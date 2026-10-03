@@ -35,7 +35,7 @@ class WantedSystem {
         const prev = this.level;
         this.level = n;
         this.lose = 0;
-        if (n > prev) this.heatCd = Config.wanted.escalateEvery;
+        if (n > prev) this.heatCd = Config.wanted.escalateEvery * (this.escalateMul || 1);      // delegado aliado: estrelas sobem mais devagar
         if (this.onChange) this.onChange(n, prev, why);
     }
 

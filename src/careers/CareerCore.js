@@ -168,6 +168,16 @@ class Careers {
         return { ok: true, msg: `${c.name} · ${job.title}: ${job.text}` };
     }
 
+    // Missão de fora das carreiras (malha de influência do Império): ocupa o mesmo espaço de trabalho.
+    startExternal(job) {
+        const block = this.canStart();
+        if (block) return { ok: false, msg: block };
+        if (!job.start()) { job.dispose(); this.unmark(); return { ok: false, msg: job.why || 'Sem trabalho agora' }; }
+        this.job = job;
+        AudioFX.blip(700, 0.15, 0.18);
+        return { ok: true, msg: `${job.title}: ${job.text}` };
+    }
+
     abandon() {
         if (!this.job) return { ok: false, msg: 'Nenhum trabalho em andamento' };
         this.job.fail('você abandonou o trabalho');
@@ -185,6 +195,7 @@ class Careers {
             money = this.payout(job.c, money);
             if (money > 0) g.inventory.addCash(Math.round(money));
             job.c.addXp(xp);
+            if (g.empire) g.empire.spend(6, 5);
             this.jobsDone++;
             this.jobsBy[job.c.id] = (this.jobsBy[job.c.id] || 0) + 1;
             if (job.defId) this.jobTypes[job.defId] = (this.jobTypes[job.defId] || 0) + 1;

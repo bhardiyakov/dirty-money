@@ -147,7 +147,7 @@ class ScamCareer extends Career {
             d.data -= T.data;
             if (this.g.achievements) this.g.achievements.bump('scams');
             const ok = Math.random() < Math.min(0.95, Math.max(0.05, this.chance + T.chance));
-            const v = ok ? Math.round((T.min + Math.random() * (T.max - T.min)) * (1 + 0.1 * this.skill('labia'))) : 0;
+            const v = ok ? Math.round((T.min + Math.random() * (T.max - T.min)) * (1 + 0.1 * this.skill('labia')) * (this.g.empire ? this.g.empire.fx('scam') : 1)) : 0;
             if (ok) inv.addCash(v);
             this.addXp(ok ? 20 + v / 40 : 8);
             AudioFX.blip(ok ? 950 : 220, 0.12, 0.15);

@@ -255,6 +255,7 @@ class Game {
         this.careers = new Careers(this);                    // carreiras do crime: desmanche, ladrão, armeiro, estelionato, jogo do bicho
         this.skills = new SkillTree(this);                   // nível do personagem, árvore de habilidades e notoriedade
         this.achievements = new Achievements(this);          // conquistas e platina
+        this.empire = new Empire(this);                      // império: energia/exposição, soldados, lavagem, influência, domínio, estações
         this.op = new PoliceOperation(this);                 // operação policial na favela (única hora em que a polícia entra)
         this._flash(`Polícia patrulhando: ${this.policeManager.cars.length} viaturas, ${this.policeManager.officers.length} a pé`);
     }
@@ -424,7 +425,7 @@ class Game {
 
             this.lockpick.update(dt);
             if (!this.lockpick.active && !this.arrest && !this.death && !this.hiding && !frozenUI) this._playerActions(dt);      // (arrombando/rendido: sem ações)
-            this.player.update(move, this.input.isSprinting(), dt);
+            this.player.update(move, this.input.isSprinting() && !(this.empire && this.empire.tired), dt);      // (exausto: não corre)
             if (!frozenUI) Interiors.autoEnter(this);            // lojas: atravessar o vão da porta = entrar
             HouseView.update(dt, this);                          // safe house: fade fora↔dentro, zoom 2×, porta, seta
             this.camera.follow(HouseView.focusFor(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
@@ -552,6 +553,7 @@ class Game {
         if (this.policeManager) {
             const ps = this._playerState();
             // Percepção da polícia (raio do nível + linha de visada) -> procurado e FUGA.
+            if (this.empire) this.wanted.escalateMul = this.empire.escalateMul(ps.pos.x, ps.pos.z);
             if (this.skills) this.wanted.loseMul = this.skills.policeMul * (1 - (SkillTree.m.lose || 0) - (this.mode === 'car' ? (SkillTree.m.carLose || 0) : 0));
             this.policeManager.update(dt, ps.pos, ps.vel, this.wanted.level);
             const seen = this.policeManager.playerSeen;
@@ -584,6 +586,7 @@ class Game {
         if (this.careers) this.careers.update(dt);
         if (this.goals) this.goals.update(dt);
         if (this.achievements) this.achievements.update(dt);
+        if (this.empire) { this.empire.update(dt); EmpireUI.hud(this); }
         this._autosave(dt);
     }
 
@@ -818,6 +821,7 @@ class Game {
         if (!this.aiReady) return;
         const p = this.player, pos = p.position, heading = p.root.rotation.y;
 
+        if (this.empire) this.empire.spend(kind === 'shoot' ? 0.3 : 0.8, kind === 'shoot' ? 2 : 0.5);
         if (kind === 'shoot') {
             // Tiro de verdade: projéteis (com mira assistida), ouvido por todos; libera as armas da polícia.
             const angle = this.combat.aimAssist(pos.x, pos.z, heading);
@@ -1155,6 +1159,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             car.setControlled(true);
             this.activeCar = car;
             this.mode = 'car';
+            if (this.empire && (car._wasLocked || car._xpGiven !== true)) this.empire.spend(4, car.windowBroken ? 8 : 3);
             if (car._wasLocked) { car.hotwire = car.hotwireMax = this.careers ? this.careers.hotwireTime() : 3; car._wasLocked = false; }
             if (this.careers) this.careers.onCarEntered(car);
             if (this.skills && car._xpGiven !== true) { car._xpGiven = true; this.skills.addXp(car.driver === false ? 8 : 12); }
@@ -1593,6 +1598,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
                 if (sp && s.at !== 'here') { pl.teleport(new BABYLON.Vector3(sp.x, 0, sp.z)); pl.root.rotation.y = sp.face; this.camera.snapTo(pl.position); }
                 if (this.policeManager) this.policeManager.scatter(pl.position);
                 s.perks = RealEstate.wakePerks(this, s.prop);
+                if (this.empire) { this.empire.onSleep(); this.empire.onWake(); }
                 const ok = SaveGame.write(this);
                 s.ok = ok;
             }
@@ -1724,6 +1730,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         pl.root.rotation.y = Math.atan2(victim.position.x - pl.position.x, victim.position.z - pl.position.z);
         pl.velocity.setAll(0);
         this.holdup = { victim, t: 0, dur: R.holdTime, alertT: 0, seen: false };
+        if (this.empire) this.empire.spend(5, 12);
         this.wanted.reportCrime(R.crimeWindow);
         if (this.policeManager) this.policeManager.alertNear(pl.position, R.policeAlertRadius);
         this.holdup.seen = this.npcManager.alertViolence(pl.position, R.witnessRadius + 8, victim) > 0;
@@ -1781,7 +1788,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     }
 
     // Probabilidade de o furto dar certo. Por enquanto fixa/aleatória; depois virá do status do personagem.
-    _theftChance(npc) { return Math.min(0.95, Config.robbery.theftChance + (SkillTree.m.theft || 0)); }
+    _theftChance(npc) { return Math.min(0.95, Config.robbery.theftChance + (SkillTree.m.theft || 0) + (this.empire ? this.empire.fx('theft', 0) : 0)); }
 
     _resolveTheft(npc) {
         const pl = this.player, R = Config.robbery;
@@ -1794,10 +1801,12 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             if (this.careers) this.careers.onPickpocket(npc, pl.position);
             if (this.skills) this.skills.addXp(5);
             if (this.achievements) this.achievements.bump('thefts');
+            if (this.empire) this.empire.spend(2, 3);
             AudioFX.blip(1180, 0.08, 0.14);
             this._flash(`Furto: +${brl(loot)} — ele nem percebeu`);
         } else {
             npc.panic(pl.position);                                    // percebeu: grita e sai correndo
+            if (this.empire) this.empire.spend(2, 10);
             Standing.harm(this, 3);
             this.wanted.reportCrime();
             this.npcManager.alertViolence(pl.position, 9, npc);
@@ -1919,6 +1928,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this.player.aimTimer = 0;
         this.camera.snapTo(this.player.position);
         this.dayNight.skip(hours === null ? this._wakeInfo().hours : hours);
+        if (this.empire) this.empire.onWake();
         if (this.gangs) this.gangs.clear();
         if (this.policeManager) this.policeManager.scatter(p);              // horas depois: a polícia já não está onde estava
     }
@@ -2091,6 +2101,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         };
         if (this.goals) this.goals.onWanted(n, prev, why);
         if (this.careers) this.careers.onWanted(n, prev);
+        if (this.empire && n > prev) this.empire.spend(0, 10 * (n - prev));
         if (this.skills && n === 0 && why === 'escape') this.skills.addXp(25 * prev * prev);
         if (this.achievements && n === 0 && why === 'escape' && prev >= 5) this.achievements.bump('escape5');      // fugir de muitas estrelas vale muito
         if (n > prev && msg[n]) this._flash(msg[n]);

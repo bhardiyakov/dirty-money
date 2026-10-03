@@ -63,7 +63,7 @@ class BichoCareer extends Career {
 
     get arregoMul() { return 1 - 0.08 * this.skill('influencia'); }
     totalPts() { return Object.values(this.data.zones).reduce((s, v) => s + v, 0); }
-    dayIncome() { let s = 0; for (const [z, n] of Object.entries(this.data.zones)) s += n * 520 * (Economy.ZONE[z] ? Economy.ZONE[z].mul : 1); return Math.round(s * (1 + (SkillTree.m.income || 0))); }
+    dayIncome() { let s = 0; for (const [z, n] of Object.entries(this.data.zones)) s += n * 520 * (Economy.ZONE[z] ? Economy.ZONE[z].mul : 1); return Math.round(s * (1 + (SkillTree.m.income || 0)) * (this.g.empire ? this.g.empire.fx('bicho') : 1)); }
     dayArrego() { return Math.round(this.totalPts() * 160 * this.arregoMul); }
     escortCost() { return 1500; }
     _immunity() { Careers.immunity = !!(this.data.school && this.data.opinion >= 40); }

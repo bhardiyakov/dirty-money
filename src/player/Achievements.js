@@ -56,6 +56,9 @@ class Achievements {
             ['worth10m', 'IMPÉRIO', 'Bilionário do crime', 'Tenha R$ 10 milhões de patrimônio', () => [Math.floor(worth()), 10000000]],
             ['laundry1m', 'IMPÉRIO', 'Lavanderia', 'Lave R$ 1 milhão nas fachadas', () => [Math.floor(Laundry.xp), 1000000]],
             ['estate10', 'IMPÉRIO', 'Imobiliária', 'Tenha 10 imóveis', () => [Object.keys(RealEstate.owned).length, 10]],
+            ['district1', 'IMPÉRIO', 'Bandeira fincada', 'Domine um distrito inteiro', () => [g.empire ? g.empire.dominion.count : 0, 1]],
+            ['city', 'IMPÉRIO', 'Dono da cidade', 'Domine todos os distritos', () => [g.empire ? g.empire.dominion.count : 0, g.empire ? g.empire.dominion.districts.length : 7]],
+            ['crew12', 'IMPÉRIO', 'Exército particular', 'Tenha 12 soldados', () => [g.empire ? g.empire.biz.soldiers.length : 0, 12]],
         );
         return out;
     }

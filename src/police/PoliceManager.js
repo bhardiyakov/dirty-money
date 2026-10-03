@@ -405,7 +405,7 @@ class PoliceManager {
         const L = level > 0 ? Config.wanted.levels[level] : null;
         const cover = Standing.cover(pos.x, pos.z);                                       // moradores acobertam (moral alta) ou delatam (baixa) dentro da favela
         if (cover.state !== this._coverState) { this._coverState = cover.state; if (cover.state && L) this.game._flash(cover.state === 'hide' ? 'Os moradores estão te acobertando: a polícia perde seu rastro' : 'Os moradores estão te delatando para a polícia!'); }
-        const sk = this.game && this.game.skills, R = (L ? L.sight : Config.police.sightRange) * (Weather.cur ? Weather.cur.sightMul : 1) * cover.sight * (sk ? sk.policeMul * (1 - (SkillTree.m.sight || 0)) : 1);      // notoriedade vê mais longe; Discreto, mais perto       // chuva/tempestade: enxergam menos longe
+        const sk = this.game && this.game.skills, R = (L ? L.sight : Config.police.sightRange) * (Weather.cur ? Weather.cur.sightMul : 1) * cover.sight * (sk ? sk.policeMul * (1 - (SkillTree.m.sight || 0)) : 1) * (this.game.empire ? this.game.empire.policeSightMul(pos.x, pos.z) : 1);      // alerta tático, delegado aliado, domínio, estação      // notoriedade vê mais longe; Discreto, mais perto       // chuva/tempestade: enxergam menos longe
         const memory = (L ? L.lose + 3 : Config.police.hearMemory) * cover.mem;
 
         // 1) Percepção: raio do nível + linha de visada (esconder-se atrás de prédios funciona).

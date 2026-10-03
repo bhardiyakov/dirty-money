@@ -31,7 +31,7 @@ class GuideUI {
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'],
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
-            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
+            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['daily', 'Energia e exposição (o dia)'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas']);
         return out;
@@ -148,6 +148,36 @@ GuideUI.PAGES = {
 
     goals: () => `<h2>Metas de carreira</h2>
         <p>O painel embaixo da tela mostra a próxima meta de cada trilha — <b>Patrimônio</b>, <b>Carreiras</b>, <b>Morro</b>, <b>Lavagem</b>, <b>Imóveis</b> e <b>Fuga</b> — com barra de progresso. Cada meta batida paga na hora (dinheiro e, nas maiores, kits médicos) e libera a próxima.</p>`,
+
+    daily: () => `<h2>Energia e exposição (o dia)</h2>
+        <p>Cada dia é limitado. Você acorda com <b>energia cheia</b> e <b>exposição zerada</b> (barras ⚡ e 🔥 no HUD).</p>
+        <ul><li>Furtar, roubar carro, assaltar, brigar, atirar, correr e concluir trabalhos <b>gastam energia</b>. Cansado (menos de 12%) você não corre. Só o <b>sono</b> recupera.</li>
+        <li>Crimes e estrelas de procurado <b>aumentam a exposição</b> (ela esfria devagar quando você está limpo). Exposição cheia = <b>ALERTA TÁTICO</b> no distrito onde você está: a polícia enxerga 60% mais longe até você dormir.</li>
+        <li><b>Desmaio</b>: energia zerada ou continuar acordado depois das <b>2h</b>. Você acorda em casa sem nada de sujo na mochila (dinheiro, joias e mercadoria são confiscados) e paga propina de hospital/advogado do dinheiro limpo.</li>
+        <li>A decisão do dia: arriscar mais um roubo com a polícia nas ruas ou voltar para casa, dormir e começar limpo.</li></ul>
+        <div class="gd-tip">Guarde dinheiro em casa (baú/cofre) ou lave antes de forçar a barra: sujo na mochila é o que se perde.</div>`,
+
+    empire: () => `<h2>Soldados, galpões e lavagem</h2>
+        <p>Na aba <b>IMPÉRIO</b> o trabalho manual vira gestão:</p>
+        <ul><li><b>Galpões</b> (cada um abriga 4 soldados) e <b>soldados</b> (recrutamento + salário diário). Aloque cada soldado num distrito: todo dia ele faz roubos passivos — distritos ricos rendem mais. Soldado pode ser <b>preso</b> (mais em distrito com alerta tático, menos com delegado aliado).</li>
+        <li>O lucro cai no <b>cofre do galpão</b>, como dinheiro sujo. Ele só vira dinheiro na mão quando você o <b>recolhe</b> (na favela ou em casa) — e sujo na mochila se perde num desmaio.</li>
+        <li><b>Rotas de lavagem</b>: postos, restaurantes e boates de fachada comprados no distrito onde você está lavam o cofre todo dia, direto para dinheiro <b>limpo</b> (com perda e um pouco de Receita).</li>
+        <li>Salário sem pagar = soldado larga o bonde. Facções inimigas emboscam as rotas.</li></ul>`,
+
+    influence: () => `<h2>Malha de influência</h2>
+        <p>Os "corações" aqui são puramente transacionais:</p>
+        <ul><li><b>Delegados</b> de cada distrito: dê presentes de luxo (charutos, uísque, relógio) — <b>1 por dia</b>, entregue <b>no próprio distrito</b>. Com 10 ❤ as viaturas dali têm <b>metade do alcance de visão</b> e as estrelas sobem na metade da velocidade. Sem presente há 3 dias, ele esfria.</li>
+        <li><b>Fornecedor do Porto</b>: não aceita presente, só serviço — <b>contratos de assassinato</b> e <b>sabotagens</b> de carregamentos rivais. Com 10 ❤, armas 40% mais baratas.</li>
+        <li><b>Família Moretti</b> (rival) e <b>Milícia</b>: com relação −4 ou pior, mandam emboscadas nas suas rotas. Destruir os galpões deles piora a relação; tributo melhora. Vender armas à milícia agrada a ela e irrita o tráfico.</li>
+        <li><b>Vereadores</b>: extorquidos com arma na mão, pagam e contam para o domínio do distrito.</li></ul>`,
+
+    dominion: () => `<h2>Domínio e estações</h2>
+        <h3>Domínio da cidade</h3><p>Cada distrito tem 3 <b>coleções</b> (aba IMPÉRIO): <b>LAVAGEM</b> (fachadas de luxo + imóveis de alto padrão no distrito), <b>INFLUÊNCIA</b> (vereadores extorquidos) e <b>FORÇA</b> (galpões rivais destruídos). Na favela: 3 fachadas do C.V, comunidade em 70+ e Gerente de Frente.</p>
+        <ul><li>Lavagem completa: soldados rendem +25% ali. Influência: polícia vê 15% menos. Força: sem emboscadas.</li><li>As três: <b>distrito dominado</b> (mais bônus). Todos: <b>dono da cidade</b>.</li></ul>
+        <h3>Estações do crime</h3><p>Eventos globais em ciclo, com aviso 2 dias antes — prepare-se:</p>
+        <ul><li><b>Calmaria</b> (14 dias): normal.</li><li><b>Carnaval</b> (14): furtos rendem mais, polícia distraída, bancas do bicho faturam o dobro.</li>
+        <li><b>Eleições</b> (28): presentes valem o dobro na influência, extorsão rende mais, a lavagem aperta.</li>
+        <li><b>Intervenção Federal</b> (14): armas 3× mais caras, milícia some, polícia vê mais longe, soldados rendem a metade — hora do colarinho branco (golpes +50%).</li></ul>`,
 
     level: () => `<h2>Nível e habilidades</h2>
         <p>Além das carreiras, o <b>personagem</b> tem um nível próprio (aba CARREIRAS › <b>HABILIDADES</b>). Todo XP conta: trabalhos, missões do morro, metas, conquistas, furtos, carros roubados e fugas da polícia (fugir de muitas estrelas vale muito).</p>

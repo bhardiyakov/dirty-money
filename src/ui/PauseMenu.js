@@ -11,7 +11,7 @@
 
 class PauseMenu {
     static get TABS() {
-        return [['map', 'MAPA'], ['inventory', 'INVENTÁRIO'], ['status', 'STATUS'], ['careers', 'CARREIRAS'], ['guide', 'GUIA'], ['settings', 'CONFIGURAÇÕES']];
+        return [['map', 'MAPA'], ['inventory', 'INVENTÁRIO'], ['status', 'STATUS'], ['careers', 'CARREIRAS'], ['empire', 'IMPÉRIO'], ['guide', 'GUIA'], ['settings', 'CONFIGURAÇÕES']];
     }
 
     // Legenda do mapa: tipos de lugar (a chave é o `type` dos POIs).
@@ -154,6 +154,7 @@ class PauseMenu {
               </div>
               <div class="pm-page" data-page="status"><div class="pm-stat-grid" id="pmStatus"></div></div>
               <div class="pm-page" data-page="careers"><div id="pmCareers"></div></div>
+              <div class="pm-page" data-page="empire"><div id="pmEmpire"></div></div>
               <div class="pm-page" data-page="guide"><div id="pmGuide"></div></div>
               <div class="pm-page" data-page="settings">
                 <div class="px pm-set"><div class="px-title">CONFIGURAÇÕES</div><div id="pmSet"></div>
@@ -307,6 +308,7 @@ class PauseMenu {
         } else if (id === 'inventory') { this._renderInventory(); }
         else if (id === 'status') this._renderStatus();
         else if (id === 'careers') { if (this.g.careers) this.g.careers.ui.render(this.$('pmCareers')); }
+        else if (id === 'empire') { if (this.g.empire) (this.empireUI || (this.empireUI = new EmpireUI(this.g))).render(this.$('pmEmpire')); }
         else if (id === 'guide') { (this.guide || (this.guide = new GuideUI(this.g))).render(this.$('pmGuide')); }
         else if (id === 'settings') this._renderSettings();
     }

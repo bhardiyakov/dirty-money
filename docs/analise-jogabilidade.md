@@ -54,6 +54,14 @@ A aba **GUIA** do menu explica o jogo inteiro e cada carreira (os capítulos das
 
 Joystick (borda = correr) + ATACAR + até 2 botões de contexto que aparecem sozinhos (lidos da dica de interação) + chip da arma (toque troca, segurar recarrega) + ✚ KIT com vida baixa + menu ⋯ com as ações raras; topo: pausa e carreiras; pinça = zoom.
 
+## Império (`src/empire/`, aba IMPÉRIO)
+
+- **Ciclo diário**: energia (gasta com ações; só o sono recupera) × exposição (crimes e estrelas). Exposição cheia = alerta tático no distrito (polícia +60% de visão até dormir). Energia zerada ou acordado depois das 2h = desmaio: confisco do sujo da mochila + propina do limpo.
+- **Automação**: galpões e soldados alocados por distrito → cofre sujo diário; rotas de lavagem (posto, restaurante, boate) lavam o cofre para limpo; salários, prisões e emboscadas.
+- **Malha de influência**: delegados por distrito (presentes diários, decaimento; 10 ❤ = metade da visão e estrelas mais lentas), Fornecedor do Porto (contratos/sabotagem; armas −40%), rival e milícia (emboscadas), vereadores (extorsão).
+- **Domínio**: 3 coleções por distrito (lavagem, influência, força) com bônus; distrito dominado; dono da cidade.
+- **Estações do crime**: Calmaria, Carnaval, Eleições (28 dias) e Intervenção Federal, com aviso 2 dias antes e efeitos em polícia, preços de armas, golpes, bicho, soldados e lavagem.
+
 ## Próximos passos recomendados (por impacto × custo)
 
 | # | Ideia | Custo | Efeito no retorno do jogador |

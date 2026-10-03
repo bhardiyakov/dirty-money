@@ -56,7 +56,7 @@ class GunsmithCareer extends Career {
                 check: () => this.lotValue() < 3000 ? 'Precisa de um lote de pelo menos R$ 3.000 no estoque' : null,
                 desc: 'Entregue o seu estoque de armas (lote mínimo R$ 3.000) no fundo da favela. Paga 40% acima dos vapores e o tráfico gosta.' },
             { id: 'mil', rank: 2, name: 'Contrato: Milícia do Rio Seco', pay: 'lote × 1,9', make: () => new ArmsDealJob(this, 'mil'),
-                check: () => this.lotValue() < 3000 ? 'Precisa de um lote de pelo menos R$ 3.000 no estoque' : null,
+                check: () => (this.g.empire && this.g.empire.fx('noMilitia', false)) ? 'A milícia sumiu durante a Intervenção Federal' : (this.lotValue() < 3000 ? 'Precisa de um lote de pelo menos R$ 3.000 no estoque' : null),
                 desc: 'A milícia paga quase o dobro — mas armar o inimigo derruba sua moral com o tráfico e te torna alvo de sequestro (contrate seguranças).' },
         ];
     }
@@ -186,6 +186,7 @@ class ArmsDealJob extends CareerJob {
         const mul = this.buyer === 'cv' ? 1.4 : 1.9, pay = Math.round(ok * mul);
         if (this.buyer === 'cv') Standing.add('traffic', 6 - 3 * jam);
         else { Standing.add('traffic', -12); d.rivalDeals++; }
+        if (g.empire) g.empire.influence.add('milicia', this.buyer === 'mil' ? 2 : -1);
         this.succeed(pay, 150 + pay / 80, `lote entregue${jam ? ` (${jam} arma(s) travaram no teste)` : ''}${this.buyer === 'mil' ? ' · o tráfico ficou sabendo (moral −12)' : ''}`);
         return true;
     }

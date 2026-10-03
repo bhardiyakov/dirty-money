@@ -128,7 +128,7 @@ const Economy = {
     // ------------------------------------------------------------------ tempo
     // Chamado todo quadro com a hora do relógio do jogo: vira o dia → novos preços e estoque.
     tick(hour) {
-        if (this._lastHour >= 0 && hour < this._lastHour - 12) { this.day++; this.shops = {}; if (typeof Laundry !== 'undefined') Laundry.onNewDay(); if (typeof Careers !== 'undefined' && Careers.instance) Careers.instance.onNewDay(); }
+        if (this._lastHour >= 0 && hour < this._lastHour - 12) { this.day++; this.shops = {}; if (typeof Laundry !== 'undefined') Laundry.onNewDay(); if (typeof Careers !== 'undefined' && Careers.instance) Careers.instance.onNewDay(); if (typeof Empire !== 'undefined' && Empire.instance) Empire.instance.onNewDay(); }
         this._lastHour = hour;
     },
 
@@ -160,6 +160,8 @@ const Economy = {
         let p = this.ITEMS[id].base;
         for (const f of this.factors(shop, hour)) p *= f.mul;
         p *= 1 - (typeof SkillTree !== 'undefined' ? (SkillTree.m.price || 0) : 0);      // habilidade Pechincha
+        const K = this.ITEMS[id].kind, E = typeof Empire !== 'undefined' && Empire.instance;
+        if (E && (K === 'weapon' || K === 'ammo')) p *= E.fx('guns') * E.influence.gunPriceMul();      // estação (intervenção) e Fornecedor do Porto
         return Math.max(1, Math.round(p));
     },
 
