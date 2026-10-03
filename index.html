@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">`n    <meta name="mobile-web-app-capable" content="yes">`n    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <title>Dirty Money - Criminal Simulator MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #0a0a0a;
+            font-family: 'Courier New', monospace;
+        }
+
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            outline: none;
+        }
+
+        /* HUD: DOM puro sobreposto ao canvas (position: absolute). */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ff00;
+            font-size: 12px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.72);
+            padding: 10px;
+            border: 2px solid #00ff00;
+            border-radius: 4px;
+            min-width: 270px;
+            max-width: 330px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            pointer-events: none;
+        }
+
+        .hud-row {
+            margin: 4px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .hud-label {
+            font-weight: bold;
+            color: #00ff00;
+            min-width: 100px;
+        }
+
+        .hud-value {
+            color: #00ff00;
+            font-weight: normal;
+            text-align: right;
+        }
+
+        .hud-section {
+            margin-top: 8px;
+            border-top: 1px solid #00ff00;
+            padding-top: 8px;
+        }
+
+        /* Vinheta de dano: tela inteira, não captura cliques. */
+        #hit {
+            position: absolute;
+            inset: 0;
+            z-index: 8;
+            pointer-events: none;
+            opacity: 0;
+            background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 45%, rgba(220, 20, 10, 0.85) 100%);
+        }
+
+        /* Painel de inventário (abre com I). */
+        #inventory {
+            display: none;
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            width: 300px;
+            z-index: 12;
+            padding: 12px 14px;
+            color: #00ff00;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.82);
+            border: 2px solid #00ff00;
+            border-radius: 4px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            pointer-events: none;
+        }
+        #inventory h3 { font-size: 13px; margin-bottom: 8px; border-bottom: 1px solid #00ff00; padding-bottom: 6px; }
+        .inv-row { display: flex; justify-content: space-between; margin: 3px 0; }
+        .inv-row.big { color: #ffd23f; font-size: 14px; font-weight: bold; margin-bottom: 6px; }
+        .inv-row.cur { color: #ffe14d; font-weight: bold; }
+        .inv-row.off { color: #557055; }
+        .inv-sep { margin: 8px 0 4px; color: #88aa88; border-top: 1px solid #1d4a1d; padding-top: 6px; }
+        .inv-hint { margin-top: 10px; color: #7d9a7d; font-size: 11px; }
+
+        /* Dica de interação perto de um veículo (F / G). */
+        #prompt {
+            display: none;
+            position: absolute;
+            left: 50%;
+            bottom: 64px;
+            transform: translateX(-50%);
+            z-index: 11;
+            padding: 7px 14px;
+            color: #e8ffe8;
+            font-size: 13px;
+            background: rgba(0, 0, 0, 0.78);
+            border: 1px solid #00ff00;
+            border-radius: 4px;
+            pointer-events: none;
+            text-align: center;
+            white-space: nowrap;
+        }
+        #prompt b { color: #ffe14d; }
+        #prompt small { display: block; color: #88aa88; font-size: 11px; margin-top: 2px; }
+
+        /* GPS (minimapa) no canto inferior esquerdo. */
+        #minimap {
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+            z-index: 10;
+            background: #0a0a0a;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.25);
+        }
+        /* Tela de carregamento: cobre o jogo até o 1º quadro estar compilado e desenhado (sem travadas de shader/sprites). */
+        #loading-screen { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+            background: radial-gradient(ellipse at center, #14202e 0%, #07090d 75%); color: #eef1f7; font-family: 'Courier New', monospace; text-transform: uppercase;
+            transition: opacity 0.45s ease; }
+        #loading-screen.done { opacity: 0; pointer-events: none; }
+        #loading-screen .ls-title { font-size: clamp(26px, 7vmin, 56px); font-weight: 700; letter-spacing: 6px; color: #6dff8a; text-shadow: 0 0 18px rgba(44,255,106,0.55); }
+        #loading-screen .ls-bar { width: min(420px, 70vw); height: 16px; border: 3px solid #3a4560; background: #0a0d13; box-shadow: 0 0 0 2px #07090d; }
+        #loading-screen .ls-bar i { display: block; height: 100%; width: 0%; background: linear-gradient(180deg, #8dffa5 0 45%, #2fbf5a 45% 100%); transition: width 0.25s steps(8); }
+        #loading-screen .ls-text { font-size: 13px; letter-spacing: 2px; color: #aab3c8; min-height: 16px; }
+        #loading-screen.hidden { display: none; }
+        /* Menu principal: HTML/CSS sobre o canvas, 100% pixel art (bordas em degraus, múltiplos inteiros, sem suavização). */
+        #main-menu { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; overflow: hidden;
+            background: #0a0a0a; font-family: 'Press Start 2P', 'Courier New', monospace;
+            image-rendering: pixelated; opacity: 1; transition: opacity 0.5s steps(5); }
+        #main-menu.fade { opacity: 0; pointer-events: none; }
+        /* Fundos em tela cheia (cover), trocados a cada 2 s com transição de glitch. */
+        #mm-bg { position: absolute; inset: 0; image-rendering: pixelated; }
+        #mm-bg .mm-slide { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; }
+        #mm-bg .mm-slide.on { opacity: 1; }
+        #mm-bg.glitch { animation: mm-glitch 0.4s steps(1) 1; }
+        @keyframes mm-glitch {
+            0%   { transform: translate(-14px, 0) scale(1.04); filter: hue-rotate(90deg) saturate(2.4) contrast(1.4); clip-path: inset(0 0 62% 0); }
+            12%  { transform: translate(18px, 4px) scale(1.04); filter: hue-rotate(-60deg) saturate(3) brightness(1.5); clip-path: inset(38% 0 30% 0); }
+            25%  { transform: translate(-8px, -3px) scale(1.04); filter: invert(1) hue-rotate(180deg); clip-path: inset(0); }
+            37%  { transform: translate(22px, 0) scale(1.05); filter: saturate(0) contrast(2); clip-path: inset(70% 0 0 0); }
+            50%  { transform: translate(-20px, 6px) scale(1.04); filter: hue-rotate(200deg) saturate(2.5); clip-path: inset(10% 0 55% 0); }
+            62%  { transform: translate(10px, -4px) scale(1.04); filter: contrast(1.8) brightness(1.4); clip-path: inset(0); }
+            75%  { transform: translate(-6px, 0) scale(1.02); filter: hue-rotate(40deg) saturate(1.8); clip-path: inset(45% 0 20% 0); }
+            88%  { transform: translate(4px, 2px) scale(1.01); filter: none; clip-path: inset(0); }
+            100% { transform: none; filter: none; clip-path: inset(0); }
+        }
+        #mm-bars { position: absolute; inset: 0; pointer-events: none; }
+        #mm-bars i { position: absolute; left: 0; width: 100%; opacity: 0.55; mix-blend-mode: screen; }
+        /* Escurece o fundo para o logo e os botões não brigarem com a imagem. */
+        #mm-shade { position: absolute; inset: 0; pointer-events: none;
+            background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.78) 100%); }
+        #main-menu .mm-frame { position: relative; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 32px; image-rendering: pixelated; }
+        #main-menu .mm-logo { display: block; width: min(460px, 80vw); max-height: 52vh; object-fit: contain; image-rendering: pixelated;
+            filter: drop-shadow(0 6px 0 rgba(0,0,0,0.85)) drop-shadow(0 0 18px rgba(0,0,0,0.95)) drop-shadow(0 0 40px rgba(0,0,0,0.8)); }
+        #main-menu .mm-title { font-size: clamp(20px, 5vmin, 40px); line-height: 1.5; text-align: center; color: #6dff8a; letter-spacing: 4px;
+            text-shadow: 4px 4px 0 #1c5e2e, 8px 8px 0 #07090d; }
+        #main-menu .mm-buttons { display: flex; flex-direction: column; gap: 20px; width: min(320px, 70vw); }
+        #main-menu .mm-btn { font-family: inherit; font-size: 14px; text-transform: uppercase; padding: 16px 12px; cursor: pointer; border-radius: 0; outline: none;
+            color: #eef1f7; background: #1d2a3d; border: 4px solid #3a4560; image-rendering: pixelated;
+            box-shadow: inset -4px -4px 0 #0f1722, inset 4px 4px 0 #2e4260, 4px 4px 0 #07090d; }
+        #main-menu .mm-btn:hover:not(:disabled), #main-menu .mm-btn:focus-visible { color: #0a0d13; background: #6dff8a; border-color: #eef1f7;
+            box-shadow: inset -4px -4px 0 #2fbf5a, inset 4px 4px 0 #b8ffc7, 4px 4px 0 #07090d; }
+        #main-menu .mm-btn:active:not(:disabled) { transform: translate(4px, 4px); box-shadow: inset -4px -4px 0 #2fbf5a, inset 4px 4px 0 #b8ffc7; }
+        #main-menu .mm-btn.mm-disabled, #main-menu .mm-btn:disabled { cursor: not-allowed; color: #5b6475; background: #161b24; border-color: #2a303c;
+            box-shadow: inset -4px -4px 0 #0f1319, inset 4px 4px 0 #1f2530; }
+        #main-menu .mm-logo { animation: mm-pulse 4.5s ease-in-out infinite; transform-origin: center; }
+        @keyframes mm-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+        #mm-settings { position: absolute; inset: 0; z-index: 5; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); }
+        #mm-settings.open { display: flex; }
+        #mm-settings .mm-panel { width: min(460px, 92vw); display: flex; flex-direction: column; gap: 18px; padding: 24px; background: #0d121a; border: 4px solid #3a4560;
+            box-shadow: inset -4px -4px 0 #0f1722, inset 4px 4px 0 #2e4260, 6px 6px 0 #07090d; }
+        #mm-settings h2 { font-size: 16px; color: #6dff8a; text-align: center; text-shadow: 3px 3px 0 #1c5e2e; font-weight: normal; }
+        #mm-settings .mm-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 10px; color: #eef1f7; line-height: 1.5; }
+        #mm-settings .mm-toggle { font-family: inherit; font-size: 10px; min-width: 104px; padding: 8px; cursor: pointer; border-radius: 0; color: #5b6475; background: #161b24; border: 4px solid #2a303c; }
+        #mm-settings .mm-toggle.is-on { color: #0a0d13; background: #6dff8a; border-color: #eef1f7; }
+        #mm-settings input[type=range] { width: 130px; accent-color: #6dff8a; }
+    </style>
+</head>
+<body>
+    <div id="main-menu">
+        <div id="mm-bg"></div><div id="mm-bars"></div><div id="mm-shade"></div>
+        <div class="mm-frame">
+            <img class="mm-logo" src="./assets/logo.png" alt="Dirty Money">
+            <div class="mm-buttons">
+                <button type="button" class="mm-btn" id="btn-new">Novo Jogo</button>
+                <button type="button" class="mm-btn" id="btn-load">Carregar Jogo</button>
+                <button type="button" class="mm-btn" id="btn-settings">Configurações</button>
+            </div>
+        </div>
+        <div id="mm-settings"><div class="mm-panel">
+            <h2>CONFIGURAÇÕES</h2>
+            <div class="mm-row"><span>VOLUME GERAL</span><span><input type="range" id="set-volume" min="0" max="100"> <span id="set-volume-val"></span></span></div>
+            <div class="mm-row"><span>EFEITOS SONOROS</span><button type="button" class="mm-toggle" data-key="sfx"></button></div>
+            <div class="mm-row"><span>MINIMAPA</span><button type="button" class="mm-toggle" data-key="minimap"></button></div>
+            <div class="mm-row"><span>DICAS NA TELA</span><button type="button" class="mm-toggle" data-key="prompts"></button></div>
+            <button type="button" class="mm-btn" id="btn-settings-back">Voltar</button>
+        </div></div>
+    </div>
+    <div id="loading-screen" class="hidden"><div class="ls-title">DIRTY MONEY</div><div class="ls-bar"><i id="ls-fill"></i></div><div class="ls-text" id="ls-text">Carregando…</div></div>
+    <canvas id="canvas"></canvas>
+    <div id="hud">
+        <div class="hud-row">
+            <span class="hud-label">≡ DIRTY MONEY</span>
+            <span class="hud-value" style="font-size: 11px;">Checkpoint de arte</span>
+        </div>
+        <div class="hud-section">
+            <div class="hud-row">
+                <span class="hud-label">Mode</span>
+                <span class="hud-value" id="controlMode">A PÉ</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Hora</span>
+                <span class="hud-value" id="clock">--:--</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Clima</span>
+                <span class="hud-value" id="weatherText">Céu limpo</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Vida</span>
+                <span class="hud-value" id="hpText">██████████ 100</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Arma</span>
+                <span class="hud-value" id="weaponText">—</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Dinheiro</span>
+                <span class="hud-value" id="cashText" style="color:#ffd23f;">$ 0</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Position</span>
+                <span class="hud-value" id="playerPos">X: 0.00 Z: 0.00</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Speed</span>
+                <span class="hud-value" id="playerVel">0.00 m/s</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">State</span>
+                <span class="hud-value" id="playerState">IDLE</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">NPCs</span>
+                <span class="hud-value" id="npcCount">carregando…</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Procurado</span>
+                <span class="hud-value" id="wantedLevel" style="color:#ffd23f;">LIMPO</span>
+            </div>
+            <div class="hud-row" id="forcesRow" style="display:none;">
+                <span class="hud-label">Forças</span>
+                <span class="hud-value" id="forcesText" style="font-size: 11px; color:#8fb4ff;"></span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">FPS</span>
+                <span class="hud-value" id="fps">0</span>
+            </div>
+        </div>
+        <div class="hud-section" style="min-height: 16px; color: #ffe14d;">
+            <span id="actionLog"></span>
+        </div>
+        <div class="hud-section" style="font-size: 11px; color: #888;">
+            <div>WASD mover · Shift correr · Z/X zoom</div>
+            <div>Clique/Espaço golpe-tiro · J soco · K chute</div>
+            <div>1-9 armas: punhos pistola SMG escopeta taco revólver AK fuzil faca</div>
+            <div>R recarregar · M kit médico · I inventário · ESC/P menu (mapa e GPS)</div>
+            <div>E assaltar / esconder-se (caçamba, caixote, latão) · V pular grade/muro</div>
+            <div>F carro/moto/bike/jet ski/lancha/barco (derruba o piloto) · Marina na orla leste</div>
+            <div>Carro estacionado: F quebra o vidro (alarme) · G arromba (furtivo)</div>
+            <div>F em movimento: pula rolando (perde vida)</div>
+            <div>★ fuja do raio/visão da polícia · 3★ heli · 4★ SWAT · 5★ ruas fechadas</div>
+            <div>Carros amassam, fumegam e explodem · carro rápido atropela (você também)</div>
+            <div>No carro: H buzina · L faróis · T avança 2h · Y muda o clima · segure E num posto p/ abastecer (chuva, tempestade)</div>
+        </div>
+    </div>
+
+    <canvas id="minimap"></canvas>
+
+    <!-- Vinheta vermelha ao levar dano. -->
+    <div id="hit"></div>
+
+    <!-- Dica de interação (veículo por perto). -->
+    <div id="prompt"></div>
+
+    <!-- Inventário (tecla I). -->
+    <div id="inventory">
+        <h3>≡ INVENTÁRIO</h3>
+        <div id="invBody"></div>
+        <div class="inv-hint">I/Esc fecha · 1-5 equipa · M kit médico · R recarrega</div>
+    </div>
+
+    <!-- Babylon.js core via CDN (UMD -> global BABYLON). -->
+    <script src="https://cdn.jsdelivr.net/npm/babylonjs@6.40.0/babylon.min.js"></script>
+    <!-- Havok (física) — expõe o global HavokPhysics(). -->
+    <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+
+    <!-- Nosso código como scripts clássicos, em ordem de dependência.
+         (Sem ES Modules => abre por duplo-clique no index.html, file:// funciona.) -->
+    <script src="./src/config.js"></script>
+    <script src="./src/audio/AudioFX.js"></script>
+    <script src="./src/art/Pixel.js"></script>
+    <script src="./src/economy/Economy.js"></script>
+    <script src="./src/economy/Laundry.js"></script>
+    <script src="./src/economy/RealEstate.js"></script>
+    <script src="./src/world/Interiors.js"></script>
+    <script src="./src/art/TileFactory.js"></script>
+    <script src="./src/art/SpriteBaker.js"></script>
+    <script src="./src/art/CharacterRig.js"></script>
+    <script src="./src/art/CharacterSheet.js"></script>
+    <script src="./src/art/SpriteActor.js"></script>
+    <script src="./src/art/PropSprites.js"></script>
+    <script src="./src/art/ItemSprites.js"></script>
+    <script src="./src/art/WeaponArt.js"></script>
+    <script src="./src/art/HideSprites.js"></script>
+    <script src="./src/art/HouseArt.js"></script>
+    <script src="./src/art/ShopArt.js"></script>
+    <script src="./src/art/ShopStyles.js"></script>
+    <script src="./src/art/HomeStyles.js"></script>
+    <script src="./src/art/CarSheet.js"></script>
+    <script src="./src/art/HeliSheet.js"></script>
+    <script src="./src/art/BoatSheet.js"></script>
+    <script src="./src/render/GlowBatch.js"></script>
+    <script src="./src/world/Fireworks.js"></script>
+    <script src="./src/render/RevealPlugin.js"></script>
+    <script src="./src/world/TrafficSignals.js"></script>
+    <script src="./src/world/Weather.js"></script>
+    <script src="./src/world/DayNight.js"></script>
+    <script src="./src/world/Pickups.js"></script>
+    <script src="./src/map/WorldMap.js"></script>
+    <script src="./src/map/RoadPlan.js"></script>
+    <script src="./src/map/RuralPlan.js"></script>
+    <script src="./src/map/Marina.js"></script>
+    <script src="./src/map/SafeHouse.js"></script>
+    <script src="./src/map/CityGrid.js"></script>
+    <script src="./src/map/MeshBatch.js"></script>
+    <script src="./src/map/TerrainBuilder.js"></script>
+    <script src="./src/world/HouseView.js"></script>
+    <script src="./src/map/WorldBuilder.js"></script>
+    <script src="./src/map/MapRenderer.js"></script>
+    <script src="./src/map/MapGeo.js"></script>
+    <script src="./src/ai/StateMachine.js"></script>
+    <script src="./src/core/engine.js"></script>
+    <script src="./src/core/camera.js"></script>
+    <script src="./src/core/navigation.js"></script>
+    <script src="./src/core/physics.js"></script>
+    <script src="./src/core/ColliderStreamer.js"></script>
+    <script src="./src/input/inputManager.js"></script>
+    <script src="./src/player/Inventory.js"></script>
+    <script src="./src/player/Stash.js"></script>
+    <script src="./src/player/Standing.js"></script>
+    <script src="./src/player/Missions.js"></script>
+    <script src="./src/player/Aid.js"></script>
+    <script src="./src/player/SaveGame.js"></script>
+    <script src="./src/player/player.js"></script>
+    <script src="./src/npc/npcStates.js"></script>
+    <script src="./src/npc/npcActivities.js"></script>
+    <script src="./src/npc/NPC.js"></script>
+    <script src="./src/npc/NPCManager.js"></script>
+    <script src="./src/npc/GangManager.js"></script>
+    <script src="./src/npc/FavelaWatch.js"></script>
+    <script src="./src/npc/Barricades.js"></script>
+    <script src="./src/npc/Baile.js"></script>
+    <script src="./src/npc/MotoTaxi.js"></script>
+    <script src="./src/npc/MotoStands.js"></script>
+    <script src="./src/world/RoadNet.js"></script>
+    <script src="./src/world/Gps.js"></script>
+    <script src="./src/world/WaterFx.js"></script>
+    <script src="./src/world/Birds.js"></script>
+    <script src="./src/world/StreetProps.js"></script>
+    <script src="./src/world/Puddles.js"></script>
+    <script src="./src/vehicle/Bikes.js"></script>
+    <script src="./src/vehicle/Vehicle.js"></script>
+    <script src="./src/vehicle/TrafficCar.js"></script>
+    <script src="./src/vehicle/Boat.js"></script>
+    <script src="./src/vehicle/Chopper.js"></script>
+    <script src="./src/vehicle/VehicleManager.js"></script>
+    <script src="./src/vehicle/TrafficManager.js"></script>
+    <script src="./src/vehicle/CarLights.js"></script>
+    <script src="./src/vehicle/CarDoors.js"></script>
+    <script src="./src/vehicle/CarDamage.js"></script>
+    <script src="./src/vehicle/Collisions.js"></script>
+    <script src="./src/combat/Combat.js"></script>
+    <script src="./src/combat/Ragdoll.js"></script>
+    <script src="./src/police/WantedSystem.js"></script>
+    <script src="./src/police/policeStates.js"></script>
+    <script src="./src/police/PoliceCar.js"></script>
+    <script src="./src/police/PoliceOfficer.js"></script>
+    <script src="./src/police/PoliceOperation.js"></script>
+    <script src="./src/police/Helicopter.js"></script>
+    <script src="./src/police/Roadblocks.js"></script>
+    <script src="./src/police/PoliceManager.js"></script>
+    <script src="./src/ui/Minimap.js"></script>
+    <script src="./src/ui/Lockpick.js"></script>
+    <script src="./src/ui/EndScreen.js"></script>
+    <script src="./src/ui/StashUI.js"></script>
+    <script src="./src/ui/PropertyUI.js"></script>
+    <script src="./src/ui/TribunalUI.js"></script>
+    <script src="./src/ui/ShopUI.js"></script>
+    <script src="./src/ui/Hud.js"></script>`n    <script src="./src/ui/TouchControls.js"></script>
+    <script src="./src/ui/PauseMenu.js"></script>
+    <script src="./src/tools/DevMode.js"></script>`n    <script src="./src/tools/debug.js"></script>
+    <script src="./src/game.js"></script>
+    <script src="./src/main.js"></script>
+</body>
+</html>

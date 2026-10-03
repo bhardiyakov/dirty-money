@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dirty Money - Galeria de Arte</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #1b1d22; color: #d8dce2; font: 13px 'Courier New', monospace; padding: 16px; }
+        h1 { font-size: 16px; color: #00ff78; margin-bottom: 4px; }
+        .sub { color: #8a909a; margin-bottom: 12px; }
+        .bar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; background: #252830; padding: 10px 12px; border: 1px solid #3a3f4a; margin-bottom: 14px; position: sticky; top: 0; z-index: 5; }
+        .bar label { display: flex; gap: 6px; align-items: center; }
+        .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+        .tab { background: #252830; border: 1px solid #3a3f4a; color: #9aa0aa; padding: 6px 12px; cursor: pointer; font: inherit; }
+        .tab.on { color: #00ff78; border-color: #00ff78; }
+        select, input[type=range] { background: #14161a; color: #d8dce2; border: 1px solid #3a3f4a; padding: 3px; font: inherit; }
+        h2 { font-size: 13px; color: #ffd23f; margin: 14px 0 6px; font-weight: normal; }
+        .row { display: flex; flex-wrap: wrap; gap: 3px; align-items: flex-start; }
+        .cell { background: #3b3e45; border: 1px solid #2b2d33; text-align: center; font-size: 10px; color: #8a909a; }
+        .cell canvas { display: block; image-rendering: pixelated; }
+        .clip { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 10px; }
+        .clip .info { width: 150px; color: #9aa0aa; }
+        .clip .info b { color: #d8dce2; }
+        .strip { display: flex; flex-wrap: wrap; gap: 3px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>≡ DIRTY MONEY — Galeria de Arte</h1>
+    <div class="sub">Tudo é gerado por código: sprites pré-renderizados (SpriteBaker) vistos de cima, luz no noroeste, e texturas tileáveis em pixel art (20 px por unidade).</div>
+
+    <div class="tabs">
+        <button class="tab on" data-tab="chars">Personagens</button>
+        <button class="tab" data-tab="cars">Carros</button>
+        <button class="tab" data-tab="props">Vegetação</button>
+        <button class="tab" data-tab="world">Texturas do mundo</button>
+    </div>
+
+    <!-- ===================== PERSONAGENS ===================== -->
+    <div id="tab-chars">
+        <div class="bar">
+            <label>Corpo
+                <select id="body">
+                    <option value="player">Jogador</option>
+                    <option value="police">Policial</option>
+                    <option value="swat">SWAT (4★)</option>
+                    <option value="army">Soldado (5★)</option>
+                    <option value="civA">Civil A</option>
+                    <option value="civB">Civil B</option>
+                </select>
+            </label>
+            <label>Variante de cor <select id="variant"></select></label>
+            <label>Arma
+                <select id="weapon">
+                    <option value="none">Desarmado</option>
+                    <option value="pistol">Pistola</option>
+                    <option value="smg">Submetralhadora</option>
+                    <option value="shotgun">Escopeta</option>
+                    <option value="bat">Taco</option>
+                    <option value="bike">Bicicleta (clipe mount)</option>
+                    <option value="moto">Moto (clipe mount)</option>
+                </select>
+            </label>
+            <label>Direção <input type="range" id="dir" min="0" max="15" value="0"> <span id="dirTxt">0 (N)</span></label>
+            <label>Zoom <input type="range" id="zoom" min="2" max="6" value="3"> <span id="zoomTxt">3×</span></label>
+        </div>
+        <div id="out"></div>
+    </div>
+
+    <div id="tab-cars" class="hidden"></div>
+    <div id="tab-props" class="hidden"></div>
+    <div id="tab-world" class="hidden"></div>
+
+    <script src="./src/config.js"></script>
+    <script src="./src/art/Pixel.js"></script>
+    <script src="./src/art/TileFactory.js"></script>
+    <script src="./src/art/SpriteBaker.js"></script>
+    <script src="./src/art/CharacterRig.js"></script>
+    <script src="./src/art/PropSprites.js"></script>
+    <script src="./src/art/CarSheet.js"></script>
+    <script>
+        const LOOKS = {
+            player: { hair: 'short', build: 1.08, belt: true },
+            police: { hair: 'police', build: 1.05, belt: true },
+            swat: { hair: 'helmet', build: 1.2, belt: true, vest: true, mask: true },
+            army: { hair: 'helmet', build: 1.1, belt: true },
+            civA: { hair: 'short', build: 1.0 },
+            civB: { hair: 'long', build: 0.9 },
+        };
+        const VARIANT_DEFAULT = { player: 0, police: 1, swat: 26, army: 27, civA: 2, civB: 3 };
+        const F = 64, DIRS = 16;
+        const el = (id) => document.getElementById(id);
+        CharacterRig.VARIANTS = CharacterRig._buildVariants();
+
+        // ---------- util: indexado -> canvas ----------
+        function toCanvas(rgba, w, h, zoom, bg) {
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            c.style.width = (w * zoom) + 'px'; c.style.height = (h * zoom) + 'px';
+            if (bg) c.style.background = bg;
+            c.getContext('2d').putImageData(new ImageData(rgba, w, h), 0, 0);
+            return c;
+        }
+        function colorizeRamps(indexed, ramps, shadowAlpha = 0.36) {
+            const out = new Uint8ClampedArray(indexed.length);
+            for (let i = 0; i < indexed.length; i += 4) {
+                if (indexed[i + 3] < 128) continue;
+                if (indexed[i] > 250) { out[i + 2] = 12; out[i + 3] = Math.round(shadowAlpha * 255); continue; }
+                const c = ramps[indexed[i]][indexed[i + 1]];
+                out[i] = c[0]; out[i + 1] = c[1]; out[i + 2] = c[2]; out[i + 3] = 255;
+            }
+            return out;
+        }
+        function cell(canvas, label) {
+            const d = document.createElement('div');
+            d.className = 'cell';
+            d.appendChild(canvas);
+            if (label !== undefined) d.appendChild(document.createTextNode(label));
+            return d;
+        }
+        function section(parent, title) {
+            const h = document.createElement('h2');
+            h.textContent = title;
+            parent.appendChild(h);
+            const row = document.createElement('div');
+            row.className = 'row';
+            parent.appendChild(row);
+            return row;
+        }
+
+        // ---------- abas ----------
+        const built = {};
+        document.querySelectorAll('.tab').forEach((b) => b.onclick = () => {
+            document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b));
+            for (const t of ['chars', 'cars', 'props', 'world']) el('tab-' + t).classList.toggle('hidden', t !== b.dataset.tab);
+            if (!built[b.dataset.tab] && builders[b.dataset.tab]) { builders[b.dataset.tab](el('tab-' + b.dataset.tab)); built[b.dataset.tab] = true; }
+        });
+
+        // ===================== PERSONAGENS =====================
+        CharacterRig.VARIANTS.forEach((_, i) => {
+            const o = document.createElement('option');
+            o.value = i;
+            o.textContent = i === 0 ? '0 · jogador' : i === 1 ? '1 · policial' : `${i} · civil`;
+            el('variant').appendChild(o);
+        });
+
+        function frameCanvas(prims, heading, variant, zoom, size = F) {
+            const idx = SpriteBaker.bake(prims, { size, heading });
+            return toCanvas(CharacterRig.colorize(idx, variant), size, size, zoom);
+        }
+        // Clipes de bicicleta/moto usam quadros maiores (80 px) — o veículo é mais comprido que o boneco.
+        const frameSize = (name) => (/^(ride|park|fallen|mount)/.test(name) ? 80 : F);
+
+        const anims = [];
+        function renderChars() {
+            const body = el('body').value, variant = +el('variant').value, weapon = el('weapon').value;
+            const dir = +el('dir').value, zoom = +el('zoom').value;
+            el('dirTxt').textContent = `${dir} (${Math.round(dir * 360 / DIRS)}°)`;
+            el('zoomTxt').textContent = zoom + '×';
+            const heading = dir * Math.PI * 2 / DIRS;
+            const look = LOOKS[body];
+            const out = el('out');
+            out.innerHTML = '';
+            anims.length = 0;
+
+            const row = section(out, `Direções (16) — idle${weapon !== 'none' ? ' com ' + weapon : ''}`);
+            const idlePrims = CharacterRig.build(CharacterRig.CLIPS.idle.pose(0, weapon), look);
+            for (let d = 0; d < DIRS; d++) row.appendChild(cell(frameCanvas(idlePrims, d * Math.PI * 2 / DIRS, variant, Math.max(2, zoom - 1)), d));
+
+            for (const name of Object.keys(CharacterRig.CLIPS)) {
+                const def = CharacterRig.CLIPS[name];
+                let w = weapon;
+                if (def.weapons) { if (!def.weapons.includes(w)) continue; }
+                else if (!def.armed) w = 'none';
+                const wrap = document.createElement('div');
+                wrap.className = 'clip';
+                const info = document.createElement('div');
+                info.className = 'info';
+                info.innerHTML = `<b>${name}</b>${w !== 'none' ? ' · ' + w : ''}<br>${def.frames} frames · ${def.fps} fps · ${def.loop ? 'loop' : 'uma vez'}`;
+                const strip = document.createElement('div');
+                strip.className = 'strip';
+                const frames = [], FS = frameSize(name);
+                for (let f = 0; f < def.frames; f++) {
+                    const t = def.loop ? f / def.frames : (def.frames > 1 ? f / (def.frames - 1) : 0);
+                    const c = frameCanvas(CharacterRig.build(def.pose(t, w), look), heading, variant, zoom, FS);
+                    strip.appendChild(cell(c, f));
+                    frames.push(c);
+                }
+                const pc = document.createElement('canvas');
+                pc.width = FS; pc.height = FS;
+                pc.style.width = pc.style.height = (FS * zoom) + 'px';
+                anims.push({ def, frames, ctx: pc.getContext('2d'), FS });
+                wrap.appendChild(info);
+                wrap.appendChild(cell(pc, '▶'));
+                wrap.appendChild(strip);
+                out.appendChild(wrap);
+            }
+        }
+        function tick(now) {
+            if (el('tab-chars').classList.contains('hidden')) { requestAnimationFrame(tick); return; }   // aba oculta: não anima.
+            for (const a of anims) {
+                const n = a.def.frames;
+                let f = Math.floor(now / 1000 * a.def.fps);
+                f = a.def.loop ? f % n : f % (n + Math.ceil(a.def.fps * 0.5));
+                f = Math.min(f, n - 1);
+                a.ctx.clearRect(0, 0, a.FS, a.FS);
+                a.ctx.drawImage(a.frames[f], 0, 0);
+            }
+            requestAnimationFrame(tick);
+        }
+        el('body').onchange = () => { el('variant').value = VARIANT_DEFAULT[el('body').value]; renderChars(); };
+        for (const id of ['variant', 'weapon', 'dir', 'zoom']) el(id).oninput = renderChars;
+        el('variant').value = 0;
+        renderChars();
+        requestAnimationFrame(tick);
+
+        // ===================== CARROS / VEGETAÇÃO / MUNDO =====================
+        const builders = {
+            cars(root) {
+                const F = 112;
+                const bake = (id, heading) => SpriteBaker.bake(CarSheet.model(id), { size: F, heading, shadow: false });
+                let row = section(root, 'Catálogo de modelos (cada um com dimensões e desempenho próprios)');
+                const paintFor = { taxi: 2, sports: 0, van: 4, pickup: 5, suv: 9, hatch: 1, sedan: 3 };
+                for (const [id, M] of Object.entries(CarSheet.MODELS)) {
+                    row.appendChild(cell(toCanvas(colorizeRamps(bake(id, 0), CarSheet.rampsFor(paintFor[id])), F, F, 2.4, '#44474f'),
+                        `${M.name} · ${M.len}×${M.wid}u · ${Math.round(M.maxSpeed * 3.6)} km/h`));
+                }
+                // Fases de amassado por modelo: limpo → leve → médio → destruído → carcaça carbonizada (pintura 12).
+                row = section(root, 'Amassados (fase 0 · 1 · 2 · 3 · carcaça) — um modelo por linha');
+                for (const [id] of Object.entries(CarSheet.MODELS)) {
+                    for (let dent = 0; dent <= 3; dent++) {
+                        const img = SpriteBaker.bake(CarSheet.model(id, dent), { size: F, heading: 0.5, shadow: false });
+                        row.appendChild(cell(toCanvas(colorizeRamps(img, CarSheet.rampsFor(paintFor[id])), F, F, 1.7, '#44474f'), `${id} · fase ${dent}`));
+                    }
+                    const wreck = SpriteBaker.bake(CarSheet.model(id, 3), { size: F, heading: 0.5, shadow: false });
+                    row.appendChild(cell(toCanvas(colorizeRamps(wreck, CarSheet.rampsFor(12)), F, F, 1.7, '#44474f'), `${id} · carcaça`));
+                }
+                row = section(root, 'Sedã — 32 direções');
+                for (let d = 0; d < 32; d++) {
+                    row.appendChild(cell(toCanvas(colorizeRamps(bake('sedan', d * Math.PI * 2 / 32), CarSheet.rampsFor(0)), F, F, 1.2, '#44474f'), d));
+                }
+                row = section(root, 'Pinturas');
+                CarSheet.PAINTS.forEach((p, i) => {
+                    row.appendChild(cell(toCanvas(colorizeRamps(bake('sedan', 0), CarSheet.rampsFor(i)), F, F, 2, '#44474f'), p.name));
+                });
+            },
+
+            props(root) {
+                const row = section(root, 'Árvores, arbustos e guarda-sóis (frames do atlas)');
+                PropSprites.FRAMES.forEach((fr, i) => {
+                    const idx = SpriteBaker.bake(PropSprites.model(fr.kind, fr.seed), { size: PropSprites.FRAME, shadowLen: 0.5 });
+                    row.appendChild(cell(toCanvas(colorizeRamps(idx, PropSprites.rampsFor(fr.row)), PropSprites.FRAME, PropSprites.FRAME, 2, '#5a9a45'), `${fr.kind} #${fr.seed}`));
+                });
+            },
+
+            world(root) {
+                const tile = (pc, zoom = 2, label, repeat = 1) => {
+                    const c = document.createElement('canvas');
+                    c.width = pc.w * repeat; c.height = pc.h * repeat;
+                    const ctx = c.getContext('2d');
+                    const img = new ImageData(new Uint8ClampedArray(pc.data), pc.w, pc.h);
+                    const tmp = document.createElement('canvas');
+                    tmp.width = pc.w; tmp.height = pc.h;
+                    tmp.getContext('2d').putImageData(img, 0, 0);
+                    for (let y = 0; y < repeat; y++) for (let x = 0; x < repeat; x++) ctx.drawImage(tmp, x * pc.w, y * pc.h);
+                    c.style.width = (c.width * zoom) + 'px'; c.style.height = (c.height * zoom) + 'px';
+                    return cell(c, label);
+                };
+                let row = section(root, 'Chão (cada tile repetido 2×2 para checar emendas)');
+                row.appendChild(tile(TileFactory.asphalt(11), 1.5, 'asfalto 4u', 2));
+                row.appendChild(tile(TileFactory.sidewalk(41), 1.5, 'calçada 4u', 2));
+                row.appendChild(tile(TileFactory.grass(51), 1.5, 'grama 4u', 2));
+                row.appendChild(tile(TileFactory.sand(61), 1.5, 'areia 4u', 2));
+                row.appendChild(tile(TileFactory.concrete(71), 1.5, 'concreto 4u', 2));
+                row.appendChild(tile(TileFactory.plaza(81), 1.5, 'praça 4u', 2));
+                row = section(root, 'Ruas (rua 10u × 8u, faixa de pedestres, orla)');
+                row.appendChild(tile(TileFactory.road(21), 1.5, 'rua (repetida 2× ao longo)', 1));
+                row.appendChild(tile(TileFactory.zebra(31), 1.5, 'faixa de pedestres', 1));
+                row.appendChild(tile(TileFactory.shore(91), 1, 'orla (alpha = pontilhado)', 1));
+                row = section(root, 'Água (4 frames animados)');
+                for (let f = 0; f < 4; f++) row.appendChild(tile(TileFactory.water(f), 2, 'frame ' + f, 1));
+                row = section(root, 'Telhados (8u × 8u)');
+                for (const k of Object.keys(TileFactory.roofStyles)) row.appendChild(tile(TileFactory.roof(k), 1.2, k, 1));
+                row = section(root, 'Fachadas — diffuse (esq.) e janelas acesas à noite (dir.)');
+                for (const k of Object.keys(TileFactory.facadeStyles)) {
+                    const f = TileFactory.facade(k);
+                    row.appendChild(tile(f.diffuse, 1.5, k, 1));
+                    row.appendChild(tile(f.emissive, 1.5, k + ' · noite', 1));
+                }
+            },
+        };
+    </script>
+</body>
+</html>
