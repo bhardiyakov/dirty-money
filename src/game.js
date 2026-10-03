@@ -2070,6 +2070,18 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     }
 
     _updateHud() {
+        // O painel #hud antigo é `display:none` (só aparece com ?debug): sem ele visível, todas as escritas no DOM abaixo são
+        // trabalho jogado fora (e `textContent` invalida o estilo mesmo com o mesmo texto). Reconfere a visibilidade a cada 0.5 s.
+        if (this.hud.hit) {                                          // (vinheta de dano fica fora do #hud: sempre atualiza, mas só escreve se mudou)
+            const o = Math.round(Math.min(0.6, Math.max(0, this.player.hitFlash) * 1.7) * 100) / 100;
+            if (o !== this._hitOp) { this._hitOp = o; this.hud.hit.style.opacity = String(o); }
+        }
+        const now = performance.now();
+        if (now - (this._hudCheckT || 0) > 500) { this._hudCheckT = now; this._hudShown = !!(this.hud.pos && this.hud.pos.offsetParent); }
+        if (this._hudShown === false) {
+            if (this.hud.action && this.actionTimer <= 0 && this.hud.action.textContent) this.hud.action.textContent = '';
+            return;
+        }
         const driving = this.mode === 'car' && this.activeCar;
         const flying = this.mode === 'heli' && this.chopper;
         const p = driving ? this.activeCar.position : this.player.position;
@@ -2112,7 +2124,6 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             this.hud.weapon.textContent = `${Weapons[wk].name}${inv.isGun(wk) ? ' ' + inv.ammoText(wk) : ''}${this.reloading > 0 ? ' ↻' : ''}`;
         }
         if (this.hud.cash) this.hud.cash.textContent = `${brl(inv.cash)}`;
-        if (this.hud.hit) this.hud.hit.style.opacity = String(Math.min(0.6, Math.max(0, pl.hitFlash) * 1.7));
 
         if (this.hud.npcs) {
             this.hud.npcs.textContent = this.aiReady

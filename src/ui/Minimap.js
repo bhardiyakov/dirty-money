@@ -16,6 +16,17 @@ class Minimap {
         this.canvas.style.width = this.size + 'px';
         this.canvas.style.height = this.size + 'px';
         this.ctx.scale(dpr, dpr);
+        // Camada estática (ruas, prédios, terrenos) numa tela 2× maior, redesenhada só quando o foco sai da folga: o MapRenderer
+        // percorre todas as vias/quarteirões do mapa a cada chamada, caro demais para refazer 20× por segundo.
+        this.base = document.createElement('canvas');
+        this.baseSize = this.size * 2;
+        this.base.width = this.baseSize * dpr;
+        this.base.height = this.baseSize * dpr;
+        this.baseCtx = this.base.getContext('2d');
+        this.baseCtx.scale(dpr, dpr);
+        this.dpr = dpr;
+        this._bx = this._bz = 0;
+        this._baseKey = null;
         MapRenderer.drawWorld(1);                       // o mundo raster é assado uma vez (compartilhado com o mapa de pausa)
     }
 
@@ -31,7 +42,17 @@ class Minimap {
         this._roundRect(ctx, 0, 0, S, S, 0);
         ctx.clip();
 
-        MapRenderer.drawView(ctx, S, S, center.x, center.z, k);
+        const B = this.baseSize, slack = (B - S) / 2 - 4;                         // folga (px) até a borda da camada
+        const opKey = typeof Standing !== 'undefined' && Standing.policeOp ? 1 : 0;
+        if (this._baseKey === null || this._baseKey !== opKey || Math.abs(center.x - this._bx) * k > slack || Math.abs(center.z - this._bz) * k > slack) {
+            this._bx = center.x; this._bz = center.z; this._baseKey = opKey;
+            const bc = this.baseCtx;
+            bc.save(); bc.setLineDash([]);
+            MapRenderer.drawView(bc, B, B, this._bx, this._bz, k);
+            bc.restore();
+        }
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(this.base, Math.round(S / 2 - B / 2 + (this._bx - center.x) * k), Math.round(S / 2 - B / 2 + (center.z - this._bz) * k), B, B);
 
         // Área de perseguição da polícia (como no GTA V): círculo que pisca em vermelho/azul quando te enxergam e fica
         // azul-escuro, tracejado, quando você está sumindo da vista. A moldura do radar também pisca.
