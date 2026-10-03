@@ -119,8 +119,81 @@ class MainMenu {
     }
 }
 
+// ============================================================================
+// SimBridge — ponte Main Thread ⇄ Web Worker de simulação (src/sim/worker.js).
+//   • set(id, campos): registra a mudança num mapa pendente (várias chamadas no mesmo quadro viram UM registro).
+//   • flush(): uma vez por quadro (fim do quadro do Babylon) empacota tudo num ArrayBuffer e TRANSFERE ao worker (zero cópia).
+//   • O worker devolve os buffers (RECYCLE) e manda STATE com o que ELE mudou; o espelho `entities` é atualizado e os
+//     ouvintes de onState recebem os ids mudados. Nada disso bloqueia o render: o main só copia números de/para buffers.
+// SharedArrayBuffer não é usado: exige cross-origin isolation (cabeçalhos COOP/COEP), que um jogo offline servido como arquivos
+// estáticos não garante; buffers transferíveis em pingue-pongue dão o mesmo "sem cópia" sem esse requisito.
+// ============================================================================
+
+class SimBridge {
+    constructor(url = './src/sim/worker.js') {
+        this.entities = new Map();              // espelho do estado: id → entidade (mesmos campos da SimEntity)
+        this.pending = new Map();               // id → entidade a enviar no próximo flush
+        this.listeners = [];
+        this._pool = [];
+        this._changed = [];
+        this.worker = new Worker(url);
+        this.worker.onmessage = (ev) => this._onMessage(ev.data);
+        this.worker.postMessage({ t: SimSchema.MSG.INIT });
+    }
+
+    // Cria/atualiza a entidade `id` com os campos dados (kind, x, z, districtZone, tags, craftYield, factionValue, noiseMask, suspicionLevel).
+    set(id, fields) {
+        let e = this.entities.get(id);
+        if (!e) this.entities.set(id, e = { id, kind: 0, x: 0, z: 0, districtZone: 0, tags: 0, craftYield: 0, factionValue: 0, noiseMask: 0, suspicionLevel: 0 });
+        Object.assign(e, fields);
+        this.pending.set(id, e);
+        return e;
+    }
+
+    remove(id) {
+        this.entities.delete(id);
+        this.pending.delete(id);
+        this.worker.postMessage({ t: SimSchema.MSG.REMOVE, ids: [id] });
+    }
+
+    // fn(idsMudados, bridge) a cada STATE do worker.
+    onState(fn) { this.listeners.push(fn); }
+
+    flush() {
+        const n = this.pending.size;
+        if (!n) return;
+        let buf = this._pool.pop();
+        if (!buf || SimSchema.capacity(buf) < n) buf = SimSchema.alloc(n);
+        const view = new Float64Array(buf);
+        let i = 0;
+        for (const e of this.pending.values()) SimSchema.write(view, i++, e);
+        this.pending.clear();
+        this.worker.postMessage({ t: SimSchema.MSG.UPSERT, buf, n }, [buf]);
+    }
+
+    _onMessage(m) {
+        const M = SimSchema.MSG;
+        if (m.t === M.RECYCLE) { this._pool.push(m.buf); return; }
+        if (m.t !== M.STATE) return;
+        const view = new Float64Array(m.buf), ids = this._changed;
+        ids.length = 0;
+        for (let i = 0; i < m.n; i++) {
+            const id = view[i * SimSchema.STRIDE + SimSchema.F.ID];
+            if (this.pending.has(id)) continue;                 // mudança local mais nova ainda não enviada: ela vence
+            let e = this.entities.get(id);
+            if (!e) this.entities.set(id, e = {});
+            SimSchema.read(view, i, e);
+            ids.push(id);
+        }
+        this.worker.postMessage({ t: M.RECYCLE, buf: m.buf }, [m.buf]);
+        if (ids.length) for (const fn of this.listeners) fn(ids, this);
+    }
+}
+
 window.addEventListener('DOMContentLoaded', () => {
     window.game = new Game('canvas');
+    window.sim = new SimBridge();
+    window.game.gameEngine.engine.onEndFrameObservable.add(() => window.sim.flush());      // um lote por quadro, depois do render
     if (location.search.includes('debug')) DebugTools.install(window.game);
     window.mainMenu = new MainMenu(window.game);
     console.log('%cDIRTY MONEY iniciado', 'color:#00ff78');
