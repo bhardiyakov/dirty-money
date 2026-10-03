@@ -32,13 +32,15 @@ Leitura do código (sistemas, números e fluxos), não de testes com jogadores. 
 
 Base genérica (`CareerCore.js`): cada carreira tem patentes por XP, 2 skills (0–5, 1 ponto a cada 250 XP), trabalhos (um por vez, nunca junto com a missão do morro) e um painel de gestão. Tela: aba **CARREIRAS** do menu (tecla **O**; no celular, botão CRIME). Tudo entra no save e na trilha "Carreiras" das metas.
 
-| Carreira | Jogável agora | Skills (efeito real no jogo) | Em breve |
+| Carreira | Trabalhos | Gestão / sistemas | Skills (efeito real) |
 |---|---|---|---|
-| Desmanche | Puxada (popular → desmanche; amassado derruba o pagamento), Encomenda de luxo (rastreador com timer → polícia na coordenada; adulteração parada na oficina), Frota do tráfico, gestão de desmanches (renda × suspeita da Receita) | Mecânica: ligação direta (nova, para todo carro trancado) e arrombamento; Direção: aderência e giro do carro que você dirige | peças compradas, blindagem/fundo falso como itens |
-| Ladrão | Levantar a fita (sem correr/arma/polícia; disfarce), Invasão noturna (ruído, alarme com tempo para abafar, peso que deixa você lento, receptador) | Furtividade: ruído; Eletrônica: segundos antes do alarme | transportadora/banco com planejamento |
-| Armeiro | Catar sucata (cenas de tiroteio reais e zonas de conflito), bancada (5 receitas), venda aos vapores com chance de travar | Engenharia: material e falhas; Inteligência: receitas | contratos com facções, sequestro |
-| Estelionato | Chupa-cabra (instalar sem ninguém olhando), celulares em furtos em bairro rico, central de golpes com rastreio e VPN, lavagem via cripto | TI: rastreio e instalação; Lábia: chance e lucro | botnet, defesa dos servidores |
-| Jogo do Bicho | Banca (turno, rapa, malote com pivetes), Rota do recolhe (blitz), Banqueiro (pontos por zona, arrego, rival, matador), Patrono (escola de samba → imunidade política) | Influência: arrego; Segurança: assaltos e blitz | eventos de carnaval, opinião pública |
+| Desmanche | Puxada, Encomenda de luxo (rastreador → polícia na coordenada; adulteração parada), Frota do tráfico | Desmanchar qualquer carro roubado (E no desmanche); oficina: funilaria, motor preparado, blindagem, fundo falso; peças sobem a suspeita da Receita; desmanches próprios (renda + peças) | Mecânica (ligação direta, arrombamento, adulteração), Direção (aderência e giro) |
+| Ladrão | Levantar a fita (disfarce), Invasão noturna, Arrombar comércio (mini-game), Grande assalto (caixa de força, vigia, cofre temporizado, fuga) | Ruído com onda sonora (pedestres e polícia), alarme abafável, peso da carga, receptador | Furtividade (ruído), Eletrônica (alarme, fechaduras, cofre) |
+| Armeiro | Catar sucata (cenas reais de tiroteio), Contrato C.V, Contrato milícia | Bancada (5 receitas), venda com chance de travar, munição para a própria arma, silenciador e pente estendido importados, sequestro × seguranças | Engenharia (material, falhas), Inteligência (receitas) |
+| Estelionato | Chupa-cabra, Invasão corporativa | Celulares em furtos ricos, 3 tipos de golpe, rastreio + VPN, batida com destruição de HDs, chantagem (limpo), cripto, lavagem diária para facções | TI (rastreio, instalação, download), Lábia (chance e lucro) |
+| Jogo do Bicho | Banca, Rota do recolhe, Queima de arquivo | Escolta, pontos e arrego por zona, família rival por zona (passe, polícia fecha rival, matador), escola de samba com opinião pública, imunidade e desfile | Influência (arrego, rival), Segurança (assaltos e blitz) |
+
+A aba **GUIA** do menu explica o jogo inteiro e cada carreira (os capítulos das carreiras são gerados dos próprios dados, então não desatualizam).
 
 ## Próximos passos recomendados (por impacto × custo)
 

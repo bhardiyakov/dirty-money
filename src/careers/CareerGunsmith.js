@@ -6,7 +6,11 @@
 //   Torneiro Mecânico   FABRICAR na bancada (favela ou em casa): pistola artesanal, submetralhadora rústica, munição recarregada…
 //                       e VENDER o lote aos vapores (favela). Com Engenharia baixa, parte das armas TRAVA na mão do comprador:
 //                       a moral com o tráfico cai.
-//   Mercador da Morte   fuzis montados com peças importadas (Inteligência 4); contratos com facções e milícias (em breve).
+//   Mercador da Morte   fuzis montados com peças importadas (Inteligência 4); CONTRATOS: entregar um lote do estoque ao C.V
+//                       (moral +) ou à MILÍCIA do Rio Seco (paga mais, mas o tráfico odeia e você vira ALVO DE SEQUESTRO — o
+//                       resgate sai do seu bolso, a não ser que pague SEGURANÇAS). ACESSÓRIOS IMPORTADOS (dinheiro limpo) para as
+//                       SUAS armas: silenciador (o tiro não chama a polícia de longe) e pente estendido (+50% no carregador).
+// Munição recarregada do estoque também pode ir para a SUA mochila (botão "usar munição").
 // Skills: ENGENHARIA (−10% de material por nível e menos falhas) e INTELIGÊNCIA (libera receitas de calibre maior).
 // ============================================================================
 
@@ -18,14 +22,14 @@ class GunsmithCareer extends Career {
             ranks: [
                 { name: 'Catador de Sucata', xp: 0, desc: 'Recolhe cápsulas e peças nas cenas de tiroteio.' },
                 { name: 'Torneiro Mecânico', xp: 500, desc: 'Fabrica armas caseiras e recarrega munição para os vapores.' },
-                { name: 'Mercador da Morte', xp: 2500, desc: 'Fuzis com peças importadas; contratos com facções (em breve).' },
+                { name: 'Mercador da Morte', xp: 2500, desc: 'Fuzis montados, contratos com C.V e milícia, silenciador e pente estendido.' },
             ],
             skills: {
                 engenharia: { name: 'Engenharia', desc: '−10% de material por nível e −6 pontos de chance de a arma travar' },
                 inteligencia: { name: 'Inteligência', desc: 'Libera receitas: escopeta (nível 2) e fuzil montado (nível 4)' },
             },
         });
-        this.data = { scrap: 0, casings: 0, stock: {}, jams: 0 };
+        this.data = { scrap: 0, casings: 0, stock: {}, jams: 0, mods: {}, rivalDeals: 0, guards: 0 };
     }
 
     static get RECIPES() {
@@ -38,6 +42,9 @@ class GunsmithCareer extends Career {
         };
     }
 
+    lotValue() { const R = GunsmithCareer.RECIPES, d = this.data; return Object.keys(R).reduce((s, k) => s + (R[k].gun ? (d.stock[k] || 0) * R[k].price : 0), 0); }
+    static get ACCESSORIES() { return { sil: { name: 'Silenciador', price: 6000, desc: 'o tiro só é percebido bem de perto: a polícia não vem pelo barulho' }, ext: { name: 'Pente estendido', price: 4500, desc: '+50% de balas no carregador' } }; }
+
     get jamChance() { return Math.max(0, 0.3 - 0.06 * this.skill('engenharia')); }
     need(R) { const k = 1 - 0.1 * this.skill('engenharia'); return { scrap: Math.max(1, Math.ceil(R.scrap * k)), casings: Math.ceil(R.casings * k), cost: R.cost }; }
 
@@ -45,8 +52,12 @@ class GunsmithCareer extends Career {
         return [
             { id: 'scrap', rank: 0, name: 'Catar sucata', pay: 'sucata + cápsulas', make: () => new ScrapJob(this),
                 desc: 'Vá à cena de tiroteio mais recente (ou a uma zona de conflito da favela) e vasculhe 3 pontos com E. Polícia perto enquanto você mexe na cena = abordagem.' },
-            { id: 'merchant', rank: 2, name: 'Contrato com facção', pay: '—', soon: true, make: () => null,
-                desc: 'Em breve: miras, silenciadores e pentes importados; vender exclusividade a uma facção cria inimigos na outra.' },
+            { id: 'cv', rank: 2, name: 'Contrato: Comando Verde', pay: 'lote × 1,4 + moral', make: () => new ArmsDealJob(this, 'cv'),
+                check: () => this.lotValue() < 3000 ? 'Precisa de um lote de pelo menos R$ 3.000 no estoque' : null,
+                desc: 'Entregue o seu estoque de armas (lote mínimo R$ 3.000) no fundo da favela. Paga 40% acima dos vapores e o tráfico gosta.' },
+            { id: 'mil', rank: 2, name: 'Contrato: Milícia do Rio Seco', pay: 'lote × 1,9', make: () => new ArmsDealJob(this, 'mil'),
+                check: () => this.lotValue() < 3000 ? 'Precisa de um lote de pelo menos R$ 3.000 no estoque' : null,
+                desc: 'A milícia paga quase o dobro — mas armar o inimigo derruba sua moral com o tráfico e te torna alvo de sequestro (contrate seguranças).' },
         ];
     }
 
@@ -63,8 +74,28 @@ class GunsmithCareer extends Career {
             html += `<button data-act="craft" data-arg="${k}" ${can ? '' : 'disabled'}>${Rc.name} — ${n.scrap} kg${n.casings ? ` + ${n.casings} cáps.` : ''} + ${brl(n.cost)}${locked ? ` (${this.rank < Rc.rank ? this.ranks[Rc.rank].name : 'Inteligência ' + Rc.intel})` : ''}</button>`;
         }
         const total = Object.keys(R).reduce((s, k) => s + (d.stock[k] || 0) * R[k].price, 0);
-        html += `<button data-act="sell" ${total > 0 && inFav ? '' : 'disabled'}>Vender o lote aos vapores (até ${brl(total)})${inFav ? '' : ' — só na favela'}</button></div>`;
+        html += `<button data-act="sell" ${total > 0 && inFav ? '' : 'disabled'}>Vender o lote aos vapores (até ${brl(total)})${inFav ? '' : ' — só na favela'}</button>`;
+        html += `<button data-act="ammo" ${d.stock.ammo_c > 0 ? '' : 'disabled'}>Usar munição do estoque na sua arma (${d.stock.ammo_c || 0} caixa(s) · +24 balas cada)</button></div>`;
+        if (this.rank < 2) return html + '<p class="cr-dim">Como MERCADOR DA MORTE: contratos com facções e acessórios importados para as suas armas.</p>';
+        const w = this.g.player.weapon, gun = this.g.inventory.isGun(w), m = d.mods[w] || {};
+        html += `<h3 style="font-size:13px;margin-top:6px">IMPORTADOS — ${gun ? Weapons[w].name : 'saque uma arma de fogo'}</h3><div class="cr-btns">`;
+        for (const [k, A] of Object.entries(GunsmithCareer.ACCESSORIES)) html += `<button data-act="acc" data-arg="${k}" ${gun && !m[k] ? '' : 'disabled'}>${m[k] ? '✔ ' : ''}${A.name} (${brl(A.price)} limpo) — ${A.desc}</button>`;
+        html += `</div><div class="cr-row"><span>Negócios com a milícia</span><b>${d.rivalDeals}</b></div><div class="cr-row"><span>Seguranças</span><b>${d.guards > 0 ? d.guards + ' dia(s)' : 'nenhum'}</b></div>
+            <div class="cr-btns"><button data-act="guards">Contratar seguranças por 5 dias (${brl(8000)})</button></div>`;
         return html;
+    }
+
+    onNewDay() {
+        const d = this.data, g = this.g;
+        if (d.guards > 0) d.guards--;
+        if (this.rank < 2 || d.rivalDeals <= 0) return;
+        const risk = Math.min(0.5, 0.12 * d.rivalDeals) * (d.guards > 0 ? 0.2 : 1);
+        if (Math.random() >= risk) return;
+        const ransom = Math.round((g.inventory.cash + g.inventory.clean) * 0.25);
+        const fromDirty = Math.min(g.inventory.cash, ransom);
+        g.inventory.cash -= fromDirty; g.inventory.clean = Math.max(0, g.inventory.clean - (ransom - fromDirty));
+        d.rivalDeals = Math.max(0, d.rivalDeals - 1);
+        g._flash(`🚨 SEQUESTRO! O tráfico pegou um parente seu por armar a milícia — resgate de ${brl(ransom)}${d.guards > 0 ? ' (os seguranças falharam)' : ''}`);
     }
 
     action(name, arg) {
@@ -81,6 +112,30 @@ class GunsmithCareer extends Career {
             this.addXp(Rc.gun ? 30 + Rc.price / 60 : 12);
             AudioFX.blip(420, 0.12, 0.16);
             return `Fabricou: ${Rc.name}`;
+        }
+        if (name === 'ammo') {
+            const w = this.g.player.weapon;
+            if (!(d.stock.ammo_c > 0)) return 'Sem munição recarregada no estoque';
+            if (!inv.isGun(w) || !inv.owned(w)) return 'Saque a arma de fogo que vai receber a munição';
+            d.stock.ammo_c--; inv.addAmmo(w, 24);
+            return `+24 balas para ${Weapons[w].name} (${inv.ammoText(w)})`;
+        }
+        if (name === 'acc') {
+            const A = GunsmithCareer.ACCESSORIES[arg], w = this.g.player.weapon;
+            if (!A) return null;
+            if (this.rank < 2) return 'Só para Mercador da Morte';
+            if (!inv.isGun(w)) return 'Saque a arma de fogo que vai receber o acessório';
+            const m = d.mods[w] || (d.mods[w] = {});
+            if (m[arg]) return 'Essa arma já tem';
+            if (inv.clean < A.price) return `Precisa de ${brl(A.price)} de dinheiro LIMPO (importação oficial)`;
+            inv.clean -= A.price; m[arg] = 1; this.mgr.applyMods();
+            this.addXp(60);
+            return `${A.name} instalado na ${Weapons[w].name}`;
+        }
+        if (name === 'guards') {
+            if (inv.cash < 8000) return `Faltam ${brl(8000 - inv.cash)}`;
+            inv.cash -= 8000; d.guards += 5;
+            return 'Seguranças contratados por 5 dias: sequestro fica muito mais difícil';
         }
         if (name === 'sell') {
             const p = this.g.player.position;
@@ -101,6 +156,35 @@ class GunsmithCareer extends Career {
             return `Vendeu ${sold} peça(s) por ${brl(pay)}${jam ? ` · ${jam} arma(s) TRAVARAM na mão do comprador: moral com o tráfico −${3 * jam}` : ''}`;
         }
         return null;
+    }
+}
+
+// Contrato de armas (Mercador da Morte): leva o lote do estoque até o comprador.
+class ArmsDealJob extends CareerJob {
+    constructor(c, buyer) {
+        super(c, { title: buyer === 'cv' ? 'CONTRATO · C.V' : 'CONTRATO · MILÍCIA', text: buyer === 'cv' ? 'Entregue o lote no fundo da favela' : 'Entregue o lote no ponto da milícia', limit: 480 });
+        this.buyer = buyer;
+    }
+    start() {
+        const p = this.g._playerState().pos;
+        if (this.buyer === 'cv') this.drop = this.mgr.favelaSpot(7704, 0.55, 0.85);
+        else { const d = this.mgr.cityDoor(p, 150, 900, (q) => q.district !== 'favela' && q.biome === 'industrial') || this.mgr.cityDoor(p, 150, 1200, (q) => q.district !== 'favela'); if (!d) { this.why = 'A milícia não respondeu'; return false; } this.drop = { x: d.x, z: d.z }; }
+        this.value = this.c.lotValue();
+        this.target(this.drop.x, this.drop.z, this.buyer === 'cv' ? 'Entrega ao C.V' : 'Ponto da milícia');
+        return true;
+    }
+    status() { return `LOTE ${brl(this.value)}`; }
+    prompt() { return this.g.mode === 'player' && this.near(this.g.player.position, 4) ? `<b>E</b> entregar o lote (${brl(this.value)})<small>${this.buyer === 'cv' ? 'o tráfico paga 40% a mais' : 'a milícia paga quase o dobro — o tráfico vai saber'}</small>` : ''; }
+    interact() {
+        const g = this.g; if (g.mode !== 'player' || !this.near(g.player.position, 4)) return false;
+        const c = this.c, d = c.data, R = GunsmithCareer.RECIPES;
+        let ok = 0, jam = 0;
+        for (const k of Object.keys(R)) { if (!R[k].gun) continue; const n = d.stock[k] || 0; for (let i = 0; i < n; i++) { if (Math.random() < c.jamChance) jam++; else ok += R[k].price; } d.stock[k] = 0; }
+        const mul = this.buyer === 'cv' ? 1.4 : 1.9, pay = Math.round(ok * mul);
+        if (this.buyer === 'cv') Standing.add('traffic', 6 - 3 * jam);
+        else { Standing.add('traffic', -12); d.rivalDeals++; }
+        this.succeed(pay, 150 + pay / 80, `lote entregue${jam ? ` (${jam} arma(s) travaram no teste)` : ''}${this.buyer === 'mil' ? ' · o tráfico ficou sabendo (moral −12)' : ''}`);
+        return true;
     }
 }
 

@@ -40,17 +40,19 @@ class Inventory {
     isGun(key) { return !!(Weapons[key] && Weapons[key].gun); }
 
     mag(key) { return this.weapons[key].mag || 0; }
+    // Capacidade do carregador (pente estendido do Armeiro: +50%, ver careers/CareerGunsmith.js → magBonus).
+    magOf(key) { return Math.round(Weapons[key].mag * (this.magBonus && this.magBonus[key] ? 1.5 : 1)); }
     reserve(key) { return this.weapons[key].reserve || 0; }
     canFire(key) { return this.isGun(key) && this.mag(key) > 0; }
     canReload(key) {
-        return this.isGun(key) && this.mag(key) < Weapons[key].mag && this.reserve(key) > 0;
+        return this.isGun(key) && this.mag(key) < this.magOf(key) && this.reserve(key) > 0;
     }
 
     consume(key) { this.weapons[key].mag--; }
 
     // Passa munição da reserva para o carregador. Retorna quantas balas entraram.
     reload(key) {
-        const w = this.weapons[key], need = Weapons[key].mag - w.mag, n = Math.min(need, w.reserve);
+        const w = this.weapons[key], need = this.magOf(key) - w.mag, n = Math.min(need, w.reserve);
         w.mag += n; w.reserve -= n;
         return n;
     }
@@ -60,7 +62,7 @@ class Inventory {
         const w = this.weapons[key];
         const had = w.owned;
         w.owned = true;
-        if (this.isGun(key)) { w.mag = Math.max(w.mag, Weapons[key].mag); w.reserve += reserve; }
+        if (this.isGun(key)) { w.mag = Math.max(w.mag, this.magOf(key)); w.reserve += reserve; }
         return !had;
     }
 

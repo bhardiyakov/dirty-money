@@ -6,7 +6,11 @@
 //   Clonador / Golpista    CENTRAL DE GOLPES (em casa ou na favela): cada golpe gasta 1 dado; a Lábia aumenta a chance e o lucro.
 //                          Cada golpe enche a barra de RASTREIO da Delegacia de Crimes Cibernéticos (a skill TI enche menos);
 //                          VPN/proxy esvazia. Rastreio cheio = a polícia chega (★★) e os dados são apreendidos.
-//   Operador de Botnet     LAVAGEM VIA CRIPTO (sujo → limpo) e, em breve, invasão de bancos de dados e defesa dos servidores.
+//                          Tipos de golpe: FALSO PARENTE (seguro, pouco), FALSA CENTRAL DO BANCO (médio) e BOLETO/PIX FALSO PARA
+//                          EMPRESAS (2 dados, muito dinheiro, muito rastreio). Rastreio cheio estando na central = BATIDA: a polícia
+//                          arromba a porta e você tem segundos para DESTRUIR OS HDs (apertar E/clicar várias vezes; TI ajuda).
+//   Operador de Botnet     INVASÃO CORPORATIVA (plugar o dispositivo numa sede sem ser visto → DOSSIÊ → CHANTAGEM paga em dinheiro
+//                          LIMPO), LAVAGEM VIA CRIPTO (sujo → limpo) e LAVAR PARA AS FACÇÕES (renda limpa diária, rastreio diário).
 // ============================================================================
 
 class ScamCareer extends Career {
@@ -17,22 +21,23 @@ class ScamCareer extends Career {
             ranks: [
                 { name: 'Pescador de Dados', xp: 0, desc: 'Chupa-cabra em caixa eletrônico e celulares furtados.' },
                 { name: 'Clonador / Golpista', xp: 500, desc: 'Central de golpes: esvazia contas sem sair de casa.' },
-                { name: 'Operador de Botnet', xp: 2500, desc: 'Lava dinheiro em cripto; invasões corporativas (em breve).' },
+                { name: 'Operador de Botnet', xp: 2500, desc: 'Invasão corporativa e chantagem, cripto e lavagem para as facções.' },
             ],
             skills: {
                 ti: { name: 'TI', desc: '−12% de rastreio por golpe e instalação do skimmer mais rápida, por nível' },
                 labia: { name: 'Lábia', desc: '+6% de chance de a vítima cair e +10% de lucro por golpe, por nível' },
             },
         });
-        this.data = { data: 0, trace: 0 };
+        this.data = { data: 0, trace: 0, dossier: 0, service: false };
+        this.raid = null;
     }
 
     jobs() {
         return [
             { id: 'skim', rank: 0, name: 'Chupa-cabra', pay: '3–6 dados', make: () => new SkimJob(this),
                 desc: 'Instale o skimmer no caixa eletrônico marcado quando ninguém estiver olhando, espere ~40 s e volte para recolher os dados. Dica: furtar (C) gente em bairro rico rende celulares.' },
-            { id: 'botnet', rank: 2, name: 'Invasão corporativa', pay: '—', soon: true, make: () => null,
-                desc: 'Em breve: roubo de dados para chantagem e a defesa dos seus servidores quando a polícia arrombar a porta.' },
+            { id: 'corp', rank: 2, name: 'Invasão corporativa', pay: '1 dossiê → chantagem', make: () => new CorpHackJob(this),
+                desc: 'Vá até a sede marcada e fique plugado no servidor ~15 s sem ninguém olhando. O dossiê vira chantagem (dinheiro LIMPO) na aba, em casa ou na favela.' },
         ];
     }
 
@@ -44,7 +49,51 @@ class ScamCareer extends Career {
         this.g._flash(`📱 Levou também um celular desbloqueado: +1 dado (${this.data.data})`);
     }
 
-    update(dt) { if (this.data.trace > 0) this.data.trace = Math.max(0, this.data.trace - dt * 0.12); }
+    update(dt) { if (this.data.trace > 0 && !this.raid) this.data.trace = Math.max(0, this.data.trace - dt * 0.12); }
+
+    onNewDay() {
+        const d = this.data;
+        if (!d.service || this.rank < 2) return;
+        const v = 2500 + 300 * this.skill('labia');
+        this.g.inventory.clean += v;
+        this.addXp(30);
+        this.g._flash(`💻 Lavagem das facções: +${brl(v)} limpos` + this._trace(15));
+    }
+
+    // ---- BATIDA: a polícia arromba a porta da central. Tela própria (fora do loop do jogo: funciona com o menu aberto ou numa casa).
+    _startRaid() {
+        const g = this.g, need = Math.max(4, 11 - this.skill('ti'));
+        if (g.menu && g.menu.isOpen) g.menu.close();
+        this.raid = { left: 8, hits: 0, need };
+        const el = this._raidEl || (this._raidEl = document.createElement('div'));
+        el.id = 'crRaid';
+        el.style.cssText = 'position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(60,0,0,0.55);font-family:Silkscreen,monospace;color:#fff;text-transform:uppercase;text-align:center;cursor:pointer;user-select:none';
+        document.body.appendChild(el);
+        const hit = () => { if (!this.raid) return; this.raid.hits++; AudioFX.blip(300 + this.raid.hits * 40, 0.05, 0.12); this._raidDraw(); if (this.raid.hits >= this.raid.need) this._endRaid(true); };
+        this._raidKey = (e) => { if (e.key === 'e' || e.key === 'E' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); hit(); } };
+        this._raidClick = (e) => { e.preventDefault(); hit(); };
+        window.addEventListener('keydown', this._raidKey, true);
+        el.addEventListener('pointerdown', this._raidClick);
+        this._raidTimer = setInterval(() => { if (!this.raid) return; this.raid.left -= 0.1; this._raidDraw(); if (this.raid.left <= 0) this._endRaid(false); }, 100);
+        this._raidDraw();
+        AudioFX.blip(160, 0.5, 0.25);
+    }
+    _raidDraw() {
+        const r = this.raid; if (!r || !this._raidEl) return;
+        this._raidEl.innerHTML = `<div style="font-size:30px;color:#ff5a4d;text-shadow:0 0 18px #f00">🚨 BATIDA! A POLÍCIA ESTÁ ARROMBANDO A PORTA</div>
+            <div style="font-size:18px">DESTRUA OS HDs: aperte <b style="color:#ffd23a">E</b> (ou toque na tela) ${r.need} vezes</div>
+            <div style="font-size:44px;color:#ffd23a">${r.hits}/${r.need}</div><div style="font-size:16px">${Math.max(0, r.left).toFixed(1)} s</div>`;
+    }
+    _endRaid(ok) {
+        const g = this.g, d = this.data, inv = g.inventory;
+        clearInterval(this._raidTimer);
+        window.removeEventListener('keydown', this._raidKey, true);
+        if (this._raidEl) { this._raidEl.removeEventListener('pointerdown', this._raidClick); this._raidEl.remove(); }
+        this.raid = null; d.data = 0; d.dossier = 0;
+        if (ok) { d.trace = 20; g.wanted.ensureLevel(1); g._flash('💥 HDs destruídos! Não sobrou prova — saia daí antes que entrem'); this.addXp(60); }
+        else { const lost = Math.round(inv.cash * 0.35); inv.cash -= lost; d.trace = 40; g.wanted.addStars(3, 'cyber'); g._flash(`🚔 Pegaram os servidores! Apreenderam ${brl(lost)} e os dados — FUJA!`); }
+        if (g.policeManager) g.policeManager.alertNear(g.player.position, 320);
+    }
 
     get chance() { return Math.min(0.92, 0.45 + 0.06 * this.skill('labia')); }
 
@@ -55,35 +104,67 @@ class ScamCareer extends Career {
         if (this.rank < 1) return html + '<p class="cr-dim">Na patente GOLPISTA você abre a central de golpes (em casa ou na favela).</p>';
         html += `<div class="cr-row"><span>Chance de cair no golpe</span><b>${Math.round(this.chance * 100)}%</b></div>
             <p class="cr-dim">${here ? 'Central aberta aqui.' : 'A central só funciona em casa ou na favela.'}</p>
-            <div class="cr-btns"><button data-act="scam" ${here && d.data > 0 ? '' : 'disabled'}>Aplicar golpe (gasta 1 dado)</button>
-            <button data-act="vpn" ${tr > 0 ? '' : 'disabled'}>Trocar VPN / proxy (${brl(250)}, −35% rastreio)</button>`;
-        if (this.rank >= 2) html += `<button data-act="crypto" ${here ? '' : 'disabled'}>Lavar via cripto: ${brl(5000)} sujo → ${brl(4250)} limpo (+12% rastreio)</button>`;
+            <div class="cr-btns">`;
+        for (const [k, T] of Object.entries(ScamCareer.TYPES)) {
+            const lock = this.rank < T.rank;
+            html += `<button data-act="scam" data-arg="${k}" ${here && d.data >= T.data && !lock ? '' : 'disabled'}>${T.name} — ${T.data} dado(s), ${Math.round(Math.min(0.95, Math.max(0.05, this.chance + T.chance)) * 100)}% de chance, ${brl(T.min)}–${brl(T.max)}, rastreio +${T.trace}${lock ? ` (${this.ranks[T.rank].name})` : ''}</button>`;
+        }
+        html += `<button data-act="vpn" ${tr > 0 ? '' : 'disabled'}>Trocar VPN / proxy (${brl(250)}, −35% rastreio)</button>`;
+        if (this.rank >= 2) html += `<button data-act="crypto" ${here ? '' : 'disabled'}>Lavar via cripto: ${brl(5000)} sujo → ${brl(4250)} limpo (+12% rastreio)</button>
+            <button data-act="blackmail" ${here && d.dossier > 0 ? '' : 'disabled'}>Chantagear com um dossiê (${d.dossier}) — ${brl(8000)}–${brl(20000)} LIMPO, rastreio +35</button>
+            <button data-act="service">${d.service ? '✔ Lavando para as facções (renda limpa diária) — clique para parar' : 'Lavar para as facções: +' + brl(2500 + 300 * this.skill('labia')) + ' limpo por dia, rastreio +15/dia'}</button>`;
         return html + '</div>';
+    }
+
+    static get TYPES() {
+        return {
+            parente: { name: 'Falso parente no WhatsApp', rank: 1, data: 1, chance: 0.15, min: 150, max: 450, trace: 8 },
+            banco: { name: 'Falsa central do banco', rank: 1, data: 1, chance: 0, min: 350, max: 950, trace: 14 },
+            empresa: { name: 'Boleto / Pix falso para empresas', rank: 1, data: 2, chance: -0.15, min: 1500, max: 4000, trace: 28 },
+        };
     }
 
     _trace(n) {
         const d = this.data, g = this.g;
         d.trace = Math.min(100, d.trace + n * (1 - 0.12 * this.skill('ti')));
         if (d.trace < 100) return '';
+        if (this.mgr.atBase() && !this.raid) { this._startRaid(); return ' · 🚨 RASTREADO: A POLÍCIA ESTÁ ARROMBANDO A PORTA!'; }
         d.trace = 30; d.data = 0;
         g.wanted.addStars(2, 'cyber');
         if (g.policeManager) g.policeManager.alertNear(g.player.position, 320);
         return ' · 🚨 RASTREADO! A polícia está a caminho e apreendeu seus dados';
     }
 
-    action(name) {
+    action(name, arg) {
         const d = this.data, inv = this.g.inventory;
+        if (this.raid) return 'BATIDA EM ANDAMENTO — destrua os HDs!';
         if (name === 'scam') {
-            if (this.rank < 1) return 'Só para Golpista';
+            const T = ScamCareer.TYPES[arg] || ScamCareer.TYPES.banco;
+            if (this.rank < T.rank) return 'Só para Golpista';
             if (!this.mgr.atBase()) return 'A central só funciona em casa ou na favela';
-            if (d.data <= 0) return 'Sem dados — instale chupa-cabras ou furte celulares';
-            d.data--;
-            const ok = Math.random() < this.chance;
-            const v = ok ? Math.round((300 + Math.random() * 600) * (1 + 0.1 * this.skill('labia'))) : 0;
+            if (d.data < T.data) return 'Sem dados suficientes — instale chupa-cabras ou furte celulares';
+            d.data -= T.data;
+            const ok = Math.random() < Math.min(0.95, Math.max(0.05, this.chance + T.chance));
+            const v = ok ? Math.round((T.min + Math.random() * (T.max - T.min)) * (1 + 0.1 * this.skill('labia'))) : 0;
             if (ok) inv.addCash(v);
-            this.addXp(ok ? 30 : 10);
+            this.addXp(ok ? 20 + v / 40 : 8);
             AudioFX.blip(ok ? 950 : 220, 0.12, 0.15);
-            return (ok ? `A vítima caiu: +${brl(v)}` : 'Desconfiou e desligou na sua cara') + this._trace(14);
+            return (ok ? `${T.name}: a vítima caiu, +${brl(v)}` : `${T.name}: desconfiou e desligou na sua cara`) + this._trace(T.trace);
+        }
+        if (name === 'blackmail') {
+            if (this.rank < 2) return 'Só para Operador de Botnet';
+            if (!this.mgr.atBase()) return 'Só em casa ou na favela';
+            if (d.dossier <= 0) return 'Sem dossiê — faça uma invasão corporativa';
+            d.dossier--;
+            const v = Math.round((8000 + Math.random() * 12000) * (1 + 0.1 * this.skill('labia')) / 100) * 100;
+            inv.clean += v;
+            this.addXp(160);
+            return `A diretoria pagou para o dossiê sumir: +${brl(v)} LIMPOS` + this._trace(35);
+        }
+        if (name === 'service') {
+            if (this.rank < 2) return 'Só para Operador de Botnet';
+            d.service = !d.service;
+            return d.service ? 'Você agora lava o dinheiro das facções: renda limpa todo dia (e rastreio)' : 'Parou de lavar para as facções';
         }
         if (name === 'vpn') {
             if (inv.cash < 250) return 'Faltam ' + brl(250 - inv.cash);
@@ -159,5 +240,28 @@ class SkimJob extends CareerJob {
             this.wait -= dt;
             if (this.wait <= 0) g._flash('O skimmer já tem dados — vá recolher');
         }
+    }
+}
+
+// Invasão corporativa (Operador de Botnet): plugar o dispositivo no servidor de uma sede sem ninguém ver.
+class CorpHackJob extends CareerJob {
+    constructor(c) { super(c, { title: 'INVASÃO CORPORATIVA', text: 'Plugue o dispositivo no servidor da sede marcada', limit: 480 }); this.prog = 0; this._why = ''; }
+    start() {
+        const p = this.g._playerState().pos, d = this.mgr.cityDoor(p, 60, 700, (q) => q.district !== 'favela' && q.biome === 'downtown') || this.mgr.cityDoor(p, 60, 900, (q) => q.district !== 'favela');
+        if (!d) { this.why = 'Nenhuma sede no radar'; return false; }
+        this.corp = ['Holding Atlântica S.A.', 'Construtora Prazer Mar', 'Grupo Litoral Seguros', 'Petrobrisa Energia'][Math.floor(Math.random() * 4)];
+        this.text = `Sede da ${this.corp} (ao lado de ${d.name})`;
+        this.target(d.x, d.z, 'Sede corporativa');
+        return true;
+    }
+    status() { return this.prog > 0 ? `DOWNLOAD ${crBar(this.prog)}${this._why ? ' · ' + this._why : ''}` : 'CHEGUE À SEDE'; }
+    update(dt, pos) {
+        const g = this.g; this._why = '';
+        if (!this.near(pos, 4) || g.mode !== 'player') { if (this.prog > 0) this._why = 'VOLTE AO SERVIDOR'; return; }
+        if (this.mgr.copDist(pos) < 20) this._why = 'POLÍCIA OLHANDO';
+        else if (this.mgr.watcher(pos, 7)) this._why = 'TEM GENTE OLHANDO';
+        if (this._why) return;
+        this.prog += dt / Math.max(8, 15 - this.c.skill('ti'));
+        if (this.prog >= 1) { this.c.data.dossier++; this.succeed(0, 180, `dossiê da ${this.corp} copiado — chantageie na aba O`); }
     }
 }

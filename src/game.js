@@ -408,6 +408,7 @@ class Game {
             const car = this.activeCar;
             car.drive(axis.z, axis.x, dt);
             this._fuelUpdate(dt);
+            if (this.careers && !frozenUI && this.careers.carPrompt() && this.input.consumePress('e')) this.careers.carInteract();      // desmanche: E desmancha o carro
             // (uma batida forte pode arremessar o piloto de dentro do drive(): aí o foco é o jogador)
             this.camera.follow((this.mode === 'car' && this.activeCar ? this.activeCar : this.player).position, dt);
         } else if (this.mode === 'heli' && this.chopper) {
@@ -817,7 +818,10 @@ class Game {
             // Tiro de verdade: projéteis (com mira assistida), ouvido por todos; libera as armas da polícia.
             const angle = this.combat.aimAssist(pos.x, pos.z, heading);
             this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p }, p.weapon);
-            if (Baile.covers(pos.x, pos.z)) {                                // o baile abafa o tiro: só quem está a < 14 u (e a vista) percebe
+            if (this.careers && this.careers.silenced(p.weapon)) {          // silenciador (Armeiro): só quem está muito perto e vê percebe
+                this.npcManager.alertViolence(pos, 8);
+                this.wanted.reportCrime();
+            } else if (Baile.covers(pos.x, pos.z)) {                                // o baile abafa o tiro: só quem está a < 14 u (e a vista) percebe
                 this.npcManager.alertViolence(pos, 14);
                 this.wanted.reportCrime();
                 Baile.onShot(pos);
@@ -1241,6 +1245,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         } else if (this.mode === 'car' && this.activeCar && this.activeCar.hotwire > 0) {
             const hw = this.activeCar;
             html = `<b>LIGAÇÃO DIRETA</b> ${crBar(1 - hw.hotwire / (hw.hotwireMax || 1))}<small>você está exposto na rua — a skill Mecânica (Desmanche) encurta</small>`;
+        } else if (this.mode === 'car' && this.careers && this.careers.carPrompt()) {
+            html = this.careers.carPrompt();
         } else if (this.mode === 'car' && this._fuelPrompt) {
             html = this._fuelPrompt;
         } else if (this.mode === 'player' && !this.player.busy && !this.lockpick.active) {
@@ -2077,6 +2083,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             5: '★★★★★ INIMIGO DO ESTADO! Ruas fechadas, SWAT e exército atrás de você',
         };
         if (this.goals) this.goals.onWanted(n, prev, why);
+        if (this.careers) this.careers.onWanted(n, prev);
         if (n > prev && msg[n]) this._flash(msg[n]);
         else if (n === 0 && why === 'escape') this._flash('Você se safou! A polícia perdeu o seu rastro');
         if (this.policeManager) this.policeManager.onWantedChange(n, prev, why);

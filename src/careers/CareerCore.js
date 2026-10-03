@@ -123,7 +123,10 @@ class Careers {
         const d = this.by.chop.skill('direcao');
         Vehicle.playerGrip = 1 + 0.09 * d;                   // menos derrapagem lateral
         Vehicle.playerTurn = 1 + 0.05 * d;                   // giro mais vivo
+        const mods = this.by.gunsmith.data.mods || {}, mb = this.g.inventory.magBonus = {};      // pente estendido
+        for (const k of Object.keys(mods)) if (mods[k].ext) mb[k] = 1;
     }
+    silenced(weapon) { const m = this.by.gunsmith.data.mods; return !!(m && m[weapon] && m[weapon].sil); }
     lockpickMul() { return 1 - 0.07 * this.by.chop.skill('mecanica'); }                 // dificuldade do arrombamento (G)
     hotwireTime() { return Math.max(0.8, 3.2 - 0.45 * this.by.chop.skill('mecanica')); }   // s de ligação direta (carro trancado)
 
@@ -220,13 +223,19 @@ class Careers {
     }
 
     onCarEntered(car) { if (this.job) this.job.onCarEntered(car); }
+
+    // Dentro de um carro (tecla E): por enquanto só o desmanche usa (desmanchar o carro roubado).
+    carPrompt() { try { return this.by.chop.carPrompt(); } catch (e) { console.error('[CARREIRAS] carPrompt', e); return ''; } }
+    carInteract() { return this.by.chop.carInteract(); }
     onPickpocket(npc, pos) { this.by.scam.onPickpocket(npc, pos); }
     onNewDay() { for (const c of this.list) c.onNewDay(); }
+    onWanted(n, prev) { this.by.bicho.onWanted(n, prev); }
 
     // Ação de botão da tela (ui/CareerUI.js).
     uiAction(act, careerId, arg) {
         const c = this.by[careerId];
         if (act === 'job') { const r = this.start(careerId, arg); this.g._flash(r.msg); if (r.ok) this.g.menu.close(); return; }
+        if (act === 'guide') { const m = this.g.menu; m.guide = m.guide || new GuideUI(this.g); m.guide.sel = 'career_' + careerId; m.setTab('guide'); return; }
         if (act === 'abandon') { this.g._flash(this.abandon().msg); return; }
         if (act === 'skill' && c) { this.g._flash(c.upgrade(arg) ? `${c.skillDefs[arg].name} nível ${c.skill(arg)}` : 'Sem pontos de habilidade (ou já no máximo)'); return; }
         if (c) { const msg = c.action(act, arg); if (msg) this.g._flash(msg); }

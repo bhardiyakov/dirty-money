@@ -11,7 +11,7 @@
 
 class PauseMenu {
     static get TABS() {
-        return [['map', 'MAPA'], ['inventory', 'INVENTÁRIO'], ['status', 'STATUS'], ['careers', 'CARREIRAS'], ['settings', 'CONFIGURAÇÕES']];
+        return [['map', 'MAPA'], ['inventory', 'INVENTÁRIO'], ['status', 'STATUS'], ['careers', 'CARREIRAS'], ['guide', 'GUIA'], ['settings', 'CONFIGURAÇÕES']];
     }
 
     // Legenda do mapa: tipos de lugar (a chave é o `type` dos POIs).
@@ -154,6 +154,7 @@ class PauseMenu {
               </div>
               <div class="pm-page" data-page="status"><div class="pm-stat-grid" id="pmStatus"></div></div>
               <div class="pm-page" data-page="careers"><div id="pmCareers"></div></div>
+              <div class="pm-page" data-page="guide"><div id="pmGuide"></div></div>
               <div class="pm-page" data-page="settings">
                 <div class="px pm-set"><div class="px-title">CONFIGURAÇÕES</div><div id="pmSet"></div>
                   <div class="pm-keys"><b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas</div></div>
@@ -306,6 +307,7 @@ class PauseMenu {
         } else if (id === 'inventory') { this._renderInventory(); }
         else if (id === 'status') this._renderStatus();
         else if (id === 'careers') { if (this.g.careers) this.g.careers.ui.render(this.$('pmCareers')); }
+        else if (id === 'guide') { (this.guide || (this.guide = new GuideUI(this.g))).render(this.$('pmGuide')); }
         else if (id === 'settings') this._renderSettings();
     }
 
@@ -593,7 +595,7 @@ class PauseMenu {
         let desc = '', btns = [];
         if (it.kind === 'weapon') {
             const W = Weapons[it.key], eq = this.g.player.weapon === it.key;
-            desc = W.gun ? `Dano ${W.dmg}${W.pellets > 1 ? ' ×' + W.pellets : ''}<br>Alcance ${W.range} · ${W.auto ? 'Automática' : 'Tiro a tiro'}<br>Carregador ${inv.mag(it.key)}/${W.mag} · reserva ${inv.reserve(it.key)}` : `Dano ${W.dmg} · corpo a corpo`;
+            desc = W.gun ? `Dano ${W.dmg}${W.pellets > 1 ? ' ×' + W.pellets : ''}<br>Alcance ${W.range} · ${W.auto ? 'Automática' : 'Tiro a tiro'}<br>Carregador ${inv.mag(it.key)}/${inv.magOf(it.key)} · reserva ${inv.reserve(it.key)}` : `Dano ${W.dmg} · corpo a corpo`;
             btns = [[eq ? 'EM USO' : 'EQUIPAR', 'primary'], ['DESCARTAR', 'discard']];
         } else if (it.kind === 'ammo') { desc = `Munição de ${Weapons[it.key].name}<br>${it.count} balas na mochila.`; btns = [['DESCARTAR', 'discard']]; }
         else if (it.kind === 'medkit') { desc = `Recupera 55 de vida.<br>${it.count} no estoque (M também usa).`; btns = [['USAR', 'primary'], ['DESCARTAR', 'discard']]; }

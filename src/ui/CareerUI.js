@@ -73,7 +73,7 @@ class CareerUI {
             main += `<div class="cr-box cr-active"><h3>EM ANDAMENTO · ${h.title}</h3><p class="cr-dim">${h.text}${h.extra ? ' — ' + h.extra : ''}</p><div><button data-act="abandon" data-career="${M.job.c.id}">Abandonar o trabalho</button></div></div>`;
         }
         const nx = c.nextRank;
-        main += `<div class="cr-box" style="--c:${c.color}"><h3>${c.icon} ${c.name} — ${c.rankName.toUpperCase()}</h3><p class="cr-dim">${c.desc}</p>
+        main += `<div class="cr-box" style="--c:${c.color}"><h3>${c.icon} ${c.name} — ${c.rankName.toUpperCase()} <button data-act="guide" style="float:right;font-size:11px;padding:3px 8px">? Como funciona</button></h3><p class="cr-dim">${c.desc}</p>
             <div class="cr-ranks">${c.ranks.map((r, i) => `<span class="${i < c.rank ? 'done' : (i === c.rank ? 'cur' : '')}" title="${r.desc}">${r.name}${i > c.rank ? ` · ${r.xp} XP` : ''}</span>`).join('')}</div>
             <p class="cr-dim">${c.ranks[c.rank].desc}${nx ? ` Próxima patente: <b style="color:#ffe27a">${nx.name}</b> em ${nx.xp - c.xp} XP.` : ' Topo da carreira.'}</p></div>`;
 
