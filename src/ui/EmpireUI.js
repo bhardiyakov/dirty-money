@@ -92,6 +92,11 @@ class EmpireUI {
             case 'raze': return job(new EmpireBombJob(e.stub, 'raze', this.razeD || null));
             case 'contract': return job(new EmpireTargetJob(e.stub, 'hit', null));
             case 'sabotage': return job(new EmpireBombJob(e.stub, 'sabotage', null));
+            case 'bankGps': { const b = Banks.get(arg); if (b) { g.setGps(b.x, b.z, b.name); g.menu.close(); } return null; }
+            case 'blueprint': return Banks.buyBlueprint(g, arg);
+            case 'bribe': return Banks.bribe(g, arg);
+            case 'power': return job(new BankPowerJob(e.stub, Banks.get(arg)));
+            case 'stashHot': return Banks.stash(g);
         }
         return null;
     }
@@ -139,6 +144,20 @@ class EmpireUI {
         h += `</table><p class="cr-dim">Delegado com 10 ❤: viaturas do distrito com metade do alcance e estrelas subindo na metade da velocidade (presentes: 1 por dia, entregue no distrito; sem presente há 3 dias, ele esfria). Fornecedor com 10 ❤: armas 40% mais baratas. Facções com relação −4 ou pior emboscam suas rotas.</p>
             <div class="em-row"><span>Extorquir vereador em</span><select data-target="extortD">${opt(this.extortD, 'qualquer distrito')}</select><button data-emp="extort">Ir</button></div>
             <div class="em-row" style="margin-top:6px"><span>Destruir galpão rival em</span><select data-target="razeD">${opt(this.razeD, 'qualquer distrito')}</select><button data-emp="raze">Ir</button></div></div></div>`;
+
+        // bancos
+        h += `<div class="cr-box"><h3>BANCOS <small>3 sedes · 7 agências</small></h3>
+            <div class="em-grid"><div>${row('Saldo em conta (limpo, rende 0,15%/dia)', brl(Banks.account))}${row('Alerta do COAF', Math.round(Banks.coaf) + '%')}${bar(Banks.coaf, '#ff5a4d')}
+            ${row('Cédulas marcadas com você', `${brl(Banks.hot)} (${Banks.hotKg} kg)`)}<div class="em-btns"><button data-emp="stashHot" ${Banks.hot > 0 ? '' : 'disabled'}>Guardar as cédulas no cofre do galpão (na favela/em casa)</button></div>
+            ${row('Portas no firewall', Object.entries(Banks.backdoor).map(([b, n]) => `${Banks.BRANDS[b].name} (${n}d)`).join(', ') || 'nenhuma')}
+            <p class="cr-dim">Agência: roubo rápido (caixas eletrônicos e cofre de caixa, Ladrão Arrombador+), pendrive no terminal do gerente (Estelionato Golpista+). Conta e depósitos: fale com o caixa em qualquer agência.</p></div>
+            <div><table><tr><th>Banco</th><th>Distrito</th><th></th></tr>${Banks.list.map((b) => `<tr><td style="color:${Banks.BRANDS[b.brand].color}">${b.name}</td><td>${e.dName(e.districtAt(b.x, b.z))}</td><td><button data-emp="bankGps" data-arg="${b.id}">GPS</button></td></tr>`).join('')}</table></div></div>
+            <h3 style="font-size:13px;margin-top:8px">PLANEJAMENTO DAS SEDES <small>Ladrão: Especialista em Cofres</small></h3>
+            <table><tr><th>Sede</th><th>Planta baixa</th><th>Energia (hoje)</th><th>Vigilantes (hoje)</th><th>Cofres abertos</th></tr>${Banks.hqs().map((b) => { const P = Banks.plans[b.id] || {}; return `<tr><td style="color:${Banks.BRANDS[b.brand].color}">${b.name}</td>
+                <td>${P.blueprint ? '<span class="ok">✔</span>' : `<button data-emp="blueprint" data-arg="${b.id}">${brl(25000)} (favela)</button>`}</td>
+                <td>${P.power === Economy.day ? '<span class="ok">✔ cortada</span>' : `<button data-emp="power" data-arg="${b.id}">Cortar</button>`}</td>
+                <td>${P.bribe === Economy.day ? '<span class="ok">✔ comprados</span>' : `<button data-emp="bribe" data-arg="${b.id}">${brl(b.brand === 'nacional' ? 45000 : 15000)}</button>`}</td><td>${P.done || 0}</td></tr>`; }).join('')}</table>
+            <p class="cr-dim">Sem planta você não acha o cofre. Sem energia cortada o laser dispara no meio da perfuração. Sem vigilantes comprados, a perfuração aciona o sensor e a polícia chega antes. Com energia cortada hoje, a sede pode ser invadida à noite. Cercado lá dentro: negociação de reféns.</p></div>`;
 
         // domínio
         h += `<div class="cr-box"><h3>DOMÍNIO DA CIDADE <small>${D.count}/${D.districts.length} distritos</small></h3><table><tr><th>Distrito</th><th>Lavagem</th><th>Influência</th><th>Força</th><th></th></tr>`;

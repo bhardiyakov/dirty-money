@@ -58,6 +58,8 @@ class Achievements {
             ['estate10', 'IMPÉRIO', 'Imobiliária', 'Tenha 10 imóveis', () => [Object.keys(RealEstate.owned).length, 10]],
             ['district1', 'IMPÉRIO', 'Bandeira fincada', 'Domine um distrito inteiro', () => [g.empire ? g.empire.dominion.count : 0, 1]],
             ['city', 'IMPÉRIO', 'Dono da cidade', 'Domine todos os distritos', () => [g.empire ? g.empire.dominion.count : 0, g.empire ? g.empire.dominion.districts.length : 7]],
+            ['hq3', 'BANCOS', 'Os três cofres', 'Perfure o cofre das 3 sedes bancárias', () => [Banks.hqs().filter((b) => (Banks.plans[b.id] || {}).done).length, 3]],
+            ['transfer5', 'BANCOS', 'Laranjal', 'Faça 5 transferências via laranjas', () => [st('transfers'), 5]],
             ['crew12', 'IMPÉRIO', 'Exército particular', 'Tenha 12 soldados', () => [g.empire ? g.empire.biz.soldiers.length : 0, 12]],
         );
         return out;

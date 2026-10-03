@@ -62,6 +62,17 @@ Joystick (borda = correr) + ATACAR + até 2 botões de contexto que aparecem soz
 - **Domínio**: 3 coleções por distrito (lavagem, influência, força) com bônus; distrito dominado; dono da cidade.
 - **Estações do crime**: Calmaria, Carnaval, Eleições (28 dias) e Intervenção Federal, com aviso 2 dias antes e efeitos em polícia, preços de armas, golpes, bicho, soldados e lavagem.
 
+## Bancos (`src/banks/Banks.js`, `src/art/BankStyles.js`)
+
+- **Rede**: 3 sedes no Distrito Financeiro + 7 agências espalhadas. Marcas Inaú (laranja/azul, forte no cibernético), Brascor (vermelho/branco, mais dinheiro físico) e Nacional (amarelo/azul, polícia chega mais rápido). Interiores modulares: um layout de agência recolorido por marca e um layout de sede.
+- **Agência (roubo rápido)**: caixas eletrônicos e cofre de caixa disparam o alarme; a polícia cerca o prédio em segundos (varia por marca). Ao sair: estrelas e 3 min para escapar do quarteirão antes do isolamento.
+- **Sede (planejada)**: planta baixa no mercado negro da favela, corte de energia (trabalho na caixa de força) e propina dos vigilantes — valem só no dia. Sem energia o laser apaga; o cofre da sede leva 25–60 s.
+- **Reféns**: cercado lá dentro, negociação por Lábia, Intimidação (com arma) ou rendição; falhar = invasão e prisão.
+- **Dinheiro marcado**: pesa na mochila e precisa ir para o cofre do galpão (8% de troca) antes de ser lavado.
+- **Conta e COAF**: depósitos limpos rendem 0,15%/dia; depósitos sujos sobem o alerta do COAF; 100% = metade apreendida e Receita no máximo.
+- **Cibernético**: pendrive no terminal do gerente (Estelionato) abre uma porta no firewall por 3 dias; de casa, a transferência via laranjas é um mini-jogo de confirmar contas.
+- Ao entrar em qualquer interior, as malhas da cidade são ocultadas e restauradas na saída.
+
 ## Próximos passos recomendados (por impacto × custo)
 
 | # | Ideia | Custo | Efeito no retorno do jogador |

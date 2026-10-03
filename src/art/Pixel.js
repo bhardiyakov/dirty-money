@@ -42,6 +42,7 @@ const Pixel = {
 
     // '#rrggbb' -> [r,g,b]
     hex(h) {
+        if (typeof h !== 'string') return h;
         const s = h.replace('#', '');
         return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
     },

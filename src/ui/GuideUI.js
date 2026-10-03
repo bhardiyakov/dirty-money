@@ -31,7 +31,7 @@ class GuideUI {
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'],
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
-            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['daily', 'Energia e exposição (o dia)'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
+            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['daily', 'Energia e exposição (o dia)'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas']);
         return out;
@@ -178,6 +178,22 @@ GuideUI.PAGES = {
         <ul><li><b>Calmaria</b> (14 dias): normal.</li><li><b>Carnaval</b> (14): furtos rendem mais, polícia distraída, bancas do bicho faturam o dobro.</li>
         <li><b>Eleições</b> (28): presentes valem o dobro na influência, extorsão rende mais, a lavagem aperta.</li>
         <li><b>Intervenção Federal</b> (14): armas 3× mais caras, milícia some, polícia vê mais longe, soldados rendem a metade — hora do colarinho branco (golpes +50%).</li></ul>`,
+
+    banks: () => `<h2>Bancos</h2>
+        <p>A cidade tem <b>3 sedes</b> (no Distrito Financeiro) e <b>7 agências</b>, de três marcas (marcadores coloridos na porta; lista com GPS na aba IMPÉRIO):</p>
+        <ul><li><b style="color:#ec7000">Banco Inaú</b> — tecnologia: o melhor alvo do cibercrime (transferências rendem mais).</li>
+        <li><b style="color:#cc092f">Banco Brascor</b> — varejo: muito dinheiro vivo nos caixas, alvo da força bruta.</li>
+        <li><b style="color:#f6c700">Banco Nacional</b> — estatal: PM na porta, a polícia chega mais rápido e o suborno é caro.</li></ul>
+        <h3>Agência (roubo rápido — Ladrão Arrombador+)</h3><ul><li>Entre no expediente (10h–16h), estoure os <b>caixas eletrônicos</b> e o <b>cofre de caixa</b> (E). O alarme dispara e a polícia chega em segundos.</li>
+        <li>Ao sair: 3–4 estrelas e <b>3 minutos</b> para se afastar antes de a rua ser isolada.</li></ul>
+        <h3>Sede (Especialista em Cofres)</h3><ul><li><b>Planta baixa</b> (mercado negro, só na favela): sem ela você não acha o cofre.</li>
+        <li><b>Cortar a energia</b> na caixa de força do quarteirão (mini-game): desliga câmeras e laser e deixa entrar à noite. Vale até a meia-noite.</li>
+        <li><b>Subornar os vigilantes</b> (na Nacional, também a PM): a perfuração não aciona o alarme e a polícia demora mais. Vale só hoje.</li>
+        <li>Perfure o <b>cofre</b> parado no local — rende centenas de milhares.</li></ul>
+        <h3>Negociação de reféns</h3><p>Se a polícia chega com você lá dentro, ela cerca o prédio e abre negociação: <b>Lábia</b> (pedir tempo) ou <b>Intimidar</b> (com arma). Cada acerto dá uma trégua para terminar e sair; três falhas e o BOPE invade (preso). Sair cercado, sem trégua, é ser preso na porta.</p>
+        <h3>Dinheiro marcado</h3><p>O que sai do banco são cédulas com série rastreada: <b>pesam</b> (você fica lento), não vão para a mochila e somem se você desmaiar ou for preso. Guarde no <b>cofre do galpão</b> (precisa de galpão) para as fachadas lavarem.</p>
+        <h3>Cibercrime (Estelionato Golpista+)</h3><p>Plugue o <b>pendrive</b> no terminal do gerente de uma agência (porta no firewall da marca por 3 dias) e faça a <b>transferência via laranjas</b> de casa ou da favela: confirme as contas certas antes do firewall fechar.</p>
+        <h3>Conta e COAF</h3><p>Fale com o caixa: depositar <b>limpo</b> guarda os lucros com juros e nada se perde. Depositar <b>sujo</b> em conta de fachada enche o <b>Alerta do COAF</b> — cheio, bloqueiam a conta e levam metade.</p>`,
 
     level: () => `<h2>Nível e habilidades</h2>
         <p>Além das carreiras, o <b>personagem</b> tem um nível próprio (aba CARREIRAS › <b>HABILIDADES</b>). Todo XP conta: trabalhos, missões do morro, metas, conquistas, furtos, carros roubados e fugas da polícia (fugir de muitas estrelas vale muito).</p>

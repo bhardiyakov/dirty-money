@@ -1941,6 +1941,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this._closeInventory();
         if (lost === null) lost = this.inventory.fine(Config.police.fineBase * (1 - (SkillTree.m.fine || 0)));
         this.inventory.confiscate();                                       // preso: perde TODAS as armas
+        if (typeof Banks !== 'undefined') Banks.lose();                    // (e as cédulas marcadas)
         this._respawn('station', hours);
         this._flash(`⚠ PRESO! Multa de ${brl(lost)}. Armas confiscadas. Você acordou na delegacia`);
     }

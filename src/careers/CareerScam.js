@@ -110,6 +110,7 @@ class ScamCareer extends Career {
             const lock = this.rank < T.rank;
             html += `<button data-act="scam" data-arg="${k}" ${here && d.data >= T.data && !lock ? '' : 'disabled'}>${T.name} — ${T.data} dado(s), ${Math.round(Math.min(0.95, Math.max(0.05, this.chance + T.chance)) * 100)}% de chance, ${brl(T.min)}–${brl(T.max)}, rastreio +${T.trace}${lock ? ` (${this.ranks[T.rank].name})` : ''}</button>`;
         }
+        for (const [b, n] of Object.entries(Banks.backdoor)) html += `<button data-act="transfer" data-arg="${b}" ${here ? '' : 'disabled'}>Transferência via laranjas — ${Banks.BRANDS[b].name} (porta aberta por ${n} dia(s))</button>`;
         html += `<button data-act="vpn" ${tr > 0 ? '' : 'disabled'}>Trocar VPN / proxy (${brl(250)}, −35% rastreio)</button>`;
         if (this.rank >= 2) html += `<button data-act="crypto" ${here ? '' : 'disabled'}>Lavar via cripto: ${brl(5000)} sujo → ${brl(4250)} limpo (+12% rastreio)</button>
             <button data-act="blackmail" ${here && d.dossier > 0 ? '' : 'disabled'}>Chantagear com um dossiê (${d.dossier}) — ${brl(8000)}–${brl(20000)} LIMPO, rastreio +35</button>
@@ -153,6 +154,7 @@ class ScamCareer extends Career {
             AudioFX.blip(ok ? 950 : 220, 0.12, 0.15);
             return (ok ? `${T.name}: a vítima caiu, +${brl(v)}` : `${T.name}: desconfiou e desligou na sua cara`) + this._trace(T.trace);
         }
+        if (name === 'transfer') return Banks.transfer(this.g, arg);
         if (name === 'blackmail') {
             if (this.rank < 2) return 'Só para Operador de Botnet';
             if (!this.mgr.atBase()) return 'Só em casa ou na favela';

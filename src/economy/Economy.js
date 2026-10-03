@@ -82,6 +82,8 @@ const Economy = {
         japanese: { label: 'Restaurante Japonês', tier: 1.0, hours: [12, 23], stock: [['sushi'], ['sake'], ['omakase'], ['soda']] },
         guns:     { label: 'Loja de Armas', tier: 1.0, hours: [9, 19], legal: true, guns: true,
             stock: [['knife', 1, 3], ['bat', 1, 3], ['pistol', 1, 4], ['revolver', 1, 3], ['shotgun', 1, 2], ['smg', 0.6, 1], ['rifle', 0.5, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['vest', 1, 3], ['vest2', 0.6, 1]] },
+        bank_branch: { label: 'Agência bancária', tier: 1, hours: [10, 16], stock: [] },
+        bank_hq:  { label: 'Sede bancária', tier: 1, hours: [10, 17], stock: [] },
         drugs:    { label: 'Boca de Fumo', tier: 0.72, hours: [0, 24], guns: true, fence: 0.55,
             stock: [['pistol', 1, 2], ['revolver', 0.9, 2], ['shotgun', 0.8, 2], ['smg', 0.7, 1], ['ak47', 0.6, 1], ['rifle', 0.4, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['hack', 0.8, 3], ['carkey', 0.8, 3], ['medkit', 0.8, 2]] },
     },
@@ -128,7 +130,7 @@ const Economy = {
     // ------------------------------------------------------------------ tempo
     // Chamado todo quadro com a hora do relógio do jogo: vira o dia → novos preços e estoque.
     tick(hour) {
-        if (this._lastHour >= 0 && hour < this._lastHour - 12) { this.day++; this.shops = {}; if (typeof Laundry !== 'undefined') Laundry.onNewDay(); if (typeof Careers !== 'undefined' && Careers.instance) Careers.instance.onNewDay(); if (typeof Empire !== 'undefined' && Empire.instance) Empire.instance.onNewDay(); }
+        if (this._lastHour >= 0 && hour < this._lastHour - 12) { this.day++; this.shops = {}; if (typeof Laundry !== 'undefined') Laundry.onNewDay(); if (typeof Careers !== 'undefined' && Careers.instance) Careers.instance.onNewDay(); if (typeof Empire !== 'undefined' && Empire.instance) Empire.instance.onNewDay(); if (typeof Banks !== 'undefined') Banks.onNewDay(); }
         this._lastHour = hour;
     },
 

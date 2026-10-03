@@ -118,6 +118,7 @@ class Empire {
         const inv = g.inventory, b = g.careers && g.careers.by.burglar;
         const lost = inv.cash + (inv.jewelValue || 0) + (b ? b.data.goods : 0);
         inv.cash = 0; inv.jewels = 0; inv.jewelValue = 0;
+        if (typeof Banks !== 'undefined') Banks.lose();
         if (b) { b.data.goods = 0; b.data.weight = 0; }
         const fee = Math.round(Math.max(500, inv.clean * 0.08));
         inv.clean = Math.max(0, inv.clean - fee);
@@ -148,6 +149,7 @@ class Empire {
         if (h >= 2 && h < 6 && !g.sleeping && !Interiors.active && this.now - this.wokeAt > 6) this.faint('2h da manhã sem dormir');
         this.biz.update(dt);
         this.influence.update(dt);
+        if (typeof Banks !== 'undefined') { Banks.build(g); Banks.tick(dt, g); }
     }
 
     // Virou o dia (Economy.tick): estação avança; negócios, influência e domínio rodam o dia.

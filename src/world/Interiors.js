@@ -76,7 +76,7 @@ const Interiors = {
     // ------------------------------------------------------------------ regras de entrada
     check(game, shop) {
         const hour = game.dayNight.hour;
-        if (!Economy.isOpen(shop.style, hour)) return { ok: false, closed: true, msg: `FECHADO — abre às ${Economy.opensAt(shop.style)}h` };
+        if (!Economy.isOpen(shop.style, hour) && !(shop.bank && Banks.canBreakIn(shop.bank))) return { ok: false, closed: true, msg: `FECHADO — abre às ${Economy.opensAt(shop.style)}h${shop.bank && shop.bank.tier === 'hq' ? ' (ou corte a energia do quarteirão)' : ''}` };
         if (game.wanted.level > 0) return { ok: false, msg: 'A polícia está na sua cola — não dá para entrar' };
         return { ok: true };
     },
@@ -85,6 +85,7 @@ const Interiors = {
     prompt(game) {
         const p = game.player.position;
         if (this.active) {
+            if (this.active.shop.bank) { const bp = Banks.prompt(game); if (bp) return bp; }
             const a = this.active, o = this.STAGE;
             if (game.shopUI.open || game.stashUI.open || game.propertyUI.open || game.sleeping) return '';
             if (a.shop.home) { const hu = this.homeUse(game); if (hu) return RealEstate.isOwned(a.shop.home) ? (this.HOME_PROMPT[hu.kind] || '') : (hu.kind === 'desk' ? '<b>E</b> ver a proposta de compra<small>você está só visitando o imóvel</small>' : '<b>VISITA</b><small>só dá para usar depois de comprar o imóvel</small>'); }
@@ -108,6 +109,7 @@ const Interiors = {
         const p = game.player.position;
         if (this.active) {
             if (game.shopUI.open || game.stashUI.open || game.propertyUI.open || game.sleeping) return true;
+            if (this.active.shop.bank && Banks.interact(game)) return true;
             if (this.active.shop.home) {
                 const hu = this.homeUse(game);
                 if (hu && hu.kind !== 'desk' && !RealEstate.isOwned(this.active.shop.home)) { game._flash('Você está só visitando — compre o imóvel para usar isto'); return true; }
@@ -242,6 +244,8 @@ const Interiors = {
         const mm = document.getElementById('minimap'); if (mm) mm.style.opacity = '0';
         if (HouseView.ready) { HouseView.inside = false; HouseView.t = 0; HouseView._first = true; }
         game._flash(`${shop.name}`);
+        this._hideCity(game, true);
+        if (shop.bank) Banks.onEnter(game, shop);
     },
 
     _doLeave(game) {
@@ -259,6 +263,24 @@ const Interiors = {
         const mm = document.getElementById('minimap'); if (mm) mm.style.opacity = '1';
         game.shopUI.close();
         if (game.colliderStream) game.colliderStream.refresh(game.camera.target.x, game.camera.target.z);
+        this._hideCity(game, false);
+        if (a.shop.bank) Banks.onLeave(game);
+    },
+
+    // Dentro de um interior a cidade não aparece: some com todas as malhas visíveis do mapa (a GPU para de avaliá-las e o mapa de sombras
+    // fica leve) e devolve exatamente as mesmas ao sair. O mundo está congelado lá dentro, então ninguém muda essa visibilidade no meio.
+    _hideCity(game, hide) {
+        if (hide) {
+            const lim = this.STAGE.x - 400, keep = this._hidden = [], stage = new Set([this._bd, this.active && this.active.room.mesh]);
+            for (const x of this._actors) stage.add(x.mesh);
+            for (const m of game.scene.meshes) {
+                if (!m.isVisible || stage.has(m)) continue;
+                const bi = m.getBoundingInfo && m.getBoundingInfo(), cx = bi ? bi.boundingBox.centerWorld.x : m.position.x;
+                if (cx > lim && !m.alwaysSelectAsActiveMesh) continue;                // (o palco da loja e o que está nele)
+                if (m === game.player.root || (game.player.actor && m === game.player.actor.mesh)) continue;
+                m.isVisible = false; keep.push(m);
+            }
+        } else if (this._hidden) { for (const m of this._hidden) m.isVisible = true; this._hidden = null; }
     },
 
     // Atualização por quadro DENTRO da loja: anima atores, auto-sair pela porta.
@@ -266,6 +288,7 @@ const Interiors = {
         const a = this.active; if (!a) return;
         a.t += dt;
         for (const x of this._actors) if (x.mesh.isEnabled()) x.update(dt, 1);
+        if (a.shop.bank) Banks.update(dt, game);
         const o = this.STAGE, p = game.player.position, d = a.data.door;
         const ax = game.input.getMoveAxis();
         if (Math.abs(ax.x) + Math.abs(ax.z) < 0.1 && a.t > 0.3) a.released = true;                    // a saída só vale depois de soltar as teclas uma vez
