@@ -92,7 +92,7 @@ class GameEngine {
 
         // PCF (borda nítida, barato, sem blur): combina com o visual pixel art e evita a
         // perda de precisão do ESM em janelas de profundidade grandes.
-        this.shadowGenerator = new BABYLON.ShadowGenerator(2048, this.sun);
+        this.shadowGenerator = new BABYLON.ShadowGenerator(Config.perf.shadowSize || 2048, this.sun);
         this.shadowGenerator.usePercentageCloserFiltering = true;
         this.shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_LOW;
         this.shadowGenerator.bias = 0.0008;

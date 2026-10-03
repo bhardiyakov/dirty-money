@@ -200,7 +200,7 @@ class Game {
             await this.physics.init();
             this.physics.plugin.setTimeStep(1 / 60); this.physics.plugin._useDeltaForWorldStep = false;      // física em passo fixo (ver _render)
             this.physics.addStaticGround(this.gameEngine.ground);
-            this.colliderStream = new ColliderStreamer(this.physics, this.gameEngine.colliders);        // só os colisores perto da câmera existem no Havok
+            this.colliderStream = new ColliderStreamer(this.physics, this.gameEngine.colliders, Config.perf.colliderRadius, 50);        // só os colisores perto da câmera existem no Havok
             this.colliderStream.refresh(this.camera.target.x, this.camera.target.z);
             if (this.gameEngine.world.terrain) this.gameEngine.world.terrain.attachPhysics(this.physics);      // paredões das serras
 
@@ -250,6 +250,7 @@ class Game {
         this._escModal = false;
         window.addEventListener('keydown', (e) => { if (e.key === 'Escape') this._escModal = this._modalUiOpen(); }, true);
         this.propertyUI = new PropertyUI(this);              // ficha dos imóveis à venda / casas compradas
+        this.goals = new Goals(this);                        // metas de carreira (o que fazer a seguir + recompensas)
         this.missions = new Missions(this);                  // missões do tráfico (pedidas na boca de fumo)
         this.op = new PoliceOperation(this);                 // operação policial na favela (única hora em que a polícia entra)
         this._flash(`Polícia patrulhando: ${this.policeManager.cars.length} viaturas, ${this.policeManager.officers.length} a pé`);
@@ -329,8 +330,10 @@ class Game {
         // (GameEngine: customAnimationFrameRequester), então lógica, render e o contador de FPS rodam juntos a 30 Hz,
         // com o dt real entre eles.
         let last = performance.now();
+        this.autoQuality = new AutoQuality(this);
         this.gameEngine.runRenderLoop(() => {
             const now = performance.now();
+            this.autoQuality.tick((now - last) / 1000, this.menu.isOpen);
             const dt = Math.min((now - last) / 1000 * (this.timeScale || 1), 0.05);
             last = now;
             this._update(dt);
@@ -572,6 +575,18 @@ class Game {
         if (this.actionTimer > 0) this.actionTimer -= dt;
         this._updateHud();
         this.ui.update(dt);
+        if (this.goals) this.goals.update(dt);
+        this._autosave(dt);
+    }
+
+    // Autosave: a cada 2 min de jogo, só em momento calmo (sem procurado, preso, morto, dormindo, em missão de tempo). Antes só dormir salvava,
+    // e perder 1 h de progresso por um crash/aba fechada é o jeito mais rápido de o jogador não voltar.
+    _autosave(dt) {
+        this._asT = (this._asT || 0) + dt;
+        if (this._asT < 120) return;
+        if (this.wanted.level > 0 || this.arrest || this.death || this.sleeping || this.hiding || this.holdup || this.player.rag || (this.missions && this.missions.cur && this.missions.cur.type !== 'defend')) return;
+        this._asT = 0;
+        if (SaveGame.write(this)) this._flash('💾 Progresso salvo automaticamente');
     }
 
     // Dentro de uma loja (Interiors): só o jogador, a câmera, o relógio e a interface rodam; trânsito, pedestres, polícia e física ficam parados.
@@ -2050,6 +2065,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             4: '★★★★ Tropa de elite (SWAT) em campo — armados de metralhadora',
             5: '★★★★★ INIMIGO DO ESTADO! Ruas fechadas, SWAT e exército atrás de você',
         };
+        if (this.goals) this.goals.onWanted(n, prev, why);
         if (n > prev && msg[n]) this._flash(msg[n]);
         else if (n === 0 && why === 'escape') this._flash('Você se safou! A polícia perdeu o seu rastro');
         if (this.policeManager) this.policeManager.onWantedChange(n, prev, why);

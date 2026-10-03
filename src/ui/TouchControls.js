@@ -74,6 +74,11 @@ class TouchControls {
             #tcBack.on { display: block; }
 
             /* ---- interface responsiva (celular / janela estreita) ---- */
+            /* celular: sem máscara/sombras difusas no HUD (cada quadro repinta tudo isso por cima do WebGL) */
+            body.mobile .px { box-shadow: none !important; border: 2px solid #35e0ff; }
+            body.mobile .px::before { display: none; }
+            body.mobile #minimap { box-shadow: none !important; }
+            body.mobile #opVignette { animation: none; opacity: 0.6; }
             body.mobile #hud2 { top: 6px; right: 6px; transform: scale(0.5); transform-origin: top right; }
             body.mobile #minimap { width: 108px !important; height: 108px !important; left: 8px !important; top: 8px !important; bottom: auto !important; border-width: 3px; }
             body.mobile #toast { font-size: 11px; top: 118px; max-width: 70vw; padding: 4px 8px; }
