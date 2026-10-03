@@ -8,7 +8,9 @@ function brl(n) { return "R$ " + Math.round(n).toLocaleString("pt-BR"); }
 
 const Config = {
     // Desempenho (navegador, celular, Capacitor/Tauri): teto de quadros por segundo do jogo inteiro (lógica + render).
-    perf: { fpsCap: 30 },
+    // `lite` (celular, tablet ou aparelho fraco) liga o perfil leve: mapa de sombras menor, menos pedestres/carros e menos colisores vivos.
+    // O AutoQuality (core/AutoQuality.js) ainda pode descer mais um nível em tempo real se o aparelho não aguentar os 30 quadros.
+    perf: { fpsCap: 30, lite: false, shadowSize: 2048, colliderRadius: 220, dprCap: 2 },
 
     // Pixel art: tudo (texturas do mundo e sprites) é desenhado nesta densidade,
     // e o jogo é renderizado numa resolução interna baixa e ampliado sem suavizar.
@@ -188,7 +190,7 @@ const Config = {
         honkCooldown: 3.5,
         abandonDist: 48,       // Carro abandonado some do meio da pista quando você se afasta tanto.
         // Mundo grande: o trânsito só existe PERTO do jogador. Quem passa de `recycleDist` reaparece numa rua entre spawnMin e spawnMax.
-        spawnMin: 95, spawnMax: 230, recycleDist: 285, relocPerSec: 3,
+        spawnMin: 90, spawnMax: 170, recycleDist: 205, relocPerSec: 3,
     },
 
     // Semáforos dos cruzamentos (ciclo: eixo N-S, depois eixo L-O).
@@ -340,3 +342,21 @@ const Config = {
         fineBase: 0.5, finePerStar: 0.1,    // Multa ao ser preso: fração do dinheiro = fineBase + finePerStar × ★ (máx. 0,75).
     },
 };
+
+// Perfil de desempenho: detecta aparelho de toque / pouca memória / poucos núcleos e enxuga o mundo vivo. `?lite` força, `?full` desliga.
+(function applyPerfProfile() {
+    const q = typeof location !== 'undefined' ? location.search : '';
+    const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    const nav = typeof navigator !== 'undefined' ? navigator : {};
+    const weak = (nav.deviceMemory && nav.deviceMemory <= 4) || (nav.hardwareConcurrency && nav.hardwareConcurrency <= 4);
+    let saved = null;
+    try { saved = localStorage.getItem('dm_quality'); } catch (e) { /* sem storage */ }
+    const lite = q.includes('lite') || (!q.includes('full') && (coarse || weak || saved === 'lite'));
+    if (!lite) return;
+    const P = Config.perf;
+    P.lite = true; P.shadowSize = 1024; P.colliderRadius = 190; P.dprCap = 1.5;
+    Config.npc.count = 48;
+    Config.traffic.count = 18; Config.traffic.parked = 8; Config.traffic.motos = 2; Config.traffic.motosParked = 2; Config.traffic.bicycles = 2; Config.traffic.bicyclesParked = 2;
+    Config.traffic.spawnMax = 150; Config.traffic.recycleDist = 185;
+    Config.npc.recycleDist = 200;
+})();

@@ -110,7 +110,22 @@ class NPCManager {
     // env = { playerPos, wanted (nível), chasers: [{ position, car: bool }] }
     update(dt, env) {
         this._rain(dt);
-        for (const npc of this.npcs) npc.update(dt);
+        // LOD de simulação: pedestre longe da tela (> 90 u do foco) atualiza FSM/sprite a cada 3 quadros (escalonado por id), com o dt acumulado.
+        // O crowd do Recast continua movendo todos; só a lógica e a animação (invisíveis de qualquer jeito) ficam mais espaçadas.
+        const f = this.nav.focus, farSq = 90 * 90;
+        this._frame = (this._frame || 0) + 1;
+        for (const npc of this.npcs) {
+            if (npc.alive && !npc.rag && npc.state !== 'FLEE' && npc.state !== 'HURT') {
+                const dx = npc.position.x - f.x, dz = npc.position.z - f.z;
+                if (dx * dx + dz * dz > farSq) {
+                    npc._lodDt = (npc._lodDt || 0) + dt;
+                    if ((this._frame + npc.id) % 3 !== 0) continue;
+                    npc.update(npc._lodDt); npc._lodDt = 0;
+                    continue;
+                }
+            }
+            if (npc._lodDt) { npc.update(npc._lodDt + dt); npc._lodDt = 0; } else npc.update(dt);
+        }
         this._recycle(dt);
         if (env) this._perceive(dt, env);
     }

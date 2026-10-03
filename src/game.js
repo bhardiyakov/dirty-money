@@ -200,7 +200,7 @@ class Game {
             await this.physics.init();
             this.physics.plugin.setTimeStep(1 / 60); this.physics.plugin._useDeltaForWorldStep = false;      // física em passo fixo (ver _render)
             this.physics.addStaticGround(this.gameEngine.ground);
-            this.colliderStream = new ColliderStreamer(this.physics, this.gameEngine.colliders);        // só os colisores perto da câmera existem no Havok
+            this.colliderStream = new ColliderStreamer(this.physics, this.gameEngine.colliders, Config.perf.colliderRadius, 50);        // só os colisores perto da câmera existem no Havok
             this.colliderStream.refresh(this.camera.target.x, this.camera.target.z);
             if (this.gameEngine.world.terrain) this.gameEngine.world.terrain.attachPhysics(this.physics);      // paredões das serras
 
@@ -250,7 +250,9 @@ class Game {
         this._escModal = false;
         window.addEventListener('keydown', (e) => { if (e.key === 'Escape') this._escModal = this._modalUiOpen(); }, true);
         this.propertyUI = new PropertyUI(this);              // ficha dos imóveis à venda / casas compradas
+        this.goals = new Goals(this);                        // metas de carreira (o que fazer a seguir + recompensas)
         this.missions = new Missions(this);                  // missões do tráfico (pedidas na boca de fumo)
+        this.careers = new Careers(this);                    // carreiras do crime: desmanche, ladrão, armeiro, estelionato, jogo do bicho
         this.op = new PoliceOperation(this);                 // operação policial na favela (única hora em que a polícia entra)
         this._flash(`Polícia patrulhando: ${this.policeManager.cars.length} viaturas, ${this.policeManager.officers.length} a pé`);
     }
@@ -329,8 +331,10 @@ class Game {
         // (GameEngine: customAnimationFrameRequester), então lógica, render e o contador de FPS rodam juntos a 30 Hz,
         // com o dt real entre eles.
         let last = performance.now();
+        this.autoQuality = new AutoQuality(this);
         this.gameEngine.runRenderLoop(() => {
             const now = performance.now();
+            this.autoQuality.tick((now - last) / 1000, this.menu.isOpen);
             const dt = Math.min((now - last) / 1000 * (this.timeScale || 1), 0.05);
             last = now;
             this._update(dt);
@@ -385,6 +389,7 @@ class Game {
         if (this._escModal) { this.input.justPressed['escape'] = false; this._escModal = false; }                   // o ESC foi usado para fechar uma janela
         if (this._canPause() && (this.input.consumePress('escape') || this.input.consumePress('p') || this._padStart())) { this.menu.open('map'); return; }
         if (this._canPause() && this.input.consumePress('i')) { this.menu.open('inventory'); return; }
+        if (this._canPause() && this.input.consumePress('o')) { this.menu.open('careers'); return; }
 
         // Tela "DETIDO": o mundo fica parado (atrás do blur) até qualquer tecla/botão.
         if (this.arrest && this.arrest.phase === 'screen') { this._updateArrest(dt); return; }
@@ -403,6 +408,7 @@ class Game {
             const car = this.activeCar;
             car.drive(axis.z, axis.x, dt);
             this._fuelUpdate(dt);
+            if (this.careers && !frozenUI && this.careers.carPrompt() && this.input.consumePress('e')) this.careers.carInteract();      // desmanche: E desmancha o carro
             // (uma batida forte pode arremessar o piloto de dentro do drive(): aí o foco é o jogador)
             this.camera.follow((this.mode === 'car' && this.activeCar ? this.activeCar : this.player).position, dt);
         } else if (this.mode === 'heli' && this.chopper) {
@@ -572,6 +578,19 @@ class Game {
         if (this.actionTimer > 0) this.actionTimer -= dt;
         this._updateHud();
         this.ui.update(dt);
+        if (this.careers) this.careers.update(dt);
+        if (this.goals) this.goals.update(dt);
+        this._autosave(dt);
+    }
+
+    // Autosave: a cada 2 min de jogo, só em momento calmo (sem procurado, preso, morto, dormindo, em missão de tempo). Antes só dormir salvava,
+    // e perder 1 h de progresso por um crash/aba fechada é o jeito mais rápido de o jogador não voltar.
+    _autosave(dt) {
+        this._asT = (this._asT || 0) + dt;
+        if (this._asT < 120) return;
+        if (this.wanted.level > 0 || this.arrest || this.death || this.sleeping || this.hiding || this.holdup || this.player.rag || (this.missions && this.missions.cur && this.missions.cur.type !== 'defend') || (this.careers && this.careers.job)) return;
+        this._asT = 0;
+        if (SaveGame.write(this)) this._flash('💾 Progresso salvo automaticamente');
     }
 
     // Dentro de uma loja (Interiors): só o jogador, a câmera, o relógio e a interface rodam; trânsito, pedestres, polícia e física ficam parados.
@@ -799,7 +818,10 @@ class Game {
             // Tiro de verdade: projéteis (com mira assistida), ouvido por todos; libera as armas da polícia.
             const angle = this.combat.aimAssist(pos.x, pos.z, heading);
             this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p }, p.weapon);
-            if (Baile.covers(pos.x, pos.z)) {                                // o baile abafa o tiro: só quem está a < 14 u (e a vista) percebe
+            if (this.careers && this.careers.silenced(p.weapon)) {          // silenciador (Armeiro): só quem está muito perto e vê percebe
+                this.npcManager.alertViolence(pos, 8);
+                this.wanted.reportCrime();
+            } else if (Baile.covers(pos.x, pos.z)) {                                // o baile abafa o tiro: só quem está a < 14 u (e a vista) percebe
                 this.npcManager.alertViolence(pos, 14);
                 this.wanted.reportCrime();
                 Baile.onShot(pos);
@@ -1094,6 +1116,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         const driver = car.driver !== false;
         const door = () => this.doors.doorPoint(car, sign);
         car.hold = true;                                              // o carro para enquanto você mexe nele
+        car._wasLocked = !!car.locked && !car.isBike && !car.isBoat;    // trancado (sem chave): vai precisar de ligação direta
         this.doors.prewarm(car);
         const open = () => this.doors.set(car, sign, true);
         const wait = Math.max(0.3, Math.min(1.2, car.speed / 12));    // carro em movimento: espera ele frear e acompanha
@@ -1127,6 +1150,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             car.setControlled(true);
             this.activeCar = car;
             this.mode = 'car';
+            if (car._wasLocked) { car.hotwire = car.hotwireMax = this.careers ? this.careers.hotwireTime() : 3; car._wasLocked = false; }
+            if (this.careers) this.careers.onCarEntered(car);
             this.ui.showVehicle(car);                                 // modelo do carro por 3 s
             this._flash(`Carro #${car.id} roubado! (F pra sair)`);
         });
@@ -1164,7 +1189,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             return;
         }
         this.lockpick.start({
-            difficulty: car.lockLevel || (car.lockLevel = 0.85 + Math.random() * 0.5),
+            difficulty: (car.lockLevel || (car.lockLevel = 0.85 + Math.random() * 0.5)) * (this.careers ? this.careers.lockpickMul() : 1),
             onEnd: (res) => {
                 const pl = this.player;
                 if (res === 'ok') { if (pl.action) pl.action.timer = 0; return; }       // acabou o passo: abre a porta
@@ -1217,6 +1242,11 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             if (ch.state === 'failing') html = '<b>PANE!</b> <b>F</b> pule agora!<small>o helicóptero vai explodir ao tocar o chão</small>';
             else if (ch.alt - ch.floor < 1.2) html = '<b>F</b> descer do helicóptero<small><b>ESPAÇO</b> sobe · <b>W/S</b> frente/ré · <b>A/D</b> lados · <b>Q/E</b> gira</small>';
             else html = `<b>F</b> SE JOGAR (${ch.alt > 5 ? 'queda mortal em terra' : 'queda baixa'}; a água salva)<small><b>SHIFT</b> desce · <b>ESPAÇO</b> sobe · <b>W/S</b> <b>A/D</b> <b>Q/E</b> · altura ${Math.round(ch.alt)} m</small>`;
+        } else if (this.mode === 'car' && this.activeCar && this.activeCar.hotwire > 0) {
+            const hw = this.activeCar;
+            html = `<b>LIGAÇÃO DIRETA</b> ${crBar(1 - hw.hotwire / (hw.hotwireMax || 1))}<small>você está exposto na rua — a skill Mecânica (Desmanche) encurta</small>`;
+        } else if (this.mode === 'car' && this.careers && this.careers.carPrompt()) {
+            html = this.careers.carPrompt();
         } else if (this.mode === 'car' && this._fuelPrompt) {
             html = this._fuelPrompt;
         } else if (this.mode === 'player' && !this.player.busy && !this.lockpick.active) {
@@ -1224,7 +1254,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             const chop = this._chopperNear();
             const spot = !car && !chop && this._nearHideSpot();
             const fence = !car && !spot && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.6);
-            const shopP = (!car && !chop) ? (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Aid.prompt(this) || Interiors.prompt(this) : '';
+            const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Aid.prompt(this) || Interiors.prompt(this) : '';
             if (shopP) html = shopP;
             else if (spot) html = `<b>E</b> esconder-se ${spot.kind === 'dumpster' ? 'na caçamba' : (spot.kind === 'barrel' ? 'no latão' : 'no caixote')}<small>se a polícia não te viu entrar, você some do radar</small>`;
             else if (fence) html = `<b>V</b> pular ${fence.kind === 'wall' ? 'o muro' : 'a grade'}`;
@@ -1576,6 +1606,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // ---------------------------------------------------------------- esconderijos e pulos
     // E: sair do esconderijo | entrar no esconderijo ao alcance (caçamba, caixote, latão) | senão, assaltar.
     _interact() {
+        if (this.careers && this.careers.interact()) return;
         if (this.missions && this.missions.interact()) return;
         if (!this.propertyUI.open && this.propertyUI.cool <= 0 && RealEstate.interact(this)) return;
         if (!this.motoUI.open && this.motoUI.cool <= 0 && MotoStands.interact(this)) return;
@@ -1755,6 +1786,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             npc.pickpocketed = true;
             const loot = R.theftLoot[0] + Math.floor(Math.random() * (R.theftLoot[1] - R.theftLoot[0] + 1));
             this.inventory.addCash(loot);
+            if (this.careers) this.careers.onPickpocket(npc, pl.position);
             AudioFX.blip(1180, 0.08, 0.14);
             this._flash(`Furto: +${brl(loot)} — ele nem percebeu`);
         } else {
@@ -2050,6 +2082,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             4: '★★★★ Tropa de elite (SWAT) em campo — armados de metralhadora',
             5: '★★★★★ INIMIGO DO ESTADO! Ruas fechadas, SWAT e exército atrás de você',
         };
+        if (this.goals) this.goals.onWanted(n, prev, why);
+        if (this.careers) this.careers.onWanted(n, prev);
         if (n > prev && msg[n]) this._flash(msg[n]);
         else if (n === 0 && why === 'escape') this._flash('Você se safou! A polícia perdeu o seu rastro');
         if (this.policeManager) this.policeManager.onWantedChange(n, prev, why);
@@ -2070,6 +2104,18 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     }
 
     _updateHud() {
+        // O painel #hud antigo é `display:none` (só aparece com ?debug): sem ele visível, todas as escritas no DOM abaixo são
+        // trabalho jogado fora (e `textContent` invalida o estilo mesmo com o mesmo texto). Reconfere a visibilidade a cada 0.5 s.
+        if (this.hud.hit) {                                          // (vinheta de dano fica fora do #hud: sempre atualiza, mas só escreve se mudou)
+            const o = Math.round(Math.min(0.6, Math.max(0, this.player.hitFlash) * 1.7) * 100) / 100;
+            if (o !== this._hitOp) { this._hitOp = o; this.hud.hit.style.opacity = String(o); }
+        }
+        const now = performance.now();
+        if (now - (this._hudCheckT || 0) > 500) { this._hudCheckT = now; this._hudShown = !!(this.hud.pos && this.hud.pos.offsetParent); }
+        if (this._hudShown === false) {
+            if (this.hud.action && this.actionTimer <= 0 && this.hud.action.textContent) this.hud.action.textContent = '';
+            return;
+        }
         const driving = this.mode === 'car' && this.activeCar;
         const flying = this.mode === 'heli' && this.chopper;
         const p = driving ? this.activeCar.position : this.player.position;
@@ -2112,7 +2158,6 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             this.hud.weapon.textContent = `${Weapons[wk].name}${inv.isGun(wk) ? ' ' + inv.ammoText(wk) : ''}${this.reloading > 0 ? ' ↻' : ''}`;
         }
         if (this.hud.cash) this.hud.cash.textContent = `${brl(inv.cash)}`;
-        if (this.hud.hit) this.hud.hit.style.opacity = String(Math.min(0.6, Math.max(0, pl.hitFlash) * 1.7));
 
         if (this.hud.npcs) {
             this.hud.npcs.textContent = this.aiReady

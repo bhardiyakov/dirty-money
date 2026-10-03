@@ -196,7 +196,21 @@ class TrafficManager {
         const env = this.env;
         const pp = game.mode === 'car' && game.activeCar ? game.activeCar.position : game.player.position;
 
+        // LOD de simulação: carro de trânsito comum longe da tela (> 100 u do foco; a tela mostra ~60 u) roda a IA em 1 de cada 2
+        // quadros, com o dt acumulado. A física do Havok continua andando todo quadro com a velocidade que a IA deixou.
+        const fx = pp.x, fz = pp.z, farSq = 100 * 100;
         for (const car of this.vm.vehicles) {
+            const calm = !car.controlled && !car.hold && !car.wrecked && !(car.burning > 0) && car.mode !== 'abandoned' && !car.ignoreSignals && !car.isBike;
+            if (calm) {
+                const dx = car.position.x - fx, dz = car.position.z - fz;
+                if (dx * dx + dz * dz > farSq) {
+                    car._lodDt = (car._lodDt || 0) + dt;
+                    if ((car._lodTick = !car._lodTick)) continue;          // quadro ímpar: só acumula
+                    car.update(car._lodDt, env); car._lodDt = 0;
+                    continue;
+                }
+                car._lodDt = 0;
+            }
             car.update(dt, env);
 
             // Carro largado na pista: some (vira estacionado em outra vaga) quando o jogador se afasta.

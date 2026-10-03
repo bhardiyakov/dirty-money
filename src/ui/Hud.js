@@ -359,11 +359,11 @@ class Hud {
 
 
         // ---- missão do tráfico em andamento
-        const mi = g.missions ? g.missions.hud() : null;
+        const mi = (g.careers && g.careers.hud()) || (g.missions ? g.missions.hud() : null);
         this._set('mi', mi ? mi.title + mi.extra + mi.low : '', () => {
             this.missionPanel.style.display = mi ? '' : 'none';
             if (!mi) return;
-            this.$('hMiT').textContent = 'MISSÃO · ' + mi.title; this.$('hMiX').textContent = mi.text; const e = this.$('hMiE'); e.textContent = mi.extra; e.style.color = mi.low ? '#ff5a4d' : '#9ec5ff';
+            this.$('hMiT').textContent = (g.careers && g.careers.job ? '' : 'MISSÃO · ') + mi.title; this.$('hMiX').textContent = mi.text; const e = this.$('hMiE'); e.textContent = mi.extra; e.style.color = mi.low ? '#ff5a4d' : '#9ec5ff';
         });
         // ---- vida e colete
         const hp =Math.max(0, Math.min(1, pl.hp / pl.maxHp)), hpPct = Math.round(hp * 100);

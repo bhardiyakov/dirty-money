@@ -168,7 +168,7 @@ class PoliceManager {
         for (const c of this.cars) {
             if (c.temp || c.destroyed) continue;
             for (let k = 0; k < 80; k++) {
-                const l = RoadNet.randomLanePoint(14, { x: pos.x, z: pos.z, rMin: 70, rMax: 230 });
+                const l = RoadNet.randomLanePoint(14, { x: pos.x, z: pos.z, rMin: 70, rMax: 170 });
                 if (!l || Math.hypot(l.point.x - pos.x, l.point.z - pos.z) < 70 || !this.traffic._clear(l.point.x, l.point.z, 12)) continue;
                 if (this.cars.some((o) => o !== c && Math.hypot(o.position.x - l.point.x, o.position.z - l.point.z) < 12)) continue;
                 c.teleport(l.point.x, l.point.z, Math.atan2(l.d.dx, l.d.dz));
@@ -205,7 +205,7 @@ class PoliceManager {
         if (this._recT > 0) return;
         this._recT = 1.5;
         const f = this.game.camera.target, far2 = 300 * 300;
-        const ring = { x: f.x, z: f.z, rMin: 85, rMax: 230 };
+        const ring = { x: f.x, z: f.z, rMin: 85, rMax: 170 };
         for (const c of this.cars) {
             if (c.temp || c.destroyed || c.role === 'block' || c.fsm.name !== 'PATROL') continue;
             const dx = c.position.x - f.x, dz = c.position.z - f.z;
@@ -336,7 +336,7 @@ class PoliceManager {
         let lane = null;
         for (let t = 0; t < 60 && !lane; t++) {
             const f = this.game ? this.game.camera.target : { x: 0, z: 0 };
-            const c = RoadNet.randomLanePoint(14, { x: f.x, z: f.z, rMin: 60, rMax: 230 });
+            const c = RoadNet.randomLanePoint(14, { x: f.x, z: f.z, rMin: 60, rMax: 170 });
             if (!c || !this.traffic._clear(c.point.x, c.point.z, 12) || Standing.policeBanned(c.point.x, c.point.z)) continue;
             if (avoid && Math.hypot(c.point.x - avoid.x, c.point.z - avoid.z) < avoid.r) continue;
             lane = c;

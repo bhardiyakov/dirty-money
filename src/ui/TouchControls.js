@@ -74,6 +74,11 @@ class TouchControls {
             #tcBack.on { display: block; }
 
             /* ---- interface responsiva (celular / janela estreita) ---- */
+            /* celular: sem máscara/sombras difusas no HUD (cada quadro repinta tudo isso por cima do WebGL) */
+            body.mobile .px { box-shadow: none !important; border: 2px solid #35e0ff; }
+            body.mobile .px::before { display: none; }
+            body.mobile #minimap { box-shadow: none !important; }
+            body.mobile #opVignette { animation: none; opacity: 0.6; }
             body.mobile #hud2 { top: 6px; right: 6px; transform: scale(0.5); transform-origin: top right; }
             body.mobile #minimap { width: 108px !important; height: 108px !important; left: 8px !important; top: 8px !important; bottom: auto !important; border-width: 3px; }
             body.mobile #toast { font-size: 11px; top: 118px; max-width: 70vw; padding: 4px 8px; }
@@ -106,7 +111,7 @@ class TouchControls {
             root.appendChild(b); this._bindButton(b, key); this.buttons.push(b);
         }
         // atalhos do topo (ao lado do HUD): pausa/mapa, mochila, zoom ±
-        this.top = [['II', 'p'], ['MOCH', 'i'], ['−', 'x'], ['+', 'z']].map(([label, key], i) => {
+        this.top = [['II', 'p'], ['MOCH', 'i'], ['CRIME', 'o'], ['−', 'x'], ['+', 'z']].map(([label, key], i) => {
             const b = document.createElement('div');
             b.className = 'tct'; b.textContent = label; b.dataset.i = i;
             root.appendChild(b); this._bindButton(b, key, key === 'x' || key === 'z'); return b;
@@ -123,7 +128,7 @@ class TouchControls {
         const press = (down) => {
             el.classList.toggle('down', down);
             if (key === '#weapon') { if (down && this.input.onWeaponCycle) this.input.onWeaponCycle(1); return; }
-            if (key === 'p' || key === 'i') { if (down) { this.input.setVirtual(key, true, 'touch'); setTimeout(() => this.input.setVirtual(key, false, 'touch'), 60); } return; }       // (toque único)
+            if (key === 'p' || key === 'i' || key === 'o') { if (down) { this.input.setVirtual(key, true, 'touch'); setTimeout(() => this.input.setVirtual(key, false, 'touch'), 60); } return; }       // (toque único)
             this.input.setVirtual(key, down, 'touch');
         };
         el.addEventListener('pointerdown', (e) => { e.preventDefault(); AudioFX.init(); try { el.setPointerCapture(e.pointerId); } catch (x) { /* ok */ } press(true); });

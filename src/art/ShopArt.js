@@ -31,7 +31,13 @@ class ShopCtx {
     mix(a, b, k) { return HouseArt._mixc(a, b, k); }
     bx(x, y, w, h, col) { this.c.box(x, y, w, h, col, this.t(col, 1.25), this.t(col, 0.7), this.t(col, 0.34)); }
     use(kind, r) { this.uses.push({ kind, x0: r[0], z0: r[1], x1: r[2], z1: r[3] }); }              // móvel de USO da casa (dormir, baú, cofre…): ver Interiors.enterHome
-    solid(r, h, extra = {}) { this.obs.push(Object.assign({ x0: r[0], z0: r[1], x1: r[2], z1: r[3], h }, extra)); }
+    // Colisor de um móvel. Na vista oblíqua o móvel desenhado ocupa a BASE + o topo deslocado para o norte (h × K u): se o colisor cobrisse só a
+    // base, o jogador passaria "por dentro" do tampo quando andasse atrás do móvel. Por isso o colisor é a silhueta inteira (base + topo).
+    // Paredes (`wall`) não estendem; `ShopCtx.EXTEND = false` volta ao colisor só da base (teste).
+    solid(r, h, extra = {}) {
+        const up = extra.wall || ShopCtx.EXTEND === false ? 0 : Math.min(0.7, h * this.K);
+        this.obs.push(Object.assign({ x0: r[0], z0: r[1], x1: r[2], z1: r[3] + up, h }, extra));
+    }
     light(x, z, r, col, a) { this.lights.push({ x: this.X(x), y: this.Y(z), r: r * this.PPU, col, a }); }
 
     // ---------------------------------------------------------------- piso

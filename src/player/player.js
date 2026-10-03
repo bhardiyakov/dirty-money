@@ -290,7 +290,7 @@ class Player {
         this.depth = depth;
         this.swimming = depth > W.wadeDepth;
         const wf = depth <= 0 ? 1 : (depth <= W.wadeDepth ? 0.85 - 0.4 * (depth / W.wadeDepth) : (sprinting ? 0.52 : 0.4));
-        const maxSpeed = ((sprinting && depth <= 0) ? Config.player.sprintSpeed : Config.player.maxSpeed) * lock * wf;
+        const maxSpeed = ((sprinting && depth <= 0) ? Config.player.sprintSpeed : Config.player.maxSpeed) * lock * wf * (this.loadMul || 1);      // loadMul: carga pesada (eletrônicos roubados)
 
         // Acelera/desacelera suavemente rumo à velocidade alvo (frame-independent).
         const targetVel = moveDir.scale(maxSpeed);

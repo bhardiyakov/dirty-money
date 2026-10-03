@@ -17,7 +17,7 @@ const SaveGame = {
             hour: g.dayNight.hour, weather: g.weather.state,
             player: { x: p.position.x, z: p.position.z, rot: p.root.rotation.y, hp: p.hp, armor: p.armor, armorMax: p.armorMax, weapon: p.weapon },
             inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, weapons },
-            stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(),
+            stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null,
         };
     },
 
@@ -36,7 +36,7 @@ const SaveGame = {
         const p = g.player, inv = g.inventory, I = s.inventory || {};
         for (const k of ['cash', 'clean', 'medkits', 'hacks', 'keys', 'food', 'water', 'jewels', 'jewelValue']) if (typeof I[k] === 'number') inv[k] = I[k];
         for (const k of Object.keys(I.weapons || {})) if (inv.weapons[k]) Object.assign(inv.weapons[k], I.weapons[k]);
-        g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Economy.day = s.day || 0; Economy.shops = {};
+        g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); Economy.day = s.day || 0; Economy.shops = {};
         const pl = s.player || {};
         p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));
         p.root.rotation.y = pl.rot || 0;

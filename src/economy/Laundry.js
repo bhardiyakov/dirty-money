@@ -53,7 +53,7 @@ const Laundry = {
         inv.cash -= amt; inv.clean += net;
         this.used[shop.id] = (this.used[shop.id] || 0) + amt;
         this.xp += amt;
-        this.taxHeat = Math.min(100, this.taxHeat + (amt / 60) * (1 - 0.07 * lv));        // Contabilidade alta: a Receita nem percebe
+        this.taxHeat = Math.min(100, this.taxHeat + (amt / 60) * (1 - 0.07 * lv) * (typeof Careers !== 'undefined' && Careers.immunity ? 0.25 : 1));      // patrono de escola de samba: imunidade política        // Contabilidade alta: a Receita nem percebe
         let msg = `Lavou ${brl(amt)} → ${brl(net)} limpos (perda ${Math.round(this.lossRate * 100)}%)`;
         if (this.level > lv) msg += ` · Contabilidade nv ${this.level}!`;
         this._audit(game);

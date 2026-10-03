@@ -100,11 +100,11 @@ class DayNight {
 
         // Sem sol (noite) a passada de sombra é custo à toa: congela o mapa de sombras.
         const sm = ge.shadowGenerator.getShadowMap();
-        const wantShadows = shadowI >= 0.25;
+        const wantShadows = shadowI >= 0.25 && !this.forceNoShadows;      // (forceNoShadows: AutoQuality, aparelho fraco)
         if (this._shadowsOn !== wantShadows) { this._shadowsOn = wantShadows; sm.refreshRate = wantShadows ? 1 : 0; }
         // Chuva: sombras mais fracas. Ao anoitecer elas desvanecem (darkness -> 1 = invisivel) ANTES de congelar o mapa; senao o mapa
         // congelado ficava pintado no chao como uma 'marca d'agua' de sombras velhas (e nao acompanhava mais sol nem camera).
-        const fade = Math.max(0, Math.min(1, (shadowI - 0.25) / 0.17));
+        const fade = this.forceNoShadows ? 0 : Math.max(0, Math.min(1, (shadowI - 0.25) / 0.17));
         const dark = Math.round((1 - (1 - (0.4 + 0.4 * (Weather.cur ? Weather.cur.k : 0))) * fade) * 100) / 100;
         if (this._shadowDark !== dark) { this._shadowDark = dark; ge.shadowGenerator.setDarkness(dark); }
 

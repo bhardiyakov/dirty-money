@@ -246,6 +246,7 @@ class Vehicle {
     // mata a componente lateral (grip) e recompõe — velocidade segue o nariz.
     drive(throttle, steer, dt) {
         if (this.engineDead) throttle = 0;                  // motor morto: só rola até parar
+        if (this.hotwire > 0) { this.hotwire -= dt; throttle = 0; }      // ligação direta (carro trancado roubado): motor ainda não pegou
         if (this.tank > 0 && this.controlled) {             // gasolina: marcha lenta + acelerador (mais com o carro rápido); tanque vazio = motor sem força
             if (this.fuel <= 0) { this.fuel = 0; throttle = 0; }
             else this.fuel = Math.max(0, this.fuel - (this.spec.bike ? 0.5 : 1) * Config.fuel.burn * (0.1 + Math.abs(throttle) * (0.45 + 0.55 * Math.min(1, this.speed / this.spec.maxSpeed))) * dt);
@@ -317,12 +318,12 @@ class Vehicle {
         }
 
         // --- Grip lateral: mata a derrapagem (decaimento exponencial = independe de FPS); barco derrapa mais na água ---
-        lat *= Math.exp(-(this.spec.grip || Config.vehicle.grip * (this.spec.boat || !Weather.cur ? 1 : Weather.cur.gripMul)) * dt);       // (pista molhada: carro derrapa mais)
+        lat *= Math.exp(-(this.spec.grip || Config.vehicle.grip * (this.spec.boat || !Weather.cur ? 1 : Weather.cur.gripMul)) * (this.controlled && !this.spec.boat ? Vehicle.playerGrip : 1) * dt);       // (skill Direção: Vehicle.playerGrip)       // (pista molhada: carro derrapa mais)
 
         // --- Direção: guinada proporcional à velocidade; zera X/Z (anti-capotamento) ---
         // Inverte ao dar ré (como um carro real) e não vira parado.
         const speedFactor = Math.min(1, Math.abs(fwd) / (this.spec.turnRef || Config.vehicle.turnSpeedRef));
-        const yaw = steer * this.spec.turn * speedFactor * (fwd < 0 ? -1 : 1);
+        const yaw = steer * this.spec.turn * speedFactor * (fwd < 0 ? -1 : 1) * (this.controlled ? Vehicle.playerTurn : 1);
         this.phys.setAngularVelocity(new BABYLON.Vector3(0, yaw, 0));
 
         // --- Recompõe a velocidade preservando a queda (gravidade) ---
@@ -392,3 +393,7 @@ class Vehicle {
         return this.phys.getLinearVelocity();
     }
 }
+
+// Skill Direção (carreira Desmanche): multiplicadores de aderência lateral e de giro só para o veículo que o JOGADOR dirige.
+Vehicle.playerGrip = 1;
+Vehicle.playerTurn = 1;

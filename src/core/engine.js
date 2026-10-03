@@ -45,6 +45,12 @@ class GameEngine {
     createScene() {
         this.scene = new BABYLON.Scene(this.engine);
         this.scene.clearColor = BABYLON.Color4.FromHexString('#2a6586ff');
+        // O jogo não usa o mouse para escolher malhas: desliga o picking por movimento/clique (raycast em todas as malhas a cada evento).
+        this.scene.skipPointerMovePicking = true;
+        this.scene.skipPointerDownPicking = true;
+        this.scene.skipPointerUpPicking = true;
+        this.scene.autoClear = true;
+        this.scene.autoClearDepthAndStencil = true;
 
         this._createLights();
 
@@ -86,7 +92,7 @@ class GameEngine {
 
         // PCF (borda nítida, barato, sem blur): combina com o visual pixel art e evita a
         // perda de precisão do ESM em janelas de profundidade grandes.
-        this.shadowGenerator = new BABYLON.ShadowGenerator(2048, this.sun);
+        this.shadowGenerator = new BABYLON.ShadowGenerator(Config.perf.shadowSize || 2048, this.sun);
         this.shadowGenerator.usePercentageCloserFiltering = true;
         this.shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_LOW;
         this.shadowGenerator.bias = 0.0008;

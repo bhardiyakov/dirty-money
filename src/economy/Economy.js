@@ -128,7 +128,7 @@ const Economy = {
     // ------------------------------------------------------------------ tempo
     // Chamado todo quadro com a hora do relógio do jogo: vira o dia → novos preços e estoque.
     tick(hour) {
-        if (this._lastHour >= 0 && hour < this._lastHour - 12) { this.day++; this.shops = {}; if (typeof Laundry !== 'undefined') Laundry.onNewDay(); }
+        if (this._lastHour >= 0 && hour < this._lastHour - 12) { this.day++; this.shops = {}; if (typeof Laundry !== 'undefined') Laundry.onNewDay(); if (typeof Careers !== 'undefined' && Careers.instance) Careers.instance.onNewDay(); }
         this._lastHour = hour;
     },
 
