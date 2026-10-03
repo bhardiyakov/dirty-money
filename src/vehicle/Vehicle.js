@@ -144,6 +144,7 @@ class Vehicle {
     takeDamage(amount, source = 'env') {
         if (this.wrecked || amount <= 0) return;
         if (source && source !== 'env') this.lastHitBy = source;
+        if (this.controlled) amount *= 1 - (SkillTree.m.carDmg || 0);      // habilidade Lataria
         this.hp = Math.max(0, this.hp - amount);
         const f = this.hp / this.maxHp;
         this.dent = f > 0.75 ? 0 : f > 0.5 ? 1 : f > 0.25 ? 2 : 3;
@@ -249,7 +250,7 @@ class Vehicle {
         if (this.hotwire > 0) { this.hotwire -= dt; throttle = 0; }      // ligação direta (carro trancado roubado): motor ainda não pegou
         if (this.tank > 0 && this.controlled) {             // gasolina: marcha lenta + acelerador (mais com o carro rápido); tanque vazio = motor sem força
             if (this.fuel <= 0) { this.fuel = 0; throttle = 0; }
-            else this.fuel = Math.max(0, this.fuel - (this.spec.bike ? 0.5 : 1) * Config.fuel.burn * (0.1 + Math.abs(throttle) * (0.45 + 0.55 * Math.min(1, this.speed / this.spec.maxSpeed))) * dt);
+            else this.fuel = Math.max(0, this.fuel - (this.spec.bike ? 0.5 : 1) * Config.fuel.burn * (1 - (SkillTree.m.fuel || 0)) * (0.1 + Math.abs(throttle) * (0.45 + 0.55 * Math.min(1, this.speed / this.spec.maxSpeed))) * dt);
         }
         const up = BABYLON.Vector3.Up();
         const forward = this.body.getDirection(BABYLON.Axis.Z);
@@ -273,7 +274,7 @@ class Vehicle {
             const drop = (this.spec.brakeDrag || Config.vehicle.brakeDrag * (Weather.cur ? Weather.cur.brakeMul : 1)) * dt;
             fwd = Math.abs(fwd) <= drop ? 0 : fwd - Math.sign(fwd) * drop;
         }
-        fwd = BABYLON.Scalar.Clamp(fwd, -(this.spec.maxReverse || Config.vehicle.maxReverse), this.spec.maxSpeed);
+        fwd = BABYLON.Scalar.Clamp(fwd, -(this.spec.maxReverse || Config.vehicle.maxReverse), this.spec.maxSpeed * (this.controlled ? 1 + (SkillTree.m.topSpeed || 0) : 1));
         this._applyMotion(fwd, lat, steer, dt, vel, forward, right);
     }
 

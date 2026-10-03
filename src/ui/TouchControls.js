@@ -1,6 +1,12 @@
 // ============================================================================
 // TouchControls — controles NA TELA para celular/tablet, só quando é tela de toque E não há controle (Xbox) conectado.
-// Joystick à esquerda (andar / dirigir), botões à direita (muda conforme está a pé ou no veículo) e atalhos no topo.
+// Poucos botões, e só os que fazem sentido AGORA:
+//   joystick (esquerda)  anda/dirige; empurrar até a borda = correr (a pé)
+//   ATACAR (direita)     golpe/tiro (segurar = rajada); no carro vira SAIR; no helicóptero, SUBIR/DESCER/SAIR
+//   CONTEXTO (até 2)     aparecem sozinhos com o que dá para fazer ali: ENTRAR, ROUBAR, ARROMBAR, FURTAR, ASSALTAR, PULAR,
+//                        VASCULHAR, DESMANCHAR, ABASTECER… — lidos da própria dica de interação do jogo (Game._promptHtml)
+//   ARMA (chip)          toque = próxima arma; segurar = recarregar · ✚ KIT aparece só com vida baixa e kit na mochila
+//   ⋯                    o resto (chute, mochila, buzina, farol, zoom…) · topo: pausa/mapa e CARREIRAS · pinça = zoom
 // Tudo aperta teclas virtuais do InputManager (setVirtual), então o jogo não sabe a diferença. Some quando um controle é conectado
 // ou quando o jogador usa teclado/mouse de verdade (notebook com tela de toque). Também deixa a interface responsiva (classe
 // `mobile` no <body>): HUD menor, minimapa no canto de cima, dicas acima dos botões, menu de pausa em coluna.
@@ -26,12 +32,12 @@ class TouchControls {
 
     get wanted() { return this.input.touchDevice && !this.input.padConnected && !this._physical; }
 
-    // Botões: [rótulo, tecla, modo ('foot'|'car'|'both'), classe, segurar?]
-    static get BUTTONS() {
+    // Botões fixos do menu "⋯" (ações raras): [rótulo, tecla, modo ('foot'|'car'|'heli'|'all'), segurar?]
+    static get MORE() {
         return [
-            ['ATIRAR', ' ', 'foot', 'fire'], ['ENTRAR', 'f', 'both', 'use'], ['CORRER', 'shift', 'foot', 'run'], ['SOCO', 'j', 'foot', 'punch'], ['CHUTE', 'k', 'foot', 'kick'],
-            ['RECARR', 'r', 'foot', 'reload'], ['E', 'e', 'both', 'act'], ['ARMA', '#weapon', 'foot', 'weapon'], ['KIT', 'm', 'foot', 'heal'], ['PULAR', 'v', 'foot', 'vault'],
-            ['BUZINA', 'h', 'car', 'horn'], ['FAROL', 'l', 'car', 'light'], ['FURTAR', 'c', 'foot', 'steal'],
+            ['CHUTE', 'k', 'foot'], ['RECARREGAR', 'r', 'foot'], ['KIT MÉDICO', 'm', 'foot'], ['MOCHILA', 'i', 'all'],
+            ['BUZINA', 'h', 'car', true], ['FAROL', 'l', 'car'], ['GIRAR ↺', 'q', 'heli', true], ['GIRAR ↻', 'e', 'heli', true],
+            ['ZOOM +', 'z', 'all', true], ['ZOOM −', 'x', 'all', true],
         ];
     }
 
@@ -48,24 +54,27 @@ class TouchControls {
             #tcKnob { position: absolute; left: 50%; top: 50%; width: calc(var(--u) * 1.1); height: calc(var(--u) * 1.1); margin: calc(var(--u) * -0.55) 0 0 calc(var(--u) * -0.55);
                 border-radius: 50%; background: rgba(235,240,250,0.55); border: 3px solid rgba(7,9,13,0.75); pointer-events: none; }
             .tcb { position: absolute; pointer-events: auto; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 700;
-                width: calc(var(--u) * 0.95); height: calc(var(--u) * 0.95); font-size: calc(var(--u) * 0.2); color: #eef1f7; line-height: 1.05;
-                background: rgba(20,26,38,0.55); border: 3px solid rgba(7,9,13,0.75); border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(135,145,170,0.45); }
-            .tcb.down { background: rgba(70,200,120,0.7); transform: scale(0.94); }
-            .tcb.fire { width: calc(var(--u) * 1.5); height: calc(var(--u) * 1.5); right: calc(var(--u) * 0.3); bottom: calc(var(--u) * 0.3); background: rgba(190,40,40,0.55); font-size: calc(var(--u) * 0.24); }
-            .tcb.use { right: calc(var(--u) * 1.95); bottom: calc(var(--u) * 0.3); background: rgba(40,120,200,0.55); }
-            .tcb.kick { right: calc(var(--u) * 3.0); bottom: calc(var(--u) * 0.3); }
-            .tcb.run { right: calc(var(--u) * 0.3); bottom: calc(var(--u) * 1.95); }
-            .tcb.punch { right: calc(var(--u) * 1.35); bottom: calc(var(--u) * 1.95); }
-            .tcb.act { right: calc(var(--u) * 2.4); bottom: calc(var(--u) * 1.95); }
-            .tcb.reload { right: calc(var(--u) * 3.45); bottom: calc(var(--u) * 1.95); }
-            .tcb.weapon { right: calc(var(--u) * 0.3); bottom: calc(var(--u) * 3.0); }
-            .tcb.heal { right: calc(var(--u) * 1.35); bottom: calc(var(--u) * 3.0); }
-            .tcb.vault { right: calc(var(--u) * 2.4); bottom: calc(var(--u) * 3.0); }
-            .tcb.steal { right: calc(var(--u) * 3.45); bottom: calc(var(--u) * 3.0); }
-            .tcb.horn { right: calc(var(--u) * 0.3); bottom: calc(var(--u) * 1.95); }
-            .tcb.light { right: calc(var(--u) * 1.35); bottom: calc(var(--u) * 1.95); }
-            body.tc-car .tcb.use { right: calc(var(--u) * 0.3); bottom: calc(var(--u) * 0.3); width: calc(var(--u) * 1.5); height: calc(var(--u) * 1.5); }
-            body.tc-car .tcb.act { right: calc(var(--u) * 1.95); bottom: calc(var(--u) * 0.3); }            .tcb.hide { display: none; }
+                width: calc(var(--u) * 1.15); height: calc(var(--u) * 1.15); font-size: calc(var(--u) * 0.2); color: #eef1f7; line-height: 1.05;
+                background: rgba(20,26,38,0.6); border: 3px solid rgba(7,9,13,0.75); border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(135,145,170,0.45); }
+            .tcb.down { background: rgba(70,200,120,0.75); transform: scale(0.94); }
+            #touchUI .hide { display: none !important; }
+            #tcMain { width: calc(var(--u) * 1.75); height: calc(var(--u) * 1.75); right: calc(var(--u) * 0.35); bottom: calc(var(--u) * 0.4); background: rgba(190,40,40,0.6); font-size: calc(var(--u) * 0.26); }
+            #tcMain.car { background: rgba(40,120,200,0.6); }
+            #tcCtx0 { right: calc(var(--u) * 2.25); bottom: calc(var(--u) * 0.35); background: rgba(40,120,200,0.62); }
+            #tcCtx1 { right: calc(var(--u) * 0.6); bottom: calc(var(--u) * 2.3); background: rgba(150,90,210,0.62); }
+            .tcb.ctx { animation: tcPop 0.18s ease-out; }
+            @keyframes tcPop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+            .tcchip { position: absolute; pointer-events: auto; display: flex; align-items: center; gap: 6px; padding: 0 12px; height: calc(var(--u) * 0.62); border-radius: 12px;
+                font-size: calc(var(--u) * 0.2); font-weight: 700; color: #eef1f7; background: rgba(20,26,38,0.66); border: 3px solid rgba(7,9,13,0.75); box-shadow: inset 0 0 0 2px rgba(135,145,170,0.45); white-space: nowrap; }
+            .tcchip.down { background: rgba(70,200,120,0.75); }
+            #tcWeapon { right: calc(var(--u) * 2.35); bottom: calc(var(--u) * 1.75); }
+            #tcWeapon small { color: #ffd23f; font-size: calc(var(--u) * 0.17); }
+            #tcKit { right: calc(var(--u) * 2.35); bottom: calc(var(--u) * 2.5); color: #ff8a8a; }
+            #tcMore { right: calc(var(--u) * 0.35); bottom: calc(var(--u) * 3.55); width: calc(var(--u) * 0.8); justify-content: center; font-size: calc(var(--u) * 0.32); padding: 0; }
+            #tcMorePanel { position: absolute; right: calc(var(--u) * 1.3); bottom: calc(var(--u) * 2.9); pointer-events: auto; display: none; flex-wrap: wrap; gap: 6px; width: calc(var(--u) * 4.4);
+                justify-content: flex-end; padding: 8px; border-radius: 14px; background: rgba(9,14,32,0.85); border: 2px solid rgba(53,224,255,0.45); }
+            #tcMorePanel.on { display: flex; }
+            #tcMorePanel .tcchip { position: static; height: calc(var(--u) * 0.6); }
             .tct { position: absolute; top: calc(var(--u) * 0.15); pointer-events: auto; width: calc(var(--u) * 0.7); height: calc(var(--u) * 0.7); border-radius: 8px; font-size: calc(var(--u) * 0.2);
                 display: flex; align-items: center; justify-content: center; font-weight: 700; color: #eef1f7; background: rgba(20,26,38,0.6); border: 3px solid rgba(7,9,13,0.75); box-shadow: inset 0 0 0 2px rgba(135,145,170,0.45); }
             .tct.down { background: rgba(70,200,120,0.7); }
@@ -81,8 +90,9 @@ class TouchControls {
             body.mobile #opVignette { animation: none; opacity: 0.6; }
             body.mobile #hud2 { top: 6px; right: 6px; transform: scale(0.5); transform-origin: top right; }
             body.mobile #minimap { width: 108px !important; height: 108px !important; left: 8px !important; top: 8px !important; bottom: auto !important; border-width: 3px; }
-            body.mobile #toast { font-size: 11px; top: 118px; max-width: 70vw; padding: 4px 8px; }
-            body.mobile #prompt { font-size: 11px; padding: 5px 9px; bottom: auto; top: 44%; max-width: 62vw; white-space: normal; }
+            body.mobile #toast { font-size: 11px; top: 60px; max-width: 54vw; padding: 4px 8px; }
+            body.mobile #prompt { font-size: 10px; padding: 4px 8px; bottom: auto; top: 8px; max-width: 44vw; white-space: normal; }
+            body.mobile #prompt small { font-size: 9px; }
             body.mobile #vehPop { transform: scale(0.55); transform-origin: top left; right: auto; left: 8px; bottom: auto; top: 124px; }
             body.mobile #vehPop.show { transform: scale(0.55); }
             body.mobile #inventory { width: 62vw !important; max-height: 80vh; overflow: auto; }
@@ -104,18 +114,33 @@ class TouchControls {
         this.stickEl = root.querySelector('#tcStick'); this.knob = root.querySelector('#tcKnob');
         this._bindStick();
 
-        this.buttons = [];
-        for (const [label, key, mode, cls] of TouchControls.BUTTONS) {
-            const b = document.createElement('div');
-            b.className = 'tcb ' + cls; b.textContent = label; b.dataset.mode = mode;
-            root.appendChild(b); this._bindButton(b, key); this.buttons.push(b);
-        }
-        // atalhos do topo (ao lado do HUD): pausa/mapa, mochila, zoom ±
-        this.top = [['II', 'p'], ['MOCH', 'i'], ['CRIME', 'o'], ['−', 'x'], ['+', 'z']].map(([label, key], i) => {
+        // botão principal, 2 de contexto, chip da arma, chip do kit, "⋯" e o painel do "⋯"
+        const mk = (id, cls, html = '') => { const d = document.createElement('div'); d.id = id; d.className = cls; d.innerHTML = html; root.appendChild(d); return d; };
+        this.main = mk('tcMain', 'tcb', 'ATACAR');
+        this._bindDynamic(this.main, () => this._mainKey);
+        this.ctx = [mk('tcCtx0', 'tcb hide'), mk('tcCtx1', 'tcb hide')];
+        this.ctx.forEach((b, i) => this._bindDynamic(b, () => this._ctxKeys[i]));
+        this._ctxKeys = [null, null]; this._ctxSig = '';
+        this.weapon = mk('tcWeapon', 'tcchip', 'PUNHOS');
+        this._bindWeapon(this.weapon);
+        this.kit = mk('tcKit', 'tcchip hide', '✚ KIT');
+        this._bindButton(this.kit, 'm', false);
+        this.moreBtn = mk('tcMore', 'tcchip', '⋯');
+        this.morePanel = mk('tcMorePanel', '');
+        this.moreBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.morePanel.classList.toggle('on'); });
+        this.more = TouchControls.MORE.map(([label, key, mode, hold]) => {
+            const b = document.createElement('div'); b.className = 'tcchip'; b.textContent = label; b.dataset.mode = mode;
+            this.morePanel.appendChild(b); this._bindButton(b, key, !!hold);
+            if (!hold) b.addEventListener('pointerup', () => this.morePanel.classList.remove('on'));
+            return b;
+        });
+        // atalhos do topo (ao lado do HUD): pausa/mapa e carreiras
+        this.top = [['II', 'p'], ['CRIME', 'o']].map(([label, key], i) => {
             const b = document.createElement('div');
             b.className = 'tct'; b.textContent = label; b.dataset.i = i;
-            root.appendChild(b); this._bindButton(b, key, key === 'x' || key === 'z'); return b;
+            root.appendChild(b); this._bindButton(b, key, false); return b;
         });
+        this._bindPinch();
         const back = this.back = document.createElement('div');
         back.id = 'tcBack'; back.textContent = '✕ VOLTAR';
         back.addEventListener('pointerdown', (e) => { e.preventDefault(); if (this.g.menu.isOpen) this.g.menu.close(); });
@@ -124,16 +149,72 @@ class TouchControls {
         root.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
+    // hold = a tecla fica apertada enquanto o dedo estiver no botão; senão é um toque único (aperta e solta em 60 ms).
     _bindButton(el, key, hold = true) {
         const press = (down) => {
             el.classList.toggle('down', down);
-            if (key === '#weapon') { if (down && this.input.onWeaponCycle) this.input.onWeaponCycle(1); return; }
-            if (key === 'p' || key === 'i' || key === 'o') { if (down) { this.input.setVirtual(key, true, 'touch'); setTimeout(() => this.input.setVirtual(key, false, 'touch'), 60); } return; }       // (toque único)
+            if (!hold) { if (down) this._tap(key); return; }
             this.input.setVirtual(key, down, 'touch');
         };
         el.addEventListener('pointerdown', (e) => { e.preventDefault(); AudioFX.init(); try { el.setPointerCapture(e.pointerId); } catch (x) { /* ok */ } press(true); });
-        const up = (e) => { e.preventDefault(); if (el.classList.contains('down') || key === '#weapon') press(false); };
+        const up = (e) => { e.preventDefault(); if (el.classList.contains('down')) press(false); };
         el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
+    }
+
+    _tap(key) { this.input.setVirtual(key, true, 'touch'); setTimeout(() => this.input.setVirtual(key, false, 'touch'), 60); }
+
+    // Botão cuja tecla muda com o contexto (lida na hora do toque e solta a MESMA tecla no fim — segurar E abastece, segurar ESPAÇO é rajada).
+    _bindDynamic(el, keyFn) {
+        let held = null;
+        el.addEventListener('pointerdown', (e) => {
+            e.preventDefault(); AudioFX.init();
+            const k = keyFn(); if (!k) return;
+            try { el.setPointerCapture(e.pointerId); } catch (x) { /* ok */ }
+            held = k; el.classList.add('down'); this.input.setVirtual(k, true, 'touch');
+        });
+        const up = (e) => { e.preventDefault(); if (!held) return; el.classList.remove('down'); this.input.setVirtual(held, false, 'touch'); held = null; };
+        el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
+    }
+
+    // Chip da arma: toque = próxima arma; segurar meio segundo = recarregar.
+    _bindWeapon(el) {
+        let t0 = 0, timer = null;
+        el.addEventListener('pointerdown', (e) => {
+            e.preventDefault(); AudioFX.init(); el.classList.add('down'); t0 = performance.now();
+            timer = setTimeout(() => { timer = null; this._tap('r'); }, 450);
+        });
+        const up = (e) => { e.preventDefault(); if (!el.classList.contains('down')) return; el.classList.remove('down'); if (timer) { clearTimeout(timer); timer = null; if (this.input.onWeaponCycle) this.input.onWeaponCycle(1); } };
+        el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+    }
+
+    // Pinça com dois dedos no jogo = zoom (substitui os botões + e −).
+    _bindPinch() {
+        const cv = this.g.gameEngine && this.g.gameEngine.canvas; if (!cv) return;
+        const pts = new Map(); let d0 = 0;
+        const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+        cv.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 2) d0 = dist(); });
+        cv.addEventListener('pointermove', (e) => {
+            if (!pts.has(e.pointerId)) return; pts.get(e.pointerId).x = e.clientX; pts.get(e.pointerId).y = e.clientY;
+            if (pts.size !== 2 || !this.g.camera) return;
+            const d = dist(); this.g.camera.zoom(-(d - d0) * 0.04); d0 = d;
+        });
+        const end = (e) => { pts.delete(e.pointerId); };
+        cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+    }
+
+    // Ações de contexto lidas da dica de interação (<b>E</b> vasculhar…): no máximo 2, na ordem em que a dica as mostra.
+    static parseActions(html) {
+        const out = [], seen = new Set(), re = /<b>([EFGCV])<\/b>\s*([^<]*)/g;
+        let m;
+        while ((m = re.exec(html || '')) && out.length < 2) {
+            const key = m[1].toLowerCase();
+            if (seen.has(key)) continue;
+            let t = m[2].replace(/\(segure\)\s*/i, '').replace(/[—·(:].*$/, '').trim().split(/\s+/).filter((w) => !/^(o|a|os|as|e|de|do|da|na|no|para|este|esta|um|uma)$/i.test(w)).slice(0, 2).join(' ');
+            if (t.length > 12) t = t.split(' ')[0];                          // botão pequeno: duas palavras só se couberem
+            if (!t) t = { e: 'AGIR', f: 'ENTRAR', g: 'ARROMBAR', c: 'FURTAR', v: 'PULAR' }[key];
+            seen.add(key); out.push({ key, label: t.toUpperCase() });
+        }
+        return out;
     }
 
     // Joystick analógico: o dedo pode sair do círculo; o botão acompanha até o raio e o eixo satura em 1.
@@ -146,7 +227,7 @@ class TouchControls {
             const ux = dx / d, uy = dy / d, m = d < R * 0.12 ? 0 : k;
             this.knob.style.transform = `translate(${ux * k * R * 0.7}px, ${uy * k * R * 0.7}px)`;
             this.input.analog.x = ux * m; this.input.analog.z = -uy * m;
-            this.input.setVirtual('shift', !this.g.input.carMode && k > 0.95 && !this.input.padConnected, 'touch');            // empurrar até a borda = correr
+            this.input.setVirtual('shift', this.g.mode === 'player' && k > 0.92 && !this.input.padConnected, 'touch');            // empurrar até a borda = correr (só a pé)
         };
         const end = (e) => {
             if (e.pointerId !== S.id) return;
@@ -162,8 +243,8 @@ class TouchControls {
         const mobile = this.input.touchDevice || window.innerWidth < 900;
         document.body.classList.toggle('mobile', mobile);
         const u = Math.max(44, Math.min(76, Math.min(window.innerWidth, window.innerHeight) * 0.11));
-        const hudW = 244 * 0.5 + 14;
-        this.top.forEach((b, i) => { b.style.right = `${hudW + i * (u * 0.8)}px`; });
+        const hudW = (document.getElementById('hud2') ? document.getElementById('hud2').offsetWidth : 460) * 0.5 + 14;      // HUD escalado a 50% no celular
+        this.top.forEach((b, i) => { b.style.right = `${hudW + i * (u * 0.8)}px`; b.style.width = i ? `${u * 0.95}px` : ''; });
     }
 
     _refresh() {
@@ -178,15 +259,44 @@ class TouchControls {
         this._ready = true;
     }
 
-    // Todo frame (Game): troca o conjunto de botões a pé/no veículo e mostra o botão de voltar quando o menu está aberto.
+    // Todo frame (Game): principal conforme o modo, botões de contexto conforme a dica, chip da arma e do kit.
     update() {
-        const car = this.g.mode === 'car' && !!this.g.activeCar, boat = car && this.g.activeCar.isBoat, mode = car ? 'car' : 'foot';
-        if (mode !== this._mode) {
-            this._mode = mode;
-            document.body.classList.toggle('tc-car', car);
-            for (const b of this.buttons) { const m = b.dataset.mode; b.classList.toggle('hide', m !== 'both' && m !== mode); }
-        }
         this.back.classList.toggle('on', this.shown && this.g.menu.isOpen);
         this.root.style.display = this.shown && !this.g.menu.isOpen ? 'block' : 'none';
+        if (!this.shown || this.g.menu.isOpen) return;
+        const g = this.g, mode = g.mode === 'heli' ? 'heli' : (g.mode === 'car' && g.activeCar ? 'car' : 'foot');
+        if (mode !== this._mode) {
+            this._mode = mode;
+            document.body.classList.toggle('tc-car', mode === 'car');
+            for (const b of this.more) { const m = b.dataset.mode; b.style.display = m === 'all' || m === mode ? '' : 'none'; }
+            this.main.textContent = mode === 'foot' ? 'ATACAR' : 'SAIR';
+            this.main.classList.toggle('car', mode !== 'foot');
+            this.weapon.style.display = mode === 'foot' ? '' : 'none';
+            this._ctxSig = '';
+        }
+        this._mainKey = mode === 'foot' ? ' ' : 'f';
+        // contexto
+        let acts;
+        if (mode === 'heli') acts = [{ key: ' ', label: 'SUBIR' }, { key: 'shift', label: 'DESCER' }];
+        else acts = TouchControls.parseActions(g._promptHtml).filter((a) => !(mode === 'car' && a.key === 'f'));
+        const sig = acts.map((a) => a.key + a.label).join('|');
+        if (sig !== this._ctxSig) {
+            this._ctxSig = sig;
+            this.ctx.forEach((b, i) => {
+                const a = acts[i];
+                this._ctxKeys[i] = a ? a.key : null;
+                b.classList.toggle('hide', !a);
+                if (a) { b.textContent = a.label; b.classList.remove('ctx'); void b.offsetWidth; b.classList.add('ctx'); }
+            });
+        }
+        // arma e kit
+        if (mode === 'foot') {
+            const p = g.player, inv = g.inventory, w = p.weapon === 'none' ? 'fists' : p.weapon;
+            const txt = (Weapons[w] ? Weapons[w].name : 'Punhos').toUpperCase() + (inv.isGun(w) ? ` <small>${inv.ammoText(w)}</small>` : '');
+            if (txt !== this._wTxt) { this._wTxt = txt; this.weapon.innerHTML = '⟳ ' + txt; }
+            const showKit = inv.medkits > 0 && p.hp < p.maxHp * 0.75;
+            if (showKit !== this._kitOn) { this._kitOn = showKit; this.kit.classList.toggle('hide', !showKit); }
+            if (showKit) { const t = `✚ KIT (${inv.medkits})`; if (t !== this._kitTxt) { this._kitTxt = t; this.kit.textContent = t; } }
+        } else if (this._kitOn) { this._kitOn = false; this.kit.classList.add('hide'); }
     }
 }

@@ -121,7 +121,7 @@ class Stash {
     sellJewels(game) {
         const inv = game.inventory;
         const total = inv.jewelValue + this.jv;
-        const gain = Math.round(total * 0.7);
+        const gain = Math.round(total * 0.7 * (1 + (SkillTree.m.fence || 0)));
         inv.jewels = 0; inv.jewelValue = 0; this.jv = 0; delete this.boxes.safe.jewels;
         for (const b of Object.keys(this.boxes)) delete this.boxes[b].jewels;
         inv.addCash(gain);

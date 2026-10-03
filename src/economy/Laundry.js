@@ -23,7 +23,7 @@ const Laundry = {
     xp: 0, taxHeat: 0, day: -1, game: null,
 
     get level() { return Math.min(8, Math.floor(Math.sqrt(this.xp / 500))); },         // Contabilidade 0..8
-    get lossRate() { return Math.max(0.12, 0.32 - 0.025 * this.level); },
+    get lossRate() { return Math.max(0.06, 0.32 - 0.025 * this.level - (SkillTree.m.launder || 0)); },      // (habilidade Contador)
     get count() { return Object.keys(this.owned).length; },
     capacity() { return 1500 + 500 * Math.min(this.level, 4); },                       // sujo por dia, por fachada
 
@@ -53,7 +53,7 @@ const Laundry = {
         inv.cash -= amt; inv.clean += net;
         this.used[shop.id] = (this.used[shop.id] || 0) + amt;
         this.xp += amt;
-        this.taxHeat = Math.min(100, this.taxHeat + (amt / 60) * (1 - 0.07 * lv) * (typeof Careers !== 'undefined' && Careers.immunity ? 0.25 : 1));      // patrono de escola de samba: imunidade política        // Contabilidade alta: a Receita nem percebe
+        this.taxHeat = Math.min(100, this.taxHeat + (amt / 60) * (1 - 0.07 * lv) * (typeof Careers !== 'undefined' && Careers.immunity ? 0.25 : 1) * (1 - (SkillTree.m.taxHeat || 0)));      // patrono de escola de samba: imunidade política        // Contabilidade alta: a Receita nem percebe
         let msg = `Lavou ${brl(amt)} → ${brl(net)} limpos (perda ${Math.round(this.lossRate * 100)}%)`;
         if (this.level > lv) msg += ` · Contabilidade nv ${this.level}!`;
         this._audit(game);
@@ -75,7 +75,7 @@ const Laundry = {
         this.used = {};
         const g = this.game, n = this.count;
         if (!g || !n) return;
-        const income = n * (140 + 20 * this.level);
+        const income = Math.round(n * (140 + 20 * this.level) * (1 + (SkillTree.m.income || 0)));
         g.inventory.clean += income;
         g._flash(`Suas ${n} fachada(s) renderam ${brl(income)} limpos`);
     },

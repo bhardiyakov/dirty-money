@@ -20,8 +20,8 @@ class ChopCareer extends Career {
             desc: 'Carros roubados viram peças, placas frias e frota para o crime. Dirija bem: cada batida é dinheiro perdido.',
             ranks: [
                 { name: 'Puxador', xp: 0, desc: 'Furta carros populares estacionados e leva ao desmanche.' },
-                { name: 'Dublê / Adulterador', xp: 600, desc: 'Carros de luxo sob encomenda, com rastreador; clona placas e chassis.' },
-                { name: 'Mestre Mecânico', xp: 2500, desc: 'Gerencia desmanches e prepara a frota do tráfico.' },
+                { name: 'Dublê / Adulterador', xp: 1500, desc: 'Carros de luxo sob encomenda, com rastreador; clona placas e chassis.' },
+                { name: 'Mestre Mecânico', xp: 6000, desc: 'Gerencia desmanches e prepara a frota do tráfico.' },
             ],
             skills: {
                 mecanica: { name: 'Mecânica', desc: 'Ligação direta −0,45 s e arrombamento 7% mais fácil por nível; adulteração mais curta' },
@@ -59,6 +59,7 @@ class ChopCareer extends Career {
         g.inventory.addCash(v);
         this.addXp(25 + v / 40);
         this.data.parts += 1;
+        if (g.achievements) g.achievements.bump('scrapped');
         g._flash(`🔧 ${car.spec.model} desmanchado: +${brl(v)} e 1 peça aproveitada`);
         AudioFX.blip(640, 0.15, 0.18);
         return true;
@@ -66,7 +67,7 @@ class ChopCareer extends Career {
 
     _suspect(n) {
         const d = this.data, g = this.g;
-        d.suspicion = Math.min(100, d.suspicion + n * (Careers.immunity ? 0.3 : 1));
+        d.suspicion = Math.min(100, d.suspicion + n * (Careers.immunity ? 0.3 : 1) * (1 - (SkillTree.m.taxHeat || 0)));
         if (d.suspicion < 100) return '';
         d.suspicion = 40;
         const fine = Math.round(Math.max(g.inventory.clean, g.inventory.cash) * 0.25);
@@ -140,6 +141,7 @@ class ChopCareer extends Career {
             if (arg === 'engine') car.spec = Object.assign({}, car.spec, { power: car.spec.power * 1.25, maxSpeed: car.spec.maxSpeed + 4 });
             if (arg === 'armor') { const f = car.hpFrac; car.maxHp = Math.round(car.maxHp * 1.6); car.hp = car.maxHp * f; }
             this.addXp(40 + M.parts * 10);
+            if (m.engine && m.armor && m.hidden && this.g.achievements) this.g.achievements.bump('fullmod');
             return `${M.name} instalado no ${car.spec.model}`;
         }
         if (name === 'buyShop') {
@@ -160,7 +162,7 @@ class ChopCareer extends Career {
     onNewDay() {
         const d = this.data;
         if (!d.shops) return;
-        const g = this.g, income = d.shops * 1800;
+        const g = this.g, income = Math.round(d.shops * 1800 * (1 + (SkillTree.m.income || 0)));
         g.inventory.addCash(income);
         d.parts += d.shops * 2;
         const raid = this._suspect(d.shops * 9);

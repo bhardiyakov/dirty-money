@@ -64,7 +64,7 @@ class Combat {
             b.on = true; b.owner = shooter.owner; b.ref = shooter.ref; b.fly = !!shooter.fly;   // fly: tiro vindo do alto passa por cima dos prédios
             b.x = mx; b.z = mz; b.px = mx; b.pz = mz;
             b.vx = Math.sin(a) * sp; b.vz = Math.cos(a) * sp;
-            b.dmg = W.dmg; b.left = W.range; b.dirx = Math.sin(a); b.dirz = Math.cos(a);
+            b.dmg = W.dmg * (shooter.dmgMul || 1); b.left = W.range; b.dirx = Math.sin(a); b.dirz = Math.cos(a);
         }
         this.shots[shooter.owner]++;
         AudioFX.shot(weaponKey, shooter.x, shooter.z);

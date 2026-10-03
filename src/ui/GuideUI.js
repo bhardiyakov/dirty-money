@@ -31,7 +31,7 @@ class GuideUI {
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'],
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
-            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
+            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas']);
         return out;
@@ -94,7 +94,11 @@ GuideUI.PAGES = {
         <tr><td><kbd>H</kbd> · <kbd>L</kbd></td><td>buzina · faróis</td></tr><tr><td><kbd>Z</kbd> <kbd>X</kbd> / roda</td><td>zoom</td></tr>
         <tr><td><kbd>I</kbd></td><td>mochila</td></tr><tr><td><kbd>O</kbd></td><td>carreiras do crime</td></tr><tr><td><kbd>Esc</kbd> / <kbd>P</kbd></td><td>menu (mapa, GPS, status, guia)</td></tr></table>
         <h3>Controle (Xbox)</h3><p>Funciona direto: analógico move, gatilhos e botões fazem as ações, <b>D-pad</b> troca de arma e <b>Start</b> pausa.</p>
-        <h3>Celular</h3><p>Joystick à esquerda; botões à direita mudam a pé ou no veículo (ATIRAR, ENTRAR, CORRER, SOCO, CHUTE, RECARR, E, ARMA, KIT, PULAR, FURTAR, BUZINA, FAROL). No topo: <b>II</b> pausa, <b>MOCH</b> mochila, <b>CRIME</b> carreiras e zoom.</p>`,
+        <h3>Celular</h3><ul><li><b>Joystick</b> (esquerda): anda e dirige; empurre até a borda para <b>correr</b>.</li>
+        <li><b>ATACAR</b> (botão grande): soco ou tiro — segure para rajada. No carro vira <b>SAIR</b>; no helicóptero aparecem <b>SUBIR</b> e <b>DESCER</b>.</li>
+        <li><b>Botões de contexto</b>: aparecem sozinhos só quando há algo a fazer ali — ENTRAR, ROUBAR, ARROMBAR, FURTAR, ASSALTAR, PULAR, VASCULHAR, DESMANCHAR, ABASTECER…</li>
+        <li><b>Arma</b> (chip): toque troca de arma, segure recarrega. <b>✚ KIT</b> aparece com vida baixa.</li>
+        <li><b>⋯</b>: chute, mochila, buzina, farol, girar o helicóptero, zoom. No topo: <b>II</b> (mapa/pausa) e <b>CRIME</b> (carreiras). <b>Pinça</b> com dois dedos = zoom.</li></ul>`,
 
     money: () => `<h2>Dinheiro sujo × limpo</h2>
         <p>Tudo o que vem do crime é <b>dinheiro sujo</b>. O <b>dinheiro limpo</b> é o que está "na conta" e pode ser gasto no comércio legal.</p>
@@ -145,9 +149,26 @@ GuideUI.PAGES = {
     goals: () => `<h2>Metas de carreira</h2>
         <p>O painel embaixo da tela mostra a próxima meta de cada trilha — <b>Patrimônio</b>, <b>Carreiras</b>, <b>Morro</b>, <b>Lavagem</b>, <b>Imóveis</b> e <b>Fuga</b> — com barra de progresso. Cada meta batida paga na hora (dinheiro e, nas maiores, kits médicos) e libera a próxima.</p>`,
 
+    level: () => `<h2>Nível e habilidades</h2>
+        <p>Além das carreiras, o <b>personagem</b> tem um nível próprio (aba CARREIRAS › <b>HABILIDADES</b>). Todo XP conta: trabalhos, missões do morro, metas, conquistas, furtos, carros roubados e fugas da polícia (fugir de muitas estrelas vale muito).</p>
+        <ul><li>O nível <b>não tem teto</b>, mas cada nível pede mais XP que o anterior (o nível 100 pede ~780 mil XP). <b>1 ponto por nível</b>.</li>
+        <li>A árvore tem <b>6 ramos</b> — Físico, Combate, Sombra, Volante, Negócios e Malandragem — com 4 camadas. Cada camada pede um nível mínimo (1, 5, 12, 20) e uma habilidade anterior do ramo; camadas altas custam mais pontos por grau.</li>
+        <li>As habilidades mudam o jogo de verdade: vida máxima, dano, recarga, dispersão, chance de furto, visão da polícia, tempo para despistar, aderência e velocidade do carro, preços, perda na lavagem, rendas diárias, multas, conta do hospital, pagamento e XP.</li>
+        <li><b>Prestígio</b> (nível 25+): graus infinitos que somam pagamento e XP — sempre há onde gastar pontos.</li></ul>`,
+
+    notoriety: () => `<h2>Notoriedade (dificuldade)</h2>
+        <p>Quanto mais alto o seu nível, mais a cidade te conhece: <b>Desconhecido → Conhecido na área → Nome na rua → Procurado na cidade → Inimigo público → Lenda do crime → Mito</b>.</p>
+        <ul><li>A polícia <b>enxerga mais longe</b> e <b>demora mais para esquecer</b> você (até +60%). As habilidades do ramo Sombra e Volante compensam.</li>
+        <li>Em troca, <b>todo trabalho paga mais</b> (+1,5% por nível, sem teto). O jogo fica mais difícil e mais lucrativo para sempre.</li>
+        <li>As patentes das carreiras pedem bem mais XP do que no começo do jogo e, depois da última, vem a <b>maestria</b>: níveis infinitos, cada um 25% mais caro, +3% de pagamento naquela carreira.</li></ul>`,
+
+    achievements: () => `<h2>Conquistas e platina</h2>
+        <p>Na aba CARREIRAS › <b>CONQUISTAS</b> ficam dezenas de objetivos de longo prazo, com barra de progresso: furtos, fugas de 5 estrelas, patentes e maestria 10 em cada carreira, 50 trabalhos por carreira, carros desmanchados, grandes assaltos, armas vendidas, golpes, desfiles, patrimônio de R$ 10 milhões, nível 100, árvore completa e Prestígio 10.</p>
+        <p>Cada conquista dá XP de personagem. A <b>PLATINA</b> só vem quando <b>todas</b> estiverem completas — é para levar muito tempo.</p>`,
+
     careers: () => `<h2>Como as carreiras funcionam</h2>
         <p>Além do tráfico, você pode seguir <b>cinco carreiras</b> ao mesmo tempo. Cada uma tem:</p>
-        <ul><li><b>Patentes</b> por XP — a patente libera trabalhos novos e a gestão.</li>
+        <ul><li><b>Patentes</b> por XP — a patente libera trabalhos novos e a gestão. Depois da última patente vem a <b>maestria</b> (infinita, +3% de pagamento por nível).</li>
         <li><b>Duas habilidades</b> (0 a 5): 1 ponto a cada ${Careers.XP_PER_POINT} XP; elas mudam o jogo de verdade (tempo de ligação direta, aderência do carro, barulho dos passos, chance do golpe…).</li>
         <li><b>Trabalhos</b>: um por vez (e não junto com a missão do morro). O alvo aparece no <b>GPS</b> e com um <b>marcador brilhante</b> no chão; o andamento fica no painel do canto superior esquerdo. Falhar (prazo, prisão, morte, abandono) não dá XP e deixa os contatos quietos uns segundos.</li>
         <li><b>Gestão</b> nas patentes altas: negócios que rendem por dia — e riscos que também rodam por dia (Receita, arrego, rival, sequestro, rastreio).</li></ul>

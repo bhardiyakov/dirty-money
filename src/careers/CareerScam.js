@@ -20,8 +20,8 @@ class ScamCareer extends Career {
             desc: 'Dados de cartão, celulares e golpes por telefone. Lucro alto, risco no rastreio — não na bala.',
             ranks: [
                 { name: 'Pescador de Dados', xp: 0, desc: 'Chupa-cabra em caixa eletrônico e celulares furtados.' },
-                { name: 'Clonador / Golpista', xp: 500, desc: 'Central de golpes: esvazia contas sem sair de casa.' },
-                { name: 'Operador de Botnet', xp: 2500, desc: 'Invasão corporativa e chantagem, cripto e lavagem para as facções.' },
+                { name: 'Clonador / Golpista', xp: 1200, desc: 'Central de golpes: esvazia contas sem sair de casa.' },
+                { name: 'Operador de Botnet', xp: 6000, desc: 'Invasão corporativa e chantagem, cripto e lavagem para as facções.' },
             ],
             skills: {
                 ti: { name: 'TI', desc: '−12% de rastreio por golpe e instalação do skimmer mais rápida, por nível' },
@@ -90,12 +90,13 @@ class ScamCareer extends Career {
         window.removeEventListener('keydown', this._raidKey, true);
         if (this._raidEl) { this._raidEl.removeEventListener('pointerdown', this._raidClick); this._raidEl.remove(); }
         this.raid = null; d.data = 0; d.dossier = 0;
+        if (ok && g.achievements) g.achievements.bump('raidWon');
         if (ok) { d.trace = 20; g.wanted.ensureLevel(1); g._flash('💥 HDs destruídos! Não sobrou prova — saia daí antes que entrem'); this.addXp(60); }
         else { const lost = Math.round(inv.cash * 0.35); inv.cash -= lost; d.trace = 40; g.wanted.addStars(3, 'cyber'); g._flash(`🚔 Pegaram os servidores! Apreenderam ${brl(lost)} e os dados — FUJA!`); }
         if (g.policeManager) g.policeManager.alertNear(g.player.position, 320);
     }
 
-    get chance() { return Math.min(0.92, 0.45 + 0.06 * this.skill('labia')); }
+    get chance() { return Math.min(0.92, 0.45 + 0.06 * this.skill('labia') + (SkillTree.m.labia || 0) * 0.375); }
 
     panel() {
         const d = this.data, tr = Math.round(d.trace), here = this.mgr.atBase();
@@ -144,6 +145,7 @@ class ScamCareer extends Career {
             if (!this.mgr.atBase()) return 'A central só funciona em casa ou na favela';
             if (d.data < T.data) return 'Sem dados suficientes — instale chupa-cabras ou furte celulares';
             d.data -= T.data;
+            if (this.g.achievements) this.g.achievements.bump('scams');
             const ok = Math.random() < Math.min(0.95, Math.max(0.05, this.chance + T.chance));
             const v = ok ? Math.round((T.min + Math.random() * (T.max - T.min)) * (1 + 0.1 * this.skill('labia'))) : 0;
             if (ok) inv.addCash(v);

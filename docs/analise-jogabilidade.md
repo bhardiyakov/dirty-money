@@ -42,6 +42,18 @@ Base genérica (`CareerCore.js`): cada carreira tem patentes por XP, 2 skills (0
 
 A aba **GUIA** do menu explica o jogo inteiro e cada carreira (os capítulos das carreiras são gerados dos próprios dados, então não desatualizam).
 
+## Progressão longa e "platina"
+
+- **Nível do personagem** sem teto (`src/player/SkillTree.js`): todo XP conta; curva 200 × (nível−1)^1,8 — o nível 100 pede ~780 mil XP. 1 ponto por nível.
+- **Árvore de habilidades**: 6 ramos × 6 habilidades em 4 camadas (nível mínimo 1/5/12/20, pré-requisitos, custo crescente), com efeitos reais em ~30 sistemas. **Prestígio** infinito a partir do nível 25.
+- **Notoriedade**: o nível deixa a polícia mais atenta (até +60% de visão e memória) e os pagamentos maiores (+1,5% por nível, sem teto).
+- **Carreiras mais longas**: patentes pedem ~2,5× mais XP; depois do topo, **maestria** infinita (+25% de XP por nível, +3% de pagamento).
+- **Conquistas** (`src/player/Achievements.js`): 42 objetivos de longo prazo; a **platina** exige todos (nível 100, maestria 10 em todas as carreiras, árvore completa, Prestígio 10, R$ 10 milhões…).
+
+## Controles de celular
+
+Joystick (borda = correr) + ATACAR + até 2 botões de contexto que aparecem sozinhos (lidos da dica de interação) + chip da arma (toque troca, segurar recarrega) + ✚ KIT com vida baixa + menu ⋯ com as ações raras; topo: pausa e carreiras; pinça = zoom.
+
 ## Próximos passos recomendados (por impacto × custo)
 
 | # | Ideia | Custo | Efeito no retorno do jogador |

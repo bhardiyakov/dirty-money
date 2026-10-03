@@ -108,6 +108,7 @@ class Missions {
         const m = this.cur, g = this.g;
         g.inventory.addCash(m.reward);
         Standing.missionsDone = (Standing.missionsDone || 0) + 1;
+        if (g.skills) g.skills.addXp(m.type === 'defend' ? 160 : 90);
         Standing.add('traffic', m.type === 'defend' ? 12 : (m.type === 'collect' ? 8 : 6));
         const rank = Missions.rank;
         g._flash(`✔ ${m.title} cumprida: +${brl(m.reward)}${extra}`);

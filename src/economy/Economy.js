@@ -159,6 +159,7 @@ const Economy = {
     price(shop, id, hour) {
         let p = this.ITEMS[id].base;
         for (const f of this.factors(shop, hour)) p *= f.mul;
+        p *= 1 - (typeof SkillTree !== 'undefined' ? (SkillTree.m.price || 0) : 0);      // habilidade Pechincha
         return Math.max(1, Math.round(p));
     },
 
@@ -222,7 +223,7 @@ const Economy = {
     fenceOffer(shop, game) {
         const S = this.STYLES[shop.style];
         if (!S.fence || game.inventory.jewels <= 0) return null;
-        return { count: game.inventory.jewels, value: Math.round(game.inventory.jewelValue * S.fence) };
+        return { count: game.inventory.jewels, value: Math.round(game.inventory.jewelValue * S.fence * (1 + (SkillTree.m.fence || 0))) };
     },
     sellJewels(game, shop) {
         const o = this.fenceOffer(shop, game);

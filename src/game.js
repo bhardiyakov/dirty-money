@@ -253,6 +253,8 @@ class Game {
         this.goals = new Goals(this);                        // metas de carreira (o que fazer a seguir + recompensas)
         this.missions = new Missions(this);                  // missões do tráfico (pedidas na boca de fumo)
         this.careers = new Careers(this);                    // carreiras do crime: desmanche, ladrão, armeiro, estelionato, jogo do bicho
+        this.skills = new SkillTree(this);                   // nível do personagem, árvore de habilidades e notoriedade
+        this.achievements = new Achievements(this);          // conquistas e platina
         this.op = new PoliceOperation(this);                 // operação policial na favela (única hora em que a polícia entra)
         this._flash(`Polícia patrulhando: ${this.policeManager.cars.length} viaturas, ${this.policeManager.officers.length} a pé`);
     }
@@ -550,6 +552,7 @@ class Game {
         if (this.policeManager) {
             const ps = this._playerState();
             // Percepção da polícia (raio do nível + linha de visada) -> procurado e FUGA.
+            if (this.skills) this.wanted.loseMul = this.skills.policeMul * (1 - (SkillTree.m.lose || 0) - (this.mode === 'car' ? (SkillTree.m.carLose || 0) : 0));
             this.policeManager.update(dt, ps.pos, ps.vel, this.wanted.level);
             const seen = this.policeManager.playerSeen;
             if (seen) this.wanted.seenByPolice();
@@ -580,6 +583,7 @@ class Game {
         this.ui.update(dt);
         if (this.careers) this.careers.update(dt);
         if (this.goals) this.goals.update(dt);
+        if (this.achievements) this.achievements.update(dt);
         this._autosave(dt);
     }
 
@@ -695,7 +699,7 @@ class Game {
         if (!inv.isGun(key) || this.reloading > 0) return;
         if (!inv.canReload(key)) { this._flash(inv.reserve(key) <= 0 ? 'Sem munição na mochila!' : 'Carregador cheio'); return; }
         if (p.busy && p.action.name !== 'shoot') return;
-        this.reloading = 1.25;
+        this.reloading = 1.25 * (1 - (SkillTree.m.reload || 0));
         this._reloadWeapon = key;
         p.playAction('draw', { lock: 0.55, weapon: p.look });          // (visual: mexe na arma)
         AudioFX.blip(260, 0.2, 0.2);
@@ -817,7 +821,8 @@ class Game {
         if (kind === 'shoot') {
             // Tiro de verdade: projéteis (com mira assistida), ouvido por todos; libera as armas da polícia.
             const angle = this.combat.aimAssist(pos.x, pos.z, heading);
-            this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p }, p.weapon);
+            const crit = Math.random() < (SkillTree.m.crit || 0);
+            this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p, spreadMul: 1 - (SkillTree.m.spread || 0), dmgMul: (1 + (SkillTree.m.gunDmg || 0)) * (crit ? 2 : 1) }, p.weapon);
             if (this.careers && this.careers.silenced(p.weapon)) {          // silenciador (Armeiro): só quem está muito perto e vê percebe
                 this.npcManager.alertViolence(pos, 8);
                 this.wanted.reportCrime();
@@ -841,7 +846,7 @@ class Game {
         this._delayed.push({
             t: M.delay,
             fn: () => {
-                const hit = this.combat.melee(p.position.x, p.position.z, p.root.rotation.y, M.dmg, M.range, 'player');
+                const hit = this.combat.melee(p.position.x, p.position.z, p.root.rotation.y, M.dmg * (1 + (SkillTree.m.melee || 0)), M.range, 'player');
                 this.npcManager.alertViolence(p.position);
                 if (hit) { this.wanted.reportCrime(); this._flash(`Agrediu #${hit.id}!`); }
             },
@@ -1152,6 +1157,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             this.mode = 'car';
             if (car._wasLocked) { car.hotwire = car.hotwireMax = this.careers ? this.careers.hotwireTime() : 3; car._wasLocked = false; }
             if (this.careers) this.careers.onCarEntered(car);
+            if (this.skills && car._xpGiven !== true) { car._xpGiven = true; this.skills.addXp(car.driver === false ? 8 : 12); }
             this.ui.showVehicle(car);                                 // modelo do carro por 3 s
             this._flash(`Carro #${car.id} roubado! (F pra sair)`);
         });
@@ -1230,8 +1236,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         const el = this.hud.prompt;
         if (!el) return;
         let html = '';
-        if (!this.showPrompts) { /* dicas desligadas nas configurações */ }
-        else if (Interiors.active) html = Interiors.prompt(this);
+        if (Interiors.active) html = Interiors.prompt(this);                    // (com as dicas desligadas o texto é montado igual — os botões de toque leem — mas não aparece)
         else if (this.hiding && this.hiding.phase === 'hidden') {
             html = `<b>E</b> sair do esconderijo<small>${this.hiding.seen ? 'a polícia te viu entrar — eles estão vindo!' : 'ninguém te viu entrar'}</small>`;
         } else if (this.holdup) {
@@ -1277,10 +1282,10 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             if (!html) html = Interiors.prompt(this);
             if (!html && HouseView.hint) html = HouseView.hint;
         }
-        if (html === this._promptHtml) return;
-        this._promptHtml = html;
+        if (html === this._promptHtml && this.showPrompts === this._promptShown) return;
+        this._promptHtml = html; this._promptShown = this.showPrompts;
         el.innerHTML = html;
-        el.style.display = html ? 'block' : 'none';
+        el.style.display = html && this.showPrompts ? 'block' : 'none';
     }
 
     // Lado do veículo em que o jogador está: vetor lateral unitário (rx, rz) e sinal (+1 direita / −1 esquerda).
@@ -1641,7 +1646,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         if (d < 0.01) { dx = 0; dz = -1; d = 1; }
         const edge = { x: px + (dx / d) * 0.95, z: pz + (dz / d) * 0.95 };
         const pm = this.policeManager;
-        const seen = this.wanted.level > 0 && !!pm && pm.playerSeen;
+        const seen = this.wanted.level > 0 && !!pm && pm.playerSeen && !(SkillTree.m.hideAlways);      // (Sumir no mapa: sempre funciona)
         this.hiding = { spot, phase: 'in', seen, t: 0, edge };
         const face = Math.atan2(px - edge.x, pz - edge.z);
         const ok = pl.runSequence([{ clip: 'walk', timer: 0.25, glide: edge }, { clip: 'enter' }], {
@@ -1776,7 +1781,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     }
 
     // Probabilidade de o furto dar certo. Por enquanto fixa/aleatória; depois virá do status do personagem.
-    _theftChance(npc) { return Config.robbery.theftChance; }
+    _theftChance(npc) { return Math.min(0.95, Config.robbery.theftChance + (SkillTree.m.theft || 0)); }
 
     _resolveTheft(npc) {
         const pl = this.player, R = Config.robbery;
@@ -1787,6 +1792,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             const loot = R.theftLoot[0] + Math.floor(Math.random() * (R.theftLoot[1] - R.theftLoot[0] + 1));
             this.inventory.addCash(loot);
             if (this.careers) this.careers.onPickpocket(npc, pl.position);
+            if (this.skills) this.skills.addXp(5);
+            if (this.achievements) this.achievements.bump('thefts');
             AudioFX.blip(1180, 0.08, 0.14);
             this._flash(`Furto: +${brl(loot)} — ele nem percebeu`);
         } else {
@@ -1922,7 +1929,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this.bustTimer = 0;
         this._dropFromCar();
         this._closeInventory();
-        if (lost === null) lost = this.inventory.fine(Config.police.fineBase);
+        if (lost === null) lost = this.inventory.fine(Config.police.fineBase * (1 - (SkillTree.m.fine || 0)));
         this.inventory.confiscate();                                       // preso: perde TODAS as armas
         this._respawn('station', hours);
         this._flash(`⚠ PRESO! Multa de ${brl(lost)}. Armas confiscadas. Você acordou na delegacia`);
@@ -2020,7 +2027,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this._closeInventory();
         this.reloading = 0;
         this.player.revive();
-        if (lost === null) { lost = this.inventory.fine(0.5); this.inventory.ravage(); }
+        if (lost === null) { lost = this.inventory.fine(0.5 * (1 - (SkillTree.m.hospital || 0))); this.inventory.ravage(); }
         this._respawn(where, hours);
         if (where === 'hospital') this._flash(`☠ Você acordou no hospital. Conta: -${brl(lost)}`);
     }
@@ -2084,6 +2091,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         };
         if (this.goals) this.goals.onWanted(n, prev, why);
         if (this.careers) this.careers.onWanted(n, prev);
+        if (this.skills && n === 0 && why === 'escape') this.skills.addXp(25 * prev * prev);
+        if (this.achievements && n === 0 && why === 'escape' && prev >= 5) this.achievements.bump('escape5');      // fugir de muitas estrelas vale muito
         if (n > prev && msg[n]) this._flash(msg[n]);
         else if (n === 0 && why === 'escape') this._flash('Você se safou! A polícia perdeu o seu rastro');
         if (this.policeManager) this.policeManager.onWantedChange(n, prev, why);

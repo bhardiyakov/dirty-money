@@ -34,11 +34,21 @@ class Career {
     skill(k) { return this.skills[k] || 0; }
 
     addXp(n) {
-        const r0 = this.rank, p0 = this.points;
-        this.xp += Math.max(0, Math.round(n));
+        n = Math.max(0, Math.round(n * (1 + (SkillTree.m.xp || 0))));
+        const r0 = this.rank, p0 = this.points, m0 = this.mastery;
+        this.xp += n;
+        if (this.g.skills) this.g.skills.addXp(n);                      // todo XP de carreira também sobe o NÍVEL DO PERSONAGEM
         if (this.rank > r0) { this.g._flash(`★ ${this.name}: promovido a ${this.rankName.toUpperCase()}! Novos trabalhos liberados (O)`); AudioFX.blip(980, 0.3, 0.24); }
+        else if (this.mastery > m0) { this.g._flash(`✦ ${this.name}: MAESTRIA ${this.mastery} (+${this.mastery * 3}% de pagamento nesta carreira)`); AudioFX.blip(1100, 0.25, 0.22); }
         else if (this.points > p0) this.g._flash(`${this.name}: +1 ponto de habilidade — gaste na aba CARREIRAS (O)`);
+        if (this.g.achievements) this.g.achievements.check();
     }
+
+    // MAESTRIA: depois da última patente, níveis infinitos (cada um pede 25% a mais de XP que o anterior). +3% de pagamento por nível.
+    static masteryXp(k) { return Math.round(1500 * (Math.pow(1.25, k) - 1) / 0.25); }        // XP acumulado acima do topo para a maestria k
+    get topXp() { return this.ranks[this.ranks.length - 1].xp; }
+    get mastery() { const over = this.xp - this.topXp; if (over < 0) return 0; let k = 0; while (Careers.masteryXpOf(k + 1) <= over) k++; return k; }
+    get masteryNext() { const k = this.mastery; return { need: Careers.masteryXpOf(k + 1), have: Math.max(0, this.xp - this.topXp), base: Careers.masteryXpOf(k) }; }
 
     upgrade(k) {
         if (!(k in this.skills) || this.points <= 0 || this.skills[k] >= 5) return false;
@@ -99,7 +109,8 @@ class CareerJob {
 }
 
 class Careers {
-    static get XP_PER_POINT() { return 250; }
+    static get XP_PER_POINT() { return 400; }
+    static masteryXpOf(k) { return Career.masteryXp(k); }
 
     constructor(game) {
         this.g = game;
@@ -110,6 +121,7 @@ class Careers {
         this.job = null;
         this.cool = 0;
         this.jobsDone = 0;
+        this.jobsBy = {}; this.jobTypes = {};
         this.scenes = [];                 // cenas de tiroteio recentes: { x, z, age }
         this._dead = new WeakSet();
         this._scanT = 0;
@@ -121,14 +133,14 @@ class Careers {
     // ---------------------------------------------------------------- skills → sistemas existentes
     applyMods() {
         const d = this.by.chop.skill('direcao');
-        Vehicle.playerGrip = 1 + 0.09 * d;                   // menos derrapagem lateral
+        Vehicle.playerGrip = 1 + 0.09 * d + (SkillTree.m.grip || 0);      // menos derrapagem lateral (carreira + habilidade Piloto)
         Vehicle.playerTurn = 1 + 0.05 * d;                   // giro mais vivo
         const mods = this.by.gunsmith.data.mods || {}, mb = this.g.inventory.magBonus = {};      // pente estendido
         for (const k of Object.keys(mods)) if (mods[k].ext) mb[k] = 1;
     }
     silenced(weapon) { const m = this.by.gunsmith.data.mods; return !!(m && m[weapon] && m[weapon].sil); }
-    lockpickMul() { return 1 - 0.07 * this.by.chop.skill('mecanica'); }                 // dificuldade do arrombamento (G)
-    hotwireTime() { return Math.max(0.8, 3.2 - 0.45 * this.by.chop.skill('mecanica')); }   // s de ligação direta (carro trancado)
+    lockpickMul() { return Math.max(0.4, 1 - 0.07 * this.by.chop.skill('mecanica') - (SkillTree.m.lockpick || 0)); }                 // dificuldade do arrombamento (G)
+    hotwireTime() { return Math.max(0.6, 3.2 - 0.45 * this.by.chop.skill('mecanica') - (SkillTree.m.hotwire || 0)); }   // s de ligação direta (carro trancado)
 
     // ---------------------------------------------------------------- trabalhos
     canStart() {
@@ -149,6 +161,7 @@ class Careers {
         const block = this.canStart() || (def.check && def.check());
         if (block) return { ok: false, msg: block };
         const job = def.make();
+        job.defId = def.id;
         if (!job.start()) { job.dispose(); this.unmark(); return { ok: false, msg: job.why || 'Sem trabalho agora' }; }
         this.job = job;
         AudioFX.blip(700, 0.15, 0.18);
@@ -169,9 +182,12 @@ class Careers {
         this.unmark();
         if (g.gps && g.gps._career) g.gps = null;
         if (ok) {
+            money = this.payout(job.c, money);
             if (money > 0) g.inventory.addCash(Math.round(money));
             job.c.addXp(xp);
             this.jobsDone++;
+            this.jobsBy[job.c.id] = (this.jobsBy[job.c.id] || 0) + 1;
+            if (job.defId) this.jobTypes[job.defId] = (this.jobTypes[job.defId] || 0) + 1;
             this.cool = 8;
             g._flash(`✔ ${job.c.name}: ${msg || job.title + ' concluído'}${money > 0 ? ` +${brl(money)}` : ''} · +${Math.round(xp)} XP`);
             AudioFX.blip(900, 0.2, 0.2);
@@ -180,6 +196,13 @@ class Careers {
             g._flash(`✖ ${job.c.name}: ${msg}`);
             AudioFX.blip(170, 0.3, 0.2);
         }
+    }
+
+    // Pagamento final: maestria da carreira (+3%/nível), notoriedade do personagem e habilidades de pagamento (Magnata, Contatos, Prestígio).
+    payout(c, money) {
+        if (!(money > 0)) return 0;
+        const sk = this.g.skills;
+        return Math.round(money * (1 + 0.03 * c.mastery) * (sk ? sk.payMul : 1) * (1 + (SkillTree.m.jobPay || 0)));
     }
 
     // ---------------------------------------------------------------- quadro
@@ -330,13 +353,13 @@ class Careers {
 
     // ---------------------------------------------------------------- save
     serialize() {
-        const out = { jobsDone: this.jobsDone, c: {} };
+        const out = { jobsDone: this.jobsDone, jobsBy: this.jobsBy, jobTypes: this.jobTypes, c: {} };
         for (const c of this.list) out.c[c.id] = c.serialize();
         return out;
     }
     load(s) {
         if (!s) return;
-        this.jobsDone = s.jobsDone || 0;
+        this.jobsDone = s.jobsDone || 0; this.jobsBy = s.jobsBy || {}; this.jobTypes = s.jobTypes || {};
         for (const c of this.list) c.load(s.c && s.c[c.id]);
         this.applyMods();
     }
