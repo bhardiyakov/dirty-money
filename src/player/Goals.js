@@ -4,6 +4,7 @@
 // meta de cada trilha com barra de progresso, e cada meta batida paga uma recompensa na hora (dinheiro sujo, kit médico) com aviso e som.
 //   PATRIMÔNIO  dinheiro sujo + limpo + joias      MORRO  missões do tráfico        LAVAGEM  fachadas e valor lavado
 //   IMÓVEIS     propriedades compradas             FUGA   estrelas alcançadas e fugas da polícia
+//   CARREIRAS   trabalhos concluídos nas carreiras do crime (careers/)
 // Tudo é lido do estado que já existe (não precisa de gancho nos outros sistemas), exceto fugas e estrelas, contadas em onWanted().
 // Salvo no save (SaveGame): metas cumpridas + contadores.
 // ============================================================================
@@ -13,6 +14,7 @@ class Goals {
     static get TRACKS() {
         return {
             money: ['PATRIMÔNIO', [['m1', 'Juntar', 1000, 150, 0], ['m2', 'Juntar', 5000, 400, 0], ['m3', 'Juntar', 25000, 1500, 1], ['m4', 'Juntar', 100000, 5000, 1], ['m5', 'Juntar', 500000, 20000, 2], ['m6', 'Juntar', 1000000, 50000, 3]]],
+            career: ['CARREIRAS', [['c1', 'Trabalhos de carreira', 1, 200, 0], ['c2', 'Trabalhos de carreira', 5, 800, 1], ['c3', 'Trabalhos de carreira', 15, 3000, 1], ['c4', 'Trabalhos de carreira', 40, 12000, 2]]],
             favela: ['MORRO', [['f1', 'Missões do tráfico', 1, 200, 0], ['f2', 'Missões do tráfico', 3, 500, 1], ['f3', 'Missões do tráfico', 8, 1500, 1], ['f4', 'Missões do tráfico', 15, 4000, 2], ['f5', 'Missões do tráfico', 30, 10000, 2]]],
             laundry: ['LAVAGEM', [['l1', 'Fachadas do C.V', 1, 300, 0], ['l2', 'Lavar no total', 5000, 600, 0], ['l3', 'Fachadas do C.V', 3, 1500, 1], ['l4', 'Lavar no total', 50000, 6000, 1], ['l5', 'Lavar no total', 250000, 20000, 2]]],
             estate: ['IMÓVEIS', [['e1', 'Imóveis comprados', 1, 500, 0], ['e2', 'Imóveis comprados', 3, 2500, 1], ['e3', 'Imóveis comprados', 6, 10000, 2]]],
@@ -38,6 +40,7 @@ class Goals {
             case 'favela': return Standing.missionsDone || 0;
             case 'laundry': return label.startsWith('Fachadas') ? Laundry.count : Math.floor(Laundry.xp);
             case 'estate': return Object.keys(RealEstate.owned).length;
+            case 'career': return g.careers ? g.careers.jobsDone : 0;
             case 'heat': return label.startsWith('Fugas') ? this.escapes : this.maxStars;
         }
         return 0;

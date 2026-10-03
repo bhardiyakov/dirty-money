@@ -111,7 +111,7 @@ class TouchControls {
             root.appendChild(b); this._bindButton(b, key); this.buttons.push(b);
         }
         // atalhos do topo (ao lado do HUD): pausa/mapa, mochila, zoom ±
-        this.top = [['II', 'p'], ['MOCH', 'i'], ['−', 'x'], ['+', 'z']].map(([label, key], i) => {
+        this.top = [['II', 'p'], ['MOCH', 'i'], ['CRIME', 'o'], ['−', 'x'], ['+', 'z']].map(([label, key], i) => {
             const b = document.createElement('div');
             b.className = 'tct'; b.textContent = label; b.dataset.i = i;
             root.appendChild(b); this._bindButton(b, key, key === 'x' || key === 'z'); return b;
@@ -128,7 +128,7 @@ class TouchControls {
         const press = (down) => {
             el.classList.toggle('down', down);
             if (key === '#weapon') { if (down && this.input.onWeaponCycle) this.input.onWeaponCycle(1); return; }
-            if (key === 'p' || key === 'i') { if (down) { this.input.setVirtual(key, true, 'touch'); setTimeout(() => this.input.setVirtual(key, false, 'touch'), 60); } return; }       // (toque único)
+            if (key === 'p' || key === 'i' || key === 'o') { if (down) { this.input.setVirtual(key, true, 'touch'); setTimeout(() => this.input.setVirtual(key, false, 'touch'), 60); } return; }       // (toque único)
             this.input.setVirtual(key, down, 'touch');
         };
         el.addEventListener('pointerdown', (e) => { e.preventDefault(); AudioFX.init(); try { el.setPointerCapture(e.pointerId); } catch (x) { /* ok */ } press(true); });

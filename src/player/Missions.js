@@ -54,6 +54,7 @@ class Missions {
     offer() {
         const g = this.g;
         if (this.cur) return { ok: false, msg: 'Você já tem um serviço em andamento' };
+        if (g.careers && g.careers.job) return { ok: false, msg: 'Termine (ou abandone) o trabalho da sua carreira antes' };
         if (this.cool > 0) return { ok: false, msg: `Volte daqui a ${Math.ceil(this.cool)}s — o chefe não tem nada agora` };
         if (!Standing.isResident(Standing.territoryAt(g.player.position.x, g.player.position.z))) return { ok: false, msg: 'Você não é do morro: ninguém te dá serviço' };
         if (Standing.traffic < 20) return { ok: false, msg: 'Seu nome está sujo com o tráfico. Pague a taxa antes' };

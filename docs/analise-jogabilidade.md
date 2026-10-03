@@ -28,6 +28,18 @@ Leitura do código (sistemas, números e fluxos), não de testes com jogadores. 
 - **Metas de Carreira** (`src/player/Goals.js`): 5 trilhas (Patrimônio, Morro, Lavagem, Imóveis, Fuga) com degraus crescentes, painel de progresso discreto na base da tela e recompensa em dinheiro/kit médico ao bater cada meta, com aviso e som. Salvo no save; saves antigos recebem as metas já cumpridas sem chuva de prêmios.
 - **Autosave** a cada 2 min (só sem procurado/preso/morto/dormindo/missão com prazo).
 
+## Carreiras do crime (`src/careers/`)
+
+Base genérica (`CareerCore.js`): cada carreira tem patentes por XP, 2 skills (0–5, 1 ponto a cada 250 XP), trabalhos (um por vez, nunca junto com a missão do morro) e um painel de gestão. Tela: aba **CARREIRAS** do menu (tecla **O**; no celular, botão CRIME). Tudo entra no save e na trilha "Carreiras" das metas.
+
+| Carreira | Jogável agora | Skills (efeito real no jogo) | Em breve |
+|---|---|---|---|
+| Desmanche | Puxada (popular → desmanche; amassado derruba o pagamento), Encomenda de luxo (rastreador com timer → polícia na coordenada; adulteração parada na oficina), Frota do tráfico, gestão de desmanches (renda × suspeita da Receita) | Mecânica: ligação direta (nova, para todo carro trancado) e arrombamento; Direção: aderência e giro do carro que você dirige | peças compradas, blindagem/fundo falso como itens |
+| Ladrão | Levantar a fita (sem correr/arma/polícia; disfarce), Invasão noturna (ruído, alarme com tempo para abafar, peso que deixa você lento, receptador) | Furtividade: ruído; Eletrônica: segundos antes do alarme | transportadora/banco com planejamento |
+| Armeiro | Catar sucata (cenas de tiroteio reais e zonas de conflito), bancada (5 receitas), venda aos vapores com chance de travar | Engenharia: material e falhas; Inteligência: receitas | contratos com facções, sequestro |
+| Estelionato | Chupa-cabra (instalar sem ninguém olhando), celulares em furtos em bairro rico, central de golpes com rastreio e VPN, lavagem via cripto | TI: rastreio e instalação; Lábia: chance e lucro | botnet, defesa dos servidores |
+| Jogo do Bicho | Banca (turno, rapa, malote com pivetes), Rota do recolhe (blitz), Banqueiro (pontos por zona, arrego, rival, matador), Patrono (escola de samba → imunidade política) | Influência: arrego; Segurança: assaltos e blitz | eventos de carnaval, opinião pública |
+
 ## Próximos passos recomendados (por impacto × custo)
 
 | # | Ideia | Custo | Efeito no retorno do jogador |

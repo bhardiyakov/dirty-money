@@ -11,7 +11,7 @@
 
 class PauseMenu {
     static get TABS() {
-        return [['map', 'MAPA'], ['inventory', 'INVENTÁRIO'], ['status', 'STATUS'], ['skills', 'HABILIDADES'], ['settings', 'CONFIGURAÇÕES']];
+        return [['map', 'MAPA'], ['inventory', 'INVENTÁRIO'], ['status', 'STATUS'], ['careers', 'CARREIRAS'], ['settings', 'CONFIGURAÇÕES']];
     }
 
     // Legenda do mapa: tipos de lugar (a chave é o `type` dos POIs).
@@ -153,10 +153,10 @@ class PauseMenu {
                 </div>
               </div>
               <div class="pm-page" data-page="status"><div class="pm-stat-grid" id="pmStatus"></div></div>
-              <div class="pm-page" data-page="skills"><div class="px pm-soon"><h2>HABILIDADES</h2><p>Em breve: árvore de habilidades — direção, tiro, furtividade, arrombamento e fuga.</p></div></div>
+              <div class="pm-page" data-page="careers"><div id="pmCareers"></div></div>
               <div class="pm-page" data-page="settings">
                 <div class="px pm-set"><div class="px-title">CONFIGURAÇÕES</div><div id="pmSet"></div>
-                  <div class="pm-keys"><b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>ESC</b> menu · <b>1-9</b> armas</div></div>
+                  <div class="pm-keys"><b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas</div></div>
               </div>
             </div>
             <div class="pm-hints" id="pmHints"></div>`;
@@ -305,6 +305,7 @@ class PauseMenu {
             this._refreshDest(); this._buildLegend();
         } else if (id === 'inventory') { this._renderInventory(); }
         else if (id === 'status') this._renderStatus();
+        else if (id === 'careers') { if (this.g.careers) this.g.careers.ui.render(this.$('pmCareers')); }
         else if (id === 'settings') this._renderSettings();
     }
 
