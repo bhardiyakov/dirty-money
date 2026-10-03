@@ -31,7 +31,7 @@ class GuideUI {
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'],
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
-            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
+            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['daily', 'Energia e exposição (o dia)'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas']);
         return out;
@@ -94,7 +94,11 @@ GuideUI.PAGES = {
         <tr><td><kbd>H</kbd> · <kbd>L</kbd></td><td>buzina · faróis</td></tr><tr><td><kbd>Z</kbd> <kbd>X</kbd> / roda</td><td>zoom</td></tr>
         <tr><td><kbd>I</kbd></td><td>mochila</td></tr><tr><td><kbd>O</kbd></td><td>carreiras do crime</td></tr><tr><td><kbd>Esc</kbd> / <kbd>P</kbd></td><td>menu (mapa, GPS, status, guia)</td></tr></table>
         <h3>Controle (Xbox)</h3><p>Funciona direto: analógico move, gatilhos e botões fazem as ações, <b>D-pad</b> troca de arma e <b>Start</b> pausa.</p>
-        <h3>Celular</h3><p>Joystick à esquerda; botões à direita mudam a pé ou no veículo (ATIRAR, ENTRAR, CORRER, SOCO, CHUTE, RECARR, E, ARMA, KIT, PULAR, FURTAR, BUZINA, FAROL). No topo: <b>II</b> pausa, <b>MOCH</b> mochila, <b>CRIME</b> carreiras e zoom.</p>`,
+        <h3>Celular</h3><ul><li><b>Joystick</b> (esquerda): anda e dirige; empurre até a borda para <b>correr</b>.</li>
+        <li><b>ATACAR</b> (botão grande): soco ou tiro — segure para rajada. No carro vira <b>SAIR</b>; no helicóptero aparecem <b>SUBIR</b> e <b>DESCER</b>.</li>
+        <li><b>Botões de contexto</b>: aparecem sozinhos só quando há algo a fazer ali — ENTRAR, ROUBAR, ARROMBAR, FURTAR, ASSALTAR, PULAR, VASCULHAR, DESMANCHAR, ABASTECER…</li>
+        <li><b>Arma</b> (chip): toque troca de arma, segure recarrega. <b>✚ KIT</b> aparece com vida baixa.</li>
+        <li><b>⋯</b>: chute, mochila, buzina, farol, girar o helicóptero, zoom. No topo: <b>II</b> (mapa/pausa) e <b>CRIME</b> (carreiras). <b>Pinça</b> com dois dedos = zoom.</li></ul>`,
 
     money: () => `<h2>Dinheiro sujo × limpo</h2>
         <p>Tudo o que vem do crime é <b>dinheiro sujo</b>. O <b>dinheiro limpo</b> é o que está "na conta" e pode ser gasto no comércio legal.</p>
@@ -145,9 +149,72 @@ GuideUI.PAGES = {
     goals: () => `<h2>Metas de carreira</h2>
         <p>O painel embaixo da tela mostra a próxima meta de cada trilha — <b>Patrimônio</b>, <b>Carreiras</b>, <b>Morro</b>, <b>Lavagem</b>, <b>Imóveis</b> e <b>Fuga</b> — com barra de progresso. Cada meta batida paga na hora (dinheiro e, nas maiores, kits médicos) e libera a próxima.</p>`,
 
+    daily: () => `<h2>Energia e exposição (o dia)</h2>
+        <p>Cada dia é limitado. Você acorda com <b>energia cheia</b> e <b>exposição zerada</b> (barras ⚡ e 🔥 no HUD).</p>
+        <ul><li>Furtar, roubar carro, assaltar, brigar, atirar, correr e concluir trabalhos <b>gastam energia</b>. Cansado (menos de 12%) você não corre. Só o <b>sono</b> recupera.</li>
+        <li>Crimes e estrelas de procurado <b>aumentam a exposição</b> (ela esfria devagar quando você está limpo). Exposição cheia = <b>ALERTA TÁTICO</b> no distrito onde você está: a polícia enxerga 60% mais longe até você dormir.</li>
+        <li><b>Desmaio</b>: energia zerada ou continuar acordado depois das <b>2h</b>. Você acorda em casa sem nada de sujo na mochila (dinheiro, joias e mercadoria são confiscados) e paga propina de hospital/advogado do dinheiro limpo.</li>
+        <li>A decisão do dia: arriscar mais um roubo com a polícia nas ruas ou voltar para casa, dormir e começar limpo.</li></ul>
+        <div class="gd-tip">Guarde dinheiro em casa (baú/cofre) ou lave antes de forçar a barra: sujo na mochila é o que se perde.</div>`,
+
+    empire: () => `<h2>Soldados, galpões e lavagem</h2>
+        <p>Na aba <b>IMPÉRIO</b> o trabalho manual vira gestão:</p>
+        <ul><li><b>Galpões</b> (cada um abriga 4 soldados) e <b>soldados</b> (recrutamento + salário diário). Aloque cada soldado num distrito: todo dia ele faz roubos passivos — distritos ricos rendem mais. Soldado pode ser <b>preso</b> (mais em distrito com alerta tático, menos com delegado aliado).</li>
+        <li>O lucro cai no <b>cofre do galpão</b>, como dinheiro sujo. Ele só vira dinheiro na mão quando você o <b>recolhe</b> (na favela ou em casa) — e sujo na mochila se perde num desmaio.</li>
+        <li><b>Rotas de lavagem</b>: postos, restaurantes e boates de fachada comprados no distrito onde você está lavam o cofre todo dia, direto para dinheiro <b>limpo</b> (com perda e um pouco de Receita).</li>
+        <li>Salário sem pagar = soldado larga o bonde. Facções inimigas emboscam as rotas.</li></ul>`,
+
+    influence: () => `<h2>Malha de influência</h2>
+        <p>Os "corações" aqui são puramente transacionais:</p>
+        <ul><li><b>Delegados</b> de cada distrito: dê presentes de luxo (charutos, uísque, relógio) — <b>1 por dia</b>, entregue <b>no próprio distrito</b>. Com 10 ❤ as viaturas dali têm <b>metade do alcance de visão</b> e as estrelas sobem na metade da velocidade. Sem presente há 3 dias, ele esfria.</li>
+        <li><b>Fornecedor do Porto</b>: não aceita presente, só serviço — <b>contratos de assassinato</b> e <b>sabotagens</b> de carregamentos rivais. Com 10 ❤, armas 40% mais baratas.</li>
+        <li><b>Família Moretti</b> (rival) e <b>Milícia</b>: com relação −4 ou pior, mandam emboscadas nas suas rotas. Destruir os galpões deles piora a relação; tributo melhora. Vender armas à milícia agrada a ela e irrita o tráfico.</li>
+        <li><b>Vereadores</b>: extorquidos com arma na mão, pagam e contam para o domínio do distrito.</li></ul>`,
+
+    dominion: () => `<h2>Domínio e estações</h2>
+        <h3>Domínio da cidade</h3><p>Cada distrito tem 3 <b>coleções</b> (aba IMPÉRIO): <b>LAVAGEM</b> (fachadas de luxo + imóveis de alto padrão no distrito), <b>INFLUÊNCIA</b> (vereadores extorquidos) e <b>FORÇA</b> (galpões rivais destruídos). Na favela: 3 fachadas do C.V, comunidade em 70+ e Gerente de Frente.</p>
+        <ul><li>Lavagem completa: soldados rendem +25% ali. Influência: polícia vê 15% menos. Força: sem emboscadas.</li><li>As três: <b>distrito dominado</b> (mais bônus). Todos: <b>dono da cidade</b>.</li></ul>
+        <h3>Estações do crime</h3><p>Eventos globais em ciclo, com aviso 2 dias antes — prepare-se:</p>
+        <ul><li><b>Calmaria</b> (14 dias): normal.</li><li><b>Carnaval</b> (14): furtos rendem mais, polícia distraída, bancas do bicho faturam o dobro.</li>
+        <li><b>Eleições</b> (28): presentes valem o dobro na influência, extorsão rende mais, a lavagem aperta.</li>
+        <li><b>Intervenção Federal</b> (14): armas 3× mais caras, milícia some, polícia vê mais longe, soldados rendem a metade — hora do colarinho branco (golpes +50%).</li></ul>`,
+
+    banks: () => `<h2>Bancos</h2>
+        <p>A cidade tem <b>3 sedes</b> (no Distrito Financeiro) e <b>7 agências</b>, de três marcas (marcadores coloridos na porta; lista com GPS na aba IMPÉRIO):</p>
+        <ul><li><b style="color:#ec7000">Banco Inaú</b> — tecnologia: o melhor alvo do cibercrime (transferências rendem mais).</li>
+        <li><b style="color:#cc092f">Banco Brascor</b> — varejo: muito dinheiro vivo nos caixas, alvo da força bruta.</li>
+        <li><b style="color:#f6c700">Banco Nacional</b> — estatal: PM na porta, a polícia chega mais rápido e o suborno é caro.</li></ul>
+        <h3>Agência (roubo rápido — Ladrão Arrombador+)</h3><ul><li>Entre no expediente (10h–16h), estoure os <b>caixas eletrônicos</b> e o <b>cofre de caixa</b> (E). O alarme dispara e a polícia chega em segundos.</li>
+        <li>Ao sair: 3–4 estrelas e <b>3 minutos</b> para se afastar antes de a rua ser isolada.</li></ul>
+        <h3>Sede (Especialista em Cofres)</h3><ul><li><b>Planta baixa</b> (mercado negro, só na favela): sem ela você não acha o cofre.</li>
+        <li><b>Cortar a energia</b> na caixa de força do quarteirão (mini-game): desliga câmeras e laser e deixa entrar à noite. Vale até a meia-noite.</li>
+        <li><b>Subornar os vigilantes</b> (na Nacional, também a PM): a perfuração não aciona o alarme e a polícia demora mais. Vale só hoje.</li>
+        <li>Perfure o <b>cofre</b> parado no local — rende centenas de milhares.</li></ul>
+        <h3>Negociação de reféns</h3><p>Se a polícia chega com você lá dentro, ela cerca o prédio e abre negociação: <b>Lábia</b> (pedir tempo) ou <b>Intimidar</b> (com arma). Cada acerto dá uma trégua para terminar e sair; três falhas e o BOPE invade (preso). Sair cercado, sem trégua, é ser preso na porta.</p>
+        <h3>Dinheiro marcado</h3><p>O que sai do banco são cédulas com série rastreada: <b>pesam</b> (você fica lento), não vão para a mochila e somem se você desmaiar ou for preso. Guarde no <b>cofre do galpão</b> (precisa de galpão) para as fachadas lavarem.</p>
+        <h3>Cibercrime (Estelionato Golpista+)</h3><p>Plugue o <b>pendrive</b> no terminal do gerente de uma agência (porta no firewall da marca por 3 dias) e faça a <b>transferência via laranjas</b> de casa ou da favela: confirme as contas certas antes do firewall fechar.</p>
+        <h3>Conta e COAF</h3><p>Fale com o caixa: depositar <b>limpo</b> guarda os lucros com juros e nada se perde. Depositar <b>sujo</b> em conta de fachada enche o <b>Alerta do COAF</b> — cheio, bloqueiam a conta e levam metade.</p>`,
+
+    level: () => `<h2>Nível e habilidades</h2>
+        <p>Além das carreiras, o <b>personagem</b> tem um nível próprio (aba CARREIRAS › <b>HABILIDADES</b>). Todo XP conta: trabalhos, missões do morro, metas, conquistas, furtos, carros roubados e fugas da polícia (fugir de muitas estrelas vale muito).</p>
+        <ul><li>O nível <b>não tem teto</b>, mas cada nível pede mais XP que o anterior (o nível 100 pede ~780 mil XP). <b>1 ponto por nível</b>.</li>
+        <li>A árvore tem <b>6 ramos</b> — Físico, Combate, Sombra, Volante, Negócios e Malandragem — com 4 camadas. Cada camada pede um nível mínimo (1, 5, 12, 20) e uma habilidade anterior do ramo; camadas altas custam mais pontos por grau.</li>
+        <li>As habilidades mudam o jogo de verdade: vida máxima, dano, recarga, dispersão, chance de furto, visão da polícia, tempo para despistar, aderência e velocidade do carro, preços, perda na lavagem, rendas diárias, multas, conta do hospital, pagamento e XP.</li>
+        <li><b>Prestígio</b> (nível 25+): graus infinitos que somam pagamento e XP — sempre há onde gastar pontos.</li></ul>`,
+
+    notoriety: () => `<h2>Notoriedade (dificuldade)</h2>
+        <p>Quanto mais alto o seu nível, mais a cidade te conhece: <b>Desconhecido → Conhecido na área → Nome na rua → Procurado na cidade → Inimigo público → Lenda do crime → Mito</b>.</p>
+        <ul><li>A polícia <b>enxerga mais longe</b> e <b>demora mais para esquecer</b> você (até +60%). As habilidades do ramo Sombra e Volante compensam.</li>
+        <li>Em troca, <b>todo trabalho paga mais</b> (+1,5% por nível, sem teto). O jogo fica mais difícil e mais lucrativo para sempre.</li>
+        <li>As patentes das carreiras pedem bem mais XP do que no começo do jogo e, depois da última, vem a <b>maestria</b>: níveis infinitos, cada um 25% mais caro, +3% de pagamento naquela carreira.</li></ul>`,
+
+    achievements: () => `<h2>Conquistas e platina</h2>
+        <p>Na aba CARREIRAS › <b>CONQUISTAS</b> ficam dezenas de objetivos de longo prazo, com barra de progresso: furtos, fugas de 5 estrelas, patentes e maestria 10 em cada carreira, 50 trabalhos por carreira, carros desmanchados, grandes assaltos, armas vendidas, golpes, desfiles, patrimônio de R$ 10 milhões, nível 100, árvore completa e Prestígio 10.</p>
+        <p>Cada conquista dá XP de personagem. A <b>PLATINA</b> só vem quando <b>todas</b> estiverem completas — é para levar muito tempo.</p>`,
+
     careers: () => `<h2>Como as carreiras funcionam</h2>
         <p>Além do tráfico, você pode seguir <b>cinco carreiras</b> ao mesmo tempo. Cada uma tem:</p>
-        <ul><li><b>Patentes</b> por XP — a patente libera trabalhos novos e a gestão.</li>
+        <ul><li><b>Patentes</b> por XP — a patente libera trabalhos novos e a gestão. Depois da última patente vem a <b>maestria</b> (infinita, +3% de pagamento por nível).</li>
         <li><b>Duas habilidades</b> (0 a 5): 1 ponto a cada ${Careers.XP_PER_POINT} XP; elas mudam o jogo de verdade (tempo de ligação direta, aderência do carro, barulho dos passos, chance do golpe…).</li>
         <li><b>Trabalhos</b>: um por vez (e não junto com a missão do morro). O alvo aparece no <b>GPS</b> e com um <b>marcador brilhante</b> no chão; o andamento fica no painel do canto superior esquerdo. Falhar (prazo, prisão, morte, abandono) não dá XP e deixa os contatos quietos uns segundos.</li>
         <li><b>Gestão</b> nas patentes altas: negócios que rendem por dia — e riscos que também rodam por dia (Receita, arrego, rival, sequestro, rastreio).</li></ul>

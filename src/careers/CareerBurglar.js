@@ -23,8 +23,8 @@ class BurglarCareer extends Career {
             desc: 'Invasão silenciosa: estude a casa, entre de noite, leve o que couber e suma antes do alarme.',
             ranks: [
                 { name: 'Olheiro de Fita', xp: 0, desc: 'Levanta a rotina e os alarmes das casas ricas.' },
-                { name: 'Arrombador', xp: 500, desc: 'Invade casas à noite: joias, eletrônicos e dinheiro vivo.' },
-                { name: 'Especialista em Cofres', xp: 2200, desc: 'Grande assalto a agência: caixa de força, vigia, cofre temporizado e fuga.' },
+                { name: 'Arrombador', xp: 1200, desc: 'Invade casas à noite: joias, eletrônicos e dinheiro vivo.' },
+                { name: 'Especialista em Cofres', xp: 5500, desc: 'Grande assalto a agência: caixa de força, vigia, cofre temporizado e fuga.' },
             ],
             skills: {
                 furtividade: { name: 'Furtividade', desc: '−10% de barulho dos passos e das gavetas por nível' },
@@ -82,7 +82,7 @@ class BurglarCareer extends Career {
         return null;
     }
 
-    update() { this.g.player.loadMul = Math.max(0.6, 1 - this.data.weight * 0.045); }       // carga pesada: corre menos
+    update() { this.g.player.loadMul = Math.max(0.5, 1 - this.data.weight * 0.045 - (typeof Banks !== 'undefined' ? Banks.hotKg * 0.012 : 0)); }       // carga pesada (e cédulas marcadas): corre menos       // carga pesada: corre menos
 
     prompt() {
         if (this.data.goods <= 0 || this.g.mode !== 'player') return '';
@@ -169,7 +169,7 @@ class BurglaryJob extends CareerJob {
         return true;
     }
 
-    get mul() { return 1 - 0.1 * this.c.skill('furtividade'); }
+    get mul() { return Math.max(0.2, 1 - 0.1 * this.c.skill('furtividade') - (SkillTree.m.noise || 0)); }
 
     status() {
         if (this.stage === 0) return 'CHEGUE À PORTA';
@@ -348,6 +348,7 @@ class HeistJob extends CareerJob {
         }
         if (this.stage === 3) {
             const far = Math.hypot(pos.x - this.bank.x, pos.z - this.bank.z) > 220, safe = Standing.inFavela(pos.x, pos.z);
+            if ((safe || far) && g.wanted.level === 0 && this.power && this.bribed && g.achievements) g.achievements.bump('heistClean');
             if ((safe || far) && g.wanted.level === 0) this.succeed(this.loot, 400 + this.loot / 100, `assalto à ${this.bank.name.split(' (')[0]}${this.power && this.bribed ? ' — trabalho limpo' : ''}`);
         }
     }

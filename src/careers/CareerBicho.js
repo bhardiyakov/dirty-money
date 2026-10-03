@@ -25,9 +25,9 @@ class BichoCareer extends Career {
             desc: 'Não é guerra, é monopólio: bancas, arrego, influência — até virar patrono de escola de samba.',
             ranks: [
                 { name: 'Apontador', xp: 0, desc: 'Toca a banca da calçada e leva o malote ao cofre.' },
-                { name: 'Recolhedor de Rota', xp: 600, desc: 'Recolhe o dinheiro de vários apontadores pela cidade.' },
-                { name: 'Banqueiro', xp: 2500, desc: 'Administra pontos por zona, arrego e a guerra fria contra rivais.' },
-                { name: 'Patrono de Escola de Samba', xp: 9000, desc: 'A escola lava o capital e compra imunidade política.' },
+                { name: 'Recolhedor de Rota', xp: 1500, desc: 'Recolhe o dinheiro de vários apontadores pela cidade.' },
+                { name: 'Banqueiro', xp: 6000, desc: 'Administra pontos por zona, arrego e a guerra fria contra rivais.' },
+                { name: 'Patrono de Escola de Samba', xp: 18000, desc: 'A escola lava o capital e compra imunidade política.' },
             ],
             skills: {
                 influencia: { name: 'Influência', desc: '−8% de arrego e de passe/fechamento de bancas rivais, por nível' },
@@ -63,7 +63,7 @@ class BichoCareer extends Career {
 
     get arregoMul() { return 1 - 0.08 * this.skill('influencia'); }
     totalPts() { return Object.values(this.data.zones).reduce((s, v) => s + v, 0); }
-    dayIncome() { let s = 0; for (const [z, n] of Object.entries(this.data.zones)) s += n * 520 * (Economy.ZONE[z] ? Economy.ZONE[z].mul : 1); return Math.round(s); }
+    dayIncome() { let s = 0; for (const [z, n] of Object.entries(this.data.zones)) s += n * 520 * (Economy.ZONE[z] ? Economy.ZONE[z].mul : 1); return Math.round(s * (1 + (SkillTree.m.income || 0)) * (this.g.empire ? this.g.empire.fx('bicho') : 1)); }
     dayArrego() { return Math.round(this.totalPts() * 160 * this.arregoMul); }
     escortCost() { return 1500; }
     _immunity() { Careers.immunity = !!(this.data.school && this.data.opinion >= 40); }
@@ -185,6 +185,7 @@ class BichoCareer extends Career {
             d.day++;
             d.opinion = Math.min(100, d.opinion + 1);
             if (d.day % 7 === 0) {
+                if (d.opinion >= 60 && g.achievements) g.achievements.bump('parades');
                 if (d.opinion >= 60) { const v = 30000; inv.clean += v; d.opinion = Math.min(100, d.opinion + 8); msgs.push(`🎉 DESFILE: a escola brilhou na avenida — patrocínios de ${brl(v)} limpos`); }
                 else { d.opinion = Math.max(0, d.opinion - 6); msgs.push('📰 Desfile fraco e escândalo na imprensa: opinião pública em queda'); }
             }

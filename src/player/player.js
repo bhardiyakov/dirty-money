@@ -44,12 +44,14 @@ class Player {
     // (atropelamento/queda têm a própria animação).
     takeDamage(amount, quiet = false) {
         if (this.hp <= 0 || this.invulnerable) return;       // (rendido: ninguém atira)
-        if (this.armor > 0) {                                 // colete: absorve 75% do dano até acabar
-            const a = Math.min(this.armor, amount * 0.75);
+        amount *= 1 - (SkillTree.m.dmgTaken || 0);           // habilidade Sangue frio
+        if (this.armor > 0) {                                 // colete: absorve 75% do dano até acabar (Colete ajustado: mais)
+            const a = Math.min(this.armor, amount * (0.75 + (SkillTree.m.vest || 0)));
             this.armor -= a; amount -= a;
             if (this.armor < 0.5) { this.armor = 0; this.armorMax = 0; }
         }
         this.hp = Math.max(0, this.hp - amount);
+        if (this.hp <= 0 && SkillTree.instance && SkillTree.instance.trySecondWind()) this.hp = this.maxHp * 0.3;      // Corpo fechado
         this._sinceHit = 0;
         this.hitFlash = 0.35;                       // vinheta vermelha na tela
         if (!this.busy && !quiet) this.playAction('hurt', { lock: 0.6 });
@@ -81,7 +83,7 @@ class Player {
         if (this.hitFlash > 0) this.hitFlash -= dt;
         if (this.hp <= 0) return;                         // morto não regenera
         this._sinceHit += dt;
-        const cap = this.maxHp * 0.3;                      // punitivo: sem tratamento só se recupera até 30% da vida, bem devagar
+        const cap = this.maxHp * (0.3 + (SkillTree.m.regen || 0));      // (habilidade Recuperação sobe o teto)                      // punitivo: sem tratamento só se recupera até 30% da vida, bem devagar
         if (this._sinceHit > 10 && this.hp < cap) this.hp = Math.min(cap, this.hp + 1.2 * dt);
     }
 
@@ -290,7 +292,7 @@ class Player {
         this.depth = depth;
         this.swimming = depth > W.wadeDepth;
         const wf = depth <= 0 ? 1 : (depth <= W.wadeDepth ? 0.85 - 0.4 * (depth / W.wadeDepth) : (sprinting ? 0.52 : 0.4));
-        const maxSpeed = ((sprinting && depth <= 0) ? Config.player.sprintSpeed : Config.player.maxSpeed) * lock * wf * (this.loadMul || 1);      // loadMul: carga pesada (eletrônicos roubados)
+        const maxSpeed = ((sprinting && depth <= 0) ? Config.player.sprintSpeed * (1 + (SkillTree.m.sprint || 0)) : Config.player.maxSpeed) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1);      // loadMul: carga pesada (eletrônicos roubados)
 
         // Acelera/desacelera suavemente rumo à velocidade alvo (frame-independent).
         const targetVel = moveDir.scale(maxSpeed);

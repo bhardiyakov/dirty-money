@@ -27,7 +27,7 @@ class WantedSystem {
     get cfg() { return Config.wanted.levels[this.level] || null; }
 
     // Fração da fuga concluída (0..1).
-    get escape() { return this.cfg ? Math.min(1, this.lose / this.cfg.lose) : 0; }
+    get escape() { return this.cfg ? Math.min(1, this.lose / (this.cfg.lose * (this.loseMul || 1))) : 0; }
 
     _set(n, why) {
         n = Math.max(0, Math.min(Config.wanted.maxLevel, n));
@@ -35,7 +35,7 @@ class WantedSystem {
         const prev = this.level;
         this.level = n;
         this.lose = 0;
-        if (n > prev) this.heatCd = Config.wanted.escalateEvery;
+        if (n > prev) this.heatCd = Config.wanted.escalateEvery * (this.escalateMul || 1);      // delegado aliado: estrelas sobem mais devagar
         if (this.onChange) this.onChange(n, prev, why);
     }
 
@@ -73,7 +73,7 @@ class WantedSystem {
         if (this.level <= 0) return;
         if (seen) { this.lose = 0; return; }
         this.lose += dt;
-        if (this.lose >= this.cfg.lose) this._set(0, 'escape');
+        if (this.lose >= this.cfg.lose * (this.loseMul || 1)) this._set(0, 'escape');      // loseMul: notoriedade (+) e habilidades de fuga (−)
     }
 
     // Garante pelo menos `n` estrelas (ex.: ser visto com arma de fogo na mão).

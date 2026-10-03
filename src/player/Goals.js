@@ -95,6 +95,7 @@ class Goals {
             this.done[p.id] = 1;
             g.inventory.addCash(p.money);
             if (p.kits) g.inventory.medkits += p.kits;
+            if (g.skills) g.skills.addXp(60);
             g._flash(`🏆 META: ${p.label} ${this._fmt(p.key, p.target)} — +${brl(p.money)}${p.kits ? ` e ${p.kits} kit(s) médico(s)` : ''}`);
             AudioFX.blip(1100, 0.25, 0.22);
         }

@@ -21,8 +21,8 @@ class GunsmithCareer extends Career {
             desc: 'Sucata de tiroteio vira arma caseira. Fabrique com capricho: arma que trava queima seu nome com o tráfico.',
             ranks: [
                 { name: 'Catador de Sucata', xp: 0, desc: 'Recolhe cápsulas e peças nas cenas de tiroteio.' },
-                { name: 'Torneiro Mecânico', xp: 500, desc: 'Fabrica armas caseiras e recarrega munição para os vapores.' },
-                { name: 'Mercador da Morte', xp: 2500, desc: 'Fuzis montados, contratos com C.V e milícia, silenciador e pente estendido.' },
+                { name: 'Torneiro Mecânico', xp: 1200, desc: 'Fabrica armas caseiras e recarrega munição para os vapores.' },
+                { name: 'Mercador da Morte', xp: 6000, desc: 'Fuzis montados, contratos com C.V e milícia, silenciador e pente estendido.' },
             ],
             skills: {
                 engenharia: { name: 'Engenharia', desc: '−10% de material por nível e −6 pontos de chance de a arma travar' },
@@ -56,7 +56,7 @@ class GunsmithCareer extends Career {
                 check: () => this.lotValue() < 3000 ? 'Precisa de um lote de pelo menos R$ 3.000 no estoque' : null,
                 desc: 'Entregue o seu estoque de armas (lote mínimo R$ 3.000) no fundo da favela. Paga 40% acima dos vapores e o tráfico gosta.' },
             { id: 'mil', rank: 2, name: 'Contrato: Milícia do Rio Seco', pay: 'lote × 1,9', make: () => new ArmsDealJob(this, 'mil'),
-                check: () => this.lotValue() < 3000 ? 'Precisa de um lote de pelo menos R$ 3.000 no estoque' : null,
+                check: () => (this.g.empire && this.g.empire.fx('noMilitia', false)) ? 'A milícia sumiu durante a Intervenção Federal' : (this.lotValue() < 3000 ? 'Precisa de um lote de pelo menos R$ 3.000 no estoque' : null),
                 desc: 'A milícia paga quase o dobro — mas armar o inimigo derruba sua moral com o tráfico e te torna alvo de sequestro (contrate seguranças).' },
         ];
     }
@@ -152,6 +152,7 @@ class GunsmithCareer extends Career {
             if (!sold && !jam) return 'Seu estoque está vazio';
             inv.addCash(pay);
             this.addXp(sold * 15);
+            if (this.g.achievements) this.g.achievements.bump('gunsSold', sold);
             if (jam) { Standing.add('traffic', -3 * jam); d.jams += jam; }
             return `Vendeu ${sold} peça(s) por ${brl(pay)}${jam ? ` · ${jam} arma(s) TRAVARAM na mão do comprador: moral com o tráfico −${3 * jam}` : ''}`;
         }
@@ -179,10 +180,13 @@ class ArmsDealJob extends CareerJob {
         const g = this.g; if (g.mode !== 'player' || !this.near(g.player.position, 4)) return false;
         const c = this.c, d = c.data, R = GunsmithCareer.RECIPES;
         let ok = 0, jam = 0;
-        for (const k of Object.keys(R)) { if (!R[k].gun) continue; const n = d.stock[k] || 0; for (let i = 0; i < n; i++) { if (Math.random() < c.jamChance) jam++; else ok += R[k].price; } d.stock[k] = 0; }
+        let sold = 0;
+        for (const k of Object.keys(R)) { if (!R[k].gun) continue; const n = d.stock[k] || 0; for (let i = 0; i < n; i++) { if (Math.random() < c.jamChance) jam++; else { ok += R[k].price; sold++; } } d.stock[k] = 0; }
+        if (g.achievements) g.achievements.bump('gunsSold', sold);
         const mul = this.buyer === 'cv' ? 1.4 : 1.9, pay = Math.round(ok * mul);
         if (this.buyer === 'cv') Standing.add('traffic', 6 - 3 * jam);
         else { Standing.add('traffic', -12); d.rivalDeals++; }
+        if (g.empire) g.empire.influence.add('milicia', this.buyer === 'mil' ? 2 : -1);
         this.succeed(pay, 150 + pay / 80, `lote entregue${jam ? ` (${jam} arma(s) travaram no teste)` : ''}${this.buyer === 'mil' ? ' · o tráfico ficou sabendo (moral −12)' : ''}`);
         return true;
     }

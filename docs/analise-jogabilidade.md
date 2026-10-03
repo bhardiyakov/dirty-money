@@ -42,6 +42,37 @@ Base genérica (`CareerCore.js`): cada carreira tem patentes por XP, 2 skills (0
 
 A aba **GUIA** do menu explica o jogo inteiro e cada carreira (os capítulos das carreiras são gerados dos próprios dados, então não desatualizam).
 
+## Progressão longa e "platina"
+
+- **Nível do personagem** sem teto (`src/player/SkillTree.js`): todo XP conta; curva 200 × (nível−1)^1,8 — o nível 100 pede ~780 mil XP. 1 ponto por nível.
+- **Árvore de habilidades**: 6 ramos × 6 habilidades em 4 camadas (nível mínimo 1/5/12/20, pré-requisitos, custo crescente), com efeitos reais em ~30 sistemas. **Prestígio** infinito a partir do nível 25.
+- **Notoriedade**: o nível deixa a polícia mais atenta (até +60% de visão e memória) e os pagamentos maiores (+1,5% por nível, sem teto).
+- **Carreiras mais longas**: patentes pedem ~2,5× mais XP; depois do topo, **maestria** infinita (+25% de XP por nível, +3% de pagamento).
+- **Conquistas** (`src/player/Achievements.js`): 42 objetivos de longo prazo; a **platina** exige todos (nível 100, maestria 10 em todas as carreiras, árvore completa, Prestígio 10, R$ 10 milhões…).
+
+## Controles de celular
+
+Joystick (borda = correr) + ATACAR + até 2 botões de contexto que aparecem sozinhos (lidos da dica de interação) + chip da arma (toque troca, segurar recarrega) + ✚ KIT com vida baixa + menu ⋯ com as ações raras; topo: pausa e carreiras; pinça = zoom.
+
+## Império (`src/empire/`, aba IMPÉRIO)
+
+- **Ciclo diário**: energia (gasta com ações; só o sono recupera) × exposição (crimes e estrelas). Exposição cheia = alerta tático no distrito (polícia +60% de visão até dormir). Energia zerada ou acordado depois das 2h = desmaio: confisco do sujo da mochila + propina do limpo.
+- **Automação**: galpões e soldados alocados por distrito → cofre sujo diário; rotas de lavagem (posto, restaurante, boate) lavam o cofre para limpo; salários, prisões e emboscadas.
+- **Malha de influência**: delegados por distrito (presentes diários, decaimento; 10 ❤ = metade da visão e estrelas mais lentas), Fornecedor do Porto (contratos/sabotagem; armas −40%), rival e milícia (emboscadas), vereadores (extorsão).
+- **Domínio**: 3 coleções por distrito (lavagem, influência, força) com bônus; distrito dominado; dono da cidade.
+- **Estações do crime**: Calmaria, Carnaval, Eleições (28 dias) e Intervenção Federal, com aviso 2 dias antes e efeitos em polícia, preços de armas, golpes, bicho, soldados e lavagem.
+
+## Bancos (`src/banks/Banks.js`, `src/art/BankStyles.js`)
+
+- **Rede**: 3 sedes no Distrito Financeiro + 7 agências espalhadas. Marcas Inaú (laranja/azul, forte no cibernético), Brascor (vermelho/branco, mais dinheiro físico) e Nacional (amarelo/azul, polícia chega mais rápido). Interiores modulares: um layout de agência recolorido por marca e um layout de sede.
+- **Agência (roubo rápido)**: caixas eletrônicos e cofre de caixa disparam o alarme; a polícia cerca o prédio em segundos (varia por marca). Ao sair: estrelas e 3 min para escapar do quarteirão antes do isolamento.
+- **Sede (planejada)**: planta baixa no mercado negro da favela, corte de energia (trabalho na caixa de força) e propina dos vigilantes — valem só no dia. Sem energia o laser apaga; o cofre da sede leva 25–60 s.
+- **Reféns**: cercado lá dentro, negociação por Lábia, Intimidação (com arma) ou rendição; falhar = invasão e prisão.
+- **Dinheiro marcado**: pesa na mochila e precisa ir para o cofre do galpão (8% de troca) antes de ser lavado.
+- **Conta e COAF**: depósitos limpos rendem 0,15%/dia; depósitos sujos sobem o alerta do COAF; 100% = metade apreendida e Receita no máximo.
+- **Cibernético**: pendrive no terminal do gerente (Estelionato) abre uma porta no firewall por 3 dias; de casa, a transferência via laranjas é um mini-jogo de confirmar contas.
+- Ao entrar em qualquer interior, as malhas da cidade são ocultadas e restauradas na saída.
+
 ## Próximos passos recomendados (por impacto × custo)
 
 | # | Ideia | Custo | Efeito no retorno do jogador |

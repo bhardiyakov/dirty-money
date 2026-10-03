@@ -63,7 +63,7 @@ const Standing = {
     playerInFavela(g) { const p = g.player.position; return this.inFavela(p.x, p.z); },
 
     _clamp(v) { return Math.max(0, Math.min(100, v)); },
-    add(which, n) { this[which] = this._clamp(this[which] + n); },
+    add(which, n) { if (n > 0 && (which === 'traffic' || which === 'community') && typeof SkillTree !== 'undefined') n *= 1 + (SkillTree.m.moral || 0); this[which] = this._clamp(this[which] + n); },
 
     // O jogador machucou/roubou/matou um morador (weight ~ gravidade). Só conta dentro da favela.
     harm(g, weight) {
@@ -88,7 +88,7 @@ const Standing = {
     },
 
     // Chance de convencer o tribunal (a "lábia" vem do respeito que você acumulou).
-    labiaChance() { return Math.max(0.05, Math.min(0.8, 0.1 + 0.004 * this.traffic + 0.003 * this.community)); },
+    labiaChance() { return Math.max(0.05, Math.min(0.85, 0.1 + 0.004 * this.traffic + 0.003 * this.community + (typeof SkillTree !== 'undefined' ? (SkillTree.m.labia || 0) : 0))); },
     // O tráfico aceita tomar tudo e liberar você?
     seizeAllowed() { return this.traffic >= 20 || this.community >= 35; },
 
