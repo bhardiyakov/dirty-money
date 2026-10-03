@@ -105,14 +105,19 @@ class Boat extends Vehicle {
 
     // ------------------------------------------------------------------- frame
     update(dt, env, focus) {
+        if (this._asleep && (this.controlled || this.burning > 0 || this.wrecked)) { this._asleep = false; this.phys.setMotionType(BABYLON.PhysicsMotionType.DYNAMIC); if (this.visual) this.visual.setVisible(true); }
         if (this.controlled) { this.syncVisual(dt); return; }
         if (this.burning > 0 || this.wrecked) { this.driveTo(0, 0, dt, 3, 8); this.syncVisual(dt); return; }
         const p = this.position;
-        if (focus && Math.hypot(p.x - focus.x, p.z - focus.z) > 260) {            // longe da câmera: dorme (sem IA e parado)
-            if (!this._asleep) { this._asleep = true; this.phys.setLinearVelocity(BABYLON.Vector3.Zero()); this.phys.setAngularVelocity(BABYLON.Vector3.Zero()); this.syncVisual(0); if (this.visual) this.visual.setVisible(false); }
+        if (focus && Math.hypot(p.x - focus.x, p.z - focus.z) > 160) {            // longe da câmera (a tela mostra ~60 u): dorme — sem IA, sem sprite e CONGELADO no Havok (corpo estático custa quase nada)
+            if (!this._asleep) {
+                this._asleep = true; this.phys.setLinearVelocity(BABYLON.Vector3.Zero()); this.phys.setAngularVelocity(BABYLON.Vector3.Zero());
+                this.syncVisual(0); if (this.visual) this.visual.setVisible(false);
+                this.phys.setMotionType(BABYLON.PhysicsMotionType.STATIC);
+            }
             return;
         }
-        if (this._asleep) { this._asleep = false; if (this.visual) this.visual.setVisible(true); }
+        if (this._asleep) { this._asleep = false; this.phys.setMotionType(BABYLON.PhysicsMotionType.DYNAMIC); if (this.visual) this.visual.setVisible(true); }
         if (this.hold || this.mode === 'parked' || this.mode === 'abandoned' || this.mode === 'wreck') this.driveTo(0, 0, dt, 3, 4.5);
         else this.cruiseUpdate(dt);
         this.syncVisual(dt);
