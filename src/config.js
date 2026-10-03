@@ -188,7 +188,7 @@ const Config = {
         honkCooldown: 3.5,
         abandonDist: 48,       // Carro abandonado some do meio da pista quando você se afasta tanto.
         // Mundo grande: o trânsito só existe PERTO do jogador. Quem passa de `recycleDist` reaparece numa rua entre spawnMin e spawnMax.
-        spawnMin: 95, spawnMax: 230, recycleDist: 285, relocPerSec: 3,
+        spawnMin: 90, spawnMax: 170, recycleDist: 205, relocPerSec: 3,
     },
 
     // Semáforos dos cruzamentos (ciclo: eixo N-S, depois eixo L-O).

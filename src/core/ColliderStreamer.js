@@ -6,7 +6,7 @@
 // ============================================================================
 
 class ColliderStreamer {
-    constructor(physics, colliders, radius = 300, gap = 70) {
+    constructor(physics, colliders, radius = 220, gap = 50) {
         this.physics = physics;
         this.radius = radius; this.gap = gap;
         this.items = colliders.map((c) => ({ c, x: c.node.position.x, z: c.node.position.z, agg: null }));
