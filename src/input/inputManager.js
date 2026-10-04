@@ -78,7 +78,7 @@ class InputManager {
         const p = this._pad(), was = this.padConnected;
         this.padConnected = !!p;
         if (p) this.padName = p.id;
-        if (!p) { this.releaseVirtual('pad'); this._padPrev = []; this.analog.x = this.analog.z = 0; this.zoomAxis = 0; }
+        if (!p && was) { this.releaseVirtual('pad'); this._padPrev = []; this.analog.x = this.analog.z = 0; this.zoomAxis = 0; }      // (só ao DESCONECTAR: senão zerava o joystick da tela a cada 1 s)
         if (was !== this.padConnected && this.onChange && !silent) this.onChange(this.padConnected, this.padName);
         if (was !== this.padConnected && silent && this.onChange) this.onChange(this.padConnected, this.padName);
     }

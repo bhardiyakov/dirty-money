@@ -230,6 +230,7 @@ class PauseMenu {
         const panel = (title, body) => `<div class="px"><div class="px-title">${title}</div><div class="body">${body}</div></div>`;
         el.innerHTML =
             panel('PERSONAGEM', bar('VIDA', pl.hp / pl.maxHp * 100, 'linear-gradient(90deg,#ff3a8a,#4a7cff)', `${Math.round(pl.hp)}/${pl.maxHp}`) + bar('COLETE', armor, 'linear-gradient(90deg,#2a7cff,#35c8ff)', `${armor}%`)
+                + bar('FÔLEGO', (pl.stamina == null ? 1 : pl.stamina / (pl.staminaMax || 100)) * 100, 'linear-gradient(90deg,#10b981,#a3e635)', `condicionamento ${Bags.fitLevel(pl.fit)}/20`) + row('Carga', Bags.label(g))
                 + row('Arma na mão', pl.weapon === 'none' ? 'Punhos' : Weapons[pl.weapon].name) + row('Kits médicos', inv.medkits) + row('Hora', g.dayNight.label))
             + panel(`FACÇÃO · ${cv.name} (${cv.sigla})`, `<span class="tag" style="color:${hos ? '#ff5a4d' : '#5ac07a'}">${res ? (hos ? 'MORADOR · HOSTIL' : 'MORADOR · NEUTRO') : 'ESTRANHO · HOSTIL'}</span>`
                 + row('Patente', Missions.rankName) + row('Missões cumpridas', Standing.missionsDone || 0)
@@ -527,11 +528,11 @@ class PauseMenu {
 
     // ------------------------------------------------------------------ inventário
     _renderInventory() {
-        const inv = this.g.inventory, grid = this.$('pmGrid'), CELL = 84, GAP = 4;
-        const C = Inventory.COLS, R = Inventory.ROWS;
+        const inv = this.g.inventory, grid = this.$('pmGrid'), CELL = (inv.cols > 5 || inv.rows > 4) ? 70 : 84, GAP = 4;
+        const C = inv.cols, R = inv.rows;
         this._layout = inv.layout();
         this.invSel = Math.max(0, Math.min(this.invSel, this._layout.length - 1));
-        this.$('pmInvTitle').textContent = `Mochila · ${inv.slotsUsed()}/${Inventory.CAPACITY}`;
+        this.$('pmInvTitle').textContent = `${Bags.def(inv).emo} ${Bags.def(inv).name} · ${inv.slotsUsed()}/${inv.capacity} · ${(Bags.kg || 0).toFixed(1)}/${Bags.def(inv).kg} kg`;
         grid.style.width = C * CELL + (C - 1) * GAP + 'px';
         grid.style.height = R * CELL + (R - 1) * GAP + 'px';
         grid.replaceChildren();

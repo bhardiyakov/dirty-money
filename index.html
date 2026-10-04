@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Dirty Money">
+    <meta name="theme-color" content="#07090e">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" href="./assets/icon-192.png">
+    <link rel="apple-touch-icon" href="./assets/icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -24,6 +30,15 @@
             overflow: hidden;
             background: #07090e;
         }
+
+        /* celular em pé: o jogo é em paisagem (NativeMobile em src/ui/TouchControls.js trava a orientação quando o navegador deixa) */
+        #rotate-hint { position: fixed; inset: 0; z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+            background: #07090e; color: #e8eef7; font: 600 17px/1.4 Inter, system-ui, sans-serif; text-align: center; padding: 32px; }
+        #rotate-hint .rh-phone { width: 54px; height: 92px; border: 4px solid #e8eef7; border-radius: 12px; animation: rhTurn 1.8s ease-in-out infinite; }
+        #rotate-hint small { color: #94a3b8; font-weight: 500; font-size: 13px; }
+        @keyframes rhTurn { 0%, 20% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+        @media (orientation: portrait) { html.touch-device #rotate-hint { display: flex; } }
+        html.touch-device, html.touch-device body { height: 100dvh; }
 
         #canvas {
             display: block;
@@ -228,6 +243,7 @@
     </style>
 </head>
 <body>
+    <div id="rotate-hint"><div class="rh-phone"></div>Gire o celular para jogar<small>Dirty Money é jogado na horizontal</small></div>
     <div id="main-menu">
         <div id="mm-ph"></div><div id="mm-bg"></div><div id="mm-bars"></div><div id="mm-shade"></div>
         <div class="mm-frame">
@@ -296,7 +312,14 @@
                 // Novo jogo / carregar: some a logo e os botões, aparece a faixa de carregamento; fundos passam com fusão suave.
                 loading() { root.classList.add('loading'); play(4200, false); showTip(); tipT = setInterval(showTip, 5200); },
                 progress(p) { const e = document.getElementById('ls-pct'); if (e) e.textContent = Math.round(p * 100) + '%'; },
-                done() { root.classList.add('fade'); setTimeout(() => { clearInterval(timer); clearInterval(tipT); root.remove(); }, 750); },
+                done() {
+                    root.classList.add('fade');
+                    setTimeout(() => {                                   // solta tudo: as 6 imagens de fundo decodificadas (~50 MB) e a própria abertura
+                        clearInterval(timer); clearInterval(tipT);
+                        for (const d of slides) d.style.backgroundImage = 'none';
+                        slides.length = 0; root.remove(); window.Intro = null;
+                    }, 750);
+                },
             };
         })();
     </script>
@@ -451,9 +474,12 @@
     <script src="./src/core/navigation.js"></script>
     <script src="./src/core/physics.js"></script>
     <script src="./src/core/ColliderStreamer.js"></script>
+    <script src="./src/core/Perf.js"></script>
+    <script src="./src/core/Spatial.js"></script>
     <script src="./src/core/AutoQuality.js"></script>
     <script src="./src/input/inputManager.js"></script>
     <script src="./src/player/Inventory.js"></script>
+    <script src="./src/player/Bags.js"></script>
     <script src="./src/player/Stash.js"></script>
     <script src="./src/player/Standing.js"></script>
     <script src="./src/player/Missions.js"></script>

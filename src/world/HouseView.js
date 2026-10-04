@@ -3,7 +3,7 @@
 //
 // Por fora: a casa é um barraco de verdade da favela (tijolo, zinco, tábua), com a porta turquesa na frente, luz quente saindo
 //   pelo vão e uma SETA amarela pulando em frente à porta — o jeito de dizer "dá para entrar aqui". A porta abre sozinha quando
-//   o jogador chega perto. Não há tecla nem chave: é só caminhar até lá.
+//   o jogador chega perto. Não há tecla nem chave: é só caminhar até a porta — e ele já aparece do lado de dentro.
 // Por dentro: ao cruzar a soleira, o telhado e as paredes de fora somem (fade) e entra o corte da casa (art/HouseArt.interior),
 //   com a câmera dando zoom 2× e enquadrando o cômodo inteiro, como na arte de referência. Saiu, tudo volta.
 //
@@ -201,9 +201,27 @@ const HouseView = {
     // ------------------------------------------------------------------ por quadro
     update(dt, game) {
         if (!this.ready) return;
-        const S = SafeHouse, p = game.player.position;
+        const S = SafeHouse;
+        let p = game.player.position;
         this.time += dt;
         const onFoot = game.mode === 'player' && !game.heliFall;
+        // Entrar: chegou à porta pelo lado de fora → já aparece DENTRO de casa (logo depois da soleira, virado para o cômodo), com o
+        // corte e o zoom na hora (sem precisar atravessar a soleira andando). Rearma só depois de se afastar da porta (sair não re-entra).
+        if (onFoot && !this.inside && !game.player.busy && !game.player.rag) {
+            const dc = S.doorWorld(), dd = Math.hypot(p.x - dc.x, p.z - dc.z);
+            if (dd > 3.2) this._reArm = true;
+            const lz = p.z - S.oz;
+            if (this._reArm && Math.abs(p.x - dc.x) < (S.door.x1 - S.door.x0) / 2 + 0.5 && lz > -1.6 && lz < 0.5) {
+                this._reArm = false;
+                game.player.teleport(new BABYLON.Vector3(dc.x, 0, S.oz + S.T + 1.4));
+                game.player.root.rotation.y = 0;
+                p = game.player.position;
+                if (game.player.velocity) game.player.velocity.setAll(0);
+                this.inside = true; this.t = 1; this._first = true;
+                game.camera.setZoomMul(0.5);
+                game.camera.snapTo(this.focusFor(game.player.position, game.camera, game.gameEngine.engine.getAspectRatio(game.camera.camera)));
+            }
+        }
         if (onFoot) this.inside = this.inside ? S.inside(p.x, p.z, -0.35) : S.inside(p.x, p.z, 0);
         else this.inside = false;
 

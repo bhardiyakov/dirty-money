@@ -116,7 +116,7 @@ class EmpireUI {
 
         let h = `<div class="cr-box"><h3>DIA ${Economy.day} · ${g.dayNight.label} · ${e.dName(here)}${e.alerts[here] ? ' <small style="color:#ff5a4d">ALERTA TÁTICO</small>' : ''}</h3>
             <div class="em-grid"><div>${row('⚡ Energia', Math.round(e.energy))}${bar(e.energy, 'linear-gradient(90deg,#ffd23a,#5ac07a)')}${row('🔥 Exposição', Math.round(e.exposure))}${bar(e.exposure, 'linear-gradient(90deg,#ff9a3a,#ff3a8a)')}
-            <p class="cr-dim">Ações gastam energia e esquentam a exposição. Exposição cheia = alerta tático no distrito. Energia zerada ou acordado depois das 2h = desmaio (perde o sujo da mochila). Dormir zera tudo.</p></div>
+            <p class="cr-dim">Ações gastam energia e esquentam a exposição. Exposição cheia = alerta tático no distrito. Energia zerada = desmaio (perde o sujo da mochila). Dormir zera tudo.</p></div>
             <div><b style="color:#ffd23a">ESTAÇÃO: ${S.name.toUpperCase()}</b> <small style="color:#8fb4ff">faltam ${e.seasonLeft} dia(s)</small><p class="cr-dim">${S.desc}</p><p class="cr-dim">Depois: <b style="color:#e8edf8">${e.nextSeason.name}</b> — ${e.nextSeason.desc}</p></div></div></div>`;
 
         // negócios

@@ -27,6 +27,12 @@ class PoliceOfficer {
         };
     }
 
+    // Velocidade de perseguição: policial comum com 1★ corre menos (Config.police.oneStar.chaseMul).
+    get chaseSpeed() {
+        const g = this.manager && this.manager.game;
+        return this.spec.chase * (this.kind === 'cop' && g && g.wanted && g.wanted.level === 1 ? Config.police.oneStar.chaseMul : 1);
+    }
+
     // manager = PoliceManager (armas liberadas, combate) | temp = reforço que some depois | kind: 'cop'|'swat'|'army'.
     constructor(scene, nav, startPos, id, sprites, manager, temp = false, kind = 'cop') {
         this.scene = scene;
@@ -117,7 +123,7 @@ class PoliceOfficer {
     }
 
     onChaseEnter() {
-        this._setSpeed(this.spec.chase);
+        this._setSpeed(this.chaseSpeed);
         this._recompute = 0;
     }
 
@@ -156,7 +162,7 @@ class PoliceOfficer {
         }
 
         // Senão: persegue (com a arma na mão se ela já estava sacada).
-        if (this.shooting) { this.shooting = false; this._setSpeed(this.spec.chase); }
+        if (this.shooting) { this.shooting = false; this._setSpeed(this.chaseSpeed); }
         if (this.guard) { this._holdPost(dt); return; }                 // guarda de bloqueio fica no posto
         this._recompute -= dt;
         if (this._recompute <= 0) {
@@ -190,7 +196,7 @@ class PoliceOfficer {
         if (!this.free || this.vaulting) return;
         const pos = this.nav.closestPoint(this.transform.position);
         this.transform.position.copyFrom(pos);
-        this.params.maxSpeed = this.spec.chase;
+        this.params.maxSpeed = this.chaseSpeed;
         this.index = this.nav.crowd.addAgent(pos, this.params, this.transform);
         this.free = null;
         this.actor.mesh.position.y = 0.5;
@@ -246,7 +252,7 @@ class PoliceOfficer {
             if (!this.mind || (!this.mind.sees && !this.manager.weaponsFree && dist > 12) || dist > 45 || this.free.stuck > 2.5 || !this._offNav(t)) { this._exitFree(); return; }
         }
         const dist = Math.hypot(t.x - p.x, t.z - p.z);
-        const sp = dist > 1.6 ? this._freeMove(t.x, t.z, dt, this.spec.chase) : 0;
+        const sp = dist > 1.6 ? this._freeMove(t.x, t.z, dt, this.chaseSpeed) : 0;
         this.transform.rotation.y = this.heading;
         if (this.vaulting) { /* clipe de pulo já tocando */ }
         else if (sp > 0.5) this.actor.play('run', this.drawn ? this.spec.clip : 'none'); else this.actor.play('idle', 'none');
@@ -423,7 +429,7 @@ class PoliceOfficer {
             if (this.actor.done) { const a = this.action; this.action = null; if (a.onDone) a.onDone(); }
         } else if (this.shooting) this.actor.play('aim', this.spec.clip);
         else if (speed < 0.5) this.actor.play('idle', w);
-        else if (this.fsm.name === 'CHASE') { this.actor.play('run', w); rate = Math.max(0.7, speed / this.spec.chase) * 1.5; }
+        else if (this.fsm.name === 'CHASE') { this.actor.play('run', w); rate = Math.max(0.7, speed / this.chaseSpeed) * 1.5; }
         else { this.actor.play('walk', w); rate = Math.max(0.6, speed / this.spec.patrol) * 1.0; }
 
         this.actor.setPosition(this.transform.position.x, this.transform.position.z);
@@ -437,7 +443,7 @@ class PoliceOfficer {
         const dx = p.x - t.x, dz = p.z - t.z, d = Math.hypot(dx, dz) || 1;
         this.shooting = false; this.action = null; this.hurtTimer = 0;
         if (this.index < 0) {                                   // fora do NavMesh (quintal): chega em linha reta, pulando o que houver
-            const sp = !A.arrived && !this.vaulting ? this._freeMove(t.x + dx / d * 1.5, t.z + dz / d * 1.5, dt, this.spec.chase) : (this.vaulting ? this._freeMove(0, 0, dt, 1) : 0);
+            const sp = !A.arrived && !this.vaulting ? this._freeMove(t.x + dx / d * 1.5, t.z + dz / d * 1.5, dt, this.chaseSpeed) : (this.vaulting ? this._freeMove(0, 0, dt, 1) : 0);
             if (d < 2.4 && !this.vaulting) A.arrived = true;
             if (A.arrived && !this.vaulting) {
                 let a = (Math.atan2(t.x - p.x, t.z - p.z) - this.heading) % (Math.PI * 2);
@@ -459,7 +465,7 @@ class PoliceOfficer {
                 this.dest = this.nav.closestPoint(new BABYLON.Vector3(t.x + dx / d * 1.5, 0, t.z + dz / d * 1.5));
                 this.nav.crowd.agentGoto(this.index, this.dest);
             }
-            this._setSpeed(this.spec.chase);
+            this._setSpeed(this.chaseSpeed);
             if (d < 2.8) { A.arrived = true; this.nav.crowd.agentGoto(this.index, p); this._setSpeed(0.01); }
         }
         const v = this.nav.crowd.getAgentVelocity(this.index);
@@ -471,7 +477,7 @@ class PoliceOfficer {
         this.heading += a * (1 - Math.exp(-12 * dt));
         this.transform.rotation.y = this.heading;
         let rate = 1;
-        if (speed > 0.5) { this.actor.play('run', 'none'); rate = Math.max(0.7, speed / this.spec.chase) * 1.5; } else this.actor.play('idle', 'none');
+        if (speed > 0.5) { this.actor.play('run', 'none'); rate = Math.max(0.7, speed / this.chaseSpeed) * 1.5; } else this.actor.play('idle', 'none');
         this.actor.setPosition(p.x, p.z);
         this.actor.setHeading(this.heading);
         this.actor.update(dt, rate);

@@ -71,7 +71,7 @@ class StashUI {
             this.sel[c] = Math.max(0, Math.min(this.sel[c], list.length - 1));
             const col = document.createElement('div'); col.className = 'col' + (c === this.col ? ' on' : '');
             const h = document.createElement('h4');
-            h.innerHTML = c === 0 ? `<span>MOCHILA</span><span>${inv.slotsUsed()}/${Inventory.CAPACITY}</span>` : `<span>${B.title}</span><span>${list.length ? '' : 'vazio'}</span>`;
+            h.innerHTML = c === 0 ? `<span>${Bags.def(inv).name.toUpperCase()}</span><span>${inv.slotsUsed()}/${inv.capacity}</span>` : `<span>${B.title}</span><span>${list.length ? '' : 'vazio'}</span>`;
             col.appendChild(h);
             const rows = document.createElement('div'); rows.className = 'rows';
             if (!list.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = c === 0 ? 'nada para guardar aqui' : 'vazio'; rows.appendChild(e); }

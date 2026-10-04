@@ -29,7 +29,7 @@ class GuideUI {
 
     // Índice: [id, título] ou [null, cabeçalho de grupo].
     index() {
-        const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'],
+        const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'], ['bags', 'Bolsas, peso e fôlego'],
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
             ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['daily', 'Energia e exposição (o dia)'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
@@ -94,11 +94,13 @@ GuideUI.PAGES = {
         <tr><td><kbd>H</kbd> · <kbd>L</kbd></td><td>buzina · faróis</td></tr><tr><td><kbd>Z</kbd> <kbd>X</kbd> / roda</td><td>zoom</td></tr>
         <tr><td><kbd>I</kbd></td><td>mochila</td></tr><tr><td><kbd>O</kbd></td><td>carreiras do crime</td></tr><tr><td><kbd>Esc</kbd> / <kbd>P</kbd></td><td>menu (mapa, GPS, status, guia)</td></tr></table>
         <h3>Controle (Xbox)</h3><p>Funciona direto: analógico move, gatilhos e botões fazem as ações, <b>D-pad</b> troca de arma e <b>Start</b> pausa.</p>
-        <h3>Celular</h3><ul><li><b>Joystick</b> (esquerda): anda e dirige; empurre até a borda para <b>correr</b>.</li>
-        <li><b>ATACAR</b> (botão grande): soco ou tiro — segure para rajada. No carro vira <b>SAIR</b>; no helicóptero aparecem <b>SUBIR</b> e <b>DESCER</b>.</li>
-        <li><b>Botões de contexto</b>: aparecem sozinhos só quando há algo a fazer ali — ENTRAR, ROUBAR, ARROMBAR, FURTAR, ASSALTAR, PULAR, VASCULHAR, DESMANCHAR, ABASTECER…</li>
-        <li><b>Arma</b> (chip): toque troca de arma, segure recarrega. <b>✚ KIT</b> aparece com vida baixa.</li>
-        <li><b>⋯</b>: chute, mochila, buzina, farol, girar o helicóptero, zoom. No topo: <b>II</b> (mapa/pausa) e <b>CRIME</b> (carreiras). <b>Pinça</b> com dois dedos = zoom.</li></ul>`,
+        <h3>Celular</h3><ul><li>Abre em <b>tela cheia</b> e na <b>horizontal</b>. No iPhone, use <i>Compartilhar → Adicionar à Tela de Início</i> para jogar como app.</li>
+        <li><b>Joystick flutuante</b>: encoste o dedo em qualquer lugar da metade esquerda — ele nasce ali. A pé, empurrar até a borda também corre. Dirigindo, vira um <b>volante</b> (só esquerda/direita).</li>
+        <li><b>4 botões</b> à direita, que mudam com o que você está fazendo:<br>
+        a pé — <b>ATACAR</b> (segure para rajada) · <b>CORRER</b> · ação do lugar (ENTRAR, ROUBAR, VASCULHAR…; sem nada por perto, CHUTE) · <b>ARMA</b> (toque troca, segure recarrega);<br>
+        dirigindo — <b>ACELERAR</b> · <b>RÉ / FREIO</b> · <b>SAIR</b> · ação do lugar (ABASTECER, DESMANCHAR…) ou BUZINA;<br>
+        helicóptero — <b>SUBIR</b> · <b>DESCER</b> · <b>SAIR</b> · <b>GIRAR</b>.</li>
+        <li><b>✚ KIT</b> aparece com vida baixa. <b>⋯</b>: mochila, farol, furtar, pular grade, zoom. No topo: <b>II</b> (mapa/pausa) e <b>CRIME</b> (carreiras). <b>Pinça</b> = zoom.</li></ul>`,
 
     money: () => `<h2>Dinheiro sujo × limpo</h2>
         <p>Tudo o que vem do crime é <b>dinheiro sujo</b>. O <b>dinheiro limpo</b> é o que está "na conta" e pode ser gasto no comércio legal.</p>
@@ -109,13 +111,24 @@ GuideUI.PAGES = {
 
     police: () => `<h2>Polícia e procurado</h2>
         <p>Crime só vira estrela se um policial <b>vir</b> (ou ouvir o tiro). Quanto mais estrelas, maior o raio de visão e mais gente vem:</p>
-        <table><tr><th>Nível</th><th>O que acontece</th></tr><tr><td>★</td><td>a polícia de perto te procura</td></tr><tr><td>★★</td><td>viaturas por rádio e helicóptero (enxerga por cima dos prédios)</td></tr>
+        <table><tr><th>Nível</th><th>O que acontece</th></tr><tr><td>★</td><td>delito leve: só quem viu te procura (sem rádio nem viatura extra), corre menos, precisa chegar bem perto para prender e te perde rápido</td></tr><tr><td>★★</td><td>viaturas por rádio e helicóptero (enxerga por cima dos prédios)</td></tr>
         <tr><td>★★★</td><td>atiram à vista, SWAT e bloqueios</td></tr><tr><td>★★★★</td><td>SWAT com metralhadora, mais viaturas</td></tr><tr><td>★★★★★</td><td>exército e ruas fechadas</td></tr></table>
         <h3>Como fugir</h3><ul><li>Saia da visão e fique escondido o tempo da fuga (o HUD mostra "ESCAPANDO").</li><li>Policial colado em você impede a fuga, mesmo atrás de parede.</li>
         <li><b>Esconderijos</b> (<kbd>E</kbd> em caçamba, caixote, latão): se ninguém viu você entrar, some do radar.</li><li>Com procurado você não entra em lojas nem consegue aceitar trabalhos.</li></ul>`,
 
+    bags: () => `<h2>Bolsas, peso e fôlego</h2>
+        <p>A bolsa define <b>quantos espaços</b> a grade do inventário tem e <b>quanto peso</b> você carrega sem perder velocidade. Ela aparece no seu personagem.</p>
+        <table><tr><th>Bolsa</th><th>Grade</th><th>Carga</th><th>Onde</th></tr>
+        <tr><td>👖 Bolsos</td><td>3×2</td><td>8 kg</td><td>começo</td></tr><tr><td>👜 Mala transversal</td><td>4×3</td><td>14 kg</td><td>conveniência</td></tr>
+        <tr><td>🎒 Mochila</td><td>5×4</td><td>24 kg</td><td>conveniência</td></tr><tr><td>🎒 Mochila tática</td><td>6×5</td><td>38 kg</td><td>loja de armas / boca</td></tr></table>
+        <h3>Peso</h3><ul><li>Tudo pesa: armas (pistola 1 kg … AK 4,3 kg), munição, kits, comida, joias, <b>dinheiro vivo</b> (R$ 50 mil ≈ 1 kg), eletrônicos furtados e cédulas de banco.</li>
+        <li>Até metade da carga: normal. Até a carga cheia: cada vez mais lento (−30%). Acima dela: <b>sobrecarga</b> — bem lento e sem correr.</li>
+        <li>O HUD mostra a bolsa e o peso (amarelo = pesado, vermelho = sobrecarga).</li></ul>
+        <h3>Fôlego</h3><ul><li>Correr gasta fôlego (mais rápido com peso). Andando ou parado ele volta.</li><li>Zerou: <b>sem fôlego</b> — anda arrastado e só volta a correr com 35%.</li>
+        <li><b>Condicionamento</b>: correr treina o personagem (até nível 20): mais fôlego, gasta menos e recupera mais rápido. Correr carregado treina mais.</li></ul>`,
+
     fail: () => `<h2>Prisão, morte e Tribunal</h2>
-        <ul><li><b>Preso</b>: policial colado em você por alguns segundos (com procurado). Você paga multa, perde <b>todas as armas</b> e acorda na delegacia 12 h+ depois.</li>
+        <ul><li><b>Preso</b>: policial colado em você por alguns segundos (com procurado). Você paga multa, perde <b>todas as armas</b> e acorda na delegacia 12 h+ depois. <b>Com 1★</b> é delito leve: multa de 15%, você <b>fica com as armas</b> e é liberado em 3–5 h.</li>
         <li><b>Morte</b>: acorda no <b>hospital</b> 12 h+ depois e paga a conta.</li>
         <li><b>Tribunal do Crime</b>: se a vida zerar dentro da favela, o tráfico julga — pagar a multa (todo o sujo), entregar tudo (armas, kits, joias) ou tentar a lábia (falhou = execução).</li>
         <li>Trabalhos de carreira e missões em andamento falham se você for preso ou morrer.</li></ul>`,
@@ -153,7 +166,7 @@ GuideUI.PAGES = {
         <p>Cada dia é limitado. Você acorda com <b>energia cheia</b> e <b>exposição zerada</b> (barras ⚡ e 🔥 no HUD).</p>
         <ul><li>Furtar, roubar carro, assaltar, brigar, atirar, correr e concluir trabalhos <b>gastam energia</b>. Cansado (menos de 12%) você não corre. Só o <b>sono</b> recupera.</li>
         <li>Crimes e estrelas de procurado <b>aumentam a exposição</b> (ela esfria devagar quando você está limpo). Exposição cheia = <b>ALERTA TÁTICO</b> no distrito onde você está: a polícia enxerga 60% mais longe até você dormir.</li>
-        <li><b>Desmaio</b>: energia zerada ou continuar acordado depois das <b>2h</b>. Você acorda em casa sem nada de sujo na mochila (dinheiro, joias e mercadoria são confiscados) e paga propina de hospital/advogado do dinheiro limpo.</li>
+        <li><b>Desmaio</b>: energia zerada. Você acorda em casa sem nada de sujo na mochila (dinheiro, joias e mercadoria são confiscados) e paga propina de hospital/advogado do dinheiro limpo.</li>
         <li>A decisão do dia: arriscar mais um roubo com a polícia nas ruas ou voltar para casa, dormir e começar limpo.</li></ul>
         <div class="gd-tip">Guarde dinheiro em casa (baú/cofre) ou lave antes de forçar a barra: sujo na mochila é o que se perde.</div>`,
 

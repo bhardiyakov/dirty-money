@@ -252,6 +252,7 @@ class Player {
         }
         // Dentro do carro (esperando a porta fechar): parado e invisível.
         if (this.frozen) {
+            Bags.stamina(this, false, false, dt);                                   // (sentado no carro: recupera o fôlego)
             this.velocity.setAll(0); this.speed = 0;
             this._syncSprite();
             return;
@@ -287,12 +288,15 @@ class Player {
             }
         }
 
+        // Fôlego: só corre enquanto tiver (e sem sobrecarga de peso). Ver Bags.stamina.
+        sprinting = Bags.stamina(this, sprinting, lock > 0 && moveDir.lengthSquared() > 1e-4, dt);
+
         // Na água: raso (0 a wadeDepth m da margem) = anda devagar, cada vez mais; fundo = nada (ainda mais devagar).
         const W = Config.water, depth = MapGeo.waterDepth(this.root.position.x, this.root.position.z);
         this.depth = depth;
         this.swimming = depth > W.wadeDepth;
         const wf = depth <= 0 ? 1 : (depth <= W.wadeDepth ? 0.85 - 0.4 * (depth / W.wadeDepth) : (sprinting ? 0.52 : 0.4));
-        const maxSpeed = ((sprinting && depth <= 0) ? Config.player.sprintSpeed * (1 + (SkillTree.m.sprint || 0)) : Config.player.maxSpeed) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1);      // loadMul: carga pesada (eletrônicos roubados)
+        const maxSpeed = ((sprinting && depth <= 0) ? Config.player.sprintSpeed * (1 + (SkillTree.m.sprint || 0)) : Config.player.maxSpeed) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1);      // loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo
 
         // Acelera/desacelera suavemente rumo à velocidade alvo (frame-independent).
         const targetVel = moveDir.scale(maxSpeed);

@@ -54,6 +54,33 @@ const CharacterRig = {
         return { elbow: this._add(this._add(S, this._mul(u, a)), this._mul(p, h)), end };
     },
 
+    // Bolsa do jogador (ver Bags): 'cross' = mala transversal (alça na diagonal do peito, bolsa no quadril esquerdo),
+    // 'pack' = mochila de couro nas costas, 'tactical' = mochila tática maior, escura, com bolsos laterais.
+    _bag(P, kind, tc, ty, wide) {
+        const M = this.MAT, B = SpriteBaker, rot = (p) => SpriteBaker._rotY(p, ty), at = (p) => this._add(tc, rot(p));
+        if (kind === 'cross') {
+            P.push(B.capsule(M.dark, at([0.36 * wide, 0.3, 0.27]), at([-0.38 * wide, -0.32, 0.27]), 0.045));    // alça (frente)
+            P.push(B.capsule(M.dark, at([0.36 * wide, 0.3, -0.27]), at([-0.38 * wide, -0.32, -0.27]), 0.045));  // alça (costas)
+            const bc = at([-0.5 * wide, -0.4, 0.02]);
+            P.push(B.box(M.wood, bc, [0.09, 0.17, 0.22], ty, 0.05));
+            P.push(B.box(M.gold, this._add(bc, rot([-0.08, 0.05, 0])), [0.02, 0.04, 0.05], ty, 0.01));    // fivela
+            return;
+        }
+        const big = kind === 'tactical';
+        const bc = at([0, big ? 0.02 : 0.04, big ? -0.53 : -0.47]);
+        P.push(B.box(big ? M.dark : M.wood, bc, big ? [0.4 * wide, 0.46, 0.21] : [0.32 * wide, 0.36, 0.16], ty, big ? 0.06 : 0.09));
+        // alças por cima dos ombros
+        for (const s of [1, -1]) P.push(B.capsule(M.dark, at([s * 0.28 * wide, 0.36, -0.2]), at([s * 0.3 * wide, -0.12, -0.24]), 0.05));
+        if (big) {
+            for (const s of [1, -1]) P.push(B.box(M.pants, this._add(bc, rot([s * 0.42 * wide, -0.1, 0])), [0.08, 0.2, 0.15], ty, 0.04));   // bolsos laterais
+            P.push(B.box(M.pants, this._add(bc, rot([0, -0.12, -0.2])), [0.26 * wide, 0.18, 0.06], ty, 0.04));                         // bolso traseiro
+            P.push(B.box(M.metal, this._add(bc, rot([0, 0.47, 0])), [0.3 * wide, 0.03, 0.12], ty, 0.01));                              // tampa
+        } else {
+            P.push(B.box(M.wood, this._add(bc, rot([0, -0.12, -0.16])), [0.22 * wide, 0.14, 0.05], ty, 0.04));                         // bolso de fora
+            P.push(B.box(M.gold, this._add(bc, rot([0, 0.02, -0.21])), [0.16 * wide, 0.015, 0.01], ty, 0.005));                        // zíper
+        }
+    },
+
     // ----------------------------------------------------- pose -> primitivas
     // look: { hair: 'short'|'long'|'cap'|'police', build: 1 (largura dos ombros), jacket: bool }
     build(pose, look = {}) {
@@ -97,6 +124,7 @@ const CharacterRig = {
             P.push(B.capsule(M.dark, this._add(tc, rot([0.3, 0.32, -0.22], ty)), this._add(tc, rot([0.32, -0.1, -0.2], ty)), 0.05));
             P.push(B.capsule(M.dark, this._add(tc, rot([-0.3, 0.32, -0.22], ty)), this._add(tc, rot([-0.32, -0.1, -0.2], ty)), 0.05));
         }
+        if (look.bag) this._bag(P, look.bag, tc, ty, wide);
         const shR = this._add(tc, rot([0.54 * wide, 0.12, 0], ty));
         const shL = this._add(tc, rot([-0.54 * wide, 0.12, 0], ty));
         P.push(B.sphere(M.sleeve, shR, 0.2));

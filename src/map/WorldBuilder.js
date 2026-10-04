@@ -1025,6 +1025,7 @@ class WorldBuilder {
                 this.meshes.push(m);
             }
         }
+        this.batches = {};      // os arrays de vértices já estão nas malhas (GPU): os construtores seguravam ~50 MB à toa
     }
 
     // ------------------------------------------------------------------ runtime

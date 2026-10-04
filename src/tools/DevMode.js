@@ -8,7 +8,9 @@
 //   POLÍCIA    ★ 0–5, polícia desligada, viatura/SWAT/exército/helicóptero na hora, limpar forças
 //   JOGADOR    imortal, munição/gasolina infinitas, veículo indestrutível, velocidade, todas as armas, dinheiro, itens, escala de tempo
 //   MUNDO      itens no chão, matar/reviver pedestres, explodir carros, depuração (grade de navegação, wireframe)
-//   INFO       FPS, tempo de quadro, draw calls, malhas, corpos de física, memória, população e posição
+//   INFO       CAPACIDADE (folga de CPU/picos/memória/ritmo), custo de cada sistema, culling, zonas, varredura, FPS, draw calls, memória…
+// Com o modo dev ligado, a barra CAPACIDADE DE CRESCIMENTO fica sempre no canto (ver core/Perf.js); MUNDO → TESTE DE CARGA enche a cidade
+// até a barra cair, para medir quanto ainda cabe.
 // ============================================================================
 
 class DevMode {
@@ -40,11 +42,12 @@ class DevMode {
         if (on === this.enabled) return;
         this.enabled = on;
         this.badge.style.display = on ? 'block' : 'none';
+        this.capEl.style.display = on ? 'block' : 'none';
         if (!on) { this.open = false; this.panel.style.display = 'none'; this._resetFlags(); }
         else if (this.g.ui && this.g._flash) this.g._flash('MODO DEV ligado — tecla ` ou botão DEV');
     }
 
-    toggle() { this.open = !this.open; this.panel.style.display = this.open && this.enabled ? 'flex' : 'none'; if (this.open) this._render(); }
+    toggle() { this.open = !this.open; this.panel.style.display = this.open && this.enabled ? 'flex' : 'none'; this.capEl.style.left = this.open ? 'min(362px, 50vw)' : '12px'; if (this.open) this._render(); }
 
     // Desligar o modo dev devolve tudo ao normal (velocidade, relógio, clima, escala de tempo).
     _resetFlags() {
@@ -72,12 +75,25 @@ class DevMode {
             #devBody input[type=number] { width: 70px; background: #0b1f12; color: #e9fff0; border: 2px solid #3a6a50; padding: 3px; font: inherit; }
             #devBody input[type=range] { width: 100%; accent-color: #6dff8a; }
             #devBody pre { white-space: pre-wrap; margin: 0; color: #cfeedd; }
+            #devCap { position: fixed; top: 12px; left: 12px; z-index: 45; display: none; width: min(360px, 80vw); padding: 7px 10px 8px;
+                font: 600 11px/1.3 Inter, system-ui, sans-serif; color: #e8eef7; background: rgba(10,14,22,0.82); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+                -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); pointer-events: none; }
+            #devCap .t { display: flex; justify-content: space-between; letter-spacing: 0.04em; }
+            #devCap .t b { font-size: 13px; font-variant-numeric: tabular-nums; }
+            #devCap .bar { position: relative; height: 9px; margin: 5px 0 4px; border-radius: 99px; background: rgba(255,255,255,0.1); overflow: hidden; }
+            #devCap .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; transition: width .4s ease, background .4s ease; }
+            #devCap .s { display: flex; justify-content: space-between; color: #9aa7b8; font-weight: 500; font-variant-numeric: tabular-nums; }
             #devPanel .hint { padding: 4px 8px; color: #8fb09c; font-size: 10px; border-top: 2px solid #1d3a2a; }`;
         document.head.appendChild(css);
         const badge = this.badge = document.createElement('div');
         badge.id = 'devBadge'; badge.textContent = 'DEV';
         badge.addEventListener('click', () => this.toggle());
         document.body.appendChild(badge);
+        // Barra de CAPACIDADE (sempre visível com o modo dev ligado): quanto o jogo ainda pode crescer sem perder 30 FPS/travar (ver core/Perf.js).
+        const cap = this.capEl = document.createElement('div');
+        cap.id = 'devCap';
+        cap.innerHTML = '<div class="t"><span>CAPACIDADE DE CRESCIMENTO</span><b id="dcPct">–</b></div><div class="bar"><i id="dcBar"></i></div><div class="s"><span id="dcA"></span><span id="dcB"></span></div>';
+        document.body.appendChild(cap);
         const p = this.panel = document.createElement('div');
         p.id = 'devPanel';
         p.innerHTML = '<div class="dt" id="devTabs"></div><div id="devBody"></div><div class="hint">` abre/fecha · o jogo continua rodando · ESC → CONFIGURAÇÕES desliga o modo dev</div>';
@@ -206,6 +222,10 @@ class DevMode {
     _tab5(H, B, T, g) {
         H('ITENS NO CHÃO (à frente)');
         for (const [k, t] of Object.entries(Pickups.TYPES)) B(t.label || k, () => { const p = this._ahead(3); g.pickups.add(k, { x: p.x, z: p.z }, { ttl: 0 }); });
+        H('TESTE DE CARGA (barra de capacidade)');
+        B('+10 pedestres', () => this._addPeds(10));
+        B('+10 carros', () => this._addCars(10));
+        B(this._stress ? 'Parar teste automático' : 'Teste automático', () => this._stressToggle());
         H('PEDESTRES');
         B('Matar todos', () => { for (const n of g.npcManager.npcs) if (n.alive) n.takeDamage(999, g.player.position, 'env'); });
         B('Assustar todos', () => { for (const n of g.npcManager.npcs) if (n.alive) n.panic(g.player.position); });
@@ -230,7 +250,19 @@ class DevMode {
         const pre = document.getElementById('devInfo'); if (!pre) return;
         const g = this.g, e = g.gameEngine.engine, sc = g.scene, p = this._pos(), m = performance.memory;
         const pe = sc.getPhysicsEngine();
+        const C = Perf.capacity(), rc = g.renderCuller, Z = Zones.count;
         pre.textContent = [
+            `CAPACIDADE: ${Math.round(C.total * 100)}%  (limite: ${C.limit})`,
+            `  CPU média ${Math.round(C.cpu * 100)}% · pico ${Math.round(C.peak * 100)}% · memória ${Math.round(C.mem * 100)}% · ritmo ${Math.round(C.pace * 100)}% (${Perf.interval.toFixed(0)} ms entre quadros)`,
+            `  cabe ~${C.growth.toFixed(1)}× o conteúdo atual`,
+            `Quadro (trabalho): ${Perf.frameAvg.toFixed(1)} ms de ${Perf.budgetMs.toFixed(1)} · p95 ${Perf.p95.toFixed(1)} ms · pior (3 s) ${Perf.peak.toFixed(1)} ms`,
+            `Heap: ${Math.round(Perf.heapMB)} MB / orçamento ${Math.round(C.memBudget)} MB · tendência ${Perf.heapSlope >= 0 ? '+' : ''}${Perf.heapSlope.toFixed(1)} MB/min${Perf.heapSlope > 4 ? '  ⚠ SUBINDO' : ''}`,
+            `Render: ${rc ? rc.stats.candidates + ' candidatas (' + rc.stats.static + ' estáticas na grade, ' + rc.stats.dynamic + ' dinâmicas)' : '-'}`,
+            `Zonas: ativa ${Z[0]} · perto ${Z[1]} · dormindo ${Z[2]}`,
+            `Varredura 3 s: ${g._sweepInfo || '-'}`,
+            '— custo por sistema (ms/quadro) —',
+            ...Perf.top(14).map(([k, v]) => `  ${v.toFixed(2).padStart(6)}  ${k}`),
+            '',
             `FPS: ${Math.round(e.getFps())} (teto ${Config.perf.fpsCap})`, `Draw calls por quadro: ${this.drawCalls === undefined ? "-" : this.drawCalls}`, `Malhas: ${sc.meshes.length} (ativas ${sc.getActiveMeshes().length})`,
             `Corpos de física: ${pe ? pe._physicsBodies.length : '-'}`, `Memória JS: ${m ? Math.round(m.usedJSHeapSize / 1048576) + ' MB' : '-'}`,
             `Posição: ${p.x.toFixed(0)}, ${p.z.toFixed(0)}`, `Hora: ${g.dayNight.label}  Clima: ${g.weather.label}${g.weather.rainyDay ? ' (dia chuvoso)' : ''}`,
@@ -239,6 +271,46 @@ class DevMode {
             `Pedestres: ${g.npcManager ? g.npcManager.count : 0}  Colisores: ${g.colliderStream ? g.colliderStream.active.length : 0}`,
             g.activeCar ? `Veículo: ${g.activeCar.spec.name}  vel ${g.activeCar.speed.toFixed(1)} m/s  gasolina ${Math.round(g.activeCar.fuel)}/${g.activeCar.tank}  vida ${Math.round(g.activeCar.hp)}` : 'A pé',
         ].join('\n');
+    }
+
+    // Teste de carga: mais pedestres/carros em volta do jogador (somem com a reciclagem normal se você se afastar).
+    _addPeds(n) {
+        const g = this.g, M = g.npcManager;
+        for (let i = 0; i < n; i++) {
+            const { pos, role } = M._place(null, 10, 70);
+            const npc = new NPC(M.scene, M.nav, pos, 10000 + (this._pid = (this._pid || 0) + 1), M.sprites, M.ctx, role);
+            npc.setStyle(M._style(pos, role)); M.npcs.push(npc);
+        }
+    }
+    _addCars(n) { const T = this.g.traffic; for (let i = 0; i < n; i++) T._spawnCar('drive', null, T.ring(20, 110)); }
+    // Automático: a cada 4 s põe +10 pedestres e +5 carros até a capacidade cair abaixo de 15% (ou +300 entidades) e diz quanto coube.
+    _stressToggle() {
+        if (this._stress) { clearInterval(this._stress); this._stress = null; return; }
+        const g = this.g, n0 = g.npcManager.npcs.length + g.vehicleManager.vehicles.length, c0 = Perf.capacity().total;
+        g._flash(`Teste de carga: começando com ${n0} entidades, capacidade ${Math.round(c0 * 100)}%`);
+        this._stress = setInterval(() => {
+            const c = Perf.capacity().total, n = g.npcManager.npcs.length + g.vehicleManager.vehicles.length;
+            if (c < 0.15 || n - n0 >= 300) {
+                clearInterval(this._stress); this._stress = null;
+                const msg = `Teste de carga: +${n - n0} entidades (total ${n}) até a capacidade chegar a ${Math.round(c * 100)}%`;
+                console.log('[CARGA] ' + msg); g._flash(msg); this.stressResult = { added: n - n0, total: n, cap: c, cap0: c0 };
+                if (this.open) this._render();
+                return;
+            }
+            this._addPeds(10); this._addCars(5);
+        }, 4000);
+    }
+
+    // Barra de capacidade: verde > 50%, amarelo 25–50%, vermelho < 25%.
+    _cap() {
+        const C = Perf.capacity(), pct = Math.round(C.total * 100), $ = (id) => document.getElementById(id);
+        if (!$('dcPct')) return;
+        $('dcPct').textContent = pct + '%';
+        const bar = $('dcBar');
+        bar.style.width = Math.max(2, pct) + '%';
+        bar.style.background = pct > 50 ? 'linear-gradient(90deg,#10b981,#34d399)' : pct > 25 ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'linear-gradient(90deg,#e11d48,#fb7185)';
+        $('dcA').textContent = `${Perf.frameAvg.toFixed(1)} ms/quadro · p95 ${Perf.p95.toFixed(0)} ms · ~${C.growth.toFixed(1)}×`;
+        $('dcB').textContent = `${Math.round(Perf.heapMB)} MB ${Perf.heapSlope > 4 ? '↑' + Perf.heapSlope.toFixed(0) + '/min' : ''} · ${C.limit}`;
     }
 
     // ================================================================== utilidades
@@ -336,6 +408,8 @@ class DevMode {
         if (c && F.fuel && c.tank > 0) c.fuel = c.tank;
         if (c && F.tough && !c.wrecked) { c.hp = c.maxHp; c.burning = 0; c.dent = 0; }
         if (F.noPolice && g.wanted.level > 0) { g.wanted.bust(); if (g.policeManager) g.policeManager.reset(); }
+        this._capT = (this._capT || 0) - dt;
+        if (this._capT <= 0) { this._capT = 0.5; this._cap(); }
         if (this.open && this.tab === 'INFO') { this._infoT -= dt; if (this._infoT <= 0) { this._infoT = 0.25; this._info(); } }
     }
 }

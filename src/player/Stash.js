@@ -106,7 +106,7 @@ class Stash {
         } else {
             this._invAdd(game, id, q);
             if (id === 'jewels') { inv.jewelValue += jv; this.jv = Math.max(0, this.jv - jv); }
-            if (inv.slotsUsed() > Inventory.CAPACITY) {                       // mochila cheia: desfaz
+            if (inv.slotsUsed() > inv.capacity) {                       // mochila cheia: desfaz
                 this._invAdd(game, id, -q);
                 if (id === 'jewels') { inv.jewelValue -= jv; this.jv += jv; }
                 return 'Mochila cheia';

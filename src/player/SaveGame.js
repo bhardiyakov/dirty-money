@@ -16,7 +16,8 @@ const SaveGame = {
             v: this.VERSION, savedAt: Date.now(),
             hour: g.dayNight.hour, weather: g.weather.state,
             player: { x: p.position.x, z: p.position.z, rot: p.root.rotation.y, hp: p.hp, armor: p.armor, armorMax: p.armorMax, weapon: p.weapon },
-            inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, weapons },
+            inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, bag: inv.bag, weapons },
+            fitness: p.fit ? p.fit.xp : 0,
             stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(),
         };
     },
@@ -36,6 +37,8 @@ const SaveGame = {
         const p = g.player, inv = g.inventory, I = s.inventory || {};
         for (const k of ['cash', 'clean', 'medkits', 'hacks', 'keys', 'food', 'water', 'jewels', 'jewelValue']) if (typeof I[k] === 'number') inv[k] = I[k];
         for (const k of Object.keys(I.weapons || {})) if (inv.weapons[k]) Object.assign(inv.weapons[k], I.weapons[k]);
+        inv.bag = Bags.DEFS[I.bag] ? I.bag : 'pack';                       // saves antigos (antes das bolsas): a mochila 5×4 de sempre
+        p.fit = { xp: s.fitness || 0 };
         g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
         const pl = s.player || {};
         p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));

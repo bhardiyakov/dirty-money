@@ -458,6 +458,16 @@ class PoliceManager {
             u.setTarget(this._tp, this._tv);
             u.setAlert(!inFav && (m.sees && !!L || fresh));
             if (u.op && this.game.op) this.game.op.steer(u);       // operação na favela: confronta os traficantes
+            // Zonas (core/Spatial.js): patrulha calma fora da tela "dorme" (a cada 2 quadros perto da tela, a cada 5 longe, com o dt somado).
+            // Quem te vê, persegue ou está numa operação roda todo quadro.
+            const tier = (m.sees || fresh || u.op) ? 0 : Zones.tier(u.position.x, u.position.z);
+            if (tier > 0) {
+                u._lodDt = (u._lodDt || 0) + dt;
+                if (!Zones.every(u.id, tier, 2, 5)) continue;
+                u.update(Math.min(u._lodDt, 0.2)); u._lodDt = 0;
+                continue;
+            }
+            if (u._lodDt) { u.update(u._lodDt + dt); u._lodDt = 0; continue; }
             u.update(dt);
         }
         // Mortos continuam "vivendo" só para o corpo aparecer e depois reaparecer.
