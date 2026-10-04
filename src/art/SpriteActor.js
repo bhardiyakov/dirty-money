@@ -36,10 +36,17 @@ class SpriteActor {
         this._shadeTimer = Math.random() * 0.3;
         this.mesh.position.y = 0.5;
         this.mesh.isPickable = false;
-        this.mesh.alwaysSelectAsActiveMesh = true;
-        this.mesh.doNotSyncBoundingInfo = true;
+        // Culling por frustum (antes ficava sempre ativo: TODO pedestre e carro do mundo era desenhado, mesmo fora da tela). O quad tem
+        // tamanho fixo, então a caixa envolvente é trivial; a esfera basta (mais barata) e uma folga cobre o sprite alto.
+        this.mesh.cullingStrategy = BABYLON.AbstractMesh.CULLINGSTRATEGY_BOUNDINGSPHERE_ONLY;
+        this._setBounds(h);
 
         this._uv = new Float32Array(8);
+    }
+
+    // Caixa envolvente do quad (lado 2h) com um pouco de altura: o frustum descarta o sprite fora da tela.
+    _setBounds(h) {
+        this.mesh.setBoundingInfo(new BABYLON.BoundingInfo(new BABYLON.Vector3(-h, -1, -h), new BABYLON.Vector3(h, 3, h)));
     }
 
     // Fixa o frame do clipe (animação dirigida por código: cambalhota, inclinação da moto...). O update() volta a avançar daqui.
@@ -81,6 +88,7 @@ class SpriteActor {
         this.clip = null;
         const h = sheet.frame / Config.art.ppu / 2;
         this.mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, [-h, 0, h, h, 0, h, -h, 0, -h, h, 0, -h]);
+        this._setBounds(h);
     }
 
     // Troca a variante da paleta (ex.: pintura → carcaça carbonizada).

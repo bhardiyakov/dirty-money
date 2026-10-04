@@ -157,7 +157,7 @@ const HouseView = {
         if (world.shadow && world._ghost) {
             const g = BABYLON.MeshBuilder.CreateBox('hs_shadow', { width: W + 1, height: S.ROOF_Y, depth: D + 1 }, scene);
             g.position.set(ox + W / 2, S.ROOF_Y / 2, oz + D / 2);
-            g.material = world._ghost; g.isPickable = false; g.receiveShadows = false; g.freezeWorldMatrix();
+            g.material = world._ghost; g.isPickable = false; g.receiveShadows = false; g.layerMask = 0x10000000; g.freezeWorldMatrix();
             world.shadow.addShadowCaster(g);
         }
 
