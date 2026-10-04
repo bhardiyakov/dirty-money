@@ -184,6 +184,7 @@ class Game {
         // Quedas: arremessado (flail), cambalhota (tumble), caído (lie) e levantando (getup) — para todos os corpos.
         for (const s of ['player', 'civA', 'civB', 'police']) S[s].queue([['flail'], ['lie'], ['getup'], ['tumble']]);
         // Bicicletas e motos (piloto + veículo): andando, estacionadas, caídas e o jogador subindo.
+        S.courier.queue([['ride_moto']]);
         S.rider.queue([['ride_bike'], ['ride_moto'], ['park_bike'], ['park_moto'], ['fallen_bike'], ['fallen_moto'],
             ['mount', 'bike'], ['mount', 'moto'], ['mount', 'bikeL'], ['mount', 'motoL']]);
         // Tropa de elite (SWAT, metralhadora) e exército (fuzil, desenhado com a arma longa): assados por último,
@@ -273,9 +274,10 @@ class Game {
         const t = document.getElementById('ls-text'), f = document.getElementById('ls-fill');
         if (t) t.textContent = text;
         if (f) f.style.width = Math.round(p * 100) + '%';
+        if (window.Intro) Intro.progress(p);
     }
 
-    // Ciclo de vida: o loop de render NÃO existe até tudo o que é pesado terminar, tudo escondido atrás de #loading-screen:
+    // Ciclo de vida: o loop de render NÃO existe até tudo o que é pesado terminar, tudo escondido atrás da tela inicial (#main-menu, em modo carregamento):
     //   1) física (Havok) e navegação;  2) assar TODOS os sprites (personagens, carros, barcos) sem orçamento por quadro;
     //   3) congelar os materiais estáticos do mundo;  4) preparar o 1º estado do jogo e COMPILAR os shaders de tudo que existe
     //   (scene.whenReadyAsync);  5) só então começa o loop — e a tela some DEPOIS do primeiro quadro desenhado (ver _start).
@@ -337,6 +339,7 @@ class Game {
         this.autoQuality = new AutoQuality(this);
         this.gameEngine.runRenderLoop(() => {
             const now = performance.now();
+            if (Pool.active) { last = now; return; }                  // sinuca: o mundo para por completo (sem update nem render)
             this.autoQuality.tick((now - last) / 1000, this.menu.isOpen);
             const dt = Math.min((now - last) / 1000 * (this.timeScale || 1), 0.05);
             last = now;
@@ -345,8 +348,7 @@ class Game {
             if (this._bootDone && !this._loadingHidden) {            // 1º quadro real desenhado: agora (depois da pintura) a tela de carregamento sai
                 this._loadingHidden = true;
                 requestAnimationFrame(() => requestAnimationFrame(() => {
-                    const el = document.getElementById('loading-screen');
-                    if (el) { el.classList.add('done'); setTimeout(() => el.remove(), 600); }
+                    if (window.Intro) Intro.done();                  // a tela inicial (fundos + barra) some em fade
                 }));
             }
         });
@@ -751,14 +753,14 @@ class Game {
 
     // Alguma janela/diálogo que usa o ESC está aberta (ou acabou de fechar)? Então o ESC não deve abrir o menu de pausa.
     _modalUiOpen() {
-        return !!(this.stashUI.open || this.shopUI.open || this.propertyUI.open || this.motoUI.open || this.tribunal.open
+        return !!(Pool.active || this.stashUI.open || this.shopUI.open || this.propertyUI.open || this.motoUI.open || this.tribunal.open
             || this.endScreen.visible || this.sleeping || this.motoRide);          // (arrombar e inventário legado consomem o ESC sozinhos; _canPause já bloqueia a pausa neles)
     }
 
     // Dá para pausar? Não durante as telas de fim (detido/morte), enquanto arromba (Esc cancela o mini-game) nem sem o jogo pronto.
     _canPause() {
         if (this.menu.isOpen) return false;
-        if (this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping) return false;
+        if (Pool.active || this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping) return false;
         if ((this.arrest && this.arrest.phase === 'screen') || (this.death && this.death.phase === 'screen')) return false;
         return true;
     }
@@ -1528,6 +1530,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             return;
         }
         const p = bike.position;
+        if (bike.courier && variant >= CharacterRig.VARIANT_COURIER) Couriers.onThrown(this, bike);       // o pedido cai no chão
         this.casualties.push(new Casualty(this, p, {
             variant, sheet: variant % 2 ? 'civB' : 'civA', threat: kind === 'eject' ? this.player.position : p,
             dx, dz, power, kind: kind === 'eject' ? 'eject' : 'hit', lethal: kind !== 'eject' && power > 15,
@@ -1573,7 +1576,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         if (this.hiding || this.arrest || this.death) return;
         if (!this._sleepEl) {
             const el = this._sleepEl = document.createElement('div');
-            el.style.cssText = "position:fixed;inset:0;z-index:45;background:#000;opacity:0;pointer-events:none;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-family:'Press Start 2P',monospace;color:#cfd8e8;text-align:center;padding:20px";
+            el.style.cssText = "position:fixed;inset:0;z-index:45;background:#000;opacity:0;pointer-events:none;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-family:var(--font);font-size:18px;font-weight:600;color:#e6ebf5;text-align:center;padding:20px";
             document.body.appendChild(el);
         }
         this.player.velocity.setAll(0);
@@ -2056,7 +2059,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         car.takeDamage(dmg, src);
 
         // Bicicleta/moto: numa batida forte o piloto é ARREMESSADO (continua no sentido em que vinha) e o veículo tomba.
-        if (car.isBike && dv > 5.5 && car.riderVariant != null) {
+        if (car.isBike && dv > (car.courier ? 9 : 5.5) && car.riderVariant != null) {          // (entregador: piloto calejado, só cai em batida feia)
             car.throwRider(-dvx, -dvz, dv * 0.9);
             if (dv > 8) car.fall();
         }

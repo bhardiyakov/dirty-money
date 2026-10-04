@@ -18,20 +18,20 @@ class EmpireUI {
         st.textContent = `
             #pmEmpire { width: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; }
             #pmEmpire .em-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 12px; align-items: start; }
-            #pmEmpire .cr-box h3 small { color: #8fb4ff; font-size: 11px; margin-left: 6px; }
-            #pmEmpire button, #pmEmpire select { font: inherit; font-size: 12px; padding: 6px 9px; border-radius: 8px; border: 2px solid #3f5a8a; background: #141d36; color: #eef2ff; cursor: pointer; }
-            #pmEmpire button:hover:not([disabled]) { background: #1d2a4d; border-color: #ffd23a; }
+            #pmEmpire .cr-box h3 small { color: var(--blue); font-size: 11px; margin-left: 6px; }
+            #pmEmpire button, #pmEmpire select { font: inherit; font-size: 12px; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--card-h); color: var(--tx); font-weight: 600; cursor: pointer; }
+            #pmEmpire button:hover:not([disabled]) { background: rgba(255,255,255,0.14); border-color: var(--gold); }
             #pmEmpire button[disabled] { opacity: 0.4; cursor: not-allowed; }
             #pmEmpire .em-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
             #pmEmpire .em-btns { display: flex; gap: 6px; flex-wrap: wrap; }
-            #pmEmpire .hearts { color: #ff6a8a; letter-spacing: 1px; } #pmEmpire .hearts.neg { color: #8fb4ff; }
-            #pmEmpire table { border-collapse: collapse; width: 100%; } #pmEmpire td, #pmEmpire th { padding: 4px 5px; text-align: left; font-size: 12px; border-bottom: 1px solid #1f2a4a; vertical-align: top; } #pmEmpire th { color: #8fb4ff; }
-            #pmEmpire .ok { color: #5ac07a; } #pmEmpire .dom { color: #ffd23a; font-weight: 700; }
-            #hud2 .emp-panel { grid-column: 1 / 3; padding: 7px 12px 8px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
-            #hud2 .emp-panel .r { display: flex; align-items: center; gap: 8px; } #hud2 .emp-panel .r span { width: 22px; text-align: center; }
-            #hud2 .emp-panel i { flex: 1; height: 10px; border-radius: 5px; background: #0a0f22; border: 2px solid #1f2a4a; overflow: hidden; } #hud2 .emp-panel i s { display: block; height: 100%; }
-            #hud2 .emp-panel .d { font-size: 10px; color: #aab3c8; letter-spacing: 1px; display: flex; justify-content: space-between; }
-            #hud2 .emp-panel .d b { color: #ff5a4d; }`;
+            #pmEmpire .hearts { color: #ff6a8a; letter-spacing: 1px; } #pmEmpire .hearts.neg { color: var(--blue); }
+            #pmEmpire table { border-collapse: collapse; width: 100%; } #pmEmpire td, #pmEmpire th { padding: 4px 5px; text-align: left; font-size: 12px; border-bottom: 1px solid var(--line); vertical-align: top; } #pmEmpire th { color: var(--blue); }
+            #pmEmpire .ok { color: #5ac07a; } #pmEmpire .dom { color: var(--gold); font-weight: 700; }
+            #hud2 .emp-panel { padding: 10px 14px 11px; display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
+            #hud2 .emp-panel .r { display: flex; align-items: center; gap: 9px; } #hud2 .emp-panel .r span { width: 22px; text-align: center; font-family: var(--emoji); font-size: 16px; }
+            #hud2 .emp-panel i { flex: 1; height: 8px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; } #hud2 .emp-panel i s { display: block; height: 100%; border-radius: 99px; transition: width .3s; }
+            #hud2 .emp-panel .d { font-size: 11px; font-weight: 600; color: var(--tx-2); display: flex; justify-content: space-between; gap: 8px; }
+            #hud2 .emp-panel .d b { color: var(--red); }`;
         document.head.appendChild(st);
     }
 
@@ -54,9 +54,9 @@ class EmpireUI {
         if (key === EmpireUI._key) return;
         EmpireUI._key = key;
         const enEl = document.getElementById('empEn'), exEl = document.getElementById('empEx');
-        enEl.style.width = en + '%'; enEl.style.background = en < 12 ? '#ff5a4d' : 'linear-gradient(90deg,#ffd23a,#5ac07a)';
-        exEl.style.width = ex + '%'; exEl.style.background = ex >= 100 ? '#ff2a2a' : 'linear-gradient(90deg,#ff9a3a,#ff3a8a)';
-        document.getElementById('empD').innerHTML = `<span>${e.dName(d).toUpperCase()}${e.alerts[d] ? ' · <b>ALERTA TÁTICO</b>' : ''}</span><span>${e.seasonDef.name.toUpperCase()} · ${e.seasonLeft}D</span>`;
+        enEl.style.width = en + '%'; enEl.style.background = en < 12 ? '#f43f5e' : 'linear-gradient(90deg,#fbbf24,#34d399)';
+        exEl.style.width = ex + '%'; exEl.style.background = ex >= 100 ? '#f43f5e' : 'linear-gradient(90deg,#fb923c,#f43f5e)';
+        document.getElementById('empD').innerHTML = `<span>${e.dName(d)}${e.alerts[d] ? ' · <b>alerta tático</b>' : ''}</span><span>${e.seasonDef.name} · ${e.seasonLeft}d</span>`;
     }
 
     // ---------------------------------------------------------------- aba

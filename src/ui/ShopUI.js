@@ -8,25 +8,13 @@ class ShopUI {
         this.g = game; this.open = false; this.shop = null; this.sel = 0; this.cool = 0;
         const st = document.createElement('style');
         st.textContent = `
-        #shopUI{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:rgba(4,6,10,.6);font-family:'Press Start 2P',monospace;color:#e8ecf2}
-        #shopUI .sp{width:min(720px,95vw);max-height:92vh;display:flex;flex-direction:column;background:#161b24;border:3px solid #6f7d92;box-shadow:0 0 0 3px #0b0e14,0 10px 40px #000a;padding:14px 16px}
-        #shopUI h3{margin:0 0 4px;font-size:14px;letter-spacing:1px;color:#ffd23a;text-align:center}
-        #shopUI .sub{font-size:8px;color:#8f9bb0;text-align:center;margin-bottom:6px;line-height:1.6}
-        #shopUI .chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:8px}
-        #shopUI .chip{font-size:7px;padding:3px 6px;border:2px solid #2b3445;background:#0f131a;color:#9fb0c8}
-        #shopUI .chip.up{color:#ff9a8a;border-color:#5a2a28}#shopUI .chip.down{color:#8be08b;border-color:#2a5a2e}
-        #shopUI .rows{overflow:auto;max-height:52vh;background:#0f131a;border:2px solid #2b3445;padding:6px}
-        #shopUI .row{display:flex;align-items:center;gap:9px;padding:6px;border:2px solid transparent;font-size:8px;line-height:1.55}
-        #shopUI .row.sel{border-color:#ffd23a;background:#1f2736}
-        #shopUI .row.off{opacity:.45}
-        #shopUI .row canvas{flex:none;image-rendering:pixelated}
-        #shopUI .row .nm{flex:1;min-width:0}#shopUI .row .nm small{display:block;color:#8f9bb0;font-size:7px}
-        #shopUI .row .pr{color:#8be08b;white-space:nowrap;min-width:56px;text-align:right}
-        #shopUI .row .st{color:#9fb0c8;white-space:nowrap;font-size:7px;min-width:44px;text-align:right}
-        #shopUI .btn{font:inherit;font-size:8px;background:#2a3446;color:#e8ecf2;border:2px solid #56657c;padding:6px 8px;cursor:pointer;white-space:nowrap}
-        #shopUI .btn:hover{background:#3a4862}
-        #shopUI .msg{min-height:12px;font-size:8px;text-align:center;margin-top:8px}
-        #shopUI .foot{margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:7px;color:#8f9bb0;flex-wrap:wrap}`;
+        #shopUI .sp{width:min(760px,95vw)}
+        #shopUI .chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:12px}
+        #shopUI .chip{font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--card-h);color:var(--tx-2)}
+        #shopUI .chip.up{color:#fda4af;background:rgba(244,63,94,0.14)}#shopUI .chip.down{color:#86efac;background:rgba(52,211,153,0.14)}
+        #shopUI .rows{max-height:52vh}
+        #shopUI .row .pr{color:#86efac;font:700 15px var(--font-d);white-space:nowrap;min-width:84px;text-align:right}
+        #shopUI .row .st{color:var(--tx-3);white-space:nowrap;font-size:12px;min-width:64px;text-align:right}`;
         document.head.appendChild(st);
         const r = this.root = document.createElement('div');
         r.id = 'shopUI';
@@ -68,12 +56,12 @@ class ShopUI {
         list.forEach((e, i) => {
             const it = Economy.ITEMS[e.id], price = Economy.price(shop, e.id, hour);
             const row = document.createElement('div'); row.className = 'row' + (i === this.sel ? ' sel' : '') + (e.qty <= 0 ? ' off' : '');
-            const ic = g.menu.itemIcon(it.icon), k = Math.max(1, Math.min(3, Math.floor(30 / Math.max(ic.w, ic.h)) || 1));
+            const ic = g.menu.itemIcon(it.icon, e.id), k = Math.max(1, Math.min(3, Math.floor(30 / Math.max(ic.w, ic.h)) || 1));
             const cv = ic.canvas.cloneNode(); cv.getContext('2d').drawImage(ic.canvas, 0, 0); cv.style.width = ic.w * k + 'px'; cv.style.height = ic.h * k + 'px';
-            const nm = document.createElement('div'); nm.className = 'nm'; nm.innerHTML = `${it.name.toUpperCase()}<small>${it.desc}${it.kind === 'meal' ? '' : ''}</small>`;
+            const nm = document.createElement('div'); nm.className = 'nm'; nm.innerHTML = `${it.name}<small>${it.desc}${it.kind === 'meal' ? '' : ''}</small>`;
             const pr = document.createElement('div'); pr.className = 'pr'; pr.textContent = brl(price);
             const stq = document.createElement('div'); stq.className = 'st'; stq.textContent = e.qty === Infinity ? '' : (e.qty > 0 ? 'resta ' + e.qty : 'esgotado');
-            const b = document.createElement('button'); b.className = 'btn'; b.textContent = it.kind === 'meal' ? 'COMER' : 'COMPRAR';
+            const b = document.createElement('button'); b.className = 'btn'; b.textContent = it.kind === 'meal' ? 'Comer' : 'Comprar'; b.classList.add('pri');
             b.addEventListener('click', () => { this.sel = i; this._buy(e.id); });
             row.append(cv, nm, stq, pr, b);
             row.addEventListener('mousedown', () => { if (this.sel !== i) { this.sel = i; this.render(); } });
@@ -114,7 +102,7 @@ class ShopUI {
             });
             this.$foot.appendChild(b);
         }
-        const x = document.createElement('button'); x.className = 'btn'; x.textContent = 'FECHAR'; x.addEventListener('click', () => this.close()); this.$foot.appendChild(x);
+        const x = document.createElement('button'); x.className = 'btn'; x.textContent = 'Fechar'; x.addEventListener('click', () => this.close()); this.$foot.appendChild(x);
         const sel = this.$rows.querySelector('.sel'); if (sel) sel.scrollIntoView({ block: 'nearest' });
     }
 

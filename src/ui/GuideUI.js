@@ -13,16 +13,16 @@ class GuideUI {
         st.textContent = `
             #pmGuide { display: flex; gap: 14px; width: 100%; min-height: 0; }
             .gd-index { width: 250px; flex: none; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
-            .gd-index div { cursor: pointer; padding: 8px 11px; border-radius: 10px; background: rgba(9,14,32,0.86); border: 2px solid #1f2a4a; color: #cfd7ea; font-size: 13px; }
-            .gd-index div:hover { border-color: #3a4a7a; } .gd-index div.on { border-color: #35e0ff; color: #fff; box-shadow: 0 0 12px rgba(53,224,255,0.35); }
-            .gd-index .gd-h { cursor: default; background: none; border: none; color: #8fb4ff; font-size: 11px; letter-spacing: 2px; padding: 8px 4px 2px; }
-            .gd-body { flex: 1; min-width: 0; overflow-y: auto; background: rgba(9,14,32,0.86); border-radius: 12px; border: 2px solid #1f2a4a; padding: 16px 20px; color: #dfe6f5; font-size: 14px; line-height: 1.55; text-transform: none; }
-            .gd-body h2 { margin: 0 0 10px; font-size: 20px; color: #fff; letter-spacing: 1px; text-transform: uppercase; }
-            .gd-body h3 { margin: 16px 0 6px; font-size: 15px; color: #ffe27a; text-transform: uppercase; letter-spacing: 1px; }
+            .gd-index div { cursor: pointer; padding: 8px 11px; border-radius: var(--r-2); background: var(--glass); border: 1px solid var(--line-2); color: var(--tx-2); font-size: 13px; }
+            .gd-index div:hover { border-color: rgba(255,255,255,0.3); } .gd-index div.on { border-color: var(--tx); color: #fff; background: var(--card-on); }
+            .gd-index .gd-h { cursor: default; background: none; border: none; color: var(--blue); font-size: 11px; letter-spacing: 2px; padding: 8px 4px 2px; }
+            .gd-body { flex: 1; min-width: 0; overflow-y: auto; background: var(--glass); border-radius: var(--r); border: 1px solid var(--line-2); padding: 16px 20px; color: var(--tx); font-size: 15px; line-height: 1.65; text-transform: none; padding: 22px 28px; }
+            .gd-body h2 { margin: 0 0 12px; font: 700 26px var(--font-d); color: var(--tx); }
+            .gd-body h3 { margin: 18px 0 6px; font: 700 17px var(--font-d); color: var(--gold); }
             .gd-body p { margin: 6px 0; } .gd-body ul { margin: 4px 0 8px; padding-left: 20px; } .gd-body li { margin: 3px 0; }
-            .gd-body b { color: #ffe27a; } .gd-body kbd { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 4px; background: #1d2a4d; border: 1px solid #3f5a8a; color: #fff; font: inherit; font-size: 12px; text-align: center; }
-            .gd-body table { border-collapse: collapse; width: 100%; margin: 6px 0; } .gd-body td, .gd-body th { border-bottom: 1px solid #1f2a4a; padding: 5px 6px; text-align: left; vertical-align: top; font-size: 13px; } .gd-body th { color: #8fb4ff; }
-            .gd-tip { margin: 10px 0; padding: 8px 12px; border-left: 3px solid #35e0ff; background: rgba(53,224,255,0.07); border-radius: 0 8px 8px 0; }
+            .gd-body b { color: var(--gold); } .gd-body kbd { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 4px; background: rgba(255,255,255,0.14); border: 1px solid #3f5a8a; color: #fff; font: inherit; font-size: 12px; text-align: center; }
+            .gd-body table { border-collapse: collapse; width: 100%; margin: 6px 0; } .gd-body td, .gd-body th { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: left; vertical-align: top; font-size: 13px; } .gd-body th { color: var(--blue); }
+            .gd-tip { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--acc); background: rgba(52,211,153,0.08); border-radius: 0 8px 8px 0; }
             @media (max-width: 900px) { #pmGuide { flex-direction: column; } .gd-index { width: auto; flex-direction: row; overflow-x: auto; } .gd-index div { white-space: nowrap; } .gd-index .gd-h { display: none; } }`;
         document.head.appendChild(st);
     }
@@ -31,7 +31,7 @@ class GuideUI {
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'],
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
-            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['daily', 'Energia e exposição (o dia)'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
+            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['daily', 'Energia e exposição (o dia)'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas']);
         return out;
@@ -179,6 +179,22 @@ GuideUI.PAGES = {
         <li><b>Eleições</b> (28): presentes valem o dobro na influência, extorsão rende mais, a lavagem aperta.</li>
         <li><b>Intervenção Federal</b> (14): armas 3× mais caras, milícia some, polícia vê mais longe, soldados rendem a metade — hora do colarinho branco (golpes +50%).</li></ul>`,
 
+    pool: () => `<h2>Sinuca no bar</h2>
+        <p>Todo <b>bar</b> tem uma mesa de sinuca. Chegue perto dela e aperte <kbd>E</kbd>. Durante a partida o resto do mundo para.</p>
+        <h3>Apostas e adversários</h3>
+        <table><tr><th>Adversário</th><th>Aposta</th><th>Como joga</th></tr>
+        ${Pool.STAKES.map((o, i) => `<tr><td>${o.emo} ${o.name}</td><td>${brl(o.bet)}</td><td>${['erra bastante', 'acerta as fáceis', 'simula a jogada e pensa na branca', 'precisão de profissional', 'quase não erra, joga posição'][i]}</td></tr>`).join('')}</table>
+        <p>A aposta sai do dinheiro vivo (sujo). Ganhando, você leva o <b>dobro</b>.</p>
+        <h3>Regras (bola 8)</h3>
+        <ul><li>Quem encaçapa primeiro (depois da saída) fica com o grupo: <b>lisas 1–7</b> ou <b>listradas 9–15</b>.</li>
+        <li>Encaçapou uma bola sua: joga de novo. Limpou o grupo: a próxima é a <b>8</b>.</li>
+        <li><b>Falta</b>: branca na caçapa, não tocar em nada ou tocar primeiro bola que não é sua. O adversário ganha <b>bola na mão</b> (põe a branca onde quiser).</li>
+        <li>Encaçapar a 8 antes de limpar o grupo, ou junto com uma falta, é <b>derrota</b>.</li></ul>
+        <h3>Controles</h3>
+        <ul><li><b>Mirar</b>: aponte no pano (mouse) ou arraste o dedo. <kbd>←</kbd> <kbd>→</kbd> e a roda do mouse fazem o ajuste fino.</li>
+        <li><b>Força</b>: arraste a barra da direita e solte. No PC, também dá para segurar o botão do mouse e puxar para trás, ou segurar <kbd>ESPAÇO</kbd> e soltar.</li>
+        <li>A linha de mira mostra onde a branca bate. A linha fica <b style="color:#fb7185">vermelha</b> se a bola atingida não for sua.</li></ul>
+        <div class="gd-tip">Com bola na mão, arraste a branca para uma posição de tacada fácil antes de mirar.</div>`,
     banks: () => `<h2>Bancos</h2>
         <p>A cidade tem <b>3 sedes</b> (no Distrito Financeiro) e <b>7 agências</b>, de três marcas (marcadores coloridos na porta; lista com GPS na aba IMPÉRIO):</p>
         <ul><li><b style="color:#ec7000">Banco Inaú</b> — tecnologia: o melhor alvo do cibercrime (transferências rendem mais).</li>

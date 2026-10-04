@@ -92,6 +92,7 @@ const Interiors = {
             const door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2, nearExit = Math.hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3;
             const cl = a.data.clerk, nearClerk = cl && Math.hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
             const shop = a.shop, S = Economy.STYLES[shop.style] || {};
+            if (this.useNear(game, 'pool')) return `<b>E</b> jogar sinuca<small>bola 8 apostada · de ${brl(Pool.STAKES[0].bet)} a ${brl(Pool.STAKES[Pool.STAKES.length - 1].bet)}</small>`;
             if (nearClerk) return `<b>E</b> ${S.guns ? 'ver o que tem à venda' : 'ver o cardápio'}<small>${shop.name} · ${Economy.zoneOf(shop).label}</small>`;
             if (nearExit) return '<b>E</b> sair da loja<small>ou ande até a porta</small>';
             return '';
@@ -117,6 +118,7 @@ const Interiors = {
             }
             const a = this.active, o = this.STAGE, door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2;
             const cl = a.data.clerk;
+            if (this.useNear(game, 'pool')) { Pool.open(game, a.shop); return true; }
             if (cl && Math.hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6) { game.shopUI.show(a.shop); return true; }
             if (Math.hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3) { this.leave(game); return true; }
             return false;
@@ -140,6 +142,17 @@ const Interiors = {
         const shop = { id: 'home' + prop.id, kind: style, style, name: prop.type, district: 'city', biome: 'residential', variant: v, x: prop.x, z: prop.z, face: 0, home: prop, reform: RealEstate.reformLevel(prop) };
         this.enter(game, shop);
         return true;
+    },
+    // Ponto de uso `kind` (ex.: a mesa de sinuca do bar) ao alcance do jogador numa loja, ou null.
+    useNear(game, kind, maxD = 1.6) {
+        const a = this.active; if (!a) return null;
+        const o = this.STAGE, p = game.player.position;
+        for (const u of a.data.uses || []) {
+            if (u.kind !== kind) continue;
+            const cx = Math.max(o.x + u.x0, Math.min(p.x, o.x + u.x1)), cz = Math.max(o.z + u.z0, Math.min(p.z, o.z + u.z1));
+            if (Math.hypot(p.x - cx, p.z - cz) <= maxD) return u;
+        }
+        return null;
     },
     // Móvel de uso mais próximo (a ≤ 1,9 u do retângulo) dentro da casa, ou null.
     homeUse(game, maxD = 1.9) {

@@ -126,7 +126,7 @@ class Minimap {
 
         // Moldura + Norte.
         // (a moldura de pixels é CSS no #minimap; aqui só o "N" do norte, com contorno)
-        ctx.font = '700 12px "Silkscreen", "Courier New", monospace';
+        ctx.font = '700 12px Inter, Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.lineWidth = 3;

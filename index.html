@@ -7,8 +7,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <title>Dirty Money - Criminal Simulator MVP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preload" as="image" href="./assets/bg1.jpg" fetchpriority="high">
+    <link rel="preload" as="image" href="./assets/logo.png" fetchpriority="high">
+    <title>Dirty Money</title>
     <style>
         * {
             margin: 0;
@@ -20,8 +22,7 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background: #0a0a0a;
-            font-family: 'Courier New', monospace;
+            background: #07090e;
         }
 
         #canvas {
@@ -140,25 +141,19 @@
             border-radius: 10px;
             box-shadow: 0 0 20px rgba(0, 255, 0, 0.25);
         }
-        /* Tela de carregamento: cobre o jogo até o 1º quadro estar compilado e desenhado (sem travadas de shader/sprites). */
-        #loading-screen { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-            background: radial-gradient(ellipse at center, #14202e 0%, #07090d 75%); color: #eef1f7; font-family: 'Courier New', monospace; text-transform: uppercase;
-            transition: opacity 0.45s ease; }
-        #loading-screen.done { opacity: 0; pointer-events: none; }
-        #loading-screen .ls-title { font-size: clamp(26px, 7vmin, 56px); font-weight: 700; letter-spacing: 6px; color: #6dff8a; text-shadow: 0 0 18px rgba(44,255,106,0.55); }
-        #loading-screen .ls-bar { width: min(420px, 70vw); height: 16px; border: 3px solid #3a4560; background: #0a0d13; box-shadow: 0 0 0 2px #07090d; }
-        #loading-screen .ls-bar i { display: block; height: 100%; width: 0%; background: linear-gradient(180deg, #8dffa5 0 45%, #2fbf5a 45% 100%); transition: width 0.25s steps(8); }
-        #loading-screen .ls-text { font-size: 13px; letter-spacing: 2px; color: #aab3c8; min-height: 16px; }
-        #loading-screen.hidden { display: none; }
-        /* Menu principal: HTML/CSS sobre o canvas, 100% pixel art (bordas em degraus, múltiplos inteiros, sem suavização). */
-        #main-menu { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; overflow: hidden;
-            background: #0a0a0a; font-family: 'Press Start 2P', 'Courier New', monospace;
-            image-rendering: pixelated; opacity: 1; transition: opacity 0.5s steps(5); }
+        /* ---------------------------------------------------------------- tela inicial (menu + carregamento)
+           Montada por um script INLINE logo abaixo da marcação: não espera o Babylon nem os ~100 scripts do jogo. Estados em #main-menu:
+           (nada) só a prévia borrada do 1º fundo · .bg-ready fundos nítidos · .ui-ready logo e botões · .loading barra embaixo · .fade some. */
+        #main-menu { position: fixed; inset: 0; z-index: 120; overflow: hidden; color: #f2f4f8; background: #07090e;
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; transition: opacity .7s ease; }
         #main-menu.fade { opacity: 0; pointer-events: none; }
-        /* Fundos em tela cheia (cover), trocados a cada 2 s com transição de glitch. */
-        #mm-bg { position: absolute; inset: 0; image-rendering: pixelated; }
-        #mm-bg .mm-slide { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; }
-        #mm-bg .mm-slide.on { opacity: 1; }
+        #mm-ph { position: absolute; inset: -40px; background: url(data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAABQAEAQf/xAAqEAABAwIDBgcBAAAAAAAAAAABAAIDETEEBSESIjNBcYETMjRCYYKRsf/EABcBAAMBAAAAAAAAAAAAAAAAAAECAwD/xAAYEQEBAQEBAAAAAAAAAAAAAAAAAQIRMf/aAAwDAQACEQMRAD8A8wgZG67alot1S2XQsieJJoKtJsbH8Q8UpDd060IKRw+KxUsRigptAACgsOalqKR3MXxyTuEcLWi+rijxE/wmOY0bNKuNNb0SZy98sj94t2aanQFHESMw8TvZTkflHPnIVmi8w7prKuI/7fwqUjWjRieGOgQg9IO6lJYNf//Z) center / cover; filter: blur(22px) saturate(1.1); transform: scale(1.05); }
+        #mm-bg { position: absolute; inset: 0; opacity: 0; transition: opacity .8s ease; }
+        #main-menu.bg-ready #mm-bg { opacity: 1; }
+        #mm-bg .mm-slide { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; transition: opacity 1.4s ease; will-change: opacity, transform; }
+        #mm-bg .mm-slide.on { opacity: 1; animation: mmKen 9s ease-out both; }
+        @keyframes mmKen { from { transform: scale(1.1) translate3d(0, -1%, 0); } to { transform: scale(1) translate3d(0, 0, 0); } }
+        #main-menu:not(.loading) #mm-bg .mm-slide { transition-duration: .25s; }
         #mm-bg.glitch { animation: mm-glitch 0.4s steps(1) 1; }
         @keyframes mm-glitch {
             0%   { transform: translate(-14px, 0) scale(1.04); filter: hue-rotate(90deg) saturate(2.4) contrast(1.4); clip-path: inset(0 0 62% 0); }
@@ -172,58 +167,139 @@
             100% { transform: none; filter: none; clip-path: inset(0); }
         }
         #mm-bars { position: absolute; inset: 0; pointer-events: none; }
-        #mm-bars i { position: absolute; left: 0; width: 100%; opacity: 0.55; mix-blend-mode: screen; }
-        /* Escurece o fundo para o logo e os botões não brigarem com a imagem. */
-        #mm-shade { position: absolute; inset: 0; pointer-events: none;
-            background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.78) 100%); }
-        #main-menu .mm-frame { position: relative; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 32px; image-rendering: pixelated; }
-        #main-menu .mm-logo { display: block; width: min(460px, 80vw); max-height: 52vh; object-fit: contain; image-rendering: pixelated;
-            filter: drop-shadow(0 6px 0 rgba(0,0,0,0.85)) drop-shadow(0 0 18px rgba(0,0,0,0.95)) drop-shadow(0 0 40px rgba(0,0,0,0.8)); }
-        #main-menu .mm-title { font-size: clamp(20px, 5vmin, 40px); line-height: 1.5; text-align: center; color: #6dff8a; letter-spacing: 4px;
-            text-shadow: 4px 4px 0 #1c5e2e, 8px 8px 0 #07090d; }
-        #main-menu .mm-buttons { display: flex; flex-direction: column; gap: 20px; width: min(320px, 70vw); }
-        #main-menu .mm-btn { font-family: inherit; font-size: 14px; text-transform: uppercase; padding: 16px 12px; cursor: pointer; border-radius: 0; outline: none;
-            color: #eef1f7; background: #1d2a3d; border: 4px solid #3a4560; image-rendering: pixelated;
-            box-shadow: inset -4px -4px 0 #0f1722, inset 4px 4px 0 #2e4260, 4px 4px 0 #07090d; }
-        #main-menu .mm-btn:hover:not(:disabled), #main-menu .mm-btn:focus-visible { color: #0a0d13; background: #6dff8a; border-color: #eef1f7;
-            box-shadow: inset -4px -4px 0 #2fbf5a, inset 4px 4px 0 #b8ffc7, 4px 4px 0 #07090d; }
-        #main-menu .mm-btn:active:not(:disabled) { transform: translate(4px, 4px); box-shadow: inset -4px -4px 0 #2fbf5a, inset 4px 4px 0 #b8ffc7; }
-        #main-menu .mm-btn.mm-disabled, #main-menu .mm-btn:disabled { cursor: not-allowed; color: #5b6475; background: #161b24; border-color: #2a303c;
-            box-shadow: inset -4px -4px 0 #0f1319, inset 4px 4px 0 #1f2530; }
-        #main-menu .mm-logo { animation: mm-pulse 4.5s ease-in-out infinite; transform-origin: center; }
-        @keyframes mm-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
-        #mm-settings { position: absolute; inset: 0; z-index: 5; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); }
+        #mm-bars i { position: absolute; left: 0; width: 100%; opacity: 0.5; mix-blend-mode: screen; }
+        #mm-shade { position: absolute; inset: 0; pointer-events: none; transition: background .8s ease;
+            background: radial-gradient(ellipse at 50% 45%, rgba(5,7,12,0.3) 0%, rgba(5,7,12,0.82) 100%); }
+        #main-menu.loading #mm-shade { background: linear-gradient(180deg, rgba(5,7,12,0.15) 0%, rgba(5,7,12,0.1) 55%, rgba(5,7,12,0.9) 100%); }
+        #main-menu .mm-frame { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 34px; padding: 24px;
+            opacity: 0; transform: translateY(14px); pointer-events: none; transition: opacity .6s ease, transform .6s ease; }
+        #main-menu.ui-ready:not(.loading) .mm-frame { opacity: 1; transform: none; pointer-events: auto; }
+        #main-menu.loading .mm-frame { transform: translateY(-14px); transition-duration: .4s; }
+        #main-menu .mm-logo { display: block; width: min(460px, 80vw); max-height: 52vh; object-fit: contain;
+            filter: drop-shadow(0 10px 30px rgba(0,0,0,0.85)); animation: mm-pulse 4.5s ease-in-out infinite; transform-origin: center; }
+        @keyframes mm-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+        #main-menu .mm-buttons { display: flex; flex-direction: column; gap: 12px; width: min(340px, 78vw); }
+        #main-menu .mm-btn { font: 600 16px 'Inter', system-ui, sans-serif; letter-spacing: 0.01em; padding: 15px 20px; border-radius: 14px; cursor: pointer; outline: none;
+            color: #f2f4f8; background: rgba(16,19,28,0.62); border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+            -webkit-backdrop-filter: blur(18px) saturate(1.5); backdrop-filter: blur(18px) saturate(1.5); transition: background .15s, transform .12s, border-color .15s; }
+        #main-menu .mm-btn:hover:not(:disabled), #main-menu .mm-btn:focus-visible { background: rgba(40,46,62,0.8); border-color: rgba(255,255,255,0.3); transform: translateY(-1px); }
+        #main-menu .mm-btn:active:not(:disabled) { transform: translateY(1px); }
+        #main-menu .mm-btn#btn-new { background: linear-gradient(180deg, #3ee0a1, #10b981); color: #04130c; border-color: transparent; font-weight: 700; }
+        #main-menu .mm-btn#btn-new:hover:not(:disabled), #main-menu .mm-btn#btn-new:focus-visible { background: linear-gradient(180deg, #5cf0b5, #1fc98f); }
+        #main-menu .mm-btn:disabled, #main-menu .mm-btn.mm-disabled { cursor: not-allowed; color: #6f7689; background: rgba(16,19,28,0.5); border-color: rgba(255,255,255,0.08); transform: none; }
+        #main-menu .mm-btn small { display: block; font-size: 11px; font-weight: 500; color: #8a93a8; margin-top: 3px; }
+        /* espera dos scripts do jogo (fundos já prontos): pontinho girando embaixo */
+        #mm-wait { position: absolute; left: 50%; bottom: 7vh; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.18); border-top-color: #34d399;
+            animation: mmSpin .8s linear infinite; opacity: 0; transition: opacity .4s; }
+        #main-menu.bg-ready:not(.ui-ready) #mm-wait { opacity: 1; }
+        @keyframes mmSpin { to { transform: rotate(360deg); } }
+        /* carregamento: faixa na parte de baixo, os fundos continuam passando */
+        #mm-load { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 max(28px, 5vw) max(26px, 4.5vh); display: flex; flex-direction: column; gap: 12px;
+            opacity: 0; transform: translateY(20px); pointer-events: none; transition: opacity .6s ease .25s, transform .6s ease .25s; }
+        #main-menu.loading #mm-load { opacity: 1; transform: none; }
+        #mm-load .ml-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+        #mm-load .ml-logo { height: clamp(48px, 11vh, 96px); filter: drop-shadow(0 6px 18px rgba(0,0,0,0.8)); }
+        #mm-load .ml-tip { flex: 1; max-width: 640px; text-align: right; font-size: clamp(13px, 1.6vh, 15px); line-height: 1.5; color: #d6dbe6; text-shadow: 0 1px 8px rgba(0,0,0,0.9); transition: opacity .4s; }
+        #mm-load .ml-tip b { color: #fbbf24; font-weight: 700; margin-right: 6px; }
+        #mm-load .ml-bar { position: relative; height: 6px; border-radius: 99px; background: rgba(255,255,255,0.14); overflow: hidden; }
+        #mm-load .ml-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 99px; background: linear-gradient(90deg, #22d3ee, #34d399); transition: width .5s ease;
+            box-shadow: 0 0 14px rgba(52,211,153,0.7); }
+        #mm-load .ml-bar i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent); animation: mmShine 1.4s linear infinite; }
+        @keyframes mmShine { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+        #mm-load .ml-row { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: #aab1c2; text-shadow: 0 1px 6px rgba(0,0,0,0.9); }
+        #mm-load .ml-row span:last-child { font-variant-numeric: tabular-nums; color: #f2f4f8; }
+        /* configurações */
+        #mm-settings { position: absolute; inset: 0; z-index: 5; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45);
+            -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
         #mm-settings.open { display: flex; }
-        #mm-settings .mm-panel { width: min(460px, 92vw); display: flex; flex-direction: column; gap: 18px; padding: 24px; background: #0d121a; border: 4px solid #3a4560;
-            box-shadow: inset -4px -4px 0 #0f1722, inset 4px 4px 0 #2e4260, 6px 6px 0 #07090d; }
-        #mm-settings h2 { font-size: 16px; color: #6dff8a; text-align: center; text-shadow: 3px 3px 0 #1c5e2e; font-weight: normal; }
-        #mm-settings .mm-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 10px; color: #eef1f7; line-height: 1.5; }
-        #mm-settings .mm-toggle { font-family: inherit; font-size: 10px; min-width: 104px; padding: 8px; cursor: pointer; border-radius: 0; color: #5b6475; background: #161b24; border: 4px solid #2a303c; }
-        #mm-settings .mm-toggle.is-on { color: #0a0d13; background: #6dff8a; border-color: #eef1f7; }
-        #mm-settings input[type=range] { width: 130px; accent-color: #6dff8a; }
+        #mm-settings .mm-panel { width: min(460px, 92vw); display: flex; flex-direction: column; gap: 14px; padding: 24px; border-radius: 20px; background: rgba(18,21,31,0.9);
+            border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 18px 50px rgba(0,0,0,0.45); }
+        #mm-settings h2 { font: 700 20px 'Outfit', 'Inter', sans-serif; text-align: center; }
+        #mm-settings .mm-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; }
+        #mm-settings .mm-toggle { font: 600 13px 'Inter', sans-serif; min-width: 96px; padding: 7px 14px; cursor: pointer; border-radius: 99px; color: #aab1c2;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); }
+        #mm-settings .mm-toggle.is-on { color: #04130c; background: #34d399; border-color: transparent; }
+        #mm-settings input[type=range] { width: 130px; accent-color: #34d399; }
+        @media (max-height: 520px) {
+            #main-menu .mm-frame { gap: 14px; padding: 10px; } #main-menu .mm-logo { max-height: 36vh; }
+            #main-menu .mm-buttons { gap: 8px; } #main-menu .mm-btn { padding: 10px 16px; font-size: 14px; }
+            #mm-load { gap: 8px; } #mm-load .ml-logo { height: 44px; }
+        }
     </style>
 </head>
 <body>
     <div id="main-menu">
-        <div id="mm-bg"></div><div id="mm-bars"></div><div id="mm-shade"></div>
+        <div id="mm-ph"></div><div id="mm-bg"></div><div id="mm-bars"></div><div id="mm-shade"></div>
         <div class="mm-frame">
-            <img class="mm-logo" src="./assets/logo.png" alt="Dirty Money">
+            <img class="mm-logo" src="./assets/logo.png" alt="Dirty Money" fetchpriority="high">
             <div class="mm-buttons">
                 <button type="button" class="mm-btn" id="btn-new">Novo Jogo</button>
                 <button type="button" class="mm-btn" id="btn-load">Carregar Jogo</button>
                 <button type="button" class="mm-btn" id="btn-settings">Configurações</button>
             </div>
         </div>
+        <div id="mm-wait"></div>
+        <div id="mm-load">
+            <div class="ml-top"><img class="ml-logo" src="./assets/logo.png" alt=""><div class="ml-tip" id="ml-tip"></div></div>
+            <div class="ml-bar"><i id="ls-fill"></i></div>
+            <div class="ml-row"><span id="ls-text">Carregando…</span><span id="ls-pct">0%</span></div>
+        </div>
         <div id="mm-settings"><div class="mm-panel">
-            <h2>CONFIGURAÇÕES</h2>
-            <div class="mm-row"><span>VOLUME GERAL</span><span><input type="range" id="set-volume" min="0" max="100"> <span id="set-volume-val"></span></span></div>
-            <div class="mm-row"><span>EFEITOS SONOROS</span><button type="button" class="mm-toggle" data-key="sfx"></button></div>
-            <div class="mm-row"><span>MINIMAPA</span><button type="button" class="mm-toggle" data-key="minimap"></button></div>
-            <div class="mm-row"><span>DICAS NA TELA</span><button type="button" class="mm-toggle" data-key="prompts"></button></div>
+            <h2>Configurações</h2>
+            <div class="mm-row"><span>Volume geral</span><span><input type="range" id="set-volume" min="0" max="100"> <span id="set-volume-val"></span></span></div>
+            <div class="mm-row"><span>Efeitos sonoros</span><button type="button" class="mm-toggle" data-key="sfx"></button></div>
+            <div class="mm-row"><span>Minimapa</span><button type="button" class="mm-toggle" data-key="minimap"></button></div>
+            <div class="mm-row"><span>Dicas na tela</span><button type="button" class="mm-toggle" data-key="prompts"></button></div>
             <button type="button" class="mm-btn" id="btn-settings-back">Voltar</button>
         </div></div>
     </div>
-    <div id="loading-screen" class="hidden"><div class="ls-title">DIRTY MONEY</div><div class="ls-bar"><i id="ls-fill"></i></div><div class="ls-text" id="ls-text">Carregando…</div></div>
+    <script>
+        // Abertura: roda JÁ (antes do Babylon e dos scripts do jogo). Pré-carrega e decodifica os fundos e a logo; só mostra os fundos
+        // quando o 1º está pronto, e a logo/botões quando os fundos E o jogo (MainMenu) estão prontos. O slideshow segue no carregamento.
+        window.Intro = (() => {
+            const root = document.getElementById('main-menu'), bg = document.getElementById('mm-bg'), bars = document.getElementById('mm-bars');
+            const files = [1, 2, 3, 4, 5, 6].map((n) => './assets/bg' + n + '.jpg');
+            const load = (src) => { const im = new Image(); im.src = src; return (im.decode ? im.decode() : new Promise((r, j) => { im.onload = r; im.onerror = j; })).catch(() => {}); };
+            const slides = files.map((f) => { const d = document.createElement('div'); d.className = 'mm-slide'; d.style.backgroundImage = 'url(' + f + ')'; bg.appendChild(d); return d; });
+            const ready = slides.map(() => false);
+            let idx = 0, timer = 0, menuOk = false, bgOk = false;
+            const first = Promise.all([load(files[0]), load('./assets/logo.png')]).then(() => { ready[0] = true; slides[0].classList.add('on'); root.classList.add('bg-ready'); bgOk = true; reveal(); });
+            first.then(() => files.slice(1).forEach((f, i) => load(f).then(() => { ready[i + 1] = true; })));     // os outros, em seguida
+            setTimeout(() => { if (!bgOk) { bgOk = true; root.classList.add('bg-ready'); slides[0].classList.add('on'); reveal(); } }, 4000);   // rede lenta: não segura o menu
+            function reveal() { if (bgOk && menuOk) root.classList.add('ui-ready'); }
+            function next(glitch) {
+                let n = idx; for (let k = 1; k <= slides.length; k++) { const j = (idx + k) % slides.length; if (ready[j]) { n = j; break; } }
+                if (n === idx) return;
+                const swap = () => { slides[idx].classList.remove('on'); idx = n; slides[idx].classList.add('on'); };
+                if (!glitch) return swap();
+                bg.classList.remove('glitch'); void bg.offsetWidth; bg.classList.add('glitch');
+                bars.innerHTML = ''; const cols = ['#ff1e56', '#1effe0', '#ffe81e', '#ffffff'];
+                for (let i = 0; i < 7; i++) { const b = document.createElement('i'); b.style.top = Math.random() * 95 + '%'; b.style.height = 6 + Math.random() * 40 + 'px'; b.style.background = cols[i % 4]; b.style.transform = 'translateX(' + (Math.random() - 0.5) * 60 + 'px)'; bars.appendChild(b); }
+                setTimeout(swap, 160); setTimeout(() => { bg.classList.remove('glitch'); bars.innerHTML = ''; }, 420);
+            }
+            const play = (ms, glitch) => { clearInterval(timer); timer = setInterval(() => next(glitch), ms); };
+            play(3500, true);
+            const TIPS = [
+                'Lave o dinheiro sujo nas fachadas antes de comprar imóveis fora da favela.',
+                'Fugir é sumir de vista: entre num beco, troque de carro ou se esconda numa caçamba.',
+                'Cada carreira tem patentes, habilidades e trabalhos próprios — veja a aba Carreiras.',
+                'O jogo salva sozinho a cada 2 minutos em momento calmo, e sempre que você dorme.',
+                'Dinheiro marcado de banco pesa na mochila: guarde no cofre do galpão.',
+                'Delegados com 10 ❤ deixam o distrito bem mais tranquilo para você.',
+                'Energia zerada ou acordado depois das 2h = desmaio. Durma em casa.',
+            ];
+            let tipI = Math.floor(Math.random() * TIPS.length), tipT = 0;
+            const tipEl = document.getElementById('ml-tip');
+            const showTip = () => { tipEl.style.opacity = 0; setTimeout(() => { tipEl.innerHTML = '<b>Dica</b>' + TIPS[tipI++ % TIPS.length]; tipEl.style.opacity = 1; }, 350); };
+            return {
+                menuReady() { menuOk = true; reveal(); },
+                // Novo jogo / carregar: some a logo e os botões, aparece a faixa de carregamento; fundos passam com fusão suave.
+                loading() { root.classList.add('loading'); play(4200, false); showTip(); tipT = setInterval(showTip, 5200); },
+                progress(p) { const e = document.getElementById('ls-pct'); if (e) e.textContent = Math.round(p * 100) + '%'; },
+                done() { root.classList.add('fade'); setTimeout(() => { clearInterval(timer); clearInterval(tipT); root.remove(); }, 750); },
+            };
+        })();
+    </script>
     <canvas id="canvas"></canvas>
     <div id="hud">
         <div class="hud-row">
@@ -325,6 +401,7 @@
     <!-- Nosso código como scripts clássicos, em ordem de dependência.
          (Sem ES Modules => abre por duplo-clique no index.html, file:// funciona.) -->
     <script src="./src/config.js"></script>
+    <script src="./src/ui/Theme.js"></script>
     <script src="./src/player/SkillTree.js"></script>
     <script src="./src/audio/AudioFX.js"></script>
     <script src="./src/art/Pixel.js"></script>
@@ -391,6 +468,7 @@
     <script src="./src/careers/CareerScam.js"></script>
     <script src="./src/careers/CareerBicho.js"></script>
     <script src="./src/banks/Banks.js"></script>
+    <script src="./src/minigames/Pool.js"></script>
     <script src="./src/empire/EmpireSystems.js"></script>
     <script src="./src/empire/Empire.js"></script>
     <script src="./src/ui/EmpireUI.js"></script>
@@ -419,6 +497,7 @@
     <script src="./src/vehicle/Boat.js"></script>
     <script src="./src/vehicle/Chopper.js"></script>
     <script src="./src/vehicle/VehicleManager.js"></script>
+    <script src="./src/npc/Couriers.js"></script>
     <script src="./src/vehicle/TrafficManager.js"></script>
     <script src="./src/vehicle/CarLights.js"></script>
     <script src="./src/vehicle/CarDoors.js"></script>

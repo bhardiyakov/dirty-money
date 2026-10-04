@@ -11,7 +11,7 @@
 
 class PauseMenu {
     static get TABS() {
-        return [['map', 'MAPA'], ['inventory', 'INVENTÁRIO'], ['status', 'STATUS'], ['careers', 'CARREIRAS'], ['empire', 'IMPÉRIO'], ['guide', 'GUIA'], ['settings', 'CONFIGURAÇÕES']];
+        return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
     }
 
     // Legenda do mapa: tipos de lugar (a chave é o `type` dos POIs).
@@ -22,8 +22,8 @@ class PauseMenu {
             paynspray: { label: 'Pay n Pay', icon: 'spray' },
             home: { label: 'Safe house', icon: 'home' },
             imovel: { label: 'Imóvel à venda', icon: 'home' },
-            baile: { label: 'Baile funk', icon: 'food' },
-            mototaxi: { label: 'Ponto de mototáxi', icon: 'boat' },
+            baile: { label: 'Baile funk', icon: 'music' },
+            mototaxi: { label: 'Ponto de mototáxi', icon: 'moto' },
             gunshop: { label: 'Loja de Armas', icon: 'gun' },
             hideout: { label: 'Esconderijo', icon: 'dumpster' },
             hospital: { label: 'Hospital', icon: 'hospital' },
@@ -65,70 +65,75 @@ class PauseMenu {
     _build() {
         const css = document.createElement('style');
         css.textContent = `
-            #pause { position: fixed; inset: 0; z-index: 30; display: none; flex-direction: column; gap: 14px; padding: 16px 34px 12px;
-                -webkit-backdrop-filter: blur(16px) brightness(0.5) saturate(0.8); backdrop-filter: blur(16px) brightness(0.5) saturate(0.8);
-                background: radial-gradient(ellipse at center, rgba(10,14,24,0.35) 30%, rgba(0,0,0,0.65) 100%);
-                font-family: 'Silkscreen', 'Press Start 2P', 'Courier New', monospace; text-transform: uppercase; color: #eef1f7; user-select: none; }
-            #pause.show { display: flex; }
-            .pm-tabs { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-            .pm-tab { padding: 9px 24px; font-size: 19px; font-weight: 700; letter-spacing: 1px; color: #dfe4f0; background: #141a26; cursor: pointer;
-                border: 4px solid #07090d; box-shadow: inset 0 0 0 2px #3a4560, 0 0 0 2px #8791aa; }
-            .pm-tab:hover { background: #1b2434; }
-            .pm-tab.on { color: #6dff8a; text-shadow: 0 0 10px rgba(44,255,106,0.8); background: #0d1b14; box-shadow: inset 0 0 0 2px #2f6a47, 0 0 0 2px #4fb77a; }
+            #pause { position: fixed; inset: 0; z-index: 30; display: none; flex-direction: column; gap: 16px; padding: 20px 32px 14px;
+                -webkit-backdrop-filter: blur(20px) brightness(0.55) saturate(1.1); backdrop-filter: blur(20px) brightness(0.55) saturate(1.1);
+                background: radial-gradient(1400px 800px at 50% 0%, rgba(30,38,58,0.45), rgba(5,7,12,0.78));
+                font-family: var(--font); color: var(--tx); user-select: none; }
+            #pause.show { display: flex; animation: pmIn .2s ease-out; }
+            @keyframes pmIn { from { opacity: 0; } to { opacity: 1; } }
+            .pm-tabs { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; align-self: center; padding: 5px; border-radius: var(--r-pill);
+                background: rgba(255,255,255,0.06); border: 1px solid var(--line); }
+            .pm-tab { padding: 9px 20px; font: 600 14px var(--font); color: var(--tx-2); cursor: pointer; border-radius: var(--r-pill); transition: background .15s, color .15s; white-space: nowrap; }
+            .pm-tab:hover { color: var(--tx); background: rgba(255,255,255,0.06); }
+            .pm-tab.on { color: #0b0e14; background: var(--tx); box-shadow: 0 4px 14px rgba(0,0,0,0.35); }
             .pm-main { flex: 1; min-height: 0; display: flex; }
-            .pm-page { display: none; flex: 1; min-height: 0; gap: 14px; }
+            .pm-page { display: none; flex: 1; min-height: 0; gap: 16px; }
             .pm-page.on { display: flex; }
-            .pm-hints { display: flex; gap: 26px; justify-content: center; flex-wrap: wrap; font-size: 14px; color: #dfe4f0; }
-            .pm-hints b { color: #ffe27a; }
-            #pause .px { background: #141922; border: 4px solid #07090d; box-shadow: inset 0 0 0 2px #3a4560, 0 0 0 2px #8791aa, 3px 3px 0 2px rgba(0,0,0,0.45); }
-            #pause .px-title { background: #05070b; text-align: center; font-weight: 700; font-size: 19px; padding: 7px 0 5px; letter-spacing: 1px; }
+            .pm-hints { display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; font-size: 12px; color: var(--tx-3); }
+            .pm-hints b { color: var(--tx); font-weight: 700; padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,0.1); margin-right: 4px; }
+            #pause .px { background: var(--glass); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+            #pause .px-title { text-align: left; font: 700 12px var(--font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--tx-2); padding: 14px 18px 8px; background: none; }
             .pm-col { display: flex; flex-direction: column; min-height: 0; }
             .pm-mappanel { flex: 1; min-width: 0; }
-            .pm-mapwrap { position: relative; flex: 1; min-height: 0; background: #2c5877; overflow: hidden; margin: 6px; border: 3px solid #07090d; }
+            .pm-mapwrap { position: relative; flex: 1; min-height: 0; background: #2c5877; overflow: hidden; margin: 0 12px; border-radius: var(--r-2); }
             .pm-mapwrap canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; cursor: none; }
-            .pm-note { padding: 5px 10px 7px; font-size: 12px; color: #aab3c8; }
-            .pm-side { width: 292px; gap: 14px; }
-            .pm-dest { padding: 12px 14px; display: flex; gap: 12px; align-items: center; font-size: 16px; font-weight: 700; line-height: 1.25; }
-            .pm-dest .t { flex: 1; } .pm-dest .d { color: #ffd23f; font-size: 14px; }
+            .pm-note { padding: 10px 18px 12px; font-size: 12px; color: var(--tx-3); }
+            .pm-side { width: 300px; gap: 16px; }
+            .pm-dest { padding: 14px 16px; display: flex; gap: 12px; align-items: center; font: 700 15px/1.3 var(--font-d); }
+            .pm-dest .t { flex: 1; } .pm-dest .d { color: var(--gold); font: 500 13px var(--font); margin-top: 2px; }
             .pm-legend { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-            .pm-legend-list { flex: 1; overflow-y: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
-            .pm-legend-list::-webkit-scrollbar { width: 14px; } .pm-legend-list::-webkit-scrollbar-track { background: #07090d; }
-            .pm-legend-list::-webkit-scrollbar-thumb { background: #5b6580; border: 2px solid #07090d; }
-            .lg { display: flex; align-items: center; gap: 12px; padding: 7px 8px; font-size: 15px; font-weight: 700; cursor: pointer; border: 2px solid transparent; }
-            .lg:hover { background: #1b2434; } .lg.on { border-color: #ffd23f; background: #1d2433; }
-            .lg.off { color: #6b7488; } .lg.off canvas { opacity: 0.45; }
-            .lg small { margin-left: auto; font-size: 12px; color: #8d97ad; }
-            .pm-inv { gap: 14px; }
-            .pm-grid { position: relative; margin: 10px auto; }
-            .pm-cell { position: absolute; background: #0d1119; border: 2px solid #272f42; box-sizing: border-box; }
-            .pm-item { position: absolute; box-sizing: border-box; background: #1c2535; border: 3px solid #4a587a; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-            .pm-item:hover { background: #26324a; } .pm-item.on { border-color: #ffd23f; background: #2b3550; box-shadow: 0 0 0 2px #07090d, 0 0 14px rgba(255,210,63,0.45); }
-            .pm-item canvas { image-rendering: pixelated; pointer-events: none; }
-            .pm-item .n { position: absolute; right: 4px; bottom: 2px; font-size: 13px; font-weight: 700; color: #ffe27a; text-shadow: 1px 1px 0 #000; }
-            .pm-info { width: 330px; gap: 12px; } .pm-info .body { padding: 12px 14px; font-size: 14px; line-height: 1.5; flex: 1; overflow: auto; }
-            .pm-info h4 { font-size: 18px; color: #ffe27a; margin-bottom: 6px; }
-            .pm-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-            .pm-btn { padding: 8px 14px; font-size: 14px; font-weight: 700; color: #eef1f7; background: #1a2232; cursor: pointer; border: 3px solid #07090d; box-shadow: inset 0 0 0 2px #3a4560; }
-            .pm-btn:hover { background: #26324a; color: #6dff8a; }
-            .pm-stats { padding: 10px 14px; font-size: 13px; line-height: 1.6; }
-            .pm-stats span { color: #ffd23f; }
-            .pm-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); grid-auto-rows: max-content; gap: 14px; padding: 6px; align-content: start; overflow-y: auto; overflow-x: hidden; width: 100%; max-height: 100%; min-height: 0; }
+            .pm-legend-list { flex: 1; overflow-y: auto; padding: 0 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+            .lg { display: flex; align-items: center; gap: 12px; padding: 7px 10px; font-size: 14px; font-weight: 500; cursor: pointer; border-radius: var(--r-3); border: 1px solid transparent; }
+            .lg:hover { background: var(--card-h); } .lg.on { border-color: var(--gold); background: rgba(251,191,36,0.1); }
+            .lg.off { color: var(--tx-3); } .lg.off canvas { opacity: 0.4; filter: grayscale(1); }
+            .lg small { margin-left: auto; font-size: 12px; color: var(--tx-3); font-weight: 600; }
+            .pm-inv { gap: 16px; }
+            .pm-grid { position: relative; margin: 12px auto; }
+            .pm-cell { position: absolute; background: rgba(255,255,255,0.035); border: 1px dashed rgba(255,255,255,0.08); border-radius: 14px; box-sizing: border-box; }
+            .pm-item { position: absolute; box-sizing: border-box; background: linear-gradient(160deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04)); border: 1px solid var(--line-2);
+                border-radius: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform .12s, border-color .12s, background .12s; }
+            .pm-item:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.3); }
+            .pm-item.on { border-color: var(--gold); background: linear-gradient(160deg, rgba(251,191,36,0.22), rgba(251,191,36,0.06)); box-shadow: 0 0 0 1px var(--gold), 0 8px 22px rgba(251,191,36,0.2); }
+            .pm-item canvas { pointer-events: none; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4)); }
+            .pm-item .n { position: absolute; right: 7px; bottom: 5px; font: 700 12px var(--font-d); color: var(--tx); padding: 1px 6px; border-radius: 99px; background: rgba(0,0,0,0.45); }
+            .pm-item .n:empty { display: none; }
+            .pm-info { width: 340px; gap: 16px; } .pm-info .body { padding: 4px 18px 18px; font-size: 14px; line-height: 1.55; flex: 1; overflow: auto; color: var(--tx-2); }
+            .pm-info h4 { font: 700 20px var(--font-d); color: var(--tx); margin-bottom: 8px; }
+            .pm-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+            .pm-btn { padding: 9px 14px; font: 600 13px var(--font); color: var(--tx); background: var(--card-h); cursor: pointer; border: 1px solid var(--line-2); border-radius: var(--r-3); transition: background .15s; }
+            .pm-btn:hover { background: rgba(255,255,255,0.16); }
+            .pm-btn:first-child { background: var(--acc); color: #04130c; border-color: transparent; }
+            .pm-btn:first-child:hover { background: #5cf0b5; }
+            .pm-stats { padding: 14px 18px; font-size: 13px; line-height: 1.8; color: var(--tx-2); }
+            .pm-stats span { color: var(--tx); font-weight: 700; float: right; }
+            .pm-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); grid-auto-rows: max-content; gap: 16px; padding: 4px; align-content: start; overflow-y: auto; overflow-x: hidden; width: 100%; max-height: 100%; min-height: 0; }
             .pm-stat-grid > .px { flex: none; overflow: visible; }
-            .pm-stat-grid .px .body { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 9px; }
-            .pm-stat-grid .sr { display: flex; justify-content: space-between; gap: 10px; font-size: 15px; color: #cfd7ea; } .pm-stat-grid .sr b { color: #ffe27a; font-weight: 700; }
-            .pm-stat-grid .sb { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #aab3c8; }
-            .pm-stat-grid .sb i { display: block; height: 12px; border-radius: 6px; background: #0a0f22; border: 2px solid #1f2a4a; overflow: hidden; }
-            .pm-stat-grid .sb i s { display: block; height: 100%; border-radius: 4px; }
-            .pm-stat-grid .tag { align-self: flex-start; font-size: 12px; padding: 3px 9px; border-radius: 8px; border: 1px solid currentColor; letter-spacing: 1px; }
-            .pm-soon { margin: auto; text-align: center; padding: 36px 48px; max-width: 560px; }
-            .pm-soon h2 { font-size: 30px; color: #ffe27a; margin-bottom: 14px; } .pm-soon p { font-size: 15px; color: #aab3c8; line-height: 1.6; }
+            .pm-stat-grid .px .body { padding: 4px 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+            .pm-stat-grid .sr { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; color: var(--tx-2); } .pm-stat-grid .sr b { color: var(--tx); font-weight: 700; }
+            .pm-stat-grid .sb { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--tx-2); }
+            .pm-stat-grid .sb i { display: block; height: 8px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; }
+            .pm-stat-grid .sb i s { display: block; height: 100%; border-radius: 99px; }
+            .pm-stat-grid .tag { align-self: flex-start; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 99px; border: 1px solid currentColor; }
+            .pm-soon { margin: auto; text-align: center; padding: 40px 48px; max-width: 560px; }
+            .pm-soon h2 { font: 700 28px var(--font-d); color: var(--tx); margin-bottom: 12px; } .pm-soon p { font-size: 15px; color: var(--tx-2); line-height: 1.6; }
             .pm-set { margin: auto; width: min(640px, 92%); }
-            .pm-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 13px 18px; font-size: 17px; font-weight: 700; border-bottom: 2px solid #1d2433; cursor: pointer; }
-            .pm-row.on { background: #1d2433; color: #ffe27a; }
-            .pm-row input[type=range] { width: 240px; accent-color: #6dff8a; }
-            .pm-toggle { padding: 6px 16px; min-width: 70px; text-align: center; border: 3px solid #07090d; background: #2a2f3c; box-shadow: inset 0 0 0 2px #3a4560; }
-            .pm-toggle.is-on { background: #0f2a1a; color: #6dff8a; box-shadow: inset 0 0 0 2px #2f6a47; }
-            .pm-keys { padding: 12px 18px; font-size: 13px; line-height: 1.7; color: #aab3c8; } .pm-keys b { color: #ffe27a; }`;
+            .pm-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 18px; margin: 0 8px; font-size: 15px; font-weight: 600; border-radius: var(--r-3); cursor: pointer; }
+            .pm-row + .pm-row { border-top: 1px solid var(--line); }
+            .pm-row.on { background: var(--card-h); }
+            .pm-row input[type=range] { width: 240px; }
+            .pm-toggle { padding: 6px 16px; min-width: 76px; text-align: center; border-radius: 99px; font-size: 13px; font-weight: 700; background: var(--card-h); color: var(--tx-2); border: 1px solid var(--line-2); }
+            .pm-toggle.is-on { background: var(--acc); color: #04130c; border-color: transparent; }
+            .pm-keys { padding: 16px 20px 18px; font-size: 13px; line-height: 2.1; color: var(--tx-2); } .pm-keys b { color: var(--tx); padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,0.1); font-weight: 700; }`;
         document.head.appendChild(css);
 
         const root = this.root = document.createElement('div');
@@ -137,18 +142,18 @@ class PauseMenu {
             <div class="pm-tabs"></div>
             <div class="pm-main">
               <div class="pm-page" data-page="map">
-                <div class="px pm-col pm-mappanel"><div class="px-title">CIDADE DOS PRAZERES - MAPA TÁTICO</div>
+                <div class="px pm-col pm-mappanel"><div class="px-title">Cidade dos Prazeres · mapa tático</div>
                   <div class="pm-mapwrap"><canvas id="pmMap"></canvas></div>
-                  <div class="pm-note">ⓘ (Saindo do menu, o GPS aparecerá no minimapa)</div></div>
+                  <div class="pm-note">Saindo do menu, a rota do GPS aparece no minimapa.</div></div>
                 <div class="pm-col pm-side">
-                  <div class="px pm-dest"><div id="pmPin"></div><div class="t" id="pmDest">SEM DESTINO<div class="d">Clique no mapa para marcar</div></div></div>
-                  <div class="px pm-legend"><div class="px-title">LEGENDA</div><div class="pm-legend-list" id="pmLegend"></div></div>
+                  <div class="px pm-dest"><div id="pmPin"></div><div class="t" id="pmDest">Sem destino<div class="d">Clique no mapa para marcar</div></div></div>
+                  <div class="px pm-legend"><div class="px-title">Legenda</div><div class="pm-legend-list" id="pmLegend"></div></div>
                 </div>
               </div>
               <div class="pm-page pm-inv" data-page="inventory">
                 <div class="px pm-col" style="flex:1;min-width:0"><div class="px-title" id="pmInvTitle">MOCHILA</div><div class="pm-grid" id="pmGrid"></div></div>
                 <div class="pm-col pm-info">
-                  <div class="px pm-col" style="flex:1;min-height:0"><div class="px-title">ITEM</div><div class="body" id="pmInfo"></div></div>
+                  <div class="px pm-col" style="flex:1;min-height:0"><div class="px-title">Item</div><div class="body" id="pmInfo"></div></div>
                   <div class="px pm-stats" id="pmStats"></div>
                 </div>
               </div>
@@ -157,7 +162,7 @@ class PauseMenu {
               <div class="pm-page" data-page="empire"><div id="pmEmpire"></div></div>
               <div class="pm-page" data-page="guide"><div id="pmGuide"></div></div>
               <div class="pm-page" data-page="settings">
-                <div class="px pm-set"><div class="px-title">CONFIGURAÇÕES</div><div id="pmSet"></div>
+                <div class="px pm-set"><div class="px-title">Configurações</div><div id="pmSet"></div>
                   <div class="pm-keys"><b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas</div></div>
               </div>
             </div>
@@ -186,63 +191,29 @@ class PauseMenu {
         window.addEventListener('keydown', (e) => this._onKey(e));
         window.addEventListener('resize', () => { if (this.isOpen) this._fitCanvas(); });
         this._buildLegend();
+        if (Emoji.ready) Emoji.ready.then(() => { this._icons = {}; this._buildLegend(); });      // a fonte de emoji chegou: redesenha os selos
     }
 
-    // ------------------------------------------------------------------ ícones de pixel art
-    // Ícone 16×16 desenhado por código (com contorno), em <canvas> ampliado `k`×.
+    // ------------------------------------------------------------------ ícones (estilo emoji, HD)
+    // Selo redondo com o emoji do lugar (mapa e legenda): canvas 96×96, desenhado no tamanho que o chamador pedir.
     icon(name, k = 2) {
-        const key = name + k;
-        if (this._icons[key]) return this._icons[key];
-        const p = new PixelCanvas(18, 18), h = Pixel.hex, R = (x, y, w, hh, c) => p.rect(x + 1, y + 1, w, hh, h(c)), S = (x, y, c) => p.set(x + 1, y + 1, h(c));
-        let big = null;
-        if (name === 'hospital') { R(0, 0, 16, 16, '#8a97a8'); R(1, 1, 14, 14, '#f2f4f6'); R(7, 3, 2, 10, '#d21f26'); R(3, 7, 10, 2, '#d21f26'); }
-        else if (name === 'station') {
-            R(1, 0, 14, 10, '#e8ecf5'); R(2, 1, 12, 8, '#2f4a8a');
-            for (let j = 0; j < 5; j++) R(2 + j, 10 + j, 12 - 2 * j, 1, j === 0 ? '#e8ecf5' : '#2f4a8a');
-            R(7, 3, 2, 5, '#e6bd3f'); R(5, 5, 6, 2, '#e6bd3f'); S(7, 15, '#e8ecf5'); S(8, 15, '#e8ecf5');
-        } else if (name === 'cart') {
-            R(0, 1, 3, 1, '#cfd6de'); R(2, 2, 1, 7, '#cfd6de'); R(3, 4, 12, 6, '#aab4c2'); R(3, 4, 12, 1, '#e8edf3');
-            for (let i = 4; i < 15; i += 3) R(i, 5, 1, 4, '#7b8696'); p.disc(5 + 1, 13 + 1, 1, h('#2a2f3a')); p.disc(12 + 1, 13 + 1, 1, h('#2a2f3a'));
-        } else if (name === 'spray') {
-            R(5, 5, 7, 10, '#4aa3ff'); R(5, 5, 7, 1, '#bfe0ff'); R(6, 2, 5, 3, '#cfd6de'); R(11, 3, 3, 1, '#cfd6de'); R(5, 12, 7, 3, '#2f78c8'); R(7, 8, 3, 2, '#e8f4ff');
-        } else if (name === 'fuel') {
-            R(2, 1, 8, 14, '#d9453a'); R(3, 2, 6, 4, '#cfe8f4'); R(2, 14, 8, 2, '#3a3f4a'); R(10, 4, 2, 7, '#cfd6de'); R(12, 8, 2, 4, '#cfd6de'); R(13, 12, 2, 2, '#e8c22c');
-        } else if (name === 'boat') {
-            R(0, 11, 16, 2, '#2f78c8'); R(1, 9, 14, 3, '#e8ecf5'); R(3, 12, 10, 2, '#c9d2dc'); R(7, 1, 1, 9, '#cfd6de'); R(8, 2, 6, 5, '#f2f4f6'); R(8, 6, 6, 1, '#d9453a');
-        } else if (name === 'gun') {
-            R(1, 4, 12, 4, '#3a3f46'); R(1, 4, 12, 1, '#7a8088'); R(3, 8, 4, 6, '#3a3f46'); R(10, 8, 2, 2, '#3a3f46'); R(12, 3, 3, 3, '#5a6068');
-        } else if (name === 'home') {
-            for (let j = 0; j < 6; j++) R(7 - j, 1 + j, 2 + 2 * j, 1, '#d9453a');               // telhado
-            R(2, 7, 12, 8, '#e8d9b0'); R(2, 7, 12, 1, '#fff2cc'); R(2, 14, 12, 1, '#a89868');   // paredes
-            R(6, 9, 4, 6, '#2f8f94'); R(9, 12, 1, 1, '#ffd23a'); R(3, 9, 2, 2, '#3a6ea8'); R(11, 9, 2, 2, '#3a6ea8');
-        } else if (name === 'dumpster') {
-            R(0, 4, 16, 10, '#24472f'); R(1, 5, 7, 6, '#3d7a50'); R(8, 5, 7, 6, '#3d7a50'); R(7, 7, 2, 3, '#1c2820'); R(1, 14, 3, 2, '#111318'); R(12, 14, 3, 2, '#111318');
-        } else if (name === 'food') big = ItemSprites.icon('food');
-        else if (name === 'pin') { /* desenhado no canvas do mapa */ }
-        if (big) { const c = document.createElement('canvas'); c.width = 20; c.height = 20; const x = c.getContext('2d'), id = x.createImageData(40, 40); id.data.set(big.data); const t = document.createElement('canvas'); t.width = 40; t.height = 40; t.getContext('2d').putImageData(id, 0, 0); x.imageSmoothingEnabled = false; x.drawImage(t, 0, 0, 20, 20); c.style.width = 20 * k + 'px'; c.style.height = 20 * k + 'px'; return (this._icons[key] = c); }
-        ItemSprites._outline(p);
-        const c = document.createElement('canvas');
-        c.width = 18; c.height = 18;
-        const x = c.getContext('2d'), id = x.createImageData(18, 18);
-        id.data.set(p.data); x.putImageData(id, 0, 0);
-        c.style.width = 18 * k + 'px'; c.style.height = 18 * k + 'px';
-        return (this._icons[key] = c);
+        if (this._icons[name]) return this._icons[name];
+        const S = 96, c = document.createElement('canvas'); c.width = c.height = S;
+        const x = c.getContext('2d');
+        x.fillStyle = 'rgba(12,15,24,0.9)'; x.beginPath(); x.arc(S / 2, S / 2, S / 2 - 3, 0, Math.PI * 2); x.fill();
+        x.strokeStyle = 'rgba(255,255,255,0.85)'; x.lineWidth = 5; x.stroke();
+        const src = Emoji.canvas(name, 128), r = src.width / src.height, w = r > 1 ? S * 0.66 : S * 0.6 * r, h = r > 1 ? w / r : S * 0.6;
+        x.drawImage(src, (S - w) / 2, (S - h) / 2, w, h);
+        return (this._icons[name] = c);
     }
 
-    // Ícone de item (atlas ItemSprites) recortado no que foi desenhado: { canvas, w, h }.
-    itemIcon(key) {
-        const ck = 'item:' + key;
+    // Ícone de item: { canvas HD, w, h } — w×h é o tamanho lógico (os chamadores multiplicam por um fator inteiro).
+    // Itens com emoji: 40×40; armas de fogo (arte vetorial 2:1): 80×40.
+    itemIcon(key, id) {
+        const k = (id && Emoji.char(id)) ? id : key, ck = 'item:' + k;
         if (this._icons[ck]) return this._icons[ck];
-        if (typeof WeaponArt !== 'undefined' && WeaponArt.has(key) && key !== 'none') return (this._icons[ck] = { canvas: WeaponArt.canvas(key), w: WeaponArt.W, h: WeaponArt.H });      // armas: arte realista
-        const px = ItemSprites.icon(key);
-        let x0 = px.w, y0 = px.h, x1 = 0, y1 = 0;
-        for (let y = 0; y < px.h; y++) for (let x = 0; x < px.w; x++) if (px.data[(y * px.w + x) * 4 + 3] > 0) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
-        const w = x1 - x0 + 1, hh = y1 - y0 + 1, c = document.createElement('canvas');
-        c.width = w; c.height = hh;
-        const ctx = c.getContext('2d'), id = ctx.createImageData(w, hh);
-        for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++) { const s = ((y0 + y) * px.w + x0 + x) * 4, d = (y * w + x) * 4; for (let k = 0; k < 4; k++) id.data[d + k] = px.data[s + k]; }
-        ctx.putImageData(id, 0, 0);
-        return (this._icons[ck] = { canvas: c, w, h: hh });
+        const c = Emoji.canvas(k, 128), wide = c.width > c.height;
+        return (this._icons[ck] = { canvas: c, w: wide ? 80 : 40, h: wide ? 40 : 40 });
     }
 
     // ------------------------------------------------------------------ STATUS (personagem, facção, dinheiro, procurado, casa)
@@ -423,9 +394,9 @@ class PauseMenu {
     _refreshDest() {
         const g = this.g, el = this.$('pmDest'), pin = this.$('pmPin');
         if (!pin.firstChild) { const c = document.createElement('canvas'); c.width = 40; c.height = 52; c.style.width = '40px'; c.style.height = '52px'; this._drawPin(c.getContext('2d'), 20, 48, '#4aa8ff', 1.2); pin.appendChild(c); }
-        if (!g.gps) { el.innerHTML = 'SEM DESTINO<div class="d">Clique no mapa para marcar</div>'; return; }
+        if (!g.gps) { el.innerHTML = 'Sem destino<div class="d">Clique no mapa para marcar</div>'; return; }
         const len = g.gps.len, dist = len >= 1000 ? (len / 1000).toFixed(1) + ' KM' : Math.round(len) + ' M';
-        el.innerHTML = `DESTINO: ${g.gps.label.toUpperCase()}<div class="d">(${dist})</div>`;
+        el.innerHTML = `${g.gps.label}<div class="d">${dist.toLowerCase()} de distância</div>`;
     }
 
     // ------------------------------------------------------------------ mapa: legenda
@@ -437,8 +408,7 @@ class PauseMenu {
             const n = all.filter((p) => p.type === type).length;
             const row = document.createElement('div');
             row.className = 'lg' + (n ? '' : ' off') + (this.sel && this.sel.type === type ? ' on' : '');
-            row.appendChild(this.icon(T.icon, 2).cloneNode(true));
-            const c = row.firstChild; const src = this.icon(T.icon, 2); c.getContext('2d').drawImage(src, 0, 0);
+            const c = this.icon(T.icon).cloneNode(); c.getContext('2d').drawImage(this.icon(T.icon), 0, 0); c.style.width = c.style.height = '30px'; row.appendChild(c);
             row.append(document.createTextNode(T.label));
             const s = document.createElement('small'); s.textContent = n ? n : 'em breve'; row.appendChild(s);
             row.addEventListener('click', () => this._focusType(type));
@@ -474,7 +444,7 @@ class PauseMenu {
     }
 
     _label(ctx, text, x, y, size = 15) {
-        ctx.font = `700 ${size}px "Arial Narrow", "Roboto Condensed", Arial, sans-serif`;
+        ctx.font = `700 ${size}px Inter, Arial, sans-serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
         ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(8,10,16,0.92)'; ctx.strokeText(text, x, y);
         ctx.fillStyle = '#ffffff'; ctx.fillText(text, x, y);
@@ -499,10 +469,10 @@ class PauseMenu {
             if (p.type === 'hideout' && m.scale < 3.5) continue;
             const [x, y] = this._w2s(p.x, p.z);
             if (!on(x, y)) continue;
-            const T = PauseMenu.POI_TYPES[p.type], src = this.icon(T.icon, 1), k = p.type === 'hideout' ? ik * 0.55 : ik;
-            const w = src.width * k, hh = src.height * k;
+            const T = PauseMenu.POI_TYPES[p.type], src = this.icon(T.icon), k = p.type === 'hideout' ? ik * 0.55 : ik;
+            const w = 17 * k, hh = w;
             ctx.drawImage(src, x - w / 2, y - hh / 2, w, hh);
-            if (this.sel === p) { ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 3; ctx.strokeRect(x - w / 2 - 4, y - hh / 2 - 4, w + 8, hh + 8); }
+            if (this.sel === p) { ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, w / 2 + 4, 0, Math.PI * 2); ctx.stroke(); }
         }
 
         // Barricadas em chamas (laranja) durante a operação.
@@ -560,7 +530,7 @@ class PauseMenu {
         const C = Inventory.COLS, R = Inventory.ROWS;
         this._layout = inv.layout();
         this.invSel = Math.max(0, Math.min(this.invSel, this._layout.length - 1));
-        this.$('pmInvTitle').textContent = `MOCHILA  ${inv.slotsUsed()}/${Inventory.CAPACITY}`;
+        this.$('pmInvTitle').textContent = `Mochila · ${inv.slotsUsed()}/${Inventory.CAPACITY}`;
         grid.style.width = C * CELL + (C - 1) * GAP + 'px';
         grid.style.height = R * CELL + (R - 1) * GAP + 'px';
         grid.replaceChildren();
@@ -641,10 +611,10 @@ class PauseMenu {
 
     _renderSettings() {
         const s = this.settings, el = this.$('pmSet');
-        const tog = (v) => `<div class="pm-toggle ${v ? 'is-on' : ''}">${v ? 'LIGADO' : 'DESLIG.'}</div>`;
+        const tog = (v) => `<div class="pm-toggle ${v ? 'is-on' : ''}">${v ? 'Ligado' : 'Desligado'}</div>`;
         const rows = [
-            ['VOLUME GERAL', `<input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="pmVol"><span>${Math.round(s.volume * 100)}%</span>`],
-            ['EFEITOS SONOROS', tog(s.sfx)], ['MINIMAPA', tog(s.minimap)], ['DICAS NA TELA (F / G / E / V)', tog(s.prompts)], ['MODO DEV (FERRAMENTAS DE TESTE) · TECLA ', tog(s.dev)],
+            ['🔊 Volume geral', `<input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="pmVol"><span>${Math.round(s.volume * 100)}%</span>`],
+            ['🎵 Efeitos sonoros', tog(s.sfx)], ['🗺️ Minimapa', tog(s.minimap)], ['💬 Dicas na tela', tog(s.prompts)], ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],
         ];
         el.innerHTML = rows.map((r, i) => `<div class="pm-row ${i === this.setRow ? 'on' : ''}" data-i="${i}"><span>${r[0]}</span><span style="display:flex;gap:12px;align-items:center">${r[1]}</span></div>`).join('');
         el.querySelectorAll('.pm-row').forEach((row) => row.addEventListener('click', (e) => {
@@ -676,7 +646,7 @@ class PauseMenu {
         ctx.save();
         ctx.fillStyle = on ? 'rgba(200,24,24,0.88)' : 'rgba(110,10,10,0.88)'; ctx.fillRect(0, 0, W, h);
         ctx.fillStyle = '#ffe9a8'; for (let x = (on ? 0 : 14); x < W; x += 28) ctx.fillRect(x, h - 5, 14, 5);       // listra de aviso
-        ctx.font = `800 ${Math.round(h * 0.55)}px "Arial Narrow", "Roboto Condensed", Arial, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = `800 ${Math.round(h * 0.55)}px Outfit, Inter, Arial, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillStyle = '#fff'; ctx.fillText('🚨 OPERAÇÃO POLICIAL EM ANDAMENTO — ÁREA DE RISCO 🚨', W / 2, h / 2 - 2);
         ctx.restore();
     }

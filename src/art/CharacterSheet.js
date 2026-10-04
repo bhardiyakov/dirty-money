@@ -262,6 +262,8 @@ class SpriteLibrary {
             // Pilotos de bicicleta/moto (o veículo vai desenhado junto): quadro de 80 px porque a moto é mais
             // comprida que o boneco; 16 direções para curvar suave. A cor do quadro/tanque vem da variante (slot `cap`).
             rider: new CharacterSheet(scene, this.palette, { name: 'rider', dirs: 16, frame: 80, look: { hair: 'short', build: 1.05, belt: true } }),
+            // Entregadores de aplicativo: capacete e baú térmico nas costas (só a moto andando usa esta folha).
+            courier: new CharacterSheet(scene, this.palette, { name: 'courier', dirs: 16, frame: 80, look: { hair: 'helmet', build: 1.05, belt: true, box: true } }),
         };
     }
 

@@ -178,6 +178,7 @@ const Config = {
         motosParked: 3,
         bicycles: 4,           // Bicicletas circulando (pedalando devagar pelas faixas) e estacionadas.
         bicyclesParked: 3,
+        couriers: 6,           // Entregadores de aplicativo (moto, baú vermelho): correm de restaurante em restaurante pela cidade.
         laneOffset: 2.5,       // Distância do eixo da rua ao centro da faixa (rua tem 5u de meio a meio-fio).
         parkOffset: 4.9,       // ...e do eixo ao centro de um carro estacionado (as rodas sobem um pouco no meio-fio).
         cruiseMin: 9,          // Velocidade de cruzeiro (m/s), mín–máx por motorista.
@@ -356,7 +357,7 @@ const Config = {
     const P = Config.perf;
     P.lite = true; P.shadowSize = 1024; P.colliderRadius = 190; P.dprCap = 1.5;
     Config.npc.count = 48;
-    Config.traffic.count = 18; Config.traffic.parked = 8; Config.traffic.motos = 2; Config.traffic.motosParked = 2; Config.traffic.bicycles = 2; Config.traffic.bicyclesParked = 2;
+    Config.traffic.count = 18; Config.traffic.parked = 8; Config.traffic.motos = 2; Config.traffic.motosParked = 2; Config.traffic.bicycles = 2; Config.traffic.bicyclesParked = 2; Config.traffic.couriers = 3;
     Config.traffic.spawnMax = 150; Config.traffic.recycleDist = 185;
     Config.npc.recycleDist = 200;
 })();

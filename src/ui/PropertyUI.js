@@ -10,19 +10,11 @@ class PropertyUI {
         this.open = false; this.cool = 0; this.sel = 0; this.p = null; this.opts = [];
         const st = document.createElement('style');
         st.textContent = `
-        #propUI{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:rgba(4,6,10,.66);font-family:'Press Start 2P',monospace;color:#e8ecf2}
-        #propUI .pp{width:min(640px,95vw);background:#161b24;border:3px solid #6f7d92;box-shadow:0 0 0 3px #0b0e14,0 10px 40px #000a;padding:14px 16px}
-        #propUI h3{margin:0 0 4px;font-size:14px;letter-spacing:1px;color:#ffd23a;text-align:center}
-        #propUI .sub{font-size:8px;color:#8f9bb0;text-align:center;margin-bottom:10px;line-height:1.7}
-        #propUI .tbl{background:#0f131a;border:2px solid #2b3445;padding:8px 10px;font-size:8px;line-height:2}
-        #propUI .tbl div{display:flex;justify-content:space-between;gap:10px}
-        #propUI .tbl b{color:#ffd23a;font-weight:normal}
-        #propUI .note{font-size:7px;line-height:1.7;color:#9fb0c8;margin:8px 0 2px}
-        #propUI .opt{display:block;width:100%;text-align:left;font:inherit;font-size:9px;background:#222b3a;color:#e8ecf2;border:2px solid #56657c;padding:8px 9px;margin-top:6px;cursor:pointer}
-        #propUI .opt.sel{border-color:#ffd23a;background:#2c3850}
-        #propUI .opt.off{opacity:.4;cursor:not-allowed}
-        #propUI .opt small{display:block;font-size:7px;color:#9aa7bd;margin-top:2px}
-        #propUI .msg{min-height:11px;font-size:8px;text-align:center;margin-top:8px;color:#8be08b}`;
+        #propUI .pp{width:min(640px,95vw)}
+        #propUI .tbl{background:var(--card);border:1px solid var(--line);border-radius:var(--r-2);padding:10px 14px;font-size:14px;line-height:2}
+        #propUI .tbl div{display:flex;justify-content:space-between;gap:10px;color:var(--tx-2)}
+        #propUI .tbl b{color:var(--tx);font-weight:700}
+        #propUI .note{font-size:12px;line-height:1.6;color:var(--tx-3);margin:10px 0 2px}`;
         document.head.appendChild(st);
         const r = this.root = document.createElement('div');
         r.id = 'propUI';

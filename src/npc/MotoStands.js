@@ -167,19 +167,12 @@ class MotoTaxiUI {
         this.g = game; this.open = false; this.cool = 0; this.sel = 0; this.opts = [];
         const st = document.createElement('style');
         st.textContent = `
-        #motoUI{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:rgba(4,6,10,.66);font-family:'Press Start 2P',monospace;color:#e8ecf2}
-        #motoUI .mp{width:min(680px,95vw);max-height:92vh;overflow:auto;background:#161b24;border:3px solid #ffd23a;box-shadow:0 0 0 3px #0b0e14,0 10px 40px #000a;padding:14px 16px}
-        #motoUI h3{margin:0 0 4px;font-size:14px;letter-spacing:1px;color:#ffd23a;text-align:center}
-        #motoUI .sub{font-size:8px;color:#8f9bb0;text-align:center;margin-bottom:10px;line-height:1.7}
-        #motoUI .opt{display:block;width:100%;text-align:left;font:inherit;font-size:9px;background:#222b3a;color:#e8ecf2;border:2px solid #56657c;padding:8px 9px;margin-top:6px;cursor:pointer}
-        #motoUI .opt.sel{border-color:#ffd23a;background:#2c3850}
-        #motoUI .opt.off{opacity:.4;cursor:not-allowed}
-        #motoUI .opt small{display:block;font-size:7px;color:#9aa7bd;margin-top:3px;line-height:1.6}
-        #motoUI .opt b{color:#7fe0a0;font-weight:normal;float:right}
-        #motoUI .msg{min-height:11px;font-size:8px;text-align:center;margin-top:8px;color:#ff8a8a}`;
+        #motoUI .mp{width:min(680px,95vw);max-height:92vh;overflow:auto}
+        #motoUI .opt b{color:#86efac;font:700 14px var(--font-d);float:right}
+        #motoUI .msg{color:#fda4af !important}`;
         document.head.appendChild(st);
         const r = this.root = document.createElement('div'); r.id = 'motoUI';
-        r.innerHTML = '<div class="mp"><h3>🛵 MOTOTÁXI</h3><div class="sub"></div><div class="opts"></div><div class="msg"></div></div>';
+        r.innerHTML = '<div class="mp"><h3>🛵 Mototáxi</h3><div class="sub"></div><div class="opts"></div><div class="msg"></div></div>';
         document.body.appendChild(r);
         this.$sub = r.querySelector('.sub'); this.$opts = r.querySelector('.opts'); this.$msg = r.querySelector('.msg');
         r.addEventListener('mousedown', (e) => { if (e.target === r) this.close(); });

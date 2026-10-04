@@ -89,6 +89,14 @@ const CharacterRig = {
             P.push(B.ellipsoid(M.dark, this._add(tc, rot([0, -0.12, 0.2], ty)), [0.3 * wide, 0.1, 0.16], ty));   // bolsos de carregador
         }
         if (look.belt) P.push(B.ellipsoid(M.dark, [0, 1.0 + bob, lean * 0.4], [0.4 * wide, 0.06, 0.28], hipY * 0.5 + ty * 0.5));
+        if (look.box) {
+            // Baú térmico de entrega nas costas (cor `cap` da variante: vermelho) com faixa clara na tampa e alças escuras.
+            const bc = this._add(tc, rot([0, 0.2, -0.58], ty));
+            P.push(B.box(M.cap, bc, [0.44, 0.4, 0.3], ty, 0.07));
+            P.push(B.box(M.gold, this._add(bc, [0, 0.4, 0]), [0.3, 0.02, 0.07], ty, 0.01));
+            P.push(B.capsule(M.dark, this._add(tc, rot([0.3, 0.32, -0.22], ty)), this._add(tc, rot([0.32, -0.1, -0.2], ty)), 0.05));
+            P.push(B.capsule(M.dark, this._add(tc, rot([-0.3, 0.32, -0.22], ty)), this._add(tc, rot([-0.32, -0.1, -0.2], ty)), 0.05));
+        }
         const shR = this._add(tc, rot([0.54 * wide, 0.12, 0], ty));
         const shL = this._add(tc, rot([-0.54 * wide, 0.12, 0], ty));
         P.push(B.sphere(M.sleeve, shR, 0.2));
@@ -901,8 +909,14 @@ const CharacterRig = {
             const r = Pixel.rng(1070 + i * 41), sh = ['#e86aa0', '#37c0b6', '#f0d24a'][i];
             out.push(mk({ skin: pick(this.SKINS, r), hair: pick(this.HAIRS, r), shirt: sh, sleeve: sh, forearm: pick(this.SKINS, r), pants: '#c9b98a', shoes: '#5a3a22', cap: ['#e6e8ee', '#d9453a', '#2f86d0'][i] }));
         }
+        // 53–56: entregadores de aplicativo (jaqueta vermelha ou preta, capacete, baú e moto vermelhos; faixa branca no baú).
+        for (let i = 0; i < 4; i++) {
+            const r = Pixel.rng(1110 + i * 43), jk = i % 2 ? '#1c1d22' : '#d81f26';
+            out.push(mk({ skin: pick(this.SKINS, r), hair: '#15151a', shirt: jk, sleeve: jk, forearm: jk, pants: ['#23252c', '#2f3a52', '#3a3a40', '#23252c'][i], shoes: '#111114', cap: '#e3161b', gold: '#f6f6f2' }));
+        }
         return out;
     },
+    VARIANT_COURIER: 53, COURIERS: 4,
     VARIANT_SWAT: 26,
     VARIANT_ARMY: 27,
     // Grupos de roupa por lugar (linhas da paleta): executivos, favela, praia, corrida, turistas e os civis comuns.

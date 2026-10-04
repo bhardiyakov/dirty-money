@@ -60,6 +60,8 @@ class Achievements {
             ['city', 'IMPÉRIO', 'Dono da cidade', 'Domine todos os distritos', () => [g.empire ? g.empire.dominion.count : 0, g.empire ? g.empire.dominion.districts.length : 7]],
             ['hq3', 'BANCOS', 'Os três cofres', 'Perfure o cofre das 3 sedes bancárias', () => [Banks.hqs().filter((b) => (Banks.plans[b.id] || {}).done).length, 3]],
             ['transfer5', 'BANCOS', 'Laranjal', 'Faça 5 transferências via laranjas', () => [st('transfers'), 5]],
+            ['pool10', 'BAR', 'Taco de ouro', 'Vença 10 partidas de sinuca apostadas', () => [st('poolWins'), 10]],
+            ['poolBoss', 'BAR', 'Caça-fantasma', 'Vença O Fantasma na sinuca', () => [st('poolBoss'), 1]],
             ['crew12', 'IMPÉRIO', 'Exército particular', 'Tenha 12 soldados', () => [g.empire ? g.empire.biz.soldiers.length : 0, 12]],
         );
         return out;

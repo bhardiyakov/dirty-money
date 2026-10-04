@@ -73,6 +73,10 @@ Joystick (borda = correr) + ATACAR + até 2 botões de contexto que aparecem soz
 - **Cibernético**: pendrive no terminal do gerente (Estelionato) abre uma porta no firewall por 3 dias; de casa, a transferência via laranjas é um mini-jogo de confirmar contas.
 - Ao entrar em qualquer interior, as malhas da cidade são ocultadas e restauradas na saída.
 
+## Interface (`src/ui/Theme.js`)
+
+Interface moderna em HD, separada do mundo em pixel art: tokens de cor/raio/sombra em `:root`, fontes Inter (texto) e Outfit (títulos/números), cartões de vidro desfocado, botões arredondados. Ícones no estilo emoji (Noto Color Emoji, igual em todo aparelho); armas de fogo e munição são arte vetorial HD (`WeaponArt.VGrid`) no mesmo estilo.
+
 ## Próximos passos recomendados (por impacto × custo)
 
 | # | Ideia | Custo | Efeito no retorno do jogador |

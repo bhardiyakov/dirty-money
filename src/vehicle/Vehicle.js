@@ -191,10 +191,11 @@ class Vehicle {
         if (!lib) return;
         const state = this.wrecked ? 'fallen' : (this.riderVariant != null ? 'ride' : 'park');
         const variant = this.riderVariant != null ? this.riderVariant : (this.frameVariant != null ? this.frameVariant : 2);
-        const key = state + ':' + variant;
+        const sheet = state === 'ride' && this.courier && variant >= CharacterRig.VARIANT_COURIER ? 'courier' : 'rider';      // entregador: capacete e baú
+        const key = state + ':' + variant + ':' + sheet;
         if (this._lookKey === key) return;
         this._lookKey = key;
-        this.visual.setSheet(Bikes.sheet(lib, this.spec.id, state));
+        this.visual.setSheet(Bikes.sheet(lib, this.spec.id, state, sheet));
         this.visual.setVariant(variant);
     }
 

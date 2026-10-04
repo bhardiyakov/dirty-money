@@ -67,7 +67,7 @@ class ScamCareer extends Career {
         this.raid = { left: 8, hits: 0, need };
         const el = this._raidEl || (this._raidEl = document.createElement('div'));
         el.id = 'crRaid';
-        el.style.cssText = 'position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(60,0,0,0.55);font-family:Silkscreen,monospace;color:#fff;text-transform:uppercase;text-align:center;cursor:pointer;user-select:none';
+        el.style.cssText = 'position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(60,0,10,0.6);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);font-family:var(--font);color:#fff;text-align:center;cursor:pointer;user-select:none';
         document.body.appendChild(el);
         const hit = () => { if (!this.raid) return; this.raid.hits++; AudioFX.blip(300 + this.raid.hits * 40, 0.05, 0.12); this._raidDraw(); if (this.raid.hits >= this.raid.need) this._endRaid(true); };
         this._raidKey = (e) => { if (e.key === 'e' || e.key === 'E' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); hit(); } };

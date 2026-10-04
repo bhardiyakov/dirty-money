@@ -20,25 +20,14 @@ class StashUI {
     _build() {
         const st = document.createElement('style');
         st.textContent = `
-        #stashUI{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:rgba(4,6,10,.62);font-family:'Press Start 2P',monospace;color:#e8ecf2;image-rendering:pixelated}
-        #stashUI .sp{width:min(780px,95vw);max-height:92vh;display:flex;flex-direction:column;background:#161b24;border:3px solid #6f7d92;box-shadow:0 0 0 3px #0b0e14,0 10px 40px #000a;padding:14px 16px}
-        #stashUI h3{margin:0 0 4px;font-size:15px;letter-spacing:2px;color:#ffd23a;text-align:center}
-        #stashUI .sub{font-size:8px;color:#8f9bb0;text-align:center;margin-bottom:10px}
-        #stashUI .cols{display:flex;gap:12px;min-height:0;flex:1}
-        #stashUI .col{flex:1;min-width:0;background:#0f131a;border:2px solid #2b3445;padding:8px;display:flex;flex-direction:column}
-        #stashUI .col.on{border-color:#ffd23a}
-        #stashUI h4{margin:0 0 8px;font-size:9px;color:#9fb0c8;display:flex;justify-content:space-between}
-        #stashUI .rows{overflow:auto;min-height:150px;max-height:50vh}
-        #stashUI .row{display:flex;align-items:center;gap:8px;padding:5px;border:2px solid transparent;font-size:8px;line-height:1.5}
-        #stashUI .row.sel{border-color:#ffd23a;background:#1f2736}
-        #stashUI .row canvas{flex:none;image-rendering:pixelated}
-        #stashUI .row .nm{flex:1;min-width:0}
-        #stashUI .row .ct{color:#ffd23a;white-space:nowrap}
-        #stashUI .btn{font:inherit;font-size:8px;background:#2a3446;color:#e8ecf2;border:2px solid #56657c;padding:5px 7px;cursor:pointer;white-space:nowrap}
-        #stashUI .btn:hover{background:#3a4862}
-        #stashUI .empty{font-size:8px;color:#5f6b80;padding:16px 4px;text-align:center}
-        #stashUI .foot{margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:7px;color:#8f9bb0;flex-wrap:wrap}
-        #stashUI .msg{color:#8be08b;min-height:10px;font-size:8px;text-align:center;margin-top:6px}
+        #stashUI .sp{width:min(820px,95vw)}
+        #stashUI .cols{display:flex;gap:14px;min-height:0;flex:1}
+        #stashUI .col{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:var(--r-2);padding:12px;display:flex;flex-direction:column}
+        #stashUI .col.on{border-color:var(--gold)}
+        #stashUI h4{margin:0 0 10px;font:700 13px var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--tx-2);display:flex;justify-content:space-between}
+        #stashUI .rows{min-height:150px;max-height:50vh;background:none;border:none;padding:0}
+        #stashUI .row .ct{color:var(--gold);font:700 14px var(--font-d);white-space:nowrap}
+        #stashUI .empty{font-size:13px;color:var(--tx-3);padding:22px 4px;text-align:center}
         @media (max-width:640px){#stashUI .cols{flex-direction:column}#stashUI .rows{max-height:22vh}}`;
         document.head.appendChild(st);
         const r = this.root = document.createElement('div');
@@ -92,7 +81,7 @@ class StashUI {
                 const k = Math.max(1, Math.min(3, Math.floor(28 / Math.max(ic.w, ic.h)) || 1));
                 const cv = ic.canvas.cloneNode(); cv.getContext('2d').drawImage(ic.canvas, 0, 0); cv.style.width = ic.w * k + 'px'; cv.style.height = ic.h * k + 'px';
                 row.appendChild(cv);
-                const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = Stash.label(it.id).toUpperCase();
+                const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = Stash.label(it.id);
                 const ct = document.createElement('div'); ct.className = 'ct';
                 ct.textContent = it.id === 'cash' ? '$' + it.count : (it.id.startsWith('weapon:') ? '' : '×' + it.count);
                 row.append(nm, ct);
@@ -115,7 +104,7 @@ class StashUI {
             b.addEventListener('click', () => { const n = g.stash.sellJewels(g); this.msg(`Vendeu as joias por ${brl(n)}`); AudioFX.blip(900, 0.15, 0.2); this.render(); });
             this.$foot.appendChild(b);
         }
-        const x = document.createElement('button'); x.className = 'btn'; x.textContent = 'FECHAR'; x.addEventListener('click', () => this.close());
+        const x = document.createElement('button'); x.className = 'btn'; x.textContent = 'Fechar'; x.addEventListener('click', () => this.close());
         this.$foot.appendChild(x);
     }
 

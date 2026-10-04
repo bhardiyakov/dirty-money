@@ -237,12 +237,12 @@ const Banks = {
         let el = this._sEl;
         if (!el) {
             el = this._sEl = document.createElement('div');
-            el.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:50;width:min(560px,92vw);padding:16px 18px;background:rgba(12,4,6,0.94);border:3px solid #ff3a3a;border-radius:12px;color:#fff;font-family:Silkscreen,monospace;text-align:center;display:flex;flex-direction:column;gap:10px';
+            el.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:50;width:min(560px,92vw);padding:22px 24px;background:rgba(24,6,12,0.9);border:1px solid rgba(244,63,94,0.6);border-radius:22px;box-shadow:0 0 0 1px rgba(244,63,94,0.25),0 24px 70px rgba(120,0,20,0.55);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);color:#fff;font-family:var(--font);text-align:center;display:flex;flex-direction:column;gap:12px';
             el.addEventListener('click', (e) => { const b = e.target.closest('button[data-neg]'); if (b) this.negotiate(this.game, b.dataset.neg); });
             document.body.appendChild(el);
         }
         el.style.display = 'flex';
-        const btn = (k, t) => `<button data-neg="${k}" style="font:inherit;font-size:13px;padding:9px;border-radius:8px;border:2px solid #ff8a8a;background:#2a0a0e;color:#fff;cursor:pointer">${t}</button>`;
+        const btn = (k, t) => `<button data-neg="${k}" class="ui-btn" style="padding:12px;font-size:14px;border-color:rgba(251,113,133,0.55);background:rgba(244,63,94,0.12)">${t}</button>`;
         el.innerHTML = `<div style="font-size:20px;color:#ff5a5a">🚔 NEGOCIAÇÃO DE REFÉNS</div><div style="font-size:12px;color:#ffd0d0">${S.msg}</div>
             ${S.breach > 0 ? `<div style="font-size:26px;color:#ff3a3a">INVASÃO EM ${Math.ceil(S.breach)}s</div>` : `<div style="font-size:11px;color:#aab3c8">Tentativas restantes: ${S.turns} · ${brl(this.hot)} marcados com você</div>
             ${btn('talk', 'LÁBIA — pedir mais tempo')}${btn('threat', 'INTIMIDAR — ameaçar os reféns (precisa de arma)')}${btn('surrender', 'RENDER-SE')}`}`;
@@ -283,7 +283,7 @@ const Banks = {
         let el = this._cEl;
         if (!el) {
             el = this._cEl = document.createElement('div');
-            el.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:46;width:min(520px,92vw);padding:16px 18px;background:rgba(9,14,32,0.96);border:2px solid #35e0ff;border-radius:12px;color:#eef2ff;font-family:Silkscreen,monospace;display:flex;flex-direction:column;gap:8px';
+            el.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:46;width:min(520px,92vw);padding:22px 24px;background:var(--glass-2);border:1px solid var(--line-2);border-radius:22px;box-shadow:var(--shadow);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);color:var(--tx);font-family:var(--font);display:flex;flex-direction:column;gap:10px';
             el.addEventListener('click', (e) => {
                 const b = e.target.closest('button[data-bk]'); if (!b) return;
                 const [act, amt] = b.dataset.bk.split(':'), g = this.game, n = amt === 'all' ? Infinity : +amt;
@@ -293,7 +293,7 @@ const Banks = {
             });
             document.body.appendChild(el);
         }
-        const inv = game.inventory, bank = this.session && this.session.bank, b = (k, t) => `<button data-bk="${k}" style="font:inherit;font-size:12px;padding:7px 9px;border-radius:8px;border:2px solid #3f5a8a;background:#141d36;color:#eef2ff;cursor:pointer">${t}</button>`;
+        const inv = game.inventory, bank = this.session && this.session.bank, b = (k, t) => `<button data-bk="${k}" class="ui-btn">${t}</button>`;
         el.style.display = 'flex';
         el.innerHTML = `<div style="font-size:16px;color:${bank ? this.BRANDS[bank.brand].color : '#fff'}">${bank ? bank.name.toUpperCase() : 'BANCO'}</div>
             <div style="font-size:12px">Saldo: <b style="color:#ffd23a">${brl(this.account)}</b> (rende 0,15% ao dia, não se perde) · Limpo na mão: ${brl(inv.clean)} · Sujo: ${brl(inv.cash)}</div>
@@ -354,7 +354,7 @@ const Banks = {
         if (game.menu.isOpen) game.menu.close();
         const rounds = 4, st = { r: 0, ok: 0, t: 0 };
         const el = document.createElement('div');
-        el.style.cssText = 'position:fixed;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;background:rgba(2,8,16,0.82);font-family:Silkscreen,monospace;color:#cfe8ff';
+        el.style.cssText = 'position:fixed;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;background:rgba(4,8,16,0.8);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);font-family:var(--font);color:var(--tx)';
         document.body.appendChild(el);
         const code = () => `AG ${1000 + Math.floor(Math.random() * 9000)} · CC ${10000 + Math.floor(Math.random() * 90000)}-${Math.floor(Math.random() * 10)}`;
         const mutate = (c) => c.replace(/\d/g, (d, i) => (Math.random() < 0.18 ? String((+d + 1 + Math.floor(Math.random() * 8)) % 10) : d));
@@ -376,7 +376,7 @@ const Banks = {
                 el.innerHTML = `<div style="width:min(520px,92vw);padding:18px;border:2px solid #35e0ff;border-radius:12px;background:#06121e;display:flex;flex-direction:column;gap:10px;text-align:center">
                     <div style="font-size:16px;color:#35e0ff">TRANSFERÊNCIA VIA LARANJAS — ${B.name.toUpperCase()}</div><div style="font-size:11px">Conta ${st.r + 1}/${rounds}: confirme a conta de destino antes do firewall fechar (${st.t.toFixed(1)}s)</div>
                     <div style="font-size:20px;color:#ffd23a;letter-spacing:1px">${target}</div>
-                    ${opts.map((c) => `<button data-c="${c}" style="font:inherit;font-size:14px;padding:9px;border-radius:8px;border:2px solid #3f5a8a;background:#0c1a2c;color:#eef;cursor:pointer">${c}</button>`).join('')}</div>`;
+                    ${opts.map((c) => `<button data-c="${c}" class="ui-btn" style="font:600 15px var(--font-d);padding:12px">${c}</button>`).join('')}</div>`;
             };
             draw();
             el.onclick = (e) => { const b = e.target.closest('button[data-c]'); if (!b) return; if (b.dataset.c === target) st.ok++; st.r++; AudioFX.blip(b.dataset.c === target ? 900 : 200, 0.08, 0.12); clearInterval(timer); round(); };
