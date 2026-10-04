@@ -30,6 +30,7 @@ class PauseMenu {
             station: { label: 'Delegacia', icon: 'station' },
             marina: { label: 'Marina', icon: 'boat' },
             gas: { label: 'Posto de Gasolina', icon: 'fuel' },
+            chop: { label: 'Desmanche (carros roubados)', icon: 'chop' },
         };
     }
 

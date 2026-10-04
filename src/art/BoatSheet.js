@@ -105,8 +105,7 @@ class BoatSheet {
             const img = SpriteBaker.bake(prims, { size: F, heading: (d * TAU_BOAT) / D, shadow: false });
             for (let y = 0; y < F; y++) data.set(img.subarray(y * F * 4, (y + 1) * F * 4), (y * W + d * F) * 4);
         }
-        const tex = BABYLON.RawTexture.CreateRGBATexture(data, W, F, this.scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
-        tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+        const tex = SpriteMaterial.atlasTexture(this.scene, data, W, F);
         const material = SpriteMaterial.create(this.scene, 'boat_' + this.name, tex, this.palette);
         this._clip = { name: 'static', weapon: 'none', frames: 1, dirs: D, fps: 1, loop: true, texture: tex, material, frame: F, W, H: F };
         this.ready = true;

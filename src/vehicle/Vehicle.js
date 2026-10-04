@@ -58,6 +58,7 @@ class Vehicle {
         // Bloco invisível: não pinta nada na tela, mas segue na lista de sombras (o mapa de sombra ignora o
         // material de cor) e a física (aggregate) continua nele. Só o sprite aparece.
         this.body.material = Vehicle._ghostMaterial(scene);
+        this.body.layerMask = Vehicle.GHOST_LAYER;                     // a câmera nem tenta desenhar (o mapa de sombra ignora a máscara)
 
         // Sprite por cima (y=1,5: acima da cabine 3D, abaixo de qualquer giroflex).
         this.visual = null;
@@ -65,6 +66,8 @@ class Vehicle {
             this.visual = new SpriteActor(scene, carSheet, paintRow, `carSprite${id}`);
             this.visual.play('static');
             this.visual.mesh.position.y = 1.5;
+            this.visual.setPosition(startPos.x, startPos.z);              // já nasce no lugar (não na origem)
+            this.visual.setHeading(heading);
         }
 
         // Cabine 3D (dá altura à sombra do carro; o sprite cobre o topo dela).
@@ -73,6 +76,7 @@ class Vehicle {
             cabin.parent = this.body;
             cabin.position.set(0, 0.5, 0.2);
             cabin.material = Vehicle._ghostMaterial(scene);
+            cabin.layerMask = Vehicle.GHOST_LAYER;
             cabin.isPickable = false;
         }
         this.wheels = [];     // rodas 3D foram removidas: o sprite já desenha as rodas e elas ficavam escondidas.
@@ -109,6 +113,9 @@ class Vehicle {
         }
         return cache[row];
     }
+
+    // Camada fora da máscara da câmera (0x0FFFFFFF): malhas só de sombra/física não viram chamada de desenho na tela.
+    static get GHOST_LAYER() { return 0x10000000; }
 
     // Material "fantasma": sem cor e sem profundidade na tela; a malha continua projetando sombra.
     static _ghostMaterial(scene) {
@@ -352,6 +359,7 @@ class Vehicle {
         this.phys.setAngularVelocity(BABYLON.Vector3.Zero());
         this._preStepFrames = 2;
         this._cmd = null;                       // (o salto não é batida)
+        if (this.visual) { this.visual.setPosition(x, z); this.visual.setHeading(heading); }      // o sprite vai junto já neste quadro
     }
 
     // Leva o sprite para a posição/rotação do corpo físico (chame todo frame).

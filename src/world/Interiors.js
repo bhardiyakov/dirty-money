@@ -203,9 +203,18 @@ const Interiors = {
     _room(shop) {
         const key = shop.style + shop.variant + (shop.reform ? 'r' + shop.reform : '');
         let r = this._rooms[key];
-        if (r) return r;
+        const lru = this._lru || (this._lru = []);
+        const touch = () => { const i = lru.indexOf(key); if (i >= 0) lru.splice(i, 1); lru.push(key); };
+        if (r) { touch(); return r; }
+        // Cache das salas pintadas: só as 4 mais recentes (cada uma é uma textura grande); as outras são refeitas se você voltar.
+        while (lru.length >= 4) {
+            const old = lru.shift(), o = this._rooms[old];
+            if (o && (!this.active || this.active.room !== o)) { const m = o.mesh.material; o.mesh.dispose(); if (m) { if (m.diffuseTexture) m.diffuseTexture.dispose(); m.dispose(); } delete this._rooms[old]; }
+        }
+        touch();
         const data = ShopStyles.get(shop.style, shop.variant, shop.reform || 0), IN = data.in, o = this.STAGE;
         const tex = data.canvas.toTexture(game.scene, { wrap: false, mips: false });
+        data.canvas = null; delete ShopStyles._cache[shop.style + shop.variant + (shop.reform ? 'r' + shop.reform : '')];   // os pixels já estão na GPU
         tex.hasAlpha = true;
         const m = new BABYLON.StandardMaterial('shop_' + key, game.scene);
         m.diffuseTexture = tex; m.useAlphaFromDiffuseTexture = true; m.diffuseColor = BABYLON.Color3.Black(); m.specularColor = BABYLON.Color3.Black();

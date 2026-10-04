@@ -82,6 +82,38 @@ class ChopCareer extends Career {
 
     get yard() { return this.mgr.favelaSpot(7701, 0.1, 0.3); }          // desmanche / oficina com bloqueador (fixo)
 
+    // O desmanche no mundo: ponto no mapa/legenda (🔧), anel laranja no chão e placa — senão ninguém sabe onde levar o carro.
+    update(dt) {
+        if (this._yardOn || !this.g.physicsReady) return;
+        const y = this.yard; if (!y) return;
+        this._yardOn = true;
+        CityGrid.addPoi({ type: 'chop', name: 'Desmanche da favela', x: y.x, z: y.z });
+        const glow = this._glow = new GlowBatch(this.g.scene, 2, 'chopGlow', 'glow');
+        const a = glow.alloc(), b = glow.alloc();
+        glow.place(a, y.x, 0.2, y.z, 9); glow.color(a, 1, 0.5, 0.12, 1);         // área de entrega (≈ raio do "dentro do desmanche")
+        glow.place(b, y.x, 0.25, y.z, 3.4); glow.color(b, 1, 0.75, 0.3, 1);
+        glow.flush();
+    }
+
+    // A pé perto do desmanche: o que fazer aqui.
+    prompt() {
+        const g = this.g, y = this.yard;
+        if (!y || g.mode !== 'player') return '';
+        const p = g.player.position;
+        if (Math.hypot(p.x - y.x, p.z - y.z) > 9) return '';
+        return '<b>🔧 DESMANCHE</b><small>chegue aqui DIRIGINDO um carro roubado: E desmancha (vende as peças), O abre a oficina</small>';
+    }
+
+    // Entrou num carro roubado fora de um trabalho: diz onde levar (e marca o GPS se não houver outro destino).
+    onStolen(car) {
+        const g = this.g;
+        if (!car || car.isBoat || car.isBike || car._chopHint || car._careerTarget) return;
+        car._chopHint = true;
+        const y = this.yard; if (!y) return;
+        if (!g.gps) { this.mgr.gpsTo(y.x, y.z, 'Desmanche'); g.gps._chopHint = true; }
+        g._flash(`🔧 Leve ao Desmanche da favela para vender as peças (~${brl(this.scrapValue(car))})${g.gps && g.gps._chopHint ? ' — marcado no GPS' : ''}`);
+    }
+
     jobs() {
         return [
             { id: 'pull', rank: 0, name: 'Puxada', pay: 'R$ 250–550', make: () => new ChopJob(this, 'pull'),

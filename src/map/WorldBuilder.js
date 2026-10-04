@@ -1019,7 +1019,7 @@ class WorldBuilder {
                 const m = new BABYLON.Mesh('shadow' + pk, this.scene), vd = new BABYLON.VertexData();
                 vd.positions = new Float32Array(px.pos); vd.indices = px.pos.length / 3 > 65535 ? new Uint32Array(px.idx) : new Uint16Array(px.idx);      // (tipados: metade da memória)
                 vd.applyToMesh(m);
-                m.material = this._ghost; m.isPickable = false; m.receiveShadows = false; m.alwaysSelectAsActiveMesh = false;
+                m.material = this._ghost; m.isPickable = false; m.receiveShadows = false; m.alwaysSelectAsActiveMesh = false; m.layerMask = 0x10000000;   // só sombra: fora da câmera
                 m.freezeWorldMatrix();
                 this.shadow.addShadowCaster(m);
                 this.meshes.push(m);

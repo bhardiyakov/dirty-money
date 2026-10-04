@@ -256,7 +256,7 @@ class Careers {
         return false;
     }
 
-    onCarEntered(car) { if (this.job) this.job.onCarEntered(car); }
+    onCarEntered(car) { if (this.job) this.job.onCarEntered(car); else if (this.by.chop) this.by.chop.onStolen(car); }
 
     // Dentro de um carro (tecla E): por enquanto só o desmanche usa (desmanchar o carro roubado).
     carPrompt() { try { return this.by.chop.carPrompt(); } catch (e) { console.error('[CARREIRAS] carPrompt', e); return ''; } }

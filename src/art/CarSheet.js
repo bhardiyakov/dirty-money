@@ -341,8 +341,7 @@ class CarSheet {
 
     _finish() {
         const F = this.frame, W = this.dirs * F, scene = this.scene;
-        const tex = BABYLON.RawTexture.CreateRGBATexture(this._data, W, F, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
-        tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+        const tex = SpriteMaterial.atlasTexture(scene, this._data, W, F);
         const material = SpriteMaterial.create(scene, 'car_' + this.name, tex, this.palette);
         this._clip = { name: 'static', weapon: 'none', frames: 1, dirs: this.dirs, fps: 1, loop: true, texture: tex, material, frame: F, W, H: F };
         this._data = null; this._prims = null;
@@ -707,8 +706,7 @@ class DoorSheet {
 
     _finish() {
         const F = this.frame, W = this.dirs * F, H = this.frames * F;
-        const tex = BABYLON.RawTexture.CreateRGBATexture(this._data, W, H, this.scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
-        tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+        const tex = SpriteMaterial.atlasTexture(this.scene, this._data, W, H);
         const material = SpriteMaterial.create(this.scene, this.name, tex, this.palette);
         this._clip = { name: 'static', weapon: 'none', frames: this.frames, dirs: this.dirs, fps: 1, loop: true, texture: tex, material, frame: F, W, H };
         this._data = null; this._prims = null;
