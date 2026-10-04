@@ -18,7 +18,7 @@ class TrafficManager {
         this.signals = signals;
         this.shadow = shadowGenerator;
 
-        this.env = { obstacles: [], signals };
+        this.env = { obstacles: [], signals, grid: new SpatialHash(16) };       // grid: obstáculos por célula (a IA só olha a vizinhança)
         this._pool = [];          // objetos de obstáculo reaproveitados (sem lixo por frame)
         this.honks = 0;
         this.lastHonk = null;
@@ -197,6 +197,9 @@ class TrafficManager {
         if (game.mode !== 'car') add('ped', game.player.position.x, game.player.position.z, 0, 0, game.player);
 
         out.length = n;
+        const G = this.env.grid;
+        G.clear();
+        for (let i = 0; i < n; i++) G.insert(out[i], out[i].x, out[i].z);
     }
 
     // ------------------------------------------------------------------- frame
@@ -206,17 +209,18 @@ class TrafficManager {
         const env = this.env;
         const pp = game.mode === 'car' && game.activeCar ? game.activeCar.position : game.player.position;
 
-        // LOD de simulação: carro de trânsito comum longe da tela (> 100 u do foco; a tela mostra ~60 u) roda a IA em 1 de cada 2
-        // quadros, com o dt acumulado. A física do Havok continua andando todo quadro com a velocidade que a IA deixou.
-        const fx = pp.x, fz = pp.z, farSq = 100 * 100;
+        // Zonas (ver core/Spatial.js): carro comum na tela roda a IA todo quadro; perto da tela, a cada 2; longe ("dormindo"), a cada 5,
+        // com o dt somado. A física do Havok continua andando todo quadro com a velocidade que a IA deixou.
         for (const car of this.vm.vehicles) {
-            const calm = !car.controlled && !car.hold && !car.wrecked && !(car.burning > 0) && car.mode !== 'abandoned' && !car.ignoreSignals && !car.isBike;
+            const calm = !car.controlled && !car.hold && !car.wrecked && !(car.burning > 0) && car.mode !== 'abandoned' && !car.ignoreSignals;
             if (calm) {
-                const dx = car.position.x - fx, dz = car.position.z - fz;
-                if (dx * dx + dz * dz > farSq) {
+                const tier = Zones.tier(car.position.x, car.position.z);
+                if (tier > 0) {
                     car._lodDt = (car._lodDt || 0) + dt;
-                    if ((car._lodTick = !car._lodTick)) continue;          // quadro ímpar: só acumula
-                    car.update(car._lodDt, env); car._lodDt = 0;
+                    if (!Zones.every(car.id, tier, car.mode === 'parked' ? 6 : 2, car.mode === 'parked' ? 15 : 5)) continue;      // estacionado: quase nada a fazer
+                    const d = Math.min(car._lodDt, car.mode === 'parked' ? 0.5 : 0.2);
+                    if (car.courier) Couriers.update(car, d);
+                    car.update(d, env); car._lodDt = 0;
                     continue;
                 }
                 car._lodDt = 0;

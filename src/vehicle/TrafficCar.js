@@ -153,7 +153,7 @@ class TrafficCar extends Vehicle {
         const near = this._near || (this._near = []);
         near.length = 0;
         const reach2 = (look + 6) * (look + 6);
-        for (const o of env.obstacles) {
+        for (const o of env.grid.query(p.x, p.z, look + 6, TrafficCar._q1)) {
             if (o.ref === this || (o.layer || 0) !== (this.layer || 0)) continue;
             if (this.ramming && o.kind === 'car') continue;      // viatura em perseguição fura a fila (empurra o carro)
             const dx = o.x - p.x, dz = o.z - p.z;
@@ -266,7 +266,7 @@ class TrafficCar extends Vehicle {
             R.pointAt(u + s, T); R.pointAt(u + s + 0.6, T2);
             const tx = T2.x - T.x, tz = T2.z - T.z, tl = Math.hypot(tx, tz) || 1;
             const px = T.x + (-tz / tl) * off, pz = T.z + (tx / tl) * off;
-            for (const o of env.obstacles) {
+            for (const o of env.grid.query(px, pz, 50, TrafficCar._q2)) {                // (inclui quem chega em 1,2 s, até ~40 m/s)
                 if (o.ref === this || o === hitObj || o.ref === hitObj.ref || (o.layer || 0) !== (this.layer || 0)) continue;
                 const rad = o.kind === 'car' ? (this.halfW + o.hw) * 0.95 : 1.2;
                 for (const k of (o.kind === 'car' ? [0, 1.2] : [0])) {                        // posição agora e daqui a 1,2 s (carro vindo de frente)
@@ -281,7 +281,7 @@ class TrafficCar extends Vehicle {
     // Há carro vindo no sentido contrário e perto do cruzamento (esquerda deve esperar)?
     _oncoming(jn, env) {
         const d = jn.d, C = jn.inter;
-        for (const o of env.obstacles) {
+        for (const o of env.grid.query(C.x + d.dx * 11, C.z + d.dz * 11, 20, TrafficCar._q3)) {
             if (o.kind !== 'car' || o.ref === this || (o.layer || 0) !== (this.layer || 0)) continue;
             const along = (o.x - C.x) * d.dx + (o.z - C.z) * d.dz;      // + = à frente do centro, no meu sentido
             const lat = Math.abs((o.x - C.x) * d.dz - (o.z - C.z) * d.dx);
@@ -295,7 +295,7 @@ class TrafficCar extends Vehicle {
     // A faixa de saída do cruzamento está ocupada (carro parado nos primeiros 7u)?
     _exitBlocked(jn, env) {
         const X = this.route.pts[jn.exitIdx], d = jn.dOut;
-        for (const o of env.obstacles) {
+        for (const o of env.grid.query(X.x + d.dx * 3, X.z + d.dz * 3, 8, TrafficCar._q3)) {
             if (o.kind !== 'car' || o.ref === this || (o.layer || 0) !== (this.layer || 0)) continue;
             const along = (o.x - X.x) * d.dx + (o.z - X.z) * d.dz;
             const lat = Math.abs((o.x - X.x) * d.dz - (o.z - X.z) * d.dx);
@@ -315,3 +315,5 @@ class TrafficCar extends Vehicle {
 
 // Multiplicador da velocidade de cruzeiro por classe de via.
 TrafficCar.CLS_SPEED = { hwy: 1.5, ave: 1.15, bridge: 1.2, city: 1.0, isl: 0.9, dirt: 0.62, fav: 0.5 };
+// Listas de consulta à grade de obstáculos (reaproveitadas: sem lixo por quadro). Uma por ponto de uso.
+TrafficCar._q1 = []; TrafficCar._q2 = []; TrafficCar._q3 = [];

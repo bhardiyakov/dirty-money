@@ -94,6 +94,7 @@ class TrafficSignals {
         const inters = this._visible || (this._visible = CityGrid.intersections.filter((n) => n.visible));
         for (let k = 0; k < inters.length; k++) {
             const inter = inters[k];
+            if (!Zones.near(inter.x, inter.z, 40)) continue;           // só os cruzamentos na tela (+ margem): o resto ninguém vê
             const ns = TrafficSignals._lensColor(this.vehicle(inter, 'ns').color);
             const ew = TrafficSignals._lensColor(this.vehicle(inter, 'ew').color);
             // Pedestre: N/S atravessam a rua 'ns' (cw.crosses === 'ns'); L/O a rua 'ew'.

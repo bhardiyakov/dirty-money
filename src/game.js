@@ -311,9 +311,41 @@ class Game {
             try { if (SaveGame.apply(this, this._pendingSave)) this._flash('Jogo carregado — ' + SaveGame.label(this._pendingSave)); } catch (e) { console.error('[SAVE] falha ao aplicar:', e); }
         }
         this._releaseStaticGeometry();
+        this.renderCuller = new RenderCuller(this.scene);           // particionamento espacial do render (core/Spatial.js)
+        this.renderCuller.build();
+        console.log(`[RENDER] grade de culling: ${this.renderCuller.stats.static} malhas estáticas em células de ${this.renderCuller.cell} u`);
         if (!this._pendingSave && SafeHouse.placed) this._flash('Você acordou no seu esconderijo, na favela — a porta turquesa fica ao sul');
         this._pendingSave = null;
         this._start();
+    }
+
+    // Varredura de manutenção (a cada 3 s): solta da memória o que foi carregado e não está em uso. NÃO apaga o mundo (recarregar a cidade
+    // custaria segundos de travada): o que é caro de refazer e está em uso fica; o resto sai.
+    //   • clipes de animação assados (texturas na GPU) que nenhum personagem vivo usa há 60 s — a folha re-assa sob demanda se precisar;
+    //   • lista de atores vivos (atores cujo quad já foi descartado saem do registro);
+    //   • amostra o heap para a barra de capacidade e a tendência de vazamento (Perf).
+    _sweep() {
+        const now = performance.now() / 1000;
+        let actors = 0;
+        for (const a of SpriteActor.live) {
+            if (!a.mesh || a.mesh.isDisposed()) { SpriteActor.live.delete(a); continue; }
+            actors++;
+            if (a.clip) a.clip._used = now;
+        }
+        const keep = { player: ['idle:none', 'walk:none', 'run:none'], civA: ['idle:none', 'walk:none'], civB: ['idle:none', 'walk:none'], police: ['idle:none', 'walk:none'] };
+        let freed = 0, clips = 0;
+        for (const [name, sh] of Object.entries(this.sprites.sheets)) {
+            for (const [key, c] of Object.entries(sh.clips)) {
+                clips++;
+                if (c._used === undefined) { c._used = now; continue; }                 // recém-assado: conta a partir de agora
+                if (now - c._used < 60 || ((keep[name] || (name.startsWith('player') && keep.player)) || []).includes(key)) continue;
+                c.material.dispose(); c.texture.dispose(); delete sh.clips[key]; freed++;
+            }
+        }
+        if (freed) console.log(`[MEMÓRIA] ${freed} clipes de animação sem uso liberados da GPU`);
+        this._sweepFreed = (this._sweepFreed || 0) + freed;
+        Perf.sampleHeap();
+        this._sweepInfo = `${actors} atores · ${clips - freed} clipes na GPU · ${this._sweepFreed} liberados desde o início`;
     }
 
     // Malhas estáticas (transform congelado, buffers não atualizáveis): a GPU já tem os vértices; a cópia na RAM de normais, UVs e
@@ -355,8 +387,10 @@ class Game {
             this.autoQuality.tick((now - last) / 1000, this.menu.isOpen);
             const dt = Math.min((now - last) / 1000 * (this.timeScale || 1), 0.05);
             last = now;
+            Perf.frameStart();
             this._update(dt);
             this._render(dt);
+            Perf.frameEnd();
             if (this._bootDone && !this._loadingHidden) {            // 1º quadro real desenhado: agora (depois da pintura) a tela de carregamento sai
                 this._loadingHidden = true;
                 requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -370,9 +404,12 @@ class Game {
     // 2 passos do Havok — entrada, colisão e veículos continuam em 60 Hz e nada atravessa mureta fina por causa de um dt grande.
     _render(dt) {
         this._frameDt = dt * 1000;
+        Perf.lap('outros');
         this.scene.render();                                         // (1 passo de 1/60 dentro do render)
+        Perf.lap('render (cena)');
         const pe = this.scene.getPhysicsEngine();
         if (pe && this.physicsReady && !Interiors.active && !this.menu.isOpen) for (let n = Math.min(3, Math.round(dt * 60)) - 1; n > 0; n--) pe._step(1 / 60);
+        Perf.lap('física');
     }
 
     // Controle (Xbox) e toque viram teclas virtuais: ver InputManager. No menu/telas de fim o jogo solta tudo o que o controle segurava.
@@ -398,8 +435,11 @@ class Game {
         this.dev.update(dt);
         Interiors.tickFade(dt);
         // Assa sprites pendentes em fatias de ~4 ms (sem engasgar o jogo): personagens e carros amassados.
+        Perf.lap('outros');
         this.sprites.pump(4);
         this.carLib.pump(5);
+        Perf.lap('sprites (bake)');
+        Zones.update(this);                                                               // retângulo da câmera → zonas ativa/perto/dormindo
 
         // Menu de pausa: o jogo para de verdade (a física também) e o menu roda por conta própria.
         if (this.menu.isOpen) { this.menu.update(dt); return; }
@@ -447,6 +487,7 @@ class Game {
             this.camera.follow(HouseView.focusFor(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
         }
 
+        Perf.lap('jogador');
         this._updateHeliFall(dt);
         this._updateChoppers(dt);
 
@@ -461,7 +502,9 @@ class Game {
 
         // --- Mundo (água animada, sombra seguindo o foco) ---
         if (this.mode !== 'player') HouseView.update(dt, this);          // (de carro/helicóptero: garante o "fora" e o zoom normal)
+        Perf.lap('outros');
         this.gameEngine.update(dt, this.camera.target, this.camera.view);
+        Perf.lap('mundo (água/sombra)');
 
         // --- Hijack (entrar/sair do carro) ---
         if (this.physicsReady && this.input.consumePress('f')) this._toggleHijack();
@@ -474,6 +517,7 @@ class Game {
         if (this.hiding) this._updateHiding(dt);
 
         // --- Combate: balas, ações com atraso, vida do jogador ---
+        Perf.lap('outros');
         this.combat.update(dt);
         this.fireworks.update(dt);
         for (let i = this._delayed.length - 1; i >= 0; i--) {
@@ -486,6 +530,7 @@ class Game {
         this._hpPrev = this.player.hp;
         if (this.player.hp <= 0 && !this.player.rag && !this.death) this._startDeath();      // (atropelado: primeiro voa e cai, depois "FIM DA LINHA")
 
+        Perf.lap('combate');
         // --- Itens no chão (coleta só a pé) e painel do inventário ---
         this._updateGps(dt);
         if (this.birds) this.birds.update(dt);
@@ -502,6 +547,7 @@ class Game {
             if (this._invTimer <= 0) { this._invTimer = 0.2; this._renderInventory(); }
         }
 
+        Perf.lap('rua (props/itens/pássaros)');
         // --- Relógio do jogo (sol, ambiente, janelas, postes) ---
         this.weather.update(dt);
         if (this.input.consumePress('y')) this.weather.cycle();
@@ -512,10 +558,14 @@ class Game {
 
         // --- Trânsito: IA dos carros (e sprites seguindo os corpos físicos) ---
         AudioFX.setListener(this.camera.target.x, this.camera.target.z);
+        Perf.lap('clima/hora');
         if (this.traffic) this.traffic.update(dt, this);
+        Perf.lap('trânsito');
         if (this.boats) this.boats.update(dt, this);
         if (this.colliderStream) this.colliderStream.update(dt, this.camera.target.x, this.camera.target.z);
+        Perf.lap('barcos/colisores');
         if (this.vehicleManager) { this.carDamage.update(dt); this.collisions.update(dt); this.doors.update(dt); this._updateAlarms(dt); }
+        Perf.lap('veículos (dano/colisão)');
         this._updatePrompt();
         for (let i = this.casualties.length - 1; i >= 0; i--) {
             if (!this.casualties[i].update(dt)) { this.casualties[i].dispose(); this.casualties.splice(i, 1); }
@@ -534,6 +584,7 @@ class Game {
 
         // --- Semáforos ---
         this.signals.update(dt);
+        Perf.lap('luzes/semáforos');
 
         // --- IA (pedestres) ---
         if (this.aiReady) {
@@ -543,7 +594,9 @@ class Game {
             const chasers = this.policeManager
                 ? this.policeManager.units.filter((u) => u.fsm.name === 'CHASE').map((u) => ({ position: u.position, car: !!u.body }))
                 : [];
+            Perf.lap('navegação (crowd)');
             this.npcManager.update(dt, { playerPos: ps0.pos, wanted: this.wanted.level, chasers });
+            Perf.lap('pedestres');
 
             if (this.mode === 'player' && this.input.consumePress('e')) this._interact();
             if (this.mode === 'player' && this.input.consumePress('c') && !this.hiding && !this.arrest && !this.death && !this.lockpick.active && !this.inventoryOpen) this._tryPickpocket();
@@ -565,6 +618,7 @@ class Game {
             RealEstate.build(this); RealEstate.update(dt); this.propertyUI.update(dt);
         }
 
+        Perf.lap('favela (gangues/moto/missões)');
         // --- Polícia: detecção -> procurado -> perseguição/prisão ---
         if (this.policeManager) {
             const ps = this._playerState();
@@ -592,8 +646,10 @@ class Game {
             }
         }
 
+        Perf.lap('polícia');
         // --- GPS ---
         this._updateMinimap();
+        Perf.lap('minimapa');
 
         // --- HUD ---
         if (this.actionTimer > 0) this.actionTimer -= dt;
@@ -603,9 +659,12 @@ class Game {
         if (this.goals) this.goals.update(dt);
         if (this.achievements) this.achievements.update(dt);
         if (this.empire) { this.empire.update(dt); EmpireUI.hud(this); }
+        Perf.lap('HUD/carreiras/império');
         this._autosave(dt);
         this._geoT = (this._geoT || 0) + dt;
         if (this._geoT > 15) { this._geoT = 0; this._releaseStaticGeometry(); }
+        this._sweepT = (this._sweepT || 0) + dt;
+        if (this._sweepT > 3) { this._sweepT = 0; this._sweep(); }
     }
 
     // Autosave: a cada 2 min de jogo, só em momento calmo (sem procurado, preso, morto, dormindo, em missão de tempo). Antes só dormir salvava,

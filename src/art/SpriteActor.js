@@ -43,6 +43,7 @@ class SpriteActor {
         this._setBounds(h);
 
         this._uv = new Float32Array(8);
+        SpriteActor.live.add(this);      // registro dos atores vivos (a varredura de 3 s sabe quais clipes estão em uso)
     }
 
     // Caixa envolvente do quad (lado 2h) com um pouco de altura: o frustum descarta o sprite fora da tela.
@@ -152,5 +153,6 @@ class SpriteActor {
 
     setVisible(v) { this.mesh.setEnabled(v); }
 
-    dispose() { this.mesh.dispose(); }
+    dispose() { this.mesh.dispose(); SpriteActor.live.delete(this); }
 }
+SpriteActor.live = new Set();
