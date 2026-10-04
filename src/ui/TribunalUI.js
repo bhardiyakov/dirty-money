@@ -13,22 +13,18 @@ class TribunalUI {
         this.opts = [];
         const st = document.createElement('style');
         st.textContent = `
-        #tribunal{position:fixed;inset:0;z-index:41;display:none;align-items:center;justify-content:center;background:rgba(6,2,2,.78);font-family:'Press Start 2P',monospace;color:#e8ecf2;image-rendering:pixelated}
-        #tribunal .tp{width:min(640px,94vw);background:#1a1214;border:3px solid #a33;box-shadow:0 0 0 3px #0b0607,0 10px 40px #000a;padding:16px 18px}
-        #tribunal h3{margin:0 0 6px;font-size:16px;letter-spacing:2px;color:#ff6a66;text-align:center}
-        #tribunal .sub{font-size:8px;line-height:1.7;color:#c9a9a9;text-align:center;margin-bottom:10px}
-        #tribunal .mo{display:flex;gap:10px;margin-bottom:12px;font-size:8px}
-        #tribunal .mo div{flex:1;background:#0f0a0b;border:2px solid #3a2326;padding:6px}
-        #tribunal .mo b{display:block;height:6px;background:#2a1c1e;margin-top:5px}
-        #tribunal .mo b i{display:block;height:100%}
-        #tribunal .opt{display:block;width:100%;text-align:left;font:inherit;font-size:9px;line-height:1.6;background:#241a1c;color:#e8ecf2;border:2px solid #5c3a3e;padding:9px 10px;margin-top:7px;cursor:pointer}
-        #tribunal .opt.sel{border-color:#ffd23a;background:#33242a}
-        #tribunal .opt.off{opacity:.38;cursor:not-allowed}
-        #tribunal .opt small{display:block;font-size:7px;color:#a98f92}`;
+        #tribunal{background:rgba(20,2,6,.72) !important}
+        #tribunal .tp{width:min(660px,94vw);border-color:rgba(244,63,94,0.55) !important;box-shadow:0 0 0 1px rgba(244,63,94,0.3),0 24px 70px rgba(120,0,20,0.5) !important}
+        #tribunal h3{color:#fb7185 !important}
+        #tribunal .mo{display:flex;gap:10px;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--tx-2)}
+        #tribunal .mo div{flex:1;background:var(--card);border:1px solid var(--line);border-radius:var(--r-3);padding:10px}
+        #tribunal .mo b{display:block;height:6px;background:rgba(255,255,255,0.08);margin-top:7px;border-radius:99px;overflow:hidden}
+        #tribunal .mo b i{display:block;height:100%;border-radius:99px}
+        #tribunal .opt.sel{border-color:#fb7185 !important;background:rgba(244,63,94,0.12) !important}`;
         document.head.appendChild(st);
         const r = this.root = document.createElement('div');
         r.id = 'tribunal';
-        r.innerHTML = '<div class="tp"><h3>TRIBUNAL DO CRIME</h3><div class="sub"></div><div class="mo"></div><div class="opts"></div></div>';
+        r.innerHTML = '<div class="tp"><h3>⚖️ Tribunal do Crime</h3><div class="sub"></div><div class="mo"></div><div class="opts"></div></div>';
         document.body.appendChild(r);
         this.$sub = r.querySelector('.sub'); this.$mo = r.querySelector('.mo'); this.$opts = r.querySelector('.opts');
         window.addEventListener('keydown', (e) => this._key(e));

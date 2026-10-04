@@ -1573,7 +1573,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         if (this.hiding || this.arrest || this.death) return;
         if (!this._sleepEl) {
             const el = this._sleepEl = document.createElement('div');
-            el.style.cssText = "position:fixed;inset:0;z-index:45;background:#000;opacity:0;pointer-events:none;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-family:'Press Start 2P',monospace;color:#cfd8e8;text-align:center;padding:20px";
+            el.style.cssText = "position:fixed;inset:0;z-index:45;background:#000;opacity:0;pointer-events:none;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-family:var(--font);font-size:18px;font-weight:600;color:#e6ebf5;text-align:center;padding:20px";
             document.body.appendChild(el);
         }
         this.player.velocity.setAll(0);

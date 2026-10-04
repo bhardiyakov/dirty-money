@@ -55,12 +55,12 @@ class Goals {
     _ensureEl() {
         if (this._el) return this._el;
         const st = document.createElement('style');
-        st.textContent = `#goalBox { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 9; pointer-events: none; display: flex; gap: 8px;
-                font-family: 'Silkscreen', 'Press Start 2P', 'Courier New', monospace; text-transform: uppercase; }
-            #goalBox .gl { min-width: 128px; padding: 4px 8px 5px; background: rgba(9,14,32,0.72); border: 2px solid rgba(53,224,255,0.45); border-radius: 8px; color: #dfe6f5; font-size: 9px; line-height: 1.25; }
-            #goalBox .gl b { display: block; font-size: 8px; color: #8fb4ff; letter-spacing: 1px; }
-            #goalBox .gl i { display: block; height: 4px; margin-top: 3px; background: #0a0f22; border-radius: 2px; overflow: hidden; }
-            #goalBox .gl i::after { content: ''; display: block; height: 100%; width: var(--p, 0%); background: linear-gradient(90deg, #35e0ff, #ff3ad0); }
+        st.textContent = `#goalBox { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 9; pointer-events: none; display: flex; gap: 8px; font-family: var(--font); }
+            #goalBox .gl { min-width: 150px; padding: 8px 12px 9px; background: var(--glass); border: 1px solid var(--line); border-radius: var(--r-2); color: var(--tx); font-size: 12px; font-weight: 600; line-height: 1.3;
+                -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+            #goalBox .gl b { display: block; font-size: 10px; font-weight: 700; color: var(--tx-3); letter-spacing: 0.1em; text-transform: uppercase; }
+            #goalBox .gl i { display: block; height: 4px; margin-top: 6px; background: rgba(255,255,255,0.08); border-radius: 99px; overflow: hidden; }
+            #goalBox .gl i::after { content: ''; display: block; height: 100%; width: var(--p, 0%); border-radius: 99px; background: linear-gradient(90deg, #22d3ee, #34d399); }
             body.mobile #goalBox { bottom: 4px; gap: 4px; transform: translateX(-50%) scale(0.78); transform-origin: bottom center; }
             body.mobile #goalBox .gl:nth-child(n+3) { display: none; }`;
         document.head.appendChild(st);

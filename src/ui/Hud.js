@@ -1,12 +1,11 @@
 // ============================================================================
-// Hud — a interface do jogo em PIXEL ART (substitui a caixa verde de depuração, que só aparece com `?debug`+dbg.hud).
+// Hud — a interface do jogo, em HD e cartões de vidro (tema em ui/Theme.js; ícones no estilo emoji).
 //   canto superior direito:  ARMA (ícone da arma em uso, ou uma mão se não há nenhuma + munição) |
 //                            NÍVEL DE PROCURADO (5 estrelas + status) | VIDA e COLETE (só se estiver usando) | $ e hora
 //   canto inferior esquerdo: o mapa (GPS, canvas #minimap, com moldura de pixel)
 //   canto inferior direito:  ao entrar num veículo, por 3 s, o MODELO dele (nome + imagem em pixel art)
 //   topo, no centro:         mensagens curtas (Pegou: AK-47, Roubando o carro…) — `toast`
-// Os painéis são DOM com moldura de pixels (bordas em degrau) e fonte de pixel; ícones e estrelas são canvas pequenos
-// ampliados sem suavização.
+// Os painéis são DOM com fundo translúcido desfocado; ícones são emojis (Noto Color Emoji) e as armas, arte vetorial HD.
 // ============================================================================
 
 class Hud {
@@ -21,154 +20,137 @@ class Hud {
 
     // ------------------------------------------------------------------ montagem
     _build() {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap';
-        document.head.appendChild(link);
-
         const css = document.createElement('style');
         css.textContent = `
-            #hud2 { position: fixed; top: 14px; right: 14px; width: 244px; display: flex; flex-direction: column; gap: 11px;
-                z-index: 10; pointer-events: none; font-family: 'Silkscreen', 'Press Start 2P', 'Courier New', monospace; text-transform: uppercase; color: #eef1f7; }
-            .px { position: relative; background: #141922; border: 4px solid #07090d;
-                box-shadow: inset 0 0 0 2px #3a4560, 0 0 0 2px #8791aa, 3px 3px 0 2px rgba(0,0,0,0.45); image-rendering: pixelated; }
-            .px-title { background: #05070b; text-align: center; font-weight: 700; font-size: 15px; padding: 5px 0 3px; letter-spacing: 1px; }
-            .px-body { padding: 8px 10px 9px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-            .px canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
-            .px-name { font-size: 14px; font-weight: 700; color: #aab3c8; letter-spacing: 1px; }
-            .px-name.on { color: #f1f4fb; }
-            .px-ammo { font-size: 12px; color: #ffd23f; min-height: 13px; }
-            .px-stars { display: flex; gap: 3px; margin-top: 2px; }
-            .px-status { font-size: 14px; font-weight: 700; letter-spacing: 1px; }
-            .px-forces { font-size: 9px; color: #8fb4ff; min-height: 10px; }
-            .px-row { width: 100%; display: flex; flex-direction: column; gap: 3px; }
-            .px-label { font-size: 15px; font-weight: 700; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
-            .px-bar { position: relative; height: 22px; background: #0a0d13; border: 3px solid #07090d; box-shadow: 0 0 0 2px #39425a; }
-            .px-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; }
-            .px-fill::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: rgba(255,255,255,0.28); }
-            .px-fill.hp { background: linear-gradient(180deg, #ff5b57 0 45%, #d02222 45% 100%); }
-            .px-fill.hp.low { background: linear-gradient(180deg, #ff9a3a 0 45%, #e0541a 45% 100%); animation: hpBlink 0.6s steps(2, jump-none) infinite; }
-            .px-fill.ar { background: linear-gradient(180deg, #5aa2ff 0 45%, #2a62d2 45% 100%); }
-            .px-pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
-                text-shadow: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000; }
-            .px-armor { display: flex; align-items: flex-end; gap: 8px; }
-            .px-armor .col { flex: 1; display: flex; flex-direction: column; gap: 3px; }
-            .px-lvl { font-size: 11px; text-align: right; color: #bcd0ff; }
-            .px-money { flex-direction: row; justify-content: space-between; font-size: 13px; padding: 6px 10px; }
-            .px-money .c { color: #ffd23f; } .px-money .t { color: #cfd6e6; }
-            @keyframes hpBlink { 0% { opacity: 1; } 50% { opacity: 0.55; } }
+            #hud2 { position: fixed; top: 16px; right: 16px; width: 330px; display: flex; flex-direction: column; gap: 10px; z-index: 10; pointer-events: none;
+                font-family: var(--font); color: var(--tx); transform-origin: top right; }
+            .px { position: relative; background: var(--glass); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--shadow-s);
+                -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+            .px-title { font: 700 11px var(--font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--tx-2); padding: 10px 14px 0; }
+            .px-body { padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 6px; }
 
-            #vehPop { position: fixed; right: 16px; bottom: 16px; z-index: 11; min-width: 250px; max-width: 340px; pointer-events: none;
-                font-family: 'Silkscreen', 'Press Start 2P', monospace; text-transform: uppercase; color: #f1f4fb;
-                opacity: 0; transform: translateX(40px); transition: opacity 0.25s steps(4), transform 0.25s steps(5); }
-            #vehPop.show { opacity: 1; transform: translateX(0); }
-            #vehPop .px-body { padding: 10px 14px 12px; gap: 8px; }
-            #vehPop .vt { font-size: 11px; color: #8d97ad; letter-spacing: 1px; }
-            #vehPop .vn { font-size: 16px; font-weight: 700; text-align: center; letter-spacing: 1px; }
+            /* cartão do jogador: arma à esquerda, vida e colete à direita */
+            .h-main { display: flex; gap: 12px; padding: 12px; align-items: stretch; }
+            .h-weap { width: 108px; flex: none; border-radius: var(--r-2); background: linear-gradient(160deg, rgba(255,255,255,0.09), rgba(255,255,255,0.02));
+                border: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 6px; }
+            .h-weap .w-icon { width: 92px; height: 46px; display: flex; align-items: center; justify-content: center; }
+            .h-weap .w-icon canvas { max-width: 100%; max-height: 100%; }
+            .h-weap .w-icon .emo { font-size: 36px; }
+            .px-name { font: 600 12px var(--font); color: var(--tx-2); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+            .px-name.on { color: var(--tx); }
+            .px-ammo { font: 700 15px var(--font-d); font-variant-numeric: tabular-nums; color: var(--gold); min-height: 0; }
+            .px-ammo:empty { display: none; }
+            .h-vit { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+            .vrow { display: flex; align-items: center; gap: 9px; }
+            .vrow .emo { font-size: 18px; width: 22px; text-align: center; flex: none; }
+            .vrow .vcol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+            .px-label { display: flex; justify-content: space-between; align-items: baseline; font: 600 11px var(--font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--tx-2); }
+            .px-label .px-pct { position: static; font: 700 14px var(--font-d); letter-spacing: 0; color: var(--tx); font-variant-numeric: tabular-nums; text-shadow: none; }
+            .px-lvl { font-size: 10px; color: var(--blue); margin-left: 6px; letter-spacing: 0.04em; }
+            .px-bar { position: relative; height: 8px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; }
+            .px-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; border-radius: 99px; transition: width .25s ease; }
+            .px-fill.hp { background: linear-gradient(90deg, #f43f5e, #fb7185); box-shadow: 0 0 10px rgba(244,63,94,0.55); }
+            .px-fill.hp.low { background: linear-gradient(90deg, #f97316, #f43f5e); animation: hpBlink .7s ease-in-out infinite; }
+            .px-fill.ar { background: linear-gradient(90deg, #3b82f6, #22d3ee); box-shadow: 0 0 10px rgba(59,130,246,0.5); }
+            .h-kit { font: 700 12px var(--font-d); color: #fda4af; display: inline-flex; align-items: center; gap: 3px; }
+            .h-kit:empty { display: none; }
+            @keyframes hpBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
 
-            #toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 12; pointer-events: none; max-width: 56vw; text-align: center;
-                font-family: 'Silkscreen', 'Press Start 2P', monospace; font-weight: 700; font-size: 15px; text-transform: uppercase; letter-spacing: 1px;
-                color: #ffe27a; padding: 8px 16px; display: none;
-                text-shadow: 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000; }
+            /* dinheiro, hora, missões */
+            .stats-panel { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 10px 14px; }
+            .stats-panel .st { display: flex; align-items: center; gap: 7px; font: 700 15px var(--font-d); font-variant-numeric: tabular-nums; white-space: nowrap; }
+            .stats-panel .st .emo { font-size: 17px; }
+            .stats-panel .st.cash { color: #86efac; flex-basis: 100%; justify-content: space-between; }
+            .stats-panel .st.cash small { font: 600 12px var(--font); color: #93c5fd; }
+            .stats-panel .st.cash small:empty { display: none; }
 
-            #prompt, #lockpick { font-family: 'Silkscreen', 'Courier New', monospace; text-transform: uppercase; border-radius: 0; border-width: 3px; }
-            #minimap { border-radius: 0 !important; border: 4px solid #07090d; box-shadow: inset 0 0 0 2px #3a4560, 0 0 0 2px #8791aa, 3px 3px 0 2px rgba(0,0,0,0.45) !important;
-                image-rendering: pixelated; left: 16px !important; bottom: 16px !important; }
-            #minimap.alert-r { border-color: #e03030 !important; box-shadow: inset 0 0 0 2px #7a1c1c, 0 0 0 2px #ff5a4d, 0 0 16px rgba(255,60,50,0.8) !important; }
-            #minimap.alert-b { border-color: #2f62e8 !important; box-shadow: inset 0 0 0 2px #1c2f7a, 0 0 0 2px #5a8aff, 0 0 16px rgba(60,110,255,0.8) !important; }
-            #inventory { left: 16px !important; right: auto !important; top: 16px !important; border-radius: 0 !important; font-family: 'Silkscreen', 'Courier New', monospace; text-transform: uppercase; }
+            /* procurado */
+            .wanted-panel .px-body { padding-top: 6px; gap: 4px; }
+            .px-stars { display: flex; gap: 4px; }
+            .px-stars .emo { font-size: 24px; transition: filter .2s, opacity .2s, transform .2s; }
+            .px-stars .emo.off { filter: grayscale(1) brightness(0.5); opacity: 0.45; }
+            .px-stars .emo.hot { filter: hue-rotate(-38deg) saturate(2.2) drop-shadow(0 0 6px rgba(255,60,60,0.9)); transform: scale(1.08); }
+            .px-status { font: 800 14px var(--font-d); letter-spacing: 0.06em; text-transform: uppercase; }
+            .px-forces { font: 500 11px var(--font); color: var(--tx-2); min-height: 0; }
+            .px-forces:empty { display: none; }
+
+            /* missão em andamento (canto superior esquerdo) */
+            #hMission { position: fixed; top: 16px; left: 16px; width: 280px; z-index: 10; pointer-events: none; font-family: var(--font); color: var(--tx); border-left: 3px solid var(--gold); }
+            #hMission .px-title { color: var(--gold); padding: 10px 14px 0; }
+            #hMission .px-body { padding: 6px 14px 11px; gap: 3px; }
+            #hMiX { font-size: 13px; color: var(--tx); line-height: 1.35; }
+            #hMiE { font: 700 13px var(--font-d); }
+
+            #vehPop { position: fixed; right: 16px; bottom: 16px; z-index: 11; min-width: 240px; max-width: 340px; pointer-events: none; font-family: var(--font); color: var(--tx);
+                opacity: 0; transform: translateY(16px); transition: opacity .25s ease, transform .25s ease; }
+            #vehPop.show { opacity: 1; transform: translateY(0); }
+            #vehPop .px-body { padding: 8px 16px 14px; gap: 10px; align-items: center; }
+            #vehPop .vn { font: 700 18px var(--font-d); text-align: center; }
+            #vehPop canvas { image-rendering: pixelated; }
+
+            #toast { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 12; pointer-events: none; max-width: min(620px, 56vw); text-align: center;
+                font: 600 15px/1.35 var(--font); color: var(--tx); padding: 10px 20px; display: none; border-radius: var(--r-pill);
+                background: var(--glass-2); border: 1px solid var(--line-2); box-shadow: var(--shadow-s); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+                animation: toastIn .22s ease-out; }
+            @keyframes toastIn { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+            #minimap { border-radius: 20px !important; border: 1px solid var(--line-2) !important; box-shadow: var(--shadow-s), 0 0 0 4px rgba(14,17,26,0.55) !important;
+                left: 16px !important; bottom: 16px !important; image-rendering: auto; }
+            #minimap.alert-r { border-color: var(--red) !important; box-shadow: 0 0 0 3px rgba(244,63,94,0.55), 0 0 22px rgba(244,63,94,0.6) !important; }
+            #minimap.alert-b { border-color: var(--blue) !important; box-shadow: 0 0 0 3px rgba(96,165,250,0.55), 0 0 22px rgba(96,165,250,0.6) !important; }
             /* operação policial na favela: o mapa vibra, a tela pulsa em vermelho (vibe de perigo) */
             @keyframes opShake { 0% { transform: translate(0,0) rotate(0deg); } 25% { transform: translate(-2px,1px) rotate(-0.4deg); } 50% { transform: translate(2px,-1px) rotate(0.4deg); } 75% { transform: translate(-1px,-2px) rotate(-0.2deg); } 100% { transform: translate(1px,2px) rotate(0.3deg); } }
-            @keyframes opGlow { 0%,100% { box-shadow: inset 0 0 0 2px #7a1c1c, 0 0 0 2px #ff5a4d, 0 0 6px rgba(255,60,50,0.5); } 50% { box-shadow: inset 0 0 0 2px #b02020, 0 0 0 2px #ff7a6d, 0 0 26px rgba(255,60,50,1); } }
+            @keyframes opGlow { 0%,100% { box-shadow: 0 0 0 3px rgba(244,63,94,0.4), 0 0 8px rgba(244,63,94,0.4); } 50% { box-shadow: 0 0 0 3px rgba(244,63,94,0.9), 0 0 30px rgba(244,63,94,0.95); } }
             @keyframes opPulse { 0%,100% { opacity: 0.35; } 50% { opacity: 0.9; } }
-            body.op-on #minimap { animation: opShake 0.16s steps(1) infinite, opGlow 0.9s ease-in-out infinite; border-color: #e03030 !important; }
-            body.op-on #pmMap { animation: opShake 0.14s steps(1) infinite; outline: 3px solid #e03030; box-shadow: 0 0 28px rgba(255,50,40,0.85); }
+            body.op-on #minimap { animation: opShake 0.16s steps(1) infinite, opGlow 0.9s ease-in-out infinite; border-color: var(--red) !important; }
+            body.op-on #pmMap { animation: opShake 0.14s steps(1) infinite; outline: 2px solid var(--red); box-shadow: 0 0 28px rgba(244,63,94,0.85); }
             #opVignette { position: fixed; inset: 0; z-index: 9; pointer-events: none; display: none;
-                background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(190,15,15,0.55) 100%); animation: opPulse 1.1s ease-in-out infinite; }
+                background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(190,15,30,0.5) 100%); animation: opPulse 1.1s ease-in-out infinite; }
             body.op-on #opVignette { display: block; }
             #hud { display: none; }`;
         document.head.appendChild(css);
-        // ---- visual NEON (JOGADOR | ARMA lado a lado, faixa de dinheiro/hora/missões embaixo; painéis arredondados com borda ciano→magenta)
-        const skin = document.createElement('style');
-        skin.textContent = `
-            #hud2 { width: 460px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; top: 12px; right: 12px; align-items: stretch; }
-            #hud2 .hp-panel { grid-column: 1; grid-row: 1; } #hud2 .weapon-panel { grid-column: 2; grid-row: 1; }
-            #hud2 .stats-panel { grid-column: 1 / 3; grid-row: 2; } #hud2 .wanted-panel { grid-column: 1 / 3; grid-row: 3; } #hud2 .moral-panel { grid-column: 1 / 3; grid-row: 4; }
-            .px { background: rgba(9, 14, 32, 0.86); border: none; border-radius: 14px; box-shadow: 0 0 18px rgba(53,224,255,0.18), 0 0 26px rgba(255,58,208,0.12); image-rendering: auto; overflow: hidden; }
-            .px::before { content: ''; position: absolute; inset: 0; border-radius: 14px; padding: 2.5px; pointer-events: none;
-                background: linear-gradient(135deg, #35e0ff 0%, #7a5cff 50%, #ff3ad0 100%);
-                -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
-            .px-title { background: rgba(0,0,0,0.38); border-bottom: 1px solid rgba(255,255,255,0.07); font-size: 15px; padding: 7px 0 5px; letter-spacing: 1.5px; color: #f4f7ff; }
-            .weapon-panel .px-title { color: #ffd23a; }
-            .px-title .kit { color: #ff6a8a; font-size: 11px; margin-left: 6px; }
-            .px-bar { height: 22px; background: #0a0f22; border: 2px solid #1f2a4a; border-radius: 8px; box-shadow: none; overflow: hidden; }
-            .px-fill { border-radius: 6px; } .px-fill::after { height: 5px; background: rgba(255,255,255,0.22); }
-            .px-fill.hp { background: linear-gradient(90deg, #ff3a8a 0%, #b04cff 55%, #4a7cff 100%); }
-            .px-fill.hp.low { background: linear-gradient(90deg, #ff9a3a, #e0541a); }
-            .px-fill.ar { background: linear-gradient(90deg, #2a7cff 0%, #35c8ff 100%); }
-            .px-pct { font-size: 14px; text-shadow: 0 1px 2px #000; }
-            .px-label { font-size: 15px; }
-            .hp-panel .px-body { padding: 12px 12px 12px; }
-            .vrow { display: flex; align-items: center; gap: 10px; } .vrow .vcol { flex: 1; min-width: 0; }
-            .vrow .h-icon, .vrow .a-icon { flex: none; width: 36px; display: flex; justify-content: center; }
-            .vrow canvas { image-rendering: pixelated; }
-            .weapon-panel .px-body { padding: 10px; justify-content: center; flex: 1; }
-            .weapon-panel .px-name { font-size: 15px; color: #dfe6f5; }
-            .weapon-panel .w-icon { width: 88%; display: flex; justify-content: center; }
-            .stats-panel { display: flex; justify-content: space-around; align-items: center; padding: 12px 8px; gap: 8px; font-size: 18px; letter-spacing: 1px; }
-            .stats-panel .st { display: flex; align-items: center; gap: 9px; color: #f2f5ff; white-space: nowrap; }
-            .stats-panel .ic-slot { display: inline-flex; } .stats-panel canvas { image-rendering: pixelated; }
-            .wanted-panel .px-title, .moral-panel .px-title { font-size: 12px; }
-            #minimap { border-radius: 14px !important; border: 3px solid #35e0ff !important;
-                box-shadow: 0 0 0 2px #0a1022, 0 0 14px rgba(53,224,255,0.55), 0 0 24px rgba(255,58,208,0.35) !important; image-rendering: auto; }
-        `;
-        document.head.appendChild(skin);
 
+        const E = (k, cls = '') => `<span class="emo ${cls}">${Emoji.char(k)}</span>`;
         const mk = (cls, html = '') => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; return d; };
         const root = this.root = mk('');
         root.id = 'hud2';
 
-        // ARMA
-        this.weaponPanel = mk('px weapon-panel', '<div class="px-title">ARMA</div><div class="px-body"><div class="w-icon"></div><div class="px-name" id="hWName"></div><div class="px-ammo" id="hWAmmo"></div></div>');
+        // JOGADOR: arma (ícone, nome, munição) + VIDA e COLETE + kits médicos
+        this.vitalPanel = this.weaponPanel = mk('px h-main', `
+            <div class="h-weap"><div class="w-icon"></div><div class="px-name" id="hWName"></div><div class="px-ammo" id="hWAmmo"></div></div>
+            <div class="h-vit">
+              <div class="vrow">${E('heart')}<div class="vcol"><div class="px-label"><span>Vida <span class="h-kit" id="hKit2"></span></span><span class="px-pct" id="hHpT"></span></div><div class="px-bar"><div class="px-fill hp" id="hHp"></div></div></div></div>
+              <div class="vrow" id="hArmorRow">${E('shield')}<div class="vcol"><div class="px-label"><span>Colete<span class="px-lvl" id="hArL"></span></span><span class="px-pct" id="hArT">0%</span></div><div class="px-bar"><div class="px-fill ar" id="hAr"></div></div></div></div>
+            </div>`);
+        // DINHEIRO (sujo e limpo), HORA e MISSÕES (troféu)
+        this.moneyPanel = mk('px stats-panel', `<div class="st cash"><span>${E('cash')} <span id="hCash"></span></span><small id="hClean"></small></div>
+            <div class="st">${E('clock')}<span id="hClock"></span></div><div class="st">${E('trophy')}<span id="hKit"></span></div>`);
         // PROCURADO
-        this.wantedPanel = mk('px wanted-panel', '<div class="px-title">NÍVEL DE PROCURADO</div><div class="px-body"><div class="px-stars"></div><div class="px-status" id="hStatus"></div><div class="px-forces" id="hForces"></div></div>');
-        // JOGADOR: VIDA e COLETE (com ícones), kit médico no título
-        this.vitalPanel = mk('px hp-panel', `<div class="px-title">JOGADOR <span class="kit" id="hKit2"></span></div><div class="px-body" style="align-items:stretch;gap:9px">
-            <div class="vrow"><div class="h-icon"></div><div class="vcol"><div class="px-label"><span>VIDA</span></div><div class="px-bar"><div class="px-fill hp" id="hHp"></div><div class="px-pct" id="hHpT"></div></div></div></div>
-            <div class="vrow" id="hArmorRow"><div class="a-icon"></div><div class="vcol"><div class="px-label"><span>COLETE</span><span class="px-lvl" id="hArL"></span></div><div class="px-bar"><div class="px-fill ar" id="hAr"></div><div class="px-pct" id="hArT">0%</div></div></div></div></div>`);
-        // DINHEIRO, HORA e MISSÕES (troféu)
-        this.moneyPanel = mk('px stats-panel', '<div class="st"><span class="ic-slot cash"></span><span id="hCash"></span></div><div class="st"><span class="ic-slot clock"></span><span id="hClock"></span></div><div class="st"><span class="ic-slot trophy"></span><span id="hKit"></span></div>');
-        this.missionPanel = mk('px', '<div class="px-title" style="font-size:11px" id="hMiT"></div><div class="px-body" style="gap:2px;padding:5px 8px"><div class="px-forces" style="color:#ffe27a;font-size:10px;text-align:center" id="hMiX"></div><div class="px-status" style="font-size:13px" id="hMiE"></div></div>');
+        this.wantedPanel = mk('px wanted-panel', '<div class="px-title">Procurado</div><div class="px-body"><div class="px-stars"></div><div class="px-status" id="hStatus"></div><div class="px-forces" id="hForces"></div></div>');
+        this.missionPanel = mk('px', '<div class="px-title" id="hMiT"></div><div class="px-body"><div id="hMiX"></div><div id="hMiE"></div></div>');
+        this.missionPanel.id = 'hMission';
         this.missionPanel.style.display = 'none';
-        root.append(this.vitalPanel, this.weaponPanel, this.moneyPanel, this.wantedPanel);
-        Object.assign(this.missionPanel.style, { position: 'fixed', top: '14px', left: '14px', width: '230px', zIndex: '10', pointerEvents: 'none', fontFamily: "'Silkscreen', 'Press Start 2P', monospace", textTransform: 'uppercase', color: '#eef1f7' });
+        root.append(this.vitalPanel, this.moneyPanel, this.wantedPanel);
         document.body.appendChild(this.missionPanel);
         const vg = document.createElement('div'); vg.id = 'opVignette'; document.body.appendChild(vg);
         document.body.appendChild(root);
-        // o HUD de vida/colete/arma ocupa só ~10% da tela: escala com a largura da janela (celular tem a própria regra no TouchControls)
+        // o HUD acompanha a largura da janela (celular tem a própria regra no TouchControls)
         const fit = () => {
             if (document.body.classList.contains('mobile')) { root.style.transform = ''; return; }
-            const s = Math.max(0.5, Math.min(0.78, window.innerWidth / 2600));
-            root.style.transform = `scale(${s})`; root.style.transformOrigin = 'top right';
+            const s = Math.max(0.78, Math.min(1.15, window.innerWidth / 1500));
+            root.style.transform = `scale(${s})`;
+            this.missionPanel.style.transform = `scale(${s})`; this.missionPanel.style.transformOrigin = 'top left';
         };
         fit(); window.addEventListener('resize', fit);
 
         // Estrelas
         const starsEl = this.wantedPanel.querySelector('.px-stars');
         this.stars = [];
-        for (let i = 0; i < Config.wanted.maxLevel; i++) {
-            const c = Hud._star(false); starsEl.appendChild(c); this.stars.push(c);
-        }
-        this.starOn = Hud._star(true); this.starOff = Hud._star(false); this.starHot = Hud._star(true, true);
-        this.vestIcon = this._canvasFromPixels(ItemSprites.icon('vest'), 1);
-        this.weaponPanel.querySelector('.w-icon').appendChild(this.wIcon = document.createElement('canvas'));
-        this.vitalPanel.querySelector('.a-icon').appendChild(this.aIcon = document.createElement('canvas'));
-        // ícones do painel (pixel art desenhada em código)
-        this.vitalPanel.querySelector('.h-icon').appendChild(Hud._icon('heart'));
-        for (const k of ['cash', 'clock', 'trophy']) this.moneyPanel.querySelector('.ic-slot.' + k).appendChild(Hud._icon(k));
+        for (let i = 0; i < Config.wanted.maxLevel; i++) { const s = document.createElement('span'); s.className = 'emo off'; s.textContent = Emoji.char('star'); starsEl.appendChild(s); this.stars.push(s); }
+        this.wIcon = this.weaponPanel.querySelector('.w-icon');
 
         // Janela do veículo e mensagens
-        this.vehPop = mk('', '<div class="px"><div class="px-title">VEÍCULO</div><div class="px-body"><div class="vn" id="vName"></div><div class="v-img"></div></div></div>');
+        this.vehPop = mk('', '<div class="px"><div class="px-title">Veículo</div><div class="px-body"><div class="vn" id="vName"></div><div class="v-img"></div></div></div>');
         this.vehPop.id = 'vehPop';
         document.body.appendChild(this.vehPop);
         this.toastEl = mk('');
@@ -179,68 +161,13 @@ class Hud {
     }
 
     // ------------------------------------------------------------------ ícones
-    // PixelCanvas -> <canvas> ampliado `k`× (pixels nítidos).
-    _canvasFromPixels(px, k = 1) {
-        const c = document.createElement('canvas');
-        c.width = px.w; c.height = px.h;
-        const x = c.getContext('2d'), id = x.createImageData(px.w, px.h);
-        id.data.set(px.data);
-        x.putImageData(id, 0, 0);
-        c.style.width = px.w * k + 'px'; c.style.height = px.h * k + 'px';
-        return c;
-    }
-
-    // Ícones 12×? em pixel art (grade de caracteres → canvas ampliado 3×): heart | cash | clock | trophy.
-    static _icon(kind) {
-        const P = {
-            heart: { rows: ['..RR..RR..', '.RHHRRRRR.', 'RHHRRRRRRR', 'RHRRRRRRRR', '.RRRRRRRR.', '..RRRRRR..', '...RRRR...', '....RR....'], pal: { R: '#ff4a6e', H: '#ffb0c0' } },
-            cash: { rows: ['GGGGGGGGGGGG', 'GddddddddddG', 'GdddLLLLdddG', 'GdddLddLdddG', 'GdddLLLLdddG', 'GddddddddddG', 'GGGGGGGGGGGG'], pal: { G: '#1a7a3a', d: '#3fcf68', L: '#c4f8d2' } },
-            clock: { rows: ['...WWWWWW...', '..WwwwwwwW..', '.WwwwKwwwwW.', 'WwwwwKwwwwwW', 'WwwwwKwwwwwW', 'WwwwwKKKKwwW', 'WwwwwwwwwwwW', '.WwwwwwwwwW.', '..WwwwwwwW..', '...WWWWWW...'], pal: { W: '#e8ecf8', w: '#35c8ff', K: '#10162c' } },
-            trophy: { rows: ['YYYYYYYYYY', 'YyyyyyyyyY', 'YyyyyyyyyY', '.YyyyyyyY.', '..YyyyyY..', '...YyyY...', '....YY....', '....YY....', '..YYYYYY..', '..YYYYYY..'], pal: { Y: '#ffc72e', y: '#ffe27a' } },
-        }[kind];
-        const k = 3, w = P.rows[0].length, c = document.createElement('canvas');
-        c.width = w * k; c.height = P.rows.length * k;
-        const x = c.getContext('2d');
-        P.rows.forEach((r, j) => { for (let i = 0; i < w; i++) { const ch = r[i]; if (ch === '.' || !P.pal[ch]) continue; x.fillStyle = P.pal[ch]; x.fillRect(i * k, j * k, k, k); } });
-        return c;
-    }
-
-    // Estrela 9×9 ampliada 4×. on = cheia | hot = vermelha (4–5★).
-    static _star(on, hot = false) {
-        const rows = ['....X....', '....X....', '...XXX...', 'XXXXXXXXX', '.XXXXXXX.', '..XXXXX..', '..XXXXX..', '.XXX.XXX.', '.XX...XX.'];
-        const p = new PixelCanvas(11, 11);
-        const fill = on ? (hot ? [255, 120, 104] : [244, 244, 246]) : [43, 48, 62];
-        const shade = on ? (hot ? [190, 60, 52] : [168, 170, 180]) : [30, 34, 45];
-        rows.forEach((r, j) => [...r].forEach((ch, i) => { if (ch === 'X') p.set(i + 1, j + 1, j >= 5 ? shade : fill); }));
-        ItemSprites._outline(p);
-        const c = document.createElement('canvas');
-        c.width = 11; c.height = 11;
-        const x = c.getContext('2d'), id = x.createImageData(11, 11);
-        id.data.set(p.data); x.putImageData(id, 0, 0);
-        c.style.width = '40px'; c.style.height = '40px';
-        return c;
-    }
-
-    // Mão aberta (sem arma): bitmap 16×14 em tons de pele.
-    _handPixels() {
-        const rows = [
-            '......XX........', '.....XXXX.......', '.....XXXX.XX....', '.XX..XXXX.XXXX..', '.XXX.XXXX.XXXX..',
-            '.XXXXXXXXXXXXXX.', '..XXXXXXXXXXXXX.', '...XXXXXXXXXXXX.', '....XXXXXXXXXXX.', '....XXXXXXXXXXX.',
-            '.....XXXXXXXXX..', '......XXXXXXX...', '......XXXXXX....', '......XXXXXX....',
-        ];
-        const p = new PixelCanvas(18, 16);
-        rows.forEach((r, j) => [...r].forEach((ch, i) => {
-            if (ch !== 'X') return;
-            const edgeR = r[i + 1] !== 'X', low = j > 9;
-            p.set(i + 1, j + 1, edgeR || low ? [214, 160, 118] : (i < 5 ? [240, 196, 156] : [232, 184, 142]));
-        }));
-        ItemSprites._outline(p);
-        return p;
-    }
-
     // Ícone de uma arma (do atlas de itens) em canvas, ampliado 2×.
     _weaponIcon(key) {
-        if (!this._icons[key]) { const c = WeaponArt.canvas(key); c.style.width = '100%'; c.style.height = 'auto'; c.style.imageRendering = 'pixelated'; this._icons[key] = c; }      // arte realista (art/WeaponArt.js)
+        if (!this._icons[key]) {
+            const ch = Emoji.VECTOR[key] ? null : Emoji.char(key);                 // faca, taco, mão: emoji; armas de fogo: arte vetorial HD
+            if (ch) { const e = document.createElement('span'); e.className = 'emo'; e.textContent = ch; this._icons[key] = e; }
+            else { const c = WeaponArt.canvas(key); c.style.width = '100%'; c.style.height = 'auto'; this._icons[key] = c; }
+        }
         return this._icons[key];
     }
 
@@ -315,13 +242,8 @@ class Hud {
         // ---- arma
         const wk = pl.weapon === 'none' ? 'fists' : pl.weapon, W = Weapons[wk];
         const none = pl.weapon === 'none' || wk === 'fists';
-        this._set('wIcon', none ? 'none' : wk, (k) => {
-            const src = this._weaponIcon(k);
-            this.wIcon.width = src.width; this.wIcon.height = src.height;
-            this.wIcon.getContext('2d').drawImage(src, 0, 0);
-            this.wIcon.style.width = '100%'; this.wIcon.style.height = 'auto'; this.wIcon.style.imageRendering = 'pixelated';
-        });
-        this._set('wName', none ? 'NENHUMA' : W.name, (v) => { const e = this.$('hWName'); e.textContent = v; e.classList.toggle('on', !none); });
+        this._set('wIcon', none ? 'none' : wk, (k) => { this.wIcon.replaceChildren(this._weaponIcon(k)); });
+        this._set('wName', none ? 'Desarmado' : W.name, (v) => { const e = this.$('hWName'); e.textContent = v; e.classList.toggle('on', !none); });
         const ammo = !none && inv.isGun(wk) ? `${inv.mag(wk)}/${inv.reserve(wk)}${g.reloading > 0 ? ' ↻' : ''}` : '';
         this._set('wAmmo', ammo, (v) => { this.$('hWAmmo').textContent = v; });
 
@@ -330,27 +252,24 @@ class Hud {
         this._set('wShow', lvl > 0 || g.wanted.lose > 0.3 || !!g.hiding, (v) => { this.wantedPanel.style.display = v ? '' : 'none'; });      // painel de procurado só quando há procurado
         const hot = lvl >= 4;
         this._set('stars', lvl + (hot ? 'h' : ''), () => {
-            this.stars.forEach((c, i) => {
-                const src = i < lvl ? (hot ? this.starHot : this.starOn) : this.starOff;
-                c.getContext('2d').clearRect(0, 0, 11, 11); c.getContext('2d').drawImage(src, 0, 0, 11, 11);
-            });
+            this.stars.forEach((c, i) => { c.className = 'emo' + (i < lvl ? (hot ? ' hot' : '') : ' off'); });
         });
         let st, col;
-        if (g.hiding && g.hiding.phase === 'hidden') { st = g.hiding.seen ? 'VISTO! ELES VÊM' : 'ESCONDIDO'; col = g.hiding.seen ? '#ff5a4d' : '#8fd6ff'; }
-        else if (lvl <= 0) { st = 'LIMPO'; col = '#6dff8a'; }
-        else if (g.bustTimer > 0) { st = `PRESO EM ${Math.max(0, Config.police.bustTime - g.bustTimer).toFixed(1)}S`; col = '#ff5a4d'; }
-        else if (g.wanted.lose > 0.3) { st = `ESCAPANDO ${Math.max(0, g.wanted.cfg.lose - g.wanted.lose).toFixed(1)}S`; col = '#7dff9a'; }
-        else { st = 'PROCURADO'; col = '#ff8a3d'; }
+        if (g.hiding && g.hiding.phase === 'hidden') { st = g.hiding.seen ? 'Visto! Eles vêm' : 'Escondido'; col = g.hiding.seen ? '#fb7185' : '#7dd3fc'; }
+        else if (lvl <= 0) { st = 'Limpo'; col = '#86efac'; }
+        else if (g.bustTimer > 0) { st = `Preso em ${Math.max(0, Config.police.bustTime - g.bustTimer).toFixed(1)}s`; col = '#fb7185'; }
+        else if (g.wanted.lose > 0.3) { st = `Escapando ${Math.max(0, g.wanted.cfg.lose - g.wanted.lose).toFixed(1)}s`; col = '#86efac'; }
+        else { st = 'Procurado'; col = '#fdba74'; }
         this._set('status', st + col, () => { const e = this.$('hStatus'); e.textContent = st; e.style.color = col; });
         let forces = '';
         if (lvl > 0 && g.policeManager) {
             const pm = g.policeManager, n = (f) => pm.officers.filter((o) => o.alive && f(o)).length;
             const cars = pm.cars.filter((c) => c.role !== 'block' && c.fsm.name === 'CHASE').length;
-            const parts = [`${cars} VIAT`, `${n((o) => o.kind === 'cop' && o.fsm.name === 'CHASE')} A PÉ`];
-            if (pm.heli && pm.heli.alive) parts.push('HELI');
+            const parts = [`🚓 ${cars}`, `👮 ${n((o) => o.kind === 'cop' && o.fsm.name === 'CHASE')}`];
+            if (pm.heli && pm.heli.alive) parts.push('🚁');
             if (n((o) => o.kind === 'swat')) parts.push(`SWAT ${n((o) => o.kind === 'swat')}`);
-            if (n((o) => o.kind === 'army')) parts.push(`EB ${n((o) => o.kind === 'army')}`);
-            if (pm.blocks.active) parts.push(`${pm.blocks.active} BLOQ`);
+            if (n((o) => o.kind === 'army')) parts.push(`Exército ${n((o) => o.kind === 'army')}`);
+            if (pm.blocks.active) parts.push(`🚧 ${pm.blocks.active}`);
             forces = parts.join(' · ');
         }
         this._set('forces', forces, (v) => { this.$('hForces').textContent = v; });
@@ -363,26 +282,20 @@ class Hud {
         this._set('mi', mi ? mi.title + mi.extra + mi.low : '', () => {
             this.missionPanel.style.display = mi ? '' : 'none';
             if (!mi) return;
-            this.$('hMiT').textContent = (g.careers && g.careers.job ? '' : 'MISSÃO · ') + mi.title; this.$('hMiX').textContent = mi.text; const e = this.$('hMiE'); e.textContent = mi.extra; e.style.color = mi.low ? '#ff5a4d' : '#9ec5ff';
+            this.$('hMiT').textContent = (g.careers && g.careers.job ? '' : 'Missão · ') + mi.title; this.$('hMiX').textContent = mi.text; const e = this.$('hMiE'); e.textContent = mi.extra; e.style.color = mi.low ? '#fb7185' : '#93c5fd';
         });
         // ---- vida e colete
         const hp =Math.max(0, Math.min(1, pl.hp / pl.maxHp)), hpPct = Math.round(hp * 100);
-        this._set('hp', hpPct, (v) => { this.$('hHp').style.width = v + '%'; this.$('hHpT').textContent = v + '%'; this.$('hHp').classList.toggle('low', v < 30); });
+        this._set('hp', hpPct, (v) => { this.$('hHp').style.width = v + '%'; this.$('hHpT').textContent = v; this.$('hHp').classList.toggle('low', v < 30); });
         const hasVest = pl.armorMax > 0 && pl.armor > 0;
-        this._set('vestIcon', 1, () => {                                       // o COLETE aparece sempre (0% sem colete)
-            if (this.aIcon.width_set) return;
-            this.aIcon.width = this.vestIcon.width; this.aIcon.height = this.vestIcon.height;
-            this.aIcon.getContext('2d').drawImage(this.vestIcon, 0, 0);
-            this.aIcon.style.width = '36px'; this.aIcon.style.height = '36px'; this.aIcon.width_set = true;
-        });
         const ap = hasVest ? Math.round((pl.armor / pl.armorMax) * 100) : 0;
-        this._set('ar', ap, (v) => { this.$('hAr').style.width = v + '%'; this.$('hArT').textContent = v + '%'; });
-        this._set('arl', hasVest ? pl.armorMax : 0, (v) => { this.$('hArL').textContent = v ? 'NÍVEL ' + (v >= 100 ? 2 : 1) : ''; });
+        this._set('ar', ap, (v) => { this.$('hAr').style.width = v + '%'; this.$('hArT').textContent = v; });
+        this._set('arl', hasVest ? pl.armorMax : 0, (v) => { this.$('hArL').textContent = v ? 'nível ' + (v >= 100 ? 2 : 1) : ''; });
 
         // ---- dinheiro, hora e kits
-        this._set('cash', inv.cash + '/' + inv.clean, () => { this.$('hCash').textContent = brl(inv.cash) + (inv.clean > 0 ? ' · ✔' + brl(inv.clean) : ''); });
+        this._set('cash', inv.cash + '/' + inv.clean, () => { this.$('hCash').textContent = brl(inv.cash); this.$('hClean').textContent = inv.clean > 0 ? 'limpo ' + brl(inv.clean) : ''; });
         this._set('clock', g.dayNight.label, (v) => { this.$('hClock').textContent = v; });
         this._set('kit', Standing.missionsDone, (v) => { this.$('hKit').textContent = '+' + v; });                 // troféu: missões do tráfico cumpridas
-        this._set('kit2', inv.medkits, (v) => { this.$('hKit2').textContent = v ? '✚' + v : ''; });                 // kits médicos no título do JOGADOR
+        this._set('kit2', inv.medkits, (v) => { this.$('hKit2').innerHTML = v ? `<span class="emo" style="font-size:12px">${Emoji.char('medkit')}</span>${v}` : ''; });                 // kits médicos no título do JOGADOR
     }
 }

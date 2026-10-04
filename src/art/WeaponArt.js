@@ -15,7 +15,7 @@ const WeaponArt = {
     canvas(key) {
         if (key === 'none') key = 'fists';
         if (this._cache[key]) return this._cache[key];
-        const g = new WeaponArt.Grid(this.W, this.H);
+        const g = new WeaponArt.VGrid(this.W, this.H, 4);                 // HD: as mesmas formas, desenhadas em vetor 4× (estilo emoji)
         (this['_' + key] || this._pistol).call(this, g);
         return (this._cache[key] = g.render());
     },
@@ -237,5 +237,76 @@ WeaponArt.Grid = class {
         const x = c.getContext('2d');
         for (let j = 0; j < this.h; j++) for (let i = 0; i < this.w; i++) { const col = this.d[j * this.w + i]; if (col) { x.fillStyle = col; x.fillRect(i, j, 1, 1); } }
         return c;
+    }
+};
+
+// ----------------------------------------------------------------------------- versão vetorial em HD (interface moderna)
+// Mesma API da Grid, mas cada primitiva vira um caminho suave do Canvas 2D em escala `k`, com gradiente da paleta
+// [claro, base, escuro, mais escuro], brilho no topo e contorno arredondado — o visual de um emoji. Os detalhes de textura
+// pixel a pixel (que leem `get`) simplesmente não aparecem.
+WeaponArt.VGrid = class {
+    constructor(w, h, k) { this.w = w; this.h = h; this.k = k; this.ops = []; this.outline = '#101216'; }
+    get() { return null; }
+    px(x, y, c) { this.ops.push(['dot', x, y, c]); }
+    rect(x, y, w, h, c) { this.ops.push(['rect', x, y, w, h, c]); }
+    line(x0, y0, x1, y1, c) { this.ops.push(['line', [[x0, y0], [x1, y1]], 1, c]); }
+    thick(pts, c) { this.ops.push(['line', pts, 2.2, c]); }
+    rectH(x, y, w, h, P) { this.ops.push(['rectH', x, y, w, h, P]); }
+    poly(pts, P) { this.ops.push(['poly', pts, P]); }
+    cap(ax, ay, bx, by, r, P) { this.ops.push(['cap', ax, ay, bx, by, r, P]); }
+    finish(color) { this.outline = color; }
+    _grad(x, y0, y1, P) {
+        const g = x.createLinearGradient(0, y0, 0, y1);
+        g.addColorStop(0, P[0]); g.addColorStop(0.28, P[1]); g.addColorStop(0.78, P[2] || P[1]); g.addColorStop(1, P[3] || P[2] || P[1]);
+        return g;
+    }
+    render() {
+        const k = this.k, W = this.w * k, H = this.h * k, pad = 3 * k;
+        const body = document.createElement('canvas'); body.width = W; body.height = H;
+        const x = body.getContext('2d');
+        x.scale(k, k); x.lineJoin = 'round'; x.lineCap = 'round';
+        for (const o of this.ops) {
+            const t = o[0];
+            if (t === 'poly') {
+                const pts = o[1]; let y0 = 1e9, y1 = -1e9;
+                for (const p of pts) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+                x.beginPath(); pts.forEach((p, i) => (i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1]))); x.closePath();
+                x.fillStyle = this._grad(x, y0, y1 + 1, o[2]); x.fill();
+                x.strokeStyle = o[2][1]; x.lineWidth = 0.6; x.stroke();
+            } else if (t === 'rectH') {
+                const [, rx, ry, rw, rh, P] = o;
+                x.beginPath(); x.roundRect(rx, ry, rw, rh, Math.min(rh, rw) * 0.28);
+                x.fillStyle = this._grad(x, ry, ry + rh, P); x.fill();
+            } else if (t === 'cap') {
+                const [, ax, ay, bx, by, r, P] = o;
+                x.strokeStyle = P[2]; x.lineWidth = r * 2; x.beginPath(); x.moveTo(ax, ay); x.lineTo(bx, by); x.stroke();
+                x.strokeStyle = P[1]; x.lineWidth = r * 1.55; x.beginPath(); x.moveTo(ax - 0.3, ay - 0.3); x.lineTo(bx - 0.3, by - 0.3); x.stroke();
+                x.strokeStyle = P[0]; x.lineWidth = r * 0.55; x.beginPath(); x.moveTo(ax - r * 0.4, ay - r * 0.35); x.lineTo(bx - r * 0.4, by - r * 0.35); x.stroke();
+            } else if (t === 'rect') {
+                const [, rx, ry, rw, rh, c] = o;
+                x.fillStyle = c; x.beginPath(); x.roundRect(rx, ry, rw, rh, Math.min(rw, rh) * 0.35); x.fill();
+            } else if (t === 'line') {
+                const [, pts, lw, c] = o;
+                x.strokeStyle = c; x.lineWidth = lw; x.beginPath(); pts.forEach((p, i) => (i ? x.lineTo(p[0] + 0.5, p[1] + 0.5) : x.moveTo(p[0] + 0.5, p[1] + 0.5))); x.stroke();
+            } else if (t === 'dot') {
+                x.fillStyle = o[3]; x.beginPath(); x.arc(o[1] + 0.5, o[2] + 0.5, 0.75, 0, Math.PI * 2); x.fill();
+            }
+        }
+        // brilho suave na metade de cima (o "vidrado" dos emojis)
+        x.setTransform(1, 0, 0, 1, 0, 0);
+        x.globalCompositeOperation = 'source-atop';
+        const gl = x.createLinearGradient(0, 0, 0, H); gl.addColorStop(0, 'rgba(255,255,255,0.22)'); gl.addColorStop(0.45, 'rgba(255,255,255,0.04)'); gl.addColorStop(1, 'rgba(0,0,0,0.12)');
+        x.fillStyle = gl; x.fillRect(0, 0, W, H);
+        x.globalCompositeOperation = 'source-over';
+        // contorno arredondado: a silhueta dilatada, pintada na cor do contorno, por trás
+        const out = document.createElement('canvas'); out.width = W + pad * 2; out.height = H + pad * 2;
+        const o = out.getContext('2d'), r = 1.1 * k;
+        for (let a = 0; a < 16; a++) o.drawImage(body, pad + Math.cos(a / 16 * Math.PI * 2) * r, pad + Math.sin(a / 16 * Math.PI * 2) * r);
+        o.globalCompositeOperation = 'source-in'; o.fillStyle = this.outline; o.fillRect(0, 0, out.width, out.height);
+        o.globalCompositeOperation = 'source-over'; o.drawImage(body, pad, pad);
+        // recorta de volta para W×H (mantém o 2:1 e o encaixe dos ícones antigos)
+        const fin = document.createElement('canvas'); fin.width = W; fin.height = H;
+        fin.getContext('2d').drawImage(out, 0, 0, out.width, out.height, 0, 0, W, H);
+        return fin;
     }
 };

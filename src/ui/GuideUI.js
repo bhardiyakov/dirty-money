@@ -13,16 +13,16 @@ class GuideUI {
         st.textContent = `
             #pmGuide { display: flex; gap: 14px; width: 100%; min-height: 0; }
             .gd-index { width: 250px; flex: none; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
-            .gd-index div { cursor: pointer; padding: 8px 11px; border-radius: 10px; background: rgba(9,14,32,0.86); border: 2px solid #1f2a4a; color: #cfd7ea; font-size: 13px; }
-            .gd-index div:hover { border-color: #3a4a7a; } .gd-index div.on { border-color: #35e0ff; color: #fff; box-shadow: 0 0 12px rgba(53,224,255,0.35); }
-            .gd-index .gd-h { cursor: default; background: none; border: none; color: #8fb4ff; font-size: 11px; letter-spacing: 2px; padding: 8px 4px 2px; }
-            .gd-body { flex: 1; min-width: 0; overflow-y: auto; background: rgba(9,14,32,0.86); border-radius: 12px; border: 2px solid #1f2a4a; padding: 16px 20px; color: #dfe6f5; font-size: 14px; line-height: 1.55; text-transform: none; }
-            .gd-body h2 { margin: 0 0 10px; font-size: 20px; color: #fff; letter-spacing: 1px; text-transform: uppercase; }
-            .gd-body h3 { margin: 16px 0 6px; font-size: 15px; color: #ffe27a; text-transform: uppercase; letter-spacing: 1px; }
+            .gd-index div { cursor: pointer; padding: 8px 11px; border-radius: var(--r-2); background: var(--glass); border: 1px solid var(--line-2); color: var(--tx-2); font-size: 13px; }
+            .gd-index div:hover { border-color: rgba(255,255,255,0.3); } .gd-index div.on { border-color: var(--tx); color: #fff; background: var(--card-on); }
+            .gd-index .gd-h { cursor: default; background: none; border: none; color: var(--blue); font-size: 11px; letter-spacing: 2px; padding: 8px 4px 2px; }
+            .gd-body { flex: 1; min-width: 0; overflow-y: auto; background: var(--glass); border-radius: var(--r); border: 1px solid var(--line-2); padding: 16px 20px; color: var(--tx); font-size: 15px; line-height: 1.65; text-transform: none; padding: 22px 28px; }
+            .gd-body h2 { margin: 0 0 12px; font: 700 26px var(--font-d); color: var(--tx); }
+            .gd-body h3 { margin: 18px 0 6px; font: 700 17px var(--font-d); color: var(--gold); }
             .gd-body p { margin: 6px 0; } .gd-body ul { margin: 4px 0 8px; padding-left: 20px; } .gd-body li { margin: 3px 0; }
-            .gd-body b { color: #ffe27a; } .gd-body kbd { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 4px; background: #1d2a4d; border: 1px solid #3f5a8a; color: #fff; font: inherit; font-size: 12px; text-align: center; }
-            .gd-body table { border-collapse: collapse; width: 100%; margin: 6px 0; } .gd-body td, .gd-body th { border-bottom: 1px solid #1f2a4a; padding: 5px 6px; text-align: left; vertical-align: top; font-size: 13px; } .gd-body th { color: #8fb4ff; }
-            .gd-tip { margin: 10px 0; padding: 8px 12px; border-left: 3px solid #35e0ff; background: rgba(53,224,255,0.07); border-radius: 0 8px 8px 0; }
+            .gd-body b { color: var(--gold); } .gd-body kbd { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 4px; background: rgba(255,255,255,0.14); border: 1px solid #3f5a8a; color: #fff; font: inherit; font-size: 12px; text-align: center; }
+            .gd-body table { border-collapse: collapse; width: 100%; margin: 6px 0; } .gd-body td, .gd-body th { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: left; vertical-align: top; font-size: 13px; } .gd-body th { color: var(--blue); }
+            .gd-tip { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--acc); background: rgba(52,211,153,0.08); border-radius: 0 8px 8px 0; }
             @media (max-width: 900px) { #pmGuide { flex-direction: column; } .gd-index { width: auto; flex-direction: row; overflow-x: auto; } .gd-index div { white-space: nowrap; } .gd-index .gd-h { display: none; } }`;
         document.head.appendChild(st);
     }
