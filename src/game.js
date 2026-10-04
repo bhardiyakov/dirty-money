@@ -316,9 +316,27 @@ class Game {
         if (this._pendingSave) {
             try { if (SaveGame.apply(this, this._pendingSave)) this._flash('Jogo carregado — ' + SaveGame.label(this._pendingSave)); } catch (e) { console.error('[SAVE] falha ao aplicar:', e); }
         }
+        this._releaseStaticGeometry();
         if (!this._pendingSave && SafeHouse.placed) this._flash('Você acordou no seu esconderijo, na favela — a porta turquesa fica ao sul');
         this._pendingSave = null;
         this._start();
+    }
+
+    // Malhas estáticas (transform congelado, buffers não atualizáveis): a GPU já tem os vértices; a cópia na RAM de normais, UVs e
+    // cores (o Babylon guarda para picking/serialização, que o jogo não usa) é liberada. ~80 MB a menos de heap. Repetido de vez em quando para pegar
+    // o que é refeito em jogo (postes quebrados etc.). O chão fica de fora (a física dele é uma malha de triângulos).
+    _releaseStaticGeometry() {
+        let freed = 0;
+        for (const g of this.scene.geometries) {
+            if (g._dmReleased || !g.meshes.length) continue;
+            const vbs = g.getVertexBuffers(); if (!vbs) continue;
+            if (Object.values(vbs).some((vb) => vb.isUpdatable())) { g._dmReleased = true; continue; }
+            if (!g.meshes.every((m) => m.isWorldMatrixFrozen && m !== this.gameEngine.ground && !m.physicsBody)) continue;
+            // posições e índices ficam (caixas envolventes, ordenação de transparentes); normais, UVs e cores só vivem na GPU
+            for (const [kind, vb] of Object.entries(vbs)) if (kind !== BABYLON.VertexBuffer.PositionKind && vb._buffer && vb._buffer._data) { vb._buffer._data = null; freed++; }
+            g._dmReleased = true;
+        }
+        if (freed) console.log(`[MEMÓRIA] ${freed} buffers de vértices estáticos liberados da RAM (ficam só na GPU)`);
     }
 
     // Materiais do mundo que nunca mudam de estado de shader (defines): congela (não reavalia a cada quadro). A água troca de textura
@@ -590,6 +608,8 @@ class Game {
         if (this.achievements) this.achievements.update(dt);
         if (this.empire) { this.empire.update(dt); EmpireUI.hud(this); }
         this._autosave(dt);
+        this._geoT = (this._geoT || 0) + dt;
+        if (this._geoT > 15) { this._geoT = 0; this._releaseStaticGeometry(); }
     }
 
     // Autosave: a cada 2 min de jogo, só em momento calmo (sem procurado, preso, morto, dormindo, em missão de tempo). Antes só dormir salvava,

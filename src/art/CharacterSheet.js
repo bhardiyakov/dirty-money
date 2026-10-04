@@ -41,16 +41,18 @@ const SpriteMaterial = {
             uniform vec2 palSize;
             uniform vec3 tint;
             uniform float shadowAlpha;
+            uniform float packed;
             void main(void) {
                 vec4 t = texture2D(atlas, vUV);
-                if (t.a < 0.5) discard;
-                float ramp = floor(t.r * 255.0 + 0.5);
-                float level = floor(t.g * 255.0 + 0.5);
-                if (ramp > 250.0) {
+                // packed (RG8): r = rampa*5+nível (255 = sombra), g = alfa | antigo (RGBA): r = rampa, g = nível, a = alfa
+                if ((packed > 0.5 ? t.g : t.a) < 0.5) discard;
+                float idx = floor(t.r * 255.0 + 0.5);
+                if (packed < 0.5 && idx <= 250.0) idx = idx * 5.0 + floor(t.g * 255.0 + 0.5);
+                if (idx > 250.0) {
                     gl_FragColor = vec4(0.0, 0.0, 0.05, shadowAlpha);
                     return;
                 }
-                vec2 puv = vec2((ramp * 5.0 + level + 0.5) / palSize.x, (floor(vVariant + 0.5) + 0.5) / palSize.y);
+                vec2 puv = vec2((idx + 0.5) / palSize.x, (floor(vVariant + 0.5) + 0.5) / palSize.y);
                 vec3 c = texture2D(palette, puv).rgb;
                 gl_FragColor = vec4(c * tint * vShade, 1.0);
             }`;
@@ -91,22 +93,43 @@ const SpriteMaterial = {
             uniform vec2 palSize;
             uniform vec3 tint;
             uniform float shadowAlpha;
+            uniform float packed;
             uniform vec2 focus;
             uniform float fadeR;
             void main(void) {
                 vec4 t = texture2D(atlas, vUV);
-                if (t.a < 0.5) discard;
-                float ramp = floor(t.r * 255.0 + 0.5);
-                float level = floor(t.g * 255.0 + 0.5);
-                if (ramp > 250.0) {
+                // packed (RG8): r = rampa*5+nível (255 = sombra), g = alfa | antigo (RGBA): r = rampa, g = nível, a = alfa
+                if ((packed > 0.5 ? t.g : t.a) < 0.5) discard;
+                float idx = floor(t.r * 255.0 + 0.5);
+                if (packed < 0.5 && idx <= 250.0) idx = idx * 5.0 + floor(t.g * 255.0 + 0.5);
+                if (idx > 250.0) {
                     gl_FragColor = vec4(0.0, 0.0, 0.05, shadowAlpha);
                     return;
                 }
                 float k = clamp(length(vWorld.xz - focus) / fadeR, 0.0, 1.0);
-                vec2 puv = vec2((ramp * 5.0 + level + 0.5) / palSize.x, (floor(vVariant + 0.5) + 0.5) / palSize.y);
+                vec2 puv = vec2((idx + 0.5) / palSize.x, (floor(vVariant + 0.5) + 0.5) / palSize.y);
                 vec3 c = texture2D(palette, puv).rgb;
                 gl_FragColor = vec4(c * tint * vShade, smoothstep(0.2, 1.0, k));      // furo macio (degradê de alfa)
             }`;
+    },
+
+    // Atlas a partir dos dados do baker (RGBA: rampa, nível, -, alfa) EMPACOTADO em 2 bytes por pixel (RG8: índice da paleta e
+    // alfa) — metade da memória de vídeo e de RAM de todas as folhas de personagens, carros, barcos e portas. Sem WebGL2,
+    // o mesmo empacotamento vai num RGBA (o shader lê igual).
+    atlasTexture(scene, data, W, H) {
+        const n = W * H, gl2 = scene.getEngine().webGLVersion >= 2, out = new Uint8Array(n * (gl2 ? 2 : 4)), k = gl2 ? 2 : 4;
+        for (let i = 0; i < n; i++) {
+            if (data[i * 4 + 3] < 128) continue;
+            const r = data[i * 4];
+            out[i * k] = r > 250 ? 255 : r * 5 + data[i * 4 + 1];
+            out[i * k + 1] = 255;
+        }
+        const tex = gl2
+            ? new BABYLON.RawTexture(out, W, H, BABYLON.Constants.TEXTUREFORMAT_RG, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE, BABYLON.Constants.TEXTURETYPE_UNSIGNED_BYTE)
+            : BABYLON.RawTexture.CreateRGBATexture(out, W, H, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
+        tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+        tex._packed = true;
+        return tex;
     },
 
     // Cor de luz ambiente dos sprites, COMPARTILHADA por todos os materiais (mesma referência):
@@ -124,7 +147,7 @@ const SpriteMaterial = {
         const shader = fade ? 'spriteFade' : 'sprite';
         const m = new BABYLON.ShaderMaterial(name, scene, { vertex: shader, fragment: shader }, {
             attributes: ['position', 'uv', 'color'],
-            uniforms: ['worldViewProjection', 'world', 'palSize', 'tint', 'shadowAlpha', 'focus', 'fadeR'],
+            uniforms: ['worldViewProjection', 'world', 'palSize', 'tint', 'shadowAlpha', 'packed', 'focus', 'fadeR'],
             samplers: ['atlas', 'palette'],
             needAlphaBlending: true,
         });
@@ -133,6 +156,7 @@ const SpriteMaterial = {
         m.setVector2('palSize', new BABYLON.Vector2(palette.width, palette.height));
         m.setColor3('tint', this.sharedTint());
         m.setFloat('shadowAlpha', 0.36);
+        m.setFloat('packed', atlas._packed ? 1 : 0);
         if (fade) {
             m.setVector2('focus', new BABYLON.Vector2(0, 0));
             m.setFloat('fadeR', opts.fadeR || 3.2);
@@ -209,8 +233,7 @@ class CharacterSheet {
     }
 
     _finish(key, name, weapon, def, data, W, H, ms) {
-        const tex = BABYLON.RawTexture.CreateRGBATexture(data, W, H, this.scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
-        tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+        const tex = SpriteMaterial.atlasTexture(this.scene, data, W, H);
         const material = SpriteMaterial.create(this.scene, `${this.name}_${name}_${weapon}`, tex, this.palette);
         this.clips[key] = { name, weapon, frames: def.frames, dirs: this.dirs, fps: def.fps, loop: def.loop, texture: tex, material, frame: this.frame, W, H };
         delete this.jobs[key];

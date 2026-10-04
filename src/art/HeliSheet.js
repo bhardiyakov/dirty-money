@@ -57,8 +57,7 @@ class HeliSheet {
             const img = SpriteBaker.bake(prims, { size: frame, heading: (d * Math.PI * 2) / dirs, shadow: false });
             for (let y = 0; y < frame; y++) data.set(img.subarray(y * frame * 4, (y + 1) * frame * 4), (y * W + d * frame) * 4);
         }
-        const tex = BABYLON.RawTexture.CreateRGBATexture(data, W, H, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
-        tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+        const tex = SpriteMaterial.atlasTexture(scene, data, W, H);
         const material = SpriteMaterial.create(scene, 'heli_body', tex, palette);
         this._clip = { name: 'static', weapon: 'none', frames: 1, dirs, fps: 1, loop: true, texture: tex, material, frame, W, H };
         console.log(`[HELI] ${dirs} direções em ${(performance.now() - t0).toFixed(0)} ms`);

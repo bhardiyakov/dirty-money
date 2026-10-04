@@ -365,15 +365,14 @@ const PropSprites = {
                 } else {
                     t = texture2D(atlas, vUV);
                 }
-                if (t.a < 0.5) discard;
-                float ramp = floor(t.r * 255.0 + 0.5);
-                float level = floor(t.g * 255.0 + 0.5);
-                if (ramp > 250.0) {
+                if (t.g < 0.5) discard;                                  // atlas empacotado (RG8): r = rampa*5+nível (255 = sombra), g = alfa
+                float idx = floor(t.r * 255.0 + 0.5);
+                if (idx > 250.0) {
                     gl_FragColor = vec4(0.0, 0.0, 0.05, shadowAlpha);
                     return;
                 }
                 float k = useFade > 0.5 ? clamp(length(vWorld.xz - focus) / fadeR, 0.0, 1.0) : 1.0;
-                vec2 puv = vec2((ramp * 5.0 + level + 0.5) / palSize.x, (floor(vVariant + 0.5) + 0.5) / palSize.y);
+                vec2 puv = vec2((idx + 0.5) / palSize.x, (floor(vVariant + 0.5) + 0.5) / palSize.y);
                 vec3 c = texture2D(palette, puv).rgb;
                 gl_FragColor = vec4(c * tint * vShade, smoothstep(0.2, 1.0, k));
             }`;
@@ -422,11 +421,7 @@ const PropSprites = {
         const put = (buf, bw, img, cx, cy) => { for (let y = 0; y < F; y++) buf.set(img.subarray(y * F * 4, (y + 1) * F * 4), ((cy + y) * bw + cx) * 4); };
 
         this.FRAMES.forEach((fr, i) => put(data, W, SpriteBaker.bake(this.model(fr.kind, fr.seed), { size: F, shadowLen: 0.5 }), (i % cols) * F, Math.floor(i / cols) * F));
-        const tex = (buf, w, h) => {
-            const t = BABYLON.RawTexture.CreateRGBATexture(buf, w, h, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
-            t.wrapU = t.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-            return t;
-        };
+        const tex = (buf, w, h) => SpriteMaterial.atlasTexture(scene, buf, w, h);       // 2 bytes/pixel (metade da memória)
         const atlas = tex(data, W, H);
 
         // Atlas animados: j = índice entre as plantas que balançam; quadro f fica f*arows linhas abaixo (deslocamento constante no shader).
