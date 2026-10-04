@@ -89,9 +89,21 @@ class SimBridge {
         this.listeners = [];
         this._pool = [];
         this._changed = [];
-        this.worker = new Worker(url);
+        this.worker = SimBridge._spawn(url);
         this.worker.onmessage = (ev) => this._onMessage(ev.data);
         this.worker.postMessage({ t: SimSchema.MSG.INIT });
+    }
+
+    // Worker de verdade por http(s); em file:// (duplo clique) o navegador recusa, então a simulação roda aqui mesmo, com a mesma
+    // troca de mensagens (assíncrona, em ordem). Sem transferência real: os buffers continuam indo e voltando em pingue-pongue.
+    static _spawn(url) {
+        if (/^https?:$/.test(location.protocol)) {
+            try { return new Worker(url); } catch (e) { console.warn('[SIM] Worker indisponível, simulação na Main Thread:', e); }
+        }
+        const main = { onmessage: null, postMessage: (data) => setTimeout(() => scope.onmessage && scope.onmessage({ data })) };
+        const scope = { onmessage: null, postMessage: (data) => setTimeout(() => main.onmessage && main.onmessage({ data })) };
+        startSimWorker(scope);
+        return main;
     }
 
     // Cria/atualiza a entidade `id` com os campos dados (kind, x, z, districtZone, tags, craftYield, factionValue, noiseMask, suspicionLevel).
