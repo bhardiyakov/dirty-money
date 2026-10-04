@@ -184,6 +184,7 @@ class Game {
         // Quedas: arremessado (flail), cambalhota (tumble), caído (lie) e levantando (getup) — para todos os corpos.
         for (const s of ['player', 'civA', 'civB', 'police']) S[s].queue([['flail'], ['lie'], ['getup'], ['tumble']]);
         // Bicicletas e motos (piloto + veículo): andando, estacionadas, caídas e o jogador subindo.
+        S.courier.queue([['ride_moto']]);
         S.rider.queue([['ride_bike'], ['ride_moto'], ['park_bike'], ['park_moto'], ['fallen_bike'], ['fallen_moto'],
             ['mount', 'bike'], ['mount', 'moto'], ['mount', 'bikeL'], ['mount', 'motoL']]);
         // Tropa de elite (SWAT, metralhadora) e exército (fuzil, desenhado com a arma longa): assados por último,
@@ -1529,6 +1530,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             return;
         }
         const p = bike.position;
+        if (bike.courier && variant >= CharacterRig.VARIANT_COURIER) Couriers.onThrown(this, bike);       // o pedido cai no chão
         this.casualties.push(new Casualty(this, p, {
             variant, sheet: variant % 2 ? 'civB' : 'civA', threat: kind === 'eject' ? this.player.position : p,
             dx, dz, power, kind: kind === 'eject' ? 'eject' : 'hit', lethal: kind !== 'eject' && power > 15,
@@ -2057,7 +2059,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         car.takeDamage(dmg, src);
 
         // Bicicleta/moto: numa batida forte o piloto é ARREMESSADO (continua no sentido em que vinha) e o veículo tomba.
-        if (car.isBike && dv > 5.5 && car.riderVariant != null) {
+        if (car.isBike && dv > (car.courier ? 9 : 5.5) && car.riderVariant != null) {          // (entregador: piloto calejado, só cai em batida feia)
             car.throwRider(-dvx, -dvz, dv * 0.9);
             if (dv > 8) car.fall();
         }

@@ -133,7 +133,7 @@ class TrafficCar extends Vehicle {
                 vt = Math.min(vt, T.turnSpeed * (this.turnMul || 1) + Math.max(0, dEntry - 5) * 0.45);
             }
 
-            if (dStop > -0.4 && !this.ignoreSignals) {   // ainda não cruzou a linha de retenção
+            if (dStop > -0.4 && !this.ignoreSignals && !this.runsReds) {   // ainda não cruzou a linha de retenção (entregador apressado fura o sinal)
                 const sig = env.signals.vehicle(jn.inter, jn.axis);
                 const brakeDist = (v * v) / (2 * T.brake * 0.7);
                 let must = false;
@@ -164,7 +164,7 @@ class TrafficCar extends Vehicle {
                 R.pointAt(u + s, this._pt);
                 if (this.lat !== 0) { const t2 = this._pt2 || (this._pt2 = { x: 0, z: 0 }); R.pointAt(u + s + 0.6, t2); const tx = t2.x - this._pt.x, tz = t2.z - this._pt.z, tl = Math.hypot(tx, tz) || 1; this._pt.x += (-tz / tl) * this.lat; this._pt.z += (tx / tl) * this.lat; }
                 for (const o of near) {
-                    const rad = o.kind === 'car' ? (this.halfW + o.hw) * 0.92 : 1.15;
+                    const rad = o.kind === 'car' ? (this.halfW + o.hw) * (this.squeeze || 0.92) : 1.15;      // moto de entrega: passa no corredor entre os carros
                     const dx = o.x - this._pt.x, dz = o.z - this._pt.z;
                     if (dx * dx + dz * dz < rad * rad) { hit = o; hitS = s; break; }
                 }

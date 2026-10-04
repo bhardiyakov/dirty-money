@@ -38,13 +38,13 @@ const Bikes = {
     },
 
     // Folha de veículo (cacheada) para `kind` ('moto'|'bicycle') no estado `state` ('ride'|'park'|'fallen').
-    sheet(sprites, kind, state) {
+    sheet(sprites, kind, state, sheetName = 'rider') {
         const cache = sprites._bikeSheets || (sprites._bikeSheets = {});
-        const key = kind + ':' + state;
+        const key = kind + ':' + state + ':' + sheetName;
         if (!cache[key]) {
             const spec = Object.assign({ id: kind }, Bikes.MODELS[kind]);
             const clip = `${state}_${spec.bike}`;
-            cache[key] = new BikeSheet(sprites.sheets.rider, clip, spec, kind);
+            cache[key] = new BikeSheet(sprites.sheets[sheetName], clip, spec, kind);
             cache[key].lib = sprites;
         }
         return cache[key];

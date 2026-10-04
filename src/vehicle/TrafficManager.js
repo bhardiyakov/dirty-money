@@ -105,6 +105,14 @@ class TrafficManager {
         return bike;
     }
 
+    // Entregador de aplicativo: moto circulando com piloto de baú vermelho, guiada por Couriers (restaurante → cliente).
+    _spawnCourier(avoid = null, near = this.ring()) {
+        const bike = this._spawnBike('moto', 'drive', avoid, near);
+        if (!bike) return null;
+        Couriers.make(bike);
+        return bike;
+    }
+
     // Carcaça que cumpriu o papel (fora da tela): some, e entra outro veículo no lugar, longe do jogador.
     removeWreck(car) {
         const i = this.vm.vehicles.indexOf(car);
@@ -115,7 +123,8 @@ class TrafficManager {
         car.dispose(this.shadow);
         const f = this.focus();
         const avoid = { x: f.x, z: f.z, r: 90 };
-        if (car.isBike) this._spawnBike(car.spec.id, car.baseMode || 'drive', avoid);
+        if (car.courier) this._spawnCourier(avoid);
+        else if (car.isBike) this._spawnBike(car.spec.id, car.baseMode || 'drive', avoid);
         else this._spawnCar(car.baseMode || 'drive', avoid);
     }
 
@@ -129,6 +138,7 @@ class TrafficManager {
             for (let i = 0; i < T.motosParked; i++) this._spawnBike('moto', 'parked', null, r);
             for (let i = 0; i < T.bicycles; i++) this._spawnBike('bicycle', 'drive', null, r);
             for (let i = 0; i < T.bicyclesParked; i++) this._spawnBike('bicycle', 'parked', null, r);
+            for (let i = 0; i < (T.couriers || 0); i++) this._spawnCourier(null, r);
         }
     }
 
@@ -211,6 +221,7 @@ class TrafficManager {
                 }
                 car._lodDt = 0;
             }
+            if (car.courier) Couriers.update(car, dt);
             car.update(dt, env);
 
             // Carro largado na pista: some (vira estacionado em outra vaga) quando o jogador se afasta.
@@ -251,9 +262,9 @@ class TrafficManager {
         for (const car of this.vm.vehicles) {
             if (car.controlled || car.hold || car.wrecked || car.burning > 0 || car.mode === 'abandoned') continue;
             const dx = car.position.x - pp.x, dz = car.position.z - pp.z;
-            if (dx * dx + dz * dz < far2) continue;
+            if (dx * dx + dz * dz < (car.courier ? far2 * 1.6 : far2)) continue;     // entregador: um pouco mais de folga (o trajeto dele cruza a área)
             const mode = car.baseMode === 'parked' ? 'parked' : 'drive';
-            const fresh = car.isBike ? this._spawnBike(car.spec.id, mode) : this._spawnCar(mode);
+            const fresh = car.courier ? this._spawnCourier() : car.isBike ? this._spawnBike(car.spec.id, mode) : this._spawnCar(mode);
             if (!fresh) { this._relocate(car, mode); return; }                 // sem lugar para o novo: ao menos reposiciona este
             const i = this.vm.vehicles.indexOf(car);
             if (i >= 0) this.vm.vehicles.splice(i, 1);
