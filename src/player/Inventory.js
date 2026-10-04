@@ -26,6 +26,7 @@ class Inventory {
         this.water = 0;
         this.jewels = 0;       // peças de joalheria: valem dinheiro quando vendidas (cofre → "vender")
         this.jewelValue = 0;   // soma do valor das peças ($)
+        this.bag = 'none';     // bolsa equipada (ver Bags.js): define o tamanho da grade e a carga confortável
     }
 
     // Texto/efeitos de comer e beber (vida recuperada).
@@ -75,10 +76,11 @@ class Inventory {
     }
 
     // ---------------------------------------------------------------- mochila com espaços (estilo Resident Evil)
-    // Grade COLS×ROWS; cada item ocupa w×h células (armas compridas ocupam mais). Dinheiro e vida não ocupam espaço.
-    static get COLS() { return 5; }
-    static get ROWS() { return 4; }
-    static get CAPACITY() { return Inventory.COLS * Inventory.ROWS; }
+    // Grade cols×rows (depende da bolsa: bolsos 3×2 … mochila tática 6×5); cada item ocupa w×h células (armas compridas
+    // ocupam mais). Dinheiro e vida não ocupam espaço.
+    get cols() { return Bags.def(this).cols; }
+    get rows() { return Bags.def(this).rows; }
+    get capacity() { return this.cols * this.rows; }
     static get SIZES() { return { pistol: 2, revolver: 2, smg: 2, knife: 1, shotgun: 3, rifle: 3, ak47: 3, bat: 3 }; }
     static get STACK() { return { medkit: 3, hack: 5, key: 5, food: 4, water: 4, jewel: 4 }; }                // unidades por célula
 
@@ -104,7 +106,7 @@ class Inventory {
 
     // Células ocupadas / livres.
     slotsUsed() { return this.items().reduce((s, it) => s + it.w * it.h, 0); }
-    slotsFree() { return Inventory.CAPACITY - this.slotsUsed(); }
+    slotsFree() { return this.capacity - this.slotsUsed(); }
 
     // Células extras que `Pickups` precisaria para guardar este tipo de item (0 se já cabe numa pilha existente).
     slotsNeeded(T) {
@@ -127,7 +129,7 @@ class Inventory {
 
     // Posiciona os itens na grade (primeiro encaixe, linha a linha). Retorna os itens com { x, y }.
     layout() {
-        const C = Inventory.COLS, R = Inventory.ROWS, taken = Array.from({ length: R }, () => new Array(C).fill(false));
+        const C = this.cols, R = this.rows, taken = Array.from({ length: R }, () => new Array(C).fill(false));
         const placed = [];
         for (const it of this.items()) {
             let ok = false;

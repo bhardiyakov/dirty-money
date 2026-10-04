@@ -51,6 +51,10 @@ class Hud {
             .px-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; border-radius: 99px; transition: width .25s ease; }
             .px-fill.hp { background: linear-gradient(90deg, #f43f5e, #fb7185); box-shadow: 0 0 10px rgba(244,63,94,0.55); }
             .px-fill.hp.low { background: linear-gradient(90deg, #f97316, #f43f5e); animation: hpBlink .7s ease-in-out infinite; }
+            .px-fill.st { background: linear-gradient(90deg, #10b981, #a3e635); box-shadow: 0 0 10px rgba(16,185,129,0.5); }
+            .px-fill.st.low { background: linear-gradient(90deg, #f59e0b, #facc15); }
+            .h-load { font: 600 12px var(--font); color: var(--tx-2); margin: 2px 0 0 2px; font-variant-numeric: tabular-nums; }
+            .h-load.heavy { color: #fbbf24; } .h-load.over { color: #fb7185; }
             .px-fill.ar { background: linear-gradient(90deg, #3b82f6, #22d3ee); box-shadow: 0 0 10px rgba(59,130,246,0.5); }
             .h-kit { font: 700 12px var(--font-d); color: #fda4af; display: inline-flex; align-items: center; gap: 3px; }
             .h-kit:empty { display: none; }
@@ -121,6 +125,8 @@ class Hud {
             <div class="h-vit">
               <div class="vrow">${E('heart')}<div class="vcol"><div class="px-label"><span>Vida <span class="h-kit" id="hKit2"></span></span><span class="px-pct" id="hHpT"></span></div><div class="px-bar"><div class="px-fill hp" id="hHp"></div></div></div></div>
               <div class="vrow" id="hArmorRow">${E('shield')}<div class="vcol"><div class="px-label"><span>Colete<span class="px-lvl" id="hArL"></span></span><span class="px-pct" id="hArT">0%</span></div><div class="px-bar"><div class="px-fill ar" id="hAr"></div></div></div></div>
+              <div class="vrow">${E('wind')}<div class="vcol"><div class="px-label"><span>Fôlego<span class="px-lvl" id="hStL"></span></span><span class="px-pct" id="hStT"></span></div><div class="px-bar"><div class="px-fill st" id="hSt"></div></div></div></div>
+              <div class="h-load" id="hLoad"></div>
             </div>`);
         // DINHEIRO (sujo e limpo), HORA e MISSÕES (troféu)
         this.moneyPanel = mk('px stats-panel', `<div class="st cash"><span>${E('cash')} <span id="hCash"></span></span><small id="hClean"></small></div>
@@ -291,6 +297,18 @@ class Hud {
         const ap = hasVest ? Math.round((pl.armor / pl.armorMax) * 100) : 0;
         this._set('ar', ap, (v) => { this.$('hAr').style.width = v + '%'; this.$('hArT').textContent = v; });
         this._set('arl', hasVest ? pl.armorMax : 0, (v) => { this.$('hArL').textContent = v ? 'nível ' + (v >= 100 ? 2 : 1) : ''; });
+
+        // ---- fôlego (estamina) e peso carregado
+        const stMax = pl.staminaMax || 100, sp = Math.round(Math.max(0, Math.min(1, (pl.stamina == null ? stMax : pl.stamina) / stMax)) * 100);
+        this._set('st', sp + (pl.winded ? 'w' : ''), () => { this.$('hSt').style.width = sp + '%'; this.$('hStT').textContent = pl.winded ? 'sem fôlego' : sp; this.$('hSt').classList.toggle('low', !!pl.winded || sp < 25); });
+        const fl = Bags.fitLevel(pl.fit);
+        this._set('stl', fl, (v) => { this.$('hStL').textContent = v ? 'cond. ' + v : ''; });
+        const D = Bags.def(inv), kg = Math.round((Bags.kg || 0) * 10) / 10, r = Bags.ratio || 0;
+        this._set('load', D.name + kg, () => {
+            const el = this.$('hLoad');
+            el.innerHTML = `<span class="emo">${D.emo}</span> ${D.name} · ${kg.toFixed(1)}/${D.kg} kg${r > 1 ? ' · sobrecarga' : (r > 0.5 ? ' · pesado' : '')}`;
+            el.className = 'h-load' + (r > 1 ? ' over' : (r > 0.5 ? ' heavy' : ''));
+        });
 
         // ---- dinheiro, hora e kits
         this._set('cash', inv.cash + '/' + inv.clean, () => { this.$('hCash').textContent = brl(inv.cash); this.$('hClean').textContent = inv.clean > 0 ? 'limpo ' + brl(inv.clean) : ''; });

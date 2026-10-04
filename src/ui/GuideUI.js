@@ -29,7 +29,7 @@ class GuideUI {
 
     // Índice: [id, título] ou [null, cabeçalho de grupo].
     index() {
-        const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'],
+        const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'], ['bags', 'Bolsas, peso e fôlego'],
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
             ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['daily', 'Energia e exposição (o dia)'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
@@ -109,13 +109,24 @@ GuideUI.PAGES = {
 
     police: () => `<h2>Polícia e procurado</h2>
         <p>Crime só vira estrela se um policial <b>vir</b> (ou ouvir o tiro). Quanto mais estrelas, maior o raio de visão e mais gente vem:</p>
-        <table><tr><th>Nível</th><th>O que acontece</th></tr><tr><td>★</td><td>a polícia de perto te procura</td></tr><tr><td>★★</td><td>viaturas por rádio e helicóptero (enxerga por cima dos prédios)</td></tr>
+        <table><tr><th>Nível</th><th>O que acontece</th></tr><tr><td>★</td><td>delito leve: só quem viu te procura (sem rádio nem viatura extra), corre menos, precisa chegar bem perto para prender e te perde rápido</td></tr><tr><td>★★</td><td>viaturas por rádio e helicóptero (enxerga por cima dos prédios)</td></tr>
         <tr><td>★★★</td><td>atiram à vista, SWAT e bloqueios</td></tr><tr><td>★★★★</td><td>SWAT com metralhadora, mais viaturas</td></tr><tr><td>★★★★★</td><td>exército e ruas fechadas</td></tr></table>
         <h3>Como fugir</h3><ul><li>Saia da visão e fique escondido o tempo da fuga (o HUD mostra "ESCAPANDO").</li><li>Policial colado em você impede a fuga, mesmo atrás de parede.</li>
         <li><b>Esconderijos</b> (<kbd>E</kbd> em caçamba, caixote, latão): se ninguém viu você entrar, some do radar.</li><li>Com procurado você não entra em lojas nem consegue aceitar trabalhos.</li></ul>`,
 
+    bags: () => `<h2>Bolsas, peso e fôlego</h2>
+        <p>A bolsa define <b>quantos espaços</b> a grade do inventário tem e <b>quanto peso</b> você carrega sem perder velocidade. Ela aparece no seu personagem.</p>
+        <table><tr><th>Bolsa</th><th>Grade</th><th>Carga</th><th>Onde</th></tr>
+        <tr><td>👖 Bolsos</td><td>3×2</td><td>8 kg</td><td>começo</td></tr><tr><td>👜 Mala transversal</td><td>4×3</td><td>14 kg</td><td>conveniência</td></tr>
+        <tr><td>🎒 Mochila</td><td>5×4</td><td>24 kg</td><td>conveniência</td></tr><tr><td>🎒 Mochila tática</td><td>6×5</td><td>38 kg</td><td>loja de armas / boca</td></tr></table>
+        <h3>Peso</h3><ul><li>Tudo pesa: armas (pistola 1 kg … AK 4,3 kg), munição, kits, comida, joias, <b>dinheiro vivo</b> (R$ 50 mil ≈ 1 kg), eletrônicos furtados e cédulas de banco.</li>
+        <li>Até metade da carga: normal. Até a carga cheia: cada vez mais lento (−30%). Acima dela: <b>sobrecarga</b> — bem lento e sem correr.</li>
+        <li>O HUD mostra a bolsa e o peso (amarelo = pesado, vermelho = sobrecarga).</li></ul>
+        <h3>Fôlego</h3><ul><li>Correr gasta fôlego (mais rápido com peso). Andando ou parado ele volta.</li><li>Zerou: <b>sem fôlego</b> — anda arrastado e só volta a correr com 35%.</li>
+        <li><b>Condicionamento</b>: correr treina o personagem (até nível 20): mais fôlego, gasta menos e recupera mais rápido. Correr carregado treina mais.</li></ul>`,
+
     fail: () => `<h2>Prisão, morte e Tribunal</h2>
-        <ul><li><b>Preso</b>: policial colado em você por alguns segundos (com procurado). Você paga multa, perde <b>todas as armas</b> e acorda na delegacia 12 h+ depois.</li>
+        <ul><li><b>Preso</b>: policial colado em você por alguns segundos (com procurado). Você paga multa, perde <b>todas as armas</b> e acorda na delegacia 12 h+ depois. <b>Com 1★</b> é delito leve: multa de 15%, você <b>fica com as armas</b> e é liberado em 3–5 h.</li>
         <li><b>Morte</b>: acorda no <b>hospital</b> 12 h+ depois e paga a conta.</li>
         <li><b>Tribunal do Crime</b>: se a vida zerar dentro da favela, o tráfico julga — pagar a multa (todo o sujo), entregar tudo (armas, kits, joias) ou tentar a lábia (falhou = execução).</li>
         <li>Trabalhos de carreira e missões em andamento falham se você for preso ou morrer.</li></ul>`,

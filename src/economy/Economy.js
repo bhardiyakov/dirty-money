@@ -63,6 +63,10 @@ const Economy = {
         ammo_r:   { name: 'Munição de fuzil', icon: 'ammo_rifle', base: 180, kind: 'ammo', weapons: ['rifle', 'ak47'], n: 60, desc: '+60 balas' },
         vest:     { name: 'Colete nível 1', icon: 'vest', base: 450, kind: 'vest', max: 50, desc: 'Absorve 75% do dano até 50 pts' },
         vest2:    { name: 'Colete nível 2', icon: 'vest2', base: 1000, kind: 'vest', max: 100, desc: 'Absorve 75% do dano até 100 pts' },
+        // bolsas (ver player/Bags.js): mais espaço na grade e mais carga antes de pesar; aparecem no personagem
+        bag_cross: { name: 'Mala transversal', icon: 'bag_cross', base: 120, kind: 'bag', bag: 'cross', desc: 'Grade 4×3 · carrega 14 kg sem pesar' },
+        bag_pack: { name: 'Mochila', icon: 'bag_pack', base: 350, kind: 'bag', bag: 'pack', desc: 'Grade 5×4 · carrega 24 kg sem pesar' },
+        bag_tac:  { name: 'Mochila tática', icon: 'bag_tactical', base: 2200, kind: 'bag', bag: 'tactical', desc: 'Grade 6×5 · carrega 38 kg sem pesar' },
         // mercado clandestino
         hack:     { name: 'Módulo de hackeio', icon: 'hack', base: 160, kind: 'goods', give: 'hack', desc: 'Abre fechadura de carro sem mini-game' },
         carkey:   { name: 'Chave de carro roubada', icon: 'carkey', base: 130, kind: 'goods', give: 'key', desc: 'Destranca um carro sem alarme' },
@@ -72,7 +76,7 @@ const Economy = {
     // hours: [abre, fecha] (fecha > 24 = passa da meia-noite) | tier: multiplicador do estilo | stock: [id, peso, qtdMax?]
     STYLES: {
         burger:   { label: 'Lanchonete', tier: 1.0, hours: [8, 26], stock: [['burger'], ['bacon'], ['fries'], ['soda'], ['shake'], ['lunch'], ['bottle']] },
-        mart:     { label: 'Conveniência', tier: 1.0, hours: [0, 24], night: 1.2, stock: [['bottle'], ['soda'], ['snack'], ['lunch'], ['coffee'], ['cake'], ['patch']] },
+        mart:     { label: 'Conveniência', tier: 1.0, hours: [0, 24], night: 1.2, stock: [['bottle'], ['soda'], ['snack'], ['lunch'], ['coffee'], ['cake'], ['patch'], ['bag_cross'], ['bag_pack']] },
         pharmacy: { label: 'Farmácia', tier: 1.1, hours: [7, 23], night: 1.2, stock: [['medkit'], ['patch'], ['bottle'], ['juice']] },
         bar:      { label: 'Bar', tier: 1.0, hours: [11, 28], happy: [17, 19], stock: [['beer'], ['shot'], ['snack'], ['fries'], ['soda']] },
         bakery:   { label: 'Padaria', tier: 0.9, hours: [5, 20], stock: [['bread'], ['coffee'], ['cake'], ['slice'], ['juice'], ['lunch']] },
@@ -81,11 +85,11 @@ const Economy = {
         italian:  { label: 'Ristorante', tier: 1.0, hours: [12, 23], stock: [['pasta'], ['risotto'], ['wine'], ['menu_it']] },
         japanese: { label: 'Restaurante Japonês', tier: 1.0, hours: [12, 23], stock: [['sushi'], ['sake'], ['omakase'], ['soda']] },
         guns:     { label: 'Loja de Armas', tier: 1.0, hours: [9, 19], legal: true, guns: true,
-            stock: [['knife', 1, 3], ['bat', 1, 3], ['pistol', 1, 4], ['revolver', 1, 3], ['shotgun', 1, 2], ['smg', 0.6, 1], ['rifle', 0.5, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['vest', 1, 3], ['vest2', 0.6, 1]] },
+            stock: [['knife', 1, 3], ['bat', 1, 3], ['pistol', 1, 4], ['revolver', 1, 3], ['shotgun', 1, 2], ['smg', 0.6, 1], ['rifle', 0.5, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['vest', 1, 3], ['vest2', 0.6, 1], ['bag_tac', 0.8, 2]] },
         bank_branch: { label: 'Agência bancária', tier: 1, hours: [10, 16], stock: [] },
         bank_hq:  { label: 'Sede bancária', tier: 1, hours: [10, 17], stock: [] },
         drugs:    { label: 'Boca de Fumo', tier: 0.72, hours: [0, 24], guns: true, fence: 0.55,
-            stock: [['pistol', 1, 2], ['revolver', 0.9, 2], ['shotgun', 0.8, 2], ['smg', 0.7, 1], ['ak47', 0.6, 1], ['rifle', 0.4, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['hack', 0.8, 3], ['carkey', 0.8, 3], ['medkit', 0.8, 2]] },
+            stock: [['pistol', 1, 2], ['revolver', 0.9, 2], ['shotgun', 0.8, 2], ['smg', 0.7, 1], ['ak47', 0.6, 1], ['rifle', 0.4, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['hack', 0.8, 3], ['carkey', 0.8, 3], ['medkit', 0.8, 2], ['bag_tac', 0.7, 1]] },
     },
 
     // Quais lojas do mapa (id em TileFactory.SHOPS) têm interior, e qual estilo usam.
@@ -208,6 +212,7 @@ const Economy = {
         if (it.kind === 'meal' && pl.hp >= pl.maxHp - 0.5 && id !== 'wine' && id !== 'beer' && id !== 'shot' && id !== 'sake') return { ok: false, msg: 'Você não está com fome (vida cheia)' };
         if (it.kind === 'ammo' && !it.weapons.some((w) => inv.owned(w))) return { ok: false, msg: 'Você não tem arma para essa munição' };
         if (it.kind === 'vest' && pl.armorMax >= it.max && pl.armor >= pl.armorMax - 0.5) return { ok: false, msg: 'Você já está com esse colete' };
+        if (it.kind === 'bag') { const D = Bags.DEFS[it.bag]; if (inv.bag === it.bag) return { ok: false, msg: 'Você já está com essa bolsa' }; if (inv.slotsUsed() > D.cols * D.rows) return { ok: false, msg: `Não cabe o que você carrega (${inv.slotsUsed()} espaços; ela tem ${D.cols * D.rows})` }; }
         if (!this._fits(game, it)) return { ok: false, msg: 'Mochila cheia' };
         if (needClean) inv.clean -= price; else inv.cash -= price;
         if (entry.qty !== Infinity) entry.qty--;
@@ -217,6 +222,7 @@ const Economy = {
             case 'weapon': inv.addWeapon(it.weapon, it.ammo); break;
             case 'ammo': { const own = it.weapons.filter((w) => inv.owned(w)); for (const w of own) inv.addAmmo(w, it.n); break; }
             case 'vest': pl.wearVest(it.max); break;
+            case 'bag': msg = Bags.equip(game, it.bag).msg + ` (-${brl(price)})`; break;
             case 'goods': if (it.give === 'food') inv.food++; else if (it.give === 'water') inv.water++; else if (it.give === 'medkit') inv.medkits++; else if (it.give === 'hack') inv.hacks++; else inv.keys++; break;
         }
         Standing.shopped(shop, price);

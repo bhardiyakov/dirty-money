@@ -169,13 +169,7 @@ class Game {
         console.log(`[SPRITES] essencial em ${(performance.now() - t0).toFixed(0)} ms`);
 
         // O resto é assado aos poucos, em fatias por frame (ver _update).
-        S.player.queue([
-            ['punch'], ['punchL'], ['kick'], ['carjack'], ['vault'], ['swim'], ['opendoor'], ['enter'], ['pick'], ['surrender'], ['kneel'], ['rummage'], ['pickpocket'],
-            ...['pistol', 'smg', 'shotgun', 'bat'].flatMap((w) => [['idle', w], ['walk', w], ['run', w]]),
-            ...['pistol', 'smg', 'shotgun'].flatMap((w) => [['draw', w], ['aim', w], ['shoot', w]]),
-            ['swing', 'bat'], ['hurt'],
-        ]);
-        S.player.queue([['dead']]);
+        S.player.queue(Bags.PLAYER_CLIPS);
         S.civA.queue([['scared'], ['hurt'], ['dead'], ['run'], ['swim'], ['surrender'], ['kneel']]);
         S.civB.queue([['scared'], ['hurt'], ['dead'], ['run'], ['swim'], ['surrender'], ['kneel']]);
         // Policial armado: locomoção com pistola na mão + sacar/mirar/atirar + reação e morte.
@@ -418,6 +412,8 @@ class Game {
         if (this.arrest && this.arrest.phase === 'screen') { this._updateArrest(dt); return; }
         if (this.death && this.death.phase === 'screen') { this._updateDeath(dt); return; }
 
+        Bags.update(this, dt);                                                            // peso carregado, bolsa no sprite
+        if (this.mode !== 'player') Bags.stamina(this.player, false, false, dt);         // (dirigindo/pilotando: recupera o fôlego)
         if (Interiors.active) { this._updateInterior(dt); return; }                       // dentro de uma loja: o mundo fica congelado
         const frozenUI = this.stashUI.open || !!this.sleeping || Interiors.busy || this.motoUI.open || !!this.motoRide;                              // janela do baú aberta / dormindo: personagem parado
         if (frozenUI) for (const k of Object.keys(this.input.justPressed)) delete this.input.justPressed[k];
@@ -580,7 +576,7 @@ class Game {
             if (seen) this.wanted.seenByPolice();
 
             // (Estar armado e à vista NÃO libera mais a polícia: só atirar — ver _onAttack/notifyPlayerShot.)
-            this.wanted.update(dt, seen || (this.wanted.level > 0 && this.policeManager.nearestDist(ps.pos) < Config.police.closeNoEscape));       // policial colado (mesmo atrás de parede) impede a fuga
+            this.wanted.update(dt, seen || (this.wanted.level > 0 && this.policeManager.nearestDist(ps.pos) < (this.wanted.level === 1 ? Config.police.oneStar.closeNoEscape : Config.police.closeNoEscape)));       // policial colado (mesmo atrás de parede) impede a fuga
 
             const alerted = this.wanted.level > 0;
 
@@ -588,7 +584,7 @@ class Game {
             // (com armas liberadas a polícia atira em vez de prender)
             if (this.arrest || this.death || this.hiding || this.mode === 'heli' || this.heliFall) {
                 this.bustTimer = 0;
-            } else if (alerted && !this.policeManager.weaponsFree && this.policeManager.nearestDist(ps.pos) < Config.police.bustRange) {
+            } else if (alerted && !this.policeManager.weaponsFree && this.policeManager.nearestDist(ps.pos) < (this.wanted.level === 1 ? Config.police.oneStar.bustRange : Config.police.bustRange)) {
                 this.bustTimer += dt;
                 if (this.bustTimer >= Config.police.bustTime && !this.player.rag) this._startArrest();
             } else {
@@ -1875,7 +1871,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             const d = o.distanceTo(pl.position);
             if (d < bd) { bd = d; best = o; }
         }
-        if (!best) { this._busted(); return; }                             // ninguém a pé para prender: como antes
+        const stars = this.wanted.level;
+        if (!best) { this._busted(null, null, stars); return; }            // ninguém a pé para prender: como antes
         if (bd > 13) {                                                     // longe demais: um policial chega "do nada" a ~9u, fora de cena
             const a = Math.random() * Math.PI * 2;
             const p = this.nav.closestPoint(new BABYLON.Vector3(pl.position.x + Math.cos(a) * 9, 0, pl.position.z + Math.sin(a) * 9));
@@ -1886,7 +1883,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         best.arrest = { target: () => pl.position, arrived: false };
         const face = Math.atan2(best.position.x - pl.position.x, best.position.z - pl.position.z);
         pl.runSequence([{ clip: 'surrender' }, { clip: 'kneel', timer: 9999 }], { face });
-        this.arrest = { phase: 'approach', officer: best, t: 0, lost: 0 };
+        this.arrest = { phase: 'approach', officer: best, t: 0, lost: 0, stars };
         this._flash('Você se rendeu! Mãos para cima!');
     }
 
@@ -1899,12 +1896,13 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         } else if (A.phase === 'cuff') {
             if (A.t > 0.9) {                                               // policial parado diante do ajoelhado: tela de detido
                 A.phase = 'screen'; A.t = 0;
-                A.lost = this.inventory.fine(Math.min(0.9, Config.police.fineBase + Config.police.finePerStar * this.wanted.level));
-                A.wake = this._wakeInfo();
+                const light = A.stars === 1, O = Config.police.oneStar;
+                A.lost = this.inventory.fine(light ? O.fine * (1 - (SkillTree.m.fine || 0)) : Math.min(0.9, Config.police.fineBase + Config.police.finePerStar * A.stars));
+                A.wake = this._wakeInfo(light ? O.hours : null);
                 this.endScreen.show({ title: 'DETIDO', lines: [
                     { text: `MULTA: ${brl(A.lost)}`, color: '#ffd23f' },
-                    ...(this.inventory.armed ? [{ text: 'TODAS AS ARMAS FORAM CONFISCADAS', color: '#ff7a6e' }] : []),
-                    { text: `VOCÊ ACORDA NA DELEGACIA ÀS ${A.wake.label}`, color: '#9ec5ff' },
+                    ...(this.inventory.armed ? [light ? { text: 'DELITO LEVE: VOCÊ FICA COM SUAS ARMAS', color: '#86efac' } : { text: 'TODAS AS ARMAS FORAM CONFISCADAS', color: '#ff7a6e' }] : []),
+                    { text: light ? `LIBERADO DA DELEGACIA ÀS ${A.wake.label}` : `VOCÊ ACORDA NA DELEGACIA ÀS ${A.wake.label}`, color: '#9ec5ff' },
                 ] });
                 AudioFX.blip(180, 0.5, 0.25);
                 this._anyPress();                                          // (descarta teclas apertadas antes da tela)
@@ -1929,12 +1927,12 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this.endScreen.hide();
         this.player.invulnerable = false;
         if (A.officer) A.officer.endArrest();
-        this._busted(A.lost, A.wake ? A.wake.hours : null);
+        this._busted(A.lost, A.wake ? A.wake.hours : null, A.stars);
     }
 
     // Horas que passam até o jogador acordar (no mínimo Config.respawn.hoursMin) e a hora do relógio em que isso cai.
-    _wakeInfo() {
-        const R = Config.respawn, hours = R.hoursMin + Math.random() * (R.hoursMax - R.hoursMin);
+    _wakeInfo(range = null) {
+        const R = Config.respawn, [h0, h1] = range || [R.hoursMin, R.hoursMax], hours = h0 + Math.random() * (h1 - h0);
         const t = (this.dayNight.hour + hours) % 24, h = Math.floor(t), m = Math.floor((t - h) * 60);
         return { hours, label: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}` };
     }
@@ -1957,16 +1955,17 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     }
 
     // Preso: multa e acorda na DELEGACIA, 12h+ depois.
-    _busted(lost = null, hours = null) {
+    _busted(lost = null, hours = null, stars = this.wanted.level) {
+        const light = stars === 1, O = Config.police.oneStar;
         this.wanted.bust();            // zera procurado -> polícia volta a patrulhar.
         this.bustTimer = 0;
         this._dropFromCar();
         this._closeInventory();
-        if (lost === null) lost = this.inventory.fine(Config.police.fineBase * (1 - (SkillTree.m.fine || 0)));
-        this.inventory.confiscate();                                       // preso: perde TODAS as armas
+        if (lost === null) lost = this.inventory.fine((light ? O.fine : Config.police.fineBase) * (1 - (SkillTree.m.fine || 0)));
+        if (!(light && O.keepWeapons)) this.inventory.confiscate();        // preso: perde TODAS as armas (1★: delito leve, fica com elas)
         if (typeof Banks !== 'undefined') Banks.lose();                    // (e as cédulas marcadas)
-        this._respawn('station', hours);
-        this._flash(`⚠ PRESO! Multa de ${brl(lost)}. Armas confiscadas. Você acordou na delegacia`);
+        this._respawn('station', hours === null && light ? this._wakeInfo(O.hours).hours : hours);
+        this._flash(light ? `⚠ Detido por delito leve: multa de ${brl(lost)}. Liberado com seus pertences` : `⚠ PRESO! Multa de ${brl(lost)}. Armas confiscadas. Você acordou na delegacia`);
     }
 
     // Desce do veículo no lugar onde ele parou (o jogador a pé fica sem posição enquanto dirige).

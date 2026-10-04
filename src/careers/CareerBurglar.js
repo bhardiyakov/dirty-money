@@ -82,7 +82,7 @@ class BurglarCareer extends Career {
         return null;
     }
 
-    update() { this.g.player.loadMul = Math.max(0.5, 1 - this.data.weight * 0.045 - (typeof Banks !== 'undefined' ? Banks.hotKg * 0.012 : 0)); }       // carga pesada (e cédulas marcadas): corre menos       // carga pesada: corre menos
+    update() { }                                                            // (o peso da carga entra no Bags.weight)
 
     prompt() {
         if (this.data.goods <= 0 || this.g.mode !== 'player') return '';

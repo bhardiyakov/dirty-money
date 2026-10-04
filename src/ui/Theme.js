@@ -125,7 +125,7 @@ const Emoji = {
     CHAR: {
         // itens do chão e da mochila
         medkit: '🩹', water: '💧', food: '🍔', lootbox: '📦', cash_small: '💵', cash_bag: '💰', cash_case: '💼', jewels: '💎', necklace: '📿', rings: '💍',
-        watch: '⌚', coins: '🪙', phone_old: '📟', phone_new: '📱', jerry: '⛽', knife: '🔪', bat: '🏏', backpack: '🎒', hack: '💾', carkey: '🔑',
+        watch: '⌚', coins: '🪙', phone_old: '📟', phone_new: '📱', jerry: '⛽', knife: '🔪', bat: '🏏', backpack: '🎒', wind: '💨', bag_cross: '👜', bag_pack: '🎒', bag_tactical: '🎒', pockets: '👖', hack: '💾', carkey: '🔑',
         vest: '🦺', vest2: '🦺', fists: '✋', none: '✋',
         // comidas e bebidas das lojas (Economy.ITEMS)
         burger: '🍔', bacon: '🍔', fries: '🍟', soda: '🥤', shake: '🥤', slice: '🍕', pizza: '🍕', salad: '🥗', juice: '🧃', bowl: '🍧', pasta: '🍝', risotto: '🍚',

@@ -290,7 +290,7 @@ const Config = {
         escalateEvery: 6,      // s mínimos entre estrelas por crimes comuns (matar policial sobe na hora)
         levels: [
             null,
-            { sight: 38, lose: 8,  radio: false, dispatchR: 60,  cars: 1, heli: false, swat: 0, army: 0, blocks: 0 },
+            { sight: 30, lose: 5,  radio: false, dispatchR: 40,  cars: 0, heli: false, swat: 0, army: 0, blocks: 0 },     // 1★: só quem viu (sem rádio, sem viatura extra)
             { sight: 52, lose: 16, radio: true,  dispatchR: 140, cars: 3, heli: true,  swat: 0, army: 0, blocks: 0 },
             { sight: 64, lose: 24, radio: true,  dispatchR: 190, cars: 4, heli: true,  swat: 1, army: 0, blocks: 2 },
             { sight: 78, lose: 32, radio: true,  dispatchR: 260, cars: 6, heli: true,  swat: 2, army: 0, blocks: 4 },
@@ -340,6 +340,9 @@ const Config = {
         officerChaseSpeed: 11,
         officerWanderRadius: 30,
         closeNoEscape: 32,     // Policial a menos disso (u) te impede de escapar mesmo sem linha de visada (atrás de parede).
+        // 1★ (delito leve): a polícia é bem menos punitiva — corre menos, precisa chegar mais perto para prender, perde você mais fácil
+        // atrás de paredes; preso com 1★ = multa pequena, armas NÃO são confiscadas e você é liberado em poucas horas.
+        oneStar: { bustRange: 4.5, closeNoEscape: 14, chaseMul: 0.8, fine: 0.15, keepWeapons: true, hours: [3, 5] },
         fineBase: 0.5, finePerStar: 0.1,    // Multa ao ser preso: fração do dinheiro = fineBase + finePerStar × ★ (máx. 0,75).
     },
 };

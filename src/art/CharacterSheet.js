@@ -252,6 +252,12 @@ class CharacterSheet {
         }
     }
 
+    // Libera as texturas/materiais de todos os clipes (folha que saiu de uso).
+    disposeClips() {
+        for (const c of Object.values(this.clips)) { c.material.dispose(); c.texture.dispose(); }
+        this.clips = {}; this.jobs = {}; this.pending = [];
+    }
+
     // Gasta até `budgetMs` do frame assando a fila. Retorna true enquanto ainda há trabalho.
     pump(budgetMs) {
         const t0 = performance.now();
