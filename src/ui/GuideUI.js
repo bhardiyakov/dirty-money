@@ -31,7 +31,7 @@ class GuideUI {
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'],
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
-            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['daily', 'Energia e exposição (o dia)'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
+            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['daily', 'Energia e exposição (o dia)'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas']);
         return out;
@@ -179,6 +179,22 @@ GuideUI.PAGES = {
         <li><b>Eleições</b> (28): presentes valem o dobro na influência, extorsão rende mais, a lavagem aperta.</li>
         <li><b>Intervenção Federal</b> (14): armas 3× mais caras, milícia some, polícia vê mais longe, soldados rendem a metade — hora do colarinho branco (golpes +50%).</li></ul>`,
 
+    pool: () => `<h2>Sinuca no bar</h2>
+        <p>Todo <b>bar</b> tem uma mesa de sinuca. Chegue perto dela e aperte <kbd>E</kbd>. Durante a partida o resto do mundo para.</p>
+        <h3>Apostas e adversários</h3>
+        <table><tr><th>Adversário</th><th>Aposta</th><th>Como joga</th></tr>
+        ${Pool.STAKES.map((o, i) => `<tr><td>${o.emo} ${o.name}</td><td>${brl(o.bet)}</td><td>${['erra bastante', 'acerta as fáceis', 'simula a jogada e pensa na branca', 'precisão de profissional', 'quase não erra, joga posição'][i]}</td></tr>`).join('')}</table>
+        <p>A aposta sai do dinheiro vivo (sujo). Ganhando, você leva o <b>dobro</b>.</p>
+        <h3>Regras (bola 8)</h3>
+        <ul><li>Quem encaçapa primeiro (depois da saída) fica com o grupo: <b>lisas 1–7</b> ou <b>listradas 9–15</b>.</li>
+        <li>Encaçapou uma bola sua: joga de novo. Limpou o grupo: a próxima é a <b>8</b>.</li>
+        <li><b>Falta</b>: branca na caçapa, não tocar em nada ou tocar primeiro bola que não é sua. O adversário ganha <b>bola na mão</b> (põe a branca onde quiser).</li>
+        <li>Encaçapar a 8 antes de limpar o grupo, ou junto com uma falta, é <b>derrota</b>.</li></ul>
+        <h3>Controles</h3>
+        <ul><li><b>Mirar</b>: aponte no pano (mouse) ou arraste o dedo. <kbd>←</kbd> <kbd>→</kbd> e a roda do mouse fazem o ajuste fino.</li>
+        <li><b>Força</b>: arraste a barra da direita e solte. No PC, também dá para segurar o botão do mouse e puxar para trás, ou segurar <kbd>ESPAÇO</kbd> e soltar.</li>
+        <li>A linha de mira mostra onde a branca bate. A linha fica <b style="color:#fb7185">vermelha</b> se a bola atingida não for sua.</li></ul>
+        <div class="gd-tip">Com bola na mão, arraste a branca para uma posição de tacada fácil antes de mirar.</div>`,
     banks: () => `<h2>Bancos</h2>
         <p>A cidade tem <b>3 sedes</b> (no Distrito Financeiro) e <b>7 agências</b>, de três marcas (marcadores coloridos na porta; lista com GPS na aba IMPÉRIO):</p>
         <ul><li><b style="color:#ec7000">Banco Inaú</b> — tecnologia: o melhor alvo do cibercrime (transferências rendem mais).</li>

@@ -115,7 +115,7 @@ const ShopStyles = {
         for (let k = 0; k < 5; k++) S.stool(S.P(2.8 + k * 2.4), 7.2);
         S.table(S.P(4.5), 3.6, 1.8, 1.8, 'wood', '#8a6238'); S.chair(S.P(4.5), 5.2, 's'); S.chair(S.P(4.5), 2.0, 'n'); S.chair(S.P(6.4), 3.6, 'w');
         // mesa de sinuca
-        { const r = S.R(W - 8.8, 2.6, W - 3.0, 5.8), b = S.blk(r, 0.9, '#2f7a40', '#4a3018'); const c = S.c;
+        { const r = S.R(W - 8.8, 2.6, W - 3.0, 5.8), b = S.blk(r, 0.9, '#2f7a40', '#4a3018'); const c = S.c; S.use('pool', r);
           c.box(b.x, b.top, b.w, b.h, '#5a3a1c', '#8a6238', '#33220f', '#1a1008'); c.fr(b.x + 4, b.top + 4, b.w - 8, b.h - 8, '#2f8a48'); c.fr(b.x + 4, b.top + 4, b.w - 8, 1, '#3fa05a');
           for (const [bx2, by2, col] of [[30, 20, '#d9453a'], [34, 24, '#e0c030'], [34, 16, '#2f6fb5'], [38, 20, '#101010'], [38, 14, '#d9702a'], [38, 26, '#8a4ab0']]) c.disk(b.x + bx2, b.top + by2 - 6, 2, col);
           c.disk(b.x + 14, b.top + 19, 2, '#f4f1e8'); c.ln(b.x + 4, b.top + 36, b.x + 28, b.top + 22, '#d9b878');
