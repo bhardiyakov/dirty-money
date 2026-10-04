@@ -66,6 +66,8 @@ class Vehicle {
             this.visual = new SpriteActor(scene, carSheet, paintRow, `carSprite${id}`);
             this.visual.play('static');
             this.visual.mesh.position.y = 1.5;
+            this.visual.setPosition(startPos.x, startPos.z);              // já nasce no lugar (não na origem)
+            this.visual.setHeading(heading);
         }
 
         // Cabine 3D (dá altura à sombra do carro; o sprite cobre o topo dela).
@@ -357,6 +359,7 @@ class Vehicle {
         this.phys.setAngularVelocity(BABYLON.Vector3.Zero());
         this._preStepFrames = 2;
         this._cmd = null;                       // (o salto não é batida)
+        if (this.visual) { this.visual.setPosition(x, z); this.visual.setHeading(heading); }      // o sprite vai junto já neste quadro
     }
 
     // Leva o sprite para a posição/rotação do corpo físico (chame todo frame).

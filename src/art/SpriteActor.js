@@ -36,6 +36,7 @@ class SpriteActor {
         this._shadeTimer = Math.random() * 0.3;
         this.mesh.position.y = 0.5;
         this.mesh.isPickable = false;
+        this.mesh.isVisible = false;   // só aparece quando recebe a 1ª posição (senão nasce na origem (0,0) e "pisca" lá por um quadro)
         // Culling por frustum (antes ficava sempre ativo: TODO pedestre e carro do mundo era desenhado, mesmo fora da tela). O quad tem
         // tamanho fixo, então a caixa envolvente é trivial; a esfera basta (mais barata) e uma folga cobre o sprite alto.
         this.mesh.cullingStrategy = BABYLON.AbstractMesh.CULLINGSTRATEGY_BOUNDINGSPHERE_ONLY;
@@ -109,6 +110,7 @@ class SpriteActor {
     setPosition(x, z) {
         this.mesh.position.x = x;
         this.mesh.position.z = z;
+        if (!this._placed) { this._placed = true; this.mesh.isVisible = true; }
     }
 
     // Escurece o sprite quando está na sombra de um prédio (suave, a ~4 consultas/s).
