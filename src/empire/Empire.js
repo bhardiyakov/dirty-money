@@ -4,7 +4,7 @@
 //   • DISTRITOS   a cidade dividida em zonas que respondem diferente (riqueza, polícia, rival, domínio): districtAt(x, z).
 //   • CICLO DIÁRIO ENERGIA (gasta com furtos, roubos, combate, corrida e trabalhos; só o sono recupera) × EXPOSIÇÃO (calor do dia:
 //                 sobe com crimes e estrelas). Exposição cheia = ALERTA TÁTICO no distrito (a polícia vê muito mais longe até você
-//                 dormir). Energia zerada ou acordado depois das 2h = DESMAIO: confiscam o sujo da mochila (dinheiro, joias,
+//                 dormir). Energia zerada = DESMAIO: confiscam o sujo da mochila (dinheiro, joias,
 //                 mercadoria) e cobram propina de hospital/advogado; você acorda em casa. DORMIR zera tudo.
 //   • ESTAÇÕES DO CRIME eventos globais de 14/28 dias (Calmaria, Carnaval, Eleições, Intervenção Federal) com avisos antes.
 // Os sistemas de gestão (soldados, galpões, rotas de lavagem, influência, domínio) ficam em empire/EmpireSystems.js; a tela, em
@@ -146,7 +146,6 @@ class Empire {
         if (g.mode === 'player' && g.input.isSprinting() && g.player.speed > 5) this.spend(0.25 * dt);
         if (g.wanted.level === 0 && this.exposure > 0) this.exposure = Math.max(0, this.exposure - 0.02 * dt);
         const h = g.dayNight.hour;
-        if (h >= 2 && h < 6 && !g.sleeping && !Interiors.active && this.now - this.wokeAt > 6) this.faint('2h da manhã sem dormir');
         this.biz.update(dt);
         this.influence.update(dt);
         if (typeof Banks !== 'undefined') { Banks.build(g); Banks.tick(dt, g); }

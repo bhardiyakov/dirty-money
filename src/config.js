@@ -328,7 +328,7 @@ const Config = {
         crimeVisibleTime: 8,   // Janela após o crime em que ser visto gera procurado.
 
         bustRange: 8,          // Distância da polícia que conta para a prisão.
-        bustTime: 1.2,         // Segundos colado na polícia para ser preso.
+        bustTime: 5,           // Segundos colado na polícia para ser preso (dá tempo de reagir e fugir a pé).
 
         // Interceptação preditiva (viaturas).
         interceptSpeed: 22,
