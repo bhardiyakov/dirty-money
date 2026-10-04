@@ -273,9 +273,10 @@ class Game {
         const t = document.getElementById('ls-text'), f = document.getElementById('ls-fill');
         if (t) t.textContent = text;
         if (f) f.style.width = Math.round(p * 100) + '%';
+        if (window.Intro) Intro.progress(p);
     }
 
-    // Ciclo de vida: o loop de render NÃO existe até tudo o que é pesado terminar, tudo escondido atrás de #loading-screen:
+    // Ciclo de vida: o loop de render NÃO existe até tudo o que é pesado terminar, tudo escondido atrás da tela inicial (#main-menu, em modo carregamento):
     //   1) física (Havok) e navegação;  2) assar TODOS os sprites (personagens, carros, barcos) sem orçamento por quadro;
     //   3) congelar os materiais estáticos do mundo;  4) preparar o 1º estado do jogo e COMPILAR os shaders de tudo que existe
     //   (scene.whenReadyAsync);  5) só então começa o loop — e a tela some DEPOIS do primeiro quadro desenhado (ver _start).
@@ -345,8 +346,7 @@ class Game {
             if (this._bootDone && !this._loadingHidden) {            // 1º quadro real desenhado: agora (depois da pintura) a tela de carregamento sai
                 this._loadingHidden = true;
                 requestAnimationFrame(() => requestAnimationFrame(() => {
-                    const el = document.getElementById('loading-screen');
-                    if (el) { el.classList.add('done'); setTimeout(() => el.remove(), 600); }
+                    if (window.Intro) Intro.done();                  // a tela inicial (fundos + barra) some em fade
                 }));
             }
         });

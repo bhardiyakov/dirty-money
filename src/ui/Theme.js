@@ -67,39 +67,6 @@ const Theme = {
             #inventory .inv-sep { color: var(--tx-3); border-color: var(--line); }
             #inventory .inv-row.off { color: var(--tx-3); } #inventory .inv-hint { color: var(--tx-3); }
 
-            /* tela de carregamento */
-            #loading-screen { font-family: var(--font) !important; text-transform: none !important; background: radial-gradient(1200px 700px at 50% 40%, #16202f 0%, #07090e 70%) !important; gap: 22px !important; }
-            #loading-screen .ls-title { font: 800 clamp(30px, 7vmin, 64px) var(--font-d) !important; letter-spacing: 0.04em !important; color: #fff !important;
-                text-shadow: none !important; background: linear-gradient(180deg, #ffffff 30%, #9fe8c4); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-            #loading-screen .ls-bar { height: 8px !important; border: none !important; border-radius: 99px; background: rgba(255,255,255,0.08) !important; box-shadow: none !important; overflow: hidden; }
-            #loading-screen .ls-bar i { border-radius: 99px; background: linear-gradient(90deg, #22d3ee, #34d399) !important; transition: width .3s ease !important; }
-            #loading-screen .ls-text { font-size: 13px !important; letter-spacing: 0.02em !important; color: var(--tx-2) !important; }
-
-            /* menu principal */
-            #main-menu { font-family: var(--font) !important; image-rendering: auto !important; transition: opacity .5s ease !important; }
-            #main-menu .mm-frame { gap: 34px; image-rendering: auto; }
-            #main-menu .mm-logo { image-rendering: auto; }
-            #mm-shade { background: radial-gradient(ellipse at 50% 45%, rgba(5,7,12,0.35) 0%, rgba(5,7,12,0.85) 100%) !important; }
-            #main-menu .mm-buttons { gap: 12px; width: min(340px, 78vw); }
-            #main-menu .mm-btn { font: 600 16px var(--font) !important; text-transform: none !important; letter-spacing: 0.01em; padding: 15px 20px; border-radius: 14px !important;
-                color: var(--tx); background: rgba(16,19,28,0.62) !important; border: 1px solid var(--line-2) !important; box-shadow: var(--shadow-s) !important;
-                -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); transition: background .15s, transform .12s, border-color .15s; }
-            #main-menu .mm-btn:first-child { background: linear-gradient(180deg, #3ee0a1, #10b981) !important; color: #04130c !important; border-color: transparent !important; font-weight: 700 !important; }
-            #main-menu .mm-btn:hover:not(:disabled), #main-menu .mm-btn:focus-visible { background: rgba(40,46,62,0.8) !important; color: #fff !important; border-color: rgba(255,255,255,0.3) !important;
-                transform: translateY(-1px); box-shadow: var(--shadow-s) !important; }
-            #main-menu .mm-btn:first-child:hover:not(:disabled), #main-menu .mm-btn:first-child:focus-visible { background: linear-gradient(180deg, #5cf0b5, #1fc98f) !important; color: #04130c !important; border-color: transparent !important; }
-            #main-menu .mm-btn:active:not(:disabled) { transform: translateY(1px) !important; }
-            #main-menu .mm-btn.mm-disabled, #main-menu .mm-btn:disabled { color: var(--tx-3) !important; background: rgba(16,19,28,0.5) !important; border-color: var(--line) !important; }
-            @media (max-height: 520px) {
-                #main-menu .mm-frame { gap: 14px; padding: 10px; } #main-menu .mm-logo { max-height: 36vh; }
-                #main-menu .mm-buttons { gap: 8px; } #main-menu .mm-btn { padding: 10px 16px; font-size: 14px !important; }
-            }
-            #mm-settings { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-            #mm-settings .mm-panel { border-radius: var(--r) !important; background: var(--glass-2) !important; border: 1px solid var(--line-2) !important; box-shadow: var(--shadow) !important; gap: 14px !important; }
-            #mm-settings h2 { font: 700 20px var(--font-d) !important; color: var(--tx) !important; text-shadow: none !important; }
-            #mm-settings .mm-row { font-size: 14px !important; font-weight: 500; color: var(--tx) !important; }
-            #mm-settings .mm-toggle { font: 600 13px var(--font) !important; border-radius: var(--r-pill) !important; border: 1px solid var(--line-2) !important; background: var(--card) !important; color: var(--tx-2) !important; padding: 7px 14px !important; }
-            #mm-settings .mm-toggle.is-on { background: var(--acc) !important; color: #04130c !important; border-color: transparent !important; }
             input[type=range] { accent-color: var(--acc) !important; }
 
             /* sobreposições de mini-jogo e cortinas (prisão, transferências, golpes) */
