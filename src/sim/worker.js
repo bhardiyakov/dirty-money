@@ -9,10 +9,13 @@
 // Protocolo (ver SimSchema.MSG): o main manda lotes UPSERT/REMOVE; o worker responde, a TICK_HZ, um lote STATE só com as
 // entidades que ELE mudou. Lotes são ArrayBuffers TRANSFERIDOS (zero cópia) e devolvidos (RECYCLE) para reuso: nenhum lado
 // aloca por quadro.
+//
+// Aberto por duplo clique (file://), o navegador não deixa criar o Worker: o index.html carrega este arquivo como script comum e o
+// SimBridge roda a mesma simulação na Main Thread (startSimWorker com um `self` falso). Por isso tudo fica dentro da função — as
+// classes daqui não colidem com as globais do jogo (ex.: SpatialHash de core/Spatial.js).
 // ============================================================================
 
-importScripts('./schema.js');
-
+function startSimWorker(self) {
 const TICK_HZ = 10;
 
 class SimEntity {
@@ -142,3 +145,9 @@ self.onmessage = (ev) => {
         case M.RECYCLE: world._pool.push(m.buf); break;
     }
 };
+}
+
+if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
+    importScripts('./schema.js');
+    startSimWorker(self);
+}
