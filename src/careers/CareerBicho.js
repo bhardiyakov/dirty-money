@@ -287,7 +287,7 @@ class RouteJob extends CareerJob {
         const p = this.g._playerState().pos;
         for (let i = 0; i < 3; i++) {
             const from = i ? this.stops[i - 1] : p;
-            const d = this.mgr.cityDoor(from, 60, 260, (q) => q.district !== 'favela' && this.stops.every((s) => Math.hypot(s.x - q.x, s.z - q.z) > 50));
+            const d = this.mgr.cityDoor(from, 60, 260, (q) => q.district !== 'favela' && this.stops.every((s) => hypot(s.x - q.x, s.z - q.z) > 50));
             if (!d) break;
             this.stops.push({ x: d.x, z: d.z, name: d.name });
         }
@@ -364,3 +364,4 @@ class HitJob extends CareerJob {
     update(dt) { if (this.actor) this.actor.update(dt, 1); }
     dispose() { const a = this.actor; if (a) { this.g._delayed.push({ t: 6, fn: () => a.dispose() }); this.actor = null; } }
 }
+memoStatics(BichoCareer, 'ZONES');

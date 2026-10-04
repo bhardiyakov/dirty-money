@@ -96,7 +96,7 @@ const SafeHouse = {
         let best = null, bd = 1.5;
         for (const f of this.furniture) {
             if (!f.use) continue;
-            const dx = Math.max(this.ox + f.x0 - x, 0, x - (this.ox + f.x1)), dz = Math.max(this.oz + f.z0 - z, 0, z - (this.oz + f.z1)), d = Math.hypot(dx, dz);
+            const dx = Math.max(this.ox + f.x0 - x, 0, x - (this.ox + f.x1)), dz = Math.max(this.oz + f.z0 - z, 0, z - (this.oz + f.z1)), d = hypot(dx, dz);
             if (d < bd) { bd = d; best = { use: f.use, f }; }
         }
         return best;

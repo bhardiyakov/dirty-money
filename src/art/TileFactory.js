@@ -81,7 +81,9 @@ const TileFactory = {
         T.scrub = tex(this.scrub(161));
         T.forest = tex(this.forest(171));
         T.earth = tex(this.earth(181));
-        T.water = [0, 1, 2, 3].map((f) => tex(this.water(f)));
+        // Água: UMA textura; os 4 quadros da animação ficam na RAM (80×80) e WorldBuilder.update reescreve os pixels da textura (ver lá).
+        T.waterFrames = [0, 1, 2, 3].map((f) => this.water(f).data);
+        T.water = [tex(this.water(0))];
 
         T.roofs = {};
         for (const key of Object.keys(this.roofStyles)) {

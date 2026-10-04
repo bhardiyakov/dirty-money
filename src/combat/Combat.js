@@ -76,7 +76,7 @@ class Combat {
         let best = null, bestScore = Infinity;
         const consider = (t, reach = range) => {
             const dx = t.position.x - x, dz = t.position.z - z;
-            const d = Math.hypot(dx, dz);
+            const d = hypot(dx, dz);
             if (d > reach || d < 0.5) return;
             let da = Math.atan2(dx, dz) - angle;
             while (da > Math.PI) da -= Math.PI * 2;
@@ -106,7 +106,7 @@ class Combat {
         let best = null, bestD = range;
         const consider = (t) => {
             const dx = t.position.x - x, dz = t.position.z - z;
-            const d = Math.hypot(dx, dz);
+            const d = hypot(dx, dz);
             if (d > bestD || d < 0.01) return;
             if ((dx * fx + dz * fz) / d < 0.5) return;
             best = t; bestD = d;
@@ -163,7 +163,7 @@ class Combat {
 
             b.px = b.x; b.pz = b.z;
             b.x += b.vx * dt; b.z += b.vz * dt;
-            const step = Math.hypot(b.vx * dt, b.vz * dt);
+            const step = hypot(b.vx * dt, b.vz * dt);
             b.left -= step;
 
             // 1) Alvos: o mais próximo ao longo do segmento (px,pz)->(x,z).

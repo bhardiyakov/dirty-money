@@ -121,7 +121,7 @@ class Puddles {
             for (let j = Math.floor((fz - R) / C); j <= Math.floor((fz + R) / C); j++) {
                 const c = this.grid.get(i + ',' + j);
                 if (!c) continue;
-                for (const p of c) { const d = Math.hypot(p.x - fx, p.z - fz); if (d < R) list.push([d, p]); }
+                for (const p of c) { const d = hypot(p.x - fx, p.z - fz); if (d < R) list.push([d, p]); }
             }
         }
         list.sort((a, b) => a[0] - b[0]);
@@ -149,7 +149,7 @@ class Puddles {
 
         const tg = g.camera.target;
         this._q -= dt;
-        const moved = this._fx === undefined || Math.hypot(tg.x - this._fx, tg.z - this._fz) > 14;
+        const moved = this._fx === undefined || hypot(tg.x - this._fx, tg.z - this._fz) > 14;
         if (this.level <= 0 && !this.mesh.isEnabled()) { return; }
         if (this._q <= 0 || moved) { this._q = 1; this._fx = tg.x; this._fz = tg.z; this._requery(tg.x, tg.z); }
 

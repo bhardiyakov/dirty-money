@@ -39,7 +39,7 @@ const MapGeo = {
 
     // Direção (a luz VIAJA nela) e intensidade do sol — o ciclo dia/noite chama isto.
     setSun(dir, intensity) {
-        const h = Math.hypot(dir.x, dir.z) || 1e-6;
+        const h = hypot(dir.x, dir.z) || 1e-6;
         this._sun = { dx: -dir.x / h, dz: -dir.z / h, slope: Math.abs(dir.y) / h };
         this._sunReach = 48 / this._sun.slope;
         this._sunI = intensity;
@@ -66,7 +66,7 @@ const MapGeo = {
     // (sólidos com mais de 2u de altura). Amostra a cada 1,2u.
     hasLineOfSight(ax, az, bx, bz) {
         const dx = bx - ax, dz = bz - az;
-        const dist = Math.hypot(dx, dz);
+        const dist = hypot(dx, dz);
         const n = Math.ceil(dist / 1.2);
         for (let k = 1; k < n; k++) {
             const t = k / n, x = ax + dx * t, z = az + dz * t;

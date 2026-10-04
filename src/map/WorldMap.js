@@ -31,7 +31,7 @@ const WorldMap = {
     _segDist(x, z, ax, az, bx, bz) {       // distância de (x,z) ao segmento AB
         const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
         const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
-        return Math.hypot(x - (ax + dx * t), z - (az + dz * t));
+        return hypot(x - (ax + dx * t), z - (az + dz * t));
     },
 
     // ------------------------------------------------------------ geografia
@@ -92,12 +92,12 @@ const WorldMap = {
         // Faixa da cidade: sempre terra (retângulo exato: a costa leste é a orla do canal, reta como uma avenida beira-mar).
         {
             const S = this.STRIP, qx = Math.abs(x - S.cx) - S.hx + S.r, qz = Math.abs(z - S.cz) - S.hz + S.r;
-            const sd = Math.min(Math.max(qx, qz), 0) + Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) - S.r;
+            const sd = Math.min(Math.max(qx, qz), 0) + hypot(Math.max(qx, 0), Math.max(qz, 0)) - S.r;
             if (sd < 0) return 1;
         }
         // Continente: caixa com cantos arredondados (raio 330) e costa bem recortada (baías, penínsulas).
         const dW = x - this._eW[j], dS = z - this._eS[i], dN = this._eN[i] - z, R = 330;
-        const corner = (a, b) => (a < R && b < R) ? R - Math.hypot(R - a, R - b) : Math.min(a, b);
+        const corner = (a, b) => (a < R && b < R) ? R - hypot(R - a, R - b) : Math.min(a, b);
         const m = Math.min(this._eE[j] - x, corner(dW, dS), corner(dW, dN), dS, dN, dW);
         let land;
         if (m > 150) land = true; else if (m < -150) land = false;
@@ -116,7 +116,7 @@ const WorldMap = {
             const I = this.ISLAND, d = this._segDist(x, z, I.ax, I.az, I.bx, I.bz);
             if (d < I.r + 45 && (d < I.r - 51 || d < I.r + (F(x / 120, z / 120, 17) - 0.5) * 90 - 6)) land = true;
             if (!land) for (const k of this.ISLETS) {
-                const d2 = Math.hypot(x - k.x, z - k.z);
+                const d2 = hypot(x - k.x, z - k.z);
                 if (d2 < k.r + 12 && d2 < k.r + (F(x / 40, z / 40, 18) - 0.5) * 24) { land = true; break; }
             }
         }
@@ -136,7 +136,7 @@ const WorldMap = {
             mt = Math.max(mt, prof);       // (só as SERRAS ganham terraços/paredões; os morros são lisos)
         }
         for (const d of this.DOMES) {
-            const u = Math.hypot(x - d.x, z - d.z) / d.r;
+            const u = hypot(x - d.x, z - d.z) / d.r;
             if (u >= 1) continue;
             h += Math.pow(1 - u * u, 1.4) * d.h * (0.75 + 0.5 * F(x / 70, z / 70, 3, 24));
         }
@@ -257,7 +257,7 @@ const WorldMap = {
             const k = j * nx + i;
             if (!land[k]) { biome[k] = R.SEA; continue; }
             const x = X(i), z = Z(j), hh = h[k], dwm = dWater[k] * c;
-            const sx = (hAt(i + 1, j) - hAt(i - 1, j)) / (2 * c), sz = (hAt(i, j + 1) - hAt(i, j - 1)) / (2 * c), slope = Math.hypot(sx, sz);
+            const sx = (hAt(i + 1, j) - hAt(i - 1, j)) / (2 * c), sz = (hAt(i, j + 1) - hAt(i, j - 1)) / (2 * c), slope = hypot(sx, sz);
             // CITY = célula inteira dentro da malha urbana; as que só tocam a borda ficam como terreno, por baixo (sem frestas).
             if (urban[k]) { biome[k] = R.CITY; continue; }
             if (slope > cliffS && hh > 5) flags[k] |= 1;
@@ -291,7 +291,7 @@ const WorldMap = {
 
     _inFavela(x, z, hh) {
         for (const d of this.DOMES.slice(0, 2)) {
-            const u = Math.hypot(x - d.x, z - d.z) / d.r;
+            const u = hypot(x - d.x, z - d.z) / d.r;
             if (u > 1.1) continue;
             if (u < 0.92 + (this._fbm(x / 50, z / 50, 2, 43) - 0.5) * 0.25 && hh > 1.5) return true;
         }
@@ -363,8 +363,8 @@ const WorldMap = {
     // Brilho do relevo em (x, z) para tingir o chão urbano que segue o morro (favela): >1 = voltado ao sol, <1 = sombra.
     shadeAt(x, z, gain = 2.4) {
         const e = 6, hx = this.heightAt(x + e, z) - this.heightAt(x - e, z), hz = this.heightAt(x, z + e) - this.heightAt(x, z - e);
-        const gx = hx / (2 * e), gz = hz / (2 * e), d = Config.light.sunDir, l = Math.hypot(d[0], d[1], d[2]);
-        const il = 1 / Math.hypot(gx, 1, gz), lam = (-gx * (-d[0] / l) + (-d[1] / l) - gz * (-d[2] / l)) * il;
+        const gx = hx / (2 * e), gz = hz / (2 * e), d = Config.light.sunDir, l = hypot(d[0], d[1], d[2]);
+        const il = 1 / hypot(gx, 1, gz), lam = (-gx * (-d[0] / l) + (-d[1] / l) - gz * (-d[2] / l)) * il;
         return Math.max(0.55, Math.min(1.3, 1 + (lam - (-d[1] / l)) * gain));
     },
 

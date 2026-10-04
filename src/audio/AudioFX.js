@@ -39,7 +39,7 @@ const AudioFX = {
 
     // Ganho/pan espaciais a partir da posição do som. Retorna null se longe demais.
     _spatial(x, z, maxDist, vol) {
-        const d = Math.hypot(x - this.listener.x, z - this.listener.z);
+        const d = hypot(x - this.listener.x, z - this.listener.z);
         if (d > maxDist) return null;
         const g = Math.pow(1 - d / maxDist, 1.4) * vol;
         if (g < 0.01) return null;
@@ -123,7 +123,7 @@ const AudioFX = {
     alarm(x, z, hi) {
         const ctx = this.ctx;
         if (!ctx || ctx.state !== 'running' || this.muted) return;
-        const d = Math.hypot(x - this.listener.x, z - this.listener.z);
+        const d = hypot(x - this.listener.x, z - this.listener.z);
         if (d > 95) return;
         const vol = Math.pow(1 - d / 95, 1.5) * 0.2;
         if (vol < 0.008) return;
@@ -267,7 +267,7 @@ const AudioFX = {
         this.honkCount++;
         const ctx = this.ctx;
         if (!ctx || ctx.state !== 'running' || this.muted) return;
-        const d = Math.hypot(x - this.listener.x, z - this.listener.z);
+        const d = hypot(x - this.listener.x, z - this.listener.z);
         if (d > 80) return;
         const vol = Math.pow(1 - d / 80, 1.6) * 0.32;
         if (vol < 0.01) return;

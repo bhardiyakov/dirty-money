@@ -269,3 +269,4 @@ class CorpHackJob extends CareerJob {
         if (this.prog >= 1) { this.c.data.dossier++; this.succeed(0, 180, `dossiê da ${this.corp} copiado — chantageie na aba O`); }
     }
 }
+memoStatics(ScamCareer, 'TYPES');

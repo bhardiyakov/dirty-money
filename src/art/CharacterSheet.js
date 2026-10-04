@@ -117,11 +117,16 @@ const SpriteMaterial = {
     // alfa) — metade da memória de vídeo e de RAM de todas as folhas de personagens, carros, barcos e portas. Sem WebGL2,
     // o mesmo empacotamento vai num RGBA (o shader lê igual).
     atlasTexture(scene, data, W, H) {
+        return this.indexTexture(scene, SpriteIO.fromBaker(data, W * H), W, H);
+    },
+
+    // O mesmo atlas a partir de ÍNDICES de paleta (W×H; 254 = transparente, 255 = sombra) — o formato dos PNGs (SpriteIO).
+    indexTexture(scene, idx, W, H) {
         const n = W * H, gl2 = scene.getEngine().webGLVersion >= 2, out = new Uint8Array(n * (gl2 ? 2 : 4)), k = gl2 ? 2 : 4;
         for (let i = 0; i < n; i++) {
-            if (data[i * 4 + 3] < 128) continue;
-            const r = data[i * 4];
-            out[i * k] = r > 250 ? 255 : r * 5 + data[i * 4 + 1];
+            const v = idx[i];
+            if (v === 254) continue;
+            out[i * k] = v;
             out[i * k + 1] = 255;
         }
         const tex = gl2
@@ -190,14 +195,29 @@ class CharacterSheet {
         return { def, w, key: name + ':' + w };
     }
 
-    // Retorna o clipe (bakeando agora, se preciso) ou null se a arma não é suportada.
+    // Retorna o clipe (do PNG, se houver; senão desenhando agora) ou null se a arma não é suportada.
     getClip(name, weapon = 'none') {
         const r = this._resolve(name, weapon);
         if (!r) return null;
         if (this.clips[r.key]) return this.clips[r.key];
+        if (this._fromFile(name, r.w, r.def)) return this.clips[r.key];
         const job = this.jobs[r.key] || (this.jobs[r.key] = this._startJob(name, r.w, r.def));
         job.step(Infinity);
         return this.clips[r.key];
+    }
+
+    // Arquivo do clipe (assets/sprites/char/<folha>/<clipe>-<arma>.png) — ver SpriteIO. Colunas = direções, linhas = quadros.
+    static fileKey(sheet, name, weapon) { return `char/${sheet}/${name}-${weapon}`; }
+
+    // Clipe lido do PNG, se ele existe e tem o tamanho certo. true = pronto (sem desenhar por código).
+    _fromFile(name, weapon, def) {
+        if (!SpriteIO.manifest) return false;
+        const W = this.dirs * this.frame, H = def.frames * this.frame;
+        const idx = SpriteIO.indices(CharacterSheet.fileKey(this.name, name, weapon), W, H);
+        if (!idx) return false;
+        this._finishTex(name + ':' + weapon, name, weapon, def, SpriteMaterial.indexTexture(this.scene, idx, W, H), W, H);
+        delete this.jobs[name + ':' + weapon];
+        return true;
     }
 
     // Job de bake PROGRESSIVO: faz um frame de animação (todas as direções) por passo.
@@ -207,23 +227,22 @@ class CharacterSheet {
         const data = new Uint8Array(W * H * 4);
         const key = name + ':' + weapon;
         const self = this;
+        // Passo = UMA direção de um quadro (antes era o quadro inteiro, 8–16 direções de uma vez: num celular, 20–30 ms num único
+        // passo, estourando o orçamento por quadro). As primitivas do quadro são montadas uma vez e reaproveitadas nas direções.
         const job = {
-            f: 0, ms: 0,
+            f: 0, d: 0, prims: null, ms: 0,
             step(budgetMs) {
                 const t0 = performance.now();
                 while (this.f < N && (performance.now() - t0 < budgetMs)) {
-                    const f = this.f;
-                    const t = def.loop ? f / N : (N > 1 ? f / (N - 1) : 0);
-                    const prims = CharacterRig.build(def.pose(t, weapon), self.look);
-                    for (let d = 0; d < D; d++) {
-                        const img = SpriteBaker.bake(prims, { size: F, heading: (d * Math.PI * 2) / D });
-                        for (let y = 0; y < F; y++) {
-                            const src = y * F * 4;
-                            const dst = ((f * F + y) * W + d * F) * 4;
-                            data.set(img.subarray(src, src + F * 4), dst);
-                        }
+                    const f = this.f, d = this.d;
+                    if (!this.prims) { const t = def.loop ? f / N : (N > 1 ? f / (N - 1) : 0); this.prims = CharacterRig.build(def.pose(t, weapon), self.look); }
+                    const img = SpriteBaker.bake(this.prims, { size: F, heading: (d * Math.PI * 2) / D });
+                    for (let y = 0; y < F; y++) {
+                        const src = y * F * 4;
+                        const dst = ((f * F + y) * W + d * F) * 4;
+                        data.set(img.subarray(src, src + F * 4), dst);
                     }
-                    this.f++;
+                    if (++this.d >= D) { this.d = 0; this.f++; this.prims = null; }
                 }
                 this.ms += performance.now() - t0;
                 if (this.f >= N) self._finish(key, name, weapon, def, data, W, H, this.ms);
@@ -233,10 +252,13 @@ class CharacterSheet {
     }
 
     _finish(key, name, weapon, def, data, W, H, ms) {
-        const tex = SpriteMaterial.atlasTexture(this.scene, data, W, H);
+        this._finishTex(key, name, weapon, def, SpriteMaterial.atlasTexture(this.scene, data, W, H), W, H);
+        delete this.jobs[key];
+    }
+
+    _finishTex(key, name, weapon, def, tex, W, H) {
         const material = SpriteMaterial.create(this.scene, `${this.name}_${name}_${weapon}`, tex, this.palette);
         this.clips[key] = { name, weapon, frames: def.frames, dirs: this.dirs, fps: def.fps, loop: def.loop, texture: tex, material, frame: this.frame, W, H };
-        delete this.jobs[key];
     }
 
     // Pré-aquece uma lista de [clipe, arma] AGORA (use só para o essencial).
@@ -264,7 +286,7 @@ class CharacterSheet {
         while (this.pending.length && performance.now() - t0 < budgetMs) {
             const [name, weapon] = this.pending[0];
             const r = this._resolve(name, weapon);
-            if (!r || this.clips[r.key]) { this.pending.shift(); continue; }
+            if (!r || this.clips[r.key] || this._fromFile(name, r.w, r.def)) { this.pending.shift(); continue; }
             const job = this.jobs[r.key] || (this.jobs[r.key] = this._startJob(name, r.w, r.def));
             job.step(Math.max(0.5, budgetMs - (performance.now() - t0)));
             if (this.clips[r.key]) this.pending.shift();
@@ -272,6 +294,28 @@ class CharacterSheet {
         return this.pending.length > 0;
     }
 }
+
+// Clipes que cada folha usa no jogo — FONTE ÚNICA: a carga (Game._warmSprites), as forças especiais (Game._queueForces) e o
+// exportador de PNG (SpriteExport) leem daqui. Lista de [clipe, arma?]. (Função: Bags.js carrega depois deste arquivo.)
+CharacterSheet.sets = () => {
+    const falls = [['flail'], ['lie'], ['getup'], ['tumble']];
+    const civ = [['idle'], ['walk'], ['scared'], ['hurt'], ['dead'], ['run'], ['swim'], ['surrender'], ['kneel'], ...falls];
+    const force = (w) => [['idle'], ['walk'], ['run'], ['hurt'], ['dead'], ['draw', w], ['aim', w], ['shoot', w], ['idle', w], ['walk', w], ['run', w], ...falls];
+    return {
+        player: [['idle'], ['walk'], ['run'], ...Bags.PLAYER_CLIPS, ...falls],
+        civA: civ, civB: civ,
+        // Policial armado: locomoção com pistola na mão + sacar/mirar/atirar + reação, morte e quedas.
+        police: [['idle'], ['walk'], ['run'], ['vault'], ['hurt'], ['dead'], ['draw', 'pistol'], ['aim', 'pistol'], ['shoot', 'pistol'],
+            ['idle', 'pistol'], ['walk', 'pistol'], ['run', 'pistol'], ...falls],
+        swat: force('smg'), army: force('shotgun'),
+        // Bicicletas e motos (piloto + veículo): andando, estacionadas, caídas e o jogador subindo.
+        rider: [['ride_bike'], ['ride_moto'], ['park_bike'], ['park_moto'], ['fallen_bike'], ['fallen_moto'],
+            ['mount', 'bike'], ['mount', 'moto'], ['mount', 'bikeL'], ['mount', 'motoL']],
+        courier: [['ride_moto']],
+    };
+};
+// O que aparece no primeiro segundo de jogo: assado (ou lido do PNG) já na construção, antes do menu.
+CharacterSheet.ESSENTIAL = { player: [['idle'], ['walk'], ['run']], civA: [['idle'], ['walk']], civB: [['idle'], ['walk']], police: [['idle'], ['walk']] };
 
 // ----------------------------------------------------------------------------
 // SpriteLibrary — paleta + folhas por tipo de corpo, criadas uma vez por cena.

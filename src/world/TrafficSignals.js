@@ -23,13 +23,15 @@ class TrafficSignals {
 
         // Brilhos: por poste 2 lentes de veículo (y alto) + 2 lâmpadas de pedestre (y baixo).
         const inters = CityGrid.intersections.filter((n) => n.visible);      // (só os cruzamentos urbanos têm poste e luz)
-        this.glow = new GlowBatch(scene, inters.length * 16, 'signalGlow');
+        const xzs = [];
+        for (const inter of inters) for (const p of inter.poles) for (let k = 0; k < 4; k++) xzs.push([p.x, p.z]);
+        this.glow = new GlowGrid(scene, 'signalGlow', xzs);                   // por região: só os da vizinhança vão para a GPU
         this._slots = [];      // por cruzamento: [{ lensNS, lensEW, pedNS, pedEW } x4 postes]
         for (const inter of inters) {
             const poles = inter.poles.map((p) => {
                 const s = {
-                    lensNS: this.glow.alloc(), lensEW: this.glow.alloc(),
-                    pedNS: this.glow.alloc(), pedEW: this.glow.alloc(),
+                    lensNS: this.glow.alloc(p.x, p.z), lensEW: this.glow.alloc(p.x, p.z),
+                    pedNS: this.glow.alloc(p.x, p.z), pedEW: this.glow.alloc(p.x, p.z),
                 };
                 // Lentes sobre o cabeçote (y≈5,3), voltadas para dentro do cruzamento.
                 this.glow.place(s.lensNS, p.x, 5.35, p.z - p.sz * 0.55, 0.95);
@@ -42,6 +44,7 @@ class TrafficSignals {
             this._slots.push(poles);
         }
         this._refreshVisuals(true);
+        this.glow.seal();
     }
 
     // Posição (s) dentro do ciclo do cruzamento.
@@ -83,9 +86,9 @@ class TrafficSignals {
     }
 
     static _lensColor(c) {
-        if (c === 'green') return [0.1, 1.0, 0.35];
-        if (c === 'yellow') return [1.0, 0.82, 0.1];
-        return [1.0, 0.14, 0.1];
+        if (c === 'green') return TrafficSignals.C_GREEN;
+        if (c === 'yellow') return TrafficSignals.C_YELLOW;
+        return TrafficSignals.C_RED;
     }
 
     _refreshVisuals() {
@@ -101,7 +104,7 @@ class TrafficSignals {
             const cwNs = inter.crosswalks.find((q) => q.crosses === 'ns'), cwEw = inter.crosswalks.find((q) => q.crosses === 'ew');
             const pedNs = cwNs ? this.ped(cwNs).state : 'wait';
             const pedEw = cwEw ? this.ped(cwEw).state : 'wait';
-            const pc = (s) => s === 'walk' ? [0.3, 1.0, 0.55] : (s === 'flash' ? (blink ? [1.0, 0.75, 0.15] : [0, 0, 0]) : [1.0, 0.15, 0.1]);
+            const pc = (s) => s === 'walk' ? TrafficSignals.C_WALK : (s === 'flash' ? (blink ? TrafficSignals.C_FLASH : TrafficSignals.C_OFF) : TrafficSignals.C_WAIT);
             const cNs = pc(pedNs), cEw = pc(pedEw);
             for (const s of this._slots[k]) {
                 g.color(s.lensNS, ns[0], ns[1], ns[2], 0.95);
@@ -113,3 +116,5 @@ class TrafficSignals {
         g.flush();
     }
 }
+TrafficSignals.C_GREEN = [0.1, 1.0, 0.35]; TrafficSignals.C_YELLOW = [1.0, 0.82, 0.1]; TrafficSignals.C_RED = [1.0, 0.14, 0.1];
+TrafficSignals.C_WALK = [0.3, 1.0, 0.55]; TrafficSignals.C_FLASH = [1.0, 0.75, 0.15]; TrafficSignals.C_OFF = [0, 0, 0]; TrafficSignals.C_WAIT = [1.0, 0.15, 0.1];

@@ -353,3 +353,6 @@ class EmpireBombJob extends CareerJob {
         else { e.influence.razed[this.d] = (e.influence.razed[this.d] || 0) + 1; e.influence.add('rival', -1.5); e.dominion.check(); this.succeed(2500, 280, `galpão rival destruído em ${e.dName(this.d)} (${e.influence.razed[this.d]})`); }
     }
 }
+memoStatics(EmpireBusiness, 'FRONTS', 'NAMES');
+memoStatics(EmpireInfluence, 'CONTACTS', 'GIFTS');
+memoStatics(EmpireDominion, 'COLLECTIONS');

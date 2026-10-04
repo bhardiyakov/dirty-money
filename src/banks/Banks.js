@@ -38,7 +38,7 @@ const Banks = {
         if (this.built) return;
         this.built = true; this.game = game;
         Interiors.index();
-        const E = game.empire, used = [], far = (d, m) => used.every((u) => Math.hypot(u.x - d.x, u.z - d.z) > m);
+        const E = game.empire, used = [], far = (d, m) => used.every((u) => hypot(u.x - d.x, u.z - d.z) > m);
         const pool = Interiors._doors.filter((d) => d.district !== 'favela' && d.style !== 'guns' && d.style !== 'drugs').sort((a, b) => (a.id < b.id ? -1 : 1));
         const pick = (ok, m) => { const c = pool.find((d) => !d.bank && ok(d) && far(d, m)); if (c) used.push(c); return c; };
         const brands = Object.keys(this.BRANDS);
@@ -105,7 +105,7 @@ const Banks = {
         const o = Interiors.STAGE, p = game.player.position;
         let best = null, bd = 1.9;
         for (const u of a.data.uses || []) {
-            const cx = Math.max(o.x + u.x0, Math.min(p.x, o.x + u.x1)), cz = Math.max(o.z + u.z0, Math.min(p.z, o.z + u.z1)), d = Math.hypot(p.x - cx, p.z - cz);
+            const cx = Math.max(o.x + u.x0, Math.min(p.x, o.x + u.x1)), cz = Math.max(o.z + u.z0, Math.min(p.z, o.z + u.z1)), d = hypot(p.x - cx, p.z - cz);
             if (d < bd) { bd = d; best = u; }
         }
         return best;
@@ -255,7 +255,7 @@ const Banks = {
         if (e) {
             e.t -= dt;
             const p = game._playerState().pos;
-            if (Math.hypot(p.x - e.x, p.z - e.z) > 220) { this.escape = null; game._flash('Você saiu da área antes do isolamento'); }
+            if (hypot(p.x - e.x, p.z - e.z) > 220) { this.escape = null; game._flash('Você saiu da área antes do isolamento'); }
             else if (e.t <= 0) { this.escape = null; game.wanted.addStars(1, 'bank'); if (game.policeManager) game.policeManager.alertNear(p, 400); game._flash('🚧 RUA ISOLADA: bloqueios e reforços em volta do banco'); }
         }
     },
@@ -275,7 +275,7 @@ const Banks = {
     _nearClerk(game) {
         const a = Interiors.active, cl = a && a.data.clerk; if (!cl) return false;
         const o = Interiors.STAGE, p = game.player.position;
-        return Math.hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
+        return hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
     },
 
     // Caixa do banco: conta, depósito limpo/sujo, saque.
@@ -402,7 +402,7 @@ class BankPowerJob extends CareerJob {
     start() {
         const b = this.bank;
         let box = null;
-        for (let t = 0; t < 24 && !box; t++) { const a = Math.random() * Math.PI * 2, q = this.mgr.streetNear(b.x + Math.cos(a) * 26, b.z + Math.sin(a) * 26, 12); if (q && Math.hypot(q.x - b.x, q.z - b.z) > 12) box = q; }
+        for (let t = 0; t < 24 && !box; t++) { const a = Math.random() * Math.PI * 2, q = this.mgr.streetNear(b.x + Math.cos(a) * 26, b.z + Math.sin(a) * 26, 12); if (q && hypot(q.x - b.x, q.z - b.z) > 12) box = q; }
         box = box || { x: b.x + 18, z: b.z };
         this.target(box.x, box.z, 'Caixa de força');
         return true;

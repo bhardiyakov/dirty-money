@@ -53,7 +53,7 @@ class SunState {
         if (!this.spot) return;
         if (npc.ctx.night && npc.ctx.night() > 0.7) { npc.toWander(); return; }           // anoiteceu: vai embora
         if (this.phase === 'go') {
-            const d = Math.hypot(npc.position.x - this.spot.x, npc.position.z - this.spot.z);
+            const d = hypot(npc.position.x - this.spot.x, npc.position.z - this.spot.z);
             this.stuck += dt;
             if (d < 1.4 || this.stuck > 40) this._lieDown();
         } else if (this.phase === 'lie') {

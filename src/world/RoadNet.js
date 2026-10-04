@@ -147,7 +147,7 @@ const RoadNet = {
             const d = e.v ? { dx: 0, dz: sign } : { dx: sign, dz: 0 };
             const t = margin + Math.random() * (e.len - 2 * margin);
             const x = e.v ? e.a.x + d.dz * lane : e.a.x + t, z = e.v ? e.a.z + t : e.a.z - d.dx * lane;
-            if (near) { const r = Math.hypot(x - near.x, z - near.z); if (r < near.rMin || r > near.rMax) continue; }
+            if (near) { const r = hypot(x - near.x, z - near.z); if (r < near.rMin || r > near.rMax) continue; }
             if (!this.interAhead(x, z, d)) continue;       // sem cruzamento à frente
             return { point: { x, z }, d };
         }
@@ -174,7 +174,7 @@ class Route {
     _push(p) {
         const last = this.pts[this.pts.length - 1];
         this.pts.push({ x: p.x, z: p.z });
-        this.cum.push(this.cum[this.cum.length - 1] + Math.hypot(p.x - last.x, p.z - last.z));
+        this.cum.push(this.cum[this.cum.length - 1] + hypot(p.x - last.x, p.z - last.z));
     }
 
     // Planeja o próximo cruzamento e anexa a manobra. Retorna false se não há mais rua.
@@ -190,7 +190,7 @@ class Route {
             // para não ziguezaguear). Numa grade isso contorna quarteirões até chegar ao jogador.
             let best = Infinity;
             for (const o of opts) {
-                const s = Math.hypot(o.plan.exit.x - this.goal.x, o.plan.exit.z - this.goal.z) - (o.turn === 'straight' ? 6 : 0);
+                const s = hypot(o.plan.exit.x - this.goal.x, o.plan.exit.z - this.goal.z) - (o.turn === 'straight' ? 6 : 0);
                 if (s < best) { best = s; pick = o; }
             }
         } else {
@@ -251,7 +251,7 @@ class Route {
         }
         const a = P[this.seg], b = P[this.seg + 1];
         if (!b) return this.cum[this.cum.length - 1];
-        const sx = b.x - a.x, sz = b.z - a.z, len = Math.hypot(sx, sz) || 1;
+        const sx = b.x - a.x, sz = b.z - a.z, len = hypot(sx, sz) || 1;
         const t = Math.max(0, Math.min(len, ((x - a.x) * sx + (z - a.z) * sz) / len));
         return this.cum[this.seg] + t;
     }

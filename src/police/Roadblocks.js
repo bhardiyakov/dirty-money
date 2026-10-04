@@ -21,7 +21,7 @@ class Roadblocks {
     get active() { return this.list.length; }
 
     // Distância do bloqueio ao ponto.
-    _dist(b, x, z) { return Math.hypot(b.x - x, b.z - z); }
+    _dist(b, x, z) { return hypot(b.x - x, b.z - z); }
 
     // Posição do bloqueio de uma perna: 15u do centro do cruzamento, rumo à saída.
     _spot(inter, d) { return { x: inter.x + d.dx * 15, z: inter.z + d.dz * 15 }; }
@@ -31,16 +31,16 @@ class Roadblocks {
     _pick(pos, vel, n) {
         const m = this.m, f = m.game.camera.target;
         const cands = [];
-        const speed = Math.hypot(vel.x, vel.z);
+        const speed = hypot(vel.x, vel.z);
         for (const inter of CityGrid.intersections) {
             for (let di = 0; di < 4; di++) {
                 const d = RoadNet.DIRS[di];
                 const nb = inter.nbr[di];
                 if (!nb || inter.edge[di].len < 30 || RoadNet.isClosed(inter, d)) continue;
                 const s = this._spot(inter, d);
-                const dist = Math.hypot(s.x - pos.x, s.z - pos.z);
+                const dist = hypot(s.x - pos.x, s.z - pos.z);
                 if (dist < 70 || dist > 125) continue;
-                if (Math.hypot(s.x - f.x, s.z - f.z) < 60) continue;                // fora da tela
+                if (hypot(s.x - f.x, s.z - f.z) < 60) continue;                // fora da tela
                 if (this.list.some((b) => this._dist(b, s.x, s.z) < 40)) continue;
                 if (!m.traffic._clear(s.x, s.z, 7)) continue;
                 // Prefere o que está à frente da fuga e perto de 100u.
@@ -52,7 +52,7 @@ class Roadblocks {
         const out = [];
         for (const c of cands) {
             if (out.length >= n) break;
-            if (out.some((o) => Math.hypot(o.s.x - c.s.x, o.s.z - c.s.z) < 40)) continue;
+            if (out.some((o) => hypot(o.s.x - c.s.x, o.s.z - c.s.z) < 40)) continue;
             out.push(c);
         }
         return out;

@@ -30,7 +30,7 @@ const Couriers = {
     // Escolhe o próximo destino: um restaurante perto (pegar) ou um cliente a algumas quadras (entregar).
     _next(bike) {
         const c = bike.courier, p = bike.position, f = bike.traffic ? bike.traffic.focus() : p;
-        const inZone = (x, z, lo, hi) => { const k = Math.hypot(x - p.x, z - p.z); return k > lo && k < hi && Math.hypot(x - f.x, z - f.z) < 165; };   // destino dentro da área viva (perto do jogador)
+        const inZone = (x, z, lo, hi) => { const k = hypot(x - p.x, z - p.z); return k > lo && k < hi && hypot(x - f.x, z - f.z) < 165; };   // destino dentro da área viva (perto do jogador)
         let goal = null;
         if (c.state === 'toShop') {
             const doors = (Interiors._doors || []).filter((d) => this.FOOD.includes(d.style));
@@ -67,7 +67,7 @@ const Couriers = {
             return;
         }
         const p = bike.position, g = c.goal;
-        const d = g ? Math.hypot(g.x - p.x, g.z - p.z) : 0;
+        const d = g ? hypot(g.x - p.x, g.z - p.z) : 0;
         if (g && d < 20) {                                               // chegou: encosta (na pista mesmo) por alguns segundos
             c.stop = c.state === 'toShop' ? 3 + Math.random() * 3 : 2.5 + Math.random() * 2;
             c.state = c.state === 'toShop' ? 'pickup' : 'deliver';

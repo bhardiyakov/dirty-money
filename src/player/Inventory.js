@@ -170,3 +170,4 @@ class Inventory {
         return lost;
     }
 }
+memoStatics(Inventory, 'HEAL', 'SIZES', 'STACK');

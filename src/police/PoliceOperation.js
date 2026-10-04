@@ -122,7 +122,7 @@ class PoliceOperation {
             let best = null, bd = 30;
             for (const m of this.game.gangs.members) {
                 if (!m.alive || m.rag) continue;
-                const d = Math.hypot(m.position.x - u.position.x, m.position.z - u.position.z);
+                const d = hypot(m.position.x - u.position.x, m.position.z - u.position.z);
                 if (d < bd && MapGeo.hasLineOfSight(u.position.x, u.position.z, m.position.x, m.position.z)) { bd = d; best = m; }
             }
             u.foe = best;

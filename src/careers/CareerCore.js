@@ -95,7 +95,7 @@ class CareerJob {
     hud() {
         const p = this.g._playerState().pos, parts = [];
         if (this.limit > 0) { const s = Math.max(0, Math.ceil(this.t)); parts.push(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`); }
-        if (this.tx !== null) parts.push(`${Math.round(Math.hypot(p.x - this.tx, p.z - this.tz))} M`);
+        if (this.tx !== null) parts.push(`${Math.round(hypot(p.x - this.tx, p.z - this.tz))} M`);
         const st = this.status();
         if (st) parts.push(st);
         return { title: `${this.c.name} · ${this.title}`, text: this.text, extra: parts.join(' · '), low: this.limit > 0 && this.t < 30 };
@@ -103,7 +103,7 @@ class CareerJob {
 
     // Alvo da etapa: GPS + marcador no chão.
     target(x, z, label, color) { this.tx = x; this.tz = z; this.mgr.mark(x, z, color || this.c.color); if (label) this.mgr.gpsTo(x, z, label); }
-    near(pos, r) { return this.tx !== null && Math.hypot(pos.x - this.tx, pos.z - this.tz) < r; }
+    near(pos, r) { return this.tx !== null && hypot(pos.x - this.tx, pos.z - this.tz) < r; }
     succeed(money, xp, msg) { this.mgr._finish(this, true, money, xp, msg); }
     fail(why) { this.mgr._finish(this, false, 0, 0, why); }
 }
@@ -288,7 +288,7 @@ class Careers {
             const d = Standing.depth(r.x, r.z);
             if (d < d0 || d > d1) continue;
             const home = SafeHouse.spawnWorld();
-            if (home && Math.hypot(r.x - home.x, r.z - home.z) < 25) continue;
+            if (home && hypot(r.x - home.x, r.z - home.z) < 25) continue;
             return (this[key] = { x: r.x, z: r.z });
         }
         return (this[key] = { x: (b.x0 + b.x1) / 2, z: (b.z0 + b.z1) / 2 });
@@ -297,20 +297,20 @@ class Careers {
     // Porta de loja (na calçada) entre rMin e rMax de `near`, que passe no filtro; aleatória entre as válidas.
     cityDoor(near, rMin, rMax, ok = null) {
         Interiors.index();
-        const pool = Interiors._doors.filter((d) => { const r = Math.hypot(d.x - near.x, d.z - near.z); return r >= rMin && r <= rMax && (!ok || ok(d)); });
+        const pool = Interiors._doors.filter((d) => { const r = hypot(d.x - near.x, d.z - near.z); return r >= rMin && r <= rMax && (!ok || ok(d)); });
         return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
     }
 
     // Casa/apartamento de gente rica (imóvel à venda, não seu) entre rMin e rMax.
     richHome(near, rMin, rMax, minStars = 4) {
-        const pool = RealEstate.list.filter((p) => p.stars >= minStars && !RealEstate.isOwned(p) && Math.hypot(p.x - near.x, p.z - near.z) >= rMin && Math.hypot(p.x - near.x, p.z - near.z) <= rMax);
+        const pool = RealEstate.list.filter((p) => p.stars >= minStars && !RealEstate.isOwned(p) && hypot(p.x - near.x, p.z - near.z) >= rMin && hypot(p.x - near.x, p.z - near.z) <= rMax);
         return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
     }
 
     // Cena de tiroteio recente (policial/traficante morto) entre rMin e rMax.
     recentScene(near, rMin, rMax) {
         let best = null;
-        for (const s of this.scenes) { const d = Math.hypot(s.x - near.x, s.z - near.z); if (d >= rMin && d <= rMax && (!best || s.age < best.age)) best = s; }
+        for (const s of this.scenes) { const d = hypot(s.x - near.x, s.z - near.z); if (d >= rMin && d <= rMax && (!best || s.age < best.age)) best = s; }
         return best;
     }
 
@@ -325,7 +325,7 @@ class Careers {
             if (u.alive || this._dead.has(u)) continue;
             this._dead.add(u);
             const p = u.position;
-            if (!this.scenes.some((s) => Math.hypot(s.x - p.x, s.z - p.z) < 20)) this.scenes.push({ x: p.x, z: p.z, age: 0 });
+            if (!this.scenes.some((s) => hypot(s.x - p.x, s.z - p.z) < 20)) this.scenes.push({ x: p.x, z: p.z, age: 0 });
         }
     }
 

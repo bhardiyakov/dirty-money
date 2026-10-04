@@ -119,8 +119,15 @@ class WorldBuilder {
     // Garante um batch com chave (e o material por chave).
     // Com (x, z): a peça vai para o pedaço de 512 u que contém esse ponto (uma malha por material E pedaço (512 u): o frustum descarta
     // o que está longe da tela; sem pedaços, a cidade inteira seria desenhada a cada frame).
+    // As camadas DENSAS em vértices (acabamentos: platibandas, fios do "gato", postes de madeira, casas de máquina; meio-fio) usam
+    // pedaços menores (Config.world.detailChunk): com 512 u, cada uma tinha até 150 mil vértices por pedaço, e a GPU processava a
+    // vizinhança inteira (tela + sombra: ~1 milhão de vértices por quadro) para mostrar uma janela de ~70 u. As demais (ruas, paredes,
+    // telhados, chão: muitos materiais, poucos vértices) ficam em pedaços grandes — pedaço menor nelas só multiplicaria draw calls.
     _batch(key, x = null, z = null) {
-        if (x !== null) key += '@' + Math.floor(x / 512) + ',' + Math.floor(z / 512);
+        if (x !== null) {
+            const dense = WorldBuilder.DENSE.has(key), C = dense ? Config.world.detailChunk : Config.world.meshChunk, o = dense ? 0 : Config.world.meshChunkOffset;
+            key += '@' + Math.floor((x + o) / C) + ',' + Math.floor((z + o) / C);
+        }
         return this.batches[key] || (this.batches[key] = new MeshBatch());
     }
 
@@ -367,7 +374,7 @@ class WorldBuilder {
         const curbLoop = (pts, bx, bz) => {
             const cb = this._batch('curb', bx, bz);
             for (let i = 0; i < pts.length; i++) {
-                const p = pts[i], q = pts[(i + 1) % pts.length], dx = q[0] - p[0], dz = q[1] - p[1], l = Math.hypot(dx, dz) || 1, n = [dz / l, 0, -dx / l];
+                const p = pts[i], q = pts[(i + 1) % pts.length], dx = q[0] - p[0], dz = q[1] - p[1], l = hypot(dx, dz) || 1, n = [dz / l, 0, -dx / l];
                 if (l < 1e-3) continue;
                 cb.tri([p[0], 0, p[1]], [q[0], 0, q[1]], [q[0], h, q[1]], n, [[0, 0], [0, 0], [0, 0]]);
                 cb.tri([p[0], 0, p[1]], [q[0], h, q[1]], [p[0], h, p[1]], n, [[0, 0], [0, 0], [0, 0]]);
@@ -664,15 +671,19 @@ class WorldBuilder {
         this.perches = lamps.map((l) => ({ x: l.hx, z: l.hz, y: 5.75 }));          // poleiros das aves (Birds)
 
         // Brilhos: cabeçote (alto) + poça no chão, por poste.
-        this.lampGlow = new GlowBatch(this.scene, lamps.length * 2, 'lampGlow', 'glow');
+        // Cores fixas (acesas); quem acende/apaga é a intensidade global do lote (setNight → setLevel). Poste quebrado = quad apagado.
+        this.lampGlow = new GlowGrid(this.scene, 'lampGlow', lamps.flatMap((l) => [[l.hx, l.hz], [l.hx, l.hz]]));
         this._lampIds = lamps.map((l) => {
-            const a = this.lampGlow.alloc(), b = this.lampGlow.alloc();
+            const a = this.lampGlow.alloc(l.hx, l.hz), b = this.lampGlow.alloc(l.hx, l.hz);
             this.lampGlow.place(a, l.hx, 5.75, l.hz, 2.6);
             this.lampGlow.place(b, l.hx, 0.24, l.hz, 14);
+            this.lampGlow.color(a, 1.0, 0.86, 0.55, 0.9);
+            this.lampGlow.color(b, 1.0, 0.78, 0.42, 0.45);
             l.glow = [a, b];
             return [a, b];
         });
-        this.lampGlow.flush();
+        this.lampGlow.seal();
+        this.lampGlow.setLevel(0);
         this.street = new StreetProps(this, lamps);
         this.street.placeHydrants();
     }
@@ -732,11 +743,11 @@ class WorldBuilder {
         const wire = (x0, z0, x1, z1, y, c) => {                       // fio fino alinhado a um eixo, com barriga (3 trechos) no meio
             const trim = this._batch('trim', x0, z0), t = 0.03;
             if (Math.abs(x1 - x0) < 0.01 && Math.abs(z1 - z0) < 0.01) return;
-            const n = Math.max(1, Math.round(Math.hypot(x1 - x0, z1 - z0) / 5));
+            const n = Math.max(1, Math.round(hypot(x1 - x0, z1 - z0) / 5));
             for (let i = 0; i < n; i++) {
                 const a = i / n, b = (i + 1) / n, mid = 1 - Math.abs((a + b) - 1);        // 0 nas pontas, 1 no centro
                 const xa = x0 + (x1 - x0) * a, xb = x0 + (x1 - x0) * b, za = z0 + (z1 - z0) * a, zb = z0 + (z1 - z0) * b;
-                const yy = y - 0.5 * mid * Math.min(1, Math.hypot(x1 - x0, z1 - z0) / 12);
+                const yy = y - 0.5 * mid * Math.min(1, hypot(x1 - x0, z1 - z0) / 12);
                 trim.solid(Math.min(xa, xb) - t, Math.min(za, zb) - t, Math.max(xa, xb) + t, Math.max(za, zb) + t, yy, yy + 0.05, c);
             }
         };
@@ -781,7 +792,7 @@ class WorldBuilder {
             const near = [];
             for (let j = 0; j < poles.length; j++) {
                 if (j === i) continue;
-                const d = Math.hypot(poles[j].x - a.x, poles[j].z - a.z);
+                const d = hypot(poles[j].x - a.x, poles[j].z - a.z);
                 if (d < 34) near.push([d, j]);
             }
             near.sort((u, v) => u[0] - v[0]);
@@ -797,13 +808,13 @@ class WorldBuilder {
         }
 
         // Luz precária: 2 brilhos por lâmpada (cabeça pequena + poça fraca no chão), amarelo-esverdeado doente.
-        this.favGlow = new GlowBatch(this.scene, Math.max(1, this._favLamps.length * 2), 'favGlow', 'glow');
+        this.favGlow = new GlowGrid(this.scene, 'favGlow', this._favLamps.flatMap((l) => [[l.x, l.z], [l.x, l.z]]));
         this._favLamps.forEach((l) => {
-            l.a = this.favGlow.alloc(); l.b = this.favGlow.alloc();
+            l.a = this.favGlow.alloc(l.x, l.z); l.b = this.favGlow.alloc(l.x, l.z);
             this.favGlow.place(l.a, l.x, 5.5, l.z, 1.8);
             this.favGlow.place(l.b, l.x, 0.24, l.z, 9);
         });
-        this.favGlow.flush();
+        this.favGlow.seal();
         this._favT = 0;
     }
 
@@ -819,6 +830,7 @@ class WorldBuilder {
         this._favOn = true;
         this._favT += dt;
         for (const l of list) {
+            if (!Zones.near(l.x, l.z, 12)) continue;               // fora da tela: o pisca-pisca não aparece — não reenvia esses quads
             let f = 0;
             if (l.type === 0) f = 0.6 + 0.1 * Math.sin(this._favT * 3.1 + l.ph) + 0.05 * Math.sin(this._favT * 11 + l.ph);
             else if (l.type === 1) {
@@ -845,9 +857,10 @@ class WorldBuilder {
             const c = Pixel.hex(TileFactory.SHOPS[s.kind].sign), m = s.a + 3, o = 2.6;
             list.push({ x: s.side === 'W' ? l.x0 - o : (s.side === 'E' ? l.x1 + o : m), z: s.side === 'S' ? l.z0 - o : (s.side === 'N' ? l.z1 + o : m), c: [c[0] / 255, c[1] / 255, c[2] / 255] });
         }
-        this.shopGlow = new GlowBatch(this.scene, Math.max(1, list.length), 'shopGlow', 'glow');
-        this._shopIds = list.map((s) => { const i = this.shopGlow.alloc(); this.shopGlow.place(i, s.x, 0.26, s.z, 9); s.id = i; return s; });
-        this.shopGlow.flush();
+        this.shopGlow = new GlowGrid(this.scene, 'shopGlow', list.map((s) => [s.x, s.z]));
+        this._shopIds = list.map((s) => { const i = this.shopGlow.alloc(s.x, s.z); this.shopGlow.place(i, s.x, 0.26, s.z, 9); this.shopGlow.color(i, s.c[0], s.c[1], s.c[2], 0.42); s.id = i; return s; });
+        this.shopGlow.seal();
+        this.shopGlow.setLevel(0);
     }
 
     // Helipontos: laje de concreto com um H amarelo, onde os helicópteros civis ficam estacionados (ver Chopper / Game._spawnChoppers).
@@ -865,9 +878,9 @@ class WorldBuilder {
             return null;
         };
         const spot = (b) => (b._pad !== undefined ? b._pad : (b._pad = (b.foot[2] - b.foot[0] >= 24 && b.foot[3] - b.foot[1] >= 24 && b.biome !== 'downtown') ? (b.open ? [(b.foot[0] + b.foot[2]) / 2, (b.foot[1] + b.foot[3]) / 2] : freeSquare(b)) : null));
-        const near = (list, x, z) => list.filter((b) => spot(b)).sort((a, b) => Math.hypot(spot(a)[0] - x, spot(a)[1] - z) - Math.hypot(spot(b)[0] - x, spot(b)[1] - z));
+        const near = (list, x, z) => list.filter((b) => spot(b)).sort((a, b) => hypot(spot(a)[0] - x, spot(a)[1] - z) - hypot(spot(b)[0] - x, spot(b)[1] - z));
         const all = CityGrid.blocks, chosen = [];
-        const take = (b) => { if (b && !chosen.includes(b) && chosen.every((o) => Math.hypot(spot(o)[0] - spot(b)[0], spot(o)[1] - spot(b)[1]) > 60)) chosen.push(b); };
+        const take = (b) => { if (b && !chosen.includes(b) && chosen.every((o) => hypot(spot(o)[0] - spot(b)[0], spot(o)[1] - spot(b)[1]) > 60)) chosen.push(b); };
         take(near(all, c.x, c.z)[0]);                                                       // o do ponto de partida
         const parks = all.filter((b) => b.biome === 'park');
         take(near(parks, c.x, c.z)[0]);
@@ -1004,7 +1017,8 @@ class WorldBuilder {
             if (key === 'veg_hi') { mesh.renderingGroupId = 1; mesh.alphaIndex = -1; }      // copas: desenham DEPOIS de pedestres, carros e sprites do chao (que nao escrevem profundidade), sempre por cima
             if (key0.startsWith('x') || key0.startsWith('open_x')) { mesh.renderingGroupId = 1; mesh.alphaIndex = 10; }      // estruturas com furo macio: desenham DEPOIS dos sprites (e dos brilhos), com profundidade
 
-            const caster = key.startsWith('walls_') || key.startsWith('roof_') || isTrim || key === 'hide_top';
+            if (isTrim && this.shadow) { this.shadow.addShadowCaster(mesh); continue; }       // acabamentos (pedaços pequenos) projetam a própria sombra
+            const caster = key.startsWith('walls_') || key.startsWith('roof_') || key === 'hide_top';
             if (!caster || !this.shadow) continue;
             const pk = at < 0 ? '' : full.slice(at);
             let px = proxies.get(pk);
@@ -1039,18 +1053,29 @@ class WorldBuilder {
 
     update(dt, focus) {
         this._windTime = (this._windTime || 0) + dt;
-        this.props.setWind(this._windTime, this.windMode());
+        this.props.setWind(this._windTime, this.windMode(), dt);
         this._favFlicker(dt);
         if (focus) this.props.setFocus(focus.x, focus.z, this._revealR);   // fade das copas sobre o jogador.
         if (focus && this.terrain && !Interiors.active) this.terrain.update(dt, focus);
         this._waterTime += dt;
-        const frame = Math.floor(this._waterTime * 3) % 4;
-        if (frame !== this._waterFrame) {
-            this._waterFrame = frame;
-            this.mats.water.diffuseTexture = this.T.water[frame];
+        // Animação (4 quadros, 3/s) + deriva lenta (1 texel por vez; com amostragem NEAREST menos que isso nem aparece). Antes: trocar a
+        // diffuseTexture e mexer em uOffset/vOffset, e cada mudança fazia o Babylon recalcular a matriz da textura e VARRER TODOS OS
+        // MATERIAIS da cena (todo quadro). Agora os pixels do quadro são copiados já deslocados (o ladrilho é contínuo: deslocar em
+        // círculo = mudar o offset) para a mesma textura — 25 KB, ~4 vezes por segundo, nenhum material é tocado.
+        const frame = Math.floor(this._waterTime * 3) % 4, off = this._waterTime * 0.012;
+        const du = Math.round(off * 80) % 80, dv = Math.round(off * 0.6 * 80) % 80;
+        if (frame !== this._waterFrame || du !== this._waterU || dv !== this._waterV) {
+            this._waterFrame = frame; this._waterU = du; this._waterV = dv;
+            const src = this.T.waterFrames[frame], out = this._waterBuf || (this._waterBuf = new Uint8Array(src.length)), N = 80;
+            for (let y = 0; y < N; y++) {
+                const sy = (y + dv) % N;
+                for (let x = 0; x < N; x++) {
+                    const o = (y * N + x) * 4, i = (sy * N + (x + du) % N) * 4;
+                    out[o] = src[i]; out[o + 1] = src[i + 1]; out[o + 2] = src[i + 2]; out[o + 3] = src[i + 3];
+                }
+            }
+            this.T.water[0].update(out);
         }
-        const off = this._waterTime * 0.012;
-        for (const t of this.T.water) { t.uOffset = off; t.vOffset = off * 0.6; }
     }
 
     // 0 = dia, 1 = noite: liga as janelas (mapa emissivo) e os postes de rua.
@@ -1058,19 +1083,13 @@ class WorldBuilder {
         for (const k of Object.keys(this.mats.facades)) this.mats.facades[k].emissiveTexture.level = f;
         this.mats.shop.emissiveTexture.level = f;
         const on = Math.max(0, (f - 0.25) / 0.6);              // postes acendem no começo da noite
-        const q = Math.round(Math.min(1, on) * 30) / 30;       // degraus: evita reenviar o buffer toda hora
+        const q = Math.round(Math.min(1, on) * 30) / 30;
         if (q === this._lampLevel) return;
         this._lampLevel = q;
-        const g = this.lampGlow;
-        for (let li = 0; li < this._lampIds.length; li++) {
-            const [a, b] = this._lampIds[li];
-            if (this.street && !this.street.lamps[li].alive) { g.off(a); g.off(b); continue; }          // poste quebrado: luz apagada
-            if (q > 0) { g.color(a, 1.0, 0.86, 0.55, 0.9 * q); g.color(b, 1.0, 0.78, 0.42, 0.45 * q); }
-            else { g.off(a); g.off(b); }
-        }
-        g.flush();
-        const sg = this.shopGlow;                                // lojas: poças coloridas na calçada
-        for (const s of this._shopIds) { if (q > 0) sg.color(s.id, s.c[0], s.c[1], s.c[2], 0.42 * q); else sg.off(s.id); }
-        sg.flush();
+        // Postes e poças coloridas das lojas: só a intensidade global muda (um uniform; os postes quebrados já estão apagados no buffer).
+        this.lampGlow.setLevel(q);
+        this.shopGlow.setLevel(q);
     }
 }
+memoStatics(WorldBuilder, 'GLYPHS');
+WorldBuilder.DENSE = new Set(['trim', 'xtrim', 'curb', 'xcurb']);

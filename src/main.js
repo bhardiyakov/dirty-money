@@ -143,11 +143,23 @@ class SimBridge {
     }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+    // Arte em PNG (assets/sprites, ver SpriteIO): espera só as paletas e os clipes do 1º segundo de jogo; o resto baixa em segundo
+    // plano enquanto o jogador está no menu (a carga do jogo espera SpriteIO.ready). Sem manifesto/em file://: tudo procedural.
+    const ess = new Set();
+    for (const [sheet, list] of Object.entries(CharacterSheet.ESSENTIAL)) for (const [n, w] of list) ess.add(CharacterSheet.fileKey(sheet, n, w || 'none'));
+    await SpriteIO.init((k) => k.startsWith('pal/') || ess.has(k));
     window.game = new Game('canvas');
     window.sim = new SimBridge();
     window.game.gameEngine.engine.onEndFrameObservable.add(() => window.sim.flush());      // um lote por quadro, depois do render
     if (location.search.includes('debug')) DebugTools.install(window.game);
     window.mainMenu = new MainMenu(window.game);
     console.log('%cDIRTY MONEY iniciado', 'color:#00ff78');
+});
+
+// Cache offline (sw.js): a partir da 2ª visita o jogo e as bibliotecas (~7 MB) saem do aparelho, e funciona sem internet. Só por
+// http(s); registrado depois do 'load' para não disputar banda com a primeira carga.
+window.addEventListener('load', () => {
+    if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+    navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('[SW] sem cache offline:', e));
 });

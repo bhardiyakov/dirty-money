@@ -65,7 +65,7 @@ class Chopper {
 
     // Em voo de verdade (alto o bastante para ser alvo "aéreo" e não ser tapado por prédio)?
     get flying() { return this.alt - this.floor > 2; }
-    get speed() { return Math.hypot(this.vx, this.vz); }
+    get speed() { return hypot(this.vx, this.vz); }
     get hpFrac() { return Math.max(0, this.hp / this.maxHp); }
     get grounded() { return this.alt <= this.floor + 0.08; }
     // Altura acima do solo (m) para o painel.
@@ -156,7 +156,7 @@ class Chopper {
             const air = !onGround && powered;
             const vF = c.fwd > 0 ? 30 : 12, vS = 17;
             const tx = air ? (sin * c.fwd * vF + cos * c.strafe * vS) : 0, tz = air ? (cos * c.fwd * vF - sin * c.strafe * vS) : 0;
-            const ax = tx - this.vx, az = tz - this.vz, al = Math.hypot(ax, az);
+            const ax = tx - this.vx, az = tz - this.vz, al = hypot(ax, az);
             const inputOn = Math.abs(c.fwd) + Math.abs(c.strafe) > 0.01;
             const lim = (air ? (inputOn ? 15 : 3.2) : 30) * dt;                // solto: deriva (pouco atrito do ar); no chão: para
             if (al > lim) { this.vx += ax / al * lim; this.vz += az / al * lim; } else { this.vx = tx; this.vz = tz; }
@@ -269,7 +269,7 @@ class Chopper {
         f.shadow.flush();
     }
 
-    distanceTo(pos) { return Math.hypot(this.position.x - pos.x, this.position.z - pos.z); }
+    distanceTo(pos) { return hypot(this.position.x - pos.x, this.position.z - pos.z); }
 
     dispose() {
         this.actor.dispose();

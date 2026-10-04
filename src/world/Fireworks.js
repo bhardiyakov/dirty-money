@@ -14,6 +14,7 @@ class Fireworks {
         this.pool = [];
         for (let i = 0; i < this.CAP; i++) this.pool.push(this.glow.alloc());
         for (const i of this.pool) this.glow.off(i);
+        this.glow.flush();
         this.shells = []; this.bursts = [];
         this.maxShows = 6;
     }
@@ -78,13 +79,18 @@ class Fireworks {
 
     update(dt) {
         const G = this.glow;
+        // Sem fogos no ar: a malha (3.200 quads) nem vai para a GPU.
+        const busy = this.shells.length + this.bursts.length > 0;
+        if (G.mesh.isVisible !== busy) G.mesh.isVisible = busy;
+        if (!busy) return;
         // foguetes subindo
         for (let s = this.shells.length - 1; s >= 0; s--) {
             const S = this.shells[s];
             S.t += dt;
             const e = Math.min(1, S.t / S.T), e2 = 1 - (1 - e) * (1 - e);                 // desacelera no fim
             const x = S.x0 + (S.x1 - S.x0) * e2, z = S.z0 + (S.z1 - S.z0) * e2, y = S.y0 + (S.y1 - S.y0) * e2 + Math.sin(S.t * 30) * 0.05;
-            S.hist.unshift([x, y, z]); if (S.hist.length > S.ids.length) S.hist.pop();
+            const H = S.hist, h = H.length >= S.ids.length ? H.pop() : [0, 0, 0];      // rastro: reaproveita a posição mais velha
+            h[0] = x; h[1] = y; h[2] = z; H.unshift(h);
             for (let k = 0; k < S.ids.length; k++) {
                 const h = S.hist[Math.min(k, S.hist.length - 1)], f = k / S.ids.length;
                 if (!h || k >= S.hist.length) { G.off(S.ids[k]); continue; }
@@ -125,3 +131,4 @@ class Fireworks {
         G.flush();
     }
 }
+memoStatics(Fireworks, 'PALETTES');

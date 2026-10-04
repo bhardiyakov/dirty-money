@@ -34,7 +34,7 @@ const CharacterRig = {
     _sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; },
     _mul(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; },
     _dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; },
-    _len(a) { return Math.hypot(a[0], a[1], a[2]); },
+    _len(a) { return hypot(a[0], a[1], a[2]); },
     _norm(a) { const l = this._len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
 
     // IK de 2 ossos: devolve { elbow, end } para um membro S -> end (comprimentos L1, L2).
@@ -97,7 +97,7 @@ const CharacterRig = {
         // de outro jeito). Comprimento total da perna = 2 × LEG.
         const LEG = 0.43;
         // (só pés apoiados no chão contam; pé levantado, como num chute, não derruba o corpo)
-        const grounded = (f, hx) => (f[1] < 0.3 ? Math.hypot(f[0] - hx, f[2]) : 0);
+        const grounded = (f, hx) => (f[1] < 0.3 ? hypot(f[0] - hx, f[2]) : 0);
         const spread = Math.max(grounded(pose.footR, 0.2), grounded(pose.footL, -0.2));
         const reach = LEG * 2 * 0.97;
         const hipH = Math.max(0.5, Math.sqrt(Math.max(0, reach * reach - spread * spread)) + 0.16);
@@ -285,8 +285,8 @@ const CharacterRig = {
             else if (q.t === 'e') {
                 q.c = rp(q.c);
                 const [rx, ry, rz] = q.r;
-                const ry1 = Math.hypot(ry * cp, rz * sp), rz1 = Math.hypot(ry * sp, rz * cp);
-                q.r = [Math.hypot(rx * cr, ry1 * sr), Math.hypot(rx * sr, ry1 * cr), rz1];
+                const ry1 = hypot(ry * cp, rz * sp), rz1 = hypot(ry * sp, rz * cp);
+                q.r = [hypot(rx * cr, ry1 * sr), hypot(rx * sr, ry1 * cr), rz1];
             } else q.c = rp(q.c);
         }
     },
@@ -992,6 +992,7 @@ const CharacterRig = {
                 }
             }
         });
+        SpriteIO.paletteOverlay('pal/char', data, W, H);               // cores editadas em assets/sprites/pal/char.png (se houver)
         const tex = BABYLON.RawTexture.CreateRGBATexture(data, W, H, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
         tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
         return { texture: tex, width: W, height: H };

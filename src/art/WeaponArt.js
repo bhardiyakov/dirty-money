@@ -217,7 +217,7 @@ WeaponArt.Grid = class {
         const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1;
         for (let y = Math.floor(Math.min(ay, by) - r - 1); y <= Math.ceil(Math.max(ay, by) + r + 1); y++) for (let x = Math.floor(Math.min(ax, bx) - r - 1); x <= Math.ceil(Math.max(ax, bx) + r + 1); x++) {
             let t = ((x - ax) * dx + (y - ay) * dy) / L2; t = Math.max(0, Math.min(1, t));
-            const cx = ax + dx * t, cy = ay + dy * t, d = Math.hypot(x - cx, y - cy);
+            const cx = ax + dx * t, cy = ay + dy * t, d = hypot(x - cx, y - cy);
             if (d > r) continue;
             const lx = (x - cx) * -0.7 + (y - cy) * -0.7, k = lx / r;        // >0: lado da luz
             this.px(x, y, k > 0.35 ? P[0] : (k < -0.45 ? P[2] : P[1]));

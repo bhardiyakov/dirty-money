@@ -102,7 +102,7 @@ class TrafficCar extends Vehicle {
         if (this.lat !== 0 || this.latTarget !== 0) {                                   // desvio: o alvo da perseguicao sai da faixa pela normal esquerda da rota
             const t2 = this._pt2 || (this._pt2 = { x: 0, z: 0 });
             R.pointAt(u + Ld + 1, t2);
-            const tx = t2.x - this._pt.x, tz = t2.z - this._pt.z, tl = Math.hypot(tx, tz) || 1;
+            const tx = t2.x - this._pt.x, tz = t2.z - this._pt.z, tl = hypot(tx, tz) || 1;
             this._pt.x += (-tz / tl) * this.lat; this._pt.z += (tx / tl) * this.lat;
         }
         const f = this.body.getDirection(BABYLON.Axis.Z);
@@ -162,7 +162,7 @@ class TrafficCar extends Vehicle {
         if (near.length) {
             for (let s = this.halfLen + 0.2; s <= look && !hit; s += 1.5) {
                 R.pointAt(u + s, this._pt);
-                if (this.lat !== 0) { const t2 = this._pt2 || (this._pt2 = { x: 0, z: 0 }); R.pointAt(u + s + 0.6, t2); const tx = t2.x - this._pt.x, tz = t2.z - this._pt.z, tl = Math.hypot(tx, tz) || 1; this._pt.x += (-tz / tl) * this.lat; this._pt.z += (tx / tl) * this.lat; }
+                if (this.lat !== 0) { const t2 = this._pt2 || (this._pt2 = { x: 0, z: 0 }); R.pointAt(u + s + 0.6, t2); const tx = t2.x - this._pt.x, tz = t2.z - this._pt.z, tl = hypot(tx, tz) || 1; this._pt.x += (-tz / tl) * this.lat; this._pt.z += (tx / tl) * this.lat; }
                 for (const o of near) {
                     const rad = o.kind === 'car' ? (this.halfW + o.hw) * (this.squeeze || 0.92) : 1.15;      // moto de entrega: passa no corredor entre os carros
                     const dx = o.x - this._pt.x, dz = o.z - this._pt.z;
@@ -198,7 +198,7 @@ class TrafficCar extends Vehicle {
             // REFLEXO: em velocidade e vendo alguém/algo PARADO à frente que não dá mais para parar a tempo (ou perto demais), desvia
             // para o lado livre em vez de só frear (pedestre: acostamento da direita ou faixa contrária; carro: faixa contrária).
             if (!this.detour && !this.ignoreSignals && v > 6) {
-                const still = isCar ? lead < 1.5 : Math.hypot(hit.vx || 0, hit.vz || 0) < 0.8;
+                const still = isCar ? lead < 1.5 : hypot(hit.vx || 0, hit.vz || 0) < 0.8;
                 const stopD = (v * v) / (2 * T.brake * 0.6) + T.stopGap + 1.5;       // distancia de parada confortavel: se vai ficar curto, prefere desviar a frear em cima
                 if (still && gap < stopD * 1.4 && this._startDetour(hit, env, u, true)) {
                     if (this.honkCd <= 0 && this.honks < 2) { this.honks++; this.honk('freada', { v, gap, kind: hit.kind }); }
@@ -264,7 +264,7 @@ class TrafficCar extends Vehicle {
         const R = this.route, T = this._pt3 || (this._pt3 = { x: 0, z: 0 }), T2 = this._pt4 || (this._pt4 = { x: 0, z: 0 });
         for (let s = this.halfLen; s <= 30; s += 2) {
             R.pointAt(u + s, T); R.pointAt(u + s + 0.6, T2);
-            const tx = T2.x - T.x, tz = T2.z - T.z, tl = Math.hypot(tx, tz) || 1;
+            const tx = T2.x - T.x, tz = T2.z - T.z, tl = hypot(tx, tz) || 1;
             const px = T.x + (-tz / tl) * off, pz = T.z + (tx / tl) * off;
             for (const o of env.grid.query(px, pz, 50, TrafficCar._q2)) {                // (inclui quem chega em 1,2 s, até ~40 m/s)
                 if (o.ref === this || o === hitObj || o.ref === hitObj.ref || (o.layer || 0) !== (this.layer || 0)) continue;
@@ -299,7 +299,7 @@ class TrafficCar extends Vehicle {
             if (o.kind !== 'car' || o.ref === this || (o.layer || 0) !== (this.layer || 0)) continue;
             const along = (o.x - X.x) * d.dx + (o.z - X.z) * d.dz;
             const lat = Math.abs((o.x - X.x) * d.dz - (o.z - X.z) * d.dx);
-            if (along > -1 && along < 7.5 && lat < 1.9 && Math.hypot(o.vx, o.vz) < 2.2) return true;
+            if (along > -1 && along < 7.5 && lat < 1.9 && hypot(o.vx, o.vz) < 2.2) return true;
         }
         return false;
     }

@@ -213,7 +213,7 @@ class TouchControls {
     _bindPinch() {
         const cv = this.g.gameEngine && this.g.gameEngine.canvas; if (!cv) return;
         const pts = new Map(); let d0 = 0;
-        const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+        const dist = () => { const [a, b] = [...pts.values()]; return hypot(a.x - b.x, a.y - b.y); };
         cv.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 2) d0 = dist(); });
         cv.addEventListener('pointermove', (e) => {
             if (!pts.has(e.pointerId)) return; pts.get(e.pointerId).x = e.clientX; pts.get(e.pointerId).y = e.clientY;
@@ -226,6 +226,13 @@ class TouchControls {
 
     // Ações de contexto lidas da dica de interação (<b>E</b> vasculhar…): no máximo 2, na ordem em que a dica as mostra.
     static parseActions(html) {
+        // (chamado todo quadro no celular; a dica só muda de vez em quando: guarda a última leitura)
+        if (html === TouchControls._lastHtml) return TouchControls._lastActs;
+        TouchControls._lastHtml = html;
+        return (TouchControls._lastActs = TouchControls._parse(html));
+    }
+
+    static _parse(html) {
         const out = [], seen = new Set(), re = /<b>([EFGCV])<\/b>\s*([^<]*)/g;
         let m;
         while ((m = re.exec(html || '')) && out.length < 2) {
@@ -248,7 +255,7 @@ class TouchControls {
             if (e.pointerId !== S.id) return;
             const r = R(), car = this._mode === 'car';
             let dx = e.clientX - S.ox, dy = car ? 0 : e.clientY - S.oy;
-            const d = Math.hypot(dx, dy) || 1, k = Math.min(1, d / r), ux = dx / d, uy = dy / d, m = d < r * 0.12 ? 0 : k;
+            const d = hypot(dx, dy) || 1, k = Math.min(1, d / r), ux = dx / d, uy = dy / d, m = d < r * 0.12 ? 0 : k;
             // o dedo foi longe demais: a base acompanha (não "perde" o joystick)
             if (d > r * 1.35) { S.ox += ux * (d - r * 1.35); if (!car) S.oy += uy * (d - r * 1.35); this._placeStick(S.ox, S.oy); }
             this.knob.style.transform = `translate(${ux * k * r * 0.72}px, ${uy * k * r * 0.72}px)`;
@@ -404,3 +411,4 @@ const NativeMobile = {
     },
 };
 NativeMobile.init();
+memoStatics(TouchControls, 'MORE');

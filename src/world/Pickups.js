@@ -227,7 +227,7 @@ class Pickups {
             g.color(it.glow, c[0] + (1 - c[0]) * w, c[1] + (1 - c[1]) * w, c[2] + (1 - c[2]) * w, 0.24 + s * 0.16);
 
             // Coleta.
-            if (onFoot && Math.hypot(playerPos.x - it.x, playerPos.z - it.z) < 1.5) {
+            if (onFoot && hypot(playerPos.x - it.x, playerPos.z - it.z) < 1.5) {
                 const msg = this._apply(it);
                 if (msg === null) {                               // mochila cheia: o item fica no chão
                     if (this.time - (this._fullAt || -9) > 2) { this._fullAt = this.time; this.game._flash(`Mochila cheia! (${T.label}) — descarte algo no inventário`); AudioFX.blip(160, 0.12, 0.18); }
@@ -253,3 +253,4 @@ class Pickups {
     // Itens visíveis (para o GPS).
     get active() { return this.items.filter((it) => it.active); }
 }
+memoStatics(Pickups, 'TYPES');

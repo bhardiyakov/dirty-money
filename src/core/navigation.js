@@ -66,7 +66,7 @@ class GridCrowd {
         if (!a) return;
         const g = a.goal;
         // Mesmo destino de antes (a IA repete o pedido a cada 0,3–0,7 s): mantém o caminho em curso.
-        if (g && a.path && Math.hypot(g.x - dest.x, g.z - dest.z) < 0.8 && a.pi < a.path.length) return;
+        if (g && a.path && hypot(g.x - dest.x, g.z - dest.z) < 0.8 && a.pi < a.path.length) return;
         a.goal = { x: dest.x, z: dest.z };
         a.stuck = 0;
         if (this.nav.los(a.x, a.z, dest.x, dest.z)) { a.path = [{ x: dest.x, z: dest.z }]; a.pi = 0; return; }
@@ -99,9 +99,9 @@ class GridCrowd {
             let dvx = 0, dvz = 0;
             if (a.path && a.pi < a.path.length && sp > 0.02) {
                 let w = a.path[a.pi];
-                let dx = w.x - a.x, dz = w.z - a.z, d = Math.hypot(dx, dz);
+                let dx = w.x - a.x, dz = w.z - a.z, d = hypot(dx, dz);
                 const last = a.pi === a.path.length - 1;
-                while (!last && d < 0.45 && a.pi < a.path.length - 1) { a.pi++; w = a.path[a.pi]; dx = w.x - a.x; dz = w.z - a.z; d = Math.hypot(dx, dz); }
+                while (!last && d < 0.45 && a.pi < a.path.length - 1) { a.pi++; w = a.path[a.pi]; dx = w.x - a.x; dz = w.z - a.z; d = hypot(dx, dz); }
                 if (a.pi === a.path.length - 1 && d < 0.3) { a.path = null; }
                 else if (d > 1e-4) {
                     const s = (a.pi === a.path.length - 1) ? Math.min(sp, d * 4) : sp;      // freia ao chegar
@@ -110,7 +110,7 @@ class GridCrowd {
             }
             // Aceleração limitada.
             let ax = dvx - a.vx, az = dvz - a.vz;
-            const al = Math.hypot(ax, az), mx = acc * dt;
+            const al = hypot(ax, az), mx = acc * dt;
             if (al > mx) { ax *= mx / al; az *= mx / al; }
             a.vx += ax; a.vz += az;
 
@@ -122,13 +122,13 @@ class GridCrowd {
                 if (!b || j === i) continue;
                 const ex = a.x - b.x, ez = a.z - b.z;
                 if (ex > r || ex < -r || ez > r || ez < -r) continue;
-                const dd = Math.hypot(ex, ez);
+                const dd = hypot(ex, ez);
                 if (dd >= r) continue;
                 if (dd < 1e-4) { px += (Math.random() - 0.5) * 0.1; pz += (Math.random() - 0.5) * 0.1; continue; }
                 const k = (r - dd) / dd * 0.5 * (P.separationWeight || 2) * 0.6;
                 px += ex * k; pz += ez * k;
             }
-            const sl = Math.hypot(px, pz);
+            const sl = hypot(px, pz);
             if (sl > 2.5) { px *= 2.5 / sl; pz *= 2.5 / sl; }
 
             // Integra com colisão no raster (desliza nos eixos).
@@ -141,7 +141,7 @@ class GridCrowd {
                 else { a.vx = a.vz = 0; }
             }
             // Preso (quer andar e não sai do lugar): refaz o caminho.
-            if (a.path && Math.hypot(a.vx, a.vz) < 0.15) {
+            if (a.path && hypot(a.vx, a.vz) < 0.15) {
                 a.stuck += dt;
                 if (a.stuck > 1.2 && a.goal) { a.stuck = 0; const g = a.goal; a.goal = null; a.path = null; this.agentGoto(i, g); }
             } else a.stuck = 0;
@@ -184,7 +184,7 @@ class Navigation {
             const ax = f.kx + f.sx * f.r, az = f.kz + f.sz * f.r;
             for (let dz = 0; dz < f.r; dz++) for (let dx = 0; dx < f.r; dx++) {
                 const px = f.kx + f.sx * (dx + 0.5), pz = f.kz + f.sz * (dz + 0.5);
-                if (Math.hypot(px - ax, pz - az) > f.r) this._fill(px - 0.4, pz - 0.4, px + 0.4, pz + 0.4, 0);
+                if (hypot(px - ax, pz - az) > f.r) this._fill(px - 0.4, pz - 0.4, px + 0.4, pz + 0.4, 0);
             }
         }
         // 3) sólidos (com a folga de um agente, pela regra "centro da célula dentro").
@@ -220,7 +220,7 @@ class Navigation {
 
     // Linha reta livre entre dois pontos (amostra a cada ~0,4 u, com folga lateral de 0,25).
     los(ax, az, bx, bz) {
-        const dx = bx - ax, dz = bz - az, d = Math.hypot(dx, dz);
+        const dx = bx - ax, dz = bz - az, d = hypot(dx, dz);
         if (d < 0.01) return true;
         const n = Math.ceil(d / 0.4), ux = dx / d, uz = dz / d, px = -uz * 0.25, pz = ux * 0.25;
         for (let k = 1; k <= n; k++) {

@@ -428,17 +428,25 @@ const PropSprites = {
         const sw = [], jOf = new Map();
         this.FRAMES.forEach((fr, i) => { if (this.SWAY[fr.kind]) { jOf.set(i, sw.length); sw.push(i); } });
         const AC = 16, arows = Math.ceil(sw.length / AC), AW = AC * F, AH = arows * this.ANIM_FRAMES * F;
-        const anims = this.MODES.map((M, mode) => {
-            const buf = new Uint8Array(AW * AH * 4);
-            for (let f = 0; f < this.ANIM_FRAMES; f++) {
-                sw.forEach((i, j) => {
-                    const fr = this.FRAMES[i];
-                    const prims = this.sway(this.model(fr.kind, fr.seed), fr.kind, mode, f);
-                    put(buf, AW, SpriteBaker.bake(prims, { size: F, shadowLen: 0.5 }), (j % AC) * F, (f * arows + Math.floor(j / AC)) * F);
-                });
+        // Só o vento LEVE (tempo bom) é assado na carga. Vento forte e tempestade (só com chuva, ~30% dos dias) são assados aos poucos
+        // quando o tempo vira (bakeStep, com orçamento por quadro) e descartados depois de um tempo de céu limpo: cada atlas tem
+        // 1920×1920 (≈7 MB de vídeo) e a carga ficava mais lenta com os três. Enquanto o atlas do modo não fica pronto, as plantas usam
+        // o maior modo já pronto (a chuva começa em garoa: dá tempo).
+        const bakeJob = (mode) => ({ mode, buf: new Uint8Array(AW * AH * 4), n: 0, total: this.ANIM_FRAMES * sw.length });
+        const bakeStep = (job, budgetMs) => {
+            const t1 = performance.now();
+            while (job.n < job.total && performance.now() - t1 < budgetMs) {
+                const f = Math.floor(job.n / sw.length), j = job.n % sw.length, fr = this.FRAMES[sw[j]];
+                const prims = this.sway(this.model(fr.kind, fr.seed), fr.kind, job.mode, f);
+                put(job.buf, AW, SpriteBaker.bake(prims, { size: F, shadowLen: 0.5 }), (j % AC) * F, (f * arows + Math.floor(j / AC)) * F);
+                job.n++;
             }
-            return tex(buf, AW, AH);
-        });
+            if (job.n < job.total) return null;
+            const t = tex(job.buf, AW, AH);
+            job.buf = null;
+            return t;
+        };
+        const anims = [bakeStep(bakeJob(0), Infinity), null, null];
 
         // Paleta: 1 linha por variante; x = rampa*5 + nível (mesmo formato dos personagens).
         const PW = 8 * 5, PH = this.ROWS.length;
@@ -456,10 +464,13 @@ const PropSprites = {
         ptex.wrapU = ptex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
         const palette = { texture: ptex, width: PW, height: PH };
 
+        const bound = [anims[0], anims[0], anims[0]];      // modo sem atlas próprio usa o do vento leve
+        const focusV = new BABYLON.Vector2(0, 0);
+        let job = null, calm = 0;
         const api = {
             frame: F, W, H, atlas, anims,
-            hiMaterial: PropSprites.swayMaterial(scene, 'propsHi', atlas, anims, palette, true),
-            loMaterial: PropSprites.swayMaterial(scene, 'propsLo', atlas, anims, palette, false),
+            hiMaterial: PropSprites.swayMaterial(scene, 'propsHi', atlas, bound, palette, true),
+            loMaterial: PropSprites.swayMaterial(scene, 'propsLo', atlas, bound, palette, false),
             // Retângulo UV de um frame estático (norte = linha de cima da imagem).
             rect: (i) => {
                 const u0 = ((i % cols) * F) / W, v0 = (Math.floor(i / cols) * F) / H;
@@ -479,13 +490,34 @@ const PropSprites = {
                 const i = idx[Math.min(idx.length - 1, Math.floor(rnd * idx.length))];
                 return { index: i, row: this.FRAMES[i].row, kind };
             },
-            // t = tempo (s); mode = 0 leve | 1 forte | 2 intenso.
-            setWind: (t, mode) => {
-                for (const m of [api.hiMaterial, api.loMaterial]) { m.setFloat('time', t); m.setFloat('mode', mode); m.setFloat('cps', PropSprites.MODES[mode].cps); }
+            // t = tempo (s); mode = 0 leve | 1 forte | 2 intenso. Chamado todo quadro (WorldBuilder.update): também assa aos poucos o
+            // atlas do modo pedido e solta os de vento forte depois de ~2 min de vento leve.
+            setWind: (t, mode, dt = 1 / 30) => {
+                if (mode > 0 && !anims[mode] && !job) job = bakeJob(mode);
+                if (job) {
+                    const done = bakeStep(job, 2);
+                    if (done) { anims[job.mode] = done; api._bind(); job = null; }
+                }
+                calm = mode === 0 ? calm + dt : 0;
+                if (calm > 120 && (anims[1] || anims[2])) {
+                    for (const k of [1, 2]) if (anims[k]) { anims[k].dispose(); anims[k] = null; }
+                    api._bind();
+                }
+                let use = mode;
+                while (use > 0 && !anims[use]) use--;
+                for (const m of [api.hiMaterial, api.loMaterial]) { m.setFloat('time', t); m.setFloat('mode', use); m.setFloat('cps', PropSprites.MODES[use].cps); }
             },
-            setFocus: (x, z, r) => { api.hiMaterial.setVector2('focus', new BABYLON.Vector2(x, z)); if (r > 0) api.hiMaterial.setFloat('fadeR', r); },
+            _bind: () => {
+                for (let k = 1; k < 3; k++) {
+                    const tx = anims[k] || anims[0];
+                    if (bound[k] === tx) continue;
+                    bound[k] = tx;
+                    for (const m of [api.hiMaterial, api.loMaterial]) m.setTexture('anim' + k, tx);
+                }
+            },
+            setFocus: (x, z, r) => { focusV.set(x, z); api.hiMaterial.setVector2('focus', focusV); if (r > 0) api.hiMaterial.setFloat('fadeR', r); },
         };
-        console.log(`[PROPS] ${this.FRAMES.length} frames + ${sw.length}×${this.ANIM_FRAMES}×3 de vento em ${(performance.now() - t0).toFixed(0)} ms (atlas animado ${AW}×${AH})`);
+        console.log(`[PROPS] ${this.FRAMES.length} frames + ${sw.length}×${this.ANIM_FRAMES} de vento leve em ${(performance.now() - t0).toFixed(0)} ms (atlas animado ${AW}×${AH})`);
         return api;
     },
 };

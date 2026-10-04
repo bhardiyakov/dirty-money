@@ -13,6 +13,13 @@
 class Collisions {
     constructor(game) {
         this.g = game;
+        // Objetos reaproveitados (antes: um contexto, um vetor de direção e dois resultados novos por carro por quadro).
+        this._ctx = { car: null, c: null, v: new BABYLON.Vector3(), sp: 0, fx: 0, fz: 0, rx: 0, rz: 0, hl: 0, hw: 0, reach2: 0 };
+        this._dir = new BABYLON.Vector3();
+        this._L = { dx: 0, dz: 0, lf: 0, lr: 0 };
+        this._R = { dmg: 0, power: 0, dx: 0, dz: 0 };
+        this._grid = new SpatialHash(8);
+        this._q = [];
     }
 
     update(dt) {
@@ -23,48 +30,74 @@ class Collisions {
         const onFoot = g.mode !== 'car' && pl.alive;
         const npcs = g.npcManager ? g.npcManager.npcs : [];
         const offs = g.policeManager ? g.policeManager.officers : [];
+        const gang = g.gangs ? g.gangs.members : [];
         if (pl._runCd > 0) pl._runCd -= dt;
+        const ctx = this._ctx;
+        let built = false;
 
         for (const car of g.carDamage.allCars()) {
-            const c = car.position, v = car.velocity;
-            const sp = Math.hypot(v.x, v.z);
-            const d = car.body.getDirection(BABYLON.Axis.Z);
-            const dl = Math.hypot(d.x, d.z) || 1, fx = d.x / dl, fz = d.z / dl, rx = fz, rz = -fx;
+            const c = car.position, v = ctx.v.copyFrom(car.velocity);
+            const sp = Math.sqrt(v.x * v.x + v.z * v.z);
+            const moving = sp > C.runOverSpeed;
             const hl = car.halfLen - 0.15, hw = car.halfW - 0.05;          // casco real do corpo (menos a folga)
             const reach = hl + 2.5, reach2 = reach * reach;
-            const ctx = { car, c, v, sp, fx, fz, rx, rz, hl, hw, reach2 };
+            if (!moving) {                                                  // parado: só o jogador a pé (empurrão) — e só se estiver perto
+                if (!onFoot) continue;
+                const dx = pl.position.x - c.x, dz = pl.position.z - c.z;
+                if (dx * dx + dz * dz > reach2) continue;
+            }
+            const d = this._dir;
+            car.body.getDirectionToRef(BABYLON.Axis.Z, d);             // (devolve o nó, não o vetor)
+            const dl = Math.sqrt(d.x * d.x + d.z * d.z) || 1, fx = d.x / dl, fz = d.z / dl;
+            ctx.car = car; ctx.c = c; ctx.sp = sp; ctx.fx = fx; ctx.fz = fz; ctx.rx = fz; ctx.rz = -fx;
+            ctx.hl = hl; ctx.hw = hw; ctx.reach2 = reach2;
 
             if (onFoot) this._player(ctx, pl);
-            if (sp > C.runOverSpeed) {
-                for (const n of npcs) if (n.alive) this._victim(ctx, n, 0.4, 'npc');
-                for (const o of offs) if (o.alive) this._victim(ctx, o, 0.45, 'officer');
-                if (g.gangs) for (const o of g.gangs.members) if (o.alive) this._victim(ctx, o, 0.45, 'gang');
+            if (moving) {
+                // Quem pode ser atropelado fica numa grade (montada uma vez por quadro, só se algum carro anda): cada carro consulta só a
+                // vizinhança em vez de testar todos os pedestres, policiais e traficantes do mundo (antes ~7 mil testes por quadro).
+                if (!built) { built = true; this._fill(npcs, offs, gang); }
+                for (const e of this._grid.query(c.x, c.z, reach, this._q)) {
+                    if (e.alive) this._victim(ctx, e, e._ck ? 0.45 : 0.4, Collisions.KINDS[e._ck]);
+                }
             }
         }
+        ctx.car = null; ctx.c = null;
+    }
+
+    _fill(npcs, offs, gang) {
+        const G = this._grid;
+        G.clear();
+        for (const n of npcs) if (n.alive) { n._ck = 0; G.insert(n, n.position.x, n.position.z); }
+        for (const o of offs) if (o.alive) { o._ck = 1; G.insert(o, o.position.x, o.position.z); }
+        for (const o of gang) if (o.alive) { o._ck = 2; G.insert(o, o.position.x, o.position.z); }
     }
 
     // Posição de `e` no sistema do carro (lf = ao longo do eixo, lr = lateral) ou null se fora do casco (+ raio r).
+    // (Devolve sempre o mesmo objeto: use antes da próxima chamada.)
     _local(ctx, e, r) {
         const p = e.position, dx = p.x - ctx.c.x, dz = p.z - ctx.c.z;
         if (dx * dx + dz * dz > ctx.reach2) return null;
         const lf = dx * ctx.fx + dz * ctx.fz, lr = dx * ctx.rx + dz * ctx.rz;
         if (Math.abs(lf) >= ctx.hl + r || Math.abs(lr) >= ctx.hw + r) return null;
-        return { dx, dz, lf, lr };
+        const L = this._L;
+        L.dx = dx; L.dz = dz; L.lf = lf; L.lr = lr;
+        return L;
     }
 
     // Atropelamento conforme a velocidade do carro e o ângulo do impacto: { dmg, power, dx, dz } (dmg 0 = nada).
     // `power` é a velocidade efetiva (m/s) — comanda a força do ragdoll — e (dx, dz) a direção do arremesso:
-    // principalmente a do carro, com um pouco de afastamento do casco.
+    // principalmente a do carro, com um pouco de afastamento do casco. (Devolve sempre o mesmo objeto.)
     _runOver(ctx, L) {
-        const l = Math.hypot(L.dx, L.dz) || 1;
+        const l = Math.sqrt(L.dx * L.dx + L.dz * L.dz) || 1;
         const nx = L.dx / l, nz = L.dz / l;
         const cosT = (ctx.v.x * nx + ctx.v.z * nz) / ctx.sp;
         const eff = ctx.sp * (0.35 + 0.65 * Math.max(0, cosT));
         const vx = ctx.v.x / ctx.sp, vz = ctx.v.z / ctx.sp;
-        return {
-            dmg: Math.max(0, (eff - Config.crash.runOverSpeed) * Config.crash.runOverDmg),
-            power: eff, dx: vx * 0.75 + nx * 0.25, dz: vz * 0.75 + nz * 0.25,
-        };
+        const R = this._R;
+        R.dmg = Math.max(0, (eff - Config.crash.runOverSpeed) * Config.crash.runOverDmg);
+        R.power = eff; R.dx = vx * 0.75 + nx * 0.25; R.dz = vz * 0.75 + nz * 0.25;
+        return R;
     }
 
     // Jogador a pé: sólido (empurrado para fora do casco) e, se o carro anda, atropelado.
@@ -111,7 +144,7 @@ class Collisions {
         const car = ctx.car, byPlayer = car.controlled;
         const src = byPlayer ? 'player' : (car.role ? 'police' : 'env');
         const from = { x: ctx.c.x, z: ctx.c.z };
-        e.takeDamage(R.dmg, from, src, { dx: R.dx, dz: R.dz, power: R.power });     // com `impact`: arremessado (ragdoll)
+        e.takeDamage(R.dmg, from, src, { dx: R.dx, dz: R.dz, power: R.power });     // com `impact`: arremessado (ragdoll) (cópia: R é reaproveitado)
         this._impactFx(e.position, 0.2);
         car.takeDamage(1 + R.dmg * 0.02, 'env');
 
@@ -127,6 +160,8 @@ class Collisions {
         g.combat.spark(p.x, 1.1, p.z, [1, 0.3, 0.25]);
         AudioFX.thud(p.x, p.z);
         const f = g.camera.target;
-        if (Math.hypot(p.x - f.x, p.z - f.z) < 30) g.camera.shake(shake);
+        const dx = p.x - f.x, dz = p.z - f.z;
+        if (dx * dx + dz * dz < 900) g.camera.shake(shake);
     }
 }
+Collisions.KINDS = ['npc', 'officer', 'gang'];

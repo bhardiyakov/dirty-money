@@ -41,7 +41,7 @@ class ChopCareer extends Career {
     }
 
     // Jogador dirigindo dentro do desmanche (parado ou devagar)?
-    inShop() { const g = this.g, car = g.activeCar, y = this.yard; return g.mode === 'car' && car && !car.isBoat && Math.hypot(car.position.x - y.x, car.position.z - y.z) < 10; }
+    inShop() { const g = this.g, car = g.activeCar, y = this.yard; return g.mode === 'car' && car && !car.isBoat && hypot(car.position.x - y.x, car.position.z - y.z) < 10; }
     scrapValue(car) { return Math.round(ChopCareer.value(car.spec) * 0.3 * Math.pow(Math.max(0, car.hpFrac), 1.5) / 10) * 10; }
 
     // Prompt no carro (tecla E): desmanchar o carro roubado.
@@ -100,7 +100,7 @@ class ChopCareer extends Career {
         const g = this.g, y = this.yard;
         if (!y || g.mode !== 'player') return '';
         const p = g.player.position;
-        if (Math.hypot(p.x - y.x, p.z - y.z) > 9) return '';
+        if (hypot(p.x - y.x, p.z - y.z) > 9) return '';
         return '<b>🔧 DESMANCHE</b><small>chegue aqui DIRIGINDO um carro roubado: E desmancha (vende as peças), O abre a oficina</small>';
     }
 
@@ -224,7 +224,7 @@ class ChopJob extends CareerJob {
         if (!g.physicsReady) { this.why = 'O trânsito ainda está carregando'; return false; }
         const p = g._playerState().pos;
         const cand = g.vehicleManager.vehicles.filter((v) => !v.isBike && !v.isBoat && !v.controlled && !v.destroyed && !v.wrecked && v.mode === 'parked' && this._wanted(v))
-            .map((v) => ({ v, d: Math.hypot(v.position.x - p.x, v.position.z - p.z) })).filter((o) => o.d > 25 && o.d < 280).sort((a, b) => a.d - b.d);
+            .map((v) => ({ v, d: hypot(v.position.x - p.x, v.position.z - p.z) })).filter((o) => o.d > 25 && o.d < 280).sort((a, b) => a.d - b.d);
         if (!cand.length) { this.why = this.kind === 'order' ? 'Nenhum carro de luxo estacionado por perto — tente nos bairros nobres ou na orla' : 'Nenhum carro desse tipo estacionado por perto — ande um pouco e tente de novo'; return false; }
         this.car = cand[Math.min(cand.length - 1, Math.floor(Math.random() * Math.min(3, cand.length)))].v;
         this.car._careerTarget = true;
@@ -240,7 +240,7 @@ class ChopJob extends CareerJob {
         this.text = this.kind === 'pull' ? 'Leve ao desmanche sem amassar' : 'Leve à oficina com bloqueador de sinal';
         this.target(y.x, y.z, 'Desmanche');
         if (this.kind === 'order') {
-            const d = Math.hypot(y.x - car.position.x, y.z - car.position.z);
+            const d = hypot(y.x - car.position.x, y.z - car.position.z);
             this.track = Math.round(40 + d / 9);
             this.g._flash(`📡 RASTREADOR ATIVO: ${this.track}s até a seguradora passar a localização à polícia`);
         }
@@ -262,12 +262,12 @@ class ChopJob extends CareerJob {
         if (this.stage === 0) {
             this.mgr.mark(car.position.x, car.position.z, this.c.color);
             this.tx = car.position.x; this.tz = car.position.z;
-            if (g.gps && g.gps._career && Math.hypot(g.gps.x - car.position.x, g.gps.z - car.position.z) > 6) { g.gps.x = car.position.x; g.gps.z = car.position.z; }
+            if (g.gps && g.gps._career && hypot(g.gps.x - car.position.x, g.gps.z - car.position.z) > 6) { g.gps.x = car.position.x; g.gps.z = car.position.z; }
             return;
         }
-        const y = this.c.yard, inYard = Math.hypot(car.position.x - y.x, car.position.z - y.z) < 8;
+        const y = this.c.yard, inYard = hypot(car.position.x - y.x, car.position.z - y.z) < 8;
         if (g.activeCar !== car && this.stage === 1) {
-            if (Math.hypot(car.position.x - pos.x, car.position.z - pos.z) > 140) { this.fail('você largou o carro'); return; }
+            if (hypot(car.position.x - pos.x, car.position.z - pos.z) > 140) { this.fail('você largou o carro'); return; }
         }
         if (this.kind === 'order' && !this.tracked && this.stage === 1) {
             this.track -= dt;
@@ -311,3 +311,4 @@ class ChopJob extends CareerJob {
 
     dispose() { if (this.car) this.car._careerTarget = false; }
 }
+memoStatics(ChopCareer, 'MODS');

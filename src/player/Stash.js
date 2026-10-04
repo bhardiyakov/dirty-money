@@ -138,3 +138,4 @@ class Stash {
         this.jv = o.jv || 0; this.wstate = o.wstate || {};
     }
 }
+memoStatics(Stash, 'BOXES', 'GUNS');

@@ -59,8 +59,8 @@ class GangManager {
                 const x = b.x1 - (dmin + rng() * (dmax - dmin)) * W, z = b.z0 + 20 + rng() * (b.z1 - b.z0 - 40);
                 const r = RoadPlan.nearestRoadPoint(x, z, 40);
                 if (!r || r.edge.cls !== 'fav' || !Standing.inFavela(r.x, r.z) || Standing.depth(r.x, r.z) < dmin - 0.03) continue;
-                if (home && Math.hypot(r.x - home.x, r.z - home.z) < this.safeRadius) continue;
-                if (this.groups.some((g) => Math.hypot(g.x - r.x, g.z - r.z) < 18)) continue;
+                if (home && hypot(r.x - home.x, r.z - home.z) < this.safeRadius) continue;
+                if (this.groups.some((g) => hypot(g.x - r.x, g.z - r.z) < 18)) continue;
                 this.groups.push({ x: r.x, z: r.z, size, alive: size, minDepth: dmin, deep: dmin >= 0.5, wp: { x: r.x, z: r.z }, wpT: 0, members: [], active: false, regrow: 60 });
                 return;
             }
@@ -103,7 +103,7 @@ class GangManager {
         let ax = null, az = null;
         if (op && op.active && Standing.alarm > 0) {
             let bd = 150;
-            for (const c of op.cops) { const d = Math.hypot(c.position.x - leader.position.x, c.position.z - leader.position.z); if (d < bd) { bd = d; ax = c.position.x; az = c.position.z; } }
+            for (const c of op.cops) { const d = hypot(c.position.x - leader.position.x, c.position.z - leader.position.z); if (d < bd) { bd = d; ax = c.position.x; az = c.position.z; } }
         }
         for (let t = 0; t < 8; t++) {
             let a = Math.random() * Math.PI * 2, r = 25 + Math.random() * 20;
@@ -112,7 +112,7 @@ class GangManager {
             const p = RoadPlan.nearestRoadPoint(x, z, 25);
             if (!p || p.edge.cls !== 'fav' || !Standing.inFavela(p.x, p.z)) continue;
             if (Standing.depth(p.x, p.z) < g.minDepth - 0.08 && ax === null) continue;       // cada grupo patrulha a sua faixa
-            if (home && Math.hypot(p.x - home.x, p.z - home.z) < this.safeRadius) continue;
+            if (home && hypot(p.x - home.x, p.z - home.z) < this.safeRadius) continue;
             g.wp = { x: p.x, z: p.z }; return;
         }
         g.wp = { x: leader.position.x, z: leader.position.z };
@@ -148,7 +148,7 @@ class GangManager {
         if (this._streamT <= 0) {
             this._streamT = 0.5;
             for (const G of this.groups) {
-                const d = Math.hypot(G.x - pos.x, G.z - pos.z);
+                const d = hypot(G.x - pos.x, G.z - pos.z);
                 if (!G.active) {
                     if (G.alive < G.size) { G.regrow -= 0.5; if (G.regrow <= 0) { G.alive++; G.regrow = 60; } }
                     if (G.alive > 0 && d < this.streamIn && this.members.length + G.alive <= this.maxActive) this._spawnGroup(G);
@@ -163,7 +163,7 @@ class GangManager {
             const leader = G.members.find((o) => o.alive && !o.rag);
             if (!leader) continue;
             G.wpT -= dt;
-            if (G.wpT <= 0 || Math.hypot(leader.position.x - G.wp.x, leader.position.z - G.wp.z) < 4) { this._pickWp(G, leader); G.wpT = 12 + Math.random() * 8; }
+            if (G.wpT <= 0 || hypot(leader.position.x - G.wp.x, leader.position.z - G.wp.z) < 4) { this._pickWp(G, leader); G.wpT = 12 + Math.random() * 8; }
         }
         for (let i = this.members.length - 1; i >= 0; i--) {
             const u = this.members[i], G = u.group;
@@ -174,7 +174,7 @@ class GangManager {
                 continue;
             }
             if (u.rag) { u.update(dt); continue; }
-            const m = this._mind(u), p = u.position, dist = Math.hypot(p.x - pos.x, p.z - pos.z);
+            const m = this._mind(u), p = u.position, dist = hypot(p.x - pos.x, p.z - pos.z);
             m.sees = hostile && dist < this.sight * (this.angry ? 1.25 : 1) && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z);
             if (m.sees) {
                 this._note(m, pos, vel);
@@ -184,7 +184,7 @@ class GangManager {
             this._tp.set(m.x, 0, m.z); this._tv.set(m.sees ? m.vx : 0, 0, m.sees ? m.vz : 0);
             // operação policial: enfrenta o policial mais próximo à vista (independe de o jogador ser hostil ou neutro)
             let cop = null;
-            if (cops.length) { let bd = 30; for (const c of cops) { const d = Math.hypot(c.position.x - p.x, c.position.z - p.z); if (d < bd && MapGeo.hasLineOfSight(p.x, p.z, c.position.x, c.position.z)) { bd = d; cop = c; } } }
+            if (cops.length) { let bd = 30; for (const c of cops) { const d = hypot(c.position.x - p.x, c.position.z - p.z); if (d < bd && MapGeo.hasLineOfSight(p.x, p.z, c.position.x, c.position.z)) { bd = d; cop = c; } } }
             if (cop) { m.sees = true; m.t = this.time; u.setTarget(cop.position, this._tv.set(0, 0, 0)); u.setAlert(true); }
             else { u.setTarget(this._tp, this._tv); u.setAlert(hostile && (m.sees || fresh)); }
             u.update(dt);

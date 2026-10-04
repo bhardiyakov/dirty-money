@@ -1,6 +1,6 @@
 // ============================================================================
 // Carros como sprites pré-renderizados vistos de cima (mesmo baker e mesmo visual do
-// personagem), em 64 direções e várias pinturas (paleta).
+// personagem), em 32 direções e várias pinturas (paleta).
 //
 //   CarSheet.MODELS  catálogo: dimensões, física e desempenho de cada modelo
 //   CarSheet         folha de sprites de UM modelo (interface igual à CharacterSheet:
@@ -298,6 +298,7 @@ class CarSheet {
                 }
             }
         });
+        SpriteIO.paletteOverlay('pal/car', pdata, PW, PH);              // cores editadas em assets/sprites/pal/car.png (se houver)
         const ptex = BABYLON.RawTexture.CreateRGBATexture(pdata, PW, PH, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
         ptex.wrapU = ptex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
         return { texture: ptex, width: PW, height: PH };
@@ -305,7 +306,7 @@ class CarSheet {
 
     // Folha de UM modelo. `palette` é compartilhada (CarLibrary).
     // dent: fase de amassado (0 = limpo, 1..3). lazy: não assa agora — use bake(ms) aos poucos (variantes amassadas).
-    constructor(scene, modelId = 'sedan', palette = null, { dirs = 64, frame = 112, dent = 0, lazy = false } = {}) {
+    constructor(scene, modelId = 'sedan', palette = null, { dirs = 32, frame = 112, dent = 0, lazy = false } = {}) {      // 32 direções (11,25°): metade da memória e do preparo das 64 de antes
         this.scene = scene;
         this.modelId = modelId;
         this.dent = dent;
@@ -316,14 +317,20 @@ class CarSheet {
         this.palette = palette || CarSheet.createPalette(scene);
         this.lib = null;                 // CarLibrary dona desta folha (para achar as variantes amassadas)
         this.ready = false;
+        this._clip = null;
+        this._ms = 0;
+
+        // PNG pronto (assets/sprites/car/<modelo>[-dent<n>].png, uma linha com as direções): nada a desenhar.
+        const idx = SpriteIO.manifest ? SpriteIO.indices(CarSheet.fileKey(modelId, dent), dirs * frame, frame) : null;
+        if (idx) { this._finishTex(SpriteMaterial.indexTexture(scene, idx, dirs * frame, frame)); return; }
 
         this._data = new Uint8Array(dirs * frame * frame * 4);
         this._prims = CarSheet.model(modelId, dent);
         this._d = 0;                     // próxima direção a assar
-        this._ms = 0;
-        this._clip = null;
         if (!lazy) this.bake(Infinity);
     }
+
+    static fileKey(modelId, dent = 0) { return 'car/' + modelId + (dent ? '-dent' + dent : ''); }
 
     // Assa direções por até `budgetMs`. Retorna true quando a folha ficou pronta.
     bake(budgetMs) {
@@ -340,13 +347,16 @@ class CarSheet {
     }
 
     _finish() {
-        const F = this.frame, W = this.dirs * F, scene = this.scene;
-        const tex = SpriteMaterial.atlasTexture(scene, this._data, W, F);
-        const material = SpriteMaterial.create(scene, 'car_' + this.name, tex, this.palette);
+        this._finishTex(SpriteMaterial.atlasTexture(this.scene, this._data, this.dirs * this.frame, this.frame));
+        console.log(`[CARROS] ${this.name}: ${this.dirs} direções em ${this._ms.toFixed(0)} ms`);
+    }
+
+    _finishTex(tex) {
+        const F = this.frame, W = this.dirs * F;
+        const material = SpriteMaterial.create(this.scene, 'car_' + this.name, tex, this.palette);
         this._clip = { name: 'static', weapon: 'none', frames: 1, dirs: this.dirs, fps: 1, loop: true, texture: tex, material, frame: F, W, H: F };
         this._data = null; this._prims = null;
         this.ready = true;
-        console.log(`[CARROS] ${this.name}: ${this.dirs} direções em ${this._ms.toFixed(0)} ms`);
     }
 
     // Interface do SpriteActor: só existe um clipe estático (null enquanto a variante ainda está sendo assada).
@@ -620,7 +630,7 @@ class CarSheet {
 
 // ----------------------------------------------------------------------------
 // DoorSheet — a PORTA da frente de um modelo, abrindo, como sprite à parte desenhado por cima do carro.
-// O quadro é pequeno e centrado na DOBRADIÇA (a porta gira em torno dela), em 64 direções como o carro:
+// O quadro é pequeno e centrado na DOBRADIÇA (a porta gira em torno dela), em 32 direções como o carro:
 // o jogo põe o quadro na posição da dobradiça do carro e usa o mesmo heading. 10 quadros = 2 lados × 5 ângulos
 // (0–4: porta esquerda, 5–9: direita). Fechada, a porta já faz parte do sprite do carro (não há overlay).
 // Mesma interface de folha do SpriteActor (getClip), assada aos poucos como as variantes amassadas.
@@ -669,7 +679,7 @@ class DoorSheet {
         ];
     }
 
-    constructor(scene, modelId, palette, { frame = 64, dirs = 64 } = {}) {
+    constructor(scene, modelId, palette, { frame = 64, dirs = 32 } = {}) {
         this.scene = scene;
         this.modelId = modelId;
         this.spec = Object.assign({ id: modelId }, CarSheet.MODELS[modelId]);
@@ -680,6 +690,10 @@ class DoorSheet {
         this.ready = false;
         this._clip = null;
         this.frames = DoorSheet.ANGLES * 2;
+        this._ms = 0;
+        // PNG pronto (assets/sprites/door/<modelo>.png: colunas = direções, linhas = abertura da porta esquerda e depois da direita).
+        const idx = SpriteIO.manifest ? SpriteIO.indices(DoorSheet.fileKey(modelId), dirs * frame, this.frames * frame) : null;
+        if (idx) { this._finishTex(SpriteMaterial.indexTexture(scene, idx, dirs * frame, this.frames * frame)); return; }
         this._data = new Uint8Array(dirs * frame * this.frames * frame * 4);
         this._prims = [];
         for (const sign of [-1, 1]) {
@@ -704,14 +718,19 @@ class DoorSheet {
         return this.ready;
     }
 
+    static fileKey(modelId) { return 'door/' + modelId; }
+
     _finish() {
+        this._finishTex(SpriteMaterial.atlasTexture(this.scene, this._data, this.dirs * this.frame, this.frames * this.frame));
+        console.log(`[PORTAS] ${this.modelId}: ${this.frames} quadros × ${this.dirs} direções em ${this._ms.toFixed(0)} ms`);
+    }
+
+    _finishTex(tex) {
         const F = this.frame, W = this.dirs * F, H = this.frames * F;
-        const tex = SpriteMaterial.atlasTexture(this.scene, this._data, W, H);
         const material = SpriteMaterial.create(this.scene, this.name, tex, this.palette);
         this._clip = { name: 'static', weapon: 'none', frames: this.frames, dirs: this.dirs, fps: 1, loop: true, texture: tex, material, frame: F, W, H };
         this._data = null; this._prims = null;
         this.ready = true;
-        console.log(`[PORTAS] ${this.modelId}: ${this.frames} quadros × ${this.dirs} direções em ${this._ms.toFixed(0)} ms`);
     }
 
     getClip() { return this._clip; }
@@ -738,12 +757,30 @@ class CarLibrary {
         return s;
     }
 
+    // Folha PRONTA do modelo (assa agora, de uma vez, se preciso: use na carga ou quando não dá para esperar).
     sheet(modelId) {
-        if (!this.sheets[modelId]) {
-            this.sheets[modelId] = new CarSheet(this.scene, modelId, this.palette);
-            this.sheets[modelId].lib = this;
-        }
-        return this.sheets[modelId];
+        let s = this.sheets[modelId];
+        if (!s) { s = this.sheets[modelId] = new CarSheet(this.scene, modelId, this.palette); s.lib = this; }
+        else if (!s.ready) s.bake(Infinity);                 // estava na fila (peek): termina já
+        return s;
+    }
+
+    // Folha do modelo SE já estiver pronta; senão põe na fila (assada aos poucos por pump, sem travar o quadro) e devolve null.
+    // O trânsito usa isto ao repor carros durante o jogo: assar todas as direções de um modelo novo de uma vez custava um engasgo visível.
+    peek(modelId) {
+        const s = this.sheets[modelId];
+        if (s) return s.ready ? s : null;
+        const n = this.sheets[modelId] = new CarSheet(this.scene, modelId, this.palette, { lazy: true });
+        n.lib = this;
+        this._jobs.push(n);
+        return null;
+    }
+
+    // Alguma folha pronta de um modelo da classe `cls` (ex.: 'sedan' → sedan, sedan2…); senão de qualquer modelo. null se nenhuma.
+    readyOf(cls) {
+        for (const id of CarSheet.CLASSES[cls] || [cls]) { const s = this.sheets[id]; if (s && s.ready) return s; }
+        for (const id of Object.keys(this.sheets)) { const s = this.sheets[id]; if (s.ready && !s.spec.bike) return s; }
+        return null;
     }
 
     // Folha do modelo com amassado de fase `dent` (0 = limpo). null se ainda está sendo assada (já enfileirada).
@@ -757,6 +794,30 @@ class CarLibrary {
             this._jobs.push(s);
         }
         return s.ready ? s : null;
+    }
+
+    // Libera da memória de vídeo as folhas que nenhum carro usa há um tempo (marcadas com _used pela varredura do Game): amassados e
+    // portas (5 MB por modelo!) depois de 90 s, modelos limpos depois de 4 min. Sem isto elas só se acumulavam — numa sessão longa,
+    // centenas de MB. Tudo volta sob demanda e em segundo plano (amassado: o carro mostra a fase pronta; porta: pré-assada ao chegar
+    // perto; modelo: o trânsito usa outro já pronto). `keep`: folhas que nunca saem (viatura, SWAT, exército).
+    sweep(now, keep) {
+        let n = 0;
+        const drop = (map, idle) => {
+            for (const k of Object.keys(map)) {
+                const s = map[k];
+                if (!s.ready || keep.has(s)) continue;                       // (na fila de bake: deixa terminar)
+                if (s._used === undefined) { s._used = now; continue; }
+                if (now - s._used < idle) continue;
+                const c = s.getClip();
+                c.material.dispose(); c.texture.dispose();
+                delete map[k];
+                n++;
+            }
+        };
+        drop(this.dents, 90);
+        drop(this.doors, 90);
+        drop(this.sheets, 240);
+        return n;
     }
 
     // Assa as variantes amassadas pendentes, usando até `budgetMs` por frame. Retorna true se ainda há trabalho.
@@ -796,3 +857,5 @@ class CarLibrary {
         return 'sedan';
     }
 }
+memoStatics(CarSheet, 'SLOT', 'PAINTS', 'STYLE', 'CLASSES', 'POOLS', 'MODELS');
+memoStatics(DoorSheet, 'SPEC');

@@ -322,7 +322,7 @@ class PauseMenu {
                     if (it === cur) continue;
                     const dx = (it.x + it.w / 2) - (cur.x + cur.w / 2), dy = it.y - cur.y;
                     if (dx * dir[0] + dy * dir[1] <= 0) continue;
-                    const d = Math.abs(dx) * (dir[1] ? 1 : 0.3) + Math.abs(dy) * (dir[0] ? 1 : 0.3) + Math.hypot(dx, dy) * 0.2;
+                    const d = Math.abs(dx) * (dir[1] ? 1 : 0.3) + Math.abs(dy) * (dir[0] ? 1 : 0.3) + hypot(dx, dy) * 0.2;
                     if (d < bd) { bd = d; best = it; }
                 }
                 if (best) { this.invSel = L.indexOf(best); this._renderInventory(); }
@@ -384,7 +384,7 @@ class PauseMenu {
         let best = null, bd = 16 / m.scale;
         for (const p of this.pois()) {
             if (p.type === 'hideout' && m.scale < 3.5) continue;
-            const d = Math.hypot(p.x - w.x, p.z - w.z);
+            const d = hypot(p.x - w.x, p.z - w.z);
             if (d < bd) { bd = d; best = p; }
         }
         if (!best && !CityGrid.isInside(w.x, w.z)) return;                     // fora da ilha: sem rota
@@ -514,7 +514,7 @@ class PauseMenu {
         // Dica do lugar sob o cursor.
         const cw = this._s2w(m.cur.x, m.cur.y);
         let hover = null, hd = 14 / m.scale;
-        for (const p of this.pois()) { if (p.type === 'hideout' && m.scale < 3.5) continue; const d = Math.hypot(p.x - cw.x, p.z - cw.z); if (d < hd) { hd = d; hover = p; } }
+        for (const p of this.pois()) { if (p.type === 'hideout' && m.scale < 3.5) continue; const d = hypot(p.x - cw.x, p.z - cw.z); if (d < hd) { hd = d; hover = p; } }
         if (hover) { const [hx, hy] = this._w2s(hover.x, hover.z); this._label(ctx, hover.type === 'hideout' ? 'Esconderijo' : hover.name, hx, hy - 30 * ik / 2 - 14, 16); }
 
         // Cursor em pixel art (seta).
@@ -680,3 +680,4 @@ class PauseMenu {
         this._padPrev = Array.from(p.buttons, (x) => x.pressed);
     }
 }
+memoStatics(PauseMenu, 'TABS', 'POI_TYPES');

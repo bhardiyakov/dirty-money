@@ -417,9 +417,10 @@
     </div>
 
     <!-- Babylon.js core via CDN (UMD -> global BABYLON). -->
-    <script src="https://cdn.jsdelivr.net/npm/babylonjs@6.40.0/babylon.min.js"></script>
+    <!-- crossorigin: resposta CORS (as CDNs mandam o cabeçalho) — o cache offline (sw.js) guarda a resposta inteira, não uma "opaca". -->
+    <script src="https://cdn.jsdelivr.net/npm/babylonjs@6.40.0/babylon.min.js" crossorigin="anonymous"></script>
     <!-- Havok (física) — expõe o global HavokPhysics(). -->
-    <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+    <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js" crossorigin="anonymous"></script>
 
     <!-- Nosso código como scripts clássicos, em ordem de dependência.
          (Sem ES Modules => abre por duplo-clique no index.html, file:// funciona.) -->
@@ -428,6 +429,7 @@
     <script src="./src/player/SkillTree.js"></script>
     <script src="./src/audio/AudioFX.js"></script>
     <script src="./src/art/Pixel.js"></script>
+    <script src="./src/art/SpriteIO.js"></script>
     <script src="./src/economy/Economy.js"></script>
     <script src="./src/economy/Laundry.js"></script>
     <script src="./src/economy/RealEstate.js"></script>
@@ -546,9 +548,12 @@
     <script src="./src/ui/PropertyUI.js"></script>
     <script src="./src/ui/TribunalUI.js"></script>
     <script src="./src/ui/ShopUI.js"></script>
-    <script src="./src/ui/Hud.js"></script>`n    <script src="./src/ui/TouchControls.js"></script>
+    <script src="./src/ui/Hud.js"></script>
+    <script src="./src/ui/TouchControls.js"></script>
     <script src="./src/ui/PauseMenu.js"></script>
-    <script src="./src/tools/DevMode.js"></script>`n    <script src="./src/tools/debug.js"></script>
+    <script src="./src/tools/DevMode.js"></script>
+    <script src="./src/tools/debug.js"></script>
+    <script src="./src/tools/SpriteExport.js"></script>
     <script src="./src/game.js"></script>
     <script src="./src/sim/schema.js"></script>
     <script src="./src/main.js"></script>

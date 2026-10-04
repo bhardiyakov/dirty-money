@@ -31,7 +31,7 @@ class CarDoors {
     // Vetores do carro no plano: frente (f) e direita (r), unitários.
     static axes(car) {
         const f = car.body.getDirection(BABYLON.Axis.Z);
-        const l = Math.hypot(f.x, f.z) || 1;
+        const l = hypot(f.x, f.z) || 1;
         return { fx: f.x / l, fz: f.z / l, rx: f.z / l, rz: -f.x / l };
     }
 

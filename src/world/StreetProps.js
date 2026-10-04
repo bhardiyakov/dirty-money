@@ -24,7 +24,7 @@ class StreetProps {
         lamps.forEach((l, i) => { l.key = StreetProps.keyOf(l.x, l.z); this._add('l', i, l.x, l.z, l.key); });
     }
 
-    static keyOf(x, z) { return Math.floor(x / 256) + ',' + Math.floor(z / 256); }
+    static keyOf(x, z) { const C = Config.world.detailChunk; return Math.floor(x / C) + ',' + Math.floor(z / C); }    // (pedaço pequeno: postes são densos em vértices; quebrar um refaz só o pedaço dele)
 
     _add(k, i, x, z, key) {
         const ch = this.chunks[k];
@@ -46,7 +46,7 @@ class StreetProps {
             for (let n = 0; n < count; n++) {
                 const side = rng() < 0.5 ? 1 : -1, s = 20 + rng() * (e.len - 40);
                 const x = e.v ? e.a.x + side * hw : e.a.x + s, z = e.v ? e.a.z + s : e.a.z + side * hw;
-                if (this.lamps.some((l) => Math.hypot(l.x - x, l.z - z) < 2.5)) continue;
+                if (this.lamps.some((l) => hypot(l.x - x, l.z - z) < 2.5)) continue;
                 const h = { x, z, alive: true, key: StreetProps.keyOf(x, z), jet: 0 };
                 this.hydrants.push(h);
                 this._add('h', this.hydrants.length - 1, x, z, h.key);
@@ -112,7 +112,7 @@ class StreetProps {
             if (game.birds) { game.birds.scare(l.x, l.z, 16); game.birds.removePerch(l.hx, l.hz); }
         }
         // Tomba na direção da batida (pivô no pé): um nó no pé do poste com o poste, o braço e o cabeçote como filhos.
-        const dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;
+        const dl = hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;
         const node = new BABYLON.TransformNode('pole_fall', this.scene);
         node.position.set(l.x, 0, l.z);
         const mat = this.w.fallMaterial || (this.w.fallMaterial = (() => { const m = new BABYLON.StandardMaterial('poleFall', this.scene); m.diffuseColor = new BABYLON.Color3(0.22, 0.23, 0.26); m.specularColor = BABYLON.Color3.Black(); return m; })());
@@ -155,7 +155,7 @@ class StreetProps {
             const sp = Math.abs(car.speed || 0);
             if (sp < 4.2) continue;
             const p = car.position;
-            const f = car.body.getDirection(BABYLON.Axis.Z), fl = Math.hypot(f.x, f.z) || 1, fx = f.x / fl, fz = f.z / fl, rx = fz, rz = -fx;
+            const f = car.body.getDirection(BABYLON.Axis.Z), fl = hypot(f.x, f.z) || 1, fx = f.x / fl, fz = f.z / fl, rx = fz, rz = -fx;
             const R = car.halfLen + 0.8;
             for (let gx = Math.floor((p.x - R) / 16); gx <= Math.floor((p.x + R) / 16); gx++) {
                 for (let gz = Math.floor((p.z - R) / 16); gz <= Math.floor((p.z + R) / 16); gz++) {
@@ -168,7 +168,7 @@ class StreetProps {
                         const lz = dx * fx + dz * fz, lx = dx * rx + dz * rz;
                         const rad = e.k === 'l' ? 0.18 : 0.22;
                         if (Math.abs(lz) > car.halfLen + rad || Math.abs(lx) > car.halfW + rad) continue;
-                        const v = car.phys ? car.phys.getLinearVelocity() : null, vl = v ? Math.hypot(v.x, v.z) : 0;
+                        const v = car.phys ? car.phys.getLinearVelocity() : null, vl = v ? hypot(v.x, v.z) : 0;
                         const vx = v && vl > 0.1 ? v.x : fx * sp, vz = v && vl > 0.1 ? v.z : fz * sp;
                         if (e.k === 'l') {
                             if (sp < 7) continue;                              // devagar: o poste aguenta (o carro só raspa)
@@ -208,7 +208,7 @@ class StreetProps {
                 h.jet -= dt;
                 if (h.jet <= 0) { this.jets.splice(i, 1); continue; }
                 const k = Math.min(1, h.jet / 1.0);                              // no último segundo o jato enfraquece
-                const near = Math.hypot(h.x - game.camera.target.x, h.z - game.camera.target.z) < 90;
+                const near = hypot(h.x - game.camera.target.x, h.z - game.camera.target.z) < 90;
                 if (!near) continue;
                 h._acc = (h._acc || 0) + dt * 60 * k;
                 while (h._acc >= 1) {

@@ -30,7 +30,7 @@ class AutoQuality {
         const g = this.g, ge = g.gameEngine, sg = ge.shadowGenerator;
         this.level++;
         if (this.level === 1) {
-            if (sg) sg.getShadowMap().resize(512);
+            if (sg) ge.setShadowSize(512);
         } else if (this.level === 2) {
             if (g.dayNight) g.dayNight.forceNoShadows = true;
             if (sg) sg.getShadowMap().refreshRate = 0;

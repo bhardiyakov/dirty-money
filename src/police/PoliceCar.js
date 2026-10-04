@@ -211,7 +211,7 @@ class PoliceCar extends TrafficCar {
         let best = null, bestScore = Infinity;
         for (const q of pts) {
             const c = new BABYLON.Vector3(q.x, 0, q.z);
-            const score = q.d + 0.5 * Math.hypot(c.x - goal.x, c.z - goal.z) + (this._pathClear(p, c) ? 0 : 1000);
+            const score = q.d + 0.5 * hypot(c.x - goal.x, c.z - goal.z) + (this._pathClear(p, c) ? 0 : 1000);
             if (score < bestScore) { bestScore = score; best = c; }
         }
         if (best) this._driveDirect(best, dt);
@@ -222,7 +222,7 @@ class PoliceCar extends TrafficCar {
     _driveDirect(point, dt) {
         const pos = this.position;
         const dx = point.x - pos.x, dz = point.z - pos.z;
-        const dist = Math.hypot(dx, dz);
+        const dist = hypot(dx, dz);
         const f = this.body.getDirection(BABYLON.Axis.Z);
         let delta = Math.atan2(dx, dz) - Math.atan2(f.x, f.z);
         while (delta > Math.PI) delta -= Math.PI * 2;
@@ -239,7 +239,7 @@ class PoliceCar extends TrafficCar {
         for (let k = 0; k < 60; k++) {
             const l = RoadNet.randomLanePoint(14);
             if (!l) continue;
-            const d = Math.hypot(l.point.x - g.x, l.point.z - g.z);
+            const d = hypot(l.point.x - g.x, l.point.z - g.z);
             if (d < 60 || d > 90 || !this.traffic._clear(l.point.x, l.point.z, 12)) continue;
             this.teleport(l.point.x, l.point.z, Math.atan2(l.d.dx, l.d.dz));
             this.route = null; this._reverseT = 0; this._stuckT = 0; this.ramming = false;
@@ -252,7 +252,7 @@ class PoliceCar extends TrafficCar {
 
     // Trecho reto livre? Testa o eixo e as duas laterais do carro contra prédios e a água.
     _pathClear(a, b) {
-        const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+        const dx = b.x - a.x, dz = b.z - a.z, len = hypot(dx, dz);
         if (len < 1) return true;
         const nx = -dz / len * 1.4, nz = dx / len * 1.4;
         for (const k of [0, 1, -1]) {

@@ -30,7 +30,7 @@ class NPCManager {
 
     _place(role, rMin = 0, rMax = 190) {
         const nav = this.nav, f = nav.focus, V = (p) => new BABYLON.Vector3(p.x, 0, p.z);
-        const inRing = (p) => { const d = Math.hypot(p.x - f.x, p.z - f.z); return d >= rMin && d <= rMax; };
+        const inRing = (p) => { const d = hypot(p.x - f.x, p.z - f.z); return d >= rMin && d <= rMax; };
         if (role === 'jog') {
             for (let k = 0; k < 6; k++) {
                 const j = CityGrid.jogNear(f.x, f.z, 300); if (!j) break;
@@ -216,7 +216,7 @@ class NPCManager {
         for (const npc of this.npcs) {
             if (!npc.alive || npc.rag || npc.free || npc.index < 0) continue;
             if (ok && !ok(npc)) continue;
-            const d = Math.hypot(npc.position.x - pos.x, npc.position.z - pos.z);
+            const d = hypot(npc.position.x - pos.x, npc.position.z - pos.z);
             if (d < best && this._sees(npc, pos)) { best = d; nearest = npc; }
         }
         return nearest;

@@ -78,11 +78,11 @@ class MotoTaxis {
             }
         }
         for (let i = this.list.length - 1; i >= 0; i--) {
-            const m = this.list[i], d = Math.hypot(m.x - pos.x, m.z - pos.z);
+            const m = this.list[i], d = hypot(m.x - pos.x, m.z - pos.z);
             if (!near || d > 260) { this._remove(i); continue; }
             if (m.stuck) { m.stuck = false; this._next(m); }
             // anda em linha reta rumo ao próximo cruzamento
-            const dx = m.to.x - m.x, dz = m.to.z - m.z, L = Math.hypot(dx, dz);
+            const dx = m.to.x - m.x, dz = m.to.z - m.z, L = hypot(dx, dz);
             const ux = L > 0.001 ? dx / L : 0, uz = L > 0.001 ? dz / L : 0;
             const tgt = Math.atan2(ux, uz);
             let da = (tgt - m.heading) % (Math.PI * 2); if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2;

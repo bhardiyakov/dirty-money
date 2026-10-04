@@ -58,7 +58,9 @@ class CarLights {
             const s = this._slots(car);
             const p = car.position;
             const dx = p.x - focus.x, dz = p.z - focus.z;
-            if (dx * dx + dz * dz > range2) {                      // fora de vista: apaga tudo
+            if (dx * dx + dz * dz > range2) {                      // fora de vista: apaga tudo (uma vez, ao sair do alcance)
+                if (s.dark) continue;
+                s.dark = true;
                 for (const i of s.hl) g.off(i);
                 for (const i of s.tl) g.off(i);
                 for (const i of s.sig) g.off(i);
@@ -66,13 +68,14 @@ class CarLights {
                 g.off(s.pool); g.off(s.beam); c.off(s.cone[0]); c.off(s.cone[1]);
                 continue;
             }
+            s.dark = false;
 
-            // Vetor frente = o da imagem DESENHADA (o sprite tem 64 direções): luzes e feixes saem exatamente das lanternas do desenho,
+            // Vetor frente = o da imagem DESENHADA (o sprite tem 32 direções): luzes e feixes saem exatamente das lanternas do desenho,
             // sem o desvio de até ~5,6° entre o corpo físico e o sprite.
             let fx, fz;
             const vis = car.visual;
             if (vis && vis.sheet && vis.sheet.dirs && !car.spec.boat) { const a = (vis.dir * Math.PI * 2) / vis.sheet.dirs; fx = Math.sin(a); fz = Math.cos(a); }
-            else { const f = car.body.getDirection(BABYLON.Axis.Z); fx = f.x; fz = f.z; const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl; }
+            else { const f = car.body.getDirection(BABYLON.Axis.Z); fx = f.x; fz = f.z; const fl = hypot(fx, fz) || 1; fx /= fl; fz /= fl; }
             const rx = fz, rz = -fx;                              // direita do carro
             const L = s.lamps;
             const alive = car.mode !== 'parked' && car.mode !== 'abandoned' && !car.destroyed;
@@ -128,13 +131,13 @@ class CarLights {
 
             // ---- Giroflex (viaturas em perseguição) + reflexo colorido no chão.
             if (car.sirenOn) {
-                const A = sirenPhase ? [0.2, 0.45, 1.0] : [0.12, 0.2, 0.5];
-                const B = sirenPhase ? [0.5, 0.08, 0.08] : [1.0, 0.18, 0.15];
+                const A = sirenPhase ? CarLights.SIREN[0] : CarLights.SIREN[1];
+                const B = sirenPhase ? CarLights.SIREN[2] : CarLights.SIREN[3];
                 g.place(s.siren[0], p.x + fx * -0.1 - rx * 0.32, 2.05 + el, p.z + fz * -0.1 - rz * 0.32, 1.9);
                 g.place(s.siren[1], p.x + fx * -0.1 + rx * 0.32, 2.05 + el, p.z + fz * -0.1 + rz * 0.32, 1.9);
                 g.color(s.siren[0], A[0], A[1], A[2], 1);
                 g.color(s.siren[1], B[0], B[1], B[2], 1);
-                const col = sirenPhase ? [0.15, 0.3, 0.9] : [0.9, 0.12, 0.1];
+                const col = sirenPhase ? CarLights.SIREN[4] : CarLights.SIREN[5];
                 g.place(s.pool, p.x, 0.25, p.z, 11);
                 g.color(s.pool, col[0], col[1], col[2], 0.16 + 0.1 * night);
             } else {
@@ -158,7 +161,7 @@ class CarLights {
             // ---- Chuva: o carro em movimento levanta água dos pneus (leque branco-azulado que sobe e se espalha atrás das rodas).
             const W = Weather.cur;
             if ((alive || car.controlled) && W && W.k > 0.12 && !car.spec.boat) {
-                const v = car.velocity, sp = Math.hypot(v.x, v.z);
+                const v = car.velocity, sp = hypot(v.x, v.z);
                 if (sp > 2.5) {
                     s.sprayT = (s.sprayT || 0) - dt;
                     if (s.sprayT <= 0) {
@@ -177,6 +180,9 @@ class CarLights {
         c.flush();
     }
 }
+
+// Cores do giroflex (azul forte/fraco, vermelho fraco/forte) e do reflexo no chão (azul/vermelho): constantes, sem array novo por quadro.
+CarLights.SIREN = [[0.2, 0.45, 1.0], [0.12, 0.2, 0.5], [0.5, 0.08, 0.08], [1.0, 0.18, 0.15], [0.15, 0.3, 0.9], [0.9, 0.12, 0.1]];
 
 // ----------------------------------------------------------------------------
 // PuffSystem — pool de baforadas de fumaça (cada uma é um quad do GlowBatch 'puff').

@@ -21,7 +21,7 @@ const SpriteBaker = {
     LIGHT: (() => {
         const d = Config.light.sunDir;
         const l = [-d[0], -d[1], -d[2]];
-        const m = Math.hypot(l[0], l[1], l[2]);
+        const m = hypot(l[0], l[1], l[2]);
         return [l[0] / m, l[1] / m, l[2] / m];
     })(),
 
@@ -73,7 +73,7 @@ const SpriteBaker = {
         for (const p of prims) {
             if (p.t === 'c') {
                 const a = rotP(p.a), b = rotP(p.b);
-                const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+                const len = hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
                 const n = Math.max(2, Math.ceil(len / (p.r * 0.32)));
                 for (let i = 0; i <= n; i++) {
                     const t = i / n;
@@ -147,7 +147,7 @@ const SpriteBaker = {
         // ---- Caixas de topo arredondado
         for (let k = 0; k < boxes.length; k++) {
             const p = boxes[k];
-            const ex = Math.hypot(p.hx, p.hz);
+            const ex = hypot(p.hx, p.hz);
             const px0 = Math.max(0, Math.floor(half + (p.x - ex) * ppu)), px1 = Math.min(N - 1, Math.ceil(half + (p.x + ex) * ppu));
             const py0 = Math.max(0, Math.floor(half - (p.z + ex) * ppu)), py1 = Math.min(N - 1, Math.ceil(half - (p.z - ex) * ppu));
             const sn = -p.s, cs = p.c, b = p.b;

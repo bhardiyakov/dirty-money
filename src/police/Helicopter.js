@@ -101,13 +101,13 @@ class Helicopter {
         if (!this.alive) { this._crash(dt); return; }
         const H = Config.heli, m = this.manager;
         const pp = m.playerPos, p = this.position;
-        const dP = Math.hypot(pp.x - p.x, pp.z - p.z);
+        const dP = hypot(pp.x - p.x, pp.z - p.z);
         this.sees = !this.leaving && m.level > 0 && dP < H.sight * (Weather.cur ? Weather.cur.sightMul : 1);
 
         // Para onde vai: sobrevoa o jogador (orbita) se o vê; senão a última posição conhecida; saindo = para longe.
         let tx, tz, arrive = 1;
         if (this.leaving) {
-            const ax = p.x - pp.x, az = p.z - pp.z, l = Math.hypot(ax, az) || 1;
+            const ax = p.x - pp.x, az = p.z - pp.z, l = hypot(ax, az) || 1;
             tx = p.x + ax / l * 200; tz = p.z + az / l * 200; arrive = 0;
         } else if (this.sees) {
             this.orbit += dt * 0.55;
@@ -117,17 +117,17 @@ class Helicopter {
             const k = m.known || pp;
             tx = k.x; tz = k.z;
         }
-        const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz) || 1;
+        const dx = tx - p.x, dz = tz - p.z, d = hypot(dx, dz) || 1;
         const want = arrive ? Math.min(H.speed, d * 1.3) : H.speed;
         const wx = dx / d * want, wz = dz / d * want;
-        const ax = wx - this.vx, az = wz - this.vz, al = Math.hypot(ax, az);
+        const ax = wx - this.vx, az = wz - this.vz, al = hypot(ax, az);
         const lim = H.accel * dt;
         if (al > lim) { this.vx += ax / al * lim; this.vz += az / al * lim; } else { this.vx = wx; this.vz = wz; }
         p.x += this.vx * dt; p.z += this.vz * dt;
         this.alt += (H.alt - this.alt) * Math.min(1, dt * 0.5);
 
         // Proa: para onde voa; quase parado, de frente para o jogador.
-        const sp = Math.hypot(this.vx, this.vz);
+        const sp = hypot(this.vx, this.vz);
         const hd = sp > 3 ? Math.atan2(this.vx, this.vz) : Math.atan2(pp.x - p.x, pp.z - p.z);
         let da = (hd - this.heading) % (Math.PI * 2);
         if (da > Math.PI) da -= Math.PI * 2;
@@ -175,7 +175,7 @@ class Helicopter {
         f.light.flush();
     }
 
-    distanceTo(pos) { return Math.hypot(this.position.x - pos.x, this.position.z - pos.z); }
+    distanceTo(pos) { return hypot(this.position.x - pos.x, this.position.z - pos.z); }
 
     dispose() {
         this.actor.dispose();

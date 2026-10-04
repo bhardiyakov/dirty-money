@@ -91,7 +91,7 @@ const CityGrid = {
         if (x < s[0] + m || x > s[2] - m || z < s[1] + m || z > s[3] - m) return false;
         if (r - m <= 0.01) return true;
         const cx = x < s[0] + r ? s[0] + r : (x > s[2] - r ? s[2] - r : x), cz = z < s[1] + r ? s[1] + r : (z > s[3] - r ? s[3] - r : z);
-        return Math.hypot(x - cx, z - cz) <= r - m;
+        return hypot(x - cx, z - cz) <= r - m;
     },
 
     // ================================================================= plano de ruas
@@ -202,7 +202,7 @@ const CityGrid = {
         if (edge) return r < 0.5 ? 'beach' : (r < 0.78 ? 'port' : 'forest');
         const u = ((i + 0.5) / c.cols) * 2 - 1;
         const v = ((j + 0.5) / c.rows) * 2 - 1;
-        const d = Math.hypot(u, v * 0.8);
+        const d = hypot(u, v * 0.8);
         if (d < 0.46) return r < 0.1 ? 'park' : 'downtown';
         if (u > 0.28 && v < 0.15) return r < 0.16 ? 'forest' : 'industrial';
         if (r < 0.15) return r < 0.07 ? 'forest' : 'park';
@@ -211,7 +211,7 @@ const CityGrid = {
 
     // Bioma de um quarteirão novo da cidade (fora do miolo antigo), pela posição (x, z) e um sorteio r.
     _biomeCity(x, z, r) {
-        const d = Math.hypot((x - 0) / 230, (z - 40) / 360);                // distância ao coração do centro
+        const d = hypot((x - 0) / 230, (z - 40) / 360);                // distância ao coração do centro
         if (d < 0.9) return r < 0.08 ? 'park' : 'downtown';
         if (d < 1.9) return r < 0.07 ? 'park' : (r < 0.62 ? 'commercial' : 'residential');
         if (z < -560 && x > -140) return r < 0.1 ? 'forest' : (r < 0.55 ? 'industrial' : 'port');          // zona industrial/portuária ao sul
@@ -309,7 +309,7 @@ const CityGrid = {
         const picked = [];
         for (const b of ok) {
             const x = (b.slab[0] + b.slab[2]) / 2, z = (b.slab[1] + b.slab[3]) / 2;
-            if (picked.length >= 24 || picked.some((p) => Math.hypot(p.x - x, p.z - z) < 230)) continue;
+            if (picked.length >= 24 || picked.some((p) => hypot(p.x - x, p.z - z) < 230)) continue;
             picked.push({ x, z }); b.station = true;
         }
     },
@@ -378,7 +378,7 @@ const CityGrid = {
     _pickLandmarks(cells) {
         const cand = cells.filter((b) => b.district === 'city' && !b.open && b.slab[0] > -170 && b.slab[2] < 170 && b.slab[1] > -212 && b.slab[3] < 212 && b.i < 100);
         const near = (tx, tz, skip) => cand.filter((k) => k !== skip)
-            .sort((a, b) => Math.hypot((a.slab[0] + a.slab[2]) / 2 - tx, (a.slab[1] + a.slab[3]) / 2 - tz) - Math.hypot((b.slab[0] + b.slab[2]) / 2 - tx, (b.slab[1] + b.slab[3]) / 2 - tz))[0];
+            .sort((a, b) => hypot((a.slab[0] + a.slab[2]) / 2 - tx, (a.slab[1] + a.slab[3]) / 2 - tz) - hypot((b.slab[0] + b.slab[2]) / 2 - tx, (b.slab[1] + b.slab[3]) / 2 - tz))[0];
         const h = near(-21, -21), s = near(21, 21, h);
         this.landmarkCells = {};
         this.landmarkCells[h.id] = 'hospital';
@@ -631,7 +631,7 @@ const CityGrid = {
             return true;
         };
         const spaced = (x, z, minDist) => {
-            for (const p of props) if (Math.hypot(p.x - x, p.z - z) < minDist) return false;
+            for (const p of props) if (hypot(p.x - x, p.z - z) < minDist) return false;
             return true;
         };
         const scatter = (type, kind, n, rect, minDist, margin, extra = {}) => {
@@ -737,7 +737,10 @@ const CityGrid = {
         const [fx0, fz0, fx1, fz1] = block.foot, lots = block.lots;
         const hit = (r, a, m) => r.x1 > a.x0 - m && r.x0 < a.x1 + m && r.z1 > a.z0 - m && r.z0 < a.z1 + m;
         const overlapsLot = (r, m) => lots.some((l) => hit(r, l, m));
-        const overlapsObs = (r, m) => this.obstacles.some((o) => hit(r, o, m));
+        // Só sólidos perto do quarteirão podem colidir com o que nasce dentro dele (cercas na borda, caçambas a ≥ 0,8 u da borda; folga
+        // máx. 0,5): filtra UMA vez em vez de varrer todos os sólidos do mundo a cada candidato (era O(n²) na carga).
+        const foot = { x0: fx0, z0: fz0, x1: fx1, z1: fz1 }, near = this.obstacles.filter((o) => hit(o, foot, 1.5));
+        const overlapsObs = (r, m) => near.some((o) => hit(r, o, m));
         // Em frente a cada loja o caminho até a porta fica LIVRE (sem grade, muro nem caçamba): zona de 3,2 u entre a calçada e a fachada.
         const zones = [];
         for (const l of lots) for (const s of l.shops || []) zones.push(s.side === 'S' ? { x0: s.a - 0.6, z0: l.z0 - 3.4, x1: s.a + 6.6, z1: l.z0 } : s.side === 'N' ? { x0: s.a - 0.6, z0: l.z1, x1: s.a + 6.6, z1: l.z1 + 3.4 } : s.side === 'W' ? { x0: l.x0 - 3.4, z0: s.a - 0.6, x1: l.x0, z1: s.a + 6.6 } : { x0: l.x1, z0: s.a - 0.6, x1: l.x1 + 3.4, z1: s.a + 6.6 });
@@ -753,7 +756,7 @@ const CityGrid = {
                 const r = alongX ? { x0: s, z0: lo, x1: e, z1: hi } : { x0: lo, z0: s, x1: hi, z1: e };
                 if (rng() < 0.82 && !overlapsLot(r, 0.35) && !overlapsObs(r, 0.1) && !inShop(r)) {
                     const f = Object.assign({}, r, { h: wall ? 1.7 : 1.5, vault: true, kind: wall ? 'wall' : 'fence' });
-                    block.fences.push(f); this.obstacles.push(f); this.vaultables.push(f);
+                    block.fences.push(f); this.obstacles.push(f); this.vaultables.push(f); near.push(f);
                 }
                 s = e + 3.5 + rng() * 2;
             }
@@ -783,7 +786,8 @@ const CityGrid = {
             const r = { x0: x - w / 2, z0: z - d / 2, x1: x + w / 2, z1: z + d / 2 };
             if (r.x0 < fx0 + 0.8 || r.x1 > fx1 - 0.8 || r.z0 < fz0 + 0.8 || r.z1 > fz1 - 0.8) continue;
             if (overlapsLot(r, 0.45) || overlapsObs(r, 0.5) || inShop(r)) continue;
-            this.obstacles.push(Object.assign({}, r, { h, hide: true }));
+            const ob = Object.assign({}, r, { h, hide: true });
+            this.obstacles.push(ob); near.push(ob);
             const spot = { x, z, w, d, h, kind };
             block.props.push(Object.assign({ type: 'hide' }, spot));
             this.hideSpots.push(spot);
@@ -801,12 +805,39 @@ const CityGrid = {
     },
 
     // Grade/muro pulável mais próximo de (x, z) a menos de maxD (distância até o retângulo), ou null.
+    // Todo pulável (vault: true) também é obstáculo: a busca usa a grade dos sólidos em vez de varrer todos os muros do mundo a cada
+    // quadro (a dica de interação pergunta isto o tempo todo).
     nearestVault(x, z, maxD = 1.6) {
-        let best = null, bd = maxD;
-        for (const o of this.vaultables) {
+        let best = null, bd2 = maxD * maxD;
+        for (const o of this.obstaclesAround(x, z, maxD)) {
+            if (!o.vault) continue;
             const cx = Math.max(o.x0, Math.min(x, o.x1)), cz = Math.max(o.z0, Math.min(z, o.z1));
-            const d = Math.hypot(x - cx, z - cz);
-            if (d < bd) { bd = d; best = o; }
+            const dx = x - cx, dz = z - cz, d2 = dx * dx + dz * dz;
+            if (d2 < bd2) { bd2 = d2; best = o; }
+        }
+        return best;
+    },
+
+    // Esconderijo (caçamba, caixote, latão) mais próximo de (x, z) a menos de maxD (distância até o retângulo), ou null. Os esconderijos
+    // não mudam depois da construção: grade própria montada na 1ª consulta.
+    nearestHideSpot(x, z, maxD = 2.3) {
+        const S = this.CELL;
+        if (!this._hideGrid) {
+            this._hideGrid = new Map();
+            for (const h of this.hideSpots) {
+                for (let i = Math.floor((h.x - h.w / 2) / S); i <= Math.floor((h.x + h.w / 2) / S); i++) for (let j = Math.floor((h.z - h.d / 2) / S); j <= Math.floor((h.z + h.d / 2) / S); j++) {
+                    const k = this._gridKey(i, j);
+                    let c = this._hideGrid.get(k); if (!c) this._hideGrid.set(k, c = []); c.push(h);
+                }
+            }
+        }
+        let best = null, bd2 = maxD * maxD;
+        for (let i = Math.floor((x - maxD) / S); i <= Math.floor((x + maxD) / S); i++) for (let j = Math.floor((z - maxD) / S); j <= Math.floor((z + maxD) / S); j++) {
+            const c = this._hideGrid.get(this._gridKey(i, j)); if (!c) continue;
+            for (const s of c) {
+                const dx = Math.max(Math.abs(x - s.x) - s.w / 2, 0), dz = Math.max(Math.abs(z - s.z) - s.d / 2, 0), d2 = dx * dx + dz * dz;
+                if (d2 < bd2) { bd2 = d2; best = s; }
+            }
         }
         return best;
     },
@@ -989,7 +1020,7 @@ const CityGrid = {
 
     // Lugar vago para deitar na areia (marca como ocupado) ou null.
     beachSpot(near = null) {
-        const free = this.beachSpots.filter((p) => !p.taken && (!near || Math.hypot(p.x - near.x, p.z - near.z) < 320));
+        const free = this.beachSpots.filter((p) => !p.taken && (!near || hypot(p.x - near.x, p.z - near.z) < 320));
         if (!free.length) return null;
         const p = free[Math.floor(Math.random() * free.length)];
         p.taken = true;
@@ -1000,7 +1031,7 @@ const CityGrid = {
     shorePoint(near = null) {
         if (!this.shorePoints.length) return null;
         if (!near) return this.shorePoints[Math.floor(Math.random() * this.shorePoints.length)];
-        const c = this.shorePoints.filter((p) => Math.hypot(p.x - near.x, p.z - near.z) < 220);
+        const c = this.shorePoints.filter((p) => hypot(p.x - near.x, p.z - near.z) < 220);
         return (c.length ? c : this.shorePoints)[Math.floor(Math.random() * (c.length || this.shorePoints.length))];
     },
 
@@ -1012,7 +1043,7 @@ const CityGrid = {
     jogNear(x, z, max = 400) {
         let best = null, bd = max;
         for (const j of this.jogPaths) {
-            const u = Math.max(0, Math.min(j.len, (j.v ? z : x) - j.start)), p = this.jogAt(j, u), d = Math.hypot(p.x - x, p.z - z);
+            const u = Math.max(0, Math.min(j.len, (j.v ? z : x) - j.start)), p = this.jogAt(j, u), d = hypot(p.x - x, p.z - z);
             if (d < bd) { bd = d; best = { path: j, u }; }
         }
         return best;
@@ -1067,7 +1098,7 @@ const CityGrid = {
     // `near` = { x, z, r }: só quarteirões a até r u dali (o mundo é grande).
     randomWalkablePoint(near = null) {
         let list = this.blocks;
-        if (near) { const f = this.blocks.filter((b) => Math.hypot((b.slab[0] + b.slab[2]) / 2 - near.x, (b.slab[1] + b.slab[3]) / 2 - near.z) < near.r); if (f.length) list = f; }
+        if (near) { const f = this.blocks.filter((b) => hypot((b.slab[0] + b.slab[2]) / 2 - near.x, (b.slab[1] + b.slab[3]) / 2 - near.z) < near.r); if (f.length) list = f; }
         const blk = list[Math.floor(Math.random() * list.length)];
         const [x0, z0, x1, z1] = blk.slab;
         const r = Math.random;

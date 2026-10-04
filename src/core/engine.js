@@ -104,27 +104,62 @@ class GameEngine {
 
         // PCF (borda nítida, barato, sem blur): combina com o visual pixel art e evita a
         // perda de precisão do ESM em janelas de profundidade grandes.
-        this.shadowGenerator = new BABYLON.ShadowGenerator(Config.perf.shadowSize || 2048, this.sun);
+        // useRedTextureType (5º argumento): o PCF lê a sombra da textura de PROFUNDIDADE; o alvo de cor nem é amostrado, então basta
+        // 1 canal em vez de RGBA half-float (2048²: 32 → 8 MB de memória de vídeo).
+        this.shadowGenerator = new BABYLON.ShadowGenerator(Config.perf.shadowSize || 2048, this.sun, false, undefined, true);
         this.shadowGenerator.usePercentageCloserFiltering = true;
         this.shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_LOW;
         this.shadowGenerator.bias = 0.0008;
         this.shadowGenerator.normalBias = 0.02;
         this.shadowGenerator.setDarkness(0.4);
+        // Versão da lista de projetores: o filtro abaixo refaz o cache dos estáticos quando alguém entra/sai (um pedaço de postes
+        // refeito porque um poste quebrou, por exemplo).
+        this._casterVer = 0;
+        const sg = this.shadowGenerator, add = sg.addShadowCaster.bind(sg), rem = sg.removeShadowCaster.bind(sg);
+        sg.addShadowCaster = (m, d) => { this._casterVer++; return add(m, d); };
+        sg.removeShadowCaster = (m, d) => { this._casterVer++; return rem(m, d); };
+        this._setupShadowMap();
+    }
+
+    // Ajustes do alvo do mapa de sombra — refeitos sempre que o Babylon recria o alvo (troca de tamanho em setShadowSize).
+    _setupShadowMap() {
+        const sm = this.shadowGenerator.getShadowMap(), eng = this.engine;
+        // Profundidade em 16 bits em vez de float32 (2048²: 16 → 8 MB). A janela da sombra tem 160 u: 16 bits dão ~0,003 u de precisão,
+        // bem abaixo do bias (≈0,13 u) — mesma sombra, sem acne.
+        if (eng.webGLVersion > 1 && eng._features.supportDepthStencilTexture) {
+            sm.createDepthStencilTexture(eng.useReverseDepthBuffer ? BABYLON.Constants.GREATER : BABYLON.Constants.LESS, true, false, 1, BABYLON.Constants.TEXTUREFORMAT_DEPTH16);
+        }
         // O mapa de sombra NÃO descarta por conta própria: sem isto ele desenhava, todo quadro, todos os projetores do mundo (carros
         // da cidade inteira, postes e blocos de sombra de todos os pedaços). Só entra quem está na janela da sombra (+ folga para a
         // sombra comprida de um prédio alto que fica fora dela).
-        const out = [];
-        this.shadowGenerator.getShadowMap().getCustomRenderList = (layer, list, n) => {
+        // Projetores ESTÁTICOS (matriz congelada: prédios, acabamentos, postes — a maioria dos ~900) só são re-filtrados quando o foco
+        // anda 8 u, a janela muda ou a lista muda; os dinâmicos (carros) são testados todo quadro.
+        const out = [], near = [], dyn = [], C = { n: -1, x: 0, z: 0, R: 0 };
+        const inRange = (m, f, R) => { const bs = m.getBoundingInfo().boundingSphere, c = bs.centerWorld, r = bs.radiusWorld; return Math.abs(c.x - f.x) < R + r && Math.abs(c.z - f.z) < R + r; };
+        sm.getCustomRenderList = (layer, list, n) => {
             const f = this._shadowFocus; if (!f) return null;
             const R = this.sun.shadowFrustumSize * 0.6 + 26;
-            out.length = 0;
-            for (let i = 0; i < n; i++) {
-                const m = list[i]; if (!m.isEnabled() || !m.isVisible) continue;
-                const bs = m.getBoundingInfo().boundingSphere, c = bs.centerWorld, r = bs.radiusWorld;
-                if (Math.abs(c.x - f.x) < R + r && Math.abs(c.z - f.z) < R + r) out.push(m);
+            if (n !== C.n || this._casterVer !== C.v || Math.abs(f.x - C.x) > 8 || Math.abs(f.z - C.z) > 8 || Math.abs(R - C.R) > 4) {
+                C.n = n; C.v = this._casterVer; C.x = f.x; C.z = f.z; C.R = R;
+                near.length = 0; dyn.length = 0;
+                for (let i = 0; i < n; i++) { const m = list[i]; if (!m.isWorldMatrixFrozen) dyn.push(m); else if (inRange(m, f, R + 12)) near.push(m); }
             }
+            out.length = 0;
+            for (const m of near) if (m.isEnabled() && m.isVisible && !m.isDisposed()) out.push(m);
+            for (const m of dyn) if (m.isEnabled() && m.isVisible && !m.isDisposed() && inRange(m, f, R)) out.push(m);
             return out;
         };
+    }
+
+    // Troca a resolução do mapa de sombra (AutoQuality). Não use getShadowMap().resize(): ela recria o alvo SEM a textura de
+    // profundidade que o PCF lê (as sombras sumiam) e perde o descarte acima.
+    setShadowSize(size) {
+        const sg = this.shadowGenerator;
+        if (!sg || sg.mapSize === size) return;
+        const rate = sg.getShadowMap().refreshRate;
+        sg.mapSize = size;                                       // recria o alvo (mantém a lista de projetores)
+        sg.getShadowMap().refreshRate = rate;
+        this._setupShadowMap();
     }
 
     // Chamado todo frame: anima o mundo e centra o frustum da sombra no foco.

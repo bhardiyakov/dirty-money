@@ -21,6 +21,7 @@ class PoliceManager {
         this.sprites = sprites;
         this.carLib = carLib;
         this.carSheet = carLib.sheet('sedan');       // viaturas = sedã com a pintura da polícia
+        for (const id of Object.values(PoliceManager.TEAMS).map((t) => t.model)) carLib.peek(id);   // van da SWAT e jipe do exército: assados na carga (não no meio da perseguição)
         this.traffic = traffic;
         this.game = game;
         this.cars = [];
@@ -169,8 +170,8 @@ class PoliceManager {
             if (c.temp || c.destroyed) continue;
             for (let k = 0; k < 80; k++) {
                 const l = RoadNet.randomLanePoint(14, { x: pos.x, z: pos.z, rMin: 70, rMax: 170 });
-                if (!l || Math.hypot(l.point.x - pos.x, l.point.z - pos.z) < 70 || !this.traffic._clear(l.point.x, l.point.z, 12)) continue;
-                if (this.cars.some((o) => o !== c && Math.hypot(o.position.x - l.point.x, o.position.z - l.point.z) < 12)) continue;
+                if (!l || hypot(l.point.x - pos.x, l.point.z - pos.z) < 70 || !this.traffic._clear(l.point.x, l.point.z, 12)) continue;
+                if (this.cars.some((o) => o !== c && hypot(o.position.x - l.point.x, o.position.z - l.point.z) < 12)) continue;
                 c.teleport(l.point.x, l.point.z, Math.atan2(l.d.dx, l.d.dz));
                 c.route = null; c._reverseT = 0; c._stuckT = 0; c.ramming = false; c._bestDist = Infinity; c._progressT = 0; c._relocCd = 10;
                 c.startRoute(l.point.x, l.point.z, l.d);
@@ -182,7 +183,7 @@ class PoliceManager {
             if (o.free && !o.vaulting) o._exitFree();
             if (o.temp || !o.alive || o.rag || o.index < 0) continue;
             let p = null;
-            for (let k = 0; k < 20 && !p; k++) { const q = this.nav.randomWalkable(); if (Math.hypot(q.x - pos.x, q.z - pos.z) >= 70) p = q; }
+            for (let k = 0; k < 20 && !p; k++) { const q = this.nav.randomWalkable(); if (hypot(q.x - pos.x, q.z - pos.z) >= 70) p = q; }
             if (!p) continue;
             this.nav.crowd.agentTeleport(o.index, p);
             o.transform.position.copyFrom(p);
@@ -221,7 +222,7 @@ class PoliceManager {
         }
         for (let i = this.officers.length - 1; i >= 0; i--) {              // reforço que ficou dentro da favela, fora da tela: some
             const o = this.officers[i];
-            if (o.temp && !o.guard && !o.rag && o.fsm.name !== 'CHASE' && Standing.policeBanned(o.position.x, o.position.z) && Math.hypot(o.position.x - f.x, o.position.z - f.z) > 60) { o.dispose(); this.officers.splice(i, 1); }
+            if (o.temp && !o.guard && !o.rag && o.fsm.name !== 'CHASE' && Standing.policeBanned(o.position.x, o.position.z) && hypot(o.position.x - f.x, o.position.z - f.z) > 60) { o.dispose(); this.officers.splice(i, 1); }
         }
         for (const o of this.officers) {
             if (o.temp || !o.alive || o.rag || o.index < 0 || o.free || o.guard || o.fsm.name === 'CHASE') continue;
@@ -274,10 +275,10 @@ class PoliceManager {
         for (let t = 0; t < 80; t++) {
             const l = RoadNet.randomLanePoint(14, { x: pos.x, z: pos.z, rMin: 75, rMax: 115 });
             if (!l) continue;
-            const d = Math.hypot(l.point.x - pos.x, l.point.z - pos.z);
+            const d = hypot(l.point.x - pos.x, l.point.z - pos.z);
             if (d < 75 || d > 115) continue;
             if (!this.traffic._clear(l.point.x, l.point.z, 12) || Standing.policeBanned(l.point.x, l.point.z)) continue;
-            if (this.cars.some((c) => Math.hypot(c.position.x - l.point.x, c.position.z - l.point.z) < 12)) continue;
+            if (this.cars.some((c) => hypot(c.position.x - l.point.x, c.position.z - l.point.z) < 12)) continue;
             const car = new PoliceCar(this.scene, this.physics, l.point, this._nextCarId++, this.carLib.sheet(model), this.traffic,
                 Math.atan2(l.d.dx, l.d.dz), { paint, role, siren, temp: true });
             car.manager = this;
@@ -306,7 +307,7 @@ class PoliceManager {
     _cleanup() {
         if (this._quiet <= 20) return;
         const f = this.game.camera.target, force = this._quiet > 70;
-        const away = (u) => Math.hypot(u.position.x - f.x, u.position.z - f.z) > 75;
+        const away = (u) => hypot(u.position.x - f.x, u.position.z - f.z) > 75;
         for (let i = this.officers.length - 1; i >= 0; i--) {
             const o = this.officers[i];
             if (o.temp && (force || away(o))) { o.dispose(); this.officers.splice(i, 1); }
@@ -338,7 +339,7 @@ class PoliceManager {
             const f = this.game ? this.game.camera.target : { x: 0, z: 0 };
             const c = RoadNet.randomLanePoint(14, { x: f.x, z: f.z, rMin: 60, rMax: 170 });
             if (!c || !this.traffic._clear(c.point.x, c.point.z, 12) || Standing.policeBanned(c.point.x, c.point.z)) continue;
-            if (avoid && Math.hypot(c.point.x - avoid.x, c.point.z - avoid.z) < avoid.r) continue;
+            if (avoid && hypot(c.point.x - avoid.x, c.point.z - avoid.z) < avoid.r) continue;
             lane = c;
         }
         if (!lane) return null;
@@ -378,7 +379,7 @@ class PoliceManager {
         const k = this.known || { x: pos.x, z: pos.z };
         for (const o of this.officers) {
             if (!o.alive) continue;
-            this._mind(o).dispatched = Math.hypot(o.position.x - k.x, o.position.z - k.z) < L.dispatchR;
+            this._mind(o).dispatched = hypot(o.position.x - k.x, o.position.z - k.z) < L.dispatchR;
         }
         const d2 = (c) => (c.position.x - k.x) ** 2 + (c.position.z - k.z) ** 2;
         const cars = this.cars.filter((c) => c.role === 'patrol' && !c.destroyed).sort((a, b) => d2(a) - d2(b));
@@ -417,7 +418,7 @@ class PoliceManager {
         const units = this.units;
         for (const u of units) {
             const m = this._mind(u), p = u.position;
-            m.sees = !hide && Math.hypot(p.x - pos.x, p.z - pos.z) < R && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z);
+            m.sees = !hide && hypot(p.x - pos.x, p.z - pos.z) < R && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z);
             if (m.sees) {
                 seen = true;
                 if (L) this._note(m, pos.x, pos.z, vel.x, vel.z, this.time);     // sem ★ ver não faz ninguém te perseguir
@@ -515,3 +516,4 @@ class PoliceManager {
         }
     }
 }
+memoStatics(PoliceManager, 'TEAMS');

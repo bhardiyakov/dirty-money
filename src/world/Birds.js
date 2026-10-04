@@ -139,7 +139,7 @@ class Birds {
             if (!a) continue;
             for (const p of a) {
                 if (p.busy) continue;
-                const dx = p.x - x, dz = p.z - z, d = Math.hypot(dx, dz);
+                const dx = p.x - x, dz = p.z - z, d = hypot(dx, dz);
                 if (d < 4 || d > r) continue;
                 if (dirx !== undefined && (dx * dirx + dz * dirz) / d < 0.3) continue;       // só à frente
                 out.push(p);
@@ -172,7 +172,7 @@ class Birds {
 
     // Espanta as aves num raio (tiro, explosão, buzina...).
     scare(x, z, r) {
-        for (const b of this.birds) if (b.state !== 'fly' && Math.hypot(b.x - x, b.z - z) < r) this._flee(b, x, z);
+        for (const b of this.birds) if (b.state !== 'fly' && hypot(b.x - x, b.z - z) < r) this._flee(b, x, z);
     }
 
     // --------------------------------------------------------------- criação
@@ -255,7 +255,7 @@ class Birds {
 
         for (let i = this.birds.length - 1; i >= 0; i--) {
             const b = this.birds[i];
-            const dc = Math.hypot(b.x - tg.x, b.z - tg.z);
+            const dc = hypot(b.x - tg.x, b.z - tg.z);
             if (b.airT > 30) { this._remove(b); continue; }                                  // preso no ar (beco sem saida): some
             if (dc > 120 || (this.birds.length > target + 2 && dc > 70 && b.state !== 'fly')) { this._remove(b); continue; }
             if (checkThreat && b.state !== 'fly') {
@@ -350,7 +350,7 @@ class Birds {
         let ty = Math.min(b.cruise, ceil), v = 6.5 + sp.S * 1.2;
         let landing = false;
         if (b.target) {
-            const dx = b.target.x - b.x, dz = b.target.z - b.z, d = Math.hypot(dx, dz);
+            const dx = b.target.x - b.x, dz = b.target.z - b.z, d = hypot(dx, dz);
             const want = Math.atan2(dx, dz);
             let da = want - b.h; da = Math.atan2(Math.sin(da), Math.cos(da));
             b.h += Math.max(-3.2 * dt, Math.min(3.2 * dt, da));
@@ -378,13 +378,13 @@ class Birds {
         const ny = b.y + Math.max(-5 * dt, Math.min(5 * dt, ty - b.y));
         // Garantia final: o passo não pode terminar dentro de um sólido (nem atravessá-lo na altura em que ele está).
         const c = this._clearance(nx, nz, ny);
-        if (c.inside && !(b.target && b.target.perch && Math.hypot(nx - b.target.x, nz - b.target.z) < 1.5)) {
+        if (c.inside && !(b.target && b.target.perch && hypot(nx - b.target.x, nz - b.target.z) < 1.5)) {
             b.y += Math.max(0, Math.min(5 * dt, Math.min(c.need, ceil) - b.y));              // não anda adiante: sobe, vira e se afasta da parede
             const o = c.hit;
             if (o) {
                 const qx = Math.max(o.x0, Math.min(b.x, o.x1)), qz = Math.max(o.z0, Math.min(b.z, o.z1));
-                let ax = b.x - qx, az = b.z - qz, al = Math.hypot(ax, az);
-                if (al < 1e-3) { ax = b.x - (o.x0 + o.x1) / 2; az = b.z - (o.z0 + o.z1) / 2; al = Math.hypot(ax, az) || 1; }
+                let ax = b.x - qx, az = b.z - qz, al = hypot(ax, az);
+                if (al < 1e-3) { ax = b.x - (o.x0 + o.x1) / 2; az = b.z - (o.z0 + o.z1) / 2; al = hypot(ax, az) || 1; }
                 b.x += (ax / al) * 3 * dt; b.z += (az / al) * 3 * dt;
                 let da = Math.atan2(ax, az) - b.h; da = Math.atan2(Math.sin(da), Math.cos(da));
                 b.h += Math.max(-3.5 * dt, Math.min(3.5 * dt, da));                          // vira para longe do sólido
@@ -404,12 +404,12 @@ class Birds {
     _seekLanding(b, ctx) {
         const dirx = Math.sin(b.h), dirz = Math.cos(b.h);
         let p = Math.random() < 0.55 ? this.perchNear(b.x, b.z, 38, dirx, dirz) : null;
-        if (p && Math.hypot(p.x - ctx.px, p.z - ctx.pz) < ctx.pr + 3) p = null;
+        if (p && hypot(p.x - ctx.px, p.z - ctx.pz) < ctx.pr + 3) p = null;
         if (p) { p.busy = true; b.target = { x: p.x, z: p.z, y: p.y, perch: p }; return; }
         for (let t = 0; t < 10; t++) {
             const a = b.h + (Math.random() - 0.5) * 1.3, d = 10 + Math.random() * 22;
             const x = b.x + Math.sin(a) * d, z = b.z + Math.cos(a) * d;
-            if (!this._freeGround(x, z) || Math.hypot(x - ctx.px, z - ctx.pz) < ctx.pr + 4) continue;
+            if (!this._freeGround(x, z) || hypot(x - ctx.px, z - ctx.pz) < ctx.pr + 4) continue;
             b.target = { x, z, y: 0.3, perch: null };
             return;
         }
@@ -478,3 +478,4 @@ class Birds {
         for (let k = 0; k < 4; k++) { C[c + k * 4] = variant; C[c + k * 4 + 1] = shade; C[c + k * 4 + 2] = 0; C[c + k * 4 + 3] = 1; }
     }
 }
+memoStatics(Birds, 'SPECIES', 'SLOT');

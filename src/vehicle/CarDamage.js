@@ -32,7 +32,7 @@ class CarDamage {
         this.time += dt;
         const f = this.g.camera.target;
         for (const car of this.allCars()) {
-            const near = Math.hypot(car.position.x - f.x, car.position.z - f.z) < 75;
+            const near = hypot(car.position.x - f.x, car.position.z - f.z) < 75;
             if (car.burning > 0) this._burn(car, dt, near);
             else if (car.wrecked) this._wreck(car, dt, near);
             else if (car.hp > 0 && car.hp / car.maxHp < Config.crash.smokeBelow) this._smoke(car, dt, near);
@@ -44,7 +44,7 @@ class CarDamage {
     // Ponto sobre o capô (frente do carro), com leve sorteio.
     _hood(car, back = 0.9) {
         const p = car.position, d = car.body.getDirection(BABYLON.Axis.Z);
-        const l = Math.hypot(d.x, d.z) || 1, fx = d.x / l, fz = d.z / l;
+        const l = hypot(d.x, d.z) || 1, fx = d.x / l, fz = d.z / l;
         const s = car.halfLen - back, j = (Math.random() - 0.5) * 0.9;
         return { x: p.x + fx * s - fz * j, z: p.z + fz * s + fx * j };
     }
@@ -127,7 +127,7 @@ class CarDamage {
         }
         for (let i = 0; i < 9; i++) g.combat.spark(x + (Math.random() - 0.5) * 4, 0.8 + Math.random() * 2, z + (Math.random() - 0.5) * 4, [1, 0.45 + Math.random() * 0.4, 0.12]);
         AudioFX.explosion(x, z);
-        const fd = Math.hypot(x - g.camera.target.x, z - g.camera.target.z);
+        const fd = hypot(x - g.camera.target.x, z - g.camera.target.z);
         if (fd < 70) g.camera.shake(1.3 * (1 - fd / 70));
 
         const bl = car.spec.blast || 1;                          // moto explode menos que um carro
@@ -156,7 +156,7 @@ class CarDamage {
         }
         for (let i = 0; i < 16; i++) g.combat.spark(x + (Math.random() - 0.5) * 6, 0.8 + Math.random() * 3, z + (Math.random() - 0.5) * 6, [1, 0.45 + Math.random() * 0.4, 0.12]);
         AudioFX.explosion(x, z);
-        const fd = Math.hypot(x - g.camera.target.x, z - g.camera.target.z);
+        const fd = hypot(x - g.camera.target.x, z - g.camera.target.z);
         if (fd < 90) g.camera.shake(1.8 * (1 - fd / 90));
         this._blast(x, z, Config.crash.explosionR * bl, src, null, bl);
         if (src === 'player') {
@@ -175,7 +175,7 @@ class CarDamage {
         const pl = g.player;
         if (pl.alive) {
             const pp = g.mode === 'car' && g.activeCar ? g.activeCar.position : pl.position;
-            const d = Math.hypot(pp.x - x, pp.z - z), k = fall(d);
+            const d = hypot(pp.x - x, pp.z - z), k = fall(d);
             if (k > 0) {
                 pl.takeDamage(95 * k * bl);
                 if (g.mode !== 'car') {
@@ -186,17 +186,17 @@ class CarDamage {
         }
         if (g.npcManager) for (const n of g.npcManager.npcs) {
             if (!n.alive) continue;
-            const k = fall(Math.hypot(n.position.x - x, n.position.z - z));
+            const k = fall(hypot(n.position.x - x, n.position.z - z));
             if (k > 0) n.takeDamage((230 * k + 20) * bl, from, src);
         }
         if (g.policeManager) for (const o of g.policeManager.officers) {
             if (!o.alive) continue;
-            const k = fall(Math.hypot(o.position.x - x, o.position.z - z));
+            const k = fall(hypot(o.position.x - x, o.position.z - z));
             if (k > 0) o.takeDamage((190 * k + 15) * bl, from, src);
         }
         for (const c of this.allCars()) {
             if (c === srcCar || c.wrecked) continue;
-            const dx = c.position.x - x, dz = c.position.z - z, d = Math.hypot(dx, dz), k = fall(d);
+            const dx = c.position.x - x, dz = c.position.z - z, d = hypot(dx, dz), k = fall(d);
             if (k <= 0) continue;
             c.takeDamage((90 * k * k + 6) * bl, src === 'player' ? 'player' : 'env');
             if (c.role !== 'block') {                                      // (viaturas de bloqueio são estáticas)
@@ -244,7 +244,7 @@ class CarDamage {
         // Some fora da tela depois de um tempo (vira outro carro novo / outra viatura de patrulha).
         if (car.wreckT > Config.crash.wreckLife) {
             const f = g.camera.target;
-            if (Math.hypot(car.position.x - f.x, car.position.z - f.z) > 75) this._removeWreck(car);
+            if (hypot(car.position.x - f.x, car.position.z - f.z) > 75) this._removeWreck(car);
         }
     }
 

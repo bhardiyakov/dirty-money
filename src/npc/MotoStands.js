@@ -23,8 +23,8 @@ const MotoStands = {
             const tx = b.x1 - w.fx * W; let best = null, bd = 1e9;
             for (const n of RoadPlan.nodes) {
                 if (!Standing.inFavela(n.x, n.z)) continue;
-                if (home && Math.hypot(n.x - home.x, n.z - home.z) < 30) continue;
-                const d = Math.hypot(n.x - tx, n.z - w.z);
+                if (home && hypot(n.x - home.x, n.z - home.z) < 30) continue;
+                const d = hypot(n.x - tx, n.z - w.z);
                 if (d < bd) { bd = d; best = n; }
             }
             if (!best) continue;
@@ -41,7 +41,7 @@ const MotoStands = {
     _stream(g, pos) {
         const [va, vb] = CharacterRig.VARIANT_GROUPS.poor;
         for (const s of this.stands) {
-            const on = Math.hypot(s.x - pos.x, s.z - pos.z) < 120;
+            const on = hypot(s.x - pos.x, s.z - pos.z) < 120;
             if (on && !s.actors.length) {
                 for (let k = 0; k < 2; k++) {
                     const a = new SpriteActor(g.scene, Bikes.sheet(g.sprites, 'moto', 'ride'), va + Math.floor(Math.random() * (vb - va + 1)), 'mtStand');
@@ -71,7 +71,7 @@ const MotoStands = {
         this._stream(g, pos);
         const G = this.glow, f = g.camera.target, pulse = 0.7 + 0.3 * Math.sin(this._t * 3);
         this.stands.forEach((s, i) => {
-            if (Math.hypot(s.x - f.x, s.z - f.z) > 70) { G.off(i); return; }
+            if (hypot(s.x - f.x, s.z - f.z) > 70) { G.off(i); return; }
             G.place(i, s.x + 0.6, 0.35, s.z - 0.6, 3 + 0.5 * pulse); G.color(i, 1, 0.82, 0.2, 0.7 * pulse);
             for (const a of s.actors) { if (!a.clip) a.play('static'); a.update(dt, 0); }
         });
@@ -82,7 +82,7 @@ const MotoStands = {
         if (!this.built || g.mode !== 'player' || g.motoRide) return null;
         const p = g.player.position;
         let best = null, bd = maxD;
-        for (const s of this.stands) { const d = Math.hypot(s.x - p.x, s.z - p.z); if (d < bd) { bd = d; best = s; } }
+        for (const s of this.stands) { const d = hypot(s.x - p.x, s.z - p.z); if (d < bd) { bd = d; best = s; } }
         return best;
     },
     prompt(g) { const s = this.nearStand(g); return s ? `<b>E</b> chamar mototáxi — ${s.name}<small>só favela e redondezas · bem mais barato que Uber e táxi</small>` : ''; },
@@ -117,7 +117,7 @@ class MotoRide {
     constructor(game, dest, from) {
         this.g = game;
         const r = Gps.route({ x: from.x, z: from.z }, { x: dest.x, z: dest.z });
-        this.pts = r.pts.filter((p, i, a) => i === 0 || Math.hypot(p.x - a[i - 1].x, p.z - a[i - 1].z) > 0.5);
+        this.pts = r.pts.filter((p, i, a) => i === 0 || hypot(p.x - a[i - 1].x, p.z - a[i - 1].z) > 0.5);
         this.dest = dest; this.i = 1; this.t = 0;
         const [va, vb] = CharacterRig.VARIANT_GROUPS.poor;
         this.actor = new SpriteActor(game.scene, Bikes.sheet(game.sprites, 'moto', 'ride'), va + Math.floor(Math.random() * (vb - va + 1)), 'mtRide');
@@ -144,7 +144,7 @@ class MotoRide {
         if (!this.actor.clip) this.actor.play('static');
         const tgt = this.pts[this.i];
         if (!tgt) { this.finish(); return; }
-        const dx = tgt.x - this.x, dz = tgt.z - this.z, L = Math.hypot(dx, dz), ux = L > 0.001 ? dx / L : 0, uz = L > 0.001 ? dz / L : 0;
+        const dx = tgt.x - this.x, dz = tgt.z - this.z, L = hypot(dx, dz), ux = L > 0.001 ? dx / L : 0, uz = L > 0.001 ? dz / L : 0;
         const want = Math.atan2(ux, uz);
         let da = (want - this.heading) % (Math.PI * 2); if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2;
         this.heading += da * (1 - Math.exp(-10 * dt));

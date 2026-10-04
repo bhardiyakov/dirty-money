@@ -124,3 +124,4 @@ class DayNight {
         return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
     }
 }
+memoStatics(DayNight, 'KEYS');

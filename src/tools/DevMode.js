@@ -148,8 +148,8 @@ class DevMode {
         const sp = (CityGrid.shorePoints || [])[40]; if (sp) B('Orla / praia', () => this.tp(sp.x - sp.nx * 4, sp.z - sp.nz * 4));
         B('Mar (nadar)', () => this.tp(300, 300));
         H('POSTOS DE GASOLINA');
-        const me = this._pos(); const st = (CityGrid.stations || []).slice().sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z));
-        for (const s of st.slice(0, 8)) B(`${s.name} (${Math.round(Math.hypot(s.x - me.x, s.z - me.z))}u)`, () => this.tp(s.x, s.z - 9));
+        const me = this._pos(); const st = (CityGrid.stations || []).slice().sort((a, b) => hypot(a.x - me.x, a.z - me.z) - hypot(b.x - me.x, b.z - me.z));
+        for (const s of st.slice(0, 8)) B(`${s.name} (${Math.round(hypot(s.x - me.x, s.z - me.z))}u)`, () => this.tp(s.x, s.z - 9));
         H('COORDENADAS');
         const mk = (ph, v) => { const i = document.createElement('input'); i.type = 'number'; i.placeholder = ph; i.value = v; this._row.appendChild(i); return i; };
         const ix = mk('X', Math.round(me.x)), iz = mk('Z', Math.round(me.z));
@@ -231,13 +231,31 @@ class DevMode {
         B('Assustar todos', () => { for (const n of g.npcManager.npcs) if (n.alive) n.panic(g.player.position); });
         B('Chuva de dinheiro', () => { for (let i = 0; i < 12; i++) { const p = this._ahead(2 + Math.random() * 6, (Math.random() - 0.5) * 8); g.pickups.add('cash', { x: p.x, z: p.z }, { amount: 100, ttl: 60 }); } });
         H('EXPLOSÕES');
-        B('Explodir carros num raio de 40', () => { const p = this._pos(); for (const c of g.vehicleManager.vehicles) if (Math.hypot(c.position.x - p.x, c.position.z - p.z) < 40 && c !== g.activeCar) c.takeDamage(99999, 'player'); });
+        B('Explodir carros num raio de 40', () => { const p = this._pos(); for (const c of g.vehicleManager.vehicles) if (hypot(c.position.x - p.x, c.position.z - p.z) < 40 && c !== g.activeCar) c.takeDamage(99999, 'player'); });
         B('Explosão à frente', () => { const p = this._ahead(8); g.carDamage._blast(p.x, p.z, 9, 'player', null, 1); AudioFX.explosion(p.x, p.z); g.camera.shake(1); });
+        H('ARTE EM PNG (assets/sprites)');
+        B(this._exporting ? `Exportando… ${this._exporting}` : 'Exportar arte atual como PNG (moldes)', () => this._exportArt());
+        B(`Lidos de PNG nesta sessão: ${SpriteIO.used.size}${SpriteIO.manifest ? '' : ' (sem manifest.json: tudo por código)'}`, () => {});
         H('DEPURAÇÃO');
         B('Grade de navegação (N)', () => g._toggleNavDebug());
         B('Wireframe', () => { g.scene.forceWireframe = !g.scene.forceWireframe; });
         B('Esconder HUD', () => { const e = document.getElementById('hud2'); if (e) e.style.visibility = e.style.visibility === 'hidden' ? '' : 'hidden'; });
         B('Abrir mapa', () => g.menu.open('map'));
+    }
+
+    // Exporta personagens, carros, portas e paletas como PNG indexado + manifest.json (ver tools/SpriteExport.js e docs/sprites-png.md).
+    async _exportArt() {
+        if (this._exporting) return;
+        this._exporting = '0%';
+        try {
+            const dir = await SpriteExport.pickDir();        // (no clique: o navegador só abre o seletor de pasta durante o gesto)
+            const r = await SpriteExport.run(this.g, { dir, onProgress: (p, what) => { this._exporting = `${Math.round(p * 100)}% ${what}`; if (this.tab === 'MUNDO' && this.open) this._render(); } });
+            this.g._flash(`Arte exportada: ${r.files} arquivos (${r.mb} MB) → ${r.where}`);
+        } catch (e) {
+            if (!(e && e.name === 'AbortError')) { console.error('[EXPORTAR]', e); this.g._flash('Falha ao exportar a arte (veja o console)'); }
+        }
+        this._exporting = null;
+        if (this.open) this._render();
     }
 
     // =============================================================== INFO

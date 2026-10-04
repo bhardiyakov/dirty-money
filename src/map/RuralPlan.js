@@ -32,7 +32,7 @@ const RuralPlan = {
             const n = RoadPlan.nearestRoadPoint(x, z, 70);
             if (n && n.d < n.edge.w / 2 + roadMargin) return false;
         }
-        const r = Math.hypot(x1 - x0, z1 - z0) / 2 + 2;
+        const r = hypot(x1 - x0, z1 - z0) / 2 + 2;
         for (const o of CityGrid.obstaclesAround(cx, cz, r)) if (o.x1 > x0 - 1.5 && o.x0 < x1 + 1.5 && o.z1 > z0 - 1.5 && o.z0 < z1 + 1.5) return false;
         return true;
     },
@@ -58,7 +58,7 @@ const RuralPlan = {
         for (let t = 0; t < trials && out.length < n; t++) {
             const x = W.minX + this.rng() * (W.maxX - W.minX), z = W.minZ + this.rng() * (W.maxZ - W.minZ);
             if (!biomes.includes(WorldMap.biomeAt(x, z))) continue;
-            if (out.some((o) => Math.hypot(o.x - x, o.z - z) < minGap)) continue;
+            if (out.some((o) => hypot(o.x - x, o.z - z) < minGap)) continue;
             out.push({ x, z });
         }
         return out;

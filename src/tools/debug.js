@@ -74,7 +74,7 @@ const DebugTools = {
                         for (const c of cars) if (c.mode === 'drive' && c.route) {
                             stat.samples++;
                             const p = c.position; const u = c.route.progress(p.x, p.z); c.route.pointAt(u, pt);
-                            const dev = Math.hypot(pt.x - p.x, pt.z - p.z);
+                            const dev = hypot(pt.x - p.x, pt.z - p.z);
                             if (dev > stat.maxDev) stat.maxDev = dev;
                             if (dev > 2.2) stat.offLane++;
                         }
@@ -257,7 +257,7 @@ const DebugTools = {
                 for (let i = 0; i < 90 && !out.hit; i++) {
                     car.phys.setLinearVelocity(new BABYLON.Vector3(0, car.phys.getLinearVelocity().y, speed));
                     this.step(1, 1 / 30);
-                    const d = Math.hypot(car.position.x - tp.x, car.position.z - tp.z);
+                    const d = hypot(car.position.x - tp.x, car.position.z - tp.z);
                     out.minD = Math.min(out.minD, d);
                     if (target.hp < hp0 || target.alive === false) out.hit = true;
                 }
@@ -285,7 +285,7 @@ const DebugTools = {
                 const spots = [];
                 for (let k = 0; k < 400 && spots.length < pm.cars.length; k++) {
                     const l = RoadNet.randomLanePoint(14); if (!l) continue;
-                    const d = Math.hypot(l.point.x - q.x, l.point.z - q.z);
+                    const d = hypot(l.point.x - q.x, l.point.z - q.z);
                     if (d > 90 && d < 140 && !MapGeo.hasLineOfSight(l.point.x, l.point.z, q.x, q.z)) spots.push(l);
                 }
                 pm.cars.forEach((c, i) => { const s = spots[i]; if (s) { c.teleport(s.point.x, s.point.z, Math.atan2(s.d.dx, s.d.dz)); c.route = null; } });

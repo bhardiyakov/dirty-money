@@ -143,6 +143,11 @@ class Game {
         this.stashUI = new StashUI(this);
         this.shopUI = new ShopUI(this);              // compra nas lojas (interiores)
         this.sleeping = null;                        // dormindo na cama (salva o jogo): { phase, t }
+        // Janelas que só nascem quando física + navegação ficam prontas (_maybeInitPolice): até lá (ou se o Havok não carregar — sem
+        // internet na 1ª visita, CDN fora do ar) ficam estes "vazios", e o jogo não quebra lendo .open/.cool a cada quadro.
+        const idleUI = () => ({ open: false, cool: 0, update() {}, show() {} });
+        this.motoUI = idleUI(); this.motoRide = null;
+        this.propertyUI = idleUI();
 
         this._bindResize();
         // O carregamento só começa quando o menu principal chama begin(); NADA é desenhado até tudo estar pronto (ver _boot).
@@ -157,37 +162,24 @@ class Game {
         return this._bootPromise;
     }
 
-    // "Fotografa" os clipes mais usados já na carga, para não engasgar no primeiro uso.
+    // "Fotografa" os clipes mais usados já na carga, para não engasgar no primeiro uso (listas em CharacterSheet.sets / ESSENTIAL).
     _warmSprites() {
         const t0 = performance.now();
-        const S = this.sprites.sheets;
+        const S = this.sprites.sheets, sets = CharacterSheet.sets();
         // Essencial agora (o que aparece no primeiro segundo de jogo).
-        S.player.warm([['idle'], ['walk'], ['run']]);
-        S.civA.warm([['idle'], ['walk']]);
-        S.civB.warm([['idle'], ['walk']]);
-        S.police.warm([['idle'], ['walk']]);
+        for (const [k, list] of Object.entries(CharacterSheet.ESSENTIAL)) S[k].warm(list);
         console.log(`[SPRITES] essencial em ${(performance.now() - t0).toFixed(0)} ms`);
+        // O resto é assado aos poucos (fila). Tropa de elite e exército NÃO entram na carga: só com 3★/5★, e a varredura de memória
+        // (_sweep) descartava os clipes sem uso 60 s depois — eram assados na hora, travando o jogo no meio da perseguição. Ver _queueForces.
+        for (const k of ['player', 'civA', 'civB', 'police', 'courier', 'rider']) S[k].queue(sets[k]);
+    }
 
-        // O resto é assado aos poucos, em fatias por frame (ver _update).
-        S.player.queue(Bags.PLAYER_CLIPS);
-        S.civA.queue([['scared'], ['hurt'], ['dead'], ['run'], ['swim'], ['surrender'], ['kneel']]);
-        S.civB.queue([['scared'], ['hurt'], ['dead'], ['run'], ['swim'], ['surrender'], ['kneel']]);
-        // Policial armado: locomoção com pistola na mão + sacar/mirar/atirar + reação e morte.
-        S.police.queue([['run'], ['vault'], ['hurt'], ['dead'], ['draw', 'pistol'], ['aim', 'pistol'], ['shoot', 'pistol'],
-            ['idle', 'pistol'], ['walk', 'pistol'], ['run', 'pistol']]);
-        // Quedas: arremessado (flail), cambalhota (tumble), caído (lie) e levantando (getup) — para todos os corpos.
-        for (const s of ['player', 'civA', 'civB', 'police']) S[s].queue([['flail'], ['lie'], ['getup'], ['tumble']]);
-        // Bicicletas e motos (piloto + veículo): andando, estacionadas, caídas e o jogador subindo.
-        S.courier.queue([['ride_moto']]);
-        S.rider.queue([['ride_bike'], ['ride_moto'], ['park_bike'], ['park_moto'], ['fallen_bike'], ['fallen_moto'],
-            ['mount', 'bike'], ['mount', 'moto'], ['mount', 'bikeL'], ['mount', 'motoL']]);
-        // Tropa de elite (SWAT, metralhadora) e exército (fuzil, desenhado com a arma longa): assados por último,
-        // aos poucos, bem antes de alguém precisar deles (4★/5★).
-        for (const [sheet, w] of [['swat', 'smg'], ['army', 'shotgun']]) {
-            S[sheet].queue([['idle'], ['walk'], ['run'], ['hurt'], ['dead'],
-                ['draw', w], ['aim', w], ['shoot', w], ['idle', w], ['walk', w], ['run', w],
-                ['flail'], ['lie'], ['getup'], ['tumble']]);
-        }
+    // Tropa de elite (SWAT, metralhadora; entra com 3★) e exército (fuzil, desenhado com a arma longa; entra com 5★): assados aos poucos,
+    // em segundo plano, assim que o procurado chega a 2★/4★ — um nível antes de precisar deles.
+    _queueForces(stars) {
+        const S = this.sprites.sheets, sets = CharacterSheet.sets();
+        if (stars >= 2) S.swat.queue(sets.swat);
+        if (stars >= 4) S.army.queue(sets.army);
     }
 
     async _initPhysics() {
@@ -284,6 +276,7 @@ class Game {
             await Promise.all([this._initAI(), this._initPhysics()]);
 
             this._loading('Montando sprites…', 0.3);
+            await Promise.race([SpriteIO.ready, new Promise((r) => setTimeout(r, 15000))]);      // arte em PNG ainda baixando (rede lenta: segue procedural)
             const s0 = performance.now();
             for (let guard = 0; guard < 2000; guard++) {
                 const more = this.sprites.pump(40) | this.carLib.pump(40);
@@ -321,7 +314,10 @@ class Game {
 
     // Varredura de manutenção (a cada 3 s): solta da memória o que foi carregado e não está em uso. NÃO apaga o mundo (recarregar a cidade
     // custaria segundos de travada): o que é caro de refazer e está em uso fica; o resto sai.
-    //   • clipes de animação assados (texturas na GPU) que nenhum personagem vivo usa há 60 s — a folha re-assa sob demanda se precisar;
+    //   • clipes de animação das forças SITUACIONAIS (SWAT, exército) sem uso há 60 s. As folhas do dia a dia (jogador, civis, polícia,
+    //     motos) ficam inteiras na memória (~55 MB, número fechado): re-assar um clipe na hora custa 20–50 ms no PC e 150–400 ms num
+    //     celular — sacar a arma de novo depois de um minuto travava o jogo. As forças só voltam com 2★/4★ (ver _queueForces);
+    //   • folhas de carro (amassados, portas, modelos) sem uso — CarLibrary.sweep;
     //   • lista de atores vivos (atores cujo quad já foi descartado saem do registro);
     //   • amostra o heap para a barra de capacidade e a tendência de vazamento (Perf).
     _sweep() {
@@ -331,21 +327,34 @@ class Game {
             if (!a.mesh || a.mesh.isDisposed()) { SpriteActor.live.delete(a); continue; }
             actors++;
             if (a.clip) a.clip._used = now;
+            if (a.sheet) a.sheet._used = now;
         }
-        const keep = { player: ['idle:none', 'walk:none', 'run:none'], civA: ['idle:none', 'walk:none'], civB: ['idle:none', 'walk:none'], police: ['idle:none', 'walk:none'] };
         let freed = 0, clips = 0;
         for (const [name, sh] of Object.entries(this.sprites.sheets)) {
+            const situational = name === 'swat' || name === 'army';
             for (const [key, c] of Object.entries(sh.clips)) {
                 clips++;
-                if (c._used === undefined) { c._used = now; continue; }                 // recém-assado: conta a partir de agora
-                if (now - c._used < 60 || ((keep[name] || (name.startsWith('player') && keep.player)) || []).includes(key)) continue;
+                if (!situational) continue;
+                if (c._used === undefined) { c._used = now; continue; }              // recém-assado: conta a partir de agora
+                if (now - c._used < 60) continue;
                 c.material.dispose(); c.texture.dispose(); delete sh.clips[key]; freed++;
             }
         }
-        if (freed) console.log(`[MEMÓRIA] ${freed} clipes de animação sem uso liberados da GPU`);
+        // carros: folhas usadas por qualquer veículo existente (mesmo mostrando um amassado) contam como em uso
+        const lib = this.carLib, keep = this._carKeep || (this._carKeep = new Set());
+        if (lib) {
+            const mark = (v) => { if (v.carSheet) v.carSheet._used = now; };
+            if (this.vehicleManager) { for (const v of this.vehicleManager.vehicles) mark(v); for (const v of this.vehicleManager.boats) mark(v); }
+            if (this.policeManager) {
+                for (const v of this.policeManager.cars) mark(v);
+                if (!keep.size) { keep.add(this.policeManager.carSheet); for (const t of Object.values(PoliceManager.TEAMS)) { const s = lib.sheets[t.model]; if (s) keep.add(s); } }
+            }
+            freed += lib.sweep(now, keep);
+        }
+        if (freed) console.log(`[MEMÓRIA] ${freed} clipes/folhas sem uso liberados da GPU`);
         this._sweepFreed = (this._sweepFreed || 0) + freed;
         Perf.sampleHeap();
-        this._sweepInfo = `${actors} atores · ${clips - freed} clipes na GPU · ${this._sweepFreed} liberados desde o início`;
+        this._sweepInfo = `${actors} atores · ${clips} clipes de personagem · ${Object.keys(lib.sheets).length + Object.keys(lib.dents).length + Object.keys(lib.doors).length} folhas de carro · ${this._sweepFreed} liberados desde o início`;
     }
 
     // Malhas estáticas (transform congelado, buffers não atualizáveis): a GPU já tem os vértices; a cópia na RAM de normais, UVs e
@@ -409,6 +418,7 @@ class Game {
         Perf.lap('render (cena)');
         const pe = this.scene.getPhysicsEngine();
         if (pe && this.physicsReady && !Interiors.active && !this.menu.isOpen) for (let n = Math.min(3, Math.round(dt * 60)) - 1; n > 0; n--) pe._step(1 / 60);
+        Vehicle.physFrame++;                                          // a física andou: as velocidades guardadas dos veículos ficam velhas
         Perf.lap('física');
     }
 
@@ -434,10 +444,14 @@ class Game {
         this._pollInput();
         this.dev.update(dt);
         Interiors.tickFade(dt);
-        // Assa sprites pendentes em fatias de ~4 ms (sem engasgar o jogo): personagens e carros amassados.
+        // Assa sprites pendentes (personagens, carros, amassados, portas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
+        // de folga) menos o trabalho medido do quadro, entre 1 e 8 ms. Antes eram 9 ms fixos — num celular que já gasta 25 ms por quadro,
+        // isso derrubava o FPS enquanto havia fila.
         Perf.lap('outros');
-        this.sprites.pump(4);
-        this.carLib.pump(5);
+        const bk = Perf.sec['sprites (bake)'], spare = Math.max(1, Math.min(8, 1000 / Config.perf.fpsCap * 0.8 - (Perf.frameAvg - (bk ? bk.avg : 0))));
+        const t0b = performance.now();
+        this.sprites.pump(spare * 0.45);
+        this.carLib.pump(Math.max(0.5, spare - (performance.now() - t0b)));
         Perf.lap('sprites (bake)');
         Zones.update(this);                                                               // retângulo da câmera → zonas ativa/perto/dormindo
 
@@ -867,7 +881,7 @@ class Game {
         if (G.t > 0) return;
         G.t = 0.7;
         const from = this._playerState().pos;
-        if (Math.hypot(G.x - from.x, G.z - from.z) < 9) { this.gps = null; this._flash('Você chegou ao destino!'); AudioFX.blip(880, 0.2, 0.2); return; }
+        if (hypot(G.x - from.x, G.z - from.z) < 9) { this.gps = null; this._flash('Você chegou ao destino!'); AudioFX.blip(880, 0.2, 0.2); return; }
         const r = Gps.route({ x: from.x, z: from.z }, { x: G.x, z: G.z });
         G.route = r.pts; G.len = r.len;
     }
@@ -1163,7 +1177,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         if (this.player.busy) return;
         const car = this._hijackTarget();
         const ch = this._chopperNear();
-        if (ch && (!car || ch.distanceTo(this.player.position) < Math.hypot(car.position.x - this.player.position.x, car.position.z - this.player.position.z))) { this._boardChopper(ch); return; }
+        if (ch && (!car || ch.distanceTo(this.player.position) < hypot(car.position.x - this.player.position.x, car.position.z - this.player.position.z))) { this._boardChopper(ch); return; }
         if (!car) { this._flash('Nenhum veículo por perto'); return; }
         if (car.isBoat) this._boardBoat(car);
         else if (car.isBike) this._mountBike(car);
@@ -1317,6 +1331,12 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     _updatePrompt() {
         const el = this.hud.prompt;
         if (!el) return;
+        // A dica junta ~12 buscas (veículos, esconderijos, muros, lojas, imóveis, pedestres com linha de visada…): recalcula ~10 vezes por
+        // segundo — imperceptível num texto de ajuda — e na hora quando o modo (a pé/carro/helicóptero) muda. As teclas (E/F/G/V) não
+        // dependem daqui: cada ação procura o próprio alvo quando é apertada.
+        this._promptT = (this._promptT || 0) - (this._dt || 0);
+        if (this._promptT > 0 && this.mode === this._promptMode && !!Interiors.active === this._promptIn) return;
+        this._promptT = 0.1; this._promptMode = this.mode; this._promptIn = !!Interiors.active;
         let html = '';
         if (Interiors.active) html = Interiors.prompt(this);                    // (com as dicas desligadas o texto é montado igual — os botões de toque leem — mas não aparece)
         else if (this.hiding && this.hiding.phase === 'hidden') {
@@ -1372,7 +1392,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 
     // Lado do veículo em que o jogador está: vetor lateral unitário (rx, rz) e sinal (+1 direita / −1 esquerda).
     _sideOf(car) {
-        const r = car.body.getDirection(BABYLON.Axis.X), l = Math.hypot(r.x, r.z) || 1;
+        const r = car.body.getDirection(BABYLON.Axis.X), l = hypot(r.x, r.z) || 1;
         const rx = r.x / l, rz = r.z / l, p = this.player.position, c = car.position;
         return { rx, rz, sign: ((p.x - c.x) * rx + (p.z - c.z) * rz) >= 0 ? 1 : -1 };
     }
@@ -1383,7 +1403,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         for (const s of CityGrid.stations || []) {
             const z = s.zone;
             if (p.x < z[0] || p.x > z[2] || p.z < z[1] || p.z > z[3]) continue;
-            if (s.pumps.some((b) => Math.hypot(b.x - p.x, b.z - p.z) < 7)) return s;
+            if (s.pumps.some((b) => hypot(b.x - p.x, b.z - p.z) < 7)) return s;
         }
         return null;
     }
@@ -1463,14 +1483,14 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // no píer mais próximo (a menos de 9 u) ou, se não houver, boiando ao lado (dá para nadar a até 230 m da costa).
     _leaveBoat(boat, sp) {
         if (sp > 4.5) { this._flash('Reduza a velocidade para descer do barco'); return; }
-        const c = boat.position, f = boat.body.getDirection(BABYLON.Axis.Z), l = Math.hypot(f.x, f.z) || 1, fx = f.x / l, fz = f.z / l, rx = fz, rz = -fx;
+        const c = boat.position, f = boat.body.getDirection(BABYLON.Axis.Z), l = hypot(f.x, f.z) || 1, fx = f.x / l, fz = f.z / l, rx = fz, rz = -fx;
         let best = null, bd = 1e9;
         for (let r = 2; r <= 9 && !best; r += 1.5) {
             for (let a = 0; a < 16; a++) {
                 const ang = a * Math.PI / 8, ox = Math.cos(ang) * (boat.halfLen * 0.4 + r), oz = Math.sin(ang) * (boat.halfW + r);
                 const x = c.x + fx * ox + rx * oz, z = c.z + fz * ox + rz * oz;
                 if (!MapGeo.isLand(x, z) || CityGrid.blockedAt(x, z, 0.5)) continue;
-                const d = Math.hypot(x - c.x, z - c.z);
+                const d = hypot(x - c.x, z - c.z);
                 if (d < bd) { bd = d; best = { x, z }; }
             }
         }
@@ -1569,7 +1589,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 
     _bail(car, sp) {
         const c = car.position, v = car.velocity;
-        const r = car.body.getDirection(BABYLON.Axis.X), rl = Math.hypot(r.x, r.z) || 1;
+        const r = car.body.getDirection(BABYLON.Axis.X), rl = hypot(r.x, r.z) || 1;
         const ox = -r.x / rl, oz = -r.z / rl;                           // lado do motorista (esquerda)
         const dx = v.x / sp * 0.7 + ox * 0.55, dz = v.z / sp * 0.7 + oz * 0.55;
         const start = new BABYLON.Vector3(c.x + ox * (car.halfW + 0.45), 0, c.z + oz * (car.halfW + 0.45));
@@ -1712,13 +1732,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // Esconderijo mais próximo do jogador (distância até o retângulo < maxD), ou null.
     _nearHideSpot(maxD = 2.3) {
         const p = this.player.position;
-        let best = null, bd = maxD;
-        for (const s of CityGrid.hideSpots) {
-            const dx = Math.max(Math.abs(p.x - s.x) - s.w / 2, 0), dz = Math.max(Math.abs(p.z - s.z) - s.d / 2, 0);
-            const d = Math.hypot(dx, dz);
-            if (d < bd) { bd = d; best = s; }
-        }
-        return best;
+        return CityGrid.nearestHideSpot(p.x, p.z, maxD);
     }
 
     // Entra no esconderijo: vai até a beirada, "mergulha" nele e some. Se a polícia (já atrás de você) te VÊ entrando,
@@ -1726,7 +1740,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     _startHiding(spot) {
         const pl = this.player, p = pl.position;
         const px = Math.max(spot.x - spot.w / 2, Math.min(p.x, spot.x + spot.w / 2)), pz = Math.max(spot.z - spot.d / 2, Math.min(p.z, spot.z + spot.d / 2));
-        let dx = p.x - px, dz = p.z - pz, d = Math.hypot(dx, dz);
+        let dx = p.x - px, dz = p.z - pz, d = hypot(dx, dz);
         if (d < 0.01) { dx = 0; dz = -1; d = 1; }
         const edge = { x: px + (dx / d) * 0.95, z: pz + (dz / d) * 0.95 };
         const pm = this.policeManager;
@@ -1819,7 +1833,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // Por frame durante o assalto: confere se ainda vale, mantém a mira e, no fim, a vítima entrega o dinheiro.
     _updateHoldup(dt) {
         const H = this.holdup, pl = this.player, R = Config.robbery, v = H.victim;
-        const d = Math.hypot(v.position.x - pl.position.x, v.position.z - pl.position.z);
+        const d = hypot(v.position.x - pl.position.x, v.position.z - pl.position.z);
         if (!v.alive || v.rag || !v.surrendered) { this.holdup = null; return; }       // levou golpe/tiro: acabou (ele já reagiu)
         if (this.mode !== 'player' || pl.rag || pl.weapon === 'none' || pl.swimming || this.arrest || this.death || this.hiding) { this._cancelHoldup('Você baixou a arma — a vítima fugiu'); return; }
         if (d > R.holdLeash) { this._cancelHoldup('A vítima escapou!'); return; }
@@ -1870,7 +1884,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 
     _resolveTheft(npc) {
         const pl = this.player, R = Config.robbery;
-        const gone = !npc.alive || npc.rag || Math.hypot(npc.position.x - pl.position.x, npc.position.z - pl.position.z) > R.theftRange + 1;
+        const gone = !npc.alive || npc.rag || hypot(npc.position.x - pl.position.x, npc.position.z - pl.position.z) > R.theftRange + 1;
         if (gone) { this._flash('Ele se afastou — não deu tempo'); return; }
         if (Math.random() < this._theftChance(npc)) {
             npc.pickpocketed = true;
@@ -1919,7 +1933,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this.bustTimer = 0;
         this._closeInventory();
         if (this.mode === 'car' && this.activeCar) {                       // desce do veículo, que fica parado/largado
-            const car = this.activeCar, c = car.position, r = car.body.getDirection(BABYLON.Axis.X), rl = Math.hypot(r.x, r.z) || 1;
+            const car = this.activeCar, c = car.position, r = car.body.getDirection(BABYLON.Axis.X), rl = hypot(r.x, r.z) || 1;
             this._dropFromCar();
             pl.teleport(new BABYLON.Vector3(c.x + r.x / rl * 2.4, 0, c.z + r.z / rl * 2.4));
         }
@@ -2030,7 +2044,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // Desce do veículo no lugar onde ele parou (o jogador a pé fica sem posição enquanto dirige).
     _stepOutOfCar() {
         if (this.mode !== 'car' || !this.activeCar) return;
-        const car = this.activeCar, c = car.position, r = car.body.getDirection(BABYLON.Axis.X), rl = Math.hypot(r.x, r.z) || 1;
+        const car = this.activeCar, c = car.position, r = car.body.getDirection(BABYLON.Axis.X), rl = hypot(r.x, r.z) || 1;
         this._dropFromCar();
         this.player.teleport(new BABYLON.Vector3(c.x + r.x / rl * 2.4, 0, c.z + r.z / rl * 2.4));
     }
@@ -2147,7 +2161,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         if (car === ac) this.input.rumble(Math.min(1, dv / 12), 0.6, 120 + dv * 12);
         this.combat.spark(p.x, 1.0, p.z, [1, 0.85, 0.45]);
         const f = this.camera.target;
-        if (Math.hypot(p.x - f.x, p.z - f.z) < 45) this.camera.shake(Math.min(0.7, dv * 0.045));
+        if (hypot(p.x - f.x, p.z - f.z) < 45) this.camera.shake(Math.min(0.7, dv * 0.045));
 
         if (car === ac && this.mode === 'car') {
             // O motorista também sente a batida forte.
@@ -2181,6 +2195,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             4: '★★★★ Tropa de elite (SWAT) em campo — armados de metralhadora',
             5: '★★★★★ INIMIGO DO ESTADO! Ruas fechadas, SWAT e exército atrás de você',
         };
+        if (n > prev) this._queueForces(n);
         if (this.goals) this.goals.onWanted(n, prev, why);
         if (this.careers) this.careers.onWanted(n, prev);
         if (this.empire && n > prev) this.empire.spend(0, 10 * (n - prev));
@@ -2306,3 +2321,4 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         }
     }
 }
+memoStatics(Game, 'WEAPON_SLOTS');

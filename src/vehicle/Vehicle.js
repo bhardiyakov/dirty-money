@@ -92,6 +92,14 @@ class Vehicle {
         this.phys.setLinearDamping(Config.vehicle.linearDamping);
         this.phys.setAngularDamping(1.0);
         this.layer = 0; this.elev = 0; this._setLayer(0);              // camada de colisão (1 = viaduto)
+
+        // Vetores de rascunho (por carro): o movimento roda todo quadro e antes criava ~8 Vector3 por carro por quadro.
+        this._fw = new BABYLON.Vector3(); this._rt = new BABYLON.Vector3(); this._v = new BABYLON.Vector3(); this._nv = new BABYLON.Vector3();
+        this._av = new BABYLON.Vector3(); this._dz = new BABYLON.Vector3();
+        // Velocidade lida do Havok UMA vez por passo de física (ver `velocity`); quem a muda pelo corpo invalida a leitura.
+        this._vel = new BABYLON.Vector3(); this._velF = -1;
+        const setLV = this.phys.setLinearVelocity.bind(this.phys);
+        this.phys.setLinearVelocity = (v) => { this._velF = -1; setLV(v); };
     }
 
     // Remove o carro do jogo (sprite, física, sombra, malhas filhas).
@@ -260,13 +268,10 @@ class Vehicle {
             if (this.fuel <= 0) { this.fuel = 0; throttle = 0; }
             else this.fuel = Math.max(0, this.fuel - (this.spec.bike ? 0.5 : 1) * Config.fuel.burn * (1 - (SkillTree.m.fuel || 0)) * (0.1 + Math.abs(throttle) * (0.45 + 0.55 * Math.min(1, this.speed / this.spec.maxSpeed))) * dt);
         }
-        const up = BABYLON.Vector3.Up();
-        const forward = this.body.getDirection(BABYLON.Axis.Z);
-        forward.y = 0;
-        forward.normalize();
-        const right = BABYLON.Vector3.Cross(up, forward).normalize();
+        const forward = this._flatAxes();
+        const right = this._rt;
 
-        const vel = this.phys.getLinearVelocity();
+        const vel = this._v; this.phys.getLinearVelocityToRef(vel);      // (os *ToRef do Babylon 6 não devolvem o vetor)
         let fwd = BABYLON.Vector3.Dot(vel, forward);   // velocidade à frente.
         let lat = BABYLON.Vector3.Dot(vel, right);     // velocidade lateral (a "derrapagem").
 
@@ -289,12 +294,10 @@ class Vehicle {
     // Controle por VELOCIDADE-ALVO (usado pela IA do trânsito): acelera/freia até `target`
     // (m/s, ≥ 0) com os limites accel/brake, em vez de empurrar com o acelerador.
     driveTo(target, steer, dt, accel = 6, brake = 12) {
-        const forward = this.body.getDirection(BABYLON.Axis.Z);
-        forward.y = 0;
-        forward.normalize();
-        const right = BABYLON.Vector3.Cross(BABYLON.Vector3.Up(), forward).normalize();
+        const forward = this._flatAxes();
+        const right = this._rt;
 
-        const vel = this.phys.getLinearVelocity();
+        const vel = this._v; this.phys.getLinearVelocityToRef(vel);      // (os *ToRef do Babylon 6 não devolvem o vetor)
         let fwd = BABYLON.Vector3.Dot(vel, forward);
         const lat = BABYLON.Vector3.Dot(vel, right);
 
@@ -306,6 +309,16 @@ class Vehicle {
         this._applyMotion(fwd, lat, steer, dt, vel, forward, right);
     }
 
+    // Frente do carro no plano do chão (normalizada) em this._fw e a direita (up × frente) em this._rt. Devolve a frente.
+    _flatAxes() {
+        const f = this._fw;
+        this.body.getDirectionToRef(BABYLON.Axis.Z, f);          // (devolve o nó, não o vetor)
+        f.y = 0;
+        f.normalize();
+        this._rt.set(f.z, 0, -f.x);                       // Cross(Up, f) com f no plano
+        return f;
+    }
+
     // Parte comum: água, grip lateral, guinada e recomposição da velocidade.
     _applyMotion(fwd, lat, steer, dt, vel, forward, right) {
         this.lastSteer = steer;
@@ -314,7 +327,7 @@ class Vehicle {
         this._crashCd -= dt;
         if (this._cmd && this._crashCd <= 0) {
             const dvx = vel.x - this._cmd.x, dvz = vel.z - this._cmd.z;
-            const dv = Math.hypot(dvx, dvz);
+            const dv = hypot(dvx, dvz);
             if (dv > Config.crash.minDv) this._impact(dv, dvx, dvz);
         }
 
@@ -333,19 +346,19 @@ class Vehicle {
         // Inverte ao dar ré (como um carro real) e não vira parado.
         const speedFactor = Math.min(1, Math.abs(fwd) / (this.spec.turnRef || Config.vehicle.turnSpeedRef));
         const yaw = steer * this.spec.turn * speedFactor * (fwd < 0 ? -1 : 1) * (this.controlled ? Vehicle.playerTurn : 1);
-        this.phys.setAngularVelocity(new BABYLON.Vector3(0, yaw, 0));
+        this.phys.setAngularVelocity(this._av.set(0, yaw, 0));
 
         // --- Recompõe a velocidade preservando a queda (gravidade) ---
-        const newVel = forward.scale(fwd).add(right.scale(lat));
-        newVel.y = vel.y;
+        const newVel = this._nv.set(forward.x * fwd + right.x * lat, vel.y, forward.z * fwd + right.z * lat);
         this.phys.setLinearVelocity(newVel);
         (this._cmd || (this._cmd = new BABYLON.Vector3())).copyFrom(newVel);
     }
 
     // Velocidade à frente (negativa = ré).
     get forwardSpeed() {
-        const f = this.body.getDirection(BABYLON.Axis.Z);
-        const v = this.phys.getLinearVelocity();
+        const f = this._dz;
+        this.body.getDirectionToRef(BABYLON.Axis.Z, f);
+        const v = this.velocity;
         return v.x * f.x + v.z * f.z;
     }
 
@@ -396,14 +409,22 @@ class Vehicle {
     }
 
     get speed() {
-        return this.phys.getLinearVelocity().length();
+        return this.velocity.length();
     }
 
+    // Velocidade linear do corpo. Lida do Havok (WASM) uma vez por passo de física e guardada: trânsito, luzes, colisões, IA e
+    // pássaros perguntam dezenas de vezes por carro por quadro, e cada leitura criava um Vector3 novo. NÃO altere o vetor devolvido
+    // (para mudar a velocidade use phys.setLinearVelocity, que invalida a leitura).
     get velocity() {
-        return this.phys.getLinearVelocity();
+        if (this._velF !== Vehicle.physFrame) { this._velF = Vehicle.physFrame; this.phys.getLinearVelocityToRef(this._vel); }
+        return this._vel;
     }
 }
+
+// Contador de passos de física (Game._render incrementa depois de avançar o Havok): marca as velocidades guardadas como velhas.
+Vehicle.physFrame = 0;
 
 // Skill Direção (carreira Desmanche): multiplicadores de aderência lateral e de giro só para o veículo que o JOGADOR dirige.
 Vehicle.playerGrip = 1;
 Vehicle.playerTurn = 1;
+memoStatics(Vehicle, 'TANK');

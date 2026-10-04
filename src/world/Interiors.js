@@ -89,8 +89,8 @@ const Interiors = {
             const a = this.active, o = this.STAGE;
             if (game.shopUI.open || game.stashUI.open || game.propertyUI.open || game.sleeping) return '';
             if (a.shop.home) { const hu = this.homeUse(game); if (hu) return RealEstate.isOwned(a.shop.home) ? (this.HOME_PROMPT[hu.kind] || '') : (hu.kind === 'desk' ? '<b>E</b> ver a proposta de compra<small>você está só visitando o imóvel</small>' : '<b>VISITA</b><small>só dá para usar depois de comprar o imóvel</small>'); }
-            const door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2, nearExit = Math.hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3;
-            const cl = a.data.clerk, nearClerk = cl && Math.hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
+            const door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2, nearExit = hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3;
+            const cl = a.data.clerk, nearClerk = cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
             const shop = a.shop, S = Economy.STYLES[shop.style] || {};
             if (this.useNear(game, 'pool')) return `<b>E</b> jogar sinuca<small>bola 8 apostada · de ${brl(Pool.STAKES[0].bet)} a ${brl(Pool.STAKES[Pool.STAKES.length - 1].bet)}</small>`;
             if (nearClerk) return `<b>E</b> ${S.guns ? 'ver o que tem à venda' : 'ver o cardápio'}<small>${shop.name} · ${Economy.zoneOf(shop).label}</small>`;
@@ -119,8 +119,8 @@ const Interiors = {
             const a = this.active, o = this.STAGE, door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2;
             const cl = a.data.clerk;
             if (this.useNear(game, 'pool')) { Pool.open(game, a.shop); return true; }
-            if (cl && Math.hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6) { game.shopUI.show(a.shop); return true; }
-            if (Math.hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3) { this.leave(game); return true; }
+            if (cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6) { game.shopUI.show(a.shop); return true; }
+            if (hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3) { this.leave(game); return true; }
             return false;
         }
         if (game.mode !== 'player' || game.player.busy) return false;
@@ -150,7 +150,7 @@ const Interiors = {
         for (const u of a.data.uses || []) {
             if (u.kind !== kind) continue;
             const cx = Math.max(o.x + u.x0, Math.min(p.x, o.x + u.x1)), cz = Math.max(o.z + u.z0, Math.min(p.z, o.z + u.z1));
-            if (Math.hypot(p.x - cx, p.z - cz) <= maxD) return u;
+            if (hypot(p.x - cx, p.z - cz) <= maxD) return u;
         }
         return null;
     },
@@ -161,8 +161,8 @@ const Interiors = {
         let best = null, bs = 1e9;
         for (const u of a.data.uses || []) {                                             // ao alcance (≤ maxD do retângulo): vence o de centro mais perto
             const cx = Math.max(o.x + u.x0, Math.min(p.x, o.x + u.x1)), cz = Math.max(o.z + u.z0, Math.min(p.z, o.z + u.z1));
-            if (Math.hypot(p.x - cx, p.z - cz) > maxD) continue;
-            const s = Math.hypot(p.x - (o.x + (u.x0 + u.x1) / 2), p.z - (o.z + (u.z0 + u.z1) / 2));
+            if (hypot(p.x - cx, p.z - cz) > maxD) continue;
+            const s = hypot(p.x - (o.x + (u.x0 + u.x1) / 2), p.z - (o.z + (u.z0 + u.z1) / 2));
             if (s < bs) { bs = s; best = u; }
         }
         return best;

@@ -45,9 +45,9 @@ class Barricades {
                 if (!Standing.inFavela(s.x, s.z)) continue;
                 const dp = Standing.depth(s.x, s.z);
                 if (dp < 0.12 || dp > 0.6) continue;
-                if (home && Math.hypot(s.x - home.x, s.z - home.z) < 45) continue;
-                if (this.list.some((b) => Math.hypot(b.x - s.x, b.z - s.z) < 32)) continue;
-                const dist = Math.hypot(s.x - ref.x, s.z - ref.z);
+                if (home && hypot(s.x - home.x, s.z - home.z) < 45) continue;
+                if (this.list.some((b) => hypot(b.x - s.x, b.z - s.z) < 32)) continue;
+                const dist = hypot(s.x - ref.x, s.z - ref.z);
                 out.push({ inter, di, d, s, score: Math.abs(dist - 90) + Math.random() * 25 });
             }
         }

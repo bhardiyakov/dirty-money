@@ -267,7 +267,7 @@ const HouseArt = {
         const patch = (cx, cy, rx, ry, seed) => {
             for (let y = cy - ry; y <= cy + ry; y++) for (let x = cx - rx; x <= cx + rx; x++) {
                 if (x < floorX0 || x >= partX0 || y < floorY0 || y >= floorY1) continue;
-                const d = Math.hypot((x - cx) / rx, (y - cy) / ry), n = Pixel.noise(x, y, 7, seed, 99, 99);
+                const d = hypot((x - cx) / rx, (y - cy) / ry), n = Pixel.noise(x, y, 7, seed, 99, 99);
                 if (d + (n - 0.5) * 0.7 > 1) continue;
                 const edge = d + (n - 0.5) * 0.7 > 0.88;
                 const g = (Pixel.hash(x, y, seed) - 0.5) * 16;
@@ -276,7 +276,7 @@ const HouseArt = {
         };
         patch(X(8.0), Y(10.6), 70, 36, 11); patch(X(9.2), Y(3.2), 62, 34, 12); patch(X(3.6), Y(9.4), 34, 24, 13);
         // Manchas escuras (óleo/umidade) e pegadas
-        const stain = (cx, cy, r, col, a, seed) => { for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) { const d = Math.hypot(x, y) / r, n = Pixel.noise(cx + x, cy + y, 5, seed, 99, 99); if (d + (n - 0.5) * 0.8 < 1) c.bl(cx + x, cy + y, 1, 1, col, a); } };
+        const stain = (cx, cy, r, col, a, seed) => { for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) { const d = hypot(x, y) / r, n = Pixel.noise(cx + x, cy + y, 5, seed, 99, 99); if (d + (n - 0.5) * 0.8 < 1) c.bl(cx + x, cy + y, 1, 1, col, a); } };
         stain(X(11.8), Y(6.6), 14, '#1c1a16', 0.28, 21); stain(X(6.0), Y(7.4), 10, '#2a1c10', 0.22, 22); stain(X(18.4), Y(9.6), 12, '#2a2418', 0.3, 23); stain(X(20.8), Y(3.8), 9, '#5a2a18', 0.2, 24);
         // Papelão e tecido largados no chão (detalhe de gente pobre)
         c.fr(X(10.6), Y(5.2), 26, 14, '#a8824e'); c.fr(X(10.6), Y(5.2), 26, 1, '#c4a066'); c.fr(X(10.6), Y(5.2) + 13, 26, 1, '#7a5a30'); c.ln(X(10.6) + 4, Y(5.2) + 5, X(10.6) + 22, Y(5.2) + 5, '#8c6a3a');
@@ -645,8 +645,8 @@ const HouseArt = {
         const lx = X(8.4), ly = Y(9.0);
         for (let y = 0; y < HPX; y++) for (let x = 0; x < WPX; x++) {
             const k = (y * WPX + x) * 4; if (c.data[k + 3] === 0) continue;
-            const d = Math.hypot((x - lx) / 150, (y - ly) / 120), g = Math.max(0, 1 - d) , gl = g * g * 0.22;
-            const vg = Math.hypot((x - WPX / 2) / (WPX * 0.62), (y - HPX * 0.55) / (HPX * 0.7)), v = Math.max(0, vg - 0.55) * 0.34;
+            const d = hypot((x - lx) / 150, (y - ly) / 120), g = Math.max(0, 1 - d) , gl = g * g * 0.22;
+            const vg = hypot((x - WPX / 2) / (WPX * 0.62), (y - HPX * 0.55) / (HPX * 0.7)), v = Math.max(0, vg - 0.55) * 0.34;
             c.data[k] = Math.max(0, Math.min(255, c.data[k] * (1 + gl * 1.2 - v) + gl * 40));
             c.data[k + 1] = Math.max(0, Math.min(255, c.data[k + 1] * (1 + gl * 0.9 - v) + gl * 26));
             c.data[k + 2] = Math.max(0, Math.min(255, c.data[k + 2] * (1 + gl * 0.2 - v) + gl * 6));

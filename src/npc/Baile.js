@@ -28,20 +28,20 @@ const Baile = {
             if (!Standing.inFavela(n.x, n.z)) continue;
             const dp = Standing.depth(n.x, n.z);
             if (dp < 0.3 || dp > 0.65) continue;
-            if (home && Math.hypot(n.x - home.x, n.z - home.z) < 50) continue;
-            const d = Math.hypot(n.x - tx, n.z - tz);
+            if (home && hypot(n.x - home.x, n.z - home.z) < 50) continue;
+            const d = hypot(n.x - tx, n.z - tz);
             if (d < bd) { bd = d; best = n; }
         }
         this.c = best ? { x: best.x, z: best.z } : { x: tx, z: tz };
         return this.c;
     },
 
-    covers(x, z) { return this.on && this.c && Math.hypot(x - this.c.x, z - this.c.z) < this.radius; },
+    covers(x, z) { return this.on && this.c && hypot(x - this.c.x, z - this.c.z) < this.radius; },
 
     // ---------------------------------------------------------------- reação a tiros (chamado pelo Game)
     onShot(pos) {
         if (!this.on || !this._built) return;
-        for (const D of this._dancers) if (Math.hypot(D.x - pos.x, D.z - pos.z) < 26) D.flee = 7;
+        for (const D of this._dancers) if (hypot(D.x - pos.x, D.z - pos.z) < 26) D.flee = 7;
     },
 
     // ---------------------------------------------------------------- construção (só perto do jogador)
@@ -96,8 +96,8 @@ const Baile = {
         let n = 0;
         for (let t = 0; t < 140 && n < 24; t++) {
             const ang = Math.random() * Math.PI * 2, r = 2.5 + Math.random() * 10, x = c.x + Math.cos(ang) * r, z = c.z + Math.sin(ang) * r;
-            if (!nav.walk(x, z) || Math.hypot(x - st.x, z - st.z) < 3.4) continue;
-            if (this._dancers.some((D) => Math.hypot(D.x - x, D.z - z) < 1.1)) continue;
+            if (!nav.walk(x, z) || hypot(x - st.x, z - st.z) < 3.4) continue;
+            if (this._dancers.some((D) => hypot(D.x - x, D.z - z) < 1.1)) continue;
             const poor = Math.random() < 0.5, variant = poor ? pa + Math.floor(Math.random() * (pb - pa + 1)) : va + Math.floor(Math.random() * (vb - va + 1));
             const a = mk(x, z, variant, Math.random() < 0.5 ? g.sprites.sheets.civA : g.sprites.sheets.civB);
             a.setHeading(Math.atan2(st.x - x, st.z - z));
@@ -185,7 +185,7 @@ const Baile = {
                 this._poi = null;
             }
         }
-        const p = g._playerState().pos, dist = Math.hypot(p.x - this.c.x, p.z - this.c.z);
+        const p = g._playerState().pos, dist = hypot(p.x - this.c.x, p.z - this.c.z);
         this._in = Standing.nearFavela(p.x, p.z, 20);                       // luzes, som e multidão só com o jogador na favela
         this._party(g, dist);
         const want = this.on && this._in && dist < 130 && !Interiors.active;
@@ -217,7 +217,7 @@ const Baile = {
             if (D.dj) { D.a.mesh.position.y = 0.95 + 0.06 * Math.sin(t * 6); }
             else if (D.flee > 0) {                                           // tiro por perto: sai correndo para longe do centro
                 D.flee -= dt;
-                const dx = D.x - c.x, dz = D.z - c.z, d = Math.hypot(dx, dz) || 1;
+                const dx = D.x - c.x, dz = D.z - c.z, d = hypot(dx, dz) || 1;
                 D.x += dx / d * 5 * dt; D.z += dz / d * 5 * dt; x = D.x; z = D.z;
                 if (!g.nav.walk(D.x, D.z)) { D.x -= dx / d * 5 * dt; D.z -= dz / d * 5 * dt; }
                 D.a.play('run', 'none'); D.a.setHeading(Math.atan2(dx, dz));

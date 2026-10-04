@@ -171,3 +171,4 @@ class SkillTree {
     }
 }
 SkillTree.m = {};
+memoStatics(SkillTree, 'BRANCHES', 'NODES', 'NOTORIETY');

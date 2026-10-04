@@ -26,7 +26,7 @@ class FavelaWatch {
             for (const l of blk.lots) {
                 if ((l.x1 - l.x0) * (l.z1 - l.z0) < 28 || (l.height || 0) < 6) continue;
                 const x = (l.x0 + l.x1) / 2, z = (l.z0 + l.z1) / 2;
-                if (home && Math.hypot(x - home.x, z - home.z) < 30) continue;
+                if (home && hypot(x - home.x, z - home.z) < 30) continue;
                 const k = Math.min(13, Math.floor(Standing.depth(x, z) * 14));
                 slices[k].push({ x, z, h: l.height });
             }
@@ -45,7 +45,7 @@ class FavelaWatch {
     }
 
     // ---------------------------------------------------------------- sprites (streaming)
-    _vis(x, z) { const f = this.game.camera.target; return Math.hypot(x - f.x, z - f.z) < this.streamIn; }
+    _vis(x, z) { const f = this.game.camera.target; return hypot(x - f.x, z - f.z) < this.streamIn; }
 
     _stream() {
         const nav = this.game.nav, scene = this.game.scene, sprites = this.game.sprites;
@@ -122,7 +122,7 @@ class FavelaWatch {
             if (!u.alive && u.alive !== undefined) return false;
             const x = u.position.x, z = u.position.z;
             if (!Standing.inFavela(x, z) || Standing.depth(x, z) < 0.02) return false;
-            for (const L of this.lookouts) if (L.alive && Math.hypot(L.x - x, L.z - z) < 55 && MapGeo.hasLineOfSight(L.x, L.z, x, z)) return true;
+            for (const L of this.lookouts) if (L.alive && hypot(L.x - x, L.z - z) < 55 && MapGeo.hasLineOfSight(L.x, L.z, x, z)) return true;
             return false;
         };
         for (const o of pm.officers) if (o.alive && !o.rag && seen(o)) return true;
@@ -132,7 +132,7 @@ class FavelaWatch {
 
     // Um passo de fuga/retorno: salto de até 35 u pelas vielas rumo a (tx, tz).
     _hop(L, tx, tz) {
-        const nav = this.game.nav, a = nav.crowd.agents[L.idx], dx = tx - L.x, dz = tz - L.z, d = Math.hypot(dx, dz);
+        const nav = this.game.nav, a = nav.crowd.agents[L.idx], dx = tx - L.x, dz = tz - L.z, d = hypot(dx, dz);
         if (d < 6) return true;
         const k = Math.min(1, 35 / d), r = RoadPlan.nearestRoadPoint(L.x + dx * k, L.z + dz * k, 30);
         const p = nav.closestPoint(new BABYLON.Vector3(r ? r.x : L.x + dx * k, 0, r ? r.z : L.z + dz * k));
@@ -180,7 +180,7 @@ class FavelaWatch {
             }
             if (!(this.volley > 0)) continue;                                  // (só durante a salva de entrada da polícia)
             R.fire -= dt;
-            if (R.fire > 0 || Math.hypot(R.x - f.x, R.z - f.z) > 110) continue;
+            if (R.fire > 0 || hypot(R.x - f.x, R.z - f.z) > 110) continue;
             R.fire = 1.2 + Math.random() * 2.2;
             if (!g.fireworks.launch(R.x, R.z, R.h + 0.6)) R.fire = 0.6;           // (muitos fogos no ar: tenta de novo já já)
         }
@@ -206,7 +206,7 @@ class FavelaWatch {
             }
             const run = L.state === 'flee' ? 6.2 : (L.state === 'return' ? 2.4 : 2.0);
             if (a && a.params.maxSpeed !== run) { a.params.maxSpeed = run; nav.crowd.updateAgentParameters(L.idx, a.params); }
-            const v = nav.crowd.getAgentVelocity(L.idx), sp = v ? Math.hypot(v.x, v.z) : 0;
+            const v = nav.crowd.getAgentVelocity(L.idx), sp = v ? hypot(v.x, v.z) : 0;
             if (sp > 0.4) { const ty = Math.atan2(v.x, v.z); let d = (ty - L.heading) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; L.heading += d * (1 - Math.exp(-12 * dt)); }
             L.actor.play(sp < 0.4 ? 'idle' : (L.state === 'flee' ? 'run' : 'walk'), 'none');
             L.x = L.tr.position.x; L.z = L.tr.position.z;

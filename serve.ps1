@@ -21,6 +21,7 @@ $mime = @{
     '.glb'  = 'model/gltf-binary'
     '.gltf' = 'model/gltf+json'
     '.wasm' = 'application/wasm'
+    '.webmanifest' = 'application/manifest+json'
 }
 
 $listener = New-Object System.Net.HttpListener

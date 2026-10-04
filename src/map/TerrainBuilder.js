@@ -29,7 +29,7 @@ class TerrainBuilder {
         this.ncx = Math.ceil(WorldMap.nx / this.cn); this.ncz = Math.ceil(WorldMap.nz / this.cn);
 
         // Luz do relevo = oposto da direção do sol.
-        const d = Config.light.sunDir, l = Math.hypot(d[0], d[1], d[2]);
+        const d = Config.light.sunDir, l = hypot(d[0], d[1], d[2]);
         this.L = [-d[0] / l, -d[1] / l, -d[2] / l];
 
         // Paredões por pedaço (para os colisores).
@@ -51,7 +51,7 @@ class TerrainBuilder {
 
     _rectDist(ci, cj, x, z) {
         const W = this.W, x0 = W.minX + ci * W.chunk, z0 = W.minZ + cj * W.chunk;
-        return Math.hypot(Math.max(x0 - x, 0, x - (x0 + W.chunk)), Math.max(z0 - z, 0, z - (z0 + W.chunk)));
+        return hypot(Math.max(x0 - x, 0, x - (x0 + W.chunk)), Math.max(z0 - z, 0, z - (z0 + W.chunk)));
     }
 
     _refresh(focus) {
@@ -75,7 +75,7 @@ class TerrainBuilder {
     update(dt, focus) {
         if (!focus) return;
         this._t -= dt;
-        if (!this._last || this._t <= 0 || Math.hypot(focus.x - this._last.x, focus.z - this._last.z) > 24) { this._t = 0.3; this._refresh(focus); }
+        if (!this._last || this._t <= 0 || hypot(focus.x - this._last.x, focus.z - this._last.z) > 24) { this._t = 0.3; this._refresh(focus); }
         this._pump(this.W.buildBudgetMs);
     }
 
@@ -133,7 +133,7 @@ class TerrainBuilder {
         const c = this.W.cell, K = this.W.heightScale;
         const a = this._H(i - 1, j - 1), b = this._H(i, j - 1), cc = this._H(i - 1, j), d = this._H(i, j);
         const gx = ((b + d) - (a + cc)) / (2 * c) * K, gz = ((cc + d) - (a + b)) / (2 * c) * K;
-        const il = 1 / Math.hypot(gx, 1, gz), L = this.L;
+        const il = 1 / hypot(gx, 1, gz), L = this.L;
         const lam = (-gx * L[0] + L[1] - gz * L[2]) * il;
         return Math.max(0.5, Math.min(1.2, 1 + (lam - L[1]) * 1.5));
     }
@@ -314,3 +314,4 @@ class TerrainBuilder {
         return { chunks: this.chunks.size, queued: this.queue.length, colliders: col, built: this.stats.built, avgMs: this.stats.built ? +(this.stats.ms / this.stats.built).toFixed(2) : 0 };
     }
 }
+memoStatics(TerrainBuilder, 'VEG', 'ATL', 'ATL_EDGE');

@@ -55,22 +55,26 @@ class TrafficManager {
 
     // avoid: { x, z, r } — não nascer a menos de r desse ponto (carro novo no lugar de uma carcaça, fora da tela).
     // near: { x, z, rMin, rMax } (padrão: o anel em volta do foco).
-    _spawnCar(mode, avoid = null, near = this.ring()) {
+    // bakeNow: pode assar a folha do modelo na hora (carga inicial). Durante o jogo, modelo ainda não assado entra na fila e o carro
+    // nasce com outro modelo já pronto da mesma classe — nada de engasgo ao repor o trânsito.
+    _spawnCar(mode, avoid = null, near = this.ring(), bakeNow = false) {
         const id = this._nextId++;
         let place = null;
         for (let tries = 0; tries < 60 && !place; tries++) {
             const cand = mode === 'drive' ? RoadNet.randomLanePoint(14, near) : this._randomCurbSlot(near);
             if (!cand || !this._clear(cand.point.x, cand.point.z, mode === 'drive' ? 10 : 7)) continue;
-            if (avoid && Math.hypot(cand.point.x - avoid.x, cand.point.z - avoid.z) < avoid.r) continue;
+            if (avoid && hypot(cand.point.x - avoid.x, cand.point.z - avoid.z) < avoid.r) continue;
             if (Math.random() > this._density(cand.point.x, cand.point.z)) continue;
             place = cand;
         }
         if (!place) return null;
         const d = place.d;
         const mix = this._carMix(place.point), old = mix.old;
-        const model = this.carLib.variantOf(mix.model);                                              // classe -> modelo especifico (3 compactos, 4 sedas, 4 SUVs...)
+        let model = this.carLib.variantOf(mix.model);                                                // classe -> modelo especifico (3 compactos, 4 sedas, 4 SUVs...)
+        let sheet = bakeNow ? this.carLib.sheet(model) : this.carLib.peek(model);
+        if (!sheet) { sheet = this.carLib.readyOf(mix.model) || this.carLib.sheet(model); model = sheet.modelId; }
         const paint = (old || mix.model === 'taxi') ? mix.paint : this.carLib.randomPaint(model);     // cor de fabrica sorteada do modelo
-        const car = new TrafficCar(this.scene, this.physics, place.point, id, this.carLib.sheet(model), paint, Math.atan2(d.dx, d.dz), this);
+        const car = new TrafficCar(this.scene, this.physics, place.point, id, sheet, paint, Math.atan2(d.dx, d.dz), this);
         if (old) { car.hp = Math.round(car.hp * 0.7); car.old = true; }                        // carro velho: já nasce judiado
         if (this.shadow) this.shadow.addShadowCaster(car.body);
         this.vm.vehicles.push(car);
@@ -88,7 +92,7 @@ class TrafficManager {
         for (let tries = 0; tries < 60 && !place; tries++) {
             const cand = mode === 'drive' ? RoadNet.randomLanePoint(14, near) : this._randomCurbSlot(near);
             if (!cand || !this._clear(cand.point.x, cand.point.z, mode === 'drive' ? 8 : 5)) continue;
-            if (avoid && Math.hypot(cand.point.x - avoid.x, cand.point.z - avoid.z) < avoid.r) continue;
+            if (avoid && hypot(cand.point.x - avoid.x, cand.point.z - avoid.z) < avoid.r) continue;
             if (Math.random() > this._density(cand.point.x, cand.point.z)) continue;
             place = cand;
         }
@@ -129,8 +133,8 @@ class TrafficManager {
     }
 
     spawn(count = Config.traffic.count, parked = Config.traffic.parked) {
-        for (let i = 0; i < count; i++) this._spawnCar('drive', null, this.ring(40, Config.traffic.spawnMax));
-        for (let i = 0; i < parked; i++) this._spawnCar('parked', null, this.ring(40, Config.traffic.spawnMax));
+        for (let i = 0; i < count; i++) this._spawnCar('drive', null, this.ring(40, Config.traffic.spawnMax), true);
+        for (let i = 0; i < parked; i++) this._spawnCar('parked', null, this.ring(40, Config.traffic.spawnMax), true);
         const T = Config.traffic;
         if (this.sprites) {
             const r = this.ring(40, Config.traffic.spawnMax);
@@ -146,7 +150,7 @@ class TrafficManager {
     _clear(x, z, r) {
         for (const c of this.vm.vehicles) {
             const p = c.position;
-            if (Math.hypot(p.x - x, p.z - z) < r) return false;
+            if (hypot(p.x - x, p.z - z) < r) return false;
         }
         return true;
     }
@@ -167,7 +171,7 @@ class TrafficManager {
         let x, z, d;
         if (e.v) { x = e.a.x + side * off; z = e.a.z + t; d = side > 0 ? { dx: 0, dz: 1 } : { dx: 0, dz: -1 }; }          // lado leste: sentido norte
         else { z = e.a.z + side * off; x = e.a.x + t; d = side > 0 ? { dx: -1, dz: 0 } : { dx: 1, dz: 0 }; }              // lado norte: sentido oeste
-        if (near) { const r = Math.hypot(x - near.x, z - near.z); if (r < near.rMin || r > near.rMax) return null; }
+        if (near) { const r = hypot(x - near.x, z - near.z); if (r < near.rMin || r > near.rMax) return null; }
         if (CityGrid.intersectionNear(x, z, 17)) return null;
         return { point: { x, z }, d };
     }
@@ -229,11 +233,11 @@ class TrafficManager {
             car.update(dt, env);
 
             // Carro largado na pista: some (vira estacionado em outra vaga) quando o jogador se afasta.
-            if (car.mode === 'abandoned' && Math.hypot(car.position.x - pp.x, car.position.z - pp.z) > Config.traffic.abandonDist) {
+            if (car.mode === 'abandoned' && hypot(car.position.x - pp.x, car.position.z - pp.z) > Config.traffic.abandonDist) {
                 this._relocate(car, 'parked');
             }
             // Preso por tempo demais sem motivo: reposiciona longe do jogador.
-            if (car.mode === 'drive' && car.stuck > 25 && Math.hypot(car.position.x - pp.x, car.position.z - pp.z) > 30) {
+            if (car.mode === 'drive' && car.stuck > 25 && hypot(car.position.x - pp.x, car.position.z - pp.z) > 30) {
                 this._relocate(car, 'drive');
             }
         }

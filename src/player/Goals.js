@@ -117,3 +117,4 @@ class Goals {
     serialize() { return { done: this.done, escapes: this.escapes, maxStars: this.maxStars }; }
     load(s) { if (!s) { this._backfill = true; return; } this.done = s.done || {}; this.escapes = s.escapes || 0; this.maxStars = s.maxStars || 0; }
 }
+memoStatics(Goals, 'TRACKS');

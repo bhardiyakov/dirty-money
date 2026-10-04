@@ -32,7 +32,7 @@ const RealEstate = {
         const district = block ? block.district : null, biome = block ? block.biome : null;
         let idx = Math.pow(shore, 1.1) * 0.75 + (district === 'island' ? 0.25 : 0) + (biome === 'downtown' ? 0.05 : 0);
         // favela e entorno: o mercado despenca (até ~260 u de distância dela)
-        const b = Standing._bounds(), dx = Math.max(b.x0 - x, 0, x - b.x1), dz = Math.max(b.z0 - z, 0, z - b.z1), dFav = Math.hypot(dx, dz);
+        const b = Standing._bounds(), dx = Math.max(b.x0 - x, 0, x - b.x1), dz = Math.max(b.z0 - z, 0, z - b.z1), dFav = hypot(dx, dz);
         let f = 1;
         if (dFav <= 0) f = 0.05; else if (dFav < 260) { const t = dFav / 260; f = 0.3 + 0.7 * t * t * (3 - 2 * t); }
         idx = Math.max(0, Math.min(1, idx * f));
@@ -70,14 +70,14 @@ const RealEstate = {
                 if (l.x1 - l.x0 > 0 && Math.min(l.x0 - f[0], f[2] - l.x1, l.z0 - f[1], f[3] - l.z1) > 2.5) continue;     // só lotes na beira da quadra (porta na calçada)
                 const side = e[0][1];
                 const door = side === 'W' ? { x: (s[0] + f[0]) / 2, z: cz } : side === 'E' ? { x: (s[2] + f[2]) / 2, z: cz } : side === 'S' ? { x: cx, z: (s[1] + f[1]) / 2 } : { x: cx, z: (s[3] + f[3]) / 2 };
-                if (home && Math.hypot(door.x - home.x, door.z - home.z) < 20) continue;
+                if (home && hypot(door.x - home.x, door.z - home.z) < 20) continue;
                 const loc = this.locate(cx, cz, b), tier = this.tierOf(loc.idx);
                 buckets[this.TIERS.indexOf(tier)].push({ b, l, door, loc, tier, area });
             }
         }
         this.TIERS.forEach((t, ti) => {
             const pool = buckets[ti], chosen = [];
-            while (chosen.length < t.n && pool.length) { const i = Math.floor(rng() * pool.length); const c = pool.splice(i, 1)[0]; if (chosen.every((o) => Math.hypot(o.door.x - c.door.x, o.door.z - c.door.z) > 40)) chosen.push(c); }
+            while (chosen.length < t.n && pool.length) { const i = Math.floor(rng() * pool.length); const c = pool.splice(i, 1)[0]; if (chosen.every((o) => hypot(o.door.x - c.door.x, o.door.z - c.door.z) > 40)) chosen.push(c); }
             for (const c of chosen) {
                 const k = Math.max(0, Math.min(1, (c.area - 30) / 200)), size = Math.round(t.area[0] + (t.area[1] - t.area[0]) * k);
                 const id = 'imv' + this.list.length;
@@ -178,7 +178,7 @@ const RealEstate = {
         if (!this.built || game.mode !== 'player') return null;
         const p = game.player.position;
         let best = null, bd = maxD;
-        for (const q of this.list) { const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < bd) { bd = d; best = q; } }
+        for (const q of this.list) { const d = hypot(q.x - p.x, q.z - p.z); if (d < bd) { bd = d; best = q; } }
         return best;
     },
     prompt(game) {
@@ -203,7 +203,7 @@ const RealEstate = {
         const pulse = 0.75 + 0.25 * Math.sin(this._t * 3);
         for (let i = 0; i < this.list.length; i++) {
             const p = this.list[i];
-            if (Math.hypot(p.x - f.x, p.z - f.z) > 70) { G.off(i); continue; }
+            if (hypot(p.x - f.x, p.z - f.z) > 70) { G.off(i); continue; }
             const own = this.isOwned(p), home = this.homeId === p.id;
             G.place(i, p.x, 0.35, p.z, 2.6 + 0.5 * pulse);
             if (home) G.color(i, 0.35, 0.7, 1, 0.8 * pulse); else if (own) G.color(i, 1, 0.8, 0.25, 0.8 * pulse); else G.color(i, 0.3, 1, 0.55, 0.7 * pulse);

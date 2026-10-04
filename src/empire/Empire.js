@@ -172,3 +172,4 @@ class Empire {
         this.biz.load(s.biz); this.influence.load(s.inf); this.dominion.load(s.dom);
     }
 }
+memoStatics(Empire, 'DISTRICTS', 'BIOME_DISTRICT', 'SEASONS', 'SEASON_ORDER');

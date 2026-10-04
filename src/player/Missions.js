@@ -43,9 +43,9 @@ class Missions {
             const x = b.x0 + Math.random() * (b.x1 - b.x0), z = b.z0 + Math.random() * (b.z1 - b.z0);
             const r = RoadPlan.nearestRoadPoint(x, z, 30);
             if (!r || r.edge.cls !== 'fav' || !Standing.inFavela(r.x, r.z)) continue;
-            const d = Standing.depth(r.x, r.z), dist = Math.hypot(r.x - p.x, r.z - p.z);
+            const d = Standing.depth(r.x, r.z), dist = hypot(r.x - p.x, r.z - p.z);
             if (d < d0 || d > d1 || dist < dmin || dist > dmax) continue;
-            if (home && Math.hypot(r.x - home.x, r.z - home.z) < 40) continue;
+            if (home && hypot(r.x - home.x, r.z - home.z) < 40) continue;
             return { x: r.x, z: r.z };
         }
         return null;
@@ -140,13 +140,13 @@ class Missions {
         m.t -= dt;
         if (m.t <= 0) { this._fail('estourou o prazo'); return; }
         if (this.actor) this.actor.update(dt, 1);
-        if (m.type === 'delivery' && Math.hypot(pos.x - m.to.x, pos.z - m.to.z) < 4.5 && g.mode === 'player') this._done();
+        if (m.type === 'delivery' && hypot(pos.x - m.to.x, pos.z - m.to.z) < 4.5 && g.mode === 'player') this._done();
     }
 
     // ---------------------------------------------------------------- cobrança (tecla E)
     nearDebtor(maxD = 2.8) {
         const m = this.cur, p = this.g.player.position;
-        return !!(m && m.type === 'collect' && this.actor && Math.hypot(p.x - m.to.x, p.z - m.to.z) < maxD);
+        return !!(m && m.type === 'collect' && this.actor && hypot(p.x - m.to.x, p.z - m.to.z) < maxD);
     }
 
     interact() {
@@ -175,9 +175,10 @@ class Missions {
         let extra = '';
         if (m.type === 'defend') extra = `${m.got}/${m.need} POLICIAIS`;
         else {
-            const p = this.g.player.position, d = Math.round(Math.hypot(p.x - m.to.x, p.z - m.to.z)), s = Math.max(0, Math.ceil(m.t));
+            const p = this.g.player.position, d = Math.round(hypot(p.x - m.to.x, p.z - m.to.z)), s = Math.max(0, Math.ceil(m.t));
             extra = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} · ${d} M`;
         }
         return { title: m.title, text: m.text, extra, low: m.type !== 'defend' && m.t < 30 };
     }
 }
+memoStatics(Missions, 'RANKS');

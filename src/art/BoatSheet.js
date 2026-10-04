@@ -157,3 +157,4 @@ class BoatLibrary {
         return this.sheets[key];
     }
 }
+memoStatics(BoatSheet, 'MODELS', 'PAINT_ROWS');

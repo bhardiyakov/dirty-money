@@ -23,7 +23,7 @@ class Ragdoll {
         this.kind = opts.kind || 'hit';
         this.lethal = !!opts.lethal;
         this.onLand = opts.onLand || null;
-        const l = Math.hypot(opts.dx, opts.dz) || 1;
+        const l = hypot(opts.dx, opts.dz) || 1;
         this.dx = opts.dx / l; this.dz = opts.dz / l;
         const p = this.power = Math.max(1, opts.power);
 
@@ -96,7 +96,7 @@ class Ragdoll {
             if (this.h <= 0 && this.vy < 0) this._land();
         } else if (this.phase === 'slide') {
             // Deslizando de bruços: atrito constante até parar.
-            const sp = Math.hypot(this.vx, this.vz);
+            const sp = hypot(this.vx, this.vz);
             if (sp > 0.25) {
                 const k = Math.max(0, sp - 12 * dt) / sp;
                 this.vx *= k; this.vz *= k;
@@ -113,7 +113,7 @@ class Ragdoll {
             }
         } else if (this.phase === 'rise') {
             // (ainda desliza um pouco enquanto levanta, no caso da cambalhota)
-            const sp = Math.hypot(this.vx, this.vz);
+            const sp = hypot(this.vx, this.vz);
             if (sp > 0.25) { const k = Math.max(0, sp - 10 * dt) / sp; this.vx *= k; this.vz *= k; this._move(dt); }
             a.update(dt, 1);
             if (a.done) { this._finish(false); return; }
@@ -195,7 +195,7 @@ class Casualty {
         }
         this.state = 'flee'; this.life = 0;
         // Foge do ladrão (e não de volta para o carro).
-        const dx = this.pos.x - this.threat.x, dz = this.pos.z - this.threat.z, l = Math.hypot(dx, dz) || 1;
+        const dx = this.pos.x - this.threat.x, dz = this.pos.z - this.threat.z, l = hypot(dx, dz) || 1;
         this.fx = dx / l; this.fz = dz / l;
         this.heading = Math.atan2(this.fx, this.fz);
         a.play('scared', 'none', { restart: true });
@@ -215,7 +215,7 @@ class Casualty {
             a.setPosition(p.x, p.z); a.setHeading(this.heading);
             a.update(dt, 1.3);
             const f = this.g.camera.target;
-            if (this.life > 9 || (this.life > 3 && Math.hypot(p.x - f.x, p.z - f.z) > 70)) return false;
+            if (this.life > 9 || (this.life > 3 && hypot(p.x - f.x, p.z - f.z) > 70)) return false;
         } else {
             a.update(dt);
             if (this.life > 30) return false;

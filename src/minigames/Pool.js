@@ -193,7 +193,7 @@ const Pool = {
         let moving = false;
         for (const b of B) {
             if (b.in) continue;
-            const s = Math.hypot(b.vx, b.vy);
+            const s = hypot(b.vx, b.vy);
             if (s <= 0) continue;
             const ns = s - (this.A + this.K * s) * dt;
             if (ns <= 1.2) { b.vx = 0; b.vy = 0; continue; }
@@ -310,7 +310,7 @@ const Pool = {
     _freeSpot(c) {
         const B = this.balls, R = this.R;
         for (let k = 0; k < 60; k++) {
-            if (!B.some((b) => b !== c && !b.in && Math.hypot(b.x - c.x, b.y - c.y) < 2 * R + 0.2)) return;
+            if (!B.some((b) => b !== c && !b.in && hypot(b.x - c.x, b.y - c.y) < 2 * R + 0.2)) return;
             c.x = this.W * 0.25 - (k % 6) * 6; c.y = this.H / 2 + (Math.floor(k / 6) % 2 ? 1 : -1) * Math.ceil(k / 12) * 6;
         }
     },
@@ -361,11 +361,11 @@ const Pool = {
         const R = this.R, out = [];
         for (const t of targets) for (const p of this._pockets) {
             const aimX = p.x + (p.x < 0 ? 2.5 : p.x > this.W ? -2.5 : 0), aimY = p.y + (p.y < 0 ? 2.5 : p.y > this.H ? -2.5 : 0);
-            let ox = aimX - t.x, oy = aimY - t.y; const d2 = Math.hypot(ox, oy); ox /= d2; oy /= d2;
+            let ox = aimX - t.x, oy = aimY - t.y; const d2 = hypot(ox, oy); ox /= d2; oy /= d2;
             if (p.r < 6 && Math.abs(oy) < 0.38) continue;                            // caçapa do meio: ângulo fechado demais
             const gx = t.x - ox * 2 * R, gy = t.y - oy * 2 * R;
             if (gx < R || gx > this.W - R || gy < R || gy > this.H - R) continue;
-            let cx = gx - cue.x, cy = gy - cue.y; const d1 = Math.hypot(cx, cy); if (d1 < 0.5) continue; cx /= d1; cy /= d1;
+            let cx = gx - cue.x, cy = gy - cue.y; const d1 = hypot(cx, cy); if (d1 < 0.5) continue; cx /= d1; cy /= d1;
             const cut = Math.acos(Math.max(-1, Math.min(1, cx * ox + cy * oy)));
             if (cut > 1.35) continue;
             if (!this._clear(cue.x, cue.y, gx, gy, [cue, t], B, 2 * R - 0.1)) continue;
@@ -416,7 +416,7 @@ const Pool = {
             let best = null;
             for (let k = 0; k < 40; k++) {
                 const x = this.R + Math.random() * (this.W - 2 * this.R), y = this.R + Math.random() * (this.H - 2 * this.R);
-                if (B.some((b) => b !== cue && !b.in && Math.hypot(b.x - x, b.y - y) < 2 * this.R + 0.5)) continue;
+                if (B.some((b) => b !== cue && !b.in && hypot(b.x - x, b.y - y) < 2 * this.R + 0.5)) continue;
                 const c = this._candidates(B, { x, y }, this._legal(1))[0];
                 if (c && (!best || c.score > best.s)) best = { x, y, s: c.score };
                 if (k % 10 === 9) yield;
@@ -479,7 +479,7 @@ const Pool = {
     _pDown(e) {
         if (!this._canAim()) return;
         const p = this._toTable(e), cue = this.balls[0];
-        if (this.inHand && Math.hypot(p.x - cue.x, p.y - cue.y) < this.R * 3.2) { this.drag = { id: e.pointerId }; return; }
+        if (this.inHand && hypot(p.x - cue.x, p.y - cue.y) < this.R * 3.2) { this.drag = { id: e.pointerId }; return; }
         if (e.pointerType === 'mouse' && e.button === 0) { this._aimAt(p); this.pull = { mouse: true, x0: e.clientX, y0: e.clientY }; return; }
         this.touchAim = { id: e.pointerId }; this._aimAt(p);
     },
@@ -499,10 +499,10 @@ const Pool = {
         if (this.pull && this.pull.mouse) { this.pull = null; this._release(); }
         this.touchAim = null;
     },
-    _aimAt(p) { const c = this.balls[0]; if (Math.hypot(p.x - c.x, p.y - c.y) > 1) this.aim = Math.atan2(p.y - c.y, p.x - c.x); },
+    _aimAt(p) { const c = this.balls[0]; if (hypot(p.x - c.x, p.y - c.y) > 1) this.aim = Math.atan2(p.y - c.y, p.x - c.x); },
     _placeCue(p) {
         const R = this.R, c = this.balls[0], x = Math.max(R, Math.min(this.W - R, p.x)), y = Math.max(R, Math.min(this.H - R, p.y));
-        if (this.balls.some((b) => b !== c && !b.in && Math.hypot(b.x - x, b.y - y) < 2 * R + 0.2)) return;
+        if (this.balls.some((b) => b !== c && !b.in && hypot(b.x - x, b.y - y) < 2 * R + 0.2)) return;
         c.x = x; c.y = y;
     },
     _barPow(e) { const r = this.powEl.getBoundingClientRect(); this.power = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)); },
@@ -616,7 +616,7 @@ const Pool = {
     _feltCanvas() {
         if (this._felt) return this._felt;
         const k = Math.max(2, Math.round(this.sc * this.dpr)), c = document.createElement('canvas'); c.width = this.W * k; c.height = this.H * k;
-        const x = c.getContext('2d'), g = x.createRadialGradient(c.width / 2, c.height * 0.45, 10, c.width / 2, c.height / 2, c.width * 0.62);
+        const x = c.getContext('2d', { willReadFrequently: true }), g = x.createRadialGradient(c.width / 2, c.height * 0.45, 10, c.width / 2, c.height / 2, c.width * 0.62);
         g.addColorStop(0, '#2fae62'); g.addColorStop(0.6, '#20884a'); g.addColorStop(1, '#156836');
         x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
         const id = x.getImageData(0, 0, c.width, c.height), D = id.data;
@@ -663,11 +663,11 @@ const Pool = {
         x.beginPath(); x.moveTo(c.x + dx * R, c.y + dy * R); x.lineTo(gx, gy); x.stroke(); x.setLineDash([]);
         x.strokeStyle = 'rgba(255,255,255,0.6)'; x.lineWidth = 0.3; x.beginPath(); x.arc(gx, gy, R, 0, 7); x.stroke();
         if (hit) {
-            let nx = hit.x - gx, ny = hit.y - gy; const n = Math.hypot(nx, ny); nx /= n; ny /= n;
+            let nx = hit.x - gx, ny = hit.y - gy; const n = hypot(nx, ny); nx /= n; ny /= n;
             const ok = this._isLegalFirst(hit.n);
             x.strokeStyle = ok ? 'rgba(255,240,180,0.85)' : 'rgba(255,90,90,0.85)'; x.lineWidth = 0.55;
             x.beginPath(); x.moveTo(hit.x, hit.y); x.lineTo(hit.x + nx * 26, hit.y + ny * 26); x.stroke();
-            const tx = dx - nx * (dx * nx + dy * ny), ty = dy - ny * (dx * nx + dy * ny), tl = Math.hypot(tx, ty);
+            const tx = dx - nx * (dx * nx + dy * ny), ty = dy - ny * (dx * nx + dy * ny), tl = hypot(tx, ty);
             if (tl > 0.05) { x.strokeStyle = 'rgba(255,255,255,0.3)'; x.lineWidth = 0.3; x.beginPath(); x.moveTo(gx, gy); x.lineTo(gx + tx / tl * 16 * tl, gy + ty / tl * 16 * tl); x.stroke(); }
         }
     },

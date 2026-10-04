@@ -208,7 +208,7 @@ const HouseView = {
         // Entrar: chegou à porta pelo lado de fora → já aparece DENTRO de casa (logo depois da soleira, virado para o cômodo), com o
         // corte e o zoom na hora (sem precisar atravessar a soleira andando). Rearma só depois de se afastar da porta (sair não re-entra).
         if (onFoot && !this.inside && !game.player.busy && !game.player.rag) {
-            const dc = S.doorWorld(), dd = Math.hypot(p.x - dc.x, p.z - dc.z);
+            const dc = S.doorWorld(), dd = hypot(p.x - dc.x, p.z - dc.z);
             if (dd > 3.2) this._reArm = true;
             const lz = p.z - S.oz;
             if (this._reArm && Math.abs(p.x - dc.x) < (S.door.x1 - S.door.x0) / 2 + 0.5 && lz > -1.6 && lz < 0.5) {
@@ -246,7 +246,7 @@ const HouseView = {
         if (mm && t !== this._mmT) { this._mmT = t; mm.style.opacity = String(1 - Math.min(1, t * 1.6)); mm.style.transition = 'none'; }
 
         // porta: abre quando alguém chega perto, nos dois lados
-        const dc = S.doorWorld(), near = Math.hypot(p.x - dc.x, p.z - dc.z) < 3.6;
+        const dc = S.doorWorld(), near = hypot(p.x - dc.x, p.z - dc.z) < 3.6;
         this.open += ((near ? 1 : 0) - this.open) * (1 - Math.exp(-6 * dt));
         this.pivot.rotation.y = -this.open * 1.5;
 
@@ -265,7 +265,7 @@ const HouseView = {
         G.flush();
 
         // seta: pula em frente à porta; some quando se está dentro ou longe
-        const dist = Math.hypot(p.x - dc.x, p.z - dc.z), vis = (1 - t) * (dist < 80 ? 1 : 0);
+        const dist = hypot(p.x - dc.x, p.z - dc.z), vis = (1 - t) * (dist < 80 ? 1 : 0);
         this.hint = (!this.inside && onFoot && dist < 7 && t < 0.05) ? '<b>SEU ESCONDERIJO</b><small>a porta está aberta — é só entrar</small>' : '';
         this.arrow.setEnabled(vis > 0.05);
         if (vis > 0.05) {

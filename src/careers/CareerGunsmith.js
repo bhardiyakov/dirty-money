@@ -204,7 +204,7 @@ class ScrapJob extends CareerJob {
             let s2 = null;
             for (let t = 0; t < 24 && !s2; t++) {
                 const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 5, q = this.mgr.streetNear(c.x + Math.cos(a) * r, c.z + Math.sin(a) * r, 10);
-                if (q && Math.hypot(q.x - c.x, q.z - c.z) < 12 && this.spots.every((o) => Math.hypot(o.x - q.x, o.z - q.z) > 2.5)) s2 = q;
+                if (q && hypot(q.x - c.x, q.z - c.z) < 12 && this.spots.every((o) => hypot(o.x - q.x, o.z - q.z) > 2.5)) s2 = q;
             }
             this.spots.push(s2 || { x: c.x, z: c.z });
         }
@@ -242,3 +242,4 @@ class ScrapJob extends CareerJob {
         }
     }
 }
+memoStatics(GunsmithCareer, 'RECIPES', 'ACCESSORIES');

@@ -41,14 +41,14 @@ class Boat extends Vehicle {
 
     // Distância (u) de um ponto até o CASCO (retângulo do corpo): para o jogador alcançar o barco por qualquer lado do píer.
     distTo(pos) {
-        const c = this.position, f = this.body.getDirection(BABYLON.Axis.Z), l = Math.hypot(f.x, f.z) || 1;
+        const c = this.position, f = this.body.getDirection(BABYLON.Axis.Z), l = hypot(f.x, f.z) || 1;
         const fx = f.x / l, fz = f.z / l, dx = pos.x - c.x, dz = pos.z - c.z, lf = dx * fx + dz * fz, lr = dx * fz - dz * fx;
-        return Math.hypot(Math.max(0, Math.abs(lf) - this.halfLen), Math.max(0, Math.abs(lr) - this.halfW));
+        return hypot(Math.max(0, Math.abs(lf) - this.halfLen), Math.max(0, Math.abs(lr) - this.halfW));
     }
 
     // Ponto do casco (na borda) mais perto de `pos`, para onde o jogador "embarca".
     boardPoint(pos) {
-        const c = this.position, f = this.body.getDirection(BABYLON.Axis.Z), l = Math.hypot(f.x, f.z) || 1;
+        const c = this.position, f = this.body.getDirection(BABYLON.Axis.Z), l = hypot(f.x, f.z) || 1;
         const fx = f.x / l, fz = f.z / l, rx = fz, rz = -fx, dx = pos.x - c.x, dz = pos.z - c.z;
         const lf = Math.max(-this.halfLen + 0.8, Math.min(this.halfLen - 0.8, dx * fx + dz * fz)), lr = Math.max(-this.halfW + 0.3, Math.min(this.halfW - 0.3, dx * rx + dz * rz));
         return { x: c.x + fx * lf + rx * lr, z: c.z + fz * lf + rz * lr };
@@ -109,7 +109,7 @@ class Boat extends Vehicle {
         if (this.controlled) { this.syncVisual(dt); return; }
         if (this.burning > 0 || this.wrecked) { this.driveTo(0, 0, dt, 3, 8); this.syncVisual(dt); return; }
         const p = this.position;
-        if (focus && Math.hypot(p.x - focus.x, p.z - focus.z) > 160) {            // longe da câmera (a tela mostra ~60 u): dorme — sem IA, sem sprite e CONGELADO no Havok (corpo estático custa quase nada)
+        if (focus && hypot(p.x - focus.x, p.z - focus.z) > 160) {            // longe da câmera (a tela mostra ~60 u): dorme — sem IA, sem sprite e CONGELADO no Havok (corpo estático custa quase nada)
             if (!this._asleep) {
                 this._asleep = true; this.phys.setLinearVelocity(BABYLON.Vector3.Zero()); this.phys.setAngularVelocity(BABYLON.Vector3.Zero());
                 this.syncVisual(0); if (this.visual) this.visual.setVisible(false);
@@ -134,7 +134,7 @@ class Boat extends Vehicle {
         const p = this.position;
         for (let tries = 0; tries < 14; tries++) {
             const a = Math.random() * Math.PI * 2, d = 60 + Math.random() * 110, x = p.x + Math.sin(a) * d, z = p.z + Math.cos(a) * d;
-            if (Math.hypot(x - this.home.x, z - this.home.z) > 520) continue;
+            if (hypot(x - this.home.x, z - this.home.z) > 520) continue;
             if (MapGeo.isLand(x, z) || !WorldMap.inWorld(x, z) || !this._clear(p, a, d + 8)) continue;
             this.wp = { x, z }; this._wpT = 28 + Math.random() * 20;
             return;
@@ -146,7 +146,7 @@ class Boat extends Vehicle {
     cruiseUpdate(dt) {
         const p = this.position, f = this.body.getDirection(BABYLON.Axis.Z), heading = Math.atan2(f.x, f.z), v = this.forwardSpeed;
         this._wpT -= dt;
-        if (!this.wp || this._wpT <= 0 || Math.hypot(this.wp.x - p.x, this.wp.z - p.z) < 14) this._pickWaypoint();
+        if (!this.wp || this._wpT <= 0 || hypot(this.wp.x - p.x, this.wp.z - p.z) < 14) this._pickWaypoint();
         if (!this.wp) { this.driveTo(this.cruise * 0.3, 0.4, dt, 2, 4); return; }
         const want = Math.atan2(this.wp.x - p.x, this.wp.z - p.z), look = 16 + Math.abs(v) * 1.6;
         let ang = want, turned = false;
@@ -196,7 +196,7 @@ class BoatManager {
             if (k < 0 || WorldMap.dist[k] < margin) continue;                              // (dist = metros até a terra)
             if (M && M.box && x > M.box[0] - 20 && x < M.box[2] + 25 && z > M.box[1] - 20 && z < M.box[3] + 20) continue;
             if ([714, 0, -630].some((bz) => Math.abs(z - bz) < 22)) continue;                // longe das pontes
-            if (avoid.some((a) => Math.hypot(a.x - x, a.z - z) < 38)) continue;
+            if (avoid.some((a) => hypot(a.x - x, a.z - z) < 38)) continue;
             return { x, z };
         }
         return null;
@@ -236,7 +236,7 @@ class BoatManager {
         if (this.g.carLights) this.g.carLights.release(boat);
         boat.dispose(this.shadow);
         const f = this.g.camera.target, s = this._waterSpot(235, 375, -900, 1000, 22, []);
-        if (s && Math.hypot(s.x - f.x, s.z - f.z) > 120) this._make(boat.spec.id, s.x, s.z, Math.random() * Math.PI * 2, BoatSheet.PAINT_ROWS[boat.spec.id][0], 'parked');
+        if (s && hypot(s.x - f.x, s.z - f.z) > 120) this._make(boat.spec.id, s.x, s.z, Math.random() * Math.PI * 2, BoatSheet.PAINT_ROWS[boat.spec.id][0], 'parked');
     }
 
     update(dt, game) {
@@ -250,10 +250,10 @@ class BoatManager {
         for (const b of this.boats) {
             if (b.wrecked || b._asleep) continue;
             const p = b.position;
-            if (Math.hypot(p.x - fx, p.z - fz) > 70) continue;
+            if (hypot(p.x - fx, p.z - fz) > 70) continue;
             const v = Math.abs(b.forwardSpeed);
             if (v < 1.5) continue;
-            const d = b.body.getDirection(BABYLON.Axis.Z), l = Math.hypot(d.x, d.z) || 1, ux = d.x / l, uz = d.z / l, back = b.halfLen * 0.8;
+            const d = b.body.getDirection(BABYLON.Axis.Z), l = hypot(d.x, d.z) || 1, ux = d.x / l, uz = d.z / l, back = b.halfLen * 0.8;
             const size = 0.8 + b.halfW * 0.9 + v * 0.12;
             game.waterFx.ripple(p.x - ux * back, p.z - uz * back, size * 0.3, size * 1.15, 1.4, 0.34);
             if (v > 5) {                                                                     // espuma branca no popa

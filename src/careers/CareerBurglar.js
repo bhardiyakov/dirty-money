@@ -87,7 +87,7 @@ class BurglarCareer extends Career {
     prompt() {
         if (this.data.goods <= 0 || this.g.mode !== 'player') return '';
         const p = this.g.player.position, f = this.fence;
-        if (Math.hypot(p.x - f.x, p.z - f.z) > 3) return '';
+        if (hypot(p.x - f.x, p.z - f.z) > 3) return '';
         return `<b>E</b> vender eletrônicos ao receptador<small>${brl(this.data.goods)} em mercadoria → ${brl(this._fencePay())} na mão</small>`;
     }
     _fencePay() { return Math.round(this.data.goods * 0.6); }
@@ -281,7 +281,7 @@ class HeistJob extends CareerJob {
         if (!bank) { this.why = 'Nenhuma agência no radar'; return false; }
         this.bank = { x: bank.x, z: bank.z, name: 'Agência ' + ['Banco Central do Prazer', 'Banco do Litoral', 'Caixa Federal', 'Banco Nacional'][Math.floor(Math.random() * 4)] + ' (ao lado de ' + bank.name + ')' };
         let box = null;
-        for (let t = 0; t < 20 && !box; t++) { const a = Math.random() * Math.PI * 2, q = this.mgr.streetNear(bank.x + Math.cos(a) * 28, bank.z + Math.sin(a) * 28, 12); if (q && Math.hypot(q.x - bank.x, q.z - bank.z) > 14) box = q; }
+        for (let t = 0; t < 20 && !box; t++) { const a = Math.random() * Math.PI * 2, q = this.mgr.streetNear(bank.x + Math.cos(a) * 28, bank.z + Math.sin(a) * 28, 12); if (q && hypot(q.x - bank.x, q.z - bank.z) > 14) box = q; }
         this.box = box || { x: bank.x + 20, z: bank.z };
         this.target(this.box.x, this.box.z, 'Caixa de força do quarteirão');
         return true;
@@ -298,15 +298,15 @@ class HeistJob extends CareerJob {
     prompt() {
         const g = this.g; if (g.mode !== 'player' || g.lockpick.active) return '';
         const p = g.player.position;
-        if (this.stage === 0 && Math.hypot(p.x - this.box.x, p.z - this.box.z) < 3) return '<b>E</b> abrir a caixa de força e cortar a energia<small>mini-game: errar dá curto (alarme do quarteirão)</small>';
-        if (this.stage <= 1 && Math.hypot(p.x - this.bank.x, p.z - this.bank.z) < 4) return `<b>E</b> invadir e abrir o cofre temporizado<small>${this.power ? 'energia cortada' : 'câmeras e laser LIGADOS'} · ${this.bribed ? 'vigia comprado' : 'vigia vai apertar o pânico (suborne na aba O)'}</small>`;
+        if (this.stage === 0 && hypot(p.x - this.box.x, p.z - this.box.z) < 3) return '<b>E</b> abrir a caixa de força e cortar a energia<small>mini-game: errar dá curto (alarme do quarteirão)</small>';
+        if (this.stage <= 1 && hypot(p.x - this.bank.x, p.z - this.bank.z) < 4) return `<b>E</b> invadir e abrir o cofre temporizado<small>${this.power ? 'energia cortada' : 'câmeras e laser LIGADOS'} · ${this.bribed ? 'vigia comprado' : 'vigia vai apertar o pânico (suborne na aba O)'}</small>`;
         return '';
     }
 
     interact() {
         const g = this.g; if (g.mode !== 'player' || g.lockpick.active || g.player.busy) return false;
         const p = g.player.position;
-        if (this.stage === 0 && Math.hypot(p.x - this.box.x, p.z - this.box.z) < 3) {
+        if (this.stage === 0 && hypot(p.x - this.box.x, p.z - this.box.z) < 3) {
             this.mgr.act('pick', 30);
             g.lockpick.start({ difficulty: 1.3 * (1 - 0.07 * this.c.skill('eletronica')), onEnd: (res) => {
                 if (g.player.action && g.player.action.name === 'pick') g.player.action.timer = 0;
@@ -318,7 +318,7 @@ class HeistJob extends CareerJob {
             } });
             return true;
         }
-        if (this.stage <= 1 && Math.hypot(p.x - this.bank.x, p.z - this.bank.z) < 4) {
+        if (this.stage <= 1 && hypot(p.x - this.bank.x, p.z - this.bank.z) < 4) {
             this.stage = 2; this.prog = 0; this.tx = this.bank.x; this.tz = this.bank.z;
             this.text = 'Fique no cofre até o temporizador abrir';
             this.mgr.act('rummage', 2);
@@ -330,9 +330,9 @@ class HeistJob extends CareerJob {
 
     update(dt, pos) {
         const g = this.g;
-        if (this.stage === 0 && Math.hypot(pos.x - this.bank.x, pos.z - this.bank.z) < 6) { this.stage = 1; this.text = 'Você pulou a caixa de força: câmeras e laser ligados'; this.target(this.bank.x, this.bank.z, 'Agência bancária'); }      // foi direto à agência
+        if (this.stage === 0 && hypot(pos.x - this.bank.x, pos.z - this.bank.z) < 6) { this.stage = 1; this.text = 'Você pulou a caixa de força: câmeras e laser ligados'; this.target(this.bank.x, this.bank.z, 'Agência bancária'); }      // foi direto à agência
         if (this.stage === 2) {
-            if (Math.hypot(pos.x - this.bank.x, pos.z - this.bank.z) > 7) { this.stage = 1; this.prog = 0; this.text = 'Você saiu do cofre: o temporizador zerou'; return; }
+            if (hypot(pos.x - this.bank.x, pos.z - this.bank.z) > 7) { this.stage = 1; this.prog = 0; this.text = 'Você saiu do cofre: o temporizador zerou'; return; }
             const dur = Math.max(12, 30 - 3 * this.c.skill('eletronica'));
             this.prog += dt / dur;
             if (!this.power && !this.laser && this.prog > 0.4) { this.laser = true; g.wanted.ensureLevel(3); if (g.policeManager) g.policeManager.alertNear(pos, 400); g._flash('🚨 LASER! O sensor pegou você — a polícia está vindo pesado'); }
@@ -347,7 +347,7 @@ class HeistJob extends CareerJob {
             return;
         }
         if (this.stage === 3) {
-            const far = Math.hypot(pos.x - this.bank.x, pos.z - this.bank.z) > 220, safe = Standing.inFavela(pos.x, pos.z);
+            const far = hypot(pos.x - this.bank.x, pos.z - this.bank.z) > 220, safe = Standing.inFavela(pos.x, pos.z);
             if ((safe || far) && g.wanted.level === 0 && this.power && this.bribed && g.achievements) g.achievements.bump('heistClean');
             if ((safe || far) && g.wanted.level === 0) this.succeed(this.loot, 400 + this.loot / 100, `assalto à ${this.bank.name.split(' (')[0]}${this.power && this.bribed ? ' — trabalho limpo' : ''}`);
         }

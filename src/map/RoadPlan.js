@@ -247,7 +247,7 @@ const RoadPlan = {
                 const c = this._eg.get(this._key(i, j)); if (!c) continue;
                 for (const e of c) {
                     const px = e.v ? e.a.x : Math.max(e.a.x, Math.min(x, e.b.x)), pz = e.v ? Math.max(e.a.z, Math.min(z, e.b.z)) : e.a.z;
-                    const d = Math.hypot(px - x, pz - z);
+                    const d = hypot(px - x, pz - z);
                     if (d < bd) { bd = d; best = { x: px, z: pz, edge: e, d }; }
                 }
             }
@@ -310,7 +310,7 @@ const RoadPlan = {
             const c = this._eg.get(this._key(i, j)); if (!c) continue;
             for (const e of c) {
                 if (seen.has(e)) continue; seen.add(e);
-                const px = e.v ? e.a.x : Math.max(e.a.x, Math.min(x, e.b.x)), pz = e.v ? Math.max(e.a.z, Math.min(z, e.b.z)) : e.a.z, d = Math.hypot(px - x, pz - z);
+                const px = e.v ? e.a.x : Math.max(e.a.x, Math.min(x, e.b.x)), pz = e.v ? Math.max(e.a.z, Math.min(z, e.b.z)) : e.a.z, d = hypot(px - x, pz - z);
                 if (d <= r) out.push({ x: px, z: pz, d, edge: e });
             }
         }

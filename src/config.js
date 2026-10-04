@@ -6,6 +6,23 @@
 // Dinheiro do jogo é em reais: brl(1500) → "R$ 1.500" (use em TODA interface que mostra valores).
 function brl(n) { return "R$ " + Math.round(n).toLocaleString("pt-BR"); }
 
+// Distância euclidiana de 2 ou 3 componentes. Use no lugar de Math.hypot: o do V8 é ~18× mais lento que sqrt e aloca a cada chamada
+// (é variádico) — e distâncias são calculadas centenas de vezes por quadro (IA, polícia, trânsito, colisões, pássaros).
+// (Sem a proteção contra overflow do Math.hypot, que só importa para valores acima de ~1e154.)
+function hypot(x, y, z = 0) { return Math.sqrt(x * x + y * y + z * z); }
+
+// Tabelas constantes declaradas como `static get NOME() { return {...} }` montavam um objeto NOVO a cada leitura — e várias são lidas em
+// laços de todo quadro (Pickups.TYPES, Birds.SPECIES, CarSheet.MODELS...): lixo para o coletor e engasgos no celular. memoStatics troca
+// o getter por um que monta a tabela na 1ª leitura e devolve sempre a mesma (ninguém altera essas tabelas). Use no fim do arquivo da classe.
+function memoStatics(cls, ...names) {
+    for (const n of names) {
+        const d = Object.getOwnPropertyDescriptor(cls, n);
+        if (!d || !d.get) throw new Error(`memoStatics: ${cls.name}.${n} não é um getter estático`);
+        let v, done = false;
+        Object.defineProperty(cls, n, { configurable: true, get() { if (!done) { v = d.get.call(cls); done = true; } return v; } });
+    }
+}
+
 const Config = {
     // Desempenho (navegador, celular, Capacitor/Tauri): teto de quadros por segundo do jogo inteiro (lógica + render).
     // `lite` (celular, tablet ou aparelho fraco) liga o perfil leve: mapa de sombras menor, menos pedestres/carros e menos colisores vivos.
@@ -80,6 +97,9 @@ const Config = {
         loadRadius: 230,       // pedaços dentro deste raio do foco são construídos (a câmera enxerga no máx. ~70u).
         unloadExtra: 120,      // folga antes de descartar um pedaço distante.
         buildBudgetMs: 5,      // tempo máx. por frame construindo pedaços.
+        meshChunk: 512,        // lado (u) dos pedaços de malha mesclada da cidade (1 malha por material e pedaço; o frustum descarta os de fora)
+        meshChunkOffset: 256,  // desloca essa grade: sem isto o centro da cidade (0,0) caía na quina de 4 pedaços e cada material lá era desenhado 4× (−40% de draw calls no centro)
+        detailChunk: 128,      // ...e das camadas densas em vértices (acabamentos, meio-fio, postes, hidrantes): ver WorldBuilder._batch
         seed: 20261003,
         legacyPlan: false,     // true = só a cidade antiga (8×10 quarteirões); false = o mundo todo (faixa urbana, ilha, pontes, favela, rodovias).
 

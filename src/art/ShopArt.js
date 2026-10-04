@@ -361,7 +361,7 @@ class ShopCtx {
         let best = null, bd = 1e9;
         while (q.length) {
             const [x, z] = q.pop(), px = (x + 0.5) * st, pz = (z + 0.5) * st;
-            if (pz >= 3.8) { const d = Math.hypot(px - tx, pz - tz); if (d < bd) { bd = d; best = { x: px, z: pz }; } }
+            if (pz >= 3.8) { const d = hypot(px - tx, pz - tz); if (d < bd) { bd = d; best = { x: px, z: pz }; } }
             for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
                 const X = x + dx, Z = z + dz;
                 if (X < 0 || Z < 0 || X >= nx || Z >= nz || seen[Z * nx + X] || !this.free((X + 0.5) * st, (Z + 0.5) * st)) continue;
@@ -379,11 +379,11 @@ class ShopCtx {
             const k = (y * WP + x) * 4; if (c.data[k + 3] === 0) continue;
             let add0 = 0, add1 = 0, add2 = 0, mul = 1;
             for (const L of lights) {
-                const d = Math.hypot(x - L.x, y - L.y) / L.r; if (d >= 1) continue;
+                const d = hypot(x - L.x, y - L.y) / L.r; if (d >= 1) continue;
                 const g = (1 - d) * (1 - d) * L.a;
                 mul += g * 0.9; add0 += g * L.col[0] * 0.2; add1 += g * L.col[1] * 0.2; add2 += g * L.col[2] * 0.2;
             }
-            const vg = Math.hypot((x - WP / 2) / (WP * 0.62), (y - HP * 0.55) / (HP * 0.7)), v = Math.max(0, vg - 0.55) * vignette;
+            const vg = hypot((x - WP / 2) / (WP * 0.62), (y - HP * 0.55) / (HP * 0.7)), v = Math.max(0, vg - 0.55) * vignette;
             c.data[k] = Math.max(0, Math.min(255, c.data[k] * (mul - v) + add0));
             c.data[k + 1] = Math.max(0, Math.min(255, c.data[k + 1] * (mul - v) + add1));
             c.data[k + 2] = Math.max(0, Math.min(255, c.data[k + 2] * (mul - v) + add2));

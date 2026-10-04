@@ -139,7 +139,7 @@ class PoliceOfficer {
         if (this._recompute > 0) return;
         this._recompute = 0.6;
         const g = this.guard, p = this.position;
-        if (Math.hypot(p.x - g.x, p.z - g.z) > 1.4) {
+        if (hypot(p.x - g.x, p.z - g.z) > 1.4) {
             this.dest = new BABYLON.Vector3(g.x, 0, g.z);
             this.nav.crowd.agentGoto(this.index, this.dest);
         }
@@ -179,7 +179,7 @@ class PoliceOfficer {
     // ----- Perseguição fora do NavMesh (pulando grades e muros) -----
     _offNav(pos) {
         const q = this.nav.closestPoint(pos);
-        return Math.hypot(q.x - pos.x, q.z - pos.z) > 2.0;
+        return hypot(q.x - pos.x, q.z - pos.z) > 2.0;
     }
 
     _enterFree() {
@@ -217,7 +217,7 @@ class PoliceOfficer {
             if (e >= 1) { this.vaulting = null; this.actor.mesh.position.y = 0.5; }
             return speed;
         }
-        const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
+        const dx = tx - p.x, dz = tz - p.z, d = hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
         if (d > 1.5) {
             const o = CityGrid.nearestVault(p.x + ux * 0.55, p.z + uz * 0.55, 0.45);
             const land = o && CityGrid.vaultLanding(o, p.x, p.z);
@@ -248,10 +248,10 @@ class PoliceOfficer {
         this._recompute -= dt;
         if (this._recompute <= 0 && !this.vaulting) {
             this._recompute = 0.4;
-            const dist = Math.hypot(t.x - p.x, t.z - p.z);
+            const dist = hypot(t.x - p.x, t.z - p.z);
             if (!this.mind || (!this.mind.sees && !this.manager.weaponsFree && dist > 12) || dist > 45 || this.free.stuck > 2.5 || !this._offNav(t)) { this._exitFree(); return; }
         }
-        const dist = Math.hypot(t.x - p.x, t.z - p.z);
+        const dist = hypot(t.x - p.x, t.z - p.z);
         const sp = dist > 1.6 ? this._freeMove(t.x, t.z, dt, this.chaseSpeed) : 0;
         this.transform.rotation.y = this.heading;
         if (this.vaulting) { /* clipe de pulo já tocando */ }
@@ -363,7 +363,7 @@ class PoliceOfficer {
         let pos = null;
         for (let i = 0; i < 12; i++) {
             const p = this.nav.randomWalkable();
-            if (Math.hypot(p.x - this.targetPos.x, p.z - this.targetPos.z) > 45) { pos = p; break; }
+            if (hypot(p.x - this.targetPos.x, p.z - this.targetPos.z) > 45) { pos = p; break; }
         }
         if (!pos) pos = this.nav.randomWalkable();
         this.transform.position.copyFrom(pos);
@@ -440,7 +440,7 @@ class PoliceOfficer {
     // Rendição do jogador: corre até ficar de frente para ele (1,5u) e para, encarando. `arrest` = { target(): pos, arrived }.
     _arrestStep(dt) {
         const A = this.arrest, t = A.target(), p = this.position;
-        const dx = p.x - t.x, dz = p.z - t.z, d = Math.hypot(dx, dz) || 1;
+        const dx = p.x - t.x, dz = p.z - t.z, d = hypot(dx, dz) || 1;
         this.shooting = false; this.action = null; this.hurtTimer = 0;
         if (this.index < 0) {                                   // fora do NavMesh (quintal): chega em linha reta, pulando o que houver
             const sp = !A.arrived && !this.vaulting ? this._freeMove(t.x + dx / d * 1.5, t.z + dz / d * 1.5, dt, this.chaseSpeed) : (this.vaulting ? this._freeMove(0, 0, dt, 1) : 0);
@@ -469,7 +469,7 @@ class PoliceOfficer {
             if (d < 2.8) { A.arrived = true; this.nav.crowd.agentGoto(this.index, p); this._setSpeed(0.01); }
         }
         const v = this.nav.crowd.getAgentVelocity(this.index);
-        const speed = v ? Math.hypot(v.x, v.z) : 0;
+        const speed = v ? hypot(v.x, v.z) : 0;
         const targetY = A.arrived || speed < 0.4 ? Math.atan2(t.x - p.x, t.z - p.z) : Math.atan2(v.x, v.z);
         let a = (targetY - this.heading) % (Math.PI * 2);
         if (a > Math.PI) a -= Math.PI * 2;
@@ -493,7 +493,7 @@ class PoliceOfficer {
 
     _distToDest() {
         const p = this.position;
-        return Math.hypot(p.x - this.dest.x, p.z - this.dest.z);
+        return hypot(p.x - this.dest.x, p.z - this.dest.z);
     }
 
     _distToTarget() {
@@ -508,3 +508,4 @@ class PoliceOfficer {
         return this.transform.position;
     }
 }
+memoStatics(PoliceOfficer, 'KINDS');

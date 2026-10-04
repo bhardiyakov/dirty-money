@@ -71,7 +71,7 @@ class HeliSheet {
     static _rotorMaterial(scene, size) {
         const c = document.createElement('canvas');
         c.width = c.height = size;
-        const g = c.getContext('2d');
+        const g = c.getContext('2d', { willReadFrequently: true });      // lê os pixels de volta logo abaixo: canvas na CPU, sem esperar a GPU
         const R = size * 0.43, cx = size / 2, cy = size / 2;
         g.fillStyle = 'rgba(205,212,225,0.2)';                       // disco de "borrão" do rotor
         g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.fill();

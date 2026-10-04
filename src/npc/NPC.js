@@ -147,12 +147,12 @@ class NPC {
 
     _dropTowel() { if (this.towel) { this.towel.dispose(); this.towel = null; } }
 
-    distanceToTargetXZ(x, z) { return Math.hypot(this.position.x - x, this.position.z - z); }
+    distanceToTargetXZ(x, z) { return hypot(this.position.x - x, this.position.z - z); }
 
     // Anda em linha reta (sem NavMesh) rumo a (gx, gz) a `speed` u/s e escolhe o clipe pela profundidade:
     // além de wadeDepth m da margem, nada; antes, vadeia. Retorna a distância que falta.
     freeMove(gx, gz, dt, speed) {
-        const p = this.position, dx = gx - p.x, dz = gz - p.z, d = Math.hypot(dx, dz) || 1;
+        const p = this.position, dx = gx - p.x, dz = gz - p.z, d = hypot(dx, dz) || 1;
         const depth = MapGeo.waterDepth(p.x, p.z), W = Config.water.wadeDepth, deep = depth > W;
         const v = deep ? speed : speed * (depth > 0 ? 1.15 : 1.6);
         if (d > 0.05) {
@@ -279,7 +279,7 @@ class NPC {
         let pos = null;
         for (let i = 0; i < 12; i++) {
             const p = this.nav.randomWalkable();
-            if (!this.ctx.playerPos || Math.hypot(p.x - this.ctx.playerPos().x, p.z - this.ctx.playerPos().z) > 45) { pos = p; break; }
+            if (!this.ctx.playerPos || hypot(p.x - this.ctx.playerPos().x, p.z - this.ctx.playerPos().z) > 45) { pos = p; break; }
         }
         if (!pos) pos = this.nav.randomWalkable();
         this.transform.position.copyFrom(pos);
@@ -329,7 +329,7 @@ class NPC {
         }
         const signals = this.ctx.signals;
         const v = this.nav.crowd.getAgentVelocity(this.index);
-        const sp = v ? Math.hypot(v.x, v.z) : 0;
+        const sp = v ? hypot(v.x, v.z) : 0;
 
         // Já atravessando: com o sinal fechando, corre para terminar; ao sair da faixa, volta ao normal.
         if (this.crossing) {
