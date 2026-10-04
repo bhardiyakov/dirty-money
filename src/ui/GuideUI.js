@@ -94,11 +94,13 @@ GuideUI.PAGES = {
         <tr><td><kbd>H</kbd> · <kbd>L</kbd></td><td>buzina · faróis</td></tr><tr><td><kbd>Z</kbd> <kbd>X</kbd> / roda</td><td>zoom</td></tr>
         <tr><td><kbd>I</kbd></td><td>mochila</td></tr><tr><td><kbd>O</kbd></td><td>carreiras do crime</td></tr><tr><td><kbd>Esc</kbd> / <kbd>P</kbd></td><td>menu (mapa, GPS, status, guia)</td></tr></table>
         <h3>Controle (Xbox)</h3><p>Funciona direto: analógico move, gatilhos e botões fazem as ações, <b>D-pad</b> troca de arma e <b>Start</b> pausa.</p>
-        <h3>Celular</h3><ul><li><b>Joystick</b> (esquerda): anda e dirige; empurre até a borda para <b>correr</b>.</li>
-        <li><b>ATACAR</b> (botão grande): soco ou tiro — segure para rajada. No carro vira <b>SAIR</b>; no helicóptero aparecem <b>SUBIR</b> e <b>DESCER</b>.</li>
-        <li><b>Botões de contexto</b>: aparecem sozinhos só quando há algo a fazer ali — ENTRAR, ROUBAR, ARROMBAR, FURTAR, ASSALTAR, PULAR, VASCULHAR, DESMANCHAR, ABASTECER…</li>
-        <li><b>Arma</b> (chip): toque troca de arma, segure recarrega. <b>✚ KIT</b> aparece com vida baixa.</li>
-        <li><b>⋯</b>: chute, mochila, buzina, farol, girar o helicóptero, zoom. No topo: <b>II</b> (mapa/pausa) e <b>CRIME</b> (carreiras). <b>Pinça</b> com dois dedos = zoom.</li></ul>`,
+        <h3>Celular</h3><ul><li>Abre em <b>tela cheia</b> e na <b>horizontal</b>. No iPhone, use <i>Compartilhar → Adicionar à Tela de Início</i> para jogar como app.</li>
+        <li><b>Joystick flutuante</b>: encoste o dedo em qualquer lugar da metade esquerda — ele nasce ali. A pé, empurrar até a borda também corre. Dirigindo, vira um <b>volante</b> (só esquerda/direita).</li>
+        <li><b>4 botões</b> à direita, que mudam com o que você está fazendo:<br>
+        a pé — <b>ATACAR</b> (segure para rajada) · <b>CORRER</b> · ação do lugar (ENTRAR, ROUBAR, VASCULHAR…; sem nada por perto, CHUTE) · <b>ARMA</b> (toque troca, segure recarrega);<br>
+        dirigindo — <b>ACELERAR</b> · <b>RÉ / FREIO</b> · <b>SAIR</b> · ação do lugar (ABASTECER, DESMANCHAR…) ou BUZINA;<br>
+        helicóptero — <b>SUBIR</b> · <b>DESCER</b> · <b>SAIR</b> · <b>GIRAR</b>.</li>
+        <li><b>✚ KIT</b> aparece com vida baixa. <b>⋯</b>: mochila, farol, furtar, pular grade, zoom. No topo: <b>II</b> (mapa/pausa) e <b>CRIME</b> (carreiras). <b>Pinça</b> = zoom.</li></ul>`,
 
     money: () => `<h2>Dinheiro sujo × limpo</h2>
         <p>Tudo o que vem do crime é <b>dinheiro sujo</b>. O <b>dinheiro limpo</b> é o que está "na conta" e pode ser gasto no comércio legal.</p>
