@@ -34,8 +34,8 @@ class PoliceCar extends TrafficCar {
         this._relocCd = 0;
 
         // Barra do giroflex (corpo escuro sobre o teto, acima do plano do sprite). As luzes azul/
-        // vermelha que piscam são brilhos do CarLights, ligados por `sirenOn`.
-        if (this.siren) {
+        // vermelha que piscam são brilhos do CarLights, ligados por `sirenOn`. Viaturas do atlas já têm a barra desenhada no teto.
+        if (this.siren && !this.spec.siren) {
             const bar = BABYLON.MeshBuilder.CreateBox(`lightbar${id}`, { width: 1.2, height: 0.22, depth: 0.4 }, scene);
             bar.parent = this.body;
             bar.position.set(0, 1.55, -0.1);

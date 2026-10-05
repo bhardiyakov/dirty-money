@@ -8,7 +8,8 @@
 // ============================================================================
 
 class CarLights {
-    constructor(scene, maxCars = 120) {
+    // maxCars: carros COM LUZ ao mesmo tempo (só os perto da câmera têm); se passar, os lotes crescem sozinhos.
+    constructor(scene, maxCars = 48) {
         this.glow = new GlowBatch(scene, maxCars * 10, 'carGlow', 'glow');
         this.cones = new GlowBatch(scene, maxCars * 2, 'carCone', 'cone');
         this.puffs = new PuffSystem(scene, 420);
@@ -28,7 +29,7 @@ class CarLights {
                 pool: this.glow.alloc(),
                 beam: this.glow.alloc(),
                 cone: [this.cones.alloc(), this.cones.alloc()],
-                lamps: car.spec.lamps || CarSheet.lamps(car.spec.id),
+                lamps: car._lamps || (car._lamps = car.spec.lamps || CarSheet.lamps(car.spec.id)),      // (guardado no carro: ele entra e sai do alcance)
                 puffT: Math.random(),
             };
             this.slots.set(car, s);
@@ -55,27 +56,21 @@ class CarLights {
         const range2 = this.range * this.range;
 
         for (const car of cars) {
-            const s = this._slots(car);
             const p = car.position;
             const dx = p.x - focus.x, dz = p.z - focus.z;
-            if (dx * dx + dz * dz > range2) {                      // fora de vista: apaga tudo (uma vez, ao sair do alcance)
-                if (s.dark) continue;
-                s.dark = true;
-                for (const i of s.hl) g.off(i);
-                for (const i of s.tl) g.off(i);
-                for (const i of s.sig) g.off(i);
-                for (const i of s.siren) g.off(i);
-                g.off(s.pool); g.off(s.beam); c.off(s.cone[0]); c.off(s.cone[1]);
+            if (dx * dx + dz * dz > range2) {                      // fora de vista: DEVOLVE os quads (o lote só guarda os carros perto
+                if (this.slots.has(car)) this.release(car);        // da câmera — com centenas de carros no mapa ele não cresce)
                 continue;
             }
-            s.dark = false;
+            const s = this._slots(car);
 
-            // Vetor frente = o da imagem DESENHADA (o sprite tem 32 direções): luzes e feixes saem exatamente das lanternas do desenho,
-            // sem o desvio de até ~5,6° entre o corpo físico e o sprite.
+            // Vetor frente = o da imagem DESENHADA: luzes e feixes saem exatamente das lanternas do desenho. Carro (atlas): o sprite
+            // gira no ângulo exato; moto/bicicleta: a folha tem N direções (desvio de até meia direção entre o corpo físico e o sprite).
             let fx, fz;
             const vis = car.visual;
-            if (vis && vis.sheet && vis.sheet.dirs && !car.spec.boat) { const a = (vis.dir * Math.PI * 2) / vis.sheet.dirs; fx = Math.sin(a); fz = Math.cos(a); }
-            else { const f = car.body.getDirection(BABYLON.Axis.Z); fx = f.x; fz = f.z; const fl = hypot(fx, fz) || 1; fx /= fl; fz /= fl; }
+            if (vis && vis.rotates) { fx = Math.sin(vis.heading); fz = Math.cos(vis.heading); }
+            else if (vis && vis.sheet && vis.sheet.dirs && !car.spec.boat) { const a = (vis.dir * Math.PI * 2) / vis.sheet.dirs; fx = Math.sin(a); fz = Math.cos(a); }
+            else { const f = car.fwdToRef(this._f || (this._f = new BABYLON.Vector3())); fx = f.x; fz = f.z; const fl = hypot(fx, fz) || 1; fx /= fl; fz /= fl; }
             const rx = fz, rz = -fx;                              // direita do carro
             const L = s.lamps;
             const alive = car.mode !== 'parked' && car.mode !== 'abandoned' && !car.destroyed;
@@ -133,8 +128,9 @@ class CarLights {
             if (car.sirenOn) {
                 const A = sirenPhase ? CarLights.SIREN[0] : CarLights.SIREN[1];
                 const B = sirenPhase ? CarLights.SIREN[2] : CarLights.SIREN[3];
-                g.place(s.siren[0], p.x + fx * -0.1 - rx * 0.32, 2.05 + el, p.z + fz * -0.1 - rz * 0.32, 1.9);
-                g.place(s.siren[1], p.x + fx * -0.1 + rx * 0.32, 2.05 + el, p.z + fz * -0.1 + rz * 0.32, 1.9);
+                const sz = car.spec.siren ? car.spec.siren.z : -0.1;           // giroflex desenhado no teto (atlas) ou o padrão
+                g.place(s.siren[0], p.x + fx * sz - rx * 0.32, 2.05 + el, p.z + fz * sz - rz * 0.32, 1.9);
+                g.place(s.siren[1], p.x + fx * sz + rx * 0.32, 2.05 + el, p.z + fz * sz + rz * 0.32, 1.9);
                 g.color(s.siren[0], A[0], A[1], A[2], 1);
                 g.color(s.siren[1], B[0], B[1], B[2], 1);
                 const col = sirenPhase ? CarLights.SIREN[4] : CarLights.SIREN[5];

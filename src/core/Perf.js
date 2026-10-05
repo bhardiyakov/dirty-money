@@ -22,11 +22,15 @@ const Perf = {
     _heap: [],                 // [t (s), MB] amostrados a cada 3 s
     heapMB: 0, heapSlope: 0, heapLimitMB: 0,
     budgetMs: 1000 / 30 * 0.8,
+    hitchMs: 250,              // acima disso o quadro é um ENGASGO: entra limitado na média (ver frameEnd)
+    hitch: null,               // último engasgo: { ms, sec (sistema que mais gastou), secMs, at }
 
     frameStart() {
         const n = performance.now();
         if (this._f0) { const iv = n - this._f0; if (iv < 500) this.interval = this.interval ? this.interval * 0.94 + iv * 0.06 : iv; }
         this._t = this._f0 = n;
+        const m = performance.memory; this._h0 = m ? m.usedJSHeapSize : 0;      // (engasgo + heap caindo = coleta de lixo, ver frameEnd)
+        HangProbe.frameStart();
     },
     interval: 0,               // intervalo REAL entre quadros (ms): inclui a GPU e o navegador
     lap(name) {
@@ -34,12 +38,25 @@ const Perf = {
         let s = this.sec[name];
         if (!s) { s = this.sec[name] = { ms: 0, avg: 0 }; this.order.push(name); }
         s.ms += n - this._t; this._t = n;
+        HangProbe.lap(name);
     },
     frameEnd() {
         const n = performance.now(), f = n - this._f0;
         this.frameMs = f;
-        this.frameAvg = this.frameAvg ? this.frameAvg * 0.94 + f * 0.06 : f;
-        for (const k of this.order) { const s = this.sec[k]; s.avg = s.avg * 0.94 + s.ms * 0.06; s.ms = 0; }
+        // Um quadro isolado enorme (compilar shader na 1ª vez que algo aparece, GC grande, a janela travada pelo sistema) não pode
+        // dominar a MÉDIA: um de 15 s sozinho a punha em ~900 ms com o p95 em 10 ms. A média recebe no máximo `hitchMs`; o quadro
+        // inteiro vai para o pico/p95 e fica anotado em `hitch` (quanto durou e qual sistema gastou mais), mostrado no painel dev.
+        const k = f > this.hitchMs ? this.hitchMs / f : 1;
+        if (f > this.hitchMs) {
+            let worst = '', wm = 0;
+            for (const name of this.order) { const s = this.sec[name]; if (s.ms > wm) { wm = s.ms; worst = name; } }
+            // Se o heap caiu muito neste quadro, foi uma COLETA DE LIXO grande: ela pausa o jogo onde estiver, e a seção "culpada" é
+            // só quem estava rodando na hora — gcMB diz quanto foi liberado (aí o remédio é alocar menos, não mexer na seção).
+            const m = performance.memory, gcMB = m && this._h0 ? (this._h0 - m.usedJSHeapSize) / 1048576 : 0;
+            this.hitch = { ms: f, sec: worst, secMs: wm, at: n, gcMB };
+        }
+        this.frameAvg = this.frameAvg ? this.frameAvg * 0.94 + f * k * 0.06 : f * k;
+        for (const name of this.order) { const s = this.sec[name]; s.avg = s.avg * 0.94 + s.ms * k * 0.06; s.ms = 0; }
         this._peaks.push(f); if (this._peaks.length > 90) this._peaks.shift();        // ~3 s a 30 FPS
         let p = 0; for (const v of this._peaks) if (v > p) p = v; this.peak = p;
         if ((this._pk = (this._pk || 0) + 1) % 15 === 0) { const srt = this._peaks.slice().sort((x, y) => y - x); this.p95 = srt[Math.min(srt.length - 1, 4)] || 0; }    // 5º pior de 90 ≈ p95

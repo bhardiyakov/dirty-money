@@ -73,16 +73,26 @@ class TrafficCar extends Vehicle {
     update(dt, env) {
         if (this.controlled) { this.syncVisual(dt); return; }
         if (this.burning > 0 || this.wrecked) {         // pegando fogo ou carcaça: freia e fica parado
-            this.driveTo(0, 0, dt, 6, 18);
+            if (!this._resting()) this.driveTo(0, 0, dt, 6, 18);
             this.syncVisual(dt);
             return;
         }
         if (this.hold || this.mode === 'parked' || this.mode === 'abandoned') {   // hold: jogador está roubando este carro
-            this.driveTo(0, 0, dt, 6, 16);              // segura o carro parado
+            if (!this._resting()) this.driveTo(0, 0, dt, 6, 16);              // segura o carro parado (já parado: não toca na física)
         } else {
             this.aiUpdate(dt, env);
         }
         this.syncVisual(dt);
+    }
+
+    // Já parado (de verdade)? Escrever velocidade zero num corpo parado ACORDA ele no Havok: com isso nenhum carro estacionado dormia, e
+    // cada um custava simulação, sincronização da matriz e reenvio do sprite a todo passo. Parado e quieto, a física fica intocada.
+    _resting() {
+        const v = this.velocity;
+        if (v.x * v.x + v.z * v.z > 0.0025) { this.phys._dmRest = false; return false; }
+        this.braking = true; this.accelerating = false;           // (como o driveTo(0) faria: parado segurando o freio)
+        this.phys._dmRest = !(this._preStepFrames > 0);           // física pode pular a releitura deste corpo (ver Physics.init)
+        return true;
     }
 
     aiUpdate(dt, env) {
@@ -105,7 +115,8 @@ class TrafficCar extends Vehicle {
             const tx = t2.x - this._pt.x, tz = t2.z - this._pt.z, tl = hypot(tx, tz) || 1;
             this._pt.x += (-tz / tl) * this.lat; this._pt.z += (tx / tl) * this.lat;
         }
-        const f = this.body.getDirection(BABYLON.Axis.Z);
+        const f = this._fdir || (this._fdir = new BABYLON.Vector3());
+        this.fwdToRef(f);                                        // (sem Vector3 novo nem matriz de mundo)
         let delta = Math.atan2(this._pt.x - p.x, this._pt.z - p.z) - Math.atan2(f.x, f.z);
         while (delta > Math.PI) delta -= Math.PI * 2;
         while (delta < -Math.PI) delta += Math.PI * 2;
@@ -118,9 +129,9 @@ class TrafficCar extends Vehicle {
         let vt = this.cruise * (this.ignoreSignals ? 1 : (this._clsMul || 1) * (Weather.cur ? Weather.cur.trafficMul : 1));       // chuva: motoristas mais cautelosos (viatura em perseguição ignora)
         let reason = '';
         let signal = 0;
-        const stopSpeed = (d) => (d <= 0.25 ? 0 : Math.sqrt(2 * T.brake * 0.7 * (d - 0.25)));
 
-        const jn = R.junctions.find((j) => R.cum[j.exitIdx] - u > -0.5);
+        let jn = null;                                                  // próximo cruzamento ainda não deixado para trás
+        for (let k = 0; k < R.junctions.length; k++) { const j = R.junctions[k]; if (R.cum[j.exitIdx] - u > -0.5) { jn = j; break; } }
         if (jn) {
             const dEntry = R.cum[jn.entryIdx] - u;
             const dStop = dEntry - (this.halfLen + 0.6); // centro do carro para o para-choque parar na linha
@@ -140,10 +151,12 @@ class TrafficCar extends Vehicle {
                 if (sig.color === 'red') must = true;
                 else if (sig.color === 'yellow') must = dStop > brakeDist * 1.05 + 0.5;   // dá pra parar com conforto?
                 // O motivo só vale quando o limite realmente reduz a velocidade (não só "tem sinal lá na frente").
-                const limit = (why) => { const s = stopSpeed(dStop); if (s < vt) { vt = s; reason = why; } };
-                if (must) limit('sinal');
-                if (jn.turn === 'left' && dStop < 7 && this._oncoming(jn, env)) limit('preferencial');
-                if (dStop < 5 && this._exitBlocked(jn, env)) limit('saida');
+                const s = dStop <= 0.25 ? 0 : Math.sqrt(2 * T.brake * 0.7 * (dStop - 0.25));      // velocidade que ainda para na linha
+                if (s < vt) {                                                                       // (sem closures por carro por quadro)
+                    if (must) { vt = s; reason = 'sinal'; }
+                    else if (jn.turn === 'left' && dStop < 7 && this._oncoming(jn, env)) { vt = s; reason = 'preferencial'; }
+                    else if (dStop < 5 && this._exitBlocked(jn, env)) { vt = s; reason = 'saida'; }
+                }
             }
         }
 

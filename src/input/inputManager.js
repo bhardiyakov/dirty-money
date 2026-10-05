@@ -3,10 +3,15 @@
 // Tudo vira a mesma coisa: o mapa de teclas (`keys`/`justPressed`) + um eixo analógico. O resto do jogo só lê teclas; controle e toque
 // "apertam teclas virtuais" (setVirtual) — assim cada sistema (menu, mini-game de arrombar, tela de preso) funciona sem mudança.
 //
-//   Controle (Gamepad API, layout "standard" — Xbox/PlayStation/Switch Pro):
-//     analógico esq. mover/dirigir · RT golpe/tiro (no carro: acelera) · LT correr (no carro: freio/ré) · LB soco · RB chute
-//     A entrar/sair do veículo (F) · B interagir/abastecer (E) · X recarregar · Y pular grade (V) · RS clique furtar (C)
-//     direcional ←/→ troca de arma · ↑ kit médico · ↓ buzina · Back inventário · Start pausa (Game) · analógico dir. zoom
+//   Controle (Gamepad API, layout "standard" — Xbox/PlayStation/Switch Pro), no padrão dos jogos de mundo aberto (GTA V / Watch Dogs):
+//     A pé:   analógico esq. mover · A/✕ correr (segurar) e pular grade/muro (tocar perto) · L3 correr · X/□ interagir (E)
+//             Y/△ entrar no veículo (F) · B/○ recarregar (com arma) / soco · RT/R2 golpe/tiro · RB/R1 chute · LT/L2 MIRAR (ver Aim)
+//             LB/L1 e direcional ←/→ troca de arma · R3 furtar (C) · ↑ kit médico · ↓ arrombar (G)
+//             Mirando: analógico dir. aponta (manual) ou troca de alvo (assistida). Teclado/mouse: botão direito mira, o cursor aponta.
+//     Carro:  RT acelera · LT freia/ré · Y/△ sair · X/□ interagir (abastecer/desmanche) · L3 buzina · ↓ faróis
+//     Helicóptero: RT sobe · LT desce · analógico esq. mover · analógico dir. ↔ gira · Y/△ descer/pular
+//     Sempre: Back/SHARE inventário · Start/OPTIONS pausa (Game) · analógico dir. ↕ zoom
+//     As dicas na tela mostram os botões do controle conectado (Xbox ou PlayStation): ver PadGlyphs (que espelha esta tabela).
 //   Celular: TouchControls (src/ui/TouchControls.js) aparece quando é tela de toque e NÃO há controle conectado.
 // ============================================================================
 
@@ -19,8 +24,17 @@ class InputManager {
         this.analog = { x: 0, z: 0 };       // eixo analógico (controle ou joystick da tela), -1..1
         this.zoomAxis = 0;                  // zoom contínuo analógico (+ afasta)
         this.carMode = false;               // o Game avisa: dirigindo (RT/LT viram acelerador/freio)
+        this.heliMode = false;              // o Game avisa: pilotando o helicóptero (RT sobe, LT desce)
+        this.gunInHand = false;             // o Game avisa: arma de fogo na mão (B recarrega; sem ela, B dá soco)
         this.padConnected = false;          // há controle conectado?
         this.padName = '';
+        this.padType = 'xbox';              // desenho dos botões nas dicas: 'xbox' | 'ps' (PadGlyphs.type)
+        this.usingPad = false;              // o último comando veio do controle (as dicas mostram os botões dele; teclado/mouse volta às teclas)
+        this.yawAxis = 0;                   // analógico direito na horizontal (gira o helicóptero)
+        this.rstick = { x: 0, y: 0 };       // analógico direito cru (x direita +, y baixo +), com zona morta — a mira manual aponta com ele
+        this.padAim = false;                // LT/L2 segurado a pé: mirando
+        this.mouseAim = false;              // botão direito do mouse segurado sobre o jogo: mirando
+        this.mouseX = -1; this.mouseY = -1; this.mouseMovedAt = 0;
         this.touchDevice = (typeof window !== 'undefined') && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /[?&]touch\b/.test(location.search));
         this.onChange = null;               // callback: conectou/desconectou controle (TouchControls e o Game)
         this.onWeaponCycle = null;          // callback(dir): trocar de arma (D-pad / botão da tela)
@@ -31,8 +45,10 @@ class InputManager {
 
     _setupListeners() {
         window.addEventListener('keydown', (e) => {
+            if (e.padNav) return;      // teclas geradas pelo controle navegando nas janelas (PadNav) são só para as janelas
             AudioFX.init();            // áudio só é liberado depois de um gesto do usuário.
             const k = e.key.toLowerCase();
+            this.usingPad = false;
             if (!this.keys[k]) this.justPressed[k] = true; // ignora auto-repeat do teclado.
             this.keys[k] = true;
             // Evita a página rolar com setas/espaço.
@@ -42,6 +58,7 @@ class InputManager {
         });
 
         window.addEventListener('keyup', (e) => {
+            if (e.padNav) return;
             this.keys[e.key.toLowerCase()] = false;
         });
 
@@ -53,12 +70,21 @@ class InputManager {
         window.addEventListener('mousedown', (e) => {
             AudioFX.init();
             if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;        // (toque na tela virou "clique": só os controles da tela agem)
+            this.usingPad = false;
             if (e.button === 0) { this.justPressed['mouse0'] = true; this.mouseDown = true; }
+            if (e.button === 2 && e.target && e.target.id === 'canvas') this.mouseAim = true;              // botão direito sobre o jogo: mirar
         });
-        window.addEventListener('mouseup', (e) => { if (e.button === 0) this.mouseDown = false; });
+        window.addEventListener('mouseup', (e) => { if (e.button === 0) this.mouseDown = false; if (e.button === 2) this.mouseAim = false; });
+        // Posição do mouse (mira manual: o personagem aponta para o cursor).
+        window.addEventListener('mousemove', (e) => {
+            if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
+            this.mouseX = e.clientX; this.mouseY = e.clientY;
+            if (Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0) > 2) { this.mouseMovedAt = performance.now(); this.usingPad = false; }
+        });
+        window.addEventListener('contextmenu', (e) => { if (e.target && e.target.id === 'canvas') e.preventDefault(); });
 
         // Perder o foco não pode deixar tecla "presa".
-        window.addEventListener('blur', () => { this.keys = {}; this._virt = {}; this.mouseDown = false; this.analog.x = this.analog.z = 0; });
+        window.addEventListener('blur', () => { this.keys = {}; this._virt = {}; this.mouseDown = false; this.mouseAim = false; this.analog.x = this.analog.z = 0; });
 
         // Controle conectado/desconectado (o navegador só avisa depois do 1º botão apertado).
         window.addEventListener('gamepadconnected', (e) => { this.padName = e.gamepad ? e.gamepad.id : ''; this._refreshPad(); });
@@ -77,8 +103,9 @@ class InputManager {
     _refreshPad(silent = false) {
         const p = this._pad(), was = this.padConnected;
         this.padConnected = !!p;
-        if (p) this.padName = p.id;
-        if (!p && was) { this.releaseVirtual('pad'); this._padPrev = []; this.analog.x = this.analog.z = 0; this.zoomAxis = 0; }      // (só ao DESCONECTAR: senão zerava o joystick da tela a cada 1 s)
+        if (p) { this.padName = p.id; this.padType = PadGlyphs.type(p.id); }
+        if (p && !was) this.usingPad = true;                                                                        // acabou de conectar: as dicas já mostram os botões dele
+        if (!p && was) { this.releaseVirtual('pad'); this._padPrev = []; this.analog.x = this.analog.z = 0; this.zoomAxis = this.yawAxis = 0; this.rstick.x = this.rstick.y = 0; this.padAim = false; this.usingPad = false; }      // (só ao DESCONECTAR: senão zerava o joystick da tela a cada 1 s)
         if (was !== this.padConnected && this.onChange && !silent) this.onChange(this.padConnected, this.padName);
         if (was !== this.padConnected && silent && this.onChange) this.onChange(this.padConnected, this.padName);
     }
@@ -110,22 +137,46 @@ class InputManager {
         if (!p) { this._refreshPad(); return; }
         const dz = (v) => (Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82);
         const btn = (i) => !!(p.buttons[i] && p.buttons[i].pressed), val = (i) => (p.buttons[i] ? p.buttons[i].value : 0);
-        if (p.buttons.some((b) => b && b.pressed)) AudioFX.init();
+        if (p.buttons.some((b) => b && b.pressed)) { AudioFX.init(); this.usingPad = true; }
+        if (this.suppressPad) {                                                                      // saindo de um menu/janela: espera soltar tudo
+            if (p.buttons.some((b) => b && b.pressed)) { this.releaseVirtual('pad'); this._padPrev = Array.from(p.buttons, (b) => !!(b && b.pressed)); this.padAim = false; return; }
+            this.suppressPad = false;
+        }
+        else if (p.mapping === 'standard' && p.axes.some((a) => Math.abs(a) > 0.5)) this.usingPad = true;       // (fora do "standard" há eixo que repousa em -1)
 
         // movimento / direção
+        const car = this.carMode, heli = this.heliMode, foot = !car && !heli;
         let x = dz(p.axes[0] || 0), z = -dz(p.axes[1] || 0);
-        if (btn(14) && !this.carMode) x -= 1; if (btn(15) && !this.carMode) x += 1;                // (direcional fica para trocar de arma)
-        if (this.carMode) { const t = val(7) - val(6); if (Math.abs(t) > 0.05) z = t; }            // RT acelera, LT freia/ré
+        if (car) { const t = val(7) - val(6); if (Math.abs(t) > 0.05) z = t; }                     // RT acelera, LT freia/ré
         this.analog.x = Math.max(-1, Math.min(1, x)); this.analog.z = Math.max(-1, Math.min(1, z));
-        this.zoomAxis = dz(p.axes[3] || 0);
+        const rt = val(7) > 0.35, lt = val(6) > 0.35;
+        this.padAim = foot && lt;                                                                    // LT a pé: mirar (ver Aim)
+        this.rstick.x = dz(p.axes[2] || 0); this.rstick.y = dz(p.axes[3] || 0);
+        this.zoomAxis = this.padAim ? 0 : this.rstick.y;                                             // (mirando, o analógico direito aponta)
+        this.yawAxis = this.rstick.x;
 
-        // botões -> teclas
-        const hold = (i, key) => this.setVirtual(key, btn(i), 'pad');
-        hold(0, 'f'); hold(1, 'e'); hold(2, 'r'); hold(3, 'v'); hold(4, 'j'); hold(5, 'k'); hold(8, 'i'); hold(11, 'c'); hold(12, 'm'); hold(13, 'h');
-        this.setVirtual(' ', !this.carMode && val(7) > 0.35, 'pad');                                       // RT: golpe/tiro (rajada segurando)
-        this.setVirtual('shift', btn(10) || (!this.carMode && val(6) > 0.35), 'pad');                      // LS ou LT: correr
+        // botões -> teclas (layout GTA / Watch Dogs: ver o cabeçalho)
+        const set = (key, on) => this.setVirtual(key, on, 'pad');
+        set('f', btn(3));                                   // Y: entrar/sair do veículo
+        set('e', btn(2));                                   // X: interagir
+        set('padjump', foot && btn(0));                     // A: pula grade/muro (só se houver um ali: Game)
+        set('r', foot && btn(1) && this.gunInHand);         // B: recarregar (arma de fogo na mão)…
+        set('j', foot && btn(1) && !this.gunInHand);        //    …ou soco
+        set('padcancel', btn(1));                           // B: cancelar (mini-game de arrombar)
+        set('k', foot && btn(5));                           // RB: chute
+        set('g', foot && btn(13));                          // ↓: arrombar na manha
+        set('c', foot && btn(11));                          // R3: furtar
+        set('m', btn(12));                                  // ↑: kit médico
+        set('l', car && btn(13));                           // ↓ no carro: faróis
+        set('h', car && btn(10));                           // L3: buzina
+        set('i', btn(8));                                   // Back/SHARE: inventário
+        set(' ', !car && rt);                               // RT: golpe/tiro (rajada segurando) · helicóptero: sobe
+        set('shift', (foot && !lt && (btn(0) || btn(10))) || (heli && lt));     // A ou L3 segurado: correr (mirando, não corre) · helicóptero: LT desce
         const edge = (i) => btn(i) && !this._padPrev[i];
-        if (!this.carMode) { if (edge(14) && this.onWeaponCycle) this.onWeaponCycle(-1); if (edge(15) && this.onWeaponCycle) this.onWeaponCycle(1); }
+        if (foot && this.onWeaponCycle) {                   // ←/→ e LB: troca de arma
+            if (edge(14)) this.onWeaponCycle(-1);
+            if (edge(15) || edge(4)) this.onWeaponCycle(1);
+        }
         this._padPrev = Array.from(p.buttons, (b) => !!(b && b.pressed));
     }
 
@@ -151,6 +202,9 @@ class InputManager {
     isSprinting() {
         return !!this.keys['shift'];
     }
+
+    // Segurando o botão de mirar (LT/L2 ou botão direito do mouse)?
+    get aimHeld() { return this.padAim || this.mouseAim; }
 
     // Retorna true uma única vez por pressionada física da tecla.
     consumePress(key) {

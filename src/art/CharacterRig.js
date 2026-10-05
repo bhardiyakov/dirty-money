@@ -140,6 +140,7 @@ const CharacterRig = {
         };
         const handR = arm(shR, pose.handR, 1);
         const handL = arm(shL, pose.handL, -1);
+        if (look.hand) this._handBag(P, look.hand, handL, pose);          // bolsa/maleta/mala na mão esquerda (Bags: camada do jogador)
 
         // Pernas (IK): joelho dobra para frente.
         const leg = (hx, foot) => {
@@ -188,8 +189,9 @@ const CharacterRig = {
         // Arma na mão direita.
         if (pose.weapon) this._weapon(P, pose.weapon, handR);
 
-        // Montado numa bicicleta/moto: o veículo vem junto no mesmo sprite.
-        if (pose.ride) P.push(...this._bike(pose));
+        // Montado numa bicicleta/moto: o VEÍCULO é desenhado à parte (atlas dos carros, RiderActor) — aqui só os pedais girando
+        // embaixo dos pés (bicicleta). Os clipes park_*/fallen_* (riderless) continuam com o veículo inteiro (miniatura antiga).
+        if (pose.ride === 'bike') P.push(...this._pedals(pose));
 
         return this._finish(P, pose);
     },
@@ -421,6 +423,18 @@ const CharacterRig = {
             pose.footL = [-0.2, 0.1 + Math.max(0, -c) * 0.2, -s * A];
             pose.handR = [0.6, 0.76 + Math.max(0, -s) * 0.05, -s * 0.36];
             pose.handL = [-0.6, 0.76 + Math.max(0, s) * 0.05, s * 0.36];
+        } else if (gait === 'heavy') {
+            // Carga pesada nas costas (sobrecarga): curvado para a frente, passos curtos e arrastados, mãos segurando as alças no peito.
+            const A = 0.26;
+            pose.bob = Math.abs(c) * 0.06 - 0.07;
+            pose.lean = 0.22;
+            pose.torsoYaw = s * 0.07;
+            pose.hipYaw = -s * 0.06;
+            pose.headYaw = -s * 0.03;
+            pose.footR = [0.24, 0.1 + Math.max(0, c) * 0.1, s * A];
+            pose.footL = [-0.24, 0.1 + Math.max(0, -c) * 0.1, -s * A];
+            pose.handR = [0.3, 1.24 + Math.max(0, -s) * 0.03, 0.3];
+            pose.handL = [-0.3, 1.24 + Math.max(0, s) * 0.03, 0.3];
         } else {
             const A = 0.66;
             pose.bob = Math.abs(c) * 0.09 - 0.04;
@@ -455,6 +469,68 @@ const CharacterRig = {
             pose.weapon = { kind, dir: [-0.35, 0.85, -0.3] };
         }
         return pose;
+    },
+
+    // Bolsa/maleta/mala NA MÃO ESQUERDA (ver Bags: bolsa de lona, maleta, mala de rodinhas levantada). A mão direita fica livre ou com
+    // a pistola; o corpo pende para o lado oposto ao peso e o braço da bolsa quase não balança (ela é pesada).
+    hold(pose, w, gait, t) {
+        pose = this.carry(pose, w, gait);
+        const s = Math.sin(2 * Math.PI * t), b = pose.bob;
+        const sw = gait === 'run' ? 0.1 : (gait === 'walk' ? 0.05 : 0);
+        pose.handL = [-0.66, (gait === 'run' ? 0.74 : 0.66) + b, 0.04 + s * sw];
+        if (!w || w === 'none') pose.handR = gait === 'run' ? [0.56, 1.06 + b, 0.2 - s * 0.45] : [0.66, 0.8 + b, -s * 0.34];     // o braço livre balança mais (equilíbrio)
+        else pose.handR = [0.36, 1.05 + b, 0.62 + sw];                                                                              // pistola numa mão só
+        pose.torsoYaw = (pose.torsoYaw || 0) * 0.6;
+        pose.roll = -0.07;                                              // pende para a direita (contrapeso)
+        pose.pivot = [0, 0, 0];
+        return pose;
+    },
+
+    // Puxando a mala de rodinhas: braço esquerdo para trás segurando a alça; a mala vem atrás, nas rodinhas.
+    pull(pose, w, gait, t) {
+        const s = Math.sin(2 * Math.PI * t), b = pose.bob;
+        pose.handL = [-0.5, 0.86 + b, -0.5];
+        pose.handR = gait === 'walk' ? [0.62, 0.78 + b, -s * 0.36] : [0.6, 0.74 + b, 0.02];
+        pose.torsoYaw = (pose.torsoYaw || 0) * 0.7 + 0.08;
+        pose.lean = (pose.lean || 0) + 0.04;
+        pose.pull = true;
+        return pose;
+    },
+
+    // A bolsa da mão (look.hand), presa à mão esquerda `h`. kind: 'duffel' (bolsa de lona) | 'briefcase' (maleta de alumínio) |
+    // 'suitcase' (mala de rodinhas): levantada (clipes *_hold) ou puxada atrás (clipes *_pull, pose.pull).
+    _handBag(P, kind, h, pose) {
+        const M = this.MAT, B = SpriteBaker, add = this._add;
+        if (kind === 'duffel') {
+            const c = add(h, [-0.06, -0.3, 0]);
+            P.push(B.capsule(M.dark, add(c, [0, 0, -0.42]), add(c, [0, 0, 0.42]), 0.25));                         // corpo (lona)
+            P.push(B.capsule(M.metal, add(c, [0, 0.24, -0.36]), add(c, [0, 0.24, 0.36]), 0.025));                // zíper
+            for (const z of [-0.36, 0.36]) P.push(B.capsule(M.dark, add(c, [0, -0.02, z]), add(c, [0, 0, z * 1.18]), 0.2));   // pontas
+            for (const z of [-0.14, 0.14]) P.push(B.capsule(M.dark, add(h, [0, -0.02, 0]), add(c, [0.02, 0.2, z]), 0.04));  // alças
+            P.push(B.box(M.gold, add(c, [-0.24, 0.02, 0]), [0.01, 0.07, 0.1], 0, 0.01));                         // etiqueta
+            return;
+        }
+        if (kind === 'briefcase') {
+            const c = add(h, [-0.02, -0.27, 0]);
+            P.push(B.box(M.metal, c, [0.07, 0.22, 0.32], 0, 0.04));                                                // alumínio
+            P.push(B.box(M.dark, add(c, [0, 0.0, 0]), [0.075, 0.015, 0.33], 0, 0.005));                          // friso
+            for (const z of [-0.2, 0.2]) P.push(B.box(M.dark, add(c, [0, 0.2, z]), [0.075, 0.03, 0.03], 0, 0.01));  // fechos
+            P.push(B.capsule(M.dark, add(h, [0, 0.0, -0.08]), add(h, [0, 0.0, 0.08]), 0.035));                    // alça
+            return;
+        }
+        // mala de rodinhas
+        if (pose.pull) {
+            const c = [h[0] + 0.02, 0.4, h[2] - 0.62];
+            P.push(B.box(M.dark, c, [0.2, 0.38, 0.27], 0, 0.06));                                                  // corpo
+            for (let k = -2; k <= 2; k++) P.push(B.box(M.metal, add(c, [k * 0.075, 0.385, 0]), [0.012, 0.005, 0.25], 0, 0.002));   // frisos
+            P.push(B.capsule(M.metal, h, add(c, [0, 0.38, 0.24]), 0.03));                                         // alça telescópica
+            for (const x of [-0.16, 0.16]) P.push(B.sphere(M.dark, add(c, [x, -0.34, -0.26]), 0.06));            // rodinhas
+            return;
+        }
+        const c = add(h, [-0.08, -0.34, 0]);
+        P.push(B.box(M.dark, c, [0.13, 0.3, 0.38], 0, 0.06));
+        for (let k = -2; k <= 2; k++) P.push(B.box(M.metal, add(c, [-0.13, 0, k * 0.1]), [0.005, 0.28, 0.012], 0, 0.002));
+        P.push(B.capsule(M.dark, add(h, [0, 0, -0.08]), add(h, [0, 0, 0.08]), 0.035));
     },
 
     // ----------------------------------------------------------- clipes de ação
@@ -582,6 +658,17 @@ const CharacterRig = {
             roll: fallen ? 1.38 : (kind === 'moto' ? 0.12 : 0.2),
             offset: [fallen ? 0.55 : 0, 0, 0],
         });
+    },
+
+    // Pedivela e pedais da bicicleta (giram com `crank`): a parte da bicicleta que se mexe, desenhada com o piloto.
+    _pedals(pose) {
+        const M = this.MAT, B = SpriteBaker, P = [], c = pose.crank || 0;
+        for (const s of [0, Math.PI]) {
+            const a = this._pedalPos(c + s), sx = s === 0 ? 1 : -1;
+            P.push(B.capsule(M.metal, [sx * 0.1, 0.38, -0.02], [sx * 0.15, a.y, a.z], 0.03));
+            P.push(B.ellipsoid(M.dark, [sx * 0.2, a.y, a.z], [0.12, 0.03, 0.07], 0));
+        }
+        return P;
     },
 
     // Primitivas do veículo em coordenadas do rig (+Z frente, rodas no chão y=0). Usa os slots do personagem:
@@ -854,6 +941,14 @@ const CharacterRig = {
         getup:  { frames: 8, fps: 12, loop: false, pose: (t) => CharacterRig.getupPose(t) },     // levantando
 
         // ---- bicicleta e moto (o piloto vai no mesmo sprite) ----
+        // ---- carregando peso (só o jogador; ver Bags): bolsa/maleta/mala na mão, mala puxada nas rodinhas, sobrecarga nas costas ----
+        idle_hold:  { frames: 4, fps: 4, loop: true, weapons: ['none', 'pistol'], pose: (t, w) => CharacterRig.hold(CharacterRig.gait('idle', t), w, 'idle', t) },
+        walk_hold:  { frames: 8, fps: 10, loop: true, weapons: ['none', 'pistol'], pose: (t, w) => CharacterRig.hold(CharacterRig.gait('walk', t), w, 'walk', t) },
+        run_hold:   { frames: 8, fps: 13, loop: true, weapons: ['none', 'pistol'], pose: (t, w) => CharacterRig.hold(CharacterRig.gait('run', t), w, 'run', t) },
+        idle_pull:  { frames: 4, fps: 4, loop: true, pose: (t) => CharacterRig.pull(CharacterRig.gait('idle', t), 'none', 'idle', t) },
+        walk_pull:  { frames: 8, fps: 10, loop: true, pose: (t) => CharacterRig.pull(CharacterRig.gait('walk', t), 'none', 'walk', t) },
+        walk_heavy: { frames: 8, fps: 8, loop: true, pose: (t) => CharacterRig.gait('heavy', t) },
+
         ride_bike: { frames: 8, fps: 10, loop: true, pose: (t) => CharacterRig.ridePose('bike', t * 2 * Math.PI) },
         // moto: 3 quadros de inclinação (0 = inclinada p/ a direita, 1 = reta, 2 = p/ a esquerda)
         ride_moto: { frames: 3, fps: 1, loop: true, pose: (t) => CharacterRig.ridePose('moto', 0, [-0.42, 0, 0.42][Math.round(t * 3) % 3]) },
@@ -995,6 +1090,22 @@ const CharacterRig = {
         SpriteIO.paletteOverlay('pal/char', data, W, H);               // cores editadas em assets/sprites/pal/char.png (se houver)
         const tex = BABYLON.RawTexture.CreateRGBATexture(data, W, H, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
         tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+        this._pal = { data, tex, W };                                  // (recolorir o jogador: setColors)
         return { texture: tex, width: W, height: H };
+    },
+
+    // Troca cores de uma variante em tempo real (a roupa que o jogador veste: Outfit). cols: { shirt, sleeve, forearm, pants, shoes, cap… }.
+    // Só reescreve a linha dela na textura de paleta: todos os sprites dessa variante mudam juntos, sem gerar atlas.
+    setColors(row, cols) {
+        if (!this.VARIANTS) this.VARIANTS = this._buildVariants();
+        Object.assign(this.VARIANTS[row], cols);
+        const P = this._pal;
+        if (!P) return;
+        const ramps = this.rampsFor(row);
+        for (const idx of Object.keys(ramps)) for (let lv = 0; lv < 5; lv++) {
+            const o = (row * P.W + idx * 5 + lv) * 4, c = ramps[idx][lv];
+            P.data[o] = c[0]; P.data[o + 1] = c[1]; P.data[o + 2] = c[2]; P.data[o + 3] = 255;
+        }
+        P.tex.update(P.data);
     },
 };

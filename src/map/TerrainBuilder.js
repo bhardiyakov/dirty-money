@@ -85,14 +85,28 @@ class TerrainBuilder {
         this._pump(Infinity);
     }
 
+    // Constrói pedaços até gastar `ms` neste quadro. Um pedaço custa 12–19 ms no PC (bem mais no celular), então ele é montado em
+    // FATIAS (`_buildSteps`: uma linha de células por passo, depois uma malha por passo) e pode atravessar vários quadros — antes, o
+    // orçamento só era conferido entre pedaços inteiros, e um salto (respawn no hospital/delegacia) dava vários quadros de 15–25 ms.
     _pump(ms) {
         const t0 = performance.now();
-        while (this.queue.length) {
-            const q = this.queue.shift();
-            if (this.chunks.has(q.k)) continue;
-            this.chunks.set(q.k, this._build(q.i, q.j));
-            if (performance.now() - t0 > ms) break;
-        }
+        do {
+            if (!this._job) {
+                const q = this.queue.shift();
+                if (!q) return;
+                if (this.chunks.has(q.k)) continue;
+                this._job = { k: q.k, steps: this._buildSteps(q.i, q.j) };
+            }
+            const ts = performance.now(), r = this._job.steps.next();
+            this.stats.ms += performance.now() - ts;                         // (só o tempo de trabalho, não a espera entre quadros)
+            if (r.done) { this.chunks.set(this._job.k, r.value); this._job = null; }
+        } while (performance.now() - t0 < ms);
+    }
+
+    // Pedaço inteiro de uma vez (quem precisa dele já pronto).
+    _build(ci, cj) {
+        const steps = this._buildSteps(ci, cj);
+        for (;;) { const r = steps.next(); if (r.done) return r.value; }
     }
 
     _dispose(c) {
@@ -156,8 +170,8 @@ class TerrainBuilder {
     }
 
     // -------------------------------------------------------------------- pedaço
-    _build(ci, cj) {
-        const t0 = performance.now();
+    // Passos da construção de um pedaço (gerador): pausa a cada linha de células e antes de cada malha; devolve o pedaço no fim.
+    *_buildSteps(ci, cj) {
         const W = this.W, M = WorldMap, B = M.B, c = W.cell, n = this.cn, nx = M.nx, nz = M.nz;
         const gi0 = ci * n, gj0 = cj * n;
         const chunk = { i: ci, j: cj, meshes: [], colliders: [] };
@@ -175,73 +189,77 @@ class TerrainBuilder {
         const biomeAt = (i, j) => (i < 0 || j < 0 || i >= nx || j >= nz) ? B.SEA : M.biome[j * nx + i];
         const isGround = (b) => b !== B.SEA && b !== B.CITY;
 
-        for (let b = 0; b < n; b++) for (let a = 0; a < n; a++) {
-            const gi = gi0 + a, gj = gj0 + b;
-            if (gi >= nx || gj >= nz) continue;
-            const k = gj * nx + gi, bio = M.biome[k];
-            const x0 = W.minX + gi * c, z0 = W.minZ + gj * c, x1 = x0 + c, z1 = z0 + c;
+        for (let b = 0; b < n; b++) {
+            if (b > 0) yield;                                              // (fatia: uma linha de células por passo)
+            for (let a = 0; a < n; a++) {
+                const gi = gi0 + a, gj = gj0 + b;
+                if (gi >= nx || gj >= nz) continue;
+                const k = gj * nx + gi, bio = M.biome[k];
+                const x0 = W.minX + gi * c, z0 = W.minZ + gj * c, x1 = x0 + c, z1 = z0 + c;
 
-            if (bio === B.SEA) {                                         // espuma: água encostada na terra (não na cidade-calçadão)
-                this._foam(foam, gi, gj, x0, z0, x1, z1, biomeAt);
-                continue;
-            }
-            if (bio === B.CITY) continue;
-
-            const jit = 0.95 + 0.1 * Pixel.hash(gi, gj, 5);
-            const cNW = S(a, b + 1) * jit, cNE = S(a + 1, b + 1) * jit, cSW = S(a, b) * jit, cSE = S(a + 1, b) * jit;
-            const col = (s) => [s * 1, s * 1, s * 1];
-            // Células na divisa de biomas: 2×2 sub-quadros, cada um sorteia o bioma vizinho (borda "pontilhada" de pixel art).
-            const nb = [biomeAt(gi + 1, gj), biomeAt(gi - 1, gj), biomeAt(gi, gj + 1), biomeAt(gi, gj - 1)];
-            const mixed = nb.some((q) => q !== bio && isGround(q) && q !== B.SAND) && bio !== B.SAND;
-            if (!mixed) {
-                batch(this._matFor(bio, gi, gj)).top(x0, z0, x1, z1, y, uvT, [col(cNW), col(cNE), col(cSW), col(cSE)]);
-            } else {
-                const h = c / 2;
-                for (let sz = 0; sz < 2; sz++) for (let sx = 0; sx < 2; sx++) {
-                    const hn = nb[sx ? 0 : 1], vn = nb[sz ? 2 : 3], r = Pixel.hash(gi * 2 + sx, gj * 2 + sz, 9);
-                    let q = bio;
-                    if (r < 0.33 && isGround(hn) && hn !== B.SAND) q = hn; else if (r < 0.66 && isGround(vn) && vn !== B.SAND) q = vn;
-                    const u0 = sx * 0.5, v0 = sz * 0.5, u1 = u0 + 0.5, v1 = v0 + 0.5;
-                    const lerp = (u, v) => { const s = (cSW * (1 - u) + cSE * u) * (1 - v) + (cNW * (1 - u) + cNE * u) * v; return col(s); };
-                    const sx0 = x0 + sx * h, sz0 = z0 + sz * h;
-                    batch(this._matFor(q, gi, gj)).top(sx0, sz0, sx0 + h, sz0 + h, y, uvT, [lerp(u0, v1), lerp(u1, v1), lerp(u0, v0), lerp(u1, v0)]);
+                if (bio === B.SEA) {                                         // espuma: água encostada na terra (não na cidade-calçadão)
+                    this._foam(foam, gi, gj, x0, z0, x1, z1, biomeAt);
+                    continue;
                 }
-            }
+                if (bio === B.CITY) continue;
 
-            // Curvas de nível (nas serras/morros e onde o terreno sobe) e sombra nos paredões.
-            const hc = M.h[k];
-            if (hc > 8 || bio === B.ROCK || bio === B.FAVELA) {
-                const lv = (v) => Math.floor(v / W.contour);
-                const L0 = lv(hc);
-                const eastK = gi + 1 < nx ? k + 1 : -1, northK = gj + 1 < nz ? k + nx : -1;
-                const line = (xa, za, xb, zb, lvl) => {
-                    const th = (lvl % 4 === 0) ? 0.34 : 0.2, dk = (lvl % 4 === 0) ? 0.36 : 0.52;
-                    trim.top(Math.min(xa, xb) - (xa === xb ? th / 2 : 0), Math.min(za, zb) - (za === zb ? th / 2 : 0), Math.max(xa, xb) + (xa === xb ? th / 2 : 0), Math.max(za, zb) + (za === zb ? th / 2 : 0), y + 0.004, () => [0, 0], [0.32 * dk + 0.1, 0.27 * dk + 0.08, 0.2 * dk + 0.05]);
-                };
-                if (eastK >= 0 && isGround(M.biome[eastK]) && lv(M.h[eastK]) !== L0) line(x1, z0, x1, z1, Math.max(L0, lv(M.h[eastK])));
-                if (northK >= 0 && isGround(M.biome[northK]) && lv(M.h[northK]) !== L0) line(x0, z1, x1, z1, Math.max(L0, lv(M.h[northK])));
-            }
-            if (M.flags[k] & 1) {                                        // paredão: faixa escura do lado onde o chão cai
-                const dirs = [[1, 0, x1 - 1.0, z0, x1, z1], [-1, 0, x0, z0, x0 + 1.0, z1], [0, 1, x0, z1 - 1.0, x1, z1], [0, -1, x0, z0, x1, z0 + 1.0]];
-                for (const [dx, dz, ax, az, bx, bz] of dirs) {
-                    if (this._H(gi + dx, gj + dz) < hc - 2.2) trim.top(ax, az, bx, bz, y + 0.006, () => [0, 0], [0.13, 0.11, 0.09]);
+                const jit = 0.95 + 0.1 * Pixel.hash(gi, gj, 5);
+                const cNW = S(a, b + 1) * jit, cNE = S(a + 1, b + 1) * jit, cSW = S(a, b) * jit, cSE = S(a + 1, b) * jit;
+                const col = (s) => [s * 1, s * 1, s * 1];
+                // Células na divisa de biomas: 2×2 sub-quadros, cada um sorteia o bioma vizinho (borda "pontilhada" de pixel art).
+                const nb = [biomeAt(gi + 1, gj), biomeAt(gi - 1, gj), biomeAt(gi, gj + 1), biomeAt(gi, gj - 1)];
+                const mixed = nb.some((q) => q !== bio && isGround(q) && q !== B.SAND) && bio !== B.SAND;
+                if (!mixed) {
+                    batch(this._matFor(bio, gi, gj)).top(x0, z0, x1, z1, y, uvT, [col(cNW), col(cNE), col(cSW), col(cSE)]);
+                } else {
+                    const h = c / 2;
+                    for (let sz = 0; sz < 2; sz++) for (let sx = 0; sx < 2; sx++) {
+                        const hn = nb[sx ? 0 : 1], vn = nb[sz ? 2 : 3], r = Pixel.hash(gi * 2 + sx, gj * 2 + sz, 9);
+                        let q = bio;
+                        if (r < 0.33 && isGround(hn) && hn !== B.SAND) q = hn; else if (r < 0.66 && isGround(vn) && vn !== B.SAND) q = vn;
+                        const u0 = sx * 0.5, v0 = sz * 0.5, u1 = u0 + 0.5, v1 = v0 + 0.5;
+                        const lerp = (u, v) => { const s = (cSW * (1 - u) + cSE * u) * (1 - v) + (cNW * (1 - u) + cNE * u) * v; return col(s); };
+                        const sx0 = x0 + sx * h, sz0 = z0 + sz * h;
+                        batch(this._matFor(q, gi, gj)).top(sx0, sz0, sx0 + h, sz0 + h, y, uvT, [lerp(u0, v1), lerp(u1, v1), lerp(u0, v0), lerp(u1, v0)]);
+                    }
                 }
-            }
 
-            this._plant(vegHi, vegLo, bio, gi, gj, x0 + c / 2, z0 + c / 2, hc, base);
+                // Curvas de nível (nas serras/morros e onde o terreno sobe) e sombra nos paredões.
+                const hc = M.h[k];
+                if (hc > 8 || bio === B.ROCK || bio === B.FAVELA) {
+                    const lv = (v) => Math.floor(v / W.contour);
+                    const L0 = lv(hc);
+                    const eastK = gi + 1 < nx ? k + 1 : -1, northK = gj + 1 < nz ? k + nx : -1;
+                    const line = (xa, za, xb, zb, lvl) => {
+                        const th = (lvl % 4 === 0) ? 0.34 : 0.2, dk = (lvl % 4 === 0) ? 0.36 : 0.52;
+                        trim.top(Math.min(xa, xb) - (xa === xb ? th / 2 : 0), Math.min(za, zb) - (za === zb ? th / 2 : 0), Math.max(xa, xb) + (xa === xb ? th / 2 : 0), Math.max(za, zb) + (za === zb ? th / 2 : 0), y + 0.004, () => [0, 0], [0.32 * dk + 0.1, 0.27 * dk + 0.08, 0.2 * dk + 0.05]);
+                    };
+                    if (eastK >= 0 && isGround(M.biome[eastK]) && lv(M.h[eastK]) !== L0) line(x1, z0, x1, z1, Math.max(L0, lv(M.h[eastK])));
+                    if (northK >= 0 && isGround(M.biome[northK]) && lv(M.h[northK]) !== L0) line(x0, z1, x1, z1, Math.max(L0, lv(M.h[northK])));
+                }
+                if (M.flags[k] & 1) {                                        // paredão: faixa escura do lado onde o chão cai
+                    const dirs = [[1, 0, x1 - 1.0, z0, x1, z1], [-1, 0, x0, z0, x0 + 1.0, z1], [0, 1, x0, z1 - 1.0, x1, z1], [0, -1, x0, z0, x1, z0 + 1.0]];
+                    for (const [dx, dz, ax, az, bx, bz] of dirs) {
+                        if (this._H(gi + dx, gj + dz) < hc - 2.2) trim.top(ax, az, bx, bz, y + 0.006, () => [0, 0], [0.13, 0.11, 0.09]);
+                    }
+                }
+
+                this._plant(vegHi, vegLo, bio, gi, gj, x0 + c / 2, z0 + c / 2, hc, base);
+            }
         }
 
-        // Monta as malhas.
+        // Monta as malhas (uma por passo).
         const mk = (bt, name, mat, o) => { const m = bt.build(`terr_${ci}_${cj}_${name}`, this.scene, mat, Object.assign({ receiveShadows: false, alwaysActive: false }, o)); if (m) chunk.meshes.push(m); return m; };
-        for (const [mat, bt] of batches) mk(bt, mat.name, mat, { vertexColors: true });
-        mk(trim, 'trim', wb.mats.solid, { vertexColors: true });
-        mk(foam, 'foam', wb.mats.shore);
+        for (const [mat, bt] of batches) { yield; mk(bt, mat.name, mat, { vertexColors: true }); }
+        yield; mk(trim, 'trim', wb.mats.solid, { vertexColors: true });
+        yield; mk(foam, 'foam', wb.mats.shore);
+        yield;
         const hi = mk(vegHi, 'vhi', wb.props.hiMaterial, { vertexColors: true });
         if (hi) { hi.renderingGroupId = 1; hi.alphaIndex = -1; }                  // copas por cima de tudo que anda no chao (ver WorldBuilder._flush)
-        const lo = mk(vegLo, 'vlo', wb.props.loMaterial, { vertexColors: true });
+        yield; mk(vegLo, 'vlo', wb.props.loMaterial, { vertexColors: true });
         this._addColliders(chunk);
 
-        this.stats.built++; this.stats.ms += performance.now() - t0;
+        this.stats.built++;
         return chunk;
     }
 

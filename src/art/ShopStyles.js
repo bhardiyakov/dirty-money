@@ -80,6 +80,47 @@ const ShopStyles = {
         return S.finish();
     },
 
+    // ======================================================================= BOUTIQUE (roupas, tênis, acessórios, bolsas e malas)
+    clothes(v) {
+        const W = [22, 24, 22, 24, 26][v], D = 13.5, S = this._ctx('clothes', v, W, D, 0.5), c = S.c;
+        const wall = this._pal(v, [['#e8d6de', '#d4bcc8'], ['#dcdce6', '#c4c4d4'], ['#e6dccc', '#d0c2ac'], ['#d6e2dc', '#bccec4'], ['#ece4d8', '#d8ccbc']]);
+        S.floor('planks', ['#c8a882', '#b89a78', '#d0b894', '#a88a6a', '#c0a080'][v], '#8a6a4a', { size: 18 });
+        S.shell({ n: { kind: 'paint', A: wall[0], B: wall[1] }, rail: '#d46a9e', cap: '#8a7a80', side: '#8a7078', front: '#7a6068', mat: '#5a3a48' });
+        const tees = ['#e8742c', '#eceae4', '#1f1f24', '#f2d22c', '#3a3d46', '#2e1c14', '#2f6fd0', '#d9453a', '#4a5034', '#e86aa0', '#22252e', '#2fd07a'];
+        // arara: barra de metal com cabides e peças penduradas (cores variadas), vista de cima
+        const rack = (r, n0) => {
+            const b = S.blk(r, 1.55, '#b8bcc4', '#6a6e78');
+            c.fr(b.x, b.top + Math.floor(b.h / 2) - 1, b.w, 2, '#e8ecf0');
+            for (let x = 3, k = n0; x < b.w - 4; x += 5, k++) {
+                const col = tees[k % tees.length];
+                c.box(b.x + x, b.top + 2, 4, b.h - 4 + b.hp - 4, col, S.t(col, 1.3), S.t(col, 0.7), S.t(col, 0.35));
+                c.px(b.x + x + 1, b.top + 1, '#c8ccd2');
+            }
+        };
+        rack(S.R(2.2, 7.0, 8.8, 7.8), 0 + v); rack(S.R(2.2, 4.4, 8.8, 5.2), 4 + v);
+        if (W >= 24) rack(S.R(W - 9.6, 4.4, W - 4.4, 5.2), 8 + v);
+        // parede de tênis (prateleiras ao fundo) e parede de bolsas/malas
+        S.shelf(S.R(1.0, 12.3, W / 2 - 2.6, 13.3), 2.5, 4, ['#f0f0f4', '#2fd07a', '#e03a3a', '#2a2820', '#2f7fd0', '#1c1410', '#f2d22c'], '#e8e4dc');
+        S.shelf(S.R(W / 2 + 2.6, 12.3, W - 1.0, 13.3), 2.5, 3, ['#2a2c30', '#4a5034', '#b4bdc9', '#7a4a2a', '#1b2a5a', '#d46a9e'], '#e8e4dc');
+        // mesa de vitrine com peças dobradas (pilhas coloridas) e acessórios
+        { const b = S.blk(S.R(W / 2 - 2.2, 6.6, W / 2 + 2.2, 8.4), 0.9, '#f4f0ea', '#a89888');
+          for (let k = 0; k < 6; k++) { const col = tees[(k * 5 + v) % tees.length], x = b.x + 6 + (k % 3) * Math.floor((b.w - 16) / 3), y = b.top + 4 + Math.floor(k / 3) * Math.floor(b.h / 2 - 2); c.box(x, y, 14, 8, col, S.t(col, 1.3), S.t(col, 0.7), S.t(col, 0.35)); c.fr(x + 1, y + 3, 12, 1, S.t(col, 0.8)); } }
+        // espelhos (molduras douradas) e provador com cortina
+        for (const xx of [S.P(W - 3.0)]) { const bd = S.band(xx - 1.2, xx + 1.2); c.fr(bd.x, bd.y + 6, bd.w, 30, '#c8a040'); c.fr(bd.x + 2, bd.y + 8, bd.w - 4, 26, '#cfe0ea'); c.fr(bd.x + 4, bd.y + 10, 3, 20, '#ffffff'); }
+        { const bd = S.band(S.P(1.2), S.P(4.2)); c.fr(bd.x, bd.y + 4, bd.w, bd.h - 6, '#6a2a48'); for (let x = 2; x < bd.w - 2; x += 4) c.fr(bd.x + x, bd.y + 4, 1, bd.h - 6, '#8a3a60'); c.fr(bd.x, bd.y + 3, bd.w, 2, '#c8a040'); }
+        // manequins (cabeça e tronco vestido)
+        const mannequin = (x, z, col) => { const px = S.X(x), py = S.Y(z); c.bl(px - 7, py + 2, 18, 7, [8, 5, 3], 0.3); c.box(px - 9, py - 14, 18, 20, col, S.t(col, 1.3), S.t(col, 0.7), S.t(col, 0.3)); c.box(px - 6, py + 4, 12, 4, '#2a2c30', '#4a4d55', '#18191c', '#000'); c.disk(px, py - 19, 6, '#e8e4dc'); c.px(px - 2, py - 22, '#ffffff'); S.solid([x - 0.35, z - 0.35, x + 0.35, z + 0.35], 1.8); };
+        mannequin(S.P(W - 2.4), 9.2, tees[(v + 3) % tees.length]); mannequin(S.P(W - 2.4), 7.4, tees[(v + 6) % tees.length]);
+        // caixa (balcão) com sacolas da loja
+        S.counter(S.R(W / 2 - 3.2, 10.0, W / 2 + 3.2, 11.3), 1.0, '#f4f0ea', '#d46a9e', ['register', 'phone']);
+        { const b = S.base(S.R(W / 2 + 1.0, 10.1, W / 2 + 3.0, 11.2), 1.0); c.box(b.x + 4, b.top + 2, 10, 9, '#d46a9e', '#f0a0c8', '#8a3a60', '#401828'); c.box(b.x + 16, b.top + 3, 9, 8, '#f4f0ea', '#fff', '#a8a098', '#403830'); }
+        S.rug(S.R(W / 2 - 3.4, 2.0, W / 2 + 3.4, 5.6), '#d46a9e', '#8a3a60', false);
+        S.plant(S.P(1.8), 2.6, false); S.plant(S.P(W - 1.8), 2.6, false);
+        this._clerk(S, W / 2, 11.9, this.S, 12); if (v & 1) this._patron(S, 5.5, 6.1, this.N, 9 + v);
+        S.light(W / 2, 8.5, 8, [255, 236, 220], 0.42); S.light(W / 2, 3.5, 6, [255, 230, 240], 0.28); S.light(S.P(W - 3), 11, 3, [255, 220, 150], 0.25);
+        return S.finish(0.3);
+    },
+
     // ======================================================================= PADARIA
     bakery(v) {
         const W = [20, 22, 20, 22, 24][v], D = 13, S = this._ctx('bakery', v, W, D, 0.45);

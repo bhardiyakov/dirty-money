@@ -59,15 +59,53 @@ class Vehicle {
         // material de cor) e a física (aggregate) continua nele. Só o sprite aparece.
         this.body.material = Vehicle._ghostMaterial(scene);
         this.body.layerMask = Vehicle.GHOST_LAYER;                     // a câmera nem tenta desenhar (o mapa de sombra ignora a máscara)
+        this.body._dmShadowBox = [this.spec.wid - 0.1, this.spec.bodyH || 0.8, this.spec.len - 0.3];   // sombra pelo lote (ShadowBoxBatch)
 
-        // Sprite por cima (y=1,5: acima da cabine 3D, abaixo de qualquer giroflex).
+        // Sprite por cima (y=1,5: acima da cabine 3D, abaixo de qualquer giroflex). Carro: quad do lote único do atlas (CarArt), girado
+        // no ângulo exato; moto/bicicleta/barco: SpriteActor com a folha de direções.
         this.visual = null;
-        if (carSheet) {
+        if (carSheet && carSheet.art === 'rider') {                 // moto, bicicleta, barco: veículo do atlas + piloto por cima
+            this.paintRow = this.spec.bike ? Bikes.paintOf(this.spec.id, id) : paintRow;
+            this.visual = new RiderActor(scene, carSheet.vehModel, this.paintRow, carSheet.seat, carSheet.scale || 1);
+            this.visual.setY(this.spec.boat ? 0.8 : 1.5);
+            this.visual.setPosition(startPos.x, startPos.z);
+            this.visual.setHeading(heading);
+        } else if (carSheet && carSheet.art) {
+            this.visual = CarArt.actor(carSheet.modelId, paintRow);
+            this.visual.setY(1.5);
+            this.visual.setPosition(startPos.x, startPos.z);              // já nasce no lugar (não na origem)
+            this.visual.setHeading(heading);
+        } else if (carSheet) {
             this.visual = new SpriteActor(scene, carSheet, paintRow, `carSprite${id}`);
             this.visual.play('static');
             this.visual.mesh.position.y = 1.5;
-            this.visual.setPosition(startPos.x, startPos.z);              // já nasce no lugar (não na origem)
+            this.visual.setPosition(startPos.x, startPos.z);
             this.visual.setHeading(heading);
+        }
+
+        // Moto, bicicleta e barcos: a sombra segue o DESENHO (a ficha de física é só aproximada) e tem formato próprio — cápsula para
+        // duas rodas, casco com proa para barcos — e altura de verdade (o piloto da moto já tem a sombra dele, no sprite).
+        if ((this.spec.bike || this.spec.boat) && this.visual && this.visual.body && CarArt.model(this.visual.body.modelId)) {
+            const m = CarArt.model(this.visual.body.modelId), k = this.visual.body.scale || 1;
+            const H = { moto: 0.8, bicycle: 0.7, jetski: 1.1, lancha: 1.6, barco: 2.4 }[this.spec.id] || 1;
+            const L = m.len * k, W = m.wid * k;
+            if (this.spec.boat) {
+                this.body._dmShadowBox = [W * 0.95, H, L * 0.97];
+                this.body._dmShadowShape = 'hull';
+            } else {
+                // Duas rodas: a largura do desenho é a do GUIDÃO — o chassi é fino (~40% dela). O guidão vira uma barra fina à parte,
+                // no alto e à frente (as mãos do piloto), que projeta só um traço.
+                this.body._dmShadowBox = [W * (this.spec.bike === 'moto' ? 0.42 : 0.28), H, L * 0.92];
+                this.body._dmShadowShape = 'pill';
+                const bar = BABYLON.MeshBuilder.CreateBox(`carBar${id}`, { size: 0.1 }, scene);
+                bar.parent = this.body;
+                bar.position.set(0, 0.4, L * 0.24);
+                bar.material = Vehicle._ghostMaterial(scene);
+                bar.layerMask = Vehicle.GHOST_LAYER;
+                bar.isPickable = false;
+                bar._dmShadowBox = [W * 0.72, 0.1, 0.12];
+                bar._dmShadowShape = 'car';
+            }
         }
 
         // Cabine 3D (dá altura à sombra do carro; o sprite cobre o topo dela).
@@ -78,6 +116,7 @@ class Vehicle {
             cabin.material = Vehicle._ghostMaterial(scene);
             cabin.layerMask = Vehicle.GHOST_LAYER;
             cabin.isPickable = false;
+            cabin._dmShadowBox = [this.spec.wid * 0.8, 0.7, this.spec.len * 0.36];
         }
         this.wheels = [];     // rodas 3D foram removidas: o sprite já desenha as rodas e elas ficavam escondidas.
 
@@ -99,7 +138,7 @@ class Vehicle {
         // Velocidade lida do Havok UMA vez por passo de física (ver `velocity`); quem a muda pelo corpo invalida a leitura.
         this._vel = new BABYLON.Vector3(); this._velF = -1;
         const setLV = this.phys.setLinearVelocity.bind(this.phys);
-        this.phys.setLinearVelocity = (v) => { this._velF = -1; setLV(v); };
+        this.phys.setLinearVelocity = (v) => { this._velF = -1; this.phys._dmRest = false; setLV(v); };      // (_dmRest: ver Physics.init)
     }
 
     // Remove o carro do jogo (sprite, física, sombra, malhas filhas).
@@ -196,6 +235,7 @@ class Vehicle {
     fall() {
         if (this.wrecked) return;
         this.throwRider(0, 0, 5);
+        this._fell = true;                  // (caiu, não queimou: a pintura continua)
         this.wrecked = true; this.wreckT = 0; this.engineDead = true;
         if (this.mode !== undefined) this.mode = 'wreck';
     }
@@ -207,9 +247,16 @@ class Vehicle {
         const state = this.wrecked ? 'fallen' : (this.riderVariant != null ? 'ride' : 'park');
         const variant = this.riderVariant != null ? this.riderVariant : (this.frameVariant != null ? this.frameVariant : 2);
         const sheet = state === 'ride' && this.courier && variant >= CharacterRig.VARIANT_COURIER ? 'courier' : 'rider';      // entregador: capacete e baú
-        const key = state + ':' + variant + ':' + sheet;
+        const key = state + ':' + variant + ':' + sheet + (this.courier ? 'c' : '');
         if (this._lookKey === key) return;
         this._lookKey = key;
+        if (this.visual instanceof RiderActor) {                      // veículo do atlas (em pé / caído) + piloto por cima
+            const art = this.carSheet.vehModel;
+            this.visual.setModel(state === 'fallen' ? art + '_caida' : art);
+            if (this.courier) this.visual.setVariant(Bikes.COURIER_PAINT);
+            this.visual.setRider(state === 'ride' ? variant : null, lib.sheets[sheet], this.spec.bike === 'bike' ? 'ride_bike' : 'ride_moto');
+            return;
+        }
         this.visual.setSheet(Bikes.sheet(lib, this.spec.id, state, sheet));
         this.visual.setVariant(variant);
     }
@@ -236,23 +283,15 @@ class Vehicle {
         else this.takeDamage(dmg, 'crash');
     }
 
-    // Mostra no sprite a fase de amassado atual (a variante pode ainda estar sendo assada: usa a melhor pronta)
-    // e, na carcaça, a pintura carbonizada.
+    // Mostra no sprite a fase de amassado atual (o atlas já tem as 3 fases: é só um número no shader) e, na carcaça, a pintura
+    // carbonizada.
     _refreshLook() {
         const sheet = this.carSheet, lib = sheet && sheet.lib;
         if (!this.visual || !lib) return;
-        if (this.isBike) { this._bikeLook(); return; }
-        const want = this.wrecked ? 3 : this.dent;
-        if (want < 3 && this.hp < this.maxHp) lib.dentSheet(sheet.modelId, want + 1);   // pré-assa a PRÓXIMA fase (troca instantânea na próxima batida)
-        if (this._shownDent !== want) {
-            const s = lib.dentSheet(sheet.modelId, want);
-            if (s) { this.visual.setSheet(s); this._shownDent = want; }
-            else for (let k = want - 1; k > this._shownDent; k--) {
-                const t = lib.dentSheet(sheet.modelId, k);
-                if (t) { this.visual.setSheet(t); this._shownDent = k; break; }
-            }
-        }
-        if (this.wrecked && !this._charred) {
+        if (this.isBike) { this._bikeLook(); if (!(this.visual instanceof RiderActor)) return; }
+        const want = this.wrecked && !this._fell ? 3 : this.dent;
+        if (this._shownDent !== want) { this.visual.setDamage(want); this._shownDent = want; }
+        if (this.wrecked && !this._fell && !this._charred) {
             this._charred = true;
             this.visual.setVariant(12);
         }
@@ -262,12 +301,15 @@ class Vehicle {
     // Modelo arcade em espaço de velocidade: decompõe v em frente+lado,
     // mata a componente lateral (grip) e recompõe — velocidade segue o nariz.
     drive(throttle, steer, dt) {
+        this.throttleIn = throttle;                         // pedal do jogador (mesmo com o motor desligado: acelerar tenta dar a partida)
         if (this.engineDead) throttle = 0;                  // motor morto: só rola até parar
+        if (this.controlled && typeof EngineAudio !== 'undefined' && EngineAudio.gates(this)) throttle = 0;      // dando a partida / morreu: sem força
         if (this.hotwire > 0) { this.hotwire -= dt; throttle = 0; }      // ligação direta (carro trancado roubado): motor ainda não pegou
         if (this.tank > 0 && this.controlled) {             // gasolina: marcha lenta + acelerador (mais com o carro rápido); tanque vazio = motor sem força
             if (this.fuel <= 0) { this.fuel = 0; throttle = 0; }
             else this.fuel = Math.max(0, this.fuel - (this.spec.bike ? 0.5 : 1) * Config.fuel.burn * (1 - (SkillTree.m.fuel || 0)) * (0.1 + Math.abs(throttle) * (0.45 + 0.55 * Math.min(1, this.speed / this.spec.maxSpeed))) * dt);
         }
+        this.throttle = throttle;                           // (o que chegou ao motor: o som do motor lê — EngineAudio)
         const forward = this._flatAxes();
         const right = this._rt;
 
@@ -297,7 +339,7 @@ class Vehicle {
         const forward = this._flatAxes();
         const right = this._rt;
 
-        const vel = this._v; this.phys.getLinearVelocityToRef(vel);      // (os *ToRef do Babylon 6 não devolvem o vetor)
+        const vel = this._v.copyFrom(this.velocity);                  // (a já lida neste passo de física: 1 chamada ao Havok a menos por carro)
         let fwd = BABYLON.Vector3.Dot(vel, forward);
         const lat = BABYLON.Vector3.Dot(vel, right);
 
@@ -312,7 +354,7 @@ class Vehicle {
     // Frente do carro no plano do chão (normalizada) em this._fw e a direita (up × frente) em this._rt. Devolve a frente.
     _flatAxes() {
         const f = this._fw;
-        this.body.getDirectionToRef(BABYLON.Axis.Z, f);          // (devolve o nó, não o vetor)
+        this.fwdToRef(f);                                        // (do quaternião: sem matriz de mundo)
         f.y = 0;
         f.normalize();
         this._rt.set(f.z, 0, -f.x);                       // Cross(Up, f) com f no plano
@@ -357,21 +399,56 @@ class Vehicle {
     // Velocidade à frente (negativa = ré).
     get forwardSpeed() {
         const f = this._dz;
-        this.body.getDirectionToRef(BABYLON.Axis.Z, f);
+        this.fwdToRef(f);
         const v = this.velocity;
         return v.x * f.x + v.z * f.z;
+    }
+
+    // ---------------------------------------------------------------- dormir (fora da bolha acordada, ver Zones.asleep)
+    // Congela o carro: guarda a velocidade, zera e DESATIVA o corpo no Havok (não simula, não sincroniza). A IA também para (quem
+    // chama pula o update). Ao acordar, devolve a velocidade e o carro segue de onde estava — ainda fora da tela.
+    sleep() {
+        if (this._asleep) return;
+        const v = this.velocity;
+        this._sleepVel = { x: v.x, z: v.z };
+        this.phys.setLinearVelocity(Vehicle._ZERO); this.phys.setAngularVelocity(Vehicle._ZERO);
+        this._activation(false);
+        this._asleep = true;
+        this.phys._dmRest = true;
+        this.braking = false; this.accelerating = false; this.signal = 0;
+    }
+
+    wake() {
+        if (!this._asleep) return;
+        this._asleep = false;
+        const s = this._sleepVel; this._sleepVel = null;
+        this._activation(true);
+        this.phys.setLinearVelocity(s ? this._nv.set(s.x, 0, s.z) : Vehicle._ZERO);      // (também libera a releitura da física)
+    }
+
+    // Enquanto dorme: só termina o "pré-passo" de um teletransporte (o recycle do trânsito move carros adormecidos).
+    sleepTick() {
+        if (this._preStepFrames > 0 && --this._preStepFrames === 0) { this.phys.disablePreStep = true; this.phys._dmRest = true; }
+    }
+
+    _activation(on) {
+        try {
+            const pl = this.phys._physicsPlugin || this.body.getScene().getPhysicsEngine().getPhysicsPlugin(), hk = pl._hknp;
+            hk.HP_Body_SetActivationState(this.phys._pluginData.hpBodyId, on ? hk.ActivationState.ACTIVE : hk.ActivationState.INACTIVE);
+        } catch (e) { /* sem controle de ativação: só a velocidade zerada já basta */ }
     }
 
     // Teletransporta o corpo físico (spawn, respawn, remover carro abandonado). O Havok só
     // lê a transformação do mesh se `disablePreStep` estiver desligado — por 2 frames.
     teleport(x, z, heading) {
-        this.phys.disablePreStep = false;
+        this.phys.disablePreStep = false; this.phys._dmRest = false; this._sleepVel = null;      // (adormecido e movido: acorda parado no lugar novo)
         this.body.position.set(x, 0.45, z);
         this.body.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(heading, 0, 0);
         this.phys.setLinearVelocity(BABYLON.Vector3.Zero());
         this.phys.setAngularVelocity(BABYLON.Vector3.Zero());
         this._preStepFrames = 2;
         this._cmd = null;                       // (o salto não é batida)
+        this._onDeck = false;                   // (teleportado: o viaduto é reavaliado pela rampa)
         if (this.visual) { this.visual.setPosition(x, z); this.visual.setHeading(heading); }      // o sprite vai junto já neste quadro
     }
 
@@ -380,19 +457,58 @@ class Vehicle {
         if (this._preStepFrames > 0 && --this._preStepFrames === 0) this.phys.disablePreStep = true;
         if (!this.visual) return;
         this._refreshLook();
-        const p = this.body.getAbsolutePosition();
-        const f = this.body.getDirection(BABYLON.Axis.Z);
+        const p = this.position;                                 // (sem recalcular a matriz do corpo: ver o getter `position`)
+        const f = this._sdir || (this._sdir = new BABYLON.Vector3());
+        this.fwdToRef(f);                                        // (sem Vector3 novo nem matriz de mundo)
         this.visual.setPosition(p.x, p.z);
         this.visual.setHeading(Math.atan2(f.x, f.z));
         // Viaduto: o sprite sobe com o tabuleiro (a física é plana) e o carro passa para a camada 1 (não colide com o de baixo).
+        // Só SOBE quem entra pela rampa andando ao longo da via (quem cruza por baixo, em outra rua, fica no chão); quem já está no
+        // tabuleiro fica nele até sair pela outra ponta — a altura passa a depender só da posição. Antes a direção era conferida o
+        // tempo todo: girar ou derrapar lá em cima fazia o carro "cair" para baixo do tabuleiro (e trocar de camada de colisão).
         if (RoadPlan.viaducts && RoadPlan.viaducts.length) {
-            const e = RoadPlan.elevAt(p.x, p.z, f.x, f.z);
+            const e = this._onDeck ? RoadPlan.elevAt(p.x, p.z) : RoadPlan.elevAt(p.x, p.z, f.x, f.z);
+            this._onDeck = e > 0;
             this.elev = e;
             const L = e > 2.2 ? 1 : 0;
             if (L !== (this.layer || 0)) this._setLayer(L);
-            this.visual.mesh.position.y = 1.5 + e;
+            if (this.visual.setY) this.visual.setY(1.5 + e); else this.visual.mesh.position.y = 1.5 + e;
         }
+        this._bodyMotion(dt, f);
         if (this.isBike) this._animateBike(dt); else this.visual.update(dt);
+    }
+
+    // Movimento da carroceria e do chão: a aceleração no referencial do carro (da velocidade medida, quadro a quadro) move a suspensão
+    // e as rodas da frente do sprite (CarActor.animate); derrapagem, freada brusca e arrancada cantando pneu deixam marcas no chão
+    // (SkidMarks) e soltam fumaça de borracha.
+    _bodyMotion(dt, f) {
+        if (dt <= 0 || !this.visual) return;
+        const v = this.velocity, fl = Math.sqrt(f.x * f.x + f.z * f.z) || 1, fx = f.x / fl, fz = f.z / fl;
+        const pv = this._pv || (this._pv = { x: v.x, z: v.z, fwd: 0 });
+        const ax = (v.x - pv.x) / dt, az = (v.z - pv.z) / dt;
+        pv.x = v.x; pv.z = v.z;
+        const aF = ax * fx + az * fz, aL = ax * fz - az * fx;
+        if (this.visual.animate) this.visual.animate(dt, aF, aL, this.wrecked || this.engineDead && !this.controlled ? 0 : this.lastSteer);
+        if (this.spec.boat || this.wrecked || this._asleep || typeof SkidMarks === 'undefined') return;
+        // ---- marcas de pneu
+        const fwd = v.x * fx + v.z * fz, lat = v.x * fz - v.z * fx, sp = Math.abs(fwd);
+        let k = 0;
+        const slip = Math.abs(lat) - (this.isBike ? 2.2 : 2.6);                                  // de lado
+        if (slip > 0 && sp > 3) k = Math.min(1, slip / 4);
+        if (this.braking && sp > 7 && aF * Math.sign(fwd) < -7.5) k = Math.max(k, Math.min(1, (-aF * Math.sign(fwd) - 7.5) / 6 + 0.35));     // freada brusca
+        if (this.controlled && this.accelerating && fwd > 0.5 && fwd < 11 && aF > 6.5 && !this.spec.bike) k = Math.max(k, Math.min(0.8, (aF - 6.5) / 5 + 0.3));   // arrancada
+        const P = this.position, near = SkidMarks.focus && Math.abs(P.x - SkidMarks.focus.x) < 80 && Math.abs(P.z - SkidMarks.focus.z) < 80;
+        if (k <= 0 || !near || !MapGeo.isLand(P.x, P.z)) { if (this._skidding) { SkidMarks.lift(this); this._skidding = false; } return; }
+        this._skidding = true;
+        const rx = fz, rz = -fx, y = (this.elev || 0) + 0.2;
+        const m = this.visual.tire, tz = m ? m.z : this.halfLen * 0.6, tx = m ? m.x : this.halfW * 0.75;
+        if (this.isBike) { SkidMarks.track(this, 0, P.x - fx * this.halfLen * 0.55, P.z - fz * this.halfLen * 0.55, y, k); return; }
+        for (let w = 0; w < 2; w++) {                                                         // traseiras (e as dianteiras na freada)
+            const s = w ? 1 : -1, x = P.x - fx * tz + rx * tx * s, z = P.z - fz * tz + rz * tx * s;
+            SkidMarks.track(this, w, x, z, y, k);
+            if (k > 0.45) SkidMarks.smoke(this.game || SkidMarks.game, x, z, v.x, v.z, k);
+            if (this.braking && Math.abs(lat) < 2) SkidMarks.track(this, 2 + w, P.x + fx * tz + rx * tx * s, P.z + fz * tz + rz * tx * s, y, k * 0.8);
+        }
     }
 
     // Camada de colisão: 0 = chão, 1 = tabuleiro do viaduto. Os dois grupos se ignoram; os sólidos fixos continuam valendo.
@@ -404,8 +520,19 @@ class Vehicle {
         sh.filterCollideMask = L ? ~1 : ~2;
     }
 
+    // Posição do corpo. Sem pai, a posição LOCAL já é a do mundo (o Havok escreve nela a cada passo): ler direto evita recalcular a
+    // matriz do corpo na 1ª consulta depois de cada passo — ~3,6 µs por carro, ~0,5 ms por quadro com 140 carros. NÃO altere o vetor.
     get position() {
-        return this.body.getAbsolutePosition();
+        const b = this.body;
+        return b.parent ? b.getAbsolutePosition() : b.position;
+    }
+
+    // Frente do corpo (eixo +Z girado) direto do quaternião, sem montar a matriz de mundo. Devolve `out`.
+    fwdToRef(out) {
+        const b = this.body, q = b.rotationQuaternion;
+        if (!q || b.parent) { b.getDirectionToRef(BABYLON.Axis.Z, out); return out; }
+        out.set(2 * (q.x * q.z + q.w * q.y), 2 * (q.y * q.z - q.w * q.x), 1 - 2 * (q.x * q.x + q.y * q.y));
+        return out;
     }
 
     get speed() {
@@ -423,6 +550,7 @@ class Vehicle {
 
 // Contador de passos de física (Game._render incrementa depois de avançar o Havok): marca as velocidades guardadas como velhas.
 Vehicle.physFrame = 0;
+Vehicle._ZERO = new BABYLON.Vector3(0, 0, 0);          // (só leitura: velocidade zero sem alocar)
 
 // Skill Direção (carreira Desmanche): multiplicadores de aderência lateral e de giro só para o veículo que o JOGADOR dirige.
 Vehicle.playerGrip = 1;

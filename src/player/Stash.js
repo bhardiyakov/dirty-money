@@ -1,7 +1,7 @@
 // ============================================================================
 // Stash — o que fica guardado em casa: GELADEIRA (comida e água), COFRE (dinheiro e joias) e BAÚ (qualquer coisa).
 // Os dados são só contagens por item; a interface é StashUI. Entra no save (SaveGame).
-//   ids de item: cash | jewels | food | water | medkit | hack | key | ammo:<arma> | weapon:<arma>
+//   ids de item: cash | jewels | food | water | medkit | hack | key | ammo:<arma> | weapon:<arma> | bag:<bolsa> (Bags.DEFS; só no baú)
 // Move itens entre a mochila (Inventory, com espaços limitados) e a caixa. Armas guardam o carregador/reserva delas (wstate).
 // ============================================================================
 
@@ -16,6 +16,7 @@ class Stash {
     }
     static get GUNS() { return ['pistol', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47']; }
     static get CASH_STEP() { return 100; }
+    static single(id) { return id.startsWith('weapon:') || id.startsWith('bag:'); }      // um só (sem quantidade): armas e bolsas
 
     constructor() {
         this.boxes = { fridge: {}, safe: {}, chest: {} };
@@ -28,12 +29,14 @@ class Stash {
         const [k, a] = id.split(':');
         if (k === 'ammo') return 'Munição: ' + Weapons[a].name;
         if (k === 'weapon') return Weapons[a].name;
+        if (k === 'bag') return Bags.DEFS[a].name;
         return { cash: 'Dinheiro', jewels: 'Joias', food: 'Comida', water: 'Água', medkit: 'Kit médico', hack: 'Módulo de hackeio', key: 'Chave de carro' }[id] || id;
     }
     static icon(id) {
         const [k, a] = id.split(':');
         if (k === 'ammo') return 'ammo_pistol';
         if (k === 'weapon') return a;
+        if (k === 'bag') return Bags.DEFS[a].icon;
         return { cash: 'cash_bag', jewels: 'jewels', food: 'food', water: 'water', medkit: 'medkit', hack: 'hack', key: 'carkey' }[id] || id;
     }
 
@@ -42,6 +45,7 @@ class Stash {
         const inv = game.inventory, [k, a] = id.split(':');
         if (k === 'ammo') return inv.weapons[a].reserve || 0;
         if (k === 'weapon') return inv.weapons[a].owned && a !== 'fists' ? 1 : 0;
+        if (k === 'bag') return Bags.has(inv, a) ? 1 : 0;
         return { cash: inv.cash, jewels: inv.jewels, food: inv.food, water: inv.water, medkit: inv.medkits, hack: inv.hacks, key: inv.keys }[id] || 0;
     }
 
@@ -71,6 +75,7 @@ class Stash {
         const ids = ['cash', 'jewels', 'food', 'water', 'medkit', 'hack', 'key'];
         for (const g of Stash.GUNS) ids.push('weapon:' + g, 'ammo:' + g);
         ids.push('weapon:bat', 'weapon:knife');
+        for (const b of Object.keys(Bags.DEFS)) if (b !== 'none') ids.push('bag:' + b);
         for (const id of ids) {
             if (!B.ok(id)) continue;
             const c = this.invCount(game, id);
@@ -93,6 +98,14 @@ class Stash {
         let q = n === 'all' ? have : Math.min(have, n);
         if (q <= 0) return '';
         if (!Stash.BOXES[box].ok(id)) return 'Isso não cabe aqui';
+        if (id.startsWith('bag:')) {                                    // bolsa: a que está em uso só sai se o que se carrega couber nos bolsos
+            const b = id.slice(4);
+            if (dir === 'in') { const r = Bags.remove(game, b); if (!r.ok) return r.msg; d[id] = 1; return 'Guardou: ' + Stash.label(id); }
+            if (Bags.has(inv, b)) return 'Você já está com essa bolsa';
+            delete d[id];
+            inv.spareBags.push(b);
+            return `Pegou: ${Stash.label(id)} (de reserva — use no Inventário → Equipamento)`;
+        }
         // joias levam o valor junto (média)
         let jv = 0;
         if (id === 'jewels') {

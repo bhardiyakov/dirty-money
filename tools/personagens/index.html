@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dirty Money — Personagens (gerador do atlas)</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #2b2e34; color: #d8dce2; font: 13px system-ui, Segoe UI, Arial, sans-serif; padding: 16px; }
+        h1 { font-size: 18px; margin-bottom: 4px; }
+        .sub { color: #9aa0aa; margin-bottom: 12px; line-height: 1.5; }
+        .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: #23262b; padding: 10px 12px; border: 1px solid #3a3f4a; margin-bottom: 14px; position: sticky; top: 0; z-index: 5; }
+        button { background: #ffd23a; color: #1b1b1b; border: 0; padding: 7px 12px; font-weight: 700; cursor: pointer; border-radius: 3px; }
+        button:disabled { opacity: 0.5; cursor: default; }
+        label { display: flex; gap: 6px; align-items: center; }
+        select, input { background: #14161a; color: #d8dce2; border: 1px solid #3a3f4a; padding: 3px; }
+        #status { color: #9aa0aa; }
+        h2 { font-size: 12px; letter-spacing: 2px; color: #ffd23a; text-transform: uppercase; margin: 16px 0 8px; border-bottom: 1px solid #ffd23a55; padding-bottom: 4px; }
+        .grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .cell { background: #5a6170; border: 1px solid #40444d; padding: 4px; text-align: center; font-size: 10px; color: #e8eaee; }
+        .cell canvas { display: block; margin: 0 auto 3px; }
+    </style>
+</head>
+<body>
+    <h1>Personagens vistos de cima — gerador do atlas do jogo</h1>
+    <div class="sub">
+        As poses são as do jogo (<code>CharacterRig</code>); o desenho é vetorial, suave e visto de cima, como o dos carros, numa direção só
+        (o jogo gira o sprite). <b>Gerar atlas</b> desenha todos os quadros; <b>Salvar</b> grava <code>assets/chars/personagens-atlas.js</code>.<br>
+        Abra pelo servidor de desenvolvimento: <code>http://localhost:8123/tools/personagens/</code>.
+    </div>
+    <div class="bar">
+        <button id="build">Gerar atlas</button>
+        <button id="save" disabled>Salvar personagens-atlas.js</button>
+        <label>Folha <select id="sheet"></select></label>
+        <label>Variante <select id="variant"></select></label>
+        <label>Bolsa <select id="bag"><option value="">—</option><option>cross</option><option>pack</option><option>tactical</option><option>duffel</option><option>briefcase</option><option>suitcase</option></select></label>
+        <label>Giro <input id="rot" type="range" min="0" max="360" value="0" step="15"></label>
+        <span id="status"></span>
+    </div>
+    <div id="out"></div>
+
+    <script src="../../src/config.js"></script>
+    <script src="../../src/art/Pixel.js"></script>
+    <script src="../../src/art/SpriteBaker.js"></script>
+    <script src="../../src/art/CharacterRig.js"></script>
+    <script src="../../src/player/Bags.js"></script>
+    <script src="../../src/art/CharacterSheet.js"></script>
+    <script src="../carros/atlas.js"></script>
+    <script src="./renderer.js"></script>
+    <script src="./atlas.js"></script>
+    <script>
+        const $ = (id) => document.getElementById(id);
+        let jsText = null;
+        CharacterRig.VARIANTS = CharacterRig._buildVariants();
+        for (const s of Object.keys(SpriteLibrary.SHEETS)) $('sheet').insertAdjacentHTML('beforeend', `<option>${s}</option>`);
+        CharacterRig.VARIANTS.forEach((_, i) => $('variant').insertAdjacentHTML('beforeend', `<option value="${i}">${i}</option>`));
+        $('variant').value = 0;
+
+        const slotColors = (v) => { const r = CharacterRig.rampsFor(v), out = []; for (const k of Object.keys(r)) out[+k] = r[k][2]; return out; };
+
+        // Quadro → canvas pintado (com a sombra no chão e girado, como no jogo).
+        function frameCanvas(f, bag, v, rotDeg, zoom = 2) {
+            const S = 120, c = document.createElement('canvas');
+            c.width = S; c.height = S; c.style.width = S * zoom / 1.6 + 'px';
+            const ctx = c.getContext('2d'), cols = slotColors(v);
+            const draw = (fr) => { if (!fr || !fr.w) return null; const t = document.createElement('canvas'); t.width = fr.w; t.height = fr.h; t.getContext('2d').putImageData(CharRender.colorize(fr, cols), 0, 0); return t; };
+            const body = draw(f), bg = draw(bag);
+            const place = (img, fr) => ctx.drawImage(img, S / 2 + fr.ox, S / 2 - fr.oz);
+            const a = (rotDeg * Math.PI) / 180;
+            // sombra: silhueta deslocada para o sudeste, sem girar o deslocamento
+            if (body) {
+                ctx.save(); ctx.translate(0.28 * 32, 0.22 * 32); ctx.translate(S / 2, S / 2); ctx.rotate(a); ctx.translate(-S / 2, -S / 2);
+                ctx.filter = 'brightness(0) opacity(0.36)'; place(body, f); ctx.restore();
+            }
+            ctx.save(); ctx.translate(S / 2, S / 2); ctx.rotate(a); ctx.translate(-S / 2, -S / 2);
+            if (body) place(body, f);
+            if (bg) place(bg, bag);
+            ctx.restore();
+            return c;
+        }
+
+        // Pré-visualização direta (sem atlas): todos os clipes da folha, primeiro quadro + animação.
+        const anims = [];
+        function preview() {
+            const sheet = $('sheet').value, v = +$('variant').value, bag = $('bag').value, rot = +$('rot').value, look = SpriteLibrary.SHEETS[sheet].look;
+            const out = $('out'); out.replaceChildren(); anims.length = 0;
+            const h = document.createElement('h2'); h.textContent = `${sheet} — ${CharAtlasBuild.combos(sheet).length} clipes`; out.appendChild(h);
+            const grid = document.createElement('div'); grid.className = 'grid'; out.appendChild(grid);
+            for (const [n, w] of CharAtlasBuild.combos(sheet)) {
+                const def = CharacterRig.CLIPS[n], frames = [];
+                for (let f = 0; f < def.frames; f++) {
+                    const pose = CharAtlasBuild.pose(def, f, w);
+                    const hand = CharAtlasBuild.HANDS[bag], lk = !bag || sheet !== 'player' ? look : hand ? (hand.test(n) ? Object.assign({}, look, { hand: bag }) : look) : Object.assign({}, look, { bag });      // (bolsa da mão: só nos clipes de carregar)
+                    frames.push(CharRender.crop(CharRender.render(CharacterRig.build(pose, lk))));
+                }
+                const cell = document.createElement('div'); cell.className = 'cell';
+                const cv = frameCanvas(frames[0], null, v, rot);
+                cell.appendChild(cv); cell.appendChild(document.createTextNode(`${n}${w !== 'none' ? ' · ' + w : ''} (${def.frames})`));
+                grid.appendChild(cell);
+                anims.push({ cell, cv, frames, def, v, rot });
+            }
+        }
+        function tick(now) {
+            for (const a of anims) {
+                const f = Math.floor((now / 1000) * a.def.fps) % a.def.frames;
+                if (a.f === f) continue; a.f = f;
+                const c = frameCanvas(a.frames[f], null, a.v, a.rot);
+                a.cell.replaceChild(c, a.cv); a.cv = c;
+            }
+            requestAnimationFrame(tick);
+        }
+        for (const id of ['sheet', 'variant', 'bag', 'rot']) $(id).addEventListener('change', preview);
+        $('rot').addEventListener('input', preview);
+        preview(); requestAnimationFrame(tick);
+
+        async function build() {
+            $('build').disabled = true;
+            const r = await CharAtlasBuild.build((d, t, what) => { $('status').textContent = `${d}/${t} quadros · ${what}`; });
+            jsText = CharAtlasBuild.toJS(r);
+            window.__charAtlas = r; window.__charAtlasJS = jsText;
+            $('status').textContent = `${r.frames} quadros (${r.pieces} imagens) · atlas ${r.W}×${r.H} · PNG ${(r.png.length / 1024).toFixed(0)} KB · .js ${(jsText.length / 1024).toFixed(0)} KB · ${(r.ms / 1000).toFixed(1)} s`;
+            $('save').disabled = false; $('build').disabled = false;
+            return r;
+        }
+        async function save() {
+            if (!jsText) return;
+            const blob = new Blob([jsText], { type: 'application/javascript' });
+            // servidor de desenvolvimento (serve.ps1): grava direto em assets/chars/
+            try { const r = await fetch('/__save/assets/chars/personagens-atlas.js', { method: 'PUT', body: blob }); if (r.ok) { $('status').textContent += ' · salvo em assets/chars/personagens-atlas.js'; return; } } catch (e) { /* sem o servidor: pergunta onde salvar */ }
+            if (window.showSaveFilePicker) {
+                try {
+                    const h = await showSaveFilePicker({ suggestedName: 'personagens-atlas.js', types: [{ description: 'JavaScript', accept: { 'application/javascript': ['.js'] } }] });
+                    const w = await h.createWritable(); await w.write(blob); await w.close();
+                    $('status').textContent += ' · salvo';
+                    return;
+                } catch (e) { if (e.name === 'AbortError') return; }
+            }
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'personagens-atlas.js'; a.click();
+        }
+        $('build').onclick = build; $('save').onclick = save;
+        window.buildAtlas = build;
+    </script>
+</body>
+</html>

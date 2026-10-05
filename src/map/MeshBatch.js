@@ -23,7 +23,8 @@ class MeshBatch {
     quad(a, b, c, d, n, uvs, color = [1, 1, 1]) {
         const base = this.pos.length / 3;
         const per = Array.isArray(color[0]);
-        for (const p of [a, b, c, d]) this.pos.push(p[0], p[1], p[2]);
+        // (sem `for (const p of [a, b, c, d])`: o array e o iterador eram lixo a cada quad — milhares por pedaço de terreno)
+        this.pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2], d[0], d[1], d[2]);
         for (let k = 0; k < 4; k++) {
             this.nor.push(n[0], n[1], n[2]);
             const c4 = per ? color[k] : color;
@@ -41,7 +42,7 @@ class MeshBatch {
         const facing = -(cx * n[0] + cy * n[1] + cz * n[2]);          // a face visível tem normal = -cross(b-a, c-a)
         if (facing < 0) { [b, c] = [c, b]; uvs = [uvs[0], uvs[2], uvs[1]]; }
         const base = this.pos.length / 3;
-        for (const p of [a, b, c]) this.pos.push(p[0], p[1], p[2]);
+        this.pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
         for (let k = 0; k < 3; k++) {
             this.nor.push(n[0], n[1], n[2]);
             this.col.push(color[0], color[1], color[2], 1);

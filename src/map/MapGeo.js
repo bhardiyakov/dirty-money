@@ -13,6 +13,17 @@ const MapGeo = {
         return RoadPlan.onBridge(x, z) || this.onDock(x, z) ? 0 : WorldMap.waterDepth(x, z);
     },
 
+    // Profundidade SOB as pontes (quem nada/navega por baixo do tabuleiro): a ponte não conta como chão; o píer continua contando.
+    waterDepthBelow(x, z) {
+        if (Interiors.active) return 0;
+        return this.onDock(x, z) ? 0 : WorldMap.waterDepth(x, z);
+    },
+
+    // Terra para um BARCO: margem e píer encalham; a ponte não (o barco passa por baixo do tabuleiro).
+    isShore(x, z) {
+        return WorldMap.isLand(x, z) || this.onDock(x, z);
+    },
+
     // Sobre um píer da marina (cais e dedos)? Para andar a pé como em terra firme.
     onDock(x, z) {
         const M = typeof Marina !== 'undefined' ? Marina : null;
@@ -79,9 +90,11 @@ const MapGeo = {
 
     // Empurra um círculo (pos.x/pos.z, raio r) para fora de todos os sólidos.
     // Modifica `pos` e devolve true se houve contato.
-    resolveCircle(pos, r) {
+    // inWater: quem está NA ÁGUA (nadando, ou sob a ponte) passa por baixo da mureta das pontes (que fica lá em cima, no tabuleiro).
+    resolveCircle(pos, r, inWater = false) {
         let hit = false;
         for (const o of (Interiors.active ? Interiors.obstacles : CityGrid.obstaclesAround(pos.x, pos.z, r))) {
+            if (inWater && o.bridgeRail) continue;
             const cx = Math.max(o.x0, Math.min(pos.x, o.x1));
             const cz = Math.max(o.z0, Math.min(pos.z, o.z1));
             const dx = pos.x - cx, dz = pos.z - cz;

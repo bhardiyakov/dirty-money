@@ -67,6 +67,10 @@ const Economy = {
         bag_cross: { name: 'Mala transversal', icon: 'bag_cross', base: 120, kind: 'bag', bag: 'cross', desc: 'Grade 4×3 · carrega 14 kg sem pesar' },
         bag_pack: { name: 'Mochila', icon: 'bag_pack', base: 350, kind: 'bag', bag: 'pack', desc: 'Grade 5×4 · carrega 24 kg sem pesar' },
         bag_tac:  { name: 'Mochila tática', icon: 'bag_tactical', base: 2200, kind: 'bag', bag: 'tactical', desc: 'Grade 6×5 · carrega 38 kg sem pesar' },
+        // na mão (o jogador anda carregando: só dá para usar pistola junto) — para roubos grandes: dinheiro de cofre, armas, mercadoria
+        bag_brief:  { name: 'Maleta de alumínio', icon: 'bag_brief', base: 650, kind: 'bag', bag: 'briefcase', desc: 'Na mão · grade 4×2 · 12 kg · discreta' },
+        bag_duffel: { name: 'Bolsa de lona', icon: 'bag_duffel', base: 380, kind: 'bag', bag: 'duffel', desc: 'Na mão · grade 7×5 · 52 kg sem pesar — cabe um cofre de banco' },
+        bag_suit:   { name: 'Mala de rodinhas', icon: 'bag_suit', base: 900, kind: 'bag', bag: 'suitcase', desc: 'Puxada · grade 6×6 · 46 kg; andando, as rodinhas levam o peso' },
         // mercado clandestino
         hack:     { name: 'Módulo de hackeio', icon: 'hack', base: 160, kind: 'goods', give: 'hack', desc: 'Abre fechadura de carro sem mini-game' },
         carkey:   { name: 'Chave de carro roubada', icon: 'carkey', base: 130, kind: 'goods', give: 'key', desc: 'Destranca um carro sem alarme' },
@@ -85,15 +89,18 @@ const Economy = {
         italian:  { label: 'Ristorante', tier: 1.0, hours: [12, 23], stock: [['pasta'], ['risotto'], ['wine'], ['menu_it']] },
         japanese: { label: 'Restaurante Japonês', tier: 1.0, hours: [12, 23], stock: [['sushi'], ['sake'], ['omakase'], ['soda']] },
         guns:     { label: 'Loja de Armas', tier: 1.0, hours: [9, 19], legal: true, guns: true,
-            stock: [['knife', 1, 3], ['bat', 1, 3], ['pistol', 1, 4], ['revolver', 1, 3], ['shotgun', 1, 2], ['smg', 0.6, 1], ['rifle', 0.5, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['vest', 1, 3], ['vest2', 0.6, 1], ['bag_tac', 0.8, 2]] },
+            stock: [['knife', 1, 3], ['bat', 1, 3], ['pistol', 1, 4], ['revolver', 1, 3], ['shotgun', 1, 2], ['smg', 0.6, 1], ['rifle', 0.5, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['vest', 1, 3], ['vest2', 0.6, 1], ['bag_tac', 0.8, 2], ['bag_duffel', 0.9, 3]] },
+        // Boutique (shopping/comércio): roupas, tênis e acessórios que mudam o personagem (player/Outfit.js), bolsas e malas.
+        clothes:  { label: 'Boutique', tier: 1.0, hours: [10, 22], clothes: true,
+            stock: [...Object.keys(Outfit.ITEMS).filter((id) => Outfit.ITEMS[id].base > 0).map((id) => ['of_' + id]), ['bag_cross'], ['bag_pack'], ['bag_brief'], ['bag_suit'], ['bag_duffel']] },
         bank_branch: { label: 'Agência bancária', tier: 1, hours: [10, 16], stock: [] },
         bank_hq:  { label: 'Sede bancária', tier: 1, hours: [10, 17], stock: [] },
         drugs:    { label: 'Boca de Fumo', tier: 0.72, hours: [0, 24], guns: true, fence: 0.55,
-            stock: [['pistol', 1, 2], ['revolver', 0.9, 2], ['shotgun', 0.8, 2], ['smg', 0.7, 1], ['ak47', 0.6, 1], ['rifle', 0.4, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['hack', 0.8, 3], ['carkey', 0.8, 3], ['medkit', 0.8, 2], ['bag_tac', 0.7, 1]] },
+            stock: [['pistol', 1, 2], ['revolver', 0.9, 2], ['shotgun', 0.8, 2], ['smg', 0.7, 1], ['ak47', 0.6, 1], ['rifle', 0.4, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['hack', 0.8, 3], ['carkey', 0.8, 3], ['medkit', 0.8, 2], ['bag_tac', 0.7, 1], ['bag_duffel', 0.8, 2]] },
     },
 
     // Quais lojas do mapa (id em TileFactory.SHOPS) têm interior, e qual estilo usam.
-    KIND_STYLE: { lanchonete: 'burger', conveniencia: 'mart', farmacia: 'pharmacy', bar: 'bar', padaria: 'bakery', armas: 'guns', pizzaria: 'pizza', saladas: 'fit', italiano: 'italian', japones: 'japanese', bocafumo: 'drugs' },
+    KIND_STYLE: { lanchonete: 'burger', conveniencia: 'mart', roupas: 'clothes', farmacia: 'pharmacy', bar: 'bar', padaria: 'bakery', armas: 'guns', pizzaria: 'pizza', saladas: 'fit', italiano: 'italian', japones: 'japanese', bocafumo: 'drugs' },
 
     // Multiplicador de preço pela zona da cidade (distrito + bioma do quarteirão).
     ZONE: {
@@ -122,6 +129,7 @@ const Economy = {
         fit: ['Saladas & Sucos Fit', 'Verde Vida', 'Suco Natural Bem-Estar', 'Fit Bowl'],
         italian: ['Ristorante Il Padrino', 'Trattoria La Bella', 'Osteria Dolce Vita', 'Ristorante Milano'],
         japanese: ['Sushi Sakura', 'Kaito Japanese Dining', 'Yamato Sushi Bar', 'Restaurante Tóquio'],
+        clothes: ['Boutique Vitrine', 'Moda Carioca', 'Shopping Estilo', 'Loja Atitude', 'Street Wear BR', 'Grife do Centro'],
         guns: ['Armas & Cia', 'Armaria Liberty', 'Arsenal Legal', 'Tiro Certo Armas'],
         drugs: ['Boca do Morro', 'Biqueira da Laje', 'Ponto do Gordo', 'Casa do Fumo'],
     },
@@ -159,6 +167,8 @@ const Economy = {
         }
         if (S.night && (hour >= 22 || hour < 6)) out.push({ label: 'Adicional noturno', mul: S.night });
         if (S.happy && hour >= S.happy[0] && hour < S.happy[1]) out.push({ label: 'Happy hour', mul: 0.85 });
+        if (Outfit.m.price > 0) out.push({ label: 'Bem vestido', mul: 1 - Outfit.m.price });                        // terno, sapato social… (Outfit)
+        if (shop.district === 'favela' && Outfit.m.favela > 0) out.push({ label: 'Estilo do morro', mul: 1 - Outfit.m.favela });   // chinelo, camisa de time, corrente
         return out;
     },
 
@@ -205,6 +215,7 @@ const Economy = {
     buy(game, shop, id) {
         const it = this.ITEMS[id], inv = game.inventory, st = this.stockFor(shop), entry = st.items.find((e) => e.id === id), pl = game.player;
         if (!entry || entry.qty <= 0) return { ok: false, msg: 'Esgotado' };
+        if (it.kind === 'outfit' && Outfit.owned.has(it.outfit)) return Outfit.wear(it.outfit);                 // já é sua: vestir é de graça
         const price = this.price(shop, id, game.dayNight.hour);
         const needClean = shop.district !== 'favela' && price >= Laundry.CLEAN_MIN;          // compra grande no comércio legal: só dinheiro LIMPO
         if ((needClean ? inv.clean : inv.cash) < price) return { ok: false, msg: needClean ? (inv.cash >= price ? 'Compra grande: o comércio legal só aceita dinheiro LIMPO — lave o seu' : 'Dinheiro limpo insuficiente') : 'Dinheiro insuficiente' };
@@ -212,7 +223,7 @@ const Economy = {
         if (it.kind === 'meal' && pl.hp >= pl.maxHp - 0.5 && id !== 'wine' && id !== 'beer' && id !== 'shot' && id !== 'sake') return { ok: false, msg: 'Você não está com fome (vida cheia)' };
         if (it.kind === 'ammo' && !it.weapons.some((w) => inv.owned(w))) return { ok: false, msg: 'Você não tem arma para essa munição' };
         if (it.kind === 'vest' && pl.armorMax >= it.max && pl.armor >= pl.armorMax - 0.5) return { ok: false, msg: 'Você já está com esse colete' };
-        if (it.kind === 'bag') { const D = Bags.DEFS[it.bag]; if (inv.bag === it.bag) return { ok: false, msg: 'Você já está com essa bolsa' }; if (inv.slotsUsed() > D.cols * D.rows) return { ok: false, msg: `Não cabe o que você carrega (${inv.slotsUsed()} espaços; ela tem ${D.cols * D.rows})` }; }
+        if (it.kind === 'bag' && Bags.has(inv, it.bag)) return { ok: false, msg: inv.bag === it.bag ? 'Você já está com essa bolsa' : 'Você já tem essa bolsa (de reserva: troque no Inventário → Equipamento)' };
         if (!this._fits(game, it)) return { ok: false, msg: 'Mochila cheia' };
         if (needClean) inv.clean -= price; else inv.cash -= price;
         if (entry.qty !== Infinity) entry.qty--;
@@ -222,7 +233,8 @@ const Economy = {
             case 'weapon': inv.addWeapon(it.weapon, it.ammo); break;
             case 'ammo': { const own = it.weapons.filter((w) => inv.owned(w)); for (const w of own) inv.addAmmo(w, it.n); break; }
             case 'vest': pl.wearVest(it.max); break;
-            case 'bag': msg = Bags.equip(game, it.bag).msg + ` (-${brl(price)})`; break;
+            case 'bag': msg = Bags.acquire(game, it.bag).msg + ` (-${brl(price)})`; break;          // a antiga vira reserva
+            case 'outfit': Outfit.give(it.outfit); msg = `Comprou e vestiu: ${it.name} (-${brl(price)})`; break;
             case 'goods': if (it.give === 'food') inv.food++; else if (it.give === 'water') inv.water++; else if (it.give === 'medkit') inv.medkits++; else if (it.give === 'hack') inv.hacks++; else inv.keys++; break;
         }
         Standing.shopped(shop, price);
@@ -233,7 +245,7 @@ const Economy = {
     fenceOffer(shop, game) {
         const S = this.STYLES[shop.style];
         if (!S.fence || game.inventory.jewels <= 0) return null;
-        return { count: game.inventory.jewels, value: Math.round(game.inventory.jewelValue * S.fence * (1 + (SkillTree.m.fence || 0))) };
+        return { count: game.inventory.jewels, value: Math.round(game.inventory.jewelValue * S.fence * (1 + (SkillTree.m.fence || 0) + Outfit.m.fence)) };
     },
     sellJewels(game, shop) {
         const o = this.fenceOffer(shop, game);
@@ -243,3 +255,8 @@ const Economy = {
         return { ok: true, msg: `Vendeu ${o.count} joias por ${brl(o.value)} (sem perguntas)` };
     },
 };
+
+// Roupas e acessórios da boutique (player/Outfit.js) entram no catálogo como itens 'of_<peça>' (kind 'outfit').
+for (const [id, o] of Object.entries(Outfit.ITEMS)) {
+    if (o.base > 0) Economy.ITEMS['of_' + id] = { name: o.name, icon: 'of_' + id, base: o.base, kind: 'outfit', outfit: id, desc: `${Outfit.SLOT_NAME[o.slot]} · ${o.desc}` };
+}

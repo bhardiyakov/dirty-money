@@ -116,6 +116,7 @@ class Puddles {
 
     // Poças a até 80 u do foco ganham um quad (as mais próximas, no máximo `cap`).
     _requery(fx, fz) {
+        if (!inWorld(fx, fz)) return;
         const C = this.CELL, R = 80, list = [];
         for (let i = Math.floor((fx - R) / C); i <= Math.floor((fx + R) / C); i++) {
             for (let j = Math.floor((fz - R) / C); j <= Math.floor((fz + R) / C); j++) {

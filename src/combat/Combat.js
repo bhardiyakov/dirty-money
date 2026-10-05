@@ -53,7 +53,7 @@ class Combat {
     fire(shooter, weaponKey) {
         const W = Weapons[weaponKey];
         const n = W.pellets || 1;
-        const muzzle = 1.15;
+        const muzzle = shooter.fly ? 1.15 : 1.15 * (Config.art.charScale || 1);     // (a arma acompanha a escala do personagem)
         const mx = shooter.x + Math.sin(shooter.angle) * muzzle, mz = shooter.z + Math.cos(shooter.angle) * muzzle;
         for (let k = 0; k < n; k++) {
             const b = this.bullets.find((q) => !q.on);

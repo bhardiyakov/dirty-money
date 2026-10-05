@@ -44,7 +44,8 @@ class ShopUI {
         const g = this.g, shop = this.shop, S = Economy.STYLES[shop.style], hour = g.dayNight.hour, inv = g.inventory;
         const list = Economy.stockFor(shop).items;
         this.$h3.textContent = shop.name.toUpperCase();
-        this.$sub.innerHTML = `${S.label.toUpperCase()} · ${Economy.zoneOf(shop).label.toUpperCase()}<br>SEU DINHEIRO: <span style="color:#ffd23a">${brl(inv.cash)}</span> · LIMPO: <span style="color:#7fe0a0">${brl(inv.clean)}</span> · ${g.dayNight.label}`;
+        this.$sub.innerHTML = `${S.label.toUpperCase()} · ${Economy.zoneOf(shop).label.toUpperCase()}<br>SEU DINHEIRO: <span style="color:#ffd23a">${brl(inv.cash)}</span> · LIMPO: <span style="color:#7fe0a0">${brl(inv.clean)}</span> · ${g.dayNight.label}` +
+            (S.clothes ? `<br><span style="color:#f0a0c8">VESTINDO: ${Outfit.summary()}</span> · ${Bags.label(g)}` : '');
         this.$chips.replaceChildren();
         for (const f of Economy.factors(shop, hour)) {
             if (Math.abs(f.mul - 1) < 0.015) continue;
@@ -59,9 +60,10 @@ class ShopUI {
             const ic = g.menu.itemIcon(it.icon, e.id), k = Math.max(1, Math.min(3, Math.floor(30 / Math.max(ic.w, ic.h)) || 1));
             const cv = ic.canvas.cloneNode(); cv.getContext('2d').drawImage(ic.canvas, 0, 0); cv.style.width = ic.w * k + 'px'; cv.style.height = ic.h * k + 'px';
             const nm = document.createElement('div'); nm.className = 'nm'; nm.innerHTML = `${it.name}<small>${it.desc}${it.kind === 'meal' ? '' : ''}</small>`;
-            const pr = document.createElement('div'); pr.className = 'pr'; pr.textContent = brl(price);
+            const own = it.kind === 'outfit' && Outfit.owned.has(it.outfit), worn = own && Outfit.isWorn(it.outfit);      // roupa que já é sua: vestir/tirar de graça
+            const pr = document.createElement('div'); pr.className = 'pr'; pr.textContent = own ? (worn ? 'VESTINDO' : 'SUA') : brl(price);
             const stq = document.createElement('div'); stq.className = 'st'; stq.textContent = e.qty === Infinity ? '' : (e.qty > 0 ? 'resta ' + e.qty : 'esgotado');
-            const b = document.createElement('button'); b.className = 'btn'; b.textContent = it.kind === 'meal' ? 'Comer' : 'Comprar'; b.classList.add('pri');
+            const b = document.createElement('button'); b.className = 'btn'; b.textContent = it.kind === 'meal' ? 'Comer' : own ? (worn ? 'Tirar' : 'Vestir') : 'Comprar'; if (!worn) b.classList.add('pri');
             b.addEventListener('click', () => { this.sel = i; this._buy(e.id); });
             row.append(cv, nm, stq, pr, b);
             row.addEventListener('mousedown', () => { if (this.sel !== i) { this.sel = i; this.render(); } });

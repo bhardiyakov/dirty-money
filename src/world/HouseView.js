@@ -239,6 +239,14 @@ const HouseView = {
             this.interiorMat.alpha = Math.min(0.999, inA);
             this.interior.setEnabled(inA > 0.01);
             game.camera.setZoomMul(1 - 0.5 * t * t * (3 - 2 * t));
+            // Durante o fade os materiais ficam descongelados (o alpha muda todo quadro); 2 quadros depois de parar, congelam de novo:
+            // material congelado não reavalia o shader a cada desenho (~3× mais barato por malha).
+            for (const m of this.ext) if (m.isFrozen) m.unfreeze();
+            if (this.interiorMat.isFrozen) this.interiorMat.unfreeze();
+            this._settle = 2;
+        } else if (this._settle > 0 && --this._settle === 0) {
+            for (const m of this.ext) m.freeze();
+            this.interiorMat.freeze();
         }
 
         // o minimapa não serve dentro de casa (e taparia a cama): some com o corte

@@ -261,6 +261,74 @@ const AudioFX = {
         mk('lowpass', 160, 38, 3.0 + 1.2 * power, 0.7 * power, 1.2);          // base grave
     },
 
+    // Pedaço de ruído filtrado agendado em `at` (relógio do áudio), já com ganho/pan espaciais `sp`.
+    _nz(at, sp, { vol, dur, f0, f1 = f0, type = 'lowpass', q = 0.8, att = 0.002 }) {
+        const ctx = this.ctx, src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+        src.buffer = this._noise(); src.loop = dur > 1;
+        f.type = type; f.Q.value = q;
+        f.frequency.setValueAtTime(f0, at); f.frequency.exponentialRampToValueAtTime(Math.max(30, f1), at + dur);
+        g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol * sp.g), at + att); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+        src.connect(f); f.connect(g);
+        if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = sp.pan; g.connect(p); p.connect(this.master); } else g.connect(this.master);
+        src.start(at, Math.random() * 0.5); src.stop(at + dur + 0.05);
+        return g;
+    },
+
+    // Fogos — LANÇAMENTO: o estalo da espoleta, o chiado do propelente subindo (o filtro abre conforme o foguete ganha velocidade,
+    // e some ao longe), faíscas crepitando no rastro e, às vezes, o assobio. dur = tempo de subida (s).
+    fireworkLaunch(x, z, dur = 0.9) {
+        if (!this._ok()) return;
+        const sp = this._spatial(x, z, 220, 1);
+        if (!sp) return;
+        const ctx = this.ctx, t = ctx.currentTime + 0.01;
+        this._nz(t, sp, { vol: 0.35, dur: 0.05, f0: 1800, f1: 200, att: 0.001 });                                   // espoleta
+        this._nz(t, sp, { vol: 0.18, dur: 0.09, f0: 420, f1: 70, att: 0.002 });
+        // chiado: ruído em banda subindo de 700 a 3600 Hz, mais forte no começo e sumindo no alto
+        const src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), hp = ctx.createBiquadFilter(), g = ctx.createGain();
+        src.buffer = this._noise(); src.loop = true;
+        bp.type = 'bandpass'; bp.Q.value = 1.6; bp.frequency.setValueAtTime(700, t); bp.frequency.exponentialRampToValueAtTime(3600, t + dur);
+        hp.type = 'highpass'; hp.frequency.value = 350;
+        const v = 0.3 * sp.g;
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.04);
+        g.gain.exponentialRampToValueAtTime(v * 0.55, t + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.12);
+        src.connect(bp); bp.connect(hp); hp.connect(g);
+        let out = g;
+        if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = sp.pan; g.connect(p); out = p; }
+        out.connect(this.master);
+        src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.2);
+        for (let i = 0; i < 9; i++) {                                                                                  // faíscas do rastro
+            const at = t + 0.05 + Math.random() * dur * 0.9;
+            this._nz(at, sp, { vol: 0.07 + Math.random() * 0.06, dur: 0.008 + Math.random() * 0.01, f0: 4000 + Math.random() * 3000, type: 'highpass', q: 0.7, att: 0.0005 });
+        }
+        if (Math.random() < 0.4) {                                                                                     // foguete de assobio
+            const o = ctx.createOscillator(), og = ctx.createGain(), vib = ctx.createOscillator(), vg = ctx.createGain();
+            o.type = 'sine'; o.frequency.setValueAtTime(1500, t); o.frequency.exponentialRampToValueAtTime(2900 + Math.random() * 800, t + dur);
+            vib.frequency.value = 22; vg.gain.value = 45; vib.connect(vg); vg.connect(o.frequency);
+            og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.05 * sp.g, t + 0.08); og.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            o.connect(og); og.connect(out === g ? this.master : out);
+            o.start(t); vib.start(t); o.stop(t + dur + 0.05); vib.stop(t + dur + 0.05);
+        }
+    },
+
+    // Fogos — ESTOURO: chega com o atraso do som (343 m/s); estalo seco + "bum" grave + eco nos prédios + o crepitar das estrelas.
+    // De longe: mais baixo e mais abafado (o ar come os agudos).
+    fireworkBurst(x, z, y = 15) {
+        if (!this._ok()) return;
+        const d = hypot(x - this.listener.x, z - this.listener.z, y), sp = this._spatial(x, z, 420, 1);
+        if (!sp) return;
+        const far = Math.min(1, d / 300), t = this.ctx.currentTime + 0.01 + d / 343, dark = 1 - 0.6 * far;
+        this._nz(t, sp, { vol: 0.85, dur: 0.035, f0: 9000 * dark, f1: 2500 * dark, type: 'lowpass', att: 0.0008 });         // estalo
+        this._nz(t, sp, { vol: 1.0, dur: 1.4, f0: 1600 * dark, f1: 45, att: 0.003 });                                      // bum
+        this._nz(t, sp, { vol: 0.6, dur: 0.6, f0: 260, f1: 40, q: 1.2, att: 0.004 });                                     // pressão grave
+        for (const [dl, k] of [[0.19 + Math.random() * 0.08, 0.32], [0.46 + Math.random() * 0.15, 0.18], [0.9 + Math.random() * 0.3, 0.09]])
+            this._nz(t + dl, sp, { vol: k, dur: 0.9, f0: 700 * dark, f1: 60, att: 0.02 });                                 // eco nos prédios / morro
+        const n = 18 + Math.floor(Math.random() * 16);                                                                    // crepitar das estrelas
+        for (let i = 0; i < n; i++) {
+            const at = t + 0.35 + Math.pow(Math.random(), 0.8) * 1.3;
+            this._nz(at, sp, { vol: (0.06 + Math.random() * 0.1) * (1 - 0.5 * far), dur: 0.01 + Math.random() * 0.015, f0: (3500 + Math.random() * 4000) * dark, type: 'highpass', q: 0.8, att: 0.0005 });
+        }
+    },
+
     // Buzina de carro: duas ondas quadradas (acorde de terça menor, ~380/450 Hz) por um
     // lowpass, com ataque/queda rápidos. pitch varia por motorista; dur em segundos.
     honk(x, z, pitch = 1, dur = 0.3) {

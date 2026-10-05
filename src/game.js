@@ -19,6 +19,7 @@ class Game {
         this.input = new InputManager();
         this.input.onWeaponCycle = (d) => this._cycleWeapon(d);
         this.sprites = new SpriteLibrary(this.scene);
+        Outfit.load(null);                           // roupa de sempre (o save, se houver, veste o que estava vestido); pinta a paleta do jogador
         this.carLib = new CarLibrary(this.scene);
         this.signals = new TrafficSignals(this.scene);
         this.dayNight = new DayNight(this.gameEngine);
@@ -127,10 +128,10 @@ class Game {
         this.actionTimer = 0;
         this.touch = new TouchControls(this);        // botões na tela (celular sem controle) + interface responsiva
         this.ui = new Hud(this);                     // interface em pixel art (arma, procurado, vida/colete, veículo, mensagens)
-        this.gps = null;                             // destino marcado no mapa: { x, z, label, route, len }
+        this.gps = null;                             // destino marcado no mapa: { x, z, label } (só um marcador, sem rota)
         this.showPrompts = true;
         this.birds = new Birds(this);                 // aves: pombos, gaivotas, rolinhas, bem-te-vis (fogem de gente, carros e tiros)
-        this.gameEngine.world.game = this;            // StreetProps (postes e hidrantes) usa os efeitos do jogo
+        this.gameEngine.world.game = this;            // StreetProps (postes) usa os efeitos do jogo
         this.puddles = new Puddles(this);             // poças nas ruas: enchem com chuva forte e somem aos poucos
         this.chopper = null;                          // helicóptero que o jogador pilota (modo 'heli')
         this.choppers = [];                           // todos os helicópteros civis dos helipontos
@@ -139,6 +140,8 @@ class Game {
         this.waterFx = new WaterFx(this.scene);       // marolas ao vadear/nadar
         this.dev = new DevMode(this);                // modo dev (ligado nas Configurações): painel de testes
         this.menu = new PauseMenu(this);             // menu de pausa (mapa HD, inventário, configurações)
+        this.aim = new Aim(this);                    // mira do jogador (assistida ou manual, ver combat/Aim.js)
+        PadNav.init(this);                           // controle nas telas de mouse/teclado (menus, janelas, tela inicial, sinuca)
         this.stash = new Stash();                    // geladeira, cofre e baú da safe house
         this.stashUI = new StashUI(this);
         this.shopUI = new ShopUI(this);              // compra nas lojas (interiores)
@@ -191,6 +194,9 @@ class Game {
             this.colliderStream.refresh(this.camera.target.x, this.camera.target.z);
             if (this.gameEngine.world.terrain) this.gameEngine.world.terrain.attachPhysics(this.physics);      // paredões das serras
 
+            await CarArt.ready;                             // atlas dos carros (decodificado desde a carga da página)
+            CarArt.init(this.scene);
+            SkidMarks.init(this.scene); SkidMarks.game = this;                  // marcas de pneu no chão (derrapagem, freada, arrancada)
             this.vehicleManager = new VehicleManager(this.scene, this.physics, this.gameEngine.shadowGenerator, this.carLib);
             this.traffic = new TrafficManager(this.scene, this.physics, this.vehicleManager, this.carLib, this.signals, this.gameEngine.shadowGenerator);
             this.traffic.sprites = this.sprites;            // (bicicletas e motos usam os sprites de piloto)
@@ -252,6 +258,7 @@ class Game {
             this.gameEngine.resize();
             this.camera.fitPixelScale(this.gameEngine.renderHeight);
             this.camera.onResize();
+            this._redraw = true;                         // redimensionar apaga a tela: com o mundo parado (menu/tela de fim) redesenha 1×
         });
     }
 
@@ -264,10 +271,10 @@ class Game {
     }
 
     // Ciclo de vida: o loop de render NÃO existe até tudo o que é pesado terminar, tudo escondido atrás da tela inicial (#main-menu, em modo carregamento):
-    //   1) física (Havok) e navegação;  2) assar TODOS os sprites (personagens, carros, barcos) sem orçamento por quadro;
+    //   1) física (Havok) e navegação;  2) assar TODOS os sprites (personagens, barcos; os carros vêm prontos do atlas) sem orçamento por quadro;
     //   3) congelar os materiais estáticos do mundo;  4) preparar o 1º estado do jogo e COMPILAR os shaders de tudo que existe
     //   (scene.whenReadyAsync);  5) só então começa o loop — e a tela some DEPOIS do primeiro quadro desenhado (ver _start).
-    // (Tudo no jogo é gerado por código: não há arquivos para baixar além do Havok, que o _initPhysics já espera.)
+    // (Quase tudo é gerado por código; os carros vêm do atlas embutido em assets/cars/carros-atlas.js, decodificado desde a carga da página.)
     async _boot() {
         const yieldUI = () => new Promise((r) => setTimeout(r, 0));
         try {
@@ -277,9 +284,10 @@ class Game {
 
             this._loading('Montando sprites…', 0.3);
             await Promise.race([SpriteIO.ready, new Promise((r) => setTimeout(r, 15000))]);      // arte em PNG ainda baixando (rede lenta: segue procedural)
+            await CharArt.ready;                                                      // atlas dos personagens (decodificado desde a carga da página)
             const s0 = performance.now();
             for (let guard = 0; guard < 2000; guard++) {
-                const more = this.sprites.pump(40) | this.carLib.pump(40);
+                const more = this.sprites.pump(40);                                   // (personagens e carros vêm dos atlas: quase nada a assar)
                 if (!more) break;
                 if (guard % 3 === 0) { this._loading('Montando sprites…', 0.3 + 0.4 * Math.min(1, (performance.now() - s0) / 6000)); await yieldUI(); }
             }
@@ -334,27 +342,18 @@ class Game {
             const situational = name === 'swat' || name === 'army';
             for (const [key, c] of Object.entries(sh.clips)) {
                 clips++;
-                if (!situational) continue;
+                if (!situational || c.shared) continue;                              // (atlas vetorial: textura única, nunca sai)
                 if (c._used === undefined) { c._used = now; continue; }              // recém-assado: conta a partir de agora
                 if (now - c._used < 60) continue;
                 c.material.dispose(); c.texture.dispose(); delete sh.clips[key]; freed++;
             }
         }
-        // carros: folhas usadas por qualquer veículo existente (mesmo mostrando um amassado) contam como em uso
-        const lib = this.carLib, keep = this._carKeep || (this._carKeep = new Set());
-        if (lib) {
-            const mark = (v) => { if (v.carSheet) v.carSheet._used = now; };
-            if (this.vehicleManager) { for (const v of this.vehicleManager.vehicles) mark(v); for (const v of this.vehicleManager.boats) mark(v); }
-            if (this.policeManager) {
-                for (const v of this.policeManager.cars) mark(v);
-                if (!keep.size) { keep.add(this.policeManager.carSheet); for (const t of Object.values(PoliceManager.TEAMS)) { const s = lib.sheets[t.model]; if (s) keep.add(s); } }
-            }
-            freed += lib.sweep(now, keep);
-        }
+        // carros: nada a liberar — todos os modelos, cores, amassados e portas estão num atlas único (CarArt), sempre na GPU
+        const cars = CarArt.cars ? CarArt.cars.count - CarArt.cars._free.length : 0;
         if (freed) console.log(`[MEMÓRIA] ${freed} clipes/folhas sem uso liberados da GPU`);
         this._sweepFreed = (this._sweepFreed || 0) + freed;
         Perf.sampleHeap();
-        this._sweepInfo = `${actors} atores · ${clips} clipes de personagem · ${Object.keys(lib.sheets).length + Object.keys(lib.dents).length + Object.keys(lib.doors).length} folhas de carro · ${this._sweepFreed} liberados desde o início`;
+        this._sweepInfo = `${actors} atores · ${clips} clipes de personagem · ${cars} carros no lote do atlas · ${this._sweepFreed} liberados desde o início`;
     }
 
     // Malhas estáticas (transform congelado, buffers não atualizáveis): a GPU já tem os vértices; a cópia na RAM de normais, UVs e
@@ -374,11 +373,11 @@ class Game {
         if (freed) console.log(`[MEMÓRIA] ${freed} buffers de vértices estáticos liberados da RAM (ficam só na GPU)`);
     }
 
-    // Materiais do mundo que nunca mudam de estado de shader (defines): congela (não reavalia a cada quadro). A água troca de textura
-    // por quadro e fica de fora.
+    // Materiais do mundo que nunca mudam de estado de shader (defines): congela (não reavalia a cada quadro). A água entra também: a
+    // animação reescreve os pixels da MESMA textura (WorldBuilder.update), sem trocar textura nem offset.
     _freezeStaticMaterials() {
         const world = this.gameEngine.world, list = [];
-        const walk = (o) => { for (const k of Object.keys(o)) { const m = o[k]; if (m instanceof BABYLON.Material) { if (k !== 'water') list.push(m); } else if (m && typeof m === 'object' && !(m instanceof BABYLON.BaseTexture)) walk(m); } };
+        const walk = (o) => { for (const k of Object.keys(o)) { const m = o[k]; if (m instanceof BABYLON.Material) list.push(m); else if (m && typeof m === 'object' && !(m instanceof BABYLON.BaseTexture)) walk(m); } };
         walk(world.mats);
         for (const m of list) m.freeze();
         console.log(`[CARGA] ${list.length} materiais congelados`);
@@ -390,16 +389,25 @@ class Game {
         // com o dt real entre eles.
         let last = performance.now();
         this.autoQuality = new AutoQuality(this);
+        // Caixa-preta (core/HangProbe.js): marca também as bordas do quadro do motor, para separar "dentro" de "entre" quadros.
+        const eng = this.gameEngine.engine;
+        eng.onBeginFrameObservable.add(() => HangProbe.mark('motor: começo do quadro'));
+        eng.onEndFrameObservable.add(() => HangProbe.mark('motor: fim do quadro'));
         this.gameEngine.runRenderLoop(() => {
             const now = performance.now();
             if (Pool.active) { last = now; return; }                  // sinuca: o mundo para por completo (sem update nem render)
+            HangProbe.mark('laço: AutoQuality');
             this.autoQuality.tick((now - last) / 1000, this.menu.isOpen);
             const dt = Math.min((now - last) / 1000 * (this.timeScale || 1), 0.05);
             last = now;
             Perf.frameStart();
-            this._update(dt);
-            this._render(dt);
+            // Um erro em QUALQUER sistema não pode congelar o jogo: sem o try, a exceção subia até o laço do Babylon, que parava de
+            // agendar quadros (tela travada para sempre). Agora o quadro com erro é pulado, o erro vai para o console (1× por mensagem
+            // a cada 5 s, sem inundar) e o jogo segue.
+            try { this._update(dt); } catch (e) { this._frameError('update', e); }
+            try { this._render(dt); } catch (e) { this._frameError('render', e); }
             Perf.frameEnd();
+            HangProbe.mark('laço: fim do quadro');
             if (this._bootDone && !this._loadingHidden) {            // 1º quadro real desenhado: agora (depois da pintura) a tela de carregamento sai
                 this._loadingHidden = true;
                 requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -409,16 +417,69 @@ class Game {
         });
     }
 
+    // Resgate: veículo (ou o jogador) que a física lançou para fora do mundo — posição infinita, gigante ou NaN, típico de um corpo que
+    // nasce/é teleportado dentro de outro — volta, parado, para o último lugar bom (guardado a cada 0,5 s). Sem isto, a primeira
+    // busca em grade com essa posição (objetos de rua, IA, câmera…) entrava em laço infinito e a aba congelava. Roda logo depois
+    // dos passos de física, antes de qualquer sistema usar as posições.
+    _rescueStrays(dt) {
+        const ok = (p) => inWorld(p.x, p.z) && Number.isFinite(p.y);
+        for (const car of this.carDamage ? this.carDamage.allCars() : []) {
+            if (!car || !car.body || car.body.isDisposed()) continue;
+            const p = car.position;
+            if (ok(p)) {
+                car._safeT = (car._safeT || 0) - dt;
+                if (car._safeT <= 0) {
+                    car._safeT = 0.5;
+                    const f = car.fwdToRef(this._rsF || (this._rsF = new BABYLON.Vector3())), s = car._safe || (car._safe = { x: 0, z: 0, h: 0 });
+                    s.x = p.x; s.z = p.z; s.h = Math.atan2(f.x, f.z);
+                }
+                continue;
+            }
+            const s = car._safe || { x: this.camera.target.x, z: this.camera.target.z, h: 0 };
+            console.warn(`[RESGATE] ${car.spec && car.spec.id} fora do mundo em (${p.x}, ${p.y}, ${p.z}) — devolvido a (${s.x.toFixed(1)}, ${s.z.toFixed(1)})`);
+            HangProbe.mark('resgate: veículo fora do mundo');
+            car.teleport(s.x, s.z, s.h);
+        }
+        if (this.mode === 'player' && this.player) {
+            const p = this.player.position;
+            if (ok(p)) {
+                this._plSafeT = (this._plSafeT || 0) - dt;
+                if (this._plSafeT <= 0) { this._plSafeT = 0.5; (this._plSafe || (this._plSafe = new BABYLON.Vector3())).set(p.x, 0, p.z); }
+            } else {
+                const s = this._plSafe || new BABYLON.Vector3(this.camera.target.x, 0, this.camera.target.z);
+                console.warn(`[RESGATE] jogador fora do mundo em (${p.x}, ${p.y}, ${p.z}) — devolvido a (${s.x.toFixed(1)}, ${s.z.toFixed(1)})`);
+                HangProbe.mark('resgate: jogador fora do mundo');
+                this.player.teleport(s.clone());
+                if (this.player.velocity) this.player.velocity.setAll(0);
+            }
+        }
+    }
+
+    _frameError(where, e) {
+        const k = where + ':' + (e && e.message), now = performance.now(), log = this._errLog || (this._errLog = new Map());
+        if (now - (log.get(k) || -1e9) < 5000) return;
+        log.set(k, now);
+        console.error(`[QUADRO] erro em ${where} (o jogo continua):`, e);
+    }
+
     // Desenha e avança a física em passos FIXOS de 1/60 s (independente do FPS visual): com o teto de 30 FPS, cada quadro roda
     // 2 passos do Havok — entrada, colisão e veículos continuam em 60 Hz e nada atravessa mureta fina por causa de um dt grande.
     _render(dt) {
         this._frameDt = dt * 1000;
         Perf.lap('outros');
+        // Mundo PARADO atrás de um blur (menu de pausa, telas "DETIDO" / "FIM DA LINHA"): a imagem não muda, então desenha mais 2 quadros
+        // (para assentar) e para — a tela guarda o último. Antes a cena inteira (com todos os carros) era redesenhada 30×/s só para o
+        // navegador borrar de novo a cada quadro, e a física continuava andando atrás das telas de fim: em GPU fraca o jogo parecia travado.
+        const still = this.menu.isOpen || (this.arrest && this.arrest.phase === 'screen') || (this.death && this.death.phase === 'screen');
+        this._stillN = still ? (this._stillN || 0) + 1 : 0;
+        if (this._stillN > 2 && !this._redraw) { Perf.lap('render (cena)'); Perf.lap('física'); return; }
+        this._redraw = false;
         this.scene.render();                                         // (1 passo de 1/60 dentro do render)
         Perf.lap('render (cena)');
         const pe = this.scene.getPhysicsEngine();
         if (pe && this.physicsReady && !Interiors.active && !this.menu.isOpen) for (let n = Math.min(3, Math.round(dt * 60)) - 1; n > 0; n--) pe._step(1 / 60);
         Vehicle.physFrame++;                                          // a física andou: as velocidades guardadas dos veículos ficam velhas
+        this._rescueStrays(dt);
         Perf.lap('física');
     }
 
@@ -426,7 +487,13 @@ class Game {
     _pollInput() {
         const inp = this.input;
         inp.carMode = this.mode === 'car' && !!this.activeCar;
-        if (this.menu.isOpen) inp.releaseVirtual('pad'); else inp.poll();
+        inp.heliMode = this.mode === 'heli' && !!this.chopper;
+        const W = this.player && Weapons[this.player.weapon];
+        inp.gunInHand = !!(W && W.gun);
+        // Menu de pausa ou janela aberta (loja, baú, imóvel, mototáxi, Tribunal): o controle navega nela (PauseMenu._pad / PadNav), não no jogo.
+        const ui = this.menu.isOpen || !!(this.motoUI && (this.shopUI.open || this.stashUI.open || this.propertyUI.open || this.motoUI.open || this.tribunal.open));
+        if (ui) inp.releaseVirtual('pad'); else { if (this._uiWas) inp.suppressPad = true; inp.poll(); }      // (ao voltar, o botão que fechou a janela ainda está apertado)
+        this._uiWas = ui;
         if (this.touch) this.touch.update();
     }
 
@@ -444,14 +511,12 @@ class Game {
         this._pollInput();
         this.dev.update(dt);
         Interiors.tickFade(dt);
-        // Assa sprites pendentes (personagens, carros, amassados, portas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
+        // Assa sprites pendentes (personagens; os carros vêm prontos do atlas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
         // de folga) menos o trabalho medido do quadro, entre 1 e 8 ms. Antes eram 9 ms fixos — num celular que já gasta 25 ms por quadro,
         // isso derrubava o FPS enquanto havia fila.
         Perf.lap('outros');
         const bk = Perf.sec['sprites (bake)'], spare = Math.max(1, Math.min(8, 1000 / Config.perf.fpsCap * 0.8 - (Perf.frameAvg - (bk ? bk.avg : 0))));
-        const t0b = performance.now();
-        this.sprites.pump(spare * 0.45);
-        this.carLib.pump(Math.max(0.5, spare - (performance.now() - t0b)));
+        this.sprites.pump(spare);
         Perf.lap('sprites (bake)');
         Zones.update(this);                                                               // retângulo da câmera → zonas ativa/perto/dormindo
 
@@ -474,6 +539,7 @@ class Game {
         this.stashUI.update(dt);
         if (this.sleeping) this._updateSleep(dt);
         const axis = frozenUI ? { x: 0, z: 0 } : this.input.getMoveAxis();
+        if (this.aim) this.aim.update(dt);                   // mira (LT / botão direito): vira o corpo e mostra o círculo
 
         // --- Controle desacoplado: player OU carro recebem o input ---
         if (this.mode === 'car' && this.activeCar) {
@@ -512,7 +578,9 @@ class Game {
 
         // --- Círculo de visibilidade: o alvo (a pé ou o veículo dele) nunca some debaixo de viaduto, ponte, túnel, cobertura ou copa ---
         const rv = this.mode === 'car' && this.activeCar ? this.activeCar : null, rp = rv ? rv.position : this.player.position;
-        this.gameEngine.world.setReveal(rp.x, rp.z, rv ? (Math.max(rv.halfLen, rv.halfW) + 1.6) * 3 : 9.0, rv && rv.visual ? rv.visual.mesh.position.y : 0.5);
+        // (o furo só se abre no que está ACIMA do alvo: a pé, a altura vem do personagem — cabeça no chão ou no viaduto, abaixo do
+        // tabuleiro quando nada sob a ponte; de veículo, a altura do sprite dele — barco sob a ponte fica rebaixado)
+        this.gameEngine.world.setReveal(rp.x, rp.z, rv ? (Math.max(rv.halfLen, rv.halfW) + 1.6) * 3 : 9.0, rv && rv.visual ? (rv.visual.mesh ? rv.visual.mesh.position.y : rv.visual.y) : this.player.revealY);
 
         // --- Mundo (água animada, sombra seguindo o foco) ---
         if (this.mode !== 'player') HouseView.update(dt, this);          // (de carro/helicóptero: garante o "fora" e o zoom normal)
@@ -524,6 +592,7 @@ class Game {
         if (this.physicsReady && this.input.consumePress('f')) this._toggleHijack();
         if (this.physicsReady && this.input.consumePress('g')) this._lockpickKey();
         if (this.mode === 'player' && this.input.consumePress('v')) this._tryVault();
+        if (this.mode === 'player' && this.input.consumePress('padjump') && !this.player.busy && !this.lockpick.active && !this.hiding && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.5)) this._tryVault();      // controle: A/✕ (que também é correr) só pula se houver grade/muro
 
         if (this.arrest) this._updateArrest(dt);
         if (this.holdup) this._updateHoldup(dt);
@@ -550,9 +619,7 @@ class Game {
         if (this.birds) this.birds.update(dt);
         if (this.puddles) this.puddles.update(dt);
         if (this.vehicleManager && this.gameEngine.world.street) {
-            const sc = this.vehicleManager.vehicles.slice();
-            if (this.policeManager) for (const c of this.policeManager.cars) sc.push(c);
-            this.gameEngine.world.street.update(dt, sc, this);
+            this.gameEngine.world.street.update(dt, this.carDamage.allCars(), this);       // (lista reaproveitada; barcos são ignorados lá)
         }
         this.waterFx.follow(dt, this.player.position, this.mode === "player" && this.player.alive ? (this.player.depth || 0) : 0, this.player.speed, !!this.player.swimming);
         this.pickups.update(dt, this.mode === 'player' ? this.player.position : this.camera.target,this.mode === 'player' && !this.player.busy);
@@ -580,15 +647,16 @@ class Game {
         Perf.lap('barcos/colisores');
         if (this.vehicleManager) { this.carDamage.update(dt); this.collisions.update(dt); this.doors.update(dt); this._updateAlarms(dt); }
         Perf.lap('veículos (dano/colisão)');
+        if (this.vehicleManager) EngineAudio.update(this, dt);                 // ronco dos motores (o seu e o do trânsito perto)
+        Footsteps.update(this, dt);                                            // passos (presos à animação de andar/correr)
         this._updatePrompt();
         for (let i = this.casualties.length - 1; i >= 0; i--) {
             if (!this.casualties[i].update(dt)) { this.casualties[i].dispose(); this.casualties.splice(i, 1); }
         }
         if (this.vehicleManager) {
             // Faróis, lanternas, setas, giroflex e fumaça de todos os carros próximos.
-            const civ = this.vehicleManager.vehicles.concat(this.vehicleManager.boats);
-            const cars = this.policeManager ? civ.concat(this.policeManager.cars) : civ;
-            this.carLights.update(dt, this.dayNight.night, this.camera.target, cars);
+            this.carLights.update(dt, this.dayNight.night, this.camera.target, this.carDamage.allCars());      // (lista reaproveitada: sem arrays novos por quadro)
+            SkidMarks.focus = this.camera.target; SkidMarks.update(dt);
             if (this.mode === 'car' && this.activeCar && this.input.consumePress('l')) this.activeCar.lightsOn = !this.activeCar.lightsOn;
         }
         if (this.mode === 'car' && this.activeCar && this.input.consumePress('h')) {
@@ -638,7 +706,7 @@ class Game {
             const ps = this._playerState();
             // Percepção da polícia (raio do nível + linha de visada) -> procurado e FUGA.
             if (this.empire) this.wanted.escalateMul = this.empire.escalateMul(ps.pos.x, ps.pos.z);
-            if (this.skills) this.wanted.loseMul = this.skills.policeMul * (1 - (SkillTree.m.lose || 0) - (this.mode === 'car' ? (SkillTree.m.carLose || 0) : 0));
+            if (this.skills) this.wanted.loseMul = this.skills.policeMul * (1 - (SkillTree.m.lose || 0) - Outfit.m.lose - (this.mode === 'car' ? (SkillTree.m.carLose || 0) : 0));
             this.policeManager.update(dt, ps.pos, ps.vel, this.wanted.level);
             const seen = this.policeManager.playerSeen;
             if (seen) this.wanted.seenByPolice();
@@ -661,7 +729,7 @@ class Game {
         }
 
         Perf.lap('polícia');
-        // --- GPS ---
+        // --- Minimapa ---
         this._updateMinimap();
         Perf.lap('minimapa');
 
@@ -862,28 +930,26 @@ class Game {
         return hit;
     }
 
-    // ---------------------------------------------------------------- GPS (destino marcado no mapa)
-    // Marca o destino (x, z) e calcula a rota pelas ruas; aparece no minimapa e no mapa grande.
+    // ---------------------------------------------------------------- Marcador de destino (como o blip vermelho do GTA San Andreas)
+    // Só um ponto no mapa: aparece no minimapa (na borda, apontando, se estiver longe) e no mapa grande. Sem rota pelas ruas e sem
+    // recálculo — o caminho é por sua conta. (Antes era um GPS que recalculava a rota a cada 0,7 s; ver docs/otimizacao.md.)
+    // Os nomes setGps/clearGps/this.gps ficaram para não mexer em quem marca destinos (missões, carreiras, bancos, mototáxi).
     setGps(x, z, label = 'Ponto marcado') {
-        const from = this._playerState().pos;
-        const r = Gps.route({ x: from.x, z: from.z }, { x, z });
-        this.gps = { x, z, label, route: r.pts, len: r.len, t: 0 };
-        this._flash(`GPS: ${label}`);
+        this.gps = { x, z, label, t: 0 };
+        this._flash(`📍 Marcado no mapa: ${label}`);
     }
 
-    clearGps() { if (this.gps) { this.gps = null; this._flash('GPS desligado'); } }
+    clearGps() { if (this.gps) { this.gps = null; this._flash('Marcador removido'); } }
 
-    // Recalcula a rota a partir de onde você está (a cada ~0,7 s) e desliga ao chegar.
+    // Some ao chegar (conferido ~4×/s: só uma distância).
     _updateGps(dt) {
         const G = this.gps;
         if (!G) return;
         G.t -= dt;
         if (G.t > 0) return;
-        G.t = 0.7;
+        G.t = 0.25;
         const from = this._playerState().pos;
-        if (hypot(G.x - from.x, G.z - from.z) < 9) { this.gps = null; this._flash('Você chegou ao destino!'); AudioFX.blip(880, 0.2, 0.2); return; }
-        const r = Gps.route({ x: from.x, z: from.z }, { x: G.x, z: G.z });
-        G.route = r.pts; G.len = r.len;
+        if (hypot(G.x - from.x, G.z - from.z) < 9) { this.gps = null; this._flash('Você chegou ao destino!'); AudioFX.blip(880, 0.2, 0.2); }
     }
 
     _renderInventory() {
@@ -915,9 +981,10 @@ class Game {
         if (this.empire) this.empire.spend(kind === 'shoot' ? 0.3 : 0.8, kind === 'shoot' ? 2 : 0.5);
         if (kind === 'shoot') {
             // Tiro de verdade: projéteis (com mira assistida), ouvido por todos; libera as armas da polícia.
-            const angle = this.combat.aimAssist(pos.x, pos.z, heading);
+            const angle = this.aim ? this.aim.shotAngle(pos.x, pos.z, heading) : this.combat.aimAssist(pos.x, pos.z, heading);
             const crit = Math.random() < (SkillTree.m.crit || 0);
-            this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p, spreadMul: 1 - (SkillTree.m.spread || 0), dmgMul: (1 + (SkillTree.m.gunDmg || 0)) * (crit ? 2 : 1) }, p.weapon);
+            this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p, spreadMul: this.aim ? this.aim.spreadMul() : 1 - (SkillTree.m.spread || 0), dmgMul: (1 + (SkillTree.m.gunDmg || 0)) * (crit ? 2 : 1) }, p.weapon);
+            if (this.aim) this.aim.onShot(p.weapon);                          // coice: desfirma a mira um pouco
             if (this.careers && this.careers.silenced(p.weapon)) {          // silenciador (Armeiro): só quem está muito perto e vê percebe
                 this.npcManager.alertViolence(pos, 8);
                 this.wanted.reportCrime();
@@ -941,7 +1008,7 @@ class Game {
         this._delayed.push({
             t: M.delay,
             fn: () => {
-                const hit = this.combat.melee(p.position.x, p.position.z, p.root.rotation.y, M.dmg * (1 + (SkillTree.m.melee || 0)), M.range, 'player');
+                const hit = this.combat.melee(p.position.x, p.position.z, p.root.rotation.y, M.dmg * (1 + (SkillTree.m.melee || 0) + Outfit.m.melee), M.range, 'player');
                 this.npcManager.alertViolence(p.position);
                 if (hit) { this.wanted.reportCrime(); this._flash(`Agrediu #${hit.id}!`); }
             },
@@ -953,7 +1020,7 @@ class Game {
     }
 
     _updateMinimap() {
-        this._mmT = (this._mmT || 0) + this._dt;                   // o GPS redesenha a ~20 Hz (é um canvas 2D caro e a olho nu não faz diferença)
+        this._mmT = (this._mmT || 0) + this._dt;                   // o minimapa redesenha a ~20 Hz (é um canvas 2D caro e a olho nu não faz diferença)
         if (this._mmT < 0.05) return;
         this._mmT = 0;
         let center, heading;
@@ -994,7 +1061,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             blips.push({ pos: { x: it.x, z: it.z }, color: `rgb(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)})` });
         }
 
-        this.minimap.update(center, heading, blips, this.gps, this._pursuit(center));
+        const hp = CityGrid.pois.find((q) => q.type === 'home');                // safe house (ou o imóvel que virou casa): sempre no radar
+        this.minimap.update(center, heading, blips, this.gps, this._pursuit(center), hp ? { x: hp.x, z: hp.z, icon: this.menu.icon('home') } : null);
     }
 
     // ---------------------------------------------------------------- helicóptero
@@ -1039,7 +1107,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         const inp = this.input, ax = inp.getMoveAxis(), k = inp.keys;
         return {
             fwd: ax.z, strafe: ax.x,
-            yaw: (k['e'] ? 1 : 0) - (k['q'] ? 1 : 0),
+            yaw: Math.max(-1, Math.min(1, (k['e'] ? 1 : 0) - (k['q'] ? 1 : 0) + inp.yawAxis)),        // (controle: analógico direito)
             climb: (k[' '] ? 1 : 0) - ((k['shift'] || inp.isSprinting()) ? 1 : 0),
         };
     }
@@ -1364,7 +1432,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Aid.prompt(this) || Interiors.prompt(this) : '';
             if (shopP) html = shopP;
             else if (spot) html = `<b>E</b> esconder-se ${spot.kind === 'dumpster' ? 'na caçamba' : (spot.kind === 'barrel' ? 'no latão' : 'no caixote')}<small>se a polícia não te viu entrar, você some do radar</small>`;
-            else if (fence) html = `<b>V</b> pular ${fence.kind === 'wall' ? 'o muro' : 'a grade'}`;
+            else if (fence && fence.bridgeRail && (this.player.underBridge || this.player.depth > 0)) html = '';      // (nadando sob a ponte: não dá para subir)
+            else if (fence) html = fence.bridgeRail ? '<b>V</b> pular da ponte na água' : `<b>V</b> pular ${fence.kind === 'wall' ? 'o muro' : 'a grade'}`;
             else if (!car && this.npcManager) {
                 const R = Config.robbery, pp = this.player.position;
                 const steal = this.npcManager.nearestTarget(pp, R.theftRange, (n) => !n.surrendered && !n.fleeing && !n.pickpocketed && n.state !== 'HURT');
@@ -1384,9 +1453,10 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             if (!html) html = Interiors.prompt(this);
             if (!html && HouseView.hint) html = HouseView.hint;
         }
-        if (html === this._promptHtml && this.showPrompts === this._promptShown) return;
-        this._promptHtml = html; this._promptShown = this.showPrompts;
-        el.innerHTML = html;
+        const pad = this.input.usingPad ? this.input.padType : '';          // jogando no controle: as teclas viram os botões dele (Xbox/PlayStation)
+        if (html === this._promptHtml && this.showPrompts === this._promptShown && pad === this._promptPad) return;
+        this._promptHtml = html; this._promptShown = this.showPrompts; this._promptPad = pad;     // (_promptHtml fica com as teclas: os botões de toque leem)
+        el.innerHTML = pad ? PadGlyphs.render(html, pad) : html;
         el.style.display = html && this.showPrompts ? 'block' : 'none';
     }
 
@@ -1528,7 +1598,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         const f = bike.body.getDirection(BABYLON.Axis.Z), heading = Math.atan2(f.x, f.z);
         bike.hold = true;
         const go = () => {
-            if (bike.visual) bike.visual.setVisible(false);              // o sprite da subida já desenha o veículo
+            // (o veículo continua à vista: o sprite da subida só desenha a pessoa — RiderActor)
             const ok = this.player.startMount(kind, bike.position, heading, S.sign, () => {
                 if (bike.visual) bike.visual.setVisible(true);
                 bike.setRider(0);                                        // quem pilota agora é o jogador (variante 0)
@@ -1576,6 +1646,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         car.setControlled(false);
         if (car.isBike) car.setRider(null);
         this.player.teleport(exitPos);
+        if (car._onDeck) { this.player.onDeck = true; this.player.deckH = car.elev; this.player.actor.mesh.position.y = this.player.baseY; }      // desceu do carro EM CIMA do viaduto
+        else if (car.isBoat && RoadPlan.onBridge(exitPos.x, exitPos.z)) { this.player.underBridge = true; this.player.actor.mesh.position.y = this.player.baseY; }      // saiu do barco SOB a ponte: na água
         if (face !== null) this.player.root.rotation.y = face;
         this.player.setVisible(true);
         this.mode = 'player';
@@ -1801,11 +1873,24 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         if (pl.busy || this.hiding) return;
         const p = pl.position, o = CityGrid.nearestVault(p.x, p.z, 1.5);
         if (!o) { this._flash('Nada para pular aqui'); return; }
-        const land = CityGrid.vaultLanding(o, p.x, p.z);
-        if (!land) { this._flash('Sem espaço do outro lado'); return; }
+        if (o.bridgeRail && (pl.underBridge || pl.depth > 0)) { this._flash('Alto demais para subir daqui'); return; }      // (nadando sob a ponte)
+        const land = CityGrid.vaultLanding(o, p.x, p.z, true);
+        if (!land) { this._flash(o.bridgeRail ? 'Aqui embaixo não tem água' : 'Sem espaço do outro lado'); return; }
         const face = Math.atan2(land.x - p.x, land.z - p.z);
-        pl.runSequence([{ clip: 'vault', timer: 0.6, glide: land, arc: 0.9 }], { face });
+        if (land.water) {                                                    // da ponte para o mar: salto mais longo e mergulho
+            pl.runSequence([{ clip: 'vault', timer: 0.85, glide: land, arc: 1.6 }], { face, onDone: () => this._splash(land.x, land.z) });
+        } else {
+            pl.runSequence([{ clip: 'vault', timer: 0.6, glide: land, arc: 0.9 }], { face });
+        }
         AudioFX.thud(p.x, p.z);
+    }
+
+    // Mergulho (pulou da ponte): anéis na água no ponto onde o jogador caiu.
+    _splash(x, z) {
+        if (!this.waterFx) return;
+        this.waterFx.ripple(x, z, 1.2, 5.5, 1.3, 0.75);
+        this.waterFx.ripple(x + 0.6, z - 0.4, 0.8, 3.5, 1.0, 0.6);
+        AudioFX.thud(x, z);
     }
 
     // ---------------------------------------------------------------- assalto e furto
@@ -1929,6 +2014,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // policial mais próximo corre até ele; então aparece a tela "DETIDO" (jogo parado atrás de um blur total) até
     // qualquer tecla/botão — só aí vem a multa e a ida à delegacia (_busted).
     _startArrest() {
+        HangProbe.arm('prisão (rendição e tela)', 600);
         const pm = this.policeManager, pl = this.player;
         this.bustTimer = 0;
         this._closeInventory();
@@ -1999,6 +2085,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this.arrest = null;
         this.endScreen.hide();
         this.player.invulnerable = false;
+        HangProbe.mark('prisão: policial termina a prisão');
         if (A.officer) A.officer.endArrest();
         this._busted(A.lost, A.wake ? A.wake.hours : null, A.stars);
     }
@@ -2012,8 +2099,11 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 
     // Acorda no prédio `kind` ('hospital' | 'station'), na calçada da frente, depois de `hours` horas.
     _respawn(kind, hours) {
+        HangProbe.arm('respawn: ' + kind, 600);
+        HangProbe.mark('respawn: ponto de despertar');
         const home = kind === 'home' ? (RealEstate.homeSpawn() || SafeHouse.spawnWorld()) : null;      // 'home': ao lado da cama (ou na porta do imóvel-casa)
         const p = home ? new BABYLON.Vector3(home.x, 0, home.z) : CityGrid.landmarkSpawn(kind);
+        HangProbe.mark('respawn: teleporte');
         this.player.teleport(p);
         this.player.root.rotation.y = home ? home.face : 0;                // de frente para o prédio (norte) / para a porta
         this.player.hp = this.player.maxHp;
@@ -2021,21 +2111,31 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this.player.weapon = 'none';                                       // acorda de punhos (armas guardadas na mochila, ou confiscadas)
         this.player.aimTimer = 0;
         this.camera.snapTo(this.player.position);
+        HangProbe.mark('respawn: pular horas');
         this.dayNight.skip(hours === null ? this._wakeInfo().hours : hours);
+        HangProbe.mark('respawn: império');
         if (this.empire) this.empire.onWake();
+        HangProbe.mark('respawn: gangues');
         if (this.gangs) this.gangs.clear();
+        HangProbe.mark('respawn: espalhar polícia');
         if (this.policeManager) this.policeManager.scatter(p);              // horas depois: a polícia já não está onde estava
+        HangProbe.arm('acordou: ' + kind, 20);                              // (caixa-preta: grava os próximos 20 s, ver core/HangProbe.js)
     }
 
     // Preso: multa e acorda na DELEGACIA, 12h+ depois.
     _busted(lost = null, hours = null, stars = this.wanted.level) {
         const light = stars === 1, O = Config.police.oneStar;
+        HangProbe.arm('preso', 600);
+        HangProbe.mark('preso: zerar procurado');
         this.wanted.bust();            // zera procurado -> polícia volta a patrulhar.
         this.bustTimer = 0;
+        HangProbe.mark('preso: sair do veículo');
         this._dropFromCar();
         this._closeInventory();
+        HangProbe.mark('preso: multa e confisco');
         if (lost === null) lost = this.inventory.fine((light ? O.fine : Config.police.fineBase) * (1 - (SkillTree.m.fine || 0)));
         if (!(light && O.keepWeapons)) this.inventory.confiscate();        // preso: perde TODAS as armas (1★: delito leve, fica com elas)
+        HangProbe.mark('preso: cédulas marcadas');
         if (typeof Banks !== 'undefined') Banks.lose();                    // (e as cédulas marcadas)
         this._respawn('station', hours === null && light ? this._wakeInfo(O.hours).hours : hours);
         this._flash(light ? `⚠ Detido por delito leve: multa de ${brl(lost)}. Liberado com seus pertences` : `⚠ PRESO! Multa de ${brl(lost)}. Armas confiscadas. Você acordou na delegacia`);
@@ -2052,6 +2152,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // Vida zerada: o personagem cai (sprite de morto), o mundo segue por um instante, e aparece "FIM DA LINHA" (jogo
     // parado atrás do blur) até qualquer tecla/botão; só então vêm a conta e o despertar no HOSPITAL, 12h+ depois.
     _startDeath() {
+        HangProbe.arm('morte (queda e tela)', 600);
         const pl = this.player;
         this.bustTimer = 0;
         this._closeInventory();
@@ -2127,12 +2228,17 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 
     // Morreu: sem procurado, conta do hospital, e acorda no HOSPITAL 12h+ depois.
     _wasted(lost = null, hours = null, where = 'hospital') {
+        HangProbe.arm('morte: ' + where, 600);
+        HangProbe.mark('morte: zerar procurado');
         this.wanted.bust();
         this.bustTimer = 0;
+        HangProbe.mark('morte: sair do veículo');
         this._dropFromCar();
         this._closeInventory();
         this.reloading = 0;
+        HangProbe.mark('morte: reviver');
         this.player.revive();
+        HangProbe.mark('morte: conta do hospital');
         if (lost === null) { lost = this.inventory.fine(0.5 * (1 - (SkillTree.m.hospital || 0))); this.inventory.ravage(); }
         this._respawn(where, hours);
         if (where === 'hospital') this._flash(`☠ Você acordou no hospital. Conta: -${brl(lost)}`);
@@ -2180,6 +2286,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         exitPos.y = 0;
         car.setControlled(false);
         this.player.teleport(exitPos);
+        if (car._onDeck) { this.player.onDeck = true; this.player.deckH = car.elev; this.player.actor.mesh.position.y = this.player.baseY; }      // desceu do carro EM CIMA do viaduto
+        else if (car.isBoat && RoadPlan.onBridge(exitPos.x, exitPos.z)) { this.player.underBridge = true; this.player.actor.mesh.position.y = this.player.baseY; }      // saiu do barco SOB a ponte: na água
         this.player.setVisible(true);
         this.mode = 'player';
         this.activeCar = null;

@@ -36,7 +36,9 @@ class Collisions {
         let built = false;
 
         for (const car of g.carDamage.allCars()) {
-            const c = car.position, v = ctx.v.copyFrom(car.velocity);
+            const c = car.position;
+            if (!Zones.near(c.x, c.z, 40)) continue;                        // longe da tela: ninguém vê o atropelamento nem o empurrão
+            const v = ctx.v.copyFrom(car.velocity);
             const sp = Math.sqrt(v.x * v.x + v.z * v.z);
             const moving = sp > C.runOverSpeed;
             const hl = car.halfLen - 0.15, hw = car.halfW - 0.05;          // casco real do corpo (menos a folga)
@@ -47,7 +49,7 @@ class Collisions {
                 if (dx * dx + dz * dz > reach2) continue;
             }
             const d = this._dir;
-            car.body.getDirectionToRef(BABYLON.Axis.Z, d);             // (devolve o nó, não o vetor)
+            car.fwdToRef(d);                                           // (do quaternião: sem matriz de mundo)
             const dl = Math.sqrt(d.x * d.x + d.z * d.z) || 1, fx = d.x / dl, fz = d.z / dl;
             ctx.car = car; ctx.c = c; ctx.sp = sp; ctx.fx = fx; ctx.fz = fz; ctx.rx = fz; ctx.rz = -fx;
             ctx.hl = hl; ctx.hw = hw; ctx.reach2 = reach2;

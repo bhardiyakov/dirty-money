@@ -36,8 +36,25 @@ try {
         # Erro numa requisição (ex.: navegador cancelou no meio) não pode derrubar o servidor.
         try {
             $rel = [System.Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath.TrimStart('/'))
+            # Ferramentas de arte (tools/carros, tools/personagens): PUT /__save/assets/... grava o atlas gerado no disco.
+            # Só dentro de assets/ e só para .js/.json/.png (o servidor só escuta em localhost).
+            if ($ctx.Request.HttpMethod -eq 'PUT' -and $rel.StartsWith('__save/')) {
+                $dest = [System.IO.Path]::GetFullPath((Join-Path $root $rel.Substring(7)))
+                $assets = [System.IO.Path]::GetFullPath((Join-Path $root 'assets')) + [System.IO.Path]::DirectorySeparatorChar
+                $okExt = @('.js', '.json', '.png') -contains [System.IO.Path]::GetExtension($dest).ToLower()
+                if ($dest.StartsWith($assets, [System.StringComparison]::OrdinalIgnoreCase) -and $okExt) {
+                    $ms = New-Object System.IO.MemoryStream
+                    $ctx.Request.InputStream.CopyTo($ms)
+                    [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($dest)) | Out-Null
+                    [System.IO.File]::WriteAllBytes($dest, $ms.ToArray())
+                    Write-Host "salvo: $dest ($($ms.Length) bytes)"
+                    $ctx.Response.StatusCode = 204
+                } else { $ctx.Response.StatusCode = 403 }
+                continue
+            }
             if ([string]::IsNullOrEmpty($rel)) { $rel = 'index.html' }
             $path = Join-Path $root $rel
+            if (Test-Path $path -PathType Container) { $path = Join-Path $path 'index.html' }      # pasta → index.html (ex.: /tools/carros/)
 
             if (Test-Path $path -PathType Leaf) {
                 $ext = [System.IO.Path]::GetExtension($path).ToLower()

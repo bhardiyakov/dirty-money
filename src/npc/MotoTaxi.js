@@ -39,12 +39,12 @@ class MotoTaxis {
         const legs = this._legs(from); if (!legs.length) return null;
         const leg = legs[Math.floor(Math.random() * legs.length)];
         const [va, vb] = CharacterRig.VARIANT_GROUPS.poor;
-        const actor = new SpriteActor(g.scene, Bikes.sheet(g.sprites, 'moto', 'ride'), va + Math.floor(Math.random() * (vb - va + 1)), 'mototaxi');
+        const actor = Bikes.actor(g, 'moto', va + Math.floor(Math.random() * (vb - va + 1)), 'mototaxi');
         actor.play('static');
         const t = Math.random() * 0.8;                                         // começa no meio do trecho
         const x = from.x + (leg.to.x - from.x) * t, z = from.z + (leg.to.z - from.z) * t;
         const m = { actor, from, to: leg.to, di: leg.di, x, z, heading: Math.atan2(leg.to.x - from.x, leg.to.z - from.z), speed: this.speed * (0.85 + Math.random() * 0.3), v: 0, lean: 1, prev: from };
-        actor.setPosition(x, z); actor.mesh.position.y = 1.5; actor.setHeading(m.heading);
+        actor.setY(1.5); actor.setPosition(x, z); actor.setHeading(m.heading);
         this.list.push(m);
         return m;
     }

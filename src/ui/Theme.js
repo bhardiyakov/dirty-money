@@ -35,6 +35,14 @@ const Theme = {
                 --blur: blur(18px) saturate(1.5);
             }
             html, body { font-family: var(--font); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-feature-settings: 'cv11', 'ss01'; }
+            /* Modo sem desfoque (html.no-blur): o "vidro" borrado dos painéis é refeito pela GPU a cada quadro, na resolução da TELA, por cima
+               do jogo em movimento — em placa fraca custa mais que a cena 3D. Sem ele, os painéis ficam um pouco mais opacos. Liga no perfil
+               leve e é o 1º degrau do AutoQuality. */
+            html.no-blur { --glass: rgba(14, 17, 26, 0.9); --glass-2: rgba(20, 24, 35, 0.95); --blur: none; }
+            html.no-blur *, html.no-blur *::before, html.no-blur *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+            html.no-blur #endscreen { background: radial-gradient(ellipse at center, rgba(20,2,6,0.82) 20%, rgba(0,0,0,0.94) 100%) !important; }
+            html.no-blur #pause { background: rgba(6, 8, 13, 0.93) !important; }
+            html.no-blur :is(#shopUI, #stashUI, #propUI, #tribunal, #motoUI) { background: rgba(5, 7, 12, 0.72) !important; }
             .emo { font-family: var(--emoji); font-style: normal; font-weight: 400; line-height: 1; display: inline-block; }
             .num { font-family: var(--font-d); font-variant-numeric: tabular-nums; }
             ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -126,12 +134,16 @@ const Emoji = {
         // itens do chão e da mochila
         medkit: '🩹', water: '💧', food: '🍔', lootbox: '📦', cash_small: '💵', cash_bag: '💰', cash_case: '💼', jewels: '💎', necklace: '📿', rings: '💍',
         watch: '⌚', coins: '🪙', phone_old: '📟', phone_new: '📱', jerry: '⛽', knife: '🔪', bat: '🏏', backpack: '🎒', wind: '💨', bag_cross: '👜', bag_pack: '🎒', bag_tactical: '🎒', pockets: '👖', hack: '💾', carkey: '🔑',
-        vest: '🦺', vest2: '🦺', fists: '✋', none: '✋',
+        vest: '🦺', vest2: '🦺', fists: '✋', none: '✋', bag_brief: '💼', bag_duffel: '👝', bag_suit: '🧳', briefcase: '💼', duffel: '👝', suitcase: '🧳',
+        // roupas e acessórios (Outfit / boutique)
+        of_chinelo: '🩴', of_tenis_corrida: '👟', of_tenis_basquete: '👟', of_coturno: '🥾', of_sapato_social: '👞', of_camiseta_branca: '👕', of_regata_academia: '🎽',
+        of_camisa_time: '⚽', of_moletom_capuz: '🧥', of_jaqueta_couro: '🧥', of_colete_carga: '🦺', of_terno: '👔', of_bermuda: '🩳', of_calca_moletom: '👖', of_calca_cargo: '👖',
+        of_calca_social: '👖', of_oculos_escuros: '🕶️', of_relogio_ouro: '⌚', of_luvas: '🧤', of_corrente_ouro: '📿', of_tenis_branco: '👟', of_jaqueta_laranja: '🧥', of_calca_jeans: '👖',
         // comidas e bebidas das lojas (Economy.ITEMS)
         burger: '🍔', bacon: '🍔', fries: '🍟', soda: '🥤', shake: '🥤', slice: '🍕', pizza: '🍕', salad: '🥗', juice: '🧃', bowl: '🍧', pasta: '🍝', risotto: '🍚',
         menu_it: '🍽️', wine: '🍷', sushi: '🍣', omakase: '🍱', sake: '🍶', beer: '🍺', shot: '🥃', snack: '🍢', bread: '🥪', coffee: '☕', cake: '🍰', lunch: '🍱', bottle: '💧',
         // lugares do mapa (PauseMenu.POI_TYPES)
-        hospital: '🏥', station: '🚓', cart: '🛒', spray: '🎨', fuel: '⛽', boat: '🚤', home: '🏠', dumpster: '🗑️', pin: '📍', chop: '🔧', moto: '🛵', bank: '🏦', music: '🎶', gun: '🔫',
+        hospital: '🏥', station: '🚓', cart: '🛒', spray: '🎨', fuel: '⛽', boat: '🚤', home: '🏠', dumpster: '🗑️', pin: '📍', chop: '🔧', moto: '🛵', bank: '🏦', music: '🎶', gun: '🔫', shirt: '👕',
         // indicadores do HUD
         heart: '❤️', shield: '🛡️', cash: '💵', clean: '💳', clock: '🕒', trophy: '🏆', star: '⭐', energy: '⚡', heat: '🔥', medal: '🏅', siren: '🚨',
     },

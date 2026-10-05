@@ -28,7 +28,7 @@
 </head>
 <body>
     <h1>≡ DIRTY MONEY — Galeria de Arte</h1>
-    <div class="sub">Tudo é gerado por código: sprites pré-renderizados (SpriteBaker) vistos de cima, luz no noroeste, e texturas tileáveis em pixel art (20 px por unidade).</div>
+    <div class="sub">Personagens e carros vêm de atlas vetoriais prontos (tools/personagens, tools/carros): um desenho por quadro, girado no jogo. Vegetação e texturas do mundo são geradas por código em pixel art (20 px por unidade).</div>
 
     <div class="tabs">
         <button class="tab on" data-tab="chars">Personagens</button>
@@ -78,7 +78,10 @@
     <script src="./src/art/TileFactory.js"></script>
     <script src="./src/art/SpriteBaker.js"></script>
     <script src="./src/art/CharacterRig.js"></script>
+    <script src="./tools/personagens/renderer.js"></script>
     <script src="./src/art/PropSprites.js"></script>
+    <script src="./assets/cars/carros-atlas.js"></script>
+    <script src="./src/art/CarArt.js"></script>
     <script src="./src/art/CarSheet.js"></script>
     <script>
         const LOOKS = {
@@ -146,9 +149,20 @@
             el('variant').appendChild(o);
         });
 
+        // O jogo desenha os personagens com o atlas vetorial (tools/personagens): mesmo renderizador aqui, um quadro olhando para a
+        // frente, girado no canvas, com a sombra no chão (silhueta deslocada para o sudeste). Canvas a 32 px/m (1,6× o quadro antigo).
+        const slotColors = (v) => { const r = CharacterRig.rampsFor(v), o = []; for (const k of Object.keys(r)) o[+k] = r[k][2]; return o; };
         function frameCanvas(prims, heading, variant, zoom, size = F) {
-            const idx = SpriteBaker.bake(prims, { size, heading });
-            return toCanvas(CharacterRig.colorize(idx, variant), size, size, zoom);
+            const fr = CharRender.crop(CharRender.render(prims)), K = CharRender.PPU / 20, S = Math.round(size * K);
+            const c = document.createElement('canvas'); c.width = S; c.height = S;
+            c.style.width = c.style.height = (size * zoom) + 'px';
+            if (!fr.w) return c;
+            const t = document.createElement('canvas'); t.width = fr.w; t.height = fr.h;
+            t.getContext('2d').putImageData(CharRender.colorize(fr, slotColors(variant)), 0, 0);
+            const ctx = c.getContext('2d'), draw = (dx, dz, filter) => { ctx.save(); ctx.filter = filter; ctx.translate(S / 2 + dx, S / 2 + dz); ctx.rotate(heading); ctx.drawImage(t, fr.ox, -fr.oz); ctx.restore(); };
+            draw(0.26 * CharRender.PPU, 0.2 * CharRender.PPU, 'brightness(0) opacity(0.36)');
+            draw(0, 0, 'none');
+            return c;
         }
         // Clipes de bicicleta/moto usam quadros maiores (80 px) — o veículo é mais comprido que o boneco.
         const frameSize = (name) => (/^(ride|park|fallen|mount)/.test(name) ? 80 : F);
@@ -189,7 +203,7 @@
                     frames.push(c);
                 }
                 const pc = document.createElement('canvas');
-                pc.width = FS; pc.height = FS;
+                pc.width = pc.height = frames[0].width;
                 pc.style.width = pc.style.height = (FS * zoom) + 'px';
                 anims.push({ def, frames, ctx: pc.getContext('2d'), FS });
                 wrap.appendChild(info);
@@ -205,7 +219,7 @@
                 let f = Math.floor(now / 1000 * a.def.fps);
                 f = a.def.loop ? f % n : f % (n + Math.ceil(a.def.fps * 0.5));
                 f = Math.min(f, n - 1);
-                a.ctx.clearRect(0, 0, a.FS, a.FS);
+                a.ctx.clearRect(0, 0, a.ctx.canvas.width, a.ctx.canvas.height);
                 a.ctx.drawImage(a.frames[f], 0, 0);
             }
             requestAnimationFrame(tick);
@@ -218,33 +232,27 @@
 
         // ===================== CARROS / VEGETAÇÃO / MUNDO =====================
         const builders = {
-            cars(root) {
-                const F = 112;
-                const bake = (id, heading) => SpriteBaker.bake(CarSheet.model(id), { size: F, heading, shadow: false });
-                let row = section(root, 'Catálogo de modelos (cada um com dimensões e desempenho próprios)');
-                const paintFor = { taxi: 2, sports: 0, van: 4, pickup: 5, suv: 9, hatch: 1, sedan: 3 };
+            // Carros: desenho vetorial do atlas (assets/cars/carros-atlas.js, gerado por tools/carros/index.html), pintado e amassado
+            // com a mesma conta do shader do jogo (CarArt). No jogo cada imagem é girada no ângulo exato do carro.
+            async cars(root) {
+                await CarArt.ready;
+                const show = (c, zoom = 1) => { c.style.width = (c.width * zoom) + 'px'; c.style.height = (c.height * zoom) + 'px'; c.style.background = '#44474f'; return c; };
+                let row = section(root, `Catálogo: ${Object.keys(CarSheet.MODELS).length} modelos (cada um com dimensões e desempenho próprios) — gerador em tools/carros/`);
                 for (const [id, M] of Object.entries(CarSheet.MODELS)) {
-                    row.appendChild(cell(toCanvas(colorizeRamps(bake(id, 0), CarSheet.rampsFor(paintFor[id])), F, F, 2.4, '#44474f'),
-                        `${M.name} · ${M.len}×${M.wid}u · ${Math.round(M.maxSpeed * 3.6)} km/h`));
+                    const paint = (CarSheet.POOLS[id] || [4])[0];
+                    row.appendChild(cell(show(CarArt.image(id, paint)), `${M.model} (${M.cls}) · ${M.len.toFixed(1)}×${M.wid.toFixed(1)} m · ${Math.round(M.maxSpeed * 3.6)} km/h`));
                 }
                 // Fases de amassado por modelo: limpo → leve → médio → destruído → carcaça carbonizada (pintura 12).
                 row = section(root, 'Amassados (fase 0 · 1 · 2 · 3 · carcaça) — um modelo por linha');
-                for (const [id] of Object.entries(CarSheet.MODELS)) {
-                    for (let dent = 0; dent <= 3; dent++) {
-                        const img = SpriteBaker.bake(CarSheet.model(id, dent), { size: F, heading: 0.5, shadow: false });
-                        row.appendChild(cell(toCanvas(colorizeRamps(img, CarSheet.rampsFor(paintFor[id])), F, F, 1.7, '#44474f'), `${id} · fase ${dent}`));
-                    }
-                    const wreck = SpriteBaker.bake(CarSheet.model(id, 3), { size: F, heading: 0.5, shadow: false });
-                    row.appendChild(cell(toCanvas(colorizeRamps(wreck, CarSheet.rampsFor(12)), F, F, 1.7, '#44474f'), `${id} · carcaça`));
+                for (const id of Object.keys(CarSheet.MODELS)) {
+                    const paint = (CarSheet.POOLS[id] || [4])[1 % (CarSheet.POOLS[id] || [4]).length];
+                    for (let dent = 0; dent <= 3; dent++) row.appendChild(cell(show(CarArt.image(id, paint, dent), 0.75), `${id} · fase ${dent}`));
+                    row.appendChild(cell(show(CarArt.image(id, 12, 3), 0.75), `${id} · carcaça`));
                 }
-                row = section(root, 'Sedã — 32 direções');
-                for (let d = 0; d < 32; d++) {
-                    row.appendChild(cell(toCanvas(colorizeRamps(bake('sedan', d * Math.PI * 2 / 32), CarSheet.rampsFor(0)), F, F, 1.2, '#44474f'), d));
-                }
-                row = section(root, 'Pinturas');
-                CarSheet.PAINTS.forEach((p, i) => {
-                    row.appendChild(cell(toCanvas(colorizeRamps(bake('sedan', 0), CarSheet.rampsFor(i)), F, F, 2, '#44474f'), p.name));
-                });
+                row = section(root, 'Pinturas (a mesma imagem, repintada no shader)');
+                CarSheet.PAINTS.forEach((p, i) => row.appendChild(cell(show(CarArt.image('sedan_medio', i), 0.75), `${i} · ${p.name}`)));
+                row = section(root, 'Pintura 2 (teto/faixas): muscle car');
+                CarSheet.PAINTS.forEach((p, i) => { if (p.paint2 !== p.paint) row.appendChild(cell(show(CarArt.image('muscle', i), 0.75), `${i} · ${p.name}`)); });
             },
 
             props(root) {

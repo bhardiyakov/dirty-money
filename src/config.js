@@ -10,6 +10,10 @@ function brl(n) { return "R$ " + Math.round(n).toLocaleString("pt-BR"); }
 // (é variádico) — e distâncias são calculadas centenas de vezes por quadro (IA, polícia, trânsito, colisões, pássaros).
 // (Sem a proteção contra overflow do Math.hypot, que só importa para valores acima de ~1e154.)
 function hypot(x, y, z = 0) { return Math.sqrt(x * x + y * y + z * z); }
+// Posição utilizável (finita e dentro do mundo, com folga)? NaN/Infinity dão false. As buscas em grade (`for (i = floor(x/S); i <=
+// floor((x+r)/S); i++)`) com x infinito ou gigante (> ~1e17: `i + 1 === i`) NUNCA terminam — um carro lançado para longe pela física
+// congelava o jogo inteiro. Quem recebe posições de entidades confere com isto antes de varrer a grade.
+function inWorld(x, z) { const W = Config.world; return x > W.minX - 3000 && x < W.maxX + 3000 && z > W.minZ - 3000 && z < W.maxZ + 3000; }
 
 // Tabelas constantes declaradas como `static get NOME() { return {...} }` montavam um objeto NOVO a cada leitura — e várias são lidas em
 // laços de todo quadro (Pickups.TYPES, Birds.SPECIES, CarSheet.MODELS...): lixo para o coletor e engasgos no celular. memoStatics troca
@@ -34,6 +38,7 @@ const Config = {
     art: {
         ppu: 20,               // pixels de textura por unidade de mundo (1u ≈ 1m).
         pixelate: true,        // renderiza em baixa resolução + upscale "crocante".
+        charScale: 0.8,        // escala do DESENHO dos personagens (atlas vetorial). Os carros são de tamanho real; isto aproxima a proporção.
         internalHeight: (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ? 440 : 560,   // altura interna alvo (px) quando pixelate = true (celular: menor, mais leve).
     },
 
@@ -99,7 +104,7 @@ const Config = {
         buildBudgetMs: 5,      // tempo máx. por frame construindo pedaços.
         meshChunk: 512,        // lado (u) dos pedaços de malha mesclada da cidade (1 malha por material e pedaço; o frustum descarta os de fora)
         meshChunkOffset: 256,  // desloca essa grade: sem isto o centro da cidade (0,0) caía na quina de 4 pedaços e cada material lá era desenhado 4× (−40% de draw calls no centro)
-        detailChunk: 128,      // ...e das camadas densas em vértices (acabamentos, meio-fio, postes, hidrantes): ver WorldBuilder._batch
+        detailChunk: 128,      // ...e das camadas densas em vértices (acabamentos, meio-fio, postes): ver WorldBuilder._batch
         seed: 20261003,
         legacyPlan: false,     // true = só a cidade antiga (8×10 quarteirões); false = o mundo todo (faixa urbana, ilha, pontes, favela, rodovias).
 
@@ -238,7 +243,8 @@ const Config = {
         linearDamping: 0.1,    // Arrasto do chassi.
         brakeDrag: 8,          // Freio-motor (m/s²) quando solta o acelerador.
         waterDrag: 6,          // Atola o carro fora da terra (não atravessa água).
-        hijackRange: 4,        // Distância do player ao carro para roubá-lo.
+        hijackRange: 5,        // Distância do player ao carro para roubá-lo (do centro do carro: acompanha o vehicle.scale).
+        scale: 1.3,            // Tamanho de TODOS os veículos — carros, motos, bicicletas, jet skis, barcos (desenho, física, sombra, portas, luzes).
     },
 
     // Procurado (★) e FUGA. Cada nível define quão fácil é se safar e o que a cidade manda atrás de você.
@@ -376,8 +382,13 @@ const Config = {
     let saved = null;
     try { saved = localStorage.getItem('dm_quality'); } catch (e) { /* sem storage */ }
     const lite = q.includes('lite') || (!q.includes('full') && (coarse || weak || saved === 'lite'));
-    if (!lite) return;
     const P = Config.perf;
+    // App instalado no PC (Tauri) — ou `?fps60` no navegador, para testar: 60 quadros. Se o PC não segurar, o AutoQuality volta a 30
+    // antes de mexer na qualidade visual.
+    const desktopApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+    if (!lite && (desktopApp || q.includes('fps60'))) P.fpsCap = 60;
+    if (!lite) return;
+    if (typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // sem vidro borrado nos painéis (ver Theme)
     P.lite = true; P.shadowSize = 1024; P.colliderRadius = 190; P.dprCap = 1.5;
     Config.npc.count = 48;
     Config.traffic.count = 18; Config.traffic.parked = 8; Config.traffic.motos = 2; Config.traffic.motosParked = 2; Config.traffic.bicycles = 2; Config.traffic.bicyclesParked = 2; Config.traffic.couriers = 3;

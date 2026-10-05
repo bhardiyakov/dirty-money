@@ -104,14 +104,14 @@ class ChopCareer extends Career {
         return '<b>🔧 DESMANCHE</b><small>chegue aqui DIRIGINDO um carro roubado: E desmancha (vende as peças), O abre a oficina</small>';
     }
 
-    // Entrou num carro roubado fora de um trabalho: diz onde levar (e marca o GPS se não houver outro destino).
+    // Entrou num carro roubado fora de um trabalho: diz onde levar (e marca no mapa se não houver outro destino).
     onStolen(car) {
         const g = this.g;
         if (!car || car.isBoat || car.isBike || car._chopHint || car._careerTarget) return;
         car._chopHint = true;
         const y = this.yard; if (!y) return;
         if (!g.gps) { this.mgr.gpsTo(y.x, y.z, 'Desmanche'); g.gps._chopHint = true; }
-        g._flash(`🔧 Leve ao Desmanche da favela para vender as peças (~${brl(this.scrapValue(car))})${g.gps && g.gps._chopHint ? ' — marcado no GPS' : ''}`);
+        g._flash(`🔧 Leve ao Desmanche da favela para vender as peças (~${brl(this.scrapValue(car))})${g.gps && g.gps._chopHint ? ' — marcado no mapa' : ''}`);
     }
 
     jobs() {
@@ -216,7 +216,7 @@ class ChopJob extends CareerJob {
         const s = car.spec, v = ChopCareer.value(s);
         if (this.kind === 'pull') return v <= 1300;
         if (this.kind === 'order') return ChopCareer.luxury(s);
-        return /^(suv|pickup)/.test(car.spec.id) || s.cls === 'suv' || s.cls === 'pickup';
+        return s.cls === 'suv' || s.cls === 'pickup';
     }
 
     start() {

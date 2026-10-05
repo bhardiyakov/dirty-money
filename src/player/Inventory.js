@@ -27,6 +27,7 @@ class Inventory {
         this.jewels = 0;       // peças de joalheria: valem dinheiro quando vendidas (cofre → "vender")
         this.jewelValue = 0;   // soma do valor das peças ($)
         this.bag = 'none';     // bolsa equipada (ver Bags.js): define o tamanho da grade e a carga confortável
+        this.spareBags = [];   // bolsas de reserva levadas junto, vazias (trocam-se no menu; guardam-se no baú de casa)
     }
 
     // Texto/efeitos de comer e beber (vida recuperada).

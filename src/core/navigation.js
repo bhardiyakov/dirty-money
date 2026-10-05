@@ -74,8 +74,10 @@ class GridCrowd {
     }
 
     update(dt) {
-        // Fila de caminhos (orçamento ~3 ms/frame, pelo menos um).
-        if (this.queue.length) {
+        // Fila de caminhos. No app de PC o A* roda no Rust, em outra thread (RemotePaths): o quadro só despacha o lote e aplica as
+        // respostas que chegarem. Fora dele (navegador, file://), A* aqui mesmo com orçamento de ~3 ms/frame (pelo menos um).
+        if (this.queue.length && this.nav.remote) this._dispatchRemote();
+        else if (this.queue.length) {
             const t0 = performance.now();
             while (this.queue.length) {
                 const a = this.queue.shift();
@@ -91,6 +93,12 @@ class GridCrowd {
         }
 
         const A = this.agents, n = A.length, nav = this.nav;
+        // Vizinhança por grade espacial (antes: cada agente testava TODOS os outros — O(n²): 600 pedestres = 360 mil testes por quadro).
+        // A grade é montada no começo do quadro; as posições são lidas ao vivo (quem já andou neste quadro), e a busca tem 0,5 u de
+        // folga para cobrir o pouco que alguém anda num quadro.
+        const G = this._grid || (this._grid = new SpatialHash(2)), near = this._near || (this._near = []);
+        G.clear();
+        for (let i = 0; i < n; i++) { const a = A[i]; if (a) G.insert(a, a.x, a.z); }
         for (let i = 0; i < n; i++) {
             const a = A[i];
             if (!a) continue;
@@ -117,9 +125,10 @@ class GridCrowd {
             // Separação dos vizinhos (empurra para fora da sobreposição).
             let px = 0, pz = 0;
             const r = (P.radius || 0.4) * 2 + 0.1;
-            for (let j = 0; j < n; j++) {
-                const b = A[j];
-                if (!b || j === i) continue;
+            G.query(a.x, a.z, r + 0.5, near);
+            for (let q = 0; q < near.length; q++) {
+                const b = near[q];
+                if (b === a) continue;
                 const ex = a.x - b.x, ez = a.z - b.z;
                 if (ex > r || ex < -r || ez > r || ez < -r) continue;
                 const dd = hypot(ex, ez);
@@ -148,12 +157,82 @@ class GridCrowd {
             a.transform.position.x = a.x; a.transform.position.z = a.z;
         }
     }
+
+    // Manda a fila (até 256 agentes) para o Rust; um lote por vez. O agente continua `queued` até a resposta chegar, então um novo
+    // agentGoto no meio do caminho não duplica o pedido — e, se o destino mudou, a resposta velha é descartada e ele volta à fila.
+    _dispatchRemote() {
+        if (this._remoteBusy) return;
+        const batch = [];
+        while (this.queue.length && batch.length < 256) {
+            const a = this.queue.shift();
+            if (a.dead || !a.goal) { a.queued = false; continue; }
+            batch.push(a);
+        }
+        if (!batch.length) return;
+        const buf = new ArrayBuffer(4 + batch.length * 16), v = new DataView(buf);
+        v.setUint32(0, batch.length, true);
+        for (let k = 0; k < batch.length; k++) {
+            const a = batch[k], o = 4 + k * 16;
+            a._reqGoal = a.goal;
+            v.setFloat32(o, a.x, true); v.setFloat32(o + 4, a.z, true); v.setFloat32(o + 8, a.goal.x, true); v.setFloat32(o + 12, a.goal.z, true);
+        }
+        this._remoteBusy = true;
+        const t0 = performance.now();
+        this.nav.remote.findPaths(new Uint8Array(buf))
+            .then((res) => this._applyRemote(batch, res, performance.now() - t0))
+            .catch((e) => {
+                console.warn('[NAV] caminhos no Rust falharam; voltando ao A* em JS:', e);
+                this.nav.remote = null;
+                for (const a of batch) if (!a.dead) this.queue.push(a);
+            })
+            .finally(() => { this._remoteBusy = false; });
+    }
+
+    // Resposta do Rust, na ordem do lote: u32 nº de pontos (0xFFFFFFFF = sem caminho) + pontos (f32 x, f32 z).
+    _applyRemote(batch, buffer, roundTripMs) {
+        const v = new DataView(buffer);
+        let o = 0;
+        for (const a of batch) {
+            const n = v.getUint32(o, true); o += 4;
+            let path = null;
+            if (n !== 0xffffffff) { path = new Array(n); for (let k = 0; k < n; k++, o += 8) path[k] = { x: v.getFloat32(o, true), z: v.getFloat32(o + 4, true) }; }
+            a.queued = false;
+            if (a.dead || !a.goal) continue;
+            if (a.goal !== a._reqGoal) { a.queued = true; this.queue.push(a); continue; }      // destino mudou enquanto calculava
+            a.path = path; a.pi = 0;
+            if (!path) this.stats.fails++;
+        }
+        this.stats.paths += batch.length;
+        this.stats.remoteMs = (this.stats.remoteMs || 0) * 0.9 + roundTripMs * 0.1;      // ida e volta de um lote (fora do quadro)
+    }
+}
+
+// A* no Rust (app de PC, Tauri): o raster de andáveis vai uma vez na carga (~6 MB), as edições depois (barricadas) vão por retângulo,
+// e os pedidos de caminho vão em lote, resolvidos numa thread do Rust (src-tauri/src/nav). Precisa de `withGlobalTauri` no tauri.conf.
+class RemotePaths {
+    static available() { return typeof window !== 'undefined' && !!(window.__TAURI__ && window.__TAURI__.core); }
+
+    static async connect(nav) {
+        const head = 16, bytes = new Uint8Array(head + nav.grid.length), v = new DataView(bytes.buffer);
+        v.setUint32(0, nav.w, true); v.setUint32(4, nav.h, true); v.setFloat32(8, nav.minX, true); v.setFloat32(12, nav.minZ, true);
+        bytes.set(nav.grid, head);
+        await window.__TAURI__.core.invoke('nav_set_grid', bytes);
+        return new RemotePaths();
+    }
+
+    findPaths(request) { return window.__TAURI__.core.invoke('nav_find_paths', request); }
+
+    fillRect(i0, j0, i1, j1, value) {
+        window.__TAURI__.core.invoke('nav_fill_rect', { i0, j0, i1, j1, value })
+            .catch((e) => console.warn('[NAV] edição do raster não chegou ao Rust:', e));
+    }
 }
 
 class Navigation {
     constructor(scene) {
         this.scene = scene;
         this.crowd = new GridCrowd(this);
+        this.remote = null;                     // RemotePaths quando o A* roda no Rust (app de PC)
         this.ready = false;
         this.focus = { x: 0, z: 0 };           // onde está o jogador/câmera (randomWalkable sorteia por perto)
         this._debugMesh = null;
@@ -202,6 +281,11 @@ class Navigation {
         let n = 0; for (let k = 0; k < e.length; k++) if (e[k]) n++;
         this.buildMs = performance.now() - t0;
         console.log(`[NAV] raster ${w}×${h} (${(n / 1000).toFixed(0)}k células andáveis) em ${this.buildMs.toFixed(0)} ms`);
+        if (RemotePaths.available()) {
+            RemotePaths.connect(this)
+                .then((r) => { this.remote = r; console.log('[NAV] A* no Rust (fora da thread do jogo)'); })
+                .catch((e) => console.warn('[NAV] A* no Rust indisponível; seguindo em JS:', e));
+        }
     }
 
     // Preenche o retângulo (u de mundo) com `val`, nas células cujo CENTRO está dentro dele.
@@ -210,6 +294,7 @@ class Navigation {
         const i0 = Math.max(0, Math.ceil(x0 - this.minX - 0.5)), i1 = Math.min(w - 1, Math.floor(x1 - this.minX - 0.5));
         const j0 = Math.max(0, Math.ceil(z0 - this.minZ - 0.5)), j1 = Math.min(h - 1, Math.floor(z1 - this.minZ - 0.5));
         for (let j = j0; j <= j1; j++) { const row = j * w; for (let i = i0; i <= i1; i++) this.grid[row + i] = val; }
+        if (this.remote && i0 <= i1 && j0 <= j1) this.remote.fillRect(i0, j0, i1, j1, val);      // (barricadas: o Rust recebe a mesma edição)
     }
 
     // ----------------------------------------------------------------- consultas

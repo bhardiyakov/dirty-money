@@ -4,6 +4,8 @@
 // uma cauda curta de cometa (único modelo, a pedido: ver imagem de referência). O código ainda sabe fazer outros tipos
 // (willow, ring, spiral), mas launch() só usa a esfera verde/amarela.
 // Vista de cima, a esfera aparece como um disco que se abre (a altura só muda o paralaxe e o tamanho aparente).
+// Som (AudioFX.fireworkLaunch / fireworkBurst): espoleta e chiado subindo (às vezes assobio); o estouro chega com o atraso do som,
+// com estalo, "bum", eco e o crepitar das estrelas — mais baixo e abafado de longe.
 // Uso: game.fireworks.launch(x, z, y0, tipo?) → false se há disparos demais ao mesmo tempo. update(dt) todo quadro.
 // ============================================================================
 
@@ -33,8 +35,9 @@ class Fireworks {
         if (!ids) return false;
         const T = 'peony';                                                              // um único modelo: esfera verde/amarela
         const rise = 7 + Math.random() * 5, a = Math.random() * Math.PI * 2, dr = Math.random() * 4;
-        this.shells.push({ t: 0, T: 0.75 + Math.random() * 0.3, x0: x, z0: z, y0, x1: x + Math.cos(a) * dr, z1: z + Math.sin(a) * dr, y1: y0 + rise + 6, ids, type: T, hist: [] });
-        AudioFX.blip(500, 0.5, 0.04);                                                    // assobio da subida
+        const S = { t: 0, T: 0.75 + Math.random() * 0.3, x0: x, z0: z, y0, x1: x + Math.cos(a) * dr, z1: z + Math.sin(a) * dr, y1: y0 + rise + 6, ids, type: T, hist: [] };
+        this.shells.push(S);
+        AudioFX.fireworkLaunch(x, z, S.T);                                               // espoleta + chiado da subida (às vezes assobio)
         return true;
     }
 
@@ -74,7 +77,7 @@ class Fireworks {
         }
         const flash = ids[need - 2], core = ids[need - 1];
         this.bursts.push({ parts, cfg, ids, age: 0, hz: 0, x, y, z, flash, core, pal, per });
-        AudioFX.blip(110, 0.18, 0.12);
+        AudioFX.fireworkBurst(x, z, y);                                                  // estalo + bum + eco + crepitar (com o atraso do som)
     }
 
     update(dt) {

@@ -26,9 +26,13 @@ class TrafficManager {
     }
 
     // ------------------------------------------------------------------- spawn
-    // O mundo é grande: carros só nascem PERTO do foco (câmera), numa rua entre spawnMin e spawnMax dele (fora da tela).
+    // O mundo é grande: o trânsito só existe na BOLHA ACORDADA em volta da câmera (Zones.ar). Carro novo/reciclado nasce numa rua entre a
+    // borda da tela no zoom máximo (Zones.sr) e a borda da bolha — fora da tela, já acordado, entrando na cena; quem sai da bolha
+    // dorme e é reciclado para essa faixa (_recycle).
     focus() { return this.game ? this.game.camera.target : { x: 0, z: 0 }; }
-    ring(min = Config.traffic.spawnMin, max = Config.traffic.spawnMax) { const f = this.focus(); return { x: f.x, z: f.z, rMin: min, rMax: max }; }
+    ring(min = Zones.sr, max = Zones.ar - 6) { const f = this.focus(); return { x: f.x, z: f.z, rMin: Math.min(min, max - 10), rMax: max }; }
+    // Quantidades do Config valiam para o raio antigo (recycleDist ~205 u); na bolha menor, escala pela área para manter a densidade na tela.
+    static scaled(n) { return n > 0 ? Math.max(1, Math.round(n * Math.min(1, (Zones.ar / Config.traffic.recycleDist) ** 2))) : 0; }
 
     // Quão "movimentado" é o lugar (0..1): aceita o ponto com essa probabilidade. Cidade cheia; favela e estradas vazias.
     _density(x, z) {
@@ -43,21 +47,19 @@ class TrafficManager {
         const n = RoadPlan.nearestRoadPoint(p.x, p.z, 30), cls = n ? n.edge.cls : 'city', r = Math.random();
         const W = (table) => { let t = Math.random() * table.reduce((s, e) => s + e[1], 0); for (const [k, w] of table) { t -= w; if (t <= 0) return k; } return table[0][0]; };
         const civil = [0, 1, 3, 4, 5, 7, 8, 9], old = [13, 14, 15, 16, 17, 18];
-        if (cls === 'fav') return { model: W([['hatch', 30], ['sedan', 25], ['pickup', 20], ['van', 15], ['suv', 4], ['taxi', 6]]), paint: r < 0.85 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.85 };
-        if (cls === 'dirt') return { model: W([['pickup', 40], ['hatch', 20], ['van', 15], ['sedan', 15], ['suv', 10]]), paint: r < 0.6 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.6 };
-        if (cls === 'hwy') return { model: W([['pickup', 25], ['suv', 20], ['sedan', 20], ['van', 15], ['hatch', 10], ['sports', 6], ['taxi', 4]]), paint: r < 0.2 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.2 };
+        if (cls === 'fav') return { model: W([['old', 34], ['hatch', 22], ['sedan', 12], ['pickup', 16], ['van', 11], ['suv', 3], ['taxi', 5]]), paint: r < 0.85 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.85 };
+        if (cls === 'dirt') return { model: W([['pickup', 36], ['old', 24], ['hatch', 12], ['van', 12], ['sedan', 7], ['suv', 9]]), paint: r < 0.6 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.6 };
+        if (cls === 'hwy') return { model: W([['pickup', 24], ['suv', 20], ['sedan', 19], ['van', 14], ['hatch', 10], ['old', 6], ['sports', 6], ['taxi', 4]]), paint: r < 0.2 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.2 };
         if (cls === 'isl' || cls === 'bridge') return { model: W([['suv', 25], ['sports', 20], ['super', 6], ['sedan', 18], ['taxi', 12], ['hatch', 8], ['pickup', 6], ['van', 6]]), paint: civil[Math.floor(Math.random() * civil.length)], old: false };
         // cidade: o coração do centro tem mais táxis, sedãs e esportivos; os bairros, mais populares
         const downtown = Math.abs(p.x) < 200 && p.z > -300 && p.z < 420;
-        const model = downtown ? W([['sedan', 25], ['taxi', 22], ['suv', 14], ['sports', 12], ['super', 3], ['hatch', 12], ['van', 8], ['pickup', 5]]) : W([['sedan', 28], ['hatch', 24], ['suv', 14], ['pickup', 12], ['van', 10], ['taxi', 8], ['sports', 4], ['super', 1]]);
+        const model = downtown ? W([['sedan', 24], ['taxi', 22], ['suv', 14], ['sports', 12], ['super', 3], ['hatch', 12], ['van', 8], ['pickup', 5], ['old', 3]]) : W([['sedan', 24], ['hatch', 24], ['suv', 14], ['pickup', 12], ['van', 10], ['old', 12], ['taxi', 8], ['sports', 4], ['super', 1]]);
         return { model, paint: model === 'taxi' ? 2 : (r < 0.1 && !downtown ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)]), old: false };
     }
 
     // avoid: { x, z, r } — não nascer a menos de r desse ponto (carro novo no lugar de uma carcaça, fora da tela).
     // near: { x, z, rMin, rMax } (padrão: o anel em volta do foco).
-    // bakeNow: pode assar a folha do modelo na hora (carga inicial). Durante o jogo, modelo ainda não assado entra na fila e o carro
-    // nasce com outro modelo já pronto da mesma classe — nada de engasgo ao repor o trânsito.
-    _spawnCar(mode, avoid = null, near = this.ring(), bakeNow = false) {
+    _spawnCar(mode, avoid = null, near = this.ring()) {
         const id = this._nextId++;
         let place = null;
         for (let tries = 0; tries < 60 && !place; tries++) {
@@ -70,9 +72,8 @@ class TrafficManager {
         if (!place) return null;
         const d = place.d;
         const mix = this._carMix(place.point), old = mix.old;
-        let model = this.carLib.variantOf(mix.model);                                                // classe -> modelo especifico (3 compactos, 4 sedas, 4 SUVs...)
-        let sheet = bakeNow ? this.carLib.sheet(model) : this.carLib.peek(model);
-        if (!sheet) { sheet = this.carLib.readyOf(mix.model) || this.carLib.sheet(model); model = sheet.modelId; }
+        const model = this.carLib.variantOf(mix.model);                                              // classe -> modelo especifico (6 compactos, 7 antigos, 5 SUVs...)
+        const sheet = this.carLib.sheet(model);                                                       // (atlas: todos prontos)
         const paint = (old || mix.model === 'taxi') ? mix.paint : this.carLib.randomPaint(model);     // cor de fabrica sorteada do modelo
         const car = new TrafficCar(this.scene, this.physics, place.point, id, sheet, paint, Math.atan2(d.dx, d.dz), this);
         if (old) { car.hp = Math.round(car.hp * 0.7); car.old = true; }                        // carro velho: já nasce judiado
@@ -133,16 +134,15 @@ class TrafficManager {
     }
 
     spawn(count = Config.traffic.count, parked = Config.traffic.parked) {
-        for (let i = 0; i < count; i++) this._spawnCar('drive', null, this.ring(40, Config.traffic.spawnMax), true);
-        for (let i = 0; i < parked; i++) this._spawnCar('parked', null, this.ring(40, Config.traffic.spawnMax), true);
-        const T = Config.traffic;
+        const T = Config.traffic, S = TrafficManager.scaled, r = this.ring(40);
+        for (let i = 0; i < S(count); i++) this._spawnCar('drive', null, r);
+        for (let i = 0; i < S(parked); i++) this._spawnCar('parked', null, r);
         if (this.sprites) {
-            const r = this.ring(40, Config.traffic.spawnMax);
-            for (let i = 0; i < T.motos; i++) this._spawnBike('moto', 'drive', null, r);
-            for (let i = 0; i < T.motosParked; i++) this._spawnBike('moto', 'parked', null, r);
-            for (let i = 0; i < T.bicycles; i++) this._spawnBike('bicycle', 'drive', null, r);
-            for (let i = 0; i < T.bicyclesParked; i++) this._spawnBike('bicycle', 'parked', null, r);
-            for (let i = 0; i < (T.couriers || 0); i++) this._spawnCourier(null, r);
+            for (let i = 0; i < S(T.motos); i++) this._spawnBike('moto', 'drive', null, r);
+            for (let i = 0; i < S(T.motosParked); i++) this._spawnBike('moto', 'parked', null, r);
+            for (let i = 0; i < S(T.bicycles); i++) this._spawnBike('bicycle', 'drive', null, r);
+            for (let i = 0; i < S(T.bicyclesParked); i++) this._spawnBike('bicycle', 'parked', null, r);
+            for (let i = 0; i < S(T.couriers || 0); i++) this._spawnCourier(null, r);
         }
     }
 
@@ -184,26 +184,32 @@ class TrafficManager {
         return o;
     }
 
+    // Grade de obstáculos (carros e pedestres) que a IA consulta. Refeita a cada quadro, sem closures nem objetos novos (pool), e
+    // sem ler a velocidade no Havok de quem está estacionado (é zero) — com ~140 carros era ~0,8 ms por quadro.
     _buildObstacles(game) {
-        let n = 0;
-        const out = this.env.obstacles;
-        const add = (kind, x, z, vx, vz, ref, half = 0.4, hw = 0.4) => { out[n] = this._push(n, kind, x, z, vx, vz, ref, half, hw); n++; };
-
-        for (const c of this.vm.vehicles) {
-            const p = c.position, v = c.velocity;
-            add('car', p.x, p.z, v.x, v.z, c, c.halfLen, c.halfW);
-        }
-        if (game.policeManager) {
-            for (const c of game.policeManager.cars) { const p = c.position, v = c.velocity; add('car', p.x, p.z, v.x, v.z, c, c.halfLen, c.halfW); }
-            for (const o of game.policeManager.officers) add('ped', o.position.x, o.position.z, 0, 0, o);
-        }
-        if (game.npcManager) for (const npc of game.npcManager.npcs) if (npc.alive) add('ped', npc.position.x, npc.position.z, 0, 0, npc);
-        if (game.mode !== 'car') add('ped', game.player.position.x, game.player.position.z, 0, 0, game.player);
-
-        out.length = n;
-        const G = this.env.grid;
+        const out = this.env.obstacles, G = this.env.grid;
         G.clear();
-        for (let i = 0; i < n; i++) G.insert(out[i], out[i].x, out[i].z);
+        let n = 0;
+        const car = (c) => {
+            const p = c.position, still = (c.mode === 'parked' && !c.controlled) || c._asleep;
+            // Velocidade: ler no Havok custa ~2 µs (e cria um array); longe da tela a IA é grosseira (roda a cada 5 quadros), então
+            // vale a última lida (c._vel) — perto da tela, a de agora.
+            const v = still ? null : (Zones.near(p.x, p.z, 60) ? c.velocity : c._vel);
+            const o = this._push(n, 'car', p.x, p.z, v ? v.x : 0, v ? v.z : 0, c, c.halfLen, c.halfW);
+            out[n++] = o; G.insert(o, o.x, o.z);
+        };
+        const ped = (e) => {
+            const p = e.position, o = this._push(n, 'ped', p.x, p.z, 0, 0, e, 0.4, 0.4);
+            out[n++] = o; G.insert(o, o.x, o.z);
+        };
+        for (const c of this.vm.vehicles) car(c);
+        if (game.policeManager) {
+            for (const c of game.policeManager.cars) car(c);
+            for (const o of game.policeManager.officers) ped(o);
+        }
+        if (game.npcManager) for (const npc of game.npcManager.npcs) if (npc.alive) ped(npc);
+        if (game.mode !== 'car') ped(game.player);
+        out.length = n;
     }
 
     // ------------------------------------------------------------------- frame
@@ -214,9 +220,13 @@ class TrafficManager {
         const pp = game.mode === 'car' && game.activeCar ? game.activeCar.position : game.player.position;
 
         // Zonas (ver core/Spatial.js): carro comum na tela roda a IA todo quadro; perto da tela, a cada 2; longe ("dormindo"), a cada 5,
-        // com o dt somado. A física do Havok continua andando todo quadro com a velocidade que a IA deixou.
+        // com o dt somado. A física do Havok continua andando todo quadro com a velocidade que a IA deixou. Fora da bolha: dorme (abaixo).
+        let asleepN = 0;
         for (const car of this.vm.vehicles) {
             const calm = !car.controlled && !car.hold && !car.wrecked && !(car.burning > 0) && car.mode !== 'abandoned' && !car.ignoreSignals;
+            // Fora da BOLHA ACORDADA (2× a visão máxima): dorme — sem IA, sem física, sem sprite. Acorda ao entrar nela (fora da tela).
+            if (calm && Zones.asleep(car.position.x, car.position.z)) { if (car._asleep) car.sleepTick(); else car.sleep(); asleepN++; continue; }
+            if (car._asleep) car.wake();
             if (calm) {
                 const tier = Zones.tier(car.position.x, car.position.z);
                 if (tier > 0) {
@@ -241,6 +251,7 @@ class TrafficManager {
                 this._relocate(car, 'drive');
             }
         }
+        this._asleepN = asleepN;
         this._recycle(dt, pp);
     }
 
@@ -265,12 +276,14 @@ class TrafficManager {
     _recycle(dt, pp) {
         this._recT = (this._recT || 0) - dt;
         if (this._recT > 0) return;
-        this._recT = 1 / Config.traffic.relocPerSec;
-        const T = Config.traffic, far2 = T.recycleDist * T.recycleDist;
+        this._recT = 1 / Config.traffic.relocPerSec / ((this._asleepN || 0) > 6 ? 4 : 1);      // muitos adormecidos (teleporte, respawn): repovoa 4× mais rápido, 1 por vez
+        const far = Zones.ar + 10, far2 = far * far;                         // saiu da bolha acordada (e um pouco mais): recicla
         for (const car of this.vm.vehicles) {
             if (car.controlled || car.hold || car.wrecked || car.burning > 0 || car.mode === 'abandoned') continue;
-            const dx = car.position.x - pp.x, dz = car.position.z - pp.z;
-            if (dx * dx + dz * dz < (car.courier ? far2 * 1.6 : far2)) continue;     // entregador: um pouco mais de folga (o trajeto dele cruza a área)
+            if (!car._asleep) {                                                 // adormecido = saiu da bolha (fica parado na borda): recicla já
+                const dx = car.position.x - pp.x, dz = car.position.z - pp.z;
+                if (dx * dx + dz * dz < far2) continue;
+            }
             const mode = car.baseMode === 'parked' ? 'parked' : 'drive';
             const fresh = car.courier ? this._spawnCourier() : car.isBike ? this._spawnBike(car.spec.id, mode) : this._spawnCar(mode);
             if (!fresh) { this._relocate(car, mode); return; }                 // sem lugar para o novo: ao menos reposiciona este

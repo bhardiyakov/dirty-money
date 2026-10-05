@@ -195,15 +195,25 @@ class CharacterSheet {
         return { def, w, key: name + ':' + w };
     }
 
-    // Retorna o clipe (do PNG, se houver; senão desenhando agora) ou null se a arma não é suportada.
+    // Retorna o clipe (do atlas vetorial; senão do PNG; senão desenhando agora) ou null se a arma não é suportada.
     getClip(name, weapon = 'none') {
         const r = this._resolve(name, weapon);
         if (!r) return null;
         if (this.clips[r.key]) return this.clips[r.key];
-        if (this._fromFile(name, r.w, r.def)) return this.clips[r.key];
+        if (this._fromAtlas(name, r) || this._fromFile(name, r.w, r.def)) return this.clips[r.key];
         const job = this.jobs[r.key] || (this.jobs[r.key] = this._startJob(name, r.w, r.def));
         job.step(Infinity);
         return this.clips[r.key];
+    }
+
+    // Clipe do atlas vetorial (CharArt): um quadro por pose, uma direção só (o SpriteActor gira o sprite). Textura e material são os
+    // do atlas, compartilhados por todos os clipes de todas as folhas (`shared`: ninguém os descarta). true = pronto.
+    _fromAtlas(name, r) {
+        if (!CharArt.material) return false;
+        const fr = CharArt.packed(CharArt.frames(this.name, r.key));
+        if (!fr) return false;
+        this.clips[r.key] = { name, weapon: r.w, frames: fr.n, dirs: 1, fps: r.def.fps, loop: r.def.loop, vector: true, pk: fr, texture: CharArt.tex, material: CharArt.material, shared: true, frame: this.frame, W: 0, H: 0 };
+        return true;
     }
 
     // Arquivo do clipe (assets/sprites/char/<folha>/<clipe>-<arma>.png) — ver SpriteIO. Colunas = direções, linhas = quadros.
@@ -274,9 +284,9 @@ class CharacterSheet {
         }
     }
 
-    // Libera as texturas/materiais de todos os clipes (folha que saiu de uso).
+    // Libera as texturas/materiais de todos os clipes (folha que saiu de uso). Os do atlas são compartilhados: ficam.
     disposeClips() {
-        for (const c of Object.values(this.clips)) { c.material.dispose(); c.texture.dispose(); }
+        for (const c of Object.values(this.clips)) if (!c.shared) { c.material.dispose(); c.texture.dispose(); }
         this.clips = {}; this.jobs = {}; this.pending = [];
     }
 
@@ -286,7 +296,7 @@ class CharacterSheet {
         while (this.pending.length && performance.now() - t0 < budgetMs) {
             const [name, weapon] = this.pending[0];
             const r = this._resolve(name, weapon);
-            if (!r || this.clips[r.key] || this._fromFile(name, r.w, r.def)) { this.pending.shift(); continue; }
+            if (!r || this.clips[r.key] || this._fromAtlas(name, r) || this._fromFile(name, r.w, r.def)) { this.pending.shift(); continue; }
             const job = this.jobs[r.key] || (this.jobs[r.key] = this._startJob(name, r.w, r.def));
             job.step(Math.max(0.5, budgetMs - (performance.now() - t0)));
             if (this.clips[r.key]) this.pending.shift();
@@ -321,23 +331,30 @@ CharacterSheet.ESSENTIAL = { player: [['idle'], ['walk'], ['run']], civA: [['idl
 // SpriteLibrary — paleta + folhas por tipo de corpo, criadas uma vez por cena.
 // ----------------------------------------------------------------------------
 class SpriteLibrary {
+    // Tipos de corpo (uma folha cada). A mesma tabela alimenta o gerador do atlas vetorial (tools/personagens).
+    static get SHEETS() {
+        return {
+            player: { dirs: 16, look: { hair: 'short', build: 1.08, belt: true } },
+            civA: { dirs: 8, look: { hair: 'short', build: 1.0 } },
+            civB: { dirs: 8, look: { hair: 'long', build: 0.9 } },
+            police: { dirs: 8, look: { hair: 'police', build: 1.05, belt: true } },
+            // Forças especiais: corpo mais robusto, capacete (SWAT: com máscara e colete).
+            swat: { dirs: 8, look: { hair: 'helmet', build: 1.2, belt: true, vest: true, mask: true } },
+            army: { dirs: 8, look: { hair: 'helmet', build: 1.1, belt: true } },
+            // Pilotos de bicicleta/moto (o veículo vai desenhado junto): quadro de 80 px porque a moto é mais
+            // comprida que o boneco; 16 direções para curvar suave. A cor do quadro/tanque vem da variante (slot `cap`).
+            rider: { dirs: 16, frame: 80, look: { hair: 'short', build: 1.05, belt: true } },
+            // Entregadores de aplicativo: capacete e baú térmico nas costas (só a moto andando usa esta folha).
+            courier: { dirs: 16, frame: 80, look: { hair: 'helmet', build: 1.05, belt: true, box: true } },
+        };
+    }
+
     constructor(scene) {
         this.scene = scene;
         this.palette = CharacterRig.createPalette(scene);
-        this.sheets = {
-            player: new CharacterSheet(scene, this.palette, { name: 'player', dirs: 16, look: { hair: 'short', build: 1.08, belt: true } }),
-            civA: new CharacterSheet(scene, this.palette, { name: 'civA', dirs: 8, look: { hair: 'short', build: 1.0 } }),
-            civB: new CharacterSheet(scene, this.palette, { name: 'civB', dirs: 8, look: { hair: 'long', build: 0.9 } }),
-            police: new CharacterSheet(scene, this.palette, { name: 'police', dirs: 8, look: { hair: 'police', build: 1.05, belt: true } }),
-            // Forças especiais: corpo mais robusto, capacete (SWAT: com máscara e colete).
-            swat: new CharacterSheet(scene, this.palette, { name: 'swat', dirs: 8, look: { hair: 'helmet', build: 1.2, belt: true, vest: true, mask: true } }),
-            army: new CharacterSheet(scene, this.palette, { name: 'army', dirs: 8, look: { hair: 'helmet', build: 1.1, belt: true } }),
-            // Pilotos de bicicleta/moto (o veículo vai desenhado junto): quadro de 80 px porque a moto é mais
-            // comprida que o boneco; 16 direções para curvar suave. A cor do quadro/tanque vem da variante (slot `cap`).
-            rider: new CharacterSheet(scene, this.palette, { name: 'rider', dirs: 16, frame: 80, look: { hair: 'short', build: 1.05, belt: true } }),
-            // Entregadores de aplicativo: capacete e baú térmico nas costas (só a moto andando usa esta folha).
-            courier: new CharacterSheet(scene, this.palette, { name: 'courier', dirs: 16, frame: 80, look: { hair: 'helmet', build: 1.05, belt: true, box: true } }),
-        };
+        if (CharArt.available()) CharArt.init(scene, this.palette);     // atlas vetorial (pixels chegam em segundo plano: ver CharArt.load)
+        this.sheets = {};
+        for (const [name, s] of Object.entries(SpriteLibrary.SHEETS)) this.sheets[name] = new CharacterSheet(scene, this.palette, Object.assign({ name }, s));
     }
 
     // Variantes: 0 = jogador, 1 = policial, 2..(VARIANT_SWAT-1) = civis, depois SWAT e exército.
