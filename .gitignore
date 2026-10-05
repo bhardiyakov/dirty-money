@@ -1,0 +1,7 @@
+node_modules/
+client/dist/
+src-tauri/target/
+src-tauri/gen/
+*:Zone.Identifier
+dist-game/
+.vendor-cache/

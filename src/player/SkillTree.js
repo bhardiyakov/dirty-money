@@ -36,6 +36,7 @@ class SkillTree {
             ['mira', 'combate', 1, 3, 'spread', 0.12, 'Mão firme', '−12% de dispersão dos tiros', null],
             ['recarga', 'combate', 2, 3, 'reload', 0.15, 'Recarga rápida', '−15% no tempo de recarga', ['mira', 1]],
             ['calibre', 'combate', 2, 3, 'gunDmg', 0.08, 'Calibre certo', '+8% de dano das armas de fogo', ['mira', 2]],
+            ['olhoaguia', 'combate', 2, 3, 'aim', 0.1, 'Olho de águia', 'mirando: firma a mira mais rápido, trava alvos mais longe e erra menos', ['mira', 1]],
             ['colete', 'combate', 3, 1, 'vest', 0.12, 'Colete ajustado', 'o colete absorve 87% do dano (era 75%)', ['calibre', 2]],
             ['olhos', 'combate', 4, 2, 'crit', 0.1, 'Sangue nos olhos', '10% de chance de tiro crítico (dano dobrado)', ['recarga', 3]],
 

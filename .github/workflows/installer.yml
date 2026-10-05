@@ -1,0 +1,47 @@
+# Builds the Windows installer (setup.exe) in the cloud: nobody needs Rust or Node installed locally.
+# Trigger: push a tag like v0.1.0, or run it by hand from the GitHub "Actions" tab.
+# The setup.exe is attached to a draft GitHub Release, ready to publish.
+# (YAML forbids tab indentation, so this file uses spaces.)
+name: Windows installer
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install the Tauri CLI
+        run: npm install
+
+      - name: Generate application icons
+        run: npx tauri icon assets/icon-512.png
+
+      - name: Build and publish setup.exe
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: npx tauri
+          tagName: v__VERSION__
+          releaseName: 'Dirty Money v__VERSION__'
+          releaseBody: 'Baixe o arquivo *-setup.exe abaixo e dê dois cliques para instalar.'
+          releaseDraft: true
+          prerelease: false

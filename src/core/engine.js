@@ -146,7 +146,14 @@ class GameEngine {
             }
             out.length = 0;
             for (const m of near) if (m.isEnabled() && m.isVisible && !m.isDisposed()) out.push(m);
-            for (const m of dyn) if (m.isEnabled() && m.isVisible && !m.isDisposed() && inRange(m, f, R)) out.push(m);
+            // Caixas de sombra dos veículos (chassi/cabine) vão para um lote único (ShadowBoxBatch): 1 desenho no lugar de 2 por carro.
+            const boxes = this._shadowBoxes || (this._shadowBoxes = new ShadowBoxBatch(this.scene, Vehicle._ghostMaterial(this.scene), Vehicle.GHOST_LAYER));
+            boxes.begin();
+            for (const m of dyn) {
+                if (!m.isEnabled() || !m.isVisible || m.isDisposed() || !inRange(m, f, R)) continue;
+                if (m._dmShadowBox) boxes.add(m); else out.push(m);
+            }
+            if (boxes.end()) out.push(boxes.mesh);
             return out;
         };
     }

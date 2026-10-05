@@ -59,14 +59,21 @@ class Vehicle {
         // material de cor) e a física (aggregate) continua nele. Só o sprite aparece.
         this.body.material = Vehicle._ghostMaterial(scene);
         this.body.layerMask = Vehicle.GHOST_LAYER;                     // a câmera nem tenta desenhar (o mapa de sombra ignora a máscara)
+        this.body._dmShadowBox = [this.spec.wid - 0.1, this.spec.bodyH || 0.8, this.spec.len - 0.3];   // sombra pelo lote (ShadowBoxBatch)
 
-        // Sprite por cima (y=1,5: acima da cabine 3D, abaixo de qualquer giroflex).
+        // Sprite por cima (y=1,5: acima da cabine 3D, abaixo de qualquer giroflex). Carro: quad do lote único do atlas (CarArt), girado
+        // no ângulo exato; moto/bicicleta/barco: SpriteActor com a folha de direções.
         this.visual = null;
-        if (carSheet) {
+        if (carSheet && carSheet.art) {
+            this.visual = CarArt.actor(carSheet.modelId, paintRow);
+            this.visual.setY(1.5);
+            this.visual.setPosition(startPos.x, startPos.z);              // já nasce no lugar (não na origem)
+            this.visual.setHeading(heading);
+        } else if (carSheet) {
             this.visual = new SpriteActor(scene, carSheet, paintRow, `carSprite${id}`);
             this.visual.play('static');
             this.visual.mesh.position.y = 1.5;
-            this.visual.setPosition(startPos.x, startPos.z);              // já nasce no lugar (não na origem)
+            this.visual.setPosition(startPos.x, startPos.z);
             this.visual.setHeading(heading);
         }
 
@@ -78,6 +85,7 @@ class Vehicle {
             cabin.material = Vehicle._ghostMaterial(scene);
             cabin.layerMask = Vehicle.GHOST_LAYER;
             cabin.isPickable = false;
+            cabin._dmShadowBox = [this.spec.wid * 0.8, 0.7, this.spec.len * 0.36];
         }
         this.wheels = [];     // rodas 3D foram removidas: o sprite já desenha as rodas e elas ficavam escondidas.
 
@@ -99,7 +107,7 @@ class Vehicle {
         // Velocidade lida do Havok UMA vez por passo de física (ver `velocity`); quem a muda pelo corpo invalida a leitura.
         this._vel = new BABYLON.Vector3(); this._velF = -1;
         const setLV = this.phys.setLinearVelocity.bind(this.phys);
-        this.phys.setLinearVelocity = (v) => { this._velF = -1; setLV(v); };
+        this.phys.setLinearVelocity = (v) => { this._velF = -1; this.phys._dmRest = false; setLV(v); };      // (_dmRest: ver Physics.init)
     }
 
     // Remove o carro do jogo (sprite, física, sombra, malhas filhas).
@@ -236,22 +244,14 @@ class Vehicle {
         else this.takeDamage(dmg, 'crash');
     }
 
-    // Mostra no sprite a fase de amassado atual (a variante pode ainda estar sendo assada: usa a melhor pronta)
-    // e, na carcaça, a pintura carbonizada.
+    // Mostra no sprite a fase de amassado atual (o atlas já tem as 3 fases: é só um número no shader) e, na carcaça, a pintura
+    // carbonizada.
     _refreshLook() {
         const sheet = this.carSheet, lib = sheet && sheet.lib;
         if (!this.visual || !lib) return;
         if (this.isBike) { this._bikeLook(); return; }
         const want = this.wrecked ? 3 : this.dent;
-        if (want < 3 && this.hp < this.maxHp) lib.dentSheet(sheet.modelId, want + 1);   // pré-assa a PRÓXIMA fase (troca instantânea na próxima batida)
-        if (this._shownDent !== want) {
-            const s = lib.dentSheet(sheet.modelId, want);
-            if (s) { this.visual.setSheet(s); this._shownDent = want; }
-            else for (let k = want - 1; k > this._shownDent; k--) {
-                const t = lib.dentSheet(sheet.modelId, k);
-                if (t) { this.visual.setSheet(t); this._shownDent = k; break; }
-            }
-        }
+        if (this._shownDent !== want) { this.visual.setDamage(want); this._shownDent = want; }
         if (this.wrecked && !this._charred) {
             this._charred = true;
             this.visual.setVariant(12);
@@ -297,7 +297,7 @@ class Vehicle {
         const forward = this._flatAxes();
         const right = this._rt;
 
-        const vel = this._v; this.phys.getLinearVelocityToRef(vel);      // (os *ToRef do Babylon 6 não devolvem o vetor)
+        const vel = this._v.copyFrom(this.velocity);                  // (a já lida neste passo de física: 1 chamada ao Havok a menos por carro)
         let fwd = BABYLON.Vector3.Dot(vel, forward);
         const lat = BABYLON.Vector3.Dot(vel, right);
 
@@ -312,7 +312,7 @@ class Vehicle {
     // Frente do carro no plano do chão (normalizada) em this._fw e a direita (up × frente) em this._rt. Devolve a frente.
     _flatAxes() {
         const f = this._fw;
-        this.body.getDirectionToRef(BABYLON.Axis.Z, f);          // (devolve o nó, não o vetor)
+        this.fwdToRef(f);                                        // (do quaternião: sem matriz de mundo)
         f.y = 0;
         f.normalize();
         this._rt.set(f.z, 0, -f.x);                       // Cross(Up, f) com f no plano
@@ -357,15 +357,49 @@ class Vehicle {
     // Velocidade à frente (negativa = ré).
     get forwardSpeed() {
         const f = this._dz;
-        this.body.getDirectionToRef(BABYLON.Axis.Z, f);
+        this.fwdToRef(f);
         const v = this.velocity;
         return v.x * f.x + v.z * f.z;
+    }
+
+    // ---------------------------------------------------------------- dormir (fora da bolha acordada, ver Zones.asleep)
+    // Congela o carro: guarda a velocidade, zera e DESATIVA o corpo no Havok (não simula, não sincroniza). A IA também para (quem
+    // chama pula o update). Ao acordar, devolve a velocidade e o carro segue de onde estava — ainda fora da tela.
+    sleep() {
+        if (this._asleep) return;
+        const v = this.velocity;
+        this._sleepVel = { x: v.x, z: v.z };
+        this.phys.setLinearVelocity(Vehicle._ZERO); this.phys.setAngularVelocity(Vehicle._ZERO);
+        this._activation(false);
+        this._asleep = true;
+        this.phys._dmRest = true;
+        this.braking = false; this.accelerating = false; this.signal = 0;
+    }
+
+    wake() {
+        if (!this._asleep) return;
+        this._asleep = false;
+        const s = this._sleepVel; this._sleepVel = null;
+        this._activation(true);
+        this.phys.setLinearVelocity(s ? this._nv.set(s.x, 0, s.z) : Vehicle._ZERO);      // (também libera a releitura da física)
+    }
+
+    // Enquanto dorme: só termina o "pré-passo" de um teletransporte (o recycle do trânsito move carros adormecidos).
+    sleepTick() {
+        if (this._preStepFrames > 0 && --this._preStepFrames === 0) { this.phys.disablePreStep = true; this.phys._dmRest = true; }
+    }
+
+    _activation(on) {
+        try {
+            const pl = this.phys._physicsPlugin || this.body.getScene().getPhysicsEngine().getPhysicsPlugin(), hk = pl._hknp;
+            hk.HP_Body_SetActivationState(this.phys._pluginData.hpBodyId, on ? hk.ActivationState.ACTIVE : hk.ActivationState.INACTIVE);
+        } catch (e) { /* sem controle de ativação: só a velocidade zerada já basta */ }
     }
 
     // Teletransporta o corpo físico (spawn, respawn, remover carro abandonado). O Havok só
     // lê a transformação do mesh se `disablePreStep` estiver desligado — por 2 frames.
     teleport(x, z, heading) {
-        this.phys.disablePreStep = false;
+        this.phys.disablePreStep = false; this.phys._dmRest = false; this._sleepVel = null;      // (adormecido e movido: acorda parado no lugar novo)
         this.body.position.set(x, 0.45, z);
         this.body.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(heading, 0, 0);
         this.phys.setLinearVelocity(BABYLON.Vector3.Zero());
@@ -380,8 +414,9 @@ class Vehicle {
         if (this._preStepFrames > 0 && --this._preStepFrames === 0) this.phys.disablePreStep = true;
         if (!this.visual) return;
         this._refreshLook();
-        const p = this.body.getAbsolutePosition();
-        const f = this.body.getDirection(BABYLON.Axis.Z);
+        const p = this.position;                                 // (sem recalcular a matriz do corpo: ver o getter `position`)
+        const f = this._sdir || (this._sdir = new BABYLON.Vector3());
+        this.fwdToRef(f);                                        // (sem Vector3 novo nem matriz de mundo)
         this.visual.setPosition(p.x, p.z);
         this.visual.setHeading(Math.atan2(f.x, f.z));
         // Viaduto: o sprite sobe com o tabuleiro (a física é plana) e o carro passa para a camada 1 (não colide com o de baixo).
@@ -390,7 +425,7 @@ class Vehicle {
             this.elev = e;
             const L = e > 2.2 ? 1 : 0;
             if (L !== (this.layer || 0)) this._setLayer(L);
-            this.visual.mesh.position.y = 1.5 + e;
+            if (this.visual.setY) this.visual.setY(1.5 + e); else this.visual.mesh.position.y = 1.5 + e;
         }
         if (this.isBike) this._animateBike(dt); else this.visual.update(dt);
     }
@@ -404,8 +439,19 @@ class Vehicle {
         sh.filterCollideMask = L ? ~1 : ~2;
     }
 
+    // Posição do corpo. Sem pai, a posição LOCAL já é a do mundo (o Havok escreve nela a cada passo): ler direto evita recalcular a
+    // matriz do corpo na 1ª consulta depois de cada passo — ~3,6 µs por carro, ~0,5 ms por quadro com 140 carros. NÃO altere o vetor.
     get position() {
-        return this.body.getAbsolutePosition();
+        const b = this.body;
+        return b.parent ? b.getAbsolutePosition() : b.position;
+    }
+
+    // Frente do corpo (eixo +Z girado) direto do quaternião, sem montar a matriz de mundo. Devolve `out`.
+    fwdToRef(out) {
+        const b = this.body, q = b.rotationQuaternion;
+        if (!q || b.parent) { b.getDirectionToRef(BABYLON.Axis.Z, out); return out; }
+        out.set(2 * (q.x * q.z + q.w * q.y), 2 * (q.y * q.z - q.w * q.x), 1 - 2 * (q.x * q.x + q.y * q.y));
+        return out;
     }
 
     get speed() {
@@ -423,6 +469,7 @@ class Vehicle {
 
 // Contador de passos de física (Game._render incrementa depois de avançar o Havok): marca as velocidades guardadas como velhas.
 Vehicle.physFrame = 0;
+Vehicle._ZERO = new BABYLON.Vector3(0, 0, 0);          // (só leitura: velocidade zero sem alocar)
 
 // Skill Direção (carreira Desmanche): multiplicadores de aderência lateral e de giro só para o veículo que o JOGADOR dirige.
 Vehicle.playerGrip = 1;

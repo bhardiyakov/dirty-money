@@ -77,18 +77,119 @@ Visual: comparação pixel a pixel antes/depois (dia, entardecer, noite, favela,
   abre **offline**. Arquivos do jogo: rede primeiro (edições aparecem no recarregar). Não atua em `file://`.
 - Checagem O(n²) de sobreposição ao gerar quintais (0,4 s na carga) → pré-filtro por quarteirão.
 
+## Carros e personagens
+
+Os carros saíram do desenho procedural: atlas vetorial pronto (36 modelos), girado e repintado no shader, todos num
+lote único. Medições e como adicionar modelos em [`carros.md`](carros.md).
+
+Os personagens também: atlas vetorial (839 quadros, uma direção cada, girados no jogo), 54 → 16 MB de textura e a fase
+"Montando sprites" da carga de 5,7 s para 2 ms. Ver [`personagens.md`](personagens.md).
+
 ## Arte em PNG
 
 Infraestrutura pronta para trocar a arte procedural por PNG indexado, folha por folha — ver
 [`sprites-png.md`](sprites-png.md). Com os moldes exportados na pasta, o jogo carrega ~24% mais rápido mesmo no PC
 (no celular, onde desenhar por código custa ~5×, o ganho é maior).
 
+## App de PC (Tauri) — segunda rodada (outubro/2026)
+
+Medido no navegador interno com GPU real (Intel Iris Xe integrada), meio-dia travado, jogador no centro da cidade,
+comparações A/B na mesma sessão (liga/desliga em tempo real).
+
+| Mudança | Antes | Depois |
+|---|---|---|
+| **60 FPS no app de PC** (`config.js`; `AutoQuality` volta a 30 antes de baixar a qualidade) | teto 30 | teto 60 |
+| Caixas de sombra dos veículos num lote só (`render/ShadowBoxBatch.js`) | ~20 desenhos no mapa de sombra | 1 |
+| Mapa de sombra (tempo) | 1,08 ms | 0,75 ms |
+| Casa do jogador congelada quando o fade está parado; água congelada (a textura é a mesma) | 8 materiais reavaliados por quadro | 0 |
+| Quadro inteiro (72 pedestres) | 10,0 ms | 9,1 ms |
+| `Zones.every` conta quadros a 30 FPS: a 60, quem está fora da tela roda as mesmas vezes por **segundo** | lógica fora da tela ×2 a 60 FPS | igual a 30 FPS |
+| `syncVisual` dos carros lia `getAbsolutePosition()` (refaz a matriz) | ~6 µs por carro | posição direta |
+| **Separação da multidão era O(n²)** (`GridCrowd`) → grade espacial | 600 pedestres: 4,7 ms | 0,6 ms |
+| Quadro inteiro com 600 pedestres | 9,6 ms (44 FPS) | 4,4 ms (57 FPS) |
+| A* da multidão no app de PC: em lote, numa thread do Rust (`src-tauri/src/nav`) | rajadas de 13–15 ms (tiro: todos refazem caminho) | fora do quadro |
+
+Escala da multidão: com a separação corrigida, o gargalo deixou de ser o número de pedestres. O A* só pesa em
+rajadas (pânico, nascimento em massa) e, no app de PC, sai da thread do jogo. No navegador e em `file://` continua o
+A* em JS com orçamento de 3 ms por quadro. Se o Rust falhar, o jogo volta sozinho para o JS.
+
+### Travamento no respawn: GPS (corrigido)
+
+Sintoma: depois de morrer/ser preso, o navegador congelava ("a página não está respondendo") e às vezes caía. Achado com a
+caixa-preta (`core/HangProbe.js`: travou na seção "rua", 2,2 s depois de acordar) e a pausa do depurador (`world/Gps.js`).
+
+Causa: o Dijkstra do GPS guardava as distâncias num `Float32Array` e não marcava nós já resolvidos. Gravar em 32 bits às vezes
+arredonda para cima; a mesma distância (64 bits) voltava a parecer menor, o nó voltava à fila e reexpandia os vizinhos — em
+cascata, sem fim. Com um destino marcado, a rota é recalculada a cada 0,7 s a partir de onde você está; acordar longe
+(hospital/delegacia) era o gatilho comum. Em 7 pares aleatórios de pontos, a versão antiga passou de 50 mil passos sem
+terminar em 3.
+
+Correção: distâncias em `Float64Array`, cada nó fechado uma vez só e um teto de segurança. 59 rotas comparadas com um
+Dijkstra de referência: comprimentos idênticos; a pior levou 1,8 ms.
+
+A caixa-preta fica no jogo: só grava nas janelas de morte/prisão e custa um `if` fora delas.
+
+Depois disso o GPS foi **substituído por um marcador** (como o blip vermelho do GTA San Andreas): `game.gps` guarda só
+`{ x, z, label }`; o minimapa mostra o blip no lugar ou preso na borda com uma setinha (a borda de cima fica abaixo do "N",
+que antes cobria marcadores ao norte — vale também para a safe house); o mapa da pausa mostra o alfinete e a distância em
+linha reta. Nada é recalculado por quadro — só a checagem de chegada (uma distância, ~4×/s). `world/Gps.js` continua
+para o que precisa de um caminho UMA vez por pedido: a corrida do mototáxi e o prazo das missões.
+
+### Travamento no respawn: posições fora do mundo (proteção)
+
+Um segundo relato da caixa-preta apontou de novo a seção "rua", 2,5 s depois de acordar. Ali, além do GPS, roda a colisão
+carro × poste/hidrante (`StreetProps`), que varre a grade com `for (gx = floor((x - R)/16); gx <= floor((x + R)/16); gx++)`.
+Com x infinito ou gigante (acima de ~1e17, `gx + 1 === gx`) esse laço nunca termina. O mesmo padrão existe em mais de 20
+buscas por grade (grade espacial, cidade, ruas, interiores, poças, culling da câmera). Um corpo que nasce ou é teleportado dentro
+de outro pode ser lançado pela física para posições assim.
+
+Proteção em duas camadas:
+- `inWorld(x, z)` (config.js): posição finita e dentro do mundo (com folga de 3.000 u). As buscas que recebem posições de
+  entidades ou da câmera devolvem vazio fora disso: `SpatialHash.insert/query`, `RenderCuller._candidates`,
+  `CityGrid.obstaclesAround/nearestHideSpot/nearestVault`, `RoadPlan.nearestRoadPoint/nodeNear/onPavement/nearbyRoadPoints`,
+  `Interiors.shopNear`, `Puddles._requery` e a colisão do `StreetProps`.
+- `Game._rescueStrays` (logo depois dos passos de física): veículo ou jogador fora do mundo volta, parado, para o último
+  lugar bom (guardado a cada 0,5 s). Fica registrado no console (`[RESGATE] ...`) e na caixa-preta.
+
+Testado provocando o problema: carro posto em (1e20, 1e20) → as buscas voltam na hora, a atualização da rua leva 0,2 ms e o
+resgate devolve o carro, que segue dirigindo. Em 6 ciclos de morte e prisão com polícia ativa, nenhum resgate foi necessário
+nesta máquina. Se acontecer na sua, o console vai dizer qual veículo e onde.
+
+### Jogo offline (sem internet) e por duplo clique
+
+Babylon.js 6.40.0 e Havok vinham de CDN a cada abertura. Sem internet o `.wasm` do Havok não carregava, o jogo seguia
+**sem física** e, sem física, não existem carros, polícia nem pedestres (nem pelo dev mode). Agora as três peças ficam em
+`vendor/` (`babylon.min.js`, `HavokPhysics_umd.js` e `HavokPhysics.wasm.js` — o `.wasm` embutido em base64, porque em
+`file://` o navegador proíbe buscar arquivos); `core/physics.js` passa o binário ao Havok (`wasmBinary`). Bônus: a versão do
+Havok fica congelada (o sync rápido de `physics.js` lê a memória interna dele). O manifesto só é carregado por http(s)
+(em `file://` gerava erros de CORS no console). Para atualizar o Havok: baixar os dois arquivos da CDN e regerar o base64.
+
+### Respawn (hospital/delegacia) e outros saltos
+
+O respawn é um TELEPORTE: o mundo em volta do destino nasce de uma vez, enquanto voando de helicóptero ele chega aos
+poucos. Medido no perfil leve, função por função, nos quadros logo após acordar:
+
+| | Antes | Depois |
+|---|---|---|
+| Colisores (`ColliderStreamer`) | salto criava ~170 e destruía ~700 corpos num quadro (11–36 ms) | só os de até 40 u na hora; o resto 40/quadro, descarte 80/quadro |
+| Terreno (`TerrainBuilder`) | orçamento de 5 ms conferido só entre pedaços; cada pedaço 12–19 ms → 5 quadros seguidos de 15–22 ms | pedaço montado em fatias (1 linha de células / 1 malha por passo); respeita o orçamento |
+| `MeshBatch.quad/tri` | um array + iterador de lixo por quad (milhares por pedaço) | sem alocação |
+
+Verificado também: 6 mortes seguidas (favela ↔ hospital) sem vazamento — memória, malhas, texturas, materiais e corpos
+físicos voltam aos mesmos números. Neste PC (8 núcleos, Iris Xe) nenhum caminho de morte/prisão travou o navegador,
+antes ou depois; os picos que sobram (20–40 ms) são pausas do coletor de lixo e o acender dos faróis quando o salto de
+horas cai à noite.
+
+Medir no app: `?fps60` simula o teto do app no navegador; `?full` desliga o `AutoQuality` (necessário para medir com
+a aba em segundo plano, que senão grava o perfil leve).
+
 ## Próximos passos recomendados
 
 1. **Pool de veículos** no trânsito: hoje cada reposição (3×/s) destrói e recria malhas + corpo físico + sprite
    (~1 ms no PC, ~6–8 ms no celular).
 2. **Sprites em lote (instancing)** quando a arte em PNG chegar: juntar os clipes de cada tipo num atlas único e
-   desenhar todos os atores do mesmo tipo numa chamada.
+   desenhar todos os atores do mesmo tipo numa chamada. **Feito para os carros** (atlas vetorial + `CarBatch`, ver
+   [`carros.md`](carros.md)); os personagens já usam um atlas e um material únicos, falta juntá-los num lote.
 3. **Acessórios em camada** (mochilas) em vez de uma cópia inteira das animações do jogador por bolsa.
 4. **Fixar a versão do Havok** numa URL versionada compatível com o Babylon 6.40.
 5. **Geração do mundo fora da thread principal ou pré-calculada** (a semente é fixa: dá para gerar uma vez e

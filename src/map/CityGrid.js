@@ -808,6 +808,7 @@ const CityGrid = {
     // Todo pulável (vault: true) também é obstáculo: a busca usa a grade dos sólidos em vez de varrer todos os muros do mundo a cada
     // quadro (a dica de interação pergunta isto o tempo todo).
     nearestVault(x, z, maxD = 1.6) {
+        if (!inWorld(x, z)) return null;
         let best = null, bd2 = maxD * maxD;
         for (const o of this.obstaclesAround(x, z, maxD)) {
             if (!o.vault) continue;
@@ -831,6 +832,7 @@ const CityGrid = {
                 }
             }
         }
+        if (!inWorld(x, z)) return null;
         let best = null, bd2 = maxD * maxD;
         for (let i = Math.floor((x - maxD) / S); i <= Math.floor((x + maxD) / S); i++) for (let j = Math.floor((z - maxD) / S); j <= Math.floor((z + maxD) / S); j++) {
             const c = this._hideGrid.get(this._gridKey(i, j)); if (!c) continue;
@@ -885,6 +887,7 @@ const CityGrid = {
 
     // Sólidos que podem tocar um círculo (x, z, r): as células que ele cobre.
     obstaclesAround(x, z, r) {
+        if (!inWorld(x, z)) return [];
         const S = this.CELL, i0 = Math.floor((x - r) / S), i1 = Math.floor((x + r) / S), j0 = Math.floor((z - r) / S), j1 = Math.floor((z + r) / S);
         if (i0 === i1 && j0 === j1) return this._grid.get(this._gridKey(i0, j0)) || [];
         const out = [];

@@ -9,10 +9,10 @@
 //   • PNG INDEXADO de 8 bits (paleta de 256). O ÍNDICE do pixel é o que importa: índice = rampa × 5 + nível (rampa = parte do
 //     desenho: pele, camisa, pintura, vidro…; nível 0..4 = contorno, sombra, base, luz, brilho). 254 = transparente, 255 = sombra
 //     projetada (o jogo pinta translúcida). As CORES da paleta embutida são só uma referência (a variante usada na exportação): quem
-//     pinta é a paleta do jogo (pal/*.png), uma linha por variante — é assim que um único desenho vira dezenas de pedestres e carros.
+//     pinta é a paleta do jogo (pal/*.png), uma linha por variante — é assim que um único desenho vira dezenas de pedestres.
 //   • Personagem: um PNG por clipe, colunas = direções (0 = norte, sentido horário), linhas = quadros da animação.
-//   • Carro/porta: colunas = direções; porta: linhas = quadros de abertura (esquerda, depois direita).
 //   • Paletas (pal/*.png): RGB comum, largura = rampas × 5, uma linha por variante.
+//   (Carros não passam por aqui: vêm do atlas vetorial pronto — CarArt, assets/cars/carros-atlas.js — que usa só o PNG abaixo.)
 //
 // Uso no código: SpriteIO.indices(key, W, H) → Uint8Array (W×H índices) ou null;  SpriteIO.rgba(key) → { w, h, data } ou null.
 // Os PNGs ficam comprimidos na memória (poucos MB) e são decodificados na hora em que a folha é pedida (~1–5 ms, bem menos que
@@ -31,11 +31,11 @@ const SpriteIO = {
     used: new Set(),           // chaves lidas de arquivo nesta sessão (painel dev)
 
     // Prioridade de download de cada arquivo: 0 = antes do menu (paletas e o 1º segundo de jogo: `eager`), 1 = o que a carga do jogo
-    // monta (personagens do dia a dia, modelos de carro), 2 = sob demanda (mochilas, SWAT/exército, amassados, portas) — baixado em
-    // segundo plano sem segurar nada; se for pedido antes de chegar, é desenhado por código daquela vez.
+    // monta (personagens do dia a dia), 2 = sob demanda (mochilas, SWAT/exército) — baixado em segundo plano sem segurar nada; se
+    // for pedido antes de chegar, é desenhado por código daquela vez.
     tier(key, eager) {
         if (eager(key)) return 0;
-        if (/^char\/(player_|swat\/|army\/)|^door\/|-dent\d$/.test(key)) return 2;
+        if (/^char\/(player_|swat\/|army\/)/.test(key)) return 2;
         return 1;
     },
 
@@ -137,6 +137,21 @@ const PNG = {
 
     // ------------------------------------------------------------------ leitura
     decode(b) {
+        const info = this._parse(b);
+        return this._unfilter(info, Inflate.zlib(info.z, (info.stride + 1) * info.h));
+    },
+
+    // O mesmo, com a descompressão NATIVA do navegador (DecompressionStream: ~10× mais rápida que o Inflate em JS para imagens
+    // grandes — o atlas dos carros). Sem suporte (navegadores antigos), cai no Inflate síncrono.
+    async decodeAsync(b) {
+        const info = this._parse(b);
+        if (typeof DecompressionStream !== 'function') return this.decode(b);
+        const raw = new Uint8Array(await new Response(new Blob([info.z]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer());
+        return this._unfilter(info, raw);
+    },
+
+    // Cabeçalho e dados comprimidos (IDATs concatenados) de um PNG.
+    _parse(b) {
         const SIG = [137, 80, 78, 71, 13, 10, 26, 10];
         for (let i = 0; i < 8; i++) if (b[i] !== SIG[i]) throw new Error('não é PNG');
         const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
@@ -158,19 +173,26 @@ const PNG = {
         const z = new Uint8Array(n); n = 0; for (const c of idat) { z.set(c, n); n += c.length; }
         const ch = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[type];
         if (!ch) throw new Error(`tipo de cor ${type} não suportado`);
-        const bpp = Math.max(1, (ch * depth) >> 3), stride = (w * ch * depth + 7) >> 3;
-        const raw = Inflate.zlib(z, (stride + 1) * h);
+        return { w, h, depth, type, ch, plte, trns, z, bpp: Math.max(1, (ch * depth) >> 3), stride: (w * ch * depth + 7) >> 3 };
+    },
+
+    // Desfaz os filtros de linha (sub/up/média/Paeth) dos dados descomprimidos.
+    _unfilter(info, raw) {
+        const { w, h, depth, type, ch, plte, trns, bpp, stride } = info;
         const px = new Uint8Array(stride * h);
-        for (let y = 0; y < h; y++) {
-            const f = raw[y * (stride + 1)], src = y * (stride + 1) + 1, dst = y * stride, up = dst - stride;
-            for (let x = 0; x < stride; x++) {
-                const a = x >= bpp ? px[dst + x - bpp] : 0, c0 = y > 0 ? px[up + x] : 0, cc = y > 0 && x >= bpp ? px[up + x - bpp] : 0;
-                let v = raw[src + x];
-                if (f === 1) v += a;
-                else if (f === 2) v += c0;
-                else if (f === 3) v += (a + c0) >> 1;
-                else if (f === 4) { const q = a + c0 - cc, pa = Math.abs(q - a), pb = Math.abs(q - c0), pc = Math.abs(q - cc); v += pa <= pb && pa <= pc ? a : (pb <= pc ? c0 : cc); }
-                px[dst + x] = v;
+        for (let y = 0; y < h; y++) {                                       // um laço apertado por tipo de filtro (sem desvio por byte)
+            const f = raw[y * (stride + 1)], src = y * (stride + 1) + 1, dst = y * stride, up = dst - stride, top = y > 0;
+            px.set(raw.subarray(src, src + stride), dst);
+            if (f === 1) { for (let x = bpp; x < stride; x++) px[dst + x] += px[dst + x - bpp]; }
+            else if (f === 2) { if (top) for (let x = 0; x < stride; x++) px[dst + x] += px[up + x]; }
+            else if (f === 3) {
+                for (let x = 0; x < stride; x++) px[dst + x] += ((x >= bpp ? px[dst + x - bpp] : 0) + (top ? px[up + x] : 0)) >> 1;
+            } else if (f === 4) {
+                for (let x = 0; x < stride; x++) {
+                    const a = x >= bpp ? px[dst + x - bpp] : 0, b = top ? px[up + x] : 0, c = top && x >= bpp ? px[up + x - bpp] : 0;
+                    const q = a + b - c, pa = q > a ? q - a : a - q, pb = q > b ? q - b : b - q, pc = q > c ? q - c : c - q;
+                    px[dst + x] += pa <= pb && pa <= pc ? a : (pb <= pc ? b : c);
+                }
             }
         }
         // índices de 1/2/4 bits → 1 byte por pixel

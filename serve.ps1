@@ -38,6 +38,7 @@ try {
             $rel = [System.Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath.TrimStart('/'))
             if ([string]::IsNullOrEmpty($rel)) { $rel = 'index.html' }
             $path = Join-Path $root $rel
+            if (Test-Path $path -PathType Container) { $path = Join-Path $path 'index.html' }      # pasta → index.html (ex.: /tools/carros/)
 
             if (Test-Path $path -PathType Leaf) {
                 $ext = [System.IO.Path]::GetExtension($path).ToLower()

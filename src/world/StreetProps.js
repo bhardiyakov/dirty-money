@@ -30,7 +30,7 @@ class StreetProps {
         const ch = this.chunks[k];
         let c = ch.get(key); if (!c) ch.set(key, c = { ids: [], mesh: null });
         c.ids.push(i);
-        const gk = Math.floor(x / 16) + ',' + Math.floor(z / 16);
+        const gk = (Math.floor(x / 16) + 4096) * 8192 + (Math.floor(z / 16) + 4096);      // (chave numérica: a de texto criava strings a cada consulta)
         let g = this.grid.get(gk); if (!g) this.grid.set(gk, g = []);
         g.push({ k, i });
     }
@@ -151,15 +151,16 @@ class StreetProps {
         this.time += dt;
         // 1) Colisão carro × poste/hidrante.
         for (const car of cars) {
-            if (!car || car.wrecked || car.isBoat) continue;
+            if (!car || car.wrecked || car.isBoat || car._asleep) continue;
             const sp = Math.abs(car.speed || 0);
             if (sp < 4.2) continue;
             const p = car.position;
-            const f = car.body.getDirection(BABYLON.Axis.Z), fl = hypot(f.x, f.z) || 1, fx = f.x / fl, fz = f.z / fl, rx = fz, rz = -fx;
+            if (!inWorld(p.x, p.z)) continue;                                // (física lançou o carro para longe: o laço da grade não terminaria)
+            const f = car.fwdToRef ? car.fwdToRef(this._f || (this._f = new BABYLON.Vector3())) : car.body.getDirection(BABYLON.Axis.Z), fl = hypot(f.x, f.z) || 1, fx = f.x / fl, fz = f.z / fl, rx = fz, rz = -fx;
             const R = car.halfLen + 0.8;
             for (let gx = Math.floor((p.x - R) / 16); gx <= Math.floor((p.x + R) / 16); gx++) {
                 for (let gz = Math.floor((p.z - R) / 16); gz <= Math.floor((p.z + R) / 16); gz++) {
-                    const g = this.grid.get(gx + ',' + gz);
+                    const g = this.grid.get((gx + 4096) * 8192 + (gz + 4096));
                     if (!g) continue;
                     for (const e of g) {
                         const it = e.k === 'l' ? this.lamps[e.i] : this.hydrants[e.i];

@@ -1,0 +1,31 @@
+[package]
+name = "dirty-money"
+version = "0.1.0"
+description = "Dirty Money — authoritative simulation host (Tauri)"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "dirty_money_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+
+# The simulation must be fast even in debug builds, otherwise the 60 TPS budget is meaningless during development.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

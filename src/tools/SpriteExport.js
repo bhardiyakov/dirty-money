@@ -47,33 +47,18 @@ const SpriteExport = {
                 jobs.push({ sh, name, base, clip: n, weapon: r.w });
             }
         }
-        const models = Object.keys(CarSheet.MODELS).filter((m) => !CarSheet.MODELS[m].bike);
-        const total = jobs.length + models.length * 5;
+        const total = jobs.length;
         let done = 0;
         for (const j of jobs) {
             const c = j.sh.getClip(j.clip, j.weapon);
+            if (c.vector) { done++; continue; }                                  // (atlas vetorial: não há molde indexado — ver tools/personagens)
             const ref = this.REF[j.base] !== undefined ? this.REF[j.base] : 2;
             put(CharacterSheet.fileKey(j.name, j.clip, j.weapon), await this._indexed(c.texture, c.W, c.H, palChar, pcw, ref),
                 { w: c.W, h: c.H, kind: 'clip', sheet: j.name, clip: j.clip, weapon: j.weapon, dirs: c.dirs, frames: c.frames, frame: c.frame, fps: c.fps, loop: c.loop, ref });
             if (++done % 6 === 0) { onProgress(done / total, `personagens ${done}/${jobs.length}`); await tick(); }
         }
 
-        // ---- carros: limpo, 3 fases de amassado e a porta de cada modelo
-        const cl = game.carLib;
-        for (const m of models) {
-            const clean = cl.sheet(m), c0 = clean.getClip();
-            put(CarSheet.fileKey(m), await this._indexed(c0.texture, c0.W, c0.H, palCar, pkw, 0), { w: c0.W, h: c0.H, kind: 'car', model: m, dent: 0, dirs: clean.dirs, frame: clean.frame });
-            for (let dent = 1; dent <= 3; dent++) {
-                const own = !cl.dents[m + '#' + dent] || !cl.dents[m + '#' + dent].ready;
-                const s = own ? new CarSheet(game.scene, m, cl.palette, { dent }) : cl.dents[m + '#' + dent], c = s.getClip();
-                put(CarSheet.fileKey(m, dent), await this._indexed(c.texture, c.W, c.H, palCar, pkw, 0), { w: c.W, h: c.H, kind: 'car', model: m, dent, dirs: s.dirs, frame: s.frame });
-                if (own) { c.material.dispose(); c.texture.dispose(); }
-            }
-            const door = cl.doorSheet(m); door.bake(Infinity);
-            const cd = door.getClip();
-            put(DoorSheet.fileKey(m), await this._indexed(cd.texture, cd.W, cd.H, palCar, pkw, 0), { w: cd.W, h: cd.H, kind: 'door', model: m, dirs: door.dirs, frames: door.frames, frame: door.frame, note: 'linhas: abertura da porta ESQUERDA (5), depois da DIREITA (5)' });
-            done += 5; onProgress(done / total, `carros ${m}`); await tick();
-        }
+        // (carros: não entram — vêm do atlas vetorial pronto, assets/cars/carros-atlas.js, gerado por tools/carros)
 
         // folhas de mochila criadas só para exportar (não é a que o jogador está usando): solta da GPU
         for (const name of sheets) if (name.startsWith('player_') && lib.sheets[name] !== game.player.actor.sheet) { lib.sheets[name].disposeClips(); delete lib.sheets[name]; }

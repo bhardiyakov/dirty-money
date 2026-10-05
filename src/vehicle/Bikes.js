@@ -12,6 +12,7 @@
 class BikeSheet {
     constructor(sheet, clipName, spec, kind) {
         this.cs = sheet;                 // CharacterSheet `rider`
+        this.atlasName = sheet.name;     // (atlas vetorial: tamanho do quad girado)
         this.clipName = clipName;
         this.spec = spec;
         this.modelId = kind;

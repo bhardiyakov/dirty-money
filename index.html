@@ -8,7 +8,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Dirty Money">
     <meta name="theme-color" content="#07090e">
-    <link rel="manifest" href="./manifest.webmanifest">
+    <!-- Manifesto (instalar como app) só por http(s): em file:// o Chrome bloqueia e enche o console de erros de CORS. -->
+    <script>if (/^https?:$/.test(location.protocol)) document.write('<link rel="manifest" href="./manifest.webmanifest">');</script>
     <link rel="icon" href="./assets/icon-192.png">
     <link rel="apple-touch-icon" href="./assets/icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -146,7 +147,7 @@
         #prompt b { color: #ffe14d; }
         #prompt small { display: block; color: #88aa88; font-size: 11px; margin-top: 2px; }
 
-        /* GPS (minimapa) no canto inferior esquerdo. */
+        /* Minimapa no canto inferior esquerdo. */
         #minimap {
             position: absolute;
             left: 20px;
@@ -266,6 +267,7 @@
             <div class="mm-row"><span>Efeitos sonoros</span><button type="button" class="mm-toggle" data-key="sfx"></button></div>
             <div class="mm-row"><span>Minimapa</span><button type="button" class="mm-toggle" data-key="minimap"></button></div>
             <div class="mm-row"><span>Dicas na tela</span><button type="button" class="mm-toggle" data-key="prompts"></button></div>
+            <div class="mm-row"><span>Mira</span><button type="button" class="mm-toggle" data-key="aimAssist" data-on="Assistida" data-off="Manual"></button></div>
             <button type="button" class="mm-btn" id="btn-settings-back">Voltar</button>
         </div></div>
     </div>
@@ -390,7 +392,7 @@
             <div>WASD mover · Shift correr · Z/X zoom</div>
             <div>Clique/Espaço golpe-tiro · J soco · K chute</div>
             <div>1-9 armas: punhos pistola SMG escopeta taco revólver AK fuzil faca</div>
-            <div>R recarregar · M kit médico · I inventário · O carreiras do crime · ESC/P menu (mapa e GPS)</div>
+            <div>R recarregar · M kit médico · I inventário · O carreiras do crime · ESC/P menu (mapa e marcador)</div>
             <div>E assaltar / esconder-se (caçamba, caixote, latão) · V pular grade/muro</div>
             <div>F carro/moto/bike/jet ski/lancha/barco (derruba o piloto) · Marina na orla leste</div>
             <div>Carro estacionado: F quebra o vidro (alarme) · G arromba (furtivo)</div>
@@ -416,11 +418,13 @@
         <div class="inv-hint">I/Esc fecha · 1-5 equipa · M kit médico · R recarrega</div>
     </div>
 
-    <!-- Babylon.js core via CDN (UMD -> global BABYLON). -->
-    <!-- crossorigin: resposta CORS (as CDNs mandam o cabeçalho) — o cache offline (sw.js) guarda a resposta inteira, não uma "opaca". -->
-    <script src="https://cdn.jsdelivr.net/npm/babylonjs@6.40.0/babylon.min.js" crossorigin="anonymous"></script>
-    <!-- Havok (física) — expõe o global HavokPhysics(). -->
-    <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js" crossorigin="anonymous"></script>
+    <!-- Bibliotecas LOCAIS (pasta vendor/): o jogo abre sem internet e com versões congeladas. Antes vinham da CDN a cada abertura —
+         offline, o Havok não carregava e o jogo seguia sem física (sem carros, polícia nem pedestres). -->
+    <!-- Babylon.js 6.40.0 (UMD -> global BABYLON). -->
+    <script src="./vendor/babylon.min.js"></script>
+    <!-- Havok (física) — expõe o global HavokPhysics(); o .wasm vai embutido em base64 (file:// não deixa buscar o arquivo). -->
+    <script src="./vendor/HavokPhysics_umd.js"></script>
+    <script src="./vendor/HavokPhysics.wasm.js"></script>
 
     <!-- Nosso código como scripts clássicos, em ordem de dependência.
          (Sem ES Modules => abre por duplo-clique no index.html, file:// funciona.) -->
@@ -437,6 +441,8 @@
     <script src="./src/art/TileFactory.js"></script>
     <script src="./src/art/SpriteBaker.js"></script>
     <script src="./src/art/CharacterRig.js"></script>
+    <script src="./assets/chars/personagens-atlas.js"></script>
+    <script src="./src/art/CharArt.js"></script>
     <script src="./src/art/CharacterSheet.js"></script>
     <script src="./src/art/SpriteActor.js"></script>
     <script src="./src/art/PropSprites.js"></script>
@@ -448,10 +454,13 @@
     <script src="./src/art/ShopStyles.js"></script>
     <script src="./src/art/HomeStyles.js"></script>
     <script src="./src/art/BankStyles.js"></script>
+    <script src="./assets/cars/carros-atlas.js"></script>
+    <script src="./src/art/CarArt.js"></script>
     <script src="./src/art/CarSheet.js"></script>
     <script src="./src/art/HeliSheet.js"></script>
     <script src="./src/art/BoatSheet.js"></script>
     <script src="./src/render/GlowBatch.js"></script>
+    <script src="./src/render/ShadowBoxBatch.js"></script>
     <script src="./src/world/Fireworks.js"></script>
     <script src="./src/render/RevealPlugin.js"></script>
     <script src="./src/world/TrafficSignals.js"></script>
@@ -476,10 +485,13 @@
     <script src="./src/core/navigation.js"></script>
     <script src="./src/core/physics.js"></script>
     <script src="./src/core/ColliderStreamer.js"></script>
+    <script src="./src/core/HangProbe.js"></script>
     <script src="./src/core/Perf.js"></script>
     <script src="./src/core/Spatial.js"></script>
     <script src="./src/core/AutoQuality.js"></script>
+    <script src="./src/input/PadGlyphs.js"></script>
     <script src="./src/input/inputManager.js"></script>
+    <script src="./src/input/PadNav.js"></script>
     <script src="./src/player/Inventory.js"></script>
     <script src="./src/player/Bags.js"></script>
     <script src="./src/player/Stash.js"></script>
@@ -532,6 +544,7 @@
     <script src="./src/vehicle/CarDamage.js"></script>
     <script src="./src/vehicle/Collisions.js"></script>
     <script src="./src/combat/Combat.js"></script>
+    <script src="./src/combat/Aim.js"></script>
     <script src="./src/combat/Ragdoll.js"></script>
     <script src="./src/police/WantedSystem.js"></script>
     <script src="./src/police/policeStates.js"></script>

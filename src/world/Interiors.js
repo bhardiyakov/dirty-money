@@ -41,6 +41,7 @@ const Interiors = {
 
     // Loja cuja porta está perto de (x, z) (a pé, na calçada em frente).
     shopNear(x, z, r = 1.9) {
+        if (!inWorld(x, z)) return null;
         this.index();
         const C = this._C, i0 = Math.floor((x - r) / C), i1 = Math.floor((x + r) / C), j0 = Math.floor((z - r) / C), j1 = Math.floor((z + r) / C);
         let best = null, bd = r * r;

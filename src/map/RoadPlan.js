@@ -209,6 +209,7 @@ const RoadPlan = {
 
     // Cruzamento a até `r` u (distância de xadrez) de (x, z), ou null.
     nodeNear(x, z, r = 13) {
+        if (!inWorld(x, z)) return null;
         r = Math.min(r, 500);
         const S = this.CELL, k0 = Math.floor((x - r) / S), k1 = Math.floor((x + r) / S), j0 = Math.floor((z - r) / S), j1 = Math.floor((z + r) / S);
         let best = null, bd = r;
@@ -238,6 +239,7 @@ const RoadPlan = {
 
     // Ponto de eixo de rua mais próximo de (x, z): { x, z, edge } ou null.
     nearestRoadPoint(x, z, maxR = 400) {
+        if (!inWorld(x, z)) return null;
         const S = this.CELL;
         for (let r = 0; r * S <= maxR; r++) {
             let best = null, bd = Infinity;
@@ -285,6 +287,7 @@ const RoadPlan = {
     // (x, z) está sobre uma via — pista de rua/avenida/rodovia/estrada de terra/viela, cruzamento e curva, ponte (com as
     // calçadas dela) ou viaduto (e o chão sob ele) — ou a menos de `m` u dela? Regra do mundo: NENHUMA vegetação nisso.
     onPavement(x, z, m = 0) {
+        if (!inWorld(x, z)) return false;
         const S = this.CELL, key = this._key;
         const i0 = Math.floor((x - m) / S), i1 = Math.floor((x + m) / S), j0 = Math.floor((z - m) / S), j1 = Math.floor((z + m) / S);
         for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
@@ -305,6 +308,7 @@ const RoadPlan = {
 
     // Pontos de via a até `r` u de (x, z): o ponto mais próximo de cada trecho em volta — [{ x, z, d, edge }].
     nearbyRoadPoints(x, z, r = 90) {
+        if (!inWorld(x, z)) return [];
         const S = this.CELL, out = [], seen = new Set();
         for (let i = Math.floor((x - r) / S); i <= Math.floor((x + r) / S); i++) for (let j = Math.floor((z - r) / S); j <= Math.floor((z + r) / S); j++) {
             const c = this._eg.get(this._key(i, j)); if (!c) continue;

@@ -1,7 +1,9 @@
 # Arte em PNG — guia para trocar a arte procedural
 
-Hoje toda a arte do Dirty Money é desenhada por código na carga (`SpriteBaker`). Isso custa segundos de CPU no
-celular e não permite um artista desenhar à mão. O jogo agora aceita **PNGs prontos no lugar de qualquer folha**:
+Hoje quase toda a arte do Dirty Money é desenhada por código na carga (`SpriteBaker`). Isso custa segundos de CPU no
+celular e não permite um artista desenhar à mão. (**Carros e personagens** já saíram desse esquema: vêm de atlas vetoriais
+prontos, com outro formato — ver [`carros.md`](carros.md) e [`personagens.md`](personagens.md). O que segue vale para o resto e
+para a paleta.) O jogo agora aceita **PNGs prontos no lugar de qualquer folha**:
 se o arquivo existe e está listado no `assets/sprites/manifest.json`, ele é usado; se não, a folha continua sendo
 desenhada por código. Dá para trocar **uma folha por vez**.
 
@@ -18,10 +20,7 @@ O que sai (~375 arquivos, ~12 MB):
 | Arquivo | Conteúdo | Tamanho |
 |---|---|---|
 | `char/<tipo>/<clipe>-<arma>.png` | uma animação de um tipo de personagem | largura = direções × quadro, altura = quadros × quadro |
-| `car/<modelo>.png` | carro limpo | 32 direções × 112 px, 1 linha |
-| `car/<modelo>-dent1..3.png` | fases de amassado | idem |
-| `door/<modelo>.png` | porta abrindo | 32 direções × 64 px; 10 linhas (5 da porta esquerda, 5 da direita) |
-| `pal/char.png`, `pal/car.png` | **paletas** (cores de verdade) | 80 colunas × uma linha por variante |
+| `pal/char.png`, `pal/car.png` | **paletas** (cores de verdade; `pal/car` = barcos e helicóptero) | 80 colunas × uma linha por variante |
 | `manifest.json` | lista do que o jogo lê de arquivo + tamanho, quadros, fps de cada um | — |
 
 Tipos de personagem: `player` (e `player_cross`, `player_pack`, `player_tactical` — o jogador com cada bolsa),
@@ -40,7 +39,7 @@ Os PNGs são **INDEXADOS (8 bits, paleta de 256 cores)**. O que o jogo lê é o 
 ```
 
 A **rampa** diz *o que* é o pixel; a **paleta** do jogo diz *de que cor* ele fica em cada variante. Por isso um único
-desenho de `civA` vira dezenas de pedestres diferentes, e um único carro sai em 40 pinturas.
+desenho de `civA` vira dezenas de pedestres diferentes.
 
 Rampas dos personagens (`pal/char.png`):
 
@@ -61,17 +60,17 @@ Rampas dos personagens (`pal/char.png`):
 | 13 | clarão do tiro | 65–69 |
 | 14 | sangue | 70–74 |
 
-Rampas dos carros (`pal/car.png`): 1 pintura · 2 pintura 2 (faixas/teto) · 3 vidro · 4 pneus/escuro · 5 cromado ·
+Rampas de barcos e helicóptero (`pal/car.png`): 1 pintura · 2 pintura 2 (faixas/teto) · 3 vidro · 4 pneus/escuro · 5 cromado ·
 6 farol · 7 lanterna · 8 letreiro · 9 banco · 10 acabamento.
 
 As cores que aparecem no PNG exportado são as de **uma variante de referência** (jogador laranja, policial azul,
-carro vermelho…) só para você enxergar o que está fazendo. Pintar com a "cor da camisa" é usar os índices 15–19.
+civil…) só para você enxergar o que está fazendo. Pintar com a "cor da camisa" é usar os índices 15–19.
 
 ### Layout
 
-- **Direções = colunas**, da esquerda para a direita, começando no **norte** (personagem/carro olhando para o topo da
+- **Direções = colunas**, da esquerda para a direita, começando no **norte** (personagem olhando para o topo da
   tela) e girando no **sentido horário** (norte → leste → sul → oeste). Personagens: 16 direções (jogador e pilotos)
-  ou 8 (pedestres e polícia). Carros e portas: 32.
+  ou 8 (pedestres e polícia).
 - **Quadros = linhas**, de cima para baixo, na ordem da animação. Quantidade e fps de cada clipe estão no
   `manifest.json` (`frames`, `fps`, `loop`).
 - O tamanho do arquivo **tem que ser exatamente** o do molde. Se não bater, o jogo avisa no console e usa o desenho
@@ -92,7 +91,7 @@ Outros editores servem desde que salvem **PNG indexado de 8 bits preservando a o
 ## 4. Como o jogo carrega
 
 - `SpriteIO.init()` (antes do menu) lê o `manifest.json` e baixa: paletas e o essencial primeiro; o que a carga do
-  jogo usa em seguida; mochilas, SWAT/exército, amassados e portas em segundo plano.
+  jogo usa em seguida; mochilas e SWAT/exército em segundo plano.
 - Os PNGs são decodificados na hora em que a folha é pedida (1–5 ms cada) e viram a mesma textura de 2 bytes/pixel
   que o desenho por código gerava.
 - Com o service worker (`sw.js`), depois da primeira visita tudo vem do aparelho, inclusive offline.

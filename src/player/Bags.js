@@ -113,6 +113,13 @@ const Bags = {
     _sheetSwap(game) {
         const pl = game.player, id = (game.inventory.bag || 'none');
         if (this._shown === id || pl._baseSheet) return;                            // (montando na moto: troca depois)
+        // Atlas vetorial: a bolsa é uma CAMADA por cima do jogador (só os pixels que ela muda), não uma cópia de todas as animações.
+        if (CharArt.available() && CharArt.data.sheets.player.bags) {
+            const look = this.DEFS[id] && this.DEFS[id].look;
+            pl.actor.setOverlay(look || null);
+            this._shown = id;
+            return;
+        }
         const lib = pl.lib, sheet = this.sheetFor(lib, id), w = pl.actor.clip ? pl.actor.clip.weapon : 'none';
         const need = [['idle', 'none'], ['walk', 'none'], ['run', 'none']].concat(w && w !== 'none' ? [['idle', w], ['walk', w], ['run', w]] : []);
         if (this._queued !== id) { sheet.queue(need); if (sheet !== lib.sheets.player) sheet.queue(this.PLAYER_CLIPS); this._queued = id; }

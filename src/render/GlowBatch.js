@@ -98,7 +98,6 @@ class GlowBatch {
     // capacity: nº máximo de quads | kind: 'glow' | 'cone' | 'puff' | 'ring'
     constructor(scene, capacity, name = 'glow', kind = 'glow') {
         GlowBatch.register();
-        this.capacity = capacity;
         this.count = 0;
         // Faixa de quads alterados desde o último flush (cor e posição): só ela vai para a GPU. Antes o buffer INTEIRO era reenviado a
         // cada mudança — o lote dos postes (14 mil quads, ~1,5 MB) subia por completo a cada degrau do anoitecer, e um único item piscando
@@ -107,25 +106,8 @@ class GlowBatch {
         this._p0 = Infinity; this._p1 = -1;
         this._level = 1;
 
-        this.pos = new Float32Array(capacity * 12);
-        this.col = new Float32Array(capacity * 16);
-        const uv = new Float32Array(capacity * 8);
-        const idx = capacity * 4 > 65535 ? new Uint32Array(capacity * 6) : new Uint16Array(capacity * 6);
-        for (let i = 0; i < capacity; i++) {
-            const u = i * 8, b = i * 4, o = i * 6;
-            uv[u + 2] = 1; uv[u + 5] = 1; uv[u + 6] = 1; uv[u + 7] = 1;                 // (0,0) (1,0) (0,1) (1,1)
-            idx[o] = b + 3; idx[o + 1] = b + 1; idx[o + 2] = b; idx[o + 3] = b + 2; idx[o + 4] = b + 3; idx[o + 5] = b;
-        }
-
         this.mesh = new BABYLON.Mesh(name, scene);
-        const vd = new BABYLON.VertexData();
-        vd.positions = this.pos;
-        vd.colors = this.col;
-        vd.uvs = uv;
-        vd.indices = idx;                                   // (sem normais: o shader não as usa — era memória de vídeo à toa)
-        vd.applyToMesh(this.mesh, true);
-        this._vbCol = this.mesh.getVertexBuffer(BABYLON.VertexBuffer.ColorKind);
-        this._vbPos = this.mesh.getVertexBuffer(BABYLON.VertexBuffer.PositionKind);
+        this._geometry(capacity);
 
         const m = new BABYLON.ShaderMaterial(name + 'Mat', scene, { vertex: kind, fragment: kind }, {
             attributes: ['position', 'uv', 'color'],
@@ -155,10 +137,38 @@ class GlowBatch {
         this.mesh.isVisible = v > 0;
     }
 
-    // Reserva um quad e devolve o índice (reaproveita os que foram devolvidos com free).
+    // (Re)cria os buffers para `capacity` quads, preservando os que já existem (crescer o lote).
+    _geometry(capacity) {
+        const pos = new Float32Array(capacity * 12), col = new Float32Array(capacity * 16);
+        if (this.pos) { pos.set(this.pos); col.set(this.col); }
+        this.pos = pos; this.col = col; this.capacity = capacity;
+        const uv = new Float32Array(capacity * 8);
+        const idx = capacity * 4 > 65535 ? new Uint32Array(capacity * 6) : new Uint16Array(capacity * 6);
+        for (let i = 0; i < capacity; i++) {
+            const u = i * 8, b = i * 4, o = i * 6;
+            uv[u + 2] = 1; uv[u + 5] = 1; uv[u + 6] = 1; uv[u + 7] = 1;                 // (0,0) (1,0) (0,1) (1,1)
+            idx[o] = b + 3; idx[o + 1] = b + 1; idx[o + 2] = b; idx[o + 3] = b + 2; idx[o + 4] = b + 3; idx[o + 5] = b;
+        }
+        const vd = new BABYLON.VertexData();
+        vd.positions = this.pos;
+        vd.colors = this.col;
+        vd.uvs = uv;
+        vd.indices = idx;                                   // (sem normais: o shader não as usa — era memória de vídeo à toa)
+        vd.applyToMesh(this.mesh, true);
+        this._vbCol = this.mesh.getVertexBuffer(BABYLON.VertexBuffer.ColorKind);
+        this._vbPos = this.mesh.getVertexBuffer(BABYLON.VertexBuffer.PositionKind);
+        this._c0 = Infinity; this._c1 = -1; this._p0 = Infinity; this._p1 = -1;      // (os buffers novos já subiram inteiros)
+    }
+
+    // Reserva um quad e devolve o índice (reaproveita os que foram devolvidos com free). Lote cheio: CRESCE (dobra) — antes lançava
+    // um erro que, no meio do quadro, matava o laço do jogo (ex.: muitos carros com farol aceso no teste de carga = jogo congelado).
     alloc() {
         if (this._free && this._free.length) return this._free.pop();
-        if (this.count >= this.capacity) throw new Error('GlowBatch cheio');
+        if (this.count >= this.capacity) {
+            const n = Math.max(16, this.capacity * 2);
+            console.warn(`[GlowBatch] ${this.mesh.name}: ${this.capacity} → ${n} quads`);
+            this._geometry(n);
+        }
         return this.count++;
     }
 

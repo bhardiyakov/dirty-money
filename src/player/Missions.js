@@ -6,7 +6,7 @@
 //   • DEFESA (soldado)       só durante uma operação policial: derrube 3 policiais da operação.
 // Patentes pelo nº de missões feitas (e pela moral do tráfico): Aviãozinho → Soldado (3 missões, tráfico ≥ 50) → Gerente de
 // Frente (8 missões, tráfico ≥ 65: paga mais). Falhar (prazo, morte, prisão, abandono) custa moral do tráfico.
-// A missão ativa mostra um painel no HUD e o destino vai para o GPS (Game.setGps). Salvo no save: só `Standing.missionsDone`.
+// A missão ativa mostra um painel no HUD e o destino é marcado no mapa (Game.setGps). Salvo no save: só `Standing.missionsDone`.
 // ============================================================================
 
 class Missions {

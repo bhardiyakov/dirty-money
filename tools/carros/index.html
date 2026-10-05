@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dirty Money — Carros (gerador do atlas)</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #2b2e34; color: #d8dce2; font: 13px system-ui, Segoe UI, Arial, sans-serif; padding: 16px; }
+        h1 { font-size: 18px; margin-bottom: 4px; }
+        .sub { color: #9aa0aa; margin-bottom: 12px; line-height: 1.5; }
+        .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: #23262b; padding: 10px 12px; border: 1px solid #3a3f4a; margin-bottom: 14px; position: sticky; top: 0; z-index: 5; }
+        button { background: #ffd23a; color: #1b1b1b; border: 0; padding: 7px 12px; font-weight: 700; cursor: pointer; border-radius: 3px; }
+        button:disabled { opacity: 0.5; cursor: default; }
+        label { display: flex; gap: 6px; align-items: center; }
+        #status { color: #9aa0aa; }
+        h2 { font-size: 12px; letter-spacing: 2px; color: #ffd23a; text-transform: uppercase; margin: 16px 0 8px; border-bottom: 1px solid #ffd23a55; padding-bottom: 4px; }
+        .grid { display: flex; flex-wrap: wrap; gap: 14px; }
+        .card { background: #33363d; border: 1px solid #40444d; padding: 8px; border-radius: 4px; }
+        .card img, .card canvas { display: block; }
+        .card .n { margin-top: 6px; font-weight: 600; }
+        .card .id { color: #9aa0aa; font: 11px Consolas, monospace; }
+        .card .new { color: #5fd07a; font-size: 10px; margin-left: 6px; }
+        .row { display: flex; gap: 10px; align-items: flex-end; }
+        #atlasView canvas { image-rendering: pixelated; background: repeating-conic-gradient(#3a3d44 0 25%, #2f3238 0 50%) 0 0 / 16px 16px; max-width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>Carros vistos de cima — gerador do atlas do jogo</h1>
+    <div class="sub">
+        Desenho vetorial (gerador.js, porte do <code>gen.py</code> do pacote "Carros 2D" + modelos novos). <b>Gerar atlas</b> rasteriza tudo a 40 px/m
+        e separa as camadas (cor, pinturas e amassados); <b>Salvar</b> grava <code>assets/cars/carros-atlas.js</code>, que o jogo lê.<br>
+        Abra esta página pelo servidor de desenvolvimento (<code>serve.ps1</code> → <code>http://localhost:8123/tools/carros/</code>).
+    </div>
+    <div class="bar">
+        <button id="build">Gerar atlas</button>
+        <button id="save" disabled>Salvar carros-atlas.js</button>
+        <label>Pintura <input id="paint" type="color" value="#c8202e"></label>
+        <label>Pintura 2 <input id="paint2" type="color" value="#f4f1e8"></label>
+        <label><input id="usePaint" type="checkbox"> repintar</label>
+        <label>Amassado <input id="dent" type="range" min="0" max="3" value="0"> <span id="dentV">0</span></label>
+        <label><input id="burnt" type="checkbox"> carcaça queimada</label>
+        <span id="status"></span>
+    </div>
+
+    <div id="catalog"></div>
+    <h2>Atlas</h2>
+    <div id="atlasView"></div>
+
+    <script src="./gerador.js"></script>
+    <script src="./atlas.js"></script>
+    <script>
+        const CATS = { popular: 'Populares', antigo: 'Antigos', suv: 'SUVs', taxi: 'Táxis', seda: 'Sedãs', esportivo: 'Esportivos', super: 'Superesportivos', picape: 'Picapes', van: 'Vans', forca: 'Polícia / forças' };
+        const $ = (id) => document.getElementById(id);
+        let result = null, jsText = null;
+
+        // Catálogo: o desenho vetorial com as cores do catálogo (ou o resultado do atlas, depois de gerado: mesma conta do shader do jogo).
+        function drawCatalog() {
+            const root = $('catalog');
+            root.replaceChildren();
+            for (const [cat, title] of Object.entries(CATS)) {
+                const cars = CarGen.CARS.filter((c) => c.categoria === cat);
+                if (!cars.length) continue;
+                const h = document.createElement('h2'); h.textContent = `${title} (${cars.length})`; root.appendChild(h);
+                const grid = document.createElement('div'); grid.className = 'grid'; root.appendChild(grid);
+                for (const c of cars) {
+                    const card = document.createElement('div'); card.className = 'card'; card.dataset.id = c.id;
+                    const row = document.createElement('div'); row.className = 'row';
+                    const img = new Image();
+                    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(CarGen.carSVG(c, { tag: '_cat', size: [Math.round((c.L + 2 * (c.pad || 10)) * 0.8), Math.round((c.W + 2 * (c.pad || 10)) * 0.8)] }));
+                    row.appendChild(img);
+                    const cv = document.createElement('canvas'); cv.className = 'game'; row.appendChild(cv);
+                    card.appendChild(row);
+                    card.insertAdjacentHTML('beforeend', `<div class="n">${c.nome}${c.novo ? '<span class="new">NOVO</span>' : ''}</div><div class="id">${c.id} · ${(c.L / 70).toFixed(2)} × ${(c.W / 70).toFixed(2)} m${c.fixed ? ' · pintura fixa' : ''}</div>`);
+                    grid.appendChild(card);
+                }
+            }
+        }
+
+        const hex01 = (h) => CarGen.rgb(h).map((v) => v / 255);
+
+        // A mesma conta do shader do jogo (CarArt): cor = K + M1·P + M2·P2, amassados por limiar, carcaça queimada.
+        function composite(res, model, paint, paint2, dent, burnt) {
+            const [x0, y0, w, h] = model.r, W = res.W, out = new ImageData(w, h);
+            const P = paint || hex01(model.color), Q = paint2 || hex01(model.color2 || model.color);
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+                const i = ((y0 + y) * W + x0 + x) * 4, o = (y * w + x) * 4;
+                const a = res.A[i + 3] / 255;
+                if (a <= 0) continue;
+                let c = [0, 1, 2].map((k) => res.A[i + k] / 255 + (res.B[i] / 255) * P[k] + (res.B[i + 1] / 255) * Q[k]);
+                if (dent * 64 + 0.5 >= res.B[i + 2]) {
+                    const s = (res.B[i + 3] - 128) / 128;
+                    c = c.map((v) => (s < 0 ? v * (1 + s) : v + (a - v) * Math.min(1, s * 128 / 127)));
+                }
+                if (burnt) { const l = (c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11); c = [0.07 * a + l * 0.2, 0.06 * a + l * 0.18, 0.055 * a + l * 0.16]; }
+                for (let k = 0; k < 3; k++) out.data[o + k] = Math.round(Math.min(1, c[k] / a) * 255);
+                out.data[o + 3] = Math.round(a * 255);
+            }
+            return out;
+        }
+
+        function refreshGame() {
+            if (!result) return;
+            const dent = +$('dent').value, burnt = $('burnt').checked, rp = $('usePaint').checked;
+            $('dentV').textContent = dent;
+            for (const card of document.querySelectorAll('.card')) {
+                const m = result.models[card.dataset.id], cv = card.querySelector('canvas.game');
+                const img = composite(result, m, rp ? hex01($('paint').value) : null, rp ? hex01($('paint2').value) : null, dent, burnt);
+                cv.width = img.width; cv.height = img.height;
+                cv.getContext('2d').putImageData(img, 0, 0);
+                cv.style.width = img.width * 2 + 'px'; cv.style.imageRendering = 'pixelated';
+            }
+        }
+
+        function showAtlas(res) {
+            const cv = document.createElement('canvas'); cv.width = res.W; cv.height = res.H;
+            const img = new ImageData(res.W, res.H);
+            for (let i = 0; i < res.W * res.H; i++) {
+                const a = res.A[i * 4 + 3] / 255;
+                if (!a) continue;
+                for (let k = 0; k < 3; k++) img.data[i * 4 + k] = Math.min(255, (res.A[i * 4 + k] + res.B[i * 4] * 0.85) / a);
+                img.data[i * 4 + 3] = res.A[i * 4 + 3];
+            }
+            cv.getContext('2d').putImageData(img, 0, 0);
+            $('atlasView').replaceChildren(cv);
+        }
+
+        async function build() {
+            $('build').disabled = true;
+            const r = await CarAtlasBuild.build((n, t, id) => { $('status').textContent = `rasterizando ${n}/${t} (${id})…`; });
+            result = r;
+            jsText = CarAtlasBuild.toJS(r);
+            window.__atlas = r; window.__atlasJS = jsText;
+            $('status').textContent = `${Object.keys(r.models).length} carros · atlas ${r.W}×${r.H} · PNGs ${(r.pngA.length / 1024).toFixed(0)} + ${(r.pngB.length / 1024).toFixed(0)} KB · ${(jsText.length / 1024).toFixed(0)} KB de .js · ${r.ms.toFixed(0)} ms`;
+            $('save').disabled = false;
+            $('build').disabled = false;
+            showAtlas(r);
+            refreshGame();
+            return r;
+        }
+
+        async function save() {
+            if (!jsText) return;
+            const blob = new Blob([jsText], { type: 'application/javascript' });
+            if (window.showSaveFilePicker) {
+                try {
+                    const h = await showSaveFilePicker({ suggestedName: 'carros-atlas.js', types: [{ description: 'JavaScript', accept: { 'application/javascript': ['.js'] } }] });
+                    const w = await h.createWritable(); await w.write(blob); await w.close();
+                    $('status').textContent += ' · salvo';
+                    return;
+                } catch (e) { if (e.name === 'AbortError') return; }
+            }
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'carros-atlas.js'; a.click();
+        }
+
+        $('build').onclick = build;
+        $('save').onclick = save;
+        for (const id of ['dent', 'burnt', 'paint', 'paint2', 'usePaint']) $(id).addEventListener('input', refreshGame);
+        drawCatalog();
+        window.buildAtlas = build;
+    </script>
+</body>
+</html>

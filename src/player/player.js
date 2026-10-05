@@ -31,6 +31,7 @@ class Player {
         this.weapon = 'none';      // none | pistol | smg | shotgun | bat
         this.action = null;        // { name, lock, onDone, holdAim }
         this.aimTimer = 0;         // tempo restante "mirando" parado após sacar/atirar.
+        this.aimHeading = null;    // mirando (Aim): direção para onde o corpo aponta; null = livre
         this._combo = 0;
 
         this.actor.play('idle');
@@ -288,6 +289,10 @@ class Player {
             }
         }
 
+        // Mirando (Aim): não corre e anda devagar, de frente para a mira (pode andar de lado/de costas).
+        const aiming = this.aimHeading != null;
+        if (aiming) { sprinting = false; this.aimTimer = Math.max(this.aimTimer, 0.3); }
+
         // Fôlego: só corre enquanto tiver (e sem sobrecarga de peso). Ver Bags.stamina.
         sprinting = Bags.stamina(this, sprinting, lock > 0 && moveDir.lengthSquared() > 1e-4, dt);
 
@@ -296,7 +301,7 @@ class Player {
         this.depth = depth;
         this.swimming = depth > W.wadeDepth;
         const wf = depth <= 0 ? 1 : (depth <= W.wadeDepth ? 0.85 - 0.4 * (depth / W.wadeDepth) : (sprinting ? 0.52 : 0.4));
-        const maxSpeed = ((sprinting && depth <= 0) ? Config.player.sprintSpeed * (1 + (SkillTree.m.sprint || 0)) : Config.player.maxSpeed) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1);      // loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo
+        const maxSpeed = ((sprinting && depth <= 0) ? Config.player.sprintSpeed * (1 + (SkillTree.m.sprint || 0)) : Config.player.maxSpeed) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? 0.6 : 1);      // loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar
 
         // Acelera/desacelera suavemente rumo à velocidade alvo (frame-independent).
         const targetVel = moveDir.scale(maxSpeed);
@@ -320,8 +325,10 @@ class Player {
         if (!this._glide) MapGeo.resolveCircle(prev, Config.player.radius);   // não atravessa prédios (no pulo, passa por cima)
         this.speed = this.velocity.length();
 
-        // Gira o corpo em direção ao movimento (menor caminho angular) — só fora de ações.
-        if (!this.action && moveDir.lengthSquared() > 1e-4) {
+        // Gira o corpo em direção ao movimento (menor caminho angular) — só fora de ações. Mirando: sempre para a mira (até atirando).
+        if (aiming && (!this.action || this.action.name === 'shoot' || this.action.name === 'draw')) {
+            this.root.rotation.y = this._lerpAngle(this.root.rotation.y, this.aimHeading, 1 - Math.exp(-22 * dt));
+        } else if (!this.action && moveDir.lengthSquared() > 1e-4) {
             const targetY = Math.atan2(moveDir.x, moveDir.z);
             const rt = 1 - Math.exp(-Config.player.turnLerp * dt);
             this.root.rotation.y = this._lerpAngle(this.root.rotation.y, targetY, rt);

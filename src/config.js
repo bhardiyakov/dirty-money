@@ -10,6 +10,10 @@ function brl(n) { return "R$ " + Math.round(n).toLocaleString("pt-BR"); }
 // (é variádico) — e distâncias são calculadas centenas de vezes por quadro (IA, polícia, trânsito, colisões, pássaros).
 // (Sem a proteção contra overflow do Math.hypot, que só importa para valores acima de ~1e154.)
 function hypot(x, y, z = 0) { return Math.sqrt(x * x + y * y + z * z); }
+// Posição utilizável (finita e dentro do mundo, com folga)? NaN/Infinity dão false. As buscas em grade (`for (i = floor(x/S); i <=
+// floor((x+r)/S); i++)`) com x infinito ou gigante (> ~1e17: `i + 1 === i`) NUNCA terminam — um carro lançado para longe pela física
+// congelava o jogo inteiro. Quem recebe posições de entidades confere com isto antes de varrer a grade.
+function inWorld(x, z) { const W = Config.world; return x > W.minX - 3000 && x < W.maxX + 3000 && z > W.minZ - 3000 && z < W.maxZ + 3000; }
 
 // Tabelas constantes declaradas como `static get NOME() { return {...} }` montavam um objeto NOVO a cada leitura — e várias são lidas em
 // laços de todo quadro (Pickups.TYPES, Birds.SPECIES, CarSheet.MODELS...): lixo para o coletor e engasgos no celular. memoStatics troca
@@ -376,8 +380,13 @@ const Config = {
     let saved = null;
     try { saved = localStorage.getItem('dm_quality'); } catch (e) { /* sem storage */ }
     const lite = q.includes('lite') || (!q.includes('full') && (coarse || weak || saved === 'lite'));
-    if (!lite) return;
     const P = Config.perf;
+    // App instalado no PC (Tauri) — ou `?fps60` no navegador, para testar: 60 quadros. Se o PC não segurar, o AutoQuality volta a 30
+    // antes de mexer na qualidade visual.
+    const desktopApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+    if (!lite && (desktopApp || q.includes('fps60'))) P.fpsCap = 60;
+    if (!lite) return;
+    if (typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // sem vidro borrado nos painéis (ver Theme)
     P.lite = true; P.shadowSize = 1024; P.colliderRadius = 190; P.dprCap = 1.5;
     Config.npc.count = 48;
     Config.traffic.count = 18; Config.traffic.parked = 8; Config.traffic.motos = 2; Config.traffic.motosParked = 2; Config.traffic.bicycles = 2; Config.traffic.bicyclesParked = 2; Config.traffic.couriers = 3;

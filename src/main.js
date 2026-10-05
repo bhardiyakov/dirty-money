@@ -38,7 +38,7 @@ class MainMenu {
             for (const t of toggles) {
                 const on = !!s[t.dataset.key];
                 t.classList.toggle('is-on', on);
-                t.textContent = on ? 'Ligado' : 'Desligado';
+                t.textContent = on ? (t.dataset.on || 'Ligado') : (t.dataset.off || 'Desligado');
             }
         };
         const commit = () => { this.game.menu._saveSettings(); this.game.menu.applySettings(); render(); };
@@ -172,6 +172,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 // Cache offline (sw.js): a partir da 2ª visita o jogo e as bibliotecas (~7 MB) saem do aparelho, e funciona sem internet. Só por
 // http(s); registrado depois do 'load' para não disputar banda com a primeira carga.
 window.addEventListener('load', () => {
-    if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+    // No app instalado (Tauri) tudo já vem no instalador: o cache offline não serve para nada lá.
+    if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol) || '__TAURI_INTERNALS__' in window) return;
     navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('[SW] sem cache offline:', e));
 });

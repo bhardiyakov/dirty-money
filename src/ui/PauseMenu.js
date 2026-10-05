@@ -1,7 +1,7 @@
 // ============================================================================
 // PauseMenu — o menu de pausa (Esc / P). O jogo PARA de verdade (física, IA, relógio, áudio) e o fundo fica borrado.
 // A moldura e as abas são pixel art; o MAPA é em alta resolução (MapRenderer.drawHD), com zoom, arrastar e cursor.
-//   MAPA        mapa tático da cidade: clique/Enter marca o GPS (rota pelas ruas, também no minimapa), legenda de lugares
+//   MAPA        mapa tático da cidade: clique/Enter marca o destino (blip vermelho, também no minimapa; sem rota), legenda de lugares
 //   INVENTÁRIO  mochila de espaços limitados (estilo Resident Evil): equipar, usar, descartar
 //   STATUS / HABILIDADES   reservados (funcionalidades futuras)
 //   CONFIGURAÇÕES          volume, efeitos, minimapa, dicas
@@ -12,6 +12,10 @@
 class PauseMenu {
     static get TABS() {
         return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
+    }
+    static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'dev']; }      // linhas de Ajustes, na ordem
+    static get KEYS_HTML() {
+        return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas';
     }
 
     // Legenda do mapa: tipos de lugar (a chave é o `type` dos POIs).
@@ -43,7 +47,7 @@ class PauseMenu {
         this.setRow = 0;                 // linha das configurações
         this._icons = {};
         this._legendIdx = {};
-        this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, dev: false }, this._loadSettings());
+        this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual)
         this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
         this._build();
         this.applySettings();
@@ -145,7 +149,7 @@ class PauseMenu {
               <div class="pm-page" data-page="map">
                 <div class="px pm-col pm-mappanel"><div class="px-title">Cidade dos Prazeres · mapa tático</div>
                   <div class="pm-mapwrap"><canvas id="pmMap"></canvas></div>
-                  <div class="pm-note">Saindo do menu, a rota do GPS aparece no minimapa.</div></div>
+                  <div class="pm-note">Saindo do menu, o marcador aparece no minimapa (na borda, apontando, se estiver longe).</div></div>
                 <div class="pm-col pm-side">
                   <div class="px pm-dest"><div id="pmPin"></div><div class="t" id="pmDest">Sem destino<div class="d">Clique no mapa para marcar</div></div></div>
                   <div class="px pm-legend"><div class="px-title">Legenda</div><div class="pm-legend-list" id="pmLegend"></div></div>
@@ -164,7 +168,7 @@ class PauseMenu {
               <div class="pm-page" data-page="guide"><div id="pmGuide"></div></div>
               <div class="pm-page" data-page="settings">
                 <div class="px pm-set"><div class="px-title">Configurações</div><div id="pmSet"></div>
-                  <div class="pm-keys"><b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas</div></div>
+                  <div class="pm-keys">${PauseMenu.KEYS_HTML}</div></div>
               </div>
             </div>
             <div class="pm-hints" id="pmHints"></div>`;
@@ -193,6 +197,32 @@ class PauseMenu {
         window.addEventListener('resize', () => { if (this.isOpen) this._fitCanvas(); });
         this._buildLegend();
         if (Emoji.ready) Emoji.ready.then(() => { this._icons = {}; this._buildLegend(); });      // a fonte de emoji chegou: redesenha os selos
+    }
+
+    // Rodapé com as teclas da aba — no controle, os botões dele (Xbox ou PlayStation, ver PadGlyphs).
+    _renderHints() {
+        const id = this.tab, inp = this.g.input, pad = inp.usingPad ? inp.padType : '';
+        this._hintsPad = pad;
+        const hint = (k, t) => `<span><b>${k}</b> ${t}</span>`, g = (b) => PadGlyphs.glyph(b, pad), ph = (h, t) => `<span>${h} ${t}</span>`;
+        if (pad) {
+            const common = ph(g('b'), 'Voltar ao jogo') + ph(g('lb') + g('rb'), 'Abas');
+            this.$('pmHints').innerHTML = id === 'map' ? common + ph(g('ls'), 'Mover cursor') + ph(g('a'), 'Marcar destino') + ph(g('x'), 'Limpar marcador') + ph(g('lt') + g('rt'), 'Zoom')
+                : id === 'inventory' ? common + ph(g('dpadlr'), 'Selecionar') + ph(g('a'), 'Usar/Equipar') + ph(g('x'), 'Descartar')
+                : id === 'settings' ? common + ph(g('up') + g('down'), 'Opção') + ph(g('dpadlr'), 'Ajustar') + ph(g('a'), 'Alternar')
+                : common + ph(g('ls'), 'Navegar') + ph(g('a'), 'Selecionar') + ph(g('rstick'), 'Rolar');
+        } else {
+            const common = hint('ESC', 'Voltar ao jogo') + hint('Q / E', 'Abas');
+            this.$('pmHints').innerHTML = id === 'map' ? common + hint('SETAS/MOUSE', 'Mover cursor') + hint('ENTER/CLIQUE', 'Marcar destino') + hint('X', 'Limpar marcador') + hint('+ / -', 'Zoom')
+                : id === 'inventory' ? common + hint('SETAS', 'Selecionar') + hint('ENTER', 'Usar/Equipar') + hint('DEL', 'Descartar')
+                : id === 'settings' ? common + hint('↑ ↓', 'Opção') + hint('← →', 'Ajustar') + hint('ENTER', 'Alternar') : common;
+        }
+        const keys = this.root.querySelector('.pm-keys');
+        if (keys) keys.innerHTML = pad
+            ? `<b style="background:none;padding:0">A pé:</b> ${g('ls')} mover · ${g('a')} correr (segurar) / pular grade · ${g('x')} interagir/assaltar/esconder · ${g('y')} veículo · ${g('rt')} atacar · ${g('b')} recarregar (sem arma: soco) · ${g('lt')} mirar (${g('rstick')} aponta/troca de alvo) · ${g('rb')} chute · ${g('down')} arrombar · ${g('rs')} furtar · ${g('lb')} ${g('dpadlr')} armas · ${g('up')} kit médico<br>`
+            + `<b style="background:none;padding:0">Carro:</b> ${g('rt')} acelerar · ${g('lt')} freio/ré · ${g('y')} sair · ${g('x')} abastecer/desmanchar · ${g('l3')} buzina · ${g('down')} faróis<br>`
+            + `<b style="background:none;padding:0">Helicóptero:</b> ${g('rt')} sobe · ${g('lt')} desce · ${g('rstick')} gira · ${g('y')} descer/pular<br>`
+            + `${g('back')} inventário · ${g('start')} menu · ${g('rstick')} zoom`
+            : PauseMenu.KEYS_HTML;
     }
 
     // ------------------------------------------------------------------ ícones (estilo emoji, HD)
@@ -231,6 +261,7 @@ class PauseMenu {
         el.innerHTML =
             panel('PERSONAGEM', bar('VIDA', pl.hp / pl.maxHp * 100, 'linear-gradient(90deg,#ff3a8a,#4a7cff)', `${Math.round(pl.hp)}/${pl.maxHp}`) + bar('COLETE', armor, 'linear-gradient(90deg,#2a7cff,#35c8ff)', `${armor}%`)
                 + bar('FÔLEGO', (pl.stamina == null ? 1 : pl.stamina / (pl.staminaMax || 100)) * 100, 'linear-gradient(90deg,#10b981,#a3e635)', `condicionamento ${Bags.fitLevel(pl.fit)}/20`) + row('Carga', Bags.label(g))
+                + bar('PONTARIA', Aim.quality() * 100, 'linear-gradient(90deg,#ff9a3a,#ffd23a)', `${Math.round(Aim.quality() * 100)}% · mira ${this.settings.aimAssist ? 'assistida' : 'manual'} — sobe com Mão firme e Olho de águia`)
                 + row('Arma na mão', pl.weapon === 'none' ? 'Punhos' : Weapons[pl.weapon].name) + row('Kits médicos', inv.medkits) + row('Hora', g.dayNight.label))
             + panel(`FACÇÃO · ${cv.name} (${cv.sigla})`, `<span class="tag" style="color:${hos ? '#ff5a4d' : '#5ac07a'}">${res ? (hos ? 'MORADOR · HOSTIL' : 'MORADOR · NEUTRO') : 'ESTRANHO · HOSTIL'}</span>`
                 + row('Patente', Missions.rankName) + row('Missões cumpridas', Standing.missionsDone || 0)
@@ -249,6 +280,8 @@ class PauseMenu {
         const g = this.g;
         this.isOpen = true;
         this.root.classList.add('show');
+        const pad = typeof PadNav !== 'undefined' && PadNav.pad();
+        this._padPrev = pad ? Array.from(pad.buttons, (x) => !!(x && x.pressed)) : null;      // o Start que abriu o menu ainda está apertado: não fecha de novo
         g.scene.physicsEnabled = false;               // a física congela (o mundo "para de verdade")
         AudioFX.pause();
         MapRenderer.drawWorld(1);
@@ -263,17 +296,14 @@ class PauseMenu {
         AudioFX.unpause();
         this.g.input.justPressed = {};                // teclas apertadas no menu não valem no jogo
         this.map.drag = null;
+        if (typeof FocusNav !== 'undefined') FocusNav.clear();         // tira o destaque do controle
     }
 
     setTab(id) {
         this.tab = id;
         for (const b of this.root.querySelectorAll('.pm-tab')) b.classList.toggle('on', b.dataset.tab === id);
         for (const pg of this.root.querySelectorAll('.pm-page')) pg.classList.toggle('on', pg.dataset.page === id);
-        const hint = (k, t) => `<span><b>${k}</b> ${t}</span>`;
-        const common = hint('ESC', 'Voltar ao jogo') + hint('Q / E', 'Abas');
-        this.$('pmHints').innerHTML = id === 'map' ? common + hint('SETAS/MOUSE', 'Mover cursor') + hint('ENTER/CLIQUE', 'Marcar GPS') + hint('X', 'Limpar GPS') + hint('+ / -', 'Zoom')
-            : id === 'inventory' ? common + hint('SETAS', 'Selecionar') + hint('ENTER', 'Usar/Equipar') + hint('DEL', 'Descartar')
-            : id === 'settings' ? common + hint('↑ ↓', 'Opção') + hint('← →', 'Ajustar') + hint('ENTER', 'Alternar') : common;
+        this._renderHints();
         if (id === 'map') {
             this._fitCanvas();
             if (!this.map.init) { const p = this.g._playerState().pos; this.map.cx = p.x; this.map.cz = p.z; this.map.init = true; }
@@ -329,8 +359,8 @@ class PauseMenu {
             } else if (k === 'enter') this._invAction('primary');
             else if (k === 'delete' || k === 'backspace') this._invAction('discard');
         } else if (this.tab === 'settings') {
-            if (k === 'arrowup') this.setRow = (this.setRow + 4) % 5;
-            else if (k === 'arrowdown') this.setRow = (this.setRow + 1) % 5;
+            if (k === 'arrowup') this.setRow = (this.setRow + 5) % 6;
+            else if (k === 'arrowdown') this.setRow = (this.setRow + 1) % 6;
             else if (k === 'arrowleft') this._setAdjust(-1);
             else if (k === 'arrowright') this._setAdjust(1);
             else if (k === 'enter' || k === ' ') this._setAdjust(0);
@@ -378,7 +408,7 @@ class PauseMenu {
         return CityGrid.pois.concat(hide);
     }
 
-    // Marca o GPS onde está o cursor (encaixa no lugar mais próximo, se houver um a < 16 px).
+    // Marca o destino onde está o cursor (encaixa no lugar mais próximo, se houver um a < 16 px).
     _markAtCursor() {
         const m = this.map, w = this._s2w(m.cur.x, m.cur.y);
         let best = null, bd = 16 / m.scale;
@@ -387,7 +417,7 @@ class PauseMenu {
             const d = hypot(p.x - w.x, p.z - w.z);
             if (d < bd) { bd = d; best = p; }
         }
-        if (!best && !CityGrid.isInside(w.x, w.z)) return;                     // fora da ilha: sem rota
+        if (!best && !WorldMap.isLand(w.x, w.z)) return;                      // no mar: não marca (em terra, qualquer lugar)
         this.g.setGps(best ? best.x : w.x, best ? best.z : w.z, best ? PauseMenu.POI_TYPES[best.type].label + (best.name && best.type !== 'hideout' ? ' — ' + best.name : '') : 'Ponto marcado');
         this._refreshDest();
         AudioFX.blip(900, 0.08, 0.14);
@@ -395,10 +425,11 @@ class PauseMenu {
 
     _refreshDest() {
         const g = this.g, el = this.$('pmDest'), pin = this.$('pmPin');
-        if (!pin.firstChild) { const c = document.createElement('canvas'); c.width = 40; c.height = 52; c.style.width = '40px'; c.style.height = '52px'; this._drawPin(c.getContext('2d'), 20, 48, '#4aa8ff', 1.2); pin.appendChild(c); }
+        if (!pin.firstChild) { const c = document.createElement('canvas'); c.width = 40; c.height = 52; c.style.width = '40px'; c.style.height = '52px'; this._drawPin(c.getContext('2d'), 20, 48, '#ff3b3b', 1.2); pin.appendChild(c); }
         if (!g.gps) { el.innerHTML = 'Sem destino<div class="d">Clique no mapa para marcar</div>'; return; }
-        const len = g.gps.len, dist = len >= 1000 ? (len / 1000).toFixed(1) + ' KM' : Math.round(len) + ' M';
-        el.innerHTML = `${g.gps.label}<div class="d">${dist.toLowerCase()} de distância</div>`;
+        const pp = g._playerState().pos, len = hypot(g.gps.x - pp.x, g.gps.z - pp.z);
+        const dist = len >= 1000 ? (len / 1000).toFixed(1) + ' km' : Math.round(len) + ' m';
+        el.innerHTML = `${g.gps.label}<div class="d">${dist} em linha reta</div>`;
     }
 
     // ------------------------------------------------------------------ mapa: legenda
@@ -452,18 +483,25 @@ class PauseMenu {
         ctx.fillStyle = '#ffffff'; ctx.fillText(text, x, y);
     }
 
+    // Nome de região: letras espaçadas, contorno grosso e uma faixa escura atrás — legível por cima de ícones e ruas.
+    _regionLabel(ctx, text, x, y, size) {
+        ctx.save();
+        ctx.font = `800 ${size}px Outfit, Inter, Arial, sans-serif`;
+        if ('letterSpacing' in ctx) ctx.letterSpacing = Math.round(size * 0.12) + 'px';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+        const w = ctx.measureText(text).width, h = size * 1.25;
+        ctx.fillStyle = 'rgba(8,10,16,0.55)';
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - w / 2 - 10, y - h / 2, w + 20, h, h / 2) : ctx.rect(x - w / 2 - 10, y - h / 2, w + 20, h); ctx.fill();
+        ctx.lineWidth = Math.max(4, size * 0.28); ctx.strokeStyle = 'rgba(8,10,16,0.95)'; ctx.strokeText(text, x, y);
+        ctx.fillStyle = '#ffffff'; ctx.fillText(text, x, y);
+        ctx.restore();
+    }
+
     _drawMap() {
         const g = this.g, c = this.mapCv, ctx = this.mapCtx, m = this.map, W = c.width, H = c.height;
         MapRenderer.drawView(ctx, W, H, m.cx, m.cz, m.scale, { labels: true });          // mundo raster + ruas/prédios vetoriais, em qualquer zoom
         ctx.imageSmoothingEnabled = false;
-        // Nomes das regiões (só com o mapa afastado; de perto aparecem os nomes das ruas).
-        if (m.scale < 2.4) {
-            const a = Math.min(1, (2.4 - m.scale) / 0.8), size = Math.max(11, Math.min(22, 7 + m.scale * 26));
-            ctx.save(); ctx.globalAlpha = a;
-            for (const r of WorldMap.regions) { const [rx, ry] = this._w2s(r.x, r.z); if (rx > -80 && ry > -30 && rx < W + 80 && ry < H + 30) this._label(ctx, r.name, rx, ry, size * r.size); }
-            ctx.restore();
-        }
-        const on = (x, y, pad = 40) => x > -pad && y > -pad && x < W + pad && y < H + pad;
+        const on =(x, y, pad = 40) => x > -pad && y > -pad && x < W + pad && y < H + pad;
         const ik = Math.max(1.3, Math.min(2.6, m.scale / 3));                     // tamanho dos ícones acompanha o zoom
 
         // Lugares (hospital, delegacia, lojas…) e, bem de perto, os esconderijos.
@@ -491,17 +529,18 @@ class PauseMenu {
             }
         }
 
-        // Rota do GPS: tracejado amarelo e azul (por cima das ruas).
-        if (g.gps && g.gps.route && g.gps.route.length > 1) {
-            const P = g.gps.route.map((q) => this._w2s(q.x, q.z));
-            const path = () => { ctx.beginPath(); P.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); };
-            ctx.lineJoin = 'round'; ctx.lineCap = 'butt';
-            ctx.setLineDash([]); ctx.strokeStyle = 'rgba(7,9,13,0.9)'; ctx.lineWidth = 9; path(); ctx.stroke();
-            ctx.setLineDash([14, 14]); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 5; path(); ctx.stroke();
-            ctx.lineDashOffset = -14; ctx.strokeStyle = '#4aa8ff'; path(); ctx.stroke();
-            ctx.setLineDash([]); ctx.lineDashOffset = 0;
+        // Marcador de destino: alfinete vermelho (sem rota pelas ruas).
+        if (g.gps) {
             const [dx, dy] = this._w2s(g.gps.x, g.gps.z);
-            if (on(dx, dy, 80)) { this._drawPin(ctx, dx, dy, '#4aa8ff', 1.1); this._label(ctx, 'DESTINO', dx + 52, dy - 24, 17); }
+            if (on(dx, dy, 80)) { this._drawPin(ctx, dx, dy, '#ff3b3b', 1.1); this._label(ctx, 'DESTINO', dx + 52, dy - 24, 17); }
+        }
+
+        // Nomes das regiões POR CIMA dos ícones da legenda (só com o mapa afastado; de perto aparecem os nomes das ruas).
+        if (m.scale < 2.4) {
+            const a = Math.min(1, (2.4 - m.scale) / 0.8), size = Math.max(13, Math.min(24, 9 + m.scale * 26));
+            ctx.save(); ctx.globalAlpha = a;
+            for (const r of WorldMap.regions) { const [rx, ry] = this._w2s(r.x, r.z); if (rx > -80 && ry > -30 && rx < W + 80 && ry < H + 30) this._regionLabel(ctx, r.name, rx, ry, size * r.size); }
+            ctx.restore();
         }
 
         // Jogador: alfinete verde e nome.
@@ -607,7 +646,7 @@ class PauseMenu {
     _setAdjust(d) {
         const s = this.settings;
         if (this.setRow === 0) s.volume = Math.max(0, Math.min(1, Math.round((s.volume + d * 0.1) * 10) / 10));
-        else if (d === 0 || true) { const k = ['volume', 'sfx', 'minimap', 'prompts', 'dev'][this.setRow]; if (this.setRow > 0) s[k] = d === 0 ? !s[k] : d > 0; }
+        else if (d === 0 || true) { const k = PauseMenu.SET_KEYS[this.setRow]; if (this.setRow > 0) s[k] = (d === 0 || k === 'aimAssist') ? !s[k] : d > 0; }      // (mira: ← → alternam)
         this._saveSettings(); this.applySettings();
     }
 
@@ -616,7 +655,9 @@ class PauseMenu {
         const tog = (v) => `<div class="pm-toggle ${v ? 'is-on' : ''}">${v ? 'Ligado' : 'Desligado'}</div>`;
         const rows = [
             ['🔊 Volume geral', `<input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="pmVol"><span>${Math.round(s.volume * 100)}%</span>`],
-            ['🎵 Efeitos sonoros', tog(s.sfx)], ['🗺️ Minimapa', tog(s.minimap)], ['💬 Dicas na tela', tog(s.prompts)], ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],
+            ['🎵 Efeitos sonoros', tog(s.sfx)], ['🗺️ Minimapa', tog(s.minimap)], ['💬 Dicas na tela', tog(s.prompts)],
+            ['🎯 Mira <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">assistida trava no alvo · manual: você aponta (analógico direito / mouse)</small>', `<div class="pm-toggle is-on">${s.aimAssist ? 'Assistida' : 'Manual'}</div>`],
+            ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],
         ];
         el.innerHTML = rows.map((r, i) => `<div class="pm-row ${i === this.setRow ? 'on' : ''}" data-i="${i}"><span>${r[0]}</span><span style="display:flex;gap:12px;align-items:center">${r[1]}</span></div>`).join('');
         el.querySelectorAll('.pm-row').forEach((row) => row.addEventListener('click', (e) => {
@@ -662,22 +703,51 @@ class PauseMenu {
         this._clampCenter();
     }
 
-    // Controle: B/Start fecha, LB/RB abas, A/Y marca o GPS, direcional/analógico move o cursor.
+    // Controle: B/Start fecha, LB/RB abas. Em cada aba:
+    //   MAPA        analógico/direcional move o cursor · A/Y marca o destino · X limpa · RT/LT ou analógico direito zoom
+    //   INVENTÁRIO  direcional escolhe o item · A usa/equipa · X descarta
+    //   AJUSTES     ↑/↓ opção · ←/→ ajusta · A alterna
+    //   STATUS, CARREIRAS, IMPÉRIO, GUIA   destaque nos botões/cartões (FocusNav) · A clica · analógico direito rola
     _pad(dt) {
-        const pads = navigator.getGamepads ? navigator.getGamepads() : [], p = [...pads].find((x) => x);
+        const p = PadNav.pad();
         if (!p) { this._padPrev = null; return; }
         const b = (i) => !!(p.buttons[i] && p.buttons[i].pressed), prev = this._padPrev || [];
         const edge = (i) => b(i) && !prev[i];
+        const inp = this.g.input;
+        if (p.buttons.some((x) => x && x.pressed)) { inp.usingPad = true; if (p.id) inp.padType = PadGlyphs.type(p.id); }      // (o InputManager não lê o controle com o menu aberto)
+        if ((inp.usingPad ? inp.padType : '') !== this._hintsPad) this._renderHints();                                         // trocou teclado ↔ controle: refaz o rodapé
         const tabs = PauseMenu.TABS.map((t) => t[0]), i = tabs.indexOf(this.tab);
-        if (edge(1) || edge(9)) { this._padPrev = Array.from(p.buttons, (x) => x.pressed); this.close(); return; }
-        if (edge(4)) this.setTab(tabs[(i + tabs.length - 1) % tabs.length]);
-        if (edge(5)) this.setTab(tabs[(i + 1) % tabs.length]);
+        this._padPrev = Array.from(p.buttons, (x) => !!(x && x.pressed));
+        if (edge(1) || edge(9)) { FocusNav.clear(); this.close(); return; }
+        if (edge(4)) { FocusNav.clear(); this.setTab(tabs[(i + tabs.length - 1) % tabs.length]); return; }
+        if (edge(5)) { FocusNav.clear(); this.setTab(tabs[(i + 1) % tabs.length]); return; }
+        const key = (k) => this._onKey({ key: k, shiftKey: false, preventDefault() {} });
         if (this.tab === 'map') {
             if (edge(0) || edge(3)) this._markAtCursor();
+            if (edge(2)) { this.g.clearGps(); this._refreshDest(); }
             const ax = (b(15) ? 1 : 0) - (b(14) ? 1 : 0) || (Math.abs(p.axes[0]) > 0.3 ? p.axes[0] : 0), az = (b(13) ? 1 : 0) - (b(12) ? 1 : 0) || (Math.abs(p.axes[1]) > 0.3 ? p.axes[1] : 0);
             if (ax || az) this._moveCursor(ax, az, dt);
+            const zin = (p.buttons[7] ? p.buttons[7].value : 0) - (p.buttons[6] ? p.buttons[6].value : 0) - (Math.abs(p.axes[3] || 0) > 0.25 ? p.axes[3] : 0);
+            if (Math.abs(zin) > 0.1) this._zoom(Math.pow(2.2, zin * dt), { x: this.map.cur.x, y: this.map.cur.y });
+            return;
         }
-        this._padPrev = Array.from(p.buttons, (x) => x.pressed);
+        const d = PadNav.dir(p, dt);
+        if (this.tab === 'inventory' || this.tab === 'settings') {
+            if (d) key(d.dx > 0 ? 'ArrowRight' : d.dx < 0 ? 'ArrowLeft' : d.dy > 0 ? 'ArrowDown' : 'ArrowUp');
+            if (edge(0)) key('Enter');
+            if (edge(2) && this.tab === 'inventory') key('Delete');
+            return;
+        }
+        // Abas de cartões e botões: navegação genérica.
+        const root = this.root.querySelector('.pm-page.on');
+        if (!root) return;
+        const cur = FocusNav.sync(root);
+        if (d) {
+            if (!cur || !FocusNav.move(root, d.dx, d.dy)) { if (d.dy) FocusNav.scroll(root, d.dy * 140); }
+        }
+        if (edge(0)) FocusNav.activate();
+        const ry = p.axes[3] || 0;
+        if (Math.abs(ry) > 0.25) FocusNav.scroll(root, ry * 900 * dt);
     }
 }
-memoStatics(PauseMenu, 'TABS', 'POI_TYPES');
+memoStatics(PauseMenu, 'TABS', 'POI_TYPES', 'KEYS_HTML', 'SET_KEYS');
