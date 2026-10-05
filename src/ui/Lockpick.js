@@ -79,7 +79,9 @@ class Lockpick {
         this.el.className = '';
         this.el.style.display = 'block';
         this.active = true;
-        this.g.input.consumePress(' '); this.g.input.consumePress('enter'); this.g.input.consumePress('mouse0'); this.g.input.consumePress('escape');
+        const inp = this.g.input, pad = inp.usingPad ? inp.padType : '';
+        this.el.querySelector('.lp-hint').innerHTML = pad ? `${PadGlyphs.glyph('a', pad)} ou ${PadGlyphs.glyph('rt', pad)} travar o pino na zona verde · ${PadGlyphs.glyph('b', pad)} desistir` : 'ESPAÇO / clique: travar o pino na zona verde · Esc: desistir';
+        for (const k of [' ', 'enter', 'mouse0', 'escape', 'padjump', 'padcancel']) inp.consumePress(k);
         this._render();
     }
 
@@ -103,14 +105,14 @@ class Lockpick {
             if (this._end <= 0) this._finish(this.result);
             return;
         }
-        if (inp.consumePress('escape')) { this._finish('cancel'); return; }
+        if (inp.consumePress('escape') | inp.consumePress('padcancel')) { this._finish('cancel'); return; }        // (controle: B/○)
 
         const pin = this.pins[this.cur], C = Config.theft.lockpick;
         for (const p of this.pins) if (p.missT > 0) p.missT -= dt;
         pin.m += pin.dir * pin.speed * dt;
         if (pin.m >= 1) { pin.m = 1; pin.dir = -1; } else if (pin.m <= 0) { pin.m = 0; pin.dir = 1; }
 
-        const hit = inp.consumePress(' ') | inp.consumePress('enter') | inp.consumePress('mouse0');
+        const hit = inp.consumePress(' ') | inp.consumePress('enter') | inp.consumePress('mouse0') | inp.consumePress('padjump');      // (controle: RT ou A/✕)
         if (hit) {
             if (Math.abs(pin.m - pin.center) <= pin.zone / 2) {     // travou
                 pin.done = true;

@@ -2,7 +2,7 @@
 // Hud — a interface do jogo, em HD e cartões de vidro (tema em ui/Theme.js; ícones no estilo emoji).
 //   canto superior direito:  ARMA (ícone da arma em uso, ou uma mão se não há nenhuma + munição) |
 //                            NÍVEL DE PROCURADO (5 estrelas + status) | VIDA e COLETE (só se estiver usando) | $ e hora
-//   canto inferior esquerdo: o mapa (GPS, canvas #minimap, com moldura de pixel)
+//   canto inferior esquerdo: o mapa (minimapa, canvas #minimap, com moldura de pixel)
 //   canto inferior direito:  ao entrar num veículo, por 3 s, o MODELO dele (nome + imagem em pixel art)
 //   topo, no centro:         mensagens curtas (Pegou: AK-47, Roubando o carro…) — `toast`
 // Os painéis são DOM com fundo translúcido desfocado; ícones são emojis (Noto Color Emoji) e as armas, arte vetorial HD.
@@ -191,6 +191,7 @@ class Hud {
         let img;
         try {
             if (car.isChopper) img = null;
+            else if (car.visual instanceof RiderActor) img = CarArt.preview(car.visual.modelId.replace('_caida', ''), car.visual.variant);      // (moto, bicicleta, barco: o mesmo atlas dos carros)
             else if (car.isBoat) img = BoatSheet.preview(spec.id, car.visual ? car.visual.variant : 4);
             else if (car.isBike) img = this._bikePreview(car);
             else img = CarSheet.preview(spec.id, car.visual ? car.visual.variant : 0);
@@ -210,10 +211,23 @@ class Hud {
 
     // Moto/bicicleta: o desenho do veículo do rig (sem piloto), de lado para a direita.
     _bikePreview(car) {
-        const kind = car.spec.bike, look = { hair: 'short', build: 1.05, belt: true };
+        const kind = car.spec.bike, variant = car.frameVariant != null ? car.frameVariant : 2;
+        // Atlas vetorial (o mesmo desenho do jogo), girado com a frente para a direita; sem atlas, o desenho antigo do rig.
+        const art = CharArt.available() && CharArt.image('rider', 'park_' + kind + ':none', 0, variant);
+        if (art) {
+            const c = document.createElement('canvas'), pad = 2;
+            c.width = art.height + pad * 2; c.height = art.width + pad * 2;
+            const ctx = c.getContext('2d');
+            ctx.translate(c.width - pad, pad); ctx.rotate(Math.PI / 2);
+            ctx.filter = 'brightness(0) invert(0.94)';                        // contorno claro (lê bem no painel escuro)
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) ctx.drawImage(art, dx, dy);
+            ctx.filter = 'none'; ctx.drawImage(art, 0, 0);
+            return c;
+        }
+        const look = { hair: 'short', build: 1.05, belt: true };
         const prims = CharacterRig.build(CharacterRig.CLIPS['park_' + kind].pose(0, 'none'), look);
         const F = 80, img = SpriteBaker.bake(prims, { size: F, heading: Math.PI / 2, shadow: false });
-        const rgba = CharacterRig.colorize(img, car.frameVariant != null ? car.frameVariant : 2);
+        const rgba = CharacterRig.colorize(img, variant);
         let x0 = F, y0 = F, x1 = 0, y1 = 0;
         for (let y = 0; y < F; y++) for (let x = 0; x < F; x++) if (rgba[(y * F + x) * 4 + 3] > 0) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
         const pad = 2, w = x1 - x0 + 1 + pad * 2, h = y1 - y0 + 1 + pad * 2;
@@ -306,7 +320,7 @@ class Hud {
         const D = Bags.def(inv), kg = Math.round((Bags.kg || 0) * 10) / 10, r = Bags.ratio || 0;
         this._set('load', D.name + kg, () => {
             const el = this.$('hLoad');
-            el.innerHTML = `<span class="emo">${D.emo}</span> ${D.name} · ${kg.toFixed(1)}/${D.kg} kg${r > 1 ? ' · sobrecarga' : (r > 0.5 ? ' · pesado' : '')}`;
+            el.innerHTML = `<span class="emo">${D.emo}</span> ${D.name} · ${kg.toFixed(1)}/${Math.round(Bags.cap || D.kg)} kg${r >= Bags.HARD ? ' · NO LIMITE' : r > 1 ? ' · sobrecarga' : (r > 0.5 ? ' · pesado' : '')}`;
             el.className = 'h-load' + (r > 1 ? ' over' : (r > 0.5 ? ' heavy' : ''));
         });
 

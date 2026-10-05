@@ -161,7 +161,7 @@ class DevMode {
     _tab1(H, B, T, g) {
         H('OPÇÕES'); T('Entrar no veículo ao gerar', 'enterOnSpawn');
         H('CARROS');
-        for (const id of Object.keys(CarSheet.MODELS)) B(CarSheet.MODELS[id].name, () => this.spawnCar(id));
+        for (const id of Object.keys(CarSheet.MODELS)) B(CarSheet.MODELS[id].model, () => this.spawnCar(id));
         H('DUAS RODAS');
         B('Moto', () => this.spawnBike('moto')); B('Bicicleta', () => this.spawnBike('bicycle'));
         H('BARCOS (na água mais próxima)');
@@ -243,7 +243,7 @@ class DevMode {
         B('Abrir mapa', () => g.menu.open('map'));
     }
 
-    // Exporta personagens, carros, portas e paletas como PNG indexado + manifest.json (ver tools/SpriteExport.js e docs/sprites-png.md).
+    // Exporta personagens e paletas como PNG indexado (os carros vêm do atlas: tools/carros) + manifest.json (ver tools/SpriteExport.js e docs/sprites-png.md).
     async _exportArt() {
         if (this._exporting) return;
         this._exporting = '0%';
@@ -274,6 +274,7 @@ class DevMode {
             `  CPU média ${Math.round(C.cpu * 100)}% · pico ${Math.round(C.peak * 100)}% · memória ${Math.round(C.mem * 100)}% · ritmo ${Math.round(C.pace * 100)}% (${Perf.interval.toFixed(0)} ms entre quadros)`,
             `  cabe ~${C.growth.toFixed(1)}× o conteúdo atual`,
             `Quadro (trabalho): ${Perf.frameAvg.toFixed(1)} ms de ${Perf.budgetMs.toFixed(1)} · p95 ${Perf.p95.toFixed(1)} ms · pior (3 s) ${Perf.peak.toFixed(1)} ms`,
+            `Último engasgo (> ${Perf.hitchMs} ms): ${Perf.hitch ? `${Perf.hitch.ms.toFixed(0)} ms há ${((performance.now() - Perf.hitch.at) / 1000).toFixed(0)} s — mais caro: ${Perf.hitch.sec} (${Perf.hitch.secMs.toFixed(0)} ms)` : 'nenhum'}`,
             `Heap: ${Math.round(Perf.heapMB)} MB / orçamento ${Math.round(C.memBudget)} MB · tendência ${Perf.heapSlope >= 0 ? '+' : ''}${Perf.heapSlope.toFixed(1)} MB/min${Perf.heapSlope > 4 ? '  ⚠ SUBINDO' : ''}`,
             `Render: ${rc ? rc.stats.candidates + ' candidatas (' + rc.stats.static + ' estáticas na grade, ' + rc.stats.dynamic + ' dinâmicas)' : '-'}`,
             `Zonas: ativa ${Z[0]} · perto ${Z[1]} · dormindo ${Z[2]}`,
@@ -328,7 +329,11 @@ class DevMode {
         bar.style.width = Math.max(2, pct) + '%';
         bar.style.background = pct > 50 ? 'linear-gradient(90deg,#10b981,#34d399)' : pct > 25 ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'linear-gradient(90deg,#e11d48,#fb7185)';
         $('dcA').textContent = `${Perf.frameAvg.toFixed(1)} ms/quadro · p95 ${Perf.p95.toFixed(0)} ms · ~${C.growth.toFixed(1)}×`;
-        $('dcB').textContent = `${Math.round(Perf.heapMB)} MB ${Perf.heapSlope > 4 ? '↑' + Perf.heapSlope.toFixed(0) + '/min' : ''} · ${C.limit}`;
+        const H = Perf.hitch, recent = H && performance.now() - H.at < 15000;           // engasgo nos últimos 15 s: mostra quanto e onde
+        const gc = H && H.gcMB > 8;                                                     // heap caiu muito: foi coleta de lixo
+        $('dcB').textContent = recent ? (gc ? `engasgo ${(H.ms / 1000).toFixed(1)} s · coleta de lixo (−${Math.round(H.gcMB)} MB)` : `engasgo ${(H.ms / 1000).toFixed(1)} s · ${H.sec || '?'} (${Math.round(H.secMs)} ms)`)
+            : `${Math.round(Perf.heapMB)} MB ${Perf.heapSlope > 4 ? '↑' + Perf.heapSlope.toFixed(0) + '/min' : ''} · ${C.limit}`;
+        if (H && H !== this._hitchLogged) { this._hitchLogged = H; console.warn(`[PERF] engasgo de ${H.ms.toFixed(0)} ms — mais caro: ${H.sec} (${H.secMs.toFixed(0)} ms)${H.gcMB > 8 ? ` · coleta de lixo liberou ${Math.round(H.gcMB)} MB` : ''}`); }
     }
 
     // ================================================================== utilidades
@@ -359,13 +364,13 @@ class DevMode {
     }
 
     spawnCar(model) {
-        const g = this.g, p = this._ahead(7), paints = [0, 1, 3, 4, 5, 7, 8, 9];
-        const car = new TrafficCar(g.scene, g.physics, { x: p.x, z: p.z }, g.traffic._nextId++, g.carLib.sheet(model), paints[Math.floor(Math.random() * paints.length)], p.a + Math.PI / 2, g.traffic);
+        const g = this.g, p = this._ahead(7);
+        const car = new TrafficCar(g.scene, g.physics, { x: p.x, z: p.z }, g.traffic._nextId++, g.carLib.sheet(model), g.carLib.randomPaint(model), p.a + Math.PI / 2, g.traffic);
         if (g.gameEngine.shadowGenerator) g.gameEngine.shadowGenerator.addShadowCaster(car.body);
         g.vehicleManager.vehicles.push(car);
         car.baseMode = 'parked'; car.park(); car.locked = false; car.fuel = car.tank;
         if (this.flags.enterOnSpawn) this._enter(car);
-        g._flash(`${car.spec.name} gerado`);
+        g._flash(`${car.spec.name} ${car.spec.model} gerado`);
         return car;
     }
 

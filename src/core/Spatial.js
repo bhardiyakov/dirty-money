@@ -11,10 +11,11 @@
 //                   2 = SUSPENSA  (longe):                     "dorme": lógica a cada 8 quadros (~4 Hz; veículos: 5), só o suficiente
 //                                                              para a posição andar e o minimapa acompanhar.
 //                 every(entity, tier) diz se a entidade roda NESTE quadro (escalonado pelo id para espalhar a carga).
+//                 asleep(x, z): fora da BOLHA ACORDADA (2× a visão máxima do zoom) — ali nada roda (ver Zones.asleep).
 //
 //   RenderCuller  particionamento espacial do RENDER. O Babylon, por padrão, avalia TODAS as malhas da cena a cada quadro
 //                 (isReady, matriz, LOD, frustum…): ~1.100 malhas para desenhar ~150. Aqui as malhas ESTÁTICAS do mundo (matriz
-//                 congelada: prédios, terreno, postes, hidrantes, sombras) vão para uma grade de 64 u na carga; a cada quadro o
+//                 congelada: prédios, terreno, postes, sombras) vão para uma grade de 64 u na carga; a cada quadro o
 //                 Babylon só recebe como candidatas as malhas das células que o retângulo da câmera (+ margem) toca (lista refeita só quando
 //                 a câmera muda de célula) e as dinâmicas (carros, pessoas, efeitos) cujo nó raiz está dentro do retângulo.
 // ============================================================================
@@ -25,9 +26,10 @@ class SpatialHash {
         this.buckets = new Map();       // chave → array (reaproveitado entre quadros)
         this.used = [];                 // baldes com algo neste quadro
     }
-    _key(i, j) { return (i + 32768) * 65536 + (j + 32768); }
+    _key(i, j) { return (i + 4096) * 8192 + (j + 4096); }        // (cabe num inteiro pequeno do V8: a chave antiga passava de 2³¹ e cada Map.get ficava mais lento)
     clear() { for (const b of this.used) b.length = 0; this.used.length = 0; }
     insert(o, x, z) {
+        if (!inWorld(x, z)) return;                                      // (fora do mundo: não entra na grade — ver inWorld)
         const k = this._key(Math.floor(x / this.cell), Math.floor(z / this.cell));
         let b = this.buckets.get(k);
         if (!b) this.buckets.set(k, b = []);
@@ -37,6 +39,7 @@ class SpatialHash {
     // Tudo nas células que o círculo (x, z, r) toca (pode trazer um pouco a mais: quem chama ainda testa a distância).
     query(x, z, r, out) {
         out.length = 0;
+        if (!inWorld(x, z)) return out;                                  // (posição infinita/gigante: o laço abaixo não terminaria)
         const c = this.cell, i0 = Math.floor((x - r) / c), i1 = Math.floor((x + r) / c), j0 = Math.floor((z - r) / c), j1 = Math.floor((z + r) / c);
         for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
             const b = this.buckets.get(this._key(i, j));
@@ -51,11 +54,20 @@ const Zones = {
     count: [0, 0, 0],                // quantas entidades caíram em cada zona (último quadro; para o painel dev)
     _cnt: [0, 0, 0],
 
+    // BOLHA ACORDADA: círculo FIXO de raio = 2× a meia-diagonal da maior visão possível (zoom todo afastado, Config.camera.maxView),
+    // centrado na câmera. Fora dela o mundo DORME de verdade (asleep): carros sem IA nem física (corpo congelado no Havok), patrulha e
+    // pedestres calmos sem lógica. O trânsito VIVE dentro dela: nasce entre a borda da tela no zoom máximo (sr) e a borda da bolha (ar)
+    // e, ao sair, é reciclado para essa faixa (TrafficManager) — como no GTA. Não depende do zoom atual (dar zoom não acorda ninguém).
+    ar: 139, sr: 76,
+    asleep(x, z) { const dx = x - this.cx, dz = z - this.cz; return dx * dx + dz * dz > this.ar * this.ar; },
+
     update(game) {
-        const cam = game.camera, c = cam.camera.position, eng = game.gameEngine.engine;
+        const cam = game.camera, c = cam.camera.position, eng = game.gameEngine.engine, asp = eng.getAspectRatio(cam.camera);
         this.cx = c.x; this.cz = c.z;
         this.hz = cam.view + this.margin;
-        this.hx = cam.view * eng.getAspectRatio(cam.camera) + this.margin;
+        this.hx = cam.view * asp + this.margin;
+        const hd = Math.hypot(Config.camera.maxView * Math.max(1, asp), Config.camera.maxView);      // meia-diagonal da tela no zoom máximo
+        this.sr = hd + 6; this.ar = 2 * hd;
         this.frame++;
         this.count = this._cnt.slice(); this._cnt[0] = this._cnt[1] = this._cnt[2] = 0;
     },
@@ -69,7 +81,13 @@ const Zones = {
     near(x, z, pad = 0) { return Math.abs(x - this.cx) <= this.hx + pad && Math.abs(z - this.cz) <= this.hz + pad; },
     // A entidade (com id numérico) roda neste quadro? Zona 0 sempre; 1 a cada n1 quadros; 2 a cada n2 (veículos usam 2/5: a direção
     // por perseguição de rota precisa de correções mais frequentes do que a lógica de um pedestre).
-    every(id, tier, n1 = 3, n2 = 8) { return tier === 0 || (this.frame + (id | 0)) % (tier === 1 ? n1 : n2) === 0; },
+    // n1/n2 são contados a 30 FPS: com teto maior (60 no app de PC) o intervalo cresce junto, e quem está fora da tela continua rodando
+    // as mesmas vezes por SEGUNDO (senão a 60 FPS toda a lógica fora da tela custaria o dobro sem ninguém ver diferença).
+    every(id, tier, n1 = 3, n2 = 8) {
+        if (tier === 0) return true;
+        const k = Config.perf.fpsCap > 30 ? Math.round(Config.perf.fpsCap / 30) : 1;
+        return (this.frame + (id | 0)) % ((tier === 1 ? n1 : n2) * k) === 0;
+    },
 };
 
 class RenderCuller {
@@ -89,7 +107,7 @@ class RenderCuller {
         scene.onMeshRemovedObservable.add((m) => { this._dynDirty = true; if (this.staticSet.has(m)) { this.staticSet.delete(m); this._range = ''; } });
     }
 
-    _key(i, j) { return (i + 32768) * 65536 + (j + 32768); }
+    _key(i, j) { return (i + 4096) * 8192 + (j + 4096); }        // (cabe num inteiro pequeno do V8: a chave antiga passava de 2³¹ e cada Map.get ficava mais lento)
 
     // Registra as malhas estáticas que existem agora (fim da carga). Malhas com alwaysSelectAsActiveMesh ou gigantes (mar, lotes de
     // brilho) ficam como dinâmicas: são candidatas sempre.
@@ -127,6 +145,7 @@ class RenderCuller {
         }
         // Retângulo visto: o do jogo (Zones, que já tem a margem) ou, num palco/câmera diferente, o tamanho do frustum na altura do chão.
         const p = cam.position, hz = Zones.hz + 6, hx = Zones.hx + 6;
+        if (!inWorld(p.x, p.z)) return { data: sc.meshes, length: sc.meshes.length };      // (câmera fora do mundo: o laço da grade não terminaria)
         const c = this.cell, i0 = Math.floor((p.x - hx) / c), i1 = Math.floor((p.x + hx) / c), j0 = Math.floor((p.z - hz) / c), j1 = Math.floor((p.z + hz) / c);
         const range = i0 + ',' + i1 + ',' + j0 + ',' + j1;
         if (range !== this._range) {

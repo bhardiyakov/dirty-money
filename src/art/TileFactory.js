@@ -526,7 +526,7 @@ const TileFactory = {
         { id: 'lanchonete', sign: '#d9453a', wall: '#8c6a4a', glass: '#4a6a7a', icon: 'cup', name: 'Lanchonete', poi: 'lanchonete' },
         { id: 'conveniencia', sign: '#2fa36a', wall: '#d7dbd0', glass: '#5a7f8c', icon: 'cart', name: 'Conveniência', poi: 'conveniencia' },
         { id: 'farmacia', sign: '#2fae8f', wall: '#e6e9e6', glass: '#5f8f98', icon: 'cross', name: 'Farmácia' },
-        { id: 'roupas', sign: '#d46a9e', wall: '#c9b2c0', glass: '#6a6f8a', icon: 'shirt', name: 'Boutique' },
+        { id: 'roupas', sign: '#d46a9e', wall: '#c9b2c0', glass: '#6a6f8a', icon: 'shirt', name: 'Boutique', poi: 'boutique' },
         { id: 'banco', sign: '#2f5fb0', wall: '#b4bcc8', glass: '#3f5a78', icon: 'coin', name: 'Banco' },
         { id: 'bar', sign: '#9a4fd0', wall: '#4a3a55', glass: '#2f2f48', icon: 'cup', name: 'Bar', poi: 'lanchonete' },
         { id: 'padaria', sign: '#e0902a', wall: '#d9b98a', glass: '#6a7a78', icon: 'cup', name: 'Padaria', poi: 'lanchonete' },

@@ -114,6 +114,12 @@ class NPCManager {
         // escalonado por id, com o dt somado. O crowd do Recast continua movendo todos; só a lógica e a animação (invisíveis) espaçam.
         for (const npc of this.npcs) {
             if (npc.alive && !npc.rag && npc.state !== 'FLEE' && npc.state !== 'HURT') {
+                if (Zones.asleep(npc.position.x, npc.position.z)) {           // fora da bolha acordada: quase dorme — lógica ~1×/s (para continuar
+                    npc._lodDt = (npc._lodDt || 0) + dt;                         // passeando e voltar a cruzar a tela), sem animação no meio
+                    if (!Zones.every(npc.id, 2, 3, 30)) continue;
+                    npc.update(Math.min(npc._lodDt, 1)); npc._lodDt = 0;
+                    continue;
+                }
                 const tier = Zones.tier(npc.position.x, npc.position.z);
                 if (tier > 0) {
                     npc._lodDt = (npc._lodDt || 0) + dt;

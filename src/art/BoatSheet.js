@@ -84,10 +84,18 @@ class BoatSheet {
         return P;
     }
 
+    // Onde fica a origem do piloto (m: z = frente, x = direita): no jet ski, no banco com as mãos no guidão; na lancha, no timão (direita).
+    static get SEATS() { return { jetski: { z: -0.5, x: 0 }, lancha: { z: -0.35, x: 0.41 }, barco: { z: 0, x: 0 } }; }
+
     constructor(scene, modelId, palette, rider = false) {
         this.scene = scene;
         this.modelId = modelId;
-        this.spec = Object.assign({ id: modelId }, BoatSheet.MODELS[modelId]);
+        this.spec = Object.assign({ id: modelId }, CarArt.scaledSpec(BoatSheet.MODELS[modelId]));      // (medidas em Config.vehicle.scale)
+        if (typeof CarArt !== 'undefined' && CarArt.available() && CarArt.model(modelId)) {        // desenho vetorial do atlas dos carros: nada a assar
+            this.art = 'rider'; this.vehModel = modelId; this.seat = CarArt.scaledSeat(BoatSheet.SEATS[modelId]);
+            this.dirs = 32; this.frame = this.spec.frame; this.rider = rider; this.name = modelId; this.palette = palette; this.lib = null; this.ready = true;
+            return;
+        }
         this.dirs = 32;
         this.frame = this.spec.frame;
         this.rider = rider;
@@ -157,4 +165,4 @@ class BoatLibrary {
         return this.sheets[key];
     }
 }
-memoStatics(BoatSheet, 'MODELS', 'PAINT_ROWS');
+memoStatics(BoatSheet, 'MODELS', 'PAINT_ROWS', 'SEATS');

@@ -1,5 +1,5 @@
 // ============================================================================
-// RevealPlugin — "círculo de visibilidade": estruturas que ficam ACIMA do jogador/veículo (viaduto, ponte sobre a água,
+// RevealPlugin — "círculo de visibilidade": estruturas que ficam ACIMA do jogador/veículo (viaduto,
 // teto de túnel, cobertura de posto) ganham um furo pontilhado (dither 2×2 em pixels internos, como o fade das copas)
 // em volta do alvo, para ele nunca sumir debaixo delas.
 //
@@ -35,16 +35,21 @@ const Reveal = {
             bindForSubMesh(ub) { const s = Reveal.state; ub.updateFloat4('revealP', s[0], s[1], s[2], s[3], 'revealP'); }
             getCustomCode(shaderType) {
                 if (shaderType !== 'fragment') return null;
-                // Furo MACIO (alfa em degradê, como as poças de luz dos faróis): transparente no centro, opaco na borda.
+                // Furo PONTILHADO (dither 2×2 de Bayer nos pixels internos, como o fade das copas): vazio no centro, cheio na borda,
+                // com a mesma transição suave de antes. Cada pixel ou é desenhado inteiro (cobre e grava profundidade) ou é descartado
+                // (mostra o que está embaixo). O furo com alfa em degradê não servia: a estrutura desenha antes dos carros e grava
+                // profundidade (ver WorldBuilder._flush), e no anel semitransparente ela escondia o carro que passava por baixo.
                 return {
                     CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: `
                         #ifdef REVEAL
-                        float ra = 1.0;                                  // (ignora o alfa da textura: estas peças são opacas fora do furo)
                         if (revealP.z > 0.0 && vPositionW.y > revealP.w + 0.06) {
                             float rk = length(vPositionW.xz - revealP.xy) / revealP.z;
-                            ra = smoothstep(0.2, 1.0, rk);
+                            float ra = smoothstep(0.2, 1.0, rk);
+                            vec2 q = mod(floor(gl_FragCoord.xy), 2.0);
+                            float th = (mod(q.x * 2.0 + q.y * 3.0, 4.0) + 0.5) / 4.0;     // Bayer 2×2: 0,2 / 3,1
+                            if (ra < th) discard;
                         }
-                        color.a = ra;
+                        color.a = 1.0;                                   // (ignora o alfa da textura: estas peças são opacas fora do furo)
                         #endif`,
                 };
             }

@@ -21,11 +21,14 @@ class CarDamage {
 
     get puffs() { return this.g.carLights.puffs; }
 
-    // Todos os carros do jogo (civis + polícia).
+    // Todos os veículos (civis, barcos, polícia) numa lista REAPROVEITADA: antes eram 2 arrays novos de ~200 itens a cada chamada,
+    // várias vezes por quadro (dano, colisões, luzes). Quem chama só percorre na hora; não guarde a lista.
     allCars() {
-        const g = this.g;
-        const civ = g.vehicleManager ? g.vehicleManager.vehicles.concat(g.vehicleManager.boats) : [];
-        return g.policeManager ? civ.concat(g.policeManager.cars) : civ;
+        const g = this.g, out = this._all || (this._all = []);
+        out.length = 0;
+        if (g.vehicleManager) { for (const c of g.vehicleManager.vehicles) out.push(c); for (const c of g.vehicleManager.boats) out.push(c); }
+        if (g.policeManager) for (const c of g.policeManager.cars) out.push(c);
+        return out;
     }
 
     update(dt) {
@@ -43,7 +46,7 @@ class CarDamage {
 
     // Ponto sobre o capô (frente do carro), com leve sorteio.
     _hood(car, back = 0.9) {
-        const p = car.position, d = car.body.getDirection(BABYLON.Axis.Z);
+        const p = car.position, d = car.fwdToRef(this._hd || (this._hd = new BABYLON.Vector3()));
         const l = hypot(d.x, d.z) || 1, fx = d.x / l, fz = d.z / l;
         const s = car.halfLen - back, j = (Math.random() - 0.5) * 0.9;
         return { x: p.x + fx * s - fz * j, z: p.z + fz * s + fx * j };
@@ -194,7 +197,7 @@ class CarDamage {
             const k = fall(hypot(o.position.x - x, o.position.z - z));
             if (k > 0) o.takeDamage((190 * k + 15) * bl, from, src);
         }
-        for (const c of this.allCars()) {
+        for (const c of this.allCars().slice()) {           // (cópia: uma explosão em cadeia pede allCars() de novo no meio)
             if (c === srcCar || c.wrecked) continue;
             const dx = c.position.x - x, dz = c.position.z - z, d = hypot(dx, dz), k = fall(d);
             if (k <= 0) continue;

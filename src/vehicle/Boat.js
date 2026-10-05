@@ -1,6 +1,6 @@
 // ============================================================================
 // Boat — jet ski, lancha e barco. É um `Vehicle` normal (corpo físico arcade no Havok, roubável, pilotável, amassa, pega fogo
-// e explode), mas o "chão" é a ÁGUA: encalha na terra e nos píeres (MapGeo.isLand), derrapa de lado como casco e deixa rastro.
+// e explode), mas o "chão" é a ÁGUA: encalha na terra e nos píeres (MapGeo.isShore: sob a ponte passa), derrapa de lado como casco e deixa rastro.
 //
 // Modos (mesmos nomes do trânsito, para luzes/explosão/carcaça funcionarem sem mudança):
 //   'parked'     atracado na marina ou ancorado: parado, vazio, destrancado (F para subir)
@@ -58,9 +58,16 @@ class Boat extends Vehicle {
     _refreshLook() {
         const lib = this.carSheet && this.carSheet.lib;
         if (!this.visual || !lib) return;
-        const rider = this.hasRider && this.spec.id !== 'barco', key = this.wrecked ? 'w' : (rider ? 'r' : 'p');
+        const rider = this.hasRider && this.spec.id !== 'barco', key = this.wrecked ? 'w' : (rider ? 'r' + (this.controlled ? 'p' : '') : 'p');
         if (this._lookKey === key) return;
         this._lookKey = key;
+        if (this.visual instanceof RiderActor) {                       // casco do atlas + piloto (o jogador, ou um civil) por cima
+            const g = this.mgr && this.mgr.g, sheet = g && g.sprites && g.sprites.sheets.rider;
+            const v = this.controlled ? 0 : 2 + (this.id * 7) % ((g && g.sprites.civilianVariants) || 20);
+            this.visual.setRider(rider && !this.wrecked ? v : null, sheet, 'ride_moto');
+            if (this.wrecked) { this.visual.setVariant(12); this.visual.setDamage(3); }
+            return;
+        }
         this.visual.setSheet(lib.sheet(this.spec.id, rider && !this.wrecked));
         if (this.wrecked) this.visual.setVariant(12);
     }
@@ -75,7 +82,10 @@ class Boat extends Vehicle {
         this.visual.setHeading(Math.atan2(f.x, f.z));
         // Debaixo de uma ponte o sprite fica ABAIXO do tabuleiro (a ponte o esconde; o círculo de visibilidade o revela).
         const sea = 1 + (Weather.cur ? Weather.cur.k * 2.2 : 0);            // mar agitado com chuva: o barco balança mais
-        this.visual.mesh.position.y = RoadPlan.onBridge(p.x, p.z) ? 0.1 : 0.8 + Math.sin(this.bobT * 1.6 * sea + this.id) * 0.04 * sea;
+        const y = RoadPlan.onBridge(p.x, p.z) ? 0.1 : 0.8 + Math.sin(this.bobT * 1.6 * sea + this.id) * 0.04 * sea;
+        if (this.visual.setY) this.visual.setY(y); else this.visual.mesh.position.y = y;
+        this._bodyMotion(dt, f);                                            // (o casco "senta" na arrancada e mergulha na freada)
+        if (!this.wrecked && this.visual.setDamage) this.visual.setDamage(this.dent);
         this.visual.update(dt);
     }
 
@@ -93,7 +103,7 @@ class Boat extends Vehicle {
     // em vez de subir na praia. Sondas à frente e dos lados.
     _applyMotion(fwd, lat, steer, dt, vel, forward, right) {
         const p = this.position, hl = this.halfLen, hw = this.halfW + 0.9;
-        const land = (ox, oz) => MapGeo.isLand(p.x + forward.x * ox + right.x * oz, p.z + forward.z * ox + right.z * oz);
+        const land = (ox, oz) => MapGeo.isShore(p.x + forward.x * ox + right.x * oz, p.z + forward.z * ox + right.z * oz);      // (ponte não: passa por baixo)
         if (fwd > 0.2) {
             if (land(hl + 1.2, 0) || land(hl + 0.6, hw * 0.7) || land(hl + 0.6, -hw * 0.7)) fwd = Math.min(fwd, 0);
             else if (land(hl + 3 + fwd * 0.5, 0)) fwd = Math.max(0, fwd - 26 * dt);
@@ -126,7 +136,7 @@ class Boat extends Vehicle {
     // Linha de água livre? (nenhum ponto de terra, píer ou fora do mundo entre p e p + d na direção `a`)
     _clear(p, a, d) {
         const s = Math.sin(a), c = Math.cos(a);
-        for (let t = 6; t <= d; t += 6) { const x = p.x + s * t, z = p.z + c * t; if (MapGeo.isLand(x, z) || !WorldMap.inWorld(x, z)) return false; }
+        for (let t = 6; t <= d; t += 6) { const x = p.x + s * t, z = p.z + c * t; if (MapGeo.isShore(x, z) || !WorldMap.inWorld(x, z)) return false; }
         return true;
     }
 
@@ -135,7 +145,7 @@ class Boat extends Vehicle {
         for (let tries = 0; tries < 14; tries++) {
             const a = Math.random() * Math.PI * 2, d = 60 + Math.random() * 110, x = p.x + Math.sin(a) * d, z = p.z + Math.cos(a) * d;
             if (hypot(x - this.home.x, z - this.home.z) > 520) continue;
-            if (MapGeo.isLand(x, z) || !WorldMap.inWorld(x, z) || !this._clear(p, a, d + 8)) continue;
+            if (MapGeo.isShore(x, z) || !WorldMap.inWorld(x, z) || !this._clear(p, a, d + 8)) continue;
             this.wp = { x, z }; this._wpT = 28 + Math.random() * 20;
             return;
         }

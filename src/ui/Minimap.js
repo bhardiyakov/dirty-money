@@ -1,7 +1,7 @@
 // ============================================================================
-// Minimap (GPS) — canto inferior esquerdo.
+// Minimap — canto inferior esquerdo.
 // Desenha a janela do mundo ao redor do jogador (north-up) com o MapRenderer (terreno raster + ruas/prédios vetoriais),
-// mais blip do jogador, unidades (carros/polícia), a rota do GPS e o círculo de perseguição.
+// mais blip do jogador, unidades (carros/polícia), o marcador de destino e o círculo de perseguição.
 // ============================================================================
 
 class Minimap {
@@ -31,7 +31,8 @@ class Minimap {
     }
 
     // center: Vector3 | heading: rad (0 = norte) | blips: [{pos, color}]
-    update(center, heading, blips = [], gps = null, pursuit = null) {
+    // home: { x, z, icon } da safe house (sempre desenhada; na borda se estiver longe)
+    update(center, heading, blips = [], gps = null, pursuit = null, home = null) {
         const ctx = this.ctx;
         const S = this.size;
         const range = Config.minimap.rangeUnits;   // unidades de mundo na largura.
@@ -82,28 +83,40 @@ class Minimap {
             ctx.fill();
         }
 
-        // Rota do GPS (amarelo/azul tracejado, como no mapa grande) e marcador do destino (na borda, se estiver longe).
-        if (gps && gps.route && gps.route.length > 1) {
-            const P = gps.route.map((q) => [sx(q.x), sy(q.z)]);
+        // Marcador de destino (blip vermelho, como no GTA San Andreas): no lugar dele ou, longe, preso na borda com uma setinha
+        // apontando a direção — o mesmo esquema da safe house logo abaixo. Sem rota: o caminho é por sua conta.
+        if (gps) {
+            const gx = sx(gps.x), gy = sy(gps.z), { inside, px, py } = this._edgePoint(gx, gy, S, 12);
+            const r = 6;
             ctx.save();
-            ctx.lineJoin = 'round'; ctx.lineCap = 'butt';
-            const path = () => { ctx.beginPath(); P.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); };
-            ctx.setLineDash([]); ctx.strokeStyle = '#07090d'; ctx.lineWidth = 7; path(); ctx.stroke();
-            ctx.setLineDash([8, 8]); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 3.5; path(); ctx.stroke();
-            ctx.lineDashOffset = -8; ctx.strokeStyle = '#4aa8ff'; path(); ctx.stroke();
+            if (!inside) {
+                ctx.translate(px, py); ctx.rotate(Math.atan2(gy - py, gx - px));
+                ctx.fillStyle = '#ff3b3b'; ctx.strokeStyle = '#07090d'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(r + 7, 0); ctx.lineTo(r + 1, -5); ctx.lineTo(r + 1, 5); ctx.closePath(); ctx.stroke(); ctx.fill();
+                ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+            }
+            ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
+            ctx.fillStyle = '#ff3b3b'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#07090d'; ctx.stroke();
+            if (inside && Math.floor(performance.now() / 500) % 2 === 0) {      // pulso suave quando está à vista
+                ctx.beginPath(); ctx.arc(px, py, r + 4, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,59,59,0.55)'; ctx.stroke();
+            }
             ctx.restore();
-            const d = P[P.length - 1], m = 14;
-            const inside = d[0] > m && d[0] < S - m && d[1] > m && d[1] < S - m;
-            const px = Math.max(m, Math.min(S - m, d[0])), py = Math.max(m, Math.min(S - m, d[1]));
+        }
+
+        // Safe house SEMPRE à vista (como no GTA): o ícone da casa no lugar dela ou, se estiver fora do radar, preso na borda na
+        // direção dela — dá para voltar para casa sem abrir o mapa nem marcar destino.
+        if (home && home.icon) {
+            const hx = sx(home.x), hy = sy(home.z), { inside, px, py } = this._edgePoint(hx, hy, S, 13);
+            const r = inside ? 11 : 10;
             ctx.save();
-            ctx.translate(px, py);
-            if (!inside) ctx.rotate(Math.atan2(d[1] - S / 2, d[0] - S / 2) + Math.PI / 2);        // seta apontando para o destino
-            ctx.fillStyle = '#4aa8ff'; ctx.strokeStyle = '#07090d'; ctx.lineWidth = 2.5;
-            ctx.beginPath();
-            if (inside) { ctx.moveTo(0, 0); ctx.bezierCurveTo(-8, -9, -8, -19, 0, -19); ctx.bezierCurveTo(8, -19, 8, -9, 0, 0); }     // alfinete
-            else { ctx.moveTo(0, -9); ctx.lineTo(8, 7); ctx.lineTo(0, 3); ctx.lineTo(-8, 7); ctx.closePath(); }
-            ctx.stroke(); ctx.fill();
-            if (inside) { ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(0, -13, 3, 0, Math.PI * 2); ctx.fill(); }
+            if (!inside) {                                          // setinha apontando para fora (para a casa)
+                ctx.translate(px, py); ctx.rotate(Math.atan2(hy - py, hx - px));
+                ctx.fillStyle = '#5ee08a'; ctx.strokeStyle = '#07090d'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(r + 7, 0); ctx.lineTo(r + 1, -5); ctx.lineTo(r + 1, 5); ctx.closePath(); ctx.stroke(); ctx.fill();
+                ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+            }
+            ctx.beginPath(); ctx.arc(px, py, r + 2, 0, Math.PI * 2); ctx.fillStyle = '#5ee08a'; ctx.fill();          // aro verde = "casa"
+            ctx.drawImage(home.icon, px - r, py - r, r * 2, r * 2);
             ctx.restore();
         }
 
@@ -134,6 +147,20 @@ class Minimap {
         ctx.strokeText('N', S / 2, 5);
         ctx.fillStyle = '#eef1f7';
         ctx.fillText('N', S / 2, 5);
+    }
+
+    // Onde desenhar um marcador (gx, gy em px do radar): no próprio lugar, ou — fora do radar — no ponto em que a reta centro→alvo
+    // cruza a borda. A borda de cima fica 26 px para dentro: lá em cima no meio está o "N", desenhado por último, que cobria o
+    // marcador de quem estava exatamente ao norte.
+    _edgePoint(gx, gy, S, m) {
+        const top = Math.max(m, 26);
+        const inside = gx > m && gx < S - m && gy > top && gy < S - m;
+        if (inside) return { inside, px: gx, py: gy };
+        const c = S / 2, dx = gx - c, dy = gy - c;
+        const tx = dx > 0 ? (S - m - c) / dx : dx < 0 ? (m - c) / dx : Infinity;
+        const ty = dy > 0 ? (S - m - c) / dy : dy < 0 ? (top - c) / dy : Infinity;
+        const t = Math.min(tx, ty);
+        return { inside, px: c + dx * t, py: c + dy * t };
     }
 
     _roundRect(ctx, x, y, w, h, r) {

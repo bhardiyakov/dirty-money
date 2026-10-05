@@ -1,7 +1,7 @@
 // ============================================================================
 // MotoStands — os PONTOS DE MOTOTÁXI da favela (3 pontos fixos, marcados no mapa) e o serviço de corrida.
 // No ponto (E): escolhe o destino — outros pontos, safe house/casa, baile (se rolando), entrada da favela, imóveis seus ou o destino
-// marcado no GPS — SÓ dentro da favela e redondezas (`inZone`: favela + 110 u); a cidade não é atendida. Preço bem abaixo de Uber
+// marcado no mapa — SÓ dentro da favela e redondezas (`inZone`: favela + 110 u); a cidade não é atendida. Preço bem abaixo de Uber
 // e táxi (R$ 3 + R$ 0,012/m; Uber R$ 7 + 0,045/m; táxi R$ 8 + 0,06/m — a tela mostra a comparação). Paga em dinheiro (sujo).
 // A corrida é de verdade: o mototaxista leva você pelas ruas (Gps.route) a ~14 u/s, fora do trânsito, pedestres saem da frente;
 // você vai invisível/invulnerável e a câmera acompanha a moto. Não pega quem está com a polícia no rastro.
@@ -44,8 +44,8 @@ const MotoStands = {
             const on = hypot(s.x - pos.x, s.z - pos.z) < 120;
             if (on && !s.actors.length) {
                 for (let k = 0; k < 2; k++) {
-                    const a = new SpriteActor(g.scene, Bikes.sheet(g.sprites, 'moto', 'ride'), va + Math.floor(Math.random() * (vb - va + 1)), 'mtStand');
-                    a.play('static'); a.setPosition(s.x + (k ? 1.6 : -0.2), s.z + (k ? -0.4 : 0.5)); a.mesh.position.y = 1.5; a.setHeading(k ? 0.5 : -0.4);
+                    const a = Bikes.actor(g, 'moto', va + Math.floor(Math.random() * (vb - va + 1)), 'mtStand');
+                    a.setY(1.5); a.setPosition(s.x + (k ? 1.6 : -0.2), s.z + (k ? -0.4 : 0.5)); a.setHeading(k ? 0.5 : -0.4);
                     s.actors.push(a);
                 }
                 // placa no chão: faixa amarela e preta com o nome
@@ -120,14 +120,14 @@ class MotoRide {
         this.pts = r.pts.filter((p, i, a) => i === 0 || hypot(p.x - a[i - 1].x, p.z - a[i - 1].z) > 0.5);
         this.dest = dest; this.i = 1; this.t = 0;
         const [va, vb] = CharacterRig.VARIANT_GROUPS.poor;
-        this.actor = new SpriteActor(game.scene, Bikes.sheet(game.sprites, 'moto', 'ride'), va + Math.floor(Math.random() * (vb - va + 1)), 'mtRide');
+        this.actor = Bikes.actor(game, 'moto', va + Math.floor(Math.random() * (vb - va + 1)), 'mtRide');
         this.actor.play('static');
         const p0 = this.pts[0], n = this.pts[1] || p0;
         this.x = p0.x; this.z = p0.z; this.v = 0; this.speed = 14;
         this.heading = Math.atan2(n.x - p0.x, n.z - p0.z);
         const pl = game.player;
         pl.setVisible(false); pl.invulnerable = true; pl.velocity.setAll(0);
-        this.actor.setPosition(this.x, this.z); this.actor.mesh.position.y = 1.5;
+        this.actor.setY(1.5); this.actor.setPosition(this.x, this.z);
         game.camera.snapTo(pl.position);
     }
     finish() {

@@ -35,7 +35,7 @@ const Marina = {
         for (let i = 0; i < N; i++) {
             const cz = z0 + (i + 0.5) * P, occ = this.LAYOUT[i], slip = { i, x0: xe + 5, x1: xe + 5 + L, z: cz, boats: [] };
             if (occ) {
-                const [kind, n] = occ, len = BoatSheet.MODELS[kind].len, gap = (P - 2.4) / n;
+                const [kind, n] = occ, len = BoatSheet.MODELS[kind].len * CarArt.K, gap = (P - 2.4) / n;
                 for (let b = 0; b < n; b++) {
                     const z = cz + (n === 1 ? 0 : (b - (n - 1) / 2) * Math.min(1.9, gap));
                     slip.boats.push({ kind, x: xe + 6.5 + len / 2, z, heading: Math.PI / 2, paint: rows[kind][Math.floor(rng() * rows[kind].length)] });

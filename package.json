@@ -1,0 +1,14 @@
+{
+	"name": "dirty-money",
+	"private": true,
+	"scripts": {
+		"tauri": "tauri",
+		"dev": "tauri dev",
+		"build": "tauri build",
+		"dev:engine": "tauri dev --config src-tauri/tauri.engine.conf.json",
+		"build:engine": "tauri build --config src-tauri/tauri.engine.conf.json"
+	},
+	"devDependencies": {
+		"@tauri-apps/cli": "^2.1.0"
+	}
+}

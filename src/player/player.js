@@ -31,6 +31,7 @@ class Player {
         this.weapon = 'none';      // none | pistol | smg | shotgun | bat
         this.action = null;        // { name, lock, onDone, holdAim }
         this.aimTimer = 0;         // tempo restante "mirando" parado após sacar/atirar.
+        this.aimHeading = null;    // mirando (Aim): direção para onde o corpo aponta; null = livre
         this._combo = 0;
 
         this.actor.play('idle');
@@ -44,7 +45,7 @@ class Player {
     // (atropelamento/queda têm a própria animação).
     takeDamage(amount, quiet = false) {
         if (this.hp <= 0 || this.invulnerable) return;       // (rendido: ninguém atira)
-        amount *= 1 - (SkillTree.m.dmgTaken || 0);           // habilidade Sangue frio
+        amount *= 1 - (SkillTree.m.dmgTaken || 0) - Outfit.m.dmgTaken;      // habilidade Sangue frio | roupa (jaqueta de couro, coturno)
         if (this.armor > 0) {                                 // colete: absorve 75% do dano até acabar (Colete ajustado: mais)
             const a = Math.min(this.armor, amount * (0.75 + (SkillTree.m.vest || 0)));
             this.armor -= a; amount -= a;
@@ -73,7 +74,7 @@ class Player {
     _ragEnd(dead) {
         this.root.rotation.y = this.rag.heading;
         this.rag = null;
-        this.actor.mesh.position.y = 0.5;
+        this.actor.mesh.position.y = this.baseY;
         this.actor.play(dead ? 'dead' : 'idle', 'none', { restart: true });
         this._syncSprite();
     }
@@ -130,7 +131,7 @@ class Player {
         const seq = this._seq;
         if (!seq) return false;
         this._seq = null; this._glide = null;
-        this.actor.mesh.position.y = 0.5;
+        this.actor.mesh.position.y = this.baseY;
         this.action = null;
         if (seq.onAbort) seq.onAbort();
         return true;
@@ -276,27 +277,32 @@ class Player {
         // Deslize até a porta do carro (passo `glide` de uma sequência).
         if (this._glide) {
             const g = this._glide;
-            if (!this.action) { this._glide = null; this.actor.mesh.position.y = 0.5; }
+            if (!this.action) { this._glide = null; this.actor.mesh.position.y = this.baseY; }
             else {
                 g.t = Math.min(1, g.t + dt / g.dur);
                 const e = g.t * g.t * (3 - 2 * g.t);
                 const to = g.to();
                 this.root.position.x = g.x0 + (to.x - g.x0) * e;
                 this.root.position.z = g.z0 + (to.z - g.z0) * e;
-                if (g.arc) this.actor.mesh.position.y = 0.5 + g.arc * Math.sin(Math.PI * g.t);      // arco do pulo
-                if (g.t >= 1) { this._glide = null; this.actor.mesh.position.y = 0.5; }
+                if (g.arc) this.actor.mesh.position.y = this.baseY + g.arc * Math.sin(Math.PI * g.t);      // arco do pulo
+                if (g.t >= 1) { this._glide = null; this.actor.mesh.position.y = this.baseY; }
             }
         }
+
+        // Mirando (Aim): não corre e anda devagar, de frente para a mira (pode andar de lado/de costas).
+        const aiming = this.aimHeading != null;
+        if (aiming) { sprinting = false; this.aimTimer = Math.max(this.aimTimer, 0.3); }
 
         // Fôlego: só corre enquanto tiver (e sem sobrecarga de peso). Ver Bags.stamina.
         sprinting = Bags.stamina(this, sprinting, lock > 0 && moveDir.lengthSquared() > 1e-4, dt);
 
         // Na água: raso (0 a wadeDepth m da margem) = anda devagar, cada vez mais; fundo = nada (ainda mais devagar).
-        const W = Config.water, depth = MapGeo.waterDepth(this.root.position.x, this.root.position.z);
+        // (sob a ponte o tabuleiro não é chão: vale a água de baixo — ver _updateLevel)
+        const W = Config.water, depth = this.underBridge ? MapGeo.waterDepthBelow(this.root.position.x, this.root.position.z) : MapGeo.waterDepth(this.root.position.x, this.root.position.z);
         this.depth = depth;
         this.swimming = depth > W.wadeDepth;
         const wf = depth <= 0 ? 1 : (depth <= W.wadeDepth ? 0.85 - 0.4 * (depth / W.wadeDepth) : (sprinting ? 0.52 : 0.4));
-        const maxSpeed = ((sprinting && depth <= 0) ? Config.player.sprintSpeed * (1 + (SkillTree.m.sprint || 0)) : Config.player.maxSpeed) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1);      // loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo
+        const maxSpeed = ((sprinting && depth <= 0) ? Config.player.sprintSpeed * (1 + (SkillTree.m.sprint || 0) + Outfit.m.sprint) : Config.player.maxSpeed * (1 + Outfit.m.walk)) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? 0.6 : 1);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar
 
         // Acelera/desacelera suavemente rumo à velocidade alvo (frame-independent).
         const targetVel = moveDir.scale(maxSpeed);
@@ -317,11 +323,15 @@ class Player {
         } else {
             this.velocity.setAll(0);
         }
-        if (!this._glide) MapGeo.resolveCircle(prev, Config.player.radius);   // não atravessa prédios (no pulo, passa por cima)
+        if (this.onDeck) this._clampToDeck(prev);                           // no viaduto: só as muretas (o que há lá embaixo não bate)
+        else if (!this._glide) MapGeo.resolveCircle(prev, Config.player.radius, this.underBridge || depth > 0);   // não atravessa prédios (no pulo, passa por cima); na água, passa sob a mureta da ponte
+        this._updateLevel();
         this.speed = this.velocity.length();
 
-        // Gira o corpo em direção ao movimento (menor caminho angular) — só fora de ações.
-        if (!this.action && moveDir.lengthSquared() > 1e-4) {
+        // Gira o corpo em direção ao movimento (menor caminho angular) — só fora de ações. Mirando: sempre para a mira (até atirando).
+        if (aiming && (!this.action || this.action.name === 'shoot' || this.action.name === 'draw')) {
+            this.root.rotation.y = this._lerpAngle(this.root.rotation.y, this.aimHeading, 1 - Math.exp(-22 * dt));
+        } else if (!this.action && moveDir.lengthSquared() > 1e-4) {
             const targetY = Math.atan2(moveDir.x, moveDir.z);
             const rt = 1 - Math.exp(-Config.player.turnLerp * dt);
             this.root.rotation.y = this._lerpAngle(this.root.rotation.y, targetY, rt);
@@ -360,6 +370,9 @@ class Player {
                 this.state = 'walk';
                 rate = Math.max(0.6, this.speed / Config.player.maxSpeed) * 1.5;
             }
+            // Carregando peso (Bags): bolsa/maleta/mala na mão, mala puxada nas rodinhas, ou andar curvado de sobrecarga.
+            const cw = Bags.clipFor(this, clip, w);
+            if (cw && this.actor.play(cw[0], cw[1])) { this._syncSprite(); this.actor.update(dt, rate); return; }
             this.actor.play(clip, w);
         }
 
@@ -389,8 +402,59 @@ class Player {
         this.actor.setVisible(v);
     }
 
+    // ---------------------------------------------------------------- andar de cima / de baixo
+    // O mundo é plano (2D): "estar em cima" do viaduto ou "embaixo" de uma ponte é só um estado, que decide a altura do desenho,
+    // com o que se bate e se o furo (RevealPlugin) se abre — ele só abre quando há algo ACIMA do personagem.
+    //   onDeck       no tabuleiro do viaduto: entra pelo pé da rampa andando ao longo da via e fica até sair pela outra ponta.
+    //   underBridge  sob uma ponte cidade ↔ ilha: chegou à área do tabuleiro vindo da ÁGUA (nadando ou no raso) e fica até sair dela.
+    get baseY() { return this.underBridge ? 0.1 : 0.5 + (this.deckH || 0); }
+
+    // Altura do furo: a CABEÇA (a pé, a mureta ao lado não abre furo); sob a ponte, abaixo do tabuleiro.
+    get revealY() { return this.underBridge ? 0.1 : this.baseY + 1.2; }
+
+    _updateLevel() {
+        const p = this.root.position, wasY = this.baseY;
+        const onB = RoadPlan.onBridge(p.x, p.z);
+        if (!onB) this.underBridge = false;
+        else if (!this.underBridge && this._wasInWater) this.underBridge = true;
+        this._wasInWater = !onB && MapGeo.waterDepth(p.x, p.z) > 0;
+
+        if (RoadPlan.viaducts && RoadPlan.viaducts.length) {
+            if (this.onDeck) {
+                this.deckH = RoadPlan.elevAt(p.x, p.z);
+                if (this.deckH <= 0) { this.onDeck = false; this.deckH = 0; }
+            } else if (this.speed > 0.3 && !this.underBridge) {
+                const e = RoadPlan.elevAt(p.x, p.z, this.velocity.x, this.velocity.z);
+                if (e > 0 && e < 1.2) { this.onDeck = true; this.deckH = e; }       // só pelo PÉ da rampa (embaixo do tabuleiro não sobe)
+            }
+        }
+        if (this.baseY !== wasY && !this._glide && !this.rag) this.actor.mesh.position.y = this.baseY;
+        // No viaduto o sprite vai para a camada 1, junto do tabuleiro (as estruturas 'x' de lá cobrem a camada 0 inteira): desenha
+        // depois dele e, estando mais alto, passa no teste de profundidade — como os carros que andam lá em cima.
+        const group = this.onDeck ? 1 : 0;
+        if (this.actor.mesh.renderingGroupId !== group) {
+            this.actor.mesh.renderingGroupId = group;
+            for (const m of this.actor.mesh.getChildMeshes()) m.renderingGroupId = group;
+        }
+    }
+
+    // No tabuleiro do viaduto: as muretas seguram de lado (largura da pista).
+    _clampToDeck(p) {
+        const r = Config.player.radius + 0.2;
+        for (const e of RoadPlan.viaducts) {
+            if (!e.v) continue;
+            const z0 = Math.min(e.a.z, e.b.z), z1 = Math.max(e.a.z, e.b.z);
+            if (p.z < z0 || p.z > z1) continue;
+            const hw = e.w / 2 - r, cx = e.a.x;
+            if (p.x < cx - hw) { p.x = cx - hw; this.velocity.x = 0; }
+            else if (p.x > cx + hw) { p.x = cx + hw; this.velocity.x = 0; }
+            return;
+        }
+    }
+
     teleport(pos) {
         this.cancelSequence();
+        this.onDeck = false; this.deckH = 0; this.underBridge = false; this._wasInWater = false;
         if (this.frozen) { this.frozen = false; this.actor.setVisible(true); }
         this.root.position.copyFrom(pos);
         if (!MapGeo.canWade(pos.x, pos.z)) {                       // (largado no mar aberto, longe da margem: leva para o ponto mais próximo onde dá para estar a pé)
@@ -404,7 +468,7 @@ class Player {
         this.action = null;
         this.rag = null;
         this.endMount();
-        this.actor.mesh.position.y = 0.5;
+        this.actor.mesh.position.y = this.baseY;
         this._syncSprite();
         this.actor.mesh.computeWorldMatrix(true); this.actor.mesh.refreshBoundingInfo();             // o sprite não sincroniza o volume sozinho: após um salto longo (loja, safe house) o culling o esconderia
     }

@@ -3,7 +3,7 @@
 //
 //   Career      uma carreira: patentes por XP, duas skills (0..5, compradas com pontos: 1 ponto a cada XP_PER_POINT de XP),
 //               a lista de TRABALHOS (cada um vira um CareerJob) e, nas patentes altas, um painel de GESTÃO (HTML no menu de pausa).
-//   CareerJob   um trabalho em andamento: alvo no GPS + marcador brilhante no chão, prazo opcional, etapas, prompt e tecla E.
+//   CareerJob   um trabalho em andamento: alvo marcado no mapa + marcador brilhante no chão, prazo opcional, etapas, prompt e tecla E.
 //   Careers     o gerenciador: um trabalho por vez (nem junto com a missão do morro), aplica as skills nos sistemas que já
 //               existem (arrombamento, ligação direta, aderência dos carros, peso da carga), acha pontos no mapa, conta as
 //               cenas de tiroteio recentes, roda o dia (renda/arrego/suspeita) e salva tudo no save.
@@ -101,7 +101,7 @@ class CareerJob {
         return { title: `${this.c.name} · ${this.title}`, text: this.text, extra: parts.join(' · '), low: this.limit > 0 && this.t < 30 };
     }
 
-    // Alvo da etapa: GPS + marcador no chão.
+    // Alvo da etapa: marcado no mapa + marcador no chão.
     target(x, z, label, color) { this.tx = x; this.tz = z; this.mgr.mark(x, z, color || this.c.color); if (label) this.mgr.gpsTo(x, z, label); }
     near(pos, r) { return this.tx !== null && hypot(pos.x - this.tx, pos.z - this.tz) < r; }
     succeed(money, xp, msg) { this.mgr._finish(this, true, money, xp, msg); }
@@ -343,7 +343,7 @@ class Careers {
     calm() { const g = this.g; return g.mode === 'player' && !g.input.isSprinting() && g.player.weapon === 'none' && g.wanted.level === 0; }
     atBase() { const p = this.g.player.position; return Standing.inFavela(p.x, p.z) || HouseView.inside || !!(Interiors.active && Interiors.active.shop.home); }
 
-    // ---------------------------------------------------------------- GPS e marcador
+    // ---------------------------------------------------------------- Marcador no mapa e no chão
     gpsTo(x, z, label) { this.g.setGps(x, z, label); if (this.g.gps) this.g.gps._career = true; }
 
     mark(x, z, color = '#ffd23a') {

@@ -41,6 +41,7 @@ const Interiors = {
 
     // Loja cuja porta está perto de (x, z) (a pé, na calçada em frente).
     shopNear(x, z, r = 1.9) {
+        if (!inWorld(x, z)) return null;
         this.index();
         const C = this._C, i0 = Math.floor((x - r) / C), i1 = Math.floor((x + r) / C), j0 = Math.floor((z - r) / C), j1 = Math.floor((z + r) / C);
         let best = null, bd = r * r;
@@ -93,7 +94,7 @@ const Interiors = {
             const cl = a.data.clerk, nearClerk = cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
             const shop = a.shop, S = Economy.STYLES[shop.style] || {};
             if (this.useNear(game, 'pool')) return `<b>E</b> jogar sinuca<small>bola 8 apostada · de ${brl(Pool.STAKES[0].bet)} a ${brl(Pool.STAKES[Pool.STAKES.length - 1].bet)}</small>`;
-            if (nearClerk) return `<b>E</b> ${S.guns ? 'ver o que tem à venda' : 'ver o cardápio'}<small>${shop.name} · ${Economy.zoneOf(shop).label}</small>`;
+            if (nearClerk) return `<b>E</b> ${S.guns ? 'ver o que tem à venda' : S.clothes ? 'ver roupas, tênis e bolsas' : 'ver o cardápio'}<small>${shop.name} · ${Economy.zoneOf(shop).label}</small>`;
             if (nearExit) return '<b>E</b> sair da loja<small>ou ande até a porta</small>';
             return '';
         }

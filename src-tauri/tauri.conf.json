@@ -1,0 +1,44 @@
+{
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "Dirty Money",
+	"version": "0.1.0",
+	"identifier": "com.dirtymoney.game",
+	"build": {
+		"frontendDist": "../dist-game",
+		"beforeDevCommand": "node scripts/package-legacy.mjs",
+		"beforeBuildCommand": "node scripts/package-legacy.mjs"
+	},
+	"app": {
+		"withGlobalTauri": true,
+		"windows": [
+			{
+				"label": "main",
+				"title": "Dirty Money",
+				"width": 1600,
+				"height": 900,
+				"resizable": true
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": ["nsis"],
+		"category": "Game",
+		"shortDescription": "Dirty Money",
+		"icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
+		"windows": {
+			"webviewInstallMode": {
+				"type": "embedBootstrapper",
+				"silent": true
+			},
+			"nsis": {
+				"installMode": "currentUser",
+				"languages": ["PortugueseBR", "English"],
+				"displayLanguageSelector": false
+			}
+		}
+	}
+}

@@ -20,8 +20,7 @@ class PoliceManager {
         this.shadowGenerator = shadowGenerator;
         this.sprites = sprites;
         this.carLib = carLib;
-        this.carSheet = carLib.sheet('sedan');       // viaturas = sedã com a pintura da polícia
-        for (const id of Object.values(PoliceManager.TEAMS).map((t) => t.model)) carLib.peek(id);   // van da SWAT e jipe do exército: assados na carga (não no meio da perseguição)
+        this.carSheet = carLib.sheet('viatura');     // viatura (pintura própria no atlas)
         this.traffic = traffic;
         this.game = game;
         this.cars = [];
@@ -105,8 +104,8 @@ class PoliceManager {
     // 4★: vans da SWAT | 5★: jipes do exército. Chegam de fora da tela e despejam o esquadrão ao parar perto de você.
     static get TEAMS() {
         return {
-            swat: { model: 'van', paint: 10, role: 'swat', kind: 'swat', crew: 4 },
-            army: { model: 'suv', paint: 11, role: 'army', kind: 'army', crew: 4, siren: false },
+            swat: { model: 'swat_van', paint: 10, role: 'swat', kind: 'swat', crew: 4 },
+            army: { model: 'militar', paint: 11, role: 'army', kind: 'army', crew: 4, siren: false },
         };
     }
 
@@ -206,11 +205,11 @@ class PoliceManager {
         if (this._recT > 0) return;
         this._recT = 1.5;
         const f = this.game.camera.target, far2 = 300 * 300;
-        const ring = { x: f.x, z: f.z, rMin: 85, rMax: 170 };
+        const ring = { x: f.x, z: f.z, rMin: Zones.sr, rMax: Zones.ar - 6 };      // dentro da bolha acordada, fora da tela (ver Zones)
         for (const c of this.cars) {
             if (c.temp || c.destroyed || c.role === 'block' || c.fsm.name !== 'PATROL') continue;
             const dx = c.position.x - f.x, dz = c.position.z - f.z;
-            if (dx * dx + dz * dz < far2 && !(dx * dx + dz * dz > 3600 && Standing.policeBanned(c.position.x, c.position.z))) continue;      // (ou está dentro da favela, longe da tela: sai)
+            if (!c._asleep && dx * dx + dz * dz < far2 && !(dx * dx + dz * dz > 3600 && Standing.policeBanned(c.position.x, c.position.z))) continue;      // (adormecida = saiu da bolha: volta para perto)      // (ou está dentro da favela, longe da tela: sai)
             for (let k = 0; k < 30; k++) {
                 const l = RoadNet.randomLanePoint(14, ring);
                 if (!l || !this.traffic._clear(l.point.x, l.point.z, 12) || Math.random() > this._policeDensity(l.point.x, l.point.z)) continue;
@@ -249,7 +248,7 @@ class PoliceManager {
 
     // Viatura de bloqueio de rua: corpo ESTÁTICO (imóvel até para o seu carro), de lado, giroflex ligado.
     makeBlockCar(x, z, heading) {
-        const car = new PoliceCar(this.scene, this.physics, { x, z }, this._nextCarId++, this.carLib.sheet('sedan'), this.traffic, heading,
+        const car = new PoliceCar(this.scene, this.physics, { x, z }, this._nextCarId++, this.carLib.sheet('viatura'), this.traffic, heading,
             { paint: 6, role: 'block', temp: true });
         car.manager = this;
         car.phys.setMotionType(BABYLON.PhysicsMotionType.STATIC);
@@ -271,7 +270,7 @@ class PoliceManager {
     // Viatura de reforço: nasce numa faixa FORA da tela (75–115u de `pos`), já sabendo para onde ir.
     // opts: { model, paint, role, siren } — por padrão, uma viatura comum.
     spawnCar(pos, opts = {}) {
-        const { model = 'sedan', paint = 6, role = 'patrol', siren = true } = opts;
+        const { model = 'viatura', paint = 6, role = 'patrol', siren = true } = opts;
         for (let t = 0; t < 80; t++) {
             const l = RoadNet.randomLanePoint(14, { x: pos.x, z: pos.z, rMin: 75, rMax: 115 });
             if (!l) continue;
@@ -406,7 +405,7 @@ class PoliceManager {
         const L = level > 0 ? Config.wanted.levels[level] : null;
         const cover = Standing.cover(pos.x, pos.z);                                       // moradores acobertam (moral alta) ou delatam (baixa) dentro da favela
         if (cover.state !== this._coverState) { this._coverState = cover.state; if (cover.state && L) this.game._flash(cover.state === 'hide' ? 'Os moradores estão te acobertando: a polícia perde seu rastro' : 'Os moradores estão te delatando para a polícia!'); }
-        const sk = this.game && this.game.skills, R = (L ? L.sight : Config.police.sightRange) * (Weather.cur ? Weather.cur.sightMul : 1) * cover.sight * (sk ? sk.policeMul * (1 - (SkillTree.m.sight || 0)) : 1) * (this.game.empire ? this.game.empire.policeSightMul(pos.x, pos.z) : 1);      // alerta tático, delegado aliado, domínio, estação      // notoriedade vê mais longe; Discreto, mais perto       // chuva/tempestade: enxergam menos longe
+        const sk = this.game && this.game.skills, R = (L ? L.sight : Config.police.sightRange) * (Weather.cur ? Weather.cur.sightMul : 1) * cover.sight * (sk ? sk.policeMul * (1 - (SkillTree.m.sight || 0) - Outfit.m.sight) : 1) * (this.game.empire ? this.game.empire.policeSightMul(pos.x, pos.z) : 1);      // alerta tático, delegado aliado, domínio, estação      // notoriedade vê mais longe; Discreto, mais perto       // chuva/tempestade: enxergam menos longe
         const memory = (L ? L.lose + 3 : Config.police.hearMemory) * cover.mem;
 
         // 1) Percepção: raio do nível + linha de visada (esconder-se atrás de prédios funciona).
@@ -461,6 +460,10 @@ class PoliceManager {
             if (u.op && this.game.op) this.game.op.steer(u);       // operação na favela: confronta os traficantes
             // Zonas (core/Spatial.js): patrulha calma fora da tela "dorme" (a cada 2 quadros perto da tela, a cada 5 longe, com o dt somado).
             // Quem te vê, persegue ou está numa operação roda todo quadro.
+            // Fora da bolha acordada e calma (não te vê, sem rastro, sem operação): dorme — viatura congelada, policial sem lógica.
+            const calmU = !(m.sees || fresh || u.op) && !u.sirenOn && !u.arrest && u.alive !== false;
+            if (calmU && Zones.asleep(u.position.x, u.position.z)) { if (u.sleep) { if (u._asleep) u.sleepTick(); else u.sleep(); } continue; }
+            if (u._asleep) u.wake();
             const tier = (m.sees || fresh || u.op) ? 0 : Zones.tier(u.position.x, u.position.z);
             if (tier > 0) {
                 u._lodDt = (u._lodDt || 0) + dt;

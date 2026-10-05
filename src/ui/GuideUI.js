@@ -92,8 +92,9 @@ GuideUI.PAGES = {
         <tr><td><kbd>C</kbd></td><td>furtar pedestre</td></tr><tr><td><kbd>V</kbd></td><td>pular grade/muro</td></tr>
         <tr><td><kbd>F</kbd></td><td>entrar/sair de veículo (carro estacionado: quebra o vidro, com alarme)</td></tr><tr><td><kbd>G</kbd></td><td>arrombar carro na manha (mini-game, sem alarme)</td></tr>
         <tr><td><kbd>H</kbd> · <kbd>L</kbd></td><td>buzina · faróis</td></tr><tr><td><kbd>Z</kbd> <kbd>X</kbd> / roda</td><td>zoom</td></tr>
-        <tr><td><kbd>I</kbd></td><td>mochila</td></tr><tr><td><kbd>O</kbd></td><td>carreiras do crime</td></tr><tr><td><kbd>Esc</kbd> / <kbd>P</kbd></td><td>menu (mapa, GPS, status, guia)</td></tr></table>
-        <h3>Controle (Xbox)</h3><p>Funciona direto: analógico move, gatilhos e botões fazem as ações, <b>D-pad</b> troca de arma e <b>Start</b> pausa.</p>
+        <tr><td><kbd>I</kbd></td><td>inventário: equipamento (roupas, bolsa, arma) e mochila — <kbd>C</kbd> alterna</td></tr><tr><td><kbd>O</kbd></td><td>carreiras do crime</td></tr><tr><td><kbd>Esc</kbd> / <kbd>P</kbd></td><td>menu (mapa e marcador, status, guia)</td></tr></table>
+        <h3>Controle (Xbox / PlayStation)</h3><p>Funciona direto, no padrão de GTA e Watch Dogs: <b>RT/R2</b> ataca, <b>A/✕</b> corre (e pula grade), <b>X/□</b> interage, <b>Y/△</b> entra/sai do veículo, <b>B/○</b> recarrega, <b>LT/L2</b> mira (no teclado: botão direito do mouse), <b>LB/L1</b> troca de arma; no carro <b>RT</b> acelera e <b>LT</b> freia. <b>Start/OPTIONS</b> pausa — a lista completa está em Ajustes. As dicas na tela mostram os botões do controle conectado.</p>
+        <h3>Mira</h3><p>Com arma de fogo, segure <b>LT/L2</b> (ou o botão direito do mouse) para mirar: o personagem anda devagar de frente para o alvo e o círculo mostra onde a bala pode cair — ele encolhe enquanto você fica firme e abre ao andar ou atirar em rajada. <b>Assistida</b> trava no alvo (empurre o analógico direito ou passe o mouse para trocar); <b>Manual</b> você aponta com o analógico direito ou o cursor e erra menos com a mira firme. Troque em Ajustes. As habilidades <b>Mão firme</b> e <b>Olho de águia</b> (Combate) firmam a mira mais rápido e fazem errar menos.</p>
         <h3>Celular</h3><ul><li>Abre em <b>tela cheia</b> e na <b>horizontal</b>. No iPhone, use <i>Compartilhar → Adicionar à Tela de Início</i> para jogar como app.</li>
         <li><b>Joystick flutuante</b>: encoste o dedo em qualquer lugar da metade esquerda — ele nasce ali. A pé, empurrar até a borda também corre. Dirigindo, vira um <b>volante</b> (só esquerda/direita).</li>
         <li><b>4 botões</b> à direita, que mudam com o que você está fazendo:<br>
@@ -121,6 +122,9 @@ GuideUI.PAGES = {
         <table><tr><th>Bolsa</th><th>Grade</th><th>Carga</th><th>Onde</th></tr>
         <tr><td>👖 Bolsos</td><td>3×2</td><td>8 kg</td><td>começo</td></tr><tr><td>👜 Mala transversal</td><td>4×3</td><td>14 kg</td><td>conveniência</td></tr>
         <tr><td>🎒 Mochila</td><td>5×4</td><td>24 kg</td><td>conveniência</td></tr><tr><td>🎒 Mochila tática</td><td>6×5</td><td>38 kg</td><td>loja de armas / boca</td></tr></table>
+        <h3>Trocar, guardar e descartar</h3><ul><li>Comprou uma bolsa nova? A antiga fica de <b>reserva</b> (vai junto, vazia, e pesa o próprio peso). Troque em <kbd>I</kbd> → <b>👤 Equipamento</b>.</li>
+        <li>Para não carregar a reserva, guarde no <b>baú</b> de casa ou <b>descarte</b>. A bolsa em uso só sai se o que você leva couber nos bolsos (3×2).</li>
+        <li>No Equipamento também se trocam roupas e acessórios (comprados na <b>boutique</b> 👕 do mapa): cada peça mostra o que muda nos seus atributos antes de vestir.</li></ul>
         <h3>Peso</h3><ul><li>Tudo pesa: armas (pistola 1 kg … AK 4,3 kg), munição, kits, comida, joias, <b>dinheiro vivo</b> (R$ 50 mil ≈ 1 kg), eletrônicos furtados e cédulas de banco.</li>
         <li>Até metade da carga: normal. Até a carga cheia: cada vez mais lento (−30%). Acima dela: <b>sobrecarga</b> — bem lento e sem correr.</li>
         <li>O HUD mostra a bolsa e o peso (amarelo = pesado, vermelho = sobrecarga).</li></ul>
@@ -209,7 +213,7 @@ GuideUI.PAGES = {
         <li>A linha de mira mostra onde a branca bate. A linha fica <b style="color:#fb7185">vermelha</b> se a bola atingida não for sua.</li></ul>
         <div class="gd-tip">Com bola na mão, arraste a branca para uma posição de tacada fácil antes de mirar.</div>`,
     banks: () => `<h2>Bancos</h2>
-        <p>A cidade tem <b>3 sedes</b> (no Distrito Financeiro) e <b>7 agências</b>, de três marcas (marcadores coloridos na porta; lista com GPS na aba IMPÉRIO):</p>
+        <p>A cidade tem <b>3 sedes</b> (no Distrito Financeiro) e <b>7 agências</b>, de três marcas (marcadores coloridos na porta; lista na aba IMPÉRIO, com botão para marcar no mapa):</p>
         <ul><li><b style="color:#ec7000">Banco Inaú</b> — tecnologia: o melhor alvo do cibercrime (transferências rendem mais).</li>
         <li><b style="color:#cc092f">Banco Brascor</b> — varejo: muito dinheiro vivo nos caixas, alvo da força bruta.</li>
         <li><b style="color:#f6c700">Banco Nacional</b> — estatal: PM na porta, a polícia chega mais rápido e o suborno é caro.</li></ul>
@@ -245,7 +249,7 @@ GuideUI.PAGES = {
         <p>Além do tráfico, você pode seguir <b>cinco carreiras</b> ao mesmo tempo. Cada uma tem:</p>
         <ul><li><b>Patentes</b> por XP — a patente libera trabalhos novos e a gestão. Depois da última patente vem a <b>maestria</b> (infinita, +3% de pagamento por nível).</li>
         <li><b>Duas habilidades</b> (0 a 5): 1 ponto a cada ${Careers.XP_PER_POINT} XP; elas mudam o jogo de verdade (tempo de ligação direta, aderência do carro, barulho dos passos, chance do golpe…).</li>
-        <li><b>Trabalhos</b>: um por vez (e não junto com a missão do morro). O alvo aparece no <b>GPS</b> e com um <b>marcador brilhante</b> no chão; o andamento fica no painel do canto superior esquerdo. Falhar (prazo, prisão, morte, abandono) não dá XP e deixa os contatos quietos uns segundos.</li>
+        <li><b>Trabalhos</b>: um por vez (e não junto com a missão do morro). O alvo aparece <b>marcado no mapa</b> (blip vermelho no minimapa) e com um <b>marcador brilhante</b> no chão; o andamento fica no painel do canto superior esquerdo. Falhar (prazo, prisão, morte, abandono) não dá XP e deixa os contatos quietos uns segundos.</li>
         <li><b>Gestão</b> nas patentes altas: negócios que rendem por dia — e riscos que também rodam por dia (Receita, arrego, rival, sequestro, rastreio).</li></ul>
         <div class="gd-tip">As carreiras se ajudam: o <b>fundo falso</b> do Desmanche esconde o dinheiro da rota do Bicho; a <b>escola de samba</b> do Bicho segura a Receita do Desmanche e das fachadas; o <b>silenciador</b> do Armeiro deixa qualquer trabalho mais discreto.</div>`,
 
@@ -261,7 +265,7 @@ GuideUI.PAGES = {
 // "Como funciona" de cada carreira (além do que vem dos dados: patentes, skills e trabalhos).
 GuideUI.CAREER_NOTES = {
     chop: `<h3>Como funciona</h3><ul>
-        <li>O <b>desmanche</b> fica na entrada da favela (aparece no GPS nos trabalhos). Pagamento = valor do modelo × <b>estado da lataria</b>: cada batida custa caro.</li>
+        <li>O <b>desmanche</b> fica na entrada da favela (aparece marcado no mapa nos trabalhos). Pagamento = valor do modelo × <b>estado da lataria</b>: cada batida custa caro.</li>
         <li><b>Encomenda de luxo</b>: ao entrar no carro começa a contagem do <b>rastreador</b>. Zerou: 2 estrelas e a polícia recebe a posição do carro a cada poucos segundos. Na oficina, fique <b>parado</b> até a adulteração terminar (o bloqueador corta o sinal).</li>
         <li>Fora dos trabalhos: chegue dirigindo qualquer carro roubado e aperte <kbd>E</kbd> para <b>desmanchar</b> (dinheiro + 1 peça).</li>
         <li><b>Oficina</b> (aba <kbd>O</kbd> dentro do carro, no desmanche): funilaria (sujo), <b>motor preparado</b>, <b>blindagem</b> e <b>fundo falso</b> (gastam <b>peças</b>). Peça comprada sobe a <b>suspeita da Receita</b>; em 100% vem multa e fecham um desmanche seu.</li>

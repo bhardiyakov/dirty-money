@@ -201,9 +201,15 @@ const Banks = {
             return;
         }
         const base = { atm: [8000, 18000], safe: [18000, 38000], vault: [180000, 420000] }[a.kind];
-        const v = Math.round((base[0] + Math.random() * (base[1] - base[0])) * (a.kind === 'vault' ? B.vault : B.cash) / 100) * 100;
+        const left = s.left || (s.left = {});                                  // (o que ficou para trás da última vez: volte com espaço)
+        const all = left[a.key] || Math.round((base[0] + Math.random() * (base[1] - base[0])) * (a.kind === 'vault' ? B.vault : B.cash) / 100) * 100;
+        // Só leva o que CABE (Bags: limite de peso da bolsa, R$ 10 mil ≈ 1 kg): cofre de banco pede bolsa de lona ou mala.
+        const fit = Math.floor(Bags.room(g) * 10000 / 100) * 100, v = Math.min(all, fit);
+        if (v <= 0) { s.done[a.key] = 0; left[a.key] = all; g._flash(`🎒 Não cabe mais nada (${Bags.label(g)}) — arrume uma bolsa de lona ou uma mala`); return; }
         this.hot += v; s.loot += v;
-        g._flash(`💰 +${brl(v)} em cédulas MARCADAS (${brl(this.hot)}, ${this.hotKg} kg)`);
+        delete left[a.key];
+        if (v < all) { s.done[a.key] = 0; left[a.key] = all - v; g._flash(`💰 +${brl(v)} MARCADOS — a bolsa encheu e ficaram ${brl(all - v)} para trás (${Bags.label(g)})`); }
+        else g._flash(`💰 +${brl(v)} em cédulas MARCADAS (${brl(this.hot)}, ${this.hotKg} kg)`);
         g.careers.by.burglar.addXp(a.kind === 'vault' ? 900 : 120);
         if (a.kind === 'vault') { this.plans[s.bank.id].done = (this.plans[s.bank.id].done || 0) + 1; if (g.achievements) g.achievements.bump('hqHeists'); }
     },

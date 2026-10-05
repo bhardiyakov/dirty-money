@@ -83,13 +83,13 @@ class StashUI {
                 row.appendChild(cv);
                 const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = Stash.label(it.id);
                 const ct = document.createElement('div'); ct.className = 'ct';
-                ct.textContent = it.id === 'cash' ? '$' + it.count : (it.id.startsWith('weapon:') ? '' : '×' + it.count);
+                ct.textContent = it.id === 'cash' ? '$' + it.count : (Stash.single(it.id) ? '' : '×' + it.count);
                 row.append(nm, ct);
                 const mk = (txt, n) => { const b = document.createElement('button'); b.className = 'btn'; b.textContent = txt; b.addEventListener('click', () => { this.col = c; this.sel[c] = i; this._do(it.id, n); }); row.appendChild(b); };
-                const gun = it.id.startsWith('weapon:');
+                const gun = Stash.single(it.id);
                 if (!gun) mk(it.id === 'cash' ? '$' + Stash.CASH_STEP : '1', it.id === 'cash' ? Stash.CASH_STEP : 1);
                 mk(gun ? (c === 0 ? 'GUARDAR' : 'PEGAR') : 'TUDO', gun ? 1 : 'all');
-                row.addEventListener('mousedown', () => { this.col = c; this.sel[c] = i; this.render(); });
+                row.addEventListener('mousedown', (e) => { if (e.target.closest('button')) return; this.col = c; this.sel[c] = i; this.render(); });      // (no botão: redesenhar agora o apagaria antes do clique)
                 rows.appendChild(row);
             });
             col.appendChild(rows);
@@ -128,7 +128,7 @@ class StashUI {
         else if (k === 'ArrowRight' || k === 'd' || k === 'D') this.col = 1;
         else if (k === 'Enter' || k === ' ') {
             const it = list[this.sel[this.col]];
-            if (it) { const gun = it.id.startsWith('weapon:'); this._do(it.id, k === ' ' && !gun ? 'all' : (it.id === 'cash' ? Stash.CASH_STEP : 1)); return; }
+            if (it) { const gun = Stash.single(it.id); this._do(it.id, k === ' ' && !gun ? 'all' : (it.id === 'cash' ? Stash.CASH_STEP : 1)); return; }
         }
         this.render();
     }
