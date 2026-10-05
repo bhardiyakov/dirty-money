@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = join(ROOT, 'dist-game');
-const ENTRIES = ['index.html', 'manifest.webmanifest', 'src', 'assets', 'vendor'];
+const ENTRIES = ['index.html', 'manifest.webmanifest', 'sw.js', 'src', 'assets', 'vendor'];
 
 await rm(OUTPUT, { recursive: true, force: true });
 await mkdir(OUTPUT, { recursive: true });
