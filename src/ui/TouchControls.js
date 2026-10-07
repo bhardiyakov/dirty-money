@@ -40,7 +40,7 @@ class TouchControls {
     // Botões do menu "⋯" (ações raras): [rótulo, tecla, modo ('foot'|'car'|'heli'|'all'), segurar?]
     static get MORE() {
         return [
-            ['RECARREGAR', 'r', 'foot'], ['KIT MÉDICO', 'm', 'foot'], ['PULAR GRADE', 'v', 'foot'], ['FURTAR', 'c', 'foot'], ['MOCHILA', 'i', 'all'],
+            ['RECARREGAR', 'r', 'foot'], ['KIT MÉDICO', 'm', 'foot'], ['PULAR / ROLAR', 'v', 'foot'], ['AGACHAR / COBERTURA', 'q', 'foot'], ['FURTAR', 'c', 'foot'], ['MOCHILA', 'i', 'all'],
             ['BUZINA', 'h', 'car', true], ['FAROL', 'l', 'car'], ['GIRAR ↺', 'q', 'heli', true],
             ['ZOOM +', 'z', 'all', true], ['ZOOM −', 'x', 'all', true],
         ];

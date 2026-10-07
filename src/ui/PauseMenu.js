@@ -13,9 +13,9 @@ class PauseMenu {
     static get TABS() {
         return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
     }
-    static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'hd', 'dev']; }      // linhas de Ajustes, na ordem
+    static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', 'hd', 'dev']; }      // linhas de Ajustes, na ordem
     static get KEYS_HTML() {
-        return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas';
+        return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas';
     }
 
     // Legenda do mapa: tipos de lugar (a chave é o `type` dos POIs).
@@ -36,6 +36,7 @@ class PauseMenu {
             gas: { label: 'Posto de Gasolina', icon: 'fuel' },
             chop: { label: 'Desmanche (carros roubados)', icon: 'chop' },
             dealer: { label: 'Concessionária (carros à venda)', icon: 'dealer' },
+            fachada: { label: 'Suas fachadas (lavagem)', icon: 'cash_bag', mine: true },      // pontos e negócios comprados para lavar dinheiro (Laundry.syncMap)
         };
     }
 
@@ -49,7 +50,7 @@ class PauseMenu {
         this.setRow = 0;                 // linha das configurações
         this._icons = {};
         this._legendIdx = {};
-        this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual)
+        this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, camBounce: true, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual)
         this.settings.hd = !!Config.art.hd;          // (já resolvido em config.js: escolha salva, ?hd=0/1 e o perfil do aparelho)
         this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
         this._build();
@@ -66,6 +67,7 @@ class PauseMenu {
         const mm = document.getElementById('minimap');
         if (mm) mm.style.visibility = s.minimap ? '' : 'hidden';
         this.g.showPrompts = s.prompts;
+        CompassCamera.bounceOn = s.camBounce !== false;
         if (this.g.dev) this.g.dev.setEnabled(s.dev);
         if (!!s.hd !== !!Config.art.hd) this._applyHd(!!s.hd);
     }
@@ -248,10 +250,10 @@ class PauseMenu {
         }
         const keys = this.root.querySelector('.pm-keys');
         if (keys) keys.innerHTML = pad
-            ? `<b style="background:none;padding:0">A pé:</b> ${g('ls')} mover · ${g('a')} correr (segurar) / pular grade · ${g('x')} interagir/assaltar/esconder · ${g('y')} veículo · ${g('rt')} atacar (sem arma: combo soco + soco + chute) · ${g('b')} recarregar · ${g('lt')} mirar (${g('rstick')} aponta/troca de alvo) · ${g('down')} arrombar · ${g('rs')} furtar · ${g('lb')} ${g('dpadlr')} armas · ${g('up')} kit médico<br>`
+            ? `<b style="background:none;padding:0">A pé:</b> ${g('ls')} mover · ${g('a')} correr (segurar) / pular grade · ${g('l3')} agachar / cobertura · ${g('rb')} rolar · ${g('x')} interagir/assaltar/esconder · ${g('y')} veículo · ${g('rt')} atacar (sem arma: combo soco + soco + chute) · ${g('b')} recarregar · ${g('lt')} mirar (${g('rstick')} aponta/troca de alvo) · ${g('down')} arrombar · ${g('rs')} furtar · ${g('lb')} ${g('dpadlr')} armas · ${g('up')} kit médico<br>`
             + `<b style="background:none;padding:0">Carro:</b> ${g('rt')} acelerar · ${g('lt')} freio/ré · ${g('y')} sair · ${g('x')} abastecer/desmanchar · ${g('l3')} buzina · ${g('down')} faróis<br>`
             + `<b style="background:none;padding:0">Helicóptero:</b> ${g('rt')} sobe · ${g('lt')} desce · ${g('rstick')} gira · ${g('y')} descer/pular<br>`
-            + `${g('back')} inventário · ${g('start')} menu · ${g('rstick')} zoom`
+            + `${g('back')} inventário · ${g('start')} menu · ${g('rstick')} zoom (na mira manual com arma, ${g('rstick')} aponta)`
             : PauseMenu.KEYS_HTML;
     }
 
@@ -391,8 +393,9 @@ class PauseMenu {
             } else if (k === 'enter') this._invAction('primary');
             else if (k === 'delete' || k === 'backspace') this._invAction('discard');
         } else if (this.tab === 'settings') {
-            if (k === 'arrowup') this.setRow = (this.setRow + 5) % 6;
-            else if (k === 'arrowdown') this.setRow = (this.setRow + 1) % 6;
+            const nRows = PauseMenu.SET_KEYS.length;
+            if (k === 'arrowup') this.setRow = (this.setRow + nRows - 1) % nRows;
+            else if (k === 'arrowdown') this.setRow = (this.setRow + 1) % nRows;
             else if (k === 'arrowleft') this._setAdjust(-1);
             else if (k === 'arrowright') this._setAdjust(1);
             else if (k === 'enter' || k === ' ') this._setAdjust(0);
@@ -471,7 +474,7 @@ class PauseMenu {
             row.className = 'lg' + (n ? '' : ' off') + (this.sel && this.sel.type === type ? ' on' : '');
             const c = this.icon(T.icon).cloneNode(); c.getContext('2d').drawImage(this.icon(T.icon), 0, 0); c.style.width = c.style.height = '30px'; row.appendChild(c);
             row.append(document.createTextNode(T.label));
-            const s = document.createElement('small'); s.textContent = n ? n : 'em breve'; row.appendChild(s);
+            const s = document.createElement('small'); s.textContent = n ? n : (T.mine ? 'nenhuma ainda' : 'em breve'); row.appendChild(s);
             row.addEventListener('click', () => this._focusType(type));
             list.appendChild(row);
         }
@@ -691,6 +694,7 @@ class PauseMenu {
             ['🔊 Volume geral', `<input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="pmVol"><span>${Math.round(s.volume * 100)}%</span>`],
             ['🎵 Efeitos sonoros', tog(s.sfx)], ['🗺️ Minimapa', tog(s.minimap)], ['💬 Dicas na tela', tog(s.prompts)],
             ['🎯 Mira <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">assistida trava no alvo · manual: você aponta (analógico direito / mouse)</small>', `<div class="pm-toggle is-on">${s.aimAssist ? 'Assistida' : 'Manual'}</div>`],
+            ['🚗 Balanço da câmera <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">dirigindo, a câmera balança com arrancadas, freadas, curvas e buracos</small>', tog(s.camBounce !== false)],
             ['🖥️ Alta definição <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">tela na resolução real e personagens nítidos (gerados no seu PC na 1ª vez que aparecem) · desligado: pixel art, mais leve</small>', tog(s.hd)],
             ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],
         ];

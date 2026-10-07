@@ -73,9 +73,37 @@ class EmpireBusiness {
         if (!F) return null;
         if (d === 'favela' || d === 'periferia') return 'Fachadas de luxo só nos distritos da cidade — vá até o distrito onde quer abrir';
         if (inv.cash < F.price) return `Faltam ${brl(F.price - inv.cash)} de dinheiro sujo`;
-        inv.cash -= F.price; this.fronts.push({ type, d });
+        inv.cash -= F.price;
+        const f = { type, d };
+        this.placeFront(f, this.g._playerState().pos);
+        this.fronts.push(f);
         if (this.g.skills) this.g.skills.addXp(200);
-        return `${F.name} aberto em ${this.e.dName(d)}: lava até ${brl(F.cap)} do cofre por dia`;
+        return `${F.name} aberto em ${this.e.dName(d)}${f.at ? ` (${f.at})` : ''}: lava até ${brl(F.cap)} do cofre por dia — está marcado no mapa`;
+    }
+
+    // Onde o negócio fica no mapa (f.x, f.z, f.at): um posto de verdade (posto), um restaurante (restaurante) ou um bar (boate) do
+    // distrito — o mais perto de `near` (onde o jogador comprou) que ainda não é fachada sua; sem nenhum, o próprio `near`. Saves
+    // antigos (sem posição) ganham uma na 1ª vez que o mapa é montado (Laundry.syncMap). Retorna false se não achou lugar.
+    placeFront(f, near = null) {
+        if (f.x !== undefined) return true;
+        let cands;
+        if (f.type === 'posto') cands = CityGrid.stations || [];
+        else {
+            Interiors.index();
+            const styles = f.type === 'boate' ? ['bar'] : ['italian', 'japanese', 'pizza', 'fit', 'burger'];
+            cands = Interiors._doors.filter((s) => styles.includes(s.style));
+        }
+        const taken = (x, z) => this.fronts.some((o) => o !== f && o.x !== undefined && Math.abs(o.x - x) < 1 && Math.abs(o.z - z) < 1);
+        let best = null, bd = Infinity;
+        for (const c of cands) {
+            const dd = near ? hypot(c.x - near.x, c.z - near.z) : 0;
+            if (dd >= bd || this.e.districtAt(c.x, c.z) !== f.d || taken(c.x, c.z)) continue;
+            bd = dd; best = c;
+        }
+        if (!best && !near) return false;
+        const at = best || near;
+        f.x = Math.round(at.x * 10) / 10; f.z = Math.round(at.z * 10) / 10; f.at = best ? best.name : null;
+        return true;
     }
 
     // Renda de um soldado por dia no distrito d.

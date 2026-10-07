@@ -30,9 +30,10 @@ class Minimap {
         MapRenderer.drawWorld(1);                       // o mundo raster é assado uma vez (compartilhado com o mapa de pausa)
     }
 
-    // center: Vector3 | heading: rad (0 = norte) | blips: [{pos, color}]
+    // center: Vector3 | heading: rad (0 = norte) | blips: [{pos, color, ring?}] (ring = raio em u de um círculo de alcance — o radar da polícia)
     // home: { x, z, icon } da safe house (sempre desenhada; na borda se estiver longe)
-    update(center, heading, blips = [], gps = null, pursuit = null, home = null) {
+    // marks: [{ x, z }] lugares seus com ícone (as fachadas de lavagem), desenhados com `markIcon` só quando estão dentro do radar
+    update(center, heading, blips = [], gps = null, pursuit = null, home = null, marks = null, markIcon = null) {
         const ctx = this.ctx;
         const S = this.size;
         const range = Config.minimap.rangeUnits;   // unidades de mundo na largura.
@@ -80,6 +81,15 @@ class Minimap {
         mm.classList.toggle('alert-r', !!(pursuit && pursuit.seen && phase));
         mm.classList.toggle('alert-b', !!(pursuit && pursuit.seen && !phase));
 
+        // Alcance da polícia (radar): círculos translúcidos por baixo dos pontos.
+        let ringed = false;
+        for (const bl of blips) {
+            if (!bl.ring) continue;
+            if (!ringed) { ringed = true; ctx.save(); ctx.fillStyle = 'rgba(58,123,255,0.13)'; ctx.strokeStyle = 'rgba(90,150,255,0.55)'; ctx.lineWidth = 1.5; }
+            ctx.beginPath(); ctx.arc(sx(bl.pos.x, bl.pos.z), sy(bl.pos.x, bl.pos.z), bl.ring * k, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        }
+        if (ringed) ctx.restore();
+
         // Blips.
         for (const bl of blips) {
             const p = { ox: sx(bl.pos.x, bl.pos.z), oy: sy(bl.pos.x, bl.pos.z) };
@@ -87,6 +97,16 @@ class Minimap {
             ctx.beginPath();
             ctx.arc(p.ox, p.oy, 3.5, 0, Math.PI * 2);
             ctx.fill();
+        }
+
+        // Fachadas de lavagem: ícone com aro dourado, só quando estão à vista no radar (não poluem a borda).
+        if (marks && markIcon) {
+            for (const m of marks) {
+                const mx = sx(m.x, m.z), my = sy(m.x, m.z), r = 8;
+                if (mx < -r || my < -r || mx > S + r || my > S + r) continue;
+                ctx.beginPath(); ctx.arc(mx, my, r + 1.5, 0, Math.PI * 2); ctx.fillStyle = '#f5c542'; ctx.fill();
+                ctx.drawImage(markIcon, mx - r, my - r, r * 2, r * 2);
+            }
         }
 
         // Marcador de destino (blip vermelho, como no GTA San Andreas): no lugar dele ou, longe, preso na borda com uma setinha

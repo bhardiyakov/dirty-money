@@ -48,13 +48,14 @@ const Footsteps = {
 
     update(game, dt) {
         const pl = game.player;
-        if (!AudioFX._ok() || game.mode !== 'player' || !pl || !pl.alive || pl.frozen || pl.swimming || !(pl.state === 'walk' || pl.state === 'sprint' || pl.state === 'wade')) { this._phase = null; return; }
+        if (!AudioFX._ok() || game.mode !== 'player' || !pl || !pl.alive || pl.frozen || pl.swimming || !(pl.state === 'walk' || pl.state === 'sprint' || pl.state === 'wade' || pl.state === 'sneak')) { this._phase = null; return; }
         const a = pl.actor, c = a && a.clip, name = a && a.clipName;
-        if (!c || !c.loop || !c.frames || !/^(walk|run|climb)/.test(name || '')) { this._phase = null; return; }
-        const ph = (a.time / c.frames) % 1;
+        if (!c || !c.loop || !c.frames || !/^(walk|run|climb|strafe|sneak)/.test(name || '')) { this._phase = null; return; }
+        const ph = (((a.time / c.frames) % 1) + 1) % 1;                                     // (clipe tocado ao contrário: o tempo é negativo)
         if (this._phase != null) {
-            const p0 = this._phase;
-            for (const m of this.MARKS) if (ph >= p0 ? (p0 < m && ph >= m) : (p0 < m || ph >= m)) this.step(game, pl.state === 'sprint' || /^run/.test(name));
+            let p0 = this._phase, p1 = ph;
+            if ((((ph - p0) % 1) + 1.5) % 1 - 0.5 < 0) { p0 = ph; p1 = this._phase; }      // andando para trás no ciclo: confere o trecho ao contrário
+            for (const m of this.MARKS) if (p1 >= p0 ? (p0 < m && p1 >= m) : (p0 < m || p1 >= m)) this.step(game, pl.state === 'sprint' || /^run/.test(name), pl.state === 'sneak');
         }
         this._phase = ph;
     },
@@ -81,11 +82,11 @@ const Footsteps = {
         return (this._bus = g);
     },
 
-    step(game, run) {
+    step(game, run, quiet = false) {
         if (!AudioFX._ok()) return;
         const surf = this.surface(game), shoe = this.shoe(), t = AudioFX.ctx.currentTime + 0.005;
         const heavy = Math.min(1, Math.max(0, ((game.player.loadRatio || 0) - 0.4) / 0.8));       // bolsa pesada: pisada mais grave
-        const V = (run ? 1.45 : 1) * (0.11 + 0.05 * heavy) * (0.85 + Math.random() * 0.3), D = run ? 0.85 : 1, toe = run ? 0.035 : 0.06;
+        const V = (run ? 1.45 : 1) * (quiet ? 0.3 : 1) * (0.11 + 0.05 * heavy) * (0.85 + Math.random() * 0.3), D = run ? 0.85 : 1, toe = run ? 0.035 : 0.06;      // (agachado: pisada macia)
         const low = 1 - 0.3 * heavy;
         const S = { sneaker: { thump: 0.8, click: 0.25, lp: 1500 }, dress: { thump: 0.6, click: 1.0, lp: 2600 }, boot: { thump: 1.25, click: 0.45, lp: 1100 }, flip: { thump: 0.5, click: 0.2, lp: 1300 } }[shoe];
         const hard = surf === 'concrete' || surf === 'tile' || surf === 'wood';

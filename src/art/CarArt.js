@@ -415,6 +415,7 @@ class CarActor {
         // Suspensão: a carroceria escorrega um pouco sobre as rodas com a transferência de peso (freada = mergulha para a frente,
         // arrancada = senta atrás, curva = inclina para fora) — mola amortecida, com um leve balanço quando a força some.
         this.sx = 0; this.sz = 0; this._vx = 0; this._vz = 0;      // deslocamento (m) da carroceria: lateral (direita +) e longitudinal (frente +)
+        this.ry = 0; this._vr = 0;                   // giro (rad) da carroceria sobre o chassi: "atrasa" ao entrar na curva e balança ao sair (peso)
         this.steer = 0;                              // ângulo das rodas da frente (rad, + = direita)
         this.ti = null;                              // quads das rodas da frente no lote CarArt.tires
         batch.hide(this.i);
@@ -446,7 +447,7 @@ class CarActor {
         if (!this.visible || !this._placed) { this.batch.hide(this.i); if (this.ti) for (const i of this.ti) T.hide(i); return; }
         const s = Math.sin(this.heading), c = Math.cos(this.heading);
         // carroceria: deslocada pela suspensão (frente = (s, c), direita = (c, -s))
-        this.batch.place(this.i, this.x + s * this.sz + c * this.sx, this.y, this.z + c * this.sz - s * this.sx, this.heading, this.hl, this.hw, this.uv);
+        this.batch.place(this.i, this.x + s * this.sz + c * this.sx, this.y, this.z + c * this.sz - s * this.sx, this.heading + this.ry, this.hl, this.hw, this.uv);
         this.batch.color(this.i, this.variant, this.shade, this.dent, 1);
         if (this.ti) {
             // rodas da frente presas ao chassi (não balançam com a carroceria), giradas pelo volante; o desenho do pneu tem 2 px de margem
@@ -469,16 +470,19 @@ class CarActor {
 
     // Física visual da carroceria (chamada pelo Vehicle a cada quadro): aF/aL = aceleração à frente / para a direita (m/s²),
     // steer = volante (-1..1, + = direita). Rodas viram até ~27°; a carroceria segue uma mola amortecida para o alvo.
-    animate(dt, aF, aL, steer) {
+    // yr = giro do chassi (rad/s) — só CARROS (moto e barco passam null): o PESO fica visível — a carroceria rola bem mais para
+    // fora da curva e gira um pouco atrasada em relação ao chassi (mola pouco amortecida: ao sair da curva ela passa do ponto e assenta).
+    animate(dt, aF, aL, steer, yr = null) {
         if (dt <= 0) return;
         const st = Math.max(-1, Math.min(1, steer || 0)) * 0.47;
         const want = this.steer + (st - this.steer) * Math.min(1, dt * 10);
-        const K = 140, C = 9.5, lim = (v, m) => Math.max(-m, Math.min(m, v));
-        const tz = lim(-aF * 0.0105, 0.1), tx = lim(-aL * 0.0085, 0.075);           // freando (aF<0) → a carroceria vai para a frente; curva → para fora
+        const K = 140, C = 9.5, lim = (v, m) => Math.max(-m, Math.min(m, v)), car = yr !== null;
+        const tz = lim(-aF * 0.0105, 0.1), tx = car ? lim(-aL * 0.0065, 0.2) : lim(-aL * 0.0085, 0.075);      // freando (aF<0) → a carroceria vai para a frente; curva → para fora
         const h = Math.min(dt, 1 / 30);                                              // (passo estável mesmo num quadro longo)
         this._vz += (K * (tz - this.sz) - C * this._vz) * h; this.sz += this._vz * h;
-        this._vx += (K * (tx - this.sx) - C * this._vx) * h; this.sx += this._vx * h;
-        if (Math.abs(want - this.steer) > 1e-4 || Math.abs(this._vz) + Math.abs(this._vx) > 1e-4) { this.steer = want; this._mark(); }
+        this._vx += (K * (tx - this.sx) - (car ? 7 : C) * this._vx) * h; this.sx += this._vx * h;
+        if (car) { const ty = lim(-yr * 0.03, 0.06); this._vr += (90 * (ty - this.ry) - 7 * this._vr) * h; this.ry += this._vr * h; }
+        if (Math.abs(want - this.steer) > 1e-4 || Math.abs(this._vz) + Math.abs(this._vx) + Math.abs(this._vr) > 1e-4) { this.steer = want; this._mark(); }
     }
 
     // Escurece o sprite quando está na sombra de um prédio (suave, a ~4 consultas/s) — como o SpriteActor.

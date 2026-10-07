@@ -190,7 +190,7 @@ const Garage = {
             const car = this._live(rec), G = this.byId(rec.garage);
             if (!G) continue;
             if (car) {
-                if (car.destroyed) { this._destroyed(rec, car); continue; }
+                if (car.destroyed && !car.canRaise) { this._destroyed(rec, car); continue; }      // (moto só caída não é perda: dá para levantar)
                 if (car.controlled || car.hold) { this._sync(rec, car); continue; }
                 const s = G.slots[rec.slot], home = s && hypot(car.position.x - s.x, car.position.z - s.z) < 4;
                 const dP = hypot(car.position.x - P.x, car.position.z - P.z);

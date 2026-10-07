@@ -244,8 +244,9 @@ class CarDamage {
                     0.5, 1.8, 1.4 + Math.random() * 0.6, 0.5 * k + 0.12, [0.16, 0.16, 0.17]);
             }
         }
-        // Some fora da tela depois de um tempo (vira outro carro novo / outra viatura de patrulha).
-        if (car.wreckT > Config.crash.wreckLife) {
+        // Some fora da tela depois de um tempo (vira outro carro novo / outra viatura de patrulha). Moto SUA só caída (dá para levantar)
+        // não some: quem cuida dela é a Garagem (longe, volta de pé para a vaga).
+        if (car.wreckT > Config.crash.wreckLife && !(car.canRaise && (car.keep || car.ownedRec))) {
             const f = g.camera.target;
             if (hypot(car.position.x - f.x, car.position.z - f.z) > 75) this._removeWreck(car);
         }

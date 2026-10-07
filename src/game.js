@@ -39,6 +39,7 @@ class Game {
         Vehicle.onThrow = (bike, variant, dx, dz, power, kind) => this._onThrow(bike, variant, dx, dz, power, kind);
         this.casualties = [];                        // pessoas avulsas arremessadas (motorista arrancado, ciclista caído)
         this.combat = new Combat(this.scene, this);
+        Cover.game = this;                                   // cobertura: carros parados também contam (combat/Cover.js)
         this.fireworks = new Fireworks(this.scene);  // fogos de artifício (alarme dos fogueteiros)
         this._delayed = [];       // ações com atraso (faíscas, portas, sequências)
         this.inventory = new Inventory();
@@ -576,11 +577,16 @@ class Game {
         }
 
         SpeedBlur.update(this, dt);                                  // borrão de alta velocidade (≥ 80% da máxima do carro)
+        AudioFX.screech(this.mode === 'car' && this.activeCar ? this.activeCar.slide || 0 : 0);      // pneu cantando na derrapagem (Vehicle.slide)
         Perf.lap('jogador');
         this._updateHeliFall(dt);
         this._updateChoppers(dt);
 
         // --- Zoom ---
+        // Automático: a pé aproxima; no veículo (carro, moto, barco, helicóptero) afasta conforme a velocidade. Dentro da casa
+        // (HouseView já aproxima 2×) fica neutro.
+        const zSpeed = this.mode === 'car' && this.activeCar ? this.activeCar.speed : (this.mode === 'heli' && this.chopper ? this.chopper.speed : null);
+        this.camera.setAutoZoom(this.camera.zoomMul < 0.999 ? 1 : CompassCamera.autoZoomGoal(zSpeed), dt);
         const zoom = this.input.consumeZoom();
         if (zoom.keys) this.camera.zoom(zoom.keys * Config.camera.zoomSpeed * dt);
         if (zoom.wheel) this.camera.zoom(zoom.wheel * Config.camera.wheelStep);
@@ -601,6 +607,10 @@ class Game {
         // --- Hijack (entrar/sair do carro) ---
         if (this.physicsReady && this.input.consumePress('f')) this._toggleHijack();
         if (this.physicsReady && this.input.consumePress('g')) this._lockpickKey();
+        const crouchKey = this.input.consumePress('q'), rollKey = this.input.consumePress('roll');      // (consumidas sempre: Q no helicóptero gira)
+        if (this.mode !== 'player' && this.player.crouched) this.player.setCrouch(false);                  // (entrou num veículo: sai levantado)
+        if (this.mode === 'player' && crouchKey) this._toggleCrouch();
+        if (this.mode === 'player' && rollKey) this._tryRoll();
         if (this.mode === 'player' && this.input.consumePress('v')) this._tryVault();
         if (this.mode === 'player' && this.input.consumePress('padjump') && !this.player.busy && !this.lockpick.active && !this.hiding && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.5)) this._tryVault();      // controle: A/✕ (que também é correr) só pula se houver grade/muro
 
@@ -718,6 +728,7 @@ class Game {
             if (this.motoRide) this.motoRide.update(dt);
             if (this.missions) this.missions.update(dt, gs.pos);
             RealEstate.build(this); RealEstate.update(dt); this.propertyUI.update(dt);
+            Laundry.syncMap(this, dt);                                                       // fachadas compradas → mapa e radar
             Dealers.build(this); Dealers.update(dt); Garage.update(dt); this.carUI.update(dt);      // concessionárias (vitrine) e garagens (seus carros)
         }
 
@@ -791,6 +802,7 @@ class Game {
         const move = right.scale(axis.x).add(forward.scale(axis.z));
         if (move.lengthSquared() > 1e-4) move.normalize(); else move.setAll(0);
         this.player.update(move, this.input.isSprinting(), dt);
+        this.camera.setAutoZoom(1, dt, true);                                            // (a loja já tem o enquadramento dela: sem zoom automático)
         this.camera.follow(Interiors.focus(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
         Interiors.update(dt, this);
         if (!frozen && this.input.consumePress('e')) Interiors.interact(this);
@@ -1009,7 +1021,8 @@ class Game {
         if (this.empire) this.empire.spend(kind === 'shoot' ? 0.3 : 0.8, kind === 'shoot' ? 2 : 0.5);
         if (kind === 'shoot') {
             // Tiro de verdade: projéteis (com mira assistida), ouvido por todos; libera as armas da polícia.
-            const angle = this.aim ? this.aim.shotAngle(pos.x, pos.z, heading) : this.combat.aimAssist(pos.x, pos.z, heading);
+            const angle = this.aim ? this.aim.shotAngle(pos.x, pos.z, heading, p.weapon) : this.combat.aimAssist(pos.x, pos.z, heading);
+            if (!(this.aim && this.aim.active)) p.root.rotation.y = angle;      // tiro do quadril travado: o corpo vira para o alvo (como no soco)
             const crit = Math.random() < (SkillTree.m.crit || 0);
             this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p, spreadMul: this.aim ? this.aim.spreadMul() : 1 - (SkillTree.m.spread || 0), dmgMul: (1 + (SkillTree.m.gunDmg || 0)) * (crit ? 2 : 1) }, p.weapon);
             if (this.aim) this.aim.onShot(p.weapon);                          // coice: desfirma a mira um pouco
@@ -1041,7 +1054,7 @@ class Game {
             dmgMul: (1 + (SkillTree.m.melee || 0) + Outfit.m.melee) * (knife ? Weapons.knife.dmg / M.dmg : 1),
             onHit: (t) => {
                 if (t.halfLen) { this.npcManager.alertViolence(p.position, 10); return; }      // (carro: vandalismo, só assusta)
-                this.npcManager.alertViolence(p.position, undefined, [t]);
+                this.npcManager.alertViolence(p.position, this._witnessR(), [t]);
                 this.wanted.reportCrime();
                 this._flash(`Agrediu #${t.id}!`);
             },
@@ -1077,10 +1090,13 @@ class Game {
             for (const b of this.vehicleManager.boats) blips.push({ pos: b.position, color: b === this.activeCar ? '#ffe14d' : '#4fd8ff' });
         }
         if (this.policeManager) {
+            // RADAR: sem estrelas e armado (ou com um crime em flagrante), cada policial aparece com o círculo do que ele enxerga —
+            // crime cometido fora dos círculos (e longe o bastante para não ouvirem o tiro) não dá estrela.
+            const ring = this.wanted.level === 0 && this.mode === 'player' && (this.player.weapon !== 'none' || this.wanted.pending) ? this.policeManager.sightR || 0 : 0;
             for (const u of this.policeManager.units) {
                 // Polícia = azul | SWAT = lilás claro | exército = verde.
                 const k = u.kind || u.role;
-                blips.push({ pos: u.position, color: k === 'swat' ? '#c9b8ff' : (k === 'army' ? '#7fe04a' : (k === 'block' ? '#ff5a4d' : '#3a7bff')) });
+                blips.push({ pos: u.position, color: k === 'swat' ? '#c9b8ff' : (k === 'army' ? '#7fe04a' : (k === 'block' ? '#ff5a4d' : '#3a7bff')), ring });
             }
             const h = this.policeManager.heli;
             if (h && h.alive) blips.push({ pos: h.position, color: '#ffffff' });
@@ -1095,7 +1111,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         }
 
         const hp = CityGrid.pois.find((q) => q.type === 'home');                // safe house (ou o imóvel que virou casa): sempre no radar
-        this.minimap.update(center, heading, blips, this.gps, this._pursuit(center), hp ? { x: hp.x, z: hp.z, icon: this.menu.icon('home') } : null);
+        this.minimap.update(center, heading, blips, this.gps, this._pursuit(center), hp ? { x: hp.x, z: hp.z, icon: this.menu.icon('home') } : null,
+            Laundry.mapPois, Laundry.mapPois.length ? this.menu.icon('cash_bag') : null);      // fachadas de lavagem (ícone 💰 no radar)
     }
 
     // ---------------------------------------------------------------- helicóptero
@@ -1479,12 +1496,15 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             if (chop && !car) html = '<b>F</b> pilotar o helicóptero<small>Bell 206 — decola com ESPAÇO</small>';
             if (car) {
                 if (car.isBoat) html = car.pilot ? `<b>F</b> tomar o leme: ${car.spec.name.toLowerCase()}<small>o piloto cai na água — é crime</small>` : `<b>F</b> pilotar: ${car.spec.name.toLowerCase()} ${car.spec.model}`;
-                else if (car.isBike) html = car.riderVariant != null ? `<b>F</b> derrubar o piloto e roubar a ${car.spec.name.toLowerCase()}` : `<b>F</b> subir na ${car.spec.name.toLowerCase()}`;
+                else if (car.isBike) html = car.wrecked ? `<b>F</b> levantar a ${car.spec.name.toLowerCase()} e subir` : car.riderVariant != null ? `<b>F</b> derrubar o piloto e roubar a ${car.spec.name.toLowerCase()}` : `<b>F</b> subir na ${car.spec.name.toLowerCase()}`;
                 else if (car.locked) { html = '<b>F</b> roubo rápido — quebra o vidro e dispara o alarme<small><b>G</b> arrombar na manha — furtivo, sem alarme</small>'; this.doors.prewarm(car); }
                 else if (car.driver === false) { html = '<b>F</b> entrar no carro'; this.doors.prewarm(car); }
                 else { html = '<b>F</b> roubar o carro (tira o motorista)'; this.doors.prewarm(car); }
             }
             if (!html) html = this._housePrompt();
+            if (!html && this.player.crouched) html = this.player.inCover      // agachado: o estado e como sair dele
+                ? '<b>Q</b> levantar<small>em cobertura — tiros do outro lado param no obstáculo; quem está lá não te vê</small>'
+                : '<b>Q</b> levantar<small>agachado (furtivo) — a polícia e as testemunhas só te notam bem de perto</small>';
             if (!html) html = Interiors.prompt(this);
             if (!html && HouseView.hint) html = HouseView.hint;
         }
@@ -1627,9 +1647,28 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         AudioFX.thud(c.x, c.z);
     }
 
-    // Bicicleta/moto: com piloto, o jogador derruba ele (o piloto vira ragdoll) e então sobe na moto.
+    // Bicicleta/moto: com piloto, o jogador derruba ele (o piloto vira ragdoll) e então sobe na moto. Caída (depois de uma batida),
+    // primeiro ele a levanta: vai até o lado dela, abaixa, puxa pelo guidão e põe de pé — aí sobe.
     _mountBike(bike) {
         const kind = bike.spec.bike, S = this._sideOf(bike);
+        if (bike.wrecked) {
+            if (!bike.canRaise) return;
+            const P = bike.position, sx = S.rx * S.sign, sz = S.rz * S.sign;
+            const side = () => ({ x: bike.position.x + sx * 0.95, z: bike.position.z + sz * 0.95 });
+            bike.hold = true;
+            const ok = this.player.runSequence([
+                { clip: 'walk', timer: 0.25, glide: side },
+                { clip: 'pick', timer: 0.5 },
+                { clip: 'opendoor', yank: () => { if (bike.raise()) { AudioFX.thud(P.x, P.z); this.camera.shake(0.08); } } },
+            ], {
+                face: Math.atan2(-sx, -sz),
+                onDone: () => { bike.hold = false; if (!bike.wrecked && this.mode === 'player') this._mountBike(bike); },
+                onAbort: () => { bike.hold = false; },
+            });
+            if (!ok) { bike.hold = false; return; }
+            this._flash(`Levantando a ${bike.spec.name.toLowerCase()}…`);
+            return;
+        }
         const f = bike.body.getDirection(BABYLON.Axis.Z), heading = Math.atan2(f.x, f.z);
         bike.hold = true;
         const go = () => {
@@ -1905,11 +1944,40 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     }
 
     // V: pula a grade/muro mais próximo (precisa haver espaço livre do outro lado).
+    // ---------------------------------------------------------------- tático: agachar / cobertura / rolar (Config.tactics)
+    // Q (L3 no controle): agacha (furtivo) ou levanta. Perto (coverSnap) de um prédio, muro, caçamba, contêiner ou carro parado, vai
+    // até ele e fica EM COBERTURA (combat/Cover.js).
+    _toggleCrouch() {
+        const pl = this.player;
+        if (pl.busy || pl.swimming || (pl.depth || 0) > 0 || this.hiding || this.holdup || this.arrest || this.death || this.lockpick.active) return;
+        if (pl.crouched) { pl.setCrouch(false); return; }
+        const p = pl.position, T = Config.tactics, C = Cover.find(p.x, p.z, T.coverSnap);
+        if (C && C.d > 0.85) pl.coverSnap = { x0: p.x, z0: p.z, x: C.x + C.nx * 0.75, z: C.z + C.nz * 0.75, t: 0, dur: 0.12 + 0.08 * C.d };
+        pl.setCrouch(true);
+        if (C && !this._tipCover) { this._tipCover = true; this._flash('Em cobertura: tiros vindos do outro lado param no obstáculo e quem está lá não te vê'); }
+        else if (!C && !this._tipSneak) { this._tipSneak = true; this._flash('Agachado: furtivo — a polícia e as testemunhas só te notam bem de perto'); }
+    }
+
+    // V (longe de grade/muro) ou RB: rola na direção em que anda (parado: para a frente). As balas passam por você no meio do rolamento.
+    _tryRoll() {
+        const pl = this.player;
+        if (this.mode !== 'player' || pl.busy || pl.swimming || this.hiding || this.holdup || this.arrest || this.death || this.lockpick.active || this.sleeping) return;
+        const ax = this.input.getMoveAxis(), { forward, right } = this.camera.getGroundBasis();
+        let dx = right.x * ax.x + forward.x * ax.z, dz = right.z * ax.x + forward.z * ax.z;
+        if (dx * dx + dz * dz < 0.04) { const h = pl.root.rotation.y; dx = Math.sin(h); dz = Math.cos(h); }
+        if (pl.startRoll(dx, dz)) AudioFX.roll(pl.position.x, pl.position.z);
+        else if (pl.winded || (pl.stamina != null && pl.stamina < Config.tactics.rollStamina * 0.5)) this._flash('Sem fôlego para rolar');
+    }
+
+    // Raio em que as testemunhas notam um crime do jogador: agachado (furtivo), bem menor.
+    _witnessR(r = Config.npc.violenceRadius) { return this.player.crouched ? r * Config.tactics.stealthWitness : r; }
+
     _tryVault() {
         const pl = this.player;
         if (pl.busy || this.hiding) return;
         const p = pl.position, o = CityGrid.nearestVault(p.x, p.z, 1.5);
-        if (!o) { this._flash('Nada para pular aqui'); return; }
+        if (!o) { this._tryRoll(); return; }                         // (longe de grade/muro, V rola)
+        pl.setCrouch(false);
         if (o.bridgeRail && (pl.underBridge || pl.depth > 0)) { this._flash('Alto demais para subir daqui'); return; }      // (nadando sob a ponte)
         const land = CityGrid.vaultLanding(o, p.x, p.z, true);
         if (!land) { this._flash(o.bridgeRail ? 'Aqui embaixo não tem água' : 'Sem espaço do outro lado'); return; }
@@ -1932,21 +2000,21 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 
     // ---------------------------------------------------------------- assalto e furto
     // ASSALTO (E): exige arma na mão. A vítima se rende (mãos ao alto, ajoelha) e leva `holdTime` s para entregar tudo —
-    // você precisa manter a arma e ficar perto. Chama MUITA atenção: flagrante longo, polícia avisada, testemunhas fogem
-    // e ligam (+1★ ao fim).
+    // você precisa manter a arma e ficar perto. Policial perto vendo a cena = procurado; testemunhas fogem e ligam ao fim, mas só
+    // vem a polícia que estiver por perto (Config.police.callRadius).
     _tryRob() {
         const pl = this.player, R = Config.robbery;
         if (pl.busy || this.holdup) return;
         const victim = this.npcManager.nearestTarget(pl.position, R.holdRange, (n) => !n.surrendered);
         if (!victim) { this._flash('Ninguém por perto pra assaltar…'); return; }
         if (pl.weapon === 'none') { this._flash(this.inventory.armed ? 'Saque uma arma pra assaltar (teclas 1-9)' : 'Sem arma não tem assalto — arrume uma'); return; }
+        pl.setCrouch(false);                                           // (anunciar o assalto é de pé)
         victim.surrender(pl.position);
         pl.root.rotation.y = Math.atan2(victim.position.x - pl.position.x, victim.position.z - pl.position.z);
         pl.velocity.setAll(0);
         this.holdup = { victim, t: 0, dur: R.holdTime, alertT: 0, seen: false };
         if (this.empire) this.empire.spend(5, 12);
-        this.wanted.reportCrime(R.crimeWindow);
-        if (this.policeManager) this.policeManager.alertNear(pl.position, R.policeAlertRadius);
+        this.wanted.reportCrime();                                     // flagrante: só um policial perto vendo a cena (renovado a cada 1 s)
         this.holdup.seen = this.npcManager.alertViolence(pl.position, R.witnessRadius + 8, victim) > 0;
         AudioFX.blip(320, 0.18, 0.22);
         this._flash('Mãos pra cima! Mantenha a mira…');
@@ -1965,6 +2033,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         H.alertT -= dt;
         if (H.alertT <= 0) {                                           // quem chega e vê a cena foge e vira testemunha
             H.alertT = 1;
+            this.wanted.reportCrime();
             if (this.npcManager.alertViolence(pl.position, R.witnessRadius, v) > 0) H.seen = true;
         }
         if (H.t < H.dur) return;
@@ -1976,11 +2045,13 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         AudioFX.blip(980, 0.12, 0.2);
         v.endSurrender(pl.position);
         Standing.harm(this, 4);
-        this.wanted.reportCrime(R.crimeWindow);
-        if (H.seen) {
-            this.wanted.bump('robbery');
-            this._flash(`Assalto: +${brl(loot)}! Testemunhas ligaram pra polícia — vaza!`);
-        } else this._flash(`Assalto: +${brl(loot)}! Some daqui antes que alguém te veja`);
+        this.wanted.reportCrime();
+        // Testemunhas ligam — mas só vem a polícia que estiver por perto (Config.police.callRadius); ela vai ao local e, se te achar
+        // enquanto investiga, você vira procurado. Sem polícia por perto a ligação não dá em nada.
+        const coming = H.seen && this.policeManager ? this.policeManager.callPolice(pl.position) : 0;
+        if (coming) this._flash(`Assalto: +${brl(loot)}! Testemunhas ligaram e tem polícia perto — vaza antes que te achem!`);
+        else if (H.seen) this._flash(`Assalto: +${brl(loot)}! Testemunhas ligaram, mas não tem polícia por perto — some daqui`);
+        else this._flash(`Assalto: +${brl(loot)}! Some daqui antes que alguém te veja`);
     }
 
     _cancelHoldup(msg) {
@@ -2002,7 +2073,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     }
 
     // Probabilidade de o furto dar certo. Por enquanto fixa/aleatória; depois virá do status do personagem.
-    _theftChance(npc) { return Math.min(0.95, Config.robbery.theftChance + (SkillTree.m.theft || 0) + (this.empire ? this.empire.fx('theft', 0) : 0)); }
+    _theftChance(npc) { return Math.min(0.95, Config.robbery.theftChance + (SkillTree.m.theft || 0) + (this.empire ? this.empire.fx('theft', 0) : 0) + (this.player.crouched ? Config.tactics.theftBonus : 0)); }      // (agachado: chega de mansinho)
 
     _resolveTheft(npc) {
         const pl = this.player, R = Config.robbery;
@@ -2023,7 +2094,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             if (this.empire) this.empire.spend(2, 10);
             Standing.harm(this, 3);
             this.wanted.reportCrime();
-            this.npcManager.alertViolence(pl.position, 9, npc);
+            this.npcManager.alertViolence(pl.position, this._witnessR(9), npc);
             AudioFX.blip(190, 0.2, 0.22);
             this._flash('Te pegaram no flagra! Ladrão!');
         }

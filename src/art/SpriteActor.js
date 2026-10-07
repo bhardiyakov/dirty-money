@@ -3,7 +3,7 @@
 // que mostra o frame certo do clipe atual na direção certa.
 //   play(clipe, arma)   troca o clipe (sem reiniciar se já está tocando)
 //   setHeading(rad)     escolhe a coluna de direção (0 = norte, +X = leste)
-//   update(dt, rate)    avança a animação (rate = multiplicador de velocidade)
+//   update(dt, rate)    avança a animação (rate = multiplicador de velocidade; negativo = ao contrário, em clipe com loop)
 // O quad fica em y=0.5, acima de calçada (0,18) e rua (0,02): sem z-fighting.
 //
 // Dois tipos de clipe:
@@ -334,7 +334,7 @@ class SpriteActor {
         if (c.vector) this._rotate();
         this.time += dt * c.fps * rate * (this._rateK || 1);
         let f;
-        if (c.loop) f = Math.floor(this.time) % c.frames;
+        if (c.loop) f = ((Math.floor(this.time) % c.frames) + c.frames) % c.frames;          // (ritmo negativo: anda para trás no ciclo)
         else { f = Math.min(Math.floor(this.time), c.frames - 1); if (this.time >= c.frames) this.done = true; }
         if (f !== this.frame) { this.frame = f; this._applyUV(); }
     }

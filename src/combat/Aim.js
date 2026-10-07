@@ -4,12 +4,17 @@
 //                       cursor do mouse trocam de alvo. O corpo vira para o alvo numa velocidade que depende da habilidade.
 //   MANUAL:             você aponta — analógico direito (controle) ou cursor do mouse; nada é travado. Erra menos que a assistida
 //                       quando a mira está firme (recompensa a precisão).
+//   MIRA LIVRE (manual, sem segurar o botão de mirar, arma de fogo na mão): o CURSOR do mouse vira a mira (o círculo fica nele, o
+//                       tiro vai até ele e o corpo vira na hora do disparo); o ANALÓGICO DIREITO empurrado aponta (o personagem
+//                       fica de frente para lá, anda de lado/de costas sem correr, e o RT atira nessa direção). Com a arma na mão
+//                       na mira manual, o analógico direito deixa de dar zoom.
 //   (Escolha em Ajustes › Mira; fica em PauseMenu.settings.aimAssist.)
 // PONTARIA — quanto o personagem acerta. Vem das habilidades do ramo COMBATE: "Mão firme" (dispersão) e "Olho de águia" (mira):
 //   • a mira FIRMA com o tempo parado mirando (de 0,85 s a 0,35 s): o círculo da mira encolhe até a dispersão mínima;
 //   • a dispersão mínima cai com a pontaria; andar abre o círculo; cada tiro dá um coice que desfirma um pouco (menos com pontaria);
 //   • a mira assistida trava mais longe e vira mais rápido para o alvo.
-// Sem mirar (tiro "do quadril") é como antes: assistida puxa um pouco para quem está bem à frente; manual sai reto.
+// Sem mirar (tiro "do quadril"): assistida trava em quem estiver até Config.aim.cone (30°) de onde o personagem olha — ele vira e
+// atira nele, adiantando o tiro se o alvo corre; manual vai para o cursor / analógico (mira livre) ou, sem eles, sai reto.
 // O círculo na tela mostra a dispersão real do próximo tiro: é a área onde a bala pode cair.
 // ============================================================================
 
@@ -20,6 +25,9 @@ class Aim {
         this.target = null;         // alvo travado (assistida)
         this.heading = 0;           // direção da mira (rad, 0 = norte/+z)
         this.settle = 0;            // 0 = acabou de levantar a arma · 1 = mira firme
+        this.free = null;           // mira livre (manual, sem o botão de mirar): 'mouse' | 'stick' | null
+        this.freeDir = null;        // direção da mira livre (rad), ou null
+        this._sT = 0;               // (analógico: segura a direção um instante depois de soltar — dá para soltar e atirar)
         this._stickHeld = false;
         this._mouseT = 0;
         this._build();
@@ -39,7 +47,13 @@ class Aim {
         const g = this.g, p = g.player, inp = g.input, W = Weapons[p.weapon];
         const can = g.mode === 'player' && p.alive && W && W.gun && !p.swimming && !p.rag && !g.lockpick.active && !g.hiding && !g.holdup
             && !g.arrest && !g.death && !g.inventoryOpen && !g.menu.isOpen && !(g.motoUI && g._modalUiOpen());
-        if (!can || !inp.aimHeld) { if (this.active) this._stop(); return; }
+        inp.stickAim = can && !this.assisted;                // (mira manual com arma: o analógico direito aponta em vez de dar zoom)
+        if (!can || !inp.aimHeld) {
+            if (this.active) this._stop();
+            if (can && !this.assisted) this._updateFree(dt, W); else if (this.free) this._stopFree();
+            return;
+        }
+        if (this.free) this._stopFree();
 
         const q = Aim.quality(), qa = Aim.aimSkill();
         if (!this.active) { this.active = true; this.settle = 0; this.target = null; this.heading = p.root.rotation.y; }
@@ -47,7 +61,7 @@ class Aim {
 
         // De onde vem a direção: analógico direito (controle) ou cursor (mouse, se foi o último usado).
         const rs = inp.rstick, stickMag = Math.hypot(rs.x, rs.y);
-        const stickDir = stickMag > 0.35 ? Math.atan2(rs.x, -rs.y) : null;
+        const stickDir = stickMag > 0.35 ? Aim.stickAngle(rs) : null;
         const mouse = !inp.usingPad ? this._mouseGround() : null;
         const mouseDir = mouse ? Math.atan2(mouse.x - p.position.x, mouse.z - p.position.z) : null;
 
@@ -80,13 +94,60 @@ class Aim {
         this.active = false; this.target = null; this.settle = 0;
         this.g.player.aimHeading = null;
         this.ret.style.display = 'none';
+        this._cursor(false);
+    }
+
+    // Analógico direito (x direita +, y baixo +) → direção no mundo (rad, 0 = norte), levando em conta o giro da câmera.
+    static stickAngle(rs) { return Math.atan2(rs.x, -rs.y) + (typeof CompassCamera !== 'undefined' ? CompassCamera.yaw || 0 : 0); }
+
+    // Mira livre (manual, sem segurar o botão de mirar): ver o cabeçalho. Mouse só aponta o TIRO (o corpo vira ao atirar);
+    // o analógico, quando empurrado, vira o corpo também.
+    _updateFree(dt, W) {
+        const g = this.g, p = g.player, inp = g.input, rs = inp.rstick, mag = Math.hypot(rs.x, rs.y);
+        let mode = null, dir = null, mouse = null;
+        if (inp.usingPad) {
+            if (mag > 0.3) { this._sDir = Aim.stickAngle(rs); this._sT = 0.3; } else this._sT -= dt;
+            if (this._sT > 0) { mode = 'stick'; dir = this._sDir; }
+        } else if (inp.mouseX >= 0) {
+            mouse = this._mouseGround();
+            if (mouse && Math.hypot(mouse.x - p.position.x, mouse.z - p.position.z) > 0.3) { mode = 'mouse'; dir = Math.atan2(mouse.x - p.position.x, mouse.z - p.position.z); }
+        }
+        if (!mode) { if (this.free) this._stopFree(); return; }
+        if (mode !== this.free) this.heading = mode === 'stick' ? p.root.rotation.y : dir;
+        this.free = mode; this.freeDir = dir; this.target = null; this.settle = 0;
+        this.heading = mode === 'stick' ? this._lerpAngle(this.heading, dir, 1 - Math.exp(-22 * dt)) : dir;
+        p.aimHeading = mode === 'stick' ? this.heading : null;
+        p.aimFree = mode === 'stick';
+        this._mouse = mouse;
+        this._draw(W, Aim.quality());
+    }
+
+    _stopFree() {
+        const p = this.g.player;
+        if (this.free === 'stick') p.aimHeading = null;
+        p.aimFree = false;
+        this.free = null; this.freeDir = null; this._mouse = null;
+        this.ret.style.display = 'none';
+        this._cursor(false);
+    }
+
+    // Esconde a seta do mouse sobre o jogo enquanto o círculo da mira está no cursor (ele é a mira).
+    _cursor(hide) {
+        if (hide === this._cursorHidden) return;
+        this._cursorHidden = hide;
+        const cv = this.g.scene.getEngine().getRenderingCanvas();
+        if (cv) cv.style.cursor = hide ? 'none' : '';
     }
 
     // ------------------------------------------------------------------ disparo (Game._onAttack)
-    // Direção do tiro: mirando = a mira; sem mirar = assistida puxa de leve (cone estreito), manual sai reto.
-    shotAngle(x, z, heading) {
-        if (this.active) return this.heading;
-        return this.assisted ? this.g.combat.aimAssist(x, z, heading) : heading;
+    // Direção do tiro. Mirando com alvo travado: direto nele (mesmo que o corpo ainda esteja virando), adiantado se ele corre;
+    // mirando sem alvo: a mira. Sem mirar: a assistida trava no melhor alvo até Config.aim.cone graus de onde o personagem olha
+    // (não precisa estar alinhado); manual: a mira livre (cursor / analógico) ou, sem ela, reto.
+    shotAngle(x, z, heading, weaponKey = this.g.player.weapon) {
+        const W = Weapons[weaponKey], sp = W ? W.speed : 0, c = this.g.combat;
+        if (this.active) return this.target && this.target.alive ? c.leadAngle(x, z, this.target, sp) : this.heading;
+        if (!this.assisted) return this.freeDir !== null ? this.freeDir : heading;        // mira livre: cursor / analógico
+        return c.aimAssist(x, z, heading, Math.min(W ? W.range : 30, 30), Combat.ASSIST_CONE, sp);
     }
 
     // Multiplicador da dispersão da arma para o próximo tiro (já com a habilidade Mão firme).
@@ -196,6 +257,7 @@ class Aim {
         el.style.transform = `translate(${c.x - rad}px, ${c.y - rad}px)`;
         el.style.width = el.style.height = rad * 2 + 'px';
         el.className = (this.target ? 'lock' : '') + (this.settle >= 0.98 ? ' steady' : '');
+        this._cursor(!this.target && !!this._mouse);
     }
 
     _build() {

@@ -56,12 +56,25 @@ const Config = {
         zoomSpeed: 22,         // velocidade de zoom por tecla (unidades/s).
         wheelStep: 1.5,        // passo de zoom por "tick" da roda do mouse.
         followLerp: 60,        // suavidade do acompanhamento (alto = praticamente colada).
+        // Zoom automático (CompassCamera.setAutoZoom): multiplica o zoom escolhido. A pé aproxima; no veículo afasta conforme a velocidade:
+        // carZoom parado, + speedZoom inteiro a partir de speedRef m/s. Os lerps são a rapidez da transição (afastar / aproximar).
+        footZoom: 0.78,
+        carZoom: 1.0,
+        speedZoom: 0.75,
+        speedRef: 38,          // m/s (≈ 137 km/h): acima disso o afastamento já é o máximo
+        zoomOutLerp: 1.4,
+        zoomInLerp: 0.9,
         // Dirigindo: câmera "bússola" — gira com o veículo (frente sempre para cima) e o deixa mais ao sul da tela.
         carCompass: true,
         carLead: 0.45,         // adianto à frente do veículo (fração da meia-altura visível): 0,45 = carro a ~72% da altura da tela
         carTurnTrigger: 1.13,  // só gira (em passos de 90°) quando o carro se afasta ~65° da direção da câmera: desvios não balançam a tela
         yawLerp: 3.5,          // rapidez do giro da câmera quando ela gira (maior = mais rápido; menor = mais suave)
         leadLerp: 2.5,         // rapidez com que o adianto entra (ao entrar no carro) e sai (ao descer)
+        // BALANÇO ao dirigir (CompassCamera._bounce): a câmera presa ao veículo por uma mola. lag = deslocamento (u) por m/s² de
+        // aceleração (arrancada, freada, curva), até maxAcc; stiff/damp = a mola (pouco amortecida: passa do ponto e assenta);
+        // roll = inclinação (rad) por rad/s de giro, até rollMax; bump = força dos trancos do asfalto (pulso no zoom, mola hStiff/hDamp);
+        // rumble = trepidação (u) a partir de rumbleRef m/s.
+        bounce: { lag: 0.07, maxAcc: 22, accLerp: 10, stiff: 26, damp: 3.6, roll: 0.012, rollMax: 0.03, bump: 0.18, hStiff: 60, hDamp: 6, rumble: 0.05, rumbleRef: 30 },
         // Borrão de velocidade (SpeedBlur): começa a 80% da velocidade máxima do veículo e chega ao máximo nela.
         blurFrom: 0.8,
         blurMax: 0.04,         // força máxima (fração da distância ao carro que cada pixel "arrasta")
@@ -205,15 +218,37 @@ const Config = {
         herdChance: 0.6,
     },
 
+    // Mira assistida das armas de fogo (combat/Aim.js e Combat.assistTarget): trava em quem estiver até `cone` graus (para cada lado)
+    // da direção em que o personagem olha — não precisa estar alinhado. Mirando (botão direito/LT) o cone de busca é mais largo.
+    aim: { cone: 30 },
+
+    // TÁTICO do jogador a pé (player.js e combat/Cover.js): AGACHAR (Q · L3 no controle) = furtivo; agachado encostado num prédio,
+    // muro, caçamba, contêiner ou carro parado = EM COBERTURA; ROLAR (V longe de grade/muro · RB) = esquiva de balas.
+    tactics: {
+        sneakSpeed: 0.55,      // agachado anda a esta fração do passo normal (não corre: correr levanta)
+        stealthSight: 0.55,    // agachado, a polícia e a facção só te notam até esta fração do alcance de visão de sempre...
+        stealthSightWanted: 0.75,   // ...ou esta, já procurado (a polícia está atenta)
+        stealthWitness: 0.5,   // ...e as testemunhas de um crime (assalto, furto, briga), idem
+        theftBonus: 0.25,      // furto agachado: + esta chance de dar certo
+        coverReach: 1.3,       // distância (u) até a superfície da cobertura para estar "em cobertura"
+        coverSnap: 2.4,        // apertando Q até esta distância de uma cobertura, o personagem vai até ela
+        coverMinH: 0.9,        // altura mínima (u) de um obstáculo para servir de cobertura (grade vazada não serve)
+        coverExposed: 0.5,     // levantado para mirar/atirar da cobertura: chance de uma bala vinda do lado dela passar
+        rollTime: 0.6,         // duração do rolamento (s)
+        rollDist: 4.4,         // distância percorrida rolando (u)
+        rollIframes: [0.05, 0.48],   // janela (s desde o início) em que as balas passam por você
+        rollCooldown: 0.35,    // intervalo mínimo entre dois rolamentos (s)
+        rollStamina: 12,       // fôlego gasto por rolamento
+    },
+
     // Assalto (E, com arma na mão: a vítima se rende e entrega tudo) e furto (C: carteirada, sem arma).
     robbery: {
         holdRange: 5,          // Alcance para apontar a arma e render o pedestre mais próximo.
         holdLeash: 7.5,        // Se você se afastar mais que isto da vítima, o assalto é cancelado.
         holdTime: 4.5,         // Segundos que a vítima leva para entregar tudo (você precisa manter a mira).
         holdLoot: [90, 340],   // Dinheiro do assalto, mín–máx.
-        crimeWindow: 15,       // Janela de flagrante do assalto (s): bem maior que a de um crime comum (police.crimeVisibleTime).
-        policeAlertRadius: 55, // Viaturas/policiais neste raio ouvem o chamado e vão ao local.
-        witnessRadius: 14,     // Testemunhas (pedestres que veem) até esta distância: fogem e chamam a polícia (+1★ ao fim).
+        witnessRadius: 14,     // Testemunhas (pedestres que veem) até esta distância: fogem e LIGAM para a polícia ao fim — só atende quem
+                               // estiver a até police.callRadius (sem viatura/policial por perto, ninguém vem e não há estrela).
         theftRange: 2.2,       // Alcance da carteirada.
         theftChance: 0.4,      // Chance de sucesso do furto (por enquanto aleatória; depois virá do status do personagem).
         theftLoot: [8, 55],    // Dinheiro do furto, mín–máx.
@@ -265,6 +300,16 @@ const Config = {
         turnRate: 2.0,         // Guinada máx. (rad/s) em velocidade plena.
         turnSpeedRef: 6,       // Velocidade (m/s) para direção com autoridade total.
         grip: 10,              // Aderência lateral: maior = mata a derrapagem mais rápido.
+        // PESO e DERRAPAGEM do carro que o jogador dirige (Vehicle._applyMotion; motos, bicicletas e barcos ficam de fora):
+        understeer: 0.3,       // quanto a guinada cai na velocidade understeerRef (m/s) ou acima: carro rápido vira menos
+        understeerRef: 32,
+        yawInertia: 5,         // rapidez (1/s) com que a guinada segue o volante num carro de 1 t (√ da massa: mais pesado = mais lento)
+        slipLimit: 27,         // aceleração lateral (m/s², velocidade × guinada) que os pneus seguram no seco; acima disso derrapa
+        slipMinSpeed: 13,      // abaixo disso (m/s ≈ 47 km/h) nunca derrapa por excesso de curva
+        slipGain: 2.5,         // quão rápido o excesso vira derrapagem plena
+        slipGrip: 0.85,        // fração da aderência lateral perdida derrapando de vez
+        slipYaw: 0.45,         // derrapando, a traseira escapa: o carro gira até 45% além do que o volante pede
+        slipScrub: 0.15,       // perda de velocidade (1/s) arrastando de lado
         linearDamping: 0.1,    // Arrasto do chassi.
         brakeDrag: 8,          // Freio-motor (m/s²) quando solta o acelerador.
         waterDrag: 6,          // Atola o carro fora da terra (não atravessa água).
@@ -377,10 +422,15 @@ const Config = {
         hearMemory: 22,        // Quanto tempo (s) quem ouviu um tiro continua indo ao local.
         weaponsFreeTime: 24,   // Segundos de "armas liberadas" após um tiro do jogador.
         shootRange: 44,        // Alcance em que policiais (a pé e nas viaturas) atiram com armas liberadas.
-        hearRadius: 150,       // Quem ouve um tiro do jogador nesse raio vira perseguidor (todos atiram).
+        // RADAR da polícia: um crime só vira procurado se a polícia estiver PERTO — presenciando (sightRange, com linha de visada,
+        // até crimeVisibleTime s depois) ou ouvindo/sendo chamada (hearRadius/callRadius: aí ela vai ao local e o flagrante fica aberto
+        // por investigateTime enquanto investiga). Longe da polícia, tiro e assalto não dão estrela.
+        hearRadius: 55,        // Policial a até isto de um tiro do jogador OUVE: vai ao local e passa a atirar (armas liberadas).
         maxOfficers: 42,       // Teto de policiais a pé (patrulha + reforços que descem das viaturas).
-        sightRange: 55,        // Alcance em que a polícia te "vê" (gera/mantém procurado).
-        crimeVisibleTime: 8,   // Janela após o crime em que ser visto gera procurado.
+        sightRange: 28,        // SEM estrelas: alcance em que um policial presencia um crime (≈ a tela). Com ★ vale o `sight` do nível.
+        crimeVisibleTime: 3,   // O crime precisa ser visto na hora (até isto de s depois)...
+        investigateTime: 10,   // ...ou, se a polícia por perto ouviu/foi chamada, enquanto ela investiga o local.
+        callRadius: 70,        // Testemunhas que ligam (assalto) só trazem a polícia que estiver a até isto do local.
 
         bustRange: 8,          // Distância da polícia que conta para a prisão.
         bustTime: 5,           // Segundos colado na polícia para ser preso (dá tempo de reagir e fugir a pé).

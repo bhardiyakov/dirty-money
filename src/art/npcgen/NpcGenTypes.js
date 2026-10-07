@@ -27,6 +27,13 @@ function NpcGenTypes(G) {
         'pick:none', 'surrender:none', 'kneel:none', 'rummage:none', 'pickpocket:none', 'hurt:none', 'dead:none', ...FALLS, ...RIDE,
         'mount:moto', 'mount:motoL', 'mount:bike', 'mount:bikeL',
     ];
+    // Clipes TÁTICOS do jogador (agachado/cobertura e andar agachado, com e sem arma; passo lateral mirando; rolamento de esquiva).
+    // Ficam num atlas COMPANHEIRO (protagonista_tatico; nos visuais gerados, "hero:N:t"): o atlas principal em alta definição já
+    // ocupa quase todo o espaço endereçável (4096 × 4096) — ver NpcSheet.extraAtlas.
+    const PLAYER_TAC = [
+        ...['none', 'pistol', 'smg', 'shotgun'].flatMap((w) => [`crouch:${w}`, `sneak:${w}`]),
+        ...['pistol', 'smg', 'shotgun'].map((w) => `strafe:${w}`), 'roll:none',
+    ];
     const PLAYER_HAND = ['idle_hold:none', 'walk_hold:none', 'run_hold:none', 'idle_hold:pistol', 'walk_hold:pistol', 'run_hold:pistol'];
     const PLAYER_PULL = ['idle_pull:none', 'walk_pull:none'];
     const PLAYER_HEAVY = ['walk_heavy:none'];
@@ -83,6 +90,7 @@ function NpcGenTypes(G) {
         trafic_pistola: T('gang', 8, ['gang1', 'gang2'], GANG(['pistol', 'smg'])),
         trafic_mascarado: T('gang', 8, ['gang1', 'gang3'], GANG(['pistol', 'shotgun']), { shotgun: 'rifle_ak' }),
         protagonista: T(null, 1, ['player'], [...PLAYER, 'walk_heavy:none']),
+        protagonista_tatico: T(null, 1, [], PLAYER_TAC),             // (companheiro do protagonista: nenhum lugar sorteia este tipo)
     };
 
     // O jogador no começo do jogo (a roupa de sempre do Outfit). Só os campos de FORMA importam para o atlas pronto; as cores vêm
@@ -93,6 +101,7 @@ function NpcGenTypes(G) {
         sole_color: 'tenis_branco', lace_color: 'cadarco', head: null, hat_color: 'roupa_preta', bag: null, body: 'muscular', gender: 'm',
     };
     G.BY_ID.protagonista = PLAYER_DEFAULT;
+    G.BY_ID.protagonista_tatico = PLAYER_DEFAULT;
     // Campos que mudam o DESENHO (o resto é cor). Dois visuais com a mesma chave usam o mesmo atlas.
     const SHAPE_KEYS = ['hair', 'head', 'top', 'pattern', 'bottom', 'shoes', 'bag', 'body', 'gender', 'beard', 'glasses', 'gloves', 'chain', 'mask', 'scale', 'eyes', 'watch', 'hat_logo', 'zip', 'belt', 'rifle', 'hand'];
     const shapeKey = (spec) => { const s = fullSpec(spec); return SHAPE_KEYS.map((k) => k + '=' + (s[k] === undefined || s[k] === null || s[k] === false ? '' : s[k])).join(';'); };
@@ -148,6 +157,6 @@ function NpcGenTypes(G) {
     // Tipos que servem a um lugar/papel (grupo).
     function typesFor(group) { return Object.keys(TYPES).filter((id) => TYPES[id].groups.includes(group)); }
 
-    Object.assign(G, { TYPES, PLAYER_DEFAULT, SHAPE_KEYS, shapeKey, variantSpec, weaponFor, typesFor, PLAYER_CLIPS: PLAYER, PLAYER_HAND, PLAYER_PULL, PLAYER_HEAVY, PLAYER_FIRST, hashStr: hash, rngSeed: rng });
+    Object.assign(G, { TYPES, PLAYER_DEFAULT, SHAPE_KEYS, shapeKey, variantSpec, weaponFor, typesFor, PLAYER_CLIPS: PLAYER, PLAYER_TAC, PLAYER_HAND, PLAYER_PULL, PLAYER_HEAVY, PLAYER_FIRST, hashStr: hash, rngSeed: rng });
     return G;
 }

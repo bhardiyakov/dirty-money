@@ -85,10 +85,14 @@ class Combat {
         return n;
     }
 
-    // Mira assistida (não há mouse): puxa o ângulo para o alvo vivo mais próximo dentro de um cone.
-    aimAssist(x, z, angle, range = 30, cone = 0.2) {
+    // Abertura da mira assistida (rad, para cada lado): trava em quem estiver até Config.aim.cone graus de onde o personagem olha.
+    static get ASSIST_CONE() { return ((Config.aim && Config.aim.cone) || 30) * Math.PI / 180; }
+
+    // Alvo da mira assistida: o melhor vivo e à vista dentro de ±cone da direção `angle` (rad) e de `range`. null se ninguém.
+    // Preferência: perto do centro do cone e do atirador; polícia e facção (que atiram de volta) antes dos pedestres.
+    assistTarget(x, z, angle, range = 30, cone = Combat.ASSIST_CONE) {
         let best = null, bestScore = Infinity;
-        const consider = (t, reach = range) => {
+        const consider = (t, w, reach = range) => {
             const dx = t.position.x - x, dz = t.position.z - z;
             const d = hypot(dx, dz);
             if (d > reach || d < 0.5) return;
@@ -96,20 +100,57 @@ class Combat {
             while (da > Math.PI) da -= Math.PI * 2;
             while (da < -Math.PI) da += Math.PI * 2;
             if (Math.abs(da) > cone) return;
+            const score = (Math.abs(da) * 20 + d * 0.25) * w;
+            if (score >= bestScore) return;
             if (!t.flying && !MapGeo.hasLineOfSight(x, z, t.position.x, t.position.z)) return;   // quem voa não é tapado por prédio
-            const score = Math.abs(da) * 20 + d * 0.25;
-            if (score < bestScore) { bestScore = score; best = { angle: angle + da, target: t }; }
+            bestScore = score; best = t;
         };
         const g = this.game;
-        if (g.npcManager) for (const n of g.npcManager.npcs) if (n.alive) consider(n);
+        if (g.npcManager) for (const n of g.npcManager.npcs) if (n.alive) consider(n, 1);
         if (g.policeManager) {
-            for (const o of g.policeManager.officers) if (o.alive) consider(o);
+            for (const o of g.policeManager.officers) if (o.alive) consider(o, 0.7);
             const h = g.policeManager.heli;
-            if (h && h.alive) consider(h, 40);
+            if (h && h.alive) consider(h, 0.8, Math.max(range, 40));
         }
-        if (g.gangs) for (const o of g.gangs.members) if (o.alive) consider(o);
-        if (g.watch && g.watch.lookouts) for (const o of g.watch.lookouts) if (o.alive && o.actor) consider(o);
-        return best ? best.angle : angle;
+        if (g.gangs) for (const o of g.gangs.members) if (o.alive) consider(o, 0.7);
+        if (g.watch && g.watch.lookouts) for (const o of g.watch.lookouts) if (o.alive && o.actor) consider(o, 0.9);
+        return best;
+    }
+
+    // Mira assistida sem travar (tiro "do quadril"): o ângulo para o melhor alvo do cone (já adiantado se ele corre) ou `angle`.
+    aimAssist(x, z, angle, range = 30, cone = Combat.ASSIST_CONE, speed = 0) {
+        const t = this.assistTarget(x, z, angle, range, cone);
+        return t ? this.leadAngle(x, z, t, speed) : angle;
+    }
+
+    // Ângulo para acertar `t` saindo de (x, z) com a bala a `speed` m/s: mira onde ele VAI estar quando ela chegar (velocidade
+    // estimada em _trackVel). Sem isso quem foge correndo (todo mundo, depois do 1º tiro) era errado por mais que o corpo dele.
+    leadAngle(x, z, t, speed = 0) {
+        const p = t.position, vx = t._tvx || 0, vz = t._tvz || 0;
+        let ax = p.x, az = p.z;
+        if (speed > 0 && (vx || vz)) {
+            for (let k = 0; k < 2; k++) {
+                const tt = Math.min(1.2, hypot(ax - x, az - z) / speed);
+                ax = p.x + vx * tt; az = p.z + vz * tt;
+            }
+        }
+        return Math.atan2(ax - x, az - z);
+    }
+
+    // Velocidade (suavizada) de cada alvo vivo, pela diferença de posição entre quadros: a mira assistida adianta o tiro com ela.
+    // Saltos grandes (reciclado para longe, teletransporte) não contam.
+    _trackVel(T, dt) {
+        if (dt <= 0) return;
+        const k = 1 - Math.exp(-12 * dt);
+        for (const e of T) {
+            if (e.kind === 'car' || e.kind === 'chopper') continue;
+            const r = e.ref, p = r.position;
+            if (r._tpx === undefined) { r._tpx = p.x; r._tpz = p.z; r._tvx = 0; r._tvz = 0; continue; }
+            const vx = (p.x - r._tpx) / dt, vz = (p.z - r._tpz) / dt;
+            r._tpx = p.x; r._tpz = p.z;
+            if (vx * vx + vz * vz > 1600) { r._tvx = 0; r._tvz = 0; continue; }
+            r._tvx += (vx - r._tvx) * k; r._tvz += (vz - r._tvz) * k;
+        }
     }
 
     // ---------------------------------------------------------- corpo a corpo
@@ -120,7 +161,7 @@ class Combat {
         const g = this.game, ok = (t) => t.alive && !t.rag && (!t.actor || t.actor.visible !== false);
         if (source !== 'player') {
             const p = g.player;
-            if (p && p.alive && g.mode === 'player' && !p.rag && !p.invulnerable && !g.hiding) out.push(p);
+            if (p && p.alive && g.mode === 'player' && !p.rag && !p.invulnerable && !g.hiding && !p.dodging) out.push(p);
             return out;
         }
         if (g.npcManager) for (const n of g.npcManager.npcs) if (ok(n)) out.push(n);
@@ -273,6 +314,13 @@ class Combat {
         else if (car.role) g._flash('💥 Você furou o pneu da viatura!');
     }
 
+    // A cobertura do jogador segura esta bala? (vem do lado do obstáculo; mirando/atirando de pé, só às vezes)
+    _coverStops(pl, b) {
+        if (!pl.inCover || typeof Cover === 'undefined' || !Cover.blocks(pl.cover, b.dirx, b.dirz)) return false;
+        const g = this.game, exposed = (g.aim && g.aim.active) || (pl.action && pl.action.name === 'shoot');
+        return !exposed || Math.random() >= Config.tactics.coverExposed;
+    }
+
     spark(x, y, z, color = [1, 0.8, 0.4], life = 0.2) {
         const s = this.sparks.find((q) => !q.on);
         if (!s) return;
@@ -295,7 +343,7 @@ class Combat {
         if (g.watch && g.watch.lookouts) for (const o of g.watch.lookouts) if (o.alive && o.actor) add(o, 'lookout', 0.55);
         if (g.vehicleManager) for (const c of g.vehicleManager.vehicles) add(c, 'car', 1.4);
         if (g.vehicleManager) for (const c of g.vehicleManager.boats) add(c, 'car', Math.max(0.9, c.halfW));
-        if (g.player.alive && g.mode === 'player') add(g.player, 'player', 0.6);
+        if (g.player.alive && g.mode === 'player' && !g.player.dodging) add(g.player, 'player', g.player.crouched ? 0.5 : 0.6);      // (rolando: as balas passam; agachado: alvo menor)
         if (g.choppers) for (const c of g.choppers) if (c.alive) add(c, 'chopper', 2.6);
         T.length = n;
         return T;
@@ -304,6 +352,7 @@ class Combat {
     update(dt) {
         this._updateStrikes(dt);
         const T = this._collectTargets();
+        this._trackVel(T, dt);
         const g = this.glow;
 
         for (let i = 0; i < this.MAXB; i++) {
@@ -328,6 +377,16 @@ class Combat {
                 const u = Math.max(0, Math.min(1, ((p.x - b.px) * sx + (p.z - b.pz) * sz) / sl2));
                 const dx = b.px + sx * u - p.x, dz = b.pz + sz * u - p.z;
                 if (dx * dx + dz * dz < t.r * t.r && u < hitT) { hit = t; hitT = u; }
+            }
+            // Jogador em COBERTURA e a bala vem do lado dela: para no obstáculo (levantado para mirar/atirar, parte passa).
+            if (hit && hit.kind === 'player' && this._coverStops(hit.ref, b)) {
+                const C = hit.ref.cover;
+                this.spark(C.x, 1.0, C.z, [1, 0.85, 0.5]);
+                if (typeof SparkFx !== 'undefined') SparkFx.impact(C.x, C.z, b.dirx, b.dirz);
+                AudioFX.hit(C.x, C.z);
+                if (C.kind === 'car' && C.ref.takeDamage) C.ref.takeDamage(b.dmg * Config.crash.bulletMul, b.owner);
+                b.on = false; g.off(base); g.off(base + 1); g.off(base + 2);
+                continue;
             }
             if (hit) {
                 const hx = b.px + sx * hitT, hz = b.pz + sz * hitT;
