@@ -130,6 +130,7 @@ const AudioFX = {
         this._burst(x, z, { vol: 0.55, dur: 0.45, f0: 6500, f1: 320, maxDist: 170, type: 'bandpass', q: 0.7 });
     },
 
+    roll(x, z) { this._burst(x, z, { vol: 0.16, dur: 0.32, f0: 700, f1: 160, maxDist: 26, q: 0.6, att: 0.04 }); },      // rolamento: roupa e corpo arrastando no chão
     hit(x, z) { this._burst(x, z, { vol: 0.22, dur: 0.07, f0: 5200, f1: 1200, maxDist: 45, type: 'bandpass', q: 1.5 }); },
     thud(x, z) { this._burst(x, z, { vol: 0.5, dur: 0.1, f0: 520, f1: 70, maxDist: 40 }); },
     dryfire(x, z) { this._burst(x, z, { vol: 0.25, dur: 0.04, f0: 6000, f1: 3000, maxDist: 30, type: 'highpass', q: 2 }); },
@@ -247,6 +248,30 @@ const AudioFX = {
         c.vol.gain.setTargetAtTime(rpm > 0.02 ? Math.pow(Math.max(0, 1 - near / 200), 1.2) * 0.27 * Math.min(1, rpm * 1.3) : 0, t, 0.2);
         c.o.frequency.setTargetAtTime(30 + rpm * 24 + stress * 18, t, 0.2);
         c.lfo.frequency.setTargetAtTime(2 + rpm * 11 + stress * 5, t, 0.2);
+    },
+
+    // Pneu cantando (derrapagem do carro do jogador: Vehicle.slide). Chame todo frame com a intensidade (0..1); 0 silencia.
+    // Ruído estreito em banda (o chiado da borracha) + um tom que oscila (o "uivo"), os dois subindo um pouco com a força.
+    screech(level) {
+        if (!this._ok()) return;
+        if (!this._screech) {
+            if (level < 0.05) return;                                          // (só monta a cadeia na 1ª derrapagem de verdade)
+            const ctx = this.ctx, src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), gain = ctx.createGain();
+            src.buffer = this._noise(); src.loop = true;
+            bp.type = 'bandpass'; bp.frequency.value = 2100; bp.Q.value = 7;
+            const o = ctx.createOscillator(), og = ctx.createGain(), lfo = ctx.createOscillator(), lfoG = ctx.createGain();
+            o.type = 'triangle'; o.frequency.value = 1050; og.gain.value = 0.35;
+            lfo.type = 'sine'; lfo.frequency.value = 9; lfoG.gain.value = 45;
+            lfo.connect(lfoG); lfoG.connect(o.frequency);
+            gain.gain.value = 0;
+            src.connect(bp); bp.connect(gain); o.connect(og); og.connect(gain); gain.connect(this.master);
+            src.start(); o.start(); lfo.start();
+            this._screech = { gain, bp, o };
+        }
+        const t = this.ctx.currentTime, S = this._screech, l = Math.max(0, Math.min(1, level));
+        S.gain.gain.setTargetAtTime(l < 0.08 ? 0 : 0.03 + 0.1 * l, t, l < 0.08 ? 0.12 : 0.05);
+        S.bp.frequency.setTargetAtTime(1800 + 700 * l, t, 0.1);
+        S.o.frequency.setTargetAtTime(950 + 250 * l, t, 0.1);
     },
 
     // Chuva contínua: ruído filtrado em loop. Chame todo frame com a intensidade (0..1); 0 silencia.

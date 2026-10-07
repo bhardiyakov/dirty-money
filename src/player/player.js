@@ -7,6 +7,10 @@
 // Animação: locomoção (idle/walk/run, com ou sem arma) é escolhida pela
 // velocidade; AÇÕES (soco, chute, taco, tiro, sacar, roubar carro...) tomam
 // o controle até acabarem e travam/limitam o movimento.
+//
+// TÁTICO (Config.tactics): AGACHADO (furtivo: anda devagar e é notado de mais perto) — encostado num prédio, muro, caçamba ou
+// carro fica EM COBERTURA (combat/Cover.js); ROLAMENTO de esquiva (as balas passam por ele durante a janela rollIframes); e, de
+// frente para a mira, anda para a frente, para trás e de lado (passo lateral) atirando.
 // ============================================================================
 
 class Player {
@@ -32,6 +36,13 @@ class Player {
         this.action = null;        // { name, lock, onDone, holdAim }
         this.aimTimer = 0;         // tempo restante "mirando" parado após sacar/atirar.
         this.aimHeading = null;    // mirando (Aim): direção para onde o corpo aponta; null = livre
+        this.aimFree = false;      // ...pela mira livre do analógico direito (Aim._updateFree): anda quase normal, só não corre
+        this.crouched = false;     // agachado (furtivo / cobertura)
+        this.cover = null;         // superfície de cobertura ao lado (Cover.find) enquanto agachado; null = sem cobertura
+        this.roll = null;          // rolamento de esquiva em andamento: { t, dx, dz, heading }
+        this.coverSnap = null;     // indo até a cobertura (Q perto dela): { x0, z0, x, z, t, dur }
+        this._rollCd = 0;
+        this._coverT = 0;
         this._combo = 0;
 
         this.actor.play('idle');
@@ -77,6 +88,7 @@ class Player {
     // (pulou de um veículo: cambalhota). lethal: termina caído (o jogo cuida do "WASTED").
     ragdoll({ dx, dz, power, kind = 'hit', lethal = false }) {
         this.cancelSequence();
+        this.resetTactics();
         this.action = null; this.aimTimer = 0;
         this.velocity.setAll(0);
         this.rag = new Ragdoll(
@@ -112,7 +124,72 @@ class Player {
     revive() { this.armor = 0; this.armorMax = 0; this.hp = this.maxHp; this.action = null; this._sinceHit = 0; }
 
     // ---------------------------------------------------------------- ações
-    get busy() { return !!this.action || !!this.rag || !!this.frozen; }
+    get busy() { return !!this.action || !!this.rag || !!this.frozen || !!this.roll; }
+
+    // ---------------------------------------------------------------- tático: agachar, cobertura, rolar
+    get inCover() { return this.crouched && !!this.cover; }
+    // Balas passam por ele (rolando, na janela Config.tactics.rollIframes).
+    get dodging() { const r = this.roll, I = Config.tactics.rollIframes; return !!r && r.t >= I[0] && r.t <= I[1]; }
+
+    setCrouch(on) {
+        on = !!on;
+        if (on === this.crouched) return;
+        this.crouched = on;
+        this._coverT = 0;
+        if (!on) this.cover = null;
+        else this.cover = typeof Cover !== 'undefined' ? Cover.find(this.position.x, this.position.z) : null;
+    }
+
+    resetTactics() { this.roll = null; this.crouched = false; this.cover = null; this.coverSnap = null; }
+
+    // Rolamento na direção (dx, dz) (normalizada). false se não dá agora (ocupado, na água, recarregando o fôlego do último).
+    startRoll(dx, dz) {
+        const T = Config.tactics;
+        if (this.busy || this.swimming || (this.depth || 0) > 0 || this._rollCd > 0 || this.winded) return false;
+        if (this.stamina != null) { if (this.stamina < T.rollStamina * 0.5) return false; this.stamina = Math.max(0, this.stamina - T.rollStamina); }
+        const l = Math.hypot(dx, dz) || 1;
+        this.roll = { t: 0, dx: dx / l, dz: dz / l, heading: Math.atan2(dx, dz) };
+        this.crouched = false; this.cover = null;
+        this.aimTimer = 0;
+        this.root.rotation.y = this.roll.heading;
+        if (!this.actor.play('roll', 'none', { restart: true })) this.actor.play('tumble', 'none', { restart: true });
+        return true;
+    }
+
+    // Um quadro do rolamento: desliza (rápido no meio, devagar no começo e no fim) sem atravessar paredes e toca o clipe no ritmo dele.
+    _updateRoll(dt) {
+        const R = this.roll, T = Config.tactics;
+        R.t += dt;
+        const k = Math.min(1, R.t / T.rollTime), v = (T.rollDist / T.rollTime) * (Math.PI / 2) * Math.sin(Math.PI * k);
+        const p = this.root.position, nx = p.x + R.dx * v * dt, nz = p.z + R.dz * v * dt;
+        if (MapGeo.canWade(nx, nz)) { p.x = nx; p.z = nz; }
+        else if (MapGeo.canWade(nx, p.z)) p.x = nx;
+        else if (MapGeo.canWade(p.x, nz)) p.z = nz;
+        if (this.onDeck) this._clampToDeck(p); else MapGeo.resolveCircle(p, Config.player.radius, this.underBridge);
+        this._updateLevel();
+        this.velocity.set(R.dx * v, 0, R.dz * v); this.speed = v;
+        this.root.rotation.y = R.heading;
+        this.state = 'roll';
+        const c = this.actor.clip;
+        this._syncSprite();
+        this.actor.update(dt, c ? (c.frames / c.fps) / T.rollTime : 1);           // (o clipe inteiro dura exatamente o rolamento)
+        if (R.t >= T.rollTime) { this.roll = null; this._rollCd = T.rollCooldown; this.velocity.scaleInPlace(0.3); }
+    }
+
+    // Direção do movimento em relação a para onde o corpo olha (rad): 0 = para a frente, +π/2 = para a direita, ±π = para trás.
+    _relMove() {
+        const rel = Math.atan2(this.velocity.x, this.velocity.z) - this.root.rotation.y;
+        return Math.atan2(Math.sin(rel), Math.cos(rel));
+    }
+
+    // Clipe de locomoção mirando/atirando: de frente para a mira, o movimento pode ir para qualquer lado — para a frente (andar
+    // armado), para trás (o mesmo, ao contrário) ou de lado (passo lateral; para a esquerda, ao contrário). Devolve o ritmo (com sinal).
+    _aimGait(w, base) {
+        const rel = this._relMove(), a = Math.abs(rel);
+        if (a > 0.87 && a < 2.27 && this.actor.play('strafe', w)) return (rel > 0 ? 1 : -1) * base / 0.7;      // (passo lateral: passada 0,7)
+        this.actor.play('walk', w);
+        return a >= 2.27 ? -base : base;
+    }
 
     // Sequência de ações encadeadas (entrar/roubar um carro). Cada passo:
     //   { clip, weapon?, timer?, glide?:{x,z}, yank?, onStart? }
@@ -176,7 +253,18 @@ class Player {
         } else if (w === 'bat') {
             ok = this.playAction('swing', { lock: 0.3, weapon: w });
         } else {
-            ok = this.playAction('shoot', { lock: 0.6, weapon: look, holdAim: true });
+            // Andando, o tiro NÃO troca o desenho: as pernas seguem no passo (frente/trás/lado — ver update) e o clarão sai na arma
+            // (SparkFx). A ação dura o mesmo que o clipe de tiro e termina pelo tempo.
+            const sc = this.actor.sheet.getClip('shoot', look), dur = sc ? sc.frames / sc.fps : 0.25;
+            if (this.speed >= 0.6 && !this.swimming) {
+                this.action = { name: 'shoot', lock: 0.6, onDone: null, holdAim: true, yank: null, timer: dur, moving: true };
+                this.actor.done = false;                                               // (o fim é pelo tempo: o "acabou" do tiro anterior não vale)
+                this.state = 'shoot';
+                ok = true;
+            } else {
+                ok = this.playAction('shoot', { lock: 0.6, weapon: look, holdAim: true });
+                if (ok) this.action.timer = dur;
+            }
         }
         return ok ? this.action.name : null;
     }
@@ -271,6 +359,8 @@ class Player {
             this._syncSprite();
             return;
         }
+        if (this._rollCd > 0) this._rollCd -= dt;
+        if (this.roll) { Bags.stamina(this, false, true, dt); this._updateRoll(dt); return; }
         // Fim de ação?
         let lock = 1;
         if (this.action) {
@@ -302,10 +392,28 @@ class Player {
             }
         }
 
+        // Indo até a cobertura (Q perto de um muro, caçamba ou carro): desliza rápido até encostar nela, já agachando.
+        if (this.coverSnap) {
+            const s = this.coverSnap, p = this.root.position;
+            s.t = Math.min(1, s.t + dt / s.dur);
+            const e = s.t * (2 - s.t);
+            p.x = s.x0 + (s.x - s.x0) * e; p.z = s.z0 + (s.z - s.z0) * e;
+            MapGeo.resolveCircle(p, Config.player.radius, this.underBridge);
+            if (s.t >= 1 || !this.crouched) { this.coverSnap = null; this._coverT = 0; }
+            moveDir = Player.ZERO;
+        }
+
         // Mirando (Aim): não corre e anda devagar, de frente para a mira (pode andar de lado/de costas).
         const aiming = this.aimHeading != null;
         if (aiming) { sprinting = false; this.aimTimer = Math.max(this.aimTimer, 0.3); }
 
+        // Agachado: correr levanta; parado/andando, a cobertura ao lado é reconferida (andar ao longo do muro segue nela).
+        if (this.crouched && sprinting && moveDir.lengthSquared() > 1e-4) this.setCrouch(false);
+        if (this.crouched) {
+            this._coverT -= dt;
+            if (this._coverT <= 0) { this._coverT = 0.12; this.cover = typeof Cover !== 'undefined' ? Cover.find(this.root.position.x, this.root.position.z) : null; }
+            sprinting = false;
+        }
         // Fôlego: só corre enquanto tiver (e sem sobrecarga de peso). Ver Bags.stamina.
         sprinting = Bags.stamina(this, sprinting, lock > 0 && moveDir.lengthSquared() > 1e-4, dt);
 
@@ -314,6 +422,7 @@ class Player {
         const W = Config.water, depth = this.underBridge ? MapGeo.waterDepthBelow(this.root.position.x, this.root.position.z) : MapGeo.waterDepth(this.root.position.x, this.root.position.z);
         this.depth = depth;
         this.swimming = depth > W.wadeDepth;
+        if (this.crouched && depth > 0) this.setCrouch(false);                     // (na água não dá para agachar)
         // vadeando: a água sobe da canela (na beira) à cintura (perto de nadar) — o desenho afunda até ali (SpriteActor.setWaterline)
         this.waterline = depth > 0 && !this.swimming ? 0.25 + 0.75 * Math.min(1, depth / W.wadeDepth) : 0;
         this.actor.setWaterline(this.waterline);
@@ -324,7 +433,7 @@ class Player {
         const g = onGround && moveDir.lengthSquared() > 1e-4 ? MapGeo.slopeAlong(this.root.position.x, this.root.position.z, moveDir.x, moveDir.z) : 0;
         this.slope = (this.slope || 0) + (g - (this.slope || 0)) * Math.min(1, dt * 6);
         this.actor.setSlope(this.speed > 0.3 ? this.slope : 0);
-        const maxSpeed = ((sprinting && depth <= 0) ? Bags.runSpeed(this) : Config.player.maxSpeed * (1 + Outfit.m.walk)) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? 0.6 : 1) * MapGeo.slopeSpeed(this.slope);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
+        const maxSpeed = ((sprinting && depth <= 0) ? Bags.runSpeed(this) : Config.player.maxSpeed * (1 + Outfit.m.walk)) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? (this.aimFree ? 0.85 : 0.6) : 1) * (this.crouched ? Config.tactics.sneakSpeed : 1) * MapGeo.slopeSpeed(this.slope);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
 
         // Acelera/desacelera suavemente rumo à velocidade alvo (frame-independent).
         const targetVel = moveDir.scale(maxSpeed);
@@ -361,6 +470,15 @@ class Player {
 
         // Animação de locomoção (ações já controlam o próprio clipe).
         let rate = 1;
+        // Atirando: andando, as pernas seguem (frente, trás, lado; agachado, o andar agachado); parou no meio, a pose de mirar.
+        if (this.action && this.action.name === 'shoot' && !this.swimming) {
+            const w = this.look, base = Math.max(0.5, this.speed / (Config.anim.walk * Config.player.stride));
+            if (this.speed >= 0.3) {
+                if (this.crouched && !this.inCover && this.actor.play('sneak', w)) rate = (Math.cos(this._relMove()) < -0.5 ? -1 : 1) * base / 0.72;
+                else rate = this._aimGait(w, base);
+            } else if (this.actor.clipName !== 'shoot') this.actor.play(this.crouched && !this.inCover && this.actor.sheet.getClip('crouch', w) ? 'crouch' : 'aim', w);
+            this._syncSprite(); this.actor.update(dt, rate); return;
+        }
         if (!this.action) {
             const w = this.look;
             let clip;
@@ -381,9 +499,25 @@ class Player {
                 this.actor.update(dt, rate);
                 return;
             }
+            const gun = w === 'pistol' || w === 'smg' || w === 'shotgun';
+            // Agachado (furtivo / cobertura). Mirando EM COBERTURA ele levanta para atirar por cima (desenho de pé, abaixo).
+            if (this.crouched && !(aiming && this.inCover)) {
+                const moving = this.speed >= 0.3, cn = moving ? 'sneak' : 'crouch';
+                if (this.actor.play(cn, w) || this.actor.play(cn, 'none')) {
+                    this.state = moving ? 'sneak' : 'crouch';
+                    rate = moving ? Math.max(0.4, this.speed / (Config.anim.walk * Config.player.stride * 0.72)) : 1;      // (passada agachada: 0,72)
+                    if (moving && gun && aiming && Math.cos(this._relMove()) < -0.5) rate = -rate;                         // (mirando para trás: passos ao contrário)
+                    this._syncSprite(); this.actor.update(dt, rate); return;
+                }
+            }
             if (this.speed < 0.3) {
-                clip = (this.aimTimer > 0 && (w === 'pistol' || w === 'smg' || w === 'shotgun')) ? 'aim' : 'idle';
+                clip = (this.aimTimer > 0 && gun) ? 'aim' : 'idle';
                 this.state = 'idle';
+            } else if (gun && (aiming || this.aimTimer > 0) && !sprinting) {
+                // De frente para a mira: para a frente, para trás ou de lado (passo lateral), no ritmo da velocidade.
+                this.state = 'walk';
+                rate = this._aimGait(w, Math.max(0.5, this.speed / (Config.anim.walk * Config.player.stride)));
+                this._syncSprite(); this.actor.update(dt, rate); return;
             } else if (sprinting) {
                 clip = 'run';
                 this.state = 'sprint';
@@ -479,6 +613,7 @@ class Player {
 
     teleport(pos) {
         this.cancelSequence();
+        this.resetTactics();
         this.onDeck = false; this.deckH = 0; this.underBridge = false; this._wasInWater = false;
         if (this.frozen) { this.frozen = false; this.actor.setVisible(true); }
         this.root.position.copyFrom(pos);
@@ -503,3 +638,5 @@ class Player {
 // recomeça do 1º. O chute fecha o combo (derruba — ver Melee.kick).
 Player.COMBO = ['punchL', 'punch', 'kick'];
 Player.COMBO_GAP = 0.6;
+
+Player.ZERO = new BABYLON.Vector3(0, 0, 0);          // (só leitura: "sem movimento" sem alocar)

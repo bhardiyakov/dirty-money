@@ -4,10 +4,12 @@
 // "apertam teclas virtuais" (setVirtual) — assim cada sistema (menu, mini-game de arrombar, tela de preso) funciona sem mudança.
 //
 //   Controle (Gamepad API, layout "standard" — Xbox/PlayStation/Switch Pro), no padrão dos jogos de mundo aberto (GTA V / Watch Dogs):
-//     A pé:   analógico esq. mover · A/✕ correr (segurar) e pular grade/muro (tocar perto) · L3 correr · X/□ interagir (E)
+//     A pé:   analógico esq. mover · A/✕ correr (segurar) e pular grade/muro (tocar perto) · L3 agachar/cobertura (Q) · RB rolar
+//             · X/□ interagir (E)
 //             Y/△ entrar no veículo (F) · B/○ recarregar · RT/R2 golpe (sem arma: combo soco+soco+chute)/tiro · LT/L2 MIRAR (ver Aim)
 //             LB/L1 e direcional ←/→ troca de arma · R3 furtar (C) · ↑ kit médico · ↓ arrombar (G)
 //             Mirando: analógico dir. aponta (manual) ou troca de alvo (assistida). Teclado/mouse: botão direito mira, o cursor aponta.
+//             Mira manual com arma de fogo: mesmo sem mirar, o analógico dir. aponta (e não dá zoom) e o cursor do mouse é a mira.
 //     Carro:  RT acelera · LT freia/ré · Y/△ sair · X/□ interagir (abastecer/desmanche) · L3 buzina · ↓ faróis
 //     Helicóptero: RT sobe · LT desce · analógico esq. mover · analógico dir. ↔ gira · Y/△ descer/pular
 //     Sempre: Back/SHARE inventário · Start/OPTIONS pausa (Game) · analógico dir. ↕ zoom
@@ -33,6 +35,7 @@ class InputManager {
         this.yawAxis = 0;                   // analógico direito na horizontal (gira o helicóptero)
         this.rstick = { x: 0, y: 0 };       // analógico direito cru (x direita +, y baixo +), com zona morta — a mira manual aponta com ele
         this.padAim = false;                // LT/L2 segurado a pé: mirando
+        this.stickAim = false;              // o Aim avisa: mira manual com arma de fogo na mão (o analógico direito aponta, sem zoom)
         this.mouseAim = false;              // botão direito do mouse segurado sobre o jogo: mirando
         this.mouseX = -1; this.mouseY = -1; this.mouseMovedAt = 0;
         this.touchDevice = (typeof window !== 'undefined') && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /[?&]touch\b/.test(location.search));
@@ -152,7 +155,7 @@ class InputManager {
         const rt = val(7) > 0.35, lt = val(6) > 0.35;
         this.padAim = foot && lt;                                                                    // LT a pé: mirar (ver Aim)
         this.rstick.x = dz(p.axes[2] || 0); this.rstick.y = dz(p.axes[3] || 0);
-        this.zoomAxis = this.padAim ? 0 : this.rstick.y;                                             // (mirando, o analógico direito aponta)
+        this.zoomAxis = this.padAim || this.stickAim ? 0 : this.rstick.y;                            // (mirando ou na mira manual armado, o analógico direito aponta)
         this.yawAxis = this.rstick.x;
 
         // botões -> teclas (layout GTA / Watch Dogs: ver o cabeçalho)
@@ -168,9 +171,11 @@ class InputManager {
         set('m', btn(12));                                  // ↑: kit médico
         set('l', car && btn(13));                           // ↓ no carro: faróis
         set('h', car && btn(10));                           // L3: buzina
+        set('q', foot && btn(10));                          // L3 a pé: agachar / cobertura
+        set('roll', foot && btn(5));                        // RB a pé: rolar (esquiva)
         set('i', btn(8));                                   // Back/SHARE: inventário
         set(' ', !car && rt);                               // RT: golpe/tiro (rajada segurando) · helicóptero: sobe
-        set('shift', (foot && !lt && (btn(0) || btn(10))) || (heli && lt));     // A ou L3 segurado: correr (mirando, não corre) · helicóptero: LT desce
+        set('shift', (foot && !lt && btn(0)) || (heli && lt));           // A segurado: correr (mirando, não corre) · helicóptero: LT desce
         const edge = (i) => btn(i) && !this._padPrev[i];
         if (foot && this.onWeaponCycle) {                   // ←/→ e LB: troca de arma
             if (edge(14)) this.onWeaponCycle(-1);

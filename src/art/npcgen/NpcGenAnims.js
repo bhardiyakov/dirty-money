@@ -5,7 +5,8 @@
 //   correr armado (pistola / submetralhadora / escopeta / fuzil / taco), sacar, mirar, soco de direita e de esquerda,
 //   ROUBAR CARRO (puxar o motorista), ABRIR A PORTA, ENTRAR NO CARRO, arrombar fechadura, pular grade, render-se e ajoelhar,
 //   pânico (correr com as mãos pra cima), cambalhota, arremessado no ar, caído, morto com poça de sangue, FURTO (carteirada),
-//   ASSALTO (anunciar com a arma), mexer na bolsa, carregar maleta/sacola, puxar mala de rodinhas, andar sobrecarregado.
+//   ASSALTO (anunciar com a arma), mexer na bolsa, carregar maleta/sacola, puxar mala de rodinhas, andar sobrecarregado,
+//   TÁTICO: agachado (cobertura), andar agachado (furtivo), passo lateral mirando (strafe) e rolamento de esquiva.
 //
 // Cada animação = função que devolve uma lista de Poses (uma por quadro). Espaço do personagem: x direita, y frente, z cima (px).
 // CLIPS liga o nome do clipe do JOGO ("walk:pistol", "carjack:none"…) à animação, com quadros, fps e loop.
@@ -876,6 +877,114 @@ function NpcGenAnims(G) {
     // NOVO: deitado, vivo (o primeiro quadro do levantar).
     const lie = () => [getUp()[0]];
 
+    // ------------------------------------------------------------------ tático (jogador)
+    // Tronco inclinado para a frente com a torção da arma (se houver): agachado e andando agachado.
+    function leanFor(p, name, lean) {
+        const h = WEAPON_HOLD[name];
+        p.chest_R = mm3(Rz(deg(h ? h.chest_yaw : 0)), Rx(deg(lean)));
+        p.head_R = mm3(Rz(deg(h ? h.head_yaw : 0)), Rx(deg(HEAD_TILT - lean * 0.7)));
+        return h;
+    }
+    // NOVO: agachado (atrás de uma cobertura / furtivo) — joelhos bem dobrados, pé esquerdo à frente, tronco inclinado. Com arma de
+    // fogo ela fica erguida, pronta (é só levantar e atirar); sem arma, os antebraços à frente. Respira devagar.
+    function crouchIdle(name, n = 4) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, b = sin(TAU * t), p = base();
+            standLegs(p, 13.5, [-4.5, 5.5], 18, 13.5 + 0.35 * b);
+            p.pelvis_t = V.add(p.pelvis_t, [0, -2.0, 0]);
+            p.pelvis_R = Rx(deg(-8));
+            const h = leanFor(p, name, 22 + 1.2 * b);
+            if (h) holdWeapon(p, name, { keepChest: true, bob: [0, 0, 0.25 * b] });
+            else {
+                p.arm_fk('R', { flex: 40 + 2 * b, abd: 16, elbow: 72 });
+                p.arm_fk('L', { flex: 34 + 2 * b, abd: 18, elbow: 66 });
+            }
+            out.push(p);
+        }
+        return out;
+    }
+    // NOVO: andar agachado (furtivo) — passos curtos e baixos, joelhos dobrados, tronco inclinado, pés rolando devagar.
+    // Passada 0,72 da do andar (o jogo corrige o ritmo).
+    function sneakWalk(name, n = 8) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, c = cos(TAU * t), p = base();
+            p.pelvis_t = [0, 0.5, -7.5 - 0.6 * cos(2 * TAU * t)];
+            gait(p, t, { stride: 5.6, lift: 2.6, width: 10.6, heel: 6, toeoff: -18 });
+            p.pelvis_R = mm3(Rz(deg(3 * c)), Rx(deg(-6)));
+            const h = leanFor(p, name, 16);
+            if (h) holdWeapon(p, name, { keepChest: true, bob: [0, 0, 0.4 * cos(2 * TAU * t)] });
+            else {
+                p.arm_fk('R', { flex: 34 - 8 * c, abd: 16, elbow: 74 });
+                p.arm_fk('L', { flex: 34 + 8 * c, abd: 18, elbow: 70 });
+            }
+            out.push(p);
+        }
+        return out;
+    }
+    // Pernas do PASSO LATERAL: cada pé desliza de lado no apoio e é levado para o outro lado no ar, sem cruzar (t = 0: pé direito
+    // pousando por fora). O corpo anda para a DIREITA (+x); tocado ao contrário, para a esquerda.
+    function sideGait(p, t, { step = 4.2, lift = 3.0, width = 10.4, stance = 0.5 } = {}) {
+        step *= STRIDE_K();
+        for (const [side, s, ph0] of [['R', 1, t], ['L', -1, t + 0.5]]) {
+            const ph = ph0 % 1.0;
+            let x, z;
+            if (ph < stance) { const u = ph / stance; x = step * (1 - 2 * u); z = 0.0; }
+            else { const u = (ph - stance) / (1 - stance); x = -step + 2 * step * ease(u); z = lift * sin(PI * u); }
+            placeFoot(p, side, [s * width + x, s * 0.6, z], -s * 10, 0);
+        }
+    }
+    // NOVO: andando de lado MIRANDO (strafe): passo lateral com a arma apontada. Para a frente/para trás mirando, o jogo usa o
+    // andar armado (walk:arma), normal ou ao contrário.
+    function strafeWalk(name, n = 8) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, p = base();
+            p.pelvis_t = [0, 0, -1.8 - 0.8 * cos(2 * TAU * t)];
+            p.pelvis_R = Ry(deg(2.5 * sin(TAU * t)));
+            sideGait(p, t);
+            holdWeapon(p, name);
+            out.push(p);
+        }
+        return out;
+    }
+    // NOVO: rolamento de ESQUIVA — abaixa, mergulha encolhido dando uma volta inteira para a frente e levanta já de pé.
+    function dodgeRoll(n = 10) {
+        const out = [];
+        const tuck = (p) => {
+            p.leg_fk('R', { flex: 100, abd: 12, knee: 120, foot: -20 });
+            p.leg_fk('L', { flex: 100, abd: 12, knee: 120, foot: -20 });
+            p.arm_fk('R', { flex: 70, abd: 20, elbow: 90 });
+            p.arm_fk('L', { flex: 70, abd: 20, elbow: 90 });
+        };
+        for (let i = 0; i < n; i++) {
+            const t = i / (n - 1), p = base();
+            if (t < 0.15) {                                            // abaixando, tronco indo à frente
+                const k = ease(t / 0.15);
+                standLegs(p, 12.0, [-2.0 - 3.0 * k, 3.0 + 3.0 * k], 14, 10.0 * k);
+                p.chest_R = Rx(deg(38 * k)); p.head_R = Rx(deg(HEAD_TILT + 12 * k));
+                p.arm_fk('R', { flex: 20 + 50 * k, abd: 16, elbow: 30 + 60 * k });
+                p.arm_fk('L', { flex: 20 + 50 * k, abd: 16, elbow: 30 + 60 * k });
+            } else if (t < 0.8) {                                      // encolhido, girando uma volta inteira
+                const u = (t - 0.15) / 0.65;
+                p.pelvis_t = [0, 0, -11.0 + 4.0 * sin(PI * u)];
+                p.root = Rx(deg(-360 * u));                            // (Rx negativo: a cabeça vai para a FRENTE)
+                p.chest_R = Rx(deg(30)); p.head_R = Rx(deg(30));
+                tuck(p);
+                p.shadowScale = 0.85;
+            } else {                                                   // levantando
+                const k = ease((t - 0.8) / 0.2);
+                standLegs(p, 12.4, [-3.0 * (1 - k) + 0.4 * k, 4.0 * (1 - k) + 0.4 * k], 14 - 2 * k, 10.0 * (1 - k));
+                p.chest_R = Rx(deg(28 * (1 - k))); p.head_R = Rx(deg(HEAD_TILT + 8 * (1 - k)));
+                p.arm_fk('R', { flex: 60 * (1 - k) + 4 * k, abd: 14, elbow: 80 * (1 - k) + 14 * k });
+                p.arm_fk('L', { flex: 60 * (1 - k) + 4 * k, abd: 14, elbow: 80 * (1 - k) + 14 * k });
+            }
+            out.push(p);
+        }
+        return out;
+    }
+
     // NOVO: pular uma grade/muro — agacha, apoia as mãos, passa as pernas de lado por cima e cai.
     function vault() {
         const seq = [
@@ -1379,6 +1488,11 @@ function NpcGenAnims(G) {
         ride_bike: { fps: 10, loop: true, dirs: 16, fn: () => rideBike() },
         ride_boat: { fps: 3, loop: true, dirs: 16, fn: () => rideBoat() },
         mount: { fps: 12, loop: false, dirs: 16, fn: (w) => mountAnim(w) },          // (só o jogador: moto/motoL/bike/bikeL)
+        // tático (só o jogador): agachado/cobertura, andar agachado (furtivo), passo lateral mirando e rolamento de esquiva
+        crouch: { fps: 3, loop: true, fn: (w) => crouchIdle(w) },
+        sneak: { fps: 9, loop: true, fn: (w) => sneakWalk(w) },
+        strafe: { fps: 10, loop: true, fn: (w) => strafeWalk(w === 'none' ? 'pistol' : w) },
+        roll: { fps: 16, loop: false, fn: () => dodgeRoll() },
     };
 
     Object.assign(G, { Pose, setRig, RIG, ik2, HEAD_TILT, ANIMS, CLIPS, CTX, WEAPON_HOLD, anim: { idle, walk, run, gunIdle, gunWalk, gunRun, gunDraw, holdWeapon, kneelPose, death, getUp } });

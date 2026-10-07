@@ -82,6 +82,38 @@ const Laundry = {
 
     update(dt) { if (this.taxHeat > 0) this.taxHeat = Math.max(0, this.taxHeat - 0.15 * dt); },
 
+    // ---------------------------------------------------------------- mapa
+    // Todo estabelecimento comprado para lavar dinheiro — os pontos da favela (daqui) e os negócios de luxo do Império (postos,
+    // restaurantes, boates: EmpireBusiness.fronts) — vira um lugar no mapa (POI 'fachada', com legenda) e um ícone no radar
+    // (`mapPois`). Conferido a cada segundo: comprar, carregar um save ou perder um negócio atualiza sozinho.
+    mapPois: [],
+    _mapKey: null,
+    syncMap(game, dt) {
+        this._mapT = (this._mapT || 0) - dt;
+        if (this._mapT > 0 || !CityGrid.pois) return;
+        this._mapT = 1;
+        const biz = game.empire && game.empire.biz, fronts = biz ? biz.fronts : [];
+        const key = () => Object.keys(this.owned).join(',') + '|' + fronts.map((f) => f.type + ':' + f.d + ':' + f.x).join(',');
+        if (key() === this._mapKey) return;
+        const P = CityGrid.pois;
+        for (let i = P.length - 1; i >= 0; i--) if (P[i].type === 'fachada') P.splice(i, 1);
+        const list = [];
+        if (Object.keys(this.owned).length) {
+            Interiors.index();
+            for (const id of Object.keys(this.owned)) {
+                const s = Interiors._doors.find((d) => d.id === id);
+                if (s) list.push(CityGrid.addPoi({ type: 'fachada', name: `${this.owned[id].name || s.name} · ponto do C.V`, x: s.x, z: s.z }));
+            }
+        }
+        for (const f of fronts) {
+            if (!biz.placeFront(f)) continue;                                     // (save antigo: ganha um lugar agora)
+            const F = EmpireBusiness.FRONTS[f.type];
+            list.push(CityGrid.addPoi({ type: 'fachada', name: `${F ? F.name : 'Negócio'}${f.at ? ' — ' + f.at : ''} · ${game.empire.dName(f.d)}`, x: f.x, z: f.z }));
+        }
+        this.mapPois = list;
+        this._mapKey = key();                                                     // (com as posições recém-dadas)
+    },
+
     serialize() { return { owned: this.owned, xp: this.xp, heat: this.taxHeat }; },
     load(s) {
         if (!s) return;

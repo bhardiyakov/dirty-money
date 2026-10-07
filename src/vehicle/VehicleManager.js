@@ -20,7 +20,7 @@ class VehicleManager {
         let best = null;
         let bestDist = range;
         for (const car of this.vehicles) {
-            if (car.destroyed) continue;             // pegando fogo ou carcaça: não dá para roubar
+            if (car.destroyed && !car.canRaise) continue;      // pegando fogo ou carcaça: não dá para roubar (moto caída: dá para levantar)
             const d = BABYLON.Vector3.Distance(pos, car.position);
             if (d < bestDist) { bestDist = d; best = car; }
         }

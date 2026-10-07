@@ -175,7 +175,8 @@ class GangManager {
             }
             if (u.rag) { u.update(dt); continue; }
             const m = this._mind(u), p = u.position, dist = hypot(p.x - pos.x, p.z - pos.z);
-            m.sees = hostile && dist < this.sight * (this.angry ? 1.25 : 1) && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z);
+            m.sees = hostile && dist < this.sight * (this.angry ? 1.25 : 1) * (typeof Cover !== 'undefined' ? Cover.sightMul(this.game, this.angry) : 1) && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z)
+                && !(typeof Cover !== 'undefined' && Cover.hiddenFrom(this.game, p.x, p.z));          // (agachado: furtivo; atrás de cobertura: não te vê)
             if (m.sees) {
                 this._note(m, pos, vel);
                 if (G) for (const o of G.members) if (o !== u && o.alive) this._note(this._mind(o), pos, vel);      // o grupo todo fica sabendo

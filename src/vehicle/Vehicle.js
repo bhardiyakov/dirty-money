@@ -28,6 +28,8 @@ class Vehicle {
         this.riderVariant = null;            // (bike) variante de paleta de quem pilota; null = sem piloto
         this.frameVariant = null;            // (bike) cor do quadro quando estacionada
         this.lastSteer = 0;                  // direção aplicada no último frame (inclinação da moto)
+        this._yaw = 0;                       // guinada (rad/s) de fato aplicada: com o jogador ao volante ela tem inércia (ver _applyMotion)
+        this.slide = 0;                      // derrapagem por excesso de velocidade na curva (0..1): o pneu canta (AudioFX.screech)
 
         // Vida e estado de destruição: amassa em 3 fases; com pouca vida solta fumaça; a 0 pega fogo e explode
         // (CarDamage cuida dos efeitos) e vira carcaça carbonizada.
@@ -277,6 +279,24 @@ class Vehicle {
         if (this.mode !== undefined) this.mode = 'wreck';
     }
 
+    // Caída numa batida (não queimou)? Então dá para LEVANTAR: o jogador põe de pé e sobe (Game._mountBike).
+    get canRaise() { return this.isBike && !!this._fell && !(this.burning > 0); }
+
+    // Põe a moto/bicicleta caída de pé de novo, sem piloto e parada. Bicicleta que caiu por estar destruída volta torta (25% da vida).
+    raise() {
+        if (!this.canRaise) return false;
+        this._fell = false; this.wrecked = false; this.wreckT = 0; this.engineDead = false;
+        if (this.hp <= 0) {
+            this.hp = Math.round(this.maxHp * 0.25);
+            const f = this.hp / this.maxHp;
+            this.dent = f > 0.75 ? 0 : f > 0.5 ? 1 : f > 0.25 ? 2 : 3;
+        }
+        if (this.mode !== undefined) { this.mode = 'abandoned'; this.route = null; }
+        this.driver = false;
+        this._lookKey = null;               // (troca o desenho caído pelo de pé no próximo quadro)
+        return true;
+    }
+
     // Escolhe o sprite certo: andando (com piloto), estacionada (sem piloto) ou caída — e a cor da variante.
     _bikeLook() {
         const lib = this.carSheet.lib;
@@ -446,12 +466,34 @@ class Vehicle {
             lat += Math.sin(this._flatT * 5.1 + 1.7) * 2.2 * sp * dt * 4;
             fwd *= Math.exp(-0.18 * nFlat * dt);
         }
-        lat *= Math.exp(-(this.spec.grip || Config.vehicle.grip * (this.spec.boat || !Weather.cur ? 1 : Weather.cur.gripMul)) * gripK * (this.controlled && !this.spec.boat ? Vehicle.playerGrip : 1) * dt);       // (skill Direção: Vehicle.playerGrip)       // (pista molhada: carro derrapa mais)
 
         // --- Direção: guinada proporcional à velocidade; zera X/Z (anti-capotamento) ---
         // Inverte ao dar ré (como um carro real) e não vira parado.
         const speedFactor = Math.min(1, Math.abs(fwd) / (this.spec.turnRef || Config.vehicle.turnSpeedRef));
-        const yaw = (steer * this.spec.turn * (this.controlled ? Vehicle.playerTurn : 1) + pull + wob) * speedFactor * (fwd < 0 ? -1 : 1);
+        let yaw = (steer * this.spec.turn * (this.controlled ? Vehicle.playerTurn : 1) + pull + wob) * speedFactor * (fwd < 0 ? -1 : 1);
+
+        // --- PESO e DERRAPAGEM (só o carro que o jogador dirige; IA, motos, bicicletas e barcos seguem o modelo de sempre) ---
+        //   peso:       rápido, o carro vira menos (subesterço) e a guinada não muda na hora — cresce e some com a inércia da massa
+        //               (um utilitário de 2 t demora o dobro de um popular para "entrar" na curva e para se endireitar);
+        //   derrapagem: quando a curva pede mais aceleração lateral (velocidade × guinada) do que os pneus seguram, a traseira solta —
+        //               o pneu quase não segura de lado, o carro gira um pouco além do volante e arrasta perdendo velocidade.
+        //               Contra-esterço ou aliviar a curva devolvem a aderência. Pista molhada e a skill Direção mudam o limite.
+        if (this.controlled && !this.spec.boat && !this.isBike) {
+            const V = Config.vehicle, af = Math.abs(fwd), hs = Math.min(1, af / V.understeerRef);
+            yaw *= 1 - V.understeer * hs * hs;
+            const kI = V.yawInertia * Math.sqrt(1000 / this.spec.mass);
+            this._yaw += (yaw - this._yaw) * (1 - Math.exp(-kI * dt));
+            const limit = V.slipLimit * (Weather.cur ? Weather.cur.gripMul : 1) * Vehicle.playerGrip;
+            const over = af > V.slipMinSpeed ? Math.max(0, Math.abs(fwd * this._yaw) - limit) / limit : 0;
+            const want = Math.min(1, over * V.slipGain);
+            this.slide += (want - this.slide) * (1 - Math.exp(-(want > this.slide ? 7 : 2.2) * dt));
+            if (this.slide < 1e-3) this.slide = 0;
+            yaw = this._yaw * (1 + V.slipYaw * this.slide);
+            gripK *= 1 - V.slipGrip * this.slide;
+            fwd *= Math.exp(-V.slipScrub * this.slide * dt);
+        } else { this._yaw = yaw; this.slide = 0; }
+
+        lat *= Math.exp(-(this.spec.grip || Config.vehicle.grip * (this.spec.boat || !Weather.cur ? 1 : Weather.cur.gripMul)) * gripK * (this.controlled && !this.spec.boat ? Vehicle.playerGrip : 1) * dt);       // (skill Direção: Vehicle.playerGrip)       // (pista molhada: carro derrapa mais)
         this.phys.setAngularVelocity(this._av.set(0, yaw, 0));
 
         // --- Recompõe a velocidade preservando a queda (gravidade) ---
@@ -548,11 +590,15 @@ class Vehicle {
     _bodyMotion(dt, f) {
         if (dt <= 0 || !this.visual) return;
         const v = this.velocity, fl = Math.sqrt(f.x * f.x + f.z * f.z) || 1, fx = f.x / fl, fz = f.z / fl;
-        const pv = this._pv || (this._pv = { x: v.x, z: v.z, fwd: 0 });
+        const pv = this._pv || (this._pv = { x: v.x, z: v.z, fwd: 0, h: null });
         const ax = (v.x - pv.x) / dt, az = (v.z - pv.z) / dt;
         pv.x = v.x; pv.z = v.z;
         const aF = ax * fx + az * fz, aL = ax * fz - az * fx;
-        if (this.visual.animate) this.visual.animate(dt, aF, aL, this.wrecked || this.engineDead && !this.controlled ? 0 : this.lastSteer);
+        const hd = Math.atan2(fx, fz);                                                        // giro do chassi (rad/s): a carroceria "atrasa" nele
+        let yr = 0;
+        if (pv.h !== null) { let d = hd - pv.h; d = Math.atan2(Math.sin(d), Math.cos(d)); yr = d / dt; }
+        pv.h = hd;
+        if (this.visual.animate) this.visual.animate(dt, aF, aL, this.wrecked || this.engineDead && !this.controlled ? 0 : this.lastSteer, this.isBike || this.spec.boat ? null : yr);
         if (this.spec.boat || this.wrecked || this._asleep || typeof SkidMarks === 'undefined') return;
         this._rimFx(dt);                                                                      // pneu furado: faíscas do aro
         // ---- marcas de pneu

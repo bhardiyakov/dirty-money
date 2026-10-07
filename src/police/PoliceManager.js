@@ -69,18 +69,28 @@ class PoliceManager {
         m.x = x; m.z = z; m.vx = vx; m.vz = vz; m.t = t;
     }
 
-    // Todas as unidades num raio de `pos` OUVEM algo ali (tiro) e vão ao local.
+    // Todas as unidades num raio de `pos` OUVEM algo ali (tiro, explosão, chamado) e vão ao local. Se alguém ouviu e há um crime em
+    // flagrante, ele fica aberto enquanto a polícia investiga (Config.police.investigateTime). Devolve quantas unidades ouviram.
     alertNear(pos, radius) {
+        let n = 0;
         for (const u of this.units) {
-            if (u.distanceTo(pos) < radius) this._note(this._mind(u), pos.x, pos.z, 0, 0, this.time);
+            if (u.distanceTo(pos) < radius) { this._note(this._mind(u), pos.x, pos.z, 0, 0, this.time); n++; }
         }
+        const w = this.game.wanted;
+        if (n && w && w.pending) w.reportCrime(Config.police.investigateTime);
+        return n;
     }
 
-    // O jogador disparou uma arma de fogo: libera as armas e TODOS que ouvem vêm.
+    // O jogador disparou uma arma de fogo: quem está a até hearRadius ouve, vem e libera as armas. Longe da polícia, ninguém
+    // fica sabendo. Devolve quantas unidades ouviram.
     notifyPlayerShot(pos) {
-        this.weaponsFreeUntil = this.time + Config.police.weaponsFreeTime;
-        this.alertNear(pos, Config.police.hearRadius);
+        const n = this.alertNear(pos, Config.police.hearRadius);
+        if (n) this.weaponsFreeUntil = this.time + Config.police.weaponsFreeTime;
+        return n;
     }
+
+    // Testemunhas ligaram (assalto): só atende quem estiver a até Config.police.callRadius do local. Devolve quantos vêm.
+    callPolice(pos) { return this.alertNear(pos, Config.police.callRadius); }
 
     // O jogador está com arma de fogo na mão e foi visto: armas liberadas enquanto durar a vista.
     notifyGunDrawn(pos) {
@@ -407,6 +417,8 @@ class PoliceManager {
         if (cover.state !== this._coverState) { this._coverState = cover.state; if (cover.state && L) this.game._flash(cover.state === 'hide' ? 'Os moradores estão te acobertando: a polícia perde seu rastro' : 'Os moradores estão te delatando para a polícia!'); }
         const sk = this.game && this.game.skills, R = (L ? L.sight : Config.police.sightRange) * (Weather.cur ? Weather.cur.sightMul : 1) * cover.sight * (sk ? sk.policeMul * (1 - (SkillTree.m.sight || 0) - Outfit.m.sight) : 1) * (this.game.empire ? this.game.empire.policeSightMul(pos.x, pos.z) : 1);      // alerta tático, delegado aliado, domínio, estação      // notoriedade vê mais longe; Discreto, mais perto       // chuva/tempestade: enxergam menos longe
         const memory = (L ? L.lose + 3 : Config.police.hearMemory) * cover.mem;
+        const sightR = R * (typeof Cover !== 'undefined' ? Cover.sightMul(this.game, !!L) : 1);       // agachado (furtivo): te notam de mais perto
+        this.sightR = sightR;                                                                    // (o radar do minimapa desenha esse alcance)
 
         // 1) Percepção: raio do nível + linha de visada (esconder-se atrás de prédios funciona).
         //    O helicóptero enxerga POR CIMA dos prédios (só o alcance conta).
@@ -417,7 +429,8 @@ class PoliceManager {
         const units = this.units;
         for (const u of units) {
             const m = this._mind(u), p = u.position;
-            m.sees = !hide && hypot(p.x - pos.x, p.z - pos.z) < R && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z);
+            m.sees = !hide && hypot(p.x - pos.x, p.z - pos.z) < sightR && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z)
+                && !(typeof Cover !== 'undefined' && Cover.hiddenFrom(this.game, p.x, p.z));          // agachado atrás de muro/carro: não te vê
             if (m.sees) {
                 seen = true;
                 if (L) this._note(m, pos.x, pos.z, vel.x, vel.z, this.time);     // sem ★ ver não faz ninguém te perseguir

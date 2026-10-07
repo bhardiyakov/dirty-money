@@ -6,7 +6,9 @@
 //   • FORMA (boné, regata, bermuda, chinelo, mochila, cabelo…): o desenho muda, então o atlas do jogador é GERADO DE NOVO num Worker
 //     (o mesmo gerador dos NPCs): primeiro parado/andando/correndo (~2 s), depois todo o resto. Enquanto isso o jogador segue com o
 //     visual anterior. Cada visual gerado fica guardado (memória e IndexedDB): voltar a ele é imediato.
-//   • O visual de sempre (a roupa inicial) vem pronto: assets/npcs/protagonista.js.
+//   • O visual de sempre (a roupa inicial) vem pronto: assets/npcs/protagonista.js (+ protagonista_tatico.js, o atlas COMPANHEIRO com os
+//     clipes táticos — agachar, andar agachado, passo lateral, rolar —, que não cabem no principal em alta definição). Cada visual
+//     gerado também ganha o seu companheiro ("hero:N:t"); a folha do jogador procura nele o que o principal não tem (extraAtlas).
 //   • preview(ficha) = o boneco nas 8 direções (tela de equipamento), num segundo Worker.
 // ============================================================================
 
@@ -15,6 +17,7 @@ const PlayerLook = {
     shown: null,            // chave de forma do atlas em uso
     want: null,             // chave de forma pedida (gerando)
     ids: new Map(),         // chave de forma → id do atlas registrado no NpcArt
+    tacIds: new Map(),      // chave de forma → id do atlas companheiro (clipes táticos) desse visual
     _job: 0,
     VERSION: 6,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb)
 
@@ -64,6 +67,7 @@ const PlayerLook = {
     // Troca o atlas da folha do jogador e reinicia o clipe atual (com o desenho novo).
     _use(key, id, partial = false) {
         const hero = this.game.sprites.sheets.hero, a = this.game.player && this.game.player.actor;
+        hero.extraAtlas = this.tacIds.get(key) || 'protagonista_tatico';
         hero.setAtlas(id);
         hero.fallbackAtlas = partial ? (this.ids.get(this.shown) || 'protagonista') : 'protagonista';
         if (!partial) { this.shown = key; if (this.want === key) this.want = null; }
@@ -72,9 +76,9 @@ const PlayerLook = {
 
     async _load(s, key) {
         const job = ++this._job;
-        const cached = await this._idbGet(this._ck(key));
+        const cached = await this._idbGet(this._ck(key)), cachedT = cached && await this._idbGet(this._ck(key) + '|t');
         if (job !== this._job) return;
-        if (cached) { this._register(key, cached, false); return; }
+        if (cached && cachedT) { this._registerTac(key, cachedT); this._register(key, cached, false); return; }       // (sem o companheiro: gera tudo de novo)
         this._build(s, key, job);
     },
     _ck(key) { return `v${this.VERSION}.${this.k()}|${key}`; },
@@ -90,13 +94,25 @@ const PlayerLook = {
         if (this._partialId && this._partialId !== id) { NpcArt.dropAtlas(this._partialId); this._partialId = null; }
         if (partial) this._partialId = id;
         // guarda só os 6 visuais mais recentes na memória de vídeo
-        while (this.ids.size > 6) { const [k, v] = this.ids.entries().next().value; if (k === this.shown) break; this.ids.delete(k); NpcArt.dropAtlas(v); }
+        while (this.ids.size > 6) {
+            const [k, v] = this.ids.entries().next().value;
+            if (k === this.shown) break;
+            this.ids.delete(k); NpcArt.dropAtlas(v);
+            const t = this.tacIds.get(k); if (t) { this.tacIds.delete(k); NpcArt.dropAtlas(t); }
+        }
+    },
+    // Atlas companheiro (clipes táticos) do visual `key`: registrado antes do principal (o _use já o encontra).
+    _registerTac(key, atlas) {
+        const id = 'hero:' + (this._seq = (this._seq || 0) + 1) + ':t', old = this.tacIds.get(key);
+        NpcArt.addAtlas(id, atlas);
+        this.tacIds.set(key, id);
+        if (old && old !== id) NpcArt.dropAtlas(old);
     },
 
     // Gera o atlas em Workers paralelos: o 1º faz parado/andando/correndo (o visual troca em poucos segundos); o resto é dividido entre
     // todos. Os Workers devolvem os quadros já recortados; o empacotamento (rápido) é feito aqui.
     _build(s, key, job) {
-        const G = this.G, all = this.clipsFor(s), pl = this.game.player, w = pl ? pl.look : 'none', k = this.k();
+        const G = this.G, all = this.clipsFor(s).concat(G.PLAYER_TAC), pl = this.game.player, w = pl ? pl.look : 'none', k = this.k();
         const first = G.PLAYER_FIRST.concat(w !== 'none' ? [`idle:${w}`, `walk:${w}`, `run:${w}`] : []).concat(s.hand ? G.PLAYER_HAND.slice(0, 3) : []).filter((k) => all.includes(k));
         const rest = all.filter((k) => !first.includes(k));
         const N = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
@@ -110,10 +126,13 @@ const PlayerLook = {
             n++;
             if (m.first && n < need) { this._register(key, this._pack(got.filter((c) => first.includes(c.key)), k), true); return; }
             if (n < need) return;
-            const order = new Map(all.map((k, i) => [k, i]));
-            const a = this._pack(got.sort((p, q) => order.get(p.key) - order.get(q.key)), k);
+            const order = new Map(all.map((k, i) => [k, i])), tac = new Set(G.PLAYER_TAC);
+            got.sort((p, q) => order.get(p.key) - order.get(q.key));
+            const t = this._pack(got.filter((c) => tac.has(c.key)), k), a = this._pack(got.filter((c) => !tac.has(c.key)), k);      // principal + companheiro
+            this._registerTac(key, t);
             this._register(key, a, false);
             this._idbPut(this._ck(key), a);
+            this._idbPut(this._ck(key) + '|t', t);
         };
         const run = (i, keys, then = null) => {
             const wk = this._worker('atlas' + i, true);
