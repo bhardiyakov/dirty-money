@@ -243,11 +243,11 @@ class TrafficManager {
             car.update(dt, env);
 
             // Carro largado na pista: some (vira estacionado em outra vaga) quando o jogador se afasta.
-            if (car.mode === 'abandoned' && hypot(car.position.x - pp.x, car.position.z - pp.z) > Config.traffic.abandonDist) {
+            if (car.mode === 'abandoned' && !car.keep && hypot(car.position.x - pp.x, car.position.z - pp.z) > Config.traffic.abandonDist) {      // (seus carros e os de vitrine: Garage/Dealers cuidam)
                 this._relocate(car, 'parked');
             }
             // Preso por tempo demais sem motivo: reposiciona longe do jogador.
-            if (car.mode === 'drive' && car.stuck > 25 && hypot(car.position.x - pp.x, car.position.z - pp.z) > 30) {
+            if (car.mode === 'drive' && !car.keep && car.stuck > 25 && hypot(car.position.x - pp.x, car.position.z - pp.z) > 30) {
                 this._relocate(car, 'drive');
             }
         }
@@ -279,7 +279,7 @@ class TrafficManager {
         this._recT = 1 / Config.traffic.relocPerSec / ((this._asleepN || 0) > 6 ? 4 : 1);      // muitos adormecidos (teleporte, respawn): repovoa 4× mais rápido, 1 por vez
         const far = Zones.ar + 10, far2 = far * far;                         // saiu da bolha acordada (e um pouco mais): recicla
         for (const car of this.vm.vehicles) {
-            if (car.controlled || car.hold || car.wrecked || car.burning > 0 || car.mode === 'abandoned') continue;
+            if (car.controlled || car.hold || car.keep || car.wrecked || car.burning > 0 || car.mode === 'abandoned') continue;      // (keep: seus carros e os de vitrine)
             if (!car._asleep) {                                                 // adormecido = saiu da bolha (fica parado na borda): recicla já
                 const dx = car.position.x - pp.x, dz = car.position.z - pp.z;
                 if (dx * dx + dz * dz < far2) continue;

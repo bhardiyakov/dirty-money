@@ -3,7 +3,8 @@
 //   WANDER — caminha entre destinos, obedecendo semáforos de pedestre.
 //   IDLE   — para um pouco (olha a vitrine, confere o celular...).
 //   FLEE   — foge em pânico (assalto, tiro, perseguição).
-//   HURT   — levou um golpe: cambaleia e depois foge do agressor.
+//   HURT   — levou um golpe: cambaleia e depois foge do agressor (ou, se for brigão, revida).
+//   FIGHT  — revida: vai até o jogador e troca socos e chutes (Combat.strike) até cansar ou apanhar demais.
 // Os estados só decidem PARA ONDE ir; o Recast Crowd resolve o caminho.
 // ============================================================================
 
@@ -190,6 +191,74 @@ class HurtState {
 
     update(dt) {
         this.timer -= dt;
-        if (this.timer <= 0) this.npc.panic(this.npc.threat);
+        if (this.timer > 0) return;
+        const npc = this.npc;
+        if (FightState.wants(npc)) npc.fsm.setState(new FightState(npc, npc.ctx.game.player));
+        else npc.panic(npc.threat, true);
     }
+}
+
+// --- FIGHT: o brigão revida — vai até quem bateu e troca socos e chutes (golpes de verdade: Combat.strike) até cansar, apanhar
+// demais, o outro sumir/entrar num carro ou puxar uma arma de fogo. Aí foge.
+class FightState {
+    // Revida? Só o brigão (NPC.brawler), batido pelo jogador a pé, com fôlego e o jogador sem arma de fogo na mão.
+    static wants(npc) {
+        const g = npc.ctx.game, p = g && g.player;
+        if (!p || !npc.brawler || npc._hitBy !== 'player' || npc.hp < npc.maxHp * 0.4 || !g.combat) return false;
+        if (g.mode !== 'player' || !p.alive || p.rag || FightState.armed(p)) return false;
+        return hypot(p.position.x - npc.position.x, p.position.z - npc.position.z) < 9;
+    }
+    static armed(p) { const W = Weapons[p.weapon]; return !!(W && W.gun); }
+
+    constructor(npc, foe) {
+        this.npc = npc;
+        this.foe = foe;
+        this.name = 'FIGHT';
+        this.clip = null;          // golpe tocando (o NPC.update toca o clipe)
+        this.attackT = 0;          // tempo até o golpe acabar
+        this.cd = 0.25;            // até o próximo golpe
+        this.timer = 0;            // fôlego
+        this.repath = 0;
+    }
+
+    enter() {
+        this.timer = 9 + Math.random() * 6;
+        this.npc.waiting = null; this.npc.crossing = null;
+        this.npc.fleeAge = 0;
+    }
+
+    update(dt) {
+        const npc = this.npc, g = npc.ctx.game, foe = this.foe, p = npc.position;
+        this.timer -= dt; this.cd -= dt; this.repath -= dt;
+        if (this.attackT > 0 && (this.attackT -= dt) <= 0) this.clip = null;
+        const dx = foe.position.x - p.x, dz = foe.position.z - p.z, d = hypot(dx, dz);
+        if (g.mode !== 'player' || !foe.alive || g.hiding || this.timer <= 0 || d > 14 || npc.hp < npc.maxHp * 0.3 || FightState.armed(foe)) {
+            this.clip = null;
+            npc.panic(foe.position, true);
+            return;
+        }
+        if (foe.rag) { if (this.attackT <= 0) { npc.setSpeed(0); this.clip = null; } return; }          // caiu: espera levantar
+        npc.heading = Math.atan2(dx, dz);
+        if (this.attackT > 0 || d < 0.95) {                                       // golpeando ou colado: para
+            npc.setSpeed(0);
+            if (this.repath <= 0) { npc.gotoTarget(p); this.repath = 0.3; }
+        } else {                                                                  // avança
+            npc.setSpeed(Config.npc.fleeSpeed * 0.8);
+            if (this.repath <= 0) { npc.gotoTarget(foe.position); this.repath = 0.3; }
+        }
+        if (d < 1.45 && this.cd <= 0 && this.attackT <= 0) this._attack(g);
+    }
+
+    _attack(g) {
+        const npc = this.npc, r = Math.random();
+        const kind = r < 0.25 ? 'kick' : (this._jab = !this._jab) ? 'punchL' : 'punch';
+        if (!npc.actor.play(kind, 'none', { restart: true })) return;
+        this.clip = kind;
+        this.attackT = { punch: 0.43, punchL: 0.36, kick: 0.58 }[kind];
+        this.cd = this.attackT + 0.35 + Math.random() * 0.6;
+        g.combat.strike({ position: npc.position, heading: () => npc.heading, ok: () => npc.alive && !npc.rag && npc.fsm.current === this && this.clip === kind },
+            kind, { source: 'npc', ref: npc, dmgMul: 0.75 });
+    }
+
+    exit() { this.clip = null; }
 }

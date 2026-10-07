@@ -85,7 +85,11 @@ class BoatSheet {
     }
 
     // Onde fica a origem do piloto (m: z = frente, x = direita): no jet ski, no banco com as mãos no guidão; na lancha, no timão (direita).
-    static get SEATS() { return { jetski: { z: -0.5, x: 0 }, lancha: { z: -0.35, x: 0.41 }, barco: { z: 0, x: 0 } }; }
+    // Piloto 2,5D (NpcArt): a origem é o banco (jet ski: atrás do guidão; lancha: o banco do timão) — ver NpcGenAnims.RIDE.
+    static get SEATS() {
+        if (typeof NpcArt !== 'undefined' && NpcArt.available()) return { jetski: { z: -0.357, x: 0 }, lancha: { z: -0.21, x: 0.41 }, barco: { z: 0, x: 0 } };
+        return { jetski: { z: -0.5, x: 0 }, lancha: { z: -0.35, x: 0.41 }, barco: { z: 0, x: 0 } };
+    }
 
     constructor(scene, modelId, palette, rider = false) {
         this.scene = scene;

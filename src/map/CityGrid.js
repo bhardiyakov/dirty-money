@@ -340,6 +340,18 @@ const CityGrid = {
     },
 
     // ============================================================ lojas
+    // Toldo das lojas: sai 1,5 u da parede, de y0 a y1. Alto o bastante para um adulto passar por baixo (MapGeo.coverAt esconde quem
+    // está debaixo dele inteiro, sem a cabeça furar o toldo).
+    AWNING: { depth: 1.5, y0: 3.0, y1: 3.25 },
+    // Retângulo [x0, z0, x1, z1] coberto pelo toldo da loja `s` do lote `l`.
+    awningRect(l, s) {
+        const D = this.AWNING.depth, a = s.a, b = s.a + 6;
+        if (s.side === 'S') return [a, l.z0 - D, b, l.z0];
+        if (s.side === 'N') return [a, l.z1, b, l.z1 + D];
+        if (s.side === 'W') return [l.x0 - D, a, l.x0, b];
+        return [l.x1, a, l.x1 + D, b];
+    },
+
     // Térreo comercial: nas paredes do prédio voltadas para a calçada, vitrines de 6 u (letreiro, vitrine, porta) com toldo.
     // `lot.shops` = [{ side:'S'|'N'|'W'|'E', a: início ao longo da parede, kind: índice em TileFactory.SHOPS }]. As lojas de
     // alguns tipos viram pontos de interesse no mapa (lanchonete, conveniência, Pay n Pay).

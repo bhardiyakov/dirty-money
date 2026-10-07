@@ -204,12 +204,12 @@ class NPCManager {
     }
 
     // Violência/assalto: só reage quem está perto E enxerga o local.
-    // `except`: um pedestre que não reage (a vítima do assalto, que já está rendida). Retorna quantos fugiram.
+    // `except`: pedestre (ou lista) que não reage (a vítima do assalto, que já está rendida; o assaltante). Retorna quantos fugiram.
     alertViolence(pos, radius = Config.npc.violenceRadius, except = null) {
         const p = new BABYLON.Vector3(pos.x, 0, pos.z);
         let n = 0;
         for (const npc of this.npcs) {
-            if (npc === except) continue;
+            if (npc === except || (Array.isArray(except) && except.includes(npc))) continue;
             if (npc.alive && BABYLON.Vector3.Distance(npc.position, p) < radius && this._sees(npc, p)) { npc.panic(p); n++; }
         }
         return n;

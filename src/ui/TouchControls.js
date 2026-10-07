@@ -334,7 +334,7 @@ class TouchControls {
         return [
             H(' ', gun ? 'ATIRAR' : 'ATACAR', gun ? '🔫' : (w === 'fists' ? '👊' : Emoji.char(w) || '👊'), 'c-red'),
             acts[1] ? ctx(acts[1], 'c-violet') : { type: 'run', key: 'shift', label: 'CORRER', icon: '🏃', color: 'c-amber' },
-            acts[0] ? ctx(acts[0], 'c-blue') : T('k', 'CHUTE', '🦶', 'c-dark'),
+            acts[0] ? ctx(acts[0], 'c-blue') : T('i', 'BOLSA', '🎒', 'c-dark'),                // (o chute agora é o 3º golpe do combo de ATACAR)
             { type: 'weapon', key: 'r', label: wName.length > 9 ? wName.split(' ')[0] : wName, icon: '🔄', color: 'c-dark', sub: gun ? inv.ammoText(w) : '' },
         ];
     }

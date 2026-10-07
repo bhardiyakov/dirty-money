@@ -72,7 +72,6 @@ const TileFactory = {
         T.sand = tex(this.sand(61));
         T.concrete = tex(this.concrete(71));
         T.plaza = tex(this.plaza(81));
-        T.shore = tex(this.shore(91), { mips: false });
         // Terreno do mundo grande.
         T.dirt = tex(this.dirt(101));
         T.rock = tex(this.rock(111));
@@ -366,27 +365,6 @@ const TileFactory = {
         }
         const r2 = Pixel.rng(200 + frame * 13); // brilhos que piscam a cada frame
         for (let i = 0; i < 9; i++) p.set(r2() * 80, r2() * 80, spark);
-        return p;
-    },
-
-    // Orla: 160 px ao longo (8u) × 280 px de largura (14u). Linha 0 = junto à terra.
-    // Espuma branca -> raso turquesa -> some em pontilhado (alpha binário, sem blending).
-    shore(seed) {
-        const W = 160, H = 280;
-        const p = new PixelCanvas(W, H);
-        const foam = Pixel.hex('#e8f6f6'), shallow = Pixel.hex('#5fc4c0'), mid = Pixel.hex('#3e9fb4'), deep = Pixel.hex('#2f7f9e');
-        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-            const wob = Math.sin((x / W) * Math.PI * 2 * 3) * 4 + Math.sin((x / W) * Math.PI * 2 * 7 + 1.3) * 2;
-            const d = y + wob;                       // distância ondulada da terra
-            const h = Pixel.hash(x, y, seed);
-            let c = null;
-            if (d < 7) c = foam;
-            else if (d < 11) c = h < 0.7 ? shallow : foam;
-            else if (d < 70) c = h < 0.92 ? shallow : mid;
-            else if (d < 150) c = h < 1 - (d - 70) / 90 * 0.9 ? mid : null;
-            else if (d < 270) c = h < (1 - (d - 150) / 120) * 0.55 ? deep : null;
-            if (c) p.set(x, y, c); else p.set(x, y, [0, 0, 0], 0);
-        }
         return p;
     },
 

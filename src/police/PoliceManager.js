@@ -124,7 +124,7 @@ class PoliceManager {
     // ---------------------------------------------------------------- helicóptero
     _spawnHeli(pos) {
         const a = Math.random() * Math.PI * 2, D = Config.heli.spawnDist;
-        this.heli = new Helicopter(this.scene, this.carLib.heliSheet(), this, pos.x + Math.sin(a) * D, pos.z + Math.cos(a) * D);
+        this.heli = new Helicopter(this.scene, null, this, pos.x + Math.sin(a) * D, pos.z + Math.cos(a) * D);
     }
 
     removeHeli() {
@@ -318,7 +318,7 @@ class PoliceManager {
     }
 
     spawn() {
-        this.carLib.heliSheet();            // assa o helicóptero já na carga (evita engasgo quando ele chega)
+        HeliArt.body(this.scene, 6); HeliArt.rotor(this.scene, true); HeliArt.rotor(this.scene, false); HeliArt.shadow(this.scene);   // desenha o helicóptero já na carga (evita engasgo quando ele chega)
 
         // Viaturas de patrulha (física) — nas ruas.
         for (let i = 0; i < Config.police.patrolCars; i++) this._spawnPatrolCar(i);

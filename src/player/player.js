@@ -21,7 +21,7 @@ class Player {
         this.root = new BABYLON.TransformNode('player', scene);
         this.root.position = startPos.clone();
 
-        this.actor = new SpriteActor(scene, library.sheets.player, 0, 'playerSprite');
+        this.actor = new SpriteActor(scene, library.sheets.hero || library.sheets.player, 0, 'playerSprite');      // hero = o protagonista 2,5D (NpcArt / PlayerLook)
         this.maxHp = 100;
         this.hp = this.maxHp;
         this.armor = 0;            // colete à prova de balas (pontos restantes)
@@ -56,6 +56,21 @@ class Player {
         this._sinceHit = 0;
         this.hitFlash = 0.35;                       // vinheta vermelha na tela
         if (!this.busy && !quiet) this.playAction('hurt', { lock: 0.6 });
+    }
+
+    // Levou um golpe corpo a corpo (soco, chute, cassetete — Combat.strike): dano, cambaleia e é empurrado; com força (chute,
+    // taco) cai no chão e levanta. dx, dz = direção do golpe; M = o golpe (Melee).
+    meleeHit(amount, dx, dz, M) {
+        if (this.hp <= 0 || this.invulnerable || this.rag) return;
+        const fall = M.fall >= Config.ragdoll.minPower;
+        this.cancelSequence();
+        if (this.action && !fall) this.action = null;                // (o golpe interrompe o que ele fazia)
+        this.takeDamage(amount, fall);                               // (cambaleia: o clipe 'hurt')
+        if (this.hp <= 0) return;
+        if (fall) { this.ragdoll({ dx, dz, power: M.fall * 0.85 }); return; }
+        const p = this.root.position;
+        p.x += dx * M.push; p.z += dz * M.push;
+        MapGeo.resolveCircle(p, 0.35);
     }
 
     // Arremessado (ragdoll): perde o controle, voa/rola/desliza e levanta. kind: 'hit' (atropelado) | 'bail'
@@ -145,16 +160,19 @@ class Player {
         return true;
     }
 
-    // Golpe principal conforme a arma na mão: soco (alternando), taco ou tiro.
-    // Retorna o nome da ação iniciada ('punch' | 'punchL' | 'swing' | 'shoot') ou null.
+    // Golpe principal conforme a arma na mão: combo de mãos (soco + soco + chute), taco ou tiro.
+    // Retorna o nome da ação iniciada ('punch' | 'punchL' | 'kick' | 'swing' | 'shoot') ou null.
     // force: permite reiniciar o clipe de tiro (rajada de SMG) mesmo ocupado atirando.
     primary(force = false) {
         if (this.busy && !(force && this.action.name === 'shoot')) return null;
         const w = this.weapon, look = this.look;
         let ok;
-        if (look === 'none') {                                      // punhos e faca: socos alternados
-            this._combo ^= 1;
-            ok = this.playAction(this._combo ? 'punch' : 'punchL', { lock: 0.25 });
+        if (look === 'none') {                                      // punhos e faca: COMBO soco esquerdo → soco direito → chute
+            const now = performance.now() / 1000;
+            if (now - (this._comboEnd || 0) > Player.COMBO_GAP) this._combo = 0;     // demorou: recomeça do 1º soco
+            const name = Player.COMBO[this._combo % Player.COMBO.length];
+            ok = this.playAction(name, { lock: name === 'kick' ? 0.2 : 0.25, onDone: () => { this._comboEnd = performance.now() / 1000; } });
+            if (ok) this._combo = (this._combo + 1) % Player.COMBO.length;
         } else if (w === 'bat') {
             ok = this.playAction('swing', { lock: 0.3, weapon: w });
         } else {
@@ -168,11 +186,6 @@ class Player {
         if (this.weapon === 'none') return 'none';
         const W = Weapons[this.weapon];
         return (W && W.look) || this.weapon;
-    }
-
-    kick() {
-        if (this.busy) return false;
-        return this.playAction('kick', { lock: 0.2 });
     }
 
     // Troca de arma: saca (com animação) ou guarda.
@@ -223,8 +236,8 @@ class Player {
     // veículo desenhado junto). side: -1 esquerda / +1 direita (de onde o jogador chegou).
     startMount(kind, bikePos, bikeHeading, side, onDone) {
         if (this.busy) return false;
-        this._baseSheet = this.actor.sheet;
-        this.actor.useSheet(this.lib.sheets.rider);
+        // (2,5D: o clipe mount está na própria folha do jogador, com o visual dele; o boneco antigo usa a folha do piloto)
+        if (!this.actor.sheet.isNpc) { this._baseSheet = this.actor.sheet; this.actor.useSheet(this.lib.sheets.rider); }
         this.root.position.set(bikePos.x, 0, bikePos.z);
         this.root.rotation.y = bikeHeading;
         this.velocity.setAll(0);
@@ -301,8 +314,17 @@ class Player {
         const W = Config.water, depth = this.underBridge ? MapGeo.waterDepthBelow(this.root.position.x, this.root.position.z) : MapGeo.waterDepth(this.root.position.x, this.root.position.z);
         this.depth = depth;
         this.swimming = depth > W.wadeDepth;
+        // vadeando: a água sobe da canela (na beira) à cintura (perto de nadar) — o desenho afunda até ali (SpriteActor.setWaterline)
+        this.waterline = depth > 0 && !this.swimming ? 0.25 + 0.75 * Math.min(1, depth / W.wadeDepth) : 0;
+        this.actor.setWaterline(this.waterline);
         const wf = depth <= 0 ? 1 : (depth <= W.wadeDepth ? 0.85 - 0.4 * (depth / W.wadeDepth) : (sprinting ? 0.52 : 0.4));
-        const maxSpeed = ((sprinting && depth <= 0) ? Config.player.sprintSpeed * (1 + (SkillTree.m.sprint || 0) + Outfit.m.sprint) : Config.player.maxSpeed * (1 + Outfit.m.walk)) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? 0.6 : 1);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar
+        // Relevo: subir qualquer encosta pode, mas devagar (MapGeo.slopeSpeed) — e o desenho troca para subindo/escalando
+        // (SpriteActor.setSlope). Inclinação medida na direção do movimento e suavizada (sem tranco de célula em célula).
+        const onGround = depth <= 0 && !this.onDeck && !this.underBridge && !(typeof HouseView !== 'undefined' && HouseView.inside);
+        const g = onGround && moveDir.lengthSquared() > 1e-4 ? MapGeo.slopeAlong(this.root.position.x, this.root.position.z, moveDir.x, moveDir.z) : 0;
+        this.slope = (this.slope || 0) + (g - (this.slope || 0)) * Math.min(1, dt * 6);
+        this.actor.setSlope(this.speed > 0.3 ? this.slope : 0);
+        const maxSpeed = ((sprinting && depth <= 0) ? Bags.runSpeed(this) : Config.player.maxSpeed * (1 + Outfit.m.walk)) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? 0.6 : 1) * MapGeo.slopeSpeed(this.slope);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
 
         // Acelera/desacelera suavemente rumo à velocidade alvo (frame-independent).
         const targetVel = moveDir.scale(maxSpeed);
@@ -344,15 +366,16 @@ class Player {
             let clip;
             if (this.swimming) {                                  // nadando: crawl (mais devagar parado, "boiando")
                 clip = 'swim'; this.state = 'swim';
-                rate = this.speed < 0.3 ? 0.35 : Math.max(0.6, this.speed / 4) * 1.1;
-                this.actor.play('swim', 'none');
+                rate = this.speed < 0.3 ? 0.35 : Math.max(0.6, this.speed / 1.4);
+                if (this.speed < 0.3 && this.actor.play('swim_idle', 'none')) rate = 1;          // 2,5D: parado, bate as pernas no lugar
+                else this.actor.play('swim', 'none');
                 this._syncSprite();
                 this.actor.update(dt, rate);
                 return;
             }
             if (depth > 0) {                                      // vadeando: passos lentos e pesados
                 clip = this.speed < 0.3 ? 'idle' : 'walk'; this.state = this.speed < 0.3 ? 'idle' : 'wade';
-                rate = 0.55 * (0.5 + this.speed / Config.player.maxSpeed);
+                rate = Math.max(0.4, this.speed / (Config.anim.walk * Config.player.stride)) * 0.9;
                 this.actor.play(clip, w);
                 this._syncSprite();
                 this.actor.update(dt, rate);
@@ -364,12 +387,14 @@ class Player {
             } else if (sprinting) {
                 clip = 'run';
                 this.state = 'sprint';
-                rate = Math.max(0.6, this.speed / Config.player.sprintSpeed) * 1.5;
+                rate = Math.max(0.5, this.speed / (Config.anim.run * Config.player.stride));                 // (ritmo pela velocidade: pés plantados — Config.anim)
             } else {
                 clip = 'walk';
                 this.state = 'walk';
-                rate = Math.max(0.6, this.speed / Config.player.maxSpeed) * 1.5;
+                rate = Math.max(0.5, this.speed / (Config.anim.walk * Config.player.stride));
             }
+            // Anunciando um assalto (arma apontada, a outra mão pedindo "passa tudo") — só existe no personagem 2,5D.
+            if (this.holdingUp && clip !== 'walk' && clip !== 'run' && w !== 'none' && w !== 'bat' && this.actor.play('holdup', w)) { this._syncSprite(); this.actor.update(dt, rate); return; }
             // Carregando peso (Bags): bolsa/maleta/mala na mão, mala puxada nas rodinhas, ou andar curvado de sobrecarga.
             const cw = Bags.clipFor(this, clip, w);
             if (cw && this.actor.play(cw[0], cw[1])) { this._syncSprite(); this.actor.update(dt, rate); return; }
@@ -431,7 +456,7 @@ class Player {
         if (this.baseY !== wasY && !this._glide && !this.rag) this.actor.mesh.position.y = this.baseY;
         // No viaduto o sprite vai para a camada 1, junto do tabuleiro (as estruturas 'x' de lá cobrem a camada 0 inteira): desenha
         // depois dele e, estando mais alto, passa no teste de profundidade — como os carros que andam lá em cima.
-        const group = this.onDeck ? 1 : 0;
+        const group = this.onDeck || this.actor.mesh._ysort ? 1 : 0;                   // (personagem 2,5D: sempre no grupo 1 — ver NpcArt.init)
         if (this.actor.mesh.renderingGroupId !== group) {
             this.actor.mesh.renderingGroupId = group;
             for (const m of this.actor.mesh.getChildMeshes()) m.renderingGroupId = group;
@@ -473,3 +498,8 @@ class Player {
         this.actor.mesh.computeWorldMatrix(true); this.actor.mesh.refreshBoundingInfo();             // o sprite não sincroniza o volume sozinho: após um salto longo (loja, safe house) o culling o esconderia
     }
 }
+
+// Combo de mãos (punhos e faca): cada clique/Espaço/RT solta o próximo golpe; parado mais que COMBO_GAP s depois de um golpe,
+// recomeça do 1º. O chute fecha o combo (derruba — ver Melee.kick).
+Player.COMBO = ['punchL', 'punch', 'kick'];
+Player.COMBO_GAP = 0.6;

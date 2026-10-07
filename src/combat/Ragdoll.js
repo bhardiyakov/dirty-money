@@ -163,8 +163,9 @@ class Casualty {
     // opts: { variant, sheet ('civA'|'civB'), threat: {x,z}, dx, dz, power, lethal, kind }
     constructor(game, pos, opts) {
         this.g = game;
-        const sheet = game.sprites.sheets[opts.sheet || 'civA'];
-        this.actor = new SpriteActor(game.scene, sheet, opts.variant || 2, 'casualty');
+        // look = { sheet: NpcSheet, row } (o piloto 2,5D que caiu da moto: mesmo tipo e cores)
+        const sheet = opts.look ? opts.look.sheet : game.sprites.sheets[opts.sheet || 'civA'];
+        this.actor = new SpriteActor(game.scene, sheet, opts.look ? opts.look.row : opts.variant || 2, 'casualty');
         this.pos = new BABYLON.Vector3(pos.x, 0, pos.z);
         this.threat = opts.threat || { x: pos.x, z: pos.z };
         this.state = 'rag';

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dirty Money — NPCs 2,5D (gerador dos atlas)</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #2b2e34; color: #d8dce2; font: 13px system-ui, Segoe UI, Arial, sans-serif; padding: 16px; }
+        h1 { font-size: 18px; margin-bottom: 4px; }
+        .sub { color: #9aa0aa; margin-bottom: 12px; line-height: 1.5; }
+        .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: #23262b; padding: 10px 12px; border: 1px solid #3a3f4a; margin-bottom: 14px; position: sticky; top: 0; z-index: 5; }
+        button { background: #ffd23a; color: #1b1b1b; border: 0; padding: 7px 12px; font-weight: 700; cursor: pointer; border-radius: 3px; }
+        button:disabled { opacity: 0.5; cursor: default; }
+        label { display: flex; gap: 6px; align-items: center; }
+        select, input { background: #14161a; color: #d8dce2; border: 1px solid #3a3f4a; padding: 3px; }
+        #status { color: #9aa0aa; white-space: pre-wrap; }
+        .grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .cell { background: #5a6170; border: 1px solid #40444d; padding: 4px; text-align: center; font-size: 10px; color: #e8eaee; }
+        .cell canvas { display: block; margin: 0 auto 3px; image-rendering: pixelated; }
+    </style>
+</head>
+<body>
+    <h1>NPCs 2,5D — gerador dos atlas do jogo</h1>
+    <div class="sub">
+        Fichas e animações em <code>src/art/npcgen/</code> (porte do gerador Python do pacote de NPCs + animações novas do jogo).
+        <b>Gerar e salvar todos</b> monta um atlas por tipo e grava <code>assets/npcs/&lt;tipo&gt;.js</code> (servidor de desenvolvimento,
+        <code>http://localhost:8123/tools/npcs/</code>). As cores das variantes não precisam de atlas novo.
+    </div>
+    <div class="bar">
+        <button id="all">Gerar e salvar todos</button>
+        <label>Tipo <select id="type"></select></label>
+        <label>Variante <input id="variant" type="number" min="0" value="0" style="width:50px"></label>
+        <label>Direção <select id="dir"><option value="4">S</option><option value="5">SO</option><option value="6">O</option><option value="7">NO</option><option value="0">N</option><option value="1">NE</option><option value="2">L</option><option value="3">SE</option><option value="8">todas</option></select></label>
+        <label>Clipe <input id="filter" placeholder="filtro" style="width:90px"></label>
+        <span id="status"></span>
+    </div>
+    <div id="out" class="grid"></div>
+
+    <script src="../../src/art/SpriteIO.js"></script>
+    <script src="../../src/art/npcgen/NpcGenCore.js"></script>
+    <script src="../../src/art/npcgen/NpcGenChar.js"></script>
+    <script src="../../src/art/npcgen/NpcGenRender.js"></script>
+    <script src="../../src/art/npcgen/NpcGenAnims.js"></script>
+    <script src="../../src/art/npcgen/NpcGenTypes.js"></script>
+    <script src="../../src/art/npcgen/NpcGenBuild.js"></script>
+    <script>
+        const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G);
+        const $ = (id) => document.getElementById(id);
+        for (const id of Object.keys(G.TYPES)) $('type').insertAdjacentHTML('beforeend', `<option>${id}</option>`);
+        const status = (s) => { $('status').textContent = s; };
+
+        // ---------------------------------------------------------------- prévia (renderiza na hora, sem atlas)
+        const anims = [];
+        function frameCanvas(fr, ramps, zoom = 3) {
+            const c = document.createElement('canvas'); c.width = fr.W; c.height = fr.H;
+            c.style.width = fr.W * zoom + 'px'; c.style.height = fr.H * zoom + 'px';
+            c.getContext('2d').putImageData(new ImageData(G.colorize(fr, ramps), fr.W, fr.H), 0, 0);
+            return c;
+        }
+        async function preview() {
+            const id = $('type').value, v = +$('variant').value, dsel = +$('dir').value, flt = $('filter').value.trim();
+            const spec = G.variantSpec(id, v), ramps = G.rampsFor(spec);
+            const R = G.rendererFor(G.BY_ID[id]);
+            $('out').replaceChildren(); anims.length = 0;
+            const keys = G.TYPES[id].clips.filter((k) => !flt || k.includes(flt));
+            for (const key of keys) {
+                const [name, w0] = key.split(':'), def = G.CLIPS[name], w = G.weaponFor(id, w0);
+                const poses = def.fn(w, { hand: 'briefcase' }), dirs = dsel === 8 ? [0, 1, 2, 3, 4, 5, 6, 7] : [dsel];
+                for (const d of dirs) {
+                    const frames = poses.map((p) => frameCanvas(R.render(p, -45 * d), ramps));
+                    const cell = document.createElement('div'); cell.className = 'cell';
+                    cell.appendChild(frames[0]); cell.appendChild(document.createTextNode(`${key} (${poses.length})${dirs.length > 1 ? ' d' + d : ''}`));
+                    $('out').appendChild(cell);
+                    anims.push({ cell, cur: frames[0], frames, fps: (def.fpsFor && def.fpsFor[w0]) || def.fps });
+                }
+                await new Promise((r) => setTimeout(r, 0));
+            }
+            status(`${id}: ${keys.length} clipes`);
+        }
+        function tick(now) {
+            for (const a of anims) {
+                const f = Math.floor((now / 1000) * a.fps) % a.frames.length, c = a.frames[f];
+                if (c !== a.cur) { a.cell.replaceChild(c, a.cur); a.cur = c; }
+            }
+            requestAnimationFrame(tick);
+        }
+        for (const id of ['type', 'variant', 'dir']) $(id).addEventListener('change', preview);
+        $('filter').addEventListener('change', preview);
+        requestAnimationFrame(tick);
+
+        // ---------------------------------------------------------------- atlas → .js
+        const b64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+        async function encodePNG(a) {
+            const rows = new Uint8Array((a.w * 2 + 1) * a.h);
+            for (let y = 0; y < a.h; y++) {                                                        // filtro "sub" (1): comprime melhor o recorte
+                const o = y * (a.w * 2 + 1), src = a.data.subarray(y * a.w * 2, (y + 1) * a.w * 2);
+                rows[o] = 1;
+                for (let x = 0; x < a.w * 2; x++) rows[o + 1 + x] = (src[x] - (x >= 2 ? src[x - 2] : 0)) & 255;
+            }
+            return PNG._png(a.w, a.h, 4, rows);
+        }
+        async function toJS(id, a, ms) {
+            const png = await encodePNG(a), spec = G.BY_ID[id];
+            let nf = 0; for (const c of Object.values(a.clips)) nf += c.n * (c.dirs || 8);
+            const obj = { v: a.v || 1, id, label: spec.label, k: a.k, frame: a.frame, pivot: G.pivFor(a.k), w: a.w, h: a.h, clips: a.clips, png: b64(png) };
+            return `// GERADO por tools/npcs/index.html (src/art/npcgen) — não edite à mão.\n` +
+                `// ${spec.label}: ${Object.keys(a.clips).length} clipes, ${nf} quadros (8 direções; pilotando, 16) — ${a.pieces} imagens distintas, atlas ${a.w}×${a.h},\n` +
+                `// 2 bytes por pixel (formato ${a.v || 1}: ${a.v === 2 ? 'material e luz' : 'código da cor e alfa'}) — PNG ${(png.length / 1024).toFixed(0)} KB. Ver src/art/NpcArt.js.\n` +
+                `var NPC_ATLAS = NPC_ATLAS || {};\nNPC_ATLAS[${JSON.stringify(id)}] = ${JSON.stringify(obj)};\n`;
+        }
+        async function save(path, body) {
+            const r = await fetch('/__save/' + path, { method: 'PUT', body });
+            if (!r.ok) throw new Error('não salvou ' + path + ' (' + r.status + ')');
+        }
+        window.built = {};
+        // Monta (em Workers paralelos) e salva os tipos pedidos.
+        async function buildAll(ids = Object.keys(G.TYPES), { write = true } = {}) {
+            $('all').disabled = true;
+            const prog = {}, t0 = performance.now(), N = Math.max(1, Math.min(ids.length, (navigator.hardwareConcurrency || 4) - 1));
+            const show = () => status(Object.entries(prog).map(([k, v]) => `${k}: ${v}`).join('\n'));
+            const queue = ids.slice();
+            await Promise.all(Array.from({ length: N }, () => new Promise((done) => {
+                const w = new Worker('worker.js');
+                const next = () => { const id = queue.shift(); if (!id) { w.terminate(); done(); return; } prog[id] = '…'; show(); w.postMessage({ id }); };
+                w.onmessage = async (e) => {
+                    const m = e.data;
+                    if (m.progress) { prog[m.id] = `${m.progress[0]}/${m.progress[1]} ${m.progress[2]}`; show(); return; }
+                    if (m.error) { prog[m.id] = 'ERRO ' + m.error; show(); next(); return; }
+                    built[m.id] = m.atlas;
+                    const js = await toJS(m.id, m.atlas, m.ms);
+                    if (write) await save(`assets/npcs/${m.id}.js`, new Blob([js], { type: 'application/javascript' }));
+                    prog[m.id] = `ok ${m.atlas.w}×${m.atlas.h}, ${(js.length / 1024).toFixed(0)} KB, ${(m.ms / 1000).toFixed(1)} s`;
+                    show(); next();
+                };
+                next();
+            })));
+            status($('status').textContent + `\nFIM em ${((performance.now() - t0) / 1000).toFixed(0)} s`);
+            $('all').disabled = false;
+        }
+        $('all').onclick = () => buildAll();
+        window.buildAll = buildAll;
+
+        // ---------------------------------------------------------------- folha de revisão (PNG grande com todos os clipes)
+        // dirs = direções (linhas por clipe); salva em assets/_npcprev/<id>.png (só para conferir; não vai para o jogo).
+        async function reviewSheet(id, { dirs = [4, 2], v = 0, zoom = 2, keys = null, file = null } = {}) {
+            const a = built[id];
+            if (!a) throw new Error('monte antes: buildAll([id], {write:false})');
+            const ramps = G.rampsFor(G.variantSpec(id, v)), F = a.frame, cols = Math.max(...Object.values(a.clips).map((c) => c.n));
+            const list = (keys || Object.keys(a.clips));
+            const cw = 64, ch = 70, W = 150 + cols * cw, H = list.length * dirs.length * ch;
+            const c = document.createElement('canvas'); c.width = W; c.height = H;
+            const ctx = c.getContext('2d'); ctx.fillStyle = '#6a7080'; ctx.fillRect(0, 0, W, H); ctx.font = '11px sans-serif';
+            let row = 0;
+            for (const key of list) {
+                const clip = a.clips[key];
+                for (const d of dirs) {
+                    ctx.fillStyle = row % 2 ? '#646a79' : '#6d7383'; ctx.fillRect(0, row * ch, W, ch);
+                    ctx.fillStyle = '#fff'; ctx.fillText(`${key} d${d}`, 4, row * ch + 14); ctx.fillText(`${clip.n}q ${clip.fps}fps${clip.loop ? ' loop' : ''}`, 4, row * ch + 28);
+                    for (let f = 0; f < clip.n; f++) {
+                        const [x, y, w, h, ox, oy] = clip.f[d * clip.n + f];
+                        if (!w) continue;
+                        const img = new ImageData(w, h), fr = { W: w, H: h, code: new Uint8Array(w * h), alpha: new Uint8Array(w * h), light: a.v === 2 ? new Uint8Array(w * h) : null };
+                        for (let r = 0; r < h; r++) for (let q = 0; q < w; q++) {
+                            const o = ((y + r) * a.w + x + q) * 2, i = r * w + q;
+                            if (fr.light) { const u = G.unpackPx(a.data[o], a.data[o + 1]); fr.code[i] = u.code; fr.alpha[i] = u.alpha; fr.light[i] = u.light; }
+                            else { fr.code[i] = a.data[o]; fr.alpha[i] = a.data[o + 1]; }
+                        }
+                        G.colorize(fr, ramps, img.data);
+                        const t = document.createElement('canvas'); t.width = w; t.height = h; t.getContext('2d').putImageData(img, 0, 0);
+                        ctx.drawImage(t, 150 + f * cw + 32 + ox, row * ch + 52 + oy);
+                    }
+                    row++;
+                }
+            }
+            const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+            await save(`assets/_npcprev/${file || id}.png`, blob);
+            return `${W}×${H}`;
+        }
+        window.reviewSheet = reviewSheet;
+
+        // ---------------------------------------------------------------- comparação: esqueleto do pacote × adulto (G.ADULT)
+        // shots = [[clipe, quadro, direção], ...]; salva assets/_npcprev/<file>.png. adultOnly = só o desenho novo.
+        async function compareSheet(types, shots, { zoom = 3, file = 'cmp', adultOnly = false, W = 112, H = 112, k = G.OUT_K, v = 0 } = {}) {
+            const modes = adultOnly ? [true] : [false, true], saved = G.ADULT, cells = [];
+            for (const id of types) for (const ad of modes) {
+                G.ADULT = ad ? saved : null;
+                const spec = G.fullSpec(G.variantSpec(id, v));
+                const R = new G.Renderer(G.loadBaked(spec, G.SPACING), new G.Camera(), { W, H, pivot: [W / 2, Math.round(H * 0.68)], charScale: (spec.scale * k) / 1.04 });
+                G.setRig(G.rigFor(spec)); G.CTX.rifle = spec.rifle;
+                const ramps = G.rampsFor(spec);
+                for (const [key, fi, d] of shots) {
+                    const [name, w0] = key.split(':'), poses = G.CLIPS[name].fn(G.weaponFor(id, w0 || 'none'), {});
+                    cells.push({ fr: R.render(poses[Math.min(fi, poses.length - 1)], -45 * d), ramps, label: (ad ? 'A ' : 'o ') + id.slice(0, 14) + ' ' + key + ' ' + fi + ' d' + d });
+                }
+            }
+            G.ADULT = saved;
+            const cols = shots.length * modes.length, rows = Math.ceil(cells.length / cols);
+            const c = document.createElement('canvas'); c.width = cols * W * zoom; c.height = rows * (H * zoom + 14);
+            const ctx = c.getContext('2d'); ctx.fillStyle = '#7a8090'; ctx.fillRect(0, 0, c.width, c.height); ctx.imageSmoothingEnabled = false; ctx.font = '11px sans-serif';
+            cells.forEach((cl, i) => {
+                const x = (i % cols) * W * zoom, y = Math.floor(i / cols) * (H * zoom + 14);
+                const t = document.createElement('canvas'); t.width = W; t.height = H; t.getContext('2d').putImageData(new ImageData(G.colorize(cl.fr, cl.ramps), W, H), 0, 0);
+                ctx.drawImage(t, x, y + 14, W * zoom, H * zoom); ctx.fillStyle = '#fff'; ctx.fillText(cl.label, x + 3, y + 11);
+            });
+            const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+            await save(`assets/_npcprev/${file}.png`, blob);
+            return `${c.width}×${c.height}`;
+        }
+        window.compareSheet = compareSheet;
+
+        // ---------------------------------------------------------------- prévia grande numa resolução (k = 1: alta definição)
+        // shots = [[clipe, quadro, direção], ...] → assets/_npcprev/<file>.png (uma linha por tipo).
+        async function hdSheet(types, shots, { file = 'hd', zoom = 3, k = G.HD_K, v = 0 } = {}) {
+            const cells = [], W = G.frameFor(k), piv = G.pivFor(k), crop = [0.22, 0.14, 0.56, 0.6];
+            for (const id of types) {
+                const spec = G.fullSpec(G.variantSpec(id, v));
+                const R = new G.Renderer(G.loadBaked(spec, G.SPACING), new G.Camera(), { W, H: W, pivot: piv, ss: k >= 1 ? 2 : 4, charScale: (spec.scale * k) / 1.04 });
+                G.setRig(G.rigFor(spec)); G.CTX.rifle = spec.rifle;
+                const ramps = G.rampsFor(spec);
+                for (const [key, fi, d] of shots) {
+                    const [name, w0] = key.split(':'), poses = G.CLIPS[name].fn(G.weaponFor(id, w0 || 'none'), {});
+                    cells.push({ fr: R.render(poses[Math.min(fi, poses.length - 1)], -45 * d), ramps, label: `${id.slice(0, 16)} ${key} d${d}` });
+                }
+            }
+            const cols = shots.length, CW = Math.round(W * crop[2] * zoom), CH = Math.round(W * crop[3] * zoom);
+            const c = document.createElement('canvas'); c.width = cols * CW; c.height = types.length * (CH + 14);
+            const ctx = c.getContext('2d'); ctx.fillStyle = '#7d8471'; ctx.fillRect(0, 0, c.width, c.height); ctx.imageSmoothingEnabled = false; ctx.font = '12px sans-serif';
+            cells.forEach((cl, i) => {
+                const x = (i % cols) * CW, y = Math.floor(i / cols) * (CH + 14);
+                const t = document.createElement('canvas'); t.width = W; t.height = W; t.getContext('2d').putImageData(new ImageData(G.colorize(cl.fr, cl.ramps), W, W), 0, 0);
+                ctx.drawImage(t, W * crop[0], W * crop[1], W * crop[2], W * crop[3], x, y + 14, CW, CH);
+                ctx.fillStyle = '#fff'; ctx.fillText(cl.label, x + 3, y + 11);
+            });
+            await save(`assets/_npcprev/${file}.png`, await new Promise((r) => c.toBlob(r, 'image/png')));
+            return `${c.width}×${c.height}`;
+        }
+        window.hdSheet = hdSheet;
+        preview();
+    </script>
+</body>
+</html>

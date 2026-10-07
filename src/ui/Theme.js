@@ -42,7 +42,7 @@ const Theme = {
             html.no-blur *, html.no-blur *::before, html.no-blur *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
             html.no-blur #endscreen { background: radial-gradient(ellipse at center, rgba(20,2,6,0.82) 20%, rgba(0,0,0,0.94) 100%) !important; }
             html.no-blur #pause { background: rgba(6, 8, 13, 0.93) !important; }
-            html.no-blur :is(#shopUI, #stashUI, #propUI, #tribunal, #motoUI) { background: rgba(5, 7, 12, 0.72) !important; }
+            html.no-blur :is(#shopUI, #stashUI, #propUI, #carUI, #tribunal, #motoUI) { background: rgba(5, 7, 12, 0.72) !important; }
             .emo { font-family: var(--emoji); font-style: normal; font-weight: 400; line-height: 1; display: inline-block; }
             .num { font-family: var(--font-d); font-variant-numeric: tabular-nums; }
             ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -91,30 +91,30 @@ const Theme = {
             #lockpick.win { border-color: var(--acc) !important; }
 
             /* janelas modais (loja, baú, imóvel, tribunal, mototáxi) */
-            #shopUI, #stashUI, #propUI, #tribunal, #motoUI { position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center;
+            #shopUI, #stashUI, #propUI, #carUI, #tribunal, #motoUI { position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center;
                 background: rgba(5,7,12,0.55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font-family: var(--font); color: var(--tx); }
             #tribunal { z-index: 41; }
-            :is(#shopUI .sp, #stashUI .sp, #propUI .pp, #tribunal .tp, #motoUI .mp) { max-height: 92vh; display: flex; flex-direction: column; background: var(--glass-2);
+            :is(#shopUI .sp, #stashUI .sp, #propUI .pp, #carUI .pp, #tribunal .tp, #motoUI .mp) { max-height: 92vh; display: flex; flex-direction: column; background: var(--glass-2);
                 border: 1px solid var(--line-2); border-radius: 22px; box-shadow: var(--shadow); padding: 22px 24px; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
                 animation: modalIn .18s ease-out; }
             @keyframes modalIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
-            :is(#shopUI, #stashUI, #propUI, #tribunal, #motoUI) h3 { margin: 0 0 4px; font: 700 22px var(--font-d); letter-spacing: 0; color: var(--tx); text-align: center; }
-            :is(#shopUI, #stashUI, #propUI, #tribunal, #motoUI) .sub { font-size: 13px; color: var(--tx-2); text-align: center; margin-bottom: 14px; line-height: 1.55; }
-            :is(#shopUI, #stashUI) .rows { overflow: auto; display: flex; flex-direction: column; gap: 3px; }
-            :is(#shopUI, #stashUI) .row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--r-2); border: 1px solid transparent; font-size: 14px; line-height: 1.35; font-weight: 600; }
-            :is(#shopUI, #stashUI) .row:hover { background: var(--card); }
-            :is(#shopUI, #stashUI) .row.sel { border-color: rgba(251,191,36,0.7); background: rgba(251,191,36,0.08); }
-            :is(#shopUI, #stashUI) .row.off { opacity: .45; }
-            :is(#shopUI, #stashUI) .row canvas { flex: none; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
-            :is(#shopUI, #stashUI) .row .nm { flex: 1; min-width: 0; }
-            :is(#shopUI, #stashUI) .row .nm small { display: block; color: var(--tx-3); font-size: 12px; font-weight: 500; margin-top: 2px; }
-            :is(#shopUI, #stashUI, #propUI, #tribunal, #motoUI) .btn { font: 600 13px var(--font); color: var(--tx); background: var(--card-h); border: 1px solid var(--line-2);
+            :is(#shopUI, #stashUI, #propUI, #carUI, #tribunal, #motoUI) h3 { margin: 0 0 4px; font: 700 22px var(--font-d); letter-spacing: 0; color: var(--tx); text-align: center; }
+            :is(#shopUI, #stashUI, #propUI, #carUI, #tribunal, #motoUI) .sub { font-size: 13px; color: var(--tx-2); text-align: center; margin-bottom: 14px; line-height: 1.55; }
+            :is(#shopUI, #stashUI, #carUI) .rows { overflow: auto; display: flex; flex-direction: column; gap: 3px; }
+            :is(#shopUI, #stashUI, #carUI) .row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--r-2); border: 1px solid transparent; font-size: 14px; line-height: 1.35; font-weight: 600; }
+            :is(#shopUI, #stashUI, #carUI) .row:hover { background: var(--card); }
+            :is(#shopUI, #stashUI, #carUI) .row.sel { border-color: rgba(251,191,36,0.7); background: rgba(251,191,36,0.08); }
+            :is(#shopUI, #stashUI, #carUI) .row.off { opacity: .45; }
+            :is(#shopUI, #stashUI, #carUI) .row canvas { flex: none; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+            :is(#shopUI, #stashUI, #carUI) .row .nm { flex: 1; min-width: 0; }
+            :is(#shopUI, #stashUI, #carUI) .row .nm small { display: block; color: var(--tx-3); font-size: 12px; font-weight: 500; margin-top: 2px; }
+            :is(#shopUI, #stashUI, #propUI, #carUI, #tribunal, #motoUI) .btn { font: 600 13px var(--font); color: var(--tx); background: var(--card-h); border: 1px solid var(--line-2);
                 border-radius: var(--r-3); padding: 8px 13px; cursor: pointer; white-space: nowrap; transition: background .15s; }
-            :is(#shopUI, #stashUI, #propUI, #tribunal, #motoUI) .btn:hover { background: rgba(255,255,255,0.16); }
-            :is(#shopUI, #stashUI) .btn.pri { background: var(--acc); color: #04130c; border-color: transparent; }
-            :is(#shopUI, #stashUI) .btn.pri:hover { background: #5cf0b5; }
-            :is(#shopUI, #stashUI, #propUI, #tribunal, #motoUI) .msg { min-height: 16px; font-size: 13px; font-weight: 600; text-align: center; margin-top: 10px; }
-            :is(#shopUI, #stashUI) .foot { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; color: var(--tx-3); flex-wrap: wrap; }
+            :is(#shopUI, #stashUI, #propUI, #carUI, #tribunal, #motoUI) .btn:hover { background: rgba(255,255,255,0.16); }
+            :is(#shopUI, #stashUI, #carUI) .btn.pri { background: var(--acc); color: #04130c; border-color: transparent; }
+            :is(#shopUI, #stashUI, #carUI) .btn.pri:hover { background: #5cf0b5; }
+            :is(#shopUI, #stashUI, #propUI, #carUI, #tribunal, #motoUI) .msg { min-height: 16px; font-size: 13px; font-weight: 600; text-align: center; margin-top: 10px; }
+            :is(#shopUI, #stashUI, #carUI) .foot { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; color: var(--tx-3); flex-wrap: wrap; }
             :is(#propUI, #tribunal, #motoUI) .opt { display: block; width: 100%; text-align: left; font: 600 14px/1.4 var(--font); background: var(--card); color: var(--tx);
                 border: 1px solid var(--line-2); border-radius: var(--r-2); padding: 12px 14px; margin-top: 8px; cursor: pointer; transition: background .15s, border-color .15s; }
             :is(#propUI, #tribunal, #motoUI) .opt:hover { background: var(--card-h); }
@@ -139,11 +139,13 @@ const Emoji = {
         of_chinelo: '🩴', of_tenis_corrida: '👟', of_tenis_basquete: '👟', of_coturno: '🥾', of_sapato_social: '👞', of_camiseta_branca: '👕', of_regata_academia: '🎽',
         of_camisa_time: '⚽', of_moletom_capuz: '🧥', of_jaqueta_couro: '🧥', of_colete_carga: '🦺', of_terno: '👔', of_bermuda: '🩳', of_calca_moletom: '👖', of_calca_cargo: '👖',
         of_calca_social: '👖', of_oculos_escuros: '🕶️', of_relogio_ouro: '⌚', of_luvas: '🧤', of_corrente_ouro: '📿', of_tenis_branco: '👟', of_jaqueta_laranja: '🧥', of_calca_jeans: '👖',
+        of_tenis_skate: '👟', of_camiseta_estampa: '👕', of_camiseta_listrada: '👕', of_camisa_florida: '🌺', of_camisa_polo: '👕', of_bermuda_jeans: '🩳',
+        of_bone: '🧢', of_bone_tras: '🧢', of_touca: '🧶', of_chapeu_pescador: '👒', of_viseira: '🧢', of_capacete: '⛑️',
         // comidas e bebidas das lojas (Economy.ITEMS)
         burger: '🍔', bacon: '🍔', fries: '🍟', soda: '🥤', shake: '🥤', slice: '🍕', pizza: '🍕', salad: '🥗', juice: '🧃', bowl: '🍧', pasta: '🍝', risotto: '🍚',
         menu_it: '🍽️', wine: '🍷', sushi: '🍣', omakase: '🍱', sake: '🍶', beer: '🍺', shot: '🥃', snack: '🍢', bread: '🥪', coffee: '☕', cake: '🍰', lunch: '🍱', bottle: '💧',
         // lugares do mapa (PauseMenu.POI_TYPES)
-        hospital: '🏥', station: '🚓', cart: '🛒', spray: '🎨', fuel: '⛽', boat: '🚤', home: '🏠', dumpster: '🗑️', pin: '📍', chop: '🔧', moto: '🛵', bank: '🏦', music: '🎶', gun: '🔫', shirt: '👕',
+        hospital: '🏥', station: '🚓', cart: '🛒', spray: '🎨', fuel: '⛽', boat: '🚤', home: '🏠', dumpster: '🗑️', pin: '📍', chop: '🔧', moto: '🛵', bank: '🏦', music: '🎶', gun: '🔫', shirt: '👕', dealer: '🚗',
         // indicadores do HUD
         heart: '❤️', shield: '🛡️', cash: '💵', clean: '💳', clock: '🕒', trophy: '🏆', star: '⭐', energy: '⚡', heat: '🔥', medal: '🏅', siren: '🚨',
     },

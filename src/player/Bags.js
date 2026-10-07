@@ -101,23 +101,36 @@ const Bags = {
     stamina(pl, wantSprint, moving, dt) {
         const F = pl.fit || (pl.fit = { xp: 0 });
         const O = typeof Outfit !== 'undefined' ? Outfit.m : {};          // roupa: tênis de corrida, roupa de academia (ver Outfit)
-        const lvl = this.fitLevel(F), max = 100 + lvl * 6 + (O.staminaMax || 0), r = pl.loadRatio != null ? pl.loadRatio : (this.ratio || 0);
+        const lvl = this.fitLevel(F), max = this.staminaMax(lvl, O), r = pl.loadRatio != null ? pl.loadRatio : (this.ratio || 0);
         if (pl.stamina == null) pl.stamina = max;
         pl.staminaMax = max;
         const can = wantSprint && moving && !pl.winded && !pl.overloaded && pl.stamina > 0;
         if (can) {
-            pl.stamina -= 15 * (1 + 0.8 * Math.min(1, r)) * (1 - Math.min(0.35, lvl * 0.012)) * (1 - (O.stamina || 0)) * dt;
+            pl.stamina -= Config.player.staminaDrain * (1 + 0.8 * Math.min(1, r)) * (1 - Math.min(0.3, lvl * 0.015)) * (1 - (O.stamina || 0)) * dt;
             pl._rest = 0;
             F.xp += dt * (1 + r);                                                   // treino: correr (com peso, treina mais)
             if (pl.stamina <= 0) { pl.stamina = 0; pl.winded = true; }
         } else {
             pl._rest = (pl._rest || 0) + dt;
-            if (pl._rest > 0.6) pl.stamina = Math.min(max, pl.stamina + (moving ? 13 : 22) * (1 + lvl * 0.03 + (O.regen || 0)) * dt);
+            // recupera proporcional ao máximo: cheio em ~12 s andando / ~7 s parado (no nível 0)
+            if (pl._rest > 0.6) pl.stamina = Math.min(max, pl.stamina + max * (moving ? 0.08 : 0.14) * (1 + lvl * 0.03 + (O.regen || 0)) * dt);
             if (pl.winded && pl.stamina >= max * 0.35) pl.winded = false;
         }
         return can;
     },
     fitLevel(F) { return Math.min(20, Math.floor(Math.sqrt((F && F.xp || 0) / 25))); },     // 0..20 (nível 20 ≈ 2,8 h correndo)
+    staminaMax(lvl, O) { const P = Config.player; return P.staminaBase + lvl * P.staminaPerLvl + ((O && O.staminaMax) || 0); },
+
+    // Velocidade correndo (m/s): o pique cresce com o condicionamento (24 → 27 km/h) e cai com o fôlego até ~10 km/h — começa bem
+    // e vai perdendo o pace aos poucos (raiz: segura perto do pique com o fôlego cheio e despenca no fim). Tênis/árvore somam ao
+    // pique, sem passar do máximo (Config.player.sprintSpeed).
+    runSpeed(pl) {
+        const P = Config.player, lvl = this.fitLevel(pl.fit), O = typeof Outfit !== 'undefined' ? Outfit.m : {};
+        const S = typeof SkillTree !== 'undefined' ? SkillTree.m : {};
+        const top = Math.min(P.sprintSpeed, P.sprintSpeed * (P.sprintStart + (1 - P.sprintStart) * lvl / 20) * (1 + (S.sprint || 0) + (O.sprint || 0)));
+        const lo = P.sprintSpeed * P.sprintMin, f = Math.max(0, Math.min(1, (pl.stamina == null ? 1 : pl.stamina / (pl.staminaMax || 100))));
+        return lo + (top - lo) * Math.sqrt(f);
+    },
 
     // --------------------------------------------------------------- bolsas
     // O jogador USA uma bolsa (inv.bag) e pode levar outras de RESERVA, vazias (inv.spareBags: pesam o próprio peso). As de reserva
@@ -174,6 +187,8 @@ const Bags = {
     _sheetSwap(game) {
         const pl = game.player, id = (game.inventory.bag || 'none');
         if (this._shown === id || pl._baseSheet) return;                            // (montando na moto: troca depois)
+        // Personagem 2,5D: a bolsa faz parte do desenho do jogador (PlayerLook gera o visual com ela).
+        if (pl.actor.sheet && pl.actor.sheet.isNpc && typeof PlayerLook !== 'undefined') { this._shown = id; PlayerLook.sync(); return; }
         // Atlas vetorial: a bolsa é uma CAMADA por cima do jogador (só os pixels que ela muda), não uma cópia de todas as animações.
         if (CharArt.available() && CharArt.data.sheets.player.bags) {
             const D = this.DEFS[id], look = D && (D.look || D.hand);      // (bolsa da mão: camada só nos clipes de carregar)

@@ -37,8 +37,10 @@ const Config = {
     // e o jogo é renderizado numa resolução interna baixa e ampliado sem suavizar.
     art: {
         ppu: 20,               // pixels de textura por unidade de mundo (1u ≈ 1m).
-        pixelate: true,        // renderiza em baixa resolução + upscale "crocante".
+        pixelate: true,        // renderiza em baixa resolução + upscale "crocante" (desligado com a alta definição).
+        hd: false,             // ALTA DEFINIÇÃO (Ajustes → Gráficos): tela na resolução real e personagens 2,5D em 2× (NpcArt.hd). Ver applyPerfProfile.
         charScale: 0.8,        // escala do DESENHO dos personagens (atlas vetorial). Os carros são de tamanho real; isto aproxima a proporção.
+        npcPpu: 26,            // personagens 2,5D (NpcArt): px do atlas por metro — adultos na mesma escala dos veículos. = NpcGenBuild.PPU (pilotos × motos)
         internalHeight: (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ? 440 : 560,   // altura interna alvo (px) quando pixelate = true (celular: menor, mais leve).
     },
 
@@ -54,6 +56,15 @@ const Config = {
         zoomSpeed: 22,         // velocidade de zoom por tecla (unidades/s).
         wheelStep: 1.5,        // passo de zoom por "tick" da roda do mouse.
         followLerp: 60,        // suavidade do acompanhamento (alto = praticamente colada).
+        // Dirigindo: câmera "bússola" — gira com o veículo (frente sempre para cima) e o deixa mais ao sul da tela.
+        carCompass: true,
+        carLead: 0.45,         // adianto à frente do veículo (fração da meia-altura visível): 0,45 = carro a ~72% da altura da tela
+        carTurnTrigger: 1.13,  // só gira (em passos de 90°) quando o carro se afasta ~65° da direção da câmera: desvios não balançam a tela
+        yawLerp: 3.5,          // rapidez do giro da câmera quando ela gira (maior = mais rápido; menor = mais suave)
+        leadLerp: 2.5,         // rapidez com que o adianto entra (ao entrar no carro) e sai (ao descer)
+        // Borrão de velocidade (SpeedBlur): começa a 80% da velocidade máxima do veículo e chega ao máximo nela.
+        blurFrom: 0.8,
+        blurMax: 0.04,         // força máxima (fração da distância ao carro que cada pixel "arrasta")
     },
 
     // Relógio do jogo: 24h do jogo duram `cycleSeconds` reais. Começa no fim da tarde para
@@ -70,12 +81,25 @@ const Config = {
     },
 
     player: {
-        maxSpeed: 9,           // Velocidade de caminhada (unidades/s).
-        sprintSpeed: 16,       // Velocidade de corrida (Shift).
+        // Velocidades (1 u = 1 m) no ritmo de jogo (2× o real): andar 10 km/h; correr de 20 a 54 km/h conforme o fôlego (Bags.runSpeed).
+        // Correndo, começa no pique e vai perdendo o pace conforme o fôlego acaba.
+        maxSpeed: 2.78,        // Velocidade de caminhada (m/s) = 10 km/h.
+        sprintSpeed: 15,       // Pique máximo correndo (m/s) = 54 km/h, com o condicionamento no máximo (nível 20).
+        sprintStart: 0.89,     // Pique no condicionamento 0 (× sprintSpeed ≈ 48 km/h); cresce até 1 no nível 20.
+        sprintMin: 0.37,       // Correndo sem fôlego (× sprintSpeed ≈ 20 km/h).
+        stride: 2,             // Passada do jogador × a normal (Config.anim): no ritmo 2×, as pernas mantêm a cadência em vez de dobrá-la.
+        staminaBase: 100,      // Fôlego no condicionamento 0 (+staminaPerLvl por nível).
+        staminaPerLvl: 8,
+        staminaDrain: 4,       // Fôlego gasto por segundo correndo (≈ 25 s de corrida no nível 0; ≈ 90 s no nível 20).
         accel: 12,             // Taxa de aproximação da velocidade alvo (maior = mais responsivo).
         turnLerp: 16,          // Velocidade de giro do corpo em direção ao movimento.
         radius: 0.55,          // Raio de colisão contra prédios.
     },
+
+    // Ritmo das animações de andar/correr dos personagens 2,5D: a velocidade (m/s) em que os pés ficam PLANTADOS com o clipe no ritmo
+    // normal (passada do adulto — NpcGenAnims.gait). O jogo toca o clipe em velocidade ÷ isto: quem anda mais rápido dá passos mais
+    // rápidos, sem "patinar".
+    anim: { walk: 1.6, run: 4.3 },
 
     // Liberty City: grade de quarteirões (fonte do mundo 3D e do GPS).
     // As bordas da grade são quarteirões de costa (praia/porto/mata) sem rua externa.
@@ -149,13 +173,13 @@ const Config = {
         height: 1.6,
         accel: 40,             // maxAcceleration do agente.
 
-        wanderSpeed: 3.5,      // Velocidade andando (unidades/s).
-        jogSpeed: 5.4,         // Velocidade de quem corre na orla.
-        swimSpeed: 2.4,        // Velocidade nadando (na água rasa, anda devagar).
+        wanderSpeed: 1.6,      // Velocidade andando (m/s; um pouco mais devagar que o jogador).
+        jogSpeed: 3.4,         // Velocidade de quem corre na orla (trote).
+        swimSpeed: 1.3,        // Velocidade nadando (na água rasa, anda devagar).
         mix: { jog: 0.17, sun: 0.14, swim: 0.12 },   // fração dos pedestres que correm na orla, tomam sol e nadam (o resto perambula).
         sunTime: [40, 110],    // Segundos deitado ao sol.
         swimTime: [45, 110],   // Segundos na água.
-        fleeSpeed: 8,          // Velocidade em pânico.
+        fleeSpeed: 5.2,        // Velocidade em pânico (o jogador correndo alcança).
 
         wanderRadius: 30,      // Raio para sortear destinos de perambulação.
         reachDist: 2,          // Distância p/ considerar "chegou" ao destino.
@@ -166,7 +190,7 @@ const Config = {
         fleeTime: 5,           // Tempo mínimo fugindo antes de voltar a perambular.
 
         // Inteligência de pedestre.
-        hurrySpeed: 5.5,       // Velocidade ao terminar de atravessar com o sinal já fechando.
+        hurrySpeed: 2.6,       // Velocidade ao terminar de atravessar com o sinal já fechando.
         idleChance: 0.35,      // Chance de parar e ficar de bobeira ao chegar no destino.
         idleTime: [2, 6],      // Tempo parado (s), mín–máx.
 
@@ -224,7 +248,7 @@ const Config = {
         green: 10,             // Verde (s) de cada eixo.
         yellow: 2.2,           // Amarelo.
         allRed: 1.3,           // Tudo vermelho entre as fases (limpa o cruzamento).
-        pedFlash: 3.5,         // Últimos segundos do verde em que o pedestre NÃO deve começar a atravessar.
+        pedFlash: 5,           // Últimos segundos do verde em que o pedestre NÃO deve começar a atravessar (andando a ~1,6 m/s).
     },
 
     physics: {
@@ -237,6 +261,7 @@ const Config = {
         enginePower: 10000,    // "Empuxo" do motor; aceleração = enginePower/mass (~11 m/s²).
         maxSpeed: 26,          // Velocidade máx. à frente (m/s).
         maxReverse: 9,         // Velocidade máx. de ré (m/s).
+        hpMul: 2.2,            // Resistência de TODOS os veículos × a do catálogo (spec.hp): lataria mais dura (batidas e tiros).
         turnRate: 2.0,         // Guinada máx. (rad/s) em velocidade plena.
         turnSpeedRef: 6,       // Velocidade (m/s) para direção com autoridade total.
         grip: 10,              // Aderência lateral: maior = mata a derrapagem mais rápido.
@@ -299,8 +324,12 @@ const Config = {
 
     // Batidas, atropelamento e destruição dos carros.
     crash: {
-        minDv: 2.6,            // Queda brusca de velocidade (m/s) abaixo da qual não é batida.
-        dmgPerMs: 3.4,         // Dano ao carro por m/s acima de minDv (bater a 15 m/s ≈ 42 de dano).
+        minDv: 4.0,            // Queda brusca de velocidade (m/s) abaixo da qual não é batida (encostões e raspadas não contam).
+        // Dano = dmgK × (dv − minDv)^dmgExp — curva: batida leve quase nada, batida feia muito (com vehicle.hpMul, um popular aguenta
+        // ~12 batidas a 36 km/h, ~6 a 54 km/h e 2–3 a 90 km/h). Antes era linear (3,4 por m/s) e 3 batidas já explodiam o carro.
+        dmgK: 1.6,
+        dmgExp: 1.25,
+        tireChance: 0.05,      // Bala que acerta um carro DURANTE UMA PERSEGUIÇÃO (procurado): chance de furar o pneu mais perto.
         cooldown: 0.3,         // s entre danos de batida do mesmo carro.
         bulletMul: 0.35,       // Fração do dano da bala que o carro leva.
         runOverSpeed: 3.0,     // Velocidade (m/s) a partir da qual o carro machuca quem está na frente.
@@ -362,8 +391,8 @@ const Config = {
 
         // Policiais a pé.
         officerRadius: 0.4,
-        officerPatrolSpeed: 2.6,
-        officerChaseSpeed: 11,
+        officerPatrolSpeed: 1.5,
+        officerChaseSpeed: 5.8,        // (a pé, perseguindo: um pouco mais lento que o jogador correndo — dá para fugir enquanto houver fôlego)
         officerWanderRadius: 30,
         closeNoEscape: 32,     // Policial a menos disso (u) te impede de escapar mesmo sem linha de visada (atrás de parede).
         // 1★ (delito leve): a polícia é bem menos punitiva — corre menos, precisa chegar mais perto para prender, perde você mais fácil
@@ -382,6 +411,11 @@ const Config = {
     let saved = null;
     try { saved = localStorage.getItem('dm_quality'); } catch (e) { /* sem storage */ }
     const lite = q.includes('lite') || (!q.includes('full') && (coarse || weak || saved === 'lite'));
+    // Alta definição: por padrão no PC; no celular/aparelho fraco, a pixel art leve. A escolha do jogador (Ajustes) vale mais.
+    let hdSet = null;
+    try { const s = JSON.parse(localStorage.getItem('dm_settings') || '{}'); if (typeof s.hd === 'boolean') hdSet = s.hd; } catch (e) { /* sem storage */ }
+    Config.art.hd = q.includes('hd=0') ? false : q.includes('hd=1') ? true : hdSet !== null ? hdSet : !lite;
+    Config.art.pixelate = !Config.art.hd;
     const P = Config.perf;
     // App instalado no PC (Tauri) — ou `?fps60` no navegador, para testar: 60 quadros. Se o PC não segurar, o AutoQuality volta a 30
     // antes de mexer na qualidade visual.

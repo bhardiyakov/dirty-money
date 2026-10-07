@@ -50,7 +50,7 @@ const Footsteps = {
         const pl = game.player;
         if (!AudioFX._ok() || game.mode !== 'player' || !pl || !pl.alive || pl.frozen || pl.swimming || !(pl.state === 'walk' || pl.state === 'sprint' || pl.state === 'wade')) { this._phase = null; return; }
         const a = pl.actor, c = a && a.clip, name = a && a.clipName;
-        if (!c || !c.loop || !c.frames || !/^(walk|run)/.test(name || '')) { this._phase = null; return; }
+        if (!c || !c.loop || !c.frames || !/^(walk|run|climb)/.test(name || '')) { this._phase = null; return; }
         const ph = (a.time / c.frames) % 1;
         if (this._phase != null) {
             const p0 = this._phase;
@@ -126,10 +126,9 @@ const Footsteps = {
                 this._hit(t + 0.05, { vol: V * 0.7, dur: 0.12, f0: 600, f1: 1500, type: 'bandpass', q: 4, att: 0.01 });          // sucção ao tirar o pé
                 break;
             }
-            case 'water': {
-                this._hit(t, { vol: V * 2.0, dur: 0.24, f0: 1900, f1: 650, type: 'bandpass', q: 0.8, att: 0.006 });
-                this._hit(t, { vol: V * 1.3, dur: 0.16, f0: 520, f1: 110, att: 0.004 });
-                this._hit(t + 0.08, { vol: V * 0.6, dur: 0.2, f0: 3400, f1: 1800, type: 'bandpass', q: 1.4, att: 0.02 });
+            case 'water': {                                                     // raso: mais grave e arrastado quanto mais fundo (AudioFX.waterWade)
+                const p = game.player.position;
+                AudioFX.waterWade(p.x, p.z, (game.player.depth || 0) / Config.water.wadeDepth, run, 1);
                 break;
             }
         }

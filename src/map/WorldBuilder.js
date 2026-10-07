@@ -76,14 +76,17 @@ class WorldBuilder {
 
     _createMaterials() {
         const T = this.T, M = this.mats;
-        M.water = this._mat('water', T.water[0]);
-        M.shore = this._mat('shore', T.shore, { alphaTest: true });
+        // Orla (src/render/WaterPlugin.js): o mar (pixel art) ganha o raso e a espuma pela distância até a terra, e o chão da costa
+        // (abaixo: areia, grama e os do terreno) recebe a água que sobe e desce por cima dele — degradê translúcido, sem a reta das células.
+        Water.init(this.scene);
+        M.water = Water.sea(this._mat('water', T.water[0]));
         M.road = this._mat('road', T.road);
         M.asphalt = this._mat('asphalt', T.asphalt);
         M.zebra = this._mat('zebra', T.zebra);
         M.sidewalk = this._mat('sidewalk', T.sidewalk);
         M.grass = this._mat('grass', T.grass);
-        M.sand = this._mat('sand', T.sand);
+        M.sand = Water.land(this._mat('sand', T.sand));
+        Water.land(M.grass);
         M.concrete = this._mat('concrete', T.concrete);
         M.dirt = this._mat('dirt', T.dirt);
         M.rock = this._mat('rock', T.rock);
@@ -153,7 +156,7 @@ class WorldBuilder {
         for (const t of this.T.water) { t.uScale = size / 4; t.vScale = size / 4; }
     }
 
-    // (A espuma da costa agora é feita junto com o terreno, por pedaço: TerrainBuilder._foam.)
+    // (O raso, a espuma e a água subindo na areia são pintados nos shaders do mar e do chão: src/render/WaterPlugin.js.)
     _shore() {}
 
     // ------------------------------------------------------------------ ruas
@@ -496,7 +499,7 @@ class WorldBuilder {
 
     // Vitrines e toldos das lojas (CityGrid._addShops): um quad vertical por loja, com o UV do atlas, e o toldo listrado.
     _shops() {
-        const SH = TileFactory.SHOPS, T = this.T.shops, eps = 0.03, y0 = 0.2, y1 = 3.0;
+        const SH = TileFactory.SHOPS, T = this.T.shops, eps = 0.03, y0 = 0.2, y1 = 3.0, AW = CityGrid.AWNING;
         const awn = [[1, 1, 1], [0.92, 0.9, 0.84]];
         for (const blk of CityGrid.blocks) for (const l of blk.lots) {
             for (const s of l.shops || []) {
@@ -504,10 +507,16 @@ class WorldBuilder {
                 const uv = [[u0, v0], [u1, v0], [u0, v1], [u1, v1]], a = s.a, b = s.a + 6;
                 const batch = this._batch('shop', l.x0, l.z0), trim = this._batch('trim', l.x0, l.z0);
                 const c = Pixel.hex(S.sign), col = [c[0] / 255, c[1] / 255, c[2] / 255];
-                if (s.side === 'S') { const z = l.z0 - eps; batch.quad([a, y1, z], [b, y1, z], [a, y0, z], [b, y0, z], [0, 0, -1], uv); for (let k = 0; k < 3; k++) trim.solid(a + k * 2, l.z0 - 1.5, a + k * 2 + 2, l.z0, 2.55, 2.8, k % 2 ? awn[0] : col); }
-                else if (s.side === 'N') { const z = l.z1 + eps; batch.quad([b, y1, z], [a, y1, z], [b, y0, z], [a, y0, z], [0, 0, 1], uv); for (let k = 0; k < 3; k++) trim.solid(a + k * 2, l.z1, a + k * 2 + 2, l.z1 + 1.5, 2.55, 2.8, k % 2 ? awn[0] : col); }
-                else if (s.side === 'W') { const x = l.x0 - eps; batch.quad([x, y1, b], [x, y1, a], [x, y0, b], [x, y0, a], [-1, 0, 0], uv); for (let k = 0; k < 3; k++) trim.solid(l.x0 - 1.5, a + k * 2, l.x0, a + k * 2 + 2, 2.55, 2.8, k % 2 ? awn[0] : col); }
-                else { const x = l.x1 + eps; batch.quad([x, y1, a], [x, y1, b], [x, y0, a], [x, y0, b], [1, 0, 0], uv); for (let k = 0; k < 3; k++) trim.solid(l.x1, a + k * 2, l.x1 + 1.5, a + k * 2 + 2, 2.55, 2.8, k % 2 ? awn[0] : col); }
+                if (s.side === 'S') { const z = l.z0 - eps; batch.quad([a, y1, z], [b, y1, z], [a, y0, z], [b, y0, z], [0, 0, -1], uv); }
+                else if (s.side === 'N') { const z = l.z1 + eps; batch.quad([b, y1, z], [a, y1, z], [b, y0, z], [a, y0, z], [0, 0, 1], uv); }
+                else if (s.side === 'W') { const x = l.x0 - eps; batch.quad([x, y1, b], [x, y1, a], [x, y0, b], [x, y0, a], [-1, 0, 0], uv); }
+                else { const x = l.x1 + eps; batch.quad([x, y1, a], [x, y1, b], [x, y0, a], [x, y0, b], [1, 0, 0], uv); }
+                // toldo listrado (3 faixas de 2 u ao longo da parede), na altura de CityGrid.AWNING
+                const [rx0, rz0, rx1, rz1] = CityGrid.awningRect(l, s), alongX = s.side === 'S' || s.side === 'N';
+                for (let k = 0; k < 3; k++) {
+                    const fx0 = alongX ? rx0 + k * 2 : rx0, fz0 = alongX ? rz0 : rz0 + k * 2;
+                    trim.solid(fx0, fz0, alongX ? fx0 + 2 : rx1, alongX ? rz1 : fz0 + 2, AW.y0, AW.y1, k % 2 ? awn[0] : col);
+                }
             }
         }
     }
@@ -996,7 +1005,6 @@ class WorldBuilder {
         const matFor = (key) => {
             if (key === 'veg_hi') return this.props.hiMaterial;
             if (key === 'veg_lo') return this.props.loMaterial;
-            if (key === 'shore') return M.shore;
             if (key === 'road') return M.road;
             if (key === 'broad') return M.broad;
             if (key === 'bsidewalk') return M.bsidewalk;
@@ -1083,6 +1091,7 @@ class WorldBuilder {
         if (focus) this.props.setFocus(focus.x, focus.z, this._revealR);   // fade das copas sobre o jogador.
         if (focus && this.terrain && !Interiors.active) this.terrain.update(dt, focus);
         this._waterTime += dt;
+        Water.tick(this._waterTime);                     // relógio da orla (onda subindo na areia, espuma): textura de 1 px, ver WaterPlugin
         // Animação (4 quadros, 3/s) + deriva lenta (1 texel por vez; com amostragem NEAREST menos que isso nem aparece). Antes: trocar a
         // diffuseTexture e mexer em uOffset/vOffset, e cada mudança fazia o Babylon recalcular a matriz da textura e VARRER TODOS OS
         // MATERIAIS da cena (todo quadro). Agora os pixels do quadro são copiados já deslocados (o ladrilho é contínuo: deslocar em

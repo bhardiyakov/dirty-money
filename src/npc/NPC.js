@@ -74,6 +74,8 @@ class NPC {
 
     // ----- Interface usada pelos estados da FSM -----
     setSpeed(speed) {
+        this._baseSpeed = speed;
+        speed *= this._slopeMul || 1;                                   // relevo: subindo, mais devagar (_slopeTick)
         if (Math.abs(this.params.maxSpeed - speed) < 0.01) return;
         this.params.maxSpeed = speed;
         if (this.index >= 0) this.nav.crowd.updateAgentParameters(this.index, this.params);
@@ -114,7 +116,8 @@ class NPC {
     leaveFree() {
         this._dropTowel();
         this.free = null;
-        this.freeAnim = null;
+        this.freeAnim = null; this._freeV = 0; this._freeDepth = 0;
+        this.actor.setWaterline(0);                          // (saiu da água)
         this.actor.mesh.position.y = 0.5;
         if (this.index >= 0 || !this.alive || this.rag) return;
         const pos = this.nav.closestPoint(this.transform.position);
@@ -154,12 +157,16 @@ class NPC {
     freeMove(gx, gz, dt, speed) {
         const p = this.position, dx = gx - p.x, dz = gz - p.z, d = hypot(dx, dz) || 1;
         const depth = MapGeo.waterDepth(p.x, p.z), W = Config.water.wadeDepth, deep = depth > W;
-        const v = deep ? speed : speed * (depth > 0 ? 1.15 : 1.6);
+        const g = depth > 0 || d <= 0.05 ? 0 : MapGeo.slopeAlong(p.x, p.z, dx / d, dz / d);          // relevo (em terra): mais devagar subindo
+        const v = deep ? speed : speed * (depth > 0 ? 1.15 : 1.6) * MapGeo.slopeSpeed(g);
+        this.actor.setSlope(g);
         if (d > 0.05) {
             p.x += (dx / d) * v * dt; p.z += (dz / d) * v * dt;
             this.heading = this._lerpAngle(this.heading, Math.atan2(dx, dz), 1 - Math.exp(-6 * dt));
         }
-        this.freeAnim = deep ? { clip: 'swim', rate: 1 } : { clip: 'walk', rate: depth > 0 ? 0.6 : 0.9 };
+        this._freeV = d > 0.05 ? v : 0; this._freeDepth = depth;
+        // vadeando/andando: ritmo pela velocidade (pés plantados — Config.anim), não fixo
+        this.freeAnim = deep ? { clip: 'swim', rate: 1 } : { clip: 'walk', rate: Math.max(0.5, v / Config.anim.walk) };
         return d;
     }
 
@@ -187,7 +194,7 @@ class NPC {
     // (Quem está rendido fica congelado de medo: só `force` — o fim do assalto — o tira dali.)
     panic(threatPos, force = false) {
         if (this.rag) return;                       // voando/caído: só entra em pânico quando levantar
-        if (this.fsm.name === 'SURRENDER' && !force) return;
+        if ((this.fsm.name === 'SURRENDER' || this.fsm.name === 'MUG' || this.fsm.name === 'FIGHT') && !force) return;      // (o assaltante de rua e quem está brigando não se assustam)
         this.umbrella = false;                      // (larga o guarda-chuva)
         if (this.fsm.name === "SWIM" && this.fsm.current.inWater()) { this.fsm.current.scare(threatPos); return; }   // nadando: volta à areia primeiro
         this.threat.copyFrom(threatPos);
@@ -201,7 +208,19 @@ class NPC {
         }
     }
 
-    // Levou um golpe: cambaleia e, em seguida, foge do agressor.
+    // Brigão: levou um soco e REVIDA (FightState) em vez de fugir. Só alguns tipos de pedestre (os mais "de rua") e nem todos eles;
+    // fixo por pedestre. Sem o atlas 2,5D (bonecos antigos): 1 em 4.
+    get brawler() {
+        if (this._brawler === undefined) {
+            const id = this.actor && this.actor.sheet && this.actor.sheet.isNpc ? this.actor.sheet.id : null;
+            const tough = !id || /trabalhador|mano|torcedor|banhista|ambulante|entregador|estudante|skatista|black_power|turista/.test(id);
+            const r = ((this.id * 2654435761) >>> 0) % 100;
+            this._brawler = tough && r < (id ? 45 : 25);
+        }
+        return this._brawler;
+    }
+
+    // Levou um golpe: cambaleia e, em seguida, foge do agressor (ou revida — ver HurtState).
     hurt(fromPos) {
         if (this.rag) return;
         this.threat.set(fromPos.x, 0, fromPos.z);
@@ -215,6 +234,7 @@ class NPC {
     takeDamage(amount, from, source, impact) {
         if (!this.alive) return;
         this.hp -= amount;
+        this._hitBy = source;                                   // (quem bateu: o brigão revida o jogador — ver HurtState)
         if (this.hp <= 0) this.die(from, source, impact);
         else if (impact && impact.power >= Config.ragdoll.minPower) this.ragdoll(from, impact, false);
         else this.hurt(from);
@@ -276,6 +296,7 @@ class NPC {
 
     // Volta à vida como "outro" pedestre em outro lugar, longe do jogador.
     respawn() {
+        this.mugger = false;                                    // (era o assaltante de um StreetCrime)
         let pos = null;
         for (let i = 0; i < 12; i++) {
             const p = this.nav.randomWalkable();
@@ -386,31 +407,40 @@ class NPC {
     }
 
     // ------------------------------------------------------------ guarda-chuva
-    // Visto de cima: a copa cobre o pedestre (quad a 2,6 u de altura com 8 gomos). Abre/fecha crescendo/encolhendo em ~0,35 s.
+    // Assado no MESMO ângulo dos personagens 2,5D (SpriteBaker com elev 56°): a copa de 8 gomos fica acima da cabeça, deslocada para o
+    // norte como o resto do desenho. O quad vai alto (acima da cabeça, que testa a profundidade "de pé"), mas é recolocado e
+    // encolhido para cair na tela exatamente sobre os pés (sem a paralaxe da câmera em perspectiva). Abre/fecha em ~0,35 s.
+    static get UMB() { return { N: 176, ppu: 36, y: 5.6 }; }
     static umbrellaMaterial(scene, i) {
-        const cache = scene._umbMats || (scene._umbMats = []), colors = ['#d9453a', '#2f6fd0', '#e8c22c', '#2fa36a', '#7a4fb8', '#222831', '#e8742c', '#e86aa0'];
-        if (cache[i]) return cache[i];
-        const N = 64, tex = new BABYLON.DynamicTexture('umbTex' + i, { width: N, height: N }, scene, false, BABYLON.Texture.NEAREST_SAMPLINGMODE), c = tex.getContext(), col = colors[i % colors.length];
-        c.clearRect(0, 0, N, N);
-        c.fillStyle = col; c.beginPath(); c.arc(N / 2, N / 2, N / 2 - 1, 0, Math.PI * 2); c.fill();
-        for (let k = 0; k < 8; k++) {                                             // gomos alternando cor e tom escuro
-            if (k % 2) continue;
-            c.fillStyle = 'rgba(0,0,0,0.3)'; c.beginPath(); c.moveTo(N / 2, N / 2); c.arc(N / 2, N / 2, N / 2 - 1, k * Math.PI / 4, (k + 1) * Math.PI / 4); c.closePath(); c.fill();
+        const cache = scene._umbMats || (scene._umbMats = []), colors = ['#d9453a', '#2f6fd0', '#e8c22c', '#2fa36a', '#7a4fb8', '#3a404a', '#e8742c', '#e86aa0'];
+        if (cache[i % colors.length]) return cache[i % colors.length];
+        const { N, ppu } = NPC.UMB, B = SpriteBaker, col = Pixel.hex(colors[i % colors.length]);
+        const img = B.bake([
+            B.ellipsoid(1, [0, 2.05, 0], [0.98, 0.34, 0.98], 0.2, { cut: 2.03, panels: 8, mat2: 2 }),
+            B.capsule(3, [0, 1.3, 0], [0, 2.38, 0], 0.025),
+            B.sphere(3, [0, 2.42, 0], 0.05),
+        ], { size: N, ppu, elev: 56, shadow: false });
+        const R = { 1: Pixel.ramp5(col), 2: Pixel.ramp5(Pixel.scale(col, 0.74)), 3: Pixel.ramp5('#d8dde4') };
+        const tex = new BABYLON.DynamicTexture('umbTex' + i, { width: N, height: N }, scene, false, BABYLON.Texture.NEAREST_SAMPLINGMODE), c = tex.getContext();
+        const id = c.createImageData(N, N);
+        for (let p = 0; p < N * N; p++) {
+            if (!img[p * 4 + 3]) continue;
+            const rgb = R[img[p * 4]][img[p * 4 + 1]];
+            id.data.set([rgb[0], rgb[1], rgb[2], 255], p * 4);
         }
-        c.strokeStyle = '#111'; c.lineWidth = 2; c.beginPath(); c.arc(N / 2, N / 2, N / 2 - 1.5, 0, Math.PI * 2); c.stroke();
-        c.fillStyle = '#d8dde4'; c.beginPath(); c.arc(N / 2, N / 2, 3, 0, Math.PI * 2); c.fill();          // ponteira
-        tex.hasAlpha = true; tex.update(false);
+        c.putImageData(id, 0, 0);
+        tex.hasAlpha = true; tex.update(true);
         const m = new BABYLON.StandardMaterial('umb' + i, scene);
         m.diffuseTexture = tex; m.emissiveTexture = tex; m.disableLighting = true; m.useAlphaFromDiffuseTexture = true;
         m.transparencyMode = BABYLON.Material.MATERIAL_ALPHATEST; m.alphaCutOff = 0.4; m.backFaceCulling = false;
-        return (cache[i] = m);
+        return (cache[i % colors.length] = m);
     }
 
     _umbrellaTick(dt) {
         const want = this.umbrella && this.alive && !this.rag && !this.free;
         if (want && !this._umb) {
-            const m = BABYLON.MeshBuilder.CreateGround('umb' + this.id, { width: 2.3, height: 2.3 }, this.scene);
-            m.material = NPC.umbrellaMaterial(this.scene, this.id); m.isPickable = false; m.position.y = 2.6; m.setEnabled(false);
+            const W = NPC.UMB.N / NPC.UMB.ppu, m = BABYLON.MeshBuilder.CreateGround('umb' + this.id, { width: W, height: W }, this.scene);
+            m.material = NPC.umbrellaMaterial(this.scene, this.id); m.isPickable = false; m.setEnabled(false);
             this._umb = m; this._umbS = 0;
         }
         if (!this._umb) return;
@@ -418,9 +448,12 @@ class NPC {
         const s = this._umbS;
         if (s < 0.04 && !want) { this._umb.setEnabled(false); return; }
         this._umb.setEnabled(true);
-        this._umb.scaling.set(s, 1, s);
-        this._umb.position.x = this.transform.position.x; this._umb.position.z = this.transform.position.z;
-        this._umb.rotation.y = this.id * 0.7;
+        // Debaixo de um toldo, fica abaixo dele junto com o pedestre (MapGeo.coverAt); senão, acima da cabeça.
+        const p = this.transform.position, cov = MapGeo.coverAt(p.x, p.z), y = cov > 0 ? cov - 0.1 : NPC.UMB.y;
+        const cam = this.scene.activeCamera, H = cam ? cam.position.y : 0, k = H > y + 1 ? (H - y) / H : 1;     // tira a paralaxe
+        const cx = cam ? cam.position.x : p.x, cz = cam ? cam.position.z : p.z;
+        this._umb.position.set(cx + (p.x - cx) * k, y, cz + (p.z - cz) * k);
+        this._umb.scaling.set(s * k, 1, s * k);
     }
 
     // ----- Loop -----
@@ -444,6 +477,7 @@ class NPC {
             this.actor.play(A.clip, 'none');
             this.actor.setPosition(this.transform.position.x, this.transform.position.z);
             this.actor.setHeading(this.heading);
+            this._waterTick(dt);                                // (antes do update: a água no corpo vale só no quadro em que é informada)
             this.actor.update(dt, A.rate);
             return;
         }
@@ -451,7 +485,8 @@ class NPC {
         // Vira o corpo para a direção do movimento real do agente e escolhe o clipe.
         const v = this.nav.crowd.getAgentVelocity(this.index);
         const sp2 = v ? v.x * v.x + v.z * v.z : 0;
-        if (sp2 > 0.3) {
+        if (this.fsm.name === 'FIGHT') this.transform.rotation.y = this.heading;        // brigando: encara o adversário (FightState)
+        else if (sp2 > 0.3) {
             const targetY = Math.atan2(v.x, v.z);
             const t = 1 - Math.exp(-12 * dt);
             this.transform.rotation.y = this._lerpAngle(this.transform.rotation.y, targetY, t);
@@ -459,19 +494,57 @@ class NPC {
         }
 
         const speed = Math.sqrt(sp2);
+        this._slopeTick(dt, v, speed);
         const st = this.fsm.name;
         let rate = 1;
         if (st === 'HURT') this.actor.play('hurt');
+        else if (st === 'FIGHT') {                                                // brigando: golpe (o estado reinicia o clipe) ou guarda/avanço
+            const S = this.fsm.current;
+            if (S.clip) this.actor.play(S.clip, 'none');
+            else if (speed > 0.5) { this.actor.play('run'); rate = Math.max(0.5, speed / Config.anim.run); }
+            else this.actor.play('idle');
+        }
         else if (st === 'SURRENDER') this.actor.play(this.fsm.current.kneeling ? 'kneel' : 'surrender');
+        else if (st === 'MUG') {                                                  // assaltante (StreetCrime): sacar/anunciar parado; andar/correr armado
+            const S = this.fsm.current, moving = S.clip === 'walk' || S.clip === 'run';
+            this.actor.play(moving && speed < 0.5 ? 'idle' : S.clip, S.weapon) || this.actor.play('idle', 'none');
+            if (moving) rate = Math.max(0.5, speed / (S.clip === 'run' ? Config.anim.run : Config.anim.walk));
+        }
         else if (speed < 0.5) this.actor.play('idle');
-        else if (st === 'SHELTER') { this.actor.play('run'); rate = Math.max(0.7, speed / Config.npc.jogSpeed) * 1.25; }
-        else if (st === 'FLEE') { this.actor.play('scared'); rate = Math.max(0.7, speed / Config.npc.fleeSpeed) * 1.4; }
-        else if (st === 'JOG') { this.actor.play('run'); rate = Math.max(0.7, speed / Config.npc.jogSpeed) * 1.25; }
-        else { this.actor.play('walk'); rate = Math.max(0.6, speed / Config.npc.wanderSpeed) * 1.4; }
+        else if (st === 'SHELTER') { this.actor.play('run'); rate = Math.max(0.5, speed / Config.anim.run); }
+        else if (st === 'FLEE') { this.actor.play('scared'); rate = Math.max(0.5, speed / Config.anim.run); }
+        else if (st === 'JOG') { this.actor.play('run'); rate = Math.max(0.5, speed / Config.anim.run); }
+        else { this.actor.play('walk'); rate = Math.max(0.5, speed / Config.anim.walk); }          // (ritmo pela velocidade: pés plantados — Config.anim)
 
         this.actor.setPosition(this.transform.position.x, this.transform.position.z);
         this.actor.setHeading(this.heading);
         this.actor.update(dt, rate);
+    }
+
+    // Relevo (andando pela navegação): a cada 0,3 s mede a inclinação na direção da velocidade; subindo, o agente fica mais lento
+    // (setSpeed × MapGeo.slopeSpeed) e o desenho troca para subindo/escalando (SpriteActor.setSlope). Longe da tela não precisa.
+    _slopeTick(dt, v, speed) {
+        this._slopeT = (this._slopeT || 0) - dt;
+        if (this._slopeT > 0) { this.actor.setSlope(speed > 0.5 ? this._slope || 0 : 0); return; }
+        this._slopeT = 0.3;
+        const p = this.transform.position;
+        const g = speed > 0.5 && v && Zones.near(p.x, p.z, 30) ? MapGeo.slopeAlong(p.x, p.z, v.x / speed, v.z / speed) : 0;
+        this._slope = g;
+        this.actor.setSlope(speed > 0.5 ? g : 0);
+        const m = Math.round(MapGeo.slopeSpeed(g) * 20) / 20;
+        if (m !== (this._slopeMul || 1) && this._baseSpeed) { this._slopeMul = m; this.setSpeed(this._baseSpeed); }
+    }
+
+    // Na água (só no modo livre: nadando ou vadeando, ver freeMove): o desenho afunda até a linha d'água e, perto da tela, as marolas,
+    // a esteira, os respingos e os sons (WaterFx.track). Fora da tela não gasta nada.
+    _waterTick(dt) {
+        const A = this.freeAnim, depth = A && (A.clip === 'swim' || A.clip === 'walk') ? (this._freeDepth || 0) : 0;
+        const W = Config.water.wadeDepth, swim = depth > W;
+        this.actor.setWaterline(depth > 0 && !swim ? 0.25 + 0.75 * Math.min(1, depth / W) : 0);
+        const p = this.transform.position, g = this.ctx && this.ctx.game;
+        if (!depth || !g || !g.waterFx || !Zones.near(p.x, p.z, 6)) return;
+        g.waterFx.track(this, dt, { x: p.x, z: p.z, depth, speed: this._freeV || 0, swimming: swim, heading: this.heading, actor: this.actor,
+            wl: 0.25 + 0.75 * Math.min(1, depth / W), who: 'npc' });
     }
 
     _lerpAngle(a, b, t) {

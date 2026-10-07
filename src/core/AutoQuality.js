@@ -47,6 +47,7 @@ class AutoQuality {
             if (sg) sg.getShadowMap().refreshRate = 0;
         } else if (this.level === 4) {
             Config.art.internalHeight = Math.min(Config.art.internalHeight, 400);
+            Config.art.pixelate = true;                                         // (alta definição: a tela volta à resolução baixa; os personagens em alta ficam)
             ge.resize(); g.camera.fitPixelScale(ge.renderHeight); g.camera.onResize();
         } else { this.level = 4; this.off = true; return; }
         try { localStorage.setItem('dm_quality', 'lite'); } catch (e) { /* sem storage */ }

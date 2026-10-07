@@ -77,6 +77,10 @@ const PropSprites = {
     HEIGHT: { oak: 3.2, pine: 3.2, palm: 3.4, bush: 2.2, umbrella: 2.2, boulder: 0.9, reed: 2.2, dry: 2.2, cypress: 3.2, silo: 4.5, hay: 0.9, orchard: 2.6,
         jungle: 3.4, araucaria: 3.4, ipe: 3.2, juca: 3.4, banana: 2.4, fern: 2.2, flowers: 2.2, trash: 0.6, debris: 0.6, stain: 0.3 },
 
+    // Tipos assados com a câmera inclinada dos personagens 2,5D (graus de elevação, SpriteBaker.bake `elev`): o pé fica no centro
+    // do quadro e o resto sobe para o norte, no mesmo ângulo dos NPCs. Os demais seguem vistos de cima.
+    TILT: { umbrella: 56 },
+
     // Raio da copa/volume (u, na escala 1) de cada tipo: quão longe da pista a planta precisa ficar (RoadPlan.onPavement).
     CROWN: { oak: 2.3, pine: 2.0, palm: 2.3, bush: 1.1, cypress: 1.5, orchard: 1.8, reed: 0.9, dry: 0.9, boulder: 0.8, hay: 0.8, silo: 1.6,
         jungle: 2.6, araucaria: 2.3, ipe: 2.3, juca: 2.2, banana: 1.8, fern: 1.0, flowers: 0.8 },
@@ -263,12 +267,11 @@ const PropSprites = {
             }
             for (let k = 0; k < 4; k++) P.push(B.sphere(S.accent, [(r() - 0.5) * 1.3, 1.25, (r() - 0.5) * 1.3], 0.11));
         } else if (kind === 'umbrella') {
-            P.push(B.ellipsoid(S.a, [0, 2.2, 0], [1.55, 0.45, 1.55], 0));
-            for (let k = 0; k < 4; k++) {
-                const a = (k / 4) * TAU + 0.4;
-                P.push(B.box(S.b, [Math.sin(a) * 0.82, 2.44, Math.cos(a) * 0.82], [0.2, 0.2, 0.7], a, 0.05));
-            }
-            P.push(B.sphere(S.pole, [0, 2.8, 0], 0.13));
+            // Assado inclinado (TILT): cúpula de 8 gomos (cor e branco) sobre o mastro, que aparece por baixo, como os NPCs a 56°.
+            P.push(B.ellipsoid(S.a, [0, 2.0, 0], [1.55, 0.5, 1.55], r() * TAU, { cut: 1.98, panels: 8, mat2: S.b }));
+            P.push(B.capsule(S.pole, [0, 0.0, 0], [0, 2.45, 0], 0.05));
+            P.push(B.sphere(S.pole, [0, 2.55, 0], 0.08));
+            P.push(B.ellipsoid(S.pole, [0, 0.03, 0], [0.24, 0.05, 0.24], 0));
             // Toalha ao lado.
             P.push(B.box(S.b, [1.9, 0.04, -1.1], [0.55, 0.04, 0.9], 0.3, 0.02, { flat: true }));
         }
@@ -420,7 +423,7 @@ const PropSprites = {
         const data = new Uint8Array(W * H * 4);
         const put = (buf, bw, img, cx, cy) => { for (let y = 0; y < F; y++) buf.set(img.subarray(y * F * 4, (y + 1) * F * 4), ((cy + y) * bw + cx) * 4); };
 
-        this.FRAMES.forEach((fr, i) => put(data, W, SpriteBaker.bake(this.model(fr.kind, fr.seed), { size: F, shadowLen: 0.5 }), (i % cols) * F, Math.floor(i / cols) * F));
+        this.FRAMES.forEach((fr, i) => put(data, W, SpriteBaker.bake(this.model(fr.kind, fr.seed), { size: F, shadowLen: 0.5, elev: this.TILT[fr.kind] || 0 }), (i % cols) * F, Math.floor(i / cols) * F));
         const tex = (buf, w, h) => SpriteMaterial.atlasTexture(scene, buf, w, h);       // 2 bytes/pixel (metade da memória)
         const atlas = tex(data, W, H);
 
