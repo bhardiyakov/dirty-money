@@ -5,7 +5,8 @@
 //   1) terreno: toda célula de terra sem paredão (campo, mata, areia, favela...);
 //   2) a malha urbana (CityGrid.urbanRects) é apagada: ali só se anda pelo que o CityGrid declara (CityGrid.walkRects:
 //      calçadas, faixas de pedestres, praças/parques, orla) — a rua (asfalto) NÃO é andável, como antes;
-//   3) todo sólido (CityGrid.obstacles: prédios, cercas, postes, caçambas, paredões) é apagado, com folga de um agente.
+//   3) todo sólido (CityGrid.obstacles: prédios, cercas, postes, caçambas) é apagado, com folga de um agente. Paredões não: a pé
+//      sobe-se qualquer encosta (devagar, com a animação de escalar — SpriteActor.setSlope).
 // Valor 1 = andável, 2 = andável encostado numa parede (custa mais no A*), 0 = bloqueado.
 //
 // CAMINHOS: A* em janela limitada ao redor do trajeto (8 vizinhos, sem cortar quina) + alisamento por linha de visada.
@@ -268,7 +269,7 @@ class Navigation {
         }
         // 3) sólidos (com a folga de um agente, pela regra "centro da célula dentro").
         const m = 0.35;
-        for (const o of CityGrid.obstacles) this._fill(o.x0 - m, o.z0 - m, o.x1 + m, o.z1 + m, 0);
+        for (const o of CityGrid.obstacles) if (!o.cliff) this._fill(o.x0 - m, o.z0 - m, o.x1 + m, o.z1 + m, 0);      // (paredão: a pé sobe — mais devagar)
         for (const o of CityGrid.navBlocks) this._fill(o.x0, o.z0, o.x1, o.z1, 0);          // interior da safe house
         // 4) borda: andável encostado em parede (2) custa mais e mantém distância.
         const e = new Uint8Array(g);

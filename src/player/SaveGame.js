@@ -1,7 +1,8 @@
 // ============================================================================
 // SaveGame — grava e carrega o progresso (localStorage, chave 'dm_save'; o menu principal lê a mesma chave).
 // Salva ao DORMIR na cama da safe house (Game.sleep). Guarda: hora e clima, vida/colete/arma, posição, mochila e o
-// que está guardado em casa (Stash). Não guarda veículos, pedestres nem a polícia (o mundo recomeça "fresco" ao carregar).
+// que está guardado em casa (Stash) e os SEUS carros (Garage: os das garagens). Não guarda o trânsito, pedestres nem a polícia
+// (o mundo recomeça "fresco" ao carregar).
 // ============================================================================
 
 const SaveGame = {
@@ -18,7 +19,7 @@ const SaveGame = {
             player: { x: p.position.x, z: p.position.z, rot: p.root.rotation.y, hp: p.hp, armor: p.armor, armorMax: p.armorMax, weapon: p.weapon },
             inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, bag: inv.bag, spareBags: inv.spareBags.slice(), weapons },
             fitness: p.fit ? p.fit.xp : 0,
-            stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
+            stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
         };
     },
 
@@ -41,7 +42,7 @@ const SaveGame = {
         inv.spareBags = (I.spareBags || []).filter((b, i, a) => Bags.DEFS[b] && b !== 'none' && b !== inv.bag && a.indexOf(b) === i);
         Outfit.load(s.outfit || null);                                        // roupas e acessórios (saves antigos: o visual de sempre)
         p.fit = { xp: s.fitness || 0 };
-        g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
+        g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Garage.load(s.garage || null); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
         const pl = s.player || {};
         p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));
         p.root.rotation.y = pl.rot || 0;

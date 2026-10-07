@@ -73,6 +73,39 @@ const MapGeo = {
         return false;
     },
 
+    // Altura da cobertura sobre (x, z): o lado de baixo do toldo de loja ou da cobertura de posto; 0 = céu aberto. Quem tem os
+    // pés debaixo dela é desenhado INTEIRO por baixo (SpriteActor → shader do NpcArt), sem a cabeça "furar" o toldo.
+    coverAt(x, z) {
+        if (!this._cover) {
+            const G = this._cover = new Map(), C = 8;
+            const add = (x0, z0, x1, z1, h) => {
+                const r = { x0, z0, x1, z1, h };
+                for (let i = Math.floor(x0 / C); i <= Math.floor(x1 / C); i++) for (let j = Math.floor(z0 / C); j <= Math.floor(z1 / C); j++) {
+                    const k = i + ',' + j;
+                    (G.get(k) || G.set(k, []).get(k)).push(r);
+                }
+            };
+            for (const b of CityGrid.blocks) for (const l of b.lots) for (const s of l.shops || []) add(...CityGrid.awningRect(l, s), CityGrid.AWNING.y0);
+            for (const b of CityGrid.blocks.concat(CityGrid.extraBlocks || [])) for (const c of b.canopies || []) add(c.x0, c.z0, c.x1, c.z1, c.h);
+        }
+        const L = this._cover.get(Math.floor(x / 8) + ',' + Math.floor(z / 8));
+        if (L) for (const r of L) if (x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) return r.h;
+        return 0;
+    },
+
+    // Inclinação do chão andando na direção (dx, dz) (normalizada) a partir de (x, z): m de subida por m andado (> 0 sobe, < 0 desce).
+    slopeAlong(x, z, dx, dz) {
+        if (Interiors.active) return 0;
+        const e = 2.0;
+        return (WorldMap.heightAt(x + dx * e, z + dz * e) - WorldMap.heightAt(x - dx * e, z - dz * e)) / (2 * e) * (Config.world.heightScale || 1);
+    },
+    // Velocidade a pé pela inclinação: subindo cai bem (30% numa encosta de 45°, ~35% num paredão); descendo leve é um pouco mais
+    // rápido, descida forte freia (cuidado para não rolar).
+    slopeSpeed(g) {
+        if (g > 0) return Math.max(0.3, 1 / (1 + 1.9 * g));
+        return Math.max(0.6, 1 + Math.min(0.1, -g * 0.25) - Math.max(0, -g - 0.6) * 0.6);
+    },
+
     // Linha de visada entre dois pontos do chão: bloqueada por prédios/contêineres
     // (sólidos com mais de 2u de altura). Amostra a cada 1,2u.
     hasLineOfSight(ax, az, bx, bz) {
@@ -91,10 +124,13 @@ const MapGeo = {
     // Empurra um círculo (pos.x/pos.z, raio r) para fora de todos os sólidos.
     // Modifica `pos` e devolve true se houve contato.
     // inWater: quem está NA ÁGUA (nadando, ou sob a ponte) passa por baixo da mureta das pontes (que fica lá em cima, no tabuleiro).
-    resolveCircle(pos, r, inWater = false) {
+    // vehicle = true: os paredões do relevo também seguram (carro não sobe parede). A pé (padrão) eles NÃO seguram: qualquer encosta
+    // se sobe, só que devagar (slopeSpeed) e escalando (SpriteActor.setSlope).
+    resolveCircle(pos, r, inWater = false, vehicle = false) {
         let hit = false;
         for (const o of (Interiors.active ? Interiors.obstacles : CityGrid.obstaclesAround(pos.x, pos.z, r))) {
             if (inWater && o.bridgeRail) continue;
+            if (o.cliff && !vehicle) continue;
             const cx = Math.max(o.x0, Math.min(pos.x, o.x1));
             const cz = Math.max(o.z0, Math.min(pos.z, o.z1));
             const dx = pos.x - cx, dz = pos.z - cz;

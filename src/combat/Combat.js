@@ -2,8 +2,8 @@
 // Combat — armas, projéteis e dano.
 //
 // Armas de fogo disparam PROJÉTEIS (rastro luminoso) que andam em linha reta e param no
-// primeiro alvo (pedestre, policial, jogador), carro ou prédio. Corpo a corpo (soco, chute,
-// taco) acerta o alvo mais próximo no cone à frente, no frame do golpe.
+// primeiro alvo (pedestre, policial, jogador), carro ou prédio. Corpo a corpo (soco, chute, taco,
+// cassetete) é uma colisão casada com a animação: ver Melee e Combat.strike.
 //
 // Toda entidade atingível implementa: position, alive, takeDamage(amount, fromPos, source).
 // `source` é 'player' ou 'police' (decide quem pode ferir quem: sem fogo amigo na polícia).
@@ -23,13 +23,22 @@ const Weapons = {
     knife:   { name: 'Faca',            melee: true, dmg: 24, range: 2.0, cooldown: 0.32, look: 'none' },
 };
 
-// Golpes sem arma.
+// Golpes corpo a corpo (jogador, pedestres que revidam, polícia com cassetete, traficantes de perto). Cada golpe é uma COLISÃO de
+// verdade, casada com a animação: durante a janela em que o punho/pé/taco está estendido (t0..t1, em s desde o início do clipe),
+// a cada quadro uma cápsula vai do peito de quem bate até a ponta do golpe (reach, m; raio w) e acerta quem o corpo (círculo de
+// BODY_R) encostar nela — cada alvo leva um acerto por golpe, e só com linha de visada (não atravessa parede).
+//   sweep  taco/cassetete: a ponta varre um arco de +sweep a −sweep rad (direita → esquerda) durante a janela (pega mais de um)
+//   push   empurrão de quem apanha (m)           fall: força (m/s) do arremesso; ≥ Config.ragdoll.minPower derruba (Ragdoll)
+//   shake  tremor de câmera quando o jogador acerta/apanha       car: fração do dano que a lataria leva (só o jogador bate em carro)
+// `range` = alcance da mira assistida do jogador (vira para o alvo mais perto à frente ao começar o golpe).
 const Melee = {
-    punch: { dmg: 9, range: 1.9, delay: 0.19 },
-    punchL: { dmg: 9, range: 1.9, delay: 0.19 },
-    kick: { dmg: 14, range: 2.2, delay: 0.22 },
-    swing: { dmg: 34, range: 2.6, delay: 0.27 },
+    punch: { dmg: 9, t0: 0.09, t1: 0.25, reach: 1.15, w: 0.24, push: 0.35, fall: 0, shake: 0.12, car: 0.1, range: 1.9 },
+    punchL: { dmg: 8, t0: 0.05, t1: 0.2, reach: 1.1, w: 0.24, push: 0.3, fall: 0, shake: 0.1, car: 0.1, range: 1.9 },
+    kick: { dmg: 14, t0: 0.12, t1: 0.33, reach: 1.3, w: 0.3, push: 0.6, fall: 4.4, shake: 0.3, car: 0.5, range: 2.1 },
+    swing: { dmg: 34, t0: 0.17, t1: 0.38, reach: 1.7, w: 0.26, sweep: 1.15, push: 0.8, fall: 6.0, shake: 0.4, car: 1, multi: true, range: 2.4 },
+    baton: { dmg: 9, t0: 0.17, t1: 0.36, reach: 1.45, w: 0.26, sweep: 0.8, push: 0.45, fall: 0, shake: 0.25, car: 0.3, range: 2.0 },
 };
+const BODY_R = 0.32;          // raio do corpo de quem apanha (m)
 
 class Combat {
     constructor(scene, game) {
@@ -65,9 +74,14 @@ class Combat {
             b.x = mx; b.z = mz; b.px = mx; b.pz = mz;
             b.vx = Math.sin(a) * sp; b.vz = Math.cos(a) * sp;
             b.dmg = W.dmg * (shooter.dmgMul || 1); b.left = W.range; b.dirx = Math.sin(a); b.dirz = Math.cos(a);
+            b.trav = 0;                                                                  // (comprimento do traçante: cresce até o máximo)
         }
         this.shots[shooter.owner]++;
         AudioFX.shot(weaponKey, shooter.x, shooter.z);
+        if (typeof SparkFx !== 'undefined') {                               // fogo na boca do cano (+ faíscas e fumaça) e a cápsula ejetada
+            SparkFx.muzzle(this.game, mx, mz, shooter.angle, weaponKey, shooter.fly ? 2.2 : 1.15);
+            if (!shooter.fly) SparkFx.casing(shooter.x, shooter.z, shooter.angle, weaponKey);
+        }
         return n;
     }
 
@@ -99,31 +113,166 @@ class Combat {
     }
 
     // ---------------------------------------------------------- corpo a corpo
-    // Acerta o alvo vivo mais próximo no cone frontal (60°) até `range`. Retorna o alvo ou null.
-    melee(x, z, heading, dmg, range, source = 'player') {
-        const fx = Math.sin(heading), fz = Math.cos(heading);
-        const g = this.game;
-        let best = null, bestD = range;
-        const consider = (t) => {
-            const dx = t.position.x - x, dz = t.position.z - z;
-            const d = hypot(dx, dz);
-            if (d > bestD || d < 0.01) return;
-            if ((dx * fx + dz * fz) / d < 0.5) return;
-            best = t; bestD = d;
-        };
-        if (g.npcManager) for (const n of g.npcManager.npcs) if (n.alive) consider(n);
-        if (g.policeManager && source === 'player') for (const o of g.policeManager.officers) if (o.alive) consider(o);
-        if (g.gangs && source === 'player') for (const o of g.gangs.members) if (o.alive) consider(o);
-        if (g.watch && g.watch.lookouts && source === 'player') for (const o of g.watch.lookouts) if (o.alive && o.actor) consider(o);
-        if (best) {
-            best.takeDamage(dmg, { x, z }, source);
-            this.spark(best.position.x, 1.2, best.position.z, [1, 0.45, 0.35]);
-            AudioFX.thud(best.position.x, best.position.z);
+    // Quem pode levar um golpe de `source`: o jogador bate em todo mundo (pedestres, polícia, traficantes, olheiros); os outros só
+    // no jogador (a pé e de pé).
+    _meleeTargets(source, out = []) {
+        out.length = 0;
+        const g = this.game, ok = (t) => t.alive && !t.rag && (!t.actor || t.actor.visible !== false);
+        if (source !== 'player') {
+            const p = g.player;
+            if (p && p.alive && g.mode === 'player' && !p.rag && !p.invulnerable && !g.hiding) out.push(p);
+            return out;
+        }
+        if (g.npcManager) for (const n of g.npcManager.npcs) if (ok(n)) out.push(n);
+        if (g.policeManager) for (const o of g.policeManager.officers) if (ok(o)) out.push(o);
+        if (g.gangs) for (const o of g.gangs.members) if (ok(o) && !out.includes(o)) out.push(o);
+        if (g.watch && g.watch.lookouts) for (const o of g.watch.lookouts) if (o.alive && o.actor && !o.rag) out.push(o);
+        return out;
+    }
+
+    // Alvo para a mira assistida do golpe: o mais perto dentro de `range` e ±55° à frente (e à vista). null se ninguém.
+    meleeAim(x, z, heading, kind, source = 'player') {
+        const M = Melee[kind];
+        if (!M) return null;
+        let best = null, bs = Infinity;
+        for (const t of this._meleeTargets(source, this._mt || (this._mt = []))) {
+            const dx = t.position.x - x, dz = t.position.z - z, d = hypot(dx, dz);
+            if (d > M.range || d < 0.05) continue;
+            let da = Math.atan2(dx, dz) - heading;
+            da = Math.atan2(Math.sin(da), Math.cos(da));
+            if (Math.abs(da) > 0.96) continue;
+            if (!MapGeo.hasLineOfSight(x, z, t.position.x, t.position.z)) continue;
+            const s = d + Math.abs(da) * 1.2;
+            if (s < bs) { bs = s; best = t; }
         }
         return best;
     }
 
+    // Começa um golpe. who = { position (vivo), heading(): rad, ok(): ainda pode bater (não apanhou/caiu) } ;
+    // opts: { source: 'player'|'npc'|'police'|'gang', dmgMul, kind (Melee), onHit(alvo, golpe), ref (quem bate: não se acerta) }.
+    // A colisão é testada em update() durante a janela do golpe. Retorna o golpe (ou null).
+    strike(who, kind, opts = {}) {
+        const M = Melee[kind];
+        if (!M) return null;
+        const s = { who, kind, M, t: 0, hit: new Set(), source: opts.source || 'player', dmgMul: opts.dmgMul || 1, onHit: opts.onHit || null, ref: opts.ref || who, carHit: false };
+        (this.strikes || (this.strikes = [])).push(s);
+        return s;
+    }
+
+    _updateStrikes(dt) {
+        const L = this.strikes;
+        if (!L || !L.length) return;
+        for (let i = L.length - 1; i >= 0; i--) {
+            const s = L[i], M = s.M;
+            s.t += dt;
+            if (s.who.ok && !s.who.ok()) { L.splice(i, 1); continue; }          // quem bate apanhou/caiu: o golpe some
+            if (s.t >= M.t0) this._strikeTest(s);
+            if (s.t >= M.t1) L.splice(i, 1);
+        }
+    }
+
+    // Um quadro da janela do golpe: cápsula do peito até a ponta contra o corpo de cada alvo.
+    _strikeTest(s) {
+        const M = s.M, P = s.who.position, h = s.who.heading();
+        const u = Math.min(1, Math.max(0, (s.t - M.t0) / Math.max(0.01, M.t1 - M.t0)));
+        const a = M.sweep ? h + M.sweep * (1 - 2 * u) : h;                     // taco: varre da direita para a esquerda
+        const reach = M.sweep ? M.reach : M.reach * (0.75 + 0.25 * Math.min(1, u * 2.5));      // soco/chute: o punho vai à frente
+        const ax = P.x + Math.sin(h) * 0.15, az = P.z + Math.cos(h) * 0.15;
+        const bx = P.x + Math.sin(a) * reach, bz = P.z + Math.cos(a) * reach;
+        const sx = bx - ax, sz = bz - az, sl2 = sx * sx + sz * sz || 1e-6, R = M.w + BODY_R;
+        let landed = false;
+        for (const t of this._meleeTargets(s.source, this._mt || (this._mt = []))) {
+            if (t === s.ref || s.hit.has(t)) continue;
+            if (!M.multi && s.hit.size) break;
+            const p = t.position, k = Math.max(0, Math.min(1, ((p.x - ax) * sx + (p.z - az) * sz) / sl2));
+            const cx = ax + sx * k, cz = az + sz * k;
+            if ((p.x - cx) ** 2 + (p.z - cz) ** 2 > R * R) continue;
+            if (!MapGeo.hasLineOfSight(P.x, P.z, p.x, p.z)) continue;
+            s.hit.add(t);
+            landed = true;
+            this._land(s, t, cx, cz);
+        }
+        // Só o jogador acerta carro (lataria amassa com chute e taco; soco só faz barulho) — se não pegou ninguém.
+        if (!landed && !s.hit.size && !s.carHit && s.source === 'player' && u > 0.4) {
+            const car = this._carAt(bx, bz, M.w);
+            if (car) {
+                s.carHit = true;
+                if (M.car > 0.2 && car.takeDamage) car.takeDamage(M.dmg * M.car * s.dmgMul * (Config.crash.bulletMul || 1), 'player');
+                this.spark(bx, 1.0, bz, [1, 0.9, 0.5]);
+                AudioFX.hit(bx, bz);
+                if (M.car > 0.2 && this.game.camera) this.game.camera.shake(M.shake * 0.6);
+                if (s.onHit) s.onHit(car, s);
+            }
+        }
+    }
+
+    // Acertou `t` (ponto de contato cx, cz): dano, empurrão, queda (com força) e efeitos.
+    _land(s, t, cx, cz) {
+        const M = s.M, P = s.who.position, g = this.game;
+        let dx = t.position.x - P.x, dz = t.position.z - P.z;
+        const l = hypot(dx, dz) || 1; dx /= l; dz /= l;
+        const dmg = M.dmg * s.dmgMul;
+        const fall = M.fall >= Config.ragdoll.minPower ? { dx, dz, power: M.fall * (0.9 + Math.random() * 0.2) } : null;
+        if (t === g.player) t.meleeHit(dmg, dx, dz, M);
+        else {
+            t.takeDamage(dmg, { x: P.x, z: P.z }, s.source, fall);
+            if (t.alive && !t.rag) this.shove(t, dx * M.push, dz * M.push);
+        }
+        if (typeof Blood !== 'undefined') {
+            Blood.beat(t, dmg);                                               // camada ESPANCADO do sprite (hematomas, nariz sangrando)
+            if (M.dmg >= 20) {                                                // taco: abre o supercílio — pinga no chão (soco e chute não)
+                Blood.hit(t.position.x, t.position.z, dx, dz, dmg * 0.5, t);
+                Blood.wound(t, dmg * 0.4, false);
+            }
+        }
+        this.spark(cx, 1.15, cz, [1, 0.45, 0.35]);
+        AudioFX.thud(t.position.x, t.position.z);
+        if ((s.source === 'player' || t === g.player) && g.camera) g.camera.shake(M.shake);
+        if (s.onHit) s.onHit(t, s);
+    }
+
+    // Empurra um pedestre/policial (agente da multidão) — fica no chão andável, não atravessa parede.
+    shove(t, dx, dz) {
+        if (!dx && !dz) return;
+        const p = t.position, to = new BABYLON.Vector3(p.x + dx, p.y, p.z + dz);
+        if (!MapGeo.hasLineOfSight(p.x, p.z, to.x, to.z)) return;
+        if (t.nav && t.index >= 0) {
+            const q = t.nav.closestPoint(to);
+            if (hypot(q.x - to.x, q.z - to.z) < 0.4) t.nav.crowd.agentTeleport(t.index, q);
+        } else if (t.transform) { p.x = to.x; p.z = to.z; }
+    }
+
+    // Carro (ou moto/bicicleta) cuja lataria contém o ponto (x, z), com folga r.
+    _carAt(x, z, r) {
+        const g = this.game, list = [];
+        if (g.vehicleManager) list.push(...g.vehicleManager.vehicles);
+        if (g.policeManager) list.push(...g.policeManager.cars);
+        for (const c of list) {
+            if (!c.body || c.wrecked && c.isBike) continue;
+            const p = c.position, f = c.body.getDirection(BABYLON.Axis.Z), fl = hypot(f.x, f.z) || 1, fx = f.x / fl, fz = f.z / fl;
+            const dx = x - p.x, dz = z - p.z;
+            if (Math.abs(dx * fx + dz * fz) <= (c.halfLen || 2) + r && Math.abs(dx * fz - dz * fx) <= (c.halfW || 1) + r) return c;
+        }
+        return null;
+    }
+
     // ------------------------------------------------------------------ efeitos
+    // Bala que acertou um carro durante uma PERSEGUIÇÃO (procurado): Config.crash.tireChance de pegar o pneu mais perto do ponto
+    // atingido — chuva de faíscas na roda, estouro, e o carro passa a escorregar (Vehicle.puncture / _applyMotion).
+    _tireShot(car, hx, hz) {
+        const g = this.game;
+        if (!car || !car.puncture || !g.wanted || !(g.wanted.level > 0) || Math.random() >= Config.crash.tireChance) return;
+        const i = car.nearestWheel(hx, hz);
+        if (!car.puncture(i)) return;
+        const w = car.wheelWorld(i);
+        if (typeof SparkFx !== 'undefined') SparkFx.burst(g, w.x, w.z, car);        // leque de faíscas, lascas de borracha e fumaça
+        this.spark(w.x, 0.4, w.z, [1, 0.85, 0.5], 0.15);                            // (clarão do estouro)
+        AudioFX.thud(w.x, w.z);
+        const side = ['dianteiro esquerdo', 'dianteiro direito', 'traseiro esquerdo', 'traseiro direito'][i];
+        if (car === g.activeCar && g.mode === 'car') { g._flash(`💥 Pneu ${side} furado! O carro vai escorregar`); g.input.rumble(0.8, 0.8, 260); }
+        else if (car.role) g._flash('💥 Você furou o pneu da viatura!');
+    }
+
     spark(x, y, z, color = [1, 0.8, 0.4], life = 0.2) {
         const s = this.sparks.find((q) => !q.on);
         if (!s) return;
@@ -153,13 +302,14 @@ class Combat {
     }
 
     update(dt) {
+        this._updateStrikes(dt);
         const T = this._collectTargets();
         const g = this.glow;
 
         for (let i = 0; i < this.MAXB; i++) {
             const b = this.bullets[i];
             const base = i * 3;
-            if (!b.on) { g.off(base); g.off(base + 1); g.off(base + 2); continue; }
+            if (!b.on) { g.off(base); g.off(base + 1); g.off(base + 2); if (typeof SparkFx !== 'undefined') SparkFx.tracerOff(i); continue; }
 
             b.px = b.x; b.pz = b.z;
             b.x += b.vx * dt; b.z += b.vz * dt;
@@ -182,14 +332,21 @@ class Combat {
             if (hit) {
                 const hx = b.px + sx * hitT, hz = b.pz + sz * hitT;
                 if (hit.kind === 'car') {
-                    this.spark(hx, 1.0, hz, [1, 0.9, 0.5]); AudioFX.hit(hx, hz);
+                    this.spark(hx, 1.0, hz, [1, 0.9, 0.5]); if (typeof SparkFx !== 'undefined') SparkFx.impact(hx, hz, b.dirx, b.dirz, 1.0, 5); AudioFX.hit(hx, hz);
                     // A lataria leva parte do dano (carros amassam, soltam fumaça e podem explodir a tiros).
                     if (hit.ref.takeDamage) hit.ref.takeDamage(b.dmg * Config.crash.bulletMul, b.owner);
                     // O carro do jogador protege, mas parte do tiro atravessa a lataria/vidro.
                     if ((b.owner === 'police' || b.owner === 'gang') && hit.ref === this.game.activeCar && this.game.mode === 'car') this.game.player.takeDamage(b.dmg * 0.4);
+                    this._tireShot(hit.ref, hx, hz);
                 }
                 else {
+                    const wasAlive = hit.ref.alive !== false;
                     hit.ref.takeDamage(b.dmg, { x: b.px, z: b.pz }, b.owner);
+                    if (wasAlive && hit.kind !== 'heli' && typeof Blood !== 'undefined') {     // sangue: respingo atrás do alvo e ferida que sangra
+                        const p = hit.ref.position;
+                        Blood.hit(p.x, p.z, b.vx, b.vz, b.dmg, hit.ref);
+                        Blood.wound(hit.ref, b.dmg);
+                    }
                     this.spark(hx, 1.2, hz, [1, 0.35, 0.3]);
                     AudioFX.hit(hx, hz);
                 }
@@ -203,19 +360,24 @@ class Combat {
             for (let k = 1; k <= n && !wall; k++) {
                 const x = b.px + sx * (k / n), z = b.pz + sz * (k / n);
                 for (const o of CityGrid.obstaclesNear(x, z)) {
-                    if (o.h > 1.6 && x > o.x0 && x < o.x1 && z > o.z0 && z < o.z1) { wall = true; this.spark(x, 1.3, z, [1, 0.85, 0.5]); AudioFX.hit(x, z); break; }
+                    if (o.h > 1.6 && x > o.x0 && x < o.x1 && z > o.z0 && z < o.z1) { wall = true; this.spark(x, 1.3, z, [1, 0.85, 0.5]); if (typeof SparkFx !== 'undefined') SparkFx.impact(x, z, b.dirx, b.dirz); AudioFX.hit(x, z); break; }
                 }
             }
             if (wall || b.left <= 0 || !MapGeo.isLand(b.x, b.z)) { b.on = false; g.off(base); g.off(base + 1); g.off(base + 2); continue; }
 
-            // 3) Visual: cabeça brilhante + cauda em 2 pontos atrás.
-            g.place(base, b.x, 1.3, b.z, 0.5);
-            g.place(base + 1, b.x - b.dirx * 0.9, 1.3, b.z - b.dirz * 0.9, 0.4);
-            g.place(base + 2, b.x - b.dirx * 1.8, 1.3, b.z - b.dirz * 1.8, 0.3);
-            g.color(base, 1.0, 0.92, 0.55, 1);
-            g.color(base + 1, 1.0, 0.8, 0.35, 0.6);
-            g.color(base + 2, 1.0, 0.65, 0.2, 0.3);
+            // 3) Visual: TRAÇANTE — um risco luminoso do trecho percorrido (até 3,2 m) até a bala (SparkFx), com um halo fraco na ponta.
+            b.trav += step;
+            const L = Math.min(b.trav, 3.2);
+            if (typeof SparkFx !== 'undefined') {
+                SparkFx.tracer(i, b.x - b.dirx * L, b.z - b.dirz * L, b.x, b.z, 1.3, 0.075);
+                g.place(base, b.x, 1.3, b.z, 0.3); g.color(base, 1.0, 0.9, 0.55, 0.45);
+                g.off(base + 1); g.off(base + 2);
+            } else {
+                g.place(base, b.x, 1.3, b.z, 0.5); g.color(base, 1.0, 0.92, 0.55, 1);
+                g.off(base + 1); g.off(base + 2);
+            }
         }
+        if (typeof SparkFx !== 'undefined') SparkFx.flushTracers();
 
         // Faíscas de impacto.
         const off0 = this.MAXB * 3;

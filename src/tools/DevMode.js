@@ -167,7 +167,7 @@ class DevMode {
         H('BARCOS (na água mais próxima)');
         for (const id of Object.keys(BoatSheet.MODELS)) B(BoatSheet.MODELS[id].name, () => this.spawnBoat(id));
         H('VEÍCULO ATUAL');
-        B('Reparar + abastecer', () => { const c = g.activeCar; if (c) { c.hp = c.maxHp; c.burning = 0; c.wrecked = false; c.engineDead = false; c.dent = 0; c.fuel = c.tank; g._flash('Veículo reparado'); } });
+        B('Reparar + abastecer', () => { const c = g.activeCar; if (c) { c.hp = c.maxHp; c.burning = 0; c.wrecked = false; c.engineDead = false; c.dent = 0; c.flat = null; c.fuel = c.tank; g._flash('Veículo reparado'); } });
         B('Esvaziar tanque', () => { const c = g.activeCar; if (c) c.fuel = 0; });
         B('Destruir (explode)', () => { const c = g.activeCar; if (c) c.takeDamage(99999, 'env'); });
         B('Sair do veículo', () => { if (g.mode === 'car') g._leaveVehicle(); });

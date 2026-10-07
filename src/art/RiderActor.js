@@ -2,7 +2,8 @@
 // RiderActor — moto, bicicleta, jet ski, lancha e barco: o VEÍCULO vem do atlas dos carros (CarArt: mesmo desenho vetorial, mesmo
 // lote, mesma pintura e amassados dos carros) e o PILOTO é o sprite do personagem (atlas dos personagens, clipes ride_*) desenhado
 // POR CIMA, no banco. Antes o piloto e a moto eram um sprite só, feito das primitivas do rig (e os barcos, uma folha de 32 direções
-// em pixel art): agora tudo que tem motor tem o mesmo acabamento.
+// em pixel art): agora tudo que tem motor tem o mesmo acabamento. Com os personagens 2,5D (NpcArt) o piloto é o tipo de NPC (ou o
+// jogador) sentado, em 16 direções, com a origem no banco: as folhas 'rider'/'courier' viram tipos 2,5D sozinhas (NpcArt.attach).
 //
 // Mesma interface do CarActor (setPosition / setHeading / setY / setVariant / setDamage / setVisible / update / animate / dispose,
 // heading, y, rotates), mais:
@@ -48,7 +49,8 @@ class RiderActor {
         } else if (this.rider.sheet !== sheet) { this.rider.useSheet(sheet); this._clipName = null; }
         if (this.riderVariant !== variant) this.rider.setVariant(variant);
         this.riderVariant = variant;
-        if (this._clipName !== clip) { if (this.rider.play(clip, 'none', { restart: true })) this._clipName = clip; }
+        // (2,5D: ride_moto/bike/jetski/boat em 16 direções; o boneco antigo só tem ride_moto/ride_bike — jet ski e lancha usam o da moto)
+        if (this._clipName !== clip) { if (this.rider.play(clip, 'none', { restart: true }) || this.rider.play('ride_moto', 'none', { restart: true })) this._clipName = clip; }
         this.rider.setVisible(this.visible);
         this._place();
     }

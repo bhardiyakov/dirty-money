@@ -66,6 +66,7 @@ const Zones = {
         this.cx = c.x; this.cz = c.z;
         this.hz = cam.view + this.margin;
         this.hx = cam.view * asp + this.margin;
+        if (cam.yaw) this.hx = this.hz = Math.hypot(cam.view * asp, cam.view) + this.margin;      // câmera girada (bússola): o quadrado que cobre a tela em qualquer ângulo
         const hd = Math.hypot(Config.camera.maxView * Math.max(1, asp), Config.camera.maxView);      // meia-diagonal da tela no zoom máximo
         this.sr = hd + 6; this.ar = 2 * hd;
         this.frame++;
@@ -173,8 +174,12 @@ class RenderCuller {
                 r = m._cullR = bi ? bi.boundingSphere.radius * Math.max(Math.abs(m.scaling.x), Math.abs(m.scaling.z), 1) : 0;
                 if (!bi || r > 40) { m._cullAlways = true; out.push(m); continue; }
             }
-            let root = m; while (root.parent) root = root.parent;
-            const q = root.position;
+            // Malha parada (matriz congelada: pedaços do terreno criados depois da carga, com vértices em coordenadas de mundo e
+            // posição 0,0,0) vale pelo centro da caixa. Pela posição, os pedaços pequenos (raio ≤ 40 u: ilhotas, pontas de costa)
+            // ficavam "na origem" e nunca eram desenhados — o chão sumia e aparecia o mar por baixo das árvores.
+            let q;
+            if (m.isWorldMatrixFrozen && !m.parent) q = m._cullC || (m._cullC = m.getBoundingInfo().boundingBox.centerWorld.clone());
+            else { let root = m; while (root.parent) root = root.parent; q = root.position; }
             if (Math.abs(q.x - X0) <= hx + r + pad && Math.abs(q.z - Z0) <= hz + r + pad) out.push(m);
         }
         this.cand.length = out.length;

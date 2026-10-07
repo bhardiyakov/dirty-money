@@ -115,6 +115,8 @@ class Collisions {
                 pl._runCd = 0.6;
                 const lethal = pl.hp - R.dmg <= 0;
                 pl.takeDamage(R.dmg, true);
+                if (R.dmg >= 15 && typeof Blood !== 'undefined') { Blood.hit(pl.position.x, pl.position.z, R.dx, R.dz, R.dmg * 0.6, pl); Blood.wound(pl, R.dmg * 0.5, false); }
+                if (typeof Blood !== 'undefined') Blood.beat(pl, R.dmg);
                 // O impacto dita o ragdoll: fraco cambaleia e cai; médio é jogado; forte voa capotando.
                 if (R.power >= Config.ragdoll.minPower) pl.ragdoll({ dx: R.dx, dz: R.dz, power: R.power, kind: 'hit', lethal });
                 this._impactFx(pl.position, 0.3 + Math.min(0.5, R.power * 0.03));
@@ -127,7 +129,7 @@ class Collisions {
         const p = pl.position;
         if (penF < penR) { const s = Math.sign(L.lf) || 1, m = (penF + 0.02) * s; p.x += ctx.fx * m; p.z += ctx.fz * m; }
         else { const s = Math.sign(L.lr) || 1, m = (penR + 0.02) * s; p.x += ctx.rx * m; p.z += ctx.rz * m; }
-        MapGeo.resolveCircle(p, r);                                                  // sem empurrar para dentro de prédio
+        MapGeo.resolveCircle(p, r, false, true);                                              // sem empurrar para dentro de prédio
         pl._syncSprite();
     }
 
@@ -147,6 +149,8 @@ class Collisions {
         const src = byPlayer ? 'player' : (car.role ? 'police' : 'env');
         const from = { x: ctx.c.x, z: ctx.c.z };
         e.takeDamage(R.dmg, from, src, { dx: R.dx, dz: R.dz, power: R.power });     // com `impact`: arremessado (ragdoll) (cópia: R é reaproveitado)
+        if (R.dmg >= 15 && typeof Blood !== 'undefined') { Blood.hit(e.position.x, e.position.z, R.dx, R.dz, R.dmg * 0.6, e); Blood.wound(e, R.dmg * 0.5, false); }   // batida forte: sangue
+        if (typeof Blood !== 'undefined') Blood.beat(e, R.dmg);                                                // atropelado: ralado e roxo (ESPANCADO)
         this._impactFx(e.position, 0.2);
         car.takeDamage(1 + R.dmg * 0.02, 'env');
 

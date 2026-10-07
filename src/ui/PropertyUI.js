@@ -43,6 +43,7 @@ class PropertyUI {
         this.$sub.innerHTML = `${p.region.toUpperCase()} · ${'★'.repeat(p.stars)}${'☆'.repeat(5 - p.stars)}<br>SEU DINHEIRO: ${brl(inv.cash)} · LIMPO: <span style="color:#7fe0a0">${brl(inv.clean)}</span>`;
         const pct = Math.round(ppm / isl * 100);
         this.$tbl.innerHTML = `<div><span>ÁREA</span><b>${p.size} m²</b></div><div><span>${own ? 'VALOR DE MERCADO HOJE' : 'PREÇO'}</span><b>${brl(price)}</b></div>`
+            + `<div><span>GARAGEM</span><b>${(Garage.byId(p.id) || { cap: 0 }).cap} vaga(s) na rua em frente</b></div>`
             + `<div><span>VALOR DO m²</span><b>${brl(ppm)}</b></div><div><span>REFERÊNCIA: ILHA (m²)</span><b>${brl(isl)}</b></div><div><span>ESTE LUGAR vs ILHA</span><b>${pct}%</b></div>`
             + (own ? `<div><span>VOCÊ PAGOU</span><b>${brl(R.owned[p.id].paid)}</b></div><div><span>REFORMA</span><b>${R.reformLevel(p) ? R.REFORMS[R.reformLevel(p)].name.toUpperCase() : 'ORIGINAL'}</b></div>` : '');
         this.$note.textContent = own ? (R.homeId === p.id ? 'Sua casa atual.' : 'Você é dono deste imóvel.')
@@ -60,6 +61,8 @@ class PropertyUI {
             o.push({ label: 'BAÚ', sub: 'armas, munição, kits e o que quiser', ok: true, fn: () => this._stash('chest') });
             o.push({ label: 'COFRE', sub: 'dinheiro e joias', ok: true, fn: () => this._stash('safe') });
             o.push({ label: 'GELADEIRA', sub: 'comida e água', ok: true, fn: () => this._stash('fridge') });
+            const G = Garage.byId(p.id);
+            if (G && G.cap) o.push({ label: `GARAGEM — ${Garage.carsIn(G).length}/${G.cap} VAGA(S)`, sub: 'seus carros: onde estão, levar para outra casa, vender', ok: true, fn: () => { this.close(); this.g.carUI.showGarage(G); return null; } });
             const rf = R.reformInfo(p), lv = R.reformLevel(p);
             o.push(rf ? { label: `REFORMAR: ${rf.name.toUpperCase()} — ${brl(rf.cost)}`, sub: `dinheiro limpo · valoriza ${Math.round(rf.gain * 100)}% · ${rf.perk}`, ok: inv.clean >= rf.cost, fn: () => R.reform(g, p) }
                 : { label: 'REFORMA: PADRÃO MÁXIMO', sub: 'nada mais a reformar neste imóvel', ok: false, fn: () => null });

@@ -12,24 +12,26 @@
 // ============================================================================
 
 class EquipUI {
-    static get LEFT() { return ['eyes', 'neck', 'top', 'legs', 'shoes']; }
+    static get LEFT() { return ['head', 'eyes', 'neck', 'top', 'legs', 'shoes']; }
     static get RIGHT() { return ['weapon', 'vest', 'bag', 'hands', 'wrist']; }
     static get SLOT() {
         return {
-            eyes: { label: 'Óculos', empty: 'of_oculos_escuros', cat: 'acc', at: [86, 74] },
-            neck: { label: 'Pescoço', empty: 'of_corrente_ouro', cat: 'acc', at: [94, 128] },
-            top: { label: 'Parte de cima', empty: 'of_camiseta_branca', cat: 'top', at: [66, 165] },
-            legs: { label: 'Calça', empty: 'of_calca_jeans', cat: 'legs', at: [86, 290] },
-            shoes: { label: 'Calçado', empty: 'of_tenis_branco', cat: 'shoes', at: [80, 372] },
-            weapon: { label: 'Arma na mão', empty: 'fists', cat: 'weapon', at: [160, 262] },
-            vest: { label: 'Colete', empty: 'vest', cat: null, at: [124, 170] },
-            bag: { label: 'Bolsa', empty: 'pockets', cat: 'bag', at: [142, 128] },
-            hands: { label: 'Luvas', empty: 'of_luvas', cat: 'acc', at: [150, 252] },
-            wrist: { label: 'Pulso', empty: 'of_relogio_ouro', cat: 'acc', at: [146, 236] },
+            head: { label: 'Cabeça', empty: 'of_bone', cat: 'head', at: [100, 40], at2: [100, 213] },
+            eyes: { label: 'Óculos', empty: 'of_oculos_escuros', cat: 'acc', at: [86, 74], at2: [100, 240] },
+            neck: { label: 'Pescoço', empty: 'of_corrente_ouro', cat: 'acc', at: [94, 128], at2: [100, 252] },
+            top: { label: 'Parte de cima', empty: 'of_camiseta_branca', cat: 'top', at: [66, 165], at2: [96, 276] },
+            legs: { label: 'Calça', empty: 'of_calca_jeans', cat: 'legs', at: [86, 290], at2: [90, 314] },
+            shoes: { label: 'Calçado', empty: 'of_tenis_branco', cat: 'shoes', at: [80, 372], at2: [76, 343] },
+            weapon: { label: 'Arma na mão', empty: 'fists', cat: 'weapon', at: [160, 262], at2: [150, 309] },
+            vest: { label: 'Colete', empty: 'vest', cat: null, at: [124, 170], at2: [115, 282] },
+            bag: { label: 'Bolsa', empty: 'pockets', cat: 'bag', at: [142, 128], at2: [126, 250] },
+            hands: { label: 'Luvas', empty: 'of_luvas', cat: 'acc', at: [150, 252], at2: [152, 313] },
+            wrist: { label: 'Pulso', empty: 'of_relogio_ouro', cat: 'acc', at: [146, 236], at2: [149, 304] },
         };
     }
     static get CATS() {
-        return [['all', '✨', 'Tudo'], ['top', '👕', 'Parte de cima'], ['legs', '👖', 'Calças'], ['shoes', '👟', 'Calçados'], ['acc', '🕶️', 'Acessórios'], ['bag', '🎒', 'Bolsas'], ['weapon', '🔫', 'Armas']];
+        return [['all', '✨', 'Tudo'], ['top', '👕', 'Parte de cima'], ['legs', '👖', 'Calças'], ['shoes', '👟', 'Calçados'], ['head', '🧢', 'Bonés e chapéus'], ['acc', '🕶️', 'Acessórios'], ['bag', '🎒', 'Bolsas'], ['weapon', '🔫', 'Armas'],
+            ['look', '✂️', 'Visual: aparência e cores (de graça)']];
     }
     static get RARITY() {
         return { common: ['#9ca3af', 'Comum'], uncommon: ['#34d399', 'Incomum'], rare: ['#60a5fa', 'Rara'], epic: ['#a78bfa', 'Épica'], legend: ['#fbbf24', 'Lendária'] };
@@ -62,7 +64,7 @@ class EquipUI {
             .eq-center { position: relative; min-height: 470px; }
             .eq-center .px-title { text-align: center; }
             .eq-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-            .eq-stage { position: relative; flex: 1; display: grid; grid-template-columns: 112px 1fr 112px; align-items: stretch; padding: 0 14px 14px; min-height: 0; }
+            .eq-stage { position: relative; flex: 1; display: grid; grid-template-columns: 112px 1fr 112px; grid-template-rows: minmax(0, 1fr); align-items: stretch; padding: 0 14px 14px; min-height: 0; }
             .eq-slots { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; z-index: 1; }
             .eq-slot { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; }
             .eq-slot .lb { font: 700 10px var(--font); letter-spacing: 0.1em; text-transform: uppercase; color: var(--tx-3); }
@@ -74,8 +76,8 @@ class EquipUI {
             .eq-slot.empty .bx { opacity: 0.35; filter: grayscale(1); border-style: dashed; }
             .eq-slot.on .bx { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(251,191,36,0.35), 0 6px 18px rgba(251,191,36,0.25); }
             .eq-slot .nm { font-size: 11px; color: var(--tx-2); text-align: center; max-width: 112px; line-height: 1.2; min-height: 26px; }
-            .eq-doll { display: flex; align-items: center; justify-content: center; min-height: 0; }
-            .eq-doll canvas { width: 100%; height: 100%; max-height: 100%; object-fit: contain; }
+            .eq-doll { position: relative; min-height: 0; overflow: hidden; }          /* (o canvas não dita a altura: senão o boneco vaza do palco e os pés somem) */
+            .eq-doll canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
             .eq-cats { display: flex; gap: 4px; padding: 0 12px 8px; flex-wrap: wrap; }
             .eq-cat { width: 42px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 19px; cursor: pointer;
                 background: var(--card); border: 1px solid var(--line); transition: background .12s; }
@@ -97,6 +99,21 @@ class EquipUI {
             .eq-det .pm-btns { margin-top: 10px; }
             .eq-det .pm-btn.dim { opacity: 0.5; pointer-events: none; }
             .eq-msg { min-height: 18px; padding: 0 16px 8px; font-size: 12px; color: var(--gold); }
+            .eq-lookgrid { display: block; }
+            .eq-look { display: flex; flex-direction: column; gap: 10px; }
+            .eq-lk { display: flex; flex-direction: column; gap: 5px; }
+            .eq-lkh { font: 700 11px var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--tx-3); }
+            .eq-lkh2 { font: 700 13px var(--font-d); color: var(--gold); margin-top: 4px; border-top: 1px solid var(--line); padding-top: 8px; }
+            .eq-lknote { font-size: 12px; color: var(--gold); }
+            .eq-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+            .eq-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 99px; font-size: 12px; cursor: pointer; background: var(--card); border: 1px solid var(--line); color: var(--tx-2); }
+            .eq-chip:hover { background: var(--card-h); } .eq-chip.on { border-color: var(--gold); color: var(--tx); background: rgba(251,191,36,0.14); }
+            .eq-chip i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.5); }
+            .eq-tints { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+            .eq-sw, .eq-sw0 { width: 20px; height: 20px; border-radius: 6px; cursor: pointer; border: 2px solid rgba(0,0,0,0.45); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15); }
+            .eq-sw0 { display: inline-flex; align-items: center; justify-content: center; font-size: 13px; color: var(--tx-2); background: var(--card); }
+            .eq-sw:hover, .eq-sw0:hover { transform: translateY(-1px); } .eq-sw.on, .eq-sw0.on { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(251,191,36,0.4); }
+            .eq-doll canvas { image-rendering: pixelated; cursor: pointer; }
             @media (max-width: 1180px) { .eq-wrap { grid-template-columns: minmax(400px, 1fr) minmax(300px, 380px); } .eq-attr { grid-column: 1 / -1; order: 3; } .eq-attr .body { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); column-gap: 18px; } }
             @media (max-width: 860px) { .eq-wrap { grid-template-columns: 1fr; } .eq-center { min-height: 430px; } .eq-stage { grid-template-columns: 92px 1fr 92px; } .eq-slot .bx { width: 54px; height: 54px; font-size: 26px; } }`;
         document.head.appendChild(css);
@@ -130,7 +147,7 @@ class EquipUI {
             if (!inv.owned(k)) continue;
             out.push({ key: 'w:' + k, type: 'weapon', id: k, slot: 'weapon', cat: 'weapon', name: Weapons[k].name, icon: k, rar: EquipUI.WEAPON_RARITY[k] || 'common', worn: g.player.weapon === k });
         }
-        const order = { top: 0, legs: 1, shoes: 2, eyes: 3, neck: 4, hands: 5, wrist: 6, bag: 7, weapon: 8 };
+        const order = { top: 0, legs: 1, shoes: 2, head: 3, eyes: 4, neck: 5, hands: 6, wrist: 7, bag: 8, weapon: 9 };
         return out.sort((a, b) => (order[a.slot] - order[b.slot]) || (b.worn - a.worn));
     }
     _rarBase(b) { return b <= 0 ? 'common' : b < 300 ? 'uncommon' : b < 1500 ? 'rare' : b < 4000 ? 'epic' : 'legend'; }
@@ -154,7 +171,7 @@ class EquipUI {
         return [
             { ic: '🏃', label: 'Velocidade correndo', v: m.sprint, txt: pc(m.sprint) },
             { ic: '🚶', label: 'Passo (andando)', v: m.walk, txt: pc(m.walk) },
-            { ic: '🫁', label: 'Fôlego máximo', v: 100 + lvl * 6 + (m.staminaMax || 0), txt: String(100 + lvl * 6 + (m.staminaMax || 0)) },
+            { ic: '🫁', label: 'Fôlego máximo', v: Bags.staminaMax(lvl, m), txt: String(Bags.staminaMax(lvl, m)) },
             { ic: '💨', label: 'Cansaço ao correr', v: m.stamina, txt: pc(-m.stamina) },
             { ic: '♻️', label: 'Recuperação do fôlego', v: m.regen, txt: pc(m.regen) },
             { ic: '🛡️', label: 'Dano recebido', v: m.dmgTaken, txt: pc(-m.dmgTaken) },
@@ -245,16 +262,16 @@ class EquipUI {
         };
 
         const cats = EquipUI.CATS.map(([id, ic, nm]) => `<div class="eq-cat ${this.cat === id ? 'on' : ''}" data-cat="${id}" title="${nm}">${ic}</div>`).join('');
-        const cards = L.length ? L.map((e, i) => `<div class="eq-card ${i === this.sel ? 'on' : ''}" data-i="${i}" style="--rc:${R[e.rar][0]}">${e.worn ? '<span class="use">EM USO</span>' : ''}<div class="em">${Emoji.html(e.icon, 34)}</div><div class="t">${e.name}</div></div>`).join('')
-            : `<div class="eq-empty">${this.cat === 'weapon' ? 'Nenhuma arma. Compre na loja de armas ou na boca.' : this.cat === 'bag' ? 'Nenhuma bolsa. Compre na boutique, na conveniência ou na loja de armas — ou pegue no baú de casa.' : 'Nada aqui ainda. Roupas e acessórios se compram na BOUTIQUE (👕 no mapa).'}</div>`;
+        const cards = this.cat === 'look' ? this._lookHtml() : L.length ? L.map((e, i) => `<div class="eq-card ${i === this.sel ? 'on' : ''}" data-i="${i}" style="--rc:${R[e.rar][0]}">${e.worn ? '<span class="use">EM USO</span>' : ''}<div class="em">${Emoji.html(e.icon, 34)}</div><div class="t">${e.name}</div></div>`).join('')
+            : `<div class="eq-empty">${this.cat === 'weapon' ? 'Nenhuma arma. Compre na loja de armas ou na boca.' : this.cat === 'bag' ? 'Nenhuma bolsa. Compre na boutique, na conveniência ou na loja de armas — ou pegue no baú de casa.' : 'Nada aqui ainda. Roupas, bonés e acessórios se compram na BOUTIQUE (👕 no mapa).'}</div>`;
 
         el.innerHTML = `<div class="eq-wrap">
             <div class="px eq-col eq-attr"><div class="px-title">Atributos</div><div class="body">${attr}</div></div>
             <div class="px eq-col eq-center"><canvas class="eq-lines"></canvas><div class="px-title">Equipado</div>
               <div class="eq-stage"><div class="eq-slots">${EquipUI.LEFT.map(slotHtml).join('')}</div><div class="eq-doll"><canvas width="400" height="800"></canvas></div><div class="eq-slots">${EquipUI.RIGHT.map(slotHtml).join('')}</div></div></div>
             <div class="px eq-col"><div class="px-title">Itens disponíveis <span style="text-transform:none;letter-spacing:0;color:var(--tx-3)">· para trocar de roupa e de bolsa</span></div>
-              <div class="eq-cats">${cats}</div><div class="eq-catname">${EquipUI.CATS.find((c) => c[0] === this.cat)[2]} · ${L.length} ${L.length === 1 ? 'item' : 'itens'}</div>
-              <div class="eq-grid">${cards}</div>${cur ? this._detail(cur) : ''}<div class="eq-msg">${this._msg || ''}</div></div>
+              <div class="eq-cats">${cats}</div><div class="eq-catname">${EquipUI.CATS.find((c) => c[0] === this.cat)[2]}${this.cat === 'look' ? '' : ` · ${L.length} ${L.length === 1 ? 'item' : 'itens'}`}</div>
+              <div class="eq-grid${this.cat === 'look' ? ' eq-lookgrid' : ''}">${cards}</div>${cur && this.cat !== 'look' ? this._detail(cur) : ''}<div class="eq-msg">${this._msg || ''}</div></div>
           </div>`;
 
         // eventos
@@ -268,6 +285,11 @@ class EquipUI {
             b.addEventListener('mouseleave', () => { this.hover = null; this._refreshPreview(); });
         });
         el.querySelectorAll('.eq-det [data-act]').forEach((b) => b.addEventListener('click', () => this.act(b.dataset.act)));
+        // visual: aparência (pele, cabelo, barba, corpo) e tingir as peças vestidas — de graça
+        el.querySelectorAll('[data-app]').forEach((b) => b.addEventListener('click', () => { const [f, v] = b.dataset.app.split(':'); this._msg = Outfit.setAppearance(f, v).msg; AudioFX.blip(640, 0.06, 0.1); this.render(el); }));
+        el.querySelectorAll('[data-tint]').forEach((b) => b.addEventListener('click', () => { const [s, v] = b.dataset.tint.split(':'); this._msg = Outfit.setTint(s, v || null).msg; AudioFX.blip(700, 0.06, 0.1); this.render(el); }));
+        const dc = el.querySelector('.eq-doll canvas');
+        if (dc) dc.addEventListener('click', () => { this._dollDir = ((this._dollDir == null ? 4 : this._dollDir) + 1) % 8; this._dollSpin = false; this._paintDoll(); });
         this._drawDoll(this._state(prev));
         requestAnimationFrame(() => this._drawLines());
     }
@@ -302,7 +324,7 @@ class EquipUI {
         const note = e.type === 'bag' ? '<span class="ln n" style="margin-top:6px;font-size:12px;color:var(--tx-3)">Bolsa sem uso vai junto (vazia). Para não carregar o peso, guarde no BAÚ de casa ou descarte.</span>'
             : e.type === 'outfit' && Outfit.DEFAULT[e.slot] === e.id ? '<span class="ln n" style="margin-top:6px;font-size:12px;color:var(--tx-3)">Roupa de sempre: não dá para jogar fora.</span>' : '';
         return `<div class="eq-det"><h4>${e.name}</h4><div class="tg" style="color:${R[0]}">${R[1]} · ${slotName}${e.worn ? ' · em uso' : ''}</div>
-            ${desc ? `<span class="ln n">${desc}</span>` : ''}${this.lines(e).map((l) => `<span class="ln ${l.c}">${l.c === 'g' ? '▲ ' : l.c === 'r' ? '▼ ' : '• '}${l.t}</span>`).join('')}${note}
+            ${desc ? `<span class="ln n">${desc}</span>` : ''}${this.lines(e).map((l) => `<span class="ln ${l.c}">${l.c === 'g' ? '▲ ' : l.c === 'r' ? '▼ ' : '• '}${l.t}</span>`).join('')}${note}${this._tintFor(e)}
             <div class="pm-btns">${btns.map(([t, a, dim]) => `<div class="pm-btn ${dim ? 'dim' : ''}" data-act="${a}">${t}</div>`).join('')}</div></div>`;
     }
 
@@ -374,13 +396,47 @@ class EquipUI {
         const dr = doll.getBoundingClientRect(), k = Math.min(dr.width / 200, dr.height / 400), ox = dr.left - pr.left + (dr.width - 200 * k) / 2, oy = dr.top - pr.top + (dr.height - 400 * k) / 2;
         for (const s of el.querySelectorAll('.eq-slot')) {
             const D = EquipUI.SLOT[s.dataset.slot], bx = s.querySelector('.bx').getBoundingClientRect(), left = EquipUI.LEFT.includes(s.dataset.slot);
-            const x0 = (left ? bx.right : bx.left) - pr.left, y0 = bx.top + bx.height / 2 - pr.top, x1 = ox + D.at[0] * k, y1 = oy + D.at[1] * k;
+            const x0 = (left ? bx.right : bx.left) - pr.left, y0 = bx.top + bx.height / 2 - pr.top, at = typeof PlayerLook !== 'undefined' && PlayerLook.ok && D.at2 ? D.at2 : D.at, x1 = ox + at[0] * k, y1 = oy + at[1] * k;
             const filled = !s.classList.contains('empty'), gr = ctx.createLinearGradient(x0, y0, x1, y1);
             gr.addColorStop(0, filled ? 'rgba(251,191,36,0.85)' : 'rgba(255,255,255,0.12)'); gr.addColorStop(1, filled ? 'rgba(251,191,36,0.05)' : 'rgba(255,255,255,0)');
             ctx.strokeStyle = gr; ctx.lineWidth = filled ? 2.2 : 1.2;
             ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
             if (filled) { ctx.fillStyle = 'rgba(251,191,36,0.9)'; ctx.beginPath(); ctx.arc(x1, y1, 2.6, 0, Math.PI * 2); ctx.fill(); }
         }
+    }
+
+    // ------------------------------------------------------------------ visual (aparência + cores), de graça
+    // Cor de amostra (tom base) de um nome da paleta do gerador.
+    _sw(name) {
+        const P = typeof NpcArt !== 'undefined' ? NpcArt.gen().PAL : null, r = P && P[name];
+        return r ? r[3] : '#888';
+    }
+    // Linha de amostras para tingir a peça do encaixe `slot` (a cor atual marcada; ↺ = a cor original da peça).
+    _tintRow(slot) {
+        const cur = Outfit.tint[slot] || null;
+        const chips = Outfit.tintList(slot).map(([n, label]) => `<span class="eq-sw ${cur === n ? 'on' : ''}" data-tint="${slot}:${n}" title="${label}" style="background:${this._sw(n)}"></span>`).join('');
+        return `<div class="eq-tints"><span class="eq-sw0 ${cur ? '' : 'on'}" data-tint="${slot}:" title="Cor original">↺</span>${chips}</div>`;
+    }
+    // Tingir no detalhe da peça vestida (roupa com cor própria ou bolsa nas costas).
+    _tintFor(e) {
+        if (typeof PlayerLook === 'undefined' || !PlayerLook.ok || !e.worn) return '';
+        const slot = e.type === 'outfit' ? e.slot : e.type === 'bag' && Bags.DEFS[e.id].look ? 'bag' : null;
+        if (!slot || !Outfit.TINT_FIELD[slot]) return '';
+        return `<div class="eq-lkh" style="margin-top:8px">Tingir · de graça</div>${this._tintRow(slot)}`;
+    }
+    _lookHtml() {
+        if (typeof PlayerLook === 'undefined' || !PlayerLook.ok) return '<div class="eq-empty">Visual indisponível.</div>';
+        const A = Outfit.APPEARANCE, cur = Object.assign({}, Outfit.APPEARANCE_DEFAULT, Outfit.appearance);
+        const group = (f) => `<div class="eq-lk"><div class="eq-lkh">${Outfit.APPEARANCE_NAME[f]}</div><div class="eq-chips">${A[f].map(([v, label]) => {
+            const sw = f === 'skin' || f === 'hair_color' ? `<i style="background:${this._sw(v)}"></i>` : '';
+            return `<span class="eq-chip ${String(cur[f] || '') === v ? 'on' : ''}" data-app="${f}:${v}">${sw}${label}</span>`;
+        }).join('')}</div></div>`;
+        const inv = this.g.inventory, bag = inv.bag && inv.bag !== 'none' && Bags.DEFS[inv.bag] && Bags.DEFS[inv.bag].look;
+        const tints = [['top', 'Parte de cima'], ['legs', 'Calça'], ['shoes', 'Calçado'], ['head', 'Cabeça'], ...(bag ? [['bag', 'Bolsa']] : [])]
+            .filter(([s]) => s === 'bag' || Outfit.worn[s] || Outfit.DEFAULT[s])
+            .map(([s, label]) => `<div class="eq-lk"><div class="eq-lkh">${label} · ${s === 'bag' ? Bags.DEFS[inv.bag].name : Outfit.ITEMS[Outfit.worn[s] || Outfit.DEFAULT[s]].name}</div>${this._tintRow(s)}</div>`).join('');
+        const busy = PlayerLook.want ? '<div class="eq-lknote">⏳ Ajustando o visual no personagem…</div>' : '';
+        return `<div class="eq-look">${busy}${['skin', 'hair', 'hair_color', 'beard', 'body', 'gender'].map(group).join('')}<div class="eq-lkh2">Tingir as peças vestidas</div>${tints}</div>`;
     }
 
     // ------------------------------------------------------------------ boneco (de frente), com as cores da roupa
@@ -393,7 +449,45 @@ class EquipUI {
         return c;
     }
 
+    // Boneco: o PERSONAGEM DE VERDADE (o mesmo gerador do sprite do jogo, PlayerLook.preview), girando nas 8 direções. Sem ele, o desenho antigo.
     _drawDoll(s) {
+        if (typeof PlayerLook !== 'undefined' && PlayerLook.ok) {
+            const spec = PlayerLook.spec({ worn: s.worn, bag: s.bag });
+            spec.weaponLook = s.weapon && s.weapon !== 'none' ? ((Weapons[s.weapon] && Weapons[s.weapon].look) || s.weapon) : 'none';
+            const key = JSON.stringify(spec);
+            if (key !== this._dollKey) { this._dollKey = key; PlayerLook.preview(spec, (frames, W, H, k) => { this._doll = { frames, W, H, k: k || 0.5, armor: this.g.player.armorMax }; this._paintDoll(); }); }
+            this._paintDoll();
+            if (!this._dollTimer) this._dollTimer = setInterval(() => {
+                if (!this.el || !this.el.isConnected || !this.el.querySelector('.eq-doll canvas')) { clearInterval(this._dollTimer); this._dollTimer = null; return; }
+                if (this._dollSpin === false) return;
+                this._dollDir = ((this._dollDir == null ? 4 : this._dollDir) + 7) % 8;
+                this._paintDoll();
+            }, 650);
+            return;
+        }
+        this._drawDollOld(s);
+    }
+    _paintDoll() {
+        const cv = this.el && this.el.querySelector('.eq-doll canvas'); if (!cv) return;
+        const ctx = cv.getContext('2d'), K = cv.width / 200;
+        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); ctx.setTransform(K, 0, 0, K, 0, 0);
+        const glow = ctx.createRadialGradient(100, 230, 10, 100, 230, 150); glow.addColorStop(0, 'rgba(96,165,250,0.28)'); glow.addColorStop(1, 'rgba(96,165,250,0)');
+        ctx.fillStyle = glow; ctx.fillRect(0, 0, 200, 400);
+        ctx.fillStyle = '#1a1f2c'; ctx.beginPath(); ctx.ellipse(100, 352, 84, 15, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(251,191,36,0.75)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.strokeStyle = 'rgba(251,191,36,0.3)'; ctx.beginPath(); ctx.ellipse(100, 352, 66, 10, 0, 0, Math.PI * 2); ctx.stroke();
+        const D = this._doll;
+        if (!D) { ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '600 11px Inter, Arial, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('montando o personagem…', 100, 220); return; }
+        const d = this._dollDir == null ? 4 : this._dollDir, img = D.frames[d];
+        const t = this._dollCv || (this._dollCv = document.createElement('canvas'));
+        t.width = D.W; t.height = D.H; t.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(img), D.W, D.H), 0, 0);
+        const S = 4.3 * 0.5 / D.k, P = NpcArt.gen().pivFor(D.k);          // (adulto: ~36 px de altura no quadro em k 0,5 — at2 dos SLOTS casam com esta escala)
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(t, 100 - P[0] * S, 348 - P[1] * S, D.W * S, D.H * S);
+        if (D.armor > 0) { ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '800 11px Inter, Arial, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(`🦺 colete ${D.armor >= 100 ? 'NV II' : 'NV I'}`, 100, 385); }
+    }
+
+    _drawDollOld(s) {
         const cv = this.el.querySelector('.eq-doll canvas'); if (!cv) return;
         const ctx = cv.getContext('2d'), K = cv.width / 200;
         ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); ctx.setTransform(K, 0, 0, K, 0, 0);

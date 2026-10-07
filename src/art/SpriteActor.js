@@ -16,8 +16,12 @@
 class SpriteActor {
     constructor(scene, sheet, variant, name) {
         this.scene = scene;
-        this.sheet = sheet;
+        this._seedName = name;
+        this.npcRow = 0;           // linha da paleta dos personagens 2,5D (NpcArt); `variant` = a da paleta antiga
         this.variant = variant;
+        sheet = this._adopt(sheet, variant);
+        this.sheet = sheet;
+        variant = this.variant;
         this.clip = null;
         this.frame = 0;
         this.time = 0;
@@ -56,8 +60,33 @@ class SpriteActor {
         SpriteActor.live.add(this);      // registro dos atores vivos (a varredura de 3 s sabe quais clipes estão em uso)
     }
 
+    // Giro da câmera bússola (CompassCamera.yaw): o personagem 2,5D fica "de pé" para cima da TELA, não do norte.
+    static viewYaw() { return typeof CompassCamera !== 'undefined' ? CompassCamera.yaw || 0 : 0; }
+
     // O sprite gira no ângulo exato (clipe vetorial)? (CarLights e quem mais precisar da frente desenhada.)
     get rotates() { return !!(this.clip && this.clip.vector); }
+
+    // Personagem 2,5D (NpcArt): a folha antiga de pedestre/policial (civA, civB, police, swat, army) vira um TIPO novo do pacote de
+    // NPCs (escolhido pelo lugar da variante de cor antiga e pelo nome do sprite) — todo o resto do jogo segue pedindo "civA, cor 30".
+    // Folha 2,5D passada direto: `variant` é a linha da paleta nova.
+    _adopt(sheet, variant) {
+        if (sheet && sheet.npcRemap) {
+            const r = sheet.npcRemap(variant, this._seedName);
+            if (r) { this._legacySheet = sheet; this.variant = variant; this.npcRow = r.row; this.npcType = r.type; return r.sheet; }
+        }
+        this._legacySheet = null;
+        if (sheet && sheet.isNpc) { this.npcRow = variant; this.variant = sheet.legacyVariant; this.npcType = sheet.id; }
+        else this.variant = variant;
+        return sheet;
+    }
+
+    // Linha de paleta que o clipe atual usa (a nova para os 2,5D, a antiga para o resto).
+    _syncRow() {
+        const v = this.clip && this.clip.npc ? this.npcRow : this.variant;
+        if (this._colors[0] === v) return;
+        for (let i = 0; i < 16; i += 4) this._colors[i] = v;
+        this.mesh.updateVerticesData(BABYLON.VertexBuffer.ColorKind, this._colors);
+    }
 
     // Caixa envolvente do quad (lado 2h) com um pouco de altura: o frustum descarta o sprite fora da tela.
     _setBounds(h) {
@@ -72,12 +101,30 @@ class SpriteActor {
         if (f !== this.frame) { this.frame = f; this._applyUV(); }
     }
 
+    // Inclinação do chão na direção em que anda (MapGeo.slopeAlong; 0 = plano/parado). Quem move o personagem informa todo quadro;
+    // aí 'walk'/'run' viram, se o tipo tiver o clipe (2,5D, sem arma na mão): subida (> 0,15) = 'walk_up' (inclinado, passo curto) e
+    // encosta íngreme (> 0,6) = 'climb' (escalando com as mãos) — e o ritmo é corrigido pela passada mais curta (_rateK).
+    setSlope(g) { this._slope = g || 0; this._slopeFresh = true; }
+    static get CLIMB() { return { up: 0.15, steep: 0.6, upStride: 0.77, climbStride: 0.59 }; }
+
     // Troca de clipe. Retorna false se o clipe não existe para essa arma.
-    play(name, weapon = 'none', { restart = false } = {}) {
+    play(name, weapon = 'none', opts = {}) {
+        this._rateK = 1;
+        const C = SpriteActor.CLIMB;
+        if ((name === 'walk' || name === 'run') && weapon === 'none' && this._slope > C.up) {
+            const up = this._slope > C.steep ? 'climb' : (name === 'walk' ? 'walk_up' : null);
+            if (up && this.sheet.getClip(up, 'none')) {
+                this._rateK = up === 'walk_up' ? 1 / C.upStride : (name === 'run' ? Config.anim.run / (Config.anim.walk * C.climbStride) : 1 / C.climbStride);
+                name = up;
+            }
+        }
+        return this._play(name, weapon, opts);
+    }
+    _play(name, weapon = 'none', { restart = false } = {}) {
         const clip = this.sheet.getClip(name, weapon);
         if (!clip) return false;
         if (this.clip === clip && !restart) return true;
-        const was = this.clip && this.clip.vector;
+        const was = this._mode || 0, mode = clip.vector ? 1 : clip.npc ? 2 : 0;
         this.clip = clip;
         this.time = 0;
         this.frame = 0;
@@ -86,8 +133,16 @@ class SpriteActor {
         // Personagens (clipe vetorial) são desenhados em Config.art.charScale: o quad encolhe e o shader acompanha (lê a posição local).
         const k = clip.vector ? (Config.art.charScale || 1) : 1;
         this.mesh.scaling.x = this.mesh.scaling.z = k;
-        if (!!clip.vector !== !!was) this._modeChanged();
+        const dirsWas = this._dirs; this._dirs = clip.dirs;
+        if (mode !== was) { this._mode = mode; this._modeChanged(); }
+        else if (clip.npc && dirsWas !== clip.dirs && this.heading != null) { this.dir = -1; this.setHeading(this.heading); }     // (8 ↔ 16 direções)
         if (clip.vector) { this._setQuad(this.mesh, clip.pk.box); this._ovClip = null; }
+        else if (clip.npc && this._npcBox !== clip.pk.box) {                 // 2,5D: o quad (fixo, sem girar) tem a caixa do clipe
+            const b = this._npcBox = clip.pk.box;
+            this._setQuad(this.mesh, b);
+            this._setBounds(Math.max(-b[0], b[2], -b[1], b[3]));
+        }
+        this._syncRow();
         this._applyUV();
         return true;
     }
@@ -105,26 +160,37 @@ class SpriteActor {
     // Troca a folha de PERSONAGEM (clipes por nome) — inclusive de tamanho de quadro diferente (ex.: o jogador sobe
     // numa moto e passa a usar a folha de 80 px). O quad é redimensionado; o próximo play() pega o clipe da nova folha.
     useSheet(sheet) {
+        const keepRow = sheet && sheet.isNpc && !sheet.npcRemap ? this.npcRow : null;
+        sheet = sheet && sheet.npcRemap ? this._adopt(sheet, this.variant) : sheet;
+        if (keepRow !== null) this.npcRow = keepRow;                   // (o jogador volta da moto para a própria folha 2,5D)
         this.sheet = sheet;
         this.clip = null;
+        this._npcBox = null;
         const h = this._half = sheet.frame / Config.art.ppu / 2;
-        this.mesh.rotation.y = 0;
+        this.mesh.rotation.y = 0; this._yaw = null;
         this.mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, [-h, 0, h, h, 0, h, -h, 0, -h, h, 0, -h]);
         this._setBounds(h);
     }
 
-    // Troca a variante da paleta (ex.: pintura → carcaça carbonizada).
+    // Troca a variante da paleta (ex.: pintura → carcaça carbonizada). Pedestre 2,5D: outra variante = outra pessoa do mesmo lugar.
     setVariant(v) {
+        this.clearWounds();                                                // outra pessoa: sem os ferimentos da anterior
+        if (this._legacySheet) {
+            const sheet = this._adopt(this._legacySheet, v);
+            if (sheet !== this.sheet) { const name = this.clipName || 'idle', w = this.clip ? this.clip.weapon : 'none'; this.useSheet(sheet); this.play(name, w, { restart: true }); }
+            this._syncRow();
+            return;
+        }
         this.variant = v;
-        for (let i = 0; i < 16; i += 4) this._colors[i] = v;
-        this.mesh.updateVerticesData(BABYLON.VertexBuffer.ColorKind, this._colors);
+        this._syncRow();
         if (this._ov) this._ovColors(this._ov);
     }
 
     setHeading(rad) {
         this.heading = rad;
         if (this.rotates) { this._rotate(); return; }
-        const D = this.sheet.dirs;
+        const D = this.clip && this.clip.npc ? this.clip.dirs || 8 : this.sheet.dirs;          // (2,5D: 8 direções; pilotando, 16)
+        if (this.clip && this.clip.npc) rad -= this._yaw || 0;                 // 2,5D: a direção desenhada é relativa à tela (câmera bússola)
         const step = (Math.PI * 2) / D;
         const d = ((Math.round(rad / step) % D) + D) % D;
         if (d !== this.dir) { this.dir = d; this._applyUV(); }
@@ -146,17 +212,30 @@ class SpriteActor {
 
     // Passou de folha de direções para vetorial (ou o contrário): o quad passa a girar / volta ao quadrado fixo.
     _modeChanged() {
+        this._npcBox = null;
+        if (typeof NpcArt !== 'undefined') NpcArt.sortMesh(this.mesh, !!(this.clip && this.clip.npc));
         if (this.rotates) {
             this._shH = null;
             const H = CharArt.half(this.sheet.atlasName || this.sheet.name);
             this._setBounds(Math.max(this._half, H));
             this._rotate();
+        } else if (this.clip && this.clip.npc) {                           // 2,5D: quad fixo (a caixa vem no play), 8 direções desenhadas
+            this.mesh.rotation.y = this._yaw = SpriteActor.viewYaw();      // (de pé "para cima da tela": gira junto com a câmera bússola)
+            // (b, a guardavam a sombra do vetorial; no 2,5D b = toldo, a = água) — nos 4 vértices: sobrando um valor velho em
+            // algum deles, o shader interpola "água no corpo" e o desenho aparece afundado mesmo em terra
+            this._cover = -1;
+            for (let i = 0; i < 16; i += 4) { this._colors[i + 2] = 0; this._colors[i + 3] = this._wl || 0; }
+            this.mesh.updateVerticesData(BABYLON.VertexBuffer.ColorKind, this._colors);
+            if (this._ov) this._ov.setEnabled(false);
+            this.dir = -1;
+            const h = this.heading; this.heading = null; this.setHeading(h || 0);
         } else {
             this.mesh.rotation.y = 0;
             const h = this._half;
             this.mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, [-h, 0, h, h, 0, h, -h, 0, -h, h, 0, -h]);
             this._setBounds(h);
             if (this._ov) this._ov.setEnabled(false);
+            const hd = this.heading; this.dir = -1; this.heading = null; if (this.clip) this.setHeading(hd || 0); else this.heading = hd;
         }
     }
 
@@ -200,12 +279,60 @@ class SpriteActor {
         if (this._ov && this._ov.isEnabled()) this._ovColors(this._ov);
     }
 
+    // 2,5D: pés debaixo de um toldo/cobertura (MapGeo.coverAt) → a altura dele vai na cor do vértice (b) e o shader mantém o desenho
+    // inteiro abaixo dela. Sem isso a cabeça (que testa a profundidade "de pé", bem alta) atravessava o toldo e só o corpo sumia.
+    _updateCover() {
+        const p = this.mesh.position;
+        if (this._coverX === p.x && this._coverZ === p.z) return;
+        this._coverX = p.x; this._coverZ = p.z;
+        const h = MapGeo.coverAt(p.x, p.z);
+        if (h === this._cover) return;
+        this._cover = h;
+        for (let i = 2; i < 16; i += 4) this._colors[i] = h;
+        this.mesh.updateVerticesData(BABYLON.VertexBuffer.ColorKind, this._colors);
+    }
+
+    // 2,5D, vadeando: altura da água no corpo (m; 0 = seco). Vai na cor do vértice (a) e o shader do NpcArt afunda o que está abaixo
+    // dela (tinge, some aos poucos, linha de espuma ondulando). Nadando não precisa: a água já está desenhada no clipe de natação.
+    // Vale só no quadro em que é informada (como setSlope): quem não informa (NPC que renasceu, foi arremessado, saiu da água por outro
+    // caminho, policial, corpo caído…) volta a seco sozinho em update — nunca fica "dentro d'água" em terra.
+    setWaterline(h) {
+        this._wl = h > 0.02 ? Math.round(h * 50) / 50 : 0;
+        this._wlFresh = true;
+        this._applyWaterline();
+    }
+    _applyWaterline() {
+        const h = this._wl || 0;
+        if (!(this.clip && this.clip.npc) || this._colors[3] === h) return;
+        for (let i = 3; i < 16; i += 4) this._colors[i] = h;
+        this.mesh.updateVerticesData(BABYLON.VertexBuffer.ColorKind, this._colors);
+    }
+
     update(dt, rate = 1) {
-        const c = this.clip;
+        let c = this.clip;
         if (!c) return;
+        // 2,5D: o desenho do tipo foi trocado (alta definição pronta — NpcArt.hd): toca o mesmo clipe, no mesmo quadro, no atlas novo
+        if (c.npc && c.gen !== NpcArt.genOf(c.atlas)) {
+            const n = c.name, w = c.weapon, t = this.time, f = this.frame, done = this.done;
+            this.clip = null;
+            if (!this.play(n, w, { restart: true })) return;
+            this.frame = -1; this.setFrame(f); this.time = t; this.done = done;
+            c = this.clip;
+        }
         this._updateShade(dt);
+        if (c.npc) this._updateCover();
+        if (c.npc && this._yaw !== SpriteActor.viewYaw()) {                // câmera bússola girou: o quad acompanha e a direção desenhada é refeita
+            this.mesh.rotation.y = this._yaw = SpriteActor.viewYaw();
+            if (this.heading != null) { this.dir = -1; this.setHeading(this.heading); }
+        }
+        // água no corpo e inclinação valem só no quadro em que foram informadas (antes deste update): sem aviso, zeram
+        if (!this._wlFresh) this._wl = 0;
+        this._wlFresh = false;
+        if (c.npc) this._applyWaterline();                     // (também acerta a cor na troca de modo — o alfa do vértice nasce em 1)
+        if (!this._slopeFresh) this._slope = 0;
+        this._slopeFresh = false;
         if (c.vector) this._rotate();
-        this.time += dt * c.fps * rate;
+        this.time += dt * c.fps * rate * (this._rateK || 1);
         let f;
         if (c.loop) f = Math.floor(this.time) % c.frames;
         else { f = Math.min(Math.floor(this.time), c.frames - 1); if (this.time >= c.frames) this.done = true; }
@@ -217,6 +344,7 @@ class SpriteActor {
         const c = this.clip;
         if (!c) return;
         if (c.vector) { this._setFr(this.mesh, c.pk, this.frame, this._fr); this._applyOverlay(); return; }
+        if (c.npc) { this._setFr(this.mesh, c.pk, Math.max(0, this.dir) * c.pk.n + Math.min(this.frame, c.pk.n - 1), this._fr, true); return; }
         const F = c.frame;
         const u0 = (this.dir * F) / c.W, u1 = ((this.dir + 1) * F) / c.W;
         const v0 = (this.frame * F) / c.H, v1 = ((this.frame + 1) * F) / c.H;
@@ -232,9 +360,25 @@ class SpriteActor {
         mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, P);
     }
 
+    // Camadas de ferimento por cima da skin (personagens 2,5D): `shot` = BALEADO (furos e sangue na roupa) e `beat` = ESPANCADO
+    // (hematomas e sangue do nariz/boca), níveis 0..4 — cada nível, mais uma marca. Ficam no sprite até a pessoa ser outra
+    // (renasceu / trocou de variante) ou se curar (clearWounds). Vão no 4º número do atributo `fr` (livre) com uma semente por
+    // pessoa: o shader do NpcArt desenha as marcas (shotMask / beatMask).
+    setWounds(shot, beat) {
+        shot = Math.max(0, Math.min(4, shot | 0)); beat = Math.max(0, Math.min(4, beat | 0));
+        if (this._wShot === shot && this._wBeat === beat) return;
+        this._wShot = shot; this._wBeat = beat;
+        if (this._woundSeed == null) this._woundSeed = Math.floor(Math.random() * 250);
+        const w = shot || beat ? this._woundSeed * 25 + shot * 5 + beat : 0, R = this._fr;
+        for (let k = 3; k < 16; k += 4) R[k] = w;
+        this.mesh.updateVerticesData('fr', R);
+    }
+    get wounds() { return { shot: this._wShot || 0, beat: this._wBeat || 0 }; }
+    clearWounds() { if (!this._wShot && !this._wBeat) return; this._woundSeed = null; this.setWounds(0, 0); }
+
     // Quadro f do clipe vetorial: um único atributo (3 números) — o mesmo custo de antes, quando só a UV mudava.
-    _setFr(mesh, pk, f, R) {
-        const i = Math.min(f, pk.n - 1) * 3, a = pk.fr[i], b = pk.fr[i + 1], c = pk.fr[i + 2];
+    _setFr(mesh, pk, f, R, raw = false) {
+        const i = (raw ? f : Math.min(f, pk.n - 1)) * 3, a = pk.fr[i], b = pk.fr[i + 1], c = pk.fr[i + 2];      // raw: índice já calculado (2,5D: direção × quadros + quadro)
         if (R[0] === a && R[1] === b && R[2] === c) return;
         for (let k = 0; k < 16; k += 4) { R[k] = a; R[k + 1] = b; R[k + 2] = c; }
         mesh.updateVerticesData('fr', R);

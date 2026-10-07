@@ -45,10 +45,17 @@ const Bikes = {
 
     // Desenho no atlas dos carros, e onde fica a origem do piloto (m: z = frente, x = direita) — as mãos do rig no guidão.
     ART: { moto: 'moto', bicycle: 'bicicleta' },
-    SEAT: { moto: { z: -0.04, x: 0 }, bicycle: { z: -0.12, x: 0 } },
+    // Piloto 2,5D (NpcArt): a origem é o BANCO do desenho (moto: a frente do banco; bicicleta: o selim), em m do desenho × SCALE —
+    // as mãos e pés das animações ride_* já vêm nas manoplas/pedais (NpcGenAnims.RIDE). Boneco antigo: as mãos do rig no guidão.
+    get SEAT() {
+        if (Bikes.npc()) return { moto: { z: -0.129 * 0.9, x: 0 }, bicycle: { z: -0.271 * 0.9, x: 0 } };
+        return { moto: { z: -0.04, x: 0 }, bicycle: { z: -0.12, x: 0 } };
+    },
+    npc() { return typeof NpcArt !== 'undefined' && NpcArt.available(); },
     // O piloto do rig é "chibi" (cabeça e ombros grandes): o veículo é desenhado um pouco maior que o real para aparecer em volta dele.
     // O piloto é desenhado em Config.art.charScale: a moto acompanha, para o guidão continuar nas mãos dele.
-    get SCALE() { const k = Config.art.charScale || 1; return { moto: 1.18 * k, bicycle: 1.12 * k }; },
+    // Piloto 2,5D: adulto na escala dos veículos (Config.art.npcPpu) — 0,9 (× Config.vehicle.scale) casa com as animações ride_*.
+    get SCALE() { if (Bikes.npc()) return { moto: 0.9, bicycle: 0.9 }; const k = Config.art.charScale || 1; return { moto: 1.18 * k, bicycle: 1.12 * k }; },
     // Cores de fábrica (linhas de CarSheet.PAINTS). Entregador: vermelha (com o baú vermelho).
     PAINTS: { moto: [0, 1, 5, 4, 7, 8, 9, 26, 29, 33, 20, 28], bicycle: [1, 0, 3, 7, 24, 34, 36, 25, 4, 5, 30] },
     COURIER_PAINT: 0,

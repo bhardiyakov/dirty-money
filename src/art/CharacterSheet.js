@@ -355,6 +355,8 @@ class SpriteLibrary {
         if (CharArt.available()) CharArt.init(scene, this.palette);     // atlas vetorial (pixels chegam em segundo plano: ver CharArt.load)
         this.sheets = {};
         for (const [name, s] of Object.entries(SpriteLibrary.SHEETS)) this.sheets[name] = new CharacterSheet(scene, this.palette, Object.assign({ name }, s));
+        // Personagens 2,5D (pacote de NPCs, assets/npcs): pedestres, polícia, BOPE, Exército, traficantes e o jogador ("hero").
+        if (typeof NpcArt !== 'undefined') NpcArt.attach(this);
     }
 
     // Variantes: 0 = jogador, 1 = policial, 2..(VARIANT_SWAT-1) = civis, depois SWAT e exército.

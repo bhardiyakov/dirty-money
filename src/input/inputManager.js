@@ -5,7 +5,7 @@
 //
 //   Controle (Gamepad API, layout "standard" — Xbox/PlayStation/Switch Pro), no padrão dos jogos de mundo aberto (GTA V / Watch Dogs):
 //     A pé:   analógico esq. mover · A/✕ correr (segurar) e pular grade/muro (tocar perto) · L3 correr · X/□ interagir (E)
-//             Y/△ entrar no veículo (F) · B/○ recarregar (com arma) / soco · RT/R2 golpe/tiro · RB/R1 chute · LT/L2 MIRAR (ver Aim)
+//             Y/△ entrar no veículo (F) · B/○ recarregar · RT/R2 golpe (sem arma: combo soco+soco+chute)/tiro · LT/L2 MIRAR (ver Aim)
 //             LB/L1 e direcional ←/→ troca de arma · R3 furtar (C) · ↑ kit médico · ↓ arrombar (G)
 //             Mirando: analógico dir. aponta (manual) ou troca de alvo (assistida). Teclado/mouse: botão direito mira, o cursor aponta.
 //     Carro:  RT acelera · LT freia/ré · Y/△ sair · X/□ interagir (abastecer/desmanche) · L3 buzina · ↓ faróis
@@ -160,10 +160,9 @@ class InputManager {
         set('f', btn(3));                                   // Y: entrar/sair do veículo
         set('e', btn(2));                                   // X: interagir
         set('padjump', foot && btn(0));                     // A: pula grade/muro (só se houver um ali: Game)
-        set('r', foot && btn(1) && this.gunInHand);         // B: recarregar (arma de fogo na mão)…
-        set('j', foot && btn(1) && !this.gunInHand);        //    …ou soco
+        set('r', foot && btn(1) && this.gunInHand);         // B: recarregar (arma de fogo na mão)
+        // (sem arma, B não faz nada: o combo de mãos — soco + soco + chute — sai do RT)
         set('padcancel', btn(1));                           // B: cancelar (mini-game de arrombar)
-        set('k', foot && btn(5));                           // RB: chute
         set('g', foot && btn(13));                          // ↓: arrombar na manha
         set('c', foot && btn(11));                          // R3: furtar
         set('m', btn(12));                                  // ↑: kit médico

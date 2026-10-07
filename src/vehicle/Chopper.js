@@ -11,18 +11,14 @@
 //     e EXPLODE ao tocar o chão (dano em área).
 // O jogador, enquanto pilota, fica invisível e invulnerável com a posição presa à do helicóptero (a polícia, os pedestres, o minimapa e a
 // câmera continuam enxergando "o jogador" no lugar certo). Ver Game._boardChopper/_leaveChopper.
-// Desenho: mesmo sprite do helicóptero da polícia (HeliSheet) em outra pintura + rotor girando, no grupo de render 2 (acima de tudo).
+// Desenho: o mesmo helicóptero ilustrado da polícia (HeliArt / HeliVisual) em outra pintura — corpo, rotor (pás nítidas parado,
+// disco borrado girando) e a sombra com a silhueta dele —, no grupo de render 2 (acima de tudo).
 // ============================================================================
 
 class Chopper {
-    // Efeitos compartilhados: sombras no chão (um quad por helicóptero).
+    // O grupo 2 (o que voa) ignora a profundidade do mundo: limpa o depth antes dele.
     static _fx(scene) {
-        if (!scene._chopperFx) {
-            const shadow = new GlowBatch(scene, 8, 'chopperShadow', 'puff');
-            scene._chopperFx = { shadow, free: [0, 1, 2, 3, 4, 5, 6, 7] };
-            for (let i = 0; i < 8; i++) { shadow.alloc(); shadow.off(i); }
-            scene.setRenderingAutoClearDepthStencil(2, true, true, true);
-        }
+        if (!scene._chopperFx) { scene._chopperFx = true; scene.setRenderingAutoClearDepthStencil(2, true, true, true); }
         return scene._chopperFx;
     }
 
@@ -47,19 +43,8 @@ class Chopper {
         this._rot = 0; this._smokeT = 0; this._dustT = 0;
         this.input = { fwd: 0, strafe: 0, yaw: 0, climb: 0 };
 
-        const sheet = game.carLib.heliSheet();
-        this.actor = new SpriteActor(this.scene, sheet, variant, 'chopperBody');
-        this.actor.play('static');
-        this.actor.mesh.renderingGroupId = 2;
-        const size = sheet.frame / Config.art.ppu;
-        this.rotor = BABYLON.MeshBuilder.CreateGround('chopperRotor', { width: size, height: size }, this.scene);
-        this.rotor.material = sheet.rotorMaterial;
-        this.rotor.renderingGroupId = 2;
-        this.rotor.isPickable = false;
-        this.rotor.alwaysSelectAsActiveMesh = true;
-
-        this.fx = Chopper._fx(this.scene);
-        this.si = this.fx.free.pop();
+        this.visual = new HeliVisual(this.scene, variant, 'chopper');
+        Chopper._fx(this.scene);
         this._place(0);
     }
 
@@ -91,7 +76,7 @@ class Chopper {
         this.alt = this.floor = 0;
         this.rpm = 0; this.hp = this.maxHp;
         this.state = 'parked'; this.alive = true; this.pilot = false; this.lastHitBy = 'env';
-        this.actor.setVisible(true);
+        this.visual.setVisible(true);
         this._place(0);
     }
 
@@ -126,9 +111,7 @@ class Chopper {
         g.carDamage.boomAt(p.x, p.z, inside || this.lastHitBy === 'player' ? 'player' : 'env', 1.6);
         if (inside) g._chopperDown();                                  // o jogador morre com ele
         else if (this.lastHitBy === 'player') { g.wanted.reportCrime(); }
-        this.actor.setVisible(false);
-        this.rotor.setEnabled(false);
-        this.fx.shadow.off(this.si); this.fx.shadow.flush();
+        this.visual.setVisible(false);
         this.deadAt = g.time || 0;
         this.pilot = false;
     }
@@ -246,35 +229,19 @@ class Chopper {
         if (Math.random() < 0.55) g.combat.spark(p.x + (Math.random() - 0.5) * 3, this.alt + 1, p.z + (Math.random() - 0.5) * 3, [1, 0.45 + Math.random() * 0.4, 0.12]);
     }
 
-    // Leva sprite, rotor e sombra para a posição/altura atuais.
+    // Leva corpo, rotor e sombra para a posição/altura atuais.
     _place(dt) {
-        const p = this.position, a = this.actor, g = this.game;
+        const p = this.position, g = this.game, V = this.visual;
         const y = Math.max(1.7, this.alt + 1.7);                                // (no solo, acima dos carros)
-        a.setPosition(p.x, p.z);
-        a.setHeading(this.heading);
-        a.mesh.position.y = y;
-        this.rotor.position.set(p.x, y + 0.45, p.z);
-        this._rot += (this.rpm * 30 + (this.state === 'failing' ? 4 : 0)) * dt;
-        this.rotor.rotation.y = Math.floor(this._rot / (Math.PI / 8)) * (Math.PI / 8);
-        this.rotor.setEnabled(this.rpm > 0.04 || this.state === 'failing');
-        // Com o rotor parado, o disco translúcido some: só as pás (a textura já tem o disco; deixa mais discreto devagar).
-        this.rotor.visibility = Math.min(1, 0.35 + this.rpm * 0.65);
+        V.place(p.x, y, p.z, this.heading, this.rpm, dt, this.state === 'failing' ? 4 : 0);
 
-        // Sombra no chão: deslocada pela direção do sol e pela altura (quanto mais alto, mais longe e mais difusa).
-        const f = this.fx, s = g.gameEngine.sunDir, h = Math.max(0, this.alt - 0), k = h / Math.max(0.3, -s.y);
-        const sz = 8 + Math.min(4, h * 0.05);
-        f.shadow.place(this.si, p.x + s.x * k, 0.21, p.z + s.z * k, sz);
+        // Sombra no chão: deslocada pela direção do sol e pela altura (quanto mais alto, mais longe, maior e mais clara).
+        const s = g.gameEngine.sunDir, h = Math.max(0, this.alt), k = h / Math.max(0.3, -s.y);
         const day = Math.max(0, Math.min(1, (g.dayNight.sunI - 0.2) / 0.4));
-        if (day > 0.05) f.shadow.color(this.si, 0.03, 0.03, 0.05, (0.34 - Math.min(0.14, h * 0.003)) * day); else f.shadow.off(this.si);
-        f.shadow.flush();
+        V.placeShadow(p.x + s.x * k, p.z + s.z * k, this.heading, (0.5 - Math.min(0.2, h * 0.004)) * day, 1 + Math.min(0.3, h * 0.004));
     }
 
     distanceTo(pos) { return hypot(this.position.x - pos.x, this.position.z - pos.z); }
 
-    dispose() {
-        this.actor.dispose();
-        this.rotor.dispose();
-        this.fx.shadow.off(this.si); this.fx.shadow.flush();
-        this.fx.free.push(this.si);
-    }
+    dispose() { this.visual.dispose(); }
 }

@@ -59,11 +59,12 @@ const AudioFX = {
     },
 
     // Rajada de ruído filtrada (base de tiro, impacto e soco). cutoff cai de f0 a f1.
-    _burst(x, z, { vol = 0.4, dur = 0.12, f0 = 3000, f1 = 300, maxDist = 90, type = 'lowpass', q = 0.8 } = {}) {
+    // delay = começa daqui a `delay` s | att = subida (s) em vez do ataque seco.
+    _burst(x, z, { vol = 0.4, dur = 0.12, f0 = 3000, f1 = 300, maxDist = 90, type = 'lowpass', q = 0.8, delay = 0, att = 0 } = {}) {
         if (!this._ok()) return;
         const sp = this._spatial(x, z, maxDist, vol);
         if (!sp) return;
-        const ctx = this.ctx, t0 = ctx.currentTime;
+        const ctx = this.ctx, t0 = ctx.currentTime + delay;
         const src = ctx.createBufferSource();
         src.buffer = this._noise();
         const filt = ctx.createBiquadFilter();
@@ -71,15 +72,41 @@ const AudioFX = {
         filt.frequency.setValueAtTime(f0, t0);
         filt.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t0 + dur);
         const gain = ctx.createGain();
-        gain.gain.setValueAtTime(sp.g, t0);
-        gain.gain.exponentialRampToValueAtTime(0.0008, t0 + dur);
+        if (att > 0) { gain.gain.setValueAtTime(0.0008, t0); gain.gain.exponentialRampToValueAtTime(sp.g, t0 + att); }
+        else gain.gain.setValueAtTime(sp.g, t0);
+        gain.gain.exponentialRampToValueAtTime(0.0008, t0 + Math.max(dur, att + 0.01));
         src.connect(filt); filt.connect(gain);
         if (ctx.createStereoPanner) {
             const pan = ctx.createStereoPanner(); pan.pan.value = sp.pan;
             gain.connect(pan); pan.connect(this.master);
         } else gain.connect(this.master);
         src.start(t0, Math.random() * 0.5);
-        src.stop(t0 + dur + 0.02);
+        src.stop(t0 + Math.max(dur, att + 0.01) + 0.02);
+    },
+
+    // ------------------------------------------------------------------ água (WaterFx chama; o jogador e os NPCs por perto)
+    // vol: 1 = o jogador (o ouvinte está nele); NPCs passam menos e somem com a distância (maxDist).
+    // Braçada: a mão bate na água (tapa curto), o corpo d'água espirra, a puxada borbulha por baixo e as gotas caem de volta.
+    waterStroke(x, z, vol = 1, maxDist = 32) {
+        const v = 0.3 * vol, s = 0.85 + Math.random() * 0.3;
+        this._burst(x, z, { vol: v * 0.9, dur: 0.09, f0: 1700 * s, f1: 800, type: 'bandpass', q: 1.1, maxDist, att: 0.004 });
+        this._burst(x, z, { vol: v * 0.8, dur: 0.22, f0: 1100 * s, f1: 260, maxDist, delay: 0.012, att: 0.01 });
+        this._burst(x, z, { vol: v * 0.45, dur: 0.26, f0: 380, f1: 720, type: 'bandpass', q: 4, maxDist, delay: 0.09, att: 0.07 });     // puxada (borbulho)
+        for (let i = 0; i < 3; i++) this._burst(x, z, { vol: v * (0.12 + Math.random() * 0.12), dur: 0.025, f0: 2800 + Math.random() * 2600, f1: 2400, type: 'bandpass', q: 7, maxDist, delay: 0.16 + Math.random() * 0.3 });
+    },
+    // Pernada: chacoalhar curto e abafado.
+    waterKick(x, z, vol = 1, maxDist = 24) {
+        this._burst(x, z, { vol: 0.08 * vol, dur: 0.1, f0: 900, f1: 260, maxDist, att: 0.008 });
+        this._burst(x, z, { vol: 0.05 * vol, dur: 0.05, f0: 2400, f1: 1800, type: 'bandpass', q: 1.4, maxDist, delay: 0.02 });
+    },
+    // Passo no raso (depth01: 0 = tornozelo, 1 = cintura): a perna entra (pancada mais grave quanto mais fundo), a água chacoalha
+    // em volta e a perna sai puxando (um "shlup" que sobe), com respingos.
+    waterWade(x, z, depth01 = 0.5, run = false, vol = 1, maxDist = 28) {
+        const v = (run ? 0.34 : 0.26) * vol, d = Math.max(0, Math.min(1, depth01)), s = 0.9 + Math.random() * 0.2;
+        this._burst(x, z, { vol: v * (0.8 + 0.4 * d), dur: 0.16 + 0.1 * d, f0: (1500 - 700 * d) * s, f1: 180, maxDist, att: 0.006 });
+        this._burst(x, z, { vol: v * 0.7, dur: 0.18, f0: 2100 * s, f1: 900, type: 'bandpass', q: 0.9, maxDist, delay: 0.01, att: 0.012 });
+        this._burst(x, z, { vol: v * (0.35 + 0.4 * d), dur: 0.22, f0: 520, f1: 1500, type: 'bandpass', q: 3.5, maxDist, delay: 0.11 + 0.05 * d, att: 0.06 });   // perna saindo
+        for (let i = 0; i < 2 + (run ? 2 : 0); i++) this._burst(x, z, { vol: v * (0.1 + Math.random() * 0.12), dur: 0.03, f0: 3000 + Math.random() * 2500, f1: 2600, type: 'bandpass', q: 6, maxDist, delay: 0.12 + Math.random() * 0.25 });
     },
 
     // Tiro: cada arma tem seu "estalo" (pistola seco, SMG curto, escopeta grave e longo).

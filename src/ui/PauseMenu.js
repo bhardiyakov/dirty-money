@@ -13,7 +13,7 @@ class PauseMenu {
     static get TABS() {
         return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
     }
-    static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'dev']; }      // linhas de Ajustes, na ordem
+    static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'hd', 'dev']; }      // linhas de Ajustes, na ordem
     static get KEYS_HTML() {
         return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas';
     }
@@ -35,6 +35,7 @@ class PauseMenu {
             marina: { label: 'Marina', icon: 'boat' },
             gas: { label: 'Posto de Gasolina', icon: 'fuel' },
             chop: { label: 'Desmanche (carros roubados)', icon: 'chop' },
+            dealer: { label: 'Concessionária (carros à venda)', icon: 'dealer' },
         };
     }
 
@@ -49,6 +50,7 @@ class PauseMenu {
         this._icons = {};
         this._legendIdx = {};
         this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual)
+        this.settings.hd = !!Config.art.hd;          // (já resolvido em config.js: escolha salva, ?hd=0/1 e o perfil do aparelho)
         this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
         this._build();
         this.applySettings();
@@ -65,6 +67,20 @@ class PauseMenu {
         if (mm) mm.style.visibility = s.minimap ? '' : 'hidden';
         this.g.showPrompts = s.prompts;
         if (this.g.dev) this.g.dev.setEnabled(s.dev);
+        if (!!s.hd !== !!Config.art.hd) this._applyHd(!!s.hd);
+    }
+
+    // Alta definição liga/desliga na hora: a resolução da tela muda já; os personagens em alta são gerados conforme aparecem
+    // (NpcArt.hdWant). Desligar mantém os que já estão em alta (só a tela volta ao pixelado).
+    _applyHd(on) {
+        const g = this.g, ge = g.gameEngine;
+        Config.art.hd = on;
+        Config.art.pixelate = !on;
+        if (ge && ge.resize) { ge.resize(); if (g.camera) { g.camera.fitPixelScale(ge.renderHeight); g.camera.onResize(); } }
+        if (on && typeof NpcArt !== 'undefined') {
+            for (const id of Object.keys(NpcArt.sheets)) NpcArt.hdWant(id);
+            if (typeof PlayerLook !== 'undefined' && PlayerLook.ok) PlayerLook.sync(true);
+        }
     }
 
     // ------------------------------------------------------------------ montagem
@@ -232,7 +248,7 @@ class PauseMenu {
         }
         const keys = this.root.querySelector('.pm-keys');
         if (keys) keys.innerHTML = pad
-            ? `<b style="background:none;padding:0">A pé:</b> ${g('ls')} mover · ${g('a')} correr (segurar) / pular grade · ${g('x')} interagir/assaltar/esconder · ${g('y')} veículo · ${g('rt')} atacar · ${g('b')} recarregar (sem arma: soco) · ${g('lt')} mirar (${g('rstick')} aponta/troca de alvo) · ${g('rb')} chute · ${g('down')} arrombar · ${g('rs')} furtar · ${g('lb')} ${g('dpadlr')} armas · ${g('up')} kit médico<br>`
+            ? `<b style="background:none;padding:0">A pé:</b> ${g('ls')} mover · ${g('a')} correr (segurar) / pular grade · ${g('x')} interagir/assaltar/esconder · ${g('y')} veículo · ${g('rt')} atacar (sem arma: combo soco + soco + chute) · ${g('b')} recarregar · ${g('lt')} mirar (${g('rstick')} aponta/troca de alvo) · ${g('down')} arrombar · ${g('rs')} furtar · ${g('lb')} ${g('dpadlr')} armas · ${g('up')} kit médico<br>`
             + `<b style="background:none;padding:0">Carro:</b> ${g('rt')} acelerar · ${g('lt')} freio/ré · ${g('y')} sair · ${g('x')} abastecer/desmanchar · ${g('l3')} buzina · ${g('down')} faróis<br>`
             + `<b style="background:none;padding:0">Helicóptero:</b> ${g('rt')} sobe · ${g('lt')} desce · ${g('rstick')} gira · ${g('y')} descer/pular<br>`
             + `${g('back')} inventário · ${g('start')} menu · ${g('rstick')} zoom`
@@ -675,6 +691,7 @@ class PauseMenu {
             ['🔊 Volume geral', `<input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="pmVol"><span>${Math.round(s.volume * 100)}%</span>`],
             ['🎵 Efeitos sonoros', tog(s.sfx)], ['🗺️ Minimapa', tog(s.minimap)], ['💬 Dicas na tela', tog(s.prompts)],
             ['🎯 Mira <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">assistida trava no alvo · manual: você aponta (analógico direito / mouse)</small>', `<div class="pm-toggle is-on">${s.aimAssist ? 'Assistida' : 'Manual'}</div>`],
+            ['🖥️ Alta definição <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">tela na resolução real e personagens nítidos (gerados no seu PC na 1ª vez que aparecem) · desligado: pixel art, mais leve</small>', tog(s.hd)],
             ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],
         ];
         el.innerHTML = rows.map((r, i) => `<div class="pm-row ${i === this.setRow ? 'on' : ''}" data-i="${i}"><span>${r[0]}</span><span style="display:flex;gap:12px;align-items:center">${r[1]}</span></div>`).join('');

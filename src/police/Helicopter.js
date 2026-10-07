@@ -7,24 +7,23 @@
 // 4★, com armas liberadas, atira rajadas de metralhadora. Pode ser derrubado a tiros (cai girando,
 // explode e só vem outro depois de um tempo).
 //
-// Desenho: sprite do corpo (HeliSheet) + quad do rotor girando, ambos no grupo de renderização 2
-// (desenhados por cima de tudo, como algo que voa), sombra no chão e holofote como quads do GlowBatch.
+// Desenho: o helicóptero ilustrado (HeliArt / HeliVisual: corpo, rotor borrado, sombra com a silhueta) no grupo de renderização 2
+// (desenhado por cima de tudo, como algo que voa) e o holofote como quad do GlowBatch.
 // ============================================================================
 
 class Helicopter {
-    // Efeitos compartilhados (sombra e holofote): um quad cada, criados uma vez por cena.
+    // Efeito compartilhado (holofote): um quad, criado uma vez por cena.
     static _fx(scene) {
         if (!scene._heliFx) {
-            const shadow = new GlowBatch(scene, 1, 'heliShadow', 'puff');
             const light = new GlowBatch(scene, 1, 'heliLight', 'glow');
-            scene._heliFx = { shadow, light, si: shadow.alloc(), li: light.alloc() };
-            shadow.off(scene._heliFx.si); light.off(scene._heliFx.li);
+            scene._heliFx = { light, li: light.alloc() };
+            light.off(scene._heliFx.li);
             scene.setRenderingAutoClearDepthStencil(2, true, true, true);     // o heli ignora a profundidade do mundo
         }
         return scene._heliFx;
     }
 
-    constructor(scene, sheet, manager, x, z) {
+    constructor(scene, _unused, manager, x, z) {                 // (2º parâmetro: a antiga folha de sprites, não usada mais)
         this.scene = scene;
         this.manager = manager;
         const H = Config.heli;
@@ -44,16 +43,7 @@ class Helicopter {
         this._smokeT = 0;
         this._rot = 0;
 
-        this.actor = new SpriteActor(scene, sheet, 6, 'heliBody');
-        this.actor.play('static');
-        this.actor.mesh.renderingGroupId = 2;
-
-        const size = sheet.frame / Config.art.ppu;
-        this.rotor = BABYLON.MeshBuilder.CreateGround('heliRotor', { width: size, height: size }, scene);
-        this.rotor.material = sheet.rotorMaterial;
-        this.rotor.renderingGroupId = 2;
-        this.rotor.isPickable = false;
-        this.rotor.alwaysSelectAsActiveMesh = true;
+        this.visual = new HeliVisual(scene, 6, 'policeHeli');                   // pintura 6 = polícia (azul-marinho, faixa branca)
 
         this.fx = Helicopter._fx(scene);
         this._place(0);
@@ -147,24 +137,16 @@ class Helicopter {
         this._place(dt);
     }
 
-    // Leva sprite, rotor, sombra e holofote para a posição/altura atuais.
+    // Leva corpo, rotor, sombra e holofote para a posição/altura atuais.
     _place(dt) {
-        const p = this.position, a = this.actor, g = this.game;
-        a.setPosition(p.x, p.z);
-        a.setHeading(this.heading);
-        a.mesh.position.y = this.alt;
-        this.rotor.position.set(p.x, this.alt + 0.45, p.z);
-        // Rotor: gira em passos de 22,5° (rápido demais para o pixel art acompanhar → efeito de borrão).
-        this._rot += (this.alive ? 30 : 12) * dt;
-        this.rotor.rotation.y = Math.floor(this._rot / (Math.PI / 8)) * (Math.PI / 8);
-        this.rotor.setEnabled(this.alive || this.crashT > 0.6);
+        const p = this.position, g = this.game, V = this.visual;
+        // Rotor: em voo, o disco borrado; caindo, perde rotação (as pás voltam a aparecer).
+        V.place(p.x, this.alt, p.z, this.heading, this.alive ? 1 : Math.max(0.3, 1 - (2.4 - this.crashT) * 0.3), dt);
 
-        // Sombra no chão, deslocada pela direção do sol e pela altura; some à noite.
+        // Sombra no chão (a silhueta), deslocada pela direção do sol e pela altura; some à noite.
         const f = this.fx, s = g.gameEngine.sunDir, k = this.alt / Math.max(0.3, -s.y);
-        f.shadow.place(f.si, p.x + s.x * k, 0.21, p.z + s.z * k, 11);
         const day = Math.max(0, Math.min(1, (g.dayNight.sunI - 0.2) / 0.4));
-        if (day > 0.05) f.shadow.color(f.si, 0.03, 0.03, 0.05, 0.42 * day); else f.shadow.off(f.si);
-        f.shadow.flush();
+        V.placeShadow(p.x + s.x * k, p.z + s.z * k, this.heading, 0.42 * day, 1.15);
 
         // Holofote: disco de luz no chão sobre o jogador (ou à frente, se não o vê).
         if (this.alive && this.sees) {
@@ -178,9 +160,7 @@ class Helicopter {
     distanceTo(pos) { return hypot(this.position.x - pos.x, this.position.z - pos.z); }
 
     dispose() {
-        this.actor.dispose();
-        this.rotor.dispose();
-        this.fx.shadow.off(this.fx.si); this.fx.shadow.flush();
+        this.visual.dispose();
         this.fx.light.off(this.fx.li); this.fx.light.flush();
     }
 }

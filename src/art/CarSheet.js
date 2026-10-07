@@ -65,7 +65,7 @@ class CarSheet {
         ];
     }
 
-    // Catálogo de modelos (ids = os do atlas). len/wid (≈ metros) vêm do DESENHO; power/mass dão a aceleração; maxSpeed (m/s) e
+    // Catálogo de modelos (ids = os do atlas). len/wid (≈ metros) vêm do DESENHO; power/mass dão o freio (a arrancada vem de t100, abaixo); maxSpeed (m/s) e
     // turn (rad/s) são do modelo; cruise = fator da velocidade de cruzeiro da IA; weight = frequência dentro da classe; hp = resistência
     // (amassa em 3 fases e, a 0, pega fogo e explode); tank = litros. Nomes fictícios inspirados em carros reais.
     static get MODELS() {
@@ -117,6 +117,20 @@ class CarSheet {
             swat_van:             S('Blindado', 'Tático Blindado',       'swat',  1700, 11000, 21, 1.5, 0.82,  0, 150, 90),
             militar:              S('Jipe', 'Marruá AM2 Militar',        'army',  1300, 12500, 26, 1.8, 0.95,  0, 130, 80),
         };
+        // Arrancada: 0–100 km/h (s) do carro real em que o modelo se inspira — a aceleração vem DAQUI (Vehicle.drive), proporcional à
+        // potência de verdade: popular 1.0 ~16 s, sedã médio ~10 s, esportivo ~4,5 s, superesportivo ~3 s. Quem tem máxima abaixo de
+        // 100 km/h acelera no mesmo ritmo até o teto dele.
+        const T100 = {
+            hatch_moderno: 11.5, hatch_moderno2: 14, compacto_aventureiro: 15, quadradinho: 16, hatch_esportivo: 7.5, mini_eletrico: 10,
+            besouro: 22, seda_classico: 15, hatch_90: 16, hatch_80: 13, sedan_70: 11, brasilia: 20, perua_antiga: 13,
+            suv_compacto: 11.5, suv_cupe: 10.5, suv_quadrado: 11, suv_grande: 9, jipe_offroad: 13,
+            sedan_popular: 13, sedan_medio: 10, sedan_luxo: 6.5,
+            esportivo: 4.5, muscle: 4.8, super: 3.0, super2: 2.9,
+            picape_pequena: 14, picape_media: 11, picape_grande: 9.5,
+            van_furgao: 18, kombi: 22, minivan: 14,
+            taxi_sp: 10, taxi_rio: 10, viatura: 10, swat_van: 16, militar: 14,
+        };
+        for (const id of Object.keys(M)) M[id].t100 = T100[id] || 13;
         // Medidas do desenho (atlas): comprimento e largura da carroceria, luzes, giroflex.
         for (const id of Object.keys(M)) {
             const a = CarArt.available() ? CarArt.model(id) : null;
@@ -253,11 +267,6 @@ class CarLibrary {
     // Nada a liberar nem a assar: o atlas é único e fica na GPU (~10 MB com mipmaps, todos os modelos, cores e amassados).
     sweep() { return 0; }
     pump() { return false; }
-
-    // Folha do helicóptero da polícia (paleta procedural das pinturas).
-    heliSheet() {
-        return this._heli || (this._heli = new HeliSheet(this.scene, this.palette));
-    }
 
     // Um modelo da classe de trânsito (ex.: 'sedan' -> sedan_popular, sedan_medio ou sedan_luxo), pelo peso de cada um.
     // Id de modelo específico volta igual.

@@ -390,7 +390,7 @@
         </div>
         <div class="hud-section" style="font-size: 11px; color: #888;">
             <div>WASD mover · Shift correr · Z/X zoom</div>
-            <div>Clique/Espaço golpe-tiro · J soco · K chute</div>
+            <div>Clique/Espaço golpe-tiro (sem arma: soco + soco + chute)</div>
             <div>1-9 armas: punhos pistola SMG escopeta taco revólver AK fuzil faca</div>
             <div>R recarregar · M kit médico · I inventário · O carreiras do crime · ESC/P menu (mapa e marcador)</div>
             <div>E assaltar / esconder-se (caçamba, caixote, latão) · V pular grade/muro</div>
@@ -440,12 +440,48 @@
     <script src="./src/economy/Economy.js"></script>
     <script src="./src/economy/Laundry.js"></script>
     <script src="./src/economy/RealEstate.js"></script>
+    <script src="./src/economy/Garage.js"></script>
+    <script src="./src/economy/Dealers.js"></script>
     <script src="./src/world/Interiors.js"></script>
     <script src="./src/art/TileFactory.js"></script>
     <script src="./src/art/SpriteBaker.js"></script>
     <script src="./src/art/CharacterRig.js"></script>
     <script src="./assets/chars/personagens-atlas.js"></script>
     <script src="./src/art/CharArt.js"></script>
+    <!-- Personagens 2,5D (pacote de NPCs): gerador (fichas, animações, paletas) + atlas prontos (tools/npcs) -->
+    <script src="./src/art/npcgen/NpcGenCore.js"></script>
+    <script src="./src/art/npcgen/NpcGenChar.js"></script>
+    <script src="./src/art/npcgen/NpcGenRender.js"></script>
+    <script src="./src/art/npcgen/NpcGenAnims.js"></script>
+    <script src="./src/art/npcgen/NpcGenTypes.js"></script>
+    <script src="./src/art/npcgen/NpcGenBuild.js"></script>
+    <script src="./assets/npcs/civil_trabalhador.js"></script>
+    <script src="./assets/npcs/civil_senhor.js"></script>
+    <script src="./assets/npcs/civil_praia.js"></script>
+    <script src="./assets/npcs/civil_executiva.js"></script>
+    <script src="./assets/npcs/civil_turista.js"></script>
+    <script src="./assets/npcs/civil_estudante.js"></script>
+    <script src="./assets/npcs/civil_ambulante.js"></script>
+    <script src="./assets/npcs/civil_black_power.js"></script>
+    <script src="./assets/npcs/civil_entregador.js"></script>
+    <script src="./assets/npcs/civil_torcedor.js"></script>
+    <script src="./assets/npcs/civil_banhista.js"></script>
+    <script src="./assets/npcs/civil_corredora.js"></script>
+    <script src="./assets/npcs/civil_executivo.js"></script>
+    <script src="./assets/npcs/civil_vovo.js"></script>
+    <script src="./assets/npcs/civil_skatista.js"></script>
+    <script src="./assets/npcs/civil_mano.js"></script>
+    <script src="./assets/npcs/civil_motoboy.js"></script>
+    <script src="./assets/npcs/pm_policial.js"></script>
+    <script src="./assets/npcs/pm_policial_f.js"></script>
+    <script src="./assets/npcs/bope_capacete.js"></script>
+    <script src="./assets/npcs/bope_touca.js"></script>
+    <script src="./assets/npcs/exercito.js"></script>
+    <script src="./assets/npcs/trafic_fuzil.js"></script>
+    <script src="./assets/npcs/trafic_pistola.js"></script>
+    <script src="./assets/npcs/trafic_mascarado.js"></script>
+    <script src="./assets/npcs/protagonista.js"></script>
+    <script src="./src/art/NpcArt.js"></script>
     <script src="./src/art/CharacterSheet.js"></script>
     <script src="./src/art/SpriteActor.js"></script>
     <script src="./src/art/PropSprites.js"></script>
@@ -461,12 +497,14 @@
     <script src="./src/art/CarArt.js"></script>
     <script src="./src/art/CarSheet.js"></script>
     <script src="./src/art/RiderActor.js"></script>
-    <script src="./src/art/HeliSheet.js"></script>
+    <script src="./src/art/HeliArt.js"></script>
     <script src="./src/art/BoatSheet.js"></script>
     <script src="./src/render/GlowBatch.js"></script>
     <script src="./src/render/ShadowBoxBatch.js"></script>
     <script src="./src/world/Fireworks.js"></script>
     <script src="./src/render/RevealPlugin.js"></script>
+    <script src="./src/render/WaterPlugin.js"></script>
+    <script src="./src/render/TerrainSplat.js"></script>
     <script src="./src/world/TrafficSignals.js"></script>
     <script src="./src/world/Weather.js"></script>
     <script src="./src/world/DayNight.js"></script>
@@ -487,6 +525,7 @@
     <script src="./src/ai/StateMachine.js"></script>
     <script src="./src/core/engine.js"></script>
     <script src="./src/core/camera.js"></script>
+    <script src="./src/render/SpeedBlur.js"></script>
     <script src="./src/core/navigation.js"></script>
     <script src="./src/core/physics.js"></script>
     <script src="./src/core/ColliderStreamer.js"></script>
@@ -519,12 +558,14 @@
     <script src="./src/ui/EmpireUI.js"></script>
     <script src="./src/player/Aid.js"></script>
     <script src="./src/player/SaveGame.js"></script>
+    <script src="./src/player/PlayerLook.js"></script>
     <script src="./src/player/player.js"></script>
     <script src="./src/npc/npcStates.js"></script>
     <script src="./src/npc/npcActivities.js"></script>
     <script src="./src/npc/NPC.js"></script>
     <script src="./src/npc/NPCManager.js"></script>
     <script src="./src/npc/GangManager.js"></script>
+    <script src="./src/npc/StreetCrime.js"></script>
     <script src="./src/npc/FavelaWatch.js"></script>
     <script src="./src/npc/Barricades.js"></script>
     <script src="./src/npc/Baile.js"></script>
@@ -537,6 +578,8 @@
     <script src="./src/world/StreetProps.js"></script>
     <script src="./src/world/Puddles.js"></script>
     <script src="./src/world/SkidMarks.js"></script>
+    <script src="./src/world/Blood.js"></script>
+    <script src="./src/world/SparkFx.js"></script>
     <script src="./src/vehicle/Bikes.js"></script>
     <script src="./src/vehicle/Vehicle.js"></script>
     <script src="./src/vehicle/TrafficCar.js"></script>
@@ -565,6 +608,7 @@
     <script src="./src/ui/EndScreen.js"></script>
     <script src="./src/ui/StashUI.js"></script>
     <script src="./src/ui/PropertyUI.js"></script>
+    <script src="./src/ui/CarUI.js"></script>
     <script src="./src/ui/TribunalUI.js"></script>
     <script src="./src/ui/ShopUI.js"></script>
     <script src="./src/ui/Hud.js"></script>

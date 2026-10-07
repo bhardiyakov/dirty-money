@@ -204,7 +204,7 @@ class FavelaWatch {
                 L.t -= dt;
                 if (L.t <= 0) { L.t = 1.2; if (this._hop(L, target.x, target.z) && L.state === 'return') L.state = 'post'; }
             }
-            const run = L.state === 'flee' ? 6.2 : (L.state === 'return' ? 2.4 : 2.0);
+            const run = L.state === 'flee' ? 5.4 : (L.state === 'return' ? 1.8 : 1.5);          // (m/s, como os pedestres: o jogador correndo alcança)
             if (a && a.params.maxSpeed !== run) { a.params.maxSpeed = run; nav.crowd.updateAgentParameters(L.idx, a.params); }
             const v = nav.crowd.getAgentVelocity(L.idx), sp = v ? hypot(v.x, v.z) : 0;
             if (sp > 0.4) { const ty = Math.atan2(v.x, v.z); let d = (ty - L.heading) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; L.heading += d * (1 - Math.exp(-12 * dt)); }

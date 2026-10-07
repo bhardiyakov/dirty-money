@@ -36,7 +36,7 @@ class Vehicle {
         // vem com o tanque entre 30% e 100%. Reabastece nos postos (Game._fuelUpdate).
         this.tank = this.spec.boat || this.spec.bike === 'bike' ? 0 : (Vehicle.TANK[this.spec.id] || this.spec.tank || 45);
         this.fuel = this.tank * (0.3 + Math.random() * 0.7);
-        this.maxHp = this.spec.hp || 100;
+        this.maxHp = Math.round((this.spec.hp || 100) * (Config.vehicle.hpMul || 1));      // (lataria: catálogo × Config.vehicle.hpMul)
         this.hp = this.maxHp;
         this.dent = 0;               // fase de amassado desejada (0..3)
         this._shownDent = 0;         // fase que o sprite mostra agora (as variantes são assadas aos poucos)
@@ -213,6 +213,43 @@ class Vehicle {
         }
     }
 
+    // ------------------------------------------------------- pneus (tiro: Combat)
+    // Rodas: 0 dianteira esquerda, 1 dianteira direita, 2 traseira esquerda, 3 traseira direita. Posição no mundo em `out`.
+    wheelWorld(i, out = { x: 0, z: 0 }) {
+        const f = this.fwdToRef(this._wf || (this._wf = new BABYLON.Vector3())), P = this.position, m = this.visual && this.visual.tire;
+        const tz = (m ? m.z : this.halfLen * 0.6) * (i < 2 ? 1 : -1), tx = (m ? m.x : this.halfW * 0.75) * (i % 2 ? 1 : -1);
+        out.x = P.x + f.x * tz + f.z * tx; out.z = P.z + f.z * tz - f.x * tx;
+        return out;
+    }
+    nearestWheel(x, z) {
+        let best = 0, bd = Infinity;
+        for (let i = 0; i < 4; i++) { const w = this.wheelWorld(i), d = (w.x - x) ** 2 + (w.z - z) ** 2; if (d < bd) { bd = d; best = i; } }
+        return best;
+    }
+    // Fura o pneu i (false se já estava furado). O carro passa a escorregar (_applyMotion) e o aro solta faíscas no asfalto.
+    puncture(i) {
+        if (this.isBike || this.isBoat || this.destroyed) return false;
+        const F = this.flat || (this.flat = [0, 0, 0, 0]);
+        if (F[i]) return false;
+        F[i] = 1;
+        return true;
+    }
+    get flatCount() { const F = this.flat; return F ? F[0] + F[1] + F[2] + F[3] : 0; }
+    // O aro no asfalto: faíscas (e marca no chão) atrás de cada roda furada, mais com o carro rápido.
+    _rimFx(dt) {
+        const g = SkidMarks.game, sp = this.speed;
+        if (!this.flatCount || sp < 3 || !g || !g.combat || this._asleep) return;
+        const P = this.position, fc = SkidMarks.focus;
+        if (fc && (Math.abs(P.x - fc.x) > 60 || Math.abs(P.z - fc.z) > 60)) return;
+        const f = this.fwdToRef(this._rf || (this._rf = new BABYLON.Vector3()));
+        for (let i = 0; i < 4; i++) {
+            if (!this.flat[i]) continue;
+            const w = this.wheelWorld(i), out = i % 2 ? 1 : -1;                     // (lado de fora da roda: direita ou esquerda do carro)
+            if (typeof SparkFx !== 'undefined') SparkFx.trail(g, this, w.x, w.z, f.z * out, -f.x * out, dt);
+            SkidMarks.track(this, 4 + i, w.x, w.z, (this.elev || 0) + 0.2, 0.55);
+        }
+    }
+
     // ------------------------------------------------------- bicicleta e moto
     // Define o piloto (variante de paleta) ou tira (null = estacionada, só o veículo).
     setRider(variant) {
@@ -278,7 +315,7 @@ class Vehicle {
     // Batida: a velocidade medida caiu bruscamente em relação à que o carro tinha comandado no frame anterior.
     _impact(dv, dvx, dvz) {
         this._crashCd = Config.crash.cooldown;
-        const dmg = (dv - Config.crash.minDv) * Config.crash.dmgPerMs;
+        const C = Config.crash, dmg = C.dmgK * Math.pow(dv - C.minDv, C.dmgExp);          // curva: leve quase nada, feia muito
         if (Vehicle.onImpact) Vehicle.onImpact(this, dv, dmg, dvx, dvz);
         else this.takeDamage(dmg, 'crash');
     }
@@ -316,11 +353,25 @@ class Vehicle {
         const vel = this._v; this.phys.getLinearVelocityToRef(vel);      // (os *ToRef do Babylon 6 não devolvem o vetor)
         let fwd = BABYLON.Vector3.Dot(vel, forward);   // velocidade à frente.
         let lat = BABYLON.Vector3.Dot(vel, right);     // velocidade lateral (a "derrapagem").
+        // O atrito do chassi com o chão (Havok, ~6 m/s²) comeria a arrancada realista: andando livre, parte da velocidade COMANDADA
+        // no passo anterior. Se a medida ficou bem abaixo (parede, batida, outro carro), vale a medida.
+        if (this._cmd) {
+            const cf = this._cmd.x * forward.x + this._cmd.z * forward.z;          // (vale para a frente e para a ré)
+            if (cf * fwd > -0.05 && Math.abs(cf) > Math.abs(fwd) && Math.abs(cf) - Math.abs(fwd) < 1.2) fwd = cf;
+        }
 
         // --- Motor: integra a velocidade à frente ---
-        const accel = this.spec.power / this.spec.mass; // m/s²
+        const top = this.spec.maxSpeed * (this.controlled ? 1 + (SkillTree.m.topSpeed || 0) : 1);
         // Estado lido pelas luzes de freio e pela fumaça do escapamento.
         this.braking = (throttle < 0 && fwd > 0.5) || (throttle > 0 && fwd < -0.5);
+        // Aceleração (m/s²). Freio: forte, como sempre (power/mass). Motor: pela arrancada do modelo (spec.t100 = 0–100 km/h em s,
+        // ver CarSheet) — popular leva ~16 s, superesportivo ~3 s —, perdendo força perto da máxima (arrasto do ar). Ré: marcha curta,
+        // um pouco mais forte. Sem t100 (barcos, motos, bicicletas): o modelo antigo, power/mass.
+        let accel = this.spec.power / this.spec.mass;
+        if (this.spec.t100 && !this.braking) {
+            const r = Math.min(1, Math.abs(fwd) / top);
+            accel = Math.min(accel, (27.78 / this.spec.t100) * (throttle < 0 ? 1.6 : 1) * (1 - 0.6 * r * r * r));
+        }
         this.accelerating = throttle > 0 && fwd >= -0.5 && fwd < this.spec.maxSpeed * 0.7;
         if (throttle !== 0) {
             fwd += throttle * accel * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1);       // freio na chuva rende menos
@@ -329,7 +380,7 @@ class Vehicle {
             const drop = (this.spec.brakeDrag || Config.vehicle.brakeDrag * (Weather.cur ? Weather.cur.brakeMul : 1)) * dt;
             fwd = Math.abs(fwd) <= drop ? 0 : fwd - Math.sign(fwd) * drop;
         }
-        fwd = BABYLON.Scalar.Clamp(fwd, -(this.spec.maxReverse || Config.vehicle.maxReverse), this.spec.maxSpeed * (this.controlled ? 1 + (SkillTree.m.topSpeed || 0) : 1));
+        fwd = BABYLON.Scalar.Clamp(fwd, -(this.spec.maxReverse || Config.vehicle.maxReverse), top);
         this._applyMotion(fwd, lat, steer, dt, vel, forward, right);
     }
 
@@ -382,12 +433,25 @@ class Vehicle {
         }
 
         // --- Grip lateral: mata a derrapagem (decaimento exponencial = independe de FPS); barco derrapa mais na água ---
-        lat *= Math.exp(-(this.spec.grip || Config.vehicle.grip * (this.spec.boat || !Weather.cur ? 1 : Weather.cur.gripMul)) * (this.controlled && !this.spec.boat ? Vehicle.playerGrip : 1) * dt);       // (skill Direção: Vehicle.playerGrip)       // (pista molhada: carro derrapa mais)
+        // Pneu furado (tiro — ver puncture): a roda no aro não segura de lado (traseira furada: rabeia), puxa para o lado dela e o
+        // carro "sabonta" (balança de um lado para o outro); e arrasta um pouco.
+        const F = this.flat, nFlat = F ? F[0] + F[1] + F[2] + F[3] : 0;
+        let gripK = 1, pull = 0, wob = 0;
+        if (nFlat && Math.abs(fwd) > 1) {
+            const sp = Math.min(1, Math.abs(fwd) / 12);
+            this._flatT = (this._flatT || 0) + dt;
+            gripK = F[2] || F[3] ? 0.18 : 0.4;
+            pull = ((F[1] + F[3]) - (F[0] + F[2])) * 0.22 * sp;
+            wob = Math.sin(this._flatT * 7.3 + this.id) * 0.55 * sp + Math.sin(this._flatT * 2.1) * 0.25 * sp;
+            lat += Math.sin(this._flatT * 5.1 + 1.7) * 2.2 * sp * dt * 4;
+            fwd *= Math.exp(-0.18 * nFlat * dt);
+        }
+        lat *= Math.exp(-(this.spec.grip || Config.vehicle.grip * (this.spec.boat || !Weather.cur ? 1 : Weather.cur.gripMul)) * gripK * (this.controlled && !this.spec.boat ? Vehicle.playerGrip : 1) * dt);       // (skill Direção: Vehicle.playerGrip)       // (pista molhada: carro derrapa mais)
 
         // --- Direção: guinada proporcional à velocidade; zera X/Z (anti-capotamento) ---
         // Inverte ao dar ré (como um carro real) e não vira parado.
         const speedFactor = Math.min(1, Math.abs(fwd) / (this.spec.turnRef || Config.vehicle.turnSpeedRef));
-        const yaw = steer * this.spec.turn * speedFactor * (fwd < 0 ? -1 : 1) * (this.controlled ? Vehicle.playerTurn : 1);
+        const yaw = (steer * this.spec.turn * (this.controlled ? Vehicle.playerTurn : 1) + pull + wob) * speedFactor * (fwd < 0 ? -1 : 1);
         this.phys.setAngularVelocity(this._av.set(0, yaw, 0));
 
         // --- Recompõe a velocidade preservando a queda (gravidade) ---
@@ -490,6 +554,7 @@ class Vehicle {
         const aF = ax * fx + az * fz, aL = ax * fz - az * fx;
         if (this.visual.animate) this.visual.animate(dt, aF, aL, this.wrecked || this.engineDead && !this.controlled ? 0 : this.lastSteer);
         if (this.spec.boat || this.wrecked || this._asleep || typeof SkidMarks === 'undefined') return;
+        this._rimFx(dt);                                                                      // pneu furado: faíscas do aro
         // ---- marcas de pneu
         const fwd = v.x * fx + v.z * fz, lat = v.x * fz - v.z * fx, sp = Math.abs(fwd);
         let k = 0;

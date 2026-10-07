@@ -17,13 +17,14 @@ class PoliceOfficer {
             cop:  { sheet: 'police', variant: 1, hp: 70, clip: 'pistol', gun: 'pistol', burst: 1, gap: 0, pause: [0.95, 1.8], spread: 1, hurt: 0.28,
                     chase: Config.police.officerChaseSpeed, patrol: Config.police.officerPatrolSpeed, range: Config.police.shootRange },
             swat: { sheet: 'swat', variant: V.VARIANT_SWAT, hp: 160, clip: 'smg', gun: 'smg', burst: 5, gap: 0.12, pause: [0.8, 1.5], spread: 0.85, hurt: 0.1,
-                    chase: 8.2, patrol: 3.0, range: 40 },
+                    chase: 6.3, patrol: 1.7, range: 40 },
             army: { sheet: 'army', variant: V.VARIANT_ARMY, hp: 200, clip: 'shotgun', gun: 'rifle', burst: 4, gap: 0.1, pause: [0.7, 1.3], spread: 0.8, hurt: 0.08,
-                    chase: 8.2, patrol: 3.0, range: 44 },
+                    chase: 6.3, patrol: 1.7, range: 44 },
+            // (velocidades a pé em m/s: perseguindo, todos um pouco mais lentos que o jogador correndo — Config.player.sprintSpeed)
             // Traficantes da favela (GangManager): moradores armados; a arma e a coragem crescem com a profundidade.
-            gang1: { sheet: 'civA', group: 'poor', owner: 'gang', hp: 60, clip: 'pistol', gun: 'pistol', burst: 1, gap: 0, pause: [1.1, 2.0], spread: 1.1, hurt: 0.28, chase: 6.0, patrol: 2.0, range: 24 },
-            gang2: { sheet: 'civA', group: 'poor', owner: 'gang', hp: 85, clip: 'smg', gun: 'smg', burst: 3, gap: 0.14, pause: [1.3, 2.2], spread: 1.35, hurt: 0.18, chase: 6.6, patrol: 2.2, range: 28 },
-            gang3: { sheet: 'civA', group: 'poor', owner: 'gang', hp: 110, clip: 'shotgun', gun: 'rifle', burst: 2, gap: 0.12, pause: [1.3, 2.2], spread: 1.3, hurt: 0.12, chase: 7.0, patrol: 2.2, range: 32 },
+            gang1: { sheet: 'civA', group: 'poor', owner: 'gang', hp: 60, clip: 'pistol', gun: 'pistol', burst: 1, gap: 0, pause: [1.1, 2.0], spread: 1.1, hurt: 0.28, chase: 5.0, patrol: 1.4, range: 24 },
+            gang2: { sheet: 'civA', group: 'poor', owner: 'gang', hp: 85, clip: 'smg', gun: 'smg', burst: 3, gap: 0.14, pause: [1.3, 2.2], spread: 1.35, hurt: 0.18, chase: 5.4, patrol: 1.5, range: 28 },
+            gang3: { sheet: 'civA', group: 'poor', owner: 'gang', hp: 110, clip: 'shotgun', gun: 'rifle', burst: 2, gap: 0.12, pause: [1.3, 2.2], spread: 1.3, hurt: 0.12, chase: 5.8, patrol: 1.5, range: 32 },
         };
     }
 
@@ -90,7 +91,10 @@ class PoliceOfficer {
     _build(sprites) {
         let variant = this.spec.variant;
         if (this.spec.group) { const [a, b] = CharacterRig.VARIANT_GROUPS[this.spec.group]; variant = a + Math.floor(Math.random() * (b - a + 1)); }
-        this.actor = new SpriteActor(this.scene, sprites.sheets[this.spec.sheet], variant, `officerSprite${this.id}`);
+        // 2,5D (NpcArt): PM (homem/mulher), BOPE (capacete/touca ninja), Exército e os traficantes de cada arma — cada um com variantes.
+        const pick = sprites.npc && sprites.npc.pick(this.kind === 'cop' ? 'police' : this.kind, sprites.npc.gen().hashStr(`officer${this.id}:${this.kind}`));
+        if (pick) this.actor = new SpriteActor(this.scene, sprites.npc.sheet(pick.id, sprites.sheets[this.spec.sheet], variant), pick.row, `officerSprite${this.id}`);
+        else this.actor = new SpriteActor(this.scene, sprites.sheets[this.spec.sheet], variant, `officerSprite${this.id}`);
         this.actor.play('idle');
         this.heading = Math.random() * Math.PI * 2;
         this.actor.setHeading(this.heading);
@@ -149,6 +153,7 @@ class PoliceOfficer {
         const dist = this._distToTarget();
         const free = this.manager.weaponsFree || !!this.foe;           // (operação na favela: atira nos traficantes mesmo sem o jogador ter atirado)
         this.fireCd -= dt;
+        if (this._meleeStep(dt, dist, free)) return;
 
         // Armas liberadas, alvo ao alcance e à vista: para, saca e atira.
         if (free && this.mind && this.mind.sees && dist < this.spec.range) {
@@ -174,6 +179,33 @@ class PoliceOfficer {
             // O alvo está fora do NavMesh (quintal, viela atrás de grade) e à vista: segue em linha reta, pulando grades e muros.
             if (this.mind && this.mind.sees && dist < 30 && this._offNav(this.targetPos)) this._enterFree();
         }
+    }
+
+    // ----- Corpo a corpo -----
+    // Colado no jogador (a pé): golpe de verdade (Combat.strike). PM sem armas liberadas: cassetete (amansa para prender);
+    // traficante, BOPE e Exército: soco ou chute (de perto, em vez de atirar). true = está golpeando (o resto do chase espera).
+    _meleeStep(dt, dist, free) {
+        this.meleeCd = (this.meleeCd || 0) - dt;
+        const g = this.manager.game, P = g && g.player;
+        if (this.action && this.action.melee) {                       // no meio do golpe: parado, encarando
+            this._setSpeed(0);
+            if (P) this.heading = Math.atan2(P.position.x - this.position.x, P.position.z - this.position.z);
+            return true;
+        }
+        if (this.foe || !P || g.mode !== 'player' || !P.alive || P.rag || g.hiding || this.hurtTimer > 0 || this.action) return false;
+        if (dist > 1.35 || this.meleeCd > 0 || (this.mind && !this.mind.sees)) return false;
+        const cop = this.kind === 'cop';
+        if (cop && free) return false;                                 // (com armas liberadas a PM atira)
+        const kind = cop ? 'baton' : Math.random() < 0.35 ? 'kick' : 'punch';
+        if (!this.actor.play(kind === 'baton' ? 'swing' : kind, kind === 'baton' ? 'baton' : 'none', { restart: true })) return false;
+        this.action = { name: kind, melee: true, onDone: () => this._setSpeed(this.chaseSpeed) };
+        this.shooting = false;
+        this._setSpeed(0);
+        this.heading = Math.atan2(P.position.x - this.position.x, P.position.z - this.position.z);
+        g.combat.strike({ position: this.position, heading: () => this.heading, ok: () => this.alive && !this.rag && this.hurtTimer <= 0 && !!this.action && this.action.melee },
+            kind, { source: this.group ? 'gang' : 'police', ref: this, dmgMul: cop ? 1 : 0.9 });
+        this.meleeCd = 1.2 + Math.random() * 0.9;
+        return true;
     }
 
     // ----- Perseguição fora do NavMesh (pulando grades e muros) -----
@@ -233,6 +265,10 @@ class PoliceOfficer {
             if (this.free) this.free.stuck += dt;
             return 0;
         }
+        // relevo: a pé sobe qualquer encosta, devagar, e o desenho troca para subindo/escalando (SpriteActor.setSlope)
+        const g = MapGeo.slopeAlong(p.x, p.z, ux, uz);
+        speed *= MapGeo.slopeSpeed(g);
+        this.actor.setSlope(g);
         p.x += ux * speed * dt; p.z += uz * speed * dt;
         const hit = MapGeo.resolveCircle(p, 0.45);
         if (this.free) this.free.stuck = hit ? this.free.stuck + dt : Math.max(0, this.free.stuck - dt * 2);
@@ -360,6 +396,7 @@ class PoliceOfficer {
 
     // Volta como um policial novo de patrulha, em outro lugar, longe do jogador.
     respawn() {
+        if (this.actor.clearWounds) this.actor.clearWounds();               // (outro policial: sem os ferimentos do anterior)
         let pos = null;
         for (let i = 0; i < 12; i++) {
             const p = this.nav.randomWalkable();
@@ -429,8 +466,8 @@ class PoliceOfficer {
             if (this.actor.done) { const a = this.action; this.action = null; if (a.onDone) a.onDone(); }
         } else if (this.shooting) this.actor.play('aim', this.spec.clip);
         else if (speed < 0.5) this.actor.play('idle', w);
-        else if (this.fsm.name === 'CHASE') { this.actor.play('run', w); rate = Math.max(0.7, speed / this.chaseSpeed) * 1.5; }
-        else { this.actor.play('walk', w); rate = Math.max(0.6, speed / this.spec.patrol) * 1.0; }
+        else if (this.fsm.name === 'CHASE') { this.actor.play('run', w); rate = Math.max(0.5, speed / Config.anim.run); }          // (ritmo pela velocidade — Config.anim)
+        else { this.actor.play('walk', w); rate = Math.max(0.5, speed / Config.anim.walk); }
 
         this.actor.setPosition(this.transform.position.x, this.transform.position.z);
         this.actor.setHeading(this.heading);
@@ -477,7 +514,7 @@ class PoliceOfficer {
         this.heading += a * (1 - Math.exp(-12 * dt));
         this.transform.rotation.y = this.heading;
         let rate = 1;
-        if (speed > 0.5) { this.actor.play('run', 'none'); rate = Math.max(0.7, speed / this.chaseSpeed) * 1.5; } else this.actor.play('idle', 'none');
+        if (speed > 0.5) { this.actor.play('run', 'none'); rate = Math.max(0.5, speed / Config.anim.run); } else this.actor.play('idle', 'none');
         this.actor.setPosition(p.x, p.z);
         this.actor.setHeading(this.heading);
         this.actor.update(dt, rate);

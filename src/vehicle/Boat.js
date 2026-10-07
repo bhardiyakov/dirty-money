@@ -64,7 +64,7 @@ class Boat extends Vehicle {
         if (this.visual instanceof RiderActor) {                       // casco do atlas + piloto (o jogador, ou um civil) por cima
             const g = this.mgr && this.mgr.g, sheet = g && g.sprites && g.sprites.sheets.rider;
             const v = this.controlled ? 0 : 2 + (this.id * 7) % ((g && g.sprites.civilianVariants) || 20);
-            this.visual.setRider(rider && !this.wrecked ? v : null, sheet, 'ride_moto');
+            this.visual.setRider(rider && !this.wrecked ? v : null, sheet, this.spec.id === 'jetski' ? 'ride_jetski' : 'ride_boat');      // (2,5D; o boneco antigo usa ride_moto)
             if (this.wrecked) { this.visual.setVariant(12); this.visual.setDamage(3); }
             return;
         }
