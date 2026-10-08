@@ -17,6 +17,10 @@
 // O giro atual fica em CompassCamera.yaw (rad, 0 = norte em cima, +X = leste): os personagens 2,5D (SpriteActor), a ordem de
 // desenho deles (NpcArt) e o minimapa acompanham.
 //
+// ÂNGULO DO JOGADOR (Ajustes › Ângulo da câmera, em graus): CompassCamera.userYaw gira a vista inteira por cima de tudo isso —
+// a pé o "cima" da tela passa a ser essa direção em vez do norte; dirigindo, soma-se ao giro da bússola. Entra em CompassCamera.yaw,
+// então sprites, minimapa, mira e o movimento relativo à tela acompanham.
+//
 // ZOOM AUTOMÁTICO (setAutoZoom, Config.camera.footZoom/carZoom/speedZoom): a pé a câmera se aproxima; no veículo ela se afasta
 // proporcionalmente à velocidade (vê-se mais longe quando se anda rápido). Multiplica o zoom escolhido pelo jogador, sem passar de maxView.
 //
@@ -110,9 +114,10 @@ class CompassCamera {
         if (Math.abs(this.yaw) < 1e-4 && !vehicle) this.yaw = 0;
         this.lead += (goalLead - this.lead) * (1 - Math.exp(-C.leadLerp * dt));
         const bo = this._bounce(vehicle, dt);
-        CompassCamera.yaw = this.yaw + this.roll;
-        const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw), L = this.lead * this.view;      // (adianto em fração da meia-altura)
-        this.camera.upVector.set(Math.sin(this.yaw + this.roll), 0, Math.cos(this.yaw + this.roll));
+        const vy = this.viewYaw;
+        CompassCamera.yaw = vy + this.roll;
+        const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw), L = this.lead * this.view;      // (adianto em fração da meia-altura, na frente do veículo)
+        this.camera.upVector.set(Math.sin(vy + this.roll), 0, Math.cos(vy + this.roll));
         const t = 1 - Math.exp(-C.followLerp * dt);
         this.target.x += (targetPos.x + sy * L - this.target.x) * t;
         this.target.z += (targetPos.z + cy * L - this.target.z) * t;
@@ -124,6 +129,17 @@ class CompassCamera {
         } else this._shake = 0;
         this.camera.position.x = this.target.x + sx + bo.x;
         this.camera.position.z = this.target.z + sz + bo.z;
+    }
+
+    // Giro da vista na tela: bússola (yaw) + ângulo escolhido pelo jogador (userYaw).
+    get viewYaw() { return this.yaw + (CompassCamera.userYaw || 0); }
+
+    // Ângulo escolhido pelo jogador, em graus (0 = norte em cima; positivo gira a vista no sentido horário). Normaliza para 0..359.
+    static setAngleDeg(deg) {
+        deg = ((Math.round(+deg || 0) % 360) + 360) % 360;
+        CompassCamera.angleDeg = deg;
+        CompassCamera.userYaw = deg * Math.PI / 180;
+        return deg;
     }
 
     // Balanço ao dirigir (ver o topo). Molas pouco amortecidas, independentes de FPS (passo limitado). Devolve o deslocamento da câmera
@@ -173,7 +189,7 @@ class CompassCamera {
 
     // Ponto do chão (x, z) → posição na tela (0..1, y para baixo), sem a perspectiva (boa o bastante perto do centro).
     screenUV(x, z, aspect) {
-        const dx = x - this.target.x, dz = z - this.target.z, s = Math.sin(this.yaw + this.roll), c = Math.cos(this.yaw + this.roll);
+        const dx = x - this.target.x, dz = z - this.target.z, s = Math.sin(this.viewYaw + this.roll), c = Math.cos(this.viewYaw + this.roll);
         const u = dx * c - dz * s, v = dx * s + dz * c, V = this.view;
         return { u: 0.5 + u / (2 * V * aspect), v: 0.5 - v / (2 * V) };
     }
@@ -206,9 +222,9 @@ class CompassCamera {
         this._applyFov();
     }
 
-    // Base de movimento alinhada à TELA: "cima" = norte girado pelo yaw (a pé o yaw volta a 0 — norte fixo).
+    // Base de movimento alinhada à TELA: "cima" = norte girado pelo yaw + ângulo do jogador (a pé o yaw volta a 0).
     getGroundBasis() {
-        const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
+        const s = Math.sin(this.viewYaw), c = Math.cos(this.viewYaw);
         return {
             forward: new BABYLON.Vector3(s, 0, c),
             right: new BABYLON.Vector3(c, 0, -s),
@@ -221,4 +237,6 @@ class CompassCamera {
 }
 
 CompassCamera.yaw = 0;      // giro atual da bússola (rad): lido pelos sprites 2,5D, pela ordem de desenho e pelo minimapa
-CompassCamera.bounceOn = true;      // balanço da câmera ao dirigir (Ajustes › Balanço da câmera: PauseMenu.applySettings)
+CompassCamera.bounceOn = true;
+CompassCamera.userYaw = 0;          // ângulo da câmera escolhido pelo jogador (rad; Ajustes › Ângulo da câmera: PauseMenu.applySettings)
+CompassCamera.angleDeg = 0;         // o mesmo, em graus (0..359)      // balanço da câmera ao dirigir (Ajustes › Balanço da câmera: PauseMenu.applySettings)

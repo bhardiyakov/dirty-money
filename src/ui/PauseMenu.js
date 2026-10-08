@@ -13,7 +13,7 @@ class PauseMenu {
     static get TABS() {
         return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
     }
-    static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', 'hd', 'dev']; }      // linhas de Ajustes, na ordem
+    static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', 'camAngle', 'hd', 'dev']; }      // linhas de Ajustes, na ordem
     static get KEYS_HTML() {
         return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas';
     }
@@ -50,7 +50,7 @@ class PauseMenu {
         this.setRow = 0;                 // linha das configurações
         this._icons = {};
         this._legendIdx = {};
-        this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, camBounce: true, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual)
+        this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, camBounce: true, camAngle: 0, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual)
         this.settings.hd = !!Config.art.hd;          // (já resolvido em config.js: escolha salva, ?hd=0/1 e o perfil do aparelho)
         this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
         this._build();
@@ -68,6 +68,7 @@ class PauseMenu {
         if (mm) mm.style.visibility = s.minimap ? '' : 'hidden';
         this.g.showPrompts = s.prompts;
         CompassCamera.bounceOn = s.camBounce !== false;
+        s.camAngle = CompassCamera.setAngleDeg(s.camAngle);
         if (this.g.dev) this.g.dev.setEnabled(s.dev);
         if (!!s.hd !== !!Config.art.hd) this._applyHd(!!s.hd);
     }
@@ -683,6 +684,7 @@ class PauseMenu {
     _setAdjust(d) {
         const s = this.settings;
         if (this.setRow === 0) s.volume = Math.max(0, Math.min(1, Math.round((s.volume + d * 0.1) * 10) / 10));
+        else if (PauseMenu.SET_KEYS[this.setRow] === 'camAngle') s.camAngle = d === 0 ? 0 : (Math.round((s.camAngle || 0) / 15) + d) * 15;      // ← → de 15 em 15°; Enter volta ao norte
         else if (d === 0 || true) { const k = PauseMenu.SET_KEYS[this.setRow]; if (this.setRow > 0) s[k] = (d === 0 || k === 'aimAssist') ? !s[k] : d > 0; }      // (mira: ← → alternam)
         this._saveSettings(); this.applySettings();
     }
@@ -695,17 +697,21 @@ class PauseMenu {
             ['🎵 Efeitos sonoros', tog(s.sfx)], ['🗺️ Minimapa', tog(s.minimap)], ['💬 Dicas na tela', tog(s.prompts)],
             ['🎯 Mira <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">assistida trava no alvo · manual: você aponta (analógico direito / mouse)</small>', `<div class="pm-toggle is-on">${s.aimAssist ? 'Assistida' : 'Manual'}</div>`],
             ['🚗 Balanço da câmera <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">dirigindo, a câmera balança com arrancadas, freadas, curvas e buracos</small>', tog(s.camBounce !== false)],
+            ['🧭 Ângulo da câmera <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">gira a vista em graus · 0° = norte em cima · ← → de 15 em 15°, Enter volta a 0°</small>', `<input type="range" min="0" max="359" step="1" value="${s.camAngle || 0}" id="pmCamAng"><span style="min-width:3.2em;text-align:right">${s.camAngle || 0}°</span>`],
             ['🖥️ Alta definição <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">tela na resolução real e personagens nítidos (gerados no seu PC na 1ª vez que aparecem) · desligado: pixel art, mais leve</small>', tog(s.hd)],
             ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],
         ];
         el.innerHTML = rows.map((r, i) => `<div class="pm-row ${i === this.setRow ? 'on' : ''}" data-i="${i}"><span>${r[0]}</span><span style="display:flex;gap:12px;align-items:center">${r[1]}</span></div>`).join('');
         el.querySelectorAll('.pm-row').forEach((row) => row.addEventListener('click', (e) => {
             this.setRow = +row.dataset.i;
-            if (this.setRow > 0) this._setAdjust(0);
+            if (e.target.closest('input')) return;          // controle deslizante: ele mesmo ajusta (e redesenhar o soltaria do mouse)
+            if (this.setRow > 0 && PauseMenu.SET_KEYS[this.setRow] !== 'camAngle') this._setAdjust(0);
             this._renderSettings();
         }));
         const vol = this.$('pmVol');
         if (vol) vol.addEventListener('input', () => { s.volume = vol.value / 100; this._saveSettings(); this.applySettings(); vol.nextSibling.textContent = vol.value + '%'; });
+        const ang = this.$('pmCamAng');
+        if (ang) ang.addEventListener('input', () => { s.camAngle = +ang.value; this._saveSettings(); this.applySettings(); ang.nextSibling.textContent = s.camAngle + '°'; });
     }
 
     // ------------------------------------------------------------------ por frame (o jogo está pausado)
