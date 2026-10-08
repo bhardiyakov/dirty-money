@@ -8,6 +8,11 @@
 //                                  limiar = fase de amassado em que a marca aparece (64/128/192; 255 = nunca);
 //                                  desvio = escurece (<128) ou clareia (>128) o pixel quando a marca aparece.
 // Mais: a lâmina da porta de cada modelo (mesma codificação) e um bloco escuro sólido (vão da porta aberta).
+//
+// Terceira textura, mesmo layout, SEM pré-multiplicar — o RELEVO, para o jogo iluminar o carro com o sol do mundo (parecer 3D):
+//   C = (altura, normal x, normal y, vidro)   altura 0..255 = 0..CarGen.HMAX m; normal no espaço da imagem (x → frente do carro,
+//                                             y → lado direito), 128 = 0; vidro = 255 nos vidros (reflexo do céu).
+// Carros: CarGen.heightSVG (cintura, cabine, teto, caçamba…). Motos, bicicletas, barcos, portas e o pneu: um domo tirado do alfa.
 // ============================================================================
 
 const CarAtlasBuild = {
@@ -52,6 +57,71 @@ const CarAtlasBuild = {
         return { w, h, A, B };
     },
 
+    // Relevo de uma peça (ver o topo): { C } com o mesmo tamanho. `c` = ficha do carro (null: domo a partir do alfa `A` da peça).
+    async encodeRelief(c, piece) {
+        const { w, h } = piece, n = w * h, H = new Float32Array(n), G = new Uint8Array(n), PPU = this.PPU, HM = CarGen.HMAX;
+        if (c && !c.custom) {
+            const svg = (mode) => this.raster(CarGen.heightSVG(c, mode, [w, h]), w, h);
+            const [hp, gp, cp, rp] = await Promise.all([svg('height'), svg('glass'), svg('cab'), svg('roof')]);
+            for (let p = 0; p < n; p++) { H[p] = (hp[p * 4] / 255) * HM; G[p] = gp[p * 4]; }
+            // VIDROS: plano inclinado da borda do teto (altura do teto) até a borda da cabine (topo da carroceria, na cintura) —
+            // em cada ponto, pela distância às duas bordas (contas em ponto flutuante: a rampa não tem degraus)
+            const [belt, roofH] = CarGen.heightsOf(c), cab = new Uint8Array(n), roof = new Uint8Array(n);
+            for (let p = 0; p < n; p++) { cab[p] = cp[p * 4] >= 128 ? 1 : 0; roof[p] = rp[p * 4] >= 128 ? 1 : 0; }
+            const dOut = this._dist(cab, w, h, 0), dRoof = this._dist(roof, w, h, 1);
+            for (let p = 0; p < n; p++) {
+                if (roof[p]) H[p] = Math.max(H[p], roofH);
+                else if (cab[p]) { const t = dOut[p] / (dOut[p] + dRoof[p] || 1); H[p] = belt + (roofH - belt) * t; }
+            }
+            this._boxBlur(H, w, h, 2, 2);         // (arredonda as quinas da rampa e tira os degraus da altura em 8 bits)
+        } else {
+            // domo: alfa borrado (caixa 3× de raio ~0,12 m), altura até 0,5 m — bordas arredondadas, meio quase plano
+            for (let p = 0; p < n; p++) H[p] = piece.A[p * 4 + 3] / 255;
+            this._boxBlur(H, w, h, Math.max(1, Math.round(0.12 * PPU)), 3);
+            for (let p = 0; p < n; p++) H[p] = Math.min(1, H[p] * 1.6) * 0.5;
+        }
+        const C = new Uint8Array(n * 4);
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            const p = y * w + x, i = p * 4;
+            if (piece.A[i + 3] === 0) { C[i + 1] = 128; C[i + 2] = 128; continue; }
+            const hx = (H[y * w + Math.min(w - 1, x + 1)] - H[y * w + Math.max(0, x - 1)]) * PPU / 2;      // inclinação (m/m)
+            const hy = (H[Math.min(h - 1, y + 1) * w + x] - H[Math.max(0, y - 1) * w + x]) * PPU / 2;
+            const l = Math.hypot(hx, hy, 1);
+            C[i] = Math.round(Math.min(255, (H[p] / HM) * 255));
+            C[i + 1] = Math.round(128 - (hx / l) * 127); C[i + 2] = Math.round(128 - (hy / l) * 127);
+            C[i + 3] = G[p];
+        }
+        return C;
+    },
+
+    // Distância (px, chanfro 1 / √2) de cada pixel até o pixel mais perto cuja máscara vale `to`. Antes de qualquer pixel `to`: 1e9.
+    _dist(mask, w, h, to) {
+        const d = new Float32Array(w * h), D = Math.SQRT2;
+        for (let p = 0; p < w * h; p++) d[p] = mask[p] === to ? 0 : 1e9;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            const p = y * w + x; let v = d[p];
+            if (x > 0) v = Math.min(v, d[p - 1] + 1);
+            if (y > 0) { v = Math.min(v, d[p - w] + 1); if (x > 0) v = Math.min(v, d[p - w - 1] + D); if (x < w - 1) v = Math.min(v, d[p - w + 1] + D); }
+            d[p] = v;
+        }
+        for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) {
+            const p = y * w + x; let v = d[p];
+            if (x < w - 1) v = Math.min(v, d[p + 1] + 1);
+            if (y < h - 1) { v = Math.min(v, d[p + w] + 1); if (x < w - 1) v = Math.min(v, d[p + w + 1] + D); if (x > 0) v = Math.min(v, d[p + w - 1] + D); }
+            d[p] = v;
+        }
+        return d;
+    },
+
+    // Borrão de caixa (raio r, `passes` vezes: ~gaussiano) no lugar; fora da imagem conta como 0.
+    _boxBlur(a, w, h, r, passes) {
+        const t = new Float32Array(w * h), k = 2 * r + 1;
+        for (let pass = 0; pass < passes; pass++) {
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let sum = 0; for (let d = -r; d <= r; d++) { const xx = x + d; if (xx >= 0 && xx < w) sum += a[y * w + xx]; } t[y * w + x] = sum / k; }
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let sum = 0; for (let d = -r; d <= r; d++) { const yy = y + d; if (yy >= 0 && yy < h) sum += t[yy * w + x]; } a[y * w + x] = sum / k; }
+        }
+    },
+
     // Usa tinta 2 em algum lugar? (teto de outra cor, faixas, retrovisor...) — senão nem renderiza a 3ª passada.
     usesP2(c) {
         const s = JSON.stringify(c);
@@ -68,10 +138,12 @@ const CarAtlasBuild = {
             // (carros: sem as rodas da frente — o jogo as desenha à parte, esterçando; motos, bicicletas e barcos: veiculos.js, sem porta)
             const body = await this.encodePiece((o) => G.svgOf(c, Object.assign({ size: [w, h], tag: '_' + (k++), noFrontTires: true }, o)), w, h,
                 { fixed: c.fixed, twoTone: two, dmg: (mode) => G.damageSVG(c, mode, [w, h]) });
+            body.C = await this.encodeRelief(c, body);
             let door = null;
             if (!c.noDoor) {
                 const dw = Math.round((c.door_len + 4) * f), dh = Math.max(4, Math.round(15 * f));
                 door = await this.encodePiece((o) => G.doorSVG(c, Object.assign({ size: [dw, dh], tag: '_' + (k++) }, o)), dw, dh, { fixed: c.fixed, twoTone: false });
+                door.C = await this.encodeRelief(null, door);
             }
             out.push({ c, body, door, two });
             if (onProgress) onProgress(out.length, G.CARS.length, c.id);
@@ -99,17 +171,20 @@ const CarAtlasBuild = {
         const pieces = await this.buildPieces(onProgress);
         const solid = { w: 8, h: 8, A: new Uint8Array(256), B: new Uint8Array(256) };
         for (let i = 0; i < 64; i++) { solid.A.set([11, 12, 15, 255], i * 4); solid.B.set([0, 0, 255, 128], i * 4); }
+        solid.C = new Uint8Array(256); for (let i = 0; i < 64; i++) solid.C.set([0, 128, 128, 0], i * 4);
         const rects = [{ p: solid, w: 8, h: 8, key: 'solid' }];
         for (const pc of pieces) { rects.push({ p: pc.body, w: pc.body.w, h: pc.body.h, key: pc.c.id }); if (pc.door) rects.push({ p: pc.door, w: pc.door.w, h: pc.door.h, key: pc.c.id + ':door' }); }
         const tire = await this.encodePiece(() => CarGen.tireSVG([60, 18]), 60, 18, { fixed: true, twoTone: false });       // pneu da frente (esterça)
+        tire.C = await this.encodeRelief(null, tire);
         rects.push({ p: tire, w: tire.w, h: tire.h, key: 'tire' });
         const { W, H } = this.pack(rects);
-        const A = new Uint8Array(W * H * 4), B = new Uint8Array(W * H * 4);
-        for (let i = 0; i < W * H; i++) { B[i * 4 + 2] = 255; B[i * 4 + 3] = 128; }
+        const A = new Uint8Array(W * H * 4), B = new Uint8Array(W * H * 4), C = new Uint8Array(W * H * 4);
+        for (let i = 0; i < W * H; i++) { B[i * 4 + 2] = 255; B[i * 4 + 3] = 128; C[i * 4 + 1] = 128; C[i * 4 + 2] = 128; }
         for (const r of rects) {
             for (let y = 0; y < r.h; y++) {
                 A.set(r.p.A.subarray(y * r.w * 4, (y + 1) * r.w * 4), ((r.y + y) * W + r.x) * 4);
                 B.set(r.p.B.subarray(y * r.w * 4, (y + 1) * r.w * 4), ((r.y + y) * W + r.x) * 4);
+                C.set(r.p.C.subarray(y * r.w * 4, (y + 1) * r.w * 4), ((r.y + y) * W + r.x) * 4);
             }
         }
         const at = (key) => { const r = rects.find((q) => q.key === key); return [r.x, r.y, r.w, r.h]; };
@@ -136,21 +211,22 @@ const CarAtlasBuild = {
                 tire: (() => { const tr = c.wheel_r, tw = c.tire_out ?? 2.5, fx = Math.max(...c.wheels_x); return { z: m(fx - c.L / 2), x: m(c.W / 2 - by0 - (10 - tw) / 2), len: m(2 * tr), wid: m(10 + tw) }; })(),
             };
         }
-        const pngA = await PNGEnc.encode(W, H, A), pngB = await PNGEnc.encode(W, H, B);
+        const pngA = await PNGEnc.encode(W, H, A), pngB = await PNGEnc.encode(W, H, B), pngC = await PNGEnc.encode(W, H, C);
         const ms = performance.now() - t0;
-        return { W, H, A, B, models, solid: at('solid'), tire: at('tire'), pngA, pngB, ms, pieces };
+        return { W, H, A, B, C, models, solid: at('solid'), tire: at('tire'), pngA, pngB, pngC, ms, pieces };
     },
 
     // Texto do arquivo assets/cars/carros-atlas.js (PNGs em base64 dentro de um .js: funciona também aberto por duplo clique, file://).
     toJS(res) {
-        const meta = { version: 2, ppu: this.PPU, scale: this.SCALE, w: res.W, h: res.H, solid: res.solid, tire: res.tire, models: res.models };
+        const meta = { version: 3, ppu: this.PPU, hmax: CarGen.HMAX, scale: this.SCALE, w: res.W, h: res.H, solid: res.solid, tire: res.tire, models: res.models };
         return '// ============================================================================\n' +
             '// GERADO por tools/carros/index.html (gerador.js) — não edite à mão: mude o gerador e gere de novo.\n' +
-            `// ${Object.keys(res.models).length} veículos (carros, motos, bicicletas e barcos) vistos de cima, ${this.PPU} px/m, atlas ${res.W}×${res.H} (A: cor+alfa, B: pinturas+amassados).\n` +
+            `// ${Object.keys(res.models).length} veículos (carros, motos, bicicletas e barcos) vistos de cima, ${this.PPU} px/m, atlas ${res.W}×${res.H} (A: cor+alfa, B: pinturas+amassados, C: relevo).\n` +
             '// ============================================================================\n' +
             'var CAR_ATLAS = ' + JSON.stringify(meta) + ';\n' +
             `CAR_ATLAS.a = '${PNGEnc.base64(res.pngA)}';\n` +
-            `CAR_ATLAS.b = '${PNGEnc.base64(res.pngB)}';\n`;
+            `CAR_ATLAS.b = '${PNGEnc.base64(res.pngB)}';\n` +
+            `CAR_ATLAS.c = '${PNGEnc.base64(res.pngC)}';\n`;
     },
 };
 

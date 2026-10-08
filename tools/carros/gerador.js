@@ -470,6 +470,79 @@ const CarGen = (() => {
             `<defs>${defs.join('')}\n</defs>\n` + out.join('\n') + '\n</svg>\n';
     }
 
+    // ------------------------------------------------------------------ relevo (3D no shader)
+    // ALTURA (m) de cada ponto do carro visto de cima, em tons de cinza (0 = chão, branco = HMAX): o build tira daí as normais e o jogo
+    // ilumina o carro com o sol do mundo (CarArt) — a luz não gira junto com o carro, e é isso que faz ele parecer 3D.
+    // Carroceria plana na altura da cintura (rampas suaves no capô viravam listras: a altura sai em 8 bits), teto na altura dele,
+    // caçamba rebaixada, bordas arredondadas. Os VIDROS não saem daqui: o build (atlas.js) monta cada um como um plano inclinado da
+    // borda do teto até o topo da carroceria, a partir das máscaras abaixo.
+    // mode 'glass' = máscara dos vidros (reflexo do céu) | 'cab' = cabine inteira (vidros + teto) | 'roof' = só o teto.
+    const HMAX = 2.2;
+    const HEIGHTS = {             // [cintura, teto] (m) por categoria
+        super: [0.72, 1.12], esportivo: [0.78, 1.25], suv: [1.02, 1.72], picape: [1.02, 1.78], forca: [1.05, 1.8], van: [1.0, 2.0],
+    };
+    const heightsOf = (c) => HEIGHTS[c.categoria] || [0.9, 1.45];
+    function heightSVG(c, mode, size) {
+        const L = c.L, W = c.W, PAD = c.pad || 10, cw = L + PAD * 2, ch = W + PAD * 2;
+        const [belt, roofH] = heightsOf(c);
+        const v = (m) => { const k = Math.round(Math.max(0, Math.min(1, m / HMAX)) * 255); return `rgb(${k},${k},${k})`; };
+        const by0 = c.body_y0 || 0, bW = W - 2 * by0;
+        const bpath = bodyPath(L, bW, c.fr, c.fry, c.rr, c.rry, c.sb ?? 2, c.fb ?? 3, c.rb ?? 2, by0);
+        const cab = cabinPath(c.cf, c.cr, W, c.ci_f, c.ci_r, c.wb ?? 8, c.rwb ?? 4);
+        const roofD = rrect(c.rr_x, c.rf, c.ri, W - c.ri, c.roof_r ?? 9, c.roof_fb ?? 3, c.roof_rb ?? 2);
+        const id = c.id + '-h' + mode, defs = [], out = [];
+        const wrap = (body) => {
+            const [sw, sh] = size || [cw, ch];
+            return `<svg xmlns="http://www.w3.org/2000/svg" width="${sw}" height="${sh}" viewBox="0 0 ${cw} ${ch}" preserveAspectRatio="none">` +
+                `<defs>${defs.join('')}</defs><rect x="0" y="0" width="${cw}" height="${ch}" fill="#000"/><g transform="translate(${PAD},${PAD})">${body}</g></svg>`;
+        };
+        if (mode === 'cab' || mode === 'roof') {
+            defs.push(`<clipPath id="${id}c"><path d="${bpath}"/></clipPath>`);
+            out.push(`<g clip-path="url(#${id}c)">${mode === 'cab' ? `<path d="${cab}" fill="#fff"/>` : ''}<path d="${roofD}" fill="#fff"/></g>`);
+            return wrap(out.join(''));
+        }
+        if (mode === 'glass') {
+            defs.push(`<clipPath id="${id}c"><path d="${bpath}"/></clipPath>`);
+            out.push(`<g clip-path="url(#${id}c)"><path d="${cab}" fill="#fff"/><path d="${roofD}" fill="#000"/>`);
+            if (c.cargo) out.push(`<rect x="-5" y="-5" width="${c.cargo + 5}" height="${W + 10}" fill="#000"/>`);
+            if (c.sunroof) out.push(`<path d="${rrect(c.sunroof[0], c.sunroof[1], c.ri + 10, W - c.ri - 10, 4)}" fill="#fff"/>`);
+            if (c.engine_cover) { const [x0, x1, in_] = c.engine_cover; out.push(`<path d="${rrect(x0, x1, in_, W - in_, 6)}" fill="#fff"/>`); }
+            out.push('</g>');
+            return wrap(out.join(''));
+        }
+        const trunk = belt - 0.06;
+        defs.push(`<clipPath id="${id}c"><path d="${bpath}"/></clipPath>`);
+        // borrões: bordas da carroceria (arredondadas) e peças pequenas
+        const blur = (n, sx, sy) => defs.push(`<filter id="${id}${n}" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="${f(sx)} ${f(sy)}"/></filter>`);
+        blur('e', 3.2, 3.2); blur('s', 1.6, 1.6);
+        const inner = [];
+        inner.push(`<rect x="-20" y="-20" width="${L + 40}" height="${W + 40}" fill="${v(belt)}"/>`);
+        // caçamba (picapes): rebaixada, com as bordas na altura da cintura
+        if (c.bed) { const b = c.bed, in_ = b.inset ?? 9; inner.push(`<path d="${rrect(b.x0, b.x1, in_, W - in_, 4)}" fill="${v(b.cover ? belt - 0.04 : belt - 0.42)}" filter="url(#${id}s)"/>`); }
+        inner.push(`<path d="${roofD}" fill="${v(roofH)}"/>`);          // (os vidros em volta: atlas.js, rampa até a cintura)
+        // peças em cima do teto / da carroceria
+        if (c.lightbar) { const [lx, lw, lh] = c.lightbar; inner.push(`<rect x="${lx - lw / 2}" y="${f(W / 2 - lh / 2 - 2)}" width="${lw}" height="${lh + 4}" rx="3" fill="${v(roofH + 0.14)}"/>`); }
+        if (c.taxi_sign) { const sx = (c.rr_x + c.rf) / 2 - 9; inner.push(`<rect x="${f(sx)}" y="${f(W / 2 - 19)}" width="17" height="38" rx="3.5" fill="${v(roofH + 0.18)}"/>`); }
+        if (c.rails) { const [, x0, x1] = c.rails; for (const yy of [c.ri + 4, W - c.ri - 7]) inner.push(`<rect x="${x0}" y="${yy}" width="${x1 - x0}" height="3.2" rx="1.6" fill="${v(roofH + 0.06)}"/>`); }
+        if (c.roof_spoiler) inner.push(`<rect x="${c.rr_x - 7}" y="${c.ri + 2}" width="9" height="${W - 2 * c.ri - 4}" rx="3" fill="${v(roofH + 0.03)}"/>`);
+        if (c.spoiler) { const [x, d] = c.spoiler; inner.push(`<rect x="${x}" y="${by0 + 5}" width="${d}" height="${W - 2 * by0 - 10}" rx="2.5" fill="${v(trunk + 0.22)}"/>`); }
+        if (c.snorkel) inner.push(`<rect x="${c.cf - 18}" y="${by0 - 2}" width="14" height="7" rx="3" fill="${v(roofH - 0.1)}"/>`);
+        // fora do recorte da carroceria: paralamas, estribos, para-choque de impulsão, estepe e retrovisores
+        const outer = [];
+        for (const [x, y, rx, ry] of c.fenders || []) outer.push(`<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${v(belt - 0.22)}"/>`);
+        for (const [x0, x1] of c.running_boards || []) for (const y of [by0 - 3, W - by0 - 4]) outer.push(`<rect x="${x0}" y="${y}" width="${x1 - x0}" height="7" rx="2" fill="${v(0.35)}"/>`);
+        if (c.bullbar) outer.push(`<rect x="${L - 2}" y="${f(W * 0.2)}" width="9" height="${f(W * 0.6)}" rx="3" fill="${v(0.55)}"/>`);
+        if (c.spare) outer.push(`<circle cx="${f(-c.spare * 0.35)}" cy="${f(W / 2)}" r="${c.spare}" fill="${v(belt - 0.1)}"/>`);
+        const mx = c.mirror_x ?? c.cf - 2, mo = c.mirror_out ?? 7;
+        for (const sd of [0, 1]) {
+            let pts = [[mx, by0 + 3], [mx - 3, by0 - mo + 1], [mx - 8, by0 - mo], [mx - 12, by0 - mo + 2.5], [mx - 11, by0 + 3]];
+            if (sd) pts = mirrorY(pts, W);
+            outer.push(`<path d="${poly(pts)}" fill="${v(belt + 0.05)}"/>`);
+        }
+        out.push(`<g filter="url(#${id}e)">${outer.join('')}<g clip-path="url(#${id}c)">${inner.join('')}</g></g>`);
+        return wrap(out.join(''));
+    }
+
     // Porta dianteira vista de cima (lâmina fina) para a animação de abrir. Dobradiça na ponta direita (frente do carro).
     function doorSVG(c, opts = {}) {
         const dl = c.door_len, t = 9, y = 3;
@@ -857,7 +930,7 @@ const CarGen = (() => {
         cladding: 'big', bumpers: 'black', bumper_w: 10, grille: 0.5, grille_slots: 8, hood_lines: false,
         spare: 22, bullbar: 'dark', star: [252, 69, 14, '#e8e4d0'], door_len: 72, door_hinge: 204 });
 
-    return { S, CARS, carSVG, doorSVG, damageSVG, damageMarks, mix, light, dark, rgb, hex, rng, hashStr, rrect, poly, f };
+    return { S, CARS, HMAX, carSVG, heightSVG, heightsOf, doorSVG, damageSVG, damageMarks, mix, light, dark, rgb, hex, rng, hashStr, rrect, poly, f };
 })();
 
 if (typeof module !== 'undefined') module.exports = CarGen;

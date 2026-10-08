@@ -39,6 +39,7 @@ const Config = {
         ppu: 20,               // pixels de textura por unidade de mundo (1u ≈ 1m).
         pixelate: true,        // renderiza em baixa resolução + upscale "crocante" (desligado com a alta definição).
         hd: false,             // ALTA DEFINIÇÃO (Ajustes → Gráficos): tela na resolução real e personagens 2,5D em 2× (NpcArt.hd). Ver applyPerfProfile.
+        carRelief: 1,          // relevo dos carros (CarArt): luz do sol do mundo na carroceria, brilho e reflexo nos vidros. 0 = desenho plano.
         charScale: 0.8,        // escala do DESENHO dos personagens (atlas vetorial). Os carros são de tamanho real; isto aproxima a proporção.
         npcPpu: 26,            // personagens 2,5D (NpcArt): px do atlas por metro — adultos na mesma escala dos veículos. = NpcGenBuild.PPU (pilotos × motos)
         internalHeight: (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ? 440 : 560,   // altura interna alvo (px) quando pixelate = true (celular: menor, mais leve).
@@ -70,12 +71,6 @@ const Config = {
         carTurnTrigger: 1.13,  // só gira (em passos de 90°) quando o carro se afasta ~65° da direção da câmera: desvios não balançam a tela
         yawLerp: 3.5,          // rapidez do giro da câmera quando ela gira (maior = mais rápido; menor = mais suave)
         leadLerp: 2.5,         // rapidez com que o adianto entra (ao entrar no carro) e sai (ao descer)
-        // INCLINAÇÃO (Ajustes): até maxTilt graus a partir da vertical. Acima disso o alto da tela chegaria perto do horizonte e além
-        // da área em que o mundo fica carregado/acordado. tiltLerp = rapidez da transição (ao mudar o ajuste, entrar/sair de interior);
-        // maxReach = até onde (u, à frente do alvo) a área visível é considerada (culling e zonas).
-        maxTilt: 50,
-        tiltLerp: 4,
-        maxReach: 110,
         // BALANÇO ao dirigir (CompassCamera._bounce): a câmera presa ao veículo por uma mola. lag = deslocamento (u) por m/s² de
         // aceleração (arrancada, freada, curva), até maxAcc; stiff/damp = a mola (pouco amortecida: passa do ponto e assenta);
         // roll = inclinação (rad) por rad/s de giro, até rollMax; bump = força dos trancos do asfalto (pulso no zoom, mola hStiff/hDamp);

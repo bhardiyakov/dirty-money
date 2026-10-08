@@ -7,6 +7,10 @@
 //   • a PINTURA vem de uma tabela (linha = variante, a mesma numeração de CarSheet.PAINTS): cor = K + M1·pintura + M2·pintura2;
 //   • os AMASSADOS (fases 0..3) já estão no atlas como limiar + desvio de cor: trocar de fase é mudar um número, sem outra textura;
 //   • TODOS os carros do mundo são quads de um único lote (CarBatch): 1 chamada de desenho para os carros e 1 para as portas abertas.
+//   • RELEVO (atlas C: altura + normais + vidros, ver tools/carros/atlas.js): o shader ilumina cada carro com o SOL DO MUNDO
+//     (setSun, chamado pelo DayNight) — o lado virado para o sol clareia, o outro escurece, a lataria tem brilho e os vidros refletem
+//     o céu. A luz não gira junto com o carro: ao fazer uma curva o brilho "escorre" pela carroceria, e é isso que o faz parecer 3D.
+//     Força em Config.art.carRelief (0 = o desenho plano de antes). Atlas antigo, sem C: textura neutra (carro plano, como antes).
 //
 // Formato do atlas (duas texturas com o mesmo layout, pré-multiplicadas pelo alfa — ver tools/carros/atlas.js):
 //   A = (K.r, K.g, K.b, alfa)      B = (M1, M2, limiar do amassado, desvio do amassado)
@@ -70,8 +74,8 @@ const CarArt = {
     load() {
         if (this.ready) return this.ready;
         const t0 = performance.now(), D = this.data = CAR_ATLAS;
-        this.ready = Promise.all([PNG.decodeAsync(this._bytes(D.a)), PNG.decodeAsync(this._bytes(D.b))])
-            .then(([a, b]) => { if (!this._tex) this._px = { A: a.data, B: b.data, ms: performance.now() - t0 }; })
+        this.ready = Promise.all([PNG.decodeAsync(this._bytes(D.a)), PNG.decodeAsync(this._bytes(D.b)), D.c ? PNG.decodeAsync(this._bytes(D.c)) : null])
+            .then(([a, b, c]) => { if (!this._tex) this._px = { A: a.data, B: b.data, C: c ? c.data : null, ms: performance.now() - t0 }; })
             .catch((e) => console.warn('[CARROS] atlas: decodificação assíncrona falhou, vai na hora', e));
         return this.ready;
     },
@@ -83,7 +87,7 @@ const CarArt = {
         const t0 = performance.now();
         const D = this.data = CAR_ATLAS, W = D.w, H = D.h;
         let px = this._px, how = 'em segundo plano';
-        if (!px) { px = { A: PNG.decode(this._bytes(D.a)).data, B: PNG.decode(this._bytes(D.b)).data, ms: performance.now() - t0 }; how = 'na hora'; }
+        if (!px) { px = { A: PNG.decode(this._bytes(D.a)).data, B: PNG.decode(this._bytes(D.b)).data, C: D.c ? PNG.decode(this._bytes(D.c)).data : null, ms: performance.now() - t0 }; how = 'na hora'; }
         this._px = null;
         const A = px.A, B = px.B;
         const t1 = performance.now();
@@ -93,7 +97,9 @@ const CarArt = {
             t.anisotropicFilteringLevel = 1;
             return t;
         };
-        this._tex = { a: tex(A), b: tex(B), paints: this._paintTable(scene) };
+        // relevo: sem o atlas C, 1 pixel neutro (altura 0, normal para cima, sem vidro) — o carro sai plano, como antes
+        const C = px.C ? tex(px.C) : BABYLON.RawTexture.CreateRGBATexture(new Uint8Array([0, 128, 128, 0]), 1, 1, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
+        this._tex = { a: tex(A), b: tex(B), c: C, paints: this._paintTable(scene) };
         this._preview = this._half(A, B, W, H);
         this._scene = scene;
         this.material = this._makeMaterial(scene, 'carArt');
@@ -140,24 +146,33 @@ const CarArt = {
                 attribute vec3 position;
                 attribute vec2 uv;
                 attribute vec4 color;
+                attribute vec2 hd;
                 uniform mat4 worldViewProjection;
                 varying vec2 vUV;
                 varying vec4 vC;
+                varying vec2 vHd;
                 void main(void) {
                     vUV = uv;
                     vC = color;
+                    vHd = hd;
                     gl_Position = worldViewProjection * vec4(position, 1.0);
                 }`;
             // color: r = variante (linha da tabela de pinturas), g = sombra de prédio (1 = sol), b = fase do amassado (0..3), a = opacidade
+            // hd = (seno, cosseno) do ângulo do quad: leva a normal do relevo (espaço da imagem: x = frente, y = lado direito) para o mundo
             BABYLON.Effect.ShadersStore.carArtFragmentShader = `
                 precision highp float;
                 varying vec2 vUV;
                 varying vec4 vC;
+                varying vec2 vHd;
                 uniform sampler2D atlasA;
                 uniform sampler2D atlasB;
+                uniform sampler2D atlasC;
                 uniform sampler2D paints;
                 uniform float paintRows;
                 uniform vec3 tint;
+                uniform vec3 sunL;              // direção PARA o sol (mundo, normalizada)
+                uniform vec3 sunC;              // cor do sol × intensidade relativa (0 = sem sol)
+                uniform float relief;           // força do relevo (Config.art.carRelief)
                 void main(void) {
                     vec4 a = texture2D(atlasA, vUV);
                     if (a.a < 0.004) discard;
@@ -173,17 +188,52 @@ const CarArt = {
                     float l = dot(c, vec3(0.3, 0.59, 0.11));
                     c = mix(c, vec3(l) * 0.96, fx.g * 0.35);                               // tinta desbotada (carro velho)
                     c = mix(c, vec3(0.07, 0.06, 0.055) * a.a + l * vec3(0.2, 0.18, 0.16), fx.r);   // carcaça queimada
+                    // ---- relevo: normal da imagem → mundo (frente F, direita R, cima Y); céu (de cima) + sol, relativo a uma superfície
+                    // plana (teto/capô ficam como o desenho; laterais e rampas clareiam ou escurecem conforme o lado do sol)
+                    vec4 rl = texture2D(atlasC, vUV);
+                    vec2 nt = (rl.gb * 255.0 - 128.0) / 127.0;
+                    float nz = sqrt(max(0.0, 1.0 - dot(nt, nt)));
+                    vec3 F = vec3(vHd.x, 0.0, vHd.y), R = vec3(vHd.y, 0.0, -vHd.x);
+                    vec3 N = normalize(nt.x * F + nt.y * R + vec3(0.0, nz, 0.0));
+                    float sh = clamp((vC.g - 0.62) / 0.38, 0.0, 1.0);                       // na sombra de prédio: sem sol direto
+                    vec3 sun = sunC * sh;
+                    float sunI = dot(sun, vec3(0.333));
+                    float sky = 0.62 + 0.38 * N.y, sky0 = 1.0;
+                    float dif = max(dot(N, sunL), 0.0), dif0 = max(sunL.y, 0.0);
+                    float lit = (0.7 * sky + sunI * 1.3 * dif) / (0.7 * sky0 + sunI * 1.3 * dif0);
+                    float glass = rl.a * (1.0 - fx.r);
+                    vec3 Hh = normalize(sunL + vec3(0.0, 1.0, 0.0));
+                    float nh = max(dot(N, Hh), 0.0);
+                    float paintSpec = pow(nh, 160.0) * 0.55 * (1.0 - fx.r) * (1.0 - 0.6 * fx.g);
+                    float glassSpec = pow(nh, 420.0) * 1.4;
+                    vec3 spec = sun * mix(paintSpec, glassSpec, glass);
+                    // vidro: reflexo do céu — mais forte onde o vidro inclina (para-brisa, vidro traseiro, janelas), e DIRECIONAL: o plano
+                    // virado para o lado do sol reflete céu claro, o oposto um céu mais escuro — cada vidro inclinado se destaca do outro
+                    vec3 Rv = reflect(vec3(0.0, -1.0, 0.0), N);
+                    vec2 rh = Rv.xz, sh2 = sunL.xz;
+                    float toSun = dot(rh, sh2) / max(length(rh) * length(sh2), 1e-4);
+                    float bright = 0.55 + 0.75 * clamp(toSun, -1.0, 1.0) * min(1.0, length(rh) * 2.0);
+                    vec3 skyC = mix(vec3(0.42, 0.5, 0.6), vec3(0.78, 0.86, 0.95), clamp(Rv.y, 0.0, 1.0)) * max(bright, 0.12);
+                    float fres = 0.05 + 0.6 * (1.0 - N.y);
+                    vec3 refl = skyC * fres * glass * (0.35 + 0.65 * clamp(sunI, 0.0, 1.0));
+                    refl += sun * glass * max(dot(N, sunL) - dif0, 0.0) * 0.5;      // vidro de frente para o sol: brilho a mais
+                    vec3 lc = c * clamp(lit, 0.45, 1.6) + (spec + refl) * a.a;
+                    c = mix(c, lc, relief);
                     gl_FragColor = vec4(c * tint * vC.g * vC.a, a.a * vC.a);
                 }`;
         }
         const m = new BABYLON.ShaderMaterial(name, scene, { vertex: 'carArt', fragment: 'carArt' }, {
-            attributes: ['position', 'uv', 'color'],
-            uniforms: ['worldViewProjection', 'paintRows', 'tint'],
-            samplers: ['atlasA', 'atlasB', 'paints'],
+            attributes: ['position', 'uv', 'color', 'hd'],
+            uniforms: ['worldViewProjection', 'paintRows', 'tint', 'sunL', 'sunC', 'relief'],
+            samplers: ['atlasA', 'atlasB', 'atlasC', 'paints'],
             needAlphaBlending: true,
         });
         m.setTexture('atlasA', this._tex.a);
         m.setTexture('atlasB', this._tex.b);
+        m.setTexture('atlasC', this._tex.c);
+        m.setFloat('relief', Config.art.carRelief ?? 1);
+        (this._mats || (this._mats = [])).push(m);
+        this._applySun(m);
         m.setTexture('paints', this._tex.paints);
         m.setFloat('paintRows', this._tex.paints._rows);
         m.setColor3('tint', SpriteMaterial.sharedTint());       // dia/noite: a mesma cor ambiente dos outros sprites
@@ -191,6 +241,20 @@ const CarArt = {
         m.disableDepthWrite = true;
         m.backFaceCulling = false;
         return m;
+    },
+
+    // Sol do mundo (DayNight.apply): direção em que a luz VIAJA, intensidade e cor. O relevo dos carros é iluminado por ele.
+    setSun(dir, intensity, color = null) {
+        const l = Math.hypot(dir.x, dir.y, dir.z) || 1, k = Math.max(0, Math.min(1.2, intensity / 0.65));      // (0,65 = sol do meio-dia)
+        this._sun = { x: -dir.x / l, y: -dir.y / l, z: -dir.z / l, r: k * (color ? color[0] : 1), g: k * (color ? color[1] : 1), b: k * (color ? color[2] : 1) };
+        if (this._mats) for (const m of this._mats) this._applySun(m);
+    },
+    _applySun(m) {
+        let s = this._sun;
+        if (!s) { const d = Config.light.sunDir, l = Math.hypot(d[0], d[1], d[2]); s = { x: -d[0] / l, y: -d[1] / l, z: -d[2] / l, r: 1, g: 1, b: 1 }; }
+        const v = this._sunV || (this._sunV = { l: new BABYLON.Vector3(), c: new BABYLON.Color3() });      // (DayNight chama todo quadro)
+        m.setVector3('sunL', v.l.set(s.x, s.y, s.z));
+        m.setColor3('sunC', v.c.set(s.r, s.g, s.b));
     },
 
     // Sprite de um carro (CarActor) no lote.
@@ -290,12 +354,14 @@ class CarBatch {
         this.pos = this._grow(this.pos, capacity * 12);
         this.uv = this._grow(this.uv, capacity * 8);
         this.col = this._grow(this.col, capacity * 16);
+        this.hd = this._grow(this.hd, capacity * 8);
         const idx = new Uint16Array(capacity * 6);
         for (let i = 0; i < capacity; i++) { const b = i * 4, o = i * 6; idx[o] = b + 3; idx[o + 1] = b + 1; idx[o + 2] = b; idx[o + 3] = b + 2; idx[o + 4] = b + 3; idx[o + 5] = b; }
         const mesh = new BABYLON.Mesh(this.name, this.scene);
         const vd = new BABYLON.VertexData();
         vd.positions = this.pos; vd.uvs = this.uv; vd.colors = this.col; vd.indices = idx;
         vd.applyToMesh(mesh, true);
+        mesh.setVerticesData('hd', this.hd, true, 2);                 // (seno, cosseno) do ângulo do quad: relevo (ver o shader)
         mesh.material = this.material;
         mesh.renderingGroupId = 1;
         mesh.alphaIndex = this.alphaIndex;
@@ -307,6 +373,7 @@ class CarBatch {
         this._vbPos = mesh.getVertexBuffer(BABYLON.VertexBuffer.PositionKind);
         this._vbUV = mesh.getVertexBuffer(BABYLON.VertexBuffer.UVKind);
         this._vbCol = mesh.getVertexBuffer(BABYLON.VertexBuffer.ColorKind);
+        this._vbHd = mesh.getVertexBuffer('hd');
         this.capacity = capacity;
         this._drawn = -1;
         if (old) old.dispose();
@@ -359,8 +426,11 @@ class CarBatch {
         const u = this.uv, q = i * 8;
         u[q] = uv[2]; u[q + 1] = uv[1]; u[q + 2] = uv[2]; u[q + 3] = uv[3];
         u[q + 4] = uv[0]; u[q + 5] = uv[1]; u[q + 6] = uv[0]; u[q + 7] = uv[3];
+        this._setHd(i, s, c);
         this._touch(i);
     }
+
+    _setHd(i, s, c) { const h = this.hd, q = i * 8; for (let k = 0; k < 8; k += 2) { h[q + k] = s; h[q + k + 1] = c; } }
 
     // Quad livre: 4 cantos (frente-esq., frente-dir., trás-esq., trás-dir.) — a lâmina da porta girando em volta da dobradiça.
     quad(i, y, ax, az, bx, bz, cx, cz, dx, dz, uv) {
@@ -370,6 +440,8 @@ class CarBatch {
         const u = this.uv, q = i * 8;
         u[q] = uv[2]; u[q + 1] = uv[1]; u[q + 2] = uv[2]; u[q + 3] = uv[3];
         u[q + 4] = uv[0]; u[q + 5] = uv[1]; u[q + 6] = uv[0]; u[q + 7] = uv[3];
+        const fx = ax - cx, fz = az - cz, fl = Math.hypot(fx, fz) || 1;      // frente = trás → frente (lado esquerdo)
+        this._setHd(i, fx / fl, fz / fl);
         this._touch(i);
     }
 
@@ -390,6 +462,7 @@ class CarBatch {
         this._vbPos.updateDirectly(this.pos.subarray(a * 12, b * 12), a * 12);
         this._vbUV.updateDirectly(this.uv.subarray(a * 8, b * 8), a * 8);
         this._vbCol.updateDirectly(this.col.subarray(a * 16, b * 16), a * 16);
+        this._vbHd.updateDirectly(this.hd.subarray(a * 8, b * 8), a * 8);
         this._p0 = Infinity; this._p1 = -1;
     }
 }

@@ -597,9 +597,6 @@ class Game {
         // (o furo só se abre no que está ACIMA do alvo: a pé, a altura vem do personagem — cabeça no chão ou no viaduto, abaixo do
         // tabuleiro quando nada sob a ponte; de veículo, a altura do sprite dele — barco sob a ponte fica rebaixado)
         this.gameEngine.world.setReveal(rp.x, rp.z, rv ? (Math.max(rv.halfLen, rv.halfW) + 1.6) * 3 : 9.0, rv && rv.visual ? (rv.visual.mesh ? rv.visual.mesh.position.y : rv.visual.y) : this.player.revealY);
-        // câmera inclinada: furo no que fica entre ela e o alvo (prédio ao sul); cresce junto com a inclinação, some de volta a 0°
-        const tk = Math.min(1, CompassCamera.curTilt / 0.17);
-        Reveal.setTilt(rp.x, (rp.y || 0) + 0.9, rp.z, tk > 0.02 ? tk * (rv ? Math.max(rv.halfLen, rv.halfW) + 1.2 : 1.9) : 0);
 
         // --- Mundo (água animada, sombra seguindo o foco) ---
         if (this.mode !== 'player') HouseView.update(dt, this);          // (de carro/helicóptero: garante o "fora" e o zoom normal)

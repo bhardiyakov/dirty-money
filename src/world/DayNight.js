@@ -97,6 +97,7 @@ class DayNight {
         ge.sun.intensity = P.sunI;
         ge.sun.diffuse.copyFromFloats(...P.sunC);
         MapGeo.setSun(dir, P.sunI);
+        CarArt.setSun(dir, P.sunI, P.sunC);                 // relevo dos carros: iluminados pelo mesmo sol
 
         // Sem sol (noite) a passada de sombra é custo à toa: congela o mapa de sombras.
         const sm = ge.shadowGenerator.getShadowMap();
