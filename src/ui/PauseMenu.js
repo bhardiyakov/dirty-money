@@ -295,6 +295,7 @@ class PauseMenu {
                 + bar('FÔLEGO', (pl.stamina == null ? 1 : pl.stamina / (pl.staminaMax || 100)) * 100, 'linear-gradient(90deg,#10b981,#a3e635)', `condicionamento ${Bags.fitLevel(pl.fit)}/20`) + row('Carga', Bags.label(g))
                 + bar('PONTARIA', Aim.quality() * 100, 'linear-gradient(90deg,#ff9a3a,#ffd23a)', `${Math.round(Aim.quality() * 100)}% · mira ${this.settings.aimAssist ? 'assistida' : 'manual'} — sobe com Mão firme e Olho de águia`)
                 + row('Arma na mão', pl.weapon === 'none' ? 'Punhos' : Weapons[pl.weapon].name) + row('Kits médicos', inv.medkits) + row('Hora', g.dayNight.label))
+            + (g.goals ? panel('METAS', this._goalsHtml(bar, row)) : '')
             + panel(`FACÇÃO · ${cv.name} (${cv.sigla})`, `<span class="tag" style="color:${hos ? '#ff5a4d' : '#5ac07a'}">${res ? (hos ? 'MORADOR · HOSTIL' : 'MORADOR · NEUTRO') : 'ESTRANHO · HOSTIL'}</span>`
                 + row('Patente', Missions.rankName) + row('Missões cumpridas', Standing.missionsDone || 0)
                 + bar('MORAL COM O TRÁFICO', Standing.traffic, '#d65a4a', Math.round(Standing.traffic)) + bar('MORAL COM A COMUNIDADE', Standing.community, '#5ac07a', Math.round(Standing.community))
@@ -304,6 +305,14 @@ class PauseMenu {
                 + bar('RECEITA / PF', Laundry.taxHeat, '#9a7aff', Math.round(Laundry.taxHeat) + '%'))
             + panel('CASA E IMÓVEIS', row('Safe house', home ? `${home.type} (${home.region})` : 'Casa na favela') + row('Imóveis seus', owned.length) + row('Valor de mercado', brl(worth)) + (home ? row('Reforma', RealEstate.reformLevel(home) ? RealEstate.REFORMS[RealEstate.reformLevel(home)].name : 'original') : ''))
             + panel('PROCURADO', row('Nível', `${g.wanted.level}★`) + row('Situação', g.wanted.level > 0 ? 'A polícia está atrás de você' : 'Limpo'));
+    }
+
+    // Metas de carreira (Goals): a próxima de cada trilha, com barra de progresso e o prêmio. Só aqui — não há painel na tela do jogo.
+    _goalsHtml(bar, row) {
+        const G = this.g.goals, list = G.pending();
+        if (!list.length) return row('Todas as metas', 'cumpridas ✔');
+        return list.map((p) => bar(`${p.name} · ${p.label} ${G._fmt(p.key, Math.min(p.cur, p.target))}/${G._fmt(p.key, p.target)}`, 100 * Math.min(1, p.cur / p.target),
+            'linear-gradient(90deg,#22d3ee,#34d399)', `+${brl(p.money)}${p.kits ? ` · ${p.kits} kit(s)` : ''}`)).join('');
     }
 
     // ------------------------------------------------------------------ abrir / fechar

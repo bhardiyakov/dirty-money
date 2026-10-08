@@ -1,7 +1,8 @@
 // ============================================================================
 // Goals — METAS DE CARREIRA. O jogo tem sistemas fundos (procurado, facções, lavagem, imóveis, missões do morro), mas nada dizia ao jogador
-// "o que fazer a seguir". Aqui há 5 trilhas de metas em degraus crescentes; o painel discreto (embaixo, no centro) mostra a próxima
-// meta de cada trilha com barra de progresso, e cada meta batida paga uma recompensa na hora (dinheiro sujo, kit médico) com aviso e som.
+// "o que fazer a seguir". Aqui há trilhas de metas em degraus crescentes; a aba STATUS do menu de pausa mostra a próxima meta de cada
+// trilha com barra de progresso (PauseMenu._renderStatus, via pending()), e cada meta batida paga uma recompensa na hora (dinheiro sujo,
+// kit médico) com aviso e som. (Antes havia um painel fixo embaixo da tela: saiu — na tela, só o aviso da meta batida.)
 //   PATRIMÔNIO  dinheiro sujo + limpo + joias      MORRO  missões do tráfico        LAVAGEM  fachadas e valor lavado
 //   IMÓVEIS     propriedades compradas             FUGA   estrelas alcançadas e fugas da polícia
 //   CARREIRAS   trabalhos concluídos nas carreiras do crime (careers/)
@@ -28,8 +29,6 @@ class Goals {
         this.escapes = 0;
         this.maxStars = 0;
         this._t = 0.5;
-        this._txt = '';
-        this._el = null;
     }
 
     // Valor atual de cada trilha, conforme o rótulo do degrau (o mesmo texto serve a mais de uma métrica da trilha).
@@ -50,24 +49,6 @@ class Goals {
     onWanted(n, prev, why) {
         if (n > this.maxStars) this.maxStars = n;
         if (n === 0 && why === 'escape') this.escapes++;
-    }
-
-    _ensureEl() {
-        if (this._el) return this._el;
-        const st = document.createElement('style');
-        st.textContent = `#goalBox { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 9; pointer-events: none; display: flex; gap: 8px; font-family: var(--font); }
-            #goalBox .gl { min-width: 150px; padding: 8px 12px 9px; background: var(--glass); border: 1px solid var(--line); border-radius: var(--r-2); color: var(--tx); font-size: 12px; font-weight: 600; line-height: 1.3;
-                -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
-            #goalBox .gl b { display: block; font-size: 10px; font-weight: 700; color: var(--tx-3); letter-spacing: 0.1em; text-transform: uppercase; }
-            #goalBox .gl i { display: block; height: 4px; margin-top: 6px; background: rgba(255,255,255,0.08); border-radius: 99px; overflow: hidden; }
-            #goalBox .gl i::after { content: ''; display: block; height: 100%; width: var(--p, 0%); border-radius: 99px; background: linear-gradient(90deg, #22d3ee, #34d399); }
-            body.mobile #goalBox { bottom: 4px; gap: 4px; transform: translateX(-50%) scale(0.78); transform-origin: bottom center; }
-            body.mobile #goalBox .gl:nth-child(n+3) { display: none; }`;
-        document.head.appendChild(st);
-        const el = this._el = document.createElement('div');
-        el.id = 'goalBox';
-        document.body.appendChild(el);
-        return el;
     }
 
     // Próximo degrau pendente de cada trilha.
@@ -99,20 +80,9 @@ class Goals {
             g._flash(`🏆 META: ${p.label} ${this._fmt(p.key, p.target)} — +${brl(p.money)}${p.kits ? ` e ${p.kits} kit(s) médico(s)` : ''}`);
             AudioFX.blip(1100, 0.25, 0.22);
         }
-        this._render();
     }
 
     _fmt(key, v) { return key === 'money' || (key === 'laundry' && v >= 1000) ? brl(v) : String(v); }
-
-    _render() {
-        const list = this.pending().slice(0, 3);
-        const html = list.map((p) => `<div class="gl"><b>${p.name}</b>${p.label} ${this._fmt(p.key, Math.min(p.cur, p.target))}/${this._fmt(p.key, p.target)}<i style="--p:${Math.round(100 * Math.min(1, p.cur / p.target))}%"></i></div>`).join('');
-        if (html === this._txt) return;
-        this._txt = html;
-        this._ensureEl().innerHTML = html;
-    }
-
-    setVisible(v) { if (this._el) this._el.style.display = v ? '' : 'none'; }
 
     serialize() { return { done: this.done, escapes: this.escapes, maxStars: this.maxStars }; }
     load(s) { if (!s) { this._backfill = true; return; } this.done = s.done || {}; this.escapes = s.escapes || 0; this.maxStars = s.maxStars || 0; }

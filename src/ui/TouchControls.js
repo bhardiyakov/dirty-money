@@ -110,7 +110,7 @@ class TouchControls {
             body.mobile #hud2 .wanted-panel .px-body { padding: 8px 14px; flex-direction: row; align-items: center; justify-content: space-between; }
             body.mobile #hud2 .h-main { padding: 9px; } body.mobile #hud2 .stats-panel { padding: 8px 14px; }
             body.mobile #hMission { transform: scale(0.7); transform-origin: top left; left: 124px; top: 8px; }
-            body.mobile #toast, body.mobile #prompt, body.mobile #goalBox .gl { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+            body.mobile #toast, body.mobile #prompt { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
             body.mobile #minimap { width: 108px !important; height: 108px !important; left: 8px !important; top: 8px !important; bottom: auto !important; border-width: 3px; }
             body.mobile #toast { font-size: 12px; top: 60px; max-width: 54vw; padding: 6px 12px; }
             body.mobile #prompt { font-size: 12px; padding: 6px 10px; bottom: auto; top: 8px; max-width: 44vw; white-space: normal; }

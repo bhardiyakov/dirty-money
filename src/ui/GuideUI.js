@@ -170,7 +170,7 @@ GuideUI.PAGES = {
         <li><b>Save</b>: dormir salva; o jogo também salva sozinho a cada 2 minutos quando você está calmo (sem procurado, sem trabalho com prazo). "Carregar jogo" no menu inicial.</li></ul>`,
 
     goals: () => `<h2>Metas de carreira</h2>
-        <p>O painel embaixo da tela mostra a próxima meta de cada trilha — <b>Patrimônio</b>, <b>Carreiras</b>, <b>Morro</b>, <b>Lavagem</b>, <b>Imóveis</b> e <b>Fuga</b> — com barra de progresso. Cada meta batida paga na hora (dinheiro e, nas maiores, kits médicos) e libera a próxima.</p>`,
+        <p>A aba <b>STATUS</b> do menu (pausa) mostra a próxima meta de cada trilha — <b>Patrimônio</b>, <b>Carreiras</b>, <b>Morro</b>, <b>Lavagem</b>, <b>Imóveis</b> e <b>Fuga</b> — com barra de progresso. Cada meta batida paga na hora (dinheiro e, nas maiores, kits médicos) e libera a próxima.</p>`,
 
     daily: () => `<h2>Energia e exposição (o dia)</h2>
         <p>Cada dia é limitado. Você acorda com <b>energia cheia</b> e <b>exposição zerada</b> (barras ⚡ e 🔥 no HUD).</p>
