@@ -39,7 +39,9 @@ const Config = {
         ppu: 20,               // pixels de textura por unidade de mundo (1u ≈ 1m).
         pixelate: true,        // renderiza em baixa resolução + upscale "crocante" (desligado com a alta definição).
         hd: false,             // ALTA DEFINIÇÃO (Ajustes → Gráficos): tela na resolução real e personagens 2,5D em 2× (NpcArt.hd). Ver applyPerfProfile.
+        smooth: true,          // GRÁFICO SUAVE (Ajustes; só na alta definição): antisserrilhado (MSAA), densidade real do monitor, texturas do chão filtradas e sombras macias. Ver render/Smooth.js.
         carRelief: 1,          // relevo dos carros (CarArt): luz do sol do mundo na carroceria, brilho e reflexo nos vidros. 0 = desenho plano.
+        cars3d: true,          // carros em 3D (CarArt3D, assets/cars/carros3d.js): rodas que rolam e esterçam, carroceria balançando na suspensão. false (ou ?cars2d) = sprites do atlas.
         charScale: 0.8,        // escala do DESENHO dos personagens (atlas vetorial). Os carros são de tamanho real; isto aproxima a proporção.
         npcPpu: 26,            // personagens 2,5D (NpcArt): px do atlas por metro — adultos na mesma escala dos veículos. = NpcGenBuild.PPU (pilotos × motos)
         internalHeight: (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ? 440 : 560,   // altura interna alvo (px) quando pixelate = true (celular: menor, mais leve).
@@ -233,7 +235,10 @@ const Config = {
         theftBonus: 0.25,      // furto agachado: + esta chance de dar certo
         coverReach: 1.3,       // distância (u) até a superfície da cobertura para estar "em cobertura"
         coverSnap: 2.4,        // apertando Q até esta distância de uma cobertura, o personagem vai até ela
-        coverMinH: 0.9,        // altura mínima (u) de um obstáculo para servir de cobertura (grade vazada não serve)
+        coverMinH: 0.8,        // altura mínima (u) de um obstáculo para servir de cobertura (grade vazada não serve; mureta da ponte, 1 u, serve)
+        coverStick: 0.62,      // COLADO na cobertura (Player._coverMove): distância do centro do personagem até a superfície
+        coverLeave: 0.3,       // segundos puxando para LONGE da cobertura até soltar dela
+        coverCorner: 0.35,     // segundos segurando a direção na PONTA da cobertura até contornar a quina (carro, fim de muro)
         coverExposed: 0.5,     // levantado para mirar/atirar da cobertura: chance de uma bala vinda do lado dela passar
         rollTime: 0.6,         // duração do rolamento (s)
         rollDist: 4.4,         // distância percorrida rolando (u)
@@ -464,7 +469,7 @@ const Config = {
     const lite = q.includes('lite') || (!q.includes('full') && (coarse || weak || saved === 'lite'));
     // Alta definição: por padrão no PC; no celular/aparelho fraco, a pixel art leve. A escolha do jogador (Ajustes) vale mais.
     let hdSet = null;
-    try { const s = JSON.parse(localStorage.getItem('dm_settings') || '{}'); if (typeof s.hd === 'boolean') hdSet = s.hd; } catch (e) { /* sem storage */ }
+    try { const s = JSON.parse(localStorage.getItem('dm_settings') || '{}'); if (typeof s.hd === 'boolean') hdSet = s.hd; if (typeof s.cars3d === 'boolean') Config.art.cars3d = s.cars3d; if (typeof s.smooth === 'boolean') Config.art.smooth = s.smooth; } catch (e) { /* sem storage */ }
     Config.art.hd = q.includes('hd=0') ? false : q.includes('hd=1') ? true : hdSet !== null ? hdSet : !lite;
     Config.art.pixelate = !Config.art.hd;
     const P = Config.perf;

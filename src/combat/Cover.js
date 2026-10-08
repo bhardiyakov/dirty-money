@@ -20,16 +20,17 @@ const Cover = {
             bd = d;
             best = { x: cx, z: cz, nx: dx / d, nz: dz / d, d, h, kind, ref };
         };
-        for (const o of CityGrid.obstaclesAround(x, z, reach)) {
+        const g = this.game, pl = g && g.player, up = !!(pl && (pl.onDeck || pl.underBridge));      // no viaduto / sob a ponte: os muros do chão não valem
+        if (!up) for (const o of CityGrid.obstaclesAround(x, z, reach)) {
             if (o.h < T.coverMinH || o.kind === 'fence') continue;
             if (Math.max(o.x1 - o.x0, o.z1 - o.z0) < 0.8) continue;           // poste, placa: fino demais para esconder alguém
             take(Math.max(o.x0, Math.min(o.x1, x)), Math.max(o.z0, Math.min(o.z1, z)), o.h, o.h > 2.2 ? 'wall' : 'low', o);
         }
-        const g = this.game;
         if (g) {
             const f = this._f || (this._f = new BABYLON.Vector3());
             const cars = (c) => {
                 if (!c || !c.body || c.isBike || c.isBoat || c.controlled || c.speed > 1.5) return;   // carro andando não é cobertura
+                if (pl && !Vehicle.sameLevel(c, pl)) return;                                       // (o carro lá em cima do viaduto, não)
                 const P = c.position;
                 if (Math.abs(P.x - x) > reach + 4 || Math.abs(P.z - z) > reach + 4) return;
                 c.fwdToRef(f);

@@ -71,7 +71,8 @@ const Outfit = {
     // ---- aparência (de graça) e tingimento das peças
     APPEARANCE: {
         skin: [['pele_clara', 'Clara'], ['pele_pessego', 'Pêssego'], ['pele_morena', 'Morena'], ['pele_parda', 'Parda'], ['pele_negra', 'Negra']],
-        hair: [['spiky', 'Espetado'], ['short', 'Curto'], ['buzz', 'Raspado'], ['bald', 'Careca'], ['afro', 'Black power'], ['curly', 'Cacheado'], ['mohawk', 'Moicano'], ['dreads', 'Dreads'], ['long', 'Comprido'], ['ponytail', 'Rabo de cavalo'], ['bun', 'Coque']],
+        hair: [['spiky', 'Espetado'], ['short', 'Curto'], ['buzz', 'Raspado'], ['bald', 'Careca'], ['afro', 'Black power'], ['curly', 'Cacheado'], ['mohawk', 'Moicano'], ['dreads', 'Dreads'], ['long', 'Comprido'], ['ponytail', 'Rabo de cavalo'], ['bun', 'Coque'],
+            ['side', 'Repartido'], ['quiff', 'Topete'], ['pixie', 'Pixie'], ['bob', 'Chanel'], ['bob_fringe', 'Chanel com franja'], ['braid', 'Trança']],
         hair_color: [['preto', 'Preto'], ['castanho', 'Castanho'], ['loiro', 'Loiro'], ['ruivo', 'Ruivo'], ['grisalho', 'Grisalho']],
         beard: [['', 'Sem barba'], ['beard', 'Barba'], ['goatee', 'Cavanhaque'], ['mustache', 'Bigode']],
         body: [['muscular', 'Forte'], ['normal', 'Normal'], ['slim', 'Magro'], ['heavy', 'Pesado']],

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dirty Money — Carros 3D (gerador)</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #2b2e34; color: #d8dce2; font: 13px system-ui, Segoe UI, Arial, sans-serif; padding: 16px; }
+        h1 { font-size: 18px; margin-bottom: 4px; }
+        .sub { color: #9aa0aa; margin-bottom: 12px; line-height: 1.5; }
+        .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: #23262b; padding: 10px 12px; border: 1px solid #3a3f4a; margin-bottom: 14px; position: sticky; top: 0; z-index: 5; }
+        button { background: #ffd23a; color: #1b1b1b; border: 0; padding: 7px 12px; font-weight: 700; cursor: pointer; border-radius: 3px; }
+        button:disabled { opacity: 0.5; cursor: default; }
+        label { display: flex; gap: 6px; align-items: center; }
+        input[type=number] { width: 64px; background: #1b1d21; color: #d8dce2; border: 1px solid #3a3f4a; padding: 4px; }
+        select { background: #1b1d21; color: #d8dce2; border: 1px solid #3a3f4a; padding: 4px; }
+        #status { color: #9aa0aa; }
+        .wrap { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+        #view { width: 760px; height: 520px; max-width: 100%; background: #555; display: block; border: 1px solid #3a3f4a; }
+        table { border-collapse: collapse; font: 12px Consolas, monospace; }
+        td, th { padding: 2px 8px; border-bottom: 1px solid #383c45; text-align: right; }
+        td:first-child, th:first-child { text-align: left; }
+        tr.sel td { color: #ffd23a; }
+        tbody tr { cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Carros 3D — gerador do arquivo do jogo</h1>
+    <div class="sub">
+        Gera os carros com o gerador procedural (<code>gerador/</code>, o mesmo do pacote "veiculos3d") num nível de detalhe leve para o jogo e grava
+        <code>assets/cars/carros3d.js</code>. A vista abaixo usa o MESMO código do jogo (<code>src/art/CarArt3D.js</code>): pintura, amassado, luzes, rodas e balanço.<br>
+        Abra pelo servidor de desenvolvimento (<code>serve.ps1</code> → <code>http://localhost:8123/tools/carros3d/</code>).
+    </div>
+    <div class="bar">
+        <label>Detalhe <input id="detail" type="number" min="0.2" max="1" step="0.05" value="0.3"></label>
+        <label title="Simplificação por colapso de arestas: desvio tolerado em relação à superfície original">Tolerância <input id="maxErr" type="number" min="0" max="20" step="0.5" value="4"> mm</label>
+        <label title="Descarta o que a câmera do jogo (de cima, até ~30° da vertical) nunca vê: fundo do chassi, interior, lado de dentro das rodas"><input id="topOnly" type="checkbox" checked> só o que a câmera de cima vê</label>
+        <button id="build">Gerar</button>
+        <button id="save" disabled>Salvar carros3d.js</button>
+        <span id="status"></span>
+    </div>
+    <div class="wrap">
+        <div>
+            <canvas id="view"></canvas>
+            <div class="bar" style="margin-top:8px">
+                <label>Modelo <select id="model"></select></label>
+                <label>Pintura <select id="paint"></select></label>
+                <label>Amassado <input id="dent" type="range" min="0" max="3" value="0"></label>
+                <label><input id="lights" type="checkbox"> faróis</label>
+                <label><input id="brake" type="checkbox"> freio</label>
+                <label><input id="siren" type="checkbox"> giroflex</label>
+                <label><input id="drive" type="checkbox" checked> andando em círculo</label>
+                <label><input id="top" type="checkbox"> câmera do jogo (de cima)</label>
+            </div>
+        </div>
+        <table id="stats"><thead><tr><th>modelo</th><th>triângulos</th><th>vértices</th><th>ms</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <script src="../../vendor/babylon.min.js"></script>
+    <script src="../../src/config.js"></script>
+    <script src="../../src/art/SpriteIO.js"></script>
+    <script src="../../assets/cars/carros-atlas.js"></script>
+    <script src="../../src/art/CarArt.js"></script>
+    <script src="../../src/art/CarSheet.js"></script>
+    <script src="../../src/art/CarArt3D.js"></script>
+    <script type="module">
+        import { buildAll, toScript } from './build.js';
+        const $ = (id) => document.getElementById(id);
+        let result = null, script = null;
+
+        // ---- cena de visualização (o mesmo material/lote do jogo)
+        const canvas = $('view');
+        const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true });
+        const scene = new BABYLON.Scene(engine);
+        scene.clearColor = new BABYLON.Color4(0.36, 0.38, 0.4, 1);
+        const cam = new BABYLON.ArcRotateCamera('cam', -Math.PI / 2.6, 1.0, 14, new BABYLON.Vector3(0, 0.8, 0), scene);
+        cam.attachControl(canvas, true); cam.wheelPrecision = 30; cam.minZ = 0.5;
+        const ground = BABYLON.MeshBuilder.CreateGround('g', { width: 80, height: 80 }, scene);
+        const gm = new BABYLON.StandardMaterial('gm', scene); gm.diffuseColor = new BABYLON.Color3(0.32, 0.33, 0.35); gm.specularColor = BABYLON.Color3.Black();
+        ground.material = gm;
+        new BABYLON.HemisphericLight('h', new BABYLON.Vector3(0.3, 1, -0.2), scene);
+        if (typeof SpriteMaterial === 'undefined') window.SpriteMaterial = { sharedTint: () => new BABYLON.Color3(1, 1, 1) };
+        if (typeof MapGeo === 'undefined') window.MapGeo = { inShadow: () => false };
+        let actor = null, t = 0, prevH = 0;
+        const paints = CarSheet.PAINTS;
+        paints.forEach((p, i) => { const o = document.createElement('option'); o.value = i; o.textContent = i + ' ' + p.name; $('paint').appendChild(o); });
+
+        function show(id) {
+            if (actor) { actor.dispose(); actor = null; }
+            if (!CarArt3D.has(id)) return;
+            actor = CarArt3D.actor(id, +$('paint').value);
+            actor.setY(1.5);
+            for (const tr of $('stats').tBodies[0].rows) tr.classList.toggle('sel', tr.dataset.id === id);
+        }
+        $('model').onchange = () => show($('model').value);
+        $('paint').onchange = () => actor && actor.setVariant(+$('paint').value);
+        $('dent').oninput = () => actor && actor.setDamage(+$('dent').value);
+        CarArt3D.squash = 0;                     // câmera livre: profundidade de verdade (no jogo, de cima, ela é achatada)
+        $('top').onchange = () => {
+            CarArt3D.squash = $('top').checked ? 1 : 0;
+            if ($('top').checked) { cam.alpha = -Math.PI / 2; cam.beta = 0.001; cam.radius = 150; cam.fov = 2 * Math.atan(7 / 150); }
+            else { cam.beta = 1.0; cam.radius = 14; cam.fov = 0.8; }
+        };
+        scene.onBeforeRenderObservable.add(() => {
+            const dt = Math.min(0.05, engine.getDeltaTime() / 1000);
+            if (!actor) return;
+            const drive = $('drive').checked;
+            const R = 7, w = drive ? 0.55 + 0.35 * Math.sin(t * 0.4) : 0;
+            t += dt;
+            const ang = (prevH += w * dt);
+            const x = drive ? Math.cos(ang) * R - R : 0, z = drive ? -Math.sin(ang) * R : 0;
+            actor.setPosition(x, z);
+            actor.setHeading(drive ? ang - Math.PI : 0);
+            const v = w * R, dv = drive ? 0.35 * Math.cos(t * 0.4) * R * 0.4 : 0;
+            actor.animate(dt, dv, drive ? v * w : 0, drive ? 0.45 : 0, drive ? w : 0);
+            const night = $('lights').checked ? 1 : 0, brake = $('brake').checked;
+            actor.setLamps(night, brake ? 1 : night * 0.5, Math.floor(t * 2.6) % 2 ? 1 : 0, 0, $('siren').checked ? 1 + (Math.floor(t * 5) % 2) : 0, false);
+            if (!$('top').checked) cam.target.set(x, 0.8, z);
+            else cam.target.set(x, 0, z);
+            actor.update(dt);
+        });
+        engine.runRenderLoop(() => scene.render());
+        addEventListener('resize', () => engine.resize());
+
+        async function generate() {
+            const d = +$('detail').value;
+            $('build').disabled = true; $('save').disabled = true;
+            $('status').textContent = 'gerando…';
+            await new Promise((r) => setTimeout(r, 30));
+            const t0 = performance.now();
+            const opts = { detail: d, maxErr: +$("maxErr").value / 1000, topOnly: $("topOnly").checked };
+            result = buildAll(opts, (slug, i, n) => { $("status").textContent = `gerando ${i}/${n} (${slug})…`; });
+            const out = await toScript(result, opts);
+            script = out.text;
+            const tb = $('stats').tBodies[0];
+            tb.innerHTML = '';
+            let tris = 0, verts = 0;
+            for (const s of result.stats) {
+                tris += s.tris; verts += s.verts;
+                const tr = tb.insertRow(); tr.dataset.id = s.slug;
+                tr.innerHTML = `<td>${s.slug}</td><td>${s.tris}</td><td>${s.verts}</td><td>${s.ms}</td>`;
+                tr.onclick = () => { $('model').value = s.slug; show(s.slug); };
+            }
+            tb.insertRow().innerHTML = `<td><b>total</b></td><td>${tris}</td><td>${verts}</td><td></td>`;
+            $('status').textContent = `${result.stats.length} modelos em ${Math.round(performance.now() - t0)} ms — ${(result.bytes.length / 1048576).toFixed(2)} MB → ${(out.zBytes / 1048576).toFixed(2)} MB comprimido (${(script.length / 1048576).toFixed(2)} MB o .js)`;
+            // a vista usa o resultado novo (mesmo caminho do jogo: o .js inteiro)
+            (0, eval)(script);
+            await CarArt3D.reload(scene);
+            const sel = $('model').value;
+            $('model').innerHTML = '';
+            for (const s of result.stats) { const o = document.createElement('option'); o.value = o.textContent = s.slug; $('model').appendChild(o); }
+            $('model').value = sel && CarArt3D.has(sel) ? sel : 'hatch_moderno';
+            show($('model').value);
+            $('build').disabled = false; $('save').disabled = false;
+            window.__result = result;
+        }
+        $('build').onclick = generate;
+        $('save').onclick = async () => {
+            const r = await fetch('/__save/assets/cars/carros3d.js', { method: 'PUT', body: script });
+            $('status').textContent = r.ok ? 'salvo em assets/cars/carros3d.js' : 'falhou ao salvar (' + r.status + ')';
+        };
+        // começa com o arquivo atual do jogo, se houver
+        (async () => {
+            try { await new Promise((ok, no) => { const s = document.createElement('script'); s.src = '../../assets/cars/carros3d.js?' + Date.now(); s.onload = ok; s.onerror = no; document.head.appendChild(s); }); } catch (e) { $('status').textContent = 'sem assets/cars/carros3d.js ainda — clique em Gerar'; return; }
+            await CarArt3D.reload(scene);
+            for (const id of Object.keys(CAR3D.models)) { const o = document.createElement('option'); o.value = o.textContent = id; $('model').appendChild(o); }
+            $('model').value = 'hatch_moderno';
+            show('hatch_moderno');
+            $('status').textContent = `arquivo atual: ${Object.keys(CAR3D.models).length} modelos, detalhe ${CAR3D.detail}`;
+        })();
+        window.CarArt3D = CarArt3D;
+        window.__scene = scene;
+    </script>
+</body>
+</html>

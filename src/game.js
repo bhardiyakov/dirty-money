@@ -84,7 +84,8 @@ class Game {
         const sp = SafeHouse.spawnWorld();
         if (sp) this.player.root.rotation.y = sp.face;      // acorda dentro da safe house, de frente para a porta
         this.camera = new CompassCamera(this.scene, this.gameEngine.engine, this.player.position);
-        this.camera.fitPixelScale(this.gameEngine.renderHeight);
+        this.camera.fitPixelScale(this.gameEngine.viewHeight);
+        Smooth.apply(this);                                  // gráfico suave (alta definição): antisserrilhado, densidade do monitor, texturas filtradas
         this.minimap = new Minimap('minimap');
 
         // IA (preenchida de forma assíncrona em _initAI).
@@ -199,6 +200,7 @@ class Game {
 
             await CarArt.ready;                             // atlas dos carros (decodificado desde a carga da página)
             CarArt.init(this.scene);
+            if (CarArt3D.available()) { await CarArt3D.ready; CarArt3D.init(this.scene); }      // carros em 3D (descomprimidos desde a carga da página)
             SkidMarks.init(this.scene); SkidMarks.game = this;                  // marcas de pneu no chão (derrapagem, freada, arrancada)
             Blood.init(this.scene);                                              // sangue no chão (respingo de tiro, rastro de quem sangra)
             SparkFx.init(this.scene);                                            // faíscas em riscos e lascas (pneu furado a tiro)
@@ -262,7 +264,7 @@ class Game {
     _bindResize() {
         window.addEventListener('resize', () => {
             this.gameEngine.resize();
-            this.camera.fitPixelScale(this.gameEngine.renderHeight);
+            this.camera.fitPixelScale(this.gameEngine.viewHeight);
             this.camera.onResize();
             this._redraw = true;                         // redimensionar apaga a tela: com o mundo parado (menu/tela de fim) redesenha 1×
         });
@@ -360,7 +362,7 @@ class Game {
         if (freed) console.log(`[MEMÓRIA] ${freed} clipes/folhas sem uso liberados da GPU`);
         this._sweepFreed = (this._sweepFreed || 0) + freed;
         Perf.sampleHeap();
-        this._sweepInfo = `${actors} atores · ${clips} clipes de personagem · ${cars} carros no lote do atlas · ${this._sweepFreed} liberados desde o início`;
+        this._sweepInfo = `${actors} atores · ${clips} clipes de personagem · ${cars} carros no lote do atlas · ${typeof CarArt3D !== 'undefined' ? CarArt3D.live.size : 0} carros 3D · ${this._sweepFreed} liberados desde o início`;
     }
 
     // Malhas estáticas (transform congelado, buffers não atualizáveis): a GPU já tem os vértices; a cópia na RAM de normais, UVs e
@@ -591,6 +593,7 @@ class Game {
         if (zoom.keys) this.camera.zoom(zoom.keys * Config.camera.zoomSpeed * dt);
         if (zoom.wheel) this.camera.zoom(zoom.wheel * Config.camera.wheelStep);
         if (this.sprites.npc) this.sprites.npc.setZoom(this.gameEngine.renderHeight / (2 * this.camera.view));      // personagens 2,5D: nítidos de perto, suaves de longe
+        Smooth.zoom(this, this.gameEngine.renderHeight / (2 * this.camera.view));       // árvores e mobiliário de rua: bordas suaves no gráfico suave
 
         // --- Círculo de visibilidade: o alvo (a pé ou o veículo dele) nunca some debaixo de viaduto, ponte, túnel, cobertura ou copa ---
         const rv = this.mode === 'car' && this.activeCar ? this.activeCar : null, rp = rv ? rv.position : this.player.position;
@@ -1319,7 +1322,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // Veículo roubável mais próximo do jogador a pé (ou null).
     _hijackTarget() {
         if (!this.physicsReady || this.mode === 'car' || this.mode === 'heli' || !this.player.alive) return null;
-        return this.vehicleManager.nearest(this.player.position, Config.vehicle.hijackRange);
+        return this.vehicleManager.nearest(this.player.position, Config.vehicle.hijackRange, this.player);
     }
 
     // Entrar num carro, com a porta de verdade: o personagem vai até a porta, abre, entra, e a porta fecha.
@@ -1502,8 +1505,10 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
                 else { html = '<b>F</b> roubar o carro (tira o motorista)'; this.doors.prewarm(car); }
             }
             if (!html) html = this._housePrompt();
-            if (!html && this.player.crouched) html = this.player.inCover      // agachado: o estado e como sair dele
-                ? '<b>Q</b> levantar<small>em cobertura — tiros do outro lado param no obstáculo; quem está lá não te vê</small>'
+            if (!html && this.player.crouched) html = this.player.coverLock      // agachado: o estado e como sair dele
+                ? '<b>Q</b> sair da cobertura<small>colado — mova para os lados para deslizar; segure na ponta para contornar; afaste-se para soltar</small>'
+                : this.player.inCover
+                ? '<b>Q</b> grudar na cobertura<small>em cobertura — tiros do outro lado param no obstáculo; quem está lá não te vê</small>'
                 : '<b>Q</b> levantar<small>agachado (furtivo) — a polícia e as testemunhas só te notam bem de perto</small>';
             if (!html) html = Interiors.prompt(this);
             if (!html && HouseView.hint) html = HouseView.hint;
@@ -1950,10 +1955,13 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     _toggleCrouch() {
         const pl = this.player;
         if (pl.busy || pl.swimming || (pl.depth || 0) > 0 || this.hiding || this.holdup || this.arrest || this.death || this.lockpick.active) return;
-        if (pl.crouched) { pl.setCrouch(false); return; }
         const p = pl.position, T = Config.tactics, C = Cover.find(p.x, p.z, T.coverSnap);
-        if (C && C.d > 0.85) pl.coverSnap = { x0: p.x, z0: p.z, x: C.x + C.nx * 0.75, z: C.z + C.nz * 0.75, t: 0, dur: 0.12 + 0.08 * C.d };
+        if (pl.crouched && (pl.coverLock || !C)) { pl.setCrouch(false); return; }          // colado (ou sem cobertura perto): levanta
+        // Perto de cobertura: vai até ela e GRUDA (o direcional passa a deslizar ao longo dela — Player._coverMove)
+        const st = Player.coverStickOf(C);
+        if (C && Math.abs(C.d - st) > 0.08) pl.coverSnap = { x0: p.x, z0: p.z, x: C.x + C.nx * st, z: C.z + C.nz * st, t: 0, dur: 0.12 + 0.08 * C.d };
         pl.setCrouch(true);
+        if (C) pl.coverLock = { pull: 0, hold: 0 };
         if (C && !this._tipCover) { this._tipCover = true; this._flash('Em cobertura: tiros vindos do outro lado param no obstáculo e quem está lá não te vê'); }
         else if (!C && !this._tipSneak) { this._tipSneak = true; this._flash('Agachado: furtivo — a polícia e as testemunhas só te notam bem de perto'); }
     }

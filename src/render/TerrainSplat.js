@@ -9,7 +9,8 @@
 //   • cada pixel mistura as 4 células em volta com pesos bilineares "apertados" (a transição tem ~2 u) num ponto ENTORTADO por ruído:
 //     as divisas viram curvas orgânicas, sem quinas, e a troca de textura é gradual;
 //   • curvas de nível: linhas onde a altura interpolada cruza múltiplos de Config.world.contour (curvas, não degraus);
-//   • tudo na grade de pixels do mundo (20 px/u): continua pixel art.
+//   • tudo na grade de pixels do mundo (20 px/u): continua pixel art — com o gráfico suave (Smooth), sem a grade e com a textura
+//     filtrada (bilinear feito à mão dentro do ladrilho do atlas, que repete).
 // ============================================================================
 
 const TerrainSplat = {
@@ -61,10 +62,15 @@ const TerrainSplat = {
             vec4 tCell(vec2 c) { return texture2D(splatMap, (clamp(c, vec2(0.0), vec2(${f(P.nx - 1)}, ${f(P.nz - 1)})) + 0.5) / vec2(${f(P.nx)}, ${f(P.nz)})); }
             float tId(vec4 c) { return floor(c.r * 255.0 + 0.5); }
             float tH(vec4 c) { return (floor(c.g * 255.0 + 0.5) * 256.0 + floor(c.b * 255.0 + 0.5)) / ${f(S.HK)}; }
+            vec3 tPx(vec2 o, vec2 t) { return texture2D(splatAtlas, (o + mod(t, ${f(S.TILE)}) + 0.5) / vec2(${f(S.TILE * S.COLS)}, ${f(S.TILE * S.ROWS)})).rgb; }
             vec3 tTex(float id, vec2 p) {
-                vec2 t = floor(fract(p / 4.0) * ${f(S.TILE)}) + 0.5;
                 vec2 o = vec2(mod(id, ${f(S.COLS)}), floor(id / ${f(S.COLS)})) * ${f(S.TILE)};
-                return texture2D(splatAtlas, (o + t) / vec2(${f(S.TILE * S.COLS)}, ${f(S.TILE * S.ROWS)})).rgb;
+                vec2 q = fract(p / 4.0) * ${f(S.TILE)};
+                if (tSmooth > 0.5) {                                                                // gráfico suave: bilinear DENTRO do ladrilho (repete)
+                    vec2 i = floor(q - 0.5), w = q - 0.5 - i;
+                    return mix(mix(tPx(o, i), tPx(o, i + vec2(1.0, 0.0)), w.x), mix(tPx(o, i + vec2(0.0, 1.0)), tPx(o, i + vec2(1.0, 1.0)), w.x), w.y);
+                }
+                return tPx(o, floor(q));
             }
             float tW(float w, float id) { return id > 250.0 ? 0.0 : w * w * w; }               // peso apertado, mar e cidade fora (sem ponto e vírgula em comentário GLSL: o Babylon corta a linha ali)
             vec3 terrainColor(vec2 p) {
@@ -105,7 +111,8 @@ const TerrainSplat = {
             getClassName() { return 'TerrainSplatPlugin'; }
             prepareDefines(defines) { defines.TSPLAT = true; }
             getSamplers(samplers) { samplers.push('splatMap', 'splatAtlas'); }
-            bindForSubMesh(ub) { ub.setTexture('splatMap', mapTex); ub.setTexture('splatAtlas', atlasTex); }
+            getUniforms() { return { ubo: [{ name: 'tSmooth', size: 1, type: 'float' }], fragment: 'uniform float tSmooth;' }; }
+            bindForSubMesh(ub) { ub.setTexture('splatMap', mapTex); ub.setTexture('splatAtlas', atlasTex); ub.updateFloat('tSmooth', typeof Smooth !== 'undefined' && Smooth.on ? 1 : 0); }
             getCustomCode(shaderType) {
                 if (shaderType !== 'fragment') return null;
                 return {
@@ -115,7 +122,7 @@ const TerrainSplat = {
                         #endif`,
                     CUSTOM_FRAGMENT_UPDATE_DIFFUSE: `
                         #ifdef TSPLAT
-                        baseColor.rgb = terrainColor((floor(vPositionW.xz * 20.0) + 0.5) / 20.0);
+                        baseColor.rgb = terrainColor(tSmooth > 0.5 ? vPositionW.xz : (floor(vPositionW.xz * 20.0) + 0.5) / 20.0);     // (pixel art: na grade do mundo)
                         #ifdef VERTEXCOLOR
                         baseColor.rgb *= vColor.rgb;                                                   // (relevo: brilho por canto)
                         #endif

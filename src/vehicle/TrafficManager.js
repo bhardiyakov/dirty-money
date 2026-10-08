@@ -200,6 +200,7 @@ class TrafficManager {
         };
         const ped = (e) => {
             const p = e.position, o = this._push(n, 'ped', p.x, p.z, 0, 0, e, 0.4, 0.4);
+            o.layer = Vehicle.layerOfLevel(Vehicle.levelOf(e));          // (no viaduto: camada 1 | nadando sob a ponte: -1, ninguém da pista o vê)
             out[n++] = o; G.insert(o, o.x, o.z);
         };
         for (const c of this.vm.vehicles) car(c);

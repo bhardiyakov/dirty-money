@@ -9,7 +9,9 @@ const SUN_DIST = 160;   // distância do "sol" (câmera de sombra) ao ponto foca
 class GameEngine {
     constructor(canvasId) {
         this.canvas = document.getElementById(canvasId);
-        // Sem MSAA e sem adaptToDeviceRatio: queremos pixels duros e controle da escala.
+        // Sem MSAA no contexto e sem adaptToDeviceRatio: o controle da escala é nosso (_applyScale). No modo pixel art os pixels são
+        // duros; na alta definição o antisserrilhado e a densidade do monitor vêm do gráfico suave (render/Smooth.js), que liga/desliga
+        // na hora (o MSAA do contexto não poderia mudar sem recriá-lo).
         this.engine = new BABYLON.Engine(this.canvas, false, {
             antialias: false,
             adaptToDeviceRatio: false,
@@ -183,6 +185,8 @@ class GameEngine {
     // Resolução interna baixa + upscale nítido => pixels grandes e consistentes. A escala é
     // INTEIRA (cada pixel interno vira NxN pixels da tela, sem pixels de tamanhos desiguais),
     // escolhida para a altura interna ficar o mais perto possível de Config.art.internalHeight.
+    // Alta definição com o gráfico suave (Smooth): a densidade de pixels do monitor (até Config.perf.dprCap) — a tela não é mais
+    // desenhada em "pixels da página" e ampliada pelo navegador (Windows a 125%/150%, telas retina: imagem borrada e serrilhada).
     _applyScale() {
         const A = Config.art;
         const h = this.canvas.clientHeight || window.innerHeight;
@@ -191,10 +195,11 @@ class GameEngine {
             const lo = Math.max(1, Math.floor(h / A.internalHeight)), hi = Math.max(1, Math.ceil(h / A.internalHeight));
             const err = (l) => Math.abs(Math.log(h / l / A.internalHeight));
             level = err(lo) <= err(hi) ? lo : hi;
-        }
+        } else if (A.smooth !== false) level = 1 / Math.max(1, Math.min(window.devicePixelRatio || 1, Config.perf.dprCap || 1));
         this.engine.setHardwareScalingLevel(level);
         this.canvas.style.imageRendering = A.pixelate ? 'pixelated' : 'auto';
-        this.renderHeight = Math.round(h / level);
+        this.renderHeight = Math.round(h / level);                 // linhas de pixels desenhadas de fato (nitidez dos personagens)
+        this.viewHeight = A.pixelate ? this.renderHeight : h;      // enquadramento da câmera (fitPixelScale): não muda com a densidade
     }
 
     runRenderLoop(callback) {

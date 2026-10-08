@@ -54,13 +54,15 @@ class Collisions {
             ctx.car = car; ctx.c = c; ctx.sp = sp; ctx.fx = fx; ctx.fz = fz; ctx.rx = fz; ctx.rz = -fx;
             ctx.hl = hl; ctx.hw = hw; ctx.reach2 = reach2;
 
-            if (onFoot) this._player(ctx, pl);
+            const lv = Vehicle.levelOf(car);                                // (viaduto / ponte: só pega quem está no MESMO nível)
+            ctx.lv = lv;
+            if (onFoot && Math.abs(Vehicle.levelOf(pl) - lv) < 1.5) this._player(ctx, pl);
             if (moving) {
                 // Quem pode ser atropelado fica numa grade (montada uma vez por quadro, só se algum carro anda): cada carro consulta só a
                 // vizinhança em vez de testar todos os pedestres, policiais e traficantes do mundo (antes ~7 mil testes por quadro).
                 if (!built) { built = true; this._fill(npcs, offs, gang); }
                 for (const e of this._grid.query(c.x, c.z, reach, this._q)) {
-                    if (e.alive) this._victim(ctx, e, e._ck ? 0.45 : 0.4, Collisions.KINDS[e._ck]);
+                    if (e.alive && Math.abs(Vehicle.levelOf(e) - lv) < 1.5) this._victim(ctx, e, e._ck ? 0.45 : 0.4, Collisions.KINDS[e._ck]);
                 }
             }
         }

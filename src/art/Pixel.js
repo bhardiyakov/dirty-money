@@ -164,14 +164,17 @@ class PixelCanvas {
         }
     }
 
-    // Vira textura do Babylon (pixels nítidos). `mips` evita cintilar ao longe.
+    // Vira textura do Babylon (pixels nítidos). `mips` evita cintilar ao longe. Ladrilho (repete, com mipmaps: chão, telhados) com o
+    // gráfico suave ligado (Smooth): filtro trilinear em vez dos pixels duros — e troca na hora quando o jogador muda o ajuste.
     toTexture(scene, { wrap = true, mips = true, aniso = 1 } = {}) {
-        const sampling = mips ? BABYLON.Texture.NEAREST_NEAREST_MIPNEAREST : BABYLON.Texture.NEAREST_SAMPLINGMODE;
+        const tile = wrap && mips, smooth = tile && typeof Smooth !== 'undefined' && Smooth.on;
+        const sampling = smooth ? BABYLON.Texture.TRILINEAR_SAMPLINGMODE : mips ? BABYLON.Texture.NEAREST_NEAREST_MIPNEAREST : BABYLON.Texture.NEAREST_SAMPLINGMODE;
         const tex = BABYLON.RawTexture.CreateRGBATexture(this.data, this.w, this.h, scene, mips, false, sampling);
         const mode = wrap ? BABYLON.Texture.WRAP_ADDRESSMODE : BABYLON.Texture.CLAMP_ADDRESSMODE;
         tex.wrapU = mode;
         tex.wrapV = mode;
-        tex.anisotropicFilteringLevel = aniso;
+        tex.anisotropicFilteringLevel = smooth ? Math.max(4, aniso) : aniso;
+        if (tile) { tex._dmTile = true; tex._dmAniso = aniso; }
         return tex;
     }
 }

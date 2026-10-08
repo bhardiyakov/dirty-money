@@ -357,27 +357,42 @@ const PropSprites = {
             uniform float mode;
             uniform float cps;
             uniform float animStep;
-            void main(void) {
-                vec4 t;
-                if (vSway > 0.01) {
-                    float f = floor(mod(time * cps * 4.0 + vPh * 4.0, 4.0));
-                    vec2 uv = vUV + vec2(0.0, f * animStep);
-                    if (mode < 0.5) t = texture2D(anim0, uv);
-                    else if (mode < 1.5) t = texture2D(anim1, uv);
-                    else t = texture2D(anim2, uv);
-                } else {
-                    t = texture2D(atlas, vUV);
-                }
-                if (t.g < 0.5) discard;                                  // atlas empacotado (RG8): r = rampa*5+nível (255 = sombra), g = alfa
+            uniform float sharp;            // gráfico suave (Smooth): px da tela por px da arte (≥ 1) | 0 = pixels duros (pixel art)
+            uniform vec2 atlasSize;
+            uniform vec2 animSize;
+            vec4 raw(vec2 uv) {
+                if (vSway < 0.01) return texture2D(atlas, uv);
+                if (mode < 0.5) return texture2D(anim0, uv);
+                if (mode < 1.5) return texture2D(anim1, uv);
+                return texture2D(anim2, uv);
+            }
+            // pixel do atlas empacotado (RG8: r = rampa*5+nível, 255 = sombra; g = alfa) → cor PRÉ-MULTIPLICADA
+            vec4 px(vec4 t) {
+                if (t.g < 0.5) return vec4(0.0);
                 float idx = floor(t.r * 255.0 + 0.5);
-                if (idx > 250.0) {
-                    gl_FragColor = vec4(0.0, 0.0, 0.05, shadowAlpha);
+                if (idx > 250.0) return vec4(vec3(0.0, 0.0, 0.05) * shadowAlpha, shadowAlpha);
+                vec2 puv = vec2((idx + 0.5) / palSize.x, (floor(vVariant + 0.5) + 0.5) / palSize.y);
+                return vec4(texture2D(palette, puv).rgb * tint * vShade, 1.0);
+            }
+            void main(void) {
+                vec2 uv = vUV;
+                if (vSway > 0.01) uv += vec2(0.0, floor(mod(time * cps * 4.0 + vPh * 4.0, 4.0)) * animStep);
+                float k = useFade > 0.5 ? clamp(length(vWorld.xz - focus) / fadeR, 0.0, 1.0) : 1.0;
+                if (sharp > 0.5) {
+                    // Gráfico suave: bilinear feito à mão sobre a cor JÁ pintada (o atlas tem códigos de paleta, não cores), com o miolo
+                    // de cada pixel da arte nítido (sharp) — só a borda entre dois pixels é suavizada: sem serrilhado e sem borrar.
+                    vec2 sz = vSway > 0.01 ? animSize : atlasSize;
+                    vec2 p = uv * sz - 0.5, i = floor(p), f = clamp((p - i - 0.5) * sharp + 0.5, 0.0, 1.0);
+                    vec4 c = mix(mix(px(raw((i + 0.5) / sz)), px(raw((i + vec2(1.5, 0.5)) / sz)), f.x),
+                                 mix(px(raw((i + vec2(0.5, 1.5)) / sz)), px(raw((i + 1.5) / sz)), f.x), f.y);
+                    if (c.a < 0.02) discard;
+                    gl_FragColor = vec4(c.rgb / c.a, c.a * smoothstep(0.2, 1.0, k));
                     return;
                 }
-                float k = useFade > 0.5 ? clamp(length(vWorld.xz - focus) / fadeR, 0.0, 1.0) : 1.0;
-                vec2 puv = vec2((idx + 0.5) / palSize.x, (floor(vVariant + 0.5) + 0.5) / palSize.y);
-                vec3 c = texture2D(palette, puv).rgb;
-                gl_FragColor = vec4(c * tint * vShade, smoothstep(0.2, 1.0, k));
+                vec4 c = px(raw(uv));
+                if (c.a <= 0.0) discard;
+                if (c.a < 0.999) { gl_FragColor = vec4(0.0, 0.0, 0.05, shadowAlpha); return; }
+                gl_FragColor = vec4(c.rgb, smoothstep(0.2, 1.0, k));
             }`;
     },
 
@@ -385,7 +400,7 @@ const PropSprites = {
         this.registerSway();
         const m = new BABYLON.ShaderMaterial(name, scene, { vertex: 'propSway', fragment: 'propSway' }, {
             attributes: ['position', 'uv', 'color'],
-            uniforms: ['worldViewProjection', 'world', 'palSize', 'tint', 'shadowAlpha', 'focus', 'fadeR', 'useFade', 'time', 'mode', 'cps', 'animStep'],
+            uniforms: ['worldViewProjection', 'world', 'palSize', 'tint', 'shadowAlpha', 'focus', 'fadeR', 'useFade', 'time', 'mode', 'cps', 'animStep', 'sharp', 'atlasSize', 'animSize'],
             samplers: ['atlas', 'anim0', 'anim1', 'anim2', 'palette'],
             needAlphaBlending: true,
         });
@@ -402,6 +417,10 @@ const PropSprites = {
         m.setFloat('mode', 0);
         m.setFloat('cps', this.MODES[0].cps);
         m.setFloat('animStep', 1 / this.ANIM_FRAMES);
+        const size = (t) => { const s = t && t.getSize ? t.getSize() : { width: 1, height: 1 }; return new BABYLON.Vector2(s.width, s.height); };
+        m.setVector2('atlasSize', size(atlas));
+        m.setVector2('animSize', size(anims[0]));          // (os 3 atlas animados têm o mesmo tamanho)
+        m.setFloat('sharp', 0);                            // (Smooth.zoom liga o caminho suave)
         m.backFaceCulling = false;
         return m;
     },
@@ -519,6 +538,8 @@ const PropSprites = {
                 }
             },
             setFocus: (x, z, r) => { focusV.set(x, z); api.hiMaterial.setVector2('focus', focusV); if (r > 0) api.hiMaterial.setFloat('fadeR', r); },
+            // Gráfico suave (Smooth.zoom): px da tela por px da arte; 0 = pixels duros.
+            setSharp: (s) => { if (s === api._sharp) return; api._sharp = s; for (const m of [api.hiMaterial, api.loMaterial]) m.setFloat('sharp', s); },
         };
         console.log(`[PROPS] ${this.FRAMES.length} frames + ${sw.length}×${this.ANIM_FRAMES} de vento leve em ${(performance.now() - t0).toFixed(0)} ms (atlas animado ${AW}×${AH})`);
         return api;

@@ -45,6 +45,8 @@ class SpriteActor {
         vd.applyToMesh(this.mesh, true);                            // UVs e cores atualizáveis.
         this._fr = new Float32Array(16);                           // retângulo do quadro no atlas (só o shader vetorial lê)
         this.mesh.setVerticesData('fr', this._fr, true, 4);
+        this._fr2 = new Float32Array(16);                          // próximo quadro + peso da mistura (personagens 2,5D: _blendNext)
+        this.mesh.setVerticesData('fr2', this._fr2, true, 4);
         this._pos = new Float32Array(12);
         this.shade = 1;                // 1 = ao sol, ~0,66 = na sombra de um prédio.
         this._shadeTimer = Math.random() * 0.3;
@@ -333,10 +335,32 @@ class SpriteActor {
         this._slopeFresh = false;
         if (c.vector) this._rotate();
         this.time += dt * c.fps * rate * (this._rateK || 1);
+        this._rate = rate;
         let f;
         if (c.loop) f = ((Math.floor(this.time) % c.frames) + c.frames) % c.frames;          // (ritmo negativo: anda para trás no ciclo)
         else { f = Math.min(Math.floor(this.time), c.frames - 1); if (this.time >= c.frames) this.done = true; }
         if (f !== this.frame) { this.frame = f; this._applyUV(); }
+        if (c.npc) this._blendNext(c);
+    }
+
+    // Mistura de quadros (personagens 2,5D, com o gráfico suave): na segunda metade de cada quadro o PRÓXIMO entra em degradê
+    // (atributo fr2: o retângulo dele + o peso), então a pose muda suave em vez do salto seco. Sem o gráfico suave, peso 0.
+    _blendNext(c) {
+        const n = Math.min(c.frames, c.pk.n), R = this._fr2;
+        let w = 0, f2 = this.frame;
+        if (typeof Smooth !== 'undefined' && Smooth.on && n > 1 && (c.loop || this.frame < n - 1)) {
+            let t = this.time - Math.floor(this.time);
+            if (this._rate < 0) t = 1 - t;                         // (andando para trás no ciclo: o próximo é o anterior)
+            const k = Math.max(0, Math.min(1, (t - 0.45) / 0.55));
+            w = k * k * (3 - 2 * k);
+            f2 = c.loop ? (this.frame + (this._rate < 0 ? n - 1 : 1)) % n : this.frame + 1;
+        }
+        if (w < 0.004) { if (R[3] !== 0) { for (let k = 3; k < 16; k += 4) R[k] = 0; this.mesh.updateVerticesData('fr2', R); } return; }
+        const i = (Math.max(0, this.dir) * c.pk.n + Math.min(f2, c.pk.n - 1)) * 3, a = c.pk.fr[i], b = c.pk.fr[i + 1], d = c.pk.fr[i + 2];
+        w = Math.round(w * 64) / 64;
+        if (R[0] === a && R[1] === b && R[2] === d && R[3] === w) return;
+        for (let k = 0; k < 16; k += 4) { R[k] = a; R[k + 1] = b; R[k + 2] = d; R[k + 3] = w; }
+        this.mesh.updateVerticesData('fr2', R);
     }
 
     // Retângulo do frame/direção atual dentro do atlas do clipe.

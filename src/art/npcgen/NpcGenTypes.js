@@ -81,6 +81,11 @@ function NpcGenTypes(G) {
         civil_skatista: T('civil', 10, ['casual', 'sport'], CIV),
         civil_mano: T('civil', 10, ['poor', 'casual'], CIV),
         civil_motoboy: T('farda', 8, ['courier'], CIV),
+        // penteados e portes da malha 3D (NpcGenMesh): chanel, tranças, topete, repartido
+        civil_chanel: T('civil', 10, ['casual', 'biz', 'tourist'], CIV),
+        civil_trancas: T('civil', 10, ['casual', 'poor', 'beach'], CIV),
+        civil_topete: T('civil', 10, ['casual', 'sport'], CIV),
+        civil_repartido: T('social', 8, ['biz', 'casual'], CIV),
         pm_policial: T('farda', 6, ['police'], [...FORCE('pistol'), 'swing:baton']),
         pm_policial_f: T('farda', 6, ['police'], [...FORCE('pistol'), 'swing:baton']),
         bope_capacete: T('farda', 5, ['swat'], FORCE('smg'), { smg: 'rifle' }),
@@ -114,6 +119,11 @@ function NpcGenTypes(G) {
         Object.assign({}, CIVIL, { id: 'civil_mano', label: 'Mano do bairro', skin: 'pele_negra', hair: 'buzz', hair_color: 'preto', head: 'bucket', hat_color: 'branco', accent: 'roupa_preta', top: 'jersey', top_color: 'amarelo', pattern: 'jersey', accent2: 'verde', chain: true, bottom: 'shorts', bottom_color: 'roupa_preta', shoes: 'hightop', shoe_color: 'tenis_branco', sole_color: 'tenis_branco', body: 'muscular', scale: 1.0 }),
         // Entregador de moto ("iFome"): capacete, jaqueta e o baú vermelho nas costas (Couriers).
         Object.assign({}, CIVIL, { id: 'civil_motoboy', label: 'Motoboy (entregador)', skin: 'pele_parda', hair: 'short', hair_color: 'preto', head: 'helmet', hat_color: 'vermelho', top: 'jacket', top_color: 'vermelho', bottom: 'jeans', bottom_color: 'jeans_escuro', shoes: 'sneaker', shoe_color: 'tenis_preto', sole_color: 'tenis_branco', bag: 'bau', bag_color: 'vermelho', cargo_color: 'branco', strap_color: 'roupa_preta', body: 'normal', gloves: true, scale: 1.0 }),
+        // Com os cabelos e portes da malha 3D (sem ela, viram cabelo curto)
+        Object.assign({}, CIVIL, { id: 'civil_chanel', label: 'Moça de chanel', gender: 'f', skin: 'pele_clara', hair: 'bob', hair_color: 'preto', top: 'tshirt', top_color: 'rosa', bottom: 'jeans', bottom_color: 'jeans', shoes: 'sneaker', shoe_color: 'tenis_branco', sole_color: 'tenis_branco', bag: 'cross', bag_color: 'marrom', body: 'normal', scale: 0.96 }),
+        Object.assign({}, CIVIL, { id: 'civil_trancas', label: 'Moça de tranças', gender: 'f', skin: 'pele_negra', hair: 'braid', hair_color: 'preto', top: 'tshirt', top_color: 'amarelo', bottom: 'shorts', bottom_color: 'jeans', shoes: 'flipflop', shoe_color: 'verde', sole_color: 'amarelo', body: 'heavy', scale: 0.97 }),
+        Object.assign({}, CIVIL, { id: 'civil_topete', label: 'Rapaz de topete', skin: 'pele_morena', hair: 'quiff', hair_color: 'castanho', top: 'polo', top_color: 'azul', accent: 'branco', bottom: 'pants', bottom_color: 'bege', shoes: 'sneaker', shoe_color: 'tenis_preto', sole_color: 'tenis_branco', body: 'slim', scale: 0.99 }),
+        Object.assign({}, CIVIL, { id: 'civil_repartido', label: 'Senhor de cabelo repartido', skin: 'pele_parda', hair: 'side', hair_color: 'grisalho', top: 'social', top_color: 'branco', accent: 'branco', bottom: 'pants', bottom_color: 'marinho', shoes: 'dress', shoe_color: 'couro_preto', sole_color: 'sola_escura', body: 'heavy', beard: 'mustache', scale: 1.0 }),
     ];
     for (const r of MORE) { if (!G.BY_ID[r.id]) { G.ROSTER.push(r); G.BY_ID[r.id] = r; } }
 

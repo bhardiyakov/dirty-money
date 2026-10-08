@@ -151,6 +151,18 @@ class Vehicle {
         this.body.dispose(false, false);       // leva junto a cabine e o giroflex (filhos)
     }
 
+    // Refaz o visual do CARRO (Ajustes › Carros 3D): sprite do atlas ↔ carro 3D, com a mesma pintura, amassado, altura e posição.
+    // Motos, bicicletas e barcos (RiderActor) ficam como estão.
+    remakeVisual() {
+        const v = this.visual, sheet = this.carSheet;
+        if (!v || !sheet || sheet.art !== true) return;
+        const nv = CarArt.actor(sheet.modelId, v.variant);
+        nv.setY(v.y); nv.setDamage(v.dent); nv.setVisible(v.visible);
+        if (v._placed) { nv.setPosition(v.x, v.z); nv.setHeading(v.heading); }
+        v.dispose();
+        this.visual = nv;
+    }
+
     // Material do corpo 3D por pintura (cache por cena).
     static _paintMaterial(scene, row) {
         const cache = scene._carPaintMats || (scene._carPaintMats = {});
@@ -598,6 +610,7 @@ class Vehicle {
         let yr = 0;
         if (pv.h !== null) { let d = hd - pv.h; d = Math.atan2(Math.sin(d), Math.cos(d)); yr = d / dt; }
         pv.h = hd;
+        if (this.visual.setFlat) this.visual.setFlat(this.flat);                             // carro 3D: pneu furado baixa aquele canto
         if (this.visual.animate) this.visual.animate(dt, aF, aL, this.wrecked || this.engineDead && !this.controlled ? 0 : this.lastSteer, this.isBike || this.spec.boat ? null : yr);
         if (this.spec.boat || this.wrecked || this._asleep || typeof SkidMarks === 'undefined') return;
         this._rimFx(dt);                                                                      // pneu furado: faíscas do aro
@@ -662,6 +675,19 @@ class Vehicle {
 // Contador de passos de física (Game._render incrementa depois de avançar o Havok): marca as velocidades guardadas como velhas.
 Vehicle.physFrame = 0;
 Vehicle._ZERO = new BABYLON.Vector3(0, 0, 0);          // (só leitura: velocidade zero sem alocar)
+
+// NÍVEL de quem está no mundo, para separar quem passa POR CIMA de quem está EMBAIXO (m): tabuleiro do viaduto = a altura dele,
+// chão (e ponte sobre a água, que é a pista) = 0, água SOB a ponte = -1. Carro em cima do viaduto não freia nem atropela quem
+// anda lá embaixo; quem nada sob a ponte não é "visto" pelos carros que passam nela nem entra num deles.
+Vehicle.levelOf = (e) => {
+    if (!e) return 0;
+    if (e.isBoat) { const p = e.position; return RoadPlan.onBridge(p.x, p.z) ? -1 : 0; }
+    if (e.body && e.phys) return e._onDeck ? (e.elev || 0) : 0;                         // veículo terrestre
+    return e.underBridge ? -1 : (e.onDeck ? (e.deckH || 0) : 0);                      // jogador / pedestre
+};
+Vehicle.sameLevel = (a, b) => Math.abs(Vehicle.levelOf(a) - Vehicle.levelOf(b)) < 1.5;
+// Camada de obstáculo do trânsito (TrafficCar compara com a do carro: 0 chão, 1 viaduto, -1 água sob a ponte).
+Vehicle.layerOfLevel = (lv) => (lv > 2.2 ? 1 : lv < -0.5 ? -1 : 0);
 
 // Skill Direção (carreira Desmanche): multiplicadores de aderência lateral e de giro só para o veículo que o JOGADOR dirige.
 Vehicle.playerGrip = 1;

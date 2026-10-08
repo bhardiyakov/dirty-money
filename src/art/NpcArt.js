@@ -31,7 +31,7 @@ const NpcArt = {
     available() { return typeof NPC_ATLAS !== 'undefined' && Object.keys(NPC_ATLAS).length > 0 && typeof NpcGenCore === 'function' && !/[?&]npc=0\b/.test(location.search); },
 
     gen() {
-        if (!this.G) { const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); this.G = G; }
+        if (!this.G) { const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G); this.G = G; }
         return this.G;
     },
 
@@ -148,6 +148,7 @@ const NpcArt = {
             attribute vec3 position;
             attribute vec4 color;
             attribute vec4 fr;
+            attribute vec4 fr2;          // PRÓXIMO quadro (mesmo formato de fr) + peso da mistura em w (0 = só o quadro atual)
             uniform mat4 world;
             uniform mat4 viewProjection;
             uniform float ppu;
@@ -157,6 +158,8 @@ const NpcArt = {
             varying vec2 vC;
             varying vec3 vW;
             varying vec3 vBl;
+            varying vec3 vPx2;
+            varying vec4 vFr2;
             vec2 un(float v) { float hi = floor(v / 4096.0 + 0.0001); return vec2(hi, v - hi * 4096.0); }
             void main(void) {
                 vec2 xy = un(fr.x), wh = un(fr.y), o = un(fr.z) - 2048.0;
@@ -165,6 +168,9 @@ const NpcArt = {
                 vBl = vec3(wb / 4.0, (wr - wb * 5.0) / 4.0, ws);
                 vPx = vec2(xy.x - o.x + position.x * ppu, xy.y - o.y - position.z * ppu);
                 vFr = vec4(xy, xy + wh);
+                vec2 xy2 = un(fr2.x), wh2 = un(fr2.y), o2 = un(fr2.z) - 2048.0;
+                vPx2 = vec3(xy2.x - o2.x + position.x * ppu, xy2.y - o2.y - position.z * ppu, fr2.w);
+                vFr2 = vec4(xy2, xy2 + wh2);
                 vC = color.rg;
                 vW = vec3(position.x, position.z, color.a);                 // x e "altura" na imagem (m), linha d'água (m, 0 = seco)
                 vec4 wp = world * vec4(position, 1.0);
@@ -195,6 +201,8 @@ const NpcArt = {
             uniform float ppu;
             varying vec3 vW;
             varying vec3 vBl;
+            varying vec3 vPx2;
+            varying vec4 vFr2;
             float hb(float n) { return fract(sin(n) * 43758.5453); }
             // ---- Camadas de ferimento por cima da skin (SpriteActor.setWounds), em coordenadas do corpo (x, altura na imagem, m)
             // arredondadas ao pixel da arte: ficam no mesmo lugar do corpo quando ele anda. Cada nível acrescenta uma marca.
@@ -258,8 +266,8 @@ const NpcArt = {
                 }
                 return vec3(bruise, bl, dirt);
             }
-            vec4 tap(vec2 t) {
-                if (t.x < vFr.x || t.y < vFr.y || t.x >= vFr.z || t.y >= vFr.w) return vec4(0.0);
+            vec4 tap(vec2 t, vec4 R) {
+                if (t.x < R.x || t.y < R.y || t.x >= R.z || t.y >= R.w) return vec4(0.0);
                 vec4 s = texture2D(atlas, (t + 0.5) / atlasSize);
                 float code = floor(s.r * 255.0 + 0.5), b1 = floor((la > 0.5 ? s.a : s.g) * 255.0 + 0.5);
                 float mat = floor(code / 8.0), tone = code - mat * 8.0, row = (floor(vC.x + 0.5) + 0.5) / palRows;
@@ -287,9 +295,15 @@ const NpcArt = {
                 if (code > 0.5) c *= tint * vC.y;
                 return vec4(c * a, a);
             }
+            // bilinear do quadro cujo retângulo no atlas é R (px), no ponto p (px)
+            vec4 sampleFrame(vec2 px, vec4 R) {
+                vec2 p = px - 0.5, i = floor(p), f = clamp((p - i - 0.5) * sharp + 0.5, 0.0, 1.0);
+                return mix(mix(tap(i, R), tap(i + vec2(1.0, 0.0), R), f.x), mix(tap(i + vec2(0.0, 1.0), R), tap(i + vec2(1.0, 1.0), R), f.x), f.y);
+            }
             void main(void) {
-                vec2 p = vPx - 0.5, i = floor(p), f = clamp((p - i - 0.5) * sharp + 0.5, 0.0, 1.0);
-                vec4 c = mix(mix(tap(i), tap(i + vec2(1.0, 0.0)), f.x), mix(tap(i + vec2(0.0, 1.0)), tap(i + vec2(1.0, 1.0)), f.x), f.y);
+                vec4 c = sampleFrame(vPx, vFr);
+                // mistura com o PRÓXIMO quadro da animação (gráfico suave): a pose muda em degradê, sem o salto seco entre quadros
+                if (vPx2.z > 0.004) c = mix(c, sampleFrame(vPx2.xy, vFr2), vPx2.z);
                 // Camadas de ferimento (baleado / espancado): só sobre o CORPO — pixel opaco de pele, roupa ou rosto; nunca no contorno,
                 // na sombra, em armas e acessórios ou fora do desenho. A cor segue o sombreado do material embaixo.
                 if ((vBl.x > 0.01 || vBl.y > 0.01) && c.a > 0.6) {
@@ -341,7 +355,7 @@ const NpcArt = {
     _material(A) {
         if (A.material) return A.material;
         const m = new BABYLON.ShaderMaterial('npcArt_' + A.id, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
-            attributes: ['position', 'color', 'fr'],
+            attributes: ['position', 'color', 'fr', 'fr2'],
             uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'atlasSize', 'palRows', 'tint', 'sharp', 'la', 'fmt', 'wt'],
             samplers: ['atlas', 'palette'],
             needAlphaBlending: true,
@@ -388,6 +402,8 @@ const NpcArt = {
     // ------------------------------------------------------------------ clipes
     // Clipe pronto para o SpriteActor: { npc: true, pk: { fr, box, n, dirs }, material, fps, loop, frames }. null = o atlas não tem.
     clip(id, key) {
+        const O = this.atlases[id + '#hd'];                                 // (alta definição, fase 1: parado/andando/correndo já em alta)
+        if (O && O.data.clips[key]) return this.clip(id + '#hd', key);
         const A = this.atlases[id];
         if (!A) return null;
         const c = A.data.clips[key];
@@ -427,43 +443,70 @@ const NpcArt = {
     // resolução (k = 1: 52 px por metro), gerado aqui mesmo num Worker quando o tipo aparece pela primeira vez e guardado no aparelho
     // (IndexedDB, comprimido): da segunda vez é só carregar. Enquanto não fica pronto, o tipo aparece com o atlas pronto (resolução
     // padrão). Os atlas em alta não vêm no download (seriam ~90 MB).
-    HD_VERSION: 4,                 // mude quando o gerador mudar o desenho (os atlas em alta guardados são refeitos) — 2: atlas até 4096 de lado; 3: passada longa; 4: subida (walk_up, climb)
+    HD_VERSION: 5,                 // mude quando o gerador mudar o desenho (os atlas em alta guardados são refeitos) — 2: atlas até 4096 de lado; 3: passada longa; 4: subida (walk_up, climb); 5: corpo da malha 3D
     hdOn() { return !!(typeof Config !== 'undefined' && Config.art && Config.art.hd) && !!this._scene; },
     _hd: null,
+    // Em duas fases, para todos os tipos ficarem nítidos logo: (1) só parado/andando/correndo (poucos segundos por tipo) → atlas
+    // "<tipo>#hd" consultado ANTES do pronto (clip); (2) depois de todos os tipos terem a fase 1, o atlas inteiro (guardado no aparelho)
+    // substitui o pronto e a camada da fase 1 sai. Guardado de outra vez: vai direto ao inteiro.
+    HD_QUICK: ['idle', 'walk', 'run', 'scared'],
     hdWant(id) {
-        if (!this.hdOn() || !id || id.startsWith('hero:')) return;
+        if (!this.hdOn() || !id || id.startsWith('hero:') || id.endsWith('#hd')) return;
         const A = this.atlases[id];
         if (!A || A.hd || (A.data.k || 0.5) >= 1) return;
         A.hd = 'wait';
-        const H = this._hd || (this._hd = { queue: [], busy: 0, done: 0, t0: performance.now() });
-        H.queue.push(id);
+        const H = this._hd || (this._hd = { queue: [], later: [], busy: 0, done: 0, t0: performance.now() });
+        H.queue.push({ id, full: false });
         this._hdPump();
     },
     _hdPump() {
-        const H = this._hd, N = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
-        while (H.busy < N && H.queue.length) this._hdOne(H.queue.shift(), H.busy++ % N);
+        const H = this._hd, N = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 2));
+        // o visual do jogador sendo gerado tem a CPU primeiro (a fila espera; quem já está gerando termina)
+        if (typeof PlayerLook !== 'undefined' && PlayerLook.want) { if (!H.paused) H.paused = setTimeout(() => { H.paused = null; this._hdPump(); }, 1500); return; }
+        while (H.busy < N && (H.queue.length || H.later.length)) this._hdOne(H.queue.length ? H.queue.shift() : H.later.shift(), H.busy++ % N);
     },
-    async _hdOne(id, slot) {
+    _hdBuild(slot, id, keys) {
+        const G = this.gen();
+        return new Promise((ok, fail) => {
+            const wk = PlayerLook._worker('hd' + slot), job = (this._hdJob = (this._hdJob || 0) + 1);
+            wk.onmessage = (e) => { wk._busy = false; if (e.data.job !== job) return; if (e.data.error) fail(new Error(e.data.error)); else ok(e.data.atlas); };
+            wk.postMessage({ type: 'atlas', job, id, keys, k: G.HD_K });
+        });
+    },
+    async _hdOne({ id, full }, slot) {
         const H = this._hd, A = this.atlases[id], G = this.gen(), key = `v${this.HD_VERSION}.${G.HD_K}|${id}`;
         try {
             let a = await this._hdGet(key);
             if (a) a.data = await this._inflate(a.z);
-            else {
-                a = await new Promise((ok, fail) => {
-                    const wk = PlayerLook._worker('hd' + slot), job = (this._hdJob = (this._hdJob || 0) + 1);
-                    wk.onmessage = (e) => { wk._busy = false; if (e.data.job !== job) return; if (e.data.error) fail(new Error(e.data.error)); else ok(e.data.atlas); };
-                    wk.postMessage({ type: 'atlas', job, id, k: G.HD_K });
-                });
+            else if (!full) {                                                   // fase 1: os clipes de andar por aí
+                const keys = G.TYPES[id].clips.filter((k) => this.HD_QUICK.includes(k.split(':')[0]));
+                if (keys.length) this._overlay(id, await this._hdBuild(slot, id, keys));
+                H.later.push({ id, full: true });
+                a = null;
+            } else {
+                a = await this._hdBuild(slot, id, null);
                 const z = await this._deflate(a.data);
                 this._hdPut(key, { w: a.w, h: a.h, clips: a.clips, k: a.k, v: a.v, frame: a.frame, z });
             }
-            this._swap(id, a);
-            A.hd = 'ok';
-            H.done++;
-            if (!H.queue.length && H.busy === 1) console.log(`[NPCS] alta definição: ${H.done} tipos prontos (${Math.round((performance.now() - H.t0) / 1000)} s)`);
+            if (a) {
+                this._swap(id, a);
+                this.dropAtlas(id + '#hd');
+                A.hd = 'ok';
+                H.done++;
+                if (!H.queue.length && !H.later.length && H.busy === 1) console.log(`[NPCS] alta definição: ${H.done} tipos prontos (${Math.round((performance.now() - H.t0) / 1000)} s)`);
+            }
         } catch (e) { console.warn('[NPCS] alta definição de ' + id + ' falhou:', e); A.hd = 'fail'; }
         H.busy--;
         this._hdPump();
+    },
+    // Camada da fase 1: atlas à parte; quem já toca um clipe do tipo troca para ele (gen do pronto muda).
+    _overlay(id, a) {
+        const A = this.atlases[id];
+        if (!A || A.hd === 'ok') return;
+        this.addAtlas(id + '#hd', a);
+        A.cache = new Map();
+        A.gen = (A.gen || 0) + 1;
+        for (const s of Object.values(this.sheets)) if (s.atlasName === id || s.fallbackAtlas === id || s.extraAtlas === id) s.clips = {};
     },
     // Troca o desenho do tipo `id` (mesmo id: folhas, materiais e quem já está na tela acompanham).
     _swap(id, a) {

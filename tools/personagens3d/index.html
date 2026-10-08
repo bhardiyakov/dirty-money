@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dirty Money — Personagens 3D (malha dos NPCs)</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #2b2e34; color: #d8dce2; font: 13px system-ui, Segoe UI, Arial, sans-serif; padding: 16px; }
+        h1 { font-size: 18px; margin-bottom: 4px; }
+        .sub { color: #9aa0aa; margin-bottom: 12px; line-height: 1.5; }
+        .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: #23262b; padding: 10px 12px; border: 1px solid #3a3f4a; margin-bottom: 14px; position: sticky; top: 0; z-index: 5; }
+        button { background: #ffd23a; color: #1b1b1b; border: 0; padding: 7px 12px; font-weight: 700; cursor: pointer; border-radius: 3px; }
+        button:disabled { opacity: 0.5; cursor: default; }
+        label { display: flex; gap: 6px; align-items: center; }
+        select, input { background: #14161a; color: #d8dce2; border: 1px solid #3a3f4a; padding: 3px; }
+        #status { color: #9aa0aa; white-space: pre-wrap; }
+        .grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .cell { background: #6b7280; border: 1px solid #40444d; padding: 4px; text-align: center; font-size: 10px; color: #f0f2f5; }
+        .cell canvas { display: block; margin: 0 auto 3px; image-rendering: pixelated; }
+        .row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+        .tag { writing-mode: vertical-rl; transform: rotate(180deg); color: #9aa0aa; font-size: 11px; }
+    </style>
+</head>
+<body>
+    <h1>Personagens 3D — malha realista nos NPCs 2,5D</h1>
+    <div class="sub">
+        Lê <code>fonte/personagens_masc_fem.glb</code> (pacote "personagem_3d_realista", CC0), põe na pose de repouso do jogo (braços caídos, mãos em punho),
+        simplifica e grava <code>assets/npcs/malha3d.js</code>. O encaixe no esqueleto cartunesco e a amostragem ficam em <code>src/art/npcgen/NpcGenMesh.js</code>.
+        Depois de salvar, gere os atlas de novo em <code>tools/npcs/</code>. Abra pelo servidor de desenvolvimento (<code>http://localhost:8123/tools/personagens3d/</code>).
+    </div>
+    <div class="bar">
+        <button id="save" disabled>Salvar malha3d.js</button>
+        <label>Tipo <select id="type"></select></label>
+        <label>Variante <input id="variant" type="number" min="0" value="0" style="width:50px"></label>
+        <label>Porte <select id="body"><option value="">(da ficha)</option><option>normal</option><option>slim</option><option>muscular</option><option>heavy</option></select></label>
+        <label>Cabelo <select id="hair"><option value="">(da ficha)</option></select></label>
+        <label>Clipe <input id="clip" value="walk:none" style="width:110px"></label>
+        <label>Zoom <input id="zoom" type="number" min="1" max="8" value="4" style="width:44px"></label>
+        <label><input id="hd" type="checkbox"> alta definição</label>
+        <button id="go">Mostrar</button>
+        <span id="status"></span>
+    </div>
+    <div id="out"></div>
+
+    <script src="../../src/art/SpriteIO.js"></script>
+    <script src="../../src/art/npcgen/NpcGenCore.js"></script>
+    <script src="../../src/art/npcgen/NpcGenChar.js"></script>
+    <script src="../../src/art/npcgen/NpcGenRender.js"></script>
+    <script src="../../src/art/npcgen/NpcGenAnims.js"></script>
+    <script src="../../src/art/npcgen/NpcGenTypes.js"></script>
+    <script src="../../src/art/npcgen/NpcGenBuild.js"></script>
+    <script src="../../src/art/npcgen/NpcGenMesh.js"></script>
+    <script src="vistas.js"></script>
+    <script type="module">
+        import { loadGlb, extract } from './extrair.js';
+        const $ = (id) => document.getElementById(id);
+        const status = (s) => { $('status').textContent = s; };
+        const make = () => { const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G); return G; };
+
+        status('lendo o .glb…');
+        const t0 = performance.now();
+        const glb = await loadGlb('fonte/personagens_masc_fem.glb');
+        const logs = [];
+        const data = await extract(glb, { log: (s) => logs.push(s) });
+        const text = JSON.stringify(data);
+        console.log(logs.join('\n'));
+        window.NPC_MESH3D = data;
+        const G0 = make(); G0.MESH3D = false;                 // geométrico (como antes)
+        const G1 = make();                                    // malha 3D
+        window.G0 = G0; window.G1 = G1;
+        status(`malha extraída em ${Math.round(performance.now() - t0)} ms — ${(text.length / 1e6).toFixed(2)} MB`);
+        $('save').disabled = false;
+        for (const id of Object.keys(G1.TYPES)) $('type').insertAdjacentHTML('beforeend', `<option>${id}</option>`);
+        for (const h of ['short', 'side', 'quiff', 'buzz', 'curly', 'pixie', 'bob', 'bob_fringe', 'long', 'ponytail', 'braid', 'spiky', 'afro', 'bun', 'bald']) $('hair').insertAdjacentHTML('beforeend', `<option>${h}</option>`);
+
+        $('save').onclick = async () => {
+            const body = '// Gerado por tools/personagens3d/index.html a partir do pacote "personagem_3d_realista" (MakeHuman, CC0) — não editar à mão.\n' +
+                '// Malha do personagem realista (masculino e feminino + 11 cabelos) para o gerador de NPCs (src/art/npcgen/NpcGenMesh.js).\n' +
+                'const NPC_MESH3D = ' + text + ';\n';
+            const r = await fetch('/__save/assets/npcs/malha3d.js', { method: 'PUT', body });
+            status(r.ok ? `salvo: assets/npcs/malha3d.js (${(body.length / 1e6).toFixed(2)} MB)` : 'falhou: ' + r.status);
+        };
+
+        function canvasOf(G, fr, ramps, zoom) {
+            const c = document.createElement('canvas'); c.width = fr.W; c.height = fr.H;
+            c.style.width = fr.W * zoom + 'px'; c.style.height = fr.H * zoom + 'px';
+            c.getContext('2d').putImageData(new ImageData(G.colorize(fr, ramps), fr.W, fr.H), 0, 0);
+            return c;
+        }
+        const anims = [];
+        function show() {
+            const id = $('type').value, v = +$('variant').value, key = $('clip').value.trim(), zoom = +$('zoom').value, k = $('hd').checked ? 1 : 0.5;
+            $('out').replaceChildren(); anims.length = 0;
+            const tm = [];
+            for (const [label, G] of [['geométrico', G0], ['malha 3D', G1]]) {
+                const spec = Object.assign({}, G.variantSpec(id, v));
+                if ($('body').value) spec.body = $('body').value;
+                if ($('hair').value) spec.hair = $('hair').value;
+                const t1 = performance.now();
+                const R = G.rendererFor(spec, { k });
+                const tb = performance.now() - t1;
+                const ramps = G.rampsFor(spec);
+                const [name, w0] = key.split(':'), def = G.CLIPS[name];
+                if (!def) { status('clipe desconhecido'); return; }
+                const poses = def.fn(G.weaponFor(id, w0 || 'none'), { hand: 'briefcase' });
+                const row = document.createElement('div'); row.className = 'row';
+                row.insertAdjacentHTML('beforeend', `<div class="tag">${label}</div>`);
+                const t2 = performance.now();
+                for (const d of [4, 5, 6, 7, 0, 1, 2, 3]) {
+                    const frames = poses.map((p) => canvasOf(G, R.render(p, -45 * d), ramps, zoom));
+                    const cell = document.createElement('div'); cell.className = 'cell';
+                    cell.appendChild(frames[0]);
+                    row.appendChild(cell);
+                    anims.push({ cell, cur: frames[0], frames, fps: def.fps || 8 });
+                }
+                const pts = Object.values(R.baked.body).reduce((s, p) => s + p.n, 0);
+                tm.push(`${label}: montar ${Math.round(tb)} ms, ${pts} pontos, ${((performance.now() - t2) / (poses.length * 8)).toFixed(1)} ms/quadro`);
+                $('out').appendChild(row);
+            }
+            status(tm.join(' · '));
+        }
+        $('go').onclick = show;
+        for (const el of ['type', 'variant', 'body', 'hair', 'hd']) $(el).onchange = show;
+        $('clip').onkeydown = (e) => { if (e.key === 'Enter') show(); };
+        let f = 0;
+        setInterval(() => { f++; for (const a of anims) { const fr = a.frames[Math.floor(f * a.fps / 20) % a.frames.length]; if (fr !== a.cur) { a.cell.replaceChild(fr, a.cur); a.cur = fr; } } }, 50);
+        $('type').value = 'protagonista';
+        show();
+    </script>
+</body>
+</html>

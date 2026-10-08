@@ -37,6 +37,34 @@ function NpcGenRender(G) {
     // Pixel de material debaixo d'água? (alfa < 255 num código de material/contorno)
     const isUnder = (code, a) => a < 255 && a > 0 && (code === C.OUTLINE || (code >= 8 && (code & 7) <= 4));
 
+    // Parte da malha 3D (NpcGenMesh): cada ponto mistura o osso dele com o 2º osso que mais o influencia (skin linear). Devolve a parte
+    // já posta no espaço do corpo (osso = identidade) — o resto do renderizador não muda. (O buffer é da parte: um quadro por vez.)
+    const M4ID = G.M4();
+    // cv = direção da câmera no espaço do corpo: ponto de costas (que o renderizador descarta) não mistura o 2º osso — só a posição
+    // (a sombra no chão usa todos os pontos).
+    function skinPose(bk, B, cv) {
+        let o = bk._posed;
+        if (!o) o = bk._posed = { name: bk.name, bone: bk.bone, group: bk.group, mat: bk.mat, tone: bk.tone, n: bk.n, pos: new Float32Array(bk.n * 3), nrm: new Float32Array(bk.n * 3) };
+        const Ma = B[bk.bone], Ms = bk.bones2.map((b) => B[b]), P = bk.pos, N = bk.nrm, P2 = bk.pos2, N2 = bk.nrm2, b2 = bk.b2, w2 = bk.w2, OP = o.pos, ON = o.nrm;
+        const A = Ma.R, at = Ma.t;
+        for (let i = 0, k = 0; i < bk.n; i++, k += 3) {
+            const x = P[k], y = P[k + 1], z = P[k + 2], a = N[k], b = N[k + 1], c = N[k + 2];
+            let px = A[0] * x + A[1] * y + A[2] * z + at[0], py = A[3] * x + A[4] * y + A[5] * z + at[1], pz = A[6] * x + A[7] * y + A[8] * z + at[2];
+            let nx = A[0] * a + A[1] * b + A[2] * c, ny = A[3] * a + A[4] * b + A[5] * c, nz = A[6] * a + A[7] * b + A[8] * c;
+            const w = w2[i];
+            if (w > 0 && nx * cv[0] + ny * cv[1] + nz * cv[2] < 0.6) {
+                const Mb = Ms[b2[i]], R = Mb.R, t = Mb.t, u = 1 - w;
+                const x2 = P2[k], y2 = P2[k + 1], z2 = P2[k + 2], a2 = N2[k], c1 = N2[k + 1], c2 = N2[k + 2];
+                px = u * px + w * (R[0] * x2 + R[1] * y2 + R[2] * z2 + t[0]); py = u * py + w * (R[3] * x2 + R[4] * y2 + R[5] * z2 + t[1]); pz = u * pz + w * (R[6] * x2 + R[7] * y2 + R[8] * z2 + t[2]);
+                nx = u * nx + w * (R[0] * a2 + R[1] * c1 + R[2] * c2); ny = u * ny + w * (R[3] * a2 + R[4] * c1 + R[5] * c2); nz = u * nz + w * (R[6] * a2 + R[7] * c1 + R[8] * c2);
+                const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+                nx /= l; ny /= l; nz /= l;
+            }
+            OP[k] = px; OP[k + 1] = py; OP[k + 2] = pz; ON[k] = nx; ON[k + 1] = ny; ON[k + 2] = nz;
+        }
+        return o;
+    }
+
     class Renderer {
         // baked = { body: {nome: parte assada}, props: {...} }; W×H = quadro; pivot = pés (px); charScale = escala da ficha × escala de saída.
         constructor(baked, cam, { W = 144, H = 144, pivot = [72, 110], ss = SS, charScale = 1.0 } = {}) {
@@ -64,7 +92,8 @@ function NpcGenRender(G) {
             const sc0 = pose.scale || 1, W = this.W, H = this.H, ss = this.ss, R = this.cam.R, L = this.cam.L;
             const Rk = this._Rk = sc0 === 1 ? this.Rk : R.map((v) => v * this.k * sc0);
             const P = pose.adult ? pose.adult() : pose, B = P.B || pose.bones(), Ryaw = Rz(deg(yaw)), items = [];        // (esqueleto adulto: Pose.adult)
-            for (const bk of this.body) items.push({ bk, M: B[bk.bone] });
+            const cv = G.tmv3(Ryaw, [R[6], R[7], R[8]]);
+            for (const bk of this.body) items.push(bk.pos2 ? { bk: skinPose(bk, B, cv), M: M4ID } : { bk, M: B[bk.bone] });          // (malha 3D: skin de 2 ossos)
             for (const [name, Mp] of P.props) items.push({ bk: this.baked.props[name], M: Mp });
             let n = 0;
             for (const it of items) { it.R = mm3(Ryaw, it.M.R); it.t = mv3(Ryaw, it.M.t); n += it.bk.n; }

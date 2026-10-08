@@ -41,6 +41,7 @@ class Player {
         this.cover = null;         // superfície de cobertura ao lado (Cover.find) enquanto agachado; null = sem cobertura
         this.roll = null;          // rolamento de esquiva em andamento: { t, dx, dz, heading }
         this.coverSnap = null;     // indo até a cobertura (Q perto dela): { x0, z0, x, z, t, dur }
+        this.coverLock = null;     // COLADO na cobertura (Q perto dela): { pull, hold } — o direcional só desliza ao longo dela (_coverMove)
         this._rollCd = 0;
         this._coverT = 0;
         this._combo = 0;
@@ -136,11 +137,79 @@ class Player {
         if (on === this.crouched) return;
         this.crouched = on;
         this._coverT = 0;
-        if (!on) this.cover = null;
+        if (!on) { this.cover = null; this.coverLock = null; }
         else this.cover = typeof Cover !== 'undefined' ? Cover.find(this.position.x, this.position.z) : null;
     }
 
-    resetTactics() { this.roll = null; this.crouched = false; this.cover = null; this.coverSnap = null; }
+    // COBERTURA COLADA (como nos jogos de tiro): o direcional só leva o personagem para a esquerda/direita AO LONGO da superfície
+    // (empurrar contra ela não faz nada). Muros em fila (vários obstáculos) são uma cobertura só. Na PONTA ele para; segurando a
+    // direção por Config.tactics.coverCorner, contorna a quina (desliza para a face do lado — volta num carro, fim de muro).
+    // Puxar para longe dela por coverLeave solta. Devolve a direção de movimento a usar (já ao longo da superfície).
+    // Distância de encosto: muro ALTO acima do personagem na tela (a cabeça do desenho 2,5D cresce para cima) — afasta um pouco, senão
+    // a cabeça some atrás da parede do prédio.
+    static coverStickOf(C) {
+        const T = Config.tactics, y = typeof CompassCamera !== 'undefined' ? CompassCamera.yaw || 0 : 0;
+        if (!C || C.kind !== 'wall') return T.coverStick;
+        const below = -(C.nx * Math.sin(y) + C.nz * Math.cos(y));                       // 1 = o muro está bem acima dele na tela
+        return T.coverStick + 0.45 * Math.max(0, below);
+    }
+
+    _coverMove(moveDir, dt) {
+        const L = this.coverLock, p = this.root.position, T = Config.tactics;
+        const C = Cover.find(p.x, p.z, T.coverStick + 1.3);
+        if (!C) { this.coverLock = null; return moveDir; }                       // a cobertura sumiu (o carro foi embora)
+        this.cover = C;
+        if (moveDir.lengthSquared() < 1e-4) { L.pull = 0; L.hold = 0; return moveDir; }
+        const tx = -C.nz, tz = C.nx;                                              // tangente da superfície
+        let away = moveDir.x * C.nx + moveDir.z * C.nz, along = moveDir.x * tx + moveDir.z * tz;
+        // depois de contornar uma quina, a MESMA direção segurada continua valendo como "seguir em frente" na face nova
+        const K = L.carry;
+        if (K) {
+            if (moveDir.x * K.ix + moveDir.z * K.iz > 0.8) { const sd = K.dx * tx + K.dz * tz; along = sd >= 0 ? 1 : -1; away = 0; }
+            else L.carry = null;
+        }
+        if (away > 0.7) {                                                         // puxando para longe: solta depois de um instante
+            L.pull = (L.pull || 0) + dt; L.hold = 0;
+            if (L.pull > T.coverLeave) { this.coverLock = null; return moveDir; }
+            return Player.ZERO;
+        }
+        L.pull = 0;
+        if (Math.abs(along) < 0.2) { L.hold = 0; return Player.ZERO; }            // empurrando contra ela: fica
+        const s = Math.sign(along);
+        // Logo adiante, a MESMA face continua (ou outro obstáculo alinhado)? Senão é a ponta.
+        const N = Cover.find(p.x + tx * s * 0.5, p.z + tz * s * 0.5, T.coverStick + 0.95);
+        if (!N || N.nx * C.nx + N.nz * C.nz < 0.95) {
+            L.hold = (L.hold || 0) + dt;
+            if (N && L.hold > T.coverCorner) { L.hold = 0; this._coverCorner(N, C, s, tx, tz); }
+            return Player.ZERO;
+        }
+        L.hold = 0;
+        const v = this._cv || (this._cv = new BABYLON.Vector3()), m = Math.abs(along);
+        return v.set(tx * s * m, 0, tz * s * m);
+    }
+
+    // Contorna a quina: da ponta (N = o canto) para a face do lado, cuja normal aponta para onde ele andava.
+    _coverCorner(N, C, s, tx, tz) {
+        const T = Config.tactics, p = this.root.position, nx = tx * s, nz = tz * s;      // (= a direção em que ele andava = a normal da face do lado)
+        const x = N.x + nx * T.coverStick - C.nx * 0.35, z = N.z + nz * T.coverStick - C.nz * 0.35;      // (sonda na face do lado)
+        const D = Cover.find(x, z, T.coverStick + 0.5);
+        if (!D || D.nx * nx + D.nz * nz < 0.7 || D.d < T.coverStick - 0.15) return;      // não há face do lado (ou está tomada)
+        const st = Player.coverStickOf(D);
+        this.coverSnap = { x0: p.x, z0: p.z, x: D.x + D.nx * st, z: D.z + D.nz * st, t: 0, dur: 0.28 };
+        this.coverLock.carry = { ix: nx, iz: nz, dx: -C.nx, dz: -C.nz };      // (segue para "trás" da face nova enquanto segurar)
+    }
+
+    // Mantém o personagem encostado: a distância até a superfície volta suavemente a Config.tactics.coverStick.
+    _coverStick(dt) {
+        const p = this.root.position, T = Config.tactics, C = Cover.find(p.x, p.z, T.coverStick + 1.3);
+        if (!C) { this.coverLock = null; return; }
+        const k = 1 - Math.exp(-14 * dt), e = (Player.coverStickOf(C) - C.d) * k;
+        p.x += C.nx * e; p.z += C.nz * e;
+        MapGeo.resolveCircle(p, Config.player.radius, this.underBridge);
+        this.cover = C;
+    }
+
+    resetTactics() { this.roll = null; this.crouched = false; this.cover = null; this.coverSnap = null; this.coverLock = null; }
 
     // Rolamento na direção (dx, dz) (normalizada). false se não dá agora (ocupado, na água, recarregando o fôlego do último).
     startRoll(dx, dz) {
@@ -149,7 +218,7 @@ class Player {
         if (this.stamina != null) { if (this.stamina < T.rollStamina * 0.5) return false; this.stamina = Math.max(0, this.stamina - T.rollStamina); }
         const l = Math.hypot(dx, dz) || 1;
         this.roll = { t: 0, dx: dx / l, dz: dz / l, heading: Math.atan2(dx, dz) };
-        this.crouched = false; this.cover = null;
+        this.crouched = false; this.cover = null; this.coverLock = null;
         this.aimTimer = 0;
         this.root.rotation.y = this.roll.heading;
         if (!this.actor.play('roll', 'none', { restart: true })) this.actor.play('tumble', 'none', { restart: true });
@@ -406,6 +475,8 @@ class Player {
         // Mirando (Aim): não corre e anda devagar, de frente para a mira (pode andar de lado/de costas).
         const aiming = this.aimHeading != null;
         if (aiming) { sprinting = false; this.aimTimer = Math.max(this.aimTimer, 0.3); }
+        // Colado na cobertura: o direcional só desliza ao longo dela (ver _coverMove).
+        if (this.coverLock && this.crouched && !this.coverSnap) { moveDir = this._coverMove(moveDir, dt); if (this.coverLock) sprinting = false; }
 
         // Agachado: correr levanta; parado/andando, a cobertura ao lado é reconferida (andar ao longo do muro segue nela).
         if (this.crouched && sprinting && moveDir.lengthSquared() > 1e-4) this.setCrouch(false);
@@ -456,6 +527,7 @@ class Player {
         }
         if (this.onDeck) this._clampToDeck(prev);                           // no viaduto: só as muretas (o que há lá embaixo não bate)
         else if (!this._glide) MapGeo.resolveCircle(prev, Config.player.radius, this.underBridge || depth > 0);   // não atravessa prédios (no pulo, passa por cima); na água, passa sob a mureta da ponte
+        if (this.coverLock && this.crouched && !this.coverSnap) this._coverStick(dt);       // (encostado: mantém a distância da superfície)
         this._updateLevel();
         this.speed = this.velocity.length();
 
@@ -466,6 +538,9 @@ class Player {
             const targetY = Math.atan2(moveDir.x, moveDir.z);
             const rt = 1 - Math.exp(-Config.player.turnLerp * dt);
             this.root.rotation.y = this._lerpAngle(this.root.rotation.y, targetY, rt);
+        } else if (!this.action && this.coverLock && this.cover && !this.coverSnap) {
+            // parado na cobertura: de costas para ela (de frente para fora)
+            this.root.rotation.y = this._lerpAngle(this.root.rotation.y, Math.atan2(this.cover.nx, this.cover.nz), 1 - Math.exp(-10 * dt));
         }
 
         // Animação de locomoção (ações já controlam o próprio clipe).

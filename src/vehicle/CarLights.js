@@ -45,6 +45,7 @@ class CarLights {
         this.glow.free(s.pool); this.glow.free(s.beam);
         for (const i of s.cone) this.cones.free(i);
         this.slots.delete(car);
+        if (car.visual && car.visual.setLamps) car.visual.setLamps(0, 0, false, false, 0, false);      // (carro 3D: apaga as lâmpadas do modelo)
     }
 
     // night: 0..1 | focus: {x, z} (centro da câmera) | cars: todos os carros (civis + polícia)
@@ -138,6 +139,13 @@ class CarLights {
                 g.color(s.pool, col[0], col[1], col[2], 0.16 + 0.1 * night);
             } else {
                 g.off(s.siren[0]); g.off(s.siren[1]); g.off(s.pool);
+            }
+
+            // ---- Carro 3D: as próprias lâmpadas do modelo acendem (faróis, lanternas/freio, setas piscando, ré, giroflex, luminoso)
+            if (vis && vis.setLamps) {
+                const sigOn = (side) => hazard || (car.signal === side && blink && alive);
+                const rev = (alive || car.controlled) && !car.destroyed && car.forwardSpeed < -0.4;
+                vis.setLamps(hI, tI, sigOn(-1), sigOn(1), car.sirenOn ? (sirenPhase ? 1 : 2) : 0, rev);
             }
 
             // ---- Fumaça do escapamento (cano traseiro, lado esquerdo). Bicicleta não tem.

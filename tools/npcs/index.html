@@ -44,8 +44,10 @@
     <script src="../../src/art/npcgen/NpcGenAnims.js"></script>
     <script src="../../src/art/npcgen/NpcGenTypes.js"></script>
     <script src="../../src/art/npcgen/NpcGenBuild.js"></script>
+    <script src="../../assets/npcs/malha3d.js"></script>
+    <script src="../../src/art/npcgen/NpcGenMesh.js"></script>
     <script>
-        const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G);
+        const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G);
         const $ = (id) => document.getElementById(id);
         for (const id of Object.keys(G.TYPES)) $('type').insertAdjacentHTML('beforeend', `<option>${id}</option>`);
         const status = (s) => { $('status').textContent = s; };

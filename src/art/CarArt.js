@@ -257,8 +257,9 @@ const CarArt = {
         m.setColor3('sunC', v.c.set(s.r, s.g, s.b));
     },
 
-    // Sprite de um carro (CarActor) no lote.
+    // Sprite de um carro (CarActor) no lote — ou o carro em 3D (CarArt3D), se o modelo existe lá e os carros 3D estão ligados.
     actor(modelId, variant, scale = 1) {
+        if (typeof CarArt3D !== 'undefined' && CarArt3D.has(modelId)) return CarArt3D.actor(modelId, variant, scale);
         if (!this.cars) this.init(this.scene);
         return new CarActor(this.cars, modelId, variant, scale);
     },

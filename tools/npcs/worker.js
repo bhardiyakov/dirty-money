@@ -1,8 +1,9 @@
 // Worker da ferramenta de NPCs: monta o atlas de UM tipo (em paralelo com os outros).
 importScripts('../../src/art/npcgen/NpcGenCore.js', '../../src/art/npcgen/NpcGenChar.js', '../../src/art/npcgen/NpcGenRender.js',
-    '../../src/art/npcgen/NpcGenAnims.js', '../../src/art/npcgen/NpcGenTypes.js', '../../src/art/npcgen/NpcGenBuild.js');
+    '../../src/art/npcgen/NpcGenAnims.js', '../../src/art/npcgen/NpcGenTypes.js', '../../src/art/npcgen/NpcGenBuild.js',
+    '../../assets/npcs/malha3d.js', '../../src/art/npcgen/NpcGenMesh.js');
 const G = {};
-NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G);
+NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G);
 
 onmessage = (e) => {
     const { id, keys, k } = e.data, t0 = performance.now();          // k: resolução (padrão G.OUT_K; alta definição G.HD_K)

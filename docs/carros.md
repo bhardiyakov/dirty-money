@@ -84,3 +84,43 @@ No celular a carga procedural custava ~5× mais, então a economia ali é maior.
    porta, giroflex) vêm sozinhas do atlas.
 
 A galeria (`sprites.html` → Carros) mostra todos os modelos, as fases de amassado e as pinturas.
+
+## Carros em 3D (outubro/2026)
+
+Os **36 carros** (os 34 do pacote "veiculos3d" + os dois táxis, feitos no mesmo gerador) agora são **malhas 3D** no jogo:
+carroceria com volume, vidros, faróis, lanternas, frisos, placas e as **quatro rodas separadas**. Motos, bicicletas e barcos
+seguem no atlas 2D. Ajustes › **Carros 3D** liga/desliga na hora (desligado = os carros desenhados de antes, mais leve); `?cars2d`
+na URL força os desenhados; `Config.art.cars3d` é o padrão.
+
+```
+tools/carros3d/gerador/   o gerador procedural do pacote (cópia) + veiculos/taxis.js (táxi SP e Rio)
+tools/carros3d/build.js   converte cada carro: simplifica, corta o que a câmera de cima nunca vê, quantiza e comprime
+tools/carros3d/index.html gera, mostra (com o MESMO shader do jogo) e salva  →  assets/cars/carros3d.js
+src/art/CarArt3D.js       carrega, monta as malhas, o shader e o ator (Car3DActor, mesma interface do CarActor)
+```
+
+- **Animações**: as rodas **rolam** pela distância percorrida (ângulo = distância ÷ raio, com teto por quadro para não "andar
+  para trás" no estroboscópio) e as dianteiras **esterçam** com o volante. A carroceria gira em volta do eixo das rodas com
+  molas pouco amortecidas: **mergulha** na freada, **senta** na arrancada, **inclina para fora** na curva (e atrasa um pouco no
+  giro), passa do ponto e assenta; em velocidade, emendas e buracos do asfalto dão **trancos**. As rodas ficam no chão.
+  Pneu furado baixa aquele canto. Tudo é calculado no shader de vértice a partir de poucos números por carro.
+- **Visual**: pintura da tabela do jogo (`CarSheet.PAINTS`: pintura, pintura 2 nos modelos de teto/faixa de outra cor,
+  desbotada, carcaça queimada), luz do sol do mundo e do céu, verniz, reflexo do céu em vidros e cromados. Amassados: fase 1
+  riscos, fase 2 lataria amassada e vidros trincados, fase 3 frente esmagada, teto afundado e vidros estourados. As lâmpadas
+  do próprio modelo acendem (`CarLights` → `setLamps`): faróis, lanternas/freio, setas, ré, giroflex e o luminoso do táxi.
+- **Desempenho**: uma malha por modelo com instâncias (todos os carros do mesmo modelo = 1 chamada de desenho; só os perto da
+  câmera viram instância), um material só. Arquivo de 1,8 MB (~160 mil triângulos no total, ~4,4 mil por carro; o pacote
+  original tem ~33 mil por carro). Medido: 40 carros de 36 modelos diferentes na tela ≈ 0,7 ms de CPU e ~1 ms de GPU.
+- **Profundidade achatada**: cada carro grava profundidade numa fatia fina logo acima do chão, então ele se esconde sob
+  prédios, viadutos e copas, e os personagens 2,5D continuam passando por cima dele, como com o sprite. A geometria estampada
+  (faróis, frisos, placas, letreiros) ganha uma pequena vantagem de profundidade e nunca afunda na lataria.
+- **Continua do atlas 2D**: a física e a sombra (caixas), as medidas do catálogo, a porta aberta (lâmina girando na dobradiça),
+  as miniaturas do HUD e a galeria.
+
+### Mudar um carro 3D
+
+1. Edite a descrição em `tools/carros3d/gerador/veiculos/*.js` (veja o `LEIA-ME` do pacote: perfil, planta, cabine, detalhes).
+2. Abra `http://localhost:8123/tools/carros3d/` (servidor `serve.ps1`), **Gerar** (detalhe 0,3, tolerância 4 mm, "só o que a
+   câmera de cima vê") e confira na vista (pintura, amassado, luzes, câmera do jogo). **Salvar carros3d.js** grava o arquivo.
+3. Modelo novo: também no `MODELS`/`POOLS` do `CarSheet` e no atlas 2D (`tools/carros`), que segue dando as medidas, a porta e a
+   miniatura.

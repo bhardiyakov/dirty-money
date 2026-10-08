@@ -247,3 +247,21 @@ a aba em segundo plano, que senão grava o perfil leve).
 ## Como medir
 
 Painel DEV → aba INFO (capacidade, custo por sistema, draw calls, memória). Teste de carga em MUNDO.
+
+## Gráfico suave (outubro/2026)
+
+Ajustes › **✨ Gráfico suave** (`Config.art.smooth`, ligado por padrão; só vale na **alta definição** — o modo pixel art
+continua pixelado de propósito). Código em `src/render/Smooth.js`. Tira o serrilhado em quatro frentes:
+
+| Frente | Antes | Agora |
+|---|---|---|
+| Resolução | a tela era desenhada em "pixels da página" e o navegador ampliava (Windows a 125%/150%, retina): borrada e serrilhada | densidade real do monitor, até `Config.perf.dprCap` (2 no PC, 1,5 no perfil leve) — o enquadramento da câmera não muda (`GameEngine.viewHeight`) |
+| Bordas da geometria | sem antisserrilhamento | **MSAA 4×** (1º pós-processamento da câmera; FXAA sem WebGL 2) |
+| Texturas do chão e dos telhados | pixels duros (`NEAREST`): grão "serrilhado" e pixels de tamanhos desiguais com a câmera andando | trilinear + anisotrópico; o chão do mundo grande (`TerrainSplat`) e a orla/espuma (`WaterPlugin`) sem a grade de 5 cm |
+| Sprites de paleta (árvores, arbustos, mobiliário de rua: `PropSprites`) | contorno em escada | bilinear à mão "nítido" sobre a cor já pintada: miolo do pixel da arte duro, só a borda suavizada, na medida do zoom (como os personagens 2,5D) |
+| Sombras | PCF de qualidade baixa | PCF média (borda macia) |
+
+Custo medido (GPU integrada/dedicada do PC de teste, janela de 652×698 px da página = 815×872 reais): +0,7 ms de GPU por
+quadro, CPU igual. Cresce com a área da tela. O `AutoQuality` ganhou um degrau: **2) sem o gráfico suave** (antes de
+reduzir o mapa de sombras), então em aparelho que não aguenta ele volta à imagem de antes sozinho. Trocar o ajuste no meio
+do jogo descongela por 2 s os materiais do mundo (os defines da sombra e o uniform do chão mudam) e congela de novo.

@@ -19,7 +19,7 @@ const PlayerLook = {
     ids: new Map(),         // chave de forma → id do atlas registrado no NpcArt
     tacIds: new Map(),      // chave de forma → id do atlas companheiro (clipes táticos) desse visual
     _job: 0,
-    VERSION: 6,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb)
+    VERSION: 7,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D
 
     attach(game) { this.game = game; this.shown = null; this.sync(true); },
 
@@ -67,7 +67,7 @@ const PlayerLook = {
     // Troca o atlas da folha do jogador e reinicia o clipe atual (com o desenho novo).
     _use(key, id, partial = false) {
         const hero = this.game.sprites.sheets.hero, a = this.game.player && this.game.player.actor;
-        hero.extraAtlas = this.tacIds.get(key) || 'protagonista_tatico';
+        hero.extraAtlas = this.tacIds.get(key) || (partial && this.tacIds.get(this.shown)) || 'protagonista_tatico';      // (gerando: o tático do visual anterior)
         hero.setAtlas(id);
         hero.fallbackAtlas = partial ? (this.ids.get(this.shown) || 'protagonista') : 'protagonista';
         if (!partial) { this.shown = key; if (this.want === key) this.want = null; }
@@ -111,42 +111,73 @@ const PlayerLook = {
 
     // Gera o atlas em Workers paralelos: o 1º faz parado/andando/correndo (o visual troca em poucos segundos); o resto é dividido entre
     // todos. Os Workers devolvem os quadros já recortados; o empacotamento (rápido) é feito aqui.
+    // Fila de clipes (2 por vez) puxada por vários Workers, na ordem do que mais aparece: parado/andando/correndo (com a arma da
+    // mão), depois golpes, carro, tático, nadar, pilotar… e o resto. O visual novo entra assim que o 1º bloco fica pronto e vai sendo
+    // completado (a cada ~1,5 s) — o que ainda falta sai do visual anterior por pouco tempo. Pronto: guardado no aparelho.
+    _COMMON: /^(punch|punchL|kick|enter|opendoor|carjack|vault|crouch|sneak|roll|strafe|swim|swim_idle|hurt|draw|aim|shoot|walk_up|climb|ride_moto|ride_bike|surrender|pick)$/,
     _build(s, key, job) {
         const G = this.G, all = this.clipsFor(s).concat(G.PLAYER_TAC), pl = this.game.player, w = pl ? pl.look : 'none', k = this.k();
-        const first = G.PLAYER_FIRST.concat(w !== 'none' ? [`idle:${w}`, `walk:${w}`, `run:${w}`] : []).concat(s.hand ? G.PLAYER_HAND.slice(0, 3) : []).filter((k) => all.includes(k));
-        const rest = all.filter((k) => !first.includes(k));
-        const N = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
-        const parts = Array.from({ length: N }, () => []);
-        rest.forEach((k, i) => parts[(i + 1) % N].push(k));                    // (o 1º Worker já começa pela parte rápida)
-        const got = [], need = 1 + parts.filter((p) => p.length).length;
-        let n = 0;
-        const done = (m) => {
+        const tac = new Set(G.PLAYER_TAC), idx = new Map(all.map((c, i) => [c, i]));
+        const pri = (c) => {
+            const [n, wp] = c.split(':');
+            if (G.PLAYER_FIRST.includes(c) || (wp === w && /^(idle|walk|run)$/.test(n)) || (s.hand && G.PLAYER_HAND.slice(0, 3).includes(c))) return 0;
+            if (wp === w || (this._COMMON.test(n) && (wp === 'none' || tac.has(c)))) return 1;
+            return this._COMMON.test(n) ? 2 : 3;
+        };
+        const order = all.slice().sort((a, b) => pri(a) - pri(b) || idx.get(a) - idx.get(b));
+        // os de prioridade 0, um por Worker (em paralelo); o visual só troca quando TODOS eles estão prontos
+        const first = order.filter((c) => pri(c) === 0), chunks = first.map((c) => [c]);
+        const rest = order.filter((c) => pri(c) !== 0);
+        for (let i = 0; i < rest.length; i += 2) chunks.push(rest.slice(i, i + 2));
+        const N = Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 2) - 1, chunks.length));
+        const got = [];
+        let next = 0, left = chunks.length, firstLeft = first.length, lastPub = 0, timer = null;
+        const pack = () => {
+            const sorted = got.slice().sort((p, q) => idx.get(p.key) - idx.get(q.key));
+            return [this._pack(sorted.filter((c) => tac.has(c.key)), k), this._pack(sorted.filter((c) => !tac.has(c.key)), k)];      // companheiro + principal
+        };
+        const publish = () => {
+            timer = null;
             if (job !== this._job) return;
-            got.push(...m.clips);
-            n++;
-            if (m.first && n < need) { this._register(key, this._pack(got.filter((c) => first.includes(c.key)), k), true); return; }
-            if (n < need) return;
-            const order = new Map(all.map((k, i) => [k, i])), tac = new Set(G.PLAYER_TAC);
-            got.sort((p, q) => order.get(p.key) - order.get(q.key));
-            const t = this._pack(got.filter((c) => tac.has(c.key)), k), a = this._pack(got.filter((c) => !tac.has(c.key)), k);      // principal + companheiro
+            lastPub = performance.now();
+            const [t, a] = pack();
+            if (left > 0) {                                                    // parcial: o que falta vem do visual anterior
+                if (Object.keys(t.clips).length === tac.size) this._registerTac(key, t);       // (companheiro só completo: o que falta dele não tem para onde cair)
+                this._register(key, a, true);
+                return;
+            }
             this._registerTac(key, t);
             this._register(key, a, false);
             this._idbPut(this._ck(key), a);
             this._idbPut(this._ck(key) + '|t', t);
         };
-        const run = (i, keys, then = null) => {
+        const done = (m) => {
+            if (job !== this._job) return;
+            got.push(...m.clips);
+            left--;
+            for (const c of m.clips) if (first.includes(c.key)) firstLeft--;
+            if (!left) { if (timer) clearTimeout(timer); publish(); return; }
+            if (firstLeft > 0) return;
+            const wait = 1500 - (performance.now() - lastPub);
+            if (wait <= 0 || !lastPub) publish(); else if (!timer) timer = setTimeout(publish, wait);
+        };
+        const run = (i) => {
             const wk = this._worker('atlas' + i, true);
+            const feed = () => {
+                if (job !== this._job || next >= chunks.length) { wk._busy = false; return; }
+                wk._busy = true;
+                wk.postMessage({ type: 'clips', job, spec: s, keys: chunks[next++], k });
+            };
             wk.onmessage = (e) => {
                 const m = e.data;
-                if (!m.more) wk._busy = false;
                 if (m.job !== job) return;
-                if (m.error) { console.warn('[VISUAL] falhou:', m.error); if (job === this._job) this.want = null; return; }
+                if (m.error) { wk._busy = false; console.warn('[VISUAL] falhou:', m.error); if (job === this._job) this.want = null; return; }
                 done(m);
+                feed();
             };
-            wk.postMessage({ type: 'clips', job, spec: s, keys, then, k });
+            feed();
         };
-        run(0, first, parts[0].length ? parts[0] : null);
-        for (let i = 1; i < N; i++) if (parts[i].length) run(i, parts[i]);
+        for (let i = 0; i < N; i++) run(i);
     },
     _pack(clips, k) { const a = this.G.packAtlas(clips); return { w: a.w, h: a.h, data: a.data, clips: a.clips, k, v: 2, frame: this.G.frameFor(k) }; },
     // Resolução do visual: a dos atlas prontos, ou o dobro com a alta definição ligada (NpcArt.hd).
@@ -168,7 +199,7 @@ const PlayerLook = {
         if (!w) {
             const main = function () {
                 const G = {};
-                NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G);
+                NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G);
                 self.onmessage = (e) => {
                     const m = e.data;
                     try {
@@ -186,13 +217,15 @@ const PlayerLook = {
                             for (let d = 0; d < 8; d++) frames.push(G.colorize(R.render(pose, -45 * d, false), ramps));      // (sem a sombra no chão: o pedestal já é o chão)
                             self.postMessage({ job: m.job, frames, W: G.frameFor(k), H: G.frameFor(k), k }, frames.map((f) => f.buffer));
                         } else if (m.type === 'atlas') {                   // atlas inteiro de um TIPO (alta definição: NpcArt.hdWant)
-                            const a = G.buildAtlas(G.BY_ID[m.id], G.TYPES[m.id].clips, { typeId: m.id, k: m.k });
+                            const a = G.buildAtlas(G.BY_ID[m.id], m.keys || G.TYPES[m.id].clips, { typeId: m.id, k: m.k });
                             self.postMessage({ job: m.job, atlas: { w: a.w, h: a.h, data: a.data, clips: a.clips, k: a.k, v: a.v, frame: a.frame } }, [a.data.buffer]);
                         }
                     } catch (err) { self.postMessage({ job: m.job, error: String(err && err.stack || err) }); }
                 };
             };
-            const src = [NpcGenCore, NpcGenChar, NpcGenRender, NpcGenAnims, NpcGenTypes, NpcGenBuild].map(String).join('\n') + '\n(' + main + ')();';
+            // (a malha 3D dos personagens vai junto, como texto: o Worker não enxerga as variáveis da página)
+            const mesh = typeof NPC_MESH3D !== 'undefined' ? 'const NPC_MESH3D = ' + JSON.stringify(NPC_MESH3D) + ';\n' : '';
+            const src = mesh + [NpcGenCore, NpcGenChar, NpcGenRender, NpcGenAnims, NpcGenTypes, NpcGenBuild, NpcGenMesh].map(String).join('\n') + '\n(' + main + ')();';
             w = this._workers[kind] = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
         }
         w._busy = true;

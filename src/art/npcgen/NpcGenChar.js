@@ -462,6 +462,7 @@ function NpcGenChar(G) {
             } else prims.push(new Sphere([0, -11.0, 23.5], 5.4, H, { blend: 1.5 }));
             return new Part('hair', 'head', GR.hair, prims, texShortHair);
         }
+        if (G.MESH_HAIR && G.MESH_HAIR[style]) return _hairPart(Object.assign({}, s, { hair: 'short' }));      // estilo que só a malha 3D tem: sem ela, curto
         throw new Error('estilo de cabelo ' + style);
     }
 
@@ -920,9 +921,16 @@ function NpcGenChar(G) {
         return b;
     }
     // spacing: 0,2 na escala 1,04 (PNGs originais). Os objetos usam 80% dele (0,16 no original).
+    // Com a malha 3D (NpcGenMesh): o corpo (e o cabelo, nos estilos que ela tem) vem dela; chapéu, colete, bolsa e os cabelos que
+    // só existem geométricos continuam assados das formas.
     function loadBaked(spec, spacing = 0.2) {
         const s = fullSpec(spec), body = {};
-        for (const [k, p] of Object.entries(buildParts(s))) body[k] = bakeCached(p, spacing);
+        const mp = G.meshUsable && G.meshUsable(s) ? G.meshParts(s, spacing) : null;
+        for (const [k, p] of Object.entries(buildParts(s))) {
+            if (mp && (G.MESH_REPLACED.has(k) || (k === 'hair' && mp.hairMesh))) { if (mp.parts[k]) body[k] = mp.parts[k]; continue; }
+            body[k] = bakeCached(p, spacing);
+        }
+        if (mp) for (const k of Object.keys(mp.parts)) if (!body[k]) body[k] = mp.parts[k];
         return { body, props: bakeProps(spacing * 0.8) };
     }
 

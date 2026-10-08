@@ -31,6 +31,34 @@ NPC, variações de cor e a personalização do jogador.
   (é o que `validate.html` compara).
 - Escala no jogo: `Config.art.npcPpu` = 26 px/m (= `NpcGenBuild.PPU`): adultos na mesma escala dos veículos (que são 1,3× o real).
 
+## Corpo da malha 3D (`NpcGenMesh`, `assets/npcs/malha3d.js`)
+
+O corpo de todos os personagens (NPCs e jogador) vem do **personagem realista 3D** (pacote "personagem_3d_realista", MakeHuman, CC0:
+masculino e feminino, portes magro/forte/gordo, 11 cabelos) e não mais das formas geométricas — mas continua pixel art pré-renderizada e
+cartunesca:
+
+- **Extração** (`tools/personagens3d/`, `http://localhost:8123/tools/personagens3d/` → *Salvar malha3d.js*): lê `fonte/personagens_masc_fem.glb`,
+  põe na pose de repouso do jogo (braços quase caídos, **mãos em punho** para segurar arma/guidão/bolsa), converte os pesos de skin dos 65
+  ossos Mixamo para os 15 do gerador, simplifica o corpo (~17 mil → ~3,5 mil triângulos) e guarda as texturas pequenas (alfa dos
+  cartões de cabelo, dobras da roupa). Os cabelos vão uma vez só (os da feminina são os mesmos ajustados à cabeça dela).
+  A página compara lado a lado o geométrico e a malha (tipo, clipe, porte, cabelo, alta definição).
+- **Encaixe** (`fitFor`): cada osso da malha é levado ao osso do esqueleto cartunesco — ao longo do osso pelas juntas (o cotovelo da
+  malha cai no cotovelo do boneco), na seção pela parte geométrica que ele substitui (tronco medido num corte na altura do peito e da
+  cintura, para colete, mochila e alças continuarem servindo). A cabeça tem duas escalas (crânio maior, rosto mais curto) e os olhos da
+  malha caem onde o rosto é pintado: olhos, sobrancelhas, boca, barba, óculos e máscaras continuam sendo as texturas procedurais da ficha.
+- **Amostragem**: pontos na superfície dos triângulos (densidade igual à das formas assadas), cada um com o osso principal e o 2º osso
+  + peso → o renderizador faz **skin de 2 ossos** (`skinPose` em NpcGenRender): cotovelo, joelho, ombro e pescoço dobram sem fresta.
+- **Roupa da ficha sobre a malha** (camiseta + jeans + tênis): manga longa pinta o braço, regata tira a manga, bermuda mostra a canela
+  (com meia), bota sobe na canela, chinelo vira pé, luvas, relógio; estampas, zíper, gola, colete, mochila, chapéu: como antes.
+- **Porte** (`body`): magro/normal/forte/gordo = morphs Magro/—/Forte/Gordo da malha. `gender: 'f'` = corpo feminino.
+- **Cabelos da malha**: `short` (curto clássico), `buzz` (raspado), `curly` (crespo curto), `long`, `ponytail` e os novos `side`
+  (repartido), `quiff` (topete), `pixie`, `bob` (chanel), `bob_fringe` (chanel com franja), `braid` (trança). Os outros estilos
+  (espetado, black power, coque, moicano, dreads) continuam geométricos. O corte do chapéu vale para os dois.
+- Desligar: `G.MESH3D = false` (ou `mesh3d: false` numa ficha) volta às formas geométricas. Sem `malha3d.js`, idem (os estilos novos
+  viram cabelo curto).
+- Custo: ~270–410 mil pontos por boneco (o geométrico: ~380 mil). O skin pula o 2º osso nos pontos de costas para a câmera (que são
+  descartados): por quadro, a malha sai no mesmo tempo do geométrico ou menos. Os atlas prontos não mudam de tamanho. `malha3d.js` tem 2,2 MB.
+
 ## Sombreado "pré-renderizado" e alta definição
 
 - **Sombreado contínuo** (`NpcGenRender._smooth`, padrão; `G.SHADE = 'cel'` = os 5 tons do pacote): cada pixel ganha uma LUZ —
@@ -41,9 +69,11 @@ NPC, variações de cor e a personalização do jogador.
   (`NpcArt`) anda pela rampa de 5 tons da paleta conforme a luz — as variantes de cor continuam saindo da paleta, de graça.
 - **Alta definição** (Ajustes → 🖥️ Alta definição; ligada por padrão no PC, desligada no celular/aparelho fraco; `?hd=0`/`?hd=1`):
   a tela passa a ser desenhada na resolução real (sem o pixelado) e cada tipo ganha um atlas com o **dobro da resolução** (`HD_K` = 1:
-  52 px por metro), gerado no próprio jogo num Worker quando o tipo aparece pela primeira vez (~25 s por tipo, até 3 ao mesmo tempo)
-  e guardado no aparelho (IndexedDB `dirty-money-hd`, comprimido) — das próximas vezes é só carregar. Até ficar pronto, o tipo aparece
-  com o atlas padrão. O visual do jogador também é gerado em alta. Mudou o desenho? Suba `NpcArt.HD_VERSION` (e `PlayerLook.VERSION`).
+  52 px por metro), gerado no próprio jogo em Workers (até 4 ao mesmo tempo) quando o tipo aparece pela primeira vez, em DUAS FASES:
+  (1) parado/andando/correndo/assustado de todos os tipos que apareceram (poucos segundos cada) → camada `<tipo>#hd`, que `NpcArt.clip`
+  consulta antes do atlas pronto; (2) depois, o atlas inteiro, que substitui o pronto, sai da camada e fica guardado no aparelho
+  (IndexedDB `dirty-money-hd`, comprimido) — das próximas vezes é só carregar. Enquanto o visual do jogador é gerado, a fila espera
+  (o jogador tem a CPU primeiro). O visual do jogador também é gerado em alta. Mudou o desenho? Suba `NpcArt.HD_VERSION` (e `PlayerLook.VERSION`).
   Se o PC não aguentar, o modo econômico (AutoQuality) volta a tela ao pixelado (os personagens em alta ficam).
 - **Limite do atlas: 4096 px de lado.** O jogo endereça cada quadro como x·4096 + y (exato em float); o empacotamento (`pack`) alarga
   o atlas para 4096 quando ele passaria de 4096 de altura (o jogador em alta: 4096×3308). Passou disso, `NpcArt.clip` avisa no console.
@@ -104,10 +134,12 @@ tools/npcs/index.html            prévia de qualquer tipo/variante/clipe e "Gera
   chapéu de pescador, viseira, capacete; camiseta estampada/listrada, camisa havaiana, polo, bermuda jeans, tênis de skate.
   Bolsas (`Bags`): mala transversal, mochila e mochila tática aparecem no desenho; maleta, sacola e mala de rodinhas, na mão.
 - **Tingir** (de graça): Inventário → Equipamento, no detalhe da peça vestida ou na aba ✂️ Visual. Só muda a paleta: instantâneo.
-- **Aparência** (de graça, aba ✂️ Visual): pele, cabelo (11 estilos), cor do cabelo, barba, corpo.
+- **Aparência** (de graça, aba ✂️ Visual): pele, cabelo (17 estilos — 6 novos da malha 3D), cor do cabelo, barba, corpo.
 - **Forma nova = desenho novo**: `PlayerLook` gera o atlas do jogador em Workers paralelos (montados a partir do texto das
-  funções do gerador — funciona em `file://`): parado/andando/correndo primeiro (alguns segundos), o resto em seguida. Enquanto
-  isso o jogador segue com o visual anterior. Cada visual gerado fica no IndexedDB: voltar a ele é imediato.
+  funções do gerador — funciona em `file://`), até 6, puxando de uma fila 2 clipes por vez na ordem do que mais aparece. O visual
+  troca quando parado/andando/correndo (com a arma da mão) estão TODOS prontos — nunca metade de um e metade de outro nesses — e vai
+  sendo completado a cada ~1,5 s (golpes, carro, tático, nadar, pilotar…; o companheiro tático entra inteiro). O que ainda falta sai do
+  visual anterior só durante a geração. Cada visual gerado fica no IndexedDB: voltar a ele é imediato.
 - A tela de equipamento mostra o **próprio personagem** girando (clique para girar), renderizado pelo gerador.
 
 ## Mudar ou criar personagens
