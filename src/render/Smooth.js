@@ -1,5 +1,5 @@
 // ============================================================================
-// Smooth — GRÁFICO SUAVE (Ajustes › Gráfico suave; vale na alta definição — no modo pixel art a imagem é pixelada de propósito):
+// Smooth — GRÁFICO SUAVE (sempre ligado: o jogo é só em alta definição):
 //   • resolução real do monitor: a tela é desenhada na densidade de pixels do aparelho (até Config.perf.dprCap), sem o navegador
 //     ampliar a imagem (Windows a 125%/150%, telas retina) — ver GameEngine._applyScale;
 //   • MSAA 4× nas bordas da geometria (prédios, meios-fios, postes, carros 3D): o jogo é desenhado num alvo multiamostrado — o 1º
@@ -7,7 +7,7 @@
 //   • texturas do mundo (asfalto, calçada, faixas, telhados: Pixel.toTexture) com filtro trilinear e anisotrópico, e o chão do mundo
 //     grande (TerrainSplat) sem a grade de 5 cm: sem o grão "serrilhado" nem pixels de tamanhos desiguais com a câmera andando;
 //   • sombras com borda macia (PCF de qualidade média em vez da baixa).
-// Desligado (ou no modo pixel art), tudo volta ao de antes. O AutoQuality desliga o gráfico suave antes de mexer nas sombras.
+// (Config.art.smooth = false ou pixelate = true, só para depurar, voltam ao de antes. O AutoQuality não mexe nele.)
 // ============================================================================
 
 const Smooth = {

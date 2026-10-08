@@ -7,7 +7,8 @@
 // cores fixas (sombra, contorno, clarão…) guardam o código e o alfa. (Formato 1, o do pacote: código = material × 8 + tom, e o alfa.)
 // A cor vem da PALETA (uma linha por variante): o mesmo desenho vira dezenas de pessoas diferentes (pele, cabelo, roupa) e a roupa
 // do jogador muda de cor na hora. A sombra de contato já vem desenhada; debaixo d'água o corpo é tingido de azul.
-// Alta definição (Config.art.hd): cada tipo ganha um atlas com o dobro da resolução, gerado no próprio jogo (ver hdWant).
+// Alta definição (Config.art.hd, sempre ligada): os atlas prontos já vêm em alta (k = 1, tools/npcs). hdWant só gera no jogo um tipo
+// que ainda venha na resolução padrão (k = 0,5).
 //
 //   NpcArt.sheet(tipo)            folha de um tipo (getClip como a CharacterSheet) — o SpriteActor toca os clipes dela
 //   NpcArt.row(tipo, variante)    linha da paleta de uma variante (a cor das roupas)
