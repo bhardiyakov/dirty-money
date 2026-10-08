@@ -50,7 +50,7 @@ class SpatialHash {
 }
 
 const Zones = {
-    cx: 0, cz: 0, hx: 60, hz: 40, frame: 0, margin: 14,
+    cx: 0, cz: 0, fx: 0, fz: 0, hx: 60, hz: 40, frame: 0, margin: 14,
     count: [0, 0, 0],                // quantas entidades caíram em cada zona (último quadro; para o painel dev)
     _cnt: [0, 0, 0],
 
@@ -59,16 +59,21 @@ const Zones = {
     // pedestres calmos sem lógica. O trânsito VIVE dentro dela: nasce entre a borda da tela no zoom máximo (sr) e a borda da bolha (ar)
     // e, ao sair, é reciclado para essa faixa (TrafficManager) — como no GTA. Não depende do zoom atual (dar zoom não acorda ninguém).
     ar: 139, sr: 76,
-    asleep(x, z) { const dx = x - this.cx, dz = z - this.cz; return dx * dx + dz * dz > this.ar * this.ar; },
+    asleep(x, z) { const dx = x - this.fx, dz = z - this.fz; return dx * dx + dz * dz > this.ar * this.ar; },
 
     update(game) {
-        const cam = game.camera, c = cam.camera.position, eng = game.gameEngine.engine, asp = eng.getAspectRatio(cam.camera);
-        this.cx = c.x; this.cz = c.z;
-        this.hz = cam.view + this.margin;
-        this.hx = cam.view * asp + this.margin;
-        if (cam.viewYaw) this.hx = this.hz = Math.hypot(cam.view * asp, cam.view) + this.margin;      // câmera girada (bússola): o quadrado que cobre a tela em qualquer ângulo
+        const cam = game.camera, eng = game.gameEngine.engine, asp = eng.getAspectRatio(cam.camera);
+        // Retângulo do chão visto (CompassCamera.groundRect): girada, o quadrado que cobre a tela em qualquer ângulo; inclinada, o
+        // trapézio que se estende para a frente — o centro deixa de ser o ponto debaixo da câmera.
+        const r = cam.groundRect(asp, this._r || (this._r = {}));
+        this.cx = r.cx; this.cz = r.cz;
+        this.fx = cam.target.x; this.fz = cam.target.z;          // alvo da câmera: centro da bolha acordada (asleep)
+        this.hx = r.hx + this.margin;
+        this.hz = r.hz + this.margin;
         const hd = Math.hypot(Config.camera.maxView * Math.max(1, asp), Config.camera.maxView);      // meia-diagonal da tela no zoom máximo
-        this.sr = hd + 6; this.ar = 2 * hd;
+        // (sr é medido a partir do alvo — TrafficManager.ring, PoliceManager: inclinada, a tela alcança mais longe à frente dele)
+        const reach = Math.hypot(r.hx, r.hz) + Math.hypot(r.cx - cam.target.x, r.cz - cam.target.z);
+        this.sr = Math.max(hd, reach) + 6; this.ar = Math.max(2 * hd, this.sr + 60);
         this.frame++;
         this.count = this._cnt.slice(); this._cnt[0] = this._cnt[1] = this._cnt[2] = 0;
     },
@@ -145,7 +150,7 @@ class RenderCuller {
             this._range = '';
         }
         // Retângulo visto: o do jogo (Zones, que já tem a margem) ou, num palco/câmera diferente, o tamanho do frustum na altura do chão.
-        const p = cam.position, hz = Zones.hz + 6, hx = Zones.hx + 6;
+        const zc = this._zc || (this._zc = { x: 0, z: 0 }), p = cam.name === 'compassCamera' ? (zc.x = Zones.cx, zc.z = Zones.cz, zc) : cam.position, hz = Zones.hz + 6, hx = Zones.hx + 6;      // (centro do chão visto: inclinada, ele fica à frente da câmera)
         if (!inWorld(p.x, p.z)) return { data: sc.meshes, length: sc.meshes.length };      // (câmera fora do mundo: o laço da grade não terminaria)
         const c = this.cell, i0 = Math.floor((p.x - hx) / c), i1 = Math.floor((p.x + hx) / c), j0 = Math.floor((p.z - hz) / c), j1 = Math.floor((p.z + hz) / c);
         const range = i0 + ',' + i1 + ',' + j0 + ',' + j1;

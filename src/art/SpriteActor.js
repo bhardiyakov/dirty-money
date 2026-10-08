@@ -62,6 +62,9 @@ class SpriteActor {
 
     // Giro da câmera bússola (CompassCamera.yaw): o personagem 2,5D fica "de pé" para cima da TELA, não do norte.
     static viewYaw() { return typeof CompassCamera !== 'undefined' ? CompassCamera.yaw || 0 : 0; }
+    // Câmera inclinada (CompassCamera.tilt): o quad 2,5D se levanta do chão no mesmo ângulo (gira pelos pés, em torno do eixo
+    // horizontal da tela) e fica de frente para a câmera — senão o desenho sairia achatado. O shader lê a posição LOCAL: nada muda nele.
+    static viewTilt() { return typeof CompassCamera !== 'undefined' ? CompassCamera.curTilt || 0 : 0; }
 
     // O sprite gira no ângulo exato (clipe vetorial)? (CarLights e quem mais precisar da frente desenhada.)
     get rotates() { return !!(this.clip && this.clip.vector); }
@@ -167,7 +170,7 @@ class SpriteActor {
         this.clip = null;
         this._npcBox = null;
         const h = this._half = sheet.frame / Config.art.ppu / 2;
-        this.mesh.rotation.y = 0; this._yaw = null;
+        this.mesh.rotation.y = 0; this._yaw = null; this.mesh.rotation.x = 0; this._tilt = 0;
         this.mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, [-h, 0, h, h, 0, h, -h, 0, -h, h, 0, -h]);
         this._setBounds(h);
     }
@@ -221,6 +224,7 @@ class SpriteActor {
             this._rotate();
         } else if (this.clip && this.clip.npc) {                           // 2,5D: quad fixo (a caixa vem no play), 8 direções desenhadas
             this.mesh.rotation.y = this._yaw = SpriteActor.viewYaw();      // (de pé "para cima da tela": gira junto com a câmera bússola)
+            this.mesh.rotation.x = -(this._tilt = SpriteActor.viewTilt());
             // (b, a guardavam a sombra do vetorial; no 2,5D b = toldo, a = água) — nos 4 vértices: sobrando um valor velho em
             // algum deles, o shader interpola "água no corpo" e o desenho aparece afundado mesmo em terra
             this._cover = -1;
@@ -230,7 +234,7 @@ class SpriteActor {
             this.dir = -1;
             const h = this.heading; this.heading = null; this.setHeading(h || 0);
         } else {
-            this.mesh.rotation.y = 0;
+            this.mesh.rotation.y = 0; this.mesh.rotation.x = 0; this._tilt = 0;
             const h = this._half;
             this.mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, [-h, 0, h, h, 0, h, -h, 0, -h, h, 0, -h]);
             this._setBounds(h);
@@ -325,6 +329,7 @@ class SpriteActor {
             this.mesh.rotation.y = this._yaw = SpriteActor.viewYaw();
             if (this.heading != null) { this.dir = -1; this.setHeading(this.heading); }
         }
+        if (c.npc && this._tilt !== SpriteActor.viewTilt()) this.mesh.rotation.x = -(this._tilt = SpriteActor.viewTilt());
         // água no corpo e inclinação valem só no quadro em que foram informadas (antes deste update): sem aviso, zeram
         if (!this._wlFresh) this._wl = 0;
         this._wlFresh = false;
