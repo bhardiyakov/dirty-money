@@ -39,6 +39,7 @@ const Config = {
         ppu: 20,               // pixels de textura por unidade de mundo (1u ≈ 1m).
         pixelate: true,        // renderiza em baixa resolução + upscale "crocante" (desligado com a alta definição).
         hd: false,             // ALTA DEFINIÇÃO (Ajustes → Gráficos): tela na resolução real e personagens 2,5D em 2× (NpcArt.hd). Ver applyPerfProfile.
+        carRelief: 1,          // relevo dos carros (CarArt): luz do sol do mundo na carroceria, brilho e reflexo nos vidros. 0 = desenho plano.
         charScale: 0.8,        // escala do DESENHO dos personagens (atlas vetorial). Os carros são de tamanho real; isto aproxima a proporção.
         npcPpu: 26,            // personagens 2,5D (NpcArt): px do atlas por metro — adultos na mesma escala dos veículos. = NpcGenBuild.PPU (pilotos × motos)
         internalHeight: (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ? 440 : 560,   // altura interna alvo (px) quando pixelate = true (celular: menor, mais leve).

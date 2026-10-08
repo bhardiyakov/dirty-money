@@ -42,8 +42,16 @@ src/art/CarSheet.js       catálogo (física e desempenho), pinturas, classes, c
 - **Um lote para todos os carros** (`CarBatch`, como o `GlowBatch`): todos os carros do mundo são quads de uma única
   malha, desenhada no grupo 1 (depois dos pedestres, antes das copas e dos brilhos), testando a profundidade do mundo.
   1 chamada de desenho para os carros e 1 para as portas abertas (nenhuma quando não há porta aberta).
-- **Arquivo**: duas texturas 1024×1024 (A = cor + alfa, B = pinturas + amassados), pré-multiplicadas pelo alfa (sem
-  franja nos mipmaps), em PNG dentro de um `.js` (~1 MB). Por ser `.js`, funciona aberto por duplo clique (`file://`).
+- **Relevo (parecer 3D visto de cima)**: o gerador também desenha a ALTURA de cada carro (`CarGen.heightSVG`: carroceria
+  na cintura com as bordas arredondadas, cabine subindo pelo para-brisa / vidro traseiro / janelas até o teto, caçamba
+  rebaixada, giroflex e luminoso em cima do teto) e a máscara dos vidros; o build tira as normais e grava a textura C. O
+  shader ilumina o carro com o **sol do mundo** (`CarArt.setSun`, chamado pelo `DayNight`): o lado virado para o sol
+  clareia, o outro escurece, a lataria tem brilho e os vidros refletem o céu. Como a luz não gira com o carro, numa curva o
+  brilho "escorre" pela carroceria. Motos, bicicletas, barcos, portas e o pneu ganham um domo tirado do alfa. Força em
+  `Config.art.carRelief` (0 = plano, como antes). Teto e capô planos ficam iguais ao desenho (a luz é relativa a uma
+  superfície plana): o efeito está nas bordas e na cabine.
+- **Arquivo**: três texturas 1024×1024 (A = cor + alfa, B = pinturas + amassados, pré-multiplicadas pelo alfa — sem
+  franja nos mipmaps; C = altura, normal e vidro), em PNG dentro de um `.js` (~1,6 MB). Por ser `.js`, funciona aberto por duplo clique (`file://`).
   A decodificação começa ao carregar a página (descompressão nativa do navegador, `PNG.decodeAsync`) e a carga do jogo
   só espera por ela antes de criar o trânsito.
 
