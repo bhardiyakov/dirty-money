@@ -66,7 +66,7 @@ const Zones = {
         this.cx = c.x; this.cz = c.z;
         this.hz = cam.view + this.margin;
         this.hx = cam.view * asp + this.margin;
-        if (cam.yaw) this.hx = this.hz = Math.hypot(cam.view * asp, cam.view) + this.margin;      // câmera girada (bússola): o quadrado que cobre a tela em qualquer ângulo
+        if (cam.viewYaw) this.hx = this.hz = Math.hypot(cam.view * asp, cam.view) + this.margin;      // câmera girada (bússola): o quadrado que cobre a tela em qualquer ângulo
         const hd = Math.hypot(Config.camera.maxView * Math.max(1, asp), Config.camera.maxView);      // meia-diagonal da tela no zoom máximo
         this.sr = hd + 6; this.ar = 2 * hd;
         this.frame++;
