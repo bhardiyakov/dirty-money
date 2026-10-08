@@ -50,9 +50,9 @@ class EquipUI {
     _css() {
         const css = document.createElement('style');
         css.textContent = `
-            .eq-wrap { flex: 1; min-height: 0; display: grid; grid-template-columns: 250px minmax(420px, 1fr) minmax(330px, 400px); gap: 16px; overflow: auto; }
+            .eq-wrap { flex: 1; min-height: 0; display: grid; grid-template-columns: 250px minmax(420px, 1fr) minmax(330px, 400px); gap: 16px; overflow: auto; grid-auto-rows: minmax(min-content, 1fr); }   /* (tela baixa: a linha cresce até caber os encaixes e o painel rola, em vez de cortar) */
             .eq-col { display: flex; flex-direction: column; min-height: 0; }
-            .eq-attr .body { padding: 2px 16px 14px; display: flex; flex-direction: column; gap: 7px; overflow: auto; }
+            .eq-attr .body { padding: 2px 16px 14px; display: flex; flex-direction: column; gap: 7px; overflow: auto; flex: 1; min-height: 0; }
             .eq-bar { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--tx-2); }
             .eq-bar span { display: flex; justify-content: space-between; } .eq-bar span b { color: var(--tx); font-weight: 700; }
             .eq-bar i { display: block; height: 9px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; }
@@ -64,7 +64,7 @@ class EquipUI {
             .eq-center { position: relative; min-height: 470px; }
             .eq-center .px-title { text-align: center; }
             .eq-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-            .eq-stage { position: relative; flex: 1; display: grid; grid-template-columns: 112px 1fr 112px; grid-template-rows: minmax(0, 1fr); align-items: stretch; padding: 0 14px 14px; min-height: 0; }
+            .eq-stage { position: relative; flex: 1; display: grid; grid-template-columns: 112px 1fr 112px; align-items: stretch; padding: 0 14px 14px; }
             .eq-slots { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; z-index: 1; }
             .eq-slot { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; }
             .eq-slot .lb { font: 700 10px var(--font); letter-spacing: 0.1em; text-transform: uppercase; color: var(--tx-3); }
@@ -115,6 +115,7 @@ class EquipUI {
             .eq-sw:hover, .eq-sw0:hover { transform: translateY(-1px); } .eq-sw.on, .eq-sw0.on { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(251,191,36,0.4); }
             .eq-doll canvas { image-rendering: pixelated; cursor: pointer; }
             @media (max-width: 1180px) { .eq-wrap { grid-template-columns: minmax(400px, 1fr) minmax(300px, 380px); } .eq-attr { grid-column: 1 / -1; order: 3; } .eq-attr .body { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); column-gap: 18px; } }
+            @media (max-height: 820px) { .eq-slots { gap: 4px; } .eq-slot .bx { width: 54px; height: 54px; font-size: 26px; } .eq-slot .bx img { width: 44px; } .eq-slot .nm { min-height: 0; } }
             @media (max-width: 860px) { .eq-wrap { grid-template-columns: 1fr; } .eq-center { min-height: 430px; } .eq-stage { grid-template-columns: 92px 1fr 92px; } .eq-slot .bx { width: 54px; height: 54px; font-size: 26px; } }`;
         document.head.appendChild(css);
     }
