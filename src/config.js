@@ -37,9 +37,9 @@ const Config = {
     // e o jogo é renderizado numa resolução interna baixa e ampliado sem suavizar.
     art: {
         ppu: 20,               // pixels de textura por unidade de mundo (1u ≈ 1m).
-        pixelate: true,        // renderiza em baixa resolução + upscale "crocante" (desligado com a alta definição).
-        hd: false,             // ALTA DEFINIÇÃO (Ajustes → Gráficos): tela na resolução real e personagens 2,5D em 2× (NpcArt.hd). Ver applyPerfProfile.
-        smooth: true,          // GRÁFICO SUAVE (Ajustes; só na alta definição): antisserrilhado (MSAA), densidade real do monitor, texturas do chão filtradas e sombras macias. Ver render/Smooth.js.
+        pixelate: false,       // (o jogo é sempre em alta definição: a tela fica na resolução real, sem o modo pixel art)
+        hd: true,              // ALTA DEFINIÇÃO, sempre: tela na resolução real e personagens 2,5D em 2× (atlas prontos em alta: assets/npcs).
+        smooth: true,          // GRÁFICO SUAVE, sempre: antisserrilhado (MSAA), densidade real do monitor, texturas do chão filtradas e sombras macias. Ver render/Smooth.js.
         carRelief: 1,          // relevo dos carros (CarArt): luz do sol do mundo na carroceria, brilho e reflexo nos vidros. 0 = desenho plano.
         cars3d: true,          // carros em 3D (CarArt3D, assets/cars/carros3d.js): rodas que rolam e esterçam, carroceria balançando na suspensão. false (ou ?cars2d) = sprites do atlas.
         charScale: 0.8,        // escala do DESENHO dos personagens (atlas vetorial). Os carros são de tamanho real; isto aproxima a proporção.
@@ -464,14 +464,10 @@ const Config = {
     const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
     const nav = typeof navigator !== 'undefined' ? navigator : {};
     const weak = (nav.deviceMemory && nav.deviceMemory <= 4) || (nav.hardwareConcurrency && nav.hardwareConcurrency <= 4);
-    let saved = null;
-    try { saved = localStorage.getItem('dm_quality'); } catch (e) { /* sem storage */ }
-    const lite = q.includes('lite') || (!q.includes('full') && (coarse || weak || saved === 'lite'));
-    // Alta definição: por padrão no PC; no celular/aparelho fraco, a pixel art leve. A escolha do jogador (Ajustes) vale mais.
-    let hdSet = null;
-    try { const s = JSON.parse(localStorage.getItem('dm_settings') || '{}'); if (typeof s.hd === 'boolean') hdSet = s.hd; if (typeof s.cars3d === 'boolean') Config.art.cars3d = s.cars3d; if (typeof s.smooth === 'boolean') Config.art.smooth = s.smooth; } catch (e) { /* sem storage */ }
-    Config.art.hd = q.includes('hd=0') ? false : q.includes('hd=1') ? true : hdSet !== null ? hdSet : !lite;
-    Config.art.pixelate = !Config.art.hd;
+    try { localStorage.removeItem('dm_quality'); } catch (e) { /* sem storage */ }      // (o AutoQuality antigo gravava o perfil leve: não vale mais)
+    const lite = q.includes('lite') || (!q.includes('full') && (coarse || weak));
+    // Gráficos: sempre a alta definição com o gráfico suave, em todo aparelho (o perfil leve só enxuga o mundo vivo e as sombras).
+    try { const s = JSON.parse(localStorage.getItem('dm_settings') || '{}'); if (typeof s.cars3d === 'boolean') Config.art.cars3d = s.cars3d; } catch (e) { /* sem storage */ }
     const P = Config.perf;
     // App instalado no PC (Tauri) — ou `?fps60` no navegador, para testar: 60 quadros. Se o PC não segurar, o AutoQuality volta a 30
     // antes de mexer na qualidade visual.

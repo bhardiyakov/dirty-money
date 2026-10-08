@@ -1,10 +1,9 @@
 // ============================================================================
 // AutoQuality — qualidade adaptativa. Mede o tempo REAL entre quadros (o teto é Config.perf.fpsCap: 30 Hz ≈ 33 ms; 60 no app de PC) e, se o aparelho
 // não consegue manter o ritmo por alguns segundos, desce um degrau por vez (sempre o mais barato primeiro, nunca sobe sozinho):
-//   0) teto 60 → 30 FPS (app de PC)   1) painéis sem desfoque (html.no-blur)   2) sem o gráfico suave (MSAA, densidade do monitor,
-//   texturas filtradas: Smooth)   3) mapa de sombras 2048/1024 → 512   4) sem sombras   5) resolução interna 560/440 → 400 (pixel perfeito,
-//   câmera reajusta)
-// O degrau alcançado vira o perfil leve (`dm_quality=lite`) nas próximas sessões. `?q` na URL mostra o degrau no console.
+//   0) teto 60 → 30 FPS (app de PC)   1) mapa de sombras 2048/1024 → 512   2) sem sombras
+// Só mexe no ritmo e nas SOMBRAS: a alta definição, o gráfico suave e os personagens em alta ficam sempre (sem troca de gráficos no meio
+// do jogo). `?full` na URL desliga.
 // ============================================================================
 
 class AutoQuality {
@@ -38,26 +37,13 @@ class AutoQuality {
             return;
         }
         this.level++;
-        if (this.level === 1 && document.documentElement.classList.contains('no-blur')) this.level = 2;     // (perfil leve: já sem desfoque)
-        if (this.level === 2 && !Smooth.on) this.level = 3;                                                     // (pixel art / já sem o gráfico suave)
         if (this.level === 1) {
-            document.documentElement.classList.add('no-blur');                  // painéis sem vidro borrado (custo de GPU na resolução da tela)
-        } else if (this.level === 2) {
-            Config.art.smooth = false;                                          // (vale nesta sessão; o perfil leve da próxima já é pixel art)
-            Smooth.apply(g);
-        } else if (this.level === 3) {
             if (sg) ge.setShadowSize(512);
-        } else if (this.level === 4) {
+        } else if (this.level === 2) {
             if (g.dayNight) g.dayNight.forceNoShadows = true;
             if (sg) sg.getShadowMap().refreshRate = 0;
-        } else if (this.level === 5) {
-            Config.art.internalHeight = Math.min(Config.art.internalHeight, 400);
-            Config.art.pixelate = true;                                         // (alta definição: a tela volta à resolução baixa; os personagens em alta ficam)
-            Smooth.apply(g);                                                    // (pixel art: sem o gráfico suave)
-            ge.resize(); g.camera.fitPixelScale(ge.viewHeight); g.camera.onResize();
-        } else { this.level = 5; this.off = true; return; }
-        try { localStorage.setItem('dm_quality', 'lite'); } catch (e) { /* sem storage */ }
+        } else { this.level = 2; this.off = true; return; }
         console.log(`[QUALIDADE] desempenho baixo: degrau ${this.level}`);
-        if (g._flash) g._flash('Modo econômico: qualidade reduzida para manter a fluidez');
+        if (g._flash) g._flash('Modo econômico: sombras reduzidas para manter a fluidez');
     }
 }
