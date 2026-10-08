@@ -13,7 +13,7 @@ class PauseMenu {
     static get TABS() {
         return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
     }
-    static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', 'hd', 'smooth', 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem
+    static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem
     static get KEYS_HTML() {
         return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas';
     }
@@ -51,9 +51,8 @@ class PauseMenu {
         this._icons = {};
         this._legendIdx = {};
         this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, camBounce: true, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual)
-        this.settings.hd = !!Config.art.hd;          // (já resolvido em config.js: escolha salva, ?hd=0/1 e o perfil do aparelho)
-        this.settings.smooth = Config.art.smooth !== false;      // (idem)
-        this.settings.cars3d = typeof CarArt3D !== 'undefined' && CarArt3D.available();      // (idem: escolha salva, lida em config.js; ?cars2d)
+        delete this.settings.hd; delete this.settings.smooth;          // (escolhas antigas: o jogo é sempre em alta definição com o gráfico suave)
+        this.settings.cars3d = typeof CarArt3D !== 'undefined' && CarArt3D.available();      // (já resolvido em config.js: escolha salva; ?cars2d)
         this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
         this._build();
         this.applySettings();
@@ -71,8 +70,6 @@ class PauseMenu {
         this.g.showPrompts = s.prompts;
         CompassCamera.bounceOn = s.camBounce !== false;
         if (this.g.dev) this.g.dev.setEnabled(s.dev);
-        if (!!s.hd !== !!Config.art.hd) this._applyHd(!!s.hd);
-        if (!!s.smooth !== (Config.art.smooth !== false)) { Config.art.smooth = !!s.smooth; Smooth.apply(this.g); }
         if (typeof CarArt3D !== 'undefined' && !!s.cars3d !== CarArt3D.available()) this._applyCars3d(!!s.cars3d);
     }
 
@@ -81,20 +78,6 @@ class PauseMenu {
         Config.art.cars3d = on;
         const cd = this.g.carDamage;
         if (cd) for (const car of cd.allCars()) if (car.remakeVisual) car.remakeVisual();
-    }
-
-    // Alta definição liga/desliga na hora: a resolução da tela muda já; os personagens em alta são gerados conforme aparecem
-    // (NpcArt.hdWant). Desligar mantém os que já estão em alta (só a tela volta ao pixelado).
-    _applyHd(on) {
-        const g = this.g, ge = g.gameEngine;
-        Config.art.hd = on;
-        Config.art.pixelate = !on;
-        if (ge && ge.resize) { ge.resize(); if (g.camera) { g.camera.fitPixelScale(ge.viewHeight); g.camera.onResize(); } }
-        if (on && typeof NpcArt !== 'undefined') {
-            for (const id of Object.keys(NpcArt.sheets)) NpcArt.hdWant(id);
-            if (typeof PlayerLook !== 'undefined' && PlayerLook.ok) PlayerLook.sync(true);
-        }
-        if (g.camera) Smooth.apply(g);                 // (o gráfico suave só vale na alta definição)
     }
 
     // ------------------------------------------------------------------ montagem
@@ -711,8 +694,6 @@ class PauseMenu {
             ['🎵 Efeitos sonoros', tog(s.sfx)], ['🗺️ Minimapa', tog(s.minimap)], ['💬 Dicas na tela', tog(s.prompts)],
             ['🎯 Mira <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">assistida trava no alvo · manual: você aponta (analógico direito / mouse)</small>', `<div class="pm-toggle is-on">${s.aimAssist ? 'Assistida' : 'Manual'}</div>`],
             ['🚗 Balanço da câmera <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">dirigindo, a câmera balança com arrancadas, freadas, curvas e buracos</small>', tog(s.camBounce !== false)],
-            ['🖥️ Alta definição <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">tela na resolução real e personagens nítidos (gerados no seu PC na 1ª vez que aparecem) · desligado: pixel art, mais leve</small>', tog(s.hd)],
-            ['✨ Gráfico suave <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">bordas sem serrilhado, resolução real do monitor, texturas e sombras suavizadas · só na alta definição · desligado: mais leve</small>', tog(s.smooth)],
             ['🚘 Carros 3D <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">carros com volume: rodas que rolam e esterçam, carroceria balançando na suspensão, luzes acesas no próprio carro · desligado: carros desenhados, mais leve</small>', tog(s.cars3d)],
             ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],
         ];

@@ -37,7 +37,7 @@ const Theme = {
             html, body { font-family: var(--font); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-feature-settings: 'cv11', 'ss01'; }
             /* Modo sem desfoque (html.no-blur): o "vidro" borrado dos painéis é refeito pela GPU a cada quadro, na resolução da TELA, por cima
                do jogo em movimento — em placa fraca custa mais que a cena 3D. Sem ele, os painéis ficam um pouco mais opacos. Liga no perfil
-               leve e é o 1º degrau do AutoQuality. */
+               leve. */
             html.no-blur { --glass: rgba(14, 17, 26, 0.9); --glass-2: rgba(20, 24, 35, 0.95); --blur: none; }
             html.no-blur *, html.no-blur *::before, html.no-blur *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
             html.no-blur #endscreen { background: radial-gradient(ellipse at center, rgba(20,2,6,0.82) 20%, rgba(0,0,0,0.94) 100%) !important; }

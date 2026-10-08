@@ -116,15 +116,15 @@
             if (!r.ok) throw new Error('não salvou ' + path + ' (' + r.status + ')');
         }
         window.built = {};
-        // Monta (em Workers paralelos) e salva os tipos pedidos.
-        async function buildAll(ids = Object.keys(G.TYPES), { write = true } = {}) {
+        // Monta (em Workers paralelos) e salva os tipos pedidos. k = resolução: G.HD_K (padrão — o jogo só usa a alta definição) ou G.OUT_K.
+        async function buildAll(ids = Object.keys(G.TYPES), { write = true, k = G.HD_K } = {}) {
             $('all').disabled = true;
             const prog = {}, t0 = performance.now(), N = Math.max(1, Math.min(ids.length, (navigator.hardwareConcurrency || 4) - 1));
             const show = () => status(Object.entries(prog).map(([k, v]) => `${k}: ${v}`).join('\n'));
             const queue = ids.slice();
             await Promise.all(Array.from({ length: N }, () => new Promise((done) => {
                 const w = new Worker('worker.js');
-                const next = () => { const id = queue.shift(); if (!id) { w.terminate(); done(); return; } prog[id] = '…'; show(); w.postMessage({ id }); };
+                const next = () => { const id = queue.shift(); if (!id) { w.terminate(); done(); return; } prog[id] = '…'; show(); w.postMessage({ id, k }); };
                 w.onmessage = async (e) => {
                     const m = e.data;
                     if (m.progress) { prog[m.id] = `${m.progress[0]}/${m.progress[1]} ${m.progress[2]}`; show(); return; }
