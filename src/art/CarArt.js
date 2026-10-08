@@ -207,11 +207,16 @@ const CarArt = {
                     float paintSpec = pow(nh, 160.0) * 0.55 * (1.0 - fx.r) * (1.0 - 0.6 * fx.g);
                     float glassSpec = pow(nh, 420.0) * 1.4;
                     vec3 spec = sun * mix(paintSpec, glassSpec, glass);
-                    // vidro: reflexo do céu — mais forte onde o vidro inclina (para-brisa, vidro traseiro), mais claro para cima
+                    // vidro: reflexo do céu — mais forte onde o vidro inclina (para-brisa, vidro traseiro, janelas), e DIRECIONAL: o plano
+                    // virado para o lado do sol reflete céu claro, o oposto um céu mais escuro — cada vidro inclinado se destaca do outro
                     vec3 Rv = reflect(vec3(0.0, -1.0, 0.0), N);
-                    vec3 skyC = mix(vec3(0.42, 0.5, 0.6), vec3(0.78, 0.86, 0.95), clamp(Rv.y, 0.0, 1.0));
-                    float fres = 0.05 + 0.55 * (1.0 - N.y);
+                    vec2 rh = Rv.xz, sh2 = sunL.xz;
+                    float toSun = dot(rh, sh2) / max(length(rh) * length(sh2), 1e-4);
+                    float bright = 0.55 + 0.75 * clamp(toSun, -1.0, 1.0) * min(1.0, length(rh) * 2.0);
+                    vec3 skyC = mix(vec3(0.42, 0.5, 0.6), vec3(0.78, 0.86, 0.95), clamp(Rv.y, 0.0, 1.0)) * max(bright, 0.12);
+                    float fres = 0.05 + 0.6 * (1.0 - N.y);
                     vec3 refl = skyC * fres * glass * (0.35 + 0.65 * clamp(sunI, 0.0, 1.0));
+                    refl += sun * glass * max(dot(N, sunL) - dif0, 0.0) * 0.5;      // vidro de frente para o sol: brilho a mais
                     vec3 lc = c * clamp(lit, 0.45, 1.6) + (spec + refl) * a.a;
                     c = mix(c, lc, relief);
                     gl_FragColor = vec4(c * tint * vC.g * vC.a, a.a * vC.a);

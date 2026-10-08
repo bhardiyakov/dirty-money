@@ -43,10 +43,12 @@ src/art/CarSheet.js       catálogo (física e desempenho), pinturas, classes, c
   malha, desenhada no grupo 1 (depois dos pedestres, antes das copas e dos brilhos), testando a profundidade do mundo.
   1 chamada de desenho para os carros e 1 para as portas abertas (nenhuma quando não há porta aberta).
 - **Relevo (parecer 3D visto de cima)**: o gerador também desenha a ALTURA de cada carro (`CarGen.heightSVG`: carroceria
-  na cintura com as bordas arredondadas, cabine subindo pelo para-brisa / vidro traseiro / janelas até o teto, caçamba
-  rebaixada, giroflex e luminoso em cima do teto) e a máscara dos vidros; o build tira as normais e grava a textura C. O
+  na cintura com as bordas arredondadas, teto, caçamba rebaixada, giroflex e luminoso em cima do teto) e as máscaras da
+  cabine, do teto e dos vidros. No build cada VIDRO vira um plano inclinado da borda do teto até o topo da carroceria
+  (altura pela distância às duas bordas, em ponto flutuante); daí saem as normais, gravadas na textura C. O
   shader ilumina o carro com o **sol do mundo** (`CarArt.setSun`, chamado pelo `DayNight`): o lado virado para o sol
-  clareia, o outro escurece, a lataria tem brilho e os vidros refletem o céu. Como a luz não gira com o carro, numa curva o
+  clareia, o outro escurece, a lataria tem brilho e os vidros refletem o céu — mais claro no vidro virado para o lado do
+  sol, então cada plano inclinado (para-brisa, vidro traseiro, janelas) se destaca do outro. Como a luz não gira com o carro, numa curva o
   brilho "escorre" pela carroceria. Motos, bicicletas, barcos, portas e o pneu ganham um domo tirado do alfa. Força em
   `Config.art.carRelief` (0 = plano, como antes). Teto e capô planos ficam iguais ao desenho (a luz é relativa a uma
   superfície plana): o efeito está nas bordas e na cabine.

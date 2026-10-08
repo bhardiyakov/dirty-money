@@ -473,16 +473,18 @@ const CarGen = (() => {
     // ------------------------------------------------------------------ relevo (3D no shader)
     // ALTURA (m) de cada ponto do carro visto de cima, em tons de cinza (0 = chão, branco = HMAX): o build tira daí as normais e o jogo
     // ilumina o carro com o sol do mundo (CarArt) — a luz não gira junto com o carro, e é isso que faz ele parecer 3D.
-    // Carroceria plana na altura da cintura (rampas suaves no capô viravam listras: a altura sai em 8 bits), cabine subindo até o teto pelo para-brisa / vidro
-    // traseiro / janelas laterais (borrão anisotrópico: cada rampa no comprimento dela), caçamba rebaixada, bordas arredondadas.
-    // mode 'glass' = máscara dos vidros (branco), para o reflexo do céu.
+    // Carroceria plana na altura da cintura (rampas suaves no capô viravam listras: a altura sai em 8 bits), teto na altura dele,
+    // caçamba rebaixada, bordas arredondadas. Os VIDROS não saem daqui: o build (atlas.js) monta cada um como um plano inclinado da
+    // borda do teto até o topo da carroceria, a partir das máscaras abaixo.
+    // mode 'glass' = máscara dos vidros (reflexo do céu) | 'cab' = cabine inteira (vidros + teto) | 'roof' = só o teto.
     const HMAX = 2.2;
     const HEIGHTS = {             // [cintura, teto] (m) por categoria
         super: [0.72, 1.12], esportivo: [0.78, 1.25], suv: [1.02, 1.72], picape: [1.02, 1.78], forca: [1.05, 1.8], van: [1.0, 2.0],
     };
+    const heightsOf = (c) => HEIGHTS[c.categoria] || [0.9, 1.45];
     function heightSVG(c, mode, size) {
         const L = c.L, W = c.W, PAD = c.pad || 10, cw = L + PAD * 2, ch = W + PAD * 2;
-        const [belt, roofH] = HEIGHTS[c.categoria] || [0.9, 1.45];
+        const [belt, roofH] = heightsOf(c);
         const v = (m) => { const k = Math.round(Math.max(0, Math.min(1, m / HMAX)) * 255); return `rgb(${k},${k},${k})`; };
         const by0 = c.body_y0 || 0, bW = W - 2 * by0;
         const bpath = bodyPath(L, bW, c.fr, c.fry, c.rr, c.rry, c.sb ?? 2, c.fb ?? 3, c.rb ?? 2, by0);
@@ -494,6 +496,11 @@ const CarGen = (() => {
             return `<svg xmlns="http://www.w3.org/2000/svg" width="${sw}" height="${sh}" viewBox="0 0 ${cw} ${ch}" preserveAspectRatio="none">` +
                 `<defs>${defs.join('')}</defs><rect x="0" y="0" width="${cw}" height="${ch}" fill="#000"/><g transform="translate(${PAD},${PAD})">${body}</g></svg>`;
         };
+        if (mode === 'cab' || mode === 'roof') {
+            defs.push(`<clipPath id="${id}c"><path d="${bpath}"/></clipPath>`);
+            out.push(`<g clip-path="url(#${id}c)">${mode === 'cab' ? `<path d="${cab}" fill="#fff"/>` : ''}<path d="${roofD}" fill="#fff"/></g>`);
+            return wrap(out.join(''));
+        }
         if (mode === 'glass') {
             defs.push(`<clipPath id="${id}c"><path d="${bpath}"/></clipPath>`);
             out.push(`<g clip-path="url(#${id}c)"><path d="${cab}" fill="#fff"/><path d="${roofD}" fill="#000"/>`);
@@ -504,23 +511,15 @@ const CarGen = (() => {
             return wrap(out.join(''));
         }
         const trunk = belt - 0.06;
-        defs.push(`<clipPath id="${id}c"><path d="${bpath}"/></clipPath><clipPath id="${id}k"><path d="${cab} ${roofD}"/></clipPath>`);
-        // borrões: sx = metade da rampa do para-brisa / vidro traseiro, sy = da janela lateral; bordas da carroceria (arredondadas)
-        const wsF = Math.max(6, c.cf - c.rf), wsR = Math.max(6, c.rr_x - c.cr), side = Math.max(4, c.ri - Math.min(c.ci_f, c.ci_r));
+        defs.push(`<clipPath id="${id}c"><path d="${bpath}"/></clipPath>`);
+        // borrões: bordas da carroceria (arredondadas) e peças pequenas
         const blur = (n, sx, sy) => defs.push(`<filter id="${id}${n}" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="${f(sx)} ${f(sy)}"/></filter>`);
-        blur('f', wsF / 2.6, side / 2.6); blur('r', wsR / 2.6, side / 2.6); blur('e', 3.2, 3.2); blur('s', 1.6, 1.6);
-        const mid = (c.rf + c.rr_x) / 2;
-        defs.push(`<clipPath id="${id}hf"><rect x="${f(mid)}" y="-50" width="${L + 50}" height="${W + 100}"/></clipPath>` +
-            `<clipPath id="${id}hr"><rect x="-50" y="-50" width="${f(mid + 50)}" height="${W + 100}"/></clipPath>`);
+        blur('e', 3.2, 3.2); blur('s', 1.6, 1.6);
         const inner = [];
         inner.push(`<rect x="-20" y="-20" width="${L + 40}" height="${W + 40}" fill="${v(belt)}"/>`);
         // caçamba (picapes): rebaixada, com as bordas na altura da cintura
         if (c.bed) { const b = c.bed, in_ = b.inset ?? 9; inner.push(`<path d="${rrect(b.x0, b.x1, in_, W - in_, 4)}" fill="${v(b.cover ? belt - 0.04 : belt - 0.42)}" filter="url(#${id}s)"/>`); }
-        // cabine: o teto "derramado" até a borda dos vidros — cada metade com a rampa dela
-        for (const [h, fl] of [['hf', 'f'], ['hr', 'r']]) {
-            inner.push(`<g clip-path="url(#${id}k)"><g clip-path="url(#${id}${h})"><path d="${roofD}" fill="${v(roofH)}" filter="url(#${id}${fl})"/></g></g>`);
-        }
-        inner.push(`<path d="${roofD}" fill="${v(roofH)}" filter="url(#${id}s)" opacity="0.85"/>`);
+        inner.push(`<path d="${roofD}" fill="${v(roofH)}"/>`);          // (os vidros em volta: atlas.js, rampa até a cintura)
         // peças em cima do teto / da carroceria
         if (c.lightbar) { const [lx, lw, lh] = c.lightbar; inner.push(`<rect x="${lx - lw / 2}" y="${f(W / 2 - lh / 2 - 2)}" width="${lw}" height="${lh + 4}" rx="3" fill="${v(roofH + 0.14)}"/>`); }
         if (c.taxi_sign) { const sx = (c.rr_x + c.rf) / 2 - 9; inner.push(`<rect x="${f(sx)}" y="${f(W / 2 - 19)}" width="17" height="38" rx="3.5" fill="${v(roofH + 0.18)}"/>`); }
@@ -931,7 +930,7 @@ const CarGen = (() => {
         cladding: 'big', bumpers: 'black', bumper_w: 10, grille: 0.5, grille_slots: 8, hood_lines: false,
         spare: 22, bullbar: 'dark', star: [252, 69, 14, '#e8e4d0'], door_len: 72, door_hinge: 204 });
 
-    return { S, CARS, HMAX, carSVG, heightSVG, doorSVG, damageSVG, damageMarks, mix, light, dark, rgb, hex, rng, hashStr, rrect, poly, f };
+    return { S, CARS, HMAX, carSVG, heightSVG, heightsOf, doorSVG, damageSVG, damageMarks, mix, light, dark, rgb, hex, rng, hashStr, rrect, poly, f };
 })();
 
 if (typeof module !== 'undefined') module.exports = CarGen;

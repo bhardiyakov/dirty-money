@@ -61,9 +61,19 @@ const CarAtlasBuild = {
     async encodeRelief(c, piece) {
         const { w, h } = piece, n = w * h, H = new Float32Array(n), G = new Uint8Array(n), PPU = this.PPU, HM = CarGen.HMAX;
         if (c && !c.custom) {
-            const [hp, gp] = await Promise.all([this.raster(CarGen.heightSVG(c, 'height', [w, h]), w, h), this.raster(CarGen.heightSVG(c, 'glass', [w, h]), w, h)]);
+            const svg = (mode) => this.raster(CarGen.heightSVG(c, mode, [w, h]), w, h);
+            const [hp, gp, cp, rp] = await Promise.all([svg('height'), svg('glass'), svg('cab'), svg('roof')]);
             for (let p = 0; p < n; p++) { H[p] = (hp[p * 4] / 255) * HM; G[p] = gp[p * 4]; }
-            this._boxBlur(H, w, h, 2, 2);         // (a altura vem em 8 bits: sem isto as rampas suaves viram degraus nas normais)
+            // VIDROS: plano inclinado da borda do teto (altura do teto) até a borda da cabine (topo da carroceria, na cintura) —
+            // em cada ponto, pela distância às duas bordas (contas em ponto flutuante: a rampa não tem degraus)
+            const [belt, roofH] = CarGen.heightsOf(c), cab = new Uint8Array(n), roof = new Uint8Array(n);
+            for (let p = 0; p < n; p++) { cab[p] = cp[p * 4] >= 128 ? 1 : 0; roof[p] = rp[p * 4] >= 128 ? 1 : 0; }
+            const dOut = this._dist(cab, w, h, 0), dRoof = this._dist(roof, w, h, 1);
+            for (let p = 0; p < n; p++) {
+                if (roof[p]) H[p] = Math.max(H[p], roofH);
+                else if (cab[p]) { const t = dOut[p] / (dOut[p] + dRoof[p] || 1); H[p] = belt + (roofH - belt) * t; }
+            }
+            this._boxBlur(H, w, h, 2, 2);         // (arredonda as quinas da rampa e tira os degraus da altura em 8 bits)
         } else {
             // domo: alfa borrado (caixa 3× de raio ~0,12 m), altura até 0,5 m — bordas arredondadas, meio quase plano
             for (let p = 0; p < n; p++) H[p] = piece.A[p * 4 + 3] / 255;
@@ -82,6 +92,25 @@ const CarAtlasBuild = {
             C[i + 3] = G[p];
         }
         return C;
+    },
+
+    // Distância (px, chanfro 1 / √2) de cada pixel até o pixel mais perto cuja máscara vale `to`. Antes de qualquer pixel `to`: 1e9.
+    _dist(mask, w, h, to) {
+        const d = new Float32Array(w * h), D = Math.SQRT2;
+        for (let p = 0; p < w * h; p++) d[p] = mask[p] === to ? 0 : 1e9;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            const p = y * w + x; let v = d[p];
+            if (x > 0) v = Math.min(v, d[p - 1] + 1);
+            if (y > 0) { v = Math.min(v, d[p - w] + 1); if (x > 0) v = Math.min(v, d[p - w - 1] + D); if (x < w - 1) v = Math.min(v, d[p - w + 1] + D); }
+            d[p] = v;
+        }
+        for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) {
+            const p = y * w + x; let v = d[p];
+            if (x < w - 1) v = Math.min(v, d[p + 1] + 1);
+            if (y < h - 1) { v = Math.min(v, d[p + w] + 1); if (x < w - 1) v = Math.min(v, d[p + w + 1] + D); if (x > 0) v = Math.min(v, d[p + w - 1] + D); }
+            d[p] = v;
+        }
+        return d;
     },
 
     // Borrão de caixa (raio r, `passes` vezes: ~gaussiano) no lugar; fora da imagem conta como 0.
