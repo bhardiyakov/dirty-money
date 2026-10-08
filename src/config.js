@@ -70,6 +70,12 @@ const Config = {
         carTurnTrigger: 1.13,  // só gira (em passos de 90°) quando o carro se afasta ~65° da direção da câmera: desvios não balançam a tela
         yawLerp: 3.5,          // rapidez do giro da câmera quando ela gira (maior = mais rápido; menor = mais suave)
         leadLerp: 2.5,         // rapidez com que o adianto entra (ao entrar no carro) e sai (ao descer)
+        // INCLINAÇÃO (Ajustes): até maxTilt graus a partir da vertical. Acima disso o alto da tela chegaria perto do horizonte e além
+        // da área em que o mundo fica carregado/acordado. tiltLerp = rapidez da transição (ao mudar o ajuste, entrar/sair de interior);
+        // maxReach = até onde (u, à frente do alvo) a área visível é considerada (culling e zonas).
+        maxTilt: 50,
+        tiltLerp: 4,
+        maxReach: 110,
         // BALANÇO ao dirigir (CompassCamera._bounce): a câmera presa ao veículo por uma mola. lag = deslocamento (u) por m/s² de
         // aceleração (arrancada, freada, curva), até maxAcc; stiff/damp = a mola (pouco amortecida: passa do ponto e assenta);
         // roll = inclinação (rad) por rad/s de giro, até rollMax; bump = força dos trancos do asfalto (pulso no zoom, mola hStiff/hDamp);

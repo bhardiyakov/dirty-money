@@ -30,12 +30,16 @@ class MainMenu {
     _initSettings() {
         const panel = document.getElementById('mm-settings');
         const vol = document.getElementById('set-volume'), volVal = document.getElementById('set-volume-val');
+        const tilt = document.getElementById('set-camtilt'), tiltVal = document.getElementById('set-camtilt-val');
+        tilt.max = Config.camera.maxTilt;
         const ang = document.getElementById('set-camangle'), angVal = document.getElementById('set-camangle-val');
         const s = this.game.menu.settings;
         const toggles = [...panel.querySelectorAll('.mm-toggle')];
         const render = () => {
             vol.value = Math.round(s.volume * 100);
             volVal.textContent = vol.value + '%';
+            tilt.value = s.camTilt || 0;
+            tiltVal.textContent = tilt.value + '°';
             ang.value = s.camAngle || 0;
             angVal.textContent = ang.value + '°';
             for (const t of toggles) {
@@ -46,6 +50,7 @@ class MainMenu {
         };
         const commit = () => { this.game.menu._saveSettings(); this.game.menu.applySettings(); render(); };
         vol.addEventListener('input', () => { s.volume = vol.value / 100; commit(); });
+        tilt.addEventListener('input', () => { s.camTilt = +tilt.value; commit(); });
         ang.addEventListener('input', () => { s.camAngle = +ang.value; commit(); });
         for (const t of toggles) t.addEventListener('click', () => { s[t.dataset.key] = !s[t.dataset.key]; commit(); });
         const open = (v) => { panel.classList.toggle('open', v); if (v) render(); (v ? document.getElementById('btn-settings-back') : document.getElementById('btn-settings')).focus(); };
