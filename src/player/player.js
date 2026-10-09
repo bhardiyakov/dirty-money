@@ -89,6 +89,8 @@ class Player {
     // (pulou de um veículo: cambalhota). lethal: termina caído (o jogo cuida do "WASTED").
     ragdoll({ dx, dz, power, kind = 'hit', lethal = false }) {
         this.cancelSequence();
+        this.diving = false;
+        if (kind === 'bail' && typeof Blood !== 'undefined') Blood.dirty(this);     // pulou do veículo andando e rolou no chão: SUJO
         this.resetTactics();
         this.action = null; this.aimTimer = 0;
         this.velocity.setAll(0);
@@ -261,9 +263,10 @@ class Player {
     }
 
     // Sequência de ações encadeadas (entrar/roubar um carro). Cada passo:
-    //   { clip, weapon?, timer?, glide?:{x,z}, yank?, onStart? }
+    //   { clip, weapon?, timer?, glide?:{x,z}, yank?, onStart?, face? }
     // clip: clipe tocado (sem timer, até o fim; com timer, em loop por `timer` s — pode ser encurtado em `action.timer = 0`)
-    // glide: durante o passo o personagem desliza até {x,z} | yank: chamado no meio do clipe (frame ≥ 3) | onStart: ao começar.
+    // glide: durante o passo o personagem desliza até {x,z} | yank: chamado no meio do clipe (frame ≥ 3) | onStart: ao começar
+    // face: para onde olhar neste passo (rad, ou função que devolve) — correr até a porta olhando para ela, depois virar para o carro.
     // opts: { face: heading (rad), onDone, onAbort }. onAbort roda se a sequência for interrompida (ragdoll, teleporte,
     // cancelSequence) — quem chamou devolve o carro/porta ao normal.
     runSequence(steps, { face = null, onDone = null, onAbort = null } = {}) {
@@ -273,10 +276,11 @@ class Player {
         const seq = this._seq = { onAbort };
         const run = (i) => {
             if (this._seq !== seq) return;                           // interrompida
-            if (i >= steps.length) { this._seq = null; if (onDone) onDone(); return; }
+            if (i >= steps.length) { this._seq = null; this._glide = null; this.actor.mesh.position.y = this.baseY; if (onDone) onDone(); return; }   // (o deslize acabou junto: não arrasta o que vier depois)
             const s = steps[i];
             if (s.onStart) s.onStart();
             if (this._seq !== seq) return;                           // (onStart pode ter cancelado)
+            if (s.face !== undefined) this.root.rotation.y = typeof s.face === 'function' ? s.face() : s.face;
             const ok = this.playAction(s.clip, { lock: 0, weapon: s.weapon || 'none', yank: s.yank || null, onDone: () => run(i + 1) });
             if (!ok) { run(i + 1); return; }
             if (s.timer !== undefined) this.action.timer = s.timer;
@@ -294,7 +298,57 @@ class Player {
         this._seq = null; this._glide = null;
         this.actor.mesh.position.y = this.baseY;
         this.action = null;
+        this.setCarClip(null);
         if (seq.onAbort) seq.onAbort();
+        return true;
+    }
+
+    // Entrando no carro: o que do desenho já entrou some debaixo da carroceria de `car` (NpcArt.setClip), dos pés para a cabeça, ao
+    // longo de `dur` s. null desliga.
+    setCarClip(car, dur = 1) {
+        this._carClip = car ? { car, t: 0, dur } : null;
+        if (!car) NpcArt.setClip(this._clipIds(), null);
+    }
+    _clipIds() { const s = this.actor.sheet; return s && s.isNpc ? [s.atlasName, s.fallbackAtlas, s.extraAtlas] : []; }
+    _updateCarClip(dt) {
+        const k = this._carClip;
+        if (!k) return;
+        k.t += dt;
+        const s = Math.min(1, k.t / k.dur), e = Math.min(1, Math.max(0, (s - 0.08) / 0.77)), car = k.car, A = CarDoors.axes(car);
+        NpcArt.setClip(this._clipIds(), { x: car.position.x, z: car.position.z, fx: A.fx, fz: A.fz, hl: car.halfLen * 0.97, hw: car.halfW * 0.97, h: 1.4 * e * e * (3 - 2 * e) });
+    }
+
+    // ---------------------------------------------------------------- natação: começar/parar de nadar e MERGULHO
+    // Entrou no fundo (vadeando → nadando): joga o corpo para a frente (swim_in); voltou ao raso: fica de pé (swim_out). Mergulhado,
+    // o fôlego (o mesmo da corrida — Bags.stamina) vai acabando em Config.water.diveTime s; zerou: sobe sozinho, sem fôlego.
+    _updateSwim(dt, depth) {
+        const was = this._wasSwim;
+        this._wasSwim = this.swimming;
+        if (this.diving && (!this.swimming || !this.alive || this.rag)) this.surface(false);
+        if (this.diving) {
+            const max = this.staminaMax || 100, lvl = Bags.fitLevel(this.fit);
+            this.stamina = Math.max(0, (this.stamina == null ? max : this.stamina) - max / (Config.water.diveTime * (1 + lvl * 0.03)) * dt);
+            if (this.stamina <= 0) { this.winded = true; this.surface(true); }
+        }
+        if (was === undefined || this.action || this.rag) return;
+        if (!was && this.swimming) this.playAction('swim_in', { lock: 0.75 });
+        else if (was && !this.swimming && depth > 0) this.playAction('swim_out', { lock: 0.75 });
+    }
+    // Afunda (Q nadando): o corpo inteiro vai para baixo d'água. Precisa de fôlego.
+    dive() {
+        if (!this.swimming || this.diving || this.rag || this.frozen || !this.actor.sheet.getClip('dive', 'none')) return false;
+        if (this.winded || (this.stamina != null && this.stamina < (this.staminaMax || 100) * 0.15)) return false;
+        this.diving = true;
+        this.action = null;
+        this.playAction('dive_in', { lock: 0.5 });
+        return true;
+    }
+    // Volta à tona (Q de novo, o fôlego acabou ou chegou ao raso). breathless: subiu porque o ar acabou (o jogo avisa).
+    surface(breathless = false) {
+        if (!this.diving) return false;
+        this.diving = false;
+        this._surfaced = breathless ? 'breathless' : 'ok';                         // (o Game lê: respingo e aviso — _updateWater)
+        if (this.swimming && !this.rag) { this.action = null; this.playAction('dive_out', { lock: 0.5 }); }
         return true;
     }
 
@@ -421,11 +475,13 @@ class Player {
             this.state = 'ragdoll';
             return;
         }
+        this._updateCarClip(dt);
         // Dentro do carro (esperando a porta fechar): parado e invisível.
         if (this.frozen) {
             Bags.stamina(this, false, false, dt);                                   // (sentado no carro: recupera o fôlego)
             this.velocity.setAll(0); this.speed = 0;
             this._syncSprite();
+            this.actor.update(dt);                                                  // (o clipe segue: morto, o corpo cai até deitar no chão)
             return;
         }
         if (this._rollCd > 0) this._rollCd -= dt;
@@ -485,7 +541,8 @@ class Player {
             if (this._coverT <= 0) { this._coverT = 0.12; this.cover = typeof Cover !== 'undefined' ? Cover.find(this.root.position.x, this.root.position.z) : null; }
             sprinting = false;
         }
-        // Fôlego: só corre enquanto tiver (e sem sobrecarga de peso). Ver Bags.stamina.
+        // Fôlego: só corre enquanto tiver (e sem sobrecarga de peso). Ver Bags.stamina. Mergulhado, não recupera (gasta: _updateDive).
+        if (this.diving) this._rest = 0;
         sprinting = Bags.stamina(this, sprinting, lock > 0 && moveDir.lengthSquared() > 1e-4, dt);
 
         // Na água: raso (0 a wadeDepth m da margem) = anda devagar, cada vez mais; fundo = nada (ainda mais devagar).
@@ -494,8 +551,11 @@ class Player {
         this.depth = depth;
         this.swimming = depth > W.wadeDepth;
         if (this.crouched && depth > 0) this.setCrouch(false);                     // (na água não dá para agachar)
+        this._updateSwim(dt, depth);
         // vadeando: a água sobe da canela (na beira) à cintura (perto de nadar) — o desenho afunda até ali (SpriteActor.setWaterline)
-        this.waterline = depth > 0 && !this.swimming ? 0.25 + 0.75 * Math.min(1, depth / W.wadeDepth) : 0;
+        // (nos clipes de começar/parar de nadar e de mergulhar a água já vem desenhada)
+        const wetClip = this.action && /^(swim_|dive)/.test(this.action.name);
+        this.waterline = depth > 0 && !this.swimming && !wetClip ? 0.25 + 0.75 * Math.min(1, depth / W.wadeDepth) : 0;
         this.actor.setWaterline(this.waterline);
         const wf = depth <= 0 ? 1 : (depth <= W.wadeDepth ? 0.85 - 0.4 * (depth / W.wadeDepth) : (sprinting ? 0.52 : 0.4));
         // Relevo: subir qualquer encosta pode, mas devagar (MapGeo.slopeSpeed) — e o desenho troca para subindo/escalando
@@ -557,6 +617,13 @@ class Player {
         if (!this.action) {
             const w = this.look;
             let clip;
+            if (this.swimming && this.diving && this.actor.play('dive', 'none')) {      // mergulhado: nado peito debaixo d'água
+                this.state = 'dive';
+                rate = this.speed < 0.3 ? 0.45 : Math.max(0.6, this.speed / 1.1);
+                this._syncSprite();
+                this.actor.update(dt, rate);
+                return;
+            }
             if (this.swimming) {                                  // nadando: crawl (mais devagar parado, "boiando")
                 clip = 'swim'; this.state = 'swim';
                 rate = this.speed < 0.3 ? 0.35 : Math.max(0.6, this.speed / 1.4);
@@ -690,6 +757,7 @@ class Player {
         this.cancelSequence();
         this.resetTactics();
         this.onDeck = false; this.deckH = 0; this.underBridge = false; this._wasInWater = false;
+        this.diving = false; this._wasSwim = undefined;                // (sem mergulho nem "começar a nadar" de um teleporte)
         if (this.frozen) { this.frozen = false; this.actor.setVisible(true); }
         this.root.position.copyFrom(pos);
         if (!MapGeo.canWade(pos.x, pos.z)) {                       // (largado no mar aberto, longe da margem: leva para o ponto mais próximo onde dá para estar a pé)

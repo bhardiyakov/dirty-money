@@ -10,7 +10,8 @@ function NpcGenTypes(G) {
     'use strict';
     const { fullSpec } = G;
     const FALLS = ['flail:none', 'lie:none', 'getup:none', 'tumble:none'];
-    const BASE = ['idle:none', 'walk:none', 'run:none', 'walk_up:none', 'climb:none', 'hurt:none', 'dead:none', 'swim:none', 'swim_idle:none', ...FALLS];
+    const BASE = ['idle:none', 'walk:none', 'run:none', 'walk_up:none', 'climb:none', 'hurt:none', 'dead:none', 'swim:none', 'swim_idle:none', ...FALLS,
+        'dive_in:none', 'dive:none', 'dive_out:none'];                     // mergulho (banhistas)
     // Pilotando (16 direções): moto, bicicleta, jet ski e lancha — civis (trânsito, mototáxi, barcos), o entregador e o jogador.
     const RIDE = ['ride_moto:none', 'ride_bike:none', 'ride_jetski:none', 'ride_boat:none'];
     const CIV0 = [...BASE, 'scared:none', 'surrender:none', 'kneel:none', 'punch:none', 'punchL:none', 'kick:none', 'opendoor:none', 'enter:none'];
@@ -33,6 +34,8 @@ function NpcGenTypes(G) {
     const PLAYER_TAC = [
         ...['none', 'pistol', 'smg', 'shotgun'].flatMap((w) => [`crouch:${w}`, `sneak:${w}`]),
         ...['pistol', 'smg', 'shotgun'].map((w) => `strafe:${w}`), 'roll:none',
+        'sitin:L', 'sitin:R',                                            // sentar no carro (pela porta da esquerda / da direita)
+        'swim_in:none', 'swim_out:none', 'dive_in:none', 'dive:none', 'dive_out:none',      // começar/parar de nadar, mergulho
     ];
     const PLAYER_HAND = ['idle_hold:none', 'walk_hold:none', 'run_hold:none', 'idle_hold:pistol', 'walk_hold:pistol', 'run_hold:pistol'];
     const PLAYER_PULL = ['idle_pull:none', 'walk_pull:none'];

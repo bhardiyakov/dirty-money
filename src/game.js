@@ -647,7 +647,14 @@ class Game {
         }
         {   // água em volta do jogador (marolas, esteira, respingos e sons presos à animação — WaterFx.track); NPCs: NPC.update
             const pl = this.player, inW = this.mode === 'player' && pl.alive;
-            this.waterFx.track(pl, dt, { x: pl.position.x, z: pl.position.z, depth: inW ? (pl.depth || 0) : 0, speed: pl.speed, swimming: !!pl.swimming,
+            if (pl._surfaced) {                                                                       // voltou à tona: respingo (e sem ar, o aviso)
+                const p = pl.position;
+                this.waterFx.splash(p.x, p.z + 0.1, 12, 1.1); this.waterFx.ripple(p.x, p.z, 0.5, 2.6, 1.0, 0.45);
+                AudioFX.waterStroke(p.x, p.z, 1);
+                if (pl._surfaced === 'breathless') this._flash('Sem fôlego! Voltou à tona');
+                pl._surfaced = null;
+            }
+            this.waterFx.track(pl, dt, { x: pl.position.x, z: pl.position.z, depth: inW ? (pl.depth || 0) : 0, speed: pl.speed, swimming: !!pl.swimming, diving: !!pl.diving,
                 heading: pl.actor.heading, actor: pl.actor, wl: pl.waterline, who: 'player', wadeSound: false });      // (passos no raso: Footsteps)
             this.waterFx.update(dt);
             if (typeof NpcArt !== 'undefined') NpcArt.tick(performance.now() / 1000);                                // linha d'água ondulando em quem vadeia
@@ -1340,13 +1347,28 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         car._wasLocked = !!car.locked && !car.isBike && !car.isBoat;    // trancado (sem chave): vai precisar de ligação direta
         this.doors.prewarm(car);
         const open = () => this.doors.set(car, sign, true);
-        const wait = Math.max(0.3, Math.min(1.2, car.speed / 12));    // carro em movimento: espera ele frear e acompanha
-        const steps = [{ clip: 'walk', timer: wait, glide: door }];
-        if (how === 'smash') steps.push({ clip: 'punch', yank: () => this._smashWindow(car, sign) });
-        if (how === 'pick') steps.push({ clip: 'pick', timer: 600, onStart: () => this._startLockpick(car) });
-        if (driver) steps.push({ clip: 'carjack', onStart: open, yank: () => this._yankDriver(car, sign) });
-        else steps.push({ clip: 'opendoor', onStart: open });
-        steps.push({ clip: 'enter' });
+        const atDoor = () => door().face;                             // (virado para o carro)
+        // 1) CORRE até a porta, olhando para onde vai (perto: anda; carro em movimento: espera ele frear e acompanha)
+        const wait = Math.max(0.3, Math.min(1.2, car.speed / 12)), d0 = door(), dist = hypot(d0.x - pl.position.x, d0.z - pl.position.z);
+        const steps = [];
+        if (dist > 0.3 || car.speed > 0.5) {
+            const run = dist > 1.5;
+            steps.push({ clip: run ? 'run' : 'walk', timer: Math.max(wait, Math.min(1.6, dist / (run ? 5.5 : 2.5))), glide: door,
+                face: () => { const q = door(), p = pl.position; return hypot(q.x - p.x, q.z - p.z) > 0.25 ? Math.atan2(q.x - p.x, q.z - p.z) : q.face; } });
+        }
+        // 2) abre a porta (trancado: quebra o vidro ou arromba antes) e, com motorista, arranca ele lá de dentro
+        if (how === 'smash') steps.push({ clip: 'punch', face: atDoor, yank: () => this._smashWindow(car, sign) });
+        if (how === 'pick') steps.push({ clip: 'pick', face: atDoor, timer: 600, onStart: () => this._startLockpick(car) });
+        if (driver) steps.push({ clip: 'carjack', face: atDoor, onStart: open, yank: () => this._yankDriver(car, sign) });
+        else steps.push({ clip: 'opendoor', face: atDoor, onStart: open });
+        // 3) entra: põe o pé lá dentro, gira, senta no banco e recolhe a outra perna, deslizando da porta até o banco enquanto a
+        //    carroceria esconde o que já entrou (clipe `sitin`; sem ele — visual antigo guardado no aparelho —, o `enter` de antes)
+        const side = sign < 0 ? 'L' : 'R', SI = NpcArt.gen().SIT_IN;
+        if (SI && pl.actor.sheet.getClip('sitin', side)) {
+            const dur = SI.n / SI.fps, A = CarDoors.axes(car);
+            const seat = () => { const q = door(); return { x: q.x - A.rx * sign * SI.travel, z: q.z - A.rz * sign * SI.travel }; };
+            steps.push({ clip: 'sitin', weapon: side, face: atDoor, timer: dur, glide: seat, onStart: () => { pl.boarding = car; pl.setCarClip(car, dur); } });
+        } else steps.push({ clip: 'enter', face: atDoor });
         const ok = pl.runSequence(steps, {
             face: door().face,
             onDone: () => this._enteredCar(car, sign),
@@ -1360,9 +1382,11 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     _enteredCar(car, sign) {
         const pl = this.player;
         pl.setVisible(false);
+        pl.setCarClip(null);
         pl.frozen = true;
         this.doors.set(car, sign, false);
         this.doors.whenShut(car, () => {
+            pl.boarding = null;
             if (!pl.frozen) { car.hold = false; return; }             // (foi teleportado/preso enquanto a porta fechava)
             pl.frozen = false;
             car.hold = false;
@@ -1386,6 +1410,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this.doors.close(car);
         if (this.lockpick.active) this.lockpick.cancel();
         const pl = this.player;
+        pl.boarding = null;
+        pl.setCarClip(null);
         if (pl.frozen) { pl.frozen = false; pl.setVisible(true); }
     }
 
@@ -1510,6 +1536,11 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
                 : this.player.inCover
                 ? '<b>Q</b> grudar na cobertura<small>em cobertura — tiros do outro lado param no obstáculo; quem está lá não te vê</small>'
                 : '<b>Q</b> levantar<small>agachado (furtivo) — a polícia e as testemunhas só te notam bem de perto</small>';
+            if (!html && this.player.swimming) {                                        // nadando: o mergulho e o fôlego (o mesmo da corrida)
+                const pl = this.player, f = Math.round(100 * (pl.stamina == null ? 1 : pl.stamina / (pl.staminaMax || 100)));
+                html = pl.diving ? `<b>Q</b> voltar à tona<small>mergulhado — fôlego ${f}% (acabou, ele sobe sozinho)</small>`
+                    : `<b>Q</b> mergulhar<small>${pl.winded || f < 15 ? 'sem fôlego — espere recuperar' : `fôlego ${f}%`}</small>`;
+            }
             if (!html) html = Interiors.prompt(this);
             if (!html && HouseView.hint) html = HouseView.hint;
         }
@@ -1676,9 +1707,24 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         }
         const f = bike.body.getDirection(BABYLON.Axis.Z), heading = Math.atan2(f.x, f.z);
         bike.hold = true;
+        // Onde a subida começa: de pé ao lado do banco (o 1º quadro do clipe `mount` — ~0,6 m para o lado, um pouco atrás do centro).
+        const start = () => ({ x: bike.position.x + S.rx * S.sign * 0.6 - f.x * 0.15, z: bike.position.z + S.rz * S.sign * 0.6 - f.z * 0.15 });
         const go = () => {
+            const pl = this.player, p = pl.position, s = start(), d = hypot(s.x - p.x, s.z - p.z);
+            pl.boarding = bike;                                          // (a colisão não o empurra para fora da moto: o corpo passa por cima dela)
+            if (d < 0.25) { mount(); return; }
+            // longe do banco: vai andando até lá (sem isso o boneco "pulava" para o lado da moto no 1º quadro)
+            const ok = pl.runSequence([{ clip: d > 1.4 ? 'run' : 'walk', timer: Math.max(0.2, Math.min(0.7, d / (d > 1.4 ? 5.5 : 3))), glide: start }], {
+                face: Math.atan2(s.x - p.x, s.z - p.z),
+                onDone: mount,
+                onAbort: () => { pl.boarding = null; bike.hold = false; },
+            });
+            if (!ok) { pl.boarding = null; bike.hold = false; }
+        };
+        const mount = () => {
             // (o veículo continua à vista: o sprite da subida só desenha a pessoa — RiderActor)
             const ok = this.player.startMount(kind, bike.position, heading, S.sign, () => {
+                this.player.boarding = null;
                 if (bike.visual) bike.visual.setVisible(true);
                 bike.setRider(0);                                        // quem pilota agora é o jogador (variante 0)
                 this.player.setVisible(false);
@@ -1689,7 +1735,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
                 this.ui.showVehicle(bike);
                 this._flash(`${bike.spec.name} roubada! (F pra descer)`);
             });
-            if (!ok) { if (bike.visual) bike.visual.setVisible(true); bike.hold = false; }
+            if (!ok) { this.player.boarding = null; if (bike.visual) bike.visual.setVisible(true); bike.hold = false; }
         };
         if (bike.riderVariant != null) {
             this._flash('Derrubando o piloto…');
@@ -1954,6 +2000,11 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // até ele e fica EM COBERTURA (combat/Cover.js).
     _toggleCrouch() {
         const pl = this.player;
+        if (pl.swimming && !this.death && !this.arrest) {                                     // nadando, o Q mergulha e volta à tona
+            if (pl.diving) pl.surface();
+            else if (!pl.dive()) this._flash(pl.winded || pl.stamina < (pl.staminaMax || 100) * 0.15 ? 'Sem fôlego para mergulhar' : 'Não dá para mergulhar agora');
+            return;
+        }
         if (pl.busy || pl.swimming || (pl.depth || 0) > 0 || this.hiding || this.holdup || this.arrest || this.death || this.lockpick.active) return;
         const p = pl.position, T = Config.tactics, C = Cover.find(p.x, p.z, T.coverSnap);
         if (pl.crouched && (pl.coverLock || !C)) { pl.setCrouch(false); return; }          // colado (ou sem cobertura perto): levanta

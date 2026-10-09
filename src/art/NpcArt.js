@@ -77,6 +77,15 @@ const NpcArt = {
             return b._distanceToCamera - a._distanceToCamera;
         });
     },
+    // Recorte da carroceria nos atlas `ids` (os do jogador entrando no carro): c = { x, z, fx, fz, hl, hw, h } ou null (desliga).
+    setClip(ids, c) {
+        for (const id of ids) {
+            const A = id && this.atlases[id], m = A && A.material;
+            if (!m) continue;
+            if (c) { m.setVector4('clipA', new BABYLON.Vector4(c.x, c.z, c.fx, c.fz)); m.setVector4('clipB', new BABYLON.Vector4(c.hl, c.hw, c.h, 1)); }
+            else m.setVector4('clipB', new BABYLON.Vector4(0, 0, 0, 0));
+        }
+    },
     ALPHA: -1.5,                   // entre as portas dos carros (-2) e as copas das árvores (-1)
 
     // Malha do personagem passa a (ou deixa de) ser 2,5D: grupo de desenho e ordem (ver init).
@@ -159,14 +168,17 @@ const NpcArt = {
             varying vec2 vC;
             varying vec3 vW;
             varying vec3 vBl;
+            varying float vCond;
             varying vec3 vPx2;
             varying vec4 vFr2;
+            varying vec2 vG;
             vec2 un(float v) { float hi = floor(v / 4096.0 + 0.0001); return vec2(hi, v - hi * 4096.0); }
             void main(void) {
                 vec2 xy = un(fr.x), wh = un(fr.y), o = un(fr.z) - 2048.0;
-                // camadas de ferimento (SpriteActor.setWounds): fr.w = semente × 25 + baleado × 5 + espancado (níveis 0..4)
-                float ws = floor(fr.w / 25.0 + 0.001), wr = fr.w - ws * 25.0, wb = floor(wr / 5.0 + 0.001);
+                // camadas de ferimento (SpriteActor.setWounds): fr.w = semente × 100 + estado × 25 + baleado × 5 + espancado (0..4; estado 0..3)
+                float ws = floor(fr.w / 100.0 + 0.001), w1 = fr.w - ws * 100.0, cd = floor(w1 / 25.0 + 0.001), wr = w1 - cd * 25.0, wb = floor(wr / 5.0 + 0.001);
                 vBl = vec3(wb / 4.0, (wr - wb * 5.0) / 4.0, ws);
+                vCond = cd;
                 vPx = vec2(xy.x - o.x + position.x * ppu, xy.y - o.y - position.z * ppu);
                 vFr = vec4(xy, xy + wh);
                 vec2 xy2 = un(fr2.x), wh2 = un(fr2.y), o2 = un(fr2.z) - 2048.0;
@@ -175,6 +187,7 @@ const NpcArt = {
                 vC = color.rg;
                 vW = vec3(position.x, position.z, color.a);                 // x e "altura" na imagem (m), linha d'água (m, 0 = seco)
                 vec4 wp = world * vec4(position, 1.0);
+                vG = wp.xz;                                                 // (ponto do chão onde este pixel do desenho cai: recorte do carro)
                 gl_Position = viewProjection * wp;
                 // "De pé" para a profundidade: o desenho cresce para o norte (cabeça ~1 m acima dos pés na imagem), mas é uma pessoa em pé —
                 // a parte de cima testa a profundidade como se estivesse mais ALTA (não some atrás da parede/telhado baixo logo ao norte).
@@ -202,8 +215,12 @@ const NpcArt = {
             uniform float ppu;
             varying vec3 vW;
             varying vec3 vBl;
+            varying float vCond;
             varying vec3 vPx2;
             varying vec4 vFr2;
+            varying vec2 vG;
+            uniform vec4 clipA;          // recorte da carroceria (entrando no carro): centro (x, z) e frente (fx, fz)
+            uniform vec4 clipB;          // meio comprimento, meia largura, altura máxima na imagem (m) e ligado (w > 0,5)
             float hb(float n) { return fract(sin(n) * 43758.5453); }
             // ---- Camadas de ferimento por cima da skin (SpriteActor.setWounds), em coordenadas do corpo (x, altura na imagem, m)
             // arredondadas ao pixel da arte: ficam no mesmo lugar do corpo quando ele anda. Cada nível acrescenta uma marca.
@@ -267,6 +284,61 @@ const NpcArt = {
                 }
                 return vec3(bruise, bl, dirt);
             }
+            // ---- ESTADO da roupa e do corpo (vCond — SpriteActor.setWounds / Blood.cond), por cima de QUALQUER roupa: as marcas são do
+            // tecido e da pele que estiverem ali (a cor de baixo é a da roupa que ele veste), não uma skin pronta.
+            //   1 SUJO: manchas de terra espalhadas pela roupa (e algumas na pele);
+            //   2 MACHUCADO: menos terra, cortes e arranhões vermelhos na roupa e na pele, hematomas roxos na pele;
+            //   3 MUITO MACHUCADO: rasgos na roupa com a PELE aparecendo por baixo (borda esfiapada escura e o ralado vermelho dentro),
+            //     manchas grandes de sangue e os cortes.
+            // Traços curtos espalhados em células (cs m): cada célula tem chance p de uma marca girada (meio comprimento L, meia largura
+            // W); devolve 1 dentro de uma marca. Em pixels inteiros da arte (q já vem arredondado): marcas "pixel art", sem borrão.
+            float marks(vec2 q, float cs, float p, float L, float W, float salt) {
+                vec2 g = floor(q / cs);
+                float m = 0.0;
+                for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+                    vec2 cc = g + vec2(float(i), float(j));
+                    float h0 = hb(dot(cc, vec2(12.9898, 78.233)) + salt * 3.7 + vBl.z * 1.37);
+                    if (h0 > p) continue;
+                    float k = h0 / p;
+                    vec2 ctr = (cc + vec2(hb(k * 91.7 + salt), hb(k * 47.3 + salt))) * cs, d = q - ctr;
+                    float an = hb(k * 13.1 + salt) * 3.1416, ca = cos(an), sa = sin(an);
+                    vec2 r = vec2(ca * d.x + sa * d.y, -sa * d.x + ca * d.y) / vec2(L * (0.6 + 0.8 * hb(k * 7.7)), W * (0.7 + 0.6 * hb(k * 3.3)));
+                    m = max(m, step(dot(r, r), 1.0));
+                }
+                return m;
+            }
+            // cor da PELE da pessoa (linha da paleta dela) no mesmo sombreado (luz b1) do pixel — o que aparece no rasgo da roupa
+            vec3 skinAt(float b1) {
+                float row = (floor(vC.x + 0.5) + 0.5) / palRows, u = (fmt < 1.5 ? 102.0 : min(b1, 204.0)) / 204.0 * 4.0, i0 = floor(u), i1 = min(i0 + 1.0, 4.0);
+                vec3 c0 = texture2D(palette, vec2((8.0 + i0 + 0.5) / 256.0, row)).rgb, c1 = texture2D(palette, vec2((8.0 + i1 + 0.5) / 256.0, row)).rgb;
+                return mix(c0, c1, u - i0) * tint * vC.y;
+            }
+            vec3 condLayer(vec2 q, float mat, vec3 rgb, float lum, float b1) {
+                bool skin = mat == 1.0, cloth = mat == 3.0 || mat == 4.0 || mat == 20.0 || mat == 22.0 || mat == 26.0 || mat == 27.0 || mat == 29.0 || mat == 30.0;
+                if (!skin && !cloth) return rgb;
+                vec3 dirtC = rgb * vec3(0.5, 0.42, 0.33) + vec3(0.05, 0.035, 0.02) * tint;                  // terra: escurece puxando ao marrom
+                vec3 cutC = mix(vec3(0.42, 0.04, 0.05), vec3(0.7, 0.12, 0.1), lum) * tint;                 // corte/arranhão
+                vec3 bloodC = mix(vec3(0.3, 0.01, 0.03), vec3(0.5, 0.04, 0.05), lum) * tint;               // sangue (mancha)
+                // 1+: terra (na roupa, bem espalhada; na pele, pouca) — com o machucado por cima, menos
+                float dirt = cloth ? marks(q, 0.11, vCond < 1.5 ? 0.42 : 0.26, 0.05, 0.021, 1.0) : marks(q, 0.13, 0.14, 0.035, 0.016, 2.0);
+                rgb = mix(rgb, dirtC, dirt * 0.85);
+                if (vCond < 1.5) return rgb;
+                // 2+: hematomas (pele) e cortes/arranhões (roupa e pele)
+                if (skin) rgb = mix(rgb, mix(vec3(0.3, 0.12, 0.32), vec3(0.6, 0.28, 0.42), lum) * tint, marks(q, 0.15, 0.32, 0.045, 0.032, 9.0) * 0.7);
+                float cut = marks(q, 0.13, vCond < 2.5 ? 0.3 : 0.38, 0.056, 0.012, 5.0);
+                rgb = mix(rgb, cutC, cut * 0.9);
+                if (vCond < 2.5) return rgb;
+                // 3: rasgos (a pele aparece) e sangue
+                if (cloth) {
+                    float tear = marks(q, 0.17, 0.4, 0.1, 0.03, 13.0), edge = marks(q, 0.17, 0.4, 0.116, 0.045, 13.0);
+                    vec3 sk = skinAt(b1);
+                    sk = mix(sk, cutC, marks(q, 0.07, 0.35, 0.03, 0.009, 21.0) * 0.8);                   // o ralado na pele do rasgo
+                    rgb = mix(rgb, rgb * 0.42, max(edge - tear, 0.0));                                        // borda esfiapada
+                    rgb = mix(rgb, sk, tear);
+                }
+                rgb = mix(rgb, bloodC, marks(q, 0.16, 0.36, 0.062, 0.042, 17.0) * 0.92);
+                return rgb;
+            }
             vec4 tap(vec2 t, vec4 R) {
                 if (t.x < R.x || t.y < R.y || t.x >= R.z || t.y >= R.w) return vec4(0.0);
                 vec4 s = texture2D(atlas, (t + 0.5) / atlasSize);
@@ -307,7 +379,7 @@ const NpcArt = {
                 if (vPx2.z > 0.004) c = mix(c, sampleFrame(vPx2.xy, vFr2), vPx2.z);
                 // Camadas de ferimento (baleado / espancado): só sobre o CORPO — pixel opaco de pele, roupa ou rosto; nunca no contorno,
                 // na sombra, em armas e acessórios ou fora do desenho. A cor segue o sombreado do material embaixo.
-                if ((vBl.x > 0.01 || vBl.y > 0.01) && c.a > 0.6) {
+                if ((vBl.x > 0.01 || vBl.y > 0.01 || vCond > 0.5) && c.a > 0.6) {
                     vec2 tp = floor(vPx);
                     vec4 s0 = texture2D(atlas, (tp + 0.5) / atlasSize);
                     float code = floor(s0.r * 255.0 + 0.5), mat = floor(code / 8.0);
@@ -319,6 +391,7 @@ const NpcArt = {
                         vec3 rgb = c.rgb / c.a;
                         float lum = dot(rgb, vec3(0.3, 0.55, 0.15));
                         vec3 red = mix(vec3(0.4, 0.02, 0.04), vec3(0.64, 0.06, 0.07), lum) * tint;
+                        if (vCond > 0.5) rgb = condLayer(q, mat, rgb, lum, floor((la > 0.5 ? s0.a : s0.g) * 255.0 + 0.5));
                         if (vBl.y > 0.01) {
                             vec3 b = beatMask(q, mat);
                             rgb = mix(rgb, mix(vec3(0.38, 0.32, 0.24), vec3(0.55, 0.47, 0.36), lum) * tint, b.z * 0.55);    // terra
@@ -348,6 +421,12 @@ const NpcArt = {
                         c = vec4(rgb * a, a);
                     }
                 }
+                // Entrando no carro (Player.setCarClip): o que do desenho cai sobre a carroceria e está abaixo da altura que já
+                // entrou some debaixo dela — os pés primeiro, a cabeça por último.
+                if (clipB.w > 0.5) {
+                    vec2 d = vG - clipA.xy;
+                    if (abs(dot(d, clipA.zw)) < clipB.x && abs(dot(d, vec2(clipA.w, -clipA.z))) < clipB.y && vW.y < clipB.z) discard;
+                }
                 if (c.a < 0.02) discard;
                 gl_FragColor = c;
             }`;
@@ -357,7 +436,7 @@ const NpcArt = {
         if (A.material) return A.material;
         const m = new BABYLON.ShaderMaterial('npcArt_' + A.id, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
             attributes: ['position', 'color', 'fr', 'fr2'],
-            uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'atlasSize', 'palRows', 'tint', 'sharp', 'la', 'fmt', 'wt'],
+            uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'atlasSize', 'palRows', 'tint', 'sharp', 'la', 'fmt', 'wt', 'clipA', 'clipB'],
             samplers: ['atlas', 'palette'],
             needAlphaBlending: true,
         });
@@ -372,6 +451,8 @@ const NpcArt = {
         m.setFloat('sharp', this._sharpOf(A));
         m.setFloat('la', this._gl2 ? 0 : 1);
         m.setFloat('wt', this._wt || 0);
+        m.setVector4('clipA', new BABYLON.Vector4(0, 0, 0, 1));
+        m.setVector4('clipB', new BABYLON.Vector4(0, 0, 0, 0));
         m.alphaMode = BABYLON.Engine.ALPHA_PREMULTIPLIED;
         m.backFaceCulling = false;
         A.material = m;
