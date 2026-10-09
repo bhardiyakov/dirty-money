@@ -55,11 +55,11 @@ class TrafficCar extends Vehicle {
     // (a cabeça no volante) até alguém tirar o corpo (Game._yankDriver) ou o carro sair de cena (TrafficManager, explosão).
     killDriver() {
         if (this.driver === false || this.driverDead || this.controlled) return false;
-        this.driverDead = true; this.mode = 'abandoned'; this.route = null; this.detour = null;
+        this.driverDead = true; this.driverHp = 0; this.mode = 'abandoned'; this.route = null; this.detour = null;
         this.horn = AudioFX.hornLoop(this.pitch);
         return true;
     }
-    clearDeadDriver() { if (this.horn) { this.horn.stop(); this.horn = null; } this.driverDead = false; }
+    clearDeadDriver() { if (this.horn) { this.horn.stop(); this.horn = null; } this.driverDead = false; this.driverHp = undefined; }
 
     // O jogador largou o carro: fica abandonado no lugar.
     setControlled(v) {

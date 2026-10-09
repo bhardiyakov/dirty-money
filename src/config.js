@@ -382,8 +382,10 @@ const Config = {
         dmgExp: 1.25,
         tireChance: 0.05,      // Bala que acerta um carro DURANTE UMA PERSEGUIÇÃO (procurado): chance de furar o pneu mais perto.
         cooldown: 0.3,         // s entre danos de batida do mesmo carro.
-        bulletMul: 0.35,       // Fração do dano da bala que o carro leva.
-        driverShot: 0.1,       // Chance de um tiro que pega na CABINE de um carro de trânsito acertar o motorista (Combat._cabinShot).
+        bulletMul: 0.5,        // Fração do dano da bala que o carro leva (viaturas inclusive).
+        driverHp: 100,         // Vida de quem dirige um carro de trânsito ou uma viatura: tiros pelo LADO DO MOTORISTA vão tirando (Combat._carShot).
+        glassDriver: 0.85,     // Fração do dano da bala em quem dirige quando ela entra pelo vidro (pela porta/lataria: doorDriver).
+        doorDriver: 0.45,
         runOverSpeed: 3.0,     // Velocidade (m/s) a partir da qual o carro machuca quem está na frente.
         runOverDmg: 7.5,       // Dano em quem é atropelado por m/s acima de runOverSpeed (8 m/s ≈ 38; 17 m/s ≈ 105).
         smokeBelow: 0.35,      // Fração de vida abaixo da qual sai fumaça.

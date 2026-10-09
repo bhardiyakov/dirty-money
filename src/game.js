@@ -1425,6 +1425,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         }
         AudioFX.glass(wx, wz);
         car.windowBroken = true;
+        if (car.breakGlass) car.breakGlass(sign < 0 ? 2 : 3);                // (a janela da porta, estilhaçada no carro 3D)
         this._triggerAlarm(car, 'Vidro quebrado — o alarme disparou!');
     }
 
@@ -1459,12 +1460,17 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this._flash(msg);
     }
 
+    // Buzina presa (motorista morto ao volante): segue o carro; queimou/virou carcaça, cala.
+    _hornTick(car) {
+        if (!car.horn) return;
+        if (car.destroyed || car.wrecked) car.clearDeadDriver();
+        else car.horn.set(car.position.x, car.position.z);
+    }
+
     _updateAlarms(dt) {
+        if (this.policeManager) for (const car of this.policeManager.cars) this._hornTick(car);     // (viaturas: o motorista também pode morrer)
         for (const car of this.vehicleManager.vehicles) {
-            if (car.horn) {                                                     // buzina presa (motorista morto ao volante)
-                if (car.destroyed || car.wrecked) car.clearDeadDriver();
-                else car.horn.set(car.position.x, car.position.z);
-            }
+            this._hornTick(car);
             if (!(car.alarm > 0)) continue;
             car.alarm -= dt;
             if (car.destroyed || car.alarm <= 0) { car.alarm = 0; car.hazard = false; continue; }
