@@ -266,6 +266,7 @@ class TrafficManager {
             car.teleport(cand.point.x, cand.point.z, Math.atan2(cand.d.dx, cand.d.dz));
             car.stuck = 0; car.blocked = 0;
             if (car.clearDeadDriver) car.clearDeadDriver();                     // (outro carro, outro motorista: sem corpo nem buzina presa)
+            car.fixGlass();
             if (this.game && this.game.doors) this.game.doors.reset(car);        // (porta aberta/alarme não vão junto)
             if (mode === 'drive') { car.mode = 'drive'; car.startRoute(cand.point.x, cand.point.z, cand.d); }
             else car.park();

@@ -85,7 +85,7 @@ class PoliceCar extends TrafficCar {
             this.syncVisual(dt);
             return;
         }
-        if (this.burning > 0 || this.wrecked) {      // pegando fogo ou carcaça: freia e fica parada
+        if (this.burning > 0 || this.wrecked || this.driverDead) {      // pegando fogo, carcaça ou o motorista morto a tiro: freia e fica parada
             this.driveTo(0, 0, dt, 6, 18);
             this.syncVisual(dt);
             return;

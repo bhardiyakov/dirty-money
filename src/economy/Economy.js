@@ -61,6 +61,14 @@ const Economy = {
         ammo_s:   { name: 'Cartuchos de escopeta', icon: 'ammo_pistol', base: 70, kind: 'ammo', weapons: ['shotgun'], n: 12, desc: '+12 cartuchos' },
         ammo_m:   { name: 'Munição de SMG', icon: 'ammo_pistol', base: 130, kind: 'ammo', weapons: ['smg'], n: 60, desc: '+60 balas' },
         ammo_r:   { name: 'Munição de fuzil', icon: 'ammo_rifle', base: 180, kind: 'ammo', weapons: ['rifle', 'ak47'], n: 60, desc: '+60 balas' },
+        // academia (minigames/Gym.js): a diária/mensalidade libera os aparelhos; suplementos alimentam (e o whey ajuda no treino)
+        gym_day:  { name: 'Diária da academia', icon: 'gym', base: 25, kind: 'gympass', days: 1, desc: 'Libera rosca, supino e agachamento até o fim de hoje' },
+        gym_week: { name: 'Semana na academia', icon: 'gym', base: 120, kind: 'gympass', days: 7, desc: '7 dias de treino liberado' },
+        gym_month: { name: 'Mensalidade', icon: 'gym', base: 380, kind: 'gympass', days: 30, desc: '30 dias de treino liberado' },
+        whey:     { name: 'Shake de whey', icon: 'water', base: 22, kind: 'meal', heal: 10, kcal: 22, protein: 1, desc: 'Proteína: o próximo treino rende mais' },
+        protbar:  { name: 'Barra de proteína', icon: 'food', base: 9, kind: 'meal', heal: 8, kcal: 18, protein: 0.5, desc: 'Lanche rápido com proteína' },
+        grenade:  { name: 'Granada', icon: 'grenade', base: 950, kind: 'throw', weapon: 'grenade', n: 1, desc: 'Tecla 0 · segure para puxar o pino e mirar, solte para jogar · explode em ~3 s' },
+        molotov:  { name: 'Coquetel molotov', icon: 'molotov', base: 160, kind: 'throw', weapon: 'molotov', n: 1, desc: 'Tecla − · segure para acender e mirar, solte para jogar · fogo no chão por 30+ s' },
         vest:     { name: 'Colete nível 1', icon: 'vest', base: 450, kind: 'vest', max: 50, desc: 'Absorve 75% do dano até 50 pts' },
         vest2:    { name: 'Colete nível 2', icon: 'vest2', base: 1000, kind: 'vest', max: 100, desc: 'Absorve 75% do dano até 100 pts' },
         // bolsas (ver player/Bags.js): mais espaço na grade e mais carga antes de pesar; aparecem no personagem
@@ -95,12 +103,13 @@ const Economy = {
             stock: [...Object.keys(Outfit.ITEMS).filter((id) => Outfit.ITEMS[id].base > 0).map((id) => ['of_' + id]), ['bag_cross'], ['bag_pack'], ['bag_brief'], ['bag_suit'], ['bag_duffel']] },
         bank_branch: { label: 'Agência bancária', tier: 1, hours: [10, 16], stock: [] },
         bank_hq:  { label: 'Sede bancária', tier: 1, hours: [10, 17], stock: [] },
+        gym:      { label: 'Academia', tier: 1.0, hours: [5, 23], gym: true, stock: [['gym_day'], ['gym_week'], ['gym_month'], ['whey'], ['protbar'], ['juice'], ['bottle']] },
         drugs:    { label: 'Boca de Fumo', tier: 0.72, hours: [0, 24], guns: true, fence: 0.55,
-            stock: [['pistol', 1, 2], ['revolver', 0.9, 2], ['shotgun', 0.8, 2], ['smg', 0.7, 1], ['ak47', 0.6, 1], ['rifle', 0.4, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['hack', 0.8, 3], ['carkey', 0.8, 3], ['medkit', 0.8, 2], ['bag_tac', 0.7, 1], ['bag_duffel', 0.8, 2]] },
+            stock: [['pistol', 1, 2], ['revolver', 0.9, 2], ['shotgun', 0.8, 2], ['smg', 0.7, 1], ['ak47', 0.6, 1], ['rifle', 0.4, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['grenade', 0.85, 6], ['molotov', 1, 8], ['hack', 0.8, 3], ['carkey', 0.8, 3], ['medkit', 0.8, 2], ['bag_tac', 0.7, 1], ['bag_duffel', 0.8, 2]] },
     },
 
     // Quais lojas do mapa (id em TileFactory.SHOPS) têm interior, e qual estilo usam.
-    KIND_STYLE: { lanchonete: 'burger', conveniencia: 'mart', roupas: 'clothes', farmacia: 'pharmacy', bar: 'bar', padaria: 'bakery', armas: 'guns', pizzaria: 'pizza', saladas: 'fit', italiano: 'italian', japones: 'japanese', bocafumo: 'drugs' },
+    KIND_STYLE: { lanchonete: 'burger', conveniencia: 'mart', roupas: 'clothes', farmacia: 'pharmacy', bar: 'bar', padaria: 'bakery', armas: 'guns', pizzaria: 'pizza', saladas: 'fit', italiano: 'italian', japones: 'japanese', bocafumo: 'drugs', academia: 'gym' },
 
     // Multiplicador de preço pela zona da cidade (distrito + bioma do quarteirão).
     ZONE: {
@@ -131,6 +140,7 @@ const Economy = {
         japanese: ['Sushi Sakura', 'Kaito Japanese Dining', 'Yamato Sushi Bar', 'Restaurante Tóquio'],
         clothes: ['Boutique Vitrine', 'Moda Carioca', 'Shopping Estilo', 'Loja Atitude', 'Street Wear BR', 'Grife do Centro'],
         guns: ['Armas & Cia', 'Armaria Liberty', 'Arsenal Legal', 'Tiro Certo Armas'],
+        gym: ['Academia Músculo Forte', 'Smart Fit Liberty', 'Academia do Grandão', 'Iron Gym', 'Academia Corpo em Forma', 'Ferro & Suor'],
         drugs: ['Boca do Morro', 'Biqueira da Laje', 'Ponto do Gordo', 'Casa do Fumo'],
     },
     nameOf(style, id) {
@@ -177,7 +187,7 @@ const Economy = {
         for (const f of this.factors(shop, hour)) p *= f.mul;
         p *= 1 - (typeof SkillTree !== 'undefined' ? (SkillTree.m.price || 0) : 0);      // habilidade Pechincha
         const K = this.ITEMS[id].kind, E = typeof Empire !== 'undefined' && Empire.instance;
-        if (E && (K === 'weapon' || K === 'ammo')) p *= E.fx('guns') * E.influence.gunPriceMul();      // estação (intervenção) e Fornecedor do Porto
+        if (E && (K === 'weapon' || K === 'ammo' || K === 'throw')) p *= E.fx('guns') * E.influence.gunPriceMul();      // estação (intervenção) e Fornecedor do Porto
         return Math.max(1, Math.round(p));
     },
 
@@ -188,7 +198,7 @@ const Economy = {
         const S = this.STYLES[shop.style], r = Pixel.rng(this._h(shop.id) ^ (this.day * 7919)), items = [];
         for (const [id, chance = 1, max = Infinity] of S.stock) {
             if (S.guns && r() > Math.min(1, chance + (shop.district === 'favela' ? 0 : 0.2))) continue;     // favela: estoque sortido; cidade: quase tudo
-            if (!S.guns && r() < 0.12) continue;                                                               // restaurante sem um prato hoje
+            if (!S.guns && !S.gym && r() < 0.12) continue;                                                     // restaurante sem um prato hoje
             const qty = max === Infinity ? Infinity : 1 + Math.floor(r() * max);
             items.push({ id, qty });
         }
@@ -203,6 +213,7 @@ const Economy = {
         switch (it.kind) {
             case 'weapon': return inv.slotsNeeded({ kind: 'weapon', weapon: it.weapon, ammo: it.ammo }) <= inv.slotsFree();
             case 'ammo': return inv.slotsNeeded({ kind: 'ammo', weapons: it.weapons }) <= inv.slotsFree();
+            case 'throw': return inv.slotsNeeded({ kind: 'throw', weapon: it.weapon }) <= inv.slotsFree();
             case 'goods': {
                 const T = it.give === 'food' || it.give === 'water' ? { kind: 'heal', item: it.give } : { kind: it.give === 'key' ? 'key' : it.give };
                 return inv.slotsNeeded(T) <= inv.slotsFree();
@@ -220,25 +231,42 @@ const Economy = {
         const needClean = shop.district !== 'favela' && price >= Laundry.CLEAN_MIN;          // compra grande no comércio legal: só dinheiro LIMPO
         if ((needClean ? inv.clean : inv.cash) < price) return { ok: false, msg: needClean ? (inv.cash >= price ? 'Compra grande: o comércio legal só aceita dinheiro LIMPO — lave o seu' : 'Dinheiro limpo insuficiente') : 'Dinheiro insuficiente' };
         if (it.kind === 'weapon' && inv.owned(it.weapon)) return { ok: false, msg: 'Você já tem essa arma' };
-        if (it.kind === 'meal' && pl.hp >= pl.maxHp - 0.5 && id !== 'wine' && id !== 'beer' && id !== 'shot' && id !== 'sake') return { ok: false, msg: 'Você não está com fome (vida cheia)' };
+
         if (it.kind === 'ammo' && !it.weapons.some((w) => inv.owned(w))) return { ok: false, msg: 'Você não tem arma para essa munição' };
         if (it.kind === 'vest' && pl.armorMax >= it.max && pl.armor >= pl.armorMax - 0.5) return { ok: false, msg: 'Você já está com esse colete' };
         if (it.kind === 'bag' && Bags.has(inv, it.bag)) return { ok: false, msg: inv.bag === it.bag ? 'Você já está com essa bolsa' : 'Você já tem essa bolsa (de reserva: troque no Inventário → Equipamento)' };
         if (!this._fits(game, it)) return { ok: false, msg: 'Mochila cheia' };
         if (needClean) inv.clean -= price; else inv.cash -= price;
         if (entry.qty !== Infinity) entry.qty--;
-        let msg = `Comprou: ${it.name} (-${brl(price)})`;
-        switch (it.kind) {
-            case 'meal': pl.hp = Math.min(pl.maxHp, pl.hp + it.heal); msg = `${it.name}: +${it.heal} de vida (-${brl(price)})`; break;
-            case 'weapon': inv.addWeapon(it.weapon, it.ammo); break;
-            case 'ammo': { const own = it.weapons.filter((w) => inv.owned(w)); for (const w of own) inv.addAmmo(w, it.n); break; }
-            case 'vest': pl.wearVest(it.max); break;
-            case 'bag': msg = Bags.acquire(game, it.bag).msg + ` (-${brl(price)})`; break;          // a antiga vira reserva
-            case 'outfit': Outfit.give(it.outfit); msg = `Comprou e vestiu: ${it.name} (-${brl(price)})`; break;
-            case 'goods': if (it.give === 'food') inv.food++; else if (it.give === 'water') inv.water++; else if (it.give === 'medkit') inv.medkits++; else if (it.give === 'hack') inv.hacks++; else inv.keys++; break;
-        }
+        const msg = this.grant(game, id, `(-${brl(price)})`);
         Standing.shopped(shop, price);
         return { ok: true, msg };
+    },
+
+    // Dá 1 unidade do item `id` ao jogador (o efeito da compra, sem preço nem estoque) e devolve a mensagem. Usado pela loja e pelo
+    // menu de desenvolvedor (aba ITENS, que lista Economy.ITEMS sozinha): item novo com um `kind` daqui funciona nos dois.
+    grant(game, id, tail = '') {
+        const it = this.ITEMS[id], inv = game.inventory, pl = game.player, t = tail ? ' ' + tail : '';
+        let msg = `Comprou: ${it.name}${t}`;
+        switch (it.kind) {
+            case 'gympass': msg = `${it.name}${t} · treino liberado até ${Physique.addPass(it.days)}`; break;
+            case 'meal': {                                                    // come à vontade, até sem fome: o excesso vira gordura (Physique)
+                pl.hp = Math.min(pl.maxHp, pl.hp + it.heal);
+                if (it.protein) Physique.protein = Math.min(2, (Physique.protein || 0) + it.protein);      // (whey: o próximo treino rende mais)
+                const fx = it.icon === 'medkit' ? '' : Physique.eat(it.kcal != null ? it.kcal : it.icon === 'water' ? it.heal * 0.4 : it.heal);
+                msg = `${it.name}: +${it.heal} de vida${t} · ${Physique.hungerLabel().toLowerCase()}${fx}`;
+                break;
+            }
+            case 'weapon': inv.addWeapon(it.weapon, it.ammo); break;
+            case 'ammo': { const own = it.weapons.filter((w) => inv.owned(w)); for (const w of own) inv.addAmmo(w, it.n); break; }
+            case 'throw': inv.addAmmo(it.weapon, it.n); msg += ` · agora ${inv.ammoText(it.weapon)}`; break;
+            case 'vest': pl.wearVest(it.max); break;
+            case 'bag': msg = Bags.acquire(game, it.bag).msg + t; break;          // a antiga vira reserva
+            case 'outfit': Outfit.give(it.outfit); msg = `Comprou e vestiu: ${it.name}${t}`; break;
+            case 'goods': if (it.give === 'food') inv.food++; else if (it.give === 'water') inv.water++; else if (it.give === 'medkit') inv.medkits++; else if (it.give === 'hack') inv.hacks++; else inv.keys++; break;
+            default: console.warn(`[Economy.grant] tipo de item sem efeito: ${it.kind} (${id})`); msg = `${it.name}: sem efeito (kind '${it.kind}' não tratado em Economy.grant)`;
+        }
+        return msg;
     },
 
     // Quanto a loja paga pelas joias da mochila (null = não compra).

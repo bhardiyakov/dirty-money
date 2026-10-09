@@ -9,7 +9,7 @@
 class Game {
     // Teclas de troca de arma (1–9).
     static get WEAPON_SLOTS() {
-        return { '1': 'none', '2': 'pistol', '3': 'smg', '4': 'shotgun', '5': 'bat', '6': 'revolver', '7': 'ak47', '8': 'rifle', '9': 'knife' };
+        return { '1': 'none', '2': 'pistol', '3': 'smg', '4': 'shotgun', '5': 'bat', '6': 'revolver', '7': 'ak47', '8': 'rifle', '9': 'knife', '0': 'grenade', '-': 'molotov' };
     }
 
     constructor(canvasId) {
@@ -203,6 +203,8 @@ class Game {
             if (CarArt3D.available()) { await CarArt3D.ready; CarArt3D.init(this.scene); }      // carros em 3D (descomprimidos desde a carga da página)
             SkidMarks.init(this.scene); SkidMarks.game = this;                  // marcas de pneu no chão (derrapagem, freada, arrancada)
             Blood.init(this.scene);                                              // sangue no chão (respingo de tiro, rastro de quem sangra)
+            Footprints.init(this.scene);                                         // pegadas na areia (jogador e pedestres; somem aos poucos)
+            Throwables.init(this);                                               // granada e molotov: mira tracejada, voo, explosão, fogo no chão
             SparkFx.init(this.scene);                                            // faíscas em riscos e lascas (pneu furado a tiro)
             this.vehicleManager = new VehicleManager(this.scene, this.physics, this.gameEngine.shadowGenerator, this.carLib);
             this.traffic = new TrafficManager(this.scene, this.physics, this.vehicleManager, this.carLib, this.signals, this.gameEngine.shadowGenerator);
@@ -256,7 +258,8 @@ class Game {
         this.careers = new Careers(this);                    // carreiras do crime: desmanche, ladrão, armeiro, estelionato, jogo do bicho
         this.skills = new SkillTree(this);                   // nível do personagem, árvore de habilidades e notoriedade
         this.achievements = new Achievements(this);          // conquistas e platina
-        this.empire = new Empire(this);                      // império: energia/exposição, soldados, lavagem, influência, domínio, estações
+        this.empire = new Empire(this);                      // império: soldados, lavagem, influência, domínio, estações
+        Physique.game = this; Physique.load(null);           // físico: começa normal (o save, se houver, sobrescreve)
         this.op = new PoliceOperation(this);                 // operação policial na favela (única hora em que a polícia entra)
         this._flash(`Polícia patrulhando: ${this.policeManager.cars.length} viaturas, ${this.policeManager.officers.length} a pé`);
     }
@@ -532,6 +535,7 @@ class Game {
         // Menu de pausa: o jogo para de verdade (a física também) e o menu roda por conta própria.
         if (this.menu.isOpen) { this.menu.update(dt); return; }
         if (this._escModal) { this.input.justPressed['escape'] = false; this._escModal = false; }                   // o ESC foi usado para fechar uma janela
+        if (Gym.active) Gym.update(dt);                                                   // academia: o mini-game usa as teclas (espaço, ← →, ESC)
         if (this._canPause() && (this.input.consumePress('escape') || this.input.consumePress('p') || this._padStart())) { this.menu.open('map'); return; }
         if (this._canPause() && this.input.consumePress('i')) { this.menu.open('inventory'); return; }
         if (this._canPause() && this.input.consumePress('o')) { this.menu.open('careers'); return; }
@@ -541,6 +545,7 @@ class Game {
         if (this.death && this.death.phase === 'screen') { this._updateDeath(dt); return; }
 
         Bags.update(this, dt);                                                            // peso carregado, bolsa no sprite
+        Physique.update(dt, this);                                                        // fome, gordura, músculo (o relógio do jogo)
         if (this.mode !== 'player') Bags.stamina(this.player, false, false, dt);         // (dirigindo/pilotando: recupera o fôlego)
         if (Interiors.active) { this._updateInterior(dt); return; }                       // dentro de uma loja: o mundo fica congelado
         const frozenUI = this.stashUI.open || this.carUI.open || !!this.sleeping || Interiors.busy || this.motoUI.open || !!this.motoRide;                              // janela do baú aberta / dormindo: personagem parado
@@ -682,7 +687,7 @@ class Game {
         if (this.boats) this.boats.update(dt, this);
         if (this.colliderStream) this.colliderStream.update(dt, this.camera.target.x, this.camera.target.z);
         Perf.lap('barcos/colisores');
-        if (this.vehicleManager) { this.carDamage.update(dt); this.collisions.update(dt); this.doors.update(dt); this._updateAlarms(dt); }
+        if (this.vehicleManager) { this.carDamage.update(dt); Throwables.update(dt); this.collisions.update(dt); this.doors.update(dt); this._updateAlarms(dt); }
         Perf.lap('veículos (dano/colisão)');
         if (this.vehicleManager) EngineAudio.update(this, dt);                 // ronco dos motores (o seu e o do trânsito perto)
         Footsteps.update(this, dt);                                            // passos (presos à animação de andar/correr)
@@ -695,6 +700,7 @@ class Game {
             this.carLights.update(dt, this.dayNight.night, this.camera.target, this.carDamage.allCars());      // (lista reaproveitada: sem arrays novos por quadro)
             SkidMarks.focus = this.camera.target; SkidMarks.update(dt);
             Blood.update(dt, null, this);
+            Footprints.update(dt, this);
             SparkFx.update(dt);
             if (this.mode === 'car' && this.activeCar && this.input.consumePress('l')) this.activeCar.lightsOn = !this.activeCar.lightsOn;
         }
@@ -832,6 +838,7 @@ class Game {
         const inp = this.input;
         const p = this.player;
         const inv = this.inventory;
+        if (Gym.active) return;                                          // treinando: o mini-game comanda
 
         // Relógios das ações.
         if (this._fireCd > 0) this._fireCd -= dt;
@@ -852,7 +859,8 @@ class Game {
         for (const key of Object.keys(slots)) {
             if (!inp.consumePress(key)) continue;
             const kind = slots[key];
-            if (!inv.owned(kind === 'none' ? 'fists' : kind)) { this._flash(`Você não tem: ${Weapons[kind === 'none' ? 'fists' : kind].name} (procure pelo chão ou nos drops)`); continue; }
+            if (!inv.owned(kind === 'none' ? 'fists' : kind)) { this._flash(`Você não tem: ${Weapons[kind === 'none' ? 'fists' : kind].name} (${inv.isThrow(kind) ? 'compre na boca de fumo' : 'procure pelo chão ou nos drops'})`); continue; }
+            if (Throwables.busy()) continue;                                 // (no meio de um arremesso não troca)
             this.reloading = 0;                        // trocar de arma cancela a recarga
             if (p.equip(kind)) this._flash(`Arma: ${Weapons[kind === 'none' ? 'fists' : kind].name}${inv.isGun(kind) ? ' ' + inv.ammoText(kind) : ''}`);
         }
@@ -863,6 +871,9 @@ class Game {
 
         // Golpe/tiro principal. SMG dispara em rajada enquanto o botão/espaço estiver apertado.
         const pressed = inp.consumePress('mouse0') | inp.consumePress(' ');
+        // Granada / molotov: apertar prepara (pino / acender), segurar mira e carrega a força, soltar arremessa (Throwables).
+        if (Weapons[p.weapon] && Weapons[p.weapon].throwable) { if (pressed) Throwables.press(); return; }
+        if (Throwables.busy()) return;
         const held = (inp.keys[' '] || inp.mouseDown) && !!Weapons[p.weapon] && Weapons[p.weapon].gun && Weapons[p.weapon].auto;
         const during = p.action && Player.COMBO.includes(p.action.name) ? p.action : null;      // golpe de mão já em andamento
         if (pressed || held) this._tryPrimary();
@@ -929,14 +940,15 @@ class Game {
     }
 
     // Come/bebe um item da mochila (recupera vida).
+    // (come mesmo sem fome: o excesso vira gordura — Physique)
     _eat(kind) {
         const p = this.player, inv = this.inventory;
         if (!(inv[kind] > 0)) return;
-        if (p.hp >= p.maxHp - 1) { this._flash('Vida cheia'); return; }
         inv[kind]--;
         p.hp = Math.min(p.maxHp, p.hp + Inventory.HEAL[kind]);
+        const fx = Physique.eat(kind === 'food' ? Inventory.HEAL[kind] : Inventory.HEAL[kind] * 0.4);
         AudioFX.blip(kind === 'food' ? 380 : 700, 0.2, 0.2);
-        this._flash(`${kind === 'food' ? 'Comeu' : 'Bebeu'}: +${Inventory.HEAL[kind]} de vida`);
+        this._flash(`${kind === 'food' ? 'Comeu' : 'Bebeu'}: +${Inventory.HEAL[kind]} de vida · ${Physique.hungerLabel().toLowerCase()}${fx}`);
     }
 
     // ---------------------------------------------------------------- inventário
@@ -960,14 +972,14 @@ class Game {
 
     // Alguma janela/diálogo que usa o ESC está aberta (ou acabou de fechar)? Então o ESC não deve abrir o menu de pausa.
     _modalUiOpen() {
-        return !!(Pool.active || this.stashUI.open || this.shopUI.open || this.propertyUI.open || this.carUI.open || this.motoUI.open || this.tribunal.open
+        return !!(Gym.active || Pool.active || this.stashUI.open || this.shopUI.open || this.propertyUI.open || this.carUI.open || this.motoUI.open || this.tribunal.open
             || this.endScreen.visible || this.sleeping || this.motoRide);          // (arrombar e inventário legado consomem o ESC sozinhos; _canPause já bloqueia a pausa neles)
     }
 
     // Dá para pausar? Não durante as telas de fim (detido/morte), enquanto arromba (Esc cancela o mini-game) nem sem o jogo pronto.
     _canPause() {
         if (this.menu.isOpen) return false;
-        if (Pool.active || this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.carUI.open || this.carUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping) return false;
+        if (Gym.active || Pool.active || this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.carUI.open || this.carUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping) return false;
         if ((this.arrest && this.arrest.phase === 'screen') || (this.death && this.death.phase === 'screen')) return false;
         return true;
     }
@@ -1028,7 +1040,7 @@ class Game {
         if (!this.aiReady) return;
         const p = this.player, pos = p.position, heading = p.root.rotation.y;
 
-        if (this.empire) this.empire.spend(kind === 'shoot' ? 0.3 : 0.8, kind === 'shoot' ? 2 : 0.5);
+        if (kind !== 'shoot') Bags.train(p, 1.5);                         // soco, chute, taco, facada: treina a força
         if (kind === 'shoot') {
             // Tiro de verdade: projéteis (com mira assistida), ouvido por todos; libera as armas da polícia.
             const angle = this.aim ? this.aim.shotAngle(pos.x, pos.z, heading, p.weapon) : this.combat.aimAssist(pos.x, pos.z, heading);
@@ -1061,7 +1073,7 @@ class Game {
         const knife = weaponKey === 'knife';                                   // faca: soco com lâmina
         this.combat.strike({ position: p.position, heading: () => p.root.rotation.y, ok: () => p.alive && !p.rag && !!p.action && p.action.name === kind }, sk, {
             source: 'player', ref: p,
-            dmgMul: (1 + (SkillTree.m.melee || 0) + Outfit.m.melee) * (knife ? Weapons.knife.dmg / M.dmg : 1),
+            dmgMul: (1 + (SkillTree.m.melee || 0) + Outfit.m.melee) * (knife ? Weapons.knife.dmg / M.dmg : 1) * Physique.meleeMul(this.player),      // (força do físico: magro bate fraco, forte bate forte)
             onHit: (t) => {
                 if (t.halfLen) { this.npcManager.alertViolence(p.position, 10); return; }      // (carro: vandalismo, só assusta)
                 this.npcManager.alertViolence(p.position, this._witnessR(), [t]);
@@ -1425,6 +1437,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         }
         AudioFX.glass(wx, wz);
         car.windowBroken = true;
+        if (car.breakGlass) car.breakGlass(sign < 0 ? 2 : 3);                // (a janela da porta, estilhaçada no carro 3D)
         this._triggerAlarm(car, 'Vidro quebrado — o alarme disparou!');
     }
 
@@ -1459,12 +1472,17 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this._flash(msg);
     }
 
+    // Buzina presa (motorista morto ao volante): segue o carro; queimou/virou carcaça, cala.
+    _hornTick(car) {
+        if (!car.horn) return;
+        if (car.destroyed || car.wrecked) car.clearDeadDriver();
+        else car.horn.set(car.position.x, car.position.z);
+    }
+
     _updateAlarms(dt) {
+        if (this.policeManager) for (const car of this.policeManager.cars) this._hornTick(car);     // (viaturas: o motorista também pode morrer)
         for (const car of this.vehicleManager.vehicles) {
-            if (car.horn) {                                                     // buzina presa (motorista morto ao volante)
-                if (car.destroyed || car.wrecked) car.clearDeadDriver();
-                else car.horn.set(car.position.x, car.position.z);
-            }
+            this._hornTick(car);
             if (!(car.alarm > 0)) continue;
             car.alarm -= dt;
             if (car.destroyed || car.alarm <= 0) { car.alarm = 0; car.hazard = false; continue; }
@@ -1489,7 +1507,13 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         if (this._promptT > 0 && this.mode === this._promptMode && !!Interiors.active === this._promptIn) return;
         this._promptT = 0.1; this._promptMode = this.mode; this._promptIn = !!Interiors.active;
         let html = '';
-        if (Interiors.active) html = Interiors.prompt(this);                    // (com as dicas desligadas o texto é montado igual — os botões de toque leem — mas não aparece)
+        const TS = Throwables.s;
+        const tAim = TS ? `${Math.round(TS.dist || 0)} m · força ${Math.round(TS.power * 100)}% · ${TS.src === 'mouse' ? 'mire com o mouse' : TS.src === 'stick' ? 'mire com o analógico direito (incline mais = mais longe)' : 'segure para ir mais longe'}` : '';
+        if (Gym.active) html = '';                                                  // (treinando: o painel do mini-game já explica tudo)
+        else if (TS && TS.phase !== 'throw') html = TS.kind === 'grenade'
+            ? `<b>SOLTE</b> para jogar a granada<small>${tAim}${TS.armed ? ` · pavio ${Math.max(0, TS.fuse).toFixed(1)} s` : ' · puxando o pino…'}</small>`
+            : `<b>SOLTE</b> para jogar o molotov<small>${tAim}${TS.armed ? ' · pano aceso' : ' · acendendo…'}</small>`;
+        else if (Interiors.active) html = Interiors.prompt(this);                    // (com as dicas desligadas o texto é montado igual — os botões de toque leem — mas não aparece)
         else if (this.hiding && this.hiding.phase === 'hidden') {
             html = `<b>E</b> sair do esconderijo<small>${this.hiding.seen ? 'a polícia te viu entrar — eles estão vindo!' : 'ninguém te viu entrar'}</small>`;
         } else if (this.holdup) {
@@ -1856,12 +1880,17 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             return;
         }
         const p = bike.position;
-        if (bike.courier && variant >= CharacterRig.VARIANT_COURIER) Couriers.onThrown(this, bike);       // o pedido cai no chão
+        // Queda numa BATIDA (kind 'crash': bateu num carro, numa pessoa): piloto do trânsito/entregador cai, levanta e volta para a moto
+        // (Casualty.remount) — não sai correndo apavorado. Tiro, fogo e roubo continuam como antes (foge).
+        const lethal = kind !== 'eject' && power > 15, back = kind === 'crash' && !lethal && bike.mode !== undefined;
+        if (bike.courier && variant >= CharacterRig.VARIANT_COURIER && !back) Couriers.onThrown(this, bike);       // o pedido cai no chão
         const ra = bike.visual && bike.visual.rider;                       // (2,5D: quem cai é o mesmo tipo/visual que pilotava)
         this.casualties.push(new Casualty(this, p, {
             variant, sheet: variant % 2 ? 'civB' : 'civA', look: ra && ra.sheet && ra.sheet.isNpc ? { sheet: ra.sheet, row: ra.npcRow } : null, threat: kind === 'eject' ? this.player.position : p,
-            dx, dz, power, kind: kind === 'eject' ? 'eject' : 'hit', lethal: kind !== 'eject' && power > 15,
+            dx, dz, power, kind: kind === 'eject' ? 'eject' : 'hit', lethal,
+            remount: back ? { bike, variant, onMount: (b) => { if (b.courier) Couriers.onRemount(b); } } : null,
         }));
+
         if (bike.mode !== undefined && !bike.controlled) { bike.mode = 'abandoned'; bike.route = null; }     // sem piloto, para
         if (kind === 'eject') {
             this.wanted.reportCrime();
@@ -2458,9 +2487,10 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         car.takeDamage(dmg, src);
 
         // Bicicleta/moto: numa batida forte o piloto é ARREMESSADO (continua no sentido em que vinha) e o veículo tomba.
-        if (car.isBike && dv > (car.courier ? 9 : 5.5) && car.riderVariant != null) {          // (entregador: piloto calejado, só cai em batida feia)
-            car.throwRider(-dvx, -dvz, dv * 0.9);
-            if (dv > 8) car.fall();
+        // (entregador: apressado, costurando o trânsito — qualquer batida mais firme já derruba; ele levanta e volta para a moto)
+        if (car.isBike && dv > (car.courier ? 4.5 : 5.5) && car.riderVariant != null) {
+            car.throwRider(-dvx, -dvz, dv * 0.9, car.controlled ? 'hit' : 'crash');
+            if (dv > (car.courier ? 6 : 8)) car.fall();
         }
 
         const p = car.position;

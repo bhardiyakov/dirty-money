@@ -296,6 +296,20 @@ const CarArt3D = {
                 else if (is(kind, 2.0)) c = texture2D(paints, vec2(0.375, row)).rgb;
                 float glass = is(kind, 3.0) ? 1.0 : 0.0;
                 vec3 L = vLP.xyz;
+                // ---- VIDRO ESTILHAÇADO POR TIRO, um por um (Vehicle.breakGlass → bits 512.. de ic.w): 0 para-brisa, 1 traseiro, 2/3 janela
+                // da frente esq./dir., 4/5 de trás esq./dir. Qual vidro é este pixel: o lateral fica perto da lateral; o resto, na frente
+                // ou atrás do meio. Quebrado: o buraco escuro do interior com as trincas (células de Worley) e cacos claros na moldura.
+                float broken = 0.0;
+                if (glass > 0.5 && vLt.z >= 511.5) {
+                    float wi = abs(L.x) > dims.z * 0.66 || abs(L.z) < dims.x * 0.18 ? (L.x < 0.0 ? 2.0 : 3.0) + (L.z < -dims.x * 0.05 ? 2.0 : 0.0) : (L.z > 0.0 ? 0.0 : 1.0);
+                    broken = bit(vLt.z, 512.0 * pow(2.0, wi));
+                    if (broken > 0.5) {
+                        vec2 w = worley(vec2(L.x + L.y * 0.7, L.z + L.y * 0.5) * 11.0);
+                        float edge = 1.0 - smoothstep(0.0, 0.08, w.y - w.x), shard = step(0.62, h2(floor(vec2(L.x + L.y * 0.7, L.z + L.y * 0.5) * 11.0 + 0.5)));
+                        c = mix(vec3(0.035, 0.04, 0.045), vec3(0.62, 0.68, 0.7), max(edge * 0.75, shard * 0.35));
+                        glass = 0.12;
+                    }
+                }
                 // ---- riscos (fase 1+) na lataria e vidros trincados (2) / estourados (3)
                 if (dent > 0.5 && vLP.w < 0.5) {
                     float zone = max(smoothstep(dims.x * 0.3, dims.x, abs(L.z)), smoothstep(dims.z * 0.5, dims.z, abs(L.x)) * 0.7);
@@ -306,7 +320,7 @@ const CarArt3D = {
                         c = mix(c, c * 0.55 + vec3(0.13), m);
                         c *= 1.0 - 0.22 * (dent / 3.0) * zone * smoothstep(0.45, 0.85, n2(L.xz * 3.0 + L.y * 2.0));
                     }
-                    if (glass > 0.5 && dent > 1.5) {
+                    if (glass > 0.5 && dent > 1.5 && broken < 0.5) {
                         // vidro estilhaçado: as bordas das células (Worley) viram trincas — em partes do vidro na fase 2; na 3 ele estourou
                         vec2 w = worley(vec2(L.x + L.y * 0.7, L.z + L.y * 0.5) * 9.0);
                         float edge = 1.0 - smoothstep(0.0, 0.07, w.y - w.x);
@@ -463,6 +477,7 @@ class Car3DActor {
         // luzes (CarLights.setLamps) e pneus furados
         this.lamps = { head: 0, tail: 0, bits: 0 };
         this.flatBits = 0;
+        this.glassBits = 0;
         CarArt3D.live.add(this);
     }
 
@@ -483,6 +498,8 @@ class Car3DActor {
     }
 
     // Pneus furados (Vehicle.flat: [diant. esq., diant. dir., tras. esq., tras. dir.]): o aro desce e aquele canto afunda.
+    // Vidros quebrados por tiro (Vehicle.glass: bit i = vidro i — ver o shader): estilhaçados, o interior escuro aparece.
+    setGlass(mask) { this.glassBits = (mask | 0) * 512; }
     setFlat(F) { this.flatBits = F ? (F[0] ? 32 : 0) + (F[1] ? 64 : 0) + (F[2] ? 128 : 0) + (F[3] ? 256 : 0) : 0; this._flat = F; }
 
     // Física visual (Vehicle._bodyMotion, a cada quadro): aF/aL = aceleração à frente / para a direita (m/s²), steer = volante
@@ -549,7 +566,7 @@ class Car3DActor {
         const A = m.inst, L = this.lamps, d = m.dims;
         A[o] = this.spin; A[o + 1] = this.steer; A[o + 2] = this.pitch; A[o + 3] = this.roll;                       // ia
         A[o + 4] = this.heave / k; A[o + 5] = this.yaw; A[o + 6] = this.variant; A[o + 7] = this.dent;                  // ib
-        A[o + 8] = this.shade; A[o + 9] = L.head; A[o + 10] = L.tail; A[o + 11] = L.bits + this.flatBits;              // ic
+        A[o + 8] = this.shade; A[o + 9] = L.head; A[o + 10] = L.tail; A[o + 11] = L.bits + this.flatBits + this.glassBits;              // ic
         A[o + 12] = d[0]; A[o + 13] = d[1]; A[o + 14] = d[2]; A[o + 15] = d[3];                                       // dm
     }
 

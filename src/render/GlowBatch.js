@@ -5,6 +5,9 @@
 //   'cone'  feixe de luz aditivo no chão (faróis): trapézio com bordas e ponta difusas
 //   'puff'  fumaça com blending normal: disco em 3 tons (escapamento)
 //   'ring'  anel suave que se abre (marolas)   'arc'  o pedaço da FRENTE de um anel (a borda v = 0 do quad): onda que vai numa direção
+//   'flame' língua de fogo (CarDamage.FireField): cor = (calor 0..1, semente, -, alfa); a base é a borda v = 1, a ponta a v = 0
+//   'dash'  traço nítido (blending normal): cápsula clara com contorno escuro ao longo de v — a linha tracejada da mira de arremesso
+//           (Throwables); cor = (r, g, b, alfa)
 // Desenhado depois do mundo (renderingGroup 1) mas ainda testando profundidade, então
 // prédios e árvores na frente escondem a luz como deveriam.
 // ============================================================================
@@ -26,7 +29,25 @@ class GlowBatch {
                 vColor = color;
                 gl_Position = worldViewProjection * vec4(position, 1.0);
             }`;
-        for (const k of ['glow', 'cone', 'puff', 'ring', 'arc']) BABYLON.Effect.ShadersStore[k + 'VertexShader'] = vertex;
+        for (const k of ['glow', 'cone', 'puff', 'ring', 'arc', 'flame', 'dash']) BABYLON.Effect.ShadersStore[k + 'VertexShader'] = vertex;
+
+        // 'dash': cápsula ao longo de v (pontas arredondadas), miolo na cor pedida e contorno escuro fino — legível em qualquer chão.
+        BABYLON.Effect.ShadersStore['dashFragmentShader'] = `
+            precision highp float;
+            varying vec2 vUV;
+            varying vec4 vColor;
+            uniform float level;
+            void main(void) {
+                if (vColor.a <= 0.003) discard;
+                vec2 p = vUV * 2.0 - 1.0;
+                float y = max(abs(p.y) - 0.6, 0.0) / 0.4;                       // (o comprimento é 2,5× a largura: pontas redondas)
+                float r = length(vec2(p.x, y));
+                if (r >= 1.0) discard;
+                float edge = smoothstep(0.55, 0.7, r);
+                vec3 c = mix(vColor.rgb, vec3(0.05, 0.05, 0.07), edge);
+                float a = 1.0 - smoothstep(0.88, 1.0, r);
+                gl_FragColor = vec4(c, vColor.a * a * level);
+            }`;
 
         BABYLON.Effect.ShadersStore['glowFragmentShader'] = `
             precision highp float;
@@ -81,6 +102,35 @@ class GlowBatch {
                 gl_FragColor = vec4(vColor.rgb, vColor.a * a * level);
             }`;
 
+        // 'flame': uma LÍNGUA DE FOGO — larga e arredondada na base, afinando até a ponta, com as bordas recortadas por ruído que sobe
+        // (o fogo "lambe"); cor pelo calor: miolo branco-amarelado, amarelo, laranja, vermelho-escuro nas pontas e ao esfriar. Aditivo.
+        BABYLON.Effect.ShadersStore['flameFragmentShader'] = `
+            precision highp float;
+            varying vec2 vUV;
+            varying vec4 vColor;
+            uniform float level;
+            uniform float time;
+            float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+            float n2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y); }
+            void main(void) {
+                if (vColor.a <= 0.003) discard;
+                float y = 1.0 - vUV.y, x = vUV.x * 2.0 - 1.0, s = vColor.g * 37.0;
+                // turbulência: duas oitavas de ruído subindo (mais forte na ponta)
+                float tb = n2(vec2(x * 2.2 + s, y * 3.0 - time * 3.6 + s)) * 0.65 + n2(vec2(x * 5.0 - s, y * 7.0 - time * 6.5)) * 0.35;
+                float xx = x + (tb - 0.5) * 0.7 * (0.25 + y);
+                float w = 0.82 * pow(max(1.0 - y, 0.0), 0.72) * smoothstep(-0.05, 0.22, y);       // largura: base cheia, ponta fina
+                float d = abs(xx) / max(w, 0.001);
+                float body = (1.0 - smoothstep(0.62, 1.0, d)) * smoothstep(0.0, 0.08, y) * (1.0 - smoothstep(0.82, 1.0, y + (tb - 0.5) * 0.25));
+                if (body < 0.01) discard;
+                float core = (1.0 - smoothstep(0.0, 0.7, d)) * (1.0 - smoothstep(0.1, 0.75, y));
+                float t = clamp(vColor.r * (0.55 + 0.55 * core) - y * 0.3 + (tb - 0.5) * 0.15, 0.0, 1.0);
+                vec3 c = t < 0.3 ? mix(vec3(0.35, 0.03, 0.0), vec3(0.95, 0.22, 0.02), t / 0.3)
+                       : t < 0.62 ? mix(vec3(0.95, 0.22, 0.02), vec3(1.0, 0.62, 0.12), (t - 0.3) / 0.32)
+                       : mix(vec3(1.0, 0.62, 0.12), vec3(1.0, 0.95, 0.72), (t - 0.62) / 0.38);
+                float a = body * vColor.a * (0.55 + 0.45 * core) * (0.6 + 0.4 * t);
+                gl_FragColor = vec4(c * (1.0 + core * 0.4), a * level);
+            }`;
+
         BABYLON.Effect.ShadersStore['coneFragmentShader'] = `
             precision highp float;
             varying vec2 vUV;
@@ -115,7 +165,7 @@ class GlowBatch {
             }`;
     }
 
-    // capacity: nº máximo de quads | kind: 'glow' | 'cone' | 'puff' | 'ring' | 'arc'
+    // capacity: nº máximo de quads | kind: 'glow' | 'cone' | 'puff' | 'ring' | 'arc' | 'flame' | 'dash'
     constructor(scene, capacity, name = 'glow', kind = 'glow') {
         GlowBatch.register();
         this.count = 0;
@@ -131,10 +181,10 @@ class GlowBatch {
 
         const m = new BABYLON.ShaderMaterial(name + 'Mat', scene, { vertex: kind, fragment: kind }, {
             attributes: ['position', 'uv', 'color'],
-            uniforms: ['worldViewProjection', 'tint', 'level'],
+            uniforms: ['worldViewProjection', 'tint', 'level', 'time'],
             needAlphaBlending: true,
         });
-        m.alphaMode = kind === 'puff' ? BABYLON.Engine.ALPHA_COMBINE : BABYLON.Engine.ALPHA_ADD;
+        m.alphaMode = kind === 'puff' || kind === 'dash' ? BABYLON.Engine.ALPHA_COMBINE : BABYLON.Engine.ALPHA_ADD;
         m.backFaceCulling = false;
         m.disableDepthWrite = true;
         m.setFloat('level', 1);

@@ -191,7 +191,7 @@ const Config = {
 
         wanderSpeed: 1.6,      // Velocidade andando (m/s; um pouco mais devagar que o jogador).
         jogSpeed: 3.4,         // Velocidade de quem corre na orla (trote).
-        swimSpeed: 1.3,        // Velocidade nadando (na água rasa, anda devagar).
+        swimSpeed: 1.5,        // Velocidade nadando no peito (com pressa — voltando, assustado — nada crawl, mais rápido; na água rasa, anda devagar).
         mix: { jog: 0.17, sun: 0.14, swim: 0.12 },   // fração dos pedestres que correm na orla, tomam sol e nadam (o resto perambula).
         sunTime: [40, 110],    // Segundos deitado ao sol.
         swimTime: [45, 110],   // Segundos na água.
@@ -362,7 +362,12 @@ const Config = {
     },
 
     // Água: raso (0..wadeDepth m da margem) = o personagem anda devagar; além disso, nada (animação de natação). maxDepth = até onde dá para ir.
-    water: { wadeDepth: 10, maxDepth: 230, diveTime: 14 },        // diveTime: segundos de mergulho com o fôlego cheio (Player._updateSwim)
+    water: { wadeDepth: 10, maxDepth: 230, diveTime: 14,          // diveTime: segundos de mergulho com o fôlego cheio (Player._updateSwim)
+        // Velocidades na água (× a caminhada, Config.player.maxSpeed): nado peito (o normal), crawl com Shift (× a corrida — Bags.runSpeed —
+        // e no mínimo crawlMin × caminhada; gasta fôlego como correr), mergulho (peito debaixo d'água) e mergulho com Shift.
+        breast: 0.66, crawl: 0.3, crawlMin: 1.1, dive: 0.55, diveFast: 0.95,
+        deepWade: 0.8,             // fração de wadeDepth a partir da qual a água passa da metade do corpo (vadear "fundo": braços puxando a água)
+        accel: 3.2, turn: 0.45 },  // nadando: acelera/freia devagar (desliza) e vira mais devagar (× Config.player.turnLerp)
 
     // Roubo de carro estacionado (trancado): rápido (quebra o vidro, dispara o alarme) ou furtivo (mini-game).
     theft: {
@@ -382,14 +387,17 @@ const Config = {
         dmgExp: 1.25,
         tireChance: 0.05,      // Bala que acerta um carro DURANTE UMA PERSEGUIÇÃO (procurado): chance de furar o pneu mais perto.
         cooldown: 0.3,         // s entre danos de batida do mesmo carro.
-        bulletMul: 0.35,       // Fração do dano da bala que o carro leva.
-        driverShot: 0.1,       // Chance de um tiro que pega na CABINE de um carro de trânsito acertar o motorista (Combat._cabinShot).
+        bulletMul: 0.5,        // Fração do dano da bala que o carro leva (viaturas inclusive).
+        driverHp: 100,         // Vida de quem dirige um carro de trânsito ou uma viatura: tiros pelo LADO DO MOTORISTA vão tirando (Combat._carShot).
+        glassDriver: 0.85,     // Fração do dano da bala em quem dirige quando ela entra pelo vidro (pela porta/lataria: doorDriver).
+        doorDriver: 0.45,
         runOverSpeed: 3.0,     // Velocidade (m/s) a partir da qual o carro machuca quem está na frente.
         runOverDmg: 7.5,       // Dano em quem é atropelado por m/s acima de runOverSpeed (8 m/s ≈ 38; 17 m/s ≈ 105).
         smokeBelow: 0.35,      // Fração de vida abaixo da qual sai fumaça.
         burnTime: [4.5, 6.5],  // Segundos pegando fogo antes de explodir.
         explosionR: 9,         // Raio da explosão (u).
-        wreckLife: 45,         // Segundos até a carcaça poder sumir (fora da tela).
+        wreckLife: 45,         // Segundos até a carcaça poder sumir (fora da tela) — e nunca antes de o fogo apagar (wreckBurn + 25 s).
+        wreckBurn: [60, 100],  // Segundos que a CARCAÇA continua em chamas depois da explosão (as chamas vão baixando até virar só fumaça).
     },
 
     wanted: {

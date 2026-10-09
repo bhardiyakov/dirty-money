@@ -124,6 +124,7 @@ class Collisions {
                 if (R.power >= Config.ragdoll.minPower) pl.ragdoll({ dx: R.dx, dz: R.dz, power: R.power, kind: 'hit', lethal });
                 this._impactFx(pl.position, 0.3 + Math.min(0.5, R.power * 0.03));
                 ctx.car.takeDamage(1 + R.dmg * 0.02, 'env');
+                this._riderFalls(ctx, R);
             }
         }
 
@@ -156,12 +157,22 @@ class Collisions {
         if (typeof Blood !== 'undefined') Blood.beat(e, R.dmg, 1);                                             // atropelado: ralado e roxo (ESPANCADO) e SUJO
         this._impactFx(e.position, 0.2);
         car.takeDamage(1 + R.dmg * 0.02, 'env');
+        this._riderFalls(ctx, R);
 
         if (byPlayer) {
             // Sobreviveu: ainda é crime (matar já é reportado pelo evento de morte do NPC).
             if (kind === 'npc' && e.alive) { g.wanted.reportCrime(); if (g.npcManager) g.npcManager.alertViolence(e.position, 18); }
             if (kind === 'npc' && !e.alive) { /* onKill já reportou e alertou */ }
         }
+    }
+
+    // Moto/bicicleta do trânsito (entregador, mototaxista, ciclista) que pega alguém em cheio também vai ao chão: o piloto voa por cima
+    // (e depois volta para a moto — Game._onThrow, kind 'crash'); batida forte tomba a moto.
+    _riderFalls(ctx, R) {
+        const b = ctx.car;
+        if (!b.isBike || b.controlled || b.riderVariant == null || R.power < 4) return;
+        b.throwRider(ctx.fx, ctx.fz, R.power * 0.75, 'crash');
+        if (R.power > 6) b.fall();
     }
 
     _impactFx(p, shake) {

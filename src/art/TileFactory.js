@@ -516,10 +516,11 @@ const TileFactory = {
         { id: 'italiano', sign: '#7a1f2b', wall: '#3a2a28', glass: '#2a2430', icon: 'fork', name: 'Ristorante', poi: 'lanchonete' },
         { id: 'japones', sign: '#b8282f', wall: '#2f3a30', glass: '#2a3030', icon: 'fish', name: 'Restaurante Japonês', poi: 'lanchonete' },
         { id: 'bocafumo', sign: '#2a2a2a', wall: '#5a5048', glass: '#1a1a1a', icon: 'smoke', name: 'Boca de Fumo' },
+        { id: 'academia', sign: '#ff6a1a', wall: '#3a3f48', glass: '#28323e', icon: 'dumbbell', name: 'Academia', poi: 'academia' },
     ],
 
     shopAtlas() {
-        const CW = 120, CH = 72, COLS = 5, ROWS = 3;
+        const CW = 120, CH = 72, COLS = 5, ROWS = 4;
         const d = new PixelCanvas(CW * COLS, CH * ROWS), e = new PixelCanvas(CW * COLS, CH * ROWS);
         e.fill([0, 0, 0]);
         const H = Pixel.hex, warm = H('#ffd98a'), warm2 = H('#ffb866');
@@ -550,6 +551,7 @@ const TileFactory = {
             else if (S.icon === 'fork') { rect(d, ix + 1, iy, 1, 9, H('#fff')); rect(d, ix + 4, iy, 1, 9, H('#fff')); rect(d, ix + 7, iy, 2, 9, H('#fff')); rect(d, ix, iy, 9, 3, H('#fff')); }
             else if (S.icon === 'fish') { d.disc(ox + ix + 4, oy + iy + 5, 4, H('#fff')); rect(d, ix + 7, iy + 3, 3, 5, H('#fff')); }
             else if (S.icon === 'smoke') { d.disc(ox + ix + 5, oy + iy + 5, 4, H('#9a9a9a')); d.disc(ox + ix + 5, oy + iy + 4, 2, H('#c9c9c9')); }
+            else if (S.icon === 'dumbbell') { rect(d, ix, iy + 2, 2, 6, H('#fff')); rect(d, ix + 2, iy + 3, 1, 4, H('#fff')); rect(d, ix + 3, iy + 4, 4, 2, H('#fff')); rect(d, ix + 7, iy + 3, 1, 4, H('#fff')); rect(d, ix + 8, iy + 2, 2, 6, H('#fff')); }
             rect(e, ix, iy, 10, 10, H('#fffdf0'));
             if (S.id === 'oficina') {
                 // Portão de garagem de enrolar (faixas horizontais) + luz.

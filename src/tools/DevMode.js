@@ -100,7 +100,7 @@ class DevMode {
         document.body.appendChild(p);
         for (const t of ['keydown', 'keyup']) p.addEventListener(t, (e) => e.stopPropagation());       // digitar nos campos não mexe no jogo
         this.tabsEl = p.querySelector('#devTabs'); this.body = p.querySelector('#devBody');
-        for (const name of ['LOCAIS', 'VEÍCULOS', 'CLIMA/HORA', 'POLÍCIA', 'JOGADOR', 'MUNDO', 'INFO']) {
+        for (const name of DevMode.TABS) {
             const d = document.createElement('div'); d.textContent = name; d.dataset.t = name;
             d.addEventListener('click', () => { this.tab = name; this._render(); });
             this.tabsEl.appendChild(d);
@@ -116,8 +116,43 @@ class DevMode {
         const B = (label, fn, on = null) => { const b = document.createElement('div'); b.className = 'b' + (on ? ' on' : ''); b.textContent = label; b.addEventListener('click', () => { fn(); if (this.tab !== 'INFO') this._render(); }); this._row.appendChild(b); return b; };
         const T = (label, key, after = null) => B(`${this.flags[key] ? '■' : '□'} ${label}`, () => { this.flags[key] = !this.flags[key]; if (after) after(this.flags[key]); }, this.flags[key]);
         const g = this.g;
-        const S = this['_tab' + ['LOCAIS', 'VEÍCULOS', 'CLIMA/HORA', 'POLÍCIA', 'JOGADOR', 'MUNDO', 'INFO'].indexOf(this.tab)];
+        const S = this[DevMode.TAB_FN[this.tab]];
         if (S) S.call(this, H, B, T, g);
+    }
+
+    // =============================================================== ITENS (catálogo AUTOMÁTICO)
+    // Montada a partir dos próprios catálogos do jogo — nada aqui é lista à mão: toda arma de `Weapons` (combat/Combat.js) e todo item
+    // de `Economy.ITEMS` (lojas, inclusive roupas e bolsas) aparece sozinho, agrupado pelo tipo. Item novo = já testável aqui.
+    // Armas: dá e já põe na mão (fogo: +120 balas; arremessável: +5). Itens: o mesmo efeito da compra (Economy.grant), sem pagar.
+    _tabItems(H, B, T, g) {
+        const inv = g.inventory, pl = g.player;
+        H('BUSCAR');
+        const q = document.createElement('input'); q.type = 'text'; q.placeholder = 'filtrar (nome ou id)…'; q.value = this._itemQ || ''; q.style.width = '100%';
+        this._row.appendChild(q);
+        const all = [];
+        const btn = (label, key, fn, on) => { const b = B(label, fn, on); b.dataset.k = (label + ' ' + key).toLowerCase(); all.push(b); return b; };
+        q.addEventListener('input', () => { this._itemQ = q.value; const s = q.value.trim().toLowerCase(); for (const b of all) b.style.display = !s || b.dataset.k.includes(s) ? '' : 'none'; });
+        const ico = (k) => (typeof Emoji !== 'undefined' && Emoji.char ? Emoji.char(k) || '' : '');
+        H(`ARMAS (${Object.keys(Weapons).length - 1}) — dá e põe na mão`);
+        for (const [k, W] of Object.entries(Weapons)) {
+            if (k === 'fists' || !inv.weapons[k]) continue;
+            const tag = W.throwable ? ` +5 (${inv.reserve(k)})` : W.gun ? ' +120 balas' : '';
+            btn(`${ico(k)} ${W.name}${tag}`, k, () => {
+                inv.give(k);
+                if (!(typeof Throwables !== 'undefined' && Throwables.busy()) && !pl.equip(k)) { pl.weapon = k; pl.aimTimer = 0; }
+                g._flash(`Dev: ${W.name}${inv.isGun(k) || inv.isThrow(k) ? ' ' + inv.ammoText(k) : ''} na mão`);
+            }, pl.weapon === k);
+        }
+        btn('Todas as armas', 'todas', () => { for (const k of Object.keys(Weapons)) inv.give(k); g._flash('Dev: todas as armas'); });
+        btn('Encher munição', 'municao', () => { for (const k of Object.keys(inv.weapons)) { const w = inv.weapons[k]; if (w.owned && inv.isGun(k)) { w.mag = inv.magOf(k); w.reserve = Math.max(w.reserve, 240); } } });
+        const KIND = { gympass: 'ACADEMIA (planos)', weapon: 'ARMAS DA LOJA', ammo: 'MUNIÇÃO', throw: 'ARREMESSÁVEIS', goods: 'ITENS DA MOCHILA', meal: 'COMIDA (cura na hora)', vest: 'COLETES', bag: 'BOLSAS', outfit: 'ROUPAS E ACESSÓRIOS' };
+        const by = {};
+        for (const [id, it] of Object.entries(Economy.ITEMS)) (by[it.kind] = by[it.kind] || []).push([id, it]);
+        for (const kind of Object.keys(by).sort((a, b) => (KIND[a] ? 0 : 1) - (KIND[b] ? 0 : 1))) {
+            H(`${KIND[kind] || kind.toUpperCase()} (${by[kind].length})`);
+            for (const [id, it] of by[kind]) btn(`${ico(it.icon)} ${it.name}`, id, () => g._flash('Dev: ' + Economy.grant(g, id)));
+        }
+        if (q.value) q.dispatchEvent(new Event('input'));
     }
 
     // =============================================================== LOCAIS
@@ -213,8 +248,13 @@ class DevMode {
         for (const m of [0.25, 0.5, 1, 2]) B('x' + m, () => { g.timeScale = m; }, (g.timeScale || 1) === m);
         H('VIDA E ITENS');
         B('Curar + colete', () => { g.player.hp = g.player.maxHp; g.player.wearVest(100); });
-        B('Todas as armas', () => { for (const k of Object.keys(Weapons)) if (g.inventory.weapons[k]) g.inventory.addWeapon(k, 120); g._flash('Todas as armas + munição'); });
+        B('Todas as armas', () => { for (const k of Object.keys(Weapons)) g.inventory.give(k); g._flash('Todas as armas + munição (+ granadas e molotovs) — mais itens na aba ITENS'); });
         B('+5 kits médicos', () => { g.inventory.medkits += 5; }); B('+5 hacks', () => { g.inventory.hacks += 5; }); B('+5 chaves', () => { g.inventory.keys += 5; });
+        H(`FÍSICO — ${Physique.label()} · gordura ${Math.round(Physique.fat)} · músculo ${Math.round(Physique.muscle)} · saciedade ${Math.round(Physique.fed)}`);
+        B('Magro', () => Physique.set(5, 18, 10)); B('Normal', () => Physique.set(30, 25, 70)); B('Forte', () => Physique.set(28, 72, 70)); B('Gordo', () => Physique.set(78, 25, 95));
+        B('Faminto (saciedade 0)', () => { Physique.fed = 0; }); B('Comer até encher', () => { Physique.eat(110); });
+        B('Academia liberada 30 dias', () => g._flash('Dev: academia até ' + Physique.addPass(30))); B('Zerar séries de hoje', () => { Physique.sets = {}; Physique.gainToday = 0; });
+        B('Ir à academia mais próxima', () => { Interiors.index(); const p = this._pos(), d = (Interiors._doors || []).filter((s) => s.style === 'gym').sort((a, b) => hypot(a.x - p.x, a.z - p.z) - hypot(b.x - p.x, b.z - p.z))[0]; if (d) this.tp(d.x, d.z); else g._flash('Nenhuma academia no mapa'); });
         H('DINHEIRO'); B('+R$ 1.000', () => g.inventory.addCash(1000)); B('+R$ 100.000', () => g.inventory.addCash(100000)); B('Zerar', () => { g.inventory.cash = 0; });
     }
 
@@ -436,3 +476,6 @@ class DevMode {
         if (this.open && this.tab === 'INFO') { this._infoT -= dt; if (this._infoT <= 0) { this._infoT = 0.25; this._info(); } }
     }
 }
+// Abas do painel e o método que monta cada uma (ITENS: o catálogo automático de armas e itens — _tabItems).
+DevMode.TABS = ['LOCAIS', 'VEÍCULOS', 'CLIMA/HORA', 'POLÍCIA', 'JOGADOR', 'ITENS', 'MUNDO', 'INFO'];
+DevMode.TAB_FN = { 'LOCAIS': '_tab0', 'VEÍCULOS': '_tab1', 'CLIMA/HORA': '_tab2', 'POLÍCIA': '_tab3', 'JOGADOR': '_tab4', 'ITENS': '_tabItems', 'MUNDO': '_tab5', 'INFO': '_tab6' };
