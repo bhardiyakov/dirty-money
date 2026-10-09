@@ -108,7 +108,9 @@ GuideUI.PAGES = {
         a pé — <b>ATACAR</b> (segure para rajada) · <b>CORRER</b> · ação do lugar (ENTRAR, ROUBAR, VASCULHAR…; sem nada por perto, CHUTE) · <b>ARMA</b> (toque troca, segure recarrega);<br>
         dirigindo — <b>ACELERAR</b> · <b>RÉ / FREIO</b> · <b>SAIR</b> · ação do lugar (ABASTECER, DESMANCHAR…) ou BUZINA;<br>
         helicóptero — <b>SUBIR</b> · <b>DESCER</b> · <b>SAIR</b> · <b>GIRAR</b>.</li>
-        <li><b>✚ KIT</b> aparece com vida baixa. <b>⋯</b>: mochila, farol, furtar, pular grade, zoom. No topo: <b>II</b> (mapa/pausa) e <b>CRIME</b> (carreiras). <b>Pinça</b> = zoom.</li></ul>`,
+        <li><b>✚ KIT</b> aparece com vida baixa. <b>⋯</b>: mochila, farol, furtar, pular grade, zoom. No topo: <b>II</b> (mapa/pausa) e <b>CRIME</b> (carreiras). <b>Pinça</b> = zoom.</li>
+        <li><b>Toque no minimapa</b>: abre o <b>mapa expandido</b>, de ponta a ponta. Um dedo arrasta, <b>pinça</b> dá zoom, um toque marca o destino; os botões do canto dão zoom, centram em você e abrem a legenda.</li></ul>
+        <h3>Minimapa</h3><p>Além dos carros, da polícia e do destino, o minimapa mostra com ícone as <b>lojas e lugares em que dá para entrar</b> (lanchonete, farmácia, bar, padaria, mercado, boutique, academia, loja de armas, banco, hospital, delegacia, posto, concessionária…) — dá para saber onde você está só olhando para ele. No mapa grande, as portas que não estão na legenda aparecem quando você aproxima.</p>`,
 
     money: () => `<h2>Dinheiro sujo × limpo</h2>
         <p>Tudo o que vem do crime é <b>dinheiro sujo</b>. O <b>dinheiro limpo</b> é o que está "na conta" e pode ser gasto no comércio legal.</p>

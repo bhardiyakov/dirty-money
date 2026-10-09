@@ -166,7 +166,25 @@ class TouchControls {
         document.body.appendChild(back);
         root.addEventListener('touchstart', (e) => { if (e.target !== root) e.preventDefault(); }, { passive: false });     // (sem mouse emulado, zoom nem rolagem)
         root.addEventListener('contextmenu', (e) => e.preventDefault());
+        this._bindMinimap();
         this._parkStick();
+    }
+
+    // Toque no minimapa = mapa EXPANDIDO (tela cheia, um dedo arrasta, pinça dá zoom, toque marca o destino). Só no toque: no
+    // computador o clique continua sendo ataque/mira (com a mira manual dá para apontar por cima do radar).
+    _bindMinimap() {
+        const mm = document.getElementById('minimap'), g = this.g;
+        if (!mm) return;
+        if (g.minimap) g.minimap.expandHint = this.input.touchDevice;
+        mm.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });         // (sem clique emulado, que viraria soco)
+        mm.addEventListener('contextmenu', (e) => e.preventDefault());
+        mm.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse') return;
+            e.preventDefault();
+            if (parseFloat(mm.style.opacity || '1') < 0.5 || mm.style.visibility === 'hidden' || !g._canPause()) return;      // (dentro de loja/casa o radar some)
+            AudioFX.init();
+            g.menu.openMap(true);
+        });
     }
 
     // hold = a tecla fica apertada enquanto o dedo estiver no botão; senão é um toque único (aperta e solta em 60 ms).

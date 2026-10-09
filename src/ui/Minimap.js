@@ -2,9 +2,41 @@
 // Minimap — canto inferior esquerdo.
 // Desenha a janela do mundo ao redor do jogador (north-up) com o MapRenderer (terreno raster + ruas/prédios vetoriais),
 // mais blip do jogador, unidades (carros/polícia), o marcador de destino e o círculo de perseguição.
+// Lojas e lugares em que dá para entrar (Minimap.places) aparecem com ícone pequeno quando estão à vista: dá para se localizar
+// pelo radar ("estou do lado da farmácia"). No celular, tocar no radar abre o mapa expandido (TouchControls → PauseMenu.openMap).
 // ============================================================================
 
 class Minimap {
+    // Ícone de cada tipo de interior (Economy.STYLES) no radar.
+    static get STYLE_ICON() {
+        return { burger: 'burger', mart: 'cart', pharmacy: 'pharmacy', bar: 'beer', bakery: 'bakery', pizza: 'pizza', fit: 'salad', italian: 'pasta', japanese: 'sushi',
+            guns: 'gun', clothes: 'shirt', gym: 'gym', drugs: 'drugs', bank_branch: 'bank', bank_hq: 'bank' };
+    }
+    // Pontos do mapa (CityGrid.pois) que também vão para o radar: os que não são porta de loja (as lojas vêm TODAS das portas do
+    // Interiors, não só a amostra do mapa de pausa). Safe house, fachadas, baile e mototáxi já têm marcador próprio. Imóvel: só os seus.
+    static get RADAR_POIS() { return ['hospital', 'station', 'gas', 'marina', 'dealer', 'paynspray', 'chop', 'imovel']; }
+
+    // Lugares com ícone: [{ x, z, icon, name, label?, door }]. Conferido no máximo 1×/s e refeito só quando algo mudou (bancos tomam
+    // portas de loja, imóveis são comprados e vendidos, POIs entram no CityGrid) — a mesma lista serve de cache para o mapa de pausa.
+    static places() {
+        const now = performance.now();
+        if (Minimap._places && now - Minimap._placesT < 1000) return Minimap._places;
+        Minimap._placesT = now;
+        if (!CityGrid.blocks) return (Minimap._places = []);
+        Interiors.index();
+        const key = `${Interiors._doors.length}|${Banks.list.length}|${(CityGrid.pois || []).length}|${Object.keys(RealEstate.owned).join(',')}`;
+        if (key === Minimap._placesKey) return Minimap._places;
+        Minimap._placesKey = key;
+        const out = [], SI = Minimap.STYLE_ICON, RP = Minimap.RADAR_POIS, T = PauseMenu.POI_TYPES;
+        for (const d of Interiors._doors) { const icon = SI[d.style]; if (icon) out.push({ x: d.x, z: d.z, icon, name: d.name, label: d.bank ? '' : Economy.STYLES[d.style].label, door: true }); }
+        for (const p of CityGrid.pois || []) {
+            if (!RP.includes(p.type)) continue;
+            if (p.type === 'imovel') { const q = RealEstate.byId[p.prop]; if (!q || !RealEstate.isOwned(q)) continue; }
+            out.push({ x: p.x, z: p.z, icon: T[p.type].icon, name: p.name, door: false });
+        }
+        return (Minimap._places = out);
+    }
+
     constructor(canvasId) {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
@@ -89,6 +121,9 @@ class Minimap {
             ctx.beginPath(); ctx.arc(sx(bl.pos.x, bl.pos.z), sy(bl.pos.x, bl.pos.z), bl.ring * k, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         }
         if (ringed) ctx.restore();
+
+        // Lojas e lugares em que dá para entrar: ícones pequenos por baixo dos blips (carros e polícia ficam por cima).
+        if (this.iconOf) this._drawPlaces(ctx, S, sx, sy);
 
         // Blips.
         for (const bl of blips) {
@@ -175,6 +210,41 @@ class Minimap {
         ctx.strokeText('N', nx, ny);
         ctx.fillStyle = '#eef1f7';
         ctx.fillText('N', nx, ny);
+
+        if (this.expandHint) this._drawExpandHint(ctx, S);
+    }
+
+    // Ícones dos lugares à vista (Minimap.places). No celular o CSS encolhe o radar (108 px): os ícones crescem na mesma proporção
+    // para continuar legíveis. Lojas coladas umas nas outras viram um ícone só (o primeiro), sem formar um borrão.
+    _drawPlaces(ctx, S, sx, sy) {
+        const shown = this.canvas.clientWidth || S, r = Math.max(7, Math.min(13, 6.5 * S / shown)), gap = r * 2;
+        const drawn = this._drawn || (this._drawn = []);
+        drawn.length = 0;
+        for (const p of Minimap.places()) {
+            const x = sx(p.x, p.z), y = sy(p.x, p.z);
+            if (x < -r || y < -r || x > S + r || y > S + r) continue;
+            let near = false;
+            for (let i = 0; i < drawn.length; i += 2) if (Math.abs(drawn[i] - x) < gap && Math.abs(drawn[i + 1] - y) < gap) { near = true; break; }
+            if (near) continue;
+            drawn.push(x, y);
+            ctx.drawImage(this.iconOf(p.icon), x - r, y - r, r * 2, r * 2);
+        }
+    }
+
+    // Celular: quatro cantinhos de "expandir" no canto inferior direito — tocar no radar abre o mapa grande.
+    _drawExpandHint(ctx, S) {
+        const k = S / (this.canvas.clientWidth || S), h = 6 * k, c = S - 15 * k, a = 2.6 * k;
+        ctx.save();
+        ctx.fillStyle = 'rgba(8,10,16,0.62)';
+        ctx.beginPath(); ctx.arc(c, c, h + 4 * k, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#eef1f7'; ctx.lineWidth = 1.4 * k; ctx.lineCap = 'round';
+        ctx.beginPath();
+        for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+            const x = c + sx * h, y = c + sy * h;
+            ctx.moveTo(x - sx * a, y); ctx.lineTo(x, y); ctx.lineTo(x, y - sy * a);
+        }
+        ctx.stroke();
+        ctx.restore();
     }
 
     // Onde desenhar um marcador (gx, gy em px do radar): no próprio lugar, ou — fora do radar — no ponto em que a reta centro→alvo
@@ -201,3 +271,4 @@ class Minimap {
         ctx.closePath();
     }
 }
+memoStatics(Minimap, 'STYLE_ICON', 'RADAR_POIS');
