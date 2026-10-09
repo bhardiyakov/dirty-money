@@ -1461,6 +1461,10 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 
     _updateAlarms(dt) {
         for (const car of this.vehicleManager.vehicles) {
+            if (car.horn) {                                                     // buzina presa (motorista morto ao volante)
+                if (car.destroyed || car.wrecked) car.clearDeadDriver();
+                else car.horn.set(car.position.x, car.position.z);
+            }
             if (!(car.alarm > 0)) continue;
             car.alarm -= dt;
             if (car.destroyed || car.alarm <= 0) { car.alarm = 0; car.hazard = false; continue; }
@@ -1668,6 +1672,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // Todo carro (menos o abandonado) tem alguém ao volante: sai pela porta do lado do ladrão, como ragdoll.
     _yankDriver(car, sign = null) {
         if (car.driver === false) return;
+        const dead = !!car.driverDead;                                          // (baleado ao volante: sai o corpo e a buzina para)
+        if (car.clearDeadDriver) car.clearDeadDriver();
         car.driver = false;
         const c = car.position, S = this._sideOf(car);
         if (sign === null) sign = S.sign;
@@ -1676,7 +1682,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         const seat = { x: c.x + A.fx * (D.h - D.len * 0.5) + A.rx * sign * (car.halfW - 0.3), z: c.z + A.fz * (D.h - D.len * 0.5) + A.rz * sign * (car.halfW - 0.3) };
         this.casualties.push(new Casualty(this, seat, {
             variant: 2 + (car.id * 7) % this.sprites.civilianVariants, sheet: car.id % 2 ? 'civB' : 'civA',
-            threat: this.player.position, dx: S.rx * S.sign, dz: S.rz * S.sign, power: 6.5, kind: 'eject',
+            threat: this.player.position, dx: S.rx * S.sign, dz: S.rz * S.sign, power: dead ? 4.5 : 6.5, kind: 'eject', lethal: dead,
         }));
         this.wanted.reportCrime();
         if (this.npcManager) this.npcManager.alertViolence(c, 20);
@@ -1766,6 +1772,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             if (!MapGeo.isLand(d.x, d.z)) { sign = 1; d = this.doors.doorPoint(car, sign); }
             exitPos = new BABYLON.Vector3(d.x, 0, d.z);
             face = d.face + Math.PI;                                  // de costas para o carro, de saída
+            if (!car._onDeck && this._climbOut(car, sign)) return;    // com a animação: sai do banco pela porta
         }
         exitPos.y = 0;
         car.setControlled(false);
@@ -1782,6 +1789,33 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             this._delayed.push({ t: 0.9, fn: () => { if (!car.hold && this.activeCar !== car) this.doors.set(car, sign, false); } });
         }
         this._flash(car.isBike ? `Desceu da ${car.spec.name.toLowerCase()}` : 'Saiu do carro');
+    }
+
+    // Sair do carro de verdade: a porta abre e ele sai do BANCO — o `sitin` ao contrário (sitout): gira para a porta, põe a perna para
+    // fora, levanta e fica de pé ao lado, deslizando do banco até a porta enquanto a carroceria vai revelando o corpo (da cabeça para
+    // os pés); a porta fecha atrás dele. false = sem o clipe (visual antigo guardado no aparelho): aparece do lado, como antes.
+    _climbOut(car, sign) {
+        const pl = this.player, side = sign < 0 ? 'L' : 'R', SI = NpcArt.gen().SIT_IN;
+        if (!SI || !pl.actor.sheet.getClip('sitout', side)) return false;
+        const A = CarDoors.axes(car), d0 = this.doors.doorPoint(car, sign), dur = SI.n / SI.fps;
+        car.setControlled(false);
+        car.hold = true;
+        this.mode = 'player';
+        this.activeCar = null;
+        pl.teleport(new BABYLON.Vector3(d0.x - A.rx * sign * SI.travel, 0, d0.z - A.rz * sign * SI.travel));     // no banco
+        pl.boarding = car;
+        pl.setVisible(true);
+        this.doors.set(car, sign, true);
+        const release = () => { pl.setCarClip(null); pl.boarding = null; car.hold = false; };
+        const ok = pl.runSequence([{ clip: 'sitout', weapon: side, timer: dur, glide: () => this.doors.doorPoint(car, sign) }], {
+            face: d0.face,
+            onDone: () => { release(); this.doors.set(car, sign, false); },
+            onAbort: () => { release(); this.doors.close(car); },
+        });
+        pl.setCarClip(car, dur, true);                                  // (depois do teleporte, que limpa o recorte)
+        if (!ok) { release(); pl.teleport(new BABYLON.Vector3(d0.x, 0, d0.z)); }
+        this._flash('Saiu do carro');
+        return true;
     }
 
     _bail(car, sp) {

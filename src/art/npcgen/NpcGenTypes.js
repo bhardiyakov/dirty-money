@@ -18,7 +18,8 @@ function NpcGenTypes(G) {
     const CIV = [...CIV0, ...RIDE];
     const armed = (w) => [`idle:${w}`, `walk:${w}`, `run:${w}`, `draw:${w}`, `aim:${w}`, `shoot:${w}`];
     const FORCE = (w) => [...BASE, 'vault:none', 'punch:none', 'kick:none', 'opendoor:none', 'enter:none', 'surrender:none', 'kneel:none', ...armed(w)];
-    const GANG = (ws) => [...CIV0, 'vault:none', ...ws.flatMap((w) => [...armed(w), `holdup:${w}`])];
+    const KNIFE = ['idle:knife', 'walk:knife', 'run:knife', 'stab:knife'];          // faca na mão e a facada
+    const GANG = (ws) => [...CIV0, 'vault:none', ...ws.flatMap((w) => [...armed(w), `holdup:${w}`]), ...KNIFE, 'holdup:knife'];
     // Clipes do jogador (Bags.PLAYER_CLIPS + os novos). Os de carregar bolsa na mão saem só quando o jogador tem uma.
     const PLAYER = [
         'idle:none', 'walk:none', 'run:none', 'walk_up:none', 'climb:none',
@@ -34,7 +35,8 @@ function NpcGenTypes(G) {
     const PLAYER_TAC = [
         ...['none', 'pistol', 'smg', 'shotgun'].flatMap((w) => [`crouch:${w}`, `sneak:${w}`]),
         ...['pistol', 'smg', 'shotgun'].map((w) => `strafe:${w}`), 'roll:none',
-        'sitin:L', 'sitin:R',                                            // sentar no carro (pela porta da esquerda / da direita)
+        'sitin:L', 'sitin:R', 'sitout:L', 'sitout:R',                    // sentar no carro / sair dele (pela porta da esquerda / da direita)
+        ...KNIFE, 'holdup:knife',
         'swim_in:none', 'swim_out:none', 'dive_in:none', 'dive:none', 'dive_out:none',      // começar/parar de nadar, mergulho
     ];
     const PLAYER_HAND = ['idle_hold:none', 'walk_hold:none', 'run_hold:none', 'idle_hold:pistol', 'walk_hold:pistol', 'run_hold:pistol'];

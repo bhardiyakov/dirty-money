@@ -636,6 +636,56 @@ function NpcGenAnims(G) {
         }
         return out;
     }
+    // ---- FACA (jogador e quem a usa): na mão direita, lâmina para a frente do punho (a direção do polegar). Parado/andando/correndo =
+    // os clipes sem arma com a mão direita baixa à frente do quadril; golpe = estocada (recua, avança o corpo e a lâmina, volta);
+    // anunciar o assalto = braço esticado com a lâmina apontada para a vítima.
+    function knifeInHand(p) {
+        const B = p.bones(), hR = B.hand_R.R;
+        placeProp(p, 'knife', p.fist_world(B, 'R'), mv3(hR, [0, 1, 0]), mv3(hR, [0, 0, 1]));
+    }
+    function knifeIdle() {
+        return idle().map((p, i) => { const c = chestOrg(p), s = sin(TAU * i / 6); p.arm_ik('R', V.add(c, [11.0, 8.0, -2.5 + 0.4 * s]), [1.0, -0.4, -0.7]); knifeInHand(p); return p; });
+    }
+    function knifeWalk() {
+        return walk().map((p, i) => { const c = chestOrg(p), s = sin(TAU * i / 8); p.arm_ik('R', V.add(c, [11.0, 7.5 + 2.5 * s, -3.0]), [1.0, -0.4, -0.7]); knifeInHand(p); return p; });
+    }
+    function knifeRun() {
+        return run().map((p, i) => { const c = chestOrg(p), s = sin(TAU * i / 8); p.arm_ik('R', V.add(c, [9.0, 8.0 + 4.0 * s, 1.0]), [1.0, -0.5, -0.6]); knifeInHand(p); return p; });
+    }
+    function knifeStab() {
+        // [giro do peito, mão (relativa ao peito), direção da lâmina, inclinação, passo]
+        const seq = [[-8, [9.0, 4.0, -1.0], [0.1, 1.0, 0.25], 0, 0], [-22, [11.5, -4.0, 0.5], [0.15, 1.0, 0.3], -4, 0], [-6, [7.5, 12.0, 3.0], [0.0, 1.0, 0.1], 8, 3],
+            [6, [3.0, 23.0, 5.0], [-0.05, 1.0, 0.05], 16, 6], [8, [2.5, 24.5, 5.0], [-0.05, 1.0, 0.05], 18, 6], [-4, [7.0, 13.0, 2.0], [0.05, 1.0, 0.2], 8, 3], [-8, [9.0, 4.5, -1.0], [0.1, 1.0, 0.25], 0, 0]];
+        return seq.map(([cy, off, bd, lean, step], i) => {
+            const p = base();
+            fightStance(p, 2.0);
+            if (step) placeFoot(p, 'L', [-11.0, 4.0 + step, 0], 14);
+            p.chest_R = mm3(Rz(deg(cy)), Rx(deg(lean)));
+            p.head_R = mm3(Rz(deg(-cy * 0.5)), Rx(deg(HEAD_TILT - 4 - lean * 0.4)));
+            const c = chestOrg(p), grip = V.add(c, off), d = nrm(bd);
+            placeProp(p, 'knife', grip, d);
+            p.arm_ik('R', grip, [1.0, -0.4, -0.8]);
+            p.arm_ik('L', V.add(c, [-8.5, 8.0, 7.0]), [-1.0, -0.3, -0.9]);
+            if (i === 3) p.effects.push({ type: 'trail', pts: [0, 0.25, 0.5, 0.75, 1].map((s) => V.add(V.add(c, V.lerp(seq[2][1], off, s)), V.mul(d, 9.0))) });
+            return p;
+        });
+    }
+    function knifeHoldup(n = 4) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, s = sin(TAU * t), p = base();
+            p.pelvis_t = [0, 1.0, -1.4];
+            standLegs(p, 12.0, [-2.0, 4.0]);
+            p.chest_R = Rz(deg(-10));
+            p.head_R = mm3(Rz(deg(-6 + 4 * s)), Rx(deg(HEAD_TILT - 6)));
+            const c = chestOrg(p), grip = V.add(c, [5.0, 19.0 + 1.5 * s, 6.0 + 0.6 * s]);
+            placeProp(p, 'knife', grip, nrm([-0.1, 1.0, 0.12]));
+            p.arm_ik('R', grip, [1.0, -0.4, -0.8]);
+            p.arm_ik('L', V.add(c, [-8.0, 20.0 + 2 * s, 8.0 + 3 * s]), [-1.0, -0.3, -0.8]);
+            out.push(p);
+        }
+        return out;
+    }
     // Golpe de taco (duas mãos) ou de cassetete (prop = 'baton': uma mão, a outra na guarda).
     function batSwing(prop = 'bat') {
         const seq = [[-28, [11.0, 2.0, 12.0], [0.30, -0.45, 0.85], -8], [-48, [12.0, -3.0, 13.0], [0.25, -0.85, 0.45], -14], [-12, [12.0, 9.0, 8.0], [0.95, 0.25, 0.15], -4],
@@ -1586,15 +1636,16 @@ function NpcGenAnims(G) {
     const gunFn = { idle: gunIdle, walk: gunWalk, run: gunRun, draw: gunDraw, aim: gunAim, holdup };
     const shootFn = (w) => (w === 'pistol' ? pistolShoot() : w === 'shotgun' ? shotgunShoot() : w === 'smg' ? smgShoot('smg') : rifleShoot(w));
     const CLIPS = {
-        idle: { fps: 6, loop: true, fn: (w) => (w === 'none' ? idle() : w === 'bat' ? batIdle() : gunIdle(w)) },
-        walk: { fps: 10, loop: true, fn: (w) => (w === 'none' ? walk() : w === 'bat' ? batWalk() : gunWalk(w)) },
-        run: { fps: 14, loop: true, fn: (w) => (w === 'none' ? run() : w === 'bat' ? batRun() : gunRun(w)) },
+        idle: { fps: 6, loop: true, fn: (w) => (w === 'none' ? idle() : w === 'bat' ? batIdle() : w === 'knife' ? knifeIdle() : gunIdle(w)) },
+        walk: { fps: 10, loop: true, fn: (w) => (w === 'none' ? walk() : w === 'bat' ? batWalk() : w === 'knife' ? knifeWalk() : gunWalk(w)) },
+        run: { fps: 14, loop: true, fn: (w) => (w === 'none' ? run() : w === 'bat' ? batRun() : w === 'knife' ? knifeRun() : gunRun(w)) },
+        stab: { fps: 16, loop: false, fn: () => knifeStab() },                 // facada (Melee.stab)
         walk_up: { fps: 10, loop: true, fn: () => walkUp() },
         climb: { fps: 10, loop: true, fn: () => climb() },
         draw: { fps: 14, loop: false, fn: (w) => gunDraw(w) },
         aim: { fps: 1, loop: true, fn: (w) => gunAim(w) },
         shoot: { fps: 16, loop: false, fn: (w) => shootFn(w), fpsFor: { pistol: 15, shotgun: 12, smg: 18 } },
-        holdup: { fps: 6, loop: true, fn: (w) => holdup(w === 'none' ? 'pistol' : w) },
+        holdup: { fps: 6, loop: true, fn: (w) => (w === 'knife' ? knifeHoldup() : holdup(w === 'none' ? 'pistol' : w)) },
         swing: { fps: 14, loop: false, fn: (w) => batSwing(w === 'baton' ? 'baton' : 'bat') },
         punch: { fps: 14, loop: false, fn: () => punchCross() },
         punchL: { fps: 14, loop: false, fn: () => punchJab() },
@@ -1621,7 +1672,8 @@ function NpcGenAnims(G) {
         carjack: { fps: 9, loop: false, fn: () => carjack() },
         opendoor: { fps: 10, loop: false, fn: () => openDoor() },
         enter: { fps: 10, loop: false, fn: () => enterCar() },
-        sitin: { fps: SIT_IN.fps, loop: false, fn: (w) => sitIn(w) },          // (só o jogador: L/R = lado da frente do carro)
+        sitin: { fps: SIT_IN.fps, loop: false, fn: (w) => sitIn(w) },
+        sitout: { fps: SIT_IN.fps, loop: false, fn: (w) => sitIn(w).reverse() },     // sair do carro: o sitin ao contrário (do banco à porta)          // (só o jogador: L/R = lado da frente do carro)
         pick: { fps: 7, loop: true, fn: () => pickLock() },
         pickpocket: { fps: 7, loop: false, fn: () => pickpocket() },
         rummage: { fps: 8, loop: true, fn: () => rummage() },

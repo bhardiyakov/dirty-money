@@ -45,10 +45,21 @@ class TrafficCar extends Vehicle {
 
     // Estacionado = desligado, vazio e TRANCADO (roubar exige quebrar o vidro ou arrombar).
     park() {
+        this.clearDeadDriver();
         this.mode = 'parked'; this.route = null;
         this.locked = true; this.driver = false;
         this.alarm = 0; this.hazard = false;
     }
+
+    // Motorista baleado na cabine (Combat._cabinShot): morre ao volante — o carro para (largado, freando) e a BUZINA dispara sem parar
+    // (a cabeça no volante) até alguém tirar o corpo (Game._yankDriver) ou o carro sair de cena (TrafficManager, explosão).
+    killDriver() {
+        if (this.driver === false || this.driverDead || this.controlled) return false;
+        this.driverDead = true; this.mode = 'abandoned'; this.route = null; this.detour = null;
+        this.horn = AudioFX.hornLoop(this.pitch);
+        return true;
+    }
+    clearDeadDriver() { if (this.horn) { this.horn.stop(); this.horn = null; } this.driverDead = false; }
 
     // O jogador largou o carro: fica abandonado no lugar.
     setControlled(v) {
