@@ -21,6 +21,10 @@ const Weapons = {
     revolver: { name: 'Revólver',       gun: true, dmg: 38, cooldown: 0.55, spread: 0.03, range: 48, speed: 80, mag: 6, pellets: 1, auto: false, look: 'pistol' },
     ak47:    { name: 'AK-47',           gun: true, dmg: 19, cooldown: 0.12, spread: 0.07, range: 46, speed: 80, mag: 30, pellets: 1, auto: true, look: 'smg' },
     knife:   { name: 'Faca',            melee: true, dmg: 24, range: 2.0, cooldown: 0.32, look: 'knife' },     // (na mão: o desenho da faca; golpe: a facada — Melee.stab)
+    // Arremessáveis (combat/Throwables.js): contados em unidades (inventário: reserve). Segurar o botão = preparar (pino / acender) e
+    // carregar a FORÇA com a linha tracejada mostrando onde cai; soltar = arremessar.
+    grenade: { name: 'Granada',         throwable: true, look: 'none' },
+    molotov: { name: 'Coquetel molotov', throwable: true, look: 'none' },
 };
 
 // Golpes corpo a corpo (jogador, pedestres que revidam, polícia com cassetete, traficantes de perto). Cada golpe é uma COLISÃO de

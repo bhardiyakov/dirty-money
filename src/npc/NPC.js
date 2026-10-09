@@ -162,20 +162,26 @@ class NPC {
     distanceToTargetXZ(x, z) { return hypot(this.position.x - x, this.position.z - z); }
 
     // Anda em linha reta (sem NavMesh) rumo a (gx, gz) a `speed` u/s e escolhe o clipe pela profundidade:
-    // além de wadeDepth m da margem, nada; antes, vadeia. Retorna a distância que falta.
+    // além de wadeDepth m da margem, nada — NADO PEITO no ritmo normal, CRAWL com pressa (voltando, assustado); antes, vadeia (com a
+    // água acima da metade do corpo, andando com os braços puxando a água). Na água embala e vira devagar. Retorna a distância que falta.
     freeMove(gx, gz, dt, speed) {
         const p = this.position, dx = gx - p.x, dz = gz - p.z, d = hypot(dx, dz) || 1;
-        const depth = MapGeo.waterDepth(p.x, p.z), W = Config.water.wadeDepth, deep = depth > W;
+        const WC = Config.water, depth = MapGeo.waterDepth(p.x, p.z), W = WC.wadeDepth, deep = depth > W;
+        const crawl = deep && speed > Config.npc.swimSpeed * 1.25, wadeDeep = !deep && depth >= W * WC.deepWade;
         const g = depth > 0 || d <= 0.05 ? 0 : MapGeo.slopeAlong(p.x, p.z, dx / d, dz / d);          // relevo (em terra): mais devagar subindo
-        const v = deep ? speed : speed * (depth > 0 ? 1.15 : 1.6) * MapGeo.slopeSpeed(g);
+        const vt = deep ? speed * (crawl ? 1.35 : 1) : speed * (depth > 0 ? (wadeDeep ? 0.9 : 1.15) : 1.6) * MapGeo.slopeSpeed(g);
+        const v = this._freeVs = depth > 0 && this._freeVs != null ? this._freeVs + (vt - this._freeVs) * (1 - Math.exp(-2.5 * dt)) : vt;     // (na água: embala devagar)
         this.actor.setSlope(g);
         if (d > 0.05) {
             p.x += (dx / d) * v * dt; p.z += (dz / d) * v * dt;
-            this.heading = this._lerpAngle(this.heading, Math.atan2(dx, dz), 1 - Math.exp(-6 * dt));
+            this.heading = this._lerpAngle(this.heading, Math.atan2(dx, dz), 1 - Math.exp(-(deep ? 2.6 : 6) * dt));
         }
         this._freeV = d > 0.05 ? v : 0; this._freeDepth = depth;
-        // vadeando/andando: ritmo pela velocidade (pés plantados — Config.anim), não fixo
-        this.freeAnim = deep ? { clip: 'swim', rate: 1 } : { clip: 'walk', rate: Math.max(0.5, v / Config.anim.walk) };
+        // vadeando/andando: ritmo pela velocidade (pés plantados — Config.anim), não fixo; nadando: braçada no ritmo da velocidade
+        const has = (c) => this.actor.sheet.getClip && this.actor.sheet.getClip(c, 'none');
+        this.freeAnim = deep ? (crawl || !has('swim_breast') ? { clip: 'swim', rate: Math.max(0.7, Math.min(1.4, v / 2.2)) } : { clip: 'swim_breast', rate: Math.max(0.6, Math.min(1.4, v / 1.4)) })
+            : wadeDeep && has('wade') ? { clip: 'wade', rate: Math.max(0.5, v / (Config.anim.walk * 0.69)) }
+            : { clip: 'walk', rate: Math.max(0.5, v / Config.anim.walk) };
         if (!deep) this._dive = null;
         else if (this._dive) {                                                                 // mergulhando: afunda → debaixo d'água → sobe
             const D = this._dive;
@@ -557,7 +563,7 @@ class NPC {
     // Na água (só no modo livre: nadando ou vadeando, ver freeMove): o desenho afunda até a linha d'água e, perto da tela, as marolas,
     // a esteira, os respingos e os sons (WaterFx.track). Fora da tela não gasta nada.
     _waterTick(dt) {
-        const A = this.freeAnim, depth = A && /^(swim|walk|dive)/.test(A.clip) ? (this._freeDepth || 0) : 0;
+        const A = this.freeAnim, depth = A && /^(swim|walk|dive|wade)/.test(A.clip) ? (this._freeDepth || 0) : 0;
         const W = Config.water.wadeDepth, swim = depth > W;
         this.actor.setWaterline(depth > 0 && !swim ? 0.25 + 0.75 * Math.min(1, depth / W) : 0);
         const p = this.transform.position, g = this.ctx && this.ctx.game;

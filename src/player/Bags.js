@@ -6,6 +6,9 @@
 //     banco. Até metade da carga: normal; até a carga cheia: cada vez mais lento; acima dela: sobrecarga (bem lento e sem correr).
 //   • Fôlego: correr gasta (mais com peso); parado ou andando recupera. Zerou = sem fôlego até recuperar 35%. EVOLUI com o uso:
 //     correr treina o condicionamento (mais fôlego máximo e recuperação mais rápida).
+//   • Força: andar com peso nas costas e brigar treina a força de carregar (nível 0..20, `str`), que entra na FORÇA do físico
+//     (Physique.strength: massa muscular da academia + esse nível − fraqueza de quem está magro). Quanto mais forte, mais peso sem
+//     pesar (somado à roupa — calça cargo, colete de carga — e à habilidade Costas largas). O físico também mexe no fôlego e no pique.
 // ============================================================================
 
 const Bags = {
@@ -25,7 +28,7 @@ const Bags = {
     },
     HARD: 1.75,            // acima de 175% da carga confortável não dá para levar mais nada (e quase não se anda)
     // kg por unidade
-    W: { pistol: 1.0, revolver: 1.2, smg: 2.8, shotgun: 3.4, rifle: 4.0, ak47: 4.3, bat: 0.9, knife: 0.3 },
+    W: { pistol: 1.0, revolver: 1.2, smg: 2.8, shotgun: 3.4, rifle: 4.0, ak47: 4.3, bat: 0.9, knife: 0.3, grenade: 0.4, molotov: 0.75 },     // (arremessáveis: por unidade)
     AMMO: { pistol: 0.012, revolver: 0.014, smg: 0.01, shotgun: 0.045, rifle: 0.017, ak47: 0.017 },
     ITEM: { medkits: 0.6, hacks: 0.25, keys: 0.05, food: 0.5, water: 0.6, jewels: 0.12 },
 
@@ -43,6 +46,7 @@ const Bags = {
     weight(game) {
         const inv = game.inventory; let w = 0;
         for (const [k, s] of Object.entries(inv.weapons)) {
+            if (Weapons[k] && Weapons[k].throwable) { w += (s.reserve || 0) * (this.W[k] || 0); continue; }
             if (k === 'fists' || !s.owned) continue;
             w += this.W[k] || 0;
             w += ((s.reserve || 0) + (s.mag || 0)) * (this.AMMO[k] || 0);
@@ -66,12 +70,15 @@ const Bags = {
     // Por quadro: peso, carga e fôlego.
     update(game, dt) {
         const pl = game.player, inv = game.inventory, D = this.def(inv);
+        this._g = game;
         this._t = (this._t || 0) - dt;
         if (this._t <= 0) { this._t = 0.25; this.kg = this.weight(game); }
-        const cap = D.kg * (1 + (typeof Outfit !== 'undefined' ? Outfit.m.carry || 0 : 0));      // (roupa: calça cargo, colete de carga…)
+        const cap = D.kg * this.carryMul(pl);                                      // (força, roupa: calça cargo, colete de carga…)
         this.cap = cap; this.ratio = (this.kg || 0) / cap;
         // mala de rodinhas: andando, as rodinhas levam ~45% do peso (correndo ela vai levantada: peso cheio)
         const r = D.wheels && pl.state !== 'sprint' ? this.ratio * 0.55 : this.ratio;
+        // treino de força: andar carregando peso (de verdade: acima de 25% da carga) — correndo com peso treina mais
+        if (r > 0.25 && pl.speed > 1 && game.mode === 'player') this.train(pl, dt * Math.min(1.75, r) * (pl.state === 'sprint' ? 1.5 : 1));
         pl.loadMul = this.speedMul(r);
         pl.overloaded = r > 1;
         pl.loadRatio = r;
@@ -79,12 +86,28 @@ const Bags = {
         this._sheetSwap(game);
     },
 
+    // --------------------------------------------------------------- força
+    strLevel(S) { return Math.min(20, Math.floor(Math.sqrt((S && S.xp || 0) / 20))); },      // 0..20 (nível 20 ≈ 2,2 h carregando peso)
+    // Multiplicador da carga confortável: força (+4%/nível) + roupa + habilidade (Costas largas).
+    carryMul(pl, O) {
+        O = O || (typeof Outfit !== 'undefined' ? Outfit.m : {});
+        const T = typeof SkillTree !== 'undefined' ? SkillTree.m : {};
+        return 1 + (typeof Physique !== 'undefined' ? Physique.carryBonus(pl) : this.strLevel(pl && pl.str) * 0.04) + (O.carry || 0) + (T.carry || 0);
+    },
+    // Treino de força (xp ≈ segundos carregando peso; golpes corpo a corpo também contam). Avisa quando sobe de nível.
+    train(pl, xp) {
+        const S = pl.str || (pl.str = { xp: 0 }), L0 = this.strLevel(S);
+        S.xp += xp;
+        const L = this.strLevel(S);
+        if (L > L0 && this._g) this._g._flash(`💪 Força de carregar ${L}/20 — FORÇA ${Math.round(Physique.strength(pl))}/100`);
+    },
+
     // Quanto ainda cabe (kg) antes do limite máximo (HARD × carga confortável).
     room(game) { return Math.max(0, (this.cap || this.def(game.inventory).kg) * this.HARD - this.weight(game)); },
 
     // Clipe de locomoção com a bolsa da mão / o peso: [clipe, arma] ou null (fica o normal). clip = 'idle'|'aim'|'walk'|'run'.
     // Bolsa na mão: só dá para usar a pistola (a outra mão está ocupada); com arma de duas mãos a bolsa vai "pendurada" (sem desenho).
-    // Sobrecarga sem bolsa na mão: andar curvado, segurando as alças.
+    // Carga pesada sem bolsa na mão: o fardo nas costas, curvado segurando as alças — parado, andando E correndo (não some na corrida).
     clipFor(pl, clip, w) {
         const H = pl.handBag;
         if (H && (w === 'none' || w === 'pistol')) {
@@ -92,7 +115,11 @@ const Bags = {
             if (clip === 'walk') return [H === 'suitcase' && w === 'none' ? 'walk_pull' : 'walk_hold', w];
             if (clip === 'run') return ['run_hold', w];
         }
-        if (!H && clip === 'walk' && w === 'none' && (pl.loadRatio || 0) > 0.85) return ['walk_heavy', 'none'];
+        if (!H && w === 'none' && (pl.loadRatio || 0) > 0.85) {
+            if (clip === 'walk') return ['walk_heavy', 'none'];
+            if (clip === 'run') return ['run_heavy', 'none'];
+            if (clip === 'idle') return ['idle_heavy', 'none'];
+        }
         return null;
     },
 
@@ -106,7 +133,7 @@ const Bags = {
         pl.staminaMax = max;
         const can = wantSprint && moving && !pl.winded && !pl.overloaded && pl.stamina > 0;
         if (can) {
-            pl.stamina -= Config.player.staminaDrain * (1 + 0.8 * Math.min(1, r)) * (1 - Math.min(0.3, lvl * 0.015)) * (1 - (O.stamina || 0)) * dt;
+            pl.stamina -= Config.player.staminaDrain * (1 + 0.8 * Math.min(1, r)) * (1 - Math.min(0.3, lvl * 0.015)) * (1 - (O.stamina || 0)) * (typeof Physique !== 'undefined' ? Physique.staminaDrainMul() : 1) * dt;      // (gordo cansa mais)
             pl._rest = 0;
             F.xp += dt * (1 + r);                                                   // treino: correr (com peso, treina mais)
             if (pl.stamina <= 0) { pl.stamina = 0; pl.winded = true; }
@@ -119,7 +146,7 @@ const Bags = {
         return can;
     },
     fitLevel(F) { return Math.min(20, Math.floor(Math.sqrt((F && F.xp || 0) / 25))); },     // 0..20 (nível 20 ≈ 2,8 h correndo)
-    staminaMax(lvl, O) { const P = Config.player; return P.staminaBase + lvl * P.staminaPerLvl + ((O && O.staminaMax) || 0); },
+    staminaMax(lvl, O) { const P = Config.player; return Math.round((P.staminaBase + lvl * P.staminaPerLvl + ((O && O.staminaMax) || 0)) * (typeof Physique !== 'undefined' ? Physique.staminaMaxMul() : 1)); },
 
     // Velocidade correndo (m/s): o pique cresce com o condicionamento (24 → 27 km/h) e cai com o fôlego até ~10 km/h — começa bem
     // e vai perdendo o pace aos poucos (raiz: segura perto do pique com o fôlego cheio e despenca no fim). Tênis/árvore somam ao
@@ -127,7 +154,7 @@ const Bags = {
     runSpeed(pl) {
         const P = Config.player, lvl = this.fitLevel(pl.fit), O = typeof Outfit !== 'undefined' ? Outfit.m : {};
         const S = typeof SkillTree !== 'undefined' ? SkillTree.m : {};
-        const top = Math.min(P.sprintSpeed, P.sprintSpeed * (P.sprintStart + (1 - P.sprintStart) * lvl / 20) * (1 + (S.sprint || 0) + (O.sprint || 0)));
+        const top = Math.min(P.sprintSpeed, P.sprintSpeed * (P.sprintStart + (1 - P.sprintStart) * lvl / 20) * (1 + (S.sprint || 0) + (O.sprint || 0))) * (typeof Physique !== 'undefined' ? Physique.speedMul() : 1);
         const lo = P.sprintSpeed * P.sprintMin, f = Math.max(0, Math.min(1, (pl.stamina == null ? 1 : pl.stamina / (pl.staminaMax || 100))));
         return lo + (top - lo) * Math.sqrt(f);
     },

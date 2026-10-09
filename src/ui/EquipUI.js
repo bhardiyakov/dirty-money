@@ -167,7 +167,7 @@ class EquipUI {
     stats(s) {
         const m = Outfit.fxOf(s.worn), D = Bags.DEFS[s.bag] || Bags.DEFS.none, pl = this.g.player;
         const pc = (v) => v ? `${v > 0 ? '+' : '−'}${Math.round(Math.abs(v) * 100)}%` : '—';
-        const lvl = Bags.fitLevel(pl.fit), kg = D.kg * (1 + (m.carry || 0));
+        const lvl = Bags.fitLevel(pl.fit), kg = D.kg * Bags.carryMul(pl, m);
         return [
             { ic: '🏃', label: 'Velocidade correndo', v: m.sprint, txt: pc(m.sprint) },
             { ic: '🚶', label: 'Passo (andando)', v: m.walk, txt: pc(m.walk) },
@@ -436,7 +436,8 @@ class EquipUI {
             .filter(([s]) => s === 'bag' || Outfit.worn[s] || Outfit.DEFAULT[s])
             .map(([s, label]) => `<div class="eq-lk"><div class="eq-lkh">${label} · ${s === 'bag' ? Bags.DEFS[inv.bag].name : Outfit.ITEMS[Outfit.worn[s] || Outfit.DEFAULT[s]].name}</div>${this._tintRow(s)}</div>`).join('');
         const busy = PlayerLook.want ? '<div class="eq-lknote">⏳ Ajustando o visual no personagem…</div>' : '';
-        return `<div class="eq-look">${busy}${['skin', 'hair', 'hair_color', 'beard', 'body', 'gender'].map(group).join('')}<div class="eq-lkh2">Tingir as peças vestidas</div>${tints}</div>`;
+        const porte = `<div class="eq-lk"><div class="eq-lkh">Porte · ${Physique.label()}</div><div class="eq-lknote">O corpo muda com o que você faz: comer demais engorda, passar fome emagrece, academia e comida em dia deixam forte (ver STATUS).</div></div>`;
+        return `<div class="eq-look">${busy}${['skin', 'hair', 'hair_color', 'beard', 'gender'].map(group).join('')}${porte}<div class="eq-lkh2">Tingir as peças vestidas</div>${tints}</div>`;
     }
 
     // ------------------------------------------------------------------ boneco (de frente), com as cores da roupa

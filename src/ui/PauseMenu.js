@@ -29,6 +29,7 @@ class PauseMenu {
             baile: { label: 'Baile funk', icon: 'music' },
             mototaxi: { label: 'Ponto de mototáxi', icon: 'moto' },
             gunshop: { label: 'Loja de Armas', icon: 'gun' },
+            academia: { label: 'Academia', icon: 'gym' },
             boutique: { label: 'Boutique (roupas)', icon: 'shirt' },
             hospital: { label: 'Hospital', icon: 'hospital' },
             station: { label: 'Delegacia', icon: 'station' },
@@ -290,6 +291,7 @@ class PauseMenu {
                 + bar('FÔLEGO', (pl.stamina == null ? 1 : pl.stamina / (pl.staminaMax || 100)) * 100, 'linear-gradient(90deg,#10b981,#a3e635)', `condicionamento ${Bags.fitLevel(pl.fit)}/20`) + row('Carga', Bags.label(g))
                 + bar('PONTARIA', Aim.quality() * 100, 'linear-gradient(90deg,#ff9a3a,#ffd23a)', `${Math.round(Aim.quality() * 100)}% · mira ${this.settings.aimAssist ? 'assistida' : 'manual'} — sobe com Mão firme e Olho de águia`)
                 + row('Arma na mão', pl.weapon === 'none' ? 'Punhos' : Weapons[pl.weapon].name) + row('Kits médicos', inv.medkits) + row('Hora', g.dayNight.label))
+            + panel('FÍSICO E ATRIBUTOS', this._physiqueHtml(pl, bar, row))
             + panel(`FACÇÃO · ${cv.name} (${cv.sigla})`, `<span class="tag" style="color:${hos ? '#ff5a4d' : '#5ac07a'}">${res ? (hos ? 'MORADOR · HOSTIL' : 'MORADOR · NEUTRO') : 'ESTRANHO · HOSTIL'}</span>`
                 + row('Patente', Missions.rankName) + row('Missões cumpridas', Standing.missionsDone || 0)
                 + bar('MORAL COM O TRÁFICO', Standing.traffic, '#d65a4a', Math.round(Standing.traffic)) + bar('MORAL COM A COMUNIDADE', Standing.community, '#5ac07a', Math.round(Standing.community))
@@ -634,6 +636,26 @@ class PauseMenu {
             + (spare.length ? `<br>BOLSAS DE RESERVA <span>${spare.length}</span><div style="font-size:11px;color:var(--tx-3);line-height:1.4">${spare.join(', ')} — troque em 👤 Equipamento ou guarde no baú</div>` : '');
     }
 
+    // Físico e atributos evoluíveis (player/Physique.js): o porte, gordura, massa muscular, saciedade, força, fôlego e velocidade, e o
+    // treino do dia na academia (minigames/Gym.js).
+    _physiqueHtml(pl, bar, row) {
+        const P = Physique, fit = Bags.fitLevel(pl.fit), S = Math.round(P.strength(pl));
+        const s0 = pl.stamina; pl.stamina = pl.staminaMax || 100; const top = Bags.runSpeed(pl) * 3.6; pl.stamina = s0;      // (pique com o fôlego cheio)
+        const walk = Config.player.maxSpeed * (1 + Outfit.m.walk) * P.speedMul() * 3.6;
+        const col = { Obeso: '#f87171', Gordo: '#fb923c', 'Muito magro': '#f87171', Magro: '#fbbf24', Normal: '#86efac', Forte: '#7dd3fc', Musculoso: '#a78bfa' }[P.label()] || '#e8edf8';
+        const tr = ['curl', 'bench', 'squat'].map((k, i) => `${['rosca', 'supino', 'agach.'][i]} ${P.SETS_PER_DAY - P.setsLeft(k)}/${P.SETS_PER_DAY}`).join(' · ');
+        const pass = P.hasPass() ? `liberada até o dia ${Math.floor((P.passUntil - 0.01) / 24)}` : 'sem plano (diária na recepção)';
+        return `<span class="tag" style="color:${col}">PORTE: ${P.label().toUpperCase()}</span>`
+            + bar('GORDURA', P.fat, 'linear-gradient(90deg,#fde68a,#fb923c,#ef4444)', `${Math.round(P.fat)}% · ${P.fat >= 62 ? 'acima do peso: mais lento, menos fôlego' : P.fat <= 12 ? 'abaixo do peso: menos força' : 'normal'}`)
+            + bar('MASSA MUSCULAR', P.muscle, 'linear-gradient(90deg,#93c5fd,#6366f1)', `${Math.round(P.muscle)}/100 · academia + comida em dia`)
+            + bar('SACIEDADE', P.fed, 'linear-gradient(90deg,#f59e0b,#84cc16)', P.hungerLabel())
+            + bar('FORÇA', S, 'linear-gradient(90deg,#f472b6,#ef4444)', `${S}/100 · carga +${Math.round((Bags.carryMul(pl) - 1) * 100)}% · golpes ×${P.meleeMul(pl).toFixed(2)}`)
+            + bar('FÔLEGO', fit / 20 * 100, 'linear-gradient(90deg,#10b981,#a3e635)', `condicionamento ${fit}/20 · máx ${pl.staminaMax || Bags.staminaMax(fit, Outfit.m)} — sobe correndo`)
+            + bar('VELOCIDADE', top / 54 * 100, 'linear-gradient(90deg,#22d3ee,#3b82f6)', `pique ${Math.round(top)} km/h · andando ${walk.toFixed(1)} km/h`)
+            + row('Máximo na academia', `rosca ${Math.round(P.maxLift('curl', pl))} · supino ${Math.round(P.maxLift('bench', pl))} · agach. ${Math.round(P.maxLift('squat', pl))} kg`)
+            + row('Treino de hoje', tr) + row('Academia', pass);
+    }
+
     _renderInfo() {
         const el = this.$('pmInfo'), it = this._layout[this.invSel], inv = this.g.inventory;
         if (!it) { el.innerHTML = '<h4>MOCHILA VAZIA</h4>Pegue itens pela cidade.'; return; }
@@ -646,6 +668,12 @@ class PauseMenu {
         else if (it.kind === 'medkit') { desc = `Recupera 55 de vida.<br>${it.count} no estoque (M também usa).`; btns = [['USAR', 'primary'], ['DESCARTAR', 'discard']]; }
         else if (it.kind === 'hack') { desc = 'Abre uma fechadura de carro sozinho, sem mini-game (tecla G).'; btns = [['DESCARTAR', 'discard']]; }
         else if (it.kind === 'food' || it.kind === 'water') { desc = `Recupera ${Inventory.HEAL[it.kind]} de vida.<br>${it.count} aqui · guarde o resto na geladeira de casa.`; btns = [[it.kind === 'food' ? 'COMER' : 'BEBER', 'primary'], ['DESCARTAR', 'discard']]; }
+        else if (it.kind === 'grenade' || it.kind === 'molotov') {
+            const eq = this.g.player.weapon === it.kind;
+            desc = it.kind === 'grenade' ? `Tecla 0. Segure o ataque: puxa o pino e mira com o mouse (cai no cursor) ou o analógico direito (inclinar mais = mais longe): mais longe, mais forte. Solte para jogar.<br>Explode ~3 s depois do pino — segurar demais explode na mão.<br>${inv.reserve('grenade')} na mochila.`
+                : `Tecla −. Segure o ataque: acende o pano e mira com o mouse ou o analógico direito (linha tracejada). Solte para jogar.<br>Quebra no impacto e deixa o chão em chamas por 30 s ou mais: queima gente e carros.<br>${inv.reserve('molotov')} na mochila.`;
+            btns = [[eq ? 'EM USO' : 'EQUIPAR', 'primary'], ['DESCARTAR 1', 'discard']];
+        }
         else if (it.kind === 'jewel') { desc = `Peças de joalheria (~${brl(Math.round(inv.jewelValue))} no total).<br>Guarde no cofre de casa ou venda lá.`; btns = [['DESCARTAR', 'discard']]; }
         else { desc = 'Destranca um carro estacionado sem alarme (tecla F).'; btns = [['DESCARTAR', 'discard']]; }
         el.innerHTML = `<h4>${it.label.toUpperCase()}${it.count > 1 && it.kind !== 'ammo' ? ' ×' + it.count : ''}</h4>${desc}<div class="pm-btns"></div>`;
@@ -659,11 +687,13 @@ class PauseMenu {
         const g = this.g, inv = g.inventory, pl = g.player;
         if (act === 'primary') {
             if (it.kind === 'weapon') { if (!pl.equip(it.key)) { pl.weapon = it.key; pl.aimTimer = 0; } g.reloading = 0; g._flash(`Arma: ${Weapons[it.key].name}`); }
+            else if (it.kind === 'grenade' || it.kind === 'molotov') { if (!Throwables.busy() && !pl.equip(it.kind)) { pl.weapon = it.kind; pl.aimTimer = 0; } g._flash(`Arma: ${Weapons[it.kind].name} ${inv.ammoText(it.kind)}`); }
             else if (it.kind === 'medkit') g._useMedkit();
             else if (it.kind === 'food' || it.kind === 'water') g._eat(it.kind);
         } else if (act === 'discard') {
             if (it.kind === 'weapon') { const w = inv.weapons[it.key]; w.owned = false; w.mag = 0; w.reserve = 0; if (pl.weapon === it.key) pl.weapon = 'none'; }
             else if (it.kind === 'ammo') inv.weapons[it.key].reserve = 0;
+            else if (it.kind === 'grenade' || it.kind === 'molotov') { const w = inv.weapons[it.kind]; w.reserve = Math.max(0, w.reserve - 1); if (w.reserve <= 0 && pl.weapon === it.kind) pl.weapon = 'none'; }
             else if (it.kind === 'medkit') inv.medkits = Math.max(0, inv.medkits - 1);
             else if (it.kind === 'hack') inv.hacks = Math.max(0, inv.hacks - 1);
             else if (it.kind === 'food' || it.kind === 'water') inv[it.kind] = Math.max(0, inv[it.kind] - 1);

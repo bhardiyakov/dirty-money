@@ -3,8 +3,10 @@
 // cidade inteira de restaurante em restaurante.
 //   ciclo: vai a um restaurante (lanchonete, pizzaria, japonês…) → para em fila dupla e pega o pedido → corre até o cliente
 //   (um prédio/casa a algumas quadras) → para, entrega → próximo restaurante.
-//   "Como loucos": velocidade de cruzeiro bem acima do trânsito, arrancada forte, furam o sinal vermelho indo reto e passam no
-//   corredor entre os carros. Usam a IA de trânsito normal (TrafficCar) com `route.goal` — a mesma navegação gulosa da perseguição.
+//   "Como loucos": velocidade de cruzeiro bem acima do trânsito, arrancada forte, furam o sinal vermelho, passam no corredor entre
+//   os carros, ULTRAPASSAM quem vai devagar e desviam de pedestres em cima da hora (TrafficCar.impatient), buzinam por qualquer coisa.
+//   Batida mais firme derruba: o entregador levanta, volta para a moto e segue (Casualty.remount → onRemount).
+//   Usam a IA de trânsito normal (TrafficCar) com `route.goal` — a mesma navegação gulosa da perseguição.
 // O trânsito só existe perto do jogador (o mundo é grande), então os trajetos são curtos (algumas quadras): o ciclo inteiro
 // acontece à vista, e onde quer que o jogador esteja sempre há entregadores circulando.
 // São veículos comuns: dá para derrubar o entregador e roubar a moto; o pedido cai no chão (comida).
@@ -18,11 +20,12 @@ const Couriers = {
         bike.courier = { state: 'toShop', t: 0, stop: 0, goal: null, deliveries: 0 };
         bike.setRider(CharacterRig.VARIANT_COURIER + (bike.id % CharacterRig.COURIERS));
         bike.frameVariant = CharacterRig.VARIANT_COURIER;                 // moto vermelha quando largada
-        bike.cruise *= 1.4 + Math.random() * 0.2;
-        bike.accelMul = 1.6; bike.turnMul = 1.05;
-        bike.runsReds = Math.random() < 0.8;
-        bike.squeeze = 0.62;
+        bike.cruise *= 1.5 + Math.random() * 0.3;
+        bike.accelMul = 1.8; bike.turnMul = 1.1;
+        bike.runsReds = true;                                            // sinal, preferencial, saída de cruzamento: não espera nada
+        bike.squeeze = 0.6;
         bike.honker = true;
+        bike.impatient = true;
         bike._cruise0 = bike.cruise;
         this._next(bike);
     },
@@ -74,6 +77,17 @@ const Couriers = {
             return;
         }
         if (c.t > 160 || (c.retry && c.t > 2 && Interiors._doors && Interiors._doors.length)) this._next(bike);                                 // rodou em círculos demais: outro pedido
+    },
+
+    // Caiu numa batida, levantou e subiu de novo (Casualty.remount): xinga, buzina e volta à corrida — com o pedido, mais apressado.
+    onRemount(bike) {
+        const c = bike.courier; if (!c) return;
+        c.stop = 0; c.t = 0;
+        if (c.state === 'pickup') c.state = 'toCustomer'; else if (c.state === 'deliver') c.state = 'toShop';
+        bike.cruise = bike._cruise0;
+        bike.honks = 0; bike.honkCd = 0;
+        if (bike.honk) bike.honk('bloqueio', { v: 0 });
+        this._next(bike);
     },
 
     // O entregador foi derrubado: o lanche cai na rua (dá para pegar).

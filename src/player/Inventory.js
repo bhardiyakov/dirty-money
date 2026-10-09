@@ -19,7 +19,14 @@ class Inventory {
             ak47:    { owned: false, mag: 0,  reserve: 0 },
             rifle:   { owned: false, mag: 0,  reserve: 0 },
             knife:   { owned: false },
+            grenade: { owned: false, reserve: 0 },    // arremessáveis: `reserve` = quantas unidades (Throwables)
+            molotov: { owned: false, reserve: 0 },
         };
+        // Arma nova cadastrada só em Weapons (combat/Combat.js) já ganha a sua vaga aqui (e aparece na aba ITENS do menu dev).
+        for (const [k, W] of Object.entries(Weapons)) {
+            if (this.weapons[k] || k === 'fists') continue;
+            this.weapons[k] = W.gun ? { owned: false, mag: 0, reserve: 0 } : W.throwable ? { owned: false, reserve: 0 } : { owned: false };
+        }
         this.hacks = 0;        // módulos de hackeio: abrem uma fechadura sozinhos (sem mini-game)
         this.keys = 0;         // chaves de carro roubadas: destrancam um carro sem barulho
         this.food = 0;         // comida e água guardadas (comem-se na mochila quando a vida não está cheia)
@@ -36,7 +43,8 @@ class Inventory {
     // Peça de joalheria: entra com valor $.
     addJewel(value) { this.jewels++; this.jewelValue += value; }
 
-    owned(key) { return !!(this.weapons[key] && this.weapons[key].owned); }
+    owned(key) { const w = this.weapons[key]; return !!(w && (this.isThrow(key) ? w.reserve > 0 : w.owned)); }
+    isThrow(key) { return !!(Weapons[key] && Weapons[key].throwable); }
 
     // Armas de fogo (as que usam munição).
     isGun(key) { return !!(Weapons[key] && Weapons[key].gun); }
@@ -69,11 +77,18 @@ class Inventory {
     }
 
     addAmmo(key, n) { this.weapons[key].reserve += n; }
+    // Dá a arma `key` de qualquer tipo (fogo: com `n` balas de reserva; arremessável: `n` unidades; corpo a corpo: só a arma).
+    give(key, n) {
+        if (!this.weapons[key]) return false;
+        if (this.isThrow(key)) { this.weapons[key].reserve += n || 5; return true; }
+        this.addWeapon(key, n == null ? 120 : n);
+        return true;
+    }
     addCash(n) { this.cash += n; }
 
     // Texto "12/36" (ou "—" para armas sem munição).
     ammoText(key) {
-        return this.isGun(key) ? `${this.mag(key)}/${this.reserve(key)}` : '∞';
+        return this.isGun(key) ? `${this.mag(key)}/${this.reserve(key)}` : this.isThrow(key) ? `×${this.reserve(key)}` : '∞';
     }
 
     // ---------------------------------------------------------------- mochila com espaços (estilo Resident Evil)
@@ -83,7 +98,7 @@ class Inventory {
     get rows() { return Bags.def(this).rows; }
     get capacity() { return this.cols * this.rows; }
     static get SIZES() { return { pistol: 2, revolver: 2, smg: 2, knife: 1, shotgun: 3, rifle: 3, ak47: 3, bat: 3 }; }
-    static get STACK() { return { medkit: 3, hack: 5, key: 5, food: 4, water: 4, jewel: 4 }; }                // unidades por célula
+    static get STACK() { return { medkit: 3, hack: 5, key: 5, food: 4, water: 4, jewel: 4, grenade: 3, molotov: 2 }; }                // unidades por célula
 
     // Itens da mochila como lista de { id, kind, key, w, h, count, label }, na ordem de exibição.
     items() {
@@ -96,6 +111,8 @@ class Inventory {
         const stack = (n, per, kind, key, label) => {
             for (let i = 0; i < Math.ceil(n / per); i++) out.push({ id: `${kind}:${i}`, kind, key, w: 1, h: 1, count: Math.min(per, n - i * per), label });
         };
+        stack(this.weapons.grenade.reserve || 0, Inventory.STACK.grenade, 'grenade', 'grenade', 'Granada');
+        stack(this.weapons.molotov.reserve || 0, Inventory.STACK.molotov, 'molotov', 'molotov', 'Coquetel molotov');
         stack(this.medkits, Inventory.STACK.medkit, 'medkit', 'medkit', 'Kit médico');
         stack(this.hacks, Inventory.STACK.hack, 'hack', 'hack', 'Módulo de hackeio');
         stack(this.keys, Inventory.STACK.key, 'key', 'carkey', 'Chave de carro roubada');
@@ -119,6 +136,7 @@ class Inventory {
                 return n;
             }
             case 'ammo': return T.weapons.some((w) => this.weapons[w].reserve > 0) ? 0 : 1;
+            case 'throw': return (this.weapons[T.weapon].reserve || 0) % st[T.weapon] === 0 ? 1 : 0;
             case 'medkit': return this.medkits % st.medkit === 0 ? 1 : 0;
             case 'hack': return this.hacks % st.hack === 0 ? 1 : 0;
             case 'key': return this.keys % st.key === 0 ? 1 : 0;

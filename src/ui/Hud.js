@@ -264,7 +264,7 @@ class Hud {
         const none = pl.weapon === 'none' || wk === 'fists';
         this._set('wIcon', none ? 'none' : wk, (k) => { this.wIcon.replaceChildren(this._weaponIcon(k)); });
         this._set('wName', none ? 'Desarmado' : W.name, (v) => { const e = this.$('hWName'); e.textContent = v; e.classList.toggle('on', !none); });
-        const ammo = !none && inv.isGun(wk) ? `${inv.mag(wk)}/${inv.reserve(wk)}${g.reloading > 0 ? ' ↻' : ''}` : '';
+        const ammo = !none && inv.isGun(wk) ? `${inv.mag(wk)}/${inv.reserve(wk)}${g.reloading > 0 ? ' ↻' : ''}` : !none && inv.isThrow(wk) ? inv.ammoText(wk) : '';
         this._set('wAmmo', ammo, (v) => { this.$('hWAmmo').textContent = v; });
 
         // ---- procurado
@@ -318,9 +318,10 @@ class Hud {
         const fl = Bags.fitLevel(pl.fit);
         this._set('stl', fl, (v) => { this.$('hStL').textContent = v ? 'cond. ' + v : ''; });
         const D = Bags.def(inv), kg = Math.round((Bags.kg || 0) * 10) / 10, r = Bags.ratio || 0;
-        this._set('load', D.name + kg, () => {
+        const sl = Bags.strLevel(pl.str);
+        this._set('load', D.name + kg + '|' + sl + '|' + Math.round(Bags.cap || 0), () => {
             const el = this.$('hLoad');
-            el.innerHTML = `<span class="emo">${D.emo}</span> ${D.name} · ${kg.toFixed(1)}/${Math.round(Bags.cap || D.kg)} kg${r >= Bags.HARD ? ' · NO LIMITE' : r > 1 ? ' · sobrecarga' : (r > 0.5 ? ' · pesado' : '')}`;
+            el.innerHTML = `<span class="emo">${D.emo}</span> ${D.name} · ${kg.toFixed(1)}/${Math.round(Bags.cap || D.kg)} kg${sl ? ` · força ${sl}` : ''}${r >= Bags.HARD ? ' · NO LIMITE' : r > 1 ? ' · sobrecarga' : (r > 0.5 ? ' · pesado' : '')}`;
             el.className = 'h-load' + (r > 1 ? ' over' : (r > 0.5 ? ' heavy' : ''));
         });
 
