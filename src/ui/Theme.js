@@ -47,8 +47,10 @@ const Theme = {
             .num { font-family: var(--font-d); font-variant-numeric: tabular-nums; }
             ::-webkit-scrollbar { width: 10px; height: 10px; }
             ::-webkit-scrollbar-track { background: transparent; }
-            ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
-            ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.26); background-clip: padding-box; border: 2px solid transparent; }
+            ::-webkit-scrollbar-corner { background: transparent; }
+            ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+            ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.34); background-clip: padding-box; border: 2px solid transparent; }
+            @supports not selector(::-webkit-scrollbar) { * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.24) transparent; } }   /* Firefox */
 
             /* botão padrão de todas as telas */
             .ui-btn { font: 600 13px/1.2 var(--font); color: var(--tx); background: var(--card-h); border: 1px solid var(--line-2); border-radius: var(--r-3);
@@ -94,7 +96,7 @@ const Theme = {
             #shopUI, #stashUI, #propUI, #carUI, #tribunal, #motoUI { position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center;
                 background: rgba(5,7,12,0.55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font-family: var(--font); color: var(--tx); }
             #tribunal { z-index: 41; }
-            :is(#shopUI .sp, #stashUI .sp, #propUI .pp, #carUI .pp, #tribunal .tp, #motoUI .mp) { max-height: 92vh; display: flex; flex-direction: column; background: var(--glass-2);
+            :is(#shopUI .sp, #stashUI .sp, #propUI .pp, #carUI .pp, #tribunal .tp, #motoUI .mp) { max-height: 92vh; overflow-y: auto; display: flex; flex-direction: column; background: var(--glass-2);
                 border: 1px solid var(--line-2); border-radius: 22px; box-shadow: var(--shadow); padding: 22px 24px; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
                 animation: modalIn .18s ease-out; }
             @keyframes modalIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }

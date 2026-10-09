@@ -107,10 +107,11 @@ class PauseMenu {
             .pm-mapwrap { position: relative; flex: 1; min-height: 0; background: #2c5877; overflow: hidden; margin: 0 12px; border-radius: var(--r-2); }
             .pm-mapwrap canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; cursor: none; }
             .pm-note { padding: 10px 18px 12px; font-size: 12px; color: var(--tx-3); }
-            .pm-side { width: 300px; gap: 16px; }
+            .pm-side { width: 300px; gap: 16px; overflow-y: auto; }
+            .pm-side > .px { flex: none; }
             .pm-dest { padding: 14px 16px; display: flex; gap: 12px; align-items: center; font: 700 15px/1.3 var(--font-d); }
             .pm-dest .t { flex: 1; } .pm-dest .d { color: var(--gold); font: 500 13px var(--font); margin-top: 2px; }
-            .pm-legend { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+            .pm-side > .pm-legend { flex: 1 1 0; min-height: 170px; display: flex; flex-direction: column; }
             .pm-legend-list { flex: 1; overflow-y: auto; padding: 0 8px 10px; display: flex; flex-direction: column; gap: 2px; }
             .lg { display: flex; align-items: center; gap: 12px; padding: 7px 10px; font-size: 14px; font-weight: 500; cursor: pointer; border-radius: var(--r-3); border: 1px solid transparent; }
             .lg:hover { background: var(--card-h); } .lg.on { border-color: var(--gold); background: rgba(251,191,36,0.1); }
@@ -121,6 +122,7 @@ class PauseMenu {
             .pm-seg > div { padding: 6px 18px; font: 600 13px var(--font); color: var(--tx-2); cursor: pointer; border-radius: var(--r-pill); }
             .pm-seg > div:hover { color: var(--tx); } .pm-seg > div.on { background: var(--gold); color: #1a1205; }
             .pm-invview { display: none; flex: 1; min-height: 0; } .pm-invview.on { display: flex; }
+            .pm-gridwrap { flex: 1; min-height: 0; overflow: auto; padding: 0 12px; }
             .pm-grid { position: relative; margin: 12px auto; }
             .pm-cell { position: absolute; background: rgba(255,255,255,0.035); border: 1px dashed rgba(255,255,255,0.08); border-radius: 14px; box-sizing: border-box; }
             .pm-item { position: absolute; box-sizing: border-box; background: linear-gradient(160deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04)); border: 1px solid var(--line-2);
@@ -149,7 +151,8 @@ class PauseMenu {
             .pm-stat-grid .tag { align-self: flex-start; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 99px; border: 1px solid currentColor; }
             .pm-soon { margin: auto; text-align: center; padding: 40px 48px; max-width: 560px; }
             .pm-soon h2 { font: 700 28px var(--font-d); color: var(--tx); margin-bottom: 12px; } .pm-soon p { font-size: 15px; color: var(--tx-2); line-height: 1.6; }
-            .pm-set { margin: auto; width: min(640px, 92%); }
+            .pm-page[data-page=settings] { overflow-y: auto; padding: 4px 0; }
+            .pm-set { margin: auto; width: min(640px, 92%); flex: none; }          /* (margem auto: centra quando cabe, rola quando não cabe) */
             .pm-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 18px; margin: 0 8px; font-size: 15px; font-weight: 600; border-radius: var(--r-3); cursor: pointer; }
             .pm-row + .pm-row { border-top: 1px solid var(--line); }
             .pm-row.on { background: var(--card-h); }
@@ -177,7 +180,7 @@ class PauseMenu {
                 <div class="pm-seg" id="pmInvSeg"><div data-view="equip">👤 Equipamento</div><div data-view="bag">🎒 Mochila</div></div>
                 <div id="pmInvEquip" class="pm-invview"></div>
                 <div id="pmInvBag" class="pm-invview" style="gap:16px">
-                  <div class="px pm-col" style="flex:1;min-width:0"><div class="px-title" id="pmInvTitle">MOCHILA</div><div class="pm-grid" id="pmGrid"></div></div>
+                  <div class="px pm-col" style="flex:1;min-width:0"><div class="px-title" id="pmInvTitle">MOCHILA</div><div class="pm-gridwrap"><div class="pm-grid" id="pmGrid"></div></div></div>
                   <div class="pm-col pm-info">
                     <div class="px pm-col" style="flex:1;min-height:0"><div class="px-title">Item</div><div class="body" id="pmInfo"></div></div>
                     <div class="px pm-stats" id="pmStats"></div>
@@ -627,6 +630,7 @@ class PauseMenu {
             d.addEventListener('click', () => { this.invSel = i; this._renderInventory(); });
             grid.appendChild(d);
         });
+        const on = grid.querySelector('.pm-item.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         this._renderInfo();
         const g = this.g, pl = g.player;
         const spare = (inv.spareBags || []).map((b) => Bags.DEFS[b].name);
@@ -694,6 +698,7 @@ class PauseMenu {
             ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],
         ];
         el.innerHTML = rows.map((r, i) => `<div class="pm-row ${i === this.setRow ? 'on' : ''}" data-i="${i}"><span>${r[0]}</span><span style="display:flex;gap:12px;align-items:center">${r[1]}</span></div>`).join('');
+        const on = el.querySelector('.pm-row.on'); if (on) on.scrollIntoView({ block: 'nearest' });       // (teclado/controle: a linha escolhida não some da tela)
         el.querySelectorAll('.pm-row').forEach((row) => row.addEventListener('click', (e) => {
             this.setRow = +row.dataset.i;
             if (this.setRow > 0) this._setAdjust(0);
