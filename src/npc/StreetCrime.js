@@ -1,6 +1,7 @@
 // ============================================================================
 // StreetCrime — assalto entre NPCs: a cidade tem crime sem o jogador. De vez em quando, perto dele (dá para ver), um pedestre vira
-// ASSALTANTE (visual de traficante 2,5D, com pistola): chega andando atrás da vítima, saca, anuncia o assalto (a vítima ergue as mãos e
+// ASSALTANTE (visual de traficante 2,5D, com pistola — ou, em 40% dos assaltos, com FACA): chega andando atrás da vítima, saca (a faca
+// já vem na mão), anuncia o assalto (a vítima ergue as mãos e
 // se ajoelha), pega tudo e sai correndo armado. Quem vê foge. Se o jogador bater ou atirar no assaltante, a vítima fica livre.
 // (Usa as animações novas do pacote de NPCs: sacar, anunciar o assalto, render-se, ajoelhar, correr armado.)
 // ============================================================================
@@ -36,7 +37,7 @@ const StreetCrime = {
             .sort((a, b) => dist(a.position, v.position) - dist(b.position, v.position))[0];
         if (!m) return false;
         const id = Math.random() < 0.55 ? 'trafic_pistola' : 'trafic_mascarado', G = NpcArt.gen();
-        const look = { id, row: NpcArt.row(id, Math.floor(Math.random() * G.TYPES[id].nvar)) };
+        const look = { id, row: NpcArt.row(id, Math.floor(Math.random() * G.TYPES[id].nvar)), knife: Math.random() < 0.4 && G.TYPES[id].clips.includes('holdup:knife') };
         const st = new MugState(m, v, look, game);
         m.fsm.setState(st);
         this.active = { npc: m, state: st };
@@ -51,6 +52,7 @@ class MugState {
         this.name = 'MUG';
         this.phase = 'approach'; this.t = 0; this.aim = 0;
         this.clip = 'walk'; this.weapon = 'none';
+        this.arm = look.knife ? 'knife' : 'pistol';                 // a arma do assalto
     }
 
     enter() {
@@ -58,7 +60,8 @@ class MugState {
         this._sheet = a.sheet; this._row = a.npcRow;
         a.useSheet(NpcArt.sheet(this.look.id));             // veste o assaltante (a forma volta ao normal no fim)
         a.npcRow = this.look.row;
-        a.play('walk', 'none', { restart: true });
+        if (this.arm === 'knife') this.weapon = 'knife';            // (a faca vem na mão desde a chegada)
+        a.play('walk', this.weapon, { restart: true });
         n.mugger = true;
         n.setSpeed(Config.npc.wanderSpeed * 1.35);
         n.gotoTarget(this.victim.position);
@@ -77,8 +80,8 @@ class MugState {
             // Rendeu: para, saca e anuncia — a vítima ergue as mãos e se ajoelha. Quem vê, foge.
             this.phase = 'draw'; this.t = 0;
             n.setSpeed(0); n.gotoTarget(n.position);
-            this.clip = 'draw'; this.weapon = 'pistol';
-            n.actor.play('draw', 'pistol', { restart: true });
+            if (this.arm === 'knife') { this.phase = 'hold'; this.clip = 'holdup'; this.weapon = 'knife'; n.actor.play('holdup', 'knife', { restart: true }); }
+            else { this.clip = 'draw'; this.weapon = 'pistol'; n.actor.play('draw', 'pistol', { restart: true }); }
             v.surrender(n.position);
             this.game.npcManager.alertViolence(n.position, 14, [v, n]);
             if (hypot(this.game.player.position.x - n.position.x, this.game.player.position.z - n.position.z) < 18) this.game._flash('Assalto na rua! Um bandido rendeu um pedestre');
@@ -103,7 +106,7 @@ class MugState {
         const n = this.npc, v = this.victim;
         if (v.surrendered) v.endSurrender(n.position);
         this.phase = 'flee'; this.t = 0; this.aim = 0;
-        this.clip = 'run'; this.weapon = 'pistol';
+        this.clip = 'run'; this.weapon = this.arm;
         n.setSpeed(Config.npc.fleeSpeed * 1.1);
         n.threat.copyFrom(v.position);
         this._away();

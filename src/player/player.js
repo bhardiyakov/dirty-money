@@ -304,18 +304,22 @@ class Player {
     }
 
     // Entrando no carro: o que do desenho já entrou some debaixo da carroceria de `car` (NpcArt.setClip), dos pés para a cabeça, ao
-    // longo de `dur` s. null desliga.
-    setCarClip(car, dur = 1) {
-        this._carClip = car ? { car, t: 0, dur } : null;
-        if (!car) NpcArt.setClip(this._clipIds(), null);
+    // longo de `dur` s (a cabeça some quando ele abaixa para passar pela porta). out = saindo: o contrário — começa todo escondido e
+    // aparece da cabeça para os pés. null desliga.
+    setCarClip(car, dur = 1, out = false) {
+        this._carClip = car ? { car, t: 0, dur, out } : null;
+        if (car) this._updateCarClip(0);
+        else NpcArt.setClip(this._clipIds(), null);
     }
     _clipIds() { const s = this.actor.sheet; return s && s.isNpc ? [s.atlasName, s.fallbackAtlas, s.extraAtlas] : []; }
     _updateCarClip(dt) {
         const k = this._carClip;
         if (!k) return;
         k.t += dt;
-        const s = Math.min(1, k.t / k.dur), e = Math.min(1, Math.max(0, (s - 0.08) / 0.77)), car = k.car, A = CarDoors.axes(car);
-        NpcArt.setClip(this._clipIds(), { x: car.position.x, z: car.position.z, fx: A.fx, fz: A.fz, hl: car.halfLen * 0.97, hw: car.halfW * 0.97, h: 1.4 * e * e * (3 - 2 * e) });
+        const s = Math.min(1, k.t / k.dur), u = k.out ? 1 - s : s, e = Math.min(1, Math.max(0, (u - 0.06) / 0.52)), car = k.car, A = CarDoors.axes(car);
+        const p = this.root.position, dx = p.x - car.position.x, dz = p.z - car.position.z;
+        const inside = Math.abs(dx * A.fx + dz * A.fz) < car.halfLen && Math.abs(dx * A.rx + dz * A.rz) < car.halfW - 0.05;     // (os pés já passaram da soleira)
+        NpcArt.setClip(this._clipIds(), { x: car.position.x, z: car.position.z, fx: A.fx, fz: A.fz, hl: car.halfLen * 0.97, hw: car.halfW * 0.97, h: 1.6 * e * e * (3 - 2 * e), inside });
     }
 
     // ---------------------------------------------------------------- natação: começar/parar de nadar e MERGULHO
@@ -367,7 +371,9 @@ class Player {
         if (this.busy && !(force && this.action.name === 'shoot')) return null;
         const w = this.weapon, look = this.look;
         let ok;
-        if (look === 'none') {                                      // punhos e faca: COMBO soco esquerdo → soco direito → chute
+        if (look === 'knife' && this.actor.sheet.getClip('stab', 'knife')) {      // faca: a facada (Melee.stab)
+            ok = this.playAction('stab', { lock: 0.35, weapon: 'knife' });
+        } else if (look === 'none' || look === 'knife') {           // punhos (e a faca sem o desenho novo): COMBO soco esquerdo → soco direito → chute
             const now = performance.now() / 1000;
             if (now - (this._comboEnd || 0) > Player.COMBO_GAP) this._combo = 0;     // demorou: recomeça do 1º soco
             const name = Player.COMBO[this._combo % Player.COMBO.length];

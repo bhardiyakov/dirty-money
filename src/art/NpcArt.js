@@ -82,7 +82,7 @@ const NpcArt = {
         for (const id of ids) {
             const A = id && this.atlases[id], m = A && A.material;
             if (!m) continue;
-            if (c) { m.setVector4('clipA', new BABYLON.Vector4(c.x, c.z, c.fx, c.fz)); m.setVector4('clipB', new BABYLON.Vector4(c.hl, c.hw, c.h, 1)); }
+            if (c) { m.setVector4('clipA', new BABYLON.Vector4(c.x, c.z, c.fx, c.fz)); m.setVector4('clipB', new BABYLON.Vector4(c.hl, c.hw, c.h, c.inside ? 2 : 1)); }
             else m.setVector4('clipB', new BABYLON.Vector4(0, 0, 0, 0));
         }
     },
@@ -212,7 +212,7 @@ const NpcArt = {
             varying vec4 vFr2;
             varying vec2 vG;
             uniform vec4 clipA;          // recorte da carroceria (entrando no carro): centro (x, z) e frente (fx, fz)
-            uniform vec4 clipB;          // meio comprimento, meia largura, altura máxima na imagem (m) e ligado (w > 0,5)
+            uniform vec4 clipB;          // meio comprimento, meia largura, altura máxima na imagem (m) e o modo em w (ver main)
             float hb(float n) { return fract(sin(n) * 43758.5453); }
             vec4 tap(vec2 t, vec4 R) {
                 if (t.x < R.x || t.y < R.y || t.x >= R.z || t.y >= R.w) return vec4(0.0);
@@ -267,11 +267,12 @@ const NpcArt = {
                         c = vec4(rgb * a, a);
                     }
                 }
-                // Entrando no carro (Player.setCarClip): o que do desenho cai sobre a carroceria e está abaixo da altura que já
-                // entrou some debaixo dela — os pés primeiro, a cabeça por último.
-                if (clipB.w > 0.5) {
+                // Entrando/saindo do carro (Player.setCarClip): o que está abaixo da altura que já entrou some debaixo da carroceria —
+                // os pés primeiro, a cabeça por último. Com os pés ainda fora, só o que cai SOBRE o carro; com os pés já dentro (modo 2),
+                // todo o corpo abaixo dessa altura (o desenho cresce para o norte: senão a cabeça "atravessava" a borda do teto).
+                if (clipB.w > 0.5 && vW.y < clipB.z) {
                     vec2 d = vG - clipA.xy;
-                    if (abs(dot(d, clipA.zw)) < clipB.x && abs(dot(d, vec2(clipA.w, -clipA.z))) < clipB.y && vW.y < clipB.z) discard;
+                    if (clipB.w > 1.5 || (abs(dot(d, clipA.zw)) < clipB.x && abs(dot(d, vec2(clipA.w, -clipA.z))) < clipB.y)) discard;
                 }
                 if (c.a < 0.02) discard;
                 gl_FragColor = c;
@@ -637,6 +638,7 @@ class NpcSheet {
             const def = CharacterRig.CLIPS[name];
             if (def && !def.weapons) c = NpcArt.clip(this.atlasName, this._key(name, 'none')) || (this.fallbackAtlas && NpcArt.clip(this.fallbackAtlas, this._key(name, 'none')));
         }
+        if (!c && w === 'knife') c = this.getClip(name, 'none');            // (faca sem o desenho dela neste atlas: o clipe de mãos livres)
         if (!c && this.legacy && CharacterRig.CLIPS[name]) c = this.legacy.getClip(name, w);      // (clipes novos, como 'holdup', só existem aqui)
         if (!c && CharacterRig.CLIPS[name] && !CharacterRig.CLIPS[name].weapons) c = NpcArt.clip(this.atlasName, 'idle:none');
         this.clips[key] = c || null;

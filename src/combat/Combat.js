@@ -20,7 +20,7 @@ const Weapons = {
     // Armas achadas no chão. `look` = qual arma do boneco é desenhada na mão (só há pistola/SMG/escopeta/taco no rig).
     revolver: { name: 'Revólver',       gun: true, dmg: 38, cooldown: 0.55, spread: 0.03, range: 48, speed: 80, mag: 6, pellets: 1, auto: false, look: 'pistol' },
     ak47:    { name: 'AK-47',           gun: true, dmg: 19, cooldown: 0.12, spread: 0.07, range: 46, speed: 80, mag: 30, pellets: 1, auto: true, look: 'smg' },
-    knife:   { name: 'Faca',            melee: true, dmg: 24, range: 2.0, cooldown: 0.32, look: 'none' },
+    knife:   { name: 'Faca',            melee: true, dmg: 24, range: 2.0, cooldown: 0.32, look: 'knife' },     // (na mão: o desenho da faca; golpe: a facada — Melee.stab)
 };
 
 // Golpes corpo a corpo (jogador, pedestres que revidam, polícia com cassetete, traficantes de perto). Cada golpe é uma COLISÃO de
@@ -36,6 +36,7 @@ const Melee = {
     punchL: { dmg: 8, t0: 0.05, t1: 0.2, reach: 1.1, w: 0.24, push: 0.3, fall: 0, shake: 0.1, car: 0.1, range: 1.9 },
     kick: { dmg: 14, t0: 0.12, t1: 0.33, reach: 1.3, w: 0.3, push: 0.6, fall: 4.4, shake: 0.3, car: 0.5, range: 2.1 },
     swing: { dmg: 34, t0: 0.17, t1: 0.38, reach: 1.7, w: 0.26, sweep: 1.15, push: 0.8, fall: 6.0, shake: 0.4, car: 1, multi: true, range: 2.4 },
+    stab: { dmg: 24, t0: 0.12, t1: 0.32, reach: 1.3, w: 0.18, push: 0.25, fall: 0, shake: 0.2, car: 0.1, range: 1.9, cut: true },   // facada: corta (sangra)
     baton: { dmg: 9, t0: 0.17, t1: 0.36, reach: 1.45, w: 0.26, sweep: 0.8, push: 0.45, fall: 0, shake: 0.25, car: 0.3, range: 2.0 },
 };
 const BODY_R = 0.32;          // raio do corpo de quem apanha (m)
@@ -292,7 +293,11 @@ class Combat {
             t.takeDamage(dmg, { x: P.x, z: P.z }, s.source, fall);
             if (t.alive && !t.rag) this.shove(t, dx * M.push, dz * M.push);
         }
-        if (typeof Blood !== 'undefined') {
+        if (typeof Blood !== 'undefined' && M.cut) {                          // faca: corte — espirra e sangra (machucado, como um tiro)
+            Blood.hit(t.position.x, t.position.z, dx, dz, dmg * 0.8, t);
+            Blood.wound(t, dmg * 0.8, false);
+            Blood.cond(t, 2);
+        } else if (typeof Blood !== 'undefined') {
             Blood.beat(t, dmg);                                               // camada ESPANCADO do sprite (hematomas, nariz sangrando)
             if (M.dmg >= 20) {                                                // taco: abre o supercílio — pinga no chão (soco e chute não)
                 Blood.hit(t.position.x, t.position.z, dx, dz, dmg * 0.5, t);
@@ -328,6 +333,22 @@ class Combat {
             if (Math.abs(dx * fx + dz * fz) <= (c.halfLen || 2) + r && Math.abs(dx * fz - dz * fx) <= (c.halfW || 1) + r) return c;
         }
         return null;
+    }
+
+    // Tiro que pegou na CABINE de um carro de trânsito com motorista (da coluna da frente até o fim das portas): 10% acertam quem
+    // dirige — morre ao volante, o carro para e a buzina dispara (TrafficCar.killDriver). Viatura, moto e o carro do jogador, não.
+    _cabinShot(car, hx, hz, b) {
+        if (!car.killDriver || car.driver === false || car.driverDead || car.controlled || car.role || car.isBike || car.isBoat || car.wrecked) return;
+        const D = typeof DoorSheet !== 'undefined' && DoorSheet.SPEC[car.spec.id];
+        if (!D) return;
+        const A = CarDoors.axes(car), along = (hx - car.position.x) * A.fx + (hz - car.position.z) * A.fz;
+        if (along > D.h + 0.2 || along < D.h - D.len * 1.7) return;          // capô ou porta-malas
+        if (Math.random() >= Config.crash.driverShot) return;
+        if (!car.killDriver()) return;
+        this.spark(hx, 1.2, hz, [0.75, 0.05, 0.05]);
+        const g = this.game;
+        if (b.owner === 'player' && g.wanted) g.wanted.reportCrime();
+        if (g.npcManager) g.npcManager.alertViolence(car.position, 22);
     }
 
     // ------------------------------------------------------------------ efeitos
@@ -427,6 +448,7 @@ class Combat {
                     this.spark(hx, 1.0, hz, [1, 0.9, 0.5]); if (typeof SparkFx !== 'undefined') SparkFx.impact(hx, hz, b.dirx, b.dirz, 1.0, 5); AudioFX.hit(hx, hz);
                     // A lataria leva parte do dano (carros amassam, soltam fumaça e podem explodir a tiros).
                     if (hit.ref.takeDamage) hit.ref.takeDamage(b.dmg * Config.crash.bulletMul, b.owner);
+                    this._cabinShot(hit.ref, hx, hz, b);
                     // O carro do jogador protege, mas parte do tiro atravessa a lataria/vidro.
                     if ((b.owner === 'police' || b.owner === 'gang') && hit.ref === this.game.activeCar && this.game.mode === 'car') this.game.player.takeDamage(b.dmg * 0.4);
                     this._tireShot(hit.ref, hx, hz);

@@ -381,6 +381,39 @@ const AudioFX = {
         }
     },
 
+    // Buzina PRESA (motorista morto com a cabeça no volante — TrafficCar.killDriver): a mesma buzina, sem parar. Devolve { set(x, z),
+    // stop() }: set a cada quadro (volume e lado pela distância; longe, os osciladores são desligados), stop quando tiram o corpo.
+    hornLoop(pitch = 1) {
+        const A = this, h = { on: null };
+        h.set = (x, z) => {
+            const ctx = A.ctx;
+            const d = hypot(x - A.listener.x, z - A.listener.z), vol = !ctx || ctx.state !== 'running' || A.muted || d > 85 ? 0 : Math.pow(1 - d / 85, 1.6) * 0.24;
+            if (vol < 0.004) { if (h.on) h.off(); return; }
+            if (!h.on) {
+                const g = ctx.createGain(), lp = ctx.createBiquadFilter(), oscs = [];
+                g.gain.value = 0.0001; lp.type = 'lowpass'; lp.frequency.value = 1700;
+                let out = lp, pan = null;
+                if (ctx.createStereoPanner) { pan = ctx.createStereoPanner(); lp.connect(pan); out = pan; }
+                g.connect(lp); out.connect(A.master);
+                for (const f of [380, 452]) { const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = f * pitch; o.connect(g); o.start(); oscs.push(o); }
+                h.on = { g, pan, oscs };
+            }
+            const t = ctx.currentTime;
+            h.on.g.gain.setTargetAtTime(vol, t, 0.06);
+            if (h.on.pan) h.on.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, (x - A.listener.x) / 45)), t, 0.06);
+        };
+        h.off = () => {
+            const ctx = A.ctx, o = h.on;
+            h.on = null;
+            if (!o || !ctx) return;
+            const t = ctx.currentTime;
+            o.g.gain.setTargetAtTime(0.0001, t, 0.03);
+            for (const s of o.oscs) s.stop(t + 0.15);
+        };
+        h.stop = () => h.off();
+        return h;
+    },
+
     // Buzina de carro: duas ondas quadradas (acorde de terça menor, ~380/450 Hz) por um
     // lowpass, com ataque/queda rápidos. pitch varia por motorista; dur em segundos.
     honk(x, z, pitch = 1, dur = 0.3) {

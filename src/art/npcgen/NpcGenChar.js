@@ -790,6 +790,12 @@ function NpcGenChar(G) {
             new RoundCone([0, -3.5, 0], [0, 24.7, 0], 1.25, 2.5, S.batwood),
             new Sphere([0, -4.1, 0], 1.7, S.batwood, { blend: 0.4 }),
         ], texBat);
+        props.knife = new Part('knife', 'weapon', GR.weapon, [                        // faca: cabo na mão (origem), lâmina para +y
+            new RoundBox([0, -2.2, 0], [0.75, 2.7, 0.95], 0.55, S.tape),
+            new RoundBox([0, 0.75, 0], [0.55, 0.38, 1.8], 0.22, S.metal),
+            new RoundBox([0, 6.2, -0.2], [0.22, 5.2, 1.15], 0.15, S.chrome),
+            new RoundCone([0, 11.0, -0.2], [0, 12.9, 0.5], 0.7, 0.15, S.chrome),
+        ]);
         props.baton = new Part('baton', 'weapon', GR.weapon, [                        // cassetete
             new RoundCone([0, -3.6, 0], [0, 17.5, 0], 1.25, 1.15, S.tape),
             new CapCone([0, 3.6, 0], [0, 4.8, 0], 1.6, 1.6, S.metal, { rround: 0.3 }),
