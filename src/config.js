@@ -362,7 +362,7 @@ const Config = {
     },
 
     // Água: raso (0..wadeDepth m da margem) = o personagem anda devagar; além disso, nada (animação de natação). maxDepth = até onde dá para ir.
-    water: { wadeDepth: 10, maxDepth: 230 },
+    water: { wadeDepth: 10, maxDepth: 230, diveTime: 14 },        // diveTime: segundos de mergulho com o fôlego cheio (Player._updateSwim)
 
     // Roubo de carro estacionado (trancado): rápido (quebra o vidro, dispara o alarme) ou furtivo (mini-game).
     theft: {

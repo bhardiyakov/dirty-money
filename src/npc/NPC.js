@@ -115,7 +115,7 @@ class NPC {
     // Volta ao crowd no ponto andável mais próximo (e tira a toalha).
     leaveFree() {
         this._dropTowel();
-        this.free = null;
+        this.free = null; this._dive = null;
         this.freeAnim = null; this._freeV = 0; this._freeDepth = 0;
         this.actor.setWaterline(0);                          // (saiu da água)
         this.actor.mesh.position.y = 0.5;
@@ -131,9 +131,18 @@ class NPC {
     _clearActivity() {
         this.umbrella = false;
         this._dropTowel();
-        this.free = null; this.freeAnim = null;
+        this.free = null; this.freeAnim = null; this._dive = null;
         this.actor.mesh.position.y = 0.5;
     }
+
+    // MERGULHO (banhista): afunda (dive_in), nada peito debaixo d'água por `sec` s (dive) e volta à tona (dive_out). endDive: sobe já.
+    startDive(sec) {
+        if (this._dive || !this.actor.sheet.getClip('dive', 'none')) return false;
+        this._dive = { phase: 'in', t: 0.7, under: sec };
+        return true;
+    }
+    endDive() { if (this._dive && this._dive.phase !== 'out') this._dive = { phase: this._dive.phase === 'in' ? 'in' : 'out', t: this._dive.phase === 'in' ? this._dive.t : 0.7, under: 0 }; }
+    get diving() { return !!this._dive && this._dive.phase === 'under'; }
 
     makeTowel(x, z, heading) {
         const colors = ['#d9453a', '#2f8fd0', '#e8c22c', '#2fa36a', '#e86aa0', '#8e4fb8'];
@@ -167,6 +176,16 @@ class NPC {
         this._freeV = d > 0.05 ? v : 0; this._freeDepth = depth;
         // vadeando/andando: ritmo pela velocidade (pés plantados — Config.anim), não fixo
         this.freeAnim = deep ? { clip: 'swim', rate: 1 } : { clip: 'walk', rate: Math.max(0.5, v / Config.anim.walk) };
+        if (!deep) this._dive = null;
+        else if (this._dive) {                                                                 // mergulhando: afunda → debaixo d'água → sobe
+            const D = this._dive;
+            if ((D.t -= dt) <= 0) {
+                if (D.phase === 'in') { D.phase = 'under'; D.t = D.under; }
+                else if (D.phase === 'under') { D.phase = 'out'; D.t = 0.7; }
+                else this._dive = null;
+            }
+            if (this._dive) this.freeAnim = { clip: D.phase === 'in' ? 'dive_in' : D.phase === 'out' ? 'dive_out' : 'dive', rate: 1 };
+        }
         return d;
     }
 
@@ -538,12 +557,12 @@ class NPC {
     // Na água (só no modo livre: nadando ou vadeando, ver freeMove): o desenho afunda até a linha d'água e, perto da tela, as marolas,
     // a esteira, os respingos e os sons (WaterFx.track). Fora da tela não gasta nada.
     _waterTick(dt) {
-        const A = this.freeAnim, depth = A && (A.clip === 'swim' || A.clip === 'walk') ? (this._freeDepth || 0) : 0;
+        const A = this.freeAnim, depth = A && /^(swim|walk|dive)/.test(A.clip) ? (this._freeDepth || 0) : 0;
         const W = Config.water.wadeDepth, swim = depth > W;
         this.actor.setWaterline(depth > 0 && !swim ? 0.25 + 0.75 * Math.min(1, depth / W) : 0);
         const p = this.transform.position, g = this.ctx && this.ctx.game;
         if (!depth || !g || !g.waterFx || !Zones.near(p.x, p.z, 6)) return;
-        g.waterFx.track(this, dt, { x: p.x, z: p.z, depth, speed: this._freeV || 0, swimming: swim, heading: this.heading, actor: this.actor,
+        g.waterFx.track(this, dt, { x: p.x, z: p.z, depth, speed: this._freeV || 0, swimming: swim, diving: this.diving, heading: this.heading, actor: this.actor,
             wl: 0.25 + 0.75 * Math.min(1, depth / W), who: 'npc' });
     }
 

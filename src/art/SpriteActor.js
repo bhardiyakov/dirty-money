@@ -126,6 +126,7 @@ class SpriteActor {
         const clip = this.sheet.getClip(name, weapon);
         if (!clip) return false;
         if (this.clip === clip && !restart) return true;
+        if (name === 'dead' && clip.npc && (!this.clip || this.clip.name !== 'dead') && typeof Blood !== 'undefined') Blood.deathPool(this);   // poça de sangue (Blood)
         const was = this._mode || 0, mode = clip.vector ? 1 : clip.npc ? 2 : 0;
         this.clip = clip;
         this.time = 0;
@@ -384,21 +385,20 @@ class SpriteActor {
         mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, P);
     }
 
-    // Camadas de ferimento por cima da skin (personagens 2,5D): `shot` = BALEADO (furos e sangue na roupa) e `beat` = ESPANCADO
-    // (hematomas e sangue do nariz/boca), níveis 0..4 — cada nível, mais uma marca. Ficam no sprite até a pessoa ser outra
-    // (renasceu / trocou de variante) ou se curar (clearWounds). Vão no 4º número do atributo `fr` (livre) com uma semente por
-    // pessoa: o shader do NpcArt desenha as marcas (shotMask / beatMask).
-    setWounds(shot, beat) {
-        shot = Math.max(0, Math.min(4, shot | 0)); beat = Math.max(0, Math.min(4, beat | 0));
-        if (this._wShot === shot && this._wBeat === beat) return;
-        this._wShot = shot; this._wBeat = beat;
-        if (this._woundSeed == null) this._woundSeed = Math.floor(Math.random() * 250);
-        const w = shot || beat ? this._woundSeed * 25 + shot * 5 + beat : 0, R = this._fr;
-        for (let k = 3; k < 16; k += 4) R[k] = w;
-        this.mesh.updateVerticesData('fr', R);
+    // Ferimentos da pessoa: `shot` = tiros (0..4), `beat` = pancadas (0..4) e `cond` = o ESTADO DE DANO (Blood.cond): 1 SUJO, 2 MACHUCADO,
+    // 3 MUITO MACHUCADO. O estado é PINTADO no desenho (NpcGenMesh.paintDamage — terra, cortes, rasgos e sangue presos à roupa e à pele,
+    // girando com o corpo): mudou, o ator troca de atlas — o jogador pelo visual (PlayerLook, via onCond), o NPC pela folha machucada
+    // do tipo (NpcArt.applyDamage). Fica até a pessoa ser outra (renasceu) ou se curar (clearWounds).
+    setWounds(shot, beat, cond = this._wCond || 0) {
+        shot = Math.max(0, Math.min(4, shot | 0)); beat = Math.max(0, Math.min(4, beat | 0)); cond = Math.max(0, Math.min(3, cond | 0));
+        const was = this._wCond || 0;
+        this._wShot = shot; this._wBeat = beat; this._wCond = cond;
+        if (cond === was) return;
+        if (this.onCond) this.onCond(cond);
+        else if (typeof NpcArt !== 'undefined' && this.sheet && this.sheet.isNpc) NpcArt.applyDamage(this, cond);
     }
-    get wounds() { return { shot: this._wShot || 0, beat: this._wBeat || 0 }; }
-    clearWounds() { if (!this._wShot && !this._wBeat) return; this._woundSeed = null; this.setWounds(0, 0); }
+    get wounds() { return { shot: this._wShot || 0, beat: this._wBeat || 0, cond: this._wCond || 0 }; }
+    clearWounds() { this._hits = 0; if (!this._wShot && !this._wBeat && !this._wCond) return; this.setWounds(0, 0, 0); }
 
     // Quadro f do clipe vetorial: um único atributo (3 números) — o mesmo custo de antes, quando só a UV mudava.
     _setFr(mesh, pk, f, R, raw = false) {

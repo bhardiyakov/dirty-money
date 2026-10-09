@@ -62,8 +62,13 @@ class Combat {
     fire(shooter, weaponKey) {
         const W = Weapons[weaponKey];
         const n = W.pellets || 1;
-        const muzzle = shooter.fly ? 1.15 : 1.15 * (Config.art.charScale || 1);     // (a arma acompanha a escala do personagem)
-        const mx = shooter.x + Math.sin(shooter.angle) * muzzle, mz = shooter.z + Math.cos(shooter.angle) * muzzle;
+        let mx, mz;
+        const tip = shooter.fly ? null : Combat.muzzleOffset(W.look || weaponKey, shooter.angle);
+        if (tip && MapGeo.hasLineOfSight(shooter.x, shooter.z, shooter.x + tip[0], shooter.z + tip[1])) { mx = shooter.x + tip[0]; mz = shooter.z + tip[1]; }
+        else {                                                                      // (helicóptero, ou a ponta do cano do desenho do outro lado de uma parede)
+            const muzzle = shooter.fly ? 1.15 : 1.15 * (Config.art.charScale || 1);
+            mx = shooter.x + Math.sin(shooter.angle) * muzzle; mz = shooter.z + Math.cos(shooter.angle) * muzzle;
+        }
         for (let k = 0; k < n; k++) {
             const b = this.bullets.find((q) => !q.on);
             if (!b) break;
@@ -83,6 +88,34 @@ class Combat {
             if (!shooter.fly) SparkFx.casing(shooter.x, shooter.z, shooter.angle, weaponKey);
         }
         return n;
+    }
+
+    // Ponta do cano NO DESENHO de quem atira (personagens 2,5D): [leste, norte] em metros a partir dos pés, para a direção (das 8 do
+    // sprite) mais perto de `angle`. Sai do gerador (o clarão do quadro de tiro do clipe `shoot`, projetado como o atlas é desenhado:
+    // câmera a 56°, a altura vira "para cima" na tela), então o fogo, o traçante e a bala saem de onde a arma aparece. null = sem arma
+    // desenhada (ou sem o gerador): quem chamou usa o ponto padrão à frente do corpo.
+    static muzzleOffset(look, angle) {
+        const T = Combat._muzzle || (Combat._muzzle = {});
+        if (!(look in T)) {
+            T[look] = null;
+            try {
+                if (look && look !== 'none' && look !== 'bat' && typeof NpcArt !== 'undefined' && NpcArt.available()) {
+                    const G = NpcArt.gen(), spec = G.fullSpec(G.PLAYER_DEFAULT), w = G.weaponFor('protagonista', look);
+                    G.setRig(G.rigFor(spec));
+                    const P = G.CLIPS.shoot.fn(w).map((q) => (q.adult ? q.adult() : q)).find((q) => q.effects && q.effects.some((e) => e.type === 'flash'));
+                    if (P) {
+                        const pos = P.effects.find((e) => e.type === 'flash').pos, R = new G.Camera().R, k = (spec.scale || 1) / 52;     // (52 unidades do gerador por metro)
+                        T[look] = [];
+                        for (let d = 0; d < 8; d++) {                    // direção d do atlas = desenho girado −45°·d (0 = norte, sentido horário)
+                            const q = G.mv3(G.Rz(G.deg(-45 * d)), pos);
+                            T[look].push([(q[0] * R[0] + q[1] * R[1] + q[2] * R[2]) * k, (q[0] * R[3] + q[1] * R[4] + q[2] * R[5]) * k]);
+                        }
+                    }
+                }
+            } catch (e) { console.warn('[COMBATE] ponta do cano de ' + look + ':', e); T[look] = null; }
+        }
+        const L = T[look];
+        return L ? L[((Math.round(angle / (Math.PI / 4)) % 8) + 8) % 8] : null;
     }
 
     // Abertura da mira assistida (rad, para cada lado): trava em quem estiver até Config.aim.cone graus de onde o personagem olha.
