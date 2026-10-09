@@ -31,7 +31,7 @@ class GuideUI {
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'], ['bags', 'Bolsas, peso e fôlego'],
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
-            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['daily', 'Energia e exposição (o dia)'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
+            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas']);
         return out;
@@ -87,6 +87,7 @@ GuideUI.PAGES = {
         <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>andar / dirigir</td></tr><tr><td><kbd>Shift</kbd></td><td>correr</td></tr>
         <tr><td><kbd>Clique</kbd> / <kbd>Espaço</kbd></td><td>golpe ou tiro (sem arma: combo soco + soco + chute)</td></tr>
         <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>armas (punhos, pistola, SMG, escopeta, taco, revólver, AK, fuzil, faca)</td></tr>
+        <tr><td><kbd>0</kbd> / <kbd>−</kbd></td><td>granada / coquetel molotov (boca de fumo): <b>segure</b> o ataque para puxar o pino ou acender e mirar com o <b>mouse</b> (cai onde está o cursor) ou o <b>analógico direito</b> (inclinar mais = mais longe) — quanto mais longe, mais forte o arremesso; a linha tracejada mostra a trajetória; <b>solte</b> para jogar. A granada explode ~3 s depois do pino (segurar demais explode na mão); o molotov deixa o chão em chamas por 30 s ou mais</td></tr>
         <tr><td><kbd>R</kbd> · <kbd>M</kbd></td><td>recarregar · kit médico</td></tr>
         <tr><td><kbd>E</kbd></td><td>interagir: assaltar (com arma), esconder-se, entrar, falar, trabalhos das carreiras; no carro, desmanchar no desmanche</td></tr>
         <tr><td><kbd>C</kbd></td><td>furtar pedestre</td></tr><tr><td><kbd>V</kbd></td><td>pular grade/muro (longe deles: rolar)</td></tr>
@@ -134,6 +135,8 @@ GuideUI.PAGES = {
         <h3>Peso</h3><ul><li>Tudo pesa: armas (pistola 1 kg … AK 4,3 kg), munição, kits, comida, joias, <b>dinheiro vivo</b> (R$ 50 mil ≈ 1 kg), eletrônicos furtados e cédulas de banco.</li>
         <li>Até metade da carga: normal. Até a carga cheia: cada vez mais lento (−30%). Acima dela: <b>sobrecarga</b> — bem lento e sem correr.</li>
         <li>O HUD mostra a bolsa e o peso (amarelo = pesado, vermelho = sobrecarga).</li></ul>
+        <h3>Força</h3><ul><li>Quanto mais forte, mais peso você leva sem pesar: cada nível de <b>força</b> (0 a 20) dá <b>+4% de carga</b> (+80% no 20).</li>
+        <li>A força sobe com o uso: andar e correr <b>carregando peso</b> e brigar (soco, chute, taco, faca). A habilidade <b>Costas largas</b> (FÍSICO) e roupas como calça cargo e colete de carga somam.</li></ul>
         <h3>Fôlego</h3><ul><li>Correr gasta fôlego (mais rápido com peso). Andando ou parado ele volta.</li><li>Zerou: <b>sem fôlego</b> — anda arrastado e só volta a correr com 35%.</li>
         <li><b>Condicionamento</b>: correr treina o personagem (até nível 20): mais fôlego, gasta menos e recupera mais rápido. Correr carregado treina mais.</li></ul>`,
 
@@ -172,18 +175,10 @@ GuideUI.PAGES = {
     goals: () => `<h2>Metas de carreira</h2>
         <p>O painel embaixo da tela mostra a próxima meta de cada trilha — <b>Patrimônio</b>, <b>Carreiras</b>, <b>Morro</b>, <b>Lavagem</b>, <b>Imóveis</b> e <b>Fuga</b> — com barra de progresso. Cada meta batida paga na hora (dinheiro e, nas maiores, kits médicos) e libera a próxima.</p>`,
 
-    daily: () => `<h2>Energia e exposição (o dia)</h2>
-        <p>Cada dia é limitado. Você acorda com <b>energia cheia</b> e <b>exposição zerada</b> (barras ⚡ e 🔥 no HUD).</p>
-        <ul><li>Furtar, roubar carro, assaltar, brigar, atirar, correr e concluir trabalhos <b>gastam energia</b>. Cansado (menos de 12%) você não corre. Só o <b>sono</b> recupera.</li>
-        <li>Crimes e estrelas de procurado <b>aumentam a exposição</b> (ela esfria devagar quando você está limpo). Exposição cheia = <b>ALERTA TÁTICO</b> no distrito onde você está: a polícia enxerga 60% mais longe até você dormir.</li>
-        <li><b>Desmaio</b>: energia zerada. Você acorda em casa sem nada de sujo na mochila (dinheiro, joias e mercadoria são confiscados) e paga propina de hospital/advogado do dinheiro limpo.</li>
-        <li>A decisão do dia: arriscar mais um roubo com a polícia nas ruas ou voltar para casa, dormir e começar limpo.</li></ul>
-        <div class="gd-tip">Guarde dinheiro em casa (baú/cofre) ou lave antes de forçar a barra: sujo na mochila é o que se perde.</div>`,
-
     empire: () => `<h2>Soldados, galpões e lavagem</h2>
         <p>Na aba <b>IMPÉRIO</b> o trabalho manual vira gestão:</p>
-        <ul><li><b>Galpões</b> (cada um abriga 4 soldados) e <b>soldados</b> (recrutamento + salário diário). Aloque cada soldado num distrito: todo dia ele faz roubos passivos — distritos ricos rendem mais. Soldado pode ser <b>preso</b> (mais em distrito com alerta tático, menos com delegado aliado).</li>
-        <li>O lucro cai no <b>cofre do galpão</b>, como dinheiro sujo. Ele só vira dinheiro na mão quando você o <b>recolhe</b> (na favela ou em casa) — e sujo na mochila se perde num desmaio.</li>
+        <ul><li><b>Galpões</b> (cada um abriga 4 soldados) e <b>soldados</b> (recrutamento + salário diário). Aloque cada soldado num distrito: todo dia ele faz roubos passivos — distritos ricos rendem mais. Soldado pode ser <b>preso</b> (menos com delegado aliado).</li>
+        <li>O lucro cai no <b>cofre do galpão</b>, como dinheiro sujo. Ele só vira dinheiro na mão quando você o <b>recolhe</b> (na favela ou em casa).</li>
         <li><b>Rotas de lavagem</b>: postos, restaurantes e boates de fachada comprados no distrito onde você está lavam o cofre todo dia, direto para dinheiro <b>limpo</b> (com perda e um pouco de Receita).</li>
         <li>Salário sem pagar = soldado larga o bonde. Facções inimigas emboscam as rotas.</li></ul>`,
 
@@ -230,7 +225,7 @@ GuideUI.PAGES = {
         <li><b>Subornar os vigilantes</b> (na Nacional, também a PM): a perfuração não aciona o alarme e a polícia demora mais. Vale só hoje.</li>
         <li>Perfure o <b>cofre</b> parado no local — rende centenas de milhares.</li></ul>
         <h3>Negociação de reféns</h3><p>Se a polícia chega com você lá dentro, ela cerca o prédio e abre negociação: <b>Lábia</b> (pedir tempo) ou <b>Intimidar</b> (com arma). Cada acerto dá uma trégua para terminar e sair; três falhas e o BOPE invade (preso). Sair cercado, sem trégua, é ser preso na porta.</p>
-        <h3>Dinheiro marcado</h3><p>O que sai do banco são cédulas com série rastreada: <b>pesam</b> (você fica lento), não vão para a mochila e somem se você desmaiar ou for preso. Guarde no <b>cofre do galpão</b> (precisa de galpão) para as fachadas lavarem.</p>
+        <h3>Dinheiro marcado</h3><p>O que sai do banco são cédulas com série rastreada: <b>pesam</b> (você fica lento), não vão para a mochila e somem se você for preso. Guarde no <b>cofre do galpão</b> (precisa de galpão) para as fachadas lavarem.</p>
         <h3>Cibercrime (Estelionato Golpista+)</h3><p>Plugue o <b>pendrive</b> no terminal do gerente de uma agência (porta no firewall da marca por 3 dias) e faça a <b>transferência via laranjas</b> de casa ou da favela: confirme as contas certas antes do firewall fechar.</p>
         <h3>Conta e COAF</h3><p>Fale com o caixa: depositar <b>limpo</b> guarda os lucros com juros e nada se perde. Depositar <b>sujo</b> em conta de fachada enche o <b>Alerta do COAF</b> — cheio, bloqueiam a conta e levam metade.</p>`,
 

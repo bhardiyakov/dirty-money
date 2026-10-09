@@ -66,7 +66,7 @@ class EmpireBusiness {
         if (this.vault <= 0) return 'O cofre está vazio';
         const v = Math.round(this.vault);
         this.g.inventory.addCash(v); this.vault = 0;
-        return `Recolheu ${brl(v)} sujos do cofre do galpão — cuidado: dinheiro sujo na mochila se perde num desmaio`;
+        return `Recolheu ${brl(v)} sujos do cofre do galpão`;
     }
     buyFront(type) {
         const F = EmpireBusiness.FRONTS[type], d = this.e.here, inv = this.g.inventory;

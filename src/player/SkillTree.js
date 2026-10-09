@@ -29,6 +29,7 @@ class SkillTree {
             ['couro', 'fisico', 1, 3, 'hp', 12, 'Couro grosso', '+12 de vida máxima', null],
             ['recup', 'fisico', 2, 2, 'regen', 0.15, 'Recuperação', 'regenera sozinho até +15% de vida a mais', ['couro', 1]],
             ['sanguefrio', 'fisico', 2, 3, 'dmgTaken', 0.06, 'Sangue frio', '−6% de dano recebido', ['couro', 2]],
+            ['costas', 'fisico', 2, 3, 'carry', 0.1, 'Costas largas', '+10% de carga sem pesar', ['folego', 1]],
             ['nadador', 'fisico', 3, 2, 'swim', 0.15, 'Nadador', '+15% de velocidade na água', ['folego', 2]],
             ['corpofechado', 'fisico', 4, 1, 'secondWind', 1, 'Corpo fechado', '1 vez por dia, ao zerar a vida, você levanta com 30%', ['sanguefrio', 3]],
 

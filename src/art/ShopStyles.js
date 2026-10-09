@@ -138,6 +138,72 @@ const ShopStyles = {
         return S.finish();
     },
 
+    // ======================================================================= ACADEMIA
+    // Recepção na entrada (diária, mensalidade e suplementos). Fundo da sala: três ESTAÇÕES do jogador (uses 'gym_squat', 'gym_bench',
+    // 'gym_curl' → minigames/Gym.js) ao lado de estações iguais com frequentadores treinando (patron.type = tipo do gerador e .anim = o
+    // exercício e a faixa de peso — Interiors anima: séries e descanso), esteira com gente andando, prateleira de halteres, espelhos.
+    // O banco e a gaiola desenhados aqui são os de quem está parado; quem treina traz os seus no próprio sprite (por cima).
+    gym(v) {
+        const W = 24, D = 15, S = this._ctx('gym', v, W, D, 0.5), c = S.c;
+        const pal = this._pal(v, [['#3a4048', '#2c3238'], ['#40363a', '#30282c'], ['#2f3a44', '#232c34'], ['#3c3c40', '#2c2c30'], ['#34403a', '#26302a']]);
+        const acc = this._pal(v, ['#ff6a1a', '#e8c22c', '#2fb4d0', '#d94a6a', '#5ac07a']);
+        S.floor('tile', '#2a2c30', '#232528', { size: 20 });
+        S.shell({ n: { kind: 'paint', A: pal[0], B: pal[1] }, n2: { kind: 'tile', x0: 6.5, x1: W - 1.2, A: '#9fb8c4', B: '#86a0ac' }, rail: acc, cap: '#5a5e66', side: '#3a3e46', front: '#3a3e46', mat: '#1a1c20' });
+        // espelhos na parede do fundo (faixa clara com reflexos) e cartazes
+        { const bd = S.band(S.P(6.8), S.P(W - 1.4)); for (let x = bd.x + 6; x < bd.x + bd.w - 4; x += 22) { c.fr(x, bd.y + 6, 2, bd.h - 14, '#d8eef6'); c.fr(x + 5, bd.y + 10, 1, bd.h - 22, '#c4e2ee'); } }
+        { const bd = S.band(S.P(1.4), S.P(5.8)); S.poster(bd.x + 2, bd.y + 8, bd.w - 4, 26, acc, '#1a1a1e', 'lines'); }
+        // piso de borracha das áreas de treino e as plataformas de madeira
+        S.rug(S.R(3.0, 8.4, W - 3.2, 12.4), '#1c1e22', '#121316', false);
+        const plat = (x0, z0, x1, z1) => S.rug(S.R(x0, z0, x1, z1), '#6a4c30', '#3c2a1a', false);
+        // equipamento parado: gaiola (dois postes altos e a barra nos ganchos) e banco de supino (estofado ao longo de z, suporte na cabeceira)
+        const rack = (cx, cz) => {
+            plat(cx - 1.2, cz - 0.9, cx + 1.2, cz + 0.9);
+            for (const s of [-1, 1]) S.blk(S.R(cx + s * 0.66 - 0.06, cz - 0.16, cx + s * 0.66 + 0.06, cz + 0.16), 2.0, '#4a4e56', '#3a3d44', false);
+            const b = S.base(S.R(cx - 0.85, cz + 0.05, cx + 0.85, cz + 0.12), 1.35); c.fr(b.x, b.top, b.w, 2, '#c8ccd2');
+            for (const s of [-1, 1]) { const p = S.base(S.R(cx + s * 0.75 - 0.08, cz, cx + s * 0.75 + 0.08, cz + 0.12), 1.35); c.fr(p.x, p.top - 6, p.w, 12, '#18181c'); }
+        };
+        const bench = (cx, cz) => {
+            plat(cx - 0.8, cz - 1.1, cx + 0.8, cz + 1.0);
+            S.blk(S.R(cx - 0.15, cz - 0.8, cx + 0.15, cz + 0.45), 0.45, '#1a1a20', '#2a2a32', false);
+            for (const s of [-1, 1]) S.blk(S.R(cx + s * 0.46 - 0.04, cz + 0.52, cx + s * 0.46 + 0.04, cz + 0.6), 1.05, '#4a4e56', '#3a3d44', false);
+            const b = S.base(S.R(cx - 0.75, cz + 0.5, cx + 0.75, cz + 0.56), 1.0); c.fr(b.x, b.top, b.w, 2, '#c8ccd2');
+        };
+        const curlSpot = (cx, cz) => plat(cx - 0.7, cz - 0.6, cx + 0.7, cz + 0.6);
+        // estações: [x, z, use, frequentador (tipo, faixa, face) | null]
+        const ST = [
+            [5.2, 10.4, 'gym_squat', null], [8.6, 10.4, 'gym_squat', ['academia_m', 'w3']],
+            [12.0, 10.0, 'gym_bench', null], [14.6, 10.0, 'gym_bench', ['academia_m', 'w2']],
+            [18.0, 9.8, 'gym_curl', null], [20.0, 9.8, 'gym_curl', ['academia_f', 'w1']],
+        ];
+        ST.forEach(([x, z, use, who], i) => {
+            if (use === 'gym_squat') rack(x, z); else if (use === 'gym_bench') bench(x, z); else curlSpot(x, z);
+            if (!who) { S.use(use, S.R(x - 0.9, z - 0.9, x + 0.9, z + 0.9)); const u = S.uses[S.uses.length - 1]; u.px = S.P(x); u.pz = z; u.face = use === 'gym_bench' ? this.N : this.S; }
+            else {
+                const face = use === 'gym_bench' ? this.N : this.S;
+                S.patrons.push({ x: S.P(x), z, face: this._face(S, face), variant: 3 + i * 5 + v, type: who[0], anim: { clip: use, w: who[1] } });
+            }
+
+        });
+        // prateleira de halteres no fundo e árvore de anilhas
+        { const r = S.R(15.6, 12.9, W - 1.4, 13.6), b = S.blk(r, 0.75, '#3a3d44', '#2a2d34');
+          for (let x = b.x + 4, k = 0; x < b.x + b.w - 6; x += 9, k++) { const rr = 2 + (k % 4); c.disk(x, b.top + 4, rr, '#18181c'); c.disk(x + 5, b.top + 4, rr, '#18181c'); c.fr(x, b.top + 4, 5, 1, '#c8ccd2'); } }
+        { const r = S.R(1.6, 11.2, 2.4, 12.0), b = S.blk(r, 1.2, '#2a2c32', '#3a3d44'); for (let k = 0; k < 3; k++) { c.disk(b.x + (b.w >> 1), b.top + 4 + k * 6, 6 - k, '#141418'); c.ring(b.x + (b.w >> 1), b.top + 4 + k * 6, 6 - k, '#3a3d44'); } }
+        // esteiras na lateral (uma com alguém caminhando)
+        for (const [z0, who] of [[4.0, ['academia_f', 'walk']], [6.2, null]]) {
+            const r = S.R(W - 2.6, z0, W - 1.2, z0 + 1.8), b = S.blk(r, 0.35, '#2a2c32', '#1a1c20', false);
+            c.fr(b.x + 3, b.top + 3, b.w - 6, b.h - 6, '#101114'); c.fr(b.x + 2, b.top, b.w - 4, 3, '#4a4e56');
+            S.solid(S.R(W - 2.6, z0, W - 1.2, z0 + 0.3), 1.2);
+            if (who) S.patrons.push({ x: S.P(W - 1.9), z: z0 + 1.0, face: this._face(S, this.N), variant: 7 + v, type: who[0], anim: { clip: 'walk', w: 'none' } });
+        }
+        // recepção (diária, mensalidade, suplementos) e o bebedouro
+        S.counter(S.R(1.2, 3.0, 6.2, 4.0), 1.05, '#2a2c32', acc, ['register', 'cups']);
+        S.cooler(S.R(1.2, 6.0, 2.4, 6.8), 1.9, acc);
+        S.plant(S.P(1.6), 13.6, false);
+        this._clerk(S, 3.6, 4.8, this.S, 6);
+        S.light(6, 10, 7, [235, 245, 255], 0.45); S.light(16, 10, 7, [235, 245, 255], 0.45); S.light(4, 4, 5, [255, 230, 190], 0.3);
+        return S.finish(0.36);
+    },
+
     // ======================================================================= BAR (rústico)
     bar(v) {
         const W = [22, 24, 22, 24, 22][v], D = 14, S = this._ctx('bar', v, W, D, 0.4);

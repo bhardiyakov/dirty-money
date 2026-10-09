@@ -2,10 +2,7 @@
 // Empire — a camada de IMPÉRIO: o jogo deixa de ser só trabalho manual e vira gestão da cidade (inspirado na interdependência de
 // sistemas de Stardew Valley). Este arquivo é o núcleo:
 //   • DISTRITOS   a cidade dividida em zonas que respondem diferente (riqueza, polícia, rival, domínio): districtAt(x, z).
-//   • CICLO DIÁRIO ENERGIA (gasta com furtos, roubos, combate, corrida e trabalhos; só o sono recupera) × EXPOSIÇÃO (calor do dia:
-//                 sobe com crimes e estrelas). Exposição cheia = ALERTA TÁTICO no distrito (a polícia vê muito mais longe até você
-//                 dormir). Energia zerada = DESMAIO: confiscam o sujo da mochila (dinheiro, joias,
-//                 mercadoria) e cobram propina de hospital/advogado; você acorda em casa. DORMIR zera tudo.
+//   • (O antigo ciclo diário de ENERGIA × EXPOSIÇÃO foi removido: spend() não faz mais nada e nunca há alerta tático/desmaio.)
 //   • ESTAÇÕES DO CRIME eventos globais de 14/28 dias (Calmaria, Carnaval, Eleições, Intervenção Federal) com avisos antes.
 // Os sistemas de gestão (soldados, galpões, rotas de lavagem, influência, domínio) ficam em empire/EmpireSystems.js; a tela, em
 // ui/EmpireUI.js (aba IMPÉRIO do menu).
@@ -82,19 +79,10 @@ class Empire {
     get nextSeason() { return Empire.SEASONS[Empire.SEASON_ORDER[(this.season.idx + 1) % Empire.SEASON_ORDER.length]]; }
     get seasonLeft() { return this.seasonDef.days - this.season.day; }
 
-    // ---------------------------------------------------------------- energia e exposição
-    get tired() { return this.energy < 12; }
-
-    // Custo de uma ação (energia gasta, exposição ganha). Ganhos de exposição dobram com alerta já ligado no distrito.
-    spend(energy, exposure = 0) {
-        this.energy = Math.max(0, this.energy - energy);
-        if (exposure > 0) {
-            const d = this.here;
-            this.exposure = Math.min(100, this.exposure + exposure);
-            if (this.exposure >= 100 && !this.alerts[d]) this._alert(d);
-        }
-        if (this.energy <= 0) this.faint('exaustão');
-    }
+    // ---------------------------------------------------------------- energia e exposição (removidas)
+    // Cansaço e exposição saíram do jogo: as ações continuam chamando spend(), que agora não custa nada.
+    get tired() { return false; }
+    spend() { }
 
     _alert(d) {
         this.alerts[d] = true;
@@ -143,8 +131,7 @@ class Empire {
 
     update(dt) {
         const g = this.g;
-        if (g.mode === 'player' && g.input.isSprinting() && g.player.speed > 5) this.spend(0.25 * dt);
-        if (g.wanted.level === 0 && this.exposure > 0) this.exposure = Math.max(0, this.exposure - 0.02 * dt);
+
         const h = g.dayNight.hour;
         this.biz.update(dt);
         this.influence.update(dt);
@@ -167,7 +154,7 @@ class Empire {
     serialize() { return { energy: this.energy, exposure: this.exposure, alerts: this.alerts, season: this.season, woke: this.wokeAt, biz: this.biz.serialize(), inf: this.influence.serialize(), dom: this.dominion.serialize() }; }
     load(s) {
         if (!s) return;
-        this.energy = typeof s.energy === 'number' ? s.energy : 100; this.exposure = s.exposure || 0; this.alerts = s.alerts || {};
+        this.energy = 100; this.exposure = 0; this.alerts = {};                  // (saves antigos: cansaço/exposição não existem mais)
         this.season = s.season || { idx: 0, day: 0 }; this.wokeAt = typeof s.woke === 'number' ? s.woke : this.now;
         this.biz.load(s.biz); this.influence.load(s.inf); this.dominion.load(s.dom);
     }

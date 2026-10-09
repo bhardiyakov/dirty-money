@@ -352,6 +352,8 @@ const CityGrid = {
         return [l.x1, a, l.x1 + D, b];
     },
 
+    _gymKind() { return this._gk != null ? this._gk : (this._gk = TileFactory.SHOPS.findIndex((s) => s.id === 'academia')); },
+
     // Térreo comercial: nas paredes do prédio voltadas para a calçada, vitrines de 6 u (letreiro, vitrine, porta) com toldo.
     // `lot.shops` = [{ side:'S'|'N'|'W'|'E', a: início ao longo da parede, kind: índice em TileFactory.SHOPS }]. As lojas de
     // alguns tipos viram pontos de interesse no mapa (lanchonete, conveniência, Pay n Pay).
@@ -372,7 +374,10 @@ const CityGrid = {
                 const start = a0 + ((a1 - a0) - n * 6) / 2;
                 for (let k = 0; k < n; k++) {
                     if (rng() > 0.85) continue;
-                    const kind = kinds[Math.floor(rng() * kinds.length)], a = start + k * 6;
+                    let kind = kinds[Math.floor(rng() * kinds.length)];
+                    const a = start + k * 6;
+                    // ACADEMIAS: ~1% das lojas (umas 20 na cidade) (sorteio pela posição — não mexe no rng: o resto da cidade fica igual)
+                    if (block.biome !== 'industrial' && Pixel.hash(Math.round(a * 10), Math.round(lot.z0 * 10) + (side.charCodeAt(0) << 8), 77) < 0.012) kind = this._gymKind();
                     lot.shops.push({ side, a, kind });
                     if ((kind === 0 || kind === 5 || kind === 6 || kind === 10) && block.biome !== 'favela' && rng() < 0.6) {                     // mesas com guarda-sol na calçada (lanchonete, bar, padaria)
                         const m = a + 3, o = 2.7;
@@ -945,7 +950,7 @@ const CityGrid = {
         const count = {};
         for (const b of this.blocks) for (const l of b.lots) for (const s of l.shops || []) {
             const S = TileFactory.SHOPS[s.kind];
-            if (!S.poi || Pixel.hash(Math.round(l.x0), Math.round(l.z0), s.kind + 9) > 0.4) continue;
+            if (!S.poi || (S.poi !== 'academia' && Pixel.hash(Math.round(l.x0), Math.round(l.z0), s.kind + 9) > 0.4)) continue;      // (academias: todas no mapa)
             const x = s.side === 'W' ? l.x0 - 0.5 : (s.side === 'E' ? l.x1 + 0.5 : s.a + 3), z = s.side === 'S' ? l.z0 - 0.5 : (s.side === 'N' ? l.z1 + 0.5 : s.a + 3);
             count[S.id] = (count[S.id] || 0) + 1;
             this.addPoi({ type: S.poi, name: S.name + ' ' + count[S.id], x, z });
