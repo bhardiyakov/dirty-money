@@ -45,10 +45,21 @@ class TrafficCar extends Vehicle {
 
     // Estacionado = desligado, vazio e TRANCADO (roubar exige quebrar o vidro ou arrombar).
     park() {
+        this.clearDeadDriver();
         this.mode = 'parked'; this.route = null;
         this.locked = true; this.driver = false;
         this.alarm = 0; this.hazard = false;
     }
+
+    // Motorista baleado na cabine (Combat._cabinShot): morre ao volante — o carro para (largado, freando) e a BUZINA dispara sem parar
+    // (a cabeça no volante) até alguém tirar o corpo (Game._yankDriver) ou o carro sair de cena (TrafficManager, explosão).
+    killDriver() {
+        if (this.driver === false || this.driverDead || this.controlled) return false;
+        this.driverDead = true; this.driverHp = 0; this.mode = 'abandoned'; this.route = null; this.detour = null;
+        this.horn = AudioFX.hornLoop(this.pitch);
+        return true;
+    }
+    clearDeadDriver() { if (this.horn) { this.horn.stop(); this.horn = null; } this.driverDead = false; this.driverHp = undefined; }
 
     // O jogador largou o carro: fica abandonado no lugar.
     setControlled(v) {
@@ -177,7 +188,7 @@ class TrafficCar extends Vehicle {
                 R.pointAt(u + s, this._pt);
                 if (this.lat !== 0) { const t2 = this._pt2 || (this._pt2 = { x: 0, z: 0 }); R.pointAt(u + s + 0.6, t2); const tx = t2.x - this._pt.x, tz = t2.z - this._pt.z, tl = hypot(tx, tz) || 1; this._pt.x += (-tz / tl) * this.lat; this._pt.z += (tx / tl) * this.lat; }
                 for (const o of near) {
-                    const rad = o.kind === 'car' ? (this.halfW + o.hw) * (this.squeeze || 0.92) : 1.15;      // moto de entrega: passa no corredor entre os carros
+                    const rad = o.kind === 'car' ? (this.halfW + o.hw) * (this.squeeze || 0.92) : (this.impatient ? 0.95 : 1.15);      // moto de entrega: passa no corredor entre os carros (e rente às pessoas)
                     const dx = o.x - this._pt.x, dz = o.z - this._pt.z;
                     if (dx * dx + dz * dz < rad * rad) { hit = o; hitS = s; break; }
                 }
@@ -210,12 +221,17 @@ class TrafficCar extends Vehicle {
 
             // REFLEXO: em velocidade e vendo alguém/algo PARADO à frente que não dá mais para parar a tempo (ou perto demais), desvia
             // para o lado livre em vez de só frear (pedestre: acostamento da direita ou faixa contrária; carro: faixa contrária).
-            if (!this.detour && !this.ignoreSignals && v > 6) {
+            if (!this.detour && !this.ignoreSignals && v > (this.impatient ? 3 : 6)) {
                 const still = isCar ? lead < 1.5 : hypot(hit.vx || 0, hit.vz || 0) < 0.8;
                 const stopD = (v * v) / (2 * T.brake * 0.6) + T.stopGap + 1.5;       // distancia de parada confortavel: se vai ficar curto, prefere desviar a frear em cima
                 if (still && gap < stopD * 1.4 && this._startDetour(hit, env, u, true)) {
                     if (this.honkCd <= 0 && this.honks < 2) { this.honks++; this.honk('freada', { v, gap, kind: hit.kind }); }
                 }
+            }
+            // APRESSADO (entregador): não fica atrás de ninguém mais lento — ultrapassa pela faixa contrária assim que ela está livre,
+            // buzinando para o da frente; pedestre lento no caminho também é contornado sem esperar.
+            if (this.impatient && !this.detour && gap < 14 && lim < this.cruise * 0.8 && (this._ovT = (this._ovT || 0) - dt) <= 0 && ((this._ovT = 0.35), this._startDetour(hit, env, u, true))) {
+                if (this.honkCd <= 0) { this.honks = Math.min(1, this.honks); this.honk('freada', { v, gap, kind: hit.kind }); }
             }
         }
 
@@ -238,11 +254,12 @@ class TrafficCar extends Vehicle {
         const blockedNow = Math.abs(v) < 0.6 && (this.root === 'carro' || this.root === 'pedestre' || this.root === 'saida');
         this.blocked = blockedNow ? this.blocked + dt : Math.max(0, this.blocked - dt * 2);
         this.honkCd -= dt;
-        if (this.blocked > T.honkAfter && this.honkCd <= 0 && this.honks < 2) { this.honks++; this.honk('bloqueio', { v, blocked: this.blocked }); }
-        // Buzinou 2x e continua preso por obstáculo real: manobra e contorna (tenta de novo a cada 0,5 s até haver espaço).
-        if (blockedNow && this.honks >= 2 && !this.detour && hit) {
+        if (this.blocked > (this.impatient ? 0.4 : T.honkAfter) && this.honkCd <= 0 && this.honks < 2) { this.honks++; this.honk('bloqueio', { v, blocked: this.blocked }); }
+        // Buzinou 2x e continua preso por obstáculo real: manobra e contorna (tenta de novo a cada 0,5 s até haver espaço). Apressado: não
+        // espera a segunda buzinada.
+        if (blockedNow && (this.honks >= 2 || this.impatient) && !this.detour && hit) {
             this.waitAfter += dt;
-            if (this.waitAfter > 1.3) { this.waitAfter = 1.3 - 0.5; this._startDetour(hit, env, u, false); }
+            if (this.waitAfter > (this.impatient ? 0.5 : 1.3)) { this.waitAfter = (this.impatient ? 0.5 : 1.3) - 0.5; this._startDetour(hit, env, u, false); }
         } else if (!blockedNow && !this.detour) {
             this.waitAfter = 0;
             if (v > 4) this._freeT = (this._freeT || 0) + dt; else this._freeT = 0;

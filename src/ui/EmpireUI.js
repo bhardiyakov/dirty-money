@@ -1,5 +1,5 @@
 // ============================================================================
-// EmpireUI — a aba IMPÉRIO do menu de pausa (tecla O → aba ao lado) e as barras de ENERGIA/EXPOSIÇÃO no HUD.
+// EmpireUI — a aba IMPÉRIO do menu de pausa (tecla O → aba ao lado) e o cartão de distrito/estação no HUD.
 // Seções: dia e estação · negócios (galpões, soldados, cofre, fachadas) · malha de influência (contatos, presentes, missões) ·
 // domínio dos distritos. Cliques: data-emp="ação" data-arg="…"; selects de alocação: data-soldier.
 // ============================================================================
@@ -35,7 +35,7 @@ class EmpireUI {
         document.head.appendChild(st);
     }
 
-    // ---------------------------------------------------------------- HUD (barras)
+    // ---------------------------------------------------------------- HUD (distrito e estação)
     static hud(g) {
         const e = g.empire, root = document.getElementById('hud2');
         if (!e || !root) return;
@@ -44,19 +44,15 @@ class EmpireUI {
         if (!p) {
             p = EmpireUI._panel = document.createElement('div');
             p.className = 'px emp-panel';
-            p.innerHTML = '<div class="r"><span>⚡</span><i><s id="empEn"></s></i></div><div class="r"><span>🔥</span><i><s id="empEx"></s></i></div><div class="d" id="empD"></div>';
+            p.innerHTML = '<div class="d" id="empD"></div>';
             root.appendChild(p);
         }
         EmpireUI._t = (EmpireUI._t || 0) + 1;
         if (EmpireUI._t % 6) return;                                     // ~5× por segundo basta
-        const d = e.here, en = Math.round(e.energy), ex = Math.round(e.exposure);
-        const key = en + '|' + ex + '|' + d + '|' + !!e.alerts[d] + '|' + e.seasonId;
+        const d = e.here, key = d + '|' + e.seasonId + '|' + e.seasonLeft;
         if (key === EmpireUI._key) return;
         EmpireUI._key = key;
-        const enEl = document.getElementById('empEn'), exEl = document.getElementById('empEx');
-        enEl.style.width = en + '%'; enEl.style.background = en < 12 ? '#f43f5e' : 'linear-gradient(90deg,#fbbf24,#34d399)';
-        exEl.style.width = ex + '%'; exEl.style.background = ex >= 100 ? '#f43f5e' : 'linear-gradient(90deg,#fb923c,#f43f5e)';
-        document.getElementById('empD').innerHTML = `<span>${e.dName(d)}${e.alerts[d] ? ' · <b>alerta tático</b>' : ''}</span><span>${e.seasonDef.name} · ${e.seasonLeft}d</span>`;
+        document.getElementById('empD').innerHTML = `<span>${e.dName(d)}</span><span>${e.seasonDef.name} · ${e.seasonLeft}d</span>`;
     }
 
     // ---------------------------------------------------------------- aba
@@ -114,10 +110,8 @@ class EmpireUI {
         if (this.extortD === undefined) this.extortD = def;
         if (this.razeD === undefined) this.razeD = def;
 
-        let h = `<div class="cr-box"><h3>DIA ${Economy.day} · ${g.dayNight.label} · ${e.dName(here)}${e.alerts[here] ? ' <small style="color:#ff5a4d">ALERTA TÁTICO</small>' : ''}</h3>
-            <div class="em-grid"><div>${row('⚡ Energia', Math.round(e.energy))}${bar(e.energy, 'linear-gradient(90deg,#ffd23a,#5ac07a)')}${row('🔥 Exposição', Math.round(e.exposure))}${bar(e.exposure, 'linear-gradient(90deg,#ff9a3a,#ff3a8a)')}
-            <p class="cr-dim">Ações gastam energia e esquentam a exposição. Exposição cheia = alerta tático no distrito. Energia zerada = desmaio (perde o sujo da mochila). Dormir zera tudo.</p></div>
-            <div><b style="color:#ffd23a">ESTAÇÃO: ${S.name.toUpperCase()}</b> <small style="color:#8fb4ff">faltam ${e.seasonLeft} dia(s)</small><p class="cr-dim">${S.desc}</p><p class="cr-dim">Depois: <b style="color:#e8edf8">${e.nextSeason.name}</b> — ${e.nextSeason.desc}</p></div></div></div>`;
+        let h = `<div class="cr-box"><h3>DIA ${Economy.day} · ${g.dayNight.label} · ${e.dName(here)}</h3>
+            <div class="em-grid"><div><b style="color:#ffd23a">ESTAÇÃO: ${S.name.toUpperCase()}</b> <small style="color:#8fb4ff">faltam ${e.seasonLeft} dia(s)</small><p class="cr-dim">${S.desc}</p><p class="cr-dim">Depois: <b style="color:#e8edf8">${e.nextSeason.name}</b> — ${e.nextSeason.desc}</p></div></div></div>`;
 
         // negócios
         h += `<div class="em-grid"><div class="cr-box"><h3>NEGÓCIOS <small>automação</small></h3>

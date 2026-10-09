@@ -11,14 +11,16 @@ function NpcGenTypes(G) {
     const { fullSpec } = G;
     const FALLS = ['flail:none', 'lie:none', 'getup:none', 'tumble:none'];
     const BASE = ['idle:none', 'walk:none', 'run:none', 'walk_up:none', 'climb:none', 'hurt:none', 'dead:none', 'swim:none', 'swim_idle:none', ...FALLS,
-        'dive_in:none', 'dive:none', 'dive_out:none'];                     // mergulho (banhistas)
+        'dive_in:none', 'dive:none', 'dive_out:none',                      // mergulho (banhistas)
+        'swim_breast:none', 'wade:none', 'wade_idle:none'];                // nado peito na superfície; vadeando com a água acima da cintura
     // Pilotando (16 direções): moto, bicicleta, jet ski e lancha — civis (trânsito, mototáxi, barcos), o entregador e o jogador.
     const RIDE = ['ride_moto:none', 'ride_bike:none', 'ride_jetski:none', 'ride_boat:none'];
     const CIV0 = [...BASE, 'scared:none', 'surrender:none', 'kneel:none', 'punch:none', 'punchL:none', 'kick:none', 'opendoor:none', 'enter:none'];
     const CIV = [...CIV0, ...RIDE];
     const armed = (w) => [`idle:${w}`, `walk:${w}`, `run:${w}`, `draw:${w}`, `aim:${w}`, `shoot:${w}`];
     const FORCE = (w) => [...BASE, 'vault:none', 'punch:none', 'kick:none', 'opendoor:none', 'enter:none', 'surrender:none', 'kneel:none', ...armed(w)];
-    const GANG = (ws) => [...CIV0, 'vault:none', ...ws.flatMap((w) => [...armed(w), `holdup:${w}`])];
+    const KNIFE = ['idle:knife', 'walk:knife', 'run:knife', 'stab:knife'];          // faca na mão e a facada
+    const GANG = (ws) => [...CIV0, 'vault:none', ...ws.flatMap((w) => [...armed(w), `holdup:${w}`]), ...KNIFE, 'holdup:knife'];
     // Clipes do jogador (Bags.PLAYER_CLIPS + os novos). Os de carregar bolsa na mão saem só quando o jogador tem uma.
     const PLAYER = [
         'idle:none', 'walk:none', 'run:none', 'walk_up:none', 'climb:none',
@@ -31,11 +33,18 @@ function NpcGenTypes(G) {
     // Clipes TÁTICOS do jogador (agachado/cobertura e andar agachado, com e sem arma; passo lateral mirando; rolamento de esquiva).
     // Ficam num atlas COMPANHEIRO (protagonista_tatico; nos visuais gerados, "hero:N:t"): o atlas principal em alta definição já
     // ocupa quase todo o espaço endereçável (4096 × 4096) — ver NpcSheet.extraAtlas.
+    const GYM = ['gym_curl', 'gym_bench', 'gym_squat'].flatMap((c) => ['w1', 'w2', 'w3'].map((w) => `${c}:${w}`));
     const PLAYER_TAC = [
         ...['none', 'pistol', 'smg', 'shotgun'].flatMap((w) => [`crouch:${w}`, `sneak:${w}`]),
         ...['pistol', 'smg', 'shotgun'].map((w) => `strafe:${w}`), 'roll:none',
-        'sitin:L', 'sitin:R',                                            // sentar no carro (pela porta da esquerda / da direita)
+        'sitin:L', 'sitin:R', 'sitout:L', 'sitout:R',                    // sentar no carro / sair dele (pela porta da esquerda / da direita)
+        ...KNIFE, 'holdup:knife',
         'swim_in:none', 'swim_out:none', 'dive_in:none', 'dive:none', 'dive_out:none',      // começar/parar de nadar, mergulho
+        'run_heavy:none', 'idle_heavy:none',                             // o fardo da sobrecarga também correndo e parado (o andar fica no principal)
+        'swim_breast:none', 'wade:none', 'wade_idle:none',               // nado peito na superfície; vadeando com a água acima da cintura
+        ...GYM,                                                          // academia: rosca direta, supino, agachamento (3 faixas de peso)
+        'grenade_pin:none', 'grenade_hold:none', 'grenade_throw:none',   // granada: puxar o pino, mirar, arremessar (Throwables)
+        'molotov_light:none', 'molotov_hold:none', 'molotov_throw:none', // molotov: acender, mirar, arremessar
     ];
     const PLAYER_HAND = ['idle_hold:none', 'walk_hold:none', 'run_hold:none', 'idle_hold:pistol', 'walk_hold:pistol', 'run_hold:pistol'];
     const PLAYER_PULL = ['idle_pull:none', 'walk_pull:none'];
@@ -99,6 +108,9 @@ function NpcGenTypes(G) {
         trafic_mascarado: T('gang', 8, ['gang1', 'gang3'], GANG(['pistol', 'shotgun']), { shotgun: 'rifle_ak' }),
         protagonista: T(null, 1, ['player'], [...PLAYER, 'walk_heavy:none']),
         protagonista_tatico: T(null, 1, [], PLAYER_TAC),             // (companheiro do protagonista: nenhum lugar sorteia este tipo)
+        // frequentadores da academia (Interiors: só dentro das academias — nenhum lugar da rua sorteia estes tipos)
+        academia_m: T('civil', 8, ['gym'], ['idle:none', 'walk:none', ...GYM]),
+        academia_f: T('civil', 8, ['gym'], ['idle:none', 'walk:none', ...GYM]),
     };
 
     // O jogador no começo do jogo (a roupa de sempre do Outfit). Só os campos de FORMA importam para o atlas pronto; as cores vêm
@@ -106,7 +118,7 @@ function NpcGenTypes(G) {
     const PLAYER_DEFAULT = {
         id: 'protagonista', label: 'Protagonista', group: 'Protagonista', skin: 'pele_pessego', hair: 'spiky', hair_color: 'castanho', eyes: 'angry',
         top: 'jacket', top_color: 'laranja', pattern: null, bottom: 'jeans', bottom_color: 'jeans_escuro', shoes: 'sneaker', shoe_color: 'tenis_branco',
-        sole_color: 'tenis_branco', lace_color: 'cadarco', head: null, hat_color: 'roupa_preta', bag: null, body: 'muscular', gender: 'm',
+        sole_color: 'tenis_branco', lace_color: 'cadarco', head: null, hat_color: 'roupa_preta', bag: null, body: 'normal', gender: 'm',
     };
     G.BY_ID.protagonista = PLAYER_DEFAULT;
     G.BY_ID.protagonista_tatico = PLAYER_DEFAULT;

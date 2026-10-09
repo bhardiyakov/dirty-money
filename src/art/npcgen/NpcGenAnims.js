@@ -636,6 +636,56 @@ function NpcGenAnims(G) {
         }
         return out;
     }
+    // ---- FACA (jogador e quem a usa): na mão direita, lâmina para a frente do punho (a direção do polegar). Parado/andando/correndo =
+    // os clipes sem arma com a mão direita baixa à frente do quadril; golpe = estocada (recua, avança o corpo e a lâmina, volta);
+    // anunciar o assalto = braço esticado com a lâmina apontada para a vítima.
+    function knifeInHand(p) {
+        const B = p.bones(), hR = B.hand_R.R;
+        placeProp(p, 'knife', p.fist_world(B, 'R'), mv3(hR, [0, 1, 0]), mv3(hR, [0, 0, 1]));
+    }
+    function knifeIdle() {
+        return idle().map((p, i) => { const c = chestOrg(p), s = sin(TAU * i / 6); p.arm_ik('R', V.add(c, [11.0, 8.0, -2.5 + 0.4 * s]), [1.0, -0.4, -0.7]); knifeInHand(p); return p; });
+    }
+    function knifeWalk() {
+        return walk().map((p, i) => { const c = chestOrg(p), s = sin(TAU * i / 8); p.arm_ik('R', V.add(c, [11.0, 7.5 + 2.5 * s, -3.0]), [1.0, -0.4, -0.7]); knifeInHand(p); return p; });
+    }
+    function knifeRun() {
+        return run().map((p, i) => { const c = chestOrg(p), s = sin(TAU * i / 8); p.arm_ik('R', V.add(c, [9.0, 8.0 + 4.0 * s, 1.0]), [1.0, -0.5, -0.6]); knifeInHand(p); return p; });
+    }
+    function knifeStab() {
+        // [giro do peito, mão (relativa ao peito), direção da lâmina, inclinação, passo]
+        const seq = [[-8, [9.0, 4.0, -1.0], [0.1, 1.0, 0.25], 0, 0], [-22, [11.5, -4.0, 0.5], [0.15, 1.0, 0.3], -4, 0], [-6, [7.5, 12.0, 3.0], [0.0, 1.0, 0.1], 8, 3],
+            [6, [3.0, 23.0, 5.0], [-0.05, 1.0, 0.05], 16, 6], [8, [2.5, 24.5, 5.0], [-0.05, 1.0, 0.05], 18, 6], [-4, [7.0, 13.0, 2.0], [0.05, 1.0, 0.2], 8, 3], [-8, [9.0, 4.5, -1.0], [0.1, 1.0, 0.25], 0, 0]];
+        return seq.map(([cy, off, bd, lean, step], i) => {
+            const p = base();
+            fightStance(p, 2.0);
+            if (step) placeFoot(p, 'L', [-11.0, 4.0 + step, 0], 14);
+            p.chest_R = mm3(Rz(deg(cy)), Rx(deg(lean)));
+            p.head_R = mm3(Rz(deg(-cy * 0.5)), Rx(deg(HEAD_TILT - 4 - lean * 0.4)));
+            const c = chestOrg(p), grip = V.add(c, off), d = nrm(bd);
+            placeProp(p, 'knife', grip, d);
+            p.arm_ik('R', grip, [1.0, -0.4, -0.8]);
+            p.arm_ik('L', V.add(c, [-8.5, 8.0, 7.0]), [-1.0, -0.3, -0.9]);
+            if (i === 3) p.effects.push({ type: 'trail', pts: [0, 0.25, 0.5, 0.75, 1].map((s) => V.add(V.add(c, V.lerp(seq[2][1], off, s)), V.mul(d, 9.0))) });
+            return p;
+        });
+    }
+    function knifeHoldup(n = 4) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, s = sin(TAU * t), p = base();
+            p.pelvis_t = [0, 1.0, -1.4];
+            standLegs(p, 12.0, [-2.0, 4.0]);
+            p.chest_R = Rz(deg(-10));
+            p.head_R = mm3(Rz(deg(-6 + 4 * s)), Rx(deg(HEAD_TILT - 6)));
+            const c = chestOrg(p), grip = V.add(c, [5.0, 19.0 + 1.5 * s, 6.0 + 0.6 * s]);
+            placeProp(p, 'knife', grip, nrm([-0.1, 1.0, 0.12]));
+            p.arm_ik('R', grip, [1.0, -0.4, -0.8]);
+            p.arm_ik('L', V.add(c, [-8.0, 20.0 + 2 * s, 8.0 + 3 * s]), [-1.0, -0.3, -0.8]);
+            out.push(p);
+        }
+        return out;
+    }
     // Golpe de taco (duas mãos) ou de cassetete (prop = 'baton': uma mão, a outra na guarda).
     function batSwing(prop = 'bat') {
         const seq = [[-28, [11.0, 2.0, 12.0], [0.30, -0.45, 0.85], -8], [-48, [12.0, -3.0, 13.0], [0.25, -0.85, 0.45], -14], [-12, [12.0, 9.0, 8.0], [0.95, 0.25, 0.15], -4],
@@ -683,6 +733,177 @@ function NpcGenAnims(G) {
             } else if (gren === 'fly') p.props.push(['grenade', M4(Rx(deg(40)), V.add(c, [2.0, 38.0, 22.0])), 'chest']);
             return p;
         });
+    }
+
+    // ------------------------------------------------------------------ GRANADA e MOLOTOV (Throwables): pegar/preparar → segurar
+    // mirando (enquanto a força carrega) → arremessar. Todos na mesma base: pé direito atrás, esquerdo à frente, tronco girando.
+    // Pose de arremesso: giro (cy) e inclinação (cp) do tronco, alvos das mãos (rf, lf) em relação ao peito.
+    function throwPose(p, cy, cp, rf, lf, step = 0) {
+        placeFoot(p, 'R', [10.5, -3.0, 0], -18);
+        placeFoot(p, 'L', [-9.5, 3.0 + step, 0], 6);
+        p.pelvis_t = [0, step * 0.4, -1.8];
+        p.pelvis_R = Rz(deg(cy * 0.35));
+        p.chest_R = mm3(Rz(deg(cy * 0.65)), Rx(deg(cp)));
+        p.head_R = mm3(Rz(deg(-cy * 0.5)), Rx(deg(HEAD_TILT - cp * 0.6)));
+        const c = chestOrg(p);
+        p.arm_ik('R', V.add(c, rf), [1.0, -0.2, -0.6]);
+        p.arm_ik('L', V.add(c, lf), [-1.0, -0.2, -0.8]);
+        return c;
+    }
+    const HOLD = { cy: -38, cp: 10, rf: [15.0, -11.0, 24.0], lf: [-6.0, 20.0, 14.0] };      // braço armado atrás, o esquerdo apontando o alvo
+    function grenadeInHand(p) {
+        const B = p.bones(), fist = p.fist_world(B, 'R'), hR = B.hand_R.R;
+        p.props.push(['grenade', M4(hR, V.add(fist, mv3(hR, [0, 3.4, -0.5])))]);
+    }
+    // Garrafa na mão direita; `fwd` = para onde aponta o gargalo. Devolve o ponto do pano (onde fica o fogo).
+    function molotovInHand(p, fwd) {
+        const B = p.bones(), fist = p.fist_world(B, 'R');
+        const Mp = placeProp(p, 'molotov', fist, nrm(fwd), Math.abs(fwd[2]) > 0.9 ? [0, 1, 0] : [0, 0, 1]);
+        return propPt(Mp, [0, 12.6, 0]);
+    }
+    function ragFire(p, pos, i, k = 1) {                                     // fogo no pano: língua (clarão para cima) que tremula
+        p.effects.push({ type: 'flash', pos, dir: [0.15 * sin(i * 2.1), -0.25, 1.0], size: (0.6 + 0.18 * abs(sin(i * 1.7))) * k, variant: i % 2 });
+    }
+    // Pegar a granada e PUXAR O PINO: traz a granada ao peito, a mão esquerda engancha o anel e puxa para fora (o pino sai junto) e
+    // larga; o corpo já gira para a posição de arremesso (termina no 1º quadro do grenade_hold).
+    function grenadePin(n = 10) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const s = i / (n - 1), p = base();
+            const cy = keys([[0, -2], [0.55, -10], [1, HOLD.cy]], s), cp = keys([[0, -4], [0.55, -2], [1, HOLD.cp]], s);
+            const rf = keysN([[0, [6.0, 12.0, 12.0]], [0.55, [6.0, 13.0, 14.0]], [1, HOLD.rf]], s);
+            const lf = keysN([[0, [-6.0, 11.0, 8.0]], [0.3, [3.5, 13.5, 18.0]], [0.42, [3.5, 13.5, 18.0]], [0.68, [-17.0, 10.0, 16.0]], [1, HOLD.lf]], s);
+            throwPose(p, cy, cp, rf, lf);
+            grenadeInHand(p);
+            if (s >= 0.34 && s <= 0.85) {                                   // o pino na mão esquerda (depois é largado)
+                const B = p.bones(), fl = p.fist_world(B, 'L');
+                p.props.push(['pin', M4(Rx(deg(90 * s)), V.add(fl, [0.8, 0.8, 1.0]))]);
+            }
+            out.push(p);
+        }
+        return out;
+    }
+    // Segurando (granada armada / molotov aceso) enquanto mira e carrega a força: o braço vai um pouco mais para trás e volta,
+    // respirando — o esquerdo aponta o alvo.
+    function holdLoop(n, prop) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, s_ = sin(TAU * t), c = cos(TAU * t), p = base();
+            throwPose(p, HOLD.cy - 2 * s_, HOLD.cp + 1.2 * c, V.add(HOLD.rf, [0.4 * s_, -0.8 * s_, 0.6 * c]), V.add(HOLD.lf, [0, 0.6 * c, 0.5 * s_]));
+            if (prop === 'grenade') grenadeInHand(p);
+            else ragFire(p, molotovInHand(p, [0.1, -0.55, 0.85]), i);
+            out.push(p);
+        }
+        return out;
+    }
+    // ACENDER O MOLOTOV: garrafa em pé na frente do peito, o isqueiro sobe até o pano, acende (chama pequena do isqueiro → o pano
+    // pega fogo e cresce) e o corpo gira para a posição de arremesso (termina no 1º quadro do molotov_hold).
+    function molotovLight(n = 12) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const s = i / (n - 1), p = base();
+            const cy = keys([[0, -4], [0.7, -8], [1, HOLD.cy]], s), cp = keys([[0, -2], [0.7, 0], [1, HOLD.cp]], s);
+            const rf = keysN([[0, [7.0, 12.0, 9.0]], [0.7, [7.0, 12.5, 10.0]], [1, HOLD.rf]], s);
+            throwPose(p, cy, cp, rf, HOLD.lf);                               // (a mão esquerda é refeita abaixo, depois da garrafa)
+            const fwd = keysN([[0, [0.0, 0.15, 1.0]], [0.7, [0.0, 0.2, 1.0]], [1, [0.1, -0.55, 0.85]]], s);
+            const rag = molotovInHand(p, fwd);
+            const c = chestOrg(p), lit = rag.slice();
+            const lf = keysN([[0, [-8.0, 9.0, 4.0]], [0.28, V.sub(V.add(lit, [-1.2, 0.6, -3.2]), c)], [0.62, V.sub(V.add(lit, [-1.2, 0.6, -3.2]), c)], [0.82, [-10.0, 10.0, 8.0]], [1, HOLD.lf]], s);
+            p.arm_ik('L', V.add(c, lf), [-1.0, -0.2, -0.8]);
+            if (s < 0.85) { const B = p.bones(), fl = p.fist_world(B, 'L'); placeProp(p, 'lighter', V.add(fl, [0, 0.3, 0.6]), [0, 1, 0]); }
+            if (s >= 0.3 && s <= 0.62) p.effects.push({ type: 'flash', pos: V.add(rag, [-0.9, 0.4, -1.2]), dir: [0, 0, 1], size: 0.22, variant: i % 2 });   // chama do isqueiro
+            if (s >= 0.45) ragFire(p, rag, i, keys([[0.45, 0.45], [0.7, 1.0], [1, 1.0]], s));                                                         // o pano pegando fogo
+            out.push(p);
+        }
+        return out;
+    }
+    // ARREMESSO (granada ou molotov): do braço armado, o tronco gira, o braço passa por cima do ombro e solta à frente (o objeto
+    // sai voando no 3º quadro — o jogo cria o projétil nesse instante: Throwables.RELEASE) e acompanha o movimento até voltar.
+    function throwRelease(prop) {
+        const seq = [[HOLD.cy, HOLD.cp, HOLD.rf, HOLD.lf, 'hand', 0], [-10, 4, [13.0, 0.0, 28.0], [-10.0, 12.0, 9.0], 'hand', 3],
+            [18, -8, [7.0, 18.0, 22.0], [-12.0, 5.0, 5.0], 'fly', 5], [32, -12, [2.0, 22.0, 12.0], [-13.0, 1.0, 4.0], null, 6],
+            [34, -10, [-4.0, 16.0, 0.0], [-13.0, 0.0, 4.0], null, 6], [16, -6, [5.0, 10.0, -2.0], [-11.0, 3.0, 2.0], null, 3], [4, -3, [9.0, 5.0, -4.0], [-10.0, 4.0, 0.0], null, 0]];
+        return seq.map(([cy, cp, rf, lf, held, step], i) => {
+            const p = base();
+            const c = throwPose(p, cy, cp, rf, lf, step);
+            if (held === 'hand') { if (prop === 'grenade') grenadeInHand(p); else ragFire(p, molotovInHand(p, i === 0 ? [0.1, -0.55, 0.85] : [0.2, 0.3, 0.9]), i); }
+            else if (held === 'fly') {
+                const at = V.add(c, [3.0, 36.0, 26.0]);
+                if (prop === 'grenade') p.props.push(['grenade', M4(Rx(deg(40)), at), 'chest']);
+                else { const Mp = placeProp(p, 'molotov', at, nrm([0.1, 0.8, 0.5])); ragFire(p, propPt(Mp, [0, 12.6, 0]), i); }
+            }
+            return p;
+        });
+    }
+
+    // ------------------------------------------------------------------ ACADEMIA (minigames/Gym.js): cada clipe é UMA repetição
+    // (0 = posição inicial, meio = o ponto de esforço, fim = de volta). O jogador controla o quadro pelo mini-game; os frequentadores
+    // repetem em loop. A "arma" do clipe é a faixa de peso (w1 leve · w2 médio · w3 pesado): muda as anilhas desenhadas.
+    const gymTier = (w) => (w === 'w2' || w === 'w3' ? w : 'w1');
+    // Barra entre as duas mãos (ao longo da linha dos punhos).
+    function barInHands(p, prop) {
+        const B = p.bones(), fR = p.fist_world(B, 'R'), fL = p.fist_world(B, 'L');
+        const c = V.mul(V.add(fR, fL), 0.5), x = nrm(V.sub(fR, fL)), z0 = [0, 0, 1];
+        const y = nrm(V.cross(z0, x)), z = V.cross(x, y);
+        p.props.push([prop, M4(G.fromCols(x, y, z), c)]);
+        return c;
+    }
+    // Rosca direta: de pé, barra curta com pegada por baixo; os cotovelos colados no corpo dobram até a barra chegar ao peito e descem
+    // devagar (a descida é mais lenta que a subida). No topo, o tronco "rouba" um pouco para trás.
+    function gymCurl(w, n = 12) {
+        const out = [], tier = gymTier(w);
+        for (let i = 0; i < n; i++) {
+            const t = i / n, u = t < 0.42 ? ease(t / 0.42) : 1 - ease((t - 0.42) / 0.58);       // sobe em 42% do ciclo, desce no resto
+            const p = base();
+            p.pelvis_t = [0, 0, -0.4];
+            standLegs(p, 13.6, [0.6, 0.6]);
+            p.chest_R = Rx(deg(-2 - 5 * u));
+            p.head_R = Rx(deg(HEAD_TILT - 3 * u));
+            for (const sd of ['R', 'L']) p.arm_fk(sd, { flex: 4 + 18 * u, abd: 9, elbow: 12 + 128 * u, twist: 90 });
+            barInHands(p, 'curlbar_' + tier);
+            out.push(p);
+        }
+        return out;
+    }
+    // Supino: deitado no banco (cabeça para +y, junto ao suporte), pés no chão dos lados; a barra desce até o peito e sobe até os
+    // braços esticarem. A barra é colocada pelas mãos (o banco e o suporte vêm no clipe).
+    function gymBench(w, n = 12) {
+        const out = [], tier = gymTier(w), BH = 22.0;                         // altura do estofado (unidades do pacote)
+        for (let i = 0; i < n; i++) {
+            const t = i / n, u = t < 0.5 ? 1 - ease(t / 0.5) : ease((t - 0.5) / 0.5);           // 1 = braços esticados (começa lá em cima)
+            const p = base();
+            p.pelvis_t = [0, -14.0, BH + 3.5 - SKEL.pelvis[1][2]];
+            p.pelvis_R = Rx(deg(-90));
+            p.chest_R = Rx(deg(4));
+            p.head_R = Rx(deg(-6 - 4 * (1 - u)));
+            for (const [sd, s] of [['R', 1], ['L', -1]]) placeFoot(p, sd, [s * 15.0, -34.0, 0], s * 10, 0, [s * 0.5, -0.2, 1.0]);
+            const co = chestOrg(p);
+            for (const [sd, s] of [['R', 1], ['L', -1]]) p.arm_ik(sd, V.add(co, [s * 15.0, 9.0, 8.0 + 24.0 * u]), [s * 1.0, -0.4, -0.3]);
+            barInHands(p, 'barbell_' + tier);
+            p.props.push(['gym_bench', M4(I3(), [0, co[1] - 4.0, 0])]);
+            out.push(p);
+        }
+        return out;
+    }
+    // Agachamento: barra nas costas (sobre o trapézio), pegada larga; desce até as coxas ficarem paralelas ao chão, o tronco inclina
+    // para a frente na descida e sobe empurrando. A gaiola fica em volta (os postes dos lados).
+    function gymSquat(w, n = 12) {
+        const out = [], tier = gymTier(w);
+        for (let i = 0; i < n; i++) {
+            const t = i / n, u = t < 0.55 ? ease(t / 0.55) : 1 - ease((t - 0.55) / 0.45);       // 0 = de pé, 1 = embaixo (desce devagar)
+            const p = base();
+            p.pelvis_t = [0, -6.0 * u, -0.5 - 15.5 * u];
+            standLegs(p, 15.0, [1.5, 1.5], 22);
+            p.pelvis_R = Rx(deg(14 * u));
+            p.chest_R = Rx(deg(22 * u));
+            p.head_R = Rx(deg(HEAD_TILT - 20 * u));
+            const co = chestOrg(p);
+            for (const [sd, s] of [['R', 1], ['L', -1]]) p.arm_ik(sd, V.add(co, mv3(Rx(deg(36 * u)), [s * 21.0, -4.5, 20.5])), [s * 1.0, -0.2, -1.0]);
+            barInHands(p, 'barbell_' + tier);
+            p.props.push(['gym_rack', M4(I3(), [0, 0, 0])]);
+            out.push(p);
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ reações
@@ -1263,11 +1484,45 @@ function NpcGenAnims(G) {
             p.pelvis_R = Rz(deg(4 * c));
             p.chest_R = mm3(Rz(deg(-5 * c)), Rx(deg(20)));
             p.head_R = mm3(Rz(deg(3 * c)), Rx(deg(HEAD_TILT + 4)));
-            const co = chestOrg(p);
-            p.arm_ik('R', V.add(co, [11.0, 6.0, 20.0]), [1.0, -0.3, -1.0]);
-            p.arm_ik('L', V.add(co, [-11.0, 6.0, 20.0]), [-1.0, -0.3, -1.0]);
-            const B = p.bones();
-            p.props.push(['sack', mm4(B.chest, M4(Rx(deg(-10)), [0, -16.0, 16.0])), 'chest']);
+            heavyLoad(p);
+            out.push(p);
+        }
+        return out;
+    }
+    // O fardo nas costas e as mãos nas alças (o mesmo em parado/andando/correndo: a carga nunca some). bob: as mãos sacodem.
+    function heavyLoad(p, bob = 0) {
+        const co = chestOrg(p);
+        p.arm_ik('R', V.add(co, [11.0, 6.0, 20.0 + bob]), [1.0, -0.3, -1.0]);
+        p.arm_ik('L', V.add(co, [-11.0, 6.0, 20.0 - bob]), [-1.0, -0.3, -1.0]);
+        const B = p.bones();
+        p.props.push(['sack', mm4(B.chest, M4(Rx(deg(-10)), [0, -16.0, 16.0])), 'chest']);
+    }
+    // NOVO: correndo com o fardo — as pernas da corrida (passada um pouco mais curta e mais baixa), tronco bem curvado para
+    // a frente segurando as alças; o fardo pula a cada passada.
+    function runHeavy(n = 8) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, c = cos(TAU * t), p = base();
+            p.pelvis_t = [0, 1.0, (G.ADULT ? -5.2 : -3.8) - 1.3 * cos(2 * TAU * (t - 0.17))];
+            p.pelvis_R = Rz(deg(6 * c));
+            gait(p, t, { stride: 9.6, lift: 4.0, width: 9.2, stance: 0.4, heel: 6, toeoff: -32, kick: 5.0 });
+            p.chest_R = mm3(Rz(deg(-7 * c)), Rx(deg(26)));
+            p.head_R = mm3(Rz(deg(4 * c)), Rx(deg(HEAD_TILT - 6)));
+            heavyLoad(p, 1.2 * sin(2 * TAU * t));
+            out.push(p);
+        }
+        return out;
+    }
+    // NOVO: parado com o fardo — curvado, respirando pesado.
+    function idleHeavy(n = 6) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, b = sin(TAU * t), p = base();
+            p.pelvis_t = [0, 0, -1.4 + 0.5 * cos(TAU * t)];
+            standLegs(p);
+            p.chest_R = Rx(deg(16 + 2.5 * b));
+            p.head_R = Rx(deg(HEAD_TILT + 2 - 1.5 * b));
+            heavyLoad(p);
             out.push(p);
         }
         return out;
@@ -1323,6 +1578,73 @@ function NpcGenAnims(G) {
         return out;
     }
 
+    // NADO PEITO NA SUPERFÍCIE (o nado normal; o crawl é o nado com Shift): o corpo do "parado na água" (swimIdle) inclinado para a
+    // frente, a cabeça sempre fora d'água. Ciclo: puxada (as mãos abrem e descem, o corpo sobe e respira) → recolhe as mãos ao peito e
+    // dobra as pernas → as mãos disparam à frente com a pernada de sapo → desliza. Chaves com ease (sem trancos) e 12 quadros.
+    function swimBreast(n = 12) {
+        const out = [];
+        // braços: alvo da mão (x lateral, y frente, z altura em relação à água)
+        const AK = [[0, [5, 30, -2.5]], [0.22, [22, 25, -3.5]], [0.42, [17, 13, -9]], [0.56, [6, 10, -4]], [0.74, [5, 30, -2.5]], [1, [5, 30, -2.5]]];
+        // pernas: [flex, abd, joelho, pé]
+        const LK = [[0, [4, 6, 8, -40]], [0.42, [10, 10, 30, -30]], [0.6, [46, 30, 112, 12]], [0.76, [14, 36, 24, -24]], [0.9, [4, 6, 8, -40]], [1, [4, 6, 8, -40]]];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, p = base();
+            p.water = 0.0;
+            const rise = keys([[0, 0], [0.4, 1], [0.6, 0.6], [0.8, -0.4], [1, 0]], t);      // sobe na puxada, afunda de leve no deslize
+            const lean = 34 - 10 * rise;
+            p.pelvis_t = [0, -7.0 - 3 * (1 - rise), -41.0 + 2.6 * rise];
+            p.pelvis_R = Rx(deg(-lean));
+            p.chest_R = Rx(deg(-6 + 4 * rise));
+            p.head_R = Rx(deg(HEAD_TILT + 4 + lean * 0.75 - 3 * rise));
+            const a = keysN(AK, t), l = keysN(LK, t);
+            for (const [sd, sg] of [['R', 1], ['L', -1]]) {
+                p.arm_ik(sd, [sg * a[0], a[1], a[2]], [sg * 1.0, -0.2, -0.6]);
+                p.leg_fk(sd, { flex: l[0], abd: l[1], knee: l[2], foot: l[3] });
+            }
+            const fr = t;                                                                   // marola em volta do peito
+            p.effects.push({ type: 'ring', pos: [0, 6.0, 0], r: 15 + 14 * fr, alpha: Math.trunc(170 * (1 - fr) + 30), gaps: 8, phase: fr });
+            if (t > 0.6 && t < 0.8) { const B = p.bones(); for (const sd of ['R', 'L']) { const f = p.fist_world(B, sd); p.effects.push({ type: 'splash', pos: [f[0], f[1], 0.0], n: 5, spread: 2.2, seed: 120 + i + (sd === 'R' ? 1 : 0) }); } }
+            out.push(p);
+        }
+        return out;
+    }
+    // VADEANDO NO FUNDO (água acima da metade do corpo): o andar fica pesado — passada curta, tronco à frente, e os braços abertos
+    // na altura da água vão PUXANDO a água para trás, alternados com as pernas (como quem anda numa piscina funda).
+    function wadeDeep(n = 10) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, c = cos(TAU * t), p = base();
+            p.pelvis_t = [0, 0.6, -2.2 - 0.7 * cos(2 * TAU * t)];
+            gait(p, t, { stride: 5.4, lift: 2.4, width: 10.2 });
+            p.pelvis_R = Rz(deg(4 * c));
+            p.chest_R = mm3(Rz(deg(-10 * c)), Rx(deg(12)));
+            p.head_R = mm3(Rz(deg(5 * c)), Rx(deg(HEAD_TILT - 6)));
+            const co = chestOrg(p);
+            for (const [sd, sg, ph] of [['R', 1, 0], ['L', -1, PI]]) {
+                const u = cos(TAU * t + ph), w = sin(TAU * t + ph);            // u > 0: mão à frente (entrando); depois puxa para trás
+                p.arm_ik(sd, V.add(co, [sg * (27 - 4 * u), 4 + 15 * u, 5 - 2 * max(0, -w)]), [sg * 0.6, -1.0, -0.4]);
+            }
+            out.push(p);
+        }
+        return out;
+    }
+    // PARADO NO FUNDO: de pé com a água no peito/cintura, os braços abertos na superfície fazendo o "sculling" (vai e vem) para se
+    // equilibrar, o corpo balançando com a água.
+    function wadeIdle(n = 8) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, c = cos(TAU * t), s_ = sin(TAU * t), p = base();
+            p.pelvis_t = [0, 0, -1.6 + 0.6 * s_];
+            standLegs(p);
+            p.chest_R = mm3(Rz(deg(2 * c)), Rx(deg(5)));
+            p.head_R = Rx(deg(HEAD_TILT + 2 - 1.5 * s_));
+            const co = chestOrg(p);
+            for (const [sd, sg] of [['R', 1], ['L', -1]]) p.arm_ik(sd, V.add(co, [sg * (28 + 2 * c), 10 + 6 * s_ * sg, 5 + 0.6 * c]), [sg * 0.6, -1.0, -0.4]);
+            out.push(p);
+        }
+        return out;
+    }
+
     // Interpola listas de números (ângulos das juntas) por chaves [[t, [..]], ...] — como keys(), para qualquer tamanho.
     function keysN(K, t) {
         if (t <= K[0][0]) return K[0][1];
@@ -1332,23 +1654,24 @@ function NpcGenAnims(G) {
         }
         return K[K.length - 1][1];
     }
-    // Começar a nadar: de pé, boiando (a água no peito — o fim do vadear), joga o corpo para a frente, estica os braços e as pernas
-    // sobem até a posição do crawl (o 1º quadro do `swim`). swim_out = o mesmo ao contrário (parar de nadar e ficar de pé).
-    function swimIn(n = 6) {
+    // Do nado peito ao CRAWL (Shift): o corpo, inclinado no peito (1º quadro do `swim_breast`), deita de vez, um braço vai à frente e o
+    // outro para trás e as pernas começam a bater — termina no 1º quadro do `swim`. swim_out = o mesmo ao contrário (crawl → peito;
+    // e também do crawl para ficar de pé no raso, que parte da mesma pose inclinada).
+    function swimIn(n = 8) {
         const out = [];
         for (let i = 0; i < n; i++) {
             const s = i / (n - 1), e = ease(s), p = base();
             p.water = 0.0;
-            p.pelvis_t = V.lerp([0, 0, -45.5], [0, -20.0, -6.0 - SKEL.pelvis[1][2]], e);
-            p.pelvis_R = Rx(deg(-70 * e));
-            p.chest_R = Rx(deg(-6 * (1 - e) + 6 * sin(PI * s)));
-            p.head_R = Rx(deg(HEAD_TILT + 4 + 40 * e));
-            const aR = keysN([[0, [30, 40, 45]], [0.5, [120, 20, 30]], [1, [178, 8, 10]]], s);
-            const aL = keysN([[0, [30, 40, 45]], [0.5, [90, 30, 40]], [1, [13, 10, 20]]], s);
+            p.pelvis_t = V.lerp([0, -10.0, -41.0], [0, -20.0, -6.0 - SKEL.pelvis[1][2]], e);
+            p.pelvis_R = Rx(deg(-34 - 36 * e));
+            p.chest_R = Rx(deg(-6 * (1 - e) + 5 * sin(PI * s)));
+            p.head_R = Rx(deg(HEAD_TILT + 29.5 + 14.5 * e));
+            const aR = keysN([[0, [124, 10, 10]], [0.5, [150, 14, 16]], [1, [178, 8, 10]]], s);
+            const aL = keysN([[0, [124, 10, 10]], [0.5, [70, 24, 40]], [1, [13, 10, 20]]], s);
             p.arm_fk('R', { flex: aR[0], abd: aR[1], elbow: aR[2] }); p.arm_fk('L', { flex: aL[0], abd: aL[1], elbow: aL[2] });
             for (const [sd, ph] of [['R', 0], ['L', PI]]) {
                 const k = 16 * sin(TAU * s + ph) * e;
-                p.leg_fk(sd, { flex: 20 * (1 - e) + k, abd: 18 - 13 * e, knee: 50 * (1 - e) + 12 * e, foot: -30 - 10 * e });
+                p.leg_fk(sd, { flex: 4 * (1 - e) + k, abd: 6 - 1 * e, knee: 8 * (1 - e) + 12 * e, foot: -40 });
             }
             if (i === 3) { const B = p.bones(); for (const sd of ['R', 'L']) { const f = p.fist_world(B, sd); p.effects.push({ type: 'splash', pos: [f[0], f[1], 0.0], n: 8, spread: 3.0, seed: 40 + i + (sd === 'R' ? 1 : 0) }); } }
             out.push(p);
@@ -1384,46 +1707,47 @@ function NpcGenAnims(G) {
         }
         return out;
     }
-    // Afundar (do crawl ao mergulho): a cabeça desce, o quadril sobe e as pernas saem da água por um instante (respingo) e o corpo
-    // assenta logo abaixo da superfície, na pose do `dive`. (Voltar à tona: diveOut.)
-    function diveIn(n = 7) {
+    // Afundar (do nado peito ao mergulho — "golfinho"): a cabeça desce, o quadril sobe e as pernas saem da água por um instante
+    // (respingo) e o corpo assenta logo abaixo da superfície, na pose do `dive`. (Voltar à tona: diveOut, que termina no nado peito.)
+    const BREAST_Z = -41.0 + SKEL.pelvis[1][2];                            // altura do quadril no 1º quadro do swimBreast (no mesmo referencial do diveIn)
+    function diveIn(n = 9) {
         const out = [];
         for (let i = 0; i < n; i++) {
             const s = i / (n - 1), p = base();
             p.water = 0.0;
-            const z = keys([[0, -6.0], [0.45, -2.0], [1, DIVE_Z]], s), rx = keys([[0, -70], [0.45, -128], [1, -88]], s);
-            p.pelvis_t = [0, -20.0, z - SKEL.pelvis[1][2]];
+            const z = keys([[0, BREAST_Z], [0.45, -2.0], [1, DIVE_Z]], s), rx = keys([[0, -34], [0.45, -128], [1, -88]], s);
+            p.pelvis_t = [0, keys([[0, -10.0], [1, -20.0]], s), z - SKEL.pelvis[1][2]];
             p.pelvis_R = Rx(deg(rx));
-            p.chest_R = Rx(deg(keys([[0, 0], [0.45, 14], [1, -4]], s)));
-            p.head_R = Rx(deg(HEAD_TILT + keys([[0, 44], [0.45, 10], [1, -18]], s)));
-            const aR = keysN([[0, [178, 8, 10]], [0.45, [150, 30, 30]], [1, [178, 10, 8]]], s), aL = keysN([[0, [13, 10, 20]], [0.45, [150, 30, 30]], [1, [178, 10, 8]]], s);
+            p.chest_R = Rx(deg(keys([[0, -6], [0.45, 14], [1, -4]], s)));
+            p.head_R = Rx(deg(HEAD_TILT + keys([[0, 30], [0.45, 10], [1, -18]], s)));
+            const aR = keysN([[0, [124, 10, 10]], [0.45, [150, 30, 30]], [1, [178, 10, 8]]], s), aL = aR;
             p.arm_fk('R', { flex: aR[0], abd: aR[1], elbow: aR[2] }); p.arm_fk('L', { flex: aL[0], abd: aL[1], elbow: aL[2] });
-            const lg = keysN([[0, [0, 5, 12, -40]], [0.45, [-12, 4, 2, -50]], [1, [0, 6, 6, -40]]], s);
+            const lg = keysN([[0, [4, 6, 8, -40]], [0.45, [-12, 4, 2, -50]], [1, [0, 6, 6, -40]]], s);
             for (const sd of ['R', 'L']) p.leg_fk(sd, { flex: lg[0], abd: lg[1], knee: lg[2], foot: lg[3] });
             p.shadow = false;
-            if (i === 3 || i === 4) { const B = p.bones(); const ft = B.foot_R.t; p.effects.push({ type: 'splash', pos: [ft[0], ft[1], 0.0], n: 10, spread: 3.2, seed: 70 + i }); }
+            if (i === 4 || i === 5) { const B = p.bones(); const ft = B.foot_R.t; p.effects.push({ type: 'splash', pos: [ft[0], ft[1], 0.0], n: 10, spread: 3.2, seed: 70 + i }); }
             out.push(p);
         }
         return out;
     }
 
-    // Voltar à tona (do mergulho ao crawl): o corpo sobe inclinado, a cabeça sai primeiro (respingo), os braços abrem para boiar e o
-    // corpo assenta na pose do 1º quadro do `swim` — sem as pernas saírem da água (isso é só ao afundar).
-    function diveOut(n = 6) {
+    // Voltar à tona (do mergulho ao nado peito): o corpo sobe inclinado, a cabeça sai primeiro (respingo, a respirada), os braços abrem
+    // para boiar e o corpo assenta na pose do 1º quadro do `swim_breast` — sem as pernas saírem da água (isso é só ao afundar).
+    function diveOut(n = 8) {
         const out = [];
         for (let i = 0; i < n; i++) {
             const s = i / (n - 1), p = base();
             p.water = 0.0;
             p.shadow = false;
-            p.pelvis_t = [0, -20.0, keys([[0, DIVE_Z], [0.5, -9.0], [1, -6.0]], s) - SKEL.pelvis[1][2]];
-            p.pelvis_R = Rx(deg(keys([[0, -88], [0.5, -62], [1, -70]], s)));
-            p.chest_R = Rx(deg(keys([[0, -4], [0.5, -16], [1, 0]], s)));
-            p.head_R = Rx(deg(HEAD_TILT + keys([[0, -18], [0.4, 30], [1, 44]], s)));
-            const aR = keysN([[0, [178, 10, 8]], [0.5, [110, 55, 50]], [1, [178, 8, 10]]], s), aL = keysN([[0, [178, 10, 8]], [0.5, [110, 55, 50]], [1, [13, 10, 20]]], s);
+            p.pelvis_t = [0, keys([[0, -20.0], [1, -10.0]], s), keys([[0, DIVE_Z], [0.5, -9.0], [1, BREAST_Z]], s) - SKEL.pelvis[1][2]];
+            p.pelvis_R = Rx(deg(keys([[0, -88], [0.5, -58], [1, -34]], s)));
+            p.chest_R = Rx(deg(keys([[0, -4], [0.5, -16], [1, -6]], s)));
+            p.head_R = Rx(deg(HEAD_TILT + keys([[0, -18], [0.4, 34], [1, 30]], s)));
+            const aR = keysN([[0, [178, 10, 8]], [0.5, [110, 55, 50]], [1, [124, 10, 10]]], s), aL = aR;
             p.arm_fk('R', { flex: aR[0], abd: aR[1], elbow: aR[2] }); p.arm_fk('L', { flex: aL[0], abd: aL[1], elbow: aL[2] });
-            const lg = keysN([[0, [0, 6, 6, -40]], [0.5, [30, 25, 70, -10]], [1, [0, 5, 12, -40]]], s);
+            const lg = keysN([[0, [0, 6, 6, -40]], [0.5, [30, 25, 70, -10]], [1, [4, 6, 8, -40]]], s);
             for (const sd of ['R', 'L']) p.leg_fk(sd, { flex: lg[0], abd: lg[1], knee: lg[2], foot: lg[3] });
-            if (i === 2) { const B = p.bones(), h = B.head.t; p.effects.push({ type: 'splash', pos: [h[0], h[1], 0.0], n: 12, spread: 3.4, seed: 90 + i }); }
+            if (i === 3) { const B = p.bones(), h = B.head.t; p.effects.push({ type: 'splash', pos: [h[0], h[1], 0.0], n: 12, spread: 3.4, seed: 90 + i }); }
             out.push(p);
         }
         return out;
@@ -1586,20 +1910,30 @@ function NpcGenAnims(G) {
     const gunFn = { idle: gunIdle, walk: gunWalk, run: gunRun, draw: gunDraw, aim: gunAim, holdup };
     const shootFn = (w) => (w === 'pistol' ? pistolShoot() : w === 'shotgun' ? shotgunShoot() : w === 'smg' ? smgShoot('smg') : rifleShoot(w));
     const CLIPS = {
-        idle: { fps: 6, loop: true, fn: (w) => (w === 'none' ? idle() : w === 'bat' ? batIdle() : gunIdle(w)) },
-        walk: { fps: 10, loop: true, fn: (w) => (w === 'none' ? walk() : w === 'bat' ? batWalk() : gunWalk(w)) },
-        run: { fps: 14, loop: true, fn: (w) => (w === 'none' ? run() : w === 'bat' ? batRun() : gunRun(w)) },
+        idle: { fps: 6, loop: true, fn: (w) => (w === 'none' ? idle() : w === 'bat' ? batIdle() : w === 'knife' ? knifeIdle() : gunIdle(w)) },
+        walk: { fps: 10, loop: true, fn: (w) => (w === 'none' ? walk() : w === 'bat' ? batWalk() : w === 'knife' ? knifeWalk() : gunWalk(w)) },
+        run: { fps: 14, loop: true, fn: (w) => (w === 'none' ? run() : w === 'bat' ? batRun() : w === 'knife' ? knifeRun() : gunRun(w)) },
+        stab: { fps: 16, loop: false, fn: () => knifeStab() },                 // facada (Melee.stab)
         walk_up: { fps: 10, loop: true, fn: () => walkUp() },
         climb: { fps: 10, loop: true, fn: () => climb() },
         draw: { fps: 14, loop: false, fn: (w) => gunDraw(w) },
         aim: { fps: 1, loop: true, fn: (w) => gunAim(w) },
         shoot: { fps: 16, loop: false, fn: (w) => shootFn(w), fpsFor: { pistol: 15, shotgun: 12, smg: 18 } },
-        holdup: { fps: 6, loop: true, fn: (w) => holdup(w === 'none' ? 'pistol' : w) },
+        holdup: { fps: 6, loop: true, fn: (w) => (w === 'knife' ? knifeHoldup() : holdup(w === 'none' ? 'pistol' : w)) },
         swing: { fps: 14, loop: false, fn: (w) => batSwing(w === 'baton' ? 'baton' : 'bat') },
         punch: { fps: 14, loop: false, fn: () => punchCross() },
         punchL: { fps: 14, loop: false, fn: () => punchJab() },
         kick: { fps: 12, loop: false, fn: () => kick() },
         throw: { fps: 12, loop: false, fn: () => throwAnim() },
+        gym_curl: { fps: 9, loop: true, fn: (w) => gymCurl(w) },               // academia: rosca direta (w1/w2/w3 = faixa de peso)
+        gym_bench: { fps: 8, loop: true, fn: (w) => gymBench(w) },             // supino
+        gym_squat: { fps: 8, loop: true, fn: (w) => gymSquat(w) },             // agachamento
+        grenade_pin: { fps: 14, loop: false, fn: () => grenadePin() },        // pegar a granada e puxar o pino
+        grenade_hold: { fps: 6, loop: true, fn: () => holdLoop(6, 'grenade') },   // armada, mirando (a força carregando)
+        grenade_throw: { fps: 16, loop: false, fn: () => throwRelease('grenade') },
+        molotov_light: { fps: 13, loop: false, fn: () => molotovLight() },    // acender o pano com o isqueiro
+        molotov_hold: { fps: 8, loop: true, fn: () => holdLoop(6, 'molotov') },
+        molotov_throw: { fps: 16, loop: false, fn: () => throwRelease('molotov') },
         hurt: { fps: 12, loop: false, fn: () => hurt() },
         dead: { fps: 12, loop: false, fn: () => death(false) },        // (a poça de sangue é a do jogo — Blood.deathPool —, não desenhada)
         surrender: { fps: 9, loop: false, fn: () => surrenderKneel() },
@@ -1608,11 +1942,14 @@ function NpcGenAnims(G) {
         scared: { fps: 14, loop: true, fn: () => scared() },
         swim: { fps: 10, loop: true, fn: () => swim() },
         swim_idle: { fps: 6, loop: true, fn: () => swimIdle() },
-        swim_in: { fps: 10, loop: false, fn: () => swimIn() },                // começar a nadar (de pé → crawl)
-        swim_out: { fps: 10, loop: false, fn: () => swimIn().reverse() },     // parar de nadar (crawl → de pé)
-        dive_in: { fps: 10, loop: false, fn: () => diveIn() },                // afundar (crawl → mergulho)
-        dive: { fps: 7, loop: true, fn: () => dive() },                        // nado peito debaixo d'água
-        dive_out: { fps: 10, loop: false, fn: () => diveOut() },              // voltar à tona (mergulho → crawl)
+        swim_breast: { fps: 12, loop: true, fn: () => swimBreast() },         // nado peito na superfície (o nado normal)
+        wade: { fps: 10, loop: true, fn: () => wadeDeep() },                  // andando com a água acima da metade do corpo
+        wade_idle: { fps: 6, loop: true, fn: () => wadeIdle() },              // parado nessa água: braços equilibrando
+        swim_in: { fps: 14, loop: false, fn: () => swimIn() },                // nado peito → crawl (Shift)
+        swim_out: { fps: 14, loop: false, fn: () => swimIn().reverse() },     // crawl → nado peito (soltou o Shift / chegou ao raso)
+        dive_in: { fps: 12, loop: false, fn: () => diveIn() },                // afundar (nado peito → mergulho)
+        dive: { fps: 10, loop: true, fn: () => dive(12) },                     // nado peito debaixo d'água (12 quadros: suave)
+        dive_out: { fps: 12, loop: false, fn: () => diveOut() },              // voltar à tona (mergulho → nado peito)
         flail: { fps: 12, loop: true, fn: () => flail() },
         tumble: { fps: 16, loop: false, fn: () => tumble() },
         lie: { fps: 1, loop: true, fn: () => lie() },
@@ -1621,7 +1958,8 @@ function NpcGenAnims(G) {
         carjack: { fps: 9, loop: false, fn: () => carjack() },
         opendoor: { fps: 10, loop: false, fn: () => openDoor() },
         enter: { fps: 10, loop: false, fn: () => enterCar() },
-        sitin: { fps: SIT_IN.fps, loop: false, fn: (w) => sitIn(w) },          // (só o jogador: L/R = lado da frente do carro)
+        sitin: { fps: SIT_IN.fps, loop: false, fn: (w) => sitIn(w) },
+        sitout: { fps: SIT_IN.fps, loop: false, fn: (w) => sitIn(w).reverse() },     // sair do carro: o sitin ao contrário (do banco à porta)          // (só o jogador: L/R = lado da frente do carro)
         pick: { fps: 7, loop: true, fn: () => pickLock() },
         pickpocket: { fps: 7, loop: false, fn: () => pickpocket() },
         rummage: { fps: 8, loop: true, fn: () => rummage() },
@@ -1631,6 +1969,8 @@ function NpcGenAnims(G) {
         idle_pull: { fps: 4, loop: true, fn: () => pullAnim('idle') },
         walk_pull: { fps: 10, loop: true, fn: () => pullAnim('walk') },
         walk_heavy: { fps: 8, loop: true, fn: () => walkHeavy() },
+        run_heavy: { fps: 17, loop: true, fn: () => runHeavy() },          // (passada 9,6 × 17 qps ≈ a da corrida 11,5 × 14: pés plantados no mesmo ritmo)
+        idle_heavy: { fps: 4, loop: true, fn: () => idleHeavy() },
         baton_idle: { fps: 6, loop: true, fn: () => batonIdle() },
         baton_walk: { fps: 10, loop: true, fn: () => batonWalk() },
         // pilotando (16 direções): moto/jet ski = 3 quadros de inclinação (o jogo escolhe pelo guidão), bicicleta pedalando, lancha

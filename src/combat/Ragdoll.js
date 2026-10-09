@@ -38,7 +38,10 @@ class Ragdoll {
 
         // Giro do sprite (capota) e escolha do clipe no ar.
         this.heading = Math.atan2(this.dx, this.dz) + (Math.random() < 0.5 ? 0 : Math.PI);
-        const spinMag = bail ? 0 : (p >= 8 ? Math.min(10, (p - 5) * 0.8) : Math.min(2, p * 0.25));
+        // (personagens 2,5D: cada direção é um DESENHO — girar a direção fazia a cambalhota pular de pose a cada quadro. O clipe já capota
+        //  o corpo; a direção fica a do arremesso.)
+        const flat = !!(this.av.actor && this.av.actor.sheet && this.av.actor.sheet.isNpc);
+        const spinMag = bail || flat ? 0 : (p >= 8 ? Math.min(10, (p - 5) * 0.8) : Math.min(2, p * 0.25));
         this.spin = spinMag * (Math.random() < 0.5 ? -1 : 1);
         this.tumbling = bail || p >= 11;                         // cambalhota (vs braços soltos)
         this.air = 0;                                            // tempo no ar (para o ritmo da animação)
@@ -160,9 +163,12 @@ class Ragdoll {
 // um tempo (sprite de morto com sangue) e some.
 // ============================================================================
 class Casualty {
-    // opts: { variant, sheet ('civA'|'civB'), threat: {x,z}, dx, dz, power, lethal, kind }
+    // opts: { variant, sheet ('civA'|'civB'), threat: {x,z}, dx, dz, power, lethal, kind, remount }
+    // remount = { bike, variant, onMount(bike) }: piloto que caiu numa batida (entregador, mototáxi) — levanta, sacode a poeira e VOLTA
+    // andando para a moto (levanta a moto se ela tombou e sobe), sem pânico. Se a moto sumiu ou foi roubada, segue a pé, tranquilo.
     constructor(game, pos, opts) {
         this.g = game;
+        this.remount = opts.remount || null;
         // look = { sheet: NpcSheet, row } (o piloto 2,5D que caiu da moto: mesmo tipo e cores)
         const sheet = opts.look ? opts.look.sheet : game.sprites.sheets[opts.sheet || 'civA'];
         this.actor = new SpriteActor(game.scene, sheet, opts.look ? opts.look.row : opts.variant || 2, 'casualty');
@@ -194,6 +200,12 @@ class Casualty {
             a.setHeading(this.heading);
             return;
         }
+        if (this.remount) {
+            this.state = 'back'; this.life = 0;
+            a.play('idle', 'none', { restart: true }); a.setHeading(this.heading);
+            this.wait = 0.7 + Math.random() * 0.5;                              // atordoado um instante antes de ir buscar a moto
+            return;
+        }
         this.state = 'flee'; this.life = 0;
         // Foge do ladrão (e não de volta para o carro).
         const dx = this.pos.x - this.threat.x, dz = this.pos.z - this.threat.z, l = hypot(dx, dz) || 1;
@@ -208,6 +220,8 @@ class Casualty {
         const a = this.actor;
         if (this.state === 'rag') {
             this.rag.update(dt);
+        } else if (this.state === 'back') {
+            return this._back(dt);
         } else if (this.state === 'flee') {
             const sp = 6.2, p = this.pos;
             const nx = p.x + this.fx * sp * dt, nz = p.z + this.fz * sp * dt;
@@ -222,6 +236,56 @@ class Casualty {
             if (this.life > 30) return false;
         }
         return true;
+    }
+
+    // A moto ainda está lá, livre, para o piloto voltar? (não roubada, não pegando fogo, não removida do mundo)
+    _bikeOk() {
+        const b = this.remount && this.remount.bike, vm = this.g.vehicleManager;
+        if (!b || b.gone || b.controlled || b.hold || b.burning > 0 || b.riderVariant != null) return false;
+        if (b.wrecked && !b.canRaise) return false;
+        if (vm && vm.vehicles && b instanceof Vehicle && !vm.vehicles.includes(b)) return false;      // (mototáxi: adaptador, sem Vehicle)
+        return true;
+    }
+    // Voltando para a moto: anda até o lado dela, levanta se tombou e sobe. Moto perdida: vai embora andando (sem medo).
+    _back(dt) {
+        const a = this.actor, p = this.pos, R = this.remount;
+        if (this.wait > 0) { this.wait -= dt; a.update(dt); return true; }
+        if (!this._bikeOk()) {
+            if (!this.calm) {                                                   // perdeu a moto: segue a pé, tranquilo
+                this.calm = true; this.life = 0;
+                const ang = Math.random() * Math.PI * 2; this.fx = Math.sin(ang); this.fz = Math.cos(ang); this.heading = ang;
+                a.play('walk', 'none', { restart: true });
+            }
+            const nx = p.x + this.fx * 1.5 * dt, nz = p.z + this.fz * 1.5 * dt;
+            if (MapGeo.isLand(nx, nz)) { p.x = nx; p.z = nz; }
+            MapGeo.resolveCircle(p, 0.4);
+            a.setPosition(p.x, p.z); a.setHeading(this.heading); a.update(dt);
+            const f = this.g.camera.target;
+            return !(this.life > 14 || (this.life > 3 && hypot(p.x - f.x, p.z - f.z) > 70));
+        }
+        const b = R.bike, bp = b.position, dx = bp.x - p.x, dz = bp.z - p.z, d = hypot(dx, dz);
+        if (this.lift > 0) {                                                    // levantando a moto tombada
+            this.lift -= dt; a.update(dt);
+            if (this.lift <= 0 && b.wrecked) { b.raise(); AudioFX.thud(bp.x, bp.z); }
+            return true;
+        }
+        if (d > 1.05) {
+            const sp = d > 6 ? 3.2 : 1.7;                                       // longe: trota (com pressa, não com medo); perto: anda
+            this.heading = Math.atan2(dx, dz);
+            p.x += dx / d * Math.min(d, sp * dt); p.z += dz / d * Math.min(d, sp * dt);
+            MapGeo.resolveCircle(p, 0.4);
+            if (a.clipName !== (sp > 2 ? 'run' : 'walk')) a.play(sp > 2 ? 'run' : 'walk', 'none');
+            a.setPosition(p.x, p.z); a.setHeading(this.heading); a.update(dt, sp > 2 ? 0.75 : 1);
+            if (this.life > 25) { this.remount = null; return this._back(dt); } // (não conseguiu chegar: desiste)
+            return true;
+        }
+        if (b.wrecked) { this.lift = 0.6; a.play('pick', 'none', { restart: true }) || a.play('idle', 'none'); a.setHeading(Math.atan2(dx, dz)); return true; }
+        // sobe na moto: o piloto volta a ser o desenho do veículo e o trânsito retoma de onde parou
+        b.setRider(R.variant);
+        b.driver = true;
+        if (b.mode !== undefined) { b.mode = 'drive'; b.route = null; b.detour = null; b.lat = b.latTarget = 0; b.stuck = 0; }
+        if (R.onMount) R.onMount(b);
+        return false;
     }
 
     dispose() { this.actor.dispose(); }

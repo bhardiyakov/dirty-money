@@ -75,11 +75,11 @@ const Outfit = {
             ['side', 'Repartido'], ['quiff', 'Topete'], ['pixie', 'Pixie'], ['bob', 'Chanel'], ['bob_fringe', 'Chanel com franja'], ['braid', 'Trança']],
         hair_color: [['preto', 'Preto'], ['castanho', 'Castanho'], ['loiro', 'Loiro'], ['ruivo', 'Ruivo'], ['grisalho', 'Grisalho']],
         beard: [['', 'Sem barba'], ['beard', 'Barba'], ['goatee', 'Cavanhaque'], ['mustache', 'Bigode']],
-        body: [['muscular', 'Forte'], ['normal', 'Normal'], ['slim', 'Magro'], ['heavy', 'Pesado']],
         gender: [['m', 'Masculino'], ['f', 'Feminino']],
+        // (o PORTE — magro, normal, forte, gordo — não se escolhe: vem do físico, player/Physique.js)
     },
-    APPEARANCE_NAME: { skin: 'Pele', hair: 'Cabelo', hair_color: 'Cor do cabelo', beard: 'Barba', body: 'Corpo', gender: 'Corpo' },
-    APPEARANCE_DEFAULT: { skin: 'pele_pessego', hair: 'spiky', hair_color: 'castanho', beard: '', body: 'muscular', gender: 'm' },
+    APPEARANCE_NAME: { skin: 'Pele', hair: 'Cabelo', hair_color: 'Cor do cabelo', beard: 'Barba', gender: 'Corpo' },
+    APPEARANCE_DEFAULT: { skin: 'pele_pessego', hair: 'spiky', hair_color: 'castanho', beard: '', body: 'normal', gender: 'm' },
     // Cores para tingir (nome na paleta do gerador → rótulo). Por encaixe: o campo da ficha que muda.
     TINT_FIELD: { top: 'top_color', legs: 'bottom_color', shoes: 'shoe_color', head: 'hat_color', bag: 'bag_color' },
     TINTS: {
@@ -120,6 +120,7 @@ const Outfit = {
     lookSpec(worn = this.worn, appearance = this.appearance, tint = this.tint) {
         const s = Object.assign({}, this.APPEARANCE_DEFAULT, appearance);
         if (!s.beard) s.beard = null;
+        s.body = typeof Physique !== 'undefined' ? Physique.shape : 'normal';      // o porte é o do físico (come, treina, passa fome)
         for (const slot of this.SLOTS) {
             const id = worn[slot] || this.DEFAULT[slot], it = id && this.ITEMS[id];
             if (it && it.look) Object.assign(s, it.look);

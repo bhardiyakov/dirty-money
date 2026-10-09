@@ -7,6 +7,8 @@
 //   Interiors.active    { shop, data, ret } enquanto dentro de uma loja
 //   Interiors.obstacles sólidos da sala em coordenadas de mundo (MapGeo.resolveCircle usa no lugar do CityGrid)
 // Dentro: o atendente (sprite) fica atrás do balcão; E perto dele abre a loja (ui/ShopUI.js, preços em economy/Economy.js).
+// Uma SETA DE SAÍDA em alta definição (textura própria, 512 px — a sala é pintada a 20 px/u) fica no chão junto à porta, apontando
+// para fora: pulsa e desliza na direção da rua; some de leve quando o jogador já está em cima dela.
 // ============================================================================
 
 const Interiors = {
@@ -94,7 +96,9 @@ const Interiors = {
             const cl = a.data.clerk, nearClerk = cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
             const shop = a.shop, S = Economy.STYLES[shop.style] || {};
             if (this.useNear(game, 'pool')) return `<b>E</b> jogar sinuca<small>bola 8 apostada · de ${brl(Pool.STAKES[0].bet)} a ${brl(Pool.STAKES[Pool.STAKES.length - 1].bet)}</small>`;
-            if (nearClerk) return `<b>E</b> ${S.guns ? 'ver o que tem à venda' : S.clothes ? 'ver roupas, tênis e bolsas' : 'ver o cardápio'}<small>${shop.name} · ${Economy.zoneOf(shop).label}</small>`;
+            const gu = this.gymUse(game);
+            if (gu) { const ex = Gym.EX[gu.kind]; return `<b>E</b> ${ex.verb}<small>${!Physique.hasPass() ? 'compre a diária ou a mensalidade na recepção' : Physique.setsLeft(ex.id) > 0 ? `séries hoje: ${Physique.SETS_PER_DAY - Physique.setsLeft(ex.id)}/${Physique.SETS_PER_DAY} · ${ex.min}–${ex.max} kg` : 'séries de hoje feitas — volte amanhã'}</small>`; }
+            if (nearClerk) return `<b>E</b> ${S.guns ? 'ver o que tem à venda' : S.clothes ? 'ver roupas, tênis e bolsas' : S.gym ? 'diária, mensalidade e suplementos' : 'ver o cardápio'}<small>${shop.name} · ${Economy.zoneOf(shop).label}${S.gym ? (Physique.hasPass() ? ' · treino liberado' : ' · sem plano') : ''}</small>`;
             if (nearExit) return '<b>E</b> sair da loja<small>ou ande até a porta</small>';
             return '';
         }
@@ -120,6 +124,8 @@ const Interiors = {
             const a = this.active, o = this.STAGE, door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2;
             const cl = a.data.clerk;
             if (this.useNear(game, 'pool')) { Pool.open(game, a.shop); return true; }
+            const gu = this.gymUse(game);
+            if (gu) { Gym.open(game, gu); return true; }
             if (cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6) { game.shopUI.show(a.shop); return true; }
             if (hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3) { this.leave(game); return true; }
             return false;
@@ -176,6 +182,61 @@ const Interiors = {
         desk: '<b>E</b> usar o notebook<small>mercado imobiliário: mudar-se, vender o imóvel</small>',
     },
 
+    // ------------------------------------------------------------------ seta de saída (HD)
+    _exitArrow(scene) {
+        if (this._arrow) return this._arrow;
+        const W = 512, H = 640, tex = new BABYLON.DynamicTexture('exitArrowTex', { width: W, height: H }, scene, true);
+        const x = tex.getContext(), cx = W / 2;
+        x.clearRect(0, 0, W, H);
+        // forma: haste + ponta (aponta para baixo no desenho = sul = para a rua); cantos arredondados
+        const shape = () => {
+            x.beginPath();
+            x.moveTo(cx - 80, 200); x.lineTo(cx + 80, 200); x.lineTo(cx + 80, 380); x.lineTo(cx + 196, 380);
+            x.lineTo(cx, 600); x.lineTo(cx - 196, 380); x.lineTo(cx - 80, 380); x.closePath();
+        };
+        x.lineJoin = 'round'; x.lineCap = 'round';
+        // brilho externo (halo verde suave)
+        x.save(); x.shadowColor = 'rgba(40,255,140,0.9)'; x.shadowBlur = 46; shape(); x.fillStyle = 'rgba(30,200,110,0.55)'; x.fill(); x.restore();
+        // sombra escura logo abaixo (descola do piso)
+        x.save(); x.translate(0, 10); shape(); x.fillStyle = 'rgba(0,0,0,0.45)'; x.fill(); x.restore();
+        // corpo: degradê verde de placa de saída, contorno branco grosso
+        const g = x.createLinearGradient(0, 200, 0, 600);
+        g.addColorStop(0, '#5dffa8'); g.addColorStop(0.55, '#16c46a'); g.addColorStop(1, '#0a8a48');
+        shape(); x.fillStyle = g; x.fill();
+        x.lineWidth = 22; x.strokeStyle = '#ffffff'; x.stroke();
+        x.lineWidth = 6; x.strokeStyle = 'rgba(0,70,35,0.6)'; shape(); x.save(); x.clip(); x.stroke(); x.restore();
+        // reflexo na metade de cima
+        x.save(); shape(); x.clip();
+        const hl = x.createLinearGradient(cx - 200, 0, cx + 120, 0); hl.addColorStop(0, 'rgba(255,255,255,0.0)'); hl.addColorStop(0.5, 'rgba(255,255,255,0.35)'); hl.addColorStop(1, 'rgba(255,255,255,0.0)');
+        x.fillStyle = hl; x.fillRect(cx - 80, 200, 64, 180); x.restore();
+        // placa "SAÍDA" acima da seta (horizontal, legível de cima): pílula verde-escura com borda branca
+        const pill = (px, py, w, h, r) => { x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r); x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); };
+        x.save(); x.shadowColor = 'rgba(40,255,140,0.8)'; x.shadowBlur = 30; pill(36, 24, W - 72, 138, 44); x.fillStyle = '#0b5a32'; x.fill(); x.restore();
+        const pg = x.createLinearGradient(0, 24, 0, 162); pg.addColorStop(0, '#1aa65e'); pg.addColorStop(1, '#0a6a3a');
+        pill(36, 24, W - 72, 138, 44); x.fillStyle = pg; x.fill(); x.lineWidth = 12; x.strokeStyle = '#ffffff'; x.stroke();
+        x.font = '900 104px Inter, "Segoe UI", Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.lineWidth = 12; x.strokeStyle = 'rgba(0,50,25,0.9)'; x.strokeText('SAÍDA', cx, 98); x.fillStyle = '#ffffff'; x.fillText('SAÍDA', cx, 98);
+        tex.update(true); tex.hasAlpha = true;
+        tex.anisotropicFilteringLevel = 8;
+        const m = new BABYLON.StandardMaterial('exitArrow', scene);
+        m.diffuseTexture = tex; m.useAlphaFromDiffuseTexture = true; m.emissiveColor = new BABYLON.Color3(1, 1, 1); m.diffuseColor = BABYLON.Color3.Black();
+        m.specularColor = BABYLON.Color3.Black(); m.disableLighting = true; m.backFaceCulling = false;
+        const mesh = BABYLON.MeshBuilder.CreatePlane('exitArrow', { width: 1.9, height: 2.375 }, scene);
+        mesh.rotation.x = Math.PI / 2; mesh.material = m; mesh.isPickable = false; mesh.alphaIndex = -9; mesh.setEnabled(false);      // (logo depois da sala)
+        return (this._arrow = mesh);
+    },
+    // Por quadro (dentro): desliza para a porta e volta, pulsa; mais apagada com o jogador em cima ou de costas para a saída.
+    _tickArrow(game, dt) {
+        const a = this.active, m = this._arrow; if (!a || !m) return;
+        const o = this.STAGE, d = a.data.door, dc = o.x + (d.x0 + d.x1) / 2, p = game.player.position;
+        a.at = (a.at || 0) + dt;
+        const k = (a.at * 1.25) % 1, slide = 0.28 * (k < 0.7 ? k / 0.7 : 1 - (k - 0.7) / 0.3);
+        m.position.set(dc, 0.2, o.z + 2.0 - slide);
+        const near = Math.hypot(p.x - dc, p.z - (o.z + 1.4));
+        const want = near < 0.9 ? 0.35 : 0.72 + 0.28 * Math.sin(a.at * 4.2);
+        m.visibility += (want - m.visibility) * Math.min(1, dt * 8);
+    },
+
     // ------------------------------------------------------------------ transição
     _fadeEl() {
         if (!this._el) {
@@ -224,6 +285,7 @@ const Interiors = {
         B.top(x0, z0, x1, z1, 0.14, (x, z) => [(x - x0) / (x1 - x0), (z1 - z) / (z1 - z0)]);
         const mesh = B.build('shopRoom_' + key, game.scene, m, { receiveShadows: false });
         mesh.freezeWorldMatrix(); mesh.setEnabled(false);
+        mesh.alphaIndex = -10;                                                           // (piso da sala antes de tudo: a seta de saída e os bonecos por cima)
         return (this._rooms[key] = { data, mesh });
     },
 
@@ -240,6 +302,21 @@ const Interiors = {
     _useActors(game, list, shop) {
         const sc = game.scene, S = game.sprites.sheets, o = this.STAGE;
         const grp = shop.style === 'drugs' ? CharacterRig.VARIANT_GROUPS.poor : (shop.style === 'italian' || shop.style === 'japanese' ? CharacterRig.VARIANT_GROUPS.biz : CharacterRig.VARIANT_GROUPS.casual);
+        // frequentadores com tipo do gerador e um exercício (academia): atores próprios, animados por _gymActor
+        const typed = list.filter((e) => e.type && typeof NpcArt !== 'undefined' && NpcArt.atlases && NpcArt.atlases[e.type]);
+        list = list.filter((e) => !typed.includes(e));
+        const GA = this._gymActors || (this._gymActors = []);
+        typed.forEach((e, i) => {
+            const sheet = NpcArt.sheet(e.type), nvar = (NpcArt.gen().TYPES[e.type] || { nvar: 1 }).nvar, row = NpcArt.row(e.type, e.variant % nvar);
+            let a = GA[i];
+            if (!a) a = GA[i] = new SpriteActor(sc, sheet, row, 'gymActor' + i);
+            else { if (a.sheet !== sheet) a.useSheet(sheet); a.setVariant(row); }
+            a.gym = { clip: e.anim ? e.anim.clip : 'idle', w: e.anim ? e.anim.w : 'none', phase: 'rest', t: 0.5 + Math.random() * 3, reps: 0 };
+            a.play(a.gym.clip, a.gym.w, { restart: true }) || a.play('idle', 'none');
+            if (a.gym.clip !== 'walk') a.setFrame(0);
+            a.setPosition(o.x + e.x, o.z + e.z); a.mesh.computeWorldMatrix(true); a.mesh.refreshBoundingInfo(); a.setHeading(e.face); a.setVisible(true); a.mesh.position.y = 0.5;
+        });
+        for (let i = typed.length; i < GA.length; i++) GA[i].setVisible(false);
         list.forEach((e, i) => {
             let a = this._actors[i];
             const variant = grp[0] + ((e.variant * 7 + shop.variant * 3) % (grp[1] - grp[0] + 1));
@@ -261,6 +338,7 @@ const Interiors = {
         pl.teleport(new BABYLON.Vector3(o.x + data.spawn.x, 0, o.z + data.spawn.z));
         pl.root.rotation.y = 0; pl.velocity.setAll(0);
         this._useActors(game, (data.clerk ? [data.clerk] : []).concat(data.patrons), shop);
+        const ar = this._exitArrow(game.scene); ar.setEnabled(true); ar.visibility = 0; this._tickArrow(game, 0);
         game.camera.setZoomMul(0.5);
         game.camera.snapTo(this.focus(pl.position, game.camera, game.gameEngine.engine.getAspectRatio(game.camera.camera)));
         game.scene.physicsEnabled = false;
@@ -275,7 +353,9 @@ const Interiors = {
         const a = this.active; if (!a) return;
         const pl = game.player;
         a.room.mesh.setEnabled(false); this._bd.setEnabled(false);
+        if (this._arrow) this._arrow.setEnabled(false);
         for (const x of this._actors) x.setVisible(false);
+        for (const x of this._gymActors || []) x.setVisible(false);
         this.active = null; this.obstacles = [];
         this._needRelease = true; this._leftAt = performance.now();                  // saiu: só reentra depois de soltar as teclas (sem vai-e-vem na porta)
         pl.teleport(new BABYLON.Vector3(a.ret.x, 0, a.ret.z));
@@ -296,6 +376,8 @@ const Interiors = {
         if (hide) {
             const lim = this.STAGE.x - 400, keep = this._hidden = [], stage = new Set([this._bd, this.active && this.active.room.mesh]);
             for (const x of this._actors) stage.add(x.mesh);
+            for (const x of this._gymActors || []) stage.add(x.mesh);
+            if (this._arrow) stage.add(this._arrow);
             for (const m of game.scene.meshes) {
                 if (!m.isVisible || stage.has(m)) continue;
                 const bi = m.getBoundingInfo && m.getBoundingInfo(), cx = bi ? bi.boundingBox.centerWorld.x : m.position.x;
@@ -311,13 +393,33 @@ const Interiors = {
         const a = this.active; if (!a) return;
         a.t += dt;
         for (const x of this._actors) if (x.mesh.isEnabled()) x.update(dt, 1);
+        for (const x of this._gymActors || []) if (x.mesh.isEnabled() && x.mesh.isVisible) this._gymActor(x, dt);
         if (a.shop.bank) Banks.update(dt, game);
+        this._tickArrow(game, dt);
         const o = this.STAGE, p = game.player.position, d = a.data.door;
         const ax = game.input.getMoveAxis();
         if (Math.abs(ax.x) + Math.abs(ax.z) < 0.1 && a.t > 0.3) a.released = true;                    // a saída só vale depois de soltar as teclas uma vez
         if (a.released && p.z > o.z + 3.4) a.armed = true;
         if (!this.busy && a.armed && a.t > 0.6 && p.z < o.z + 0.55 && p.x > o.x + d.x0 && p.x < o.x + d.x1) this.leave(game);
     },
+
+    // Frequentador da academia: SÉRIES de 6–10 repetições do exercício (o clipe é uma repetição) e DESCANSO entre elas (parado na
+    // posição inicial, com a barra). Na esteira: caminha sem parar.
+    _gymActor(a, dt) {
+        const G = a.gym;
+        if (!G || G.clip === 'walk' || G.clip === 'idle') { a.update(dt, G && G.clip === 'walk' ? 0.8 : 1); return; }
+        G.t -= dt;
+        if (G.phase === 'rest') {
+            a.update(dt, 0); a.setFrame(0);
+            if (G.t <= 0) { G.phase = 'set'; G.reps = 6 + Math.floor(Math.random() * 5); const c = a.clip; G.t = G.reps * (c ? c.frames / c.fps : 1.4) * 1.15; }
+        } else {
+            a.update(dt, 0.87);
+            if (G.t <= 0 && a.frame === 0) { G.phase = 'rest'; G.t = 4 + Math.random() * 6; }
+        }
+    },
+
+    // Estação de academia livre ao alcance (uso 'gym_*'), ou null.
+    gymUse(game) { for (const k of ['gym_squat', 'gym_bench', 'gym_curl']) { const u = this.useNear(game, k, 1.0); if (u) return u; } return null; },
 
     // Enquadramento da câmera na sala (centro, com folga para a parede norte pintada).
     focus(pos, cam, aspect) {

@@ -790,6 +790,12 @@ function NpcGenChar(G) {
             new RoundCone([0, -3.5, 0], [0, 24.7, 0], 1.25, 2.5, S.batwood),
             new Sphere([0, -4.1, 0], 1.7, S.batwood, { blend: 0.4 }),
         ], texBat);
+        props.knife = new Part('knife', 'weapon', GR.weapon, [                        // faca: cabo na mão (origem), lâmina para +y
+            new RoundBox([0, -2.2, 0], [0.75, 2.7, 0.95], 0.55, S.tape),
+            new RoundBox([0, 0.75, 0], [0.55, 0.38, 1.8], 0.22, S.metal),
+            new RoundBox([0, 6.2, -0.2], [0.22, 5.2, 1.15], 0.15, S.chrome),
+            new RoundCone([0, 11.0, -0.2], [0, 12.9, 0.5], 0.7, 0.15, S.chrome),
+        ]);
         props.baton = new Part('baton', 'weapon', GR.weapon, [                        // cassetete
             new RoundCone([0, -3.6, 0], [0, 17.5, 0], 1.25, 1.15, S.tape),
             new CapCone([0, 3.6, 0], [0, 4.8, 0], 1.6, 1.6, S.metal, { rround: 0.3 }),
@@ -799,6 +805,66 @@ function NpcGenChar(G) {
             new Ellipsoid([0, 0, 0], [2.8, 2.8, 3.4], S.green),
             new RoundBox([0, 0, 3.5], [1.1, 1.1, 1.1], 0.4, S.metal),
             new RoundBox([0.0, -1.5, 2.2], [0.7, 0.8, 2.2], 0.35, S.chrome, { R: Rx(deg(-15)) }),
+        ]);
+        // ---- ACADEMIA: barras com anilhas (3 faixas de peso: w1 leve · w2 médio · w3 pesado — mais anilhas e maiores), banco de
+        // supino com o suporte e a gaiola de agachamento. A barra fica ao longo de x (esquerda → direita), centrada na origem.
+        const plates = (half, tiers, hub) => {
+            const out = [];
+            tiers.forEach(([r, w, mat], i) => {
+                const x0 = half + i * (w + 0.25), x1 = x0 + w;
+                for (const s of [1, -1]) {
+                    out.push(new RoundCone([s * x0, 0, 0], [s * x1, 0, 0], r, r, mat, { rround: 0.35 }));
+                    out.push(new RoundCone([s * (x0 - 0.05), 0, 0], [s * (x1 + 0.05), 0, 0], hub, hub, S.chrome));
+                }
+            });
+            return out;
+        };
+        const PL = { s: [3.2, 1.0, S.chrome], m: [6.6, 1.5, S.tape], l: [9.6, 1.9, S.tape], xl: [10.4, 2.1, S.tape] };
+        const bar = (half, sleeve) => [new RoundCone([-half - sleeve, 0, 0], [half + sleeve, 0, 0], 0.6, 0.6, S.chrome),
+            new RoundCone([-half - sleeve, 0, 0], [-half + 0.4, 0, 0], 1.0, 1.0, S.chrome), new RoundCone([half - 0.4, 0, 0], [half + sleeve, 0, 0], 1.0, 1.0, S.chrome)];
+        // barra olímpica (supino e agachamento): 1,6 m, anilhas a partir de ±25
+        props.barbell_w1 = new Part('barbell_w1', 'prop', GR.prop, [...bar(25, 9), ...plates(25.6, [PL.m], 1.1)]);
+        props.barbell_w2 = new Part('barbell_w2', 'prop', GR.prop, [...bar(25, 9), ...plates(25.6, [PL.l, PL.m], 1.1)]);
+        props.barbell_w3 = new Part('barbell_w3', 'prop', GR.prop, [...bar(25, 9), ...plates(25.6, [PL.xl, PL.l, PL.l], 1.1)]);
+        // barra curta da rosca direta (1,1 m)
+        props.curlbar_w1 = new Part('curlbar_w1', 'prop', GR.prop, [...bar(16, 6), ...plates(16.6, [PL.s], 0.9)]);
+        props.curlbar_w2 = new Part('curlbar_w2', 'prop', GR.prop, [...bar(16, 6), ...plates(16.6, [[4.6, 1.2, S.tape], PL.s], 0.9)]);
+        props.curlbar_w3 = new Part('curlbar_w3', 'prop', GR.prop, [...bar(16, 6), ...plates(16.6, [[6.2, 1.4, S.tape], [4.6, 1.2, S.tape]], 0.9)]);
+        // banco de supino: estofado ao longo de y (pés em −y, cabeça em +y), pés de ferro e o suporte da barra na cabeceira (+y)
+        props.gym_bench = new Part('gym_bench', 'prop', GR.prop, [
+            new RoundBox([0, 0, 20.0], [6.2, 27.0, 1.8], 1.2, S.tape),
+            new RoundBox([0, 0, 17.6], [5.0, 25.0, 0.7], 0.3, S.metal),
+            new RoundBox([0, -22.0, 8.6], [5.8, 1.0, 8.6], 0.4, S.metal), new RoundBox([0, 20.0, 8.6], [5.8, 1.0, 8.6], 0.4, S.metal),
+            ...[1, -1].flatMap((s) => [
+                new RoundBox([s * 22.0, 26.0, 21.0], [1.0, 1.0, 21.0], 0.4, S.metal),            // postes do suporte
+                new RoundBox([s * 22.0, 23.6, 37.5], [1.0, 1.6, 0.8], 0.3, S.chrome),             // ganchos
+                new RoundBox([s * 22.0, 26.0, 0.9], [2.0, 6.0, 0.9], 0.4, S.metal),
+            ]),
+        ]);
+        // gaiola de agachamento: dois postes dos lados (x ±31) atrás do corpo, com os ganchos na altura do ombro e os pinos de segurança
+        props.gym_rack = new Part('gym_rack', 'prop', GR.prop, [1, -1].flatMap((s) => [
+            new RoundBox([s * 31.0, -6.0, 46.0], [1.2, 1.2, 46.0], 0.4, S.metal),
+            new RoundBox([s * 31.0, 6.0, 46.0], [1.2, 1.2, 46.0], 0.4, S.metal),
+            new RoundBox([s * 31.0, 0, 91.5], [1.3, 7.2, 0.9], 0.4, S.metal),
+            new RoundBox([s * 31.0, 0, 1.0], [2.4, 8.0, 1.0], 0.4, S.metal),
+            new RoundBox([s * 29.4, 2.0, 62.0], [0.8, 3.0, 0.7], 0.3, S.chrome),               // ganchos (J-hooks)
+            new RoundBox([s * 31.0, 0, 34.0], [0.7, 8.4, 0.6], 0.3, S.chrome),                 // pinos de segurança
+        ]));
+        props.pin = new Part('pin', 'prop', GR.prop, [                                 // pino da granada (o anel na mão esquerda)
+            new Ellipsoid([0, 0, 0], [1.25, 0.35, 1.25], S.chrome),
+            new Ellipsoid([0, 0, 0], [0.7, 0.5, 0.7], S.chrome, { sub: true, blend: 0.2 }),
+            new RoundBox([0, 0, -1.6], [0.25, 0.25, 0.9], 0.15, S.chrome),
+        ]);
+        props.molotov = new Part('molotov', 'prop', GR.prop, [                         // coquetel molotov: garrafa (âmbar) com o pano no gargalo (+y)
+            new RoundCone([0, -7.5, 0], [0, 4.5, 0], 2.9, 2.9, S.batwood),
+            new RoundCone([0, 4.5, 0], [0, 8.6, 0], 2.7, 1.1, S.batwood),
+            new RoundCone([0, 8.6, 0], [0, 11.2, 0], 1.05, 1.05, S.batwood),
+            new Ellipsoid([0, 12.2, 0], [1.7, 2.0, 1.6], S.sock),
+            new Ellipsoid([0.8, 9.6, 1.2], [1.2, 2.2, 0.8], S.sock, { R: Rz(deg(25)) }),
+        ]);
+        props.lighter = new Part('lighter', 'prop', GR.prop, [                         // isqueiro
+            new RoundBox([0, 0, 0], [0.75, 0.5, 1.5], 0.25, S.accent),
+            new RoundBox([0, 0, 1.7], [0.6, 0.45, 0.35], 0.15, S.chrome),
         ]);
         // ---- objetos novos (animações do jogo)
         props.knife = new Part('knife', 'weapon', GR.weapon, [                        // faca (assalto de rua)
@@ -870,6 +936,9 @@ function NpcGenChar(G) {
         // ---- civis novos (lugares do jogo: praia, corrida, escritório)
         Object.assign({}, CIVIL, { id: 'civil_banhista', label: 'Banhista', skin: 'pele_morena', hair: 'buzz', hair_color: 'preto', top: 'tank', top_color: 'pele_morena', bottom: 'shorts', bottom_color: 'azul', shoes: 'flipflop', shoe_color: 'amarelo', sole_color: 'azul', body: 'muscular', scale: 1.0 }),
         Object.assign({}, CIVIL, { id: 'civil_corredora', label: 'Corredora', gender: 'f', skin: 'pele_clara', hair: 'ponytail', hair_color: 'ruivo', accent2: 'turquesa', top: 'tank', top_color: 'turquesa', bottom: 'shorts', bottom_color: 'roupa_preta', shoes: 'sneaker', shoe_color: 'tenis_branco', sole_color: 'tenis_branco', body: 'slim', scale: 0.95 }),
+        // frequentadores da ACADEMIA (só lá dentro: Interiors — rosca, supino e agachamento)
+        Object.assign({}, CIVIL, { id: 'academia_m', label: 'Marombeiro', group: 'Academia', skin: 'pele_morena', hair: 'buzz', hair_color: 'preto', top: 'tank', top_color: 'roupa_preta', bottom: 'shorts', bottom_color: 'cinza', shoes: 'sneaker', shoe_color: 'tenis_preto', sole_color: 'tenis_branco', body: 'muscular', watch: true, scale: 1.03 }),
+        Object.assign({}, CIVIL, { id: 'academia_f', label: 'Frequentadora da academia', group: 'Academia', gender: 'f', skin: 'pele_parda', hair: 'ponytail', hair_color: 'castanho', top: 'tank', top_color: 'rosa', bottom: 'pants', bottom_color: 'roupa_preta', shoes: 'sneaker', shoe_color: 'tenis_branco', sole_color: 'tenis_branco', body: 'normal', scale: 0.97 }),
         Object.assign({}, CIVIL, { id: 'civil_executivo', label: 'Executivo', skin: 'pele_parda', hair: 'short', hair_color: 'preto', top: 'jacket', top_color: 'marinho', bottom: 'pants', bottom_color: 'marinho', shoes: 'dress', shoe_color: 'couro_preto', sole_color: 'sola_escura', glasses: false, belt: true, body: 'normal', scale: 1.01 }),
         // ---- polícia
         { id: 'pm_policial', label: 'Policial militar', group: 'Polícia', skin: 'pele_negra', hair: 'buzz', hair_color: 'preto', eyes: 'neutral', head: 'police_cap', hat_color: 'pm_calca', top: 'uniform', top_color: 'pm_camisa', bottom: 'pants', bottom_color: 'pm_calca', shoes: 'boots', shoe_color: 'couro_preto', sole_color: 'sola_escura', vest: 'police', vest_color: 'tatico', bag: null, body: 'muscular', scale: 1.03 },

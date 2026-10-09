@@ -304,24 +304,30 @@ class Player {
     }
 
     // Entrando no carro: o que do desenho já entrou some debaixo da carroceria de `car` (NpcArt.setClip), dos pés para a cabeça, ao
-    // longo de `dur` s. null desliga.
-    setCarClip(car, dur = 1) {
-        this._carClip = car ? { car, t: 0, dur } : null;
-        if (!car) NpcArt.setClip(this._clipIds(), null);
+    // longo de `dur` s (a cabeça some quando ele abaixa para passar pela porta). out = saindo: o contrário — começa todo escondido e
+    // aparece da cabeça para os pés. null desliga.
+    setCarClip(car, dur = 1, out = false) {
+        this._carClip = car ? { car, t: 0, dur, out } : null;
+        if (car) this._updateCarClip(0);
+        else NpcArt.setClip(this._clipIds(), null);
     }
     _clipIds() { const s = this.actor.sheet; return s && s.isNpc ? [s.atlasName, s.fallbackAtlas, s.extraAtlas] : []; }
     _updateCarClip(dt) {
         const k = this._carClip;
         if (!k) return;
         k.t += dt;
-        const s = Math.min(1, k.t / k.dur), e = Math.min(1, Math.max(0, (s - 0.08) / 0.77)), car = k.car, A = CarDoors.axes(car);
-        NpcArt.setClip(this._clipIds(), { x: car.position.x, z: car.position.z, fx: A.fx, fz: A.fz, hl: car.halfLen * 0.97, hw: car.halfW * 0.97, h: 1.4 * e * e * (3 - 2 * e) });
+        const s = Math.min(1, k.t / k.dur), u = k.out ? 1 - s : s, e = Math.min(1, Math.max(0, (u - 0.06) / 0.52)), car = k.car, A = CarDoors.axes(car);
+        const p = this.root.position, dx = p.x - car.position.x, dz = p.z - car.position.z;
+        const inside = Math.abs(dx * A.fx + dz * A.fz) < car.halfLen && Math.abs(dx * A.rx + dz * A.rz) < car.halfW - 0.05;     // (os pés já passaram da soleira)
+        NpcArt.setClip(this._clipIds(), { x: car.position.x, z: car.position.z, fx: A.fx, fz: A.fz, hl: car.halfLen * 0.97, hw: car.halfW * 0.97, h: 1.6 * e * e * (3 - 2 * e), inside });
     }
 
     // ---------------------------------------------------------------- natação: começar/parar de nadar e MERGULHO
-    // Entrou no fundo (vadeando → nadando): joga o corpo para a frente (swim_in); voltou ao raso: fica de pé (swim_out). Mergulhado,
-    // o fôlego (o mesmo da corrida — Bags.stamina) vai acabando em Config.water.diveTime s; zerou: sobe sozinho, sem fôlego.
-    _updateSwim(dt, depth) {
+    // Nado normal = NADO PEITO na superfície (o corpo do "parado na água" puxando a água: entra e sai do vadear fundo sem tranco).
+    // Com Shift = CRAWL: joga o corpo para a frente (swim_in) e, soltando, volta ao peito (swim_out) — transições animadas. Voltou ao
+    // raso nadando crawl: fica de pé (swim_out). Mergulhado, o fôlego (o mesmo da corrida — Bags.stamina) vai acabando em
+    // Config.water.diveTime s; zerou: sobe sozinho, sem fôlego. (Shift mergulhado: a braçada de peito acelera.)
+    _updateSwim(dt, depth, sprint = false) {
         const was = this._wasSwim;
         this._wasSwim = this.swimming;
         if (this.diving && (!this.swimming || !this.alive || this.rag)) this.surface(false);
@@ -330,9 +336,14 @@ class Player {
             this.stamina = Math.max(0, (this.stamina == null ? max : this.stamina) - max / (Config.water.diveTime * (1 + lvl * 0.03)) * dt);
             if (this.stamina <= 0) { this.winded = true; this.surface(true); }
         }
-        if (was === undefined || this.action || this.rag) return;
-        if (!was && this.swimming) this.playAction('swim_in', { lock: 0.75 });
-        else if (was && !this.swimming && depth > 0) this.playAction('swim_out', { lock: 0.75 });
+        if (!this.swimming) { if (was && this._crawl && depth > 0 && !this.action && !this.rag) this.playAction('swim_out', { lock: 0.9 }); this._crawl = false; return; }
+        if (was === undefined || this.action || this.rag || this.diving) return;
+        // peito ↔ crawl (Shift): a passagem é animada; só troca de novo depois de terminar (sem pisca-pisca segurando/soltando)
+        const crawl = sprint && this.speed > 0.6;
+        if (crawl !== !!this._crawl && this.actor.sheet.getClip('swim_in', 'none')) {
+            this._crawl = crawl;
+            this.playAction(crawl ? 'swim_in' : 'swim_out', { lock: 1 });
+        } else this._crawl = crawl;
     }
     // Afunda (Q nadando): o corpo inteiro vai para baixo d'água. Precisa de fôlego.
     dive() {
@@ -340,7 +351,8 @@ class Player {
         if (this.winded || (this.stamina != null && this.stamina < (this.staminaMax || 100) * 0.15)) return false;
         this.diving = true;
         this.action = null;
-        this.playAction('dive_in', { lock: 0.5 });
+        this._crawl = false;                                                    // (o mergulho sai do peito e volta a ele)
+        this.playAction('dive_in', { lock: 0.6 });
         return true;
     }
     // Volta à tona (Q de novo, o fôlego acabou ou chegou ao raso). breathless: subiu porque o ar acabou (o jogo avisa).
@@ -348,7 +360,7 @@ class Player {
         if (!this.diving) return false;
         this.diving = false;
         this._surfaced = breathless ? 'breathless' : 'ok';                         // (o Game lê: respingo e aviso — _updateWater)
-        if (this.swimming && !this.rag) { this.action = null; this.playAction('dive_out', { lock: 0.5 }); }
+        if (this.swimming && !this.rag) { this.action = null; this._crawl = false; this.playAction('dive_out', { lock: 0.6 }); }
         return true;
     }
 
@@ -367,7 +379,9 @@ class Player {
         if (this.busy && !(force && this.action.name === 'shoot')) return null;
         const w = this.weapon, look = this.look;
         let ok;
-        if (look === 'none') {                                      // punhos e faca: COMBO soco esquerdo → soco direito → chute
+        if (look === 'knife' && this.actor.sheet.getClip('stab', 'knife')) {      // faca: a facada (Melee.stab)
+            ok = this.playAction('stab', { lock: 0.35, weapon: 'knife' });
+        } else if (look === 'none' || look === 'knife') {           // punhos (e a faca sem o desenho novo): COMBO soco esquerdo → soco direito → chute
             const now = performance.now() / 1000;
             if (now - (this._comboEnd || 0) > Player.COMBO_GAP) this._combo = 0;     // demorou: recomeça do 1º soco
             const name = Player.COMBO[this._combo % Player.COMBO.length];
@@ -475,6 +489,8 @@ class Player {
             this.state = 'ragdoll';
             return;
         }
+        // Treinando na academia (minigames/Gym.js): parado no aparelho; o mini-game comanda o quadro do sprite.
+        if (this.gym) { this.velocity.setAll(0); this.speed = 0; this.state = 'gym'; this._syncSprite(); return; }
         this._updateCarClip(dt);
         // Dentro do carro (esperando a porta fechar): parado e invisível.
         if (this.frozen) {
@@ -551,24 +567,28 @@ class Player {
         this.depth = depth;
         this.swimming = depth > W.wadeDepth;
         if (this.crouched && depth > 0) this.setCrouch(false);                     // (na água não dá para agachar)
-        this._updateSwim(dt, depth);
+        this._updateSwim(dt, depth, sprinting);
         // vadeando: a água sobe da canela (na beira) à cintura (perto de nadar) — o desenho afunda até ali (SpriteActor.setWaterline)
         // (nos clipes de começar/parar de nadar e de mergulhar a água já vem desenhada)
         const wetClip = this.action && /^(swim_|dive)/.test(this.action.name);
         this.waterline = depth > 0 && !this.swimming && !wetClip ? 0.25 + 0.75 * Math.min(1, depth / W.wadeDepth) : 0;
         this.actor.setWaterline(this.waterline);
-        const wf = depth <= 0 ? 1 : (depth <= W.wadeDepth ? 0.85 - 0.4 * (depth / W.wadeDepth) : (sprinting ? 0.52 : 0.4));
+        const wf = depth <= 0 || this.swimming ? 1 : 0.85 - 0.4 * (depth / W.wadeDepth);
+        // nadando: peito (normal), crawl (Shift: puxa da corrida e cansa como ela), mergulho (Shift: braçada mais forte)
+        const walkV = Config.player.maxSpeed * (1 + Outfit.m.walk) * Physique.speedMul();      // (físico: gordo anda mais devagar)
+        const swimV = !this.swimming ? 0 : this.diving ? walkV * (sprinting ? W.diveFast : W.dive)
+            : sprinting ? Math.max(walkV * W.crawlMin, Bags.runSpeed(this) * W.crawl) : walkV * W.breast;
         // Relevo: subir qualquer encosta pode, mas devagar (MapGeo.slopeSpeed) — e o desenho troca para subindo/escalando
         // (SpriteActor.setSlope). Inclinação medida na direção do movimento e suavizada (sem tranco de célula em célula).
         const onGround = depth <= 0 && !this.onDeck && !this.underBridge && !(typeof HouseView !== 'undefined' && HouseView.inside);
         const g = onGround && moveDir.lengthSquared() > 1e-4 ? MapGeo.slopeAlong(this.root.position.x, this.root.position.z, moveDir.x, moveDir.z) : 0;
         this.slope = (this.slope || 0) + (g - (this.slope || 0)) * Math.min(1, dt * 6);
         this.actor.setSlope(this.speed > 0.3 ? this.slope : 0);
-        const maxSpeed = ((sprinting && depth <= 0) ? Bags.runSpeed(this) : Config.player.maxSpeed * (1 + Outfit.m.walk)) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? (this.aimFree ? 0.85 : 0.6) : 1) * (this.crouched ? Config.tactics.sneakSpeed : 1) * MapGeo.slopeSpeed(this.slope);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
+        const maxSpeed = (this.swimming ? swimV : (sprinting && depth <= 0) ? Bags.runSpeed(this) : walkV) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? (this.aimFree ? 0.85 : 0.6) : 1) * (this.crouched ? Config.tactics.sneakSpeed : 1) * MapGeo.slopeSpeed(this.slope);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
 
         // Acelera/desacelera suavemente rumo à velocidade alvo (frame-independent).
         const targetVel = moveDir.scale(maxSpeed);
-        const t = 1 - Math.exp(-Config.player.accel * dt);
+        const t = 1 - Math.exp(-(this.swimming ? W.accel : depth > 0 ? Config.player.accel * 0.5 : Config.player.accel) * dt);      // (na água: embala e desliza)
         this.velocity = BABYLON.Vector3.Lerp(this.velocity, targetVel, t);
         if (this.velocity.lengthSquared() < 1e-4) this.velocity.setAll(0);
 
@@ -596,7 +616,7 @@ class Player {
             this.root.rotation.y = this._lerpAngle(this.root.rotation.y, this.aimHeading, 1 - Math.exp(-22 * dt));
         } else if (!this.action && moveDir.lengthSquared() > 1e-4) {
             const targetY = Math.atan2(moveDir.x, moveDir.z);
-            const rt = 1 - Math.exp(-Config.player.turnLerp * dt);
+            const rt = 1 - Math.exp(-Config.player.turnLerp * (this.swimming ? W.turn : 1) * dt);
             this.root.rotation.y = this._lerpAngle(this.root.rotation.y, targetY, rt);
         } else if (!this.action && this.coverLock && this.cover && !this.coverSnap) {
             // parado na cobertura: de costas para ela (de frente para fora)
@@ -617,30 +637,35 @@ class Player {
         if (!this.action) {
             const w = this.look;
             let clip;
-            if (this.swimming && this.diving && this.actor.play('dive', 'none')) {      // mergulhado: nado peito debaixo d'água
+            // Na água o ritmo da braçada/passada acompanha a velocidade e muda devagar (_wRate): acelerar e parar ficam suaves.
+            const wRate = (want) => { this._wRate = this._wRate == null ? want : this._wRate + (want - this._wRate) * (1 - Math.exp(-4 * dt)); return this._wRate; };
+            if (this.swimming && this.diving && this.actor.play('dive', 'none')) {      // mergulhado: nado peito debaixo d'água (Shift: mais forte)
                 this.state = 'dive';
-                rate = this.speed < 0.3 ? 0.45 : Math.max(0.6, this.speed / 1.1);
+                rate = wRate(this.speed < 0.3 ? 0.4 : Math.max(0.55, Math.min(1.7, this.speed / 1.6)));
                 this._syncSprite();
                 this.actor.update(dt, rate);
                 return;
             }
-            if (this.swimming) {                                  // nadando: crawl (mais devagar parado, "boiando")
-                clip = 'swim'; this.state = 'swim';
-                rate = this.speed < 0.3 ? 0.35 : Math.max(0.6, this.speed / 1.4);
-                if (this.speed < 0.3 && this.actor.play('swim_idle', 'none')) rate = 1;          // 2,5D: parado, bate as pernas no lugar
-                else this.actor.play('swim', 'none');
+            if (this.swimming) {
+                this.state = 'swim';
+                if (this._crawl && this.speed >= 0.3) { this.actor.play('swim', 'none'); rate = wRate(Math.max(0.6, Math.min(1.45, this.speed / 3.0))); }      // crawl (Shift)
+                else if (this.speed >= 0.3 && this.actor.play('swim_breast', 'none')) rate = wRate(Math.max(0.55, Math.min(1.5, this.speed / 1.8)));      // nado peito
+                else if (this.speed < 0.3 && this.actor.play('swim_idle', 'none')) rate = wRate(1);                                                          // parado: bate as pernas no lugar
+                else { this.actor.play('swim', 'none'); rate = wRate(this.speed < 0.3 ? 0.35 : Math.max(0.6, this.speed / 1.4)); }
                 this._syncSprite();
                 this.actor.update(dt, rate);
                 return;
             }
-            if (depth > 0) {                                      // vadeando: passos lentos e pesados
-                clip = this.speed < 0.3 ? 'idle' : 'walk'; this.state = this.speed < 0.3 ? 'idle' : 'wade';
-                rate = Math.max(0.4, this.speed / (Config.anim.walk * Config.player.stride)) * 0.9;
-                this.actor.play(clip, w);
+            if (depth > 0) {                                      // vadeando: passos lentos e pesados; acima da metade do corpo, braços puxando a água
+                const deep = depth >= W.wadeDepth * W.deepWade, moving = this.speed >= 0.3;
+                this.state = moving ? 'wade' : 'idle';
+                if (deep && this.actor.play(moving ? 'wade' : 'wade_idle', 'none')) rate = wRate(moving ? Math.max(0.45, this.speed / (Config.anim.walk * Config.player.stride * 0.69)) : 1);   // (passada do `wade`: 0,69 da do andar)
+                else { this.actor.play(moving ? 'walk' : 'idle', w); rate = wRate(moving ? Math.max(0.4, this.speed / (Config.anim.walk * Config.player.stride)) * 0.9 : 1); }
                 this._syncSprite();
                 this.actor.update(dt, rate);
                 return;
             }
+            this._wRate = null;
             const gun = w === 'pistol' || w === 'smg' || w === 'shotgun';
             // Agachado (furtivo / cobertura). Mirando EM COBERTURA ele levanta para atirar por cima (desenho de pé, abaixo).
             if (this.crouched && !(aiming && this.inCover)) {

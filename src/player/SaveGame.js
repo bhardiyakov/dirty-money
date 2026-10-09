@@ -18,7 +18,7 @@ const SaveGame = {
             hour: g.dayNight.hour, weather: g.weather.state,
             player: { x: p.position.x, z: p.position.z, rot: p.root.rotation.y, hp: p.hp, armor: p.armor, armorMax: p.armorMax, weapon: p.weapon },
             inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, bag: inv.bag, spareBags: inv.spareBags.slice(), weapons },
-            fitness: p.fit ? p.fit.xp : 0,
+            fitness: p.fit ? p.fit.xp : 0, strength: p.str ? p.str.xp : 0, physique: Physique.serialize(),
             stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
         };
     },
@@ -42,6 +42,8 @@ const SaveGame = {
         inv.spareBags = (I.spareBags || []).filter((b, i, a) => Bags.DEFS[b] && b !== 'none' && b !== inv.bag && a.indexOf(b) === i);
         Outfit.load(s.outfit || null);                                        // roupas e acessórios (saves antigos: o visual de sempre)
         p.fit = { xp: s.fitness || 0 };
+        p.str = { xp: s.strength || 0 };
+        Physique.load(s.physique || null);
         g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Garage.load(s.garage || null); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
         const pl = s.player || {};
         p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));

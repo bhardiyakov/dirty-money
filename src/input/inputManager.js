@@ -69,15 +69,23 @@ class InputManager {
             this.wheelDelta += Math.sign(e.deltaY);
         }, { passive: true });
 
-        // Botão esquerdo do mouse = ação principal (soco / tiro / taco).
-        window.addEventListener('mousedown', (e) => {
+        // Botão esquerdo do mouse = ação principal (soco / tiro / taco). Ouvido no pointerdown E no mousedown: o Babylon cancela o
+        // pointerdown sobre o canvas e aí o navegador não manda o mousedown (o clique sumia — ex.: "clique para continuar" nas telas de
+        // morte/prisão). O mesmo clique chega pelos dois: o 2º é ignorado.
+        const down = (e) => {
+            if (e.type === 'mousedown' && this._ptrDown === e.button && e.timeStamp - this._ptrT < 400) return;
+            if (e.type === 'pointerdown') { if (e.pointerType !== 'mouse') return; this._ptrDown = e.button; this._ptrT = e.timeStamp; }
             AudioFX.init();
             if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;        // (toque na tela virou "clique": só os controles da tela agem)
             this.usingPad = false;
             if (e.button === 0) { this.justPressed['mouse0'] = true; this.mouseDown = true; }
             if (e.button === 2 && e.target && e.target.id === 'canvas') this.mouseAim = true;              // botão direito sobre o jogo: mirar
-        });
-        window.addEventListener('mouseup', (e) => { if (e.button === 0) this.mouseDown = false; if (e.button === 2) this.mouseAim = false; });
+        };
+        window.addEventListener('pointerdown', down, true);
+        window.addEventListener('mousedown', down);
+        const up = (e) => { if (e.type === 'pointerup' && e.pointerType !== 'mouse') return; if (e.button === 0) this.mouseDown = false; if (e.button === 2) this.mouseAim = false; };
+        window.addEventListener('pointerup', up, true);
+        window.addEventListener('mouseup', up);
         // Posição do mouse (mira manual: o personagem aponta para o cursor).
         window.addEventListener('mousemove', (e) => {
             if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;

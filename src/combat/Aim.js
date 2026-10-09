@@ -47,7 +47,7 @@ class Aim {
         const g = this.g, p = g.player, inp = g.input, W = Weapons[p.weapon];
         const can = g.mode === 'player' && p.alive && W && W.gun && !p.swimming && !p.rag && !g.lockpick.active && !g.hiding && !g.holdup
             && !g.arrest && !g.death && !g.inventoryOpen && !g.menu.isOpen && !(g.motoUI && g._modalUiOpen());
-        inp.stickAim = can && !this.assisted;                // (mira manual com arma: o analógico direito aponta em vez de dar zoom)
+        inp.stickAim = (can && !this.assisted) || !!(W && W.throwable && g.mode === 'player');      // (mira manual com arma — ou granada/molotov na mão: o analógico direito aponta em vez de dar zoom)
         if (!can || !inp.aimHeld) {
             if (this.active) this._stop();
             if (can && !this.assisted) this._updateFree(dt, W); else if (this.free) this._stopFree();

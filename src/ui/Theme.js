@@ -135,7 +135,7 @@ const Emoji = {
     CHAR: {
         // itens do chão e da mochila
         medkit: '🩹', water: '💧', food: '🍔', lootbox: '📦', cash_small: '💵', cash_bag: '💰', cash_case: '💼', jewels: '💎', necklace: '📿', rings: '💍',
-        watch: '⌚', coins: '🪙', phone_old: '📟', phone_new: '📱', jerry: '⛽', knife: '🔪', bat: '🏏', backpack: '🎒', wind: '💨', bag_cross: '👜', bag_pack: '🎒', bag_tactical: '🎒', pockets: '👖', hack: '💾', carkey: '🔑',
+        watch: '⌚', coins: '🪙', phone_old: '📟', phone_new: '📱', jerry: '⛽', knife: '🔪', grenade: '💣', molotov: '🍾', bat: '🏏', backpack: '🎒', wind: '💨', bag_cross: '👜', bag_pack: '🎒', bag_tactical: '🎒', pockets: '👖', hack: '💾', carkey: '🔑',
         vest: '🦺', vest2: '🦺', fists: '✋', none: '✋', bag_brief: '💼', bag_duffel: '👝', bag_suit: '🧳', briefcase: '💼', duffel: '👝', suitcase: '🧳',
         // roupas e acessórios (Outfit / boutique)
         of_chinelo: '🩴', of_tenis_corrida: '👟', of_tenis_basquete: '👟', of_coturno: '🥾', of_sapato_social: '👞', of_camiseta_branca: '👕', of_regata_academia: '🎽',
@@ -147,7 +147,7 @@ const Emoji = {
         burger: '🍔', bacon: '🍔', fries: '🍟', soda: '🥤', shake: '🥤', slice: '🍕', pizza: '🍕', salad: '🥗', juice: '🧃', bowl: '🍧', pasta: '🍝', risotto: '🍚',
         menu_it: '🍽️', wine: '🍷', sushi: '🍣', omakase: '🍱', sake: '🍶', beer: '🍺', shot: '🥃', snack: '🍢', bread: '🥪', coffee: '☕', cake: '🍰', lunch: '🍱', bottle: '💧',
         // lugares do mapa (PauseMenu.POI_TYPES)
-        hospital: '🏥', station: '🚓', cart: '🛒', spray: '🎨', fuel: '⛽', boat: '🚤', home: '🏠', dumpster: '🗑️', pin: '📍', chop: '🔧', moto: '🛵', bank: '🏦', music: '🎶', gun: '🔫', shirt: '👕', dealer: '🚗',
+        hospital: '🏥', station: '🚓', cart: '🛒', spray: '🎨', fuel: '⛽', boat: '🚤', home: '🏠', dumpster: '🗑️', pin: '📍', chop: '🔧', moto: '🛵', bank: '🏦', music: '🎶', gun: '🔫', gym: '🏋️', shirt: '👕', dealer: '🚗',
         // indicadores do HUD
         heart: '❤️', shield: '🛡️', cash: '💵', clean: '💳', clock: '🕒', trophy: '🏆', star: '⭐', energy: '⚡', heat: '🔥', medal: '🏅', siren: '🚨',
     },

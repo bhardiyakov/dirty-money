@@ -123,6 +123,7 @@ class TrafficManager {
         const i = this.vm.vehicles.indexOf(car);
         if (i < 0) return;
         this.vm.vehicles.splice(i, 1);
+        if (car.clearDeadDriver) car.clearDeadDriver();
         if (this.game && this.game.doors) this.game.doors.reset(car);
         if (this.game) this.game.carLights.release(car);
         car.dispose(this.shadow);
@@ -264,6 +265,8 @@ class TrafficManager {
             if (Math.random() > this._density(cand.point.x, cand.point.z)) continue;
             car.teleport(cand.point.x, cand.point.z, Math.atan2(cand.d.dx, cand.d.dz));
             car.stuck = 0; car.blocked = 0;
+            if (car.clearDeadDriver) car.clearDeadDriver();                     // (outro carro, outro motorista: sem corpo nem buzina presa)
+            car.fixGlass();
             if (this.game && this.game.doors) this.game.doors.reset(car);        // (porta aberta/alarme não vão junto)
             if (mode === 'drive') { car.mode = 'drive'; car.startRoute(cand.point.x, cand.point.z, cand.d); }
             else car.park();
