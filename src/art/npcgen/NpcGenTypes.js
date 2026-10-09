@@ -111,7 +111,7 @@ function NpcGenTypes(G) {
     G.BY_ID.protagonista = PLAYER_DEFAULT;
     G.BY_ID.protagonista_tatico = PLAYER_DEFAULT;
     // Campos que mudam o DESENHO (o resto é cor). Dois visuais com a mesma chave usam o mesmo atlas.
-    const SHAPE_KEYS = ['hair', 'head', 'top', 'pattern', 'bottom', 'shoes', 'bag', 'body', 'gender', 'beard', 'glasses', 'gloves', 'chain', 'mask', 'scale', 'eyes', 'watch', 'hat_logo', 'zip', 'belt', 'rifle', 'hand'];
+    const SHAPE_KEYS = ['hair', 'head', 'top', 'pattern', 'bottom', 'shoes', 'bag', 'body', 'gender', 'beard', 'glasses', 'gloves', 'chain', 'mask', 'scale', 'eyes', 'watch', 'hat_logo', 'zip', 'belt', 'rifle', 'hand', 'dmg'];      // dmg: estado de dano pintado (0..3 — NpcGenMesh.paintDamage)
     const shapeKey = (spec) => { const s = fullSpec(spec); return SHAPE_KEYS.map((k) => k + '=' + (s[k] === undefined || s[k] === null || s[k] === false ? '' : s[k])).join(';'); };
 
     // Fichas novas de civis (variedade de forma): moram aqui para não misturar com o pacote original.

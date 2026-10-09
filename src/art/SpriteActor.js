@@ -385,24 +385,20 @@ class SpriteActor {
         mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, P);
     }
 
-    // Camadas de ferimento por cima da skin (personagens 2,5D): `shot` = BALEADO (furos e sangue na roupa) e `beat` = ESPANCADO
-    // (hematomas e sangue do nariz/boca), níveis 0..4 — cada nível, mais uma marca. Ficam no sprite até a pessoa ser outra
-    // (renasceu / trocou de variante) ou se curar (clearWounds). Vão no 4º número do atributo `fr` (livre) com uma semente por
-    // pessoa: o shader do NpcArt desenha as marcas (shotMask / beatMask).
-    // `cond` = o ESTADO da roupa e do corpo (condLayer no shader), por cima de qualquer roupa que ele use: 1 SUJO (marcas de terra),
-    // 2 MACHUCADO (cortes, arranhões e hematomas), 3 MUITO MACHUCADO (roupa rasgada mostrando a pele e muito sangue). Ver Blood.cond.
-    // fr.w = semente × 100 + estado × 25 + baleado × 5 + espancado.
+    // Ferimentos da pessoa: `shot` = tiros (0..4), `beat` = pancadas (0..4) e `cond` = o ESTADO DE DANO (Blood.cond): 1 SUJO, 2 MACHUCADO,
+    // 3 MUITO MACHUCADO. O estado é PINTADO no desenho (NpcGenMesh.paintDamage — terra, cortes, rasgos e sangue presos à roupa e à pele,
+    // girando com o corpo): mudou, o ator troca de atlas — o jogador pelo visual (PlayerLook, via onCond), o NPC pela folha machucada
+    // do tipo (NpcArt.applyDamage). Fica até a pessoa ser outra (renasceu) ou se curar (clearWounds).
     setWounds(shot, beat, cond = this._wCond || 0) {
         shot = Math.max(0, Math.min(4, shot | 0)); beat = Math.max(0, Math.min(4, beat | 0)); cond = Math.max(0, Math.min(3, cond | 0));
-        if (this._wShot === shot && this._wBeat === beat && (this._wCond || 0) === cond) return;
+        const was = this._wCond || 0;
         this._wShot = shot; this._wBeat = beat; this._wCond = cond;
-        if (this._woundSeed == null) this._woundSeed = Math.floor(Math.random() * 250);
-        const w = shot || beat || cond ? this._woundSeed * 100 + cond * 25 + shot * 5 + beat : 0, R = this._fr;
-        for (let k = 3; k < 16; k += 4) R[k] = w;
-        this.mesh.updateVerticesData('fr', R);
+        if (cond === was) return;
+        if (this.onCond) this.onCond(cond);
+        else if (typeof NpcArt !== 'undefined' && this.sheet && this.sheet.isNpc) NpcArt.applyDamage(this, cond);
     }
     get wounds() { return { shot: this._wShot || 0, beat: this._wBeat || 0, cond: this._wCond || 0 }; }
-    clearWounds() { this._hits = 0; if (!this._wShot && !this._wBeat && !this._wCond) return; this._woundSeed = null; this.setWounds(0, 0, 0); }
+    clearWounds() { this._hits = 0; if (!this._wShot && !this._wBeat && !this._wCond) return; this.setWounds(0, 0, 0); }
 
     // Quadro f do clipe vetorial: um único atributo (3 números) — o mesmo custo de antes, quando só a UV mudava.
     _setFr(mesh, pk, f, R, raw = false) {
