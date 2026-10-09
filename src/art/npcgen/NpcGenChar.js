@@ -929,6 +929,11 @@ function NpcGenChar(G) {
         for (const [k, p] of Object.entries(buildParts(s))) {
             if (mp && (G.MESH_REPLACED.has(k) || (k === 'hair' && mp.hairMesh))) { if (mp.parts[k]) body[k] = mp.parts[k]; continue; }
             body[k] = bakeCached(p, spacing);
+            if (k === 'hair' && (s.dmg | 0) >= 3 && G.paintHairBlood) {               // muito machucado: sangue no cabelo (numa cópia: o assado fica no cache)
+                const h = body[k], c = Object.assign({}, h, { mat: new Int16Array(h.mat), tone: new Int8Array(h.tone) });
+                G.paintHairBlood(s, c.pos, c.nrm, c.mat, c.tone, c.n);
+                body[k] = c;
+            }
         }
         if (mp) for (const k of Object.keys(mp.parts)) if (!body[k]) body[k] = mp.parts[k];
         return { body, props: bakeProps(spacing * 0.8) };

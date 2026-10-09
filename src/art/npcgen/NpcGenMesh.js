@@ -275,6 +275,75 @@ function NpcGenMesh(G) {
         return M.skin;
     }
 
+    // ------------------------------------------------------------------ ESTADO DE DANO pintado na roupa e na pele (ficha.dmg)
+    // 1 SUJO (atropelado/rolou no chão): manchas de terra na roupa, poucas na pele; 2 MACHUCADO (apanhou / 1 tiro): menos terra, cortes e
+    // arranhões vermelhos, hematomas, sangue do nariz; 3 MUITO MACHUCADO (2+ tiros): rasgos na roupa com a PELE aparecendo (borda
+    // esfiapada escura, ralado dentro), manchas grandes de sangue, rosto e cabelo ensanguentados.
+    // As marcas são sorteadas no ESPAÇO DO OSSO (cada ponto da parte, antes do esticão adulto): ficam presas ao corpo — giram com ele em
+    // todas as direções e acompanham as animações. Terra = madeira (marrom), sangue/corte = carne (vermelhos), rasgo = a pele da pessoa:
+    // as cores da roupa e da pele continuam vindo da paleta de cada um (uma variação da roupa, não uma skin pronta).
+    const hash3 = (x, y, z, s) => { const h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + s * 19.19) * 43758.5453; return h - floor(h); };
+    // 1 se o ponto (x, y, z), de normal (nx, ny, nz), cai numa das marcas da grade de células `cs` (chance p por célula). A marca é
+    // desenhada NA SUPERFÍCIE: a distância ao centro é medida no plano do ponto (sem a componente da normal) — um traço de meio
+    // comprimento L e meia largura W, na direção sorteada (projetada no plano); só vale do mesmo lado do corpo (|d·n| < 0,7·cs).
+    function mark(x, y, z, nx, ny, nz, cs, p, L, W, salt) {
+        const gx = floor(x / cs), gy = floor(y / cs), gz = floor(z / cs);
+        for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+            const cx = gx + i, cy = gy + j, cz = gz + k, h = hash3(cx, cy, cz, salt);
+            if (h > p) continue;
+            const q = h / p, ox = (cx + hash3(cx, cy, cz, salt + 1.3)) * cs, oy = (cy + hash3(cx, cy, cz, salt + 2.7)) * cs, oz = (cz + hash3(cx, cy, cz, salt + 4.1)) * cs;
+            let dx = x - ox, dy = y - oy, dz = z - oz;
+            const dn = dx * nx + dy * ny + dz * nz;
+            if (abs(dn) > cs * 0.7) continue;
+            dx -= dn * nx; dy -= dn * ny; dz -= dn * nz;                         // no plano da superfície
+            let ax = hash3(cx, cy, cz, salt + 5.9) - 0.5, ay = hash3(cx, cy, cz, salt + 7.3) - 0.5, az = hash3(cx, cy, cz, salt + 8.8) - 0.5;
+            const an = ax * nx + ay * ny + az * nz; ax -= an * nx; ay -= an * ny; az -= an * nz;
+            const al = sqrt(ax * ax + ay * ay + az * az) || 1; ax /= al; ay /= al; az /= al;
+            const along = dx * ax + dy * ay + dz * az, px = dx - along * ax, py = dy - along * ay, pz = dz - along * az;
+            const l = L * (0.6 + 0.8 * q), w = W * (0.7 + 0.6 * hash3(cx, cy, cz, salt + 9.9));
+            if ((along * along) / (l * l) + (px * px + py * py + pz * pz) / (w * w) < 1) return 1;
+        }
+        return 0;
+    }
+    const CLOTH = new Set([M.shirt, M.jeans, M.sock, M.accent, M.accent2]);
+    function paintDamage(s, bone, pos, nrm, mat, tone, n) {
+        const lv = s.dmg | 0;
+        if (!lv) return;
+        const part = bone.replace(/_[RL]$/, ''), salt = (bone.length * 7.31 + (bone.endsWith('_L') ? 3.3 : 0)) + (s.dmgSeed || 0);
+        for (let j = 0; j < n; j++) {
+            const x = pos[j * 3], y = pos[j * 3 + 1], z = pos[j * 3 + 2], nx = nrm[j * 3], ny = nrm[j * 3 + 1], nz = nrm[j * 3 + 2], m = mat[j], cloth = CLOTH.has(m), skin = m === M.skin;
+            const mk = (cs, p, L, W, sl) => mark(x, y, z, nx, ny, nz, cs, p, L, W, salt + sl);
+            if (part === 'head') {                                             // rosto: sangue do nariz/boca (2+), corte na testa e sangue escorrendo (3)
+                if (!(skin || m === M.mouth || m === M.beard || m === M.brow)) continue;
+                const front = y > 5.5;
+                if (lv >= 2 && front && abs(x) < 1.6 + (lv - 2) * 1.2 && z > 2.6 && z < 6.4) { mat[j] = M.flesh; tone[j] = -1; continue; }
+                if (lv >= 3 && front && ((x - 2.5) ** 2) / 9 + ((z - 10.5) ** 2) / 2.2 < 1) { mat[j] = M.flesh; tone[j] = 0; continue; }
+                if (lv >= 3 && mk(3.2, 0.5, 2.0, 0.9, 3)) { mat[j] = M.flesh; tone[j] = -1; continue; }
+                if (lv >= 2 && skin && mk(4.0, 0.35, 1.4, 1.2, 11)) tone[j] -= 2;                 // hematoma
+                continue;
+            }
+            if (!cloth && !skin) continue;
+            // 3: rasgos (a pele aparece; borda esfiapada escura; ralado dentro) e manchas de sangue
+            if (lv >= 3 && cloth) {
+                if (mk(7.5, 0.34, 3.6, 1.35, 13)) { const sc = mk(2.4, 0.45, 1.1, 0.35, 21); mat[j] = sc ? M.flesh : M.skin; tone[j] = sc ? 0 : 0; continue; }
+                if (mk(7.5, 0.34, 4.2, 1.95, 13)) { tone[j] = -3; continue; }
+            }
+            if (lv >= 3 && mk(7.0, 0.3, 2.4, 1.8, 17)) { mat[j] = M.flesh; tone[j] = -2; continue; }
+            // 2+: cortes e arranhões (vermelho vivo, finos) e hematomas na pele
+            if (lv >= 2 && mk(5.2, lv >= 3 ? 0.36 : 0.32, 2.3, 0.55, 5)) { mat[j] = M.flesh; tone[j] = 1; continue; }
+            if (lv >= 2 && skin && mk(5.0, 0.32, 1.6, 1.2, 9)) { tone[j] -= 2; continue; }
+            // 1+: terra (marrom escuro; na pele, pouca)
+            if (mk(cloth ? 4.6 : 5.5, cloth ? (lv === 1 ? 0.36 : 0.2) : 0.12, 1.7, 0.95, 1)) { mat[j] = M.wood; tone[j] = -1; }
+        }
+    }
+    function paintHairBlood(s, pos, nrm, mat, tone, n) {
+        if ((s.dmg | 0) < 3) return;
+        for (let j = 0; j < n; j++) {
+            const x = pos[j * 3], y = pos[j * 3 + 1], z = pos[j * 3 + 2];
+            if ((y > 2 && mark(x, y, z, nrm[j * 3], nrm[j * 3 + 1], nrm[j * 3 + 2], 3.6, 0.5, 2.4, 1.0, 31 + (s.dmgSeed || 0))) || (((x - 2.5) ** 2) / 10 + ((z - 12.5) ** 2) / 4 < 1 && y > 3)) { mat[j] = M.flesh; tone[j] = -1; }
+        }
+    }
+
     // ------------------------------------------------------------------ partes de uma ficha
     const _cache = new Map();
     // A ficha usa a malha? (G.MESH3D = false desliga tudo: compara com o desenho geométrico)
@@ -283,7 +352,7 @@ function NpcGenMesh(G) {
     // body: { nome: parte assada } das partes que a malha faz (corpo e cabelo da malha). sdfKeep(nome) = a ficha ainda usa a forma geométrica.
     function meshParts(spec, spacing) {
         const s = G.fullSpec(spec), key = s.gender === 'f' ? 'f' : 'm';
-        const ck = JSON.stringify([key, s.body, s.top, s.bottom, s.shoes, s.gloves, s.watch, s.hair, s.head, s.mask, s.eyes, s.beard, s.glasses, s.pattern, s.chain, s.zip, spacing]);
+        const ck = JSON.stringify([key, s.body, s.top, s.bottom, s.shoes, s.gloves, s.watch, s.hair, s.head, s.mask, s.eyes, s.beard, s.glasses, s.pattern, s.chain, s.zip, s.dmg | 0, s.dmgSeed || 0, spacing]);
         if (_cache.has(ck)) return _cache.get(ck);
         const F = fitFor(key), C = DATA.chars[key], mw = MORPH[s.body] || MORPH.normal;
         const sdf = G.buildParts(s);                                        // (as texturas procedurais de cada parte: rosto, estampa, cadarço…)
@@ -340,6 +409,7 @@ function NpcGenMesh(G) {
                 const t2 = sp.tex(pos, nrm, mat, pid, d1, d2, n);
                 for (let j = 0; j < n; j++) tone[j] += t2[j];
             }
+            paintDamage(s, b, pos, nrm, mat, tone, n);                                  // estado de dano (s.dmg): terra, cortes, rasgos, sangue
             const T8 = new Int8Array(n);
             for (let j = 0; j < n; j++) T8[j] = max(-3, min(3, tone[j]));
             out[name] = { name, bone: b, group: PART_GROUP[b], pos, nrm, mat, tone: T8, n, pos2, nrm2, b2, w2, mesh: true };
@@ -361,6 +431,7 @@ function NpcGenMesh(G) {
                 tone[n] = L < 0.7 ? -1 : L > 1.35 ? 1 : 0;
                 n++;
             }
+            paintHairBlood(s, pos, nrm, mat, tone, n);
             out.hair = { name: 'hair', bone: 'head', group: GR.hair, pos: pos.subarray(0, n * 3), nrm: nrm.subarray(0, n * 3), mat: mat.subarray(0, n), tone: tone.subarray(0, n), n, mesh: true };
         }
         // esticão "adulto" (G.ADULT), como nas partes geométricas: cada osso na sua escala (o 2º osso de cada ponto, na dele)
@@ -386,6 +457,7 @@ function NpcGenMesh(G) {
     // Partes do corpo trocadas pela malha (nome da parte geométrica).
     const REPLACED = new Set(Object.keys(PART_GROUP));
 
+    G.paintHairBlood = paintHairBlood;
     Object.assign(G, { MESH3D: !!DATA, meshUsable: usable, meshParts, meshFit: fitFor, MESH_REPLACED: REPLACED, MESH_HAIR: HAIR });
     return G;
 }

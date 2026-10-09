@@ -21,7 +21,12 @@ const PlayerLook = {
     _job: 0,
     VERSION: 9,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D; 8: sentar no carro (sitin); 9: começar/parar de nadar e mergulho
 
-    attach(game) { this.game = game; this.shown = null; this.sync(true); },
+    attach(game) {
+        this.game = game; this.shown = null;
+        const a = game.player && game.player.actor;
+        if (a) a.onCond = () => this.sync();                                // estado de dano mudou: o visual pintado (ficha.dmg)
+        this.sync(true);
+    },
 
     get G() { return NpcArt.gen(); },
     get ok() { return typeof NpcArt !== 'undefined' && !!(this.game && this.game.sprites && this.game.sprites.npc); },
@@ -38,6 +43,10 @@ const PlayerLook = {
         s.bag = D.look ? this.BAG[D.look] || null : null;
         if (D.look) { s.bag_color = (Outfit.tint && Outfit.tint.bag) || this.BAG_COLOR[D.look]; s.cargo_color = D.look === 'tactical' ? 'tatico' : 'alca'; }
         s.hand = D.hand || null;
+        // estado de dano (Blood.cond): pintado na roupa e na pele — a prévia do equipamento (over) mostra limpo
+        const pa = this.game && this.game.player && this.game.player.actor;
+        const dmg = over.dmg !== undefined ? over.dmg : (pa && pa.wounds ? pa.wounds.cond : 0);
+        if (dmg) s.dmg = dmg;                                                 // (sem dano, a chave fica igual à do visual pronto)
         if (s.hand) s.cargo_color = s.hand === 'briefcase' ? 'cromo' : s.hand === 'suitcase' ? 'roupa_preta' : 'verde';
         return s;
     },
@@ -150,6 +159,7 @@ const PlayerLook = {
             this._register(key, a, false);
             this._idbPut(this._ck(key), a);
             this._idbPut(this._ck(key) + '|t', t);
+            if (!s.dmg) this._prefetch(s);                                     // pronto o visual limpo: as versões machucadas, em segundo plano
         };
         const done = (m) => {
             if (job !== this._job) return;
@@ -178,6 +188,27 @@ const PlayerLook = {
             feed();
         };
         for (let i = 0; i < N; i++) run(i);
+    },
+    // Gera e guarda no aparelho (sem trocar o visual) as versões MACHUCADAS (dmg 2, 1, 3) do visual `s` — num Worker só, devagar: quando
+    // ele se machucar, o desenho já está pronto (senão é gerado na hora, como uma roupa nova). Recomeça se o visual mudar.
+    async _prefetch(s) {
+        const job = this._preJob = (this._preJob || 0) + 1, G = this.G, k = this.k();
+        for (const lv of [2, 1, 3]) {
+            const sp = Object.assign({}, s, { dmg: lv }), key = G.shapeKey(sp);
+            if (job !== this._preJob) return;
+            if (await this._idbGet(this._ck(key) + '|t')) continue;
+            const all = this.clipsFor(sp).concat(G.PLAYER_TAC), tac = new Set(G.PLAYER_TAC), got = [];
+            const wk = this._worker('pre');
+            for (let i = 0; i < all.length; i += 3) {
+                if (job !== this._preJob) return;
+                const m = await new Promise((ok) => { wk.onmessage = (e) => { wk._busy = false; ok(e.data); }; wk._busy = true; wk.postMessage({ type: 'clips', job: -job, spec: sp, keys: all.slice(i, i + 3), k }); });
+                if (m.error) { console.warn('[VISUAL] machucado falhou:', m.error); return; }
+                got.push(...m.clips);
+            }
+            const idx = new Map(all.map((c, i) => [c, i])), sorted = got.sort((p, q) => idx.get(p.key) - idx.get(q.key));
+            this._idbPut(this._ck(key) + '|t', this._pack(sorted.filter((c) => tac.has(c.key)), k));
+            this._idbPut(this._ck(key), this._pack(sorted.filter((c) => !tac.has(c.key)), k));
+        }
     },
     _pack(clips, k) { const a = this.G.packAtlas(clips); return { w: a.w, h: a.h, data: a.data, clips: a.clips, k, v: 2, frame: this.G.frameFor(k) }; },
     // Resolução do visual: a dos atlas prontos, ou o dobro com a alta definição ligada (NpcArt.hd).
@@ -216,8 +247,8 @@ const PlayerLook = {
                             const k = m.k || G.OUT_K, R = G.rendererFor(m.spec, { k }), pose = G.CLIPS.idle.fn(m.spec.weaponLook || 'none')[0], ramps = G.rampsFor(m.spec), frames = [];
                             for (let d = 0; d < 8; d++) frames.push(G.colorize(R.render(pose, -45 * d, false), ramps));      // (sem a sombra no chão: o pedestal já é o chão)
                             self.postMessage({ job: m.job, frames, W: G.frameFor(k), H: G.frameFor(k), k }, frames.map((f) => f.buffer));
-                        } else if (m.type === 'atlas') {                   // atlas inteiro de um TIPO (alta definição: NpcArt.hdWant)
-                            const a = G.buildAtlas(G.BY_ID[m.id], m.keys || G.TYPES[m.id].clips, { typeId: m.id, k: m.k });
+                        } else if (m.type === 'atlas') {                   // atlas inteiro de um TIPO (alta definição: NpcArt.hdWant; machucado: dmg — NpcArt.dmgSheet)
+                            const a = G.buildAtlas(m.dmg ? Object.assign({}, G.BY_ID[m.id], { dmg: m.dmg }) : G.BY_ID[m.id], m.keys || G.TYPES[m.id].clips, { typeId: m.id, k: m.k });
                             self.postMessage({ job: m.job, atlas: { w: a.w, h: a.h, data: a.data, clips: a.clips, k: a.k, v: a.v, frame: a.frame } }, [a.data.buffer]);
                         }
                     } catch (err) { self.postMessage({ job: m.job, error: String(err && err.stack || err) }); }
@@ -259,7 +290,7 @@ const PlayerLook = {
             const st = db.transaction('atlas', 'readwrite').objectStore('atlas');
             st.put({ w: atlas.w, h: atlas.h, data: atlas.data, clips: atlas.clips, k: atlas.k, v: atlas.v, frame: atlas.frame, t: Date.now() }, k);
             const all = st.getAllKeys();
-            all.onsuccess = () => { const ks = all.result.filter((x) => x !== k); if (ks.length > 10) for (const x of ks.slice(0, ks.length - 10)) st.delete(x); };
+            all.onsuccess = () => { const ks = all.result.filter((x) => x !== k); if (ks.length > 32) for (const x of ks.slice(0, ks.length - 32)) st.delete(x); };      // (cada visual: o limpo e os 3 machucados)
         } catch (e) { console.warn('[VISUAL] não guardou no aparelho:', e && e.message); }     // (sem espaço: segue só na memória)
     },
 };

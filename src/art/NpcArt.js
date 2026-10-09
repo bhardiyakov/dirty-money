@@ -167,18 +167,12 @@ const NpcArt = {
             varying vec4 vFr;
             varying vec2 vC;
             varying vec3 vW;
-            varying vec3 vBl;
-            varying float vCond;
             varying vec3 vPx2;
             varying vec4 vFr2;
             varying vec2 vG;
             vec2 un(float v) { float hi = floor(v / 4096.0 + 0.0001); return vec2(hi, v - hi * 4096.0); }
             void main(void) {
                 vec2 xy = un(fr.x), wh = un(fr.y), o = un(fr.z) - 2048.0;
-                // camadas de ferimento (SpriteActor.setWounds): fr.w = semente × 100 + estado × 25 + baleado × 5 + espancado (0..4; estado 0..3)
-                float ws = floor(fr.w / 100.0 + 0.001), w1 = fr.w - ws * 100.0, cd = floor(w1 / 25.0 + 0.001), wr = w1 - cd * 25.0, wb = floor(wr / 5.0 + 0.001);
-                vBl = vec3(wb / 4.0, (wr - wb * 5.0) / 4.0, ws);
-                vCond = cd;
                 vPx = vec2(xy.x - o.x + position.x * ppu, xy.y - o.y - position.z * ppu);
                 vFr = vec4(xy, xy + wh);
                 vec2 xy2 = un(fr2.x), wh2 = un(fr2.y), o2 = un(fr2.z) - 2048.0;
@@ -214,131 +208,12 @@ const NpcArt = {
             uniform float wt;
             uniform float ppu;
             varying vec3 vW;
-            varying vec3 vBl;
-            varying float vCond;
             varying vec3 vPx2;
             varying vec4 vFr2;
             varying vec2 vG;
             uniform vec4 clipA;          // recorte da carroceria (entrando no carro): centro (x, z) e frente (fx, fz)
             uniform vec4 clipB;          // meio comprimento, meia largura, altura máxima na imagem (m) e ligado (w > 0,5)
             float hb(float n) { return fract(sin(n) * 43758.5453); }
-            // ---- Camadas de ferimento por cima da skin (SpriteActor.setWounds), em coordenadas do corpo (x, altura na imagem, m)
-            // arredondadas ao pixel da arte: ficam no mesmo lugar do corpo quando ele anda. Cada nível acrescenta uma marca.
-            // BALEADO (vBl.x): furos de bala com sangue empapando a roupa em volta e escorrendo para baixo — tronco e coxas.
-            // Devolve 0 (nada), 1 (sangue) ou 2 (o furo, quase preto).
-            float shotMask(vec2 q) {
-                float m = 0.0, s = vBl.z;
-                for (int i = 0; i < 4; i++) {
-                    float fi = float(i);
-                    if (fi >= vBl.x * 4.0) break;
-                    vec2 c = vec2((hb(s * 3.1 + fi) - 0.5) * 0.22, 0.3 + hb(s * 5.7 + fi * 1.3) * 0.34);
-                    vec2 d = q - c;
-                    float a = atan(d.y, d.x), r = (0.045 + 0.035 * hb(s * 9.3 + fi)) * (1.0 + 0.25 * sin(a * 3.0 + s + fi) + 0.15 * sin(a * 7.0 + s * 2.0));
-                    float drip = step(abs(d.x - 0.012 * sin(d.y * 60.0 + fi)), 0.012) * step(d.y, 0.0) * step(-0.07 - 0.07 * hb(s + fi * 7.0), d.y);   // escorrido
-                    if (length(d) < 0.016) return 2.0;
-                    m = max(m, max(1.0 - step(r, length(d)), drip));
-                }
-                return m;
-            }
-            // ESPANCADO (vBl.y) — pensado para ler de CIMA (a câmera vê mais o cabelo e os ombros que o rosto): 1) sangue do nariz/boca
-            // escorrendo até a gola; 2) ferida na cabeça (sangue no cabelo, escorrendo); 3) roupa suja de terra (rolou no chão);
-            // 4) mais sujeira e a ferida maior. Hematomas roxos em toda pele que aparece (rosto, pescoço, mãos) desde o 1º nível.
-            // Devolve (roxo 0..1, sangue 0..1, sujeira 0..1).
-            vec3 beatMask(vec2 q, float mat) {
-                float s = vBl.z + 17.0, bruise = 0.0, bl = 0.0, dirt = 0.0, lv = vBl.y * 4.0;
-                bool skin = mat == 1.0, face = mat == 12.0 || mat == 14.0 || mat == 18.0, hair = mat == 2.0;
-                bool cloth = mat == 3.0 || mat == 4.0 || mat == 20.0 || mat == 22.0 || mat == 29.0 || mat == 30.0;
-                if (hair && lv > 1.5) {                                                          // ferida na cabeça
-                    vec2 c = vec2(0.03 + 0.04 * (hb(s * 1.7) - 0.5), 1.06), d = q - c;
-                    float a = atan(d.y, d.x), r = (lv > 3.5 ? 0.075 : 0.05) * (1.0 + 0.3 * sin(a * 4.0 + s));
-                    float run = step(abs(d.x - 0.01 * sin(d.y * 50.0)), 0.014) * step(d.y, 0.0) * step(-0.12, d.y);
-                    bl = max(1.0 - step(r, length(d)), run);
-                }
-                if (cloth && lv > 2.5) {                                                         // sujeira de terra
-                    for (int i = 0; i < 4; i++) {
-                        float fi = float(i);
-                        if (fi >= (lv - 2.0) * 2.0) break;
-                        vec2 c = vec2((hb(s * 7.7 + fi) - 0.5) * 0.5, 0.12 + hb(s * 3.3 + fi * 2.1) * 0.62), d = (q - c) * vec2(1.0, 1.4);
-                        float a = atan(d.y, d.x), r = (0.06 + 0.04 * hb(s * 5.1 + fi)) * (1.0 + 0.3 * sin(a * 5.0 + fi * 2.0 + s));
-                        dirt = max(dirt, 1.0 - smoothstep(r * 0.6, r, length(d)));
-                    }
-                }
-                // (medidas do desenho de pé, de frente: rosto em ~0,95 de altura, mãos em ±0,42 × 0,33, gola em ~0,8)
-                if (skin || face) {
-                    bruise = 0.35;                                                                  // pele toda arroxeada/vermelha
-                    for (int i = 0; i < 4; i++) {
-                        float fi = float(i);
-                        if (fi >= vBl.y * 4.0) break;
-                        // olho roxo, a outra maçã do rosto e as duas mãos (nós dos dedos ralados de se defender)
-                        vec2 c = i == 0 ? vec2(0.045, 0.965) : (i == 1 ? vec2(-0.05, 0.92) : (i == 2 ? vec2(0.42, 0.33) : vec2(-0.42, 0.35)));
-                        c += (vec2(hb(s * 2.3 + fi), hb(s * 4.1 + fi)) - 0.5) * 0.03;
-                        float r = (i < 2 ? 0.045 : 0.06) + 0.015 * hb(s * 6.7 + fi), l = length((q - c) * vec2(1.0, 1.2));
-                        bruise = max(bruise, 1.0 - smoothstep(r * 0.45, r, l));
-                    }
-                }
-                // sangue do nariz/boca: do rosto (0,93) escorrendo pelo queixo até a gola (~0,8) — na pele e na roupa logo abaixo
-                if (!hair) {
-                    float dx = q.x - 0.012 * (hb(s * 8.0) - 0.5);
-                    bl = max(bl, step(abs(dx), 0.016 + 0.01 * vBl.y) * step(0.84 - 0.05 * vBl.y, q.y) * step(q.y, 0.93));
-                    bl = max(bl, 1.0 - step(0.035 + 0.02 * vBl.y, length((q - vec2(0.0, 0.8)) * vec2(1.0, 1.6))));         // pingou na gola
-                }
-                return vec3(bruise, bl, dirt);
-            }
-            // ---- ESTADO da roupa e do corpo (vCond — SpriteActor.setWounds / Blood.cond), por cima de QUALQUER roupa: as marcas são do
-            // tecido e da pele que estiverem ali (a cor de baixo é a da roupa que ele veste), não uma skin pronta.
-            //   1 SUJO: manchas de terra espalhadas pela roupa (e algumas na pele);
-            //   2 MACHUCADO: menos terra, cortes e arranhões vermelhos na roupa e na pele, hematomas roxos na pele;
-            //   3 MUITO MACHUCADO: rasgos na roupa com a PELE aparecendo por baixo (borda esfiapada escura e o ralado vermelho dentro),
-            //     manchas grandes de sangue e os cortes.
-            // Traços curtos espalhados em células (cs m): cada célula tem chance p de uma marca girada (meio comprimento L, meia largura
-            // W); devolve 1 dentro de uma marca. Em pixels inteiros da arte (q já vem arredondado): marcas "pixel art", sem borrão.
-            float marks(vec2 q, float cs, float p, float L, float W, float salt) {
-                vec2 g = floor(q / cs);
-                float m = 0.0;
-                for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-                    vec2 cc = g + vec2(float(i), float(j));
-                    float h0 = hb(dot(cc, vec2(12.9898, 78.233)) + salt * 3.7 + vBl.z * 1.37);
-                    if (h0 > p) continue;
-                    float k = h0 / p;
-                    vec2 ctr = (cc + vec2(hb(k * 91.7 + salt), hb(k * 47.3 + salt))) * cs, d = q - ctr;
-                    float an = hb(k * 13.1 + salt) * 3.1416, ca = cos(an), sa = sin(an);
-                    vec2 r = vec2(ca * d.x + sa * d.y, -sa * d.x + ca * d.y) / vec2(L * (0.6 + 0.8 * hb(k * 7.7)), W * (0.7 + 0.6 * hb(k * 3.3)));
-                    m = max(m, step(dot(r, r), 1.0));
-                }
-                return m;
-            }
-            // cor da PELE da pessoa (linha da paleta dela) no mesmo sombreado (luz b1) do pixel — o que aparece no rasgo da roupa
-            vec3 skinAt(float b1) {
-                float row = (floor(vC.x + 0.5) + 0.5) / palRows, u = (fmt < 1.5 ? 102.0 : min(b1, 204.0)) / 204.0 * 4.0, i0 = floor(u), i1 = min(i0 + 1.0, 4.0);
-                vec3 c0 = texture2D(palette, vec2((8.0 + i0 + 0.5) / 256.0, row)).rgb, c1 = texture2D(palette, vec2((8.0 + i1 + 0.5) / 256.0, row)).rgb;
-                return mix(c0, c1, u - i0) * tint * vC.y;
-            }
-            vec3 condLayer(vec2 q, float mat, vec3 rgb, float lum, float b1) {
-                bool skin = mat == 1.0, cloth = mat == 3.0 || mat == 4.0 || mat == 20.0 || mat == 22.0 || mat == 26.0 || mat == 27.0 || mat == 29.0 || mat == 30.0;
-                if (!skin && !cloth) return rgb;
-                vec3 dirtC = rgb * vec3(0.5, 0.42, 0.33) + vec3(0.05, 0.035, 0.02) * tint;                  // terra: escurece puxando ao marrom
-                vec3 cutC = mix(vec3(0.42, 0.04, 0.05), vec3(0.7, 0.12, 0.1), lum) * tint;                 // corte/arranhão
-                vec3 bloodC = mix(vec3(0.3, 0.01, 0.03), vec3(0.5, 0.04, 0.05), lum) * tint;               // sangue (mancha)
-                // 1+: terra (na roupa, bem espalhada; na pele, pouca) — com o machucado por cima, menos
-                float dirt = cloth ? marks(q, 0.11, vCond < 1.5 ? 0.42 : 0.26, 0.05, 0.021, 1.0) : marks(q, 0.13, 0.14, 0.035, 0.016, 2.0);
-                rgb = mix(rgb, dirtC, dirt * 0.85);
-                if (vCond < 1.5) return rgb;
-                // 2+: hematomas (pele) e cortes/arranhões (roupa e pele)
-                if (skin) rgb = mix(rgb, mix(vec3(0.3, 0.12, 0.32), vec3(0.6, 0.28, 0.42), lum) * tint, marks(q, 0.15, 0.32, 0.045, 0.032, 9.0) * 0.7);
-                float cut = marks(q, 0.13, vCond < 2.5 ? 0.3 : 0.38, 0.056, 0.012, 5.0);
-                rgb = mix(rgb, cutC, cut * 0.9);
-                if (vCond < 2.5) return rgb;
-                // 3: rasgos (a pele aparece) e sangue
-                if (cloth) {
-                    float tear = marks(q, 0.17, 0.4, 0.1, 0.03, 13.0), edge = marks(q, 0.17, 0.4, 0.116, 0.045, 13.0);
-                    vec3 sk = skinAt(b1);
-                    sk = mix(sk, cutC, marks(q, 0.07, 0.35, 0.03, 0.009, 21.0) * 0.8);                   // o ralado na pele do rasgo
-                    rgb = mix(rgb, rgb * 0.42, max(edge - tear, 0.0));                                        // borda esfiapada
-                    rgb = mix(rgb, sk, tear);
-                }
-                rgb = mix(rgb, bloodC, marks(q, 0.16, 0.36, 0.062, 0.042, 17.0) * 0.92);
-                return rgb;
-            }
             vec4 tap(vec2 t, vec4 R) {
                 if (t.x < R.x || t.y < R.y || t.x >= R.z || t.y >= R.w) return vec4(0.0);
                 vec4 s = texture2D(atlas, (t + 0.5) / atlasSize);
@@ -377,35 +252,6 @@ const NpcArt = {
                 vec4 c = sampleFrame(vPx, vFr);
                 // mistura com o PRÓXIMO quadro da animação (gráfico suave): a pose muda em degradê, sem o salto seco entre quadros
                 if (vPx2.z > 0.004) c = mix(c, sampleFrame(vPx2.xy, vFr2), vPx2.z);
-                // Camadas de ferimento (baleado / espancado): só sobre o CORPO — pixel opaco de pele, roupa ou rosto; nunca no contorno,
-                // na sombra, em armas e acessórios ou fora do desenho. A cor segue o sombreado do material embaixo.
-                if ((vBl.x > 0.01 || vBl.y > 0.01 || vCond > 0.5) && c.a > 0.6) {
-                    vec2 tp = floor(vPx);
-                    vec4 s0 = texture2D(atlas, (tp + 0.5) / atlasSize);
-                    float code = floor(s0.r * 255.0 + 0.5), mat = floor(code / 8.0);
-                    bool inF = tp.x >= vFr.x && tp.y >= vFr.y && tp.x < vFr.z && tp.y < vFr.w;
-                    bool body = mat == 1.0 || mat == 2.0 || mat == 3.0 || mat == 4.0 || mat == 12.0 || mat == 14.0 || mat == 18.0 || mat == 20.0 || mat == 22.0
-                        || mat == 26.0 || mat == 27.0 || mat == 29.0 || mat == 30.0;
-                    if (inF && code >= 8.0 && body) {
-                        vec2 q = floor(vW.xy * ppu) / ppu;
-                        vec3 rgb = c.rgb / c.a;
-                        float lum = dot(rgb, vec3(0.3, 0.55, 0.15));
-                        vec3 red = mix(vec3(0.4, 0.02, 0.04), vec3(0.64, 0.06, 0.07), lum) * tint;
-                        if (vCond > 0.5) rgb = condLayer(q, mat, rgb, lum, floor((la > 0.5 ? s0.a : s0.g) * 255.0 + 0.5));
-                        if (vBl.y > 0.01) {
-                            vec3 b = beatMask(q, mat);
-                            rgb = mix(rgb, mix(vec3(0.38, 0.32, 0.24), vec3(0.55, 0.47, 0.36), lum) * tint, b.z * 0.55);    // terra
-                            rgb = mix(rgb, mix(vec3(0.3, 0.12, 0.32), vec3(0.62, 0.3, 0.45), lum) * tint, b.x * 0.75);      // roxo
-                            rgb = mix(rgb, red, b.y * 0.9);
-                        }
-                        if (vBl.x > 0.01) {
-                            float m = shotMask(q);
-                            if (m > 1.5) rgb = vec3(0.12, 0.0, 0.01) * tint;
-                            else rgb = mix(rgb, red, m * 0.9);
-                        }
-                        c.rgb = rgb * c.a;
-                    }
-                }
                 // Vadeando (vW.z = profundidade da água no corpo, m): abaixo da linha d'água o desenho fica tingido de mar e some aos
                 // poucos com a profundidade, e a linha balança com uma franja de espuma. Na imagem, 1 m de altura sobe 0,56 m (câmera 56°).
                 if (vW.z > 0.01 && c.a > 0.02) {
@@ -655,6 +501,64 @@ const NpcArt = {
         const s = this.sheets[id] || (this.sheets[id] = new NpcSheet(id));
         if (legacy && !s.legacy) { s.legacy = legacy; s.legacyVariant = legacyVariant; }
         return s;
+    },
+
+    // ------------------------------------------------------------------ ESTADO DE DANO pintado (ficha.dmg — NpcGenMesh.paintDamage)
+    // Pedestre/policial machucado: a folha "<tipo>#d<nível>" usa o atlas do tipo com o dano PINTADO na roupa e na pele (gerado aqui num
+    // Worker na 1ª vez e guardado no aparelho, como a alta definição; as cores continuam as da paleta de cada um) e, enquanto não fica
+    // pronto — ou para o clipe que ele não tem —, o atlas normal do tipo. O jogador usa o PlayerLook (o dano entra na ficha do visual).
+    DMG_CLIPS: /^(idle|walk|run|scared|hurt|dead|surrender|kneel|aim|shoot|draw|holdup|punch|punchL|kick|flail|lie|getup|tumble|swing|holdup)$/,
+    dmgSheet(id, lvl) {
+        const sid = id + '#d' + lvl;
+        let s = this.sheets[sid];
+        if (!s) {
+            const b = this.sheets[id];
+            s = this.sheets[sid] = new NpcSheet(sid);
+            s.fallbackAtlas = id; s.baseId = id;
+            if (b) { s.legacy = b.legacy; s.legacyVariant = b.legacyVariant; }
+        }
+        this._dmgWant(id, lvl);
+        return s;
+    },
+    // O ator passa a usar a folha do nível de dano (0 = a normal), no mesmo clipe e quadro.
+    applyDamage(actor, lvl) {
+        const sh = actor.sheet;
+        if (!sh || !sh.isNpc || sh.npcRemap || (this._lib && sh === this._lib.sheets.hero)) return;
+        const base = sh.baseId || sh.id, to = lvl > 0 ? this.dmgSheet(base, lvl) : this.sheets[base];
+        if (!to || to === sh) return;
+        const name = actor.clipName || 'idle', w = actor.clip ? actor.clip.weapon : 'none', f = actor.frame;
+        actor.useSheet(to);
+        if (actor.play(name, w, { restart: true })) actor.setFrame(f);
+    },
+    _dmgQ: [], _dmgBusy: false,
+    _dmgWant(id, lvl) {
+        const sid = id + '#d' + lvl;
+        if (this.atlases[sid] || this._dmgQ.includes(sid) || this._dmgNow === sid || !this.atlases[id]) return;
+        this._dmgQ.push(sid);
+        this._dmgPump();
+    },
+    async _dmgPump() {
+        if (this._dmgBusy || !this._dmgQ.length) return;
+        this._dmgBusy = true;
+        const sid = this._dmgNow = this._dmgQ.shift(), [id, d] = sid.split('#d'), G = this.gen(), k = (this.atlases[id].data.k || 1);
+        const key = `v${this.HD_VERSION}.${k}|${sid}`;
+        try {
+            let a = await this._hdGet(key);
+            if (a) a.data = await this._inflate(a.z);
+            else {
+                const keys = G.TYPES[id].clips.filter((c) => this.DMG_CLIPS.test(c.split(':')[0]));
+                a = await new Promise((ok, fail) => {
+                    const wk = PlayerLook._worker('dmg'), job = (this._hdJob = (this._hdJob || 0) + 1);
+                    wk.onmessage = (e) => { wk._busy = false; if (e.data.job !== job) return; if (e.data.error) fail(new Error(e.data.error)); else ok(e.data.atlas); };
+                    wk.postMessage({ type: 'atlas', job, id, keys, k, dmg: +d });
+                });
+                this._hdPut(key, { w: a.w, h: a.h, clips: a.clips, k: a.k, v: a.v, frame: a.frame, z: await this._deflate(a.data) });
+            }
+            this.addAtlas(sid, a);
+            const s = this.sheets[sid]; if (s) s.clips = {};                  // (quem já usa a folha passa a achar os clipes pintados)
+        } catch (e) { console.warn('[NPCS] dano de ' + sid + ' falhou:', e); }
+        this._dmgNow = null; this._dmgBusy = false;
+        this._dmgPump();
     },
 
     // Liga o NpcArt à biblioteca de sprites: as folhas antigas de gente passam a virar tipos 2,5D; o jogador ganha a folha "hero".
