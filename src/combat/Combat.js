@@ -335,19 +335,54 @@ class Combat {
         return null;
     }
 
-    // Tiro que pegou na CABINE de um carro de trânsito com motorista (da coluna da frente até o fim das portas): 10% acertam quem
-    // dirige — morre ao volante, o carro para e a buzina dispara (TrafficCar.killDriver). Viatura, moto e o carro do jogador, não.
-    _cabinShot(car, hx, hz, b) {
-        if (!car.killDriver || car.driver === false || car.driverDead || car.controlled || car.role || car.isBike || car.isBoat || car.wrecked) return;
-        const D = typeof DoorSheet !== 'undefined' && DoorSheet.SPEC[car.spec.id];
-        if (!D) return;
-        const A = CarDoors.axes(car), along = (hx - car.position.x) * A.fx + (hz - car.position.z) * A.fz;
-        if (along > D.h + 0.2 || along < D.h - D.len * 1.7) return;          // capô ou porta-malas
-        if (Math.random() >= Config.crash.driverShot) return;
-        if (!car.killDriver()) return;
-        this.spark(hx, 1.2, hz, [0.75, 0.05, 0.05]);
-        const g = this.game;
+    // Bala que acertou um carro: por onde ela ENTROU no casco (o raio da bala contra o retângulo do carro). Pela frente → para-brisa;
+    // por trás → vidro traseiro; pelo lado, na altura da cabine → a janela daquela porta (70%; o resto pega na porta). Vidro inteiro:
+    // ESPATIFA (cacos e som; o carro 3D mostra o buraco). Quem DIRIGE só se machuca pelo LADO DO MOTORISTA (esquerda: o para-brisa do
+    // lado dele, a janela ou a porta da frente) — o jogador leva o dano normal; o motorista NPC (trânsito ou viatura) vai perdendo vida
+    // (Config.crash.driverHp) e, zerada, morre ao volante: o carro para e a buzina dispara (TrafficCar.killDriver).
+    _carShot(car, b) {
+        if (!car.position || car.isBike || car.isBoat || car.wrecked || !CarDoors) return;
+        const D = typeof DoorSheet !== 'undefined' && car.spec && DoorSheet.SPEC[car.spec.id];
+        const A = CarDoors.axes(car), c = car.position, hl = car.halfLen || 2, hw = car.halfW || 1;
+        // raio da bala (de um pouco antes de onde ela estava neste quadro) contra o retângulo do carro, no espaço dele (u frente, v direita)
+        const ox = b.px - b.dirx * 4 - c.x, oz = b.pz - b.dirz * 4 - c.z;
+        const u0 = ox * A.fx + oz * A.fz, v0 = ox * A.rx + oz * A.rz, du = b.dirx * A.fx + b.dirz * A.fz, dv = b.dirx * A.rx + b.dirz * A.rz;
+        let tmin = -Infinity, tmax = Infinity, face = null;
+        for (const [p0, d, h, f] of [[u0, du, hl, 'u'], [v0, dv, hw, 'v']]) {
+            if (Math.abs(d) < 1e-6) { if (Math.abs(p0) > h) return; continue; }
+            let t1 = (-h - p0) / d, t2 = (h - p0) / d;
+            if (t1 > t2) { const q = t1; t1 = t2; t2 = q; }
+            if (t1 > tmin) { tmin = t1; face = f; }
+            tmax = Math.min(tmax, t2);
+        }
+        if (!face || tmin > tmax || tmin < 0) return;
+        const u = u0 + du * tmin, v = v0 + dv * tmin, wx = c.x + A.fx * u + A.rx * v, wz = c.z + A.fz * u + A.rz * v;
+        const front = D ? D.h + 0.15 : hl * 0.45, back = D ? D.h - D.len * 1.9 : -hl * 0.55, doorEnd = D ? D.h - D.len : 0;
+        let win = -1, driverSide = false;
+        if (face === 'u') { win = u > 0 ? 0 : 1; driverSide = u > 0 && v < 0; }
+        else if (u < front && u > back) {
+            const left = v < 0, fr = u > doorEnd;
+            if (Math.random() < 0.7) win = (left ? 2 : 3) + (fr ? 0 : 2);
+            driverSide = left && fr;
+        }
+        const glassHit = win >= 0;
+        if (glassHit && car.breakGlass && car.breakGlass(win)) {             // espatifou: chuva de cacos e o som
+            for (let i = 0; i < 12; i++) this.spark(wx + (Math.random() - 0.5) * 0.8, 0.9 + Math.random() * 0.6, wz + (Math.random() - 0.5) * 0.8, [0.62, 0.85, 1]);
+            if (typeof SparkFx !== 'undefined') SparkFx.impact(wx, wz, b.dirx, b.dirz, 1.2, 8);
+            AudioFX.glass(wx, wz);
+        }
+        if (!driverSide) return;
+        const g = this.game, k = glassHit ? Config.crash.glassDriver : Config.crash.doorDriver;
+        if (car === g.activeCar && g.mode === 'car') {                        // o jogador dirigindo (o tiro dele mesmo não)
+            if (b.owner !== 'player') g.player.takeDamage(b.dmg * k);
+            return;
+        }
+        if (!car.killDriver || car.driver === false || car.driverDead || car.controlled) return;
+        if (car.driverHp === undefined) car.driverHp = Config.crash.driverHp;
+        car.driverHp -= b.dmg * k;
+        this.spark(wx, 1.25, wz, [0.75, 0.05, 0.05]);
         if (b.owner === 'player' && g.wanted) g.wanted.reportCrime();
+        if (car.driverHp > 0 || !car.killDriver()) return;
         if (g.npcManager) g.npcManager.alertViolence(car.position, 22);
     }
 
@@ -448,9 +483,7 @@ class Combat {
                     this.spark(hx, 1.0, hz, [1, 0.9, 0.5]); if (typeof SparkFx !== 'undefined') SparkFx.impact(hx, hz, b.dirx, b.dirz, 1.0, 5); AudioFX.hit(hx, hz);
                     // A lataria leva parte do dano (carros amassam, soltam fumaça e podem explodir a tiros).
                     if (hit.ref.takeDamage) hit.ref.takeDamage(b.dmg * Config.crash.bulletMul, b.owner);
-                    this._cabinShot(hit.ref, hx, hz, b);
-                    // O carro do jogador protege, mas parte do tiro atravessa a lataria/vidro.
-                    if ((b.owner === 'police' || b.owner === 'gang') && hit.ref === this.game.activeCar && this.game.mode === 'car') this.game.player.takeDamage(b.dmg * 0.4);
+                    this._carShot(hit.ref, b);                                    // vidro estilhaçado e quem dirige (lado do motorista)
                     this._tireShot(hit.ref, hx, hz);
                 }
                 else {

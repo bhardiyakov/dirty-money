@@ -145,6 +145,7 @@ class Vehicle {
 
     // Remove o carro do jogo (sprite, física, sombra, malhas filhas).
     dispose(shadowGenerator = null) {
+        if (this.clearDeadDriver) this.clearDeadDriver();                 // (a buzina presa vai junto)
         if (this.visual) { this.visual.dispose(); this.visual = null; }
         if (shadowGenerator) shadowGenerator.removeShadowCaster(this.body);
         this.aggregate.dispose();
@@ -158,6 +159,7 @@ class Vehicle {
         if (!v || !sheet || sheet.art !== true) return;
         const nv = CarArt.actor(sheet.modelId, v.variant);
         nv.setY(v.y); nv.setDamage(v.dent); nv.setVisible(v.visible);
+        if (nv.setGlass) nv.setGlass(this.glass || 0);
         if (v._placed) { nv.setPosition(v.x, v.z); nv.setHeading(v.heading); }
         v.dispose();
         this.visual = nv;
@@ -201,6 +203,18 @@ class Vehicle {
     setControlled(v) {
         this.controlled = v;
     }
+
+    // ------------------------------------------------------------- vidros (tiro: Combat._carShot; soco no vidro: Game._smashWindow)
+    // Vidro i (0 para-brisa, 1 traseiro, 2/3 janela da frente esq./dir., 4/5 de trás esq./dir.) estilhaçado: o carro 3D mostra o buraco.
+    // true se quebrou agora (já estava quebrado: false). fixGlass: carro "novo" (realocado pelo trânsito).
+    breakGlass(i) {
+        const bit = 1 << i;
+        if ((this.glass || 0) & bit) return false;
+        this.glass = (this.glass || 0) | bit;
+        if (this.visual && this.visual.setGlass) this.visual.setGlass(this.glass);
+        return true;
+    }
+    fixGlass() { this.glass = 0; if (this.visual && this.visual.setGlass) this.visual.setGlass(0); }
 
     // ------------------------------------------------------------- vida e batidas
     get hpFrac() { return this.hp / this.maxHp; }
