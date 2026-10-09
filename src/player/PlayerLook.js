@@ -64,13 +64,27 @@ const PlayerLook = {
         if (!this.ok) return;
         const s = this.spec(), key = this.G.shapeKey(s);
         NpcArt.setPlayerColors(s);
+        if (!force && key === this.shown && this.want && this.want !== key) {   // voltou ao visual que já está na tela (ex.: curou antes de o
+            this.want = null; this._job++;                                     // machucado ficar pronto): cancela a geração e tira a parcial
+            const id = key === this.G.shapeKey(this.G.PLAYER_DEFAULT) && NpcArt.atlases.protagonista ? 'protagonista' : this.ids.get(key);
+            if (id) this._use(key, id);
+            this._ready(s);
+            return;
+        }
         if (!force && (key === this.shown || key === this.want)) return;
         this.want = key;
-        const hero = this.game.sprites.sheets.hero;
-        if (key === this.G.shapeKey(this.G.PLAYER_DEFAULT) && NpcArt.atlases.protagonista) { this._use(key, 'protagonista'); return; }
-        if (this.ids.has(key)) { this._use(key, this.ids.get(key)); return; }
-        void hero;
+        this._job++;                                                         // (cancela a geração em andamento: o visual pedido mudou — ex.: curou)
+        if (key === this.G.shapeKey(this.G.PLAYER_DEFAULT) && NpcArt.atlases.protagonista) { this._use(key, 'protagonista'); this._ready(s); return; }
+        if (this.ids.has(key)) { this._use(key, this.ids.get(key)); this._ready(s); return; }
         this._load(s, key);
+    },
+    // Visual completo em uso: sem a parcial de uma geração cancelada e, se ele está limpo, as versões machucadas desta roupa já vão
+    // sendo preparadas em segundo plano (um tiro mostra o dano na hora, sem esperar gerar).
+    _ready(s) {
+        if (this._partialId) { NpcArt.dropAtlas(this._partialId); this._partialId = null; }
+        if (s.dmg) return;
+        clearTimeout(this._preT);
+        this._preT = setTimeout(() => this._prefetch(s), 3000);
     },
 
     // Troca o atlas da folha do jogador e reinicia o clipe atual (com o desenho novo).
@@ -87,7 +101,7 @@ const PlayerLook = {
         const job = ++this._job;
         const cached = await this._idbGet(this._ck(key)), cachedT = cached && await this._idbGet(this._ck(key) + '|t');
         if (job !== this._job) return;
-        if (cached && cachedT) { this._registerTac(key, cachedT); this._register(key, cached, false); return; }       // (sem o companheiro: gera tudo de novo)
+        if (cached && cachedT) { this._registerTac(key, cachedT); this._register(key, cached, false); this._ready(s); return; }       // (sem o companheiro: gera tudo de novo)
         this._build(s, key, job);
     },
     _ck(key) { return `v${this.VERSION}.${this.k()}|${key}`; },
@@ -159,7 +173,7 @@ const PlayerLook = {
             this._register(key, a, false);
             this._idbPut(this._ck(key), a);
             this._idbPut(this._ck(key) + '|t', t);
-            if (!s.dmg) this._prefetch(s);                                     // pronto o visual limpo: as versões machucadas, em segundo plano
+            this._ready(s);                                                     // (limpo: as versões machucadas, em segundo plano)
         };
         const done = (m) => {
             if (job !== this._job) return;
@@ -192,23 +206,28 @@ const PlayerLook = {
     // Gera e guarda no aparelho (sem trocar o visual) as versões MACHUCADAS (dmg 2, 1, 3) do visual `s` — num Worker só, devagar: quando
     // ele se machucar, o desenho já está pronto (senão é gerado na hora, como uma roupa nova). Recomeça se o visual mudar.
     async _prefetch(s) {
-        const job = this._preJob = (this._preJob || 0) + 1, G = this.G, k = this.k();
+        const G = this.G, k = this.k(), forKey = G.shapeKey(s);
+        if (this._preFor === forKey) return;                                  // (já preparando esta roupa)
+        const job = this._preJob = (this._preJob || 0) + 1;
+        this._preFor = forKey;
+        const end = () => { if (job === this._preJob) this._preFor = null; };
         for (const lv of [2, 1, 3]) {
             const sp = Object.assign({}, s, { dmg: lv }), key = G.shapeKey(sp);
-            if (job !== this._preJob) return;
+            if (job !== this._preJob) return end();
             if (await this._idbGet(this._ck(key) + '|t')) continue;
             const all = this.clipsFor(sp).concat(G.PLAYER_TAC), tac = new Set(G.PLAYER_TAC), got = [];
             const wk = this._worker('pre');
             for (let i = 0; i < all.length; i += 3) {
-                if (job !== this._preJob) return;
+                if (job !== this._preJob) return end();
                 const m = await new Promise((ok) => { wk.onmessage = (e) => { wk._busy = false; ok(e.data); }; wk._busy = true; wk.postMessage({ type: 'clips', job: -job, spec: sp, keys: all.slice(i, i + 3), k }); });
-                if (m.error) { console.warn('[VISUAL] machucado falhou:', m.error); return; }
+                if (m.error) { console.warn('[VISUAL] machucado falhou:', m.error); return end(); }
                 got.push(...m.clips);
             }
             const idx = new Map(all.map((c, i) => [c, i])), sorted = got.sort((p, q) => idx.get(p.key) - idx.get(q.key));
             this._idbPut(this._ck(key) + '|t', this._pack(sorted.filter((c) => tac.has(c.key)), k));
             this._idbPut(this._ck(key), this._pack(sorted.filter((c) => !tac.has(c.key)), k));
         }
+        end();
     },
     _pack(clips, k) { const a = this.G.packAtlas(clips); return { w: a.w, h: a.h, data: a.data, clips: a.clips, k, v: 2, frame: this.G.frameFor(k) }; },
     // Resolução do visual: a dos atlas prontos, ou o dobro com a alta definição ligada (NpcArt.hd).

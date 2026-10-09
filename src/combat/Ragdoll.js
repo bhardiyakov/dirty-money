@@ -38,7 +38,10 @@ class Ragdoll {
 
         // Giro do sprite (capota) e escolha do clipe no ar.
         this.heading = Math.atan2(this.dx, this.dz) + (Math.random() < 0.5 ? 0 : Math.PI);
-        const spinMag = bail ? 0 : (p >= 8 ? Math.min(10, (p - 5) * 0.8) : Math.min(2, p * 0.25));
+        // (personagens 2,5D: cada direção é um DESENHO — girar a direção fazia a cambalhota pular de pose a cada quadro. O clipe já capota
+        //  o corpo; a direção fica a do arremesso.)
+        const flat = !!(this.av.actor && this.av.actor.sheet && this.av.actor.sheet.isNpc);
+        const spinMag = bail || flat ? 0 : (p >= 8 ? Math.min(10, (p - 5) * 0.8) : Math.min(2, p * 0.25));
         this.spin = spinMag * (Math.random() < 0.5 ? -1 : 1);
         this.tumbling = bail || p >= 11;                         // cambalhota (vs braços soltos)
         this.air = 0;                                            // tempo no ar (para o ritmo da animação)
