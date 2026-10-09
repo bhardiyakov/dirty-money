@@ -4,6 +4,7 @@
 //   'glow'  brilho aditivo: núcleo + halo com degradê suave/borrado (lâmpadas, faróis, giroflex, postes)
 //   'cone'  feixe de luz aditivo no chão (faróis): trapézio com bordas e ponta difusas
 //   'puff'  fumaça com blending normal: disco em 3 tons (escapamento)
+//   'ring'  anel suave que se abre (marolas)   'arc'  o pedaço da FRENTE de um anel (a borda v = 0 do quad): onda que vai numa direção
 // Desenhado depois do mundo (renderingGroup 1) mas ainda testando profundidade, então
 // prédios e árvores na frente escondem a luz como deveriam.
 // ============================================================================
@@ -25,7 +26,7 @@ class GlowBatch {
                 vColor = color;
                 gl_Position = worldViewProjection * vec4(position, 1.0);
             }`;
-        for (const k of ['glow', 'cone', 'puff', 'ring']) BABYLON.Effect.ShadersStore[k + 'VertexShader'] = vertex;
+        for (const k of ['glow', 'cone', 'puff', 'ring', 'arc']) BABYLON.Effect.ShadersStore[k + 'VertexShader'] = vertex;
 
         BABYLON.Effect.ShadersStore['glowFragmentShader'] = `
             precision highp float;
@@ -57,6 +58,25 @@ class GlowBatch {
                 if (r >= 1.0) discard;
                 float d = (r - 0.78) * 6.5;
                 float a = exp(-d * d) * (1.0 - smoothstep(0.86, 1.0, r));
+                if (a < 0.01) discard;
+                gl_FragColor = vec4(vColor.rgb, vColor.a * a * level);
+            }`;
+
+        // 'arc': o anel da marola, só o trecho da frente (±~40°, sumindo até ±75°) — a onda que sai na frente de quem anda na água
+        // e as da esteira, cada uma indo para o seu lado. A frente é a borda v = 0 do quad (quem emite gira o quad).
+        BABYLON.Effect.ShadersStore['arcFragmentShader'] = `
+            precision highp float;
+            varying vec2 vUV;
+            varying vec4 vColor;
+            uniform float level;
+            void main(void) {
+                if (vColor.a <= 0.003) discard;
+                vec2 p = vUV * 2.0 - 1.0;
+                float r = length(p);
+                if (r >= 1.0 || r < 0.05) discard;
+                float c = -p.y / r;                                       // cosseno do ângulo com a frente
+                float d = (r - 0.78) * 7.5;
+                float a = exp(-d * d) * (1.0 - smoothstep(0.86, 1.0, r)) * smoothstep(0.26, 0.78, c);
                 if (a < 0.01) discard;
                 gl_FragColor = vec4(vColor.rgb, vColor.a * a * level);
             }`;
@@ -95,7 +115,7 @@ class GlowBatch {
             }`;
     }
 
-    // capacity: nº máximo de quads | kind: 'glow' | 'cone' | 'puff' | 'ring'
+    // capacity: nº máximo de quads | kind: 'glow' | 'cone' | 'puff' | 'ring' | 'arc'
     constructor(scene, capacity, name = 'glow', kind = 'glow') {
         GlowBatch.register();
         this.count = 0;

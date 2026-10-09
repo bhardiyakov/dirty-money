@@ -19,7 +19,7 @@ const PlayerLook = {
     ids: new Map(),         // chave de forma → id do atlas registrado no NpcArt
     tacIds: new Map(),      // chave de forma → id do atlas companheiro (clipes táticos) desse visual
     _job: 0,
-    VERSION: 7,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D
+    VERSION: 9,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D; 8: sentar no carro (sitin); 9: começar/parar de nadar e mergulho
 
     attach(game) { this.game = game; this.shown = null; this.sync(true); },
 
@@ -114,7 +114,7 @@ const PlayerLook = {
     // Fila de clipes (2 por vez) puxada por vários Workers, na ordem do que mais aparece: parado/andando/correndo (com a arma da
     // mão), depois golpes, carro, tático, nadar, pilotar… e o resto. O visual novo entra assim que o 1º bloco fica pronto e vai sendo
     // completado (a cada ~1,5 s) — o que ainda falta sai do visual anterior por pouco tempo. Pronto: guardado no aparelho.
-    _COMMON: /^(punch|punchL|kick|enter|opendoor|carjack|vault|crouch|sneak|roll|strafe|swim|swim_idle|hurt|draw|aim|shoot|walk_up|climb|ride_moto|ride_bike|surrender|pick)$/,
+    _COMMON: /^(punch|punchL|kick|enter|sitin|opendoor|carjack|vault|crouch|sneak|roll|strafe|swim|swim_idle|hurt|draw|aim|shoot|walk_up|climb|ride_moto|ride_bike|surrender|pick)$/,
     _build(s, key, job) {
         const G = this.G, all = this.clipsFor(s).concat(G.PLAYER_TAC), pl = this.game.player, w = pl ? pl.look : 'none', k = this.k();
         const tac = new Set(G.PLAYER_TAC), idx = new Map(all.map((c, i) => [c, i]));

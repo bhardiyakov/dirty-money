@@ -106,6 +106,7 @@ class Collisions {
 
     // Jogador a pé: sólido (empurrado para fora do casco) e, se o carro anda, atropelado.
     _player(ctx, pl) {
+        if (pl.boarding === ctx.car && (pl.action || pl.frozen)) return;      // subindo nele / entrando por ele: o corpo passa por dentro do casco
         const r = Config.player.radius;
         const L = this._local(ctx, pl, r);
         if (!L) return;
@@ -118,7 +119,7 @@ class Collisions {
                 const lethal = pl.hp - R.dmg <= 0;
                 pl.takeDamage(R.dmg, true);
                 if (R.dmg >= 15 && typeof Blood !== 'undefined') { Blood.hit(pl.position.x, pl.position.z, R.dx, R.dz, R.dmg * 0.6, pl); Blood.wound(pl, R.dmg * 0.5, false); }
-                if (typeof Blood !== 'undefined') Blood.beat(pl, R.dmg);
+                if (typeof Blood !== 'undefined') Blood.beat(pl, R.dmg, 1);                   // atropelado: SUJO (e ralado)
                 // O impacto dita o ragdoll: fraco cambaleia e cai; médio é jogado; forte voa capotando.
                 if (R.power >= Config.ragdoll.minPower) pl.ragdoll({ dx: R.dx, dz: R.dz, power: R.power, kind: 'hit', lethal });
                 this._impactFx(pl.position, 0.3 + Math.min(0.5, R.power * 0.03));
@@ -152,7 +153,7 @@ class Collisions {
         const from = { x: ctx.c.x, z: ctx.c.z };
         e.takeDamage(R.dmg, from, src, { dx: R.dx, dz: R.dz, power: R.power });     // com `impact`: arremessado (ragdoll) (cópia: R é reaproveitado)
         if (R.dmg >= 15 && typeof Blood !== 'undefined') { Blood.hit(e.position.x, e.position.z, R.dx, R.dz, R.dmg * 0.6, e); Blood.wound(e, R.dmg * 0.5, false); }   // batida forte: sangue
-        if (typeof Blood !== 'undefined') Blood.beat(e, R.dmg);                                                // atropelado: ralado e roxo (ESPANCADO)
+        if (typeof Blood !== 'undefined') Blood.beat(e, R.dmg, 1);                                             // atropelado: ralado e roxo (ESPANCADO) e SUJO
         this._impactFx(e.position, 0.2);
         car.takeDamage(1 + R.dmg * 0.02, 'env');
 

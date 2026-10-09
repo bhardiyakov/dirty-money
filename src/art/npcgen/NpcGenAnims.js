@@ -1082,6 +1082,49 @@ function NpcGenAnims(G) {
             return p;
         });
     }
+    // Sentar no carro (o jogador): de frente para a porta aberta, apoia a mão no batente, põe no carro o pé do lado de dentro, gira o
+    // corpo para a frente do carro abaixando a cabeça, senta no banco e recolhe a outra perna; as mãos vão ao volante. w = 'L' (a
+    // frente do carro fica à ESQUERDA de quem olha para a porta: porta do motorista) | 'R'. O jogo desliza o personagem da porta até o
+    // banco durante o clipe (SIT_IN.travel m, smoothstep — Game._enterCar) e esconde sob a carroceria o que já entrou; aqui tudo é
+    // relativo a esse deslize, então o pé de fora fica plantado no chão até subir.
+    const SIT_IN = { travel: 1.05, n: 10, fps: 10 };
+    function sitIn(w = 'L') {
+        const f = w === 'R' ? 1 : -1, u = U(), D = SIT_IN.travel, out = [], n = SIT_IN.n;
+        const sst = (s) => s * s * (3 - 2 * s);                                 // = o deslize do jogo (Player.update: _glide)
+        // chaves em metros, no referencial da PORTA: x = lado (+f = frente do carro), y = para dentro do carro, z = altura
+        const hipK = [[0, [0, 0, 0.88]], [0.25, [0, 0.12, 0.86]], [0.5, [f * 0.06, 0.55, 0.64]], [0.75, [f * 0.12, 0.92, 0.5]], [1, [f * 0.14, D, 0.47]]];
+        const yawK = [[0, 0], [0.22, -f * 18], [0.5, -f * 68], [0.75, -f * 90], [1, -f * 90]];
+        const leanK = [[0, 4], [0.25, 14], [0.5, 34], [0.75, 22], [1, -6]];
+        const leadK = [[0, [-f * 0.13, 0, 0]], [0.2, [-f * 0.06, 0.24, 0.26]], [0.42, [f * 0.14, 0.66, 0.3]], [0.62, [f * 0.36, 0.96, 0.2]], [1, [f * 0.5, D + 0.09, 0.18]]];
+        const trailK = [[0, [f * 0.13, 0, 0]], [0.55, [f * 0.13, 0, 0]], [0.75, [f * 0.22, 0.56, 0.36]], [1, [f * 0.5, D - 0.09, 0.18]]];
+        const footYawK = [[0, 0], [0.4, -f * 50], [0.7, -f * 90], [1, -f * 90]];
+        const lead = f < 0 ? 'R' : 'L', trail = lead === 'R' ? 'L' : 'R', ls = lead === 'R' ? 1 : -1;
+        for (let i = 0; i < n; i++) {
+            const s = i / (n - 1), back = D * sst(s);
+            const rel = (q) => [q[0] * u, (q[1] - back) * u, q[2] * u];       // porta → relativo ao personagem (que desliza)
+            const p = base(), hip = rel(keys(hipK, s)), yaw = keys(yawK, s), lean = keys(leanK, s);
+            p.shadow = s < 0.55;
+            p.absPelvis = true;
+            p.abs = { armR: true, armL: true, legR: true, legL: true };
+            p.pelvis_t = [hip[0], hip[1], hip[2] + 3.0 - SKEL.pelvis[1][2]];
+            p.pelvis_R = mm3(Rz(deg(yaw)), Rx(deg(-8 * ease(s / 0.8))));
+            p.chest_R = Rx(deg(lean));
+            p.head_R = Rx(deg(HEAD_TILT - lean * 0.4));
+            const fy = keys(footYawK, s), sit = ease((s - 0.45) / 0.45);
+            const pole = (sd) => V.lerp([0.15 * sd, 1.0, 0.0], [f * 1.0, 0.0, 0.45], sit);
+            const lf = rel(keys(leadK, s)), tf = rel(keys(trailK, s));
+            p.leg_ik(lead, [lf[0], lf[1], ANKLE_H + lf[2]], pole(ls), footRot(fy, s > 0.1 && s < 0.6 ? 20 : 0));
+            p.leg_ik(trail, [tf[0], tf[1], ANKLE_H + tf[2]], pole(-ls), footRot(s > 0.55 ? fy : 0, s > 0.6 && s < 0.9 ? 25 : 0));
+            // mãos: no batente (alto, à frente) e na porta → no volante (à frente do banco; a direita de quem olha para +f é −f em y)
+            const wheel = rel([f * 0.4, D, 0.9]), sideR = [0, -f * 0.18 * u, 0];
+            const hR = V.lerp(rel([-f * 0.05, 0.42, 1.28]), V.add(wheel, sideR), ease((s - 0.35) / 0.55));
+            const hL = V.lerp(rel([f * 0.38, 0.28, 1.02]), V.sub(wheel, sideR), ease((s - 0.4) / 0.5));
+            p.arm_ik('R', hR, V.lerp([1.0, -0.3, -0.6], [0.3, 1.0, -0.6], sit));
+            p.arm_ik('L', hL, V.lerp([-1.0, -0.3, -0.6], [-0.3, 1.0, -0.6], sit));
+            out.push(p);
+        }
+        return out;
+    }
     // NOVO: arrombar na manha — debruçado sobre a fechadura, mexendo a gazua (loop).
     function pickLock(n = 4) {
         const out = [];
@@ -1254,11 +1297,7 @@ function NpcGenAnims(G) {
             for (const [side, ph] of [['R', t], ['L', (t + 0.5) % 1.0]]) {
                 if (ph < 0.13 || ph > 0.94) { const f = p.fist_world(B, side); p.effects.push({ type: 'splash', pos: [f[0], f[1], 0.0], n: 9, spread: 3.0, seed: i * 7 + (side === 'R' ? 1 : 0) }); }
             }
-            for (let k = 0; k < 2; k++) {
-                const ph = (t + k * 0.5) % 1.0;
-                p.effects.push({ type: 'ring', pos: [0, -2.0, 0], r: 15 + 10 * ph, alpha: Math.trunc(150 * (1 - ph) + 40), gaps: 6, phase: t * 2 });
-            }
-            out.push(p);
+            out.push(p);                                                       // (marolas: as do jogo, em arco na direção do nado — WaterFx)
         }
         return out;
     }
@@ -1279,6 +1318,112 @@ function NpcGenAnims(G) {
                 const fr = (t + k * 0.5) % 1.0;
                 p.effects.push({ type: 'ring', pos: [0, 4.0, 0], r: 17 + 12 * fr, alpha: Math.trunc(190 * (1 - fr) + 30), gaps: 8, phase: fr });
             }
+            out.push(p);
+        }
+        return out;
+    }
+
+    // Interpola listas de números (ângulos das juntas) por chaves [[t, [..]], ...] — como keys(), para qualquer tamanho.
+    function keysN(K, t) {
+        if (t <= K[0][0]) return K[0][1];
+        for (let i = 0; i < K.length - 1; i++) {
+            const [t0, a] = K[i], [t1, b] = K[i + 1];
+            if (t0 <= t && t <= t1) { const u = ease((t - t0) / max(t1 - t0, 1e-9)); return a.map((v, k) => v + (b[k] - v) * u); }
+        }
+        return K[K.length - 1][1];
+    }
+    // Começar a nadar: de pé, boiando (a água no peito — o fim do vadear), joga o corpo para a frente, estica os braços e as pernas
+    // sobem até a posição do crawl (o 1º quadro do `swim`). swim_out = o mesmo ao contrário (parar de nadar e ficar de pé).
+    function swimIn(n = 6) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const s = i / (n - 1), e = ease(s), p = base();
+            p.water = 0.0;
+            p.pelvis_t = V.lerp([0, 0, -45.5], [0, -20.0, -6.0 - SKEL.pelvis[1][2]], e);
+            p.pelvis_R = Rx(deg(-70 * e));
+            p.chest_R = Rx(deg(-6 * (1 - e) + 6 * sin(PI * s)));
+            p.head_R = Rx(deg(HEAD_TILT + 4 + 40 * e));
+            const aR = keysN([[0, [30, 40, 45]], [0.5, [120, 20, 30]], [1, [178, 8, 10]]], s);
+            const aL = keysN([[0, [30, 40, 45]], [0.5, [90, 30, 40]], [1, [13, 10, 20]]], s);
+            p.arm_fk('R', { flex: aR[0], abd: aR[1], elbow: aR[2] }); p.arm_fk('L', { flex: aL[0], abd: aL[1], elbow: aL[2] });
+            for (const [sd, ph] of [['R', 0], ['L', PI]]) {
+                const k = 16 * sin(TAU * s + ph) * e;
+                p.leg_fk(sd, { flex: 20 * (1 - e) + k, abd: 18 - 13 * e, knee: 50 * (1 - e) + 12 * e, foot: -30 - 10 * e });
+            }
+            if (i === 3) { const B = p.bones(); for (const sd of ['R', 'L']) { const f = p.fist_world(B, sd); p.effects.push({ type: 'splash', pos: [f[0], f[1], 0.0], n: 8, spread: 3.0, seed: 40 + i + (sd === 'R' ? 1 : 0) }); } }
+            out.push(p);
+        }
+        return out;
+    }
+    // MERGULHO: o corpo inteiro logo abaixo da superfície (até 10 unidades, onde o desenho ainda aparece — esmaecido e azulado, como as
+    // pernas no crawl), quase na horizontal, nadando peito: puxada (braços abrem e descem), recolhe as mãos ao peito, estica à frente e
+    // desliza; as pernas fazem a pernada de sapo enquanto os braços esticam.
+    const DIVE_Z = -14.0;                                                   // centro do corpo abaixo da linha d'água
+    function divePose(p) {
+        p.water = 0.0;
+        p.shadow = false;
+        p.pelvis_t = [0, -20.0, DIVE_Z - SKEL.pelvis[1][2]];
+        p.pelvis_R = Rx(deg(-88));
+        p.chest_R = Rx(deg(-4));                                            // (as costas curvadas para baixo, a cabeça entre os braços)
+        p.head_R = Rx(deg(HEAD_TILT - 18));
+    }
+    function dive(n = 8) {
+        const out = [];
+        const AK = [[0, [178, 10, 8]], [0.3, [112, 66, 58]], [0.45, [42, 22, 128]], [0.62, [178, 10, 8]], [1, [178, 10, 8]]];
+        const LK = [[0, [0, 6, 6, -40]], [0.4, [0, 6, 6, -40]], [0.58, [46, 34, 112, 20]], [0.78, [0, 10, 6, -40]], [1, [0, 6, 6, -40]]];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, p = base();
+            divePose(p);
+            p.pelvis_t = V.add(p.pelvis_t, [0, 0, 0.8 * sin(TAU * t)]);
+            const a = keysN(AK, t), l = keysN(LK, t);
+            for (const sd of ['R', 'L']) {
+                p.arm_fk(sd, { flex: a[0], abd: a[1], elbow: a[2] });
+                p.leg_fk(sd, { flex: l[0], abd: l[1], knee: l[2], foot: l[3] });
+            }
+            out.push(p);
+        }
+        return out;
+    }
+    // Afundar (do crawl ao mergulho): a cabeça desce, o quadril sobe e as pernas saem da água por um instante (respingo) e o corpo
+    // assenta logo abaixo da superfície, na pose do `dive`. (Voltar à tona: diveOut.)
+    function diveIn(n = 7) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const s = i / (n - 1), p = base();
+            p.water = 0.0;
+            const z = keys([[0, -6.0], [0.45, -2.0], [1, DIVE_Z]], s), rx = keys([[0, -70], [0.45, -128], [1, -88]], s);
+            p.pelvis_t = [0, -20.0, z - SKEL.pelvis[1][2]];
+            p.pelvis_R = Rx(deg(rx));
+            p.chest_R = Rx(deg(keys([[0, 0], [0.45, 14], [1, -4]], s)));
+            p.head_R = Rx(deg(HEAD_TILT + keys([[0, 44], [0.45, 10], [1, -18]], s)));
+            const aR = keysN([[0, [178, 8, 10]], [0.45, [150, 30, 30]], [1, [178, 10, 8]]], s), aL = keysN([[0, [13, 10, 20]], [0.45, [150, 30, 30]], [1, [178, 10, 8]]], s);
+            p.arm_fk('R', { flex: aR[0], abd: aR[1], elbow: aR[2] }); p.arm_fk('L', { flex: aL[0], abd: aL[1], elbow: aL[2] });
+            const lg = keysN([[0, [0, 5, 12, -40]], [0.45, [-12, 4, 2, -50]], [1, [0, 6, 6, -40]]], s);
+            for (const sd of ['R', 'L']) p.leg_fk(sd, { flex: lg[0], abd: lg[1], knee: lg[2], foot: lg[3] });
+            p.shadow = false;
+            if (i === 3 || i === 4) { const B = p.bones(); const ft = B.foot_R.t; p.effects.push({ type: 'splash', pos: [ft[0], ft[1], 0.0], n: 10, spread: 3.2, seed: 70 + i }); }
+            out.push(p);
+        }
+        return out;
+    }
+
+    // Voltar à tona (do mergulho ao crawl): o corpo sobe inclinado, a cabeça sai primeiro (respingo), os braços abrem para boiar e o
+    // corpo assenta na pose do 1º quadro do `swim` — sem as pernas saírem da água (isso é só ao afundar).
+    function diveOut(n = 6) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const s = i / (n - 1), p = base();
+            p.water = 0.0;
+            p.shadow = false;
+            p.pelvis_t = [0, -20.0, keys([[0, DIVE_Z], [0.5, -9.0], [1, -6.0]], s) - SKEL.pelvis[1][2]];
+            p.pelvis_R = Rx(deg(keys([[0, -88], [0.5, -62], [1, -70]], s)));
+            p.chest_R = Rx(deg(keys([[0, -4], [0.5, -16], [1, 0]], s)));
+            p.head_R = Rx(deg(HEAD_TILT + keys([[0, -18], [0.4, 30], [1, 44]], s)));
+            const aR = keysN([[0, [178, 10, 8]], [0.5, [110, 55, 50]], [1, [178, 8, 10]]], s), aL = keysN([[0, [178, 10, 8]], [0.5, [110, 55, 50]], [1, [13, 10, 20]]], s);
+            p.arm_fk('R', { flex: aR[0], abd: aR[1], elbow: aR[2] }); p.arm_fk('L', { flex: aL[0], abd: aL[1], elbow: aL[2] });
+            const lg = keysN([[0, [0, 6, 6, -40]], [0.5, [30, 25, 70, -10]], [1, [0, 5, 12, -40]]], s);
+            for (const sd of ['R', 'L']) p.leg_fk(sd, { flex: lg[0], abd: lg[1], knee: lg[2], foot: lg[3] });
+            if (i === 2) { const B = p.bones(), h = B.head.t; p.effects.push({ type: 'splash', pos: [h[0], h[1], 0.0], n: 12, spread: 3.4, seed: 90 + i }); }
             out.push(p);
         }
         return out;
@@ -1456,13 +1601,18 @@ function NpcGenAnims(G) {
         kick: { fps: 12, loop: false, fn: () => kick() },
         throw: { fps: 12, loop: false, fn: () => throwAnim() },
         hurt: { fps: 12, loop: false, fn: () => hurt() },
-        dead: { fps: 12, loop: false, fn: () => death(true) },
+        dead: { fps: 12, loop: false, fn: () => death(false) },        // (a poça de sangue é a do jogo — Blood.deathPool —, não desenhada)
         surrender: { fps: 9, loop: false, fn: () => surrenderKneel() },
         kneel: { fps: 1, loop: true, fn: () => [kneelPose(1)] },
         handsup: { fps: 8, loop: false, fn: () => handsUp(5) },
         scared: { fps: 14, loop: true, fn: () => scared() },
         swim: { fps: 10, loop: true, fn: () => swim() },
         swim_idle: { fps: 6, loop: true, fn: () => swimIdle() },
+        swim_in: { fps: 10, loop: false, fn: () => swimIn() },                // começar a nadar (de pé → crawl)
+        swim_out: { fps: 10, loop: false, fn: () => swimIn().reverse() },     // parar de nadar (crawl → de pé)
+        dive_in: { fps: 10, loop: false, fn: () => diveIn() },                // afundar (crawl → mergulho)
+        dive: { fps: 7, loop: true, fn: () => dive() },                        // nado peito debaixo d'água
+        dive_out: { fps: 10, loop: false, fn: () => diveOut() },              // voltar à tona (mergulho → crawl)
         flail: { fps: 12, loop: true, fn: () => flail() },
         tumble: { fps: 16, loop: false, fn: () => tumble() },
         lie: { fps: 1, loop: true, fn: () => lie() },
@@ -1471,6 +1621,7 @@ function NpcGenAnims(G) {
         carjack: { fps: 9, loop: false, fn: () => carjack() },
         opendoor: { fps: 10, loop: false, fn: () => openDoor() },
         enter: { fps: 10, loop: false, fn: () => enterCar() },
+        sitin: { fps: SIT_IN.fps, loop: false, fn: (w) => sitIn(w) },          // (só o jogador: L/R = lado da frente do carro)
         pick: { fps: 7, loop: true, fn: () => pickLock() },
         pickpocket: { fps: 7, loop: false, fn: () => pickpocket() },
         rummage: { fps: 8, loop: true, fn: () => rummage() },
@@ -1495,6 +1646,6 @@ function NpcGenAnims(G) {
         roll: { fps: 16, loop: false, fn: () => dodgeRoll() },
     };
 
-    Object.assign(G, { Pose, setRig, RIG, ik2, HEAD_TILT, ANIMS, CLIPS, CTX, WEAPON_HOLD, anim: { idle, walk, run, gunIdle, gunWalk, gunRun, gunDraw, holdWeapon, kneelPose, death, getUp } });
+    Object.assign(G, { Pose, setRig, RIG, ik2, HEAD_TILT, ANIMS, CLIPS, CTX, WEAPON_HOLD, SIT_IN, anim: { idle, walk, run, gunIdle, gunWalk, gunRun, gunDraw, holdWeapon, kneelPose, death, getUp } });
     return G;
 }

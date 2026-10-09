@@ -117,7 +117,7 @@ class SwimState {
 
     // Susto: se já está na água, volta à areia depressa e só então foge; na terra, foge na hora (panic normal).
     inWater() { return this.phase === 'swim' || this.phase === 'back'; }
-    scare(threat) { this.scared = threat.clone(); this._goBack(1.7); }
+    scare(threat) { this.scared = threat.clone(); this.npc.endDive(); this._goBack(1.7); }
 
     update(dt) {
         const npc = this.npc, S = this.shore;
@@ -134,6 +134,8 @@ class SwimState {
         } else if (this.phase === 'swim') {
             this.timer -= dt;
             if (npc.freeMove(this.goal.x, this.goal.z, dt, Config.npc.swimSpeed) < 2.5) this._pickGoal();
+            // de vez em quando dá um mergulho (no fundo, longe da beira): 3–8 s debaixo d'água
+            if (!npc._dive && Math.random() < dt * 0.05 && MapGeo.waterDepth(npc.position.x, npc.position.z) > Config.water.wadeDepth + 4) npc.startDive(3 + Math.random() * 5);
             if (this.timer <= 0) this._goBack(1);
         } else if (this.phase === 'back') {
             const d = npc.freeMove(this.goal.x, this.goal.z, dt, Config.npc.swimSpeed * this.boost);
@@ -148,6 +150,7 @@ class SwimState {
     }
 
     _goBack(boost) {
+        this.npc.endDive();
         this.boost = boost;
         this.goal = { x: this.shore.x, z: this.shore.z };
         this.phase = 'back';
