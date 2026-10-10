@@ -144,6 +144,7 @@ class Game {
         this.waterFx = new WaterFx(this.scene);       // marolas ao vadear/nadar
         this.dev = new DevMode(this);                // modo dev (ligado nas Configurações): painel de testes
         this.menu = new PauseMenu(this);             // menu de pausa (mapa HD, inventário, configurações)
+        this.minimap.iconOf = (k) => this.menu.icon(k);      // selos dos lugares no radar (os mesmos do mapa de pausa)
         this.aim = new Aim(this);                    // mira do jogador (assistida ou manual, ver combat/Aim.js)
         PadNav.init(this);                           // controle nas telas de mouse/teclado (menus, janelas, tela inicial, sinuca)
         this.stash = new Stash();                    // geladeira, cofre e baú da safe house

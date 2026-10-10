@@ -6,6 +6,8 @@
 //   STATUS / HABILIDADES   reservados (funcionalidades futuras)
 //   CONFIGURAÇÕES          volume, efeitos, minimapa, dicas
 // Teclas: Esc/P fecha · Q/E ou Tab troca de aba · mapa: setas/WASD cursor, Enter/clique marca, X limpa, +/- zoom, arrastar move.
+// Toque: um dedo arrasta, pinça = zoom, toque marca. No celular o mapa ocupa a página, com botões por cima (legenda, tela cheia, zoom,
+// centrar); tocar no minimapa abre o mapa EXPANDIDO (openMap: só o mapa, de ponta a ponta).
 // Lugares novos (lanchonete, Pay n Pay, loja…) entram no mapa e na legenda só com CityGrid.addPoi({type,name,x,z}).
 // ============================================================================
 
@@ -106,8 +108,34 @@ class PauseMenu {
             .pm-col { display: flex; flex-direction: column; min-height: 0; }
             .pm-mappanel { flex: 1; min-width: 0; }
             .pm-mapwrap { position: relative; flex: 1; min-height: 0; background: #2c5877; overflow: hidden; margin: 0 12px; border-radius: var(--r-2); }
-            .pm-mapwrap canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; cursor: none; }
+            .pm-mapwrap canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; cursor: none; touch-action: none; }
             .pm-note { padding: 10px 18px 12px; font-size: 12px; color: var(--tx-3); }
+            /* celular: botões por cima do mapa (legenda, tela cheia, zoom, centrar em você) e o destino num chip */
+            .pm-mapui { display: none; position: absolute; z-index: 2; gap: 8px; }
+            body.mobile .pm-mapui { display: flex; }
+            .pm-mapbtns { flex-direction: column; right: max(10px, env(safe-area-inset-right)); bottom: 10px; }
+            .pm-mapbtns.top { flex-direction: row; left: max(10px, env(safe-area-inset-left)); right: auto; top: 10px; bottom: auto; }
+            .pm-mapbtns > div { min-width: 44px; height: 44px; padding: 0 14px; box-sizing: border-box; border-radius: 22px; display: flex; align-items: center; justify-content: center;
+                font: 700 12px var(--font); letter-spacing: 0.04em; color: #fff; background: rgba(14,17,26,0.82); border: 1.5px solid rgba(255,255,255,0.22); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+            .pm-mapbtns:not(.top) > div { padding: 0; font: 600 26px/1 var(--font); }
+            .pm-mapbtns > div:active, #pause.legend-on .pm-mapbtns [data-mb=legend] { background: rgba(52,211,153,0.8); color: #04130c; }
+            .pm-mapbtns i.me { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-sizing: border-box; background: radial-gradient(circle, #37d65a 0 3px, transparent 4px); }
+            .pm-mapdest2 { left: max(10px, env(safe-area-inset-left)); bottom: 10px; max-width: calc(100% - 90px); align-items: center; padding: 6px 6px 6px 12px; border-radius: 22px;
+                background: rgba(14,17,26,0.85); border: 1.5px solid rgba(255,255,255,0.22); font: 700 13px/1.25 var(--font); color: #fff; }
+            .pm-mapdest2.none { padding-right: 14px; font-weight: 500; color: var(--tx-2); }
+            .pm-mapdest2 > div { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .pm-mapdest2 .d { color: var(--gold); font-weight: 500; font-size: 12px; }
+            .pm-mapdest2 .x { flex: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #e11d48; font-size: 14px; }
+            body.mobile #pause .pm-page[data-page=map] { position: relative; }
+            body.mobile #pause .pm-mappanel > .px-title, body.mobile #pause .pm-mappanel > .pm-note { display: none; }
+            body.mobile #pause .pm-mapwrap { margin: 0; border-radius: 0; }
+            body.mobile #pause .pm-page[data-page=map] > .pm-side { position: absolute; z-index: 3; top: 62px; right: max(8px, env(safe-area-inset-right)); bottom: 8px; width: min(300px, 50vw) !important; max-height: none !important; display: none; }
+            body.mobile #pause.legend-on .pm-page[data-page=map] > .pm-side { display: flex; }
+            body.mobile #pause.legend-on .pm-mapbtns:not(.top) { right: calc(min(300px, 50vw) + max(8px, env(safe-area-inset-right)) + 10px); }      /* (o zoom não fica atrás da gaveta) */
+            body.mobile #pause .pm-page[data-page=map] > .pm-side > .pm-dest { display: none; }
+            /* mapa expandido (toque no minimapa): só o mapa, de ponta a ponta — o ✕ VOLTAR do canto volta ao jogo */
+            #pause.mapfull { padding: 0 !important; gap: 0 !important; }
+            #pause.mapfull > .pm-tabs, #pause.mapfull > .pm-hints { display: none !important; }
+            #pause.mapfull .pm-mappanel { border: none; border-radius: 0; }
             .pm-side { width: 300px; gap: 16px; overflow-y: auto; }
             .pm-side > .px { flex: none; }
             .pm-dest { padding: 14px 16px; display: flex; gap: 12px; align-items: center; font: 700 15px/1.3 var(--font-d); }
@@ -170,7 +198,10 @@ class PauseMenu {
             <div class="pm-main">
               <div class="pm-page" data-page="map">
                 <div class="px pm-col pm-mappanel"><div class="px-title">Cidade dos Prazeres · mapa tático</div>
-                  <div class="pm-mapwrap"><canvas id="pmMap"></canvas></div>
+                  <div class="pm-mapwrap"><canvas id="pmMap"></canvas>
+                    <div class="pm-mapui pm-mapbtns top"><div data-mb="legend">☰ LEGENDA</div><div data-mb="full" id="pmFullBtn">TELA CHEIA</div></div>
+                    <div class="pm-mapui pm-mapbtns"><div data-mb="in">+</div><div data-mb="out">−</div><div data-mb="me"><i class="me"></i></div></div>
+                    <div class="pm-mapui pm-mapdest2" id="pmDest2"></div></div>
                   <div class="pm-note">Saindo do menu, o marcador aparece no minimapa (na borda, apontando, se estiver longe).</div></div>
                 <div class="pm-col pm-side">
                   <div class="px pm-dest"><div id="pmPin"></div><div class="t" id="pmDest">Sem destino<div class="d">Clique no mapa para marcar</div></div></div>
@@ -219,11 +250,11 @@ class PauseMenu {
         this.mapCv = this.$('pmMap');
         this.mapCtx = this.mapCv.getContext('2d');
         const cv = this.mapCv;
-        cv.addEventListener('mousemove', (e) => this._mouse(e, 'move'));
-        cv.addEventListener('mousedown', (e) => { if (e.button === 0) this._mouse(e, 'down'); });
-        window.addEventListener('mouseup', (e) => { if (this.isOpen && e.button === 0) this._mouse(e, 'up'); });
-        cv.addEventListener('contextmenu', (e) => { e.preventDefault(); this.g.clearGps(); this._refreshDest(); });
+        this._bindMapPointer(cv);
+        cv.addEventListener('contextmenu', (e) => { e.preventDefault(); if (this._touchMap) return; this.g.clearGps(); this._refreshDest(); });      // (toque longo no celular não apaga o destino)
         cv.addEventListener('wheel', (e) => { e.preventDefault(); this._zoom(e.deltaY < 0 ? 1.18 : 1 / 1.18, this._cursorFromEvent(e)); }, { passive: false });
+        root.querySelectorAll('[data-mb]').forEach((b) => b.addEventListener('click', () => this._mapButton(b.dataset.mb)));
+        this.$('pmDest2').addEventListener('click', (e) => { if (e.target.closest('[data-clear]')) { this.g.clearGps(); this._refreshDest(); } });
         window.addEventListener('keydown', (e) => this._onKey(e));
         window.addEventListener('resize', () => { if (this.isOpen) this._fitCanvas(); });
         this._buildLegend();
@@ -262,7 +293,8 @@ class PauseMenu {
         if (this._icons[name]) return this._icons[name];
         const S = 96, c = document.createElement('canvas'); c.width = c.height = S;
         const x = c.getContext('2d');
-        x.fillStyle = 'rgba(12,15,24,0.9)'; x.beginPath(); x.arc(S / 2, S / 2, S / 2 - 3, 0, Math.PI * 2); x.fill();
+        x.fillStyle = Emoji.VECTOR[name] ? 'rgba(226,231,240,0.95)' : 'rgba(12,15,24,0.9)';      // (arma em vetor é metal escuro: selo claro, senão some no radar)
+        x.beginPath(); x.arc(S / 2, S / 2, S / 2 - 3, 0, Math.PI * 2); x.fill();
         x.strokeStyle = 'rgba(255,255,255,0.85)'; x.lineWidth = 5; x.stroke();
         const src = Emoji.canvas(name, 128), r = src.width / src.height, w = r > 1 ? S * 0.66 : S * 0.6 * r, h = r > 1 ? w / r : S * 0.6;
         x.drawImage(src, (S - w) / 2, (S - h) / 2, w, h);
@@ -312,6 +344,8 @@ class PauseMenu {
         const g = this.g;
         this.isOpen = true;
         this.root.classList.add('show');
+        this._touchMap = !!(g.touch && g.touch.shown);
+        if (this._touchMap) { this.map.cur.x = this.map.cur.y = -999; this.map.cur.set = true; }      // celular: sem seta de mouse no mapa
         const pad = typeof PadNav !== 'undefined' && PadNav.pad();
         this._padPrev = pad ? Array.from(pad.buttons, (x) => !!(x && x.pressed)) : null;      // o Start que abriu o menu ainda está apertado: não fecha de novo
         g.scene.physicsEnabled = false;               // a física congela (o mundo "para de verdade")
@@ -320,10 +354,19 @@ class PauseMenu {
         this.setTab(tab);
     }
 
+    // Mapa expandido (toque no minimapa, no celular): abre direto no mapa, de ponta a ponta e centrado em você.
+    openMap(full = true) {
+        this.open('map');
+        this._touchMap = true;                       // (veio de um toque: sem a seta do mouse até alguém mexer o mouse)
+        this.root.classList.toggle('mapfull', full);
+        this._centerOnPlayer();
+    }
+
     close() {
         if (!this.isOpen) return;
         this.isOpen = false;
-        this.root.classList.remove('show');
+        this.root.classList.remove('show', 'mapfull', 'legend-on');
+        this._ptrs.clear(); this._pinch = null;
         this.g.scene.physicsEnabled = true;
         AudioFX.unpause();
         this.g.input.justPressed = {};                // teclas apertadas no menu não valem no jogo
@@ -333,6 +376,7 @@ class PauseMenu {
 
     setTab(id) {
         this.tab = id;
+        if (id !== 'map') this.root.classList.remove('mapfull', 'legend-on');      // (sem a barra de abas o mapa expandido só vale para o mapa)
         for (const b of this.root.querySelectorAll('.pm-tab')) b.classList.toggle('on', b.dataset.tab === id);
         for (const pg of this.root.querySelectorAll('.pm-page')) pg.classList.toggle('on', pg.dataset.page === id);
         this._renderHints();
@@ -356,6 +400,27 @@ class PauseMenu {
         const WD = Config.world;
         m.min = Math.min(w / (WD.maxX - WD.minX + 40), h / (WD.maxZ - WD.minZ + 40));        // enquadra o MUNDO inteiro
         m.scale = Math.max(m.min, Math.min(11, m.scale));
+        const fb = this.$('pmFullBtn');
+        if (fb) fb.textContent = this.root.classList.contains('mapfull') ? 'MENU' : 'TELA CHEIA';
+    }
+
+    _centerOnPlayer() {
+        const p = this.g._playerState().pos, m = this.map;
+        this._fitCanvas();
+        m.cx = p.x; m.cz = p.z; m.init = true;
+        this._clampCenter();
+        if (this._touchMap) m.cur.x = m.cur.y = -999;                       // no toque não há cursor (nem dica de lugar) até tocar
+        else { m.cur.x = this.mapCv.width / 2; m.cur.y = this.mapCv.height / 2; }
+    }
+
+    // Botões por cima do mapa (celular).
+    _mapButton(id) {
+        const R = this.root.classList;
+        if (id === 'legend') R.toggle('legend-on');
+        else if (id === 'full') { R.toggle('mapfull'); this._fitCanvas(); }
+        else if (id === 'in' || id === 'out') this._zoom(id === 'in' ? 1.5 : 1 / 1.5);
+        else if (id === 'me') this._centerOnPlayer();
+        AudioFX.blip(700, 0.05, 0.08);
     }
 
     // ------------------------------------------------------------------ teclado
@@ -424,43 +489,122 @@ class PauseMenu {
         this._clampCenter();
     }
 
+    // Mouse e toque pelos Pointer Events. Um dedo (ou o botão esquerdo) arrasta o mapa; toque/clique sem arrastar marca o destino;
+    // dois dedos = pinça: zoom em volta do meio deles, e o mapa acompanha os dedos (arrastar e dar zoom ao mesmo tempo).
+    _bindMapPointer(cv) {
+        const P = this._ptrs = new Map();
+        cv.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            e.preventDefault();
+            this._touchMap = e.pointerType !== 'mouse';
+            try { cv.setPointerCapture(e.pointerId); } catch (x) { /* ok */ }
+            P.set(e.pointerId, this._cursorFromEvent(e));
+            if (P.size === 1) this._mouse(e, 'down');
+            else if (P.size === 2) { this.map.drag = null; this._pinchStart(); }
+        });
+        cv.addEventListener('pointermove', (e) => {
+            if (e.pointerType === 'mouse') this._touchMap = false;
+            if (P.has(e.pointerId)) P.set(e.pointerId, this._cursorFromEvent(e));
+            if (this._pinch) this._pinchMove();
+            else if (e.pointerType === 'mouse' || P.has(e.pointerId)) this._mouse(e, 'move');
+        });
+        const up = (e) => {
+            if (!P.has(e.pointerId)) return;
+            P.delete(e.pointerId);
+            if (this._pinch) {
+                if (P.size >= 2) { this._pinchStart(); return; }
+                this._pinch = null;
+                const rest = P.values().next().value, m = this.map;          // sobrou um dedo: continua arrastando dali (sem marcar ao soltar)
+                if (rest) m.drag = { x: rest.x, y: rest.y, cx: m.cx, cz: m.cz, moved: true };
+                return;
+            }
+            if (e.type !== 'pointerup') { this.map.drag = null; return; }      // (cancelado pelo sistema: não marca nada)
+            this._mouse(e, 'up');
+        };
+        cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up); cv.addEventListener('lostpointercapture', up);
+    }
+
+    _pinchStart() {
+        const [a, b] = this._ptrs.values(), m = this.map;
+        this._pinch = { d0: Math.max(12, hypot(a.x - b.x, a.y - b.y)), s0: m.scale, w: this._s2w((a.x + b.x) / 2, (a.y + b.y) / 2) };
+    }
+
+    _pinchMove() {
+        const [a, b] = this._ptrs.values(), m = this.map, p = this._pinch, c = this.mapCv;
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        m.scale = Math.max(m.min || 1, Math.min(11, p.s0 * hypot(a.x - b.x, a.y - b.y) / p.d0));
+        m.cx = p.w.x - (mx - c.width / 2) / m.scale; m.cz = p.w.z + (my - c.height / 2) / m.scale;      // o ponto entre os dedos fica entre os dedos
+        this._clampCenter();
+    }
+
     _mouse(e, type) {
         const m = this.map, p = this._cursorFromEvent(e);
         if (type === 'move') {
             if (m.drag) {
                 const dx = p.x - m.drag.x, dy = p.y - m.drag.y;
-                if (Math.abs(dx) + Math.abs(dy) > 5) m.drag.moved = true;
+                if (Math.abs(dx) + Math.abs(dy) > (this._touchMap ? 12 : 5)) m.drag.moved = true;      // (o dedo treme mais que o mouse)
                 if (m.drag.moved) { m.cx = m.drag.cx - dx / m.scale; m.cz = m.drag.cz + dy / m.scale; this._clampCenter(); }
             }
             m.cur.x = p.x; m.cur.y = p.y;
         } else if (type === 'down') { m.drag = { x: p.x, y: p.y, cx: m.cx, cz: m.cz, moved: false }; m.cur.x = p.x; m.cur.y = p.y; }
-        else if (type === 'up' && m.drag) { const was = m.drag; m.drag = null; if (!was.moved) { m.cur.x = was.x; m.cur.y = was.y; this._markAtCursor(); } }
+        else if (type === 'up' && m.drag) {
+            const was = m.drag; m.drag = null;
+            if (!was.moved) { m.cur.x = was.x; m.cur.y = was.y; this._markAtCursor(); }
+            else if (this._touchMap) m.cur.x = m.cur.y = -999;                 // toque: depois de arrastar, sem "cursor" esquecido no mapa
+        }
     }
 
     // Lugares no mapa: POIs da cidade (os esconderijos — caçambas, caixotes, latões — ficam fora: só poluíam o mapa).
     pois() { return CityGrid.pois; }
 
-    // Marca o destino onde está o cursor (encaixa no lugar mais próximo, se houver um a < 16 px).
+    // De perto, o mapa também mostra as portas em que dá para entrar e que não têm ponto na legenda (farmácia, bar, padaria, banco,
+    // boca…) — os mesmos ícones do minimapa. Refiltrado só quando a lista do minimapa muda.
+    static get DOORS_ZOOM() { return 2.6; }
+    _extraPlaces() {
+        const all = Minimap.places();
+        if (this._xpSrc === all) return this._xp;
+        const pois = this.pois();
+        this._xpSrc = all;
+        return (this._xp = all.filter((q) => q.door && !pois.some((p) => Math.abs(p.x - q.x) < 4 && Math.abs(p.z - q.z) < 4)));
+    }
+
+    // Lugar mais perto do ponto do mundo `w` (raio em px de tela): POIs e, de perto, as portas extras.
+    _placeNear(w, px) {
+        const m = this.map;
+        let best = null, bd = px / m.scale;
+        const scan = (list) => { for (const p of list) { const d = hypot(p.x - w.x, p.z - w.z); if (d < bd) { bd = d; best = p; } } };
+        scan(this.pois());
+        if (m.scale >= PauseMenu.DOORS_ZOOM) scan(this._extraPlaces());
+        return best;
+    }
+
+    _placeLabel(p) {
+        if (p.door) return p.label && !p.name.includes(p.label) ? p.label + ' — ' + p.name : p.name;
+        return PauseMenu.POI_TYPES[p.type].label + (p.name ? ' — ' + p.name : '');
+    }
+
+    // Marca o destino onde está o cursor (encaixa no lugar mais próximo, se houver um a < 16 px — 30 px no toque: o dedo é grosso).
     _markAtCursor() {
-        const m = this.map, w = this._s2w(m.cur.x, m.cur.y);
-        let best = null, bd = 16 / m.scale;
-        for (const p of this.pois()) {
-            const d = hypot(p.x - w.x, p.z - w.z);
-            if (d < bd) { bd = d; best = p; }
-        }
+        const m = this.map, w = this._s2w(m.cur.x, m.cur.y), best = this._placeNear(w, this._touchMap ? 30 : 16);
         if (!best && !WorldMap.isLand(w.x, w.z)) return;                      // no mar: não marca (em terra, qualquer lugar)
-        this.g.setGps(best ? best.x : w.x, best ? best.z : w.z, best ? PauseMenu.POI_TYPES[best.type].label + (best.name ? ' — ' + best.name : '') : 'Ponto marcado');
+        this.g.setGps(best ? best.x : w.x, best ? best.z : w.z, best ? this._placeLabel(best) : 'Ponto marcado');
         this._refreshDest();
         AudioFX.blip(900, 0.08, 0.14);
     }
 
     _refreshDest() {
-        const g = this.g, el = this.$('pmDest'), pin = this.$('pmPin');
+        const g = this.g, el = this.$('pmDest'), pin = this.$('pmPin'), chip = this.$('pmDest2');
         if (!pin.firstChild) { const c = document.createElement('canvas'); c.width = 40; c.height = 52; c.style.width = '40px'; c.style.height = '52px'; this._drawPin(c.getContext('2d'), 20, 48, '#ff3b3b', 1.2); pin.appendChild(c); }
-        if (!g.gps) { el.innerHTML = 'Sem destino<div class="d">Clique no mapa para marcar</div>'; return; }
+        chip.classList.toggle('none', !g.gps);
+        if (!g.gps) {
+            el.innerHTML = `Sem destino<div class="d">${g.input.touchDevice ? 'Toque' : 'Clique'} no mapa para marcar</div>`;
+            chip.textContent = `${g.input.touchDevice ? 'Toque' : 'Clique'} no mapa para marcar o destino`;
+            return;
+        }
         const pp = g._playerState().pos, len = hypot(g.gps.x - pp.x, g.gps.z - pp.z);
         const dist = len >= 1000 ? (len / 1000).toFixed(1) + ' km' : Math.round(len) + ' m';
         el.innerHTML = `${g.gps.label}<div class="d">${dist} em linha reta</div>`;
+        chip.innerHTML = `<div>${g.gps.label}<div class="d">${dist} em linha reta</div></div><div class="x" data-clear>✕</div>`;
     }
 
     // ------------------------------------------------------------------ mapa: legenda
@@ -534,6 +678,15 @@ class PauseMenu {
         const on =(x, y, pad = 40) => x > -pad && y > -pad && x < W + pad && y < H + pad;
         const ik = Math.max(1.3, Math.min(2.6, m.scale / 3));                     // tamanho dos ícones acompanha o zoom
 
+        // De perto: as outras portas em que dá para entrar (menores, por baixo dos lugares da legenda).
+        if (m.scale >= PauseMenu.DOORS_ZOOM) {
+            const w = 13 * ik;
+            for (const p of this._extraPlaces()) {
+                const [x, y] = this._w2s(p.x, p.z);
+                if (on(x, y)) ctx.drawImage(this.icon(p.icon), x - w / 2, y - w / 2, w, w);
+            }
+        }
+
         // Lugares (hospital, delegacia, lojas…).
         for (const p of this.pois()) {
             const [x, y] = this._w2s(p.x, p.z);
@@ -579,13 +732,12 @@ class PauseMenu {
             this._label(ctx, 'PLAYER', px, py + 17, 17);
         }
 
-        // Dica do lugar sob o cursor.
-        const cw = this._s2w(m.cur.x, m.cur.y);
-        let hover = null, hd = 14 / m.scale;
-        for (const p of this.pois()) { const d = hypot(p.x - cw.x, p.z - cw.z); if (d < hd) { hd = d; hover = p; } }
+        // Dica do lugar sob o cursor (no toque: o último lugar tocado).
+        const hover = this._placeNear(this._s2w(m.cur.x, m.cur.y), this._touchMap ? 30 : 14);
         if (hover) { const [hx, hy] = this._w2s(hover.x, hover.z); this._label(ctx, hover.name, hx, hy - 30 * ik / 2 - 14, 16); }
 
-        // Cursor em pixel art (seta).
+        // Cursor em pixel art (seta). No toque não tem cursor: o dedo é o cursor.
+        if (this._touchMap) return;
         ctx.save();
         ctx.translate(m.cur.x, m.cur.y);
         ctx.lineJoin = 'miter'; ctx.lineWidth = 3; ctx.strokeStyle = '#07090d'; ctx.fillStyle = '#f4f6fa';
@@ -765,6 +917,7 @@ class PauseMenu {
 
     _moveCursor(ax, az, dt) {
         const m = this.map, c = this.mapCv, sp = 520 * dt;
+        this._touchMap = false;                                             // (setas/controle: volta a ter cursor)
         m.cur.x = Math.max(0, Math.min(c.width, m.cur.x + ax * sp)); m.cur.y = Math.max(0, Math.min(c.height, m.cur.y + az * sp));
         const edge = 70, pan = (360 * dt) / m.scale;
         if (m.cur.x < edge) m.cx -= pan; if (m.cur.x > c.width - edge) m.cx += pan;
