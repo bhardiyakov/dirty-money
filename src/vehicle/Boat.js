@@ -9,7 +9,7 @@
 //   'wreck'      carcaça depois da explosão
 //
 // BoatManager cria os barcos (vagas da marina + ancorados soltos + alguns navegando), dá o "tick" deles (só os perto da
-// câmera simulam), faz o rastro/espuma e remove carcaças.
+// câmera simulam), faz o rastro (marolas) e a água jorrando (WaterSpray: proa, rabo de galo, curva, hélice) e remove carcaças.
 // ============================================================================
 
 class Boat extends Vehicle {
@@ -252,7 +252,8 @@ class BoatManager {
     update(dt, game) {
         const f = game.camera.target;
         for (const b of this.boats) b.update(dt, null, f);
-        // Rastro: marolas e espuma atrás de quem anda rápido e está perto da câmera.
+        this._spray(dt, game);
+        // Rastro: marolas atrás de quem anda rápido e está perto da câmera.
         this._wakeT -= dt;
         if (this._wakeT > 0) return;
         this._wakeT = 0.16;
@@ -265,11 +266,65 @@ class BoatManager {
             if (v < 1.5) continue;
             const d = b.body.getDirection(BABYLON.Axis.Z), l = hypot(d.x, d.z) || 1, ux = d.x / l, uz = d.z / l, back = b.halfLen * 0.8;
             const size = 0.8 + b.halfW * 0.9 + v * 0.12;
-            game.waterFx.ripple(p.x - ux * back, p.z - uz * back, size * 0.3, size * 1.15, 1.4, 0.34);
-            if (v > 5) {                                                                     // espuma branca no popa
-                const sx = -uz, sz = ux;
-                for (const s of [-1, 1]) game.carLights.puffs.emit(p.x - ux * back + sx * s * b.halfW * 0.5, 0.35, p.z - uz * back + sz * s * b.halfW * 0.5, sx * s * 1.2 - ux * 1.5, 0.3, sz * s * 1.2 - uz * 1.5,
-                    0.5, 1.3 + v * 0.05, 0.9, 0.5, [0.93, 0.97, 1.0]);
+            game.waterFx.ripple(p.x - ux * back, p.z - uz * back, size * 0.3, size * 1.15, 1.4, 0.34);      // (a espuma e os jorros: _spray)
+        }
+    }
+
+    // Água jorrando (WaterSpray, pixel art) nos barcos perto da câmera, mais forte quanto mais rápido:
+    //   proa      um jorro de cada lado do casco, abrindo para fora e para trás (vai junto com o barco e fica para trás aos poucos)
+    //   rabo de galo  o jato alto atrás do jet ski e da lancha (de trás/de frente na tela vira a coroa simétrica)
+    //   curva     derrapando de lado, um leque grande para FORA da curva
+    //   hélice    espuma revirada na popa da lancha e do barco
+    _spray(dt, game) {
+        const W = game.waterFx && game.waterFx.spray;
+        if (!W) return;
+        const cx = game.camera.target.x, cz = game.camera.target.z, vel = this._vel || (this._vel = new BABYLON.Vector3());
+        const yaw = CompassCamera.yaw || 0, srx = Math.cos(yaw), srz = -Math.sin(yaw);             // "para a direita" da tela, no chão
+        const jet = (x, z, dx, dz, scale, o) => {                                                    // de lado na tela: leque inclinado; de frente/de trás: coroa
+            const side = Math.abs(dx * srx + dz * srz) / (Math.hypot(dx, dz) || 1);
+            W.emit(x, z, Object.assign({ kind: side > 0.4 ? 'plume' : 'crown', scale: side > 0.4 ? scale : scale * 1.35, dir: [dx, dz] }, o));
+        };
+        for (const b of this.boats) {
+            if (b.wrecked || b._asleep || !b.body) continue;
+            const p = b.position;
+            if (Math.abs(p.x - cx) > 60 || Math.abs(p.z - cz) > 60) continue;
+            const v = b.forwardSpeed, av = Math.abs(v);
+            if (av < 2.5) continue;
+            const id = b.spec.id, k = Math.min(1, av / b.spec.maxSpeed), S = b._spray || (b._spray = { bow: Math.random() * 0.1, tail: 0, turn: 0, churn: 0 });
+            const d = b.body.getDirection(BABYLON.Axis.Z), l = Math.hypot(d.x, d.z) || 1, ux = d.x / l, uz = d.z / l, rx = uz, rz = -ux;
+            const go = v > 0 ? 1 : -1;                                                               // (de ré: a água abre na popa)
+            b.phys.getLinearVelocityToRef(vel);
+            const lat = vel.x * rx + vel.z * rz;
+            const big = { jetski: 0.8, lancha: 1.05, barco: 0.9 }[id] || 0.9;                         // (a câmera se afasta com a velocidade: jorro graúdo)
+            // proa: os dois lados
+            if ((S.bow -= dt) <= 0) {
+                S.bow = (id === 'barco' ? 0.16 : 0.09) * (1.35 - 0.6 * k);
+                const at = b.halfLen * (id === 'jetski' ? 0.3 : 0.42) * go, side = b.halfW * 0.85, sc = big * (0.5 + 0.8 * k);
+                for (const sd of [-1, 1]) {
+                    const ox = rx * sd, oz = rz * sd;
+                    jet(p.x + ux * at + ox * side, p.z + uz * at + oz * side, ox - ux * 0.45 * go, oz - uz * 0.45 * go, sc * (0.85 + Math.random() * 0.3),
+                        { vx: vel.x * 0.6 + ox * 1.4, vz: vel.z * 0.6 + oz * 1.4, life: 0.5 + Math.random() * 0.2 });
+                }
+            }
+            // rabo de galo (jet ski e lancha andando para a frente)
+            if (id !== 'barco' && v > 6 && (S.tail -= dt) <= 0) {
+                S.tail = id === 'jetski' ? 0.07 : 0.1;
+                const at = b.halfLen * 1.02;
+                jet(p.x - ux * at + rx * (Math.random() - 0.5) * 0.3, p.z - uz * at + rz * (Math.random() - 0.5) * 0.3, -ux, -uz, big * (0.45 + 0.85 * k) * (id === 'jetski' ? 1.15 : 0.9),
+                    { vx: vel.x * 0.3 - ux * 1.5, vz: vel.z * 0.3 - uz * 1.5, life: 0.55 });
+            }
+            // curva fechada: leque para fora (para onde o casco está derrapando)
+            if (Math.abs(lat) > 1.6 && av > 6 && (S.turn -= dt) <= 0) {
+                S.turn = 0.08;
+                const sd = Math.sign(lat), ox = rx * sd, oz = rz * sd, kk = Math.min(1, Math.abs(lat) / 5);
+                jet(p.x + ox * b.halfW - ux * b.halfLen * 0.35, p.z + oz * b.halfW - uz * b.halfLen * 0.35, ox - ux * 0.2, oz - uz * 0.2, big * (0.8 + 0.7 * kk),
+                    { vx: vel.x * 0.4 + ox * 2, vz: vel.z * 0.4 + oz * 2, life: 0.6 });
+            }
+            // hélice: espuma revirada na popa (lancha e barco)
+            if (id !== 'jetski' && (S.churn -= dt) <= 0) {
+                S.churn = 0.13;
+                const at = -b.halfLen * 0.98, sd = Math.random() < 0.5 ? -1 : 1;
+                W.emit(p.x + ux * at + rx * sd * b.halfW * 0.35, p.z + uz * at + rz * sd * b.halfW * 0.35, { kind: 'crown', scale: 0.55 + 0.4 * k, dir: [-ux, -uz], vx: vel.x * 0.2, vz: vel.z * 0.2, life: 0.4, a: 0.85 });
             }
         }
     }
