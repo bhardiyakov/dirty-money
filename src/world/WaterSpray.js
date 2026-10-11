@@ -7,6 +7,7 @@
 // emit(x, z, o): o quad nasce com a BASE no ponto da água e fica "de pé" para cima da TELA (gira com a câmera bússola, como os
 // personagens 2,5D); o jato inclina para o lado da direção pedida (espelhado quando ela aponta para a esquerda da tela) e pode
 // andar junto com quem o soltou (vx, vz), perdendo velocidade. Tudo numa malha dinâmica (1 draw call). Dono: WaterFx.
+// O jorro fica SOB os barcos (o casco e o piloto são desenhados por cima: alphaIndex e altura no constructor/update).
 // SUAVE: o desenho é pixel art, mas aparece desfocado — filtro bilinear + o shader tira a média de 9 amostras em volta (miolo) e
 // mistura 8 mais afastadas (uma névoa clara em volta do jorro), com alfa pré-multiplicado (sem contorno escuro). Força em SOFT.
 // ============================================================================
@@ -210,6 +211,7 @@ class WaterSpray {
         vd.applyToMesh(mesh, true);
         mesh.material = m;
         mesh.renderingGroupId = 1;                                         // (depois do mundo, testando a profundidade: a ponte cobre)
+        mesh.alphaIndex = -3.5;                                            // ANTES do lote dos barcos (CarArt: -3) e do piloto (-2,5): o casco fica por cima da água
         mesh.isPickable = false;
         mesh.alwaysSelectAsActiveMesh = true;
         mesh.doNotSyncBoundingInfo = true;
@@ -282,7 +284,7 @@ class WaterSpray {
         if (!this.live && !this._drawn) return;
         const yaw = typeof CompassCamera !== 'undefined' ? CompassCamera.yaw || 0 : 0;
         const ux = Math.sin(yaw), uz = Math.cos(yaw), rx = uz, rz = -ux;                  // "para cima" e "para a direita" da TELA, no chão
-        const P = this.pos, UV = this.uv, C = this.col, ppu = 20, Y = 0.66;
+        const P = this.pos, UV = this.uv, C = this.col, ppu = 20, Y = 0.35;          // (rente à água, abaixo do casco: barco 3D também cobre)
         let live = 0;
         for (let i = 0; i < this.n; i++) {
             const q = this.p[i];
