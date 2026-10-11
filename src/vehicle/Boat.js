@@ -272,8 +272,9 @@ class BoatManager {
 
     // Água jorrando (WaterSpray, pixel art) nos barcos perto da câmera. Os jorros têm tamanho de verdade (a folha não é esticada:
     // jet ski ~1 m, lancha ~1,6 m); a velocidade muda quantos saem, quão fortes (opacidade) e o tipo, não a escala.
-    //   proa      um jorro de cada lado do casco, baixo e largo, abrindo para fora e para trás. Saem colados uns nos outros e andam
-    //             quase junto com o barco (ficam para trás devagar): viram uma lâmina contínua na proa que se desfaz no V da esteira
+    //   proa      o CORTE do mar: os jorros nascem na ponta da proa (onde o casco toca a água primeiro), colados à quilha, um para
+    //             cada lado; abrem para fora e escorregam para trás ao longo do casco, crescendo (o quadro do jorro sobe com o tempo)
+    //             — a lâmina contínua que vira o V da esteira. Na ponta, um respingo miúdo: a água se partindo na roda de proa.
     //   rabo de galo  o jato alto atrás do jet ski (e da lancha rápida); de lado na tela é o leque, de trás/de frente a coroa estreita
     //   curva     derrapando de lado, um leque para FORA da curva
     //   hélice    espuma revirada na popa da lancha e do barco
@@ -294,15 +295,16 @@ class BoatManager {
             const go = v > 0 ? 1 : -1;                                                               // (de ré: a água abre na popa)
             b.phys.getLinearVelocityToRef(vel);
             const lat = vel.x * rx + vel.z * rz, a = 0.55 + 0.4 * k;
-            // proa: os dois lados (jet ski e lancha devagar: o jorro menor)
+            // proa: o corte do mar começa na PONTA (de ré, na popa), um jorro para cada lado (jet ski e lancha devagar: o menor)
             if ((S.bow -= dt) <= 0) {
-                S.bow = (id === 'barco' ? 0.09 : 0.05) * (1.4 - 0.6 * k);
-                const at = b.halfLen * (jet ? 0.3 : 0.45) * go, side = b.halfW * 0.9, kind = jet || k < 0.4 ? 'bowS' : 'bowL';
+                S.bow = (id === 'barco' ? 0.08 : 0.045) * (1.4 - 0.6 * k);
+                const tip = b.halfLen * 0.94 * go, tx = p.x + ux * tip, tz = p.z + uz * tip, kind = jet || k < 0.4 ? 'bowS' : 'bowL';
                 for (const sd of [-1, 1]) {
-                    const ox = rx * sd, oz = rz * sd;
-                    W.emit(p.x + ux * at + ox * side, p.z + uz * at + oz * side, { kind, dir: [ox - ux * 0.45 * go, oz - uz * 0.45 * go], a,
-                        vx: vel.x * 0.8 + ox * 1.0, vz: vel.z * 0.8 + oz * 1.0, drag: 1.1 });
+                    const ox = rx * sd, oz = rz * sd, o0 = b.halfW * 0.12;                         // (colado à quilha: o casco ainda é fino na ponta)
+                    W.emit(tx + ox * o0, tz + oz * o0, { kind, dir: [ox - ux * 0.3 * go, oz - uz * 0.3 * go], a,
+                        vx: vel.x * 0.8 + ox * (1.3 + 0.6 * k), vz: vel.z * 0.8 + oz * (1.3 + 0.6 * k), drag: 1.1 });     // (abre para fora enquanto fica para trás: o V)
                 }
+                if (Math.random() < 0.5) W.emit(tx + ux * 0.12 * go, tz + uz * 0.12 * go, { kind: jet ? 'kick' : 'stroke', a: 0.8, vx: vel.x * 0.9, vz: vel.z * 0.9, drag: 1.5 });      // a água se partindo na roda de proa
             }
             // rabo de galo: jet ski acima de ~30 km/h, lancha só bem rápida
             if (v > (jet ? 8 : b.spec.maxSpeed * 0.6) && (S.tail -= dt) <= 0) {
