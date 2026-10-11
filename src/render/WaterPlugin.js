@@ -10,6 +10,7 @@
 //       land (areia, grama e chão do terreno)   a lâmina d'água TRANSLÚCIDA que sobe e desce por cima do chão, com a espuma na ponta
 //            e a areia molhada (mais escura) atrás;
 //     dos dois lados a cor é a mesma função da distância, então onde as malhas se encontram (a escada) não aparece emenda;
+//   • a beira ondula suave ao longo da praia (shoreWobble) e todas as linhas da orla acompanham, paralelas;
 //   • a espuma fica na grade de pixels do mundo (20 px/u), em pixel art. o degradê do raso (turquesa até o azul, e a lâmina d'água na areia)
 //     é suave e sem faixas, calculado fora da grade.
 // O tempo vem de uma textura de 5 px (Water.clock, Water.tick a cada quadro): os materiais do mundo são congelados
@@ -136,6 +137,17 @@ const Water = {
                 return mix(col, vec3(0.92, 0.97, 0.98), cap * on * 0.9);
             }
             float shoreDist(vec2 q) { return (texture2D(shoreField, (q - vec2(${K[0]}, ${K[1]})) * vec2(${K[2]}, ${K[3]})).r - 0.5) * 2.0 * ${R}; }
+            // Ondulação suave da praia: a beira — e com ela todas as linhas da orla (espuma na areia, lâmina d'água, linha de onda, raso) —
+            // entra e sai devagar ao longo da praia (ondas de ~8 e ~12 u, até ~0,45 u). O deslocamento é o do ponto da BEIRA mais perto
+            // (q − n·s, n = para onde o mar fica), então tudo que está na mesma perpendicular à beira anda junto: as linhas continuam
+            // paralelas entre si, só a praia deixa de ser régua.
+            float shoreWobble(vec2 q, float s) {
+                vec2 g = vec2(shoreDist(q + vec2(1.0, 0.0)) - shoreDist(q - vec2(1.0, 0.0)), shoreDist(q + vec2(0.0, 1.0)) - shoreDist(q - vec2(0.0, 1.0)));
+                float l = length(g);
+                if (l < 0.05) return 0.0;
+                vec2 p = q - g / l * s;
+                return 0.3 * sin(dot(p, vec2(0.43, 0.31)) + 1.3) + 0.16 * sin(dot(p, vec2(-0.52, 0.61)) + 4.1);
+            }
             // s = distância na grade de pixels (espuma, pixel art) | sb = distância sem grade (degradê suave, "borrado")
             vec3 shoreColor(vec3 sea, vec3 ground, vec2 q, float s, float sb) {
                 vec4 clk = texture2D(shoreClock, vec2(0.1, 0.5));
@@ -190,9 +202,9 @@ const Water = {
                             #ifdef SHORE_SEA
                             float sw = smoothstep(0.8, 7.0, sb);                                  // (na beira a ondulação vira a orla)
                             if (sw > 0.0) baseColor.rgb = swellColor(baseColor.rgb, q, sw);
-                            if (s < ${R} - 0.5) baseColor.rgb = shoreColor(baseColor.rgb, vec3(0.80, 0.70, 0.49), q, s, sb);
+                            if (s < ${R} - 0.5) { float wob = shoreWobble(q, s); baseColor.rgb = shoreColor(baseColor.rgb, vec3(0.80, 0.70, 0.49), q, s + wob, sb + wob); }
                             #else
-                            if (s > -4.5 && vPositionW.y < 0.4) baseColor.rgb = shoreColor(vec3(0.17, 0.41, 0.54), baseColor.rgb, q, s, sb);
+                            if (s > -5.0 && vPositionW.y < 0.4) { float wob = shoreWobble(q, s); if (s + wob > -4.5) baseColor.rgb = shoreColor(vec3(0.17, 0.41, 0.54), baseColor.rgb, q, s + wob, sb + wob); }
                             #endif
                         }
                         #endif`,
