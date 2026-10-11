@@ -9,7 +9,7 @@
 //   splash(x, z, …)    gotas de verdade: sobem e caem com gravidade (GlowBatch 'puff', com o tom da noite). A altura vira deslocamento
 //                      para o norte na tela (1 m de altura = 0,56 m), como no desenho dos personagens; ao cair, cada gota faz uma marolinha.
 //   spray.emit(x, z, …) água JORRANDO em pixel art (WaterSpray): jatos que sobem, estouram em espuma e caem — proa e rabo de galo
-//                      dos barcos (BoatManager), a mão de cada braçada, as pernadas. burst(x, z, k): o tchibum grande (mergulho, granada).
+//                      dos barcos (BoatManager), a mão de cada braçada, as pernadas. burst(x, z, big): o tchibum (mergulho, granada).
 //   track(ent, dt, o)  segue alguém na água e emite tudo preso à ANIMAÇÃO dele:
 //                        andando/nadando: ondas em ARCO na frente (na direção do movimento) e a esteira em V atrás — nada de anel
 //                                 em volta do corpo (só parado, a marola lenta e larga);
@@ -69,10 +69,12 @@ class WaterFx {
     }
 
     // Tchibum grande (mergulho de cima da ponte, granada na água): coroa alta no meio, um jato para cada lado, gotas e marolas.
-    burst(x, z, k = 1) {
-        this.spray.emit(x, z, { kind: 'crown', scale: 1.5 * k, life: 0.55 });
-        for (const sd of [-1, 1]) this.spray.emit(x + sd * 0.35 * k, z - 0.05, { kind: 'plume', scale: 0.75 * k, dir: [sd, 0], life: 0.7 });
-        this.splash(x, z, Math.round(8 * k), 1.2 * k);
+    // big = false: o tchibum pequeno (algo caindo na água) — só a coroa estreita.
+    burst(x, z, big = true) {
+        if (!big) { this.spray.emit(x, z, { kind: 'tailC' }); this.splash(x, z, 5, 0.9); return; }
+        this.spray.emit(x, z, { kind: 'burst' });
+        for (const sd of [-1, 1]) this.spray.emit(x + sd * 0.4, z - 0.05, { kind: 'tail', dir: [sd, 0], life: 0.62 });
+        this.splash(x, z, 9, 1.3);
     }
 
     // Bolhas de ar chegando à superfície em (x, z): um "plip" miúdo (às vezes dois, colados).
@@ -145,7 +147,7 @@ class WaterFx {
                 s.kick = 0.15;
                 const kx = x - fx * 0.95 + rx * (Math.random() - 0.5) * 0.3, kz = z - fz * 0.95 + rz * (Math.random() - 0.5) * 0.3 + 0.04;
                 this.splash(kx, kz, 2, 0.45, -fx * 0.4, -fz * 0.4);
-                if ((s.kn = (s.kn + 1) % 2) === 0) { AudioFX.waterKick(x, z, vol); this.spray.emit(kx, kz, { kind: 'crown', scale: 0.38, dir: [-fx, -fz], life: 0.34, a: 0.8 }); }
+                if ((s.kn = (s.kn + 1) % 2) === 0) { AudioFX.waterKick(x, z, vol); this.spray.emit(kx, kz, { kind: 'kick', a: 0.85 }); }
             }
         }
         // eventos presos à animação
@@ -159,7 +161,7 @@ class WaterFx {
             [[0.02, 1], [0.52, -1]].forEach(([m, sd]) => {                     // mão entrando na água (direita, esquerda)
                 if (!crossed(m)) return;
                 const hx = x + fx * 0.7 + rx * sd * 0.32, hz = z + fz * 0.7 + rz * sd * 0.32 + 0.06;
-                this.spray.emit(hx, hz, { kind: 'crown', scale: npc ? 0.7 : 0.85, dir: [fx + rx * sd * 0.5, fz + rz * sd * 0.5], life: 0.45 });
+                this.spray.emit(hx, hz, { kind: 'stroke' });
                 this.splash(hx, hz, 4, 1.0, fx * 0.5, fz * 0.5);                // (umas gotas soltas por cima do jorro)
                 this.arc(hx, hz, fx, fz, 0.3, 1.5, 0.75, 0.34);
                 AudioFX.waterStroke(hx, hz, vol);
@@ -167,7 +169,7 @@ class WaterFx {
         } else if (sw && /^swim_breast$/.test(name)) {                       // nado peito: a cabeça sai da água a cada braçada (coroinha na frente)
             if (crossed(0.5)) {
                 const hx = x + fx * 0.6, hz = z + fz * 0.6 + 0.06;
-                this.spray.emit(hx, hz, { kind: 'crown', scale: npc ? 0.42 : 0.5, dir: [fx, fz], life: 0.4, a: 0.85 });
+                this.spray.emit(hx, hz, { kind: 'kick', a: 0.9 });
                 this.arc(hx, hz, fx, fz, 0.3, 1.3, 0.75, 0.28);
             }
         } else if (sw) {                                                     // boiando: as pernas batem devagar

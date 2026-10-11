@@ -2116,7 +2116,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // Mergulho (pulou da ponte): o tchibum (jorro em pixel art, WaterFx.burst) e anéis na água no ponto onde o jogador caiu.
     _splash(x, z) {
         if (!this.waterFx) return;
-        this.waterFx.burst(x, z, 1);
+        this.waterFx.burst(x, z);
         this.waterFx.ripple(x, z, 1.2, 5.5, 1.3, 0.75);
         this.waterFx.ripple(x + 0.6, z - 0.4, 0.8, 3.5, 1.0, 0.6);
         AudioFX.thud(x, z);

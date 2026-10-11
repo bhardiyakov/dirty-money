@@ -427,7 +427,7 @@ const Throwables = {
 
     _splash(x, z, k = 1) {
         const g = this.g;
-        if (g.waterFx && g.waterFx.burst) { g.waterFx.burst(x, z, 0.55 + 0.35 * k); g.waterFx.ripple(x, z, 0.6, 2.5 * k, 1.2, 0.6); }
+        if (g.waterFx && g.waterFx.burst) { g.waterFx.burst(x, z, k > 1.5); g.waterFx.ripple(x, z, 0.6, 2.5 * k, 1.2, 0.6); }
         else if (g.combat) for (let i = 0; i < 8 * k; i++) g.combat.spark(x + (Math.random() - 0.5) * k, 0.4 + Math.random() * k, z + (Math.random() - 0.5) * k, [0.8, 0.9, 1.0]);
         AudioFX._burst(x, z, { vol: 0.2 * k, dur: 0.25, f0: 1400, f1: 300, maxDist: 40, att: 0.01 });
     },

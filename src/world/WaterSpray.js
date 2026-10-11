@@ -1,10 +1,9 @@
 // ============================================================================
 // WaterSpray — água JORRANDO em pixel art. A folha de quadros é desenhada aqui mesmo, por código (WaterSprayArt), na paleta e nas
 // fases de um jorro de verdade: os jatos sobem em leque, estouram em espuma, viram gotas que caem e assentam numa marola.
-//   'plume'  leque de jatos inclinado para um lado: a água que a proa abre para os lados, o "rabo de galo" atrás do jet ski e da
-//            lancha e o leque da curva fechada (BoatManager._spray)
-//   'crown'  coroa quase simétrica: a mão entrando na água a cada braçada (WaterFx.track), as pernadas, a espuma da hélice, o rabo
-//            de galo visto de trás/de frente e o miolo do tchibum (WaterFx.burst)
+// Dois desenhos — 'plume' (leque inclinado para um lado, onda quebrando) e 'crown' (coroa simétrica) — em um tipo por USO, cada um
+// já no tamanho em que aparece e na densidade de pixel do resto do jogo (KINDS): proa do jet ski e da lancha, rabo de galo de lado
+// e de trás, espuma da hélice (BoatManager._spray), a mão de cada braçada e as pernadas (WaterFx.track), o tchibum (WaterFx.burst).
 // emit(x, z, o): o quad nasce com a BASE no ponto da água e fica "de pé" para cima da TELA (gira com a câmera bússola, como os
 // personagens 2,5D); o jato inclina para o lado da direção pedida (espelhado quando ela aponta para a esquerda da tela) e pode
 // andar junto com quem o soltou (vx, vz), perdendo velocidade. Tudo numa malha dinâmica (1 draw call). Dono: WaterFx.
@@ -13,10 +12,19 @@
 const WaterSprayArt = {
     // paleta (do fundo para a espuma): azul fundo, azul, azul médio, ciano, ciano claro, espuma
     PAL: [[20, 66, 140], [36, 104, 192], [70, 154, 222], [128, 202, 240], [192, 236, 251], [244, 253, 255]],
-    // w×h px por quadro (20 px = 1 u, como o resto do jogo) · ax: onde fica a base do jorro, em fração da largura
+    // Um tipo por USO, já no tamanho em que aparece: 20 px = 1 u (1 m), a mesma densidade de pixel dos carros, barcos e personagens —
+    // o quad nunca é esticado (pixel maior ou menor que o do resto do jogo fica falso). w×h px · type: 'plume' (leque inclinado,
+    // onda quebrando para um lado) | 'crown' (coroa simétrica) · ax: onde fica a base do jorro (fração da largura) · spread: abertura
+    // da coroa (1 = leque largo).
     KINDS: {
-        plume: { w: 48, h: 40, frames: 12, vars: 4, ax: 0.16 },
-        crown: { w: 24, h: 20, frames: 8, vars: 4, ax: 0.5 },
+        bowL:   { w: 32, h: 18, type: 'plume', frames: 10, vars: 3, ax: 0.14 },              // proa da lancha e do barco; curva da lancha
+        bowS:   { w: 22, h: 13, type: 'plume', frames: 9, vars: 3, ax: 0.14 },               // proa do jet ski (e da lancha devagar)
+        tail:   { w: 28, h: 24, type: 'plume', frames: 10, vars: 3, ax: 0.14 },              // rabo de galo visto de lado; curva do jet ski
+        tailC:  { w: 18, h: 24, type: 'crown', frames: 10, vars: 3, ax: 0.5, spread: 0.45 }, // rabo de galo visto de trás/de frente
+        churn:  { w: 22, h: 10, type: 'crown', frames: 8, vars: 3, ax: 0.5 },                // espuma da hélice (baixa e larga)
+        stroke: { w: 13, h: 11, type: 'crown', frames: 8, vars: 4, ax: 0.5, spread: 0.8 },   // mão entrando na água (crawl)
+        kick:   { w: 9, h: 7, type: 'crown', frames: 6, vars: 3, ax: 0.5, spread: 0.8 },     // pernada; cabeça saindo no nado peito
+        burst:  { w: 34, h: 32, type: 'crown', frames: 10, vars: 2, ax: 0.5, spread: 0.8 },  // tchibum: mergulho da ponte, explosão na água
     },
 
     // Monta (uma vez) a folha: linhas = tipo × variante, colunas = quadros. → { data RGBA, W, H, rect(kind, v, f) }
@@ -49,38 +57,39 @@ const WaterSprayArt = {
     },
 
     // Os elementos de uma variante (fixos em todos os quadros, para a animação ser contínua): o corpo do jorro, os jatos da crista,
-    // os bolos de espuma e as gotas.
+    // os bolos de espuma e as gotas. Tudo em proporção do quadro (w, h): o mesmo desenho serve do respingo da braçada ao tchibum.
     _elements(name, k, v) {
-        let s = 9137 + v * 7919 + (name === 'crown' ? 104729 : 0);
+        let s = 9137 + v * 7919 + name.length * 104729 + k.w * 31;
         const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-        const crown = name === 'crown', base = k.h - 2, x0 = k.w * k.ax;
+        const crown = k.type === 'crown', w = k.w, h = k.h, base = h - 2, x0 = w * k.ax, sp0 = k.spread || 1;
+        const cl = (x, a, b) => Math.max(a, Math.min(b, Math.round(x)));
         const jets = [], foam = [], drops = [], bubbles = [];
         // corpo: plume = rampa que sobe da base para a frente (onda quebrando para a direita); crown = monte baixo no meio
-        const body = crown ? { x0: x0 - 5, w: 10, H: k.h * 0.3, peak: 0.5 } : { x0: x0 - 3, w: k.w * 0.66 + rnd() * 4, H: k.h * (0.58 + rnd() * 0.1), peak: 0.62 + rnd() * 0.1 };
+        const body = crown ? { x0: x0 - w * 0.21, w: w * 0.42, H: h * 0.3, peak: 0.5 } : { x0: x0 - w * 0.06, w: w * (0.66 + rnd() * 0.08), H: h * (0.55 + rnd() * 0.12), peak: 0.62 + rnd() * 0.1 };
         body.ph = rnd() * 6.28;
-        const nJ = crown ? 7 : 13;
+        const nJ = crown ? cl(w / 3, 4, 7) : cl(w / 3.7, 5, 13);
         for (let j = 0; j < nJ; j++) {
             const u = (j + 0.5) / nJ + (rnd() - 0.5) * 0.05;
             // plume: os jatos nascem na crista do corpo e apontam para cima e para a frente (mais deitados na frente);
             // crown: leque aberto para os dois lados, os do meio mais altos
-            const ang = crown ? (-1.0 + 2.0 * u + (rnd() - 0.5) * 0.3 + (v - 1.5) * 0.07) : (0.35 + u * 0.75 + (rnd() - 0.5) * 0.35);
-            const L = crown ? k.h * (0.42 + 0.4 * (1 - Math.abs(u - 0.5) * 2) + rnd() * 0.12) : k.h * (0.2 + 0.32 * rnd()) * (0.55 + 0.8 * Math.sin(Math.PI * Math.min(1, u * 1.1)));
-            jets.push({ u, dx: Math.sin(ang), dy: -Math.cos(ang), L, r: (crown ? 0.8 : 0.9) + rnd() * (crown ? 0.6 : 0.9), droop: L * (crown ? 0.45 : 0.35), delay: rnd() * 0.1 });
+            const ang = crown ? (-1.0 + 2.0 * u + (rnd() - 0.5) * 0.3 + (v - 1) * 0.07) * sp0 : (0.35 + u * 0.75 + (rnd() - 0.5) * 0.35);
+            const L = crown ? h * (0.42 + 0.4 * (1 - Math.abs(u - 0.5) * 2) + rnd() * 0.12) : h * (0.2 + 0.32 * rnd()) * (0.55 + 0.8 * Math.sin(Math.PI * Math.min(1, u * 1.1)));
+            jets.push({ u, dx: Math.sin(ang), dy: -Math.cos(ang), L, r: h * (crown ? 0.04 + rnd() * 0.03 : 0.022 + rnd() * 0.022), droop: L * (crown ? 0.45 : 0.35), delay: rnd() * 0.1 });
         }
-        const nF = crown ? 3 : 9, fu = 0.45 + rnd() * 0.2;                                // (plume: um cacho de bolos, como couve-flor)
-        for (let i = 0; i < nF; i++) foam.push({ u: crown ? 0.35 + rnd() * 0.3 : fu + (rnd() - 0.5) * 0.4, a: 0.6 + rnd() * 0.5, R: (crown ? 1.5 : 2.8) + rnd() * (crown ? 1.0 : 2.4), t0: 0.15 + rnd() * 0.16 });
-        const nD = crown ? 12 : 24;
+        const nF = crown ? cl(w / 8, 1, 3) : cl(w / 5.3, 2, 9), fu = 0.45 + rnd() * 0.2;  // (plume: um cacho de bolos, como couve-flor)
+        for (let i = 0; i < nF; i++) foam.push({ u: crown ? 0.35 + rnd() * 0.3 : fu + (rnd() - 0.5) * 0.4, a: 0.6 + rnd() * 0.5, R: h * (crown ? 0.075 + rnd() * 0.05 : 0.07 + rnd() * 0.06), t0: 0.15 + rnd() * 0.16 });
+        const nD = crown ? cl(w / 2, 4, 12) : cl(w / 2, 6, 24), small = h < 14;
         for (let i = 0; i < nD; i++) {
-            const j = jets[Math.floor(rnd() * nJ)], sp = (0.6 + rnd() * 0.8) * (crown ? k.h * 0.9 : k.h * 0.75);
-            drops.push({ j, tb: 0.22 + rnd() * 0.38, vx: j.dx * sp * (crown ? 1.0 : 1.3) + (rnd() - 0.3) * 8, vy: j.dy * sp * (crown ? 0.7 : 0.45) - rnd() * 4, size: rnd() < 0.35 ? 2 : 1 });
+            const j = jets[Math.floor(rnd() * nJ)], sp = (0.6 + rnd() * 0.8) * h * (crown ? 0.9 : 0.75);
+            drops.push({ j, tb: 0.22 + rnd() * 0.38, vx: j.dx * sp * (crown ? 1.0 : 1.3) + (rnd() - 0.3) * w * 0.17, vy: j.dy * sp * (crown ? 0.7 : 0.45) - rnd() * h * 0.1, size: !small && rnd() < 0.35 ? 2 : 1 });
         }
-        for (let i = 0; i < (crown ? 3 : 5); i++) bubbles.push({ x: x0 + (rnd() - 0.3) * k.w * (crown ? 0.7 : 0.6), y: base - 2 - rnd() * (crown ? 3 : 6), t0: 0.62 + rnd() * 0.2 });
-        return { body, jets, foam, drops, bubbles, base, x0, crown };
+        if (!small) for (let i = 0; i < (crown ? 3 : 5); i++) bubbles.push({ x: x0 + (rnd() - 0.3) * w * (crown ? 0.7 : 0.6), y: base - h * 0.08 - rnd() * h * 0.15, t0: 0.62 + rnd() * 0.2 });
+        return { body, jets, foam, drops, bubbles, base, x0, crown, g: h * (crown ? 3.5 : 1.5), vf: Math.sqrt(40 / h) };
     },
 
     // Um quadro (t = 0..1 da animação) como grade de índices da paleta (-1 = vazio).
     _frame(name, k, E, t) {
-        const w = k.w, h = k.h, base = E.base, crown = E.crown, B = E.body;
+        const w = k.w, h = k.h, base = E.base, crown = E.crown, B = E.body, vf = E.vf;
         const den = new Float32Array(w * h);
         const put = (x, y, d) => { x |= 0; y |= 0; if (x < 1 || y < 1 || x >= w - 1 || y > base) return; const i = y * w + x; if (d > den[i]) den[i] = d; };
         const sstep = (a, b, x) => { const u = Math.max(0, Math.min(1, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
@@ -96,7 +105,7 @@ const WaterSprayArt = {
         for (let x = Math.floor(B.x0); x <= B.x0 + bW + 1; x++) {
             const u = (x - B.x0) / bW, ty = top(u);
             for (let y = Math.floor(ty); y <= base + 1; y++) {
-                const hf = (base - y) / Math.max(1, bH), xr = x - B.x0, vein = Math.sin(xr * (crown ? 0.9 : 0.42) - (base - y) * (crown ? 0.5 : 0.75) + Math.sin(xr * 0.21 + B.ph) * 1.4 + B.ph + t * 3);
+                const hf = (base - y) / Math.max(1, bH), xr = x - B.x0, vein = Math.sin((xr * (crown ? 0.45 : 0.42) - (base - y) * (crown ? 0.25 : 0.75)) * vf + Math.sin(xr * 0.21 * vf + B.ph) * 1.4 + B.ph + t * 3);
                 put(x, y, 0.27 + 0.2 * hf + (vein > 0.72 ? 0.22 : vein < -0.8 ? -0.08 : 0));
             }
         }
@@ -148,7 +157,7 @@ const WaterSprayArt = {
             const a = t - d.tb;
             if (a <= 0) continue;
             const j = d.j, ox = B.x0 + j.u * B.w, oy = base - B.H * 0.8;
-            const xi = Math.round(ox + j.dx * j.L + d.vx * a), yi = Math.round(oy + j.dy * j.L + d.vy * a + (crown ? 70 : 60) * a * a);
+            const xi = Math.round(ox + j.dx * j.L + d.vx * a), yi = Math.round(oy + j.dy * j.L + d.vy * a + E.g * a * a);
             if (yi >= base - 1) continue;
             set(xi, yi, d.size > 1 ? 5 : 4);
             if (d.size > 1) { set(xi + 1, yi, 4); set(xi, yi + 1, 3); set(xi + 1, yi + 1, 2); } else set(xi, yi + 1, 2);
@@ -156,7 +165,7 @@ const WaterSprayArt = {
         // no fim: bolhas estourando na superfície (anelzinho claro) e um risco de espuma sobre a marola
         for (const b of E.bubbles) {
             if (t < b.t0) continue;
-            const xi = Math.round(b.x + (t - b.t0) * 6), yi = Math.round(b.y);
+            const xi = Math.round(b.x + (t - b.t0) * w * 0.12), yi = Math.round(b.y);
             set(xi, yi - 1, 4); set(xi - 1, yi, 3); set(xi + 1, yi, 3); set(xi, yi + 1, 2);
         }
         if (t > 0.55) for (let x = Math.floor(B.x0 + bW * 0.1); x < B.x0 + bW * (0.55 + 0.3 * fall); x++) if (Math.sin(x * 0.7 + B.ph) > -0.3) set(x, base - 2, 4);
@@ -226,18 +235,18 @@ class WaterSpray {
             }`;
     }
 
-    // Um jorro em (x, z) — a base na água. o = { kind: 'plume' | 'crown', scale (1 = tamanho da folha, 20 px/u), dir: [dx, dz] para
-    // onde a água vai (inclina o jato para esse lado da tela), life (s), vx/vz (m/s: anda junto com quem soltou, perdendo velocidade),
-    // a (opacidade), v (variante; sorteada se faltar) }.
+    // Um jorro em (x, z) — a base na água. o = { kind (WaterSprayArt.KINDS), dir: [dx, dz] para onde a água vai (inclina o leque
+    // para esse lado da tela), life (s; padrão: ~18 quadros/s), vx/vz (m/s: anda junto com quem soltou, perdendo velocidade — drag/s),
+    // a (opacidade), v (variante; sorteada se faltar) }. Sempre no tamanho da folha: 20 px = 1 u, como o resto do jogo.
     emit(x, z, o = {}) {
-        const kind = o.kind || 'plume', K = WaterSprayArt.KINDS[kind];
+        const kind = o.kind || 'bowL', K = WaterSprayArt.KINDS[kind];
         let q = null;
         for (let k = 0; k < this.n; k++) { const c = this.p[(this.next + k) % this.n]; if (!c.on) { q = c; this.next = (this.next + k + 1) % this.n; break; } }
         if (!q) { q = this.p[this.next]; this.next = (this.next + 1) % this.n; }      // (cheio: troca o mais antigo da fila)
         if (!q.on) this.live++;
-        q.on = true; q.kind = kind; q.K = K; q.age = 0; q.life = o.life || (kind === 'crown' ? 0.42 : 0.62);
+        q.on = true; q.kind = kind; q.K = K; q.age = 0; q.life = o.life || K.frames * 0.055;
         q.v = o.v != null ? o.v : Math.floor(Math.random() * K.vars);
-        q.x = x; q.z = z; q.vx = o.vx || 0; q.vz = o.vz || 0; q.s = o.scale || 1; q.a = o.a != null ? o.a : 0.94;
+        q.x = x; q.z = z; q.vx = o.vx || 0; q.vz = o.vz || 0; q.drag = o.drag != null ? o.drag : 2.2; q.a = o.a != null ? o.a : 0.94;
         q.dx = o.dir ? o.dir[0] : 1; q.dz = o.dir ? o.dir[1] : 0; q.f = -1;
     }
 
@@ -255,8 +264,8 @@ class WaterSpray {
             if (q.age >= q.life) { q.on = false; for (let k = 0; k < 16; k++) C[i * 16 + k] = 0; P.fill(0, o, o + 12); continue; }
             live++;
             q.x += q.vx * dt; q.z += q.vz * dt;
-            const drag = Math.max(0, 1 - 2.2 * dt); q.vx *= drag; q.vz *= drag;
-            const K = q.K, w = K.w / ppu * q.s, h = K.h / ppu * q.s;
+            const drag = Math.max(0, 1 - q.drag * dt); q.vx *= drag; q.vz *= drag;
+            const K = q.K, w = K.w / ppu, h = K.h / ppu;
             const flip = q.dx * rx + q.dz * rz < 0, ax = flip ? 1 - K.ax : K.ax;            // (água indo para a esquerda da tela: espelha)
             const lx = q.x - rx * w * ax, lz = q.z - rz * w * ax, Rx = rx * w, Rz = rz * w, Ux = ux * h, Uz = uz * h;
             // cantos na ordem do UV (0,0) (1,0) (0,1) (1,1): em cima à esquerda, em cima à direita, embaixo à esquerda, embaixo à direita
