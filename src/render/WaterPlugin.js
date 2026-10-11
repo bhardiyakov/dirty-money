@@ -79,15 +79,37 @@ const Water = {
             }
             return D;
         };
-        const DS = dist(1), DL = dist(0), data = new Uint8Array(N), R = this.RANGE;
-        for (let k = 0; k < N; k++) {
-            const s = isSea[k] ? (DS[k] - 0.5) * c : -(DL[k] - 0.5) * c;          // do centro do texel até a borda (a linha d'água)
-            data[k] = Math.round((Math.max(-R, Math.min(R, s)) / R * 0.5 + 0.5) * 255);
-        }
+        const DS = dist(1), DL = dist(0), data = new Uint8Array(N), R = this.RANGE, F = new Float32Array(N);
+        for (let k = 0; k < N; k++) F[k] = isSea[k] ? (DS[k] - 0.5) * c : -(DL[k] - 0.5) * c;          // do centro do texel até a borda (a linha d'água)
+        // A costa do mapa é uma ESCADA de células de 4 u: perto da beira as curvas do campo seguiam os degraus (a espuma na areia e a
+        // linha d'água faziam quinas). Desfoque do campo (caixa de 3 texels, 3 passadas ≈ gaussiana de 2,8 u): numa costa reta nada
+        // muda (a distância é linear); nos degraus a quina vira curva.
+        this._blur(F, nx, nz, 1, 3);
+        for (let k = 0; k < N; k++) data[k] = Math.round((Math.max(-R, Math.min(R, F[k])) / R * 0.5 + 0.5) * 255);
         const tex = BABYLON.RawTexture.CreateLuminanceTexture(data, nx, nz, scene, false, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE);
         tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
         this._fieldK = [W.minX, W.minZ, 1 / (nx * c), 1 / (nz * c)];
         return (this.field = tex);
+    },
+
+    // Desfoque de caixa separável (raio r texels, `passes` vezes) num campo nx × nz, com a borda repetida. Laços diretos (soma
+    // corrida): ~1,5 M texels em dezenas de ms.
+    _blur(F, nx, nz, r, passes) {
+        const tmp = new Float32Array(Math.max(nx, nz)), w = 2 * r + 1;
+        const line = (o, st, len) => {                                     // uma linha (st = 1) ou coluna (st = nx) a partir de o
+            let acc = 0;
+            for (let i = -r; i <= r; i++) acc += F[o + (i < 0 ? 0 : i >= len ? len - 1 : i) * st];
+            for (let i = 0; i < len; i++) {
+                tmp[i] = acc / w;
+                const ia = i + r + 1, ib = i - r;
+                acc += F[o + (ia < len ? ia : len - 1) * st] - F[o + (ib > 0 ? ib : 0) * st];
+            }
+            for (let i = 0, k = o; i < len; i++, k += st) F[k] = tmp[i];
+        };
+        for (let p = 0; p < passes; p++) {
+            for (let j = 0; j < nz; j++) line(j * nx, 1, nx);
+            for (let i = 0; i < nx; i++) line(i, nx, nz);
+        }
     },
 
     // ------------------------------------------------------------------ shader
@@ -178,21 +200,31 @@ const Water = {
             }`;
         return class WaterPlugin extends BABYLON.MaterialPluginBase {
             constructor(material, mode) {
-                super(material, 'Water', 310, { SHORE_SEA: false, SHORE_LAND: false });
+                super(material, 'Water', 310, { SHORE_SEA: false, SHORE_LAND: false, SHORE_GROUND: false });
                 this._mode = mode;
                 this._enable(true);
             }
             getClassName() { return 'WaterPlugin'; }
-            prepareDefines(defines) { defines.SHORE_SEA = this._mode === 'sea'; defines.SHORE_LAND = this._mode === 'land'; }
-            getSamplers(samplers) { samplers.push('shoreField', 'shoreClock'); }
+            // SHORE_GROUND (só o mar): onde a beira suavizada entra numa célula de mar, o chão é o mesmo do terreno (TerrainSplat), não
+            // uma cor lisa de areia
+            _ground() { return this._mode === 'sea' && typeof TerrainSplat !== 'undefined' && !!TerrainSplat.glsl; }
+            prepareDefines(defines) { defines.SHORE_SEA = this._mode === 'sea'; defines.SHORE_LAND = this._mode === 'land'; defines.SHORE_GROUND = this._ground(); }
+            getSamplers(samplers) { samplers.push('shoreField', 'shoreClock'); if (this._ground()) samplers.push('splatMap', 'splatAtlas'); }
             getUniforms() { return { ubo: [{ name: 'wSmooth', size: 1, type: 'float' }], fragment: 'uniform float wSmooth;' }; }
-            bindForSubMesh(ub) { ub.setTexture('shoreField', Water.field); ub.setTexture('shoreClock', Water.clock); ub.updateFloat('wSmooth', typeof Smooth !== 'undefined' && Smooth.on ? 1 : 0); }
+            bindForSubMesh(ub) {
+                ub.setTexture('shoreField', Water.field); ub.setTexture('shoreClock', Water.clock); ub.updateFloat('wSmooth', typeof Smooth !== 'undefined' && Smooth.on ? 1 : 0);
+                if (this._ground()) { ub.setTexture('splatMap', TerrainSplat.tex.map); ub.setTexture('splatAtlas', TerrainSplat.tex.atlas); }
+            }
             getCustomCode(shaderType) {
                 if (shaderType !== 'fragment') return null;
                 return {
                     CUSTOM_FRAGMENT_DEFINITIONS: `
                         #if defined(SHORE_SEA) || defined(SHORE_LAND)
                         ${GLSL}
+                        #endif
+                        #ifdef SHORE_GROUND
+                        #define tSmooth wSmooth
+                        ${this._ground() ? TerrainSplat.glsl : ''}
                         #endif`,
                     CUSTOM_FRAGMENT_UPDATE_DIFFUSE: `
                         #if defined(SHORE_SEA) || defined(SHORE_LAND)
@@ -202,7 +234,14 @@ const Water = {
                             #ifdef SHORE_SEA
                             float sw = smoothstep(0.8, 7.0, sb);                                  // (na beira a ondulação vira a orla)
                             if (sw > 0.0) baseColor.rgb = swellColor(baseColor.rgb, q, sw);
-                            if (s < ${R} - 0.5) { float wob = shoreWobble(q, s); baseColor.rgb = shoreColor(baseColor.rgb, vec3(0.80, 0.70, 0.49), q, s + wob, sb + wob); }
+                            if (s < ${R} - 0.5) {
+                                float wob = shoreWobble(q, s);
+                                vec3 gr = vec3(0.80, 0.70, 0.49);
+                                #ifdef SHORE_GROUND
+                                if (sb + wob <= 0.0) gr = terrainColor(q);                         // (o chão de verdade, como no terreno ao lado)
+                                #endif
+                                baseColor.rgb = shoreColor(baseColor.rgb, gr, q, s + wob, sb + wob);
+                            }
                             #else
                             if (s > -5.0 && vPositionW.y < 0.4) { float wob = shoreWobble(q, s); if (s + wob > -4.5) baseColor.rgb = shoreColor(vec3(0.17, 0.41, 0.54), baseColor.rgb, q, s + wob, sb + wob); }
                             #endif
