@@ -12,8 +12,11 @@
 //     dos dois lados a cor é a mesma função da distância, então onde as malhas se encontram (a escada) não aparece emenda;
 //   • a espuma fica na grade de pixels do mundo (20 px/u), em pixel art. o degradê do raso (turquesa até o azul, e a lâmina d'água na areia)
 //     é suave e sem faixas, calculado fora da grade.
-// O tempo vem de uma textura de 1 px (Water.clock, Water.tick a cada quadro): os materiais do mundo são congelados
+// O tempo vem de uma textura de 5 px (Water.clock, Water.tick a cada quadro): os materiais do mundo são congelados
 // (Game._freezeStaticMaterials) e um uniforme poderia não ser reenviado; o conteúdo de uma textura sempre vale.
+//   px 0: as fases da orla · px 1–4: a fase de cada ondulação do mar aberto (16 bits) e, no px 1, a força do mar (Waves).
+// Mar aberto (o plano d'água longe da beira): as ondulações de Waves — a mesma conta da física — clareiam a face das cristas virada
+// para o sol e escurecem os cavados, andando; com mar agitado, carneirinhos (espuma no alto das cristas).
 // ============================================================================
 
 const Water = {
@@ -24,8 +27,8 @@ const Water = {
 
     init(scene) {
         this._makeField(scene);
-        this.clock = BABYLON.RawTexture.CreateRGBATexture(new Uint8Array(4), 1, 1, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
-        this._clk = new Uint8Array(4);
+        this.clock = BABYLON.RawTexture.CreateRGBATexture(new Uint8Array(20), 5, 1, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
+        this._clk = new Uint8Array(20);
     },
     sea(material) { return this._apply(material, 'sea'); },
     land(material) { return this._apply(material, 'land'); },
@@ -36,11 +39,17 @@ const Water = {
         return material;
     },
 
-    // Fases das ondas (0–1, uma volta = 1): R = a água subindo/descendo na areia (7,4 s), G = a linha de onda que chega (14 s).
+    // Fases das ondas (0–1, uma volta = 1): R = a água subindo/descendo na areia (7,4 s), G = a linha de onda que chega (14 s);
+    // px 1–4: as ondulações do mar aberto (Waves: fase em 16 bits, R alto, G baixo) e, no px 1, B = a força do mar (M / 2,5).
     tick(t) {
         if (!this.clock) return;
         const c = this._clk;
         c[0] = Math.floor((t / 7.4 % 1) * 256) & 255; c[1] = Math.floor((t / 14 % 1) * 256) & 255;
+        if (typeof Waves !== 'undefined') {
+            Waves.setTime(t);
+            for (let i = 0; i < 4; i++) { const v = Math.floor(Waves.phase(i) * 65536) & 65535, o = (i + 1) * 4; c[o] = v >> 8; c[o + 1] = v & 255; }
+            c[6] = Math.max(0, Math.min(255, Math.round(Waves.M / 2.5 * 255)));
+        }
         this.clock.update(c);
     },
 
@@ -83,6 +92,14 @@ const Water = {
     // ------------------------------------------------------------------ shader
     _makeClass() {
         const K = this._fieldK.map((v) => v.toFixed(9)), R = this.RANGE.toFixed(1);
+        // ondulações de Waves (constantes no shader; a fase de cada uma vem do relógio): h normalizado (soma das amplitudes = 1) e a
+        // inclinação normalizada (soma de A·k = 1)
+        const WC = Waves._init(), f = (v) => v.toFixed(6);
+        const swellTerms = WC.map((c, i) => `
+                {   vec4 t = texture2D(shoreClock, vec2(${f((i + 1.5) / 5)}, 0.5));
+                    float th = dot(p, vec2(${f(c.k * c.dx)}, ${f(c.k * c.dz)})) - (t.r * 65280.0 + t.g * 255.0) / 65536.0 * 6.2831853 + ${f(c.ph)};
+                    float co = cos(th);
+                    r.x += ${f(c.A / Waves.sumA)} * sin(th); r.y += ${f(c.A * c.k * c.dx / Waves.sumAk)} * co; r.z += ${f(c.A * c.k * c.dz / Waves.sumAk)} * co; }`).join('');
         // Cor da orla. q = ponto na grade de pixels; s = distância com sinal (+ mar); sea/ground = cor do mar e do chão nesse ponto.
         const GLSL = `
             uniform sampler2D shoreField;
@@ -94,10 +111,34 @@ const Water = {
             }
             // limiar: degrau duro (pixel art) ou, no gráfico suave (wSmooth), uma transição de largura w (~1–2 px da tela)
             float wStep(float e, float x, float w) { return wSmooth > 0.5 ? smoothstep(e - w, e + w, x) : step(e, x); }
+            // mar aberto: (altura, inclinação x, inclinação z), normalizados, no ponto p — a mesma soma de Waves.sample
+            vec3 swell(vec2 p) {
+                vec3 r = vec3(0.0);${swellTerms}
+                return r;
+            }
+            // cristas e cavados passando (luz do sol na face virada para ele) e, com mar agitado, carneirinhos: riscos de espuma no alto
+            // das cristas, compridos ao longo delas, que andam junto com a ondulação maior (miolo cheio, franja salpicada)
+            vec3 swellColor(vec3 col, vec2 q, float sw) {
+                vec4 c1 = texture2D(shoreClock, vec2(0.3, 0.5));
+                float M = c1.b * 2.5;
+                vec3 r = swell(q);
+                float lit = dot(r.yz, vec2(0.8, -0.6));                                          // (o sol vem do noroeste: Config.light.sunDir)
+                float sh = (lit * 0.24 + r.x * 0.09) * sw * min(1.3, 0.6 + M * 0.35);
+                if (wSmooth < 0.5) sh = floor(sh * 16.0 + 0.5) / 16.0;                            // pixel art: em degraus
+                col *= 1.0 + sh;
+                float cap = smoothstep(0.64, 0.9, r.x) * smoothstep(1.0, 1.9, M) * sw;
+                if (cap <= 0.0) return col;
+                vec2 adv = vec2(${f(WC[0].dx)}, ${f(WC[0].dz)}) * ((c1.r * 65280.0 + c1.g * 255.0) / 65536.0 * ${f(Waves.COMP[0].L)});   // (andam com a ondulação 1)
+                vec2 d0 = vec2(${f(WC[0].dx)}, ${f(WC[0].dz)}), q2 = q - adv;
+                float patchN = wNoise(vec2(dot(q2, d0) * 1.5, dot(q2, vec2(-d0.y, d0.x)) * 0.3));   // (fino na direção da onda, comprido ao longo da crista)
+                float speck = wSmooth > 0.5 ? wNoise(q * 6.0) : wHash(floor(q * 20.0));
+                float on = wStep(0.8 - cap * 0.32, patchN, 0.03) * (0.6 + 0.4 * wStep(0.3, speck, 0.05));
+                return mix(col, vec3(0.92, 0.97, 0.98), cap * on * 0.9);
+            }
             float shoreDist(vec2 q) { return (texture2D(shoreField, (q - vec2(${K[0]}, ${K[1]})) * vec2(${K[2]}, ${K[3]})).r - 0.5) * 2.0 * ${R}; }
             // s = distância na grade de pixels (espuma, pixel art) | sb = distância sem grade (degradê suave, "borrado")
             vec3 shoreColor(vec3 sea, vec3 ground, vec2 q, float s, float sb) {
-                vec4 clk = texture2D(shoreClock, vec2(0.5));
+                vec4 clk = texture2D(shoreClock, vec2(0.1, 0.5));
                 vec2 cell = floor(q * 20.0);
                 float n = wNoise(q * 0.16), n2 = wSmooth > 0.5 ? wNoise(q * 9.0 + 3.1) : wHash(cell), n3 = wNoise(q * 0.9 + 31.0);     // (salpicado: sorteio por pixel ou ruído suave)
                 vec3 shallow = vec3(0.373, 0.769, 0.753), mid = vec3(0.243, 0.624, 0.706), foamC = vec3(0.91, 0.965, 0.965);
@@ -150,6 +191,8 @@ const Water = {
                             vec2 q = wSmooth > 0.5 ? vPositionW.xz : (floor(vPositionW.xz * 20.0) + 0.5) / 20.0;     // grade de pixels do mundo (pixel art)
                             float s = shoreDist(q), sb = shoreDist(vPositionW.xz);
                             #ifdef SHORE_SEA
+                            float sw = smoothstep(0.8, 7.0, sb);                                  // (na beira a ondulação vira a orla)
+                            if (sw > 0.0) baseColor.rgb = swellColor(baseColor.rgb, q, sw);
                             if (s < ${R} - 0.5) baseColor.rgb = shoreColor(baseColor.rgb, vec3(0.80, 0.70, 0.49), q, s, sb);
                             #else
                             if (s > -4.5 && vPositionW.y < 0.4) baseColor.rgb = shoreColor(vec3(0.17, 0.41, 0.54), baseColor.rgb, q, s, sb);

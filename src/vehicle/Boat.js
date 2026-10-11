@@ -9,7 +9,8 @@
 //   'wreck'      carcaça depois da explosão
 //
 // BoatManager cria os barcos (vagas da marina + ancorados soltos + alguns navegando), dá o "tick" deles (só os perto da
-// câmera simulam), faz o rastro (marolas) e a água jorrando (WaterSpray: proa, rabo de galo, curva, hélice) e remove carcaças.
+// câmera simulam), faz o rastro (marolas), a água jorrando (WaterSpray: proa, rabo de galo, curva, hélice) e o empurrão das ondas
+// (Waves: o barco vai e volta com a água; o desenho sobe, desce e gira de leve em syncVisual) e remove carcaças.
 // ============================================================================
 
 class Boat extends Vehicle {
@@ -78,8 +79,18 @@ class Boat extends Vehicle {
         this._refreshLook();
         const p = this.body.getAbsolutePosition(), f = this.body.getDirection(BABYLON.Axis.Z);
         this.bobT += dt;
-        this.visual.setPosition(p.x, p.z);
-        this.visual.setHeading(Math.atan2(f.x, f.z));
+        // ondas (Waves): o desenho sobe e desce com a onda (sobe na tela, como a altura de tudo no jogo) e gira de leve com a água
+        // inclinada sob o casco; o barco grande "corta" a onda e balança menos
+        let bx = 0, bz = 0, rock = 0;
+        const hd = Math.atan2(f.x, f.z), wd = WorldMap.waterDepth(p.x, p.z), wf = typeof Waves !== 'undefined' && !RoadPlan.onBridge(p.x, p.z) ? Waves.open(p.x, p.z, wd) : 0;
+        if (wf > 0) {
+            const S = Waves.sample(p.x, p.z, this._wv || (this._wv = {})), big = ({ jetski: 1, lancha: 0.7, barco: 0.45 }[this.spec.id] || 0.7) * wf;
+            const lift = S.h * Waves.UP * big, yaw = CompassCamera.yaw || 0;
+            bx = Math.sin(yaw) * lift; bz = Math.cos(yaw) * lift;
+            rock = Math.max(-0.07, Math.min(0.07, (S.gx * Math.cos(hd) - S.gz * Math.sin(hd)) * big * 0.9));
+        }
+        this.visual.setPosition(p.x + bx, p.z + bz);
+        this.visual.setHeading(hd + rock);
         // Debaixo de uma ponte o sprite fica ABAIXO do tabuleiro (a ponte o esconde; o círculo de visibilidade o revela).
         const sea = 1 + (Weather.cur ? Weather.cur.k * 2.2 : 0);            // mar agitado com chuva: o barco balança mais
         const y = RoadPlan.onBridge(p.x, p.z) ? 0.1 : 0.8 + Math.sin(this.bobT * 1.6 * sea + this.id) * 0.04 * sea;
@@ -252,6 +263,7 @@ class BoatManager {
     update(dt, game) {
         const f = game.camera.target;
         for (const b of this.boats) b.update(dt, null, f);
+        this._waves(game);
         this._spray(dt, game);
         // Rastro: marolas atrás de quem anda rápido e está perto da câmera.
         this._wakeT -= dt;
@@ -267,6 +279,22 @@ class BoatManager {
             const d = b.body.getDirection(BABYLON.Axis.Z), l = hypot(d.x, d.z) || 1, ux = d.x / l, uz = d.z / l, back = b.halfLen * 0.8;
             const size = 0.8 + b.halfW * 0.9 + v * 0.12;
             game.waterFx.ripple(p.x - ux * back, p.z - uz * back, size * 0.3, size * 1.15, 1.4, 0.34);      // (a espuma e os jorros: _spray)
+        }
+    }
+
+    // A onda empurra de leve (Waves.current): soma à velocidade a VARIAÇÃO da água da superfície — o barco acompanha a água em parte
+    // (vai e volta com cada onda); o motor e o casco, que não desliza de lado, fazem o resto. Atracado, quase nada; à deriva, mais.
+    _waves(game) {
+        if (typeof Waves === 'undefined') return;
+        const v = this._wvel || (this._wvel = new BABYLON.Vector3()), S = this._ws || (this._ws = {});
+        for (const b of this.boats) {
+            if (b._asleep || !b.body) continue;
+            const p = b.position, wf = Waves.open(p.x, p.z, WorldMap.waterDepth(p.x, p.z));
+            const F = wf * (b.mode === 'parked' && !b.controlled ? 0.12 : b.controlled || b.pilot ? 0.55 : 0.85);
+            Waves.sample(p.x, p.z, S);
+            const ux = S.vx * F, uz = S.vz * F, W0 = b._wu || (b._wu = { x: ux, z: uz });
+            if (Math.abs(ux - W0.x) + Math.abs(uz - W0.z) > 1e-4) { b.phys.getLinearVelocityToRef(v); v.x += ux - W0.x; v.z += uz - W0.z; b.phys.setLinearVelocity(v); }
+            W0.x = ux; W0.z = uz;
         }
     }
 

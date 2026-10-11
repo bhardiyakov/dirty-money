@@ -500,7 +500,8 @@ class NPC {
             const A = this.freeAnim || { clip: 'idle', rate: 1 };
             this.transform.rotation.y = this.heading;
             this.actor.play(A.clip, 'none');
-            this.actor.setPosition(this.transform.position.x, this.transform.position.z);
+            const b = this._waveTick(dt), yaw = b ? CompassCamera.yaw || 0 : 0;
+            this.actor.setPosition(this.transform.position.x + Math.sin(yaw) * b, this.transform.position.z + Math.cos(yaw) * b);
             this.actor.setHeading(this.heading);
             this._waterTick(dt);                                // (antes do update: a água no corpo vale só no quadro em que é informada)
             this.actor.update(dt, A.rate);
@@ -558,6 +559,16 @@ class NPC {
         this.actor.setSlope(speed > 0.5 ? g : 0);
         const m = Math.round(MapGeo.slopeSpeed(g) * 20) / 20;
         if (m !== (this._slopeMul || 1) && this._baseSpeed) { this._slopeMul = m; this.setSpeed(this._baseSpeed); }
+    }
+
+    // Ondas (Waves) em quem está na água no modo livre: a água leva junto (vai e volta; na beira empurra para a areia) — só se o
+    // destino ainda for água, para não "subir" na areia — e, nadando na superfície, devolve quanto o desenho sobe na tela (u).
+    _waveTick(dt) {
+        const depth = this._freeDepth || 0, p = this.transform.position;
+        if (!(depth > 0) || typeof Waves === 'undefined' || !Zones.near(p.x, p.z, 30)) return 0;
+        const c = Waves.current(p.x, p.z, depth, this._wc || (this._wc = {})), k = this._dive ? 0.3 : 1, nx = p.x + c.x * k * dt, nz = p.z + c.z * k * dt;
+        if (MapGeo.waterDepth(nx, nz) > 0.3) { p.x = nx; p.z = nz; }
+        return depth > Config.water.wadeDepth && !this._dive ? Waves.lift(p.x, p.z, depth) : 0;
     }
 
     // Na água (só no modo livre: nadando ou vadeando, ver freeMove): o desenho afunda até a linha d'água e, perto da tela, as marolas,
