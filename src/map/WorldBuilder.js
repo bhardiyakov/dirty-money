@@ -194,10 +194,14 @@ class WorldBuilder {
             for (let q = 0; q < 4; q++) if (n.edge[q] && (!best || n.edge[q].w > best.w)) best = n.edge[q];
             const S = RoadPlan.CLASS[best.cls].surface;
             const key = S === 'asphalt' ? 'asphalt' : (S === 'dirt' ? 'road_dirt' : 'road_earth');
+            if (n.round) { this._roundabout(n, y); continue; }
+            if (n.uturn) continue;                                                     // retorno: o asfalto dos trechos segue direto
             if (n.turnR) { this._turn(n, S === 'asphalt' ? 'asphalt' : key, y); continue; }
             const shd = key === 'road_earth';                                          // favela: o chão segue o morro (tingido pelo relevo)
             this._batch(shd ? key + '$' : key, n.x, n.z).top(n.x - n.hwNS, n.z - n.hwEW, n.x + n.hwNS, n.z + n.hwEW, y, (x, z) => [x / 4, -z / 4], shd ? [cs(n.x - n.hwNS, n.z + n.hwEW), cs(n.x + n.hwNS, n.z + n.hwEW), cs(n.x - n.hwNS, n.z - n.hwEW), cs(n.x + n.hwNS, n.z - n.hwEW)] : undefined);
         }
+
+        this._roundAprons();
 
         // Faixas de pedestres (zebra).
         const zy = 0.03;
@@ -205,6 +209,69 @@ class WorldBuilder {
             const zebra = this._batch('zebra', cw.x0, cw.z0);
             if (cw.axis === 'x') zebra.top(cw.x0, cw.z0, cw.x1, cw.z1, zy, (x, z) => [(x - cw.x0) / (cw.x1 - cw.x0), (cw.z1 - z) / (cw.z1 - cw.z0)]);     // atravessa em X; listras no eixo Z
             else zebra.top(cw.x0, cw.z0, cw.x1, cw.z1, zy, (x, z) => [(z - cw.z0) / (cw.z1 - cw.z0), (x - cw.x0) / (cw.x1 - cw.x0)]);                  // atravessa em Z; listras no eixo X
+        }
+    }
+
+    // ROTATÓRIA (RoadPlan: n.round): braços de asfalto liso do centro até onde os trechos começam, o disco de asfalto (raio R, centro
+    // cx/cz) e a ilha de grama com meio-fio. Braços e disco usam o mesmo material com UV de mundo: onde se sobrepõem, não há o que ver.
+    _roundabout(n, y) {
+        const R = n.round, h = Config.city.curbHeight, up = [0, 1, 0], uv = (p) => [p[0] / 4, -p[1] / 4], uvF = (x, z) => [x / 4, -z / 4], z3 = [[0, 0], [0, 0], [0, 0]];
+        const asph = this._batch('asphalt', n.x, n.z), w = (q) => n.edge[q].w / 2;
+        if (n.nbr[0]) asph.top(n.x - w(0), n.z, n.x + w(0), n.z + n.hwEW, y, uvF);
+        if (n.nbr[1]) asph.top(n.x - w(1), n.z - n.hwEW, n.x + w(1), n.z, y, uvF);
+        if (n.nbr[2]) asph.top(n.x, n.z - w(2), n.x + n.hwNS, n.z + w(2), y, uvF);
+        if (n.nbr[3]) asph.top(n.x - n.hwNS, n.z - w(3), n.x, n.z + w(3), y, uvF);
+        const ring = (r, N) => { const p = []; for (let k = 0; k < N; k++) { const t = k / N * Math.PI * 2; p.push([R.cx + r * Math.cos(t), R.cz + r * Math.sin(t)]); } return p; };
+        const C = [R.cx, R.cz], disk = ring(R.R / Math.cos(Math.PI / 48), 48);          // (circunscrito: as cordas não deixam fresta na borda)
+        for (let k = 0; k < disk.length; k++) { const a = disk[k], b = disk[(k + 1) % disk.length]; asph.tri([C[0], y, C[1]], [a[0], y, a[1]], [b[0], y, b[1]], up, [uv(C), uv(a), uv(b)]); }
+        // "Dê a preferência": tracejado branco na borda do disco, na metade de cada braço por onde se ENTRA (à direita de quem chega).
+        // Cada traço é um pedaço de listra branca da textura da zebra.
+        const zb = this._batch('zebra', n.x, n.z), ry = R.R - 0.45;
+        for (const [q, sgn, vx, side] of [[0, -1, true, 1], [1, 1, true, -1], [2, 1, false, 1], [3, -1, false, -1]]) {
+            const e = n.edge[q];
+            if (!e) continue;
+            const m = (RoadPlan.CLASS[e.cls].median || 0) / 2, base = vx ? n.x - R.cx : n.z - R.cz, a = base + sgn * m, b = base + sgn * e.w / 2;
+            const lo = Math.max(-ry + 0.05, Math.min(a, b)), hi = Math.min(ry - 0.05, Math.max(a, b));
+            if (hi <= lo) continue;
+            const ang = (c) => { const o = side * Math.sqrt(ry * ry - c * c); return vx ? Math.atan2(o, c) : Math.atan2(c, o); };
+            const t0 = ang(lo);
+            let dt = ang(hi) - t0; while (dt > Math.PI) dt -= Math.PI * 2; while (dt < -Math.PI) dt += Math.PI * 2;
+            const N = Math.max(1, Math.floor(Math.abs(dt) * ry));
+            for (let k = 0; k < N; k++) {
+                const t = t0 + dt * (k + 0.5) / N, cs = Math.cos(t), sn = Math.sin(t), px = R.cx + ry * cs, pz = R.cz + ry * sn;
+                const p = (s, r) => [px - sn * s + cs * r, 0.03, pz + cs * s + sn * r];          // s: ao longo da borda; r: para fora
+                zb.quad(p(0.25, -0.17), p(0.25, 0.17), p(-0.25, -0.17), p(-0.25, 0.17), up, [[0.106, 0.2], [0.144, 0.2], [0.106, 0.8], [0.144, 0.8]]);
+            }
+        }
+        const isl = ring(R.r, 32), gr = this._batch('open_grass', R.cx, R.cz), cb = this._batch('curb', R.cx, R.cz);
+        for (let k = 0; k < isl.length; k++) {
+            const a = isl[k], b = isl[(k + 1) % isl.length], dx = b[0] - a[0], dz = b[1] - a[1], l = hypot(dx, dz), nn = [dz / l, 0, -dx / l];
+            gr.tri([C[0], h, C[1]], [a[0], h, a[1]], [b[0], h, b[1]], up, [uv(C), uv(a), uv(b)]);
+            cb.tri([a[0], 0, a[1]], [b[0], 0, b[1]], [b[0], h, b[1]], nn, z3);                  // meio-fio da ilha (para fora)
+            cb.tri([a[0], 0, a[1]], [b[0], h, b[1]], [a[0], h, a[1]], nn, z3);
+        }
+    }
+
+    // Anel de calçada em volta das rotatórias, nos cantos da orla (CityGrid.roundAprons): topo entre os dois arcos e meio-fio em volta.
+    _roundAprons() {
+        const h = Config.city.curbHeight, up = [0, 1, 0], uv = (p) => [p[0] / 4, -p[1] / 4], z3 = [[0, 0], [0, 0], [0, 0]];
+        for (const ap of CityGrid.roundAprons || []) {
+            const I = ap.inner, O = ap.outer, sw = this._batch('sidewalk', I[0][0], I[0][1]), cb = this._batch('curb', I[0][0], I[0][1]);
+            for (let k = 0; k + 1 < I.length; k++) {
+                sw.tri([I[k][0], h, I[k][1]], [O[k][0], h, O[k][1]], [O[k + 1][0], h, O[k + 1][1]], up, [uv(I[k]), uv(O[k]), uv(O[k + 1])]);
+                sw.tri([I[k][0], h, I[k][1]], [O[k + 1][0], h, O[k + 1][1]], [I[k + 1][0], h, I[k + 1][1]], up, [uv(I[k]), uv(O[k + 1]), uv(I[k + 1])]);
+            }
+            const loop = I.concat(O.slice().reverse());
+            let area = 0;
+            for (let k = 0; k < loop.length; k++) { const p = loop[k], q = loop[(k + 1) % loop.length]; area += p[0] * q[1] - q[0] * p[1]; }
+            if (area < 0) loop.reverse();                                                     // anti-horário: a normal (dz, -dx) aponta para fora
+            for (let k = 0; k < loop.length; k++) {
+                const p = loop[k], q = loop[(k + 1) % loop.length], dx = q[0] - p[0], dz = q[1] - p[1], l = hypot(dx, dz);
+                if (l < 1e-3) continue;
+                const nn = [dz / l, 0, -dx / l];
+                cb.tri([p[0], 0, p[1]], [q[0], 0, q[1]], [q[0], h, q[1]], nn, z3);
+                cb.tri([p[0], 0, p[1]], [q[0], h, q[1]], [p[0], h, p[1]], nn, z3);
+            }
         }
     }
 
@@ -227,14 +294,16 @@ class WorldBuilder {
 
     // Canteiro central das avenidas (classe 'ave'): divisória de concreto com meio-fio, entre os cruzamentos.
     // (Sem grama nem palmeiras: o canteiro faz parte da pista e vegetação é proibida em via.)
+    // Num RETORNO o canteiro abre um vão (n.uturn.gap); perto de uma ROTATÓRIA começa depois da faixa de pedestres.
     _medians() {
         const h = Config.city.curbHeight;
+        const end = (n, v) => n.uturn ? n.uturn.gap / 2 : (n.round ? n.round.R + (v ? 0 : Math.abs(n.round.ox)) + 9.5 : (v ? n.hwEW : n.hwNS) + 3);
         for (const e of RoadPlan.edges) {
             if (e.cls !== 'ave') continue;
             const mw = RoadPlan.CLASS.ave.median / 2;
             let x0, x1, z0, z1;
-            if (e.v) { x0 = e.a.x - mw; x1 = e.a.x + mw; z0 = e.a.z + e.a.hwEW + 3; z1 = e.b.z - e.b.hwEW - 3; }
-            else { z0 = e.a.z - mw; z1 = e.a.z + mw; x0 = e.a.x + e.a.hwNS + 3; x1 = e.b.x - e.b.hwNS - 3; }
+            if (e.v) { x0 = e.a.x - mw; x1 = e.a.x + mw; z0 = e.a.z + end(e.a, true); z1 = e.b.z - end(e.b, true); }
+            else { z0 = e.a.z - mw; z1 = e.a.z + mw; x0 = e.a.x + end(e.a, false); x1 = e.b.x - end(e.b, false); }
             if (x1 <= x0 + 1 || z1 <= z0 + 1) continue;
             this._batch('open_concrete', x0, z0).top(x0, z0, x1, z1, h, (x, z) => [x / 4, -z / 4]);
             this._batch('curb', x0, z0).walls(x0, z0, x1, z1, 0, h, () => [0, 0]);

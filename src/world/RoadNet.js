@@ -11,6 +11,8 @@
 // Route: lista de pontos (polilinha) que o carro segue. É planejada cruzamento a
 // cruzamento: [entrada do cruzamento] -> curva de Bézier (ou reta) -> [saída],
 // escolhendo reto/direita/esquerda entre as manobras que ainda têm rua à frente.
+// ROTATÓRIA (inter.round): entra pela direita, gira no anel no sentido anti-horário e sai na perna escolhida (também dá a volta).
+// RETORNO (inter.uturn): segue reto ou faz o "U" pelo vão do canteiro, em volta do eixo da avenida.
 // ============================================================================
 
 const RoadNet = {
@@ -26,11 +28,12 @@ const RoadNet = {
 
     right(d) { return { dx: d.dz, dz: -d.dx }; },
     left(d) { return { dx: -d.dz, dz: d.dx }; },
+    turnDir(d, turn) { return turn === 'straight' ? d : turn === 'right' ? this.right(d) : turn === 'left' ? this.left(d) : { dx: -d.dx || 0, dz: -d.dz || 0 }; },
 
     // Distância do eixo ao centro da faixa da via que corre na direção d, neste cruzamento.
     lane(inter, d) { return d.dz !== 0 ? inter.laneNS : inter.laneEW; },
     // Meia-largura da via que CRUZA a de direção d (a "caixa" do cruzamento ao longo de d).
-    cross(inter, d) { return d.dz !== 0 ? inter.hwEW : inter.hwNS; },
+    cross(inter, d) { return inter.uturn ? 2 : (d.dz !== 0 ? inter.hwEW : inter.hwNS); },
 
     // Ponto da faixa de heading d num cruzamento, a `s` do centro ao longo de d.
     lanePoint(inter, d, s, off = this.lane(inter, d)) {
@@ -77,6 +80,8 @@ const RoadNet = {
 
     // Plano de uma manobra num cruzamento: pontos [entrada ... saída] e o novo heading.
     plan(inter, d, turn) {
+        if (inter.round) return this._planRound(inter, d, turn);
+        if (turn === 'uturn') return this._planUturn(inter, d);
         const offD = this.lane(inter, d);
         const E = this.lanePoint(inter, d, -this.cross(inter, d), offD);
         let dOut = d;
@@ -100,12 +105,77 @@ const RoadNet = {
         return { pts, dOut, exit: X };
     },
 
+    // RETORNO: semicírculo de raio = faixa em volta do eixo da avenida (o vão do canteiro), da faixa de ida à de volta, pela esquerda.
+    _planUturn(inter, d) {
+        const off = this.lane(inter, d), c = this.cross(inter, d), r = this.right(d), dOut = this.turnDir(d, 'uturn');
+        const pts = [this.lanePoint(inter, d, -c, off)];
+        for (let k = 0; k <= 10; k++) {
+            const a = Math.PI * k / 10, cs = Math.cos(a), sn = Math.sin(a);
+            pts.push({ x: inter.x + off * (r.dx * cs + d.dx * sn), z: inter.z + off * (r.dz * cs + d.dz * sn) });
+        }
+        const X = this.lanePoint(inter, dOut, c, off);
+        pts.push(X);
+        return { pts, dOut, exit: X };
+    },
+
+    // ROTATÓRIA (mão direita: anti-horário visto de cima). Entrada E na faixa, na borda do disco; Bézier até o anel (raio entre a ilha
+    // e a borda), arco anti-horário e Bézier até a saída X na faixa da perna de dOut. Os pontos onde se entra/sai do anel são os
+    // primeiros em que a curva é só "para a direita" e suave (≤ 50°): com o disco deslocado (cabeceira sem perna oeste), a faixa
+    // que passa rente a ele quase não desvia. th1 = ângulo da entrada no anel (quem vem antes dele, no anel, tem a preferência).
+    _planRound(inter, d, turn) {
+        const Rd = inter.round, C = { x: Rd.cx, z: Rd.cz }, rr = (Rd.R + Rd.r) / 2 + 0.4, Re = Rd.R + 1, TAU = Math.PI * 2;
+        const dOut = this.turnDir(d, turn), offD = this.lane(inter, d), offO = this.lane(inter, dOut);
+        const rD = this.right(d), rO = this.right(dOut);
+        // ponto da faixa (base + dir*s) a distância Re do centro: s da 1ª (sign = -1) ou 2ª (+1) interseção
+        const onCircle = (bx, bz, dir, sign) => {
+            const px = bx - C.x, pz = bz - C.z, b = px * dir.dx + pz * dir.dz, q = px * px + pz * pz - Re * Re, disc = b * b - q;
+            const s = disc > 0 ? -b + sign * Math.sqrt(disc) : sign * Re;
+            return { x: bx + dir.dx * s, z: bz + dir.dz * s };
+        };
+        const E = onCircle(inter.x + rD.dx * offD, inter.z + rD.dz * offD, d, -1);
+        const X = onCircle(inter.x + rO.dx * offO, inter.z + rO.dz * offO, dOut, 1);
+        const P = (t) => ({ x: C.x + rr * Math.cos(t), z: C.z + rr * Math.sin(t) }), T = (t) => ({ dx: -Math.sin(t), dz: Math.cos(t) });
+        const ang = (u, v) => Math.atan2(u.dx * v.dz - u.dz * v.dx, u.dx * v.dx + u.dz * v.dz);          // giro de u para v (+ = esquerda)
+        const MAXA = 50 * Math.PI / 180;
+        const psi = Math.atan2(E.z - C.z, E.x - C.x), phi = Math.atan2(X.z - C.z, X.x - C.x);
+        let a1 = 0.5, a2 = 0.5;
+        for (let a = 0.12; a < 2.2; a += 0.035) {                                                       // entrada: à direita da faixa, adiante, giro ≤ 50°
+            const p = P(psi + a), lat = (p.x - E.x) * rD.dx + (p.z - E.z) * rD.dz, fwd = (p.x - E.x) * d.dx + (p.z - E.z) * d.dz, g = -ang(d, T(psi + a));
+            if (lat >= -0.05 && fwd > 1.5 && g >= -0.05 && g <= MAXA) { a1 = a; break; }
+        }
+        for (let a = 0.12; a < 2.2; a += 0.035) {                                                       // saída: o mesmo, de trás para a frente
+            const p = P(phi - a), lat = (p.x - X.x) * rO.dx + (p.z - X.z) * rO.dz, fwd = (X.x - p.x) * dOut.dx + (X.z - p.z) * dOut.dz, g = -ang(T(phi - a), dOut);
+            if (lat >= -0.05 && fwd > 1.5 && g >= -0.05 && g <= MAXA) { a2 = a; break; }
+        }
+        let nominal = phi - psi; nominal -= Math.floor(nominal / TAU) * TAU; if (nominal < 1e-3) nominal = TAU;
+        let th1 = psi + a1, sweep = nominal - a1 - a2;
+        if (sweep < 0) { th1 += sweep / 2; sweep = 0; }                                                // direita curta: sai logo onde entrou
+        const th2 = th1 + sweep;
+        // Bézier quadrática com o controle onde a reta da faixa encontra a tangente do anel
+        const ctrl = (A, dA, B, dB) => {
+            const det = dA.dx * dB.dz - dA.dz * dB.dx, wx = B.x - A.x, wz = B.z - A.z;
+            if (Math.abs(det) < 1e-3) return { x: (A.x + B.x) / 2, z: (A.z + B.z) / 2 };
+            const t = Math.max(0, Math.min(hypot(wx, wz), (wx * dB.dz - wz * dB.dx) / det));
+            return { x: A.x + dA.dx * t, z: A.z + dA.dz * t };
+        };
+        const pts = [E], push = (p) => { const l = pts[pts.length - 1]; if (hypot(p.x - l.x, p.z - l.z) > 0.05) pts.push(p); };
+        const bez = (A, Q, B) => { for (let n = 1; n <= 6; n++) { const t = n / 6, a = (1 - t) * (1 - t), b = 2 * (1 - t) * t, c = t * t; push({ x: a * A.x + b * Q.x + c * B.x, z: a * A.z + b * Q.z + c * B.z }); } };
+        const P1 = P(th1), P2 = P(th2);
+        bez(E, ctrl(E, d, P1, T(th1)), P1);
+        const n = Math.ceil(sweep / 0.17);
+        for (let k = 1; k <= n; k++) push(P(th1 + sweep * k / n));
+        const t2 = T(th2);
+        bez(P2, ctrl(P2, t2, X, dOut), X);
+        return { pts, dOut, exit: pts[pts.length - 1], th1, round: true };
+    },
+
     // Manobras possíveis (com pesos) a partir de um cruzamento: só as que têm perna de saída e deixam outro
-    // cruzamento à frente (para a rota nunca terminar num beco sem saída).
+    // cruzamento à frente (para a rota nunca terminar num beco sem saída). Rotatória: também dá a volta; retorno: reto ou "U".
     options(inter, d) {
         const opts = [];
-        for (const [turn, w] of [['straight', 0.6], ['right', 0.2], ['left', 0.2]]) {
-            const dOut = turn === 'straight' ? d : (turn === 'right' ? this.right(d) : this.left(d));
+        const turns = inter.uturn ? RoadNet.T_UTURN : (inter.round ? RoadNet.T_ROUND : RoadNet.T_CROSS);
+        for (const [turn, w] of turns) {
+            const dOut = this.turnDir(d, turn);
             if (!inter.nbr[this.dirIndex(dOut)]) continue;                // sem rua nessa saída
             const p = this.plan(inter, d, turn);
             if (this.isClosed(inter, p.dOut)) continue;                  // rua fechada por bloqueio
@@ -142,10 +212,12 @@ const RoadNet = {
                 if (!c || !c.length) continue;
                 e = c[Math.floor(Math.random() * c.length)];
             } else e = P.randomEdge();
-            if (!e || e.len < margin * 2 + 2) continue;
+            if (!e) continue;
+            const ma = e.a.round ? Math.max(margin, e.a.hwNS + 10) : margin, mb = e.b.round ? Math.max(margin, e.b.hwNS + 10) : margin;      // longe do disco da rotatória
+            if (e.len < ma + mb + 2) continue;
             const sign = Math.random() < 0.5 ? 1 : -1, lane = e.w / 4;
             const d = e.v ? { dx: 0, dz: sign } : { dx: sign, dz: 0 };
-            const t = margin + Math.random() * (e.len - 2 * margin);
+            const t = ma + Math.random() * (e.len - ma - mb);
             const x = e.v ? e.a.x + d.dz * lane : e.a.x + t, z = e.v ? e.a.z + t : e.a.z - d.dx * lane;
             if (near) { const r = hypot(x - near.x, z - near.z); if (r < near.rMin || r > near.rMax) continue; }
             if (!this.interAhead(x, z, d)) continue;       // sem cruzamento à frente
@@ -154,6 +226,11 @@ const RoadNet = {
         return null;
     },
 };
+
+// Manobras e pesos: cruzamento comum, rotatória e retorno.
+RoadNet.T_CROSS = [['straight', 0.6], ['right', 0.2], ['left', 0.2]];
+RoadNet.T_ROUND = [['straight', 0.5], ['right', 0.22], ['left', 0.22], ['uturn', 0.06]];
+RoadNet.T_UTURN = [['straight', 0.88], ['uturn', 0.12]];
 
 // ----------------------------------------------------------------------------
 // Route — polilinha planejada que o carro segue (pure pursuit) + registro dos
@@ -198,11 +275,13 @@ class Route {
             for (const o of opts) { r -= o.w; if (r <= 0) { pick = o; break; } }
         }
 
-        const entryIdx = this.pts.length;
-        for (const p of pick.plan.pts) this._push(p);
+        const entryIdx = this.pts.length, P = pick.plan.pts;
+        let k0 = 0;                                                     // (quem já passou da entrada — ela fica até 13 u antes do centro numa rotatória — não volta)
+        while (k0 < P.length - 1 && (P[k0].x - x) * d.dx + (P[k0].z - z) * d.dz < 0.3) k0++;
+        for (let k = k0; k < P.length; k++) this._push(P[k]);
         this.junctions.push({
             inter, axis: d.dz !== 0 ? 'ns' : 'ew', turn: pick.turn,
-            entryIdx, exitIdx: this.pts.length - 1, d, dOut: pick.plan.dOut,
+            entryIdx, exitIdx: this.pts.length - 1, d, dOut: pick.plan.dOut, th1: pick.plan.th1,
         });
         this.end = { x: pick.plan.exit.x, z: pick.plan.exit.z, d: pick.plan.dOut };
         return true;

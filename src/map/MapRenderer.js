@@ -101,7 +101,14 @@ const MapRenderer = {
             rect(Math.max(r[0], vx0 - 1), Math.max(r[1], vz0 - 1), Math.min(r[2], vx1 + 1), Math.min(r[3], vz1 + 1), surf(e.cls));
         }
         for (const n of P.nodes) {
-            const vr = (n.turnR || 8) + 2; if (!vis(n.x - vr, n.z - vr, n.x + vr, n.z + vr)) continue;
+            const vr = (n.turnR || (n.round ? n.hwNS : 8)) + 2; if (!vis(n.x - vr, n.z - vr, n.x + vr, n.z + vr)) continue;
+            if (n.uturn) continue;                                          // retorno: a pista segue direto (o vão é do canteiro)
+            if (n.round) {                                                  // rotatória: disco de asfalto e a ilha verde
+                const R = n.round;
+                ctx.fillStyle = C.asphalt; ctx.beginPath(); ctx.arc(X(R.cx), Y(R.cz), R.R * k, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = C.grass; ctx.beginPath(); ctx.arc(X(R.cx), Y(R.cz), Math.max(1, R.r * k), 0, Math.PI * 2); ctx.fill();
+                continue;
+            }
             let best = null; for (let q = 0; q < 4; q++) if (n.edge[q] && (!best || n.edge[q].w > best.w)) best = n.edge[q];
             if (n.turnR) {                                                  // curva larga: arco com a largura da via
                 const sv = n.nbr[0] ? 1 : -1, sh = n.nbr[2] ? 1 : -1, R = n.turnR, cx0 = n.x + sh * R, cz0 = n.z + sv * R, a0 = Math.atan2(0, -sh), a1 = Math.atan2(-sv, 0);
@@ -126,6 +133,13 @@ const MapRenderer = {
 
         // 3) Calçadas de borda, quarteirões, prédios.
         for (const p of CityGrid.perimeter) if (vis(p.x0, p.z0, p.x1, p.z1)) rect(p.x0, p.z0, p.x1, p.z1, C.sidewalk);
+        for (const ap of CityGrid.roundAprons || []) {                      // anel de calçada das rotatórias
+            const pts = ap.inner.concat(ap.outer.slice().reverse());
+            if (!vis(pts[0][0] - 20, pts[0][1] - 20, pts[0][0] + 20, pts[0][1] + 20)) continue;
+            ctx.fillStyle = C.sidewalk; ctx.beginPath();
+            pts.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))));
+            ctx.fill();
+        }
         for (const b of CityGrid.blocks.concat(CityGrid.extraBlocks || [])) {
             const s = b.slab;
             if (b.virtual) {                                              // campo: só os prédios (lotes) e árvores

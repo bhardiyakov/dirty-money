@@ -27,6 +27,11 @@ const RoadPlan = {
 
     segs: [],
     report: [],                                  // trechos descartados na validação (para ajuste manual do plano)
+    // Marcas de NÓ, por posição "x,z" (antes do build): { round: { R, r } } = ROTATÓRIA (disco de asfalto de raio R com ilha de raio
+    // r; mão direita: gira no sentido anti-horário visto de cima); { uturn: { gap } } = RETORNO no canteiro da avenida (vão de `gap` u).
+    // Um retorno no meio de um trecho reto vira nó de 2 pernas (o build não o funde) e o trecho é cortado ali.
+    marks: new Map(),
+    mark(x, z, data) { const k = x + ',' + z; this.marks.set(k, Object.assign(this.marks.get(k) || {}, data)); },
 
     // opts: { layer: 1 = elevado (viaduto: cruza as outras vias SEM cruzamento), ramp: comprimento da rampa, elev: altura }
     addV(x, z0, z1, cls = 'city', opts = null) { if (z1 > z0) this.segs.push(Object.assign({ v: true, at: x, a: z0, b: z1, cls, layer: 0 }, opts)); },
@@ -68,6 +73,8 @@ const RoadPlan = {
     build() {
         const segs = this.segs;
         const V = segs.filter((s) => s.v), H = segs.filter((s) => !s.v);
+        const markAt = [];                                                     // marcas como [x, z] (cortam o trecho que passa por elas)
+        for (const k of this.marks.keys()) markAt.push(k.split(',').map(Number));
         const pieces = new Map();                                              // chave -> { v, at, a, b, cls }
         const cutPieces = (v, others) => {
             const own = v ? V : H;
@@ -77,6 +84,7 @@ const RoadPlan = {
                 // Vias de camadas diferentes (viaduto x rua) só se ligam onde uma TERMINA na outra; os cruzamentos "por cima" não geram nó.
                 for (const o of others) if (o.a <= s.at + 1e-6 && s.at <= o.b + 1e-6 && o.at >= s.a - 1e-6 && o.at <= s.b + 1e-6 && ((o.layer || 0) === L0 || o.a === s.at || o.b === s.at || s.a === o.at || s.b === o.at)) cuts.add(o.at);
                 for (const o of own) if (o !== s && o.at === s.at) { if (o.a > s.a && o.a < s.b) cuts.add(o.a); if (o.b > s.a && o.b < s.b) cuts.add(o.b); }
+                for (const [mx, mz] of markAt) { const at = v ? mx : mz, c = v ? mz : mx; if (at === s.at && c > s.a && c < s.b && !L0) cuts.add(c); }
                 const c = [...cuts].sort((p, q) => p - q);
                 for (let k = 0; k + 1 < c.length; k++) {
                     if (c[k + 1] - c[k] < 1) continue;
@@ -121,6 +129,7 @@ const RoadPlan = {
         for (const [k, n] of [...nodes]) {
             const NS = n.nbr[0] && n.nbr[1] && !n.nbr[2] && !n.nbr[3], EW = n.nbr[2] && n.nbr[3] && !n.nbr[0] && !n.nbr[1];
             if (!NS && !EW) continue;
+            if (this.marks.has(k)) continue;                                    // retorno (ou outra marca): o nó fica
             const [d1, d2] = NS ? [0, 1] : [2, 3];
             if (n.edge[d1].cls !== n.edge[d2].cls) continue;                    // muda de classe aqui: mantém o nó (marca a transição)
             const cls = n.edge[d1].cls, old1 = n.edge[d1], old2 = n.edge[d2];
@@ -133,6 +142,11 @@ const RoadPlan = {
         }
 
         this.nodes = [...nodes.values()];
+        for (const n of this.nodes) {
+            const m = this.marks.get(n.x + ',' + n.z);
+            if (m && m.round) n.round = Object.assign({}, m.round);
+            if (m && m.uturn && n.nbr[0] && n.nbr[1] && !n.nbr[2] && !n.nbr[3] && n.edge[0].cls === 'ave' && n.edge[1].cls === 'ave') n.uturn = Object.assign({}, m.uturn);
+        }
         this.edges = edges.filter((e) => e.a.nbr[e.v ? 0 : 2] === e.b);
         this.nodes.forEach((n, i) => { n.id = i; });
         this.edges.forEach((e, i) => { e.id = i; });
@@ -157,6 +171,16 @@ const RoadPlan = {
             const R0 = { hwy: 40, dirt: 22 }[cls] || 0, R = Math.min(R0, minLen / 2.3);
             if (R > Math.max(n.hwNS, n.hwEW) + 2) { n.turnR = R; n.hwNS = n.hwEW = R; }
         }
+        // ROTATÓRIA: o disco (raio R) fica no nó — ou, sem perna a oeste (leste), deslocado para o lado da perna, encostado no meio-fio
+        // da avenida do outro lado (não invade o quarteirão). A "caixa" do nó vai até a borda do disco: os trechos retos começam ali.
+        if (n.round) {
+            const R = n.round.R, side = n.nbr[3] ? (n.nbr[2] ? 0 : -1) : 1;
+            n.round.ox = side * Math.max(0, R - n.wNS / 2);
+            n.round.cx = n.x + n.round.ox; n.round.cz = n.z;
+            n.hwNS = R + Math.abs(n.round.ox); n.hwEW = R;
+        }
+        // RETORNO: o asfalto segue contínuo (sem caixa de cruzamento); só o canteiro abre o vão.
+        if (n.uturn) n.hwEW = 0;
     },
 
     // ============================================================= índices
@@ -301,7 +325,10 @@ const RoadPlan = {
         const R = 46 + m, n0 = Math.floor((x - R) / S), n1 = Math.floor((x + R) / S), q0 = Math.floor((z - R) / S), q1 = Math.floor((z + R) / S);
         for (let i = n0; i <= n1; i++) for (let j = q0; j <= q1; j++) {
             const c = this._ng.get(key(i, j)); if (!c) continue;
-            for (const n of c) if (Math.abs(x - n.x) <= n.hwNS + m && Math.abs(z - n.z) <= n.hwEW + m) return true;
+            for (const n of c) {
+                if (n.round) { if (hypot(x - n.round.cx, z - n.round.cz) <= n.round.R + m) return true; continue; }      // (os braços são dos trechos)
+                if (Math.abs(x - n.x) <= n.hwNS + m && Math.abs(z - n.z) <= n.hwEW + m) return true;
+            }
         }
         return false;
     },

@@ -24,7 +24,7 @@ class Roadblocks {
     _dist(b, x, z) { return hypot(b.x - x, b.z - z); }
 
     // Posição do bloqueio de uma perna: 15u do centro do cruzamento, rumo à saída.
-    _spot(inter, d) { return { x: inter.x + d.dx * 15, z: inter.z + d.dz * 15 }; }
+    _spot(inter, d) { const s = inter.round ? inter.round.R + Math.abs(inter.round.ox) + 10 : 15; return { x: inter.x + d.dx * s, z: inter.z + d.dz * s }; }      // (rotatória: fora do disco)
 
     // Pernas candidatas ao anel em volta de `pos`: rua do outro lado existe, ainda não fechada, longe da tela,
     // sem carro em cima, a 70–125u do jogador e a ≥ 40u dos outros bloqueios.

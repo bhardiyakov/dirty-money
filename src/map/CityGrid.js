@@ -59,7 +59,22 @@ const CityGrid = {
         if (typeof RuralPlan !== "undefined") RuralPlan.build();         // campo: fazendas, cabanas, postos, torres, alamedas
         if (typeof Marina !== "undefined") Marina.build();               // marina na orla leste: píeres, vagas e clube náutico
         this._purgeVegetation();
+        this._roundIslands();
         this._collectWalk();
+    },
+
+    // Ilha das rotatórias: uma palmeira e arbustos (depois da limpeza de vegetação em vias: a ilha não é pista).
+    _roundIslands() {
+        const rng = Pixel.rng(5150);
+        for (const n of RoadPlan.nodes) {
+            const R = n.round;
+            if (!R) continue;
+            this.coastProps.push({ type: 'tree', kind: 'palm', x: R.cx, z: R.cz + 0.3, s: 1.25, seed: Math.floor(rng() * 1000) });
+            for (let k = 0; k < 3; k++) {
+                const t = k * Math.PI * 2 / 3 + 0.5 + rng() * 0.4;
+                this.coastProps.push({ type: 'tree', kind: 'bush', x: R.cx + Math.cos(t) * 2.7, z: R.cz + Math.sin(t) * 2.7, s: 0.6 + rng() * 0.15, seed: Math.floor(rng() * 1000) });
+            }
+        }
     },
 
     // REGRA: vegetação só FORA das vias (ruas, estradas, rodovias, pontes, viadutos e os cantos de asfalto dos quarteirões).
@@ -112,7 +127,7 @@ const CityGrid = {
 
     _makePlan() {
         const P = RoadPlan, R = this._range;
-        P.segs = []; P.report = [];
+        P.segs = []; P.report = []; P.marks = new Map();
         const legacy = !!Config.world.legacyPlan;
         const D = this.districts = {};
 
@@ -123,7 +138,8 @@ const CityGrid = {
         const cz = legacy ? R(-210, 210, 42) : this._irregular(-1050, -210, STEPS, lr).concat(R(-168, 210, 42).slice(0, -1), this._irregular(210, 1134, STEPS, lr));
         D.city = { id: 'city', xs: cx, zs: cz, cls: 'city', sw: 4, margin: 14 };
         const aveZ = new Set(cz.filter((z, i) => (z < -210 || z > 210) && i % 4 === 0));       // avenidas largas (canteiro central) fora do miolo antigo
-        P.lattice(cx, cz, (v, at) => (!legacy && ((v && at === cx[1]) || (!v && aveZ.has(at)))) ? 'ave' : 'city', (x, z) => WorldMap.buildable(x, z, 16), 'cidade');
+        const aveX = new Set([cx[1], cx[cx.length - 1]]);                                       // N-S: a do oeste e a BEIRA-MAR (a última coluna, de frente para o canal)
+        P.lattice(cx, cz, (v, at) => (!legacy && ((v && aveX.has(at)) || (!v && aveZ.has(at)))) ? 'ave' : 'city', (x, z) => WorldMap.buildable(x, z, 16), 'cidade');
 
         if (!legacy) {
             // ---- VIADUTO: via elevada na coluna oeste da cidade (cruza as ruas por cima, sem cruzamento; rampas nas pontas).
@@ -138,6 +154,15 @@ const CityGrid = {
             P.lattice(ix, iz, 'isl', (x, z) => WorldMap.buildable(x, z, 30), 'ilha');
             // ---- As 3 PONTES (cidade -> ilha), no eixo das ruas E-O: norte, centro e sul.
             for (const z of [714, 0, -630]) P.addH(z, 168, 480, 'bridge');
+            // ---- AVENIDA BEIRA-MAR: ROTATÓRIAS nas cabeceiras das 3 pontes e RETORNOS no canteiro central, no meio dos quarteirões
+            // longos (≥ 60 u, longe das rotatórias).
+            const bx = cx[cx.length - 1], bz = [714, 0, -630];
+            for (const z of bz) P.mark(bx, z, { round: { R: 12, r: 4.5 } });
+            const along = [...new Set(cz.concat(bz))].sort((a, b) => a - b);
+            for (let k = 0; k + 1 < along.length; k++) {
+                const a = along[k], b = along[k + 1], m = Math.round((a + b) / 2);
+                if (b - a >= 60 && bz.every((z) => Math.abs(z - m) >= 30)) P.mark(bx, m, { uturn: { gap: 14 } });
+            }
             // ---- FAVELA: vielas estreitas no morro, a oeste da cidade.
             const fx = [-660, -624, -588, -552, -516, -480, -444, -408, -372, -336], fz = R(270, 738, 36);
             D.favela = { id: 'favela', xs: fx, zs: fz, cls: 'fav', sw: 1.6, margin: 6 };
@@ -436,8 +461,9 @@ const CityGrid = {
             const { x, z, hwNS, hwEW } = inter;
             inter.offset = rng() * 60;
             inter.crosswalks = []; inter.poles = [];
-            inter.signal = inter.legs >= 3;                                      // a IA cede a vez pelo ciclo (também fora da cidade)
+            inter.signal = inter.legs >= 3 && !inter.round;                      // a IA cede a vez pelo ciclo (também fora da cidade); rotatória: sem semáforo
             inter.visible = inter.signal && (inter.kinds.has('urban') || inter.kinds.has('bridge'));      // postes/faixas só onde é urbano
+            if (inter.round) { this._roundCrossings(inter); continue; }
             if (!inter.visible) continue;
             const arms = [
                 { arm: 'N', leg: 0, rect: [x - hwNS, z + hwEW, x + hwNS, z + hwEW + zl], axis: 'x', crosses: 'ns' },
@@ -461,9 +487,26 @@ const CityGrid = {
         }
     },
 
+    // ROTATÓRIA: o disco achata o relevo; faixas de pedestres (sem semáforo — o carro para para quem está nela) nos braços de rua,
+    // um carro antes da linha de "dê a preferência" (as pontes não têm: a faixa ficaria sob o tabuleiro).
+    _roundCrossings(inter) {
+        const R = inter.round, a = R.R + 5.6, b = R.R + 8.6;
+        this.roadRects.push({ x0: R.cx - R.R - 2, z0: R.cz - R.R - 2, x1: R.cx + R.R + 2, z1: R.cz + R.R + 2, cls: 'ave', flat: true, edge: null });
+        for (const [leg, arm] of [[0, 'N'], [1, 'S'], [2, 'E'], [3, 'W']]) {
+            const e = inter.edge[leg];
+            if (!e || e.cls === 'bridge' || e.cls === 'fav' || e.layer || e.len < b + 10) continue;
+            const hw = e.w / 2, s = leg === 0 || leg === 2 ? 1 : -1, v = leg < 2;
+            const c0 = (v ? R.cz : R.cx) + s * a, c1 = (v ? R.cz : R.cx) + s * b, lo = Math.min(c0, c1), hi = Math.max(c0, c1);
+            const rect = v ? [inter.x - hw, lo, inter.x + hw, hi] : [lo, inter.z - hw, hi, inter.z + hw];
+            const cw = { id: this.crosswalks.length, inter, arm, leg, rect, axis: v ? 'x' : 'z', crosses: v ? 'ns' : 'ew', x0: rect[0], z0: rect[1], x1: rect[2], z1: rect[3] };
+            inter.crosswalks.push(cw);
+            this.crosswalks.push(cw);
+        }
+    },
+
     // (x, z) dentro de alguma faixa de pedestres (com folga `m`)?
     inCrosswalk(x, z, m = 0.4) {
-        const inter = this.intersectionNear(x, z, 16);
+        const inter = this.intersectionNear(x, z, 24);
         if (!inter) return false;
         for (const cw of inter.crosswalks) {
             if (x > cw.x0 - m && x < cw.x1 + m && z > cw.z0 - m && z < cw.z1 + m) return true;
@@ -991,7 +1034,37 @@ const CityGrid = {
                 if (this._blockAtPoint(mx, mz) || !WorldMap.isLand(mx, mz)) continue;
                 const nx = e.v ? side : 0, nz = e.v ? 0 : side;
                 const r = e.v ? [e.a.x + side * hw - (side < 0 ? SW : 0), z0, e.a.x + side * hw + (side > 0 ? SW : 0), z1] : [x0, e.a.z + side * hw - (side < 0 ? SW : 0), x1, e.a.z + side * hw + (side > 0 ? SW : 0)];
+                for (const nd of [e.a, e.b]) {                                   // rotatória na ponta: a calçada para na borda do disco (o anel de calçada é o roundAprons)
+                    const R = nd.round;
+                    if (!R) continue;
+                    const inner = e.v ? (side > 0 ? r[0] : r[2]) - R.cx : (side > 0 ? r[1] : r[3]) - R.cz, t = Math.abs(inner) < R.R ? Math.sqrt(R.R * R.R - inner * inner) : 0;
+                    if (e.v) { if (nd === e.a) r[1] = Math.max(r[1], R.cz + t); else r[3] = Math.min(r[3], R.cz - t); }
+                    else if (nd === e.a) r[0] = Math.max(r[0], R.cx + t); else r[2] = Math.min(r[2], R.cx - t);
+                }
+                if (r[2] - r[0] < 1 || r[3] - r[1] < 1) continue;
                 this.perimeter.push({ x0: r[0], z0: r[1], x1: r[2], z1: r[3], edge: e, nx, nz });
+            }
+        }
+        // Rotatórias: anel de calçada (4 u) em volta do disco nos cantos sem quarteirão (a orla), entre os braços — liga a calçada da
+        // avenida à da ponte. { inner, outer }: arcos (mesmo número de pontos) do meio-fio de dentro e da borda de fora.
+        this.roundAprons = [];
+        for (const n of RoadPlan.nodes) {
+            const R = n.round;
+            if (!R) continue;
+            const R0 = R.R, R1 = R.R + SW;
+            for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+                const ns = n.edge[sz > 0 ? 0 : 1], ew = n.edge[sx > 0 ? 2 : 3];
+                if (!ns || !ew) continue;
+                const ex = sx > 0 ? n.x + ns.w / 2 - R.cx : R.cx - (n.x - ns.w / 2), ez = ew.w / 2;           // bordas dos braços (relativas ao centro)
+                if (ex >= R0 - 0.5 || ez >= R0 - 0.5) continue;
+                const tx = R.cx + sx * (ex + 2.5), tz = R.cz + sz * (ez + 2.5);
+                if (this._blockAtPoint(tx, tz) || !WorldMap.isLand(tx, tz)) continue;
+                const arc = (r) => {
+                    const a0 = Math.atan2(ez, Math.sqrt(r * r - ez * ez)), a1 = Math.atan2(Math.sqrt(r * r - ex * ex), ex), pts = [];
+                    for (let k = 0; k <= 10; k++) { const t = a0 + (a1 - a0) * k / 10; pts.push([R.cx + sx * r * Math.cos(t), R.cz + sz * r * Math.sin(t)]); }
+                    return pts;
+                };
+                this.roundAprons.push({ node: n, inner: arc(R0), outer: arc(R1) });
             }
         }
         // Trechos que dão para o mar: guarda-sóis + palmeiras + lugares para deitar + entradas na água + trilha de corrida.
@@ -1085,13 +1158,21 @@ const CityGrid = {
         this.cornerCarves = [];                                                           // cantos arredondados: o que sobra fora do arco não é calçada
         for (const b of this.blocks) if (b.r > 0.5) { const [x0, z0, x1, z1] = b.slab; for (const [kx, kz, sx, sz] of [[x0, z0, 1, 1], [x1, z0, -1, 1], [x1, z1, -1, -1], [x0, z1, 1, -1]]) this.cornerCarves.push({ kx, kz, sx, sz, r: b.r }); }
         for (const p of this.perimeter) { W.push([p.x0, p.z0, p.x1, p.z1]); this.urbanRects.push([p.x0, p.z0, p.x1, p.z1]); }
+        for (const n of RoadPlan.nodes) if (n.round) { const R = n.round; this.urbanRects.push([R.cx - R.R, R.cz - R.R, R.cx + R.R, R.cz + R.R]); }      // rotatória: pista (a ilha não é caminho)
+        for (const ap of this.roundAprons || []) for (let k = 0; k < ap.inner.length; k++) {                   // anel de calçada: quadradinhos ao longo do meio dele
+            const x = (ap.inner[k][0] + ap.outer[k][0]) / 2, z = (ap.inner[k][1] + ap.outer[k][1]) / 2;
+            W.push([x - 1.3, z - 1.3, x + 1.3, z + 1.3]);
+        }
         for (const cw of this.crosswalks) {                                                // faixas: avançam 0,7 u em cada calçada
             if (cw.axis === 'x') W.push([cw.x0 - 0.7, cw.z0, cw.x1 + 0.7, cw.z1]); else W.push([cw.x0, cw.z0 - 0.7, cw.x1, cw.z1 + 0.7]);
         }
-        // Pontes: calçadas dos dois lados (3 u) — dá para atravessar a pé.
+        // Pontes: calçadas dos dois lados (3 u) — dá para atravessar a pé (a partir da borda da rotatória, se houver).
         for (const e of RoadPlan.edges) {
             if (e.cls !== 'bridge') continue;
-            const x0 = Math.min(e.a.x, e.b.x), x1 = Math.max(e.a.x, e.b.x), z0 = Math.min(e.a.z, e.b.z), z1 = Math.max(e.a.z, e.b.z), hw = e.w / 2;
+            let x0 = Math.min(e.a.x, e.b.x), x1 = Math.max(e.a.x, e.b.x), z0 = Math.min(e.a.z, e.b.z), z1 = Math.max(e.a.z, e.b.z);
+            const hw = e.w / 2;
+            if (!e.v && e.a.round) x0 = e.a.x + e.a.hwNS;
+            if (!e.v && e.b.round) x1 = e.b.x - e.b.hwNS;
             if (e.v) { W.push([x0 - hw - 3, z0, x0 - hw, z1], [x0 + hw, z0, x0 + hw + 3, z1]); }
             else { W.push([x0, z0 - hw - 3, x1, z0 - hw], [x0, z0 + hw, x1, z0 + hw + 3]); }
             this.urbanRects.push(e.v ? [x0 - hw - 3, z0, x0 + hw + 3, z1] : [x0, z0 - hw - 3, x1, z0 + hw + 3]);
