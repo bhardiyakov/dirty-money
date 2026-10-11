@@ -7,6 +7,8 @@
 // emit(x, z, o): o quad nasce com a BASE no ponto da água e fica "de pé" para cima da TELA (gira com a câmera bússola, como os
 // personagens 2,5D); o jato inclina para o lado da direção pedida (espelhado quando ela aponta para a esquerda da tela) e pode
 // andar junto com quem o soltou (vx, vz), perdendo velocidade. Tudo numa malha dinâmica (1 draw call). Dono: WaterFx.
+// SUAVE: o desenho é pixel art, mas aparece desfocado — filtro bilinear + o shader tira a média de 9 amostras em volta (miolo) e
+// mistura 8 mais afastadas (uma névoa clara em volta do jorro), com alfa pré-multiplicado (sem contorno escuro). Força em SOFT.
 // ============================================================================
 
 const WaterSprayArt = {
@@ -27,14 +29,18 @@ const WaterSprayArt = {
         burst:  { w: 34, h: 32, type: 'crown', frames: 10, vars: 2, ax: 0.5, spread: 0.8 },  // tchibum: mergulho da ponte, explosão na água
     },
 
-    // Monta (uma vez) a folha: linhas = tipo × variante, colunas = quadros. → { data RGBA, W, H, rect(kind, v, f) }
+    G: 4,                     // margem vazia (px) em volta de cada quadro na folha: o desfoque do shader não puxa o quadro vizinho
+    E: 3,                     // quanto o quad passa do quadro (px de cada lado): a névoa do desfoque não fica cortada na borda
+
+    // Monta (uma vez) a folha: linhas = tipo × variante, colunas = quadros (cada um numa célula com margem G). RGB pré-multiplicado
+    // pelo alfa (o vazio é preto transparente: o filtro bilinear não escurece a borda). → { data RGBA, W, H, E, rect(kind, v, f) }
     build() {
         if (this._atlas) return this._atlas;
-        const K = this.KINDS, names = Object.keys(K);
-        const W = Math.max(...names.map((n) => K[n].w * K[n].frames));
+        const K = this.KINDS, names = Object.keys(K), G = this.G, E = this.E;
+        const W = Math.max(...names.map((n) => (K[n].w + 2 * G) * K[n].frames));
         let H = 0;
         const row0 = {};
-        for (const n of names) { row0[n] = H; H += K[n].h * K[n].vars; }
+        for (const n of names) { row0[n] = H; H += (K[n].h + 2 * G) * K[n].vars; }
         const data = new Uint8Array(W * H * 4);
         for (const n of names) {
             const k = K[n];
@@ -42,7 +48,7 @@ const WaterSprayArt = {
                 const els = this._elements(n, k, v);
                 for (let f = 0; f < k.frames; f++) {
                     const grid = this._frame(n, k, els, f / (k.frames - 1));
-                    const ox = f * k.w, oy = row0[n] + v * k.h;
+                    const ox = f * (k.w + 2 * G) + G, oy = row0[n] + v * (k.h + 2 * G) + G;
                     for (let y = 0; y < k.h; y++) for (let x = 0; x < k.w; x++) {
                         const c = grid[y * k.w + x];
                         if (c < 0) continue;
@@ -52,8 +58,11 @@ const WaterSprayArt = {
                 }
             }
         }
-        const rect = (n, v, f) => { const k = K[n], e = 0.02; return [(f * k.w + e) / W, (row0[n] + v * k.h + e) / H, ((f + 1) * k.w - e) / W, (row0[n] + (v + 1) * k.h - e) / H]; };
-        return (this._atlas = { data, W, H, rect });
+        const rect = (n, v, f) => {                                                    // o quadro + E px de cada lado
+            const k = K[n], x0 = f * (k.w + 2 * G) + G - E, y0 = row0[n] + v * (k.h + 2 * G) + G - E;
+            return [x0 / W, y0 / H, (x0 + k.w + 2 * E) / W, (y0 + k.h + 2 * E) / H];
+        };
+        return (this._atlas = { data, W, H, E, rect });
     },
 
     // Os elementos de uma variante (fixos em todos os quadros, para a animação ser contínua): o corpo do jorro, os jatos da crista,
@@ -179,15 +188,18 @@ class WaterSpray {
         this.n = capacity;
         const A = WaterSprayArt.build();
         this.atlas = A;
-        const tex = BABYLON.RawTexture.CreateRGBATexture(A.data, A.W, A.H, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
+        const tex = BABYLON.RawTexture.CreateRGBATexture(A.data, A.W, A.H, scene, false, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE);
         tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
         WaterSpray._register();
         const m = new BABYLON.ShaderMaterial('waterSprayMat', scene, { vertex: 'waterSpray', fragment: 'waterSpray' }, {
-            attributes: ['position', 'uv', 'color'], uniforms: ['worldViewProjection', 'tint'], samplers: ['atlas'], needAlphaBlending: true,
+            attributes: ['position', 'uv', 'color'], uniforms: ['worldViewProjection', 'tint', 'texel', 'soft'], samplers: ['atlas'], needAlphaBlending: true,
         });
         m.setTexture('atlas', tex);
+        m.setVector2('texel', new BABYLON.Vector2(1 / A.W, 1 / A.H));
+        const S = WaterSpray.SOFT;
+        m.setVector3('soft', new BABYLON.Vector3(S.blur, S.mist, S.mistMix));
         m.setColor3('tint', SpriteMaterial.sharedTint());                  // (dia/noite: a mesma cor ambiente dos sprites)
-        m.alphaMode = BABYLON.Engine.ALPHA_COMBINE;
+        m.alphaMode = BABYLON.Engine.ALPHA_PREMULTIPLIED;
         m.backFaceCulling = false;
         m.disableDepthWrite = true;
         const n = capacity, pos = new Float32Array(n * 12), uv = new Float32Array(n * 8), col = new Float32Array(n * 16), idx = new Uint16Array(n * 6);
@@ -210,6 +222,9 @@ class WaterSpray {
         this.live = 0;
     }
 
+    // Desfoque (em px da folha = px do jogo): blur = raio do miolo, mist = raio da névoa em volta, mistMix = quanto da névoa entra.
+    static get SOFT() { return { blur: 0.9, mist: 2.2, mistMix: 0.3 }; }
+
     static _register() {
         if (WaterSpray._reg) return;
         WaterSpray._reg = true;
@@ -228,10 +243,23 @@ class WaterSpray {
             varying vec4 vColor;
             uniform sampler2D atlas;
             uniform vec3 tint;
+            uniform vec2 texel;
+            uniform vec3 soft;
+            vec4 tap(vec2 o) { return texture2D(atlas, vUV + o * texel); }
             void main(void) {
-                vec4 t = texture2D(atlas, vUV);
-                if (t.a < 0.5 || vColor.a <= 0.01) discard;
-                gl_FragColor = vec4(t.rgb * tint * vColor.rgb, vColor.a);
+                if (vColor.a <= 0.01) discard;
+                float r = soft.x, R = soft.y, d = soft.y * 0.7071;
+                // miolo: média ponderada 3×3 (1 2 1) — tira o serrilhado do pixel art
+                vec4 c = tap(vec2(0.0)) * 4.0
+                    + (tap(vec2(r, 0.0)) + tap(vec2(-r, 0.0)) + tap(vec2(0.0, r)) + tap(vec2(0.0, -r))) * 2.0
+                    + tap(vec2(r, r)) + tap(vec2(-r, r)) + tap(vec2(r, -r)) + tap(vec2(-r, -r));
+                c /= 16.0;
+                // névoa: 8 amostras mais longe, misturadas por cima (borda esfumaçada, como borrifo)
+                vec4 h = tap(vec2(R, 0.0)) + tap(vec2(-R, 0.0)) + tap(vec2(0.0, R)) + tap(vec2(0.0, -R))
+                    + tap(vec2(d, d)) + tap(vec2(-d, d)) + tap(vec2(d, -d)) + tap(vec2(-d, -d));
+                c = mix(c, h / 8.0, soft.z);
+                if (c.a < 0.01) discard;
+                gl_FragColor = vec4(c.rgb * tint * vColor.rgb, c.a) * vColor.a;      // (pré-multiplicado)
             }`;
     }
 
@@ -265,9 +293,9 @@ class WaterSpray {
             live++;
             q.x += q.vx * dt; q.z += q.vz * dt;
             const drag = Math.max(0, 1 - q.drag * dt); q.vx *= drag; q.vz *= drag;
-            const K = q.K, w = K.w / ppu, h = K.h / ppu;
-            const flip = q.dx * rx + q.dz * rz < 0, ax = flip ? 1 - K.ax : K.ax;            // (água indo para a esquerda da tela: espelha)
-            const lx = q.x - rx * w * ax, lz = q.z - rz * w * ax, Rx = rx * w, Rz = rz * w, Ux = ux * h, Uz = uz * h;
+            const K = q.K, E = this.atlas.E, w = (K.w + 2 * E) / ppu, h = (K.h + 2 * E) / ppu, e = E / ppu;      // (o quad passa E px do quadro)
+            const flip = q.dx * rx + q.dz * rz < 0, ax = (E + (flip ? 1 - K.ax : K.ax) * K.w) / (K.w + 2 * E);   // (água indo para a esquerda da tela: espelha)
+            const lx = q.x - rx * w * ax - ux * e, lz = q.z - rz * w * ax - uz * e, Rx = rx * w, Rz = rz * w, Ux = ux * h, Uz = uz * h;
             // cantos na ordem do UV (0,0) (1,0) (0,1) (1,1): em cima à esquerda, em cima à direita, embaixo à esquerda, embaixo à direita
             P[o] = lx + Ux; P[o + 1] = Y; P[o + 2] = lz + Uz;
             P[o + 3] = lx + Rx + Ux; P[o + 4] = Y; P[o + 5] = lz + Rz + Uz;

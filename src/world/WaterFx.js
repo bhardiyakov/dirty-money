@@ -161,7 +161,7 @@ class WaterFx {
             [[0.02, 1], [0.52, -1]].forEach(([m, sd]) => {                     // mão entrando na água (direita, esquerda)
                 if (!crossed(m)) return;
                 const hx = x + fx * 0.7 + rx * sd * 0.32, hz = z + fz * 0.7 + rz * sd * 0.32 + 0.06;
-                this.spray.emit(hx, hz, { kind: 'stroke' });
+                this.spray.emit(hx, hz, { kind: 'stroke', a: 1 });                   // (pequeno: com o desfoque, opaco para não sumir)
                 this.splash(hx, hz, 4, 1.0, fx * 0.5, fz * 0.5);                // (umas gotas soltas por cima do jorro)
                 this.arc(hx, hz, fx, fz, 0.3, 1.5, 0.75, 0.34);
                 AudioFX.waterStroke(hx, hz, vol);
