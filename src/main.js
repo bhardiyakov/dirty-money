@@ -45,6 +45,7 @@ class MainMenu {
         vol.addEventListener('input', () => { s.volume = vol.value / 100; commit(); });
         for (const t of toggles) t.addEventListener('click', () => { s[t.dataset.key] = !s[t.dataset.key]; commit(); });
         const open = (v) => { panel.classList.toggle('open', v); if (v) render(); (v ? document.getElementById('btn-settings-back') : document.getElementById('btn-settings')).focus(); };
+        window.addEventListener('dm-settings', render);                                  // (o giroscópio pode desligar sozinho: PauseMenu)
         document.getElementById('btn-settings').addEventListener('click', () => open(true));
         document.getElementById('btn-settings-back').addEventListener('click', () => open(false));
         window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel.classList.contains('open')) open(false); });

@@ -2,19 +2,24 @@
 // TouchControls — controles NA TELA para celular/tablet, só quando é tela de toque E não há controle (Xbox) conectado.
 //
 //   JOYSTICK FLUTUANTE   não fica preso num canto: encostar o dedo em QUALQUER ponto da metade esquerda da tela faz o joystick
-//                        nascer ali; soltar, ele volta (apagadinho) para o canto como dica. A pé: anda (empurrar até a borda também
-//                        corre). Dirigindo: vira um volante HORIZONTAL (só esquerda/direita) — acelerar e ré ficam nos botões.
-//   4 BOTÕES (direita)   mudam com o CONTEXTO (a pé / dirigindo / helicóptero) e com o que dá para fazer ali (lido da dica de
-//                        interação do jogo, Game._promptHtml):
-//                          A pé:         ATACAR · CORRER (ou a 2ª ação do lugar) · ação do lugar (ENTRAR, ROUBAR, VASCULHAR…;
-//                                        sem nada por perto: CHUTE) · ARMA (toque = próxima, segurar = recarregar)
-//                          Dirigindo:    ACELERAR · RÉ/FREIO · SAIR · ação do lugar (ABASTECER, DESMANCHAR…; senão BUZINA)
+//                        nascer ali; soltar, ele volta (apagadinho) para o canto como dica. A pé: anda — empurrar até a borda CORRE
+//                        (não há botão de correr). Dirigindo: vira um volante HORIZONTAL (só esquerda/direita) — acelerar e ré ficam
+//                        nos botões. Com o VOLANTE POR GIROSCÓPIO ligado (Ajustes; TiltSteer, abaixo), inclinar o celular vira o
+//                        carro, o RÉ/FREIO vai para o canto esquerdo (polegar esquerdo freia, o direito acelera) e o joystick, se
+//                        tocado, ainda manda por cima.
+//   BOTÕES DE AÇÃO       em arco em volta do botão principal (canto inferior direito). Mudam com o CONTEXTO (a pé / dirigindo /
+//                        helicóptero) e com o que dá para fazer ali (lido da dica de interação do jogo, Game._promptHtml):
+//                          A pé:         ATACAR · ROLAR (perto de grade/muro: PULAR) · ARMA (toque = próxima, segurar = recarregar)
+//                                        · ação do lugar (ENTRAR, ROUBAR, VASCULHAR…; sem nada por perto: BOLSA) · AGACHAR
+//                                        · 2ª ação do lugar (só aparece quando há)
+//                          Dirigindo:    ACELERAR · RÉ/FREIO · SAIR · ação do lugar (ABASTECER, DESMANCHAR…; só quando há) · BUZINA
 //                          Helicóptero:  SUBIR · DESCER · SAIR · GIRAR
-//   ✚ KIT (chip)         aparece só com vida baixa e kit na mochila · ⋯ o resto (mochila, farol, zoom…) · topo: pausa e CARREIRAS
+//   ✚ KIT (chip)         aparece só com vida baixa e kit na mochila
+//   topo (sob o HUD)     ⋯ o resto (recarregar, mochila, farol, zoom…) · CRIME (carreiras) · pausa
 //   pinça (2 dedos)      zoom
 // Tudo aperta teclas virtuais do InputManager (setVirtual), então o jogo não sabe a diferença. Some quando um controle é conectado
 // ou quando o jogador usa teclado/mouse de verdade (notebook com tela de toque). Também deixa a interface responsiva (classe
-// `mobile` no <body>). `?touch` na URL força os controles (para testar no computador).
+// `mobile` no <body>: HUD enxuto — ver o CSS abaixo). `?touch` na URL força os controles (para testar no computador).
 // ============================================================================
 
 class TouchControls {
@@ -24,8 +29,9 @@ class TouchControls {
         this.shown = false;
         this.stick = { id: null, ox: 0, oy: 0, run: false };
         this._mode = '';
-        this._runBtn = false;
+        this._tilt = false;
         this._build();
+        TiltSteer.notify = (msg) => { if (this.g.ui && this.g.hud) this.g._flash(msg); };
         this.input.onChange = () => this._refresh();
         window.addEventListener('keydown', (e) => { if (e.isTrusted) this._physical = true, this._refresh(); });
         window.addEventListener('mousedown', (e) => { if (e.isTrusted && !(e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents)) this._physical = true, this._refresh(); });
@@ -40,8 +46,8 @@ class TouchControls {
     // Botões do menu "⋯" (ações raras): [rótulo, tecla, modo ('foot'|'car'|'heli'|'all'), segurar?]
     static get MORE() {
         return [
-            ['RECARREGAR', 'r', 'foot'], ['KIT MÉDICO', 'm', 'foot'], ['PULAR / ROLAR', 'v', 'foot'], ['AGACHAR / COBERTURA', 'q', 'foot'], ['FURTAR', 'c', 'foot'], ['MOCHILA', 'i', 'all'],
-            ['BUZINA', 'h', 'car', true], ['FAROL', 'l', 'car'], ['GIRAR ↺', 'q', 'heli', true],
+            ['RECARREGAR', 'r', 'foot'], ['KIT MÉDICO', 'm', 'foot'], ['FURTAR', 'c', 'foot'], ['MOCHILA', 'i', 'all'],
+            ['FAROL', 'l', 'car'], ['GIRAR ↺', 'q', 'heli', true],
             ['ZOOM +', 'z', 'all', true], ['ZOOM −', 'x', 'all', true],
         ];
     }
@@ -50,7 +56,8 @@ class TouchControls {
         const css = document.createElement('style');
         css.textContent = `
             body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
-            #touchUI { position: fixed; inset: 0; z-index: 20; pointer-events: none; display: none; --u: clamp(44px, 11vmin, 76px); font-family: var(--font); }
+            #touchUI { position: fixed; inset: 0; z-index: 20; pointer-events: none; display: none; --u: clamp(44px, 11vmin, 76px); font-family: var(--font);
+                --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); --sb: env(safe-area-inset-bottom, 0px); }      /* (fora do entalhe e dos cantos arredondados) */
             #touchUI.on { display: block; }
             #touchUI * { touch-action: none; -webkit-user-select: none; user-select: none; }
             /* zona do joystick: metade esquerda (abaixo do minimapa) */
@@ -63,20 +70,30 @@ class TouchControls {
             #tcKnob { position: absolute; left: 50%; top: 50%; width: calc(var(--u) * 1.05); height: calc(var(--u) * 1.05); margin: calc(var(--u) * -0.525) 0 0 calc(var(--u) * -0.525);
                 border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.88), rgba(210,218,235,0.55)); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
             #tcStick.run #tcKnob { background: radial-gradient(circle at 35% 30%, #d1fae5, #34d399); }
-            /* os 4 botões de contexto */
+            #tcStick.tilt:not(.on) { opacity: 0.55; }
+            #tcStick.tilt:not(.on) #tcKnob { transition: transform .08s linear; }
+            /* botões de ação: o principal (A) no canto e os outros em arco em volta dele. --r/--b: distância da borda direita/de baixo,
+               --s: tamanho (tudo em --u) */
             .tcb { position: absolute; pointer-events: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-                width: calc(var(--u) * 1.2); height: calc(var(--u) * 1.2); font-size: calc(var(--u) * 0.17); font-weight: 800; color: #fff; line-height: 1.05; letter-spacing: 0.02em;
+                --s: 1.2; width: calc(var(--u) * var(--s)); height: calc(var(--u) * var(--s)); right: calc(var(--sr) + var(--u) * var(--r)); bottom: calc(var(--sb) + var(--u) * var(--b));
+                font-size: calc(var(--u) * 0.17); font-weight: 800; color: #fff; line-height: 1.05; letter-spacing: 0.02em;
                 background: rgba(14,17,26,0.58); border: 1.5px solid rgba(255,255,255,0.24); border-radius: 50%; box-shadow: 0 6px 16px rgba(0,0,0,0.35); }
             .tcb i { font-style: normal; font-family: var(--emoji); font-size: calc(var(--u) * 0.36); line-height: 1; margin-bottom: 2px; }
             .tcb small { font-size: calc(var(--u) * 0.15); color: var(--gold); font-weight: 700; margin-top: 1px; }
             .tcb.down { transform: scale(0.93); filter: brightness(1.35); }
             .tcb.pop { animation: tcPop 0.18s ease-out; }
             @keyframes tcPop { from { transform: scale(0.7); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
-            #tcA { width: calc(var(--u) * 1.75); height: calc(var(--u) * 1.75); right: calc(var(--u) * 0.35); bottom: calc(var(--u) * 0.4); font-size: calc(var(--u) * 0.22); }
+            #tcA { --s: 1.75; --r: 0.35; --b: 0.4; font-size: calc(var(--u) * 0.22); }          /* principal: ATACAR / ACELERAR / SUBIR */
             #tcA i { font-size: calc(var(--u) * 0.5); }
-            #tcB { right: calc(var(--u) * 2.3); bottom: calc(var(--u) * 0.32); }
-            #tcC { right: calc(var(--u) * 0.6); bottom: calc(var(--u) * 2.35); }
-            #tcD { right: calc(var(--u) * 2.05); bottom: calc(var(--u) * 1.8); width: calc(var(--u) * 1.1); height: calc(var(--u) * 1.1); }
+            #tcB { --r: 2.4; --b: 0.36; }                                                        /* à esquerda: ROLAR / RÉ / DESCER */
+            #tcD { --r: 2.0; --b: 1.83; }                                                        /* diagonal: ARMA / SAIR */
+            #tcC { --r: 0.62; --b: 2.48; }                                                       /* em cima: ação do lugar / GIRAR */
+            #tcE { --s: 1; --r: 3.75; --b: 0.25; font-size: calc(var(--u) * 0.15); }             /* pequeno, mais à esquerda: AGACHAR / BUZINA */
+            #tcE i { font-size: calc(var(--u) * 0.3); }
+            #tcF { --s: 1.1; --r: 2.03; --b: 3.63; }                                             /* 2ª ação do lugar (só quando há) */
+            /* volante por giroscópio: o RÉ/FREIO vai para o polegar esquerdo (o joystick continua valendo no resto da metade esquerda) */
+            #touchUI.tilt #tcB { --s: 1.6; right: auto; left: calc(var(--sl) + var(--u) * 0.45); bottom: calc(var(--sb) + var(--u) * 0.45); font-size: calc(var(--u) * 0.2); }
+            #touchUI.tilt #tcB i { font-size: calc(var(--u) * 0.46); }
             .tcb.c-red { background: linear-gradient(180deg, rgba(251,113,133,0.82), rgba(225,29,72,0.82)); }
             .tcb.c-green { background: linear-gradient(180deg, rgba(74,222,128,0.8), rgba(22,163,74,0.8)); }
             .tcb.c-blue { background: linear-gradient(180deg, rgba(96,165,250,0.78), rgba(37,99,235,0.78)); }
@@ -87,15 +104,17 @@ class TouchControls {
             .tcchip { position: absolute; pointer-events: auto; display: flex; align-items: center; gap: 6px; padding: 0 12px; height: calc(var(--u) * 0.62); border-radius: 12px;
                 font-size: calc(var(--u) * 0.2); font-weight: 700; color: #fff; background: rgba(14,17,26,0.6); border: 1.5px solid rgba(255,255,255,0.2); white-space: nowrap; }
             .tcchip.down { background: rgba(52,211,153,0.75); }
-            #tcKit { right: calc(var(--u) * 3.45); bottom: calc(var(--u) * 2.15); color: #fda4af; }
-            #tcMore { right: calc(var(--u) * 0.35); bottom: calc(var(--u) * 3.7); width: calc(var(--u) * 0.8); justify-content: center; font-size: calc(var(--u) * 0.32); padding: 0; }
-            #tcMorePanel { position: absolute; right: calc(var(--u) * 1.3); bottom: calc(var(--u) * 3.05); pointer-events: auto; display: none; flex-wrap: wrap; gap: 6px; width: calc(var(--u) * 4.6);
+            #tcKit { right: calc(var(--sr) + var(--u) * 3.35); bottom: calc(var(--sb) + var(--u) * 2.2); color: #fda4af; }
+            /* atalhos do topo, logo abaixo do HUD (o top é posto em _placeTop): ⋯ · CRIME · pausa; o painel do ⋯ abre embaixo deles */
+            #tcTop { position: absolute; right: max(6px, var(--sr)); top: 8px; display: flex; gap: 6px; pointer-events: none; }
+            .tct { pointer-events: auto; min-width: calc(var(--u) * 0.72); height: calc(var(--u) * 0.72); padding: 0 calc(var(--u) * 0.16); border-radius: 99px; font-size: calc(var(--u) * 0.2);
+                display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; background: rgba(14,17,26,0.6); border: 1.5px solid rgba(255,255,255,0.2); }
+            .tct.down, .tct.open { background: rgba(52,211,153,0.7); }
+            #tcMore { font-size: calc(var(--u) * 0.32); padding: 0; }
+            #tcMorePanel { position: absolute; right: 0; top: calc(100% + 6px); pointer-events: auto; display: none; flex-wrap: wrap; gap: 6px; width: calc(var(--u) * 4.6);
                 justify-content: flex-end; padding: 8px; border-radius: 18px; background: rgba(14,17,26,0.88); border: 1px solid rgba(255,255,255,0.16); }
             #tcMorePanel.on { display: flex; }
             #tcMorePanel .tcchip { position: static; height: calc(var(--u) * 0.6); }
-            .tct { position: absolute; top: calc(var(--u) * 0.15); pointer-events: auto; width: calc(var(--u) * 0.7); height: calc(var(--u) * 0.7); border-radius: 50%; font-size: calc(var(--u) * 0.2);
-                display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; background: rgba(14,17,26,0.6); border: 1.5px solid rgba(255,255,255,0.2); }
-            .tct.down { background: rgba(52,211,153,0.7); }
             #tcBack { position: fixed; right: 10px; top: 10px; z-index: 40; display: none; padding: 10px 16px; font-family: var(--font); font-weight: 700; font-size: 14px; color: #fff;
                 background: linear-gradient(180deg, #fb7185, #e11d48); border: none; border-radius: 99px; box-shadow: 0 6px 16px rgba(0,0,0,0.4); }
             #tcBack.on { display: block; }
@@ -105,10 +124,30 @@ class TouchControls {
             body.mobile .px { box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(14,17,26,0.82); }
             body.mobile #minimap { box-shadow: none !important; }
             body.mobile #opVignette { animation: none; opacity: 0.6; }
-            body.mobile #hud2 { top: 6px; right: 6px; transform: scale(0.56); transform-origin: top right; gap: 7px; }
-            body.mobile #hud2 .wanted-panel .px-title, body.mobile #hud2 .px-forces { display: none; }
-            body.mobile #hud2 .wanted-panel .px-body { padding: 8px 14px; flex-direction: row; align-items: center; justify-content: space-between; }
-            body.mobile #hud2 .h-main { padding: 9px; } body.mobile #hud2 .stats-panel { padding: 8px 14px; }
+            /* HUD enxuto: uma faixa estreita no canto (barras sem rótulo, colete só vestido, fôlego só quando gasto, dinheiro e hora,
+               estrelas só com procurado). A arma e a munição aparecem no próprio botão ARMA; peso, troféus, dinheiro limpo e bairro
+               ficam no menu. Sobra a lateral direita para os botões de ação. */
+            body.mobile #hud2 { top: max(6px, env(safe-area-inset-top)); right: max(6px, env(safe-area-inset-right)); width: 184px; transform: none !important; gap: 4px; }
+            body.mobile #hud2 .px { border-radius: 12px; }
+            body.mobile #hud2 .h-weap, body.mobile #hud2 .h-load, body.mobile #hud2 .emp-panel, body.mobile #hud2 .px-forces, body.mobile #hud2 .wanted-panel .px-title { display: none; }
+            body.mobile #hud2 .h-main { padding: 6px 10px; }
+            body.mobile #hud2 .h-vit { gap: 5px; }
+            body.mobile #hud2 .vrow { gap: 6px; }
+            body.mobile #hud2 .vrow .emo { font-size: 12px; width: 14px; }
+            body.mobile #hud2 .vrow .vcol { flex-direction: row; align-items: center; gap: 6px; }
+            body.mobile #hud2 .px-bar { flex: 1; height: 6px; }
+            body.mobile #hud2 .px-label { order: 2; }
+            body.mobile #hud2 .px-label > span:first-child { display: none; }
+            body.mobile #hud2 .px-label .px-pct { font-size: 11px; min-width: 20px; text-align: right; }
+            body.mobile #hud2 .vrow.off { display: none; }
+            body.mobile #hud2 .stats-panel { padding: 5px 10px; flex-wrap: nowrap; gap: 8px; }
+            body.mobile #hud2 .stats-panel .st { font-size: 12px; gap: 4px; }
+            body.mobile #hud2 .stats-panel .st .emo { font-size: 12px; }
+            body.mobile #hud2 .stats-panel .st.cash { flex-basis: auto; min-width: 0; }
+            body.mobile #hud2 .stats-panel .st.cash small, body.mobile #hud2 .stats-panel .st:last-child { display: none; }
+            body.mobile #hud2 .wanted-panel .px-body { padding: 4px 10px; flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; }
+            body.mobile #hud2 .px-stars { gap: 1px; } body.mobile #hud2 .px-stars .emo { font-size: 13px; }
+            body.mobile #hud2 .px-status { font-size: 10px; letter-spacing: 0.02em; white-space: nowrap; }
             body.mobile #hMission { transform: scale(0.7); transform-origin: top left; left: 124px; top: 8px; }
             body.mobile #toast, body.mobile #prompt, body.mobile #goalBox .gl { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
             body.mobile #minimap { width: 108px !important; height: 108px !important; left: 8px !important; top: 8px !important; bottom: auto !important; border-width: 3px; }
@@ -138,26 +177,26 @@ class TouchControls {
         this._bindStick();
 
         const mk = (id, cls, html = '') => { const d = document.createElement('div'); d.id = id; d.className = cls; d.innerHTML = html; root.appendChild(d); return d; };
-        // os 4 botões: o que cada um faz é lido NA HORA do toque (this.slots, montado em update)
-        this.slots = [null, null, null, null];
-        this.btns = ['tcA', 'tcB', 'tcC', 'tcD'].map((id, i) => { const b = mk(id, 'tcb'); this._bindSlot(b, i); return b; });
-        this._sig = ['', '', '', ''];
+        // os botões de ação (A principal; B, D, C em arco; E pequeno; F 2ª ação): o que cada um faz é lido NA HORA do toque
+        // (this.slots, montado em update); slot vazio esconde o botão
+        this.slots = [null, null, null, null, null, null];
+        this.btns = ['tcA', 'tcB', 'tcC', 'tcD', 'tcE', 'tcF'].map((id, i) => { const b = mk(id, 'tcb hide'); this._bindSlot(b, i); return b; });
+        this._sig = this.slots.map(() => '');
         this.kit = mk('tcKit', 'tcchip hide', '✚ KIT');
         this._bindButton(this.kit, 'm', false);
-        this.moreBtn = mk('tcMore', 'tcchip', '⋯');
-        this.morePanel = mk('tcMorePanel', '');
-        this.moreBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.morePanel.classList.toggle('on'); });
+        // atalhos do topo (abaixo do HUD): ⋯ (o resto), carreiras e pausa/mapa
+        const top = this.topBar = mk('tcTop', '');
+        const tb = (label, id) => { const b = document.createElement('div'); b.className = 'tct'; b.textContent = label; if (id) b.id = id; top.appendChild(b); return b; };
+        this.moreBtn = tb('⋯', 'tcMore');
+        this.moreBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this._showMore(!this.morePanel.classList.contains('on')); });
+        this._bindButton(tb('CRIME'), 'o', false);
+        this._bindButton(tb('II'), 'p', false);
+        this.morePanel = document.createElement('div'); this.morePanel.id = 'tcMorePanel'; top.appendChild(this.morePanel);
         this.more = TouchControls.MORE.map(([label, key, mode, hold]) => {
             const b = document.createElement('div'); b.className = 'tcchip'; b.textContent = label; b.dataset.mode = mode;
             this.morePanel.appendChild(b); this._bindButton(b, key, !!hold);
-            if (!hold) b.addEventListener('pointerup', () => this.morePanel.classList.remove('on'));
+            if (!hold) b.addEventListener('pointerup', () => this._showMore(false));
             return b;
-        });
-        // atalhos do topo (ao lado do HUD): pausa/mapa e carreiras
-        this.top = [['II', 'p'], ['CRIME', 'o']].map(([label, key], i) => {
-            const b = document.createElement('div');
-            b.className = 'tct'; b.textContent = label; b.dataset.i = i;
-            root.appendChild(b); this._bindButton(b, key, false); return b;
         });
         this._bindPinch();
         const back = this.back = document.createElement('div');
@@ -201,9 +240,10 @@ class TouchControls {
 
     _tap(key) { this.input.setVirtual(key, true, 'touch'); setTimeout(() => this.input.setVirtual(key, false, 'touch'), 60); }
 
+    _showMore(on) { this.morePanel.classList.toggle('on', on); this.moreBtn.classList.toggle('open', on); }
+
     // Botão de contexto: no toque lê o que o slot faz AGORA e segura/solta a MESMA ação até o fim do toque (trocar de contexto com o
-    // dedo no botão não deixa tecla presa). Tipos: hold (segura a tecla), tap (toque único), weapon (toque = próxima arma, segurar = recarregar),
-    // run (correr: combinado com o joystick no update).
+    // dedo no botão não deixa tecla presa). Tipos: hold (segura a tecla), tap (toque único), weapon (toque = próxima arma, segurar = recarregar).
     _bindSlot(el, i) {
         let held = null, timer = null;
         el.addEventListener('pointerdown', (e) => {
@@ -213,7 +253,6 @@ class TouchControls {
             held = s; el.classList.add('down');
             if (navigator.vibrate) try { navigator.vibrate(8); } catch (x) { /* ok */ }
             if (s.type === 'weapon') timer = setTimeout(() => { timer = null; this._tap('r'); }, 450);
-            else if (s.type === 'run') this._runBtn = true;
             else if (s.type === 'tap') this._tap(s.key);
             else this.input.setVirtual(s.key, true, 'touch');
         });
@@ -221,7 +260,6 @@ class TouchControls {
             e.preventDefault(); if (!held) return;
             const s = held; held = null; el.classList.remove('down');
             if (s.type === 'weapon') { if (timer) { clearTimeout(timer); timer = null; if (this.input.onWeaponCycle) this.input.onWeaponCycle(1); } }
-            else if (s.type === 'run') this._runBtn = false;
             else if (s.type === 'hold') this.input.setVirtual(s.key, false, 'touch');
         };
         el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
@@ -289,6 +327,7 @@ class TouchControls {
         };
         z.addEventListener('pointerdown', (e) => {
             e.preventDefault(); AudioFX.init(); NativeMobile.enter();
+            this._showMore(false);
             if (S.id !== null) return;
             S.id = e.pointerId; S.ox = e.clientX; S.oy = e.clientY;
             try { z.setPointerCapture(e.pointerId); } catch (x) { /* ok */ }
@@ -298,22 +337,29 @@ class TouchControls {
         z.addEventListener('pointermove', move); z.addEventListener('pointerup', end); z.addEventListener('pointercancel', end); z.addEventListener('lostpointercapture', end);
     }
     _placeStick(x, y) { this.stickEl.style.left = x + 'px'; this.stickEl.style.top = y + 'px'; }
-    // Sem dedo: volta apagadinho para o canto (só para mostrar onde fica).
+    // Sem dedo: volta apagadinho para o canto (só para mostrar onde fica). Com o volante por giroscópio, fica ao lado do RÉ/FREIO
+    // (que ocupa o canto) e a bolinha mostra quanto o celular está inclinado.
     _parkStick() {
-        const u = this._u || 60;
-        this._placeStick(u * 0.35 + u * 1.15, window.innerHeight - u * 0.35 - u * 1.15);
+        const u = this._u || 60, t = this._tilt;
+        this._placeStick(u * (t ? 3.4 : 1.5), window.innerHeight - u * (t ? 1.25 : 1.5));
         this.stickEl.classList.remove('on', 'run');
         this.knob.style.transform = '';
+        this._knobV = null;
     }
 
-    // Os atalhos do topo ficam à esquerda do painel do HUD (canto direito, escalado).
     _layout() {
         const mobile = this.input.touchDevice || window.innerWidth < 900;
         document.body.classList.toggle('mobile', mobile);
-        const u = this._u = Math.max(44, Math.min(76, Math.min(window.innerWidth, window.innerHeight) * 0.11));
-        const hudW = (document.getElementById('hud2') ? document.getElementById('hud2').offsetWidth : 330) * 0.56 + 14;      // HUD escalado a 56% no celular
-        this.top.forEach((b, i) => { b.style.right = `${hudW + i * (u * 0.8)}px`; b.style.width = i ? `${u * 0.95}px` : ''; });
+        this._u = Math.max(44, Math.min(76, Math.min(window.innerWidth, window.innerHeight) * 0.11));
+        this._placeTop();
         if (this.stick.id === null) this._parkStick();
+    }
+
+    // Os atalhos do topo ficam logo abaixo do HUD e acompanham a altura dele (procurado, colete, fôlego aparecem e somem).
+    _placeTop() {
+        const hud = document.getElementById('hud2'), r = hud && hud.getBoundingClientRect();
+        const y = Math.round(r && r.height ? r.bottom + 6 : 8);
+        if (y !== this._topY) { this._topY = y; this.topBar.style.top = y + 'px'; }
     }
 
     _refresh() {
@@ -329,35 +375,44 @@ class TouchControls {
     }
 
     // ------------------------------------------------------------------ o que cada botão faz agora
-    // slot: { type: 'hold'|'tap'|'weapon'|'run', key, label, icon, color, sub? }
+    // slot: { type: 'hold'|'tap'|'weapon', key, label, icon, color, sub? } ou null (botão escondido), na ordem dos botões:
+    // [A principal, B esquerda, C em cima, D diagonal, E pequeno, F 2ª ação]
     _slotsFor(mode) {
         const g = this.g, H = (key, label, icon, color) => ({ type: 'hold', key, label, icon, color }), T = (key, label, icon, color) => ({ type: 'tap', key, label, icon, color });
         const ICON = { e: '✋', f: '🚪', g: '🔓', c: '🫳', v: '🧗' };
-        const acts = mode === 'heli' ? [] : TouchControls.parseActions(g._promptHtml).filter((a) => !(mode !== 'foot' && a.key === 'f'));
+        const all = mode === 'heli' ? [] : TouchControls.parseActions(g._promptHtml);
+        const acts = all.filter((a) => a.key !== 'v' && !(mode !== 'foot' && a.key === 'f'));      // (V pular grade já tem botão: ROLAR vira PULAR)
         const ctx = (a, color) => (a.key === 'e' ? H : T)(a.key, a.label, ICON[a.key] || '✋', color);      // E (abastecer, desmanchar…) às vezes é "segure"
         if (mode === 'car') return [
             H('w', 'ACELERAR', '⏩', 'c-green'),
             H('s', 'RÉ / FREIO', '⏪', 'c-red'),
+            acts[0] ? ctx(acts[0], 'c-blue') : null,
             T('f', 'SAIR', '🚪', 'c-dark'),
-            acts[0] ? ctx(acts[0], 'c-blue') : H('h', 'BUZINA', '📯', 'c-dark'),
+            H('h', 'BUZINA', '📯', 'c-dark'),
+            null,
         ];
         if (mode === 'heli') return [
             H(' ', 'SUBIR', '⬆️', 'c-green'),
             H('shift', 'DESCER', '⬇️', 'c-amber'),
-            T('f', 'SAIR', '🚪', 'c-dark'),
             H('e', 'GIRAR', '↻', 'c-dark'),
+            T('f', 'SAIR', '🚪', 'c-dark'),
+            null, null,
         ];
         const p = g.player, inv = g.inventory, w = p.weapon === 'none' ? 'fists' : p.weapon, gun = inv.isGun(w);
         const wName = (Weapons[w] ? Weapons[w].name : 'Punhos').toUpperCase();
+        const vault = all.some((a) => a.key === 'v');
         return [
-            H(' ', gun ? 'ATIRAR' : 'ATACAR', gun ? '🔫' : (w === 'fists' ? '👊' : Emoji.char(w) || '👊'), 'c-red'),
-            acts[1] ? ctx(acts[1], 'c-violet') : { type: 'run', key: 'shift', label: 'CORRER', icon: '🏃', color: 'c-amber' },
-            acts[0] ? ctx(acts[0], 'c-blue') : T('i', 'BOLSA', '🎒', 'c-dark'),                // (o chute agora é o 3º golpe do combo de ATACAR)
-            { type: 'weapon', key: 'r', label: wName.length > 9 ? wName.split(' ')[0] : wName, icon: '🔄', color: 'c-dark', sub: gun ? inv.ammoText(w) : '' },
+            H(' ', gun ? 'ATIRAR' : 'ATACAR', gun ? '🔫' : (w === 'fists' ? '👊' : Emoji.char(w) || '👊'), 'c-red'),      // (o chute é o 3º golpe do combo)
+            T('v', vault ? 'PULAR' : 'ROLAR', vault ? '🧗' : '🤸', vault ? 'c-violet' : 'c-amber'),                       // (longe de grade/muro, V rola: Game._tryVault)
+            acts[0] ? ctx(acts[0], 'c-blue') : T('i', 'BOLSA', '🎒', 'c-dark'),
+            { type: 'weapon', key: 'r', label: wName.length > 9 ? wName.split(' ')[0] : wName, icon: '🔄', color: 'c-dark',
+                sub: gun || inv.isThrow(w) ? inv.ammoText(w) + (g.reloading > 0 ? ' ↻' : '') : '' },                       // (no celular o HUD não mostra a arma)
+            T('q', p.crouched ? 'LEVANTAR' : 'AGACHAR', '🧎', p.crouched ? 'c-blue' : 'c-dark'),
+            acts[1] ? ctx(acts[1], 'c-violet') : null,
         ];
     }
 
-    // Todo frame (Game): monta os 4 botões conforme o modo e a dica, o chip do kit e o correr (botão OU joystick na borda).
+    // Todo frame (Game): monta os botões conforme o modo e a dica, o chip do kit, o correr (joystick na borda) e o volante por giroscópio.
     update() {
         this.back.classList.toggle('on', this.shown && this.g.menu.isOpen);
         this.root.style.display = this.shown && !this.g.menu.isOpen ? 'block' : 'none';
@@ -369,23 +424,39 @@ class TouchControls {
             for (const b of this.more) { const m = b.dataset.mode; b.style.display = m === 'all' || m === mode ? '' : 'none'; }
             this.stickEl.classList.toggle('wheel', mode === 'car');
             this.input.analog.z = 0;
-            this._runBtn = false;
+            if (this.stick.id === null) this.input.analog.x = 0;                                                 // (o giroscópio estava virando o carro)
             for (const k of ['shift', 'w', 's', ' ', 'h', 'e']) this.input.setVirtual(k, false, 'touch');      // nada preso de um modo para o outro
         }
         const slots = this._slotsFor(mode);
-        for (let i = 0; i < 4; i++) {
-            const s = slots[i], sig = s.type + s.key + s.label + (s.sub || '') + s.icon;
+        for (let i = 0; i < slots.length; i++) {
+            const s = slots[i], sig = s ? s.type + s.key + s.label + (s.sub || '') + s.icon : '';
             this.slots[i] = s;
             if (sig === this._sig[i]) continue;
             const changed = !this._sig[i] || this._sig[i].slice(0, 8) !== sig.slice(0, 8);
             this._sig[i] = sig;
             const b = this.btns[i];
+            if (!s) { b.className = 'tcb hide'; continue; }
             b.className = 'tcb ' + s.color + (b.classList.contains('down') ? ' down' : '');
             b.innerHTML = `<i>${s.icon}</i>${s.label}${s.sub ? `<small>${s.sub}</small>` : ''}`;
             if (changed) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
         }
-        // correr: botão CORRER segurado OU joystick empurrado até a borda (só a pé; no helicóptero o shift é o DESCER)
-        if (mode === 'foot') this.input.setVirtual('shift', this._runBtn || this.stick.run, 'touch');
+        // correr: joystick empurrado até a borda (só a pé; no helicóptero o shift é o DESCER)
+        if (mode === 'foot') this.input.setVirtual('shift', this.stick.run, 'touch');
+        // volante por giroscópio: dirigindo e sem dedo no joystick, a inclinação do celular é o volante
+        const tilt = mode === 'car' && TiltSteer.active;
+        if (tilt !== this._tilt) {
+            this._tilt = tilt;
+            this.root.classList.toggle('tilt', tilt); this.stickEl.classList.toggle('tilt', tilt);
+            if (this.stick.id === null) { this.input.analog.x = 0; this._parkStick(); }
+        }
+        if (tilt && this.stick.id === null) {
+            const v = TiltSteer.value;
+            this.input.analog.x = v;
+            if (this._knobV === null || Math.abs(v - this._knobV) > 0.01) { this._knobV = v; this.knob.style.transform = `translate(${v * this.stickEl.offsetWidth * 0.36}px, 0)`; }
+        }
+        if (!this._ro && window.ResizeObserver && document.getElementById('hud2')) {                            // (o HUD nasce depois destes controles)
+            this._ro = new ResizeObserver(() => this._placeTop()); this._ro.observe(document.getElementById('hud2'));
+        }
         // kit
         if (mode === 'foot') {
             const p = g.player, inv = g.inventory;
@@ -429,4 +500,71 @@ const NativeMobile = {
     },
 };
 NativeMobile.init();
+
+// ============================================================================
+// TiltSteer — VOLANTE POR GIROSCÓPIO (opcional: Ajustes › "Volante por giroscópio", só aparece em tela de toque; desligado de fábrica).
+//   • Lê o sensor de orientação (deviceorientation: beta/gamma), tira dele a direção da gravidade no aparelho e a projeta no eixo
+//     horizontal da TELA (conforme a tela está girada: paisagem para um lado ou para o outro). Assim tanto girar o celular como um
+//     volante quanto inclinar de lado com ele mais deitado viram o carro. sen(inclinação) → value -1..1, com zona morta e suavização.
+//   • Quem usa é o TouchControls.update (dirigindo, sem dedo no joystick).
+//   • iPhone (iOS 13+) pede permissão para o sensor, e só dentro de um toque: ligar a opção (um toque) já pede; com a opção ligada
+//     num jogo recém-aberto, pede no 1º toque na tela (no iOS a permissão vale até fechar a página). Negou, ou o aparelho não manda
+//     leitura nenhuma (sem sensor; página sem HTTPS): a opção desliga sozinha e avisa (onFail, ligado pelo PauseMenu).
+// ============================================================================
+const TiltSteer = {
+    MAX: 26,                  // graus de inclinação para virar tudo
+    DEAD: 2.5,                // zona morta (graus): o carro não fica puxando com o celular quase reto
+    on: false,                // opção ligada
+    ok: false,                // o sensor já mandou leitura
+    value: 0,                 // volante: -1 esquerda .. 1 direita
+    notify: null,             // (msg) → aviso na tela (TouchControls)
+    onFail: null,             // (msg) → a opção não pôde ser ligada (PauseMenu desliga e salva)
+    _listening: false, _needGesture: false, _check: 0,
+    get active() { return this.on && this.ok; },
+    get supported() { return typeof DeviceOrientationEvent !== 'undefined'; },
+    setEnabled(on) {
+        if (on === this.on) return;
+        this.on = on; this.value = 0;
+        clearTimeout(this._check);
+        if (!on) return;
+        if (!this.supported) { this._fail('Este aparelho não tem giroscópio'); return; }
+        this._ask();
+    },
+    // Permissão (iOS) e escuta do sensor.
+    _ask() {
+        const D = DeviceOrientationEvent;
+        if (typeof D.requestPermission !== 'function') { this._listen(); return; }
+        this._needGesture = false;                                                     // (um pedido por vez: a janela do iOS pode demorar)
+        let p;
+        try { p = D.requestPermission(); } catch (e) { this._needGesture = true; return; }
+        Promise.resolve(p).then((r) => { if (r === 'granted') this._listen(); else this._fail('Giroscópio bloqueado: permita o acesso a "Movimento e orientação" nas configurações do navegador'); })
+            .catch(() => { this._needGesture = true; });                                // (fora de um toque: tenta de novo no próximo)
+    },
+    _listen() {
+        this._needGesture = false;
+        if (!this._listening) { this._listening = true; window.addEventListener('deviceorientation', (e) => this._read(e)); }
+        clearTimeout(this._check);
+        this._check = setTimeout(() => { if (this.on && !this.ok) this._fail('Sem leitura do giroscópio neste aparelho'); }, 2500);
+    },
+    _fail(msg) {
+        this.on = false; this.value = 0;
+        if (this.onFail) this.onFail(msg); else if (this.notify) this.notify(msg);
+    },
+    _read(e) {
+        if (e.beta == null || e.gamma == null) return;                                 // (computador: um evento vazio)
+        this.ok = true;
+        if (!this.on) return;
+        const R = Math.PI / 180, b = e.beta * R, gm = e.gamma * R;
+        const ux = -Math.sin(gm) * Math.cos(b), uy = Math.sin(b);                       // "para cima" no aparelho (x direita, y topo do celular em pé)
+        const o = screen.orientation, ang = (o && typeof o.angle === 'number' ? o.angle : +window.orientation || 0) * R;
+        const sx = ux * Math.cos(ang) - uy * Math.sin(ang);                             // ... no eixo horizontal da TELA girada
+        const deg = Math.asin(Math.max(-1, Math.min(1, -sx))) / R;                      // > 0: lado direito da tela para baixo = virar à direita
+        const t = Math.sign(deg) * Math.min(1, Math.max(0, (Math.abs(deg) - this.DEAD) / (this.MAX - this.DEAD)));
+        this.value += (t - this.value) * 0.4;                                          // (suaviza o tremido da mão)
+        if (Math.abs(this.value) < 0.005) this.value = 0;
+    },
+};
+// iOS: a permissão do sensor só pode ser pedida dentro de um toque.
+window.addEventListener('touchend', () => { if (TiltSteer.on && TiltSteer._needGesture) TiltSteer._ask(); }, { capture: true, passive: true });
+
 memoStatics(TouchControls, 'MORE');
