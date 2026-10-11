@@ -232,6 +232,7 @@
             border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 18px 50px rgba(0,0,0,0.45); }
         #mm-settings h2 { font: 700 20px 'Outfit', 'Inter', sans-serif; text-align: center; }
         #mm-settings .mm-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; }
+        html:not(.touch-device) #mm-settings .mm-touch { display: none; }
         #mm-settings .mm-toggle { font: 600 13px 'Inter', sans-serif; min-width: 96px; padding: 7px 14px; cursor: pointer; border-radius: 99px; color: #aab1c2;
             background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); }
         #mm-settings .mm-toggle.is-on { color: #04130c; background: #34d399; border-color: transparent; }
@@ -269,6 +270,7 @@
             <div class="mm-row"><span>Dicas na tela</span><button type="button" class="mm-toggle" data-key="prompts"></button></div>
             <div class="mm-row"><span>Mira</span><button type="button" class="mm-toggle" data-key="aimAssist" data-on="Assistida" data-off="Manual"></button></div>
             <div class="mm-row"><span>Balanço da câmera</span><button type="button" class="mm-toggle" data-key="camBounce"></button></div>
+            <div class="mm-row mm-touch"><span>Volante por giroscópio</span><button type="button" class="mm-toggle" data-key="tiltSteer"></button></div>
             <button type="button" class="mm-btn" id="btn-settings-back">Voltar</button>
         </div></div>
     </div>

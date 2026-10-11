@@ -62,7 +62,7 @@ class Goals {
             #goalBox .gl i { display: block; height: 4px; margin-top: 6px; background: rgba(255,255,255,0.08); border-radius: 99px; overflow: hidden; }
             #goalBox .gl i::after { content: ''; display: block; height: 100%; width: var(--p, 0%); border-radius: 99px; background: linear-gradient(90deg, #22d3ee, #34d399); }
             body.mobile #goalBox { bottom: 4px; gap: 4px; transform: translateX(-50%) scale(0.78); transform-origin: bottom center; }
-            body.mobile #goalBox .gl:nth-child(n+3) { display: none; }`;
+            body.mobile #goalBox .gl:nth-child(n+2) { display: none; }`;          // (celular: só a próxima meta, para não encher a tela)
         document.head.appendChild(st);
         const el = this._el = document.createElement('div');
         el.id = 'goalBox';

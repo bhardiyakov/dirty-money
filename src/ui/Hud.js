@@ -6,6 +6,8 @@
 //   canto inferior direito:  ao entrar num veículo, por 3 s, o MODELO dele (nome + imagem em pixel art)
 //   topo, no centro:         mensagens curtas (Pegou: AK-47, Roubando o carro…) — `toast`
 // Os painéis são DOM com fundo translúcido desfocado; ícones são emojis (Noto Color Emoji) e as armas, arte vetorial HD.
+// No celular (body.mobile) o HUD vira uma faixa enxuta — só vida, colete vestido, fôlego gasto, dinheiro, hora e procurado: CSS em
+// TouchControls.
 // ============================================================================
 
 class Hud {
@@ -125,7 +127,7 @@ class Hud {
             <div class="h-vit">
               <div class="vrow">${E('heart')}<div class="vcol"><div class="px-label"><span>Vida <span class="h-kit" id="hKit2"></span></span><span class="px-pct" id="hHpT"></span></div><div class="px-bar"><div class="px-fill hp" id="hHp"></div></div></div></div>
               <div class="vrow" id="hArmorRow">${E('shield')}<div class="vcol"><div class="px-label"><span>Colete<span class="px-lvl" id="hArL"></span></span><span class="px-pct" id="hArT">0%</span></div><div class="px-bar"><div class="px-fill ar" id="hAr"></div></div></div></div>
-              <div class="vrow">${E('wind')}<div class="vcol"><div class="px-label"><span>Fôlego<span class="px-lvl" id="hStL"></span></span><span class="px-pct" id="hStT"></span></div><div class="px-bar"><div class="px-fill st" id="hSt"></div></div></div></div>
+              <div class="vrow" id="hStRow">${E('wind')}<div class="vcol"><div class="px-label"><span>Fôlego<span class="px-lvl" id="hStL"></span></span><span class="px-pct" id="hStT"></span></div><div class="px-bar"><div class="px-fill st" id="hSt"></div></div></div></div>
               <div class="h-load" id="hLoad"></div>
             </div>`);
         // DINHEIRO (sujo e limpo), HORA e MISSÕES (troféu)
@@ -310,11 +312,11 @@ class Hud {
         const hasVest = pl.armorMax > 0 && pl.armor > 0;
         const ap = hasVest ? Math.round((pl.armor / pl.armorMax) * 100) : 0;
         this._set('ar', ap, (v) => { this.$('hAr').style.width = v + '%'; this.$('hArT').textContent = v; });
-        this._set('arl', hasVest ? pl.armorMax : 0, (v) => { this.$('hArL').textContent = v ? 'nível ' + (v >= 100 ? 2 : 1) : ''; });
+        this._set('arl', hasVest ? pl.armorMax : 0, (v) => { this.$('hArL').textContent = v ? 'nível ' + (v >= 100 ? 2 : 1) : ''; this.$('hArmorRow').classList.toggle('off', !v); });      // (off: o HUD enxuto do celular esconde)
 
         // ---- fôlego (estamina) e peso carregado
         const stMax = pl.staminaMax || 100, sp = Math.round(Math.max(0, Math.min(1, (pl.stamina == null ? stMax : pl.stamina) / stMax)) * 100);
-        this._set('st', sp + (pl.winded ? 'w' : ''), () => { this.$('hSt').style.width = sp + '%'; this.$('hStT').textContent = pl.winded ? 'sem fôlego' : sp; this.$('hSt').classList.toggle('low', !!pl.winded || sp < 25); });
+        this._set('st', sp + (pl.winded ? 'w' : ''), () => { this.$('hSt').style.width = sp + '%'; this.$('hStT').textContent = pl.winded ? 'sem fôlego' : sp; this.$('hSt').classList.toggle('low', !!pl.winded || sp < 25); this.$('hStRow').classList.toggle('off', sp >= 100 && !pl.winded); });
         const fl = Bags.fitLevel(pl.fit);
         this._set('stl', fl, (v) => { this.$('hStL').textContent = v ? 'cond. ' + v : ''; });
         const D = Bags.def(inv), kg = Math.round((Bags.kg || 0) * 10) / 10, r = Bags.ratio || 0;

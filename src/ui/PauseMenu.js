@@ -15,7 +15,7 @@ class PauseMenu {
     static get TABS() {
         return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
     }
-    static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem
+    static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
     static get KEYS_HTML() {
         return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas';
     }
@@ -53,11 +53,18 @@ class PauseMenu {
         this.setRow = 0;                 // linha das configurações
         this._icons = {};
         this._legendIdx = {};
-        this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, camBounce: true, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual)
+        this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, camBounce: true, tiltSteer: false, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual) · tiltSteer: volante por giroscópio (celular)
         delete this.settings.hd; delete this.settings.smooth;          // (escolhas antigas: o jogo é sempre em alta definição com o gráfico suave)
         this.settings.cars3d = typeof CarArt3D !== 'undefined' && CarArt3D.available();      // (já resolvido em config.js: escolha salva; ?cars2d)
         this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
         this._build();
+        // giroscópio negado ou ausente: a opção volta a desligado (aqui e no menu inicial) e o jogo avisa
+        TiltSteer.onFail = (msg) => {
+            this.settings.tiltSteer = false; this._saveSettings();
+            if (this.isOpen && this.tab === 'settings') this._renderSettings();
+            window.dispatchEvent(new Event('dm-settings'));
+            if (TiltSteer.notify) TiltSteer.notify(msg);
+        };
         this.applySettings();
     }
 
@@ -72,6 +79,7 @@ class PauseMenu {
         if (mm) mm.style.visibility = s.minimap ? '' : 'hidden';
         this.g.showPrompts = s.prompts;
         CompassCamera.bounceOn = s.camBounce !== false;
+        TiltSteer.setEnabled(!!s.tiltSteer && NativeMobile.touch);           // (ligar pede a permissão do sensor no iPhone: chamado dentro do toque)
         if (this.g.dev) this.g.dev.setEnabled(s.dev);
         if (typeof CarArt3D !== 'undefined' && !!s.cars3d !== CarArt3D.available()) this._applyCars3d(!!s.cars3d);
     }
@@ -871,14 +879,17 @@ class PauseMenu {
     _renderSettings() {
         const s = this.settings, el = this.$('pmSet');
         const tog = (v) => `<div class="pm-toggle ${v ? 'is-on' : ''}">${v ? 'Ligado' : 'Desligado'}</div>`;
-        const rows = [
-            ['🔊 Volume geral', `<input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="pmVol"><span>${Math.round(s.volume * 100)}%</span>`],
-            ['🎵 Efeitos sonoros', tog(s.sfx)], ['🗺️ Minimapa', tog(s.minimap)], ['💬 Dicas na tela', tog(s.prompts)],
-            ['🎯 Mira <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">assistida trava no alvo · manual: você aponta (analógico direito / mouse)</small>', `<div class="pm-toggle is-on">${s.aimAssist ? 'Assistida' : 'Manual'}</div>`],
-            ['🚗 Balanço da câmera <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">dirigindo, a câmera balança com arrancadas, freadas, curvas e buracos</small>', tog(s.camBounce !== false)],
-            ['🚘 Carros 3D <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">carros com volume: rodas que rolam e esterçam, carroceria balançando na suspensão, luzes acesas no próprio carro · desligado: carros desenhados, mais leve</small>', tog(s.cars3d)],
-            ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],
-        ];
+        const sub = (t) => `<small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">${t}</small>`;
+        const R = {
+            volume: ['🔊 Volume geral', `<input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="pmVol"><span>${Math.round(s.volume * 100)}%</span>`],
+            sfx: ['🎵 Efeitos sonoros', tog(s.sfx)], minimap: ['🗺️ Minimapa', tog(s.minimap)], prompts: ['💬 Dicas na tela', tog(s.prompts)],
+            aimAssist: ['🎯 Mira ' + sub('assistida trava no alvo · manual: você aponta (analógico direito / mouse)'), `<div class="pm-toggle is-on">${s.aimAssist ? 'Assistida' : 'Manual'}</div>`],
+            camBounce: ['🚗 Balanço da câmera ' + sub('dirigindo, a câmera balança com arrancadas, freadas, curvas e buracos'), tog(s.camBounce !== false)],
+            tiltSteer: ['📱 Volante por giroscópio ' + sub('dirigindo, incline o celular para virar o carro · o RÉ/FREIO vai para o canto esquerdo e o joystick ainda vale'), tog(s.tiltSteer)],
+            cars3d: ['🚘 Carros 3D ' + sub('carros com volume: rodas que rolam e esterçam, carroceria balançando na suspensão, luzes acesas no próprio carro · desligado: carros desenhados, mais leve'), tog(s.cars3d)],
+            dev: ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],
+        };
+        const rows = PauseMenu.SET_KEYS.map((k) => R[k]);
         el.innerHTML = rows.map((r, i) => `<div class="pm-row ${i === this.setRow ? 'on' : ''}" data-i="${i}"><span>${r[0]}</span><span style="display:flex;gap:12px;align-items:center">${r[1]}</span></div>`).join('');
         const on = el.querySelector('.pm-row.on'); if (on) on.scrollIntoView({ block: 'nearest' });       // (teclado/controle: a linha escolhida não some da tela)
         el.querySelectorAll('.pm-row').forEach((row) => row.addEventListener('click', (e) => {
