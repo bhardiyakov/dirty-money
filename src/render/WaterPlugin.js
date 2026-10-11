@@ -139,11 +139,10 @@ const Water = {
             // s = distância na grade de pixels (espuma, pixel art) | sb = distância sem grade (degradê suave, "borrado")
             vec3 shoreColor(vec3 sea, vec3 ground, vec2 q, float s, float sb) {
                 vec4 clk = texture2D(shoreClock, vec2(0.1, 0.5));
-                vec2 cell = floor(q * 20.0);
-                float n = wNoise(q * 0.16), n2 = wSmooth > 0.5 ? wNoise(q * 9.0 + 3.1) : wHash(cell), n3 = wNoise(q * 0.9 + 31.0);     // (salpicado: sorteio por pixel ou ruído suave)
+                // (sem ruído de lugar para lugar: a espuma e a linha de onda correm PARALELAS à beira e se movem todas juntas — alinhadas)
                 vec3 shallow = vec3(0.373, 0.769, 0.753), mid = vec3(0.243, 0.624, 0.706), foamC = vec3(0.91, 0.965, 0.965);
-                float lap = 0.5 + 0.5 * sin(clk.r * 6.2832 + n * 5.0);                            // a água sobe (1) e desce (0)
-                float reach = 0.35 + 2.3 * lap + (n3 - 0.5) * 0.7;                                   // até onde ela chega na areia (u)
+                float lap = 0.5 + 0.5 * sin(clk.r * 6.2832);                                       // a água sobe (1) e desce (0)
+                float reach = 0.35 + 2.3 * lap;                                                      // até onde ela chega na areia (u)
                 float foam = 0.0;
                 vec3 col;
                 if (sb <= 0.0) {
@@ -152,18 +151,16 @@ const Water = {
                     vec3 g = ground * (1.0 - 0.24 * wet * wet);
                     float a = 1.0 - smoothstep(reach * 0.05, reach * 1.1, Lb);                       // lâmina d'água: some (fica transparente) na ponta, em degradê suave
                     col = mix(g, shallow, min(1.0, a * 0.85 + 0.15 * (1.0 - smoothstep(0.0, 0.8, Lb))));    // (= o lado do mar em s = 0)
-                    float fp = abs(L - reach * 0.88);                                               // espuma na ponta da onda: miolo cheio, franja salpicada
-                    foam = max(1.0 - wStep(0.09, fp, 0.025), (1.0 - wStep(0.26, fp, 0.025)) * wStep(0.45, n2 + 0.2 * lap, 0.05));
-                    foam = max(foam, wStep(0.86, n2, 0.04) * a * (1.0 - lap) * 0.9);                        // bolhas que ficam quando ela recua
+                    float fp = abs(L - reach * 0.88);                                               // espuma na ponta da onda: miolo cheio, franja mais clara
+                    foam = max(1.0 - wStep(0.09, fp, 0.025), (1.0 - wStep(0.22, fp, 0.025)) * 0.55);
                 } else {
-                    float k = 1.0 - smoothstep(-0.5, 8.0, sb - (n - 0.5) * 1.2); k = k * k * (3.0 - 2.0 * k);   // raso: some mar adentro em degradê suave (sem faixas)
+                    float k = 1.0 - smoothstep(-0.5, 8.0, sb); k = k * k * (3.0 - 2.0 * k);                      // raso: some mar adentro em degradê suave (sem faixas)
                     vec3 sh = mix(shallow, mid, smoothstep(0.5, 4.5, sb));
                     col = mix(sea, sh, min(1.0, k * 0.85 + 0.15 * (1.0 - smoothstep(0.0, 0.8, sb))));
-                    // linha de onda chegando: tracejada, mais fraca longe, e se desfaz ao chegar na beira
+                    // linha de onda chegando: contínua e paralela à beira, aparece longe e se desfaz ao chegar
                     float wave = clk.g, wp = 5.5 - wave * 5.0;
-                    float lp = abs(s - wp - (n3 - 0.5) * 0.8);
-                    float on = smoothstep(0.35, 0.6, wNoise(q * vec2(0.45, 0.45) + vec2(wave * 3.0, 0.0)));
-                    foam = (1.0 - wStep(0.16, lp, 0.025)) * on * wStep(0.35, n2, 0.05) * smoothstep(0.0, 0.15, wave) * (1.0 - smoothstep(0.75, 1.0, wave)) * 0.85;
+                    float lp = abs(s - wp);
+                    foam = (1.0 - wStep(0.12, lp, 0.025)) * smoothstep(0.0, 0.15, wave) * (1.0 - smoothstep(0.75, 1.0, wave)) * 0.8;
                 }
                 return mix(col, foamC, clamp(foam, 0.0, 1.0));
             }`;
