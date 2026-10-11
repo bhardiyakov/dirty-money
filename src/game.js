@@ -663,7 +663,6 @@ class Game {
             this.waterFx.track(pl, dt, { x: pl.position.x, z: pl.position.z, depth: inW ? (pl.depth || 0) : 0, speed: pl.speed, swimming: !!pl.swimming, diving: !!pl.diving,
                 heading: pl.actor.heading, actor: pl.actor, wl: pl.waterline, who: 'player', wadeSound: false });      // (passos no raso: Footsteps)
             this.waterFx.update(dt);
-            if (typeof Waves !== 'undefined') Waves.update(dt, this);                                              // ondas: a arrebentação na praia
             if (typeof NpcArt !== 'undefined') NpcArt.tick(performance.now() / 1000);                                // linha d'água ondulando em quem vadeia
         }
         this.pickups.update(dt, this.mode === 'player' ? this.player.position : this.camera.target,this.mode === 'player' && !this.player.busy);

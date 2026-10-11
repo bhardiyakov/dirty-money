@@ -2,8 +2,7 @@
 // Waves — as ONDAS do mar. Um único modelo (soma de 4 ondulações que andam em direções diferentes, cada uma com o período de uma
 // onda de verdade, c = √(gλ/2π)) serve ao desenho e à física: o que se vê passar é o que empurra.
 //   • desenho   o plano do mar (WaterPlugin) clareia a face das cristas virada para o sol e escurece os cavados, tudo andando; com
-//               mar agitado, carneirinhos (espuma no alto das cristas). Na praia, a arrebentação: a cada onda que chega à areia,
-//               jorros (WaterSpray) quebram na beira, virados para a terra.
+//               mar agitado, carneirinhos (espuma no alto das cristas). Na beira vale a orla do WaterPlugin.
 //   • balanço   barcos (Boat.syncVisual) e quem nada (Player, NPC) sobem e descem com a onda — o desenho 2,5D sobe na tela, como a
 //               altura de tudo no jogo — e o barco gira de leve.
 //   • força     a água da superfície vai e volta com cada onda (velocidade orbital): quem nada é levado junto (vai e volta), os
@@ -43,7 +42,7 @@ const Waves = {
     // Fase de cada ondulação (0..1) agora: o shader a recebe pela textura do relógio (WaterPlugin).
     phase(i) { const c = this._init()[i], p = c.w * this.t / (Math.PI * 2); return p - Math.floor(p); },      // (o shader soma a fase inicial c.ph)
 
-    // Fator de mar em (x, z): 0 em terra; lago quase parado; no mar a ondulação cresce da beira (onde vira a arrebentação) ao fundo.
+    // Fator de mar em (x, z): 0 em terra; lago quase parado; no mar a ondulação cresce da beira (onde vira a orla) ao fundo.
     open(x, z, depth) {
         const W = WorldMap, i = W.index(x, z);
         if (i < 0) return 1;
@@ -95,36 +94,5 @@ const Waves = {
     lift(x, z, depth) {
         const f = this.open(x, z, depth);
         return f > 0 ? this.sample(x, z, this._l || (this._l = {})).h * f * this.UP : 0;
-    },
-
-    // Por quadro (Game): a arrebentação na praia perto da câmera.
-    update(dt, game) {
-        const W = game.waterFx && game.waterFx.spray, pts = typeof CityGrid !== 'undefined' && CityGrid.shorePoints;
-        if (!W || !pts || !pts.length || !game.camera) return;
-        // cada onda chegando à areia (a água começando a subir: mesma batida de 7,4 s do shader) quebra na beira; com mar bravo, também
-        // no meio da batida
-        const p = (this.t / 7.4) % 1, p0 = this._lp == null ? p : this._lp;
-        this._lp = p;
-        const crossed = (m) => (p >= p0 ? p0 < m && p >= m : p0 < m || p >= m);
-        const Q = this._q || (this._q = []);
-        if (crossed(0.08) || (this.M > 1.0 && crossed(0.58))) {
-            const f = game.camera.target, R = 44, pr = Math.min(0.85, 0.45 + 0.3 * (this.M - 0.6)) * (crossed(0.08) ? 1 : 0.6);
-            for (const s of pts) {
-                if (Math.abs(s.x - f.x) > R || Math.abs(s.z - f.z) > R) continue;
-                for (let k = -1; k <= 1; k++) {                                            // (os pontos ficam a cada 9 u: três jorros cobrem o vão)
-                    if (Math.random() > pr) continue;
-                    Q.push({ t: Math.random() * 1.3, s, o: k * 3 + (Math.random() - 0.5) * 2.4 });    // (a onda vai quebrando ao longo da praia, não toda de uma vez)
-                }
-            }
-        }
-        for (let i = Q.length - 1; i >= 0; i--) {
-            const q = Q[i];
-            if ((q.t -= dt) > 0) continue;
-            Q.splice(i, 1);
-            const s = q.s, ax = -s.nz, az = s.nx, d = 1.2 + Math.random() * 1.0;          // (ao longo da praia; um pouco mar adentro da beira)
-            const x = s.x + ax * q.o + s.nx * d, z = s.z + az * q.o + s.nz * d, a = Math.min(1, 0.6 + 0.22 * this.M), M = this.M;
-            W.emit(x, z, { kind: M > 1.4 && Math.random() < 0.35 ? 'tail' : M > 0.95 ? 'bowL' : 'bowS', dir: [-s.nx, -s.nz], a, vx: -s.nx * 0.8, vz: -s.nz * 0.8, drag: 1.5 });     // quebrando para a areia
-            if (Math.random() < 0.7) W.emit(x - s.nx * 0.7, z - s.nz * 0.7, { kind: 'churn', a: a * 0.85, vx: -s.nx * 0.6, vz: -s.nz * 0.6, drag: 1.2 });       // e a espuma que ela empurra
-        }
     },
 };
