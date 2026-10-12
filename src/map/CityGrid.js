@@ -169,12 +169,11 @@ const CityGrid = {
                 const a = along[k], b = along[k + 1], m = Math.round((a + b) / 2);
                 if (b - a >= 60 && bz.every((z) => Math.abs(z - m) >= 30)) P.mark(bx, m, { uturn: { gap: 14 } });
             }
-            // ---- FAVELA: vielas estreitas no morro, a oeste da cidade.
-            const fx = [-660, -624, -588, -552, -516, -480, -444, -408, -372, -336], fz = R(270, 738, 36);
-            D.favela = { id: 'favela', xs: fx, zs: fz, cls: 'fav', sw: 1.6, margin: 6 };
-            P.lattice(fx, fz, 'fav', (x, z) => WorldMap.buildable(x, z, 6), 'favela');
-            for (const z of [342, 522, 702]) P.addH(z, -336, -294, 'fav');                  // liga a favela à avenida oeste da cidade
-            for (const z of [342, 558]) P.addH(z, -780, -660, 'dirt');                      // e à rodovia do oeste
+            // ---- FAVELA: só 3 ruas de carro, curvas, morro acima (da avenida oeste da cidade às estradas de terra); o resto são becos
+            // (FavelaPlan.build, no _buildBlocks).
+            FavelaPlan.roads(P);
+            this._favela = true;
+            for (const z of [342, 558]) P.addH(z, -780, -660, 'dirt');                      // estradas de terra até a rodovia do oeste
             // ---- RODOVIAS pelo continente (anel + travessas) e estradas de terra das fazendas.
             const H = (z, a, b, cls = 'hwy') => P.road(false, z, a, b, cls), V = (x, a, b, cls = 'hwy') => P.road(true, x, a, b, cls);
             H(1080, -1200, -294); H(-930, -1200, -294); V(-1200, -930, 1080);
@@ -308,7 +307,6 @@ const CityGrid = {
             const r = this._rand(i + 400, j + 400);
             return { biome: this._biomeIsland((x0 + x1) / 2, (z0 + z1) / 2, r), si: i + 400, sj: j + 400 };
         });
-        if (this.districts.favela) sweep(this.districts.favela, (i, j) => ({ biome: 'favela', si: i + 800, sj: j + 800 }));
 
         this._pickLandmarks(cells);
         this._pickStations(cells);
@@ -335,6 +333,7 @@ const CityGrid = {
             if (!block.open) this._fillYard(block, Pixel.rng(Math.floor(this._rand(block.i + 91, block.j + 37) * 1e9)));
             this.blocks.push(block);
         }
+        if (this._favela) FavelaPlan.build(this);                                   // FAVELA: becos, barracos e a safe house (quarteirões 'organic')
     },
 
     // ============================================================ postos de gasolina
@@ -1374,11 +1373,13 @@ const CityGrid = {
         this.urbanRects = this.urbanBoxes.slice();
         for (const b of this.blocks) {
             const [x0, z0, x1, z1] = b.slab, [fx0, fz0, fx1, fz1] = b.foot;
-            if (b.open || b.biome === 'favela') { W.push([x0, z0, x1, z1]); continue; }       // parque/mata/praia/favela (vielas entre as casas): tudo andável
+            if (b.organic) continue;                                                        // favela: as células dela entram abaixo (becos, quintais)
+            if (b.open) { W.push([x0, z0, x1, z1]); continue; }                             // parque/mata/praia: tudo andável
             W.push([x0, z0, x1, fz0], [x0, fz1, x1, z1], [x0, fz0, fx0, fz1], [fx1, fz0, x1, fz1]);   // anel de calçada
         }
         this.cornerCarves = [];                                                           // cantos arredondados: o que sobra fora do arco não é calçada
         for (const b of this.blocks) if (b.r > 0.5) { const [x0, z0, x1, z1] = b.slab; for (const [kx, kz, sx, sz] of [[x0, z0, 1, 1], [x1, z0, -1, 1], [x1, z1, -1, -1], [x0, z1, 1, -1]]) this.cornerCarves.push({ kx, kz, sx, sz, r: b.r }); }
+        for (const r of (typeof FavelaPlan !== 'undefined' && FavelaPlan.built ? FavelaPlan.walkRects : [])) W.push(r.slice(0, 4));       // (os barracos saem como sólidos)
         for (const p of this.perimeter) { W.push([p.x0, p.z0, p.x1, p.z1]); this.urbanRects.push([p.x0, p.z0, p.x1, p.z1]); }
         for (const n of RoadPlan.nodes) if (n.round) { const R = n.round; this.urbanRects.push([R.cx - R.R, R.cz - R.R, R.cx + R.R, R.cz + R.R]); }      // rotatória: pista (a ilha não é caminho)
         for (const ap of this.roundAprons || []) for (let k = 0; k < ap.inner.length; k++) {                   // anel de calçada: quadradinhos ao longo do meio dele
@@ -1431,6 +1432,10 @@ const CityGrid = {
         const blk = list[Math.floor(Math.random() * list.length)];
         const [x0, z0, x1, z1] = blk.slab;
         const r = Math.random;
+        if (blk.organic) {                                                                  // favela: um ponto de beco do ladrilho
+            const p = FavelaPlan.randomAlleyPoint(r, (x, z) => x >= x0 && x < x1 && z >= z0 && z < z1) || FavelaPlan.randomAlleyPoint(r);
+            if (p) return new BABYLON.Vector3(p.x, 0, p.z);
+        }
         if (blk.open) {
             return new BABYLON.Vector3(x0 + 2 + r() * Math.max(0.1, x1 - x0 - 4), 0, z0 + 2 + r() * Math.max(0.1, z1 - z0 - 4));
         }

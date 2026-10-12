@@ -51,14 +51,20 @@ class GangManager {
     get total() { return this.groups ? this.groups.reduce((s, g) => s + g.alive, 0) : 0; }
     get deepTotal() { return this.groups ? this.groups.filter((g) => g.deep).reduce((s, g) => s + g.alive, 0) : 0; }
 
+    // Ponto do morro (beco ou rua) perto de (x, z), a até maxD u: o nó mais perto do grafo da favela.
+    _spot(x, z, maxD) {
+        if (FavelaPlan.built) { const n = FavelaPlan.nodeNear(x, z, true); return n && hypot(n.x - x, n.z - z) <= maxD ? n : null; }      // (no beco: parados na rua trancariam o trânsito)
+        const q = RoadPlan.nearestRoadPoint(x, z, maxD); return q && q.edge.cls === 'fav' ? q : null;
+    }
+
     _buildGroups() {
         const b = Standing._bounds(), rng = Pixel.rng(9001), W = b.x1 - b.x0, home = SafeHouse.spawnWorld();
         this.groups = [];
         const make = (dmin, dmax, size) => {
             for (let t = 0; t < 80; t++) {
                 const x = b.x1 - (dmin + rng() * (dmax - dmin)) * W, z = b.z0 + 20 + rng() * (b.z1 - b.z0 - 40);
-                const r = RoadPlan.nearestRoadPoint(x, z, 40);
-                if (!r || r.edge.cls !== 'fav' || !Standing.inFavela(r.x, r.z) || Standing.depth(r.x, r.z) < dmin - 0.03) continue;
+                const r = this._spot(x, z, 40);
+                if (!r || !Standing.inFavela(r.x, r.z) || Standing.depth(r.x, r.z) < dmin - 0.03) continue;
                 if (home && hypot(r.x - home.x, r.z - home.z) < this.safeRadius) continue;
                 if (this.groups.some((g) => hypot(g.x - r.x, g.z - r.z) < 18)) continue;
                 this.groups.push({ x: r.x, z: r.z, size, alive: size, minDepth: dmin, deep: dmin >= 0.5, wp: { x: r.x, z: r.z }, wpT: 0, members: [], active: false, regrow: 60 });
@@ -109,8 +115,8 @@ class GangManager {
             let a = Math.random() * Math.PI * 2, r = 25 + Math.random() * 20;
             if (ax !== null && t < 6) { a = Math.atan2(az - leader.position.z, ax - leader.position.x) + (Math.random() - 0.5) * 0.8; }
             const x = leader.position.x + Math.cos(a) * r, z = leader.position.z + Math.sin(a) * r;
-            const p = RoadPlan.nearestRoadPoint(x, z, 25);
-            if (!p || p.edge.cls !== 'fav' || !Standing.inFavela(p.x, p.z)) continue;
+            const p = this._spot(x, z, 25);
+            if (!p || !Standing.inFavela(p.x, p.z)) continue;
             if (Standing.depth(p.x, p.z) < g.minDepth - 0.08 && ax === null) continue;       // cada grupo patrulha a sua faixa
             if (home && hypot(p.x - home.x, p.z - home.z) < this.safeRadius) continue;
             g.wp = { x: p.x, z: p.z }; return;

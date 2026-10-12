@@ -17,6 +17,7 @@ const Standing = {
     entranceDepth: 0.12,                // até aqui (borda leste) é a "entrada": a polícia ainda pode ficar
     _bounds() {
         if (this._b) return this._b;
+        if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built) { const R = FavelaPlan.R; return (this._b = { x0: R.x0, z0: R.z0, x1: R.x1, z1: R.z1 }); }      // (a favela orgânica: a mesma área de antes)
         let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
         for (const b of CityGrid.blocks) if (b.district === 'favela') { x0 = Math.min(x0, b.slab[0]); z0 = Math.min(z0, b.slab[1]); x1 = Math.max(x1, b.slab[2]); z1 = Math.max(z1, b.slab[3]); }
         return (this._b = x0 < Infinity ? { x0: x0 - 8, z0: z0 - 8, x1: x1 + 8, z1: z1 + 8 } : { x0: 0, z0: 0, x1: -1, z1: -1 });      // (+8 u: as vielas de contorno fazem parte)

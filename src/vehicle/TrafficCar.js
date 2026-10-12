@@ -216,7 +216,7 @@ class TrafficCar extends Vehicle {
                 // Causa raiz da espera: se o da frente está parado num semáforo, eu também espero
                 // legitimamente (não buzino). Se ele está parado por um obstáculo de verdade, eu buzino.
                 const lc = hit.ref;
-                if (isCar && lc instanceof TrafficCar && lc.mode === 'drive' && !lc.controlled && !lc.hold) hitRoot = lc.root || '';
+                if (isCar && lc instanceof TrafficCar && lc.mode === 'drive' && !lc.controlled && !lc.hold) hitRoot = lc.root || (lc.reason || lc._asleep || Math.abs(lc.forwardSpeed) > 0.5 ? '' : 'carro');      // (parado sem motivo — viatura atendendo, carro enroscado: obstáculo de verdade, contorna)
                 else hitRoot = isCar ? 'carro' : 'pedestre';
             }
             // Frenagem brusca (quase bati): buzina na hora.

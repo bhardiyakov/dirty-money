@@ -39,6 +39,7 @@ class WorldBuilder {
         this._tunnels();
         this._viaducts();
         this._blocks();
+        this._favela();
         this._buildings();
         this._shops();
         this._rural();
@@ -575,6 +576,7 @@ class WorldBuilder {
         };
 
         for (const blk of CityGrid.blocks) {
+            if (blk.organic) continue;                                                 // favela: chão e becos à parte (_favela)
             if (blk.poly) { polyBlock(blk); continue; }
             const [x0, z0, x1, z1] = blk.slab;
             const [fx0, fz0, fx1, fz1] = blk.foot;
@@ -883,6 +885,58 @@ class WorldBuilder {
         return Math.min(1.3, 0.1 + 0.95 * k + 0.18 * k * Math.sin(t * 0.9) + 0.04 * Math.sin(t * 0.37));
     }
 
+    // FAVELA (FavelaPlan): o chão de terra que o terreno não desenha (células de 4 u, tingidas pelo relevo), os becos cimentados
+    // (por baixo das ruas), a quadra do baile e o campinho, e os FRADES (postes de concreto) nas bocas onde um carro caberia.
+    _favela() {
+        if (typeof FavelaPlan === 'undefined' || !FavelaPlan.built) return;
+        const F = FavelaPlan, up = [0, 1, 0], uv4 = (x, z) => [x / 4, -z / 4];
+        const cs = (x, z) => { const s = WorldMap.shadeAt(x, z); return [s, s, s]; };
+        const c = Config.world.cell;
+        for (const b of F.groundBoxes) for (let x = b[0]; x < b[2] - 0.01; x += c) {
+            this._batch('open_earth$', x, b[1]).top(x, b[1], x + c, b[3], 0.012, uv4, [cs(x, b[3]), cs(x + c, b[3]), cs(x, b[1]), cs(x + c, b[1])]);
+        }
+        // becos: faixa ao longo da polilinha (juntas redondas: um leque em cada canto)
+        for (const a of F.alleys) {
+            const P = a.pts, hw = Math.max(a.w / 2, 0.72), y = 0.016;
+            for (let k = 0; k + 1 < P.length; k++) {
+                const p = P[k], q = P[k + 1], L = hypot(q[0] - p[0], q[1] - p[1]) || 1, nx = -(q[1] - p[1]) / L * hw, nz = (q[0] - p[0]) / L * hw;
+                const bt = this._batch('sidewalk$', p[0], p[1]), col = cs((p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+                const A = [p[0] + nx, y, p[1] + nz], B = [p[0] - nx, y, p[1] - nz], C2 = [q[0] - nx, y, q[1] - nz], D = [q[0] + nx, y, q[1] + nz];
+                bt.tri(A, B, C2, up, [uv4(A[0], A[2]), uv4(B[0], B[2]), uv4(C2[0], C2[2])], col);
+                bt.tri(A, C2, D, up, [uv4(A[0], A[2]), uv4(C2[0], C2[2]), uv4(D[0], D[2])], col);
+                for (let t = 0; t < 8; t++) {                                       // tampa redonda na junta (sem fresta nas curvas)
+                    const a0 = t / 8 * Math.PI * 2, a1 = (t + 1) / 8 * Math.PI * 2, Q0 = [q[0] + Math.cos(a0) * hw, y, q[1] + Math.sin(a0) * hw], Q1 = [q[0] + Math.cos(a1) * hw, y, q[1] + Math.sin(a1) * hw];
+                    bt.tri([q[0], y, q[1]], Q0, Q1, up, [uv4(q[0], q[1]), uv4(Q0[0], Q0[2]), uv4(Q1[0], Q1[2])], col);
+                }
+            }
+        }
+        // quadra (cimento, linhas brancas, traves de futsal) e campinho (terra batida, linhas de cal, traves de madeira)
+        const W1 = [0.93, 0.93, 0.9], POST = [0.85, 0.85, 0.82], WOOD = [0.42, 0.3, 0.18];
+        for (const q of F.squares) {
+            const quadra = q.kind === 'quadra', key = quadra ? 'open_concrete$' : 'road_dirt$', y = 0.018;
+            this._batch(key, q.x0, q.z0).top(q.x0, q.z0, q.x1, q.z1, y, uv4, [cs(q.x0, q.z1), cs(q.x1, q.z1), cs(q.x0, q.z0), cs(q.x1, q.z0)]);
+            const t = this._batch('trim', q.x0, q.z0), m = 1.2, lx0 = q.x0 + m, lz0 = q.z0 + m, lx1 = q.x1 - m, lz1 = q.z1 - m, lw = 0.12, ly = 0.022, mx = (q.x0 + q.x1) / 2, mz = (q.z0 + q.z1) / 2;
+            const line = (x0, z0, x1, z1) => t.solid(x0, z0, x1, z1, ly, ly + 0.01, W1);
+            line(lx0, lz0, lx1, lz0 + lw); line(lx0, lz1 - lw, lx1, lz1); line(lx0, lz0, lx0 + lw, lz1); line(lx1 - lw, lz0, lx1, lz1); line(mx - lw / 2, lz0, mx + lw / 2, lz1);
+            for (let k = 0; k < 16; k++) { const a0 = k / 16 * Math.PI * 2, r = Math.min(3, (lz1 - lz0) / 4); line(mx + Math.cos(a0) * r - lw, mz + Math.sin(a0) * r - lw, mx + Math.cos(a0) * r + lw, mz + Math.sin(a0) * r + lw); }
+            const gw = quadra ? 1.6 : 2.4, gh = quadra ? 2.0 : 2.2, col = quadra ? POST : WOOD;
+            for (const gx of [lx0, lx1]) {                                          // traves nas pontas (no sentido de x)
+                t.solid(gx - 0.08, mz - gw - 0.08, gx + 0.08, mz - gw + 0.08, 0, gh, col);
+                t.solid(gx - 0.08, mz + gw - 0.08, gx + 0.08, mz + gw + 0.08, 0, gh, col);
+                t.solid(gx - 0.08, mz - gw - 0.08, gx + 0.08, mz + gw + 0.08, gh - 0.16, gh, col);
+            }
+        }
+        // frades: concreto com a faixa amarela e preta no alto (sólidos para os carros também)
+        F.bollards.forEach((b, i) => {
+            const t = this._batch('trim', b.x, b.z), r = F.POST_R;
+            t.solid(b.x - r, b.z - r, b.x + r, b.z + r, 0, 0.5, [0.62, 0.6, 0.56]);
+            t.solid(b.x - r - 0.01, b.z - r - 0.01, b.x + r + 0.01, b.z + r + 0.01, 0.5, 0.62, [0.9, 0.74, 0.12]);
+            t.solid(b.x - r - 0.01, b.z - r - 0.01, b.x + r + 0.01, b.z + r + 0.01, 0.62, 0.72, [0.14, 0.14, 0.14]);
+            t.solid(b.x - r, b.z - r, b.x + r, b.z + r, 0.72, 0.9, [0.72, 0.7, 0.66]);
+            this._collider('frade_' + i, b.x - r, b.z - r, b.x + r, b.z + r, 0.9);
+        });
+    }
+
     // FAVELA: postes de madeira com 'gato' (ligação clandestina): fiação embolada, fios cruzando a viela, caixas de emenda,
     // transformador remendado e luz fraca que pisca (algumas lâmpadas já queimaram). Mais lixo e entulho nas bordas das ruas de terra.
     _favelaPoles() {
@@ -897,17 +951,18 @@ class WorldBuilder {
         // Postes ao longo das ruas de terra da favela (alternando os lados) e sujeira nas bordas.
         for (const e of RoadPlan.edges) {
             if (e.cls !== 'fav') continue;
-            const hw = e.w / 2 + 0.7, L = e.len;
-            let side = rng() < 0.5 ? 1 : -1;
+            const hw = e.w / 2 + 1.4, L = e.len, P = {};
+            const side = (s, o) => { RoadPlan.at(e, s, P); return [P.x - P.tz * o, P.z + P.tx * o, Math.abs(P.tz) > Math.abs(P.tx)]; };      // (normal à esquerda; true: rua no sentido de z)
+            let sd = rng() < 0.5 ? 1 : -1;
             for (let s = 6 + rng() * 6; s < L - 4; s += 15 + rng() * 9) {
-                const px = e.v ? e.a.x + side * hw : e.a.x + s, pz = e.v ? e.a.z + s : e.a.z + side * hw;
-                poles.push({ x: px, z: pz, arm: e.v ? 'x' : 'z', dir: -side });
-                side = -side;
+                const [px, pz, alongZ] = side(s, sd * hw);
+                if (!FavelaPlan.built || FavelaPlan.walkable(px, pz)) poles.push({ x: px, z: pz, arm: alongZ ? 'x' : 'z', dir: alongZ ? Math.sign(P.tz * sd) || 1 : -Math.sign(P.tx * sd) || 1 });
+                sd = -sd;
             }
             for (let s = 3 + rng() * 5; s < L - 2; s += 7 + rng() * 9) {
                 if (rng() < 0.5) continue;
-                const sd = rng() < 0.5 ? 1 : -1, off = hw + 0.5 + rng() * 0.8;
-                dirt(e.v ? e.a.x + sd * off : e.a.x + s, e.v ? e.a.z + s : e.a.z + sd * off);
+                const [dx, dz] = side(s, (rng() < 0.5 ? 1 : -1) * (hw + 0.5 + rng() * 0.8));
+                if (!FavelaPlan.built || FavelaPlan.walkable(dx, dz)) dirt(dx, dz);
             }
         }
         // Postes dentro dos quarteirões da favela (vielas): dados vindos de CityGrid (props type 'pole').
@@ -1055,7 +1110,7 @@ class WorldBuilder {
             }
             return null;
         };
-        const spot = (b) => (b._pad !== undefined ? b._pad : (b._pad = (!b.poly && b.foot[2] - b.foot[0] >= 24 && b.foot[3] - b.foot[1] >= 24 && b.biome !== 'downtown') ? (b.open ? [(b.foot[0] + b.foot[2]) / 2, (b.foot[1] + b.foot[3]) / 2] : freeSquare(b)) : null));
+        const spot = (b) => (b._pad !== undefined ? b._pad : (b._pad = (!b.poly && !b.organic && b.foot[2] - b.foot[0] >= 24 && b.foot[3] - b.foot[1] >= 24 && b.biome !== 'downtown') ? (b.open ? [(b.foot[0] + b.foot[2]) / 2, (b.foot[1] + b.foot[3]) / 2] : freeSquare(b)) : null));
         const near = (list, x, z) => list.filter((b) => spot(b)).sort((a, b) => hypot(spot(a)[0] - x, spot(a)[1] - z) - hypot(spot(b)[0] - x, spot(b)[1] - z));
         const all = CityGrid.blocks, chosen = [];
         const take = (b) => { if (b && !chosen.includes(b) && chosen.every((o) => hypot(spot(o)[0] - spot(b)[0], spot(o)[1] - spot(b)[1]) > 60)) chosen.push(b); };

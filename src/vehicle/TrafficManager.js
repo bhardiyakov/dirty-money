@@ -168,8 +168,9 @@ class TrafficManager {
             e = c[Math.floor(Math.random() * c.length)];
         } else e = P.randomEdge();
         if (!e || e.len < 36) return null;
-        const fwd = Math.random() < 0.5, off = e.w / 2 - 0.1, t = 17 + Math.random() * (e.len - 34), p = P.at(e, t);
-        const d = { dx: fwd ? p.tx : -p.tx, dz: fwd ? p.tz : -p.tz }, x = p.x + d.dz * off, z = p.z - d.dx * off;           // no meio-fio à direita de quem anda
+        const fav = e.cls === 'fav', fwd = Math.random() < 0.5, off = fav ? e.w / 2 + 0.8 : e.w / 2 - 0.1, t = 17 + Math.random() * (e.len - 34), p = P.at(e, t);
+        const d = { dx: fwd ? p.tx : -p.tx, dz: fwd ? p.tz : -p.tz }, x = p.x + d.dz * off, z = p.z - d.dx * off;           // no meio-fio à direita de quem anda (rua do morro: fora da pista estreita)
+        if (fav && !FavelaPlan.roomForCar(x, z, d.dx, d.dz)) return null;
         if (near) { const r = hypot(x - near.x, z - near.z); if (r < near.rMin || r > near.rMax) return null; }
         if (CityGrid.intersectionNear(x, z, 17)) return null;
         return { point: { x, z }, d };

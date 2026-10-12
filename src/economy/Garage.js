@@ -29,7 +29,7 @@ const Garage = {
     curbSlots(x, z, n) {
         const r = RoadNet.nearestRoadPoint(x, z);
         if (!r || !r.edge || r.d > 22) return [];
-        const e = r.edge, off = e.w / 2 - 0.1, out = [];
+        const e = r.edge, fav = e.cls === 'fav', off = fav ? e.w / 2 + 0.8 : e.w / 2 - 0.1, out = [];      // (rua do morro é estreita: estaciona fora da pista)
         const fwd = (x - r.x) * r.tz - (z - r.z) * r.tx >= 0;                     // do lado da porta: andando nesse sentido, a calçada fica à direita
         const t0 = r.s;
         for (let k = 0; out.length < n && k < n * 3; k++) {
@@ -37,6 +37,7 @@ const Garage = {
             if (t < 9 || t > e.len - 9) continue;
             const p = RoadPlan.at(e, t), d = { dx: fwd ? p.tx : -p.tx, dz: fwd ? p.tz : -p.tz }, sx = p.x + d.dz * off, sz = p.z - d.dx * off;
             if (CityGrid.intersectionNear(sx, sz, 12)) continue;
+            if (fav && !FavelaPlan.roomForCar(sx, sz, d.dx, d.dz)) continue;
             out.push({ x: sx, z: sz, h: Math.atan2(d.dx, d.dz) });
         }
         return out;
@@ -49,7 +50,7 @@ const Garage = {
         let name, x, z, cap;
         if (id === 'safehouse') { const d = SafeHouse.doorWorld(); name = 'Safe house da favela'; x = d.x; z = d.z - 1.2; cap = 2; }
         else { const p = RealEstate.byId[id]; if (!p) return null; name = `${p.type} (${p.region})`; x = p.x; z = p.z; cap = this.CAP[p.type] || 1; }
-        const slots = this.curbSlots(x, z, cap);
+        const slots = (id === 'safehouse' && FavelaPlan.built && FavelaPlan.yardSlots()) || this.curbSlots(x, z, cap);      // safe house: no quintal
         return (this._g[id] = { id, name, x, z, cap: slots.length, slots });
     },
     usable(G) { return !!G && G.cap > 0 && (G.id === 'safehouse' || RealEstate.owned[G.id]); },

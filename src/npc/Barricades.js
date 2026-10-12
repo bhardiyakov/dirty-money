@@ -1,9 +1,10 @@
 // ============================================================================
-// Barricades — as BARRICADAS DINÂMICAS da favela. Quando a polícia invade (PoliceOperation), os traficantes fecham as vielas
-// com sofás, paletes, trilhos e pneus em chamas, uma a uma, à frente da incursão. Cada barricada:
-//   • fecha a perna da rua para os CARROS (RoadNet.closed + corpo físico estático): nem trânsito, nem viatura, nem o seu carro passa;
+// Barricades — as BARRICADAS DINÂMICAS da favela. Quando a polícia invade (PoliceOperation), os traficantes fecham as RUAS do
+// morro (as 3 por onde carro passa) com sofás, paletes, trilhos e pneus em chamas, uma a uma, à frente da incursão. Cada barricada:
+//   • fecha o trecho para os CARROS (RoadNet.closed nas duas pontas + corpo físico estático): nem trânsito, nem viatura, nem o seu
+//     carro passa;
 //   • é um sólido baixo PULÁVEL a pé (CityGrid.vaultables: tecla V / a polícia também pula) e fecha o raster da navegação só na
-//     pista (as calçadas ficam livres): quem está a pé dá a volta pela calçada — gargalos táticos (choke points);
+//     pista (as beiradas ficam livres): quem está a pé dá a volta pela beirada ou pelos becos — gargalos táticos (choke points);
 //   • pega fogo: pneus com brilho pulsante e fumaça subindo (vira luz à noite).
 // Montadas na operação (2 logo no início, +1 a cada ~18 s, até 5) e desmontadas ~60 s depois que ela termina.
 // ============================================================================
@@ -20,6 +21,7 @@ class Barricades {
         for (let i = 0; i < 48; i++) { this._fid.push(this.fire.alloc()); this.fire.off(i); }
         for (let i = 0; i < 120; i++) { this._sid.push(this.smoke.alloc()); this.smoke.off(i); }
         this._fused = 0; this._sused = 0;
+        this._shut = new Map();                                  // perna fechada → quantas barricadas a fecham
     }
 
     get count() { return this.list.length; }
@@ -34,37 +36,53 @@ class Barricades {
         return m;
     }
 
-    // Pernas de rua da favela onde dá para barrar: perto de `ref`, no meio do caminho (profundidade 0,12–0,6).
+    // Pontos das ruas da favela onde dá para barrar (a cada ~25 u dos trechos 'fav'): perto de `ref`, no meio do caminho
+    // (profundidade 0,12–0,6), longe da safe house e das outras barricadas.
     _pick(ref, n) {
-        const home = SafeHouse.spawnWorld(), out = [];
-        for (const inter of CityGrid.intersections) {
-            for (let di = 0; di < 4; di++) {
-                const d = RoadNet.DIRS[di], nb = inter.nbr[di], ed = inter.edge && inter.edge[di];
-                if (!nb || !ed || ed.cls !== 'fav' || ed.len < 30 || RoadNet.isClosed(inter, d)) continue;
-                const s = { x: inter.x + d.dx * 15, z: inter.z + d.dz * 15 };
+        const home = SafeHouse.spawnWorld(), out = [], P = {};
+        for (const e of RoadPlan.edges) {
+            if (e.cls !== 'fav' || e.len < 30) continue;
+            for (let t = 15; t <= e.len - 15; t += 25) {
+                RoadPlan.at(e, t, P);
+                const s = { x: P.x, z: P.z, dx: P.tx, dz: P.tz };
                 if (!Standing.inFavela(s.x, s.z)) continue;
                 const dp = Standing.depth(s.x, s.z);
                 if (dp < 0.12 || dp > 0.6) continue;
                 if (home && hypot(s.x - home.x, s.z - home.z) < 45) continue;
                 if (this.list.some((b) => hypot(b.x - s.x, b.z - s.z) < 32)) continue;
                 const dist = hypot(s.x - ref.x, s.z - ref.z);
-                out.push({ inter, di, d, s, score: Math.abs(dist - 90) + Math.random() * 25 });
+                out.push({ e, s, score: Math.abs(dist - 90) + Math.random() * 25 });
             }
         }
         out.sort((a, b) => a.score - b.score);
-        return out.slice(0, n);
+        const res = [];
+        for (const c of out) { if (res.length >= n) break; if (!res.some((o) => hypot(o.s.x - c.s.x, o.s.z - c.s.z) < 32)) res.push(c); }
+        return res;
+    }
+
+    // Fecha/reabre o trecho nas duas pontas (contagem: duas barricadas no mesmo trecho).
+    _close(e, on) {
+        for (const n of [e.a, e.b]) {
+            const a = n.arms.find((k) => k.e === e); if (!a) continue;
+            const key = RoadNet.legKey(n, a), c = (this._shut.get(key) || 0) + (on ? 1 : -1);
+            if (c > 0) this._shut.set(key, c); else this._shut.delete(key);
+            RoadNet.setClosed(n, a, c > 0);
+        }
     }
 
     _build(c) {
-        const g = this.g, { inter, d, s } = c, sc = g.scene;
-        const ax = { x: d.dx, z: d.dz }, lat = { x: d.dz, z: -d.dx };
-        const along = Math.abs(d.dx) === 1;                      // viela horizontal (leste-oeste)? então a barricada ocupa z (a pista) e é fina em x
+        const g = this.g, { e, s } = c, sc = g.scene;
+        const ax = { x: s.dx, z: s.dz }, lat = { x: s.dz, z: -s.dx };
         const hw = 3.0, th = 1.1;
-        const rect = along ? { x0: s.x - th, z0: s.z - hw, x1: s.x + th, z1: s.z + hw } : { x0: s.x - hw, z0: s.z - th, x1: s.x + hw, z1: s.z + th };
-        const ob = Object.assign({ h: 1.3, vault: true, kind: 'barricade' }, rect);
-        CityGrid.addObstacles([ob]); CityGrid.vaultables.push(ob);
-        g.nav._fill(rect.x0, rect.z0, rect.x1, rect.z1, 0);       // só a pista: calçadas livres
-        RoadNet.setClosed(inter, d, true);
+        // sólido: quadradinhos ao longo da largura (a rua pode estar torta: um retângulo só cobriria as beiradas também)
+        const obs = [];
+        for (let l = -hw + 0.55; l <= hw - 0.55 + 1e-6; l += 0.98) {
+            const cx = s.x + lat.x * l, cz = s.z + lat.z * l;
+            obs.push({ x0: cx - 0.55, z0: cz - 0.55, x1: cx + 0.55, z1: cz + 0.55, h: 1.3, vault: true, kind: 'barricade' });
+        }
+        CityGrid.addObstacles(obs); for (const o of obs) CityGrid.vaultables.push(o);
+        for (const o of obs) g.nav._fill(o.x0, o.z0, o.x1, o.z1, 0);              // só a pista: as beiradas ficam livres
+        this._close(e, true);
 
         // visual (peças de caixas emissivas) sob um nó que "sobe" na montagem
         const root = new BABYLON.TransformNode('barricade', sc); root.position.set(s.x, 0, s.z); root.scaling.y = 0.05;
@@ -88,14 +106,14 @@ class Barricades {
             tires.push({ x: s.x + lat.x * lx + ax.x * 0.5, z: s.z + lat.z * lx + ax.z * 0.5 });
         }
 
-        // física (carros e o resto): caixa estática
+        // física (carros e o resto): caixa estática atravessada na rua
         let agg = null, node = null;
         if (g.physics && g.physics.ready) {
             node = new BABYLON.TransformNode('barCollider', sc);
-            node.position.set(s.x, 0.7, s.z);
-            agg = g.physics.addStaticBox(node, new BABYLON.Vector3(along ? th * 2 : hw * 2, 1.4, along ? hw * 2 : th * 2));
+            node.position.set(s.x, 0.7, s.z); node.rotation.y = th0;
+            agg = g.physics.addStaticBox(node, new BABYLON.Vector3(hw * 2, 1.4, th * 2));
         }
-        const b = { inter, d, x: s.x, z: s.z, ob, rect, root, tires, agg, node, t: 0, built: 0, fid: [], sid: [], puffT: 0 };
+        const b = { e, x: s.x, z: s.z, obs, root, tires, agg, node, t: 0, built: 0, fid: [], sid: [], puffT: 0 };
         for (let i = 0; i < 3 && this._fused < this._fid.length; i++) b.fid.push(this._fid[this._fused++]);
         for (let i = 0; i < 5 && this._sused < this._sid.length; i++) b.sid.push(this._sid[this._sused++]);
         b.puffs = b.sid.map((id, i) => ({ id, age: i / b.sid.length * 2.4, tire: tires[i % 3] }));
@@ -108,15 +126,17 @@ class Barricades {
     _dismantle(b) {
         const g = this.g, i = this.list.indexOf(b);
         if (i >= 0) this.list.splice(i, 1);
-        RoadNet.setClosed(b.inter, b.d, false);
-        const k = CityGrid.obstacles.indexOf(b.ob); if (k >= 0) CityGrid.obstacles.splice(k, 1);
-        const v = CityGrid.vaultables.indexOf(b.ob); if (v >= 0) CityGrid.vaultables.splice(v, 1);
+        this._close(b.e, false);
         const S = CityGrid.CELL;
-        for (let ci = Math.floor(b.rect.x0 / S); ci <= Math.floor(b.rect.x1 / S); ci++) for (let cj = Math.floor(b.rect.z0 / S); cj <= Math.floor(b.rect.z1 / S); cj++) {
-            const cell = CityGrid._grid.get(CityGrid._gridKey(ci, cj)); if (!cell) continue;
-            const q = cell.indexOf(b.ob); if (q >= 0) cell.splice(q, 1);
+        for (const ob of b.obs) {
+            const k = CityGrid.obstacles.indexOf(ob); if (k >= 0) CityGrid.obstacles.splice(k, 1);
+            const v = CityGrid.vaultables.indexOf(ob); if (v >= 0) CityGrid.vaultables.splice(v, 1);
+            for (let ci = Math.floor(ob.x0 / S); ci <= Math.floor(ob.x1 / S); ci++) for (let cj = Math.floor(ob.z0 / S); cj <= Math.floor(ob.z1 / S); cj++) {
+                const cell = CityGrid._grid.get(CityGrid._gridKey(ci, cj)); if (!cell) continue;
+                const q = cell.indexOf(ob); if (q >= 0) cell.splice(q, 1);
+            }
+            g.nav._fill(ob.x0, ob.z0, ob.x1, ob.z1, 1);
         }
-        g.nav._fill(b.rect.x0, b.rect.z0, b.rect.x1, b.rect.z1, 1);
         if (b.agg) { b.agg.dispose(); const j = g.physics.staticBodies.indexOf(b.agg); if (j >= 0) g.physics.staticBodies.splice(j, 1); }
         if (b.node) b.node.dispose();
         b.root.getChildMeshes().forEach((m) => m.dispose()); b.root.dispose();

@@ -270,7 +270,7 @@ class Navigation {
         }
         // 3) sólidos (com a folga de um agente, pela regra "centro da célula dentro").
         const m = 0.35;
-        for (const o of CityGrid.obstacles) if (!o.cliff) this._fill(o.x0 - m, o.z0 - m, o.x1 + m, o.z1 + m, 0);      // (paredão: a pé sobe — mais devagar)
+        for (const o of CityGrid.obstacles) if (!o.cliff && !o.thin) this._fill(o.x0 - m, o.z0 - m, o.x1 + m, o.z1 + m, 0);      // (paredão: a pé sobe — mais devagar; frade: passa entre eles)
         for (const o of CityGrid.navBlocks) this._fill(o.x0, o.z0, o.x1, o.z1, 0);          // interior da safe house
         // 4) borda: andável encostado em parede (2) custa mais e mantém distância.
         const e = new Uint8Array(g);
@@ -278,6 +278,7 @@ class Navigation {
             const k = z * w + x;
             if (g[k] && (!g[k - 1] || !g[k + 1] || !g[k - w] || !g[k + w])) e[k] = 2;
         }
+        if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built) FavelaPlan.navCost(e, this);      // favela: a pé, pelos becos (a rua custa mais)
         this.grid = e;
         this.ready = true;
         let n = 0; for (let k = 0; k < e.length; k++) if (e[k]) n++;

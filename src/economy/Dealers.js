@@ -54,7 +54,7 @@ const Dealers = {
         const rng = Pixel.rng(71717), home = SafeHouse.spawnWorld();
         const buckets = this.TIERS.map(() => []);
         for (const b of CityGrid.blocks) {
-            if (b.open || b.virtual || b.poly) continue;
+            if (b.open || b.virtual || b.poly || b.organic) continue;      // (favela: carro não chega na porta dos barracos)
             const f = b.foot, s = b.slab;
             for (const l of b.lots) {
                 if (l.landmark || l.safehouse || (l.x1 - l.x0) * (l.z1 - l.z0) < 60) continue;

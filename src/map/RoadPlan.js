@@ -21,7 +21,7 @@ const RoadPlan = {
         city:   { w: 10, kind: 'urban',  surface: 'asphalt', label: 'Rua' },
         isl:    { w: 10, kind: 'urban',  surface: 'asphalt', label: 'Rua' },
         ave:    { w: 16, kind: 'urban',  surface: 'asphalt', label: 'Avenida', median: 3 },
-        fav:    { w: 6,  kind: 'favela', surface: 'earth',   label: 'Viela' },
+        fav:    { w: 7,  kind: 'favela', surface: 'asphalt', label: 'Rua' },
         hwy:    { w: 12, kind: 'rural',  surface: 'asphalt', label: 'Rodovia' },
         dirt:   { w: 8,  kind: 'rural',  surface: 'dirt',    label: 'Estrada de terra' },
         bridge: { w: 12, kind: 'bridge', surface: 'asphalt', label: 'Ponte' },
@@ -121,7 +121,15 @@ const RoadPlan = {
         }
 
         const unlink = (n, d) => { const m = n.nbr[d], opp = d ^ 1; if (m) { m.nbr[opp] = null; m.edge[opp] = null; } n.nbr[d] = null; n.edge[d] = null; };
-        const deg = (n) => (n.nbr[0] ? 1 : 0) + (n.nbr[1] ? 1 : 0) + (n.nbr[2] ? 1 : 0) + (n.nbr[3] ? 1 : 0);
+        // Ponta de grade onde chega uma via livre "âncora" (as ruas da favela: a estrada de terra termina nelas) não é beco: fica.
+        const anchored = new Set();
+        for (const path of this.paths) {
+            if (!path.anchor) continue;
+            const P = path.pts, pl = [0];
+            for (let i = 1; i < P.length; i++) pl.push(pl[i - 1] + hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
+            for (const n of nodes.values()) if (this._projPts(P, pl, n.x, n.z).d <= 2.5) anchored.add(n);
+        }
+        const deg = (n) => (n.nbr[0] ? 1 : 0) + (n.nbr[1] ? 1 : 0) + (n.nbr[2] ? 1 : 0) + (n.nbr[3] ? 1 : 0) + (anchored.has(n) ? 1 : 0);
 
         // Poda pontas-sem-saída (a IA nunca pode parar num beco) e depois funde nós retos de 2 pernas.
         let changed = true;
@@ -214,9 +222,13 @@ const RoadPlan = {
             for (const [k, n] of nodes) {
                 const d = deg(n);
                 if (d === 0) { nodes.delete(k); continue; }
-                if (d === 1 && n.free && n.free.length === 1) {
+                if (d !== 1) continue;
+                if (n.free && n.free.length === 1) {
                     const e = n.free[0], o = e.a === n ? e.b : e.a;
                     o.free.splice(o.free.indexOf(e), 1); edges.splice(edges.indexOf(e), 1); nodes.delete(k); ch = true;
+                } else {                                                       // ponta de grade (âncora que a via livre não pegou)
+                    for (let q = 0; q < 4; q++) if (n.nbr[q]) { const m = n.nbr[q]; m.nbr[q ^ 1] = null; m.edge[q ^ 1] = null; n.nbr[q] = null; n.edge[q] = null; }      // (o trecho sai no filtro do fim)
+                    nodes.delete(k); ch = true;
                 }
             }
         }

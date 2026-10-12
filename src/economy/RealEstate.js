@@ -12,6 +12,7 @@
 
 const RealEstate = {
     list: [], byId: {}, owned: {}, homeId: 'safehouse', game: null, built: false,
+    T0_DRAWS: 4,                    // sorteios que o padrão 0 consumia do rng principal no mapa de antes
     FAVELA_PPM_NAME: 'Favela do Morro',
 
     // padrão do imóvel pelo índice de localização (max = limite superior do idx)
@@ -56,7 +57,7 @@ const RealEstate = {
     build(game) {
         if (this.built) return;
         this.built = true; this.game = game;
-        const rng = Pixel.rng(60606), home = SafeHouse.spawnWorld();
+        const rng = Pixel.rng(60606), rng0 = Pixel.rng(60607), home = SafeHouse.spawnWorld();
         const buckets = this.TIERS.map(() => []);
         for (const b of CityGrid.blocks) {
             if (b.open || b.virtual || b.poly) continue;                          // (quarteirão em polígono: a porta cairia fora da calçada)
@@ -66,18 +67,27 @@ const RealEstate = {
                 const area = (l.x1 - l.x0) * (l.z1 - l.z0);
                 if (area < 30) continue;
                 const cx = (l.x0 + l.x1) / 2, cz = (l.z0 + l.z1) / 2;
-                const e = [[cx - f[0], 'W'], [f[2] - cx, 'E'], [cz - f[1], 'S'], [f[3] - cz, 'N']].sort((a, c) => a[0] - c[0]);
-                if (l.x1 - l.x0 > 0 && Math.min(l.x0 - f[0], f[2] - l.x1, l.z0 - f[1], f[3] - l.z1) > 2.5) continue;     // só lotes na beira da quadra (porta na calçada)
-                const side = e[0][1];
-                const door = side === 'W' ? { x: (s[0] + f[0]) / 2, z: cz } : side === 'E' ? { x: (s[2] + f[2]) / 2, z: cz } : side === 'S' ? { x: cx, z: (s[1] + f[1]) / 2 } : { x: cx, z: (s[3] + f[3]) / 2 };
+                let door;
+                if (b.organic) {                                                  // favela: a porta do barraco (no beco/rua)
+                    if (!l.door) continue;
+                    door = { x: l.door.x, z: l.door.z };
+                } else {
+                    const e = [[cx - f[0], 'W'], [f[2] - cx, 'E'], [cz - f[1], 'S'], [f[3] - cz, 'N']].sort((a, c) => a[0] - c[0]);
+                    if (l.x1 - l.x0 > 0 && Math.min(l.x0 - f[0], f[2] - l.x1, l.z0 - f[1], f[3] - l.z1) > 2.5) continue;     // só lotes na beira da quadra (porta na calçada)
+                    const side = e[0][1];
+                    door = side === 'W' ? { x: (s[0] + f[0]) / 2, z: cz } : side === 'E' ? { x: (s[2] + f[2]) / 2, z: cz } : side === 'S' ? { x: cx, z: (s[1] + f[1]) / 2 } : { x: cx, z: (s[3] + f[3]) / 2 };
+                }
                 if (home && hypot(door.x - home.x, door.z - home.z) < 20) continue;
                 const loc = this.locate(cx, cz, b), tier = this.tierOf(loc.idx);
                 buckets[this.TIERS.indexOf(tier)].push({ b, l, door, loc, tier, area });
             }
         }
+        // (o padrão 0 — barracos, quase todos na favela — sorteia com o próprio rng e o principal avança os 4 sorteios que ele fazia
+        // antes da favela orgânica: os imóveis da cidade continuam os mesmos, com os mesmos códigos)
         this.TIERS.forEach((t, ti) => {
-            const pool = buckets[ti], chosen = [];
-            while (chosen.length < t.n && pool.length) { const i = Math.floor(rng() * pool.length); const c = pool.splice(i, 1)[0]; if (chosen.every((o) => hypot(o.door.x - c.door.x, o.door.z - c.door.z) > 40)) chosen.push(c); }
+            const pool = buckets[ti], chosen = [], R = ti === 0 ? rng0 : rng;
+            if (ti === 1) for (let k = 0; k < this.T0_DRAWS; k++) rng();
+            while (chosen.length < t.n && pool.length) { const i = Math.floor(R() * pool.length); const c = pool.splice(i, 1)[0]; if (chosen.every((o) => hypot(o.door.x - c.door.x, o.door.z - c.door.z) > 40)) chosen.push(c); }
             for (const c of chosen) {
                 const k = Math.max(0, Math.min(1, (c.area - 30) / 200)), size = Math.round(t.area[0] + (t.area[1] - t.area[0]) * k);
                 const id = 'imv' + this.list.length;

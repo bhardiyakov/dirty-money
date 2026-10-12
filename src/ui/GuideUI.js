@@ -152,7 +152,8 @@ GuideUI.PAGES = {
 
     favela: () => `<h2>Favela, facção e missões do morro</h2>
         <p>A favela é do <b>${Standing.territories[0].name} (${Standing.territories[0].sigla})</b>. Você é morador: os traficantes são neutros enquanto a <b>moral com o tráfico</b> ficar em 30+ e a <b>moral com a comunidade</b> em 20+.</p>
-        <ul><li><b>Boca de fumo</b>: compra de armas da favela (mais baratas, inclusive AK), venda de joias e <b>PEDIR SERVIÇO</b>.</li>
+        <ul><li><b>O morro</b>: só 3 ruas passam carro (Rua do Valão, Estrada do Morro e Rua da Caixa d'Água). O resto é um labirinto de <b>becos</b> estreitos entre os barracos — carro não cabe (e nas bocas mais largas tem frade de concreto): vá <b>a pé</b>, de <b>moto</b> ou de <b>mototáxi</b>.</li>
+        <li><b>Boca de fumo</b>: compra de armas da favela (mais baratas, inclusive AK), venda de joias e <b>PEDIR SERVIÇO</b>.</li>
         <li><b>Missões do morro</b>: entrega (prazo), cobrança (com arma na mão) e defesa do morro (durante operação policial). Patentes: <b>Aviãozinho</b> → <b>Soldado</b> (3 missões, tráfico 50+) → <b>Gerente de Frente</b> (8 missões, tráfico 65+), que paga mais.</li>
         <li><b>Comunidade</b>: ajude moradores (<kbd>E</kbd> desarmado, com comida/água/kit). Assaltar e brigar na favela derruba a moral.</li>
         <li><b>Operação policial</b>: é a única hora em que a polícia entra fundo na favela. <b>Baile funk</b> (21h–5h) abafa tiros. Olheiros e fogueteiros dão o alarme.</li></ul>`,

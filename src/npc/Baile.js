@@ -1,5 +1,5 @@
 // ============================================================================
-// Baile — o BAILE FUNK da favela. Sexta e sábado à noite (21h–5h), numa viela larga no meio do morro, rola um baile: palco com DJ e
+// Baile — o BAILE FUNK da favela. Sexta e sábado à noite (21h–5h), na QUADRA do meio do morro, rola um baile: palco com DJ e
 // caixas de som, luzes coloridas piscando no ritmo, uma multidão dançando e o tamborzão (batida de funk sintetizada) que se ouve de
 // longe. Mecânica: o som alto MASCARA os tiros — um disparo dentro do raio do baile (`covers`) não é ouvido pela polícia nem por
 // quem está longe (só quem está a < 14 u escuta), o que permite assassinatos furtivos. Quem dança entra em pânico se tiver tiro por
@@ -22,6 +22,8 @@ const Baile = {
 
     site() {
         if (this.c) return this.c;
+        const q = FavelaPlan.built && FavelaPlan.squares.find((s) => s.kind === 'quadra');
+        if (q) return (this.c = { x: (q.x0 + q.x1) / 2, z: (q.z0 + q.z1) / 2 - 1 });      // a quadra (o palco fica na metade norte)
         const b = Standing._bounds(), W = b.x1 - b.x0, tx = b.x1 - 0.47 * W, tz = (b.z0 + b.z1) / 2, home = SafeHouse.spawnWorld();
         let best = null, bd = 1e9;
         for (const n of RoadPlan.nodes) {

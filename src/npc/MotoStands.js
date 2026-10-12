@@ -3,7 +3,8 @@
 // No ponto (E): escolhe o destino — outros pontos, safe house/casa, baile (se rolando), entrada da favela, imóveis seus ou o destino
 // marcado no mapa — SÓ dentro da favela e redondezas (`inZone`: favela + 110 u); a cidade não é atendida. Preço bem abaixo de Uber
 // e táxi (R$ 3 + R$ 0,012/m; Uber R$ 7 + 0,045/m; táxi R$ 8 + 0,06/m — a tela mostra a comparação). Paga em dinheiro (sujo).
-// A corrida é de verdade: o mototaxista leva você pelas ruas (Gps.route) a ~14 u/s, fora do trânsito, pedestres saem da frente;
+// A corrida é de verdade: o mototaxista leva você pelos becos e ruas do morro (FavelaPlan.route; fora dele, Gps.route) a ~14 u/s,
+// fora do trânsito, pedestres saem da frente;
 // você vai invisível/invulnerável e a câmera acompanha a moto. Não pega quem está com a polícia no rastro.
 // ============================================================================
 
@@ -13,23 +14,41 @@ const MotoStands = {
 
     inZone(x, z) { return Standing.nearFavela(x, z, this.near); },
     fare(len, k = this.FARE) { return Math.max(1, Math.round(k.base + k.perM * len)); },
+    // Caminho da corrida: { pts: [{ x, z }], len }. Dentro do morro, pelos becos (e ruas); para fora, pelas ruas.
+    path(from, to) {
+        if (FavelaPlan.built && Standing.inFavela(from.x, from.z) && Standing.inFavela(to.x, to.z)) {
+            const r = FavelaPlan.route(from.x, from.z, to.x, to.z);
+            if (r && r.length) {
+                const pts = [{ x: from.x, z: from.z }].concat(r.map((p) => ({ x: p[0], z: p[1] })), [{ x: to.x, z: to.z }]);
+                let len = 0; for (let i = 1; i < pts.length; i++) len += hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
+                return { pts, len };
+            }
+        }
+        return Gps.route({ x: from.x, z: from.z }, { x: to.x, z: to.z });
+    },
 
     _build(g) {
         this.built = true;
         const b = Standing._bounds(), W = b.x1 - b.x0, home = SafeHouse.spawnWorld();
         const want = [{ name: 'Ponto da Entrada', fx: 0.05, z: (b.z0 + b.z1) / 2 + 40 }, { name: 'Ponto do Meio do Morro', fx: 0.5, z: b.z0 + (b.z1 - b.z0) * 0.3 }, { name: 'Ponto do Alto do Morro', fx: 0.82, z: b.z0 + (b.z1 - b.z0) * 0.62 }];
         this.stands = [];
+        const roadNodes = FavelaPlan.built ? FavelaPlan.graph.nodes.filter((n) => n.road && FavelaPlan.inside(n.x, n.z)) : [];
         for (const w of want) {
             const tx = b.x1 - w.fx * W; let best = null, bd = 1e9;
-            for (const n of RoadPlan.nodes) {
-                if (!Standing.inFavela(n.x, n.z)) continue;
+            for (const n of roadNodes) {                                         // na beira de uma das ruas do morro
                 if (home && hypot(n.x - home.x, n.z - home.z) < 30) continue;
                 const d = hypot(n.x - tx, n.z - w.z);
                 if (d < bd) { bd = d; best = n; }
             }
             if (!best) continue;
-            const s = { name: w.name, x: best.x + 2.2, z: best.z + 2.2, actors: [], sign: null };
-            const p = g.nav.closestPoint(new BABYLON.Vector3(s.x, 0, s.z), 8); s.x = p.x; s.z = p.z;
+            let sx = best.x, sz = best.z;
+            const r = RoadPlan.nearestRoadPoint(best.x, best.z, 12);
+            const F = FavelaPlan, ground = (x, z) => [F.GAP, F.OUT, F.OPEN, F.ALLEY].includes(F.cellAt(x, z));
+            search: for (const o of r ? [2.2, 3, 4] : []) for (const sd of [1, -1]) {      // na beirada, fora da pista, do lado que tem chão (não barraco)
+                const oo = r.edge.w / 2 + o, x = r.x - r.tz * oo * sd, z = r.z + r.tx * oo * sd;
+                if (ground(x, z) && ground(x + 1.2, z) && ground(x - 1.2, z) && ground(x, z + 1.2) && ground(x, z - 1.2)) { sx = x; sz = z; break search; }
+            }
+            const s = { name: w.name, x: sx, z: sz, actors: [], sign: null };
             this.stands.push(s);
             CityGrid.addPoi({ type: 'mototaxi', name: w.name, x: s.x, z: s.z });
         }
@@ -98,7 +117,7 @@ const MotoStands = {
     destinations(g, from) {
         const out = [];
         const add = (label, x, z, note = '') => {
-            const len = Gps.route({ x: from.x, z: from.z }, { x, z }).len;
+            const len = this.path(from, { x, z }).len;
             out.push({ label, note, x, z, len, fare: this.fare(len), uber: this.fare(len, this.UBER), taxi: this.fare(len, this.TAXI), ok: this.inZone(x, z) });
         };
         for (const s of this.stands) if (s !== from) add(s.name, s.x, s.z);
@@ -116,7 +135,7 @@ const MotoStands = {
 class MotoRide {
     constructor(game, dest, from) {
         this.g = game;
-        const r = Gps.route({ x: from.x, z: from.z }, { x: dest.x, z: dest.z });
+        const r = MotoStands.path(from, dest);
         this.pts = r.pts.filter((p, i, a) => i === 0 || hypot(p.x - a[i - 1].x, p.z - a[i - 1].z) > 0.5);
         this.dest = dest; this.i = 1; this.t = 0;
         const [va, vb] = CharacterRig.VARIANT_GROUPS.poor;

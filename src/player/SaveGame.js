@@ -47,6 +47,7 @@ const SaveGame = {
         g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Garage.load(s.garage || null); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
         const pl = s.player || {};
         p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));
+        if (CityGrid.blockedAt(pl.x, pl.z, 0.4)) p.teleport(g.nav.closestPoint(new BABYLON.Vector3(pl.x, 0, pl.z), 30));      // (o mapa mudou: salvou onde agora tem parede)
         p.root.rotation.y = pl.rot || 0;
         p.hp = Math.max(1, pl.hp || p.maxHp); p.armor = pl.armor || 0; p.armorMax = pl.armorMax || 0;
         p.weapon = inv.owned(pl.weapon) ? pl.weapon : 'none';

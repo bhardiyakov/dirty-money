@@ -87,6 +87,21 @@ const MapRenderer = {
         ctx.fillStyle = '#2c5877'; ctx.fillRect(0, 0, W, H);
         ctx.drawImage(WL.canvas, (cx - WD.minX) * wp - W / 2 / k * wp, (WD.maxZ - cz) * wp - H / 2 / k * wp, W / k * wp, H / k * wp, 0, 0, W, H);
 
+        // 1b) Favela (FavelaPlan): chão de terra, becos cimentados, quadra e campinho (as ruas passam por cima).
+        if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built && vis(FavelaPlan.R.x0 - 8, FavelaPlan.R.z0 - 8, FavelaPlan.R.x1 + 8, FavelaPlan.R.z1 + 8)) {
+            const F = FavelaPlan;
+            for (const b of F.groundBoxes) if (vis(b[0], b[1], b[2], b[3])) rect(b[0], b[1], b[2], b[3], C.earth);
+            ctx.strokeStyle = C.sidewalk; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            for (const a of F.alleys) {
+                const p0 = a.pts[0], p1 = a.pts[a.pts.length - 1];
+                if (!vis(Math.min(p0[0], p1[0]) - 4, Math.min(p0[1], p1[1]) - 4, Math.max(p0[0], p1[0]) + 4, Math.max(p0[1], p1[1]) + 4)) continue;
+                ctx.lineWidth = Math.max(1, Math.max(a.w, 1.44) * k); ctx.beginPath();
+                a.pts.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))));
+                ctx.stroke();
+            }
+            for (const q of F.squares) rect(q.x0, q.z0, q.x1, q.z1, q.kind === 'quadra' ? C.sidewalk : C.dirt);
+        }
+
         // 2) Ruas (retângulo de cada trecho, com a largura da via) e cruzamentos.
         const edges = new Set(), P = RoadPlan, S = P.CELL;
         for (let i = Math.floor(vx0 / S); i <= Math.floor(vx1 / S); i++) for (let j = Math.floor(vz0 / S); j <= Math.floor(vz1 / S); j++) {
@@ -161,6 +176,13 @@ const MapRenderer = {
                 continue;
             }
             if (!vis(s[0], s[1], s[2], s[3])) continue;
+            if (b.organic) {                                                // favela: só os barracos (chão e becos já foram)
+                for (const l of b.lots) {
+                    rect(l.x0, l.z0, l.x1, l.z1, this.lotColor(l.facade));
+                    if (k >= 2) { ctx.strokeStyle = C.buildingEdge; ctx.lineWidth = Math.max(1, 0.6 * k); ctx.strokeRect(X(l.x0), Y(l.z1), (l.x1 - l.x0) * k, (l.z1 - l.z0) * k); }
+                }
+                continue;
+            }
             if (b.poly) {                                                   // quarteirão em polígono (cortado por diagonal)
                 if (b.open) poly(b.poly, C[b.ground] || C.grass);
                 else { poly(b.poly, C.sidewalk); if (b.footPoly) poly(b.footPoly, C[b.ground] || C.plaza); }
@@ -194,7 +216,7 @@ const MapRenderer = {
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
             ctx.font = `700 ${Math.min(2.6 * k, 26)}px "Arial Narrow", "Roboto Condensed", Arial, sans-serif`;
             for (const e of edges) {
-                if (e.len < 30 || e.cls === 'fav') continue;
+                if (e.len < 30 || (e.cls === 'fav' && !e.name)) continue;
                 const M = RoadPlan.at(e, e.len / 2), mx = M.x, mz = M.z;
                 if (!vis(mx - 2, mz - 2, mx + 2, mz + 2)) continue;
                 const txt = CityGrid.streetName(e);

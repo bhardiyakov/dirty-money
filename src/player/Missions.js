@@ -36,13 +36,13 @@ class Missions {
         return out;
     }
 
-    // Ponto numa viela da favela, entre `dmin` e `dmax` u do jogador, com profundidade `d0..d1`.
+    // Ponto num beco (ou rua) da favela, entre `dmin` e `dmax` u do jogador, com profundidade `d0..d1`.
     _pickPoint(dmin, dmax, d0, d1) {
         const b = Standing._bounds(), p = this.g.player.position, home = SafeHouse.spawnWorld();
         for (let t = 0; t < 80; t++) {
             const x = b.x0 + Math.random() * (b.x1 - b.x0), z = b.z0 + Math.random() * (b.z1 - b.z0);
-            const r = RoadPlan.nearestRoadPoint(x, z, 30);
-            if (!r || r.edge.cls !== 'fav' || !Standing.inFavela(r.x, r.z)) continue;
+            const r = FavelaPlan.built ? FavelaPlan.nodeNear(x, z) : RoadPlan.nearestRoadPoint(x, z, 30);
+            if (!r || (r.edge && r.edge.cls !== 'fav') || !Standing.inFavela(r.x, r.z)) continue;
             const d = Standing.depth(r.x, r.z), dist = hypot(r.x - p.x, r.z - p.z);
             if (d < d0 || d > d1 || dist < dmin || dist > dmax) continue;
             if (home && hypot(r.x - home.x, r.z - home.z) < 40) continue;
@@ -63,7 +63,7 @@ class Missions {
         if (type === 'delivery') {
             const to = this._pickPoint(90, 280, 0.25, 0.9);
             if (!to) return { ok: false, msg: 'Sem serviço agora' };
-            const route = Gps.route(g.player.position, to), limit = Math.round(route.len / 3.2 + 70);
+            const route = MotoStands.path(g.player.position, to), limit = Math.round(route.len / 3.2 + 70);
             m = { type, title: 'ENTREGA', text: 'Leve o pacote até o ponto marcado', to, limit, t: limit, reward: Math.round((140 + Math.random() * 90) * mult) };
         } else if (type === 'collect') {
             const to = this._pickPoint(80, 260, 0.2, 0.85);
