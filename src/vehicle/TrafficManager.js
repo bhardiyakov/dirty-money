@@ -80,7 +80,7 @@ class TrafficManager {
         if (this.shadow) this.shadow.addShadowCaster(car.body);
         this.vm.vehicles.push(car);
         car.baseMode = mode;
-        if (mode === 'drive') car.startRoute(place.point.x, place.point.z, d);
+        if (mode === 'drive') car.startRoute(place.point.x, place.point.z, d, place);
         else car.park();
         return car;
     }
@@ -106,7 +106,7 @@ class TrafficManager {
         bike.setRider(mode === 'drive' ? 2 + (id * 7) % civ : null);
         if (this.shadow) this.shadow.addShadowCaster(bike.body);
         this.vm.vehicles.push(bike);
-        if (mode === 'drive') bike.startRoute(place.point.x, place.point.z, d); else bike.park();
+        if (mode === 'drive') bike.startRoute(place.point.x, place.point.z, d, place); else bike.park();
         return bike;
     }
 
@@ -168,10 +168,8 @@ class TrafficManager {
             e = c[Math.floor(Math.random() * c.length)];
         } else e = P.randomEdge();
         if (!e || e.len < 36) return null;
-        const side = Math.random() < 0.5 ? 1 : -1, off = e.w / 2 - 0.1, t = 17 + Math.random() * (e.len - 34);
-        let x, z, d;
-        if (e.v) { x = e.a.x + side * off; z = e.a.z + t; d = side > 0 ? { dx: 0, dz: 1 } : { dx: 0, dz: -1 }; }          // lado leste: sentido norte
-        else { z = e.a.z + side * off; x = e.a.x + t; d = side > 0 ? { dx: -1, dz: 0 } : { dx: 1, dz: 0 }; }              // lado norte: sentido oeste
+        const fwd = Math.random() < 0.5, off = e.w / 2 - 0.1, t = 17 + Math.random() * (e.len - 34), p = P.at(e, t);
+        const d = { dx: fwd ? p.tx : -p.tx, dz: fwd ? p.tz : -p.tz }, x = p.x + d.dz * off, z = p.z - d.dx * off;           // no meio-fio à direita de quem anda
         if (near) { const r = hypot(x - near.x, z - near.z); if (r < near.rMin || r > near.rMax) return null; }
         if (CityGrid.intersectionNear(x, z, 17)) return null;
         return { point: { x, z }, d };
@@ -268,7 +266,7 @@ class TrafficManager {
             if (car.clearDeadDriver) car.clearDeadDriver();                     // (outro carro, outro motorista: sem corpo nem buzina presa)
             car.fixGlass();
             if (this.game && this.game.doors) this.game.doors.reset(car);        // (porta aberta/alarme não vão junto)
-            if (mode === 'drive') { car.mode = 'drive'; car.startRoute(cand.point.x, cand.point.z, cand.d); }
+            if (mode === 'drive') { car.mode = 'drive'; car.startRoute(cand.point.x, cand.point.z, cand.d, cand); }
             else car.park();
             return true;
         }

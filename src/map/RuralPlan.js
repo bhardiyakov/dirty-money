@@ -97,7 +97,8 @@ const RuralPlan = {
             if (e.cls !== 'hwy' && e.cls !== 'dirt') continue;
             for (let s = 40 + rng() * 80; s < e.len - 40; s += 90 + rng() * 140) {
                 const side = rng() < 0.5 ? 1 : -1, off = e.w / 2 + 12 + rng() * 10;
-                const cx = e.v ? e.a.x + side * off : e.a.x + s, cz = e.v ? e.a.z + s : e.a.z + side * off;
+                const q = e.free ? RoadPlan.at(e, s) : null;                            // (via livre: ao lado da polilinha)
+                const cx = q ? q.x + q.tz * side * off : (e.v ? e.a.x + side * off : e.a.x + s), cz = q ? q.z - q.tx * side * off : (e.v ? e.a.z + s : e.a.z + side * off);
                 const w = 8 + Math.floor(rng() * 4), d = 6 + Math.floor(rng() * 3), x0 = Math.round(cx - w / 2), z0 = Math.round(cz - d / 2);
                 if (!this.free(x0, z0, x0 + w, z0 + d, [B.GRASS, B.FARM, B.FOREST, B.SCRUB], 7)) continue;
                 this.lot(x0, z0, x0 + w, z0 + d, 1 + Math.floor(rng() * 2), ['house0', 'house1', 'house2', 'house3', 'brick2'][Math.floor(rng() * 5)], ['tile0', 'tile1', 'shingle'][Math.floor(rng() * 3)]);
@@ -216,7 +217,8 @@ const RuralPlan = {
             for (let s = 22; s < e.len - 22; s += step) {
                 for (const side of [-1, 1]) {
                     if (rng() < 0.3) continue;
-                    const x = e.v ? e.a.x + side * off : e.a.x + s, z = e.v ? e.a.z + s : e.a.z + side * off;
+                    const q = e.free ? RoadPlan.at(e, s) : null;
+                    const x = q ? q.x + q.tz * side * off : (e.v ? e.a.x + side * off : e.a.x + s), z = q ? q.z - q.tx * side * off : (e.v ? e.a.z + s : e.a.z + side * off);
                     const b = WorldMap.biomeAt(x, z);
                     if (b === B.SEA || b === B.CITY || b === B.ROCK || b === B.SWAMP || WorldMap.waterDist(x, z) < 4) continue;
                     if (RoadPlan.onBridge(x, z) || CityGrid.blockedAt(x, z, 1.2)) continue;

@@ -95,8 +95,8 @@ class PoliceCar extends TrafficCar {
     }
 
     // Rotas da viatura nascem já orientadas pelo alvo da perseguição (se houver).
-    startRoute(x, z, d) {
-        this.route = new Route(x, z, d);
+    startRoute(x, z, d, lp = null) {
+        this.route = new Route(x, z, d, lp);
         this.route.goal = this._goal;
         this.route.ensure(2);
     }
@@ -200,10 +200,8 @@ class PoliceCar extends TrafficCar {
         // Já está na rua (a < 4 u do eixo)? Anda ao longo dela rumo ao alvo.
         const near = pts.reduce((b, q) => (q.d < b.d ? q : b), pts[0]);
         if (near.d < 4) {
-            const e = near.edge;
-            const target = e.v
-                ? new BABYLON.Vector3(near.x, 0, p.z + 25 * (Math.sign(goal.z - p.z) || 1))
-                : new BABYLON.Vector3(p.x + 25 * (Math.sign(goal.x - p.x) || 1), 0, near.z);
+            const sg = Math.sign((goal.x - p.x) * near.tx + (goal.z - p.z) * near.tz) || 1;                // ao longo da via, rumo ao alvo
+            const target = new BABYLON.Vector3(near.x + near.tx * 25 * sg, 0, near.z + near.tz * 25 * sg);
             this._driveDirect(target, dt);
             return;
         }

@@ -259,6 +259,7 @@ class Navigation {
         // 2) malha urbana: apaga; só vale o que o CityGrid declara andável.
         for (const r of CityGrid.urbanRects) this._fill(r[0], r[1], r[2], r[3], 0);
         for (const r of CityGrid.walkRects) this._fill(r[0], r[1], r[2], r[3], 1);
+        for (const P of CityGrid.walkPolys || []) this._fillPoly(P, 1);
         // 2b) cantos arredondados dos quarteirões: fora do arco volta a ser rua.
         for (const f of CityGrid.cornerCarves || []) {
             const ax = f.kx + f.sx * f.r, az = f.kz + f.sz * f.r;
@@ -287,6 +288,15 @@ class Navigation {
                 .then((r) => { this.remote = r; console.log('[NAV] A* no Rust (fora da thread do jogo)'); })
                 .catch((e) => console.warn('[NAV] A* no Rust indisponível; seguindo em JS:', e));
         }
+    }
+
+    // Preenche o polígono [[x, z], ...] com `val` (células cujo centro está dentro dele). Só na carga (não avisa o A* remoto).
+    _fillPoly(P, val) {
+        let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+        for (const p of P) { x0 = Math.min(x0, p[0]); z0 = Math.min(z0, p[1]); x1 = Math.max(x1, p[0]); z1 = Math.max(z1, p[1]); }
+        const i0 = Math.max(0, Math.ceil(x0 - this.minX - 0.5)), i1 = Math.min(this.w - 1, Math.floor(x1 - this.minX - 0.5));
+        const j0 = Math.max(0, Math.ceil(z0 - this.minZ - 0.5)), j1 = Math.min(this.h - 1, Math.floor(z1 - this.minZ - 0.5));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) if (RoadPlan.inPoly(P, this.minX + i + 0.5, this.minZ + j + 0.5)) this.grid[j * this.w + i] = val;
     }
 
     // Preenche o retângulo (u de mundo) com `val`, nas células cujo CENTRO está dentro dele.

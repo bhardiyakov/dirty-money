@@ -24,7 +24,8 @@ class Roadblocks {
     _dist(b, x, z) { return hypot(b.x - x, b.z - z); }
 
     // Posição do bloqueio de uma perna: 15u do centro do cruzamento, rumo à saída.
-    _spot(inter, d) { const s = inter.round ? inter.round.R + Math.abs(inter.round.ox) + 10 : 15; return { x: inter.x + d.dx * s, z: inter.z + d.dz * s }; }      // (rotatória: fora do disco)
+    // (perna em qualquer ângulo: ao longo do trecho; rotatória: fora do disco)
+    _spot(inter, a) { const s = inter.round ? a.cut + 10 : Math.max(15, a.cut + 9), p = RoadNet.armPoint(inter, a, Math.min(s, a.e.len / 2)); return { x: p.x, z: p.z, dx: p.dx, dz: p.dz }; }
 
     // Pernas candidatas ao anel em volta de `pos`: rua do outro lado existe, ainda não fechada, longe da tela,
     // sem carro em cima, a 70–125u do jogador e a ≥ 40u dos outros bloqueios.
@@ -33,11 +34,10 @@ class Roadblocks {
         const cands = [];
         const speed = hypot(vel.x, vel.z);
         for (const inter of CityGrid.intersections) {
-            for (let di = 0; di < 4; di++) {
-                const d = RoadNet.DIRS[di];
-                const nb = inter.nbr[di];
-                if (!nb || inter.edge[di].len < 30 || RoadNet.isClosed(inter, d)) continue;
-                const s = this._spot(inter, d);
+            for (const a of inter.arms) {
+                if (a.e.len < 30 || RoadNet.isClosed(inter, a)) continue;
+                const d = { dx: a.dx, dz: a.dz }, di = a.idx;
+                const s = this._spot(inter, a);
                 const dist = hypot(s.x - pos.x, s.z - pos.z);
                 if (dist < 70 || dist > 125) continue;
                 if (hypot(s.x - f.x, s.z - f.z) < 60) continue;                // fora da tela
@@ -45,7 +45,7 @@ class Roadblocks {
                 if (!m.traffic._clear(s.x, s.z, 7)) continue;
                 // Prefere o que está à frente da fuga e perto de 100u.
                 const ahead = speed > 1 ? ((s.x - pos.x) * vel.x + (s.z - pos.z) * vel.z) / (dist * speed) : 0;
-                cands.push({ inter, di, d, s, score: Math.abs(dist - 100) - ahead * 25 });
+                cands.push({ inter, di, d, a, s, score: Math.abs(dist - 100) - ahead * 25 });
             }
         }
         cands.sort((a, b) => a.score - b.score);
@@ -59,10 +59,10 @@ class Roadblocks {
     }
 
     _build(c) {
-        const m = this.m, { inter, d, s } = c;
+        const m = this.m, { inter, s } = c, d = { dx: s.dx, dz: s.dz };              // (direção da perna ali, para fora do cruzamento)
         const n = { x: d.dz, z: -d.dx };                                            // lateral à perna
         const heading = Math.atan2(n.x, n.z);                                        // viatura de lado (eixo longo na lateral)
-        const b = { inter, di: c.di, x: s.x, z: s.z, cars: [], guards: [] };
+        const b = { inter, di: c.di, arm: c.a, x: s.x, z: s.z, cars: [], guards: [] };
         for (const side of [-1, 1]) {
             const car = m.makeBlockCar(s.x + n.x * side * 2.4, s.z + n.z * side * 2.4, heading);
             b.cars.push(car);
@@ -72,7 +72,7 @@ class Roadblocks {
             const g = m.makeGuard(gx, gz, kind);
             if (g) b.guards.push(g);
         }
-        RoadNet.setClosed(inter, d, true);
+        RoadNet.setClosed(inter, c.a, true);
         this.list.push(b);
     }
 
@@ -81,7 +81,7 @@ class Roadblocks {
         const m = this.m;
         const i0 = this.list.indexOf(b);
         if (i0 >= 0) this.list.splice(i0, 1);            // (primeiro sai da lista: _removeCar chama forgetCar)
-        RoadNet.setClosed(b.inter, RoadNet.DIRS[b.di], false);
+        RoadNet.setClosed(b.inter, b.arm, false);
         for (const c of b.cars) m._removeCar(c);
         for (const g of b.guards) {
             const i = m.officers.indexOf(g);

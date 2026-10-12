@@ -59,7 +59,7 @@ const RealEstate = {
         const rng = Pixel.rng(60606), home = SafeHouse.spawnWorld();
         const buckets = this.TIERS.map(() => []);
         for (const b of CityGrid.blocks) {
-            if (b.open || b.virtual) continue;
+            if (b.open || b.virtual || b.poly) continue;                          // (quarteirão em polígono: a porta cairia fora da calçada)
             const f = b.foot, s = b.slab;
             for (const l of b.lots) {
                 if (l.landmark || l.safehouse) continue;
@@ -91,7 +91,46 @@ const RealEstate = {
         for (let i = 0; i < this.list.length + 4; i++) this.glow.alloc();
         for (let i = 0; i < this.list.length + 4; i++) this.glow.off(i);
         this._t = 0;
+        if (this._pendingMigrate) { this._pendingMigrate = false; this._migrate(); }
         this.refreshHomePois();
+    },
+
+    // ---------------------------------------------------------------- saves antigos
+    // A lista sai do mapa: quando o mapa muda (vias livres — as diagonais do centro), o mesmo código 'imvN' pode apontar para outro
+    // imóvel. LEGACY = a âncora de cada código na lista de antes (x, z, índice do padrão em TIERS); daqui em diante cada imóvel
+    // comprado guarda a própria âncora (x, z, type). No load, o código que não bate mais com a âncora vai para o imóvel do mesmo
+    // padrão mais perto dela; sem nenhum, o valor pago (e as reformas) volta em dinheiro limpo. `remap` = antigo → novo (a Garagem
+    // usa para levar os carros junto; 'safehouse' = devolvido).
+    LEGACY: [[-268,796,0],[-399,526,0],[-347,346,0],[-501,518,0],[-175,-195,1],[-191,141,1],[-133,380,1],[-191,183,1],[-161,520,1],[-191,-762,1],[-63,-739,2],[-119,-375,2],[-77,649,2],[-111,-599,2],[-191,-871,2],[-105,537,2],[-21,661,3],[-91,995,3],[-13,605,3],[-191,955,3],[63,776,3],[7,345,3],[21,-515,3],[27,835,3],[99,373,4],[49,1049,4],[623,354,4],[146,-389,4],[-105,-965,4],[-191,-996,4],[91,1095,4],[601,-563,4],[574,-517,5],[651,13,5],[601,-725,5],[504,113,5],[574,179,5],[517,179,5],[517,-517,6],[623,-810,6],[715,113,6],[708,917,6],[504,49,6],[510,737,6],[504,-191,6],[510,497,6]],
+    remap: {},
+    _anchor(id, o) {
+        if (o && o.x !== undefined && o.type) return o;
+        const m = /^imv(\d+)$/.exec(id), L = m && this.LEGACY[+m[1]];
+        return L ? { x: L[0], z: L[1], type: this.TIERS[L[2]].type } : null;
+    },
+    _migrate() {
+        const old = this.owned, ids = Object.keys(old), out = {}, done = new Set(), taken = new Set();
+        let refund = 0, moved = 0;
+        this.remap = {};
+        for (const id of ids) {                                                  // o mesmo código, no mesmo lugar e padrão: fica
+            const a = this._anchor(id, old[id]), p = this.byId[id];
+            if (p && (!a || (p.type === a.type && hypot(p.x - a.x, p.z - a.z) < 4))) { out[id] = old[id]; done.add(id); taken.add(id); }
+        }
+        for (const id of ids) {
+            if (done.has(id)) continue;
+            const o = old[id], a = this._anchor(id, o);
+            let best = null, bd = 260;
+            if (a) for (const p of this.list) { if (p.type !== a.type || taken.has(p.id)) continue; const d = hypot(p.x - a.x, p.z - a.z); if (d < bd) { bd = d; best = p; } }
+            if (best) { out[best.id] = o; taken.add(best.id); this.remap[id] = best.id; moved++; }
+            else { refund += Math.round((o.paid || 0) * (1 + this.REFORMS.slice(1, (o.reform || 0) + 1).reduce((s, r) => s + r.cost, 0))); this.remap[id] = 'safehouse'; }
+        }
+        for (const id in out) { const p = this.byId[id]; if (p) Object.assign(out[id], { x: p.x, z: p.z, type: p.type }); }
+        this.owned = out;
+        if (this.remap[this.homeId] !== undefined) this.homeId = this.remap[this.homeId];
+        if (typeof Garage !== 'undefined' && Garage.cars) for (const r of Garage.cars) if (this.remap[r.garage] !== undefined) r.garage = this.remap[r.garage];
+        const g = this.game;
+        if (refund && g) g.inventory.clean += refund;
+        if ((moved || refund) && g && g._flash) g._flash(refund ? `O mapa da cidade mudou: ${brl(refund)} dos imóveis que sumiram voltaram para a sua conta` : 'O mapa da cidade mudou: seus imóveis foram para os endereços equivalentes');
     },
 
     isOwned(p) { return !!this.owned[p.id]; },
@@ -107,7 +146,7 @@ const RealEstate = {
         if (clean && inv.clean < price) return { ok: false, msg: inv.cash >= price ? 'Imóvel fora da favela: só dinheiro LIMPO. Lave o seu nas fachadas' : `Faltam ${brl(price - inv.clean)} de dinheiro limpo` };
         if (!clean && inv.cash < price) return { ok: false, msg: `Faltam ${brl(price - inv.cash)}` };
         if (clean) inv.clean -= price; else inv.cash -= price;
-        this.owned[p.id] = { paid: price, day: Economy.day, reform: 0 };
+        this.owned[p.id] = { paid: price, day: Economy.day, reform: 0, x: p.x, z: p.z, type: p.type };      // (âncora: ver _migrate)
         this._poi(p);
         return { ok: true, msg: `Comprou: ${p.type} em ${p.region} (-${brl(price)})` };
     },
@@ -212,5 +251,9 @@ const RealEstate = {
     },
 
     serialize() { return { owned: this.owned, home: this.homeId }; },
-    load(s) { if (!s) return; this.owned = s.owned || {}; this.homeId = s.home || 'safehouse'; if (this.built) this.refreshHomePois(); },
+    load(s) {
+        if (!s) return;
+        this.owned = s.owned || {}; this.homeId = s.home || 'safehouse';
+        if (this.built) { this._migrate(); this.refreshHomePois(); } else this._pendingMigrate = true;
+    },
 };

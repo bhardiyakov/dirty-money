@@ -28,8 +28,10 @@ class Puddles {
                 let off = gutter ? side * (hw - 1.5 - rng() * 1.7) : side * rng() * (hw - 2.5);
                 if (e.cls === 'ave' && Math.abs(off) < 3.6) off = side * (3.8 + rng());                // fora do canteiro
                 const len = 3.4 + rng() * 3.8, wid = 1.8 + rng() * 1.8;
-                const x = e.v ? e.a.x + off : e.a.x + s, z = e.v ? e.a.z + s : e.a.z + off;
-                const p = { x, z, sx: e.v ? wid : len, sz: e.v ? len : wid, th: rng() * 0.8, seed: rng() };
+                let x, z, sx, sz;
+                if (e.free) { const q = RoadPlan.at(e, s); x = q.x + q.tz * off; z = q.z - q.tx * off; sx = sz = wid; }            // via livre: poça redonda
+                else { x = e.v ? e.a.x + off : e.a.x + s; z = e.v ? e.a.z + s : e.a.z + off; sx = e.v ? wid : len; sz = e.v ? len : wid; }
+                const p = { x, z, sx, sz, th: rng() * 0.8, seed: rng() };
                 sites.push(p);
                 const key = Math.floor(x / CELL) + ',' + Math.floor(z / CELL);
                 let c = grid.get(key); if (!c) grid.set(key, c = []);

@@ -26,6 +26,7 @@ const CityGrid = {
         park:        { open: true,  ground: 'grass',    label: 'Parque' },
         forest:      { open: true,  ground: 'grass',    label: 'Mata' },
         beach:       { open: true,  ground: 'sand',     label: 'Praia' },
+        plaza:       { open: true,  ground: 'plaza',    label: 'Praça' },
         resort:      { open: false, ground: 'plaza',    label: 'Resort' },
         favela:      { open: false, ground: 'earth',    label: 'Favela' },
     },
@@ -127,7 +128,7 @@ const CityGrid = {
 
     _makePlan() {
         const P = RoadPlan, R = this._range;
-        P.segs = []; P.report = []; P.marks = new Map();
+        P.segs = []; P.report = []; P.marks = new Map(); P.paths = [];
         const legacy = !!Config.world.legacyPlan;
         const D = this.districts = {};
 
@@ -154,6 +155,11 @@ const CityGrid = {
             P.lattice(ix, iz, 'isl', (x, z) => WorldMap.buildable(x, z, 30), 'ilha');
             // ---- As 3 PONTES (cidade -> ilha), no eixo das ruas E-O: norte, centro e sul.
             for (const z of [714, 0, -630]) P.addH(z, 168, 480, 'bridge');
+            // ---- DIAGONAIS do centro antigo (grade regular de 42 u: passam pelos cruzamentos, sem cortar trecho no meio) e a PRAÇA
+            // CENTRAL, rotatória de 8 braços na origem onde elas se cruzam com as ruas do centro.
+            P.addPath([[-168, -168], [168, 168]], 'ave', { name: 'Av. Diagonal Norte' });
+            P.addPath([[-168, 168], [168, -168]], 'ave', { name: 'Av. Diagonal Sul' });
+            P.mark(0, 0, { round: { R: 20, r: 9, plaza: true } });
             // ---- AVENIDA BEIRA-MAR: ROTATÓRIAS nas cabeceiras das 3 pontes e RETORNOS no canteiro central, no meio dos quarteirões
             // longos (≥ 60 u, longe das rotatórias).
             const bx = cx[cx.length - 1], bz = [714, 0, -630];
@@ -276,7 +282,9 @@ const CityGrid = {
                 if (d.skip && d.skip(x0, z0, x1, z1)) continue;
                 const p = pick(i, j, x0, z0, x1, z1);
                 const b = this._makeBlock(d, i, j, x0, z0, x1, z1, p.biome, p.si, p.sj);
-                if (b) cells.push(b);
+                if (!b) continue;
+                const pcs = this._cutCell(b);                                        // cortado por diagonal/praça: vira polígono(s)
+                if (pcs) pcs.forEach((poly, k) => cells.push(this._polyBlock(b, poly, k))); else cells.push(b);
             }
         };
         // CIDADE
@@ -306,6 +314,13 @@ const CityGrid = {
         this._pickStations(cells);
         for (const block of cells) {
             const rng = rngFor(block.i, block.j);
+            if (block.poly) {                                                        // quarteirão em polígono: lotes da grade que cabem nele
+                if (!block.open) { this._fillLots(block, rng); this._polyTrim(block); }
+                if (!block.open) this._addShops(block, Pixel.rng(Math.floor(this._rand(block.i + 55, block.j + 77) * 1e9)));
+                this._fillProps(block, rng);
+                this.blocks.push(block);
+                continue;
+            }
             if (block.id === SafeHouse.blockId) {                                  // a safe house do protagonista: uma casa só, com interior (ver SafeHouse.js)
                 SafeHouse.plan(block, this);
                 this._fillProps(block, rng);
@@ -328,7 +343,7 @@ const CityGrid = {
     // (o RuralPlan acrescenta os das rodovias). Quem enche o tanque é o Game (_fuelUpdate).
     _pickStations(cells) {
         this.stations = [];
-        const ok = cells.filter((b) => !b.open && !b.landmark && !this.landmarkCells[b.id] && (b.district === 'city' || b.district === 'island')
+        const ok = cells.filter((b) => !b.open && !b.poly && !b.landmark && !this.landmarkCells[b.id] && (b.district === 'city' || b.district === 'island')
             && ['commercial', 'residential', 'industrial', 'resort'].includes(b.biome) && b.foot[2] - b.foot[0] >= 20 && b.foot[3] - b.foot[1] >= 26);
         ok.sort((a, b) => this._rand(a.i + 21, a.j + 5) - this._rand(b.i + 21, b.j + 5));
         const picked = [];
@@ -418,7 +433,7 @@ const CityGrid = {
     // Hospital (onde você acorda depois de morrer) e delegacia (depois de ser preso): cada um ocupa um quarteirão urbano perto
     // do centro, com a fachada para o SUL e a calçada da frente como ponto de nascimento. (Mesmos quarteirões do jogo original.)
     _pickLandmarks(cells) {
-        const cand = cells.filter((b) => b.district === 'city' && !b.open && b.slab[0] > -170 && b.slab[2] < 170 && b.slab[1] > -212 && b.slab[3] < 212 && b.i < 100);
+        const cand = cells.filter((b) => b.district === 'city' && !b.open && !b.poly && b.slab[0] > -170 && b.slab[2] < 170 && b.slab[1] > -212 && b.slab[3] < 212 && b.i < 100);
         const near = (tx, tz, skip) => cand.filter((k) => k !== skip)
             .sort((a, b) => hypot((a.slab[0] + a.slab[2]) / 2 - tx, (a.slab[1] + a.slab[3]) / 2 - tz) - hypot((b.slab[0] + b.slab[2]) / 2 - tx, (b.slab[1] + b.slab[3]) / 2 - tz))[0];
         const h = near(-21, -21), s = near(21, 21, h);
@@ -454,7 +469,15 @@ const CityGrid = {
         this.intersections = RoadPlan.nodes;
         this.crosswalks = [];
         for (const e of RoadPlan.edges) {
-            const hw = e.w / 2, x0 = Math.min(e.a.x, e.b.x), x1 = Math.max(e.a.x, e.b.x), z0 = Math.min(e.a.z, e.b.z), z1 = Math.max(e.a.z, e.b.z);
+            const hw = e.w / 2;
+            if (e.free) {                                                        // via livre: retângulos curtos ao longo da polilinha
+                for (let s = 0; s < e.len; s += 12) {
+                    const p = RoadPlan.at(e, s), q = RoadPlan.at(e, Math.min(e.len, s + 12));
+                    this.roadRects.push({ x0: Math.min(p.x, q.x) - hw, x1: Math.max(p.x, q.x) + hw, z0: Math.min(p.z, q.z) - hw, z1: Math.max(p.z, q.z) + hw, cls: e.cls, flat: e.cls !== 'fav', edge: e });
+                }
+                continue;
+            }
+            const x0 = Math.min(e.a.x, e.b.x), x1 = Math.max(e.a.x, e.b.x), z0 = Math.min(e.a.z, e.b.z), z1 = Math.max(e.a.z, e.b.z);
             this.roadRects.push({ x0: e.v ? x0 - hw : x0, x1: e.v ? x1 + hw : x1, z0: e.v ? z0 : z0 - hw, z1: e.v ? z1 : z1 + hw, cls: e.cls, flat: e.cls !== 'fav', edge: e });
         }
         for (const inter of this.intersections) {
@@ -465,6 +488,7 @@ const CityGrid = {
             inter.visible = inter.signal && (inter.kinds.has('urban') || inter.kinds.has('bridge'));      // postes/faixas só onde é urbano
             if (inter.round) { this._roundCrossings(inter); continue; }
             if (!inter.visible) continue;
+            if (inter.gen) { this._genCrossings(inter); continue; }
             const arms = [
                 { arm: 'N', leg: 0, rect: [x - hwNS, z + hwEW, x + hwNS, z + hwEW + zl], axis: 'x', crosses: 'ns' },
                 { arm: 'S', leg: 1, rect: [x - hwNS, z - hwEW - zl, x + hwNS, z - hwEW], axis: 'x', crosses: 'ns' },
@@ -490,27 +514,60 @@ const CityGrid = {
     // ROTATÓRIA: o disco achata o relevo; faixas de pedestres (sem semáforo — o carro para para quem está nela) nos braços de rua,
     // um carro antes da linha de "dê a preferência" (as pontes não têm: a faixa ficaria sob o tabuleiro).
     _roundCrossings(inter) {
-        const R = inter.round, a = R.R + 5.6, b = R.R + 8.6;
+        const R = inter.round;
         this.roadRects.push({ x0: R.cx - R.R - 2, z0: R.cz - R.R - 2, x1: R.cx + R.R + 2, z1: R.cz + R.R + 2, cls: 'ave', flat: true, edge: null });
-        for (const [leg, arm] of [[0, 'N'], [1, 'S'], [2, 'E'], [3, 'W']]) {
-            const e = inter.edge[leg];
-            if (!e || e.cls === 'bridge' || e.cls === 'fav' || e.layer || e.len < b + 10) continue;
-            const hw = e.w / 2, s = leg === 0 || leg === 2 ? 1 : -1, v = leg < 2;
-            const c0 = (v ? R.cz : R.cx) + s * a, c1 = (v ? R.cz : R.cx) + s * b, lo = Math.min(c0, c1), hi = Math.max(c0, c1);
-            const rect = v ? [inter.x - hw, lo, inter.x + hw, hi] : [lo, inter.z - hw, hi, inter.z + hw];
-            const cw = { id: this.crosswalks.length, inter, arm, leg, rect, axis: v ? 'x' : 'z', crosses: v ? 'ns' : 'ew', x0: rect[0], z0: rect[1], x1: rect[2], z1: rect[3] };
+        for (const a of inter.arms) {
+            const e = a.e, c0 = a.cut + 5.6;
+            if (e.cls === 'bridge' || e.cls === 'fav' || e.layer || e.len < c0 + 13) continue;
+            const cw = this._armCrosswalk(inter, a, c0, c0 + 3);
             inter.crosswalks.push(cw);
             this.crosswalks.push(cw);
         }
     },
 
+    // Faixa de pedestres atravessando a perna `a` entre c0 e c1 u do nó (perna de grade: retângulo comum; diagonal: girada, axis 'o').
+    _armCrosswalk(inter, a, c0, c1) {
+        let cw;
+        if (a.q >= 0) {
+            const p0 = [inter.x + a.dx * c0, inter.z + a.dz * c0], p1 = [inter.x + a.dx * c1, inter.z + a.dz * c1], v = a.q < 2;
+            const rect = v ? [inter.x - a.hw, Math.min(p0[1], p1[1]), inter.x + a.hw, Math.max(p0[1], p1[1])] : [Math.min(p0[0], p1[0]), inter.z - a.hw, Math.max(p0[0], p1[0]), inter.z + a.hw];
+            cw = { arm: ['N', 'S', 'E', 'W'][a.q], leg: a.q, rect, axis: v ? 'x' : 'z', crosses: v ? 'ns' : 'ew', x0: rect[0], z0: rect[1], x1: rect[2], z1: rect[3] };
+        } else {
+            const lx = -a.dz, lz = a.dx, cx = inter.x + a.dx * (c0 + c1) / 2, cz = inter.z + a.dz * (c0 + c1) / 2, hl = a.hw, hd = (c1 - c0) / 2;
+            const ex = Math.abs(lx) * hl + Math.abs(a.dx) * hd, ez = Math.abs(lz) * hl + Math.abs(a.dz) * hd;
+            cw = { arm: 'D', leg: -1, axis: 'o', cx, cz, ux: lx, uz: lz, dx: a.dx, dz: a.dz, hl, hd, x0: cx - ex, z0: cz - ez, x1: cx + ex, z1: cz + ez };
+        }
+        return Object.assign(cw, { id: this.crosswalks.length, inter, armIdx: a.idx });
+    },
+
+    // Nó com perna livre (diagonal): uma faixa de pedestres logo depois do corte de cada perna (perna de grade: retângulo comum;
+    // diagonal: faixa girada, axis 'o') e um poste de semáforo por perna, no meio-fio à direita de quem chega (lente da fase dela).
+    _genCrossings(inter) {
+        const zl = 3;
+        for (const a of inter.arms) {
+            const e = a.e;
+            if (e.cls === 'fav' || e.layer || e.len < a.cut + zl + 6) continue;
+            const lx = -a.dz, lz = a.dx, cw = Object.assign(this._armCrosswalk(inter, a, a.cut, a.cut + zl), { phase: a.phase });
+            inter.crosswalks.push(cw);
+            this.crosswalks.push(cw);
+            const px = inter.x + a.dx * (a.cut - 0.4) + lx * (a.hw + 0.55), pz = inter.z + a.dz * (a.cut - 0.4) + lz * (a.hw + 0.55);
+            inter.poles.push({ x: px, z: pz, fx: a.dx, fz: a.dz, phase: a.phase, cw, sx: Math.sign(px - inter.x) || 1, sz: Math.sign(pz - inter.z) || 1 });
+            this.obstacles.push({ x0: px - 0.18, z0: pz - 0.18, x1: px + 0.18, z1: pz + 0.18, h: 5.2 });
+        }
+    },
+
+    // (x, z) dentro da faixa `cw` (com folga m)? (faixa girada: no referencial dela)
+    inCw(cw, x, z, m = 0) {
+        if (cw.axis !== 'o') return x > cw.x0 - m && x < cw.x1 + m && z > cw.z0 - m && z < cw.z1 + m;
+        const rx = x - cw.cx, rz = z - cw.cz;
+        return Math.abs(rx * cw.ux + rz * cw.uz) <= cw.hl + m && Math.abs(rx * cw.dx + rz * cw.dz) <= cw.hd + m;
+    },
+
     // (x, z) dentro de alguma faixa de pedestres (com folga `m`)?
     inCrosswalk(x, z, m = 0.4) {
-        const inter = this.intersectionNear(x, z, 24);
+        const inter = this.intersectionNear(x, z, 30);
         if (!inter) return false;
-        for (const cw of inter.crosswalks) {
-            if (x > cw.x0 - m && x < cw.x1 + m && z > cw.z0 - m && z < cw.z1 + m) return true;
-        }
+        for (const cw of inter.crosswalks) if (this.inCw(cw, x, z, m)) return true;
         return false;
     },
 
@@ -546,9 +603,132 @@ const CityGrid = {
     },
 
     _addLot(block, x0, z0, x1, z1, floors, facade, roof) {
-        const h = floors * Config.city.floorH;
-        block.lots.push({ x0, z0, x1, z1, floors, height: h, facade, roof });
-        this.obstacles.push({ x0, z0, x1, z1, h });
+        const h = floors * Config.city.floorH, obs = { x0, z0, x1, z1, h };
+        block.lots.push({ x0, z0, x1, z1, floors, height: h, facade, roof, obs });
+        this.obstacles.push(obs);
+    },
+
+    // ================================================================= quarteirões em polígono
+    // Um quarteirão da grade cortado por uma via livre (diagonal) vira dois polígonos, cada um além do meio-fio dela; perto de uma
+    // rotatória-praça, a esquina do setor vira um chanfro a R+4 do centro (o calçadão do roundApron preenche até o disco). Devolve
+    // os polígonos (anti-horários, convexos) ou null se nada corta o quarteirão. Só corta a via cujo EIXO entra no quarteirão (a
+    // que só passa pela esquina, num cruzamento, já está no polígono do cruzamento).
+    _cutCell(block) {
+        const [x0, z0, x1, z1] = block.slab, P = RoadPlan, S = P.CELL;
+        if (x1 - x0 < 1 || z1 - z0 < 1) return null;
+        let pieces = [[[x0, z0], [x1, z0], [x1, z1], [x0, z1]]], cut = false;
+        const free = new Set();
+        for (let i = Math.floor(x0 / S); i <= Math.floor(x1 / S); i++) for (let j = Math.floor(z0 / S); j <= Math.floor(z1 / S); j++) for (const e of P._eg.get(P._key(i, j)) || []) if (e.free) free.add(e);
+        for (const e of free) for (let k = 0; k + 1 < e.pts.length; k++) {
+            const A = e.pts[k], B = e.pts[k + 1];
+            if (!this._segInRect(A, B, x0, z0, x1, z1)) continue;
+            const L = hypot(B[0] - A[0], B[1] - A[1]), nx = -(B[1] - A[1]) / L, nz = (B[0] - A[0]) / L, c = nx * A[0] + nz * A[1], hw = e.w / 2, out = [];
+            for (const poly of pieces) { const l = this._clipHalf(poly, nx, nz, c + hw), r = this._clipHalf(poly, -nx, -nz, -c + hw); if (l) out.push(l); if (r) out.push(r); }
+            pieces = out; cut = true;
+        }
+        for (const n of this._plazas || (this._plazas = P.nodes.filter((q) => q.round && q.round.plaza))) {
+            const R = n.round, D = R.R + 4;
+            if (x1 < R.cx - D - 2 || x0 > R.cx + D + 2 || z1 < R.cz - D - 2 || z0 > R.cz + D + 2) continue;
+            pieces = pieces.map((poly) => {
+                const c = this._centroid(poly), s = this._roundSector(n, c[0], c[1]);
+                if (!s || poly.every((p) => (p[0] - R.cx) * s.bx + (p[1] - R.cz) * s.bz >= D)) return poly;
+                cut = true;
+                return this._clipHalf(poly, s.bx, s.bz, s.bx * R.cx + s.bz * R.cz + D);
+            }).filter(Boolean);
+        }
+        return cut ? pieces.filter((p) => this._polyArea(p) > 60) : null;
+    },
+
+    // Bloco de um pedaço: polígono da laje (`poly`) e da pegada (`footPoly`, recuada a calçada); slab/foot viram as caixas deles.
+    // Pedaço pequeno (ou sem pegada) vira pracinha (parque).
+    _polyBlock(block, poly, k) {
+        if (this._polyArea(poly) < 0) poly.reverse();
+        const foot = this._inset(poly, block.sw), box = (Q) => [Math.min(...Q.map((p) => p[0])), Math.min(...Q.map((p) => p[1])), Math.max(...Q.map((p) => p[0])), Math.max(...Q.map((p) => p[1]))];
+        const b = Object.assign({}, block, { id: block.id + '/' + k, poly, footPoly: foot, lots: [], props: [], r: 0, slab: box(poly) });
+        b.foot = foot ? box(foot) : b.slab.slice();
+        if (!foot || this._polyArea(foot) < 140) this._greenPiece(b, k);
+        return b;
+    },
+    // Pedaço sem prédio: pracinha (piso, ipês e flores) ou parquinho (grama e árvores), alternando.
+    _greenPiece(b, k) {
+        const kind = this._rand(b.i + k * 7, b.j + 13) < 0.5 ? 'plaza' : 'park', def = this.BIOMES[kind];
+        b.biome = kind; b.open = def.open; b.ground = def.ground;
+    },
+
+    // Deixa só os lotes que cabem inteiros na pegada (os outros saem, com o sólido); nenhum coube: um prédio do mesmo estilo, o maior
+    // retângulo que cabe (ou pracinha, se nem isso).
+    _polyTrim(block) {
+        const F = block.footPoly, keep = [];
+        let style = null;
+        for (const l of block.lots) {
+            if ([[l.x0, l.z0], [l.x1, l.z0], [l.x1, l.z1], [l.x0, l.z1]].every((p) => RoadPlan.inPoly(F, p[0], p[1]))) { keep.push(l); continue; }
+            style = style || l;
+            const i = this.obstacles.indexOf(l.obs); if (i >= 0) this.obstacles.splice(i, 1);
+        }
+        block.lots = keep;
+        if (keep.length || !style) return;
+        const [fx0, fz0, fx1, fz1] = block.foot, inside = (a, b, c, d) => [[a, b], [c, b], [c, d], [a, d]].every((p) => RoadPlan.inPoly(F, p[0], p[1]));
+        let best = null, ba = 0;
+        for (let w = Math.floor((fx1 - fx0) / 3) * 3; w >= 9; w -= 3) for (let d = Math.floor((fz1 - fz0) / 3) * 3; d >= 9; d -= 3) {
+            if (w * d <= ba || w > d * 2.6 || d > w * 2.6) continue;
+            search: for (let x = fx0; x + w <= fx1 + 1e-6; x += 1.5) for (let z = fz0; z + d <= fz1 + 1e-6; z += 1.5) if (inside(x, z, x + w, z + d)) { best = [x, z, x + w, z + d]; ba = w * d; break search; }
+        }
+        if (!best) { this._greenPiece(block, 3); return; }
+        this._addLot(block, best[0], best[1], best[2], best[3], Math.max(2, Math.min(style.floors, Math.round(ba / 40))), style.facade, style.roof);
+    },
+
+    // Setor da rotatória (entre duas pernas vizinhas, ângulo < 180°) onde está (x, z): { a, b, bx, bz (bissetriz) } ou null.
+    _roundSector(n, x, z) {
+        const R = n.round, th = Math.atan2(z - R.cz, x - R.cx), A = n.arms, N = A.length, TAU = Math.PI * 2;
+        for (let i = 0; i < N; i++) {
+            const a = A[i], b = A[(i + 1) % N];
+            let g = b.ang - a.ang; if (g <= 0) g += TAU;
+            let u = th - a.ang; u -= Math.floor(u / TAU) * TAU;
+            if (u > g) continue;
+            if (g >= Math.PI - 0.01) return null;
+            const bx = a.dx + b.dx, bz = a.dz + b.dz, l = hypot(bx, bz);
+            return { a, b, bx: bx / l, bz: bz / l };
+        }
+        return null;
+    },
+
+    // Polígonos: recorte pelo semiplano nx·x + nz·z ≥ c | área (+ = anti-horário) | centróide | recuo de d u (convexo, anti-horário).
+    _clipHalf(P, nx, nz, c) {
+        const out = [];
+        for (let i = 0; i < P.length; i++) {
+            const a = P[i], b = P[(i + 1) % P.length], da = nx * a[0] + nz * a[1] - c, db = nx * b[0] + nz * b[1] - c;
+            if (da >= 0) out.push(a);
+            if ((da >= 0) !== (db >= 0)) { const t = da / (da - db); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); }
+        }
+        return out.length >= 3 ? out : null;
+    },
+    _polyArea(P) { let s = 0; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; s += a[0] * b[1] - b[0] * a[1]; } return s / 2; },
+    _centroid(P) { let x = 0, z = 0; for (const p of P) { x += p[0]; z += p[1]; } return [x / P.length, z / P.length]; },
+    _inset(P, d) {
+        const N = P.length, L = [];
+        for (let i = 0; i < N; i++) {
+            const a = P[i], b = P[(i + 1) % N], l = hypot(b[0] - a[0], b[1] - a[1]) || 1, tx = (b[0] - a[0]) / l, tz = (b[1] - a[1]) / l;
+            L.push({ x: a[0] - tz * d, z: a[1] + tx * d, tx, tz, len: l });
+        }
+        const out = [];
+        for (let i = 0; i < N; i++) {
+            const A = L[(i + N - 1) % N], B = L[i], det = A.tx * B.tz - A.tz * B.tx;
+            if (Math.abs(det) < 1e-6) { out.push([B.x, B.z]); continue; }
+            const t = ((B.x - A.x) * B.tz - (B.z - A.z) * B.tx) / det;
+            out.push([A.x + A.tx * t, A.z + A.tz * t]);
+        }
+        return this._polyArea(out) > 1 && out.every((p) => RoadPlan.inPoly(P, p[0], p[1])) ? out : null;
+    },
+    // O segmento AB passa pelo interior do retângulo? (recorte de Liang-Barsky; precisa de pelo menos 0,5 u dentro)
+    _segInRect(A, B, x0, z0, x1, z1) {
+        let t0 = 0, t1 = 1;
+        const dx = B[0] - A[0], dz = B[1] - A[1];
+        for (const [p, q] of [[-dx, A[0] - x0], [dx, x1 - A[0]], [-dz, A[1] - z0], [dz, z1 - A[1]]]) {
+            if (Math.abs(p) < 1e-9) { if (q < 0) return false; continue; }
+            const r = q / p;
+            if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
+        }
+        return (t1 - t0) * hypot(dx, dz) > 0.5;
     },
 
     _fillLots(block, rng) {
@@ -685,6 +865,7 @@ const CityGrid = {
         const props = block.props;
 
         const free = (x, z, margin) => {
+            if (block.poly && !(RoadPlan.inPoly(block.poly, x, z) && RoadPlan.polyDist(block.poly, x, z) >= Math.max(1.2, margin))) return false;      // quarteirão em polígono: dentro dele
             for (const l of block.lots) {
                 if (x > l.x0 - margin && x < l.x1 + margin && z > l.z0 - margin && z < l.z1 + margin) return false;
             }
@@ -713,6 +894,14 @@ const CityGrid = {
                 scatter('tree', 'bush', 14, inner, 2.2, 0);
                 scatter('tree', 'flowers', 10, inner, 2.4, 0);
                 scatter('tree', 'fern', 6, inner, 2.0, 0);
+                break;
+            }
+            case 'plaza': {                                                          // pracinha (quarteirão cortado por diagonal)
+                const inner = [x0 + 2, z0 + 2, x1 - 2, z1 - 2];
+                scatter('tree', 'ipe', 2, inner, 6.0, 0);
+                scatter('tree', 'cypress', 3, inner, 3.5, 0);
+                scatter('tree', 'palm', 1, inner, 5.0, 0);
+                scatter('tree', 'flowers', 8, inner, 2.2, 0);
                 break;
             }
             case 'forest': {
@@ -965,6 +1154,7 @@ const CityGrid = {
     // Nome de uma via: `edge` do RoadPlan.
     streetName(edge) {
         const cls = edge.cls, at = edge.v ? edge.a.x : edge.a.z;
+        if (edge.free) return edge.name || (cls === 'ave' ? 'Avenida' : 'Rua');
         if (cls === 'hwy') return 'Rodovia ' + (edge.v ? 'BR-' : 'RJ-') + (100 + Math.abs(Math.round(at / 6)) % 90);
         if (cls === 'bridge') return 'Ponte ' + (at === 0 ? 'da Liberdade' : (at > 0 ? 'do Norte' : 'do Sul'));
         if (cls === 'dirt') return 'Estrada da Roça';
@@ -1016,7 +1206,12 @@ const CityGrid = {
             }
         }
         const c = this._bh.get(Math.floor(x / 64) * 4096 + Math.floor(z / 64));
-        if (c) for (const b of c) { const s = b.slab; if (x >= s[0] - 4.5 && x <= s[2] + 4.5 && z >= s[1] - 4.5 && z <= s[3] + 4.5) return b; }
+        if (c) for (const b of c) {
+            const s = b.slab;
+            if (!(x >= s[0] - 4.5 && x <= s[2] + 4.5 && z >= s[1] - 4.5 && z <= s[3] + 4.5)) continue;
+            if (b.poly && !RoadPlan.inPoly(b.poly, x, z) && RoadPlan.polyDist(b.poly, x, z) > 4.5) continue;
+            return b;
+        }
         return null;
     },
 
@@ -1026,7 +1221,7 @@ const CityGrid = {
         this.coastProps = []; this.beachSpots = []; this.shorePoints = []; this.jogPaths = [];
         const rng = Pixel.rng(8080);
         for (const e of RoadPlan.edges) {
-            if (e.cls !== 'city' && e.cls !== 'isl' && e.cls !== 'ave') continue;
+            if ((e.cls !== 'city' && e.cls !== 'isl' && e.cls !== 'ave') || e.free) continue;
             const hw = e.w / 2, x0 = Math.min(e.a.x, e.b.x), x1 = Math.max(e.a.x, e.b.x), z0 = Math.min(e.a.z, e.b.z), z1 = Math.max(e.a.z, e.b.z);
             for (const side of [-1, 1]) {
                 // O lado tem quarteirão? (testa o ponto ao meio, 2u além do meio-fio)
@@ -1065,6 +1260,33 @@ const CityGrid = {
                     return pts;
                 };
                 this.roundAprons.push({ node: n, inner: arc(R0), outer: arc(R1) });
+            }
+        }
+        // Rotatória-PRAÇA (cercada de quarteirões): em cada setor entre duas pernas, calçadão do disco até o chanfro a R+4 do centro
+        // (onde começa o quarteirão, _cutCell), entre os meios-fios das duas pernas.
+        for (const n of RoadPlan.nodes) {
+            const R = n.round;
+            if (!R || !R.plaza) continue;
+            const A = n.arms, N = A.length, D = R.R + 4, TAU = Math.PI * 2;
+            for (let i = 0; i < N; i++) {
+                const a = A[i], b = A[(i + 1) % N];
+                let g = b.ang - a.ang; if (g <= 0) g += TAU;
+                if (g >= Math.PI - 0.01) continue;
+                let bx = a.dx + b.dx, bz = a.dz + b.dz; const bl = hypot(bx, bz); bx /= bl; bz /= bl;
+                if (!this._blockAtPoint(R.cx + bx * (D + 3), R.cz + bz * (D + 3))) continue;
+                const La = { ox: n.x - a.dz * a.hw, oz: n.z + a.dx * a.hw, dx: a.dx, dz: a.dz }, Rb = { ox: n.x + b.dz * b.hw, oz: n.z - b.dx * b.hw, dx: b.dx, dz: b.dz };
+                const onCircle = (L) => { const qx = L.ox - R.cx, qz = L.oz - R.cz, q = qx * L.dx + qz * L.dz, t = -q + Math.sqrt(Math.max(0, q * q - (qx * qx + qz * qz - R.R * R.R))); return [L.ox + L.dx * t, L.oz + L.dz * t]; };
+                const onChamfer = (L) => { const t = (D - ((L.ox - R.cx) * bx + (L.oz - R.cz) * bz)) / (L.dx * bx + L.dz * bz); return [L.ox + L.dx * t, L.oz + L.dz * t]; };
+                const A0 = onCircle(La), B0 = onCircle(Rb), A1 = onChamfer(La), B1 = onChamfer(Rb);
+                const t0 = Math.atan2(A0[1] - R.cz, A0[0] - R.cx);
+                let t1 = Math.atan2(B0[1] - R.cz, B0[0] - R.cx); while (t1 < t0) t1 += TAU;
+                const inner = [], outer = [];
+                for (let k = 0; k <= 10; k++) {
+                    const t = t0 + (t1 - t0) * k / 10, f = k / 10;
+                    inner.push([R.cx + R.R * Math.cos(t), R.cz + R.R * Math.sin(t)]);
+                    outer.push([A1[0] + (B1[0] - A1[0]) * f, A1[1] + (B1[1] - A1[1]) * f]);
+                }
+                this.roundAprons.push({ node: n, inner, outer });
             }
         }
         // Trechos que dão para o mar: guarda-sóis + palmeiras + lugares para deitar + entradas na água + trilha de corrida.
@@ -1163,8 +1385,12 @@ const CityGrid = {
             const x = (ap.inner[k][0] + ap.outer[k][0]) / 2, z = (ap.inner[k][1] + ap.outer[k][1]) / 2;
             W.push([x - 1.3, z - 1.3, x + 1.3, z + 1.3]);
         }
+        const WP = this.walkPolys = [];                                                    // andáveis que não são retângulos (polígonos)
         for (const cw of this.crosswalks) {                                                // faixas: avançam 0,7 u em cada calçada
-            if (cw.axis === 'x') W.push([cw.x0 - 0.7, cw.z0, cw.x1 + 0.7, cw.z1]); else W.push([cw.x0, cw.z0 - 0.7, cw.x1, cw.z1 + 0.7]);
+            if (cw.axis === 'o') {
+                const L = cw.hl + 0.7, D = cw.hd, P = (a, b) => [cw.cx + cw.ux * a + cw.dx * b, cw.cz + cw.uz * a + cw.dz * b];
+                WP.push([P(-L, -D), P(L, -D), P(L, D), P(-L, D)]);
+            } else if (cw.axis === 'x') W.push([cw.x0 - 0.7, cw.z0, cw.x1 + 0.7, cw.z1]); else W.push([cw.x0, cw.z0 - 0.7, cw.x1, cw.z1 + 0.7]);
         }
         // Pontes: calçadas dos dois lados (3 u) — dá para atravessar a pé (a partir da borda da rotatória, se houver).
         for (const e of RoadPlan.edges) {

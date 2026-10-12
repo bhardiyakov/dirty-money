@@ -368,7 +368,7 @@ class NPC {
     // Chamado todo frame no estado WANDER. Retorna true se está retido esperando o sinal.
     signalGate() {
         const p = this.position;
-        const inter = CityGrid.intersectionNear(p.x, p.z, 14);
+        const inter = CityGrid.intersectionNear(p.x, p.z, 22);
         if (!inter) {
             if (this.crossing) { this.crossing = null; this.setSpeed(Config.npc.wanderSpeed); }
             return false;
@@ -413,19 +413,25 @@ class NPC {
 
     // (x, z) dentro da faixa `cw`, com folga `m` em todos os lados.
     static inside(cw, p, m) {
-        return p.x > cw.x0 - m && p.x < cw.x1 + m && p.z > cw.z0 - m && p.z < cw.z1 + m;
+        return CityGrid.inCw(cw, p.x, p.z, m);
     }
 
     // Está na "boca" da faixa (a ~1,8u da ponta) e indo PARA dentro dela? (quem só passa
     // pela calçada ao lado, em direção paralela à rua, não conta.)
     static entering(cw, p, v, sp) {
         if (sp < 0.5) return false;
-        const ax = cw.axis === 'x';
-        const along = ax ? p.x : p.z, lat = ax ? p.z : p.x;
-        const aMin = ax ? cw.x0 : cw.z0, aMax = ax ? cw.x1 : cw.z1;
-        const lMin = ax ? cw.z0 : cw.x0, lMax = ax ? cw.z1 : cw.x1;
+        let along, lat, aMin, aMax, lMin, lMax, vA;
+        if (cw.axis === 'o') {                                                    // faixa girada (perna diagonal): no referencial dela
+            const rx = p.x - cw.cx, rz = p.z - cw.cz;
+            along = rx * cw.ux + rz * cw.uz; lat = rx * cw.dx + rz * cw.dz; aMin = -cw.hl; aMax = cw.hl; lMin = -cw.hd; lMax = cw.hd; vA = v.x * cw.ux + v.z * cw.uz;
+        } else {
+            const ax = cw.axis === 'x';
+            along = ax ? p.x : p.z; lat = ax ? p.z : p.x;
+            aMin = ax ? cw.x0 : cw.z0; aMax = ax ? cw.x1 : cw.z1;
+            lMin = ax ? cw.z0 : cw.x0; lMax = ax ? cw.z1 : cw.x1;
+            vA = ax ? v.x : v.z;
+        }
         if (lat < lMin - 0.9 || lat > lMax + 0.9) return false;
-        const vA = ax ? v.x : v.z;
         if (along > aMin - 1.8 && along < aMin + 0.6 && vA > 0.35 * sp) return true;
         if (along < aMax + 1.8 && along > aMax - 0.6 && vA < -0.35 * sp) return true;
         return false;

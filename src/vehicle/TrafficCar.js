@@ -38,8 +38,8 @@ class TrafficCar extends Vehicle {
     }
 
     // ------------------------------------------------------------------ modos
-    startRoute(x, z, d) {
-        this.route = new Route(x, z, d);
+    startRoute(x, z, d, lp = null) {
+        this.route = new Route(x, z, d, lp);
         this.route.ensure(2);
     }
 
@@ -75,7 +75,7 @@ class TrafficCar extends Vehicle {
         const s = RoadNet.snapToLane(this.position.x, this.position.z, f.x, f.z);
         this.route = null;
         if (!s) return false;
-        this.startRoute(s.point.x, s.point.z, s.d);
+        this.startRoute(s.point.x, s.point.z, s.d, s);
         if (this.route.pts.length < 2) { this.route = null; return false; }     // sem cruzamento à frente
         return true;
     }
@@ -160,7 +160,7 @@ class TrafficCar extends Vehicle {
             }
 
             if (dStop > -0.4 && !this.ignoreSignals && !this.runsReds) {   // ainda não cruzou a linha de retenção (entregador apressado fura o sinal)
-                const sig = env.signals.vehicle(jn.inter, jn.axis);
+                const sig = env.signals.vehicle(jn.inter, jn.phase);
                 const brakeDist = (v * v) / (2 * T.brake * 0.7);
                 let must = false;
                 if (sig.color === 'red') must = true;
@@ -331,6 +331,7 @@ class TrafficCar extends Vehicle {
     // Quem já está no anel tem a preferência.
     _ringBusy(jn, env) {
         const Rd = jn.inter.round, th1 = jn.th1 === undefined ? 0 : jn.th1, TAU = Math.PI * 2;
+        const rr = (Rd.R + Rd.r) / 2, far = Math.min(2.0, 16 / rr), near = Math.min(0.6, 6 / rr);      // janela por distância no anel (praça grande: ~16 u antes)
         for (const o of env.grid.query(Rd.cx, Rd.cz, Rd.R + 3, TrafficCar._q3)) {
             if (o.kind !== 'car' || o.ref === this || (o.layer || 0) !== (this.layer || 0)) continue;
             const rx = o.x - Rd.cx, rz = o.z - Rd.cz, r = hypot(rx, rz);
@@ -338,21 +339,22 @@ class TrafficCar extends Vehicle {
             let up = th1 - Math.atan2(rz, rx);                                         // quanto ele ainda gira até a minha entrada
             up -= Math.floor(up / TAU) * TAU;
             if (up > TAU - 0.4) return true;                                          // passando pela minha entrada agora
-            if (up > 2.0) continue;
+            if (up > far) continue;
             const tang = (-rz * (o.vx || 0) + rx * (o.vz || 0)) / (r || 1);              // velocidade no sentido do anel
-            if (tang > 0.8 || up < 0.6) return true;
+            if (tang > 0.8 || up < near) return true;
         }
         return false;
     }
 
-    // A faixa de saída do cruzamento está ocupada (carro parado nos primeiros 7u)?
+    // A faixa de saída do cruzamento está ocupada (carro parado ou quase, onde o meu ainda não caberia)? Não entra na "caixa" sem
+    // lugar do outro lado: senão fica no meio do cruzamento e trava quem cruza.
     _exitBlocked(jn, env) {
-        const X = this.route.pts[jn.exitIdx], d = jn.dOut;
-        for (const o of env.grid.query(X.x + d.dx * 3, X.z + d.dz * 3, 8, TrafficCar._q3)) {
+        const X = this.route.pts[jn.exitIdx], d = jn.dOut, room = 2 * this.halfLen + 4;
+        for (const o of env.grid.query(X.x + d.dx * room / 2, X.z + d.dz * room / 2, room / 2 + 5, TrafficCar._q3)) {
             if (o.kind !== 'car' || o.ref === this || (o.layer || 0) !== (this.layer || 0)) continue;
             const along = (o.x - X.x) * d.dx + (o.z - X.z) * d.dz;
             const lat = Math.abs((o.x - X.x) * d.dz - (o.z - X.z) * d.dx);
-            if (along > -1 && along < 7.5 && lat < 1.9 && hypot(o.vx, o.vz) < 2.2) return true;
+            if (along > -1 && along < room && lat < 1.9 && hypot(o.vx, o.vz) < 3) return true;
         }
         return false;
     }
