@@ -165,8 +165,9 @@ class WorldBuilder {
     // Peças longas são partidas em ≤ 96 u (cada uma vai para o seu pedaço de 256 u: o frustum descarta o que está longe).
     _roads() {
         const y = 0.02, MAXP = 96;
-        const KEY = { asphalt: 'road', dirt: 'road_dirt', earth: 'road_earth' };
+        const KEY = { asphalt: 'road', dirt: 'road_dirt', earth: 'road_earth', concrete: 'road_concrete' };
         const cs = (x, z) => { const s = WorldMap.shadeAt(x, z); return [s, s, s]; };
+        const SH = { road_earth: 1, road_concrete: 0.86 };                             // chão tingido pelo relevo (terra, cimento do morro — um pouco mais escuro que os becos)
         const piece = (x0, z0, x1, z1, key, uvFn, shade = false) => {
             const alongX = (x1 - x0) >= (z1 - z0), len = alongX ? x1 - x0 : z1 - z0, n = Math.max(1, Math.ceil(len / MAXP));
             for (let k = 0; k < n; k++) {
@@ -179,7 +180,8 @@ class WorldBuilder {
         for (const e of RoadPlan.edges) {
             const S = RoadPlan.CLASS[e.cls].surface, key = KEY[S], hw = e.w / 2;
             if (e.free) {                                                               // via livre: faixa ao longo da polilinha (u ao longo, v na largura)
-                this._ribbon(e, e.cutA, e.len - e.cutB, -hw, hw, y, e.cls === 'fav' ? key + '$' : key, S === 'asphalt' ? (s, l, x, z) => [s / 8, (hw - l) / e.w] : (s, l, x, z) => [x / 4, z / 4]);
+                if (SH[key]) this._shadedRibbon(e, e.cutA, e.len - e.cutB, hw, y, key, SH[key]);
+                else this._ribbon(e, e.cutA, e.len - e.cutB, -hw, hw, y, key, S === 'asphalt' ? (s, l, x, z) => [s / 8, (hw - l) / e.w] : (s, l, x, z) => [x / 4, z / 4]);
                 continue;
             }
             if (e.v) {
@@ -198,16 +200,17 @@ class WorldBuilder {
             let best = null;
             for (const a of n.arms) if (!best || a.e.w > best.w) best = a.e;
             const S = RoadPlan.CLASS[best.cls].surface;
-            const key = S === 'asphalt' ? 'asphalt' : (S === 'dirt' ? 'road_dirt' : 'road_earth');
+            const key = S === 'asphalt' ? 'asphalt' : (KEY[S] || 'road_earth');
             if (n.round) { this._roundabout(n, y); continue; }
             if (n.uturn) continue;                                                     // retorno: o asfalto dos trechos segue direto
             if (n.poly) {                                                              // nó com perna livre: o polígono do cruzamento, em leque
-                const bt = this._batch(key, n.x, n.z), P = n.poly, uv = (p) => [p[0] / 4, -p[1] / 4], C = [n.x, n.z];
-                for (let k = 0; k < P.length; k++) { const a = P[k], b = P[(k + 1) % P.length]; bt.tri([C[0], y, C[1]], [a[0], y, a[1]], [b[0], y, b[1]], [0, 1, 0], [uv(C), uv(a), uv(b)]); }
+                const k2 = SH[key] ? key + '$' : key, bt = this._batch(k2, n.x, n.z), P = n.poly, uv = (p) => [p[0] / 4, -p[1] / 4], C = [n.x, n.z];
+                const col = SH[key] ? cs(n.x, n.z).map((v) => v * SH[key]) : undefined;
+                for (let k = 0; k < P.length; k++) { const a = P[k], b = P[(k + 1) % P.length]; bt.tri([C[0], y, C[1]], [a[0], y, a[1]], [b[0], y, b[1]], [0, 1, 0], [uv(C), uv(a), uv(b)], col); }
                 continue;
             }
             if (n.turnR) { this._turn(n, S === 'asphalt' ? 'asphalt' : key, y); continue; }
-            const shd = key === 'road_earth';                                          // favela: o chão segue o morro (tingido pelo relevo)
+            const shd = !!SH[key];                                                     // favela: o chão segue o morro (tingido pelo relevo)
             this._batch(shd ? key + '$' : key, n.x, n.z).top(n.x - n.hwNS, n.z - n.hwEW, n.x + n.hwNS, n.z + n.hwEW, y, (x, z) => [x / 4, -z / 4], shd ? [cs(n.x - n.hwNS, n.z + n.hwEW), cs(n.x + n.hwNS, n.z + n.hwEW), cs(n.x - n.hwNS, n.z - n.hwEW), cs(n.x + n.hwNS, n.z - n.hwEW)] : undefined);
         }
 
@@ -273,6 +276,25 @@ class WorldBuilder {
 
     // Faixa (ribbon) ao longo do trecho e, de s0 a s1 (u desde o nó a), entre os deslocamentos laterais l0 e l1 (+ = à esquerda de
     // quem anda de a para b), na altura y, no lote `key`. uvFn(s, l, x, z) -> [u, v]. Cada pedaço vai para o lote da sua posição.
+    // Faixa de chão tingida pelo relevo (batch key + '$'): um tom por triângulo, multiplicado por k. UV no mundo (ladrilho de 4 u).
+    _shadedRibbon(e, s0, s1, hw, y, key, k = 1) {
+        if (s1 <= s0 + 0.01) return;
+        const S = [s0];
+        for (let i = 1; i + 1 < e.pts.length; i++) if (e.cum[i] > s0 + 0.01 && e.cum[i] < s1 - 0.01) S.push(e.cum[i]);
+        S.push(s1);
+        const up = [0, 1, 0], uv = (p) => [p[0] / 4, p[2] / 4], P = {}, Q = {};
+        for (let i = 0; i + 1 < S.length; i++) {
+            RoadPlan.at(e, S[i], P); const ax = P.x, az = P.z, atx = P.tx, atz = P.tz;
+            RoadPlan.at(e, S[i + 1], Q);
+            const btx = i + 2 < S.length ? Q.tx : atx, btz = i + 2 < S.length ? Q.tz : atz;
+            const a0 = [ax - atz * hw, y, az + atx * hw], a1 = [ax + atz * hw, y, az - atx * hw], b0 = [Q.x - btz * hw, y, Q.z + btx * hw], b1 = [Q.x + btz * hw, y, Q.z - btx * hw];
+            const c = (p) => { const s = WorldMap.shadeAt(p[0], p[2]) * k; return [s, s, s]; }, bt = this._batch(key + '$', ax, az);
+            const ca0 = c(a0), ca1 = c(a1), cb0 = c(b0), cb1 = c(b1);
+            bt.tri(a0, a1, b1, up, [uv(a0), uv(a1), uv(b1)], [ca0, ca1, cb1]);
+            bt.tri(a0, b1, b0, up, [uv(a0), uv(b1), uv(b0)], [ca0, cb1, cb0]);
+        }
+    }
+
     _ribbon(e, s0, s1, l0, l1, y, key, uvFn) {
         if (s1 <= s0 + 0.01) return;
         const S = [s0];
@@ -374,6 +396,7 @@ class WorldBuilder {
     _tunnels() {
         const rock = [0.42, 0.4, 0.37], rockD = [0.3, 0.28, 0.26], conc = [0.62, 0.61, 0.58], dark = [0.05, 0.05, 0.07], H = 7;
         for (const t of RoadPlan.tunnels || []) {
+            if (t.free) { this._tunnelFree(t, H, rock, rockD, conc, dark); continue; }
             const hw = t.w / 2, m = 6.5, v = t.v, cx = v ? t.x0 : (t.x0 + t.x1) / 2, cz = v ? (t.z0 + t.z1) / 2 : t.z0;      // centro da via
             const bx0 = v ? cx - hw - m : t.x0, bx1 = v ? cx + hw + m : t.x1, bz0 = v ? t.z0 : cz - hw - m, bz1 = v ? t.z1 : cz + hw + m;
             const tr = this._batch('xtrim', bx0, bz0), tp = this._batch('open_xrock', bx0, bz0);
@@ -394,6 +417,53 @@ class WorldBuilder {
             if (v) { this._collider('tun_l', bx0, bz0, cx - hw, bz1, 6); this._collider('tun_r', cx + hw, bz0, bx1, bz1, 6); }
             else { this._collider('tun_l', bx0, bz0, bx1, cz - hw, 6); this._collider('tun_r', bx0, cz + hw, bx1, bz1, 6); }
         }
+    }
+
+    // Túnel numa via livre (curva): o maciço vai em gomos de ~4 u ao longo do eixo — ombros de pedra dos dois lados, laje do teto com
+    // a textura de pedra por cima, portais nas bocas; sólidos a pé (caixas por gomo) e paredes para os carros (colisores girados).
+    _tunnelFree(t, H, rock, rockD, conc, dark) {
+        const hw = t.w / 2, m = 6.5, P = t.pts, n = P.length, x0 = t.x0, z0 = t.z0;
+        const tr = this._batch('xtrim', x0, z0), tp = this._batch('open_xrock', x0, z0), up = [0, 1, 0], uv = (p) => [p[0] / 4, -p[2] / 4];
+        const obs = [], y = H + 0.42, W2 = hw + m;
+        const NRM = P.map((p, i) => { const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], l = hypot(b[0] - a[0], b[1] - a[1]) || 1; return [-(b[1] - a[1]) / l, (b[0] - a[0]) / l]; });      // normal média no vértice (sem fresta nas curvas)
+        for (let i = 0; i + 1 < n; i++) {
+            const p = P[i], q = P[i + 1];
+            this._obox(tr, p, q, hw, hw + m, 0.1, H, rock); this._obox(tr, p, q, -hw - m, -hw, 0.1, H, rock);
+            this._obox(tr, p, q, -hw - m, hw + m, 4.6, H + 0.4, rockD);
+            const dx = q[0] - p[0], dz = q[1] - p[1], L = hypot(dx, dz) || 1, nx = -dz / L, nz = dx / L, [an, az] = NRM[i], [bn, bz] = NRM[i + 1];
+            const A = [p[0] - an * W2, y, p[1] - az * W2], B = [p[0] + an * W2, y, p[1] + az * W2], Cq = [q[0] + bn * W2, y, q[1] + bz * W2], D = [q[0] - bn * W2, y, q[1] - bz * W2];
+            tp.tri(A, B, Cq, up, [uv(A), uv(B), uv(Cq)]); tp.tri(A, Cq, D, up, [uv(A), uv(Cq), uv(D)]);
+            for (const s of [1, -1]) {                                                 // ombros: caixa a pé e parede para os carros
+                const l = s * (hw + m / 2), cx = (p[0] + q[0]) / 2 + nx * l, cz = (p[1] + q[1]) / 2 + nz * l, r = m / 2;
+                obs.push({ x0: Math.min(p[0], q[0]) + nx * l - r, z0: Math.min(p[1], q[1]) + nz * l - r, x1: Math.max(p[0], q[0]) + nx * l + r, z1: Math.max(p[1], q[1]) + nz * l + r, h: H });
+                this._colliderRot('tun_' + (s > 0 ? 'l' : 'r'), cx, cz, m, L + 0.6, 6, Math.atan2(dx / L, dz / L));
+            }
+        }
+        CityGrid.addObstacles(obs);
+        // portais: viga de concreto atravessada e a boca escura, nas duas pontas
+        for (const [i, j] of [[0, 1], [n - 1, n - 2]]) {
+            const p = P[i], q = P[j], dx = q[0] - p[0], dz = q[1] - p[1], L = hypot(dx, dz) || 1, e = [p[0] + dx / L * 1.6, p[1] + dz / L * 1.6];
+            this._obox(tr, p, e, -hw - m, hw + m, 0.1, H + 0.5, conc);
+            this._obox(tr, p, e, -hw, hw, 0.1, 4.6, dark);
+        }
+    }
+
+    // Caixa orientada ao longo de p→q ([x, z]), entre as distâncias laterais l0..l1 (pela normal à esquerda), de y0 a y1, cor sólida.
+    _obox(bt, p, q, l0, l1, y0, y1, col) {
+        const dx = q[0] - p[0], dz = q[1] - p[1], L = hypot(dx, dz) || 1, ux = dx / L, uz = dz / L, nx = -uz, nz = ux, z3 = [[0, 0], [0, 0], [0, 0]];
+        const V = (b, l, y) => [b[0] + nx * l, y, b[1] + nz * l];
+        const A0 = V(p, l0, y1), A1 = V(p, l1, y1), B0 = V(q, l0, y1), B1 = V(q, l1, y1), a0 = V(p, l0, y0), a1 = V(p, l1, y0), b0 = V(q, l0, y0), b1 = V(q, l1, y0);
+        const face = (a, b, c, d, n) => { bt.tri(a, b, c, n, z3, col); bt.tri(a, c, d, n, z3, col); };
+        face(A0, A1, B1, B0, [0, 1, 0]);
+        face(A0, B0, b0, a0, [-nx, 0, -nz]); face(A1, B1, b1, a1, [nx, 0, nz]);
+        face(A0, A1, a1, a0, [-ux, 0, -uz]); face(B0, B1, b1, b0, [ux, 0, uz]);
+    }
+
+    // Colisor estático girado (rotY em torno de y; sx = largura no x local, sz = comprimento no z local).
+    _colliderRot(name, cx, cz, sx, sz, h, rotY, mask = 0) {
+        const node = new BABYLON.TransformNode(name, this.scene);
+        node.position.set(cx, h / 2, cz); node.rotation.y = rotY;
+        this.colliders.push({ node, size: new BABYLON.Vector3(sx, h, sz), mask });
     }
 
     // VIADUTOS: tabuleiro elevado (rampas nas pontas), pista com faixas, guarda-corpos e pilares. O tabuleiro cobre as ruas que
@@ -1225,6 +1295,7 @@ class WorldBuilder {
             if (key === 'shop') return M.shop;
             if (key === 'road_dirt') return M.dirt;
             if (key === 'road_earth') return M.earth;
+            if (key === 'road_concrete') return M.concrete;
             if (key === 'asphalt') return M.asphalt;
             if (key === 'zebra') return M.zebra;
             if (key === 'sidewalk') return M.sidewalk;

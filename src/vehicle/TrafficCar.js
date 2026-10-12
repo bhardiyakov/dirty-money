@@ -369,6 +369,6 @@ class TrafficCar extends Vehicle {
 }
 
 // Multiplicador da velocidade de cruzeiro por classe de via.
-TrafficCar.CLS_SPEED = { hwy: 1.5, ave: 1.15, bridge: 1.2, city: 1.0, isl: 0.9, dirt: 0.62, fav: 0.5 };
+TrafficCar.CLS_SPEED = { hwy: 1.5, ave: 1.15, bridge: 1.2, city: 1.0, isl: 0.9, dirt: 0.62, fav: 0.5, trail: 0.42 };
 // Listas de consulta à grade de obstáculos (reaproveitadas: sem lixo por quadro). Uma por ponto de uso.
 TrafficCar._q1 = []; TrafficCar._q2 = []; TrafficCar._q3 = [];

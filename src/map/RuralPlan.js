@@ -69,7 +69,7 @@ const RuralPlan = {
     _farms() {
         const B = WorldMap.B, rng = this.rng, ok = [B.FARM, B.GRASS];
         let placed = 0;
-        for (const c of this.pickCells([B.FARM, B.GRASS], 40, 110, 6000)) {
+        for (const c of this.pickCells([B.FARM, B.GRASS], 140, 100, 14000)) {          // (muitos candidatos: a malha de estradas é densa)
             if (placed >= 14) break;
             const x0 = Math.round(c.x - 30), z0 = Math.round(c.z - 24), x1 = x0 + 60, z1 = z0 + 48;
             if (!this.free(x0, z0, x1, z1, ok, 8)) continue;

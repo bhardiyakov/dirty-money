@@ -21,9 +21,10 @@ const RoadPlan = {
         city:   { w: 10, kind: 'urban',  surface: 'asphalt', label: 'Rua' },
         isl:    { w: 10, kind: 'urban',  surface: 'asphalt', label: 'Rua' },
         ave:    { w: 16, kind: 'urban',  surface: 'asphalt', label: 'Avenida', median: 3 },
-        fav:    { w: 7,  kind: 'favela', surface: 'asphalt', label: 'Rua' },
+        fav:    { w: 7,  kind: 'favela', surface: 'concrete', label: 'Rua' },      // (cimentada: nada de asfalto no morro)
         hwy:    { w: 12, kind: 'rural',  surface: 'asphalt', label: 'Rodovia' },
         dirt:   { w: 8,  kind: 'rural',  surface: 'dirt',    label: 'Estrada de terra' },
+        trail:  { w: 5,  kind: 'rural',  surface: 'earth',   label: 'Caminho' },
         bridge: { w: 12, kind: 'bridge', surface: 'asphalt', label: 'Ponte' },
         via:    { w: 12, kind: 'urban',  surface: 'asphalt', label: 'Elevado' },
     },
@@ -182,20 +183,39 @@ const RoadPlan = {
             const t = ((a[0] - p[0]) * sz - (a[1] - p[1]) * sx) / den, u = ((a[0] - p[0]) * rz - (a[1] - p[1]) * rx) / den;
             return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [t, u] : null;
         };
+        const bb = (Q, m = 0) => { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; for (const p of Q) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < z0) z0 = p[1]; if (p[1] > z1) z1 = p[1]; } return [x0 - m, z0 - m, x1 + m, z1 + m]; };
+        const over = (a, b) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
         for (const path of this.paths) {
             const P = path.pts, pl = [0];
             for (let i = 1; i < P.length; i++) pl.push(pl[i - 1] + hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
-            const L = pl[pl.length - 1], cuts = [];
-            for (const n of nodes.values()) { const q = this._projPts(P, pl, n.x, n.z); if (q.d <= SNAP) cuts.push({ t: q.s, n, rank: 3 }); }
+            const L = pl[pl.length - 1], cuts = [], PB = bb(P, SNAP + 1), SB = [];
+            for (let i = 0; i + 1 < P.length; i++) SB.push(bb([P[i], P[i + 1]], 0.01));
+            for (const n of nodes.values()) { if (n.x < PB[0] || n.x > PB[2] || n.z < PB[1] || n.z > PB[3]) continue; const q = this._projPts(P, pl, n.x, n.z); if (q.d <= SNAP) cuts.push({ t: q.s, n, rank: 3 }); }
+            const near = [];                                                   // trechos na caixa da via (o resto nem é olhado)
             for (const e of edges) {
                 if (e.layer) continue;                                         // viaduto: a via passa por baixo, sem cruzamento
                 const E = e.pts || [[e.a.x, e.a.z], [e.b.x, e.b.z]];
-                for (let i = 0; i + 1 < P.length; i++) for (let j = 0; j + 1 < E.length; j++) {
+                if (!over(bb(E, 1.5), PB)) continue;
+                near.push(e);
+                for (let j = 0; j + 1 < E.length; j++) {
+                    const EB = bb([E[j], E[j + 1]], 0.01);
+                    if (!over(EB, PB)) continue;
+                    for (let i = 0; i + 1 < P.length; i++) {
+                    if (!over(SB[i], EB)) continue;
                     const h = segX(P[i], P[i + 1], E[j], E[j + 1]);
                     if (!h) continue;
                     const x = P[i][0] + (P[i + 1][0] - P[i][0]) * h[0], z = P[i][1] + (P[i + 1][1] - P[i][1]) * h[0];
                     if (hypot(x - e.a.x, z - e.a.z) <= SNAP || hypot(x - e.b.x, z - e.b.z) <= SNAP) continue;      // (é um nó: já entrou)
                     cuts.push({ t: pl[i] + h[0] * (pl[i + 1] - pl[i]), x, z, rank: 2 });
+                    }
+                }
+            }
+            // Ponta em cima de um trecho já existente (entroncamento em T): corta o trecho ali.
+            for (const [t, p] of [[0, P[0]], [L, P[P.length - 1]]]) {
+                if (cuts.some((c) => Math.abs(c.t - t) < 1.5)) continue;
+                for (const e of near) {
+                    const E = e.pts || [[e.a.x, e.a.z], [e.b.x, e.b.z]], q = this._projPts(E, e.cum || [0, e.len], p[0], p[1]);
+                    if (q.d < 1.2 && hypot(q.x - e.a.x, q.z - e.a.z) > SNAP && hypot(q.x - e.b.x, q.z - e.b.z) > SNAP) { cuts.push({ t, x: q.x, z: q.z, rank: 2 }); break; }
                 }
             }
             cuts.push({ t: 0, x: P[0][0], z: P[0][1], rank: 1 }, { t: L, x: P[P.length - 1][0], z: P[P.length - 1][1], rank: 1 });
@@ -293,6 +313,8 @@ const RoadPlan = {
         return out;
     },
     project(e, x, z) { return this._projPts(e.pts, e.cum, x, z); },
+    // O ponto s do trecho e está dentro de um túnel (com folga nas bocas)?
+    inTunnel(e, s, m = 14) { for (const t of this.tunnels || []) if (t.edge === e && s > t.a - m && s < t.b + m) return true; return false; },
 
     // Pernas do nó (grade e livres), em ordem anti-horária, e as fases do semáforo: pares de pernas opostas andam juntas (grade:
     // N-S = fase 0, L-O = 1; com diagonais, 3 fases).

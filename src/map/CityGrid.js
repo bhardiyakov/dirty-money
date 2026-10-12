@@ -173,14 +173,8 @@ const CityGrid = {
             // (FavelaPlan.build, no _buildBlocks).
             FavelaPlan.roads(P);
             this._favela = true;
-            for (const z of [342, 558]) P.addH(z, -780, -660, 'dirt');                      // estradas de terra até a rodovia do oeste
-            // ---- RODOVIAS pelo continente (anel + travessas) e estradas de terra das fazendas.
-            const H = (z, a, b, cls = 'hwy') => P.road(false, z, a, b, cls), V = (x, a, b, cls = 'hwy') => P.road(true, x, a, b, cls);
-            H(1080, -1200, -294); H(-930, -1200, -294); V(-1200, -930, 1080);
-            H(-246, -1200, -294); H(186, -1200, -294);
-            V(-780, -246, 1080); V(-480, -930, -246);
-            // Estradas de terra das fazendas (ligam as rodovias entre si e à favela).
-            V(-600, -246, 342, 'dirt'); V(-900, -246, 186, 'dirt'); H(-30, -900, -294, 'dirt'); H(-420, -480, -294, 'dirt'); V(-1020, 186, 640, 'dirt'); H(400, -1200, -1020, 'dirt');
+            // ---- INTERIOR: rodovias, estradas de terra e caminhos sinuosos pelo relevo (RuralRoads).
+            RuralRoads.plan(P);
         }
         P.build();
     },
@@ -189,25 +183,29 @@ const CityGrid = {
     // Onde uma rodovia atravessa uma serra alta (relevo CRU > 24 u por 70+ u), o trecho vira TÚNEL: o relevo não é achatado
     // ali, os paredões saem do corredor e o WorldBuilder cobre a pista com um maciço de pedra com portais (os carros somem lá dentro).
     _planTunnels() {
-        const T = RoadPlan.tunnels = [];
+        const T = RoadPlan.tunnels = [], Q = {};
         for (const e of RoadPlan.edges) {
-            if (e.cls !== 'hwy' || T.length >= 5) continue;
-            const pt = (s) => (e.v ? [e.a.x, e.a.z + s] : [e.a.x + s, e.a.z]);
+            if (e.cls !== 'hwy' || T.length >= 8) continue;
+            const pt = (s) => { RoadPlan.at(e, s, Q); return [Q.x, Q.z]; };
             let s = 0;
             while (s < e.len) {
                 const [x, z] = pt(s);
                 if (WorldMap._rawHeight(x, z) <= 26) { s += 8; continue; }
                 let e1 = s; while (e1 < e.len && WorldMap._rawHeight(...pt(e1)) > 22) e1 += 8;
-                const a = s + 14, b = Math.min(e1 - 14, a + 170);
+                const a = Math.max(s + 14, (e.cutA || 0) + 35), b = Math.min(e1 - 14, a + 170, e.len - (e.cutB || 0) - 35);      // (boca longe dos cruzamentos: quem vira não raspa no paredão)
                 if (b - a >= 70 && !T.some((q) => q.edge === e && Math.abs(q.a - a) < 60)) {
-                    const p0 = pt(a), p1 = pt(b);
-                    T.push({ edge: e, v: e.v, a, b, x0: Math.min(p0[0], p1[0]), z0: Math.min(p0[1], p1[1]), x1: Math.max(p0[0], p1[0]), z1: Math.max(p0[1], p1[1]), w: e.w });
+                    const pts = [];                                                      // eixo do túnel (via livre: segue a curva)
+                    for (let q = a; q < b; q += 4) pts.push(pt(q));
+                    pts.push(pt(b));
+                    const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]);
+                    T.push({ edge: e, v: e.v, free: !!e.free, a, b, pts, x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs), w: e.w });
                 }
                 s = e1 + 40;
             }
         }
         // Retângulos de via (relevo): o trecho do túnel não achata a serra.
         for (const t of T) {
+            if (t.free) { for (const r of this.roadRects) if (r.edge === t.edge && r.s1 > t.a && r.s0 < t.b) { r.flat = false; r.tunnel = true; } continue; }
             const r = this.roadRects.find((q) => q.edge === t.edge);
             if (!r) continue;
             const hw = t.w / 2, split = (x0, z0, x1, z1, flat) => this.roadRects.push({ x0, z0, x1, z1, cls: 'hwy', flat, edge: t.edge, tunnel: !flat });
@@ -472,7 +470,7 @@ const CityGrid = {
             if (e.free) {                                                        // via livre: retângulos curtos ao longo da polilinha
                 for (let s = 0; s < e.len; s += 12) {
                     const p = RoadPlan.at(e, s), q = RoadPlan.at(e, Math.min(e.len, s + 12));
-                    this.roadRects.push({ x0: Math.min(p.x, q.x) - hw, x1: Math.max(p.x, q.x) + hw, z0: Math.min(p.z, q.z) - hw, z1: Math.max(p.z, q.z) + hw, cls: e.cls, flat: e.cls !== 'fav', edge: e });
+                    this.roadRects.push({ x0: Math.min(p.x, q.x) - hw, x1: Math.max(p.x, q.x) + hw, z0: Math.min(p.z, q.z) - hw, z1: Math.max(p.z, q.z) + hw, cls: e.cls, flat: e.cls !== 'fav', edge: e, s0: s, s1: Math.min(e.len, s + 12) });
                 }
                 continue;
             }

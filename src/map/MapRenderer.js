@@ -107,7 +107,7 @@ const MapRenderer = {
         for (let i = Math.floor(vx0 / S); i <= Math.floor(vx1 / S); i++) for (let j = Math.floor(vz0 / S); j <= Math.floor(vz1 / S); j++) {
             const c = P._eg.get(P._key(i, j)); if (c) for (const e of c) edges.add(e);
         }
-        const surf = (cls) => { const s = RoadPlan.CLASS[cls].surface; return cls === 'bridge' ? C.bridge : (s === 'dirt' ? C.dirt : (s === 'earth' ? C.earth : C.asphalt)); };
+        const surf = (cls) => { const s = RoadPlan.CLASS[cls].surface; return cls === 'bridge' ? C.bridge : (s === 'dirt' ? C.dirt : (s === 'earth' ? C.earth : (s === 'concrete' ? C.concrete : C.asphalt))); };
         const poly = (P, color) => { ctx.fillStyle = color; ctx.beginPath(); P.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])))); ctx.closePath(); ctx.fill(); };
         for (const e of edges) {
             if (e.free) {                                                   // via livre: polilinha grossa com a largura da via
@@ -147,7 +147,7 @@ const MapRenderer = {
             ctx.strokeStyle = C.laneLine; ctx.lineWidth = Math.max(1, 1.0 * k); ctx.setLineDash([5 * k, 6 * k]);
             ctx.beginPath();
             for (const e of edges) {
-                if (e.cls === 'fav' || e.cls === 'dirt') continue;
+                if (e.cls === 'fav' || e.cls === 'dirt' || e.cls === 'trail') continue;
                 if (e.free) {
                     const A = RoadPlan.at(e, e.cutA || 0); ctx.moveTo(X(A.x), Y(A.z));
                     for (let i = 1; i + 1 < e.pts.length; i++) if (e.cum[i] > (e.cutA || 0) && e.cum[i] < e.len - (e.cutB || 0)) ctx.lineTo(X(e.pts[i][0]), Y(e.pts[i][1]));

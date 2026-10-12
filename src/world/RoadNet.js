@@ -148,14 +148,18 @@ const RoadNet = {
 
     // Manobras possíveis (com pesos) a partir de um cruzamento, chegando pela perna `inA`: cada perna de saída (não fechada) vira
     // reta/direita/esquerda pelo ângulo, e o peso da manobra é dividido entre as pernas dela. Rotatória: também dá a volta; retorno:
-    // reto ou "U". (Não há beco: o RoadPlan poda as pontas soltas.)
+    // reto ou "U". (Não há beco: o RoadPlan poda as pontas soltas.) Caminho (trilha estreita do interior): o trânsito não entra —
+    // é do jogador, das motos e de quem anda a pé (só se não houver outra saída).
     options(inter, inA) {
-        const W = inter.uturn ? RoadNet.W_UTURN : (inter.round ? RoadNet.W_ROUND : RoadNet.W_CROSS), cand = [], count = {};
+        const W = inter.uturn ? RoadNet.W_UTURN : (inter.round ? RoadNet.W_ROUND : RoadNet.W_CROSS), count = {};
+        let cand = [];
         for (const a of inter.arms) {
             const turn = this.classify(inA, a);
             if (!W[turn] || this.isClosed(inter, a)) continue;
-            cand.push({ turn, a }); count[turn] = (count[turn] || 0) + 1;
+            cand.push({ turn, a });
         }
+        if (cand.some((c) => c.a.e.cls !== 'trail')) cand = cand.filter((c) => c.a.e.cls !== 'trail');
+        for (const c of cand) count[c.turn] = (count[c.turn] || 0) + 1;
         return cand.map((c) => ({ turn: c.turn, w: W[c.turn] / count[c.turn], plan: this.plan(inter, inA, c.a, c.turn) }));
     },
 
@@ -206,7 +210,7 @@ const RoadNet = {
                 if (!c || !c.length) continue;
                 e = c[Math.floor(Math.random() * c.length)];
             } else e = P.randomEdge();
-            if (!e) continue;
+            if (!e || e.cls === 'trail') continue;                                 // (caminho: sem trânsito)
             const ma = Math.max(margin, (e.cutA || 0) + 8, e.a.round ? e.a.hwNS + 10 : 0), mb = Math.max(margin, (e.cutB || 0) + 8, e.b.round ? e.b.hwNS + 10 : 0);
             if (e.len < ma + mb + 2) continue;
             const fwd = Math.random() < 0.5, p = P.at(e, ma + Math.random() * (e.len - ma - mb)), lane = e.w / 4;

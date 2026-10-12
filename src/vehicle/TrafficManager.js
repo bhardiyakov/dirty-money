@@ -38,7 +38,7 @@ class TrafficManager {
     _density(x, z) {
         const n = RoadPlan.nearestRoadPoint(x, z, 30);
         if (!n) return 0.2;
-        switch (n.edge.cls) { case 'city': case 'ave': return 1; case 'isl': return 0.8; case 'bridge': return 0.7; case 'fav': return 0.5; case 'hwy': return 0.45; default: return 0.25; }
+        switch (n.edge.cls) { case 'city': case 'ave': return 1; case 'isl': return 0.8; case 'bridge': return 0.7; case 'fav': return 0.5; case 'hwy': return 0.45; case 'trail': return 0.1; default: return 0.25; }
     }
 
     // Que carro aparece aqui: centro e ilha = carros de todo tipo (esportivos, SUVs, táxis); favela e estradas de terra =
@@ -48,7 +48,7 @@ class TrafficManager {
         const W = (table) => { let t = Math.random() * table.reduce((s, e) => s + e[1], 0); for (const [k, w] of table) { t -= w; if (t <= 0) return k; } return table[0][0]; };
         const civil = [0, 1, 3, 4, 5, 7, 8, 9], old = [13, 14, 15, 16, 17, 18];
         if (cls === 'fav') return { model: W([['old', 34], ['hatch', 22], ['sedan', 12], ['pickup', 16], ['van', 11], ['suv', 3], ['taxi', 5]]), paint: r < 0.85 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.85 };
-        if (cls === 'dirt') return { model: W([['pickup', 36], ['old', 24], ['hatch', 12], ['van', 12], ['sedan', 7], ['suv', 9]]), paint: r < 0.6 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.6 };
+        if (cls === 'dirt' || cls === 'trail') return { model: W([['pickup', 36], ['old', 24], ['hatch', 12], ['van', 12], ['sedan', 7], ['suv', 9]]), paint: r < 0.6 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.6 };
         if (cls === 'hwy') return { model: W([['pickup', 24], ['suv', 20], ['sedan', 19], ['van', 14], ['hatch', 10], ['old', 6], ['sports', 6], ['taxi', 4]]), paint: r < 0.2 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.2 };
         if (cls === 'isl' || cls === 'bridge') return { model: W([['suv', 25], ['sports', 20], ['super', 6], ['sedan', 18], ['taxi', 12], ['hatch', 8], ['pickup', 6], ['van', 6]]), paint: civil[Math.floor(Math.random() * civil.length)], old: false };
         // cidade: o coração do centro tem mais táxis, sedãs e esportivos; os bairros, mais populares
@@ -167,8 +167,9 @@ class TrafficManager {
             if (!c || !c.length) return null;
             e = c[Math.floor(Math.random() * c.length)];
         } else e = P.randomEdge();
-        if (!e || e.len < 36) return null;
+        if (!e || e.len < 36 || e.cls === 'trail') return null;
         const fav = e.cls === 'fav', fwd = Math.random() < 0.5, off = fav ? e.w / 2 + 0.8 : e.w / 2 - 0.1, t = 17 + Math.random() * (e.len - 34), p = P.at(e, t);
+        if (P.inTunnel(e, t)) return null;                                             // (no túnel o meio-fio é a parede)
         const d = { dx: fwd ? p.tx : -p.tx, dz: fwd ? p.tz : -p.tz }, x = p.x + d.dz * off, z = p.z - d.dx * off;           // no meio-fio à direita de quem anda (rua do morro: fora da pista estreita)
         if (fav && !FavelaPlan.roomForCar(x, z, d.dx, d.dz)) return null;
         if (near) { const r = hypot(x - near.x, z - near.z); if (r < near.rMin || r > near.rMax) return null; }

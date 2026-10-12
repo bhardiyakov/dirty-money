@@ -34,18 +34,20 @@ class MeshBatch {
         this.idx.push(base + 3, base + 1, base, base + 2, base + 3, base);
     }
 
-    // Triângulo orientado: a face visível aponta para `n` (troca b/c se preciso). uvs: [[u,v] x3].
+    // Triângulo orientado: a face visível aponta para `n` (troca b/c se preciso). uvs: [[u,v] x3]. color: [r,g,b] ou uma por vértice.
     tri(a, b, c, n, uvs, color = [1, 1, 1]) {
         const cx = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]);
         const cy = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
         const cz = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
         const facing = -(cx * n[0] + cy * n[1] + cz * n[2]);          // a face visível tem normal = -cross(b-a, c-a)
-        if (facing < 0) { [b, c] = [c, b]; uvs = [uvs[0], uvs[2], uvs[1]]; }
+        const per = Array.isArray(color[0]);
+        if (facing < 0) { [b, c] = [c, b]; uvs = [uvs[0], uvs[2], uvs[1]]; if (per) color = [color[0], color[2], color[1]]; }
         const base = this.pos.length / 3;
         this.pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
         for (let k = 0; k < 3; k++) {
+            const ck = per ? color[k] : color;
             this.nor.push(n[0], n[1], n[2]);
-            this.col.push(color[0], color[1], color[2], 1);
+            this.col.push(ck[0], ck[1], ck[2], 1);
             this.uv.push(uvs[k][0], uvs[k][1]);
         }
         this.idx.push(base, base + 1, base + 2);
