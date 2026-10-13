@@ -10,11 +10,11 @@ class Minimap {
     // Ícone de cada tipo de interior (Economy.STYLES) no radar.
     static get STYLE_ICON() {
         return { burger: 'burger', mart: 'cart', pharmacy: 'pharmacy', bar: 'beer', bakery: 'bakery', pizza: 'pizza', fit: 'salad', italian: 'pasta', japanese: 'sushi',
-            guns: 'gun', clothes: 'shirt', gym: 'gym', drugs: 'drugs', bank_branch: 'bank', bank_hq: 'bank' };
+            guns: 'gun', clothes: 'shirt', gym: 'gym', drugs: 'drugs', bank_branch: 'bank', bank_hq: 'bank', jewelry: 'jewels' };
     }
     // Pontos do mapa (CityGrid.pois) que também vão para o radar: os que não são porta de loja (as lojas vêm TODAS das portas do
     // Interiors, não só a amostra do mapa de pausa). Safe house, fachadas, baile e mototáxi já têm marcador próprio. Imóvel: só os seus.
-    static get RADAR_POIS() { return ['hospital', 'station', 'gas', 'marina', 'dealer', 'paynspray', 'chop', 'imovel']; }
+    static get RADAR_POIS() { return ['hospital', 'station', 'gas', 'marina', 'dealer', 'paynspray', 'chop', 'imovel', 'negocio']; }
 
     // Lugares com ícone: [{ x, z, icon, name, label?, door }]. Conferido no máximo 1×/s e refeito só quando algo mudou (bancos tomam
     // portas de loja, imóveis são comprados e vendidos, POIs entram no CityGrid) — a mesma lista serve de cache para o mapa de pausa.
@@ -100,7 +100,7 @@ class Minimap {
         if (pursuit) {
             const cx = sx(pursuit.x, pursuit.z), cy = sy(pursuit.x, pursuit.z), rr = pursuit.r * k;
             const red = '216,42,42', blue = '46,100,235';
-            const col = pursuit.seen ? (phase ? red : blue) : blue;
+            const col = pursuit.search ? '245,190,40' : pursuit.seen ? (phase ? red : blue) : blue;      // (amarelo: área de busca depois de um assalto — crime/Traces.js)
             ctx.save();
             ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2);
             ctx.fillStyle = `rgba(${col},${pursuit.seen ? 0.26 : 0.14})`; ctx.fill();

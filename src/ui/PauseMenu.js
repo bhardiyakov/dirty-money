@@ -13,11 +13,11 @@
 
 class PauseMenu {
     static get TABS() {
-        return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
+        return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
     }
     static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
     static get KEYS_HTML() {
-        return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>ESC</b> menu · <b>1-9</b> armas';
+        return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
     }
 
     // Legenda do mapa: tipos de lugar (a chave é o `type` dos POIs).
@@ -25,7 +25,9 @@ class PauseMenu {
         return {
             lanchonete: { label: 'Lanchonete', icon: 'food' },
             conveniencia: { label: 'Loja de Conveniência', icon: 'cart' },
-            paynspray: { label: 'Pay n Pay', icon: 'spray' },
+            paynspray: { label: 'Oficina mecânica (Pay n Pay)', icon: 'wrench' },
+            joalheria: { label: 'Joalheria', icon: 'jewels' },
+            negocio: { label: 'Seus negócios', icon: 'biz', mine: true },
             home: { label: 'Safe house', icon: 'home' },
             imovel: { label: 'Imóvel à venda', icon: 'home' },
             baile: { label: 'Baile funk', icon: 'music' },
@@ -229,6 +231,7 @@ class PauseMenu {
               </div>
               <div class="pm-page" data-page="status"><div class="pm-stat-grid" id="pmStatus"></div></div>
               <div class="pm-page" data-page="careers"><div id="pmCareers"></div></div>
+              <div class="pm-page" data-page="business"><div id="pmBiz"></div></div>
               <div class="pm-page" data-page="empire"><div id="pmEmpire"></div></div>
               <div class="pm-page" data-page="guide"><div id="pmGuide"></div></div>
               <div class="pm-page" data-page="settings">
@@ -395,6 +398,7 @@ class PauseMenu {
         else if (id === 'status') this._renderStatus();
         else if (id === 'careers') { if (this.g.careers) this.g.careers.ui.render(this.$('pmCareers')); }
         else if (id === 'empire') { if (this.g.empire) (this.empireUI || (this.empireUI = new EmpireUI(this.g))).render(this.$('pmEmpire')); }
+        else if (id === 'business') (this.bizUI || (this.bizUI = new BusinessUI(this.g))).render(this.$('pmBiz'));
         else if (id === 'guide') { (this.guide || (this.guide = new GuideUI(this.g))).render(this.$('pmGuide')); }
         else if (id === 'settings') this._renderSettings();
     }
@@ -838,6 +842,7 @@ class PauseMenu {
             btns = [[eq ? 'EM USO' : 'EQUIPAR', 'primary'], ['DESCARTAR 1', 'discard']];
         }
         else if (it.kind === 'jewel') { desc = `Peças de joalheria (~${brl(Math.round(inv.jewelValue))} no total).<br>Guarde no cofre de casa ou venda lá.`; btns = [['DESCARTAR', 'discard']]; }
+        else if (it.kind === 'item') { const D = Items.def(it.item); desc = `${D.desc}<br>${D.kg} kg cada · ${it.count} aqui${D.cat === 'part' ? '<br>Troque no capô: a pé, na frente do carro, E.' : D.cat === 'use' ? '<br>Use no capô do carro (a pé, E na frente dele).' : ''}`; btns = [['DESCARTAR 1', 'discard']]; }
         else { desc = 'Destranca um carro estacionado sem alarme (tecla F).'; btns = [['DESCARTAR', 'discard']]; }
         el.innerHTML = `<h4>${it.label.toUpperCase()}${it.count > 1 && it.kind !== 'ammo' ? ' ×' + it.count : ''}</h4>${desc}<div class="pm-btns"></div>`;
         const box = el.querySelector('.pm-btns');
@@ -861,6 +866,7 @@ class PauseMenu {
             else if (it.kind === 'hack') inv.hacks = Math.max(0, inv.hacks - 1);
             else if (it.kind === 'food' || it.kind === 'water') inv[it.kind] = Math.max(0, inv[it.kind] - 1);
             else if (it.kind === 'jewel') { const avg = inv.jewelValue / Math.max(1, inv.jewels); inv.jewels = Math.max(0, inv.jewels - 1); inv.jewelValue = Math.max(0, inv.jewelValue - avg); }
+            else if (it.kind === 'item') Items.take(inv, it.item, 1);
             else inv.keys = Math.max(0, inv.keys - 1);
             g._flash(`Descartou: ${it.label}`);
         }

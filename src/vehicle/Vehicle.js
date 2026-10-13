@@ -201,6 +201,7 @@ class Vehicle {
     }
 
     setControlled(v) {
+        if (v && !this.controlled && typeof CarCare !== 'undefined') { this.controlled = true; CarCare.onEnter(this); }      // peças, partida (vehicle/CarCare.js)
         this.controlled = v;
     }
 
@@ -227,6 +228,7 @@ class Vehicle {
         if (this.wrecked || amount <= 0) return;
         if (source && source !== 'env') this.lastHitBy = source;
         if (this.controlled) amount *= 1 - (SkillTree.m.carDmg || 0);      // habilidade Lataria
+        if (this.cond && typeof CarCare !== 'undefined') CarCare.onDamage(this, amount, source);      // tiro no capô fura o radiador
         this.hp = Math.max(0, this.hp - amount);
         const f = this.hp / this.maxHp;
         this.dent = f > 0.75 ? 0 : f > 0.5 ? 1 : f > 0.25 ? 2 : 3;
@@ -388,6 +390,8 @@ class Vehicle {
         if (this.engineDead) throttle = 0;                  // motor morto: só rola até parar
         if (this.controlled && typeof EngineAudio !== 'undefined' && EngineAudio.gates(this)) throttle = 0;      // dando a partida / morreu: sem força
         if (this.hotwire > 0) { this.hotwire -= dt; throttle = 0; }      // ligação direta (carro trancado roubado): motor ainda não pegou
+        if (this.controlled && typeof CarCare !== 'undefined' && CarCare.usable(this)) throttle = CarCare.tick(this, throttle, dt);      // motor falhando, superaquecido, bateria, freio, pneus (vehicle/CarCare.js)
+        const cc = this.controlled && this.cond;
         if (this.tank > 0 && this.controlled) {             // gasolina: marcha lenta + acelerador (mais com o carro rápido); tanque vazio = motor sem força
             if (this.fuel <= 0) { this.fuel = 0; throttle = 0; }
             else this.fuel = Math.max(0, this.fuel - (this.spec.bike ? 0.5 : 1) * Config.fuel.burn * (1 - (SkillTree.m.fuel || 0)) * (0.1 + Math.abs(throttle) * (0.45 + 0.55 * Math.min(1, this.speed / this.spec.maxSpeed))) * dt);
@@ -407,7 +411,7 @@ class Vehicle {
         }
 
         // --- Motor: integra a velocidade à frente ---
-        const top = this.spec.maxSpeed * (this.controlled ? 1 + (SkillTree.m.topSpeed || 0) : 1);
+        const top = this.spec.maxSpeed * (this.controlled ? 1 + (SkillTree.m.topSpeed || 0) : 1) * (cc ? this._ccTop || 1 : 1);
         // Estado lido pelas luzes de freio e pela fumaça do escapamento.
         this.braking = (throttle < 0 && fwd > 0.5) || (throttle > 0 && fwd < -0.5);
         // Aceleração (m/s²). Freio: forte, como sempre (power/mass). Motor: pela arrancada do modelo (spec.t100 = 0–100 km/h em s,
@@ -420,7 +424,7 @@ class Vehicle {
         }
         this.accelerating = throttle > 0 && fwd >= -0.5 && fwd < this.spec.maxSpeed * 0.7;
         if (throttle !== 0) {
-            fwd += throttle * accel * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1);       // freio na chuva rende menos
+            fwd += throttle * accel * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1) * (cc ? (this.braking ? this._ccBrake || 1 : this._ccPow || 1) : 1);       // freio na chuva rende menos · freio gasto / motor fraco
         } else {
             // Freio-motor / resistência ao rolamento: desacelera suave até parar.
             const drop = (this.spec.brakeDrag || Config.vehicle.brakeDrag * (Weather.cur ? Weather.cur.brakeMul : 1)) * dt;
@@ -496,6 +500,7 @@ class Vehicle {
         // --- Direção: guinada proporcional à velocidade; zera X/Z (anti-capotamento) ---
         // Inverte ao dar ré (como um carro real) e não vira parado.
         const speedFactor = Math.min(1, Math.abs(fwd) / (this.spec.turnRef || Config.vehicle.turnSpeedRef));
+        if (this.controlled && this.cond) { gripK *= this._ccGrip || 1; pull += this._ccPull || 0; }      // pneu careca / suspensão desalinhada (CarCare)
         let yaw = (steer * this.spec.turn * (this.controlled ? Vehicle.playerTurn : 1) + pull + wob) * speedFactor * (fwd < 0 ? -1 : 1);
 
         // --- PESO e DERRAPAGEM (só o carro que o jogador dirige; IA, motos, bicicletas e barcos seguem o modelo de sempre) ---

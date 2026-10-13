@@ -33,6 +33,7 @@ class Inventory {
         this.water = 0;
         this.jewels = 0;       // peças de joalheria: valem dinheiro quando vendidas (cofre → "vender")
         this.jewelValue = 0;   // soma do valor das peças ($)
+        this.gear = {};        // itens avulsos (player/Items.js): peças e ferramentas de carro, equipamento de assalto — id → quantidade
         this.bag = 'none';     // bolsa equipada (ver Bags.js): define o tamanho da grade e a carga confortável
         this.spareBags = [];   // bolsas de reserva levadas junto, vazias (trocam-se no menu; guardam-se no baú de casa)
     }
@@ -119,6 +120,10 @@ class Inventory {
         stack(this.food, Inventory.STACK.food, 'food', 'food', 'Comida');
         stack(this.water, Inventory.STACK.water, 'water', 'water', 'Água');
         stack(this.jewels, Inventory.STACK.jewel, 'jewel', 'jewels', 'Joias');
+        if (typeof Items !== 'undefined') for (const [id, n] of Object.entries(this.gear || {})) {          // itens avulsos (Items.DEFS)
+            const D = Items.def(id); if (!D || !(n > 0)) continue;
+            for (let i = 0; i < Math.ceil(n / D.stack); i++) out.push({ id: `i:${id}:${i}`, kind: 'item', item: id, key: Items.key(id), w: D.w, h: 1, count: Math.min(D.stack, n - i * D.stack), label: D.name });
+        }
         return out;
     }
 
@@ -142,6 +147,7 @@ class Inventory {
             case 'key': return this.keys % st.key === 0 ? 1 : 0;
             case 'heal': return this[T.item] % st[T.item] === 0 ? 1 : 0;           // comida/água (só guarda se a vida estiver cheia)
             case 'jewel': return this.jewels % st.jewel === 0 ? 1 : 0;
+            case 'item': { const D = typeof Items !== 'undefined' && Items.def(T.id); return !D ? 0 : (((this.gear || {})[T.id] || 0) % D.stack === 0 ? D.w : 0); }
             default: return 0;
         }
     }
@@ -174,6 +180,7 @@ class Inventory {
             w.owned = false; w.mag = 0; w.reserve = 0;
         }
         this.hacks = 0; this.keys = 0; this.jewels = 0; this.jewelValue = 0;      // a polícia também leva os itens de crime e as joias
+        if (typeof Items !== 'undefined') for (const id of Object.keys(this.gear || {})) if ((Items.def(id) || {}).cat === 'crime') delete this.gear[id];      // (furadeira, abraçadeiras; peças de carro ficam)
     }
 
     // Morreu: acorda no hospital sem os suprimentos (kits, comida, água, joias) e com metade da munição.

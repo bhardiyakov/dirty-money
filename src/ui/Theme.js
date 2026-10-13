@@ -142,12 +142,12 @@ const Emoji = {
         of_camisa_time: '⚽', of_moletom_capuz: '🧥', of_jaqueta_couro: '🧥', of_colete_carga: '🦺', of_terno: '👔', of_bermuda: '🩳', of_calca_moletom: '👖', of_calca_cargo: '👖',
         of_calca_social: '👖', of_oculos_escuros: '🕶️', of_relogio_ouro: '⌚', of_luvas: '🧤', of_corrente_ouro: '📿', of_tenis_branco: '👟', of_jaqueta_laranja: '🧥', of_calca_jeans: '👖',
         of_tenis_skate: '👟', of_camiseta_estampa: '👕', of_camiseta_listrada: '👕', of_camisa_florida: '🌺', of_camisa_polo: '👕', of_bermuda_jeans: '🩳',
-        of_bone: '🧢', of_bone_tras: '🧢', of_touca: '🧶', of_chapeu_pescador: '👒', of_viseira: '🧢', of_capacete: '⛑️',
+        of_balaclava: '🥷', of_bandana: '😷', of_bone: '🧢', of_bone_tras: '🧢', of_touca: '🧶', of_chapeu_pescador: '👒', of_viseira: '🧢', of_capacete: '⛑️',
         // comidas e bebidas das lojas (Economy.ITEMS)
         burger: '🍔', bacon: '🍔', fries: '🍟', soda: '🥤', shake: '🥤', slice: '🍕', pizza: '🍕', salad: '🥗', juice: '🧃', bowl: '🍧', pasta: '🍝', risotto: '🍚',
         menu_it: '🍽️', wine: '🍷', sushi: '🍣', omakase: '🍱', sake: '🍶', beer: '🍺', shot: '🥃', snack: '🍢', bread: '🥪', coffee: '☕', cake: '🍰', lunch: '🍱', bottle: '💧',
         // lugares do mapa (PauseMenu.POI_TYPES)
-        hospital: '🏥', station: '🚓', cart: '🛒', spray: '🎨', fuel: '⛽', boat: '🚤', home: '🏠', dumpster: '🗑️', pin: '📍', chop: '🔧', moto: '🛵', bank: '🏦', music: '🎶', gun: '🔫', gym: '🏋️', shirt: '👕', dealer: '🚗',
+        hospital: '🏥', station: '🚓', cart: '🛒', spray: '🎨', fuel: '⛽', boat: '🚤', home: '🏠', dumpster: '🗑️', pin: '📍', chop: '🔧', wrench: '🔧', biz: '🏪', moto: '🛵', bank: '🏦', music: '🎶', gun: '🔫', gym: '🏋️', shirt: '👕', dealer: '🚗',
         pharmacy: '💊', bakery: '🥐', drugs: '🌿',      // (lojas que só aparecem no minimapa: Minimap.STYLE_ICON)
         // indicadores do HUD
         heart: '❤️', shield: '🛡️', cash: '💵', clean: '💳', clock: '🕒', trophy: '🏆', star: '⭐', energy: '⚡', heat: '🔥', medal: '🏅', siren: '🚨',

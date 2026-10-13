@@ -289,14 +289,14 @@ class TouchControls {
     }
 
     static _parse(html) {
-        const out = [], seen = new Set(), re = /<b>([EFGCV])<\/b>\s*([^<]*)/g;
+        const out = [], seen = new Set(), re = /<b>([EFGCVK])<\/b>\s*([^<]*)/g;
         let m;
         while ((m = re.exec(html || '')) && out.length < 2) {
             const key = m[1].toLowerCase();
             if (seen.has(key)) continue;
             let t = m[2].replace(/\(segure\)\s*/i, '').replace(/[—·(:].*$/, '').trim().split(/\s+/).filter((w) => !/^(o|a|os|as|e|de|do|da|na|no|para|este|esta|um|uma)$/i.test(w)).slice(0, 2).join(' ');
             if (t.length > 12) t = t.split(' ')[0];                          // botão pequeno: duas palavras só se couberem
-            if (!t) t = { e: 'AGIR', f: 'ENTRAR', g: 'ARROMBAR', c: 'FURTAR', v: 'PULAR' }[key];
+            if (!t) t = { e: 'AGIR', f: 'ENTRAR', g: 'ARROMBAR', c: 'FURTAR', v: 'PULAR', k: 'MÁSCARA' }[key];
             seen.add(key); out.push({ key, label: t.toUpperCase() });
         }
         return out;
@@ -379,10 +379,10 @@ class TouchControls {
     // [A principal, B esquerda, C em cima, D diagonal, E pequeno, F 2ª ação]
     _slotsFor(mode) {
         const g = this.g, H = (key, label, icon, color) => ({ type: 'hold', key, label, icon, color }), T = (key, label, icon, color) => ({ type: 'tap', key, label, icon, color });
-        const ICON = { e: '✋', f: '🚪', g: '🔓', c: '🫳', v: '🧗' };
+        const ICON = { e: '✋', f: '🚪', g: '🔓', c: '🫳', v: '🧗', k: '🥷' };
         const all = mode === 'heli' ? [] : TouchControls.parseActions(g._promptHtml);
         const acts = all.filter((a) => a.key !== 'v' && !(mode !== 'foot' && a.key === 'f'));      // (V pular grade já tem botão: ROLAR vira PULAR)
-        const ctx = (a, color) => (a.key === 'e' ? H : T)(a.key, a.label, ICON[a.key] || '✋', color);      // E (abastecer, desmanchar…) às vezes é "segure"
+        const ctx = (a, color) => (a.key === 'e' ? H : T)(a.key, a.label, a.label === 'GRITAR' ? '📢' : ICON[a.key] || '✋', color);      // E (abastecer, desmanchar…) às vezes é "segure"
         if (mode === 'car') return [
             H('w', 'ACELERAR', '⏩', 'c-green'),
             H('s', 'RÉ / FREIO', '⏪', 'c-red'),

@@ -343,7 +343,7 @@ const EngineAudio = {
         }
         const { voice } = this.player, s = car._eng;
         s.t += dt;
-        const fuelOut = car.tank > 0 && car.fuel <= 0, broken = car.engineDead;
+        const fuelOut = car.tank > 0 && car.fuel <= 0, broken = car.engineDead || !!car._ccOff;      // (bateria, motor fundido, superaquecido: vehicle/CarCare.js)
         let starter = 0, gain = 0.42, fast = false;
         if (s.state === 'crank') {
             // arranque: 230 rpm de compressão; ligação direta = tentativas de 0,9 s com pausas

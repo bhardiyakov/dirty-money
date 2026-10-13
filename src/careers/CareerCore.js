@@ -115,7 +115,7 @@ class Careers {
     constructor(game) {
         this.g = game;
         Careers.instance = this;
-        this.list = [new ChopCareer(this), new BurglarCareer(this), new GunsmithCareer(this), new ScamCareer(this), new BichoCareer(this)];
+        this.list = [new ChopCareer(this), new BurglarCareer(this), new RobberCareer(this), new GunsmithCareer(this), new ScamCareer(this), new BichoCareer(this)];
         this.by = {};
         for (const c of this.list) this.by[c.id] = c;
         this.job = null;

@@ -208,6 +208,8 @@ const PadNav = {
 
         // 2) Janelas do jogo com teclado próprio (o menu de pausa cuida de si mesmo em PauseMenu._pad)
         if (g.menu && g.menu.isOpen) return;
+        const pn = typeof Panel !== 'undefined' && Panel.all.find((x) => x.open);      // janelas novas (oficina, capô, golpe, cerco): navegação genérica
+        if (pn) { this._focusScreen(pn.root.querySelector('.dm-pp') || pn.root, p, dt, edge); if (edge(1) && pn.closable) pn.close(); g.input.suppressPad = true; return; }
         if (g.motoUI && (g.shopUI.open || g.stashUI.open || g.propertyUI.open || g.motoUI.open || g.tribunal.open)) {
             const d = this.dir(p, dt);
             if (d) this.key(d.dx > 0 ? 'ArrowRight' : d.dx < 0 ? 'ArrowLeft' : d.dy > 0 ? 'ArrowDown' : 'ArrowUp');

@@ -17,9 +17,10 @@ const SaveGame = {
             v: this.VERSION, savedAt: Date.now(),
             hour: g.dayNight.hour, weather: g.weather.state,
             player: { x: p.position.x, z: p.position.z, rot: p.root.rotation.y, hp: p.hp, armor: p.armor, armorMax: p.armorMax, weapon: p.weapon },
-            inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, bag: inv.bag, spareBags: inv.spareBags.slice(), weapons },
+            inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, bag: inv.bag, spareBags: inv.spareBags.slice(), weapons, gear: Object.assign({}, inv.gear || {}), booster: inv.boosterUses || 0 },
             fitness: p.fit ? p.fit.xp : 0, strength: p.str ? p.str.xp : 0, physique: Physique.serialize(),
             stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
+            traces: Traces.serialize(), robbery: Robbery.serialize(), heists: Heists.serialize(), business: Business.serialize(),
         };
     },
 
@@ -38,6 +39,8 @@ const SaveGame = {
         const p = g.player, inv = g.inventory, I = s.inventory || {};
         for (const k of ['cash', 'clean', 'medkits', 'hacks', 'keys', 'food', 'water', 'jewels', 'jewelValue']) if (typeof I[k] === 'number') inv[k] = I[k];
         for (const k of Object.keys(I.weapons || {})) if (inv.weapons[k]) Object.assign(inv.weapons[k], I.weapons[k]);
+        inv.gear = {}; for (const [k, n] of Object.entries(I.gear || {})) if (Items.DEFS[k] && n > 0) inv.gear[k] = n;
+        inv.boosterUses = I.booster || 0;
         inv.bag = Bags.DEFS[I.bag] ? I.bag : 'pack';                       // saves antigos (antes das bolsas): a mochila 5×4 de sempre
         inv.spareBags = (I.spareBags || []).filter((b, i, a) => Bags.DEFS[b] && b !== 'none' && b !== inv.bag && a.indexOf(b) === i);
         Outfit.load(s.outfit || null);                                        // roupas e acessórios (saves antigos: o visual de sempre)
@@ -45,6 +48,7 @@ const SaveGame = {
         p.str = { xp: s.strength || 0 };
         Physique.load(s.physique || null);
         g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Garage.load(s.garage || null); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
+        Traces.load(s.traces || null); Robbery.load(s.robbery || null); Heists.load(s.heists || null); Business.load(s.business || null);
         const pl = s.player || {};
         p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));
         if (CityGrid.blockedAt(pl.x, pl.z, 0.4)) p.teleport(g.nav.closestPoint(new BABYLON.Vector3(pl.x, 0, pl.z), 30));      // (o mapa mudou: salvou onde agora tem parede)

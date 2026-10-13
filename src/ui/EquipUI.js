@@ -13,10 +13,11 @@
 
 class EquipUI {
     static get LEFT() { return ['head', 'eyes', 'neck', 'top', 'legs', 'shoes']; }
-    static get RIGHT() { return ['weapon', 'vest', 'bag', 'hands', 'wrist']; }
+    static get RIGHT() { return ['face', 'weapon', 'vest', 'bag', 'hands', 'wrist']; }
     static get SLOT() {
         return {
             head: { label: 'Cabeça', empty: 'of_bone', cat: 'head', at: [100, 40], at2: [100, 213] },
+            face: { label: 'Rosto', empty: 'of_balaclava', cat: 'head', at: [112, 66], at2: [104, 234] },
             eyes: { label: 'Óculos', empty: 'of_oculos_escuros', cat: 'acc', at: [86, 74], at2: [100, 240] },
             neck: { label: 'Pescoço', empty: 'of_corrente_ouro', cat: 'acc', at: [94, 128], at2: [100, 252] },
             top: { label: 'Parte de cima', empty: 'of_camiseta_branca', cat: 'top', at: [66, 165], at2: [96, 276] },

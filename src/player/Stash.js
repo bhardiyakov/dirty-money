@@ -12,6 +12,7 @@ class Stash {
             fridge: { title: 'GELADEIRA', hint: 'comida e água', ok: food },
             safe: { title: 'COFRE', hint: 'dinheiro e joias', ok: money },
             chest: { title: 'BAÚ', hint: 'qualquer coisa', ok: () => true },
+            trunk: { title: 'PORTA-MALAS', hint: 'qualquer coisa — o espaço é o do carro', ok: () => true },
         };
     }
     static get GUNS() { return ['pistol', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47']; }
@@ -30,6 +31,7 @@ class Stash {
         if (k === 'ammo') return 'Munição: ' + Weapons[a].name;
         if (k === 'weapon') return Weapons[a].name;
         if (k === 'bag') return Bags.DEFS[a].name;
+        if (k === 'item') return Items.label(a);
         return { cash: 'Dinheiro', jewels: 'Joias', food: 'Comida', water: 'Água', medkit: 'Kit médico', hack: 'Módulo de hackeio', key: 'Chave de carro' }[id] || id;
     }
     static icon(id) {
@@ -37,6 +39,7 @@ class Stash {
         if (k === 'ammo') return 'ammo_pistol';
         if (k === 'weapon') return a;
         if (k === 'bag') return Bags.DEFS[a].icon;
+        if (k === 'item') return Items.key(a);
         return { cash: 'cash_bag', jewels: 'jewels', food: 'food', water: 'water', medkit: 'medkit', hack: 'hack', key: 'carkey' }[id] || id;
     }
 
@@ -46,6 +49,7 @@ class Stash {
         if (k === 'ammo') return inv.weapons[a].reserve || 0;
         if (k === 'weapon') return inv.weapons[a].owned && a !== 'fists' ? 1 : 0;
         if (k === 'bag') return Bags.has(inv, a) ? 1 : 0;
+        if (k === 'item') return Items.count(inv, a);
         return { cash: inv.cash, jewels: inv.jewels, food: inv.food, water: inv.water, medkit: inv.medkits, hack: inv.hacks, key: inv.keys }[id] || 0;
     }
 
@@ -59,6 +63,7 @@ class Stash {
             else { this.wstate[a] = { mag: w.mag || 0, reserve: w.reserve || 0 }; w.owned = false; w.mag = 0; w.reserve = 0; if (game.player.weapon === a) { game.player.weapon = 'none'; game.player.aimTimer = 0; game.reloading = 0; } }
             return;
         }
+        if (k === 'item') { const it = inv.gear || (inv.gear = {}); it[a] = Math.max(0, (it[a] || 0) + n); if (!it[a]) delete it[a]; return; }
         if (id === 'cash') inv.cash += n;
         else if (id === 'jewels') inv.jewels += n;
         else if (id === 'food') inv.food += n;
@@ -76,6 +81,7 @@ class Stash {
         for (const g of Stash.GUNS) ids.push('weapon:' + g, 'ammo:' + g);
         ids.push('weapon:bat', 'weapon:knife');
         for (const b of Object.keys(Bags.DEFS)) if (b !== 'none') ids.push('bag:' + b);
+        for (const id of Object.keys(Items.DEFS)) ids.push('item:' + id);
         for (const id of ids) {
             if (!B.ok(id)) continue;
             const c = this.invCount(game, id);
@@ -98,6 +104,10 @@ class Stash {
         let q = n === 'all' ? have : Math.min(have, n);
         if (q <= 0) return '';
         if (!Stash.BOXES[box].ok(id)) return 'Isso não cabe aqui';
+        if (dir === 'in' && this.limit && this.limit[box]) {                   // porta-malas: espaço do carro (células, como a mochila)
+            const per = Stash.cells(id, 1), free = this.limit[box] - this.used(box);
+            if (per > 0) { q = Math.min(q, Math.floor(free / per + 1e-6)); if (q <= 0) return `Não cabe mais nada (${this.used(box)}/${this.limit[box]} espaços)`; }
+        }
         if (id.startsWith('bag:')) {                                    // bolsa: a que está em uso só sai se o que se carrega couber nos bolsos
             const b = id.slice(4);
             if (dir === 'in') { const r = Bags.remove(game, b); if (!r.ok) return r.msg; d[id] = 1; return 'Guardou: ' + Stash.label(id); }
@@ -129,6 +139,19 @@ class Stash {
         if (id === 'jewels' && !(d.jewels > 0)) this.jv = this.boxes.safe.jewels > 0 ? this.jv : 0;
         return (dir === 'in' ? 'Guardou ' : 'Pegou ') + (cash ? brl(q) : (q > 1 ? q + '× ' : '') + Stash.label(id));
     }
+
+    // Espaço (células da grade) que `n` unidades do item ocupam numa caixa com limite (porta-malas). Dinheiro não ocupa.
+    static cells(id, n) {
+        const [k, a] = id.split(':');
+        if (k === 'weapon') return (Inventory.SIZES[a] || 1) * n;
+        if (k === 'ammo') return Math.ceil(n / 60);
+        if (k === 'bag') return 3 * n;
+        if (k === 'item') { const D = Items.def(a); return D ? D.w * n / D.stack : n; }
+        if (id === 'cash') return 0;
+        if (id === 'jewels') return n / 4;
+        return n / 3;
+    }
+    used(box) { let u = 0; for (const [id, n] of Object.entries(this.boxes[box] || {})) u += Stash.cells(id, n); return Math.ceil(u - 1e-6); }
 
     // Vende todas as joias (mochila + cofre) por 70% do valor. Retorna o $ recebido.
     sellJewels(game) {

@@ -40,7 +40,9 @@ class StashUI {
 
     update(dt) { if (this.cool > 0) this.cool -= dt; }
 
-    show(box) {
+    // store: de onde vêm os itens da caixa (padrão: o Stash da casa; o porta-malas passa o do carro — vehicle/CarCare.js) · title: nome na janela.
+    show(box, store = null, title = null) {
+        this.store = store || this.g.stash; this.title = title;
         this.box = box; this.open = true; this.col = 1; this.sel = [0, 0]; this.msg('');
         this.root.style.display = 'flex';
         this.g.input.releaseVirtual && this.g.input.releaseVirtual('pad');
@@ -59,13 +61,14 @@ class StashUI {
 
     _lists() {
         const g = this.g;
-        return [g.stash.inventoryList(g, this.box), g.stash.boxList(this.box)];
+        return [this.store.inventoryList(g, this.box), this.store.boxList(this.box)];
     }
 
     render() {
         const g = this.g, B = Stash.BOXES[this.box], lists = this._lists(), inv = g.inventory;
-        this.$h.textContent = B.title;
-        this.$sub.textContent = B.hint.toUpperCase() + '   ·   DINHEIRO ' + brl(inv.cash);
+        const lim = this.store.limit && this.store.limit[this.box];
+        this.$h.textContent = this.title || B.title;
+        this.$sub.textContent = B.hint.toUpperCase() + (lim ? `   ·   ESPAÇO ${this.store.used(this.box)}/${lim}` : '') + '   ·   DINHEIRO ' + brl(inv.cash);
         this.$cols.replaceChildren();
         lists.forEach((list, c) => {
             this.sel[c] = Math.max(0, Math.min(this.sel[c], list.length - 1));
@@ -98,7 +101,7 @@ class StashUI {
         this.$foot.replaceChildren();
         const keys = document.createElement('span'); keys.textContent = '↑↓ ESCOLHE · ←→ COLUNA · ENTER 1 · ESPAÇO TUDO · ESC FECHA';
         this.$foot.appendChild(keys);
-        if (this.box === 'safe' && g.stash.jewelCount(g) > 0) {
+        if (this.box === 'safe' && this.store === g.stash && g.stash.jewelCount(g) > 0) {
             const b = document.createElement('button'); b.className = 'btn';
             b.textContent = `VENDER ${g.stash.jewelCount(g)} JOIAS (70%): ${brl(g.stash.jewelTotal(g))}`;
             b.addEventListener('click', () => { const n = g.stash.sellJewels(g); this.msg(`Vendeu as joias por ${brl(n)}`); AudioFX.blip(900, 0.15, 0.2); this.render(); });
@@ -110,7 +113,7 @@ class StashUI {
 
     _do(id, n) {
         const g = this.g, dir = this.col === 0 ? 'in' : 'out';
-        const m = g.stash.move(g, this.box, id, dir, n);
+        const m = this.store.move(g, this.box, id, dir, n);
         if (m) { this.msg(m); AudioFX.blip(dir === 'in' ? 520 : 640, 0.08, 0.14); }
         this.render();
     }

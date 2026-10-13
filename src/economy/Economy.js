@@ -13,6 +13,8 @@
 
 const Economy = {
     day: 0,                 // dias do jogo (sobe quando o relógio passa da meia-noite)
+    dayHooks: [],           // funções chamadas quando o dia vira (negócios, rastros, golpes…): Economy.onDay(fn)
+    onDay(fn) { this.dayHooks.push(fn); },
     _lastHour: -1,
     shops: {},              // estoque por loja (id → { items: [{ id, qty }], day })
 
@@ -152,7 +154,7 @@ const Economy = {
     // ------------------------------------------------------------------ tempo
     // Chamado todo quadro com a hora do relógio do jogo: vira o dia → novos preços e estoque.
     tick(hour) {
-        if (this._lastHour >= 0 && hour < this._lastHour - 12) { this.day++; this.shops = {}; if (typeof Laundry !== 'undefined') Laundry.onNewDay(); if (typeof Careers !== 'undefined' && Careers.instance) Careers.instance.onNewDay(); if (typeof Empire !== 'undefined' && Empire.instance) Empire.instance.onNewDay(); if (typeof Banks !== 'undefined') Banks.onNewDay(); }
+        if (this._lastHour >= 0 && hour < this._lastHour - 12) { this.day++; this.shops = {}; for (const fn of this.dayHooks) { try { fn(this.day); } catch (e) { console.error('[DIA] gancho falhou:', e); } } if (typeof Laundry !== 'undefined') Laundry.onNewDay(); if (typeof Careers !== 'undefined' && Careers.instance) Careers.instance.onNewDay(); if (typeof Empire !== 'undefined' && Empire.instance) Empire.instance.onNewDay(); if (typeof Banks !== 'undefined') Banks.onNewDay(); }
         this._lastHour = hour;
     },
 
@@ -177,6 +179,7 @@ const Economy = {
         }
         if (S.night && (hour >= 22 || hour < 6)) out.push({ label: 'Adicional noturno', mul: S.night });
         if (S.happy && hour >= S.happy[0] && hour < S.happy[1]) out.push({ label: 'Happy hour', mul: 0.85 });
+        if (typeof Business !== 'undefined' && Business.isOwned(shop)) out.push({ label: 'Seu negócio', mul: 0.5 });               // dono paga o preço de custo
         if (Outfit.m.price > 0) out.push({ label: 'Bem vestido', mul: 1 - Outfit.m.price });                        // terno, sapato social… (Outfit)
         if (shop.district === 'favela' && Outfit.m.favela > 0) out.push({ label: 'Estilo do morro', mul: 1 - Outfit.m.favela });   // chinelo, camisa de time, corrente
         return out;
@@ -214,6 +217,7 @@ const Economy = {
             case 'weapon': return inv.slotsNeeded({ kind: 'weapon', weapon: it.weapon, ammo: it.ammo }) <= inv.slotsFree();
             case 'ammo': return inv.slotsNeeded({ kind: 'ammo', weapons: it.weapons }) <= inv.slotsFree();
             case 'throw': return inv.slotsNeeded({ kind: 'throw', weapon: it.weapon }) <= inv.slotsFree();
+            case 'item': return inv.slotsNeeded({ kind: 'item', id: it.item }) <= inv.slotsFree();
             case 'goods': {
                 const T = it.give === 'food' || it.give === 'water' ? { kind: 'heal', item: it.give } : { kind: it.give === 'key' ? 'key' : it.give };
                 return inv.slotsNeeded(T) <= inv.slotsFree();
@@ -263,6 +267,7 @@ const Economy = {
             case 'vest': pl.wearVest(it.max); break;
             case 'bag': msg = Bags.acquire(game, it.bag).msg + t; break;          // a antiga vira reserva
             case 'outfit': Outfit.give(it.outfit); msg = `Comprou e vestiu: ${it.name}${t}`; break;
+            case 'item': Items.add(inv, it.item, 1); msg = `Comprou: ${it.name}${t} · ${Items.count(inv, it.item)} na mochila`; break;
             case 'goods': if (it.give === 'food') inv.food++; else if (it.give === 'water') inv.water++; else if (it.give === 'medkit') inv.medkits++; else if (it.give === 'hack') inv.hacks++; else inv.keys++; break;
             default: console.warn(`[Economy.grant] tipo de item sem efeito: ${it.kind} (${id})`); msg = `${it.name}: sem efeito (kind '${it.kind}' não tratado em Economy.grant)`;
         }

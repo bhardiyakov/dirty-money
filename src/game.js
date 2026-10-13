@@ -150,6 +150,7 @@ class Game {
         this.stash = new Stash();                    // geladeira, cofre e baú da safe house
         this.stashUI = new StashUI(this);
         this.shopUI = new ShopUI(this);              // compra nas lojas (interiores)
+        Traces.game = this; Business.game = this; CarCare.game = this; Mechanic.game = this;      // rastros, negócios, mecânica (crime/, economy/, vehicle/)
         this.sleeping = null;                        // dormindo na cama (salva o jogo): { phase, t }
         // Janelas que só nascem quando física + navegação ficam prontas (_maybeInitPolice): até lá (ou se o Havok não carregar — sem
         // internet na 1ª visita, CDN fora do ar) ficam estes "vazios", e o jogo não quebra lendo .open/.cool a cada quadro.
@@ -527,7 +528,7 @@ class Game {
         const W = this.player && Weapons[this.player.weapon];
         inp.gunInHand = !!(W && W.gun);
         // Menu de pausa ou janela aberta (loja, baú, imóvel, mototáxi, Tribunal): o controle navega nela (PauseMenu._pad / PadNav), não no jogo.
-        const ui = this.menu.isOpen || !!(this.motoUI && (this.shopUI.open || this.stashUI.open || this.propertyUI.open || this.carUI.open || this.motoUI.open || this.tribunal.open));
+        const ui = this.menu.isOpen || Panel.anyOpen() || !!(this.motoUI && (this.shopUI.open || this.stashUI.open || this.propertyUI.open || this.carUI.open || this.motoUI.open || this.tribunal.open));
         if (ui) inp.releaseVirtual('pad'); else { if (this._uiWas) inp.suppressPad = true; inp.poll(); }      // (ao voltar, o botão que fechou a janela ainda está apertado)
         this._uiWas = ui;
         if (this.touch) this.touch.update();
@@ -545,6 +546,7 @@ class Game {
     _update(dt) {
         this._dt = dt;
         this._pollInput();
+        Panel.tick(dt);
         this.dev.update(dt);
         Interiors.tickFade(dt);
         // Assa sprites pendentes (personagens; os carros vêm prontos do atlas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
@@ -572,7 +574,7 @@ class Game {
         Physique.update(dt, this);                                                        // fome, gordura, músculo (o relógio do jogo)
         if (this.mode !== 'player') Bags.stamina(this.player, false, false, dt);         // (dirigindo/pilotando: recupera o fôlego)
         if (Interiors.active) { this._updateInterior(dt); return; }                       // dentro de uma loja: o mundo fica congelado
-        const frozenUI = this.stashUI.open || this.carUI.open || !!this.sleeping || Interiors.busy || this.motoUI.open || !!this.motoRide;                              // janela do baú aberta / dormindo: personagem parado
+        const frozenUI = this.stashUI.open || this.carUI.open || !!this.sleeping || Interiors.busy || this.motoUI.open || !!this.motoRide || Panel.anyOpen() || !!CarCare.job;                              // janela do baú aberta / dormindo: personagem parado
         if (frozenUI) for (const k of Object.keys(this.input.justPressed)) delete this.input.justPressed[k];
         this.stashUI.update(dt);
         if (this.sleeping) this._updateSleep(dt);
@@ -587,6 +589,7 @@ class Game {
             this._fuelUpdate(dt);
             if (this.careers && !frozenUI && this.careers.carPrompt() && this.input.consumePress('e')) this.careers.carInteract();      // desmanche: E desmancha o carro
             else if (!frozenUI && Garage.carPrompt(this) && this.input.consumePress('e')) Garage.carInteract(this);      // garagem: E guarda o carro na vaga
+            else if (!frozenUI && !Panel.anyCool() && Mechanic.carPrompt(this) && this.input.consumePress('e')) Mechanic.carInteract(this);      // oficina / borracharia / mecânico do morro
             // (uma batida forte pode arremessar o piloto de dentro do drive(): aí o foco é o jogador)
             const drv = this.mode === 'car' && this.activeCar ? this.activeCar : null;
             this.camera.follow((drv || this.player).position, dt, drv);       // dirigindo: câmera bússola (gira com o carro)
@@ -644,6 +647,7 @@ class Game {
         if (this.mode === 'player' && crouchKey) this._toggleCrouch();
         if (this.mode === 'player' && rollKey) this._tryRoll();
         if (this.mode === 'player' && this.input.consumePress('v')) this._tryVault();
+        if (this.input.consumePress('k') && this.mode === 'player' && !frozenUI) Traces.toggleMask(this);      // máscara (crime/Traces.js)
         if (this.mode === 'player' && this.input.consumePress('padjump') && !this.player.busy && !this.lockpick.active && !this.hiding && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.5)) this._tryVault();      // controle: A/✕ (que também é correr) só pula se houver grade/muro
 
         if (this.arrest) this._updateArrest(dt);
@@ -769,6 +773,7 @@ class Game {
             if (this.missions) this.missions.update(dt, gs.pos);
             RealEstate.build(this); RealEstate.update(dt); this.propertyUI.update(dt);
             Laundry.syncMap(this, dt);                                                       // fachadas compradas → mapa e radar
+            Heists.build(this); Mechanic.build(this); Business.syncMap(this, dt);           // joalherias, oficinas, seus negócios no mapa
             Dealers.build(this); Dealers.update(dt); Garage.update(dt); this.carUI.update(dt);      // concessionárias (vitrine) e garagens (seus carros)
         }
 
@@ -786,6 +791,7 @@ class Game {
             // (Estar armado e à vista NÃO libera mais a polícia: só atirar — ver _onAttack/notifyPlayerShot.)
             this.wanted.update(dt, seen || (this.wanted.level > 0 && this.policeManager.nearestDist(ps.pos) < (this.wanted.level === 1 ? Config.police.oneStar.closeNoEscape : Config.police.closeNoEscape)));       // policial colado (mesmo atrás de parede) impede a fuga
 
+            Traces.update(dt, this);                                                         // descrição, placa, mandado, área de busca
             const alerted = this.wanted.level > 0;
 
             // Prisão: polícia colada em você por bustTime segundos (só quando procurado).
@@ -810,6 +816,7 @@ class Game {
         this._updateHud();
         this.ui.update(dt);
         if (this.careers) this.careers.update(dt);
+        CarCare.hud(this, dt);                                                                  // painel do carro + troca de peça em andamento
         if (this.goals) this.goals.update(dt);
         if (this.achievements) this.achievements.update(dt);
         if (this.empire) { this.empire.update(dt); EmpireUI.hud(this); }
@@ -826,15 +833,18 @@ class Game {
     _autosave(dt) {
         this._asT = (this._asT || 0) + dt;
         if (this._asT < 120) return;
-        if (this.wanted.level > 0 || this.arrest || this.death || this.sleeping || this.hiding || this.holdup || this.player.rag || (this.missions && this.missions.cur && this.missions.cur.type !== 'defend') || (this.careers && this.careers.job)) return;
+        if (this.wanted.level > 0 || this.arrest || this.death || this.sleeping || this.hiding || this.holdup || this.player.rag || Robbery.session || Heists.run || Interiors.active || (this.missions && this.missions.cur && this.missions.cur.type !== 'defend') || (this.careers && this.careers.job)) return;
         this._asT = 0;
         if (SaveGame.write(this)) this._flash('💾 Progresso salvo automaticamente');
     }
 
     // Dentro de uma loja (Interiors): só o jogador, a câmera, o relógio e a interface rodam; trânsito, pedestres, polícia e física ficam parados.
     _updateInterior(dt) {
-        const frozen = this.shopUI.open || Interiors.busy || this.stashUI.open || this.propertyUI.open || !!this.sleeping;
+        const frozen = this.shopUI.open || Interiors.busy || this.stashUI.open || this.propertyUI.open || !!this.sleeping || Panel.anyOpen();
         if (frozen) for (const k of Object.keys(this.input.justPressed)) delete this.input.justPressed[k];
+        AudioFX.setListener(this.player.position.x, this.player.position.z);           // (os sons de dentro da sala: tiro de aviso, alarme)
+        if (Traces._el && Traces._el.style.display !== 'none') Traces._el.style.display = 'none';      // (os avisos de rastro são da rua)
+        if (!frozen) this._interiorKeys(dt);
         this.shopUI.update(dt); this.stashUI.update(dt); this.propertyUI.update(dt);
         if (this.sleeping) this._updateSleep(dt);
         const axis = frozen ? { x: 0, z: 0 } : this.input.getMoveAxis();
@@ -855,6 +865,24 @@ class Game {
         if (this.actionTimer > 0) this.actionTimer -= dt;
         this._updateHud();
         this.ui.update(dt);
+    }
+
+    // Dentro de um interior (loja): trocar de arma (1-9), recarregar, pôr/tirar a máscara (K) e as teclas do assalto (G grita, ataque = tiro
+    // de aviso — crime/Robbery.js). O resto do combate não existe lá dentro (o mundo está congelado).
+    _interiorKeys(dt) {
+        const inp = this.input, p = this.player, inv = this.inventory;
+        if (this.reloading > 0) { this.reloading -= dt; if (this.reloading <= 0) { const n = inv.reload(this._reloadWeapon); if (n > 0) this._flash(`Recarregou: ${inv.ammoText(this._reloadWeapon)}`); } }
+        for (const [key, kind] of Object.entries(Game.WEAPON_SLOTS)) {
+            if (!inp.consumePress(key)) continue;
+            if (Weapons[kind] && Weapons[kind].throwable) continue;
+            if (!inv.owned(kind === 'none' ? 'fists' : kind)) { this._flash(`Você não tem: ${Weapons[kind === 'none' ? 'fists' : kind].name}`); continue; }
+            this.reloading = 0;
+            if (p.equip(kind) || p.weapon === kind) this._flash(`Arma: ${Weapons[kind === 'none' ? 'fists' : kind].name}${inv.isGun(kind) ? ' ' + inv.ammoText(kind) : ''}`);
+        }
+        if (inp.consumePress('r')) this._startReload();
+        if (inp.consumePress('k')) Traces.toggleMask(this);
+        Robbery.input(this);
+        if (!Robbery.session) { inp.consumePress('mouse0'); inp.consumePress(' '); inp.consumePress('g'); }      // (sem assalto, ataque e G não fazem nada aqui)
     }
 
     // Ações a pé: golpe/tiro (com munição), chute, troca de arma, recarga, kit médico e inventário.
@@ -981,6 +1009,7 @@ class Game {
     // conforme você some da vista (fuga). `seen` = alguém te enxerga agora (o radar pisca vermelho/azul).
     _pursuit(center) {
         const pm = this.policeManager, lvl = this.wanted.level;
+        if (pm && lvl <= 0 && Traces.search) { const S = Traces.search; return { x: S.x, z: S.z, r: S.r, seen: false, escaping: false, search: true }; }      // área de busca depois do assalto (amarela)
         if (!pm || lvl <= 0) return null;
         const L = Config.wanted.levels[lvl], seen = pm.playerSeen && !(this.hiding && !this.hiding.seen);
         const k = pm.known && !seen ? pm.known : center;
@@ -996,14 +1025,14 @@ class Game {
 
     // Alguma janela/diálogo que usa o ESC está aberta (ou acabou de fechar)? Então o ESC não deve abrir o menu de pausa.
     _modalUiOpen() {
-        return !!(Gym.active || Pool.active || this.stashUI.open || this.shopUI.open || this.propertyUI.open || this.carUI.open || this.motoUI.open || this.tribunal.open
+        return !!(Gym.active || Pool.active || Panel.anyOpen() || this.stashUI.open || this.shopUI.open || this.propertyUI.open || this.carUI.open || this.motoUI.open || this.tribunal.open
             || this.endScreen.visible || this.sleeping || this.motoRide);          // (arrombar e inventário legado consomem o ESC sozinhos; _canPause já bloqueia a pausa neles)
     }
 
     // Dá para pausar? Não durante as telas de fim (detido/morte), enquanto arromba (Esc cancela o mini-game) nem sem o jogo pronto.
     _canPause() {
         if (this.menu.isOpen) return false;
-        if (Gym.active || Pool.active || this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.carUI.open || this.carUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping) return false;
+        if (Gym.active || Pool.active || Panel.anyOpen() || Panel.anyCool() || (Robbery.session && Robbery.session.siege) || this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.carUI.open || this.carUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping) return false;
         if ((this.arrest && this.arrest.phase === 'screen') || (this.death && this.death.phase === 'screen')) return false;
         return true;
     }
@@ -1555,14 +1584,18 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
             html = this.careers.carPrompt();
         } else if (this.mode === 'car' && Garage.carPrompt(this)) {
             html = Garage.carPrompt(this);
+        } else if (this.mode === 'car' && Mechanic.carPrompt(this)) {
+            html = Mechanic.carPrompt(this);
         } else if (this.mode === 'car' && this._fuelPrompt) {
             html = this._fuelPrompt;
+        } else if (this.mode === 'player' && CarCare.job) {
+            html = CarCare.prompt(this);
         } else if (this.mode === 'player' && !this.player.busy && !this.lockpick.active) {
             const car = this._hijackTarget();
             const chop = this._chopperNear();
             const spot = !car && !chop && this._nearHideSpot();
             const fence = !car && !spot && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.6);
-            const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Aid.prompt(this) || Interiors.prompt(this) : '';
+            const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
             if (shopP) html = shopP;
             else if (spot) html = `<b>E</b> esconder-se ${spot.kind === 'dumpster' ? 'na caçamba' : (spot.kind === 'barrel' ? 'no latão' : 'no caixote')}<small>se a polícia não te viu entrar, você some do radar</small>`;
             else if (fence && fence.bridgeRail && (this.player.underBridge || this.player.depth > 0)) html = '';      // (nadando sob a ponte: não dá para subir)
@@ -1581,6 +1614,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
                 else if (car.locked) { html = '<b>F</b> roubo rápido — quebra o vidro e dispara o alarme<small><b>G</b> arrombar na manha — furtivo, sem alarme</small>'; this.doors.prewarm(car); }
                 else if (car.driver === false) { html = '<b>F</b> entrar no carro'; this.doors.prewarm(car); }
                 else { html = '<b>F</b> roubar o carro (tira o motorista)'; this.doors.prewarm(car); }
+                const cp = !car.isBoat && CarCare.prompt(this);                         // a pé na frente/atrás do carro: capô ou porta-malas
+                if (cp) html = cp + '<br>' + html;
             }
             if (!html) html = this._housePrompt();
             if (!html && this.player.crouched) html = this.player.coverLock      // agachado: o estado e como sair dele
@@ -1832,6 +1867,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this.player.setVisible(true);
         this.mode = 'player';
         this.activeCar = null;
+        this._lastCar = car;                                          // (revista do porta-malas se for preso perto dele)
         if (sign) {                                                   // porta abre, a pessoa sai, a porta fecha
             this.doors.set(car, sign, true);
             this._delayed.push({ t: 0.9, fn: () => { if (!car.hold && this.activeCar !== car) this.doors.set(car, sign, false); } });
@@ -2004,6 +2040,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         if (this.missions && this.missions.interact()) return;
         if (!this.propertyUI.open && this.propertyUI.cool <= 0 && RealEstate.interact(this)) return;
         if (!this.carUI.open && this.carUI.cool <= 0 && (Dealers.interact(this) || Garage.interact(this))) return;      // concessionária / garagem
+        if (!Panel.anyCool() && this.stashUI.cool <= 0 && (CarCare.interact(this) || Mechanic.interact(this))) return;      // capô, porta-malas, balcão de peças
         if (!this.motoUI.open && this.motoUI.cool <= 0 && MotoStands.interact(this)) return;
         if (this._interactHouse()) return;
         if (Interiors.interact(this)) return;
@@ -2385,6 +2422,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this.wanted.bust();            // zera procurado -> polícia volta a patrulhar.
         this.bustTimer = 0;
         HangProbe.mark('preso: sair do veículo');
+        const trunkMsg = CarCare.onBusted(this, this.activeCar || this._lastCar);      // revista do porta-malas (o fundo falso esconde)
+        Robbery.abort(); Traces.onBusted();
         this._dropFromCar();
         this._closeInventory();
         HangProbe.mark('preso: multa e confisco');
@@ -2393,7 +2432,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         HangProbe.mark('preso: cédulas marcadas');
         if (typeof Banks !== 'undefined') Banks.lose();                    // (e as cédulas marcadas)
         this._respawn('station', hours === null && light ? this._wakeInfo(O.hours).hours : hours);
-        this._flash(light ? `⚠ Detido por delito leve: multa de ${brl(lost)}. Liberado com seus pertences` : `⚠ PRESO! Multa de ${brl(lost)}. Armas confiscadas. Você acordou na delegacia`);
+        this._flash((light ? `⚠ Detido por delito leve: multa de ${brl(lost)}. Liberado com seus pertences` : `⚠ PRESO! Multa de ${brl(lost)}. Armas confiscadas. Você acordou na delegacia`) + (trunkMsg || ''));
     }
 
     // Desce do veículo no lugar onde ele parou (o jogador a pé fica sem posição enquanto dirige).
@@ -2488,6 +2527,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         this.wanted.bust();
         this.bustTimer = 0;
         HangProbe.mark('morte: sair do veículo');
+        Robbery.abort();
         this._dropFromCar();
         this._closeInventory();
         this.reloading = 0;
@@ -2510,6 +2550,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         const ac = this.activeCar;
         if (ac && car !== ac && BABYLON.Vector3.Distance(car.position, ac.position) < 5.5) src = 'player';
         car.takeDamage(dmg, src);
+        if (car.cond) CarCare.onImpact(car, dv, dmg, dvx, dvz);              // radiador, suspensão, vazamento de óleo (vehicle/CarCare.js)
 
         // Bicicleta/moto: numa batida forte o piloto é ARREMESSADO (continua no sentido em que vinha) e o veículo tomba.
         // (entregador: apressado, costurando o trânsito — qualquer batida mais firme já derruba; ele levanta e volta para a moto)

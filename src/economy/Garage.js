@@ -130,6 +130,7 @@ const Garage = {
         rec.hp = Math.max(0.05, car.hpFrac);
         if (car.tank > 0) rec.fuel = Math.max(0, Math.min(1, car.fuel / car.tank));
         rec.mods = Object.assign({}, car.mods || {});
+        if (typeof CarCare !== 'undefined') { CarCare.syncRec(car); CarCare.syncTrunk(car); }      // peças e porta-malas (vehicle/CarCare.js)
     },
     syncAll() { for (const r of this.cars) { const c = this._live(r); if (c) this._sync(r, c); } },
 
@@ -250,7 +251,7 @@ const Garage = {
     // ---------------------------------------------------------------- save
     serialize() {
         this.syncAll();
-        return { next: this.nextUid, cars: this.cars.map((r) => ({ uid: r.uid, model: r.model, paint: r.paint, hp: r.hp, fuel: r.fuel, mods: r.mods || {}, bought: !!r.bought, paid: r.paid || 0, dirty: !!r.dirty, garage: r.garage, slot: r.slot })) };
+        return { next: this.nextUid, cars: this.cars.map((r) => ({ uid: r.uid, model: r.model, paint: r.paint, hp: r.hp, fuel: r.fuel, mods: r.mods || {}, bought: !!r.bought, paid: r.paid || 0, dirty: !!r.dirty, garage: r.garage, slot: r.slot, cond: r.cond || null, trunk: r.trunk || null })) };
     },
     load(s) {
         for (const r of this.cars) { const c = this._live(r); if (c && this.game) this.despawn(this.game, c); }
