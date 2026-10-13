@@ -19,8 +19,8 @@
 // ============================================================================
 
 const Outfit = {
-    SLOTS: ['shoes', 'top', 'legs', 'head', 'eyes', 'wrist', 'hands', 'neck'],
-    SLOT_NAME: { shoes: 'Calçado', top: 'Parte de cima', legs: 'Calça', head: 'Cabeça', eyes: 'Óculos', wrist: 'Pulso', hands: 'Mãos', neck: 'Pescoço' },
+    SLOTS: ['shoes', 'top', 'legs', 'head', 'face', 'eyes', 'wrist', 'hands', 'neck'],
+    SLOT_NAME: { shoes: 'Calçado', top: 'Parte de cima', legs: 'Calça', head: 'Cabeça', face: 'Rosto', eyes: 'Óculos', wrist: 'Pulso', hands: 'Mãos', neck: 'Pescoço' },
 
     // base = preço (R$) antes dos fatores da loja; col = cores na paleta antiga (piloto de moto); look = forma e cor no personagem 2,5D
     // (campos da ficha do gerador: src/art/npcgen); fx = efeitos (ver o cabeçalho)
@@ -64,6 +64,10 @@ const Outfit = {
         oculos_escuros: { slot: 'eyes', name: 'Óculos escuros', base: 180, look: { glasses: true }, fx: { sight: 0.08 }, desc: 'A polícia te reconhece 8% mais de perto' },
         relogio_ouro:   { slot: 'wrist', name: 'Relógio de ouro', base: 5500, look: { watch: true }, fx: { fence: 0.12, price: 0.02 }, desc: 'Status: receptador paga 12% mais' },
         luvas:          { slot: 'hands', name: 'Luvas de couro', base: 120, look: { gloves: true }, fx: { lose: 0.08, melee: 0.05 }, desc: 'Sem digitais: a polícia perde o rastro mais rápido' },
+        // ---- rosto (máscaras): escondem o rosto de testemunhas e câmeras nos assaltos (crime/Traces.js) — mas mascarado na rua a polícia
+        //      estranha de longe. Tecla K põe/tira a última máscara usada.
+        balaclava:      { slot: 'face', name: 'Balaclava (touca ninja)', base: 90, mask: true, look: { mask: 'balaclava' }, fx: { sight: -0.3 }, desc: 'Rosto coberto: testemunha e câmera não te identificam. Na rua, a polícia estranha de longe (K tira)' },
+        bandana:        { slot: 'face', name: 'Bandana no rosto', base: 35, mask: true, look: { mask: 'bandana', accent: 'vermelho' }, fx: { sight: -0.18 }, desc: 'Cobre o nariz e a boca: a câmera não pega o rosto, mas testemunha de perto ainda descreve você (K tira)' },
         corrente_ouro:  { slot: 'neck', name: 'Corrente de ouro', base: 3200, look: { chain: true }, fx: { favela: 0.1 }, desc: 'Respeito no morro: −10% nos preços da favela' },
     },
     DEFAULT: { shoes: 'tenis_branco', top: 'jaqueta_laranja', legs: 'calca_jeans' },

@@ -52,6 +52,8 @@ const Bags = {
             w += ((s.reserve || 0) + (s.mag || 0)) * (this.AMMO[k] || 0);
         }
         for (const [k, kg] of Object.entries(this.ITEM)) w += (inv[k] || 0) * kg;
+        if (typeof Items !== 'undefined') w += Items.weight(inv);                  // peças, ferramentas e equipamento (player/Items.js)
+        if (typeof Heists !== 'undefined') w += Heists.carryKg || 0;                // o malote do golpe (joias da equipe)
         w += Math.max(0, inv.cash) / 50000;                                         // cédulas de R$ 50: 1 g cada
         const B = game.careers && game.careers.by && game.careers.by.burglar;
         if (B && B.data) w += B.data.weight || 0;                                   // eletrônicos furtados

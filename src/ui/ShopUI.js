@@ -89,6 +89,16 @@ class ShopUI {
                 }
             }
         }
+        if (typeof Business !== 'undefined' && Business.canOwn(shop)) {             // negócio próprio (economy/Business.js): comprar, recolher, lavar
+            const mk = (t, fn, pri) => { const b = document.createElement('button'); b.className = 'btn' + (pri ? ' pri' : ''); b.textContent = t; b.addEventListener('click', () => { const m = fn(); if (m) { this.msg(m.msg || m, m.ok !== false); AudioFX.blip(m.ok === false ? 200 : 760, 0.1, 0.15); } this.render(); }); this.$foot.appendChild(b); };
+            const B = Business.owned[shop.id];
+            if (!B) mk(`COMPRAR O NEGÓCIO: ${brl(Business.price(shop))} (limpo) · ~${brl(Business.estimate({ price: Business.price(shop), up: {}, mkt: 0, style: shop.style }))}/dia`, () => Business.buy(g, shop));
+            else {
+                if (B.cash > 0) mk(`RECOLHER O CAIXA: ${brl(B.cash)}`, () => Business.collect(g, shop.id), true);
+                if (inv.cash > 0) mk(`DEIXAR O SUJO NO COFRE (${brl(inv.cash)})`, () => Business.deposit(g, shop.id, Infinity));
+                mk('GERENCIAR (aba NEGÓCIOS)', () => { this.close(); g.menu.open('business'); return null; });
+            }
+        }
         if (shop.style === 'drugs' && shop.district === 'favela' && g.missions) {                      // serviços do tráfico: missões (ver player/Missions.js)
             const M = g.missions, b = document.createElement('button'); b.className = 'btn';
             b.textContent = M.cur ? 'ABANDONAR SERVIÇO' : `PEDIR SERVIÇO (${Missions.rankName})`;

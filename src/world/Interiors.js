@@ -81,6 +81,8 @@ const Interiors = {
         const hour = game.dayNight.hour;
         if (!Economy.isOpen(shop.style, hour) && !(shop.bank && Banks.canBreakIn(shop.bank))) return { ok: false, closed: true, msg: `FECHADO — abre às ${Economy.opensAt(shop.style)}h${shop.bank && shop.bank.tier === 'hq' ? ' (ou corte a energia do quarteirão)' : ''}` };
         if (game.wanted.level > 0) return { ok: false, msg: 'A polícia está na sua cola — não dá para entrar' };
+        if (typeof Robbery !== 'undefined' && Robbery.closedToday(shop)) return { ok: false, closed: true, msg: 'FECHADO — assaltada hoje: a perícia está lá dentro (reabre amanhã)' };
+        if (typeof Heists !== 'undefined' && Heists.closed(shop)) return { ok: false, closed: true, msg: 'FECHADO — a joalheria está reforçando a segurança depois do golpe' };
         return { ok: true };
     },
 
@@ -89,6 +91,8 @@ const Interiors = {
         const p = game.player.position;
         if (this.active) {
             if (this.active.shop.bank) { const bp = Banks.prompt(game); if (bp) return bp; }
+            if (typeof Heists !== 'undefined') { const hp = Heists.scoutPrompt(game); if (hp !== null) return hp; }
+            if (typeof Robbery !== 'undefined' && !game.shopUI.open) { const rp = Robbery.prompt(game); if (rp !== null) return rp; }
             const a = this.active, o = this.STAGE;
             if (game.shopUI.open || game.stashUI.open || game.propertyUI.open || game.sleeping) return '';
             if (a.shop.home) { const hu = this.homeUse(game); if (hu) return RealEstate.isOwned(a.shop.home) ? (this.HOME_PROMPT[hu.kind] || '') : (hu.kind === 'desk' ? '<b>E</b> ver a proposta de compra<small>você está só visitando o imóvel</small>' : '<b>VISITA</b><small>só dá para usar depois de comprar o imóvel</small>'); }
@@ -116,6 +120,16 @@ const Interiors = {
         if (this.active) {
             if (game.shopUI.open || game.stashUI.open || game.propertyUI.open || game.sleeping) return true;
             if (this.active.shop.bank && Banks.interact(game)) return true;
+            if (typeof Heists !== 'undefined' && Heists.scouting(game) && Heists.scoutInteract(game)) return true;
+            if (typeof Robbery !== 'undefined') {
+                if (Robbery.session) {                                                // assalto em andamento: o E é do assalto (ou da porta)
+                    if (Robbery.interact(game)) return true;
+                    const d0 = this.active.data.door, dx = this.STAGE.x + (d0.x0 + d0.x1) / 2;
+                    if (hypot(p.x - dx, p.z - (this.STAGE.z + 1.2)) < 2.3) this.leave(game);
+                    return true;
+                }
+                if (Robbery.interact(game)) return true;                             // anunciar o assalto (arma na mão, no balcão)
+            }
             if (this.active.shop.home) {
                 const hu = this.homeUse(game);
                 if (hu && hu.kind !== 'desk' && !RealEstate.isOwned(this.active.shop.home)) { game._flash('Você está só visitando — compre o imóvel para usar isto'); return true; }
@@ -301,7 +315,7 @@ const Interiors = {
     // Atores decorativos (atendente e fregueses): reaproveitados entre as lojas.
     _useActors(game, list, shop) {
         const sc = game.scene, S = game.sprites.sheets, o = this.STAGE;
-        const grp = shop.style === 'drugs' ? CharacterRig.VARIANT_GROUPS.poor : (shop.style === 'italian' || shop.style === 'japanese' ? CharacterRig.VARIANT_GROUPS.biz : CharacterRig.VARIANT_GROUPS.casual);
+        const grp = shop.style === 'drugs' ? CharacterRig.VARIANT_GROUPS.poor : (shop.style === 'italian' || shop.style === 'japanese' || shop.style === 'jewelry' ? CharacterRig.VARIANT_GROUPS.biz : CharacterRig.VARIANT_GROUPS.casual);
         // frequentadores com tipo do gerador e um exercício (academia): atores próprios, animados por _gymActor
         const typed = list.filter((e) => e.type && typeof NpcArt !== 'undefined' && NpcArt.atlases && NpcArt.atlases[e.type]);
         list = list.filter((e) => !typed.includes(e));
@@ -347,6 +361,7 @@ const Interiors = {
         game._flash(`${shop.name}`);
         this._hideCity(game, true);
         if (shop.bank) Banks.onEnter(game, shop);
+        if (typeof Heists !== 'undefined') Heists.onEnter(game, shop);         // golpe em execução: a equipe entra junto
     },
 
     _doLeave(game) {
@@ -368,6 +383,7 @@ const Interiors = {
         if (game.colliderStream) game.colliderStream.refresh(game.camera.target.x, game.camera.target.z);
         this._hideCity(game, false);
         if (a.shop.bank) Banks.onLeave(game);
+        if (typeof Robbery !== 'undefined') Robbery.onLeave(game);              // assalto: estrelas, testemunhas e rastros (já na calçada)
     },
 
     // Dentro de um interior a cidade não aparece: some com todas as malhas visíveis do mapa (a GPU para de avaliá-las e o mapa de sombras
@@ -395,6 +411,8 @@ const Interiors = {
         for (const x of this._actors) if (x.mesh.isEnabled()) x.update(dt, 1);
         for (const x of this._gymActors || []) if (x.mesh.isEnabled() && x.mesh.isVisible) this._gymActor(x, dt);
         if (a.shop.bank) Banks.update(dt, game);
+        if (typeof Robbery !== 'undefined') Robbery.update(dt, game);
+        if (typeof Heists !== 'undefined') { Heists.interiorTick(dt); Heists.scoutTick(dt, game); }
         this._tickArrow(game, dt);
         const o = this.STAGE, p = game.player.position, d = a.data.door;
         const ax = game.input.getMoveAxis();

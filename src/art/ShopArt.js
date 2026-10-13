@@ -268,6 +268,7 @@ class ShopCtx {
         }
         for (const px of [b.x, b.x + b.w - 4]) c.box(px, top, 4, fh, this.t(wood, 0.85), this.t(wood, 1.3), this.t(wood, 0.55), this.t(wood, 0.25));
         this.solid(r, h);
+        this._stock(r);
         return b;
     }
 
@@ -286,6 +287,7 @@ class ShopCtx {
         c.box(b.x, b.top, b.w, b.h, body, this.t(body, 1.25), this.t(body, 0.7), '#202428');
         for (let k = 0; k < b.w / 6; k++) { const pc = prods[Math.floor(rng() * prods.length)]; c.box(b.x + 2 + k * 6, b.top + 3 + (k % 2) * 4, 5, b.h - 8 - (k % 2) * 4, pc, this.t(pc, 1.3), this.t(pc, 0.65), this.t(pc, 0.3)); }
         this.solid(r, h);
+        this._stock(r);
         return b;
     }
 
@@ -301,6 +303,7 @@ class ShopCtx {
         c.fr(b.x + 2, gy, 2, gh, '#9ad8f0'); c.fr(b.x + b.w - 5, gy, 1, gh, '#c8ecf8');
         c.box(b.x, b.top, b.w, b.h, '#e8ecf0', '#ffffff', '#a4a8ac', '#262a2e');
         this.solid(r, h);
+        this._stock(r);
         return b;
     }
     vending(r, h, col = '#c0302a') {
@@ -371,8 +374,50 @@ class ShopCtx {
         return best || { x: start[0], z: start[1] };
     }
 
+    // ---------------------------------------------------------------- assalto (crime/Robbery.js)
+    // Prateleira, gôndola e geladeira de LOJA viram ponto de saque ('stock'); casas e bancos não.
+    _stock(r) { if (!/^(home|bank)/.test(this.style)) this.use('stock', r); }
+    // ESCRITÓRIO dos fundos de toda loja assaltável: COFRE e GRAVADOR das câmeras (DVR) encostados numa parede do fundo, num canto livre
+    // com folga em volta (nunca fecha passagem), e as câmeras pintadas na parede norte. Sem lugar livre, a loja fica sem aquele ponto.
+    _backOffice() {
+        const T = this.T, W = this.W, D = this.D, c = this.c, taken = [];
+        const clear = (r, m) => { if (r[0] < T - 1e-6 || r[2] > W - T + 1e-6 || r[1] < 0.6 || r[3] > D - T + 1e-6) return false;
+            for (const o of this.obs.concat(taken)) if (!o.wall && o.x0 < r[2] + m && o.x1 > r[0] - m && o.z0 < r[3] + m && o.z1 > r[1] - m) return false;      // (as paredes da sala não contam: é nelas que ele encosta)
+            const dc = (this.door.x0 + this.door.x1) / 2; return !(r[1] < 3.6 && Math.abs((r[0] + r[2]) / 2 - dc) < 3); };
+        const place = (fw, fd) => {
+            let best = null, bs = -1e9;
+            for (let x = T + 0.1; x + fw <= W - T - 0.1; x += 0.25) { const r = [x, D - T - fd, x + fw, D - T]; if (clear(r, 1.05)) { const s = Math.abs(x + fw / 2 - W / 2); if (s > bs) { bs = s; best = r; } } }
+            for (let z = D * 0.4; z + fw <= D - T - 0.1 && !best; z += 0.25) for (const r of [[T, z, T + fd, z + fw], [W - T - fd, z, W - T, z + fw]]) { if (clear(r, 1.05) && z > bs) { bs = z; best = r; } }
+            for (const m of [0.85, 0.7]) {                                            // aperto: folga menor, e depois solto no piso da metade do fundo
+                if (best) break;
+                for (let x = T + 0.1; x + fw <= W - T - 0.1; x += 0.25) { const r = [x, D - T - fd, x + fw, D - T]; if (clear(r, m)) { const s = Math.abs(x + fw / 2 - W / 2); if (s > bs) { bs = s; best = r; } } }
+                for (let z = D - T - fw - 0.1; z >= 1.6 && !best; z -= 0.25) for (const r of [[T, z, T + fd, z + fw], [W - T - fd, z, W - T, z + fw]]) if (clear(r, m)) { best = r; break; }      // (o mais ao fundo possível)
+                for (let z = D - T - fd - 0.6; z > D * 0.35 && !best; z -= 0.25) for (let x = T + 1; x + fw <= W - T - 1 && !best; x += 0.25) { const r = [x, z, x + fw, z + fd]; if (clear(r, m + 0.15)) best = r; }
+            }
+            if (best) taken.push({ x0: best[0], z0: best[1], x1: best[2], z1: best[3] });
+            return best;
+        };
+        const sf = place(0.95, 0.75);
+        if (sf) {
+            const b = this.blk(sf, 1.05, '#5c626a', '#3c424a');
+            c.box(b.x + 3, b.fy + 2, b.w - 6, b.hp - 4, '#4a5058', '#6a7078', '#2a3036', '#14181c');
+            c.disk(b.x + (b.w >> 1), b.fy + (b.hp >> 1), 4, '#9aa2ac'); c.disk(b.x + (b.w >> 1), b.fy + (b.hp >> 1), 1, '#2a2e34'); c.fr(b.x + b.w - 7, b.fy + 4, 2, b.hp - 8, '#9aa2ac');
+            this.use('safe', sf);
+        }
+        const dv = place(0.7, 0.55);
+        if (dv) {
+            const b = this.blk(dv, 1.25, '#24272c', '#16181c');
+            for (let k = 0; k < 3; k++) { c.fr(b.x + 2, b.fy + 3 + k * 5, b.w - 4, 3, '#30343a'); c.px(b.x + 3, b.fy + 4 + k * 5, k ? '#3adf6a' : '#ff3a3a'); }
+            c.box(b.x + 1, b.top + 1, b.w - 2, b.h - 2, '#101418', '#3a6a8a', '#060a0c', '#000');
+            for (let k = 0; k < 4; k++) c.fr(b.x + 3 + (k & 1) * ((b.w - 6) >> 1), b.top + 3 + (k >> 1) * ((b.h - 6) >> 1), ((b.w - 8) >> 1), ((b.h - 8) >> 1), ['#5a8a6a', '#6a7a9a', '#8a7a5a', '#5a6a7a'][k]);
+            this.use('dvr', dv);
+        }
+        for (const x of [T + 1.2, W - T - 1.2]) { const bd = this.band(x - 0.35, x + 0.35); c.box(bd.x, bd.y + 3, bd.w, 6, '#2a2c32', '#4a4e58', '#16181c', '#0a0b0d'); c.disk(bd.x + (bd.w >> 1), bd.y + 11, 2, '#ff3030'); }
+    }
+
     // ---------------------------------------------------------------- iluminação e vinheta (últimos passos)
     finish(vignette = 0.34) {
+        if (ShopCtx.ROBBABLE.includes(this.style)) this._backOffice();
         const c = this.c, WP = this.wpx, HP = this.hpxTot;
         const lights = this.lights;
         for (let y = 0; y < HP; y++) for (let x = 0; x < WP; x++) {
@@ -394,3 +439,5 @@ class ShopCtx {
         };
     }
 }
+// Estilos de LOJA que têm escritório nos fundos (cofre + gravador das câmeras) e podem ser assaltados (crime/Robbery.js).
+ShopCtx.ROBBABLE = ['burger', 'mart', 'pharmacy', 'bar', 'bakery', 'pizza', 'fit', 'italian', 'japanese', 'guns', 'clothes', 'gym'];

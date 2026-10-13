@@ -73,6 +73,33 @@ Joystick (borda = correr) + ATACAR + até 2 botões de contexto que aparecem soz
 - **Cibernético**: pendrive no terminal do gerente (Estelionato) abre uma porta no firewall por 3 dias; de casa, a transferência via laranjas é um mini-jogo de confirmar contas.
 - Ao entrar em qualquer interior, as malhas da cidade são ocultadas e restauradas na saída.
 
+## Assaltos, golpes, negócios e mecânica
+
+### Assalto a lojas (`src/crime/Robbery.js`, carreira ASSALTANTE em `src/careers/CareerRobber.js`)
+
+- Dentro de qualquer loja assaltável, com arma de fogo na mão no balcão: **E** anuncia o assalto. O atendente levanta as mãos e os fregueses viram **reféns** (deitados).
+- **Porte × patente**: Pé-de-chinelo (conveniência, padaria, lanchonete, farmácia, saladas) → Assaltante (bar, pizzaria, boutique, academia) → Profissional (restaurantes finos, loja de armas, vitrines de joalheria) → Mestre do Golpe (a Maison do centro). Sem a patente, o assalto não sai.
+- **Medo** (atendente, segurança e reféns) sobe com você perto e de frente com a arma, com o grito (**G**) e com o tiro de aviso (ataque). Medo baixo = alarme silencioso, refém levantando e correndo para a porta (chama a polícia e descreve você), balconista/segurança armado sacando a arma.
+- **Fazer a limpa** nos pontos marcados no chão: caixa (o atendente esvazia), cofre e gravador das câmeras (todo interior de loja ganhou um escritório nos fundos — `ShopCtx._backOffice`), prateleiras (mercadoria para o receptador), carteiras dos reféns, vitrines. Abraçadeiras amarram reféns; a furadeira corta o tempo do cofre.
+- **Polícia**: só depois do chamado começa a contagem (porte, policiamento do distrito, noite, Sangue-frio). Zerou lá dentro: **cerco** (Lábia, escudo humano, sair atirando, render-se). A loja fica fechada até o dia seguinte.
+
+### Rastros e fuga (`src/crime/Traces.js`)
+
+- Descrição da roupa (2 dias, quebra trocando 2 de 3 peças longe da polícia), rosto (sem balaclava), câmeras (DVR), digitais (luvas), placa anotada (quem foge de carro de perto da cena), **inquérito** 0–100% com **mandado de prisão** em 100% e advogado para esfriar.
+- Testemunhas ligam depois que você sai (mais medo = mais demora) e abre a **área de busca** (círculo amarelo no radar). Mascarado na rua a polícia estranha (tecla **K** põe/tira).
+
+### Joalherias e golpes (`src/crime/Heists.js`, `src/art/JewelryStyles.js`)
+
+- 5 joalherias (4 de bairro + Maison do centro), interior próprio com vitrines. Quadro do golpe no estilo GTA V: alvo → reconhecimento (fotografar vitrines, câmeras e cofre) → abordagem furtiva (gás + janela do hacker) ou agressiva → preparativos (gás no porto, uniformes, armamento, carro de fuga) → equipe (hacker, motorista, atirador: ★ e corte; ganham experiência) → execução, carro de fuga, ponto de entrega e divisão (receptador 85%, cortes, azar da equipe ruim).
+
+### Negócios próprios (`src/economy/Business.js`, aba 🏪 NEGÓCIOS em `src/ui/BusinessUI.js`)
+
+- Compra legal (dinheiro limpo) de quase toda loja da cidade. Lucro diário no caixa (insumos, salários, aluguel, eventos), lavagem proporcional ao faturamento (perda 3,5–8%; acima de 50% do faturamento a Receita estranha), melhorias (reforma, equipamento, gerente, segurança, contador, marketing). Gráfico de lucro dos últimos 7 dias.
+
+### Mecânica (`src/vehicle/CarCare.js`, `src/economy/Mechanic.js`, itens em `src/player/Items.js`)
+
+- Motor, arrefecimento, óleo (com vazamento), bateria, freios, pneus e suspensão gastam e mudam a direção (falha, superaquecimento, partida que falha, freio longo, derrapagem, carro puxando). Painel com luzes de aviso. Capô para trocar peças você mesmo; oficinas Pay n Pay (orçamento, retífica, funilaria, pintura), borracharia nos postos, mecânico do morro (sujo, placa fria). Porta-malas por carro (salvo nos carros da garagem; revistado na prisão, menos com fundo falso).
+
 ## Interface (`src/ui/Theme.js`)
 
 Interface moderna em HD, separada do mundo em pixel art: tokens de cor/raio/sombra em `:root`, fontes Inter (texto) e Outfit (títulos/números), cartões de vidro desfocado, botões arredondados. Ícones no estilo emoji (Noto Color Emoji, igual em todo aparelho); armas de fogo e munição são arte vetorial HD (`WeaponArt.VGrid`) no mesmo estilo.
