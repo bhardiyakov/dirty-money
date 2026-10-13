@@ -113,6 +113,21 @@ class Minimap {
         mm.classList.toggle('alert-r', !!(pursuit && pursuit.seen && phase));
         mm.classList.toggle('alert-b', !!(pursuit && pursuit.seen && !phase));
 
+        // Cones de visão da polícia (procurado): o que cada unidade enxerga à frente; vermelho em quem te vê agora.
+        if (blips.some((b) => b.cone)) {
+            const half = Math.acos(Config.wanted.fovCos);
+            ctx.save(); ctx.lineWidth = 1;
+            for (const bl of blips) {
+                const c = bl.cone; if (!c) continue;
+                ctx.beginPath(); ctx.moveTo(sx(bl.pos.x, bl.pos.z), sy(bl.pos.x, bl.pos.z));
+                for (let i = 0; i <= 8; i++) { const t = c.a - half + (2 * half * i) / 8, x = bl.pos.x + Math.sin(t) * c.r, z = bl.pos.z + Math.cos(t) * c.r; ctx.lineTo(sx(x, z), sy(x, z)); }
+                ctx.closePath();
+                ctx.fillStyle = c.seen ? 'rgba(230,60,60,0.28)' : 'rgba(215,228,255,0.2)'; ctx.fill();
+                ctx.strokeStyle = c.seen ? 'rgba(255,90,90,0.7)' : 'rgba(225,235,255,0.5)'; ctx.stroke();
+            }
+            ctx.restore();
+        }
+
         // Alcance da polícia (radar): círculos translúcidos por baixo dos pontos.
         let ringed = false;
         for (const bl of blips) {

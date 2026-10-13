@@ -306,7 +306,7 @@ class PoliceOfficer {
         const angle = Math.atan2(tx - this.position.x, tz - this.position.z);
         this.manager.combat.fire({
             x: this.position.x, z: this.position.z, angle, owner: K.owner || 'police', ref: this,
-            spreadMul: (1.3 + dist * 0.07) * K.spread,
+            spreadMul: (1.3 + dist * 0.07) * K.spread * (K.owner ? 1 : this.manager.moveSpread),
         }, K.gun);
         if (this.burstLeft <= 0) this.burstLeft = K.burst;
         this.burstLeft--;

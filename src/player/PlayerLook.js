@@ -19,7 +19,7 @@ const PlayerLook = {
     ids: new Map(),         // chave de forma → id do atlas registrado no NpcArt
     tacIds: new Map(),      // chave de forma → id do atlas companheiro (clipes táticos) desse visual
     _job: 0,
-    VERSION: 13,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D; 8: sentar no carro (sitin); 9: começar/parar de nadar e mergulho; 10: sair do carro (sitout) e faca; 11: fardo correndo e parado (run_heavy, idle_heavy); 12: nado peito, vadear fundo, mergulho suave; 13: granada e molotov
+    VERSION: 14,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D; 8: sentar no carro (sitin); 9: começar/parar de nadar e mergulho; 10: sair do carro (sitout) e faca; 11: fardo correndo e parado (run_heavy, idle_heavy); 12: nado peito, vadear fundo, mergulho suave; 13: granada e molotov; 14: braços soltos, cabeça maior, silhueta feminina, luz mais marcada
 
     attach(game) {
         this.game = game; this.shown = null;

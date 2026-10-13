@@ -403,29 +403,41 @@ const Config = {
     wanted: {
         maxLevel: 5,
         escalateEvery: 6,      // s mínimos entre estrelas por crimes comuns (matar policial sobe na hora)
+        // FUGA (estilo GTA): a polícia enxerga num cone à frente (fovCos) com linha de visada — de perto (nearSense) sente em volta.
+        // Sem ninguém te ver, a contagem `lose` anda; fora da ÁREA DE BUSCA (círculo em volta de onde te viram por último, raio
+        // sight × searchK) ela anda `outsideRate`× mais rápido. Policial colado (closeNoEscape) sem te ver só PAUSA a contagem.
+        fovCos: 0.34,          // cos do meio-ângulo do cone de visão (≈ 70° para cada lado)
+        nearSense: 11,         // u: de tão perto a polícia percebe você mesmo de costas
+        searchK: 1.15,         // raio da área de busca = sight do nível × isto
+        outsideRate: 1.8,      // fora da área de busca a fuga anda este tanto mais rápido
         levels: [
             null,
             { sight: 30, lose: 5,  radio: false, dispatchR: 40,  cars: 0, heli: false, swat: 0, army: 0, blocks: 0 },     // 1★: só quem viu (sem rádio, sem viatura extra)
-            { sight: 52, lose: 16, radio: true,  dispatchR: 140, cars: 3, heli: true,  swat: 0, army: 0, blocks: 0 },
-            { sight: 64, lose: 24, radio: true,  dispatchR: 190, cars: 4, heli: true,  swat: 1, army: 0, blocks: 2 },
-            { sight: 78, lose: 32, radio: true,  dispatchR: 260, cars: 6, heli: true,  swat: 2, army: 0, blocks: 4 },
-            { sight: 96, lose: 45, radio: true,  dispatchR: 999, cars: 8, heli: true,  swat: 3, army: 2, blocks: 7 },
+            { sight: 46, lose: 11, radio: true,  dispatchR: 130, cars: 2, heli: false, swat: 0, army: 0, blocks: 0 },
+            { sight: 54, lose: 17, radio: true,  dispatchR: 170, cars: 3, heli: true,  swat: 1, army: 0, blocks: 0 },
+            { sight: 62, lose: 24, radio: true,  dispatchR: 230, cars: 4, heli: true,  swat: 2, army: 0, blocks: 2 },
+            { sight: 72, lose: 32, radio: true,  dispatchR: 320, cars: 6, heli: true,  swat: 3, army: 2, blocks: 4 },
         ],
     },
 
     // Helicóptero da polícia (3★+): enxerga por cima dos prédios, holofote, metralhadora a partir de `fireFrom`★.
+    // Não vê quem está debaixo de cobertura (viaduto, ponte, toldo, posto) nem escondido; sem te ver, varre a área em espiral.
     heli: {
         hp: 380,               // Dá para derrubá-lo a tiros (pistola ≈ 16 tiros).
-        speed: 24,             // m/s: quase o máximo de um carro, então fugir de carro na reta é possível.
-        accel: 15,
+        speed: 18,             // m/s (65 km/h): acompanha carro na cidade, mas quem acelera na avenida (25+) abre distância.
+        accel: 9,
         alt: 14,               // Altura de voo.
-        sight: 100,            // Enxerga o jogador (sem linha de visada) até esta distância.
+        sight: 48,             // Te acompanhando, não te perde até esta distância (sem linha de visada; +6 por ★ acima de 3; −30% num
+                               // alvo rápido: o holofote não acompanha um carro a 100 km/h)...
+        spot: 20,              // ...mas para te ACHAR (de novo) você precisa cair no holofote: até isto do ponto embaixo/à frente dele.
         orbit: 7,              // Raio da órbita sobre o jogador.
         fireFrom: 4,           // ★ a partir das quais ele atira.
         fireRange: 46,
         spawnDist: 170,        // Entra voando de tão longe.
-        delay: 3,              // Segundos entre chegar ao nível e o helicóptero aparecer.
-        cooldown: 30,          // Segundos até vir outro depois de derrubado.
+        delay: 16,             // Segundos entre chegar ao nível e o helicóptero aparecer.
+        cooldown: 45,          // Segundos até vir outro depois de derrubado.
+        sortie: [0, 0, 0, 70, 95, 0],   // Autonomia por ★ (s no ar; 0 = sem limite): acabou, ele vai abastecer — a brecha para sumir.
+        refuel: 35,            // Segundos fora (abastecendo) até voltar.
     },
 
     police: {
@@ -459,7 +471,9 @@ const Config = {
         officerPatrolSpeed: 1.5,
         officerChaseSpeed: 5.8,        // (a pé, perseguindo: um pouco mais lento que o jogador correndo — dá para fugir enquanto houver fôlego)
         officerWanderRadius: 30,
-        closeNoEscape: 32,     // Policial a menos disso (u) te impede de escapar mesmo sem linha de visada (atrás de parede).
+        closeNoEscape: 16,     // Policial a menos disso (u), mesmo sem te ver (atrás de parede), PAUSA a contagem da fuga.
+        movingSpread: 14,      // Atirar num carro em movimento: o erro cresce 1× a cada isto de m/s (até 2,4×).
+        maxChasers: 1.5,       // Viaturas de reforço no máximo = viaturas do nível × isto (o resto patrulha).
         // 1★ (delito leve): a polícia é bem menos punitiva — corre menos, precisa chegar mais perto para prender, perde você mais fácil
         // atrás de paredes; preso com 1★ = multa pequena, armas NÃO são confiscadas e você é liberado em poucas horas.
         oneStar: { bustRange: 4.5, closeNoEscape: 14, chaseMul: 0.8, fine: 0.15, keepWeapons: true, hours: [3, 5] },

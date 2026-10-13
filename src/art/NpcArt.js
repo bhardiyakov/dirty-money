@@ -192,6 +192,8 @@ const NpcArt = {
                 gl_Position.z = lp.z / lp.w * gl_Position.w;
             }`;
         // Bilinear feito à mão sobre a cor JÁ pintada (o atlas tem códigos, não cores): suave de longe; `sharp` > 1 = de perto, nítido.
+        // De longe (`mini` = texels do atlas por pixel da tela > 1,3: dirigindo, celular, tela pequena), o bilinear de 4 amostras pulava
+        // texels — o boneco serrilhava e "fervia" andando. Aí vale a MÉDIA de n×n amostras sobre a pegada do pixel (filtro de caixa).
         BABYLON.Effect.ShadersStore.npcArtFragmentShader = `
             precision highp float;
             varying vec2 vPx;
@@ -203,6 +205,7 @@ const NpcArt = {
             uniform float palRows;
             uniform vec3 tint;
             uniform float sharp;
+            uniform float mini;
             uniform float la;
             uniform float fmt;
             uniform float wt;
@@ -245,6 +248,15 @@ const NpcArt = {
             }
             // bilinear do quadro cujo retângulo no atlas é R (px), no ponto p (px)
             vec4 sampleFrame(vec2 px, vec4 R) {
+                if (mini > 1.3) {
+                    float n = min(4.0, ceil(mini));
+                    vec4 acc = vec4(0.0);
+                    for (int j = 0; j < 4; j++) for (int k = 0; k < 4; k++) {
+                        if (float(k) >= n || float(j) >= n) continue;
+                        acc += tap(floor(px + ((vec2(float(k), float(j)) + 0.5) / n - 0.5) * mini), R);
+                    }
+                    return acc / (n * n);
+                }
                 vec2 p = px - 0.5, i = floor(p), f = clamp((p - i - 0.5) * sharp + 0.5, 0.0, 1.0);
                 return mix(mix(tap(i, R), tap(i + vec2(1.0, 0.0), R), f.x), mix(tap(i + vec2(0.0, 1.0), R), tap(i + vec2(1.0, 1.0), R), f.x), f.y);
             }
@@ -283,7 +295,7 @@ const NpcArt = {
         if (A.material) return A.material;
         const m = new BABYLON.ShaderMaterial('npcArt_' + A.id, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
             attributes: ['position', 'color', 'fr', 'fr2'],
-            uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'atlasSize', 'palRows', 'tint', 'sharp', 'la', 'fmt', 'wt', 'clipA', 'clipB'],
+            uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'atlasSize', 'palRows', 'tint', 'sharp', 'mini', 'la', 'fmt', 'wt', 'clipA', 'clipB'],
             samplers: ['atlas', 'palette'],
             needAlphaBlending: true,
         });
@@ -296,6 +308,7 @@ const NpcArt = {
         m.setFloat('palRows', this.ROWS);
         m.setColor3('tint', SpriteMaterial.sharedTint());
         m.setFloat('sharp', this._sharpOf(A));
+        m.setFloat('mini', this._miniOf(A));
         m.setFloat('la', this._gl2 ? 0 : 1);
         m.setFloat('wt', this._wt || 0);
         m.setVector4('clipA', new BABYLON.Vector4(0, 0, 0, 1));
@@ -314,6 +327,7 @@ const NpcArt = {
     // Nitidez conforme o zoom: px de tela por texel do atlas (> 1 = ampliado: sem borrar). Chamado a cada quadro pelo jogo.
     _spm: 0,
     _sharpOf(A) { return Math.max(1, Math.min(8, (this._spm || this.ppu) / this.ppuOf(A))); },
+    _miniOf(A) { return Math.max(1, Math.min(6, this.ppuOf(A) / (this._spm || this.ppu))); },
 
     // Relógio da linha d'água (ondulação de quem vadeia): um uniform por atlas carregado, ~30 por quadro.
     tick(t) {
@@ -325,7 +339,7 @@ const NpcArt = {
         if (Math.abs(screenPxPerMeter - this._spm) < 0.05) return;
         this._spm = screenPxPerMeter;
         this.sharp = this._sharpOf({ data: {} });
-        for (const A of Object.values(this.atlases)) if (A.material) A.material.setFloat('sharp', this._sharpOf(A));
+        for (const A of Object.values(this.atlases)) if (A.material) { A.material.setFloat('sharp', this._sharpOf(A)); A.material.setFloat('mini', this._miniOf(A)); }
     },
 
     // ------------------------------------------------------------------ clipes
@@ -372,7 +386,7 @@ const NpcArt = {
     // resolução (k = 1: 52 px por metro), gerado aqui mesmo num Worker quando o tipo aparece pela primeira vez e guardado no aparelho
     // (IndexedDB, comprimido): da segunda vez é só carregar. Enquanto não fica pronto, o tipo aparece com o atlas pronto (resolução
     // padrão). Os atlas em alta não vêm no download (seriam ~90 MB).
-    HD_VERSION: 5,                 // mude quando o gerador mudar o desenho (os atlas em alta guardados são refeitos) — 2: atlas até 4096 de lado; 3: passada longa; 4: subida (walk_up, climb); 5: corpo da malha 3D
+    HD_VERSION: 6,                 // mude quando o gerador mudar o desenho (os atlas em alta guardados são refeitos) — 2: atlas até 4096 de lado; 3: passada longa; 4: subida (walk_up, climb); 5: corpo da malha 3D; 6: braços soltos, cabeça maior, silhueta feminina, luz
     hdOn() { return !!(typeof Config !== 'undefined' && Config.art && Config.art.hd) && !!this._scene; },
     _hd: null,
     // Em duas fases, para todos os tipos ficarem nítidos logo: (1) só parado/andando/correndo (poucos segundos por tipo) → atlas
@@ -450,7 +464,7 @@ const NpcArt = {
             const m = A.material;
             m.setTexture('atlas', A.tex);
             m.setVector2('atlasSize', new BABYLON.Vector2(a.w, a.h));
-            m.setFloat('ppu', this.ppuOf(A)); m.setFloat('fmt', A.data.v); m.setFloat('sharp', this._sharpOf(A));
+            m.setFloat('ppu', this.ppuOf(A)); m.setFloat('fmt', A.data.v); m.setFloat('sharp', this._sharpOf(A)); m.setFloat('mini', this._miniOf(A));
         }
         for (const s of Object.values(this.sheets)) if (s.atlasName === id || s.fallbackAtlas === id || s.extraAtlas === id) s.clips = {};
     },

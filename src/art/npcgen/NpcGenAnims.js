@@ -62,6 +62,7 @@ function NpcGenAnims(G) {
         }
         arm_fk(side, { flex = 0, abd = 0, twist = 0, elbow = 0, wrist = 0 } = {}) {
             const s = side === 'R' ? 1.0 : -1.0;
+            if (G.ADULT && abd > 0 && abd <= 18) abd *= G.ARM_ABD || 1;      // braços relaxados, rente ao corpo (G.ARM_ABD; 1 = o "gorila" do pacote)
             const Ru = mm3(mm3(Rz(deg(twist) * s), Ry(-deg(abd) * s)), Rx(deg(flex)));
             this.arm[side] = ['fk', Ru, Rx(deg(elbow)), Rx(deg(wrist))];
         }

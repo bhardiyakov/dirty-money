@@ -31,6 +31,12 @@ NPC, variações de cor e a personalização do jogador.
   (é o que `validate.html` compara).
 - Escala no jogo: `Config.art.npcPpu` = 26 px/m (= `NpcGenBuild.PPU`): adultos na mesma escala dos veículos (que são 1,3× o real).
 
+- **Postura e silhueta** (outubro/2026): `G.ARM_ABD = 0,6` fecha os braços nas poses FK de descanso (abdução ≤ 18°: parado,
+  andando, correndo — sem o ar de "gorila"); `ADULT.head = 0,66` (era 0,6: de cima, o rosto e o cabelo dizem quem é quem); corpo
+  feminino com ombros 0,84, braços 0,8 e quadril 1,08 (`bodyFactors`) e, na malha, braços 20% mais finos (`fitFor('f')`).
+- **Redução no jogo** (`NpcArt`, uniform `mini`): com o boneco menor que o atlas (texels por pixel > 1,3 — dirigindo, celular), o
+  shader tira a média de n×n amostras sobre a pegada do pixel (até 4×4) em vez do bilinear de 4 amostras, que serrilhava e tremia.
+
 ## Corpo da malha 3D (`NpcGenMesh`, `assets/npcs/malha3d.js`)
 
 O corpo de todos os personagens (NPCs e jogador) vem do **personagem realista 3D** (pacote "personagem_3d_realista", MakeHuman, CC0:

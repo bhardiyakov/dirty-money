@@ -76,6 +76,9 @@ class Hud {
             .px-stars .emo { font-size: 24px; transition: filter .2s, opacity .2s, transform .2s; }
             .px-stars .emo.off { filter: grayscale(1) brightness(0.5); opacity: 0.45; }
             .px-stars .emo.hot { filter: hue-rotate(-38deg) saturate(2.2) drop-shadow(0 0 6px rgba(255,60,60,0.9)); transform: scale(1.08); }
+            /* ninguém te vê (a polícia procura): as estrelas piscam, como no GTA */
+            .px-stars.lost .emo:not(.off) { animation: starLost 0.9s steps(2, jump-none) infinite; }
+            @keyframes starLost { 0% { opacity: 1; } 100% { opacity: 0.28; } }
             .px-status { font: 800 14px var(--font-d); letter-spacing: 0.06em; text-transform: uppercase; }
             .px-forces { font: 500 11px var(--font); color: var(--tx-2); min-height: 0; }
             .px-forces:empty { display: none; }
@@ -276,11 +279,14 @@ class Hud {
         this._set('stars', lvl + (hot ? 'h' : ''), () => {
             this.stars.forEach((c, i) => { c.className = 'emo' + (i < lvl ? (hot ? ' hot' : '') : ' off'); });
         });
+        const lost = lvl > 0 && !!g.policeManager && !g.policeManager.playerSeen;
+        this._set('lost', lost, (v) => { this.stars[0].parentNode.classList.toggle('lost', v); });
         let st, col;
         if (g.hiding && g.hiding.phase === 'hidden') { st = g.hiding.seen ? 'Visto! Eles vêm' : 'Escondido'; col = g.hiding.seen ? '#fb7185' : '#7dd3fc'; }
         else if (lvl <= 0) { st = 'Limpo'; col = '#86efac'; }
         else if (g.bustTimer > 0) { st = `Preso em ${Math.max(0, Config.police.bustTime - g.bustTimer).toFixed(1)}s`; col = '#fb7185'; }
-        else if (g.wanted.lose > 0.3) { st = `Escapando ${Math.max(0, g.wanted.cfg.lose - g.wanted.lose).toFixed(1)}s`; col = '#86efac'; }
+        else if (g.wanted.hold && lost) { st = 'Polícia perto — quieto'; col = '#fdba74'; }
+        else if (g.wanted.lose > 0.3) { st = `${g.wanted.rate > 1 ? 'Fora da busca' : 'Escapando'} ${g.wanted.left.toFixed(1)}s`; col = '#86efac'; }
         else { st = 'Procurado'; col = '#fdba74'; }
         this._set('status', st + col, () => { const e = this.$('hStatus'); e.textContent = st; e.style.color = col; });
         let forces = '';

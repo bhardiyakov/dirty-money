@@ -144,18 +144,31 @@ class PoliceCar extends TrafficCar {
             const heavy = this.role === 'swat' || this.role === 'army';       // atiradores da van/jipe: metralhadora/fuzil
             m.combat.fire({
                 x: p.x, z: p.z, angle: Math.atan2(tx - p.x, tz - p.z), owner: 'police', ref: this,
-                spreadMul: 1.8 + dist * 0.06,
+                spreadMul: (1.8 + dist * 0.06) * m.moveSpread,
             }, this.role === 'army' ? 'rifle' : (heavy ? 'smg' : 'pistol'));
             this.fireCd = heavy ? 0.14 + (Math.random() < 0.18 ? 0.9 : 0) : 0.8 + Math.random() * 0.9;
         }
 
-        // Perto de um jogador A PÉ: para a viatura (não atropela) e deixa os policiais descerem.
-        this.stoppedNear = !!(m && m.game.mode !== 'car' && dist < 12);
-        if (this.stoppedNear) { this._stuckT = 0; this.reason = ''; this.driveTo(0, 0, dt, 6, 16); return; }
+        // Perto de um jogador A PÉ — ou de um carro parado/quase parado: para a viatura (não atropela nem fica empurrando você
+        // contra a parede) e deixa os policiais descerem. Arrancou de novo, a viatura volta a perseguir.
+        const pc = m && m.game.mode === 'car' ? m.game.activeCar : null;
+        this._pcStill = pc && Math.abs(pc.speed) < 1 ? (this._pcStill || 0) + dt : 0;          // carro do jogador parado há quanto tempo
+        this.stoppedNear = !!(m && ((!pc && m.game.mode !== 'car' && dist < 12) || (pc && dist < 10 && this._pcStill > 2.5)));      // (desce gente)
+        // (já quase parada, o freio fica leve: o seu carro consegue empurrá-la para sair do cerco — viatura parada não é parede)
+        if (this.stoppedNear || (pc && dist < 10 && Math.abs(pc.speed) < 3.5)) { this._stuckT = 0; this.reason = ''; this.driveTo(0, 0, dt, 6, pc && Math.abs(this.forwardSpeed) < 2 ? 1.5 : 16); return; }
 
         const lead = Math.min(Config.police.leadTimeMax, dist / Config.police.interceptSpeed);
         const predicted = this.targetPos.add(this.targetVel.scale(lead));
         this._goal = predicted;
+
+        // Na cola de um carro em fuga (vendo você): acompanha um pouco atrás e de lado, no ritmo do alvo, e só de tempos em
+        // tempos tenta a batida (PIT, ~1,3 s). Antes toda viatura mirava em cima do carro e o prensava contra a parede.
+        const tv = this.targetVel, ts = hypot(tv.x, tv.z);
+        if (pc && ts > 6 && dist < 18 && this.mind && this.mind.sees && this._reverseT <= 0) {
+            this._pitCd = (this._pitCd === undefined ? 3 + Math.random() * 3 : this._pitCd) - dt;
+            if (this._pitCd < -1.3) this._pitCd = 4 + Math.random() * 4;
+            if (this._pitCd > 0) { this._tail(tv, ts, dt); this._watchStuck(dt, dist); return; }
+        }
 
         // Enroscou num prédio/poste: dá ré um instante e depois volta a seguir só as ruas.
         if (this._reverseT > 0) {
@@ -174,6 +187,21 @@ class PoliceCar extends TrafficCar {
             this._chaseByRoad(predicted, dt);
         }
         this._watchStuck(dt, dist);
+    }
+
+    // Segue o carro do jogador a ~11u, deslocada para um lado (cada viatura de um lado), casando a velocidade — mas sem passar de
+    // 88% da máxima da viatura (~83 km/h): na avenida, um carro comum no talo abre distância, e numa esquina ela te perde de vista.
+    _tail(tv, ts, dt) {
+        const p = this.position, ux = tv.x / ts, uz = tv.z / ts, side = (this.id % 2 ? 1 : -1) * 2.2;
+        const tx = this.targetPos.x - ux * 11 + uz * side, tz = this.targetPos.z - uz * 11 - ux * side;
+        const f = this.fwdToRef(this._tf || (this._tf = new BABYLON.Vector3()));
+        let delta = Math.atan2(tx - p.x, tz - p.z) - Math.atan2(f.x, f.z);
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        const ahead = (tx - p.x) * ux + (tz - p.z) * uz;                      // > 0: o ponto de cola ainda está à frente
+        const vt = Math.max(0, Math.min(this.spec.maxSpeed * 0.88, ts + ahead * 0.5));
+        this.route = null; this.reason = '';
+        this.driveTo(vt, Math.max(-1, Math.min(1, delta / (Math.PI / 4))), dt, 9, 13);
     }
 
     // Segue as ruas rumo ao alvo: a Route escolhe, a cada cruzamento, a manobra que mais o aproxima.

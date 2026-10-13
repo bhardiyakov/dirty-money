@@ -7,9 +7,9 @@
 //     `escalateEvery` s (um tiroteio escala com o tempo, não em 2 segundos).
 //   - bump()/addStars(): agressão a policial (com o mesmo intervalo) e morte de policial (na hora).
 // Fugir:
-//   - update(dt, seen): com ★, cada segundo SEM ninguém te enxergar conta. Passou o `lose` do
-//     nível (Config.wanted.levels[n].lose) sem ser visto = você se safou e as ★ zeram.
-//     Ser visto zera a contagem. Níveis altos enxergam de mais longe e demoram mais a perder você.
+//   - update(dt, seen, hold, rate): com ★, cada segundo SEM ninguém te enxergar conta (× rate: fora da área de busca
+//     conta mais rápido). Passou o `lose` do nível (Config.wanted.levels[n].lose) sem ser visto = você se safou e as ★ zeram.
+//     Ser visto zera a contagem; policial colado sem te ver (hold) só a pausa. Níveis altos enxergam de mais longe e demoram mais.
 // Ser preso/morrer também zera. `onChange(nível, anterior, motivo)` avisa o jogo (mensagens, reforços).
 // ============================================================================
 
@@ -20,14 +20,20 @@ class WantedSystem {
         this.crimeWindow = 0;    // tempo restante da janela de flagrante.
         this.lose = 0;           // segundos seguidos sem ninguém te ver (fuga em andamento).
         this.heatCd = 0;         // tempo até a próxima ★ por crime comum.
+        this.rate = 1;           // ritmo atual da fuga (o HUD mostra o tempo que falta nesse ritmo).
+        this.hold = false;       // polícia colada: contagem parada.
         this.onChange = null;
     }
 
     // Configuração do nível atual (null sem ★).
     get cfg() { return Config.wanted.levels[this.level] || null; }
 
-    // Fração da fuga concluída (0..1).
-    get escape() { return this.cfg ? Math.min(1, this.lose / (this.cfg.lose * (this.loseMul || 1))) : 0; }
+    // Segundos sem ser visto para fugir no nível atual (notoriedade e habilidades mexem).
+    get need() { return this.cfg ? this.cfg.lose * (this.loseMul || 1) : 0; }
+
+    // Fração da fuga concluída (0..1) e segundos que faltam no ritmo atual.
+    get escape() { return this.cfg ? Math.min(1, this.lose / this.need) : 0; }
+    get left() { return this.cfg ? Math.max(0, (this.need - this.lose) / Math.max(0.2, this.rate)) : 0; }
 
     _set(n, why) {
         n = Math.max(0, Math.min(Config.wanted.maxLevel, n));
@@ -61,8 +67,10 @@ class WantedSystem {
         if (this.heatCd <= 0) this._set(this.level + 1, why);
     }
 
-    // seen: algum policial (ou o helicóptero) te enxerga agora.
-    update(dt, seen) {
+    // seen: algum policial (ou o helicóptero) te enxerga agora | hold: alguém colado (sem te ver) | rate: ritmo da contagem.
+    update(dt, seen, hold = false, rate = 1) {
+        this.hold = !!hold && !seen;
+        this.rate = rate;
         if (this.heatCd > 0) this.heatCd -= dt;
         // Expira o flagrante se ninguém viu a tempo.
         if (this.crimeWindow > 0) {
@@ -72,8 +80,9 @@ class WantedSystem {
 
         if (this.level <= 0) return;
         if (seen) { this.lose = 0; return; }
-        this.lose += dt;
-        if (this.lose >= this.cfg.lose * (this.loseMul || 1)) this._set(0, 'escape');      // loseMul: notoriedade (+) e habilidades de fuga (−)
+        if (this.hold) return;
+        this.lose += dt * rate;
+        if (this.lose >= this.need) this._set(0, 'escape');      // loseMul: notoriedade (+) e habilidades de fuga (−)
     }
 
     // Garante pelo menos `n` estrelas (ex.: ser visto com arma de fogo na mão).

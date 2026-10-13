@@ -789,7 +789,11 @@ class Game {
             if (seen) this.wanted.seenByPolice();
 
             // (Estar armado e à vista NÃO libera mais a polícia: só atirar — ver _onAttack/notifyPlayerShot.)
-            this.wanted.update(dt, seen || (this.wanted.level > 0 && this.policeManager.nearestDist(ps.pos) < (this.wanted.level === 1 ? Config.police.oneStar.closeNoEscape : Config.police.closeNoEscape)));       // policial colado (mesmo atrás de parede) impede a fuga
+            // Fuga: policial colado (mesmo atrás de parede) PAUSA a contagem; fora da área de busca ela anda mais rápido.
+            const S = this.policeManager.search;
+            const hold = this.wanted.level > 0 && this.policeManager.nearestDist(ps.pos) < (this.wanted.level === 1 ? Config.police.oneStar.closeNoEscape : Config.police.closeNoEscape);
+            const rate = S && hypot(ps.pos.x - S.x, ps.pos.z - S.z) > S.r ? Config.wanted.outsideRate : 1;
+            this.wanted.update(dt, seen, hold, rate);
 
             Traces.update(dt, this);                                                         // descrição, placa, mandado, área de busca
             const alerted = this.wanted.level > 0;
@@ -1012,9 +1016,9 @@ class Game {
         if (pm && lvl <= 0 && Traces.search) { const S = Traces.search; return { x: S.x, z: S.z, r: S.r, seen: false, escaping: false, search: true }; }      // área de busca depois do assalto (amarela)
         if (!pm || lvl <= 0) return null;
         const L = Config.wanted.levels[lvl], seen = pm.playerSeen && !(this.hiding && !this.hiding.seen);
-        const k = pm.known && !seen ? pm.known : center;
+        const S = pm.search, k = S && !seen ? S : center;            // a área de busca de verdade (a mesma que a fuga usa)
         const esc = this.wanted.escape || 0;
-        return { x: k.x, z: k.z, r: L.sight * this.weather.sightMul * (1.35 - 0.5 * esc), seen, escaping: esc > 0.02 };
+        return { x: k.x, z: k.z, r: S ? S.r : L.sight * Config.wanted.searchK, seen, escaping: esc > 0.02 };
     }
 
     // O inventário agora é uma aba do menu de pausa (a mochila com espaços); este atalho só abre o menu nela.
@@ -1167,14 +1171,19 @@ class Game {
         if (this.policeManager) {
             // RADAR: sem estrelas e armado (ou com um crime em flagrante), cada policial aparece com o círculo do que ele enxerga —
             // crime cometido fora dos círculos (e longe o bastante para não ouvirem o tiro) não dá estrela.
-            const ring = this.wanted.level === 0 && this.mode === 'player' && (this.player.weapon !== 'none' || this.wanted.pending) ? this.policeManager.sightR || 0 : 0;
-            for (const u of this.policeManager.units) {
+            const pm = this.policeManager, armed = this.wanted.level === 0 && this.mode === 'player' && (this.player.weapon !== 'none' || this.wanted.pending), ring = 0;
+            // Procurado (ou armado / com crime em flagrante): cada unidade a menos de ~1 tela mostra o CONE do que ela enxerga (como no GTA V)
+            // — a polícia só vê o que está à frente dela; fora dos cones (e longe o bastante para não ouvir), dá para agir.
+            const cones = (this.wanted.level > 0 || armed) && pm.sightR, cp = this._playerState().pos;
+            for (const u of pm.units) {
                 // Polícia = azul | SWAT = lilás claro | exército = verde.
                 const k = u.kind || u.role;
-                blips.push({ pos: u.position, color: k === 'swat' ? '#c9b8ff' : (k === 'army' ? '#7fe04a' : (k === 'block' ? '#ff5a4d' : '#3a7bff')), ring });
+                let cone = null;
+                if (cones && hypot(u.position.x - cp.x, u.position.z - cp.z) < Config.minimap.rangeUnits) { const f = pm._face(u); cone = { a: Math.atan2(f.x, f.z), r: pm.sightR, seen: !!(u.mind && u.mind.sees) }; }
+                blips.push({ pos: u.position, color: k === 'swat' ? '#c9b8ff' : (k === 'army' ? '#7fe04a' : (k === 'block' ? '#ff5a4d' : '#3a7bff')), ring, cone });
             }
-            const h = this.policeManager.heli;
-            if (h && h.alive) blips.push({ pos: h.position, color: '#ffffff' });
+            const h = pm.heli;
+            if (h && h.alive) blips.push({ pos: h.position, color: '#ffffff', ring: this.wanted.level > 0 ? (Config.heli.sight + Math.max(0, this.wanted.level - 3) * 6) * this.weather.sightMul : 0 });
 if (this.barricades) for (const b of this.barricades.list) blips.push({ pos: { x: b.x, z: b.z }, color: '#ff8a2a' });      // barricadas em chamas
 if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performance.now() / 300) % 2 ? '#ff3ad0' : '#35e0ff' });      // baile funk (pisca)        if (MotoStands.built) for (const s of MotoStands.stands) blips.push({ pos: { x: s.x, z: s.z }, color: '#ffd23a' });      // pontos de mototáxi
         if (MotoStands.built) for (const s of MotoStands.stands) blips.push({ pos: { x: s.x, z: s.z }, color: '#ffd23a' });      // pontos de mototáxi
@@ -2595,17 +2604,18 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     _onWantedChange(n, prev, why) {
         const msg = {
             1: '★ A polícia te viu! Saia do raio deles ou se esconda atrás dos prédios',
-            2: '★★ Viaturas e helicóptero a caminho! Ele enxerga por cima dos prédios',
-            3: '★★★ A polícia atira à vista! SWAT e bloqueios a caminho',
-            4: '★★★★ Tropa de elite (SWAT) em campo — armados de metralhadora',
+            2: '★★ Viaturas pelo rádio! Quebre a linha de visão e saia do círculo de busca',
+            3: '★★★ Helicóptero e SWAT a caminho! Ele não te vê debaixo de viaduto, ponte ou toldo',
+            4: '★★★★ SWAT de metralhadora e bloqueios nas ruas — o helicóptero atira',
             5: '★★★★★ INIMIGO DO ESTADO! Ruas fechadas, SWAT e exército atrás de você',
         };
         if (n > prev) this._queueForces(n);
         if (this.goals) this.goals.onWanted(n, prev, why);
         if (this.careers) this.careers.onWanted(n, prev);
         if (this.empire && n > prev) this.empire.spend(0, 10 * (n - prev));
-        if (this.skills && n === 0 && why === 'escape') this.skills.addXp(25 * prev * prev);
-        if (this.achievements && n === 0 && why === 'escape' && prev >= 5) this.achievements.bump('escape5');      // fugir de muitas estrelas vale muito
+        const fled = n === 0 && (why === 'escape' || why === 'paint');                     // (pintura express na oficina também é fuga)
+        if (this.skills && fled) this.skills.addXp(25 * prev * prev);
+        if (this.achievements && fled && prev >= 5) this.achievements.bump('escape5');      // fugir de muitas estrelas vale muito
         if (n > prev && msg[n]) this._flash(msg[n]);
         else if (n === 0 && why === 'escape') this._flash('Você se safou! A polícia perdeu o seu rastro');
         if (this.policeManager) this.policeManager.onWantedChange(n, prev, why);
@@ -2698,8 +2708,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
                 el.style.color = '#ff5a4d';
             } else if (this.wanted.lose > 0.3) {
                 // Fuga em andamento: ninguém te enxerga.
-                const left = Math.max(0, this.wanted.cfg.lose - this.wanted.lose);
-                el.textContent = `${'★'.repeat(lvl)}  ESCAPANDO ${left.toFixed(1)}s`;
+                el.textContent = `${'★'.repeat(lvl)}  ESCAPANDO ${this.wanted.left.toFixed(1)}s`;
                 el.style.color = '#7dff9a';
             } else {
                 el.textContent = '★'.repeat(lvl) + '☆'.repeat(Config.wanted.maxLevel - lvl);

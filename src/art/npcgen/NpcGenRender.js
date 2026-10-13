@@ -295,7 +295,7 @@ function NpcGenRender(G) {
                     const j = idx(y - dy, x - dx);
                     if (F[j] && ZZ[j] < zz - thr) occ++;
                 }
-                const ao = 1 - min(0.5, max(0, occ / nwin - 0.06) * 1.25);
+                const ao = 1 - min(0.58, max(0, occ / nwin - 0.05) * 1.45);          // (dobras, axilas e debaixo do queixo mais fundos)
                 // linhas de desenho: borda de profundidade com o vizinho (outra parte na frente) → traço escuro fino (contorno); troca de
                 // material com degrau (punho da manga, barra da camisa) → a cor mais escura do próprio material; degrau pequeno → vinco
                 let crease = 1;
@@ -308,10 +308,11 @@ function NpcGenRender(G) {
                     else if (gap > 0.6 * kk) crease = min(crease, 0.86);
                 }
                 const d = nx * L[0] + ny * L[1] + nz * L[2];
-                let dif = min(max((d + 0.42) / 1.42, 0), 1); dif = dif * dif * (3 - 2 * dif);
+                // (luz principal mais marcada e recorte nas bordas mais forte: o boneco "salta" do chão de longe)
+                let dif = min(max((d + 0.32) / 1.32, 0), 1); dif = dif * dif * (3 - 2 * dif);
                 const hemi = 0.5 + 0.5 * (nx * UP[0] + ny * UP[1] + nz * UP[2]);
-                const fres = (1 - min(1, abs(nz))) ** 2.2, rim = fres * max(0, nx * RIM[0] + ny * RIM[1] + nz * RIM[2]) * 0.32;
-                let lv = (0.1 + 0.2 * hemi + 0.72 * dif) * ao * crease + rim + 0.055 * TN[i];
+                const fres = (1 - min(1, abs(nz))) ** 2.0, rim = fres * max(0, nx * RIM[0] + ny * RIM[1] + nz * RIM[2]) * 0.44;
+                let lv = (0.07 + 0.17 * hemi + 0.8 * dif) * ao * crease + rim + 0.06 * TN[i];
                 const S = SHINE[m];
                 let sp = S ? max(0, nx * HV[0] + ny * HV[1] + nz * HV[2]) ** S[0] * S[1] * ao * crease : 0;
                 if (m === M.eye) { lv = 0.08; sp = sp > 0.15 ? 0.9 : 0; }                // pupila escura com um brilho

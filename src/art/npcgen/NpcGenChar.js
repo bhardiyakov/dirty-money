@@ -114,7 +114,10 @@ function NpcGenChar(G) {
     // As poses continuam escritas no esqueleto do pacote (SKEL); na hora de desenhar, os ÂNGULOS das juntas passam para um esqueleto
     // adulto (NpcGenAnims: Pose.adult) e cada parte assada é esticada no comprimento do osso (shapeFor). Resultado: ~5,3 cabeças.
     // ADULT = null volta ao desenho original do pacote (validate.html compara com os PNGs dele).
-    const ADULT = { leg: 1.7, torso: 1.35, arm: 1.38, head: 0.6, hand: 0.85, neck: 2.0, width: 0.9 };
+    // (cabeça 0,66: um pouco maior que a do adulto real — vista do alto, o rosto e o cabelo é que dizem quem é quem)
+    const ADULT = { leg: 1.7, torso: 1.35, arm: 1.38, head: 0.66, hand: 0.85, neck: 2.0, width: 0.9 };
+    // Abertura dos braços nas poses FK de descanso (abdução ≤ 18°) — 0,6: soltos ao lado do corpo, sem o ar de "gorila" do pacote.
+    G.ARM_ABD = 0.6;
     // Escala [x, y, z] de uma parte no espaço do osso (z = ao longo do osso). null = sem mudança.
     function shapeFor(bone) {
         const A = G.ADULT;
@@ -161,7 +164,7 @@ function NpcGenChar(G) {
 
     function bodyFactors(s) {
         const b = Object.assign({}, BODY[s.body] || BODY.normal);
-        if (s.gender === 'f') { b.tw *= 0.9; b.arm *= 0.86; b.hip *= 1.04; b.leg *= 0.97; }
+        if (s.gender === 'f') { b.tw *= 0.84; b.td *= 0.95; b.arm *= 0.8; b.hip *= 1.08; b.leg *= 0.97; }      // ombros mais estreitos, quadril mais largo
         return b;
     }
 
