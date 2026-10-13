@@ -1,5 +1,6 @@
 // ============================================================================
-// FavelaPlan — a FAVELA DO MORRO, orgânica: só 3 RUAS de carro (vias livres do RoadPlan, curvas, classe 'fav') e o resto um
+// FavelaPlan — a FAVELA DO MORRO, orgânica: uma mancha de contorno torto (occ: grotas, bolsões, ocupação escorrendo pelas ruas, borda
+// rala), só 3 RUAS de carro (vias livres do RoadPlan, curvas, classe 'fav') e o resto um
 // labirinto de BECOS estreitos (só moto e pedestre: carro não cabe) entre barracos colados, lojas e comércios, em quarteirões
 // tortos (células de Voronoi com becos tremidos; alguns becos somem e viram miolos de casas, outros acabam sem saída).
 //
@@ -15,7 +16,7 @@
 // ============================================================================
 
 const FavelaPlan = {
-    R: { x0: -665, z0: 265, x1: -331, z1: 743 },        // área (= o território do C.V: Standing._bounds)
+    R: { x0: -665, z0: 265, x1: -331, z1: 743 },        // caixa da grade de ocupação; a favela é a mancha dentro dela (occ, território)
     TILE: 48,
     FREE: 0, ROAD: 1, ALLEY: 2, BLD: 3, GAP: 4, OPEN: 5, RES: 6, OUT: 7,
     SAFE: { x: -401, z: 422 },                         // canto sudoeste da safe house (o mesmo de antes: saves e o começo do jogo)
@@ -35,7 +36,113 @@ const FavelaPlan = {
         { name: 'Rua da Caixa d\'Água', pts: [[-294, 702], [-340, 698], [-392, 690], [-440, 700], [-490, 690], [-540, 668], [-580, 640], [-605, 605], [-618, 572], [-624, 546]] },
     ],
 
-    roads(P) { for (const r of this.MAIN) P.addPath(this._smooth(r.pts, 4), 'fav', { name: r.name, anchor: true }); },
+    // (a ponta na cidade, x = -294, vai até a Av. do Contorno: a borda da cidade é curva e às vezes recua)
+    roads(P) {
+        for (const r of this.MAIN) {
+            const pts = r.pts.slice();
+            if (CityGrid.cityPath) { const [c, o] = CityGrid.cityLink(pts[0][1]); if (o[0] > pts[0][0] + 4) pts.unshift(c, o); else pts[0] = c; }
+            P.addPath(this._smooth(pts, 4), 'fav', { name: r.name, anchor: true });
+        }
+    },
+
+    // ================================================================= contorno
+    // A favela não é um retângulo: é uma MANCHA que cresceu morro acima sem plano. Campo `occ(x, z)` (u, ~distância com sinal:
+    // + dentro): um miolo de raio polar torto (elipse com harmônicos sorteados), uns bolsões grudados nela, BRAÇOS de ocupação ao longo
+    // das 3 ruas (o barraco nasce na beira da rua e a favela escorre por ela), e ruído na borda; perto da caixa R ela some (com a
+    // borda também ruidosa: nada de corte reto). Determinístico.
+    SHAPE: { cx: -492, cz: 500, ax: 112, az: 168 },
+    _shape() {
+        if (this._sh) return this._sh;
+        const rng = Pixel.rng(4711), S = this.SHAPE, harm = [];
+        for (let k = 2; k <= 7; k++) harm.push({ k, a: (0.3 / (k - 0.8)) * (0.6 + rng() * 0.6), ph: rng() * Math.PI * 2 });
+        const roads = this.MAIN.map((r) => this._smooth(r.pts, 6)), roadD = (x, z) => {
+            let bd = Infinity;
+            for (const P of roads) for (let i = 0; i + 1 < P.length; i++) {
+                const a = P[i], b = P[i + 1], sx = b[0] - a[0], sz = b[1] - a[1], L2 = sx * sx + sz * sz || 1;
+                const t = Math.max(0, Math.min(1, ((x - a[0]) * sx + (z - a[1]) * sz) / L2));
+                bd = Math.min(bd, hypot(x - a[0] - sx * t, z - a[1] - sz * t));
+            }
+            return bd;
+        };
+        // bolsões (morro ocupado além do miolo) e grotas (barranco, mata ou valão onde ninguém constrói, entrando pela borda)
+        const lobes = [], notches = [];
+        // ([x, z, raio(, esticado)] em arrays: objetos { x, z, r } com quebrados aqui mudariam a forma interna que o relevo usa — WorldMap.DOMES)
+        for (let n = 0; n < 5; n++) { const t = n * Math.PI * 2 / 5 + rng() * 1.0, f = 0.95 + rng() * 0.25; lobes.push([S.cx + Math.cos(t) * S.ax * f, S.cz + Math.sin(t) * S.az * f, 30 + rng() * 32]); }
+        for (let n = 0, tries = 0; n < 4 && tries < 200; tries++) {
+            const t = rng() * Math.PI * 2, f = 1.05 + rng() * 0.3, x = S.cx + Math.cos(t) * S.ax * f, z = S.cz + Math.sin(t) * S.az * f, r = 34 + rng() * 34;
+            if (roadD(x, z) < r + 12 || hypot(x - this.SAFE.x, z - this.SAFE.z) < r + 40 || notches.some((q) => hypot(q[0] - x, q[1] - z) < q[2] + r)) continue;
+            notches.push([x, z, r, 0.6 + rng() * 0.8]); n++;
+        }
+        return (this._sh = { harm, lobes, notches, roads, roadD });
+    },
+    // (o campo é suave: cacheado numa grade de 2 u em volta da caixa, com interpolação bilinear; fora dela, bem negativo)
+    occ(x, z) {
+        const G = this._occG || this._occGrid(), fx = (x - G.x0) / 2, fz = (z - G.z0) / 2, i = Math.floor(fx), j = Math.floor(fz);
+        if (i < 0 || j < 0 || i >= G.nx - 1 || j >= G.nz - 1) return -60;
+        const tx = fx - i, tz = fz - j, k = j * G.nx + i, V = G.v;
+        return (V[k] * (1 - tx) + V[k + 1] * tx) * (1 - tz) + (V[k + G.nx] * (1 - tx) + V[k + G.nx + 1] * tx) * tz;
+    },
+    _occGrid() {
+        const R = this.R, x0 = R.x0 - 24, z0 = R.z0 - 24, nx = Math.ceil((R.x1 - R.x0 + 48) / 2) + 1, nz = Math.ceil((R.z1 - R.z0 + 48) / 2) + 1, v = new Float32Array(nx * nz);
+        for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) v[j * nx + i] = this._occRaw(x0 + i * 2, z0 + j * 2);
+        return (this._occG = { x0, z0, nx, nz, v });
+    },
+    _occRaw(x, z) {
+        const S = this.SHAPE, H = this._shape(), R = this.R, n = (a, b) => this._noise(a, b) - 0.5;
+        const dx = (x - S.cx) / S.ax, dz = (z - S.cz) / S.az, th = Math.atan2(dz, dx), q = hypot(dx, dz);
+        let f = 1;
+        for (const h of H.harm) f += h.a * Math.cos(h.k * th + h.ph);
+        const rr = hypot(Math.cos(th) * S.ax, Math.sin(th) * S.az) * f;                                   // raio do miolo nessa direção
+        let v = rr * (1 - q / f);
+        for (const l of H.lobes) v = Math.max(v, l[2] - hypot(x - l[0], z - l[1]));
+        v = Math.max(v, 20 + 26 * n(x / 46 + 7, z / 46) - H.roadD(x, z));                               // braços ao longo das ruas
+        for (const g of H.notches) v = Math.min(v, hypot((x - g[0]) * g[3], (z - g[1]) / g[3]) - g[2]);
+        v += 30 * n(x / 30, z / 30) + 12 * n(x / 11 + 40, z / 11 - 9);
+        const de = Math.min(x - R.x0, R.x1 - x, z - R.z0, R.z1 - z);                                      // caixa: some antes da borda
+        return Math.min(v, de - 12 + 22 * n(x / 20 - 30, z / 20 + 11));
+    },
+    // Território do C.V: a mancha com uma folga (raster de 2 u) | contorno (laço) para o mapa | distância até ela (raster de 4 u).
+    _territory() {
+        const R = this.R, M = 300, G = 2, x0 = R.x0 - 8, z0 = R.z0 - 8, nx = Math.ceil((R.x1 - R.x0 + 16) / G), nz = Math.ceil((R.z1 - R.z0 + 16) / G);
+        const T = new Uint8Array(nx * nz);
+        let bx0 = Infinity, bz0 = Infinity, bx1 = -Infinity, bz1 = -Infinity;
+        for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+            const x = x0 + (i + 0.5) * G, z = z0 + (j + 0.5) * G;
+            if (this.occ(x, z) > -6 || this.inside(x, z)) { T[j * nx + i] = 1; bx0 = Math.min(bx0, x - 1); bz0 = Math.min(bz0, z - 1); bx1 = Math.max(bx1, x + 1); bz1 = Math.max(bz1, z + 1); }
+        }
+        this.terr = { T, x0, z0, nx, nz, G };
+        this.bounds = { x0: bx0, z0: bz0, x1: bx1, z1: bz1 };
+        const loops = WorldMap.contour((x, z) => {
+            const i = Math.floor((x - x0) / G), j = Math.floor((z - z0) / G);
+            let s = 0; for (const [a, b] of [[0, 0], [-1, 0], [0, -1], [-1, -1]]) { const ii = i + a, jj = j + b; if (ii >= 0 && jj >= 0 && ii < nx && jj < nz) s += T[jj * nx + ii]; }
+            return s / 4;
+        }, x0, z0, nx, nz, G, 0.5);
+        this.outline = loops.length ? WorldMap.simplifyLoop(loops[0], 0.8) : [];
+        // distância (u) até o território, até M u em volta (chanfro em células de 4 u)
+        const C = 4, dx0 = R.x0 - M, dz0 = R.z0 - M, dnx = Math.ceil((R.x1 - R.x0 + 2 * M) / C), dnz = Math.ceil((R.z1 - R.z0 + 2 * M) / C), D = new Float32Array(dnx * dnz);
+        for (let j = 0; j < dnz; j++) for (let i = 0; i < dnx; i++) D[j * dnx + i] = this.inTerritory(dx0 + (i + 0.5) * C, dz0 + (j + 0.5) * C) ? 0 : 1e6;
+        for (let pass = 0; pass < 2; pass++) for (let s = 0; s < dnx * dnz; s++) {
+            const k = pass ? dnx * dnz - 1 - s : s, i = k % dnx, j = (k / dnx) | 0, o = pass ? 1 : -1;
+            let d = D[k];
+            if (i + o >= 0 && i + o < dnx) d = Math.min(d, D[k + o] + C);
+            if (j + o >= 0 && j + o < dnz) { d = Math.min(d, D[k + o * dnx] + C); if (i - o >= 0 && i - o < dnx) d = Math.min(d, D[k + o * dnx - o] + C * 1.414); if (i + o >= 0 && i + o < dnx) d = Math.min(d, D[k + o * dnx + o] + C * 1.414); }
+            D[k] = d;
+        }
+        this.dist = { D, x0: dx0, z0: dz0, nx: dnx, nz: dnz, C, M };
+    },
+    // (x, z) no território do C.V (a mancha, não a caixa)?
+    inTerritory(x, z) {
+        const t = this.terr; if (!t) return false;
+        const i = Math.floor((x - t.x0) / t.G), j = Math.floor((z - t.z0) / t.G);
+        return i >= 0 && j >= 0 && i < t.nx && j < t.nz && t.T[j * t.nx + i] === 1;
+    },
+    // Distância (u) até o território (0 dentro; longe dele, pela caixa).
+    distTo(x, z) {
+        const d = this.dist; if (!d) return Infinity;
+        const i = Math.floor((x - d.x0) / d.C), j = Math.floor((z - d.z0) / d.C);
+        if (i >= 0 && j >= 0 && i < d.nx && j < d.nz) return Math.min(d.D[j * d.nx + i], d.M);
+        const b = this.bounds; return Math.max(d.M, hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1)));
+    },
 
     // Catmull-Rom pelos pontos de controle, amostrada a cada ~step u (passa pelos pontos: as pontas casam com os nós das outras vias).
     _smooth(C, step) {
@@ -58,11 +165,11 @@ const FavelaPlan = {
         const W = this.W = R.x1 - R.x0, H = this.H = R.z1 - R.z0, C = this.cells = new Uint8Array(W * H);
         this.alleys = []; this.squares = []; this.bollards = []; this.lots = []; this.props = [];
 
-        // 1) borda orgânica: o morro vai rareando (nada de borda reta); o lado da cidade (leste) fica mais cheio
+        // 1) contorno orgânico (occ): fora da mancha é morro; perto da borda a ocupação rareia em vazios tortos (terreno baldio,
+        //    barranco), sobrando grupinhos de barracos soltos na beira
         for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-            const x = R.x0 + i + 0.5, z = R.z0 + j + 0.5, de = Math.min(i, j, W - 1 - i, H - 1 - j);
-            const n = this._noise(x / 38, z / 38), city = W - 1 - i < 30 ? 0.3 : 1;
-            if (de < 3 + 15 * n * city || !WorldMap.buildable(x, z, 6)) C[j * W + i] = this.OUT;
+            const x = R.x0 + i + 0.5, z = R.z0 + j + 0.5, o = this.occ(x, z);
+            if (o <= 0 || (o < 16 && this._noise(x / 7 + 3, z / 7 - 5) > 0.42 + o / 26) || !WorldMap.buildable(x, z, 6)) C[j * W + i] = this.OUT;
         }
         // 2) as ruas (as 3 da favela e as estradas que entram nela) e os cruzamentos
         const inR = (x0, z0, x1, z1, m) => x1 > R.x0 - m && x0 < R.x1 + m && z1 > R.z0 - m && z0 < R.z1 + m;
@@ -108,8 +215,9 @@ const FavelaPlan = {
 
         // 10) chão e andável: as células de 4 u do terreno com alguma coisa da favela (o terreno não desenha nem anda nelas)
         this._groundBoxes(grid);
-        // 11) grafo dos becos (motos)
+        // 11) grafo dos becos (motos); território (a mancha)
         this._buildGraph();
+        this._territory();
         this.built = true;
         this.buildMs = performance.now() - t0;
         console.log(`[FAVELA] ${this.lots.length} barracos (${this.lots.filter((l) => l.shops.length).length} com loja), ${this.alleys.length} becos, ${this.bollards.length} frades, ${this.graph.nodes.length} nós em ${this.buildMs.toFixed(0)} ms`);
@@ -214,12 +322,16 @@ const FavelaPlan = {
             for (let k = 0; k <= n; k++) cs.push(this.cellAt(a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n));
             if (cs.some((c) => c === this.RES || c === this.OPEN || c === -1)) continue;
             if (cs.filter((c) => c === this.ROAD).length > n * 0.6) continue;
-            let k0 = 0, k1 = n;
-            while (k0 <= n && cs[k0] === this.OUT) k0++;
-            while (k1 >= 0 && cs[k1] === this.OUT) k1--;
-            if (k1 - k0 < 2) continue;
-            const A = k0 ? [a[0] + (b[0] - a[0]) * k0 / n, a[1] + (b[1] - a[1]) * k0 / n] : a, B = k1 < n ? [a[0] + (b[0] - a[0]) * k1 / n, a[1] + (b[1] - a[1]) * k1 / n] : b;
-            list.push({ a: A, b: B, ka: key(A), kb: key(B), ra: cs[0] === this.ROAD || k0 > 0, rb: cs[n] === this.ROAD || k1 < n });       // (ponta na rua ou na borda: "lá fora")
+            // só os pedaços dentro da mancha (a aresta que atravessa uma grota vira dois becos, cada um saindo para "lá fora")
+            for (let k = 0; k <= n;) {
+                while (k <= n && cs[k] === this.OUT) k++;
+                const k0 = k;
+                while (k <= n && cs[k] !== this.OUT) k++;
+                const k1 = k - 1;
+                if (k1 - k0 < 2) continue;
+                const A = k0 ? [a[0] + (b[0] - a[0]) * k0 / n, a[1] + (b[1] - a[1]) * k0 / n] : a, B = k1 < n ? [a[0] + (b[0] - a[0]) * k1 / n, a[1] + (b[1] - a[1]) * k1 / n] : b;
+                list.push({ a: A, b: B, ka: key(A), kb: key(B), ra: cs[k0] === this.ROAD || k0 > 0, rb: cs[k1] === this.ROAD || k1 < n });       // (ponta na rua ou na borda: "lá fora")
+            }
         }
         // conectividade: tira ~22% (sem isolar ninguém de "lá fora" = rua ou borda)
         const reach = (skip) => {
@@ -607,7 +719,13 @@ const FavelaPlan = {
     entrances() {
         if (this._ent) return this._ent;
         this._ent = [];
-        for (const m of this.MAIN) { const q = RoadPlan.nearestRoadPoint(this.R.x1 - 4, m.pts[0][1], 40); if (q) this._ent.push({ x: q.x, z: q.z, name: m.name }); }
+        for (const m of this.MAIN) {                                               // primeiro ponto da rua (vindo da cidade) dentro da mancha
+            const P = this._smooth(m.pts, 2);
+            let q = null;
+            for (const p of P) if (this.inTerritory(p[0], p[1])) { q = RoadPlan.nearestRoadPoint(p[0], p[1], 20); break; }
+            q = q || RoadPlan.nearestRoadPoint(this.R.x1 - 4, m.pts[0][1], 40);
+            if (q) this._ent.push({ x: q.x, z: q.z, name: m.name });
+        }
         return this._ent;
     },
     entranceNear(x, z) { let best = null, bd = Infinity; for (const e of this.entrances()) { const d = hypot(e.x - x, e.z - z); if (d < bd) { bd = d; best = e; } } return best; },

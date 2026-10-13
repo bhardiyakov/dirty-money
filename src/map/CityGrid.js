@@ -2,11 +2,18 @@
 // CityGrid — a CIDADE e tudo o que é construído, gerado a partir do plano de ruas (RoadPlan). FONTE ÚNICA: o WorldBuilder
 // constrói o 3D a partir daqui e o MapRenderer desenha o mesmo nos mapas.
 //
-// DISTRITOS (cada um com a sua grade de ruas, no mesmo grafo):
-//   CIDADE  — a faixa urbana ao longo do canal (grade de 42 u): centro de arranha-céus, comércio, residencial, industrial, porto, parques;
-//   ILHA    — a ilha praiana (resort): hotéis, condomínios, bares, orla dos dois lados;
-//   FAVELA  — as vielas do morro (grade irregular de 6 u de largura): casas humildes, escadarias, caixas-d'água.
+// DISTRITOS (no mesmo grafo):
+//   CIDADE  — a faixa urbana ao longo do canal: uma MANCHA de contorno torto (a Av. do Contorno corre pela borda oeste/norte/sul; a
+//             orla leste é a Beira-Mar), grade reta no miolo antigo e no meio (viaduto), e bairros de RUAS CURVAS no norte e no
+//             extremo sul (a mesma grade deformada por um lençol suave): centro, comércio, residencial, industrial, porto, parques;
+//   ILHA    — a ilha praiana (resort): a área urbana segue o formato dela (Av. Litorânea em volta, a uma faixa de praia da água) e as
+//             ruas de dentro são curvas; hotéis, condomínios, bares;
+//   FAVELA  — FavelaPlan: a mancha do morro, becos e barracos.
 // Fora deles: rodovias e estradas de terra pelo continente e as 3 pontes entre a cidade e a ilha (ver _makePlan).
+//
+// Quarteirões = FACES do grafo de ruas (_faces). A face que é exatamente uma célula da grade vira o quarteirão retangular de sempre;
+// as outras (cortadas por diagonal ou curva, na borda da mancha) viram quarteirões em POLÍGONO (`poly` = laje, `footPoly` = pegada;
+// slab/foot são as caixas deles), com os prédios (sempre alinhados aos eixos) empacotados na pegada (_packLots).
 //
 // Por quarteirão (cell) entre quatro ruas:
 //   slab = área do quarteirão (do meio-fio até o meio-fio)
@@ -41,6 +48,7 @@ const CityGrid = {
         this.hideSpots = [];   // esconderijos (caçambas, caixotes, latões): { x, z, w, d, h, kind }
         this.blocks = [];
         this.urbanBoxes = [];  // retângulos [x0,z0,x1,z1] cobertos por quarteirão+ruas (o terreno por baixo some; a nav só anda no declarado)
+        this.urbanPolys = [];  // o mesmo para os quarteirões em polígono: a face inteira (até o eixo das ruas em volta)
         this.roadRects = [];   // um retângulo por trecho de rua (achata o relevo)
         this.navBlocks = [];   // áreas proibidas SÓ para a navegação a pé (interior da safe house: pedestres e policiais não entram; o jogador sim)
         this._makePlan();
@@ -140,21 +148,25 @@ const CityGrid = {
         D.city = { id: 'city', xs: cx, zs: cz, cls: 'city', sw: 4, margin: 14 };
         const aveZ = new Set(cz.filter((z, i) => (z < -210 || z > 210) && i % 4 === 0));       // avenidas largas (canteiro central) fora do miolo antigo
         const aveX = new Set([cx[1], cx[cx.length - 1]]);                                       // N-S: a do oeste e a BEIRA-MAR (a última coluna, de frente para o canal)
-        P.lattice(cx, cz, (v, at) => (!legacy && ((v && aveX.has(at)) || (!v && aveZ.has(at)))) ? 'ave' : 'city', (x, z) => WorldMap.buildable(x, z, 16), 'cidade');
+        if (legacy) P.lattice(cx, cz, 'city', (x, z) => WorldMap.buildable(x, z, 16), 'cidade');
 
         if (!legacy) {
             // ---- VIADUTO: via elevada na coluna oeste da cidade (cruza as ruas por cima, sem cruzamento; rampas nas pontas).
             const nearest = (arr, v) => arr.reduce((b, q) => (Math.abs(q - v) < Math.abs(b - v) ? q : b), arr[0]);
             const xv = (cx[0] + cx[1]) / 2, zA = nearest(cz, -840), zB = nearest(cz, -270);
             D.viaduct = { x: xv, z0: zA, z1: zB };
+            // ---- CONTORNO: a mancha urbana termina numa curva torta (oeste, norte e sul) e a Av. do Contorno corre por ela, da orla sul
+            // à orla norte; as ruas da cidade são cortadas nela (_cityStreets). Os bairros do norte e do extremo sul têm ruas curvas.
+            this._cityOutline(zA, zB);
+            P.addPath(this.cityPath, 'ave', { name: 'Av. do Contorno', anchor: true });
+            this._cityStreets(P, cx, cz, aveX, aveZ, zA);
             P.addV(xv, zA, zB, 'via', { layer: 1, ramp: 55, elev: 6.2 });
             D.city.skip = (x0, z0, x1, z1) => x0 < xv && xv < x1 && z0 >= zA - 1e-6 && z1 <= zB + 1e-6;            // sem quarteirões sob o viaduto
-            // ---- ILHA: grade de 42 u (só onde há terra firme com folga para a praia).
-            const ix = this._irregular(480, 732, [36, 42, 48, 54, 60], lr), iz = this._irregular(-840, 924, [30, 36, 42, 48, 60, 72], lr);
+            // ---- ILHA: a área urbana segue o formato da ilha (a Av. Litorânea dá a volta nela, a uma faixa de praia da água) e as ruas
+            // de dentro são uma grade deformada (curvas). As 3 PONTES (cidade -> ilha) descem na avenida (_islandPlan).
+            const ix = this._irregular(396, 828, [36, 42, 48, 54, 60], lr), iz = this._irregular(-960, 1056, [30, 36, 42, 48, 60, 72], lr);
             D.island = { id: 'island', xs: ix, zs: iz, cls: 'isl', sw: 4, margin: 30 };
-            P.lattice(ix, iz, 'isl', (x, z) => WorldMap.buildable(x, z, 30), 'ilha');
-            // ---- As 3 PONTES (cidade -> ilha), no eixo das ruas E-O: norte, centro e sul.
-            for (const z of [714, 0, -630]) P.addH(z, 168, 480, 'bridge');
+            this._islandPlan(P, ix, iz);
             // ---- DIAGONAIS do centro antigo (grade regular de 42 u: passam pelos cruzamentos, sem cortar trecho no meio) e a PRAÇA
             // CENTRAL, rotatória de 8 braços na origem onde elas se cruzam com as ruas do centro.
             P.addPath([[-168, -168], [168, 168]], 'ave', { name: 'Av. Diagonal Norte' });
@@ -177,6 +189,224 @@ const CityGrid = {
             RuralRoads.plan(P);
         }
         P.build();
+    },
+
+    // ============================================================ contorno e ruas da cidade
+    // A cidade não termina numa régua: a mancha urbana (_cityField) recua da faixa em curvas tortas a oeste (o campo, a favela), ao norte
+    // e ao sul — só a orla (leste) segue a Beira-Mar. A AV. DO CONTORNO corre pela borda, da orla norte à orla sul (cityPath; cityLoop =
+    // ela fechada pelo mar, para dizer o que é dentro).
+    CITY: { x0: -294, x1: 168, z0: -1050, z1: 1134, east: 200 },
+    _smin(a, b, k) { const h = Math.max(0, Math.min(1, 0.5 + 0.5 * (b - a) / k)); return b + (a - b) * h - k * h * (1 - h); },
+    // Campo da mancha (u, + dentro): recuos sorteados de cada borda (ruído suave + um tremido curto), cantos redondos (mínimo suave).
+    // Perto das duas pontas do viaduto a borda oeste fica rente (as rampas descem em ruas da cidade); no meio dele, não (o elevado
+    // passa por cima do campo onde a cidade recua).
+    _cityField(x, z) {
+        const B = this.CITY, F = (a, b, sd, o = 3) => WorldMap._fbm(a, b, o, sd), V = this._viaBand, ss = (a, b, v) => WorldMap._ss(a, b, v);
+        const band = V ? 1 - ss(50, 110, Math.min(Math.abs(z - V[0]), Math.abs(z - V[1]))) : 0;
+        const w = 10 + 150 * ss(0.3, 0.64, F(z / 270, 3.3, 501)) * (1 - band) + 18 * (F(z / 64, 9.1, 502, 2) - 0.5);
+        const n = 30 + 210 * ss(0.36, 0.72, F(x / 230, 5.5, 503)) + 16 * (F(x / 60, 1.9, 504, 2) - 0.5);
+        const s = 30 + 190 * ss(0.36, 0.72, F(x / 230, 8.5, 505)) + 16 * (F(x / 60, 4.4, 506, 2) - 0.5);
+        return Math.min(this._smin(this._smin(x - (B.x0 + w), (B.z1 - n) - z, 70), z - (B.z0 + s), 70), B.east - x);
+    },
+    _chaikinLoop(L) {
+        const out = [];
+        for (let i = 0; i < L.length; i++) { const a = L[i], b = L[(i + 1) % L.length]; out.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]); }
+        return out;
+    },
+    _cityOutline(zA, zB) {
+        this._viaBand = [zA, zB];
+        const B = this.CITY, st = 6, x0 = B.x0 - 30, z0 = B.z0 - 30, nx = Math.ceil((B.east + 30 - x0) / st), nz = Math.ceil((B.z1 + 30 - z0) / st);
+        let L = WorldMap.contour((x, z) => this._cityField(x, z), x0, z0, nx, nz, st, 0)[0];
+        L = WorldMap.simplifyLoop(L, 1.5);
+        for (let k = 0; k < 3; k++) L = this._chaikinLoop(L);
+        // corta o laço em x = Beira-Mar: o pedaço a oeste (anti-horário: da ponta norte, pelo oeste, até a ponta sul) é a avenida
+        const XB = B.x1, n = L.length, cr = [];
+        for (let i = 0; i < n; i++) { const a = L[i], b = L[(i + 1) % n]; if ((a[0] < XB) !== (b[0] < XB)) cr.push({ i, p: [XB, a[1] + (b[1] - a[1]) * (XB - a[0]) / (b[0] - a[0])], into: b[0] < XB }); }
+        const ent = cr.find((c) => c.into), ex = cr.find((c) => !c.into), path = [ent.p];
+        for (let i = (ent.i + 1) % n; i !== (ex.i + 1) % n; i = (i + 1) % n) path.push(L[i]);
+        path.push(ex.p);
+        this.cityPath = RuralRoads._resample(path, 6);
+        const P = this.cityPath, a = P[0], b = P[P.length - 1];
+        this.cityLoop = P.concat([[B.east + 40, b[1]], [B.east + 40, a[1]]]);
+        this.cityO = this._outlineObj(P, this.cityLoop);
+    },
+    // Contorno para recortar ruas: a avenida (path, polilinha) e o laço que diz o que é dentro (loop), com uma grade dos segmentos da
+    // avenida (distância rápida).
+    _outlineObj(path, loop) {
+        const G = new Map(), S = 32;
+        for (let i = 0; i + 1 < path.length; i++) {
+            const p = path[i], q = path[i + 1];
+            for (let gi = Math.floor(Math.min(p[0], q[0]) / S); gi <= Math.floor(Math.max(p[0], q[0]) / S); gi++) for (let gj = Math.floor(Math.min(p[1], q[1]) / S); gj <= Math.floor(Math.max(p[1], q[1]) / S); gj++) {
+                const k = gi * 100000 + gj; (G.get(k) || G.set(k, []).get(k)).push(i);
+            }
+        }
+        let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+        for (const p of loop) { x0 = Math.min(x0, p[0]); z0 = Math.min(z0, p[1]); x1 = Math.max(x1, p[0]); z1 = Math.max(z1, p[1]); }
+        return { path, loop, G, box: [x0, z0, x1, z1] };
+    },
+    // Distância (u) de (x, z) até a avenida do contorno O (até ~64 u; além disso, 99).
+    _oDist(O, x, z) {
+        const P = O.path, S = 32, gi0 = Math.floor(x / S), gj0 = Math.floor(z / S);
+        let bd = 99;
+        for (let gi = gi0 - 2; gi <= gi0 + 2; gi++) for (let gj = gj0 - 2; gj <= gj0 + 2; gj++) for (const i of O.G.get(gi * 100000 + gj) || []) {
+            const a = P[i], b = P[i + 1], sx = b[0] - a[0], sz = b[1] - a[1], L2 = sx * sx + sz * sz || 1, t = Math.max(0, Math.min(1, ((x - a[0]) * sx + (z - a[1]) * sz) / L2));
+            bd = Math.min(bd, hypot(x - a[0] - sx * t, z - a[1] - sz * t));
+        }
+        return bd;
+    },
+    _oIn(O, x, z) { const b = O.box; return x >= b[0] && x <= b[2] && z >= b[1] && z <= b[3] && RoadPlan.inPoly(O.loop, x, z); },
+    // Onde uma via que chega do oeste na altura z encontra a Av. do Contorno: [x, z, nx, nz] (n = normal para fora da cidade). A 1ª
+    // interseção da reta z para leste, se ela chega de frente na avenida; senão (borda norte/sul, rasante), o ponto da avenida mais
+    // perto de (-294, z) — a via chega na perpendicular. Para as estradas do interior e as ruas da favela. (Arrays, não { x, z }: roda
+    // no meio do traçado das estradas, e um objeto { x, z, ... } novo ali muda a forma interna que WorldMap._rawHeight usa e o desotimiza.)
+    cityEdgeAt(z) {
+        const P = this.cityPath;
+        if (!P) return [-294, z, -1, 0];
+        const nrm = (i) => { const a = P[i], b = P[i + 1], l = hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[1] - a[1]) / l, -(b[0] - a[0]) / l]; };
+        let bx = Infinity, bi = -1;
+        for (let i = 0; i + 1 < P.length; i++) {
+            const a = P[i], b = P[i + 1];
+            if ((a[1] < z) === (b[1] < z)) continue;
+            const x = a[0] + (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]);
+            if (x > -300 && x < bx) { bx = x; bi = i; }
+        }
+        if (bi >= 0) { const n = nrm(bi); if (-n[0] > 0.7) return [bx, z, n[0], n[1]]; }
+        let best = null, bd = Infinity;
+        for (let i = 0; i + 1 < P.length; i++) {
+            const a = P[i], b = P[i + 1], sx = b[0] - a[0], sz = b[1] - a[1], L2 = sx * sx + sz * sz || 1, t = Math.max(0, Math.min(1, ((-294 - a[0]) * sx + (z - a[1]) * sz) / L2));
+            const x = a[0] + sx * t, zz = a[1] + sz * t, d = hypot(x + 294, zz - z);
+            if (d < bd) { bd = d; const n = nrm(i); best = [x, zz, n[0], n[1]]; }
+        }
+        return best;
+    },
+    // Pontos de chegada de uma via na Av. do Contorno: [o ponto na avenida, 22 u para fora na perpendicular].
+    cityLink(z) { const c = this.cityEdgeAt(z); return [[c[0], c[1]], [c[0] + c[2] * 22, c[1] + c[3] * 22]]; },
+    // (x, z) dentro da mancha urbana?
+    inCity(x, z) { return !this.cityO || this._oIn(this.cityO, x, z); },
+
+    // Interseção do segmento pq com o laço do contorno O (a mais perto de p) ou null.
+    _oX(O, p, q) {
+        const L = O.loop;
+        let best = null, bt = Infinity;
+        for (let i = 0; i < L.length; i++) {
+            const a = L[i], b = L[(i + 1) % L.length];
+            if (Math.max(a[0], b[0]) < Math.min(p[0], q[0]) || Math.min(a[0], b[0]) > Math.max(p[0], q[0]) || Math.max(a[1], b[1]) < Math.min(p[1], q[1]) || Math.min(a[1], b[1]) > Math.max(p[1], q[1])) continue;
+            const X = this._segX(p, q, a, b);
+            if (X) { const t = hypot(X[0] - p[0], X[1] - p[1]); if (t < bt) { bt = t; best = X; } }
+        }
+        return best;
+    },
+    // Linha de rua L (polilinha; `cross` = índices dos vértices que são cruzamentos) recortada pela mancha urbana: pedaços [[x, z], ...].
+    // Ponta que sai na Av. do Contorno: entroncamento em T se a linha chega nela de frente (a 24 u dela em ≤ 42 u de linha); chegando
+    // rasante (correndo junto dela), a linha acaba no último cruzamento antes — nada de quarteirão-fiapo entre as duas. Ponta que não
+    // sai na avenida (a linha acaba ali dentro): no último cruzamento (sem beco sem saída).
+    _clipLine(L, cross, O = this.cityO) {
+        const DK = 24, runs = [];
+        let cur = null;
+        for (let i = 0; i < L.length; i++) {
+            const p = L[i], ins = this._oIn(O, p[0], p[1]);
+            if (ins) {
+                if (!cur) { cur = { pts: [], cr: [], ea: false, eb: false }; if (i > 0) { const X = this._oX(O, L[i - 1], p); if (X) { cur.pts.push(X); cur.cr.push(false); cur.ea = true; } } }
+                cur.pts.push(p); cur.cr.push(cross.has(i));
+            } else if (cur) {
+                const X = this._oX(O, L[i - 1], p); if (X) { cur.pts.push(X); cur.cr.push(false); cur.eb = true; }
+                runs.push(cur); cur = null;
+            }
+        }
+        if (cur) runs.push(cur);
+        const out = [];
+        for (const r of runs) {
+            const n = r.pts.length, d = r.pts.map((p) => this._oDist(O, p[0], p[1])), cum = [0];
+            for (let k = 1; k < n; k++) cum.push(cum[k - 1] + hypot(r.pts[k][0] - r.pts[k - 1][0], r.pts[k][1] - r.pts[k - 1][1]));
+            let a = 0, b = n - 1;
+            const firstX = (from, step, okD) => { for (let k = from; k >= 0 && k < n; k += step) if (r.cr[k] && d[k] >= okD) return k; return -1; };
+            if (r.ea) { let k = 0; while (k < n && d[k] < DK) k++; if (k >= n || cum[k] > 42) a = firstX(0, 1, DK - 4); }
+            else a = firstX(0, 1, 0);
+            if (r.eb) { let k = n - 1; while (k >= 0 && d[k] < DK) k--; if (k < 0 || cum[n - 1] - cum[k] > 42) b = firstX(n - 1, -1, DK - 4); }
+            else b = firstX(n - 1, -1, 0);
+            if (a < 0 || b < 0 || b <= a) continue;
+            if (!r.cr.slice(a, b + 1).some(Boolean)) continue;                          // (pedaço sem nenhum cruzamento: sobra solta)
+            out.push(r.pts.slice(a, b + 1));
+        }
+        return out;
+    },
+    // ILHA: a Av. Litorânea é a curva a 30–64 u da água (a faixa de praia varia), fechada em volta da ilha; as 3 pontes chegam nela
+    // (o ponto mais a oeste dela na altura de cada uma). Dentro, a grade da ilha deformada por um lençol suave (todas as ruas curvas),
+    // recortada pela avenida como as da cidade.
+    _islandPlan(P, ix, iz) {
+        const F = (a, b, sd, o = 3) => WorldMap._fbm(a, b, o, sd), F2 = (a, b, sd) => WorldMap._fbm(a, b, 2, sd) * 2 - 1;
+        const f = (x, z) => (x < 330 || !WorldMap.isLand(x, z) ? -30 : WorldMap.seaDist(x, z) - (30 + 34 * F(x / 150, z / 150, 521)));
+        const X0 = 340, Z0 = -1060, st = 6;
+        let L = WorldMap.contour(f, X0, Z0, Math.ceil((880 - X0) / st), Math.ceil((1160 - Z0) / st), st, 0)[0];
+        L = WorldMap.simplifyLoop(L, 1.5);
+        for (let k = 0; k < 3; k++) L = this._chaikinLoop(L);
+        const R = RuralRoads._resample(L.concat([L[0]]), 6);
+        R[R.length - 1] = R[0].slice();                                             // (fechada: o último ponto é o primeiro)
+        this.islandPath = R;
+        const O = this.islandO = this._outlineObj(R, R.slice(0, -1));
+        P.addPath(R, 'ave', { name: 'Av. Litorânea', anchor: true });
+        this.bridgeEnds = {};
+        for (const z of [714, 0, -630]) {
+            let bx = Infinity;
+            for (let i = 0; i + 1 < R.length; i++) { const a = R[i], b = R[i + 1]; if ((a[1] < z) === (b[1] < z)) continue; const x = a[0] + (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]); if (x > 300 && x < bx) bx = x; }
+            this.bridgeEnds[z] = bx;
+            P.addH(z, 168, bx, 'bridge');
+        }
+        const warp = (u, v) => [u + 30 * F2(u / 220, v / 220, 531), v + 26 * F2(u / 220 + 9.7, v / 220 + 3.3, 532)];
+        const mid = ix.reduce((b, q) => (Math.abs(q - 612) < Math.abs(b - 612) ? q : b), ix[0]);
+        const line = (vert, c, a, b, at) => {
+            const vs = new Set(), Lp = [], cross = new Set(), atS = new Set(at);
+            for (let v = a; v < b; v += 6) vs.add(Math.round(v * 100) / 100);
+            vs.add(b); for (const q of at) if (q >= a && q <= b) vs.add(q);
+            [...vs].sort((p, q) => p - q).forEach((v, i) => { Lp.push(vert ? warp(c, v) : warp(v, c)); if (atS.has(v)) cross.add(i); });
+            return { L: Lp, cross };
+        };
+        let n = 0;
+        for (const x of ix) { const { L: Lp, cross } = line(true, x, iz[0] - 40, iz[iz.length - 1] + 40, iz); for (const q of this._clipLine(Lp, cross, O)) { P.addPath(q, x === mid ? 'ave' : 'isl', { name: x === mid ? 'Av. Central da Ilha' : this._gridName(true, x, true) }); n++; } }
+        for (const z of iz) { const { L: Lp, cross } = line(false, z, ix[0] - 40, ix[ix.length - 1] + 40, ix); for (const q of this._clipLine(Lp, cross, O)) { P.addPath(q, 'isl', { name: this._gridName(false, z, true) }); n++; } }
+        console.log(`[ILHA] Av. Litorânea com ${R.length} pontos; ${n} ruas curvas`);
+    },
+
+    // As ruas da cidade, recortadas pela mancha: grade reta no meio (do viaduto ao miolo antigo, z ∈ [zA, 210]) e nas duas colunas da
+    // orla; nos bairros do NORTE e do extremo SUL a mesma grade deformada por um "lençol" suave (as ruas fazem curvas, os quarteirões
+    // acompanham). Retas viram addV/addH; curvas, vias livres.
+    _cityStreets(P, cx, cz, aveX, aveZ, zA) {
+        const B = this.CITY, ZN = 210, ss = (a, b, v) => WorldMap._ss(a, b, v), F = (a, b, sd) => WorldMap._fbm(a, b, 2, sd) * 2 - 1;
+        const XE = cx[cx.length - 2], straightX = new Set([cx[cx.length - 2], cx[cx.length - 1]]);
+        const warp = (u, v) => {
+            const t = (1 - ss(XE - 66, XE - 10, u)) * (v > ZN ? ss(ZN, ZN + 90, v) : (v < zA ? ss(zA, zA - 90, v) : 0));
+            return t <= 0 ? [u, v] : [u + 36 * t * F(u / 240, v / 240, 511), v + 30 * t * F(u / 240 + 17.3, v / 240 + 4.1, 512)];
+        };
+        const cls = (vert, at) => ((vert ? aveX.has(at) : aveZ.has(at)) ? 'ave' : 'city');
+        // linha param.: de a até b no eixo (u ou v), cruzamentos em `at`; amostras a cada 6 u (vértices exatos nos cruzamentos)
+        const line = (vert, c, a, b, at) => {
+            const vs = new Set(), L = [], cross = new Set();
+            for (let v = a; v < b; v += 6) vs.add(Math.round(v * 100) / 100);
+            vs.add(b); for (const q of at) if (q >= a && q <= b) vs.add(q);
+            const list = [...vs].sort((p, q) => p - q), atS = new Set(at);
+            list.forEach((v, i) => { L.push(vert ? warp(c, v) : warp(v, c)); if (atS.has(v)) cross.add(i); });
+            return { L, cross };
+        };
+        const add = (vert, c, pieces, curved) => {
+            for (const q of pieces) {
+                if (!curved) { if (vert) P.addV(c, q[0][1], q[q.length - 1][1], cls(true, c)); else P.addH(c, q[0][0], q[q.length - 1][0], cls(false, c)); }
+                else P.addPath(q, cls(vert, c), { name: this._gridName(vert, c) });
+            }
+        };
+        let nCurve = 0;
+        for (const x of cx) {
+            if (straightX.has(x)) { const { L, cross } = line(true, x, B.z0 - 60, B.z1 + 60, cz); add(true, x, this._clipLine(L, cross), false); continue; }
+            { const { L, cross } = line(true, x, zA, ZN, cz); add(true, x, this._clipLine(L, cross), false); }
+            { const { L, cross } = line(true, x, ZN, B.z1 + 60, cz); const pc = this._clipLine(L, cross); add(true, x, pc, true); nCurve += pc.length; }
+            { const { L, cross } = line(true, x, B.z0 - 60, zA, cz); const pc = this._clipLine(L, cross); add(true, x, pc, true); nCurve += pc.length; }
+        }
+        for (const z of cz) {
+            const curved = z > ZN || z < zA, { L, cross } = line(false, z, B.x0 - 60, B.x1, cx);
+            cross.add(L.length - 1);                                                    // (acaba na Beira-Mar)
+            const pc = this._clipLine(L, cross);
+            add(false, z, pc, curved); if (curved) nCurve += pc.length;
+        }
+        console.log(`[CIDADE] contorno: ${this.cityPath.length} pontos; ${nCurve} ruas curvas`);
     },
 
     // ================================================================== túneis
@@ -252,6 +482,29 @@ const CityGrid = {
         return 'resort';
     },
 
+    // Bioma (e semente) de um quarteirão da cidade na célula [x0,z0,x1,z1] da grade (ou na caixa da face, fora da grade).
+    _pickCity(x0, z0, x1, z1) {
+        const O = this.OLD, legacy = !!Config.world.legacyPlan, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+        const inOld = x0 >= O.minX - 1e-6 && x1 <= O.maxX + 1e-6 && z0 >= O.minZ - 1e-6 && z1 <= O.maxZ + 1e-6;
+        if (inOld) {
+            const oi = Math.round((x0 - O.minX) / O.pitch), oj = Math.round((z0 - O.minZ) / O.pitch);
+            const eastEdge = oi === O.cols - 1;                                                 // a coluna do mar fica como era (praia/porto/mata)
+            const b = (legacy || eastEdge) ? this._biomeOld(oi, oj) : (oi === 0 || oj === 0 || oj === O.rows - 1 ? this._biomeCity(cx, cz, this._rand(oi, oj)) : this._biomeOld(oi, oj));
+            return { biome: b, si: oi, sj: oj };
+        }
+        const gi = Math.round(x0) + 3000, gj = Math.round(z0) + 3000;
+        const east = Math.abs(x1 - 168) < 1e-6;                                                 // a coluna do mar (x 126..168) é praia/porto/mata
+        const r = this._rand(gi, gj);
+        let biome = east ? (r < 0.5 ? 'beach' : (r < 0.78 ? 'port' : 'forest')) : this._biomeCity(cx, cz, r);
+        if (!east && Math.max(x1 - x0, z1 - z0) >= 66 && biome !== 'downtown' && this._rand(gi + 5, gj + 9) < 0.55) biome = z0 < -560 ? (r < 0.5 ? 'industrial' : 'port') : (r < 0.5 ? 'park' : 'forest');      // quarteirão grande: parque, mata ou complexo industrial
+        return { biome, si: gi, sj: gj };
+    },
+    _pickIsland(i, j, x0, z0, x1, z1) {
+        const r = this._rand(i + 400, j + 400);
+        return { biome: this._biomeIsland((x0 + x1) / 2, (z0 + z1) / 2, r), si: i + 400, sj: j + 400 };
+    },
+    _cellKey(x0, z0, x1, z1) { return Math.round(x0 * 10) + ',' + Math.round(z0 * 10) + ',' + Math.round(x1 * 10) + ',' + Math.round(z1 * 10); },
+
     // Cria um quarteirão no retângulo de linhas [x0,z0,x1,z1] do distrito `d` (se as 4 ruas existem). Devolve o bloco ou null.
     _makeBlock(d, i, j, x0, z0, x1, z1, biome, seedI, seedJ) {
         const P = RoadPlan;
@@ -272,46 +525,31 @@ const CityGrid = {
     _buildBlocks() {
         const cells = [];
         const rngFor = (i, j) => Pixel.rng(Math.floor(this._rand(i + 3, j + 11) * 1e9));
-        const O = this.OLD, legacy = !!Config.world.legacyPlan;
+        // Faces do grafo de ruas: as que são exatamente uma célula da grade viram o quarteirão retangular de sempre (sweep); as outras
+        // (cortadas por diagonal, curva, borda orgânica) viram quarteirões em POLÍGONO (_faceBlocks).
+        const faces = this._faces(), rectCells = new Set();
+        for (const f of faces) if (f.rect) rectCells.add(f.rect);
         const sweep = (d, pick) => {
             for (let i = 0; i + 1 < d.xs.length; i++) for (let j = 0; j + 1 < d.zs.length; j++) {
                 const x0 = d.xs[i], x1 = d.xs[i + 1], z0 = d.zs[j], z1 = d.zs[j + 1];
                 if (d.skip && d.skip(x0, z0, x1, z1)) continue;
+                if (!rectCells.has(this._cellKey(x0, z0, x1, z1))) continue;              // não é uma face reta (cortada/curva): vai pelas faces
                 const p = pick(i, j, x0, z0, x1, z1);
                 const b = this._makeBlock(d, i, j, x0, z0, x1, z1, p.biome, p.si, p.sj);
-                if (!b) continue;
-                const pcs = this._cutCell(b);                                        // cortado por diagonal/praça: vira polígono(s)
-                if (pcs) pcs.forEach((poly, k) => cells.push(this._polyBlock(b, poly, k))); else cells.push(b);
+                if (b) cells.push(b);
             }
         };
-        // CIDADE
-        sweep(this.districts.city, (i, j, x0, z0, x1, z1) => {
-            const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-            const inOld = x0 >= O.minX - 1e-6 && x1 <= O.maxX + 1e-6 && z0 >= O.minZ - 1e-6 && z1 <= O.maxZ + 1e-6;
-            if (inOld) {
-                const oi = Math.round((x0 - O.minX) / O.pitch), oj = Math.round((z0 - O.minZ) / O.pitch);
-                const eastEdge = oi === O.cols - 1;                                                 // a coluna do mar fica como era (praia/porto/mata)
-                const b = (legacy || eastEdge) ? this._biomeOld(oi, oj) : (oi === 0 || oj === 0 || oj === O.rows - 1 ? this._biomeCity(cx, cz, this._rand(oi, oj)) : this._biomeOld(oi, oj));
-                return { biome: b, si: oi, sj: oj };
-            }
-            const gi = Math.round(x0) + 3000, gj = Math.round(z0) + 3000;
-            const east = Math.abs(x1 - 168) < 1e-6;                                                 // a coluna do mar (x 126..168) é praia/porto/mata
-            const r = this._rand(gi, gj);
-            let biome = east ? (r < 0.5 ? 'beach' : (r < 0.78 ? 'port' : 'forest')) : this._biomeCity(cx, cz, r);
-            if (!east && Math.max(x1 - x0, z1 - z0) >= 66 && biome !== 'downtown' && this._rand(gi + 5, gj + 9) < 0.55) biome = z0 < -560 ? (r < 0.5 ? 'industrial' : 'port') : (r < 0.5 ? 'park' : 'forest');      // quarteirão grande: parque, mata ou complexo industrial
-            return { biome, si: gi, sj: gj };
-        });
-        if (this.districts.island) sweep(this.districts.island, (i, j, x0, z0, x1, z1) => {
-            const r = this._rand(i + 400, j + 400);
-            return { biome: this._biomeIsland((x0 + x1) / 2, (z0 + z1) / 2, r), si: i + 400, sj: j + 400 };
-        });
+        sweep(this.districts.city, (i, j, x0, z0, x1, z1) => this._pickCity(x0, z0, x1, z1));
+        if (this.districts.island) sweep(this.districts.island, (i, j, x0, z0, x1, z1) => this._pickIsland(i, j, x0, z0, x1, z1));
+        this._faceBlocks(faces, cells);
 
         this._pickLandmarks(cells);
         this._pickStations(cells);
         for (const block of cells) {
             const rng = rngFor(block.i, block.j);
-            if (block.poly) {                                                        // quarteirão em polígono: lotes da grade que cabem nele
-                if (!block.open) { this._fillLots(block, rng); this._polyTrim(block); }
+            if (block.station) { this._station(block, rng); this._fillProps(block, rng); block.props = []; this.blocks.push(block); continue; }       // posto: sem lotes comuns, árvores nem quintal
+            if (block.poly) {                                                        // quarteirão em polígono: lotes empacotados na pegada
+                if (!block.open) this._packLots(block, rng);
                 if (!block.open) this._addShops(block, Pixel.rng(Math.floor(this._rand(block.i + 55, block.j + 77) * 1e9)));
                 this._fillProps(block, rng);
                 this.blocks.push(block);
@@ -325,7 +563,6 @@ const CityGrid = {
                 this.blocks.push(block);
                 continue;
             }
-            if (block.station) { this._station(block, rng); this._fillProps(block, rng); block.props = []; this.blocks.push(block); continue; }       // posto: sem lotes comuns, árvores nem quintal
             if (!block.open) { this._fillLots(block, rng); this._addShops(block, Pixel.rng(Math.floor(this._rand(block.i + 55, block.j + 77) * 1e9))); }
             this._fillProps(block, rng);
             if (!block.open) this._fillYard(block, Pixel.rng(Math.floor(this._rand(block.i + 91, block.j + 37) * 1e9)));
@@ -340,8 +577,10 @@ const CityGrid = {
     // (o RuralPlan acrescenta os das rodovias). Quem enche o tanque é o Game (_fuelUpdate).
     _pickStations(cells) {
         this.stations = [];
-        const ok = cells.filter((b) => !b.open && !b.poly && !b.landmark && !this.landmarkCells[b.id] && (b.district === 'city' || b.district === 'island')
-            && ['commercial', 'residential', 'industrial', 'resort'].includes(b.biome) && b.foot[2] - b.foot[0] >= 20 && b.foot[3] - b.foot[1] >= 26);
+        // (quarteirão em polígono: o maior retângulo que cabe na pegada, se for grande o bastante)
+        const room = (b) => { if (!b.poly) return b.foot[2] - b.foot[0] >= 20 && b.foot[3] - b.foot[1] >= 26; const r = b.footPoly && this._footRect(b); if (!r || r[2] - r[0] < 22 || r[3] - r[1] < 28) return false; b._stationRect = r; return true; };
+        const ok = cells.filter((b) => !b.open && !b.landmark && !this.landmarkCells[b.id] && (b.district === 'city' || b.district === 'island')
+            && ['commercial', 'residential', 'industrial', 'resort'].includes(b.biome) && room(b));
         ok.sort((a, b) => this._rand(a.i + 21, a.j + 5) - this._rand(b.i + 21, b.j + 5));
         const picked = [];
         for (const b of ok) {
@@ -351,8 +590,16 @@ const CityGrid = {
         }
     },
 
+    // Maior retângulo (alinhado aos eixos, grade de 1 u) dentro da pegada de um quarteirão em polígono: [x0, z0, x1, z1] ou null.
+    _footRect(b) {
+        const F = b.footPoly, [fx0, fz0, fx1, fz1] = b.foot, W = Math.floor(fx1 - fx0), H = Math.floor(fz1 - fz0);
+        if (W < 4 || H < 4) return null;
+        const r = this._maxRect(this._rasterPoly(F, fx0, fz0, W, H), W, H);
+        return r ? [fx0 + r.i, fz0 + r.j, fx0 + r.i + r.w, fz0 + r.j + r.h] : null;
+    },
+
     _station(block, rng) {
-        const [fx0, fz0, fx1, fz1] = block.foot, cx = (fx0 + fx1) / 2, cz = fz0 + 10.5;
+        const [fx0, fz0, fx1, fz1] = block._stationRect || block.foot, cx = (fx0 + fx1) / 2, cz = fz0 + 10.5;
         const colors = [[0.85, 0.2, 0.18], [0.18, 0.5, 0.82], [0.9, 0.7, 0.12], [0.2, 0.62, 0.38]], color = colors[Math.floor(rng() * colors.length)];
         // loja ao fundo (norte), com vitrines voltadas para a cobertura
         const hw = Math.min(9, (fx1 - fx0 - 2) / 2), k = hw / 9;
@@ -389,6 +636,33 @@ const CityGrid = {
         return [l.x1, a, l.x1 + D, b];
     },
 
+    // Lados do lote num quarteirão em polígono, com a "distância até a calçada" de cada um (o lado inteiro tem de estar a ≤ 2,5 u dela:
+    // pontas e meio da parede, 2,5 u para fora, já fora da pegada).
+    _polySides(block, l) {
+        const F = block.footPoly, out = (x, z) => !RoadPlan.inPoly(F, x, z);
+        const g = (pts) => (pts.every((p) => out(p[0], p[1])) ? 0 : 99);
+        const xm = (l.x0 + l.x1) / 2, zm = (l.z0 + l.z1) / 2, o = 2.5;
+        return [['S', g([[l.x0 + 1, l.z0 - o], [xm, l.z0 - o], [l.x1 - 1, l.z0 - o]]), l.x0, l.x1], ['N', g([[l.x0 + 1, l.z1 + o], [xm, l.z1 + o], [l.x1 - 1, l.z1 + o]]), l.x0, l.x1],
+            ['W', g([[l.x0 - o, l.z0 + 1], [l.x0 - o, zm], [l.x0 - o, l.z1 - 1]]), l.z0, l.z1], ['E', g([[l.x1 + o, l.z0 + 1], [l.x1 + o, zm], [l.x1 + o, l.z1 - 1]]), l.z0, l.z1]];
+    },
+    // Porta de um lote na calçada: { x, z, side, face } (face = para onde olha quem sai) ou null se o lote não encosta na calçada.
+    lotDoor(b, l) {
+        const f = b.foot, s = b.slab, cx = (l.x0 + l.x1) / 2, cz = (l.z0 + l.z1) / 2, F = { W: -Math.PI / 2, E: Math.PI / 2, S: Math.PI, N: 0 };
+        if (b.footPoly) {
+            const sd = this._polySides(b, l).filter((q) => q[1] === 0);
+            if (!sd.length) return null;
+            const side = sd.sort((p, q) => (q[3] - q[2]) - (p[3] - p[2]))[0][0], n = { W: [-1, 0], E: [1, 0], S: [0, -1], N: [0, 1] }[side];
+            const wx = side === 'W' ? l.x0 : side === 'E' ? l.x1 : cx, wz = side === 'S' ? l.z0 : side === 'N' ? l.z1 : cz;
+            let t = 1; while (t < 8 && RoadPlan.inPoly(b.footPoly, wx + n[0] * t, wz + n[1] * t)) t += 0.5;
+            const x = wx + n[0] * (t + b.sw / 2), z = wz + n[1] * (t + b.sw / 2);
+            return RoadPlan.inPoly(b.poly, x, z) ? { x, z, side, face: F[side] } : { x: wx + n[0] * (t + 0.6), z: wz + n[1] * (t + 0.6), side, face: F[side] };
+        }
+        if (Math.min(l.x0 - f[0], f[2] - l.x1, l.z0 - f[1], f[3] - l.z1) > 2.5) return null;     // só lotes na beira da quadra (porta na calçada)
+        const side = [[cx - f[0], 'W'], [f[2] - cx, 'E'], [cz - f[1], 'S'], [f[3] - cz, 'N']].sort((a, c) => a[0] - c[0])[0][1];
+        const d = side === 'W' ? { x: (s[0] + f[0]) / 2, z: cz } : side === 'E' ? { x: (s[2] + f[2]) / 2, z: cz } : side === 'S' ? { x: cx, z: (s[1] + f[1]) / 2 } : { x: cx, z: (s[3] + f[3]) / 2 };
+        return Object.assign(d, { side, face: F[side] });
+    },
+
     _gymKind() { return this._gk != null ? this._gk : (this._gk = TileFactory.SHOPS.findIndex((s) => s.id === 'academia')); },
 
     // Térreo comercial: nas paredes do prédio voltadas para a calçada, vitrines de 6 u (letreiro, vitrine, porta) com toldo.
@@ -403,7 +677,7 @@ const CityGrid = {
         }[block.biome];
         for (const lot of block.lots) {
             if (lot.landmark) continue;
-            const sides = [['S', lot.z0 - fz0, lot.x0, lot.x1], ['N', fz1 - lot.z1, lot.x0, lot.x1], ['W', lot.x0 - fx0, lot.z0, lot.z1], ['E', fx1 - lot.x1, lot.z0, lot.z1]];
+            const sides = block.footPoly ? this._polySides(block, lot) : [['S', lot.z0 - fz0, lot.x0, lot.x1], ['N', fz1 - lot.z1, lot.x0, lot.x1], ['W', lot.x0 - fx0, lot.z0, lot.z1], ['E', fx1 - lot.x1, lot.z0, lot.z1]];
             lot.shops = [];
             for (const [side, gap, a0, a1] of sides) {
                 if (gap > 2.5 || rng() > P) continue;                                    // só as paredes encostadas na calçada
@@ -606,41 +880,298 @@ const CityGrid = {
     },
 
     // ================================================================= quarteirões em polígono
-    // Um quarteirão da grade cortado por uma via livre (diagonal) vira dois polígonos, cada um além do meio-fio dela; perto de uma
-    // rotatória-praça, a esquina do setor vira um chanfro a R+4 do centro (o calçadão do roundApron preenche até o disco). Devolve
-    // os polígonos (anti-horários, convexos) ou null se nada corta o quarteirão. Só corta a via cujo EIXO entra no quarteirão (a
-    // que só passa pela esquina, num cruzamento, já está no polígono do cruzamento).
-    _cutCell(block) {
-        const [x0, z0, x1, z1] = block.slab, P = RoadPlan, S = P.CELL;
-        if (x1 - x0 < 1 || z1 - z0 < 1) return null;
-        let pieces = [[[x0, z0], [x1, z0], [x1, z1], [x0, z1]]], cut = false;
-        const free = new Set();
-        for (let i = Math.floor(x0 / S); i <= Math.floor(x1 / S); i++) for (let j = Math.floor(z0 / S); j <= Math.floor(z1 / S); j++) for (const e of P._eg.get(P._key(i, j)) || []) if (e.free) free.add(e);
-        for (const e of free) for (let k = 0; k + 1 < e.pts.length; k++) {
-            const A = e.pts[k], B = e.pts[k + 1];
-            if (!this._segInRect(A, B, x0, z0, x1, z1)) continue;
-            const L = hypot(B[0] - A[0], B[1] - A[1]), nx = -(B[1] - A[1]) / L, nz = (B[0] - A[0]) / L, c = nx * A[0] + nz * A[1], hw = e.w / 2, out = [];
-            for (const poly of pieces) { const l = this._clipHalf(poly, nx, nz, c + hw), r = this._clipHalf(poly, -nx, -nz, -c + hw); if (l) out.push(l); if (r) out.push(r); }
-            pieces = out; cut = true;
+    // FACES do grafo de ruas (é planar: o viaduto passa por cima e fica de fora). Cada meia-aresta é percorrida com a face à ESQUERDA:
+    // no nó de chegada segue pela perna vizinha no sentido horário. Faces limitadas saem anti-horárias (área > 0); a de fora e as do
+    // campo (grandes) ficam de fora. Cada face: { half: [{ e, fwd, n }], pts (eixo das ruas, anti-horário), area, urban, rect }.
+    // urban = só ruas de cidade/ilha em volta; rect = é exatamente uma célula retangular da grade (chave _cellKey).
+    URBAN_CLS: new Set(['city', 'ave', 'isl']),
+    _faces(maxA = 40000) {
+        const P = RoadPlan, seen = new Set(), out = [];
+        const armsOf = (n) => n._farms || (n._farms = n.arms.filter((a) => !a.e.layer));
+        for (const n0 of P.nodes) for (const a0 of armsOf(n0)) {
+            if (seen.has(a0.e.id * 2 + (a0.e.a === n0 ? 0 : 1))) continue;
+            const half = [], pts = [];
+            let n = n0, a = a0, closed = false;
+            for (let guard = 0; guard < 2000; guard++) {
+                const e = a.e, fwd = e.a === n, k = e.id * 2 + (fwd ? 0 : 1);
+                if (seen.has(k)) { closed = n === n0 && a === a0; break; }
+                seen.add(k);
+                half.push({ e, fwd, n });
+                const E = e.pts;
+                if (fwd) for (let i = 0; i + 1 < E.length; i++) pts.push(E[i]); else for (let i = E.length - 1; i > 0; i--) pts.push(E[i]);
+                const m = a.to, A = armsOf(m), bi = A.findIndex((q) => q.e === e && q.to === n);
+                if (bi < 0) break;
+                n = m; a = A[(bi - 1 + A.length) % A.length];
+            }
+            if (!closed || half.length < 2) continue;
+            const area = this._polyArea(pts);
+            if (area <= 1 || area > maxA) continue;
+            const urban = half.every((h) => this.URBAN_CLS.has(h.e.cls));
+            let rect = null;
+            if (urban && half.every((h) => !h.e.free)) {                                   // célula da grade? (tira os vértices colineares)
+                const Q = pts.filter((p, i) => { const a = pts[(i + pts.length - 1) % pts.length], b = pts[(i + 1) % pts.length]; return Math.abs((p[0] - a[0]) * (b[1] - p[1]) - (p[1] - a[1]) * (b[0] - p[0])) > 1e-6; });
+                if (Q.length === 4) {
+                    const xs = Q.map((p) => p[0]), zs = Q.map((p) => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+                    if (Math.abs((x1 - x0) * (z1 - z0) - area) < 1) rect = this._cellKey(x0, z0, x1, z1);
+                }
+            }
+            out.push({ half, pts, area, urban, rect });
         }
-        for (const n of this._plazas || (this._plazas = P.nodes.filter((q) => q.round && q.round.plaza))) {
-            const R = n.round, D = R.R + 4;
-            if (x1 < R.cx - D - 2 || x0 > R.cx + D + 2 || z1 < R.cz - D - 2 || z0 > R.cz + D + 2) continue;
-            pieces = pieces.map((poly) => {
-                const c = this._centroid(poly), s = this._roundSector(n, c[0], c[1]);
-                if (!s || poly.every((p) => (p[0] - R.cx) * s.bx + (p[1] - R.cz) * s.bz >= D)) return poly;
-                cut = true;
-                return this._clipHalf(poly, s.bx, s.bz, s.bx * R.cx + s.bz * R.cz + D);
-            }).filter(Boolean);
+        return out;
+    },
+
+    // Distrito de um ponto (para as faces): a ilha fica a leste do canal.
+    _districtAt(x, z) { return this.districts.island && x > 300 ? this.districts.island : this.districts.city; },
+    // Célula da grade do distrito `d` que contém (x, z): { i, j, r: [x0, z0, x1, z1] } ou null.
+    _cellAt(d, x, z) {
+        const f = (L, v) => { if (v < L[0] || v > L[L.length - 1]) return -1; let lo = 0, hi = L.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (L[m] <= v) lo = m; else hi = m; } return lo; };
+        const i = f(d.xs, x), j = f(d.zs, z);
+        return i < 0 || j < 0 ? null : { i, j, r: [d.xs[i], d.zs[j], d.xs[i + 1], d.zs[j + 1]] };
+    },
+
+    // Quarteirões das faces que não são células retas: a laje (meio-fio) é a face recuada pela meia-largura de cada rua, com
+    // chanfro nas rotatórias; o bioma vem da célula da grade onde ela cai (os pedaços de uma célula cortada seguem o bairro) ou,
+    // fora da grade, da posição.
+    _faceBlocks(faces, cells) {
+        let made = 0, bad = 0;
+        const box = (Q) => [Math.min(...Q.map((p) => p[0])), Math.min(...Q.map((p) => p[1])), Math.max(...Q.map((p) => p[0])), Math.max(...Q.map((p) => p[1]))];
+        for (const f of faces) {
+            if (f.rect || !f.urban) continue;
+            const c = this._areaCentroid(f.pts), d = this._districtAt(c[0], c[1]), bb = box(f.pts);
+            if (d.skip && d.skip(bb[0], bb[1], bb[2], bb[3])) continue;
+            const slab = this._faceSlab(f);
+            if (!slab) { bad++; continue; }
+            const ci = this._cellAt(d, c[0], c[1]), r = ci ? ci.r : bb;
+            const p = d.id === 'island' ? this._pickIsland(ci ? ci.i : Math.round(c[0]), ci ? ci.j : Math.round(c[1]), r[0], r[1], r[2], r[3]) : this._pickCity(r[0], r[1], r[2], r[3]);
+            const def = this.BIOMES[p.biome];
+            const base = { id: d.id + ':f' + Math.round(c[0]) + ',' + Math.round(c[1]), district: d.id, i: p.si, j: p.sj, biome: p.biome, open: def.open, ground: def.ground,
+                slab: box(slab), foot: null, ins: [0, 0, 0, 0], sw: d.sw, lots: [], props: [], r: 0 };
+            cells.push(this._polyBlock(base, slab, 0));
+            this.urbanPolys.push(f.pts);
+            made++;
         }
-        return cut ? pieces.filter((p) => this._polyArea(p) > 60) : null;
+        console.log(`[CIDADE] ${made} quarteirões em polígono (faces)` + (bad ? `, ${bad} faces sem laje válida` : ''));
+    },
+
+    // Laje (meio-fio) de uma face: cada trecho recuado da sua meia-largura para dentro (à esquerda); nas esquinas os meios-fios se
+    // cortam (o trecho de cada um que passa do encontro sai); esquina côncava: quina viva no encontro das retas; trecho reto (mesma
+    // direção): liga as pontas. Rotatória: chanfro a R+folga do centro, na bissetriz das duas pernas. Devolve o polígono ou null.
+    _faceSlab(f) {
+        const H = f.half, N = H.length;
+        const L = H.map((h) => this._offsetLine(h.fwd ? h.e.pts : h.e.pts.slice().reverse(), h.e.w / 2));
+        const sl = (Q, i) => hypot(Q[i + 1][0] - Q[i][0], Q[i + 1][1] - Q[i][1]);
+        const cut = [];
+        for (let i = 0; i < N; i++) {
+            const A = L[i], B = L[(i + 1) % N], node = H[(i + 1) % N].n, hwM = Math.max(H[i].e.w, H[(i + 1) % N].e.w) / 2;
+            let best = null;
+            for (let a = A.length - 2, la = 0; a >= 0 && la < 70; la += sl(A, a), a--) {
+                for (let b = 0, lb = 0; b + 1 < B.length && lb < 70; lb += sl(B, b), b++) {
+                    if (best && la + lb >= best.score) break;
+                    const X = this._segX(A[a], A[a + 1], B[b], B[b + 1]);
+                    if (X) best = { s: a, t: b, X, score: la + lb };
+                }
+            }
+            if (!best) {
+                const a = A.length - 2, X = this._lineX(A[a], A[a + 1], B[0], B[1]);
+                if (X && hypot(X[0] - node.x, X[1] - node.z) < hwM * 3 + 2) best = { s: a, t: 0, X };
+            }
+            cut.push(best || { s: A.length - 2, t: 0, X: null, A1: A[A.length - 1], B0: B[0] });
+        }
+        let out = [];
+        for (let i = 0; i < N; i++) {
+            const A = L[i], cin = cut[(i - 1 + N) % N], cout = cut[i];
+            out.push(cin.X || cin.B0);
+            for (let k = cin.t + 1; k <= cout.s; k++) out.push(A[k]);
+            if (!cout.X) out.push(cout.A1);
+        }
+        // rotatória num canto: chanfro na bissetriz das duas pernas da face (praça: R + 4, com o calçadão; senão R + 1,5)
+        for (let i = 0; i < N; i++) {
+            const n = H[i].n, R = n.round;
+            if (!R) continue;
+            const a = n.arms.find((q) => q.e === H[i].e), b = n.arms.find((q) => q.e === H[(i - 1 + N) % N].e);
+            if (!a || !b) continue;
+            let g = b.ang - a.ang; while (g <= 0) g += Math.PI * 2;
+            if (g >= Math.PI - 0.01) continue;
+            let bx = a.dx + b.dx, bz = a.dz + b.dz; const bl = hypot(bx, bz) || 1; bx /= bl; bz /= bl;
+            const D = R.R + (R.plaza ? 4 : 1.5);
+            out = this._clipHalf(out, bx, bz, bx * R.cx + bz * R.cz + D);
+            if (!out) return null;
+        }
+        // limpa (pontos colados, vértices colineares) e verifica (área, sem se cruzar)
+        out = this._cleanPoly(out);
+        if (!out || this._polyArea(out) < 60 || this._selfX(out)) return null;
+        return out;
+    },
+    // Polígono sem arestas minúsculas (< minL: o recuo da calçada "vazaria" na quina) nem vértices quase retos. null se degenerar.
+    _cleanPoly(P, minL = 1.5, eps = 0.12) {
+        let Q = [];
+        for (const p of P) { const q = Q[Q.length - 1]; if (!q || hypot(p[0] - q[0], p[1] - q[1]) >= minL) Q.push(p); }
+        while (Q.length > 3 && hypot(Q[0][0] - Q[Q.length - 1][0], Q[0][1] - Q[Q.length - 1][1]) < minL) Q.pop();
+        for (let ch = true; ch && Q.length > 3;) {
+            ch = false;
+            for (let i = 0; i < Q.length && Q.length > 3; i++) {
+                const a = Q[(i + Q.length - 1) % Q.length], b = Q[i], c = Q[(i + 1) % Q.length], l = hypot(c[0] - a[0], c[1] - a[1]) || 1;
+                if (Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / l < eps) { Q.splice(i, 1); ch = true; i--; }
+            }
+        }
+        return Q.length >= 3 ? Q : null;
+    },
+
+    // Polilinha deslocada d u para a ESQUERDA (no sentido dela): esquadro nos vértices (bissetriz), limitado nas quinas fechadas.
+    _offsetLine(E, d) {
+        const n = E.length, out = [];
+        const nrm = (a, b) => { const dx = E[b][0] - E[a][0], dz = E[b][1] - E[a][1], l = hypot(dx, dz) || 1; return [-dz / l, dx / l]; };
+        for (let i = 0; i < n; i++) {
+            let v;
+            if (i === 0) v = nrm(0, 1);
+            else if (i === n - 1) v = nrm(n - 2, n - 1);
+            else {
+                const a = nrm(i - 1, i), b = nrm(i, i + 1); let mx = a[0] + b[0], mz = a[1] + b[1]; const ml = hypot(mx, mz);
+                if (ml < 1e-6) v = a; else { mx /= ml; mz /= ml; const c = Math.max(0.5, mx * a[0] + mz * a[1]); v = [mx / c, mz / c]; }
+            }
+            out.push([E[i][0] + v[0] * d, E[i][1] + v[1] * d]);
+        }
+        return out;
+    },
+    // Interseção própria dos segmentos pq e ab | das retas pq e ab (null se paralelas) | o polígono se cruza?
+    _segX(p, q, a, b) {
+        const rx = q[0] - p[0], rz = q[1] - p[1], sx = b[0] - a[0], sz = b[1] - a[1], den = rx * sz - rz * sx;
+        if (Math.abs(den) < 1e-9) return null;
+        const t = ((a[0] - p[0]) * sz - (a[1] - p[1]) * sx) / den, u = ((a[0] - p[0]) * rz - (a[1] - p[1]) * rx) / den;
+        return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [p[0] + rx * t, p[1] + rz * t] : null;
+    },
+    _lineX(p, q, a, b) {
+        const rx = q[0] - p[0], rz = q[1] - p[1], sx = b[0] - a[0], sz = b[1] - a[1], den = rx * sz - rz * sx;
+        if (Math.abs(den) < 1e-6 * hypot(rx, rz) * hypot(sx, sz)) return null;
+        const t = ((a[0] - p[0]) * sz - (a[1] - p[1]) * sx) / den;
+        return [p[0] + rx * t, p[1] + rz * t];
+    },
+    _selfX(P) {
+        const n = P.length;
+        for (let i = 0; i < n; i++) {
+            const a = P[i], b = P[(i + 1) % n], ax0 = Math.min(a[0], b[0]), ax1 = Math.max(a[0], b[0]), az0 = Math.min(a[1], b[1]), az1 = Math.max(a[1], b[1]);
+            for (let j = i + 2; j < n; j++) {
+                if (i === 0 && j === n - 1) continue;
+                const c = P[j], d = P[(j + 1) % n];
+                if (Math.max(c[0], d[0]) < ax0 || Math.min(c[0], d[0]) > ax1 || Math.max(c[1], d[1]) < az0 || Math.min(c[1], d[1]) > az1) continue;
+                if (this._segX(a, b, c, d)) return true;
+            }
+        }
+        return false;
+    },
+    // Centróide de área de um polígono (o da média dos vértices puxa para o lado curvo, cheio de pontos).
+    _areaCentroid(P) {
+        let A = 0, x = 0, z = 0;
+        for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length], c = p[0] * q[1] - q[0] * p[1]; A += c; x += (p[0] + q[0]) * c; z += (p[1] + q[1]) * c; }
+        return Math.abs(A) < 1e-9 ? this._centroid(P) : [x / (3 * A), z / (3 * A)];
+    },
+    // Triângulos (índices) de um polígono simples qualquer (orelhas; anti-horário ou não).
+    triangulate(P) {
+        const n = P.length, idx = [], tris = [];
+        if (n < 3) return tris;
+        const ccw = this._polyArea(P) > 0;
+        for (let i = 0; i < n; i++) idx.push(ccw ? i : n - 1 - i);
+        const cross = (a, b, c) => (P[b][0] - P[a][0]) * (P[c][1] - P[a][1]) - (P[b][1] - P[a][1]) * (P[c][0] - P[a][0]);
+        const inTri = (p, a, b, c) => cross(a, b, p) >= 0 && cross(b, c, p) >= 0 && cross(c, a, p) >= 0;
+        let guard = 0;
+        while (idx.length > 3 && guard++ < n * n) {
+            let cut = false;
+            for (let k = 0; k < idx.length; k++) {
+                const a = idx[(k + idx.length - 1) % idx.length], b = idx[k], c = idx[(k + 1) % idx.length];
+                if (cross(a, b, c) <= 1e-9) continue;
+                let ear = true;
+                for (const q of idx) if (q !== a && q !== b && q !== c && inTri(q, a, b, c)) { ear = false; break; }
+                if (!ear) continue;
+                tris.push([a, b, c]); idx.splice(k, 1); cut = true; break;
+            }
+            if (!cut) break;
+        }
+        for (let k = 1; k + 1 < idx.length; k++) tris.push([idx[0], idx[k], idx[k + 1]]);       // (o que sobrou: leque)
+        return tris;
+    },
+
+    // Lotes (prédios alinhados aos eixos) empacotados na pegada de um quarteirão em polígono: o maior retângulo livre (grade de 1 u)
+    // de cada vez, encostado na calçada, no tamanho e altura do bioma, com uma folga entre eles. Nenhum coube: pracinha.
+    LOTS: {
+        downtown:    [{ min: 12, max: 40, gap: 3, fl: [8, 14], n: 4, fac: ['office0', 'office1', 'office2', 'concrete0', 'concrete1'], roof: ['conc0', 'conc1', 'tar0', 'metal1'] }],
+        commercial:  [{ min: 9, max: 34, gap: 3, fl: [3, 6], n: 5, fac: ['brick0', 'brick1', 'brick2', 'concrete0', 'concrete1', 'house2'], roof: ['tar0', 'tar1', 'conc0', 'conc1'] },
+                      { min: 9, max: 18, gap: 3, fl: [2, 5], n: 6, fac: ['brick0', 'brick1', 'brick2', 'concrete0', 'house2'], roof: ['tar0', 'tar1', 'conc0', 'conc1'] }],
+        residential: [{ min: 7, max: 10, gap: 3, fl: [2, 3], n: 12, fac: ['house0', 'house1', 'house2', 'house3', 'brick2'], roof: ['tile0', 'tile1', 'tar1'] },
+                      { min: 11, max: 30, gap: 3, fl: [4, 6], n: 3, fac: ['brick0', 'brick1', 'brick2'], roof: ['tar0', 'tar1', 'conc1', 'garden0'] }],
+        resort:      [{ min: 12, max: 30, gap: 5, fl: [6, 11], n: 3, fac: ['office0', 'office1', 'office2', 'concrete1'], roof: ['conc0', 'conc1', 'metal1'] },
+                      { min: 8, max: 13, gap: 4, fl: [3, 5], n: 6, fac: ['house0', 'house1', 'house3', 'concrete1'], roof: ['tile0', 'conc1', 'garden0'] }],
+        industrial:  [{ min: 12, max: 40, gap: 4, fl: [3, 4], n: 3, fac: ['metal0', 'metal1', 'concrete0'], roof: ['metal0', 'metal1', 'tar0'] }],
+        port:        [{ min: 12, max: 40, gap: 5, fl: [3, 4], n: 2, fac: ['metal0', 'metal1', 'concrete0'], roof: ['metal0', 'metal1', 'tar0'] }],
+    },
+    _packLots(block, rng) {
+        const F = block.footPoly, specs = this.LOTS[block.biome];
+        if (!F || !specs) return;
+        const S = specs[Math.floor(rng() * specs.length)], [fx0, fz0, fx1, fz1] = block.foot;
+        const W = Math.floor(fx1 - fx0), H = Math.floor(fz1 - fz0), ox = fx0 + (fx1 - fx0 - W) / 2, oz = fz0 + (fz1 - fz0 - H) / 2;
+        if (W < S.min || H < S.min) { this._greenPiece(block, 3); return; }
+        const G = this._rasterPoly(F, ox, oz, W, H);
+        const pick = (L) => L[Math.floor(rng() * L.length)];
+        const edgeD = (x, z) => (RoadPlan.inPoly(F, x, z) ? RoadPlan.polyDist(F, x, z) : 0);
+        let placed = 0;
+        for (let k = 0; k < S.n; k++) {
+            const r = this._maxRect(G, W, H);
+            if (!r || r.w < S.min || r.h < S.min) break;
+            const w = Math.min(r.w, S.max - Math.floor(rng() * 3)), h = Math.min(r.h, S.max - Math.floor(rng() * 3));
+            // encosta na calçada: o lado do retângulo livre mais perto da borda da pegada
+            const i0 = r.w > w && edgeD(ox + r.i + r.w - 0.5, oz + r.j + r.h / 2) < edgeD(ox + r.i + 0.5, oz + r.j + r.h / 2) ? r.i + r.w - w : r.i;
+            const j0 = r.h > h && edgeD(ox + r.i + r.w / 2, oz + r.j + r.h - 0.5) < edgeD(ox + r.i + r.w / 2, oz + r.j + 0.5) ? r.j + r.h - h : r.j;
+            const fl = S.fl[0] + Math.floor(rng() * (S.fl[1] - S.fl[0] + 1));
+            this._addLot(block, ox + i0, oz + j0, ox + i0 + w, oz + j0 + h, fl, pick(S.fac), pick(S.roof));
+            placed++;
+            for (let j = Math.max(0, j0 - S.gap); j < Math.min(H, j0 + h + S.gap); j++) for (let i = Math.max(0, i0 - S.gap); i < Math.min(W, i0 + w + S.gap); i++) G[j * W + i] = 0;
+        }
+        if (!placed) this._greenPiece(block, 3);
+    },
+    // Células de 1 u (origem ox, oz; W×H) com o centro dentro do polígono F e as 4 vizinhas também (folga de ~0,5 u da borda) —
+    // por varredura de linhas (sem ponto-no-polígono por célula).
+    _rasterPoly(F, ox, oz, W, H) {
+        const A = new Uint8Array(W * H), xs = [];
+        for (let j = 0; j < H; j++) {
+            const z = oz + j + 0.5; xs.length = 0;
+            for (let i = 0, k = F.length - 1; i < F.length; k = i++) { const a = F[k], b = F[i]; if ((a[1] > z) !== (b[1] > z)) xs.push(a[0] + (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1])); }
+            xs.sort((p, q) => p - q);
+            for (let t = 0; t + 1 < xs.length; t += 2) for (let i = Math.max(0, Math.ceil(xs[t] - ox - 0.5)); i <= Math.min(W - 1, Math.floor(xs[t + 1] - ox - 0.5)); i++) A[j * W + i] = 1;
+        }
+        const G = new Uint8Array(W * H);
+        for (let j = 1; j + 1 < H; j++) for (let i = 1; i + 1 < W; i++) { const k = j * W + i; if (A[k] && A[k - 1] && A[k + 1] && A[k - W] && A[k + W]) G[k] = 1; }
+        return G;
+    },
+    // Maior retângulo de 1s numa grade W×H (histograma por linha): { i, j, w, h } ou null.
+    _maxRect(G, W, H) {
+        const hgt = new Int32Array(W), st = new Int32Array(W + 1);
+        let best = null, ba = 0;
+        for (let j = 0; j < H; j++) {
+            for (let i = 0; i < W; i++) hgt[i] = G[j * W + i] ? hgt[i] + 1 : 0;
+            let sp = 0;
+            for (let i = 0; i <= W; i++) {
+                const hh = i < W ? hgt[i] : 0;
+                while (sp > 0 && hgt[st[sp - 1]] >= hh) {
+                    const top = st[--sp], h = hgt[top], left = sp > 0 ? st[sp - 1] + 1 : 0, w = i - left;
+                    const a = Math.min(w, 40) * Math.min(h, 40) + Math.min(w, h) * 0.5;          // (prefere quadrados até ~40 u)
+                    if (h > 0 && a > ba) { ba = a; best = { i: left, j: j - h + 1, w, h }; }
+                }
+                st[sp++] = i;
+            }
+        }
+        return best;
     },
 
     // Bloco de um pedaço: polígono da laje (`poly`) e da pegada (`footPoly`, recuada a calçada); slab/foot viram as caixas deles.
     // Pedaço pequeno (ou sem pegada) vira pracinha (parque).
     _polyBlock(block, poly, k) {
         if (this._polyArea(poly) < 0) poly.reverse();
-        const foot = this._inset(poly, block.sw), box = (Q) => [Math.min(...Q.map((p) => p[0])), Math.min(...Q.map((p) => p[1])), Math.max(...Q.map((p) => p[0])), Math.max(...Q.map((p) => p[1]))];
+        let foot = this._inset(poly, block.sw);
+        if (!foot) {                                                                // (quina difícil: tenta com o contorno mais simples)
+            const Q = this._cleanPoly(WorldMap.simplifyLoop(poly, 0.6), 2.5, 0.3);
+            const F = Q && this._inset(Q, block.sw);
+            if (F) { poly = Q; foot = F; }
+        }
+        const box = (Q) => [Math.min(...Q.map((p) => p[0])), Math.min(...Q.map((p) => p[1])), Math.max(...Q.map((p) => p[0])), Math.max(...Q.map((p) => p[1]))];
         const b = Object.assign({}, block, { id: block.id + '/' + k, poly, footPoly: foot, lots: [], props: [], r: 0, slab: box(poly) });
         b.foot = foot ? box(foot) : b.slab.slice();
         if (!foot || this._polyArea(foot) < 140) this._greenPiece(b, k);
@@ -650,43 +1181,6 @@ const CityGrid = {
     _greenPiece(b, k) {
         const kind = this._rand(b.i + k * 7, b.j + 13) < 0.5 ? 'plaza' : 'park', def = this.BIOMES[kind];
         b.biome = kind; b.open = def.open; b.ground = def.ground;
-    },
-
-    // Deixa só os lotes que cabem inteiros na pegada (os outros saem, com o sólido); nenhum coube: um prédio do mesmo estilo, o maior
-    // retângulo que cabe (ou pracinha, se nem isso).
-    _polyTrim(block) {
-        const F = block.footPoly, keep = [];
-        let style = null;
-        for (const l of block.lots) {
-            if ([[l.x0, l.z0], [l.x1, l.z0], [l.x1, l.z1], [l.x0, l.z1]].every((p) => RoadPlan.inPoly(F, p[0], p[1]))) { keep.push(l); continue; }
-            style = style || l;
-            const i = this.obstacles.indexOf(l.obs); if (i >= 0) this.obstacles.splice(i, 1);
-        }
-        block.lots = keep;
-        if (keep.length || !style) return;
-        const [fx0, fz0, fx1, fz1] = block.foot, inside = (a, b, c, d) => [[a, b], [c, b], [c, d], [a, d]].every((p) => RoadPlan.inPoly(F, p[0], p[1]));
-        let best = null, ba = 0;
-        for (let w = Math.floor((fx1 - fx0) / 3) * 3; w >= 9; w -= 3) for (let d = Math.floor((fz1 - fz0) / 3) * 3; d >= 9; d -= 3) {
-            if (w * d <= ba || w > d * 2.6 || d > w * 2.6) continue;
-            search: for (let x = fx0; x + w <= fx1 + 1e-6; x += 1.5) for (let z = fz0; z + d <= fz1 + 1e-6; z += 1.5) if (inside(x, z, x + w, z + d)) { best = [x, z, x + w, z + d]; ba = w * d; break search; }
-        }
-        if (!best) { this._greenPiece(block, 3); return; }
-        this._addLot(block, best[0], best[1], best[2], best[3], Math.max(2, Math.min(style.floors, Math.round(ba / 40))), style.facade, style.roof);
-    },
-
-    // Setor da rotatória (entre duas pernas vizinhas, ângulo < 180°) onde está (x, z): { a, b, bx, bz (bissetriz) } ou null.
-    _roundSector(n, x, z) {
-        const R = n.round, th = Math.atan2(z - R.cz, x - R.cx), A = n.arms, N = A.length, TAU = Math.PI * 2;
-        for (let i = 0; i < N; i++) {
-            const a = A[i], b = A[(i + 1) % N];
-            let g = b.ang - a.ang; if (g <= 0) g += TAU;
-            let u = th - a.ang; u -= Math.floor(u / TAU) * TAU;
-            if (u > g) continue;
-            if (g >= Math.PI - 0.01) return null;
-            const bx = a.dx + b.dx, bz = a.dz + b.dz, l = hypot(bx, bz);
-            return { a, b, bx: bx / l, bz: bz / l };
-        }
-        return null;
     },
 
     // Polígonos: recorte pelo semiplano nx·x + nz·z ≥ c | área (+ = anti-horário) | centróide | recuo de d u (convexo, anti-horário).
@@ -716,18 +1210,6 @@ const CityGrid = {
         }
         return this._polyArea(out) > 1 && out.every((p) => RoadPlan.inPoly(P, p[0], p[1])) ? out : null;
     },
-    // O segmento AB passa pelo interior do retângulo? (recorte de Liang-Barsky; precisa de pelo menos 0,5 u dentro)
-    _segInRect(A, B, x0, z0, x1, z1) {
-        let t0 = 0, t1 = 1;
-        const dx = B[0] - A[0], dz = B[1] - A[1];
-        for (const [p, q] of [[-dx, A[0] - x0], [dx, x1 - A[0]], [-dz, A[1] - z0], [dz, z1 - A[1]]]) {
-            if (Math.abs(p) < 1e-9) { if (q < 0) return false; continue; }
-            const r = q / p;
-            if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
-        }
-        return (t1 - t0) * hypot(dx, dz) > 0.5;
-    },
-
     _fillLots(block, rng) {
         const [fx0, fz0, fx1, fz1] = block.foot;
         const w = fx1 - fx0, d = fz1 - fz0;
@@ -862,7 +1344,8 @@ const CityGrid = {
         const props = block.props;
 
         const free = (x, z, margin) => {
-            if (block.poly && !(RoadPlan.inPoly(block.poly, x, z) && RoadPlan.polyDist(block.poly, x, z) >= Math.max(1.2, margin))) return false;      // quarteirão em polígono: dentro dele
+            const Q = block.poly && (!block.open && block.footPoly ? block.footPoly : block.poly);
+            if (Q && !(RoadPlan.inPoly(Q, x, z) && RoadPlan.polyDist(Q, x, z) >= Math.max(1.2, margin))) return false;      // quarteirão em polígono: dentro dele (da pegada)
             for (const l of block.lots) {
                 if (x > l.x0 - margin && x < l.x1 + margin && z > l.z0 - margin && z < l.z1 + margin) return false;
             }
@@ -1156,8 +1639,12 @@ const CityGrid = {
         if (cls === 'bridge') return 'Ponte ' + (at === 0 ? 'da Liberdade' : (at > 0 ? 'do Norte' : 'do Sul'));
         if (cls === 'dirt') return 'Estrada da Roça';
         if (cls === 'fav') return 'Beco ' + (1 + Math.abs(Math.round(at / 36)) % 40);
-        if (cls === 'isl') return edge.v ? 'Av. Resort ' + (1 + Math.round((at - 480) / 42)) : 'Rua do Sol ' + (1 + Math.abs(Math.round((at + 840) / 42)));
-        if (edge.v) { const i = Math.round((at + 294) / 42); return this.STREETS_V[Math.max(0, Math.min(this.STREETS_V.length - 1, i))]; }
+        return this._gridName(edge.v, at, cls === 'isl');
+    },
+    // Nome da linha `at` da grade (vert: N-S) — também das ruas curvas, que são linhas da grade deformadas.
+    _gridName(vert, at, island = false) {
+        if (island) return vert ? 'Av. Resort ' + (1 + Math.round((at - 396) / 42)) : 'Rua do Sol ' + (1 + Math.abs(Math.round((at + 960) / 42)));
+        if (vert) { const i = Math.round((at + 294) / 42); return this.STREETS_V[Math.max(0, Math.min(this.STREETS_V.length - 1, i))]; }
         const j = Math.round((at + 1050) / 42);
         return this.STREETS_H[((j % this.STREETS_H.length) + this.STREETS_H.length) % this.STREETS_H.length] + (j >= this.STREETS_H.length ? ' ' + Math.floor(j / this.STREETS_H.length + 1) : '');
     },
@@ -1237,6 +1724,33 @@ const CityGrid = {
                 this.perimeter.push({ x0: r[0], z0: r[1], x1: r[2], z1: r[3], edge: e, nx, nz });
             }
         }
+        // Vias LIVRES urbanas (curvas: Av. do Contorno, Av. Litorânea, ruas dos bairros curvos): no lado sem quarteirão, a calçada de borda
+        // vai em TIRAS ao longo da via — `perimeterStrips`: { inner (meio-fio), outer (borda de fora): mesmos índices, n (normal para
+        // fora), poly, edge, side }.
+        this.perimeterStrips = [];
+        {
+            const Q = {};
+            for (const e of RoadPlan.edges) {
+                if (!e.free || !this.URBAN_CLS.has(e.cls)) continue;
+                const hw = e.w / 2, s0 = (e.cutA || 0) + 0.5, s1 = e.len - (e.cutB || 0) - 0.5;
+                if (s1 - s0 < 6) continue;
+                for (const side of [-1, 1]) {
+                    let run = null;
+                    const flush = () => { if (run && run.inner.length >= 3) this.perimeterStrips.push(run); run = null; };
+                    for (let s = s0; ; s = Math.min(s1, s + 3)) {
+                        RoadPlan.at(e, s, Q);
+                        const nx = -Q.tz * side, nz = Q.tx * side, mx = Q.x + nx * (hw + 2), mz = Q.z + nz * (hw + 2), ox = Q.x + nx * (hw + SW - 0.5), oz = Q.z + nz * (hw + SW - 0.5);
+                        if (!this._blockAtPoint(mx, mz) && WorldMap.isLand(mx, mz) && !RoadPlan.onPavement(ox, oz, 0)) {
+                            if (!run) run = { inner: [], outer: [], n: [], edge: e, side };
+                            run.inner.push([Q.x + nx * hw, Q.z + nz * hw]); run.outer.push([Q.x + nx * (hw + SW), Q.z + nz * (hw + SW)]); run.n.push([nx, nz]);
+                        } else flush();
+                        if (s >= s1) break;
+                    }
+                    flush();
+                }
+            }
+            for (const st of this.perimeterStrips) { st.poly = st.inner.concat(st.outer.slice().reverse()); if (this._polyArea(st.poly) < 0) st.poly.reverse(); }
+        }
         // Rotatórias: anel de calçada (4 u) em volta do disco nos cantos sem quarteirão (a orla), entre os braços — liga a calçada da
         // avenida à da ponte. { inner, outer }: arcos (mesmo número de pontos) do meio-fio de dentro e da borda de fora.
         this.roundAprons = [];
@@ -1260,7 +1774,7 @@ const CityGrid = {
             }
         }
         // Rotatória-PRAÇA (cercada de quarteirões): em cada setor entre duas pernas, calçadão do disco até o chanfro a R+4 do centro
-        // (onde começa o quarteirão, _cutCell), entre os meios-fios das duas pernas.
+        // (onde começa o quarteirão: o chanfro do _faceSlab), entre os meios-fios das duas pernas.
         for (const n of RoadPlan.nodes) {
             const R = n.round;
             if (!R || !R.plaza) continue;
@@ -1292,19 +1806,20 @@ const CityGrid = {
             const v = p.nx !== 0, len = v ? p.z1 - p.z0 : p.x1 - p.x0;
             const at = (a, t) => v ? { x: (p.nx > 0 ? p.x1 : p.x0) + p.nx * t, z: p.z0 + a } : { x: p.x0 + a, z: (p.nz > 0 ? p.z1 : p.z0) + p.nz * t };
             const sea = (t) => { const q = at(len / 2, t); return WorldMap.seaDist(q.x, q.z) === 0 && !WorldMap.isLand(q.x, q.z); };
-            // Mar a até 60 u para fora, no meio do trecho? (senão é continente/campo: sem praia)
+            // Mar a até 130 u para fora, no meio do trecho? (senão é continente/campo: sem praia; a orla tem baías: a areia varia)
             let toSea = -1;
-            for (let t = 6; t <= 60; t += 3) if (!WorldMap.isLand(at(len / 2, t).x, at(len / 2, t).z)) { toSea = t; break; }
+            for (let t = 6; t <= 130; t += 3) if (!WorldMap.isLand(at(len / 2, t).x, at(len / 2, t).z)) { toSea = t; break; }
             if (toSea < 0) continue;
             const key = (v ? 'v' : 'h') + (v ? p.x0 : p.z0).toFixed(0) + ':' + p.nx + p.nz;
             if (!jog.has(key)) jog.set(key, []);
             jog.get(key).push(v ? [p.z0, p.z1, (p.x0 + p.x1) / 2, v, p.nx, p.nz] : [p.x0, p.x1, (p.z0 + p.z1) / 2, v, p.nx, p.nz]);
             for (let a = 8 + rng() * 6; a < len - 8; a += 15 + rng() * 6) {                        // guarda-sóis e 2 lugares para deitar em cada
-                const u = at(a, 9.5);
+                let w = 9.5; while (w < 130 && WorldMap.isLand(at(a, w + 1).x, at(a, w + 1).z)) w += 2;      // (até onde vai a areia aqui)
+                const lo = Math.max(9.5, w - 36), t = lo + rng() * Math.max(0, w - 7 - lo), u = at(a, t);
                 if (WorldMap.biomeAt(u.x, u.z) !== WorldMap.B.SAND) continue;
                 this.coastProps.push({ type: 'prop', kind: 'umbrella', x: u.x, z: u.z, s: 1, seed: Math.floor(rng() * 1000) });
                 for (const side of [-1, 1]) {
-                    const q = at(a + side * 2.1, 11);
+                    const q = at(a + side * 2.1, t + 1.5);
                     this.beachSpots.push({ x: q.x, z: q.z, h: v ? (rng() < 0.5 ? 0 : Math.PI) : (rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2), taken: false });
                 }
             }
@@ -1313,10 +1828,37 @@ const CityGrid = {
                 this.coastProps.push({ type: 'tree', kind: 'palm', x: u.x, z: u.z, s: 0.9 + rng() * 0.4, seed: Math.floor(rng() * 1000) });
             }
             for (let a = 8; a < len - 8; a += 9) {                                                 // entrada na água: último ponto de terra rumo ao mar
-                let t = 6; while (t < 60 && WorldMap.isLand(at(a, t + 1).x, at(a, t + 1).z)) t++;
+                let t = 6; while (t < 130 && WorldMap.isLand(at(a, t + 1).x, at(a, t + 1).z)) t++;
                 const u = at(a, t - 1.2);
                 this.shorePoints.push({ x: u.x, z: u.z, nx: p.nx, nz: p.nz });
             }
+        }
+        // Tiras de calçada (vias curvas) que dão para o mar: os mesmos guarda-sóis, palmeiras, lugares para deitar, entradas na água e a
+        // trilha de corrida (polilinha pelo meio da calçada).
+        for (const st of this.perimeterStrips) {
+            const N = st.inner.length, out = (i, t) => ({ x: st.outer[i][0] + st.n[i][0] * t, z: st.outer[i][1] + st.n[i][1] * t });
+            const water = (i) => { let t = 1; while (t < 130 && WorldMap.isLand(out(i, t).x, out(i, t).z)) t += 2; return t < 130 ? t : -1; };
+            if (water(N >> 1) < 0) continue;
+            for (let i = 2 + Math.floor(rng() * 3); i < N - 2; i += 5 + Math.floor(rng() * 3)) {                    // guarda-sóis (a cada ~15–21 u)
+                const w = water(i); if (w < 0) continue;
+                const lo = Math.max(5.5, w - 34), t = lo + rng() * Math.max(0, w - 6 - lo), u = out(i, t);
+                if (WorldMap.biomeAt(u.x, u.z) !== WorldMap.B.SAND) continue;
+                this.coastProps.push({ type: 'prop', kind: 'umbrella', x: u.x, z: u.z, s: 1, seed: Math.floor(rng() * 1000) });
+                const tx = -st.n[i][1], tz = st.n[i][0], hd = Math.atan2(tx, tz);
+                for (const sd of [-1, 1]) this.beachSpots.push({ x: u.x + tx * sd * 2.1 + st.n[i][0] * 1.5, z: u.z + tz * sd * 2.1 + st.n[i][1] * 1.5, h: rng() < 0.5 ? hd : hd + Math.PI, taken: false });
+            }
+            for (let i = 2 + Math.floor(rng() * 3); i < N - 2; i += 4 + Math.floor(rng() * 2)) {                    // palmeiras junto ao calçadão
+                const u = out(i, 1.4 + rng() * 1.6);
+                this.coastProps.push({ type: 'tree', kind: 'palm', x: u.x, z: u.z, s: 0.9 + rng() * 0.4, seed: Math.floor(rng() * 1000) });
+            }
+            for (let i = 2; i < N - 2; i += 3) {                                                                      // entradas na água
+                const w = water(i); if (w < 0) continue;
+                const u = out(i, w - 1.2);
+                this.shorePoints.push({ x: u.x, z: u.z, nx: st.n[i][0], nz: st.n[i][1] });
+            }
+            const pts = st.inner.map((p, i) => [(p[0] + st.outer[i][0]) / 2, (p[1] + st.outer[i][1]) / 2]), cum = [0];
+            for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+            if (cum[cum.length - 1] > 60) this._jogFree = (this._jogFree || []).concat([{ pts, cum, len: cum[cum.length - 1] }]);
         }
         // Trilhas de corrida: une os trechos alinhados (mesma linha, mesma normal) numa polilinha.
         for (const list of jog.values()) {
@@ -1330,6 +1872,7 @@ const CityGrid = {
         }
         this.jogPaths = this.jogPaths.filter((j) => j.end - j.start > 60);
         for (const j of this.jogPaths) j.len = j.end - j.start;
+        this.jogPaths.push(...(this._jogFree || [])); this._jogFree = null;
     },
 
     // Lugar vago para deitar na areia (marca como ocupado) ou null.
@@ -1350,13 +1893,16 @@ const CityGrid = {
     },
 
     // Trilha de corrida: ponto no parâmetro u (0..len) de um jogPath, e o u mais próximo de (x, z).
+    // (trilha reta: { v, c, start, end }; ao longo de via curva: { pts, cum } — polilinha)
     jogAt(path, u) {
         u = Math.max(0, Math.min(path.len, u));
+        if (path.pts) { const q = RoadPlan.at({ pts: path.pts, cum: path.cum, len: path.len }, u); return { x: q.x, z: q.z }; }
         return path.v ? { x: path.c, z: path.start + u } : { x: path.start + u, z: path.c };
     },
     jogNear(x, z, max = 400) {
         let best = null, bd = max;
         for (const j of this.jogPaths) {
+            if (j.pts) { const q = RoadPlan._projPts(j.pts, j.cum, x, z); if (q.d < bd) { bd = q.d; best = { path: j, u: q.s }; } continue; }
             const u = Math.max(0, Math.min(j.len, (j.v ? z : x) - j.start)), p = this.jogAt(j, u), d = hypot(p.x - x, p.z - z);
             if (d < bd) { bd = d; best = { path: j, u }; }
         }
@@ -1369,9 +1915,11 @@ const CityGrid = {
     _collectWalk() {
         const W = [];
         this.urbanRects = this.urbanBoxes.slice();
+        const WP = this.walkPolys = [];                                                    // andáveis que não são retângulos (polígonos)
         for (const b of this.blocks) {
             const [x0, z0, x1, z1] = b.slab, [fx0, fz0, fx1, fz1] = b.foot;
             if (b.organic) continue;                                                        // favela: as células dela entram abaixo (becos, quintais)
+            if (b.poly) { WP.push(b.poly); continue; }                                      // quarteirão em polígono: a laje toda (os prédios saem como sólidos)
             if (b.open) { W.push([x0, z0, x1, z1]); continue; }                             // parque/mata/praia: tudo andável
             W.push([x0, z0, x1, fz0], [x0, fz1, x1, z1], [x0, fz0, fx0, fz1], [fx1, fz0, x1, fz1]);   // anel de calçada
         }
@@ -1379,12 +1927,16 @@ const CityGrid = {
         for (const b of this.blocks) if (b.r > 0.5) { const [x0, z0, x1, z1] = b.slab; for (const [kx, kz, sx, sz] of [[x0, z0, 1, 1], [x1, z0, -1, 1], [x1, z1, -1, -1], [x0, z1, 1, -1]]) this.cornerCarves.push({ kx, kz, sx, sz, r: b.r }); }
         for (const r of (typeof FavelaPlan !== 'undefined' && FavelaPlan.built ? FavelaPlan.walkRects : [])) W.push(r.slice(0, 4));       // (os barracos saem como sólidos)
         for (const p of this.perimeter) { W.push([p.x0, p.z0, p.x1, p.z1]); this.urbanRects.push([p.x0, p.z0, p.x1, p.z1]); }
+        for (const st of this.perimeterStrips || []) WP.push(st.poly);
+        // pista das vias livres urbanas: fora da malha a pé (o lado sem quarteirão ficava com o terreno por baixo, andável) — as faixas de
+        // pedestres, que entram depois, continuam andáveis
+        this.navRoadPolys = [];
+        for (const e of RoadPlan.edges) if (e.free && this.URBAN_CLS.has(e.cls)) this.navRoadPolys.push(this._offsetLine(e.pts, e.w / 2).concat(this._offsetLine(e.pts, -e.w / 2).reverse()));
         for (const n of RoadPlan.nodes) if (n.round) { const R = n.round; this.urbanRects.push([R.cx - R.R, R.cz - R.R, R.cx + R.R, R.cz + R.R]); }      // rotatória: pista (a ilha não é caminho)
         for (const ap of this.roundAprons || []) for (let k = 0; k < ap.inner.length; k++) {                   // anel de calçada: quadradinhos ao longo do meio dele
             const x = (ap.inner[k][0] + ap.outer[k][0]) / 2, z = (ap.inner[k][1] + ap.outer[k][1]) / 2;
             W.push([x - 1.3, z - 1.3, x + 1.3, z + 1.3]);
         }
-        const WP = this.walkPolys = [];                                                    // andáveis que não são retângulos (polígonos)
         for (const cw of this.crosswalks) {                                                // faixas: avançam 0,7 u em cada calçada
             if (cw.axis === 'o') {
                 const L = cw.hl + 0.7, D = cw.hd, P = (a, b) => [cw.cx + cw.ux * a + cw.dx * b, cw.cz + cw.uz * a + cw.dz * b];
@@ -1433,6 +1985,13 @@ const CityGrid = {
         if (blk.organic) {                                                                  // favela: um ponto de beco do ladrilho
             const p = FavelaPlan.randomAlleyPoint(r, (x, z) => x >= x0 && x < x1 && z >= z0 && z < z1) || FavelaPlan.randomAlleyPoint(r);
             if (p) return new BABYLON.Vector3(p.x, 0, p.z);
+        }
+        if (blk.poly) {                                                                     // em polígono: a calçada (ou o miolo, se aberto)
+            for (let t = 0; t < 30; t++) {
+                const x = x0 + r() * (x1 - x0), z = z0 + r() * (z1 - z0);
+                if (RoadPlan.inPoly(blk.poly, x, z) && RoadPlan.polyDist(blk.poly, x, z) > 0.5 && (blk.open || !blk.footPoly || !RoadPlan.inPoly(blk.footPoly, x, z))) return new BABYLON.Vector3(x, 0, z);
+            }
+            const c = this._areaCentroid(blk.poly); return new BABYLON.Vector3(c[0], 0, c[1]);
         }
         if (blk.open) {
             return new BABYLON.Vector3(x0 + 2 + r() * Math.max(0.1, x1 - x0 - 4), 0, z0 + 2 + r() * Math.max(0.1, z1 - z0 - 4));

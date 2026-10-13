@@ -625,22 +625,29 @@ class WorldBuilder {
             for (const c of C) for (let k2 = 0; k2 + 1 < c.pts.length; k2++) T(asph, c.K, c.pts[k2], c.pts[k2 + 1], up, 0.02, null);
         };
 
-        // Calçadas de BORDA: lados de ruas urbanas sem quarteirão (orla do canal, fim da cidade...).
+        // Calçadas de BORDA: lados de ruas urbanas sem quarteirão (orla do canal, fim da cidade...); nas vias curvas, tiras ao longo delas.
         for (const p of CityGrid.perimeter) slab('sidewalk', p.x0, p.z0, p.x1, p.z1);
+        for (const st of CityGrid.perimeterStrips || []) {
+            const I = st.inner, O = st.outer, c = I[I.length >> 1], bt = this._batch('sidewalk', c[0], c[1]), cw = st.side < 0;      // (lado direito: a borda de fora fica à direita do sentido da via)
+            const T = (a, b, d) => bt.tri([a[0], h, a[1]], [b[0], h, b[1]], [d[0], h, d[1]], up, [uvT(a), uvT(b), uvT(d)]);
+            for (let i = 0; i + 1 < I.length; i++) { if (cw) { T(I[i], O[i + 1], I[i + 1]); T(I[i], O[i], O[i + 1]); } else { T(I[i], I[i + 1], O[i + 1]); T(I[i], O[i + 1], O[i]); } }
+            curbLoop(st.poly.slice(), c[0], c[1]);
+        }
 
-        // Quarteirão em POLÍGONO (cortado por diagonal): laje inteira (parque/praça) ou anel de calçada + praça na pegada (andável, na
-        // altura da calçada: os prédios ocupam só parte dela); meio-fio em volta. Polígonos convexos: leque a partir do centróide.
+        // Quarteirão em POLÍGONO (cortado por diagonal, curva, borda orgânica): laje inteira (parque/praça) ou anel de calçada + praça na
+        // pegada (andável, na altura da calçada: os prédios ocupam só parte dela); meio-fio em volta. Polígonos quaisquer (côncavos
+        // também): triangulados por orelhas; o anel liga cada vértice da laje ao da pegada (o recuo mantém os vértices).
         const polyBlock = (blk) => {
-            const P = blk.poly, F = blk.footPoly, c = CityGrid._centroid(P), bt = this._batch((blk.open ? 'open_' + blk.ground : 'sidewalk'), c[0], c[1]);
+            const P = blk.poly, F = blk.footPoly, c = CityGrid._areaCentroid(P), bt = this._batch((blk.open ? 'open_' + blk.ground : 'sidewalk'), c[0], c[1]);
             const T = (batch, a, b, d) => batch.tri([a[0], h, a[1]], [b[0], h, b[1]], [d[0], h, d[1]], up, [uvT(a), uvT(b), uvT(d)]);
-            if (blk.open || !F) for (let i = 0; i < P.length; i++) T(bt, c, P[i], P[(i + 1) % P.length]);
+            const fill = (batch, Q) => { for (const [i, j, k] of CityGrid.triangulate(Q)) T(batch, Q[i], Q[j], Q[k]); };
+            if (blk.open || !F) fill(bt, P);
             else {
-                const pz = this._batch('open_' + blk.ground, c[0], c[1]), fc = CityGrid._centroid(F);
                 for (let i = 0; i < P.length; i++) {
                     const j = (i + 1) % P.length;
-                    T(bt, P[i], P[j], F[j]); T(bt, P[i], F[j], F[i]);                     // anel de calçada (o recuo mantém os vértices)
-                    T(pz, fc, F[i], F[j]);                                                 // praça
+                    T(bt, P[i], P[j], F[j]); T(bt, P[i], F[j], F[i]);                     // anel de calçada
                 }
+                fill(this._batch('open_' + blk.ground, c[0], c[1]), F);                    // praça
             }
             curbLoop(P.slice(), c[0], c[1]);
         };

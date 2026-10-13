@@ -162,6 +162,7 @@ const MapRenderer = {
 
         // 3) Calçadas de borda, quarteirões, prédios.
         for (const p of CityGrid.perimeter) if (vis(p.x0, p.z0, p.x1, p.z1)) rect(p.x0, p.z0, p.x1, p.z1, C.sidewalk);
+        for (const st of CityGrid.perimeterStrips || []) { const c = st.inner[st.inner.length >> 1]; if (vis(c[0] - 60, c[1] - 60, c[0] + 60, c[1] + 60)) poly(st.poly, C.sidewalk); }
         for (const ap of CityGrid.roundAprons || []) {                      // anel de calçada das rotatórias
             const pts = ap.inner.concat(ap.outer.slice().reverse());
             if (!vis(pts[0][0] - 20, pts[0][1] - 20, pts[0][0] + 20, pts[0][1] + 20)) continue;
@@ -232,14 +233,16 @@ const MapRenderer = {
 
         // 5) Territórios de facção (área de risco): véu da cor da facção, borda tracejada e, no mapa grande, o nome.
         if (typeof Standing !== 'undefined') for (const t of Standing.territories) {
-            const b = t.rect();
+            const b = t.rect(), L = t.poly && t.poly();
             if (b.x1 < b.x0 || !vis(b.x0, b.z0, b.x1, b.z1)) continue;
             const x = X(b.x0), y = Y(b.z1), w = (b.x1 - b.x0) * k, h = (b.z1 - b.z0) * k;
             ctx.save();
             const tc = Standing.policeOp ? '#ff4a3d' : t.color;
-            ctx.fillStyle = tc + '2e'; ctx.fillRect(x, y, w, h);
-            ctx.strokeStyle = tc; ctx.lineWidth = Math.max(1.5, Math.min(4, 1.2 * k + 1)); ctx.setLineDash([Math.max(5, 8 * k), Math.max(4, 5 * k)]);
-            ctx.strokeRect(x, y, w, h);
+            ctx.beginPath();                                                // contorno do território (a mancha da favela); sem ele, a caixa
+            if (L && L.length > 2) { L.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])))); ctx.closePath(); } else ctx.rect(x, y, w, h);
+            ctx.fillStyle = tc + '2e'; ctx.fill();
+            ctx.strokeStyle = tc; ctx.lineWidth = Math.max(1.5, Math.min(4, 1.2 * k + 1)); ctx.setLineDash([Math.max(5, 8 * k), Math.max(4, 5 * k)]); ctx.lineJoin = 'round';
+            ctx.stroke();
             if (opts.labels) {
                 const size = Math.max(11, Math.min(26, 12 * k + 8)), cx0 = (Math.max(x, 0) + Math.min(x + w, W)) / 2, cy0 = Math.max(y, 0) + 16 + size * 0.5;      // (ancorado na parte visível)
                 ctx.setLineDash([]); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';

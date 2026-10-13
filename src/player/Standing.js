@@ -12,17 +12,26 @@ const Standing = {
     angry: 30,                          // community abaixo disso irrita o tráfico
     _toastCd: 0,
 
-    // ---- território: retângulo que cobre os quarteirões da favela (o chão urbano dela tem biome CITY no mapa).
+    // ---- território: a MANCHA da favela (FavelaPlan.inTerritory — contorno irregular, não um retângulo); _bounds() é a caixa dela.
     // A cidade fica a LESTE (as ruas 'fav' ligam à cidade em x≈-294): profundidade 0 na borda leste, 1 no fundo oeste.
     entranceDepth: 0.12,                // até aqui (borda leste) é a "entrada": a polícia ainda pode ficar
     _bounds() {
         if (this._b) return this._b;
-        if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built) { const R = FavelaPlan.R; return (this._b = { x0: R.x0, z0: R.z0, x1: R.x1, z1: R.z1 }); }      // (a favela orgânica: a mesma área de antes)
+        if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built) return (this._b = Object.assign({}, FavelaPlan.bounds));      // (caixa da mancha)
         let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
         for (const b of CityGrid.blocks) if (b.district === 'favela') { x0 = Math.min(x0, b.slab[0]); z0 = Math.min(z0, b.slab[1]); x1 = Math.max(x1, b.slab[2]); z1 = Math.max(z1, b.slab[3]); }
         return (this._b = x0 < Infinity ? { x0: x0 - 8, z0: z0 - 8, x1: x1 + 8, z1: z1 + 8 } : { x0: 0, z0: 0, x1: -1, z1: -1 });      // (+8 u: as vielas de contorno fazem parte)
     },
-    inFavela(x, z) { const b = this._bounds(); return x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1; },
+    inFavela(x, z) {
+        const b = this._bounds();
+        if (!(x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1)) return false;
+        return typeof FavelaPlan === 'undefined' || !FavelaPlan.built || FavelaPlan.inTerritory(x, z);
+    },
+    // Distância (u) até o território (0 dentro).
+    favelaDist(x, z) {
+        if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built) return FavelaPlan.distTo(x, z);
+        const b = this._bounds(); return hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1));
+    },
     nearFavela(x, z, m = 80) { const b = this._bounds(); return x >= b.x0 - m && x <= b.x1 + m && z >= b.z0 - m && z <= b.z1 + m; },
     // 0 na entrada (leste) → 1 no fundo da favela (oeste). Fora da favela: 0.
     depth(x, z) {
@@ -39,9 +48,11 @@ const Standing = {
     },
     // ---- facções por território. `resident`: o jogador mora lá (neutro). Em território de fora (futuro: N.C.P) ele é um estranho
     // e os traficantes são sempre hostis. Em território de morador, só viram hostis se a moral cair (hostile()).
-    territories: [{ id: 'cv', sigla: 'C.V', name: 'COMANDO VERDE', color: '#2ecc5a', rect: () => Standing._bounds() }],
+    // rect(): caixa | poly(): contorno (laço [[x, z], ...]) para o mapa | inside(x, z): dentro da mancha
+    territories: [{ id: 'cv', sigla: 'C.V', name: 'COMANDO VERDE', color: '#2ecc5a', rect: () => Standing._bounds(),
+        poly: () => (typeof FavelaPlan !== 'undefined' && FavelaPlan.outline) || null, inside: (x, z) => Standing.inFavela(x, z) }],
     territoryAt(x, z) {
-        for (const t of this.territories) { const b = t.rect(); if (x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1) return t; }
+        for (const t of this.territories) if (t.inside(x, z)) return t;
         return null;
     },
     lowTraffic: 30, lowCommunity: 20,   // abaixo disso (um OU outro) o morador deixa de ser neutro

@@ -128,7 +128,8 @@ const RoadPlan = {
             if (!path.anchor) continue;
             const P = path.pts, pl = [0];
             for (let i = 1; i < P.length; i++) pl.push(pl[i - 1] + hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
-            for (const n of nodes.values()) if (this._projPts(P, pl, n.x, n.z).d <= 2.5) anchored.add(n);
+            const H = this._segHash(P);
+            for (const n of nodes.values()) if (this._projNear(P, pl, H, n.x, n.z, 2.5).d <= 2.5) anchored.add(n);
         }
         const deg = (n) => (n.nbr[0] ? 1 : 0) + (n.nbr[1] ? 1 : 0) + (n.nbr[2] ? 1 : 0) + (n.nbr[3] ? 1 : 0) + (anchored.has(n) ? 1 : 0);
 
@@ -190,7 +191,8 @@ const RoadPlan = {
             for (let i = 1; i < P.length; i++) pl.push(pl[i - 1] + hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
             const L = pl[pl.length - 1], cuts = [], PB = bb(P, SNAP + 1), SB = [];
             for (let i = 0; i + 1 < P.length; i++) SB.push(bb([P[i], P[i + 1]], 0.01));
-            for (const n of nodes.values()) { if (n.x < PB[0] || n.x > PB[2] || n.z < PB[1] || n.z > PB[3]) continue; const q = this._projPts(P, pl, n.x, n.z); if (q.d <= SNAP) cuts.push({ t: q.s, n, rank: 3 }); }
+            const PH = this._segHash(P);
+            for (const n of nodes.values()) { if (n.x < PB[0] || n.x > PB[2] || n.z < PB[1] || n.z > PB[3]) continue; const q = this._projNear(P, pl, PH, n.x, n.z, SNAP); if (q.d <= SNAP) cuts.push({ t: q.s, n, rank: 3 }); }
             const near = [];                                                   // trechos na caixa da via (o resto nem é olhado)
             for (const e of edges) {
                 if (e.layer) continue;                                         // viaduto: a via passa por baixo, sem cruzamento
@@ -268,6 +270,8 @@ const RoadPlan = {
         let best = null, bd = 0.6;
         for (const e of edges) {
             if (e.layer) continue;
+            const B = e._bb || (e._bb = this._ptsBox(e.pts || [[e.a.x, e.a.z], [e.b.x, e.b.z]]));       // (caixa: só os trechos ali perto)
+            if (x < B[0] - 1 || x > B[2] + 1 || z < B[1] - 1 || z > B[3] + 1) continue;
             const q = this._projPts(e.pts || [[e.a.x, e.a.z], [e.b.x, e.b.z]], e.cum || [0, e.len], x, z);
             if (q.d < bd) { bd = q.d; best = { e, s: q.s, q }; }
         }
@@ -289,6 +293,31 @@ const RoadPlan = {
         edges.splice(edges.indexOf(e), 1, this._freeEdge(e.a, m, p1, e.cls, e), this._freeEdge(m, e.b, p2, e.cls, e));
         return m;
     },
+
+    // Grade (16 u) dos segmentos de uma polilinha longa | ponto dela mais perto de (x, z) olhando só os segmentos a até r u (d = ∞ se
+    // nenhum) | caixa de uma polilinha.
+    _segHash(P) {
+        const H = new Map(), S = 16;
+        for (let i = 0; i + 1 < P.length; i++) {
+            const a = P[i], b = P[i + 1];
+            for (let gi = Math.floor(Math.min(a[0], b[0]) / S); gi <= Math.floor(Math.max(a[0], b[0]) / S); gi++) for (let gj = Math.floor(Math.min(a[1], b[1]) / S); gj <= Math.floor(Math.max(a[1], b[1]) / S); gj++) {
+                const k = gi * 65536 + gj; (H.get(k) || H.set(k, []).get(k)).push(i);
+            }
+        }
+        return H;
+    },
+    _projNear(P, C, H, x, z, r) {
+        const S = 16, seen = new Set();
+        let best = { d: Infinity }, bd = Infinity;
+        for (let gi = Math.floor((x - r) / S); gi <= Math.floor((x + r) / S); gi++) for (let gj = Math.floor((z - r) / S); gj <= Math.floor((z + r) / S); gj++) for (const i of H.get(gi * 65536 + gj) || []) {
+            if (seen.has(i)) continue; seen.add(i);
+            const ax = P[i][0], az = P[i][1], sx = P[i + 1][0] - ax, sz = P[i + 1][1] - az, L2 = sx * sx + sz * sz || 1;
+            const t = Math.max(0, Math.min(1, ((x - ax) * sx + (z - az) * sz) / L2)), px = ax + sx * t, pz = az + sz * t, d = hypot(x - px, z - pz);
+            if (d < bd) { const L = Math.sqrt(L2); bd = d; best = { s: C[i] + t * (C[i + 1] - C[i]), x: px, z: pz, d, tx: sx / L, tz: sz / L }; }
+        }
+        return best;
+    },
+    _ptsBox(P) { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; for (const p of P) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < z0) z0 = p[1]; if (p[1] > z1) z1 = p[1]; } return [x0, z0, x1, z1]; },
 
     // Ponto da polilinha P (comprimentos acumulados C) mais perto de (x, z): { s, x, z, d, tx, tz }.
     _projPts(P, C, x, z) {
@@ -356,7 +385,8 @@ const RoadPlan = {
             const lx = -a.dz, lz = a.dx, rx = b.dz, rz = -b.dx, cx = b.hw * rx - a.hw * lx, cz = b.hw * rz - a.hw * lz;
             const det = -a.dx * b.dz + b.dx * a.dz;
             if (Math.abs(det) < 1e-6) continue;
-            const t = (-cx * b.dz + b.dx * cz) / det, u = (a.dx * cz - a.dz * cx) / det;
+            const t = (-cx * b.dz + b.dx * cz) / det, u = (a.dx * cz - a.dz * cx) / det, CM = 6 * Math.max(a.hw, b.hw) + 8;
+            if (t > CM || u > CM) { a.cut = Math.max(a.cut, Math.min(t, CM)); b.cut = Math.max(b.cut, Math.min(u, CM)); continue; }      // (pernas quase juntas: sem quina no infinito)
             a.cut = Math.max(a.cut, t); b.cut = Math.max(b.cut, u);
             corners[i] = [n.x + a.hw * lx + t * a.dx, n.z + a.hw * lz + t * a.dz];
         }

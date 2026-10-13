@@ -31,6 +31,8 @@ class PoliceOperation {
         const p = this.game.player.position, b = Standing._bounds();
         this.center.x = b.x1 - 3;
         this.center.z = Math.max(b.z0 + 25, Math.min(b.z1 - 25, p.z + (Math.random() - 0.5) * 80));
+        const ent = FavelaPlan.built ? FavelaPlan.entranceNear(this.center.x, this.center.z) : null;      // (a borda da mancha é torta: entra por uma das ruas)
+        if (ent) { this.center.x = ent.x; this.center.z = ent.z; }
         this.state = 'active'; this.t = 0; this.reason = reason; Standing.policeOp = true; Standing.heat = 0; Standing.heatWhy = ''; this._spawnSquad(8);
         return true;
     }

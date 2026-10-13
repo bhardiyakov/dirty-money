@@ -323,8 +323,7 @@ class PauseMenu {
         const g = this.g, pl = g.player, inv = g.inventory, el = this.$('pmStatus'); if (!el) return;
         const bar = (label, v, col, note = '') => `<div class="sb"><span>${label}${note ? ` <b style="color:#8fb4ff">${note}</b>` : ''}</span><i><s style="width:${Math.max(0, Math.min(100, v))}%;background:${col}"></s></i></div>`;
         const row = (k, v) => `<div class="sr"><span>${k}</span><b>${v}</b></div>`;
-        const p = pl.position, terr = Standing.territoryAt(p.x, p.z), res = Standing.isResident(Standing.territoryAt(Standing._bounds().x1 - 1, Standing._bounds().z0 + 1)), hos = Standing.hostile(Standing.territoryAt(Standing._bounds().x1 - 1, Standing._bounds().z0 + 1));
-        const cv = Standing.territories[0];
+        const p = pl.position, terr = Standing.territoryAt(p.x, p.z), cv = Standing.territories[0], res = Standing.isResident(cv), hos = Standing.hostile(cv);
         const armor = pl.armorMax > 0 ? Math.round(pl.armor / pl.armorMax * 100) : 0;
         const owned = RealEstate.list.filter((q) => RealEstate.isOwned(q)), worth = owned.reduce((s, q) => s + RealEstate.price(q), 0);
         const home = RealEstate.home;
