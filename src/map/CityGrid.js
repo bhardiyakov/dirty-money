@@ -41,8 +41,31 @@ const CityGrid = {
     // Número de linhas da cidade ANTIGA (8×10 quarteirões de 42 u, centrada na origem): o layout dela é preservado.
     OLD: { minX: -168, maxX: 168, minZ: -210, maxZ: 210, pitch: 42, cols: 8, rows: 10 },
 
+    // A geração do mundo em PASSOS ({ label, run }), na ordem: continente → ruas → quarteirões → favela → cruzamentos → relevo → orla.
+    // Na página do jogo (window.DEFER_WORLD) o main.js roda um por vez durante a tela do estúdio, com um quadro de respiro entre eles
+    // (a tela anda e mostra o passo); fora dela, o fim deste arquivo roda todos de uma vez, como antes.
+    steps() {
+        const S = [];
+        if (!WorldMap.land) S.push({ label: 'Desenhando o continente…', run: () => WorldMap.buildLand() });
+        S.push(
+            { label: 'Traçando as ruas e estradas…', run: () => { this._t0 = performance.now(); this._reset(); this._makePlan(); } },
+            { label: 'Erguendo os quarteirões…', run: () => this._buildBlocks(false) },
+            { label: 'Subindo o morro da favela…', run: () => { if (this._favela) FavelaPlan.build(this); } },
+            { label: 'Ligando os cruzamentos…', run: () => this._buildRest(this._t0) },
+            { label: 'Esculpindo o relevo…', run: () => WorldMap.buildTerrain() },
+            { label: 'Plantando a orla e as matas…', run: () => this.finish() },
+        );
+        return S;
+    },
+
     build() {
         const t0 = performance.now();
+        this._reset();
+        this._makePlan();
+        this._buildBlocks();
+        this._buildRest(t0);
+    },
+    _reset() {
         this.obstacles = [];   // retângulos sólidos { x0, z0, x1, z1, h } (prédios, contêineres).
         this.vaultables = [];  // grades e muros: sólidos que dá para PULAR (jogador e polícia) — também estão em `obstacles`
         this.hideSpots = [];   // esconderijos (caçambas, caixotes, latões): { x, z, w, d, h, kind }
@@ -51,8 +74,8 @@ const CityGrid = {
         this.urbanPolys = [];  // o mesmo para os quarteirões em polígono: a face inteira (até o eixo das ruas em volta)
         this.roadRects = [];   // um retângulo por trecho de rua (achata o relevo)
         this.navBlocks = [];   // áreas proibidas SÓ para a navegação a pé (interior da safe house: pedestres e policiais não entram; o jogador sim)
-        this._makePlan();
-        this._buildBlocks();
+    },
+    _buildRest(t0) {
         this._buildIntersections();
         this._planTunnels();
         this._buildObstacleGrid();
@@ -522,7 +545,7 @@ const CityGrid = {
         return block;
     },
 
-    _buildBlocks() {
+    _buildBlocks(favela = true) {
         const cells = [];
         const rngFor = (i, j) => Pixel.rng(Math.floor(this._rand(i + 3, j + 11) * 1e9));
         // Faces do grafo de ruas: as que são exatamente uma célula da grade viram o quarteirão retangular de sempre (sweep); as outras
@@ -568,7 +591,7 @@ const CityGrid = {
             if (!block.open) this._fillYard(block, Pixel.rng(Math.floor(this._rand(block.i + 91, block.j + 37) * 1e9)));
             this.blocks.push(block);
         }
-        if (this._favela) FavelaPlan.build(this);                                   // FAVELA: becos, barracos e a safe house (quarteirões 'organic')
+        if (favela && this._favela) FavelaPlan.build(this);                         // FAVELA: becos, barracos e a safe house (quarteirões 'organic'; nos passos, à parte)
     },
 
     // ============================================================ postos de gasolina
@@ -2011,6 +2034,6 @@ const CityGrid = {
     isInside(x, z) { return WorldMap.isLand(x, z); },
 };
 
-CityGrid.build();                // Config, Pixel, WorldMap (terra/água) e RoadPlan já carregaram (ordem dos <script>).
-WorldMap.buildTerrain();         // relevo/biomas dependem do que a cidade ocupa
-CityGrid.finish();               // orla e áreas andáveis dependem do relevo
+// Config, Pixel, WorldMap (terra/água) e RoadPlan já carregaram (ordem dos <script>). Na página do jogo a geração espera a tela do
+// estúdio (window.DEFER_WORLD: main.js, passo a passo); fora dela, roda aqui: cidade → relevo (depende do que a cidade ocupa) → orla.
+if (!window.DEFER_WORLD) { CityGrid.build(); WorldMap.buildTerrain(); CityGrid.finish(); }

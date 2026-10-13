@@ -465,4 +465,5 @@ const WorldMap = {
     },
 };
 
-WorldMap.buildLand();     // (a ETAPA 2, buildTerrain, roda no fim do CityGrid.js — depois do plano de ruas)
+if (!window.DEFER_WORLD) WorldMap.buildLand();     // (a ETAPA 2, buildTerrain, roda no fim do CityGrid.js — depois do plano de ruas; na página do
+                                                  // jogo, as duas rodam em passos durante a tela do estúdio: CityGrid.steps)
