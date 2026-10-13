@@ -37,7 +37,9 @@ class StreetProps {
         const pole = [0.22, 0.23, 0.26], head = [0.9, 0.86, 0.7];
         const px = l.x, pz = l.z, hx = l.hx, hz = l.hz;
         b.solid(px - 0.13, pz - 0.13, px + 0.13, pz + 0.13, 0, 5.7, pole);
-        b.solid(Math.min(px, hx) - 0.07, Math.min(pz, hz) - 0.07, Math.max(px, hx) + 0.07, Math.max(pz, hz) + 0.07, 5.55, 5.7, pole);
+        if (Math.abs(hx - px) > 0.05 && Math.abs(hz - pz) > 0.05) {                  // braço na diagonal (via livre): em gomos, não uma laje
+            for (let k = 0; k < 6; k++) { const t = (k + 0.5) / 6, x = px + (hx - px) * t, z = pz + (hz - pz) * t; b.solid(x - 0.1, z - 0.1, x + 0.1, z + 0.1, 5.55, 5.7, pole); }
+        } else b.solid(Math.min(px, hx) - 0.07, Math.min(pz, hz) - 0.07, Math.max(px, hx) + 0.07, Math.max(pz, hz) + 0.07, 5.55, 5.7, pole);
         b.solid(hx - 0.32, hz - 0.22, hx + 0.32, hz + 0.22, 5.38, 5.6, head);
     }
 

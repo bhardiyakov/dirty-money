@@ -1,11 +1,11 @@
 // ============================================================================
-// MotoTaxi — os MOTOTÁXIS da favela: motos com piloto que cortam as VIELAS em alta velocidade, COMPLETAMENTE FORA do sistema de
-// trânsito (sem física, sem rotas de carro, sem semáforo, não esperam ninguém). Cada uma segue o grafo de vielas ('fav' do RoadPlan)
-// em linha reta de cruzamento a cruzamento, escolhe sozinha a próxima viela (sem voltar, a não ser em beco sem saída), desacelera
+// MotoTaxi — os MOTOTÁXIS da favela: motos com piloto que cortam os BECOS em alta velocidade, COMPLETAMENTE FORA do sistema de
+// trânsito (sem física, sem rotas de carro, sem semáforo, não esperam ninguém). Cada uma segue o grafo dos becos e das ruas do morro
+// (FavelaPlan.graph) de ponto a ponto, escolhe sozinha o próximo trecho (sem voltar, a não ser em beco sem saída), desacelera
 // um pouco nas curvas. APRESSADOS E IMPACIENTES: costuram — desviam pelo lado livre de pedestres, do jogador, de carros e de outros
 // mototáxis (deslocamento lateral na viela), só freiam quando não há espaço, e aí buzinam sem parar. Se mesmo assim pegam alguém (ou
 // batem num carro), a moto TOMBA: quem foi atingido leva dano e é arremessado, o piloto voa por cima, levanta, volta andando, levanta
-// a moto e segue viagem (Casualty.remount — sem pânico). Barricadas fechadas (RoadNet.closed) desviam a rota. Existem só perto do
+// a moto e segue viagem (Casualty.remount — sem pânico). Barricadas em chamas desviam a rota. Existem só perto do
 // jogador (streaming) e sobem de número no baile funk (mais gente circulando).
 // ============================================================================
 
@@ -20,21 +20,26 @@ class MotoTaxis {
         this._op = [];
     }
 
-    // ---------------------------------------------------------------- grafo das vielas
-    _legs(node) {                                                             // pernas 'fav' abertas de um nó: [{ di, to }]
+    // ---------------------------------------------------------------- grafo dos becos
+    _legs(node) {                                                             // trechos abertos a partir de um nó: [{ to }]
+        const B = this.g.barricades ? this.g.barricades.list : [];
         const out = [];
-        for (let di = 0; di < 4; di++) {
-            const nb = node.nbr[di], ed = node.edge && node.edge[di];
-            if (!nb || !ed || ed.cls !== 'fav') continue;
-            if (RoadNet.isClosed(node, RoadNet.DIRS[di])) continue;           // barricada: ela desvia
-            out.push({ di, to: nb });
+        for (const to of node.links) {
+            if (B.length && B.some((b) => this._segDist(b.x, b.z, node, to) < 3.5)) continue;      // barricada: ela desvia
+            out.push({ to });
         }
         return out;
     }
-    _nodeNear(x, z) {
-        let best = null, bd = 1e9;
-        for (const n of RoadPlan.nodes) { const d = (n.x - x) ** 2 + (n.z - z) ** 2; if (d < bd && Standing.inFavela(n.x, n.z)) { bd = d; best = n; } }
-        return best;
+    _segDist(x, z, a, b) {
+        const sx = b.x - a.x, sz = b.z - a.z, L2 = sx * sx + sz * sz || 1, t = Math.max(0, Math.min(1, ((x - a.x) * sx + (z - a.z) * sz) / L2));
+        return hypot(x - a.x - sx * t, z - a.z - sz * t);
+    }
+    _nodeNear(x, z) { return FavelaPlan.built ? FavelaPlan.nodeNear(x, z) : null; }
+    // Folga lateral para costurar no trecho atual (rua: 1,9 u; beco: o que sobra da largura) e a pressa (beco estreito: mais devagar).
+    _lane(m) {
+        const road = m.from.road && m.to.road, w = Math.min(m.from.w || 1.5, m.to.w || 1.5);
+        m.LAT = road ? 1.9 : Math.max(0, w / 2 - 0.45);
+        m.vmul = road ? 1 : (w < 2 ? 0.62 : 0.78);
     }
 
     _spawn(pos) {
@@ -47,7 +52,8 @@ class MotoTaxis {
         actor.play('static');
         const t = Math.random() * 0.8;                                         // começa no meio do trecho
         const x = from.x + (leg.to.x - from.x) * t, z = from.z + (leg.to.z - from.z) * t;
-        const m = { actor, from, to: leg.to, di: leg.di, x, z, heading: Math.atan2(leg.to.x - from.x, leg.to.z - from.z), speed: this.speed * (0.85 + Math.random() * 0.3), v: 0, lean: 1, prev: from };
+        const m = { actor, from, to: leg.to, x, z, heading: Math.atan2(leg.to.x - from.x, leg.to.z - from.z), speed: this.speed * (0.85 + Math.random() * 0.3), v: 0, lean: 1, prev: from };
+        this._lane(m);
         actor.setY(1.5); actor.setPosition(x, z); actor.setHeading(m.heading);
         this.list.push(m);
         return m;
@@ -62,7 +68,8 @@ class MotoTaxis {
         const pool = legs.length ? legs : this._legs(node);                    // beco sem saída (ou barricada): volta
         if (!pool.length) { m.v = 0; m.stuck = true; return; }
         const leg = pool[Math.floor(Math.random() * pool.length)];
-        m.prev = node; m.from = node; m.to = leg.to; m.di = leg.di;
+        m.prev = node; m.from = node; m.to = leg.to;
+        this._lane(m);
     }
 
     update(dt, pos) {
@@ -94,11 +101,11 @@ class MotoTaxis {
             let da = (tgt - m.heading) % (Math.PI * 2); if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2;
             m.heading += da * (1 - Math.exp(-9 * dt));
             const turning = Math.min(1, Math.abs(da) / 1.2);
-            let vt = m.speed * (1 - 0.55 * turning) * (L < 6 ? 0.7 : 1);                 // freia um pouco antes da curva
+            let vt = m.speed * (m.vmul || 1) * (1 - 0.55 * turning) * (L < 6 ? 0.7 : 1);                 // freia um pouco antes da curva
             // costurando: desvia pelo lado livre de quem está no caminho; sem espaço, freia (e buzina, impaciente)
             const av = d < 90 ? this._avoid(m, ux, uz) : null;
             m.latT = av ? av.lat : 0;
-            const dl = m.latT - (m.lat || 0); m.lat = (m.lat || 0) + Math.sign(dl) * Math.min(Math.abs(dl), (av && av.ahead < 5 ? 6 : 3.5) * dt);
+            const dl = Math.max(-m.LAT, Math.min(m.LAT, m.latT)) - (m.lat || 0); m.lat = (m.lat || 0) + Math.sign(dl) * Math.min(Math.abs(dl), (av && av.ahead < 5 ? 6 : 3.5) * dt);
             if (av) {
                 vt *= av.brake;
                 m.honkCd = (m.honkCd || 0) - dt;
@@ -141,7 +148,7 @@ class MotoTaxis {
     // Quem está no corredor à frente (até ~12 m): devolve { lat, brake, ahead } — o deslocamento lateral que contorna o mais próximo
     // (o lado livre e mais perto do centro da viela) e quanto frear (1 = nada). null = caminho livre.
     _avoid(m, ux, uz) {
-        const LAT = 1.9, lat = m.lat || 0;
+        const LAT = m.LAT !== undefined ? m.LAT : 1.9, lat = m.lat || 0;
         let best = null, ba = 1e9;
         for (const o of this._obs) {
             if (o.ref === m) continue;

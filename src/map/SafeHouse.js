@@ -11,7 +11,7 @@
 // ============================================================================
 
 const SafeHouse = {
-    blockId: 'favela:7,4',          // quarteirão da favela, perto da avenida (a cidade fica logo a leste)
+    blockId: null,                  // (a favela orgânica põe a casa no lugar dela: FavelaPlan.SAFE)
     W: 23, D: 15,                   // tamanho externo (u)
     T: 0.7,                         // espessura das paredes externas
     H: 2.8,                         // altura das paredes
@@ -52,12 +52,13 @@ const SafeHouse = {
     spawn: { x: 8.4, z: 4.0, face: Math.PI },
 
     // ---------------------------------------------------------------- plano
-    // Chamado pelo CityGrid no quarteirão `blockId`: posiciona a casa dentro do pé do quarteirão (quintal de 3,5 u na frente, ao sul),
-    // registra sólidos e deixa uma "lote" marcada (o resto do quarteirão evita a casa; o WorldBuilder não desenha o prédio genérico).
-    plan(block, grid) {
+    // Chamado pelo FavelaPlan (at = canto sudoeste reservado, com o quintal na frente, ao sul) ou pelo CityGrid no quarteirão
+    // `blockId` (centrada no pé dele, 3,5 u de quintal): registra sólidos e deixa uma "lote" marcada (o WorldBuilder não desenha o
+    // prédio genérico).
+    plan(block, grid, at = null) {
         const [fx0, fz0, fx1, fz1] = block.foot;
-        this.ox = Math.round(fx0 + (fx1 - fx0 - this.W) / 2);
-        this.oz = Math.round(fz0 + 3.5);
+        this.ox = at ? at.x : Math.round(fx0 + (fx1 - fx0 - this.W) / 2);
+        this.oz = at ? at.z : Math.round(fz0 + 3.5);
         this.block = block;
         const T = this.T, W = this.W, D = this.D, H = this.H;
         const s = [];                                                                       // sólidos em coordenadas locais

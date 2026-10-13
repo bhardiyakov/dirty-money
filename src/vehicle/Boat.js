@@ -9,7 +9,8 @@
 //   'wreck'      carcaça depois da explosão
 //
 // BoatManager cria os barcos (vagas da marina + ancorados soltos + alguns navegando), dá o "tick" deles (só os perto da
-// câmera simulam), faz o rastro/espuma e remove carcaças.
+// câmera simulam), faz o rastro (marolas), a água jorrando (WaterSpray: proa, rabo de galo, curva, hélice) e o empurrão das ondas
+// (Waves: o barco vai e volta com a água; o desenho sobe, desce e gira de leve em syncVisual) e remove carcaças.
 // ============================================================================
 
 class Boat extends Vehicle {
@@ -78,8 +79,18 @@ class Boat extends Vehicle {
         this._refreshLook();
         const p = this.body.getAbsolutePosition(), f = this.body.getDirection(BABYLON.Axis.Z);
         this.bobT += dt;
-        this.visual.setPosition(p.x, p.z);
-        this.visual.setHeading(Math.atan2(f.x, f.z));
+        // ondas (Waves): o desenho sobe e desce com a onda (sobe na tela, como a altura de tudo no jogo) e gira de leve com a água
+        // inclinada sob o casco; o barco grande "corta" a onda e balança menos
+        let bx = 0, bz = 0, rock = 0;
+        const hd = Math.atan2(f.x, f.z), wd = WorldMap.waterDepth(p.x, p.z), wf = typeof Waves !== 'undefined' && !RoadPlan.onBridge(p.x, p.z) ? Waves.open(p.x, p.z, wd) : 0;
+        if (wf > 0) {
+            const S = Waves.sample(p.x, p.z, this._wv || (this._wv = {})), big = ({ jetski: 1, lancha: 0.7, barco: 0.45 }[this.spec.id] || 0.7) * wf;
+            const lift = S.h * Waves.UP * big, yaw = CompassCamera.yaw || 0;
+            bx = Math.sin(yaw) * lift; bz = Math.cos(yaw) * lift;
+            rock = Math.max(-0.07, Math.min(0.07, (S.gx * Math.cos(hd) - S.gz * Math.sin(hd)) * big * 0.9));
+        }
+        this.visual.setPosition(p.x + bx, p.z + bz);
+        this.visual.setHeading(hd + rock);
         // Debaixo de uma ponte o sprite fica ABAIXO do tabuleiro (a ponte o esconde; o círculo de visibilidade o revela).
         const sea = 1 + (Weather.cur ? Weather.cur.k * 2.2 : 0);            // mar agitado com chuva: o barco balança mais
         const y = RoadPlan.onBridge(p.x, p.z) ? 0.1 : 0.8 + Math.sin(this.bobT * 1.6 * sea + this.id) * 0.04 * sea;
@@ -252,7 +263,9 @@ class BoatManager {
     update(dt, game) {
         const f = game.camera.target;
         for (const b of this.boats) b.update(dt, null, f);
-        // Rastro: marolas e espuma atrás de quem anda rápido e está perto da câmera.
+        this._waves(game);
+        this._spray(dt, game);
+        // Rastro: marolas atrás de quem anda rápido e está perto da câmera.
         this._wakeT -= dt;
         if (this._wakeT > 0) return;
         this._wakeT = 0.16;
@@ -265,11 +278,80 @@ class BoatManager {
             if (v < 1.5) continue;
             const d = b.body.getDirection(BABYLON.Axis.Z), l = hypot(d.x, d.z) || 1, ux = d.x / l, uz = d.z / l, back = b.halfLen * 0.8;
             const size = 0.8 + b.halfW * 0.9 + v * 0.12;
-            game.waterFx.ripple(p.x - ux * back, p.z - uz * back, size * 0.3, size * 1.15, 1.4, 0.34);
-            if (v > 5) {                                                                     // espuma branca no popa
-                const sx = -uz, sz = ux;
-                for (const s of [-1, 1]) game.carLights.puffs.emit(p.x - ux * back + sx * s * b.halfW * 0.5, 0.35, p.z - uz * back + sz * s * b.halfW * 0.5, sx * s * 1.2 - ux * 1.5, 0.3, sz * s * 1.2 - uz * 1.5,
-                    0.5, 1.3 + v * 0.05, 0.9, 0.5, [0.93, 0.97, 1.0]);
+            game.waterFx.ripple(p.x - ux * back, p.z - uz * back, size * 0.3, size * 1.15, 1.4, 0.34);      // (a espuma e os jorros: _spray)
+        }
+    }
+
+    // A onda empurra de leve (Waves.current): soma à velocidade a VARIAÇÃO da água da superfície — o barco acompanha a água em parte
+    // (vai e volta com cada onda); o motor e o casco, que não desliza de lado, fazem o resto. Atracado, quase nada; à deriva, mais.
+    _waves(game) {
+        if (typeof Waves === 'undefined') return;
+        const v = this._wvel || (this._wvel = new BABYLON.Vector3()), S = this._ws || (this._ws = {});
+        for (const b of this.boats) {
+            if (b._asleep || !b.body) continue;
+            const p = b.position, wf = Waves.open(p.x, p.z, WorldMap.waterDepth(p.x, p.z));
+            const F = wf * (b.mode === 'parked' && !b.controlled ? 0.12 : b.controlled || b.pilot ? 0.55 : 0.85);
+            Waves.sample(p.x, p.z, S);
+            const ux = S.vx * F, uz = S.vz * F, W0 = b._wu || (b._wu = { x: ux, z: uz });
+            if (Math.abs(ux - W0.x) + Math.abs(uz - W0.z) > 1e-4) { b.phys.getLinearVelocityToRef(v); v.x += ux - W0.x; v.z += uz - W0.z; b.phys.setLinearVelocity(v); }
+            W0.x = ux; W0.z = uz;
+        }
+    }
+
+    // Água jorrando (WaterSpray, pixel art) nos barcos perto da câmera. Os jorros têm tamanho de verdade (a folha não é esticada:
+    // jet ski ~1 m, lancha ~1,6 m); a velocidade muda quantos saem, quão fortes (opacidade) e o tipo, não a escala.
+    //   proa      o CORTE do mar: os jorros nascem na ponta da proa (onde o casco toca a água primeiro), colados à quilha, um para
+    //             cada lado; abrem para fora e escorregam para trás ao longo do casco, crescendo (o quadro do jorro sobe com o tempo)
+    //             — a lâmina contínua que vira o V da esteira. Na ponta, um respingo miúdo: a água se partindo na roda de proa.
+    //   rabo de galo  o jato alto atrás do jet ski (e da lancha rápida); de lado na tela é o leque, de trás/de frente a coroa estreita
+    //   curva     derrapando de lado, um leque para FORA da curva
+    //   hélice    espuma revirada na popa da lancha e do barco
+    _spray(dt, game) {
+        const W = game.waterFx && game.waterFx.spray;
+        if (!W) return;
+        const cx = game.camera.target.x, cz = game.camera.target.z, vel = this._vel || (this._vel = new BABYLON.Vector3());
+        const yaw = CompassCamera.yaw || 0, srx = Math.cos(yaw), srz = -Math.sin(yaw);             // "para a direita" da tela, no chão
+        const sideways = (dx, dz) => Math.abs(dx * srx + dz * srz) / (Math.hypot(dx, dz) || 1) > 0.4;
+        for (const b of this.boats) {
+            if (b.wrecked || b._asleep || !b.body) continue;
+            const p = b.position;
+            if (Math.abs(p.x - cx) > 60 || Math.abs(p.z - cz) > 60) continue;
+            const v = b.forwardSpeed, av = Math.abs(v);
+            if (av < 2.5) continue;
+            const id = b.spec.id, jet = id === 'jetski', k = Math.min(1, av / b.spec.maxSpeed), S = b._spray || (b._spray = { bow: Math.random() * 0.1, tail: 0, turn: 0, churn: 0 });
+            const d = b.body.getDirection(BABYLON.Axis.Z), l = Math.hypot(d.x, d.z) || 1, ux = d.x / l, uz = d.z / l, rx = uz, rz = -ux;
+            const go = v > 0 ? 1 : -1;                                                               // (de ré: a água abre na popa)
+            b.phys.getLinearVelocityToRef(vel);
+            const lat = vel.x * rx + vel.z * rz, a = 0.55 + 0.4 * k;
+            // proa: o corte do mar começa na PONTA (de ré, na popa), um jorro para cada lado (jet ski e lancha devagar: o menor)
+            if ((S.bow -= dt) <= 0) {
+                S.bow = (id === 'barco' ? 0.08 : 0.045) * (1.4 - 0.6 * k);
+                const tip = b.halfLen * 0.94 * go, tx = p.x + ux * tip, tz = p.z + uz * tip, kind = jet || k < 0.4 ? 'bowS' : 'bowL';
+                for (const sd of [-1, 1]) {
+                    const ox = rx * sd, oz = rz * sd, o0 = b.halfW * 0.12;                         // (colado à quilha: o casco ainda é fino na ponta)
+                    W.emit(tx + ox * o0, tz + oz * o0, { kind, dir: [ox - ux * 0.3 * go, oz - uz * 0.3 * go], a,
+                        vx: vel.x * 0.8 + ox * (1.3 + 0.6 * k), vz: vel.z * 0.8 + oz * (1.3 + 0.6 * k), drag: 1.1 });     // (abre para fora enquanto fica para trás: o V)
+                }
+                if (Math.random() < 0.5) W.emit(tx + ux * 0.12 * go, tz + uz * 0.12 * go, { kind: jet ? 'kick' : 'stroke', a: 0.8, vx: vel.x * 0.9, vz: vel.z * 0.9, drag: 1.5 });      // a água se partindo na roda de proa
+            }
+            // rabo de galo: jet ski acima de ~30 km/h, lancha só bem rápida
+            if (v > (jet ? 8 : b.spec.maxSpeed * 0.6) && (S.tail -= dt) <= 0) {
+                S.tail = jet ? 0.09 : 0.14;
+                const at = b.halfLen * 1.02, side = sideways(-ux, -uz);
+                W.emit(p.x - ux * at, p.z - uz * at, { kind: side ? 'tail' : 'tailC', dir: [-ux, -uz], a: a * (jet ? 1 : 0.8), vx: vel.x * 0.3 - ux * 1.2, vz: vel.z * 0.3 - uz * 1.2 });
+            }
+            // curva fechada: leque para fora (para onde o casco está derrapando)
+            if (Math.abs(lat) > 1.6 && av > 6 && (S.turn -= dt) <= 0) {
+                S.turn = 0.1;
+                const sd = Math.sign(lat), ox = rx * sd, oz = rz * sd;
+                W.emit(p.x + ox * b.halfW - ux * b.halfLen * 0.35, p.z + oz * b.halfW - uz * b.halfLen * 0.35, { kind: jet ? 'tail' : 'bowL', dir: [ox - ux * 0.2, oz - uz * 0.2],
+                    a: Math.min(1, 0.6 + Math.abs(lat) * 0.08), vx: vel.x * 0.4 + ox * 1.5, vz: vel.z * 0.4 + oz * 1.5 });
+            }
+            // hélice: espuma revirada na popa (lancha e barco)
+            if (!jet && (S.churn -= dt) <= 0) {
+                S.churn = 0.16 - 0.06 * k;
+                const at = -b.halfLen * 0.98, sd = Math.random() < 0.5 ? -1 : 1;
+                W.emit(p.x + ux * at + rx * sd * b.halfW * 0.3, p.z + uz * at + rz * sd * b.halfW * 0.3, { kind: 'churn', a: 0.8, vx: vel.x * 0.2, vz: vel.z * 0.2 });
             }
         }
     }

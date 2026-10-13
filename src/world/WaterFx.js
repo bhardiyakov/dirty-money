@@ -8,11 +8,14 @@
 //   bubble(x, z)       bolhas de ar estourando na superfície (quem está mergulhado).
 //   splash(x, z, …)    gotas de verdade: sobem e caem com gravidade (GlowBatch 'puff', com o tom da noite). A altura vira deslocamento
 //                      para o norte na tela (1 m de altura = 0,56 m), como no desenho dos personagens; ao cair, cada gota faz uma marolinha.
+//   spray.emit(x, z, …) água JORRANDO em pixel art (WaterSpray): jatos que sobem, estouram em espuma e caem — proa e rabo de galo
+//                      dos barcos (BoatManager), a mão de cada braçada, as pernadas. burst(x, z, big): o tchibum (mergulho, granada).
 //   track(ent, dt, o)  segue alguém na água e emite tudo preso à ANIMAÇÃO dele:
 //                        andando/nadando: ondas em ARCO na frente (na direção do movimento) e a esteira em V atrás — nada de anel
 //                                 em volta do corpo (só parado, a marola lenta e larga);
-//                        nadando  braçada = mão entrando na água (respingo grande, onda, som) nos pontos 0,02/0,52 do crawl;
-//                                 pernadas atrás (espuma miúda); parado, bate as pernas (marolas lentas, gotas leves);
+//                        nadando  braçada = mão entrando na água (jorro em coroa, gotas, onda, som) nos pontos 0,02/0,52 do crawl
+//                                 (nado peito: coroinha quando a cabeça sai, em 0,5);
+//                                 pernadas atrás (espuma miúda, uma coroinha a cada duas); parado, bate as pernas (marolas lentas, gotas leves);
 //                        vadeando passo = pé entrando (respingo, onda para a frente, som) em 0,25/0,75 do andar;
 //                        mergulhado: só as bolhas da respiração subindo (e um fio delas quando ele se mexe).
 //                      Os sons são de AudioFX (waterStroke/waterKick/waterWade): o jogador em cheio, NPCs pela distância.
@@ -36,6 +39,7 @@ class WaterFx {
         this.ar = [];
         for (let i = 0; i < this.na; i++) { this.arcBatch.alloc(); this.ar.push({ on: false, age: 0, life: 1, x: 0, z: 0, fx: 0, fz: 1, s0: 1, s1: 2, a: 0.5, sq: 1 }); }
         this.nextA = 0;
+        this.spray = new WaterSpray(scene, 160);
     }
 
     static get SQ() { return 0.83; }          // sen 56°: um círculo no chão visto pela câmera dos personagens
@@ -62,6 +66,15 @@ class WaterFx {
             this.nextA = (this.nextA + k + 1) % this.na;
             return;
         }
+    }
+
+    // Tchibum grande (mergulho de cima da ponte, granada na água): coroa alta no meio, um jato para cada lado, gotas e marolas.
+    // big = false: o tchibum pequeno (algo caindo na água) — só a coroa estreita.
+    burst(x, z, big = true) {
+        if (!big) { this.spray.emit(x, z, { kind: 'tailC' }); this.splash(x, z, 5, 0.9); return; }
+        this.spray.emit(x, z, { kind: 'burst' });
+        for (const sd of [-1, 1]) this.spray.emit(x + sd * 0.4, z - 0.05, { kind: 'tail', dir: [sd, 0], life: 0.62 });
+        this.splash(x, z, 9, 1.3);
     }
 
     // Bolhas de ar chegando à superfície em (x, z): um "plip" miúdo (às vezes dois, colados).
@@ -132,8 +145,9 @@ class WaterFx {
             s.kick -= dt;
             if (s.kick <= 0) {
                 s.kick = 0.15;
-                this.splash(x - fx * 0.95 + rx * (Math.random() - 0.5) * 0.3, z - fz * 0.95 + rz * (Math.random() - 0.5) * 0.3 + 0.04, 2, 0.45, -fx * 0.4, -fz * 0.4);
-                if ((s.kn = (s.kn + 1) % 2) === 0) AudioFX.waterKick(x, z, vol);
+                const kx = x - fx * 0.95 + rx * (Math.random() - 0.5) * 0.3, kz = z - fz * 0.95 + rz * (Math.random() - 0.5) * 0.3 + 0.04;
+                this.splash(kx, kz, 2, 0.45, -fx * 0.4, -fz * 0.4);
+                if ((s.kn = (s.kn + 1) % 2) === 0) { AudioFX.waterKick(x, z, vol); this.spray.emit(kx, kz, { kind: 'kick', a: 0.85 }); }
             }
         }
         // eventos presos à animação
@@ -147,10 +161,17 @@ class WaterFx {
             [[0.02, 1], [0.52, -1]].forEach(([m, sd]) => {                     // mão entrando na água (direita, esquerda)
                 if (!crossed(m)) return;
                 const hx = x + fx * 0.7 + rx * sd * 0.32, hz = z + fz * 0.7 + rz * sd * 0.32 + 0.06;
-                this.splash(hx, hz, 10, 1.15, fx * 0.5, fz * 0.5);
+                this.spray.emit(hx, hz, { kind: 'stroke', a: 1 });                   // (pequeno: com o desfoque, opaco para não sumir)
+                this.splash(hx, hz, 4, 1.0, fx * 0.5, fz * 0.5);                // (umas gotas soltas por cima do jorro)
                 this.arc(hx, hz, fx, fz, 0.3, 1.5, 0.75, 0.34);
                 AudioFX.waterStroke(hx, hz, vol);
             });
+        } else if (sw && /^swim_breast$/.test(name)) {                       // nado peito: a cabeça sai da água a cada braçada (coroinha na frente)
+            if (crossed(0.5)) {
+                const hx = x + fx * 0.6, hz = z + fz * 0.6 + 0.06;
+                this.spray.emit(hx, hz, { kind: 'kick', a: 0.9 });
+                this.arc(hx, hz, fx, fz, 0.3, 1.3, 0.75, 0.28);
+            }
         } else if (sw) {                                                     // boiando: as pernas batem devagar
             for (const m of [0.25, 0.75]) if (crossed(m)) {
                 this.splash(x + (Math.random() - 0.5) * 0.6, z + 0.1, 2, 0.4);
@@ -220,5 +241,6 @@ class WaterFx {
         }
         if (any || this._dropsOn) D.flush();
         this._dropsOn = any;
+        this.spray.update(dt);
     }
 }

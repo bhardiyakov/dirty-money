@@ -592,10 +592,17 @@ class Player {
         this.velocity = BABYLON.Vector3.Lerp(this.velocity, targetVel, t);
         if (this.velocity.lengthSquared() < 1e-4) this.velocity.setAll(0);
 
-        // Integra posição, mas confinado à terra (desliza na beira da água).
+        // Integra posição, mas confinado à terra (desliza na beira da água). Na água, as ondas levam junto (Waves.current: vai e volta
+        // com cada onda; na beira, a onda empurra para a areia e a ressaca puxa); mergulhado, bem menos. (Não muda a velocidade
+        // própria: a animação segue a braçada.)
         const prev = this.root.position;
-        const nx = prev.x + this.velocity.x * dt;
-        const nz = prev.z + this.velocity.z * dt;
+        let wx = 0, wz = 0;
+        if (depth > 0 && !this.onDeck && !this._glide && typeof Waves !== 'undefined') {
+            const c = Waves.current(prev.x, prev.z, depth, this._wc || (this._wc = {})), k = this.diving ? 0.3 : 1;
+            wx = c.x * k; wz = c.z * k;
+        }
+        const nx = prev.x + (this.velocity.x + wx) * dt;
+        const nz = prev.z + (this.velocity.z + wz) * dt;
         if (MapGeo.canWade(nx, nz)) {
             prev.x = nx; prev.z = nz;
         } else if (MapGeo.canWade(nx, prev.z)) {
@@ -707,7 +714,10 @@ class Player {
     }
 
     _syncSprite() {
-        this.actor.setPosition(this.root.position.x, this.root.position.z);
+        const p = this.root.position;
+        // nadando (na superfície): o desenho sobe e desce com a onda (Waves.lift: a altura vira deslocamento para cima da TELA)
+        const b = this.swimming && !this.diving && typeof Waves !== 'undefined' ? Waves.lift(p.x, p.z, this.depth || 0) : 0, yaw = b ? CompassCamera.yaw || 0 : 0;
+        this.actor.setPosition(p.x + Math.sin(yaw) * b, p.z + Math.cos(yaw) * b);
         this.actor.setHeading(this.root.rotation.y);
         if (Interiors.active) { this.actor.mesh.computeWorldMatrix(true); this.actor.mesh.refreshBoundingInfo(); }      // (no palco das lojas o volume antigo ficava longe: o sprite sumia)
     }

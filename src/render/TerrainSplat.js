@@ -131,5 +131,6 @@ const TerrainSplat = {
             }
         }
         new TerrainSplatPlugin(material);
+        S.glsl = GLSL; S.tex = { map: mapTex, atlas: atlasTex };       // (o mar usa o mesmo chão onde a beira suavizada entra nas células de mar: WaterPlugin)
     },
 };

@@ -90,7 +90,7 @@ class PoliceOperation {
     _spawnSquad(n) {
         const pm = this.game.policeManager, nav = this.game.nav;
         for (let i = 0; i < n && pm.officers.length < Config.police.maxOfficers; i++) {
-            const rp = RoadPlan.nearestRoadPoint(this.center.x, this.center.z, 70);          // entra pela viela mais próxima
+            const rp = FavelaPlan.built ? FavelaPlan.entranceNear(this.center.x, this.center.z) : RoadPlan.nearestRoadPoint(this.center.x, this.center.z, 70);      // entra pela rua mais próxima
             const p = nav.closestPoint(new BABYLON.Vector3((rp ? rp.x : this.center.x) + (Math.random() - 0.5) * 4, 0, (rp ? rp.z : this.center.z) + (Math.random() - 0.5) * 6));
             const o = new PoliceOfficer(pm.scene, nav, p, pm._nextId++, pm.sprites, pm, true, i % 4 === 0 ? 'swat' : 'cop');
             o.op = true; o.drawn = true;
@@ -106,7 +106,8 @@ class PoliceOperation {
         o._advFail = a && !a.path && !a.queued ? (o._advFail || 0) + 1 : 0;
         const dp = Standing.depth(o.position.x, o.position.z), deeper = dp < maxDepth;
         const tx = o.position.x + (deeper ? -(25 + Math.random() * 15) : (Math.random() - 0.5) * 40), tz = o.position.z + (Math.random() - 0.5) * 50;
-        const r = RoadPlan.nearestRoadPoint(Math.max(b.x0 + 8, tx), Math.max(b.z0 + 8, Math.min(b.z1 - 8, tz)), 45);
+        const qx = Math.max(b.x0 + 8, tx), qz = Math.max(b.z0 + 8, Math.min(b.z1 - 8, tz));
+        const r = FavelaPlan.built ? FavelaPlan.nodeNear(qx, qz) : RoadPlan.nearestRoadPoint(qx, qz, 45);      // (becos e ruas)
         const p = nav.closestPoint(new BABYLON.Vector3(r ? r.x : tx, 0, r ? r.z : tz));
         o.dest = p;
         if (o._advFail >= 2) { nav.crowd.agentTeleport(o.index, p); o.transform.position.copyFrom(p); o._advFail = 0; }

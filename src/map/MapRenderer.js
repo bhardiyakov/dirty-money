@@ -87,13 +87,35 @@ const MapRenderer = {
         ctx.fillStyle = '#2c5877'; ctx.fillRect(0, 0, W, H);
         ctx.drawImage(WL.canvas, (cx - WD.minX) * wp - W / 2 / k * wp, (WD.maxZ - cz) * wp - H / 2 / k * wp, W / k * wp, H / k * wp, 0, 0, W, H);
 
+        // 1b) Favela (FavelaPlan): chão de terra, becos cimentados, quadra e campinho (as ruas passam por cima).
+        if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built && vis(FavelaPlan.R.x0 - 8, FavelaPlan.R.z0 - 8, FavelaPlan.R.x1 + 8, FavelaPlan.R.z1 + 8)) {
+            const F = FavelaPlan;
+            for (const b of F.groundBoxes) if (vis(b[0], b[1], b[2], b[3])) rect(b[0], b[1], b[2], b[3], C.earth);
+            ctx.strokeStyle = C.sidewalk; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            for (const a of F.alleys) {
+                const p0 = a.pts[0], p1 = a.pts[a.pts.length - 1];
+                if (!vis(Math.min(p0[0], p1[0]) - 4, Math.min(p0[1], p1[1]) - 4, Math.max(p0[0], p1[0]) + 4, Math.max(p0[1], p1[1]) + 4)) continue;
+                ctx.lineWidth = Math.max(1, Math.max(a.w, 1.44) * k); ctx.beginPath();
+                a.pts.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))));
+                ctx.stroke();
+            }
+            for (const q of F.squares) rect(q.x0, q.z0, q.x1, q.z1, q.kind === 'quadra' ? C.sidewalk : C.dirt);
+        }
+
         // 2) Ruas (retângulo de cada trecho, com a largura da via) e cruzamentos.
         const edges = new Set(), P = RoadPlan, S = P.CELL;
         for (let i = Math.floor(vx0 / S); i <= Math.floor(vx1 / S); i++) for (let j = Math.floor(vz0 / S); j <= Math.floor(vz1 / S); j++) {
             const c = P._eg.get(P._key(i, j)); if (c) for (const e of c) edges.add(e);
         }
-        const surf = (cls) => { const s = RoadPlan.CLASS[cls].surface; return cls === 'bridge' ? C.bridge : (s === 'dirt' ? C.dirt : (s === 'earth' ? C.earth : C.asphalt)); };
+        const surf = (cls) => { const s = RoadPlan.CLASS[cls].surface; return cls === 'bridge' ? C.bridge : (s === 'dirt' ? C.dirt : (s === 'earth' ? C.earth : (s === 'concrete' ? C.concrete : C.asphalt))); };
+        const poly = (P, color) => { ctx.fillStyle = color; ctx.beginPath(); P.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])))); ctx.closePath(); ctx.fill(); };
         for (const e of edges) {
+            if (e.free) {                                                   // via livre: polilinha grossa com a largura da via
+                ctx.strokeStyle = surf(e.cls); ctx.lineWidth = Math.max(1, e.w * k); ctx.lineCap = 'butt'; ctx.lineJoin = 'round'; ctx.beginPath();
+                e.pts.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))));
+                ctx.stroke();
+                continue;
+            }
             const hw = e.w / 2, x0 = Math.min(e.a.x, e.b.x), x1 = Math.max(e.a.x, e.b.x), z0 = Math.min(e.a.z, e.b.z), z1 = Math.max(e.a.z, e.b.z);
             const r = e.v ? [x0 - hw, z0 - e.a.hwEW, x1 + hw, z1 + e.b.hwEW] : [x0 - e.a.hwNS, z0 - hw, x1 + e.b.hwNS, z1 + hw];
             if (!vis(r[0], r[1], r[2], r[3])) continue;
@@ -101,8 +123,16 @@ const MapRenderer = {
             rect(Math.max(r[0], vx0 - 1), Math.max(r[1], vz0 - 1), Math.min(r[2], vx1 + 1), Math.min(r[3], vz1 + 1), surf(e.cls));
         }
         for (const n of P.nodes) {
-            const vr = (n.turnR || 8) + 2; if (!vis(n.x - vr, n.z - vr, n.x + vr, n.z + vr)) continue;
-            let best = null; for (let q = 0; q < 4; q++) if (n.edge[q] && (!best || n.edge[q].w > best.w)) best = n.edge[q];
+            const vr = (n.turnR || ((n.round || n.poly) ? n.hwNS + 8 : 8)) + 2; if (!vis(n.x - vr, n.z - vr, n.x + vr, n.z + vr)) continue;
+            if (n.uturn) continue;                                          // retorno: a pista segue direto (o vão é do canteiro)
+            if (n.round) {                                                  // rotatória: disco de asfalto e a ilha verde
+                const R = n.round;
+                ctx.fillStyle = C.asphalt; ctx.beginPath(); ctx.arc(X(R.cx), Y(R.cz), R.R * k, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = C.grass; ctx.beginPath(); ctx.arc(X(R.cx), Y(R.cz), Math.max(1, R.r * k), 0, Math.PI * 2); ctx.fill();
+                continue;
+            }
+            let best = null; for (const a of n.arms) if (!best || a.e.w > best.w) best = a.e;
+            if (n.poly) { poly(n.poly, surf(best.cls)); continue; }                // nó com perna livre: o polígono do cruzamento
             if (n.turnR) {                                                  // curva larga: arco com a largura da via
                 const sv = n.nbr[0] ? 1 : -1, sh = n.nbr[2] ? 1 : -1, R = n.turnR, cx0 = n.x + sh * R, cz0 = n.z + sv * R, a0 = Math.atan2(0, -sh), a1 = Math.atan2(-sv, 0);
                 let dd = a1 - a0; while (dd > Math.PI) dd -= 2 * Math.PI; while (dd < -Math.PI) dd += 2 * Math.PI;
@@ -117,15 +147,28 @@ const MapRenderer = {
             ctx.strokeStyle = C.laneLine; ctx.lineWidth = Math.max(1, 1.0 * k); ctx.setLineDash([5 * k, 6 * k]);
             ctx.beginPath();
             for (const e of edges) {
-                if (e.cls === 'fav' || e.cls === 'dirt') continue;
-                if (e.v) { ctx.moveTo(X(e.a.x), Y(e.a.z + e.a.hwEW)); ctx.lineTo(X(e.a.x), Y(e.b.z - e.b.hwEW)); }
-                else { ctx.moveTo(X(e.a.x + e.a.hwNS), Y(e.a.z)); ctx.lineTo(X(e.b.x - e.b.hwNS), Y(e.a.z)); }
+                if (e.cls === 'fav' || e.cls === 'dirt' || e.cls === 'trail') continue;
+                if (e.free) {
+                    const A = RoadPlan.at(e, e.cutA || 0); ctx.moveTo(X(A.x), Y(A.z));
+                    for (let i = 1; i + 1 < e.pts.length; i++) if (e.cum[i] > (e.cutA || 0) && e.cum[i] < e.len - (e.cutB || 0)) ctx.lineTo(X(e.pts[i][0]), Y(e.pts[i][1]));
+                    const B = RoadPlan.at(e, e.len - (e.cutB || 0)); ctx.lineTo(X(B.x), Y(B.z));
+                    continue;
+                }
+                if (e.v) { ctx.moveTo(X(e.a.x), Y(e.a.z + e.cutA)); ctx.lineTo(X(e.a.x), Y(e.b.z - e.cutB)); }
+                else { ctx.moveTo(X(e.a.x + e.cutA), Y(e.a.z)); ctx.lineTo(X(e.b.x - e.cutB), Y(e.a.z)); }
             }
             ctx.stroke(); ctx.setLineDash([]);
         }
 
         // 3) Calçadas de borda, quarteirões, prédios.
         for (const p of CityGrid.perimeter) if (vis(p.x0, p.z0, p.x1, p.z1)) rect(p.x0, p.z0, p.x1, p.z1, C.sidewalk);
+        for (const ap of CityGrid.roundAprons || []) {                      // anel de calçada das rotatórias
+            const pts = ap.inner.concat(ap.outer.slice().reverse());
+            if (!vis(pts[0][0] - 20, pts[0][1] - 20, pts[0][0] + 20, pts[0][1] + 20)) continue;
+            ctx.fillStyle = C.sidewalk; ctx.beginPath();
+            pts.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))));
+            ctx.fill();
+        }
         for (const b of CityGrid.blocks.concat(CityGrid.extraBlocks || [])) {
             const s = b.slab;
             if (b.virtual) {                                              // campo: só os prédios (lotes) e árvores
@@ -133,16 +176,25 @@ const MapRenderer = {
                 continue;
             }
             if (!vis(s[0], s[1], s[2], s[3])) continue;
+            if (b.organic) {                                                // favela: só os barracos (chão e becos já foram)
+                for (const l of b.lots) {
+                    rect(l.x0, l.z0, l.x1, l.z1, this.lotColor(l.facade));
+                    if (k >= 2) { ctx.strokeStyle = C.buildingEdge; ctx.lineWidth = Math.max(1, 0.6 * k); ctx.strokeRect(X(l.x0), Y(l.z1), (l.x1 - l.x0) * k, (l.z1 - l.z0) * k); }
+                }
+                continue;
+            }
+            if (b.poly) {                                                   // quarteirão em polígono (cortado por diagonal)
+                if (b.open) poly(b.poly, C[b.ground] || C.grass);
+                else { poly(b.poly, C.sidewalk); if (b.footPoly) poly(b.footPoly, C[b.ground] || C.plaza); }
+            } else if (b.open) rrect(s[0], s[1], s[2], s[3], b.r || 0, C[b.ground] || C.grass);
             if (b.open) {
-                rrect(s[0], s[1], s[2], s[3], b.r || 0, C[b.ground] || C.grass);
                 if (k >= 1.5) for (const p of b.props) {
                     if (p.type !== 'tree') continue;
                     ctx.fillStyle = C.tree; ctx.beginPath(); ctx.arc(X(p.x), Y(p.z), Math.max(1, (p.kind === 'bush' ? 0.7 : 1.3) * k), 0, Math.PI * 2); ctx.fill();
                 }
                 continue;
             }
-            rrect(s[0], s[1], s[2], s[3], b.r || 0, C.sidewalk);
-            rect(b.foot[0], b.foot[1], b.foot[2], b.foot[3], C[b.ground] || C.plaza);
+            if (!b.poly) { rrect(s[0], s[1], s[2], s[3], b.r || 0, C.sidewalk); rect(b.foot[0], b.foot[1], b.foot[2], b.foot[3], C[b.ground] || C.plaza); }
             for (const l of b.lots) {
                 rect(l.x0, l.z0, l.x1, l.z1, l.landmark === 'hospital' ? '#eef1f3' : (l.landmark === 'station' ? '#2f4a8a' : this.lotColor(l.facade)));
                 if (k >= 1.2) { ctx.strokeStyle = C.buildingEdge; ctx.lineWidth = Math.max(1, 0.8 * k); ctx.strokeRect(X(l.x0), Y(l.z1), (l.x1 - l.x0) * k, (l.z1 - l.z0) * k); }
@@ -164,12 +216,14 @@ const MapRenderer = {
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
             ctx.font = `700 ${Math.min(2.6 * k, 26)}px "Arial Narrow", "Roboto Condensed", Arial, sans-serif`;
             for (const e of edges) {
-                if (e.len < 30 || e.cls === 'fav') continue;
-                const mx = (e.a.x + e.b.x) / 2, mz = (e.a.z + e.b.z) / 2;
+                if (e.len < 30 || (e.cls === 'fav' && !e.name)) continue;
+                const M = RoadPlan.at(e, e.len / 2), mx = M.x, mz = M.z;
                 if (!vis(mx - 2, mz - 2, mx + 2, mz + 2)) continue;
                 const txt = CityGrid.streetName(e);
                 if (txt.length * 2.1 * k * 0.5 > e.len * k - 10 * k) continue;
-                ctx.save(); ctx.translate(X(mx), Y(mz)); if (e.v) ctx.rotate(-Math.PI / 2);
+                let rot = e.free ? -Math.atan2(M.tz, M.tx) : (e.v ? -Math.PI / 2 : 0);              // via livre: ao longo dela (sempre de pé)
+                if (rot > Math.PI / 2) rot -= Math.PI; else if (rot < -Math.PI / 2) rot += Math.PI;
+                ctx.save(); ctx.translate(X(mx), Y(mz)); if (rot) ctx.rotate(rot);
                 ctx.lineWidth = Math.max(2, 0.7 * k); ctx.strokeStyle = 'rgba(14,18,24,0.9)'; ctx.strokeText(txt, 0, 0);
                 ctx.fillStyle = '#f4f6fa'; ctx.fillText(txt, 0, 0);
                 ctx.restore();

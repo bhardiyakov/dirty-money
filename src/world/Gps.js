@@ -14,7 +14,7 @@ const Gps = {
         // a distância em 32 bits às vezes arredondava PARA CIMA; a mesma distância (64 bits) voltava a parecer menor, o nó entrava de
         // novo na fila e reexpandia os vizinhos. Numa cidade em grade (milhares de caminhos do mesmo tamanho) as cópias se multiplicavam
         // em cascata: a aba congelava ("a página não está respondendo") — no respawn longe do destino marcado no GPS, por exemplo.
-        const N = P.nodes.length, dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), done = new Uint8Array(N);
+        const N = P.nodes.length, dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), done = new Uint8Array(N), prevE = new Array(N);
         const MAX_POPS = N * 8 + 64;                               // (cinto de segurança: Dijkstra correto fecha cada nó uma vez)
         const heap = [];                                           // [dist, nó] — heap binário mínimo
         const push = (d, n) => { heap.push([d, n]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
@@ -37,16 +37,20 @@ const Gps = {
             if (u === goalA && d + dA < best) { best = d + dA; bestNode = u; }
             if (u === goalB && d + dB < best) { best = d + dB; bestNode = u; }
             const n = P.nodes[u];
-            for (let q = 0; q < 4; q++) {
-                const m = n.nbr[q];
-                if (!m || done[m.id]) continue;
-                const nd = d + D(n, m);
-                if (nd < dist[m.id]) { dist[m.id] = nd; prev[m.id] = u; push(nd, m.id); }
+            for (const a of n.arms) {                                  // (pernas em qualquer ângulo; trecho curvo: o comprimento dele)
+                const m = a.to;
+                if (done[m.id]) continue;
+                const nd = d + (a.e.free ? a.e.len : D(n, m));
+                if (nd < dist[m.id]) { dist[m.id] = nd; prev[m.id] = u; prevE[m.id] = a.e; push(nd, m.id); }
             }
         }
         if (bestNode < 0) return straight();
         const pts = [];
-        for (let u = bestNode; u >= 0; u = prev[u]) pts.push({ x: P.nodes[u].x, z: P.nodes[u].z });
+        for (let u = bestNode; u >= 0; u = prev[u]) {
+            pts.push({ x: P.nodes[u].x, z: P.nodes[u].z });
+            const e = prevE[u];                                        // trecho curvo até o nó anterior: os pontos do meio, de trás para a frente
+            if (e && e.pts.length > 2) { const back = e.b === P.nodes[u]; for (let i = 1; i + 1 < e.pts.length; i++) { const p = e.pts[back ? e.pts.length - 1 - i : i]; pts.push({ x: p[0], z: p[1] }); } }
+        }
         pts.reverse();
         pts.unshift({ x: sa.x, z: sa.z }); pts.unshift({ x: a.x, z: a.z });
         pts.push({ x: sb.x, z: sb.z }); pts.push({ x: b.x, z: b.z });

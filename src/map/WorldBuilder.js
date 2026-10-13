@@ -39,6 +39,7 @@ class WorldBuilder {
         this._tunnels();
         this._viaducts();
         this._blocks();
+        this._favela();
         this._buildings();
         this._shops();
         this._rural();
@@ -164,8 +165,9 @@ class WorldBuilder {
     // Peças longas são partidas em ≤ 96 u (cada uma vai para o seu pedaço de 256 u: o frustum descarta o que está longe).
     _roads() {
         const y = 0.02, MAXP = 96;
-        const KEY = { asphalt: 'road', dirt: 'road_dirt', earth: 'road_earth' };
+        const KEY = { asphalt: 'road', dirt: 'road_dirt', earth: 'road_earth', concrete: 'road_concrete' };
         const cs = (x, z) => { const s = WorldMap.shadeAt(x, z); return [s, s, s]; };
+        const SH = { road_earth: 1, road_concrete: 0.86 };                             // chão tingido pelo relevo (terra, cimento do morro — um pouco mais escuro que os becos)
         const piece = (x0, z0, x1, z1, key, uvFn, shade = false) => {
             const alongX = (x1 - x0) >= (z1 - z0), len = alongX ? x1 - x0 : z1 - z0, n = Math.max(1, Math.ceil(len / MAXP));
             for (let k = 0; k < n; k++) {
@@ -177,12 +179,17 @@ class WorldBuilder {
 
         for (const e of RoadPlan.edges) {
             const S = RoadPlan.CLASS[e.cls].surface, key = KEY[S], hw = e.w / 2;
+            if (e.free) {                                                               // via livre: faixa ao longo da polilinha (u ao longo, v na largura)
+                if (SH[key]) this._shadedRibbon(e, e.cutA, e.len - e.cutB, hw, y, key, SH[key]);
+                else this._ribbon(e, e.cutA, e.len - e.cutB, -hw, hw, y, key, S === 'asphalt' ? (s, l, x, z) => [s / 8, (hw - l) / e.w] : (s, l, x, z) => [x / 4, z / 4]);
+                continue;
+            }
             if (e.v) {
-                const xk = e.a.x, za = e.a.z + e.a.hwEW, zb = e.b.z - e.b.hwEW;
+                const xk = e.a.x, za = e.a.z + e.cutA, zb = e.b.z - e.cutB;
                 if (zb <= za + 0.01) continue;
                 piece(xk - hw, za, xk + hw, zb, key, S === 'asphalt' ? (x, z) => [z / 8, (x - (xk - hw)) / e.w] : (x, z) => [x / 4, z / 4], e.cls === 'fav');
             } else {
-                const zm = e.a.z, xa = e.a.x + e.a.hwNS, xb = e.b.x - e.b.hwNS;
+                const zm = e.a.z, xa = e.a.x + e.cutA, xb = e.b.x - e.cutB;
                 if (xb <= xa + 0.01) continue;
                 piece(xa, zm - hw, xb, zm + hw, key, S === 'asphalt' ? (x, z) => [x / 8, ((zm + hw) - z) / e.w] : (x, z) => [x / 4, z / 4], e.cls === 'fav');
             }
@@ -191,20 +198,143 @@ class WorldBuilder {
         // Cruzamentos e curvas: quadrado liso (asfalto, chão batido ou terra, pela via mais larga que chega).
         for (const n of RoadPlan.nodes) {
             let best = null;
-            for (let q = 0; q < 4; q++) if (n.edge[q] && (!best || n.edge[q].w > best.w)) best = n.edge[q];
+            for (const a of n.arms) if (!best || a.e.w > best.w) best = a.e;
             const S = RoadPlan.CLASS[best.cls].surface;
-            const key = S === 'asphalt' ? 'asphalt' : (S === 'dirt' ? 'road_dirt' : 'road_earth');
+            const key = S === 'asphalt' ? 'asphalt' : (KEY[S] || 'road_earth');
+            if (n.round) { this._roundabout(n, y); continue; }
+            if (n.uturn) continue;                                                     // retorno: o asfalto dos trechos segue direto
+            if (n.poly) {                                                              // nó com perna livre: o polígono do cruzamento, em leque
+                const k2 = SH[key] ? key + '$' : key, bt = this._batch(k2, n.x, n.z), P = n.poly, uv = (p) => [p[0] / 4, -p[1] / 4], C = [n.x, n.z];
+                const col = SH[key] ? cs(n.x, n.z).map((v) => v * SH[key]) : undefined;
+                for (let k = 0; k < P.length; k++) { const a = P[k], b = P[(k + 1) % P.length]; bt.tri([C[0], y, C[1]], [a[0], y, a[1]], [b[0], y, b[1]], [0, 1, 0], [uv(C), uv(a), uv(b)], col); }
+                continue;
+            }
             if (n.turnR) { this._turn(n, S === 'asphalt' ? 'asphalt' : key, y); continue; }
-            const shd = key === 'road_earth';                                          // favela: o chão segue o morro (tingido pelo relevo)
+            const shd = !!SH[key];                                                     // favela: o chão segue o morro (tingido pelo relevo)
             this._batch(shd ? key + '$' : key, n.x, n.z).top(n.x - n.hwNS, n.z - n.hwEW, n.x + n.hwNS, n.z + n.hwEW, y, (x, z) => [x / 4, -z / 4], shd ? [cs(n.x - n.hwNS, n.z + n.hwEW), cs(n.x + n.hwNS, n.z + n.hwEW), cs(n.x - n.hwNS, n.z - n.hwEW), cs(n.x + n.hwNS, n.z - n.hwEW)] : undefined);
         }
+
+        this._roundAprons();
 
         // Faixas de pedestres (zebra).
         const zy = 0.03;
         for (const cw of CityGrid.crosswalks) {
             const zebra = this._batch('zebra', cw.x0, cw.z0);
-            if (cw.axis === 'x') zebra.top(cw.x0, cw.z0, cw.x1, cw.z1, zy, (x, z) => [(x - cw.x0) / (cw.x1 - cw.x0), (cw.z1 - z) / (cw.z1 - cw.z0)]);     // atravessa em X; listras no eixo Z
+            if (cw.axis === 'o') {                                                      // faixa girada (perna diagonal): u atravessa a rua
+                const P = (a, b) => [cw.cx + cw.ux * a + cw.dx * b, zy, cw.cz + cw.uz * a + cw.dz * b];
+                zebra.tri(P(-cw.hl, -cw.hd), P(cw.hl, -cw.hd), P(cw.hl, cw.hd), [0, 1, 0], [[0, 0], [1, 0], [1, 1]]);
+                zebra.tri(P(-cw.hl, -cw.hd), P(cw.hl, cw.hd), P(-cw.hl, cw.hd), [0, 1, 0], [[0, 0], [1, 1], [0, 1]]);
+            } else if (cw.axis === 'x') zebra.top(cw.x0, cw.z0, cw.x1, cw.z1, zy, (x, z) => [(x - cw.x0) / (cw.x1 - cw.x0), (cw.z1 - z) / (cw.z1 - cw.z0)]);     // atravessa em X; listras no eixo Z
             else zebra.top(cw.x0, cw.z0, cw.x1, cw.z1, zy, (x, z) => [(z - cw.z0) / (cw.z1 - cw.z0), (x - cw.x0) / (cw.x1 - cw.x0)]);                  // atravessa em Z; listras no eixo X
+        }
+    }
+
+    // ROTATÓRIA (RoadPlan: n.round): braços de asfalto liso do centro até onde os trechos começam, o disco de asfalto (raio R, centro
+    // cx/cz) e a ilha de grama com meio-fio. Braços e disco usam o mesmo material com UV de mundo: onde se sobrepõem, não há o que ver.
+    _roundabout(n, y) {
+        const R = n.round, h = Config.city.curbHeight, up = [0, 1, 0], uv = (p) => [p[0] / 4, -p[1] / 4], uvF = (x, z) => [x / 4, -z / 4], z3 = [[0, 0], [0, 0], [0, 0]];
+        const asph = this._batch('asphalt', n.x, n.z);
+        for (const a of n.arms) {                                                       // braço: do centro até o corte, com a largura da via
+            const lx = -a.dz * a.hw, lz = a.dx * a.hw, fx = a.dx * a.cut, fz = a.dz * a.cut;
+            const p0 = [n.x + lx, n.z + lz], p1 = [n.x - lx, n.z - lz], p2 = [n.x - lx + fx, n.z - lz + fz], p3 = [n.x + lx + fx, n.z + lz + fz];
+            asph.tri([p0[0], y, p0[1]], [p1[0], y, p1[1]], [p2[0], y, p2[1]], up, [uv(p0), uv(p1), uv(p2)]);
+            asph.tri([p0[0], y, p0[1]], [p2[0], y, p2[1]], [p3[0], y, p3[1]], up, [uv(p0), uv(p2), uv(p3)]);
+        }
+        const ring = (r, N) => { const p = []; for (let k = 0; k < N; k++) { const t = k / N * Math.PI * 2; p.push([R.cx + r * Math.cos(t), R.cz + r * Math.sin(t)]); } return p; };
+        const C = [R.cx, R.cz], disk = ring(R.R / Math.cos(Math.PI / 48), 48);          // (circunscrito: as cordas não deixam fresta na borda)
+        for (let k = 0; k < disk.length; k++) { const a = disk[k], b = disk[(k + 1) % disk.length]; asph.tri([C[0], y, C[1]], [a[0], y, a[1]], [b[0], y, b[1]], up, [uv(C), uv(a), uv(b)]); }
+        // "Dê a preferência": tracejado branco na borda do disco, na metade de cada braço por onde se ENTRA (à direita de quem chega).
+        // Cada traço é um pedaço de listra branca da textura da zebra.
+        const zb = this._batch('zebra', n.x, n.z), ry = R.R - 0.45;
+        for (const arm of n.arms) {
+            const e = arm.e, m = (RoadPlan.CLASS[e.cls].median || 0) / 2, lx = -arm.dz, lz = arm.dx;
+            // ângulo, no disco, de onde a reta do braço a `s` u à esquerda (lado de quem chega) cruza o círculo ry
+            const ang = (s) => {
+                const qx = n.x + lx * s - R.cx, qz = n.z + lz * s - R.cz, b = qx * arm.dx + qz * arm.dz, c = qx * qx + qz * qz - ry * ry, disc = b * b - c;
+                if (disc < 0) return null;
+                const t = -b + Math.sqrt(disc);
+                return Math.atan2(qz + arm.dz * t, qx + arm.dx * t);
+            };
+            const t0 = ang(m + 0.05), t1 = ang(e.w / 2 - 0.05);
+            if (t0 === null || t1 === null) continue;
+            let dt = t1 - t0; while (dt > Math.PI) dt -= Math.PI * 2; while (dt < -Math.PI) dt += Math.PI * 2;
+            const N = Math.max(1, Math.floor(Math.abs(dt) * ry));
+            for (let k = 0; k < N; k++) {
+                const t = t0 + dt * (k + 0.5) / N, cs = Math.cos(t), sn = Math.sin(t), px = R.cx + ry * cs, pz = R.cz + ry * sn;
+                const p = (s, r) => [px - sn * s + cs * r, 0.03, pz + cs * s + sn * r];          // s: ao longo da borda; r: para fora
+                zb.quad(p(0.25, -0.17), p(0.25, 0.17), p(-0.25, -0.17), p(-0.25, 0.17), up, [[0.106, 0.2], [0.144, 0.2], [0.106, 0.8], [0.144, 0.8]]);
+            }
+        }
+        const isl = ring(R.r, 32), gr = this._batch('open_grass', R.cx, R.cz), cb = this._batch('curb', R.cx, R.cz);
+        for (let k = 0; k < isl.length; k++) {
+            const a = isl[k], b = isl[(k + 1) % isl.length], dx = b[0] - a[0], dz = b[1] - a[1], l = hypot(dx, dz), nn = [dz / l, 0, -dx / l];
+            gr.tri([C[0], h, C[1]], [a[0], h, a[1]], [b[0], h, b[1]], up, [uv(C), uv(a), uv(b)]);
+            cb.tri([a[0], 0, a[1]], [b[0], 0, b[1]], [b[0], h, b[1]], nn, z3);                  // meio-fio da ilha (para fora)
+            cb.tri([a[0], 0, a[1]], [b[0], h, b[1]], [a[0], h, a[1]], nn, z3);
+        }
+    }
+
+    // Faixa (ribbon) ao longo do trecho e, de s0 a s1 (u desde o nó a), entre os deslocamentos laterais l0 e l1 (+ = à esquerda de
+    // quem anda de a para b), na altura y, no lote `key`. uvFn(s, l, x, z) -> [u, v]. Cada pedaço vai para o lote da sua posição.
+    // Faixa de chão tingida pelo relevo (batch key + '$'): um tom por triângulo, multiplicado por k. UV no mundo (ladrilho de 4 u).
+    _shadedRibbon(e, s0, s1, hw, y, key, k = 1) {
+        if (s1 <= s0 + 0.01) return;
+        const S = [s0];
+        for (let i = 1; i + 1 < e.pts.length; i++) if (e.cum[i] > s0 + 0.01 && e.cum[i] < s1 - 0.01) S.push(e.cum[i]);
+        S.push(s1);
+        const up = [0, 1, 0], uv = (p) => [p[0] / 4, p[2] / 4], P = {}, Q = {};
+        for (let i = 0; i + 1 < S.length; i++) {
+            RoadPlan.at(e, S[i], P); const ax = P.x, az = P.z, atx = P.tx, atz = P.tz;
+            RoadPlan.at(e, S[i + 1], Q);
+            const btx = i + 2 < S.length ? Q.tx : atx, btz = i + 2 < S.length ? Q.tz : atz;
+            const a0 = [ax - atz * hw, y, az + atx * hw], a1 = [ax + atz * hw, y, az - atx * hw], b0 = [Q.x - btz * hw, y, Q.z + btx * hw], b1 = [Q.x + btz * hw, y, Q.z - btx * hw];
+            const c = (p) => { const s = WorldMap.shadeAt(p[0], p[2]) * k; return [s, s, s]; }, bt = this._batch(key + '$', ax, az);
+            const ca0 = c(a0), ca1 = c(a1), cb0 = c(b0), cb1 = c(b1);
+            bt.tri(a0, a1, b1, up, [uv(a0), uv(a1), uv(b1)], [ca0, ca1, cb1]);
+            bt.tri(a0, b1, b0, up, [uv(a0), uv(b1), uv(b0)], [ca0, cb1, cb0]);
+        }
+    }
+
+    _ribbon(e, s0, s1, l0, l1, y, key, uvFn) {
+        if (s1 <= s0 + 0.01) return;
+        const S = [s0];
+        for (let i = 1; i + 1 < e.pts.length; i++) if (e.cum[i] > s0 + 0.01 && e.cum[i] < s1 - 0.01) S.push(e.cum[i]);
+        S.push(s1);
+        const smp = S.map((s) => {
+            const p = RoadPlan.at(e, s), q = RoadPlan.at(e, Math.max(0, s - 0.05)), r = RoadPlan.at(e, Math.min(e.len, s + 0.05));
+            let tx = r.x - q.x, tz = r.z - q.z; const l = hypot(tx, tz) || 1; tx /= l; tz /= l;                   // tangente média no vértice
+            return { s, x: p.x, z: p.z, lx: -tz, lz: tx };
+        });
+        const up = [0, 1, 0];
+        for (let k = 0; k + 1 < smp.length; k++) {
+            const A = smp[k], B = smp[k + 1], bt = this._batch(key, A.x, A.z);
+            const P = (Q, l) => [Q.x + Q.lx * l, y, Q.z + Q.lz * l], U = (Q, l) => { const p = P(Q, l); return uvFn(Q.s, l, p[0], p[2]); };
+            const a0 = P(A, l0), a1 = P(A, l1), b0 = P(B, l0), b1 = P(B, l1);
+            bt.tri(a0, a1, b1, up, [U(A, l0), U(A, l1), U(B, l1)]);
+            bt.tri(a0, b1, b0, up, [U(A, l0), U(B, l1), U(B, l0)]);
+        }
+    }
+
+    // Anel de calçada em volta das rotatórias, nos cantos da orla (CityGrid.roundAprons): topo entre os dois arcos e meio-fio em volta.
+    _roundAprons() {
+        const h = Config.city.curbHeight, up = [0, 1, 0], uv = (p) => [p[0] / 4, -p[1] / 4], z3 = [[0, 0], [0, 0], [0, 0]];
+        for (const ap of CityGrid.roundAprons || []) {
+            const I = ap.inner, O = ap.outer, sw = this._batch('sidewalk', I[0][0], I[0][1]), cb = this._batch('curb', I[0][0], I[0][1]);
+            for (let k = 0; k + 1 < I.length; k++) {
+                sw.tri([I[k][0], h, I[k][1]], [O[k][0], h, O[k][1]], [O[k + 1][0], h, O[k + 1][1]], up, [uv(I[k]), uv(O[k]), uv(O[k + 1])]);
+                sw.tri([I[k][0], h, I[k][1]], [O[k + 1][0], h, O[k + 1][1]], [I[k + 1][0], h, I[k + 1][1]], up, [uv(I[k]), uv(O[k + 1]), uv(I[k + 1])]);
+            }
+            const loop = I.concat(O.slice().reverse());
+            let area = 0;
+            for (let k = 0; k < loop.length; k++) { const p = loop[k], q = loop[(k + 1) % loop.length]; area += p[0] * q[1] - q[0] * p[1]; }
+            if (area < 0) loop.reverse();                                                     // anti-horário: a normal (dz, -dx) aponta para fora
+            for (let k = 0; k < loop.length; k++) {
+                const p = loop[k], q = loop[(k + 1) % loop.length], dx = q[0] - p[0], dz = q[1] - p[1], l = hypot(dx, dz);
+                if (l < 1e-3) continue;
+                const nn = [dz / l, 0, -dx / l];
+                cb.tri([p[0], 0, p[1]], [q[0], 0, q[1]], [q[0], h, q[1]], nn, z3);
+                cb.tri([p[0], 0, p[1]], [q[0], h, q[1]], [p[0], h, p[1]], nn, z3);
+            }
         }
     }
 
@@ -227,14 +357,35 @@ class WorldBuilder {
 
     // Canteiro central das avenidas (classe 'ave'): divisória de concreto com meio-fio, entre os cruzamentos.
     // (Sem grama nem palmeiras: o canteiro faz parte da pista e vegetação é proibida em via.)
+    // Num RETORNO o canteiro abre um vão (n.uturn.gap); perto de uma ROTATÓRIA começa depois da faixa de pedestres.
     _medians() {
         const h = Config.city.curbHeight;
+        const end = (n, cut) => n.uturn ? n.uturn.gap / 2 : (n.round ? cut + 9.5 : cut + 3);
         for (const e of RoadPlan.edges) {
             if (e.cls !== 'ave') continue;
             const mw = RoadPlan.CLASS.ave.median / 2;
+            if (e.free) {                                                               // via livre: canteiro ao longo da polilinha
+                const s0 = end(e.a, e.cutA), s1 = e.len - end(e.b, e.cutB);
+                if (s1 <= s0 + 1) continue;
+                this._ribbon(e, s0, s1, -mw, mw, h, 'open_concrete', (s, l, x, z) => [x / 4, -z / 4]);
+                const cb = this._batch('curb', e.a.x, e.a.z), z3 = [[0, 0], [0, 0], [0, 0]];
+                const side = (l, sgn) => {                                              // meio-fio (paredes) dos dois lados e nas pontas
+                    for (let s = s0; s < s1 - 0.01; s += 6) {
+                        const s2 = Math.min(s1, s + 6), A = RoadPlan.at(e, s), B = RoadPlan.at(e, s2);
+                        const p = [A.x - A.tz * l, A.z + A.tx * l], q = [B.x - B.tz * l, B.z + B.tx * l], nn = [-A.tz * sgn, 0, A.tx * sgn];
+                        cb.tri([p[0], 0, p[1]], [q[0], 0, q[1]], [q[0], h, q[1]], nn, z3); cb.tri([p[0], 0, p[1]], [q[0], h, q[1]], [p[0], h, p[1]], nn, z3);
+                    }
+                };
+                side(mw, 1); side(-mw, -1);
+                for (const [s, sgn] of [[s0, -1], [s1, 1]]) {
+                    const A = RoadPlan.at(e, s), p = [A.x - A.tz * mw, A.z + A.tx * mw], q = [A.x + A.tz * mw, A.z - A.tx * mw], nn = [A.tx * sgn, 0, A.tz * sgn];
+                    cb.tri([p[0], 0, p[1]], [q[0], 0, q[1]], [q[0], h, q[1]], nn, z3); cb.tri([p[0], 0, p[1]], [q[0], h, q[1]], [p[0], h, p[1]], nn, z3);
+                }
+                continue;
+            }
             let x0, x1, z0, z1;
-            if (e.v) { x0 = e.a.x - mw; x1 = e.a.x + mw; z0 = e.a.z + e.a.hwEW + 3; z1 = e.b.z - e.b.hwEW - 3; }
-            else { z0 = e.a.z - mw; z1 = e.a.z + mw; x0 = e.a.x + e.a.hwNS + 3; x1 = e.b.x - e.b.hwNS - 3; }
+            if (e.v) { x0 = e.a.x - mw; x1 = e.a.x + mw; z0 = e.a.z + end(e.a, e.cutA); z1 = e.b.z - end(e.b, e.cutB); }
+            else { z0 = e.a.z - mw; z1 = e.a.z + mw; x0 = e.a.x + end(e.a, e.cutA); x1 = e.b.x - end(e.b, e.cutB); }
             if (x1 <= x0 + 1 || z1 <= z0 + 1) continue;
             this._batch('open_concrete', x0, z0).top(x0, z0, x1, z1, h, (x, z) => [x / 4, -z / 4]);
             this._batch('curb', x0, z0).walls(x0, z0, x1, z1, 0, h, () => [0, 0]);
@@ -245,6 +396,7 @@ class WorldBuilder {
     _tunnels() {
         const rock = [0.42, 0.4, 0.37], rockD = [0.3, 0.28, 0.26], conc = [0.62, 0.61, 0.58], dark = [0.05, 0.05, 0.07], H = 7;
         for (const t of RoadPlan.tunnels || []) {
+            if (t.free) { this._tunnelFree(t, H, rock, rockD, conc, dark); continue; }
             const hw = t.w / 2, m = 6.5, v = t.v, cx = v ? t.x0 : (t.x0 + t.x1) / 2, cz = v ? (t.z0 + t.z1) / 2 : t.z0;      // centro da via
             const bx0 = v ? cx - hw - m : t.x0, bx1 = v ? cx + hw + m : t.x1, bz0 = v ? t.z0 : cz - hw - m, bz1 = v ? t.z1 : cz + hw + m;
             const tr = this._batch('xtrim', bx0, bz0), tp = this._batch('open_xrock', bx0, bz0);
@@ -265,6 +417,53 @@ class WorldBuilder {
             if (v) { this._collider('tun_l', bx0, bz0, cx - hw, bz1, 6); this._collider('tun_r', cx + hw, bz0, bx1, bz1, 6); }
             else { this._collider('tun_l', bx0, bz0, bx1, cz - hw, 6); this._collider('tun_r', bx0, cz + hw, bx1, bz1, 6); }
         }
+    }
+
+    // Túnel numa via livre (curva): o maciço vai em gomos de ~4 u ao longo do eixo — ombros de pedra dos dois lados, laje do teto com
+    // a textura de pedra por cima, portais nas bocas; sólidos a pé (caixas por gomo) e paredes para os carros (colisores girados).
+    _tunnelFree(t, H, rock, rockD, conc, dark) {
+        const hw = t.w / 2, m = 6.5, P = t.pts, n = P.length, x0 = t.x0, z0 = t.z0;
+        const tr = this._batch('xtrim', x0, z0), tp = this._batch('open_xrock', x0, z0), up = [0, 1, 0], uv = (p) => [p[0] / 4, -p[2] / 4];
+        const obs = [], y = H + 0.42, W2 = hw + m;
+        const NRM = P.map((p, i) => { const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], l = hypot(b[0] - a[0], b[1] - a[1]) || 1; return [-(b[1] - a[1]) / l, (b[0] - a[0]) / l]; });      // normal média no vértice (sem fresta nas curvas)
+        for (let i = 0; i + 1 < n; i++) {
+            const p = P[i], q = P[i + 1];
+            this._obox(tr, p, q, hw, hw + m, 0.1, H, rock); this._obox(tr, p, q, -hw - m, -hw, 0.1, H, rock);
+            this._obox(tr, p, q, -hw - m, hw + m, 4.6, H + 0.4, rockD);
+            const dx = q[0] - p[0], dz = q[1] - p[1], L = hypot(dx, dz) || 1, nx = -dz / L, nz = dx / L, [an, az] = NRM[i], [bn, bz] = NRM[i + 1];
+            const A = [p[0] - an * W2, y, p[1] - az * W2], B = [p[0] + an * W2, y, p[1] + az * W2], Cq = [q[0] + bn * W2, y, q[1] + bz * W2], D = [q[0] - bn * W2, y, q[1] - bz * W2];
+            tp.tri(A, B, Cq, up, [uv(A), uv(B), uv(Cq)]); tp.tri(A, Cq, D, up, [uv(A), uv(Cq), uv(D)]);
+            for (const s of [1, -1]) {                                                 // ombros: caixa a pé e parede para os carros
+                const l = s * (hw + m / 2), cx = (p[0] + q[0]) / 2 + nx * l, cz = (p[1] + q[1]) / 2 + nz * l, r = m / 2;
+                obs.push({ x0: Math.min(p[0], q[0]) + nx * l - r, z0: Math.min(p[1], q[1]) + nz * l - r, x1: Math.max(p[0], q[0]) + nx * l + r, z1: Math.max(p[1], q[1]) + nz * l + r, h: H });
+                this._colliderRot('tun_' + (s > 0 ? 'l' : 'r'), cx, cz, m, L + 0.6, 6, Math.atan2(dx / L, dz / L));
+            }
+        }
+        CityGrid.addObstacles(obs);
+        // portais: viga de concreto atravessada e a boca escura, nas duas pontas
+        for (const [i, j] of [[0, 1], [n - 1, n - 2]]) {
+            const p = P[i], q = P[j], dx = q[0] - p[0], dz = q[1] - p[1], L = hypot(dx, dz) || 1, e = [p[0] + dx / L * 1.6, p[1] + dz / L * 1.6];
+            this._obox(tr, p, e, -hw - m, hw + m, 0.1, H + 0.5, conc);
+            this._obox(tr, p, e, -hw, hw, 0.1, 4.6, dark);
+        }
+    }
+
+    // Caixa orientada ao longo de p→q ([x, z]), entre as distâncias laterais l0..l1 (pela normal à esquerda), de y0 a y1, cor sólida.
+    _obox(bt, p, q, l0, l1, y0, y1, col) {
+        const dx = q[0] - p[0], dz = q[1] - p[1], L = hypot(dx, dz) || 1, ux = dx / L, uz = dz / L, nx = -uz, nz = ux, z3 = [[0, 0], [0, 0], [0, 0]];
+        const V = (b, l, y) => [b[0] + nx * l, y, b[1] + nz * l];
+        const A0 = V(p, l0, y1), A1 = V(p, l1, y1), B0 = V(q, l0, y1), B1 = V(q, l1, y1), a0 = V(p, l0, y0), a1 = V(p, l1, y0), b0 = V(q, l0, y0), b1 = V(q, l1, y0);
+        const face = (a, b, c, d, n) => { bt.tri(a, b, c, n, z3, col); bt.tri(a, c, d, n, z3, col); };
+        face(A0, A1, B1, B0, [0, 1, 0]);
+        face(A0, B0, b0, a0, [-nx, 0, -nz]); face(A1, B1, b1, a1, [nx, 0, nz]);
+        face(A0, A1, a1, a0, [-ux, 0, -uz]); face(B0, B1, b1, b0, [ux, 0, uz]);
+    }
+
+    // Colisor estático girado (rotY em torno de y; sx = largura no x local, sz = comprimento no z local).
+    _colliderRot(name, cx, cz, sx, sz, h, rotY, mask = 0) {
+        const node = new BABYLON.TransformNode(name, this.scene);
+        node.position.set(cx, h / 2, cz); node.rotation.y = rotY;
+        this.colliders.push({ node, size: new BABYLON.Vector3(sx, h, sz), mask });
     }
 
     // VIADUTOS: tabuleiro elevado (rampas nas pontas), pista com faixas, guarda-corpos e pilares. O tabuleiro cobre as ruas que
@@ -429,7 +628,26 @@ class WorldBuilder {
         // Calçadas de BORDA: lados de ruas urbanas sem quarteirão (orla do canal, fim da cidade...).
         for (const p of CityGrid.perimeter) slab('sidewalk', p.x0, p.z0, p.x1, p.z1);
 
+        // Quarteirão em POLÍGONO (cortado por diagonal): laje inteira (parque/praça) ou anel de calçada + praça na pegada (andável, na
+        // altura da calçada: os prédios ocupam só parte dela); meio-fio em volta. Polígonos convexos: leque a partir do centróide.
+        const polyBlock = (blk) => {
+            const P = blk.poly, F = blk.footPoly, c = CityGrid._centroid(P), bt = this._batch((blk.open ? 'open_' + blk.ground : 'sidewalk'), c[0], c[1]);
+            const T = (batch, a, b, d) => batch.tri([a[0], h, a[1]], [b[0], h, b[1]], [d[0], h, d[1]], up, [uvT(a), uvT(b), uvT(d)]);
+            if (blk.open || !F) for (let i = 0; i < P.length; i++) T(bt, c, P[i], P[(i + 1) % P.length]);
+            else {
+                const pz = this._batch('open_' + blk.ground, c[0], c[1]), fc = CityGrid._centroid(F);
+                for (let i = 0; i < P.length; i++) {
+                    const j = (i + 1) % P.length;
+                    T(bt, P[i], P[j], F[j]); T(bt, P[i], F[j], F[i]);                     // anel de calçada (o recuo mantém os vértices)
+                    T(pz, fc, F[i], F[j]);                                                 // praça
+                }
+            }
+            curbLoop(P.slice(), c[0], c[1]);
+        };
+
         for (const blk of CityGrid.blocks) {
+            if (blk.organic) continue;                                                 // favela: chão e becos à parte (_favela)
+            if (blk.poly) { polyBlock(blk); continue; }
             const [x0, z0, x1, z1] = blk.slab;
             const [fx0, fz0, fx1, fz1] = blk.foot;
             const sh = blk.district === 'favela', r = blk.r || 0;
@@ -685,6 +903,13 @@ class WorldBuilder {
         for (const e of RoadPlan.edges) {
             if (e.cls !== 'city' && e.cls !== 'isl' && e.cls !== 'bridge' && e.cls !== 'ave') continue;
             const hw = e.w / 2 + 0.9, L = e.len;
+            if (e.free) {                                                               // via livre: dos dois lados, voltados para a pista
+                for (const [s0, sg] of [[14, -1], [20, 1]]) for (let s = Math.max(s0, e.cutA + 6); s <= L - Math.max(8, e.cutB + 4); s += 12) {
+                    const p = RoadPlan.at(e, s), lx = -p.tz * sg, lz = p.tx * sg;
+                    add(p.x + lx * hw, p.z + lz * hw, -lx, -lz);
+                }
+                continue;
+            }
             if (e.v) {
                 for (let s = 14; s <= L - 8; s += 12) add(e.a.x + hw, e.a.z + s, -1, 0);        // lado leste, aponta p/ oeste
                 for (let s = 20; s <= L - 8; s += 12) add(e.a.x - hw, e.a.z + s, 1, 0);         // lado oeste, aponta p/ leste
@@ -730,6 +955,58 @@ class WorldBuilder {
         return Math.min(1.3, 0.1 + 0.95 * k + 0.18 * k * Math.sin(t * 0.9) + 0.04 * Math.sin(t * 0.37));
     }
 
+    // FAVELA (FavelaPlan): o chão de terra que o terreno não desenha (células de 4 u, tingidas pelo relevo), os becos cimentados
+    // (por baixo das ruas), a quadra do baile e o campinho, e os FRADES (postes de concreto) nas bocas onde um carro caberia.
+    _favela() {
+        if (typeof FavelaPlan === 'undefined' || !FavelaPlan.built) return;
+        const F = FavelaPlan, up = [0, 1, 0], uv4 = (x, z) => [x / 4, -z / 4];
+        const cs = (x, z) => { const s = WorldMap.shadeAt(x, z); return [s, s, s]; };
+        const c = Config.world.cell;
+        for (const b of F.groundBoxes) for (let x = b[0]; x < b[2] - 0.01; x += c) {
+            this._batch('open_earth$', x, b[1]).top(x, b[1], x + c, b[3], 0.012, uv4, [cs(x, b[3]), cs(x + c, b[3]), cs(x, b[1]), cs(x + c, b[1])]);
+        }
+        // becos: faixa ao longo da polilinha (juntas redondas: um leque em cada canto)
+        for (const a of F.alleys) {
+            const P = a.pts, hw = Math.max(a.w / 2, 0.72), y = 0.016;
+            for (let k = 0; k + 1 < P.length; k++) {
+                const p = P[k], q = P[k + 1], L = hypot(q[0] - p[0], q[1] - p[1]) || 1, nx = -(q[1] - p[1]) / L * hw, nz = (q[0] - p[0]) / L * hw;
+                const bt = this._batch('sidewalk$', p[0], p[1]), col = cs((p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+                const A = [p[0] + nx, y, p[1] + nz], B = [p[0] - nx, y, p[1] - nz], C2 = [q[0] - nx, y, q[1] - nz], D = [q[0] + nx, y, q[1] + nz];
+                bt.tri(A, B, C2, up, [uv4(A[0], A[2]), uv4(B[0], B[2]), uv4(C2[0], C2[2])], col);
+                bt.tri(A, C2, D, up, [uv4(A[0], A[2]), uv4(C2[0], C2[2]), uv4(D[0], D[2])], col);
+                for (let t = 0; t < 8; t++) {                                       // tampa redonda na junta (sem fresta nas curvas)
+                    const a0 = t / 8 * Math.PI * 2, a1 = (t + 1) / 8 * Math.PI * 2, Q0 = [q[0] + Math.cos(a0) * hw, y, q[1] + Math.sin(a0) * hw], Q1 = [q[0] + Math.cos(a1) * hw, y, q[1] + Math.sin(a1) * hw];
+                    bt.tri([q[0], y, q[1]], Q0, Q1, up, [uv4(q[0], q[1]), uv4(Q0[0], Q0[2]), uv4(Q1[0], Q1[2])], col);
+                }
+            }
+        }
+        // quadra (cimento, linhas brancas, traves de futsal) e campinho (terra batida, linhas de cal, traves de madeira)
+        const W1 = [0.93, 0.93, 0.9], POST = [0.85, 0.85, 0.82], WOOD = [0.42, 0.3, 0.18];
+        for (const q of F.squares) {
+            const quadra = q.kind === 'quadra', key = quadra ? 'open_concrete$' : 'road_dirt$', y = 0.018;
+            this._batch(key, q.x0, q.z0).top(q.x0, q.z0, q.x1, q.z1, y, uv4, [cs(q.x0, q.z1), cs(q.x1, q.z1), cs(q.x0, q.z0), cs(q.x1, q.z0)]);
+            const t = this._batch('trim', q.x0, q.z0), m = 1.2, lx0 = q.x0 + m, lz0 = q.z0 + m, lx1 = q.x1 - m, lz1 = q.z1 - m, lw = 0.12, ly = 0.022, mx = (q.x0 + q.x1) / 2, mz = (q.z0 + q.z1) / 2;
+            const line = (x0, z0, x1, z1) => t.solid(x0, z0, x1, z1, ly, ly + 0.01, W1);
+            line(lx0, lz0, lx1, lz0 + lw); line(lx0, lz1 - lw, lx1, lz1); line(lx0, lz0, lx0 + lw, lz1); line(lx1 - lw, lz0, lx1, lz1); line(mx - lw / 2, lz0, mx + lw / 2, lz1);
+            for (let k = 0; k < 16; k++) { const a0 = k / 16 * Math.PI * 2, r = Math.min(3, (lz1 - lz0) / 4); line(mx + Math.cos(a0) * r - lw, mz + Math.sin(a0) * r - lw, mx + Math.cos(a0) * r + lw, mz + Math.sin(a0) * r + lw); }
+            const gw = quadra ? 1.6 : 2.4, gh = quadra ? 2.0 : 2.2, col = quadra ? POST : WOOD;
+            for (const gx of [lx0, lx1]) {                                          // traves nas pontas (no sentido de x)
+                t.solid(gx - 0.08, mz - gw - 0.08, gx + 0.08, mz - gw + 0.08, 0, gh, col);
+                t.solid(gx - 0.08, mz + gw - 0.08, gx + 0.08, mz + gw + 0.08, 0, gh, col);
+                t.solid(gx - 0.08, mz - gw - 0.08, gx + 0.08, mz + gw + 0.08, gh - 0.16, gh, col);
+            }
+        }
+        // frades: concreto com a faixa amarela e preta no alto (sólidos para os carros também)
+        F.bollards.forEach((b, i) => {
+            const t = this._batch('trim', b.x, b.z), r = F.POST_R;
+            t.solid(b.x - r, b.z - r, b.x + r, b.z + r, 0, 0.5, [0.62, 0.6, 0.56]);
+            t.solid(b.x - r - 0.01, b.z - r - 0.01, b.x + r + 0.01, b.z + r + 0.01, 0.5, 0.62, [0.9, 0.74, 0.12]);
+            t.solid(b.x - r - 0.01, b.z - r - 0.01, b.x + r + 0.01, b.z + r + 0.01, 0.62, 0.72, [0.14, 0.14, 0.14]);
+            t.solid(b.x - r, b.z - r, b.x + r, b.z + r, 0.72, 0.9, [0.72, 0.7, 0.66]);
+            this._collider('frade_' + i, b.x - r, b.z - r, b.x + r, b.z + r, 0.9);
+        });
+    }
+
     // FAVELA: postes de madeira com 'gato' (ligação clandestina): fiação embolada, fios cruzando a viela, caixas de emenda,
     // transformador remendado e luz fraca que pisca (algumas lâmpadas já queimaram). Mais lixo e entulho nas bordas das ruas de terra.
     _favelaPoles() {
@@ -744,17 +1021,18 @@ class WorldBuilder {
         // Postes ao longo das ruas de terra da favela (alternando os lados) e sujeira nas bordas.
         for (const e of RoadPlan.edges) {
             if (e.cls !== 'fav') continue;
-            const hw = e.w / 2 + 0.7, L = e.len;
-            let side = rng() < 0.5 ? 1 : -1;
+            const hw = e.w / 2 + 1.4, L = e.len, P = {};
+            const side = (s, o) => { RoadPlan.at(e, s, P); return [P.x - P.tz * o, P.z + P.tx * o, Math.abs(P.tz) > Math.abs(P.tx)]; };      // (normal à esquerda; true: rua no sentido de z)
+            let sd = rng() < 0.5 ? 1 : -1;
             for (let s = 6 + rng() * 6; s < L - 4; s += 15 + rng() * 9) {
-                const px = e.v ? e.a.x + side * hw : e.a.x + s, pz = e.v ? e.a.z + s : e.a.z + side * hw;
-                poles.push({ x: px, z: pz, arm: e.v ? 'x' : 'z', dir: -side });
-                side = -side;
+                const [px, pz, alongZ] = side(s, sd * hw);
+                if (!FavelaPlan.built || FavelaPlan.walkable(px, pz)) poles.push({ x: px, z: pz, arm: alongZ ? 'x' : 'z', dir: alongZ ? Math.sign(P.tz * sd) || 1 : -Math.sign(P.tx * sd) || 1 });
+                sd = -sd;
             }
             for (let s = 3 + rng() * 5; s < L - 2; s += 7 + rng() * 9) {
                 if (rng() < 0.5) continue;
-                const sd = rng() < 0.5 ? 1 : -1, off = hw + 0.5 + rng() * 0.8;
-                dirt(e.v ? e.a.x + sd * off : e.a.x + s, e.v ? e.a.z + s : e.a.z + sd * off);
+                const [dx, dz] = side(s, (rng() < 0.5 ? 1 : -1) * (hw + 0.5 + rng() * 0.8));
+                if (!FavelaPlan.built || FavelaPlan.walkable(dx, dz)) dirt(dx, dz);
             }
         }
         // Postes dentro dos quarteirões da favela (vielas): dados vindos de CityGrid (props type 'pole').
@@ -902,7 +1180,7 @@ class WorldBuilder {
             }
             return null;
         };
-        const spot = (b) => (b._pad !== undefined ? b._pad : (b._pad = (b.foot[2] - b.foot[0] >= 24 && b.foot[3] - b.foot[1] >= 24 && b.biome !== 'downtown') ? (b.open ? [(b.foot[0] + b.foot[2]) / 2, (b.foot[1] + b.foot[3]) / 2] : freeSquare(b)) : null));
+        const spot = (b) => (b._pad !== undefined ? b._pad : (b._pad = (!b.poly && !b.organic && b.foot[2] - b.foot[0] >= 24 && b.foot[3] - b.foot[1] >= 24 && b.biome !== 'downtown') ? (b.open ? [(b.foot[0] + b.foot[2]) / 2, (b.foot[1] + b.foot[3]) / 2] : freeSquare(b)) : null));
         const near = (list, x, z) => list.filter((b) => spot(b)).sort((a, b) => hypot(spot(a)[0] - x, spot(a)[1] - z) - hypot(spot(b)[0] - x, spot(b)[1] - z));
         const all = CityGrid.blocks, chosen = [];
         const take = (b) => { if (b && !chosen.includes(b) && chosen.every((o) => hypot(spot(o)[0] - spot(b)[0], spot(o)[1] - spot(b)[1]) > 60)) chosen.push(b); };
@@ -1017,6 +1295,7 @@ class WorldBuilder {
             if (key === 'shop') return M.shop;
             if (key === 'road_dirt') return M.dirt;
             if (key === 'road_earth') return M.earth;
+            if (key === 'road_concrete') return M.concrete;
             if (key === 'asphalt') return M.asphalt;
             if (key === 'zebra') return M.zebra;
             if (key === 'sidewalk') return M.sidewalk;

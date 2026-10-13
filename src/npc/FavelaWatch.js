@@ -32,11 +32,13 @@ class FavelaWatch {
             }
         }
         for (const s of slices) if (s.length) { const l = s[Math.floor(rng() * s.length)]; this.rockets.push({ x: l.x, z: l.z, h: l.h, actor: null, fire: rng() * 2 }); }
-        // olheiros: 4 cantos + 3 vielas de entrada
-        const anchors = [[b.x0 + 12, b.z0 + 12], [b.x0 + 12, b.z1 - 12], [b.x1 - 12, b.z0 + 12], [b.x1 - 12, b.z1 - 12],
-            [b.x1 - 6, b.z0 + 60], [b.x1 - 6, (b.z0 + b.z1) / 2], [b.x1 - 6, b.z1 - 60]];
-        for (const [ax, az] of anchors) {
-            const r = RoadPlan.nearestRoadPoint(ax, az, 45);
+        // olheiros: 4 cantos (no beco mais perto) + as entradas das 3 ruas do lado da cidade (na beira da rua)
+        const anchors = [[b.x0 + 16, b.z0 + 16, 'beco'], [b.x0 + 16, b.z1 - 16, 'beco'], [b.x1 - 16, b.z0 + 16, 'beco'], [b.x1 - 16, b.z1 - 16, 'beco']];
+        for (const m of FavelaPlan.MAIN) anchors.push([b.x1 - 10, m.pts[0][1], 'rua']);
+        for (const [ax, az, kind] of anchors) {
+            let r = null;
+            if (kind === 'beco' && FavelaPlan.built) r = FavelaPlan.alleyPoint(ax, az);
+            else { const q = RoadPlan.nearestRoadPoint(ax, az, 45); if (q) { const o = q.edge.w / 2 + 1.2; r = { x: q.x - q.tz * o, z: q.z + q.tx * o }; } }
             if (!r || !Standing.inFavela(r.x, r.z)) continue;
             const L = { post: { x: r.x, z: r.z }, x: r.x, z: r.z, state: 'post', t: 0, actor: null, idx: -1, tr: null, hop: 0, alive: true, hp: 40, respawn: 0, position: { x: r.x, y: 0, z: r.z }, kind: 'lookout' };
             L.takeDamage = (amount, from, source) => this._hit(L, amount, from, source);
@@ -134,7 +136,7 @@ class FavelaWatch {
     _hop(L, tx, tz) {
         const nav = this.game.nav, a = nav.crowd.agents[L.idx], dx = tx - L.x, dz = tz - L.z, d = hypot(dx, dz);
         if (d < 6) return true;
-        const k = Math.min(1, 35 / d), r = RoadPlan.nearestRoadPoint(L.x + dx * k, L.z + dz * k, 30);
+        const k = Math.min(1, 35 / d), r = FavelaPlan.built ? FavelaPlan.nodeNear(L.x + dx * k, L.z + dz * k) : RoadPlan.nearestRoadPoint(L.x + dx * k, L.z + dz * k, 30);
         const p = nav.closestPoint(new BABYLON.Vector3(r ? r.x : L.x + dx * k, 0, r ? r.z : L.z + dz * k));
         L.dest = p;
         if (a && !a.path && !a.queued && L.hop++ >= 2) { nav.crowd.agentTeleport(L.idx, p); L.tr.position.copyFrom(p); L.hop = 0; }

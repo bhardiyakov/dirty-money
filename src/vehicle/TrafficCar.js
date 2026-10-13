@@ -4,8 +4,8 @@
 // Segue uma Route (planejada cruzamento a cruzamento) por pure pursuit e escolhe a
 // velocidade-alvo como o MÍNIMO entre vários limites:
 //   cruzeiro do motorista | curva à frente | semáforo (para na linha) |
-//   esquerda cede ao tráfego contrário | "caixa livre" (não entra se a saída está
-//   bloqueada) | carro/pedestre à frente (mantém distância e para).
+//   esquerda (e retorno) cede ao tráfego contrário | rotatória: cede a quem já está no anel |
+//   "caixa livre" (não entra se a saída está bloqueada) | carro/pedestre à frente (mantém distância e para).
 // Buzina quando fica bloqueado com a via livre, ou quando precisa frear forte.
 //
 // Modos: 'drive' (IA) | 'parked' (estacionado no meio-fio) | 'abandoned' (o jogador
@@ -38,8 +38,8 @@ class TrafficCar extends Vehicle {
     }
 
     // ------------------------------------------------------------------ modos
-    startRoute(x, z, d) {
-        this.route = new Route(x, z, d);
+    startRoute(x, z, d, lp = null) {
+        this.route = new Route(x, z, d, lp);
         this.route.ensure(2);
     }
 
@@ -75,7 +75,7 @@ class TrafficCar extends Vehicle {
         const s = RoadNet.snapToLane(this.position.x, this.position.z, f.x, f.z);
         this.route = null;
         if (!s) return false;
-        this.startRoute(s.point.x, s.point.z, s.d);
+        this.startRoute(s.point.x, s.point.z, s.d, s);
         if (this.route.pts.length < 2) { this.route = null; return false; }     // sem cruzamento à frente
         return true;
     }
@@ -142,21 +142,25 @@ class TrafficCar extends Vehicle {
         let signal = 0;
 
         let jn = null;                                                  // próximo cruzamento ainda não deixado para trás
+        this._inRound = false;
         for (let k = 0; k < R.junctions.length; k++) { const j = R.junctions[k]; if (R.cum[j.exitIdx] - u > -0.5) { jn = j; break; } }
         if (jn) {
             const dEntry = R.cum[jn.entryIdx] - u;
             const dStop = dEntry - (this.halfLen + 0.6); // centro do carro para o para-choque parar na linha
 
             // Seta: avisa a curva a ~22u do cruzamento e apaga ao sair dele.
-            signal = (jn.turn !== 'straight' && dEntry < 22) ? (jn.turn === 'left' ? -1 : 1) : 0;
+            signal = (jn.turn !== 'straight' && dEntry < 22) ? (jn.turn === 'right' ? 1 : -1) : 0;
 
-            // Curva: reduz antes de entrar.
-            if (jn.turn !== 'straight' && dEntry < 16) {
-                vt = Math.min(vt, T.turnSpeed * (this.turnMul || 1) + Math.max(0, dEntry - 5) * 0.45);
+            // Curva (e rotatória, qualquer saída): reduz antes de entrar. Retorno: o "U" é fechado, bem devagar.
+            const round = !!jn.inter.round;
+            this._inRound = round && dEntry < 2;                         // no anel: sem desvio pela esquerda (seria em cima da ilha)
+            if ((jn.turn !== 'straight' || round) && dEntry < 16) {
+                const ts = jn.turn === 'uturn' && !round ? 0.62 : (round ? 1.1 : 1);
+                vt = Math.min(vt, T.turnSpeed * ts * (this.turnMul || 1) + Math.max(0, dEntry - 5) * 0.45);
             }
 
             if (dStop > -0.4 && !this.ignoreSignals && !this.runsReds) {   // ainda não cruzou a linha de retenção (entregador apressado fura o sinal)
-                const sig = env.signals.vehicle(jn.inter, jn.axis);
+                const sig = env.signals.vehicle(jn.inter, jn.phase);
                 const brakeDist = (v * v) / (2 * T.brake * 0.7);
                 let must = false;
                 if (sig.color === 'red') must = true;
@@ -165,7 +169,7 @@ class TrafficCar extends Vehicle {
                 const s = dStop <= 0.25 ? 0 : Math.sqrt(2 * T.brake * 0.7 * (dStop - 0.25));      // velocidade que ainda para na linha
                 if (s < vt) {                                                                       // (sem closures por carro por quadro)
                     if (must) { vt = s; reason = 'sinal'; }
-                    else if (jn.turn === 'left' && dStop < 7 && this._oncoming(jn, env)) { vt = s; reason = 'preferencial'; }
+                    else if (round ? (dStop < 6 && this._ringBusy(jn, env)) : ((jn.turn === 'left' || jn.turn === 'uturn') && dStop < 7 && this._oncoming(jn, env))) { vt = s; reason = 'preferencial'; }
                     else if (dStop < 5 && this._exitBlocked(jn, env)) { vt = s; reason = 'saida'; }
                 }
             }
@@ -212,7 +216,7 @@ class TrafficCar extends Vehicle {
                 // Causa raiz da espera: se o da frente está parado num semáforo, eu também espero
                 // legitimamente (não buzino). Se ele está parado por um obstáculo de verdade, eu buzino.
                 const lc = hit.ref;
-                if (isCar && lc instanceof TrafficCar && lc.mode === 'drive' && !lc.controlled && !lc.hold) hitRoot = lc.root || '';
+                if (isCar && lc instanceof TrafficCar && lc.mode === 'drive' && !lc.controlled && !lc.hold) hitRoot = lc.root || (lc.reason || lc._asleep || Math.abs(lc.forwardSpeed) > 0.5 ? '' : 'carro');      // (parado sem motivo — viatura atendendo, carro enroscado: obstáculo de verdade, contorna)
                 else hitRoot = isCar ? 'carro' : 'pedestre';
             }
             // Frenagem brusca (quase bati): buzina na hora.
@@ -276,6 +280,7 @@ class TrafficCar extends Vehicle {
     // Começa um desvio em volta do obstáculo `o`: escolhe o lado livre (pedestre: direita curta, depois esquerda; carro: esquerda, na faixa
     // contrária, se estiver livre). Retorna true se achou espaço.
     _startDetour(o, env, u, emergency) {
+        if (this._inRound) return false;
         const W = this._roadW || 10, left = Math.min(3.4, W * 0.34), right = -Math.min(1.9, W * 0.19);
         const cands = o.kind === 'car' ? [left] : (emergency ? [right, left] : [left, right]);
         for (const off of cands) {
@@ -322,14 +327,34 @@ class TrafficCar extends Vehicle {
         return false;
     }
 
-    // A faixa de saída do cruzamento está ocupada (carro parado nos primeiros 7u)?
+    // ROTATÓRIA: há carro no anel vindo pela esquerda (anti-horário) a até ~115° antes da minha entrada (th1), ou em cima dela?
+    // Quem já está no anel tem a preferência.
+    _ringBusy(jn, env) {
+        const Rd = jn.inter.round, th1 = jn.th1 === undefined ? 0 : jn.th1, TAU = Math.PI * 2;
+        const rr = (Rd.R + Rd.r) / 2, far = Math.min(2.0, 16 / rr), near = Math.min(0.6, 6 / rr);      // janela por distância no anel (praça grande: ~16 u antes)
+        for (const o of env.grid.query(Rd.cx, Rd.cz, Rd.R + 3, TrafficCar._q3)) {
+            if (o.kind !== 'car' || o.ref === this || (o.layer || 0) !== (this.layer || 0)) continue;
+            const rx = o.x - Rd.cx, rz = o.z - Rd.cz, r = hypot(rx, rz);
+            if (r < Rd.r || r > Rd.R - 0.3) continue;                                  // fora do anel (esperando na entrada, ou já saindo)
+            let up = th1 - Math.atan2(rz, rx);                                         // quanto ele ainda gira até a minha entrada
+            up -= Math.floor(up / TAU) * TAU;
+            if (up > TAU - 0.4) return true;                                          // passando pela minha entrada agora
+            if (up > far) continue;
+            const tang = (-rz * (o.vx || 0) + rx * (o.vz || 0)) / (r || 1);              // velocidade no sentido do anel
+            if (tang > 0.8 || up < near) return true;
+        }
+        return false;
+    }
+
+    // A faixa de saída do cruzamento está ocupada (carro parado ou quase, onde o meu ainda não caberia)? Não entra na "caixa" sem
+    // lugar do outro lado: senão fica no meio do cruzamento e trava quem cruza.
     _exitBlocked(jn, env) {
-        const X = this.route.pts[jn.exitIdx], d = jn.dOut;
-        for (const o of env.grid.query(X.x + d.dx * 3, X.z + d.dz * 3, 8, TrafficCar._q3)) {
+        const X = this.route.pts[jn.exitIdx], d = jn.dOut, room = 2 * this.halfLen + 4;
+        for (const o of env.grid.query(X.x + d.dx * room / 2, X.z + d.dz * room / 2, room / 2 + 5, TrafficCar._q3)) {
             if (o.kind !== 'car' || o.ref === this || (o.layer || 0) !== (this.layer || 0)) continue;
             const along = (o.x - X.x) * d.dx + (o.z - X.z) * d.dz;
             const lat = Math.abs((o.x - X.x) * d.dz - (o.z - X.z) * d.dx);
-            if (along > -1 && along < 7.5 && lat < 1.9 && hypot(o.vx, o.vz) < 2.2) return true;
+            if (along > -1 && along < room && lat < 1.9 && hypot(o.vx, o.vz) < 3) return true;
         }
         return false;
     }
@@ -344,6 +369,6 @@ class TrafficCar extends Vehicle {
 }
 
 // Multiplicador da velocidade de cruzeiro por classe de via.
-TrafficCar.CLS_SPEED = { hwy: 1.5, ave: 1.15, bridge: 1.2, city: 1.0, isl: 0.9, dirt: 0.62, fav: 0.5 };
+TrafficCar.CLS_SPEED = { hwy: 1.5, ave: 1.15, bridge: 1.2, city: 1.0, isl: 0.9, dirt: 0.62, fav: 0.5, trail: 0.42 };
 // Listas de consulta à grade de obstáculos (reaproveitadas: sem lixo por quadro). Uma por ponto de uso.
 TrafficCar._q1 = []; TrafficCar._q2 = []; TrafficCar._q3 = [];

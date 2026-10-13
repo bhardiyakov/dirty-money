@@ -118,5 +118,29 @@ const Laundry = {
     load(s) {
         if (!s) return;
         this.owned = s.owned || {}; this.xp = s.xp || 0; this.taxHeat = s.heat || 0;
+        this._migrate();
+    },
+
+    // Saves de antes da favela orgânica: o código da fachada é o da loja antiga ('favela:i,j|x0|lado|a', na grade de vielas de 36 u
+    // que começava em x = -660, z = 270). Se a loja não existe mais, a fachada passa para o ponto da favela livre mais perto de onde ela
+    // ficava (o nome segue o da loja nova).
+    _migrate() {
+        if (typeof Interiors === 'undefined' || !CityGrid.blocks) return;
+        Interiors.index();
+        const doors = Interiors._doors, has = new Set(doors.map((d) => d.id)), out = {}, taken = new Set();
+        let moved = 0;
+        for (const id of Object.keys(this.owned)) if (has.has(id)) { out[id] = this.owned[id]; taken.add(id); }
+        for (const id of Object.keys(this.owned)) {
+            if (has.has(id)) continue;
+            const m = /^favela:(\d+),(\d+)\|(-?[\d.]+)\|([SNWE])\|(-?[\d.]+)$/.exec(id);
+            if (!m) { out[id] = this.owned[id]; continue; }
+            const j = +m[2], x0 = +m[3], side = m[4], a = +m[5], z0 = 270 + 36 * j;
+            const p = side === 'S' || side === 'N' ? { x: a + 3, z: z0 + (side === 'S' ? 10 : 26) } : { x: side === 'W' ? x0 : x0 + 5, z: a + 3 };
+            let best = null, bd = Infinity;
+            for (const d of doors) { if (taken.has(d.id) || !this.canOwn(d)) continue; const dd = hypot(d.x - p.x, d.z - p.z); if (dd < bd) { bd = dd; best = d; } }
+            if (best) { out[best.id] = { name: best.name }; taken.add(best.id); moved++; }
+        }
+        this.owned = out;
+        if (moved && this.game && this.game._flash) this.game._flash(`A favela mudou: ${moved} fachada(s) do C.V foram para os pontos mais perto de onde ficavam`);
     },
 };
