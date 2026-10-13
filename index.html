@@ -242,11 +242,137 @@
             #main-menu .mm-buttons { gap: 8px; } #main-menu .mm-btn { padding: 10px 16px; font-size: 14px; }
             #mm-load { gap: 8px; } #mm-load .ml-logo { height: 44px; }
         }
+        /* ---------------------------------------------------------------- tela do estúdio (Trickstudio)
+           A 1ª coisa que aparece: tela preta com os créditos de abertura, enquanto a carga pesada (mapa, mundo 3D, física, shaders) roda por
+           baixo (src/main.js). Só opacidade e transform são animados (em CSS): o navegador anima isso fora do JS, então os créditos, o
+           indicador e a barrinha seguem andando mesmo durante um passo longo da carga. Tempos: cartão A 0,35–3,65 s · B 3,95–6,85 s ·
+           C de 7,1 s em diante (fica até a carga acabar; os mesmos números estão no script do Studio). */
+        #studio { position: fixed; inset: 0; z-index: 130; background: #000; color: #e9edf3; overflow: hidden; cursor: default; -webkit-user-select: none; user-select: none;
+            font-family: 'Outfit', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; transition: opacity .8s ease; }
+        #studio.out { opacity: 0; pointer-events: none; }
+        #studio .st-card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px 24px 72px;
+            opacity: 0; will-change: opacity, transform; }
+        #studio .st-a { animation: stCard 3.3s ease .35s both; }
+        #studio .st-b { animation: stCard 2.9s ease 3.95s both; }
+        #studio .st-c { animation: stHold 1.1s ease 7.1s both; }
+        @keyframes stCard { 0% { opacity: 0; transform: scale(.975); } 16% { opacity: 1; transform: none; } 84% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(1.012); } }
+        @keyframes stHold { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        #studio.fast .st-a, #studio.fast .st-b { animation: none; opacity: 0; }
+        #studio.fast .st-c { animation: stHold .45s ease both; }
+        /* a marca: duas cartas que se abrem (a de trás, vermelha, gira) com o "T" na da frente, e um brilho no canto */
+        #studio .st-mark { position: relative; width: clamp(96px, 16vh, 148px); aspect-ratio: 1; margin-bottom: 6px; }
+        #studio .st-mark svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+        #studio .st-mark .st-back { transform-origin: 50% 82%; animation: stFan 1.5s cubic-bezier(.2, .8, .2, 1) .65s both; }
+        #studio .st-mark .st-front { transform-origin: 50% 82%; animation: stFront 1.5s cubic-bezier(.2, .8, .2, 1) .5s both; }
+        #studio .st-mark .st-spark { transform-origin: 84% 14%; animation: stSpark 1.3s ease 1.75s both; }
+        @keyframes stFan { 0% { opacity: 0; transform: rotate(-8deg); } 25% { opacity: 1; } 100% { opacity: 1; transform: rotate(11deg); } }
+        @keyframes stFront { 0% { opacity: 0; transform: translateY(10px) rotate(-8deg); } 100% { opacity: 1; transform: rotate(-8deg); } }
+        @keyframes stSpark { 0% { opacity: 0; transform: scale(.2) rotate(-60deg); } 45% { opacity: 1; transform: scale(1.2) rotate(0); } 100% { opacity: 1; transform: scale(1); } }
+        #studio .st-word { display: flex; font-size: clamp(20px, min(5.6vh, 6.6vw), 48px); line-height: 1; letter-spacing: .3em; margin-right: -.3em; }
+        #studio .st-word b { font-weight: 800; color: #fff; animation: stUp .9s ease .95s both; }
+        #studio .st-word span { font-weight: 300; color: #9aa3b4; animation: stUp .9s ease 1.1s both; }
+        @keyframes stUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        #studio .st-rule { width: clamp(130px, 28vh, 240px); height: 2px; background: linear-gradient(90deg, transparent, #ff2e4d, transparent); animation: stRule 1s ease 1.35s both; }
+        @keyframes stRule { from { opacity: 0; transform: scaleX(0); } to { opacity: 1; transform: scaleX(1); } }
+        #studio .st-sub { font-size: clamp(11px, 1.7vh, 14px); font-weight: 500; letter-spacing: .55em; margin-right: -.55em; text-transform: uppercase; color: #8a93a6; animation: stFade 1s ease 1.75s both; }
+        @keyframes stFade { from { opacity: 0; } to { opacity: 1; } }
+        #studio .st-small { font-size: clamp(11px, 1.6vh, 13px); font-weight: 500; letter-spacing: .5em; margin-right: -.5em; text-transform: uppercase; color: #7f889b; }
+        #studio .st-tech { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .3em .8em; font-size: clamp(20px, 3.8vh, 32px); font-weight: 600; color: #f2f4f8; }
+        #studio .st-tech em { color: #ff2e4d; font-style: normal; }
+        #studio .st-c p { max-width: 640px; text-align: center; font-family: 'Inter', system-ui, sans-serif; font-size: clamp(13px, 2vh, 16px); line-height: 1.7; color: #aeb5c4; }
+        #studio .st-c .st-lead { font-family: 'Outfit', 'Inter', sans-serif; font-size: clamp(18px, 3vh, 24px); font-weight: 600; line-height: 1.3; color: #f2f4f8; }
+        /* rodapé: o passo da carga (com o indicador girando) e, quando ela acaba, como pular; a barrinha do progresso logo embaixo */
+        #studio .st-foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 max(22px, 3.5vw) max(18px, 3.4vh); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+            font: 500 clamp(11px, 1.6vh, 13px) 'Inter', system-ui, sans-serif; color: #6f7789; }
+        #studio .st-status { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        #studio .st-status span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #studio .st-spin { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.16); border-top-color: #ff2e4d; animation: stSpin .85s linear infinite; }
+        @keyframes stSpin { to { transform: rotate(360deg); } }
+        #studio .st-skip { flex: none; margin-left: auto; opacity: 0; transition: opacity .6s ease; text-align: right; }
+        #studio.ready .st-skip { opacity: 1; }
+        #studio.ready .st-spin { border-top-color: #34d399; animation-duration: 2.4s; }
+        #studio .st-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255,255,255,0.06); }
+        #studio .st-bar i { position: absolute; inset: 0; transform: scaleX(0); transform-origin: 0 50%; background: linear-gradient(90deg, #ff2e4d, #ff8a3d); will-change: transform; }
+        @media (max-height: 420px) { #studio .st-card { gap: 10px; padding-bottom: 48px; } }
     </style>
 </head>
 <body>
+    <!-- Tela do estúdio (créditos de abertura): fica por cima de tudo enquanto o jogo carrega por baixo; ver o script logo abaixo. -->
+    <div id="studio">
+        <div class="st-card st-a">
+            <div class="st-mark" aria-hidden="true">
+                <svg class="st-back" viewBox="0 0 120 120"><rect x="30" y="12" width="60" height="88" rx="9" fill="#14070a" stroke="#ff2e4d" stroke-width="4"/></svg>
+                <svg class="st-front" viewBox="0 0 120 120"><rect x="30" y="12" width="60" height="88" rx="9" fill="#000" stroke="#fff" stroke-width="4"/>
+                    <path d="M44 34 H76 V44 H65 V82 H55 V44 H44 Z" fill="#fff"/></svg>
+                <svg class="st-spark" viewBox="0 0 120 120"><path d="M101 6 L104.2 15.8 L114 19 L104.2 22.2 L101 32 L97.8 22.2 L88 19 L97.8 15.8 Z" fill="#ff2e4d"/></svg>
+            </div>
+            <div class="st-word"><b>TRICK</b><span>STUDIO</span></div>
+            <i class="st-rule"></i>
+            <div class="st-sub">apresenta</div>
+        </div>
+        <div class="st-card st-b">
+            <div class="st-small">feito com</div>
+            <div class="st-tech"><span>Babylon.js</span><em>·</em><span>Havok Physics</span></div>
+        </div>
+        <div class="st-card st-c">
+            <p class="st-lead">Esta é uma obra de ficção.</p>
+            <p>Personagens, lugares, organizações e acontecimentos são inventados. Qualquer semelhança com pessoas ou fatos reais é mera
+                coincidência. O jogo não incentiva nem aprova o crime.</p>
+        </div>
+        <div class="st-foot">
+            <div class="st-status"><i class="st-spin"></i><span id="st-text">Carregando…</span></div>
+            <div class="st-skip" id="st-skip"></div>
+        </div>
+        <div class="st-bar"><i id="st-fill"></i></div>
+    </div>
+    <script>
+        // A tela do estúdio. A carga pesada da página (mapa, mundo 3D, física, shaders) roda por baixo dela em passos (src/main.js): por isso
+        // a geração do mapa espera (DEFER_WORLD — ver CityGrid.steps). step(texto, fração, ms) mostra o passo e manda a barrinha andar até a
+        // fração no tempo estimado do passo (transição CSS: anda sozinha mesmo com o JS ocupado); ready() = a carga acabou: a tela sai no fim
+        // dos créditos (ou já, se o jogador pulou). Pular antes da carga acabar só vai direto ao último cartão; o menu fica inerte até a saída.
+        window.DEFER_WORLD = true;
+        window.Studio = (() => {
+            const root = document.getElementById('studio'), fill = document.getElementById('st-fill'), text = document.getElementById('st-text');
+            const t0 = performance.now(), END = 10300;                      // (o 3º cartão entra em 7,1 s: ~3 s para ler)
+            let p = 0, ready = false, over = false, want = false;
+            document.getElementById('st-skip').textContent = matchMedia('(pointer: coarse)').matches ? 'Toque para pular' : 'Clique ou aperte qualquer tecla para pular';
+            function step(label, target, ms = 800) {
+                if (over) return;
+                if (label) text.textContent = label;
+                if (target > p) { p = Math.min(1, target); fill.style.transition = 'transform ' + Math.max(150, ms) + 'ms cubic-bezier(.25,.6,.3,1)'; fill.style.transform = 'scaleX(' + p + ')'; }
+            }
+            function end() {
+                if (over) return;
+                over = true;
+                root.classList.add('out');
+                const mm = document.getElementById('main-menu'); if (mm) mm.removeAttribute('inert');
+                if (window.Intro && Intro.start) Intro.start();
+                const b = document.getElementById('btn-new'); if (b && !b.disabled) b.focus({ preventScroll: true });
+                setTimeout(() => root.remove(), 900);
+            }
+            function skip(e) {
+                if (over) return;
+                if (e && e.type === 'keydown') { if (e.ctrlKey || e.metaKey || e.altKey || /^F\d/.test(e.key)) return; e.preventDefault(); e.stopPropagation(); }
+                if (ready) end(); else if (!want) { want = true; root.classList.add('fast'); }
+            }
+            window.addEventListener('keydown', skip, true);
+            root.addEventListener('pointerdown', skip);
+            requestAnimationFrame(() => step('Carregando os arquivos do jogo…', 0.25, 7000));      // (enquanto os scripts chegam)
+            return {
+                step,
+                ready() {
+                    if (ready) return;
+                    ready = true;
+                    step('Pronto', 1, 300);
+                    root.classList.add('ready');
+                    setTimeout(end, want ? 250 : Math.max(450, END - (performance.now() - t0)));
+                },
+                get over() { return over; },
+            };
+        })();
+    </script>
     <div id="rotate-hint"><div class="rh-phone"></div>Gire o celular para jogar<small>Dirty Money é jogado na horizontal</small></div>
-    <div id="main-menu">
+    <div id="main-menu" inert>
         <div id="mm-ph"></div><div id="mm-bg"></div><div id="mm-bars"></div><div id="mm-shade"></div>
         <div class="mm-frame">
             <img class="mm-logo" src="./assets/logo.png" alt="Dirty Money" fetchpriority="high">
@@ -283,11 +409,11 @@
             const load = (src) => { const im = new Image(); im.src = src; return (im.decode ? im.decode() : new Promise((r, j) => { im.onload = r; im.onerror = j; })).catch(() => {}); };
             const slides = files.map((f) => { const d = document.createElement('div'); d.className = 'mm-slide'; d.style.backgroundImage = 'url(' + f + ')'; bg.appendChild(d); return d; });
             const ready = slides.map(() => false);
-            let idx = 0, timer = 0, menuOk = false, bgOk = false;
+            let idx = 0, timer = 0, menuOk = false, bgOk = false, studioOver = !window.Studio;      // (com a tela do estúdio: espera ela sair)
             const first = Promise.all([load(files[0]), load('./assets/logo.png')]).then(() => { ready[0] = true; slides[0].classList.add('on'); root.classList.add('bg-ready'); bgOk = true; reveal(); });
             first.then(() => files.slice(1).forEach((f, i) => load(f).then(() => { ready[i + 1] = true; })));     // os outros, em seguida
             setTimeout(() => { if (!bgOk) { bgOk = true; root.classList.add('bg-ready'); slides[0].classList.add('on'); reveal(); } }, 4000);   // rede lenta: não segura o menu
-            function reveal() { if (bgOk && menuOk) root.classList.add('ui-ready'); }
+            function reveal() { if (bgOk && menuOk && studioOver) root.classList.add('ui-ready'); }
             function next(glitch) {
                 let n = idx; for (let k = 1; k <= slides.length; k++) { const j = (idx + k) % slides.length; if (ready[j]) { n = j; break; } }
                 if (n === idx) return;
@@ -299,7 +425,7 @@
                 setTimeout(swap, 160); setTimeout(() => { bg.classList.remove('glitch'); bars.innerHTML = ''; }, 420);
             }
             const play = (ms, glitch) => { clearInterval(timer); timer = setInterval(() => next(glitch), ms); };
-            play(3500, true);
+            if (studioOver) play(3500, true);
             const TIPS = [
                 'Lave o dinheiro sujo nas fachadas antes de comprar imóveis fora da favela.',
                 'Fugir é sumir de vista: entre num beco, troque de carro ou se esconda numa caçamba.',
@@ -314,6 +440,7 @@
             const showTip = () => { tipEl.style.opacity = 0; setTimeout(() => { tipEl.innerHTML = '<b>Dica</b>' + TIPS[tipI++ % TIPS.length]; tipEl.style.opacity = 1; }, 350); };
             return {
                 menuReady() { menuOk = true; reveal(); },
+                start() { if (studioOver) return; studioOver = true; play(3500, true); reveal(); },      // a tela do estúdio saiu: o menu entra
                 // Novo jogo / carregar: some a logo e os botões, aparece a faixa de carregamento; fundos passam com fusão suave.
                 loading() { root.classList.add('loading'); play(4200, false); showTip(); tipT = setInterval(showTip, 5200); },
                 progress(p) { const e = document.getElementById('ls-pct'); if (e) e.textContent = Math.round(p * 100) + '%'; },

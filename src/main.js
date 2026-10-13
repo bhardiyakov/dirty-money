@@ -156,18 +156,36 @@ class SimBridge {
     }
 }
 
+// ABERTURA: enquanto a tela do estúdio (window.Studio, inline no index.html) passa os créditos, a carga pesada roda aqui em PASSOS, com um
+// quadro de respiro entre eles (a tela mostra o passo e a barrinha anda; as animações dela são CSS e seguem até durante um passo longo):
+// o mapa (CityGrid.steps), a arte essencial, o mundo 3D (new Game) e a pré-carga do jogo (física, pedestres, sprites, shaders —
+// Game.preload). Só então a tela do estúdio sai e entra o menu; o "Novo Jogo" depois só faz o que falta (a barra não empaca).
 window.addEventListener('DOMContentLoaded', async () => {
-    // Arte em PNG (assets/sprites, ver SpriteIO): espera só as paletas e os clipes do 1º segundo de jogo; o resto baixa em segundo
-    // plano enquanto o jogador está no menu (a carga do jogo espera SpriteIO.ready). Sem manifesto/em file://: tudo procedural.
-    const ess = new Set();
-    for (const [sheet, list] of Object.entries(CharacterSheet.ESSENTIAL)) for (const [n, w] of list) ess.add(CharacterSheet.fileKey(sheet, n, w || 'none'));
-    await SpriteIO.init((k) => k.startsWith('pal/') || ess.has(k));
-    window.game = new Game('canvas');
-    window.sim = new SimBridge();
-    window.game.gameEngine.engine.onEndFrameObservable.add(() => window.sim.flush());      // um lote por quadro, depois do render
-    if (location.search.includes('debug')) DebugTools.install(window.game);
-    window.mainMenu = new MainMenu(window.game);
-    console.log('%cDIRTY MONEY iniciado', 'color:#00ff78');
+    const S = window.Studio || null, frame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+    const step = async (label, p, ms, fn) => { if (S) S.step(label, p, ms); await frame(); return fn(); };
+    try {
+        if (window.DEFER_WORLD) {                                                    // o mapa: ~25 → 52% da barra
+            const L = CityGrid.steps(), MS = [300, 450, 450, 600, 200, 350, 300];
+            for (let i = 0; i < L.length; i++) await step(L[i].label, 0.26 + 0.26 * (i + 1) / L.length, MS[i] || 300, L[i].run);
+        }
+        // Arte em PNG (assets/sprites, ver SpriteIO): espera só as paletas e os clipes do 1º segundo de jogo; o resto baixa em segundo
+        // plano (a carga do jogo espera SpriteIO.ready). Sem manifesto/em file://: tudo procedural.
+        await step('Preparando a arte…', 0.55, 400, async () => {
+            const ess = new Set();
+            for (const [sheet, list] of Object.entries(CharacterSheet.ESSENTIAL)) for (const [n, w] of list) ess.add(CharacterSheet.fileKey(sheet, n, w || 'none'));
+            await SpriteIO.init((k) => k.startsWith('pal/') || ess.has(k));
+        });
+        await step('Construindo a cidade em 3D…', 0.68, 1800, () => { window.game = new Game('canvas'); });
+        window.sim = new SimBridge();
+        window.game.gameEngine.engine.onEndFrameObservable.add(() => window.sim.flush());      // um lote por quadro, depois do render
+        if (location.search.includes('debug')) DebugTools.install(window.game);
+        window.mainMenu = new MainMenu(window.game);
+        console.log('%cDIRTY MONEY iniciado', 'color:#00ff78');
+        if (S) await window.game.preload((t, p, ms) => S.step(t, 0.7 + 0.3 * p, ms));          // (sem a tela do estúdio, a pré-carga roda no boot)
+    } catch (e) {
+        console.error('[ABERTURA] falha na carga:', e);
+    }
+    if (S) S.ready();                                                                // a tela do estúdio sai (no fim dos créditos ou já, se pulada)
 });
 
 // Cache offline (sw.js): a partir da 2ª visita o jogo e as bibliotecas (~7 MB) saem do aparelho, e funciona sem internet. Só por

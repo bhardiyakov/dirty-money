@@ -282,19 +282,28 @@ class Game {
         if (window.Intro) Intro.progress(p);
     }
 
-    // Ciclo de vida: o loop de render NÃO existe até tudo o que é pesado terminar, tudo escondido atrás da tela inicial (#main-menu, em modo carregamento):
-    //   1) física (Havok) e navegação;  2) assar TODOS os sprites (personagens, barcos; os carros vêm prontos do atlas) sem orçamento por quadro;
-    //   3) congelar os materiais estáticos do mundo;  4) preparar o 1º estado do jogo e COMPILAR os shaders de tudo que existe
-    //   (scene.whenReadyAsync);  5) só então começa o loop — e a tela some DEPOIS do primeiro quadro desenhado (ver _start).
+    // Ciclo de vida: o loop de render NÃO existe até tudo o que é pesado terminar, tudo escondido atrás das telas de abertura:
+    //   PRÉ-CARGA (preload — não depende de novo/carregar, então roda já na tela do estúdio, antes do menu):
+    //     1) física (Havok) e navegação;  2) assar TODOS os sprites (personagens, barcos; os carros vêm prontos do atlas) sem orçamento por
+    //     quadro;  3) congelar os materiais estáticos do mundo;  4) preparar o 1º estado do jogo e COMPILAR os shaders de tudo que existe
+    //     (scene.whenReadyAsync);
+    //   BOOT (_boot — depois de Novo Jogo / Carregar, na tela de carregamento #main-menu): espera a pré-carga (normalmente já pronta: a
+    //     barra só corre pelos passos que faltam), aplica o save e só então começa o loop — a tela some DEPOIS do 1º quadro desenhado (_start).
     // (Quase tudo é gerado por código; os carros vêm do atlas embutido em assets/cars/carros-atlas.js, decodificado desde a carga da página.)
-    async _boot() {
-        const yieldUI = () => new Promise((r) => setTimeout(r, 0));
+    // `report(texto, fração 0..1, ms estimados do passo)` mostra o andamento: a tela do estúdio ou, se ainda rodando no boot, a barra.
+    preload(report = null) {
+        if (report) this._preReport = report;
+        return this._preP || (this._preP = this._preload());
+    }
+    async _preload() {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));      // (um quadro: a tela mostra o passo antes do pesado)
+        const say = (t, p, ms) => { if (this._preReport) this._preReport(t, p, ms); };
         try {
-            this._loading('Iniciando física e navegação…', 0.08);
-            await yieldUI();
+            say('Ligando a física, o trânsito e os pedestres…', 0.5, 3500);
+            await frame();
             await Promise.all([this._initAI(), this._initPhysics()]);
 
-            this._loading('Montando sprites…', 0.3);
+            say('Montando os personagens…', 0.62, 1500);
             await Promise.race([SpriteIO.ready, new Promise((r) => setTimeout(r, 15000))]);      // arte em PNG ainda baixando (rede lenta: segue procedural)
             await CharArt.ready;                                                      // atlas dos personagens (decodificado desde a carga da página)
             if (typeof NpcArt !== 'undefined' && NpcArt.ready) await NpcArt.ready;     // personagens 2,5D (assets/npcs, decodificados desde a carga da página)
@@ -302,24 +311,38 @@ class Game {
             for (let guard = 0; guard < 2000; guard++) {
                 const more = this.sprites.pump(40);                                   // (personagens e carros vêm dos atlas: quase nada a assar)
                 if (!more) break;
-                if (guard % 3 === 0) { this._loading('Montando sprites…', 0.3 + 0.4 * Math.min(1, (performance.now() - s0) / 6000)); await yieldUI(); }
+                if (guard % 3 === 0) { say('Montando os personagens…', 0.62 + 0.1 * Math.min(1, (performance.now() - s0) / 6000), 600); await frame(); }
             }
 
-            this._loading('Congelando materiais…', 0.74);
-            await yieldUI();
+            say('Preparando os materiais…', 0.76, 300);
+            await frame();
             this._freezeStaticMaterials();
 
-            this._loading('Compilando shaders…', 0.82);
-            await yieldUI();
+            say('Compilando os gráficos…', 0.97, 2500);
+            await frame();
             this._update(1 / 30);                                    // 1º estado do jogo (carros, NPCs, luzes) para os materiais existirem
             await this.scene.whenReadyAsync();                       // todas as malhas ativas com shader compilado e texturas prontas
             this.scene.render();                                     // aquece o pipeline (sombras, sprites, brilhos) fora da vista
             this.scene.render();
-            this._loading('Pronto!', 1);
+            say('Pronto', 1, 300);
         } catch (err) {
-            console.error('[BOOT] falha no carregamento:', err);
-            this._loading('Falha ao carregar (veja o console) — iniciando assim mesmo', 1);
+            console.error('[BOOT] falha na pré-carga:', err);
+            this._preFailed = true;
         }
+        this._preDone = true;
+    }
+
+    async _boot() {
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        if (!this._preDone) {                                       // (sem a tela do estúdio, ou ela foi pulada: a barra mostra a pré-carga de verdade)
+            this._loading('Ligando a física, o trânsito e os pedestres…', 0.06);
+            await this.preload((t, p) => this._loading(t, 0.06 + 0.86 * p));
+        } else {                                                    // o pesado já foi na tela do estúdio: a barra corre pelos passos que faltam,
+            this._loading('Preparando a cidade…', 0.38); await wait(430);      // num ritmo em que dá para vê-la encher (transição de 0,5 s)
+            this._loading(this._pendingSave ? 'Carregando o seu jogo…' : 'Acordando no esconderijo…', 0.74); await wait(430);
+        }
+        this._loading(this._preFailed ? 'Falha ao carregar (veja o console) — iniciando assim mesmo' : 'Pronto!', 1);
+        if (this._preDone) await wait(450);                         // (a barra chega aos 100% antes da tela sair)
         this._bootDone = true;
         if (this._pendingSave) {
             try { if (SaveGame.apply(this, this._pendingSave)) this._flash('Jogo carregado — ' + SaveGame.label(this._pendingSave)); } catch (e) { console.error('[SAVE] falha ao aplicar:', e); }
