@@ -34,6 +34,11 @@ NPC, variações de cor e a personalização do jogador.
 - **Postura e silhueta** (outubro/2026): `G.ARM_ABD = 0,6` fecha os braços nas poses FK de descanso (abdução ≤ 18°: parado,
   andando, correndo — sem o ar de "gorila"); `ADULT.head = 0,66` (era 0,6: de cima, o rosto e o cabelo dizem quem é quem); corpo
   feminino com ombros 0,84, braços 0,8 e quadril 1,08 (`bodyFactors`) e, na malha, braços 20% mais finos (`fitFor('f')`).
+- **Visual 3D, sem contorno** (outubro/2026, `G.LINES = false`, o padrão): o renderizador não desenha mais o contorno preto em volta
+  do boneco nem os traços onde uma parte passa na frente da outra (viram sombra de contato macia); a sombra no chão sai em degradê
+  (alfa); e o pixel de borda guarda a fração coberta (dos 2×2 subpixels) nos 2 bits baixos da luz — o shader vira isso em alfa, então a
+  silhueta sai suavizada, como um render 3D. De perto, a ampliação fica lisa (`sharp` até 1,6, sem os "quadradinhos" de pixel art).
+  `G.LINES = true` volta ao desenho cartunesco com traços.
 - **Redução no jogo** (`NpcArt`, uniform `mini`): com o boneco menor que o atlas (texels por pixel > 1,3 — dirigindo, celular), o
   shader tira a média de n×n amostras sobre a pegada do pixel (até 4×4) em vez do bilinear de 4 amostras, que serrilhava e tremia.
 

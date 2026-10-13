@@ -135,7 +135,8 @@ pizzarias, que ficava num canto da cozinha sem acesso.)
 Braços soltos ao lado do corpo (sem o ar de "gorila"), cabeça um pouco maior (rosto e cabelo mais legíveis de cima), silhueta
 feminina de verdade (ombros mais estreitos, braços finos, quadril), luz principal mais marcada com recorte nas bordas e dobras mais
 fundas; os atlas foram gerados de novo. No jogo, de longe (dirigindo, celular, tela pequena) o boneco passa a ser filtrado (média
-sobre a pegada do pixel) em vez de serrilhar e "ferver" andando.
+sobre a pegada do pixel) em vez de serrilhar e "ferver" andando. Depois, o visual passou a ser o de um render 3D: sem o contorno preto
+em volta, silhueta com borda suavizada (cobertura do pixel guardada no atlas), sombra no chão em degradê e ampliação lisa de perto.
 
 ## Interface (`src/ui/Theme.js`)
 
