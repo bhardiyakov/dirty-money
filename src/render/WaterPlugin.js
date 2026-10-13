@@ -6,16 +6,20 @@
 //   • Water.field: distância COM SINAL até a linha d'água em todo o mapa (+ mar, − terra; 1 texel = 2 u, lida com filtro bilinear,
 //     então a costa em escada de células vira uma curva suave);
 //   • o mesmo cálculo roda em dois plugins de material (StandardMaterial: luz, sombra e noite continuam do Babylon):
-//       sea  (o plano d'água)   raso turquesa em faixas que somem mar adentro e uma linha de onda que chega de fora;
+//       sea  (o plano d'água)   raso turquesa em faixas que somem mar adentro e a ARREBENTAÇÃO: vagas de água branca chegando;
 //       land (areia, grama e chão do terreno)   a lâmina d'água TRANSLÚCIDA que sobe e desce por cima do chão, com a espuma na ponta
 //            e a areia molhada (mais escura) atrás;
 //     dos dois lados a cor é a mesma função da distância, então onde as malhas se encontram (a escada) não aparece emenda;
 //   • a beira ondula suave ao longo da praia (shoreWobble) e todas as linhas da orla acompanham, paralelas;
-//   • a espuma fica na grade de pixels do mundo (20 px/u), em pixel art. o degradê do raso (turquesa até o azul, e a lâmina d'água na areia)
-//     é suave e sem faixas, calculado fora da grade.
+//   • a espuma fica na grade de pixels do mundo (20 px/u), em pixel art, e é RENDADA (bolhas: células de Voronoi que fervem): cheia na
+//     frente de cada vaga e na ponta da água que sobe, esgarçada atrás; o degradê do raso (turquesa até o azul, e a lâmina d'água na
+//     areia) é suave e sem faixas, calculado fora da grade.
+//   • uma onda a cada 7,4 s: as vagas chegam, a da frente sobe na areia rápido e desce devagar, deixando um fio de espuma no ponto mais
+//     alto que vai sumindo; cada onda tem o seu alcance (o mesmo em toda a praia: as linhas continuam alinhadas).
 // O tempo vem de uma textura de 5 px (Water.clock, Water.tick a cada quadro): os materiais do mundo são congelados
 // (Game._freezeStaticMaterials) e um uniforme poderia não ser reenviado; o conteúdo de uma textura sempre vale.
-//   px 0: as fases da orla · px 1–4: a fase de cada ondulação do mar aberto (16 bits) e, no px 1, a força do mar (Waves).
+//   px 0: a fase da onda na orla (R) e qual onda é esta (B) · px 1–4: a fase de cada ondulação do mar aberto (16 bits)
+//   e, no px 1, a força do mar (Waves).
 // Mar aberto (o plano d'água longe da beira): as ondulações de Waves — a mesma conta da física — clareiam a face das cristas virada
 // para o sol e escurecem os cavados, andando; com mar agitado, carneirinhos (espuma no alto das cristas).
 // ============================================================================
@@ -40,12 +44,13 @@ const Water = {
         return material;
     },
 
-    // Fases das ondas (0–1, uma volta = 1): R = a água subindo/descendo na areia (7,4 s), G = a linha de onda que chega (14 s);
-    // px 1–4: as ondulações do mar aberto (Waves: fase em 16 bits, R alto, G baixo) e, no px 1, B = a força do mar (M / 2,5).
+    // px 0: R = a fase da onda na orla (0–1 em 7,4 s: as vagas chegando, a água subindo e descendo na areia), B = qual onda é esta
+    // (cada uma do seu tamanho); px 1–4: as ondulações do mar aberto (Waves: fase em 16 bits, R alto, G baixo) e, no px 1, B = a força
+    // do mar (M / 2,5).
     tick(t) {
         if (!this.clock) return;
         const c = this._clk;
-        c[0] = Math.floor((t / 7.4 % 1) * 256) & 255; c[1] = Math.floor((t / 14 % 1) * 256) & 255;
+        c[0] = Math.floor((t / 7.4 % 1) * 256) & 255; c[2] = Math.floor(t / 7.4) & 255;
         if (typeof Waves !== 'undefined') {
             Waves.setTime(t);
             for (let i = 0; i < 4; i++) { const v = Math.floor(Waves.phase(i) * 65536) & 65535, o = (i + 1) * 4; c[o] = v >> 8; c[o + 1] = v & 255; }
@@ -170,33 +175,67 @@ const Water = {
                 vec2 p = q - g / l * s;
                 return 0.3 * sin(dot(p, vec2(0.43, 0.31)) + 1.3) + 0.16 * sin(dot(p, vec2(-0.52, 0.61)) + 4.1);
             }
+            // RENDA da espuma: a rede de bordas entre bolhas (células de Voronoi, F2 − F1) que ferve devagar com a onda; 1 no fio, 0 no
+            // miolo da bolha.
+            vec2 wHash2(vec2 p) { return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453); }
+            float wLace(vec2 p, float ph) {
+                vec2 i = floor(p), f = fract(p);
+                float d1 = 8.0, d2 = 8.0;
+                for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+                    vec2 g = vec2(float(x), float(y)), h = wHash2(i + g);
+                    vec2 r = g + 0.5 + 0.38 * sin(6.2832 * (ph + h)) - f;
+                    float d = dot(r, r);
+                    if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; }
+                }
+                return 1.0 - smoothstep(0.0, 0.42, sqrt(d2) - sqrt(d1));
+            }
             // s = distância na grade de pixels (espuma, pixel art) | sb = distância sem grade (degradê suave, "borrado")
+            // A onda (7,4 s): três vagas de água branca chegam pela arrebentação (frente nítida para a praia, rabo esgarçado para o mar),
+            // a da frente sobe na areia (rápido) e desce (devagar) — a espuma da ponta vai se desfazendo e o ponto mais alto fica marcado
+            // por um fio que some enquanto a água volta. Cada onda tem o seu alcance (o mesmo em toda a praia: as linhas continuam
+            // paralelas e juntas); a renda e a força (mais cheia aqui, mais rala ali) é que variam de lugar para lugar.
             vec3 shoreColor(vec3 sea, vec3 ground, vec2 q, float s, float sb) {
-                vec4 clk = texture2D(shoreClock, vec2(0.1, 0.5));
-                // (sem ruído de lugar para lugar: a espuma e a linha de onda correm PARALELAS à beira e se movem todas juntas — alinhadas)
-                vec3 shallow = vec3(0.373, 0.769, 0.753), mid = vec3(0.243, 0.624, 0.706), foamC = vec3(0.91, 0.965, 0.965);
-                float lap = 0.5 + 0.5 * sin(clk.r * 6.2832);                                       // a água sobe (1) e desce (0)
-                float reach = 0.35 + 2.3 * lap;                                                      // até onde ela chega na areia (u)
-                float foam = 0.0;
+                vec4 clk = texture2D(shoreClock, vec2(0.1, 0.5)), c1 = texture2D(shoreClock, vec2(0.3, 0.5));
+                vec3 shallow = vec3(0.373, 0.769, 0.753), mid = vec3(0.243, 0.624, 0.706), foamC = vec3(0.98, 0.995, 1.0);
+                float M = c1.b * 2.5, ph = clk.r;
+                float big = 0.78 + 0.42 * wHash(vec2(floor(clk.b * 255.0 + 0.5), 3.1));
+                float Rm = (1.5 + 0.8 * min(M, 2.0)) * big;                                          // até onde esta onda sobe (u)
+                float up = 0.3, upk = 1.0 - smoothstep(up, up + 0.28, ph);
+                float reach = ph < up ? Rm * (1.0 - (1.0 - ph / up) * (1.0 - ph / up)) : Rm * (1.0 - smoothstep(0.0, 1.0, (ph - up) / (1.0 - up)));
+                float tex = 0.55 * wLace(q * 0.85, ph) + 0.3 * wLace(q * 2.4 + 7.3, ph + 0.37) + 0.15 * wNoise(q * 6.0);
+                float brk = 0.68 + 0.32 * wNoise(q * 0.09 + 3.0);
+                float pw = 0.07;
+                float rho = 0.0;
                 vec3 col;
                 if (sb <= 0.0) {
                     float L = -s, Lb = -sb;
-                    float wet = 1.0 - smoothstep(0.0, 4.2, Lb);                                      // areia molhada: até onde as ondas maiores vão
-                    vec3 g = ground * (1.0 - 0.24 * wet * wet);
-                    float a = 1.0 - smoothstep(reach * 0.05, reach * 1.1, Lb);                       // lâmina d'água: some (fica transparente) na ponta, em degradê suave
-                    col = mix(g, shallow, min(1.0, a * 0.85 + 0.15 * (1.0 - smoothstep(0.0, 0.8, Lb))));    // (= o lado do mar em s = 0)
-                    float fp = abs(L - reach * 0.88);                                               // espuma na ponta da onda: miolo cheio, franja mais clara
-                    foam = max(1.0 - wStep(0.09, fp, 0.025), (1.0 - wStep(0.22, fp, 0.025)) * 0.55);
+                    float wet = 1.0 - smoothstep(0.0, Rm + 1.0, Lb);                                  // areia molhada até onde a onda vai
+                    vec3 g = ground * (1.0 - 0.25 * wet * wet);
+                    float a = 1.0 - smoothstep(reach - 0.6, reach + 0.04, Lb);                        // lâmina d'água: some (transparente) na ponta
+                    col = mix(g, shallow, min(1.0, a * (1.0 - 0.38 * smoothstep(0.0, Rm, Lb)) + 0.15 * (1.0 - smoothstep(0.0, 0.8, Lb))));    // (= o lado do mar em s = 0)
+                    float x = reach - L;                                                              // > 0: atrás da ponta, dentro d'água
+                    rho = smoothstep(-0.06, 0.04, x) * exp(-max(x, 0.0) / 0.55) * (0.3 + 0.95 * upk);
+                    rho += 1.6 * upk * smoothstep(-0.06, 0.0, x) * (1.0 - smoothstep(0.08, 0.2, x)) * smoothstep(0.7, 0.84, brk);      // a borda da ponta, cheia (com falhas)
+                    float pk = 1.0 - smoothstep(0.0, 0.17, abs(L - Rm * 0.97));                       // o fio do ponto mais alto
+                    rho = max(rho, pk * smoothstep(up - 0.02, up + 0.06, ph) * (1.0 - smoothstep(up + 0.04, 0.95, ph)) * 0.8);
+                    rho = max(rho, a * 0.3 * smoothstep(up, up + 0.2, ph));                           // espuma solta na água que desce
+                    rho *= brk;
                 } else {
-                    float k = 1.0 - smoothstep(-0.5, 8.0, sb); k = k * k * (3.0 - 2.0 * k);                      // raso: some mar adentro em degradê suave (sem faixas)
+                    float k = 1.0 - smoothstep(-0.5, 8.0, sb); k = k * k * (3.0 - 2.0 * k);           // raso: some mar adentro em degradê suave
                     vec3 sh = mix(shallow, mid, smoothstep(0.5, 4.5, sb));
                     col = mix(sea, sh, min(1.0, k * 0.85 + 0.15 * (1.0 - smoothstep(0.0, 0.8, sb))));
-                    // linha de onda chegando: contínua e paralela à beira, aparece longe e se desfaz ao chegar
-                    float wave = clk.g, wp = 5.5 - wave * 5.0;
-                    float lp = abs(s - wp);
-                    foam = (1.0 - wStep(0.12, lp, 0.025)) * smoothstep(0.0, 0.15, wave) * (1.0 - smoothstep(0.75, 1.0, wave)) * 0.8;
+                    for (int n = 0; n < 3; n++) {                                                     // as vagas da arrebentação
+                        float fn = float(n), pos = (fn + 1.0 - ph) * 2.4, xk = s - pos;
+                        float b = smoothstep(-0.07, 0.03, xk) * exp(-max(xk, 0.0) / (0.45 + 0.3 * fn));
+                        float edge = smoothstep(-0.08, 0.0, xk) * (1.0 - smoothstep(0.1, 0.24, xk)) * smoothstep(0.7, 0.84, brk);      // frente da vaga: branca e cheia
+                        rho = max(rho, (b * (1.15 - 0.2 * fn) + 1.6 * edge) * (1.0 - smoothstep(4.4, 7.3, pos)));
+                    }
+                    rho = max(rho, exp(-(s + reach) / 0.55) * (0.3 + 0.95 * upk));                   // o rabo da subida (a ponta já está na areia)
+                    rho = max(rho, 0.2 * (1.0 - smoothstep(0.8, 6.5, s)));                            // espuma boiando entre as vagas
+                    rho *= brk * min(1.0, 0.75 + M * 0.3);
                 }
-                return mix(col, foamC, clamp(foam, 0.0, 1.0));
+                float foam = wStep(1.0 - rho, tex, pw) * (0.8 + 0.2 * min(1.0, rho * 1.5));         // rala = só os fios mais fortes da renda
+                return mix(col, foamC, clamp(foam, 0.0, 1.0) * 0.97);
             }`;
         return class WaterPlugin extends BABYLON.MaterialPluginBase {
             constructor(material, mode) {

@@ -33,7 +33,7 @@ const RealEstate = {
         const district = block ? block.district : null, biome = block ? block.biome : null;
         let idx = Math.pow(shore, 1.1) * 0.75 + (district === 'island' ? 0.25 : 0) + (biome === 'downtown' ? 0.05 : 0);
         // favela e entorno: o mercado despenca (até ~260 u de distância dela)
-        const b = Standing._bounds(), dx = Math.max(b.x0 - x, 0, x - b.x1), dz = Math.max(b.z0 - z, 0, z - b.z1), dFav = hypot(dx, dz);
+        const dFav = Standing.favelaDist(x, z);
         let f = 1;
         if (dFav <= 0) f = 0.05; else if (dFav < 260) { const t = dFav / 260; f = 0.3 + 0.7 * t * t * (3 - 2 * t); }
         idx = Math.max(0, Math.min(1, idx * f));
@@ -60,8 +60,7 @@ const RealEstate = {
         const rng = Pixel.rng(60606), rng0 = Pixel.rng(60607), home = SafeHouse.spawnWorld();
         const buckets = this.TIERS.map(() => []);
         for (const b of CityGrid.blocks) {
-            if (b.open || b.virtual || b.poly) continue;                          // (quarteirão em polígono: a porta cairia fora da calçada)
-            const f = b.foot, s = b.slab;
+            if (b.open || b.virtual) continue;
             for (const l of b.lots) {
                 if (l.landmark || l.safehouse) continue;
                 const area = (l.x1 - l.x0) * (l.z1 - l.z0);
@@ -72,10 +71,9 @@ const RealEstate = {
                     if (!l.door) continue;
                     door = { x: l.door.x, z: l.door.z };
                 } else {
-                    const e = [[cx - f[0], 'W'], [f[2] - cx, 'E'], [cz - f[1], 'S'], [f[3] - cz, 'N']].sort((a, c) => a[0] - c[0]);
-                    if (l.x1 - l.x0 > 0 && Math.min(l.x0 - f[0], f[2] - l.x1, l.z0 - f[1], f[3] - l.z1) > 2.5) continue;     // só lotes na beira da quadra (porta na calçada)
-                    const side = e[0][1];
-                    door = side === 'W' ? { x: (s[0] + f[0]) / 2, z: cz } : side === 'E' ? { x: (s[2] + f[2]) / 2, z: cz } : side === 'S' ? { x: cx, z: (s[1] + f[1]) / 2 } : { x: cx, z: (s[3] + f[3]) / 2 };
+                    const d = CityGrid.lotDoor(b, l);                             // só lotes na beira da quadra (porta na calçada)
+                    if (!d) continue;
+                    door = { x: d.x, z: d.z };
                 }
                 if (home && hypot(door.x - home.x, door.z - home.z) < 20) continue;
                 const loc = this.locate(cx, cz, b), tier = this.tierOf(loc.idx);

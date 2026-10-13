@@ -89,12 +89,9 @@ const WorldMap = {
     // O ruído da costa só é avaliado perto dela: longe (|m| > amplitude máx. do ruído, 135) a resposta já é certa.
     _landAt(x, z, i, j) {
         const F = (a, b, s) => this._fbm(a, b, 3, s);
-        // Faixa da cidade: sempre terra (retângulo exato: a costa leste é a orla do canal, reta como uma avenida beira-mar).
-        {
-            const S = this.STRIP, qx = Math.abs(x - S.cx) - S.hx + S.r, qz = Math.abs(z - S.cz) - S.hz + S.r;
-            const sd = Math.min(Math.max(qx, qz), 0) + hypot(Math.max(qx, 0), Math.max(qz, 0)) - S.r;
-            if (sd < 0) return 1;
-        }
+        // Faixa da cidade: sempre terra. A costa leste (a orla do canal) tem baías e pontas — rente à Beira-Mar só nas cabeceiras das
+        // pontes e na marina —, e as pontas norte e sul da faixa são recortadas (nada de régua nem de canto reto).
+        if (this._stripSd(x, z) < 0) return 1;
         // Continente: caixa com cantos arredondados (raio 330) e costa bem recortada (baías, penínsulas).
         const dW = x - this._eW[j], dS = z - this._eS[i], dN = this._eN[i] - z, R = 330;
         const corner = (a, b) => (a < R && b < R) ? R - hypot(R - a, R - b) : Math.min(a, b);
@@ -123,20 +120,35 @@ const WorldMap = {
         return land ? 1 : 0;
     },
 
+    // Distância com sinal (u, − dentro) até a borda da faixa da cidade.
+    STRIP_KEEP: [714, 0, -630, -437],                   // costa rente nestas alturas (pontes e marina)
+    _stripSd(x, z) {
+        const S = this.STRIP, F = (a, b, sd, o = 3) => this._fbm(a, b, o, sd), xw = S.cx - S.hx;
+        if (x < xw - 40 || z < S.cz - S.hz - 140 || z > S.cz + S.hz + 140 || x > S.cx + S.hx + 120) return 1e3;
+        let keep = 1;
+        for (const k of this.STRIP_KEEP) keep = Math.min(keep, this._ss(26, 70, Math.abs(z - k)));
+        const xe = S.cx + S.hx + Math.max(0, 70 * this._ss(0.42, 0.74, F(z / 230, 2.2, 61)) + 12 * (F(z / 46, 7.7, 62, 2) - 0.5)) * keep;
+        const zn = S.cz + S.hz - 10 + 56 * F(x / 150, 3.9, 63) + 10 * (F(x / 40, 1.1, 64, 2) - 0.5);
+        const zs = S.cz - S.hz + 6 - 56 * F(x / 150, 6.3, 65) - 10 * (F(x / 40, 5.5, 66, 2) - 0.5);
+        const sm = (a, b, k) => { const h = Math.max(0, Math.min(1, 0.5 + 0.5 * (b - a) / k)); return b + (a - b) * h - k * h * (1 - h); };
+        return -Math.min(sm(sm(xe - x, zn - z, 50), z - zs, 50), x - xw);
+    },
+
     // Altura "crua" (u) em (x, z), sem o achatamento da cidade nem o terraceamento.
     _rawHeight(x, z) {
         const F = (a, b, o, s) => this._fbm(a, b, o, s);
         let h = (F(x / 230, z / 230, 3, 21) - 0.5) * 10;                       // colinas suaves do campo
         let mt = 0;
-        for (const r of this.RANGES) {
-            const t = 1 - Math.min(1, this._segDist(x, z, r.ax, r.az, r.bx, r.bz) / r.w);
+        const RG = this.RANGES, DM = this.DOMES;                            // (laços por índice: este é o laço mais quente da carga)
+        for (let k = 0; k < RG.length; k++) {
+            const r = RG[k], t = 1 - Math.min(1, this._segDist(x, z, r.ax, r.az, r.bx, r.bz) / r.w);
             if (t <= 0) continue;
             const prof = Math.pow(t, 1.25), ridged = 1 - Math.abs(2 * F(x / 140, z / 140, 3, 22) - 1);
             h += prof * (r.h * 0.55 + r.h * 0.55 * ridged) + prof * (F(x / 55, z / 55, 2, 23) - 0.5) * 6;
             mt = Math.max(mt, prof);       // (só as SERRAS ganham terraços/paredões; os morros são lisos)
         }
-        for (const d of this.DOMES) {
-            const u = hypot(x - d.x, z - d.z) / d.r;
+        for (let k = 0; k < DM.length; k++) {
+            const d = DM[k], u = hypot(x - d.x, z - d.z) / d.r;
             if (u >= 1) continue;
             h += Math.pow(1 - u * u, 1.4) * d.h * (0.75 + 0.5 * F(x / 70, z / 70, 3, 24));
         }
@@ -230,6 +242,17 @@ const WorldMap = {
             const i0 = Math.ceil((r[0] - W.minX) / c), i1 = Math.floor((r[2] - W.minX) / c) - 1, j0 = Math.ceil((r[1] - W.minZ) / c), j1 = Math.floor((r[3] - W.minZ) / c) - 1;
             for (let j = Math.max(0, j0); j <= Math.min(nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(nx - 1, i1); i++) { urban[j * nx + i] = 1; if (r[4] !== false) urbanFlat[j * nx + i] = 1; }
         }
+        for (const P of CityGrid.urbanPolys || []) {                                  // quarteirões em polígono: células com os 4 cantos dentro da face
+            let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+            for (const p of P) { x0 = Math.min(x0, p[0]); z0 = Math.min(z0, p[1]); x1 = Math.max(x1, p[0]); z1 = Math.max(z1, p[1]); }
+            const i0 = Math.max(0, Math.floor((x0 - W.minX) / c)), i1 = Math.min(nx - 1, Math.floor((x1 - W.minX) / c)), j0 = Math.max(0, Math.floor((z0 - W.minZ) / c)), j1 = Math.min(nz - 1, Math.floor((z1 - W.minZ) / c));
+            const cw = i1 - i0 + 2, K = new Uint8Array(cw * (j1 - j0 + 2));                  // cantos (cada um testado uma vez)
+            for (let j = j0; j <= j1 + 1; j++) for (let i = i0; i <= i1 + 1; i++) K[(j - j0) * cw + i - i0] = RoadPlan.inPoly(P, W.minX + i * c, W.minZ + j * c) ? 1 : 0;
+            for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+                const k = (j - j0) * cw + i - i0;
+                if (K[k] && K[k + 1] && K[k + cw] && K[k + cw + 1]) { urban[j * nx + i] = 1; urbanFlat[j * nx + i] = 1; }
+            }
+        }
         for (const r of CityGrid.roadRects) {                                        // estradas que cortam o relevo (a favela segue o morro: fica de fora)
             if (r.flat === false) continue;
             const i0 = Math.floor((r.x0 - 4 - W.minX) / c), i1 = Math.floor((r.x1 + 4 - W.minX) / c), j0 = Math.floor((r.z0 - 4 - W.minZ) / c), j1 = Math.floor((r.z1 + 4 - W.minZ) / c);
@@ -262,7 +285,7 @@ const WorldMap = {
             if (urban[k]) { biome[k] = R.CITY; continue; }
             if (slope > cliffS && hh > 5) flags[k] |= 1;
             let b;
-            if (dSea[k] * c < 13) b = R.SAND;
+            if (dSea[k] * c < 13 || (dSea[k] * c < 40 && x > 184 && x < 300 && Math.abs(z - this.STRIP.cz) < this.STRIP.hz + 60)) b = R.SAND;      // (orla da cidade: praia larga nas baías)
             else if (dLake[k] * c < 11 && hh < 6) b = R.SWAMP;
             else if (x > 300) b = R.RESORT;
             else if (hh > 36 || (hh > 20 && slope > 0.26) || (flags[k] & 1)) b = R.ROCK;
@@ -290,6 +313,10 @@ const WorldMap = {
     },
 
     _inFavela(x, z, hh) {
+        if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built) {                  // chão de terra em volta da mancha (não um círculo)
+            const R = FavelaPlan.R;
+            return x > R.x0 - 4 && x < R.x1 + 4 && z > R.z0 - 4 && z < R.z1 + 4 && hh > 1.5 && FavelaPlan.occ(x, z) > -14;
+        }
         for (const d of this.DOMES.slice(0, 2)) {
             const u = hypot(x - d.x, z - d.z) / d.r;
             if (u > 1.1) continue;
@@ -342,6 +369,65 @@ const WorldMap = {
             { name: 'FAZENDAS', x: -560, z: 150, size: 0.85 },
             { name: 'CANAL', x: 315, z: 0, size: 0.6 },
         ];
+    },
+
+    // ---------------------------------------------------------------- contornos
+    // Curva de nível `level` de um campo amostrado em grade (marching squares, com interpolação): f(x, z) nos nós x0 + i·step,
+    // z0 + j·step (i ≤ nx, j ≤ nz); por fora da grade conta como abaixo do nível (os laços fecham). Devolve os laços [[x, z], ...]
+    // (maior área primeiro); "dentro" = f > level.
+    contour(f, x0, z0, nx, nz, step, level = 0) {
+        const W = nx + 3, V = new Float32Array(W * (nz + 3));
+        for (let j = -1; j <= nz + 1; j++) for (let i = -1; i <= nx + 1; i++) V[(j + 1) * W + i + 1] = i < 0 || j < 0 || i > nx || j > nz ? -1e9 : f(x0 + i * step, z0 + j * step) - level;
+        const v = (i, j) => V[(j + 1) * W + i + 1], X = (i) => x0 + i * step, Z = (j) => z0 + j * step;
+        const lerp = (a, b) => { const t = a / (a - b); return Math.max(0, Math.min(1, t)); };
+        // pontos de corte nas arestas: 'h' = aresta (i,j)-(i+1,j), 'v' = (i,j)-(i,j+1)
+        const pt = new Map(), P = (k, i, j) => {
+            let p = pt.get(k);
+            if (!p) { p = k[0] === 'h' ? [X(i) + lerp(v(i, j), v(i + 1, j)) * step, Z(j)] : [X(i), Z(j) + lerp(v(i, j), v(i, j + 1)) * step]; pt.set(k, p); }
+            return k;
+        };
+        const link = new Map(), add = (a, b) => { (link.get(a) || link.set(a, []).get(a)).push(b); (link.get(b) || link.set(b, []).get(b)).push(a); };
+        for (let j = -1; j <= nz; j++) for (let i = -1; i <= nx; i++) {
+            const a = v(i, j) > 0, b = v(i + 1, j) > 0, c = v(i + 1, j + 1) > 0, d = v(i, j + 1) > 0, k = (a ? 1 : 0) | (b ? 2 : 0) | (c ? 4 : 0) | (d ? 8 : 0);
+            if (k === 0 || k === 15) continue;
+            const S = () => P('h' + i + ',' + j, i, j), N = () => P('h' + i + ',' + (j + 1), i, j + 1), Wv = () => P('v' + i + ',' + j, i, j), E = () => P('v' + (i + 1) + ',' + j, i + 1, j);
+            const mid = (v(i, j) + v(i + 1, j) + v(i + 1, j + 1) + v(i, j + 1)) > 0;
+            switch (k) {
+                case 1: case 14: add(Wv(), S()); break;
+                case 2: case 13: add(S(), E()); break;
+                case 3: case 12: add(Wv(), E()); break;
+                case 4: case 11: add(E(), N()); break;
+                case 6: case 9: add(S(), N()); break;
+                case 7: case 8: add(Wv(), N()); break;
+                case 5: if (mid) { add(Wv(), N()); add(S(), E()); } else { add(Wv(), S()); add(E(), N()); } break;
+                case 10: if (mid) { add(Wv(), S()); add(E(), N()); } else { add(Wv(), N()); add(S(), E()); } break;
+            }
+        }
+        const loops = [], seen = new Set();
+        for (const k0 of link.keys()) {
+            if (seen.has(k0)) continue;
+            const L = []; let prev = null, k = k0;
+            while (k && !seen.has(k)) { seen.add(k); L.push(pt.get(k)); const nb = link.get(k); const nx2 = nb[0] !== prev ? nb[0] : nb[1]; prev = k; k = nx2; }
+            if (L.length >= 3) loops.push(L);
+        }
+        const area = (L) => { let s = 0; for (let i = 0; i < L.length; i++) { const p = L[i], q = L[(i + 1) % L.length]; s += p[0] * q[1] - q[0] * p[1]; } return s / 2; };
+        for (const L of loops) if (area(L) < 0) L.reverse();                     // anti-horários
+        return loops.sort((a, b) => area(b) - area(a));
+    },
+    // Simplifica um laço fechado (Douglas-Peucker, tolerância eps u).
+    simplifyLoop(L, eps) {
+        const keep = new Uint8Array(L.length), rec = (a, b) => {
+            const A = L[a], B = L[b % L.length], dx = B[0] - A[0], dz = B[1] - A[1], l2 = dx * dx + dz * dz || 1;
+            let bi = -1, bd = eps;
+            for (let i = a + 1; i < b; i++) {
+                const p = L[i], t = Math.max(0, Math.min(1, ((p[0] - A[0]) * dx + (p[1] - A[1]) * dz) / l2)), d = hypot(p[0] - A[0] - dx * t, p[1] - A[1] - dz * t);
+                if (d > bd) { bd = d; bi = i; }
+            }
+            if (bi >= 0) { keep[bi] = 1; rec(a, bi); rec(bi, b); }
+        };
+        const h = L.length >> 1;
+        keep[0] = keep[h] = 1; rec(0, h); rec(h, L.length);
+        return L.filter((_, i) => keep[i]);
     },
 
     // ---------------------------------------------------------------- consultas

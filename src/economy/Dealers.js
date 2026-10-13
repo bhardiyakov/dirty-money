@@ -54,15 +54,12 @@ const Dealers = {
         const rng = Pixel.rng(71717), home = SafeHouse.spawnWorld();
         const buckets = this.TIERS.map(() => []);
         for (const b of CityGrid.blocks) {
-            if (b.open || b.virtual || b.poly || b.organic) continue;      // (favela: carro não chega na porta dos barracos)
-            const f = b.foot, s = b.slab;
+            if (b.open || b.virtual || b.organic) continue;                // (favela: carro não chega na porta dos barracos)
             for (const l of b.lots) {
                 if (l.landmark || l.safehouse || (l.x1 - l.x0) * (l.z1 - l.z0) < 60) continue;
-                if (Math.min(l.x0 - f[0], f[2] - l.x1, l.z0 - f[1], f[3] - l.z1) > 2.5) continue;          // só na beira da quadra (porta na calçada)
-                const cx = (l.x0 + l.x1) / 2, cz = (l.z0 + l.z1) / 2;
-                const e = [[cx - f[0], 'W'], [f[2] - cx, 'E'], [cz - f[1], 'S'], [f[3] - cz, 'N']].sort((a, c) => a[0] - c[0]), side = e[0][1];
-                const door = side === 'W' ? { x: (s[0] + f[0]) / 2, z: cz, face: -Math.PI / 2 } : side === 'E' ? { x: (s[2] + f[2]) / 2, z: cz, face: Math.PI / 2 }
-                    : side === 'S' ? { x: cx, z: (s[1] + f[1]) / 2, face: Math.PI } : { x: cx, z: (s[3] + f[3]) / 2, face: 0 };
+                const d = CityGrid.lotDoor(b, l);                                       // só na beira da quadra (porta na calçada)
+                if (!d) continue;
+                const cx = (l.x0 + l.x1) / 2, cz = (l.z0 + l.z1) / 2, door = { x: d.x, z: d.z, face: d.face };
                 if (home && hypot(door.x - home.x, door.z - home.z) < 40) continue;
                 if (RealEstate.list.some((p) => hypot(p.x - door.x, p.z - door.z) < 16)) continue;          // (não em cima da porta de um imóvel)
                 const loc = RealEstate.locate(cx, cz, b), ti = this.TIERS.findIndex((t) => loc.idx < t.max);

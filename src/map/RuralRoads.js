@@ -69,10 +69,18 @@ const RuralRoads = {
         for (const r of this.NET) for (const w of r.pts) { const k = key(w); if (k) uses.set(k, (uses.get(k) || 0) + 1); }
         const fixedPt = new Map();                                              // ponto fixo já ajustado (o mesmo para todas as vias)
         let fails = 0;
+        // a cidade não termina mais em x = -294: as pontas que chegavam lá encostam na Av. do Contorno (na perpendicular)
+        const isCity = (w) => Array.isArray(w) && w[0] === -294 && typeof CityGrid !== 'undefined' && CityGrid.cityPath;
+        const link = (pts) => {
+            const out = pts.slice();
+            if (isCity(out[0])) out.splice(0, 1, ...CityGrid.cityLink(out[0][1]));
+            if (isCity(out[out.length - 1])) out.splice(out.length - 1, 1, ...CityGrid.cityLink(out[out.length - 1][1]).reverse());
+            return out;
+        };
         for (const r of this.NET) {
             const S = this.STYLE[r.cls], W = [], fixed = [];
-            r.pts.forEach((w, i) => {
-                const end = i === 0 || i === r.pts.length - 1;
+            link(r.pts).forEach((w, i, pts) => {
+                const end = i === 0 || i === pts.length - 1;
                 if (!Array.isArray(w)) { W.push(this._onRoute(w)); fixed.push(true); return; }
                 const k = key(w), fx = end || uses.get(k) > 1;
                 if (fx && fixedPt.has(k)) { W.push(fixedPt.get(k)); fixed.push(true); return; }
