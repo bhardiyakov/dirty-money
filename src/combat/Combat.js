@@ -26,9 +26,9 @@ const Weapons = {
     // heavy: pesada — anda mais devagar com ela na mão e não dá para correr no talo (Player). spinUp: a minigun gira os canos antes
     // de atirar (s). reload: tempo de recarga (s; padrão 1,25).
     pistol_sil: { name: 'Pistola com silenciador', gun: true, dmg: 22, cooldown: 0.34, spread: 0.03, range: 42, speed: 74, mag: 15, pellets: 1, auto: false, silenced: true },
-    rpg:     { name: 'RPG',             gun: true, rocket: true, dmg: 520, cooldown: 0.9, spread: 0.02, range: 160, speed: 40, mag: 1, pellets: 1, auto: false, heavy: 0.8, reload: 2.2 },
-    launcher: { name: 'Lança-foguetes', gun: true, rocket: true, dmg: 400, cooldown: 0.7, spread: 0.04, range: 200, speed: 20, mag: 4, pellets: 1, auto: false, heavy: 0.78, reload: 3.0 },
-    minigun: { name: 'Minigun',         gun: true, dmg: 12, cooldown: 0.05, spread: 0.08, range: 46, speed: 82, mag: 250, pellets: 1, auto: true, heavy: 0.72, spinUp: 0.5, reload: 3.4 },
+    rpg:     { name: 'RPG',             gun: true, rocket: true, dmg: 520, cooldown: 0.9, spread: 0.02, range: 160, speed: 40, mag: 1, pellets: 1, auto: false, heavy: 0.9, reload: 2.2 },
+    launcher: { name: 'Lança-foguetes', gun: true, rocket: true, dmg: 400, cooldown: 0.7, spread: 0.04, range: 200, speed: 20, mag: 4, pellets: 1, auto: false, heavy: 0.88, reload: 3.0 },
+    minigun: { name: 'Minigun',         gun: true, dmg: 12, cooldown: 0.05, spread: 0.08, range: 46, speed: 82, mag: 250, pellets: 1, auto: true, heavy: 0.84, spinUp: 0.5, reload: 3.4 },
     // Arremessáveis (combat/Throwables.js): contados em unidades (inventário: reserve). Segurar o botão = preparar (pino / acender) e
     // carregar a FORÇA com a linha tracejada mostrando onde cai; soltar = arremessar.
     grenade: { name: 'Granada',         throwable: true, look: 'none' },

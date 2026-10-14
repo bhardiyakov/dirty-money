@@ -67,7 +67,7 @@ const Economy = {
         pistol_sil: { name: 'Pistola com silenciador', icon: 'pistol_sil', base: 2200, kind: 'weapon', weapon: 'pistol_sil', ammo: 30, desc: 'Tecla 2 (de novo) · o tiro quase não chama a polícia · 15 tiros, vem com 30 balas' },
         rpg:      { name: 'RPG', icon: 'rpg', base: 30000, kind: 'weapon', weapon: 'rpg', ammo: 3, desc: 'Tecla = · foguete livre que explode tudo · um acerto derruba o helicóptero · vem com 3 foguetes' },
         launcher: { name: 'Lança-foguetes', icon: 'launcher', base: 55000, kind: 'weapon', weapon: 'launcher', ammo: 8, desc: 'Tecla = · foguete TELEGUIADO: trava no helicóptero ou no carro · 4 por recarga, vem com 8' },
-        minigun:  { name: 'Minigun', icon: 'minigun', base: 42000, kind: 'weapon', weapon: 'minigun', ammo: 500, desc: 'Tecla = · gira os canos e cospe 20 balas por segundo · pesada: anda devagar · vem com 500' },
+        minigun:  { name: 'Minigun', icon: 'minigun', base: 42000, kind: 'weapon', weapon: 'minigun', ammo: 500, desc: 'Tecla = · gira os canos e cospe 20 balas por segundo · pesada: anda um pouco mais devagar · vem com 500' },
         ammo_rpg: { name: 'Foguetes de RPG', icon: 'ammo_rocket', base: 4000, kind: 'ammo', weapons: ['rpg'], n: 2, desc: '+2 foguetes' },
         ammo_rk:  { name: 'Foguetes teleguiados', icon: 'ammo_rocket', base: 7000, kind: 'ammo', weapons: ['launcher'], n: 4, desc: '+4 foguetes (um pente)' },
         ammo_belt: { name: 'Cinta da minigun', icon: 'ammo_rifle', base: 1600, kind: 'ammo', weapons: ['minigun'], n: 250, desc: '+250 balas' },
@@ -82,13 +82,13 @@ const Economy = {
         vest:     { name: 'Colete nível 1', icon: 'vest', base: 450, kind: 'vest', max: 50, desc: 'Absorve 75% do dano até 50 pts' },
         vest2:    { name: 'Colete nível 2', icon: 'vest2', base: 1000, kind: 'vest', max: 100, desc: 'Absorve 75% do dano até 100 pts' },
         // bolsas (ver player/Bags.js): mais espaço na grade e mais carga antes de pesar; aparecem no personagem
-        bag_cross: { name: 'Mala transversal', icon: 'bag_cross', base: 120, kind: 'bag', bag: 'cross', desc: 'Grade 4×3 · carrega 14 kg sem pesar' },
-        bag_pack: { name: 'Mochila', icon: 'bag_pack', base: 350, kind: 'bag', bag: 'pack', desc: 'Grade 5×4 · carrega 24 kg sem pesar' },
-        bag_tac:  { name: 'Mochila tática', icon: 'bag_tactical', base: 2200, kind: 'bag', bag: 'tactical', desc: 'Grade 6×5 · carrega 38 kg sem pesar' },
+        bag_cross: { name: 'Mala transversal', icon: 'bag_cross', base: 120, kind: 'bag', bag: 'cross', desc: 'Grade 4×3 · carrega 18 kg sem pesar' },
+        bag_pack: { name: 'Mochila', icon: 'bag_pack', base: 350, kind: 'bag', bag: 'pack', desc: 'Grade 5×4 · carrega 30 kg sem pesar' },
+        bag_tac:  { name: 'Mochila tática', icon: 'bag_tactical', base: 2200, kind: 'bag', bag: 'tactical', desc: 'Grade 6×5 · carrega 46 kg sem pesar' },
         // na mão (o jogador anda carregando: só dá para usar pistola junto) — para roubos grandes: dinheiro de cofre, armas, mercadoria
-        bag_brief:  { name: 'Maleta de alumínio', icon: 'bag_brief', base: 650, kind: 'bag', bag: 'briefcase', desc: 'Na mão · grade 4×2 · 12 kg · discreta' },
-        bag_duffel: { name: 'Bolsa de lona', icon: 'bag_duffel', base: 380, kind: 'bag', bag: 'duffel', desc: 'Na mão · grade 7×5 · 52 kg sem pesar — cabe um cofre de banco' },
-        bag_suit:   { name: 'Mala de rodinhas', icon: 'bag_suit', base: 900, kind: 'bag', bag: 'suitcase', desc: 'Puxada · grade 6×6 · 46 kg; andando, as rodinhas levam o peso' },
+        bag_brief:  { name: 'Maleta de alumínio', icon: 'bag_brief', base: 650, kind: 'bag', bag: 'briefcase', desc: 'Na mão · grade 4×2 · 16 kg · discreta' },
+        bag_duffel: { name: 'Bolsa de lona', icon: 'bag_duffel', base: 380, kind: 'bag', bag: 'duffel', desc: 'Na mão · grade 7×5 · 60 kg sem pesar — cabe um cofre de banco' },
+        bag_suit:   { name: 'Mala de rodinhas', icon: 'bag_suit', base: 900, kind: 'bag', bag: 'suitcase', desc: 'Puxada · grade 6×6 · 54 kg; andando, as rodinhas levam o peso' },
         // mercado clandestino
         hack:     { name: 'Módulo de hackeio', icon: 'hack', base: 160, kind: 'goods', give: 'hack', desc: 'Abre fechadura de carro sem mini-game' },
         carkey:   { name: 'Chave de carro roubada', icon: 'carkey', base: 130, kind: 'goods', give: 'key', desc: 'Destranca um carro sem alarme' },

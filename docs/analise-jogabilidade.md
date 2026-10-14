@@ -151,6 +151,24 @@ em volta, silhueta com borda suavizada (cobertura do pixel guardada no atlas), s
 - As três pesadas deixam o personagem mais lento (`heavy`, fator da velocidade a pé) e recarregam devagar (`reload`). Só a boca de
   fumo vende (estoque garantido, caras); munição: `ammo_rpg`, `ammo_rk`, `ammo_belt`.
 
+## Roda de armas (`src/ui/WeaponWheel.js`)
+
+Como a do GTA V: segurar **Tab** (teclado), **LB/L1** (controle) ou tocar o botão **ARMA** (celular) abre uma roda com 8 categorias
+(corpo a corpo, pistolas, submetralhadoras, fuzis, metralhadora, pesadas, arremessáveis, escopetas). O mouse (direção do cursor), o
+analógico direito ou o dedo escolhem a fatia; roda do mouse, ←/→ do direcional ou as setas ‹ › trocam dentro da categoria; soltar
+equipa (`Game.equipWeapon`). O centro mostra nome, munição e barras de dano/cadência/precisão/alcance. Aberta, o tempo corre a 30%
+e o ataque não sai. Toque rápido: Tab volta à arma anterior, LB passa para a próxima. No celular a roda fica aberta depois do toque
+(tocar na fatia equipa, no centro recarrega, fora fecha) ou segue o dedo arrastado a partir do ARMA; o tamanho acompanha o menor lado
+da tela (até 94%).
+
+## Peso e espaço (`src/player/Bags.js`, `Inventory.body`)
+
+- Até **3 armas no corpo** (bandoleira, cinto, coldre — sempre as 3 maiores): não ocupam a grade da mochila e pesam metade. Com os
+  bolsos (3×2) dá para levar pistola, escopeta e fuzil e ainda ter espaço para munição e kit.
+- Carga confortável maior em todas as bolsas (bolsos 12 kg … mochila tática 46 kg). Até 70% da carga não há perda; até 100%, −12%;
+  acima disso a velocidade cai aos poucos e só acima de 125% (`Bags.OVER`) é sobrecarga (sem correr). O limite para pegar mais coisa
+  é 2× a carga (`Bags.HARD`). Correr com peso cansa menos.
+
 ## Interface (`src/ui/Theme.js`)
 
 Interface moderna em HD, separada do mundo em pixel art: tokens de cor/raio/sombra em `:root`, fontes Inter (texto) e Outfit (títulos/números), cartões de vidro desfocado, botões arredondados. Ícones no estilo emoji (Noto Color Emoji, igual em todo aparelho); armas de fogo e munição são arte vetorial HD (`WeaponArt.VGrid`) no mesmo estilo.

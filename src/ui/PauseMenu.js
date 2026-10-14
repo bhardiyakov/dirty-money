@@ -171,6 +171,13 @@ class PauseMenu {
             .pm-item canvas { pointer-events: none; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4)); }
             .pm-item .n { position: absolute; right: 7px; bottom: 5px; font: 700 12px var(--font-d); color: var(--tx); padding: 1px 6px; border-radius: 99px; background: rgba(0,0,0,0.45); }
             .pm-item .n:empty { display: none; }
+            /* armas NO CORPO (Inventory.body): fora da grade, acima dela */
+            .pm-body { display: flex; gap: 8px; justify-content: center; margin: 12px auto 0; flex-wrap: wrap; }
+            .pm-body .pm-bslot { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+            .pm-body .pm-bslot > b { font: 700 10px var(--font); letter-spacing: 0.1em; text-transform: uppercase; color: var(--tx-3); }
+            .pm-body .pm-item { position: relative; }
+            .pm-body .pm-empty { box-sizing: border-box; border: 1px dashed rgba(255,255,255,0.14); border-radius: 14px; display: flex; align-items: center; justify-content: center; font: 600 11px var(--font); color: var(--tx-3); }
+            .pm-bodynote { text-align: center; font: 500 11px var(--font); color: var(--tx-3); margin-top: 6px; }
             .pm-info { width: 340px; gap: 16px; } .pm-info .body { padding: 4px 18px 18px; font-size: 14px; line-height: 1.55; flex: 1; overflow: auto; color: var(--tx-2); }
             .pm-info h4 { font: 700 20px var(--font-d); color: var(--tx); margin-bottom: 8px; }
             .pm-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
@@ -291,7 +298,7 @@ class PauseMenu {
         }
         const keys = this.root.querySelector('.pm-keys');
         if (keys) keys.innerHTML = pad
-            ? `<b style="background:none;padding:0">A pé:</b> ${g('ls')} mover · ${g('a')} correr (segurar) / pular grade · ${g('l3')} agachar / cobertura · ${g('rb')} rolar · ${g('x')} interagir/assaltar/esconder · ${g('y')} veículo · ${g('rt')} atacar (sem arma: combo soco + soco + chute) · ${g('b')} recarregar · ${g('lt')} mirar (${g('rstick')} aponta/troca de alvo) · ${g('down')} arrombar · ${g('rs')} furtar · ${g('lb')} ${g('dpadlr')} armas · ${g('up')} kit médico<br>`
+            ? `<b style="background:none;padding:0">A pé:</b> ${g('ls')} mover · ${g('a')} correr (segurar) / pular grade · ${g('l3')} agachar / cobertura · ${g('rb')} rolar · ${g('x')} interagir/assaltar/esconder · ${g('y')} veículo · ${g('rt')} atacar (sem arma: combo soco + soco + chute) · ${g('b')} recarregar · ${g('lt')} mirar (${g('rstick')} aponta/troca de alvo) · ${g('down')} arrombar · ${g('rs')} furtar · ${g('lb')} roda de armas (segurar) · ${g('dpadlr')} armas · ${g('up')} kit médico<br>`
             + `<b style="background:none;padding:0">Carro:</b> ${g('rt')} acelerar · ${g('lt')} freio/ré · ${g('y')} sair · ${g('x')} abastecer/desmanchar · ${g('l3')} buzina · ${g('down')} faróis<br>`
             + `<b style="background:none;padding:0">Helicóptero:</b> ${g('rt')} sobe · ${g('lt')} desce · ${g('rstick')} gira · ${g('y')} descer/pular<br>`
             + `${g('back')} inventário · ${g('start')} menu · ${g('rstick')} zoom (na mira manual com arma, ${g('rstick')} aponta)`
@@ -773,6 +780,23 @@ class PauseMenu {
         grid.style.width = C * CELL + (C - 1) * GAP + 'px';
         grid.style.height = R * CELL + (R - 1) * GAP + 'px';
         grid.replaceChildren();
+        // armas no corpo (coldre, cinto, bandoleira): uma fileira acima da grade
+        let bodyEl = this.$('pmBody');
+        if (!bodyEl) { bodyEl = document.createElement('div'); bodyEl.id = 'pmBody'; grid.parentNode.insertBefore(bodyEl, grid); }
+        bodyEl.replaceChildren();
+        const bw = Math.min(2 * CELL + GAP, 150), bh = Math.round(CELL * 0.8);
+        const strip = document.createElement('div'); strip.className = 'pm-body';
+        for (let s = 0; s < Inventory.BODY_SLOTS; s++) {
+            const it = this._layout.find((q) => q.body && q.x === s * 2), box = document.createElement('div');
+            box.className = 'pm-bslot';
+            box.innerHTML = `<b>${it ? it.slot : 'No corpo'}</b>`;
+            if (!it) { const e = document.createElement('div'); e.className = 'pm-empty'; e.style.cssText = `width:${bw}px;height:${bh}px`; e.textContent = 'vazio'; box.appendChild(e); strip.appendChild(box); continue; }
+            box.appendChild(this._invItemEl(it, this._layout.indexOf(it), bw, bh, inv));
+            strip.appendChild(box);
+        }
+        const note = document.createElement('div'); note.className = 'pm-bodynote';
+        note.textContent = 'No corpo: até 3 armas (as maiores) sem ocupar a mochila, com metade do peso';
+        bodyEl.append(strip, note);
         for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) {
             const d = document.createElement('div');
             d.className = 'pm-cell';
@@ -780,19 +804,9 @@ class PauseMenu {
             grid.appendChild(d);
         }
         this._layout.forEach((it, i) => {
-            const d = document.createElement('div');
-            d.className = 'pm-item' + (i === this.invSel ? ' on' : '');
-            const w = it.w * CELL + (it.w - 1) * GAP;
-            d.style.cssText = `left:${it.x * (CELL + GAP)}px;top:${it.y * (CELL + GAP)}px;width:${w}px;height:${CELL}px`;
-            const ic = this.itemIcon(it.key === 'carkey' ? 'carkey' : (it.kind === 'ammo' ? (Weapons[it.key] && Weapons[it.key].rocket ? 'ammo_rocket' : 'ammo_pistol') : it.key));
-            const k = Math.max(1, Math.min(4, Math.floor(Math.min((w - 14) / ic.w, (CELL - 14) / ic.h))));
-            const cv = ic.canvas.cloneNode(); cv.getContext('2d').drawImage(ic.canvas, 0, 0);
-            cv.style.width = ic.w * k + 'px'; cv.style.height = ic.h * k + 'px';
-            d.appendChild(cv);
-            const n = document.createElement('div'); n.className = 'n';
-            n.textContent = it.kind === 'weapon' ? (Weapons[it.key].gun ? `${inv.mag(it.key)}` : '') : 'x' + it.count;
-            d.appendChild(n);
-            d.addEventListener('click', () => { this.invSel = i; this._renderInventory(); });
+            if (it.body) return;                                                  // (na fileira do corpo, acima)
+            const w = it.w * CELL + (it.w - 1) * GAP, d = this._invItemEl(it, i, w, CELL, inv);
+            d.style.left = it.x * (CELL + GAP) + 'px'; d.style.top = it.y * (CELL + GAP) + 'px';
             grid.appendChild(d);
         });
         const on = grid.querySelector('.pm-item.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -801,6 +815,23 @@ class PauseMenu {
         const spare = (inv.spareBags || []).map((b) => Bags.DEFS[b].name);
         this.$('pmStats').innerHTML = `DINHEIRO <span>${brl(inv.cash)}</span><br>VIDA <span>${Math.round(pl.hp)}/${pl.maxHp}</span>${pl.armorMax > 0 ? `<br>COLETE <span>${Math.round(pl.armor)}/${pl.armorMax} (NÍVEL ${pl.armorMax >= 100 ? 2 : 1})</span>` : ''}<br>ARMA <span>${pl.weapon === 'none' ? 'PUNHOS' : Weapons[pl.weapon].name}</span>`
             + (spare.length ? `<br>BOLSAS DE RESERVA <span>${spare.length}</span><div style="font-size:11px;color:var(--tx-3);line-height:1.4">${spare.join(', ')} — troque em 👤 Equipamento ou guarde no baú</div>` : '');
+    }
+
+    // Um item da mochila (ou do corpo) w×h px: ícone, contador e clique para selecionar.
+    _invItemEl(it, i, w, h, inv) {
+        const d = document.createElement('div');
+        d.className = 'pm-item' + (i === this.invSel ? ' on' : '');
+        d.style.width = w + 'px'; d.style.height = h + 'px';
+        const ic = this.itemIcon(it.key === 'carkey' ? 'carkey' : (it.kind === 'ammo' ? (Weapons[it.key] && Weapons[it.key].rocket ? 'ammo_rocket' : 'ammo_pistol') : it.key));
+        const k = Math.max(1, Math.min(4, Math.floor(Math.min((w - 14) / ic.w, (h - 14) / ic.h))));
+        const cv = ic.canvas.cloneNode(); cv.getContext('2d').drawImage(ic.canvas, 0, 0);
+        cv.style.width = ic.w * k + 'px'; cv.style.height = ic.h * k + 'px';
+        d.appendChild(cv);
+        const n = document.createElement('div'); n.className = 'n';
+        n.textContent = it.kind === 'weapon' ? (Weapons[it.key].gun ? `${inv.mag(it.key)}` : '') : 'x' + it.count;
+        d.appendChild(n);
+        d.addEventListener('click', () => { this.invSel = i; this._renderInventory(); });
+        return d;
     }
 
     // Físico e atributos evoluíveis (player/Physique.js): o porte, gordura, massa muscular, saciedade, força, fôlego e velocidade, e o
@@ -829,7 +860,8 @@ class PauseMenu {
         let desc = '', btns = [];
         if (it.kind === 'weapon') {
             const W = Weapons[it.key], eq = this.g.player.weapon === it.key;
-            desc = W.gun ? `Dano ${W.dmg}${W.pellets > 1 ? ' ×' + W.pellets : ''}<br>Alcance ${W.range} · ${W.auto ? 'Automática' : 'Tiro a tiro'}<br>Carregador ${inv.mag(it.key)}/${inv.magOf(it.key)} · reserva ${inv.reserve(it.key)}` : `Dano ${W.dmg} · corpo a corpo`;
+            desc = (W.gun ? `Dano ${W.dmg}${W.pellets > 1 ? ' ×' + W.pellets : ''}<br>Alcance ${W.range} · ${W.auto ? 'Automática' : 'Tiro a tiro'}<br>Carregador ${inv.mag(it.key)}/${inv.magOf(it.key)} · reserva ${inv.reserve(it.key)}` : `Dano ${W.dmg} · corpo a corpo`)
+                + (it.body ? `<br><span style="color:var(--gold)">No corpo (${it.slot.toLowerCase()}): não ocupa a mochila e pesa metade</span>` : '');
             btns = [[eq ? 'EM USO' : 'EQUIPAR', 'primary'], ['DESCARTAR', 'discard']];
         } else if (it.kind === 'ammo') { desc = `Munição de ${Weapons[it.key].name}<br>${it.count} balas na mochila.`; btns = [['DESCARTAR', 'discard']]; }
         else if (it.kind === 'medkit') { desc = `Recupera 55 de vida.<br>${it.count} no estoque (M também usa).`; btns = [['USAR', 'primary'], ['DESCARTAR', 'discard']]; }

@@ -146,6 +146,7 @@ class Game {
         this.actionTimer = 0;
         this.touch = new TouchControls(this);        // botões na tela (celular sem controle) + interface responsiva
         this.ui = new Hud(this);                     // interface em pixel art (arma, procurado, vida/colete, veículo, mensagens)
+        this.wheel = new WeaponWheel(this);          // roda de armas (Tab / LB / botão ARMA), como a do GTA V
         this.gps = null;                             // destino marcado no mapa: { x, z, label } (só um marcador, sem rota)
         this.showPrompts = true;
         this.birds = new Birds(this);                 // aves: pombos, gaivotas, rolinhas, bem-te-vis (fogem de gente, carros e tiros)
@@ -551,6 +552,7 @@ class Game {
 
     // Próxima/anterior arma que o jogador tem (D-pad ←/→ e botão da tela): aperta a tecla de troca dela.
     _cycleWeapon(dir) {
+        if (this.wheel && this.wheel.open) { this.wheel.cycle(dir); return; }      // (roda aberta: troca dentro da categoria)
         if (this.mode !== 'player') return;
         const list = Game.WEAPON_LIST.filter(([, w]) => this.inventory.owned(w === 'none' ? 'fists' : w));
         if (list.length < 2) return;
@@ -575,8 +577,9 @@ class Game {
         Zones.update(this);                                                               // retângulo da câmera → zonas ativa/perto/dormindo
 
         // Menu de pausa: o jogo para de verdade (a física também) e o menu roda por conta própria.
-        if (this.menu.isOpen) { this.menu.update(dt); return; }
+        if (this.menu.isOpen) { if (this.wheel.open) this.wheel.close(false); this.menu.update(dt); return; }
         if (this._escModal) { this.input.justPressed['escape'] = false; this._escModal = false; }                   // o ESC foi usado para fechar uma janela
+        this.wheel.update();                                                              // roda de armas (segurar Tab / LB; o ESC fecha ela antes da pausa)
         if (Gym.active) Gym.update(dt);                                                   // academia: o mini-game usa as teclas (espaço, ← →, ESC)
         if (this._canPause() && (this.input.consumePress('escape') || this.input.consumePress('p') || this._padStart())) { this.menu.open('map'); return; }
         if (this._canPause() && this.input.consumePress('i')) { this.menu.open('inventory'); return; }
@@ -902,6 +905,7 @@ class Game {
         }
         if (inp.consumePress('r')) this._startReload();
         if (inp.consumePress('k')) Traces.toggleMask(this);
+        if (this.wheel.open) { inp.consumePress('mouse0'); inp.consumePress(' '); inp.consumePress('g'); return; }      // (roda de armas aberta)
         Robbery.input(this);
         if (!Robbery.session) { inp.consumePress('mouse0'); inp.consumePress(' '); inp.consumePress('g'); }      // (sem assalto, ataque e G não fazem nada aqui)
     }
@@ -933,16 +937,13 @@ class Game {
             if (!inp.consumePress(key)) continue;
             const kind = this._slotPick(key);
             if (kind === p.weapon) continue;                                 // (a tecla só tem a que já está na mão)
-            if (!inv.owned(kind === 'none' ? 'fists' : kind)) { this._flash(`Você não tem: ${Weapons[kind === 'none' ? 'fists' : kind].name} (${inv.isThrow(kind) ? 'compre na boca de fumo' : Weapons[kind].heavy || Weapons[kind].silenced ? 'compre no mercado clandestino' : 'procure pelo chão ou nos drops'})`); continue; }
-            if (Throwables.busy()) continue;                                 // (no meio de um arremesso não troca)
-            this.reloading = 0;                        // trocar de arma cancela a recarga
-            if (p.equip(kind)) this._flash(`Arma: ${Weapons[kind === 'none' ? 'fists' : kind].name}${inv.isGun(kind) ? ' ' + inv.ammoText(kind) : ''}`);
-            if (typeof PlayerLook !== 'undefined') PlayerLook.wantArms();      // (arma nova num visual gerado: o desenho dela)
+            this.equipWeapon(kind);
         }
         if (this.inventoryOpen || p.swimming) return;                 // nadando: sem ataques nem recarga
 
         if (inp.consumePress('r')) this._startReload();
         if (inp.consumePress('m')) this._useMedkit();
+        if (this.wheel.open) { inp.consumePress('mouse0'); inp.consumePress(' '); return; }      // roda de armas aberta: o ataque não sai
 
         // Golpe/tiro principal. SMG dispara em rajada enquanto o botão/espaço estiver apertado.
         const pressed = inp.consumePress('mouse0') | inp.consumePress(' ');
@@ -972,6 +973,28 @@ class Game {
             this._comboBuf = null;
             if (go) this._tryPrimary();
         }
+    }
+
+    // Troca para a arma `kind` ('none' = punhos) — teclas, roda de armas. Só quem tem; no meio de um arremesso não troca. Atirando,
+    // sacando ou no meio de um golpe, a troca interrompe (como no GTA). Retorna true se trocou.
+    equipWeapon(kind) {
+        const p = this.player, inv = this.inventory;
+        if (kind === 'fists') kind = 'none';
+        const key = kind === 'none' ? 'fists' : kind, W = Weapons[key];
+        if (!W || kind === p.weapon) return false;
+        if (!inv.owned(key)) { this._flash(`Você não tem: ${W.name} (${inv.isThrow(kind) ? 'compre na boca de fumo' : W.heavy || W.silenced ? 'compre no mercado clandestino' : 'procure pelo chão ou nos drops'})`); return false; }
+        if (Throwables.busy()) return false;                                 // (no meio de um arremesso não troca)
+        if (Interiors.active && W.throwable) return false;                   // (dentro da loja não se arremessa nada)
+        this.reloading = 0;                                                  // trocar de arma cancela a recarga
+        let ok = p.equip(kind);
+        if (!ok && p.weapon !== kind && !p.rag && !p.frozen && !p._seq && p.action && ['shoot', 'draw', 'punch', 'punchL', 'kick', 'swing', 'stab'].includes(p.action.name)) {
+            p.action = null;
+            ok = p.equip(kind);
+        }
+        if (!ok) return false;
+        this._flash(`Arma: ${W.name}${inv.isGun(kind) || inv.isThrow(kind) ? ' ' + inv.ammoText(kind) : ''}`);
+        if (typeof PlayerLook !== 'undefined') PlayerLook.wantArms();      // (arma nova num visual gerado: o desenho dela)
+        return true;
     }
 
     // Ataque principal respeitando recarga, cadência e munição.
