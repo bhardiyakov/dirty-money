@@ -410,21 +410,25 @@
             const slides = files.map((f) => { const d = document.createElement('div'); d.className = 'mm-slide'; d.style.backgroundImage = 'url(' + f + ')'; bg.appendChild(d); return d; });
             const ready = slides.map(() => false);
             let idx = 0, timer = 0, menuOk = false, bgOk = false, studioOver = !window.Studio;      // (com a tela do estúdio: espera ela sair)
+            let loadingOn = false, dead = false;                    // dead: a abertura já foi desmontada (done) — nada mais mexe nos fundos
+            const pending = new Set();                              // trocas de fundo agendadas (o "glitch" troca 160 ms depois)
+            const later = (fn, ms) => { const id = setTimeout(() => { pending.delete(id); if (!dead) fn(); }, ms); pending.add(id); };
             const first = Promise.all([load(files[0]), load('./assets/logo.png')]).then(() => { ready[0] = true; slides[0].classList.add('on'); root.classList.add('bg-ready'); bgOk = true; reveal(); });
             first.then(() => files.slice(1).forEach((f, i) => load(f).then(() => { ready[i + 1] = true; })));     // os outros, em seguida
             setTimeout(() => { if (!bgOk) { bgOk = true; root.classList.add('bg-ready'); slides[0].classList.add('on'); reveal(); } }, 4000);   // rede lenta: não segura o menu
             function reveal() { if (bgOk && menuOk && studioOver) root.classList.add('ui-ready'); }
             function next(glitch) {
+                if (dead) return;
                 let n = idx; for (let k = 1; k <= slides.length; k++) { const j = (idx + k) % slides.length; if (ready[j]) { n = j; break; } }
                 if (n === idx) return;
-                const swap = () => { slides[idx].classList.remove('on'); idx = n; slides[idx].classList.add('on'); };
+                const swap = () => { if (dead || !slides[idx] || !slides[n]) return; slides[idx].classList.remove('on'); idx = n; slides[idx].classList.add('on'); };
                 if (!glitch) return swap();
                 bg.classList.remove('glitch'); void bg.offsetWidth; bg.classList.add('glitch');
                 bars.innerHTML = ''; const cols = ['#ff1e56', '#1effe0', '#ffe81e', '#ffffff'];
                 for (let i = 0; i < 7; i++) { const b = document.createElement('i'); b.style.top = Math.random() * 95 + '%'; b.style.height = 6 + Math.random() * 40 + 'px'; b.style.background = cols[i % 4]; b.style.transform = 'translateX(' + (Math.random() - 0.5) * 60 + 'px)'; bars.appendChild(b); }
-                setTimeout(swap, 160); setTimeout(() => { bg.classList.remove('glitch'); bars.innerHTML = ''; }, 420);
+                later(swap, 160); later(() => { bg.classList.remove('glitch'); bars.innerHTML = ''; }, 420);
             }
-            const play = (ms, glitch) => { clearInterval(timer); timer = setInterval(() => next(glitch), ms); };
+            const play = (ms, glitch) => { if (dead) return; clearInterval(timer); timer = setInterval(() => next(glitch), ms); };
             if (studioOver) play(3500, true);
             const TIPS = [
                 'Lave o dinheiro sujo nas fachadas antes de comprar imóveis fora da favela.',
@@ -440,14 +444,17 @@
             const showTip = () => { tipEl.style.opacity = 0; setTimeout(() => { tipEl.innerHTML = '<b>Dica</b>' + TIPS[tipI++ % TIPS.length]; tipEl.style.opacity = 1; }, 350); };
             return {
                 menuReady() { menuOk = true; reveal(); },
-                start() { if (studioOver) return; studioOver = true; play(3500, true); reveal(); },      // a tela do estúdio saiu: o menu entra
+                // a tela do estúdio saiu: o menu entra (se o jogo já está carregando, segue o slideshow suave do carregamento)
+                start() { if (studioOver || dead) return; studioOver = true; if (!loadingOn) play(3500, true); reveal(); },
                 // Novo jogo / carregar: some a logo e os botões, aparece a faixa de carregamento; fundos passam com fusão suave.
-                loading() { root.classList.add('loading'); play(4200, false); showTip(); tipT = setInterval(showTip, 5200); },
+                loading() { if (dead) return; loadingOn = true; root.classList.add('loading'); play(4200, false); showTip(); clearInterval(tipT); tipT = setInterval(showTip, 5200); },
                 progress(p) { const e = document.getElementById('ls-pct'); if (e) e.textContent = Math.round(p * 100) + '%'; },
                 done() {
                     root.classList.add('fade');
                     setTimeout(() => {                                   // solta tudo: as 6 imagens de fundo decodificadas (~50 MB) e a própria abertura
+                        dead = true;
                         clearInterval(timer); clearInterval(tipT);
+                        for (const id of pending) clearTimeout(id); pending.clear();
                         for (const d of slides) d.style.backgroundImage = 'none';
                         slides.length = 0; root.remove(); window.Intro = null;
                     }, 750);
