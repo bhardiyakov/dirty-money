@@ -147,7 +147,7 @@ class Aim {
         const W = Weapons[weaponKey], sp = W ? W.speed : 0, c = this.g.combat;
         if (this.active) return this.target && this.target.alive ? c.leadAngle(x, z, this.target, sp) : this.heading;
         if (!this.assisted) return this.freeDir !== null ? this.freeDir : heading;        // mira livre: cursor / analógico
-        return c.aimAssist(x, z, heading, Math.min(W ? W.range : 30, 30), Combat.ASSIST_CONE, sp);
+        return c.aimAssist(x, z, heading, Math.min(W ? W.range : 30, W && W.rocket ? 90 : 30), Combat.ASSIST_CONE, sp);      // (foguete: pega o helicóptero mais longe)
     }
 
     // Multiplicador da dispersão da arma para o próximo tiro (já com a habilidade Mão firme).

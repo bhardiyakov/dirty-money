@@ -21,6 +21,14 @@ const Weapons = {
     revolver: { name: 'Revólver',       gun: true, dmg: 38, cooldown: 0.55, spread: 0.03, range: 48, speed: 80, mag: 6, pellets: 1, auto: false, look: 'pistol' },
     ak47:    { name: 'AK-47',           gun: true, dmg: 19, cooldown: 0.12, spread: 0.07, range: 46, speed: 80, mag: 30, pellets: 1, auto: true, look: 'smg' },
     knife:   { name: 'Faca',            melee: true, dmg: 24, range: 2.0, cooldown: 0.32, look: 'knife' },     // (na mão: o desenho da faca; golpe: a facada — Melee.stab)
+    // Armas novas (desenho no atlas protagonista_armas). silenced: o tiro só é percebido bem de perto (não chama a polícia de longe).
+    // rocket: dispara um foguete (combat/Rockets.js) — dmg = acerto direto (o helicóptero tem Config.heli.hp: um acerto derruba).
+    // heavy: pesada — anda mais devagar com ela na mão e não dá para correr no talo (Player). spinUp: a minigun gira os canos antes
+    // de atirar (s). reload: tempo de recarga (s; padrão 1,25).
+    pistol_sil: { name: 'Pistola com silenciador', gun: true, dmg: 22, cooldown: 0.34, spread: 0.03, range: 42, speed: 74, mag: 15, pellets: 1, auto: false, silenced: true },
+    rpg:     { name: 'RPG',             gun: true, rocket: true, dmg: 520, cooldown: 0.9, spread: 0.02, range: 160, speed: 40, mag: 1, pellets: 1, auto: false, heavy: 0.8, reload: 2.2 },
+    launcher: { name: 'Lança-foguetes', gun: true, rocket: true, dmg: 400, cooldown: 0.7, spread: 0.04, range: 200, speed: 20, mag: 4, pellets: 1, auto: false, heavy: 0.78, reload: 3.0 },
+    minigun: { name: 'Minigun',         gun: true, dmg: 12, cooldown: 0.05, spread: 0.08, range: 46, speed: 82, mag: 250, pellets: 1, auto: true, heavy: 0.72, spinUp: 0.5, reload: 3.4 },
     // Arremessáveis (combat/Throwables.js): contados em unidades (inventário: reserve). Segurar o botão = preparar (pino / acender) e
     // carregar a FORÇA com a linha tracejada mostrando onde cai; soltar = arremessar.
     grenade: { name: 'Granada',         throwable: true, look: 'none' },
@@ -48,7 +56,7 @@ const BODY_R = 0.32;          // raio do corpo de quem apanha (m)
 class Combat {
     constructor(scene, game) {
         this.game = game;
-        this.MAXB = 48;
+        this.MAXB = 72;                 // (a minigun põe ~20 balas por segundo no ar)
         this.MAXS = 96;
         // Rastro de cada bala = 3 quads (cabeça, meio, cauda); faíscas = 1 quad cada.
         this.glow = new GlowBatch(scene, this.MAXB * 3 + this.MAXS, 'combatGlow', 'glow');
@@ -67,6 +75,7 @@ class Combat {
     fire(shooter, weaponKey) {
         const W = Weapons[weaponKey];
         const n = W.pellets || 1;
+        if (W.rocket) return this._fireRocket(shooter, weaponKey);
         let mx, mz;
         const tip = shooter.fly ? null : Combat.muzzleOffset(W.look || weaponKey, shooter.angle);
         if (tip && MapGeo.hasLineOfSight(shooter.x, shooter.z, shooter.x + tip[0], shooter.z + tip[1])) { mx = shooter.x + tip[0]; mz = shooter.z + tip[1]; }
@@ -93,6 +102,18 @@ class Combat {
             if (!shooter.fly) SparkFx.casing(shooter.x, shooter.z, shooter.angle, weaponKey);
         }
         return n;
+    }
+
+    // Foguete (RPG / lança-foguetes): sai da boca do tubo no desenho, com o estrondo e o clarão; o voo é do Rockets.
+    _fireRocket(shooter, key) {
+        const tip = Combat.muzzleOffset(key, shooter.angle);
+        let mx = shooter.x + Math.sin(shooter.angle) * 1.3, mz = shooter.z + Math.cos(shooter.angle) * 1.3;
+        if (tip && MapGeo.hasLineOfSight(shooter.x, shooter.z, shooter.x + tip[0], shooter.z + tip[1])) { mx = shooter.x + tip[0]; mz = shooter.z + tip[1]; }
+        if (!Rockets.fire(shooter, key, mx, mz)) return 0;
+        this.shots[shooter.owner]++;
+        AudioFX.shot(key, shooter.x, shooter.z);
+        if (typeof SparkFx !== 'undefined') SparkFx.muzzle(this.game, mx, mz, shooter.angle, key, 1.45);
+        return 1;
     }
 
     // Ponta do cano NO DESENHO de quem atira (personagens 2,5D): [leste, norte] em metros a partir dos pés, para a direção (das 8 do

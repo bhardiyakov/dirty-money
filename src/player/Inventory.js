@@ -98,16 +98,19 @@ class Inventory {
     get cols() { return Bags.def(this).cols; }
     get rows() { return Bags.def(this).rows; }
     get capacity() { return this.cols * this.rows; }
-    static get SIZES() { return { pistol: 2, revolver: 2, smg: 2, knife: 1, shotgun: 3, rifle: 3, ak47: 3, bat: 3 }; }
+    static get SIZES() { return { pistol: 2, pistol_sil: 2, revolver: 2, smg: 2, knife: 1, shotgun: 3, rifle: 3, ak47: 3, bat: 3, rpg: 3, launcher: 3, minigun: 3 }; }
+    // Armas de fogo na ordem da mochila (e a munição de cada uma, com o nome dela).
+    static get GUN_ORDER() { return ['pistol', 'pistol_sil', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47', 'rpg', 'launcher', 'minigun']; }
+    static get AMMO_LABEL() { return { rpg: 'Foguetes do RPG', launcher: 'Foguetes do lança-foguetes', minigun: 'Cinta da minigun' }; }
     static get STACK() { return { medkit: 3, hack: 5, key: 5, food: 4, water: 4, jewel: 4, grenade: 3, molotov: 2 }; }                // unidades por célula
 
     // Itens da mochila como lista de { id, kind, key, w, h, count, label }, na ordem de exibição.
     items() {
-        const out = [], S = Inventory.SIZES, order = ['pistol', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47', 'bat', 'knife'];
+        const out = [], S = Inventory.SIZES, guns = Inventory.GUN_ORDER, order = [...guns, 'bat', 'knife'];
         for (const k of order) if (this.weapons[k].owned) out.push({ id: 'w:' + k, kind: 'weapon', key: k, w: S[k], h: 1, count: 1, label: Weapons[k].name });
-        for (const k of ['pistol', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47']) {
+        for (const k of guns) {
             const r = this.weapons[k].reserve || 0;
-            if (r > 0) out.push({ id: 'a:' + k, kind: 'ammo', key: k, w: 1, h: 1, count: r, label: 'Munição: ' + Weapons[k].name });
+            if (r > 0) out.push({ id: 'a:' + k, kind: 'ammo', key: k, w: 1, h: 1, count: r, label: Inventory.AMMO_LABEL[k] || 'Munição: ' + Weapons[k].name });
         }
         const stack = (n, per, kind, key, label) => {
             for (let i = 0; i < Math.ceil(n / per); i++) out.push({ id: `${kind}:${i}`, kind, key, w: 1, h: 1, count: Math.min(per, n - i * per), label });
@@ -196,4 +199,4 @@ class Inventory {
         return lost;
     }
 }
-memoStatics(Inventory, 'HEAL', 'SIZES', 'STACK');
+memoStatics(Inventory, 'HEAL', 'SIZES', 'STACK', 'GUN_ORDER', 'AMMO_LABEL');

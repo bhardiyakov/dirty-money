@@ -789,6 +789,61 @@ function NpcGenChar(G) {
             new RoundBox([0, -6.6, -0.2], [1.95, 5.0, 2.4], 1.1, S.wood, { R: Rx(deg(9)) }),
         ]);
         props.pump = new Part('pump', 'weapon', GR.pump, [new RoundBox([0, 0.0, 0.0], [2.2, 3.9, 1.75], 0.85, S.wood)]);
+        // ---- armas pesadas e a pistola com silenciador (só o jogador: atlas protagonista_armas)
+        props.pistol_sil = new Part('pistol_sil', 'weapon', GR.weapon, [                // a pistola com o tubo do silenciador (fosco) no cano
+            new RoundBox([0, 4.8, 3.15], [1.95, 7.05, 2.2], 0.75, S.metal, { tone: 1 }),
+            new RoundBox([0, 3.0, 0.6], [1.7, 4.0, 1.4], 0.6, S.metal),
+            new RoundBox([0, -0.75, -2.4], [1.8, 2.0, 3.9], 0.75, S.metal, { R: Rx(deg(-14)) }),
+            new CapCone([0, 11.2, 3.15], [0, 21.6, 3.15], 1.32, 1.32, S.tape, { rround: 0.45 }),
+            new CapCone([0, 21.0, 3.15], [0, 21.9, 3.15], 0.55, 0.55, S.lens, { rround: 0.2 }),
+        ]);
+        // RPG: tubo de aço com a proteção de madeira, a boca larga atrás, empunhadura e guarda-mato embaixo, a mira à esquerda.
+        // A ogiva (rpg_head) é outra peça: some depois do disparo.
+        props.rpg = new Part('rpg', 'weapon', GR.weapon, [
+            new CapCone([0, -15.5, 4.6], [0, 13.5, 4.6], 1.45, 1.45, S.metal, { rround: 0.3, tone: 1 }),
+            new CapCone([0, -21.0, 4.6], [0, -15.0, 4.6], 2.5, 1.5, S.metal, { rround: 0.3 }),
+            new CapCone([0, -4.5, 4.6], [0, 5.5, 4.6], 2.05, 2.05, S.wood, { rround: 0.5 }),
+            new RoundBox([0, -0.2, 1.2], [1.25, 1.5, 3.0], 0.6, S.tape, { R: Rx(deg(-12)) }),
+            new RoundBox([0, 7.4, 1.6], [1.2, 1.3, 2.6], 0.6, S.tape, { R: Rx(deg(-8)) }),
+            new RoundBox([-2.3, 2.5, 6.6], [0.75, 2.4, 1.0], 0.35, S.metal),
+            new RoundBox([-2.3, 4.8, 6.6], [0.55, 0.3, 0.6], 0.2, S.lens),
+        ]);
+        props.rpg_head = new Part('rpg_head', 'weapon', GR.pump, [                    // ogiva do RPG (verde), no eixo y a partir da boca
+            new CapCone([0, -1.0, 0], [0, 2.6, 0], 0.95, 0.95, S.green, { rround: 0.3 }),
+            new RoundCone([0, 2.8, 0], [0, 7.6, 0], 2.85, 2.85, S.green),
+            new RoundCone([0, 7.6, 0], [0, 12.4, 0], 2.85, 0.55, S.green, { tone: 1 }),
+            new Sphere([0, 12.6, 0], 0.6, S.chrome),
+        ]);
+        // Lança-foguetes de 4 tubos (verde-oliva, molduras pretas), mira ótica à esquerda, duas empunhaduras embaixo.
+        props.launcher = new Part('launcher', 'weapon', GR.weapon, [
+            new RoundBox([0, 1.5, 5.8], [3.1, 16.2, 3.1], 0.7, S.green),
+            new RoundBox([0, 17.4, 5.8], [3.35, 0.9, 3.35], 0.5, S.tape),
+            new RoundBox([0, -14.5, 5.8], [3.35, 0.9, 3.35], 0.5, S.tape),
+            new RoundBox([0, 3.5, 5.8], [3.25, 0.6, 3.25], 0.3, S.tape),
+            ...[[1.45, 1.45], [-1.45, 1.45], [1.45, -1.45], [-1.45, -1.45]].map(([x, z]) => new CapCone([x, 17.6, 5.8 + z], [x, 18.45, 5.8 + z], 1.05, 1.05, S.lens, { rround: 0.2 })),
+            new RoundBox([0, -0.2, 1.4], [1.25, 1.5, 2.9], 0.6, S.tape, { R: Rx(deg(-12)) }),
+            new RoundBox([0, 8.0, 1.8], [1.2, 1.3, 2.4], 0.6, S.tape, { R: Rx(deg(-8)) }),
+            new RoundBox([-4.3, 4.5, 7.6], [1.05, 3.0, 1.35], 0.45, S.metal),
+            new RoundBox([-4.3, 7.5, 7.6], [0.7, 0.3, 0.8], 0.25, S.lens),
+        ]);
+        // Minigun: carcaça do motor, empunhadura atrás (mão direita), alça em cima (mão esquerda), caixa de munição à esquerda.
+        // O feixe de 6 canos (minibar) é outra peça: gira no tiro.
+        props.minigun = new Part('minigun', 'weapon', GR.weapon, [
+            new RoundBox([0, 2.6, 2.4], [2.9, 4.8, 2.9], 1.1, S.metal),
+            new RoundBox([0, -2.8, 2.4], [2.3, 1.2, 2.3], 0.8, S.tape),
+            new RoundBox([0, -1.0, -1.3], [1.2, 1.4, 2.6], 0.6, S.tape, { R: Rx(deg(-15)) }),
+            new RoundBox([0, 6.0, 6.4], [0.8, 3.2, 0.7], 0.35, S.tape),
+            new RoundBox([0, 3.3, 5.3], [0.6, 0.6, 1.2], 0.3, S.metal), new RoundBox([0, 8.7, 5.3], [0.6, 0.6, 1.2], 0.3, S.metal),
+            new RoundBox([-4.6, 2.2, 0.6], [1.6, 3.4, 3.2], 0.6, S.green),
+            new RoundBox([-3.0, 6.0, 1.6], [0.9, 1.4, 0.9], 0.4, S.metal),
+        ]);
+        props.minibar = new Part('minibar', 'weapon', GR.pump, [
+            new CapCone([0, -0.5, 0], [0, 1.5, 0], 2.1, 2.1, S.metal, { rround: 0.4 }),
+            ...[0, 1, 2, 3, 4, 5].map((k) => { const a = k * Math.PI / 3, x = sin(a) * 1.3, z = Math.cos(a) * 1.3; return new CapCone([x, 0, z], [x, 20.5, z], 0.5, 0.5, S.chrome, { rround: 0.15 }); }),
+            new CapCone([0, 6.5, 0], [0, 7.6, 0], 2.05, 2.05, S.metal, { rround: 0.3 }),
+            new CapCone([0, 18.6, 0], [0, 19.7, 0], 2.05, 2.05, S.metal, { rround: 0.3 }),
+            new CapCone([0, 0, 0], [0, 20.0, 0], 0.55, 0.55, S.metal),
+        ]);
         props.bat = new Part('bat', 'weapon', GR.weapon, [
             new RoundCone([0, -3.5, 0], [0, 24.7, 0], 1.25, 2.5, S.batwood),
             new Sphere([0, -4.1, 0], 1.7, S.batwood, { blend: 0.4 }),
@@ -908,7 +963,8 @@ function NpcGenChar(G) {
         return props;
     }
 
-    const PROP_MUZZLE = { pistol: [0, 12.0, 3.15], smg: [0, 20.2, 2.4], shotgun: [0, 25.8, 2.7], rifle: [0, 26.8, 2.2], rifle_ak: [0, 26.2, 2.4] };
+    const PROP_MUZZLE = { pistol: [0, 12.0, 3.15], smg: [0, 20.2, 2.4], shotgun: [0, 25.8, 2.7], rifle: [0, 26.8, 2.2], rifle_ak: [0, 26.2, 2.4],
+        pistol_sil: [0, 22.1, 3.15], rpg: [0, 14.2, 4.6], launcher: [0, 18.7, 5.8], minigun: [0, 28.2, 2.4] };
     // empunhadura (centro do punho direito) e apoio (punho esquerdo)
     const PROP_GRIP = {
         pistol: [[0, -0.3, -1.2], [-3.4, 0.6, -1.6]],
@@ -919,6 +975,10 @@ function NpcGenChar(G) {
         bat: [[0, 0.7, 0], [0, -2.8, 0]],
         baton: [[0, 0.0, 0], [0, -2.8, 0]],
         knife: [[0, 0.0, 0], [0, 0, 0]],
+        pistol_sil: [[0, -0.3, -1.2], [-3.4, 0.6, -1.6]],
+        rpg: [[0, 0.0, 2.4], [0, 7.6, 2.8]],
+        launcher: [[0, 0.0, 2.6], [0, 8.2, 3.0]],
+        minigun: [[0, -0.8, -0.1], [0, 6.0, 7.6]],
     };
     const PUMP_Y = 13.3, PUMP_TRAVEL = 4.5;
 
@@ -962,7 +1022,9 @@ function NpcGenChar(G) {
     // ------------------------------------------------------------------ assar personagem + objetos (com cache por ficha/espaçamento)
     const _propCache = new Map();
     // Objetos maiores no corpo adulto (as armas do pacote eram do tamanho do boneco chibi): escala em volta da empunhadura.
-    const propK = (name) => (G.ADULT ? (name === 'blood' ? 1.35 : 1.2) : 1);
+    // (as pesadas — RPG, lança-foguetes, minigun e as peças delas — maiores ainda: o tamanho de verdade perto do corpo adulto)
+    const PROP_BIG = { rpg: 1.55, rpg_head: 1.55, launcher: 1.5, minigun: 1.6, minibar: 1.6 };
+    const propK = (name) => (G.ADULT ? (name === 'blood' ? 1.35 : PROP_BIG[name] || 1.2) : 1);
     const propPivot = (name) => (PROP_GRIP[name] ? PROP_GRIP[name][0] : [0, 0, 0]);
     function bakeProps(spacing) {
         const k = spacing.toFixed(4) + '|' + propK('x');

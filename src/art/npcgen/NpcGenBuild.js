@@ -53,7 +53,7 @@ function NpcGenBuild(G) {
             for (const p of poses) row.push(trim(R.render(p, (-360 / D) * d), [R.px, R.py]));
             frames.push(row);
         }
-        return { key, fps, loop: def.loop, n: poses.length, dirs: D, frames };
+        return { key, fps, loop: def.loopFor && w0 in def.loopFor ? def.loopFor[w0] : def.loop, n: poses.length, dirs: D, frames };
     }
 
     // Recorta o quadro no que tem pixel (com a posição relativa aos pés).

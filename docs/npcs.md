@@ -151,6 +151,12 @@ tools/npcs/index.html            prévia de qualquer tipo/variante/clipe e "Gera
   troca quando parado/andando/correndo (com a arma da mão) estão TODOS prontos — nunca metade de um e metade de outro nesses — e vai
   sendo completado a cada ~1,5 s (golpes, carro, tático, nadar, pilotar…; o companheiro tático entra inteiro). O que ainda falta sai do
   visual anterior só durante a geração. Cada visual gerado fica no IndexedDB: voltar a ele é imediato.
+- **Armas novas** (pistola com silenciador, RPG, lança-foguetes, minigun): moram num terceiro atlas, `protagonista_armas`
+  (`NpcGenTypes.PLAYER_ARMS`: parado, andando, correndo, sacar, mirar, atirar, agachado, andar agachado, passo lateral e assalto com
+  cada uma; `NpcSheet.armsAtlas`). Os objetos estão em `NpcGenChar.buildProps` (ogiva do RPG e feixe de canos da minigun são peças
+  à parte — `SUB_PROPS` —: a ogiva some depois do disparo e os canos giram 15° por quadro no tiro em loop) e as pegadas em
+  `WEAPON_HOLD` (RPG e lança-foguetes no ombro direito; minigun no quadril). Num visual gerado esse atlas só é gerado quando o jogador
+  TEM uma delas (`PlayerLook.wantArms`, "hero:N:w", guardado no IndexedDB); até lá o desenho delas sai do visual de sempre.
 - A tela de equipamento mostra o **próprio personagem** girando (clique para girar), renderizado pelo gerador.
 
 ## Mudar ou criar personagens

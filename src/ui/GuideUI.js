@@ -86,7 +86,8 @@ GuideUI.PAGES = {
         <h3>Teclado e mouse</h3><table>
         <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>andar / dirigir</td></tr><tr><td><kbd>Shift</kbd></td><td>correr</td></tr>
         <tr><td><kbd>Clique</kbd> / <kbd>Espaço</kbd></td><td>golpe ou tiro (sem arma: combo soco + soco + chute)</td></tr>
-        <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>armas (punhos, pistola, SMG, escopeta, taco, revólver, AK, fuzil, faca)</td></tr>
+        <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>armas (punhos, pistola, SMG, escopeta, taco, revólver, AK, fuzil, faca) — <kbd>2</kbd> de novo: pistola com silenciador</td></tr>
+        <tr><td><kbd>0</kbd> <kbd>−</kbd> <kbd>=</kbd></td><td>granada, molotov e as <b>armas pesadas</b> (<kbd>=</kbd> várias vezes: RPG → lança-foguetes → minigun)</td></tr>
         <tr><td><kbd>0</kbd> / <kbd>−</kbd></td><td>granada / coquetel molotov (boca de fumo): <b>segure</b> o ataque para puxar o pino ou acender e mirar com o <b>mouse</b> (cai onde está o cursor) ou o <b>analógico direito</b> (inclinar mais = mais longe) — quanto mais longe, mais forte o arremesso; a linha tracejada mostra a trajetória; <b>solte</b> para jogar. A granada explode ~3 s depois do pino (segurar demais explode na mão); o molotov deixa o chão em chamas por 30 s ou mais</td></tr>
         <tr><td><kbd>R</kbd> · <kbd>M</kbd></td><td>recarregar · kit médico</td></tr>
         <tr><td><kbd>E</kbd></td><td>interagir: assaltar (com arma), esconder-se, entrar, falar, trabalhos das carreiras; no carro, desmanchar no desmanche</td></tr>
@@ -129,7 +130,7 @@ GuideUI.PAGES = {
         <li>Cada policial enxerga num <b>cone à frente</b> (o radar mostra os cones quando você é procurado; vermelho = te vendo agora) e precisa de linha de visada. De perto, percebe você mesmo de costas.</li>
         <li>Saiu da vista: as <b>estrelas piscam</b> e a polícia vai para a <b>área de busca</b> (o círculo azul tracejado, onde te viram por último) e espalha as viaturas por ela. A contagem da fuga anda enquanto ninguém te vê — <b>fora do círculo, quase o dobro do ritmo</b> (o HUD mostra "Fora da busca"). Ser visto de novo zera.</li>
         <li>Policial colado em você (mesmo atrás de parede) <b>pausa</b> a contagem.</li>
-        <li><b>Helicóptero</b> (3★+): enxerga por cima dos prédios, mas <b>não te vê debaixo de viaduto, ponte, túnel, toldo de loja ou cobertura de posto</b>. Perdeu você, só te acha de novo se você cair no holofote. Um carro rápido na avenida abre distância dele, e ele tem autonomia: a 3★ e 4★ sai para <b>abastecer</b> depois de um tempo — a brecha para sumir.</li>
+        <li><b>Helicóptero</b> (3★+): enxerga por cima dos prédios, mas <b>não te vê debaixo de viaduto, ponte, túnel, toldo de loja ou cobertura de posto</b>. Perdeu você, só te acha de novo se você cair no holofote. Um carro rápido na avenida abre distância dele, e ele tem autonomia: a 3★ e 4★ sai para <b>abastecer</b> depois de um tempo — a brecha para sumir. Também dá para <b>derrubá-lo</b>: a tiros (≈16 de pistola) ou com um foguete de <b>RPG</b> ou do <b>lança-foguetes</b> (um acerto) — vale +1★ e o próximo demora a vir.</li>
         <li>Na cola de carro, as viaturas seguem atrás e só às vezes tentam a <b>batida (PIT)</b>; parado, elas freiam e descem os policiais — dá para empurrar uma viatura parada para sair do cerco.</li>
         <li><b>Pintura express</b>: sem ninguém te vendo, entre dirigindo numa oficina Pay n Pay (ou no mecânico do morro) e aperte <kbd>E</kbd> — cor nova, placa trocada e as estrelas somem (R$ 1.000 + R$ 750 por ★, aceita sujo).</li>
         <li><b>Esconderijos</b> (<kbd>E</kbd> em caçamba, caixote, latão): se ninguém viu você entrar, some do radar.</li><li>Com procurado você não entra em lojas nem consegue aceitar trabalhos.</li></ul>`,
@@ -169,7 +170,13 @@ GuideUI.PAGES = {
         <li>Comida e bebida curam na hora; marmita e água vão para a mochila. Kit médico (<kbd>M</kbd>) cura 55.</li>
         <li>Armas: loja de armas da cidade (legal) ou boca de fumo (barata, estoque pequeno). Munição e colete também.</li>
         <li><b>Mochila</b> (<kbd>I</kbd>): grade de espaços; armas compridas ocupam mais. Joias valem dinheiro na boca.</li>
-        <li>O <b>Armeiro</b> fabrica armas caseiras, recarrega munição e importa <b>silenciador</b> e <b>pente estendido</b> para as suas armas.</li></ul>`,
+        <li>O <b>Armeiro</b> fabrica armas caseiras, recarrega munição e importa <b>silenciador</b> e <b>pente estendido</b> para as suas armas.</li></ul>
+        <h3>Armas especiais</h3><ul>
+        <li><b>Pistola com silenciador</b> (<kbd>2</kbd> duas vezes; loja de armas e boca): o tiro é um "tuc" abafado — só quem está muito perto e vê percebe; a polícia de longe não ouve. Usa a munição de pistola.</li>
+        <li><b>RPG</b> (<kbd>=</kbd>; só na boca de fumo): foguete livre, um por vez (recarrega sozinho). Explode carro, viatura e quem estiver perto — e <b>derruba o helicóptero com um acerto</b>: mire nele (a mira assistida pega quem voa) que o foguete sobe até lá e explode ao passar perto. Perto demais (menos de 4 m) a ogiva não arma.</li>
+        <li><b>Lança-foguetes</b> (<kbd>=</kbd> de novo): foguete <b>teleguiado</b>. Com ele na mão, o alvo à frente fica marcado com um <b>anel vermelho</b> (bipe de trava) — o helicóptero primeiro, depois viaturas e carros — e o foguete faz a curva atrás dele. Um acerto derruba o helicóptero. 4 foguetes por recarga.</li>
+        <li><b>Minigun</b> (<kbd>=</kbd> de novo): segure o gatilho — os canos <b>giram</b> por meio segundo e ela cospe 20 balas por segundo. Pesada: com ela (e com os lança-foguetes) você anda e corre mais devagar.</li>
+        <li>Foguetes e a cinta da minigun: na boca de fumo. Explosão perto de você também machuca você.</li></ul>`,
 
     vehicles: () => `<h2>Veículos</h2>
         <ul><li><kbd>F</kbd> entra/rouba (tira o motorista). Carro estacionado está <b>trancado</b>: <kbd>F</kbd> quebra o vidro (alarme) ou <kbd>G</kbd> arromba na manha (mini-game).</li>

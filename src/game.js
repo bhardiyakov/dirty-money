@@ -7,9 +7,23 @@
 // ============================================================================
 
 class Game {
-    // Teclas de troca de arma (1–9).
-    static get WEAPON_SLOTS() {
-        return { '1': 'none', '2': 'pistol', '3': 'smg', '4': 'shotgun', '5': 'bat', '6': 'revolver', '7': 'ak47', '8': 'rifle', '9': 'knife', '0': 'grenade', '-': 'molotov' };
+    // Teclas de troca de arma (1–9, 0, − e =). Uma tecla pode ter mais de uma arma: apertar de novo passa para a próxima que você tem
+    // (2: pistola ↔ pistola com silenciador; =: as pesadas — RPG, lança-foguetes, minigun). WEAPON_SLOTS: tecla → a 1ª arma dela.
+    static get WEAPON_KEYS() {
+        return { '1': ['none'], '2': ['pistol', 'pistol_sil'], '3': ['smg'], '4': ['shotgun'], '5': ['bat'], '6': ['revolver'], '7': ['ak47'], '8': ['rifle'], '9': ['knife'], '0': ['grenade'], '-': ['molotov'], '=': ['rpg', 'launcher', 'minigun'] };
+    }
+    static get WEAPON_SLOTS() { const o = {}; for (const [k, l] of Object.entries(Game.WEAPON_KEYS)) o[k] = l[0]; return o; }
+    // Todas as armas com a tecla de cada uma: [[tecla, arma], …] (na ordem das teclas).
+    static get WEAPON_LIST() { return Object.entries(Game.WEAPON_KEYS).flatMap(([k, l]) => l.map((w) => [k, w])); }
+    // Que arma a tecla `key` pega agora: a próxima que você tem depois da que está na mão (ou a 1ª que tem). null = nenhuma.
+    _slotPick(key) {
+        const l = Game.WEAPON_KEYS[key], inv = this.inventory, cur = this.player.weapon;
+        if (!l) return null;
+        if (this._cycleTo && l.includes(this._cycleTo)) { const w = this._cycleTo; this._cycleTo = null; return w; }
+        const own = l.filter((w) => inv.owned(w === 'none' ? 'fists' : w));
+        if (!own.length) return l[0];                                          // (quem chamou avisa que não tem)
+        const i = own.indexOf(cur);
+        return own[(i + 1) % own.length];
     }
 
     constructor(canvasId) {
@@ -207,6 +221,7 @@ class Game {
             Blood.init(this.scene);                                              // sangue no chão (respingo de tiro, rastro de quem sangra)
             Footprints.init(this.scene);                                         // pegadas na areia (jogador e pedestres; somem aos poucos)
             Throwables.init(this);                                               // granada e molotov: mira tracejada, voo, explosão, fogo no chão
+            Rockets.init(this);                                                  // foguetes do RPG e do lança-foguetes (e a trava dele)
             SparkFx.init(this.scene);                                            // faíscas em riscos e lascas (pneu furado a tiro)
             this.vehicleManager = new VehicleManager(this.scene, this.physics, this.gameEngine.shadowGenerator, this.carLib);
             this.traffic = new TrafficManager(this.scene, this.physics, this.vehicleManager, this.carLib, this.signals, this.gameEngine.shadowGenerator);
@@ -537,10 +552,11 @@ class Game {
     // Próxima/anterior arma que o jogador tem (D-pad ←/→ e botão da tela): aperta a tecla de troca dela.
     _cycleWeapon(dir) {
         if (this.mode !== 'player') return;
-        const slots = Game.WEAPON_SLOTS, keys = Object.keys(slots).filter((k) => this.inventory.owned(slots[k] === 'none' ? 'fists' : slots[k]));
-        if (keys.length < 2) return;
-        const cur = keys.findIndex((k) => slots[k] === this.player.weapon), i = ((cur < 0 ? 0 : cur) + dir + keys.length) % keys.length;
-        this.input.justPressed[keys[i]] = true;
+        const list = Game.WEAPON_LIST.filter(([, w]) => this.inventory.owned(w === 'none' ? 'fists' : w));
+        if (list.length < 2) return;
+        const cur = list.findIndex(([, w]) => w === this.player.weapon), i = ((cur < 0 ? 0 : cur) + dir + list.length) % list.length;
+        this._cycleTo = list[i][1];
+        this.input.justPressed[list[i][0]] = true;
     }
 
     _update(dt) {
@@ -715,7 +731,7 @@ class Game {
         if (this.boats) this.boats.update(dt, this);
         if (this.colliderStream) this.colliderStream.update(dt, this.camera.target.x, this.camera.target.z);
         Perf.lap('barcos/colisores');
-        if (this.vehicleManager) { this.carDamage.update(dt); Throwables.update(dt); this.collisions.update(dt); this.doors.update(dt); this._updateAlarms(dt); }
+        if (this.vehicleManager) { this.carDamage.update(dt); Throwables.update(dt); Rockets.update(dt); this.collisions.update(dt); this.doors.update(dt); this._updateAlarms(dt); }
         Perf.lap('veículos (dano/colisão)');
         if (this.vehicleManager) EngineAudio.update(this, dt);                 // ronco dos motores (o seu e o do trânsito perto)
         Footsteps.update(this, dt);                                            // passos (presos à animação de andar/correr)
@@ -876,8 +892,9 @@ class Game {
     _interiorKeys(dt) {
         const inp = this.input, p = this.player, inv = this.inventory;
         if (this.reloading > 0) { this.reloading -= dt; if (this.reloading <= 0) { const n = inv.reload(this._reloadWeapon); if (n > 0) this._flash(`Recarregou: ${inv.ammoText(this._reloadWeapon)}`); } }
-        for (const [key, kind] of Object.entries(Game.WEAPON_SLOTS)) {
+        for (const key of Object.keys(Game.WEAPON_KEYS)) {
             if (!inp.consumePress(key)) continue;
+            const kind = this._slotPick(key);
             if (Weapons[kind] && Weapons[kind].throwable) continue;
             if (!inv.owned(kind === 'none' ? 'fists' : kind)) { this._flash(`Você não tem: ${Weapons[kind === 'none' ? 'fists' : kind].name}`); continue; }
             this.reloading = 0;
@@ -898,6 +915,7 @@ class Game {
 
         // Relógios das ações.
         if (this._fireCd > 0) this._fireCd -= dt;
+        if (this._autoReload > 0 && (this._autoReload -= dt) <= 0 && p.weapon === this._autoReloadW) { if (p.busy) this._autoReload = 0.2; else this._startReload(); }
         if (this.reloading > 0) {
             this.reloading -= dt;
             if (this.reloading <= 0) {
@@ -911,14 +929,15 @@ class Game {
         if (inp.consumePress('escape') && this.inventoryOpen) this._toggleInventory(false);
 
         // Troca de arma (também funciona com o inventário aberto). Só quem tem a arma.
-        const slots = Game.WEAPON_SLOTS;
-        for (const key of Object.keys(slots)) {
+        for (const key of Object.keys(Game.WEAPON_KEYS)) {
             if (!inp.consumePress(key)) continue;
-            const kind = slots[key];
-            if (!inv.owned(kind === 'none' ? 'fists' : kind)) { this._flash(`Você não tem: ${Weapons[kind === 'none' ? 'fists' : kind].name} (${inv.isThrow(kind) ? 'compre na boca de fumo' : 'procure pelo chão ou nos drops'})`); continue; }
+            const kind = this._slotPick(key);
+            if (kind === p.weapon) continue;                                 // (a tecla só tem a que já está na mão)
+            if (!inv.owned(kind === 'none' ? 'fists' : kind)) { this._flash(`Você não tem: ${Weapons[kind === 'none' ? 'fists' : kind].name} (${inv.isThrow(kind) ? 'compre na boca de fumo' : Weapons[kind].heavy || Weapons[kind].silenced ? 'compre no mercado clandestino' : 'procure pelo chão ou nos drops'})`); continue; }
             if (Throwables.busy()) continue;                                 // (no meio de um arremesso não troca)
             this.reloading = 0;                        // trocar de arma cancela a recarga
             if (p.equip(kind)) this._flash(`Arma: ${Weapons[kind === 'none' ? 'fists' : kind].name}${inv.isGun(kind) ? ' ' + inv.ammoText(kind) : ''}`);
+            if (typeof PlayerLook !== 'undefined') PlayerLook.wantArms();      // (arma nova num visual gerado: o desenho dela)
         }
         if (this.inventoryOpen || p.swimming) return;                 // nadando: sem ataques nem recarga
 
@@ -932,7 +951,18 @@ class Game {
         if (Throwables.busy()) return;
         const held = (inp.keys[' '] || inp.mouseDown) && !!Weapons[p.weapon] && Weapons[p.weapon].gun && Weapons[p.weapon].auto;
         const during = p.action && Player.COMBO.includes(p.action.name) ? p.action : null;      // golpe de mão já em andamento
-        if (pressed || held) this._tryPrimary();
+        // Minigun: segurando o gatilho, os canos GIRAM primeiro (W.spinUp s, com o zumbido) e só então ela cospe balas; soltou, param
+        // devagar (apertar logo de novo já sai atirando).
+        const W0 = Weapons[p.weapon], trig = (inp.keys[' '] || inp.mouseDown || pressed) && this.reloading <= 0 && !p.busy || (p.action && p.action.name === 'shoot' && (inp.keys[' '] || inp.mouseDown));
+        let spun = true;
+        if (W0 && W0.spinUp) {
+            const was = this._spin || 0;
+            this._spin = Math.max(0, Math.min(1, was + (trig ? dt / W0.spinUp : -dt / (W0.spinUp * 2.2))));
+            if (trig && was === 0) AudioFX._burst(p.position.x, p.position.z, { vol: 0.3, dur: W0.spinUp, f0: 250, f1: 1400, maxDist: 60, type: 'bandpass', q: 4 });
+            if (trig) p.aimTimer = Math.max(p.aimTimer, 0.6);                 // (girando: na pose de mirar)
+            spun = this._spin >= 1;
+        } else this._spin = 0;
+        if ((pressed || held) && spun) this._tryPrimary();
 
         // Combo de mãos (soco + soco + chute — Player.COMBO): apertou no MEIO de um golpe → guarda o aperto e solta o próximo golpe
         // assim que este acabar (não precisa acertar o tempo). Um aperto guardado por vez.
@@ -961,9 +991,12 @@ class Game {
             const started = p.primary(true);                          // true: pode reiniciar o clipe (rajada)
             if (!started) return;
             inv.consume(key);
-            this._fireCd = W.cooldown;
+            this._fireCd = W.spinUp ? Math.max(this._fireCd, -W.cooldown) + W.cooldown : W.cooldown;      // (minigun: guarda a sobra do quadro — 20 tiros/s mesmo a 30 qps)
             this._onAttack('shoot');
-            if (inv.mag(key) === 0 && inv.canReload(key)) this._fireCd = Math.max(this._fireCd, 0.25);
+            if (inv.mag(key) === 0 && inv.canReload(key)) {
+                this._fireCd = Math.max(this._fireCd, 0.25);
+                if (W.rocket) { this._autoReload = 0.75; this._autoReloadW = key; }      // (RPG/lança-foguetes: põe o próximo foguete sozinho)
+            }
             return;
         }
         if (W.cooldown && this._fireCd > 0) return;                  // taco e faca têm cadência
@@ -978,7 +1011,7 @@ class Game {
         if (!inv.isGun(key) || this.reloading > 0) return;
         if (!inv.canReload(key)) { this._flash(inv.reserve(key) <= 0 ? 'Sem munição na mochila!' : 'Carregador cheio'); return; }
         if (p.busy && p.action.name !== 'shoot') return;
-        this.reloading = 1.25 * (1 - (SkillTree.m.reload || 0));
+        this.reloading = ((Weapons[key] && Weapons[key].reload) || 1.25) * (1 - (SkillTree.m.reload || 0));      // (as pesadas demoram mais)
         this._reloadWeapon = key;
         p.playAction('draw', { lock: 0.55, weapon: p.look });          // (visual: mexe na arma)
         AudioFX.blip(260, 0.2, 0.2);
@@ -1075,7 +1108,7 @@ class Game {
         const el = document.getElementById('invBody');
         if (!el) return;
         const inv = this.inventory, p = this.player;
-        const slots = Object.entries(Game.WEAPON_SLOTS).map(([k, w]) => [k, w === 'none' ? 'fists' : w]);
+        const slots = Game.WEAPON_LIST.map(([k, w]) => [k, w === 'none' ? 'fists' : w]);
         const cur = p.weapon === 'none' ? 'fists' : p.weapon;
         const rows = slots.map(([k, key]) => {
             const own = inv.owned(key);
@@ -1105,7 +1138,7 @@ class Game {
             const crit = Math.random() < (SkillTree.m.crit || 0);
             this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p, spreadMul: this.aim ? this.aim.spreadMul() : 1 - (SkillTree.m.spread || 0), dmgMul: (1 + (SkillTree.m.gunDmg || 0)) * (crit ? 2 : 1) }, p.weapon);
             if (this.aim) this.aim.onShot(p.weapon);                          // coice: desfirma a mira um pouco
-            if (this.careers && this.careers.silenced(p.weapon)) {          // silenciador (Armeiro): só quem está muito perto e vê percebe
+            if ((Weapons[p.weapon] && Weapons[p.weapon].silenced) || (this.careers && this.careers.silenced(p.weapon))) {      // silenciador (a pistola com ele, ou o do Armeiro): só quem está muito perto e vê percebe
                 this.npcManager.alertViolence(pos, 8);
                 this.wanted.reportCrime();
             } else if (Baile.covers(pos.x, pos.z)) {                                // o baile abafa o tiro: só quem está a < 14 u (e a vista) percebe
@@ -2735,4 +2768,4 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         }
     }
 }
-memoStatics(Game, 'WEAPON_SLOTS');
+memoStatics(Game, 'WEAPON_KEYS', 'WEAPON_SLOTS', 'WEAPON_LIST');

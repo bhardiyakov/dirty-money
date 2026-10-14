@@ -138,6 +138,19 @@ fundas; os atlas foram gerados de novo. No jogo, de longe (dirigindo, celular, t
 sobre a pegada do pixel) em vez de serrilhar e "ferver" andando. Depois, o visual passou a ser o de um render 3D: sem o contorno preto
 em volta, silhueta com borda suavizada (cobertura do pixel guardada no atlas), sombra no chão em degradê e ampliação lisa de perto.
 
+## Armas especiais (`src/combat/Combat.js` → `Weapons`, `src/combat/Rockets.js`)
+
+- **Pistola com silenciador** (`pistol_sil`, tecla 2 duas vezes): `silenced` — só quem está a < 8 u e vê percebe; não chama a polícia
+  de longe (o mesmo caminho do silenciador do Armeiro: `CareerCore.silenced`).
+- **RPG** (`rpg`) e **lança-foguetes** (`launcher`), tecla `=`: disparam foguetes (`Rockets`), em 3D de verdade, com chama, fumaça,
+  arma depois de 4 m. No chão a explosão é a de carro (`CarDamage.boomAt`); no ar, uma bola de fogo que só fere quem voa. Acerto direto
+  no helicóptero da polícia (`Config.heli.hp` 380) derruba: RPG 520, lança-foguetes 400. O RPG é livre (mirado no helicóptero, sobe
+  até ele com espoleta de proximidade); o lança-foguetes trava no alvo à frente (helicóptero > viatura > carro, anel vermelho) e
+  persegue com até 3,2 rad/s.
+- **Minigun** (`minigun`): gira os canos por 0,5 s (`spinUp`) e atira a cada 0,05 s; o clipe de tiro fica em loop enquanto atira.
+- As três pesadas deixam o personagem mais lento (`heavy`, fator da velocidade a pé) e recarregam devagar (`reload`). Só a boca de
+  fumo vende (estoque garantido, caras); munição: `ammo_rpg`, `ammo_rk`, `ammo_belt`.
+
 ## Interface (`src/ui/Theme.js`)
 
 Interface moderna em HD, separada do mundo em pixel art: tokens de cor/raio/sombra em `:root`, fontes Inter (texto) e Outfit (títulos/números), cartões de vidro desfocado, botões arredondados. Ícones no estilo emoji (Noto Color Emoji, igual em todo aparelho); armas de fogo e munição são arte vetorial HD (`WeaponArt.VGrid`) no mesmo estilo.

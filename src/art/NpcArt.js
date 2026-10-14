@@ -454,7 +454,7 @@ const NpcArt = {
         this.addAtlas(id + '#hd', a);
         A.cache = new Map();
         A.gen = (A.gen || 0) + 1;
-        for (const s of Object.values(this.sheets)) if (s.atlasName === id || s.fallbackAtlas === id || s.extraAtlas === id) s.clips = {};
+        for (const s of Object.values(this.sheets)) if (s.uses(id)) s.clips = {};
     },
     // Troca o desenho do tipo `id` (mesmo id: folhas, materiais e quem já está na tela acompanham).
     _swap(id, a) {
@@ -471,7 +471,7 @@ const NpcArt = {
             m.setVector2('atlasSize', new BABYLON.Vector2(a.w, a.h));
             m.setFloat('ppu', this.ppuOf(A)); m.setFloat('fmt', A.data.v); m.setFloat('sharp', this._sharpOf(A)); m.setFloat('mini', this._miniOf(A));
         }
-        for (const s of Object.values(this.sheets)) if (s.atlasName === id || s.fallbackAtlas === id || s.extraAtlas === id) s.clips = {};
+        for (const s of Object.values(this.sheets)) if (s.uses(id)) s.clips = {};
     },
     async _deflate(u8) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer()); },
     async _inflate(u8) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer()); },
@@ -513,7 +513,7 @@ const NpcArt = {
         if (A.material) A.material.dispose();
         if (A.tex) A.tex.dispose();
         delete this.atlases[id];
-        for (const s of Object.values(this.sheets)) if (s.atlasName === id || s.fallbackAtlas === id || s.extraAtlas === id) s.clips = {};      // (nada de clipe guardado apontando para ele)
+        for (const s of Object.values(this.sheets)) if (s.uses(id)) s.clips = {};      // (nada de clipe guardado apontando para ele)
     },
 
     // Folha de um tipo. legacy = folha antiga para o que o atlas não tem (a primeira que pedir fica).
@@ -591,6 +591,7 @@ const NpcArt = {
             if (s) s.npcRemap = (v, name) => this.remap(k, v, name, s);
         }
         const hero = lib.sheets.hero = this.sheet('protagonista', lib.sheets.player, 0);
+        if (NPC_ATLAS.protagonista_armas) hero.armsAtlas = 'protagonista_armas';           // (as armas novas: PlayerLook troca pelo do visual gerado)
         this._lib = lib;
         hero.legacyVariant = 0;
         lib.npc = this;
@@ -647,12 +648,14 @@ class NpcSheet {
         this.legacyVariant = 2;
         this.fallbackAtlas = null;        // outro atlas do mesmo personagem (o jogador: o pronto, enquanto o novo visual é gerado)
         this.extraAtlas = null;           // atlas COMPANHEIRO com o que não coube no principal (o jogador: os clipes táticos)
+        this.armsAtlas = null;            // o outro companheiro do jogador: as armas novas (silenciador, RPG, lança-foguetes, minigun)
     }
+    uses(id) { return this.atlasName === id || this.fallbackAtlas === id || this.extraAtlas === id || this.armsAtlas === id; }
     _key(name, weapon) { return name + ':' + (weapon || 'none'); }
     getClip(name, weapon = 'none') {
         const w = weapon || 'none', key = this._key(name, w);
         if (key in this.clips) return this.clips[key];
-        let c = NpcArt.clip(this.atlasName, key) || (this.fallbackAtlas && NpcArt.clip(this.fallbackAtlas, key)) || (this.extraAtlas && NpcArt.clip(this.extraAtlas, key));
+        let c = NpcArt.clip(this.atlasName, key) || (this.fallbackAtlas && NpcArt.clip(this.fallbackAtlas, key)) || (this.extraAtlas && NpcArt.clip(this.extraAtlas, key)) || (this.armsAtlas && NpcArt.clip(this.armsAtlas, key));
         if (!c && w !== 'none') {
             const def = CharacterRig.CLIPS[name];
             if (def && !def.weapons) c = NpcArt.clip(this.atlasName, this._key(name, 'none')) || (this.fallbackAtlas && NpcArt.clip(this.fallbackAtlas, this._key(name, 'none')));

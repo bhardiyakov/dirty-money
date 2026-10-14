@@ -784,7 +784,7 @@ class PauseMenu {
             d.className = 'pm-item' + (i === this.invSel ? ' on' : '');
             const w = it.w * CELL + (it.w - 1) * GAP;
             d.style.cssText = `left:${it.x * (CELL + GAP)}px;top:${it.y * (CELL + GAP)}px;width:${w}px;height:${CELL}px`;
-            const ic = this.itemIcon(it.key === 'carkey' ? 'carkey' : (it.kind === 'ammo' ? 'ammo_pistol' : it.key));
+            const ic = this.itemIcon(it.key === 'carkey' ? 'carkey' : (it.kind === 'ammo' ? (Weapons[it.key] && Weapons[it.key].rocket ? 'ammo_rocket' : 'ammo_pistol') : it.key));
             const k = Math.max(1, Math.min(4, Math.floor(Math.min((w - 14) / ic.w, (CELL - 14) / ic.h))));
             const cv = ic.canvas.cloneNode(); cv.getContext('2d').drawImage(ic.canvas, 0, 0);
             cv.style.width = ic.w * k + 'px'; cv.style.height = ic.h * k + 'px';

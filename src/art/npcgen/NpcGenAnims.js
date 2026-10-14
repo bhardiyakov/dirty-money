@@ -199,7 +199,7 @@ function NpcGenAnims(G) {
             let lastI = -1;
             for (const pr of this.props) {
                 const [name, Mp, tag] = pr;
-                if (name === 'pump' && lastI >= 0) {                              // a bomba da escopeta: no mesmo ponto da arma maior
+                if (SUB_PROPS[name] && lastI >= 0) {                              // a bomba da escopeta (e a ogiva do RPG, os canos da minigun): no mesmo ponto da arma maior
                     const [pn, Po] = this.props[lastI], Pn = props[lastI][1];
                     const off = scaled(pn, pt4(inv4(Po), Mp.t));
                     props.push([name, M4(mm3(Pn.R, mm3(tr(Po.R), Mp.R)), pt4(Pn, off))]);
@@ -223,7 +223,7 @@ function NpcGenAnims(G) {
                 const other = h.side === 'R' ? 'L' : 'R', arm = this.arm[other];
                 if (arm[0] !== 'ik' || abs_['arm' + other]) continue;
                 const lp = pt4(inv4(this.props[h.i][1]), arm[1]);
-                if (abs(lp[0]) > 5 || abs(lp[2]) > 5 || lp[1] < -6 || lp[1] > 32) continue;      // (só a mão NO objeto: cano, cabo, coronha)
+                if (abs(lp[0]) > 5 || abs(lp[2]) > (this.props[h.i][0] === 'minigun' ? 8 : 5) || lp[1] < -6 || lp[1] > 32) continue;      // (só a mão NO objeto: cano, cabo, coronha; a alça da minigun)
                 const T = mapVia(h.i, arm[1]), so = RIG['uarm_' + other][1];
                 const J = pt4(B.chest, [so[0] * (A.width || 1), so[1], so[2] * kt]);
                 const [Ru, Rf] = ik2(J, T, UP2, LO2 - FIST[2] * (A.hand || 1), arm[2], true);
@@ -421,12 +421,26 @@ function NpcGenAnims(G) {
         shotgun: { grip: [7.0, 3.5, 6.2], chest_yaw: -24, head_yaw: 20, poleR: [1.0, -0.6, -0.7], poleL: [-0.5, -0.1, -1.0] },
         rifle: { grip: [7.0, 3.0, 7.0], chest_yaw: -26, head_yaw: 22, poleR: [1.0, -0.6, -0.7], poleL: [-0.5, -0.1, -1.0] },
         rifle_ak: { grip: [7.0, 3.5, 6.8], chest_yaw: -26, head_yaw: 22, poleR: [1.0, -0.6, -0.7], poleL: [-0.5, -0.1, -1.0] },
+        // armas novas do jogador: a pistola com silenciador como a pistola; RPG e lança-foguetes no ombro direito (o tubo passa ao
+        // lado da cabeça); a minigun na altura do quadril, as duas mãos nela
+        pistol_sil: { grip: [8.0, 25.0, 9.5], chest_yaw: 12, head_yaw: -8, poleR: [1.0, -0.3, -1.0], poleL: [-1.0, -0.2, -0.9], one_hand: true },
+        rpg: { grip: [12.0, 0.0, 16.0], chest_yaw: -26, head_yaw: 20, poleR: [1.0, -0.3, -1.0], poleL: [-0.4, -0.3, -1.0] },
+        launcher: { grip: [12.0, 0.0, 15.0], chest_yaw: -26, head_yaw: 20, poleR: [1.0, -0.3, -1.0], poleL: [-0.4, -0.3, -1.0] },
+        minigun: { grip: [9.5, 7.0, -3.0], chest_yaw: -12, head_yaw: 8, poleR: [1.0, -0.6, -0.5], poleL: [-0.7, -0.2, -0.8] },
     };
+    // peças que vão presas na arma anterior (Pose.adult): a bomba da escopeta, a ogiva do RPG, o feixe de canos da minigun
+    const SUB_PROPS = { pump: 1, rpg_head: 1, minibar: 1 };
+    const HEAVY = (name) => name === 'rpg' || name === 'launcher' || name === 'minigun';
+    // As peças móveis de cada arma: ogiva (some depois do disparo: fired) e os canos girando (spin, graus).
+    function subProps(p, name, Mp, { fired = false, spin = 0 } = {}) {
+        if (name === 'rpg' && !fired) p.props.push(['rpg_head', mm4(Mp, M4(null, [0, 13.5, 4.6]))]);
+        if (name === 'minigun') p.props.push(['minibar', mm4(Mp, M4(Ry(deg(spin)), [0, 7.4, 2.4]))]);
+    }
     const CTX = { rifle: 'rifle', melee: 'bat' };          // escolhas de arma do personagem (o build define antes de gerar as poses)
-    const LONG = (name) => name === 'smg' || name === 'shotgun' || name === 'rifle' || name === 'rifle_ak';
+    const LONG = (name) => name === 'smg' || name === 'shotgun' || name === 'rifle' || name === 'rifle_ak' || HEAVY(name);
 
     // Arma na mão e os dois braços resolvidos. recoil = graus de subida do cano, kick = recuo, pump = bombear a escopeta (0..1).
-    function holdWeapon(p, name, { recoil = 0.0, kick = 0.0, pump = 0.0, bob = [0, 0, 0], flash = null, casing = null, chest_extra = 0.0, aim_yaw = 0.0, keepChest = false, freeL = false } = {}) {
+    function holdWeapon(p, name, { recoil = 0.0, kick = 0.0, pump = 0.0, bob = [0, 0, 0], flash = null, casing = null, chest_extra = 0.0, aim_yaw = 0.0, keepChest = false, freeL = false, fired = false, spin = 0 } = {}) {
         const h = WEAPON_HOLD[name];
         if (!keepChest) {
             p.chest_R = mm3(Rz(deg(h.chest_yaw)), Rx(deg(-2 + chest_extra)));
@@ -442,12 +456,13 @@ function NpcGenAnims(G) {
             p.props.push(['pump', mm4(Mp, M4(null, [0, PUMP_Y - PUMP_TRAVEL * pump, 0.7]))]);
             lf = propPt(Mp, [0, PUMP_Y - PUMP_TRAVEL * pump, -1.2]);
         } else lf = propPt(Mp, PROP_GRIP[name][1]);
+        subProps(p, name, Mp, { fired, spin });
         p.arm_ik('R', grip, h.poleR);
         if (freeL) { /* o braço esquerdo fica com quem chamou (carregando bolsa) */ }
         else if (h.one_hand) p.arm_fk('L', { flex: 14 + recoil * 0.3, abd: 16, elbow: 34 });
         else p.arm_ik('L', lf, h.poleL);
         if (flash) p.effects.push({ type: 'flash', pos: propPt(Mp, PROP_MUZZLE[name]), dir: fwd, size: flash[0], variant: flash[1] });
-        if (casing) p.effects.push({ type: 'casing', pos: V.add(propPt(Mp, [0, 2.0, 2.4]), casing) });
+        if (casing) p.effects.push({ type: 'casing', pos: V.add(propPt(Mp, name === 'minigun' ? [3.0, 3.0, 2.4] : [0, 2.0, 2.4]), casing) });
         return Mp;
     }
     function gunIdle(name, n = 4) {
@@ -490,6 +505,12 @@ function NpcGenAnims(G) {
     const shotgunShoot = () => gunShoot('shotgun', [{ recoil: 6, kick: 1.5, flash: [1.8, 0], chest_extra: 2 }, { recoil: 17, kick: 3.6, chest_extra: 7 }, { recoil: 8, kick: 1.6, chest_extra: 3 },
         { recoil: 2, kick: 0.6, pump: 1.0 }, { recoil: 2, kick: 0.6, pump: 1.0, casing: [5, -2, 2] }, { recoil: 1, kick: 0.3, pump: 0.0 }, { recoil: 0.5, kick: 0.0 }]);
     const rifleShoot = (name = CTX.rifle) => gunShoot(name, [{ recoil: 4, kick: 1.5, flash: [1.4, 0], casing: [3, 0, 2] }, { recoil: 1.5, kick: 0.5, casing: [6, -2, 0] }, { recoil: 5, kick: 1.7, flash: [1.2, 1], casing: [3, 0, 2] }, { recoil: 1.5, kick: 0.5, casing: [6, -2, 0] }]);
+    // silenciador: clarão pequeno; RPG: a ogiva sai (some) e o tubo dá o tranco no ombro; lança-foguetes: tranco menor;
+    // minigun: os canos giram 15° por quadro (6 canos: o ciclo de 4 quadros fecha em 60°), clarão em todos.
+    const silShoot = () => gunShoot('pistol_sil', [{ recoil: 2, kick: 0.5, flash: [0.55, 0] }, { recoil: 11, kick: 1.8, casing: [2.5, -1, 2] }, { recoil: 4, kick: 0.7, casing: [5.5, -2.5, 0] }, { recoil: 1, kick: 0.2 }]);
+    const rpgShoot = () => gunShoot('rpg', [{ recoil: 1, kick: 0.3, flash: [2.2, 0] }, { recoil: 9, kick: 2.8, fired: true }, { recoil: 5, kick: 1.5, fired: true }, { recoil: 2, kick: 0.6, fired: true }, { recoil: 0.5, kick: 0.1, fired: true }], [-3.0, 4.0]);
+    const launcherShoot = () => gunShoot('launcher', [{ recoil: 1, kick: 0.3, flash: [1.9, 0] }, { recoil: 7, kick: 2.2 }, { recoil: 3.5, kick: 1.0 }, { recoil: 1, kick: 0.2 }], [-3.0, 4.0]);
+    const minigunShoot = () => gunShoot('minigun', [0, 1, 2, 3].map((f) => ({ recoil: f % 2 ? 0.8 : 1.6, kick: f % 2 ? 0.3 : 0.7, spin: f * 15, flash: [f % 2 ? 1.25 : 1.55, f % 2], casing: [3 + f, 0, 2] })), [-2.5, 3.5]);
 
     // NOVO: correr com a arma. Pistola: na mão direita, apontada para a frente e para baixo, o braço esquerdo balança.
     // Arma longa: atravessada no peito ("posição de porte"), as duas mãos nela.
@@ -498,7 +519,12 @@ function NpcGenAnims(G) {
         for (let i = 0; i < n; i++) {
             const t = i / n, p = base(), c = runLegs(p, t);
             const corg = chestOrg(p);
-            if (!LONG(name)) {
+            if (HEAVY(name)) {                                                  // pesada: continua no ombro / no quadril, sacudindo com a passada
+                holdWeapon(p, name, { bob: [0, 0, 0.9 * abs(c) - 0.4], chest_extra: -6 });
+                p.chest_R = mm3(Rz(deg(-4 * c)), p.chest_R);
+                p.props = [];
+                holdWeapon(p, name, { bob: [0, 0, 0.9 * abs(c) - 0.4], keepChest: true });
+            } else if (!LONG(name)) {
                 const grip = V.add(corg, [9.5, 12.0 + 2.0 * c, 2.5 + 1.5 * abs(c)]);
                 placeProp(p, name, grip, nrm([0.05, 1.0, -0.55]));
                 p.arm_ik('R', grip, [1.0, -0.4, -0.8]);
@@ -537,6 +563,7 @@ function NpcGenAnims(G) {
             if (h.one_hand || s < 0.5) p.arm_fk('L', { flex: 6 + 10 * s, abd: 14, elbow: 20 + 14 * s });
             else p.arm_ik('L', propPt(Mp, name === 'shotgun' ? [0, PUMP_Y, -1.2] : PROP_GRIP[name][1]), h.poleL);
             if (name === 'shotgun') p.props.push(['pump', mm4(Mp, M4(null, [0, PUMP_Y, 0.7]))]);
+            subProps(p, name, Mp);
             out.push(p);
         }
         return out;
@@ -1909,7 +1936,8 @@ function NpcGenAnims(G) {
 
     // Clipes do JOGO. weapon: arma (já traduzida para o objeto desenhado: 'smg' de um BOPE vira 'rifle' — ver NpcGenBuild.weaponFor).
     const gunFn = { idle: gunIdle, walk: gunWalk, run: gunRun, draw: gunDraw, aim: gunAim, holdup };
-    const shootFn = (w) => (w === 'pistol' ? pistolShoot() : w === 'shotgun' ? shotgunShoot() : w === 'smg' ? smgShoot('smg') : rifleShoot(w));
+    const SHOOT = { pistol: pistolShoot, shotgun: shotgunShoot, smg: () => smgShoot('smg'), pistol_sil: silShoot, rpg: rpgShoot, launcher: launcherShoot, minigun: minigunShoot };
+    const shootFn = (w) => (SHOOT[w] ? SHOOT[w]() : rifleShoot(w));
     const CLIPS = {
         idle: { fps: 6, loop: true, fn: (w) => (w === 'none' ? idle() : w === 'bat' ? batIdle() : w === 'knife' ? knifeIdle() : gunIdle(w)) },
         walk: { fps: 10, loop: true, fn: (w) => (w === 'none' ? walk() : w === 'bat' ? batWalk() : w === 'knife' ? knifeWalk() : gunWalk(w)) },
@@ -1919,7 +1947,7 @@ function NpcGenAnims(G) {
         climb: { fps: 10, loop: true, fn: () => climb() },
         draw: { fps: 14, loop: false, fn: (w) => gunDraw(w) },
         aim: { fps: 1, loop: true, fn: (w) => gunAim(w) },
-        shoot: { fps: 16, loop: false, fn: (w) => shootFn(w), fpsFor: { pistol: 15, shotgun: 12, smg: 18 } },
+        shoot: { fps: 16, loop: false, fn: (w) => shootFn(w), fpsFor: { pistol: 15, shotgun: 12, smg: 18, pistol_sil: 15, rpg: 10, launcher: 12, minigun: 22 }, loopFor: { minigun: true } },
         holdup: { fps: 6, loop: true, fn: (w) => (w === 'knife' ? knifeHoldup() : holdup(w === 'none' ? 'pistol' : w)) },
         swing: { fps: 14, loop: false, fn: (w) => batSwing(w === 'baton' ? 'baton' : 'bat') },
         punch: { fps: 14, loop: false, fn: () => punchCross() },

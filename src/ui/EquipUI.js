@@ -37,7 +37,7 @@ class EquipUI {
     static get RARITY() {
         return { common: ['#9ca3af', 'Comum'], uncommon: ['#34d399', 'Incomum'], rare: ['#60a5fa', 'Rara'], epic: ['#a78bfa', 'Épica'], legend: ['#fbbf24', 'Lendária'] };
     }
-    static get WEAPON_RARITY() { return { knife: 'common', bat: 'common', pistol: 'uncommon', revolver: 'uncommon', shotgun: 'rare', smg: 'rare', rifle: 'epic', ak47: 'epic' }; }
+    static get WEAPON_RARITY() { return { knife: 'common', bat: 'common', pistol: 'uncommon', revolver: 'uncommon', shotgun: 'rare', smg: 'rare', rifle: 'epic', ak47: 'epic', pistol_sil: 'rare', rpg: 'legend', launcher: 'legend', minigun: 'legend' }; }
 
     constructor(game, menu) {
         this.g = game;
@@ -145,7 +145,7 @@ class EquipUI {
             const D = Bags.DEFS[id];
             out.push({ key: 'b:' + id, type: 'bag', id, slot: 'bag', cat: 'bag', name: D.name, icon: D.icon, rar: this._rarBase(D.base), worn: inv.bag === id });
         }
-        for (const k of ['pistol', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47', 'bat', 'knife']) {
+        for (const k of [...Inventory.GUN_ORDER, 'bat', 'knife']) {
             if (!inv.owned(k)) continue;
             out.push({ key: 'w:' + k, type: 'weapon', id: k, slot: 'weapon', cat: 'weapon', name: Weapons[k].name, icon: k, rar: EquipUI.WEAPON_RARITY[k] || 'common', worn: g.player.weapon === k });
         }
@@ -614,7 +614,7 @@ class EquipUI {
             if (weapon === 'bat') { ctx.strokeStyle = '#8a5a2e'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(hr[0], 254); ctx.lineTo(hr[0] + 18, 190); ctx.stroke(); }
             else if (weapon === 'knife') { part('#cfd6df', () => poly([[hr[0] + 2, 250], [hr[0] + 26, 238], [hr[0] + 6, 258]]), 1.2); }
             else {
-                const ic = this.menu.itemIcon(weapon).canvas, w = ['rifle', 'ak47', 'shotgun', 'smg'].includes(weapon) ? 70 : 46, h = w * ic.height / ic.width;
+                const ic = this.menu.itemIcon(weapon).canvas, w = ['rifle', 'ak47', 'shotgun', 'smg', 'rpg', 'launcher', 'minigun'].includes(weapon) ? 70 : 46, h = w * ic.height / ic.width;
                 ctx.save(); ctx.translate(hr[0] + 4, 258); ctx.rotate(-0.15); ctx.drawImage(ic, -10, -h / 2, w, h); ctx.restore();
             }
         }

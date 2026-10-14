@@ -379,7 +379,7 @@ const DollArt = {
             if (s.weapon === 'bat') r.piece('#9a6a3a', 'bat').capsule(74, 110, 88, 152, 1.6, 3.2);
             else if (s.weapon === 'knife') { r.piece('#cfd6df', 'blade').poly([[71.5, 112], [75, 112], [74.5, 125], [73, 128]]); r.piece('#2a2c33', 'hilt').rect(71, 111, 5, 3); }
             else if (s.icon) {
-                const long = ['rifle', 'ak47', 'shotgun', 'smg'].includes(s.weapon), w = long ? 32 : 22, tb = DollRaster.trim(s.icon), h = Math.max(5, Math.round(w * tb[3] / tb[2]));
+                const long = ['rifle', 'ak47', 'shotgun', 'smg', 'rpg', 'launcher', 'minigun'].includes(s.weapon), w = long ? 32 : 22, tb = DollRaster.trim(s.icon), h = Math.max(5, Math.round(w * tb[3] / tb[2]));
                 r.image(s.icon, Math.round(hr[0] - w * 0.12), Math.round(hr[1] - h * 0.55), w, h);
             }
             arm('R', [65, 58], [71, 82], wr, hr, false);
