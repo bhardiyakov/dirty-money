@@ -3,12 +3,13 @@
 // interface). Segue a folha de referência do jogo: MÃO (palma aberta), PISTOLA (estilo 1911), METRALHADORA (estilo Uzi), FUZIL
 // (estilo AK-47, madeira), FACA (de caça, cabo listrado), TACO (de beisebol) — mais o REVÓLVER e a ESCOPETA no mesmo estilo.
 // Todas de lado, cano/ponta para a direita, luz vinda de cima/esquerda, contorno escuro de 1 px.
-// `WeaponArt.canvas(key)` devolve um canvas 80×40 (cache); chaves: fists | knife | bat | pistol | revolver | smg | shotgun | rifle | ak47.
+// `WeaponArt.canvas(key)` devolve um canvas 80×40 (cache); chaves: fists | knife | bat | pistol | revolver | smg | shotgun | rifle | ak47 |
+// pistol_sil | rpg | launcher | minigun | rocket (o foguete avulso: ícone da munição do RPG e do lança-foguetes).
 // ============================================================================
 
 const WeaponArt = {
     W: 80, H: 40,
-    KEYS: ['fists', 'knife', 'bat', 'pistol', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47'],
+    KEYS: ['fists', 'knife', 'bat', 'pistol', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47', 'pistol_sil', 'rpg', 'launcher', 'minigun', 'rocket'],
     _cache: {},
     has(key) { return key === 'none' || this.KEYS.includes(key); },
 
@@ -29,6 +30,7 @@ const WeaponArt = {
         skin: ['#fadcc0', '#eab48a', '#c98660', '#9c593b'],
         brass: ['#f0d07a', '#c9a23f', '#8e6e22', '#5a4410'],
         leather: ['#a8683c', '#7a4424', '#4e2a14', '#2e180a'],
+        olive: ['#b6c878', '#7b9142', '#51642a', '#2f3c16'],
     },
 
     // ---------------------------------------------------------------- MÃO (palma aberta, dedos levemente abertos)
@@ -175,6 +177,69 @@ const WeaponArt = {
 
     // ---------------------------------------------------------------- FUZIL de assalto (mesmo desenho do AK: "fuzil" da referência)
     _rifle(g) { this._ak47(g); },
+
+    // ---------------------------------------------------------------- PISTOLA COM SILENCIADOR (a 1911 com o tubo fosco no cano)
+    _pistol_sil(g) {
+        this._pistol(g);
+        const K = this.P.grip;
+        g.cap(61, 12.5, 77, 12.5, 3.4, K);                                                                       // silenciador
+        for (let x = 65; x <= 73; x += 4) g.rect(x, 9.6, 1, 6, K[3]);                                            // aneis
+        g.rect(76, 11.5, 1.5, 2, '#0a0b0d');                                                                      // boca
+    },
+
+    // ---------------------------------------------------------------- RPG (tubo de aço, proteção de madeira, ogiva verde)
+    _rpg(g) {
+        const M = this.P.metal, W = this.P.wood, K = this.P.grip, O = this.P.olive;
+        g.poly([[1, 13], [9, 16], [9, 24], [1, 27]], M);                                                          // boca traseira (venturi)
+        g.cap(8, 20, 56, 20, 2.7, M);                                                                             // tubo
+        g.rectH(22, 15.5, 17, 9, W);                                                                              // proteção de madeira
+        for (let x = 25; x < 38; x += 3) g.rect(x, 17, 1, 6, W[2]);
+        g.poly([[29, 22], [35, 22], [34, 34], [28, 33]], K);                                                      // empunhadura
+        g.poly([[42, 22], [47, 22], [46, 31], [41, 30]], K);                                                      // empunhadura da frente
+        for (const [x, y] of [[36, 23], [37, 24], [38, 25], [39, 25], [40, 24]]) g.px(x, y, M[3]);                 // guarda-mato
+        g.rectH(30, 12, 8, 4, M); g.rect(36, 12.5, 2, 2, '#1a2a3a');                                               // luneta
+        g.cap(55, 20, 61, 20, 1.6, O);                                                                            // pescoço da ogiva
+        g.poly([[60, 14], [68, 13.2], [74, 15.5], [79, 20], [74, 24.5], [68, 26.8], [60, 26]], O);                 // ogiva
+        g.rect(63, 14.5, 1, 11, O[2]);
+        g.finish('#101216');
+    },
+
+    // ---------------------------------------------------------------- LANÇA-FOGUETES (4 tubos, verde-oliva, mira ótica)
+    _launcher(g) {
+        const M = this.P.metal, K = this.P.grip, O = this.P.olive;
+        g.rectH(5, 11, 64, 13, O);                                                                                // caixa dos tubos
+        g.rectH(2, 10, 5, 15, K); g.rectH(67, 10, 6, 15, K); g.rectH(35, 10, 3, 15, K);                           // molduras
+        g.rect(9, 17, 24, 1, O[2]); g.rect(40, 17, 25, 1, O[2]);                                                  // divisão dos tubos
+        g.rect(71, 12, 1.5, 4, '#0a0b0d'); g.rect(71, 19, 1.5, 4, '#0a0b0d');                                     // bocas
+        g.rectH(24, 4.5, 12, 6, M); g.rect(33, 5.5, 3, 3, '#2a4a6a'); g.rect(33.4, 5.8, 1, 1, '#9fd0ff');          // mira ótica
+        g.poly([[26, 24], [32, 24], [31, 35], [25, 34]], K);                                                      // empunhadura
+        g.poly([[46, 24], [51, 24], [50, 33], [45, 32]], K);                                                      // empunhadura da frente
+        g.rect(12, 13, 10, 2, '#e8c840'); g.rect(12, 13, 10, 0.6, '#fff2a0');                                     // faixa de aviso
+        g.finish('#101216');
+    },
+
+    // ---------------------------------------------------------------- MINIGUN (motor, alça, feixe de canos, cinta de munição)
+    _minigun(g) {
+        const M = this.P.metal, S = this.P.steel, K = this.P.grip, B = this.P.brass;
+        g.poly([[8, 25], [15, 25], [13, 36], [6, 35]], K);                                                         // empunhadura
+        g.rectH(5, 11, 26, 15, M);                                                                                 // motor
+        g.rect(9, 14, 16, 2, M[3]); g.rect(9, 19, 16, 2, M[3]);
+        g.thick([[11, 11], [11, 6], [27, 6], [27, 11]], K[1]);                                                     // alça
+        for (const y of [14, 18.5, 23]) g.cap(31, y, 75, y, 1.5, S);                                               // canos
+        g.rectH(30, 11, 5, 15, M); g.rectH(48, 12, 3, 13, M); g.rectH(71, 11.5, 4, 14, M);                         // braçadeiras
+        for (let i = 0; i < 6; i++) g.cap(17 + i * 2, 27 + i * 1.6, 18 + i * 2, 28 + i * 1.6, 1.2, B);             // cinta
+        g.finish('#101216');
+    },
+
+    // ---------------------------------------------------------------- FOGUETE avulso (munição do RPG e do lança-foguetes)
+    _rocket(g) {
+        const O = this.P.olive, M = this.P.metal;
+        g.poly([[8, 13], [16, 17], [16, 23], [8, 27]], M);                                                         // aletas
+        g.cap(14, 20, 42, 20, 2.2, M);                                                                             // motor
+        g.poly([[40, 13], [56, 12], [66, 15], [74, 20], [66, 25], [56, 28], [40, 27]], O);                         // ogiva
+        g.rect(46, 13, 1, 14, O[2]); g.rect(73, 19, 3, 2, M[1]);
+        g.finish('#101216');
+    },
 };
 
 // ----------------------------------------------------------------------------- grade de pixels

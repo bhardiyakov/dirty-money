@@ -138,7 +138,7 @@ class Careers {
         const mods = this.by.gunsmith.data.mods || {}, mb = this.g.inventory.magBonus = {};      // pente estendido
         for (const k of Object.keys(mods)) if (mods[k].ext) mb[k] = 1;
     }
-    silenced(weapon) { const m = this.by.gunsmith.data.mods; return !!(m && m[weapon] && m[weapon].sil); }
+    silenced(weapon) { if (Weapons[weapon] && Weapons[weapon].silenced) return true; const m = this.by.gunsmith.data.mods; return !!(m && m[weapon] && m[weapon].sil); }      // (a pistola com silenciador já vem com ele)
     lockpickMul() { return Math.max(0.4, 1 - 0.07 * this.by.chop.skill('mecanica') - (SkillTree.m.lockpick || 0)); }                 // dificuldade do arrombamento (G)
     hotwireTime() { return Math.max(0.6, 3.2 - 0.45 * this.by.chop.skill('mecanica') - (SkillTree.m.hotwire || 0)); }   // s de ligação direta (carro trancado)
 

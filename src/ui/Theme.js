@@ -153,7 +153,7 @@ const Emoji = {
         heart: '❤️', shield: '🛡️', cash: '💵', clean: '💳', clock: '🕒', trophy: '🏆', star: '⭐', energy: '⚡', heat: '🔥', medal: '🏅', siren: '🚨',
     },
     // armas de fogo: arte vetorial (WeaponArt) no lugar do emoji
-    VECTOR: { pistol: 1, revolver: 1, smg: 1, shotgun: 1, rifle: 1, ak47: 1, gun: 'pistol', ammo_pistol: 1, ammo_rifle: 1 },
+    VECTOR: { pistol: 1, revolver: 1, smg: 1, shotgun: 1, rifle: 1, ak47: 1, pistol_sil: 1, rpg: 1, launcher: 1, minigun: 1, gun: 'pistol', ammo_pistol: 1, ammo_rifle: 1, ammo_rocket: 'rocket' },
     _cache: {},
 
     char(key) { return this.CHAR[key] || null; },
@@ -173,7 +173,7 @@ const Emoji = {
         let c;
         const v = this.VECTOR[key];
         if (v && typeof WeaponArt !== 'undefined') {
-            if (key.startsWith('ammo')) c = this._ammo(px, key === 'ammo_rifle');
+            if (key.startsWith('ammo') && typeof v !== 'string') c = this._ammo(px, key === 'ammo_rifle');
             else c = WeaponArt.canvas(typeof v === 'string' ? v : key);
         } else {
             c = document.createElement('canvas');

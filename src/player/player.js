@@ -311,7 +311,7 @@ class Player {
         if (car) this._updateCarClip(0);
         else NpcArt.setClip(this._clipIds(), null);
     }
-    _clipIds() { const s = this.actor.sheet; return s && s.isNpc ? [s.atlasName, s.fallbackAtlas, s.extraAtlas] : []; }
+    _clipIds() { const s = this.actor.sheet; return s && s.isNpc ? [s.atlasName, s.fallbackAtlas, s.extraAtlas, s.armsAtlas] : []; }
     _updateCarClip(dt) {
         const k = this._carClip;
         if (!k) return;
@@ -393,6 +393,10 @@ class Player {
             // Andando, o tiro NÃO troca o desenho: as pernas seguem no passo (frente/trás/lado — ver update) e o clarão sai na arma
             // (SparkFx). A ação dura o mesmo que o clipe de tiro e termina pelo tempo.
             const sc = this.actor.sheet.getClip('shoot', look), dur = sc ? sc.frames / sc.fps : 0.25;
+            if (sc && sc.loop && this.action && this.action.name === 'shoot') {     // minigun: o clipe de tiro (canos girando) segue em loop
+                this.action.timer = Math.max(this.action.timer || 0, 0.18);
+                return 'shoot';
+            }
             if (this.speed >= 0.6 && !this.swimming) {
                 this.action = { name: 'shoot', lock: 0.6, onDone: null, holdAim: true, yank: null, timer: dur, moving: true };
                 this.actor.done = false;                                               // (o fim é pelo tempo: o "acabou" do tiro anterior não vale)
@@ -405,6 +409,9 @@ class Player {
         }
         return ok ? this.action.name : null;
     }
+
+    // Arma pesada na mão (RPG, lança-foguetes, minigun): fator da velocidade a pé (Weapons[...].heavy).
+    get heavyMul() { const W = Weapons[this.weapon]; return (W && W.heavy) || 1; }
 
     // Arma desenhada na mão (as armas novas reaproveitam o desenho de pistola/SMG).
     get look() {
@@ -584,7 +591,7 @@ class Player {
         const g = onGround && moveDir.lengthSquared() > 1e-4 ? MapGeo.slopeAlong(this.root.position.x, this.root.position.z, moveDir.x, moveDir.z) : 0;
         this.slope = (this.slope || 0) + (g - (this.slope || 0)) * Math.min(1, dt * 6);
         this.actor.setSlope(this.speed > 0.3 ? this.slope : 0);
-        const maxSpeed = (this.swimming ? swimV : (sprinting && depth <= 0) ? Bags.runSpeed(this) : walkV) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? (this.aimFree ? 0.85 : 0.6) : 1) * (this.crouched ? Config.tactics.sneakSpeed : 1) * MapGeo.slopeSpeed(this.slope);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
+        const maxSpeed = (this.swimming ? swimV : (sprinting && depth <= 0) ? Bags.runSpeed(this) : walkV) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? (this.aimFree ? 0.85 : 0.6) : 1) * (this.crouched ? Config.tactics.sneakSpeed : 1) * MapGeo.slopeSpeed(this.slope) * (this.swimming ? 1 : this.heavyMul);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
 
         // Acelera/desacelera suavemente rumo à velocidade alvo (frame-independent).
         const targetVel = moveDir.scale(maxSpeed);
@@ -673,7 +680,7 @@ class Player {
                 return;
             }
             this._wRate = null;
-            const gun = w === 'pistol' || w === 'smg' || w === 'shotgun';
+            const gun = Player.GUN_LOOKS.has(w);
             // Agachado (furtivo / cobertura). Mirando EM COBERTURA ele levanta para atirar por cima (desenho de pé, abaixo).
             if (this.crouched && !(aiming && this.inCover)) {
                 const moving = this.speed >= 0.3, cn = moving ? 'sneak' : 'crouch';
@@ -816,5 +823,7 @@ class Player {
 // recomeça do 1º. O chute fecha o combo (derruba — ver Melee.kick).
 Player.COMBO = ['punchL', 'punch', 'kick'];
 Player.COMBO_GAP = 0.6;
+// Desenhos de arma de fogo com pose de mirar / passo lateral (o revólver usa o da pistola; fuzil e AK, o da SMG).
+Player.GUN_LOOKS = new Set(['pistol', 'smg', 'shotgun', 'pistol_sil', 'rpg', 'launcher', 'minigun']);
 
 Player.ZERO = new BABYLON.Vector3(0, 0, 0);          // (só leitura: "sem movimento" sem alocar)

@@ -153,6 +153,9 @@ function NpcGenMesh(G) {
             const h = F['hand_' + sd];
             for (const c of [0, 1, 2]) { h.o[c] *= 0.9; h.s[c] *= 0.9; }
         }
+        if (key === 'f') {                                                        // braços femininos mais finos (a caixa da manga engrossava a malha)
+            for (const sd of ['R', 'L']) for (const b of ['uarm_' + sd, 'farm_' + sd]) for (const c of [0, 1]) { F[b].s[c] *= 0.8; F[b].o[c] *= 0.8; }
+        }
         F.chest.zTop = 15.6; F.chest.sTop = F.chest.s[2] * 0.72;                  // acima dos ombros (trapézio, pescoço): mais baixo — o pescoço aparece
         // cabeça: olhos (centro de cada globo ocular) → (±5,4; 10,2), topo do crânio → 25,4, queixo → −1,6; frente/nuca pela caixa
         const H = F.head, eL = [0, 0, 0], eR = [0, 0, 0];

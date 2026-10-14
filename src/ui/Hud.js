@@ -35,6 +35,9 @@ class Hud {
             .h-main { display: flex; gap: 12px; padding: 12px; align-items: stretch; }
             .h-weap { width: 108px; flex: none; border-radius: var(--r-2); background: linear-gradient(160deg, rgba(255,255,255,0.09), rgba(255,255,255,0.02));
                 border: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 6px; }
+            .h-weap { pointer-events: auto; cursor: pointer; transition: border-color .12s, background .12s; }      /* clique: roda de armas */
+            .h-weap:hover { border-color: rgba(251,191,36,0.6); background: linear-gradient(160deg, rgba(251,191,36,0.16), rgba(255,255,255,0.03)); }
+            .h-weap .w-key { font: 700 10px var(--font); letter-spacing: 0.06em; color: var(--tx-3); }
             .h-weap .w-icon { width: 92px; height: 46px; display: flex; align-items: center; justify-content: center; }
             .h-weap .w-icon canvas { max-width: 100%; max-height: 100%; }
             .h-weap .w-icon .emo { font-size: 36px; }
@@ -76,6 +79,9 @@ class Hud {
             .px-stars .emo { font-size: 24px; transition: filter .2s, opacity .2s, transform .2s; }
             .px-stars .emo.off { filter: grayscale(1) brightness(0.5); opacity: 0.45; }
             .px-stars .emo.hot { filter: hue-rotate(-38deg) saturate(2.2) drop-shadow(0 0 6px rgba(255,60,60,0.9)); transform: scale(1.08); }
+            /* ninguém te vê (a polícia procura): as estrelas piscam, como no GTA */
+            .px-stars.lost .emo:not(.off) { animation: starLost 0.9s steps(2, jump-none) infinite; }
+            @keyframes starLost { 0% { opacity: 1; } 100% { opacity: 0.28; } }
             .px-status { font: 800 14px var(--font-d); letter-spacing: 0.06em; text-transform: uppercase; }
             .px-forces { font: 500 11px var(--font); color: var(--tx-2); min-height: 0; }
             .px-forces:empty { display: none; }
@@ -123,7 +129,7 @@ class Hud {
 
         // JOGADOR: arma (ícone, nome, munição) + VIDA e COLETE + kits médicos
         this.vitalPanel = this.weaponPanel = mk('px h-main', `
-            <div class="h-weap"><div class="w-icon"></div><div class="px-name" id="hWName"></div><div class="px-ammo" id="hWAmmo"></div></div>
+            <div class="h-weap" title="Roda de armas (segure Tab)"><div class="w-icon"></div><div class="px-name" id="hWName"></div><div class="px-ammo" id="hWAmmo"></div><div class="w-key">TAB · RODA</div></div>
             <div class="h-vit">
               <div class="vrow">${E('heart')}<div class="vcol"><div class="px-label"><span>Vida <span class="h-kit" id="hKit2"></span></span><span class="px-pct" id="hHpT"></span></div><div class="px-bar"><div class="px-fill hp" id="hHp"></div></div></div></div>
               <div class="vrow" id="hArmorRow">${E('shield')}<div class="vcol"><div class="px-label"><span>Colete<span class="px-lvl" id="hArL"></span></span><span class="px-pct" id="hArT">0%</span></div><div class="px-bar"><div class="px-fill ar" id="hAr"></div></div></div></div>
@@ -156,6 +162,8 @@ class Hud {
         this.stars = [];
         for (let i = 0; i < Config.wanted.maxLevel; i++) { const s = document.createElement('span'); s.className = 'emo off'; s.textContent = Emoji.char('star'); starsEl.appendChild(s); this.stars.push(s); }
         this.wIcon = this.weaponPanel.querySelector('.w-icon');
+        const hw = this.weaponPanel.querySelector('.h-weap');
+        hw.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); if (this.g.wheel) this.g.wheel.show('click'); });
 
         // Janela do veículo e mensagens
         this.vehPop = mk('', '<div class="px"><div class="px-title">Veículo</div><div class="px-body"><div class="vn" id="vName"></div><div class="v-img"></div></div></div>');
@@ -276,11 +284,14 @@ class Hud {
         this._set('stars', lvl + (hot ? 'h' : ''), () => {
             this.stars.forEach((c, i) => { c.className = 'emo' + (i < lvl ? (hot ? ' hot' : '') : ' off'); });
         });
+        const lost = lvl > 0 && !!g.policeManager && !g.policeManager.playerSeen;
+        this._set('lost', lost, (v) => { this.stars[0].parentNode.classList.toggle('lost', v); });
         let st, col;
         if (g.hiding && g.hiding.phase === 'hidden') { st = g.hiding.seen ? 'Visto! Eles vêm' : 'Escondido'; col = g.hiding.seen ? '#fb7185' : '#7dd3fc'; }
         else if (lvl <= 0) { st = 'Limpo'; col = '#86efac'; }
         else if (g.bustTimer > 0) { st = `Preso em ${Math.max(0, Config.police.bustTime - g.bustTimer).toFixed(1)}s`; col = '#fb7185'; }
-        else if (g.wanted.lose > 0.3) { st = `Escapando ${Math.max(0, g.wanted.cfg.lose - g.wanted.lose).toFixed(1)}s`; col = '#86efac'; }
+        else if (g.wanted.hold && lost) { st = 'Polícia perto — quieto'; col = '#fdba74'; }
+        else if (g.wanted.lose > 0.3) { st = `${g.wanted.rate > 1 ? 'Fora da busca' : 'Escapando'} ${g.wanted.left.toFixed(1)}s`; col = '#86efac'; }
         else { st = 'Procurado'; col = '#fdba74'; }
         this._set('status', st + col, () => { const e = this.$('hStatus'); e.textContent = st; e.style.color = col; });
         let forces = '';
@@ -323,8 +334,8 @@ class Hud {
         const sl = Bags.strLevel(pl.str);
         this._set('load', D.name + kg + '|' + sl + '|' + Math.round(Bags.cap || 0), () => {
             const el = this.$('hLoad');
-            el.innerHTML = `<span class="emo">${D.emo}</span> ${D.name} · ${kg.toFixed(1)}/${Math.round(Bags.cap || D.kg)} kg${sl ? ` · força ${sl}` : ''}${r >= Bags.HARD ? ' · NO LIMITE' : r > 1 ? ' · sobrecarga' : (r > 0.5 ? ' · pesado' : '')}`;
-            el.className = 'h-load' + (r > 1 ? ' over' : (r > 0.5 ? ' heavy' : ''));
+            el.innerHTML = `<span class="emo">${D.emo}</span> ${D.name} · ${kg.toFixed(1)}/${Math.round(Bags.cap || D.kg)} kg${sl ? ` · força ${sl}` : ''}${r >= Bags.HARD ? ' · NO LIMITE' : r > Bags.OVER ? ' · sobrecarga' : (r > 0.7 ? ' · pesado' : '')}`;
+            el.className = 'h-load' + (r > Bags.OVER ? ' over' : (r > 0.7 ? ' heavy' : ''));
         });
 
         // ---- dinheiro, hora e kits

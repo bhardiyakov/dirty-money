@@ -100,6 +100,75 @@ Joystick (borda = correr) + ATACAR + até 2 botões de contexto que aparecem soz
 
 - Motor, arrefecimento, óleo (com vazamento), bateria, freios, pneus e suspensão gastam e mudam a direção (falha, superaquecimento, partida que falha, freio longo, derrapagem, carro puxando). Painel com luzes de aviso. Capô para trocar peças você mesmo; oficinas Pay n Pay (orçamento, retífica, funilaria, pintura), borracharia nos postos, mecânico do morro (sujo, placa fria). Porta-malas por carro (salvo nos carros da garagem; revistado na prisão, menos com fundo falso).
 
+## Polícia: fuga possível a partir de 3★ (`src/police/*`, `Config.wanted` / `Config.heli`)
+
+Antes, de 3★ para cima era impossível fugir (medido com um robô dirigindo pelas ruas, sem renderizar: 0 fugas em 6 tentativas,
+até de esportivo): o helicóptero via a 100 u através dos prédios voando a 24 m/s (mais rápido que quase todo carro), os reforços
+nasciam em volta da posição VERDADEIRA do jogador mesmo sem ninguém saber dela, qualquer policial a 32 u zerava a fuga atrás de
+parede e as viaturas prensavam o carro do jogador contra a parede. Agora (estilo GTA V):
+
+- **Cone de visão** (`fovCos`, ~70° para cada lado) com linha de visada; de perto (`nearSense`, 11 u) a polícia percebe em volta. O
+  radar desenha os cones (vermelho = te vendo).
+- **Área de busca**: perdeu de vista, as estrelas piscam e cada unidade varre um ponto do círculo onde te viram por último (puxado
+  pelo rumo que você levava). Fora do círculo a fuga anda 1,8×; policial colado só PAUSA a contagem. Reforços nascem em volta da
+  área, longe de você, e param de vir quando a pista esfria; bloqueios só de 4★ e em volta da área.
+- **Helicóptero** (3★+, chega depois de 16 s): 18 m/s, segura você até 48 u (menos num alvo rápido), não vê debaixo de viaduto,
+  ponte, túnel, toldo ou cobertura de posto e só te reacha no holofote; varre a área em espiral; autonomia de 70 s (3★) / 95 s (4★),
+  depois vai abastecer por 35 s.
+- **Viaturas** seguem o carro na cola e só às vezes tentam a batida (PIT); com o carro parado, freiam (dá para empurrar) e descem.
+- Atirar num carro em movimento erra mais (`movingSpread`). **Pintura express** na oficina (sem ninguém vendo) zera as estrelas.
+- Resultado no mesmo robô: a 3★ com polícia em cima, foge em boa parte das tentativas (esportivo ~3/4, mesmo com o helicóptero
+  colado desde o início); sedã comum foge quando quebra a visão cedo — o helicóptero continua sendo o grande perigo.
+
+## Interiores (`src/art/ShopArt.js` — `ShopCtx._polish`)
+
+Todo interior (lojas, casas, bancos, joalherias) ganha um acabamento antes da luz: objetos de canto e de parede por tipo de lugar
+(lixeira, planta, placa de piso molhado, cestas, caixas, engradados, bebedouro, cabideiro, porta-guarda-chuva, banco, pedestais com
+corda; relógio, quadros, ar-condicionado, TV, neon, arandela, placa de saída, extintor, calendário), sombra de contato no piso junto
+às paredes e móveis, piso encerado refletindo móveis e luzes (calhas fluorescentes no mercado), sujeira leve e marcas de sola na
+entrada, rodapé, e luz com mais contraste e "temperatura" (quente em restaurante, bar e casa; fria em mercado e farmácia). Nada fecha
+passagem: cada objeto testa folga e que a sala inteira continua alcançável a pé da porta. (O mesmo teste corrigiu o cofre das
+pizzarias, que ficava num canto da cozinha sem acesso.)
+
+## Personagens (`src/art/npcgen/*`, `src/art/NpcArt.js`)
+
+Braços soltos ao lado do corpo (sem o ar de "gorila"), cabeça um pouco maior (rosto e cabelo mais legíveis de cima), silhueta
+feminina de verdade (ombros mais estreitos, braços finos, quadril), luz principal mais marcada com recorte nas bordas e dobras mais
+fundas; os atlas foram gerados de novo. No jogo, de longe (dirigindo, celular, tela pequena) o boneco passa a ser filtrado (média
+sobre a pegada do pixel) em vez de serrilhar e "ferver" andando. Depois, o visual passou a ser o de um render 3D: sem o contorno preto
+em volta, silhueta com borda suavizada (cobertura do pixel guardada no atlas), sombra no chão em degradê e ampliação lisa de perto.
+
+## Armas especiais (`src/combat/Combat.js` → `Weapons`, `src/combat/Rockets.js`)
+
+- **Pistola com silenciador** (`pistol_sil`, tecla 2 duas vezes): `silenced` — só quem está a < 8 u e vê percebe; não chama a polícia
+  de longe (o mesmo caminho do silenciador do Armeiro: `CareerCore.silenced`).
+- **RPG** (`rpg`) e **lança-foguetes** (`launcher`), tecla `=`: disparam foguetes (`Rockets`), em 3D de verdade, com chama, fumaça,
+  arma depois de 4 m. No chão a explosão é a de carro (`CarDamage.boomAt`); no ar, uma bola de fogo que só fere quem voa. Acerto direto
+  no helicóptero da polícia (`Config.heli.hp` 380) derruba: RPG 520, lança-foguetes 400. O RPG é livre (mirado no helicóptero, sobe
+  até ele com espoleta de proximidade); o lança-foguetes trava no alvo à frente (helicóptero > viatura > carro, anel vermelho) e
+  persegue com até 3,2 rad/s.
+- **Minigun** (`minigun`): gira os canos por 0,5 s (`spinUp`) e atira a cada 0,05 s; o clipe de tiro fica em loop enquanto atira.
+- As três pesadas deixam o personagem mais lento (`heavy`, fator da velocidade a pé) e recarregam devagar (`reload`). Só a boca de
+  fumo vende (estoque garantido, caras); munição: `ammo_rpg`, `ammo_rk`, `ammo_belt`.
+
+## Roda de armas (`src/ui/WeaponWheel.js`)
+
+Como a do GTA V: segurar **Tab** (teclado), **LB/L1** (controle) ou tocar o botão **ARMA** (celular) abre uma roda com 8 categorias
+(corpo a corpo, pistolas, submetralhadoras, fuzis, metralhadora, pesadas, arremessáveis, escopetas). O mouse (direção do cursor), o
+analógico direito ou o dedo escolhem a fatia; roda do mouse, ←/→ do direcional ou as setas ‹ › trocam dentro da categoria; soltar
+equipa (`Game.equipWeapon`). O centro mostra nome, munição e barras de dano/cadência/precisão/alcance. Aberta, o tempo corre a 30%
+e o ataque não sai. Toque rápido: Tab volta à arma anterior, LB passa para a próxima. No celular a roda fica aberta depois do toque
+(tocar na fatia equipa, no centro recarrega, fora fecha) ou segue o dedo arrastado a partir do ARMA; o tamanho acompanha o menor lado
+da tela (até 94%).
+
+## Peso e espaço (`src/player/Bags.js`, `Inventory.body`)
+
+- Até **3 armas no corpo** (bandoleira, cinto, coldre — sempre as 3 maiores): não ocupam a grade da mochila e pesam metade. Com os
+  bolsos (3×2) dá para levar pistola, escopeta e fuzil e ainda ter espaço para munição e kit.
+- Carga confortável maior em todas as bolsas (bolsos 12 kg … mochila tática 46 kg). Até 70% da carga não há perda; até 100%, −12%;
+  acima disso a velocidade cai aos poucos e só acima de 125% (`Bags.OVER`) é sobrecarga (sem correr). O limite para pegar mais coisa
+  é 2× a carga (`Bags.HARD`). Correr com peso cansa menos.
+
 ## Interface (`src/ui/Theme.js`)
 
 Interface moderna em HD, separada do mundo em pixel art: tokens de cor/raio/sombra em `:root`, fontes Inter (texto) e Outfit (títulos/números), cartões de vidro desfocado, botões arredondados. Ícones no estilo emoji (Noto Color Emoji, igual em todo aparelho); armas de fogo e munição são arte vetorial HD (`WeaponArt.VGrid`) no mesmo estilo.

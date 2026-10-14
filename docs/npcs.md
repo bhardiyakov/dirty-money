@@ -31,6 +31,17 @@ NPC, variações de cor e a personalização do jogador.
   (é o que `validate.html` compara).
 - Escala no jogo: `Config.art.npcPpu` = 26 px/m (= `NpcGenBuild.PPU`): adultos na mesma escala dos veículos (que são 1,3× o real).
 
+- **Postura e silhueta** (outubro/2026): `G.ARM_ABD = 0,6` fecha os braços nas poses FK de descanso (abdução ≤ 18°: parado,
+  andando, correndo — sem o ar de "gorila"); `ADULT.head = 0,66` (era 0,6: de cima, o rosto e o cabelo dizem quem é quem); corpo
+  feminino com ombros 0,84, braços 0,8 e quadril 1,08 (`bodyFactors`) e, na malha, braços 20% mais finos (`fitFor('f')`).
+- **Visual 3D, sem contorno** (outubro/2026, `G.LINES = false`, o padrão): o renderizador não desenha mais o contorno preto em volta
+  do boneco nem os traços onde uma parte passa na frente da outra (viram sombra de contato macia); a sombra no chão sai em degradê
+  (alfa); e o pixel de borda guarda a fração coberta (dos 2×2 subpixels) nos 2 bits baixos da luz — o shader vira isso em alfa, então a
+  silhueta sai suavizada, como um render 3D. De perto, a ampliação fica lisa (`sharp` até 1,6, sem os "quadradinhos" de pixel art).
+  `G.LINES = true` volta ao desenho cartunesco com traços.
+- **Redução no jogo** (`NpcArt`, uniform `mini`): com o boneco menor que o atlas (texels por pixel > 1,3 — dirigindo, celular), o
+  shader tira a média de n×n amostras sobre a pegada do pixel (até 4×4) em vez do bilinear de 4 amostras, que serrilhava e tremia.
+
 ## Corpo da malha 3D (`NpcGenMesh`, `assets/npcs/malha3d.js`)
 
 O corpo de todos os personagens (NPCs e jogador) vem do **personagem realista 3D** (pacote "personagem_3d_realista", MakeHuman, CC0:
@@ -140,6 +151,12 @@ tools/npcs/index.html            prévia de qualquer tipo/variante/clipe e "Gera
   troca quando parado/andando/correndo (com a arma da mão) estão TODOS prontos — nunca metade de um e metade de outro nesses — e vai
   sendo completado a cada ~1,5 s (golpes, carro, tático, nadar, pilotar…; o companheiro tático entra inteiro). O que ainda falta sai do
   visual anterior só durante a geração. Cada visual gerado fica no IndexedDB: voltar a ele é imediato.
+- **Armas novas** (pistola com silenciador, RPG, lança-foguetes, minigun): moram num terceiro atlas, `protagonista_armas`
+  (`NpcGenTypes.PLAYER_ARMS`: parado, andando, correndo, sacar, mirar, atirar, agachado, andar agachado, passo lateral e assalto com
+  cada uma; `NpcSheet.armsAtlas`). Os objetos estão em `NpcGenChar.buildProps` (ogiva do RPG e feixe de canos da minigun são peças
+  à parte — `SUB_PROPS` —: a ogiva some depois do disparo e os canos giram 15° por quadro no tiro em loop) e as pegadas em
+  `WEAPON_HOLD` (RPG e lança-foguetes no ombro direito; minigun no quadril). Num visual gerado esse atlas só é gerado quando o jogador
+  TEM uma delas (`PlayerLook.wantArms`, "hero:N:w", guardado no IndexedDB); até lá o desenho delas sai do visual de sempre.
 - A tela de equipamento mostra o **próprio personagem** girando (clique para girar), renderizado pelo gerador.
 
 ## Mudar ou criar personagens

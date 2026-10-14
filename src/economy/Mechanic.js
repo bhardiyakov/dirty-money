@@ -52,11 +52,40 @@ const Mechanic = {
     carPrompt(game) {
         const car = game.activeCar; if (game.mode !== 'car' || !CarCare.usable(car) || car.speed > 1.5) return '';
         const s = this.at(car.position.x, car.position.z); if (!s) return '';
+        if (game.wanted.level > 0 && s.kind !== 'posto') {          // procurado: pintura express (como o Pay 'n' Spray do GTA)
+            if (game.policeManager && game.policeManager.playerSeen) return `<b>E</b> pintura express<small>⚠ A polícia está te vendo — despiste antes de fechar a porta</small>`;
+            return `<b>E</b> pintura express e placa trocada — ${brl(this.hotPrice(game))}<small>${s.name} · porta fechada, sem perguntas: a polícia perde o carro de vista</small>`;
+        }
         if (this.nearPump(s, car.position.x, car.position.z) && car.tank > 0 && car.fuel < car.tank - 0.5) return '';      // (nas bombas, o E abastece)
         const c = CarCare.cond(car), w = CarCare.worst(c);
         return `<b>E</b> ${s.kind === 'posto' ? 'borracharia e troca de óleo' : s.kind === 'morro' ? 'mecânico do morro (aceita sujo, placa fria)' : 'oficina: diagnóstico e orçamento'}<small>${s.name} · ${w < 0.4 || car.hpFrac < 0.5 ? '⚠ o carro precisa de conserto' : w < 0.7 ? 'umas peças gastas' : 'carro em ordem'}</small>`;
     },
-    carInteract(game) { if (!this.carPrompt(game)) return false; const car = game.activeCar; this.service(game, car, this.at(car.position.x, car.position.z)); return true; },
+    carInteract(game) {
+        if (!this.carPrompt(game)) return false;
+        const car = game.activeCar, s = this.at(car.position.x, car.position.z);
+        if (game.wanted.level > 0 && s.kind !== 'posto') { this.hotPaint(game, car, s); return true; }
+        this.service(game, car, s); return true;
+    },
+
+    // Pintura express com ★ (ninguém te vendo): cor nova, placa trocada e as estrelas zeram. Aceita dinheiro sujo (sem nota).
+    hotPrice(game) { return 1000 + 750 * game.wanted.level; },
+    hotPaint(game, car, s) {
+        const pm = game.policeManager;
+        if (pm && pm.playerSeen) { game._flash('A polícia te viu entrar — não dá para fechar a porta. Despiste primeiro'); return; }
+        const amt = this.hotPrice(game), inv = game.inventory;
+        if (inv.cash + inv.clean < amt) { game._flash(`Pintura express: ${brl(amt)} — faltam ${brl(amt - inv.cash - inv.clean)}`); return; }
+        const dirty = Math.min(inv.cash, amt); inv.cash -= dirty; inv.clean -= amt - dirty;
+        const rows = this.PAINT_ROWS.map((r) => r[0]), cur = car.visual && car.visual.variant, pick = rows.filter((r) => r !== cur);
+        const row = pick[Math.floor(Math.random() * pick.length)] ?? rows[0];
+        if (car.visual && car.visual.setVariant) car.visual.setVariant(row);
+        if (car.ownedRec) car.ownedRec.paint = row;
+        Traces.clearPlate(car);
+        game.wanted._set(0, 'paint');
+        if (pm) { for (const u of pm.units) u.mind = null; pm.known = null; pm.search = null; }      // ninguém sabe de mais nada (os reforços voltam a patrulhar e somem depois)
+        game.dayNight.skip(0.25);
+        AudioFX.blip(900, 0.12, 0.16);
+        game._flash(`🎨 Pintura express (−${brl(amt)}): carro de outra cor, placa nova — a polícia perdeu você de vista`);
+    },
 
     // ---------------------------------------------------------------- a pé: balcão de peças
     prompt(game) {

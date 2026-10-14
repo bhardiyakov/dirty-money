@@ -98,16 +98,41 @@ class Inventory {
     get cols() { return Bags.def(this).cols; }
     get rows() { return Bags.def(this).rows; }
     get capacity() { return this.cols * this.rows; }
-    static get SIZES() { return { pistol: 2, revolver: 2, smg: 2, knife: 1, shotgun: 3, rifle: 3, ak47: 3, bat: 3 }; }
+    static get SIZES() { return { pistol: 2, pistol_sil: 2, revolver: 2, smg: 2, knife: 1, shotgun: 3, rifle: 3, ak47: 3, bat: 3, rpg: 3, launcher: 3, minigun: 3 }; }
+    // Armas de fogo na ordem da mochila (e a munição de cada uma, com o nome dela).
+    static get GUN_ORDER() { return ['pistol', 'pistol_sil', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47', 'rpg', 'launcher', 'minigun']; }
+    static get AMMO_LABEL() { return { rpg: 'Foguetes do RPG', launcher: 'Foguetes do lança-foguetes', minigun: 'Cinta da minigun' }; }
     static get STACK() { return { medkit: 3, hack: 5, key: 5, food: 4, water: 4, jewel: 4, grenade: 3, molotov: 2 }; }                // unidades por célula
 
-    // Itens da mochila como lista de { id, kind, key, w, h, count, label }, na ordem de exibição.
+    // ---------------------------------------------------------------- armas NO CORPO
+    // Até BODY_SLOTS armas vão no corpo (bandoleira nas costas, cinto, coldre) e NÃO ocupam a mochila — pesam metade (Bags.BODY_KG).
+    // São sempre as MAIORES que você tem (empate: a ordem da mochila): a escolha não muda ao trocar de arma, então a grade não
+    // embaralha. Assim dá para andar com 3 armas (ex.: pistola, escopeta e AK) mesmo só com os bolsos.
+    static get BODY_SLOTS() { return 3; }
+    // Onde cada arma do corpo vai, pelo tamanho: arma longa nas costas/bandoleira, pistola e SMG no coldre/cinto, faca no cinto.
+    static get BODY_PLACES() { return { 3: ['Bandoleira', 'Costas', 'Ombro'], 2: ['Coldre', 'Cinto', 'Perna'], 1: ['Cinto', 'Bota', 'Bolso'] }; }
+    // Nomes dos lugares das armas `keys` (do corpo, na ordem).
+    bodyPlaces(keys) {
+        const used = new Set(), S = Inventory.SIZES;
+        return keys.map((k) => { const L = Inventory.BODY_PLACES[Math.min(3, S[k] || 1)], n = L.find((q) => !used.has(q)) || 'No corpo'; used.add(n); return n; });
+    }
+    // Armas que você carrega (sem punhos e arremessáveis, que vão em pilhas na mochila).
+    carried() { return Object.keys(this.weapons).filter((k) => k !== 'fists' && !this.isThrow(k) && this.weapons[k].owned); }
+    bodyOf(keys) {
+        const S = Inventory.SIZES, order = [...Inventory.GUN_ORDER, 'bat', 'knife'], ix = (k) => { const i = order.indexOf(k); return i < 0 ? 99 : i; };
+        return keys.slice().sort((a, b) => (S[b] || 1) - (S[a] || 1) || ix(a) - ix(b)).slice(0, Inventory.BODY_SLOTS);
+    }
+    body() { return this.bodyOf(this.carried()); }
+    // Células da grade que as armas `keys` ocupariam (as do corpo não contam).
+    _gridCells(keys) { const S = Inventory.SIZES, b = this.bodyOf(keys); return keys.reduce((s, k) => s + (b.includes(k) ? 0 : (S[k] || 1)), 0); }
+
+    // Itens da mochila como lista de { id, kind, key, w, h, count, label }, na ordem de exibição (as armas do corpo ficam de fora).
     items() {
-        const out = [], S = Inventory.SIZES, order = ['pistol', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47', 'bat', 'knife'];
-        for (const k of order) if (this.weapons[k].owned) out.push({ id: 'w:' + k, kind: 'weapon', key: k, w: S[k], h: 1, count: 1, label: Weapons[k].name });
-        for (const k of ['pistol', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47']) {
+        const out = [], S = Inventory.SIZES, guns = Inventory.GUN_ORDER, order = [...guns, 'bat', 'knife'], body = this.body();
+        for (const k of order) if (this.weapons[k].owned && !body.includes(k)) out.push({ id: 'w:' + k, kind: 'weapon', key: k, w: S[k], h: 1, count: 1, label: Weapons[k].name });
+        for (const k of guns) {
             const r = this.weapons[k].reserve || 0;
-            if (r > 0) out.push({ id: 'a:' + k, kind: 'ammo', key: k, w: 1, h: 1, count: r, label: 'Munição: ' + Weapons[k].name });
+            if (r > 0) out.push({ id: 'a:' + k, kind: 'ammo', key: k, w: 1, h: 1, count: r, label: Inventory.AMMO_LABEL[k] || 'Munição: ' + Weapons[k].name });
         }
         const stack = (n, per, kind, key, label) => {
             for (let i = 0; i < Math.ceil(n / per); i++) out.push({ id: `${kind}:${i}`, kind, key, w: 1, h: 1, count: Math.min(per, n - i * per), label });
@@ -136,7 +161,8 @@ class Inventory {
         const S = Inventory.SIZES, st = Inventory.STACK;
         switch (T.kind) {
             case 'weapon': {
-                let n = this.weapons[T.weapon].owned ? 0 : S[T.weapon];
+                const own = this.carried();
+                let n = this.weapons[T.weapon].owned ? 0 : this._gridCells(own.concat(T.weapon)) - this._gridCells(own);      // (cabe no corpo: 0)
                 if (T.ammo && !(this.weapons[T.weapon].reserve > 0)) n += 1;
                 return n;
             }
@@ -152,10 +178,12 @@ class Inventory {
         }
     }
 
-    // Posiciona os itens na grade (primeiro encaixe, linha a linha). Retorna os itens com { x, y }.
+    // Posiciona os itens na grade (primeiro encaixe, linha a linha). Retorna os itens com { x, y } — antes deles, as armas do CORPO
+    // ({ body: true, slot }, na fileira y = −1, acima da grade: as setas do menu chegam nelas subindo).
     layout() {
         const C = this.cols, R = this.rows, taken = Array.from({ length: R }, () => new Array(C).fill(false));
-        const placed = [];
+        const B = this.body(), names = this.bodyPlaces(B);
+        const placed = B.map((k, i) => ({ id: 'w:' + k, kind: 'weapon', key: k, w: 2, h: 1, count: 1, label: Weapons[k].name, body: true, slot: names[i], x: i * 2, y: -1 }));
         for (const it of this.items()) {
             let ok = false;
             for (let y = 0; y < R && !ok; y++) for (let x = 0; x + it.w <= C && !ok; x++) {
@@ -196,4 +224,4 @@ class Inventory {
         return lost;
     }
 }
-memoStatics(Inventory, 'HEAL', 'SIZES', 'STACK');
+memoStatics(Inventory, 'HEAL', 'SIZES', 'STACK', 'GUN_ORDER', 'AMMO_LABEL', 'BODY_SLOTS', 'BODY_PLACES');

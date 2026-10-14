@@ -136,7 +136,9 @@ function NpcGenRender(G) {
             const IDX = new Int8Array(np_), DOT = new Float64Array(np_);
             const smooth = G.SHADE !== 'cel';                                      // (sombreado contínuo "pré-renderizado"; 'cel' = o do pacote)
             const NXa = smooth ? new Float32Array(np_) : null, NYa = smooth ? new Float32Array(np_) : null, NZa = smooth ? new Float32Array(np_) : null, TN = smooth ? new Float32Array(np_) : null;
-            const fillMin = (ss * ss) >> 1, weapMin = Math.ceil((ss * ss * 5) / 16);
+            // Visual 3D (sem traços): pixel de borda com qualquer cobertura entra, e a fração coberta vira o alfa (borda suavizada — COV).
+            const aa = smooth && !G.LINES, COV = aa ? new Uint8Array(np_) : null;
+            const fillMin = aa ? 1 : (ss * ss) >> 1, weapMin = Math.ceil((ss * ss * 5) / 16);
             const gcount = new Float64Array(NG), mcount = new Int32Array(NM);
             const subI = new Int16Array(ss * ss), subL = new Int32Array(ss * ss), subZ = new Float64Array(ss * ss);
             for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
@@ -184,13 +186,14 @@ function NpcGenRender(G) {
                 const tone = tc > 0 ? ts / tc : tsa / sc;
                 const i = py * cw + px;
                 F[i] = filled ? 1 : 0; DOM[i] = dom; ZZ[i] = zz; HH[i] = hh; MAT[i] = mat;
+                if (COV) COV[i] = filledN;
                 const d = (nx / nl) * L[0] + (ny / nl) * L[1] + (nz / nl) * L[2];
                 DOT[i] = d;
                 IDX[i] = 1 + (d > -0.3) + (d > 0.3) + (d > 0.8) + rint(tone);
                 if (smooth) { NXa[i] = nx / nl; NYa[i] = ny / nl; NZa[i] = nz / nl; TN[i] = tone; }
             }
             const at = (A, y, x) => A[((y % ch) + ch) % ch * cw + ((x % cw) + cw) % cw];
-            if (smooth) return this._smooth(out, { F, DOM, ZZ, HH, MAT, NXa, NYa, NZa, TN, cw, ch, bx0, by0, np_, water, depth, effects: P.effects, Ryaw, nsh, pose, shadow });
+            if (smooth) return this._smooth(out, { F, DOM, ZZ, HH, MAT, NXa, NYa, NZa, TN, COV, sq: ss * ss, cw, ch, bx0, by0, np_, water, depth, effects: P.effects, Ryaw, nsh, pose, shadow });
             // ---------------- sombreamento: oclusão + materiais especiais
             for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
                 const i = y * cw + x, zz = ZZ[i];
@@ -275,7 +278,9 @@ function NpcGenRender(G) {
         //   luz difusa com "wrap" (passagem suave para a sombra) + céu (de cima mais claro) + oclusão ambiente (dobras, axilas, entre
         //   as pernas escurecem) + luz de recorte nas bordas + o desenho das texturas (listras, costuras) + brilho especular por
         //   material (couro, cabelo, metal brilham; jeans e algodão não). Acima de 204 = além do tom mais claro (o brilho, quase branco).
-        // Vincos entre partes (braço na frente do corpo) escurecem em vez de virar linha preta; o contorno externo fica.
+        // Vincos entre partes (braço na frente do corpo) escurecem em vez de virar linha preta. Visual "3D" (G.LINES = false, o padrão):
+        // SEM contorno preto — nem o externo nem os traços onde uma parte passa na frente da outra (viram sombra de contato macia) — e a
+        // sombra no chão sai com borda suave (alfa em degradê). G.LINES = true volta aos traços do desenho cartunesco.
         _smooth(out, c) {
             const { F, DOM, ZZ, HH, MAT, NXa, NYa, NZa, TN, cw, ch, bx0, by0, np_, water, depth } = c;
             const W = this.W, code = out.code, alpha = out.alpha, light = out.light = new Uint8Array(W * this.H), L = this.cam.L, k = this.k;
@@ -295,7 +300,7 @@ function NpcGenRender(G) {
                     const j = idx(y - dy, x - dx);
                     if (F[j] && ZZ[j] < zz - thr) occ++;
                 }
-                const ao = 1 - min(0.5, max(0, occ / nwin - 0.06) * 1.25);
+                const ao = 1 - min(0.58, max(0, occ / nwin - 0.05) * 1.45);          // (dobras, axilas e debaixo do queixo mais fundos)
                 // linhas de desenho: borda de profundidade com o vizinho (outra parte na frente) → traço escuro fino (contorno); troca de
                 // material com degrau (punho da manga, barra da camisa) → a cor mais escura do próprio material; degrau pequeno → vinco
                 let crease = 1;
@@ -308,10 +313,11 @@ function NpcGenRender(G) {
                     else if (gap > 0.6 * kk) crease = min(crease, 0.86);
                 }
                 const d = nx * L[0] + ny * L[1] + nz * L[2];
-                let dif = min(max((d + 0.42) / 1.42, 0), 1); dif = dif * dif * (3 - 2 * dif);
+                // (luz principal mais marcada e recorte nas bordas mais forte: o boneco "salta" do chão de longe)
+                let dif = min(max((d + 0.32) / 1.32, 0), 1); dif = dif * dif * (3 - 2 * dif);
                 const hemi = 0.5 + 0.5 * (nx * UP[0] + ny * UP[1] + nz * UP[2]);
-                const fres = (1 - min(1, abs(nz))) ** 2.2, rim = fres * max(0, nx * RIM[0] + ny * RIM[1] + nz * RIM[2]) * 0.32;
-                let lv = (0.1 + 0.2 * hemi + 0.72 * dif) * ao * crease + rim + 0.055 * TN[i];
+                const fres = (1 - min(1, abs(nz))) ** 2.0, rim = fres * max(0, nx * RIM[0] + ny * RIM[1] + nz * RIM[2]) * 0.44;
+                let lv = (0.07 + 0.17 * hemi + 0.8 * dif) * ao * crease + rim + 0.06 * TN[i];
                 const S = SHINE[m];
                 let sp = S ? max(0, nx * HV[0] + ny * HV[1] + nz * HV[2]) ** S[0] * S[1] * ao * crease : 0;
                 if (m === M.eye) { lv = 0.08; sp = sp > 0.15 ? 0.9 : 0; }                // pupila escura com um brilho
@@ -322,12 +328,17 @@ function NpcGenRender(G) {
             }
             // cor (material + luz) + água + contorno externo
             const UNDER = new Uint8Array(np_), ABOVE = new Uint8Array(np_), AL = new Uint8Array(np_), CO = new Uint8Array(np_);
-            const hasWater = water !== null && water !== undefined;
+            const hasWater = water !== null && water !== undefined, lines = !!G.LINES;
             for (let i = 0; i < np_; i++) {
                 if (!F[i]) continue;
                 CO[i] = MAT[i] << 3;
-                if (LN[i] === 2 && !isDecal[MAT[i]]) CO[i] = C.OUTLINE;                 // traço de contorno (parte na frente de outra)
-                else if (LN[i] === 1 && !isDecal[MAT[i]]) LT[i] = min(LT[i], 22);       // traço na cor escura do material
+                if (lines) {
+                    if (LN[i] === 2 && !isDecal[MAT[i]]) CO[i] = C.OUTLINE;             // traço de contorno (parte na frente de outra)
+                    else if (LN[i] === 1 && !isDecal[MAT[i]]) LT[i] = min(LT[i], 22);   // traço na cor escura do material
+                } else if (!isDecal[MAT[i]]) {
+                    if (LN[i] === 2) LT[i] = Math.round(LT[i] * 0.6);                   // parte na frente de outra: sombra de contato (sem traço)
+                    else if (LN[i] === 1) LT[i] = Math.round(LT[i] * 0.84);             // troca de material com degrau: só um vinco leve
+                }
                 AL[i] = 255;
                 if (hasWater && HH[i] < water - 0.6) {
                     UNDER[i] = 1;
@@ -342,24 +353,33 @@ function NpcGenRender(G) {
                 const dil = at(ABOVE, y, x - 1) || at(ABOVE, y, x + 1) || at(ABOVE, y - 1, x) || at(ABOVE, y + 1, x);
                 if (!dil) continue;
                 if (hasWater && UNDER[i]) { CO[i] = C.FOAM; AL[i] = 235; continue; }
-                if (F[i]) continue;
+                if (F[i] || !lines) continue;
                 CO[i] = C.OUTLINE; AL[i] = 255; F[i] = 2;
             }
+            // luz em 64 níveis (bits altos) + cobertura da borda nos 2 bits baixos (0 = cheio, 1–3 = 75/50/25%: o jogo vira alfa)
+            const COV = c.COV, sq = c.sq || 4;
             for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
                 const i = y * cw + x, o = (by0 + y) * W + bx0 + x;
-                code[o] = CO[i]; alpha[o] = AL[i]; light[o] = LT[i];
+                const cv = COV && F[i] === 1 ? min(3, max(0, Math.round((1 - COV[i] / sq) * 4))) : 0;
+                code[o] = CO[i]; alpha[o] = AL[i]; light[o] = (LT[i] & 0xfc) | cv;
                 if (F[i]) depth[o] = ZZ[i];
             }
             for (const fx of c.effects) this._effect(code, alpha, depth, fx, c.Ryaw);
             if (c.shadow && c.pose.shadow && !hasWater) {
-                const sh = this._shadow(c.nsh, c.pose);
-                for (let i = 0; i < W * this.H; i++) if (sh[i] && alpha[i] === 0) { code[i] = C.SHADOW; alpha[i] = SHADOW_RGBA[3]; }
+                if (lines) {
+                    const sh = this._shadow(c.nsh, c.pose);
+                    for (let i = 0; i < W * this.H; i++) if (sh[i] && alpha[i] === 0) { code[i] = C.SHADOW; alpha[i] = SHADOW_RGBA[3]; }
+                } else {
+                    const sh = this._shadow(c.nsh, c.pose, true), A = SHADOW_RGBA[3] * 1.2;
+                    for (let i = 0; i < W * this.H; i++) if (sh[i] > 0.03 && alpha[i] === 0) { code[i] = C.SHADOW; alpha[i] = Math.min(255, Math.round(A * sh[i])); }
+                }
             }
             return out;
         }
 
-        // Sombra: a projeção vertical de um a cada 3 pontos do corpo (gx/gy, calculados na passada do render).
-        _shadow(cnt, pose) {
+        // Sombra: a projeção vertical de um a cada 3 pontos do corpo (gx/gy, calculados na passada do render). soft = degradê 0..1 (borda
+        // macia, mais escura onde o corpo se concentra) em vez da máscara recortada.
+        _shadow(cnt, pose, soft = false) {
             const W = this.W, H = this.H, s2 = 2, gx = this._gx, gy = this._gy;
             const k = pose.shadowScale === undefined ? 1.0 : pose.shadowScale;
             if (k !== 1.0) {
@@ -380,6 +400,16 @@ function NpcGenRender(G) {
             for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) T[y * W + x] = (S[((y - 1 + H) % H) * W + x] + S[y * W + x] * 2 + S[((y + 1) % H) * W + x]) / 4;
             S = new Float32Array(W * H);
             for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) S[y * W + x] = (T[y * W + (x - 1 + W) % W] + T[y * W + x] * 2 + T[y * W + (x + 1) % W]) / 4;
+            if (soft) {
+                // mais 3 passadas de desfoque (raio proporcional à resolução) e uma curva: núcleo cheio, borda que some aos poucos
+                const n = Math.max(2, Math.round(3 * this.k / 0.5));
+                for (let p = 0; p < n; p++) {
+                    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) T[y * W + x] = (S[((y - 1 + H) % H) * W + x] + S[y * W + x] * 2 + S[((y + 1) % H) * W + x]) / 4;
+                    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) S[y * W + x] = (T[y * W + (x - 1 + W) % W] + T[y * W + x] * 2 + T[y * W + (x + 1) % W]) / 4;
+                }
+                for (let i = 0; i < W * H; i++) { const v = Math.min(1, S[i] / 0.42); S[i] = v * v * (3 - 2 * v); }
+                return S;
+            }
             const m = new Uint8Array(W * H), out = new Uint8Array(W * H);
             for (let i = 0; i < W * H; i++) m[i] = S[i] > 0.16 ? 1 : 0;
             for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -490,12 +520,13 @@ function NpcGenRender(G) {
         if (!a) return [0, 0];
         if (isSpecial(c)) return [c, a];
         const w = a >= 255 ? 0 : 1 + min(3, max(0, Math.round((200 - a) / 50)));
-        return [(c & ~7) | w, l & 0xfc];          // (luz em 64 níveis: comprime melhor, e a olho é contínua)
+        return [(c & ~7) | w, l & 0xff];          // (luz em 64 níveis nos bits altos + cobertura da borda nos 2 baixos — ver _smooth)
     }
+    const covA = (b1) => 1 - (b1 & 3) * 0.25;   // fração coberta de um pixel de borda (sombreado contínuo)
     function unpackPx(b0, b1) {
         if (isSpecial(b0)) return { code: b0, alpha: b1, light: 0 };
         const w = b0 & 7;
-        return { code: b0 & ~7, alpha: w ? Math.round(200 - ((w - 1) / 3) * 150) : 255, light: b1 };
+        return { code: b0 & ~7, alpha: Math.round((w ? 200 - ((w - 1) / 3) * 150 : 255) * covA(b1)), light: b1 };
     }
 
     // RGBA de um quadro (prévia/validação) com as rampas de uma ficha: ramps[material] = 5 cores '#rrggbb'.
@@ -509,14 +540,15 @@ function NpcGenRender(G) {
             const c = fr.code[i], o = ((oy + y) * S + ox + x) * 4;
             let rgb;
             const ramp = R[c >> 3] || [[255, 0, 255], [255, 0, 255], [255, 0, 255], [255, 0, 255], [255, 0, 255]];
+            let ao = a;
             if (c < 8 || (c & 7) > 4) rgb = SPECIAL[c] || [255, 0, 255];
-            else if (fr.light) rgb = shadeRamp(ramp, fr.light[i]);
+            else if (fr.light) { rgb = shadeRamp(ramp, fr.light[i] & 0xfc); ao = Math.round(a * covA(fr.light[i])); }
             else rgb = ramp[c & 7];
             if (isUnder(c, a)) {
                 const dw = (200 - a) / 150, mf = 0.45 + 0.45 * dw;
                 rgb = rgb.map((v, k) => floor(v * (1 - mf) + WATER_RGB[k] * mf));
             }
-            out[o] = rgb[0]; out[o + 1] = rgb[1]; out[o + 2] = rgb[2]; out[o + 3] = a;
+            out[o] = rgb[0]; out[o + 1] = rgb[1]; out[o + 2] = rgb[2]; out[o + 3] = ao;
         }
         return out;
     }

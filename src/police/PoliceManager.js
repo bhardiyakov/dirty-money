@@ -9,6 +9,11 @@
 //   - quem ouve o tiro (hearRadius) vira perseguidor;
 //   - policiais a pé param no alcance, sacam e atiram; as viaturas atiram pelas janelas;
 //   - viaturas paradas junto ao jogador a pé despejam REFORÇOS (policiais que descem).
+//
+// FUGA (estilo GTA V): cada unidade enxerga num CONE à frente (Config.wanted.fovCos) com linha de visada; de perto
+// (nearSense) percebe em volta. Quem perdeu você de vista vai para a ÁREA DE BUSCA (onde te viram por último, puxada
+// um pouco no rumo que você levava) e cada unidade varre um ponto dela. Reforços nascem em volta da área — nunca em
+// cima de você — e param de vir quando a pista esfria. O helicóptero não te vê debaixo de cobertura (airCover).
 // ============================================================================
 
 class PoliceManager {
@@ -43,7 +48,9 @@ class PoliceManager {
         this.level = 0;
         this.playerSeen = false;     // alguém te enxerga agora (alimenta a fuga)
         this.known = null;           // última posição que o rádio conhece (2★+)
+        this.search = null;          // área de busca { x, z, r, age }: onde a polícia te procura (2★+)
         this._dispT = 0;
+        this._tf = new BABYLON.Vector3();
         this._tp = new BABYLON.Vector3();
         this._tv = new BABYLON.Vector3();
     }
@@ -62,7 +69,59 @@ class PoliceManager {
     //   x,z,vx,vz,t última posição conhecida (vista ou ouvida) e quando
     //   dispatched  o rádio mandou esta unidade atrás de você (2★+)
     _mind(u) {
-        return u.mind || (u.mind = { sees: false, x: 0, z: 0, vx: 0, vz: 0, t: -1e9, dispatched: false });
+        return u.mind || (u.mind = { sees: false, x: 0, z: 0, vx: 0, vz: 0, t: -1e9, st: -1e9, dispatched: false, wp: null, wpT: 0 });
+    }
+
+    // Para onde a unidade olha (x, z unitário): a frente da viatura ou o rosto do policial.
+    _face(u) {
+        if (u.body && u.fwdToRef) { const f = u.fwdToRef(this._tf); return f; }
+        const h = u.heading || 0;
+        this._tf.set(Math.sin(h), 0, Math.cos(h));
+        return this._tf;
+    }
+
+    // Debaixo de cobertura vista de cima (o helicóptero não te enxerga): toldo de loja ou cobertura de posto, embaixo do
+    // tabuleiro de um viaduto, barco/nadador sob a ponte.
+    airCover(x, z) {
+        const g = this.game, car = g.mode === 'car' ? g.activeCar : null;
+        if (MapGeo.coverAt(x, z) > 0) return true;
+        for (const t of RoadPlan.tunnels || []) {                                  // dentro do túnel da serra
+            const pad = t.w / 2 + 1.5;
+            if (x < t.x0 - pad || x > t.x1 + pad || z < t.z0 - pad || z > t.z1 + pad) continue;
+            for (const q of t.pts) if (hypot(q[0] - x, q[1] - z) < pad + 2) return true;
+        }
+        const onDeck = car ? !!car._onDeck : !!(g.player && g.player.onDeck);
+        if (!onDeck && RoadPlan.elevAt(x, z) > 3.2) return true;
+        if (car ? car.isBoat && RoadPlan.onBridge(x, z) : !!(g.player && g.player.underBridge)) return true;
+        return false;
+    }
+
+    // Área de busca: a última posição conhecida (rádio), puxada pelo rumo que você levava nos primeiros segundos.
+    _searchArea(L) {
+        const k = this.known;
+        if (!k || !L) return null;
+        const age = this.time - k.t, r = L.sight * Config.wanted.searchK, drift = Math.min(age, 2.5);
+        let dx = k.vx * drift, dz = k.vz * drift;
+        const dl = hypot(dx, dz), cap = r * 0.75;
+        if (dl > cap) { dx *= cap / dl; dz *= cap / dl; }
+        return { x: k.x + dx, z: k.z + dz, r, age };
+    }
+
+    // Cada unidade que perdeu você de vista varre um ponto da área de busca (sorteado; troca ao chegar ou a cada ~10 s).
+    _searchPoint(u, m, S) {
+        const p = u.position;
+        if (!m.wp || this.time > m.wpT || hypot(p.x - m.wp.x, p.z - m.wp.z) < 9 || hypot(m.wp.x - S.x, m.wp.z - S.z) > S.r * 1.1) {
+            const a = Math.random() * Math.PI * 2, rr = S.r * (0.2 + 0.75 * Math.random());
+            m.wp = { x: S.x + Math.sin(a) * rr, z: S.z + Math.cos(a) * rr };
+            m.wpT = this.time + 7 + Math.random() * 6;
+        }
+        return m.wp;
+    }
+
+    // Erro extra contra quem foge de carro (atirar num carro em movimento é difícil).
+    get moveSpread() {
+        if (this.game.mode !== 'car') return 1;
+        return 1 + Math.min(1.4, hypot(this.playerVel.x, this.playerVel.z) / Config.police.movingSpread);
     }
 
     _note(m, x, z, vx, vz, t) {
@@ -120,16 +179,22 @@ class PoliceManager {
     }
 
     _manageTeams(L, pos) {
-        if (!L) return;
-        const T = PoliceManager.TEAMS;
+        if (!L || this._cold(L)) return;
+        const T = PoliceManager.TEAMS, k = this.search || pos;
         for (const role of ['swat', 'army']) {
             const have = this.cars.filter((c) => c.role === role).length;
             if (have < L[role] && this.time >= this._teamAt[role]) {
                 this._teamAt[role] = this.time + 6;
-                this.spawnCar(pos, T[role]);
+                this.spawnCar(k, Object.assign({ avoid: pos, avoidR: this._avoidR() }, T[role]));
             }
         }
     }
+
+    // A pista esfriou: faz mais que a memória do nível que ninguém te vê (reforço não vem mais).
+    _cold(L) { return !this.known || this.time - this.known.t > (L ? L.lose + 3 : 20); }
+
+    // Reforço não nasce perto de você: fora da tela e, sem ninguém te ver, fora do alcance de visão.
+    _avoidR() { return this.playerSeen ? 70 : Math.max(75, (this.sightR || 50) + 14); }
 
     // ---------------------------------------------------------------- helicóptero
     _spawnHeli(pos) {
@@ -145,9 +210,15 @@ class PoliceManager {
 
     // Chega nos níveis com helicóptero; quando a poeira baixa, vai embora e some fora da tela.
     _manageHeli(L, pos) {
+        const H = this.heli, S = Config.heli.sortie[this.level] || 0;
+        if (L && L.heli && H && H.alive && !H.fuelOut && S && H.airT > S) {               // autonomia acabou: vai abastecer (e volta depois)
+            H.fuelOut = true; H.leaving = true; this.heliCooldown = Config.heli.refuel;
+            this.game._flash('🚁 O helicóptero foi abastecer — aproveite para sumir!');
+        }
         if (L && L.heli) {
-            if (!this.heli && this.time >= this._heliAt && this.heliCooldown <= 0) this._spawnHeli(pos);
-            else if (this.heli && this.heli.alive) this.heli.leaving = false;
+            if (!this.heli && this.time >= this._heliAt && this.heliCooldown <= 0) this._spawnHeli(this.search || pos);
+            else if (this.heli && this.heli.alive && !this.heli.fuelOut) this.heli.leaving = false;
+            if (this.heli && this.heli.fuelOut && this.heli.distanceTo(this.game.camera.target) > 140) this.removeHeli();
         } else if (this.heli && this.heli.alive) {
             if (this._quiet > 8 || L) this.heli.leaving = true;
             const f = this.game.camera.target;
@@ -166,6 +237,7 @@ class PoliceManager {
         this.heliCooldown = 0;
         for (const u of this.units) u.mind = null;
         this.known = null;
+        this.search = null;
         this.weaponsFreeUntil = -1;
         this.playerSeen = false;
         this._nextBackup = 0;
@@ -278,14 +350,16 @@ class PoliceManager {
     }
 
     // Viatura de reforço: nasce numa faixa FORA da tela (75–115u de `pos`), já sabendo para onde ir.
-    // opts: { model, paint, role, siren } — por padrão, uma viatura comum.
+    // opts: { model, paint, role, siren, avoid: {x,z}, avoidR } — por padrão, uma viatura comum; `avoid` = não nascer a menos de
+    // avoidR desse ponto (o jogador de verdade: o reforço vem para a área de busca, não para cima de você).
     spawnCar(pos, opts = {}) {
-        const { model = 'viatura', paint = 6, role = 'patrol', siren = true } = opts;
+        const { model = 'viatura', paint = 6, role = 'patrol', siren = true, avoid = null, avoidR = 0 } = opts;
         for (let t = 0; t < 80; t++) {
             const l = RoadNet.randomLanePoint(14, { x: pos.x, z: pos.z, rMin: 75, rMax: 115 });
             if (!l) continue;
             const d = hypot(l.point.x - pos.x, l.point.z - pos.z);
             if (d < 75 || d > 115) continue;
+            if (avoid && hypot(l.point.x - avoid.x, l.point.z - avoid.z) < avoidR) continue;
             if (!this.traffic._clear(l.point.x, l.point.z, 12) || Standing.policeBanned(l.point.x, l.point.z)) continue;
             if (this.cars.some((c) => hypot(c.position.x - l.point.x, c.position.z - l.point.z) < 12)) continue;
             const car = new PoliceCar(this.scene, this.physics, l.point, this._nextCarId++, this.carLib.sheet(model), this.traffic,
@@ -385,7 +459,7 @@ class PoliceManager {
     // da última posição conhecida, e as `cars` viaturas mais próximas.
     _dispatch(L, pos) {
         if (!L || !L.radio) { for (const u of this.units) this._mind(u).dispatched = false; return; }
-        const k = this.known || { x: pos.x, z: pos.z };
+        const k = this.search || this.known || { x: pos.x, z: pos.z };
         for (const o of this.officers) {
             if (!o.alive) continue;
             this._mind(o).dispatched = hypot(o.position.x - k.x, o.position.z - k.z) < L.dispatchR;
@@ -394,11 +468,12 @@ class PoliceManager {
         const cars = this.cars.filter((c) => c.role === 'patrol' && !c.destroyed).sort((a, b) => d2(a) - d2(b));
         cars.forEach((c, i) => { this._mind(c).dispatched = i < L.cars; });
 
-        // Faltam viaturas por perto? Manda vir mais uma (de fora da tela), a cada poucos segundos.
+        // Faltam viaturas por perto? Manda vir mais uma (de fora da tela, para a área de busca), a cada poucos segundos — enquanto
+        // a pista está quente e sem passar do teto de reforços do nível.
         const close = cars.filter((c) => c.mind.dispatched && d2(c) < 170 * 170).length;
-        if (close < L.cars && this.time >= this._nextBackup && cars.filter((c) => c.temp).length < 6) {
+        if (close < L.cars && this.time >= this._nextBackup && !this._cold(L) && cars.filter((c) => c.temp).length < Math.ceil(L.cars * Config.police.maxChasers)) {
             this._nextBackup = this.time + 3.5;
-            this.spawnCar(pos);
+            this.spawnCar(k, { avoid: pos, avoidR: this._avoidR() });
         }
     }
 
@@ -426,13 +501,17 @@ class PoliceManager {
         const heli = this.heli;
         const hide = !!(this.game.hiding && !this.game.hiding.seen);   // escondido sem ter sido visto entrando: ninguém te enxerga
         if (heli) { heli.update(dt); if (heli.sees && !hide) seen = true; }       // (ao cair, ele se remove sozinho)
-        const units = this.units;
+        const units = this.units, fov = Config.wanted.fovCos, nearS = Config.wanted.nearSense;
         for (const u of units) {
-            const m = this._mind(u), p = u.position;
-            m.sees = !hide && hypot(p.x - pos.x, p.z - pos.z) < sightR && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z)
+            const m = this._mind(u), p = u.position, dx = pos.x - p.x, dz = pos.z - p.z, d = hypot(dx, dz);
+            let sees = !hide && d < sightR;
+            // Cone de visão: fora do "sentir" de perto, só vê o que está à frente — a não ser que já esteja te acompanhando com os olhos.
+            if (sees && d > nearS && this.time - m.st > 1.5) { const f = this._face(u); sees = (f.x * dx + f.z * dz) / d > fov; }
+            m.sees = sees && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z)
                 && !(typeof Cover !== 'undefined' && Cover.hiddenFrom(this.game, p.x, p.z));          // agachado atrás de muro/carro: não te vê
             if (m.sees) {
                 seen = true;
+                m.st = this.time;
                 if (L) this._note(m, pos.x, pos.z, vel.x, vel.z, this.time);     // sem ★ ver não faz ninguém te perseguir
             }
         }
@@ -441,6 +520,7 @@ class PoliceManager {
         // 2) Rádio e despacho.
         if (!L) this.known = null;
         else if (L.radio && seen) this.known = { x: pos.x, z: pos.z, vx: vel.x, vz: vel.z, t: this.time };
+        this.search = L && L.radio ? this._searchArea(L) : null;
         if (this._respawn.length && this.time >= this._respawn[0]) {
             const f = this.game.camera.target;
             if (this._spawnPatrolCar(this._nextCarId++, { x: f.x, z: f.z, r: 90 })) this._respawn.shift();
@@ -451,7 +531,8 @@ class PoliceManager {
         if (this._dispT <= 0) {
             this._dispT = 0.5;
             this._dispatch(L, pos); this._manageHeli(L, pos); this._manageTeams(L, pos);
-            this.blocks.update(L, pos, vel);
+            const S = this.search, kv = this.known && S && S.age < 4 ? this.known : null;      // bloqueios: em volta de onde ACHAM que você está
+            this.blocks.update(L, S || pos, kv ? { x: kv.vx, z: kv.vz } : (S ? { x: 0, z: 0 } : vel));
         }
 
         // 3) Cada unidade age conforme o que SABE.
@@ -466,6 +547,8 @@ class PoliceManager {
             const fresh = this.time - m.t < memory;
             const recent = this.time - m.t < 0.6;           // velocidade só vale se a visão é recente
             this._tp.set(m.x, 0, m.z);
+            const S = this.search;
+            if (S && fresh && !m.sees && this.time - m.t > 2.5 && !u.guard) { const w = this._searchPoint(u, m, S); this._tp.set(w.x, 0, w.z); }      // perdeu de vista: varre a área
             if (Standing.policeBanned(m.x, m.z)) { const e = Standing.clampToEntrance(m.x, m.z); this._tp.set(e.x, 0, e.z); }     // perseguição para na entrada da favela
             this._tv.set(recent ? m.vx : 0, 0, recent ? m.vz : 0);
             u.setTarget(this._tp, this._tv);

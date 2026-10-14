@@ -28,7 +28,7 @@ class Pickups {
             knife:    { label: 'Faca', color: W, kind: 'weapon', weapon: 'knife', ammo: 0 },
             bat:      { label: 'Taco de beisebol', color: W, kind: 'weapon', weapon: 'bat', ammo: 0 },
             // ---- munição
-            ammo_pistol:  { label: 'Munição de pistola/revólver', color: AM, kind: 'ammo', weapons: ['pistol', 'revolver'], n: 24 },
+            ammo_pistol:  { label: 'Munição de pistola/revólver', color: AM, kind: 'ammo', weapons: ['pistol', 'revolver', 'pistol_sil'], n: 24 },
             ammo_rifle:   { label: 'Munição de fuzil', color: AM, kind: 'ammo', weapons: ['rifle', 'ak47'], n: 60 },
             ammo_smg:     { label: 'Munição de SMG', color: AM, kind: 'ammo', weapons: ['smg'], n: 60, sprite: 'ammo_pistol' },
             ammo_shotgun: { label: 'Cartuchos', color: AM, kind: 'ammo', weapons: ['shotgun'], n: 12, sprite: 'ammo_pistol' },
@@ -155,13 +155,18 @@ class Pickups {
                 const n = 80 + Math.floor(Math.random() * 220);
                 inv.addCash(n); inv.medkits++;
                 const guns = Object.keys(inv.weapons).filter((k) => inv.owned(k) && inv.isGun(k));
-                for (const g of guns) inv.addAmmo(g, g === 'shotgun' ? 8 : (g === 'revolver' ? 12 : 30));
+                for (const g of guns) inv.addAmmo(g, Pickups.ammoBit(g));
                 return `Mochila: +${brl(n)}, kit médico${guns.length ? ' e munição' : ''}`;
             }
             case 'hack': inv.hacks++; return `Módulo de hackeio (${inv.hacks}) — abre uma fechadura sozinho (G)`;
             case 'key': inv.keys++; return `Chave de carro roubada (${inv.keys}) — destranca um carro sem alarme (F)`;
         }
         return '';
+    }
+
+    // Um punhado de munição da arma `g` achado por aí (n = o de uma arma comum): foguete vem 1 (2 no lança-foguetes), a minigun ganha mais.
+    static ammoBit(g, n = 30) {
+        return g === 'shotgun' ? 8 : g === 'revolver' ? 12 : g === 'rpg' ? 1 : g === 'launcher' ? 2 : g === 'minigun' ? 4 * n : n;
     }
 
     // Loot box: sorteia o conteúdo.
@@ -173,11 +178,12 @@ class Pickups {
             case 'ammo': {
                 const guns = Object.keys(inv.weapons).filter((k) => inv.owned(k) && inv.isGun(k));
                 const g = guns[Math.floor(Math.random() * guns.length)] || 'pistol';
-                inv.addAmmo(g, 24); return `Loot box: munição de ${Weapons[g].name} +24`;
+                const n = Pickups.ammoBit(g, 24);
+                inv.addAmmo(g, n); return `Loot box: munição de ${Weapons[g].name} +${n}`;
             }
             case 'medkit': inv.medkits++; return 'Loot box: kit médico';
             case 'gun': {
-                const g = Pickups._roll([['revolver', 3], ['smg', 3], ['shotgun', 2], ['ak47', 1]]);
+                const g = Pickups._roll([['revolver', 3], ['smg', 3], ['shotgun', 2], ['pistol_sil', 1], ['ak47', 1]]);
                 inv.addWeapon(g, 30); return `Loot box: ${Weapons[g].name} (+30 balas)`;
             }
             case 'jewel': { const n = 500 + Math.floor(Math.random() * 1200); inv.addJewel(n); return `Loot box: joias (~${brl(n)})`; }

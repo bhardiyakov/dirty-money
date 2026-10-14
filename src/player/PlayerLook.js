@@ -9,6 +9,9 @@
 //   • O visual de sempre (a roupa inicial) vem pronto: assets/npcs/protagonista.js (+ protagonista_tatico.js, o atlas COMPANHEIRO com os
 //     clipes táticos — agachar, andar agachado, passo lateral, rolar —, que não cabem no principal em alta definição). Cada visual
 //     gerado também ganha o seu companheiro ("hero:N:t"); a folha do jogador procura nele o que o principal não tem (extraAtlas).
+//   • As ARMAS NOVAS (pistola com silenciador, RPG, lança-foguetes, minigun) moram num terceiro atlas (protagonista_armas.js; armsAtlas
+//     da folha). Num visual gerado ele só é gerado quando o jogador tem uma delas ("hero:N:w", guardado como os outros); enquanto isso,
+//     o desenho delas sai do visual de sempre.
 //   • preview(ficha) = o boneco nas 8 direções (tela de equipamento), num segundo Worker.
 // ============================================================================
 
@@ -18,8 +21,10 @@ const PlayerLook = {
     want: null,             // chave de forma pedida (gerando)
     ids: new Map(),         // chave de forma → id do atlas registrado no NpcArt
     tacIds: new Map(),      // chave de forma → id do atlas companheiro (clipes táticos) desse visual
+    armsIds: new Map(),     // chave de forma (sem o dano) → id do atlas das armas novas desse visual
+    _clean: new Map(),      // chave de forma → a mesma sem o dano pintado (as armas novas não têm versão machucada)
     _job: 0,
-    VERSION: 13,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D; 8: sentar no carro (sitin); 9: começar/parar de nadar e mergulho; 10: sair do carro (sitout) e faca; 11: fardo correndo e parado (run_heavy, idle_heavy); 12: nado peito, vadear fundo, mergulho suave; 13: granada e molotov
+    VERSION: 15,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D; 8: sentar no carro (sitin); 9: começar/parar de nadar e mergulho; 10: sair do carro (sitout) e faca; 11: fardo correndo e parado (run_heavy, idle_heavy); 12: nado peito, vadear fundo, mergulho suave; 13: granada e molotov; 14: braços soltos, cabeça maior, silhueta feminina, luz mais marcada; 15: visual 3D (sem contorno preto, borda suavizada, sombra macia)
 
     attach(game) {
         this.game = game; this.shown = null;
@@ -64,6 +69,8 @@ const PlayerLook = {
         if (!this.ok) return;
         const s = this.spec(), key = this.G.shapeKey(s);
         NpcArt.setPlayerColors(s);
+        if (!this._clean.has(key)) this._clean.set(key, s.dmg ? this.G.shapeKey(this._noDmg(s)) : key);
+        this.wantArms();
         if (!force && key === this.shown && this.want && this.want !== key) {   // voltou ao visual que já está na tela (ex.: curou antes de o
             this.want = null; this._job++;                                     // machucado ficar pronto): cancela a geração e tira a parcial
             const id = key === this.G.shapeKey(this.G.PLAYER_DEFAULT) && NpcArt.atlases.protagonista ? 'protagonista' : this.ids.get(key);
@@ -93,6 +100,7 @@ const PlayerLook = {
         hero.extraAtlas = this.tacIds.get(key) || (partial && this.tacIds.get(this.shown)) || 'protagonista_tatico';      // (gerando: o tático do visual anterior)
         hero.setAtlas(id);
         hero.fallbackAtlas = partial ? (this.ids.get(this.shown) || 'protagonista') : 'protagonista';
+        hero.armsAtlas = this.armsIds.get(this._clean.get(key) || key) || (NpcArt.atlases.protagonista_armas ? 'protagonista_armas' : null);
         if (!partial) { this.shown = key; if (this.want === key) this.want = null; }
         if (a && a.sheet === hero && a.clip) { const n = a.clipName, w = a.clip.weapon, f = a.frame; a.clip = null; if (a.play(n, w, { restart: true })) a.setFrame(f); }
     },
@@ -228,6 +236,65 @@ const PlayerLook = {
             this._idbPut(this._ck(key), this._pack(sorted.filter((c) => !tac.has(c.key)), k));
         }
         end();
+    },
+    // ---------------------------------------------------------------- atlas das armas novas do visual gerado (só quando é preciso)
+    // Pede quando o jogador TEM uma das armas novas (comprou, achou) e o visual não é o de sempre. Num Worker à parte (não atrapalha a
+    // geração da roupa); a arma que está na mão primeiro.
+    _noDmg(s) { const o = Object.assign({}, s); delete o.dmg; return o; },     // (a ficha limpa: a chave igual à do visual sem machucado)
+    ownsArms() {
+        const inv = this.game && this.game.inventory, G = this.G;
+        return !!inv && G.ARMS_LOOKS.some((w) => inv.owned(w));
+    },
+    wantArms() {
+        if (!this.ok || !this.ownsArms()) return;
+        if (this.want) { clearTimeout(this._armsT); this._armsT = setTimeout(() => this.wantArms(), 2000); return; }      // (a roupa nova primeiro)
+        const s = this._noDmg(this.spec()), key = this.G.shapeKey(s);
+        if (key === this.G.shapeKey(this.G.PLAYER_DEFAULT) || this.armsIds.has(key) || this._armsFor === key) return;
+        this._armsFor = key;
+        this._buildArms(s, key);
+    },
+    async _buildArms(s, key) {
+        const job = this._armsJob = (this._armsJob || 0) + 1, G = this.G, k = this.k(), ck = this._ck(key) + '|w';
+        const fin = (a) => {
+            if (job !== this._armsJob) return;
+            this._armsFor = null;
+            const id = 'hero:' + (this._seq = (this._seq || 0) + 1) + ':w', old = this.armsIds.get(key);
+            NpcArt.addAtlas(id, a);
+            this.armsIds.set(key, id);
+            if (old && old !== id) NpcArt.dropAtlas(old);
+            while (this.armsIds.size > 3) { const [k0, v0] = this.armsIds.entries().next().value; this.armsIds.delete(k0); NpcArt.dropAtlas(v0); }
+            if (this.shown) this._use(this.shown, this.ids.get(this.shown) || 'protagonista');
+        };
+        const cached = await this._idbGet(ck);
+        if (job !== this._armsJob) return;
+        if (cached) { fin(cached); return; }
+        const pl = this.game.player, w = pl ? pl.look : 'none', all = G.PLAYER_ARMS, idx = new Map(all.map((c, i) => [c, i]));
+        const order = all.slice().sort((a, b) => (b.endsWith(':' + w) - a.endsWith(':' + w)) || idx.get(a) - idx.get(b));
+        const chunks = [];
+        for (let i = 0; i < order.length; i += 3) chunks.push(order.slice(i, i + 3));
+        const N = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1)), got = [];
+        let next = 0, left = chunks.length;
+        for (let i = 0; i < N; i++) {
+            const wk = this._worker('arms' + i);
+            const feed = () => {
+                if (job !== this._armsJob || next >= chunks.length) { wk._busy = false; return; }
+                wk._busy = true;
+                wk.postMessage({ type: 'clips', job: 'w' + job, spec: s, keys: chunks[next++], k });
+            };
+            wk.onmessage = (e) => {
+                const m = e.data;
+                if (m.job !== 'w' + job) return;
+                if (m.error) { wk._busy = false; console.warn('[VISUAL] armas falharam:', m.error); if (job === this._armsJob) this._armsFor = null; return; }
+                got.push(...m.clips);
+                if (--left === 0) {
+                    const a = this._pack(got.sort((p, q) => idx.get(p.key) - idx.get(q.key)), k);
+                    this._idbPut(ck, a);
+                    fin(a);
+                }
+                feed();
+            };
+            feed();
+        }
     },
     _pack(clips, k) { const a = this.G.packAtlas(clips); return { w: a.w, h: a.h, data: a.data, clips: a.clips, k, v: 2, frame: this.G.frameFor(k) }; },
     // Resolução do visual: a dos atlas prontos, ou o dobro com a alta definição ligada (NpcArt.hd).

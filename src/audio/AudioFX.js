@@ -115,6 +115,13 @@ const AudioFX = {
         else if (kind === 'smg') this._burst(x, z, { vol: 0.45, dur: 0.09, f0: 4200, f1: 500, maxDist: 110 });
         else if (kind === 'revolver') this._burst(x, z, { vol: 0.7, dur: 0.22, f0: 3000, f1: 180, maxDist: 135 });
         else if (kind === 'rifle' || kind === 'ak47') this._burst(x, z, { vol: 0.6, dur: 0.12, f0: 3200, f1: 220, maxDist: 130 });
+        else if (kind === 'pistol_sil') {                                   // silenciador: um "tuc" abafado e o estalo do ferrolho — ouve-se de perto
+            this._burst(x, z, { vol: 0.22, dur: 0.07, f0: 1600, f1: 500, maxDist: 26, type: 'bandpass', q: 1.4 });
+            this._burst(x, z, { vol: 0.12, dur: 0.04, f0: 5200, f1: 2600, maxDist: 18, type: 'bandpass', q: 2, delay: 0.03 });
+        } else if (kind === 'rpg' || kind === 'launcher') {                // foguete: estouro grave do disparo e o chiado do motor indo embora
+            this._burst(x, z, { vol: 0.85, dur: 0.5, f0: 1400, f1: 70, maxDist: 190 });
+            this._burst(x, z, { vol: 0.35, dur: 1.1, f0: 7000, f1: 2500, maxDist: 120, type: 'highpass', q: 0.7, delay: 0.05 });
+        } else if (kind === 'minigun') this._burst(x, z, { vol: 0.34, dur: 0.05, f0: 3800, f1: 700, maxDist: 125 });      // (20 por segundo: o "brrrt")
         else this._burst(x, z, { vol: 0.55, dur: 0.16, f0: 3600, f1: 260, maxDist: 120 });
     },
 

@@ -59,10 +59,18 @@ const Economy = {
         smg:      { name: 'Submetralhadora', icon: 'smg', base: 1500, kind: 'weapon', weapon: 'smg', ammo: 60, desc: 'Rajada · 60 balas' },
         rifle:    { name: 'Fuzil', icon: 'rifle', base: 2400, kind: 'weapon', weapon: 'rifle', ammo: 60, desc: 'Longo alcance · 60 balas' },
         ak47:     { name: 'AK-47', icon: 'ak47', base: 2900, kind: 'weapon', weapon: 'ak47', ammo: 60, desc: 'Automática pesada · 60 balas' },
-        ammo_p:   { name: 'Munição de pistola/revólver', icon: 'ammo_pistol', base: 60, kind: 'ammo', weapons: ['pistol', 'revolver'], n: 24, desc: '+24 balas' },
+        ammo_p:   { name: 'Munição de pistola/revólver', icon: 'ammo_pistol', base: 60, kind: 'ammo', weapons: ['pistol', 'revolver', 'pistol_sil'], n: 24, desc: '+24 balas' },
         ammo_s:   { name: 'Cartuchos de escopeta', icon: 'ammo_pistol', base: 70, kind: 'ammo', weapons: ['shotgun'], n: 12, desc: '+12 cartuchos' },
         ammo_m:   { name: 'Munição de SMG', icon: 'ammo_pistol', base: 130, kind: 'ammo', weapons: ['smg'], n: 60, desc: '+60 balas' },
         ammo_r:   { name: 'Munição de fuzil', icon: 'ammo_rifle', base: 180, kind: 'ammo', weapons: ['rifle', 'ak47'], n: 60, desc: '+60 balas' },
+        // armas novas: a pistola com silenciador (loja de armas e boca) e as pesadas (só na boca de fumo — tecla =)
+        pistol_sil: { name: 'Pistola com silenciador', icon: 'pistol_sil', base: 2200, kind: 'weapon', weapon: 'pistol_sil', ammo: 30, desc: 'Tecla 2 (de novo) · o tiro quase não chama a polícia · 15 tiros, vem com 30 balas' },
+        rpg:      { name: 'RPG', icon: 'rpg', base: 30000, kind: 'weapon', weapon: 'rpg', ammo: 3, desc: 'Tecla = · foguete livre que explode tudo · um acerto derruba o helicóptero · vem com 3 foguetes' },
+        launcher: { name: 'Lança-foguetes', icon: 'launcher', base: 55000, kind: 'weapon', weapon: 'launcher', ammo: 8, desc: 'Tecla = · foguete TELEGUIADO: trava no helicóptero ou no carro · 4 por recarga, vem com 8' },
+        minigun:  { name: 'Minigun', icon: 'minigun', base: 42000, kind: 'weapon', weapon: 'minigun', ammo: 500, desc: 'Tecla = · gira os canos e cospe 20 balas por segundo · pesada: anda um pouco mais devagar · vem com 500' },
+        ammo_rpg: { name: 'Foguetes de RPG', icon: 'ammo_rocket', base: 4000, kind: 'ammo', weapons: ['rpg'], n: 2, desc: '+2 foguetes' },
+        ammo_rk:  { name: 'Foguetes teleguiados', icon: 'ammo_rocket', base: 7000, kind: 'ammo', weapons: ['launcher'], n: 4, desc: '+4 foguetes (um pente)' },
+        ammo_belt: { name: 'Cinta da minigun', icon: 'ammo_rifle', base: 1600, kind: 'ammo', weapons: ['minigun'], n: 250, desc: '+250 balas' },
         // academia (minigames/Gym.js): a diária/mensalidade libera os aparelhos; suplementos alimentam (e o whey ajuda no treino)
         gym_day:  { name: 'Diária da academia', icon: 'gym', base: 25, kind: 'gympass', days: 1, desc: 'Libera rosca, supino e agachamento até o fim de hoje' },
         gym_week: { name: 'Semana na academia', icon: 'gym', base: 120, kind: 'gympass', days: 7, desc: '7 dias de treino liberado' },
@@ -74,13 +82,13 @@ const Economy = {
         vest:     { name: 'Colete nível 1', icon: 'vest', base: 450, kind: 'vest', max: 50, desc: 'Absorve 75% do dano até 50 pts' },
         vest2:    { name: 'Colete nível 2', icon: 'vest2', base: 1000, kind: 'vest', max: 100, desc: 'Absorve 75% do dano até 100 pts' },
         // bolsas (ver player/Bags.js): mais espaço na grade e mais carga antes de pesar; aparecem no personagem
-        bag_cross: { name: 'Mala transversal', icon: 'bag_cross', base: 120, kind: 'bag', bag: 'cross', desc: 'Grade 4×3 · carrega 14 kg sem pesar' },
-        bag_pack: { name: 'Mochila', icon: 'bag_pack', base: 350, kind: 'bag', bag: 'pack', desc: 'Grade 5×4 · carrega 24 kg sem pesar' },
-        bag_tac:  { name: 'Mochila tática', icon: 'bag_tactical', base: 2200, kind: 'bag', bag: 'tactical', desc: 'Grade 6×5 · carrega 38 kg sem pesar' },
+        bag_cross: { name: 'Mala transversal', icon: 'bag_cross', base: 120, kind: 'bag', bag: 'cross', desc: 'Grade 4×3 · carrega 18 kg sem pesar' },
+        bag_pack: { name: 'Mochila', icon: 'bag_pack', base: 350, kind: 'bag', bag: 'pack', desc: 'Grade 5×4 · carrega 30 kg sem pesar' },
+        bag_tac:  { name: 'Mochila tática', icon: 'bag_tactical', base: 2200, kind: 'bag', bag: 'tactical', desc: 'Grade 6×5 · carrega 46 kg sem pesar' },
         // na mão (o jogador anda carregando: só dá para usar pistola junto) — para roubos grandes: dinheiro de cofre, armas, mercadoria
-        bag_brief:  { name: 'Maleta de alumínio', icon: 'bag_brief', base: 650, kind: 'bag', bag: 'briefcase', desc: 'Na mão · grade 4×2 · 12 kg · discreta' },
-        bag_duffel: { name: 'Bolsa de lona', icon: 'bag_duffel', base: 380, kind: 'bag', bag: 'duffel', desc: 'Na mão · grade 7×5 · 52 kg sem pesar — cabe um cofre de banco' },
-        bag_suit:   { name: 'Mala de rodinhas', icon: 'bag_suit', base: 900, kind: 'bag', bag: 'suitcase', desc: 'Puxada · grade 6×6 · 46 kg; andando, as rodinhas levam o peso' },
+        bag_brief:  { name: 'Maleta de alumínio', icon: 'bag_brief', base: 650, kind: 'bag', bag: 'briefcase', desc: 'Na mão · grade 4×2 · 16 kg · discreta' },
+        bag_duffel: { name: 'Bolsa de lona', icon: 'bag_duffel', base: 380, kind: 'bag', bag: 'duffel', desc: 'Na mão · grade 7×5 · 60 kg sem pesar — cabe um cofre de banco' },
+        bag_suit:   { name: 'Mala de rodinhas', icon: 'bag_suit', base: 900, kind: 'bag', bag: 'suitcase', desc: 'Puxada · grade 6×6 · 54 kg; andando, as rodinhas levam o peso' },
         // mercado clandestino
         hack:     { name: 'Módulo de hackeio', icon: 'hack', base: 160, kind: 'goods', give: 'hack', desc: 'Abre fechadura de carro sem mini-game' },
         carkey:   { name: 'Chave de carro roubada', icon: 'carkey', base: 130, kind: 'goods', give: 'key', desc: 'Destranca um carro sem alarme' },
@@ -99,7 +107,7 @@ const Economy = {
         italian:  { label: 'Ristorante', tier: 1.0, hours: [12, 23], stock: [['pasta'], ['risotto'], ['wine'], ['menu_it']] },
         japanese: { label: 'Restaurante Japonês', tier: 1.0, hours: [12, 23], stock: [['sushi'], ['sake'], ['omakase'], ['soda']] },
         guns:     { label: 'Loja de Armas', tier: 1.0, hours: [9, 19], legal: true, guns: true,
-            stock: [['knife', 1, 3], ['bat', 1, 3], ['pistol', 1, 4], ['revolver', 1, 3], ['shotgun', 1, 2], ['smg', 0.6, 1], ['rifle', 0.5, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['vest', 1, 3], ['vest2', 0.6, 1], ['bag_tac', 0.8, 2], ['bag_duffel', 0.9, 3]] },
+            stock: [['knife', 1, 3], ['bat', 1, 3], ['pistol', 1, 4], ['pistol_sil', 0.6, 1], ['revolver', 1, 3], ['shotgun', 1, 2], ['smg', 0.6, 1], ['rifle', 0.5, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['vest', 1, 3], ['vest2', 0.6, 1], ['bag_tac', 0.8, 2], ['bag_duffel', 0.9, 3]] },
         // Boutique (shopping/comércio): roupas, tênis e acessórios que mudam o personagem (player/Outfit.js), bolsas e malas.
         clothes:  { label: 'Boutique', tier: 1.0, hours: [10, 22], clothes: true,
             stock: [...Object.keys(Outfit.ITEMS).filter((id) => Outfit.ITEMS[id].base > 0).map((id) => ['of_' + id]), ['bag_cross'], ['bag_pack'], ['bag_brief'], ['bag_suit'], ['bag_duffel']] },
@@ -107,7 +115,8 @@ const Economy = {
         bank_hq:  { label: 'Sede bancária', tier: 1, hours: [10, 17], stock: [] },
         gym:      { label: 'Academia', tier: 1.0, hours: [5, 23], gym: true, stock: [['gym_day'], ['gym_week'], ['gym_month'], ['whey'], ['protbar'], ['juice'], ['bottle']] },
         drugs:    { label: 'Boca de Fumo', tier: 0.72, hours: [0, 24], guns: true, fence: 0.55,
-            stock: [['pistol', 1, 2], ['revolver', 0.9, 2], ['shotgun', 0.8, 2], ['smg', 0.7, 1], ['ak47', 0.6, 1], ['rifle', 0.4, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'], ['grenade', 0.85, 6], ['molotov', 1, 8], ['hack', 0.8, 3], ['carkey', 0.8, 3], ['medkit', 0.8, 2], ['bag_tac', 0.7, 1], ['bag_duffel', 0.8, 2]] },
+            stock: [['pistol', 1, 2], ['pistol_sil', 0.9, 2], ['revolver', 0.9, 2], ['shotgun', 0.8, 2], ['smg', 0.7, 1], ['ak47', 0.6, 1], ['rifle', 0.4, 1], ['ammo_p'], ['ammo_s'], ['ammo_m'], ['ammo_r'],
+                ['rpg', 1, 1], ['launcher', 1, 1], ['minigun', 1, 1], ['ammo_rpg', 1, 4], ['ammo_rk', 1, 3], ['ammo_belt'], ['grenade', 0.85, 6], ['molotov', 1, 8], ['hack', 0.8, 3], ['carkey', 0.8, 3], ['medkit', 0.8, 2], ['bag_tac', 0.7, 1], ['bag_duffel', 0.8, 2]] },
     },
 
     // Quais lojas do mapa (id em TileFactory.SHOPS) têm interior, e qual estilo usam.

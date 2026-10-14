@@ -9,7 +9,8 @@
 //                        tocado, ainda manda por cima.
 //   BOTÕES DE AÇÃO       em arco em volta do botão principal (canto inferior direito). Mudam com o CONTEXTO (a pé / dirigindo /
 //                        helicóptero) e com o que dá para fazer ali (lido da dica de interação do jogo, Game._promptHtml):
-//                          A pé:         ATACAR · ROLAR (perto de grade/muro: PULAR) · ARMA (toque = próxima, segurar = recarregar)
+//                          A pé:         ATACAR · ROLAR (perto de grade/muro: PULAR) · ARMA (abre a RODA DE ARMAS: tocar = ela fica
+//                                        aberta; encostar e arrastar até a fatia = equipa ao soltar — WeaponWheel)
 //                                        · ação do lugar (ENTRAR, ROUBAR, VASCULHAR…; sem nada por perto: BOLSA) · AGACHAR
 //                                        · 2ª ação do lugar (só aparece quando há)
 //                          Dirigindo:    ACELERAR · RÉ/FREIO · SAIR · ação do lugar (ABASTECER, DESMANCHAR…; só quando há) · BUZINA
@@ -243,23 +244,28 @@ class TouchControls {
     _showMore(on) { this.morePanel.classList.toggle('on', on); this.moreBtn.classList.toggle('open', on); }
 
     // Botão de contexto: no toque lê o que o slot faz AGORA e segura/solta a MESMA ação até o fim do toque (trocar de contexto com o
-    // dedo no botão não deixa tecla presa). Tipos: hold (segura a tecla), tap (toque único), weapon (toque = próxima arma, segurar = recarregar).
+    // dedo no botão não deixa tecla presa). Tipos: hold (segura a tecla), tap (toque único), weapon (abre a roda de armas — o dedo
+    // arrastado escolhe a fatia; sem a roda, toque = próxima arma).
     _bindSlot(el, i) {
-        let held = null, timer = null;
+        let held = null;
         el.addEventListener('pointerdown', (e) => {
             e.preventDefault(); AudioFX.init();
             const s = this.slots[i]; if (!s || held) return;
             try { el.setPointerCapture(e.pointerId); } catch (x) { /* ok */ }
             held = s; el.classList.add('down');
             if (navigator.vibrate) try { navigator.vibrate(8); } catch (x) { /* ok */ }
-            if (s.type === 'weapon') timer = setTimeout(() => { timer = null; this._tap('r'); }, 450);
+            if (s.type === 'weapon') { if (!(this.g.wheel && this.g.wheel.touchStart(e.clientX, e.clientY))) held.noWheel = true; }
             else if (s.type === 'tap') this._tap(s.key);
             else this.input.setVirtual(s.key, true, 'touch');
         });
+        el.addEventListener('pointermove', (e) => { if (held && held.type === 'weapon' && this.g.wheel) this.g.wheel.touchMove(e.clientX, e.clientY); });
         const up = (e) => {
             e.preventDefault(); if (!held) return;
             const s = held; held = null; el.classList.remove('down');
-            if (s.type === 'weapon') { if (timer) { clearTimeout(timer); timer = null; if (this.input.onWeaponCycle) this.input.onWeaponCycle(1); } }
+            if (s.type === 'weapon') {
+                if (s.noWheel) { s.noWheel = false; if (this.input.onWeaponCycle) this.input.onWeaponCycle(1); }      // (sem roda agora: a próxima arma)
+                else if (this.g.wheel) this.g.wheel.touchEnd(e.clientX, e.clientY);
+            }
             else if (s.type === 'hold') this.input.setVirtual(s.key, false, 'touch');
         };
         el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);

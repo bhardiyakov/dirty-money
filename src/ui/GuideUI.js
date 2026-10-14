@@ -86,7 +86,9 @@ GuideUI.PAGES = {
         <h3>Teclado e mouse</h3><table>
         <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>andar / dirigir</td></tr><tr><td><kbd>Shift</kbd></td><td>correr</td></tr>
         <tr><td><kbd>Clique</kbd> / <kbd>Espaço</kbd></td><td>golpe ou tiro (sem arma: combo soco + soco + chute)</td></tr>
-        <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>armas (punhos, pistola, SMG, escopeta, taco, revólver, AK, fuzil, faca)</td></tr>
+        <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>armas (punhos, pistola, SMG, escopeta, taco, revólver, AK, fuzil, faca) — <kbd>2</kbd> de novo: pistola com silenciador</td></tr>
+        <tr><td><kbd>0</kbd> <kbd>−</kbd> <kbd>=</kbd></td><td>granada, molotov e as <b>armas pesadas</b> (<kbd>=</kbd> várias vezes: RPG → lança-foguetes → minigun)</td></tr>
+        <tr><td><kbd>Tab</kbd> (segurar)</td><td><b>roda de armas</b>: aponte o mouse para a categoria, a roda do mouse troca a arma dentro dela, solte o Tab para equipar (o tempo fica lento enquanto ela está aberta). Toque rápido no Tab: volta à arma anterior. Clicar no quadro da arma do HUD também abre.</td></tr>
         <tr><td><kbd>0</kbd> / <kbd>−</kbd></td><td>granada / coquetel molotov (boca de fumo): <b>segure</b> o ataque para puxar o pino ou acender e mirar com o <b>mouse</b> (cai onde está o cursor) ou o <b>analógico direito</b> (inclinar mais = mais longe) — quanto mais longe, mais forte o arremesso; a linha tracejada mostra a trajetória; <b>solte</b> para jogar. A granada explode ~3 s depois do pino (segurar demais explode na mão); o molotov deixa o chão em chamas por 30 s ou mais</td></tr>
         <tr><td><kbd>R</kbd> · <kbd>M</kbd></td><td>recarregar · kit médico</td></tr>
         <tr><td><kbd>E</kbd></td><td>interagir: assaltar (com arma), esconder-se, entrar, falar, trabalhos das carreiras; no carro, desmanchar no desmanche</td></tr>
@@ -95,7 +97,7 @@ GuideUI.PAGES = {
         <tr><td><kbd>F</kbd></td><td>entrar/sair de veículo (carro estacionado: quebra o vidro, com alarme)</td></tr><tr><td><kbd>G</kbd></td><td>arrombar carro na manha (mini-game, sem alarme)</td></tr>
         <tr><td><kbd>H</kbd> · <kbd>L</kbd></td><td>buzina · faróis</td></tr><tr><td><kbd>Z</kbd> <kbd>X</kbd> / roda</td><td>zoom</td></tr>
         <tr><td><kbd>I</kbd></td><td>inventário: equipamento (roupas, bolsa, arma) e mochila — <kbd>C</kbd> alterna</td></tr><tr><td><kbd>O</kbd></td><td>carreiras do crime</td></tr><tr><td><kbd>Esc</kbd> / <kbd>P</kbd></td><td>menu (mapa e marcador, status, guia)</td></tr></table>
-        <h3>Controle (Xbox / PlayStation)</h3><p>Funciona direto, no padrão de GTA e Watch Dogs: <b>RT/R2</b> ataca, <b>A/✕</b> corre (e pula grade), <b>X/□</b> interage, <b>Y/△</b> entra/sai do veículo, <b>B/○</b> recarrega, <b>LT/L2</b> mira (no teclado: botão direito do mouse), <b>LB/L1</b> troca de arma; no carro <b>RT</b> acelera e <b>LT</b> freia. <b>Start/OPTIONS</b> pausa — a lista completa está em Ajustes. As dicas na tela mostram os botões do controle conectado.</p>
+        <h3>Controle (Xbox / PlayStation)</h3><p>Funciona direto, no padrão de GTA e Watch Dogs: <b>RT/R2</b> ataca, <b>A/✕</b> corre (e pula grade), <b>X/□</b> interage, <b>Y/△</b> entra/sai do veículo, <b>B/○</b> recarrega, <b>LT/L2</b> mira (no teclado: botão direito do mouse), <b>LB/L1</b> segurado abre a <b>roda de armas</b> (analógico direito escolhe, ←/→ troca dentro da categoria, soltar equipa; toque rápido = próxima arma); no carro <b>RT</b> acelera e <b>LT</b> freia. <b>Start/OPTIONS</b> pausa — a lista completa está em Ajustes. As dicas na tela mostram os botões do controle conectado.</p>
         <h3>Cobertura, furtividade e esquiva</h3><ul>
         <li><b>Agachar</b> (<kbd>Q</kbd> · <b>L3</b>): anda devagar e quase sem barulho — a polícia, a facção e as testemunhas só te notam bem de perto, e o furto dá mais certo. Correr levanta.</li>
         <li><b>Cobertura</b>: agache perto de um prédio, muro, caçamba, contêiner ou carro parado (grade não serve, é vazada) e o personagem encosta nele. Tiros vindos do outro lado param no obstáculo e quem está lá não te vê. Mirando, você levanta para atirar por cima — e fica parcialmente exposto.</li>
@@ -104,6 +106,7 @@ GuideUI.PAGES = {
         <h3>Mira</h3><p>Com arma de fogo, segure <b>LT/L2</b> (ou o botão direito do mouse) para mirar: o personagem anda devagar de frente para o alvo e o círculo mostra onde a bala pode cair — ele encolhe enquanto você fica firme e abre ao andar ou atirar em rajada. <b>Assistida</b> trava no alvo (empurre o analógico direito ou passe o mouse para trocar); <b>Manual</b> você aponta com o analógico direito ou o cursor e erra menos com a mira firme — e, mesmo sem segurar a mira, o cursor do mouse É a mira (o tiro vai até ele) e o analógico direito aponta para onde você empurrar (RT atira para lá). Troque em Ajustes. As habilidades <b>Mão firme</b> e <b>Olho de águia</b> (Combate) firmam a mira mais rápido e fazem errar menos.</p>
         <h3>Celular</h3><ul><li>Abre em <b>tela cheia</b> e na <b>horizontal</b>. No iPhone, use <i>Compartilhar → Adicionar à Tela de Início</i> para jogar como app.</li>
         <li><b>Joystick flutuante</b>: encoste o dedo em qualquer lugar da metade esquerda — ele nasce ali. A pé, empurrar até a borda <b>corre</b>. Dirigindo, vira um <b>volante</b> (só esquerda/direita).</li>
+        <li><b>Roda de armas</b>: toque no botão <b>ARMA</b> e a roda abre (o tempo fica lento): toque numa categoria para equipar, nas setas ‹ › para trocar a arma dentro dela, no <b>RECARREGAR</b> do centro para recarregar, ou fora para fechar. Mais rápido: encoste no ARMA, arraste o dedo até a categoria e solte.</li>
         <li><b>Volante por giroscópio</b> (ligue em Ajustes): dirigindo, incline o celular para virar o carro. O <b>RÉ / FREIO</b> vai para o canto esquerdo (polegar esquerdo freia, o direito acelera) e o joystick, se tocado, ainda manda.</li>
         <li><b>Botões de ação</b> em volta do botão grande, no canto direito, que mudam com o que você está fazendo:<br>
         a pé — <b>ATACAR</b> (segure para rajada) · <b>ROLAR</b> (perto de grade/muro: PULAR) · <b>ARMA</b> (toque troca, segure recarrega) · ação do lugar (ENTRAR, ROUBAR, VASCULHAR…; sem nada por perto, BOLSA) · <b>AGACHAR</b> · e uma 2ª ação do lugar quando houver;<br>
@@ -122,22 +125,30 @@ GuideUI.PAGES = {
         <li>Outras formas de lavar: <b>cripto</b> e <b>lavagem para facções</b> (Estelionato), <b>escola de samba</b> (Bicho: parte da renda já entra limpa e a Receita quase não sobe).</li></ul>`,
 
     police: () => `<h2>Polícia e procurado</h2>
-        <p>Crime só vira estrela com a polícia <b>por perto</b>: um policial precisa <b>ver</b> na hora (bem perto, sem parede no meio) ou estar perto o bastante para <b>ouvir o tiro</b> — aí ele vai ao local e, se te achar, você vira procurado. Testemunhas de assalto ligam, mas só vem quem estiver na área. Armado, o minimapa mostra o <b>círculo de visão</b> de cada policial. Quanto mais estrelas, maior o raio de visão e mais gente vem:</p>
-        <table><tr><th>Nível</th><th>O que acontece</th></tr><tr><td>★</td><td>delito leve: só quem viu te procura (sem rádio nem viatura extra), corre menos, precisa chegar bem perto para prender e te perde rápido</td></tr><tr><td>★★</td><td>viaturas por rádio e helicóptero (enxerga por cima dos prédios)</td></tr>
-        <tr><td>★★★</td><td>atiram à vista, SWAT e bloqueios</td></tr><tr><td>★★★★</td><td>SWAT com metralhadora, mais viaturas</td></tr><tr><td>★★★★★</td><td>exército e ruas fechadas</td></tr></table>
-        <h3>Como fugir</h3><ul><li>Saia da visão e fique escondido o tempo da fuga (o HUD mostra "ESCAPANDO").</li><li>Policial colado em você impede a fuga, mesmo atrás de parede.</li>
+        <p>Crime só vira estrela com a polícia <b>por perto</b>: um policial precisa <b>ver</b> na hora (bem perto, sem parede no meio) ou estar perto o bastante para <b>ouvir o tiro</b> — aí ele vai ao local e, se te achar, você vira procurado. Testemunhas de assalto ligam, mas só vem quem estiver na área. Armado, o minimapa mostra o <b>cone de visão</b> de cada policial (ele só vê o que está à frente dele). Quanto mais estrelas, maior o raio de visão e mais gente vem:</p>
+        <table><tr><th>Nível</th><th>O que acontece</th></tr><tr><td>★</td><td>delito leve: só quem viu te procura (sem rádio nem viatura extra), corre menos, precisa chegar bem perto para prender e te perde rápido</td></tr><tr><td>★★</td><td>viaturas por rádio, atiram à vista</td></tr>
+        <tr><td>★★★</td><td>helicóptero e uma van da SWAT</td></tr><tr><td>★★★★</td><td>SWAT com metralhadora, mais viaturas, bloqueios e o helicóptero atira</td></tr><tr><td>★★★★★</td><td>exército e ruas fechadas</td></tr></table>
+        <h3>Como fugir (como no GTA)</h3><ul>
+        <li>Cada policial enxerga num <b>cone à frente</b> (o radar mostra os cones quando você é procurado; vermelho = te vendo agora) e precisa de linha de visada. De perto, percebe você mesmo de costas.</li>
+        <li>Saiu da vista: as <b>estrelas piscam</b> e a polícia vai para a <b>área de busca</b> (o círculo azul tracejado, onde te viram por último) e espalha as viaturas por ela. A contagem da fuga anda enquanto ninguém te vê — <b>fora do círculo, quase o dobro do ritmo</b> (o HUD mostra "Fora da busca"). Ser visto de novo zera.</li>
+        <li>Policial colado em você (mesmo atrás de parede) <b>pausa</b> a contagem.</li>
+        <li><b>Helicóptero</b> (3★+): enxerga por cima dos prédios, mas <b>não te vê debaixo de viaduto, ponte, túnel, toldo de loja ou cobertura de posto</b>. Perdeu você, só te acha de novo se você cair no holofote. Um carro rápido na avenida abre distância dele, e ele tem autonomia: a 3★ e 4★ sai para <b>abastecer</b> depois de um tempo — a brecha para sumir. Também dá para <b>derrubá-lo</b>: a tiros (≈16 de pistola) ou com um foguete de <b>RPG</b> ou do <b>lança-foguetes</b> (um acerto) — vale +1★ e o próximo demora a vir.</li>
+        <li>Na cola de carro, as viaturas seguem atrás e só às vezes tentam a <b>batida (PIT)</b>; parado, elas freiam e descem os policiais — dá para empurrar uma viatura parada para sair do cerco.</li>
+        <li><b>Pintura express</b>: sem ninguém te vendo, entre dirigindo numa oficina Pay n Pay (ou no mecânico do morro) e aperte <kbd>E</kbd> — cor nova, placa trocada e as estrelas somem (R$ 1.000 + R$ 750 por ★, aceita sujo).</li>
         <li><b>Esconderijos</b> (<kbd>E</kbd> em caçamba, caixote, latão): se ninguém viu você entrar, some do radar.</li><li>Com procurado você não entra em lojas nem consegue aceitar trabalhos.</li></ul>`,
 
     bags: () => `<h2>Bolsas, peso e fôlego</h2>
         <p>A bolsa define <b>quantos espaços</b> a grade do inventário tem e <b>quanto peso</b> você carrega sem perder velocidade. Ela aparece no seu personagem.</p>
         <table><tr><th>Bolsa</th><th>Grade</th><th>Carga</th><th>Onde</th></tr>
-        <tr><td>👖 Bolsos</td><td>3×2</td><td>8 kg</td><td>começo</td></tr><tr><td>👜 Mala transversal</td><td>4×3</td><td>14 kg</td><td>conveniência</td></tr>
-        <tr><td>🎒 Mochila</td><td>5×4</td><td>24 kg</td><td>conveniência</td></tr><tr><td>🎒 Mochila tática</td><td>6×5</td><td>38 kg</td><td>loja de armas / boca</td></tr></table>
+        <tr><td>👖 Bolsos</td><td>3×2</td><td>12 kg</td><td>começo</td></tr><tr><td>👜 Mala transversal</td><td>4×3</td><td>18 kg</td><td>conveniência</td></tr>
+        <tr><td>🎒 Mochila</td><td>5×4</td><td>30 kg</td><td>conveniência</td></tr><tr><td>🎒 Mochila tática</td><td>6×5</td><td>46 kg</td><td>loja de armas / boca</td></tr></table>
         <h3>Trocar, guardar e descartar</h3><ul><li>Comprou uma bolsa nova? A antiga fica de <b>reserva</b> (vai junto, vazia, e pesa o próprio peso). Troque em <kbd>I</kbd> → <b>👤 Equipamento</b>.</li>
         <li>Para não carregar a reserva, guarde no <b>baú</b> de casa ou <b>descarte</b>. A bolsa em uso só sai se o que você leva couber nos bolsos (3×2).</li>
         <li>No Equipamento também se trocam roupas e acessórios (comprados na <b>boutique</b> 👕 do mapa): cada peça mostra o que muda nos seus atributos antes de vestir.</li></ul>
-        <h3>Peso</h3><ul><li>Tudo pesa: armas (pistola 1 kg … AK 4,3 kg), munição, kits, comida, joias, <b>dinheiro vivo</b> (R$ 50 mil ≈ 1 kg), eletrônicos furtados e cédulas de banco.</li>
-        <li>Até metade da carga: normal. Até a carga cheia: cada vez mais lento (−30%). Acima dela: <b>sobrecarga</b> — bem lento e sem correr.</li>
+        <h3>Armas no corpo</h3><ul><li>Até <b>3 armas</b> vão no corpo — as longas na <b>bandoleira</b> e nas costas, pistolas no <b>coldre</b> e no cinto, a faca no cinto — e <b>não ocupam a mochila</b>: dá para andar com pistola, escopeta e fuzil só com os bolsos. São sempre as 3 maiores que você tem (aparecem acima da grade no inventário) e pesam a metade.</li>
+        <li>Da 4ª arma em diante, elas vão para a mochila (ocupam espaços como antes).</li></ul>
+        <h3>Peso</h3><ul><li>Tudo pesa: armas (pistola 1 kg … AK 4,3 kg; RPG 6,5 · lança-foguetes 9 · minigun 14), munição, kits, comida, joias, <b>dinheiro vivo</b> (R$ 50 mil ≈ 1 kg), eletrônicos furtados e cédulas de banco.</li>
+        <li>Até 70% da carga: normal. Até a carga cheia: só um pouco mais lento (−12%). Acima dela, vai ficando mais lento; passou de <b>125%</b>, é <b>sobrecarga</b> — não corre. O limite para pegar mais coisa é o dobro da carga.</li>
         <li>O HUD mostra a bolsa e o peso (amarelo = pesado, vermelho = sobrecarga).</li></ul>
         <h3>Força</h3><ul><li>Quanto mais forte, mais peso você leva sem pesar: cada nível de <b>força</b> (0 a 20) dá <b>+4% de carga</b> (+80% no 20).</li>
         <li>A força sobe com o uso: andar e correr <b>carregando peso</b> e brigar (soco, chute, taco, faca). A habilidade <b>Costas largas</b> (FÍSICO) e roupas como calça cargo e colete de carga somam.</li></ul>
@@ -163,7 +174,13 @@ GuideUI.PAGES = {
         <li>Comida e bebida curam na hora; marmita e água vão para a mochila. Kit médico (<kbd>M</kbd>) cura 55.</li>
         <li>Armas: loja de armas da cidade (legal) ou boca de fumo (barata, estoque pequeno). Munição e colete também.</li>
         <li><b>Mochila</b> (<kbd>I</kbd>): grade de espaços; armas compridas ocupam mais. Joias valem dinheiro na boca.</li>
-        <li>O <b>Armeiro</b> fabrica armas caseiras, recarrega munição e importa <b>silenciador</b> e <b>pente estendido</b> para as suas armas.</li></ul>`,
+        <li>O <b>Armeiro</b> fabrica armas caseiras, recarrega munição e importa <b>silenciador</b> e <b>pente estendido</b> para as suas armas.</li></ul>
+        <h3>Armas especiais</h3><ul>
+        <li><b>Pistola com silenciador</b> (<kbd>2</kbd> duas vezes; loja de armas e boca): o tiro é um "tuc" abafado — só quem está muito perto e vê percebe; a polícia de longe não ouve. Usa a munição de pistola.</li>
+        <li><b>RPG</b> (<kbd>=</kbd>; só na boca de fumo): foguete livre, um por vez (recarrega sozinho). Explode carro, viatura e quem estiver perto — e <b>derruba o helicóptero com um acerto</b>: mire nele (a mira assistida pega quem voa) que o foguete sobe até lá e explode ao passar perto. Perto demais (menos de 4 m) a ogiva não arma.</li>
+        <li><b>Lança-foguetes</b> (<kbd>=</kbd> de novo): foguete <b>teleguiado</b>. Com ele na mão, o alvo à frente fica marcado com um <b>anel vermelho</b> (bipe de trava) — o helicóptero primeiro, depois viaturas e carros — e o foguete faz a curva atrás dele. Um acerto derruba o helicóptero. 4 foguetes por recarga.</li>
+        <li><b>Minigun</b> (<kbd>=</kbd> de novo): segure o gatilho — os canos <b>giram</b> por meio segundo e ela cospe 20 balas por segundo. Pesada: com ela (e com os lança-foguetes) na mão você anda e corre um pouco mais devagar.</li>
+        <li>Foguetes e a cinta da minigun: na boca de fumo. Explosão perto de você também machuca você.</li></ul>`,
 
     vehicles: () => `<h2>Veículos</h2>
         <ul><li><kbd>F</kbd> entra/rouba (tira o motorista). Carro estacionado está <b>trancado</b>: <kbd>F</kbd> quebra o vidro (alarme) ou <kbd>G</kbd> arromba na manha (mini-game).</li>

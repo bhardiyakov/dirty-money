@@ -202,7 +202,7 @@ const SparkFx = {
         this.chunks = new ParticleStreaks(scene, 90, 'chunk');
         this.flashes = new ParticleStreaks(scene, 24, 'flash');
         this.casings = new ParticleStreaks(scene, 160, 'casing');
-        this.tracers = new ParticleStreaks(scene, 48, 'tracer');           // (um por bala do Combat: o índice é o da bala)
+        this.tracers = new ParticleStreaks(scene, 72, 'tracer');           // (um por bala do Combat: o índice é o da bala — Combat.MAXB)
     },
     update(dt) {
         if (!this.sparks) return;
@@ -221,9 +221,10 @@ const SparkFx = {
 
     // ------------------------------------------------------------------ tiro
     // Tamanho do fogo e da fumaça por arma: [comprimento, largura, faíscas, fumaça] (m).
-    MUZZLE: { pistol: [1.05, 1.0, 3, 1], revolver: [1.3, 1.25, 4, 2], smg: [1.0, 0.95, 2, 1], shotgun: [1.7, 1.65, 7, 3], rifle: [1.45, 1.3, 3, 2], ak47: [1.5, 1.35, 4, 2] },
+    MUZZLE: { pistol: [1.05, 1.0, 3, 1], revolver: [1.3, 1.25, 4, 2], smg: [1.0, 0.95, 2, 1], shotgun: [1.7, 1.65, 7, 3], rifle: [1.45, 1.3, 3, 2], ak47: [1.5, 1.35, 4, 2],
+        pistol_sil: [0.42, 0.4, 1, 1], rpg: [2.6, 2.4, 10, 6], launcher: [2.2, 2.0, 8, 5], minigun: [1.3, 1.2, 2, 1] },
     // Cápsula: [comprimento, largura, cartucho de escopeta?] — o revólver não ejeta.
-    SHELL: { pistol: [0.17, 0.08, 0], smg: [0.17, 0.08, 0], rifle: [0.26, 0.09, 0], ak47: [0.26, 0.095, 0], shotgun: [0.3, 0.14, 1] },
+    SHELL: { pistol: [0.17, 0.08, 0], smg: [0.17, 0.08, 0], rifle: [0.26, 0.09, 0], ak47: [0.26, 0.095, 0], shotgun: [0.3, 0.14, 1], pistol_sil: [0.17, 0.08, 0], minigun: [0.26, 0.09, 0] },
 
     // Fogo na boca do cano em (x, z), apontando para `angle` (rad, 0 = norte): clarão em estrela, umas faíscas para a frente e
     // fumaça que fica no ar.

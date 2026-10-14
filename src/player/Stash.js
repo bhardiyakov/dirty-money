@@ -15,7 +15,7 @@ class Stash {
             trunk: { title: 'PORTA-MALAS', hint: 'qualquer coisa — o espaço é o do carro', ok: () => true },
         };
     }
-    static get GUNS() { return ['pistol', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47']; }
+    static get GUNS() { return Inventory.GUN_ORDER; }
     static get CASH_STEP() { return 100; }
     static single(id) { return id.startsWith('weapon:') || id.startsWith('bag:'); }      // um só (sem quantidade): armas e bolsas
 
@@ -28,7 +28,7 @@ class Stash {
     // ----------------------------------------------------------- nomes
     static label(id) {
         const [k, a] = id.split(':');
-        if (k === 'ammo') return 'Munição: ' + Weapons[a].name;
+        if (k === 'ammo') return Inventory.AMMO_LABEL[a] || 'Munição: ' + Weapons[a].name;
         if (k === 'weapon') return Weapons[a].name;
         if (k === 'bag') return Bags.DEFS[a].name;
         if (k === 'item') return Items.label(a);
@@ -36,7 +36,7 @@ class Stash {
     }
     static icon(id) {
         const [k, a] = id.split(':');
-        if (k === 'ammo') return 'ammo_pistol';
+        if (k === 'ammo') return Weapons[a] && Weapons[a].rocket ? 'ammo_rocket' : 'ammo_pistol';
         if (k === 'weapon') return a;
         if (k === 'bag') return Bags.DEFS[a].icon;
         if (k === 'item') return Items.key(a);

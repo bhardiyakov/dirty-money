@@ -2,9 +2,11 @@
 // Helicopter — o helicóptero da polícia (3★+).
 //
 // Voa por cima da cidade: ENXERGA POR CIMA DOS PRÉDIOS (esconder-se atrás de construção não
-// adianta enquanto ele estiver a menos de Config.heli.sight de você). Orbita o jogador com o
-// holofote aceso no chão; sem ver o jogador, vai à última posição conhecida pelo rádio. A partir de
-// 4★, com armas liberadas, atira rajadas de metralhadora. Pode ser derrubado a tiros (cai girando,
+// adianta enquanto ele estiver a menos de Config.heli.sight de você) — mas não te vê debaixo de
+// cobertura: viaduto, ponte, toldo de loja, cobertura de posto (PoliceManager.airCover). Orbita o
+// jogador com o holofote aceso no chão; sem te ver, varre a ÁREA DE BUSCA numa espiral que abre
+// (nunca vai direto até você sem pista). Um carro comum no talo abre distância dele na reta. A partir
+// de 4★, com armas liberadas, atira rajadas de metralhadora. Pode ser derrubado a tiros (cai girando,
 // explode e só vem outro depois de um tempo).
 //
 // Desenho: o helicóptero ilustrado (HeliArt / HeliVisual: corpo, rotor borrado, sombra com a silhueta) no grupo de renderização 2
@@ -39,6 +41,8 @@ class Helicopter {
         this.sees = false;
         this.fireCd = 1.5;
         this.burst = 0;
+        this.airT = 0;                                      // tempo no ar (autonomia: Config.heli.sortie)
+        this.fuelOut = false;
         this.crashT = 0;
         this._smokeT = 0;
         this._rot = 0;
@@ -90,9 +94,14 @@ class Helicopter {
     update(dt) {
         if (!this.alive) { this._crash(dt); return; }
         const H = Config.heli, m = this.manager;
+        this.airT += dt;
         const pp = m.playerPos, p = this.position;
         const dP = hypot(pp.x - p.x, pp.z - p.z);
-        this.sees = !this.leaving && m.level > 0 && dP < H.sight * (Weather.cur ? Weather.cur.sightMul : 1);
+        // Te acompanhando, segura você até `range`; sem te ver, só te ACHA quem cai no holofote (perto da vertical dele, à frente).
+        const fast = Math.min(1, Math.max(0, (hypot(m.playerVel.x, m.playerVel.z) - 12) / 16));          // alvo rápido: o holofote escapa
+        const range = (H.sight + Math.max(0, m.level - 3) * 6) * (Weather.cur ? Weather.cur.sightMul : 1) * (1 - 0.3 * fast);
+        const gx = p.x + this.vx * 0.8, gz = p.z + this.vz * 0.8, spot = hypot(pp.x - gx, pp.z - gz) < H.spot;
+        this.sees = !this.leaving && m.level > 0 && dP < range && (this.sees || spot) && !m.airCover(pp.x, pp.z);
 
         // Para onde vai: sobrevoa o jogador (orbita) se o vê; senão a última posição conhecida; saindo = para longe.
         let tx, tz, arrive = 1;
@@ -101,11 +110,17 @@ class Helicopter {
             tx = p.x + ax / l * 200; tz = p.z + az / l * 200; arrive = 0;
         } else if (this.sees) {
             this.orbit += dt * 0.55;
+            this.sweep = 0;
             tx = pp.x + m.playerVel.x * 0.6 + Math.cos(this.orbit) * H.orbit;
             tz = pp.z + m.playerVel.z * 0.6 + Math.sin(this.orbit) * H.orbit;
+        } else if (m.search) {
+            // Perdeu você: espiral sobre a área de busca, abrindo até a borda dela.
+            const S = m.search;
+            this.sweep = (this.sweep || 0) + dt * 0.4;
+            const rr = Math.min(S.r * 0.9, 8 + this.sweep * 8), a = this.sweep * 1.2;
+            tx = S.x + Math.cos(a) * rr; tz = S.z + Math.sin(a) * rr;
         } else {
-            const k = m.known || pp;
-            tx = k.x; tz = k.z;
+            tx = p.x + this.vx; tz = p.z + this.vz;          // sem pista nenhuma: segue em frente, devagar
         }
         const dx = tx - p.x, dz = tz - p.z, d = hypot(dx, dz) || 1;
         const want = arrive ? Math.min(H.speed, d * 1.3) : H.speed;
@@ -128,7 +143,7 @@ class Helicopter {
         this.fireCd -= dt;
         if (this.sees && m.level >= H.fireFrom && m.weaponsFree && dP < H.fireRange && this.fireCd <= 0) {
             const ang = Math.atan2(pp.x + m.playerVel.x * 0.25 - p.x, pp.z + m.playerVel.z * 0.25 - p.z);
-            m.combat.fire({ x: p.x, z: p.z, angle: ang, owner: 'police', ref: this, fly: true, spreadMul: 1.7 + dP * 0.04 }, 'smg');
+            m.combat.fire({ x: p.x, z: p.z, angle: ang, owner: 'police', ref: this, fly: true, spreadMul: (1.7 + dP * 0.04) * m.moveSpread }, 'smg');
             if (this.burst <= 0) this.burst = 6;
             this.burst--;
             this.fireCd = this.burst > 0 ? 0.11 : 1.3 + Math.random() * 0.9;

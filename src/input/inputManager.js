@@ -7,7 +7,8 @@
 //     A pé:   analógico esq. mover · A/✕ correr (segurar) e pular grade/muro (tocar perto) · L3 agachar/cobertura (Q) · RB rolar
 //             · X/□ interagir (E)
 //             Y/△ entrar no veículo (F) · B/○ recarregar · RT/R2 golpe (sem arma: combo soco+soco+chute)/tiro · LT/L2 MIRAR (ver Aim)
-//             LB/L1 e direcional ←/→ troca de arma · R3 furtar (C) · ↑ kit médico · ↓ arrombar (G)
+//             LB/L1 segurado: RODA DE ARMAS (WeaponWheel; toque rápido = próxima) · direcional ←/→ troca de arma · R3 furtar (C)
+//             · ↑ kit médico · ↓ arrombar (G)
 //             Mirando: analógico dir. aponta (manual) ou troca de alvo (assistida). Teclado/mouse: botão direito mira, o cursor aponta.
 //             Mira manual com arma de fogo: mesmo sem mirar, o analógico dir. aponta (e não dá zoom) e o cursor do mouse é a mira.
 //     Carro:  RT acelera · LT freia/ré · Y/△ sair · X/□ interagir (abastecer/desmanche) · L3 buzina · ↓ faróis
@@ -41,6 +42,7 @@ class InputManager {
         this.touchDevice = (typeof window !== 'undefined') && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /[?&]touch\b/.test(location.search));
         this.onChange = null;               // callback: conectou/desconectou controle (TouchControls e o Game)
         this.onWeaponCycle = null;          // callback(dir): trocar de arma (D-pad / botão da tela)
+        this.wheelOpen = false;             // o WeaponWheel avisa: roda de armas aberta (o analógico direito e a roda do mouse são dela)
         this._virt = {};                    // teclas mantidas por controle/toque: { tecla: fonte }
         this._padPrev = [];
         this._setupListeners();
@@ -55,7 +57,7 @@ class InputManager {
             if (!this.keys[k]) this.justPressed[k] = true; // ignora auto-repeat do teclado.
             this.keys[k] = true;
             // Evita a página rolar com setas/espaço.
-            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) {
+            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'tab'].includes(k)) {      // (Tab: roda de armas, não troca o foco)
                 e.preventDefault();
             }
         });
@@ -163,7 +165,7 @@ class InputManager {
         const rt = val(7) > 0.35, lt = val(6) > 0.35;
         this.padAim = foot && lt;                                                                    // LT a pé: mirar (ver Aim)
         this.rstick.x = dz(p.axes[2] || 0); this.rstick.y = dz(p.axes[3] || 0);
-        this.zoomAxis = this.padAim || this.stickAim ? 0 : this.rstick.y;                            // (mirando ou na mira manual armado, o analógico direito aponta)
+        this.zoomAxis = this.padAim || this.stickAim || this.wheelOpen ? 0 : this.rstick.y;          // (mirando, na mira manual armado ou na roda de armas, o analógico direito aponta)
         this.yawAxis = this.rstick.x;
 
         // botões -> teclas (layout GTA / Watch Dogs: ver o cabeçalho)
@@ -184,10 +186,11 @@ class InputManager {
         set('i', btn(8));                                   // Back/SHARE: inventário
         set(' ', !car && rt);                               // RT: golpe/tiro (rajada segurando) · helicóptero: sobe
         set('shift', (foot && !lt && btn(0)) || (heli && lt));           // A segurado: correr (mirando, não corre) · helicóptero: LT desce
+        set('padwheel', foot && btn(4));                    // LB: roda de armas (segurar) / próxima arma (toque) — WeaponWheel
         const edge = (i) => btn(i) && !this._padPrev[i];
-        if (foot && this.onWeaponCycle) {                   // ←/→ e LB: troca de arma
+        if (foot && this.onWeaponCycle) {                   // ←/→: troca de arma (com a roda aberta: troca dentro da categoria)
             if (edge(14)) this.onWeaponCycle(-1);
-            if (edge(15) || edge(4)) this.onWeaponCycle(1);
+            if (edge(15)) this.onWeaponCycle(1);
         }
         this._padPrev = Array.from(p.buttons, (b) => !!(b && b.pressed));
     }
@@ -231,6 +234,7 @@ class InputManager {
     // Consome a intenção de zoom deste frame.
     // keys: sinal contínuo (+ afasta / - aproxima) | wheel: nº de ticks acumulados (+ afasta).
     consumeZoom() {
+        if (this.wheelOpen) return { keys: 0, wheel: 0 };                // (a roda do mouse troca de arma na roda de armas)
         let keys = 0;
         if (this.keys['x']) keys += 1; // afastar
         if (this.keys['z']) keys -= 1; // aproximar

@@ -3,7 +3,8 @@
 //
 // Os desenhos vêm de atlas prontos (assets/npcs/<tipo>.js, gerados por tools/npcs a partir de src/art/npcgen): 8 direções por quadro,
 // vistos do alto a 56° (não giram: cada direção tem o seu desenho). Cada pixel guarda 2 bytes — formato 2 (sombreado contínuo, "pré-
-// renderizado"): o MATERIAL (× 8 + nível de água) e a LUZ (0–204 anda pela rampa de 5 tons do material; acima, o brilho especular);
+// renderizado"): o MATERIAL (× 8 + nível de água) e a LUZ (0–204 anda pela rampa de 5 tons do material; acima, o brilho especular;
+// os 2 bits baixos da luz = cobertura do pixel de borda: a silhueta sai suavizada, como um render 3D, sem contorno preto);
 // cores fixas (sombra, contorno, clarão…) guardam o código e o alfa. (Formato 1, o do pacote: código = material × 8 + tom, e o alfa.)
 // A cor vem da PALETA (uma linha por variante): o mesmo desenho vira dezenas de pessoas diferentes (pele, cabelo, roupa) e a roupa
 // do jogador muda de cor na hora. A sombra de contato já vem desenhada; debaixo d'água o corpo é tingido de azul.
@@ -192,6 +193,8 @@ const NpcArt = {
                 gl_Position.z = lp.z / lp.w * gl_Position.w;
             }`;
         // Bilinear feito à mão sobre a cor JÁ pintada (o atlas tem códigos, não cores): suave de longe; `sharp` > 1 = de perto, nítido.
+        // De longe (`mini` = texels do atlas por pixel da tela > 1,3: dirigindo, celular, tela pequena), o bilinear de 4 amostras pulava
+        // texels — o boneco serrilhava e "fervia" andando. Aí vale a MÉDIA de n×n amostras sobre a pegada do pixel (filtro de caixa).
         BABYLON.Effect.ShadersStore.npcArtFragmentShader = `
             precision highp float;
             varying vec2 vPx;
@@ -203,6 +206,7 @@ const NpcArt = {
             uniform float palRows;
             uniform vec3 tint;
             uniform float sharp;
+            uniform float mini;
             uniform float la;
             uniform float fmt;
             uniform float wt;
@@ -231,20 +235,32 @@ const NpcArt = {
                     if (a < 0.002) return vec4(0.0);
                     c = texture2D(palette, vec2((code + 0.5) / 256.0, row)).rgb;
                 } else {                                                           // formato 2, material: [material × 8 + água, LUZ]
-                    // luz 0–204 anda pela rampa de 5 tons do material (sombreado contínuo); acima disso, o brilho (quase branco)
+                    // luz 0–204 anda pela rampa de 5 tons do material (sombreado contínuo); acima disso, o brilho (quase branco).
+                    // Os 2 bits baixos da luz = cobertura do pixel de borda (0 = cheio; 1–3 = 75/50/25%): silhueta suavizada, sem contorno.
+                    float cov = mod(b1, 4.0); b1 -= cov;
                     float u = min(b1, 204.0) / 204.0 * 4.0, i0 = floor(u), i1 = min(i0 + 1.0, 4.0);
                     vec3 c0 = texture2D(palette, vec2((mat * 8.0 + i0 + 0.5) / 256.0, row)).rgb;
                     vec3 c1 = texture2D(palette, vec2((mat * 8.0 + i1 + 0.5) / 256.0, row)).rgb;
                     c = mix(c0, c1, u - i0);
                     if (b1 > 204.0) c = mix(c, c1 + (1.0 - c1) * 0.65, (b1 - 204.0) / 51.0);
-                    a8 = tone < 0.5 ? 255.0 : 200.0 - (tone - 1.0) / 3.0 * 150.0; a = a8 / 255.0;
+                    a8 = tone < 0.5 ? 255.0 : 200.0 - (tone - 1.0) / 3.0 * 150.0;
                     if (tone > 0.5) c = mix(c, vec3(0.1804, 0.4078, 0.5569), 0.45 + 0.45 * clamp((200.0 - a8) / 150.0, 0.0, 1.0));     // debaixo d'água
+                    a = a8 / 255.0 * (1.0 - cov * 0.25);
                 }
                 if (code > 0.5) c *= tint * vC.y;
                 return vec4(c * a, a);
             }
             // bilinear do quadro cujo retângulo no atlas é R (px), no ponto p (px)
             vec4 sampleFrame(vec2 px, vec4 R) {
+                if (mini > 1.3) {
+                    float n = min(4.0, ceil(mini));
+                    vec4 acc = vec4(0.0);
+                    for (int j = 0; j < 4; j++) for (int k = 0; k < 4; k++) {
+                        if (float(k) >= n || float(j) >= n) continue;
+                        acc += tap(floor(px + ((vec2(float(k), float(j)) + 0.5) / n - 0.5) * mini), R);
+                    }
+                    return acc / (n * n);
+                }
                 vec2 p = px - 0.5, i = floor(p), f = clamp((p - i - 0.5) * sharp + 0.5, 0.0, 1.0);
                 return mix(mix(tap(i, R), tap(i + vec2(1.0, 0.0), R), f.x), mix(tap(i + vec2(0.0, 1.0), R), tap(i + vec2(1.0, 1.0), R), f.x), f.y);
             }
@@ -283,7 +299,7 @@ const NpcArt = {
         if (A.material) return A.material;
         const m = new BABYLON.ShaderMaterial('npcArt_' + A.id, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
             attributes: ['position', 'color', 'fr', 'fr2'],
-            uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'atlasSize', 'palRows', 'tint', 'sharp', 'la', 'fmt', 'wt', 'clipA', 'clipB'],
+            uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'atlasSize', 'palRows', 'tint', 'sharp', 'mini', 'la', 'fmt', 'wt', 'clipA', 'clipB'],
             samplers: ['atlas', 'palette'],
             needAlphaBlending: true,
         });
@@ -296,6 +312,7 @@ const NpcArt = {
         m.setFloat('palRows', this.ROWS);
         m.setColor3('tint', SpriteMaterial.sharedTint());
         m.setFloat('sharp', this._sharpOf(A));
+        m.setFloat('mini', this._miniOf(A));
         m.setFloat('la', this._gl2 ? 0 : 1);
         m.setFloat('wt', this._wt || 0);
         m.setVector4('clipA', new BABYLON.Vector4(0, 0, 0, 1));
@@ -313,7 +330,9 @@ const NpcArt = {
 
     // Nitidez conforme o zoom: px de tela por texel do atlas (> 1 = ampliado: sem borrar). Chamado a cada quadro pelo jogo.
     _spm: 0,
-    _sharpOf(A) { return Math.max(1, Math.min(8, (this._spm || this.ppu) / this.ppuOf(A))); },
+    // (até 1,6: de perto o boneco fica nítido, mas liso — sem os "quadradinhos" de pixel art ampliada)
+    _sharpOf(A) { return Math.max(1, Math.min(1.6, (this._spm || this.ppu) / this.ppuOf(A))); },
+    _miniOf(A) { return Math.max(1, Math.min(6, this.ppuOf(A) / (this._spm || this.ppu))); },
 
     // Relógio da linha d'água (ondulação de quem vadeia): um uniform por atlas carregado, ~30 por quadro.
     tick(t) {
@@ -325,7 +344,7 @@ const NpcArt = {
         if (Math.abs(screenPxPerMeter - this._spm) < 0.05) return;
         this._spm = screenPxPerMeter;
         this.sharp = this._sharpOf({ data: {} });
-        for (const A of Object.values(this.atlases)) if (A.material) A.material.setFloat('sharp', this._sharpOf(A));
+        for (const A of Object.values(this.atlases)) if (A.material) { A.material.setFloat('sharp', this._sharpOf(A)); A.material.setFloat('mini', this._miniOf(A)); }
     },
 
     // ------------------------------------------------------------------ clipes
@@ -372,7 +391,7 @@ const NpcArt = {
     // resolução (k = 1: 52 px por metro), gerado aqui mesmo num Worker quando o tipo aparece pela primeira vez e guardado no aparelho
     // (IndexedDB, comprimido): da segunda vez é só carregar. Enquanto não fica pronto, o tipo aparece com o atlas pronto (resolução
     // padrão). Os atlas em alta não vêm no download (seriam ~90 MB).
-    HD_VERSION: 5,                 // mude quando o gerador mudar o desenho (os atlas em alta guardados são refeitos) — 2: atlas até 4096 de lado; 3: passada longa; 4: subida (walk_up, climb); 5: corpo da malha 3D
+    HD_VERSION: 7,                 // mude quando o gerador mudar o desenho (os atlas em alta guardados são refeitos) — 2: atlas até 4096 de lado; 3: passada longa; 4: subida (walk_up, climb); 5: corpo da malha 3D; 6: braços soltos, cabeça maior, silhueta feminina, luz; 7: visual 3D sem contorno
     hdOn() { return !!(typeof Config !== 'undefined' && Config.art && Config.art.hd) && !!this._scene; },
     _hd: null,
     // Em duas fases, para todos os tipos ficarem nítidos logo: (1) só parado/andando/correndo (poucos segundos por tipo) → atlas
@@ -435,7 +454,7 @@ const NpcArt = {
         this.addAtlas(id + '#hd', a);
         A.cache = new Map();
         A.gen = (A.gen || 0) + 1;
-        for (const s of Object.values(this.sheets)) if (s.atlasName === id || s.fallbackAtlas === id || s.extraAtlas === id) s.clips = {};
+        for (const s of Object.values(this.sheets)) if (s.uses(id)) s.clips = {};
     },
     // Troca o desenho do tipo `id` (mesmo id: folhas, materiais e quem já está na tela acompanham).
     _swap(id, a) {
@@ -450,9 +469,9 @@ const NpcArt = {
             const m = A.material;
             m.setTexture('atlas', A.tex);
             m.setVector2('atlasSize', new BABYLON.Vector2(a.w, a.h));
-            m.setFloat('ppu', this.ppuOf(A)); m.setFloat('fmt', A.data.v); m.setFloat('sharp', this._sharpOf(A));
+            m.setFloat('ppu', this.ppuOf(A)); m.setFloat('fmt', A.data.v); m.setFloat('sharp', this._sharpOf(A)); m.setFloat('mini', this._miniOf(A));
         }
-        for (const s of Object.values(this.sheets)) if (s.atlasName === id || s.fallbackAtlas === id || s.extraAtlas === id) s.clips = {};
+        for (const s of Object.values(this.sheets)) if (s.uses(id)) s.clips = {};
     },
     async _deflate(u8) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer()); },
     async _inflate(u8) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer()); },
@@ -494,7 +513,7 @@ const NpcArt = {
         if (A.material) A.material.dispose();
         if (A.tex) A.tex.dispose();
         delete this.atlases[id];
-        for (const s of Object.values(this.sheets)) if (s.atlasName === id || s.fallbackAtlas === id || s.extraAtlas === id) s.clips = {};      // (nada de clipe guardado apontando para ele)
+        for (const s of Object.values(this.sheets)) if (s.uses(id)) s.clips = {};      // (nada de clipe guardado apontando para ele)
     },
 
     // Folha de um tipo. legacy = folha antiga para o que o atlas não tem (a primeira que pedir fica).
@@ -572,6 +591,7 @@ const NpcArt = {
             if (s) s.npcRemap = (v, name) => this.remap(k, v, name, s);
         }
         const hero = lib.sheets.hero = this.sheet('protagonista', lib.sheets.player, 0);
+        if (NPC_ATLAS.protagonista_armas) hero.armsAtlas = 'protagonista_armas';           // (as armas novas: PlayerLook troca pelo do visual gerado)
         this._lib = lib;
         hero.legacyVariant = 0;
         lib.npc = this;
@@ -628,12 +648,14 @@ class NpcSheet {
         this.legacyVariant = 2;
         this.fallbackAtlas = null;        // outro atlas do mesmo personagem (o jogador: o pronto, enquanto o novo visual é gerado)
         this.extraAtlas = null;           // atlas COMPANHEIRO com o que não coube no principal (o jogador: os clipes táticos)
+        this.armsAtlas = null;            // o outro companheiro do jogador: as armas novas (silenciador, RPG, lança-foguetes, minigun)
     }
+    uses(id) { return this.atlasName === id || this.fallbackAtlas === id || this.extraAtlas === id || this.armsAtlas === id; }
     _key(name, weapon) { return name + ':' + (weapon || 'none'); }
     getClip(name, weapon = 'none') {
         const w = weapon || 'none', key = this._key(name, w);
         if (key in this.clips) return this.clips[key];
-        let c = NpcArt.clip(this.atlasName, key) || (this.fallbackAtlas && NpcArt.clip(this.fallbackAtlas, key)) || (this.extraAtlas && NpcArt.clip(this.extraAtlas, key));
+        let c = NpcArt.clip(this.atlasName, key) || (this.fallbackAtlas && NpcArt.clip(this.fallbackAtlas, key)) || (this.extraAtlas && NpcArt.clip(this.extraAtlas, key)) || (this.armsAtlas && NpcArt.clip(this.armsAtlas, key));
         if (!c && w !== 'none') {
             const def = CharacterRig.CLIPS[name];
             if (def && !def.weapons) c = NpcArt.clip(this.atlasName, this._key(name, 'none')) || (this.fallbackAtlas && NpcArt.clip(this.fallbackAtlas, this._key(name, 'none')));

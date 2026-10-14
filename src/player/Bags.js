@@ -3,7 +3,8 @@
 //   • Bolsa: define a grade da mochila (células) e a carga confortável (kg). Sem bolsa = só os bolsos. Mala transversal, mochila e
 //     mochila tática se compram (conveniência / loja de armas / boca) e APARECEM no sprite do personagem (folha própria do rig).
 //   • Peso: armas, munição, kits, comida, joias, dinheiro vivo (cédulas: R$ 50 ≈ 1 g), mercadoria do ladrão e cédulas marcadas de
-//     banco. Até metade da carga: normal; até a carga cheia: cada vez mais lento; acima dela: sobrecarga (bem lento e sem correr).
+//     banco. As armas NO CORPO (até 3 — Inventory.body: coldre, cinto, bandoleira) pesam metade (bem distribuídas). Até 70% da
+//     carga: normal; até a carga cheia: um pouco mais lento; acima dela: cada vez mais lento; acima de 125%, sobrecarga (sem correr).
 //   • Fôlego: correr gasta (mais com peso); parado ou andando recupera. Zerou = sem fôlego até recuperar 35%. EVOLUI com o uso:
 //     correr treina o condicionamento (mais fôlego máximo e recuperação mais rápida).
 //   • Força: andar com peso nas costas e brigar treina a força de carregar (nível 0..20, `str`), que entra na FORÇA do físico
@@ -18,18 +19,20 @@ const Bags = {
     DEFS: {
     // self: peso da bolsa VAZIA (kg) — só conta nas bolsas de reserva que o jogador leva sem usar (inv.spareBags).
     // icon: chave do emoji (Theme/Emoji) | base: preço de catálogo (raridade no menu de equipamento)
-        none:      { name: 'Bolsos', cols: 3, rows: 2, kg: 8, emo: '👖', look: null, self: 0, icon: 'pockets', base: 0 },
-        cross:     { name: 'Mala transversal', cols: 4, rows: 3, kg: 14, emo: '👜', look: 'cross', self: 0.5, icon: 'bag_cross', base: 120 },
-        pack:      { name: 'Mochila', cols: 5, rows: 4, kg: 24, emo: '🎒', look: 'pack', self: 0.9, icon: 'bag_pack', base: 350 },
-        tactical:  { name: 'Mochila tática', cols: 6, rows: 5, kg: 38, emo: '🎒', look: 'tactical', self: 1.6, icon: 'bag_tactical', base: 2200 },
-        briefcase: { name: 'Maleta de alumínio', cols: 4, rows: 2, kg: 12, emo: '💼', look: null, hand: 'briefcase', self: 1.4, icon: 'bag_brief', base: 650 },
-        duffel:    { name: 'Bolsa de lona', cols: 7, rows: 5, kg: 52, emo: '👝', look: null, hand: 'duffel', self: 1.1, icon: 'bag_duffel', base: 380 },
-        suitcase:  { name: 'Mala de rodinhas', cols: 6, rows: 6, kg: 46, emo: '🧳', look: null, hand: 'suitcase', wheels: true, self: 3.2, icon: 'bag_suit', base: 900 },
+        none:      { name: 'Bolsos', cols: 3, rows: 2, kg: 12, emo: '👖', look: null, self: 0, icon: 'pockets', base: 0 },
+        cross:     { name: 'Mala transversal', cols: 4, rows: 3, kg: 18, emo: '👜', look: 'cross', self: 0.5, icon: 'bag_cross', base: 120 },
+        pack:      { name: 'Mochila', cols: 5, rows: 4, kg: 30, emo: '🎒', look: 'pack', self: 0.9, icon: 'bag_pack', base: 350 },
+        tactical:  { name: 'Mochila tática', cols: 6, rows: 5, kg: 46, emo: '🎒', look: 'tactical', self: 1.6, icon: 'bag_tactical', base: 2200 },
+        briefcase: { name: 'Maleta de alumínio', cols: 4, rows: 2, kg: 16, emo: '💼', look: null, hand: 'briefcase', self: 1.4, icon: 'bag_brief', base: 650 },
+        duffel:    { name: 'Bolsa de lona', cols: 7, rows: 5, kg: 60, emo: '👝', look: null, hand: 'duffel', self: 1.1, icon: 'bag_duffel', base: 380 },
+        suitcase:  { name: 'Mala de rodinhas', cols: 6, rows: 6, kg: 54, emo: '🧳', look: null, hand: 'suitcase', wheels: true, self: 3.2, icon: 'bag_suit', base: 900 },
     },
-    HARD: 1.75,            // acima de 175% da carga confortável não dá para levar mais nada (e quase não se anda)
+    HARD: 2.0,             // acima de 200% da carga confortável não dá para levar mais nada (e quase não se anda)
+    OVER: 1.25,            // acima de 125%: sobrecarga — não corre
+    BODY_KG: 0.5,          // fração do peso de uma arma que está NO CORPO (coldre, cinto, bandoleira)
     // kg por unidade
-    W: { pistol: 1.0, revolver: 1.2, smg: 2.8, shotgun: 3.4, rifle: 4.0, ak47: 4.3, bat: 0.9, knife: 0.3, grenade: 0.4, molotov: 0.75 },     // (arremessáveis: por unidade)
-    AMMO: { pistol: 0.012, revolver: 0.014, smg: 0.01, shotgun: 0.045, rifle: 0.017, ak47: 0.017 },
+    W: { pistol: 1.0, pistol_sil: 1.2, revolver: 1.2, smg: 2.8, shotgun: 3.4, rifle: 4.0, ak47: 4.3, bat: 0.9, knife: 0.3, grenade: 0.4, molotov: 0.75, rpg: 6.5, launcher: 9.0, minigun: 14.0 },     // (arremessáveis: por unidade)
+    AMMO: { pistol: 0.012, pistol_sil: 0.012, revolver: 0.014, smg: 0.01, shotgun: 0.045, rifle: 0.017, ak47: 0.017, rpg: 1.8, launcher: 1.5, minigun: 0.02 },
     ITEM: { medkits: 0.6, hacks: 0.25, keys: 0.05, food: 0.5, water: 0.6, jewels: 0.12 },
 
     // Clipes do jogador assados em segundo plano (a folha base e a de cada bolsa).
@@ -44,11 +47,11 @@ const Bags = {
 
     // Peso total carregado (kg).
     weight(game) {
-        const inv = game.inventory; let w = 0;
+        const inv = game.inventory, body = inv.body ? inv.body() : []; let w = 0;
         for (const [k, s] of Object.entries(inv.weapons)) {
             if (Weapons[k] && Weapons[k].throwable) { w += (s.reserve || 0) * (this.W[k] || 0); continue; }
             if (k === 'fists' || !s.owned) continue;
-            w += this.W[k] || 0;
+            w += (this.W[k] || 0) * (body.includes(k) ? this.BODY_KG : 1);
             w += ((s.reserve || 0) + (s.mag || 0)) * (this.AMMO[k] || 0);
         }
         for (const [k, kg] of Object.entries(this.ITEM)) w += (inv[k] || 0) * kg;
@@ -64,9 +67,9 @@ const Bags = {
 
     // Multiplicador de velocidade pela carga (1 = normal).
     speedMul(r) {
-        if (r <= 0.5) return 1;
-        if (r <= 1) return 1 - 0.3 * (r - 0.5) / 0.5;
-        return Math.max(0.35, 0.7 - 0.5 * (r - 1));
+        if (r <= 0.7) return 1;
+        if (r <= 1) return 1 - 0.12 * (r - 0.7) / 0.3;
+        return Math.max(0.45, 0.88 - 0.4 * (r - 1));
     },
 
     // Por quadro: peso, carga e fôlego.
@@ -82,7 +85,7 @@ const Bags = {
         // treino de força: andar carregando peso (de verdade: acima de 25% da carga) — correndo com peso treina mais
         if (r > 0.25 && pl.speed > 1 && game.mode === 'player') this.train(pl, dt * Math.min(1.75, r) * (pl.state === 'sprint' ? 1.5 : 1));
         pl.loadMul = this.speedMul(r);
-        pl.overloaded = r > 1;
+        pl.overloaded = r > this.OVER;
         pl.loadRatio = r;
         pl.handBag = D.hand || null;
         this._sheetSwap(game);
@@ -117,7 +120,7 @@ const Bags = {
             if (clip === 'walk') return [H === 'suitcase' && w === 'none' ? 'walk_pull' : 'walk_hold', w];
             if (clip === 'run') return ['run_hold', w];
         }
-        if (!H && w === 'none' && (pl.loadRatio || 0) > 0.85) {
+        if (!H && w === 'none' && (pl.loadRatio || 0) > 1) {
             if (clip === 'walk') return ['walk_heavy', 'none'];
             if (clip === 'run') return ['run_heavy', 'none'];
             if (clip === 'idle') return ['idle_heavy', 'none'];
@@ -135,7 +138,7 @@ const Bags = {
         pl.staminaMax = max;
         const can = wantSprint && moving && !pl.winded && !pl.overloaded && pl.stamina > 0;
         if (can) {
-            pl.stamina -= Config.player.staminaDrain * (1 + 0.8 * Math.min(1, r)) * (1 - Math.min(0.3, lvl * 0.015)) * (1 - (O.stamina || 0)) * (typeof Physique !== 'undefined' ? Physique.staminaDrainMul() : 1) * dt;      // (gordo cansa mais)
+            pl.stamina -= Config.player.staminaDrain * (1 + 0.5 * Math.max(0, Math.min(1.5, r) - 0.3)) * (1 - Math.min(0.3, lvl * 0.015)) * (1 - (O.stamina || 0)) * (typeof Physique !== 'undefined' ? Physique.staminaDrainMul() : 1) * dt;      // (gordo cansa mais)
             pl._rest = 0;
             F.xp += dt * (1 + r);                                                   // treino: correr (com peso, treina mais)
             if (pl.stamina <= 0) { pl.stamina = 0; pl.winded = true; }
