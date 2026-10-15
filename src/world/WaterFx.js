@@ -153,10 +153,11 @@ class WaterFx {
         // eventos presos à animação
         const a = o.actor, c = a && a.clip, name = a && a.clipName || '';
         if (!c || !c.loop || !c.frames) { s.ph = null; return; }
-        const ph = (a.time / c.frames) % 1, p0 = s.ph;
+        const ph = a.phase, p0 = s.ph;                                       // (0..1, qualquer nº de quadros)
         s.ph = ph;
         if (p0 == null) return;
-        const crossed = (m) => (ph >= p0 ? (p0 < m && ph >= m) : (p0 < m || ph >= m));
+        const back = ((((ph - p0) % 1) + 1.5) % 1) - 0.5 < 0, q0 = back ? ph : p0, q1 = back ? p0 : ph;      // (andando para trás no ciclo: o trecho ao contrário)
+        const crossed = (m) => (q1 >= q0 ? (q0 < m && q1 >= m) : (q0 < m || q1 >= m));
         if (sw && /^swim$/.test(name)) {
             [[0.02, 1], [0.52, -1]].forEach(([m, sd]) => {                     // mão entrando na água (direita, esquerda)
                 if (!crossed(m)) return;
@@ -177,8 +178,8 @@ class WaterFx {
                 this.splash(x + (Math.random() - 0.5) * 0.6, z + 0.1, 2, 0.4);
                 if (Math.random() < 0.5) AudioFX.waterKick(x, z, vol * 0.7);
             }
-        } else if (/^(walk|run)/.test(name)) {                               // vadeando: pé entrando na água
-            [[0.25, 1], [0.75, -1]].forEach(([m, sd]) => {
+        } else if (/^(walk|run|wade$)/.test(name)) {                         // vadeando: pé entrando na água (na fase do toque: Footsteps.strikes)
+            (typeof Footsteps !== 'undefined' ? Footsteps.strikes(c) : [[0.25, 1], [0.75, -1]]).forEach(([m, sd]) => {
                 if (!crossed(m)) return;
                 const run = /^run/.test(name), d01 = Math.min(1, o.depth / Config.water.wadeDepth);
                 const px = x + fx * 0.25 + rx * sd * 0.14, pz = z + fz * 0.25 + rz * sd * 0.14 + lift * 0.5;

@@ -115,11 +115,11 @@ class MotoTaxis {
             const step = m.v * dt;
             if (step >= L) { m.x = m.to.x; m.z = m.to.z; this._next(m); } else { m.x += ux * step; m.z += uz * step; }
             const steerLat = dl * 0.35;                                          // inclina para o lado em que está costurando
-            m.lean = Math.abs(da + steerLat) < 0.18 ? 1 : (da + steerLat > 0 ? 2 : 0);
+            m.lean = Math.max(-1, Math.min(1, (da + steerLat) / 0.45));       // (da > 0 = virando para a direita: deita para a direita)
             const hx = m.x + uz * m.lat, hz = m.z - ux * m.lat;                  // posição desenhada (deslocada para o lado)
             m.hx = hx; m.hz = hz;
             if (!m.actor.clip) m.actor.play('static');                         // (folha ainda sendo assada: tenta de novo)
-            m.actor.setPosition(hx, hz); m.actor.setHeading(m.heading); m.actor.setFrame(m.lean); m.actor.update(dt, 0);
+            m.actor.setPosition(hx, hz); m.actor.setHeading(m.heading); m.actor.update(dt, 0); m.actor.setLean(m.lean, dt);
 
             // pedestre bem na frente ainda dá um pulo para o lado; quem a moto pega mesmo assim é atingido — e a moto vai ao chão
             if (d < 70) this._pedestrians(m, ux, uz);

@@ -68,11 +68,12 @@ const Gym = {
         return r <= 0.45 ? ['Leve', '#7dd3fc'] : r <= 0.75 ? ['Ideal', '#86efac'] : r <= 0.95 ? ['Pesado', '#fbbf24'] : r <= 1.1 ? ['No limite', '#fb923c'] : ['Pesado demais', '#f87171'];
     },
 
-    // Quadro do clipe na fração `ph` (0..1) de uma repetição.
+    // Pose do clipe na fração `ph` (0..1) de uma repetição (pela fase: qualquer nº de quadros; com o gráfico suave, o próximo quadro
+    // entra em degradê).
     _pose(ph) {
         const a = this.g.player.actor, ex = this.ex, w = this.tier();
         if (a.clipName !== ex.clip || !a.clip || a.clip.weapon !== w) a.play(ex.clip, w, { restart: true });
-        if (a.clip) a.setFrame(Math.round(ph * a.clip.frames) % a.clip.frames);
+        if (a.clip) a.setPhase(ph);
         this.g.player._syncSprite();
     },
 

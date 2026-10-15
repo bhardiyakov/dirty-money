@@ -4,7 +4,11 @@
 //   play(clipe, arma)   troca o clipe (sem reiniciar se já está tocando)
 //   setHeading(rad)     escolhe a coluna de direção (0 = norte, +X = leste)
 //   update(dt, rate)    avança a animação (rate = multiplicador de velocidade; negativo = ao contrário, em clipe com loop)
+//   phase / setPhase(u) fase do clipe (0..1: no loop, a posição no ciclo; sem loop, quanto já tocou) — lida/posta sem contar quadros
+//   setLean(v)          inclinação pilotando (ride_moto/ride_jetski): v = +1 → 1º quadro (+12°), 0 → o do meio, −1 → o último; contínuo
 // O quad fica em y=0.5, acima de calçada (0,18) e rua (0,02): sem z-fighting.
+// 2,5D (NpcArt): a textura de cada direção mora numa PÁGINA do atlas, carregada sob demanda — enquanto a página não chega, o ator
+// mantém o último quadro desenhado (ou a direção vizinha já pronta); ator novo, sem nada desenhado ainda, fica escondido.
 //
 // Dois tipos de clipe:
 //   • folha de direções (barcos, helicóptero, e o que não estiver no atlas): colunas = direções; o quad não gira;
@@ -95,19 +99,59 @@ class SpriteActor {
         this.mesh.setBoundingInfo(new BABYLON.BoundingInfo(new BABYLON.Vector3(-h, -1, -h), new BABYLON.Vector3(h, 3, h)));
     }
 
-    // Fixa o frame do clipe (animação dirigida por código: cambalhota, inclinação da moto...). O update() volta a avançar daqui.
+    // Fixa o frame do clipe (animação dirigida por código). O update() volta a avançar daqui. (Prefira setPhase/setLean: o número de
+    // quadros dos clipes muda com o atlas.)
     setFrame(f) {
         if (!this.clip) return;
         f = Math.max(0, Math.min(this.clip.frames - 1, f | 0));
         this.time = f;
+        this._lean = null;
         if (f !== this.frame) { this.frame = f; this._applyUV(); }
+        if (this.clip.npc) this._blendNext(this.clip);                    // (no início do quadro a mistura é 0: nada do clipe anterior sobra em fr2)
+    }
+
+    // Fase do clipe: em loop, a posição no ciclo (0..1); sem loop, quanto já tocou (1 = no fim).
+    get phase() {
+        const c = this.clip;
+        if (!c || !c.frames) return 0;
+        if (c.loop) { const n = c.frames; return (((this.time % n) + n) % n) / n; }
+        return Math.max(0, Math.min(1, this.time / c.frames));
+    }
+    // Põe o clipe na fase u (como `phase`): quadro e mistura com o próximo recalculados na hora (sem esperar o update).
+    setPhase(u) {
+        const c = this.clip;
+        if (!c) return;
+        const n = c.frames;
+        u = +u || 0;
+        this.time = (c.loop ? u - Math.floor(u) : Math.max(0, Math.min(1, u))) * n;
+        this.done = !c.loop && this.time >= n;
+        this._lean = null;
+        const f = c.loop ? Math.floor(this.time) % n : Math.min(Math.floor(this.time), n - 1);
+        if (f !== this.frame) { this.frame = f; this._applyUV(); }
+        if (c.npc) this._blendNext(c);
+    }
+    // Inclinação pilotando: os quadros de ride_moto/ride_jetski são passos de inclinação (+12°, +6°, 0, −6°, −12°; fps 0). v = +1 → o 1º,
+    // 0 → o do meio, −1 → o último, contínuo (com o gráfico suave, mistura os dois passos vizinhos). O update não mexe mais no quadro.
+    setLean(v) {
+        const c = this.clip;
+        if (!c) return;
+        const n = c.frames, p = ((1 - Math.max(-1, Math.min(1, +v || 0))) / 2) * (n - 1);
+        this._lean = c;
+        this.time = p; this.done = false;
+        const smooth = c.npc && typeof Smooth !== 'undefined' && Smooth.on;
+        const f = Math.min(n - 1, smooth ? Math.floor(p) : Math.round(p));
+        if (f !== this.frame) { this.frame = f; this._applyUV(); }
+        if (c.npc) this._blendNext(c);
     }
 
     // Inclinação do chão na direção em que anda (MapGeo.slopeAlong; 0 = plano/parado). Quem move o personagem informa todo quadro;
     // aí 'walk'/'run' viram, se o tipo tiver o clipe (2,5D, sem arma na mão): subida (> 0,15) = 'walk_up' (inclinado, passo curto) e
     // encosta íngreme (> 0,6) = 'climb' (escalando com as mãos) — e o ritmo é corrigido pela passada mais curta (_rateK).
     setSlope(g) { this._slope = g || 0; this._slopeFresh = true; }
-    static get CLIMB() { return { up: 0.15, steep: 0.6, upStride: 0.77, climbStride: 0.59 }; }
+    static get CLIMB() { return { up: 0.15, steep: 0.6, upStride: 0.77, climbStride: 0.46 }; }      // (passadas × a do andar: o pé plantado dos clipes, medido)
+    // Clipes de passada (loop): trocar de um para outro (andar → correr, sacar a arma andando, subida…) mantém a FASE do ciclo — o pé
+    // que está no chão continua no chão, em vez de o passo recomeçar do zero.
+    static get GAIT() { return /^(walk|run|walk_up|climb|scared|sneak|strafe|wade|walk_hold|run_hold|walk_pull|walk_heavy|run_heavy)$/; }
 
     // Troca de clipe. Retorna false se o clipe não existe para essa arma.
     play(name, weapon = 'none', opts = {}) {
@@ -127,12 +171,15 @@ class SpriteActor {
         if (!clip) return false;
         if (this.clip === clip && !restart) return true;
         if (name === 'dead' && clip.npc && (!this.clip || this.clip.name !== 'dead') && typeof Blood !== 'undefined') Blood.deathPool(this);   // poça de sangue (Blood)
-        const was = this._mode || 0, mode = clip.vector ? 1 : clip.npc ? 2 : 0;
+        const was = this._mode || 0, mode = clip.vector ? 1 : clip.npc ? 2 : 0, prev = this.clip, G = SpriteActor.GAIT;
+        const carry = !restart && prev && prev.loop && clip.loop && G.test(prev.name) && G.test(name) ? this.phase : 0;
         this.clip = clip;
-        this.time = 0;
-        this.frame = 0;
+        this.time = carry * clip.frames;
+        this.frame = Math.min(clip.frames - 1, Math.floor(this.time));
         this.done = false;
-        this.mesh.material = clip.material;
+        this._lean = null;
+        this._rate = 1;                                                    // (o ritmo do clipe anterior — andando de costas — não inverte a mistura de um clipe dirigido por setPhase/setFrame; o update repõe o dele)
+        if (!clip.npc) { this.mesh.material = clip.material; if (this._npcWait) { this._npcWait = false; this._vis(); } }     // (2,5D: o material vem da página — _npcDraw)
         // Personagens (clipe vetorial) são desenhados em Config.art.charScale: o quad encolhe e o shader acompanha (lê a posição local).
         const k = clip.vector ? (Config.art.charScale || 1) : 1;
         this.mesh.scaling.x = this.mesh.scaling.z = k;
@@ -140,17 +187,26 @@ class SpriteActor {
         if (mode !== was) { this._mode = mode; this._modeChanged(); }
         else if (clip.npc && dirsWas !== clip.dirs && this.heading != null) { this.dir = -1; this.setHeading(this.heading); }     // (8 ↔ 16 direções)
         if (clip.vector) { this._setQuad(this.mesh, clip.pk.box); this._ovClip = null; }
-        else if (clip.npc && this._npcBox !== clip.pk.box) {                 // 2,5D: o quad (fixo, sem girar) tem a caixa do clipe
-            const b = this._npcBox = clip.pk.box;
-            this._setQuad(this.mesh, b);
-            this._setBounds(Math.max(-b[0], b[2], -b[1], b[3]));
-        }
         this._syncRow();
+        if (clip.npc) NpcArt.wantClip(clip);                                // (as páginas do clipe para a fila; a da direção atual, já)
         this._applyUV();
         return true;
     }
 
     get clipName() { return this.clip ? this.clip.name : ''; }
+
+    // Procura o clipe atual de novo na folha (o atlas mudou: visual novo do jogador, dano pintado pronto, atlas descartado…) e segue
+    // na mesma FASE (o clipe novo pode ter outro número de quadros) — ou na mesma inclinação (setLean). false = a folha não tem o clipe.
+    replay() {
+        const c = this.clip;
+        if (!c) return false;
+        const ph = this.phase, done = this.done, lean = this._lean === c && c.frames > 1 ? 1 - (2 * this.time) / (c.frames - 1) : null;
+        if (!this.play(c.name, c.weapon, { restart: true })) return false;     // (com o clipe antigo ainda em this.clip: nada de nova poça de sangue)
+        this.frame = -1;
+        if (lean !== null) this.setLean(lean);
+        else { this.setPhase(ph); this.done = done; }
+        return true;
+    }
 
     // Troca a folha de sprites (ex.: carro que amassou) mantendo posição e direção. Folha ainda não assada = ignora.
     setSheet(sheet) {
@@ -163,7 +219,7 @@ class SpriteActor {
     // Troca a folha de PERSONAGEM (clipes por nome) — inclusive de tamanho de quadro diferente (ex.: o jogador sobe
     // numa moto e passa a usar a folha de 80 px). O quad é redimensionado; o próximo play() pega o clipe da nova folha.
     useSheet(sheet) {
-        const keepRow = sheet && sheet.isNpc && !sheet.npcRemap ? this.npcRow : null;
+        const keepRow = sheet && sheet.isNpc && !sheet.npcRemap ? this.npcRow : null, was = this.npcType;
         sheet = sheet && sheet.npcRemap ? this._adopt(sheet, this.variant) : sheet;
         if (keepRow !== null) this.npcRow = keepRow;                   // (o jogador volta da moto para a própria folha 2,5D)
         this.sheet = sheet;
@@ -171,6 +227,9 @@ class SpriteActor {
         this._npcBox = null;
         const h = this._half = sheet.frame / Config.art.ppu / 2;
         this.mesh.rotation.y = 0; this._yaw = null;
+        // outra PESSOA (pedestre reciclado, NPC vestido de assaltante): não segura o desenho da anterior — some até a página nova chegar
+        if (this._pg && keepRow === null && sheet && sheet.isNpc && this.npcType !== was) { this._pg = null; this._drawClip = null; if (!this._npcWait) { this._npcWait = true; this._vis(); } }
+        if (this._pg) return;                                              // (2,5D já desenhado: segura o quadro e a caixa até a página nova chegar)
         this.mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, [-h, 0, h, h, 0, h, -h, 0, -h, h, 0, -h]);
         this._setBounds(h);
     }
@@ -192,10 +251,19 @@ class SpriteActor {
     setHeading(rad) {
         this.heading = rad;
         if (this.rotates) { this._rotate(); return; }
-        const D = this.clip && this.clip.npc ? this.clip.dirs || 8 : this.sheet.dirs;          // (2,5D: 8 direções; pilotando, 16)
-        if (this.clip && this.clip.npc) rad -= this._yaw || 0;                 // 2,5D: a direção desenhada é relativa à tela (câmera bússola)
-        const step = (Math.PI * 2) / D;
-        const d = ((Math.round(rad / step) % D) + D) % D;
+        const npc = !!(this.clip && this.clip.npc), D = npc ? this.clip.dirs || 8 : this.sheet.dirs;      // (2,5D: 16 direções; atlas antigos, 8)
+        if (npc) rad -= this._yaw || 0;                                    // 2,5D: a direção desenhada é relativa à tela (câmera bússola)
+        // perfil leve (NpcArt.dirs = 8): clipe de 16 direções só nas pares (as páginas ímpares nem são carregadas)
+        const S = npc && D > 8 && NpcArt.lite ? 2 : 1, N = D / S, x = rad / ((Math.PI * 2) / N);
+        let d = (((Math.round(x) % N) + N) % N) * S;
+        // HISTERESE (2,5D): fica na direção atual enquanto o rumo estiver a até 0,5 + 0,18 passo dela — rumo tremendo na fronteira
+        // (multidão, polícia mirando, balanço da câmera) não faz o desenho piscar entre duas direções
+        if (npc && this.dir >= 0 && this._dirD === D && d !== this.dir) {
+            let e = x - this.dir / S;
+            e -= Math.round(e / N) * N;
+            if (Math.abs(e) <= 0.68) d = this.dir;
+        }
+        this._dirD = D;
         if (d !== this.dir) { this.dir = d; this._applyUV(); }
     }
 
@@ -230,6 +298,7 @@ class SpriteActor {
             for (let i = 0; i < 16; i += 4) { this._colors[i + 2] = 0; this._colors[i + 3] = this._wl || 0; }
             this.mesh.updateVerticesData(BABYLON.VertexBuffer.ColorKind, this._colors);
             if (this._ov) this._ov.setEnabled(false);
+            this._pg = null; this._drawClip = null;                        // (o que estava na tela era de outro shader: nada 2,5D desenhado ainda)
             this.dir = -1;
             const h = this.heading; this.heading = null; this.setHeading(h || 0);
         } else {
@@ -265,8 +334,10 @@ class SpriteActor {
     setPosition(x, z) {
         this.mesh.position.x = x;
         this.mesh.position.z = z;
-        if (!this._placed) { this._placed = true; this.mesh.isVisible = true; }
+        if (!this._placed) { this._placed = true; this._vis(); }
     }
+    // Aparece quando já tem posição e — 2,5D — algo desenhado (a página do clipe chegou).
+    _vis() { const v = !!this._placed && !this._npcWait; if (this.mesh.isVisible !== v) this.mesh.isVisible = v; }
 
     // Escurece o sprite quando está na sombra de um prédio (suave, a ~4 consultas/s).
     _updateShade(dt) {
@@ -314,19 +385,22 @@ class SpriteActor {
     update(dt, rate = 1) {
         let c = this.clip;
         if (!c) return;
-        // 2,5D: o desenho do tipo foi trocado (alta definição pronta — NpcArt.hd): toca o mesmo clipe, no mesmo quadro, no atlas novo
+        // 2,5D: o atlas do clipe foi trocado ou descartado (NpcArt.genOf: visual novo, dano sem uso que saiu…): o mesmo clipe, na mesma fase
         if (c.npc && c.gen !== NpcArt.genOf(c.atlas)) {
-            const n = c.name, w = c.weapon, t = this.time, f = this.frame, done = this.done;
-            this.clip = null;
-            if (!this.play(n, w, { restart: true })) return;
-            this.frame = -1; this.setFrame(f); this.time = t; this.done = done;
+            if (!this.replay()) { this.clip = null; return; }               // (sem o clipe: para até o jogo pedir outro)
             c = this.clip;
+        }
+        if (c.npc) {                                                       // página do atlas: marca o uso (LRU); saiu da GPU ou ainda não chegou → tenta de novo
+            const P = this._pg;
+            if (P && P.tex) { if (this.mesh.isEnabled()) P.used = NpcArt.now; }         // (escondido não conta como uso)
+            else if (P && !this._wait) { this._wait = P; this._waitT = 0.5; }         // (saiu da GPU: pede de volta já)
+            if (this._wait && (this._waitT = (this._waitT || 0) + dt) >= 0.5) { this._waitT = 0; this._applyUV(); }    // (chegando, o NpcArt já avisa: _pageReady)
         }
         this._updateShade(dt);
         if (c.npc) this._updateCover();
         if (c.npc && this._yaw !== SpriteActor.viewYaw()) {                // câmera bússola girou: o quad acompanha e a direção desenhada é refeita
             this.mesh.rotation.y = this._yaw = SpriteActor.viewYaw();
-            if (this.heading != null) { this.dir = -1; this.setHeading(this.heading); }
+            if (this.heading != null) this.setHeading(this.heading);      // (com a histerese: o balanço da câmera não faz o desenho piscar)
         }
         // água no corpo e inclinação valem só no quadro em que foram informadas (antes deste update): sem aviso, zeram
         if (!this._wlFresh) this._wl = 0;
@@ -335,29 +409,35 @@ class SpriteActor {
         if (!this._slopeFresh) this._slope = 0;
         this._slopeFresh = false;
         if (c.vector) this._rotate();
-        this.time += dt * c.fps * rate * (this._rateK || 1);
-        this._rate = rate;
-        let f;
-        if (c.loop) f = ((Math.floor(this.time) % c.frames) + c.frames) % c.frames;          // (ritmo negativo: anda para trás no ciclo)
-        else { f = Math.min(Math.floor(this.time), c.frames - 1); if (this.time >= c.frames) this.done = true; }
-        if (f !== this.frame) { this.frame = f; this._applyUV(); }
+        if (this._lean !== c) {                                            // (inclinação pilotando: quem pilota escolhe o quadro — setLean)
+            this.time += dt * c.fps * rate * (this._rateK || 1);
+            this._rate = rate;
+            let f;
+            if (c.loop) f = ((Math.floor(this.time) % c.frames) + c.frames) % c.frames;          // (ritmo negativo: anda para trás no ciclo)
+            else { f = Math.min(Math.floor(this.time), c.frames - 1); if (this.time >= c.frames) this.done = true; }
+            if (f !== this.frame) { this.frame = f; this._applyUV(); }
+        }
         if (c.npc) this._blendNext(c);
     }
 
     // Mistura de quadros (personagens 2,5D, com o gráfico suave): na segunda metade de cada quadro o PRÓXIMO entra em degradê
-    // (atributo fr2: o retângulo dele + o peso), então a pose muda suave em vez do salto seco. Sem o gráfico suave, peso 0.
+    // (atributo fr2: o retângulo dele + o peso), então a pose muda suave em vez do salto seco. Sem o gráfico suave, peso 0. Sempre na
+    // direção e na página do que está DESENHADO (esperando a página do clipe: peso 0). Inclinação (setLean): mistura linear contínua.
     _blendNext(c) {
-        const n = Math.min(c.frames, c.pk.n), R = this._fr2;
+        const n = Math.min(c.frames, c.pk.n), R = this._fr2, P = this._pg;
         let w = 0, f2 = this.frame;
-        if (typeof Smooth !== 'undefined' && Smooth.on && n > 1 && (c.loop || this.frame < n - 1)) {
-            let t = this.time - Math.floor(this.time);
-            if (this._rate < 0) t = 1 - t;                         // (andando para trás no ciclo: o próximo é o anterior)
-            const k = Math.max(0, Math.min(1, (t - 0.45) / 0.55));
-            w = k * k * (3 - 2 * k);
-            f2 = c.loop ? (this.frame + (this._rate < 0 ? n - 1 : 1)) % n : this.frame + 1;
+        if (this._drawClip === c && P && P.tex && typeof Smooth !== 'undefined' && Smooth.on && n > 1 && (c.loop || this.frame < n - 1)) {
+            if (this._lean === c) { w = this.time - Math.floor(this.time); f2 = Math.min(this.frame + 1, n - 1); }
+            else {
+                let t = this.time - Math.floor(this.time);
+                if (this._rate < 0) t = 1 - t;                         // (andando para trás no ciclo: o próximo é o anterior)
+                const k = Math.max(0, Math.min(1, (t - 0.45) / 0.55));
+                w = k * k * (3 - 2 * k);
+                f2 = c.loop ? (this.frame + (this._rate < 0 ? n - 1 : 1)) % n : this.frame + 1;
+            }
         }
         if (w < 0.004) { if (R[3] !== 0) { for (let k = 3; k < 16; k += 4) R[k] = 0; this.mesh.updateVerticesData('fr2', R); } return; }
-        const i = (Math.max(0, this.dir) * c.pk.n + Math.min(f2, c.pk.n - 1)) * 3, a = c.pk.fr[i], b = c.pk.fr[i + 1], d = c.pk.fr[i + 2];
+        const i = (Math.max(0, this._drawDir) * c.pk.n + Math.min(f2, c.pk.n - 1)) * 3, a = c.pk.fr[i], b = c.pk.fr[i + 1], d = c.pk.fr[i + 2];
         w = Math.round(w * 64) / 64;
         if (R[0] === a && R[1] === b && R[2] === d && R[3] === w) return;
         for (let k = 0; k < 16; k += 4) { R[k] = a; R[k + 1] = b; R[k + 2] = d; R[k + 3] = w; }
@@ -369,7 +449,7 @@ class SpriteActor {
         const c = this.clip;
         if (!c) return;
         if (c.vector) { this._setFr(this.mesh, c.pk, this.frame, this._fr); this._applyOverlay(); return; }
-        if (c.npc) { this._setFr(this.mesh, c.pk, Math.max(0, this.dir) * c.pk.n + Math.min(this.frame, c.pk.n - 1), this._fr, true); return; }
+        if (c.npc) { this._npcDraw(c); return; }
         const F = c.frame;
         const u0 = (this.dir * F) / c.W, u1 = ((this.dir + 1) * F) / c.W;
         const v0 = (this.frame * F) / c.H, v1 = ((this.frame + 1) * F) / c.H;
@@ -377,6 +457,54 @@ class SpriteActor {
         uv[0] = u0; uv[1] = v0; uv[2] = u1; uv[3] = v0;
         uv[4] = u0; uv[5] = v1; uv[6] = u1; uv[7] = v1;
         this.mesh.updateVerticesData(BABYLON.VertexBuffer.UVKind, uv);
+    }
+
+    // 2,5D: desenha o quadro atual se a página da direção já está na GPU; senão a direção vizinha (outra paridade) já pronta; senão
+    // mantém o último quadro desenhado (material e fr intactos, mistura 0) — e o ator que ainda não desenhou nada fica escondido. Quem
+    // espera fica na lista do NpcArt (_pageReady: tenta de novo quando uma página chega) e pede a página na frente da fila se está na tela.
+    _npcDraw(c) {
+        const D = c.dirs, d = Math.max(0, this.dir) % D;
+        let P = c.pages[c.pd[d]], dd = d;
+        if (!P.tex && !NpcArt.want(P, P.pri > 0 && this._onScreen() ? 0 : NpcArt._pri(P) - 0.5)) {      // (fora da tela: a paridade da direção atual antes da outra)
+            this._wait = P;
+            NpcArt._waiters.add(this);
+            dd = -1;
+            if (D > 8) for (const e of [(d + 1) % D, (d + D - 1) % D]) { const Q = c.pages[c.pd[e]]; if (Q.tex || NpcArt.want(Q)) { dd = e; P = Q; break; } }
+            if (dd < 0) {
+                if (this._fr2[3] !== 0) { for (let k = 3; k < 16; k += 4) this._fr2[k] = 0; this.mesh.updateVerticesData('fr2', this._fr2); }
+                if (!this._pg && !this._npcWait) { this._npcWait = true; this._vis(); }
+                return;
+            }
+        } else if (this._wait) { this._wait = null; NpcArt._waiters.delete(this); }
+        if (this.mesh.material !== P.mat) this.mesh.material = P.mat;
+        if (this._npcBox !== c.pk.box) {                                  // o quad (fixo, sem girar) tem a caixa do clipe desenhado
+            const b = this._npcBox = c.pk.box;
+            this._setQuad(this.mesh, b);
+            this._setBounds(Math.max(-b[0], b[2], -b[1], b[3]));
+        }
+        this._pg = P; this._drawClip = c; this._drawDir = dd;
+        P.used = NpcArt.now;
+        this._setFr(this.mesh, c.pk, dd * c.pk.n + Math.min(this.frame, c.pk.n - 1), this._fr, true);
+        if (this._npcWait) { this._npcWait = false; this._vis(); }
+    }
+    // Uma página chegou (NpcArt._upload): quem esperava tenta desenhar de novo.
+    _pageReady() {
+        if (!this.mesh || this.mesh.isDisposed()) { NpcArt._waiters.delete(this); return; }
+        if (this.clip && this.clip.npc) { this._applyUV(); this._blendNext(this.clip); } else NpcArt._waiters.delete(this);
+    }
+    // O atlas do que está desenhado foi descartado (NpcArt.dropAtlas): some até desenhar de novo (o update refaz o clipe).
+    _lostPage() {
+        this._pg = null; this._drawClip = null; this._npcBox = null;
+        this._wait = 1; this._waitT = 1;
+        if (!this._npcWait) { this._npcWait = true; this._vis(); }
+    }
+    // Na tela agora? (pedir a página na frente da fila)
+    _onScreen() {
+        const m = this.mesh, F = this.scene.frustumPlanes;
+        if (!this._placed || !m.isEnabled()) return false;
+        if (!F) return true;
+        m.computeWorldMatrix();
+        return m.isInFrustum(F);
     }
 
     // Quad fixo de um clipe vetorial: a caixa (x0, z0, x1, z1) em metros relativa aos pés (já com a folga da sombra).
@@ -422,6 +550,6 @@ class SpriteActor {
 
     setVisible(v) { this.mesh.setEnabled(v); }
 
-    dispose() { this.mesh.dispose(); SpriteActor.live.delete(this); }
+    dispose() { this.mesh.dispose(); SpriteActor.live.delete(this); if (typeof NpcArt !== 'undefined') NpcArt._waiters.delete(this); }
 }
 SpriteActor.live = new Set();

@@ -5,7 +5,7 @@
 // (CarArt: modelos 'moto' e 'bicicleta', e as versões caídas '*_caida'), repintável como um carro; o PILOTO é o sprite do personagem
 // por cima (RiderActor), com os clipes do rig:
 //   ride_bike   pedalando (os pés giram com a velocidade)
-//   ride_moto   pilotando: 3 quadros de inclinação pelo guidão
+//   ride_moto   pilotando: degraus de inclinação escolhidos pelo guidão (RiderActor.setLean: contínuo, + = deitado para a direita)
 // Estacionada = só o veículo; caída = o desenho de lado (piloto arremessado numa batida).
 // A "folha de veículo" abaixo (BikeSheet) só adapta a interface que o Vehicle espera.
 // ============================================================================

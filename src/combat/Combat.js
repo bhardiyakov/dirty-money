@@ -77,7 +77,7 @@ class Combat {
         const n = W.pellets || 1;
         if (W.rocket) return this._fireRocket(shooter, weaponKey);
         let mx, mz;
-        const tip = shooter.fly ? null : Combat.muzzleOffset(W.look || weaponKey, shooter.angle);
+        const tip = shooter.fly ? null : Combat.muzzleOffset(W.look || weaponKey, shooter.angle, shooter.ref && shooter.ref.actor);
         if (tip && MapGeo.hasLineOfSight(shooter.x, shooter.z, shooter.x + tip[0], shooter.z + tip[1])) { mx = shooter.x + tip[0]; mz = shooter.z + tip[1]; }
         else {                                                                      // (helicóptero, ou a ponta do cano do desenho do outro lado de uma parede)
             const muzzle = shooter.fly ? 1.15 : 1.15 * (Config.art.charScale || 1);
@@ -106,7 +106,7 @@ class Combat {
 
     // Foguete (RPG / lança-foguetes): sai da boca do tubo no desenho, com o estrondo e o clarão; o voo é do Rockets.
     _fireRocket(shooter, key) {
-        const tip = Combat.muzzleOffset(key, shooter.angle);
+        const tip = Combat.muzzleOffset(key, shooter.angle, shooter.ref && shooter.ref.actor);
         let mx = shooter.x + Math.sin(shooter.angle) * 1.3, mz = shooter.z + Math.cos(shooter.angle) * 1.3;
         if (tip && MapGeo.hasLineOfSight(shooter.x, shooter.z, shooter.x + tip[0], shooter.z + tip[1])) { mx = shooter.x + tip[0]; mz = shooter.z + tip[1]; }
         if (!Rockets.fire(shooter, key, mx, mz)) return 0;
@@ -116,32 +116,47 @@ class Combat {
         return 1;
     }
 
-    // Ponta do cano NO DESENHO de quem atira (personagens 2,5D): [leste, norte] em metros a partir dos pés, para a direção (das 8 do
-    // sprite) mais perto de `angle`. Sai do gerador (o clarão do quadro de tiro do clipe `shoot`, projetado como o atlas é desenhado:
-    // câmera a 56°, a altura vira "para cima" na tela), então o fogo, o traçante e a bala saem de onde a arma aparece. null = sem arma
-    // desenhada (ou sem o gerador): quem chamou usa o ponto padrão à frente do corpo.
-    static muzzleOffset(look, angle) {
+    // Ponta do cano NO DESENHO de quem atira (personagens 2,5D): [leste, norte] em metros a partir dos pés. Sai do gerador (o clarão
+    // do quadro de tiro do clipe `shoot`, projetado como o atlas é desenhado: câmera a 56°, a altura vira "para cima" na tela), então
+    // o fogo, o traçante e a bala saem de onde a arma aparece. Direção: a que o sprite de `actor` desenha para `angle` — a mais perto
+    // das do clipe dele (16; 8 nos atlas antigos e no perfil leve), relativa à câmera bússola —; sem ator (ou boneco antigo, que gira
+    // no ângulo exato), o próprio ângulo. null = sem arma desenhada (ou sem o gerador): quem chamou usa o ponto padrão à frente do corpo.
+    static muzzleOffset(look, angle, actor = null) {
         const T = Combat._muzzle || (Combat._muzzle = {});
         if (!(look in T)) {
             T[look] = null;
             try {
                 if (look && look !== 'none' && look !== 'bat' && typeof NpcArt !== 'undefined' && NpcArt.available()) {
-                    const G = NpcArt.gen(), spec = G.fullSpec(G.PLAYER_DEFAULT), w = G.weaponFor('protagonista', look);
+                    const G = NpcArt.gen(), spec = G.fullSpec(G.PLAYER_DEFAULT);
                     G.setRig(G.rigFor(spec));
-                    const P = G.CLIPS.shoot.fn(w).map((q) => (q.adult ? q.adult() : q)).find((q) => q.effects && q.effects.some((e) => e.type === 'flash'));
+                    const poses = G.clipPoses ? G.clipPoses('shoot', look, 'protagonista').poses : G.CLIPS.shoot.fn(G.weaponFor('protagonista', look));
+                    const P = poses.map((q) => (q.adult ? q.adult() : q)).find((q) => q.effects && q.effects.some((e) => e.type === 'flash'));
                     if (P) {
-                        const pos = P.effects.find((e) => e.type === 'flash').pos, R = new G.Camera().R, k = (spec.scale || 1) / 52;     // (52 unidades do gerador por metro)
-                        T[look] = [];
-                        for (let d = 0; d < 8; d++) {                    // direção d do atlas = desenho girado −45°·d (0 = norte, sentido horário)
-                            const q = G.mv3(G.Rz(G.deg(-45 * d)), pos);
-                            T[look].push([(q[0] * R[0] + q[1] * R[1] + q[2] * R[2]) * k, (q[0] * R[3] + q[1] * R[4] + q[2] * R[5]) * k]);
-                        }
+                        const pos = P.effects.find((e) => e.type === 'flash').pos, k = (spec.scale || 1) / 52;     // (52 unidades do gerador por metro)
+                        T[look] = { p: [pos[0] * k, pos[1] * k, pos[2] * k], R: new G.Camera().R };
                     }
                 }
             } catch (e) { console.warn('[COMBATE] ponta do cano de ' + look + ':', e); T[look] = null; }
         }
-        const L = T[look];
-        return L ? L[((Math.round(angle / (Math.PI / 4)) % 8) + 8) % 8] : null;
+        const M = T[look];
+        if (!M) return null;
+        const c = typeof SpriteActor !== 'undefined' && actor instanceof SpriteActor ? actor.clip : null, npc = !!(c && c.npc);
+        const yaw = npc ? SpriteActor.viewYaw() : 0;
+        let a = angle - yaw;                                                     // (2,5D: a direção desenhada é relativa à tela)
+        if (npc) {
+            const D = c.dirs || 8, S = D > 8 && NpcArt.lite ? 2 : 1, st = (Math.PI * 2) / D;
+            let d = Math.round(a / (st * S)) * S;
+            // a histerese do SpriteActor segura a direção desenhada até 0,68 passo além da fronteira: rumo perto dela, vale a desenhada
+            // (o fogo sai de onde a arma APARECE, não da direção vizinha)
+            if (actor.dir >= 0 && actor._dirD === D) { let e = a / st - actor.dir; e -= Math.round(e / D) * D; if (Math.abs(e) <= 0.68 * S) d = actor.dir; }
+            a = d * st;
+        }
+        // desenho girado −a (0 = norte, sentido horário; a direção d do atlas = −360°/D·d), projetado na tela; a tela → o mundo
+        const s = Math.sin(-a), co = Math.cos(-a), p = M.p, R = M.R, qx = co * p[0] - s * p[1], qy = s * p[0] + co * p[1];
+        const sx = qx * R[0] + qy * R[1] + p[2] * R[2], sy = qx * R[3] + qy * R[4] + p[2] * R[5];
+        if (!yaw) return [sx, sy];
+        const cy = Math.cos(yaw), sy0 = Math.sin(yaw);                          // (câmera girada: o "para cima" da tela aponta para o rumo yaw)
+        return [sx * cy + sy * sy0, -sx * sy0 + sy * cy];
     }
 
     // Abertura da mira assistida (rad, para cada lado): trava em quem estiver até Config.aim.cone graus de onde o personagem olha.

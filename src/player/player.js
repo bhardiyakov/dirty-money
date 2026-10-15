@@ -106,6 +106,7 @@ class Player {
         this.rag = null;
         this.actor.mesh.position.y = this.baseY;
         this.actor.play(dead ? 'dead' : 'idle', 'none', { restart: true });
+        if (dead) this.actor.setPhase(1);                                       // (já deitado: só a pose final, sem refazer a queda)
         this._syncSprite();
     }
 
@@ -257,15 +258,15 @@ class Player {
     // armado), para trás (o mesmo, ao contrário) ou de lado (passo lateral; para a esquerda, ao contrário). Devolve o ritmo (com sinal).
     _aimGait(w, base) {
         const rel = this._relMove(), a = Math.abs(rel);
-        if (a > 0.87 && a < 2.27 && this.actor.play('strafe', w)) return (rel > 0 ? 1 : -1) * base / 0.7;      // (passo lateral: passada 0,7)
+        if (a > 0.87 && a < 2.27 && this.actor.play('strafe', w)) return (rel > 0 ? 1 : -1) * base / 0.37;      // (passo lateral: passada 0,37 da do andar — o pé plantado do clipe, medido)
         this.actor.play('walk', w);
         return a >= 2.27 ? -base : base;
     }
 
     // Sequência de ações encadeadas (entrar/roubar um carro). Cada passo:
-    //   { clip, weapon?, timer?, glide?:{x,z}, yank?, onStart?, face? }
+    //   { clip, weapon?, timer?, fit?, glide?:{x,z}, yank?, onStart?, face? }
     // clip: clipe tocado (sem timer, até o fim; com timer, em loop por `timer` s — pode ser encurtado em `action.timer = 0`)
-    // glide: durante o passo o personagem desliza até {x,z} | yank: chamado no meio do clipe (frame ≥ 3) | onStart: ao começar
+    // glide: durante o passo o personagem desliza até {x,z} | yank: chamado no meio do clipe (Player.YANK) | onStart: ao começar
     // face: para onde olhar neste passo (rad, ou função que devolve) — correr até a porta olhando para ela, depois virar para o carro.
     // opts: { face: heading (rad), onDone, onAbort }. onAbort roda se a sequência for interrompida (ragdoll, teleporte,
     // cancelSequence) — quem chamou devolve o carro/porta ao normal.
@@ -284,6 +285,8 @@ class Player {
             const ok = this.playAction(s.clip, { lock: 0, weapon: s.weapon || 'none', yank: s.yank || null, onDone: () => run(i + 1) });
             if (!ok) { run(i + 1); return; }
             if (s.timer !== undefined) this.action.timer = s.timer;
+            // fit: o clipe (sem loop) dura exatamente o timer — toca uma vez, mais devagar ou mais rápido, e não acaba antes do passo
+            if (s.fit && s.timer && this.actor.clip && !this.actor.clip.loop) this.action.rate = this.actor.clip.frames / this.actor.clip.fps / s.timer;
             // glide: ponto {x,z} ou função que o devolve (acompanha um carro que ainda está freando).
             this._glide = s.glide ? { x0: this.root.position.x, z0: this.root.position.z, to: typeof s.glide === 'function' ? s.glide : () => s.glide, t: 0, dur: Math.max(0.05, s.timer || 0.3), arc: s.arc || 0 } : null;
         };
@@ -514,7 +517,7 @@ class Player {
         if (this.action) {
             const a = this.action;
             lock = a.lock;
-            if (a.yank && this.actor.frame >= 3) { const y = a.yank; a.yank = null; y(); }    // meio do puxão do roubo
+            if (a.yank && this.actor.phase >= (Player.YANK[a.name] || 0.5)) { const y = a.yank; a.yank = null; y(); }    // meio do puxão do roubo (Player.YANK)
             if (a.timer !== undefined) { a.timer -= dt; if (a.timer <= 0) this.actor.done = true; }
             if (this.actor.done) {
                 this.action = null;
@@ -673,7 +676,7 @@ class Player {
             if (depth > 0) {                                      // vadeando: passos lentos e pesados; acima da metade do corpo, braços puxando a água
                 const deep = depth >= W.wadeDepth * W.deepWade, moving = this.speed >= 0.3;
                 this.state = moving ? 'wade' : 'idle';
-                if (deep && this.actor.play(moving ? 'wade' : 'wade_idle', 'none')) rate = wRate(moving ? Math.max(0.45, this.speed / (Config.anim.walk * Config.player.stride * 0.69)) : 1);   // (passada do `wade`: 0,69 da do andar)
+                if (deep && this.actor.play(moving ? 'wade' : 'wade_idle', 'none')) rate = wRate(moving ? Math.max(0.45, this.speed / (Config.anim.walk * Config.player.stride * 0.54)) : 1);   // (passada do `wade`: 0,54 da do andar, medida)
                 else { this.actor.play(moving ? 'walk' : 'idle', w); rate = wRate(moving ? Math.max(0.4, this.speed / (Config.anim.walk * Config.player.stride)) * 0.9 : 1); }
                 this._syncSprite();
                 this.actor.update(dt, rate);
@@ -712,10 +715,11 @@ class Player {
             if (this.holdingUp && clip !== 'walk' && clip !== 'run' && w !== 'none' && w !== 'bat' && this.actor.play('holdup', w)) { this._syncSprite(); this.actor.update(dt, rate); return; }
             // Carregando peso (Bags): bolsa/maleta/mala na mão, mala puxada nas rodinhas, ou andar curvado de sobrecarga.
             const cw = Bags.clipFor(this, clip, w);
-            if (cw && this.actor.play(cw[0], cw[1])) { this._syncSprite(); this.actor.update(dt, rate); return; }
+            if (cw && this.actor.play(cw[0], cw[1])) { this._syncSprite(); this.actor.update(dt, cw[0] === 'walk_heavy' ? rate / 0.55 : rate); return; }      // (walk_heavy: passada 0,55 × a do andar)
             this.actor.play(clip, w);
         }
 
+        if (this.action && this.action.rate) rate = this.action.rate;            // (passo `fit` de uma sequência: o clipe acompanha o timer)
         this._syncSprite();
         this.actor.update(dt, rate);
     }
@@ -823,6 +827,10 @@ class Player {
 // recomeça do 1º. O chute fecha o combo (derruba — ver Melee.kick).
 Player.COMBO = ['punchL', 'punch', 'kick'];
 Player.COMBO_GAP = 0.6;
+// Puxão (yank) de uma ação: a FASE do clipe (0..1, vale para qualquer nº de quadros) em que o gesto acontece. Padrão 0,5 = o antigo
+// "quadro 3 de 6": carjack (as duas mãos agarraram o motorista, logo antes de jogar o corpo para trás), pickpocket (a mão no bolso:
+// pegou), enter. opendoor: 3 de 5 (puxou a porta: a moto tombada sobe). punch (quebrar o vidro): o punho esticado (0,17 s de 0,43).
+Player.YANK = { opendoor: 0.6, punch: 0.4 };
 // Desenhos de arma de fogo com pose de mirar / passo lateral (o revólver usa o da pistola; fuzil e AK, o da SMG).
 Player.GUN_LOOKS = new Set(['pistol', 'smg', 'shotgun', 'pistol_sil', 'rpg', 'launcher', 'minigun']);
 

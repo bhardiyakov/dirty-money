@@ -2,26 +2,35 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>NPCs — validação do porte do gerador</title>
+    <title>NPCs — validação do gerador e dos atlas</title>
     <style>
         body { background: #2b2e34; color: #d8dce2; font: 13px system-ui, Segoe UI, Arial, sans-serif; padding: 16px; }
         canvas { image-rendering: pixelated; background: #5c6170; margin: 2px; }
         .row { display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; }
-        pre { font-size: 12px; }
+        pre { font-size: 12px; white-space: pre-wrap; }
+        .sub { color: #9aa0aa; margin-bottom: 8px; }
     </style>
 </head>
 <body>
-    <h3>Porte JS × PNG original (192 px, escala 1,04)</h3>
+    <h3 id="title">Porte JS × PNG original (192 px, escala 1,04)</h3>
+    <div class="sub">Sem parâmetros: compara o porte com as folhas do pacote em <code>_ref/</code>. <code>?atlas=civil_vovo,pm_policial</code>
+        (ou <code>?atlas=todos</code>): confere os atlas prontos de <code>assets/npcs/</code> no formato paginado (manifesto, páginas, PNG,
+        retângulos, direções) e desenha a folha de um clipe nas 16 direções (<code>&amp;clip=walk:none</code>; <code>&amp;dir=../pasta</code> = outra pasta).</div>
     <pre id="log">rodando…</pre>
     <div id="out"></div>
+    <script src="../../src/art/SpriteIO.js"></script>
     <script src="../../src/art/npcgen/NpcGenCore.js"></script>
     <script src="../../src/art/npcgen/NpcGenChar.js"></script>
     <script src="../../src/art/npcgen/NpcGenRender.js"></script>
     <script src="../../src/art/npcgen/NpcGenAnims.js"></script>
+    <script src="../../src/art/npcgen/NpcGenTypes.js"></script>
+    <script src="../../src/art/npcgen/NpcGenBuild.js"></script>
     <script>
-        const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G);
-        G.ADULT = null; G.SHADE = 'cel';     // compara com o desenho ORIGINAL do pacote (chibi, 5 tons), não com o do jogo (adulto, sombreado contínuo)
-        const DIRS = [['S', 180], ['SW', 135], ['W', 90], ['NW', 45], ['N', 0], ['NE', -45], ['E', -90], ['SE', -135]];
+        const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G);
+        const Q = new URLSearchParams(location.search);
+        const SHADE0 = G.SHADE, ADULT0 = G.ADULT;
+        if (!Q.get('atlas')) { G.ADULT = null; G.SHADE = 'cel'; }     // compara com o desenho ORIGINAL do pacote (chibi, 5 tons), não com o do jogo (adulto, sombreado contínuo)
+        const DIRS = [['S', 180], ['SW', 135], ['W', 90], ['NW', 45], ['N', 0], ['NE', -45], ['E', -90], ['SE', -135]];     // (as 8 linhas das folhas do PACOTE, na ordem dele)
         const log = (s) => { document.getElementById('log').textContent += '\n' + s; };
         const loadImg = (src) => new Promise((ok, err) => { const i = new Image(); i.onload = () => ok(i); i.onerror = err; i.src = src; });
 
@@ -70,7 +79,120 @@
             log(`${cid} ${anim}: ${npts} pontos (assar ${tb.toFixed(0)} ms), render ${(tr / nfr).toFixed(1)} ms/quadro — ${bad} px diferentes de ${tot} (${(100 * bad / Math.max(tot, 1)).toFixed(2)}%)`);
             return { bad, tot };
         }
-        (async () => {
+        // ---------------------------------------------------------------- atlas paginados (SPEC: NpcGenBuild.js, cabeçalho)
+        const DIR_NAMES = ['N', 'NNE', 'NE', 'ENE', 'L', 'ESE', 'SE', 'SSE', 'S', 'SSO', 'SO', 'OSO', 'O', 'ONO', 'NO', 'NNO'];
+        const BASE = (Q.get('dir') || '../../assets/npcs').replace(/\/$/, '') + '/';
+        const script = (src) => new Promise((ok, err) => { const s = document.createElement('script'); s.src = src; s.onload = () => { s.remove(); ok(); }; s.onerror = () => { s.remove(); err(new Error('não carregou ' + src)); }; document.head.appendChild(s); });
+        const pageWait = new Map();
+        window.NPC_PAGE = (id, i, b64) => { const k = id + '#' + i, r = pageWait.get(k); if (r) { pageWait.delete(k); r(b64); } };
+        async function loadPage(id, i, file) {
+            const got = new Promise((ok) => pageWait.set(id + '#' + i, ok));
+            await script(BASE + file);
+            const b64 = await Promise.race([got, new Promise((_, err) => setTimeout(() => err(new Error(file + ' não chamou NPC_PAGE(' + id + ',' + i + ')')), 50))]);
+            const bin = atob(b64), u8 = new Uint8Array(bin.length);
+            for (let j = 0; j < bin.length; j++) u8[j] = bin.charCodeAt(j);
+            return { bytes: u8.length, img: await PNG.decodeAsync(u8) };
+        }
+        // Confere um atlas: { id, ok, erros, páginas, quadros } (e guarda as páginas RG em atlases[id] para a folha)
+        window.atlases = {};
+        async function checkAtlas(id) {
+            const errs = [], bad = (m) => { if (errs.length < 40) errs.push(m); };
+            delete (window.NPC_ATLAS || {})[id];
+            await script(BASE + id + '.js');
+            const A = window.NPC_ATLAS && NPC_ATLAS[id];
+            if (!A) return { id, ok: false, erros: ['sem NPC_ATLAS[' + id + ']'] };
+            try { const txt = await (await fetch(BASE + id + '.js', { cache: 'no-store' })).text(); if (/[^\x00-\x7f]/.test(txt)) bad('manifesto com caractere não ASCII'); } catch (e) { /* file:// */ }
+            if (!A.paged) return { id, ok: false, antigo: true, erros: ['formato antigo (um PNG só): regenere com node tools/npcs/regen.cjs'] };
+            const pages = [];
+            for (let i = 0; i < A.pages.length; i++) {
+                const P = A.pages[i];
+                if (P.file !== `${id}/p${i}.js`) bad(`p${i}: file ${P.file}`);
+                if (P.w > G.ATLAS_MAX || P.h > G.ATLAS_MAX) bad(`p${i}: ${P.w}×${P.h} passa de ${G.ATLAS_MAX}`);
+                const { bytes, img } = await loadPage(id, i, P.file);
+                if (img.type !== 0 || img.w !== P.w || img.h !== P.h * 2) bad(`p${i}: PNG tipo ${img.type} ${img.w}×${img.h} (esperado cinza ${P.w}×${P.h * 2})`);
+                if (bytes !== P.bytes) bad(`p${i}: ${bytes} bytes, o manifesto diz ${P.bytes}`);
+                pages.push({ P, rg: G.unplanar(img.data, P.w, P.h), occ: new Uint8Array(P.w * P.h) });
+            }
+            let nfr = 0, empty = 0;
+            const corners = new Map();
+            for (const [key, c] of Object.entries(A.clips)) {
+                if (!c.dirs) bad(`${key}: sem dirs`);
+                if (c.f.length !== c.n * c.dirs || !c.pd || c.pd.length !== c.dirs) { bad(`${key}: f ${c.f.length} / pd ${c.pd && c.pd.length} (n ${c.n}, dirs ${c.dirs})`); continue; }
+                for (let d = 0; d < c.dirs; d++) {
+                    const pg = pages[c.pd[d]], par = c.dirs > 8 ? d & 1 : 0;
+                    if (!pg) { bad(`${key} ${d}: página ${c.pd[d]} não existe`); continue; }
+                    if (pg.P.par !== par) bad(`${key} ${d}: página de paridade ${pg.P.par}`);
+                    if (c.pd[d] !== c.pd[par]) bad(`${key} ${d}: a mesma paridade em páginas diferentes`);
+                    if (G.GROUP_OF[key.split(':')[0]] && pg.P.g !== G.GROUP_OF[key.split(':')[0]]) bad(`${key}: grupo ${pg.P.g}`);
+                    for (let f = 0; f < c.n; f++) {
+                        const [x, y, w, h] = c.f[d * c.n + f], W = pg.P.w;
+                        nfr++;
+                        if (!w) { empty++; continue; }
+                        if (x + w > pg.P.w || y + h > pg.P.h) { bad(`${key} ${d}/${f}: fora da página`); continue; }
+                        const ck = c.pd[d] + ':' + x + ',' + y;
+                        if (!corners.has(ck)) {                              // retângulos distintos não se sobrepõem
+                            corners.set(ck, w + '×' + h);
+                            for (let r = 0; r < h; r++) for (let q = 0; q < w; q++) { const o = (y + r) * W + x + q; if (pg.occ[o]) { bad(`${key} ${d}/${f}: sobrepõe outro quadro`); r = h; break; } pg.occ[o] = 1; }
+                        } else if (corners.get(ck) !== w + '×' + h) bad(`${key} ${d}/${f}: mesmo canto, outro tamanho`);
+                        // o recorte encosta no desenho nas 4 bordas (endereço certo: não caiu num pedaço vazio da página)
+                        const px = (q, r) => { const o = ((y + r) * W + x + q) * 2; return pg.rg[o] | pg.rg[o + 1]; };
+                        let t = 0, b = 0, l = 0, rr = 0;
+                        for (let q = 0; q < w; q++) { t |= px(q, 0); b |= px(q, h - 1); }
+                        for (let r = 0; r < h; r++) { l |= px(0, r); rr |= px(w - 1, r); }
+                        if (!(t && b && l && rr)) bad(`${key} ${DIR_NAMES[(d * 16) / c.dirs] || d}/${f}: borda vazia (endereço errado?)`);
+                    }
+                }
+            }
+            atlases[id] = { A, pages };
+            return { id, ok: !errs.length, erros: errs, paginas: pages.length, quadros: nfr, vazios: empty, mpx: +(pages.reduce((s, p) => s + p.P.w * p.P.h, 0) / 1e6).toFixed(1) };
+        }
+        // Folha de um clipe: linhas = direções (16), colunas = quadros, com as cores da variante v
+        function clipSheet(id, key, v = 0, zoom = 1) {
+            const { A, pages } = atlases[id], c = A.clips[key];
+            if (!c) { log(`${id}: sem o clipe ${key}`); return; }
+            const ramps = G.rampsFor(G.variantSpec(id, v)), cw = 120, ch = 150, cv = document.createElement('canvas');
+            cv.width = 50 + c.n * cw; cv.height = c.dirs * ch; cv.style.width = cv.width * zoom + 'px';
+            const ctx = cv.getContext('2d'); ctx.fillStyle = '#6a7080'; ctx.fillRect(0, 0, cv.width, cv.height); ctx.font = '11px sans-serif';
+            for (let d = 0; d < c.dirs; d++) {
+                const P = pages[c.pd[d]];
+                ctx.fillStyle = '#fff'; ctx.fillText(DIR_NAMES[(d * 16) / c.dirs] || String(d), 4, d * ch + 14); ctx.fillText('p' + c.pd[d], 4, d * ch + 28);
+                for (let f = 0; f < c.n; f++) {
+                    const [x, y, w, h, ox, oy] = c.f[d * c.n + f];
+                    if (!w) continue;
+                    const fr = { W: w, H: h, code: new Uint8Array(w * h), alpha: new Uint8Array(w * h), light: A.v === 2 ? new Uint8Array(w * h) : null }, img = new ImageData(w, h);
+                    for (let r = 0; r < h; r++) for (let q = 0; q < w; q++) {
+                        const o = ((y + r) * P.P.w + x + q) * 2, i = r * w + q;
+                        if (fr.light) { const u = G.unpackPx(P.rg[o], P.rg[o + 1]); fr.code[i] = u.code; fr.alpha[i] = u.alpha; fr.light[i] = u.light; } else { fr.code[i] = P.rg[o]; fr.alpha[i] = P.rg[o + 1]; }
+                    }
+                    G.colorize(fr, ramps, img.data);
+                    const t = document.createElement('canvas'); t.width = w; t.height = h; t.getContext('2d').putImageData(img, 0, 0);
+                    ctx.drawImage(t, 50 + f * cw + cw / 2 + ox, d * ch + ch * 0.8 + oy);
+                }
+            }
+            const wrap = document.createElement('div'); wrap.appendChild(document.createTextNode(`${id} ${key}: ${c.n} quadros × ${c.dirs} direções, ${c.fps} qps${c.loop ? ', loop' : ''}`));
+            wrap.appendChild(document.createElement('br')); wrap.appendChild(cv); document.getElementById('out').appendChild(wrap);
+        }
+        async function atlasMode() {
+            document.getElementById('title').textContent = 'Atlas paginados de ' + BASE;
+            G.SHADE = SHADE0; G.ADULT = ADULT0;
+            let ids = Q.get('atlas').split(',');
+            if (ids[0] === 'todos') ids = Object.keys(G.TYPES);
+            window.results = [];
+            for (const id of ids) {
+                try {
+                    const r = await checkAtlas(id);
+                    results.push(r);
+                    log(`${id}: ${r.ok ? 'ok' : 'PROBLEMAS'}${r.paginas !== undefined ? ` — ${r.paginas} páginas (${r.mpx} Mpx), ${r.quadros} quadros${r.vazios ? ', ' + r.vazios + ' vazios' : ''}` : ''}${r.erros.length ? '\n   ' + r.erros.join('\n   ') : ''}`);
+                    if (r.paginas !== undefined && Q.get('clip') !== 'nenhum') clipSheet(id, Q.get('clip') || 'walk:none', +(Q.get('v') || 0));
+                    if (ids.length > 3) delete atlases[id];                  // (a memória: muitos tipos)
+                } catch (e) { results.push({ id, ok: false, erros: [String(e.message || e)] }); log(`${id}: ERRO ${e.message || e}`); }
+            }
+            log('FIM: ' + results.filter((r) => r.ok).length + '/' + results.length + ' ok');
+            window.done = true;
+        }
+
+        if (Q.get('atlas')) atlasMode();
+        else (async () => {
             try {
                 window.results = [];
                 results.push(await check('civil_trabalhador', 'idle', [0, 3], [0, 2, 4, 7]));
@@ -81,7 +203,8 @@
                 results.push(await check('pm_policial', 'pistol_walk', [2], [0, 2, 5]));
                 results.push(await check('bope_capacete', 'rifle_shoot', [0, 1], [0, 6]));
                 log('FIM');
-            } catch (e) { log('ERRO: ' + e.stack); }
+            } catch (e) { log('ERRO: ' + e.stack + '\n(as folhas do pacote vão em tools/npcs/_ref/; ?atlas=<tipo> confere os atlas prontos)'); }
+            window.done = true;
         })();
     </script>
 </body>

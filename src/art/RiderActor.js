@@ -9,7 +9,9 @@
 // heading, y, rotates), mais:
 //   setModel(id)                     troca o desenho (moto em pé ↔ caída)
 //   setRider(variante, folha, clipe) põe/tira o piloto (variante = linha da paleta dos personagens; null = sem piloto)
-//   setFrame(f)                      quadro do clipe do piloto (inclinação da moto)
+//   setLean(v, dt)                   inclinação do piloto pelo guidão (moto, jet ski): v = −1..+1, + = curva para a DIREITA
+//                                    (Vehicle.lastSteer > 0, rumo aumentando); dt > 0 = suaviza (o corpo deita aos poucos)
+//   setFrame(f)                      quadro do clipe do piloto (código antigo: prefira setLean)
 // ============================================================================
 
 class RiderActor {
@@ -75,6 +77,17 @@ class RiderActor {
         if (this.rider) this.rider.setVisible(this.visible && this.riderVariant != null);
     }
     setFrame(f) { if (this.rider && this.riderVariant != null) this.rider.setFrame(f); }
+    // Inclinação pilotando: os quadros de ride_moto/ride_jetski são degraus de inclinação (o 1º, +12°, deitado para a direita — o do
+    // meio, reto — o último, para a esquerda; SpriteActor.setLean escolhe/mistura pelo valor contínuo). Os outros clipes (bicicleta
+    // pedalando, lancha) seguem o próprio ritmo. v = −1..+1 (+ = curva para a direita); dt > 0: segue o alvo a LEAN_K/s, sem pulo.
+    setLean(v, dt = 0) {
+        v = Math.max(-1, Math.min(1, +v || 0));
+        const L = this._leanV = dt > 0 && this._leanV != null ? this._leanV + (v - this._leanV) * (1 - Math.exp(-RiderActor.LEAN_K * dt)) : v;
+        const r = this.rider;
+        if (r && this.riderVariant != null && RiderActor.LEAN.test(r.clipName)) r.setLean(L);
+    }
+    static get LEAN() { return /^ride_(moto|jetski)$/; }
+    static get LEAN_K() { return 7; }
     animate(dt, aF, aL, steer) { this.body.animate(dt, aF, aL, steer); }
 
     update(dt, rate = 1) {

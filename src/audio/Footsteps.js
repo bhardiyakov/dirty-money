@@ -1,6 +1,7 @@
 // ============================================================================
-// Footsteps — passos do jogador, sintetizados (Web Audio) e presos à ANIMAÇÃO: o pé bate no chão nos pontos 0,25 e 0,75 do ciclo
-// de andar/correr (CharacterRig.gait), então o som cai junto com o desenho — andando, correndo, carregando peso, vadeando.
+// Footsteps — passos do jogador, sintetizados (Web Audio) e presos à ANIMAÇÃO: o som sai na FASE do ciclo em que o pé bate no chão
+// (Footsteps.strikes: personagem 2,5D = calcanhar direito no início do ciclo e o esquerdo na metade, qualquer nº de quadros; boneco
+// antigo, CharacterRig.gait = 0,25 e 0,75), então cai junto com o desenho — andando, correndo, carregando peso, vadeando.
 //
 // Cada passo = calcanhar (pancada) + ponta do pé (raspada), com o timbre do CHÃO e do CALÇADO:
 //   chão:     asfalto/calçada · grama · folhas (mata) · areia · terra · cascalho · lama (mangue) · água rasa · madeira (casa) ·
@@ -11,7 +12,12 @@
 
 const Footsteps = {
     _phase: null,
-    MARKS: [0.25, 0.75],
+    MARKS: [0.25, 0.75],                // boneco antigo (CharacterRig.gait): o pé direito bate em 0,25, o esquerdo em 0,75
+    MARKS_25D: [0, 0.5],                // clipes de passada 2,5D (NpcGenAnims; medido: 0,98–1,0 e 0,48–0,5): direito no início, esquerdo na metade
+    // Fases do ciclo do clipe `c` em que os pés tocam o chão: [[fase, lado (1 = direito, −1 = esquerdo)], …] (WaterFx usa também).
+    strikes(c) { return c && c.npc ? this._S25 || (this._S25 = [[this.MARKS_25D[0], 1], [this.MARKS_25D[1], -1]]) : this._S || (this._S = [[this.MARKS[0], 1], [this.MARKS[1], -1]]); },
+    // Clipes de passada que soam (andar/correr em qualquer arma e carga, subida, escalada, de lado, agachado, vadeando).
+    GAIT: /^(walk|run|climb|strafe|sneak|wade$)/,
 
     // Chão sob o jogador.
     surface(game) {
@@ -50,12 +56,12 @@ const Footsteps = {
         const pl = game.player;
         if (!AudioFX._ok() || game.mode !== 'player' || !pl || !pl.alive || pl.frozen || pl.swimming || !(pl.state === 'walk' || pl.state === 'sprint' || pl.state === 'wade' || pl.state === 'sneak')) { this._phase = null; return; }
         const a = pl.actor, c = a && a.clip, name = a && a.clipName;
-        if (!c || !c.loop || !c.frames || !/^(walk|run|climb|strafe|sneak)/.test(name || '')) { this._phase = null; return; }
-        const ph = (((a.time / c.frames) % 1) + 1) % 1;                                     // (clipe tocado ao contrário: o tempo é negativo)
+        if (!c || !c.loop || !c.frames || !this.GAIT.test(name || '')) { this._phase = null; return; }
+        const ph = a.phase;                                                                 // (0..1; clipe tocado ao contrário: o tempo é negativo)
         if (this._phase != null) {
             let p0 = this._phase, p1 = ph;
             if ((((ph - p0) % 1) + 1.5) % 1 - 0.5 < 0) { p0 = ph; p1 = this._phase; }      // andando para trás no ciclo: confere o trecho ao contrário
-            for (const m of this.MARKS) if (p1 >= p0 ? (p0 < m && p1 >= m) : (p0 < m || p1 >= m)) this.step(game, pl.state === 'sprint' || /^run/.test(name), pl.state === 'sneak');
+            for (const [m] of this.strikes(c)) if (p1 >= p0 ? (p0 < m && p1 >= m) : (p0 < m || p1 >= m)) this.step(game, pl.state === 'sprint' || /^run/.test(name), pl.state === 'sneak');
         }
         this._phase = ph;
     },

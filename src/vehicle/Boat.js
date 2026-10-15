@@ -97,6 +97,9 @@ class Boat extends Vehicle {
         if (this.visual.setY) this.visual.setY(y); else this.visual.mesh.position.y = y;
         this._bodyMotion(dt, f);                                            // (o casco "senta" na arrancada e mergulha na freada)
         if (!this.wrecked && this.visual.setDamage) this.visual.setDamage(this.dent);
+        // jet ski: o piloto deita para o lado da curva pelo guidão (como a moto: RiderActor.setLean) — antes os degraus de inclinação
+        // do clipe tocavam em loop, balançando sozinhos. (Lancha: ride_boat segue no ritmo dele.)
+        if (this.visual instanceof RiderActor && this.hasRider && !this.wrecked) this.visual.setLean(this.lastSteer * Math.min(1, Math.abs(this.forwardSpeed) / 5), dt);
         this.visual.update(dt);
     }
 
