@@ -126,16 +126,7 @@ class Combat {
         if (!(look in T)) {
             T[look] = null;
             try {
-                if (look && look !== 'none' && look !== 'bat' && typeof NpcArt !== 'undefined' && NpcArt.available()) {
-                    const G = NpcArt.gen(), spec = G.fullSpec(G.PLAYER_DEFAULT);
-                    G.setRig(G.rigFor(spec));
-                    const poses = G.clipPoses ? G.clipPoses('shoot', look, 'protagonista').poses : G.CLIPS.shoot.fn(G.weaponFor('protagonista', look));
-                    const P = poses.map((q) => (q.adult ? q.adult() : q)).find((q) => q.effects && q.effects.some((e) => e.type === 'flash'));
-                    if (P) {
-                        const pos = P.effects.find((e) => e.type === 'flash').pos, k = (spec.scale || 1) / 52;     // (52 unidades do gerador por metro)
-                        T[look] = { p: [pos[0] * k, pos[1] * k, pos[2] * k], R: new G.Camera().R };
-                    }
-                }
+                if (look && look !== 'none' && look !== 'bat' && typeof NpcArt !== 'undefined' && NpcArt.available()) T[look] = NpcData.muzzle(look);      // (medida no build: bake.cjs)
             } catch (e) { console.warn('[COMBATE] ponta do cano de ' + look + ':', e); T[look] = null; }
         }
         const M = T[look];

@@ -175,6 +175,9 @@ window.addEventListener('DOMContentLoaded', async () => {
             for (const [sheet, list] of Object.entries(CharacterSheet.ESSENTIAL)) for (const [n, w] of list) ess.add(CharacterSheet.fileKey(sheet, n, w || 'none'));
             await SpriteIO.init((k) => k.startsWith('pal/') || ess.has(k));
         });
+        // Personagens 2,5D: npc-data.json e os manifestos dos atlas prontos (assets/baked — já pedidos desde a carga do NpcArt.js);
+        // sem eles (file://, rede fora) o jogo segue com os bonecos antigos.
+        await step('Carregando os personagens…', 0.6, 500, () => (typeof NpcArt !== 'undefined' ? Promise.race([NpcArt.boot(), new Promise((r) => setTimeout(r, 20000))]) : null));
         await step('Construindo a cidade em 3D…', 0.68, 1800, () => { window.game = new Game('canvas'); });
         window.sim = new SimBridge();
         window.game.gameEngine.engine.onEndFrameObservable.add(() => window.sim.flush());      // um lote por quadro, depois do render

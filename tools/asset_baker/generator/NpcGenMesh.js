@@ -1,5 +1,5 @@
 // ============================================================================
-// NpcGenMesh — o corpo dos personagens 2,5D a partir da MALHA 3D realista (assets/npcs/malha3d.js, extraída por tools/personagens3d do
+// NpcGenMesh — o corpo dos personagens 2,5D a partir da MALHA 3D realista (generator/malha3d.js, extraída por tools/personagens3d do
 // pacote "personagem_3d_realista": MakeHuman, CC0) no lugar das formas geométricas (SDF) do gerador.
 //
 // Mistura de 3D e pixel art: a anatomia vem da malha (rosto, orelhas, mãos fechadas, ombros, dobras da camiseta e do jeans, tênis,

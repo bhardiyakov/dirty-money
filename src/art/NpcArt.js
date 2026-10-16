@@ -1,30 +1,33 @@
 // ============================================================================
 // NpcArt — os personagens 2,5D (o pacote de NPCs: civis, PM, BOPE, Exército, traficantes e o protagonista) no jogo.
 //
-// Os desenhos vêm de atlas prontos (gerados por tools/npcs a partir de src/art/npcgen): 16 direções por quadro (atlas antigos: 8; pilotando,
-// 16), vistos do alto a 56° (não giram: cada direção tem o seu desenho). Cada pixel guarda 2 bytes — formato 2 (sombreado contínuo, "pré-
+// Os desenhos vêm de atlas PRONTOS, gerados no build (tools/asset_baker/bake.cjs — o gerador procedural não roda no jogo): 16 direções
+// por quadro, vistos do alto a 56° (não giram: cada direção tem o seu desenho). Cada pixel guarda 2 bytes — formato 2 (sombreado contínuo, "pré-
 // renderizado"): o MATERIAL (× 8 + nível de água) e a LUZ (0–204 anda pela rampa de 5 tons do material; acima, o brilho especular;
 // os 2 bits baixos da luz = cobertura do pixel de borda: a silhueta sai suavizada, como um render 3D, sem contorno preto);
 // cores fixas (sombra, contorno, clarão…) guardam o código e o alfa. (Formato 1, o do pacote: código = material × 8 + tom, e o alfa.)
 // A cor vem da PALETA (uma linha por variante): o mesmo desenho vira dezenas de pessoas diferentes (pele, cabelo, roupa) e a roupa
 // do jogador muda de cor na hora. A sombra de contato já vem desenhada; debaixo d'água o corpo é tingido de azul.
 //
-// ATLAS PAGINADO: assets/npcs/<tipo>.js (carregado pelo index.html) é só o MANIFESTO — clipes, retângulos e em que página mora cada
-// direção de cada clipe (pd). Os pixels ficam nas PÁGINAS assets/npcs/<tipo>/p<i>.js (NPC_PAGE(tipo, i, PNG planar em base64)), cada
-// uma com um GRUPO de clipes (hot = parado/andar/correr/mirar…, act, fall, water, car, gym) e uma PARIDADE de direção (0 = as pares — e
-// todas as de um clipe de até 8 direções —, 1 = as ímpares): o quadro e o próximo (mistura) estão sempre na mesma textura.
-//   • Na carga da página só o protagonista é decodificado (pares primeiro); o resto vem quando um ator precisa: <script> injetado (vale
-//     em http(s), Tauri e file://) → Worker decodifica (PNG.decodeRG) → textura enviada à GPU em faixas, com orçamento por quadro
+// ATLAS PAGINADO: assets/baked/npcs/<tipo>.json (lido na abertura: boot) é só o MANIFESTO — clipes, retângulos e em que página mora
+// cada direção de cada clipe (pd). Os pixels ficam nas PÁGINAS assets/baked/npcs/<tipo>/p<i>.webp (WebP sem perdas: R e G = os 2 bytes
+// do pixel), cada uma com um GRUPO de clipes (hot = parado/andar/correr/mirar…, act, fall, water, car, gym) e uma PARIDADE de direção
+// (0 = as pares — e todas as de um clipe de até 8 direções —, 1 = as ímpares): o quadro e o próximo (mistura) estão na mesma textura.
+// Os dados que não são desenho (tipos, variantes, paletas) vêm de assets/baked/npc-data.json (NpcData).
+//   • Na carga da página só o protagonista é decodificado (pares primeiro); o resto vem quando um ator precisa: Worker busca e
+//     decodifica o WebP (AtlasDecoder) → textura enviada à GPU em faixas, com orçamento por quadro
 //     (Config.art.uploadMB; na carga e no menu, sem orçamento) → material da página. Fila com prioridade: o que um
 //     ator NA TELA precisa agora > hot par > hot ímpar > outros grupos par > ímpar; até 2 decodificações ao mesmo tempo.
 //   • Página que ainda não chegou: o ator segue mostrando o último quadro desenhado (ou a direção vizinha, se a página dela já está
 //     pronta); ator novo sem nada desenhado fica escondido até a página chegar (SpriteActor._npcDraw).
+//   • DANO pintado (sujo, machucado, muito machucado): atlas "<tipo>#d<n>" com os clipes com dano do manifesto, nos MESMOS retângulos
+//     da base; cada página = a página base + a camada de dano do nível (d<n>p<i>.webp, quase vazia), juntadas na decodificação.
 //   • Memória: passou do orçamento (Config.art.vramMB), as páginas sem uso há 15 s saem da GPU (as menos usadas primeiro) e voltam
-//     sozinhas quando pedidas de novo; atlas de dano sem uso há 30 s saem inteiros (voltam do IndexedDB). Os atlas que o jogador
+//     sozinhas quando pedidas de novo; atlas de dano sem uso há 30 s saem inteiros (voltam dos arquivos). Os atlas que o jogador
 //     usa agora ficam presos.
-//   • Perfil leve (Config.art.npcDirs = 8): só as páginas pares (o SpriteActor só escolhe direções pares) e os atlas gerados no jogo
-//     já saem com 8 direções.
-// O formato antigo (o PNG inteiro, cinza+alfa, dentro do manifesto) continua valendo: um atlas de uma página só.
+//   • Perfil leve (Config.art.npcDirs = 8): só as páginas pares (o SpriteActor só escolhe direções pares) e os visuais montados no
+//     guarda-roupa já saem com 8 direções.
+//   • Sem os arquivos (aberto por file://, rede fora) ou com ?npc=0: os bonecos antigos (CharacterSheet).
 //
 //   NpcArt.sheet(tipo)            folha de um tipo (getClip como a CharacterSheet) — o SpriteActor toca os clipes dela
 //   NpcArt.row(tipo, variante)    linha da paleta de uma variante (a cor das roupas)
@@ -36,7 +39,6 @@
 // ============================================================================
 
 const NpcArt = {
-    G: null,                       // o gerador (fichas, paletas; o Worker do jogador usa o mesmo código)
     atlases: {},                   // id → atlas { id, data (metadados), pages, file (páginas em arquivo: podem sair da GPU), dmg, cache, gen }
     sheets: {},                    // id → NpcSheet
     ready: null,                   // Promise: as páginas do dia a dia (hot) do protagonista prontas (o resto chega sob demanda)
@@ -44,18 +46,13 @@ const NpcArt = {
     _rows: new Map(),              // chave → linha
     _nextRow: 1,
     sharp: 1,
-    BASE: './assets/npcs/',
+    BASE: './assets/baked/npcs/',
     HERO: ['protagonista', 'protagonista_tatico', 'protagonista_armas'],
     now: 0,                        // relógio do jogo (s; NpcArt.tick): última vez que cada página foi desenhada (LRU)
     stats: { decoded: 0, decodeMs: 0, uploads: 0, upMB: 0, upMs: 0, upMax: 0, evicted: 0, dropped: 0, failed: 0 },      // (up*: envio em faixas — _upStep)
 
     // (?npc=0 na URL: volta aos bonecos antigos — comparar/depurar)
-    available() { return typeof NPC_ATLAS !== 'undefined' && Object.keys(NPC_ATLAS).length > 0 && typeof NpcGenCore === 'function' && !/[?&]npc=0\b/.test(location.search); },
-
-    gen() {
-        if (!this.G) { const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G); this.G = G; }
-        return this.G;
-    },
+    available() { return NpcData.ok && Object.keys(this.atlases).length > 0 && !/[?&]npc=0\b/.test(location.search); },
 
     // Direções desenhadas (16; perfil leve: 8 — só as páginas pares) e o orçamento de memória de vídeo das páginas.
     get dirs() { return (typeof Config !== 'undefined' && Config.art && Config.art.npcDirs) || 16; },
@@ -63,11 +60,25 @@ const NpcArt = {
     budget() { return ((typeof Config !== 'undefined' && Config.art && Config.art.vramMB) || 640) * 1048576; },
 
     // ------------------------------------------------------------------ manifestos e páginas
-    // Lê os manifestos (nada é decodificado) e põe na fila as páginas do protagonista (pares primeiro).
+    // ABERTURA (main.js espera isto antes de montar o mundo): npc-data.json (NpcData) e os manifestos de todos os tipos, em paralelo; aí
+    // a fila das páginas do protagonista (load). false = sem os atlas prontos (file://, rede fora, ?npc=0): os bonecos antigos.
+    boot() {
+        if (this._boot) return this._boot;
+        return (this._boot = (async () => {
+            if (/[?&]npc=0\b/.test(location.search)) return false;
+            try { if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase('dirty-money-hd'); } catch (e) { /* (o cache dos machucados gerados no jogo, que não existe mais) */ }
+            const d = await NpcData.load();
+            const got = await Promise.all(d.atlases.map((id) => fetch(this.BASE + id + '.json').then((r) => (r.ok ? r.json() : null), () => null)));
+            got.forEach((m, i) => { if (m && !this.atlases[d.atlases[i]]) this._fromManifest(d.atlases[i], m); });
+            if (!Object.keys(this.atlases).length) throw new Error('nenhum manifesto em ' + this.BASE);
+            this.load();
+            return true;
+        })().catch((e) => { console.warn('[NPCS] atlas prontos indisponíveis — bonecos antigos:', (e && e.message) || e); return false; }));
+    },
+    // Põe na fila as páginas do protagonista (pares primeiro). (Os manifestos já foram lidos: boot.)
     load() {
         if (this.ready) return this.ready;
         const t0 = performance.now();
-        for (const [id, d] of Object.entries(NPC_ATLAS)) if (!this.atlases[id]) this._fromManifest(id, d);
         const hero = this.HERO.map((id) => this.atlases[id]).filter(Boolean);
         for (const par of [0, 1]) for (const A of hero) for (const P of A.pages) if (P.par === par) this._want(P);
         const M = this.atlases.protagonista, hot = M ? M.pages.filter((P) => P.g === 'hot' && this._dirOk(P)) : [];
@@ -79,13 +90,15 @@ const NpcArt = {
         return this.ready;
     },
     _fromManifest(id, d) {
-        const pages = d.paged && d.pages ? d.pages.map((p) => ({ w: p.w, h: p.h, g: p.g || 'hot', par: p.par || 0, file: p.file, bytes: p.bytes || 0 }))
-            : [{ w: d.w, h: d.h, g: 'hot', par: 0, file: id + '.js', legacy: true, bytes: d.png ? Math.round(d.png.length * 0.75) : 0 }];      // (formato antigo: o PNG está no manifesto)
-        return this._atlas(id, { clips: d.clips, k: d.k, v: d.v, frame: d.frame }, pages, true, d);
+        const pages = d.pages.map((p) => ({ w: p.w, h: p.h, g: p.g || 'hot', par: p.par || 0, file: p.file, bytes: p.bytes || 0 }));
+        const A = this._atlas(id, { clips: d.clips, k: d.k, v: d.v, frame: d.frame }, pages, true);
+        A.dmgInfo = d.dmg || null;                                          // { clips, levels: { n: { página: camada } } } — dmgAtlas
+        if (d.scale > 0) A.scale = d.scale;
+        return A;
     },
-    _atlas(id, data, pages, file, src = null) {
-        // (gen: um número por atlas criado — o mesmo id recarregado, como o dano que voltou do aparelho, é outro: SpriteActor.update refaz o clipe)
-        const A = { id, data, pages, file, src, gen: (this._genSeq = (this._genSeq || 0) + 1), cache: null, dmg: /#d\d+$/.test(id), born: this.now, hot: false, carClip: null };
+    _atlas(id, data, pages, file) {
+        // (gen: um número por atlas criado — o mesmo id recriado, como o dano que saiu da memória e voltou, é outro: SpriteActor.update refaz o clipe)
+        const A = { id, data, pages, file, gen: (this._genSeq = (this._genSeq || 0) + 1), cache: null, dmg: /#d\d+$/.test(id), born: this.now, hot: false, carClip: null };
         pages.forEach((P, i) => { P.A = A; P.i = i; P.st = P.px ? 'ready' : 'idle'; P.used = 0; P.pri = 9; P.seq = 0; P.tex = null; P.mat = null; });
         this.atlases[id] = A;
         return A;
@@ -95,54 +108,26 @@ const NpcArt = {
 
     // Pede a página P. pri: 0 = um ator NA TELA precisa dela agora; sem pri, a do grupo (hot par 1, ímpar 2; outros 3/4). true = já na GPU.
     want(P, pri) { return this._want(P, pri); },
-    _q: [], _fetched: [], _seq: 0, _loading: 0, _decoding: 0, _res: 0, _live: new Set(), _waiters: new Set(),
+    _q: [], _seq: 0, _decoding: 0, _res: 0, _live: new Set(), _waiters: new Set(),
+    DECODERS: 3,                   // páginas sendo buscadas + decodificadas ao mesmo tempo (AtlasDecoder: 2 Workers)
     _want(P, pri = this._pri(P)) {
         if (P.tex) return true;
         if (P.px) { if (this._scene) this._upload(P, pri); return !!P.tex; }       // (sobe em faixas: pronta numa das próximas vezes — _upStep)
-        if (P.dead || !this._dirOk(P)) return false;
+        if (P.dead || P.unused || !this._dirOk(P)) return false;
         if (P.st === 'idle' || (P.st === 'failed' && performance.now() >= P.retry)) { P.st = 'queued'; P.pri = pri; P.seq = ++this._seq; this._q.push(P); this._pump(); }
-        else if (pri < P.pri && (P.st === 'queued' || P.st === 'fetched' || P.st === 'loading')) P.pri = pri;
+        else if (pri < P.pri && P.st === 'queued') P.pri = pri;
         return false;
     },
     // Um ator começou a tocar `c`: as páginas do clipe para a fila (a da direção atual já vem pedida pelo desenho, com a prioridade dele).
     wantClip(c) { for (let i = 0; i < c.pd.length; i++) if (i === 0 || c.pd[i] !== c.pd[i - 1]) this._want(c.pages[c.pd[i]]); },
-    // carregar (injetar o script) — até 2 adiantados; decodificar — até 2 ao mesmo tempo
-    _pump() {
-        while (this._loading + this._fetched.length < 2 && this._q.length) this._fetch(this._pop(this._q));
-        while (this._decoding < 2 && this._fetched.length) this._decode(this._pop(this._fetched));
-    },
+    // buscar + decodificar (AtlasDecoder, num Worker) — até DECODERS ao mesmo tempo, pela prioridade
+    _pump() { while (this._decoding < this.DECODERS && this._q.length) this._decode(this._pop(this._q)); },
     _pop(L) { let k = 0; for (let i = 1; i < L.length; i++) if (L[i].pri < L[k].pri || (L[i].pri === L[k].pri && L[i].seq < L[k].seq)) k = i; return L.splice(k, 1)[0]; },
-    _fetch(P) {
-        const A = P.A;
-        P.st = 'loading';
-        if (P.legacy && A.src && A.src.png) { P.b64 = A.src.png; A.src.png = null; P.st = 'fetched'; this._fetched.push(P); return; }
-        if (typeof document === 'undefined') { this._fail(P, 'sem documento'); return; }
-        this._loading++;
-        const s = document.createElement('script');
-        let over = false;
-        const end = () => {
-            if (over) return;
-            over = true;
-            s.remove();                                                     // (o texto base64 do script pode ser recolhido)
-            this._loading--;
-            if (P.legacy) { const d = NPC_ATLAS[A.id]; if (d && d.png) { P.b64 = d.png; d.png = null; } if (A.src) NPC_ATLAS[A.id] = A.src; }
-            if (P.dead) P.b64 = null;
-            else if (P.st === 'loading') { if (P.b64) { P.st = 'fetched'; this._fetched.push(P); } else this._fail(P, 'arquivo ' + P.file + ' não carregou'); }
-            this._pump();
-        };
-        s.onload = end; s.onerror = end;
-        s.async = true;
-        s.src = this.BASE + P.file;
-        document.head.appendChild(s);
-    },
-    // (chamado pela página ao rodar: NPC_PAGE)
-    _onPage(id, i, b64) { const A = this.atlases[id], P = A && A.pages[i]; if (P && P.st === 'loading' && !P.legacy) P.b64 = b64; },
     async _decode(P) {
         P.st = 'decoding'; this._decoding++;
-        const src = P.b64, t0 = performance.now();
-        P.b64 = null;
+        const t0 = performance.now();
         try {
-            const img = await PNG.decodeRG(src);
+            const img = await AtlasDecoder.rg(this.BASE + P.file, P.ov ? this.BASE + P.ov : null);      // (página de dano: a base + a camada do nível)
             if (img.w !== P.w || img.h !== P.h) throw new Error(`página ${P.i}: ${img.w}×${img.h}, esperado ${P.w}×${P.h}`);
             this.stats.decoded++; this.stats.decodeMs += performance.now() - t0;
             if (!P.dead) { P.px = img.data; P.st = 'ready'; P.fails = 0; if (this._scene) this._upload(P, P.pri); }
@@ -294,25 +279,25 @@ const NpcArt = {
             if (!P || !a.clip || !a.clip.npc || !a.mesh || a.mesh.isDisposed() || !a._onScreen()) continue;
             if (P.tex) P.used = now; else if (!P.dead) a._applyUV();
         }
+        const pin = this._pins();
         for (const A of Object.values(this.atlases)) {
-            if (!A.dmg) continue;
+            if (!A.dmg || pin.includes(A.id)) continue;                     // (o dano do jogador fica enquanto ele estiver machucado)
             let u = A.born; for (const P of A.pages) if (P.used > u) u = P.used;
             if (now - u >= 30) { this.dropAtlas(A.id); this.stats.dropped++; }
         }
         const B = this.budget();
         if (this._res <= B) return;
-        const pin = this._pins();
         const L = [...this._live].filter((P) => P.A.file && !P.dead && !pin.includes(P.A.id) && now - P.used >= 15).sort((a, b) => a.used - b.used);
         for (const P of L) { if (this._res <= B) break; this._evict(P); }
     },
     // Os atlas que o jogador usa AGORA (presos na GPU — _lru; na fila de envio, na frente — _upload).
-    _pins() { const h = this._lib && this._lib.sheets.hero; return h ? [h.atlasName, h.extraAtlas, h.armsAtlas, h.fallbackAtlas] : this.HERO; },
+    _pins() { const h = this._lib && this._lib.sheets.hero; return h ? h.pinned || h.atlasList() : this.HERO; },
     // Memória (testes / painel dev).
     mem() {
         let pages = 0, live = 0, cpu = 0; const by = {};
         for (const A of Object.values(this.atlases)) for (const P of A.pages) { pages++; if (P.tex) { live++; by[A.id] = (by[A.id] || 0) + 1; } if (P.px) cpu += P.px.byteLength; }
         let upMB = 0; for (const P of this._upQ) upMB += (P.h - P.up.y) * P.w * 2 / 1048576;
-        return Object.assign({ pages, live, texMB: Math.round(this._res / 1048576), budgetMB: Math.round(this.budget() / 1048576), cpuMB: Math.round(cpu / 1048576), queued: this._q.length + this._fetched.length + this._loading + this._decoding + this._upQ.length,
+        return Object.assign({ pages, live, texMB: Math.round(this._res / 1048576), budgetMB: Math.round(this.budget() / 1048576), cpuMB: Math.round(cpu / 1048576), queued: this._q.length + this._decoding + this._upQ.length,
             uploading: this._upQ.length, upLeftMB: Math.round(upMB), zombies: this._zombies.length, byAtlas: by }, this.stats);
     },
 
@@ -320,7 +305,6 @@ const NpcArt = {
     init(scene) {
         if (this._scene === scene) return;
         this._scene = scene;
-        this.gen();
         this._gl2 = scene.getEngine().webGLVersion >= 2;
         this._empty = null;
         this._palette();
@@ -384,11 +368,11 @@ const NpcArt = {
     _fillRow(row, spec, upload = true) {
         const P = this._pal;
         if (!P) return;
-        const G = this.gen(), ramps = G.rampsFor(spec), hex = G.hexrgb;
+        const D = NpcData, ramps = D.rampsFor(spec), hex = D.hexrgb;
         for (let code = 0; code < 256; code++) {
             const tone = code & 7, mat = code >> 3;
             let c = null;
-            if (code < 8 || tone > 4) c = G.SPECIAL[code] || null;
+            if (code < 8 || tone > 4) c = D.SPECIAL[code] || null;
             else if (ramps[mat]) c = hex(ramps[mat][tone]);
             const o = (row * P.W + code) * 4;
             if (c) { P.data[o] = c[0]; P.data[o + 1] = c[1]; P.data[o + 2] = c[2]; P.data[o + 3] = 255; }
@@ -414,9 +398,9 @@ const NpcArt = {
         const key = id + '#' + v;
         let r = this._rows.get(key);
         if (r !== undefined) return r;
-        r = this._nextRow < this.ROWS ? this._nextRow++ : 1 + (this.G.hashStr(key) % (this.ROWS - 1));
+        r = this._nextRow < this.ROWS ? this._nextRow++ : 1 + (NpcData.hashStr(key) % (this.ROWS - 1));
         this._rows.set(key, r);
-        this._rowSpec.set(key, this.gen().variantSpec(id, v));
+        this._rowSpec.set(key, NpcData.variantSpec(String(id).replace(/#d\d+$/, ''), v));
         this._fillRow(r, this._rowSpec.get(key));
         return r;
     },
@@ -667,7 +651,7 @@ const NpcArt = {
         return clip;
     },
 
-    // Atlas gerado em tempo de jogo (o visual do jogador: PlayerLook; o machucado: dmgSheet) — já decodificado. Aceita a forma paginada
+    // Atlas já decodificado (o visual do jogador montado no guarda-roupa e lido do aparelho: PlayerLook). Aceita a forma paginada
     // ({ k, v, frame, clips, pages: [{ w, h, g, par, data }] }) e a antiga ({ w, h, data, clips }: uma página só).
     addAtlas(id, a) {
         if (this.atlases[id]) this.dropAtlas(id);
@@ -676,7 +660,7 @@ const NpcArt = {
         const A = this._atlas(id, { clips: g.clips, k: g.k || 0.5, v: g.v || 2, frame: g.frame }, pages, false);
         return A;
     },
-    // Atlas gerado (G.buildAtlas / G.packPages / o empacotador antigo G.packAtlas) → a forma paginada (com dirs e pd em todo clipe).
+    // Atlas empacotado (packPages do gerador, no Worker do guarda-roupa; ou o formato antigo de uma página) → a forma paginada (com dirs e pd em todo clipe).
     paged(a, k, frame) {
         if (!a) return a;
         let clips = a.clips;
@@ -684,23 +668,8 @@ const NpcArt = {
         for (const c of Object.values(clips)) { if (!c.dirs) c.dirs = 8; if (!c.pd) c.pd = new Array(c.dirs).fill(0); }
         return { k: a.k != null ? a.k : k, v: a.v || 2, frame: a.frame != null ? a.frame : frame, clips, pages };
     },
-    // Atlas paginado ↔ o que vai para o IndexedDB (cada página comprimida: ~4× menos espaço). Sem CompressionStream (Safari < 16.4,
-    // Firefox < 113) — ou se comprimir falhar —, a página vai CRUA (data) e o resultado sai com raw: true (quem guarda decide quanto cabe:
-    // PlayerLook._idbPut); o unzip lê as duas formas. Página comprimida sem DecompressionStream para abrir = null (refaz).
-    get canZip() { return typeof CompressionStream === 'function' && typeof DecompressionStream === 'function'; },
-    async zip(a) {
-        const pages = [];
-        let raw = false;
-        for (const p of a.pages) {
-            let z = null;
-            if (this.canZip) { try { z = await this._deflate(p.data); } catch (e) { z = null; } }
-            if (z) { pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, z }); continue; }
-            raw = true;
-            const d = p.data instanceof Uint8Array ? p.data : new Uint8Array(p.data);
-            pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, data: d.byteOffset || d.byteLength !== d.buffer.byteLength ? d.slice() : d });     // (vista de um buffer maior: o IndexedDB guardaria o buffer inteiro)
-        }
-        return raw ? { k: a.k, v: a.v, frame: a.frame, clips: a.clips, pages, raw } : { k: a.k, v: a.v, frame: a.frame, clips: a.clips, pages };
-    },
+    // Registro do IndexedDB (gravado pelo Worker do guarda-roupa: páginas comprimidas com CompressionStream, ou cruas — raw — sem ela)
+    // → atlas paginado. Página comprimida sem DecompressionStream para abrir = null (o guarda-roupa monta de novo).
     async unzip(a) {
         if (!a || !a.pages) return null;                                     // (formato de antes das páginas: refaz)
         const pages = [];
@@ -708,61 +677,25 @@ const NpcArt = {
         catch (e) { return null; }                                          // (comprimido e sem DecompressionStream: refaz)
         return { k: a.k, v: a.v, frame: a.frame, clips: a.clips, pages };
     },
-    // Geração do desenho de um tipo (o atlas foi trocado: os clipes já tocando são refeitos — SpriteActor.update).
+    // Geração do atlas de um id (o atlas foi trocado: os clipes já tocando são refeitos — SpriteActor.update).
     // (atlas descartado — o visual antigo do jogador — = -1: quem ainda o usa, como o piloto da moto, também refaz o clipe)
     genOf(id) { const A = this.atlases[id]; return A ? A.gen || 0 : -1; },
     // Escala do desenho de um atlas: cada tipo sai na escala da ficha (spec.scale; NpcGenBuild: charScale = scale·k/1,04) num quad do mesmo
     // tamanho para todos, então o pé plantado anda scale × o do corpo de referência (escala 1 — o protagonista, onde Config.anim.walk/run e
     // os fatores do jogo foram medidos: strafe, wade, SpriteActor.CLIMB, walk_heavy). Medido (motion.cjs footSpeed, 34 tipos × as passadas,
     // qualquer arma): footSpeed ÷ o da referência = scale (±0,1%). Os clipes de passada (STRIDE) tocam a 1/scale: sem deslize em nenhum tipo.
-    // Dano (#dN) = o tipo; visual gerado do jogador (hero:…) = a ficha dele (PLAYER_DEFAULT + roupa: sem scale → 1), ou A.scale se quem
-    // registrou o atlas a informou.
+    // Dano (#dN) = o tipo; visual do guarda-roupa (hero:…) = a ficha dele (PLAYER_DEFAULT + roupa: sem scale → 1), ou A.scale se quem
+    // registrou o atlas a informou (o manifesto traz a escala do tipo).
     STRIDE: /^(walk|run|walk_up|climb|scared|sneak|strafe|wade|walk_hold|run_hold|walk_pull|walk_heavy|run_heavy|baton_walk)$/,
     scaleOf(id) {
         const A = this.atlases[id];
         if (A && A.scale > 0) return A.scale;
-        let k = 1;
-        try { const G = this.gen(), s = G.BY_ID[String(id).replace(/#d\d+$/, '')]; if (s) k = G.fullSpec(s).scale || 1; } catch (e) { /* sem o gerador: 1 */ }
+        const k = NpcData.ok ? NpcData.scaleOf(id) : 1;
         if (A) A.scale = k;
         return k;
     },
 
-    // Atlas gerados no aparelho (os de dano) ficam no IndexedDB, comprimidos, sob esta versão.
-    HD_VERSION: 8,                 // mude quando o gerador mudar o desenho (os atlas guardados são refeitos) — 2: atlas até 4096 de lado; 3: passada longa; 4: subida (walk_up, climb); 5: corpo da malha 3D; 6: braços soltos, cabeça maior, silhueta feminina, luz; 7: visual 3D sem contorno; 8: 16 direções, mais quadros, páginas
-    hdOn() { return !!(typeof Config !== 'undefined' && Config.art && Config.art.hd) && !!this._scene; },
-    async _deflate(u8) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer()); },
     async _inflate(u8) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer()); },
-    _db() {
-        if (this._dbp) return this._dbp;
-        return (this._dbp = new Promise((ok) => {
-            try {
-                const r = indexedDB.open('dirty-money-hd', 1);
-                r.onupgradeneeded = () => r.result.createObjectStore('atlas');
-                r.onsuccess = () => {
-                    const db = r.result;
-                    try {                                                          // (versões antigas do desenho: apaga)
-                        const st = db.transaction('atlas', 'readwrite').objectStore('atlas'), q = st.getAllKeys(), pre = `v${this.HD_VERSION}.`;
-                        q.onsuccess = () => { for (const k of q.result) if (!String(k).startsWith(pre)) st.delete(k); };
-                    } catch (e) { /* segue */ }
-                    ok(db);
-                };
-                r.onerror = () => ok(null);
-            } catch (e) { ok(null); }
-        }));
-    },
-    async _dbGet(k) {
-        const db = await this._db();
-        if (!db) return null;
-        return new Promise((ok) => {
-            try { const q = db.transaction('atlas').objectStore('atlas').get(k); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }
-            catch (e) { ok(null); }
-        });
-    },
-    async _dbPut(k, v) {
-        const db = await this._db();
-        if (!db) return;
-        try { db.transaction('atlas', 'readwrite').objectStore('atlas').put(v, k); } catch (e) { console.warn('[NPCS] atlas de dano não guardado:', e && e.message); }
-    },
 
     // Descarta um atlas (o visual antigo do jogador, um atlas de dano sem uso…): texturas, materiais e quem o desenhava (esconde até
     // desenhar de novo: o SpriteActor refaz o clipe no próximo update). Quem ainda desenha uma página dele na GPU (o visual antigo do
@@ -778,11 +711,11 @@ const NpcArt = {
             P.dead = true;
             this._upCancel(P);
             if (!keep) this._free(P);
-            P.px = P.b64 = null;
+            P.px = null;
             this._wake(P);
         }
         if (keep) this._zombies.push({ A, t: performance.now() });
-        this._q = this._q.filter((P) => P.A !== A); this._fetched = this._fetched.filter((P) => P.A !== A);
+        this._q = this._q.filter((P) => P.A !== A);
         for (const s of Object.values(this.sheets)) if (s.uses(id)) s.clips = {};      // (nada de clipe guardado apontando para ele)
     },
     _free(P) {
@@ -815,12 +748,25 @@ const NpcArt = {
         return s;
     },
 
-    // ------------------------------------------------------------------ ESTADO DE DANO pintado (ficha.dmg — NpcGenMesh.paintDamage)
-    // Pedestre/policial machucado: a folha "<tipo>#d<nível>" usa o atlas do tipo com o dano PINTADO na roupa e na pele (gerado aqui num
-    // Worker na 1ª vez e guardado no aparelho, comprimido; as cores continuam as da paleta de cada um) e, enquanto não fica pronto — ou
-    // para o clipe que ele não tem —, o atlas normal do tipo. Sem uso há 30 s, sai da memória (volta do aparelho). O jogador usa o
-    // PlayerLook (o dano entra na ficha do visual).
-    DMG_CLIPS: /^(idle|walk|run|scared|hurt|dead|surrender|kneel|aim|shoot|draw|holdup|punch|punchL|kick|flail|lie|getup|tumble|swing|holdup)$/,
+    // ------------------------------------------------------------------ ESTADO DE DANO pintado (1 sujo, 2 machucado, 3 muito machucado)
+    // Pedestre/policial machucado: a folha "<tipo>#d<nível>" usa o atlas de dano do tipo — o dano foi PINTADO na roupa e na pele no build
+    // (tools/asset_baker: terra, cortes, rasgos, sangue; as cores continuam as da paleta de cada um) — e, para o clipe que ele não tem
+    // (só os de DANO têm camada), o atlas normal do tipo. Sem uso há 30 s, o atlas de dano sai da memória (volta dos arquivos).
+    // O jogador usa o mesmo esquema (PlayerLook monta a lista de atlas da folha dele).
+    // Atlas de dano: os clipes com dano do manifesto (os MESMOS retângulos da base) sobre páginas = página base + camada do nível. Páginas
+    // sem nenhum clipe com dano não são pedidas (unused). null = o tipo não tem esse nível (bake sem dano).
+    dmgAtlas(id, lvl) {
+        const sid = id + '#d' + lvl;
+        if (this.atlases[sid]) return sid;
+        const B = this.atlases[id], D = B && B.dmgInfo, L = D && D.levels[lvl];
+        if (!L) return null;
+        const clips = {}, used = new Set();
+        for (const key of D.clips) { const c = B.data.clips[key]; if (c) { clips[key] = c; for (const p of c.pd) used.add(p); } }
+        const pages = B.pages.map((P, i) => ({ w: P.w, h: P.h, g: P.g, par: P.par, file: P.file, ov: L[i] || null, bytes: P.bytes, unused: !used.has(i) }));
+        const A = this._atlas(sid, { clips, k: B.data.k, v: B.data.v, frame: B.data.frame }, pages, true);
+        if (B.scale) A.scale = B.scale;
+        return sid;
+    },
     dmgSheet(id, lvl) {
         const sid = id + '#d' + lvl;
         let s = this.sheets[sid];
@@ -830,7 +776,7 @@ const NpcArt = {
             s.fallbackAtlas = id; s.baseId = id; s.dmgLvl = lvl;
             if (b) { s.legacy = b.legacy; s.legacyVariant = b.legacyVariant; }
         }
-        this._dmgWant(id, lvl);
+        this.dmgAtlas(id, lvl);
         return s;
     },
     // O ator passa a usar a folha do nível de dano (0 = a normal), no mesmo clipe e na mesma fase.
@@ -843,41 +789,6 @@ const NpcArt = {
         actor.useSheet(to);
         if (actor.play(name, w, { restart: true })) actor.setPhase(ph);
     },
-    _dmgQ: [], _dmgBusy: false,
-    _dmgWant(id, lvl) {
-        const sid = id + '#d' + lvl;
-        if (this.atlases[sid] || this._dmgQ.includes(sid) || this._dmgNow === sid || !this.atlases[id]) return;
-        this._dmgQ.push(sid);
-        this._dmgPump();
-    },
-    async _dmgPump() {
-        if (this._dmgBusy || !this._dmgQ.length) return;
-        this._dmgBusy = true;
-        const sid = this._dmgNow = this._dmgQ.shift(), [id, d] = sid.split('#d'), G = this.gen(), B = this.atlases[id], k = (B && B.data.k) || 1, dirs = this.lite ? 8 : 0;
-        const key = `v${this.HD_VERSION}.${k}.${dirs || 'n'}|${sid}`;
-        try {
-            if (!B) throw new Error('tipo sem atlas');
-            let a = await this.unzip(await this._dbGet(key));
-            if (!a) {
-                const keys = G.TYPES[id].clips.filter((c) => this.DMG_CLIPS.test(c.split(':')[0]));
-                // no orçamento de geração do jogo (PlayerLook.gen: poucos Workers, com folga; o visual do jogador passa na frente)
-                const m = await PlayerLook.gen(PlayerLook.PRI.npc, { type: 'atlas', id, keys, k, dmg: +d, dirs });      // (perfil leve: 8 direções)
-                if (!m || m.error) throw new Error(m ? m.error : 'cancelado');
-                a = this.paged(m.atlas, k, G.frameFor(k));
-                if (this.canZip) this.zip(a).then((z) => !z.raw && this._dbPut(key, z), () => {});     // (sem compressão não guarda: 34 tipos × 3 níveis crus = GBs)
-            }
-            if (this.atlases[id]) {
-                this.addAtlas(sid, a);
-                const s = this.sheets[sid];
-                if (s) {                                                          // quem já usa a folha passa aos clipes pintados (na mesma fase)
-                    s.clips = {};
-                    if (typeof SpriteActor !== 'undefined') for (const x of SpriteActor.live) if (x.sheet === s && x.clip && x.clip.npc && x.clip.atlas !== sid) x.replay();
-                }
-            }
-        } catch (e) { console.warn('[NPCS] dano de ' + sid + ' falhou:', e); }
-        this._dmgNow = null; this._dmgBusy = false;
-        this._dmgPump();
-    },
 
     // Liga o NpcArt à biblioteca de sprites: as folhas antigas de gente passam a virar tipos 2,5D; o jogador ganha a folha "hero".
     attach(lib) {
@@ -889,7 +800,7 @@ const NpcArt = {
             if (s) s.npcRemap = (v, name) => this.remap(k, v, name, s);
         }
         const hero = lib.sheets.hero = this.sheet('protagonista', lib.sheets.player, 0);
-        if (this.atlases.protagonista_armas) hero.armsAtlas = 'protagonista_armas';           // (as armas novas: PlayerLook troca pelo do visual gerado)
+        hero.setChain(this.HERO.filter((id) => this.atlases[id]));        // (principal, tático, armas novas — PlayerLook troca pelo visual e o dano)
         this._lib = lib;
         hero.legacyVariant = 0;
         lib.npc = this;
@@ -912,11 +823,11 @@ const NpcArt = {
     },
     // Tipo + variante de alguém de um grupo, escolhido pela semente (mesma semente = mesma pessoa).
     pick(group, seed) {
-        const G = this.gen();
-        let types = G.typesFor(group).filter((id) => this.atlases[id]);
-        if (!types.length) types = G.typesFor('casual').filter((id) => this.atlases[id]);
+        const D = NpcData;
+        let types = D.typesFor(group).filter((id) => this.atlases[id]);
+        if (!types.length) types = D.typesFor('casual').filter((id) => this.atlases[id]);
         if (!types.length) return null;
-        const id = types[seed % types.length], v = Math.floor(seed / 977) % G.TYPES[id].nvar;
+        const id = types[seed % types.length], v = Math.floor(seed / 977) % D.nvar(id);
         return { id, v, row: this.row(id, v) };
     },
     _seen: new Map(),
@@ -927,14 +838,11 @@ const NpcArt = {
         if ((sheetName === 'rider' || sheetName === 'courier') && variant === 0 && this._lib && this._lib.sheets.hero) return { sheet: this._lib.sheets.hero, row: 0, type: 'protagonista' };
         const n = (this._seen.get(name) || 0) + 1;
         this._seen.set(name, n);
-        const seed = this.gen().hashStr(`${name}#${n}:${sheetName}:${variant}`);
+        const seed = NpcData.hashStr(`${name}#${n}:${sheetName}:${variant}`);
         const p = this.pick(this._groupOf(sheetName, variant), seed);
         return p ? { sheet: this.sheet(p.id, legacy, variant), row: p.row, type: p.id } : null;
     },
 };
-
-// Página de atlas carregada: assets/npcs/<tipo>/p<i>.js chama isto ao rodar (o <script> foi injetado pelo NpcArt._fetch).
-function NPC_PAGE(id, i, b64) { NpcArt._onPage(id, i, b64); }
 
 // ----------------------------------------------------------------------------
 // NpcSheet — folha de um tipo 2,5D com a interface da CharacterSheet (o SpriteActor e o resto do jogo não precisam saber).
@@ -947,22 +855,28 @@ class NpcSheet {
         this.clips = {}; this.jobs = {}; this.pending = [];
         this.legacy = null;               // CharacterSheet para o que o atlas não tem (definida pela SpriteLibrary)
         this.legacyVariant = 2;
-        this.fallbackAtlas = null;        // outro atlas do mesmo personagem (o jogador: o pronto, enquanto o novo visual é gerado)
+        this.fallbackAtlas = null;        // outro atlas do mesmo personagem (dano: o atlas normal do tipo, para os clipes sem dano)
         this.extraAtlas = null;           // atlas COMPANHEIRO com o que não coube no principal (o jogador: os clipes táticos)
         this.armsAtlas = null;            // o outro companheiro do jogador: as armas novas (silenciador, RPG, lança-foguetes, minigun)
+        this.chain = null;                // lista explícita de atlas, na ordem de procura (o jogador: PlayerLook.setChain) — vale no lugar dos 4 acima
+        this.pinned = null;               // os da lista que ficam presos na GPU (o jogador: os que ele usa; null = todos — NpcArt._pins)
         this.dmgLvl = 0;                  // folha de dano (NpcArt.dmgSheet): o nível
     }
-    uses(id) { return this.atlasName === id || this.fallbackAtlas === id || this.extraAtlas === id || this.armsAtlas === id; }
+    // Atlas onde um clipe é procurado, na ordem.
+    atlasList() { return this.chain || [this.atlasName, this.fallbackAtlas, this.extraAtlas, this.armsAtlas].filter(Boolean); }
+    uses(id) { return this.atlasList().includes(id); }
     _key(name, weapon) { return name + ':' + (weapon || 'none'); }
     getClip(name, weapon = 'none') {
         const w = weapon || 'none', key = this._key(name, w);
         if (key in this.clips) return this.clips[key];
-        // (folha de dano cujo atlas saiu da memória por falta de uso: volta do aparelho — enquanto isso, o atlas normal do tipo)
-        if (this.dmgLvl && !NpcArt.atlases[this.atlasName] && NpcArt.DMG_CLIPS.test(name)) NpcArt._dmgWant(this.baseId, this.dmgLvl);
-        let c = NpcArt.clip(this.atlasName, key) || (this.fallbackAtlas && NpcArt.clip(this.fallbackAtlas, key)) || (this.extraAtlas && NpcArt.clip(this.extraAtlas, key)) || (this.armsAtlas && NpcArt.clip(this.armsAtlas, key));
+        // (folha de dano cujo atlas saiu da memória por falta de uso: recriado — as páginas voltam dos arquivos quando pedidas)
+        if (this.dmgLvl && !NpcArt.atlases[this.atlasName]) NpcArt.dmgAtlas(this.baseId, this.dmgLvl);
+        const L = this.atlasList();
+        let c = null;
+        for (const id of L) if ((c = NpcArt.clip(id, key))) break;
         if (!c && w !== 'none') {
             const def = CharacterRig.CLIPS[name];
-            if (def && !def.weapons) c = NpcArt.clip(this.atlasName, this._key(name, 'none')) || (this.fallbackAtlas && NpcArt.clip(this.fallbackAtlas, this._key(name, 'none')));
+            if (def && !def.weapons) for (const id of L) if ((c = NpcArt.clip(id, this._key(name, 'none')))) break;
         }
         if (!c && w === 'knife') c = this.getClip(name, 'none');            // (faca sem o desenho dela neste atlas: o clipe de mãos livres)
         if (!c && this.legacy && CharacterRig.CLIPS[name]) c = this.legacy.getClip(name, w);      // (clipes novos, como 'holdup', só existem aqui)
@@ -970,10 +884,11 @@ class NpcSheet {
         this.clips[key] = c || null;
         return this.clips[key];
     }
-    // Troca o atlas (o jogador com outra roupa): os clipes são procurados de novo.
+    // Troca o atlas / a lista de atlas (o jogador com outra roupa, machucado…): os clipes são procurados de novo.
     setAtlas(id) { this.atlasName = id; this.clips = {}; }
+    setChain(list) { this.chain = list.filter(Boolean); this.atlasName = this.chain[0]; this.clips = {}; }
     _resolve(name, weapon) { const def = CharacterRig.CLIPS[name]; if (!def) return null; let w = weapon || 'none'; if (def.weapons && !def.weapons.includes(w)) return null; return { def, w, key: name + ':' + w }; }
     warm() {} queue() {} pump() { return false; } disposeClips() { this.clips = {}; }
 }
 
-if (NpcArt.available()) NpcArt.load();          // manifestos já; as páginas do protagonista decodificam durante a carga da página / menu
+NpcArt.boot();          // dados e manifestos já (main.js espera antes de montar o mundo); as páginas do protagonista decodificam durante a abertura

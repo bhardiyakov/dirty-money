@@ -36,8 +36,8 @@ const StreetCrime = {
         const m = L.filter((n) => n !== v && calm(n) && dist(n.position, v.position) > 4 && dist(n.position, v.position) < 18)
             .sort((a, b) => dist(a.position, v.position) - dist(b.position, v.position))[0];
         if (!m) return false;
-        const id = Math.random() < 0.55 ? 'trafic_pistola' : 'trafic_mascarado', G = NpcArt.gen();
-        const look = { id, row: NpcArt.row(id, Math.floor(Math.random() * G.TYPES[id].nvar)), knife: Math.random() < 0.4 && G.TYPES[id].clips.includes('holdup:knife') };
+        const id = Math.random() < 0.55 ? 'trafic_pistola' : 'trafic_mascarado', T = NpcData.type(id);
+        const look = { id, row: NpcArt.row(id, Math.floor(Math.random() * T.nvar)), knife: Math.random() < 0.4 && T.clips.includes('holdup:knife') };
         const st = new MugState(m, v, look, game);
         m.fsm.setState(st);
         this.active = { npc: m, state: st };

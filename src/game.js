@@ -323,7 +323,7 @@ class Game {
             say('Montando os personagens…', 0.62, 1500);
             await Promise.race([SpriteIO.ready, new Promise((r) => setTimeout(r, 15000))]);      // arte em PNG ainda baixando (rede lenta: segue procedural)
             await CharArt.ready;                                                      // atlas dos personagens (decodificado desde a carga da página)
-            if (typeof NpcArt !== 'undefined' && NpcArt.ready) await NpcArt.ready;     // personagens 2,5D (assets/npcs, decodificados desde a carga da página)
+            if (typeof NpcArt !== 'undefined' && NpcArt.ready) await NpcArt.ready;     // personagens 2,5D (assets/baked: o protagonista, decodificado durante a abertura)
             const s0 = performance.now();
             for (let guard = 0; guard < 2000; guard++) {
                 const more = this.sprites.pump(40);                                   // (personagens e carros vêm dos atlas: quase nada a assar)
@@ -1494,7 +1494,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         else steps.push({ clip: 'opendoor', face: atDoor, onStart: open });
         // 3) entra: põe o pé lá dentro, gira, senta no banco e recolhe a outra perna, deslizando da porta até o banco enquanto a
         //    carroceria esconde o que já entrou (clipe `sitin`; sem ele — visual antigo guardado no aparelho —, o `enter` de antes)
-        const side = sign < 0 ? 'L' : 'R', SI = NpcArt.gen().SIT_IN, sc = SI && pl.actor.sheet.getClip('sitin', side);
+        const side = sign < 0 ? 'L' : 'R', SI = NpcData.SIT_IN, sc = SI && pl.actor.sheet.getClip('sitin', side);
         if (sc) {
             const dur = sc.fps > 0 ? sc.frames / sc.fps : SI.n / SI.fps, A = CarDoors.axes(car);     // (a duração do clipe do ATLAS — o visual guardado pode ser de outra versão)
             const seat = () => { const q = door(); return { x: q.x - A.rx * sign * SI.travel, z: q.z - A.rz * sign * SI.travel }; };
@@ -1945,7 +1945,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // fora, levanta e fica de pé ao lado, deslizando do banco até a porta enquanto a carroceria vai revelando o corpo (da cabeça para
     // os pés); a porta fecha atrás dele. false = sem o clipe (visual antigo guardado no aparelho): aparece do lado, como antes.
     _climbOut(car, sign) {
-        const pl = this.player, side = sign < 0 ? 'L' : 'R', SI = NpcArt.gen().SIT_IN, sc = SI && pl.actor.sheet.getClip('sitout', side);
+        const pl = this.player, side = sign < 0 ? 'L' : 'R', SI = NpcData.SIT_IN, sc = SI && pl.actor.sheet.getClip('sitout', side);
         if (!sc) return false;
         const A = CarDoors.axes(car), d0 = this.doors.doorPoint(car, sign), dur = sc.fps > 0 ? sc.frames / sc.fps : SI.n / SI.fps;     // (a duração do clipe do atlas)
         car.setControlled(false);

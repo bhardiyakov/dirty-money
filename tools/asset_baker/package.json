@@ -1,0 +1,11 @@
+{
+	"name": "dirty-money-asset-baker",
+	"private": true,
+	"description": "Build-time asset baking: roda o gerador dos personagens 2,5D no Node e grava spritesheets .webp + metadados .json em assets/baked/",
+	"scripts": {
+		"bake": "node bake.cjs"
+	},
+	"devDependencies": {
+		"sharp": "0.35.5"
+	}
+}

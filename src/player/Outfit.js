@@ -23,7 +23,7 @@ const Outfit = {
     SLOT_NAME: { shoes: 'Calçado', top: 'Parte de cima', legs: 'Calça', head: 'Cabeça', face: 'Rosto', eyes: 'Óculos', wrist: 'Pulso', hands: 'Mãos', neck: 'Pescoço' },
 
     // base = preço (R$) antes dos fatores da loja; col = cores na paleta antiga (piloto de moto); look = forma e cor no personagem 2,5D
-    // (campos da ficha do gerador: src/art/npcgen); fx = efeitos (ver o cabeçalho)
+    // (campos da ficha do gerador: tools/asset_baker/generator); fx = efeitos (ver o cabeçalho)
     ITEMS: {
         // ---- calçados
         tenis_branco:   { slot: 'shoes', name: 'Tênis branco', base: 0, col: { shoes: '#f0f0f4' }, look: { shoes: 'sneaker', shoe_color: 'tenis_branco', sole_color: 'tenis_branco' }, fx: {}, desc: 'O de sempre' },
@@ -143,8 +143,8 @@ const Outfit = {
                 const it = this.ITEMS[this.worn[slot] || this.DEFAULT[slot]];
                 if (it && it.col) for (const [k, c] of Object.entries(it.col)) cols[k] = c === 'skin' ? skin : c;
             }
-            if (typeof NpcArt !== 'undefined' && NpcArt.G) {           // a cor tingida também no piloto
-                const P = NpcArt.G.PAL, s = this.lookSpec(), base = (n) => P[n] && P[n][2];
+            if (typeof NpcData !== 'undefined' && NpcData.ok) {        // a cor tingida também no piloto
+                const P = NpcData.PAL, s = this.lookSpec(), base = (n) => P[n] && P[n][2];
                 if (this.tint.top && base(s.top_color)) cols.shirt = cols.sleeve = base(s.top_color);
                 if (this.tint.legs && base(s.bottom_color)) cols.pants = base(s.bottom_color);
                 if (this.tint.shoes && base(s.shoe_color)) cols.shoes = base(s.shoe_color);

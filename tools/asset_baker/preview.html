@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dirty Money — NPCs 2,5D (gerador dos atlas)</title>
+    <title>Dirty Money — NPCs 2,5D (prévia do gerador)</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #2b2e34; color: #d8dce2; font: 13px system-ui, Segoe UI, Arial, sans-serif; padding: 16px; }
@@ -21,16 +21,13 @@
     </style>
 </head>
 <body>
-    <h1>NPCs 2,5D — gerador dos atlas do jogo</h1>
+    <h1>NPCs 2,5D — prévia do gerador</h1>
     <div class="sub">
-        Fichas e animações em <code>src/art/npcgen/</code> (porte do gerador Python do pacote de NPCs + animações novas do jogo), 16 direções.
-        <b>Gerar e salvar todos</b> monta um atlas por tipo no formato paginado (<code>assets/npcs/&lt;tipo&gt;.js</code> = manifesto,
-        <code>assets/npcs/&lt;tipo&gt;/p&lt;i&gt;.js</code> = páginas) e grava na pasta escolhida (<code>assets/npcs</code> do jogo), pelo servidor de
-        desenvolvimento (<code>serve.ps1</code>) ou, sem nenhum dos dois, baixando os arquivos. O jeito oficial (mais rápido) é
-        <code>node tools/npcs/regen.cjs</code>. As cores das variantes não precisam de atlas novo.
+        Fichas e animações em <code>tools/asset_baker/generator/</code> (porte do gerador Python do pacote de NPCs + animações novas do
+        jogo), 16 direções, renderizadas aqui na hora. Os atlas do jogo (<code>assets/baked/</code>: WebP + JSON, com as camadas de dano)
+        saem do build: <code>npm run bake</code> (ou <code>node tools/asset_baker/bake.cjs [tipos]</code>). As cores das variantes não precisam de atlas novo.
     </div>
     <div class="bar">
-        <button id="all">Gerar e salvar todos</button>
         <button id="pick" hidden>Pasta…</button>
         <label title="só as 8 direções pares (o jogo LITE)"><input id="lite" type="checkbox"> 8 dir.</label>
         <label>Tipo <select id="type"></select></label>
@@ -41,15 +38,14 @@
     </div>
     <div id="out" class="grid"></div>
 
-    <script src="../../src/art/SpriteIO.js"></script>
-    <script src="../../src/art/npcgen/NpcGenCore.js"></script>
-    <script src="../../src/art/npcgen/NpcGenChar.js"></script>
-    <script src="../../src/art/npcgen/NpcGenRender.js"></script>
-    <script src="../../src/art/npcgen/NpcGenAnims.js"></script>
-    <script src="../../src/art/npcgen/NpcGenTypes.js"></script>
-    <script src="../../src/art/npcgen/NpcGenBuild.js"></script>
-    <script src="../../assets/npcs/malha3d.js"></script>
-    <script src="../../src/art/npcgen/NpcGenMesh.js"></script>
+    <script src="./generator/NpcGenCore.js"></script>
+    <script src="./generator/NpcGenChar.js"></script>
+    <script src="./generator/NpcGenRender.js"></script>
+    <script src="./generator/NpcGenAnims.js"></script>
+    <script src="./generator/NpcGenTypes.js"></script>
+    <script src="./generator/NpcGenBuild.js"></script>
+    <script src="./generator/malha3d.js"></script>
+    <script src="./generator/NpcGenMesh.js"></script>
     <script>
         const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G);
         const $ = (id) => document.getElementById(id);
@@ -99,8 +95,8 @@
         $('filter').addEventListener('change', preview);
         requestAnimationFrame(tick);
 
-        // ---------------------------------------------------------------- gravar: na pasta escolhida (File System Access API — escolha a
-        // assets/npcs do jogo), pelo servidor de desenvolvimento (serve.ps1: PUT /__save/assets/...) ou, sem nenhum dos dois, baixando
+        // ---------------------------------------------------------------- gravar as folhas de revisão: na pasta escolhida (File System
+        // Access API), pelo servidor de desenvolvimento (serve.ps1: PUT /__save/assets/...) ou, sem nenhum dos dois, baixando
         let saveDir = null, devOk = null;
         if (window.showDirectoryPicker) $('pick').hidden = false;
         async function pickDir() {
@@ -124,80 +120,14 @@
             } catch (e) { devOk = false; return false; }
         }
         async function save(path, body) { if (!(await put(path, body))) download(path.split('/').pop(), body); }      // (folhas de revisão)
-        // Arquivos de um tipo (files[0] = manifesto, depois as páginas): as páginas primeiro, o manifesto por último; as páginas velhas
-        // (p<i>.js a mais, de um atlas maior) saem da pasta. Devolve onde gravou.
-        async function saveType(id, files) {
-            const order = [...files.slice(1), files[0]], names = new Set(files.slice(1).map((f) => f.path.split('/')[1]));
-            if (saveDir) {
-                const sub = await saveDir.getDirectoryHandle(id, { create: true });
-                for (const f of order) {
-                    const [dir, name] = f.path.includes('/') ? [sub, f.path.split('/')[1]] : [saveDir, f.path];
-                    const wr = await (await dir.getFileHandle(name, { create: true })).createWritable();
-                    await wr.write(f.text); await wr.close();
-                }
-                const old = []; for await (const name of sub.keys()) if (/^p\d+\.js$/.test(name) && !names.has(name)) old.push(name);
-                for (const name of old) await sub.removeEntry(name);
-                return 'pasta ' + saveDir.name + (old.length ? ` (apagou ${old.length} páginas velhas)` : '');
-            }
-            let ok = true;
-            for (const f of order) if (!(ok = await put('assets/npcs/' + f.path, new Blob([f.text], { type: 'application/javascript' })))) break;
-            if (ok) {                                           // (o servidor não apaga: avisa se sobrou página de um atlas maior)
-                const r = await fetch(`../../assets/npcs/${id}/p${files.length - 1}.js`, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
-                return 'assets/npcs' + (r && r.ok ? ` — APAGUE à mão as páginas ${id}/p${files.length - 1}.js em diante (velhas)` : '');
-            }
-            for (const f of order) download(f.path.replace('/', '__'), f.text);
-            return `downloads (${id}.js e ${id}__p<i>.js → mova para assets/npcs/${id}.js e assets/npcs/${id}/p<i>.js)`;
-        }
-        window.built = {}; window.outFiles = {};
-        // Monta (em Workers paralelos) e salva os tipos pedidos. k = resolução: G.HD_K (padrão — o jogo só usa a alta definição) ou G.OUT_K;
-        // keys = só estes clipes (lista ou função; testes); dirs = 8: só as direções pares. Sem gravar (write: false) os arquivos ficam em
-        // window.outFiles; o atlas cru (window.built, para a folha de revisão) fica de poucos tipos ou sem gravar (a memória).
-        async function buildAll(ids = Object.keys(G.TYPES), { write = true, k = G.HD_K, keys = null, dirs = $('lite').checked ? 8 : 0 } = {}) {
-            $('all').disabled = true;
-            const prog = {}, t0 = performance.now(), N = Math.max(1, Math.min(ids.length, (navigator.hardwareConcurrency || 4) - 1)), keep = !write || ids.length <= 4;
-            const show = () => status(Object.entries(prog).map(([k, v]) => `${k}: ${v}`).join('\n'));
-            const queue = ids.slice();
-            let bytes = 0, nfr = 0;
-            await Promise.all(Array.from({ length: N }, () => new Promise((done) => {
-                const w = new Worker('worker.js');
-                const next = () => {
-                    const id = queue.shift();
-                    if (!id) { w.terminate(); done(); return; }
-                    const ks = keys ? G.TYPES[id].clips.filter((c) => (typeof keys === 'function' ? keys(c) : keys.includes(c))) : null;
-                    prog[id] = '…'; show(); w.postMessage({ id, k, dirs, keys: ks });
-                };
-                w.onmessage = async (e) => {
-                    const m = e.data;
-                    if (m.progress) { prog[m.id] = `${m.progress[0]}/${m.progress[1]} ${m.progress[2]}`; show(); return; }
-                    if (m.error) { prog[m.id] = 'ERRO ' + m.error; show(); next(); return; }
-                    let where = 'sem gravar';
-                    try { if (write) where = await saveType(m.id, m.files); else outFiles[m.id] = m.files; }
-                    catch (err) { where = 'ERRO ao gravar: ' + err.message; }
-                    if (keep) built[m.id] = m.atlas;
-                    let js = 0, png = 0, n = 0;
-                    for (const f of m.files) js += f.text.length;
-                    for (const P of m.atlas.pages) png += P.w * P.h;
-                    for (const c of Object.values(m.atlas.clips)) n += c.n * c.dirs;
-                    bytes += js; nfr += n;
-                    prog[m.id] = `ok ${n} quadros, ${m.atlas.pages.length} páginas (${(png / 1e6).toFixed(1)} Mpx), JS ${(js / 1048576).toFixed(1)} MB, ${(m.ms / 1000).toFixed(1)} s → ${where}`;
-                    show(); next();
-                };
-                next();
-            })));
-            status($('status').textContent + `\nFIM: ${nfr} quadros, JS ${(bytes / 1048576).toFixed(1)} MB em ${((performance.now() - t0) / 1000).toFixed(0)} s`);
-            $('all').disabled = false;
-        }
-        $('all').onclick = async () => { if (window.showDirectoryPicker && !saveDir) await pickDir(); buildAll(); };
-        window.buildAll = buildAll;
-
         // ---------------------------------------------------------------- folha de revisão (PNG grande com todos os clipes)
         // dirs = direções do jogo, 0–15 (linhas por clipe; 8 = sul, 4 = leste); salva em assets/_npcprev/<id>.png (só para conferir; não vai
-        // para o jogo). O atlas vem de buildAll (window.built) — páginas RG na memória, retângulos por página (pd).
-        async function reviewSheet(id, { dirs = [8, 4], v = 0, zoom = 2, keys = null, file = null } = {}) {
-            const a = built[id];
-            if (!a) throw new Error('monte antes: buildAll([id], {write:false})');
+        // para o jogo). Monta o atlas aqui (G.buildAtlas: páginas RG na memória, retângulos por página — pd): devagar com muitos clipes.
+        async function reviewSheet(id, { dirs = [8, 4], v = 0, zoom = 2, keys = null, file = null, k = G.HD_K } = {}) {
+            status(`montando ${id}…`); await new Promise((r) => setTimeout(r, 0));
+            const a = G.buildAtlas(G.BY_ID[id], keys || G.TYPES[id].clips, { typeId: id, k });
             const ramps = G.rampsFor(G.variantSpec(id, v)), F = a.frame, cols = Math.max(...Object.values(a.clips).map((c) => c.n));
-            const list = (keys || Object.keys(a.clips));
+            const list = Object.keys(a.clips);
             const cw = 64, ch = 70, W = 150 + cols * cw, H = list.length * dirs.length * ch;
             const c = document.createElement('canvas'); c.width = W; c.height = H;
             const ctx = c.getContext('2d'); ctx.fillStyle = '#6a7080'; ctx.fillRect(0, 0, W, H); ctx.font = '11px sans-serif';

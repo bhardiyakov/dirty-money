@@ -2,19 +2,18 @@
 // NpcGenBuild — monta o ATLAS de um tipo de personagem para o jogo: renderiza cada clipe nas 16 direções, recorta cada quadro no que
 // tem desenho, junta quadros iguais (mirar = último quadro de sacar…) e empacota tudo em PÁGINAS de textura de 2 bytes por pixel
 // (código da cor, alfa): uma ou mais por grupo de clipes (hot, act, fall, water, car, gym) e paridade da direção (pares / ímpares),
-// carregadas sob demanda pelo jogo (NpcArt). Usado pela ferramenta (tools/npcs/regen.cjs e tools/npcs/index.html: atlas prontos em
-// assets/npcs/) e pelos Workers do jogo (visual do jogador, machucados).
+// carregadas sob demanda pelo jogo (NpcArt). Usado no BUILD (tools/asset_baker/bake.cjs: atlas prontos em assets/baked/, WebP + JSON) e
+// pelo Worker do guarda-roupa (tools/asset_baker/wardrobe: o visual de uma roupa nova, só na tela de equipamento).
 //
 // Direções na ordem do JOGO: 0 = norte (de costas), 1 = nor-nordeste … sentido horário … 15 = nor-noroeste (yaw = −22,5°·d).
 // Quadro: [x, y, w, h, ox, oy] = retângulo NA PÁGINA pd[dir] e canto superior esquerdo relativo aos pés (px; y para baixo = sul).
-// Arquivos (formato paginado): assets/npcs/<id>.js = manifesto (só ASCII) e assets/npcs/<id>/p<i>.js = NPC_PAGE(id, i, PNG em base64),
-// PNG cinza de w × 2h: em cima o byte 0 de cada pixel, embaixo o byte 1 (manifestJS / pageRows / pngFile / unplanar).
+// Arquivos: o formato está no cabeçalho de tools/asset_baker/bake.cjs (manifesto JSON + páginas WebP + camadas de dano).
 // ============================================================================
 
 function NpcGenBuild(G) {
     'use strict';
     // Resolução: px do atlas por unidade do gerador (o original era 1,04). OUT_K = 0,5 → 26 px por metro no jogo (os atlas prontos);
-    // HD_K = 1,0 → o dobro (alta definição: gerado no próprio jogo, ver NpcArt.hd). Em alta, o z-buffer usa 2×2 amostras por pixel
+    // HD_K = 1,0 → o dobro (alta definição: os atlas do jogo). Em alta, o z-buffer usa 2×2 amostras por pixel
     // (fino o bastante; 4×4 custaria 4× mais sem ganho).
     const OUT_K = 0.5, HD_K = 1.0;
     const PPU = 26;                    // TAMANHO no jogo: px por metro na resolução de referência (k 0,5) = Config.art.npcPpu — os pilotos
@@ -83,8 +82,8 @@ function NpcGenBuild(G) {
         while (!r.done) r = it.next();
         return r.value;
     }
-    // O mesmo, um quadro por passo (cada next() desenha um): o Worker do jogo descansa entre os quadros para não prender um núcleo
-    // (PlayerLook.gen — o jogo continua liso enquanto gera); o valor final (done) é o clipe.
+    // O mesmo, um quadro por passo (cada next() desenha um): o Worker do guarda-roupa ouve 'cancel' entre os quadros; o valor final
+    // (done) é o clipe.
     function* clipSteps(R, key, typeId, opts = {}) {
         const [name, w0] = key.split(':'), c = clipDef(name, w0, typeId, opts);
         const D = opts.dirs && opts.dirs < c.dirs ? opts.dirs : c.dirs, frames = [];
@@ -200,7 +199,7 @@ function NpcGenBuild(G) {
         });
         return atlasOf(clips, k);
     }
-    // Os clipes já desenhados → o atlas (páginas + o formato). (O Worker do jogo desenha clipe a clipe, com folga, e fecha aqui.)
+    // Os clipes já desenhados → o atlas (páginas + o formato).
     function atlasOf(clips, k = OUT_K) {
         const a = packPages(clips);
         a.frame = frameFor(k); a.k = k; a.v = G.SHADE === 'cel' ? 1 : 2; a.pivot = pivFor(k);          // v = formato (2: material + luz)
@@ -209,68 +208,9 @@ function NpcGenBuild(G) {
     // Buffers das páginas (para transferir de um Worker sem copiar).
     const atlasBuffers = (a) => a.pages.map((p) => p.data.buffer);
 
-    // ------------------------------------------------------------------ arquivos do formato paginado (regen.cjs, tools/npcs)
-    const ascii = (s) => String(s).replace(/[^\x00-\x7f]/g, (ch) => '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0'));
-    // Linhas (já com o byte de filtro 0) do PNG cinza de uma página: w × 2h — linhas 0..h−1 = byte 0 de cada pixel (material×8 + água /
-    // código), h..2h−1 = byte 1 (luz + cobertura / alfa). Separados assim comprimem ~15% melhor que intercalados.
-    function pageRows(w, h, rg) {
-        const rows = new Uint8Array((w + 1) * h * 2);
-        for (let y = 0; y < h; y++) {
-            const a = y * (w + 1) + 1, b = (y + h) * (w + 1) + 1, s = y * w * 2;
-            for (let x = 0; x < w; x++) { rows[a + x] = rg[s + x * 2]; rows[b + x] = rg[s + x * 2 + 1]; }
-        }
-        return rows;
-    }
-    // O inverso (pixels já sem filtro, w × 2h) → RG intercalado (w × h × 2), o formato da textura.
-    function unplanar(gray, w, h) {
-        const n = w * h, rg = new Uint8Array(n * 2);
-        for (let i = 0; i < n; i++) { rg[i * 2] = gray[i]; rg[i * 2 + 1] = gray[n + i]; }
-        return rg;
-    }
-    let _crcT = null;
-    function crc32(b, s, e) {
-        let T = _crcT;
-        if (!T) { T = _crcT = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; T[n] = c >>> 0; } }
-        let c = 0xffffffff;
-        for (let i = s; i < e; i++) c = T[(c ^ b[i]) & 0xff] ^ (c >>> 8);
-        return (c ^ 0xffffffff) >>> 0;
-    }
-    // Arquivo PNG (8 bits, sem entrelaçar; type 0 = cinza) com os dados z JÁ comprimidos (zlib: deflateSync no Node, CompressionStream
-    // ('deflate') no navegador).
-    function pngFile(w, h, type, z) {
-        const out = new Uint8Array(8 + 25 + 12 + z.length + 12), dv = new DataView(out.buffer);
-        out.set([137, 80, 78, 71, 13, 10, 26, 10]);
-        let p = 8;
-        const chunk = (t, len, fill) => {
-            dv.setUint32(p, len);
-            for (let i = 0; i < 4; i++) out[p + 4 + i] = t.charCodeAt(i);
-            fill(p + 8);
-            dv.setUint32(p + 8 + len, crc32(out, p + 4, p + 8 + len));
-            p += 12 + len;
-        };
-        chunk('IHDR', 13, (o) => { dv.setUint32(o, w); dv.setUint32(o + 4, h); out[o + 8] = 8; out[o + 9] = type; });
-        chunk('IDAT', z.length, (o) => out.set(z, o));
-        chunk('IEND', 0, () => {});
-        return out;
-    }
-    // Arquivo de uma página: assets/npcs/<id>/p<i>.js.
-    const pageFile = (id, i) => `${id}/p${i}.js`;
-    const pageJS = (id, i, b64) => `NPC_PAGE(${JSON.stringify(id)},${i},"${b64}");\n`;
-    // Manifesto assets/npcs/<id>.js (só ASCII: o navegador guarda o texto do script em 1 byte por caractere). a = atlas (buildAtlas);
-    // pages = [{ w, h, g, par, file, bytes }] (bytes = tamanho do PNG).
-    function manifestJS(id, a, label, pages) {
-        let nf = 0, bytes = 0;
-        for (const c of Object.values(a.clips)) nf += c.n * c.dirs;
-        for (const p of pages) bytes += p.bytes;
-        const obj = { v: a.v, id, label, k: a.k, frame: a.frame, pivot: a.pivot || pivFor(a.k), paged: 1, pages, clips: a.clips };
-        return '// GERADO por tools/npcs (src/art/npcgen) - nao edite a mao.\n' +
-            `// ${ascii(label || id)}: ${Object.keys(a.clips).length} clipes, ${nf} quadros, ${pages.length} paginas (PNG ${(bytes / 1048576).toFixed(1)} MB). Ver src/art/NpcArt.js.\n` +
-            `var NPC_ATLAS = NPC_ATLAS || {};\nNPC_ATLAS[${JSON.stringify(id)}] = ${ascii(JSON.stringify(obj))};\n`;
-    }
-
     Object.assign(G, {
         OUT_K, HD_K, PPU, FRAME, PIV, DIRS, ATLAS_MAX, PAGE_TARGET, GROUPS, GROUP_OF, frameFor, pivFor, SPACING, rendererFor, clipDef, renderClip, clipSteps, trimFrame: trim,
-        packPages, packAtlas: packPages, buildAtlas, atlasOf, atlasBuffers, asciiJS: ascii, pageRows, unplanar, pngFile, pageFile, pageJS, manifestJS,
+        packPages, packAtlas: packPages, buildAtlas, atlasOf, atlasBuffers,
     });
     return G;
 }

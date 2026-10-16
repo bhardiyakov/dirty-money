@@ -321,7 +321,7 @@ const Interiors = {
         list = list.filter((e) => !typed.includes(e));
         const GA = this._gymActors || (this._gymActors = []);
         typed.forEach((e, i) => {
-            const sheet = NpcArt.sheet(e.type), nvar = (NpcArt.gen().TYPES[e.type] || { nvar: 1 }).nvar, row = NpcArt.row(e.type, e.variant % nvar);
+            const sheet = NpcArt.sheet(e.type), nvar = NpcData.nvar(e.type), row = NpcArt.row(e.type, e.variant % nvar);
             let a = GA[i];
             if (!a) a = GA[i] = new SpriteActor(sc, sheet, row, 'gymActor' + i);
             else { if (a.sheet !== sheet) a.useSheet(sheet); a.setVariant(row); }

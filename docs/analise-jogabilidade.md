@@ -130,7 +130,7 @@ entrada, rodapé, e luz com mais contraste e "temperatura" (quente em restaurant
 passagem: cada objeto testa folga e que a sala inteira continua alcançável a pé da porta. (O mesmo teste corrigiu o cofre das
 pizzarias, que ficava num canto da cozinha sem acesso.)
 
-## Personagens (`src/art/npcgen/*`, `src/art/NpcArt.js`)
+## Personagens (`tools/asset_baker/generator/*` no build, `src/art/NpcArt.js` no jogo)
 
 Braços soltos ao lado do corpo (sem o ar de "gorila"), cabeça um pouco maior (rosto e cabelo mais legíveis de cima), silhueta
 feminina de verdade (ombros mais estreitos, braços finos, quadril), luz principal mais marcada com recorte nas bordas e dobras mais

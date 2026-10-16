@@ -314,7 +314,7 @@ class Player {
         if (car) this._updateCarClip(0);
         else NpcArt.setClip(this._clipIds(), null);
     }
-    _clipIds() { const s = this.actor.sheet; return s && s.isNpc ? [s.atlasName, s.fallbackAtlas, s.extraAtlas, s.armsAtlas] : []; }
+    _clipIds() { const s = this.actor.sheet; return s && s.isNpc ? s.atlasList() : []; }
     _updateCarClip(dt) {
         const k = this._carClip;
         if (!k) return;

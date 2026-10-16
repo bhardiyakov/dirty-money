@@ -26,8 +26,8 @@
     <h1>Personagens 3D — malha realista nos NPCs 2,5D</h1>
     <div class="sub">
         Lê <code>fonte/personagens_masc_fem.glb</code> (pacote "personagem_3d_realista", CC0), põe na pose de repouso do jogo (braços caídos, mãos em punho),
-        simplifica e grava <code>assets/npcs/malha3d.js</code>. O encaixe no esqueleto cartunesco e a amostragem ficam em <code>src/art/npcgen/NpcGenMesh.js</code>.
-        Depois de salvar, gere os atlas de novo em <code>tools/npcs/</code>. Abra pelo servidor de desenvolvimento (<code>http://localhost:8123/tools/personagens3d/</code>).
+        simplifica e grava <code>tools/asset_baker/generator/malha3d.js</code>. O encaixe no esqueleto cartunesco e a amostragem ficam em
+        <code>tools/asset_baker/generator/NpcGenMesh.js</code>. Depois de salvar, gere os atlas de novo: <code>npm run bake</code>. Abra pelo servidor de desenvolvimento (<code>http://localhost:8123/tools/personagens3d/</code>).
     </div>
     <div class="bar">
         <button id="save" disabled>Salvar malha3d.js</button>
@@ -43,14 +43,13 @@
     </div>
     <div id="out"></div>
 
-    <script src="../../src/art/SpriteIO.js"></script>
-    <script src="../../src/art/npcgen/NpcGenCore.js"></script>
-    <script src="../../src/art/npcgen/NpcGenChar.js"></script>
-    <script src="../../src/art/npcgen/NpcGenRender.js"></script>
-    <script src="../../src/art/npcgen/NpcGenAnims.js"></script>
-    <script src="../../src/art/npcgen/NpcGenTypes.js"></script>
-    <script src="../../src/art/npcgen/NpcGenBuild.js"></script>
-    <script src="../../src/art/npcgen/NpcGenMesh.js"></script>
+    <script src="../asset_baker/generator/NpcGenCore.js"></script>
+    <script src="../asset_baker/generator/NpcGenChar.js"></script>
+    <script src="../asset_baker/generator/NpcGenRender.js"></script>
+    <script src="../asset_baker/generator/NpcGenAnims.js"></script>
+    <script src="../asset_baker/generator/NpcGenTypes.js"></script>
+    <script src="../asset_baker/generator/NpcGenBuild.js"></script>
+    <script src="../asset_baker/generator/NpcGenMesh.js"></script>
     <script src="vistas.js"></script>
     <script type="module">
         import { loadGlb, extract } from './extrair.js';
@@ -76,10 +75,10 @@
 
         $('save').onclick = async () => {
             const body = '// Gerado por tools/personagens3d/index.html a partir do pacote "personagem_3d_realista" (MakeHuman, CC0) — não editar à mão.\n' +
-                '// Malha do personagem realista (masculino e feminino + 11 cabelos) para o gerador de NPCs (src/art/npcgen/NpcGenMesh.js).\n' +
+                '// Malha do personagem realista (masculino e feminino + 11 cabelos) para o gerador de NPCs (tools/asset_baker/generator/NpcGenMesh.js).\n' +
                 'const NPC_MESH3D = ' + text + ';\n';
-            const r = await fetch('/__save/assets/npcs/malha3d.js', { method: 'PUT', body });
-            status(r.ok ? `salvo: assets/npcs/malha3d.js (${(body.length / 1e6).toFixed(2)} MB)` : 'falhou: ' + r.status);
+            const r = await fetch('/__save/tools/asset_baker/generator/malha3d.js', { method: 'PUT', body });
+            status(r.ok ? `salvo: tools/asset_baker/generator/malha3d.js (${(body.length / 1e6).toFixed(2)} MB) — agora npm run bake` : 'falhou: ' + r.status);
         };
 
         function canvasOf(G, fr, ramps, zoom) {

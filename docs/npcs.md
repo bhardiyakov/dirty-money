@@ -2,9 +2,15 @@
 
 Pedestres, Polícia Militar, BOPE, Exército, traficantes **e o protagonista** usam agora os personagens do pacote de NPCs
 ("GTA 2,5D": vistos do alto a 56°, 8 direções desenhadas, contorno escuro e sombreamento em 5 tons). O pacote veio com 17 fichas
-renderizadas por um gerador em Python; o gerador foi **portado para JavaScript** (`src/art/npcgen/`) e roda no navegador — dá o
-mesmo resultado pixel a pixel (conferido contra os PNGs do pacote) e é com ele que o jogo ganhou animações novas, mais tipos de
-NPC, variações de cor e a personalização do jogador.
+renderizadas por um gerador em Python; o gerador foi **portado para JavaScript** (`tools/asset_baker/generator/`) — dá o mesmo
+resultado pixel a pixel (conferido contra os PNGs do pacote) e é com ele que o jogo ganhou animações novas, mais tipos de NPC,
+variações de cor e a personalização do jogador.
+
+**Build-time asset baking.** O gerador **não roda no jogo**: `tools/asset_baker/bake.cjs` (Node) renderiza tudo no build e grava
+arquivos estáticos em `assets/baked/` — páginas `.webp` sem perdas, manifestos `.json`, as **camadas de dano** e `npc-data.json`
+(tipos, variantes, paletas, ficha do jogador). O jogo só carrega e decodifica (WebP num Worker de decodificação). A única exceção é a
+**tela de equipamento** (guarda-roupa): uma roupa de forma nova é montada lá, num Worker com o gerador empacotado
+(`assets/baked/wardrobe.worker.js`), e guardada no IndexedDB — fechou a tela, o Worker é encerrado (ver *Personalização do jogador*).
 
 ## O que tem
 
@@ -78,18 +84,16 @@ cartunesca:
   passa na frente da outra (contorno escuro) ou o material muda com degrau (a cor escura do próprio material).
 - **Formato 2 do atlas** (2 bytes por pixel, como antes): material × 8 + nível de água, e a luz (64 níveis). O shader do jogo
   (`NpcArt`) anda pela rampa de 5 tons da paleta conforme a luz — as variantes de cor continuam saindo da paleta, de graça.
-- **Alta definição** (Ajustes → 🖥️ Alta definição; ligada por padrão no PC, desligada no celular/aparelho fraco; `?hd=0`/`?hd=1`):
-  a tela passa a ser desenhada na resolução real (sem o pixelado) e cada tipo ganha um atlas com o **dobro da resolução** (`HD_K` = 1:
-  52 px por metro), gerado no próprio jogo em Workers (até 4 ao mesmo tempo) quando o tipo aparece pela primeira vez, em DUAS FASES:
-  (1) parado/andando/correndo/assustado de todos os tipos que apareceram (poucos segundos cada) → camada `<tipo>#hd`, que `NpcArt.clip`
-  consulta antes do atlas pronto; (2) depois, o atlas inteiro, que substitui o pronto, sai da camada e fica guardado no aparelho
-  (IndexedDB `dirty-money-hd`, comprimido) — das próximas vezes é só carregar. Enquanto o visual do jogador é gerado, a fila espera
-  (o jogador tem a CPU primeiro). O visual do jogador também é gerado em alta. Mudou o desenho? Suba `NpcArt.HD_VERSION` (e `PlayerLook.VERSION`).
-  Se o PC não aguentar, o modo econômico (AutoQuality) volta a tela ao pixelado (os personagens em alta ficam).
+- **Alta definição, sempre** (`Config.art.hd`): os atlas assados já saem com o **dobro da resolução** (`HD_K` = 1: 52 px por metro);
+  os visuais do guarda-roupa, idem.
 - **Atlas em PÁGINAS de até 4096 px de lado.** O jogo endereça cada quadro como x·4096 + y (exato em float). `NpcGenBuild.packPages`
   separa os quadros por grupo de clipes (`GROUPS`: hot = parado/andar/correr/armas, act, fall, water, car, gym) e paridade da direção
   (pares / ímpares), páginas de até ~8 Mpx; todas as direções de uma paridade de um clipe ficam na mesma página (o quadro seguinte,
-  `fr2`, sai da mesma textura). Formato dos arquivos: cabeçalho de `src/art/npcgen/NpcGenBuild.js`.
+  `fr2`, sai da mesma textura). Formato dos arquivos: cabeçalho de `tools/asset_baker/bake.cjs`.
+- **Dano pintado** (1 sujo, 2 machucado, 3 muito machucado — `NpcGenMesh.paintDamage`): o dano só repinta a roupa e a pele, então cada
+  nível é uma CAMADA do tamanho da página base (`<tipo>/d<n>p<i>.webp`), com o pixel machucado onde ele muda e (0, 0) no resto —
+  quase vazia, poucos KB a centenas de KB. Só os clipes do dia a dia machucado têm camada (`npc-data.json` → `dmg`); o atlas
+  `<tipo>#d<n>` (`NpcArt.dmgAtlas`) usa os mesmos retângulos da base e a página = base + camada, juntadas no Worker de decodificação.
 
 ## Pilotando (`ride_*`, `mount`)
 
@@ -112,19 +116,26 @@ dão soco ou chute** colados em você — o jogador cambaleia, é empurrado e ca
 ## Como funciona
 
 ```
-src/art/npcgen/NpcGenCore.js     motor: primitivas SDF → nuvem de pontos "assada" por parte do corpo; câmera; matemática
-src/art/npcgen/NpcGenChar.js     fichas (pele, cabelo, roupa, chapéu, colete, bolsa, corpo…), paletas (PAL) e armas/objetos
-src/art/npcgen/NpcGenRender.js   pixel art: z-buffer a 4×, cobertura, 5 tons, contornos, água, efeitos (clarão, cápsula…), sombra
-src/art/npcgen/NpcGenAnims.js    esqueleto (IK) e TODAS as animações; CLIPS = clipe do jogo ("walk:pistol") → animação
-src/art/npcgen/NpcGenTypes.js    tipos do jogo: clipes de cada um, arma desenhada, lugares onde aparece, regras de variação
-src/art/npcgen/NpcGenBuild.js    monta o atlas: 16 direções, recorte, quadros repetidos juntados, páginas; formato dos arquivos
-src/art/NpcArt.js                no jogo: atlas → textura, paleta das variantes, shader, folhas (NpcSheet), quem é quem
-src/player/PlayerLook.js         visual do jogador: ficha a partir da roupa/bolsa; gera o atlas novo em Workers; cache
-assets/npcs/<tipo>.js            atlas prontos: o manifesto (clipes, quadros, páginas; só ASCII) — gerados por tools/npcs/regen.cjs
-assets/npcs/<tipo>/p<i>.js       as páginas: NPC_PAGE(tipo, i, PNG cinza w × 2h em base64), carregadas quando o jogo precisa
-tools/npcs/regen.cjs             gera de novo os atlas prontos (Node, worker_threads) — o jeito oficial
-tools/npcs/index.html            prévia de qualquer tipo/variante/clipe/direção e "Gerar e salvar todos" (no navegador)
-tools/npcs/validate.html         ?atlas=<tipo>: confere os atlas prontos (páginas, PNG, retângulos) e desenha um clipe nas 16 direções
+tools/asset_baker/generator/NpcGenCore.js    motor: primitivas SDF → nuvem de pontos "assada" por parte do corpo; câmera; matemática
+tools/asset_baker/generator/NpcGenChar.js    fichas (pele, cabelo, roupa, chapéu, colete, bolsa, corpo…), paletas (PAL) e armas/objetos
+tools/asset_baker/generator/NpcGenRender.js  pixel art: z-buffer a 4×, cobertura, 5 tons, contornos, água, efeitos (clarão, cápsula…), sombra
+tools/asset_baker/generator/NpcGenAnims.js   esqueleto (IK) e TODAS as animações; CLIPS = clipe do jogo ("walk:pistol") → animação
+tools/asset_baker/generator/NpcGenTypes.js   tipos do jogo: clipes de cada um, arma desenhada, lugares onde aparece, regras de variação
+tools/asset_baker/generator/NpcGenBuild.js   monta o atlas: 16 direções, recorte, quadros repetidos juntados, páginas
+tools/asset_baker/generator/NpcGenMesh.js    corpo da malha 3D (+ malha3d.js) e o dano pintado
+tools/asset_baker/bake.cjs                   o BUILD: renderiza tudo no Node (worker_threads) → assets/baked (WebP + JSON + camadas de dano)
+tools/asset_baker/wardrobe/worker-main.js    o Worker do guarda-roupa (vai empacotado com o gerador em assets/baked/wardrobe.worker.js)
+tools/asset_baker/preview.html               prévia de qualquer tipo/variante/clipe/direção (renderiza na hora, no navegador)
+tools/asset_baker/validate.html              ?atlas=<tipo>: confere os atlas assados (JSON, WebP, camadas, retângulos) e desenha um clipe
+assets/baked/npc-data.json                   dados do jogo: tipos, variantes de cor, paletas, ficha/clipes do jogador, hash do gerador
+assets/baked/npcs/<tipo>.json                manifesto: clipes, quadros, páginas e camadas de dano
+assets/baked/npcs/<tipo>/p<i>.webp           as páginas (R = byte 0, G = byte 1), carregadas quando o jogo precisa
+assets/baked/npcs/<tipo>/d<n>p<i>.webp       a camada de dano n da página i
+src/art/NpcData.js                           no jogo: os dados (npc-data.json) — cores de uma ficha, chave de forma, tipos
+src/art/AtlasDecoder.js                      no jogo: busca e decodifica as páginas WebP num Worker (junta a camada de dano)
+src/art/NpcArt.js                            no jogo: páginas → textura, paleta das variantes, shader, folhas (NpcSheet), quem é quem
+src/player/PlayerLook.js                     visual do jogador: ficha a partir da roupa/bolsa → atlas prontos ou do IndexedDB
+src/player/Wardrobe.js                       o guarda-roupa: monta (Worker) e grava no IndexedDB um visual novo, só na tela de equipamento
 ```
 
 - **Cor por paleta.** Cada pixel do atlas guarda o *código* da cor (material × 8 + tom) e o alfa — 2 bytes por pixel (PNG cinza+alfa
@@ -156,18 +167,21 @@ tools/npcs/validate.html         ?atlas=<tipo>: confere os atlas prontos (págin
   Bolsas (`Bags`): mala transversal, mochila e mochila tática aparecem no desenho; maleta, sacola e mala de rodinhas, na mão.
 - **Tingir** (de graça): Inventário → Equipamento, no detalhe da peça vestida ou na aba ✂️ Visual. Só muda a paleta: instantâneo.
 - **Aparência** (de graça, aba ✂️ Visual): pele, cabelo (17 estilos — 6 novos da malha 3D), cor do cabelo, barba, corpo.
-- **Forma nova = desenho novo**: `PlayerLook` gera o atlas do jogador em Workers paralelos (montados a partir do texto das
-  funções do gerador — funciona em `file://`), até 6, puxando de uma fila 2 clipes por vez na ordem do que mais aparece. O visual
-  troca quando parado/andando/correndo (com a arma da mão) estão TODOS prontos — nunca metade de um e metade de outro nesses — e vai
-  sendo completado a cada ~1,5 s (golpes, carro, tático, nadar, pilotar…; o companheiro tático entra inteiro). O que ainda falta sai do
-  visual anterior só durante a geração. Cada visual gerado fica no IndexedDB: voltar a ele é imediato.
+- **Forma nova = desenho novo, só no guarda-roupa**: durante o jogo nada é desenhado — o visual vem dos atlas prontos (a roupa inicial,
+  com os níveis de dano) ou do IndexedDB (`dirty-money-visual`). Uma forma que ainda não está lá (roupa trocada na boutique, o porte que
+  mudou com a academia…) mantém o último visual e um aviso pede para abrir **Inventário → Equipamento**. Lá o `Wardrobe` abre os Workers
+  do gerador (os núcleos − 1, até 4; o jogo está pausado), que desenham os clipes que faltam e gravam cada um no aparelho; no fim um deles
+  empacota as páginas e grava o atlas pronto (principal + tático + armas novas, se tiver alguma) e o visual troca. Depois vêm os níveis
+  de dano daquela roupa (barra "Preparando o visual machucado"). Saiu da tela no meio: os Workers são encerrados e o que já foi gravado
+  continua na próxima visita. Recarregou o jogo com a mesma roupa: lido do IndexedDB, sem gerar de novo. A chave leva o hash do gerador
+  (`npc-data.json` → `genHash`): mudou o desenho no build, os visuais guardados são montados de novo.
 - **Armas novas** (pistola com silenciador, RPG, lança-foguetes, minigun): moram num terceiro atlas, `protagonista_armas`
   (`NpcGenTypes.PLAYER_ARMS`: parado, andando, correndo, sacar, mirar, atirar, agachado, andar agachado, passo lateral e assalto com
   cada uma; `NpcSheet.armsAtlas`). Os objetos estão em `NpcGenChar.buildProps` (ogiva do RPG e feixe de canos da minigun são peças
   à parte — `SUB_PROPS` —: a ogiva some depois do disparo e os canos giram 15° por quadro no tiro em loop) e as pegadas em
-  `WEAPON_HOLD` (RPG e lança-foguetes no ombro direito; minigun no quadril). Num visual gerado esse atlas só é gerado quando o jogador
-  TEM uma delas (`PlayerLook.wantArms`, "hero:N:w", guardado no IndexedDB); até lá o desenho delas sai do visual de sempre.
-- A tela de equipamento mostra o **próprio personagem** girando (clique para girar), renderizado pelo gerador.
+  `WEAPON_HOLD` (RPG e lança-foguetes no ombro direito; minigun no quadril). Num visual do guarda-roupa esse atlas só é montado quando
+  o jogador TEM uma delas; até lá o desenho delas sai do visual de sempre.
+- A tela de equipamento mostra o **próprio personagem** girando (clique para girar), renderizado pelo gerador no Worker do guarda-roupa.
 
 ## Mudar ou criar personagens
 
@@ -177,18 +191,19 @@ tools/npcs/validate.html         ?atlas=<tipo>: confere os atlas prontos (págin
    pack2/tactical/cross, `watch`, `belt`, `zip`.
 2. Tipo do jogo: `TYPES` em `NpcGenTypes.js` (regras de variação, lugares, clipes, arma desenhada).
 3. Animações: funções em `NpcGenAnims.js` e a tabela `CLIPS` (nome do clipe do jogo → animação, fps, loop).
-4. Gere os atlas de novo: **`node tools/npcs/regen.cjs`** (todos os tipos, um por Worker, os maiores primeiro; grava
-   `assets/npcs/<tipo>.js` + `assets/npcs/<tipo>/p<i>.js`, apaga páginas velhas e não mexe em `malha3d.js`). Só alguns tipos:
-   `node tools/npcs/regen.cjs civil_vovo pm_policial`; `-j N` = Workers (padrão: núcleos − 1); `--clips walk,idle:none --out /tmp/x`
-   = só esses clipes, noutra pasta (testes); `--dry` = mede sem gravar; `--list` = tipos e quadros; `--help`. Para conferir:
-   `tools/npcs/validate.html?atlas=<tipo>&clip=walk:none`. A prévia (`http://localhost:8123/tools/npcs/`, servidor `serve.ps1`)
-   mostra qualquer tipo/variante/clipe/direção; o **Gerar e salvar todos** dela faz o mesmo que o regen.cjs no navegador (mais
-   devagar) e grava na pasta escolhida (File System Access API), pelo `serve.ps1` ou baixando os arquivos. Tipo novo: acrescente o
-   `<script src="./assets/npcs/<tipo>.js">` (o manifesto) no `index.html`.
-5. Mudou o desenho do jogador? Suba `PlayerLook.VERSION` (invalida os visuais guardados no IndexedDB).
+4. Gere os atlas de novo: **`npm run bake:install`** (uma vez: instala o `sharp`, o codificador WebP) e **`npm run bake`** (todos os
+   tipos, um por Worker, os maiores primeiro; grava `assets/baked/npcs/<tipo>.json` + as páginas e camadas `.webp`, apaga as velhas,
+   e no fim `npc-data.json` e `wardrobe.worker.js`). Só alguns tipos: `node tools/asset_baker/bake.cjs civil_vovo pm_policial`;
+   `-j N` = Workers (padrão: núcleos − 1); `--no-dmg` = sem as camadas de dano; `--fast` = WebP com esforço 4 (testes);
+   `--data` = só `npc-data.json` + `wardrobe.worker.js` (mudou paleta, tipo, ficha ou o Worker do guarda-roupa — sem renderizar);
+   `--clips walk,idle:none --out /tmp/x` = só esses clipes, noutra pasta; `--dry` = mede sem gravar; `--list` = tipos e quadros;
+   `--help`. O build confere que as cores calculadas no jogo (`NpcData.rampsFor`) batem com as do gerador. Para conferir os arquivos:
+   `tools/asset_baker/validate.html?atlas=<tipo>&clip=walk:none&dmg=2`. A prévia (`http://localhost:8123/tools/asset_baker/preview.html`,
+   servidor `serve.ps1`) mostra qualquer tipo/variante/clipe/direção. Tipo novo entra sozinho (o `npc-data.json` lista os manifestos).
+5. Mudou o desenho do jogador? Nada a fazer: o hash do gerador muda e os visuais guardados no IndexedDB são montados de novo.
 
-`tools/npcs/validate.html` (sem parâmetros) compara o porte com os PNGs originais do pacote (com `G.ADULT = null`, as proporções do pacote): copie algumas folhas de `sprites/` do pacote para
-`tools/npcs/_ref/` como `<tipo>_<animação>.png` (ex.: `civil_trabalhador_idle.png`).
+`tools/asset_baker/validate.html` (sem parâmetros) compara o porte com os PNGs originais do pacote (com `G.ADULT = null`, as proporções do pacote): copie algumas folhas de `sprites/` do pacote para
+`tools/asset_baker/_ref/` como `<tipo>_<animação>.png` (ex.: `civil_trabalhador_idle.png`).
 
 ## Subindo morro (`walk_up`, `climb`)
 

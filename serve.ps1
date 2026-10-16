@@ -15,6 +15,7 @@ $mime = @{
     '.css'  = 'text/css; charset=utf-8'
     '.json' = 'application/json; charset=utf-8'
     '.png'  = 'image/png'
+    '.webp' = 'image/webp'
     '.jpg'  = 'image/jpeg'
     '.svg'  = 'image/svg+xml'
     '.ico'  = 'image/x-icon'
@@ -36,13 +37,14 @@ try {
         # Erro numa requisição (ex.: navegador cancelou no meio) não pode derrubar o servidor.
         try {
             $rel = [System.Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath.TrimStart('/'))
-            # Ferramentas de arte (tools/carros, tools/personagens): PUT /__save/assets/... grava o atlas gerado no disco.
-            # Só dentro de assets/ e só para .js/.json/.png (o servidor só escuta em localhost).
+            # Ferramentas de arte (tools/carros, tools/personagens, tools/personagens3d): PUT /__save/assets/... grava o atlas gerado no disco
+            # (e a malha 3D, em tools/asset_baker/generator/malha3d.js). Só nesses lugares e só para .js/.json/.png (o servidor só escuta em localhost).
             if ($ctx.Request.HttpMethod -eq 'PUT' -and $rel.StartsWith('__save/')) {
                 $dest = [System.IO.Path]::GetFullPath((Join-Path $root $rel.Substring(7)))
                 $assets = [System.IO.Path]::GetFullPath((Join-Path $root 'assets')) + [System.IO.Path]::DirectorySeparatorChar
                 $okExt = @('.js', '.json', '.png') -contains [System.IO.Path]::GetExtension($dest).ToLower()
-                if ($dest.StartsWith($assets, [System.StringComparison]::OrdinalIgnoreCase) -and $okExt) {
+                $mesh = [System.IO.Path]::GetFullPath((Join-Path $root 'tools/asset_baker/generator/malha3d.js'))
+                if (($dest.StartsWith($assets, [System.StringComparison]::OrdinalIgnoreCase) -or $dest -eq $mesh) -and $okExt) {
                     $ms = New-Object System.IO.MemoryStream
                     $ctx.Request.InputStream.CopyTo($ms)
                     [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($dest)) | Out-Null

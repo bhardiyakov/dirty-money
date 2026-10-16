@@ -12,8 +12,8 @@
 // Unidades: 1 unidade = 1 pixel na escala 1,04 (a dos PNGs originais). Espaço do personagem: x = direita, y = frente, z = cima.
 // Mundo: x = leste, y = norte, z = cima. Pés em z = 0.
 //
-// Escrito como UMA função (NpcGenCore(G) preenche o objeto G): o jogo também roda o gerador num Worker para o visual do jogador
-// (ver NpcGenWorker), montado a partir do texto destas funções — funciona até aberto por duplo clique (file://).
+// Escrito como UMA função (NpcGenCore(G) preenche o objeto G): roda no Node (tools/asset_baker/bake.cjs: os atlas do jogo), nas páginas
+// de ferramenta (tools/asset_baker/preview.html) e no Worker do guarda-roupa (assets/baked/wardrobe.worker.js, montado no build).
 // ============================================================================
 
 function NpcGenCore(G) {

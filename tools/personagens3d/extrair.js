@@ -7,7 +7,7 @@
 //   - pesos de skin já convertidos para os 15 ossos do gerador (pelve, peito, cabeça, braços, antebraços, mãos, coxas, canelas, pés);
 //   - deltas dos portes (Magro, Forte, Gordo) e as juntas (posição das articulações na mesma pose);
 //   - texturas pequenas: o alfa dos cartões de cabelo (+ luminância dos fios) e a luminância das roupas (dobras do tecido).
-// O resto (encaixe no esqueleto do jogo, amostragem em pontos, roupas, rosto cartunesco) fica em src/art/npcgen/NpcGenMesh.js.
+// O resto (encaixe no esqueleto do jogo, amostragem em pontos, roupas, rosto cartunesco) fica em tools/asset_baker/generator/NpcGenMesh.js.
 // ============================================================================
 
 import { simplify } from '../carros3d/simplify.js';

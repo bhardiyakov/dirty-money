@@ -14,17 +14,17 @@
 <body>
     <h3 id="title">Porte JS × PNG original (192 px, escala 1,04)</h3>
     <div class="sub">Sem parâmetros: compara o porte com as folhas do pacote em <code>_ref/</code>. <code>?atlas=civil_vovo,pm_policial</code>
-        (ou <code>?atlas=todos</code>): confere os atlas prontos de <code>assets/npcs/</code> no formato paginado (manifesto, páginas, PNG,
-        retângulos, direções) e desenha a folha de um clipe nas 16 direções (<code>&amp;clip=walk:none</code>; <code>&amp;dir=../pasta</code> = outra pasta).</div>
+        (ou <code>?atlas=todos</code>): confere os atlas assados de <code>assets/baked/npcs/</code> (manifesto JSON, páginas WebP, camadas de dano,
+        retângulos, direções) e desenha a folha de um clipe nas 16 direções (<code>&amp;clip=walk:none</code>; <code>&amp;dmg=2</code> = com a
+        camada de dano 2; <code>&amp;dir=../pasta</code> = outra pasta).</div>
     <pre id="log">rodando…</pre>
     <div id="out"></div>
-    <script src="../../src/art/SpriteIO.js"></script>
-    <script src="../../src/art/npcgen/NpcGenCore.js"></script>
-    <script src="../../src/art/npcgen/NpcGenChar.js"></script>
-    <script src="../../src/art/npcgen/NpcGenRender.js"></script>
-    <script src="../../src/art/npcgen/NpcGenAnims.js"></script>
-    <script src="../../src/art/npcgen/NpcGenTypes.js"></script>
-    <script src="../../src/art/npcgen/NpcGenBuild.js"></script>
+    <script src="./generator/NpcGenCore.js"></script>
+    <script src="./generator/NpcGenChar.js"></script>
+    <script src="./generator/NpcGenRender.js"></script>
+    <script src="./generator/NpcGenAnims.js"></script>
+    <script src="./generator/NpcGenTypes.js"></script>
+    <script src="./generator/NpcGenBuild.js"></script>
     <script>
         const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G);
         const Q = new URLSearchParams(location.search);
@@ -79,39 +79,48 @@
             log(`${cid} ${anim}: ${npts} pontos (assar ${tb.toFixed(0)} ms), render ${(tr / nfr).toFixed(1)} ms/quadro — ${bad} px diferentes de ${tot} (${(100 * bad / Math.max(tot, 1)).toFixed(2)}%)`);
             return { bad, tot };
         }
-        // ---------------------------------------------------------------- atlas paginados (SPEC: NpcGenBuild.js, cabeçalho)
+        // ---------------------------------------------------------------- atlas assados (SPEC: tools/asset_baker/bake.cjs, cabeçalho)
         const DIR_NAMES = ['N', 'NNE', 'NE', 'ENE', 'L', 'ESE', 'SE', 'SSE', 'S', 'SSO', 'SO', 'OSO', 'O', 'ONO', 'NO', 'NNO'];
-        const BASE = (Q.get('dir') || '../../assets/npcs').replace(/\/$/, '') + '/';
-        const script = (src) => new Promise((ok, err) => { const s = document.createElement('script'); s.src = src; s.onload = () => { s.remove(); ok(); }; s.onerror = () => { s.remove(); err(new Error('não carregou ' + src)); }; document.head.appendChild(s); });
-        const pageWait = new Map();
-        window.NPC_PAGE = (id, i, b64) => { const k = id + '#' + i, r = pageWait.get(k); if (r) { pageWait.delete(k); r(b64); } };
-        async function loadPage(id, i, file) {
-            const got = new Promise((ok) => pageWait.set(id + '#' + i, ok));
-            await script(BASE + file);
-            const b64 = await Promise.race([got, new Promise((_, err) => setTimeout(() => err(new Error(file + ' não chamou NPC_PAGE(' + id + ',' + i + ')')), 50))]);
-            const bin = atob(b64), u8 = new Uint8Array(bin.length);
-            for (let j = 0; j < bin.length; j++) u8[j] = bin.charCodeAt(j);
-            return { bytes: u8.length, img: await PNG.decodeAsync(u8) };
+        const BASE = (Q.get('dir') || '../../assets/baked/npcs').replace(/\/$/, '') + '/';
+        // página WebP → { bytes, w, h, rg } (R = byte 0, G = byte 1; o mesmo que o jogo faz no AtlasDecoder)
+        async function loadPage(file) {
+            const r = await fetch(BASE + file, { cache: 'no-store' });
+            if (!r.ok) throw new Error(file + ': HTTP ' + r.status);
+            const blob = await r.blob(), bmp = await createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+            const cv = new OffscreenCanvas(bmp.width, bmp.height), cx = cv.getContext('2d', { willReadFrequently: true });
+            cx.drawImage(bmp, 0, 0);
+            const px = cx.getImageData(0, 0, bmp.width, bmp.height).data, n = bmp.width * bmp.height, rg = new Uint8Array(n * 2);
+            let blue = 0;
+            for (let i = 0; i < n; i++) { rg[i * 2] = px[i * 4]; rg[i * 2 + 1] = px[i * 4 + 1]; if (px[i * 4 + 2]) blue++; }
+            return { bytes: blob.size, w: bmp.width, h: bmp.height, rg, blue };
         }
         // Confere um atlas: { id, ok, erros, páginas, quadros } (e guarda as páginas RG em atlases[id] para a folha)
         window.atlases = {};
         async function checkAtlas(id) {
             const errs = [], bad = (m) => { if (errs.length < 40) errs.push(m); };
-            delete (window.NPC_ATLAS || {})[id];
-            await script(BASE + id + '.js');
-            const A = window.NPC_ATLAS && NPC_ATLAS[id];
-            if (!A) return { id, ok: false, erros: ['sem NPC_ATLAS[' + id + ']'] };
-            try { const txt = await (await fetch(BASE + id + '.js', { cache: 'no-store' })).text(); if (/[^\x00-\x7f]/.test(txt)) bad('manifesto com caractere não ASCII'); } catch (e) { /* file:// */ }
-            if (!A.paged) return { id, ok: false, antigo: true, erros: ['formato antigo (um PNG só): regenere com node tools/npcs/regen.cjs'] };
+            const res = await fetch(BASE + id + '.json', { cache: 'no-store' });
+            if (!res.ok) return { id, ok: false, erros: [id + '.json: HTTP ' + res.status] };
+            const A = await res.json();
             const pages = [];
             for (let i = 0; i < A.pages.length; i++) {
                 const P = A.pages[i];
-                if (P.file !== `${id}/p${i}.js`) bad(`p${i}: file ${P.file}`);
+                if (P.file !== `${id}/p${i}.webp`) bad(`p${i}: file ${P.file}`);
                 if (P.w > G.ATLAS_MAX || P.h > G.ATLAS_MAX) bad(`p${i}: ${P.w}×${P.h} passa de ${G.ATLAS_MAX}`);
-                const { bytes, img } = await loadPage(id, i, P.file);
-                if (img.type !== 0 || img.w !== P.w || img.h !== P.h * 2) bad(`p${i}: PNG tipo ${img.type} ${img.w}×${img.h} (esperado cinza ${P.w}×${P.h * 2})`);
-                if (bytes !== P.bytes) bad(`p${i}: ${bytes} bytes, o manifesto diz ${P.bytes}`);
-                pages.push({ P, rg: G.unplanar(img.data, P.w, P.h), occ: new Uint8Array(P.w * P.h) });
+                const img = await loadPage(P.file);
+                if (img.w !== P.w || img.h !== P.h) bad(`p${i}: WebP ${img.w}×${img.h} (esperado ${P.w}×${P.h})`);
+                if (img.blue) bad(`p${i}: ${img.blue} pixels com azul (o canal B tem de ser 0)`);
+                if (img.bytes !== P.bytes) bad(`p${i}: ${img.bytes} bytes, o manifesto diz ${P.bytes}`);
+                pages.push({ P, rg: img.rg, occ: new Uint8Array(P.w * P.h) });
+            }
+            // camadas de dano: mesmo tamanho da página; só dos clipes com dano; com &dmg=N a folha sai com a camada N junta
+            const lvl = +(Q.get('dmg') || 0);
+            if (A.dmg) {
+                for (const key of A.dmg.clips) if (!A.clips[key]) bad(`dano: clipe ${key} não existe`);
+                for (const [lv, L] of Object.entries(A.dmg.levels)) for (const [pi, file] of Object.entries(L)) {
+                    const P = A.pages[pi], img = await loadPage(file);
+                    if (!P || img.w !== P.w || img.h !== P.h) { bad(`dano ${lv} p${pi}: ${img.w}×${img.h}`); continue; }
+                    if (+lv === lvl) { const rg = pages[pi].rg; for (let j = 0; j < rg.length; j += 2) if (img.rg[j] | img.rg[j + 1]) { rg[j] = img.rg[j]; rg[j + 1] = img.rg[j + 1]; } }
+                }
             }
             let nfr = 0, empty = 0;
             const corners = new Map();
@@ -144,7 +153,7 @@
                 }
             }
             atlases[id] = { A, pages };
-            return { id, ok: !errs.length, erros: errs, paginas: pages.length, quadros: nfr, vazios: empty, mpx: +(pages.reduce((s, p) => s + p.P.w * p.P.h, 0) / 1e6).toFixed(1) };
+            return { id, ok: !errs.length, erros: errs, paginas: pages.length, quadros: nfr, vazios: empty, dano: A.dmg ? Object.keys(A.dmg.levels).length : 0, mpx: +(pages.reduce((s, p) => s + p.P.w * p.P.h, 0) / 1e6).toFixed(1) };
         }
         // Folha de um clipe: linhas = direções (16), colunas = quadros, com as cores da variante v
         function clipSheet(id, key, v = 0, zoom = 1) {
@@ -173,7 +182,7 @@
             wrap.appendChild(document.createElement('br')); wrap.appendChild(cv); document.getElementById('out').appendChild(wrap);
         }
         async function atlasMode() {
-            document.getElementById('title').textContent = 'Atlas paginados de ' + BASE;
+            document.getElementById('title').textContent = 'Atlas assados de ' + BASE;
             G.SHADE = SHADE0; G.ADULT = ADULT0;
             let ids = Q.get('atlas').split(',');
             if (ids[0] === 'todos') ids = Object.keys(G.TYPES);
@@ -182,7 +191,7 @@
                 try {
                     const r = await checkAtlas(id);
                     results.push(r);
-                    log(`${id}: ${r.ok ? 'ok' : 'PROBLEMAS'}${r.paginas !== undefined ? ` — ${r.paginas} páginas (${r.mpx} Mpx), ${r.quadros} quadros${r.vazios ? ', ' + r.vazios + ' vazios' : ''}` : ''}${r.erros.length ? '\n   ' + r.erros.join('\n   ') : ''}`);
+                    log(`${id}: ${r.ok ? 'ok' : 'PROBLEMAS'}${r.paginas !== undefined ? ` — ${r.paginas} páginas (${r.mpx} Mpx), ${r.quadros} quadros${r.vazios ? ', ' + r.vazios + ' vazios' : ''}, ${r.dano} níveis de dano` : ''}${r.erros.length ? '\n   ' + r.erros.join('\n   ') : ''}`);
                     if (r.paginas !== undefined && Q.get('clip') !== 'nenhum') clipSheet(id, Q.get('clip') || 'walk:none', +(Q.get('v') || 0));
                     if (ids.length > 3) delete atlases[id];                  // (a memória: muitos tipos)
                 } catch (e) { results.push({ id, ok: false, erros: [String(e.message || e)] }); log(`${id}: ERRO ${e.message || e}`); }
@@ -203,7 +212,7 @@
                 results.push(await check('pm_policial', 'pistol_walk', [2], [0, 2, 5]));
                 results.push(await check('bope_capacete', 'rifle_shoot', [0, 1], [0, 6]));
                 log('FIM');
-            } catch (e) { log('ERRO: ' + e.stack + '\n(as folhas do pacote vão em tools/npcs/_ref/; ?atlas=<tipo> confere os atlas prontos)'); }
+            } catch (e) { log('ERRO: ' + e.stack + '\n(as folhas do pacote vão em tools/asset_baker/_ref/; ?atlas=<tipo> confere os atlas assados)'); }
             window.done = true;
         })();
     </script>

@@ -587,50 +587,11 @@
     <script src="./src/art/CharacterRig.js"></script>
     <script src="./assets/chars/personagens-atlas.js"></script>
     <script src="./src/art/CharArt.js"></script>
-    <!-- Personagens 2,5D (pacote de NPCs): gerador (fichas, animações, paletas) + MANIFESTOS dos atlas prontos (tools/npcs) — as páginas de
-         pixels (assets/npcs/<tipo>/p<i>.js) não vão aqui: o NpcArt injeta cada uma quando um personagem precisa dela -->
-    <script src="./src/art/npcgen/NpcGenCore.js"></script>
-    <script src="./src/art/npcgen/NpcGenChar.js"></script>
-    <script src="./src/art/npcgen/NpcGenRender.js"></script>
-    <script src="./src/art/npcgen/NpcGenAnims.js"></script>
-    <script src="./src/art/npcgen/NpcGenTypes.js"></script>
-    <script src="./src/art/npcgen/NpcGenBuild.js"></script>
-    <script src="./assets/npcs/malha3d.js"></script>
-    <script src="./src/art/npcgen/NpcGenMesh.js"></script>
-    <script src="./assets/npcs/civil_trabalhador.js"></script>
-    <script src="./assets/npcs/academia_m.js"></script>
-    <script src="./assets/npcs/academia_f.js"></script>
-    <script src="./assets/npcs/civil_senhor.js"></script>
-    <script src="./assets/npcs/civil_praia.js"></script>
-    <script src="./assets/npcs/civil_executiva.js"></script>
-    <script src="./assets/npcs/civil_turista.js"></script>
-    <script src="./assets/npcs/civil_estudante.js"></script>
-    <script src="./assets/npcs/civil_ambulante.js"></script>
-    <script src="./assets/npcs/civil_black_power.js"></script>
-    <script src="./assets/npcs/civil_entregador.js"></script>
-    <script src="./assets/npcs/civil_torcedor.js"></script>
-    <script src="./assets/npcs/civil_banhista.js"></script>
-    <script src="./assets/npcs/civil_corredora.js"></script>
-    <script src="./assets/npcs/civil_executivo.js"></script>
-    <script src="./assets/npcs/civil_vovo.js"></script>
-    <script src="./assets/npcs/civil_skatista.js"></script>
-    <script src="./assets/npcs/civil_mano.js"></script>
-    <script src="./assets/npcs/civil_motoboy.js"></script>
-    <script src="./assets/npcs/civil_chanel.js"></script>
-    <script src="./assets/npcs/civil_trancas.js"></script>
-    <script src="./assets/npcs/civil_topete.js"></script>
-    <script src="./assets/npcs/civil_repartido.js"></script>
-    <script src="./assets/npcs/pm_policial.js"></script>
-    <script src="./assets/npcs/pm_policial_f.js"></script>
-    <script src="./assets/npcs/bope_capacete.js"></script>
-    <script src="./assets/npcs/bope_touca.js"></script>
-    <script src="./assets/npcs/exercito.js"></script>
-    <script src="./assets/npcs/trafic_fuzil.js"></script>
-    <script src="./assets/npcs/trafic_pistola.js"></script>
-    <script src="./assets/npcs/trafic_mascarado.js"></script>
-    <script src="./assets/npcs/protagonista.js"></script>
-    <script src="./assets/npcs/protagonista_tatico.js"></script>
-    <script src="./assets/npcs/protagonista_armas.js"></script>
+    <!-- Personagens 2,5D: atlas PRONTOS, gerados no build (tools/asset_baker/bake.cjs → assets/baked). Aqui só os dados (NpcData lê
+         npc-data.json), o decodificador das páginas WebP (num Worker) e o NpcArt, que lê os manifestos JSON e pede cada página quando um
+         personagem precisa dela. O gerador procedural NÃO é carregado no jogo: só a tela de equipamento o abre, num Worker (Wardrobe). -->
+    <script src="./src/art/NpcData.js"></script>
+    <script src="./src/art/AtlasDecoder.js"></script>
     <script src="./src/art/NpcArt.js"></script>
     <script src="./src/art/CharacterSheet.js"></script>
     <script src="./src/art/SpriteActor.js"></script>
@@ -725,6 +686,7 @@
     <script src="./src/player/Aid.js"></script>
     <script src="./src/player/SaveGame.js"></script>
     <script src="./src/player/PlayerLook.js"></script>
+    <script src="./src/player/Wardrobe.js"></script>
     <script src="./src/player/player.js"></script>
     <script src="./src/npc/npcStates.js"></script>
     <script src="./src/npc/npcActivities.js"></script>

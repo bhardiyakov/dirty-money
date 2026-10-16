@@ -370,6 +370,8 @@ class PauseMenu {
         MapRenderer.drawWorld(1);
         this.setTab(tab);
     }
+    // O guarda-roupa (Wardrobe: o gerador do visual, num Worker) só existe com Inventário → Equipamento aberto.
+    _syncWardrobe() { if (typeof Wardrobe !== 'undefined') Wardrobe.setActive(this.isOpen && this.tab === 'inventory' && this.invView === 'equip'); }
 
     // Mapa expandido (toque no minimapa, no celular): abre direto no mapa, de ponta a ponta e centrado em você.
     openMap(full = true) {
@@ -389,10 +391,12 @@ class PauseMenu {
         this.g.input.justPressed = {};                // teclas apertadas no menu não valem no jogo
         this.map.drag = null;
         if (typeof FocusNav !== 'undefined') FocusNav.clear();         // tira o destaque do controle
+        this._syncWardrobe();
     }
 
     setTab(id) {
         this.tab = id;
+        this._syncWardrobe();                          // (antes de desenhar a tela: o boneco do equipamento usa o guarda-roupa)
         if (id !== 'map') this.root.classList.remove('mapfull', 'legend-on');      // (sem a barra de abas o mapa expandido só vale para o mapa)
         for (const b of this.root.querySelectorAll('.pm-tab')) b.classList.toggle('on', b.dataset.tab === id);
         for (const pg of this.root.querySelectorAll('.pm-page')) pg.classList.toggle('on', pg.dataset.page === id);
@@ -765,7 +769,7 @@ class PauseMenu {
     }
 
     // ------------------------------------------------------------------ inventário
-    setInvView(v) { this.invView = v; this._renderHints(); this._renderInventory(); }
+    setInvView(v) { this.invView = v; this._syncWardrobe(); this._renderHints(); this._renderInventory(); }
 
     _renderInventory() {
         for (const b of this.root.querySelectorAll('#pmInvSeg > div')) b.classList.toggle('on', b.dataset.view === this.invView);

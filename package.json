@@ -6,7 +6,9 @@
 		"dev": "tauri dev",
 		"build": "tauri build",
 		"dev:engine": "tauri dev --config src-tauri/tauri.engine.conf.json",
-		"build:engine": "tauri build --config src-tauri/tauri.engine.conf.json"
+		"build:engine": "tauri build --config src-tauri/tauri.engine.conf.json",
+		"bake:install": "npm --prefix tools/asset_baker install",
+		"bake": "node tools/asset_baker/bake.cjs"
 	},
 	"devDependencies": {
 		"@tauri-apps/cli": "^2.1.0"

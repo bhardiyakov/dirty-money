@@ -46,6 +46,13 @@ class EquipUI {
         this.sel = 0;
         this.hover = null;          // entrada sob o mouse (prévia)
         this._css();
+        if (typeof Wardrobe !== 'undefined') {
+            Wardrobe.onChange = (st) => this._genStatus(st);              // montando o visual: a barra sobre o boneco
+            Wardrobe.onLeave = () => {                                       // (saiu da tela: nada da prévia fica na memória nem rodando)
+                this._doll = null; this._dollKey = null; this._dollCv = null;
+                if (this._dollTimer) { clearInterval(this._dollTimer); this._dollTimer = null; }
+            };
+        }
     }
 
     _css() {
@@ -79,6 +86,10 @@ class EquipUI {
             .eq-slot .nm { font-size: 11px; color: var(--tx-2); text-align: center; max-width: 112px; line-height: 1.2; min-height: 26px; }
             .eq-doll { position: relative; min-height: 0; overflow: hidden; }          /* (o canvas não dita a altura: senão o boneco vaza do palco e os pés somem) */
             .eq-doll canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+            .eq-gen { position: absolute; left: 8px; right: 8px; top: 6px; display: none; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700; color: var(--tx-2); text-align: center; pointer-events: none; }
+            .eq-gen.on { display: flex; }
+            .eq-gen i { display: block; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.1); overflow: hidden; }
+            .eq-gen i s { display: block; height: 100%; width: 0; border-radius: 99px; background: #fbbf24; transition: width 0.25s; }
             .eq-cats { display: flex; gap: 4px; padding: 0 12px 8px; flex-wrap: wrap; }
             .eq-cat { width: 42px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 19px; cursor: pointer;
                 background: var(--card); border: 1px solid var(--line); transition: background .12s; }
@@ -270,7 +281,7 @@ class EquipUI {
         el.innerHTML = `<div class="eq-wrap">
             <div class="px eq-col eq-attr"><div class="px-title">Atributos</div><div class="body">${attr}</div></div>
             <div class="px eq-col eq-center"><canvas class="eq-lines"></canvas><div class="px-title">Equipado</div>
-              <div class="eq-stage"><div class="eq-slots">${EquipUI.LEFT.map(slotHtml).join('')}</div><div class="eq-doll"><canvas width="400" height="800"></canvas></div><div class="eq-slots">${EquipUI.RIGHT.map(slotHtml).join('')}</div></div></div>
+              <div class="eq-stage"><div class="eq-slots">${EquipUI.LEFT.map(slotHtml).join('')}</div><div class="eq-doll"><canvas width="400" height="800"></canvas><div class="eq-gen"><span></span><i><s></s></i></div></div><div class="eq-slots">${EquipUI.RIGHT.map(slotHtml).join('')}</div></div></div>
             <div class="px eq-col"><div class="px-title">Itens disponíveis <span style="text-transform:none;letter-spacing:0;color:var(--tx-3)">· para trocar de roupa e de bolsa</span></div>
               <div class="eq-cats">${cats}</div><div class="eq-catname">${EquipUI.CATS.find((c) => c[0] === this.cat)[2]}${this.cat === 'look' ? '' : ` · ${L.length} ${L.length === 1 ? 'item' : 'itens'}`}</div>
               <div class="eq-grid${this.cat === 'look' ? ' eq-lookgrid' : ''}">${cards}</div>${cur && this.cat !== 'look' ? this._detail(cur) : ''}<div class="eq-msg">${this._msg || ''}</div></div>
@@ -293,7 +304,20 @@ class EquipUI {
         const dc = el.querySelector('.eq-doll canvas');
         if (dc) dc.addEventListener('click', () => { const n = this._dollN(); this._dollDir = ((this._dollDir == null ? n >> 1 : this._dollDir) + 1) % n; this._dollSpin = false; this._paintDoll(); });
         this._drawDoll(this._state(prev));
+        if (typeof Wardrobe !== 'undefined') this._genStatus(Wardrobe.status());
         requestAnimationFrame(() => this._drawLines());
+    }
+    // Barra do guarda-roupa (Wardrobe) sobre o boneco: montando a roupa nova / os machucados dela.
+    _genStatus(st) {
+        const box = this.el && this.el.querySelector('.eq-gen');
+        if (!box) return;
+        box.classList.toggle('on', !!st);
+        if (!st) return;
+        const txt = st.error ? '⚠️ ' + st.error
+            : st.stage === 'look' ? (st.packing ? '⏳ Vestindo o personagem…' : `⏳ Montando o visual novo… ${Math.round(st.pct * 100)}%`)
+            : `🩹 Preparando o visual machucado (${st.step}/${st.steps})… ${Math.round(st.pct * 100)}%`;
+        box.querySelector('span').textContent = txt;
+        box.querySelector('s').style.width = (st.error ? 0 : Math.round(st.pct * 100)) + '%';
     }
 
     // Item da prévia: o que está sob o mouse, senão o selecionado — só se ainda não estiver em uso (prévia = "e se eu vestir?").
@@ -410,7 +434,7 @@ class EquipUI {
     // ------------------------------------------------------------------ visual (aparência + cores), de graça
     // Cor de amostra (tom base) de um nome da paleta do gerador.
     _sw(name) {
-        const P = typeof NpcArt !== 'undefined' ? NpcArt.gen().PAL : null, r = P && P[name];
+        const P = typeof NpcData !== 'undefined' && NpcData.ok ? NpcData.PAL : null, r = P && P[name];
         return r ? r[3] : '#888';
     }
     // Linha de amostras para tingir a peça do encaixe `slot` (a cor atual marcada; ↺ = a cor original da peça).
@@ -437,9 +461,8 @@ class EquipUI {
         const tints = [['top', 'Parte de cima'], ['legs', 'Calça'], ['shoes', 'Calçado'], ['head', 'Cabeça'], ...(bag ? [['bag', 'Bolsa']] : [])]
             .filter(([s]) => s === 'bag' || Outfit.worn[s] || Outfit.DEFAULT[s])
             .map(([s, label]) => `<div class="eq-lk"><div class="eq-lkh">${label} · ${s === 'bag' ? Bags.DEFS[inv.bag].name : Outfit.ITEMS[Outfit.worn[s] || Outfit.DEFAULT[s]].name}</div>${this._tintRow(s)}</div>`).join('');
-        const busy = PlayerLook.want ? '<div class="eq-lknote">⏳ Ajustando o visual no personagem…</div>' : '';
         const porte = `<div class="eq-lk"><div class="eq-lkh">Porte · ${Physique.label()}</div><div class="eq-lknote">O corpo muda com o que você faz: comer demais engorda, passar fome emagrece, academia e comida em dia deixam forte (ver STATUS).</div></div>`;
-        return `<div class="eq-look">${busy}${['skin', 'hair', 'hair_color', 'beard', 'gender'].map(group).join('')}${porte}<div class="eq-lkh2">Tingir as peças vestidas</div>${tints}</div>`;
+        return `<div class="eq-look">${['skin', 'hair', 'hair_color', 'beard', 'gender'].map(group).join('')}${porte}<div class="eq-lkh2">Tingir as peças vestidas</div>${tints}</div>`;
     }
 
     // ------------------------------------------------------------------ boneco (de frente), com as cores da roupa
@@ -452,15 +475,15 @@ class EquipUI {
         return c;
     }
 
-    // Boneco: o PERSONAGEM DE VERDADE (o mesmo gerador do sprite do jogo, PlayerLook.preview), girando por todas as direções do clipe
-    // parado (16; perfil leve, 8 — uma volta a cada ~5 s). Sem ele, o desenho antigo.
+    // Boneco: o PERSONAGEM DE VERDADE (o mesmo gerador do sprite do jogo, no Worker do guarda-roupa — Wardrobe.preview), girando por todas
+    // as direções do clipe parado (16; perfil leve, 8 — uma volta a cada ~5 s). Sem ele (aberto por file://), o desenho antigo.
     _dollN() { return this._doll && this._doll.frames && this._doll.frames.length ? this._doll.frames.length : 8; }
     _drawDoll(s) {
-        if (typeof PlayerLook !== 'undefined' && PlayerLook.ok) {
+        if (typeof PlayerLook !== 'undefined' && PlayerLook.ok && typeof Wardrobe !== 'undefined' && Wardrobe.active) {
             const spec = PlayerLook.spec({ worn: s.worn, bag: s.bag });
             spec.weaponLook = s.weapon && s.weapon !== 'none' ? ((Weapons[s.weapon] && Weapons[s.weapon].look) || s.weapon) : 'none';
             const key = JSON.stringify(spec);
-            if (key !== this._dollKey) { this._dollKey = key; PlayerLook.preview(spec, (frames, W, H, k) => { this._doll = { frames, W, H, k: k || 0.5, armor: this.g.player.armorMax }; this._paintDoll(); }); }
+            if (key !== this._dollKey) { this._dollKey = key; Wardrobe.preview(spec, (frames, W, H, k) => { this._doll = { frames, W, H, k: k || 0.5, armor: this.g.player.armorMax }; this._paintDoll(); }); }
             this._paintDoll();
             if (!this._dollTimer) this._dollTimer = setInterval(() => {
                 if (!this.el || !this.el.isConnected || !this.el.querySelector('.eq-doll canvas')) { clearInterval(this._dollTimer); this._dollTimer = null; return; }
@@ -489,7 +512,7 @@ class EquipUI {
         const n = D.frames.length, d = this._dollDir == null ? n >> 1 : this._dollDir % n, img = D.frames[d];
         const t = this._dollCv || (this._dollCv = document.createElement('canvas'));
         t.width = D.W; t.height = D.H; t.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(img), D.W, D.H), 0, 0);
-        const S = 4.3 * 0.5 / D.k, P = NpcArt.gen().pivFor(D.k);          // (adulto: ~36 px de altura no quadro em k 0,5 — at2 dos SLOTS casam com esta escala)
+        const S = 4.3 * 0.5 / D.k, P = NpcData.pivFor(D.k);          // (adulto: ~36 px de altura no quadro em k 0,5 — at2 dos SLOTS casam com esta escala)
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(t, 100 - P[0] * S, 348 - P[1] * S, D.W * S, D.H * S);
         if (D.armor > 0) { ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '800 11px Inter, Arial, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(`🦺 colete ${D.armor >= 100 ? 'NV II' : 'NV I'}`, 100, 385); }
