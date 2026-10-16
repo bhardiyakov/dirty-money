@@ -232,11 +232,13 @@ ficam plantados com a passada do adulto — `STRIDE_K` em `NpcGenAnims.gait`). M
 
 ## Números
 
-- Atlas prontos (k = 1, 16 direções, páginas): 34 tipos, ~160 mil quadros, 326 páginas — 408 MB de `.js` (303 MB de PNG), ~5–20 MB por
-  tipo; se TODAS as páginas estivessem na placa de vídeo seriam ~1,5 GB, mas só as páginas em uso ficam (orçamento `Config.art.vramMB`:
-  640 MB; perfil leve 256 MB e só as direções pares). Medido: ~105–160 MB de textura no 1º quadro do mundo (antes: 408 MB) e o
-  mundo pronto em ~3 s depois de "novo jogo".
-- Carga: na abertura só os manifestos (e o protagonista); cada página é decodificada num Worker quando alguém precisa dela.
-- Renderizar um quadro (k = 1, 224 px): ~13–17 ms numa thread (Node 22; ~25 ms com 4 Workers em 4 núcleos), mais ~3,5 s para assar a
-  ficha. Gerar todos (`regen.cjs`, 16 direções, ~160 mil quadros): ~20 min com 4 Workers.
+- Atlas assados (k = 1, 16 direções, páginas): 34 tipos, ~160 mil quadros, 326 páginas (784 Mpx) — **277 MB de WebP** (antes: 408 MB
+  de `.js` com PNG em base64) **+ 105 MB das camadas de dano** (3 níveis; antes o dano era gerado no aparelho de cada jogador). Se TODAS
+  as páginas estivessem na placa de vídeo seriam ~1,5 GB, mas só as páginas em uso ficam (orçamento `Config.art.vramMB`: 640 MB;
+  perfil leve 256 MB e só as direções pares). As páginas assadas são idênticas, pixel a pixel, às que o gerador desenha.
+- Carga: na abertura `npc-data.json` + os 34 manifestos JSON (e as páginas do protagonista); cada página é buscada e decodificada num
+  Worker (`AtlasDecoder`, decodificador WebP nativo do navegador) quando alguém precisa dela. Nenhum desenho é gerado durante o jogo.
+- Build (`npm run bake`, 4 núcleos): ~70 min — render ~10 ms por quadro, o WebP com esforço 6 (o mais compacto) e as camadas de dano
+  (+ 82 mil quadros × 3 níveis). `--fast` (esforço 4, ~8% maior) e `--no-dmg` para testes.
+- Guarda-roupa (visual de uma roupa nova, principal + tático, ~16 mil quadros): ~1–2 min com 2–4 Workers; depois ~30–40 s por nível de dano.
 - Desempenho do jogo com 70 pedestres: igual ao dos bonecos antigos (o shader faz 4 leituras por pixel do sprite).

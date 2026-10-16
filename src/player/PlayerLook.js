@@ -81,7 +81,7 @@ const PlayerLook = {
     async _resolve(s, key, lvl, job) {
         let look = this.isDefault(key) ? 'default' : this.looks.get(key) || (await this._load(key));
         if (job !== this._job) return;
-        if (look) { this.want = null; this._warned.delete(key); }
+        if (look) { this.want = null; this._warned.delete(key); this._unwarn(); }
         else {                                                               // não está no aparelho: segue com o que tem; o guarda-roupa monta
             this.want = key;
             if (typeof Wardrobe !== 'undefined' && Wardrobe.active) Wardrobe.ensure(key, s);
@@ -96,11 +96,17 @@ const PlayerLook = {
         this._apply(key, look, dmg);
     },
     // Aviso (uma vez por forma): o visual novo se monta na tela de equipamento.
+    WARN: 'Visual novo: abra Inventário → Equipamento para montar o personagem',
     _warn(key) {
         if (this._warned.has(key)) return;
         this._warned.add(key);
         const ui = this.game && this.game.ui;
-        if (ui && ui.toast) ui.toast('Visual novo: abra Inventário → Equipamento para montar o personagem');
+        if (ui && ui.toast) ui.toast(this.WARN);
+    },
+    // O visual pedido chegou: o aviso (se ainda estiver na tela) sai.
+    _unwarn() {
+        const ui = this.game && this.game.ui;
+        if (ui && ui.toast && ui.toastEl && ui.toastEl.style.display !== 'none' && ui.toastEl.textContent === this.WARN) ui.toast(null);
     },
 
     // Folha do jogador: dano → principal → tático → armas → os prontos.

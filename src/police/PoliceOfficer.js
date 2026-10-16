@@ -92,7 +92,7 @@ class PoliceOfficer {
         let variant = this.spec.variant;
         if (this.spec.group) { const [a, b] = CharacterRig.VARIANT_GROUPS[this.spec.group]; variant = a + Math.floor(Math.random() * (b - a + 1)); }
         // 2,5D (NpcArt): PM (homem/mulher), BOPE (capacete/touca ninja), Exército e os traficantes de cada arma — cada um com variantes.
-        const pick = sprites.npc && sprites.npc.pick(this.kind === 'cop' ? 'police' : this.kind, sprites.npc.gen().hashStr(`officer${this.id}:${this.kind}`));
+        const pick = sprites.npc && sprites.npc.pick(this.kind === 'cop' ? 'police' : this.kind, NpcData.hashStr(`officer${this.id}:${this.kind}`));
         if (pick) this.actor = new SpriteActor(this.scene, sprites.npc.sheet(pick.id, sprites.sheets[this.spec.sheet], variant), pick.row, `officerSprite${this.id}`);
         else this.actor = new SpriteActor(this.scene, sprites.sheets[this.spec.sheet], variant, `officerSprite${this.id}`);
         this.actor.play('idle');
