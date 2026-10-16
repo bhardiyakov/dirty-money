@@ -2324,6 +2324,63 @@ function NpcGenAnims(G) {
         }
         return out;
     }
+    // DE PÉ NO RASO (chegou ao raso nadando crawl: swim_out → ESTE → wade_idle): do último quadro do swim_out (o 1º do `swim_breast`:
+    // deslizando, braços juntos à frente) ao 1º do `wade_idle`. Os joelhos encolhem para baixo do corpo e as mãos apertam a água para
+    // baixo (o tronco sobe), as pernas descem e os pés acham o fundo, o tronco chega à vertical e os braços varrem para baixo e para os
+    // lados (equilíbrio) e sobem à pose do sculling na superfície; os joelhos amortecem um pouco e o corpo assenta.
+    // Duas réguas: nadando, a linha d'água é a origem do desenho; vadeando, os pés — e a água quem desenha é o jogo
+    // (SpriteActor.setWaterline: no limite do fundo, 1 m de corpo na água). Aqui a água desenhada (p.water) sobe de 0 a esse 1 m junto
+    // com o corpo: a troca de régua acontece no clipe, sem salto. O fim é o 1º quadro do wade_idle no mapeamento adulto "molhado"
+    // (Pose.adult: na água a pélvis não sobe com as pernas — dz) e com as pernas em FK nas rotações do adulto seco: o mesmo desenho.
+    function swStateOf(p) {                                                // estado (como o do wetPose) de uma Pose montada do mesmo jeito
+        const B = p.bones(), C = B.chest.R, Pr = p.pelvis_R, Cr = p.chest_R, Hr = p.head_R, d = (r) => r / deg(1);
+        const arm = (sd, s) => {
+            const a = p.arm[sd], q = V.mul(tmv3(C, V.sub(a[1], B['uarm_' + sd].t)), 1 / SW_REACH), o = tmv3(C, a[2]);
+            return [s * q[0], q[1], q[2], s * o[0], o[1], o[2]];
+        };
+        return { hip: V.add(RIG.pelvis[1], p.pelvis_t), pitch: d(Math.atan2(Pr[5], Pr[4])), roll: d(Math.atan2(-Pr[6], Pr[0])), twist: d(Math.atan2(Cr[3], Cr[0])),
+            bend: -d(Math.atan2(Cr[7], Cr[8])), hturn: d(Math.atan2(Hr[3], Hr[0])), htilt: d(Math.atan2(Hr[7], Hr[8])) - HEAD_TILT, aR: arm('R', 1), aL: arm('L', -1) };
+    }
+    function swimStand(n = 10) {
+        const out = [], B0 = breastAt(0), UM = ((G.PPU || 26) * 1.04) / 0.5 / (CTX.scale || 1), WZ = 1.0 * UM;       // u por metro (NpcGenBuild: charScale, PPU)
+        const E = wadeIdle(1)[0], Ew = clonePose(E), A = E.adult().B;
+        Ew.water = 0.0;
+        const dz = A.pelvis.t[2] - Ew.adult().B.pelvis.t[2], SE = Object.assign(swStateOf(E), { lR: B0.lR, lL: B0.lL });      // (as pernas vão à parte)
+        SE.hip = V.add(SE.hip, [0, 0, dz - WZ]);                           // (régua da água: o quadril WZ abaixo de onde fica com os pés no fundo)
+        const z0 = B0.hip[2], zE = SE.hip[2], zf = (f) => z0 + (zE - z0) * f;
+        const st = (o, a) => { const P = o.pitch + o.bend, q = swUp(a, P); return swFlat(Object.assign({}, SE, o, { aR: q, aL: q })); };
+        const K = [[0, swFlat(B0)],
+            [0.32, st({ hip: [0, -7, zf(0.25) + 1.5], pitch: 24, roll: 0, twist: 0, bend: 14, hturn: 0, htilt: 22 }, [swLat(15), 0.60, -0.60, 1, -0.3, -0.6])],
+            [0.62, st({ hip: [0, -2.5, zf(0.8)], pitch: 8, roll: 0, twist: 1, bend: 10, hturn: 0, htilt: 10 }, [swLat(30), 0.12, -0.78, 1, -0.5, -0.4])],
+            [0.84, st({ hip: [0, -0.5, zE - 1.2], pitch: 1, roll: 0, twist: 2, bend: 7, hturn: 0, htilt: 6 }, [swLat(32), 0.16, -0.62, 1, -0.5, -0.4])],
+            [1, swFlat(SE)]];
+        // pernas: rotações (quatérnios) por chave — das do nado peito às do adulto seco do wade_idle (em relação à pélvis)
+        const fk = (l, sd) => { const s = sd === 'R' ? 1 : -1; return [mm3(Ry(deg(l[1]) * s), Rx(deg(l[0]))), Rx(-deg(l[2])), Rx(deg(l[3]))]; };
+        const trR = (R) => [R[0], R[3], R[6], R[1], R[4], R[7], R[2], R[5], R[8]];
+        const endR = (sd) => [mm3(trR(A.pelvis.R), A['thigh_' + sd].R), mm3(trR(A['thigh_' + sd].R), A['shin_' + sd].R), mm3(trR(A['shin_' + sd].R), A['foot_' + sd].R)];
+        const LK = [[0, B0.lR], [0.34, [62, 2, 88, -15]], [0.62, [28, -2, 40, -8]], [0.84, [12, -5, 20, -2]]];
+        const legK = {};
+        for (const sd of ['R', 'L']) {
+            const Ks = LK.map(([t, l]) => [t, fk(l, sd)]).concat([[1, endR(sd)]]);
+            legK[sd] = [0, 1, 2].map((j) => {
+                let prev = null;
+                return Ks.map(([t, Rs]) => { let q = m2q(Rs[j]); if (prev && q[0] * prev[0] + q[1] * prev[1] + q[2] * prev[2] + q[3] * prev[3] < 0) q = q.map((v) => -v); prev = q; return [t, q]; });
+            });
+        }
+        const off = (s) => WZ * sstep(s);                                 // a régua: a água sobe de 0 (nadando) a WZ (vadeando)
+        for (let i = 0; i < n; i++) {
+            const s = n > 1 ? i / (n - 1) : 1, S = swUnflat(keysN(K, s)), w = off(s);
+            S.hip = V.add(S.hip, [0, 0, w]);
+            const p = wetPose(S);
+            p.water = w;
+            for (const sd of ['R', 'L']) p.leg[sd] = ['fk', ...legK[sd].map((Kq) => q2m(keysN(Kq, s)))];
+            if (s > 0.08 && s < 0.3) for (const sd of ['R', 'L']) { const f = swFx(swFist(p, sd)); p.effects.push({ type: 'splash', pos: [f[0], f[1], w], n: 6, spread: 2.4, seed: 140 + i + (sd === 'R' ? 1 : 0) }); }
+            const u = (s - 0.3) / 0.7;                                     // marola saindo do corpo enquanto ele fica de pé (some no fim)
+            if (u > 0 && u < 1) p.effects.push({ type: 'ring', pos: [0, 4.0, w], r: 13 + 12 * u, alpha: Math.trunc(200 * (1 - u) * min(1, u * 4)), gaps: 8, phase: u });
+            out.push(p);
+        }
+        return out;
+    }
     // MERGULHO: o corpo inteiro logo abaixo da superfície (onde o desenho ainda aparece — esmaecido e azulado), quase na horizontal, nadando
     // peito: puxada (braços abrem e descem), recolhe as mãos sob o peito, estica à frente e desliza; pernada de sapo enquanto estica.
     const DIVE_Y = 0.0, DIVE_Z = -14.0;                                    // quadril (o centro do corpo abaixo da linha d'água)
@@ -2605,6 +2662,7 @@ function NpcGenAnims(G) {
         wade_idle: { fps: 6, loop: true, k: 8, n: 8, fn: (w, o, n) => wadeIdle(n) },              // parado nessa água: braços equilibrando
         swim_in: { fps: 14, loop: false, k: 8, n: 12, fn: (w, o, n) => swimIn(n) },                // nado peito → crawl (Shift)
         swim_out: { fps: 14, loop: false, k: 8, n: 12, fn: (w, o, n) => swimIn(n).reverse() },     // crawl → nado peito (soltou o Shift / chegou ao raso)
+        swim_stand: { fps: 12, loop: false, k: 10, n: 10, fn: (w, o, n) => swimStand(n) },         // ficar de pé no raso (depois do swim_out; → wade_idle)
         dive_in: { fps: 12, loop: false, k: 9, n: 10, fn: (w, o, n) => diveIn(n) },                // afundar (nado peito → mergulho)
         dive: { fps: 10, loop: true, k: 12, n: 12, fn: (w, o, n) => dive(n) },                     // nado peito debaixo d'água
         dive_out: { fps: 12, loop: false, k: 8, n: 9, fn: (w, o, n) => diveOut(n) },              // voltar à tona (mergulho → nado peito)

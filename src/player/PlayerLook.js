@@ -26,7 +26,7 @@ const PlayerLook = {
     armsIds: new Map(),     // chave de forma (sem o dano) → id do atlas das armas novas desse visual
     _clean: new Map(),      // chave de forma → a mesma sem o dano pintado (as armas novas não têm versão machucada)
     _job: 0,
-    VERSION: 16,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D; 8: sentar no carro (sitin); 9: começar/parar de nadar e mergulho; 10: sair do carro (sitout) e faca; 11: fardo correndo e parado (run_heavy, idle_heavy); 12: nado peito, vadear fundo, mergulho suave; 13: granada e molotov; 14: braços soltos, cabeça maior, silhueta feminina, luz mais marcada; 15: visual 3D (sem contorno preto, borda suavizada, sombra macia); 16: 16 direções, mais quadros, atlas paginado (páginas comprimidas)
+    VERSION: 17,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D; 8: sentar no carro (sitin); 9: começar/parar de nadar e mergulho; 10: sair do carro (sitout) e faca; 11: fardo correndo e parado (run_heavy, idle_heavy); 12: nado peito, vadear fundo, mergulho suave; 13: granada e molotov; 14: braços soltos, cabeça maior, silhueta feminina, luz mais marcada; 15: visual 3D (sem contorno preto, borda suavizada, sombra macia); 16: 16 direções, mais quadros, atlas paginado (páginas comprimidas); 17: levantar da água (swim_stand)
 
     attach(game) {
         this.game = game; this.shown = null;
@@ -93,6 +93,7 @@ const PlayerLook = {
         if (this._partialId) { NpcArt.dropAtlas(this._partialId); this._partialId = null; }
         if (s.dmg) return;
         clearTimeout(this._preT);
+        if (!NpcArt.canZip) return;                                          // (sem compressão o aparelho guarda cru, ~4× maior: só o que foi usado — _idbPut)
         this._preT = setTimeout(() => this._prefetch(s), 3000);
     },
 
@@ -370,7 +371,10 @@ const PlayerLook = {
 
     // ------------------------------------------------------------------ cache no aparelho (IndexedDB; sem ele, só na memória)
     // Cada atlas guardado com as páginas comprimidas (NpcArt.zip). No máximo 32 guardados: sai o gravado há mais tempo (o registro
-    // '#t' guarda quando cada um foi gravado). Ao abrir, apaga o que é de outra VERSION.
+    // '#t' guarda quando cada um foi gravado). Ao abrir, apaga o que é de outra VERSION. Sem CompressionStream (Safari/Firefox antigos)
+    // as páginas vão cruas (~4× maiores: 16 direções em alta, ~80 MB por atlas) e ficam só os RAW_MAX gravados por último — o visual
+    // em uso, o companheiro tático, as armas novas e o visual anterior; o _load/unzip lê as duas formas.
+    RAW_MAX: 8,
     _db() {
         if (this._dbp) return this._dbp;
         return (this._dbp = new Promise((ok) => {
@@ -407,6 +411,7 @@ const PlayerLook = {
         if (!db) return;
         let v;
         try { v = await NpcArt.zip(atlas); v.t = Date.now(); } catch (e) { return; }
+        const max = v.raw ? this.RAW_MAX : 32;                                // (cru: cabem menos)
         try {
             const st = db.transaction('atlas', 'readwrite').objectStore('atlas');
             st.put(v, k);
@@ -415,7 +420,7 @@ const PlayerLook = {
                 const T = q.result || {};
                 T[k] = Date.now();
                 const ks = Object.keys(T).sort((a, b) => T[a] - T[b]);
-                while (ks.length > 32) { const x = ks.shift(); delete T[x]; st.delete(x); }      // (cada visual: o limpo e os 3 machucados)
+                while (ks.length > max) { const x = ks.shift(); delete T[x]; st.delete(x); }     // (cada visual: o limpo e os 3 machucados)
                 st.put(T, '#t');
             };
         } catch (e) { console.warn('[VISUAL] não guardou no aparelho:', e && e.message); }     // (sem espaço: segue só na memória)

@@ -410,7 +410,7 @@ class SpriteActor {
         this._slopeFresh = false;
         if (c.vector) this._rotate();
         if (this._lean !== c) {                                            // (inclinação pilotando: quem pilota escolhe o quadro — setLean)
-            this.time += dt * c.fps * rate * (this._rateK || 1);
+            this.time += dt * c.fps * rate * (this._rateK || 1) * (c.gaitK || 1);     // (gaitK: passada 2,5D pela escala do tipo — NpcArt.scaleOf)
             this._rate = rate;
             let f;
             if (c.loop) f = ((Math.floor(this.time) % c.frames) + c.frames) % c.frames;          // (ritmo negativo: anda para trás no ciclo)

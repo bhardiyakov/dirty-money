@@ -532,6 +532,7 @@ const NpcArt = {
         const [name, weapon] = key.split(':');
         const clip = {
             name, weapon, npc: true, atlas: id, gen: A.gen || 0, frames: n, dirs, fps: c.fps, loop: c.loop, pk: { fr, box, n }, pages: A.pages, pd, shared: true, frame: 0, W: 0, H: 0,
+            gaitK: this.STRIDE.test(name) ? 1 / this.scaleOf(id) : 1,         // (passada com o pé plantado: o ritmo pela escala do tipo — scaleOf)
             get material() { const P = this.pages[this.pd[0]]; return (P && P.mat) || null; },      // (compatibilidade: o da direção 0)
         };
         cache.set(key, clip);
@@ -555,21 +556,48 @@ const NpcArt = {
         for (const c of Object.values(clips)) { if (!c.dirs) c.dirs = 8; if (!c.pd) c.pd = new Array(c.dirs).fill(0); }
         return { k: a.k != null ? a.k : k, v: a.v || 2, frame: a.frame != null ? a.frame : frame, clips, pages };
     },
-    // Atlas paginado ↔ o que vai para o IndexedDB (cada página comprimida: ~4× menos espaço).
+    // Atlas paginado ↔ o que vai para o IndexedDB (cada página comprimida: ~4× menos espaço). Sem CompressionStream (Safari < 16.4,
+    // Firefox < 113) — ou se comprimir falhar —, a página vai CRUA (data) e o resultado sai com raw: true (quem guarda decide quanto cabe:
+    // PlayerLook._idbPut); o unzip lê as duas formas. Página comprimida sem DecompressionStream para abrir = null (refaz).
+    get canZip() { return typeof CompressionStream === 'function' && typeof DecompressionStream === 'function'; },
     async zip(a) {
         const pages = [];
-        for (const p of a.pages) pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, z: await this._deflate(p.data) });
-        return { k: a.k, v: a.v, frame: a.frame, clips: a.clips, pages };
+        let raw = false;
+        for (const p of a.pages) {
+            let z = null;
+            if (this.canZip) { try { z = await this._deflate(p.data); } catch (e) { z = null; } }
+            if (z) { pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, z }); continue; }
+            raw = true;
+            const d = p.data instanceof Uint8Array ? p.data : new Uint8Array(p.data);
+            pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, data: d.byteOffset || d.byteLength !== d.buffer.byteLength ? d.slice() : d });     // (vista de um buffer maior: o IndexedDB guardaria o buffer inteiro)
+        }
+        return raw ? { k: a.k, v: a.v, frame: a.frame, clips: a.clips, pages, raw } : { k: a.k, v: a.v, frame: a.frame, clips: a.clips, pages };
     },
     async unzip(a) {
         if (!a || !a.pages) return null;                                     // (formato de antes das páginas: refaz)
         const pages = [];
-        for (const p of a.pages) pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, data: p.z ? await this._inflate(p.z) : p.data });
+        try { for (const p of a.pages) pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, data: p.z ? await this._inflate(p.z) : p.data }); }
+        catch (e) { return null; }                                          // (comprimido e sem DecompressionStream: refaz)
         return { k: a.k, v: a.v, frame: a.frame, clips: a.clips, pages };
     },
     // Geração do desenho de um tipo (o atlas foi trocado: os clipes já tocando são refeitos — SpriteActor.update).
     // (atlas descartado — o visual antigo do jogador — = -1: quem ainda o usa, como o piloto da moto, também refaz o clipe)
     genOf(id) { const A = this.atlases[id]; return A ? A.gen || 0 : -1; },
+    // Escala do desenho de um atlas: cada tipo sai na escala da ficha (spec.scale; NpcGenBuild: charScale = scale·k/1,04) num quad do mesmo
+    // tamanho para todos, então o pé plantado anda scale × o do corpo de referência (escala 1 — o protagonista, onde Config.anim.walk/run e
+    // os fatores do jogo foram medidos: strafe, wade, SpriteActor.CLIMB, walk_heavy). Medido (motion.cjs footSpeed, 34 tipos × as passadas,
+    // qualquer arma): footSpeed ÷ o da referência = scale (±0,1%). Os clipes de passada (STRIDE) tocam a 1/scale: sem deslize em nenhum tipo.
+    // Dano (#dN) = o tipo; visual gerado do jogador (hero:…) = a ficha dele (PLAYER_DEFAULT + roupa: sem scale → 1), ou A.scale se quem
+    // registrou o atlas a informou.
+    STRIDE: /^(walk|run|walk_up|climb|scared|sneak|strafe|wade|walk_hold|run_hold|walk_pull|walk_heavy|run_heavy|baton_walk)$/,
+    scaleOf(id) {
+        const A = this.atlases[id];
+        if (A && A.scale > 0) return A.scale;
+        let k = 1;
+        try { const G = this.gen(), s = G.BY_ID[String(id).replace(/#d\d+$/, '')]; if (s) k = G.fullSpec(s).scale || 1; } catch (e) { /* sem o gerador: 1 */ }
+        if (A) A.scale = k;
+        return k;
+    },
 
     // Atlas gerados no aparelho (os de dano) ficam no IndexedDB, comprimidos, sob esta versão.
     HD_VERSION: 8,                 // mude quando o gerador mudar o desenho (os atlas guardados são refeitos) — 2: atlas até 4096 de lado; 3: passada longa; 4: subida (walk_up, climb); 5: corpo da malha 3D; 6: braços soltos, cabeça maior, silhueta feminina, luz; 7: visual 3D sem contorno; 8: 16 direções, mais quadros, páginas
@@ -683,7 +711,7 @@ const NpcArt = {
                     wk.onmessage = (e) => { wk._busy = false; if (e.data.job !== job) return; if (e.data.error) fail(new Error(e.data.error)); else ok(e.data.atlas); };
                     wk.postMessage({ type: 'atlas', job, id, keys, k, dmg: +d, dirs });       // (perfil leve: 8 direções)
                 }), k, G.frameFor(k));
-                this.zip(a).then((z) => this._dbPut(key, z), () => {});
+                if (this.canZip) this.zip(a).then((z) => !z.raw && this._dbPut(key, z), () => {});     // (sem compressão não guarda: 34 tipos × 3 níveis crus = GBs)
             }
             if (this.atlases[id]) {
                 this.addAtlas(sid, a);

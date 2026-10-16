@@ -328,8 +328,9 @@ class Player {
     // ---------------------------------------------------------------- natação: começar/parar de nadar e MERGULHO
     // Nado normal = NADO PEITO na superfície (o corpo do "parado na água" puxando a água: entra e sai do vadear fundo sem tranco).
     // Com Shift = CRAWL: joga o corpo para a frente (swim_in) e, soltando, volta ao peito (swim_out) — transições animadas. Voltou ao
-    // raso nadando crawl: fica de pé (swim_out). Mergulhado, o fôlego (o mesmo da corrida — Bags.stamina) vai acabando em
-    // Config.water.diveTime s; zerou: sobe sozinho, sem fôlego. (Shift mergulhado: a braçada de peito acelera.)
+    // raso nadando crawl: volta ao peito e fica de pé (swim_out → swim_stand → wade_idle). Mergulhado, o fôlego (o mesmo da
+    // corrida — Bags.stamina) vai acabando em Config.water.diveTime s; zerou: sobe sozinho, sem fôlego. (Shift mergulhado: a braçada
+    // de peito acelera.)
     _updateSwim(dt, depth, sprint = false) {
         const was = this._wasSwim;
         this._wasSwim = this.swimming;
@@ -339,7 +340,14 @@ class Player {
             this.stamina = Math.max(0, (this.stamina == null ? max : this.stamina) - max / (Config.water.diveTime * (1 + lvl * 0.03)) * dt);
             if (this.stamina <= 0) { this.winded = true; this.surface(true); }
         }
-        if (!this.swimming) { if (was && this._crawl && depth > 0 && !this.action && !this.rag) this.playAction('swim_out', { lock: 0.9 }); this._crawl = false; return; }
+        if (!this.swimming) {
+            // chegou ao raso nadando crawl: volta ao peito (swim_out) e fica de pé (swim_stand: os pés acham o fundo; anda só um pouco
+            // — lock 0,2, como os outros golpes de uma vez). Sem o clipe (visual antigo, guardado no aparelho): direto ao wade_idle.
+            const stand = () => { if (!this.swimming && this.depth > 0 && !this.rag && !this.action) this.playAction('swim_stand', { lock: 0.2, onDone: () => { this._wlEase = 1; } }); };
+            if (was && this._crawl && depth > 0 && !this.action && !this.rag) this.playAction('swim_out', { lock: 0.9, onDone: stand });
+            this._crawl = false; return;
+        }
+        if (this.action && this.action.name === 'swim_stand' && !this.rag) this.action = null;      // levado ao fundo no meio (andando não dá — ver canWade): nada de novo
         if (was === undefined || this.action || this.rag || this.diving) return;
         // peito ↔ crawl (Shift): a passagem é animada; só troca de novo depois de terminar (sem pisca-pisca segurando/soltando)
         const crawl = sprint && this.speed > 0.6;
@@ -582,6 +590,8 @@ class Player {
         // (nos clipes de começar/parar de nadar e de mergulhar a água já vem desenhada)
         const wetClip = this.action && /^(swim_|dive)/.test(this.action.name);
         this.waterline = depth > 0 && !this.swimming && !wetClip ? 0.25 + 0.75 * Math.min(1, depth / W.wadeDepth) : 0;
+        // acabou o swim_stand: a água desenhada nele está a 1 m do corpo; a do jogo desce até a daqui em 0,4 s (sem degrau na linha)
+        if (this._wlEase > 0) { if (this.waterline > 0) this.waterline += (1 - this.waterline) * this._wlEase; this._wlEase = Math.max(0, this._wlEase - dt / 0.4); }
         this.actor.setWaterline(this.waterline);
         const wf = depth <= 0 || this.swimming ? 1 : 0.85 - 0.4 * (depth / W.wadeDepth);
         // nadando: peito (normal), crawl (Shift: puxa da corrida e cansa como ela), mergulho (Shift: braçada mais forte)
@@ -613,11 +623,14 @@ class Player {
         }
         const nx = prev.x + (this.velocity.x + wx) * dt;
         const nz = prev.z + (this.velocity.z + wz) * dt;
-        if (MapGeo.canWade(nx, nz)) {
+        // ficando de pé no raso (swim_stand): os pés já acharam o fundo — não volta a nadar no meio do clipe (ele não tem volta)
+        const standing = this.action && this.action.name === 'swim_stand' && !this.underBridge;
+        const canWade = (x, z) => MapGeo.canWade(x, z) && !(standing && MapGeo.waterDepth(x, z) > W.wadeDepth);
+        if (canWade(nx, nz)) {
             prev.x = nx; prev.z = nz;
-        } else if (MapGeo.canWade(nx, prev.z)) {
+        } else if (canWade(nx, prev.z)) {
             prev.x = nx; this.velocity.z = 0;
-        } else if (MapGeo.canWade(prev.x, nz)) {
+        } else if (canWade(prev.x, nz)) {
             prev.z = nz; this.velocity.x = 0;
         } else {
             this.velocity.setAll(0);
