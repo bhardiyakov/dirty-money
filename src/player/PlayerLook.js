@@ -29,7 +29,8 @@ const PlayerLook = {
     VERSION: 17,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D; 8: sentar no carro (sitin); 9: começar/parar de nadar e mergulho; 10: sair do carro (sitout) e faca; 11: fardo correndo e parado (run_heavy, idle_heavy); 12: nado peito, vadear fundo, mergulho suave; 13: granada e molotov; 14: braços soltos, cabeça maior, silhueta feminina, luz mais marcada; 15: visual 3D (sem contorno preto, borda suavizada, sombra macia); 16: 16 direções, mais quadros, atlas paginado (páginas comprimidas); 17: levantar da água (swim_stand)
 
     attach(game) {
-        this.game = game; this.shown = null;
+        this.game = game; this.shown = null; this._t0 = performance.now();       // (_calm: o tempo de jogo)
+        if (!this._gpaceT) this._gpaceT = setInterval(() => this._gpace(), 2000);  // (desde já: o ritmo SEM gerar é a referência)
         const a = game.player && game.player.actor;
         if (a) a.onCond = () => this.sync();                                // estado de dano mudou: o visual pintado (ficha.dmg)
         this.sync(true);
@@ -74,7 +75,7 @@ const PlayerLook = {
         if (!this._clean.has(key)) this._clean.set(key, s.dmg ? this.G.shapeKey(this._noDmg(s)) : key);
         this.wantArms();
         if (!force && key === this.shown && this.want && this.want !== key) {   // voltou ao visual que já está na tela (ex.: curou antes de o
-            this.want = null; this._job++;                                     // machucado ficar pronto): cancela a geração e tira a parcial
+            this.want = null; this._job++; this._gpump();                      // machucado ficar pronto): cancela a geração e tira a parcial
             const id = key === this.G.shapeKey(this.G.PLAYER_DEFAULT) && NpcArt.atlases.protagonista ? 'protagonista' : this.ids.get(key);
             if (id) this._use(key, id);
             this._ready(s);
@@ -82,7 +83,10 @@ const PlayerLook = {
         }
         if (!force && (key === this.shown || key === this.want)) return;
         this.want = key;
-        this._job++;                                                         // (cancela a geração em andamento: o visual pedido mudou — ex.: curou)
+        if (this._preFor && this._preFor !== this._clean.get(key)) {          // roupa nova: as machucadas de antemão da antiga não servem
+            this._preJob = (this._preJob || 0) + 1; this._preFor = null; clearTimeout(this._preT);      // mais (sai da fila; machucou: continua)
+        }
+        this._job++; this._gpump();                                          // (cancela a geração em andamento: o visual pedido mudou — ex.: curou)
         if (key === this.G.shapeKey(this.G.PLAYER_DEFAULT) && NpcArt.atlases.protagonista) { this._use(key, 'protagonista'); this._ready(s); return; }
         if (this.ids.has(key)) { this._use(key, this.ids.get(key)); this._ready(s); return; }
         this._load(s, key);
@@ -145,9 +149,9 @@ const PlayerLook = {
         if (old && old !== id) NpcArt.dropAtlas(old);
     },
 
-    // Gera o atlas em Workers paralelos: o 1º faz parado/andando/correndo (o visual troca em poucos segundos); o resto é dividido entre
-    // todos. Os Workers devolvem os quadros já recortados; o empacotamento (rápido) é feito aqui.
-    // Fila de clipes (2 por vez) puxada por vários Workers, na ordem do que mais aparece: parado/andando/correndo (com a arma da
+    // Gera o atlas no orçamento de geração (gen: poucos Workers, com folga): primeiro parado/andando/correndo (o visual troca assim que
+    // eles ficam prontos); depois o resto. Os Workers devolvem os quadros já recortados; o empacotamento (rápido) é feito aqui.
+    // Fila de clipes (2 por vez), na ordem do que mais aparece: parado/andando/correndo (com a arma da
     // mão), depois golpes, carro, tático, nadar, pilotar… e o resto. O visual novo entra assim que o 1º bloco fica pronto e vai sendo
     // completado (a cada ~1,5 s) — o que ainda falta sai do visual anterior por pouco tempo. Pronto: guardado no aparelho.
     _COMMON: /^(punch|punchL|kick|enter|sitin|opendoor|carjack|vault|crouch|sneak|roll|strafe|swim|swim_idle|swim_breast|wade|wade_idle|hurt|draw|aim|shoot|walk_up|climb|ride_moto|ride_bike|surrender|pick)$/,
@@ -165,9 +169,8 @@ const PlayerLook = {
         const first = order.filter((c) => pri(c) === 0), chunks = first.map((c) => [c]);
         const rest = order.filter((c) => pri(c) !== 0);
         for (let i = 0; i < rest.length; i += 2) chunks.push(rest.slice(i, i + 2));
-        const N = Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 2) - 1, chunks.length));
-        const got = [];
-        let next = 0, left = chunks.length, firstLeft = first.length, lastPub = 0, timer = null;
+        const got = [], live = () => job === this._job;
+        let left = chunks.length, firstLeft = first.length, lastPub = 0, pubMs = 0, timer = null;
         const pack = () => {
             const sorted = got.slice().sort((p, q) => idx.get(p.key) - idx.get(q.key));
             return [this._pack(sorted.filter((c) => tac.has(c.key)), k), this._pack(sorted.filter((c) => !tac.has(c.key)), k)];      // companheiro + principal
@@ -175,11 +178,12 @@ const PlayerLook = {
         const publish = () => {
             timer = null;
             if (job !== this._job) return;
-            lastPub = performance.now();
+            lastPub = this._gpubT = performance.now();                         // (_gpace: janela com publish não vale de referência)
             const [t, a] = pack();
             if (left > 0) {                                                    // parcial: o que falta vem do visual anterior
                 if (Object.keys(t.clips).length === tac.size) this._registerTac(key, t);       // (companheiro só completo: o que falta dele não tem para onde cair)
                 this._register(key, a, true);
+                pubMs = performance.now() - lastPub;                           // (empacotar + subir as páginas: o intervalo cresce com o custo)
                 return;
             }
             this._registerTac(key, t);
@@ -195,50 +199,39 @@ const PlayerLook = {
             for (const c of m.clips) if (first.includes(c.key)) firstLeft--;
             if (!left) { if (timer) clearTimeout(timer); publish(); return; }
             if (firstLeft > 0) return;
-            const wait = 1500 - (performance.now() - lastPub);
+            const wait = Math.max(1500, pubMs * 25) - (performance.now() - lastPub);      // (no máximo ~4% da thread principal)
             if (wait <= 0 || !lastPub) publish(); else if (!timer) timer = setTimeout(publish, wait);
         };
-        const run = (i) => {
-            const wk = this._worker('atlas' + i, true);
-            const feed = () => {
-                if (job !== this._job || next >= chunks.length) { wk._busy = false; return; }
-                wk._busy = true;
-                wk.postMessage({ type: 'clips', job, spec: s, keys: chunks[next++], k, dirs: this.dirs() });
-            };
-            wk.onmessage = (e) => {
-                const m = e.data;
-                if (m.job !== job) return;
-                if (m.error) { wk._busy = false; console.warn('[VISUAL] falhou:', m.error); if (job === this._job) this.want = null; return; }
+        // no orçamento de geração (gen): os 1ºs clipes na frente (PRI.first), o resto atrás deles; um visual novo cancela este (live)
+        for (const keys of chunks) {
+            const pri = first.includes(keys[0]) ? this.PRI.first : this.PRI.look;
+            this.gen(pri, { type: 'clips', spec: s, keys, k, dirs: this.dirs() }, live).then((m) => {
+                if (!m || !live()) return;
+                if (m.error) { console.warn('[VISUAL] falhou:', m.error); this.want = null; this._job++; this._gpump(); return; }
                 done(m);
-                feed();
-            };
-            feed();
-        };
-        for (let i = 0; i < N; i++) run(i);
+            });
+        }
     },
-    // Gera e guarda no aparelho (sem trocar o visual) as versões MACHUCADAS (dmg 2, 1, 3) do visual `s` — num Worker só, devagar: quando
-    // ele se machucar, o desenho já está pronto (senão é gerado na hora, como uma roupa nova). Recomeça se o visual mudar.
+    // Gera e guarda no aparelho (sem trocar o visual) as versões MACHUCADAS (dmg 2, 1, 3) do visual `s`, devagar e só com o jogo folgado
+    // (_calm: depois de Config.art.genPreDelay s de jogo, ritmo bom, nenhum visual sendo gerado): um nível por vez, num pedido só (o
+    // Worker desenha e empacota), na prioridade mais baixa e solo — qualquer outro desenho para este, que continua depois de onde parou.
+    // Quando ele se machucar, o desenho já está pronto (senão é gerado na hora, como uma roupa nova). Recomeça se o visual mudar.
     async _prefetch(s) {
         const G = this.G, k = this.k(), forKey = G.shapeKey(s);
         if (this._preFor === forKey) return;                                  // (já preparando esta roupa)
-        const job = this._preJob = (this._preJob || 0) + 1;
+        const job = this._preJob = (this._preJob || 0) + 1, live = () => job === this._preJob;
         this._preFor = forKey;
         const end = () => { if (job === this._preJob) this._preFor = null; };
         for (const lv of [2, 1, 3]) {
             const sp = Object.assign({}, s, { dmg: lv }), key = G.shapeKey(sp);
-            if (job !== this._preJob) return end();
+            if (!live()) return end();
             if (await this._idbHas(this._ck(key) + '|t')) continue;
-            const all = this.clipsFor(sp).concat(G.PLAYER_TAC), tac = new Set(G.PLAYER_TAC), got = [];
-            const wk = this._worker('pre');
-            for (let i = 0; i < all.length; i += 3) {
-                if (job !== this._preJob) return end();
-                const m = await new Promise((ok) => { wk.onmessage = (e) => { wk._busy = false; ok(e.data); }; wk._busy = true; wk.postMessage({ type: 'clips', job: -job, spec: sp, keys: all.slice(i, i + 3), k, dirs: this.dirs() }); });
-                if (m.error) { console.warn('[VISUAL] machucado falhou:', m.error); return end(); }
-                got.push(...m.clips);
-            }
-            const idx = new Map(all.map((c, i) => [c, i])), sorted = got.sort((p, q) => idx.get(p.key) - idx.get(q.key));
-            await this._idbPut(this._ck(key) + '|t', this._pack(sorted.filter((c) => tac.has(c.key)), k));
-            await this._idbPut(this._ck(key), this._pack(sorted.filter((c) => !tac.has(c.key)), k));
+            if (!(await this._calmWait(live))) return end();
+            const m = await this.gen(this.PRI.pre, { type: 'look', spec: sp, keys: this.clipsFor(sp).concat(G.PLAYER_TAC), tac: G.PLAYER_TAC, k, dirs: this.dirs() }, live, true);
+            if (!m || !live()) return end();
+            if (m.error) { console.warn('[VISUAL] machucado falhou:', m.error); return end(); }
+            await this._idbPut(this._ck(key) + '|t', this._paged(m.atlases[0], k));
+            await this._idbPut(this._ck(key), this._paged(m.atlases[1], k));
         }
         end();
     },
@@ -277,34 +270,26 @@ const PlayerLook = {
         const order = all.slice().sort((a, b) => (b.endsWith(':' + w) - a.endsWith(':' + w)) || idx.get(a) - idx.get(b));
         const chunks = [];
         for (let i = 0; i < order.length; i += 3) chunks.push(order.slice(i, i + 3));
-        const N = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1)), got = [];
-        let next = 0, left = chunks.length;
-        for (let i = 0; i < N; i++) {
-            const wk = this._worker('arms' + i);
-            const feed = () => {
-                if (job !== this._armsJob || next >= chunks.length) { wk._busy = false; return; }
-                wk._busy = true;
-                wk.postMessage({ type: 'clips', job: 'w' + job, spec: s, keys: chunks[next++], k, dirs: this.dirs() });
-            };
-            wk.onmessage = (e) => {
-                const m = e.data;
-                if (m.job !== 'w' + job) return;
-                if (m.error) { wk._busy = false; console.warn('[VISUAL] armas falharam:', m.error); if (job === this._armsJob) this._armsFor = null; return; }
+        const got = [], live = () => job === this._armsJob;
+        let left = chunks.length;
+        for (const keys of chunks) {
+            this.gen(this.PRI.arms, { type: 'clips', spec: s, keys, k, dirs: this.dirs() }, live).then((m) => {
+                if (!m || !live()) return;
+                if (m.error) { console.warn('[VISUAL] armas falharam:', m.error); this._armsFor = null; this._armsJob++; this._gpump(); return; }
                 got.push(...m.clips);
                 if (--left === 0) {
                     const a = this._pack(got.sort((p, q) => idx.get(p.key) - idx.get(q.key)), k);
                     this._idbPut(ck, a);
                     fin(a);
                 }
-                feed();
-            };
-            feed();
+            });
         }
     },
     // Empacota os quadros recortados (vindos dos Workers) no atlas PAGINADO (G.packPages; o empacotador antigo, uma página só, se o
     // gerador ainda não tiver o novo).
-    _pack(clips, k) {
-        const G = this.G, a = G.packPages ? G.packPages(clips) : G.packAtlas(clips);
+    _pack(clips, k) { return this._paged(this.G.packPages ? this.G.packPages(clips) : this.G.packAtlas(clips), k); },
+    _paged(a, k) {
+        const G = this.G;
         return NpcArt.paged(a.pages ? { k, v: 2, frame: G.frameFor(k), clips: a.clips, pages: a.pages } : { w: a.w, h: a.h, data: a.data, clips: a.clips, k, v: 2, frame: G.frameFor(k) }, k, G.frameFor(k));
     },
     // Resolução do visual: a dos atlas prontos, ou o dobro com a alta definição ligada (NpcArt.hdOn).
@@ -323,6 +308,137 @@ const PlayerLook = {
         return Math.min(typeof NpcArt !== 'undefined' ? NpcArt.dirs : 16, (c && c.dirs) || 8);
     },
 
+    // ------------------------------------------------------------------ ORÇAMENTO DE GERAÇÃO (todos os atlas desenhados no jogo)
+    // Os pedidos de desenho — o visual do jogador (os 1ºs clipes primeiro), as armas novas, o machucado dos NPCs (NpcArt._dmgPump) e
+    // as versões machucadas preparadas de antemão — entram numa fila só, por prioridade (PRI), e rodam em no máximo genMax() Workers
+    // ao mesmo tempo (os núcleos menos 2, de 1 a 3; perfil leve, até 2). Cada Worker desenha com FOLGA (duty: a fração de um
+    // núcleo — _gpace a ajusta pelo ritmo do jogo) e para com a aba oculta: antes, até 11 Workers a 100% tomavam todos os núcleos por
+    // minutos e o jogo engasgava. Regras da fila:
+    //   • os 1ºs clipes de um visual novo (PRI.first, o jogador esperando) interrompem o que estiver rodando se não houver Worker
+    //     livre — o interrompido volta à fila e continua de onde parou (os clipes prontos ficam no Worker);
+    //   • quem espera há mais de 60 s passa na frente do resto (o machucado de um NPC não fica minutos atrás do resto do visual);
+    //   • solo (as versões machucadas de antemão) só roda sem nada mais urgente na fila ou rodando (senão para e espera).
+    PRI: { first: 0, look: 1, arms: 2, npc: 3, pre: 4 },
+    _gq: [], _gs: [], _gn: 0,
+    genMax() {
+        const n = Config.art.genWorkers;
+        if (n) return n;
+        const lite = typeof NpcArt !== 'undefined' && NpcArt.lite;               // (núcleos − 2: o jogo, a GPU/compositor; o duty segura o resto)
+        return Math.max(1, Math.min(lite ? 2 : 3, (navigator.hardwareConcurrency || 2) - 2));
+    },
+    genDuty(pri) {
+        const A = Config.art;
+        if (pri === this.PRI.first) return A.genDutyFirst || 1;
+        return this._duty || A.genDuty || 0.5;
+    },
+    // Pede um desenho: msg = { type: 'clips' | 'look' | 'atlas', … } (ver _worker); live() = ainda é preciso (senão sai da fila ou é
+    // interrompido). → a resposta do Worker ({ clips } | { atlases } | { atlas } | { error }) ou null (desistiu).
+    gen(pri, msg, live = () => true, solo = false) {
+        return new Promise((done) => {
+            this._gq.push({ id: ++this._gn, at: performance.now(), pri, msg, live, solo, done, sig: JSON.stringify([msg.type, msg.spec, msg.id, msg.dmg, msg.k, msg.dirs]) });
+            this._gpump();
+        });
+    },
+    _gpump() {
+        const q = this._gq, S = this._gs, now = performance.now();
+        const stop = (x, again) => { x.t.stop = true; x.t.again = again; x.w.postMessage({ type: 'cancel', job: x.t.id }); };
+        for (let i = q.length - 1; i >= 0; i--) if (!q[i].live()) q.splice(i, 1)[0].done(null);
+        q.sort((a, b) => a.pri - b.pri || a.id - b.id);
+        const top = Math.min(q.length ? q[0].pri : 9, ...S.map((x) => (x.t && !x.t.solo ? x.t.pri : 9)));
+        for (const x of S) if (x.t && !x.t.stop && (!x.t.live() || (x.t.solo && top < x.t.pri))) stop(x, x.t.live());
+        while (q.length) {
+            let i = 0;
+            if (q[0].pri > this.PRI.first) { const j = q.findIndex((t) => !t.solo && t.pri > q[0].pri && now - t.at > 60000); if (j > 0) i = j; }    // (esperou demais)
+            const t = q[i];
+            if (t.solo && S.some((x) => x.t && x.t.pri < t.pri)) break;
+            let x = S.find((y) => !y.t && y.sig === t.sig) || S.find((y) => !y.t);      // (o mesmo pedido/ficha: o Worker já tem o boneco assado)
+            if (!x && S.length < this.genMax()) x = this._gslot();
+            if (!x) {                                                                // sem Worker livre: só o jogador esperando interrompe alguém
+                if (t.pri !== this.PRI.first || S.some((y) => y.t.stop)) break;      // (um já está parando)
+                let v = null;
+                for (const y of S) if (y.t.pri > t.pri && (!v || y.t.pri > v.t.pri)) v = y;
+                if (v) stop(v, true);
+                break;
+            }
+            q.splice(i, 1);
+            if (this._probe && t.pri === this.PRI.first) this._gprobeEnd();      // (o jogador esperando: a sonda acaba já)
+            x.t = t; x.sig = t.sig; this._gbusy = true;
+            x.w.postMessage(Object.assign({ duty: this.genDuty(t.pri) }, t.msg, { job: t.id }));
+        }
+    },
+    _gslot() {
+        const x = { w: this._worker('gen' + this._gs.length), t: null, sig: '' };
+        x.w._busy = false;
+        x.w.onmessage = (e) => this._gdone(x, e.data);
+        x.w.onerror = (e) => { e.preventDefault && e.preventDefault(); this._gdone(x, { job: x.t && x.t.id, error: String(e.message || e) }); };
+        if (!this._gvis && typeof document !== 'undefined') {                    // aba oculta: os Workers param (voltam quando ela aparece)
+            this._gvis = true;
+            document.addEventListener('visibilitychange', () => { for (const y of this._gs) y.w.postMessage({ type: 'pace', hidden: document.hidden }); });
+        }
+        if (typeof document !== 'undefined' && document.hidden) x.w.postMessage({ type: 'pace', hidden: true });
+        this._gs.push(x);
+        return x;
+    },
+    _gdone(x, m) {
+        const t = x.t;
+        if (!t || m.job !== t.id) return;
+        x.t = null;
+        if (m.cancelled && t.again && t.live()) { t.stop = t.again = false; this._gq.push(t); }      // (interrompido: volta à fila)
+        else t.done(m.cancelled ? null : m);
+        this._gpump();
+    },
+    // RITMO do jogo (a cada 2 s): quadros por segundo de fato (Perf._pk conta os quadros; um engasgo entre quadros também conta) e o
+    // p95 do trabalho por quadro (Perf.p95), comparados com os do PRÓPRIO aparelho sem gerar nada (_ref) — não com o teto: um aparelho
+    // que não chega ao teto nem parado (GPU fraca) deixava o duty preso no mínimo e o visual completo levava mais de 10 min.
+    //   • _ref: média das janelas sem nenhum Worker desenhando; gerando direto, a cada ~45 s os Workers param duas janelas (sonda:
+    //     uma para assentar, outra mede) para medi-la de novo (o jogo muda: um lugar mais pesado) — nunca com os 1ºs clipes de um
+    //     visual na fila (o jogador esperando);
+    //   • gerando: FPS < 78% da referência (88% sem o visual do jogador na vez) ou p95 bem acima dela → duty × 0,7 (até
+    //     genDutyMin); FPS ≥ 86% (94%) e p95 perto, ou o teto seguro → duty +0,1 (até genDutyMax); janela com publish não é referência;
+    //   • _calmOk (as versões machucadas de antemão): FPS perto do teto de fato e sem engasgos (aparelho folgado de verdade).
+    _gpace() {
+        if (typeof Perf === 'undefined' || (typeof document !== 'undefined' && document.hidden)) { this._pkT = 0; this._probe = 0; return; }
+        const A = Config.art, now = performance.now(), n = Perf._pk || 0, cap = Config.perf.fpsCap || 30, p95 = Perf.p95 || 0;
+        const busy = this._gs.some((x) => x.t), first = this._gs.some((x) => x.t && x.t.pri === this.PRI.first) || this._gq.some((t) => t.pri === this.PRI.first);
+        const pace = (m) => { for (const x of this._gs) if ('hidden' in m || (x.t && x.t.pri !== this.PRI.first)) x.w.postMessage(Object.assign({ type: 'pace' }, m)); };
+        if (this._pkT && now - this._pkT < 6000) {
+            const fps = ((n - this._pkN) * 1000) / (now - this._pkT), r = this._ref;
+            this._calmOk = fps >= cap * 0.9 && p95 < Perf.budgetMs;
+            if (this._probe === 2 || (!this._gbusy && !busy)) {                 // janela sem gerar: a referência
+                if (!(this._gpubT > this._pkT)) this._ref = r ? { fps: r.fps * 0.7 + fps * 0.3, p95: r.p95 * 0.7 + p95 * 0.3 } : { fps, p95 };
+                this._refT = now;
+            } else if (r && !this._probe) {
+                // o visual do jogador (ele está esperando) aceita perder até ~20% do FPS; o resto (machucados), ~10%
+                const look = this._gs.some((x) => x.t && x.t.pri <= this.PRI.look), lo = look ? 0.78 : 0.88, hi = look ? 0.86 : 0.94;
+                const d0 = this._duty || A.genDuty || 0.5, top = fps >= cap * 0.95 && p95 < Perf.budgetMs;
+                const slow = !top && (fps < r.fps * lo || p95 > r.p95 * 1.5 + 3), ok = top || (fps >= r.fps * hi && p95 <= r.p95 * 1.25 + 2);
+                const d = slow ? Math.max(A.genDutyMin || 0.25, d0 * 0.7) : ok ? Math.min(A.genDutyMax || 1, d0 + 0.1) : d0;
+                if (Math.abs(d - d0) > 0.01) { this._duty = d; pace({ duty: d }); }
+            }
+        }
+        if (this._probe === 2) this._gprobeEnd();
+        else if (this._probe) this._probe = 2;                                   // (1ª janela da sonda: assentar; a 2ª mede)
+        else if (busy && !first && (!this._ref || now - (this._refT || 0) > 45000)) { this._probe = 1; pace({ hidden: true }); }
+        this._pkT = now; this._pkN = n; this._gbusy = busy;
+    },
+    _gprobeEnd() { this._probe = 0; for (const x of this._gs) x.w.postMessage({ type: 'pace', hidden: false }); },    // (fim da sonda)
+    // Jogo FOLGADO para gerar de antemão: Config.art.genPreDelay s de jogo, aba visível, nenhum visual/armas sendo gerado e o ritmo bom
+    // (_gpace: FPS perto do teto, sem engasgos).
+    _calm() {
+        if ((typeof document !== 'undefined' && document.hidden) || this.want || this._armsFor) return false;
+        if (performance.now() - (this._t0 || 0) < (Config.art.genPreDelay || 60) * 1000) return false;
+        return !!this._calmOk;
+    },
+    // Espera o jogo ficar folgado (duas checagens seguidas, a cada 2,5 s). false = desistiu (live() caiu).
+    async _calmWait(live) {
+        let ok = 0;
+        while (live()) {
+            if (this._calm()) { if (++ok >= 2) return true; } else ok = 0;
+            await new Promise((r) => setTimeout(r, 2500));
+        }
+        return false;
+    },
+
     // Worker montado a partir do TEXTO das funções do gerador (funciona até em file://). restart = interrompe o que estiver fazendo.
     _workers: {},
     _worker(kind, restart = false) {
@@ -332,32 +448,83 @@ const PlayerLook = {
             const main = function () {
                 const G = {};
                 NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G);
-                self.onmessage = (e) => {
-                    const m = e.data;
+                // FOLGA (PlayerLook.gen): depois de cada quadro desenhado o Worker descansa (1 − duty) ÷ duty × o tempo gasto — duty 0,5 ≈ meio
+                // núcleo — e, com a aba oculta, para. Um pedido por vez (fila); 'cancel' interrompe entre um quadro e outro e guarda os clipes
+                // já prontos (o mesmo pedido, mandado de novo, continua de onde parou).
+                let duty = 1, hidden = false, t0 = 0, chain = Promise.resolve();
+                const drop = new Set(), parts = new Map(), STOP = {};
+                let wake = null;                                                            // ('cancel'/aba: acorda a folga já — antes, até 3 s)
+                const nap = (ms) => new Promise((ok) => { const t = setTimeout(() => { wake = null; ok(); }, ms); wake = () => { clearTimeout(t); wake = null; ok(); }; });
+                const rest = async (m) => {
+                    const w = performance.now() - t0;
+                    if (w < (duty < 1 ? 4 : 100)) return;                                   // (duty 1: só abre a porta para 'cancel'/'pace')
+                    await nap(duty < 1 ? Math.min(3000, (w * (1 - duty)) / duty) : 0);
+                    while (hidden && !drop.has(m.job)) await nap(250);
+                    if (drop.has(m.job)) throw STOP;
+                    t0 = performance.now();
+                };
+                // (perfil leve: só as direções pares — se o gerador não souber renderizar menos, as ímpares saem aqui)
+                const fit = (m) => (c) => { if (m.dirs && c.dirs > m.dirs) { const s = c.dirs / m.dirs; c.frames = c.frames.filter((_, d) => d % s === 0); c.dirs = m.dirs; } return c; };
+                // os clipes `keys` de um pedido, quadro a quadro com folga; interrompido, os prontos ficam em `parts` (pela assinatura do pedido)
+                const clipsOf = async (m, R, keys, typeId, opts) => {
+                    const sig = JSON.stringify([m.type, m.spec, m.id, m.dmg, m.k, m.dirs]), have = parts.get(sig) || new Map(), out = [];
+                    parts.delete(sig);
+                    try {
+                        for (const key of keys) {
+                            let c = have.get(key);
+                            if (!c) {
+                                const it = G.clipSteps(R, key, typeId, opts);
+                                for (let r = it.next(); ; r = it.next()) { if (r.done) { c = r.value; break; } await rest(m); }
+                                have.set(key, c);
+                            }
+                            out.push(c);
+                        }
+                    } catch (err) {
+                        if (err === STOP) { parts.set(sig, have); while (parts.size > 2) parts.delete(parts.keys().next().value); }
+                        throw err;
+                    }
+                    return out.map(fit(m));
+                };
+                const bufs = (pages) => [...new Set(pages.map((p) => p.data.buffer))];
+                const run = async (m) => {
+                    drop.clear();
+                    if (m.duty) duty = m.duty;
+                    t0 = performance.now();
                     try {
                         if (m.type === 'clips') {
                             const R = G.rendererFor(m.spec, { k: m.k || G.OUT_K });
-                            // (perfil leve: só as direções pares — se o gerador não souber renderizar menos, as ímpares saem aqui)
-                            const fit = (c) => { if (m.dirs && c.dirs > m.dirs) { const s = c.dirs / m.dirs; c.frames = c.frames.filter((_, d) => d % s === 0); c.dirs = m.dirs; } return c; };
-                            const send = (keys, first, more) => {
-                                const clips = keys.map((key) => fit(G.renderClip(R, key, null, { hand: m.spec.hand, dirs: m.dirs || undefined }))), buf = [];
-                                for (const c of clips) for (const row of c.frames) for (const f of row) if (f.data.byteLength) buf.push(f.data.buffer);
-                                self.postMessage({ job: m.job, first, more, clips }, buf);
-                            };
-                            send(m.keys, !!m.then, !!m.then);
-                            if (m.then) send(m.then, false, false);
+                            await rest(m);
+                            const clips = await clipsOf(m, R, m.keys, null, { hand: m.spec.hand, dirs: m.dirs || undefined }), buf = [];
+                            for (const c of clips) for (const row of c.frames) for (const f of row) if (f.data.byteLength) buf.push(f.data.buffer);
+                            self.postMessage({ job: m.job, clips }, buf);
+                        } else if (m.type === 'look') {                    // um visual inteiro (as versões machucadas de antemão): desenha e empacota aqui
+                            const R = G.rendererFor(m.spec, { k: m.k || G.OUT_K });
+                            await rest(m);
+                            const clips = await clipsOf(m, R, m.keys, null, { hand: m.spec.hand, dirs: m.dirs || undefined }), tac = new Set(m.tac || []);
+                            const atlases = [clips.filter((c) => tac.has(c.key)), clips.filter((c) => !tac.has(c.key))].map((cs) => G.packPages(cs));      // companheiro + principal
+                            self.postMessage({ job: m.job, atlases }, bufs(atlases.flatMap((a) => a.pages)));
                         } else if (m.type === 'preview') {
                             const k = m.k || G.OUT_K, R = G.rendererFor(m.spec, { k }), pose = G.CLIPS.idle.fn(m.spec.weaponLook || 'none')[0], ramps = G.rampsFor(m.spec), frames = [];
                             const D = m.dirs || 8;
                             for (let d = 0; d < D; d++) frames.push(G.colorize(R.render(pose, (-360 / D) * d, false), ramps));      // (sem a sombra no chão: o pedestal já é o chão)
                             self.postMessage({ job: m.job, frames, W: G.frameFor(k), H: G.frameFor(k), k }, frames.map((f) => f.buffer));
                         } else if (m.type === 'atlas') {                   // atlas inteiro de um TIPO (machucado: dmg — NpcArt.dmgSheet), paginado
-                            const a = G.buildAtlas(m.dmg ? Object.assign({}, G.BY_ID[m.id], { dmg: m.dmg }) : G.BY_ID[m.id], m.keys || G.TYPES[m.id].clips, { typeId: m.id, k: m.k, dirs: m.dirs || undefined });
-                            const pages = a.pages ? a.pages.map((p) => ({ w: p.w, h: p.h, g: p.g, par: p.par, data: p.data })) : null;
-                            const out = pages ? { k: a.k, v: a.v, frame: a.frame, clips: a.clips, pages } : { w: a.w, h: a.h, data: a.data, clips: a.clips, k: a.k, v: a.v, frame: a.frame };
-                            self.postMessage({ job: m.job, atlas: out }, [...new Set(pages ? pages.map((p) => p.data.buffer) : [a.data.buffer])]);
+                            const spec = m.dmg ? Object.assign({}, G.BY_ID[m.id], { dmg: m.dmg }) : G.BY_ID[m.id], R = G.rendererFor(spec, { k: m.k || G.OUT_K });
+                            await rest(m);
+                            const a = G.atlasOf(await clipsOf(m, R, m.keys || G.TYPES[m.id].clips, m.id, m.dirs ? { hand: null, dirs: m.dirs } : { hand: null }), m.k || G.OUT_K);
+                            const pages = a.pages.map((p) => ({ w: p.w, h: p.h, g: p.g, par: p.par, data: p.data }));
+                            self.postMessage({ job: m.job, atlas: { k: a.k, v: a.v, frame: a.frame, clips: a.clips, pages } }, bufs(pages));
                         }
-                    } catch (err) { self.postMessage({ job: m.job, error: String(err && err.stack || err) }); }
+                    } catch (err) {
+                        if (err === STOP) self.postMessage({ job: m.job, cancelled: true });
+                        else self.postMessage({ job: m.job, error: String(err && err.stack || err) });
+                    }
+                };
+                self.onmessage = (e) => {
+                    const m = e.data;
+                    if (m.type === 'pace') { if ('hidden' in m) { hidden = !!m.hidden; if (wake) wake(); } if (m.duty) duty = m.duty; return; }
+                    if (m.type === 'cancel') { drop.add(m.job); if (wake) wake(); return; }
+                    chain = chain.then(() => run(m));
                 };
             };
             // (a malha 3D dos personagens vai junto, como texto: o Worker não enxerga as variáveis da página)

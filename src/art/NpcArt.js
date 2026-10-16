@@ -14,7 +14,8 @@
 // uma com um GRUPO de clipes (hot = parado/andar/correr/mirar…, act, fall, water, car, gym) e uma PARIDADE de direção (0 = as pares — e
 // todas as de um clipe de até 8 direções —, 1 = as ímpares): o quadro e o próximo (mistura) estão sempre na mesma textura.
 //   • Na carga da página só o protagonista é decodificado (pares primeiro); o resto vem quando um ator precisa: <script> injetado (vale
-//     em http(s), Tauri e file://) → Worker decodifica (PNG.decodeRG) → textura + material da página. Fila com prioridade: o que um
+//     em http(s), Tauri e file://) → Worker decodifica (PNG.decodeRG) → textura enviada à GPU em faixas, com orçamento por quadro
+//     (Config.art.uploadMB; na carga e no menu, sem orçamento) → material da página. Fila com prioridade: o que um
 //     ator NA TELA precisa agora > hot par > hot ímpar > outros grupos par > ímpar; até 2 decodificações ao mesmo tempo.
 //   • Página que ainda não chegou: o ator segue mostrando o último quadro desenhado (ou a direção vizinha, se a página dela já está
 //     pronta); ator novo sem nada desenhado fica escondido até a página chegar (SpriteActor._npcDraw).
@@ -46,7 +47,7 @@ const NpcArt = {
     BASE: './assets/npcs/',
     HERO: ['protagonista', 'protagonista_tatico', 'protagonista_armas'],
     now: 0,                        // relógio do jogo (s; NpcArt.tick): última vez que cada página foi desenhada (LRU)
-    stats: { decoded: 0, decodeMs: 0, uploads: 0, evicted: 0, dropped: 0, failed: 0 },
+    stats: { decoded: 0, decodeMs: 0, uploads: 0, upMB: 0, upMs: 0, upMax: 0, evicted: 0, dropped: 0, failed: 0 },      // (up*: envio em faixas — _upStep)
 
     // (?npc=0 na URL: volta aos bonecos antigos — comparar/depurar)
     available() { return typeof NPC_ATLAS !== 'undefined' && Object.keys(NPC_ATLAS).length > 0 && typeof NpcGenCore === 'function' && !/[?&]npc=0\b/.test(location.search); },
@@ -71,6 +72,7 @@ const NpcArt = {
         for (const par of [0, 1]) for (const A of hero) for (const P of A.pages) if (P.par === par) this._want(P);
         const M = this.atlases.protagonista, hot = M ? M.pages.filter((P) => P.g === 'hot' && this._dirOk(P)) : [];
         this.ready = Promise.all(hot.map((P) => this._wait(P))).then(() => {
+            this._upNow();                                                  // (ainda na tela de carregamento: o protagonista já sobe inteiro para a GPU)
             let n = 0, px = 0; for (const A of Object.values(this.atlases)) for (const P of A.pages) { n++; px += P.w * P.h; }
             console.log(`[NPCS] ${Object.keys(this.atlases).length} atlas, ${n} páginas (${Math.round(px * 2 / 1048576)} MB se todas carregassem); protagonista pronto em ${Math.round(performance.now() - t0)} ms`);
         });
@@ -96,7 +98,7 @@ const NpcArt = {
     _q: [], _fetched: [], _seq: 0, _loading: 0, _decoding: 0, _res: 0, _live: new Set(), _waiters: new Set(),
     _want(P, pri = this._pri(P)) {
         if (P.tex) return true;
-        if (P.px) { if (this._scene) { this._upload(P); return true; } return false; }
+        if (P.px) { if (this._scene) this._upload(P, pri); return !!P.tex; }       // (sobe em faixas: pronta numa das próximas vezes — _upStep)
         if (P.dead || !this._dirOk(P)) return false;
         if (P.st === 'idle' || (P.st === 'failed' && performance.now() >= P.retry)) { P.st = 'queued'; P.pri = pri; P.seq = ++this._seq; this._q.push(P); this._pump(); }
         else if (pri < P.pri && (P.st === 'queued' || P.st === 'fetched' || P.st === 'loading')) P.pri = pri;
@@ -143,7 +145,7 @@ const NpcArt = {
             const img = await PNG.decodeRG(src);
             if (img.w !== P.w || img.h !== P.h) throw new Error(`página ${P.i}: ${img.w}×${img.h}, esperado ${P.w}×${P.h}`);
             this.stats.decoded++; this.stats.decodeMs += performance.now() - t0;
-            if (!P.dead) { P.px = img.data; P.st = 'ready'; P.fails = 0; if (this._scene) this._upload(P); }
+            if (!P.dead) { P.px = img.data; P.st = 'ready'; P.fails = 0; if (this._scene) this._upload(P, P.pri); }
         } catch (e) { this._fail(P, e); }
         this._decoding--;
         this._wake(P);
@@ -159,15 +161,116 @@ const NpcArt = {
     _wait(P) { return P.px || P.tex || P.st === 'failed' ? Promise.resolve() : new Promise((ok) => (P.waiters || (P.waiters = [])).push(ok)); },
     _wake(P) { if (P.waiters) { const w = P.waiters; P.waiters = null; for (const f of w) f(); } },
 
-    // Página decodificada → textura (RG8 / LUMINANCE_ALPHA) + o material dela. Quem esperava por uma página tenta desenhar de novo.
-    _upload(P) {
-        const sc = this._scene;
-        P.tex = new BABYLON.RawTexture(P.px, P.w, P.h, this._gl2 ? BABYLON.Constants.TEXTUREFORMAT_RG : BABYLON.Constants.TEXTUREFORMAT_LUMINANCE_ALPHA, sc, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE, BABYLON.Constants.TEXTURETYPE_UNSIGNED_BYTE);
-        P.tex.wrapU = P.tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-        P.px = null; P.st = 'ready'; P.used = this.now;
-        this._res += P.w * P.h * 2; this._live.add(P); this.stats.uploads++;
+    // ENVIO À GPU EM FAIXAS. Página decodificada (ou de um atlas gerado: addAtlas) → textura RG8 (WebGL2) / LUMINANCE_ALPHA (WebGL1)
+    // criada VAZIA e preenchida em faixas horizontais (texSubImage2D) com um orçamento por quadro (Config.art.uploadMB e no máximo UP_MS
+    // de envio): a página inteira (até 4096×1720×2 B = 14 MB) num texImage2D só travava o quadro por centenas de ms — até segundos —
+    // quando um tipo novo aparecia. Só depois da última faixa ela fica PRONTA (P.tex: o SpriteActor passa a usá-la; material; quem
+    // esperava tenta desenhar de novo). A fila vai pela prioridade de _want (o que um ator NA TELA precisa agora primeiro) e a faixa
+    // seguinte pode ser de outra página (a que chegou mais urgente passa na frente). Tela de carregamento / menu (nenhum quadro de jogo a
+    // proteger): sem orçamento (UP_FREE por vez); sem quadro nenhum (carregando), um temporizador toca a fila.
+    UP_MS: 4, UP_FREE: 64 * 1048576, UP_STRIP: 4 * 1048576,          // (faixa de no máximo 4 MB, mesmo sem orçamento: o menu segue respondendo)
+    _upQ: [], _upLeft: 0, _upMsLeft: 0, _upBusy: false, _upGame: false, _upFrameT: -1e9, _upTimer: 0, _zombies: [],
+    upBudget() { return ((typeof Config !== 'undefined' && Config.art && Config.art.uploadMB) || 3) * 1048576; },
+    _upload(P, pri = this._pri(P)) {
+        if (P.tex || !P.px || P.dead || !this._scene) return;
+        if (pri >= 0 && this._pins().includes(P.A.id)) pri -= 10;           // (o jogador na frente de todos — e, entre as dele, a da direção na tela primeiro)
+        if (P.up) { if (pri < P.pri) P.pri = pri; }
+        else { P.up = { tex: null, y: 0 }; P.st = 'uploading'; P.pri = pri; P.seq = ++this._seq; this._upQ.push(P); }
+        this._upStep();                                                     // (o que sobrou do orçamento deste quadro)
+        if (this._upQ.length) this._upKick();
+    },
+    // Envia faixas enquanto houver orçamento (_upLeft bytes, _upMsLeft ms — repostos a cada quadro: _upFrame). O estado do GL que mexe
+    // passa pelo motor (textura ligada, FLIP_Y) ou volta como estava (UNPACK_ALIGNMENT).
+    _upStep() {
+        if (this._upBusy || !this._upQ.length || this._upLeft <= 0 || this._upMsLeft <= 0 || !this._scene) return;
+        const eng = this._scene.getEngine(), gl = eng._gl, L = this._upQ, done = [], t0 = performance.now();
+        const F = this._gl2 ? BABYLON.Constants.TEXTUREFORMAT_RG : BABYLON.Constants.TEXTUREFORMAT_LUMINANCE_ALPHA, UB = BABYLON.Constants.TEXTURETYPE_UNSIGNED_BYTE;
+        const fmt = eng._getInternalFormat(F), type = eng._getWebGLTextureType(UB);
+        this._upBusy = true;
+        let al = 0;
+        try {
+            al = gl.getParameter(gl.UNPACK_ALIGNMENT);
+            while (L.length && this._upLeft > 0 && performance.now() - t0 < this._upMsLeft) {
+                let k = 0;
+                for (let i = 1; i < L.length; i++) if (L[i].pri < L[k].pri || (L[i].pri === L[k].pri && L[i].seq < L[k].seq)) k = i;
+                const P = L[k], U = P.up, row = P.w * 2;
+                if (!U.tex) {                                               // (a textura nasce vazia, no formato e amostragem de sempre — e já conta na memória)
+                    U.tex = new BABYLON.RawTexture(null, P.w, P.h, F, this._scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE, UB);
+                    U.tex.wrapU = U.tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+                    this._res += P.w * P.h * 2;
+                }
+                const n = Math.min(P.h - U.y, Math.max(16, Math.floor(Math.min(this._upLeft, this.UP_STRIP) / row)));
+                eng._bindTextureDirectly(gl.TEXTURE_2D, U.tex.getInternalTexture(), true);
+                eng._unpackFlipY(false);
+                gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);                     // (linhas de 2 B/px: alinhadas a 2 em qualquer largura)
+                gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, U.y, P.w, n, fmt, type, P.px.subarray(U.y * row, (U.y + n) * row));
+                U.y += n; this._upLeft -= n * row; this.stats.upMB += n * row / 1048576;
+                if (U.y >= P.h) { L.splice(k, 1); done.push(P); }
+            }
+        } finally {
+            eng._bindTextureDirectly(gl.TEXTURE_2D, null);
+            if (al) gl.pixelStorei(gl.UNPACK_ALIGNMENT, al);
+            const ms = performance.now() - t0;
+            this._upMsLeft -= ms; this.stats.upMs += ms; if (this._upGame && ms > this.stats.upMax) this.stats.upMax = ms;     // (upMax: só em quadros de jogo)
+            this._upBusy = false;
+        }
+        for (const P of done) this._upDone(P);
+    },
+    // Última faixa: a página está na GPU.
+    _upDone(P) {
+        P.tex = P.up.tex; P.up = null; P.px = null; P.st = 'ready'; P.used = this.now;
+        this._live.add(P); this.stats.uploads++;
         this._bind(P);
         if (this._waiters.size) for (const a of [...this._waiters]) a._pageReady(P);
+    },
+    // Página que saiu (dropAtlas) ou cena nova no meio do envio: para limpo (a textura incompleta sai e deixa de contar).
+    _upCancel(P) {
+        const U = P.up;
+        if (!U) return;
+        P.up = null;
+        const i = this._upQ.indexOf(P);
+        if (i >= 0) this._upQ.splice(i, 1);
+        if (U.tex) { U.tex.dispose(); this._res -= P.w * P.h * 2; }
+    },
+    // Começo de cada quadro do motor: repõe o orçamento e envia. (Quem pede no meio do quadro usa o que sobrou: _upload.)
+    // (Quadros lentos — aparelho fraco a 10–20 quadros/s —: o orçamento cresce com a duração MÉDIA do quadro, até 3×, para a vazão não
+    // despencar junto — os pedestres não ficam muitos segundos escondidos esperando a página; a fração do quadro gasta em envio fica a
+    // mesma. Um quadro lento isolado quase não mexe na média.)
+    _upDt: 33.3,
+    _upFrame() {
+        const t = performance.now();
+        this._upDt += (Math.min(250, Math.max(0, t - this._upFrameT)) - this._upDt) * 0.1;
+        this._upFrameT = t;
+        const k = Math.min(3, Math.max(1, this._upDt / 33.3));
+        const free = this._upQ.length > 0 && this._upFree();
+        this._upLeft = free ? this.UP_FREE : this.upBudget() * k;
+        this._upMsLeft = free ? 50 : this.UP_MS * k; this._upGame = !free;
+        if (this._upQ.length) this._upStep();
+    },
+    // A fila inteira, já, se nada está sendo jogado (o protagonista no fim da carga: NpcArt.ready).
+    _upNow() {
+        if (!this._upQ.length || !this._upFree()) return;
+        this._upLeft = this._upMsLeft = Infinity; this._upGame = false;
+        this._upStep();
+        this._upLeft = this._upMsLeft = 0;                                  // (o próximo quadro repõe)
+    },
+    // Sem quadro de jogo a proteger: carregando (o mundo ainda não apareceu), menu inicial ou de pausa aberto.
+    _upFree() {
+        if (typeof window === 'undefined') return true;
+        const g = window.game, mm = window.mainMenu;
+        return !g || !g._loadingHidden || !!(mm && !mm.started) || !!(g.menu && g.menu.isOpen);
+    },
+    // Sem o laço do motor (a carga e o menu inicial, antes de o jogo começar): um temporizador envia sem orçamento. (Com o laço rodando,
+    // só os quadros enviam — um quadro lento num aparelho fraco não vira brecha para enviar tudo de uma vez.)
+    _upKick() {
+        if (this._upTimer || typeof setTimeout !== 'function') return;
+        this._upTimer = setTimeout(() => {
+            this._upTimer = 0;
+            if (!this._upQ.length || !this._scene) return;
+            const loops = this._scene.getEngine().activeRenderLoops;
+            if (loops ? !loops.length : performance.now() - this._upFrameT > 1000) { this._upLeft = this.UP_FREE; this._upMsLeft = 50; this._upGame = false; this._upStep(); }
+            if (this._upQ.length) this._upKick();
+        }, 40);
     },
     // Tira a página da GPU (o material fica, com uma textura vazia: quem ainda aponta para ele não quebra) — volta quando pedida.
     _evict(P) {
@@ -198,15 +301,19 @@ const NpcArt = {
         }
         const B = this.budget();
         if (this._res <= B) return;
-        const h = this._lib && this._lib.sheets.hero, pin = h ? [h.atlasName, h.extraAtlas, h.armsAtlas, h.fallbackAtlas] : this.HERO;
-        const L = [...this._live].filter((P) => P.A.file && !pin.includes(P.A.id) && now - P.used >= 15).sort((a, b) => a.used - b.used);
+        const pin = this._pins();
+        const L = [...this._live].filter((P) => P.A.file && !P.dead && !pin.includes(P.A.id) && now - P.used >= 15).sort((a, b) => a.used - b.used);
         for (const P of L) { if (this._res <= B) break; this._evict(P); }
     },
+    // Os atlas que o jogador usa AGORA (presos na GPU — _lru; na fila de envio, na frente — _upload).
+    _pins() { const h = this._lib && this._lib.sheets.hero; return h ? [h.atlasName, h.extraAtlas, h.armsAtlas, h.fallbackAtlas] : this.HERO; },
     // Memória (testes / painel dev).
     mem() {
         let pages = 0, live = 0, cpu = 0; const by = {};
         for (const A of Object.values(this.atlases)) for (const P of A.pages) { pages++; if (P.tex) { live++; by[A.id] = (by[A.id] || 0) + 1; } if (P.px) cpu += P.px.byteLength; }
-        return Object.assign({ pages, live, texMB: Math.round(this._res / 1048576), budgetMB: Math.round(this.budget() / 1048576), cpuMB: Math.round(cpu / 1048576), queued: this._q.length + this._fetched.length + this._loading + this._decoding, byAtlas: by }, this.stats);
+        let upMB = 0; for (const P of this._upQ) upMB += (P.h - P.up.y) * P.w * 2 / 1048576;
+        return Object.assign({ pages, live, texMB: Math.round(this._res / 1048576), budgetMB: Math.round(this.budget() / 1048576), cpuMB: Math.round(cpu / 1048576), queued: this._q.length + this._fetched.length + this._loading + this._decoding + this._upQ.length,
+            uploading: this._upQ.length, upLeftMB: Math.round(upMB), zombies: this._zombies.length, byAtlas: by }, this.stats);
     },
 
     // ------------------------------------------------------------------ GPU
@@ -218,9 +325,16 @@ const NpcArt = {
         this._empty = null;
         this._palette();
         this._register();
-        for (const A of Object.values(this.atlases)) for (const P of A.pages) if (P.tex || P.mat) { P.tex = null; P.mat = null; if (A.file && P.st === 'ready') P.st = 'idle'; }
-        this._live.clear(); this._res = 0;
-        for (const A of Object.values(this.atlases)) for (const P of A.pages) if (P.px) this._upload(P);         // (o protagonista, decodificado na carga da página)
+        for (const A of Object.values(this.atlases)) for (const P of A.pages) {
+            if (P.up) { P.up = null; P.st = 'ready'; }                     // (envio pela metade na cena antiga: recomeça nesta — os pixels ainda estão em P.px)
+            if (P.tex || P.mat) { P.tex = null; P.mat = null; if (A.file && P.st === 'ready' && !P.px) P.st = 'idle'; }
+        }
+        this._live.clear(); this._res = 0; this._upQ = []; this._zombies = [];
+        const eng = scene.getEngine();                                      // envio das páginas em faixas: o orçamento é reposto a cada quadro (_upFrame)
+        if (this._upObs) this._upObs.e.onBeginFrameObservable.remove(this._upObs.o);
+        this._upObs = { e: eng, o: eng.onBeginFrameObservable.add(() => this._upFrame()) };
+        scene.onBeforeRenderObservable.add(() => this._palFlush());          // (linhas novas da paleta: uma vez por quadro)
+        for (const A of Object.values(this.atlases)) for (const P of A.pages) if (P.px) this._upload(P, P.pri);  // (o protagonista, decodificado na carga da página)
         // Ordem de desenho do grupo 1 (o dos carros, ver CarArt): os personagens 2,5D vão logo depois dos carros e portas e antes das
         // copas (alphaIndex ALPHA) e, entre eles, do NORTE para o SUL — quem está mais ao sul fica por cima (a cabeça cresce para o norte).
         scene.setRenderingOrder(1, null, null, (a, b) => {
@@ -279,7 +393,20 @@ const NpcArt = {
             const o = (row * P.W + code) * 4;
             if (c) { P.data[o] = c[0]; P.data[o + 1] = c[1]; P.data[o + 2] = c[2]; P.data[o + 3] = 255; }
         }
-        if (upload) P.tex.update(P.data);
+        if (upload) { P.lo = Math.min(P.lo == null ? row : P.lo, row); P.hi = Math.max(P.hi == null ? row : P.hi, row); }    // (sobe antes do próximo desenho: _palFlush)
+    },
+    // Linhas novas da paleta → GPU uma vez por quadro, logo antes do desenho, só as que mudaram (texSubImage2D): dezenas de pedestres
+    // nascendo no mesmo quadro mandavam a paleta INTEIRA (256 × 384 × 4 B = 384 KB) uma vez cada.
+    _palFlush() {
+        const P = this._pal;
+        if (!P || P.lo == null || !this._scene) return;
+        const lo = P.lo, n = P.hi - lo + 1, eng = this._scene.getEngine(), gl = eng._gl, it = P.tex.getInternalTexture();
+        P.lo = P.hi = null;
+        if (!it) return;
+        eng._bindTextureDirectly(gl.TEXTURE_2D, it, true);
+        eng._unpackFlipY(false);                                            // (a paleta foi criada sem inverter: linha r em y = r)
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, lo, P.W, n, gl.RGBA, gl.UNSIGNED_BYTE, P.data.subarray(lo * P.W * 4, (lo + n) * P.W * 4));
+        eng._bindTextureDirectly(gl.TEXTURE_2D, null);
     },
 
     // Linha da paleta da variante `v` do tipo `id` (cria na primeira vez).
@@ -492,6 +619,7 @@ const NpcArt = {
         this.now = t;
         this._wt = t % 1000;
         for (const P of this._live) P.mat.setFloat('wt', this._wt);
+        if (this._zombies.length) this._reap();
         if (t - this._lruT >= 2) { this._lruT = t; this._lru(); }
     },
 
@@ -637,21 +765,47 @@ const NpcArt = {
     },
 
     // Descarta um atlas (o visual antigo do jogador, um atlas de dano sem uso…): texturas, materiais e quem o desenhava (esconde até
-    // desenhar de novo: o SpriteActor refaz o clipe no próximo update).
+    // desenhar de novo: o SpriteActor refaz o clipe no próximo update). Quem ainda desenha uma página dele na GPU (o visual antigo do
+    // jogador, trocado agora pelo novo, que sobe em faixas) segue no último quadro até a página nova chegar — sem piscar: as texturas
+    // saem depois (_reap), quando ninguém mais as desenha (no máximo em 10 s).
     dropAtlas(id) {
         const A = this.atlases[id];
         if (!A) return;
         delete this.atlases[id];
-        if (typeof SpriteActor !== 'undefined') for (const a of SpriteActor.live) if (a._pg && a._pg.A === A) a._lostPage();
+        let keep = false;
+        if (typeof SpriteActor !== 'undefined') for (const a of SpriteActor.live) if (a._pg && a._pg.A === A) { if (a._pg.tex) keep = true; else a._lostPage(); }
         for (const P of A.pages) {
             P.dead = true;
-            if (P.tex) { P.tex.dispose(); this._res -= P.w * P.h * 2; this._live.delete(P); }
-            if (P.mat) P.mat.dispose();
-            P.tex = P.mat = P.px = P.b64 = null;
+            this._upCancel(P);
+            if (!keep) this._free(P);
+            P.px = P.b64 = null;
             this._wake(P);
         }
+        if (keep) this._zombies.push({ A, t: performance.now() });
         this._q = this._q.filter((P) => P.A !== A); this._fetched = this._fetched.filter((P) => P.A !== A);
         for (const s of Object.values(this.sheets)) if (s.uses(id)) s.clips = {};      // (nada de clipe guardado apontando para ele)
+    },
+    _free(P) {
+        if (P.tex) { P.tex.dispose(); this._res -= P.w * P.h * 2; this._live.delete(P); }
+        if (P.mat) P.mat.dispose();
+        P.tex = P.mat = null;
+    },
+    // (tick) Atlas descartados que alguém ainda desenhava: quem já não espera uma página nova (ou esperou 10 s) larga o último quadro
+    // (_lostPage: some até desenhar de novo); sem ninguém, as texturas saem da GPU.
+    _reap() {
+        const t = performance.now();
+        this._zombies = this._zombies.filter((Z) => {
+            const age = t - Z.t;
+            if (age < 250 || (Z.n = (Z.n || 0) + 1) < 3) return true;       // (o SpriteActor ainda vai refazer o clipe e pedir a página nova — 2 quadros, mesmo a 2 quadros/s)
+            let busy = false;
+            if (typeof SpriteActor !== 'undefined') for (const a of SpriteActor.live) {
+                if (!a._pg || a._pg.A !== Z.A) continue;
+                if (age < 10000 && a._wait && a._wait.A !== Z.A) busy = true; else a._lostPage();
+            }
+            if (busy) return true;
+            for (const P of Z.A.pages) this._free(P);
+            return false;
+        });
     },
 
     // Folha de um tipo. legacy = folha antiga para o que o atlas não tem (a primeira que pedir fica).
@@ -706,11 +860,10 @@ const NpcArt = {
             let a = await this.unzip(await this._dbGet(key));
             if (!a) {
                 const keys = G.TYPES[id].clips.filter((c) => this.DMG_CLIPS.test(c.split(':')[0]));
-                a = this.paged(await new Promise((ok, fail) => {
-                    const wk = PlayerLook._worker('dmg'), job = (this._dmgJob = (this._dmgJob || 0) + 1);
-                    wk.onmessage = (e) => { wk._busy = false; if (e.data.job !== job) return; if (e.data.error) fail(new Error(e.data.error)); else ok(e.data.atlas); };
-                    wk.postMessage({ type: 'atlas', job, id, keys, k, dmg: +d, dirs });       // (perfil leve: 8 direções)
-                }), k, G.frameFor(k));
+                // no orçamento de geração do jogo (PlayerLook.gen: poucos Workers, com folga; o visual do jogador passa na frente)
+                const m = await PlayerLook.gen(PlayerLook.PRI.npc, { type: 'atlas', id, keys, k, dmg: +d, dirs });      // (perfil leve: 8 direções)
+                if (!m || m.error) throw new Error(m ? m.error : 'cancelado');
+                a = this.paged(m.atlas, k, G.frameFor(k));
                 if (this.canZip) this.zip(a).then((z) => !z.raw && this._dbPut(key, z), () => {});     // (sem compressão não guarda: 34 tipos × 3 níveis crus = GBs)
             }
             if (this.atlases[id]) {
