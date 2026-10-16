@@ -5,11 +5,12 @@
 //   • Arquivos do jogo (mesma origem): REDE PRIMEIRO — o que acabou de ser editado aparece no próximo recarregar; sem rede, ou com a
 //     rede travada por mais de 4 s, vale o que está no cache.
 // Só funciona servido por http(s) (localhost incluso); aberto por duplo clique (file://) o jogo segue como antes, sem cache.
-// Para forçar todos a baixarem de novo as bibliotecas, troque LIB_CACHE.
+// Para forçar todos a baixarem de novo as bibliotecas, troque LIB_CACHE. Trocar APP_CACHE apaga o cache dos arquivos do jogo no aparelho
+// (v2: os atlas antigos dos personagens — assets/npcs/*.js, até ~400 MB — deram lugar a assets/baked; sem a troca eles ficariam guardados).
 // ============================================================================
 
 const LIB_CACHE = 'dm-lib-v1';
-const APP_CACHE = 'dm-app-v1';
+const APP_CACHE = 'dm-app-v2';
 const LIB_HOSTS = ['cdn.jsdelivr.net', 'cdn.babylonjs.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', () => self.skipWaiting());

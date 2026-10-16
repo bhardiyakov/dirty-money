@@ -131,6 +131,7 @@ assets/baked/npc-data.json                   dados do jogo: tipos, variantes de 
 assets/baked/npcs/<tipo>.json                manifesto: clipes, quadros, páginas e camadas de dano
 assets/baked/npcs/<tipo>/p<i>.webp           as páginas (R = byte 0, G = byte 1), carregadas quando o jogo precisa
 assets/baked/npcs/<tipo>/d<n>p<i>.webp       a camada de dano n da página i
+assets/baked/npcs/protagonista_mao_<bolsa>.*  os clipes de carregar a bolsa da mão com a roupa inicial (extras do bake.cjs)
 src/art/NpcData.js                           no jogo: os dados (npc-data.json) — cores de uma ficha, chave de forma, tipos
 src/art/AtlasDecoder.js                      no jogo: busca e decodifica as páginas WebP num Worker (junta a camada de dano)
 src/art/NpcArt.js                            no jogo: páginas → textura, paleta das variantes, shader, folhas (NpcSheet), quem é quem
@@ -165,15 +166,21 @@ src/player/Wardrobe.js                       o guarda-roupa: monta (Worker) e gr
 - **Peças** (`Outfit.ITEMS`): cada uma tem `look` (forma + cor na ficha do gerador). Novas: boné aba curva, boné pra trás, touca,
   chapéu de pescador, viseira, capacete; camiseta estampada/listrada, camisa havaiana, polo, bermuda jeans, tênis de skate.
   Bolsas (`Bags`): mala transversal, mochila e mochila tática aparecem no desenho; maleta, sacola e mala de rodinhas, na mão.
+- **Bolsa da mão** (maleta, bolsa de lona, mala de rodinhas): só aparece nos clipes de carregar (`*_hold`, `*_pull`), então NÃO muda a
+  forma do visual (fora da chave de forma): fica num atlas à parte — o pronto da roupa inicial (`protagonista_mao_<bolsa>`, assado no
+  build, com dano) ou, num visual do guarda-roupa, os clipes de carregar montados para ele (`<ck>|h:<bolsa>`; até lá, os da roupa inicial).
+  Comprar ou pegar uma bolsa da mão no meio do jogo nunca pede o guarda-roupa com a roupa inicial.
 - **Tingir** (de graça): Inventário → Equipamento, no detalhe da peça vestida ou na aba ✂️ Visual. Só muda a paleta: instantâneo.
 - **Aparência** (de graça, aba ✂️ Visual): pele, cabelo (17 estilos — 6 novos da malha 3D), cor do cabelo, barba, corpo.
 - **Forma nova = desenho novo, só no guarda-roupa**: durante o jogo nada é desenhado — o visual vem dos atlas prontos (a roupa inicial,
   com os níveis de dano) ou do IndexedDB (`dirty-money-visual`). Uma forma que ainda não está lá (roupa trocada na boutique, o porte que
-  mudou com a academia…) mantém o último visual e um aviso pede para abrir **Inventário → Equipamento**. Lá o `Wardrobe` abre os Workers
+  mudou com a academia…) mantém o último visual, um aviso pede para abrir **Inventário → Equipamento** e um ponto amarelo marca a aba
+  Inventário e o botão Equipamento no menu enquanto o visual não estiver montado. Lá o `Wardrobe` abre os Workers
   do gerador (os núcleos − 1, até 4; o jogo está pausado), que desenham os clipes que faltam e gravam cada um no aparelho; no fim um deles
   empacota as páginas e grava o atlas pronto (principal + tático + armas novas, se tiver alguma) e o visual troca. Depois vêm os níveis
   de dano daquela roupa (barra "Preparando o visual machucado"). Saiu da tela no meio: os Workers são encerrados e o que já foi gravado
-  continua na próxima visita. Recarregou o jogo com a mesma roupa: lido do IndexedDB, sem gerar de novo. A chave leva o hash do gerador
+  continua na próxima visita. Recarregou o jogo com a mesma roupa: lido do IndexedDB, sem gerar de novo. Depois do primeiro visual
+  gravado o jogo pede armazenamento persistente (`navigator.storage.persist`), para o navegador não apagar o IndexedDB por falta de espaço. A chave leva o hash do gerador
   (`npc-data.json` → `genHash`): mudou o desenho no build, os visuais guardados são montados de novo.
 - **Armas novas** (pistola com silenciador, RPG, lança-foguetes, minigun): moram num terceiro atlas, `protagonista_armas`
   (`NpcGenTypes.PLAYER_ARMS`: parado, andando, correndo, sacar, mirar, atirar, agachado, andar agachado, passo lateral e assalto com
@@ -232,8 +239,8 @@ ficam plantados com a passada do adulto — `STRIDE_K` em `NpcGenAnims.gait`). M
 
 ## Números
 
-- Atlas assados (k = 1, 16 direções, páginas): 34 tipos, ~160 mil quadros, 326 páginas (784 Mpx) — **277 MB de WebP** (antes: 408 MB
-  de `.js` com PNG em base64) **+ 105 MB das camadas de dano** (3 níveis; antes o dano era gerado no aparelho de cada jogador). Se TODAS
+- Atlas assados (k = 1, 16 direções, páginas): 34 tipos + 3 de bolsa da mão, ~163 mil quadros, 332 páginas (803 Mpx) — **283 MB de
+  WebP** (antes: 408 MB de `.js` com PNG em base64) **+ 109 MB das camadas de dano** (3 níveis; antes o dano era gerado no aparelho de cada jogador). Se TODAS
   as páginas estivessem na placa de vídeo seriam ~1,5 GB, mas só as páginas em uso ficam (orçamento `Config.art.vramMB`: 640 MB;
   perfil leve 256 MB e só as direções pares). As páginas assadas são idênticas, pixel a pixel, às que o gerador desenha.
 - Carga: na abertura `npc-data.json` + os 34 manifestos JSON (e as páginas do protagonista); cada página é buscada e decodificada num

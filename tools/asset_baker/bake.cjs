@@ -10,6 +10,8 @@
 //   assets/baked/npcs/<tipo>/d<n>p<i>.webp CAMADA DE DANO n (1 sujo, 2 machucado, 3 muito machucado) da página i: mesmo tamanho e mesmo
 //                                         layout da página base; pixel ≠ (0, 0) = o pixel machucado, (0, 0) = igual ao da base. Quase toda
 //                                         vazia (comprime para poucos KB) — o jogo junta base + camada na decodificação (NpcArt).
+//   assets/baked/npcs/protagonista_mao_<bolsa>.json (+ páginas) os clipes de CARREGAR do protagonista com a bolsa da mão (maleta, bolsa
+//                                         de lona, mala de rodinhas): a bolsa só aparece nesses clipes, então ela não muda o resto do visual
 //   assets/baked/npc-data.json            dados do jogo: tipos, variantes de cor, paletas, ficha do jogador, ponta do cano das armas,
 //                                         sentar no carro, lista dos manifestos e o hash do gerador
 //   assets/baked/wardrobe.worker.js       o gerador empacotado num Worker — carregado SÓ pela tela de equipamento (src/player/Wardrobe.js),
@@ -44,10 +46,16 @@ const WORKER_MAIN = path.join(HERE, 'wardrobe', 'worker-main.js');
 // do protagonista e os visuais montados no guarda-roupa): também o que ele mais faz andando por aí machucado.
 const DMG_NPC = ['idle', 'walk', 'run', 'scared', 'hurt', 'dead', 'surrender', 'kneel', 'aim', 'shoot', 'draw', 'holdup', 'punch', 'punchL', 'kick',
     'flail', 'lie', 'getup', 'tumble', 'swing'];
-const DMG_PLAYER = DMG_NPC.concat(['crouch', 'sneak', 'strafe', 'roll', 'walk_up', 'climb', 'walk_heavy', 'run_heavy', 'idle_heavy', 'stab']);
+const DMG_PLAYER = DMG_NPC.concat(['crouch', 'sneak', 'strafe', 'roll', 'walk_up', 'climb', 'walk_heavy', 'run_heavy', 'idle_heavy', 'stab',
+    'idle_hold', 'walk_hold', 'run_hold', 'idle_pull', 'walk_pull']);
 const PLAYER_TYPES = new Set(['protagonista', 'protagonista_tatico', 'protagonista_armas']);
 const dmgNames = (id) => new Set(PLAYER_TYPES.has(id) ? DMG_PLAYER : DMG_NPC);
 const DMG_LEVELS = [1, 2, 3];
+// Atlas EXTRAS (não são tipos do gerador): os clipes de carregar a bolsa da mão com a ficha do protagonista — um por bolsa. base = a ficha
+// (e o tipo para as armas desenhadas), hand = a bolsa, keys(G) = os clipes.
+const HAND_KINDS = ['briefcase', 'duffel', 'suitcase'];
+const EXTRAS = {};
+for (const h of HAND_KINDS) EXTRAS['protagonista_mao_' + h] = { base: 'protagonista', hand: h, keys: (G) => G.PLAYER_HAND.concat(h === 'suitcase' ? G.PLAYER_PULL : []) };
 
 function loadGen() {
     for (const f of GEN) vm.runInThisContext(fs.readFileSync(path.join(GEN_DIR, f), 'utf8'), { filename: path.join(GEN_DIR, f) });
@@ -76,14 +84,14 @@ async function webp(rg, w, h, effort) {
 // DIFERENÇA de cada quadro, no mesmo retângulo da página base (o dano só repinta a roupa e a pele: a geometria, o recorte e os quadros
 // repetidos são os mesmos). Devolve os números.
 async function buildType(G, job, progress) {
-    const { id, keys, k, dirs, out, dry, dmg, effort } = job, spec = G.BY_ID[id], t0 = Date.now();
-    const opts = dirs ? { hand: null, dirs } : { hand: null };
+    const { id, keys, k, dirs, out, dry, dmg, effort } = job, base = job.base || id, spec = G.BY_ID[base], t0 = Date.now();
+    const opts = dirs ? { hand: job.hand || null, dirs } : { hand: job.hand || null };
     let R = G.rendererFor(spec, { k });
     const tb = Date.now(), clips = [];
     let last = tb;
     keys.forEach((key, i) => {
         if (i) R = G.rendererFor(spec, { k });                         // (rendererFor também arma o esqueleto global da ficha)
-        clips.push(G.renderClip(R, key, id, opts));
+        clips.push(G.renderClip(R, key, base, opts));
         const t = Date.now(); if (t - last > 15000) { last = t; progress(['base', i + 1, keys.length, key]); }
     });
     const a = G.atlasOf(clips, k);
@@ -101,12 +109,12 @@ async function buildType(G, job, progress) {
     const te = Date.now();
 
     // camadas de dano
-    const names = dmgNames(id), dkeys = dmg ? keys.filter((key) => names.has(key.split(':')[0])) : [];
+    const names = dmgNames(base), dkeys = dmg ? keys.filter((key) => names.has(key.split(':')[0])) : [];
     const levels = {}, stat = { frames: 0, mismatch: 0, conflict: 0, bytes: 0 };
     for (const lv of dkeys.length ? DMG_LEVELS : []) {
         const sp = Object.assign({}, spec, { dmg: lv }), ov = new Map(), touched = new Set();
         dkeys.forEach((key, i) => {
-            const RL = G.rendererFor(sp, { k }), c = G.renderClip(RL, key, id, opts), m = a.clips[key];
+            const RL = G.rendererFor(sp, { k }), c = G.renderClip(RL, key, base, opts), m = a.clips[key];
             for (let d = 0; d < c.dirs; d++) {
                 const pi = m.pd[d], P = a.pages[pi], W = P.w;
                 let O = ov.get(pi);
@@ -141,7 +149,7 @@ async function buildType(G, job, progress) {
     const td = Date.now();
     for (const P of a.pages) P.data = null;
 
-    const man = { v: a.v, id, label: spec.label || id, k: a.k, frame: a.frame, pivot: a.pivot, scale: G.fullSpec(spec).scale || 1, pages, clips: a.clips };
+    const man = { v: a.v, id, label: (spec.label || id) + (job.hand ? ' (' + job.hand + ')' : ''), k: a.k, frame: a.frame, pivot: a.pivot, scale: G.fullSpec(spec).scale || 1, pages, clips: a.clips };
     if (dkeys.length) man.dmg = { clips: dkeys, levels };
     if (!dry) {
         const tmp = path.join(out, 'npcs', id + '.json.tmp');
@@ -193,12 +201,13 @@ function npcData(G, hash, atlases) {
     for (const [code, rgb] of Object.entries(G.SPECIAL)) special[code] = Array.from(rgb);
     return {
         v: 1, genHash: hash, OUT_K: G.OUT_K, HD_K: G.HD_K, PPU: G.PPU, geom: { frame: 112, pivot: [56, 72], refK: 0.5 },
-        atlases, M: G.M, PAL: G.PAL, SPECIAL: special, DEFAULT: G.fullSpec({}), SHAPE_KEYS: G.SHAPE_KEYS.filter((k) => k !== 'dmg'),
+        atlases, M: G.M, PAL: G.PAL, SPECIAL: special, DEFAULT: G.fullSpec({}), SHAPE_KEYS: G.SHAPE_KEYS.filter((k) => k !== 'dmg' && k !== 'hand'),      // (dano e bolsa da mão: atlas à parte)
         types, variants, muzzle, SIT_IN: G.SIT_IN || null,
         dmg: { npc: DMG_NPC, player: DMG_PLAYER, levels: DMG_LEVELS },
         player: {
             DEFAULT: G.PLAYER_DEFAULT, CLIPS: G.PLAYER_CLIPS, TAC: G.PLAYER_TAC, ARMS: G.PLAYER_ARMS, ARMS_LOOKS: G.ARMS_LOOKS, HAND: G.PLAYER_HAND,
             PULL: G.PLAYER_PULL, HEAVY: G.PLAYER_HEAVY, FIRST: G.PLAYER_FIRST,
+            HANDS: Object.fromEntries(HAND_KINDS.map((h) => [h, 'protagonista_mao_' + h])),      // bolsa da mão → atlas pronto dos clipes de carregar
         },
     };
 }
@@ -218,7 +227,8 @@ function checkRamps(G, data) {
         const A = G.rampsFor(a), B = D.rampsFor(b);
         for (const m of Object.keys(A)) if (JSON.stringify(A[m]) !== JSON.stringify(B[m])) { if (bad++ < 5) console.error(`rampsFor diferente: material ${m}`, a.id || '', A[m], B[m]); }
     }
-    if (G.shapeKey(G.PLAYER_DEFAULT) !== D.shapeKey(G.PLAYER_DEFAULT) + ';dmg=') { bad++; console.error('shapeKey diferente:', G.shapeKey(G.PLAYER_DEFAULT), D.shapeKey(G.PLAYER_DEFAULT)); }
+    const gk = G.shapeKey(G.PLAYER_DEFAULT).split(';').filter((p) => !/^(dmg|hand)=/.test(p)).join(';');
+    if (gk !== D.shapeKey(G.PLAYER_DEFAULT)) { bad++; console.error('shapeKey diferente:', gk, D.shapeKey(G.PLAYER_DEFAULT)); }
     if (bad) throw new Error(`NpcData (src/art/NpcData.js) não bate com o gerador em ${bad} casos: ajuste o rampsFor/shapeKey de lá`);
     console.log(`paletas: NpcData.rampsFor = gerador em ${specs.length} fichas`);
 }
@@ -262,24 +272,25 @@ const G = loadGen(), HASH = genHash();
 const OUT = opt.out || path.join(ROOT, 'assets', 'baked'), K = G.HD_K, EFFORT = opt.fast ? 4 : 6;
 if (opt.data) { writeData(G, OUT, HASH); process.exit(0); }
 if (opt.clips && !opt.out && !opt.dry && !opt.list) { console.error('--clips gera atlas INCOMPLETOS: use --out <pasta> (ou --dry)'); process.exit(2); }
-const bad = opt.ids.filter((id) => !G.TYPES[id]);
-if (bad.length) { console.error('tipo desconhecido: ' + bad.join(', ') + '\ntipos: ' + Object.keys(G.TYPES).join(' ')); process.exit(2); }
+const ALL = Object.keys(G.TYPES).concat(Object.keys(EXTRAS));
+const bad = opt.ids.filter((id) => !G.TYPES[id] && !EXTRAS[id]);
+if (bad.length) { console.error('tipo desconhecido: ' + bad.join(', ') + '\ntipos: ' + ALL.join(' ')); process.exit(2); }
 const glob = (p) => new RegExp('^' + p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
 const pats = opt.clips && opt.clips.map((p) => glob(p.includes(':') ? p : p + ':*'));
-const keysOf = (id) => G.TYPES[id].clips.filter((key) => !pats || pats.some((r) => r.test(key)));
+const keysOf = (id) => (EXTRAS[id] ? EXTRAS[id].keys(G) : G.TYPES[id].clips).filter((key) => !pats || pats.some((r) => r.test(key)));
 // custo = quadros a renderizar (poses × direções; com dano, + 3 × os dos clipes com dano), para começar pelos maiores
 function cost(id, keys) {
     let n = 0, d = 0;
-    const names = dmgNames(id);
+    const X = EXTRAS[id], base = X ? X.base : id, names = dmgNames(base);
     for (const key of keys) {
         const [name, w0] = key.split(':');
         let c = 10 * G.DIRS;
-        try { const cd = G.clipDef(name, w0, id, {}); c = cd.poses.length * (opt.dirs && opt.dirs < cd.dirs ? opt.dirs : cd.dirs); } catch (e) { /* estimativa */ }
+        try { const cd = G.clipDef(name, w0, base, X ? { hand: X.hand } : {}); c = cd.poses.length * (opt.dirs && opt.dirs < cd.dirs ? opt.dirs : cd.dirs); } catch (e) { /* estimativa */ }
         n += c; if (names.has(name)) d += c;
     }
     return { frames: n, dmgFrames: d, total: n + (opt.dmg ? d * DMG_LEVELS.length : 0) };
 }
-const ids = (opt.ids.length ? opt.ids : Object.keys(G.TYPES)).map((id) => { const keys = keysOf(id); return Object.assign({ id, keys }, cost(id, keys)); });
+const ids = (opt.ids.length ? opt.ids : ALL).map((id) => { const keys = keysOf(id), X = EXTRAS[id]; return Object.assign({ id, keys, base: X && X.base, hand: X && X.hand }, cost(id, keys)); });
 if (opt.list) {
     let tf = 0, td = 0;
     for (const t of ids) { console.log(`${t.id.padEnd(22)} ${String(t.keys.length).padStart(3)} clipes ${String(t.frames).padStart(6)} quadros ${String(t.dmgFrames).padStart(6)} com dano`); tf += t.frames; td += t.dmgFrames; }
@@ -310,7 +321,7 @@ for (let w = 0; w < N; w++) {
     const next = () => {
         const t = queue.shift();
         if (!t) { worker.terminate(); return; }
-        worker.postMessage({ id: t.id, keys: t.keys, k: K, dirs: opt.dirs, out: OUT, dry: opt.dry, dmg: opt.dmg, effort: EFFORT });
+        worker.postMessage({ id: t.id, base: t.base, hand: t.hand, keys: t.keys, k: K, dirs: opt.dirs, out: OUT, dry: opt.dry, dmg: opt.dmg, effort: EFFORT });
     };
     worker.on('message', (m) => {
         if (m.progress) { const [st, i, n, key] = m.progress; console.log(`  ${m.id}: ${st} ${i}/${n} (${key})`); return; }

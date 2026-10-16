@@ -5,7 +5,8 @@
 //   • setActive(true) ao abrir a tela: PlayerLook.sync → ensure(chave, ficha) se a forma vestida não está no aparelho. Os Workers
 //     (assets/baked/wardrobe.worker.js = o gerador empacotado no build) desenham os clipes que faltam e GRAVAM cada um no IndexedDB; no
 //     fim de cada etapa um deles empacota as páginas e grava o atlas pronto; aí o PlayerLook lê de lá (saved) e o visual troca.
-//     Etapas: o visual limpo (principal + tático + armas novas, se tiver alguma) e depois os níveis de dano (2, 1, 3).
+//     Etapas: o visual limpo (principal + tático + armas novas e os clipes de carregar a bolsa da mão, se tiver) e depois os níveis de
+//     dano (2, 1, 3).
 //   • setActive(false) ao sair: os Workers são ENCERRADOS (terminate) — nada do gerador fica na memória do jogo, nem do lado deles nem
 //     deste (a thread principal só troca mensagens pequenas: nenhum pixel do visual passa por aqui). O que já foi gravado fica: na
 //     próxima visita continua de onde parou; recarregou o jogo com a mesma roupa, o visual é lido do aparelho, sem gerar de novo.
@@ -45,17 +46,19 @@ const Wardrobe = {
         this._emit();
     },
 
-    // Monta o que falta do visual `key` (ficha `spec`): limpo (principal, tático, armas novas) e depois os níveis de dano.
+    // Monta o que falta do visual `key` (ficha `spec`): limpo (principal, tático, armas novas, bolsa da mão) e depois os níveis de dano.
     async ensure(key, spec) {
         if (!this.active || PlayerLook.isDefault(key) || (this.cur && this.cur.key === key)) return;
         const job = ++this.job;
         this._cancel();
-        const ck = PlayerLook.ck(key), sets = PlayerLook.sets(spec), keys = [ck, ck + '|t', ck + '|w', ck + '|d1', ck + '|d2', ck + '|d3'];
+        const ck = PlayerLook.ck(key), sets = PlayerLook.sets(spec), hk = sets.hand && ck + '|h:' + sets.hand.kind;
+        const keys = [ck, ck + '|t', ck + '|w', ck + '|d1', ck + '|d2', ck + '|d3'].concat(hk ? [hk] : []);
         const has = await PlayerLook.idbHas(keys);
         if (job !== this.job || !this.active) return;
         const stages = [], clean = [];
         if (!has[ck] || !has[ck + '|t']) clean.push({ key: ck, part: 'main', keys: sets.main }, { key: ck + '|t', part: 'tac', keys: sets.tac });
         if (sets.arms && !has[ck + '|w']) clean.push({ key: ck + '|w', part: 'arms', keys: sets.arms });
+        if (hk && !has[hk]) clean.push({ key: hk, part: 'h:' + sets.hand.kind, keys: sets.hand.keys });      // (a ficha leva a bolsa: o Worker a desenha na mão)
         if (clean.length) stages.push({ name: 'look', spec, sets: clean });
         const names = new Set(NpcData.dmgClips(true)), all = sets.main.concat(sets.tac, sets.arms || []), dk = all.filter((c) => names.has(c.split(':')[0]));
         for (const lvl of [2, 1, 3]) if (!has[ck + '|d' + lvl] && dk.length) stages.push({ name: 'dmg', lvl, spec: Object.assign({}, spec, { dmg: lvl }), sets: [{ key: ck + '|d' + lvl, part: 'd' + lvl, keys: dk }] });
@@ -118,11 +121,19 @@ const Wardrobe = {
         if (m.error) { this._fail(m.error); return; }
         if (m.packed) {
             C.si++;
+            this._persist();
             PlayerLook.saved(C.key, m.packed);                               // (lê do aparelho e troca o visual)
             this._stage();
             return;
         }
         if (m.done) this._dispatch();
+    },
+    // Armazenamento PERSISTENTE (uma vez, depois do primeiro visual gravado): sem ele o navegador pode apagar o IndexedDB quando falta
+    // espaço e o visual teria de ser montado de novo. (Chrome decide sozinho, sem perguntar; Firefox pergunta uma vez.)
+    _persist() {
+        if (this._persistAsked || typeof navigator === 'undefined' || !navigator.storage || !navigator.storage.persist) return;
+        this._persistAsked = true;
+        navigator.storage.persisted().then((ok) => ok || navigator.storage.persist()).catch(() => {});
     },
     _fail(msg) {
         console.warn('[GUARDA-ROUPA]', msg);

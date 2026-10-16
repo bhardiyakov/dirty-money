@@ -108,6 +108,7 @@ class PauseMenu {
             .pm-tab { padding: 9px 20px; font: 600 14px var(--font); color: var(--tx-2); cursor: pointer; border-radius: var(--r-pill); transition: background .15s, color .15s; white-space: nowrap; }
             .pm-tab:hover { color: var(--tx); background: rgba(255,255,255,0.06); }
             .pm-tab.on { color: #0b0e14; background: var(--tx); box-shadow: 0 4px 14px rgba(0,0,0,0.35); }
+            .pm-tab.pm-new::after, #pmInvSeg > div.pm-new::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 7px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.8); vertical-align: 1px; }
             .pm-main { flex: 1; min-height: 0; display: flex; }
             .pm-page { display: none; flex: 1; min-height: 0; gap: 16px; }
             .pm-page.on { display: flex; }
@@ -368,7 +369,14 @@ class PauseMenu {
         g.scene.physicsEnabled = false;               // a física congela (o mundo "para de verdade")
         AudioFX.pause();
         MapRenderer.drawWorld(1);
+        this.lookBadge();
         this.setTab(tab);
+    }
+    // Ponto amarelo em Inventário e em Equipamento enquanto há um visual novo para montar no guarda-roupa (PlayerLook.want).
+    lookBadge() {
+        if (!this.root) return;
+        const on = typeof PlayerLook !== 'undefined' && !!PlayerLook.want, tip = on ? 'Visual novo para montar em Equipamento' : '';
+        for (const el of this.root.querySelectorAll('.pm-tab[data-tab="inventory"], #pmInvSeg > div[data-view="equip"]')) { el.classList.toggle('pm-new', on); el.title = tip; }
     }
     // O guarda-roupa (Wardrobe: o gerador do visual, num Worker) só existe com Inventário → Equipamento aberto.
     _syncWardrobe() { if (typeof Wardrobe !== 'undefined') Wardrobe.setActive(this.isOpen && this.tab === 'inventory' && this.invView === 'equip'); }

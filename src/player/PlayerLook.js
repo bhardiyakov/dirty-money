@@ -10,8 +10,10 @@
 //     visual que tem e um aviso pede para abrir Inventário → Equipamento, onde o Wardrobe monta o que falta.
 //   • DANO (1 sujo, 2 machucado, 3 muito machucado — Blood.cond): a folha procura primeiro nos atlas de dano do nível (prontos:
 //     protagonista#dN…, camadas do build; de um visual do guarda-roupa: <ck>|dN) e, para o que eles não têm, nos limpos.
-//   • A folha do jogador é uma LISTA de atlas (NpcSheet.setChain): dano → principal → tático → armas → os prontos (o que um visual do
-//     guarda-roupa ainda não tem, como as armas novas compradas depois, sai do desenho de sempre).
+//   • BOLSA DA MÃO (maleta, bolsa de lona, mala de rodinhas): só aparece nos clipes de carregar, então não muda o resto do visual — vai
+//     num atlas à parte: o pronto da roupa inicial (protagonista_mao_<bolsa>, com dano) ou o do guarda-roupa para um visual dele.
+//   • A folha do jogador é uma LISTA de atlas (NpcSheet.setChain): dano → principal → tático → armas → bolsa da mão → os prontos (o que um
+//     visual do guarda-roupa ainda não tem, como as armas novas ou a bolsa comprada depois, sai do desenho de sempre).
 // ============================================================================
 
 const PlayerLook = {
@@ -20,6 +22,7 @@ const PlayerLook = {
     want: null,             // chave pedida que ainda não está no aparelho (o guarda-roupa monta)
     looks: new Map(),       // chave → { main, tac, arms } (ids registrados no NpcArt) — os lidos do aparelho
     dmgIds: new Map(),      // "<chave>|d<n>" → id do atlas de dano de um visual do guarda-roupa
+    handIds: new Map(),     // "<chave>|h:<bolsa>" → id do atlas dos clipes de carregar de um visual do guarda-roupa
     LOOKS_MEM: 2,           // visuais do aparelho guardados na memória de vídeo (16 direções: ~60–80 MB cada)
     _job: 0,
     _warned: new Set(),
@@ -53,15 +56,11 @@ const PlayerLook = {
     // Estado de dano do jogador (Blood.cond: 0 limpo … 3 muito machucado).
     dmg() { const a = this.game && this.game.player && this.game.player.actor; return a && a.wounds ? a.wounds.cond | 0 : 0; },
 
-    // Clipes do jogador para uma ficha (os de carregar só com bolsa na mão) e os conjuntos de um visual (atlas principal, tático e armas).
-    clipsFor(s) {
-        const P = this.P, out = P.CLIPS.concat(P.HEAVY);
-        if (s.hand) out.push(...P.HAND);
-        if (s.hand === 'suitcase') out.push(...P.PULL);
-        return out;
-    },
+    // Conjuntos de clipes de um visual: principal, tático, armas novas (se tiver alguma) e os de carregar a bolsa da mão (se tiver uma).
+    clipsFor() { const P = this.P; return P.CLIPS.concat(P.HEAVY); },
+    handClips(kind) { const P = this.P; return P.HAND.concat(kind === 'suitcase' ? P.PULL : []); },
     ownsArms() { const inv = this.game && this.game.inventory; return !!inv && this.P.ARMS_LOOKS.some((w) => inv.owned(w)); },
-    sets(s) { return { main: this.clipsFor(s), tac: this.P.TAC, arms: this.ownsArms() ? this.P.ARMS : null }; },
+    sets(s) { return { main: this.clipsFor(), tac: this.P.TAC, arms: this.ownsArms() ? this.P.ARMS : null, hand: s.hand ? { kind: s.hand, keys: this.handClips(s.hand) } : null }; },
 
     get defaultKey() { return this._dk || (this._dk = NpcData.shapeKey(this.P.DEFAULT)); },
     isDefault(key) { return key === this.defaultKey; },
@@ -81,19 +80,21 @@ const PlayerLook = {
     async _resolve(s, key, lvl, job) {
         let look = this.isDefault(key) ? 'default' : this.looks.get(key) || (await this._load(key));
         if (job !== this._job) return;
-        if (look) { this.want = null; this._warned.delete(key); this._unwarn(); }
+        if (look) { this.want = null; this._warned.delete(key); this._unwarn(); this._badge(); }
         else {                                                               // não está no aparelho: segue com o que tem; o guarda-roupa monta
             this.want = key;
+            this._badge();
             if (typeof Wardrobe !== 'undefined' && Wardrobe.active) Wardrobe.ensure(key, s);
             else this._warn(key);
             const cur = this.shown && !this.isDefault(this.shown) && this.looks.get(this.shown);
             look = cur || 'default';
             key = cur ? this.shown : this.defaultKey;
         }
-        if (look !== 'default' && typeof Wardrobe !== 'undefined' && Wardrobe.active && !this.want) Wardrobe.ensure(key, s);     // (faltando só armas ou machucados)
-        const dmg = lvl ? await this._dmgAtlases(key, lvl, look) : [];
+        if (look !== 'default' && typeof Wardrobe !== 'undefined' && Wardrobe.active && !this.want) Wardrobe.ensure(key, s);     // (faltando só armas, bolsa ou machucados)
+        const hand = s.hand ? await this._handAtlas(key, s.hand, look) : null;
+        const dmg = lvl ? await this._dmgAtlases(key, lvl, look, hand) : [];
         if (job !== this._job) return;
-        this._apply(key, look, dmg);
+        this._apply(key, look, dmg, hand);
     },
     // Aviso (uma vez por forma): o visual novo se monta na tela de equipamento.
     WARN: 'Visual novo: abra Inventário → Equipamento para montar o personagem',
@@ -103,19 +104,21 @@ const PlayerLook = {
         const ui = this.game && this.game.ui;
         if (ui && ui.toast) ui.toast(this.WARN);
     },
+    _badge() { const m = this.game && this.game.menu; if (m && m.lookBadge) m.lookBadge(); },      // (o ponto em Inventário → Equipamento)
     // O visual pedido chegou: o aviso (se ainda estiver na tela) sai.
     _unwarn() {
         const ui = this.game && this.game.ui;
         if (ui && ui.toast && ui.toastEl && ui.toastEl.style.display !== 'none' && ui.toastEl.textContent === this.WARN) ui.toast(null);
     },
 
-    // Folha do jogador: dano → principal → tático → armas → os prontos.
-    _apply(key, look, dmg) {
+    // Folha do jogador: dano → principal → tático → armas → bolsa da mão → os prontos.
+    _apply(key, look, dmg, hand = null) {
         const hero = this.game.sprites.sheets.hero, a = this.game.player && this.game.player.actor;
-        const own = look === 'default' ? this.HERO : [look.main, look.tac, look.arms || 'protagonista_armas'];
+        const own = (look === 'default' ? this.HERO : [look.main, look.tac, look.arms || 'protagonista_armas']).concat(hand ? [hand] : []);
         const chain = [...new Set([...dmg, ...own, ...this.HERO])].filter((id) => NpcArt.atlases[id]);
         const same = hero.chain && chain.length === hero.chain.length && chain.every((id, i) => id === hero.chain[i]);
         hero.pinned = [...dmg, ...own];                                      // (presos na GPU: os que ele usa; os prontos de reserva podem sair)
+        if (hand && NpcArt.atlases[hand]) for (const P of NpcArt.atlases[hand].pages) if (P.g === 'hot') NpcArt.want(P);     // (já sobe: pegar a bolsa não espera página)
         this.shown = key;
         if (!same) {
             hero.setChain(chain);
@@ -123,10 +126,24 @@ const PlayerLook = {
         }
         this._sweep();
     },
-    // Atlas de dano do nível: os prontos (camadas do build) para a roupa inicial e para o que cai nos prontos (armas novas); os do
-    // guarda-roupa para um visual dele.
-    async _dmgAtlases(key, lvl, look) {
+    // Atlas dos clipes de carregar a bolsa `kind`: o pronto (roupa inicial) ou o do guarda-roupa (visual dele; sem ele ainda, o pronto).
+    async _handAtlas(key, kind, look) {
+        const baked = this.P.HANDS && this.P.HANDS[kind], def = baked && NpcArt.atlases[baked] ? baked : null;
+        if (look === 'default') return def;
+        const hk = key + '|h:' + kind;
+        let id = this.handIds.get(hk);
+        if (!id) {
+            const a = await this._idbGet(this.ck(key) + '|h:' + kind);
+            if (a && !this.handIds.get(hk)) { id = 'hero:' + (this._seq = (this._seq || 0) + 1) + ':h'; NpcArt.addAtlas(id, a); this.handIds.set(hk, id); }
+            else id = this.handIds.get(hk);
+        }
+        return id || def;
+    },
+    // Atlas de dano do nível: os prontos (camadas do build) para a roupa inicial e para o que cai nos prontos (armas novas, bolsa da mão);
+    // os do guarda-roupa para um visual dele.
+    async _dmgAtlases(key, lvl, look, hand = null) {
         const out = [];
+        if (hand && Object.values(this.P.HANDS || {}).includes(hand)) out.push(NpcArt.dmgAtlas(hand, lvl));      // (bolsa da mão pronta: tem camadas de dano)
         if (look !== 'default') {
             const dk = key + '|d' + lvl;
             let id = this.dmgIds.get(dk);
@@ -152,8 +169,10 @@ const PlayerLook = {
             this.looks.delete(k);
             for (const id of [L.main, L.tac, L.arms]) if (id && !used.has(id)) NpcArt.dropAtlas(id);
         }
-        const idle = [...this.dmgIds].filter(([, id]) => !used.has(id));
-        while (idle.length > 1) { const [k, id] = idle.shift(); this.dmgIds.delete(k); NpcArt.dropAtlas(id); }
+        for (const M of [this.dmgIds, this.handIds]) {
+            const idle = [...M].filter(([, id]) => !used.has(id));
+            while (idle.length > 1) { const [k, id] = idle.shift(); M.delete(k); NpcArt.dropAtlas(id); }
+        }
     },
 
     // Visual `key` do aparelho (principal + tático obrigatórios; armas se houver) → registrado no NpcArt. null = não está lá.
@@ -172,14 +191,14 @@ const PlayerLook = {
         this._loading.set(key, p);
         return p;
     },
-    // O guarda-roupa gravou parte do visual `key` (keys = os registros gravados: <ck> e <ck>|t = o visual limpo, |w as armas, |dN um nível
-    // de dano): o que estava na memória daquilo sai (o em uso, quando a folha trocar — _sweep) e é lido de novo.
+    // O guarda-roupa gravou parte do visual `key` (keys = os registros gravados: <ck> e <ck>|t = o visual limpo, |w as armas, |h:<bolsa> os
+    // clipes de carregar, |dN um nível de dano): o que estava na memória daquilo sai (o em uso, quando a folha trocar — _sweep) e é lido de novo.
     saved(key, keys = []) {
         const ck = this.ck(key), L = this.looks.get(key);
         if (L && keys.some((k) => k === ck || k === ck + '|t' || k === ck + '|w')) { this.looks.delete(key); this._orphans.push(...[L.main, L.tac, L.arms].filter(Boolean)); }
         for (const k of keys) {
-            const m = /\|d(\d)$/.exec(k), dk = m && key + '|d' + m[1], id = dk && this.dmgIds.get(dk);
-            if (id) { this.dmgIds.delete(dk); this._orphans.push(id); }
+            const m = /\|(d\d|h:\w+)$/.exec(k), M = m && (m[1][0] === 'd' ? this.dmgIds : this.handIds), mk = m && key + '|' + m[1], id = M && M.get(mk);
+            if (id) { M.delete(mk); this._orphans.push(id); }
         }
         this.sync();
     },
