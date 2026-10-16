@@ -70,13 +70,12 @@ const EngineAudio = {
         return Object.assign({ key: k }, this.PROFILES[k]);
     },
 
-    // ------------------------------------------------------------------ buffers do ciclo do motor
+    // ------------------------------------------------------------------ buffers do ciclo do motor (assados num Worker, fora da main thread)
     _rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); },
 
-    _cycle(P, base) {
-        const key = P.key + '@' + base;
-        if (this._bufs[key]) return this._bufs[key];
-        const ctx = AudioFX.ctx, SR = ctx.sampleRate, rnd = this._rng(base * 31 + P.key.length * 977 + P.cyl * 7);
+    // A conta de um ciclo (só números, sem Web Audio: roda igual no Worker e, sem Worker, aqui): as N amostras já normalizadas.
+    _synth(P, base, SR) {
+        const rnd = this._rng(base * 31 + P.key.length * 977 + P.cyl * 7);
         const cycT = (P.two ? 60 : 120) / base, per = Math.round(cycT * SR), nCyc = Math.max(4, Math.ceil(0.5 / cycT)), N = per * nCyc;
         const d = new Float32Array(N);
         const tau = P.tau * (base > 2000 ? 0.7 : 1), L = Math.min(Math.round(tau * 7 * SR), N), W = [1, 0.55, 0.3];
@@ -108,24 +107,95 @@ const EngineAudio = {
         for (let i = 0; i < N; i++) mean += d[i];
         mean /= N;
         for (let i = 0; i < N; i++) { d[i] -= mean; peak = Math.max(peak, Math.abs(d[i])); }
-        const b = ctx.createBuffer(1, N, SR), ch = b.getChannelData(0), g = 0.85 / (peak || 1);
-        for (let i = 0; i < N; i++) ch[i] = d[i] * g;
+        const g = 0.85 / (peak || 1);
+        for (let i = 0; i < N; i++) d[i] *= g;
+        return d;
+    },
+
+    // Buffer do ciclo AGORA (assa aqui mesmo se ainda não tem: só o caminho sem Worker usa).
+    _cycle(P, base) {
+        const key = P.key + '@' + base;
+        return this._bufs[key] || this._put(key, this._synth(P, base, AudioFX.ctx.sampleRate));
+    },
+    _put(key, d) {
+        const ctx = AudioFX.ctx, b = ctx.createBuffer(1, d.length, ctx.sampleRate);
+        b.getChannelData(0).set(d);
         return (this._bufs[key] = b);
     },
 
-    // Pronto para tocar sem travar? (os dois buffers do perfil já assados)
+    // Pronto para tocar? (os dois buffers do perfil já assados)
     _ready(P) { return P.electric || (this._bufs[P.key + '@1000'] && this._bufs[P.key + '@4500']); },
-    // Assa os buffers em segundo plano: no máximo um por quadro (os perfis pedidos agora vêm primeiro).
+    // Assa os buffers em segundo plano (os perfis pedidos agora vêm primeiro; o do carro do jogador fura a fila). A conta vai para um
+    // Worker, que recebe a fila toda de uma vez e devolve um buffer por vez — a main thread só cria o AudioBuffer com as amostras
+    // que voltam. Sem Worker: um buffer por quadro, aqui mesmo.
     _want(P) { if (!this._ready(P)) (this._queue || (this._queue = [])).unshift(P.key); },
     _warm() {
         if (!this._qInit) { this._qInit = true; this._queue = (this._queue || []).concat(Object.keys(this.PROFILES).filter((k) => !this.PROFILES[k].electric)); }
-        const Q = this._queue;
-        while (Q.length) {
-            const k = Q[0], P = Object.assign({ key: k }, this.PROFILES[k]);
-            if (this._ready(P)) { Q.shift(); continue; }
+        const Q = this._queue, w = this._worker(), pv = this.player && this.player.voice, mine = pv && !pv.P.electric && !this._ready(pv.P) && pv.P.key;
+        if (w) {
+            if (!this._wkOk && this._asked.size && performance.now() - this._wkT > 8000) { this._wkFail(); return; }    // (nunca respondeu: desiste)
+            if (mine && this._wkFirst !== mine) { this._wkFirst = mine; this._ask(w, mine, true); }
+            while (Q.length) this._ask(w, Q.shift());
+            return;
+        }
+        while (mine || Q.length) {
+            const k = mine || Q[0], P = Object.assign({ key: k }, this.PROFILES[k]);
+            if (!mine && this._ready(P)) { Q.shift(); continue; }
             this._cycle(P, this._bufs[k + '@1000'] ? 4500 : 1000);
             return;
         }
+    },
+    // Pede ao Worker os buffers do perfil que ainda faltam (first: passam na frente do que ele ainda tem na fila).
+    _ask(w, k, first) {
+        const P = Object.assign({ key: k }, this.PROFILES[k]), SR = AudioFX.ctx.sampleRate;
+        for (const base of [1000, 4500]) {
+            const key = k + '@' + base;
+            if (this._bufs[key] || this._asked.has(key)) continue;
+            this._asked.add(key);
+            w.postMessage({ key, P, base, SR });
+        }
+        if (first) w.postMessage({ first: k });
+        this._wkT = performance.now();
+    },
+    // O Worker: o código é o próprio _rng/_synth daqui, como texto num Blob (mesma conta, mesma sequência aleatória → as mesmas
+    // amostras); as amostras voltam transferidas (sem cópia). Falhou (sem Worker, bloqueado, erro): segue sem ele.
+    _asked: new Set(),        // 'perfil@rpm' pedidos ao Worker que ainda não voltaram
+    _worker() {
+        if (this._wk !== undefined) return this._wk;
+        this._wk = null;
+        try {
+            const src = 'const E = ({\n' + [this._rng, this._synth, this._wmain].map(String).join(',\n') + '\n});\nE._wmain();';
+            const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+            w.onmessage = (e) => this._got(e.data);
+            w.onerror = (e) => { if (e.preventDefault) e.preventDefault(); this._wkFail(); };
+            this._wk = w;
+        } catch (e) { this._wk = null; }
+        return this._wk;
+    },
+    // (roda DENTRO do Worker) fila própria, um ciclo por vez; { first } passa os pedidos daquele perfil na frente
+    _wmain() {
+        let Q = [], on = false;
+        const step = () => {
+            const m = Q.shift();
+            if (!m) { on = false; return; }
+            try { const d = this._synth(m.P, m.base, m.SR); self.postMessage({ key: m.key, d }, [d.buffer]); } catch (err) { self.postMessage({ key: m.key, error: String(err) }); }
+            setTimeout(step, 0);                                            // (entre um e outro, deixa chegar um { first })
+        };
+        self.onmessage = (e) => {
+            const m = e.data;
+            if (m.first) { const a = Q.filter((j) => j.P.key === m.first); Q = a.concat(Q.filter((j) => j.P.key !== m.first)); } else Q.push(m);
+            if (!on) { on = true; setTimeout(step, 0); }
+        };
+    },
+    _got(m) {
+        if (!m.key || !this._asked.delete(m.key)) return;                  // (resposta de um Worker já abandonado)
+        this._wkOk = true;
+        if (m.error || !m.d) { this._wkFail(); return; }
+        if (!this._bufs[m.key]) this._put(m.key, m.d);
+    },
+    _wkFail() {
+        if (this._wk) try { this._wk.terminate(); } catch (e) { /* ok */ }
+        this._wk = null; this._asked.clear(); this._qInit = false;          // (o que faltava volta para a fila e é assado aqui)
     },
 
     _curve() {
@@ -160,13 +230,12 @@ const EngineAudio = {
             return v;
         }
         // corpo: dois loops do ciclo (1000 e 4500 rpm) → distorção → filtro → (graves) → saída
-        v.lo = mk(ctx.createBufferSource()); v.lo.buffer = this._cycle(P, 1000); v.lo.loop = true;
-        v.hi = mk(ctx.createBufferSource()); v.hi.buffer = this._cycle(P, 4500); v.hi.loop = true;
+        // (os dois loops entram em _attach: na hora, se o perfil já está assado; senão quando o Worker devolver, poucos quadros depois)
         v.gLo = mk(ctx.createGain()); v.gHi = mk(ctx.createGain()); v.gHi.gain.value = 0;
         v.pre = mk(ctx.createGain());
         v.shp = mk(ctx.createWaveShaper()); v.shp.curve = this._curve(); v.shp.oversample = '2x';
         v.lp = mk(ctx.createBiquadFilter()); v.lp.type = 'lowpass'; v.lp.Q.value = 0.9;
-        v.lo.connect(v.gLo); v.hi.connect(v.gHi); v.gLo.connect(v.pre); v.gHi.connect(v.pre); v.pre.connect(v.shp); v.shp.connect(v.lp);
+        v.gLo.connect(v.pre); v.gHi.connect(v.pre); v.pre.connect(v.shp); v.shp.connect(v.lp);
         let tail = v.lp;
         if (P.bass) { v.bs = mk(ctx.createBiquadFilter()); v.bs.type = 'lowshelf'; v.bs.frequency.value = 160; v.bs.gain.value = P.bass; tail.connect(v.bs); tail = v.bs; }
         v.body = mk(ctx.createGain()); tail.connect(v.body); v.body.connect(v.out);
@@ -189,8 +258,22 @@ const EngineAudio = {
         v.sbp2 = mk(ctx.createBiquadFilter()); v.sbp2.type = 'bandpass'; v.sbp2.frequency.value = (P.starter || 180) * 5; v.sbp2.Q.value = 1.4;
         v.stg = mk(ctx.createGain()); v.stg.gain.value = 0;
         v.st.connect(v.sbp2); v.sbp2.connect(v.stg); v.stg.connect(v.out); v.st.start();
-        v.lo.start(0, Math.random() * 0.3); v.hi.start(0, Math.random() * 0.3); v.nz.start(0, Math.random());
+        v.nz.start(0, Math.random());
+        if (!this._attach(v, 1000)) this._want(P);
         return v;
+    },
+
+    // Liga na voz os dois loops do ciclo (1000 e 4500 rpm), se os buffers do perfil já existem. Devolve se ligou.
+    _attach(v, rpm) {
+        const P = v.P;
+        if (v.dead || !this._ready(P)) return false;
+        const ctx = AudioFX.ctx, mk = (n) => { v.nodes.push(n); return n; };
+        v.lo = mk(ctx.createBufferSource()); v.lo.buffer = this._bufs[P.key + '@1000']; v.lo.loop = true;
+        v.hi = mk(ctx.createBufferSource()); v.hi.buffer = this._bufs[P.key + '@4500']; v.hi.loop = true;
+        v.lo.playbackRate.value = rpm / 1000; v.hi.playbackRate.value = rpm / 4500;
+        v.lo.connect(v.gLo); v.hi.connect(v.gHi);
+        v.lo.start(0, Math.random() * 0.3); v.hi.start(0, Math.random() * 0.3);
+        return true;
     },
 
     _free(v) {
@@ -291,7 +374,7 @@ const EngineAudio = {
             return;
         }
         const rpm = Math.max(60, sim.rpm), x = Math.max(0, Math.min(1, (rpm - 1600) / 2000));
-        set(v.lo.playbackRate, rpm / 1000); set(v.hi.playbackRate, rpm / 4500);
+        if (v.lo || this._attach(v, rpm)) { set(v.lo.playbackRate, rpm / 1000); set(v.hi.playbackRate, rpm / 4500); }
         set(v.gLo.gain, Math.cos(x * 1.5708)); set(v.gHi.gain, Math.sin(x * 1.5708));
         set(v.pre.gain, 0.55 + P.drive * 0.75 * sim.load);
         set(v.lp.frequency, (P.lp[0] + (P.lp[1] - P.lp[0]) * sim.rf) * (0.5 + 0.5 * sim.load) * (extra.lpMul || 1));
@@ -385,7 +468,7 @@ const EngineAudio = {
 
     _shutdown(entry) {
         const v = entry.voice, s = entry.car._eng, P = v.P, t0 = AudioFX.ctx.currentTime;
-        if (!P.electric) {
+        if (!P.electric && v.lo) {
             v.lo.playbackRate.cancelScheduledValues(t0); v.hi.playbackRate.cancelScheduledValues(t0);
             v.lo.playbackRate.setValueAtTime(Math.max(0.1, s.rpm / 1000), t0); v.lo.playbackRate.linearRampToValueAtTime(0.12, t0 + 0.55);
             v.hi.playbackRate.setValueAtTime(Math.max(0.05, s.rpm / 4500), t0); v.hi.playbackRate.linearRampToValueAtTime(0.03, t0 + 0.55);

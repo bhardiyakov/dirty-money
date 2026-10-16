@@ -46,6 +46,13 @@ const Config = {
         npcPpu: 26,            // personagens 2,5D (NpcArt): px do atlas por metro — adultos na mesma escala dos veículos. = NpcGenBuild.PPU (pilotos × motos)
         npcDirs: 16,           // direções desenhadas dos personagens 2,5D. Perfil leve: 8 (só as páginas pares dos atlas; os gerados no jogo saem com 8)
         vramMB: 640,           // orçamento das páginas dos atlas 2,5D na GPU (MB): passou, as sem uso há 15 s saem (NpcArt._lru). Perfil leve: 256
+        // GERAÇÃO de atlas no jogo (PlayerLook.gen: o visual do jogador, as armas novas, o machucado dos NPCs): no máximo genWorkers Workers
+        // (0 = automático: os núcleos menos 2, de 1 a 3; perfil leve, até 2), cada um usando a fração duty de um núcleo (descansa entre
+        // os quadros): começa em genDuty e anda entre genDutyMin (jogo apertado) e genDutyMax (folgado) conforme o ritmo; os 1ºs clipes de
+        // um visual novo (parado/andando/correndo: o jogador esperando), genDutyFirst. As versões machucadas do jogador são preparadas de
+        // antemão só depois de genPreDelay s de jogo e com o ritmo bom.
+        genWorkers: 0, genDuty: 0.5, genDutyMin: 0.25, genDutyMax: 1, genDutyFirst: 0.75, genPreDelay: 60,
+        uploadMB: 3,           // envio das páginas 2,5D à GPU: MB por quadro, em faixas (NpcArt._upStep — sem travar quando um tipo novo aparece). Perfil leve: 1
         internalHeight: (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ? 440 : 560,   // altura interna alvo (px) quando pixelate = true (celular: menor, mais leve).
     },
 
@@ -502,7 +509,7 @@ const Config = {
     if (!lite) return;
     if (typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // sem vidro borrado nos painéis (ver Theme)
     P.lite = true; P.shadowSize = 1024; P.colliderRadius = 190; P.dprCap = 1.5;
-    Config.art.npcDirs = 8; Config.art.vramMB = 256;                                    // personagens 2,5D: 8 direções, menos páginas na GPU
+    Config.art.npcDirs = 8; Config.art.vramMB = 256; Config.art.uploadMB = 1;           // personagens 2,5D: 8 direções, menos páginas na GPU (e enviadas aos poucos)
     Config.npc.count = 48;
     Config.traffic.count = 18; Config.traffic.parked = 8; Config.traffic.motos = 2; Config.traffic.motosParked = 2; Config.traffic.bicycles = 2; Config.traffic.bicyclesParked = 2; Config.traffic.couriers = 3;
     Config.traffic.spawnMax = 150; Config.traffic.recycleDist = 185;

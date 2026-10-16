@@ -78,11 +78,19 @@ function NpcGenBuild(G) {
     // Quadros de um clipe ("nome:arma") nas 16 direções: { key, fps, loop, n, dirs, frames: [dir][f] = {w, h, ox, oy, data} }.
     // opts.dirs = no máximo tantas direções (8 = só as pares, a −45°·d: o jogo LITE); o resto de opts vai para o clipe (hand…).
     function renderClip(R, key, typeId, opts = {}) {
+        const it = clipSteps(R, key, typeId, opts);
+        let r = it.next();
+        while (!r.done) r = it.next();
+        return r.value;
+    }
+    // O mesmo, um quadro por passo (cada next() desenha um): o Worker do jogo descansa entre os quadros para não prender um núcleo
+    // (PlayerLook.gen — o jogo continua liso enquanto gera); o valor final (done) é o clipe.
+    function* clipSteps(R, key, typeId, opts = {}) {
         const [name, w0] = key.split(':'), c = clipDef(name, w0, typeId, opts);
         const D = opts.dirs && opts.dirs < c.dirs ? opts.dirs : c.dirs, frames = [];
         for (let d = 0; d < D; d++) {
             const row = [];
-            for (const p of c.poses) row.push(trim(R.render(p, (-360 / D) * d), [R.px, R.py]));
+            for (const p of c.poses) { row.push(trim(R.render(p, (-360 / D) * d), [R.px, R.py])); yield; }
             frames.push(row);
         }
         return { key, fps: c.fps, loop: !!c.loop, n: c.poses.length, dirs: D, frames };
@@ -190,6 +198,10 @@ function NpcGenBuild(G) {
             clips.push(renderClip(R, key, typeId, dirs ? { hand, dirs } : { hand }));
             if (onClip) onClip(i + 1, keys.length, key);
         });
+        return atlasOf(clips, k);
+    }
+    // Os clipes já desenhados → o atlas (páginas + o formato). (O Worker do jogo desenha clipe a clipe, com folga, e fecha aqui.)
+    function atlasOf(clips, k = OUT_K) {
         const a = packPages(clips);
         a.frame = frameFor(k); a.k = k; a.v = G.SHADE === 'cel' ? 1 : 2; a.pivot = pivFor(k);          // v = formato (2: material + luz)
         return a;
@@ -257,8 +269,8 @@ function NpcGenBuild(G) {
     }
 
     Object.assign(G, {
-        OUT_K, HD_K, PPU, FRAME, PIV, DIRS, ATLAS_MAX, PAGE_TARGET, GROUPS, GROUP_OF, frameFor, pivFor, SPACING, rendererFor, clipDef, renderClip, trimFrame: trim,
-        packPages, packAtlas: packPages, buildAtlas, atlasBuffers, asciiJS: ascii, pageRows, unplanar, pngFile, pageFile, pageJS, manifestJS,
+        OUT_K, HD_K, PPU, FRAME, PIV, DIRS, ATLAS_MAX, PAGE_TARGET, GROUPS, GROUP_OF, frameFor, pivFor, SPACING, rendererFor, clipDef, renderClip, clipSteps, trimFrame: trim,
+        packPages, packAtlas: packPages, buildAtlas, atlasOf, atlasBuffers, asciiJS: ascii, pageRows, unplanar, pngFile, pageFile, pageJS, manifestJS,
     });
     return G;
 }
