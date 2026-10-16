@@ -150,6 +150,108 @@ const PNG = {
         return this._unfilter(info, raw);
     },
 
+    // ------------------------------------------------------------------ pixels de 2 bytes (atlas paginados dos personagens 2,5D: NpcArt)
+    // PNG.decodeRG(base64 | bytes) → Promise<{ w, h, data }> com data = RG intercalado (w × h × 2). Aceita o PNG "planar" (cinza 8 bits,
+    // w × 2h: em cima o 1º byte de cada pixel, embaixo o 2º — comprime melhor) e o cinza+alfa antigo (já intercalado). Tudo FORA da
+    // thread principal: Worker de um Blob (funciona em file://) com base64 → inflate nativo (DecompressionStream) → filtros → intercala.
+    // Sem Worker / sem DecompressionStream (ou o Worker falhou): o mesmo aqui, com o decodificador acima.
+    RG_WORKERS: 2,
+    _rgW: null, _rgJobs: new Map(), _rgSeq: 0, _rgOff: false,
+    decodeRG(src) {
+        const ws = this._rgOff ? null : this._rgPool();
+        if (!ws) return this._rgMain(src);
+        return new Promise((ok, fail) => {
+            const job = ++this._rgSeq, w = ws.reduce((a, b) => (b._n < a._n ? b : a));
+            w._n++;
+            this._rgJobs.set(job, { ok, fail, src, w });
+            w.postMessage({ job, src });
+        });
+    },
+    _rgPool() {
+        if (this._rgW) return this._rgW.length ? this._rgW : null;
+        this._rgW = [];
+        if (typeof Worker !== 'function' || typeof DecompressionStream !== 'function' || typeof Blob !== 'function' || typeof URL === 'undefined') return null;
+        try {
+            const url = URL.createObjectURL(new Blob(['(' + this._rgWorkerMain + ')();'], { type: 'text/javascript' }));
+            for (let i = 0; i < this.RG_WORKERS; i++) {
+                const w = new Worker(url);
+                w._n = 0;
+                w.onmessage = (e) => this._rgDone(w, e.data);
+                w.onerror = (e) => { e.preventDefault(); this._rgBroken(w, e.message || 'erro no Worker'); };
+                this._rgW.push(w);
+            }
+        } catch (e) { this._rgW = []; return null; }
+        return this._rgW;
+    },
+    _rgDone(w, m) {
+        const J = this._rgJobs.get(m.job);
+        if (!J) return;
+        this._rgJobs.delete(m.job); w._n--;
+        if (!m.error) { J.ok({ w: m.w, h: m.h, data: m.data }); return; }
+        // falhou no Worker: tenta aqui (se aqui der certo, o problema era o Worker — os próximos já vêm direto para cá)
+        this._rgMain(J.src).then((img) => { if (!this._rgOff) console.warn('[PNG] Worker de decodificação falhou (' + m.error + ') — decodificando na thread principal'); this._rgOff = true; J.ok(img); }, J.fail);
+    },
+    _rgBroken(w, msg) {
+        for (const [job, J] of this._rgJobs) if (J.w === w) this._rgDone(w, { job, error: msg });
+    },
+    async _rgMain(src) {
+        const b = typeof src === 'string' ? this.b64(src) : src, img = await this.decodeAsync(b);
+        if (img.type === 4 && img.ch === 2) return { w: img.w, h: img.h, data: img.data };
+        if (img.type !== 0 || img.ch !== 1 || img.h & 1) throw new Error('PNG de atlas com formato inesperado');
+        const H = img.h >> 1, B = img.w * H, px = img.data, out = new Uint8Array(B * 2);
+        for (let i = 0; i < B; i++) { out[i * 2] = px[i]; out[i * 2 + 1] = px[B + i]; }
+        return { w: img.w, h: H, data: out };
+    },
+    b64(s) {
+        if (typeof Uint8Array.fromBase64 === 'function') return Uint8Array.fromBase64(s);
+        const t = atob(s), u = new Uint8Array(t.length);
+        for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i);
+        return u;
+    },
+    // Código do Worker (vai como texto: não enxerga nada da página).
+    _rgWorkerMain: function () {
+        const b64 = (s) => { if (typeof Uint8Array.fromBase64 === 'function') return Uint8Array.fromBase64(s); const t = atob(s), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u; };
+        self.onmessage = async (e) => {
+            const m = e.data;
+            try {
+                const b = typeof m.src === 'string' ? b64(m.src) : m.src, dv = new DataView(b.buffer, b.byteOffset, b.byteLength), idat = [];
+                let p = 8, w = 0, h = 0, type = -1;
+                while (p + 8 <= b.length) {
+                    const len = dv.getUint32(p), t = String.fromCharCode(b[p + 4], b[p + 5], b[p + 6], b[p + 7]);
+                    if (t === 'IHDR') { w = dv.getUint32(p + 8); h = dv.getUint32(p + 12); type = b[p + 17]; if (b[p + 16] !== 8 || b[p + 20]) throw new Error('PNG de 8 bits sem entrelaçamento'); }
+                    else if (t === 'IDAT') idat.push(b.subarray(p + 8, p + 8 + len));
+                    else if (t === 'IEND') break;
+                    p += 12 + len;
+                }
+                if (type !== 0 && type !== 4) throw new Error('tipo de cor ' + type);
+                const raw = new Uint8Array(await new Response(new Blob(idat).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer());
+                const bpp = type === 4 ? 2 : 1, S = w * bpp, px = new Uint8Array(S * h);
+                if (raw.length < (S + 1) * h) throw new Error('PNG truncado');
+                for (let y = 0; y < h; y++) {                                  // filtros de linha (nenhum/sub/up/média/Paeth)
+                    const f = raw[y * (S + 1)], s = y * (S + 1) + 1, o = y * S, u = o - S;
+                    px.set(raw.subarray(s, s + S), o);
+                    if (f === 1) { for (let x = bpp; x < S; x++) px[o + x] += px[o + x - bpp]; }
+                    else if (f === 2) { if (y) for (let x = 0; x < S; x++) px[o + x] += px[u + x]; }
+                    else if (f === 3) { for (let x = 0; x < S; x++) px[o + x] += ((x >= bpp ? px[o + x - bpp] : 0) + (y ? px[u + x] : 0)) >> 1; }
+                    else if (f === 4) {
+                        for (let x = 0; x < S; x++) {
+                            const a = x >= bpp ? px[o + x - bpp] : 0, bb = y ? px[u + x] : 0, c = y && x >= bpp ? px[u + x - bpp] : 0;
+                            const q = a + bb - c, pa = q > a ? q - a : a - q, pb = q > bb ? q - bb : bb - q, pc = q > c ? q - c : c - q;
+                            px[o + x] += pa <= pb && pa <= pc ? a : (pb <= pc ? bb : c);
+                        }
+                    }
+                }
+                let out = px, H = h;
+                if (type === 0) {                                              // planar → RG intercalado
+                    if (h & 1) throw new Error('PNG planar de altura ímpar');
+                    H = h >> 1; const B = w * H; out = new Uint8Array(B * 2);
+                    for (let i = 0; i < B; i++) { out[i * 2] = px[i]; out[i * 2 + 1] = px[B + i]; }
+                }
+                self.postMessage({ job: m.job, w, h: H, data: out }, [out.buffer]);
+            } catch (err) { self.postMessage({ job: m.job, error: String((err && err.message) || err) }); }
+        };
+    },
+
     // Cabeçalho e dados comprimidos (IDATs concatenados) de um PNG.
     _parse(b) {
         const SIG = [137, 80, 78, 71, 13, 10, 26, 10];

@@ -254,7 +254,8 @@ class FightState {
         const kind = r < 0.25 ? 'kick' : (this._jab = !this._jab) ? 'punchL' : 'punch';
         if (!npc.actor.play(kind, 'none', { restart: true })) return;
         this.clip = kind;
-        this.attackT = { punch: 0.43, punchL: 0.36, kick: 0.58 }[kind];
+        const c = npc.actor.clip;                                                 // (o golpe dura o clipe: n/fps — mais quadros, o mesmo tempo)
+        this.attackT = c && c.fps > 0 ? c.frames / c.fps : { punch: 0.43, punchL: 0.36, kick: 0.58 }[kind];
         this.cd = this.attackT + 0.35 + Math.random() * 0.6;
         g.combat.strike({ position: npc.position, heading: () => npc.heading, ok: () => npc.alive && !npc.rag && npc.fsm.current === this && this.clip === kind },
             kind, { source: 'npc', ref: npc, dmgMul: 0.75 });

@@ -180,7 +180,7 @@ class NPC {
         // vadeando/andando: ritmo pela velocidade (pés plantados — Config.anim), não fixo; nadando: braçada no ritmo da velocidade
         const has = (c) => this.actor.sheet.getClip && this.actor.sheet.getClip(c, 'none');
         this.freeAnim = deep ? (crawl || !has('swim_breast') ? { clip: 'swim', rate: Math.max(0.7, Math.min(1.4, v / 2.2)) } : { clip: 'swim_breast', rate: Math.max(0.6, Math.min(1.4, v / 1.4)) })
-            : wadeDeep && has('wade') ? { clip: 'wade', rate: Math.max(0.5, v / (Config.anim.walk * 0.69)) }
+            : wadeDeep && has('wade') ? { clip: 'wade', rate: Math.max(0.5, v / (Config.anim.walk * 0.54)) }
             : { clip: 'walk', rate: Math.max(0.5, v / Config.anim.walk) };
         if (!deep) this._dive = null;
         else if (this._dive) {                                                                 // mergulhando: afunda → debaixo d'água → sobe
@@ -285,7 +285,7 @@ class NPC {
         this.rag = null;
         if (dead) {
             this.deadTimer = 28;
-            this.actor.play('dead', 'none', { restart: true });
+            this.actor.play('dead', 'none', { restart: true }); this.actor.setPhase(1);          // (já deitado: só a pose final; a poça vem do play)
             this.actor.setHeading(this.heading);
             if (this.ctx.events) this.ctx.events.onKill(this, this._killSource, 'npc');
             return;

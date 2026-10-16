@@ -1375,7 +1375,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         const floor = Chopper.floorAt(F.x, F.z);
         a.setPosition(F.x, F.z);
         a.setHeading(F.heading);
-        a.setFrame(Math.floor(F.t * 12) % 4);
+        const fc = a.clip;                                                   // (o flail no ritmo do próprio clipe, pela fase: qualquer nº de quadros)
+        if (fc && fc.fps > 0) a.setPhase(F.t * fc.fps / fc.frames);
         a.mesh.position.y = 0.5 + Math.max(0, F.h);
         if (F.h > floor) return;
 
@@ -1493,9 +1494,9 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         else steps.push({ clip: 'opendoor', face: atDoor, onStart: open });
         // 3) entra: põe o pé lá dentro, gira, senta no banco e recolhe a outra perna, deslizando da porta até o banco enquanto a
         //    carroceria esconde o que já entrou (clipe `sitin`; sem ele — visual antigo guardado no aparelho —, o `enter` de antes)
-        const side = sign < 0 ? 'L' : 'R', SI = NpcArt.gen().SIT_IN;
-        if (SI && pl.actor.sheet.getClip('sitin', side)) {
-            const dur = SI.n / SI.fps, A = CarDoors.axes(car);
+        const side = sign < 0 ? 'L' : 'R', SI = NpcArt.gen().SIT_IN, sc = SI && pl.actor.sheet.getClip('sitin', side);
+        if (sc) {
+            const dur = sc.fps > 0 ? sc.frames / sc.fps : SI.n / SI.fps, A = CarDoors.axes(car);     // (a duração do clipe do ATLAS — o visual guardado pode ser de outra versão)
             const seat = () => { const q = door(); return { x: q.x - A.rx * sign * SI.travel, z: q.z - A.rz * sign * SI.travel }; };
             steps.push({ clip: 'sitin', weapon: side, face: atDoor, timer: dur, glide: seat, onStart: () => { pl.boarding = car; pl.setCarClip(car, dur); } });
         } else steps.push({ clip: 'enter', face: atDoor });
@@ -1944,9 +1945,9 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
     // fora, levanta e fica de pé ao lado, deslizando do banco até a porta enquanto a carroceria vai revelando o corpo (da cabeça para
     // os pés); a porta fecha atrás dele. false = sem o clipe (visual antigo guardado no aparelho): aparece do lado, como antes.
     _climbOut(car, sign) {
-        const pl = this.player, side = sign < 0 ? 'L' : 'R', SI = NpcArt.gen().SIT_IN;
-        if (!SI || !pl.actor.sheet.getClip('sitout', side)) return false;
-        const A = CarDoors.axes(car), d0 = this.doors.doorPoint(car, sign), dur = SI.n / SI.fps;
+        const pl = this.player, side = sign < 0 ? 'L' : 'R', SI = NpcArt.gen().SIT_IN, sc = SI && pl.actor.sheet.getClip('sitout', side);
+        if (!sc) return false;
+        const A = CarDoors.axes(car), d0 = this.doors.doorPoint(car, sign), dur = sc.fps > 0 ? sc.frames / sc.fps : SI.n / SI.fps;     // (a duração do clipe do atlas)
         car.setControlled(false);
         car.hold = true;
         this.mode = 'player';
@@ -2231,7 +2232,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
         if (!land) { this._flash(o.bridgeRail ? 'Aqui embaixo não tem água' : 'Sem espaço do outro lado'); return; }
         const face = Math.atan2(land.x - p.x, land.z - p.z);
         if (land.water) {                                                    // da ponte para o mar: salto mais longo e mergulho
-            pl.runSequence([{ clip: 'vault', timer: 0.85, glide: land, arc: 1.6 }], { face, onDone: () => this._splash(land.x, land.z) });
+            pl.runSequence([{ clip: 'vault', timer: 0.85, fit: true, glide: land, arc: 1.6 }], { face, onDone: () => this._splash(land.x, land.z) });   // (fit: o clipe de 0,6 s esticado até 0,85 s, uma vez só)
         } else {
             pl.runSequence([{ clip: 'vault', timer: 0.6, glide: land, arc: 0.9 }], { face });
         }

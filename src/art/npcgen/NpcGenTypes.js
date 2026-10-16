@@ -40,6 +40,7 @@ function NpcGenTypes(G) {
         'sitin:L', 'sitin:R', 'sitout:L', 'sitout:R',                    // sentar no carro / sair dele (pela porta da esquerda / da direita)
         ...KNIFE, 'holdup:knife',
         'swim_in:none', 'swim_out:none', 'dive_in:none', 'dive:none', 'dive_out:none',      // começar/parar de nadar, mergulho
+        'swim_stand:none',                                               // chegou ao raso nadando crawl: fica de pé (swim_out → isto → wade_idle)
         'run_heavy:none', 'idle_heavy:none',                             // o fardo da sobrecarga também correndo e parado (o andar fica no principal)
         'swim_breast:none', 'wade:none', 'wade_idle:none',               // nado peito na superfície; vadeando com a água acima da cintura
         ...GYM,                                                          // academia: rosca direta, supino, agachamento (3 faixas de peso)

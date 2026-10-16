@@ -12,7 +12,9 @@
 //   • As ARMAS NOVAS (pistola com silenciador, RPG, lança-foguetes, minigun) moram num terceiro atlas (protagonista_armas.js; armsAtlas
 //     da folha). Num visual gerado ele só é gerado quando o jogador tem uma delas ("hero:N:w", guardado como os outros); enquanto isso,
 //     o desenho delas sai do visual de sempre.
-//   • preview(ficha) = o boneco nas 8 direções (tela de equipamento), num segundo Worker.
+//   • preview(ficha) = o boneco em todas as direções do clipe parado (16; perfil leve, 8 — tela de equipamento), num segundo Worker.
+//   • Os atlas gerados saem PAGINADOS (NpcArt.paged: páginas por grupo de clipes e paridade de direção) e, no perfil leve
+//     (Config.art.npcDirs = 8), só com as 8 direções pares. No aparelho (IndexedDB) cada página vai comprimida.
 // ============================================================================
 
 const PlayerLook = {
@@ -24,7 +26,7 @@ const PlayerLook = {
     armsIds: new Map(),     // chave de forma (sem o dano) → id do atlas das armas novas desse visual
     _clean: new Map(),      // chave de forma → a mesma sem o dano pintado (as armas novas não têm versão machucada)
     _job: 0,
-    VERSION: 15,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D; 8: sentar no carro (sitin); 9: começar/parar de nadar e mergulho; 10: sair do carro (sitout) e faca; 11: fardo correndo e parado (run_heavy, idle_heavy); 12: nado peito, vadear fundo, mergulho suave; 13: granada e molotov; 14: braços soltos, cabeça maior, silhueta feminina, luz mais marcada; 15: visual 3D (sem contorno preto, borda suavizada, sombra macia)
+    VERSION: 17,             // mude quando o gerador mudar o desenho (invalida o cache do IndexedDB) — 2: adulto, pilotando; 3: sombreado contínuo; 4: atlas HD até 4096 de lado; 5: passada longa; 6: subida (walk_up, climb); 7: corpo da malha 3D; 8: sentar no carro (sitin); 9: começar/parar de nadar e mergulho; 10: sair do carro (sitout) e faca; 11: fardo correndo e parado (run_heavy, idle_heavy); 12: nado peito, vadear fundo, mergulho suave; 13: granada e molotov; 14: braços soltos, cabeça maior, silhueta feminina, luz mais marcada; 15: visual 3D (sem contorno preto, borda suavizada, sombra macia); 16: 16 direções, mais quadros, atlas paginado (páginas comprimidas); 17: levantar da água (swim_stand)
 
     attach(game) {
         this.game = game; this.shown = null;
@@ -91,6 +93,7 @@ const PlayerLook = {
         if (this._partialId) { NpcArt.dropAtlas(this._partialId); this._partialId = null; }
         if (s.dmg) return;
         clearTimeout(this._preT);
+        if (!NpcArt.canZip) return;                                          // (sem compressão o aparelho guarda cru, ~4× maior: só o que foi usado — _idbPut)
         this._preT = setTimeout(() => this._prefetch(s), 3000);
     },
 
@@ -102,7 +105,7 @@ const PlayerLook = {
         hero.fallbackAtlas = partial ? (this.ids.get(this.shown) || 'protagonista') : 'protagonista';
         hero.armsAtlas = this.armsIds.get(this._clean.get(key) || key) || (NpcArt.atlases.protagonista_armas ? 'protagonista_armas' : null);
         if (!partial) { this.shown = key; if (this.want === key) this.want = null; }
-        if (a && a.sheet === hero && a.clip) { const n = a.clipName, w = a.clip.weapon, f = a.frame; a.clip = null; if (a.play(n, w, { restart: true })) a.setFrame(f); }
+        if (a && a.sheet === hero && a.clip) a.replay();                   // (o mesmo clipe no atlas novo, na mesma fase: o número de quadros pode mudar)
     },
 
     async _load(s, key) {
@@ -112,7 +115,9 @@ const PlayerLook = {
         if (cached && cachedT) { this._registerTac(key, cachedT); this._register(key, cached, false); this._ready(s); return; }       // (sem o companheiro: gera tudo de novo)
         this._build(s, key, job);
     },
-    _ck(key) { return `v${this.VERSION}.${this.k()}|${key}`; },
+    _ck(key) { return `v${this.VERSION}.${this.k()}.${this.dirs() || 'n'}|${key}`; },
+    // Direções dos atlas gerados: 8 no perfil leve (só as pares); senão as do gerador (0 = sem forçar).
+    dirs() { return typeof NpcArt !== 'undefined' && NpcArt.lite ? 8 : 0; },
 
     // Atlas gerado → NpcArt (textura + material) e em uso. partial = só os primeiros clipes (o resto vem do atlas anterior).
     _register(key, atlas, partial) {
@@ -124,8 +129,8 @@ const PlayerLook = {
         if (old && old !== id) NpcArt.dropAtlas(old);
         if (this._partialId && this._partialId !== id) { NpcArt.dropAtlas(this._partialId); this._partialId = null; }
         if (partial) this._partialId = id;
-        // guarda só os 6 visuais mais recentes na memória de vídeo
-        while (this.ids.size > 6) {
+        // guarda só os visuais mais recentes na memória de vídeo (16 direções: ~60–80 MB cada; os outros voltam do IndexedDB)
+        while (this.ids.size > (NpcArt.lite ? 2 : 3)) {
             const [k, v] = this.ids.entries().next().value;
             if (k === this.shown) break;
             this.ids.delete(k); NpcArt.dropAtlas(v);
@@ -198,7 +203,7 @@ const PlayerLook = {
             const feed = () => {
                 if (job !== this._job || next >= chunks.length) { wk._busy = false; return; }
                 wk._busy = true;
-                wk.postMessage({ type: 'clips', job, spec: s, keys: chunks[next++], k });
+                wk.postMessage({ type: 'clips', job, spec: s, keys: chunks[next++], k, dirs: this.dirs() });
             };
             wk.onmessage = (e) => {
                 const m = e.data;
@@ -222,18 +227,18 @@ const PlayerLook = {
         for (const lv of [2, 1, 3]) {
             const sp = Object.assign({}, s, { dmg: lv }), key = G.shapeKey(sp);
             if (job !== this._preJob) return end();
-            if (await this._idbGet(this._ck(key) + '|t')) continue;
+            if (await this._idbHas(this._ck(key) + '|t')) continue;
             const all = this.clipsFor(sp).concat(G.PLAYER_TAC), tac = new Set(G.PLAYER_TAC), got = [];
             const wk = this._worker('pre');
             for (let i = 0; i < all.length; i += 3) {
                 if (job !== this._preJob) return end();
-                const m = await new Promise((ok) => { wk.onmessage = (e) => { wk._busy = false; ok(e.data); }; wk._busy = true; wk.postMessage({ type: 'clips', job: -job, spec: sp, keys: all.slice(i, i + 3), k }); });
+                const m = await new Promise((ok) => { wk.onmessage = (e) => { wk._busy = false; ok(e.data); }; wk._busy = true; wk.postMessage({ type: 'clips', job: -job, spec: sp, keys: all.slice(i, i + 3), k, dirs: this.dirs() }); });
                 if (m.error) { console.warn('[VISUAL] machucado falhou:', m.error); return end(); }
                 got.push(...m.clips);
             }
             const idx = new Map(all.map((c, i) => [c, i])), sorted = got.sort((p, q) => idx.get(p.key) - idx.get(q.key));
-            this._idbPut(this._ck(key) + '|t', this._pack(sorted.filter((c) => tac.has(c.key)), k));
-            this._idbPut(this._ck(key), this._pack(sorted.filter((c) => !tac.has(c.key)), k));
+            await this._idbPut(this._ck(key) + '|t', this._pack(sorted.filter((c) => tac.has(c.key)), k));
+            await this._idbPut(this._ck(key), this._pack(sorted.filter((c) => !tac.has(c.key)), k));
         }
         end();
     },
@@ -262,7 +267,7 @@ const PlayerLook = {
             NpcArt.addAtlas(id, a);
             this.armsIds.set(key, id);
             if (old && old !== id) NpcArt.dropAtlas(old);
-            while (this.armsIds.size > 3) { const [k0, v0] = this.armsIds.entries().next().value; this.armsIds.delete(k0); NpcArt.dropAtlas(v0); }
+            while (this.armsIds.size > (NpcArt.lite ? 1 : 2)) { const [k0, v0] = this.armsIds.entries().next().value; this.armsIds.delete(k0); NpcArt.dropAtlas(v0); }
             if (this.shown) this._use(this.shown, this.ids.get(this.shown) || 'protagonista');
         };
         const cached = await this._idbGet(ck);
@@ -279,7 +284,7 @@ const PlayerLook = {
             const feed = () => {
                 if (job !== this._armsJob || next >= chunks.length) { wk._busy = false; return; }
                 wk._busy = true;
-                wk.postMessage({ type: 'clips', job: 'w' + job, spec: s, keys: chunks[next++], k });
+                wk.postMessage({ type: 'clips', job: 'w' + job, spec: s, keys: chunks[next++], k, dirs: this.dirs() });
             };
             wk.onmessage = (e) => {
                 const m = e.data;
@@ -296,16 +301,26 @@ const PlayerLook = {
             feed();
         }
     },
-    _pack(clips, k) { const a = this.G.packAtlas(clips); return { w: a.w, h: a.h, data: a.data, clips: a.clips, k, v: 2, frame: this.G.frameFor(k) }; },
-    // Resolução do visual: a dos atlas prontos, ou o dobro com a alta definição ligada (NpcArt.hd).
+    // Empacota os quadros recortados (vindos dos Workers) no atlas PAGINADO (G.packPages; o empacotador antigo, uma página só, se o
+    // gerador ainda não tiver o novo).
+    _pack(clips, k) {
+        const G = this.G, a = G.packPages ? G.packPages(clips) : G.packAtlas(clips);
+        return NpcArt.paged(a.pages ? { k, v: 2, frame: G.frameFor(k), clips: a.clips, pages: a.pages } : { w: a.w, h: a.h, data: a.data, clips: a.clips, k, v: 2, frame: G.frameFor(k) }, k, G.frameFor(k));
+    },
+    // Resolução do visual: a dos atlas prontos, ou o dobro com a alta definição ligada (NpcArt.hdOn).
     k() { return typeof NpcArt !== 'undefined' && NpcArt.hdOn() ? this.G.HD_K : this.G.OUT_K; },
 
-    // O boneco nas 8 direções (parado), para a tela de equipamento: cb(frames RGBA[8], W, H).
+    // O boneco em todas as direções do clipe parado (as do atlas do jogador: 16; perfil leve, 8), para a tela de equipamento:
+    // cb(frames RGBA[D], W, H, k) — frames[d] = direção d (0 = de costas, sentido horário).
     preview(s, cb) {
         const job = this._pj = (this._pj || 0) + 1, wk = this._worker('preview');
         wk.onmessage = (e) => { wk._busy = false; if (e.data.job === this._pj && !e.data.error) cb(e.data.frames, e.data.W, e.data.H, e.data.k); };
-        wk.postMessage({ type: 'preview', job, spec: s, k: this.k() });
+        wk.postMessage({ type: 'preview', job, spec: s, k: this.k(), dirs: this.previewDirs() });
         return job;
+    },
+    previewDirs() {
+        const A = typeof NpcArt !== 'undefined' && NpcArt.atlases.protagonista, c = A && A.data.clips['idle:none'];
+        return Math.min(typeof NpcArt !== 'undefined' ? NpcArt.dirs : 16, (c && c.dirs) || 8);
     },
 
     // Worker montado a partir do TEXTO das funções do gerador (funciona até em file://). restart = interrompe o que estiver fazendo.
@@ -322,8 +337,10 @@ const PlayerLook = {
                     try {
                         if (m.type === 'clips') {
                             const R = G.rendererFor(m.spec, { k: m.k || G.OUT_K });
+                            // (perfil leve: só as direções pares — se o gerador não souber renderizar menos, as ímpares saem aqui)
+                            const fit = (c) => { if (m.dirs && c.dirs > m.dirs) { const s = c.dirs / m.dirs; c.frames = c.frames.filter((_, d) => d % s === 0); c.dirs = m.dirs; } return c; };
                             const send = (keys, first, more) => {
-                                const clips = keys.map((key) => G.renderClip(R, key, null, { hand: m.spec.hand })), buf = [];
+                                const clips = keys.map((key) => fit(G.renderClip(R, key, null, { hand: m.spec.hand, dirs: m.dirs || undefined }))), buf = [];
                                 for (const c of clips) for (const row of c.frames) for (const f of row) if (f.data.byteLength) buf.push(f.data.buffer);
                                 self.postMessage({ job: m.job, first, more, clips }, buf);
                             };
@@ -331,11 +348,14 @@ const PlayerLook = {
                             if (m.then) send(m.then, false, false);
                         } else if (m.type === 'preview') {
                             const k = m.k || G.OUT_K, R = G.rendererFor(m.spec, { k }), pose = G.CLIPS.idle.fn(m.spec.weaponLook || 'none')[0], ramps = G.rampsFor(m.spec), frames = [];
-                            for (let d = 0; d < 8; d++) frames.push(G.colorize(R.render(pose, -45 * d, false), ramps));      // (sem a sombra no chão: o pedestal já é o chão)
+                            const D = m.dirs || 8;
+                            for (let d = 0; d < D; d++) frames.push(G.colorize(R.render(pose, (-360 / D) * d, false), ramps));      // (sem a sombra no chão: o pedestal já é o chão)
                             self.postMessage({ job: m.job, frames, W: G.frameFor(k), H: G.frameFor(k), k }, frames.map((f) => f.buffer));
-                        } else if (m.type === 'atlas') {                   // atlas inteiro de um TIPO (alta definição: NpcArt.hdWant; machucado: dmg — NpcArt.dmgSheet)
-                            const a = G.buildAtlas(m.dmg ? Object.assign({}, G.BY_ID[m.id], { dmg: m.dmg }) : G.BY_ID[m.id], m.keys || G.TYPES[m.id].clips, { typeId: m.id, k: m.k });
-                            self.postMessage({ job: m.job, atlas: { w: a.w, h: a.h, data: a.data, clips: a.clips, k: a.k, v: a.v, frame: a.frame } }, [a.data.buffer]);
+                        } else if (m.type === 'atlas') {                   // atlas inteiro de um TIPO (machucado: dmg — NpcArt.dmgSheet), paginado
+                            const a = G.buildAtlas(m.dmg ? Object.assign({}, G.BY_ID[m.id], { dmg: m.dmg }) : G.BY_ID[m.id], m.keys || G.TYPES[m.id].clips, { typeId: m.id, k: m.k, dirs: m.dirs || undefined });
+                            const pages = a.pages ? a.pages.map((p) => ({ w: p.w, h: p.h, g: p.g, par: p.par, data: p.data })) : null;
+                            const out = pages ? { k: a.k, v: a.v, frame: a.frame, clips: a.clips, pages } : { w: a.w, h: a.h, data: a.data, clips: a.clips, k: a.k, v: a.v, frame: a.frame };
+                            self.postMessage({ job: m.job, atlas: out }, [...new Set(pages ? pages.map((p) => p.data.buffer) : [a.data.buffer])]);
                         }
                     } catch (err) { self.postMessage({ job: m.job, error: String(err && err.stack || err) }); }
                 };
@@ -350,33 +370,59 @@ const PlayerLook = {
     },
 
     // ------------------------------------------------------------------ cache no aparelho (IndexedDB; sem ele, só na memória)
+    // Cada atlas guardado com as páginas comprimidas (NpcArt.zip). No máximo 32 guardados: sai o gravado há mais tempo (o registro
+    // '#t' guarda quando cada um foi gravado). Ao abrir, apaga o que é de outra VERSION. Sem CompressionStream (Safari/Firefox antigos)
+    // as páginas vão cruas (~4× maiores: 16 direções em alta, ~80 MB por atlas) e ficam só os RAW_MAX gravados por último — o visual
+    // em uso, o companheiro tático, as armas novas e o visual anterior; o _load/unzip lê as duas formas.
+    RAW_MAX: 8,
     _db() {
         if (this._dbp) return this._dbp;
         return (this._dbp = new Promise((ok) => {
             try {
                 const r = indexedDB.open('dirty-money-visual', 1);
                 r.onupgradeneeded = () => r.result.createObjectStore('atlas');
-                r.onsuccess = () => ok(r.result);
+                r.onsuccess = () => {
+                    const db = r.result;
+                    try {
+                        const st = db.transaction('atlas', 'readwrite').objectStore('atlas'), q = st.getAllKeys(), pre = `v${this.VERSION}.`;
+                        q.onsuccess = () => { for (const k of q.result) if (k !== '#t' && !String(k).startsWith(pre)) st.delete(k); };
+                    } catch (e) { /* segue */ }
+                    ok(db);
+                };
                 r.onerror = () => ok(null);
             } catch (e) { ok(null); }
         }));
     },
-    async _idbGet(k) {
+    async _idbRaw(k, count = false) {
         const db = await this._db();
         if (!db) return null;
         return new Promise((ok) => {
-            try { const q = db.transaction('atlas').objectStore('atlas').get(k); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }
+            try { const st = db.transaction('atlas').objectStore('atlas'), q = count ? st.count(k) : st.get(k); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }
             catch (e) { ok(null); }
         });
     },
+    async _idbGet(k) {
+        const v = await this._idbRaw(k);
+        try { return v ? await NpcArt.unzip(v) : null; } catch (e) { return null; }
+    },
+    async _idbHas(k) { return !!(await this._idbRaw(k, true)); },
     async _idbPut(k, atlas) {
         const db = await this._db();
         if (!db) return;
+        let v;
+        try { v = await NpcArt.zip(atlas); v.t = Date.now(); } catch (e) { return; }
+        const max = v.raw ? this.RAW_MAX : 32;                                // (cru: cabem menos)
         try {
             const st = db.transaction('atlas', 'readwrite').objectStore('atlas');
-            st.put({ w: atlas.w, h: atlas.h, data: atlas.data, clips: atlas.clips, k: atlas.k, v: atlas.v, frame: atlas.frame, t: Date.now() }, k);
-            const all = st.getAllKeys();
-            all.onsuccess = () => { const ks = all.result.filter((x) => x !== k); if (ks.length > 32) for (const x of ks.slice(0, ks.length - 32)) st.delete(x); };      // (cada visual: o limpo e os 3 machucados)
+            st.put(v, k);
+            const q = st.get('#t');
+            q.onsuccess = () => {
+                const T = q.result || {};
+                T[k] = Date.now();
+                const ks = Object.keys(T).sort((a, b) => T[a] - T[b]);
+                while (ks.length > max) { const x = ks.shift(); delete T[x]; st.delete(x); }     // (cada visual: o limpo e os 3 machucados)
+                st.put(T, '#t');
+            };
         } catch (e) { console.warn('[VISUAL] não guardou no aparelho:', e && e.message); }     // (sem espaço: segue só na memória)
     },
 };

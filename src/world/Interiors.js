@@ -327,7 +327,7 @@ const Interiors = {
             else { if (a.sheet !== sheet) a.useSheet(sheet); a.setVariant(row); }
             a.gym = { clip: e.anim ? e.anim.clip : 'idle', w: e.anim ? e.anim.w : 'none', phase: 'rest', t: 0.5 + Math.random() * 3, reps: 0 };
             a.play(a.gym.clip, a.gym.w, { restart: true }) || a.play('idle', 'none');
-            if (a.gym.clip !== 'walk') a.setFrame(0);
+            if (a.gym.clip !== 'walk') a.setPhase(0);
             a.setPosition(o.x + e.x, o.z + e.z); a.mesh.computeWorldMatrix(true); a.mesh.refreshBoundingInfo(); a.setHeading(e.face); a.setVisible(true); a.mesh.position.y = 0.5;
         });
         for (let i = typed.length; i < GA.length; i++) GA[i].setVisible(false);
@@ -428,11 +428,12 @@ const Interiors = {
         if (!G || G.clip === 'walk' || G.clip === 'idle') { a.update(dt, G && G.clip === 'walk' ? 0.8 : 1); return; }
         G.t -= dt;
         if (G.phase === 'rest') {
-            a.update(dt, 0); a.setFrame(0);
+            a.update(dt, 0); a.setPhase(0);
             if (G.t <= 0) { G.phase = 'set'; G.reps = 6 + Math.floor(Math.random() * 5); const c = a.clip; G.t = G.reps * (c ? c.frames / c.fps : 1.4) * 1.15; }
         } else {
+            const p0 = a.phase;
             a.update(dt, 0.87);
-            if (G.t <= 0 && a.frame === 0) { G.phase = 'rest'; G.t = 4 + Math.random() * 6; }
+            if (G.t <= 0 && a.phase < p0) { G.phase = 'rest'; G.t = 4 + Math.random() * 6; a.setPhase(0); }     // (fecha a série quando a repetição volta ao começo)
         }
     },
 

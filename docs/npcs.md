@@ -86,8 +86,10 @@ cartunesca:
   (IndexedDB `dirty-money-hd`, comprimido) — das próximas vezes é só carregar. Enquanto o visual do jogador é gerado, a fila espera
   (o jogador tem a CPU primeiro). O visual do jogador também é gerado em alta. Mudou o desenho? Suba `NpcArt.HD_VERSION` (e `PlayerLook.VERSION`).
   Se o PC não aguentar, o modo econômico (AutoQuality) volta a tela ao pixelado (os personagens em alta ficam).
-- **Limite do atlas: 4096 px de lado.** O jogo endereça cada quadro como x·4096 + y (exato em float); o empacotamento (`pack`) alarga
-  o atlas para 4096 quando ele passaria de 4096 de altura (o jogador em alta: 4096×3308). Passou disso, `NpcArt.clip` avisa no console.
+- **Atlas em PÁGINAS de até 4096 px de lado.** O jogo endereça cada quadro como x·4096 + y (exato em float). `NpcGenBuild.packPages`
+  separa os quadros por grupo de clipes (`GROUPS`: hot = parado/andar/correr/armas, act, fall, water, car, gym) e paridade da direção
+  (pares / ímpares), páginas de até ~8 Mpx; todas as direções de uma paridade de um clipe ficam na mesma página (o quadro seguinte,
+  `fr2`, sai da mesma textura). Formato dos arquivos: cabeçalho de `src/art/npcgen/NpcGenBuild.js`.
 
 ## Pilotando (`ride_*`, `mount`)
 
@@ -115,18 +117,26 @@ src/art/npcgen/NpcGenChar.js     fichas (pele, cabelo, roupa, chapéu, colete, b
 src/art/npcgen/NpcGenRender.js   pixel art: z-buffer a 4×, cobertura, 5 tons, contornos, água, efeitos (clarão, cápsula…), sombra
 src/art/npcgen/NpcGenAnims.js    esqueleto (IK) e TODAS as animações; CLIPS = clipe do jogo ("walk:pistol") → animação
 src/art/npcgen/NpcGenTypes.js    tipos do jogo: clipes de cada um, arma desenhada, lugares onde aparece, regras de variação
-src/art/npcgen/NpcGenBuild.js    monta o atlas: 8 direções, recorte, quadros repetidos juntados, empacotamento
+src/art/npcgen/NpcGenBuild.js    monta o atlas: 16 direções, recorte, quadros repetidos juntados, páginas; formato dos arquivos
 src/art/NpcArt.js                no jogo: atlas → textura, paleta das variantes, shader, folhas (NpcSheet), quem é quem
 src/player/PlayerLook.js         visual do jogador: ficha a partir da roupa/bolsa; gera o atlas novo em Workers; cache
-assets/npcs/<tipo>.js            atlas prontos (gerados por tools/npcs)
-tools/npcs/index.html            prévia de qualquer tipo/variante/clipe e "Gerar e salvar todos"
+assets/npcs/<tipo>.js            atlas prontos: o manifesto (clipes, quadros, páginas; só ASCII) — gerados por tools/npcs/regen.cjs
+assets/npcs/<tipo>/p<i>.js       as páginas: NPC_PAGE(tipo, i, PNG cinza w × 2h em base64), carregadas quando o jogo precisa
+tools/npcs/regen.cjs             gera de novo os atlas prontos (Node, worker_threads) — o jeito oficial
+tools/npcs/index.html            prévia de qualquer tipo/variante/clipe/direção e "Gerar e salvar todos" (no navegador)
+tools/npcs/validate.html         ?atlas=<tipo>: confere os atlas prontos (páginas, PNG, retângulos) e desenha um clipe nas 16 direções
 ```
 
 - **Cor por paleta.** Cada pixel do atlas guarda o *código* da cor (material × 8 + tom) e o alfa — 2 bytes por pixel (PNG cinza+alfa
   dentro de um `.js`, para funcionar também aberto por duplo clique). A cor vem de uma linha da paleta (`NpcArt._palette`): a linha
   0 é o jogador, as outras são as variantes dos tipos. Material 0 e os tons 5–7 são cores fixas (sombra, contorno, clarão do tiro…).
-- **8 direções desenhadas**: o quad não gira (`SpriteActor`, clipe `npc`), escolhe o quadro pela direção. O shader faz o
-  bilinear à mão sobre a cor já pintada (suave de longe, nítido de perto — `NpcArt.setZoom`).
+- **16 direções desenhadas** (22,5° cada; o perfil leve usa só as 8 pares): o quad não gira (`SpriteActor`, clipe `npc`), escolhe o
+  quadro pela direção, com histerese (só troca passando 0,68 de passo da direção atual: sem "piscar" na fronteira). O shader faz o
+  bilinear à mão sobre a cor já pintada (suave de longe, nítido de perto — `NpcArt.setZoom`) e mistura o quadro seguinte (suave).
+- **Mais quadros, mesma duração**: andar e correr 12 quadros por ciclo, soco 9, chute 10, morte 10, cambalhota 11… (tabela em
+  `CLIPS`, `k` → `n`; o fps sobe na mesma proporção, então os pés continuam plantados nas mesmas velocidades e os tempos do jogo em
+  segundos valem). Sequências escritas à mão viram `n` quadros por `resample` (interpolação suave, sem mudar o tempo de cada pose);
+  ciclos são recalculados com o `n`. O jogo usa a FASE do clipe (`SpriteActor.phase` / `setPhase` / `setLean`), não o índice do quadro.
 - **Ordem de desenho**: personagens 2,5D vão no grupo 1, depois dos carros e antes das copas das árvores, e entre si do norte para
   o sul (quem está ao sul fica por cima). A parte de cima do desenho testa a profundidade "em pé" (não some atrás de muro/telhado
   baixo logo ao norte). Com os pés debaixo de um toldo de loja ou de uma cobertura de posto (`MapGeo.coverAt`, altura na cor do
@@ -167,12 +177,17 @@ tools/npcs/index.html            prévia de qualquer tipo/variante/clipe e "Gera
    pack2/tactical/cross, `watch`, `belt`, `zip`.
 2. Tipo do jogo: `TYPES` em `NpcGenTypes.js` (regras de variação, lugares, clipes, arma desenhada).
 3. Animações: funções em `NpcGenAnims.js` e a tabela `CLIPS` (nome do clipe do jogo → animação, fps, loop).
-4. Abra `http://localhost:8123/tools/npcs/` (servidor `serve.ps1`): a prévia mostra qualquer tipo/variante/clipe; **Gerar e salvar
-   todos** monta os atlas em Workers paralelos (~4 min no PC) e grava em `assets/npcs/`. Tipo novo: acrescente o
-   `<script src="./assets/npcs/<tipo>.js">` no `index.html`.
+4. Gere os atlas de novo: **`node tools/npcs/regen.cjs`** (todos os tipos, um por Worker, os maiores primeiro; grava
+   `assets/npcs/<tipo>.js` + `assets/npcs/<tipo>/p<i>.js`, apaga páginas velhas e não mexe em `malha3d.js`). Só alguns tipos:
+   `node tools/npcs/regen.cjs civil_vovo pm_policial`; `-j N` = Workers (padrão: núcleos − 1); `--clips walk,idle:none --out /tmp/x`
+   = só esses clipes, noutra pasta (testes); `--dry` = mede sem gravar; `--list` = tipos e quadros; `--help`. Para conferir:
+   `tools/npcs/validate.html?atlas=<tipo>&clip=walk:none`. A prévia (`http://localhost:8123/tools/npcs/`, servidor `serve.ps1`)
+   mostra qualquer tipo/variante/clipe/direção; o **Gerar e salvar todos** dela faz o mesmo que o regen.cjs no navegador (mais
+   devagar) e grava na pasta escolhida (File System Access API), pelo `serve.ps1` ou baixando os arquivos. Tipo novo: acrescente o
+   `<script src="./assets/npcs/<tipo>.js">` (o manifesto) no `index.html`.
 5. Mudou o desenho do jogador? Suba `PlayerLook.VERSION` (invalida os visuais guardados no IndexedDB).
 
-`tools/npcs/validate.html` compara o porte com os PNGs originais do pacote (com `G.ADULT = null`, as proporções do pacote): copie algumas folhas de `sprites/` do pacote para
+`tools/npcs/validate.html` (sem parâmetros) compara o porte com os PNGs originais do pacote (com `G.ADULT = null`, as proporções do pacote): copie algumas folhas de `sprites/` do pacote para
 `tools/npcs/_ref/` como `<tipo>_<animação>.png` (ex.: `civil_trabalhador_idle.png`).
 
 ## Subindo morro (`walk_up`, `climb`)
@@ -202,8 +217,11 @@ ficam plantados com a passada do adulto — `STRIDE_K` em `NpcGenAnims.gait`). M
 
 ## Números
 
-- Atlas prontos (formato 2, resolução padrão): ~0,8–1,3 MB por tipo (`.js`; o protagonista, 2,5 MB), ~3 MB de textura cada, criada só quando o tipo aparece. 26 tipos ≈ 29 MB de arquivos. Gerar todos: ~3 min.
-- Alta definição: ~35 s por tipo na primeira vez (até 3 ao mesmo tempo, em segundo plano), depois carrega do aparelho em segundos; ~10 MB de textura por tipo. A tela em resolução real custa mais à placa de vídeo que o pixelado.
-- Decodificação de todos os atlas na carga: ~0,75 s, em segundo plano.
-- Renderizar um quadro no tamanho do jogo: ~10–15 ms (Worker). Visual novo do jogador: primeira parte em ~12 s, completo em ~28 s.
+- Atlas prontos (k = 1, 16 direções, páginas): 34 tipos, ~160 mil quadros, 326 páginas — 408 MB de `.js` (303 MB de PNG), ~5–20 MB por
+  tipo; se TODAS as páginas estivessem na placa de vídeo seriam ~1,5 GB, mas só as páginas em uso ficam (orçamento `Config.art.vramMB`:
+  640 MB; perfil leve 256 MB e só as direções pares). Medido: ~105–160 MB de textura no 1º quadro do mundo (antes: 408 MB) e o
+  mundo pronto em ~3 s depois de "novo jogo".
+- Carga: na abertura só os manifestos (e o protagonista); cada página é decodificada num Worker quando alguém precisa dela.
+- Renderizar um quadro (k = 1, 224 px): ~13–17 ms numa thread (Node 22; ~25 ms com 4 Workers em 4 núcleos), mais ~3,5 s para assar a
+  ficha. Gerar todos (`regen.cjs`, 16 direções, ~160 mil quadros): ~20 min com 4 Workers.
 - Desempenho do jogo com 70 pedestres: igual ao dos bonecos antigos (o shader faz 4 leituras por pixel do sprite).

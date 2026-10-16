@@ -295,7 +295,13 @@ function NpcGenRender(G) {
                 if (isDecal[m]) LN[i] = 0;
                 // oclusão ambiente: vizinhos bem mais perto da câmera (por cima/na frente deste pixel)
                 let occ = 0;
-                for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+                if (y >= rad && y < ch - rad && x >= rad && x < cw - rad) {         // (longe da borda: o mesmo vizinho, sem a volta por módulo)
+                    for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad, r = (y - dy) * cw + x; dx <= rad; dx++) {
+                        if (!dy && !dx) continue;
+                        const j = r - dx;
+                        if (F[j] && ZZ[j] < zz - thr) occ++;
+                    }
+                } else for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
                     if (!dy && !dx) continue;
                     const j = idx(y - dy, x - dx);
                     if (F[j] && ZZ[j] < zz - thr) occ++;
@@ -389,10 +395,16 @@ function NpcGenRender(G) {
                 for (let j = 0; j < cnt; j++) { gx[j] = mx + (gx[j] - mx) * k; gy[j] = my + (gy[j] - my) * k; }
             }
             const W2 = W * s2, H2 = H * s2, S2 = new Uint8Array(W2 * H2);
+            let X0 = W2, X1 = -1, Y0 = H2, Y1 = -1;
             for (let j = 0; j < cnt; j++) {
                 const X = floor((this.px + gx[j]) * s2), Y = floor((this.py - gy[j]) * s2);
-                if (X >= 0 && X < W2 && Y >= 0 && Y < H2) S2[Y * W2 + X] = 1;
+                if (X >= 0 && X < W2 && Y >= 0 && Y < H2) { S2[Y * W2 + X] = 1; if (X < X0) X0 = X; if (X > X1) X1 = X; if (Y < Y0) Y0 = Y; if (Y > Y1) Y1 = Y; }
             }
+            // Atalho (o mesmo resultado, bit a bit): cada passada de desfoque espalha 1 px; se a mancha, alargada pelo número de passadas,
+            // não encosta na borda do quadro, a volta (np.roll) só leria zeros — desfoca só essa janela, sem módulo.
+            const np = soft ? 1 + Math.max(2, Math.round(3 * this.k / 0.5)) : 1;
+            const xa = (X0 >> 1) - np, xb = (X1 >> 1) + np, ya = (Y0 >> 1) - np, yb = (Y1 >> 1) + np;
+            if (X1 >= 0 && xa >= 1 && ya >= 1 && xb <= W - 2 && yb <= H - 2) return this._shadowWin(S2, W2, xa, xb, ya, yb, np, soft);
             let S = new Float32Array(W * H);
             for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) S[y * W + x] = (S2[y * 2 * W2 + x * 2] + S2[y * 2 * W2 + x * 2 + 1] + S2[(y * 2 + 1) * W2 + x * 2] + S2[(y * 2 + 1) * W2 + x * 2 + 1]) / 4;
             // desfoque [1 2 1] (com volta, como o np.roll) em y e depois em x
@@ -410,12 +422,28 @@ function NpcGenRender(G) {
                 for (let i = 0; i < W * H; i++) { const v = Math.min(1, S[i] / 0.42); S[i] = v * v * (3 - 2 * v); }
                 return S;
             }
-            const m = new Uint8Array(W * H), out = new Uint8Array(W * H);
+            return this._shadowMask(S);
+        }
+        _shadowMask(S) {
+            const W = this.W, H = this.H, m = new Uint8Array(W * H), out = new Uint8Array(W * H);
             for (let i = 0; i < W * H; i++) m[i] = S[i] > 0.16 ? 1 : 0;
             for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
                 out[y * W + x] = m[y * W + x] | m[y * W + (x - 1 + W) % W] | m[y * W + (x + 1) % W] | m[((y - 1 + H) % H) * W + x] | m[((y + 1) % H) * W + x];
             }
             return out;
+        }
+        // _shadow só na janela [xa, xb] × [ya, yb] (dentro de 1..W−2 × 1..H−2): as mesmas contas, na mesma ordem, de cada pixel; fora dela
+        // tudo fica 0, como na conta do quadro inteiro. np = número de passadas (1 + as do degradê).
+        _shadowWin(S2, W2, xa, xb, ya, yb, np, soft) {
+            const W = this.W, H = this.H, S = new Float32Array(W * H), T = new Float32Array(W * H);
+            for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) S[y * W + x] = (S2[y * 2 * W2 + x * 2] + S2[y * 2 * W2 + x * 2 + 1] + S2[(y * 2 + 1) * W2 + x * 2] + S2[(y * 2 + 1) * W2 + x * 2 + 1]) / 4;
+            for (let p = 0; p < np; p++) {
+                for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) T[y * W + x] = (S[(y - 1) * W + x] + S[y * W + x] * 2 + S[(y + 1) * W + x]) / 4;
+                for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) S[y * W + x] = (T[y * W + x - 1] + T[y * W + x] * 2 + T[y * W + x + 1]) / 4;
+            }
+            if (!soft) return this._shadowMask(S);
+            for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) { const i = y * W + x, v = Math.min(1, S[i] / 0.42); S[i] = v * v * (3 - 2 * v); }
+            return S;
         }
 
         // Escala dos efeitos desenhados em px (clarão, respingos): acompanha a resolução do atlas (o pacote original: 1).

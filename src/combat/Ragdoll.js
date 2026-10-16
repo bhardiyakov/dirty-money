@@ -44,7 +44,8 @@ class Ragdoll {
         const spinMag = bail || flat ? 0 : (p >= 8 ? Math.min(10, (p - 5) * 0.8) : Math.min(2, p * 0.25));
         this.spin = spinMag * (Math.random() < 0.5 ? -1 : 1);
         this.tumbling = bail || p >= 11;                         // cambalhota (vs braços soltos)
-        this.air = 0;                                            // tempo no ar (para o ritmo da animação)
+        if (this.tumbling) this.heading = Math.atan2(this.dx, this.dz);          // (o clipe rola para a FRENTE: de frente para onde voa)
+        this.air = 0;                                            // tempo no ar desde a decolagem/o último quique (a pose usa airPh)
 
         this.phase = 'air';
         this.t = 0;
@@ -88,14 +89,12 @@ class Ragdoll {
             this.vy -= this.g * dt;
             this._move(dt);
             this.heading += this.spin * dt;
-            // Frame do clipe no ar: cambalhota gira conforme o tempo (forte = várias voltas); ragdoll balança os membros.
-            if (this.tumbling) {
-                const turns = this.kind === 'bail' ? 1 / 0.62 : 1.5 + this.power * 0.05;
-                const ph = (this.air * turns) % 1;
-                a.setFrame(Math.min(9, Math.floor(ph * 10)));
-            } else {
-                a.setFrame(Math.floor(this.air * 10) % 4);
-            }
+            // Pose do clipe no ar, pela FASE (qualquer nº de quadros): a cambalhota (uma volta por ciclo) gira conforme o tempo (forte =
+            // várias voltas); o ragdoll balança os membros 2,5 vezes por segundo.
+            // (fase acumulada, não air × ritmo: o quique zera o `air` e a pose pulava de volta ao começo do giro — agora segue girando)
+            const turns = !this.tumbling ? 2.5 : this.kind === 'bail' ? 1 / 0.62 : 1.5 + this.power * 0.05;
+            this.airPh = ((this.airPh || 0) + dt * turns) % 1;
+            a.setPhase(this.airPh);
             if (this.h <= 0 && this.vy < 0) this._land();
         } else if (this.phase === 'slide') {
             // Deslizando de bruços: atrito constante até parar.
@@ -112,7 +111,7 @@ class Ragdoll {
                 if (this.lethal) { this._finish(true); return; }
                 this.phase = 'rise';
                 a.play('getup', 'none', { restart: true });
-                if (this.kind === 'bail') a.time = 8 * 0.5;           // (cambalhota termina agachado: pula o começo)
+                if (this.kind === 'bail') a.setPhase(0.5);            // (cambalhota termina agachado: pula a 1ª metade)
             }
         } else if (this.phase === 'rise') {
             // (ainda desliza um pouco enquanto levanta, no caso da cambalhota)
@@ -141,7 +140,7 @@ class Ragdoll {
             // Cambalhota termina em pé (agachado): levanta direto.
             this.phase = 'rise';
             a.play('getup', 'none', { restart: true });
-            a.time = 8 * 0.5;
+            a.setPhase(0.5);                                      // (do meio do levantar: já está agachado)
             this.vx *= 0.5; this.vz *= 0.5;
             return;
         }
@@ -196,7 +195,7 @@ class Casualty {
         this.heading = this.rag.heading;
         if (dead) {
             this.dead = true; this.state = 'dead'; this.life = 0;
-            a.play('dead', 'none', { restart: true });
+            a.play('dead', 'none', { restart: true }); a.setPhase(1);          // (já deitado: só a pose final; a poça vem do play)
             a.setHeading(this.heading);
             return;
         }

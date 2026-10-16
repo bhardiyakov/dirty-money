@@ -27,7 +27,7 @@ const Throwables = {
     },
     FORCE_T: 1.25,          // (sem mouse nem analógico) s segurando até o alcance máximo
     STICK_DZ: 0.22,         // zona morta do analógico direito (abaixo disso, mantém a última mira)
-    RELEASE: 0.13,          // s depois do início do *_throw em que o objeto sai da mão (3º quadro a 16 qps)
+    RELEASE: 0.13,          // s depois do início do *_throw em que o objeto sai da mão (a chave "voando" do clipe, 2/16 s: em segundos, vale para qualquer nº de quadros)
     ANGLE: 0.66,            // ângulo de saída (rad, ~38°)
     GRAV: 14,               // gravidade do voo (m/s²: um pouco mais "seca" que a real — o arremesso fica legível)
     H0: 1.75,               // altura da mão ao soltar (m)

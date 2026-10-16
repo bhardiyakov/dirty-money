@@ -44,6 +44,8 @@ const Config = {
         cars3d: true,          // carros em 3D (CarArt3D, assets/cars/carros3d.js): rodas que rolam e esterçam, carroceria balançando na suspensão. false (ou ?cars2d) = sprites do atlas.
         charScale: 0.8,        // escala do DESENHO dos personagens (atlas vetorial). Os carros são de tamanho real; isto aproxima a proporção.
         npcPpu: 26,            // personagens 2,5D (NpcArt): px do atlas por metro — adultos na mesma escala dos veículos. = NpcGenBuild.PPU (pilotos × motos)
+        npcDirs: 16,           // direções desenhadas dos personagens 2,5D. Perfil leve: 8 (só as páginas pares dos atlas; os gerados no jogo saem com 8)
+        vramMB: 640,           // orçamento das páginas dos atlas 2,5D na GPU (MB): passou, as sem uso há 15 s saem (NpcArt._lru). Perfil leve: 256
         internalHeight: (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ? 440 : 560,   // altura interna alvo (px) quando pixelate = true (celular: menor, mais leve).
     },
 
@@ -489,7 +491,8 @@ const Config = {
     const weak = (nav.deviceMemory && nav.deviceMemory <= 4) || (nav.hardwareConcurrency && nav.hardwareConcurrency <= 4);
     try { localStorage.removeItem('dm_quality'); } catch (e) { /* sem storage */ }      // (o AutoQuality antigo gravava o perfil leve: não vale mais)
     const lite = q.includes('lite') || (!q.includes('full') && (coarse || weak));
-    // Gráficos: sempre a alta definição com o gráfico suave, em todo aparelho (o perfil leve só enxuga o mundo vivo e as sombras).
+    // Gráficos: sempre a alta definição com o gráfico suave, em todo aparelho (o perfil leve enxuga o mundo vivo, as sombras e as direções
+    // desenhadas dos personagens 2,5D — 8 em vez de 16, com menos memória de vídeo).
     try { const s = JSON.parse(localStorage.getItem('dm_settings') || '{}'); if (typeof s.cars3d === 'boolean') Config.art.cars3d = s.cars3d; } catch (e) { /* sem storage */ }
     const P = Config.perf;
     // App instalado no PC (Tauri) — ou `?fps60` no navegador, para testar: 60 quadros. Se o PC não segurar, o AutoQuality volta a 30
@@ -499,6 +502,7 @@ const Config = {
     if (!lite) return;
     if (typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // sem vidro borrado nos painéis (ver Theme)
     P.lite = true; P.shadowSize = 1024; P.colliderRadius = 190; P.dprCap = 1.5;
+    Config.art.npcDirs = 8; Config.art.vramMB = 256;                                    // personagens 2,5D: 8 direções, menos páginas na GPU
     Config.npc.count = 48;
     Config.traffic.count = 18; Config.traffic.parked = 8; Config.traffic.motos = 2; Config.traffic.motosParked = 2; Config.traffic.bicycles = 2; Config.traffic.bicyclesParked = 2; Config.traffic.couriers = 3;
     Config.traffic.spawnMax = 150; Config.traffic.recycleDist = 185;

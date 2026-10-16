@@ -367,7 +367,7 @@ class PoliceOfficer {
         this.rag = null;
         if (dead) {
             this.deadTimer = 40;
-            this.actor.play('dead', 'none', { restart: true });
+            this.actor.play('dead', 'none', { restart: true }); this.actor.setPhase(1);          // (já deitado: só a pose final; a poça vem do play)
             this.actor.setHeading(this.heading);
             if (this.manager.events) this.manager.events.onOfficerKilled(this, this._killSource);
             return;

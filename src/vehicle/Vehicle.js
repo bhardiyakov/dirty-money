@@ -346,17 +346,15 @@ class Vehicle {
         this.visual.setVariant(variant);
     }
 
-    // Bicicleta: os pedais giram conforme a velocidade. Moto: 3 quadros de inclinação pelo volante.
+    // Bicicleta: os pedais giram conforme a velocidade. Moto: o piloto deita para o lado da curva (degraus de inclinação do clipe,
+    // contínuos: setLean) conforme o guidão e a velocidade — volante à direita (lastSteer > 0) = deitado para a direita.
     _animateBike(dt) {
         const v = this.visual, sp = Math.abs(this.forwardSpeed), riding = this.riderVariant != null && !this.wrecked;
         if (this.spec.bike === 'bike') {
             v.update(dt, riding ? Math.min(2.2, sp / 3.6) : 0);
         } else {
             v.update(dt, 0);
-            if (riding) {
-                const st = this.lastSteer * Math.min(1, sp / 5);
-                v.setFrame(Math.abs(st) < 0.22 ? 1 : (st > 0 ? 0 : 2));
-            }
+            if (riding && v.setLean) v.setLean(this.lastSteer * Math.min(1, sp / 5), dt);
         }
     }
 

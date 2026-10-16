@@ -291,7 +291,7 @@ class EquipUI {
         el.querySelectorAll('[data-app]').forEach((b) => b.addEventListener('click', () => { const [f, v] = b.dataset.app.split(':'); this._msg = Outfit.setAppearance(f, v).msg; AudioFX.blip(640, 0.06, 0.1); this.render(el); }));
         el.querySelectorAll('[data-tint]').forEach((b) => b.addEventListener('click', () => { const [s, v] = b.dataset.tint.split(':'); this._msg = Outfit.setTint(s, v || null).msg; AudioFX.blip(700, 0.06, 0.1); this.render(el); }));
         const dc = el.querySelector('.eq-doll canvas');
-        if (dc) dc.addEventListener('click', () => { this._dollDir = ((this._dollDir == null ? 4 : this._dollDir) + 1) % 8; this._dollSpin = false; this._paintDoll(); });
+        if (dc) dc.addEventListener('click', () => { const n = this._dollN(); this._dollDir = ((this._dollDir == null ? n >> 1 : this._dollDir) + 1) % n; this._dollSpin = false; this._paintDoll(); });
         this._drawDoll(this._state(prev));
         requestAnimationFrame(() => this._drawLines());
     }
@@ -452,7 +452,9 @@ class EquipUI {
         return c;
     }
 
-    // Boneco: o PERSONAGEM DE VERDADE (o mesmo gerador do sprite do jogo, PlayerLook.preview), girando nas 8 direções. Sem ele, o desenho antigo.
+    // Boneco: o PERSONAGEM DE VERDADE (o mesmo gerador do sprite do jogo, PlayerLook.preview), girando por todas as direções do clipe
+    // parado (16; perfil leve, 8 — uma volta a cada ~5 s). Sem ele, o desenho antigo.
+    _dollN() { return this._doll && this._doll.frames && this._doll.frames.length ? this._doll.frames.length : 8; }
     _drawDoll(s) {
         if (typeof PlayerLook !== 'undefined' && PlayerLook.ok) {
             const spec = PlayerLook.spec({ worn: s.worn, bag: s.bag });
@@ -463,9 +465,12 @@ class EquipUI {
             if (!this._dollTimer) this._dollTimer = setInterval(() => {
                 if (!this.el || !this.el.isConnected || !this.el.querySelector('.eq-doll canvas')) { clearInterval(this._dollTimer); this._dollTimer = null; return; }
                 if (this._dollSpin === false) return;
-                this._dollDir = ((this._dollDir == null ? 4 : this._dollDir) + 7) % 8;
+                const n = this._dollN();
+                this._dollTick = ((this._dollTick || 0) + 1) % Math.max(1, Math.round(16 / n));
+                if (this._dollTick) return;
+                this._dollDir = ((this._dollDir == null ? n >> 1 : this._dollDir) + n - 1) % n;
                 this._paintDoll();
-            }, 650);
+            }, 325);
             return;
         }
         this._drawDollOld(s);
@@ -481,7 +486,7 @@ class EquipUI {
         ctx.strokeStyle = 'rgba(251,191,36,0.3)'; ctx.beginPath(); ctx.ellipse(100, 352, 66, 10, 0, 0, Math.PI * 2); ctx.stroke();
         const D = this._doll;
         if (!D) { ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '600 11px Inter, Arial, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('montando o personagem…', 100, 220); return; }
-        const d = this._dollDir == null ? 4 : this._dollDir, img = D.frames[d];
+        const n = D.frames.length, d = this._dollDir == null ? n >> 1 : this._dollDir % n, img = D.frames[d];
         const t = this._dollCv || (this._dollCv = document.createElement('canvas'));
         t.width = D.W; t.height = D.H; t.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(img), D.W, D.H), 0, 0);
         const S = 4.3 * 0.5 / D.k, P = NpcArt.gen().pivFor(D.k);          // (adulto: ~36 px de altura no quadro em k 0,5 — at2 dos SLOTS casam com esta escala)

@@ -92,7 +92,7 @@ const MotoStands = {
         this.stands.forEach((s, i) => {
             if (hypot(s.x - f.x, s.z - f.z) > 70) { G.off(i); return; }
             G.place(i, s.x + 0.6, 0.35, s.z - 0.6, 3 + 0.5 * pulse); G.color(i, 1, 0.82, 0.2, 0.7 * pulse);
-            for (const a of s.actors) { if (!a.clip) a.play('static'); a.update(dt, 0); }
+            for (const a of s.actors) { if (!a.clip) a.play('static'); a.setLean(0); a.update(dt, 0); }          // (parado no ponto: piloto reto)
         });
         G.flush();
     },
@@ -172,7 +172,7 @@ class MotoRide {
         const step = this.v * dt;
         if (step >= L) { this.x = tgt.x; this.z = tgt.z; this.i++; } else { this.x += ux * step; this.z += uz * step; }
         this.actor.setPosition(this.x, this.z); this.actor.setHeading(this.heading);
-        this.actor.setFrame(Math.abs(da) < 0.18 ? 1 : (da > 0 ? 2 : 0)); this.actor.update(dt, 0);
+        this.actor.update(dt, 0); this.actor.setLean(Math.max(-1, Math.min(1, da / 0.45)), dt);     // (da > 0 = virando para a direita: deita para a direita)
         // o jogador "vai na garupa": a posição dele acompanha a moto (polícia, câmera, mapa, tudo enxerga)
         g.player.teleport(new BABYLON.Vector3(this.x, 0, this.z)); g.player.velocity.setAll(0);
         if (g.motoTaxis) g.motoTaxis._pedestrians(this, ux, uz);
