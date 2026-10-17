@@ -15,7 +15,7 @@ class MainMenu {
 		const hasSave = this.save !== null;
 		this.btnLoad.disabled = !hasSave;
 		this.btnLoad.classList.toggle('mm-disabled', !hasSave);
-		if (hasSave) { this.btnLoad.title = 'Último save: ' + SaveGame.label(this.save); this.btnLoad.innerHTML = `Carregar Jogo<small>${SaveGame.label(this.save)}</small>`; }
+		if (hasSave) { this.btnLoad.title = I18n.t('menu.lastSave', { label: SaveGame.label(this.save) }); this.btnLoad.innerHTML = `${I18n.t('menu.load')}<small>${SaveGame.label(this.save)}</small>`; }
 
 		this.btnNew.addEventListener('click', () => this._start('new'));
 		this.btnLoad.addEventListener('click', () => this._start('load'));
@@ -29,22 +29,24 @@ class MainMenu {
 		const panel = document.getElementById('mm-settings');
 		const vol = document.getElementById('set-volume'), volVal = document.getElementById('set-volume-val');
 		const s = this.game.menu.settings;
-		const toggles = [...panel.querySelectorAll('.mm-toggle[data-key]')], gfx = document.getElementById('set-gfx');
+		const toggles = [...panel.querySelectorAll('.mm-toggle[data-key]')], gfx = document.getElementById('set-gfx'), lang = document.getElementById('set-lang');
 		const render = () => {
 			vol.value = Math.round(s.volume * 100);
 			volVal.textContent = vol.value + '%';
 			for (const t of toggles) {
 				const on = !!s[t.dataset.key];
 				t.classList.toggle('is-on', on);
-				t.textContent = on ? (t.dataset.on || 'Ligado') : (t.dataset.off || 'Desligado');
+				t.textContent = I18n.t(on ? (t.dataset.on || 'common.on') : (t.dataset.off || 'common.off'));
 			}
 			gfx.textContent = Graphics.label(s.graphics);
+			lang.textContent = I18n.label(s.language);
 		};
 		const commit = () => { this.game.menu._saveSettings(); this.game.menu.applySettings(); render(); };
 		vol.addEventListener('input', () => { s.volume = vol.value / 100; commit(); });
 		for (const t of toggles) t.addEventListener('click', () => { s[t.dataset.key] = !s[t.dataset.key]; commit(); });
 		// Graphics preset: applied on page load, and nothing has started yet here — the menu reloads right away with the new one.
 		gfx.addEventListener('click', () => { s.graphics = Graphics.next(s.graphics || 'auto'); commit(); location.reload(); });
+		lang.addEventListener('click', () => { s.language = I18n.next(I18n.lang); commit(); location.reload(); });      // (same: texts are read once, at start)
 		const open = (v) => { panel.classList.toggle('open', v); if (v) render(); (v ? document.getElementById('btn-settings-back') : document.getElementById('btn-settings')).focus(); };
 		window.addEventListener('dm-settings', render);                                  // (o giroscópio pode desligar sozinho: PauseMenu)
 		document.getElementById('btn-settings').addEventListener('click', () => open(true));
@@ -158,6 +160,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 	const S = window.Studio || null, frame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 	const step = async (label, p, ms, fn) => { if (S) S.step(label, p, ms); await frame(); return fn(); };
 	try {
+		await I18n.load();                                                           // os textos no idioma escolhido, antes do menu
+		I18n.apply(document);
 		if (window.DEFER_WORLD) {                                                    // o mapa: ~25 → 52% da barra
 			const L = CityGrid.steps(), MS = [300, 450, 450, 600, 200, 350, 300];
 			for (let i = 0; i < L.length; i++) await step(L[i].label, 0.26 + 0.26 * (i + 1) / L.length, MS[i] || 300, L[i].run);

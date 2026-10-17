@@ -377,28 +377,29 @@
 		<div class="mm-frame">
 			<img class="mm-logo" src="./assets/logo.png" alt="Dirty Money" fetchpriority="high">
 			<div class="mm-buttons">
-				<button type="button" class="mm-btn" id="btn-new">Novo Jogo</button>
-				<button type="button" class="mm-btn" id="btn-load">Carregar Jogo</button>
-				<button type="button" class="mm-btn" id="btn-settings">Configurações</button>
+				<button type="button" class="mm-btn" id="btn-new" data-i18n="menu.new">Novo Jogo</button>
+				<button type="button" class="mm-btn" id="btn-load" data-i18n="menu.load">Carregar Jogo</button>
+				<button type="button" class="mm-btn" id="btn-settings" data-i18n="menu.settings">Configurações</button>
 			</div>
 		</div>
 		<div id="mm-wait"></div>
 		<div id="mm-load">
 			<div class="ml-top"><img class="ml-logo" src="./assets/logo.png" alt=""><div class="ml-tip" id="ml-tip"></div></div>
 			<div class="ml-bar"><i id="ls-fill"></i></div>
-			<div class="ml-row"><span id="ls-text">Carregando…</span><span id="ls-pct">0%</span></div>
+			<div class="ml-row"><span id="ls-text" data-i18n="loading">Carregando…</span><span id="ls-pct">0%</span></div>
 		</div>
 		<div id="mm-settings"><div class="mm-panel">
-			<h2>Configurações</h2>
-			<div class="mm-row"><span>Volume geral</span><span><input type="range" id="set-volume" min="0" max="100"> <span id="set-volume-val"></span></span></div>
-			<div class="mm-row"><span>Efeitos sonoros</span><button type="button" class="mm-toggle" data-key="sfx"></button></div>
-			<div class="mm-row"><span>Minimapa</span><button type="button" class="mm-toggle" data-key="minimap"></button></div>
-			<div class="mm-row"><span>Dicas na tela</span><button type="button" class="mm-toggle" data-key="prompts"></button></div>
-			<div class="mm-row"><span>Mira</span><button type="button" class="mm-toggle" data-key="aimAssist" data-on="Assistida" data-off="Manual"></button></div>
-			<div class="mm-row"><span>Balanço da câmera</span><button type="button" class="mm-toggle" data-key="camBounce"></button></div>
-			<div class="mm-row"><span>Gráficos</span><button type="button" class="mm-toggle is-on" id="set-gfx"></button></div>
-			<div class="mm-row mm-touch"><span>Volante por giroscópio</span><button type="button" class="mm-toggle" data-key="tiltSteer"></button></div>
-			<button type="button" class="mm-btn" id="btn-settings-back">Voltar</button>
+			<h2 data-i18n="settings.title">Configurações</h2>
+			<div class="mm-row"><span data-i18n="settings.volume">Volume geral</span><span><input type="range" id="set-volume" min="0" max="100"> <span id="set-volume-val"></span></span></div>
+			<div class="mm-row"><span data-i18n="settings.sfx">Efeitos sonoros</span><button type="button" class="mm-toggle" data-key="sfx"></button></div>
+			<div class="mm-row"><span data-i18n="settings.minimap">Minimapa</span><button type="button" class="mm-toggle" data-key="minimap"></button></div>
+			<div class="mm-row"><span data-i18n="settings.prompts">Dicas na tela</span><button type="button" class="mm-toggle" data-key="prompts"></button></div>
+			<div class="mm-row"><span data-i18n="settings.aim">Mira</span><button type="button" class="mm-toggle" data-key="aimAssist" data-on="settings.aim.assisted" data-off="settings.aim.manual"></button></div>
+			<div class="mm-row"><span data-i18n="settings.camBounce">Balanço da câmera</span><button type="button" class="mm-toggle" data-key="camBounce"></button></div>
+			<div class="mm-row"><span data-i18n="settings.graphics">Gráficos</span><button type="button" class="mm-toggle is-on" id="set-gfx"></button></div>
+			<div class="mm-row"><span data-i18n="settings.language">Idioma</span><button type="button" class="mm-toggle is-on" id="set-lang"></button></div>
+			<div class="mm-row mm-touch"><span data-i18n="settings.tilt">Volante por giroscópio</span><button type="button" class="mm-toggle" data-key="tiltSteer"></button></div>
+			<button type="button" class="mm-btn" id="btn-settings-back" data-i18n="common.back">Voltar</button>
 		</div></div>
 	</div>
 	<script>
@@ -568,6 +569,7 @@
 		 (Sem ES Modules => abre por duplo-clique no index.html, file:// funciona.) -->
 	<script src="./src/storage/Store.js"></script>
 	<script src="./src/storage/AssetIO.js"></script>
+	<script src="./src/core/I18n.js"></script>
 	<script src="./src/config.js"></script>
 	<script src="./src/core/Graphics.js"></script>
 	<script src="./src/ui/Theme.js"></script>

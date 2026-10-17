@@ -48,7 +48,7 @@ const Graphics = {
 	label(choice) {
 		const c = this.CHOICES.includes(choice) ? choice : 'auto';
 		if (c !== 'auto') return this.LABEL[c];
-		return `${this.LABEL.auto} (${this.LABEL[this._auto || (this._auto = this.detect())]})`;
+		return `${I18n.t('graphics.auto')} (${this.LABEL[this._auto || (this._auto = this.detect())]})`;
 	},
 
 	// Automatic level from the device: the GPU first (a weak one decides alone), then touch, memory and cores.
