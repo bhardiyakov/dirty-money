@@ -94,9 +94,23 @@ class CompassCamera {
 	// orthographic half-height of the view plane (one unit there = one unit of a camera-facing sprite).
 	_applyFov() {
 		const cam = this.camera;
-		if (!this.tilted) { cam.fov = 2 * Math.atan(this.view / Config.camera.height); return; }
+		if (!this.tilted) { cam.fov = 2 * Math.atan(this.view / Config.camera.height); this._applyFog(0, 1); return; }
 		const v = this.view, a = this.engine.getAspectRatio(cam);
 		cam.orthoTop = v; cam.orthoBottom = -v; cam.orthoRight = v * a; cam.orthoLeft = -v * a;
+		this._applyFog(v, a);
+	}
+
+	// 2.5D edge cut: linear scene fog whose "distance" is how far toward the nearest screen edge a pixel is (CompassCamera.EDGE_FOG,
+	// installed below), in view units — fogStart/fogEnd are fractions of the half-height `view`, and the density slot (unused by linear
+	// fog) carries the aspect ratio. With the 2.5D camera enabled the fog mode stays on even while an interior holds the top-down camera
+	// (view = 0: the cut moves out of reach), because frozen materials keep the fog define they were compiled with.
+	static get NO_FOG() { return 1e7; }
+	_applyFog(view, aspect) {
+		const sc = this.scene, C = Config.camera, mode = C.tilted ? BABYLON.Scene.FOGMODE_LINEAR : BABYLON.Scene.FOGMODE_NONE;
+		if (sc.fogMode !== mode) sc.fogMode = mode;
+		if (!C.tilted) return;
+		if (!view) { sc.fogStart = CompassCamera.NO_FOG; sc.fogEnd = CompassCamera.NO_FOG + 1; return; }
+		sc.fogStart = view * C.fogStart; sc.fogEnd = view * C.fogEnd; sc.fogDensity = aspect;
 	}
 
 	// Places the camera so that ground point (x, z) is at the centre of the screen.
@@ -279,6 +293,37 @@ class CompassCamera {
 		this._applyFov();
 	}
 }
+
+// Babylon's fog measures the distance from the eye, which under a tilted orthographic camera fogs mostly the top of the screen. This
+// version (same include, same uniforms) makes LINEAR fog measure the distance toward the nearest screen edge instead: in an orthographic
+// view, view-space x and y are screen positions, and vFogInfos.w (the density, unused by linear fog) holds the aspect ratio.
+CompassCamera.EDGE_FOG = `#ifdef FOG
+#define FOGMODE_NONE 0.
+#define FOGMODE_EXP 1.
+#define FOGMODE_EXP2 2.
+#define FOGMODE_LINEAR 3.
+#define E 2.71828
+uniform vec4 vFogInfos;
+uniform vec3 vFogColor;
+varying vec3 vFogDistance;
+float CalcFogFactor()
+{
+	float fogCoeff = 1.0;
+	float fogStart = vFogInfos.y;
+	float fogEnd = vFogInfos.z;
+	float fogDensity = vFogInfos.w;
+	if (FOGMODE_LINEAR == vFogInfos.x)
+	{
+		float edge = max(abs(vFogDistance.x) / max(fogDensity, 0.01), abs(vFogDistance.y));
+		fogCoeff = (fogEnd - edge) / (fogEnd - fogStart);
+	}
+	else if (FOGMODE_EXP == vFogInfos.x) fogCoeff = 1.0 / pow(E, length(vFogDistance) * fogDensity);
+	else if (FOGMODE_EXP2 == vFogInfos.x) fogCoeff = 1.0 / pow(E, length(vFogDistance) * length(vFogDistance) * fogDensity * fogDensity);
+	return clamp(fogCoeff, 0.0, 1.0);
+}
+#endif
+`;
+BABYLON.Effect.IncludesShadersStore.fogFragmentDeclaration = CompassCamera.EDGE_FOG;
 
 CompassCamera.yaw = 0;      // giro atual da bússola (rad): lido pelos sprites 2,5D, pela ordem de desenho e pelo minimapa
 CompassCamera.tilted = false;      // the game camera is in 2.5D (tilted orthographic) mode right now: sprites stand up (SpriteActor)

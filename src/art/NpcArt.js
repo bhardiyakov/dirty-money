@@ -596,6 +596,7 @@ const NpcArt = {
 		m.setFloat('palRows', this.ROWS);
 		m.setColor3('tint', SpriteMaterial.sharedTint());
 		m.setFloat('la', this._gl2 ? 0 : 1);
+		m.setVector4('silhouette', this.NO_SILHOUETTE);                   // (always bound: the X-ray twin shares this shader program)
 		m.alphaMode = BABYLON.Engine.ALPHA_PREMULTIPLIED;
 		m.backFaceCulling = false;
 		return m;
@@ -611,6 +612,7 @@ const NpcArt = {
 	// X-ray material of a page (XRaySilhouette): the same drawing, painted as a flat silhouette only where something closer to the camera
 	// already wrote depth (GREATER), without writing depth itself. Refreshed on every call: only the player's current page uses it.
 	SILHOUETTE: new BABYLON.Vector4(1.0, 0.86, 0.38, 0.62),
+	NO_SILHOUETTE: new BABYLON.Vector4(0, 0, 0, 0),
 	silhouetteOf(P) {
 		let m = P.sil;
 		if (!m) {

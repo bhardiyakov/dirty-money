@@ -63,6 +63,10 @@ const Config = {
 		tilt: 56,
 		distance: 150,
 		tallest: 42,           // tallest building (m): its top shows up to tallest·cot(tilt) beyond the bottom edge — culling margin
+		// 2.5D edge cut (scene fog, CompassCamera._applyFog): the world fades into the background colour from `fogStart` to `fogEnd` of
+		// the way from the centre of the screen to its nearest edge — nothing past the immediate surroundings shows or pops in.
+		fogStart: 0.86,
+		fogEnd: 1.0,
 		viewHalf: 15,          // metade da altura visível no chão (zoom padrão).
 		minView: 8,            // zoom máximo (aproximado).
 		maxView: 34,           // zoom mínimo (afastado).

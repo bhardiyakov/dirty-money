@@ -7,6 +7,7 @@
 // ============================================================================
 
 class DayNight {
+	static get EDGE_DIM() { return 0.35; }          // 2.5D edge cut colour = the background colour × this
 	constructor(gameEngine) {
 		this.ge = gameEngine;
 		this.hour = Config.time.start;
@@ -111,6 +112,7 @@ class DayNight {
 
 		SpriteMaterial.sharedTint().copyFromFloats(...P.tint);
 		ge.scene.clearColor.set(P.clear[0], P.clear[1], P.clear[2], 1);
+		ge.scene.fogColor.set(P.clear[0] * DayNight.EDGE_DIM, P.clear[1] * DayNight.EDGE_DIM, P.clear[2] * DayNight.EDGE_DIM);      // (the 2.5D edge cut: a darker background)
 
 		// Janelas e postes só quando a noite mudou de verdade (evita reenviar buffers à toa).
 		if (Math.abs(P.n - this._lastNight) > 0.015) {

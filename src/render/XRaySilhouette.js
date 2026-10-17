@@ -16,10 +16,12 @@ class XRaySilhouette {
 		m.isVisible = true;                                                 // (the sprite is created hidden until placed: its own visibility rules)
 		m.alwaysSelectAsActiveMesh = true;
 		m.renderingGroupId = actor.mesh.renderingGroupId;
-		m.alphaIndex = XRaySilhouette.DRAW_LAST;
+		m.alphaIndex = XRaySilhouette.DRAW_FIRST;
 		m.setEnabled(false);
 	}
-	static get DRAW_LAST() { return 1e6; }
+	// First of the transparent pass: only what was drawn before it (buildings, walls, terrain — the opaque world) counts as hiding the
+	// player, not tree canopies or awnings drawn later in the same group (they fade over him instead).
+	static get DRAW_FIRST() { return -1e6; }
 
 	// Every frame, before rendering: on while the player's standing 2.5D drawing is on screen, with the X-ray twin of its page material.
 	update() {
