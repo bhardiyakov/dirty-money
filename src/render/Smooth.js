@@ -42,8 +42,7 @@ const Smooth = {
 	// sombra) nem reenviam o uniform do chão (TerrainSplat). Trocando o ajuste no meio do jogo, descongela e congela de novo depois
 	// que os shaders novos ficaram prontos.
 	_thaw(scene) {
-		const hv = typeof HouseView !== 'undefined' ? new Set([...(HouseView.ext || []), HouseView.interiorMat]) : new Set();      // (a casa congela os dela)
-		const list = scene.materials.filter((m) => m.isFrozen && !hv.has(m));
+		const list = scene.materials.filter((m) => m.isFrozen);
 		if (!list.length) return;
 		for (const m of list) m.unfreeze();
 		clearTimeout(this._refreeze);

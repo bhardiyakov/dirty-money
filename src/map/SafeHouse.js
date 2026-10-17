@@ -60,15 +60,8 @@ const SafeHouse = {
 		this.ox = at ? at.x : Math.round(fx0 + (fx1 - fx0 - this.W) / 2);
 		this.oz = at ? at.z : Math.round(fz0 + 3.5);
 		this.block = block;
-		const T = this.T, W = this.W, D = this.D, H = this.H;
-		const s = [];                                                                       // sólidos em coordenadas locais
-		const d = this.door;
-		s.push([0, 0, d.x0, T], [d.x1, 0, W, T]);                                           // parede sul, com o vão da porta
-		s.push([0, D - T, W, D]);                                                           // norte
-		s.push([0, T, T, D - T], [W - T, T, W, D - T]);                                     // oeste e leste
-		s.push([this.PX, T, this.PX + this.PT, this.gapZ[0]], [this.PX, this.gapZ[1], this.PX + this.PT, D - T]);   // divisória com vão
-		for (const r of s) this._solid(grid, r, H, 'wall');
-		for (const f of this.furniture) this._solid(grid, [f.x0, f.z0, f.x1, f.z1], f.h, f.kind);
+		const W = this.W, D = this.D, H = this.H;
+		for (const r of this.solids()) this._solid(grid, r, r[4], r[5]);
 		grid.navBlocks.push({ x0: this.ox - 0.2, z0: this.oz - 0.2, x1: this.ox + W + 0.2, z1: this.oz + D + 0.2 });      // pedestres/policiais a pé não entram
 		block.lots.push({ x0: this.ox, z0: this.oz, x1: this.ox + W, z1: this.oz + D, floors: 1, height: H, facade: 'brick0', roof: 'zinc0', safehouse: true });
 		this.placed = true;
@@ -78,6 +71,18 @@ const SafeHouse = {
 	crowds(p) {
 		const m = p.type === 'tree' || p.type === 'pole' ? 6.5 : 1.0;
 		return p.x > this.ox - m && p.x < this.ox + this.W + m && p.z > this.oz - m * 0.5 && p.z < this.oz + this.D + m;
+	},
+
+	// Walls ('wall') and furniture as solids in local coordinates: [x0, z0, x1, z1, height, kind]. Also the room on the interiors stage.
+	solids() {
+		const T = this.T, W = this.W, D = this.D, H = this.H, d = this.door;
+		const walls = [
+			[0, 0, d.x0, T], [d.x1, 0, W, T],                                               // parede sul, com o vão da porta
+			[0, D - T, W, D],                                                               // norte
+			[0, T, T, D - T], [W - T, T, W, D - T],                                         // oeste e leste
+			[this.PX, T, this.PX + this.PT, this.gapZ[0]], [this.PX, this.gapZ[1], this.PX + this.PT, D - T],   // divisória com vão
+		];
+		return walls.map((r) => [...r, H, 'wall']).concat(this.furniture.map((f) => [f.x0, f.z0, f.x1, f.z1, f.h, f.kind]));
 	},
 
 	_solid(grid, r, h, kind) {
@@ -90,18 +95,6 @@ const SafeHouse = {
 	spawnWorld() { return this.placed ? { x: this.ox + this.spawn.x, z: this.oz + this.spawn.z, face: this.spawn.face } : null; },
 	center() { return { x: this.ox + this.W / 2, z: this.oz + this.D / 2 }; },
 	doorWorld() { return { x: this.ox + (this.door.x0 + this.door.x1) / 2, z: this.oz + this.T / 2 }; },
-
-	// Móvel de uso (cama, geladeira, cofre, baú) ao alcance de quem está em (x, z) dentro da casa: { use, f } ou null.
-	nearestUse(x, z) {
-		if (!this.inside(x, z, -0.3)) return null;
-		let best = null, bd = 1.5;
-		for (const f of this.furniture) {
-			if (!f.use) continue;
-			const dx = Math.max(this.ox + f.x0 - x, 0, x - (this.ox + f.x1)), dz = Math.max(this.oz + f.z0 - z, 0, z - (this.oz + f.z1)), d = hypot(dx, dz);
-			if (d < bd) { bd = d; best = { use: f.use, f }; }
-		}
-		return best;
-	},
 
 	// Dentro do cômodo (entre as paredes)? `m` > 0 encolhe, < 0 alarga a área.
 	inside(x, z, m = 0) {

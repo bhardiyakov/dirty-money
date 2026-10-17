@@ -23,8 +23,8 @@ const Footsteps = {
 	surface(game) {
 		const pl = game.player, p = pl.position;
 		if ((pl.depth || 0) > 0) return 'water';
-		if (typeof Interiors !== 'undefined' && Interiors.active) return 'tile';
 		if (typeof HouseView !== 'undefined' && HouseView.inside) return 'wood';
+		if (typeof Interiors !== 'undefined' && Interiors.active) return 'tile';
 		if (pl.onDeck) return 'concrete';
 		const blk = CityGrid._blockAtPoint ? CityGrid._blockAtPoint(p.x, p.z) : null;
 		if (blk) {

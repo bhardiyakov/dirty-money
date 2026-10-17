@@ -276,20 +276,6 @@ class Weather {
 
 		// Clarão do relâmpago.
 		if (this.flash > 0.01) { ctx.fillStyle = `rgba(225,232,255,${Math.min(0.62, this.flash * 0.55)})`; ctx.fillRect(0, 0, W, H); }
-
-		// Dentro de casa: nada de chuva (nem vinheta e clarão) por cima do cômodo — um "filtro" recorta o retângulo da casa e a
-		// chuva só aparece nas laterais, do lado de fora. O recorte aparece junto com o fade do interior (HouseView.t).
-		if (typeof HouseView !== 'undefined' && HouseView.ready && HouseView.t > 0.01) {
-			const r = HouseView.screenRect(this.g.scene, W, H);
-			if (r) {
-				ctx.save();
-				ctx.globalCompositeOperation = 'destination-out';
-				ctx.globalAlpha = Math.min(1, HouseView.t);
-				ctx.fillStyle = '#000';
-				ctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
-				ctx.restore();
-			}
-		}
 	}
 }
 Weather.cur = null;

@@ -10,13 +10,13 @@ const SaveGame = {
 	VERSION: 1,
 
 	snapshot(g) {
-		const p = g.player, inv = g.inventory;
+		const p = g.player, inv = g.inventory, at = this._where(g);
 		const weapons = {};
 		for (const k of Object.keys(inv.weapons)) weapons[k] = Object.assign({}, inv.weapons[k]);
 		return {
 			v: this.VERSION, savedAt: Date.now(),
 			hour: g.dayNight.hour, weather: g.weather.state,
-			player: { x: p.position.x, z: p.position.z, rot: p.root.rotation.y, hp: p.hp, armor: p.armor, armorMax: p.armorMax, weapon: p.weapon },
+			player: { x: at.x, z: at.z, rot: at.rot, hp: p.hp, armor: p.armor, armorMax: p.armorMax, weapon: p.weapon },
 			inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, bag: inv.bag, spareBags: inv.spareBags.slice(), weapons, gear: Object.assign({}, inv.gear || {}), booster: inv.boosterUses || 0 },
 			fitness: p.fit ? p.fit.xp : 0, strength: p.str ? p.str.xp : 0, physique: Physique.serialize(),
 			stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
@@ -59,6 +59,15 @@ const SaveGame = {
 		if (typeof s.hour === 'number') { g.dayNight.hour = s.hour; g.dayNight.apply(); }
 		if (s.weather && g.weather) g.weather.set(s.weather, true);
 		return true;
+	},
+
+	// Where the player is saved: inside an interior (the stage off the map), the city point it stands for — the safe house's bed
+	// (loading wakes up in there again) or the pavement in front of the shop / property.
+	_where(g) {
+		const a = typeof Interiors !== 'undefined' && Interiors.active, p = g.player;
+		if (!a) return { x: p.position.x, z: p.position.z, rot: p.root.rotation.y };
+		const bed = a.shop.safehouse && SafeHouse.spawnWorld();
+		return bed ? { x: bed.x, z: bed.z, rot: bed.face } : { x: a.ret.x, z: a.ret.z, rot: a.ret.face };
 	},
 
 	// "dd/mm hh:mm" do último save (para o menu principal).

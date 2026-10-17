@@ -1,19 +1,18 @@
 // ============================================================================
-// HouseView — a safe house na tela: a casa por fora (paredes, telhado, porta, janelas) e o CORTE por dentro.
+// HouseView — the safe house in the city: the house from outside (walls, roof, door, windows), its door and the entrance arrow.
 //
-// Por fora: a casa é um barraco de verdade da favela (tijolo, zinco, tábua), com a porta turquesa na frente, luz quente saindo
-//   pelo vão e uma SETA amarela pulando em frente à porta — o jeito de dizer "dá para entrar aqui". A porta abre sozinha quando
-//   o jogador chega perto. Não há tecla nem chave: é só caminhar até a porta — e ele já aparece do lado de dentro.
-// Por dentro: ao cruzar a soleira, o telhado e as paredes de fora somem (fade) e entra o corte da casa (art/HouseArt.interior),
-//   com a câmera dando zoom 2× e enquadrando o cômodo inteiro, como na arte de referência. Saiu, tudo volta.
+// From outside it is a real favela shack (brick, zinc, planks), with the turquoise door at the front, warm light spilling out of the
+//   doorway and a yellow ARROW bobbing in front of the door. The door swings open when the player comes close; walking through it
+//   enters the house like any other interior (world/Interiors.js: the room is set up on the stage off the map and the city is
+//   unloaded while inside). `stageRoom()` gives Interiors the room: the painted cutaway (art/HouseArt.interior), its solids, the
+//   furniture in use and the spawn points.
 //
-// `HouseView.t` vai de 0 (fora) a 1 (dentro). O Game consulta `focusFor` (enquadramento) e `inside`.
+// `HouseView.inside` = the player is in the safe house room.
 // ============================================================================
 
 const HouseView = {
-	t: 0,                  // 0 = fora, 1 = dentro (suavizado)
-	inside: false,         // jogador dentro do cômodo (com histerese na soleira)
 	ready: false,
+	get inside() { return !!(Interiors.active && Interiors.active.shop.safehouse); },
 
 	// ------------------------------------------------------------------ construção
 	build(world) {
@@ -30,19 +29,15 @@ const HouseView = {
 			if (opts.color) m.diffuseColor = BABYLON.Color3.FromHexString(opts.color);
 			return m;
 		};
-		this.ext = [];                        // materiais que somem quando o jogador entra
-		this.extMeshes = [];
-		const fadeMat = (m) => { m.alpha = 0.999; m.forceDepthWrite = true; this.ext.push(m); return m; };
-
 		const mats = {
-			brick: fadeMat(std('hsBrick', tex(A.brick()))),
-			zinc: fadeMat(std('hsZinc', tex(A.zinc()))),
-			plank: fadeMat(std('hsPlank', tex(A.plank()))),
-			cap: fadeMat(std('hsCap', null)),
-			roofTop: fadeMat(std('hsRoofTop', tex(A.roof(), false))),
-			roofSlab: fadeMat(std('hsRoofSlab', null)),
-			glass: fadeMat(std('hsGlass', tex(A.window(), false))),
-			door: fadeMat(std('hsDoor', tex(A.door(), false))),
+			brick: std('hsBrick', tex(A.brick())),
+			zinc: std('hsZinc', tex(A.zinc())),
+			plank: std('hsPlank', tex(A.plank())),
+			cap: std('hsCap', null),
+			roofTop: std('hsRoofTop', tex(A.roof(), false)),
+			roofSlab: std('hsRoofSlab', null),
+			glass: std('hsGlass', tex(A.window(), false)),
+			door: std('hsDoor', tex(A.door(), false)),
 		};
 		mats.cap.diffuseColor = BABYLON.Color3.White(); mats.roofSlab.diffuseColor = BABYLON.Color3.White();
 		this.mats = mats;
@@ -104,7 +99,7 @@ const HouseView = {
 
 		const build = (key, mat, opts = {}) => {
 			const mesh = B[key].build('hs_' + key, scene, mat, Object.assign({ receiveShadows: true, alwaysActive: true }, opts));
-			if (mesh) { mesh.freezeWorldMatrix(); this.extMeshes.push(mesh); }
+			if (mesh) mesh.freezeWorldMatrix();
 			return mesh;
 		};
 		build('brick', mats.brick); build('zinc', mats.zinc); build('plank', mats.plank);
@@ -119,7 +114,7 @@ const HouseView = {
 		RB.top(rx0, rz0, rx1, rz1, ry + 0.012, (x, z) => [(x - rx0) / (rx1 - rx0), (rz1 - z) / (rz1 - rz0)]);
 		const slab = SL.build('hs_roofSlab', scene, mats.roofSlab, { vertexColors: true, receiveShadows: true });
 		const top = RB.build('hs_roofTop', scene, mats.roofTop, { receiveShadows: true });
-		for (const m of [slab, top]) if (m) { m.freezeWorldMatrix(); this.extMeshes.push(m); }
+		for (const m of [slab, top]) if (m) m.freezeWorldMatrix();
 		mats.roofTop.diffuseTexture.wrapU = mats.roofTop.diffuseTexture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 
 		// --- porta (folha que gira na dobradiça) ---
@@ -128,7 +123,7 @@ const HouseView = {
 		const leaf = BABYLON.MeshBuilder.CreateBox('hsDoorLeaf', { width: d.x1 - d.x0, height: d.h, depth: 0.12 }, scene);
 		leaf.parent = pivot; leaf.position.set((d.x1 - d.x0) / 2, d.h / 2, 0);
 		leaf.material = mats.door; leaf.isPickable = false; leaf.receiveShadows = true;
-		this.pivot = pivot; this.leaf = leaf; this.extMeshes.push(leaf);
+		this.pivot = pivot; this.leaf = leaf;
 		this.open = 0;
 
 		// --- degrau da entrada (permanente) ---
@@ -137,23 +132,7 @@ const HouseView = {
 		const stoop = ST.build('hs_stoop', scene, world.mats.solid, { vertexColors: true, receiveShadows: true });
 		if (stoop) stoop.freezeWorldMatrix();
 
-		// --- o corte do interior: um quadro pintado deitado no chão ---
-		const art = A.interior(), IN = art.in;
-		const itex = tex(art.canvas, false);
-		itex.hasAlpha = true;
-		const im = new BABYLON.StandardMaterial('hsInterior', scene);
-		im.diffuseTexture = itex; im.useAlphaFromDiffuseTexture = true;
-		im.diffuseColor = BABYLON.Color3.Black(); im.specularColor = BABYLON.Color3.Black();
-		im.emissiveColor = new BABYLON.Color3(1, 1, 1); im.disableLighting = true;
-		im.backFaceCulling = false; im.alpha = 0.999; im.forceDepthWrite = false;
-		const IB = new MeshBatch();
-		const ix0 = ox + IN.x0, ix1 = ox + IN.x1, iz0 = oz + IN.z0, iz1 = oz + IN.z1;
-		IB.top(ix0, iz0, ix1, iz1, 0.14, (x, z) => [(x - ix0) / (ix1 - ix0), (iz1 - z) / (iz1 - iz0)]);
-		const interior = IB.build('hs_interior', scene, im, { receiveShadows: false });
-		interior.freezeWorldMatrix(); interior.setEnabled(false);
-		this.interior = interior; this.interiorMat = im;
-
-		// --- sombra: uma caixa-fantasma (volume da casa) sempre projeta, mesmo com o telhado "apagado" por dentro ---
+		// --- sombra: uma caixa-fantasma (volume da casa) projeta a sombra da casa ---
 		if (world.shadow && world._ghost) {
 			const g = BABYLON.MeshBuilder.CreateBox('hs_shadow', { width: W + 1, height: S.ROOF_Y, depth: D + 1 }, scene);
 			g.position.set(ox + W / 2, S.ROOF_Y / 2, oz + D / 2);
@@ -165,12 +144,10 @@ const HouseView = {
 		for (const o of CityGrid.obstacles) if (o.home === 'wall') world._collider('hs_wall_' + o.x0.toFixed(1) + '_' + o.z0.toFixed(1), o.x0, o.z0, o.x1, o.z1, H);
 		world._collider('hs_door', ox + d.x0, oz, ox + d.x1, oz + T, d.h);
 
-		// --- brilhos: lâmpada (dentro), luz saindo pela porta e pelas janelas (fora) ---
+		// --- brilhos: luz saindo pela porta e pelas janelas ---
 		const G = new GlowBatch(scene, 8, 'houseGlow', 'glow');
 		this.glow = G;
-		this.g = { bulb: G.alloc(), bulb2: G.alloc(), door: G.alloc(), doorCore: G.alloc(), win: [G.alloc(), G.alloc(), G.alloc()] };
-		const bx = ox + art.bulb.x, bz = oz + art.bulb.z;
-		G.place(this.g.bulb, bx, 0.9, bz, 3.2); G.place(this.g.bulb2, bx, 0.12, bz, 14);
+		this.g = { door: G.alloc(), doorCore: G.alloc(), win: [G.alloc(), G.alloc(), G.alloc()] };
 		const dc = S.doorWorld();
 		G.place(this.g.door, dc.x, 0.25, dc.z - 2.6, 9); G.place(this.g.doorCore, dc.x, 0.9, dc.z - 0.2, 3);
 		const wins = [S.windows[0], S.windows[1], S.windows[3]];
@@ -199,84 +176,30 @@ const HouseView = {
 	},
 
 	// ------------------------------------------------------------------ por quadro
+	// The door (opens when someone comes close), the night lights and the entrance arrow. Entering is the door trigger of Interiors.
 	update(dt, game) {
 		if (!this.ready) return;
-		const S = SafeHouse;
-		let p = game.player.position;
+		const S = SafeHouse, p = game.player.position;
 		this.time += dt;
-		const onFoot = game.mode === 'player' && !game.heliFall;
-		// Entrar: chegou à porta pelo lado de fora → já aparece DENTRO de casa (logo depois da soleira, virado para o cômodo), com o
-		// corte e o zoom na hora (sem precisar atravessar a soleira andando). Rearma só depois de se afastar da porta (sair não re-entra).
-		if (onFoot && !this.inside && !game.player.busy && !game.player.rag) {
-			const dc = S.doorWorld(), dd = hypot(p.x - dc.x, p.z - dc.z);
-			if (dd > 3.2) this._reArm = true;
-			const lz = p.z - S.oz;
-			if (this._reArm && Math.abs(p.x - dc.x) < (S.door.x1 - S.door.x0) / 2 + 0.5 && lz > -1.6 && lz < 0.5) {
-				this._reArm = false;
-				game.player.teleport(new BABYLON.Vector3(dc.x, 0, S.oz + S.T + 1.4));
-				game.player.root.rotation.y = 0;
-				p = game.player.position;
-				if (game.player.velocity) game.player.velocity.setAll(0);
-				this.inside = true; this.t = 1; this._first = true;
-				game.camera.setZoomMul(0.5);
-				game.camera.snapTo(this.focusFor(game.player.position, game.camera, game.gameEngine.engine.getAspectRatio(game.camera.camera)));
-			}
-		}
-		if (onFoot) this.inside = this.inside ? S.inside(p.x, p.z, -0.35) : S.inside(p.x, p.z, 0);
-		else this.inside = false;
 
-		// transição fora ↔ dentro
-		const target = this.inside ? 1 : 0, prev = this.t;
-		if (!this._init) { this._init = true; this.t = target; this._first = true; }              // (o jogo já começa dentro de casa: sem fade de abertura)
-		this.t += (target - this.t) * (1 - Math.exp(-7 * dt));
-		if (Math.abs(target - this.t) < 0.004) this.t = target;
-		const t = this.t;
-		if (t !== prev || this._first) {
-			this._first = false;
-			const extA = Math.max(0, Math.min(1, 1 - t * 1.2)), inA = Math.max(0, Math.min(1, (t - 0.12) * 1.3));
-			for (const m of this.ext) m.alpha = Math.min(0.999, extA);
-			for (const m of this.extMeshes) m.setEnabled(extA > 0.01);
-			this.interiorMat.alpha = Math.min(0.999, inA);
-			this.interior.setEnabled(inA > 0.01);
-			game.camera.setZoomMul(1 - 0.5 * t * t * (3 - 2 * t));
-			// Durante o fade os materiais ficam descongelados (o alpha muda todo quadro); 2 quadros depois de parar, congelam de novo:
-			// material congelado não reavalia o shader a cada desenho (~3× mais barato por malha).
-			for (const m of this.ext) if (m.isFrozen) m.unfreeze();
-			if (this.interiorMat.isFrozen) this.interiorMat.unfreeze();
-			this._settle = 2;
-		} else if (this._settle > 0 && --this._settle === 0) {
-			for (const m of this.ext) m.freeze();
-			this.interiorMat.freeze();
-		}
-
-		// o minimapa não serve dentro de casa (e taparia a cama): some com o corte
-		const mm = document.getElementById('minimap');
-		if (mm && t !== this._mmT) { this._mmT = t; mm.style.opacity = String(1 - Math.min(1, t * 1.6)); mm.style.transition = 'none'; }
-
-		// porta: abre quando alguém chega perto, nos dois lados
-		const dc = S.doorWorld(), near = hypot(p.x - dc.x, p.z - dc.z) < 3.6;
+		// porta: abre quando alguém chega perto
+		const dc = S.doorWorld(), dist = hypot(p.x - dc.x, p.z - dc.z), near = dist < 3.6;
 		this.open += ((near ? 1 : 0) - this.open) * (1 - Math.exp(-6 * dt));
 		this.pivot.rotation.y = -this.open * 1.5;
 
-		// luz: à noite o interior fica mais escuro (só a lâmpada ilumina) e as janelas acendem
+		// luz: à noite as janelas acendem e a luz quente sai pela porta
 		const night = game.dayNight ? game.dayNight.night : 0;
-		const k = 1 - 0.3 * night;
-		this.interiorMat.emissiveColor.set(k, k * 0.97, k * 0.92);
 		this.mats.glass.emissiveColor.set(0.5 * night, 0.34 * night, 0.12 * night);
-		const flick = 0.92 + 0.05 * Math.sin(this.time * 7.3) + 0.03 * Math.sin(this.time * 19.1);
 		const G = this.glow, g = this.g;
-		G.color(g.bulb, 1.0, 0.82, 0.45, 0.3 * t * flick);
-		G.color(g.bulb2, 1.0, 0.78, 0.38, (0.16 + 0.3 * night) * t * flick);
-		G.color(g.door, 1.0, 0.8, 0.42, (0.16 + 0.5 * night) * (1 - t) * (0.7 + 0.3 * this.open));
-		G.color(g.doorCore, 1.0, 0.85, 0.5, (0.12 + 0.3 * night) * (1 - t) * this.open);
-		for (const w of g.win) G.color(w, 1.0, 0.8, 0.4, 0.5 * night * (1 - t));
+		G.color(g.door, 1.0, 0.8, 0.42, (0.16 + 0.5 * night) * (0.7 + 0.3 * this.open));
+		G.color(g.doorCore, 1.0, 0.85, 0.5, (0.12 + 0.3 * night) * this.open);
+		for (const w of g.win) G.color(w, 1.0, 0.8, 0.4, 0.5 * night);
 		G.flush();
 
-		// seta: pula em frente à porta; some quando se está dentro ou longe
-		const dist = hypot(p.x - dc.x, p.z - dc.z), vis = (1 - t) * (dist < 80 ? 1 : 0);
-		this.hint = (!this.inside && onFoot && dist < 7 && t < 0.05) ? '<b>SEU ESCONDERIJO</b><small>a porta está aberta — é só entrar</small>' : '';
-		this.arrow.setEnabled(vis > 0.05);
-		if (vis > 0.05) {
+		// seta: pula em frente à porta; some longe dela
+		const vis = dist < 80;
+		this.arrow.setEnabled(vis);
+		if (vis) {
 			const bob = Math.abs(Math.sin(this.time * 3.2));
 			this.arrow.position.z = this.arrowBase.z - 0.15 + bob * 0.7;
 			const s = 0.9 + 0.12 * Math.sin(this.time * 6.4) + (dist < 14 ? 0.12 : 0);
@@ -284,32 +207,16 @@ const HouseView = {
 		}
 	},
 
-	// Retângulo da casa (com a face norte pintada) em pixels do canvas de efeitos (w×h = tamanho interno do render), ou null.
-	screenRect(scene, w, h) {
-		const cam = scene.activeCamera, S = SafeHouse;
-		if (!cam) return null;
-		const vp = cam.viewport.toGlobal(w, h), M = scene.getTransformMatrix();
-		let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-		for (const [x, z] of [[S.ox - 0.1, S.oz - 0.3], [S.ox + S.W + 0.1, S.oz - 0.3], [S.ox - 0.1, S.oz + S.D + 2.5], [S.ox + S.W + 0.1, S.oz + S.D + 2.5]]) {
-			const p = BABYLON.Vector3.Project(new BABYLON.Vector3(x, 0.14, z), BABYLON.Matrix.IdentityReadOnly, M, vp);
-			x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
-		}
-		return { x0: Math.floor(x0), y0: Math.floor(y0), x1: Math.ceil(x1), y1: Math.ceil(y1) };
-	},
-
-	// Enquadramento da câmera: dentro da casa ela mira no cômodo inteiro (se couber na tela; senão segue o jogador sem sair dos limites).
-	focusFor(pos, cam, aspect) {
-		const t = this.t;
-		if (!this.ready || t < 0.002) return pos;
-		const S = SafeHouse, c = S.center(), view = cam.viewHalf * 0.5;
-		const hx = S.W / 2 + 0.8, hz = S.D / 2 + 1.1, cz = c.z + 1.1;
-		const halfW = view * Math.max(1, aspect), halfH = view;
-		const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-		const fx = hx <= halfW ? c.x : clamp(pos.x, c.x - (hx - halfW), c.x + (hx - halfW));
-		const fz = hz <= halfH ? cz : clamp(pos.z, cz - (hz - halfH), cz + (hz - halfH));
-		const e = t * t * (3 - 2 * t);
-		this._focus = this._focus || { x: 0, z: 0 };
-		this._focus.x = pos.x + (fx - pos.x) * e; this._focus.z = pos.z + (fz - pos.z) * e;
-		return this._focus;
+	// The safe house room for the interiors stage, in the shape of a ShopStyles layout (local coordinates, origin at the house's
+	// south-west corner): the painted cutaway, the solids (walls and furniture), the furniture in use, the door and where one walks in.
+	stageRoom() {
+		const S = SafeHouse, art = HouseArt.interior();
+		return {
+			canvas: art.canvas, in: art.in, W: S.W, D: S.D,
+			obs: S.solids().map(([x0, z0, x1, z1, h]) => ({ x0, z0, x1, z1, h })),
+			door: { x0: S.door.x0, x1: S.door.x1 }, clerk: null, patrons: [],
+			spawn: { x: (S.door.x0 + S.door.x1) / 2, z: S.T + 1.4 },
+			uses: S.furniture.filter((f) => f.use).map((f) => ({ kind: f.use, x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1 })),
+		};
 	},
 };

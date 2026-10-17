@@ -37,6 +37,9 @@ const Interiors = {
 			const k = key(Math.floor(p.x / C), Math.floor(p.z / C));
 			(grid.get(k) || grid.set(k, []).get(k)).push(shop);
 		}
+		// The safe house: one more door (on the grid only — `_doors` lists the shops, which the careers send the player to).
+		const home = this.safeHouseDoor();
+		if (home) { const k = key(Math.floor(home.x / C), Math.floor(home.z / C)); (grid.get(k) || grid.set(k, []).get(k)).push(home); }
 		this._key = key; this._C = C;
 		console.log(`[LOJAS] ${doors.length} portas indexadas`);
 	},
@@ -76,8 +79,31 @@ const Interiors = {
 		if (!this._lockT || performance.now() - this._lockT > 1800) { this._lockT = performance.now(); game._flash(c.msg); }
 	},
 
+	// The safe house as an interior: its door on the house's south wall (outside = where one comes back to, facing the street).
+	safeHouseDoor() {
+		if (!SafeHouse.placed) return null;
+		if (this._home) return this._home;
+		const d = SafeHouse.doorWorld();
+		return (this._home = { id: 'safehouse', kind: 'safehouse', style: 'safehouse', name: 'Seu esconderijo', variant: 0, x: d.x, z: SafeHouse.oz - 1.25, face: Math.PI, ex: d.x, ez: SafeHouse.oz, safehouse: true });
+	},
+	// Wakes up in the safe house, next to the bed (new game, sleeping there, the "home" respawn, a game saved there): straight in,
+	// without the fade, leaving whatever interior the player was in.
+	wakeAtSafeHouse(game) {
+		const home = this.safeHouseDoor(); if (!home) return;
+		if (this.active && !this.active.shop.safehouse) this._doLeave(game);
+		if (!this.active) this._doEnter(game, home, true);
+		const o = this.STAGE, b = SafeHouse.spawn, pl = game.player;
+		pl.teleport(new BABYLON.Vector3(o.x + b.x, 0, o.z + b.z));
+		pl.root.rotation.y = b.face; pl.velocity.setAll(0);
+		this.active.released = this.active.armed = false;
+		game.camera.snapTo(this.focus(pl.position, game.camera, game.gameEngine.engine.getAspectRatio(game.camera.camera)));
+	},
+	// The furniture of a home can be used: the safe house always, a bought property once it is the player's.
+	_owned(shop) { return !!shop.safehouse || RealEstate.isOwned(shop.home); },
+
 	// ------------------------------------------------------------------ regras de entrada
 	check(game, shop) {
+		if (shop.safehouse) return game.wanted.level > 0 ? { ok: false, msg: 'A polícia está na sua cola — não dá para entrar' } : { ok: true };
 		const hour = game.dayNight.hour;
 		if (!Economy.isOpen(shop.style, hour) && !(shop.bank && Banks.canBreakIn(shop.bank))) return { ok: false, closed: true, msg: `FECHADO — abre às ${Economy.opensAt(shop.style)}h${shop.bank && shop.bank.tier === 'hq' ? ' (ou corte a energia do quarteirão)' : ''}` };
 		if (game.wanted.level > 0) return { ok: false, msg: 'A polícia está na sua cola — não dá para entrar' };
@@ -95,7 +121,7 @@ const Interiors = {
 			if (typeof Robbery !== 'undefined' && !game.shopUI.open) { const rp = Robbery.prompt(game); if (rp !== null) return rp; }
 			const a = this.active, o = this.STAGE;
 			if (game.shopUI.open || game.stashUI.open || game.propertyUI.open || game.sleeping) return '';
-			if (a.shop.home) { const hu = this.homeUse(game); if (hu) return RealEstate.isOwned(a.shop.home) ? (this.HOME_PROMPT[hu.kind] || '') : (hu.kind === 'desk' ? '<b>E</b> ver a proposta de compra<small>você está só visitando o imóvel</small>' : '<b>VISITA</b><small>só dá para usar depois de comprar o imóvel</small>'); }
+			if (a.shop.home || a.shop.safehouse) { const hu = this.homeUse(game); if (hu) return this._owned(a.shop) ? (this.HOME_PROMPT[hu.kind] || '') : (hu.kind === 'desk' ? '<b>E</b> ver a proposta de compra<small>você está só visitando o imóvel</small>' : '<b>VISITA</b><small>só dá para usar depois de comprar o imóvel</small>'); }
 			const door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2, nearExit = hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3;
 			const cl = a.data.clerk, nearClerk = cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
 			const shop = a.shop, S = Economy.STYLES[shop.style] || {};
@@ -103,12 +129,13 @@ const Interiors = {
 			const gu = this.gymUse(game);
 			if (gu) { const ex = Gym.EX[gu.kind]; return `<b>E</b> ${ex.verb}<small>${!Physique.hasPass() ? 'compre a diária ou a mensalidade na recepção' : Physique.setsLeft(ex.id) > 0 ? `séries hoje: ${Physique.SETS_PER_DAY - Physique.setsLeft(ex.id)}/${Physique.SETS_PER_DAY} · ${ex.min}–${ex.max} kg` : 'séries de hoje feitas — volte amanhã'}</small>`; }
 			if (nearClerk) return `<b>E</b> ${S.guns ? 'ver o que tem à venda' : S.clothes ? 'ver roupas, tênis e bolsas' : S.gym ? 'diária, mensalidade e suplementos' : 'ver o cardápio'}<small>${shop.name} · ${Economy.zoneOf(shop).label}${S.gym ? (Physique.hasPass() ? ' · treino liberado' : ' · sem plano') : ''}</small>`;
-			if (nearExit) return '<b>E</b> sair da loja<small>ou ande até a porta</small>';
+			if (nearExit) return `<b>E</b> sair ${shop.safehouse ? 'de casa' : 'da loja'}<small>ou ande até a porta</small>`;
 			return '';
 		}
 		const shop = this.shopNear(p.x, p.z);
 		if (!shop || game.mode !== 'player') return '';
 		const c = this.check(game, shop), S = Economy.STYLES[shop.style];
+		if (shop.safehouse) return c.ok ? '<b>SEU ESCONDERIJO</b><small>a porta está aberta — é só entrar</small>' : `<b>ENTRADA BLOQUEADA</b><small>${c.msg}</small>`;
 		if (!c.ok) return `<b>${c.closed ? 'FECHADO' : 'ENTRADA BLOQUEADA'}</b><small>${shop.name} — ${c.msg.replace('FECHADO — ', '')}</small>`;
 		return `<b>${shop.name}</b><small>${S.label} · ${Economy.zoneOf(shop).label} — é só entrar pela porta</small>`;
 	},
@@ -130,10 +157,11 @@ const Interiors = {
 				}
 				if (Robbery.interact(game)) return true;                             // anunciar o assalto (arma na mão, no balcão)
 			}
-			if (this.active.shop.home) {
+			const shop = this.active.shop;
+			if (shop.home || shop.safehouse) {
 				const hu = this.homeUse(game);
-				if (hu && hu.kind !== 'desk' && !RealEstate.isOwned(this.active.shop.home)) { game._flash('Você está só visitando — compre o imóvel para usar isto'); return true; }
-				if (hu) { if (hu.kind === 'bed') { if (!RealEstate.isOwned(this.active.shop.home)) game._flash('Só dá para dormir depois de comprar o imóvel'); else game._startSleep('here', this.active.shop.home); } else if (hu.kind === 'desk') game.propertyUI.show(this.active.shop.home); else game.stashUI.show(hu.kind); return true; }
+				if (hu && hu.kind !== 'desk' && !this._owned(shop)) { game._flash('Você está só visitando — compre o imóvel para usar isto'); return true; }
+				if (hu) { if (hu.kind === 'bed') { if (!this._owned(shop)) game._flash('Só dá para dormir depois de comprar o imóvel'); else if (shop.safehouse) game._startSleep(); else game._startSleep('here', shop.home); } else if (hu.kind === 'desk') game.propertyUI.show(this.active.shop.home); else game.stashUI.show(hu.kind); return true; }
 			}
 			const a = this.active, o = this.STAGE, door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2;
 			const cl = a.data.clerk;
@@ -177,7 +205,7 @@ const Interiors = {
 	},
 	// Móvel de uso mais próximo (a ≤ 1,9 u do retângulo) dentro da casa, ou null.
 	homeUse(game, maxD = 1.9) {
-		const a = this.active; if (!a || !a.shop.home) return null;
+		const a = this.active; if (!a || !(a.shop.home || a.shop.safehouse)) return null;
 		const o = this.STAGE, p = game.player.position;
 		let best = null, bs = 1e9;
 		for (const u of a.data.uses || []) {                                             // ao alcance (≤ maxD do retângulo): vence o de centro mais perto
@@ -288,7 +316,7 @@ const Interiors = {
 			if (o && (!this.active || this.active.room !== o)) { const m = o.mesh.material; o.mesh.dispose(); if (m) { if (m.diffuseTexture) m.diffuseTexture.dispose(); m.dispose(); } delete this._rooms[old]; }
 		}
 		touch();
-		const data = ShopStyles.get(shop.style, shop.variant, shop.reform || 0), IN = data.in, o = this.STAGE;
+		const data = shop.safehouse ? HouseView.stageRoom() : ShopStyles.get(shop.style, shop.variant, shop.reform || 0), IN = data.in, o = this.STAGE;
 		const tex = data.canvas.toTexture(game.scene, { wrap: false, mips: false });
 		data.canvas = null; delete ShopStyles._cache[shop.style + shop.variant + (shop.reform ? 'r' + shop.reform : '')];   // os pixels já estão na GPU
 		tex.hasAlpha = true;
@@ -342,7 +370,8 @@ const Interiors = {
 		for (let i = list.length; i < this._actors.length; i++) this._actors[i].setVisible(false);
 	},
 
-	_doEnter(game, shop) {
+	// `quiet`: waking up inside (no name flash).
+	_doEnter(game, shop, quiet = false) {
 		const room = this._room(shop), data = room.data, o = this.STAGE, pl = game.player;
 		this._backdrop().setEnabled(true); room.mesh.setEnabled(true);
 		const ret = { x: shop.x, z: shop.z, face: shop.face };
@@ -357,8 +386,7 @@ const Interiors = {
 		game.camera.snapTo(this.focus(pl.position, game.camera, game.gameEngine.engine.getAspectRatio(game.camera.camera)));
 		game.scene.physicsEnabled = false;
 		const mm = document.getElementById('minimap'); if (mm) mm.style.opacity = '0';
-		if (HouseView.ready) { HouseView.inside = false; HouseView.t = 0; HouseView._first = true; }
-		game._flash(`${shop.name}`);
+		if (!quiet) game._flash(`${shop.name}`);
 		this._hideCity(game, true);
 		if (shop.bank) Banks.onEnter(game, shop);
 		if (typeof Heists !== 'undefined') Heists.onEnter(game, shop);         // golpe em execução: a equipe entra junto

@@ -369,6 +369,8 @@ class Game {
 		this.renderCuller = new RenderCuller(this.scene);           // particionamento espacial do render (core/Spatial.js)
 		this.renderCuller.build();
 		console.log(`[RENDER] grade de culling: ${this.renderCuller.stats.static} malhas estáticas em células de ${this.renderCuller.cell} u`);
+		const p0 = this.player.position;
+		if (SafeHouse.inside(p0.x, p0.z)) Interiors.wakeAtSafeHouse(this);      // (começo de jogo, ou um jogo salvo na safe house)
 		if (!this._pendingSave && SafeHouse.placed) this._flash('Você acordou no seu esconderijo, na favela — a porta turquesa fica ao sul');
 		this._pendingSave = null;
 		this._start();
@@ -628,9 +630,9 @@ class Game {
 			if (!this.lockpick.active && !this.arrest && !this.death && !this.hiding && !frozenUI) this._playerActions(dt);      // (arrombando/rendido: sem ações)
 			this.player.update(move, this.input.isSprinting() && !(this.empire && this.empire.tired), dt);      // (exausto: não corre)
 			if (!frozenUI) Interiors.autoEnter(this);            // lojas: atravessar o vão da porta = entrar
-			HouseView.update(dt, this);                          // safe house: fade fora↔dentro, zoom 2×, porta, seta
-			this.camera.setFlat(HouseView.inside);               // (inside the safe house: the top-down camera its cutaway is painted for)
-			this.camera.follow(HouseView.focusFor(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
+			HouseView.update(dt, this);                          // safe house: porta, luzes, seta (entrar = a porta de Interiors)
+			this.camera.setFlat(false);
+			this.camera.follow(this.player.position, dt);
 		}
 
 		SpeedBlur.update(this, dt);                                  // borrão de alta velocidade (≥ 80% da máxima do carro)
@@ -640,8 +642,7 @@ class Game {
 		this._updateChoppers(dt);
 
 		// --- Zoom ---
-		// Automático: a pé aproxima; no veículo (carro, moto, barco, helicóptero) afasta conforme a velocidade. Dentro da casa
-		// (HouseView já aproxima 2×) fica neutro.
+		// Automático: a pé aproxima; no veículo (carro, moto, barco, helicóptero) afasta conforme a velocidade.
 		const zSpeed = this.mode === 'car' && this.activeCar ? this.activeCar.speed : (this.mode === 'heli' && this.chopper ? this.chopper.speed : null);
 		this.camera.setAutoZoom(this.camera.zoomMul < 0.999 ? 1 : CompassCamera.autoZoomGoal(zSpeed), dt);
 		const zoom = this.input.consumeZoom();
@@ -657,7 +658,7 @@ class Game {
 		this.gameEngine.world.setReveal(rp.x, rp.z, rv ? (Math.max(rv.halfLen, rv.halfW) + 1.6) * 3 : 9.0, rv && rv.visual ? (rv.visual.mesh ? rv.visual.mesh.position.y : rv.visual.y) : this.player.revealY);
 
 		// --- Mundo (água animada, sombra seguindo o foco) ---
-		if (this.mode !== 'player') HouseView.update(dt, this);          // (de carro/helicóptero: garante o "fora" e o zoom normal)
+		if (this.mode !== 'player') HouseView.update(dt, this);          // (de carro/helicóptero: a porta e a seta continuam)
 		Perf.lap('outros');
 		this.gameEngine.update(dt, this.camera.target, this.camera.groundHalf());
 		Perf.lap('mundo (água/sombra)');
@@ -1689,7 +1690,6 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 				const cp = !car.isBoat && CarCare.prompt(this);                         // a pé na frente/atrás do carro: capô ou porta-malas
 				if (cp) html = cp + '<br>' + html;
 			}
-			if (!html) html = this._housePrompt();
 			if (!html && this.player.crouched) html = this.player.coverLock      // agachado: o estado e como sair dele
 				? '<b>Q</b> sair da cobertura<small>colado — mova para os lados para deslizar; segure na ponta para contornar; afaste-se para soltar</small>'
 				: this.player.inCover
@@ -1701,7 +1701,6 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 					: `<b>Q</b> mergulhar<small>${pl.winded || f < 15 ? 'sem fôlego — espere recuperar' : `fôlego ${f}%`}</small>`;
 			}
 			if (!html) html = Interiors.prompt(this);
-			if (!html && HouseView.hint) html = HouseView.hint;
 		}
 		const pad = this.input.usingPad ? this.input.padType : '';          // jogando no controle: as teclas viram os botões dele (Xbox/PlayStation)
 		if (html === this._promptHtml && this.showPrompts === this._promptShown && pad === this._promptPad) return;
@@ -2031,33 +2030,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		}
 	}
 
-	// ---------------------------------------------------------------- safe house: geladeira, cofre, baú e cama
-	_houseUse() {
-		if (!HouseView.inside || this.mode !== 'player' || this.player.busy || this.stashUI.cool > 0 || this.stashUI.open || this.sleeping) return null;
-		const p = this.player.position;
-		return SafeHouse.nearestUse(p.x, p.z);
-	}
-
-	// E perto de um móvel de uso da casa. Retorna true se tratou.
-	_interactHouse() {
-		const h = this._houseUse();
-		if (!h) return false;
-		if (h.use === 'bed') this._startSleep();
-		else this.stashUI.show(h.use);
-		return true;
-	}
-
-	_housePrompt() {
-		const h = this._houseUse();
-		if (!h) return '';
-		return {
-			fridge: '<b>E</b> abrir a geladeira<small>guarde comida e água</small>',
-			safe: '<b>E</b> abrir o cofre<small>dinheiro e joias — dá para vender as joias</small>',
-			chest: '<b>E</b> abrir o baú<small>armas, munição, kits e o que mais quiser</small>',
-			bed: '<b>E</b> dormir e salvar o jogo<small>8 horas de sono: recupera a vida e grava o progresso</small>',
-		}[h.use] || '';
-	}
-
+	// ---------------------------------------------------------------- dormir (a cama da safe house ou de um imóvel: Interiors)
 	// Dormir: escurece a tela, passa a noite, cura, grava o jogo e clareia de novo.
 	_startSleep(at = 'safehouse', prop = null) {
 		if (this.wanted.level > 0) { this._flash('Com a polícia no seu rastro não dá para dormir'); return; }
@@ -2083,10 +2056,10 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 				s.phase = 'black'; s.t = 0;
 				el.innerHTML = '<div style="font-size:22px;letter-spacing:6px">Zzz…</div>';
 				// a noite passa
-				const pl = this.player, sp = SafeHouse.spawnWorld();
+				const pl = this.player;
 				this.dayNight.skip(RealEstate.sleepHours(s.prop));
 				pl.hp = pl.maxHp;
-				if (sp && s.at !== 'here') { pl.teleport(new BABYLON.Vector3(sp.x, 0, sp.z)); pl.root.rotation.y = sp.face; this.camera.snapTo(pl.position); }
+				if (s.at !== 'here') Interiors.wakeAtSafeHouse(this);
 				if (this.policeManager) this.policeManager.scatter(pl.position);
 				s.perks = RealEstate.wakePerks(this, s.prop);
 				if (this.empire) { this.empire.onSleep(); this.empire.onWake(); }
@@ -2114,7 +2087,6 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (!this.carUI.open && this.carUI.cool <= 0 && (Dealers.interact(this) || Garage.interact(this))) return;      // concessionária / garagem
 		if (!Panel.anyCool() && this.stashUI.cool <= 0 && (CarCare.interact(this) || Mechanic.interact(this))) return;      // capô, porta-malas, balcão de peças
 		if (!this.motoUI.open && this.motoUI.cool <= 0 && MotoStands.interact(this)) return;
-		if (this._interactHouse()) return;
 		if (Interiors.interact(this)) return;
 		if (this.hiding) { if (this.hiding.phase === 'hidden') this._leaveHiding(); return; }
 		if (this.holdup) { this._cancelHoldup('Você baixou a arma — a vítima fugiu'); return; }
@@ -2483,6 +2455,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (this.gangs) this.gangs.clear();
 		HangProbe.mark('respawn: espalhar polícia');
 		if (this.policeManager) this.policeManager.scatter(p);              // horas depois: a polícia já não está onde estava
+		if (home && !RealEstate.homeSpawn()) Interiors.wakeAtSafeHouse(this);      // (a safe house: ao lado da cama, lá dentro)
 		HangProbe.arm('acordou: ' + kind, 20);                              // (caixa-preta: grava os próximos 20 s, ver core/HangProbe.js)
 	}
 
