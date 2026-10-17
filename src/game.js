@@ -95,6 +95,7 @@ class Game {
 		this._warmSprites();
 		this.player = new Player(this.scene, this.sprites, CityGrid.startPos());
 		if (typeof PlayerLook !== 'undefined') PlayerLook.attach(this);      // visual do jogador (roupa, bolsa, aparência) no personagem 2,5D
+		this.xray = new XRaySilhouette(this.scene, this.player.actor);      // 2.5D camera: the player's silhouette through what hides him
 		const sp = SafeHouse.spawnWorld();
 		if (sp) this.player.root.rotation.y = sp.face;      // acorda dentro da safe house, de frente para a porta
 		this.camera = new CompassCamera(this.scene, this.gameEngine.engine, this.player.position);
@@ -527,6 +528,7 @@ class Game {
 		this._stillN = still ? (this._stillN || 0) + 1 : 0;
 		if (this._stillN > 2 && !this._redraw) { Perf.lap('render (cena)'); Perf.lap('física'); return; }
 		this._redraw = false;
+		this.xray.update();
 		this.scene.render();                                         // (1 passo de 1/60 dentro do render)
 		Perf.lap('render (cena)');
 		const pe = this.scene.getPhysicsEngine();

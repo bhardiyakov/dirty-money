@@ -320,7 +320,7 @@ const NpcArt = {
 		this._register();
 		for (const A of Object.values(this.atlases)) for (const P of A.pages) {
 			if (P.up) { P.up = null; P.st = 'ready'; }                     // (envio pela metade na cena antiga: recomeça nesta — os pixels ainda estão em P.px)
-			if (P.tex || P.mat) { P.tex = null; P.mat = null; if (A.file && P.st === 'ready' && !P.px) P.st = 'idle'; }
+			if (P.tex || P.mat) { P.tex = null; P.mat = P.sil = null; if (A.file && P.st === 'ready' && !P.px) P.st = 'idle'; }
 		}
 		this._live.clear(); this._res = 0; this._upQ = []; this._zombies = [];
 		const eng = scene.getEngine();                                      // envio das páginas em faixas: o orçamento é reposto a cada quadro (_upFrame)
@@ -491,6 +491,7 @@ const NpcArt = {
 			varying vec2 vG;
 			uniform vec4 clipA;          // recorte da carroceria (entrando no carro): centro (x, z) e frente (fx, fz)
 			uniform vec4 clipB;          // meio comprimento, meia largura, altura máxima na imagem (m) e o modo em w (ver main)
+			uniform vec4 silhouette;     // X-ray pass: tint (rgb) and strength (a), 0 = the normal drawing
 			float hb(float n) { return fract(sin(n) * 43758.5453); }
 			vec4 tap(vec2 t, vec4 R) {
 				if (t.x < R.x || t.y < R.y || t.x >= R.z || t.y >= R.w) return vec4(0.0);
@@ -565,6 +566,8 @@ const NpcArt = {
 					if (clipB.w > 1.5 || (abs(dot(d, clipA.zw)) < clipB.x && abs(dot(d, vec2(clipA.w, -clipA.z))) < clipB.y)) discard;
 				}
 				if (c.a < 0.02) discard;
+				// X-ray pass (XRaySilhouette): a flat tinted silhouette instead of the drawing (premultiplied).
+				if (silhouette.a > 0.0) { gl_FragColor = vec4(silhouette.rgb, 1.0) * (silhouette.a * smoothstep(0.2, 0.6, c.a)); return; }
 				gl_FragColor = c;
 			}`;
 	},
@@ -572,32 +575,51 @@ const NpcArt = {
 	// Material de uma página (o mesmo shader para todas; cada página tem a sua textura e o seu tamanho). Também refaz o que mudou
 	// enquanto ela estava fora da GPU (zoom, relógio da água, recorte do carro).
 	_bind(P) {
-		const A = P.A;
-		let m = P.mat;
-		if (!m) {
-			m = P.mat = new BABYLON.ShaderMaterial('npcArt_' + A.id + '_' + P.i, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
-				attributes: ['position', 'color', 'fr', 'fr2'],
-				uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'palRows', 'tint', 'sharp', 'mini', 'la', 'fmt', 'wt', 'clipA', 'clipB'],
-				samplers: ['atlas', 'palette'],
-				needAlphaBlending: true,
-			});
-			m.setTexture('palette', this._pal.tex);
-			m.setFloat('ppu', this.ppuOf(A));
-			m.setFloat('fmt', A.data.v || 1);
-			m.setFloat('lift', 4.0);
-			m.setVector2('atlasSize', new BABYLON.Vector2(P.w, P.h));
-			m.setFloat('palRows', this.ROWS);
-			m.setColor3('tint', SpriteMaterial.sharedTint());
-			m.setFloat('la', this._gl2 ? 0 : 1);
-			m.alphaMode = BABYLON.Engine.ALPHA_PREMULTIPLIED;
-			m.backFaceCulling = false;
-		}
+		const m = P.mat || (P.mat = this._newMaterial(P, 'npcArt_'));
+		this._refresh(m, P);
+		this._clipU(m, P.A.carClip);
+		return m;
+	},
+	// The page's material: the fixed uniforms (the dynamic ones: _refresh).
+	_newMaterial(P, prefix) {
+		const A = P.A, m = new BABYLON.ShaderMaterial(prefix + A.id + '_' + P.i, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
+			attributes: ['position', 'color', 'fr', 'fr2'],
+			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'palRows', 'tint', 'sharp', 'mini', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette'],
+			samplers: ['atlas', 'palette'],
+			needAlphaBlending: true,
+		});
+		m.setTexture('palette', this._pal.tex);
+		m.setFloat('ppu', this.ppuOf(A));
+		m.setFloat('fmt', A.data.v || 1);
+		m.setFloat('lift', 4.0);
+		m.setVector2('atlasSize', new BABYLON.Vector2(P.w, P.h));
+		m.setFloat('palRows', this.ROWS);
+		m.setColor3('tint', SpriteMaterial.sharedTint());
+		m.setFloat('la', this._gl2 ? 0 : 1);
+		m.alphaMode = BABYLON.Engine.ALPHA_PREMULTIPLIED;
+		m.backFaceCulling = false;
+		return m;
+	},
+	// What changes while the page lives: its texture (on the GPU or not), the zoom sharpness, the water clock, standing.
+	_refresh(m, P) {
 		m.setTexture('atlas', P.tex || this._emptyTex());
-		m.setFloat('sharp', this._sharpOf(A));
-		m.setFloat('mini', this._miniOf(A));
+		m.setFloat('sharp', this._sharpOf(P.A));
+		m.setFloat('mini', this._miniOf(P.A));
 		m.setFloat('wt', this._wt || 0);
 		m.setVector2('stand', this._stand);
-		this._clipU(m, A.carClip);
+	},
+	// X-ray material of a page (XRaySilhouette): the same drawing, painted as a flat silhouette only where something closer to the camera
+	// already wrote depth (GREATER), without writing depth itself. Refreshed on every call: only the player's current page uses it.
+	SILHOUETTE: new BABYLON.Vector4(1.0, 0.86, 0.38, 0.62),
+	silhouetteOf(P) {
+		let m = P.sil;
+		if (!m) {
+			m = P.sil = this._newMaterial(P, 'npcXray_');
+			m.setVector4('silhouette', this.SILHOUETTE);
+			m.depthFunction = BABYLON.Constants.GREATER;
+			m.disableDepthWrite = true;
+		}
+		this._refresh(m, P);
 		return m;
 	},
 
@@ -727,7 +749,8 @@ const NpcArt = {
 	_free(P) {
 		if (P.tex) { P.tex.dispose(); this._res -= P.w * P.h * 2; this._live.delete(P); }
 		if (P.mat) P.mat.dispose();
-		P.tex = P.mat = null;
+		if (P.sil) P.sil.dispose();
+		P.tex = P.mat = P.sil = null;
 	},
 	// (tick) Atlas descartados que alguém ainda desenhava: quem já não espera uma página nova (ou esperou 10 s) larga o último quadro
 	// (_lostPage: some até desenhar de novo); sem ninguém, as texturas saem da GPU.
