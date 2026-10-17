@@ -56,6 +56,13 @@ const Config = {
 		// ponto de fuga fica EM CIMA do alvo, os telhados se projetam para fora e nunca
 		// o escondem.
 		height: 150,           // altura da câmera (u). Maior = perspectiva mais sutil.
+		// 2.5D camera (`?cam=25d` while it is being completed): orthographic, tilted `tilt` degrees above the horizon — the angle the
+		// character atlases were rendered at (tools/asset_baker) — looking north from the south. Interiors and the safe house keep the
+		// top-down camera above (their art is painted for it). `distance` = how far back along the view ray it sits (depth range only).
+		tilted: typeof location !== 'undefined' && /[?&]cam=25d\b/.test(location.search),
+		tilt: 56,
+		distance: 150,
+		tallest: 42,           // tallest building (m): its top shows up to tallest·cot(tilt) beyond the bottom edge — culling margin
 		viewHalf: 15,          // metade da altura visível no chão (zoom padrão).
 		minView: 8,            // zoom máximo (aproximado).
 		maxView: 34,           // zoom mínimo (afastado).

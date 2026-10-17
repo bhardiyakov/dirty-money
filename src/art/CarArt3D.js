@@ -413,12 +413,15 @@ const CarArt3D = {
 		if (!cam) return;
 		const M = this._models;
 		for (const id in M) M[id].n = 0;
-		const cp = cam.position, eng = sc.getEngine();
+		const cp = cam.position, eng = sc.getEngine(), G = typeof CompassCamera !== 'undefined' && CompassCamera.current;
 		const aspect = eng.getRenderWidth() / Math.max(1, eng.getRenderHeight());
-		const reach = Math.tan((cam.fov || 0.8) / 2) * Math.max(10, cp.y) * Math.max(1, aspect) * 1.5 + 10, r2 = reach * reach;
+		let cx = cp.x, cz = cp.z, reach;
+		if (G && G.camera === cam && G.tilted) { const g = G.groundHalf(); cx = G.focus.x; cz = G.focus.z; reach = Math.hypot(g.x, g.z) * 1.2 + 10; }      // (2.5D: around the ground at the screen centre)
+		else reach = Math.tan((cam.fov || 0.8) / 2) * Math.max(10, cp.y) * Math.max(1, aspect) * 1.5 + 10;
+		const r2 = reach * reach;
 		for (const a of this.live) {
 			if (!a.visible || !a._placed) continue;
-			const dx = a.x - cp.x, dz = a.z - cp.z;
+			const dx = a.x - cx, dz = a.z - cz;
 			if (this.squash && dx * dx + dz * dz > r2) continue;
 			const m = M[a.modelId] || this._model(a.modelId);
 			if (m.n >= m.cap) this._grow(m, m.cap * 2);

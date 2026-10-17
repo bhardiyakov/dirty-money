@@ -62,12 +62,13 @@ const Zones = {
 	asleep(x, z) { const dx = x - this.cx, dz = z - this.cz; return dx * dx + dz * dz > this.ar * this.ar; },
 
 	update(game) {
-		const cam = game.camera, c = cam.camera.position, eng = game.gameEngine.engine, asp = eng.getAspectRatio(cam.camera);
-		this.cx = c.x; this.cz = c.z;
-		this.hz = cam.view + this.margin;
-		this.hx = cam.view * asp + this.margin;
-		if (cam.yaw) this.hx = this.hz = Math.hypot(cam.view * asp, cam.view) + this.margin;      // câmera girada (bússola): o quadrado que cobre a tela em qualquer ângulo
-		const hd = Math.hypot(Config.camera.maxView * Math.max(1, asp), Config.camera.maxView);      // meia-diagonal da tela no zoom máximo
+		const cam = game.camera, eng = game.gameEngine.engine, asp = eng.getAspectRatio(cam.camera), g = cam.groundHalf(cam.view, asp);
+		this.camera = cam.camera;
+		this.cx = cam.focus.x; this.cz = cam.focus.z;                       // (the ground at the centre of the screen: a tilted camera sits far south of it)
+		this.hz = g.z + this.margin;
+		this.hx = g.x + this.margin;
+		if (cam.yaw) this.hx = this.hz = Math.hypot(g.x, g.z) + this.margin;      // câmera girada (bússola): o quadrado que cobre a tela em qualquer ângulo
+		const gm = cam.groundHalf(Config.camera.maxView, Math.max(1, asp)), hd = Math.hypot(gm.x, gm.z);      // meia-diagonal da tela no zoom máximo
 		this.sr = hd + 6; this.ar = 2 * hd;
 		this.frame++;
 		this.count = this._cnt.slice(); this._cnt[0] = this._cnt[1] = this._cnt[2] = 0;
@@ -145,9 +146,9 @@ class RenderCuller {
 			this._range = '';
 		}
 		// Retângulo visto: o do jogo (Zones, que já tem a margem) ou, num palco/câmera diferente, o tamanho do frustum na altura do chão.
-		const p = cam.position, hz = Zones.hz + 6, hx = Zones.hx + 6;
-		if (!inWorld(p.x, p.z)) return { data: sc.meshes, length: sc.meshes.length };      // (câmera fora do mundo: o laço da grade não terminaria)
-		const c = this.cell, i0 = Math.floor((p.x - hx) / c), i1 = Math.floor((p.x + hx) / c), j0 = Math.floor((p.z - hz) / c), j1 = Math.floor((p.z + hz) / c);
+		const game = cam === Zones.camera, px = game ? Zones.cx : cam.position.x, pz = game ? Zones.cz : cam.position.z, hz = Zones.hz + 6, hx = Zones.hx + 6;
+		if (!inWorld(px, pz)) return { data: sc.meshes, length: sc.meshes.length };      // (câmera fora do mundo: o laço da grade não terminaria)
+		const c = this.cell, i0 = Math.floor((px - hx) / c), i1 = Math.floor((px + hx) / c), j0 = Math.floor((pz - hz) / c), j1 = Math.floor((pz + hz) / c);
 		const range = i0 + ',' + i1 + ',' + j0 + ',' + j1;
 		if (range !== this._range) {
 			this._range = range;
@@ -165,7 +166,7 @@ class RenderCuller {
 		// matriz recalculada pelo render, mas getAbsolutePosition() recalcula sob demanda: a IA continua lendo posições certas.)
 		const out = this.cand.data;
 		out.length = this._nStatic;
-		const pad = 8, X0 = p.x, Z0 = p.z;
+		const pad = 8, X0 = px, Z0 = pz;
 		for (const m of this.dynamic) {
 			if (m.alwaysSelectAsActiveMesh || m._cullAlways) { out.push(m); continue; }
 			let r = m._cullR;

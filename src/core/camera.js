@@ -23,6 +23,12 @@
 // BALANÇO ao dirigir (_bounce, Config.camera.bounce; desliga em Ajustes): a câmera vai presa ao veículo por uma MOLA — arrancando ela
 // fica para trás, freando passa à frente, nas curvas é jogada para fora e inclina um pouco junto, e quando a força some passa do ponto
 // e assenta. Em velocidade o asfalto ainda dá trancos (o zoom pulsa de leve) e trepida. Batida forte = solavanco (somado ao tremor).
+//
+// 2.5D MODE (Config.camera.tilted, `?cam=25d`): the same camera turned ORTHOGRAPHIC and tilted Config.camera.tilt degrees above the
+// horizon, looking north from the south — the angle the character atlases were rendered at, so a standing sprite shows its art 1:1.
+// `view` is then the half-height of the view plane; `focus` is the ground point at the centre of the screen (the camera itself sits
+// `distance` back along its ray) and groundHalf() the visible ground for culling. Buildings south of the player can now hide him (the
+// X-ray silhouette shows him). Interiors and the safe house hold the top-down camera (setFlat): their art is painted for it.
 // ============================================================================
 
 class CompassCamera {
@@ -42,22 +48,73 @@ class CompassCamera {
 		const c = Config.camera;
 		this.camera = new BABYLON.FreeCamera('compassCamera',
 			new BABYLON.Vector3(this.target.x, c.height, this.target.z), scene);
-
-		// Olhando reto pra baixo. O "cima" da tela é o norte (+Z) — daí o upVector,
-		// senão o lookAt degenera (olhar paralelo ao up padrão).
-		this.camera.upVector = new BABYLON.Vector3(0, 0, 1);
-		this.camera.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
-		this.camera.minZ = 20;
-		this.camera.maxZ = 400;
 		this.camera.inputs.clear();            // câmera TRAVADA: nenhum input mexe nela.
+		this.focus = { x: this.target.x, z: this.target.z };      // ground point at the centre of the screen (shake and bounce included)
+		this.flat = false;                     // interiors / safe house: the top-down camera even in 2.5D mode (setFlat)
+		this._tilted = null;
+		CompassCamera.current = this;
 
 		scene.activeCamera = this.camera;
-		this._applyFov();
+		this._applyMode();
 	}
 
-	// FOV vertical que enquadra `viewHalf` unidades acima/abaixo do alvo no chão.
+	// 2.5D (tilted orthographic) right now? Config.camera.tilted, except where setFlat holds the top-down camera.
+	get tilted() { return !!Config.camera.tilted && !this.flat; }
+	setFlat(on) {
+		if (on === this.flat) return;
+		this.flat = on;
+		this._applyMode();
+	}
+
+	// Projection and fixed pose of the current mode. Top-down: perspective looking straight down, north (+Z) up the screen (hence the
+	// upVector, or lookAt degenerates). 2.5D: orthographic; pose written every frame by _pose.
+	_applyMode() {
+		const tilted = this.tilted, cam = this.camera;
+		if (tilted === this._tilted) return;
+		this._tilted = tilted;
+		CompassCamera.tilted = tilted;
+		if (tilted) {
+			cam.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+			cam.upVector = new BABYLON.Vector3(0, 1, 0);
+			cam.minZ = 1;
+			cam.maxZ = Config.camera.distance + 250;
+		} else {
+			cam.mode = BABYLON.Camera.PERSPECTIVE_CAMERA;
+			cam.upVector = new BABYLON.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+			cam.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+			cam.position.y = Config.camera.height;
+			cam.minZ = 20;
+			cam.maxZ = 400;
+		}
+		this._applyFov();
+		this._pose(this.focus.x, this.focus.z);
+	}
+
+	// Projection that frames `view`: top-down, the vertical FOV that shows `view` units of ground above/below the target; 2.5D, the
+	// orthographic half-height of the view plane (one unit there = one unit of a camera-facing sprite).
 	_applyFov() {
-		this.camera.fov = 2 * Math.atan(this.view / Config.camera.height);
+		const cam = this.camera;
+		if (!this.tilted) { cam.fov = 2 * Math.atan(this.view / Config.camera.height); return; }
+		const v = this.view, a = this.engine.getAspectRatio(cam);
+		cam.orthoTop = v; cam.orthoBottom = -v; cam.orthoRight = v * a; cam.orthoLeft = -v * a;
+	}
+
+	// Places the camera so that ground point (x, z) is at the centre of the screen.
+	_pose(x, z) {
+		const cam = this.camera;
+		this.focus.x = x; this.focus.z = z;
+		if (!this.tilted) { cam.position.x = x; cam.position.z = z; return; }
+		const e = Config.camera.tilt * Math.PI / 180, D = Config.camera.distance, yaw = this.yaw;
+		cam.rotation.set(e, yaw, this.roll);
+		cam.position.set(x - D * Math.cos(e) * Math.sin(yaw), D * Math.sin(e), z - D * Math.cos(e) * Math.cos(yaw));
+	}
+
+	// Half extents of the visible ground (across and along the screen), for culling, spawning and the shadow window. 2.5D: the ground
+	// is foreshortened by sin(tilt), and building tops beyond the bottom edge still show (tallest·cot(tilt)). view/aspect default to now.
+	groundHalf(view = this.view, aspect = this.engine.getAspectRatio(this.camera)) {
+		if (!this.tilted) return { x: view * aspect, z: view };
+		const e = Config.camera.tilt * Math.PI / 180;
+		return { x: view * aspect, z: view / Math.sin(e) + Config.camera.tallest / Math.tan(e) };
 	}
 
 	// Metade da altura visível de fato: o zoom do jogador × o de interiores (HouseView: 1 fora, 0,5 dentro da casa) × o automático
@@ -112,7 +169,7 @@ class CompassCamera {
 		const bo = this._bounce(vehicle, dt);
 		CompassCamera.yaw = this.yaw + this.roll;
 		const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw), L = this.lead * this.view;      // (adianto em fração da meia-altura)
-		this.camera.upVector.set(Math.sin(this.yaw + this.roll), 0, Math.cos(this.yaw + this.roll));
+		if (!this.tilted) this.camera.upVector.set(Math.sin(this.yaw + this.roll), 0, Math.cos(this.yaw + this.roll));
 		const t = 1 - Math.exp(-C.followLerp * dt);
 		this.target.x += (targetPos.x + sy * L - this.target.x) * t;
 		this.target.z += (targetPos.z + cy * L - this.target.z) * t;
@@ -122,8 +179,7 @@ class CompassCamera {
 			sx = (Math.random() - 0.5) * this._shake; sz = (Math.random() - 0.5) * this._shake;
 			this._shake *= Math.exp(-7 * dt);
 		} else this._shake = 0;
-		this.camera.position.x = this.target.x + sx + bo.x;
-		this.camera.position.z = this.target.z + sz + bo.z;
+		this._pose(this.target.x + sx + bo.x, this.target.z + sz + bo.z);
 	}
 
 	// Balanço ao dirigir (ver o topo). Molas pouco amortecidas, independentes de FPS (passo limitado). Devolve o deslocamento da câmera
@@ -171,8 +227,13 @@ class CompassCamera {
 		return out;
 	}
 
-	// Ponto do chão (x, z) → posição na tela (0..1, y para baixo), sem a perspectiva (boa o bastante perto do centro).
+	// Ponto do chão (x, z) → posição na tela (0..1, y para baixo), sem a perspectiva (boa o bastante perto do centro). 2.5D: the
+	// orthographic projection itself.
 	screenUV(x, z, aspect) {
+		if (this.tilted) {
+			const cam = this.camera, p = BABYLON.Vector3.Project(this._uvP || (this._uvP = new BABYLON.Vector3()).set(x, 0, z), BABYLON.Matrix.IdentityReadOnly, cam.getTransformationMatrix(), this._uvV || (this._uvV = new BABYLON.Viewport(0, 0, 1, 1)));
+			return { u: p.x, v: p.y };
+		}
 		const dx = x - this.target.x, dz = z - this.target.z, s = Math.sin(this.yaw + this.roll), c = Math.cos(this.yaw + this.roll);
 		const u = dx * c - dz * s, v = dx * s + dz * c, V = this.view;
 		return { u: 0.5 + u / (2 * V * aspect), v: 0.5 - v / (2 * V) };
@@ -187,8 +248,7 @@ class CompassCamera {
 	snapTo(pos) {
 		this.target.x = pos.x;
 		this.target.z = pos.z;
-		this.camera.position.x = pos.x;
-		this.camera.position.z = pos.z;
+		this._pose(pos.x, pos.z);
 	}
 
 	// delta > 0 afasta (zoom out) | delta < 0 aproxima (zoom in).
@@ -221,4 +281,6 @@ class CompassCamera {
 }
 
 CompassCamera.yaw = 0;      // giro atual da bússola (rad): lido pelos sprites 2,5D, pela ordem de desenho e pelo minimapa
+CompassCamera.tilted = false;      // the game camera is in 2.5D (tilted orthographic) mode right now: sprites stand up (SpriteActor)
+CompassCamera.current = null;      // the game camera (culling and batching outside the game loop read its focus and ground extent)
 CompassCamera.bounceOn = true;      // balanço da câmera ao dirigir (Ajustes › Balanço da câmera: PauseMenu.applySettings)

@@ -220,7 +220,9 @@ class Aim {
 	}
 
 	// ------------------------------------------------------------------ tela
-	// Ponto do chão sob o cursor do mouse (raio da câmera × plano y = 0), ou null.
+	// Ponto do chão sob o cursor do mouse (raio da câmera × plano y = 0), ou null. 2.5D: the plane at chest height, where the cursor
+	// visually points on a standing character (a tilted ray drifts cot(tilt) ≈ 0.67 m per metre of height).
+	static get AIM_HEIGHT() { return 1.2; }
 	_mouseGround() {
 		const inp = this.g.input;
 		if (inp.mouseX < 0) return null;
@@ -229,7 +231,7 @@ class Aim {
 		const r = cv.getBoundingClientRect();
 		const ray = sc.createPickingRay(inp.mouseX - r.left, inp.mouseY - r.top, BABYLON.Matrix.Identity(), cam);
 		if (Math.abs(ray.direction.y) < 1e-4) return null;
-		const t = -ray.origin.y / ray.direction.y;
+		const h = typeof CompassCamera !== 'undefined' && CompassCamera.tilted ? Aim.AIM_HEIGHT : 0, t = (h - ray.origin.y) / ray.direction.y;
 		return t > 0 ? { x: ray.origin.x + ray.direction.x * t, z: ray.origin.z + ray.direction.z * t } : null;
 	}
 

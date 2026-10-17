@@ -611,6 +611,7 @@ class Game {
 			else if (!frozenUI && !Panel.anyCool() && Mechanic.carPrompt(this) && this.input.consumePress('e')) Mechanic.carInteract(this);      // oficina / borracharia / mecânico do morro
 			// (uma batida forte pode arremessar o piloto de dentro do drive(): aí o foco é o jogador)
 			const drv = this.mode === 'car' && this.activeCar ? this.activeCar : null;
+			this.camera.setFlat(false);
 			this.camera.follow((drv || this.player).position, dt, drv);       // dirigindo: câmera bússola (gira com o carro)
 		} else if (this.mode === 'heli' && this.chopper) {
 			// Helicóptero: o controle é lido em _updateChoppers (que também prende o jogador invisível à posição dele e segue a câmera).
@@ -626,6 +627,7 @@ class Game {
 			this.player.update(move, this.input.isSprinting() && !(this.empire && this.empire.tired), dt);      // (exausto: não corre)
 			if (!frozenUI) Interiors.autoEnter(this);            // lojas: atravessar o vão da porta = entrar
 			HouseView.update(dt, this);                          // safe house: fade fora↔dentro, zoom 2×, porta, seta
+			this.camera.setFlat(HouseView.inside);               // (inside the safe house: the top-down camera its cutaway is painted for)
 			this.camera.follow(HouseView.focusFor(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
 		}
 
@@ -655,7 +657,7 @@ class Game {
 		// --- Mundo (água animada, sombra seguindo o foco) ---
 		if (this.mode !== 'player') HouseView.update(dt, this);          // (de carro/helicóptero: garante o "fora" e o zoom normal)
 		Perf.lap('outros');
-		this.gameEngine.update(dt, this.camera.target, this.camera.view);
+		this.gameEngine.update(dt, this.camera.target, this.camera.groundHalf());
 		Perf.lap('mundo (água/sombra)');
 
 		// --- Hijack (entrar/sair do carro) ---
@@ -876,10 +878,11 @@ class Game {
 		if (move.lengthSquared() > 1e-4) move.normalize(); else move.setAll(0);
 		this.player.update(move, this.input.isSprinting(), dt);
 		this.camera.setAutoZoom(1, dt, true);                                            // (a loja já tem o enquadramento dela: sem zoom automático)
+		this.camera.setFlat(true);                                                       // (interiors are painted for the top-down camera)
 		this.camera.follow(Interiors.focus(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
 		Interiors.update(dt, this);
 		if (!frozen && this.input.consumePress('e')) Interiors.interact(this);
-		this.gameEngine.update(dt, this.camera.target, this.camera.view);
+		this.gameEngine.update(dt, this.camera.target, this.camera.groundHalf());
 		this.player.tickHealth(dt);
 		this.weather.update(dt);
 		this.dayNight.update(dt);
@@ -1322,6 +1325,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			pl.root.position.x = ch.position.x; pl.root.position.z = ch.position.z;
 			pl.velocity.set(ch.vx, 0, ch.vz);
 			pl.root.rotation.y = ch.heading;
+			this.camera.setFlat(false);
 			this.camera.follow(ch.position, dt);
 		}
 	}
