@@ -11,8 +11,9 @@
 // Altura fixa + FOV variável: o zoom muda o FOV, então a "força" da perspectiva
 // (inclinação dos prédios por unidade de mundo) não muda ao dar zoom.
 //
-// DIRIGINDO (Config.camera.carCompass): a câmera gira como uma bússola, em passos de 90° — só quando o veículo vira uma esquina ou
-// faz o retorno (Config.camera.carTurnTrigger), nunca a cada desvio — para a frente dele ficar para cima, e se adianta
+// DIRIGINDO (Config.camera.carCompass): a câmera gira atrás do veículo, suave (Config.camera.carSmooth: acompanha a direção dele aos
+// poucos, conforme a velocidade) ou como uma bússola, em passos de 90° — só quando o veículo vira uma esquina ou faz o retorno
+// (Config.camera.carTurnTrigger), nunca a cada desvio — para a frente dele ficar para cima, e se adianta
 // na direção dele, deixando o carro mais ao sul da tela (vê-se mais do que vem pela frente). A pé, volta suavemente ao norte.
 // O giro atual fica em CompassCamera.yaw (rad, 0 = norte em cima, +X = leste): os personagens 2,5D (SpriteActor), a ordem de
 // desenho deles (NpcArt) e o minimapa acompanham.
@@ -166,10 +167,14 @@ class CompassCamera {
 		if (vehicle && C.carCompass) {
 			const f = vehicle.fwdToRef(this._f || (this._f = new BABYLON.Vector3()));
 			const h = f.x * f.x + f.z * f.z > 1e-4 ? Math.atan2(f.x, f.z) : null;
-			// A câmera NÃO segue cada desvio: guarda uma direção (_carYaw) e só gira em passos de 90° quando o carro se afasta dela
-			// mais que carTurnTrigger (virou uma esquina, fez o retorno). Ao entrar no carro, parte da direção dele.
+			// carSmooth: a câmera vai atrás do carro, girando com ele aos poucos — mais rápido quanto mais rápido ele anda, parado ela
+			// fica (dar ré não vira a tela). Sem ele: guarda uma direção (_carYaw) e só gira em passos de 90° quando o carro se afasta
+			// dela mais que carTurnTrigger (virou uma esquina, fez o retorno). Ao entrar no carro, parte da direção dele.
 			if (this._carVeh !== vehicle) { this._carVeh = vehicle; this._carYaw = h != null ? h : this.yaw; }
-			else if (h != null) {
+			else if (h != null && C.carSmooth) {
+				const k = C.carYawLerp * Math.min(1, (vehicle.speed || 0) / C.carYawSpeed);
+				this._carYaw = wrap(this._carYaw + wrap(h - this._carYaw) * (1 - Math.exp(-k * dt)));
+			} else if (h != null) {
 				const off = wrap(h - this._carYaw);
 				if (Math.abs(off) > C.carTurnTrigger) this._carYaw = wrap(this._carYaw + Math.round(off / (Math.PI / 2)) * (Math.PI / 2));
 			}

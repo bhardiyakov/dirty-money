@@ -84,6 +84,9 @@ const Config = {
 		// Dirigindo: câmera "bússola" — gira com o veículo (frente sempre para cima) e o deixa mais ao sul da tela.
 		carCompass: true,
 		carLead: 0.45,         // adianto à frente do veículo (fração da meia-altura visível): 0,45 = carro a ~72% da altura da tela
+		carSmooth: true,       // gira suave atrás do veículo (false = em passos de 90°, com carTurnTrigger)
+		carYawLerp: 1.6,       // rapidez com que a direção da câmera alcança a do veículo (carSmooth), já em velocidade
+		carYawSpeed: 10,       // m/s: abaixo disso a câmera gira mais devagar (parado não gira — manobras não balançam a tela)
 		carTurnTrigger: 1.13,  // só gira (em passos de 90°) quando o carro se afasta ~65° da direção da câmera: desvios não balançam a tela
 		yawLerp: 3.5,          // rapidez do giro da câmera quando ela gira (maior = mais rápido; menor = mais suave)
 		leadLerp: 2.5,         // rapidez com que o adianto entra (ao entrar no carro) e sai (ao descer)
