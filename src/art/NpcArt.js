@@ -658,10 +658,10 @@ const NpcArt = {
 	},
 
 	// A wardrobe look read from the device (PlayerLook ← LookStore): its pages stay as Blobs and are decoded on demand like the baked
-	// ones (AtlasDecoder, in a Worker), so they can also leave the GPU and come back. rec = { k, v, frame, clips, pages: [{ w, h, g, par, blob }] }.
+	// ones (AtlasDecoder, in a Worker), so they can also leave the GPU and come back. rec = { k, v, frame, clips, pages: [{ w, h, g, par, type, bytes }] }.
 	addStored(id, rec) {
 		if (this.atlases[id]) this.dropAtlas(id);
-		const pages = rec.pages.map((p) => ({ w: p.w, h: p.h, g: p.g || 'hot', par: p.par || 0, blob: p.blob }));
+		const pages = rec.pages.map((p) => ({ w: p.w, h: p.h, g: p.g || 'hot', par: p.par || 0, blob: new Blob([p.bytes], { type: p.type }) }));
 		return this._atlas(id, { clips: rec.clips, k: rec.k || 0.5, v: rec.v || 2, frame: rec.frame }, pages, true);
 	},
 	// Geração do atlas de um id (o atlas foi trocado: os clipes já tocando são refeitos — SpriteActor.update).

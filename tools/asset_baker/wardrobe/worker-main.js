@@ -10,7 +10,7 @@
 //        → { job, clip, of } per finished clip, { job, frac } halfway through a clip, { job, done: true } at the end ({ job, cancelled } / { job, error })
 //   { type: 'pack', job, ck, sets: [{ key, part, keys }], k }
 //        reads the stored clips of each set, packs the pages (G.packPages), stores the finished atlas in <key> (LookStore format: one
-//        PNG Blob per page) and deletes the loose clips → { job, packed: [keys] }
+//        PNG per page, as bytes) and deletes the loose clips → { job, packed: [keys] }
 //   { type: 'cancel', job }                       stops between two frames (what is already stored stays: it resumes later)
 // ============================================================================
 const G = {};
@@ -116,7 +116,8 @@ async function runPack(m) {
 		const a = G.packPages(clips), pages = [];
 		clips.length = 0;
 		for (const p of a.pages) {
-			pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, blob: await pageBlob(p) });
+			const blob = await pageBlob(p);
+			pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, type: blob.type, bytes: await blob.arrayBuffer() });
 			p.data = null;
 		}
 		await LookStore.put(S.key, { k: m.k, v: G.SHADE === 'cel' ? 1 : 2, frame: G.frameFor(m.k), clips: a.clips, pages, gen: GEN_HASH, t: Date.now() });

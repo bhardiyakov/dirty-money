@@ -5593,44 +5593,49 @@ function NpcGenMesh(G) {
 // the schema: the main thread reads it (PlayerLook, Wardrobe) and the wardrobe Worker writes it (tools/asset_baker/bake.cjs bundles
 // this file into assets/baked/wardrobe.worker.js).
 //
-//   <ck>, <ck>|t, <ck>|w, <ck>|h:<bag>, <ck>|d<n>   a packed atlas: { k, v, frame, clips, pages: [{ w, h, g, par, blob }], gen, t }
-//                                                  blob = the page as a PNG (R = byte 0, G = byte 1 of the 2-byte pixel, B = 0,
-//                                                  opaque), decoded off the main thread like the baked WebP pages (AtlasDecoder);
-//                                                  where the Worker cannot encode PNG, the raw RG bytes (type RAW_TYPE)
+//   <ck>, <ck>|t, <ck>|w, <ck>|h:<bag>, <ck>|d<n>   a packed atlas: { k, v, frame, clips, pages: [{ w, h, g, par, type, bytes }], gen, t }
+//                                                  bytes (ArrayBuffer) of type `type`: the page as a PNG (R = byte 0, G = byte 1 of the
+//                                                  2-byte pixel, B = 0, opaque), decoded off the main thread like the baked WebP pages
+//                                                  (AtlasDecoder); where the Worker cannot encode PNG, the raw RG bytes (RAW_TYPE).
+//                                                  Bytes, not Blobs: private windows of WebKit before Safari 17 refuse Blobs in IndexedDB
 //   part|<ck>|<part>|<clip>                        a drawn clip waiting to be packed (Worker only)
 //   #t, #parts                                     the Worker's bookkeeping (oldest looks and clips are dropped)
 //
-// Version 3 = pages stored as Blobs (version 2 held deflated byte arrays). Any upgrade clears the store: looks are drawn again in the
+// Version 4 = pages as PNG bytes (2: deflated byte arrays; 3: Blobs). Any upgrade clears the store: looks are drawn again in the
 // equipment screen.
 // ============================================================================
 
 const LookStore = {
 	NAME: 'dirty-money-visual',
-	VERSION: 3,
+	VERSION: 4,
 	STORE: 'atlas',
 	RAW_TYPE: 'application/x-dm-rg8',
-	_db: null,
+	_opening: null, _blocked: null,
 
-	// The open database (shared). A failed open is not cached: the next call tries again.
+	// The open database (shared). One open request at a time: while an older version open in another tab blocks it, callers fail at
+	// once (a second request would only queue behind the first and never settle); it completes by itself when that tab lets go. A
+	// failed open is forgotten: the next call tries again.
 	open() {
-		if (this._db) return this._db;
-		this._db = new Promise((resolve, reject) => {
+		if (!this._opening) {
 			const r = indexedDB.open(this.NAME, this.VERSION);
-			r.onupgradeneeded = () => {
-				const db = r.result;
-				if (db.objectStoreNames.contains(this.STORE)) r.transaction.objectStore(this.STORE).clear();
-				else db.createObjectStore(this.STORE);
-			};
-			r.onsuccess = () => {
-				const db = r.result;
-				db.onversionchange = () => { db.close(); this._db = null; };    // (a newer version in another tab: let it upgrade)
-				resolve(db);
-			};
-			r.onerror = () => reject(r.error);
-			r.onblocked = () => reject(new Error('IndexedDB blocked by an older version open in another tab'));
-		});
-		this._db.catch(() => { this._db = null; });
-		return this._db;
+			this._blocked = new Promise((resolve, reject) => { r.onblocked = () => reject(new Error('IndexedDB blocked by an older version open in another tab')); });
+			this._opening = new Promise((resolve, reject) => {
+				r.onupgradeneeded = () => {
+					const db = r.result;
+					if (db.objectStoreNames.contains(this.STORE)) r.transaction.objectStore(this.STORE).clear();
+					else db.createObjectStore(this.STORE);
+				};
+				r.onsuccess = () => {
+					const db = r.result;
+					db.onversionchange = () => { db.close(); this._opening = null; };      // (a newer version in another tab: let it upgrade)
+					resolve(db);
+				};
+				r.onerror = () => { this._opening = null; reject(r.error); };
+			});
+			this._blocked.catch(() => {});
+			this._opening.catch(() => {});
+		}
+		return Promise.race([this._opening, this._blocked]);
 	},
 
 	request(q) { return new Promise((resolve, reject) => { q.onsuccess = () => resolve(q.result); q.onerror = () => reject(q.error); }); },
@@ -5679,7 +5684,7 @@ const LookStore = {
 //        → { job, clip, of } per finished clip, { job, frac } halfway through a clip, { job, done: true } at the end ({ job, cancelled } / { job, error })
 //   { type: 'pack', job, ck, sets: [{ key, part, keys }], k }
 //        reads the stored clips of each set, packs the pages (G.packPages), stores the finished atlas in <key> (LookStore format: one
-//        PNG Blob per page) and deletes the loose clips → { job, packed: [keys] }
+//        PNG per page, as bytes) and deletes the loose clips → { job, packed: [keys] }
 //   { type: 'cancel', job }                       stops between two frames (what is already stored stays: it resumes later)
 // ============================================================================
 const G = {};
@@ -5785,7 +5790,8 @@ async function runPack(m) {
 		const a = G.packPages(clips), pages = [];
 		clips.length = 0;
 		for (const p of a.pages) {
-			pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, blob: await pageBlob(p) });
+			const blob = await pageBlob(p);
+			pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, type: blob.type, bytes: await blob.arrayBuffer() });
 			p.data = null;
 		}
 		await LookStore.put(S.key, { k: m.k, v: G.SHADE === 'cel' ? 1 : 2, frame: G.frameFor(m.k), clips: a.clips, pages, gen: GEN_HASH, t: Date.now() });
