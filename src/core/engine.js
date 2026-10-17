@@ -195,7 +195,10 @@ class GameEngine {
 			const lo = Math.max(1, Math.floor(h / A.internalHeight)), hi = Math.max(1, Math.ceil(h / A.internalHeight));
 			const err = (l) => Math.abs(Math.log(h / l / A.internalHeight));
 			level = err(lo) <= err(hi) ? lo : hi;
-		} else if (A.smooth !== false) level = 1 / Math.max(1, Math.min(window.devicePixelRatio || 1, Config.perf.dprCap || 1));
+		} else {                                                   // (graphics preset: the screen's density with the smooth look, × the render scale)
+			const density = A.smooth !== false ? Math.max(1, Math.min(window.devicePixelRatio || 1, Config.perf.dprCap || 1)) : 1;
+			level = 1 / (density * (Config.perf.renderScale || 1));
+		}
 		this.engine.setHardwareScalingLevel(level);
 		this.canvas.style.imageRendering = A.pixelate ? 'pixelated' : 'auto';
 		this.renderHeight = Math.round(h / level);                 // linhas de pixels desenhadas de fato (nitidez dos personagens)

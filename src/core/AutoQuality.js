@@ -2,8 +2,8 @@
 // AutoQuality — qualidade adaptativa. Mede o tempo REAL entre quadros (o teto é Config.perf.fpsCap: 30 Hz ≈ 33 ms; 60 no app de PC) e, se o aparelho
 // não consegue manter o ritmo por alguns segundos, desce um degrau por vez (sempre o mais barato primeiro, nunca sobe sozinho):
 //   0) teto 60 → 30 FPS (app de PC)   1) mapa de sombras 2048/1024 → 512   2) sem sombras
-// Só mexe no ritmo e nas SOMBRAS: a alta definição, o gráfico suave e os personagens em alta ficam sempre (sem troca de gráficos no meio
-// do jogo). `?full` na URL desliga.
+// Só mexe no ritmo e nas SOMBRAS: o resto do preset de gráficos (src/core/Graphics.js) fica como foi escolhido (sem troca de gráficos no
+// meio do jogo); no Low, que já vem sem sombras, começa no degrau 2. `?full` na URL desliga.
 // ============================================================================
 
 class AutoQuality {
@@ -13,6 +13,7 @@ class AutoQuality {
 		this.acc = 0; this.n = 0; this.bad = 0; this.cool = 6;        // 6 s de carência no início (carregamento e aquecimento de shaders)
 		this.slow = 1000 / Config.perf.fpsCap * 1.35;                  // média de ms por quadro acima disto = quadro "ruim"
 		this.off = location.search.includes('full');
+		if (Config.perf.shadows === false) { this.level = 2; this._shadowsOff(); }      // (Low graphics preset: no sun shadows at all)
 	}
 
 	// Chamado todo quadro com o dt REAL em segundos (antes do teto de 50 ms do jogo).
@@ -27,6 +28,12 @@ class AutoQuality {
 		if (this.bad >= 4) { this.bad = 0; this.cool = 5; this._down(); }
 	}
 
+	_shadowsOff() {
+		const g = this.g, sg = g.gameEngine.shadowGenerator;
+		if (g.dayNight) g.dayNight.forceNoShadows = true;
+		if (sg) sg.getShadowMap().refreshRate = 0;
+	}
+
 	_down() {
 		const g = this.g, ge = g.gameEngine, sg = ge.shadowGenerator;
 		// Degrau zero (só no app de PC, que começa a 60 FPS): volta ao teto de 30 sem perder nada da imagem.
@@ -39,10 +46,8 @@ class AutoQuality {
 		this.level++;
 		if (this.level === 1) {
 			if (sg) ge.setShadowSize(512);
-		} else if (this.level === 2) {
-			if (g.dayNight) g.dayNight.forceNoShadows = true;
-			if (sg) sg.getShadowMap().refreshRate = 0;
-		} else { this.level = 2; this.off = true; return; }
+		} else if (this.level === 2) this._shadowsOff();
+		else { this.level = 2; this.off = true; return; }
 		console.log(`[QUALIDADE] desempenho baixo: degrau ${this.level}`);
 		if (g._flash) g._flash('Modo econômico: sombras reduzidas para manter a fluidez');
 	}

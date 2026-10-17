@@ -396,6 +396,7 @@
 			<div class="mm-row"><span>Dicas na tela</span><button type="button" class="mm-toggle" data-key="prompts"></button></div>
 			<div class="mm-row"><span>Mira</span><button type="button" class="mm-toggle" data-key="aimAssist" data-on="Assistida" data-off="Manual"></button></div>
 			<div class="mm-row"><span>Balanço da câmera</span><button type="button" class="mm-toggle" data-key="camBounce"></button></div>
+			<div class="mm-row"><span>Gráficos</span><button type="button" class="mm-toggle is-on" id="set-gfx"></button></div>
 			<div class="mm-row mm-touch"><span>Volante por giroscópio</span><button type="button" class="mm-toggle" data-key="tiltSteer"></button></div>
 			<button type="button" class="mm-btn" id="btn-settings-back">Voltar</button>
 		</div></div>
@@ -566,6 +567,7 @@
 	<!-- Nosso código como scripts clássicos, em ordem de dependência.
 		 (Sem ES Modules => abre por duplo-clique no index.html, file:// funciona.) -->
 	<script src="./src/config.js"></script>
+	<script src="./src/core/Graphics.js"></script>
 	<script src="./src/ui/Theme.js"></script>
 	<script src="./src/ui/Panel.js"></script>
 	<script src="./src/player/SkillTree.js"></script>

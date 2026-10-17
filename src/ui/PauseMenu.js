@@ -15,7 +15,7 @@ class PauseMenu {
 	static get TABS() {
 		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
 	}
-	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
+	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', 'graphics', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
 		return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
@@ -55,7 +55,7 @@ class PauseMenu {
 		this.setRow = 0;                 // linha das configurações
 		this._icons = {};
 		this._legendIdx = {};
-		this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, camBounce: true, tiltSteer: false, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual) · tiltSteer: volante por giroscópio (celular)
+		this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual) · tiltSteer: volante por giroscópio (celular)
 		delete this.settings.hd; delete this.settings.smooth;          // (escolhas antigas: o jogo é sempre em alta definição com o gráfico suave)
 		this.settings.cars3d = typeof CarArt3D !== 'undefined' && CarArt3D.available();      // (já resolvido em config.js: escolha salva; ?cars2d)
 		this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
@@ -921,8 +921,16 @@ class PauseMenu {
 	_setAdjust(d) {
 		const s = this.settings;
 		if (this.setRow === 0) s.volume = Math.max(0, Math.min(1, Math.round((s.volume + d * 0.1) * 10) / 10));
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'graphics') this._setGraphics(d);
 		else if (d === 0 || true) { const k = PauseMenu.SET_KEYS[this.setRow]; if (this.setRow > 0) s[k] = (d === 0 || k === 'aimAssist') ? !s[k] : d > 0; }      // (mira: ← → alternam)
 		this._saveSettings(); this.applySettings();
+	}
+
+	// Graphics preset: ← → / Enter walk the choices; saved now, applied the next time the game opens (the world was built for the current one).
+	_setGraphics(d) {
+		const s = this.settings, C = Graphics.CHOICES, i = Math.max(0, C.indexOf(s.graphics || 'auto'));
+		s.graphics = d < 0 ? C[(i + C.length - 1) % C.length] : C[(i + 1) % C.length];
+		if (this.g._flash) this.g._flash(`Gráficos: ${Graphics.label(s.graphics)} — vale da próxima vez que abrir o jogo`);
 	}
 
 	_renderSettings() {
@@ -934,6 +942,7 @@ class PauseMenu {
 			sfx: ['🎵 Efeitos sonoros', tog(s.sfx)], minimap: ['🗺️ Minimapa', tog(s.minimap)], prompts: ['💬 Dicas na tela', tog(s.prompts)],
 			aimAssist: ['🎯 Mira ' + sub('assistida trava no alvo · manual: você aponta (analógico direito / mouse)'), `<div class="pm-toggle is-on">${s.aimAssist ? 'Assistida' : 'Manual'}</div>`],
 			camBounce: ['🚗 Balanço da câmera ' + sub('dirigindo, a câmera balança com arrancadas, freadas, curvas e buracos'), tog(s.camBounce !== false)],
+			graphics: ['🖥️ Gráficos ' + sub(`Low · Medium · High · HD (automático escolhe pelo aparelho) · em uso: ${Graphics.LABEL[Graphics.level]} · vale ao reabrir o jogo`), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
 			tiltSteer: ['📱 Volante por giroscópio ' + sub('dirigindo, incline o celular para virar o carro · o RÉ/FREIO vai para o canto esquerdo e o joystick ainda vale'), tog(s.tiltSteer)],
 			cars3d: ['🚘 Carros 3D ' + sub('carros com volume: rodas que rolam e esterçam, carroceria balançando na suspensão, luzes acesas no próprio carro · desligado: carros desenhados, mais leve'), tog(s.cars3d)],
 			dev: ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],

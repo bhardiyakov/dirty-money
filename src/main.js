@@ -31,7 +31,7 @@ class MainMenu {
 		const panel = document.getElementById('mm-settings');
 		const vol = document.getElementById('set-volume'), volVal = document.getElementById('set-volume-val');
 		const s = this.game.menu.settings;
-		const toggles = [...panel.querySelectorAll('.mm-toggle')];
+		const toggles = [...panel.querySelectorAll('.mm-toggle[data-key]')], gfx = document.getElementById('set-gfx');
 		const render = () => {
 			vol.value = Math.round(s.volume * 100);
 			volVal.textContent = vol.value + '%';
@@ -40,10 +40,13 @@ class MainMenu {
 				t.classList.toggle('is-on', on);
 				t.textContent = on ? (t.dataset.on || 'Ligado') : (t.dataset.off || 'Desligado');
 			}
+			gfx.textContent = Graphics.label(s.graphics);
 		};
 		const commit = () => { this.game.menu._saveSettings(); this.game.menu.applySettings(); render(); };
 		vol.addEventListener('input', () => { s.volume = vol.value / 100; commit(); });
 		for (const t of toggles) t.addEventListener('click', () => { s[t.dataset.key] = !s[t.dataset.key]; commit(); });
+		// Graphics preset: applied on page load, and nothing has started yet here — the menu reloads right away with the new one.
+		gfx.addEventListener('click', () => { s.graphics = Graphics.next(s.graphics || 'auto'); commit(); location.reload(); });
 		const open = (v) => { panel.classList.toggle('open', v); if (v) render(); (v ? document.getElementById('btn-settings-back') : document.getElementById('btn-settings')).focus(); };
 		window.addEventListener('dm-settings', render);                                  // (o giroscópio pode desligar sozinho: PauseMenu)
 		document.getElementById('btn-settings').addEventListener('click', () => open(true));
