@@ -567,7 +567,8 @@ const NpcArt = {
 				}
 				if (c.a < 0.02) discard;
 				// X-ray pass (XRaySilhouette): a flat tinted silhouette instead of the drawing (premultiplied).
-				if (silhouette.a > 0.0) { gl_FragColor = vec4(silhouette.rgb, 1.0) * (silhouette.a * smoothstep(0.2, 0.6, c.a)); return; }
+				// (only above the feet line: below it is the ground contact - shadow, a foot stepping forward - which the ground itself covers)
+				if (silhouette.a > 0.0) { if (vW.y < 0.05) discard; gl_FragColor = vec4(silhouette.rgb, 1.0) * (silhouette.a * smoothstep(0.2, 0.6, c.a)); return; }
 				gl_FragColor = c;
 			}`;
 	},
