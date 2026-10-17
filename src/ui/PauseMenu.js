@@ -15,7 +15,7 @@ class PauseMenu {
 	static get TABS() {
 		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
 	}
-	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', 'graphics', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
+	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
 		return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
@@ -71,8 +71,8 @@ class PauseMenu {
 	}
 
 	// ------------------------------------------------------------- configurações
-	_loadSettings() { try { return JSON.parse(localStorage.getItem('dm_settings')) || {}; } catch (e) { return {}; } }
-	_saveSettings() { try { localStorage.setItem('dm_settings', JSON.stringify(this.settings)); } catch (e) { /* sem storage */ } }
+	_loadSettings() { return Store.getJSON('settings', null) || {}; }
+	_saveSettings() { Store.setJSON('settings', this.settings); }
 	applySettings() {
 		const s = this.settings;
 		AudioFX.setVolume(s.volume);
@@ -921,31 +921,34 @@ class PauseMenu {
 	_setAdjust(d) {
 		const s = this.settings;
 		if (this.setRow === 0) s.volume = Math.max(0, Math.min(1, Math.round((s.volume + d * 0.1) * 10) / 10));
-		else if (PauseMenu.SET_KEYS[this.setRow] === 'graphics') this._setGraphics(d);
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'graphics') this._cycle('graphics', Graphics.CHOICES, 'auto', d, (c) => I18n.t('settings.graphics.flash', { choice: Graphics.label(c) }));
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'language') this._cycle('language', I18n.LANGS, I18n.lang, d, (c) => I18n.t('settings.language.flash', { choice: I18n.label(c) }));
 		else if (d === 0 || true) { const k = PauseMenu.SET_KEYS[this.setRow]; if (this.setRow > 0) s[k] = (d === 0 || k === 'aimAssist') ? !s[k] : d > 0; }      // (mira: ← → alternam)
 		this._saveSettings(); this.applySettings();
 	}
 
-	// Graphics preset: ← → / Enter walk the choices; saved now, applied the next time the game opens (the world was built for the current one).
-	_setGraphics(d) {
-		const s = this.settings, C = Graphics.CHOICES, i = Math.max(0, C.indexOf(s.graphics || 'auto'));
-		s.graphics = d < 0 ? C[(i + C.length - 1) % C.length] : C[(i + 1) % C.length];
-		if (this.g._flash) this.g._flash(`Gráficos: ${Graphics.label(s.graphics)} — vale da próxima vez que abrir o jogo`);
+	// Graphics preset and language: ← → / Enter walk the choices; saved now, applied the next time the game opens (the world was built
+	// for the current preset, the texts were read in the current language).
+	_cycle(key, C, current, d, flash) {
+		const s = this.settings, i = Math.max(0, C.indexOf(s[key] || current));
+		s[key] = d < 0 ? C[(i + C.length - 1) % C.length] : C[(i + 1) % C.length];
+		if (this.g._flash) this.g._flash(flash(s[key]));
 	}
 
 	_renderSettings() {
 		const s = this.settings, el = this.$('pmSet');
-		const tog = (v) => `<div class="pm-toggle ${v ? 'is-on' : ''}">${v ? 'Ligado' : 'Desligado'}</div>`;
+		const T = (k, v) => I18n.t(k, v), tog = (v) => `<div class="pm-toggle ${v ? 'is-on' : ''}">${T(v ? 'common.on' : 'common.off')}</div>`;
 		const sub = (t) => `<small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">${t}</small>`;
 		const R = {
-			volume: ['🔊 Volume geral', `<input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="pmVol"><span>${Math.round(s.volume * 100)}%</span>`],
-			sfx: ['🎵 Efeitos sonoros', tog(s.sfx)], minimap: ['🗺️ Minimapa', tog(s.minimap)], prompts: ['💬 Dicas na tela', tog(s.prompts)],
-			aimAssist: ['🎯 Mira ' + sub('assistida trava no alvo · manual: você aponta (analógico direito / mouse)'), `<div class="pm-toggle is-on">${s.aimAssist ? 'Assistida' : 'Manual'}</div>`],
-			camBounce: ['🚗 Balanço da câmera ' + sub('dirigindo, a câmera balança com arrancadas, freadas, curvas e buracos'), tog(s.camBounce !== false)],
-			graphics: ['🖥️ Gráficos ' + sub(`Low · Medium · High · HD (automático escolhe pelo aparelho) · em uso: ${Graphics.LABEL[Graphics.level]} · vale ao reabrir o jogo`), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
-			tiltSteer: ['📱 Volante por giroscópio ' + sub('dirigindo, incline o celular para virar o carro · o RÉ/FREIO vai para o canto esquerdo e o joystick ainda vale'), tog(s.tiltSteer)],
-			cars3d: ['🚘 Carros 3D ' + sub('carros com volume: rodas que rolam e esterçam, carroceria balançando na suspensão, luzes acesas no próprio carro · desligado: carros desenhados, mais leve'), tog(s.cars3d)],
-			dev: ['🛠️ Modo dev (ferramentas de teste)', tog(s.dev)],
+			volume: ['🔊 ' + T('settings.volume'), `<input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="pmVol"><span>${Math.round(s.volume * 100)}%</span>`],
+			sfx: ['🎵 ' + T('settings.sfx'), tog(s.sfx)], minimap: ['🗺️ ' + T('settings.minimap'), tog(s.minimap)], prompts: ['💬 ' + T('settings.prompts'), tog(s.prompts)],
+			aimAssist: ['🎯 ' + T('settings.aim') + ' ' + sub(T('settings.aim.hint')), `<div class="pm-toggle is-on">${T(s.aimAssist ? 'settings.aim.assisted' : 'settings.aim.manual')}</div>`],
+			camBounce: ['🚗 ' + T('settings.camBounce') + ' ' + sub(T('settings.camBounce.hint')), tog(s.camBounce !== false)],
+			graphics: ['🖥️ ' + T('settings.graphics') + ' ' + sub(T('settings.graphics.hint', { level: Graphics.LABEL[Graphics.level] })), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
+			language: ['🌐 ' + T('settings.language') + ' ' + sub(T('settings.language.hint')), `<div class="pm-toggle is-on">${I18n.label(s.language || I18n.lang)}</div>`],
+			tiltSteer: ['📱 ' + T('settings.tilt') + ' ' + sub(T('settings.tilt.hint')), tog(s.tiltSteer)],
+			cars3d: ['🚘 ' + T('settings.cars3d') + ' ' + sub(T('settings.cars3d.hint')), tog(s.cars3d)],
+			dev: ['🛠️ ' + T('settings.dev'), tog(s.dev)],
 		};
 		const rows = PauseMenu.SET_KEYS.map((k) => R[k]);
 		el.innerHTML = rows.map((r, i) => `<div class="pm-row ${i === this.setRow ? 'on' : ''}" data-i="${i}"><span>${r[0]}</span><span style="display:flex;gap:12px;align-items:center">${r[1]}</span></div>`).join('');

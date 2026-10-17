@@ -1,12 +1,12 @@
 // ============================================================================
-// SaveGame — grava e carrega o progresso (localStorage, chave 'dm_save'; o menu principal lê a mesma chave).
+// SaveGame — grava e carrega o progresso (storage/Store.js, chave 'save'; o menu principal lê a mesma chave).
 // Salva ao DORMIR na cama da safe house (Game.sleep). Guarda: hora e clima, vida/colete/arma, posição, mochila e o
 // que está guardado em casa (Stash) e os SEUS carros (Garage: os das garagens). Não guarda o trânsito, pedestres nem a polícia
 // (o mundo recomeça "fresco" ao carregar).
 // ============================================================================
 
 const SaveGame = {
-	KEY: 'dm_save',
+	KEY: 'save',
 	VERSION: 1,
 
 	snapshot(g) {
@@ -25,12 +25,15 @@ const SaveGame = {
 	},
 
 	write(g) {
-		try { localStorage.setItem(this.KEY, JSON.stringify(this.snapshot(g))); return true; }
-		catch (e) { console.error('[SAVE] falha ao gravar:', e); return false; }
+		let snap;
+		try { snap = this.snapshot(g); } catch (e) { console.error('[SAVE] falha ao montar o save:', e); return false; }
+		if (Store.setJSON(this.KEY, snap)) return true;
+		console.error('[SAVE] falha ao gravar: sem onde guardar');
+		return false;
 	},
 
 	read() {
-		try { const raw = localStorage.getItem(this.KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+		return Store.getJSON(this.KEY);
 	},
 
 	// Aplica um save no jogo recém-carregado (chamado no fim do boot).
