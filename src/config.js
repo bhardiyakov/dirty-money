@@ -247,10 +247,6 @@ const Config = {
 		herdChance: 0.6,
 	},
 
-	// Mira assistida das armas de fogo (combat/Aim.js e Combat.assistTarget): trava em quem estiver até `cone` graus (para cada lado)
-	// da direção em que o personagem olha — não precisa estar alinhado. Mirando (botão direito/LT) o cone de busca é mais largo.
-	aim: { cone: 30 },
-
 	// TÁTICO do jogador a pé (player.js e combat/Cover.js): AGACHAR (Q · L3 no controle) = furtivo; agachado encostado num prédio,
 	// muro, caçamba, contêiner ou carro parado = EM COBERTURA; ROLAR (V longe de grade/muro · RB) = esquiva de balas.
 	tactics: {

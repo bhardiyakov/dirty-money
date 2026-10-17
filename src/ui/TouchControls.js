@@ -84,7 +84,8 @@ class TouchControls {
             .tcb.down { transform: scale(0.93); filter: brightness(1.35); }
             .tcb.pop { animation: tcPop 0.18s ease-out; }
             @keyframes tcPop { from { transform: scale(0.7); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
-            #tcA { --s: 1.75; --r: 0.35; --b: 0.4; font-size: calc(var(--u) * 0.22); }          /* principal: ATACAR / ACELERAR / SUBIR */
+            #tcA { --s: 1.75; --r: 0.35; --b: 0.4; font-size: calc(var(--u) * 0.22); }          /* principal: ATACAR / MIRA / ACELERAR / SUBIR */
+            #tcA > * { transform: translate(var(--ax, 0px), var(--ay, 0px)); }                   /* MIRA: the icon follows the finger (the stick's knob) */
             #tcA i { font-size: calc(var(--u) * 0.5); }
             #tcB { --r: 2.4; --b: 0.36; }                                                        /* à esquerda: ROLAR / RÉ / DESCER */
             #tcD { --r: 2.0; --b: 1.83; }                                                        /* diagonal: ARMA / SAIR */
@@ -255,10 +256,14 @@ class TouchControls {
             held = s; el.classList.add('down');
             if (navigator.vibrate) try { navigator.vibrate(8); } catch (x) { /* ok */ }
             if (s.type === 'weapon') { if (!(this.g.wheel && this.g.wheel.touchStart(e.clientX, e.clientY))) held.noWheel = true; }
+            else if (s.type === 'aim') this._aimStart(el, e);
             else if (s.type === 'tap') this._tap(s.key);
             else this.input.setVirtual(s.key, true, 'touch');
         });
-        el.addEventListener('pointermove', (e) => { if (held && held.type === 'weapon' && this.g.wheel) this.g.wheel.touchMove(e.clientX, e.clientY); });
+        el.addEventListener('pointermove', (e) => {
+            if (held && held.type === 'weapon' && this.g.wheel) this.g.wheel.touchMove(e.clientX, e.clientY);
+            else if (held && held.type === 'aim') this._aimMove(e);
+        });
         const up = (e) => {
             e.preventDefault(); if (!held) return;
             const s = held; held = null; el.classList.remove('down');
@@ -267,8 +272,31 @@ class TouchControls {
                 else if (this.g.wheel) this.g.wheel.touchEnd(e.clientX, e.clientY);
             }
             else if (s.type === 'hold') this.input.setVirtual(s.key, false, 'touch');
+            else if (s.type === 'aim') this._aimEnd(el);
         };
         el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
+    }
+
+    // Fire button as the AIM STICK (gun in hand): the finger on it and dragged places the reticle around the player — direction and
+    // distance (Aim: input.touchAim) — and the gun fires by itself while the reticle is over a target. The knob follows the finger.
+    _aimStart(el, e) {
+        const r = el.getBoundingClientRect();
+        this._aim = { el, cx: r.left + r.width / 2, cy: r.top + r.height / 2, R: r.width * 0.85 };
+        this.input.touchAim = { x: 0, y: 0 };
+        this._aimMove(e);
+    }
+    _aimMove(e) {
+        const A = this._aim; if (!A) return;
+        let dx = (e.clientX - A.cx) / A.R, dy = (e.clientY - A.cy) / A.R;
+        const m = Math.hypot(dx, dy);
+        if (m > 1) { dx /= m; dy /= m; }
+        this.input.touchAim = { x: dx, y: dy };
+        A.el.style.setProperty('--ax', dx * A.R * 0.45 + 'px'); A.el.style.setProperty('--ay', dy * A.R * 0.45 + 'px');
+    }
+    _aimEnd(el) {
+        this._aim = null;
+        this.input.touchAim = null;
+        el.style.setProperty('--ax', '0px'); el.style.setProperty('--ay', '0px');
     }
 
     // Pinça com dois dedos no jogo = zoom (substitui os botões + e −).
@@ -372,7 +400,7 @@ class TouchControls {
         const on = this.wanted;
         this.shown = on;
         this.root.classList.toggle('on', on);
-        if (!on) { this.input.releaseVirtual('touch'); this.input.analog.x = this.input.analog.z = 0; }
+        if (!on) { this.input.releaseVirtual('touch'); this.input.analog.x = this.input.analog.z = 0; this.input.touchAim = null; }
         if (this.g._flash && this._announced !== this.input.padConnected && this.input.padConnected !== undefined && this._ready) {
             this._announced = this.input.padConnected;
             this.g._flash(this.input.padConnected ? '🎮 Controle conectado' : (this.input.touchDevice ? 'Controle desconectado — controles na tela ativados' : 'Controle desconectado'));
@@ -408,7 +436,8 @@ class TouchControls {
         const wName = (Weapons[w] ? Weapons[w].name : 'Punhos').toUpperCase();
         const vault = all.some((a) => a.key === 'v');
         return [
-            H(' ', gun ? 'ATIRAR' : 'ATACAR', gun ? '🔫' : (w === 'fists' ? '👊' : Emoji.char(w) || '👊'), 'c-red'),      // (o chute é o 3º golpe do combo)
+            gun ? { type: 'aim', key: ' ', label: 'MIRA', icon: '🎯', color: 'c-red' }                                   // (arma de fogo: o botão vira o analógico da mira — Aim)
+                : H(' ', 'ATACAR', w === 'fists' ? '👊' : Emoji.char(w) || '👊', 'c-red'),                                 // (o chute é o 3º golpe do combo)
             T('v', vault ? 'PULAR' : 'ROLAR', vault ? '🧗' : '🤸', vault ? 'c-violet' : 'c-amber'),                       // (longe de grade/muro, V rola: Game._tryVault)
             acts[0] ? ctx(acts[0], 'c-blue') : T('i', 'BOLSA', '🎒', 'c-dark'),
             { type: 'weapon', key: 'r', label: wName.length > 9 ? wName.split(' ')[0] : wName, icon: '🔄', color: 'c-dark',
@@ -432,6 +461,7 @@ class TouchControls {
             this.input.analog.z = 0;
             if (this.stick.id === null) this.input.analog.x = 0;                                                 // (o giroscópio estava virando o carro)
             for (const k of ['shift', 'w', 's', ' ', 'h', 'e']) this.input.setVirtual(k, false, 'touch');      // nada preso de um modo para o outro
+            this.input.touchAim = null;
         }
         const slots = this._slotsFor(mode);
         for (let i = 0; i < slots.length; i++) {

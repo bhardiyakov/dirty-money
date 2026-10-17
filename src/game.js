@@ -170,7 +170,7 @@ class Game {
 		this.dev = new DevMode(this);                // modo dev (ligado nas Configurações): painel de testes
 		this.menu = new PauseMenu(this);             // menu de pausa (mapa HD, inventário, configurações)
 		this.minimap.iconOf = (k) => this.menu.icon(k);      // selos dos lugares no radar (os mesmos do mapa de pausa)
-		this.aim = new Aim(this);                    // mira do jogador (assistida ou manual, ver combat/Aim.js)
+		this.aim = new Aim(this);                    // mira do jogador (manual: mouse, analógico direito ou o botão de tiro do celular — combat/Aim.js)
 		PadNav.init(this);                           // controle nas telas de mouse/teclado (menus, janelas, tela inicial, sinuca)
 		this.stash = new Stash();                    // geladeira, cofre e baú da safe house
 		this.stashUI = new StashUI(this);
@@ -968,7 +968,8 @@ class Game {
 		const during = p.action && Player.COMBO.includes(p.action.name) ? p.action : null;      // golpe de mão já em andamento
 		// Minigun: segurando o gatilho, os canos GIRAM primeiro (W.spinUp s, com o zumbido) e só então ela cospe balas; soltou, param
 		// devagar (apertar logo de novo já sai atirando).
-		const W0 = Weapons[p.weapon], trig = (inp.keys[' '] || inp.mouseDown || pressed) && this.reloading <= 0 && !p.busy || (p.action && p.action.name === 'shoot' && (inp.keys[' '] || inp.mouseDown));
+		const auto = !!(this.aim && this.aim.autoFire);                      // (celular: a mira passando por cima de um alvo atira sozinha)
+		const W0 = Weapons[p.weapon], trig = (inp.keys[' '] || inp.mouseDown || pressed || auto) && this.reloading <= 0 && !p.busy || (p.action && p.action.name === 'shoot' && (inp.keys[' '] || inp.mouseDown || auto));
 		let spun = true;
 		if (W0 && W0.spinUp) {
 			const was = this._spin || 0;
@@ -977,7 +978,7 @@ class Game {
 			if (trig) p.aimTimer = Math.max(p.aimTimer, 0.6);                 // (girando: na pose de mirar)
 			spun = this._spin >= 1;
 		} else this._spin = 0;
-		if ((pressed || held) && spun) this._tryPrimary();
+		if ((pressed || held || auto) && spun) this._tryPrimary();
 
 		// Combo de mãos (soco + soco + chute — Player.COMBO): apertou no MEIO de um golpe → guarda o aperto e solta o próximo golpe
 		// assim que este acabar (não precisa acertar o tempo). Um aperto guardado por vez.
@@ -1169,11 +1170,12 @@ class Game {
 
 		if (kind !== 'shoot') Bags.train(p, 1.5);                         // soco, chute, taco, facada: treina a força
 		if (kind === 'shoot') {
-			// Tiro de verdade: projéteis (com mira assistida), ouvido por todos; libera as armas da polícia.
-			const angle = this.aim ? this.aim.shotAngle(pos.x, pos.z, heading, p.weapon) : this.combat.aimAssist(pos.x, pos.z, heading);
+			// Tiro de verdade: projéteis (na direção da mira), ouvido por todos; libera as armas da polícia.
+			const angle = this.aim ? this.aim.shotAngle(pos.x, pos.z, heading, p.weapon) : heading;
+			const high = this.aim ? this.aim.shotOpts() : null;                    // (alvo no alto: a bala passa por cima dos prédios, só nele)
 			if (!(this.aim && this.aim.active)) p.root.rotation.y = angle;      // tiro do quadril travado: o corpo vira para o alvo (como no soco)
 			const crit = Math.random() < (SkillTree.m.crit || 0);
-			this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p, spreadMul: this.aim ? this.aim.spreadMul() : 1 - (SkillTree.m.spread || 0), dmgMul: (1 + (SkillTree.m.gunDmg || 0)) * (crit ? 2 : 1) }, p.weapon);
+			this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p, over: !!high, only: high ? high.only : null, spreadMul: this.aim ? this.aim.spreadMul() : 1 - (SkillTree.m.spread || 0), dmgMul: (1 + (SkillTree.m.gunDmg || 0)) * (crit ? 2 : 1) }, p.weapon);
 			if (this.aim) this.aim.onShot(p.weapon);                          // coice: desfirma a mira um pouco
 			if ((Weapons[p.weapon] && Weapons[p.weapon].silenced) || (this.careers && this.careers.silenced(p.weapon))) {      // silenciador (a pistola com ele, ou o do Armeiro): só quem está muito perto e vê percebe
 				this.npcManager.alertViolence(pos, 8);
