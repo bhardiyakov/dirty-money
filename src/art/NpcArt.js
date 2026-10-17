@@ -456,8 +456,15 @@ const NpcArt = {
 				wp.y -= stand.x;
 				vG = wp.xz;                                                 // (ponto do chão onde este pixel do desenho cai: recorte do carro)
 				gl_Position = viewProjection * wp;
-				// Standing: the quad already has its true height; the bias keeps the art below the feet (shadow, front foot) above the ground.
-				if (stand.y > 0.0) { gl_Position.z -= stand.y * gl_Position.w; return; }
+				// Standing: the quad already has its true height. The art BELOW the feet (the front foot of a stride toward the camera, a
+				// swimmer lying on the water, the shadow) would sit under the ground or the water in front and get cut, so it tests the
+				// depth at the height of the feet; the bias keeps that edge above the ground.
+				if (stand.y > 0.0) {
+					float feet = (world * vec4(0.0, 0.0, 0.0, 1.0)).y - stand.x;
+					vec4 dp = viewProjection * vec4(wp.x, max(wp.y, feet), wp.z, 1.0);
+					gl_Position.z = (dp.z / dp.w - stand.y) * gl_Position.w;
+					return;
+				}
 				// "De pé" para a profundidade: o desenho cresce para o norte (cabeça ~1 m acima dos pés na imagem), mas é uma pessoa em pé —
 				// a parte de cima testa a profundidade como se estivesse mais ALTA (não some atrás da parede/telhado baixo logo ao norte).
 				// Com os pés debaixo de um toldo (color.b = altura dele, SpriteActor._updateCover), o corpo inteiro fica abaixo do toldo.
