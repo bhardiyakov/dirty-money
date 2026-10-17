@@ -4,7 +4,7 @@
 //   • COR (camiseta azul em vez de laranja, tênis vermelho, boné preto…): só a linha 0 da paleta muda — na hora, em todas as animações.
 //   • FORMA (boné, regata, bermuda, chinelo, mochila, cabelo, porte…): é outro desenho. Durante o JOGO nada é desenhado: o visual vem
 //       - dos atlas PRONTOS (assets/baked, gerados no build): protagonista + protagonista_tatico + protagonista_armas = a roupa inicial;
-//       - ou do aparelho (IndexedDB 'dirty-money-visual'), onde o GUARDA-ROUPA (a tela de equipamento — Wardrobe) gravou o visual
+//       - ou do aparelho (IndexedDB 'dirty-money-visual', LookStore), onde o GUARDA-ROUPA (a tela de equipamento — Wardrobe) gravou o visual
 //         montado para aquela forma. Recarregou o jogo com a mesma roupa: lido de lá, sem desenhar nada de novo.
 //     Forma que ainda não está no aparelho (trocou de roupa na boutique, o porte mudou com a academia…): o jogador segue com o último
 //     visual que tem e um aviso pede para abrir Inventário → Equipamento, onde o Wardrobe monta o que falta.
@@ -23,7 +23,7 @@ const PlayerLook = {
 	looks: new Map(),       // chave → { main, tac, arms } (ids registrados no NpcArt) — os lidos do aparelho
 	dmgIds: new Map(),      // "<chave>|d<n>" → id do atlas de dano de um visual do guarda-roupa
 	handIds: new Map(),     // "<chave>|h:<bolsa>" → id do atlas dos clipes de carregar de um visual do guarda-roupa
-	LOOKS_MEM: 2,           // visuais do aparelho guardados na memória de vídeo (16 direções: ~60–80 MB cada)
+	LOOKS_MEM: 2,           // device looks kept registered (their pages decode on demand and, when unused, can leave the GPU)
 	_job: 0,
 	_warned: new Set(),
 	HERO: ['protagonista', 'protagonista_tatico', 'protagonista_armas'],
@@ -133,8 +133,8 @@ const PlayerLook = {
 		const hk = key + '|h:' + kind;
 		let id = this.handIds.get(hk);
 		if (!id) {
-			const a = await this._idbGet(this.ck(key) + '|h:' + kind);
-			if (a && !this.handIds.get(hk)) { id = 'hero:' + (this._seq = (this._seq || 0) + 1) + ':h'; NpcArt.addAtlas(id, a); this.handIds.set(hk, id); }
+			const a = await this._stored(this.ck(key) + '|h:' + kind);
+			if (a && !this.handIds.get(hk)) { id = 'hero:' + (this._seq = (this._seq || 0) + 1) + ':h'; NpcArt.addStored(id, a); this.handIds.set(hk, id); }
 			else id = this.handIds.get(hk);
 		}
 		return id || def;
@@ -148,8 +148,8 @@ const PlayerLook = {
 			const dk = key + '|d' + lvl;
 			let id = this.dmgIds.get(dk);
 			if (!id) {
-				const a = await this._idbGet(this.ck(key) + '|d' + lvl);
-				if (a && !this.dmgIds.get(dk)) { id = 'hero:' + (this._seq = (this._seq || 0) + 1) + ':d' + lvl; NpcArt.addAtlas(id, a); this.dmgIds.set(dk, id); }
+				const a = await this._stored(this.ck(key) + '|d' + lvl);
+				if (a && !this.dmgIds.get(dk)) { id = 'hero:' + (this._seq = (this._seq || 0) + 1) + ':d' + lvl; NpcArt.addStored(id, a); this.dmgIds.set(dk, id); }
 				else id = this.dmgIds.get(dk);
 			}
 			if (id) out.push(id);
@@ -180,11 +180,11 @@ const PlayerLook = {
 		if (!this._loading) this._loading = new Map();
 		if (this._loading.has(key)) return this._loading.get(key);
 		const ck = this.ck(key), p = (async () => {
-			const [main, tac, arms] = await Promise.all([this._idbGet(ck), this._idbGet(ck + '|t'), this._idbGet(ck + '|w')]);
+			const [main, tac, arms] = await Promise.all([this._stored(ck), this._stored(ck + '|t'), this._stored(ck + '|w')]);
 			if (!main || !tac) return null;
 			const id = 'hero:' + (this._seq = (this._seq || 0) + 1), L = { main: id, tac: id + ':t', arms: arms ? id + ':w' : null };
-			NpcArt.addAtlas(L.main, main); NpcArt.addAtlas(L.tac, tac);
-			if (arms) NpcArt.addAtlas(L.arms, arms);
+			NpcArt.addStored(L.main, main); NpcArt.addStored(L.tac, tac);
+			if (arms) NpcArt.addStored(L.arms, arms);
 			this.looks.set(key, L);
 			return L;
 		})().finally(() => this._loading.delete(key));
@@ -212,31 +212,8 @@ const PlayerLook = {
 		return Math.min(typeof NpcArt !== 'undefined' ? NpcArt.dirs : 16, (c && c.dirs) || 8);
 	},
 
-	// ------------------------------------------------------------------ IndexedDB (só leitura aqui: quem grava é o Worker do guarda-roupa)
-	DB: 'dirty-money-visual', DB_VER: 2,
-	_db() {
-		if (this._dbp) return this._dbp;
-		return (this._dbp = new Promise((ok) => {
-			try {
-				const r = indexedDB.open(this.DB, this.DB_VER);
-				r.onupgradeneeded = () => { const d = r.result; if (d.objectStoreNames.contains('atlas')) r.transaction.objectStore('atlas').clear(); else d.createObjectStore('atlas'); };     // (v1: os visuais gerados no jogo, de antes)
-				r.onsuccess = () => ok(r.result);
-				r.onerror = () => ok(null);
-				r.onblocked = () => ok(null);
-			} catch (e) { ok(null); }
-		}));
+	// A look's record on the device (LookStore; written by the wardrobe Worker). null = not there, or the store cannot be opened.
+	async _stored(key) {
+		try { return await LookStore.get(key); } catch (e) { return null; }
 	},
-	async _idbRaw(k, count = false) {
-		const db = await this._db();
-		if (!db) return null;
-		return new Promise((ok) => {
-			try { const st = db.transaction('atlas').objectStore('atlas'), q = count ? st.count(k) : st.get(k); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }
-			catch (e) { ok(null); }
-		});
-	},
-	async _idbGet(k) {
-		const v = await this._idbRaw(k);
-		try { return v ? await NpcArt.unzip(v) : null; } catch (e) { return null; }
-	},
-	async idbHas(keys) { const out = {}; for (const k of keys) out[k] = !!(await this._idbRaw(k, true)); return out; },
 };

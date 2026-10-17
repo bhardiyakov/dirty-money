@@ -53,7 +53,7 @@ const Wardrobe = {
 		this._cancel();
 		const ck = PlayerLook.ck(key), sets = PlayerLook.sets(spec), hk = sets.hand && ck + '|h:' + sets.hand.kind;
 		const keys = [ck, ck + '|t', ck + '|w', ck + '|d1', ck + '|d2', ck + '|d3'].concat(hk ? [hk] : []);
-		const has = await PlayerLook.idbHas(keys);
+		const has = await LookStore.hasAll(keys).catch(() => ({}));
 		if (job !== this.job || !this.active) return;
 		const stages = [], clean = [];
 		if (!has[ck] || !has[ck + '|t']) clean.push({ key: ck, part: 'main', keys: sets.main }, { key: ck + '|t', part: 'tac', keys: sets.tac });

@@ -1,70 +1,61 @@
 // ============================================================================
-// Worker do GUARDA-ROUPA (tela de equipamento). Vai empacotado com o gerador em assets/baked/wardrobe.worker.js (bake.cjs) e só é
-// carregado por src/player/Wardrobe.js enquanto a tela de equipamento está aberta — fechou, o Worker é encerrado (terminate) e nada do
-// gerador fica na memória do jogo.
+// Wardrobe Worker (equipment screen). Bundled with the generator and src/storage/LookStore.js into assets/baked/wardrobe.worker.js
+// (bake.cjs) and loaded only by src/player/Wardrobe.js while the equipment screen is open — once it closes, the Worker is terminated and
+// nothing of the generator stays in the game's memory.
 //
-// Mensagens (a thread principal só orquestra: nenhum pixel do visual passa por ela):
-//   { type: 'preview', job, spec, k, dirs }        → { job, frames: [RGBA por direção], W, H, k }    (o boneco girando da tela)
+// Messages (the main thread only orchestrates: no pixel of the look goes through it):
+//   { type: 'preview', job, spec, k, dirs }        → { job, frames: [RGBA per direction], W, H, k }    (the spinning figure on screen)
 //   { type: 'clips', job, ck, part, spec, keys, k, dirs }
-//        desenha os clipes que ainda não estão no aparelho e grava cada um (comprimido) em  part|<ck>|<part>|<clipe>
-//        → { job, clip, of } por clipe pronto, { job, frac } no meio de um clipe, { job, done: true } no fim ({ job, cancelled } / { job, error })
+//        draws the clips not yet on the device and stores each one (deflated) in  part|<ck>|<part>|<clip>
+//        → { job, clip, of } per finished clip, { job, frac } halfway through a clip, { job, done: true } at the end ({ job, cancelled } / { job, error })
 //   { type: 'pack', job, ck, sets: [{ key, part, keys }], k }
-//        lê os clipes gravados de cada conjunto, empacota as páginas (G.packPages), grava o atlas pronto em <key> (o formato de
-//        NpcArt.unzip: páginas comprimidas) e apaga os clipes avulsos → { job, packed: [keys] }
-//   { type: 'cancel', job }                       interrompe entre um quadro e outro (o que já foi gravado fica: continua depois)
+//        reads the stored clips of each set, packs the pages (G.packPages), stores the finished atlas in <key> (LookStore format: one
+//        PNG Blob per page) and deletes the loose clips → { job, packed: [keys] }
+//   { type: 'cancel', job }                       stops between two frames (what is already stored stays: it resumes later)
 // ============================================================================
 const G = {};
 NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G);
 
-// ---------------------------------------------------------------- IndexedDB (o mesmo banco da thread principal: PlayerLook)
-const DB_NAME = 'dirty-money-visual', DB_VER = 2, STORE = 'atlas', LOOKS_MAX = 32, RAW_MAX = 8, PARTS_LOOKS = 3;
-let _db = null;
-function db() {
-	return _db || (_db = new Promise((ok, fail) => {
-		const r = indexedDB.open(DB_NAME, DB_VER);
-		r.onupgradeneeded = () => { const d = r.result; if (d.objectStoreNames.contains(STORE)) r.transaction.objectStore(STORE).clear(); else d.createObjectStore(STORE); };
-		r.onsuccess = () => ok(r.result);
-		r.onerror = () => fail(r.error);
-		r.onblocked = () => fail(new Error('IndexedDB bloqueado'));
-	}));
+// ---------------------------------------------------------------- device storage (LookStore: the same database the main thread reads)
+const LOOKS_MAX = 32, RAW_MAX = 8, PARTS_LOOKS = 3;
+// '#t' table (key → when it was stored): at most LOOKS_MAX packed atlases (RAW_MAX with raw pages); the oldest goes — never one of the
+// look being stored right now (ck). Bookkeeping failures do not fail the look.
+function touch(keys, raw, ck) {
+	return LookStore.transact('readwrite', async (st) => {
+		const T = (await LookStore.request(st.get('#t'))) || {}, now = Date.now();
+		for (const k of keys) T[k] = now;
+		const max = raw ? RAW_MAX : LOOKS_MAX, old = Object.keys(T).filter((k) => !k.startsWith(ck)).sort((a, b) => T[a] - T[b]);
+		while (Object.keys(T).length > max && old.length) { const k = old.shift(); delete T[k]; st.delete(k); }
+		st.put(T, '#t');
+	}).catch(() => {});
 }
-const req = (q) => new Promise((ok, fail) => { q.onsuccess = () => ok(q.result); q.onerror = () => fail(q.error); });
-async function get(k) { const d = await db(); return req(d.transaction(STORE).objectStore(STORE).get(k)); }
-async function has(k) { const d = await db(); return (await req(d.transaction(STORE).objectStore(STORE).count(k))) > 0; }
-async function put(k, v) {
-	const d = await db(), t = d.transaction(STORE, 'readwrite');
-	t.objectStore(STORE).put(v, k);
-	return new Promise((ok, fail) => { t.oncomplete = () => ok(); t.onerror = () => fail(t.error); t.onabort = () => fail(t.error || new Error('sem espaço no aparelho')); });
-}
-async function delPrefix(prefix) {
-	const d = await db(), t = d.transaction(STORE, 'readwrite');
-	t.objectStore(STORE).delete(IDBKeyRange.bound(prefix, prefix + '￿'));
-	return new Promise((ok) => { t.oncomplete = t.onerror = t.onabort = () => ok(); });
-}
-// Tabela '#t' (chave → quando foi gravada): no máximo LOOKS_MAX atlas prontos (RAW_MAX sem compressão); sai o mais antigo — nunca um
-// do visual que está sendo gravado agora (ck).
-async function touch(keys, raw, ck) {
-	const d = await db(), t = d.transaction(STORE, 'readwrite'), st = t.objectStore(STORE), T = (await req(st.get('#t'))) || {}, now = Date.now();
-	for (const k of keys) T[k] = now;
-	const max = raw ? RAW_MAX : LOOKS_MAX, ks = Object.keys(T).filter((k) => !k.startsWith(ck)).sort((a, b) => T[a] - T[b]);
-	while (Object.keys(T).length > max && ks.length) { const x = ks.shift(); delete T[x]; st.delete(x); }
-	st.put(T, '#t');
-	return new Promise((ok) => { t.oncomplete = t.onerror = t.onabort = () => ok(); });
-}
-// Clipes avulsos de no máximo PARTS_LOOKS visuais (os experimentados por último): os de visuais mais antigos saem.
-async function touchParts(ck) {
-	const d = await db(), t = d.transaction(STORE, 'readwrite'), st = t.objectStore(STORE), T = (await req(st.get('#parts'))) || {};
-	T[ck] = Date.now();
-	const old = Object.keys(T).sort((a, b) => T[b] - T[a]).slice(PARTS_LOOKS);
-	for (const k of old) { delete T[k]; st.delete(IDBKeyRange.bound('part|' + k + '|', 'part|' + k + '|￿')); }
-	st.put(T, '#parts');
-	return new Promise((ok) => { t.oncomplete = t.onerror = t.onabort = () => ok(); });
+// Loose clips of at most PARTS_LOOKS looks (the ones tried most recently): those of older looks go.
+function touchParts(ck) {
+	return LookStore.transact('readwrite', async (st) => {
+		const T = (await LookStore.request(st.get('#parts'))) || {};
+		T[ck] = Date.now();
+		for (const k of Object.keys(T).sort((a, b) => T[b] - T[a]).slice(PARTS_LOOKS)) { delete T[k]; st.delete(IDBKeyRange.bound('part|' + k + '|', 'part|' + k + '|￿')); }
+		st.put(T, '#parts');
+	}).catch(() => {});
 }
 
 // ---------------------------------------------------------------- compressão (CompressionStream; sem ela, cru)
 const canZip = typeof CompressionStream === 'function' && typeof DecompressionStream === 'function';
 const deflate = async (u8) => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer());
 const inflate = async (u8) => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer());
+
+// ---------------------------------------------------------------- packed page → stored Blob
+// A PNG of the 2-byte pixels (R = byte 0, G = byte 1, B = 0, opaque: no premultiplication, so the bytes survive exactly), decoded later
+// off the main thread like the baked WebP pages (AtlasDecoder). Without OffscreenCanvas here (Safari < 16.4): the raw bytes.
+const canPng = typeof OffscreenCanvas === 'function' && typeof OffscreenCanvas.prototype.convertToBlob === 'function';
+async function pageBlob(p) {
+	if (!canPng) return new Blob([p.data], { type: LookStore.RAW_TYPE });
+	const n = p.w * p.h, rgba = new Uint8ClampedArray(n * 4);
+	for (let i = 0, j = 0; i < n; i++, j += 4) { rgba[j] = p.data[i * 2]; rgba[j + 1] = p.data[i * 2 + 1]; rgba[j + 3] = 255; }
+	const canvas = new OffscreenCanvas(p.w, p.h);
+	canvas.getContext('2d').putImageData(new ImageData(rgba, p.w, p.h), 0, 0);
+	return canvas.convertToBlob({ type: 'image/png' });
+}
 
 // Clipe desenhado → registro do aparelho: os quadros num buffer só (comprimido) + os retângulos.
 async function clipRecord(c) {
@@ -99,7 +90,7 @@ async function runClips(m) {
 	let lastFrac = 0;
 	for (const key of m.keys) {
 		const pk = partKey(m.ck, m.part, key);
-		if (await has(pk)) { self.postMessage({ job: m.job, clip: key, cached: true }); continue; }
+		if (await LookStore.has(pk)) { self.postMessage({ job: m.job, clip: key, cached: true }); continue; }
 		const R = G.rendererFor(m.spec, { k: m.k }), [name, w0] = key.split(':'), cd = G.clipDef(name, w0, null, opts);
 		const total = cd.poses.length * (opts.dirs && opts.dirs < cd.dirs ? opts.dirs : cd.dirs), it = G.clipSteps(R, key, null, opts);
 		let c, i = 0;
@@ -109,31 +100,27 @@ async function runClips(m) {
 			const t = performance.now();
 			if (t - lastFrac > 400) { lastFrac = t; self.postMessage({ job: m.job, frac: i / total }); }
 		}
-		await put(pk, await clipRecord(c));
+		await LookStore.put(pk, await clipRecord(c));
 		self.postMessage({ job: m.job, clip: key });
 	}
 }
 async function runPack(m) {
-	const done = [];
-	let raw = false;
+	const done = [], raw = !canPng;
 	for (const S of m.sets) {
 		const clips = [];
 		for (const key of S.keys) {
-			const r = await get(partKey(m.ck, S.part, key));
-			if (!r) throw new Error('clipe ' + key + ' (' + S.part + ') não está no aparelho');
+			const r = await LookStore.get(partKey(m.ck, S.part, key));
+			if (!r) throw new Error('clip ' + key + ' (' + S.part + ') is not on the device');
 			clips.push(await clipFrom(r));
 		}
 		const a = G.packPages(clips), pages = [];
 		clips.length = 0;
 		for (const p of a.pages) {
-			if (canZip) pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, z: await deflate(p.data) });
-			else { raw = true; pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, data: p.data }); }
+			pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, blob: await pageBlob(p) });
 			p.data = null;
 		}
-		const rec = { k: m.k, v: G.SHADE === 'cel' ? 1 : 2, frame: G.frameFor(m.k), clips: a.clips, pages, gen: GEN_HASH, t: Date.now() };
-		if (raw) rec.raw = true;
-		await put(S.key, rec);
-		await delPrefix(`part|${m.ck}|${S.part}|`);
+		await LookStore.put(S.key, { k: m.k, v: G.SHADE === 'cel' ? 1 : 2, frame: G.frameFor(m.k), clips: a.clips, pages, gen: GEN_HASH, t: Date.now() });
+		await LookStore.deletePrefix(`part|${m.ck}|${S.part}|`).catch(() => {});
 		done.push(S.key);
 	}
 	await touch(done, raw, m.ck);

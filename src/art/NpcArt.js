@@ -39,7 +39,7 @@
 // ============================================================================
 
 const NpcArt = {
-	atlases: {},                   // id → atlas { id, data (metadados), pages, file (páginas em arquivo: podem sair da GPU), dmg, cache, gen }
+	atlases: {},                   // id → atlas { id, data (metadata), pages, file (pages can be reloaded — a file or a stored Blob: they may leave the GPU), dmg, cache, gen }
 	sheets: {},                    // id → NpcSheet
 	ready: null,                   // Promise: as páginas do dia a dia (hot) do protagonista prontas (o resto chega sob demanda)
 	ROWS: 384,                     // linhas da paleta (variantes); 0 = jogador
@@ -127,7 +127,7 @@ const NpcArt = {
 		P.st = 'decoding'; this._decoding++;
 		const t0 = performance.now();
 		try {
-			const img = await AtlasDecoder.rg(this.BASE + P.file, P.ov ? this.BASE + P.ov : null);      // (página de dano: a base + a camada do nível)
+			const img = P.blob ? await this._fromBlob(P) : await AtlasDecoder.rg(this.BASE + P.file, P.ov ? this.BASE + P.ov : null);      // (damage page: base + the level's layer)
 			if (img.w !== P.w || img.h !== P.h) throw new Error(`página ${P.i}: ${img.w}×${img.h}, esperado ${P.w}×${P.h}`);
 			this.stats.decoded++; this.stats.decodeMs += performance.now() - t0;
 			if (!P.dead) { P.px = img.data; P.st = 'ready'; P.fails = 0; if (this._scene) this._upload(P, P.pri); }
@@ -135,6 +135,11 @@ const NpcArt = {
 		this._decoding--;
 		this._wake(P);
 		this._pump();
+	},
+	// Page of a wardrobe look (LookStore): a PNG decoded in the Worker like the baked pages, or raw RG bytes (just read, no pixel work).
+	async _fromBlob(P) {
+		if (P.blob.type !== LookStore.RAW_TYPE) return AtlasDecoder.rg(P.blob);
+		return { w: P.w, h: P.h, data: new Uint8Array(await P.blob.arrayBuffer()) };
 	},
 	_fail(P, e) {
 		P.st = 'failed'; P.fails = (P.fails || 0) + 1;
@@ -146,7 +151,7 @@ const NpcArt = {
 	_wait(P) { return P.px || P.tex || P.st === 'failed' ? Promise.resolve() : new Promise((ok) => (P.waiters || (P.waiters = [])).push(ok)); },
 	_wake(P) { if (P.waiters) { const w = P.waiters; P.waiters = null; for (const f of w) f(); } },
 
-	// ENVIO À GPU EM FAIXAS. Página decodificada (ou de um atlas gerado: addAtlas) → textura RG8 (WebGL2) / LUMINANCE_ALPHA (WebGL1)
+	// ENVIO À GPU EM FAIXAS. Página decodificada → textura RG8 (WebGL2) / LUMINANCE_ALPHA (WebGL1)
 	// criada VAZIA e preenchida em faixas horizontais (texSubImage2D) com um orçamento por quadro (Config.art.uploadMB e no máximo UP_MS
 	// de envio): a página inteira (até 4096×1720×2 B = 14 MB) num texImage2D só travava o quadro por centenas de ms — até segundos —
 	// quando um tipo novo aparecia. Só depois da última faixa ela fica PRONTA (P.tex: o SpriteActor passa a usá-la; material; quem
@@ -651,31 +656,12 @@ const NpcArt = {
 		return clip;
 	},
 
-	// Atlas já decodificado (o visual do jogador montado no guarda-roupa e lido do aparelho: PlayerLook). Aceita a forma paginada
-	// ({ k, v, frame, clips, pages: [{ w, h, g, par, data }] }) e a antiga ({ w, h, data, clips }: uma página só).
-	addAtlas(id, a) {
+	// A wardrobe look read from the device (PlayerLook ← LookStore): its pages stay as Blobs and are decoded on demand like the baked
+	// ones (AtlasDecoder, in a Worker), so they can also leave the GPU and come back. rec = { k, v, frame, clips, pages: [{ w, h, g, par, blob }] }.
+	addStored(id, rec) {
 		if (this.atlases[id]) this.dropAtlas(id);
-		const g = this.paged(a);
-		const pages = g.pages.map((p) => ({ w: p.w, h: p.h, g: p.g || 'hot', par: p.par || 0, px: p.data instanceof Uint8Array ? p.data : new Uint8Array(p.data) }));
-		const A = this._atlas(id, { clips: g.clips, k: g.k || 0.5, v: g.v || 2, frame: g.frame }, pages, false);
-		return A;
-	},
-	// Atlas empacotado (packPages do gerador, no Worker do guarda-roupa; ou o formato antigo de uma página) → a forma paginada (com dirs e pd em todo clipe).
-	paged(a, k, frame) {
-		if (!a) return a;
-		let clips = a.clips;
-		const pages = a.pages || [{ w: a.w, h: a.h, g: 'hot', par: 0, data: a.data }];
-		for (const c of Object.values(clips)) { if (!c.dirs) c.dirs = 8; if (!c.pd) c.pd = new Array(c.dirs).fill(0); }
-		return { k: a.k != null ? a.k : k, v: a.v || 2, frame: a.frame != null ? a.frame : frame, clips, pages };
-	},
-	// Registro do IndexedDB (gravado pelo Worker do guarda-roupa: páginas comprimidas com CompressionStream, ou cruas — raw — sem ela)
-	// → atlas paginado. Página comprimida sem DecompressionStream para abrir = null (o guarda-roupa monta de novo).
-	async unzip(a) {
-		if (!a || !a.pages) return null;                                     // (formato de antes das páginas: refaz)
-		const pages = [];
-		try { for (const p of a.pages) pages.push({ w: p.w, h: p.h, g: p.g, par: p.par, data: p.z ? await this._inflate(p.z) : p.data }); }
-		catch (e) { return null; }                                          // (comprimido e sem DecompressionStream: refaz)
-		return { k: a.k, v: a.v, frame: a.frame, clips: a.clips, pages };
+		const pages = rec.pages.map((p) => ({ w: p.w, h: p.h, g: p.g || 'hot', par: p.par || 0, blob: p.blob }));
+		return this._atlas(id, { clips: rec.clips, k: rec.k || 0.5, v: rec.v || 2, frame: rec.frame }, pages, true);
 	},
 	// Geração do atlas de um id (o atlas foi trocado: os clipes já tocando são refeitos — SpriteActor.update).
 	// (atlas descartado — o visual antigo do jogador — = -1: quem ainda o usa, como o piloto da moto, também refaz o clipe)
@@ -695,8 +681,6 @@ const NpcArt = {
 		return k;
 	},
 
-	async _inflate(u8) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer()); },
-
 	// Descarta um atlas (o visual antigo do jogador, um atlas de dano sem uso…): texturas, materiais e quem o desenhava (esconde até
 	// desenhar de novo: o SpriteActor refaz o clipe no próximo update). Quem ainda desenha uma página dele na GPU (o visual antigo do
 	// jogador, trocado agora pelo novo, que sobe em faixas) segue no último quadro até a página nova chegar — sem piscar: as texturas
@@ -711,7 +695,7 @@ const NpcArt = {
 			P.dead = true;
 			this._upCancel(P);
 			if (!keep) this._free(P);
-			P.px = null;
+			P.px = P.blob = null;
 			this._wake(P);
 		}
 		if (keep) this._zombies.push({ A, t: performance.now() });
