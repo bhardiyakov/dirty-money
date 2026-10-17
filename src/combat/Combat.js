@@ -424,6 +424,7 @@ class Combat {
         }
         if (g.gangs) for (const o of g.gangs.members) if (o.alive) add(o, 'gang', 0.55);
         if (g.watch && g.watch.lookouts) for (const o of g.watch.lookouts) if (o.alive && o.actor) add(o, 'lookout', 0.55);
+        if (g.watch && g.watch.rockets) for (const o of g.watch.rockets) if (o.alive && o.actor) add(o, 'roof', 0.55);         // (fogueteiros: só a bala mirada neles)
         if (g.vehicleManager) for (const c of g.vehicleManager.vehicles) add(c, 'car', 1.4);
         if (g.vehicleManager) for (const c of g.vehicleManager.boats) add(c, 'car', Math.max(0.9, c.halfW));
         if (g.player.alive && g.mode === 'player' && !g.player.dodging) add(g.player, 'player', g.player.crouched ? 0.5 : 0.6);      // (rolando: as balas passam; agachado: alvo menor)
@@ -452,7 +453,7 @@ class Combat {
             let hit = null, hitT = 2;
             const sx = b.x - b.px, sz = b.z - b.pz, sl2 = sx * sx + sz * sz || 1e-6;
             for (const t of T) {
-                if (t.ref === b.ref || (b.only && t.ref !== b.only)) continue;
+                if (t.ref === b.ref || (b.only && t.ref !== b.only) || (t.kind === 'roof' && !b.only)) continue;      // (no telhado: só o tiro mirado nele)
                 if (b.owner === 'gang' && t.kind === 'gang') continue;
                 if (b.owner === 'police' && (t.kind === 'officer' || t.kind === 'heli' || (t.kind === 'car' && t.ref.role))) continue;   // sem fogo amigo
                 if (b.owner === 'player' && t.kind === 'player') continue;
