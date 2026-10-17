@@ -137,6 +137,7 @@ src/art/AtlasDecoder.js                      no jogo: busca e decodifica as pág
 src/art/NpcArt.js                            no jogo: páginas → textura, paleta das variantes, shader, folhas (NpcSheet), quem é quem
 src/player/PlayerLook.js                     visual do jogador: ficha a partir da roupa/bolsa → atlas prontos ou do IndexedDB
 src/player/Wardrobe.js                       o guarda-roupa: monta (Worker) e grava no IndexedDB um visual novo, só na tela de equipamento
+src/storage/LookStore.js                     o IndexedDB dos visuais: o esquema único, lido pelo jogo e gravado pelo Worker do guarda-roupa
 ```
 
 - **Cor por paleta.** Cada pixel do atlas guarda o *código* da cor (material × 8 + tom) e o alfa — 2 bytes por pixel (PNG cinza+alfa
@@ -177,7 +178,8 @@ src/player/Wardrobe.js                       o guarda-roupa: monta (Worker) e gr
   mudou com a academia…) mantém o último visual, um aviso pede para abrir **Inventário → Equipamento** e um ponto amarelo marca a aba
   Inventário e o botão Equipamento no menu enquanto o visual não estiver montado. Lá o `Wardrobe` abre os Workers
   do gerador (os núcleos − 1, até 4; o jogo está pausado), que desenham os clipes que faltam e gravam cada um no aparelho; no fim um deles
-  empacota as páginas e grava o atlas pronto (principal + tático + armas novas, se tiver alguma) e o visual troca. Depois vêm os níveis
+  empacota as páginas e grava o atlas pronto (principal + tático + armas novas, se tiver alguma; cada página um PNG, que o jogo
+  decodifica num Worker e sob demanda, como as páginas prontas — `LookStore`, `NpcArt.addStored`) e o visual troca. Depois vêm os níveis
   de dano daquela roupa (barra "Preparando o visual machucado"). Saiu da tela no meio: os Workers são encerrados e o que já foi gravado
   continua na próxima visita. Recarregou o jogo com a mesma roupa: lido do IndexedDB, sem gerar de novo. Depois do primeiro visual
   gravado o jogo pede armazenamento persistente (`navigator.storage.persist`), para o navegador não apagar o IndexedDB por falta de espaço. A chave leva o hash do gerador
