@@ -57,6 +57,14 @@ class ColliderStreamer {
 		return !pending;
 	}
 
+	// Releases every body (the player went into an interior: the city is unloaded). The next update rebuilds around the focus as
+	// after a jump.
+	releaseAll() {
+		for (const it of this.active) { it.agg.dispose(); it.agg = null; }
+		this.active.length = 0;
+		this._last = null;
+	}
+
 	// Salto (teleporte/respawn): só os corpos até `NEAR` u nascem na hora (o jogador não atravessa nada em volta); o resto nasce 40
 	// por quadro, e os que ficaram para trás saem 80 por quadro. Antes, o salto criava e destruía TUDO num quadro só (no centro da
 	// cidade: ~170 corpos novos + ~700 descartados, mais o terreno — o engasgo do respawn no hospital/delegacia).

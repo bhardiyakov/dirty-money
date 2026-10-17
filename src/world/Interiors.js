@@ -387,7 +387,7 @@ const Interiors = {
 		game.scene.physicsEnabled = false;
 		const mm = document.getElementById('minimap'); if (mm) mm.style.opacity = '0';
 		if (!quiet) game._flash(`${shop.name}`);
-		this._hideCity(game, true);
+		this._unloadCity(game, true);
 		if (shop.bank) Banks.onEnter(game, shop);
 		if (typeof Heists !== 'undefined') Heists.onEnter(game, shop);         // golpe em execução: a equipe entra junto
 	},
@@ -408,28 +408,35 @@ const Interiors = {
 		game.scene.physicsEnabled = true;
 		const mm = document.getElementById('minimap'); if (mm) mm.style.opacity = '1';
 		game.shopUI.close();
-		if (game.colliderStream) game.colliderStream.refresh(game.camera.target.x, game.camera.target.z);
-		this._hideCity(game, false);
+		this._unloadCity(game, false);
 		if (a.shop.bank) Banks.onLeave(game);
 		if (typeof Robbery !== 'undefined') Robbery.onLeave(game);              // assalto: estrelas, testemunhas e rastros (já na calçada)
 	},
 
-	// Dentro de um interior a cidade não aparece: some com todas as malhas visíveis do mapa (a GPU para de avaliá-las e o mapa de sombras
-	// fica leve) e devolve exatamente as mesmas ao sair. O mundo está congelado lá dentro, então ninguém muda essa visibilidade no meio.
-	_hideCity(game, hide) {
-		if (hide) {
+	// Inside an interior the city is unloaded from the frame: every mesh of the map (buildings, terrain, props, people and cars) is
+	// disabled — out of rendering, the shadow map and picking — and the streamed Havok colliders are released; the terrain stops
+	// streaming (WorldBuilder). Leaving brings back exactly the same meshes (the world is frozen inside, nothing else touches them)
+	// and the colliders around the door rebuild like after a teleport. The merged city buffers stay on the GPU: rebuilding the city
+	// on the way out would freeze the game for seconds.
+	_unloadCity(game, unload) {
+		const cs = game.colliderStream;
+		if (unload) {
+			if (cs) cs.releaseAll();
 			const lim = this.STAGE.x - 400, keep = this._hidden = [], stage = new Set([this._bd, this.active && this.active.room.mesh]);
 			for (const x of this._actors) stage.add(x.mesh);
 			for (const x of this._gymActors || []) stage.add(x.mesh);
 			if (this._arrow) stage.add(this._arrow);
 			for (const m of game.scene.meshes) {
-				if (!m.isVisible || stage.has(m)) continue;
+				if (!m.isEnabled(false) || stage.has(m)) continue;
 				const bi = m.getBoundingInfo && m.getBoundingInfo(), cx = bi ? bi.boundingBox.centerWorld.x : m.position.x;
 				if (cx > lim && !m.alwaysSelectAsActiveMesh) continue;                // (o palco da loja e o que está nele)
 				if (m === game.player.root || (game.player.actor && m === game.player.actor.mesh)) continue;
-				m.isVisible = false; keep.push(m);
+				m.setEnabled(false); keep.push(m);
 			}
-		} else if (this._hidden) { for (const m of this._hidden) m.isVisible = true; this._hidden = null; }
+			return;
+		}
+		if (this._hidden) { for (const m of this._hidden) m.setEnabled(true); this._hidden = null; }
+		if (cs) cs.update(0, game.camera.target.x, game.camera.target.z);
 	},
 
 	// Atualização por quadro DENTRO da loja: anima atores, auto-sair pela porta.
