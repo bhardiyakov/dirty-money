@@ -626,7 +626,7 @@ class Player {
             const t = 1 - Math.exp(-(this.swimming ? W.accel : Config.player.accel * 0.5) * dt);
             this.velocity = BABYLON.Vector3.Lerp(this.velocity, moveDir.scale(maxSpeed), t);
             this.skidding = false;
-        } else this._landVelocity(moveDir, maxSpeed, dt);
+        } else this._landVelocity(moveDir, maxSpeed, dt, aiming || !!this.coverLock || !!this.action);
         if (this.velocity.lengthSquared() < 1e-4) this.velocity.setAll(0);
 
         // Integra posição, mas confinado à terra (desliza na beira da água). Na água, as ondas levam junto (Waves.current: vai e volta
@@ -661,7 +661,7 @@ class Player {
         // Gira o corpo em direção ao movimento (menor caminho angular) — só fora de ações. Mirando: sempre para a mira (até atirando).
         if (aiming && (!this.action || this.action.name === 'shoot' || this.action.name === 'draw')) {
             this.root.rotation.y = this._lerpAngle(this.root.rotation.y, this.aimHeading, 1 - Math.exp(-22 * dt));
-        } else if (!this.action && !this.skidding && moveDir.lengthSquared() > 1e-4) {      // (derrapando: segue de frente para onde desliza)
+        } else if (!this.action && !this._steered && moveDir.lengthSquared() > 1e-4) {      // (em terra o _landVelocity já virou o corpo)
             const targetY = Math.atan2(moveDir.x, moveDir.z);
             const rt = 1 - Math.exp(-Config.player.turnLerp * (this.swimming ? W.turn : 1) * dt);
             this.root.rotation.y = this._lerpAngle(this.root.rotation.y, targetY, rt);
@@ -754,34 +754,41 @@ class Player {
         this.actor.update(dt, rate);
     }
 
-    // Land locomotion. With input: exponential approach to the target velocity. Without it: friction (constant deceleration
-    // along the current heading — inertia). Running fast and reversing (dot of the velocity direction and the input direction
-    // near −1): skid — strong braking along the old direction, and only below skidExitSpeed does the new direction take over.
-    _landVelocity(moveDir, maxSpeed, dt) {
-        const P = Config.player, v = this.velocity, speed = Math.hypot(v.x, v.z);
-        const inputLen = Math.hypot(moveDir.x, moveDir.z), hasInput = inputLen > 1e-2;
+    // Land locomotion with heavy steps: the body turns toward the stick at a speed-limited rate (quick pivot standing, wide turns at a
+    // sprint) and the velocity always points where the body faces — no sideways drift. Speed builds up at moveAccel and drops at
+    // stopDecel (a couple of planted steps, no slide); while still turning, less of it (cos of what is left to turn). Running and
+    // reversing (cos of facing → stick ≤ skidDot): skid — hard braking along the facing without turning, then the pivot.
+    // `free`: aiming, glued to cover or in an action — the old free approach (strafing, sliding along the cover).
+    _landVelocity(moveDir, maxSpeed, dt, free) {
+        const P = Config.player, v = this.velocity, inputLen = Math.hypot(moveDir.x, moveDir.z), hasInput = inputLen > 1e-2;
+        this._steered = !free;                                                  // (on land this owns the body's heading, skid included)
+        if (free) {
+            this.skidding = false;
+            const t = 1 - Math.exp(-P.accel * dt);
+            v.x += (moveDir.x * maxSpeed - v.x) * t;
+            v.z += (moveDir.z * maxSpeed - v.z) * t;
+            return;
+        }
+        let heading = this.root.rotation.y, speed = Math.hypot(v.x, v.z), target = 0, decel = P.stopDecel;
         if (this.skidding) {
-            this._brake(speed, P.skidFriction, dt);
-            if (Math.hypot(v.x, v.z) <= P.skidExitSpeed) this.skidding = false;
-            return;
+            decel = P.skidFriction;
+            if (speed <= P.skidExitSpeed) this.skidding = false;
+        } else if (hasInput) {
+            const diff = this._wrapAngle(Math.atan2(moveDir.x, moveDir.z) - heading);
+            if (maxSpeed > 0 && speed >= P.skidMinSpeed && Math.cos(diff) <= P.skidDot) { this.skidding = true; decel = P.skidFriction; }
+            else {
+                const k = Math.max(0, Math.min(1, (speed - 3) / 7)), rate = P.turnRateWalk + (P.turnRateSprint - P.turnRateWalk) * k;
+                const turn = Math.max(-rate * dt, Math.min(rate * dt, diff));
+                heading += turn;
+                target = maxSpeed * Math.max(0, Math.cos(diff - turn)) ** 0.6 * Math.min(1, inputLen);
+            }
         }
-        if (hasInput && maxSpeed > 0 && speed >= P.skidMinSpeed && (v.x * moveDir.x + v.z * moveDir.z) / (speed * inputLen) <= P.skidDot) {
-            this.skidding = true;
-            this._brake(speed, P.skidFriction, dt);
-            return;
-        }
-        if (!hasInput) { this._brake(speed, P.friction, dt); return; }
-        const t = 1 - Math.exp(-P.accel * dt);
-        v.x += (moveDir.x * maxSpeed - v.x) * t;
-        v.z += (moveDir.z * maxSpeed - v.z) * t;
+        speed = target > speed ? Math.min(target, speed + P.moveAccel * dt) : Math.max(target, speed - decel * dt);
+        this.root.rotation.y = heading;
+        v.x = Math.sin(heading) * speed;
+        v.z = Math.cos(heading) * speed;
     }
-
-    // Takes `decel · dt` off the ground speed, keeping the direction (never reverses it).
-    _brake(speed, decel, dt) {
-        if (speed === 0) return;
-        const k = Math.max(0, speed - decel * dt) / speed;
-        this.velocity.x *= k; this.velocity.z *= k;
-    }
+    _wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
     // Run or walk clip by the ACTUAL speed, not the sprint button (hysteresis): releasing sprint he keeps the running stride while
     // decelerating, and skidding keeps the running legs slowing down with the speed.
