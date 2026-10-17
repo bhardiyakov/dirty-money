@@ -56,10 +56,10 @@ const Config = {
 		// ponto de fuga fica EM CIMA do alvo, os telhados se projetam para fora e nunca
 		// o escondem.
 		height: 150,           // altura da câmera (u). Maior = perspectiva mais sutil.
-		// 2.5D camera (`?cam=25d` while it is being completed): orthographic, tilted `tilt` degrees above the horizon — the angle the
+		// 2.5D camera (the default; `?cam=top` = the old top-down camera everywhere): orthographic, tilted `tilt` degrees above the horizon — the angle the
 		// character atlases were rendered at (tools/asset_baker) — looking north from the south. Interiors and the safe house keep the
 		// top-down camera above (their art is painted for it). `distance` = how far back along the view ray it sits (depth range only).
-		tilted: typeof location !== 'undefined' && /[?&]cam=25d\b/.test(location.search),
+		tilted: !(typeof location !== 'undefined' && /[?&]cam=top\b/.test(location.search)),
 		tilt: 56,
 		distance: 150,
 		tallest: 42,           // tallest building (m): its top shows up to tallest·cot(tilt) beyond the bottom edge — culling margin
@@ -495,28 +495,8 @@ const Config = {
 	},
 };
 
-// Perfil de desempenho: detecta aparelho de toque / pouca memória / poucos núcleos e enxuga o mundo vivo. `?lite` força, `?full` desliga.
-(function applyPerfProfile() {
-	const q = typeof location !== 'undefined' ? location.search : '';
-	const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-	const nav = typeof navigator !== 'undefined' ? navigator : {};
-	const weak = (nav.deviceMemory && nav.deviceMemory <= 4) || (nav.hardwareConcurrency && nav.hardwareConcurrency <= 4);
+// Saved choices that shape Config before the game reads it (the graphics preset itself: src/core/Graphics.js, loaded right after).
+(function applySavedChoices() {
 	try { localStorage.removeItem('dm_quality'); } catch (e) { /* sem storage */ }      // (o AutoQuality antigo gravava o perfil leve: não vale mais)
-	const lite = q.includes('lite') || (!q.includes('full') && (coarse || weak));
-	// Gráficos: sempre a alta definição com o gráfico suave, em todo aparelho (o perfil leve enxuga o mundo vivo, as sombras e as direções
-	// desenhadas dos personagens 2,5D — 8 em vez de 16, com menos memória de vídeo).
 	try { const s = JSON.parse(localStorage.getItem('dm_settings') || '{}'); if (typeof s.cars3d === 'boolean') Config.art.cars3d = s.cars3d; } catch (e) { /* sem storage */ }
-	const P = Config.perf;
-	// App instalado no PC (Tauri) — ou `?fps60` no navegador, para testar: 60 quadros. Se o PC não segurar, o AutoQuality volta a 30
-	// antes de mexer na qualidade visual.
-	const desktopApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-	if (!lite && (desktopApp || q.includes('fps60'))) P.fpsCap = 60;
-	if (!lite) return;
-	if (typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // sem vidro borrado nos painéis (ver Theme)
-	P.lite = true; P.shadowSize = 1024; P.colliderRadius = 190; P.dprCap = 1.5;
-	Config.art.npcDirs = 8; Config.art.vramMB = 256; Config.art.uploadMB = 1;           // personagens 2,5D: 8 direções, menos páginas na GPU (e enviadas aos poucos)
-	Config.npc.count = 48;
-	Config.traffic.count = 18; Config.traffic.parked = 8; Config.traffic.motos = 2; Config.traffic.motosParked = 2; Config.traffic.bicycles = 2; Config.traffic.bicyclesParked = 2; Config.traffic.couriers = 3;
-	Config.traffic.spawnMax = 150; Config.traffic.recycleDist = 185;
-	Config.npc.recycleDist = 200;
 })();
