@@ -6,65 +6,65 @@
 // ============================================================================
 
 const SaveGame = {
-    KEY: 'dm_save',
-    VERSION: 1,
+	KEY: 'dm_save',
+	VERSION: 1,
 
-    snapshot(g) {
-        const p = g.player, inv = g.inventory;
-        const weapons = {};
-        for (const k of Object.keys(inv.weapons)) weapons[k] = Object.assign({}, inv.weapons[k]);
-        return {
-            v: this.VERSION, savedAt: Date.now(),
-            hour: g.dayNight.hour, weather: g.weather.state,
-            player: { x: p.position.x, z: p.position.z, rot: p.root.rotation.y, hp: p.hp, armor: p.armor, armorMax: p.armorMax, weapon: p.weapon },
-            inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, bag: inv.bag, spareBags: inv.spareBags.slice(), weapons, gear: Object.assign({}, inv.gear || {}), booster: inv.boosterUses || 0 },
-            fitness: p.fit ? p.fit.xp : 0, strength: p.str ? p.str.xp : 0, physique: Physique.serialize(),
-            stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
-            traces: Traces.serialize(), robbery: Robbery.serialize(), heists: Heists.serialize(), business: Business.serialize(),
-        };
-    },
+	snapshot(g) {
+		const p = g.player, inv = g.inventory;
+		const weapons = {};
+		for (const k of Object.keys(inv.weapons)) weapons[k] = Object.assign({}, inv.weapons[k]);
+		return {
+			v: this.VERSION, savedAt: Date.now(),
+			hour: g.dayNight.hour, weather: g.weather.state,
+			player: { x: p.position.x, z: p.position.z, rot: p.root.rotation.y, hp: p.hp, armor: p.armor, armorMax: p.armorMax, weapon: p.weapon },
+			inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, bag: inv.bag, spareBags: inv.spareBags.slice(), weapons, gear: Object.assign({}, inv.gear || {}), booster: inv.boosterUses || 0 },
+			fitness: p.fit ? p.fit.xp : 0, strength: p.str ? p.str.xp : 0, physique: Physique.serialize(),
+			stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
+			traces: Traces.serialize(), robbery: Robbery.serialize(), heists: Heists.serialize(), business: Business.serialize(),
+		};
+	},
 
-    write(g) {
-        try { localStorage.setItem(this.KEY, JSON.stringify(this.snapshot(g))); return true; }
-        catch (e) { console.error('[SAVE] falha ao gravar:', e); return false; }
-    },
+	write(g) {
+		try { localStorage.setItem(this.KEY, JSON.stringify(this.snapshot(g))); return true; }
+		catch (e) { console.error('[SAVE] falha ao gravar:', e); return false; }
+	},
 
-    read() {
-        try { const raw = localStorage.getItem(this.KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
-    },
+	read() {
+		try { const raw = localStorage.getItem(this.KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+	},
 
-    // Aplica um save no jogo recém-carregado (chamado no fim do boot).
-    apply(g, s) {
-        if (!s || s.v !== this.VERSION) return false;
-        const p = g.player, inv = g.inventory, I = s.inventory || {};
-        for (const k of ['cash', 'clean', 'medkits', 'hacks', 'keys', 'food', 'water', 'jewels', 'jewelValue']) if (typeof I[k] === 'number') inv[k] = I[k];
-        for (const k of Object.keys(I.weapons || {})) if (inv.weapons[k]) Object.assign(inv.weapons[k], I.weapons[k]);
-        inv.gear = {}; for (const [k, n] of Object.entries(I.gear || {})) if (Items.DEFS[k] && n > 0) inv.gear[k] = n;
-        inv.boosterUses = I.booster || 0;
-        inv.bag = Bags.DEFS[I.bag] ? I.bag : 'pack';                       // saves antigos (antes das bolsas): a mochila 5×4 de sempre
-        inv.spareBags = (I.spareBags || []).filter((b, i, a) => Bags.DEFS[b] && b !== 'none' && b !== inv.bag && a.indexOf(b) === i);
-        Outfit.load(s.outfit || null);                                        // roupas e acessórios (saves antigos: o visual de sempre)
-        p.fit = { xp: s.fitness || 0 };
-        p.str = { xp: s.strength || 0 };
-        Physique.load(s.physique || null);
-        g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Garage.load(s.garage || null); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
-        Traces.load(s.traces || null); Robbery.load(s.robbery || null); Heists.load(s.heists || null); Business.load(s.business || null);
-        const pl = s.player || {};
-        p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));
-        if (CityGrid.blockedAt(pl.x, pl.z, 0.4)) p.teleport(g.nav.closestPoint(new BABYLON.Vector3(pl.x, 0, pl.z), 30));      // (o mapa mudou: salvou onde agora tem parede)
-        p.root.rotation.y = pl.rot || 0;
-        p.hp = Math.max(1, pl.hp || p.maxHp); p.armor = pl.armor || 0; p.armorMax = pl.armorMax || 0;
-        p.weapon = inv.owned(pl.weapon) ? pl.weapon : 'none';
-        g.camera.snapTo(p.position);
-        if (typeof s.hour === 'number') { g.dayNight.hour = s.hour; g.dayNight.apply(); }
-        if (s.weather && g.weather) g.weather.set(s.weather, true);
-        return true;
-    },
+	// Aplica um save no jogo recém-carregado (chamado no fim do boot).
+	apply(g, s) {
+		if (!s || s.v !== this.VERSION) return false;
+		const p = g.player, inv = g.inventory, I = s.inventory || {};
+		for (const k of ['cash', 'clean', 'medkits', 'hacks', 'keys', 'food', 'water', 'jewels', 'jewelValue']) if (typeof I[k] === 'number') inv[k] = I[k];
+		for (const k of Object.keys(I.weapons || {})) if (inv.weapons[k]) Object.assign(inv.weapons[k], I.weapons[k]);
+		inv.gear = {}; for (const [k, n] of Object.entries(I.gear || {})) if (Items.DEFS[k] && n > 0) inv.gear[k] = n;
+		inv.boosterUses = I.booster || 0;
+		inv.bag = Bags.DEFS[I.bag] ? I.bag : 'pack';                       // saves antigos (antes das bolsas): a mochila 5×4 de sempre
+		inv.spareBags = (I.spareBags || []).filter((b, i, a) => Bags.DEFS[b] && b !== 'none' && b !== inv.bag && a.indexOf(b) === i);
+		Outfit.load(s.outfit || null);                                        // roupas e acessórios (saves antigos: o visual de sempre)
+		p.fit = { xp: s.fitness || 0 };
+		p.str = { xp: s.strength || 0 };
+		Physique.load(s.physique || null);
+		g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Garage.load(s.garage || null); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
+		Traces.load(s.traces || null); Robbery.load(s.robbery || null); Heists.load(s.heists || null); Business.load(s.business || null);
+		const pl = s.player || {};
+		p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));
+		if (CityGrid.blockedAt(pl.x, pl.z, 0.4)) p.teleport(g.nav.closestPoint(new BABYLON.Vector3(pl.x, 0, pl.z), 30));      // (o mapa mudou: salvou onde agora tem parede)
+		p.root.rotation.y = pl.rot || 0;
+		p.hp = Math.max(1, pl.hp || p.maxHp); p.armor = pl.armor || 0; p.armorMax = pl.armorMax || 0;
+		p.weapon = inv.owned(pl.weapon) ? pl.weapon : 'none';
+		g.camera.snapTo(p.position);
+		if (typeof s.hour === 'number') { g.dayNight.hour = s.hour; g.dayNight.apply(); }
+		if (s.weather && g.weather) g.weather.set(s.weather, true);
+		return true;
+	},
 
-    // "dd/mm hh:mm" do último save (para o menu principal).
-    label(s) {
-        if (!s || !s.savedAt) return '';
-        const d = new Date(s.savedAt), z = (n) => String(n).padStart(2, '0');
-        return `${z(d.getDate())}/${z(d.getMonth() + 1)} ${z(d.getHours())}:${z(d.getMinutes())}`;
-    },
+	// "dd/mm hh:mm" do último save (para o menu principal).
+	label(s) {
+		if (!s || !s.savedAt) return '';
+		const d = new Date(s.savedAt), z = (n) => String(n).padStart(2, '0');
+		return `${z(d.getDate())}/${z(d.getMonth() + 1)} ${z(d.getHours())}:${z(d.getMinutes())}`;
+	},
 };

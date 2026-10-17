@@ -11,68 +11,68 @@
 // ============================================================================
 
 const Smooth = {
-    on: false,
-    pp: null,              // pós-processamento do antisserrilhado (MSAA ou FXAA), o 1º da câmera
+	on: false,
+	pp: null,              // pós-processamento do antisserrilhado (MSAA ou FXAA), o 1º da câmera
 
-    // Ligado nos Ajustes e fora do modo pixel art.
-    get wanted() { const A = Config.art; return !A.pixelate && A.smooth !== false; },
+	// Ligado nos Ajustes e fora do modo pixel art.
+	get wanted() { const A = Config.art; return !A.pixelate && A.smooth !== false; },
 
-    // Aplica o estado desejado (boot, Ajustes, AutoQuality). Refaz a escala da tela (a densidade do monitor só vale com ele ligado).
-    apply(game) {
-        const on = this.wanted, ge = game.gameEngine;
-        if (on === this.on && !!this.pp === on) return;
-        this.on = on;
-        if (ge && ge.resize) { ge.resize(); if (game.camera) { game.camera.fitPixelScale(ge.viewHeight); game.camera.onResize(); } }
-        if (game.camera) this._antialias(game.camera.camera, ge.engine, on);
-        this._textures(game.scene, on);
-        if (ge && ge.shadowGenerator) ge.shadowGenerator.filteringQuality = on ? BABYLON.ShadowGenerator.QUALITY_MEDIUM : BABYLON.ShadowGenerator.QUALITY_LOW;
-        this._thaw(game.scene);
-        console.log(`[GRÁFICO] suave ${on ? 'ligado' : 'desligado'}${on ? ` (${this.pp ? this.pp.name : '-'}, ${ge.engine.getRenderWidth()}×${ge.engine.getRenderHeight()})` : ''}`);
-    },
+	// Aplica o estado desejado (boot, Ajustes, AutoQuality). Refaz a escala da tela (a densidade do monitor só vale com ele ligado).
+	apply(game) {
+		const on = this.wanted, ge = game.gameEngine;
+		if (on === this.on && !!this.pp === on) return;
+		this.on = on;
+		if (ge && ge.resize) { ge.resize(); if (game.camera) { game.camera.fitPixelScale(ge.viewHeight); game.camera.onResize(); } }
+		if (game.camera) this._antialias(game.camera.camera, ge.engine, on);
+		this._textures(game.scene, on);
+		if (ge && ge.shadowGenerator) ge.shadowGenerator.filteringQuality = on ? BABYLON.ShadowGenerator.QUALITY_MEDIUM : BABYLON.ShadowGenerator.QUALITY_LOW;
+		this._thaw(game.scene);
+		console.log(`[GRÁFICO] suave ${on ? 'ligado' : 'desligado'}${on ? ` (${this.pp ? this.pp.name : '-'}, ${ge.engine.getRenderWidth()}×${ge.engine.getRenderHeight()})` : ''}`);
+	},
 
-    // Zoom (Game, todo quadro, com os px da tela por metro): árvores, arbustos e mobiliário de rua (PropSprites, atlas de paleta) com
-    // o gráfico suave usam o bilinear à mão "nítido" — o miolo de cada pixel da arte fica duro e só a borda entre pixels é suavizada,
-    // na medida do zoom (como os personagens 2,5D, NpcArt.setZoom).
-    zoom(game, screenPxPerMeter) {
-        const props = game.gameEngine.world && game.gameEngine.world.props;
-        if (props && props.setSharp) props.setSharp(this.on ? Math.max(1, Math.round(screenPxPerMeter / Config.art.ppu * 8) / 8) : 0);
-    },
+	// Zoom (Game, todo quadro, com os px da tela por metro): árvores, arbustos e mobiliário de rua (PropSprites, atlas de paleta) com
+	// o gráfico suave usam o bilinear à mão "nítido" — o miolo de cada pixel da arte fica duro e só a borda entre pixels é suavizada,
+	// na medida do zoom (como os personagens 2,5D, NpcArt.setZoom).
+	zoom(game, screenPxPerMeter) {
+		const props = game.gameEngine.world && game.gameEngine.world.props;
+		if (props && props.setSharp) props.setSharp(this.on ? Math.max(1, Math.round(screenPxPerMeter / Config.art.ppu * 8) / 8) : 0);
+	},
 
-    // Os materiais do mundo são congelados depois da carga (Game._freezeStaticMaterials): não reavaliam os defines (qualidade da
-    // sombra) nem reenviam o uniform do chão (TerrainSplat). Trocando o ajuste no meio do jogo, descongela e congela de novo depois
-    // que os shaders novos ficaram prontos.
-    _thaw(scene) {
-        const hv = typeof HouseView !== 'undefined' ? new Set([...(HouseView.ext || []), HouseView.interiorMat]) : new Set();      // (a casa congela os dela)
-        const list = scene.materials.filter((m) => m.isFrozen && !hv.has(m));
-        if (!list.length) return;
-        for (const m of list) m.unfreeze();
-        clearTimeout(this._refreeze);
-        this._refreeze = setTimeout(() => { for (const m of list) if (!m.isFrozen) m.freeze(); }, 2000);
-    },
+	// Os materiais do mundo são congelados depois da carga (Game._freezeStaticMaterials): não reavaliam os defines (qualidade da
+	// sombra) nem reenviam o uniform do chão (TerrainSplat). Trocando o ajuste no meio do jogo, descongela e congela de novo depois
+	// que os shaders novos ficaram prontos.
+	_thaw(scene) {
+		const hv = typeof HouseView !== 'undefined' ? new Set([...(HouseView.ext || []), HouseView.interiorMat]) : new Set();      // (a casa congela os dela)
+		const list = scene.materials.filter((m) => m.isFrozen && !hv.has(m));
+		if (!list.length) return;
+		for (const m of list) m.unfreeze();
+		clearTimeout(this._refreeze);
+		this._refreeze = setTimeout(() => { for (const m of list) if (!m.isFrozen) m.freeze(); }, 2000);
+	},
 
-    _antialias(cam, eng, on) {
-        if (on && !this.pp) {
-            if (eng.webGLVersion >= 2 && eng.getCaps().maxMSAASamples > 1) {
-                this.pp = new BABYLON.PassPostProcess('msaa', 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
-                this.pp.samples = Math.min(4, eng.getCaps().maxMSAASamples);
-            } else this.pp = new BABYLON.FxaaPostProcess('fxaa', 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
-            // o MSAA só vale no 1º pós-processamento (é nele que a cena é desenhada): na frente do borrão de velocidade, se houver
-            if (cam._postProcesses[0] !== this.pp) { cam.detachPostProcess(this.pp); cam.attachPostProcess(this.pp, 0); }
-        } else if (!on && this.pp) {
-            cam.detachPostProcess(this.pp);
-            this.pp.dispose();
-            this.pp = null;
-        }
-    },
+	_antialias(cam, eng, on) {
+		if (on && !this.pp) {
+			if (eng.webGLVersion >= 2 && eng.getCaps().maxMSAASamples > 1) {
+				this.pp = new BABYLON.PassPostProcess('msaa', 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
+				this.pp.samples = Math.min(4, eng.getCaps().maxMSAASamples);
+			} else this.pp = new BABYLON.FxaaPostProcess('fxaa', 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
+			// o MSAA só vale no 1º pós-processamento (é nele que a cena é desenhada): na frente do borrão de velocidade, se houver
+			if (cam._postProcesses[0] !== this.pp) { cam.detachPostProcess(this.pp); cam.attachPostProcess(this.pp, 0); }
+		} else if (!on && this.pp) {
+			cam.detachPostProcess(this.pp);
+			this.pp.dispose();
+			this.pp = null;
+		}
+	},
 
-    // Amostragem das texturas do mundo (as feitas por Pixel.toTexture com mipmaps e repetição: os ladrilhos do chão e dos telhados).
-    // Atlas de sprites (sem repetição) continuam nítidos: filtrar misturaria os vizinhos no atlas.
-    sampling(tex) { return this.on ? BABYLON.Texture.TRILINEAR_SAMPLINGMODE : BABYLON.Texture.NEAREST_NEAREST_MIPNEAREST; },
-    _textures(scene, on) {
-        for (const t of scene.textures) {
-            if (!t._dmTile) continue;
-            t.updateSamplingMode(this.sampling(t));
-            t.anisotropicFilteringLevel = on ? Math.max(4, t._dmAniso || 1) : (t._dmAniso || 1);
-        }
-    },
+	// Amostragem das texturas do mundo (as feitas por Pixel.toTexture com mipmaps e repetição: os ladrilhos do chão e dos telhados).
+	// Atlas de sprites (sem repetição) continuam nítidos: filtrar misturaria os vizinhos no atlas.
+	sampling(tex) { return this.on ? BABYLON.Texture.TRILINEAR_SAMPLINGMODE : BABYLON.Texture.NEAREST_NEAREST_MIPNEAREST; },
+	_textures(scene, on) {
+		for (const t of scene.textures) {
+			if (!t._dmTile) continue;
+			t.updateSamplingMode(this.sampling(t));
+			t.anisotropicFilteringLevel = on ? Math.max(4, t._dmAniso || 1) : (t._dmAniso || 1);
+		}
+	},
 };
