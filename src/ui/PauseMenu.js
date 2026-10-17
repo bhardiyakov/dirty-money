@@ -15,7 +15,7 @@ class PauseMenu {
 	static get TABS() {
 		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
 	}
-	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'aimAssist', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
+	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
 		return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
@@ -55,8 +55,8 @@ class PauseMenu {
 		this.setRow = 0;                 // linha das configurações
 		this._icons = {};
 		this._legendIdx = {};
-		this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, aimAssist: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false }, this._loadSettings());       // aimAssist: mira assistida (false = manual) · tiltSteer: volante por giroscópio (celular)
-		delete this.settings.hd; delete this.settings.smooth;          // (escolhas antigas: o jogo é sempre em alta definição com o gráfico suave)
+		this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
+		delete this.settings.hd; delete this.settings.smooth; delete this.settings.aimAssist;          // (escolhas antigas: o jogo é sempre em alta definição com o gráfico suave e a mira manual)
 		this.settings.cars3d = typeof CarArt3D !== 'undefined' && CarArt3D.available();      // (já resolvido em config.js: escolha salva; ?cars2d)
 		this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
 		this._build();
@@ -342,7 +342,7 @@ class PauseMenu {
 		el.innerHTML =
 			panel('PERSONAGEM', bar('VIDA', pl.hp / pl.maxHp * 100, 'linear-gradient(90deg,#ff3a8a,#4a7cff)', `${Math.round(pl.hp)}/${pl.maxHp}`) + bar('COLETE', armor, 'linear-gradient(90deg,#2a7cff,#35c8ff)', `${armor}%`)
 				+ bar('FÔLEGO', (pl.stamina == null ? 1 : pl.stamina / (pl.staminaMax || 100)) * 100, 'linear-gradient(90deg,#10b981,#a3e635)', `condicionamento ${Bags.fitLevel(pl.fit)}/20`) + row('Carga', Bags.label(g))
-				+ bar('PONTARIA', Aim.quality() * 100, 'linear-gradient(90deg,#ff9a3a,#ffd23a)', `${Math.round(Aim.quality() * 100)}% · mira ${this.settings.aimAssist ? 'assistida' : 'manual'} — sobe com Mão firme e Olho de águia`)
+				+ bar('PONTARIA', Aim.quality() * 100, 'linear-gradient(90deg,#ff9a3a,#ffd23a)', `${Math.round(Aim.quality() * 100)}% — sobe com Mão firme e Olho de águia`)
 				+ row('Arma na mão', pl.weapon === 'none' ? 'Punhos' : Weapons[pl.weapon].name) + row('Kits médicos', inv.medkits) + row('Hora', g.dayNight.label))
 			+ panel('FÍSICO E ATRIBUTOS', this._physiqueHtml(pl, bar, row))
 			+ panel(`FACÇÃO · ${cv.name} (${cv.sigla})`, `<span class="tag" style="color:${hos ? '#ff5a4d' : '#5ac07a'}">${res ? (hos ? 'MORADOR · HOSTIL' : 'MORADOR · NEUTRO') : 'ESTRANHO · HOSTIL'}</span>`
@@ -923,7 +923,7 @@ class PauseMenu {
 		if (this.setRow === 0) s.volume = Math.max(0, Math.min(1, Math.round((s.volume + d * 0.1) * 10) / 10));
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'graphics') this._cycle('graphics', Graphics.CHOICES, 'auto', d, (c) => I18n.t('settings.graphics.flash', { choice: Graphics.label(c) }));
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'language') this._cycle('language', I18n.LANGS, I18n.lang, d, (c) => I18n.t('settings.language.flash', { choice: I18n.label(c) }));
-		else if (d === 0 || true) { const k = PauseMenu.SET_KEYS[this.setRow]; if (this.setRow > 0) s[k] = (d === 0 || k === 'aimAssist') ? !s[k] : d > 0; }      // (mira: ← → alternam)
+		else if (d === 0 || true) { const k = PauseMenu.SET_KEYS[this.setRow]; if (this.setRow > 0) s[k] = d === 0 ? !s[k] : d > 0; }
 		this._saveSettings(); this.applySettings();
 	}
 
@@ -942,7 +942,6 @@ class PauseMenu {
 		const R = {
 			volume: ['🔊 ' + T('settings.volume'), `<input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="pmVol"><span>${Math.round(s.volume * 100)}%</span>`],
 			sfx: ['🎵 ' + T('settings.sfx'), tog(s.sfx)], minimap: ['🗺️ ' + T('settings.minimap'), tog(s.minimap)], prompts: ['💬 ' + T('settings.prompts'), tog(s.prompts)],
-			aimAssist: ['🎯 ' + T('settings.aim') + ' ' + sub(T('settings.aim.hint')), `<div class="pm-toggle is-on">${T(s.aimAssist ? 'settings.aim.assisted' : 'settings.aim.manual')}</div>`],
 			camBounce: ['🚗 ' + T('settings.camBounce') + ' ' + sub(T('settings.camBounce.hint')), tog(s.camBounce !== false)],
 			graphics: ['🖥️ ' + T('settings.graphics') + ' ' + sub(T('settings.graphics.hint', { level: Graphics.LABEL[Graphics.level] })), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
 			language: ['🌐 ' + T('settings.language') + ' ' + sub(T('settings.language.hint')), `<div class="pm-toggle is-on">${I18n.label(s.language || I18n.lang)}</div>`],

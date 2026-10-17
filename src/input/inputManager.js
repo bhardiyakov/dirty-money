@@ -36,6 +36,7 @@ class InputManager {
         this.yawAxis = 0;                   // analógico direito na horizontal (gira o helicóptero)
         this.rstick = { x: 0, y: 0 };       // analógico direito cru (x direita +, y baixo +), com zona morta — a mira manual aponta com ele
         this.padAim = false;                // LT/L2 segurado a pé: mirando
+        this.touchAim = null;               // phone: the fire button dragged as a right stick ({ x, y }: x right +, y down +, length ≤ 1) — Aim
         this.stickAim = false;              // o Aim avisa: mira manual com arma de fogo na mão (o analógico direito aponta, sem zoom)
         this.mouseAim = false;              // botão direito do mouse segurado sobre o jogo: mirando
         this.mouseX = -1; this.mouseY = -1; this.mouseMovedAt = 0;

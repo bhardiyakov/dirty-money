@@ -89,7 +89,8 @@ class Combat {
             // Espalhamento: soma de 2 uniformes ≈ sino (mais tiros no centro).
             const a = shooter.angle + (Math.random() + Math.random() - 1) * W.spread * (shooter.spreadMul || 1);
             const sp = W.speed * (0.95 + Math.random() * 0.1);
-            b.on = true; b.owner = shooter.owner; b.ref = shooter.ref; b.fly = !!shooter.fly;   // fly: tiro vindo do alto passa por cima dos prédios
+            b.on = true; b.owner = shooter.owner; b.ref = shooter.ref; b.fly = !!(shooter.fly || shooter.over);   // fly: tiro vindo do alto (ou para o alto: over) passa por cima dos prédios
+            b.only = shooter.only || null;                                      // (tiro num alvo no alto: só ele pode ser atingido)
             b.x = mx; b.z = mz; b.px = mx; b.pz = mz;
             b.vx = Math.sin(a) * sp; b.vz = Math.cos(a) * sp;
             b.dmg = W.dmg * (shooter.dmgMul || 1); b.left = W.range; b.dirx = Math.sin(a); b.dirz = Math.cos(a);
@@ -148,44 +149,6 @@ class Combat {
         if (!yaw) return [sx, sy];
         const cy = Math.cos(yaw), sy0 = Math.sin(yaw);                          // (câmera girada: o "para cima" da tela aponta para o rumo yaw)
         return [sx * cy + sy * sy0, -sx * sy0 + sy * cy];
-    }
-
-    // Abertura da mira assistida (rad, para cada lado): trava em quem estiver até Config.aim.cone graus de onde o personagem olha.
-    static get ASSIST_CONE() { return ((Config.aim && Config.aim.cone) || 30) * Math.PI / 180; }
-
-    // Alvo da mira assistida: o melhor vivo e à vista dentro de ±cone da direção `angle` (rad) e de `range`. null se ninguém.
-    // Preferência: perto do centro do cone e do atirador; polícia e facção (que atiram de volta) antes dos pedestres.
-    assistTarget(x, z, angle, range = 30, cone = Combat.ASSIST_CONE) {
-        let best = null, bestScore = Infinity;
-        const consider = (t, w, reach = range) => {
-            const dx = t.position.x - x, dz = t.position.z - z;
-            const d = hypot(dx, dz);
-            if (d > reach || d < 0.5) return;
-            let da = Math.atan2(dx, dz) - angle;
-            while (da > Math.PI) da -= Math.PI * 2;
-            while (da < -Math.PI) da += Math.PI * 2;
-            if (Math.abs(da) > cone) return;
-            const score = (Math.abs(da) * 20 + d * 0.25) * w;
-            if (score >= bestScore) return;
-            if (!t.flying && !MapGeo.hasLineOfSight(x, z, t.position.x, t.position.z)) return;   // quem voa não é tapado por prédio
-            bestScore = score; best = t;
-        };
-        const g = this.game;
-        if (g.npcManager) for (const n of g.npcManager.npcs) if (n.alive) consider(n, 1);
-        if (g.policeManager) {
-            for (const o of g.policeManager.officers) if (o.alive) consider(o, 0.7);
-            const h = g.policeManager.heli;
-            if (h && h.alive) consider(h, 0.8, Math.max(range, 40));
-        }
-        if (g.gangs) for (const o of g.gangs.members) if (o.alive) consider(o, 0.7);
-        if (g.watch && g.watch.lookouts) for (const o of g.watch.lookouts) if (o.alive && o.actor) consider(o, 0.9);
-        return best;
-    }
-
-    // Mira assistida sem travar (tiro "do quadril"): o ângulo para o melhor alvo do cone (já adiantado se ele corre) ou `angle`.
-    aimAssist(x, z, angle, range = 30, cone = Combat.ASSIST_CONE, speed = 0) {
-        const t = this.assistTarget(x, z, angle, range, cone);
-        return t ? this.leadAngle(x, z, t, speed) : angle;
     }
 
     // Ângulo para acertar `t` saindo de (x, z) com a bala a `speed` m/s: mira onde ele VAI estar quando ela chegar (velocidade
@@ -489,7 +452,7 @@ class Combat {
             let hit = null, hitT = 2;
             const sx = b.x - b.px, sz = b.z - b.pz, sl2 = sx * sx + sz * sz || 1e-6;
             for (const t of T) {
-                if (t.ref === b.ref) continue;
+                if (t.ref === b.ref || (b.only && t.ref !== b.only)) continue;
                 if (b.owner === 'gang' && t.kind === 'gang') continue;
                 if (b.owner === 'police' && (t.kind === 'officer' || t.kind === 'heli' || (t.kind === 'car' && t.ref.role))) continue;   // sem fogo amigo
                 if (b.owner === 'player' && t.kind === 'player') continue;
