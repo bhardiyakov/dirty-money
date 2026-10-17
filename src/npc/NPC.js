@@ -440,18 +440,20 @@ class NPC {
 	// ------------------------------------------------------------ umbrella
 	// Baked at build time (tools/asset_baker/props/umbrella.cjs) at the SAME angle as the 2.5D characters (SpriteBaker at 56° elevation):
 	// the eight-panel canopy sits above the head, shifted north like the rest of the drawing. One cell (N px, ppu px per metre) per canopy
-	// colour in a single sheet; the eight materials share its texture. The quad goes high (above the head, which tests depth "standing up")
-	// but is moved and shrunk to land on screen exactly over the feet (no perspective-camera parallax). Opens/closes in ~0.35 s.
-	static get UMB() { return { N: 176, ppu: 36, y: 5.6, colors: 8, url: './assets/baked/props/umbrella.webp' }; }
+	// colour, centred in a `pitch`-wide slot of a power-of-two sheet; the eight materials share its texture. The quad goes high (above
+	// the head, which tests depth "standing up") but is moved and shrunk to land on screen exactly over the feet (no perspective-camera
+	// parallax). Opens/closes in ~0.35 s.
+	static get UMB() { return { N: 176, pitch: 256, ppu: 36, y: 5.6, colors: 8, url: './assets/baked/props/umbrella.webp' }; }
 	static umbrellaMaterial(scene, i) {
-		const cache = scene._umbMats || (scene._umbMats = []), { N, colors, url } = NPC.UMB, c = i % colors;
+		const cache = scene._umbMats || (scene._umbMats = []), { N, pitch, colors, url } = NPC.UMB, c = i % colors, W = pitch * colors, margin = (pitch - N) / 2;
 		if (cache[c]) return cache[c];
 		const tex = new BABYLON.Texture(url, scene, true, true, BABYLON.Texture.NEAREST_SAMPLINGMODE, () => {
-			if (tex.getSize().width !== N * colors) console.warn(`[NPC] ${url}: ${tex.getSize().width} px wide, expected ${N * colors} (NPC.UMB vs the baker)`);
+			if (tex.getSize().width !== W) console.warn(`[NPC] ${url}: ${tex.getSize().width} px wide, expected ${W} (NPC.UMB vs the baker)`);
 		});
 		tex.hasAlpha = true;
 		tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-		tex.uScale = 1 / colors; tex.uOffset = c / colors;
+		tex.uScale = N / W; tex.uOffset = (c * pitch + margin) / W;
+		tex.vScale = N / pitch; tex.vOffset = margin / pitch;
 		const m = new BABYLON.StandardMaterial('umb' + c, scene);
 		m.diffuseTexture = tex; m.emissiveTexture = tex; m.disableLighting = true; m.useAlphaFromDiffuseTexture = true;
 		m.transparencyMode = BABYLON.Material.MATERIAL_ALPHATEST; m.alphaCutOff = 0.4; m.backFaceCulling = false;

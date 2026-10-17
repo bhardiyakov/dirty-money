@@ -51,7 +51,7 @@ const SpriteExport = {
 		let done = 0;
 		for (const j of jobs) {
 			const c = j.sh.getClip(j.clip, j.weapon);
-			if (c.vector) { done++; continue; }                                  // (atlas vetorial: não há molde indexado — ver tools/personagens)
+			if (!c || c.vector) { done++; continue; }                                  // (atlas vetorial: não há molde indexado — ver tools/personagens)
 			const ref = this.REF[j.base] !== undefined ? this.REF[j.base] : 2;
 			put(CharacterSheet.fileKey(j.name, j.clip, j.weapon), await this._indexed(c.texture, c.W, c.H, palChar, pcw, ref),
 				{ w: c.W, h: c.H, kind: 'clip', sheet: j.name, clip: j.clip, weapon: j.weapon, dirs: c.dirs, frames: c.frames, frame: c.frame, fps: c.fps, loop: c.loop, ref });

@@ -32,6 +32,7 @@ const PlayerLook = {
 		this.game = game; this.shown = null;
 		const a = game.player && game.player.actor;
 		if (a) a.onCond = () => this.sync();                                // estado de dano mudou: os atlas de dano do nível
+		NpcArt.onStoredFailed = (id) => this._storedFailed(id);
 		this.sync();
 	},
 
@@ -134,7 +135,7 @@ const PlayerLook = {
 		let id = this.handIds.get(hk);
 		if (!id) {
 			const a = await this._stored(this.ck(key) + '|h:' + kind);
-			if (a && !this.handIds.get(hk)) { id = 'hero:' + (this._seq = (this._seq || 0) + 1) + ':h'; NpcArt.addStored(id, a); this.handIds.set(hk, id); }
+			if (a && !this.handIds.get(hk)) { id = 'hero:' + (this._seq = (this._seq || 0) + 1) + ':h'; this._register(id, a, this.ck(key) + '|h:' + kind); this.handIds.set(hk, id); }
 			else id = this.handIds.get(hk);
 		}
 		return id || def;
@@ -149,7 +150,7 @@ const PlayerLook = {
 			let id = this.dmgIds.get(dk);
 			if (!id) {
 				const a = await this._stored(this.ck(key) + '|d' + lvl);
-				if (a && !this.dmgIds.get(dk)) { id = 'hero:' + (this._seq = (this._seq || 0) + 1) + ':d' + lvl; NpcArt.addStored(id, a); this.dmgIds.set(dk, id); }
+				if (a && !this.dmgIds.get(dk)) { id = 'hero:' + (this._seq = (this._seq || 0) + 1) + ':d' + lvl; this._register(id, a, this.ck(key) + '|d' + lvl); this.dmgIds.set(dk, id); }
 				else id = this.dmgIds.get(dk);
 			}
 			if (id) out.push(id);
@@ -183,8 +184,8 @@ const PlayerLook = {
 			const [main, tac, arms] = await Promise.all([this._stored(ck), this._stored(ck + '|t'), this._stored(ck + '|w')]);
 			if (!main || !tac) return null;
 			const id = 'hero:' + (this._seq = (this._seq || 0) + 1), L = { main: id, tac: id + ':t', arms: arms ? id + ':w' : null };
-			NpcArt.addStored(L.main, main); NpcArt.addStored(L.tac, tac);
-			if (arms) NpcArt.addStored(L.arms, arms);
+			this._register(L.main, main, ck); this._register(L.tac, tac, ck + '|t');
+			if (arms) this._register(L.arms, arms, ck + '|w');
 			this.looks.set(key, L);
 			return L;
 		})().finally(() => this._loading.delete(key));
@@ -212,6 +213,22 @@ const PlayerLook = {
 		return Math.min(typeof NpcArt !== 'undefined' ? NpcArt.dirs : 16, (c && c.dirs) || 8);
 	},
 
+	// Registers a stored atlas and remembers which device record it came from.
+	_register(id, rec, storeKey) {
+		NpcArt.addStored(id, rec);
+		(this._storeKeys || (this._storeKeys = new Map())).set(id, storeKey);
+	},
+	// A stored page that cannot be read any more (the browser lost the record, a corrupt image): that part of the look is forgotten and
+	// deleted from the device, so the player falls back to what is ready and the wardrobe draws it again on the next visit.
+	_storedFailed(id) {
+		const storeKey = this._storeKeys && this._storeKeys.get(id);
+		if (!storeKey) return;
+		for (const M of [this.dmgIds, this.handIds]) for (const [k, v] of M) if (v === id) { M.delete(k); this._orphans.push(v); }
+		for (const [k, L] of this.looks) if ([L.main, L.tac, L.arms].includes(id)) { this.looks.delete(k); this._orphans.push(...[L.main, L.tac, L.arms].filter(Boolean)); }
+		for (const orphan of this._orphans) this._storeKeys.delete(orphan);
+		LookStore.deletePrefix(storeKey).catch(() => {});
+		this.sync();
+	},
 	// A look's record on the device (LookStore; written by the wardrobe Worker). null = not there, or the store cannot be opened.
 	async _stored(key) {
 		try { return await LookStore.get(key); } catch (e) { return null; }

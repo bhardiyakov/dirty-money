@@ -109,12 +109,14 @@ const NpcArt = {
 	// Pede a página P. pri: 0 = um ator NA TELA precisa dela agora; sem pri, a do grupo (hot par 1, ímpar 2; outros 3/4). true = já na GPU.
 	want(P, pri) { return this._want(P, pri); },
 	_q: [], _seq: 0, _decoding: 0, _res: 0, _live: new Set(), _waiters: new Set(),
+	STORED_FAILS: 3,               // failures of a stored-look page before onStoredFailed(atlas id) gives up on it (PlayerLook)
+	onStoredFailed: null,
 	DECODERS: 3,                   // páginas sendo buscadas + decodificadas ao mesmo tempo (AtlasDecoder: 2 Workers)
 	_want(P, pri = this._pri(P)) {
 		if (P.tex) return true;
 		if (P.px) { if (this._scene) this._upload(P, pri); return !!P.tex; }       // (sobe em faixas: pronta numa das próximas vezes — _upStep)
 		if (P.dead || P.unused || !this._dirOk(P)) return false;
-		if (pri >= 0 && this._pins().includes(P.A.id)) pri -= 10;            // (the player's atlases decode ahead of everyone, as they upload: _upload)
+		if (pri === 0 && this._pins().includes(P.A.id)) pri = -10;           // (the page the player shows right now decodes ahead of everyone; prefetch keeps its place)
 		if (P.st === 'idle' || (P.st === 'failed' && performance.now() >= P.retry)) { P.st = 'queued'; P.pri = pri; P.seq = ++this._seq; this._q.push(P); this._pump(); }
 		else if (pri < P.pri && P.st === 'queued') P.pri = pri;
 		return false;
@@ -147,6 +149,7 @@ const NpcArt = {
 		P.retry = performance.now() + Math.min(60000, 4000 * P.fails);                // (tenta de novo mais tarde, cada vez mais espaçado — a rede pode voltar)
 		this.stats.failed++;
 		console.warn(`[NPCS] página ${P.i} de ${P.A.id} falhou:`, (e && e.message) || e);
+		if (P.blob && P.fails === this.STORED_FAILS && this.onStoredFailed) this.onStoredFailed(P.A.id);     // (a stored look that cannot be read: PlayerLook drops it)
 		this._wake(P);
 	},
 	_wait(P) { return P.px || P.tex || P.st === 'failed' ? Promise.resolve() : new Promise((ok) => (P.waiters || (P.waiters = [])).push(ok)); },

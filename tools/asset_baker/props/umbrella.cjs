@@ -1,14 +1,15 @@
 // ============================================================================
 // Pedestrian umbrella (src/npc/NPC.js, in the rain): baked HERE with the game's own SpriteBaker and Pixel ramps, at the 56° camera of
 // the 2.5D characters — the eight-panel canopy sits above the head, shifted north like the rest of the drawing. One CELL per canopy
-// colour, side by side in a single sheet: assets/baked/props/umbrella.webp (lossless RGBA, binary alpha). The game only loads it.
-// The cell size and pixels per metre must match NPC.UMB (N, ppu); the game checks the sheet width when it loads.
+// colour, centred in a PITCH-wide slot, side by side in a single power-of-two sheet (WebGL1 resamples any other size):
+// assets/baked/props/umbrella.webp (lossless RGBA, binary alpha). The game only loads it.
+// CELL, PITCH and pixels per metre must match NPC.UMB (N, pitch, ppu); the game checks the sheet width when it loads.
 // ============================================================================
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
 
 const COLORS = ['#d9453a', '#2f6fd0', '#e8c22c', '#2fa36a', '#7a4fb8', '#3a404a', '#e8742c', '#e86aa0'];
-const CELL = 176, PPU = 36, ELEVATION = 56;
+const CELL = 176, PITCH = 256, PPU = 36, ELEVATION = 56;
 const SOURCES = ['src/config.js', 'src/art/Pixel.js', 'src/art/SpriteBaker.js'];
 
 // The game's art code (classic scripts) in a sandbox: { Pixel, SpriteBaker }.
@@ -37,16 +38,16 @@ function cellRGBA({ Pixel, SpriteBaker: B }, color) {
 
 // Writes <outDir>/props/umbrella.webp. sharp = the WebP encoder (tools/asset_baker/node_modules).
 async function bakeUmbrella(root, outDir, sharp) {
-	const art = loadArt(root), width = CELL * COLORS.length, sheet = Buffer.alloc(width * CELL * 4);
+	const art = loadArt(root), width = PITCH * COLORS.length, margin = (PITCH - CELL) / 2, sheet = Buffer.alloc(width * PITCH * 4);
 	COLORS.forEach((color, i) => {
 		const cell = cellRGBA(art, color);
-		for (let y = 0; y < CELL; y++) sheet.set(cell.subarray(y * CELL * 4, (y + 1) * CELL * 4), (y * width + i * CELL) * 4);
+		for (let y = 0; y < CELL; y++) sheet.set(cell.subarray(y * CELL * 4, (y + 1) * CELL * 4), ((y + margin) * width + i * PITCH + margin) * 4);
 	});
-	const webp = await sharp(sheet, { raw: { width, height: CELL, channels: 4 } }).webp({ lossless: true, exact: true, effort: 6 }).toBuffer();
+	const webp = await sharp(sheet, { raw: { width, height: PITCH, channels: 4 } }).webp({ lossless: true, exact: true, effort: 6 }).toBuffer();
 	const file = path.join(outDir, 'props', 'umbrella.webp');
 	fs.mkdirSync(path.dirname(file), { recursive: true });
 	fs.writeFileSync(file, webp);
-	return { file: path.relative(root, file), width, height: CELL, bytes: webp.length };
+	return { file: path.relative(root, file), width, height: PITCH, bytes: webp.length };
 }
 
-module.exports = { bakeUmbrella, COLORS, CELL, PPU };
+module.exports = { bakeUmbrella, COLORS, CELL, PITCH, PPU };
