@@ -122,6 +122,13 @@ const Config = {
 		staminaPerLvl: 8,
 		staminaDrain: 4,       // Fôlego gasto por segundo correndo (≈ 25 s de corrida no nível 0; ≈ 90 s no nível 20).
 		accel: 12,             // Taxa de aproximação da velocidade alvo (maior = mais responsivo).
+		friction: 24,          // Inertia: deceleration (m/s²) on land once the stick is released — the body slides to a stop.
+		skidDot: -0.75,        // Skid: dot(velocity direction, input direction) at or below this = a sharp reversal (~139° or more)...
+		skidMinSpeed: 7,       // ...while running this fast (m/s).
+		skidFriction: 42,      // Braking (m/s²) along the old direction during the skid, before accelerating the other way.
+		skidExitSpeed: 0.8,    // The skid ends below this speed (m/s); then he sets off in the new direction.
+		runEnter: 1.5,         // Run vs walk clip by the ACTUAL speed (× walking speed), with hysteresis: in above this...
+		runExit: 1.2,          // ...out below this — releasing sprint, he decelerates running until he drops into a walk.
 		turnLerp: 16,          // Velocidade de giro do corpo em direção ao movimento.
 		radius: 0.55,          // Raio de colisão contra prédios.
 	},

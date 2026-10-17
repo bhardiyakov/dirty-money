@@ -20,6 +20,7 @@ class Player {
         this.rag = null;           // Ragdoll ativo (arremessado por atropelamento / pulando de um carro)
         this.velocity = new BABYLON.Vector3(0, 0, 0);
         this.speed = 0;
+        this.skidding = false;     // braking hard after a sharp reversal while running (_landVelocity)
         this.state = 'idle';       // idle | walk | sprint | <ação>
 
         this.root = new BABYLON.TransformNode('player', scene);
@@ -606,10 +607,12 @@ class Player {
         this.actor.setSlope(this.speed > 0.3 ? this.slope : 0);
         const maxSpeed = (this.swimming ? swimV : (sprinting && depth <= 0) ? Bags.runSpeed(this) : walkV) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? (this.aimFree ? 0.85 : 0.6) : 1) * (this.crouched ? Config.tactics.sneakSpeed : 1) * MapGeo.slopeSpeed(this.slope) * (this.swimming ? 1 : this.heavyMul);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
 
-        // Acelera/desacelera suavemente rumo à velocidade alvo (frame-independent).
-        const targetVel = moveDir.scale(maxSpeed);
-        const t = 1 - Math.exp(-(this.swimming ? W.accel : depth > 0 ? Config.player.accel * 0.5 : Config.player.accel) * dt);      // (na água: embala e desliza)
-        this.velocity = BABYLON.Vector3.Lerp(this.velocity, targetVel, t);
+        // Acelera/desacelera rumo à velocidade alvo (frame-independent): na água embala e desliza; em terra, inércia e derrapagem.
+        if (depth > 0) {
+            const t = 1 - Math.exp(-(this.swimming ? W.accel : Config.player.accel * 0.5) * dt);
+            this.velocity = BABYLON.Vector3.Lerp(this.velocity, moveDir.scale(maxSpeed), t);
+            this.skidding = false;
+        } else this._landVelocity(moveDir, maxSpeed, dt);
         if (this.velocity.lengthSquared() < 1e-4) this.velocity.setAll(0);
 
         // Integra posição, mas confinado à terra (desliza na beira da água). Na água, as ondas levam junto (Waves.current: vai e volta
@@ -644,7 +647,7 @@ class Player {
         // Gira o corpo em direção ao movimento (menor caminho angular) — só fora de ações. Mirando: sempre para a mira (até atirando).
         if (aiming && (!this.action || this.action.name === 'shoot' || this.action.name === 'draw')) {
             this.root.rotation.y = this._lerpAngle(this.root.rotation.y, this.aimHeading, 1 - Math.exp(-22 * dt));
-        } else if (!this.action && moveDir.lengthSquared() > 1e-4) {
+        } else if (!this.action && !this.skidding && moveDir.lengthSquared() > 1e-4) {      // (derrapando: segue de frente para onde desliza)
             const targetY = Math.atan2(moveDir.x, moveDir.z);
             const rt = 1 - Math.exp(-Config.player.turnLerp * (this.swimming ? W.turn : 1) * dt);
             this.root.rotation.y = this._lerpAngle(this.root.rotation.y, targetY, rt);
@@ -715,7 +718,7 @@ class Player {
                 this.state = 'walk';
                 rate = this._aimGait(w, Math.max(0.5, this.speed / (Config.anim.walk * Config.player.stride)));
                 this._syncSprite(); this.actor.update(dt, rate); return;
-            } else if (sprinting) {
+            } else if (this._running(walkV)) {
                 clip = 'run';
                 this.state = 'sprint';
                 rate = Math.max(0.5, this.speed / (Config.anim.run * Config.player.stride));                 // (ritmo pela velocidade: pés plantados — Config.anim)
@@ -735,6 +738,43 @@ class Player {
         if (this.action && this.action.rate) rate = this.action.rate;            // (passo `fit` de uma sequência: o clipe acompanha o timer)
         this._syncSprite();
         this.actor.update(dt, rate);
+    }
+
+    // Land locomotion. With input: exponential approach to the target velocity. Without it: friction (constant deceleration
+    // along the current heading — inertia). Running fast and reversing (dot of the velocity direction and the input direction
+    // near −1): skid — strong braking along the old direction, and only below skidExitSpeed does the new direction take over.
+    _landVelocity(moveDir, maxSpeed, dt) {
+        const P = Config.player, v = this.velocity, speed = Math.hypot(v.x, v.z);
+        const inputLen = Math.hypot(moveDir.x, moveDir.z), hasInput = inputLen > 1e-2;
+        if (this.skidding) {
+            this._brake(speed, P.skidFriction, dt);
+            if (Math.hypot(v.x, v.z) <= P.skidExitSpeed) this.skidding = false;
+            return;
+        }
+        if (hasInput && maxSpeed > 0 && speed >= P.skidMinSpeed && (v.x * moveDir.x + v.z * moveDir.z) / (speed * inputLen) <= P.skidDot) {
+            this.skidding = true;
+            this._brake(speed, P.skidFriction, dt);
+            return;
+        }
+        if (!hasInput) { this._brake(speed, P.friction, dt); return; }
+        const t = 1 - Math.exp(-P.accel * dt);
+        v.x += (moveDir.x * maxSpeed - v.x) * t;
+        v.z += (moveDir.z * maxSpeed - v.z) * t;
+    }
+
+    // Takes `decel · dt` off the ground speed, keeping the direction (never reverses it).
+    _brake(speed, decel, dt) {
+        if (speed === 0) return;
+        const k = Math.max(0, speed - decel * dt) / speed;
+        this.velocity.x *= k; this.velocity.z *= k;
+    }
+
+    // Run or walk clip by the ACTUAL speed, not the sprint button (hysteresis): releasing sprint he keeps the running stride while
+    // decelerating, and skidding keeps the running legs slowing down with the speed.
+    _running(walkSpeed) {
+        const P = Config.player;
+        this._run = this.skidding || this.speed > walkSpeed * (this._run ? P.runExit : P.runEnter);
+        return this._run;
     }
 
     _syncSprite() {
