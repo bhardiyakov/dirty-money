@@ -472,6 +472,8 @@ class Car3DActor {
 		this.R = (D.R || 0.3) * this.k;
 		this.tire = f ? { z: ((f[2] - (r ? r[2] : -f[2])) / 2) * this.k, x: Math.abs(f[0]) * this.k, len: this.R * 2, wid: (D.tw || 0.2) * this.k } : null;
 		this.hl = D.len / 2 * this.k; this.hw = D.wid / 2 * this.k;
+		// where the model's lamps are (CarLights puts its glows there): height above the road, half spacing, front / rear offsets
+		this.lampGeom = { y: D.h * this.k * 0.42, roof: D.h * this.k, x: this.hw * 0.68, zF: this.hl * 0.96, zR: -this.hl * 0.96 };
 		// estado da suspensão (rad / m) e das rodas
 		this.steer = 0; this.spin = 0;
 		this.pitch = 0; this._vp = 0; this.roll = 0; this._vr = 0; this.yaw = 0; this._vy = 0; this.heave = 0; this._vh = 0;
