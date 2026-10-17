@@ -2212,21 +2212,24 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		const land = CityGrid.vaultLanding(o, p.x, p.z, true);
 		if (!land) { this._flash(o.bridgeRail ? 'Aqui embaixo não tem água' : 'Sem espaço do outro lado'); return; }
 		const face = Math.atan2(land.x - p.x, land.z - p.z);
-		if (land.water) {                                                    // da ponte para o mar: salto mais longo e mergulho
-			pl.runSequence([{ clip: 'vault', timer: 0.85, fit: true, glide: land, arc: 1.6 }], { face, onDone: () => this._splash(land.x, land.z) });   // (fit: o clipe de 0,6 s esticado até 0,85 s, uma vez só)
+		if (land.water) {                                                    // da ponte para o mar: salto de cabeça e mergulho
+			const dive = !!pl.actor.sheet.getClip('bridge_dive', 'none');
+			const step = dive ? { clip: 'bridge_dive', timer: 0.95, fit: true, glide: land, arc: 2.2 } : { clip: 'vault', timer: 0.85, fit: true, glide: land, arc: 1.6 };   // (fit: o clipe tocado uma vez, esticado até o timer)
+			pl.runSequence([step], { face, onDone: () => this._splash(land.x, land.z, dive) });
 		} else {
 			pl.runSequence([{ clip: 'vault', timer: 0.6, glide: land, arc: 0.9 }], { face });
 		}
 		AudioFX.thud(p.x, p.z);
 	}
 
-	// Mergulho (pulou da ponte): o tchibum (jorro em pixel art, WaterFx.burst) e anéis na água no ponto onde o jogador caiu.
-	_splash(x, z) {
+	// Mergulho (pulou da ponte): o tchibum e a gota que volta da água (WaterFx.plunge) no ponto onde o jogador caiu; de cabeça, ele vai
+	// ao fundo e volta à tona sozinho (Player.plunge: o mergulho e o dive_out).
+	_splash(x, z, headFirst = false) {
 		if (!this.waterFx) return;
-		this.waterFx.burst(x, z);
-		this.waterFx.ripple(x, z, 1.2, 5.5, 1.3, 0.75);
+		this.waterFx.plunge(x, z);
 		this.waterFx.ripple(x + 0.6, z - 0.4, 0.8, 3.5, 1.0, 0.6);
 		AudioFX.thud(x, z);
+		if (headFirst && this.player.swimming) this.player.plunge(1.2);
 	}
 
 	// ---------------------------------------------------------------- assalto e furto

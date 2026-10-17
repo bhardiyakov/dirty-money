@@ -10,6 +10,9 @@
 //                      para o norte na tela (1 m de altura = 0,56 m), como no desenho dos personagens; ao cair, cada gota faz uma marolinha.
 //   spray.emit(x, z, …) água JORRANDO em pixel art (WaterSpray): jatos que sobem, estouram em espuma e caem — proa e rabo de galo
 //                      dos barcos (BoatManager), a mão de cada braçada, as pernadas. burst(x, z, big): o tchibum (mergulho, granada).
+//   plunge(x, z)       someone entering the water from above (the jump from the bridge): the crown, then the rebound DROP — a thin
+//                      column of water shooting up from where the body went under, a big drop on top of it falling back — and rings
+//                      opening one after another while the body is under.
 //   track(ent, dt, o)  segue alguém na água e emite tudo preso à ANIMAÇÃO dele:
 //                        andando/nadando: ondas em ARCO na frente (na direção do movimento) e a esteira em V atrás — nada de anel
 //                                 em volta do corpo (só parado, a marola lenta e larga);
@@ -40,6 +43,7 @@ class WaterFx {
 		for (let i = 0; i < this.na; i++) { this.arcBatch.alloc(); this.ar.push({ on: false, age: 0, life: 1, x: 0, z: 0, fx: 0, fz: 1, s0: 1, s1: 2, a: 0.5, sq: 1 }); }
 		this.nextA = 0;
 		this.spray = new WaterSpray(scene, 160);
+		this._later = [];                // [seconds left, fn] — the parts of a plunge that come after the entry
 	}
 
 	static get SQ() { return CompassCamera.GROUND_SQUASH; }          // sen 56°: um círculo no chão visto pela câmera dos personagens
@@ -77,6 +81,31 @@ class WaterFx {
 		this.splash(x, z, 9, 1.3);
 	}
 
+	// Entry from above: crown and drops now; the rebound column with its drop 0.3 s later; three rings opening, the last ones wider.
+	plunge(x, z) {
+		this.burst(x, z, true);
+		this.ripple(x, z, 0.6, 3.2, 1.1, 0.6);
+		this._later.push([0.3, () => this.jet(x, z)], [0.45, () => this.ripple(x, z, 0.4, 4.2, 1.4, 0.5)], [0.9, () => this.ripple(x, z, 0.4, 5.6, 1.8, 0.4)]);
+	}
+
+	// The rebound column (Worthington jet): drops shooting almost straight up, stacked by speed, the top one the big drop.
+	jet(x, z, n = 7, power = 1) {
+		for (let k = 0; k < n; k++) {
+			const q = this._drop();
+			if (!q) return;
+			const top = k === n - 1;
+			q.on = true; q.x = x + (Math.random() - 0.5) * 0.06; q.z = z + (Math.random() - 0.5) * 0.06; q.h = 0.05;
+			q.vx = (Math.random() - 0.5) * 0.25; q.vz = (Math.random() - 0.5) * 0.25; q.vh = (2.6 + 2.2 * (k / (n - 1))) * power;
+			q.s = top ? 0.24 : 0.1 + 0.05 * (k / n); q.a = 0.95;
+		}
+	}
+
+	// A free drop slot (round robin), or null.
+	_drop() {
+		for (let j = 0; j < this.nd; j++) { const c = this.d[(this.nextD + j) % this.nd]; if (!c.on) { this.nextD = (this.nextD + j + 1) % this.nd; return c; } }
+		return null;
+	}
+
 	// Bolhas de ar chegando à superfície em (x, z): um "plip" miúdo (às vezes dois, colados).
 	bubble(x, z, n = 1) {
 		for (let i = 0; i < n; i++) {
@@ -89,8 +118,7 @@ class WaterFx {
 	// `n` gotas saindo de (x, z, altura h0): força `power` (m/s para cima ~2,4×power), espalhando para os lados e um pouco para (dx, dz).
 	splash(x, z, n = 8, power = 1, dx = 0, dz = 0, h0 = 0.05) {
 		for (let k = 0; k < n; k++) {
-			let q = null;
-			for (let j = 0; j < this.nd; j++) { const c = this.d[(this.nextD + j) % this.nd]; if (!c.on) { q = c; this.nextD = (this.nextD + j + 1) % this.nd; break; } }
+			const q = this._drop();
 			if (!q) return;
 			const a = Math.random() * Math.PI * 2, hs = (0.25 + Math.random() * 0.9) * power;
 			q.on = true; q.x = x + (Math.random() - 0.5) * 0.2; q.z = z + (Math.random() - 0.5) * 0.2; q.h = h0;
@@ -197,6 +225,12 @@ class WaterFx {
 	}
 
 	update(dt) {
+		for (let i = this._later.length - 1; i >= 0; i--) {
+			const L = this._later[i];
+			if ((L[0] -= dt) > 0) continue;
+			this._later.splice(i, 1);
+			L[1]();
+		}
 		const b = this.batch;
 		for (let i = 0; i < this.n; i++) {
 			const q = this.r[i];

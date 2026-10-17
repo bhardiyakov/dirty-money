@@ -336,6 +336,7 @@ class Player {
         const was = this._wasSwim;
         this._wasSwim = this.swimming;
         if (this.diving && (!this.swimming || !this.alive || this.rag)) this.surface(false);
+        if (this._plungeT > 0 && (this._plungeT -= dt) <= 0) this.surface(false);           // (entrou de cima: volta à tona sozinho)
         if (this.diving) {
             const max = this.staminaMax || 100, lvl = Bags.fitLevel(this.fit);
             this.stamina = Math.max(0, (this.stamina == null ? max : this.stamina) - max / (Config.water.diveTime * (1 + lvl * 0.03)) * dt);
@@ -350,6 +351,8 @@ class Player {
         }
         if (this.action && this.action.name === 'swim_stand' && !this.rag) this.action = null;      // levado ao fundo no meio (andando não dá — ver canWade): nada de novo
         if (was === undefined || this.action || this.rag || this.diving) return;
+        // a água passou do peito andando: mergulha no nado (wade_dive: impulso no fundo, o corpo deita na água e segue no nado peito)
+        if (was === false && this.actor.sheet.getClip('wade_dive', 'none')) { this._crawl = false; this.playAction('wade_dive', { lock: 0.6 }); return; }
         // peito ↔ crawl (Shift): a passagem é animada; só troca de novo depois de terminar (sem pisca-pisca segurando/soltando)
         const crawl = sprint && this.speed > 0.6;
         if (crawl !== !!this._crawl && this.actor.sheet.getClip('swim_in', 'none')) {
@@ -367,10 +370,21 @@ class Player {
         this.playAction('dive_in', { lock: 0.6 });
         return true;
     }
+    // Entered the water from above (the jump from the bridge): straight under — the dive loop, no dive_in — for `sec` s, then back up
+    // (dive_out and the resurfacing splash).
+    plunge(sec) {
+        if (!this.actor.sheet.getClip('dive', 'none')) return false;
+        this.diving = true;
+        this.action = null;
+        this._crawl = false;
+        this._plungeT = sec;
+        return true;
+    }
     // Volta à tona (Q de novo, o fôlego acabou ou chegou ao raso). breathless: subiu porque o ar acabou (o jogo avisa).
     surface(breathless = false) {
         if (!this.diving) return false;
         this.diving = false;
+        this._plungeT = 0;
         this._surfaced = breathless ? 'breathless' : 'ok';                         // (o Game lê: respingo e aviso — _updateWater)
         if (this.swimming && !this.rag) { this.action = null; this._crawl = false; this.playAction('dive_out', { lock: 0.6 }); }
         return true;
