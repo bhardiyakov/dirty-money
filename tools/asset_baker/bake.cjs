@@ -14,6 +14,7 @@
 //                                         de lona, mala de rodinhas): a bolsa só aparece nesses clipes, então ela não muda o resto do visual
 //   assets/baked/npc-data.json            dados do jogo: tipos, variantes de cor, paletas, ficha do jogador, ponta do cano das armas,
 //                                         sentar no carro, lista dos manifestos e o hash do gerador
+//   assets/baked/props/umbrella.webp      the pedestrians' umbrella, one cell per canopy colour (props/umbrella.cjs: the game's SpriteBaker)
 //   assets/baked/wardrobe.worker.js       o gerador empacotado num Worker — carregado SÓ pela tela de equipamento (src/player/Wardrobe.js),
 //                                         que monta o visual de uma roupa nova e o guarda no IndexedDB
 //
@@ -21,6 +22,7 @@
 //     -j N, --workers N   Workers em paralelo (padrão: núcleos − 1, de 1 a 8; ~0,5 GB de memória cada no pior tipo)
 //     --no-dmg            sem as camadas de dano (mais rápido; o jogo mostra o desenho limpo nos machucados)
 //     --data              só npc-data.json e wardrobe.worker.js (sem renderizar: mudou paleta, tipo ou o código do Worker)
+//     --props             only the props (assets/baked/props: the umbrella) — a second or so
 //     --fast              WebP com esforço 4 (~4× mais rápido, ~8% maior) — para testes
 //     --clips LISTA       só estes clipes: "walk" = walk:* ; "idle:none" ; curinga "shoot:*", "*:pistol" (exige --out: atlas incompletos)
 //     --out PASTA         onde gravar (padrão: assets/baked do repositório)
@@ -41,6 +43,7 @@ const GEN_DIR = path.join(HERE, 'generator');
 // O gerador, na ordem de dependência (malha3d.js define NPC_MESH3D, que o NpcGenMesh lê).
 const GEN = ['NpcGenCore.js', 'NpcGenChar.js', 'NpcGenRender.js', 'NpcGenAnims.js', 'NpcGenTypes.js', 'NpcGenBuild.js', 'malha3d.js', 'NpcGenMesh.js'];
 const WORKER_MAIN = path.join(HERE, 'wardrobe', 'worker-main.js');
+const { bakeUmbrella } = require('./props/umbrella.cjs');
 // The device store of the wardrobe looks: one schema for the game (which reads it) and the Worker (which writes it).
 const LOOK_STORE = path.join(ROOT, 'src', 'storage', 'LookStore.js');
 
@@ -74,8 +77,12 @@ function genHash() {
 // ---------------------------------------------------------------- WebP
 // Página RG (2 bytes por pixel) → WebP sem perdas RGB (R = byte 0, G = byte 1, B = 0). `exact`: o codificador não mexe em nada.
 let sharp = null;
-async function webp(rg, w, h, effort) {
+function encoder() {
 	if (!sharp) { sharp = require('sharp'); sharp.concurrency(1); sharp.cache(false); }
+	return sharp;
+}
+async function webp(rg, w, h, effort) {
+	encoder();
 	const n = w * h, rgb = Buffer.alloc(n * 3);
 	for (let i = 0, j = 0; i < n; i++, j += 3) { rgb[j] = rg[i * 2]; rgb[j + 1] = rg[i * 2 + 1]; }
 	return sharp(rgb, { raw: { width: w, height: h, channels: 3 } }).webp({ lossless: true, exact: true, effort, quality: effort >= 6 ? 100 : 80 }).toBuffer();
@@ -255,7 +262,16 @@ function writeData(G, OUT, hash) {
 }
 
 // ---------------------------------------------------------------- linha de comando
-const argv = process.argv.slice(2), opt = { ids: [], workers: 0, clips: null, out: null, dirs: 0, dry: false, list: false, dmg: true, data: false, fast: false };
+const argv = process.argv.slice(2), opt = { ids: [], workers: 0, clips: null, out: null, dirs: 0, dry: false, list: false, dmg: true, data: false, fast: false, props: false };
+// The header of this file, from its title down to the manifest format.
+function printHelp() {
+	const lines = fs.readFileSync(__filename, 'utf8').split('\n'), end = lines.findIndex((l) => l.startsWith('// Manifesto'));
+	console.log(lines.slice(2, end).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
+}
+async function writeProps(OUT) {
+	const r = await bakeUmbrella(ROOT, OUT, encoder());
+	console.log(`${r.file} (${r.width}×${r.height}, ${(r.bytes / 1024).toFixed(1)} KB)`);
+}
 for (let i = 0; i < argv.length; i++) {
 	const a = argv[i], val = () => { if (i + 1 >= argv.length) { console.error('falta o valor de ' + a); process.exit(2); } return argv[++i]; };
 	if (a === '-j' || a === '--workers') opt.workers = +val();
@@ -267,13 +283,15 @@ for (let i = 0; i < argv.length; i++) {
 	else if (a === '--no-dmg') opt.dmg = false;
 	else if (a === '--data') opt.data = true;
 	else if (a === '--fast') opt.fast = true;
-	else if (a === '-h' || a === '--help') { console.log(fs.readFileSync(__filename, 'utf8').split('\n').slice(2, 33).map((l) => l.replace(/^\/\/ ?/, '')).join('\n')); process.exit(0); }
+	else if (a === '--props') opt.props = true;
+	else if (a === '-h' || a === '--help') { printHelp(); process.exit(0); }
 	else if (a.startsWith('-')) { console.error('opção desconhecida: ' + a); process.exit(2); }
 	else opt.ids.push(a);
 }
 const G = loadGen(), HASH = genHash();
 const OUT = opt.out || path.join(ROOT, 'assets', 'baked'), K = G.HD_K, EFFORT = opt.fast ? 4 : 6;
 if (opt.data) { writeData(G, OUT, HASH); process.exit(0); }
+if (opt.props) { writeProps(OUT).then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }); return; }
 if (opt.clips && !opt.out && !opt.dry && !opt.list) { console.error('--clips gera atlas INCOMPLETOS: use --out <pasta> (ou --dry)'); process.exit(2); }
 const ALL = Object.keys(G.TYPES).concat(Object.keys(EXTRAS));
 const bad = opt.ids.filter((id) => !G.TYPES[id] && !EXTRAS[id]);
@@ -314,8 +332,10 @@ function finish() {
 	console.log(`FIM: ${tot.types} tipos, ${tot.frames} quadros, ${tot.pages} páginas ${(tot.area / 1e6).toFixed(0)} Mpx (${MB(tot.area * 2)} de textura), ` +
 		`WebP ${MB(tot.bytes)} + dano ${MB(tot.dmgBytes)} em ${S(Date.now() - t0)}` + (tot.mismatch ? ` — ${tot.mismatch} quadros com dano de outro tamanho (ficam limpos)` : '') +
 		(tot.conflict ? ` — ${tot.conflict} pixels em conflito (quadros repetidos)` : '') + (errors.length ? ` — ERROS: ${errors.join(' ')}` : ''));
-	if (!opt.dry && !errors.length) writeData(G, OUT, HASH);
 	process.exitCode = errors.length ? 1 : 0;
+	if (opt.dry || errors.length) return;
+	writeData(G, OUT, HASH);
+	writeProps(OUT).catch((e) => { console.error(e); process.exitCode = 1; });
 }
 if (!jobs.length) { finish(); return; }
 for (let w = 0; w < N; w++) {

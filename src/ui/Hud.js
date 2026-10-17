@@ -219,44 +219,19 @@ class Hud {
 		this._vehT = 3;
 	}
 
-	// Moto/bicicleta: o desenho do veículo do rig (sem piloto), de lado para a direita.
+	// Motorbike/bicycle: the vehicle's drawing from the character atlas (no rider), side-on facing right, with a light outline. null when
+	// the atlas is unavailable (the panel then shows only the name: nothing is drawn procedurally while the game runs).
 	_bikePreview(car) {
 		const kind = car.spec.bike, variant = car.frameVariant != null ? car.frameVariant : 2;
-		// Atlas vetorial (o mesmo desenho do jogo), girado com a frente para a direita; sem atlas, o desenho antigo do rig.
 		const art = CharArt.available() && CharArt.image('rider', 'park_' + kind + ':none', 0, variant);
-		if (art) {
-			const c = document.createElement('canvas'), pad = 2;
-			c.width = art.height + pad * 2; c.height = art.width + pad * 2;
-			const ctx = c.getContext('2d');
-			ctx.translate(c.width - pad, pad); ctx.rotate(Math.PI / 2);
-			ctx.filter = 'brightness(0) invert(0.94)';                        // contorno claro (lê bem no painel escuro)
-			for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) ctx.drawImage(art, dx, dy);
-			ctx.filter = 'none'; ctx.drawImage(art, 0, 0);
-			return c;
-		}
-		const look = { hair: 'short', build: 1.05, belt: true };
-		const prims = CharacterRig.build(CharacterRig.CLIPS['park_' + kind].pose(0, 'none'), look);
-		const F = 80, img = SpriteBaker.bake(prims, { size: F, heading: Math.PI / 2, shadow: false });
-		const rgba = CharacterRig.colorize(img, variant);
-		let x0 = F, y0 = F, x1 = 0, y1 = 0;
-		for (let y = 0; y < F; y++) for (let x = 0; x < F; x++) if (rgba[(y * F + x) * 4 + 3] > 0) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
-		const pad = 2, w = x1 - x0 + 1 + pad * 2, h = y1 - y0 + 1 + pad * 2;
-		const c = document.createElement('canvas');
-		c.width = w; c.height = h;
-		const ctx = c.getContext('2d'), out = ctx.createImageData(w, h), solid = new Uint8Array(w * h);
-		for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-			const i = (y * F + x) * 4;
-			if (rgba[i + 3] === 0 || rgba[i + 2] === 12 && rgba[i + 3] < 120) continue;
-			const o = ((y - y0 + pad) * w + (x - x0 + pad)) * 4;
-			out.data[o] = rgba[i]; out.data[o + 1] = rgba[i + 1]; out.data[o + 2] = rgba[i + 2]; out.data[o + 3] = 255;
-			solid[(y - y0 + pad) * w + (x - x0 + pad)] = 1;
-		}
-		for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-			if (solid[y * w + x]) continue;
-			const n = (xx, yy) => xx >= 0 && yy >= 0 && xx < w && yy < h && solid[yy * w + xx];
-			if (n(x - 1, y) || n(x + 1, y) || n(x, y - 1) || n(x, y + 1)) { const o = (y * w + x) * 4; out.data[o] = 238; out.data[o + 1] = 240; out.data[o + 2] = 246; out.data[o + 3] = 255; }
-		}
-		ctx.putImageData(out, 0, 0);
+		if (!art) return null;
+		const c = document.createElement('canvas'), pad = 2;
+		c.width = art.height + pad * 2; c.height = art.width + pad * 2;
+		const ctx = c.getContext('2d');
+		ctx.translate(c.width - pad, pad); ctx.rotate(Math.PI / 2);
+		ctx.filter = 'brightness(0) invert(0.94)';                        // contorno claro (lê bem no painel escuro)
+		for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) ctx.drawImage(art, dx, dy);
+		ctx.filter = 'none'; ctx.drawImage(art, 0, 0);
 		return c;
 	}
 

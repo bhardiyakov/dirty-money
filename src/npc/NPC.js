@@ -437,34 +437,25 @@ class NPC {
 		return false;
 	}
 
-	// ------------------------------------------------------------ guarda-chuva
-	// Assado no MESMO ângulo dos personagens 2,5D (SpriteBaker com elev 56°): a copa de 8 gomos fica acima da cabeça, deslocada para o
-	// norte como o resto do desenho. O quad vai alto (acima da cabeça, que testa a profundidade "de pé"), mas é recolocado e
-	// encolhido para cair na tela exatamente sobre os pés (sem a paralaxe da câmera em perspectiva). Abre/fecha em ~0,35 s.
-	static get UMB() { return { N: 176, ppu: 36, y: 5.6 }; }
+	// ------------------------------------------------------------ umbrella
+	// Baked at build time (tools/asset_baker/props/umbrella.cjs) at the SAME angle as the 2.5D characters (SpriteBaker at 56° elevation):
+	// the eight-panel canopy sits above the head, shifted north like the rest of the drawing. One cell (N px, ppu px per metre) per canopy
+	// colour in a single sheet; the eight materials share its texture. The quad goes high (above the head, which tests depth "standing up")
+	// but is moved and shrunk to land on screen exactly over the feet (no perspective-camera parallax). Opens/closes in ~0.35 s.
+	static get UMB() { return { N: 176, ppu: 36, y: 5.6, colors: 8, url: './assets/baked/props/umbrella.webp' }; }
 	static umbrellaMaterial(scene, i) {
-		const cache = scene._umbMats || (scene._umbMats = []), colors = ['#d9453a', '#2f6fd0', '#e8c22c', '#2fa36a', '#7a4fb8', '#3a404a', '#e8742c', '#e86aa0'];
-		if (cache[i % colors.length]) return cache[i % colors.length];
-		const { N, ppu } = NPC.UMB, B = SpriteBaker, col = Pixel.hex(colors[i % colors.length]);
-		const img = B.bake([
-			B.ellipsoid(1, [0, 2.05, 0], [0.98, 0.34, 0.98], 0.2, { cut: 2.03, panels: 8, mat2: 2 }),
-			B.capsule(3, [0, 1.3, 0], [0, 2.38, 0], 0.025),
-			B.sphere(3, [0, 2.42, 0], 0.05),
-		], { size: N, ppu, elev: 56, shadow: false });
-		const R = { 1: Pixel.ramp5(col), 2: Pixel.ramp5(Pixel.scale(col, 0.74)), 3: Pixel.ramp5('#d8dde4') };
-		const tex = new BABYLON.DynamicTexture('umbTex' + i, { width: N, height: N }, scene, false, BABYLON.Texture.NEAREST_SAMPLINGMODE), c = tex.getContext();
-		const id = c.createImageData(N, N);
-		for (let p = 0; p < N * N; p++) {
-			if (!img[p * 4 + 3]) continue;
-			const rgb = R[img[p * 4]][img[p * 4 + 1]];
-			id.data.set([rgb[0], rgb[1], rgb[2], 255], p * 4);
-		}
-		c.putImageData(id, 0, 0);
-		tex.hasAlpha = true; tex.update(true);
-		const m = new BABYLON.StandardMaterial('umb' + i, scene);
+		const cache = scene._umbMats || (scene._umbMats = []), { N, colors, url } = NPC.UMB, c = i % colors;
+		if (cache[c]) return cache[c];
+		const tex = new BABYLON.Texture(url, scene, true, true, BABYLON.Texture.NEAREST_SAMPLINGMODE, () => {
+			if (tex.getSize().width !== N * colors) console.warn(`[NPC] ${url}: ${tex.getSize().width} px wide, expected ${N * colors} (NPC.UMB vs the baker)`);
+		});
+		tex.hasAlpha = true;
+		tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+		tex.uScale = 1 / colors; tex.uOffset = c / colors;
+		const m = new BABYLON.StandardMaterial('umb' + c, scene);
 		m.diffuseTexture = tex; m.emissiveTexture = tex; m.disableLighting = true; m.useAlphaFromDiffuseTexture = true;
 		m.transparencyMode = BABYLON.Material.MATERIAL_ALPHATEST; m.alphaCutOff = 0.4; m.backFaceCulling = false;
-		return (cache[i % colors.length] = m);
+		return (cache[c] = m);
 	}
 
 	_umbrellaTick(dt) {
