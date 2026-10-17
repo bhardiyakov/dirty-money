@@ -115,6 +115,12 @@ class CrowdProxy {
 		this._push(CrowdSim.OP.GOTO, i, dest.x, dest.z);
 	}
 
+	// The world around for the next step (CrowdSim.setWorld): car footprints near the camera and the player on foot (or null).
+	setWorld(cars, player) { this._cars = cars; this._player = player; }
+
+	// A shove (the player bumping into someone): moves the agent by (dx, dz) where the ground allows, keeping its path.
+	push(i, dx, dz) { if (this.agents[i]) this._push(CrowdSim.OP.PUSH, i, dx, dz); }
+
 	// Raster edit (barricades) for the worker's copy (the local CrowdSim shares the main thread's raster).
 	fillCells(r, val) { if (this.worker) this._push(CrowdSim.OP.FILL, r.i0, r.j0, r.i1, r.j1, val); }
 
@@ -126,6 +132,7 @@ class CrowdProxy {
 			const step = Math.min(this._acc, CrowdProxy.MAX_STEP), seq = ++this.seq;
 			this._acc = 0;
 			this.local.apply(this.cmds); this.cmds.length = 0;
+			this.local.setWorld(this._cars || null, this._player || null);
 			this.local.step(step, CrowdProxy.LOCAL_PATH_MS);
 			this._buf = this.local.write(this._buf);
 			this._apply({ seq, buf: this._buf, n: this.local.agents.length, stats: this.local.nav.stats });
@@ -134,7 +141,7 @@ class CrowdProxy {
 		if (!this.worker || this._busy) return;
 		const step = Math.min(this._acc, CrowdProxy.MAX_STEP), buf = this._buf;
 		this._acc = 0; this._busy = true; this._buf = null;
-		this.worker.postMessage({ t: 'step', seq: ++this.seq, dt: step, cmds: this.cmds, buf: buf ? buf.buffer : null }, buf ? [buf.buffer] : []);
+		this.worker.postMessage({ t: 'step', seq: ++this.seq, dt: step, cmds: this.cmds, cars: this._cars || null, player: this._player || null, buf: buf ? buf.buffer : null }, buf ? [buf.buffer] : []);
 		this.cmds = [];
 	}
 
@@ -156,6 +163,9 @@ class CrowdProxy {
 }
 
 class Navigation {
+	// Trees with a trunk people walk around (bushes, ferns and flowers are walked through).
+	static TRUNKS = new Set(['araucaria', 'banana', 'cypress', 'ipe', 'juca', 'jungle', 'oak', 'palm', 'pine']);
+
 	constructor(scene) {
 		this.scene = scene;
 		this.crowd = new CrowdProxy();
@@ -165,7 +175,8 @@ class Navigation {
 		this._debugMesh = null;
 	}
 
-	async init() {
+	// lamps: the street lamps ({ x, z }: their poles block a cell).
+	async init(lamps = []) {
 		const t0 = performance.now();
 		const W = Config.world, w = this.w = Math.ceil(W.maxX - W.minX), h = this.h = Math.ceil(W.maxZ - W.minZ);
 		this.minX = W.minX; this.minZ = W.minZ;
@@ -198,6 +209,11 @@ class Navigation {
 		const m = 0.35;
 		for (const o of CityGrid.obstacles) if (!o.cliff && !o.thin) this._fill(o.x0 - m, o.z0 - m, o.x1 + m, o.z1 + m, 0);      // (paredão: a pé sobe — mais devagar; frade: passa entre eles)
 		for (const o of CityGrid.navBlocks) this._fill(o.x0, o.z0, o.x1, o.z1, 0);          // interior da safe house
+		// 3b) tree trunks and street-lamp poles: the cell under each (the sidewalk keeps room around them)
+		const cell = (x, z) => this._fill(x - 0.5, z - 0.5, x + 0.5, z + 0.5, 0);
+		for (const props of CityGrid.blocks.concat(CityGrid.extraBlocks || []).map((b) => b.props).concat([CityGrid.coastProps || []]))
+			for (const p of props || []) if (p.type === 'tree' && Navigation.TRUNKS.has(p.kind)) cell(p.x, p.z);
+		for (const l of lamps) cell(l.x, l.z);
 		// 4) borda: andável encostado em parede (2) custa mais e mantém distância.
 		const e = new Uint8Array(g);
 		for (let z = 1; z < h - 1; z++) for (let x = 1; x < w - 1; x++) {

@@ -14,6 +14,7 @@ self.onmessage = (ev) => {
 	if (m.t === 'init') { sim = new CrowdSim(new NavGrid(m.w, m.h, m.minX, m.minZ, new Uint8Array(m.grid))); return; }
 	if (m.t !== 'step' || !sim) return;
 	sim.apply(m.cmds);
+	sim.setWorld(m.cars, m.player);
 	sim.step(m.dt, PATH_MS);
 	const out = sim.write(m.buf ? new Float32Array(m.buf) : null);
 	self.postMessage({ t: 'state', seq: m.seq, buf: out.buffer, n: sim.agents.length, stats: sim.nav.stats }, [out.buffer]);
