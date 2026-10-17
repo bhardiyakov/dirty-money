@@ -6,15 +6,19 @@
 //
 // The main thread drives it with flat command lists (`apply`) and reads the agents back as one Float32Array (`write`): per agent
 // slot x, z, vx, vz, flags (1 = following a path, 2 = waiting for one) and the slot's generation (a teleport or a new agent in the
-// slot bumps it, so the main thread can drop rows computed before it).
+// slot bumps it, so the main thread can drop rows computed before it). Each step also brings the world around (`setWorld`): the cars
+// near the camera (their footprints are solid, like walls) and the player (people step out of his way and get pushed by him).
 // ============================================================================
 
 class CrowdSim {
 	static STRIDE = 6;
 	// Commands: [op, slot, ...] — ADD gen x z maxSpeed maxAcceleration radius separationWeight · REMOVE · PARAMS maxSpeed
-	// maxAcceleration radius separationWeight · TELEPORT gen x z · GOTO x z · FILL i0 j0 i1 j1 value (raster edit, no slot).
-	static OP = { ADD: 1, REMOVE: 2, PARAMS: 3, TELEPORT: 4, GOTO: 5, FILL: 6 };
-	static SIZE = [0, 9, 2, 6, 5, 4, 6];
+	// maxAcceleration radius separationWeight · TELEPORT gen x z · GOTO x z · FILL i0 j0 i1 j1 value (raster edit, no slot) ·
+	// PUSH dx dz (a shove: moves the agent if the ground allows, keeps its path).
+	static OP = { ADD: 1, REMOVE: 2, PARAMS: 3, TELEPORT: 4, GOTO: 5, FILL: 6, PUSH: 7 };
+	static SIZE = [0, 9, 2, 6, 5, 4, 6, 4];
+	static CAR = 6;                  // car record in setWorld: x, z, forward x, forward z, half length, half width
+	static YIELD_R = 2.4;            // people start stepping aside from the player this far ahead of him (m)
 
 	constructor(nav) {
 		this.nav = nav;
@@ -23,7 +27,12 @@ class CrowdSim {
 		this._cells = new Map();     // neighbour grid (2 u cells), rebuilt every step
 		this._used = [];
 		this._near = [];
+		this.cars = null;            // Float32Array of CAR records (setWorld)
+		this.player = null;          // { x, z, vx, vz, r } or null (driving, inside...)
 	}
+
+	// The world around for the next step: car footprints and the player on foot (or null).
+	setWorld(cars, player) { this.cars = cars; this.player = player; }
 
 	apply(cmds) {
 		const O = CrowdSim.OP;
@@ -35,6 +44,7 @@ class CrowdSim {
 			else if (op === O.TELEPORT) this._teleport(i, cmds[k + 2], cmds[k + 3], cmds[k + 4]);
 			else if (op === O.GOTO) this._goto(i, cmds[k + 2], cmds[k + 3]);
 			else if (op === O.FILL) this.nav.fillCells(cmds[k + 1], cmds[k + 2], cmds[k + 3], cmds[k + 4], cmds[k + 5]);
+			else if (op === O.PUSH) this._push(i, cmds[k + 2], cmds[k + 3]);
 		}
 	}
 
@@ -48,6 +58,27 @@ class CrowdSim {
 	_teleport(i, gen, x, z) {
 		const a = this.agents[i]; if (!a) return;
 		a.gen = gen; a.x = x; a.z = z; a.vx = a.vz = 0; a.path = null; a.goal = null; a.stuck = 0;
+	}
+
+	_push(i, dx, dz) {
+		const a = this.agents[i]; if (!a) return;
+		if (this._free(a.x + dx, a.z + dz, a.radius)) { a.x += dx; a.z += dz; }
+		else if (this._free(a.x + dx, a.z, a.radius)) a.x += dx;
+		else if (this._free(a.x, a.z + dz, a.radius)) a.z += dz;
+	}
+
+	// Ground the agent can stand on: walkable raster and outside every car footprint (grown by its radius).
+	_free(x, z, r) {
+		if (!this.nav.walk(x, z)) return false;
+		const C = this.cars;
+		if (!C) return true;
+		for (let o = 0; o < C.length; o += CrowdSim.CAR) {
+			const dx = x - C[o], dz = z - C[o + 1];
+			if (Math.abs(dx) > 8 || Math.abs(dz) > 8) continue;
+			const along = dx * C[o + 2] + dz * C[o + 3], side = dx * C[o + 3] - dz * C[o + 2];
+			if (Math.abs(along) < C[o + 4] + r && Math.abs(side) < C[o + 5] + r) return false;
+		}
+		return true;
 	}
 
 	// Sends the agent to (x, z). Clear straight line = immediate path; otherwise it joins the A* queue.
@@ -111,7 +142,7 @@ class CrowdSim {
 	}
 
 	_move(a, dt) {
-		const nav = this.nav, sp = a.maxSpeed;
+		const sp = a.maxSpeed;
 		// Velocidade desejada rumo ao próximo ponto do caminho.
 		let dvx = 0, dvz = 0;
 		if (a.path && a.pi < a.path.length && sp > 0.02) {
@@ -145,16 +176,28 @@ class CrowdSim {
 			const k = (r - dd) / dd * 0.5 * a.sep * 0.6;
 			px += ex * k; pz += ez * k;
 		}
+		const pl = this.player;
+		if (pl) {
+			// the player: overlapping, a strong push out (people yield to him); coming at them, they step to the side of his path
+			const ex = a.x - pl.x, ez = a.z - pl.z, dd = Math.sqrt(ex * ex + ez * ez), rr = a.radius + pl.r;
+			if (dd < rr && dd > 1e-4) { const k = (rr - dd) / dd * 3; px += ex * k; pz += ez * k; }
+			const ps = Math.sqrt(pl.vx * pl.vx + pl.vz * pl.vz);
+			if (ps > 0.5 && dd < CrowdSim.YIELD_R && dd > 1e-4 && ex * pl.vx + ez * pl.vz > 0) {
+				const ux = pl.vx / ps, uz = pl.vz / ps, lat = ex * uz - ez * ux, side = lat >= 0 ? 1 : -1;
+				const s = (1 - dd / CrowdSim.YIELD_R) * Math.min(1.6, ps * 0.45);
+				px += uz * side * s; pz += -ux * side * s;
+			}
+		}
 		const sl = Math.sqrt(px * px + pz * pz);
 		if (sl > 2.5) { px *= 2.5 / sl; pz *= 2.5 / sl; }
 
 		// Integra com colisão no raster (desliza nos eixos).
 		const mvx = (a.vx + px) * dt, mvz = (a.vz + pz) * dt;
 		if (mvx !== 0 || mvz !== 0) {
-			const nx = a.x + mvx, nz = a.z + mvz;
-			if (nav.walk(nx, nz)) { a.x = nx; a.z = nz; }
-			else if (nav.walk(nx, a.z)) { a.x = nx; a.vz = 0; }
-			else if (nav.walk(a.x, nz)) { a.z = nz; a.vx = 0; }
+			const nx = a.x + mvx, nz = a.z + mvz, r = a.radius;
+			if (this._free(nx, nz, r)) { a.x = nx; a.z = nz; }
+			else if (this._free(nx, a.z, r)) { a.x = nx; a.vz = 0; }
+			else if (this._free(a.x, nz, r)) { a.z = nz; a.vx = 0; }
 			else a.vx = a.vz = 0;
 		}
 		// Preso (quer andar e não sai do lugar): refaz o caminho.

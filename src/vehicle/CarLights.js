@@ -55,6 +55,11 @@ class CarLights {
         const blink = Math.floor(this.time * 2.6) % 2 === 0;
         const sirenPhase = Math.floor(this.time * 5) % 2 === 0;
         const range2 = this.range * this.range;
+        // Lamps face the camera or not: the camera looks along its ground forward (CompassCamera.yaw), so a lamp pointing back at it
+        // (dot of the lamp's direction with the way toward the camera) shows; turned sideways it fades; pointing away it is behind
+        // the body — hidden, instead of its glow showing through the car.
+        const cy = CompassCamera.yaw || 0, tcx = -Math.sin(cy), tcz = -Math.cos(cy);
+        const facing = (dx, dz) => Math.max(0, Math.min(1, (dx * tcx + dz * tcz + 0.1) / 0.45));
 
         for (const car of cars) {
             const p = car.position;
@@ -83,10 +88,11 @@ class CarLights {
             const hazard = !!car.hazard && !car.destroyed;                // alarme tocando: pisca-alerta + faróis piscando
             const hI = hazard ? 0.9 : (on ? Math.min(1, (night - 0.15) / 0.5) : 0);
             const el = car.elev || 0, hy = (G3 ? G3.y : 1.7) + el;
+            const front = facing(fx, fz), rear = facing(-fx, -fz), out = 0.25 * gk;          // (the glow sits just outside the body)
             for (let k = 0; k < 2; k++) {
                 const sx = k === 0 ? -L.x : L.x;
-                g.place(s.hl[k], p.x + fx * L.zF + rx * sx, hy, p.z + fz * L.zF + rz * sx, 1.7 * gk);
-                if (hI > 0.02) g.color(s.hl[k], 1.0, 0.94, 0.75, 0.5 * hI); else g.off(s.hl[k]);
+                g.place(s.hl[k], p.x + fx * (L.zF + out) + rx * sx, hy, p.z + fz * (L.zF + out) + rz * sx, 1.7 * gk);
+                if (hI * front > 0.02) g.color(s.hl[k], 1.0, 0.94, 0.75, 0.5 * hI * front); else g.off(s.hl[k]);
             }
             // Um cone por farol, em "V" RETO: o vértice fica na própria lâmpada e o feixe abre simetricamente ao longo do vetor
             // frente do carro (o eixo do feixe é paralelo ao do carro, sem desviar para fora). Os dois se sobrepõem à frente.
@@ -110,13 +116,14 @@ class CarLights {
             const tI = braking ? 1.0 : (hI > 0.02 ? 0.5 * hI : (alive || car.controlled ? 0.18 : 0));
             for (let k = 0; k < 2; k++) {
                 const sx = k === 0 ? -L.x : L.x;
-                g.place(s.tl[k], p.x + fx * L.zR + rx * sx, hy, p.z + fz * L.zR + rz * sx, (braking ? 2.0 : 1.2) * gk);
+                g.place(s.tl[k], p.x + fx * (L.zR - out) + rx * sx, hy, p.z + fz * (L.zR - out) + rz * sx, (braking ? 2.0 : 1.2) * gk);
                 // Seta traseira: o lado da curva pisca em âmbar no lugar da lanterna.
-                if (hazard) {
-                    g.color(s.tl[k], 1.0, 0.62, 0.08, 0.95);
+                if (rear <= 0.02) g.off(s.tl[k]);
+                else if (hazard) {
+                    g.color(s.tl[k], 1.0, 0.62, 0.08, 0.95 * rear);
                 } else if (car.signal === (k === 0 ? -1 : 1) && alive) {
-                    if (blink) g.color(s.tl[k], 1.0, 0.62, 0.08, 0.95); else g.off(s.tl[k]);
-                } else if (tI > 0.02) g.color(s.tl[k], 1.0, 0.1, 0.07, 0.95 * tI);
+                    if (blink) g.color(s.tl[k], 1.0, 0.62, 0.08, 0.95 * rear); else g.off(s.tl[k]);
+                } else if (tI > 0.02) g.color(s.tl[k], 1.0, 0.1, 0.07, 0.95 * tI * rear);
                 else g.off(s.tl[k]);
             }
 
@@ -124,7 +131,7 @@ class CarLights {
             for (let k = 0; k < 2; k++) {
                 const side = k === 0 ? -1 : 1;
                 g.place(s.sig[k], p.x + fx * (L.zF - 0.45) + rx * side * (L.x + 0.62), hy, p.z + fz * (L.zF - 0.45) + rz * side * (L.x + 0.62), 0.7 * gk);
-                if (hazard || (car.signal === side && blink && alive)) g.color(s.sig[k], 1.0, 0.62, 0.08, 0.95); else g.off(s.sig[k]);
+                if (front > 0.02 && (hazard || (car.signal === side && blink && alive))) g.color(s.sig[k], 1.0, 0.62, 0.08, 0.95 * front); else g.off(s.sig[k]);
             }
 
             // ---- Giroflex (viaturas em perseguição) + reflexo colorido no chão.

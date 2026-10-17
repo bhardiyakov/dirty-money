@@ -252,7 +252,7 @@ class Game {
 
 	async _initAI() {
 		try {
-			await this.nav.init(this.gameEngine.navTargets);
+			await this.nav.init(this.gameEngine.world.street ? this.gameEngine.world.street.lamps : []);
 			this.npcManager = new NPCManager(this.scene, this.nav, this.sprites, this.npcCtx);
 			this.npcManager.spawn(Config.npc.count);
 			this.aiReady = true;
@@ -640,6 +640,7 @@ class Game {
 			this.lockpick.update(dt);
 			if (!this.lockpick.active && !this.arrest && !this.death && !this.hiding && !frozenUI) this._playerActions(dt);      // (arrombando/rendido: sem ações)
 			this.player.update(move, this.input.isSprinting() && !(this.empire && this.empire.tired), dt);      // (exausto: não corre)
+			this._bumpPeople();                                  // esbarra em quem está no caminho (não atravessa as pessoas)
 			if (!frozenUI) Interiors.autoEnter(this);            // lojas: atravessar o vão da porta = entrar
 			HouseView.update(dt, this);                          // safe house: porta, luzes, seta (entrar = a porta de Interiors)
 			this.camera.setFlat(false);
@@ -779,6 +780,7 @@ class Game {
 		if (this.aiReady) {
 			const ps0 = this._playerState();
 			this.nav.focus.x = ps0.pos.x; this.nav.focus.z = ps0.pos.z;
+			this._crowdWorld();
 			this.nav.update(dt);
 			const chasers = this.policeManager
 				? this.policeManager.units.filter((u) => u.fsm.name === 'CHASE').map((u) => ({ position: u.position, car: !!u.body }))
@@ -2675,6 +2677,46 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (this.ui) this.ui.toast(msg);
 		if (this.hud.action) this.hud.action.textContent = msg;
 		this.actionTimer = 2.5;
+	}
+
+	// What the walking crowd must know each step (CrowdSim.setWorld): the footprints of the cars near the camera, at ground level (on
+	// a viaduct they are not in the people's way), and the player on foot — people step aside from him.
+	_crowdWorld() {
+		const f = this.nav.focus, R2 = 70 * 70, out = this._crowdCars || (this._crowdCars = []), fw = this._crowdFw || (this._crowdFw = new BABYLON.Vector3());
+		out.length = 0;
+		if (this.carDamage) for (const c of this.carDamage.allCars()) {
+			const p = c.position;
+			if (c.spec.boat || (c.elev || 0) > 1 || (p.x - f.x) * (p.x - f.x) + (p.z - f.z) * (p.z - f.z) > R2) continue;
+			c.fwdToRef(fw);
+			const fl = Math.hypot(fw.x, fw.z) || 1;
+			out.push(p.x, p.z, fw.x / fl, fw.z / fl, c.halfLen, c.halfW);
+		}
+		const pl = this.player, onFoot = this.mode === 'player' && pl.alive && !pl.rag && !pl.swimming;
+		this.nav.crowd.setWorld(new Float32Array(out), onFoot ? { x: pl.position.x, z: pl.position.z, vx: pl.velocity.x, vz: pl.velocity.z, r: Config.player.radius } : null);
+	}
+
+	// The player bumps into people instead of walking through them: the overlap holds him back (the part of his velocity into the
+	// person is lost) and shoves the person aside — crowd agents through the worker (CrowdProxy.push), people out of the crowd (on
+	// the beach, in the water) directly.
+	_bumpPeople() {
+		const pl = this.player;
+		if (this.mode !== 'player' || !pl.alive || pl.rag || pl.swimming || !this.npcManager) return;
+		const p = pl.position, v = pl.velocity, R = Config.player.radius;
+		const people = this.policeManager ? this.npcManager.npcs.concat(this.policeManager.officers) : this.npcManager.npcs;
+		let hit = false;
+		for (const n of people) {
+			if (!n.alive || n.rag || !n.position) continue;
+			const q = n.position, dx = p.x - q.x, dz = p.z - q.z, d2 = dx * dx + dz * dz, rr = R + ((n.params && n.params.radius) || 0.4);
+			if (d2 >= rr * rr || d2 < 1e-6) continue;
+			const d = Math.sqrt(d2), over = rr - d, ux = dx / d, uz = dz / d, into = -(v.x * ux + v.z * uz);
+			p.x += ux * over * 0.5; p.z += uz * over * 0.5;                         // he gives way by half the overlap...
+			if (into > 0) { v.x += ux * into * 0.7; v.z += uz * into * 0.7; }       // ...and loses most of the speed into the person
+			const push = over * 0.5 + Math.min(0.2, Math.max(0, into) * 0.04);
+			if (n.index >= 0 && this.nav) this.nav.crowd.push(n.index, -ux * push, -uz * push);
+			else if (n.transform) { n.transform.position.x -= ux * push; n.transform.position.z -= uz * push; }
+			hit = true;
+		}
+		if (hit) MapGeo.resolveCircle(p, R, pl.underBridge);
 	}
 
 	// Vinheta vermelha de dano: todo quadro (é um fade), mas só escreve no DOM quando muda.
