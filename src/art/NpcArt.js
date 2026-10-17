@@ -836,7 +836,7 @@ class NpcSheet {
 	constructor(id) {
 		this.id = id; this.name = id; this.atlasName = id; this.isNpc = true;
 		this.dirs = 8; this.frame = 64;
-		this.clips = {}; this.jobs = {}; this.pending = [];
+		this.clips = {}; this.pending = [];
 		this.legacy = null;               // CharacterSheet para o que o atlas não tem (definida pela SpriteLibrary)
 		this.legacyVariant = 2;
 		this.fallbackAtlas = null;        // outro atlas do mesmo personagem (dano: o atlas normal do tipo, para os clipes sem dano)

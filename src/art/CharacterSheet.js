@@ -1,9 +1,8 @@
 // ============================================================================
-// CharacterSheet — folhas de sprites de UM tipo de corpo (jogador, civil A/B,
-// policial). Cada CLIPE (idle, walk, punch...) vira uma textura própria:
-//   colunas = direções (heading), linhas = frames da animação.
-// O bake é PREGUIÇOSO: o clipe só é "fotografado" na primeira vez que é pedido
-// (ou numa chamada explícita de pré-aquecimento).
+// CharacterSheet — the legacy sprite sheets of ONE body type (player, civilian A/B, police…), used where the 2.5D atlases (NpcArt)
+// have no such clip, or when they are unavailable. Every clip comes READY-MADE: from the vector atlas (CharArt, decoded in a Worker) or
+// from a PNG override (SpriteIO). Nothing is drawn while the game runs — the procedural rig (CharacterRig + SpriteBaker) is only used
+// by the build tools (tools/personagens) that produce that atlas.
 //
 // SpriteMaterial — shader de paleta INDEXADA: o atlas guarda (rampa, nível) e a
 // cor vem de uma textura de paleta (1 linha por variante). Troca de roupa/pele/
@@ -181,8 +180,7 @@ class CharacterSheet {
 		this.frame = frame;
 		this.look = look;
 		this.clips = {};      // clipes prontos
-		this.jobs = {};       // bakes em andamento (progressivos)
-		this.pending = [];    // fila de pré-aquecimento em segundo plano
+		this.pending = [];    // clips to resolve a few per frame (queue / pump)
 	}
 
 	// Normaliza (clipe, arma): devolve { def, w, key } ou null se a arma não é suportada.
@@ -195,15 +193,13 @@ class CharacterSheet {
 		return { def, w, key: name + ':' + w };
 	}
 
-	// Retorna o clipe (do atlas vetorial; senão do PNG; senão desenhando agora) ou null se a arma não é suportada.
+	// The clip (from the vector atlas, else from a PNG), or null when the weapon is not supported or no ready-made drawing exists.
 	getClip(name, weapon = 'none') {
 		const r = this._resolve(name, weapon);
 		if (!r) return null;
 		if (this.clips[r.key]) return this.clips[r.key];
 		if (this._fromAtlas(name, r) || this._fromFile(name, r.w, r.def)) return this.clips[r.key];
-		const job = this.jobs[r.key] || (this.jobs[r.key] = this._startJob(name, r.w, r.def));
-		job.step(Infinity);
-		return this.clips[r.key];
+		return null;
 	}
 
 	// Clipe do atlas vetorial (CharArt): um quadro por pose, uma direção só (o SpriteActor gira o sprite). Textura e material são os
@@ -226,44 +222,7 @@ class CharacterSheet {
 		const idx = SpriteIO.indices(CharacterSheet.fileKey(this.name, name, weapon), W, H);
 		if (!idx) return false;
 		this._finishTex(name + ':' + weapon, name, weapon, def, SpriteMaterial.indexTexture(this.scene, idx, W, H), W, H);
-		delete this.jobs[name + ':' + weapon];
 		return true;
-	}
-
-	// Job de bake PROGRESSIVO: faz um frame de animação (todas as direções) por passo.
-	_startJob(name, weapon, def) {
-		const F = this.frame, D = this.dirs, N = def.frames;
-		const W = D * F, H = N * F;
-		const data = new Uint8Array(W * H * 4);
-		const key = name + ':' + weapon;
-		const self = this;
-		// Passo = UMA direção de um quadro (antes era o quadro inteiro, 8–16 direções de uma vez: num celular, 20–30 ms num único
-		// passo, estourando o orçamento por quadro). As primitivas do quadro são montadas uma vez e reaproveitadas nas direções.
-		const job = {
-			f: 0, d: 0, prims: null, ms: 0,
-			step(budgetMs) {
-				const t0 = performance.now();
-				while (this.f < N && (performance.now() - t0 < budgetMs)) {
-					const f = this.f, d = this.d;
-					if (!this.prims) { const t = def.loop ? f / N : (N > 1 ? f / (N - 1) : 0); this.prims = CharacterRig.build(def.pose(t, weapon), self.look); }
-					const img = SpriteBaker.bake(this.prims, { size: F, heading: (d * Math.PI * 2) / D });
-					for (let y = 0; y < F; y++) {
-						const src = y * F * 4;
-						const dst = ((f * F + y) * W + d * F) * 4;
-						data.set(img.subarray(src, src + F * 4), dst);
-					}
-					if (++this.d >= D) { this.d = 0; this.f++; this.prims = null; }
-				}
-				this.ms += performance.now() - t0;
-				if (this.f >= N) self._finish(key, name, weapon, def, data, W, H, this.ms);
-			},
-		};
-		return job;
-	}
-
-	_finish(key, name, weapon, def, data, W, H, ms) {
-		this._finishTex(key, name, weapon, def, SpriteMaterial.atlasTexture(this.scene, data, W, H), W, H);
-		delete this.jobs[key];
 	}
 
 	_finishTex(key, name, weapon, def, tex, W, H) {
@@ -276,7 +235,7 @@ class CharacterSheet {
 		for (const [name, weapon] of list) this.getClip(name, weapon || 'none');
 	}
 
-	// Enfileira clipes para assar aos poucos (veja pump).
+	// Queues clips to be resolved a few per frame (see pump).
 	queue(list) {
 		for (const [name, weapon] of list) {
 			const r = this._resolve(name, weapon || 'none');
@@ -287,19 +246,16 @@ class CharacterSheet {
 	// Libera as texturas/materiais de todos os clipes (folha que saiu de uso). Os do atlas são compartilhados: ficam.
 	disposeClips() {
 		for (const c of Object.values(this.clips)) if (!c.shared) { c.material.dispose(); c.texture.dispose(); }
-		this.clips = {}; this.jobs = {}; this.pending = [];
+		this.clips = {}; this.pending = [];
 	}
 
-	// Gasta até `budgetMs` do frame assando a fila. Retorna true enquanto ainda há trabalho.
+	// Resolves the queue within `budgetMs` of the frame. Returns true while there is still work.
 	pump(budgetMs) {
 		const t0 = performance.now();
 		while (this.pending.length && performance.now() - t0 < budgetMs) {
-			const [name, weapon] = this.pending[0];
+			const [name, weapon] = this.pending.shift();
 			const r = this._resolve(name, weapon);
-			if (!r || this.clips[r.key] || this._fromAtlas(name, r) || this._fromFile(name, r.w, r.def)) { this.pending.shift(); continue; }
-			const job = this.jobs[r.key] || (this.jobs[r.key] = this._startJob(name, r.w, r.def));
-			job.step(Math.max(0.5, budgetMs - (performance.now() - t0)));
-			if (this.clips[r.key]) this.pending.shift();
+			if (r && !this.clips[r.key] && !this._fromAtlas(name, r)) this._fromFile(name, r.w, r.def);
 		}
 		return this.pending.length > 0;
 	}

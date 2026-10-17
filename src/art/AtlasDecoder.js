@@ -61,13 +61,15 @@ const AtlasDecoder = {
 		worker.onerror = (e) => { e.preventDefault(); this._crashed(worker, e.message || 'Worker error'); };
 		return worker;
 	},
-	// A Worker died: it is replaced, and its pending jobs go through the failure path (decoded on the main thread).
+	// A Worker died: its pending jobs are decoded on the main thread and it is replaced. The crash counts as one strike, so a Worker
+	// that cannot even start (a page opened from file://, a blocked Blob URL) is not respawned forever.
 	_crashed(worker, message) {
 		const i = this._workers.indexOf(worker);
 		if (i < 0) return;
 		worker.terminate();
-		this._workers[i] = this._spawn();
-		for (const [job, J] of this._jobs) if (J.worker === worker) this._done(worker, { job, error: message });
+		this._strike(message);
+		if (this._off) this._workers.splice(i, 1); else this._workers[i] = this._spawn();
+		for (const [job, J] of this._jobs) if (J.worker === worker) this._done(worker, { job, error: message, crashed: true });
 	},
 	_done(worker, m) {
 		const J = this._jobs.get(m.job);
@@ -75,7 +77,7 @@ const AtlasDecoder = {
 		this._jobs.delete(m.job); worker._load--;
 		if (!m.error) { this._strikes = 0; J.resolve({ w: m.w, h: m.h, data: m.data }); return; }
 		if (m.http) { J.reject(new Error(m.error)); return; }              // (missing file: retrying here would not help)
-		this._runMain(J.task).then((img) => { this._strike(m.error); J.resolve(img); }, J.reject);
+		this._runMain(J.task).then((img) => { if (!m.crashed) this._strike(m.error); J.resolve(img); }, J.reject);
 	},
 	// The Worker failed where the main thread succeeded: tolerated a few times in a row, then the Workers are given up.
 	_strike(error) {

@@ -23,19 +23,18 @@ const CharArt = {
 
 	available() { return typeof CHAR_ATLAS !== 'undefined' && !!CHAR_ATLAS.sheets; },
 
-	_bytes(b64) { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; },
-
-	// Decodifica o PNG em segundo plano (descompressão nativa) desde a carga da página; se a textura já existe, sobe os pixels.
+	// Decodes the PNG off the main thread from page load (AtlasDecoder: base64 → bytes → PNG, all in a Worker); if the texture already
+	// exists, uploads the pixels.
 	load() {
 		if (this.ready) return this.ready;
 		const t0 = performance.now();
 		this.data = CHAR_ATLAS;
-		this.ready = PNG.decodeAsync(this._bytes(CHAR_ATLAS.a)).then((img) => {
+		this.ready = AtlasDecoder.png(CHAR_ATLAS.a).then((img) => {
 			this.decodeMs = Math.round(performance.now() - t0);
 			this._keepCpu(img.data);
 			if (this.tex) { this.tex.update(img.data); this._uploaded = true; } else this._px = img.data;
-			console.log(`[PERSONAGENS] atlas ${CHAR_ATLAS.w}×${CHAR_ATLAS.h} pronto em ${this.decodeMs} ms (em segundo plano)`);
-		}).catch((e) => console.warn('[PERSONAGENS] atlas: decodificação falhou', e));
+			console.log(`[PERSONAGENS] atlas ${CHAR_ATLAS.w}×${CHAR_ATLAS.h} ready in ${this.decodeMs} ms (decoded in a Worker)`);
+		}).catch((e) => console.warn('[PERSONAGENS] atlas: decoding failed', e));
 		return this.ready;
 	},
 

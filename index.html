@@ -585,13 +585,14 @@
 	<script src="./src/art/TileFactory.js"></script>
 	<script src="./src/art/SpriteBaker.js"></script>
 	<script src="./src/art/CharacterRig.js"></script>
+	<!-- AtlasDecoder: decodes the atlas pages and the legacy character PNG in Workers (CharArt, right below, uses it at load). -->
+	<script src="./src/art/AtlasDecoder.js"></script>
 	<script src="./assets/chars/personagens-atlas.js"></script>
 	<script src="./src/art/CharArt.js"></script>
 	<!-- Personagens 2,5D: atlas PRONTOS, gerados no build (tools/asset_baker/bake.cjs → assets/baked). Aqui só os dados (NpcData lê
-		 npc-data.json), o decodificador das páginas WebP (num Worker) e o NpcArt, que lê os manifestos JSON e pede cada página quando um
+		 npc-data.json), o IndexedDB dos visuais do guarda-roupa (LookStore) e o NpcArt, que lê os manifestos JSON e pede cada página quando um
 		 personagem precisa dela. O gerador procedural NÃO é carregado no jogo: só a tela de equipamento o abre, num Worker (Wardrobe). -->
 	<script src="./src/art/NpcData.js"></script>
-	<script src="./src/art/AtlasDecoder.js"></script>
 	<script src="./src/storage/LookStore.js"></script>
 	<script src="./src/art/NpcArt.js"></script>
 	<script src="./src/art/CharacterSheet.js"></script>

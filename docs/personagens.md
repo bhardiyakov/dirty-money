@@ -26,9 +26,9 @@ src/art/SpriteActor.js          clipe vetorial: o quad gira; um único atributo 
   muda (já com o braço passando por cima da alça). Antes cada bolsa era uma cópia inteira das 44 animações (~30 MB cada).
 - **Folhas**: tudo para `player` e `civA` (o civil A também vira bandido armado); para civB, polícia, SWAT, exército, piloto e
   entregador, as animações que o jogo usa (`CharacterSheet.sets`). Se faltar um clipe numa folha, o jogo usa o do civA
-  (`CharArt.FALLBACK`); se nem ele existir, o desenho procedural antigo continua como reserva.
+  (`CharArt.FALLBACK`); se nem ele existir, o clipe fica sem desenho (nada é desenhado por código durante o jogo).
 - **Arquivo**: um PNG RGBA 2048×2048 (R = material, G = luminosidade × alfa, A = cobertura) dentro de um `.js` (~2,1 MB),
-  para funcionar também aberto por duplo clique (`file://`). A decodificação começa ao carregar a página (`PNG.decodeAsync`);
+  para funcionar também aberto por duplo clique (`file://`). A decodificação começa ao carregar a página, num Worker (`AtlasDecoder.png`);
   a textura é criada vazia e recebe os pixels quando eles chegam — a carga do jogo espera por isso antes de começar.
 
 ## Medições (Chromium, PC; versão anterior × atual)
