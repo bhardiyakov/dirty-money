@@ -122,11 +122,16 @@ const Config = {
 		staminaPerLvl: 8,
 		staminaDrain: 4,       // Fôlego gasto por segundo correndo (≈ 25 s de corrida no nível 0; ≈ 90 s no nível 20).
 		accel: 12,             // Taxa de aproximação da velocidade alvo (maior = mais responsivo).
-		friction: 24,          // Inertia: deceleration (m/s²) on land once the stick is released — the body slides to a stop.
-		skidDot: -0.75,        // Skid: dot(velocity direction, input direction) at or below this = a sharp reversal (~139° or more)...
+		// Heavy steps (on land, not aiming): the body turns toward the stick at a limited rate and only moves where it faces — no
+		// sideways drift; speed builds up and drops with the steps (constant acceleration / braking), less of it while still turning.
+		moveAccel: 9,          // m/s² building up speed (walk in ~0.3 s, full sprint in ~1.5 s)
+		stopDecel: 32,         // m/s² stopping: a couple of steps to plant the feet, not a slide (sprint ≈ 0.4 s, walk ≈ 0.1 s)
+		turnRateWalk: 9.5,     // rad/s turning at walking speed (and standing: a quick pivot)...
+		turnRateSprint: 3.4,   // ...and at full sprint (wide, committed turns)
+		skidDot: -0.6,         // Skid: cos(facing → stick) at or below this = a sharp reversal (~127° or more)...
 		skidMinSpeed: 7,       // ...while running this fast (m/s).
-		skidFriction: 42,      // Braking (m/s²) along the old direction during the skid, before accelerating the other way.
-		skidExitSpeed: 0.8,    // The skid ends below this speed (m/s); then he sets off in the new direction.
+		skidFriction: 46,      // Braking (m/s²) along the old direction during the skid, before turning to the new one.
+		skidExitSpeed: 0.8,    // The skid ends below this speed (m/s); then he pivots and sets off in the new direction.
 		runEnter: 1.5,         // Run vs walk clip by the ACTUAL speed (× walking speed), with hysteresis: in above this...
 		runExit: 1.2,          // ...out below this — releasing sprint, he decelerates running until he drops into a walk.
 		turnLerp: 16,          // Velocidade de giro do corpo em direção ao movimento.

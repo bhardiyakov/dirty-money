@@ -9,6 +9,10 @@
 // ============================================================================
 
 class WorldBuilder {
+    // Height of the lamps' light pools on the ground: above every walking surface (bridge sidewalks are at 0.24 — a pool at the same
+    // height fought them for the depth and shimmered).
+    static get POOL_Y() { return 0.3; }
+
     constructor(scene, shadowGenerator) {
         this.scene = scene;
         this.shadow = shadowGenerator;
@@ -934,7 +938,7 @@ class WorldBuilder {
         this._lampIds = lamps.map((l) => {
             const a = this.lampGlow.alloc(l.hx, l.hz), b = this.lampGlow.alloc(l.hx, l.hz);
             this.lampGlow.place(a, l.hx, 5.75, l.hz, 2.6);
-            this.lampGlow.place(b, l.hx, 0.24, l.hz, 14);
+            this.lampGlow.place(b, l.hx, WorldBuilder.POOL_Y, l.hz, 14);
             this.lampGlow.color(a, 1.0, 0.86, 0.55, 0.9);
             this.lampGlow.color(b, 1.0, 0.78, 0.42, 0.45);
             l.glow = [a, b];
@@ -1122,13 +1126,15 @@ class WorldBuilder {
         this._favLamps.forEach((l) => {
             l.a = this.favGlow.alloc(l.x, l.z); l.b = this.favGlow.alloc(l.x, l.z);
             this.favGlow.place(l.a, l.x, 5.5, l.z, 1.8);
-            this.favGlow.place(l.b, l.x, 0.24, l.z, 9);
+            this.favGlow.place(l.b, l.x, WorldBuilder.POOL_Y, l.z, 9);
         });
         this.favGlow.seal();
         this._favT = 0;
     }
 
-    // Pisca-pisca da iluminação da favela (só à noite).
+    // Pisca-pisca da iluminação da favela (só à noite). Só a LÂMPADA pisca: a poça de luz no chão fica no brilho médio do tipo
+    // (uma lâmpada falhando não apaga e acende o chão inteiro a cada fração de segundo — aquilo lia como o chão piscando).
+    static get POOL_STEADY() { return [0.6, 0.5, 0.08]; }
     _favFlicker(dt) {
         const g = this.favGlow, list = this._favLamps;
         if (!g || !list || !list.length) return;
@@ -1152,10 +1158,9 @@ class WorldBuilder {
                 if (l.timer <= 0) { l.on = Math.random() < 0.22; l.timer = l.on ? 0.05 + Math.random() * 0.15 : 0.6 + Math.random() * 3.5; }
                 f = l.on ? 0.9 : 0.04;
             }
-            const a = f * q;
-            if (a <= 0.01) { g.off(l.a); g.off(l.b); continue; }
-            g.color(l.a, 0.95, 0.88, 0.5, 0.75 * a);
-            g.color(l.b, 0.9, 0.8, 0.4, 0.3 * a);
+            const a = f * q, pool = WorldBuilder.POOL_STEADY[l.type] * q;
+            if (a > 0.01) g.color(l.a, 0.95, 0.88, 0.5, 0.75 * a); else g.off(l.a);
+            if (pool > 0.01) g.color(l.b, 0.9, 0.8, 0.4, 0.3 * pool); else g.off(l.b);
         }
         g.flush();
     }

@@ -73,17 +73,19 @@ class CarLights {
             else if (vis && vis.sheet && vis.sheet.dirs && !car.spec.boat) { const a = (vis.dir * Math.PI * 2) / vis.sheet.dirs; fx = Math.sin(a); fz = Math.cos(a); }
             else { const f = car.fwdToRef(this._f || (this._f = new BABYLON.Vector3())); fx = f.x; fz = f.z; const fl = hypot(fx, fz) || 1; fx /= fl; fz /= fl; }
             const rx = fz, rz = -fx;                              // direita do carro
-            const L = s.lamps;
+            // 3D car: the glows sit on the model's own lamps (height, spacing, nose/tail) and stay small (the lamp materials light up
+            // too); drawn car: the lamps of the sheet, at the height of the sprite plane.
+            const G3 = vis && vis.lampGeom, L = G3 || s.lamps, gk = G3 ? 0.6 : 1;
             const alive = car.mode !== 'parked' && car.mode !== 'abandoned' && !car.destroyed;
 
             // ---- Faróis: ligados à noite para quem está em uso (circulando, dirigido pelo jogador, viatura)
             const on = (alive || (car.controlled && !car.destroyed)) && (car.lightsOn || night > 0.3);
             const hazard = !!car.hazard && !car.destroyed;                // alarme tocando: pisca-alerta + faróis piscando
             const hI = hazard ? 0.9 : (on ? Math.min(1, (night - 0.15) / 0.5) : 0);
-            const el = car.elev || 0, hy = 1.7 + el;
+            const el = car.elev || 0, hy = (G3 ? G3.y : 1.7) + el;
             for (let k = 0; k < 2; k++) {
                 const sx = k === 0 ? -L.x : L.x;
-                g.place(s.hl[k], p.x + fx * L.zF + rx * sx, hy, p.z + fz * L.zF + rz * sx, 1.7);
+                g.place(s.hl[k], p.x + fx * L.zF + rx * sx, hy, p.z + fz * L.zF + rz * sx, 1.7 * gk);
                 if (hI > 0.02) g.color(s.hl[k], 1.0, 0.94, 0.75, 0.5 * hI); else g.off(s.hl[k]);
             }
             // Um cone por farol, em "V" RETO: o vértice fica na própria lâmpada e o feixe abre simetricamente ao longo do vetor
@@ -108,7 +110,7 @@ class CarLights {
             const tI = braking ? 1.0 : (hI > 0.02 ? 0.5 * hI : (alive || car.controlled ? 0.18 : 0));
             for (let k = 0; k < 2; k++) {
                 const sx = k === 0 ? -L.x : L.x;
-                g.place(s.tl[k], p.x + fx * L.zR + rx * sx, hy, p.z + fz * L.zR + rz * sx, braking ? 2.0 : 1.2);
+                g.place(s.tl[k], p.x + fx * L.zR + rx * sx, hy, p.z + fz * L.zR + rz * sx, (braking ? 2.0 : 1.2) * gk);
                 // Seta traseira: o lado da curva pisca em âmbar no lugar da lanterna.
                 if (hazard) {
                     g.color(s.tl[k], 1.0, 0.62, 0.08, 0.95);
@@ -121,7 +123,7 @@ class CarLights {
             // ---- Setas dianteiras: lado da curva, um pouco para fora do farol.
             for (let k = 0; k < 2; k++) {
                 const side = k === 0 ? -1 : 1;
-                g.place(s.sig[k], p.x + fx * (L.zF - 0.45) + rx * side * (L.x + 0.62), hy, p.z + fz * (L.zF - 0.45) + rz * side * (L.x + 0.62), 0.7);
+                g.place(s.sig[k], p.x + fx * (L.zF - 0.45) + rx * side * (L.x + 0.62), hy, p.z + fz * (L.zF - 0.45) + rz * side * (L.x + 0.62), 0.7 * gk);
                 if (hazard || (car.signal === side && blink && alive)) g.color(s.sig[k], 1.0, 0.62, 0.08, 0.95); else g.off(s.sig[k]);
             }
 
@@ -130,8 +132,9 @@ class CarLights {
                 const A = sirenPhase ? CarLights.SIREN[0] : CarLights.SIREN[1];
                 const B = sirenPhase ? CarLights.SIREN[2] : CarLights.SIREN[3];
                 const sz = car.spec.siren ? car.spec.siren.z : -0.1;           // giroflex desenhado no teto (atlas) ou o padrão
-                g.place(s.siren[0], p.x + fx * sz - rx * 0.32, 2.05 + el, p.z + fz * sz - rz * 0.32, 1.9);
-                g.place(s.siren[1], p.x + fx * sz + rx * 0.32, 2.05 + el, p.z + fz * sz + rz * 0.32, 1.9);
+                const sy = (G3 ? G3.roof + 0.1 : 2.05) + el;                  // (3D: on the roof of the model)
+                g.place(s.siren[0], p.x + fx * sz - rx * 0.32, sy, p.z + fz * sz - rz * 0.32, 1.9);
+                g.place(s.siren[1], p.x + fx * sz + rx * 0.32, sy, p.z + fz * sz + rz * 0.32, 1.9);
                 g.color(s.siren[0], A[0], A[1], A[2], 1);
                 g.color(s.siren[1], B[0], B[1], B[2], 1);
                 const col = sirenPhase ? CarLights.SIREN[4] : CarLights.SIREN[5];
