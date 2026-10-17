@@ -7,6 +7,9 @@
 // ============================================================================
 
 class Game {
+	// Interface modules live in the open world and inside an interior (ui/UiLoop.js).
+	static UI_WORLD = ['minimap', 'panel', 'prompt', 'hud'];
+	static UI_INTERIOR = ['panel', 'prompt', 'hud'];
 	// Teclas de troca de arma (1–9, 0, − e =). Uma tecla pode ter mais de uma arma: apertar de novo passa para a próxima que você tem
 	// (2: pistola ↔ pistola com silenciador; =: as pesadas — RPG, lança-foguetes, minigun). WEAPON_SLOTS: tecla → a 1ª arma dela.
 	static get WEAPON_KEYS() {
@@ -147,6 +150,12 @@ class Game {
 		this.actionTimer = 0;
 		this.touch = new TouchControls(this);        // botões na tela (celular sem controle) + interface responsiva
 		this.ui = new Hud(this);                     // interface em pixel art (arma, procurado, vida/colete, veículo, mensagens)
+		// Interface modules on their own clock, run after the scene is drawn (ui/UiLoop.js); the frame only says which ones are live.
+		this.uiLoop = new UiLoop();
+		this.uiLoop.add('minimap', 20, () => this._updateMinimap());
+		this.uiLoop.add('panel', 15, (elapsed) => this.ui.update(elapsed));
+		this.uiLoop.add('prompt', 10, () => this._updatePrompt());
+		this.uiLoop.add('hud', 10, () => this._updateHud());
 		this.wheel = new WeaponWheel(this);          // roda de armas (Tab / LB / botão ARMA), como a do GTA V
 		this.gps = null;                             // destino marcado no mapa: { x, z, label } (só um marcador, sem rota)
 		this.showPrompts = true;
@@ -462,6 +471,8 @@ class Game {
 			// a cada 5 s, sem inundar) e o jogo segue.
 			try { this._update(dt); } catch (e) { this._frameError('update', e); }
 			try { this._render(dt); } catch (e) { this._frameError('render', e); }
+			try { this.uiLoop.flush(); } catch (e) { this._frameError('interface', e); }      // (a cena já foi entregue à GPU)
+			Perf.lap('interface');
 			Perf.frameEnd();
 			HangProbe.mark('laço: fim do quadro');
 			if (this._bootDone && !this._loadingHidden) {            // 1º quadro real desenhado: agora (depois da pintura) a tela de carregamento sai
@@ -743,7 +754,6 @@ class Game {
 		Perf.lap('veículos (dano/colisão)');
 		if (this.vehicleManager) EngineAudio.update(this, dt);                 // ronco dos motores (o seu e o do trânsito perto)
 		Footsteps.update(this, dt);                                            // passos (presos à animação de andar/correr)
-		this._updatePrompt();
 		for (let i = this.casualties.length - 1; i >= 0; i--) {
 			if (!this.casualties[i].update(dt)) { this.casualties[i].dispose(); this.casualties.splice(i, 1); }
 		}
@@ -835,14 +845,11 @@ class Game {
 		}
 
 		Perf.lap('polícia');
-		// --- Minimapa ---
-		this._updateMinimap();
-		Perf.lap('minimapa');
 
-		// --- HUD ---
+		// --- Interface (minimapa, painéis, dica): roda depois do desenho da cena, no ritmo de cada módulo (UiLoop) ---
 		if (this.actionTimer > 0) this.actionTimer -= dt;
-		this._updateHud();
-		this.ui.update(dt);
+		this._updateHitFlash();
+		this.uiLoop.advance(dt, Game.UI_WORLD);
 		if (this.careers) this.careers.update(dt);
 		CarCare.hud(this, dt);                                                                  // painel do carro + troca de peça em andamento
 		if (this.goals) this.goals.update(dt);
@@ -890,10 +897,9 @@ class Game {
 		this.weather.update(dt);
 		this.dayNight.update(dt);
 		Economy.tick(this.dayNight.hour);
-		this._updatePrompt();
 		if (this.actionTimer > 0) this.actionTimer -= dt;
-		this._updateHud();
-		this.ui.update(dt);
+		this._updateHitFlash();
+		this.uiLoop.advance(dt, Game.UI_INTERIOR);
 	}
 
 	// Dentro de um interior (loja): trocar de arma (1-9), recarregar, pôr/tirar a máscara (K) e as teclas do assalto (G grita, ataque = tiro
@@ -1206,10 +1212,7 @@ class Game {
 		return { none: 'punhos', pistol: 'pistola', smg: 'submetralhadora', shotgun: 'escopeta', bat: 'taco' }[kind];
 	}
 
-	_updateMinimap() {
-		this._mmT = (this._mmT || 0) + this._dt;                   // o minimapa redesenha a ~20 Hz (é um canvas 2D caro e a olho nu não faz diferença)
-		if (this._mmT < 0.05) return;
-		this._mmT = 0;
+	_updateMinimap() {                                             // (20 Hz, pelo UiLoop: é um canvas 2D caro e a olho nu não faz diferença)
 		let center, heading;
 		if (this.mode === 'car' && this.activeCar) {
 			center = this.activeCar.position;
@@ -2671,13 +2674,16 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		this.actionTimer = 2.5;
 	}
 
+	// Vinheta vermelha de dano: todo quadro (é um fade), mas só escreve no DOM quando muda.
+	_updateHitFlash() {
+		if (!this.hud.hit) return;
+		const o = Math.round(Math.min(0.6, Math.max(0, this.player.hitFlash) * 1.7) * 100) / 100;
+		if (o !== this._hitOp) { this._hitOp = o; this.hud.hit.style.opacity = String(o); }
+	}
+
 	_updateHud() {
 		// O painel #hud antigo é `display:none` (só aparece com ?debug): sem ele visível, todas as escritas no DOM abaixo são
 		// trabalho jogado fora (e `textContent` invalida o estilo mesmo com o mesmo texto). Reconfere a visibilidade a cada 0.5 s.
-		if (this.hud.hit) {                                          // (vinheta de dano fica fora do #hud: sempre atualiza, mas só escreve se mudou)
-			const o = Math.round(Math.min(0.6, Math.max(0, this.player.hitFlash) * 1.7) * 100) / 100;
-			if (o !== this._hitOp) { this._hitOp = o; this.hud.hit.style.opacity = String(o); }
-		}
 		const now = performance.now();
 		if (now - (this._hudCheckT || 0) > 500) { this._hudCheckT = now; this._hudShown = !!(this.hud.pos && this.hud.pos.offsetParent); }
 		if (this._hudShown === false) {
