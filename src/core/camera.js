@@ -283,4 +283,8 @@ class CompassCamera {
 CompassCamera.yaw = 0;      // giro atual da bússola (rad): lido pelos sprites 2,5D, pela ordem de desenho e pelo minimapa
 CompassCamera.tilted = false;      // the game camera is in 2.5D (tilted orthographic) mode right now: sprites stand up (SpriteActor)
 CompassCamera.current = null;      // the game camera (culling and batching outside the game loop read its focus and ground extent)
+// The fake 2.5D of the top-down camera (drawings lying on the ground, the art seen from `tilt`): one metre of height is drawn cos(tilt)
+// metres to the north, and a circle on the ground is squashed to sin(tilt). The 2.5D camera projects for real: both go away.
+Object.defineProperty(CompassCamera, 'NORTH_PER_METRE', { get: () => (CompassCamera.tilted ? 0 : 0.56) });
+Object.defineProperty(CompassCamera, 'GROUND_SQUASH', { get: () => (CompassCamera.tilted ? 1 : 0.83) });
 CompassCamera.bounceOn = true;      // balanço da câmera ao dirigir (Ajustes › Balanço da câmera: PauseMenu.applySettings)

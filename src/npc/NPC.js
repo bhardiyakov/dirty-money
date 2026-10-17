@@ -16,7 +16,7 @@ class NPC {
 	constructor(scene, nav, startPos, id, sprites, ctx, role = null) {
 		this.role = role;
 		this.umbrella = false;      // guarda-chuva aberto (chuva)
-		this._umb = null; this._umbS = 0;
+		this._umb = null; this._umbUp = null; this._umbS = 0;
 		this.free = null;           // fora do crowd (deitado na areia ou nadando): movido à mão
 		this.towel = null;
 		this.freeAnim = null;
@@ -461,23 +461,38 @@ class NPC {
 	}
 
 	_umbrellaTick(dt) {
-		const want = this.umbrella && this.alive && !this.rag && !this.free;
+		const want = this.umbrella && this.alive && !this.rag && !this.free, stand = SpriteActor.standing();
 		if (want && !this._umb) {
-			const W = NPC.UMB.N / NPC.UMB.ppu, m = BABYLON.MeshBuilder.CreateGround('umb' + this.id, { width: W, height: W }, this.scene);
-			m.material = NPC.umbrellaMaterial(this.scene, this.id); m.isPickable = false; m.setEnabled(false);
-			this._umb = m; this._umbS = 0;
+			const W = NPC.UMB.N / NPC.UMB.ppu, mat = NPC.umbrellaMaterial(this.scene, this.id);
+			const flat = BABYLON.MeshBuilder.CreateGround('umb' + this.id, { width: W, height: W }, this.scene);
+			const up = BABYLON.MeshBuilder.CreatePlane('umbUp' + this.id, { size: W }, this.scene);      // (2.5D camera: standing, like the NPC)
+			up.billboardMode = BABYLON.AbstractMesh.BILLBOARDMODE_Y;
+			for (const m of [flat, up]) { m.material = mat; m.isPickable = false; m.setEnabled(false); }
+			this._umb = flat; this._umbUp = up; this._umbS = 0;
 		}
 		if (!this._umb) return;
 		this._umbS += ((want ? 1 : 0) - this._umbS) * Math.min(1, dt * 9);
-		const s = this._umbS;
-		if (s < 0.04 && !want) { this._umb.setEnabled(false); return; }
-		this._umb.setEnabled(true);
+		const s = this._umbS, show = s >= 0.04 || want;
+		this._umb.setEnabled(show && !stand);
+		this._umbUp.setEnabled(show && stand);
+		if (!show) return;
+		if (stand) { this._umbrellaStanding(s); return; }
 		// Debaixo de um toldo, fica abaixo dele junto com o pedestre (MapGeo.coverAt); senão, acima da cabeça.
 		const p = this.transform.position, cov = MapGeo.coverAt(p.x, p.z), y = cov > 0 ? cov - 0.1 : NPC.UMB.y;
 		const cam = this.scene.activeCamera, H = cam ? cam.position.y : 0, k = H > y + 1 ? (H - y) / H : 1;     // tira a paralaxe
 		const cx = cam ? cam.position.x : p.x, cz = cam ? cam.position.z : p.z;
 		this._umb.position.set(cx + (p.x - cx) * k, y, cz + (p.z - cz) * k);
 		this._umb.scaling.set(s * k, 1, s * k);
+	}
+	// 2.5D camera: the umbrella art (baked at the camera's angle, the feet at the cell centre) stands at the NPC's feet like the NPC, and is
+	// moved UMB_AHEAD metres toward the camera — no change on screen in an orthographic view, but drawn over the NPC (who is pulled
+	// NpcArt.STAND_BIAS toward the camera) instead of cutting through him.
+	static get UMB_AHEAD() { return 1.5; }
+	_umbrellaStanding(s) {
+		const p = this.transform.position, m = this._umbUp, e = Config.camera.tilt * Math.PI / 180, yaw = CompassCamera.yaw || 0, d = NPC.UMB_AHEAD;
+		const feet = this.actor.mesh.position.y - NpcArt.LAYER_Y;
+		m.position.set(p.x - d * Math.cos(e) * Math.sin(yaw), feet + d * Math.sin(e), p.z - d * Math.cos(e) * Math.cos(yaw));
+		m.scaling.set(s, s * SpriteActor.STAND_SCALE, 1);
 	}
 
 	// ----- Loop -----

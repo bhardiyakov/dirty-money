@@ -34,7 +34,7 @@ class FireField {
 	}
 	update(dt) {
 		this.time += dt;
-		const b = this.b, U = 0.56, wind = 0.25 * Math.sin(this.time * 0.37);
+		const b = this.b, U = CompassCamera.NORTH_PER_METRE, wind = 0.25 * Math.sin(this.time * 0.37);
 		let any = false;
 		for (let i = 0; i < this.n; i++) {
 			const q = this.p[i];

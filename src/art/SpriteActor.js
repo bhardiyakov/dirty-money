@@ -68,6 +68,10 @@ class SpriteActor {
 
 	// Giro da câmera bússola (CompassCamera.yaw): o personagem 2,5D fica "de pé" para cima da TELA, não do norte.
 	static viewYaw() { return typeof CompassCamera !== 'undefined' ? CompassCamera.yaw || 0 : 0; }
+	// 2.5D camera (CompassCamera.tilted): 2.5D characters STAND UP — a vertical quad turned to the camera (BILLBOARDMODE_Y), stretched by
+	// 1/cos(tilt) so the art, rendered at that same angle, shows 1:1 on screen. The top-down camera keeps them lying on the ground.
+	static standing() { return typeof CompassCamera !== 'undefined' && !!CompassCamera.tilted; }
+	static get STAND_SCALE() { return 1 / Math.cos(((typeof Config !== 'undefined' && Config.camera.tilt) || 56) * Math.PI / 180); }
 
 	// O sprite gira no ângulo exato (clipe vetorial)? (CarLights e quem mais precisar da frente desenhada.)
 	get rotates() { return !!(this.clip && this.clip.vector); }
@@ -291,7 +295,8 @@ class SpriteActor {
 			this._setBounds(Math.max(this._half, H));
 			this._rotate();
 		} else if (this.clip && this.clip.npc) {                           // 2,5D: quad fixo (a caixa vem no play), 8 direções desenhadas
-			this.mesh.rotation.y = this._yaw = SpriteActor.viewYaw();      // (de pé "para cima da tela": gira junto com a câmera bússola)
+			this._yaw = SpriteActor.viewYaw();
+			this._setStanding(SpriteActor.standing());                     // (de pé "para cima da tela": gira junto com a câmera bússola)
 			// (b, a guardavam a sombra do vetorial; no 2,5D b = toldo, a = água) — nos 4 vértices: sobrando um valor velho em
 			// algum deles, o shader interpola "água no corpo" e o desenho aparece afundado mesmo em terra
 			this._cover = -1;
@@ -302,6 +307,7 @@ class SpriteActor {
 			this.dir = -1;
 			const h = this.heading; this.heading = null; this.setHeading(h || 0);
 		} else {
+			this._setStanding(false);
 			this.mesh.rotation.y = 0;
 			const h = this._half;
 			this.mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, [-h, 0, h, h, 0, h, -h, 0, -h, h, 0, -h]);
@@ -398,8 +404,10 @@ class SpriteActor {
 		}
 		this._updateShade(dt);
 		if (c.npc) this._updateCover();
+		if (c.npc && this._stand !== SpriteActor.standing()) this._setStanding(SpriteActor.standing());      // (entered/left an interior)
 		if (c.npc && this._yaw !== SpriteActor.viewYaw()) {                // câmera bússola girou: o quad acompanha e a direção desenhada é refeita
-			this.mesh.rotation.y = this._yaw = SpriteActor.viewYaw();
+			this._yaw = SpriteActor.viewYaw();
+			if (!this._stand) this.mesh.rotation.y = this._yaw;            // (standing, the billboard already faces the camera)
 			if (this.heading != null) this.setHeading(this.heading);      // (com a histerese: o balanço da câmera não faz o desenho piscar)
 		}
 		// água no corpo e inclinação valem só no quadro em que foram informadas (antes deste update): sem aviso, zeram
@@ -479,7 +487,7 @@ class SpriteActor {
 		if (this.mesh.material !== P.mat) this.mesh.material = P.mat;
 		if (this._npcBox !== c.pk.box) {                                  // o quad (fixo, sem girar) tem a caixa do clipe desenhado
 			const b = this._npcBox = c.pk.box;
-			this._setQuad(this.mesh, b);
+			this._setQuad(this.mesh, b, this._pos, this._stand);
 			this._setBounds(Math.max(-b[0], b[2], -b[1], b[3]));
 		}
 		this._pg = P; this._drawClip = c; this._drawDir = dd;
@@ -507,10 +515,23 @@ class SpriteActor {
 		return m.isInFrustum(F);
 	}
 
-	// Quad fixo de um clipe vetorial: a caixa (x0, z0, x1, z1) em metros relativa aos pés (já com a folga da sombra).
-	_setQuad(mesh, b, P = this._pos) {
-		P[0] = b[0]; P[1] = 0; P[2] = b[3]; P[3] = b[2]; P[4] = 0; P[5] = b[3]; P[6] = b[0]; P[7] = 0; P[8] = b[1]; P[9] = b[2]; P[10] = 0; P[11] = b[1];
+	// Quad fixo de um clipe vetorial: a caixa (x0, z0, x1, z1) em metros relativa aos pés (já com a folga da sombra). stand: the same
+	// box upright, in the quad's XY plane (image "north" = up).
+	_setQuad(mesh, b, P = this._pos, stand = false) {
+		const u = stand ? 1 : 2, f = stand ? 2 : 1;                       // (index of the image-height axis / of the flat axis)
+		P[0] = b[0]; P[f] = 0; P[u] = b[3]; P[3] = b[2]; P[3 + f] = 0; P[3 + u] = b[3]; P[6] = b[0]; P[6 + f] = 0; P[6 + u] = b[1]; P[9] = b[2]; P[9 + f] = 0; P[9 + u] = b[1];
 		mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, P);
+	}
+	// Standing (2.5D camera) or lying on the ground (top-down) — see standing().
+	_setStanding(on) {
+		if (this._stand === on) return;
+		this._stand = on;
+		const m = this.mesh;
+		m.billboardMode = on ? BABYLON.AbstractMesh.BILLBOARDMODE_Y : BABYLON.AbstractMesh.BILLBOARDMODE_NONE;
+		m.scaling.y = on ? SpriteActor.STAND_SCALE : 1;
+		m.rotation.y = on ? 0 : this._yaw || 0;
+		this._npcBox = null;                                               // (the quad is rebuilt in the other plane on the next draw)
+		if (this.clip && this.clip.npc) this._applyUV();
 	}
 
 	// Ferimentos da pessoa: `shot` = tiros (0..4), `beat` = pancadas (0..4) e `cond` = o ESTADO DE DANO (Blood.cond): 1 SUJO, 2 MACHUCADO,

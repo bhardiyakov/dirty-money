@@ -319,7 +319,7 @@ const Throwables = {
 			if (r) { end = r; hit = o.hit; }
 		}
 		// traços ao longo da curva (desenhada em 2,5D: altura h → h × 0,56 m para o norte), a cada ~0,55 m, piscando de leve
-		const D = this.DEF[s.kind], U = 0.56, gap = 0.55, ph = (performance.now() / 1000 * 1.6) % 1;
+		const D = this.DEF[s.kind], U = CompassCamera.NORTH_PER_METRE, gap = 0.55, ph = (performance.now() / 1000 * 1.6) % 1;
 		let acc = -ph * gap * 2, n = 0;
 		for (let i = 1; i < pts.length && n < this.DASHES; i++) {
 			const a = pts[i - 1], b = pts[i], ax = a.x, az = a.z + a.h * U, bx = b.x, bz = b.z + b.h * U, L = Math.hypot(bx - ax, bz - az);
@@ -338,7 +338,7 @@ const Throwables = {
 		// anel onde cai: o tamanho do estrago (explosão / fogo)
 		const last = pts[pts.length - 1], R = s.kind === 'grenade' ? Config.crash.explosionR * this.BLAST_BL * 0.7 : this.FIRE_R;
 		const pulse = 1 + 0.06 * Math.sin(performance.now() / 120);
-		const lz = last.z + last.h * 0.56, ly = 0.35 + last.h;                 // (caiu num telhado / bateu alto na parede: o anel lá em cima)
+		const lz = last.z + last.h * CompassCamera.NORTH_PER_METRE, ly = 0.35 + last.h;                 // (caiu num telhado / bateu alto na parede: o anel lá em cima)
 		this.mark.place(0, last.x, ly, lz, R * 2 * pulse);
 		this.mark.color(0, 1.0, s.kind === 'grenade' ? 0.35 : 0.55, 0.12, 0.85);
 		this.mark.place(1, last.x, ly, lz, 0.9);
@@ -358,7 +358,7 @@ const Throwables = {
 
 	// ------------------------------------------------------------------ voo
 	_fly(dt) {
-		const g = this.g, U = 0.56, B = this.objs;
+		const g = this.g, U = CompassCamera.NORTH_PER_METRE, B = this.objs;
 		for (let i = this.list.length - 1; i >= 0; i--) {
 			const o = this.list[i];
 			o.t += dt;
@@ -491,10 +491,10 @@ const Throwables = {
 					cd.flameFx.emit(b.x + Math.cos(a) * r, b.z + Math.sin(a) * r, (F.h || 0) + 0.02, (0.75 + Math.random() * 0.8) * (0.55 + 0.45 * I), 0.45 + Math.random() * 0.45, 0.85 + 0.15 * Math.random(), 1.1 + Math.random() * 1.1);
 				}
 				if (F.slot == null) F.slot = cd.fire.alloc();
-				cd.fire.place(F.slot, F.x, 0.3 + (F.h || 0), F.z + (F.h || 0) * 0.56, (F.r * 2.6 + 2) * (0.7 + 0.3 * I) + Math.sin(cd.time * 11 + i) * 0.8);
+				cd.fire.place(F.slot, F.x, 0.3 + (F.h || 0), F.z + (F.h || 0) * CompassCamera.NORTH_PER_METRE, (F.r * 2.6 + 2) * (0.7 + 0.3 * I) + Math.sin(cd.time * 11 + i) * 0.8);
 				cd.fire.color(F.slot, 1.0, 0.45, 0.12, 0.12 + 0.12 * I);
 				F.sm = (F.sm || 0) - dt;
-				if (F.sm <= 0) { F.sm = 0.3; cd.puffs.emit(F.x + (Math.random() - 0.5) * F.r, 2.2 + (F.h || 0), F.z + (F.h || 0) * 0.56 + F.r * 0.4 + (Math.random() - 0.5) * F.r, (Math.random() - 0.5) * 0.6, 2.4 + Math.random(), (Math.random() - 0.5) * 0.6 + 0.4, 0.4, 2.0, 2.2, 0.22 * I + 0.06, [0.12, 0.12, 0.13]); }      // (fumaça rala subindo — a mais densa é a dos carros)
+				if (F.sm <= 0) { F.sm = 0.3; cd.puffs.emit(F.x + (Math.random() - 0.5) * F.r, 2.2 + (F.h || 0), F.z + (F.h || 0) * CompassCamera.NORTH_PER_METRE + F.r * 0.4 + (Math.random() - 0.5) * F.r, (Math.random() - 0.5) * 0.6, 2.4 + Math.random(), (Math.random() - 0.5) * 0.6 + 0.4, 0.4, 2.0, 2.2, 0.22 * I + 0.06, [0.12, 0.12, 0.13]); }      // (fumaça rala subindo — a mais densa é a dos carros)
 			}
 			// dano: 4×/s em tudo que está no fogo
 			F.tick -= dt;

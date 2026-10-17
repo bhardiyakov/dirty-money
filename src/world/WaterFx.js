@@ -42,8 +42,8 @@ class WaterFx {
 		this.spray = new WaterSpray(scene, 160);
 	}
 
-	static get SQ() { return 0.83; }          // sen 56°: um círculo no chão visto pela câmera dos personagens
-	static get UP() { return 0.56; }          // cos 56°: 1 m de altura sobe 0,56 m na tela
+	static get SQ() { return CompassCamera.GROUND_SQUASH; }          // sen 56°: um círculo no chão visto pela câmera dos personagens
+	static get UP() { return CompassCamera.NORTH_PER_METRE; }        // cos 56°: 1 m de altura sobe 0,56 m na tela
 
 	// Uma marola em (x, z) que cresce de `s0` a `s1` (diâmetro, u) em `life` s. sq = achatamento norte-sul (1 = círculo).
 	ripple(x, z, s0 = 0.8, s1 = 2.8, life = 0.9, a = 0.55, sq = WaterFx.SQ) {

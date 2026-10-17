@@ -433,6 +433,7 @@ const NpcArt = {
 			uniform mat4 viewProjection;
 			uniform float ppu;
 			uniform float lift;
+			uniform vec2 stand;          // standing quad (2.5D camera): x = drop of the feet to the ground, y = depth bias (NDC)
 			varying vec2 vPx;
 			varying vec4 vFr;
 			varying vec2 vC;
@@ -442,17 +443,21 @@ const NpcArt = {
 			varying vec2 vG;
 			vec2 un(float v) { float hi = floor(v / 4096.0 + 0.0001); return vec2(hi, v - hi * 4096.0); }
 			void main(void) {
+				float h = position.y + position.z;                          // image height (m): z on a quad lying down, y on a standing one
 				vec2 xy = un(fr.x), wh = un(fr.y), o = un(fr.z) - 2048.0;
-				vPx = vec2(xy.x - o.x + position.x * ppu, xy.y - o.y - position.z * ppu);
+				vPx = vec2(xy.x - o.x + position.x * ppu, xy.y - o.y - h * ppu);
 				vFr = vec4(xy, xy + wh);
 				vec2 xy2 = un(fr2.x), wh2 = un(fr2.y), o2 = un(fr2.z) - 2048.0;
-				vPx2 = vec3(xy2.x - o2.x + position.x * ppu, xy2.y - o2.y - position.z * ppu, fr2.w);
+				vPx2 = vec3(xy2.x - o2.x + position.x * ppu, xy2.y - o2.y - h * ppu, fr2.w);
 				vFr2 = vec4(xy2, xy2 + wh2);
 				vC = color.rg;
-				vW = vec3(position.x, position.z, color.a);                 // x e "altura" na imagem (m), linha d'água (m, 0 = seco)
+				vW = vec3(position.x, h, color.a);                          // x e "altura" na imagem (m), linha d'água (m, 0 = seco)
 				vec4 wp = world * vec4(position, 1.0);
+				wp.y -= stand.x;
 				vG = wp.xz;                                                 // (ponto do chão onde este pixel do desenho cai: recorte do carro)
 				gl_Position = viewProjection * wp;
+				// Standing: the quad already has its true height; the bias keeps the art below the feet (shadow, front foot) above the ground.
+				if (stand.y > 0.0) { gl_Position.z -= stand.y * gl_Position.w; return; }
 				// "De pé" para a profundidade: o desenho cresce para o norte (cabeça ~1 m acima dos pés na imagem), mas é uma pessoa em pé —
 				// a parte de cima testa a profundidade como se estivesse mais ALTA (não some atrás da parede/telhado baixo logo ao norte).
 				// Com os pés debaixo de um toldo (color.b = altura dele, SpriteActor._updateCover), o corpo inteiro fica abaixo do toldo.
@@ -572,7 +577,7 @@ const NpcArt = {
 		if (!m) {
 			m = P.mat = new BABYLON.ShaderMaterial('npcArt_' + A.id + '_' + P.i, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
 				attributes: ['position', 'color', 'fr', 'fr2'],
-				uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'atlasSize', 'palRows', 'tint', 'sharp', 'mini', 'la', 'fmt', 'wt', 'clipA', 'clipB'],
+				uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'palRows', 'tint', 'sharp', 'mini', 'la', 'fmt', 'wt', 'clipA', 'clipB'],
 				samplers: ['atlas', 'palette'],
 				needAlphaBlending: true,
 			});
@@ -591,6 +596,7 @@ const NpcArt = {
 		m.setFloat('sharp', this._sharpOf(A));
 		m.setFloat('mini', this._miniOf(A));
 		m.setFloat('wt', this._wt || 0);
+		m.setVector2('stand', this._stand);
 		this._clipU(m, A.carClip);
 		return m;
 	},
@@ -606,10 +612,22 @@ const NpcArt = {
 	_sharpOf(A) { return Math.max(1, Math.min(1.6, (this._spm || this.ppu) / this.ppuOf(A))); },
 	_miniOf(A) { return Math.max(1, Math.min(6, this.ppuOf(A) / (this._spm || this.ppu))); },
 
+	// Standing sprites (2.5D camera, SpriteActor.standing): the feet drop from the top-down layer height (0.5) back to the ground, and
+	// the depth is pulled STAND_BIAS metres toward the camera. Uniform `stand` of every page material; follows the camera mode.
+	LAYER_Y: 0.5, STAND_BIAS: 1.0,
+	_stand: new BABYLON.Vector2(0, 0),
+	_standSync() {
+		const on = typeof SpriteActor !== 'undefined' && SpriteActor.standing(), cam = this._scene && this._scene.activeCamera;
+		const bias = on && cam ? 2 * this.STAND_BIAS / Math.max(1, cam.maxZ - cam.minZ) : 0;
+		if (this._stand.y === bias && (this._stand.x > 0) === on) return;
+		this._stand.set(on ? this.LAYER_Y : 0, bias);
+		for (const A of Object.values(this.atlases)) for (const P of A.pages) if (P.mat) P.mat.setVector2('stand', this._stand);
+	},
 	// Relógio da linha d'água (ondulação de quem vadeia): um uniform por página na GPU. Também o relógio do LRU (~2 s).
 	_lruT: 0,
 	tick(t) {
 		this.now = t;
+		this._standSync();
 		this._wt = t % 1000;
 		for (const P of this._live) P.mat.setFloat('wt', this._wt);
 		if (this._zombies.length) this._reap();

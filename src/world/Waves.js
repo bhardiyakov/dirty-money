@@ -14,7 +14,7 @@
 const Waves = {
 	// ondulações: comprimento (u = m), direção para onde andam (rad, 0 = +X, π/2 = +Z) e amplitude (m) com mar calmo (M = 1)
 	COMP: [{ L: 34, dir: 0.35, A: 0.2 }, { L: 21, dir: 1.75, A: 0.13 }, { L: 13, dir: -0.95, A: 0.08 }, { L: 7.5, dir: 2.6, A: 0.045 }],
-	UP: 0.56,                 // 1 m de altura = 0,56 u para o norte da tela (o desenho 2,5D, como WaterFx.UP)
+	get UP() { return CompassCamera.NORTH_PER_METRE; },      // 1 m de altura = 0,56 u para o norte da tela (o desenho 2,5D, como WaterFx.UP)
 	t: 0,
 	M: 1,                     // mar: ~0,6 calmo · ~1,6 chuva forte · ~2,1 tempestade
 
