@@ -18,11 +18,11 @@ const NpcData = {
 
 	load() {
 		if (this.ready) return this.ready;
-		if (typeof fetch !== 'function') return (this.ready = Promise.reject(new Error('sem fetch')));
-		return (this.ready = fetch(this.BASE + 'npc-data.json').then((r) => {
-			if (!r.ok) throw new Error('npc-data.json: HTTP ' + r.status);
-			return r.json();
-		}).then((d) => this.use(d)));
+		if (!AssetIO.available) return (this.ready = Promise.reject(new Error('sem leitura de arquivos (file://)')));
+		return (this.ready = AssetIO.json(this.BASE + 'npc-data.json').then((d) => {
+			if (!d) throw new Error('npc-data.json indisponível');
+			return this.use(d);
+		}));
 	},
 	use(d) { this.d = d; this._byId = null; return d; },
 	get ok() { return !!this.d; },

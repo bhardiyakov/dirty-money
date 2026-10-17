@@ -497,6 +497,7 @@ const Config = {
 
 // Saved choices that shape Config before the game reads it (the graphics preset itself: src/core/Graphics.js, loaded right after).
 (function applySavedChoices() {
-	try { localStorage.removeItem('dm_quality'); } catch (e) { /* sem storage */ }      // (o AutoQuality antigo gravava o perfil leve: não vale mais)
-	try { const s = JSON.parse(localStorage.getItem('dm_settings') || '{}'); if (typeof s.cars3d === 'boolean') Config.art.cars3d = s.cars3d; } catch (e) { /* sem storage */ }
+	Store.remove('quality');                                                    // (o AutoQuality antigo gravava o perfil leve: não vale mais)
+	const s = Store.getJSON('settings', null) || {};
+	if (typeof s.cars3d === 'boolean') Config.art.cars3d = s.cars3d;
 })();

@@ -4,8 +4,6 @@
 // ============================================================================
 
 class MainMenu {
-	static SAVE_KEY = 'dm_save';
-
 	constructor(game) {
 		this.game = game;
 		this.root = document.getElementById('main-menu');
@@ -54,14 +52,7 @@ class MainMenu {
 		window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel.classList.contains('open')) open(false); });
 	}
 
-	_readSave() {
-		try {
-			const raw = localStorage.getItem(MainMenu.SAVE_KEY);
-			return raw ? JSON.parse(raw) : null;
-		} catch (e) {
-			return null;
-		}
-	}
+	_readSave() { return SaveGame.read(); }
 
 	_start(mode) {
 		if (this.started) return;

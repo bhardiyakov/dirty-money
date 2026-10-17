@@ -40,7 +40,8 @@ const Graphics = {
 		console.log(`[GRÁFICOS] ${this.LABEL[this.level]}${this.choice === 'auto' && !forced ? ' (automático)' : ''}`);
 	},
 	_saved() {
-		try { const g = JSON.parse(localStorage.getItem('dm_settings') || '{}').graphics; return this.CHOICES.includes(g) ? g : 'auto'; } catch (e) { return 'auto'; }
+		const g = (Store.getJSON('settings', null) || {}).graphics;
+		return this.CHOICES.includes(g) ? g : 'auto';
 	},
 	// The choice after `choice` in the settings button's cycle, and how the button names a choice (Automatic shows what it picks here).
 	next(choice) { return this.CHOICES[(this.CHOICES.indexOf(choice) + 1) % this.CHOICES.length]; },

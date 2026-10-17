@@ -71,8 +71,8 @@ class PauseMenu {
 	}
 
 	// ------------------------------------------------------------- configurações
-	_loadSettings() { try { return JSON.parse(localStorage.getItem('dm_settings')) || {}; } catch (e) { return {}; } }
-	_saveSettings() { try { localStorage.setItem('dm_settings', JSON.stringify(this.settings)); } catch (e) { /* sem storage */ } }
+	_loadSettings() { return Store.getJSON('settings', null) || {}; }
+	_saveSettings() { Store.setJSON('settings', this.settings); }
 	applySettings() {
 		const s = this.settings;
 		AudioFX.setVolume(s.volume);

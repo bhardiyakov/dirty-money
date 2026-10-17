@@ -41,12 +41,8 @@ const SpriteIO = {
 
 	// Lê o manifesto e baixa os arquivos por prioridade (acima). Sem manifesto (ou em file://), tudo segue procedural.
 	async init(eager = () => false) {
-		if (typeof fetch !== 'function' || !/^https?:$/.test(location.protocol)) return;
-		let man = null;
-		try {
-			const r = await fetch(this.BASE + 'manifest.json', { cache: 'no-cache' });
-			if (r.ok) man = await r.json();
-		} catch (e) { /* sem manifesto: procedural */ }
+		if (!AssetIO.available) return;
+		const man = await AssetIO.json(this.BASE + 'manifest.json', { fresh: true });      // (sem manifesto: procedural)
 		if (!man || !man.entries || !Object.keys(man.entries).length) return;
 		this.manifest = man;
 		const keys = Object.keys(man.entries), T = [[], [], []];
@@ -64,7 +60,7 @@ const SpriteIO = {
 		if (this._bytes.has(key)) return Promise.resolve();
 		if (this._wait.has(key)) return this._wait.get(key);
 		const e = this.manifest.entries[key];
-		const p = fetch(this.BASE + e.file).then((r) => (r.ok ? r.arrayBuffer() : null)).then((b) => { if (b) this._bytes.set(key, new Uint8Array(b)); })
+		const p = AssetIO.bytes(this.BASE + e.file).then((b) => { if (b) this._bytes.set(key, new Uint8Array(b)); })
 			.catch(() => {}).finally(() => this._wait.delete(key));
 		this._wait.set(key, p);
 		return p;

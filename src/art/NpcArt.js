@@ -68,7 +68,7 @@ const NpcArt = {
 			if (/[?&]npc=0\b/.test(location.search)) return false;
 			try { if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase('dirty-money-hd'); } catch (e) { /* (o cache dos machucados gerados no jogo, que não existe mais) */ }
 			const d = await NpcData.load();
-			const got = await Promise.all(d.atlases.map((id) => fetch(this.BASE + id + '.json').then((r) => (r.ok ? r.json() : null), () => null)));
+			const got = await Promise.all(d.atlases.map((id) => AssetIO.json(this.BASE + id + '.json')));
 			got.forEach((m, i) => { if (m && !this.atlases[d.atlases[i]]) this._fromManifest(d.atlases[i], m); });
 			if (!Object.keys(this.atlases).length) throw new Error('nenhum manifesto em ' + this.BASE);
 			this.load();
