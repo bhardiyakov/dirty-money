@@ -1,763 +1,763 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Dirty Money">
-    <meta name="theme-color" content="#07090e">
-    <!-- Manifesto (instalar como app) só por http(s): em file:// o Chrome bloqueia e enche o console de erros de CORS. -->
-    <script>if (/^https?:$/.test(location.protocol)) document.write('<link rel="manifest" href="./manifest.webmanifest">');</script>
-    <link rel="icon" href="./assets/icon-192.png">
-    <link rel="apple-touch-icon" href="./assets/icon-192.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="preload" as="image" href="./assets/bg1.jpg" fetchpriority="high">
-    <link rel="preload" as="image" href="./assets/logo.png" fetchpriority="high">
-    <title>Dirty Money</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+	<meta name="mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<meta name="apple-mobile-web-app-title" content="Dirty Money">
+	<meta name="theme-color" content="#07090e">
+	<!-- Manifesto (instalar como app) só por http(s): em file:// o Chrome bloqueia e enche o console de erros de CORS. -->
+	<script>if (/^https?:$/.test(location.protocol)) document.write('<link rel="manifest" href="./manifest.webmanifest">');</script>
+	<link rel="icon" href="./assets/icon-192.png">
+	<link rel="apple-touch-icon" href="./assets/icon-192.png">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+	<link rel="preload" as="image" href="./assets/bg1.jpg" fetchpriority="high">
+	<link rel="preload" as="image" href="./assets/logo.png" fetchpriority="high">
+	<title>Dirty Money</title>
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
 
-        html, body {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: #07090e;
-        }
+		html, body {
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+			background: #07090e;
+		}
 
-        /* celular em pé: o jogo é em paisagem (NativeMobile em src/ui/TouchControls.js trava a orientação quando o navegador deixa) */
-        #rotate-hint { position: fixed; inset: 0; z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-            background: #07090e; color: #e8eef7; font: 600 17px/1.4 Inter, system-ui, sans-serif; text-align: center; padding: 32px; }
-        #rotate-hint .rh-phone { width: 54px; height: 92px; border: 4px solid #e8eef7; border-radius: 12px; animation: rhTurn 1.8s ease-in-out infinite; }
-        #rotate-hint small { color: #94a3b8; font-weight: 500; font-size: 13px; }
-        @keyframes rhTurn { 0%, 20% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
-        @media (orientation: portrait) { html.touch-device #rotate-hint { display: flex; } }
-        html.touch-device, html.touch-device body { height: 100dvh; }
+		/* celular em pé: o jogo é em paisagem (NativeMobile em src/ui/TouchControls.js trava a orientação quando o navegador deixa) */
+		#rotate-hint { position: fixed; inset: 0; z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+			background: #07090e; color: #e8eef7; font: 600 17px/1.4 Inter, system-ui, sans-serif; text-align: center; padding: 32px; }
+		#rotate-hint .rh-phone { width: 54px; height: 92px; border: 4px solid #e8eef7; border-radius: 12px; animation: rhTurn 1.8s ease-in-out infinite; }
+		#rotate-hint small { color: #94a3b8; font-weight: 500; font-size: 13px; }
+		@keyframes rhTurn { 0%, 20% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+		@media (orientation: portrait) { html.touch-device #rotate-hint { display: flex; } }
+		html.touch-device, html.touch-device body { height: 100dvh; }
 
-        #canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            touch-action: none;
-            outline: none;
-        }
+		#canvas {
+			display: block;
+			width: 100%;
+			height: 100%;
+			touch-action: none;
+			outline: none;
+		}
 
-        /* HUD: DOM puro sobreposto ao canvas (position: absolute). */
-        #hud {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: #00ff00;
-            font-size: 12px;
-            z-index: 10;
-            background: rgba(0, 0, 0, 0.72);
-            padding: 10px;
-            border: 2px solid #00ff00;
-            border-radius: 4px;
-            min-width: 270px;
-            max-width: 330px;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-            pointer-events: none;
-        }
+		/* HUD: DOM puro sobreposto ao canvas (position: absolute). */
+		#hud {
+			position: absolute;
+			top: 20px;
+			left: 20px;
+			color: #00ff00;
+			font-size: 12px;
+			z-index: 10;
+			background: rgba(0, 0, 0, 0.72);
+			padding: 10px;
+			border: 2px solid #00ff00;
+			border-radius: 4px;
+			min-width: 270px;
+			max-width: 330px;
+			box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+			pointer-events: none;
+		}
 
-        .hud-row {
-            margin: 4px 0;
-            display: flex;
-            justify-content: space-between;
-        }
+		.hud-row {
+			margin: 4px 0;
+			display: flex;
+			justify-content: space-between;
+		}
 
-        .hud-label {
-            font-weight: bold;
-            color: #00ff00;
-            min-width: 100px;
-        }
+		.hud-label {
+			font-weight: bold;
+			color: #00ff00;
+			min-width: 100px;
+		}
 
-        .hud-value {
-            color: #00ff00;
-            font-weight: normal;
-            text-align: right;
-        }
+		.hud-value {
+			color: #00ff00;
+			font-weight: normal;
+			text-align: right;
+		}
 
-        .hud-section {
-            margin-top: 8px;
-            border-top: 1px solid #00ff00;
-            padding-top: 8px;
-        }
+		.hud-section {
+			margin-top: 8px;
+			border-top: 1px solid #00ff00;
+			padding-top: 8px;
+		}
 
-        /* Vinheta de dano: tela inteira, não captura cliques. */
-        #hit {
-            position: absolute;
-            inset: 0;
-            z-index: 8;
-            pointer-events: none;
-            opacity: 0;
-            background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 45%, rgba(220, 20, 10, 0.85) 100%);
-        }
+		/* Vinheta de dano: tela inteira, não captura cliques. */
+		#hit {
+			position: absolute;
+			inset: 0;
+			z-index: 8;
+			pointer-events: none;
+			opacity: 0;
+			background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 45%, rgba(220, 20, 10, 0.85) 100%);
+		}
 
-        /* Painel de inventário (abre com I). */
-        #inventory {
-            display: none;
-            position: absolute;
-            right: 20px;
-            top: 20px;
-            width: 300px;
-            z-index: 12;
-            padding: 12px 14px;
-            color: #00ff00;
-            font-size: 12px;
-            background: rgba(0, 0, 0, 0.82);
-            border: 2px solid #00ff00;
-            border-radius: 4px;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-            pointer-events: none;
-        }
-        #inventory h3 { font-size: 13px; margin-bottom: 8px; border-bottom: 1px solid #00ff00; padding-bottom: 6px; }
-        .inv-row { display: flex; justify-content: space-between; margin: 3px 0; }
-        .inv-row.big { color: #ffd23f; font-size: 14px; font-weight: bold; margin-bottom: 6px; }
-        .inv-row.cur { color: #ffe14d; font-weight: bold; }
-        .inv-row.off { color: #557055; }
-        .inv-sep { margin: 8px 0 4px; color: #88aa88; border-top: 1px solid #1d4a1d; padding-top: 6px; }
-        .inv-hint { margin-top: 10px; color: #7d9a7d; font-size: 11px; }
+		/* Painel de inventário (abre com I). */
+		#inventory {
+			display: none;
+			position: absolute;
+			right: 20px;
+			top: 20px;
+			width: 300px;
+			z-index: 12;
+			padding: 12px 14px;
+			color: #00ff00;
+			font-size: 12px;
+			background: rgba(0, 0, 0, 0.82);
+			border: 2px solid #00ff00;
+			border-radius: 4px;
+			box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+			pointer-events: none;
+		}
+		#inventory h3 { font-size: 13px; margin-bottom: 8px; border-bottom: 1px solid #00ff00; padding-bottom: 6px; }
+		.inv-row { display: flex; justify-content: space-between; margin: 3px 0; }
+		.inv-row.big { color: #ffd23f; font-size: 14px; font-weight: bold; margin-bottom: 6px; }
+		.inv-row.cur { color: #ffe14d; font-weight: bold; }
+		.inv-row.off { color: #557055; }
+		.inv-sep { margin: 8px 0 4px; color: #88aa88; border-top: 1px solid #1d4a1d; padding-top: 6px; }
+		.inv-hint { margin-top: 10px; color: #7d9a7d; font-size: 11px; }
 
-        /* Dica de interação perto de um veículo (F / G). */
-        #prompt {
-            display: none;
-            position: absolute;
-            left: 50%;
-            bottom: 64px;
-            transform: translateX(-50%);
-            z-index: 11;
-            padding: 7px 14px;
-            color: #e8ffe8;
-            font-size: 13px;
-            background: rgba(0, 0, 0, 0.78);
-            border: 1px solid #00ff00;
-            border-radius: 4px;
-            pointer-events: none;
-            text-align: center;
-            white-space: nowrap;
-        }
-        #prompt b { color: #ffe14d; }
-        #prompt small { display: block; color: #88aa88; font-size: 11px; margin-top: 2px; }
+		/* Dica de interação perto de um veículo (F / G). */
+		#prompt {
+			display: none;
+			position: absolute;
+			left: 50%;
+			bottom: 64px;
+			transform: translateX(-50%);
+			z-index: 11;
+			padding: 7px 14px;
+			color: #e8ffe8;
+			font-size: 13px;
+			background: rgba(0, 0, 0, 0.78);
+			border: 1px solid #00ff00;
+			border-radius: 4px;
+			pointer-events: none;
+			text-align: center;
+			white-space: nowrap;
+		}
+		#prompt b { color: #ffe14d; }
+		#prompt small { display: block; color: #88aa88; font-size: 11px; margin-top: 2px; }
 
-        /* Minimapa no canto inferior esquerdo. */
-        #minimap {
-            position: absolute;
-            left: 20px;
-            bottom: 20px;
-            z-index: 10;
-            background: #0a0a0a;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.25);
-        }
-        /* ---------------------------------------------------------------- tela inicial (menu + carregamento)
-           Montada por um script INLINE logo abaixo da marcação: não espera o Babylon nem os ~100 scripts do jogo. Estados em #main-menu:
-           (nada) só a prévia borrada do 1º fundo · .bg-ready fundos nítidos · .ui-ready logo e botões · .loading barra embaixo · .fade some. */
-        #main-menu { position: fixed; inset: 0; z-index: 120; overflow: hidden; color: #f2f4f8; background: #07090e;
-            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; transition: opacity .7s ease; }
-        #main-menu.fade { opacity: 0; pointer-events: none; }
-        #mm-ph { position: absolute; inset: -40px; background: url(data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAABQAEAQf/xAAqEAABAwIDBgcBAAAAAAAAAAABAAIDETEEBSESIjNBcYETMjRCYYKRsf/EABcBAAMBAAAAAAAAAAAAAAAAAAECAwD/xAAYEQEBAQEBAAAAAAAAAAAAAAAAAQIRMf/aAAwDAQACEQMRAD8A8wgZG67alot1S2XQsieJJoKtJsbH8Q8UpDd060IKRw+KxUsRigptAACgsOalqKR3MXxyTuEcLWi+rijxE/wmOY0bNKuNNb0SZy98sj94t2aanQFHESMw8TvZTkflHPnIVmi8w7prKuI/7fwqUjWjRieGOgQg9IO6lJYNf//Z) center / cover; filter: blur(22px) saturate(1.1); transform: scale(1.05); }
-        #mm-bg { position: absolute; inset: 0; opacity: 0; transition: opacity .8s ease; }
-        #main-menu.bg-ready #mm-bg { opacity: 1; }
-        #mm-bg .mm-slide { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; transition: opacity 1.4s ease; will-change: opacity, transform; }
-        #mm-bg .mm-slide.on { opacity: 1; animation: mmKen 9s ease-out both; }
-        @keyframes mmKen { from { transform: scale(1.1) translate3d(0, -1%, 0); } to { transform: scale(1) translate3d(0, 0, 0); } }
-        #main-menu:not(.loading) #mm-bg .mm-slide { transition-duration: .25s; }
-        #mm-bg.glitch { animation: mm-glitch 0.4s steps(1) 1; }
-        @keyframes mm-glitch {
-            0%   { transform: translate(-14px, 0) scale(1.04); filter: hue-rotate(90deg) saturate(2.4) contrast(1.4); clip-path: inset(0 0 62% 0); }
-            12%  { transform: translate(18px, 4px) scale(1.04); filter: hue-rotate(-60deg) saturate(3) brightness(1.5); clip-path: inset(38% 0 30% 0); }
-            25%  { transform: translate(-8px, -3px) scale(1.04); filter: invert(1) hue-rotate(180deg); clip-path: inset(0); }
-            37%  { transform: translate(22px, 0) scale(1.05); filter: saturate(0) contrast(2); clip-path: inset(70% 0 0 0); }
-            50%  { transform: translate(-20px, 6px) scale(1.04); filter: hue-rotate(200deg) saturate(2.5); clip-path: inset(10% 0 55% 0); }
-            62%  { transform: translate(10px, -4px) scale(1.04); filter: contrast(1.8) brightness(1.4); clip-path: inset(0); }
-            75%  { transform: translate(-6px, 0) scale(1.02); filter: hue-rotate(40deg) saturate(1.8); clip-path: inset(45% 0 20% 0); }
-            88%  { transform: translate(4px, 2px) scale(1.01); filter: none; clip-path: inset(0); }
-            100% { transform: none; filter: none; clip-path: inset(0); }
-        }
-        #mm-bars { position: absolute; inset: 0; pointer-events: none; }
-        #mm-bars i { position: absolute; left: 0; width: 100%; opacity: 0.5; mix-blend-mode: screen; }
-        #mm-shade { position: absolute; inset: 0; pointer-events: none; transition: background .8s ease;
-            background: radial-gradient(ellipse at 50% 45%, rgba(5,7,12,0.3) 0%, rgba(5,7,12,0.82) 100%); }
-        #main-menu.loading #mm-shade { background: linear-gradient(180deg, rgba(5,7,12,0.15) 0%, rgba(5,7,12,0.1) 55%, rgba(5,7,12,0.9) 100%); }
-        #main-menu .mm-frame { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 34px; padding: 24px; overflow-y: auto;
-            opacity: 0; transform: translateY(14px); pointer-events: none; transition: opacity .6s ease, transform .6s ease; }
-        #main-menu.ui-ready:not(.loading) .mm-frame { opacity: 1; transform: none; pointer-events: auto; }
-        #main-menu.loading .mm-frame { transform: translateY(-14px); transition-duration: .4s; }
-        #main-menu .mm-logo { display: block; width: min(460px, 80vw); max-height: 52vh; object-fit: contain;
-            filter: drop-shadow(0 10px 30px rgba(0,0,0,0.85)); animation: mm-pulse 4.5s ease-in-out infinite; transform-origin: center; }
-        @keyframes mm-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
-        #main-menu .mm-buttons { display: flex; flex-direction: column; gap: 12px; width: min(340px, 78vw); }
-        #main-menu .mm-btn { font: 600 16px 'Inter', system-ui, sans-serif; letter-spacing: 0.01em; padding: 15px 20px; border-radius: 14px; cursor: pointer; outline: none;
-            color: #f2f4f8; background: rgba(16,19,28,0.62); border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-            -webkit-backdrop-filter: blur(18px) saturate(1.5); backdrop-filter: blur(18px) saturate(1.5); transition: background .15s, transform .12s, border-color .15s; }
-        #main-menu .mm-btn:hover:not(:disabled), #main-menu .mm-btn:focus-visible { background: rgba(40,46,62,0.8); border-color: rgba(255,255,255,0.3); transform: translateY(-1px); }
-        #main-menu .mm-btn:active:not(:disabled) { transform: translateY(1px); }
-        #main-menu .mm-btn#btn-new { background: linear-gradient(180deg, #3ee0a1, #10b981); color: #04130c; border-color: transparent; font-weight: 700; }
-        #main-menu .mm-btn#btn-new:hover:not(:disabled), #main-menu .mm-btn#btn-new:focus-visible { background: linear-gradient(180deg, #5cf0b5, #1fc98f); }
-        #main-menu .mm-btn:disabled, #main-menu .mm-btn.mm-disabled { cursor: not-allowed; color: #6f7689; background: rgba(16,19,28,0.5); border-color: rgba(255,255,255,0.08); transform: none; }
-        #main-menu .mm-btn small { display: block; font-size: 11px; font-weight: 500; color: #8a93a8; margin-top: 3px; }
-        /* espera dos scripts do jogo (fundos já prontos): pontinho girando embaixo */
-        #mm-wait { position: absolute; left: 50%; bottom: 7vh; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.18); border-top-color: #34d399;
-            animation: mmSpin .8s linear infinite; opacity: 0; transition: opacity .4s; }
-        #main-menu.bg-ready:not(.ui-ready) #mm-wait { opacity: 1; }
-        @keyframes mmSpin { to { transform: rotate(360deg); } }
-        /* carregamento: faixa na parte de baixo, os fundos continuam passando */
-        #mm-load { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 max(28px, 5vw) max(26px, 4.5vh); display: flex; flex-direction: column; gap: 12px;
-            opacity: 0; transform: translateY(20px); pointer-events: none; transition: opacity .6s ease .25s, transform .6s ease .25s; }
-        #main-menu.loading #mm-load { opacity: 1; transform: none; }
-        #mm-load .ml-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
-        #mm-load .ml-logo { height: clamp(48px, 11vh, 96px); filter: drop-shadow(0 6px 18px rgba(0,0,0,0.8)); }
-        #mm-load .ml-tip { flex: 1; max-width: 640px; text-align: right; font-size: clamp(13px, 1.6vh, 15px); line-height: 1.5; color: #d6dbe6; text-shadow: 0 1px 8px rgba(0,0,0,0.9); transition: opacity .4s; }
-        #mm-load .ml-tip b { color: #fbbf24; font-weight: 700; margin-right: 6px; }
-        #mm-load .ml-bar { position: relative; height: 6px; border-radius: 99px; background: rgba(255,255,255,0.14); overflow: hidden; }
-        #mm-load .ml-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 99px; background: linear-gradient(90deg, #22d3ee, #34d399); transition: width .5s ease;
-            box-shadow: 0 0 14px rgba(52,211,153,0.7); }
-        #mm-load .ml-bar i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent); animation: mmShine 1.4s linear infinite; }
-        @keyframes mmShine { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
-        #mm-load .ml-row { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: #aab1c2; text-shadow: 0 1px 6px rgba(0,0,0,0.9); }
-        #mm-load .ml-row span:last-child { font-variant-numeric: tabular-nums; color: #f2f4f8; }
-        /* configurações */
-        #mm-settings { position: absolute; inset: 0; z-index: 5; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45);
-            -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-        #mm-settings.open { display: flex; }
-        #mm-settings .mm-panel { width: min(460px, 92vw); max-height: 92vh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 24px; border-radius: 20px; background: rgba(18,21,31,0.9);
-            border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 18px 50px rgba(0,0,0,0.45); }
-        #mm-settings h2 { font: 700 20px 'Outfit', 'Inter', sans-serif; text-align: center; }
-        #mm-settings .mm-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; }
-        html:not(.touch-device) #mm-settings .mm-touch { display: none; }
-        #mm-settings .mm-toggle { font: 600 13px 'Inter', sans-serif; min-width: 96px; padding: 7px 14px; cursor: pointer; border-radius: 99px; color: #aab1c2;
-            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); }
-        #mm-settings .mm-toggle.is-on { color: #04130c; background: #34d399; border-color: transparent; }
-        #mm-settings input[type=range] { width: 130px; accent-color: #34d399; }
-        @media (max-height: 520px) {
-            #main-menu .mm-frame { gap: 14px; padding: 10px; } #main-menu .mm-logo { max-height: 36vh; }
-            #main-menu .mm-buttons { gap: 8px; } #main-menu .mm-btn { padding: 10px 16px; font-size: 14px; }
-            #mm-load { gap: 8px; } #mm-load .ml-logo { height: 44px; }
-        }
-        /* ---------------------------------------------------------------- tela do estúdio (Trickstudio)
-           A 1ª coisa que aparece: tela preta com os créditos de abertura, enquanto a carga pesada (mapa, mundo 3D, física, shaders) roda por
-           baixo (src/main.js). Só opacidade e transform são animados (em CSS): o navegador anima isso fora do JS, então os créditos, o
-           indicador e a barrinha seguem andando mesmo durante um passo longo da carga. Tempos: cartão A 0,35–3,65 s · B 3,95–6,85 s ·
-           C de 7,1 s em diante (fica até a carga acabar; os mesmos números estão no script do Studio). */
-        #studio { position: fixed; inset: 0; z-index: 130; background: #000; color: #e9edf3; overflow: hidden; cursor: default; -webkit-user-select: none; user-select: none;
-            font-family: 'Outfit', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; transition: opacity .8s ease; }
-        #studio.out { opacity: 0; pointer-events: none; }
-        #studio .st-card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px 24px 72px;
-            opacity: 0; will-change: opacity, transform; }
-        #studio .st-a { animation: stCard 3.3s ease .35s both; }
-        #studio .st-b { animation: stCard 2.9s ease 3.95s both; }
-        #studio .st-c { animation: stHold 1.1s ease 7.1s both; }
-        @keyframes stCard { 0% { opacity: 0; transform: scale(.975); } 16% { opacity: 1; transform: none; } 84% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(1.012); } }
-        @keyframes stHold { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-        #studio.fast .st-a, #studio.fast .st-b { animation: none; opacity: 0; }
-        #studio.fast .st-c { animation: stHold .45s ease both; }
-        /* a marca: duas cartas que se abrem (a de trás, vermelha, gira) com o "T" na da frente, e um brilho no canto */
-        #studio .st-mark { position: relative; width: clamp(96px, 16vh, 148px); aspect-ratio: 1; margin-bottom: 6px; }
-        #studio .st-mark svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-        #studio .st-mark .st-back { transform-origin: 50% 82%; animation: stFan 1.5s cubic-bezier(.2, .8, .2, 1) .65s both; }
-        #studio .st-mark .st-front { transform-origin: 50% 82%; animation: stFront 1.5s cubic-bezier(.2, .8, .2, 1) .5s both; }
-        #studio .st-mark .st-spark { transform-origin: 84% 14%; animation: stSpark 1.3s ease 1.75s both; }
-        @keyframes stFan { 0% { opacity: 0; transform: rotate(-8deg); } 25% { opacity: 1; } 100% { opacity: 1; transform: rotate(11deg); } }
-        @keyframes stFront { 0% { opacity: 0; transform: translateY(10px) rotate(-8deg); } 100% { opacity: 1; transform: rotate(-8deg); } }
-        @keyframes stSpark { 0% { opacity: 0; transform: scale(.2) rotate(-60deg); } 45% { opacity: 1; transform: scale(1.2) rotate(0); } 100% { opacity: 1; transform: scale(1); } }
-        #studio .st-word { display: flex; font-size: clamp(20px, min(5.6vh, 6.6vw), 48px); line-height: 1; letter-spacing: .3em; margin-right: -.3em; }
-        #studio .st-word b { font-weight: 800; color: #fff; animation: stUp .9s ease .95s both; }
-        #studio .st-word span { font-weight: 300; color: #9aa3b4; animation: stUp .9s ease 1.1s both; }
-        @keyframes stUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-        #studio .st-rule { width: clamp(130px, 28vh, 240px); height: 2px; background: linear-gradient(90deg, transparent, #ff2e4d, transparent); animation: stRule 1s ease 1.35s both; }
-        @keyframes stRule { from { opacity: 0; transform: scaleX(0); } to { opacity: 1; transform: scaleX(1); } }
-        #studio .st-sub { font-size: clamp(11px, 1.7vh, 14px); font-weight: 500; letter-spacing: .55em; margin-right: -.55em; text-transform: uppercase; color: #8a93a6; animation: stFade 1s ease 1.75s both; }
-        @keyframes stFade { from { opacity: 0; } to { opacity: 1; } }
-        #studio .st-small { font-size: clamp(11px, 1.6vh, 13px); font-weight: 500; letter-spacing: .5em; margin-right: -.5em; text-transform: uppercase; color: #7f889b; }
-        #studio .st-tech { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .3em .8em; font-size: clamp(20px, 3.8vh, 32px); font-weight: 600; color: #f2f4f8; }
-        #studio .st-tech em { color: #ff2e4d; font-style: normal; }
-        #studio .st-c p { max-width: 640px; text-align: center; font-family: 'Inter', system-ui, sans-serif; font-size: clamp(13px, 2vh, 16px); line-height: 1.7; color: #aeb5c4; }
-        #studio .st-c .st-lead { font-family: 'Outfit', 'Inter', sans-serif; font-size: clamp(18px, 3vh, 24px); font-weight: 600; line-height: 1.3; color: #f2f4f8; }
-        /* rodapé: o passo da carga (com o indicador girando) e, quando ela acaba, como pular; a barrinha do progresso logo embaixo */
-        #studio .st-foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 max(22px, 3.5vw) max(18px, 3.4vh); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
-            font: 500 clamp(11px, 1.6vh, 13px) 'Inter', system-ui, sans-serif; color: #6f7789; }
-        #studio .st-status { display: flex; align-items: center; gap: 10px; min-width: 0; }
-        #studio .st-status span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        #studio .st-spin { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.16); border-top-color: #ff2e4d; animation: stSpin .85s linear infinite; }
-        @keyframes stSpin { to { transform: rotate(360deg); } }
-        #studio .st-skip { flex: none; margin-left: auto; opacity: 0; transition: opacity .6s ease; text-align: right; }
-        #studio.ready .st-skip { opacity: 1; }
-        #studio.ready .st-spin { border-top-color: #34d399; animation-duration: 2.4s; }
-        #studio .st-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255,255,255,0.06); }
-        #studio .st-bar i { position: absolute; inset: 0; transform: scaleX(0); transform-origin: 0 50%; background: linear-gradient(90deg, #ff2e4d, #ff8a3d); will-change: transform; }
-        @media (max-height: 420px) { #studio .st-card { gap: 10px; padding-bottom: 48px; } }
-    </style>
+		/* Minimapa no canto inferior esquerdo. */
+		#minimap {
+			position: absolute;
+			left: 20px;
+			bottom: 20px;
+			z-index: 10;
+			background: #0a0a0a;
+			border-radius: 10px;
+			box-shadow: 0 0 20px rgba(0, 255, 0, 0.25);
+		}
+		/* ---------------------------------------------------------------- tela inicial (menu + carregamento)
+		   Montada por um script INLINE logo abaixo da marcação: não espera o Babylon nem os ~100 scripts do jogo. Estados em #main-menu:
+		   (nada) só a prévia borrada do 1º fundo · .bg-ready fundos nítidos · .ui-ready logo e botões · .loading barra embaixo · .fade some. */
+		#main-menu { position: fixed; inset: 0; z-index: 120; overflow: hidden; color: #f2f4f8; background: #07090e;
+			font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; transition: opacity .7s ease; }
+		#main-menu.fade { opacity: 0; pointer-events: none; }
+		#mm-ph { position: absolute; inset: -40px; background: url(data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAABQAEAQf/xAAqEAABAwIDBgcBAAAAAAAAAAABAAIDETEEBSESIjNBcYETMjRCYYKRsf/EABcBAAMBAAAAAAAAAAAAAAAAAAECAwD/xAAYEQEBAQEBAAAAAAAAAAAAAAAAAQIRMf/aAAwDAQACEQMRAD8A8wgZG67alot1S2XQsieJJoKtJsbH8Q8UpDd060IKRw+KxUsRigptAACgsOalqKR3MXxyTuEcLWi+rijxE/wmOY0bNKuNNb0SZy98sj94t2aanQFHESMw8TvZTkflHPnIVmi8w7prKuI/7fwqUjWjRieGOgQg9IO6lJYNf//Z) center / cover; filter: blur(22px) saturate(1.1); transform: scale(1.05); }
+		#mm-bg { position: absolute; inset: 0; opacity: 0; transition: opacity .8s ease; }
+		#main-menu.bg-ready #mm-bg { opacity: 1; }
+		#mm-bg .mm-slide { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; transition: opacity 1.4s ease; will-change: opacity, transform; }
+		#mm-bg .mm-slide.on { opacity: 1; animation: mmKen 9s ease-out both; }
+		@keyframes mmKen { from { transform: scale(1.1) translate3d(0, -1%, 0); } to { transform: scale(1) translate3d(0, 0, 0); } }
+		#main-menu:not(.loading) #mm-bg .mm-slide { transition-duration: .25s; }
+		#mm-bg.glitch { animation: mm-glitch 0.4s steps(1) 1; }
+		@keyframes mm-glitch {
+			0%   { transform: translate(-14px, 0) scale(1.04); filter: hue-rotate(90deg) saturate(2.4) contrast(1.4); clip-path: inset(0 0 62% 0); }
+			12%  { transform: translate(18px, 4px) scale(1.04); filter: hue-rotate(-60deg) saturate(3) brightness(1.5); clip-path: inset(38% 0 30% 0); }
+			25%  { transform: translate(-8px, -3px) scale(1.04); filter: invert(1) hue-rotate(180deg); clip-path: inset(0); }
+			37%  { transform: translate(22px, 0) scale(1.05); filter: saturate(0) contrast(2); clip-path: inset(70% 0 0 0); }
+			50%  { transform: translate(-20px, 6px) scale(1.04); filter: hue-rotate(200deg) saturate(2.5); clip-path: inset(10% 0 55% 0); }
+			62%  { transform: translate(10px, -4px) scale(1.04); filter: contrast(1.8) brightness(1.4); clip-path: inset(0); }
+			75%  { transform: translate(-6px, 0) scale(1.02); filter: hue-rotate(40deg) saturate(1.8); clip-path: inset(45% 0 20% 0); }
+			88%  { transform: translate(4px, 2px) scale(1.01); filter: none; clip-path: inset(0); }
+			100% { transform: none; filter: none; clip-path: inset(0); }
+		}
+		#mm-bars { position: absolute; inset: 0; pointer-events: none; }
+		#mm-bars i { position: absolute; left: 0; width: 100%; opacity: 0.5; mix-blend-mode: screen; }
+		#mm-shade { position: absolute; inset: 0; pointer-events: none; transition: background .8s ease;
+			background: radial-gradient(ellipse at 50% 45%, rgba(5,7,12,0.3) 0%, rgba(5,7,12,0.82) 100%); }
+		#main-menu.loading #mm-shade { background: linear-gradient(180deg, rgba(5,7,12,0.15) 0%, rgba(5,7,12,0.1) 55%, rgba(5,7,12,0.9) 100%); }
+		#main-menu .mm-frame { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 34px; padding: 24px; overflow-y: auto;
+			opacity: 0; transform: translateY(14px); pointer-events: none; transition: opacity .6s ease, transform .6s ease; }
+		#main-menu.ui-ready:not(.loading) .mm-frame { opacity: 1; transform: none; pointer-events: auto; }
+		#main-menu.loading .mm-frame { transform: translateY(-14px); transition-duration: .4s; }
+		#main-menu .mm-logo { display: block; width: min(460px, 80vw); max-height: 52vh; object-fit: contain;
+			filter: drop-shadow(0 10px 30px rgba(0,0,0,0.85)); animation: mm-pulse 4.5s ease-in-out infinite; transform-origin: center; }
+		@keyframes mm-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+		#main-menu .mm-buttons { display: flex; flex-direction: column; gap: 12px; width: min(340px, 78vw); }
+		#main-menu .mm-btn { font: 600 16px 'Inter', system-ui, sans-serif; letter-spacing: 0.01em; padding: 15px 20px; border-radius: 14px; cursor: pointer; outline: none;
+			color: #f2f4f8; background: rgba(16,19,28,0.62); border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+			-webkit-backdrop-filter: blur(18px) saturate(1.5); backdrop-filter: blur(18px) saturate(1.5); transition: background .15s, transform .12s, border-color .15s; }
+		#main-menu .mm-btn:hover:not(:disabled), #main-menu .mm-btn:focus-visible { background: rgba(40,46,62,0.8); border-color: rgba(255,255,255,0.3); transform: translateY(-1px); }
+		#main-menu .mm-btn:active:not(:disabled) { transform: translateY(1px); }
+		#main-menu .mm-btn#btn-new { background: linear-gradient(180deg, #3ee0a1, #10b981); color: #04130c; border-color: transparent; font-weight: 700; }
+		#main-menu .mm-btn#btn-new:hover:not(:disabled), #main-menu .mm-btn#btn-new:focus-visible { background: linear-gradient(180deg, #5cf0b5, #1fc98f); }
+		#main-menu .mm-btn:disabled, #main-menu .mm-btn.mm-disabled { cursor: not-allowed; color: #6f7689; background: rgba(16,19,28,0.5); border-color: rgba(255,255,255,0.08); transform: none; }
+		#main-menu .mm-btn small { display: block; font-size: 11px; font-weight: 500; color: #8a93a8; margin-top: 3px; }
+		/* espera dos scripts do jogo (fundos já prontos): pontinho girando embaixo */
+		#mm-wait { position: absolute; left: 50%; bottom: 7vh; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.18); border-top-color: #34d399;
+			animation: mmSpin .8s linear infinite; opacity: 0; transition: opacity .4s; }
+		#main-menu.bg-ready:not(.ui-ready) #mm-wait { opacity: 1; }
+		@keyframes mmSpin { to { transform: rotate(360deg); } }
+		/* carregamento: faixa na parte de baixo, os fundos continuam passando */
+		#mm-load { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 max(28px, 5vw) max(26px, 4.5vh); display: flex; flex-direction: column; gap: 12px;
+			opacity: 0; transform: translateY(20px); pointer-events: none; transition: opacity .6s ease .25s, transform .6s ease .25s; }
+		#main-menu.loading #mm-load { opacity: 1; transform: none; }
+		#mm-load .ml-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+		#mm-load .ml-logo { height: clamp(48px, 11vh, 96px); filter: drop-shadow(0 6px 18px rgba(0,0,0,0.8)); }
+		#mm-load .ml-tip { flex: 1; max-width: 640px; text-align: right; font-size: clamp(13px, 1.6vh, 15px); line-height: 1.5; color: #d6dbe6; text-shadow: 0 1px 8px rgba(0,0,0,0.9); transition: opacity .4s; }
+		#mm-load .ml-tip b { color: #fbbf24; font-weight: 700; margin-right: 6px; }
+		#mm-load .ml-bar { position: relative; height: 6px; border-radius: 99px; background: rgba(255,255,255,0.14); overflow: hidden; }
+		#mm-load .ml-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 99px; background: linear-gradient(90deg, #22d3ee, #34d399); transition: width .5s ease;
+			box-shadow: 0 0 14px rgba(52,211,153,0.7); }
+		#mm-load .ml-bar i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent); animation: mmShine 1.4s linear infinite; }
+		@keyframes mmShine { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+		#mm-load .ml-row { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: #aab1c2; text-shadow: 0 1px 6px rgba(0,0,0,0.9); }
+		#mm-load .ml-row span:last-child { font-variant-numeric: tabular-nums; color: #f2f4f8; }
+		/* configurações */
+		#mm-settings { position: absolute; inset: 0; z-index: 5; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45);
+			-webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+		#mm-settings.open { display: flex; }
+		#mm-settings .mm-panel { width: min(460px, 92vw); max-height: 92vh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 24px; border-radius: 20px; background: rgba(18,21,31,0.9);
+			border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 18px 50px rgba(0,0,0,0.45); }
+		#mm-settings h2 { font: 700 20px 'Outfit', 'Inter', sans-serif; text-align: center; }
+		#mm-settings .mm-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; }
+		html:not(.touch-device) #mm-settings .mm-touch { display: none; }
+		#mm-settings .mm-toggle { font: 600 13px 'Inter', sans-serif; min-width: 96px; padding: 7px 14px; cursor: pointer; border-radius: 99px; color: #aab1c2;
+			background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); }
+		#mm-settings .mm-toggle.is-on { color: #04130c; background: #34d399; border-color: transparent; }
+		#mm-settings input[type=range] { width: 130px; accent-color: #34d399; }
+		@media (max-height: 520px) {
+			#main-menu .mm-frame { gap: 14px; padding: 10px; } #main-menu .mm-logo { max-height: 36vh; }
+			#main-menu .mm-buttons { gap: 8px; } #main-menu .mm-btn { padding: 10px 16px; font-size: 14px; }
+			#mm-load { gap: 8px; } #mm-load .ml-logo { height: 44px; }
+		}
+		/* ---------------------------------------------------------------- tela do estúdio (Trickstudio)
+		   A 1ª coisa que aparece: tela preta com os créditos de abertura, enquanto a carga pesada (mapa, mundo 3D, física, shaders) roda por
+		   baixo (src/main.js). Só opacidade e transform são animados (em CSS): o navegador anima isso fora do JS, então os créditos, o
+		   indicador e a barrinha seguem andando mesmo durante um passo longo da carga. Tempos: cartão A 0,35–3,65 s · B 3,95–6,85 s ·
+		   C de 7,1 s em diante (fica até a carga acabar; os mesmos números estão no script do Studio). */
+		#studio { position: fixed; inset: 0; z-index: 130; background: #000; color: #e9edf3; overflow: hidden; cursor: default; -webkit-user-select: none; user-select: none;
+			font-family: 'Outfit', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; transition: opacity .8s ease; }
+		#studio.out { opacity: 0; pointer-events: none; }
+		#studio .st-card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px 24px 72px;
+			opacity: 0; will-change: opacity, transform; }
+		#studio .st-a { animation: stCard 3.3s ease .35s both; }
+		#studio .st-b { animation: stCard 2.9s ease 3.95s both; }
+		#studio .st-c { animation: stHold 1.1s ease 7.1s both; }
+		@keyframes stCard { 0% { opacity: 0; transform: scale(.975); } 16% { opacity: 1; transform: none; } 84% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(1.012); } }
+		@keyframes stHold { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+		#studio.fast .st-a, #studio.fast .st-b { animation: none; opacity: 0; }
+		#studio.fast .st-c { animation: stHold .45s ease both; }
+		/* a marca: duas cartas que se abrem (a de trás, vermelha, gira) com o "T" na da frente, e um brilho no canto */
+		#studio .st-mark { position: relative; width: clamp(96px, 16vh, 148px); aspect-ratio: 1; margin-bottom: 6px; }
+		#studio .st-mark svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+		#studio .st-mark .st-back { transform-origin: 50% 82%; animation: stFan 1.5s cubic-bezier(.2, .8, .2, 1) .65s both; }
+		#studio .st-mark .st-front { transform-origin: 50% 82%; animation: stFront 1.5s cubic-bezier(.2, .8, .2, 1) .5s both; }
+		#studio .st-mark .st-spark { transform-origin: 84% 14%; animation: stSpark 1.3s ease 1.75s both; }
+		@keyframes stFan { 0% { opacity: 0; transform: rotate(-8deg); } 25% { opacity: 1; } 100% { opacity: 1; transform: rotate(11deg); } }
+		@keyframes stFront { 0% { opacity: 0; transform: translateY(10px) rotate(-8deg); } 100% { opacity: 1; transform: rotate(-8deg); } }
+		@keyframes stSpark { 0% { opacity: 0; transform: scale(.2) rotate(-60deg); } 45% { opacity: 1; transform: scale(1.2) rotate(0); } 100% { opacity: 1; transform: scale(1); } }
+		#studio .st-word { display: flex; font-size: clamp(20px, min(5.6vh, 6.6vw), 48px); line-height: 1; letter-spacing: .3em; margin-right: -.3em; }
+		#studio .st-word b { font-weight: 800; color: #fff; animation: stUp .9s ease .95s both; }
+		#studio .st-word span { font-weight: 300; color: #9aa3b4; animation: stUp .9s ease 1.1s both; }
+		@keyframes stUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+		#studio .st-rule { width: clamp(130px, 28vh, 240px); height: 2px; background: linear-gradient(90deg, transparent, #ff2e4d, transparent); animation: stRule 1s ease 1.35s both; }
+		@keyframes stRule { from { opacity: 0; transform: scaleX(0); } to { opacity: 1; transform: scaleX(1); } }
+		#studio .st-sub { font-size: clamp(11px, 1.7vh, 14px); font-weight: 500; letter-spacing: .55em; margin-right: -.55em; text-transform: uppercase; color: #8a93a6; animation: stFade 1s ease 1.75s both; }
+		@keyframes stFade { from { opacity: 0; } to { opacity: 1; } }
+		#studio .st-small { font-size: clamp(11px, 1.6vh, 13px); font-weight: 500; letter-spacing: .5em; margin-right: -.5em; text-transform: uppercase; color: #7f889b; }
+		#studio .st-tech { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .3em .8em; font-size: clamp(20px, 3.8vh, 32px); font-weight: 600; color: #f2f4f8; }
+		#studio .st-tech em { color: #ff2e4d; font-style: normal; }
+		#studio .st-c p { max-width: 640px; text-align: center; font-family: 'Inter', system-ui, sans-serif; font-size: clamp(13px, 2vh, 16px); line-height: 1.7; color: #aeb5c4; }
+		#studio .st-c .st-lead { font-family: 'Outfit', 'Inter', sans-serif; font-size: clamp(18px, 3vh, 24px); font-weight: 600; line-height: 1.3; color: #f2f4f8; }
+		/* rodapé: o passo da carga (com o indicador girando) e, quando ela acaba, como pular; a barrinha do progresso logo embaixo */
+		#studio .st-foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 max(22px, 3.5vw) max(18px, 3.4vh); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+			font: 500 clamp(11px, 1.6vh, 13px) 'Inter', system-ui, sans-serif; color: #6f7789; }
+		#studio .st-status { display: flex; align-items: center; gap: 10px; min-width: 0; }
+		#studio .st-status span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		#studio .st-spin { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.16); border-top-color: #ff2e4d; animation: stSpin .85s linear infinite; }
+		@keyframes stSpin { to { transform: rotate(360deg); } }
+		#studio .st-skip { flex: none; margin-left: auto; opacity: 0; transition: opacity .6s ease; text-align: right; }
+		#studio.ready .st-skip { opacity: 1; }
+		#studio.ready .st-spin { border-top-color: #34d399; animation-duration: 2.4s; }
+		#studio .st-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255,255,255,0.06); }
+		#studio .st-bar i { position: absolute; inset: 0; transform: scaleX(0); transform-origin: 0 50%; background: linear-gradient(90deg, #ff2e4d, #ff8a3d); will-change: transform; }
+		@media (max-height: 420px) { #studio .st-card { gap: 10px; padding-bottom: 48px; } }
+	</style>
 </head>
 <body>
-    <!-- Tela do estúdio (créditos de abertura): fica por cima de tudo enquanto o jogo carrega por baixo; ver o script logo abaixo. -->
-    <div id="studio">
-        <div class="st-card st-a">
-            <div class="st-mark" aria-hidden="true">
-                <svg class="st-back" viewBox="0 0 120 120"><rect x="30" y="12" width="60" height="88" rx="9" fill="#14070a" stroke="#ff2e4d" stroke-width="4"/></svg>
-                <svg class="st-front" viewBox="0 0 120 120"><rect x="30" y="12" width="60" height="88" rx="9" fill="#000" stroke="#fff" stroke-width="4"/>
-                    <path d="M44 34 H76 V44 H65 V82 H55 V44 H44 Z" fill="#fff"/></svg>
-                <svg class="st-spark" viewBox="0 0 120 120"><path d="M101 6 L104.2 15.8 L114 19 L104.2 22.2 L101 32 L97.8 22.2 L88 19 L97.8 15.8 Z" fill="#ff2e4d"/></svg>
-            </div>
-            <div class="st-word"><b>TRICK</b><span>STUDIO</span></div>
-            <i class="st-rule"></i>
-            <div class="st-sub">apresenta</div>
-        </div>
-        <div class="st-card st-b">
-            <div class="st-small">feito com</div>
-            <div class="st-tech"><span>Babylon.js</span><em>·</em><span>Havok Physics</span></div>
-        </div>
-        <div class="st-card st-c">
-            <p class="st-lead">Esta é uma obra de ficção.</p>
-            <p>Personagens, lugares, organizações e acontecimentos são inventados. Qualquer semelhança com pessoas ou fatos reais é mera
-                coincidência. O jogo não incentiva nem aprova o crime.</p>
-        </div>
-        <div class="st-foot">
-            <div class="st-status"><i class="st-spin"></i><span id="st-text">Carregando…</span></div>
-            <div class="st-skip" id="st-skip"></div>
-        </div>
-        <div class="st-bar"><i id="st-fill"></i></div>
-    </div>
-    <script>
-        // A tela do estúdio. A carga pesada da página (mapa, mundo 3D, física, shaders) roda por baixo dela em passos (src/main.js): por isso
-        // a geração do mapa espera (DEFER_WORLD — ver CityGrid.steps). step(texto, fração, ms) mostra o passo e manda a barrinha andar até a
-        // fração no tempo estimado do passo (transição CSS: anda sozinha mesmo com o JS ocupado); ready() = a carga acabou: a tela sai no fim
-        // dos créditos (ou já, se o jogador pulou). Pular antes da carga acabar só vai direto ao último cartão; o menu fica inerte até a saída.
-        window.DEFER_WORLD = true;
-        window.Studio = (() => {
-            const root = document.getElementById('studio'), fill = document.getElementById('st-fill'), text = document.getElementById('st-text');
-            const t0 = performance.now(), END = 10300;                      // (o 3º cartão entra em 7,1 s: ~3 s para ler)
-            let p = 0, ready = false, over = false, want = false;
-            document.getElementById('st-skip').textContent = matchMedia('(pointer: coarse)').matches ? 'Toque para pular' : 'Clique ou aperte qualquer tecla para pular';
-            function step(label, target, ms = 800) {
-                if (over) return;
-                if (label) text.textContent = label;
-                if (target > p) { p = Math.min(1, target); fill.style.transition = 'transform ' + Math.max(150, ms) + 'ms cubic-bezier(.25,.6,.3,1)'; fill.style.transform = 'scaleX(' + p + ')'; }
-            }
-            function end() {
-                if (over) return;
-                over = true;
-                root.classList.add('out');
-                const mm = document.getElementById('main-menu'); if (mm) mm.removeAttribute('inert');
-                if (window.Intro && Intro.start) Intro.start();
-                const b = document.getElementById('btn-new'); if (b && !b.disabled) b.focus({ preventScroll: true });
-                setTimeout(() => root.remove(), 900);
-            }
-            function skip(e) {
-                if (over) return;
-                if (e && e.type === 'keydown') { if (e.ctrlKey || e.metaKey || e.altKey || /^F\d/.test(e.key)) return; e.preventDefault(); e.stopPropagation(); }
-                if (ready) end(); else if (!want) { want = true; root.classList.add('fast'); }
-            }
-            window.addEventListener('keydown', skip, true);
-            root.addEventListener('pointerdown', skip);
-            requestAnimationFrame(() => step('Carregando os arquivos do jogo…', 0.25, 7000));      // (enquanto os scripts chegam)
-            return {
-                step,
-                ready() {
-                    if (ready) return;
-                    ready = true;
-                    step('Pronto', 1, 300);
-                    root.classList.add('ready');
-                    setTimeout(end, want ? 250 : Math.max(450, END - (performance.now() - t0)));
-                },
-                get over() { return over; },
-            };
-        })();
-    </script>
-    <div id="rotate-hint"><div class="rh-phone"></div>Gire o celular para jogar<small>Dirty Money é jogado na horizontal</small></div>
-    <div id="main-menu" inert>
-        <div id="mm-ph"></div><div id="mm-bg"></div><div id="mm-bars"></div><div id="mm-shade"></div>
-        <div class="mm-frame">
-            <img class="mm-logo" src="./assets/logo.png" alt="Dirty Money" fetchpriority="high">
-            <div class="mm-buttons">
-                <button type="button" class="mm-btn" id="btn-new">Novo Jogo</button>
-                <button type="button" class="mm-btn" id="btn-load">Carregar Jogo</button>
-                <button type="button" class="mm-btn" id="btn-settings">Configurações</button>
-            </div>
-        </div>
-        <div id="mm-wait"></div>
-        <div id="mm-load">
-            <div class="ml-top"><img class="ml-logo" src="./assets/logo.png" alt=""><div class="ml-tip" id="ml-tip"></div></div>
-            <div class="ml-bar"><i id="ls-fill"></i></div>
-            <div class="ml-row"><span id="ls-text">Carregando…</span><span id="ls-pct">0%</span></div>
-        </div>
-        <div id="mm-settings"><div class="mm-panel">
-            <h2>Configurações</h2>
-            <div class="mm-row"><span>Volume geral</span><span><input type="range" id="set-volume" min="0" max="100"> <span id="set-volume-val"></span></span></div>
-            <div class="mm-row"><span>Efeitos sonoros</span><button type="button" class="mm-toggle" data-key="sfx"></button></div>
-            <div class="mm-row"><span>Minimapa</span><button type="button" class="mm-toggle" data-key="minimap"></button></div>
-            <div class="mm-row"><span>Dicas na tela</span><button type="button" class="mm-toggle" data-key="prompts"></button></div>
-            <div class="mm-row"><span>Mira</span><button type="button" class="mm-toggle" data-key="aimAssist" data-on="Assistida" data-off="Manual"></button></div>
-            <div class="mm-row"><span>Balanço da câmera</span><button type="button" class="mm-toggle" data-key="camBounce"></button></div>
-            <div class="mm-row mm-touch"><span>Volante por giroscópio</span><button type="button" class="mm-toggle" data-key="tiltSteer"></button></div>
-            <button type="button" class="mm-btn" id="btn-settings-back">Voltar</button>
-        </div></div>
-    </div>
-    <script>
-        // Abertura: roda JÁ (antes do Babylon e dos scripts do jogo). Pré-carrega e decodifica os fundos e a logo; só mostra os fundos
-        // quando o 1º está pronto, e a logo/botões quando os fundos E o jogo (MainMenu) estão prontos. O slideshow segue no carregamento.
-        window.Intro = (() => {
-            const root = document.getElementById('main-menu'), bg = document.getElementById('mm-bg'), bars = document.getElementById('mm-bars');
-            const files = [1, 2, 3, 4, 5, 6].map((n) => './assets/bg' + n + '.jpg');
-            const load = (src) => { const im = new Image(); im.src = src; return (im.decode ? im.decode() : new Promise((r, j) => { im.onload = r; im.onerror = j; })).catch(() => {}); };
-            const slides = files.map((f) => { const d = document.createElement('div'); d.className = 'mm-slide'; d.style.backgroundImage = 'url(' + f + ')'; bg.appendChild(d); return d; });
-            const ready = slides.map(() => false);
-            let idx = 0, timer = 0, menuOk = false, bgOk = false, studioOver = !window.Studio;      // (com a tela do estúdio: espera ela sair)
-            let loadingOn = false, dead = false;                    // dead: a abertura já foi desmontada (done) — nada mais mexe nos fundos
-            const pending = new Set();                              // trocas de fundo agendadas (o "glitch" troca 160 ms depois)
-            const later = (fn, ms) => { const id = setTimeout(() => { pending.delete(id); if (!dead) fn(); }, ms); pending.add(id); };
-            const first = Promise.all([load(files[0]), load('./assets/logo.png')]).then(() => { ready[0] = true; slides[0].classList.add('on'); root.classList.add('bg-ready'); bgOk = true; reveal(); });
-            first.then(() => files.slice(1).forEach((f, i) => load(f).then(() => { ready[i + 1] = true; })));     // os outros, em seguida
-            setTimeout(() => { if (!bgOk) { bgOk = true; root.classList.add('bg-ready'); slides[0].classList.add('on'); reveal(); } }, 4000);   // rede lenta: não segura o menu
-            function reveal() { if (bgOk && menuOk && studioOver) root.classList.add('ui-ready'); }
-            function next(glitch) {
-                if (dead) return;
-                let n = idx; for (let k = 1; k <= slides.length; k++) { const j = (idx + k) % slides.length; if (ready[j]) { n = j; break; } }
-                if (n === idx) return;
-                const swap = () => { if (dead || !slides[idx] || !slides[n]) return; slides[idx].classList.remove('on'); idx = n; slides[idx].classList.add('on'); };
-                if (!glitch) return swap();
-                bg.classList.remove('glitch'); void bg.offsetWidth; bg.classList.add('glitch');
-                bars.innerHTML = ''; const cols = ['#ff1e56', '#1effe0', '#ffe81e', '#ffffff'];
-                for (let i = 0; i < 7; i++) { const b = document.createElement('i'); b.style.top = Math.random() * 95 + '%'; b.style.height = 6 + Math.random() * 40 + 'px'; b.style.background = cols[i % 4]; b.style.transform = 'translateX(' + (Math.random() - 0.5) * 60 + 'px)'; bars.appendChild(b); }
-                later(swap, 160); later(() => { bg.classList.remove('glitch'); bars.innerHTML = ''; }, 420);
-            }
-            const play = (ms, glitch) => { if (dead) return; clearInterval(timer); timer = setInterval(() => next(glitch), ms); };
-            if (studioOver) play(3500, true);
-            const TIPS = [
-                'Lave o dinheiro sujo nas fachadas antes de comprar imóveis fora da favela.',
-                'Fugir é sumir de vista: entre num beco, troque de carro ou se esconda numa caçamba.',
-                'Cada carreira tem patentes, habilidades e trabalhos próprios — veja a aba Carreiras.',
-                'O jogo salva sozinho a cada 2 minutos em momento calmo, e sempre que você dorme.',
-                'Dinheiro marcado de banco pesa na mochila: guarde no cofre do galpão.',
-                'Delegados com 10 ❤ deixam o distrito bem mais tranquilo para você.',
-                'Energia zerada ou acordado depois das 2h = desmaio. Durma em casa.',
-            ];
-            let tipI = Math.floor(Math.random() * TIPS.length), tipT = 0;
-            const tipEl = document.getElementById('ml-tip');
-            const showTip = () => { tipEl.style.opacity = 0; setTimeout(() => { tipEl.innerHTML = '<b>Dica</b>' + TIPS[tipI++ % TIPS.length]; tipEl.style.opacity = 1; }, 350); };
-            return {
-                menuReady() { menuOk = true; reveal(); },
-                // a tela do estúdio saiu: o menu entra (se o jogo já está carregando, segue o slideshow suave do carregamento)
-                start() { if (studioOver || dead) return; studioOver = true; if (!loadingOn) play(3500, true); reveal(); },
-                // Novo jogo / carregar: some a logo e os botões, aparece a faixa de carregamento; fundos passam com fusão suave.
-                loading() { if (dead) return; loadingOn = true; root.classList.add('loading'); play(4200, false); showTip(); clearInterval(tipT); tipT = setInterval(showTip, 5200); },
-                progress(p) { const e = document.getElementById('ls-pct'); if (e) e.textContent = Math.round(p * 100) + '%'; },
-                done() {
-                    root.classList.add('fade');
-                    setTimeout(() => {                                   // solta tudo: as 6 imagens de fundo decodificadas (~50 MB) e a própria abertura
-                        dead = true;
-                        clearInterval(timer); clearInterval(tipT);
-                        for (const id of pending) clearTimeout(id); pending.clear();
-                        for (const d of slides) d.style.backgroundImage = 'none';
-                        slides.length = 0; root.remove(); window.Intro = null;
-                    }, 750);
-                },
-            };
-        })();
-    </script>
-    <canvas id="canvas"></canvas>
-    <div id="hud">
-        <div class="hud-row">
-            <span class="hud-label">≡ DIRTY MONEY</span>
-            <span class="hud-value" style="font-size: 11px;">Checkpoint de arte</span>
-        </div>
-        <div class="hud-section">
-            <div class="hud-row">
-                <span class="hud-label">Mode</span>
-                <span class="hud-value" id="controlMode">A PÉ</span>
-            </div>
-            <div class="hud-row">
-                <span class="hud-label">Hora</span>
-                <span class="hud-value" id="clock">--:--</span>
-            </div>
-            <div class="hud-row">
-                <span class="hud-label">Clima</span>
-                <span class="hud-value" id="weatherText">Céu limpo</span>
-            </div>
-            <div class="hud-row">
-                <span class="hud-label">Vida</span>
-                <span class="hud-value" id="hpText">██████████ 100</span>
-            </div>
-            <div class="hud-row">
-                <span class="hud-label">Arma</span>
-                <span class="hud-value" id="weaponText">—</span>
-            </div>
-            <div class="hud-row">
-                <span class="hud-label">Dinheiro</span>
-                <span class="hud-value" id="cashText" style="color:#ffd23f;">$ 0</span>
-            </div>
-            <div class="hud-row">
-                <span class="hud-label">Position</span>
-                <span class="hud-value" id="playerPos">X: 0.00 Z: 0.00</span>
-            </div>
-            <div class="hud-row">
-                <span class="hud-label">Speed</span>
-                <span class="hud-value" id="playerVel">0.00 m/s</span>
-            </div>
-            <div class="hud-row">
-                <span class="hud-label">State</span>
-                <span class="hud-value" id="playerState">IDLE</span>
-            </div>
-            <div class="hud-row">
-                <span class="hud-label">NPCs</span>
-                <span class="hud-value" id="npcCount">carregando…</span>
-            </div>
-            <div class="hud-row">
-                <span class="hud-label">Procurado</span>
-                <span class="hud-value" id="wantedLevel" style="color:#ffd23f;">LIMPO</span>
-            </div>
-            <div class="hud-row" id="forcesRow" style="display:none;">
-                <span class="hud-label">Forças</span>
-                <span class="hud-value" id="forcesText" style="font-size: 11px; color:#8fb4ff;"></span>
-            </div>
-            <div class="hud-row">
-                <span class="hud-label">FPS</span>
-                <span class="hud-value" id="fps">0</span>
-            </div>
-        </div>
-        <div class="hud-section" style="min-height: 16px; color: #ffe14d;">
-            <span id="actionLog"></span>
-        </div>
-        <div class="hud-section" style="font-size: 11px; color: #888;">
-            <div>WASD mover · Shift correr · Z/X zoom</div>
-            <div>Clique/Espaço golpe-tiro (sem arma: soco + soco + chute)</div>
-            <div>1-9 armas: punhos pistola SMG escopeta taco revólver AK fuzil faca</div>
-            <div>R recarregar · M kit médico · I inventário · O carreiras do crime · ESC/P menu (mapa e marcador)</div>
-            <div>E assaltar / esconder-se (caçamba, caixote, latão) · V pular grade/muro</div>
-            <div>F carro/moto/bike/jet ski/lancha/barco (derruba o piloto) · Marina na orla leste</div>
-            <div>Carro estacionado: F quebra o vidro (alarme) · G arromba (furtivo)</div>
-            <div>F em movimento: pula rolando (perde vida)</div>
-            <div>★ fuja do raio/visão da polícia · 3★ heli · 4★ SWAT · 5★ ruas fechadas</div>
-            <div>Carros amassam, fumegam e explodem · carro rápido atropela (você também)</div>
-            <div>No carro: H buzina · L faróis · T avança 2h · Y muda o clima · segure E num posto p/ abastecer (chuva, tempestade)</div>
-        </div>
-    </div>
+	<!-- Tela do estúdio (créditos de abertura): fica por cima de tudo enquanto o jogo carrega por baixo; ver o script logo abaixo. -->
+	<div id="studio">
+		<div class="st-card st-a">
+			<div class="st-mark" aria-hidden="true">
+				<svg class="st-back" viewBox="0 0 120 120"><rect x="30" y="12" width="60" height="88" rx="9" fill="#14070a" stroke="#ff2e4d" stroke-width="4"/></svg>
+				<svg class="st-front" viewBox="0 0 120 120"><rect x="30" y="12" width="60" height="88" rx="9" fill="#000" stroke="#fff" stroke-width="4"/>
+					<path d="M44 34 H76 V44 H65 V82 H55 V44 H44 Z" fill="#fff"/></svg>
+				<svg class="st-spark" viewBox="0 0 120 120"><path d="M101 6 L104.2 15.8 L114 19 L104.2 22.2 L101 32 L97.8 22.2 L88 19 L97.8 15.8 Z" fill="#ff2e4d"/></svg>
+			</div>
+			<div class="st-word"><b>TRICK</b><span>STUDIO</span></div>
+			<i class="st-rule"></i>
+			<div class="st-sub">apresenta</div>
+		</div>
+		<div class="st-card st-b">
+			<div class="st-small">feito com</div>
+			<div class="st-tech"><span>Babylon.js</span><em>·</em><span>Havok Physics</span></div>
+		</div>
+		<div class="st-card st-c">
+			<p class="st-lead">Esta é uma obra de ficção.</p>
+			<p>Personagens, lugares, organizações e acontecimentos são inventados. Qualquer semelhança com pessoas ou fatos reais é mera
+				coincidência. O jogo não incentiva nem aprova o crime.</p>
+		</div>
+		<div class="st-foot">
+			<div class="st-status"><i class="st-spin"></i><span id="st-text">Carregando…</span></div>
+			<div class="st-skip" id="st-skip"></div>
+		</div>
+		<div class="st-bar"><i id="st-fill"></i></div>
+	</div>
+	<script>
+		// A tela do estúdio. A carga pesada da página (mapa, mundo 3D, física, shaders) roda por baixo dela em passos (src/main.js): por isso
+		// a geração do mapa espera (DEFER_WORLD — ver CityGrid.steps). step(texto, fração, ms) mostra o passo e manda a barrinha andar até a
+		// fração no tempo estimado do passo (transição CSS: anda sozinha mesmo com o JS ocupado); ready() = a carga acabou: a tela sai no fim
+		// dos créditos (ou já, se o jogador pulou). Pular antes da carga acabar só vai direto ao último cartão; o menu fica inerte até a saída.
+		window.DEFER_WORLD = true;
+		window.Studio = (() => {
+			const root = document.getElementById('studio'), fill = document.getElementById('st-fill'), text = document.getElementById('st-text');
+			const t0 = performance.now(), END = 10300;                      // (o 3º cartão entra em 7,1 s: ~3 s para ler)
+			let p = 0, ready = false, over = false, want = false;
+			document.getElementById('st-skip').textContent = matchMedia('(pointer: coarse)').matches ? 'Toque para pular' : 'Clique ou aperte qualquer tecla para pular';
+			function step(label, target, ms = 800) {
+				if (over) return;
+				if (label) text.textContent = label;
+				if (target > p) { p = Math.min(1, target); fill.style.transition = 'transform ' + Math.max(150, ms) + 'ms cubic-bezier(.25,.6,.3,1)'; fill.style.transform = 'scaleX(' + p + ')'; }
+			}
+			function end() {
+				if (over) return;
+				over = true;
+				root.classList.add('out');
+				const mm = document.getElementById('main-menu'); if (mm) mm.removeAttribute('inert');
+				if (window.Intro && Intro.start) Intro.start();
+				const b = document.getElementById('btn-new'); if (b && !b.disabled) b.focus({ preventScroll: true });
+				setTimeout(() => root.remove(), 900);
+			}
+			function skip(e) {
+				if (over) return;
+				if (e && e.type === 'keydown') { if (e.ctrlKey || e.metaKey || e.altKey || /^F\d/.test(e.key)) return; e.preventDefault(); e.stopPropagation(); }
+				if (ready) end(); else if (!want) { want = true; root.classList.add('fast'); }
+			}
+			window.addEventListener('keydown', skip, true);
+			root.addEventListener('pointerdown', skip);
+			requestAnimationFrame(() => step('Carregando os arquivos do jogo…', 0.25, 7000));      // (enquanto os scripts chegam)
+			return {
+				step,
+				ready() {
+					if (ready) return;
+					ready = true;
+					step('Pronto', 1, 300);
+					root.classList.add('ready');
+					setTimeout(end, want ? 250 : Math.max(450, END - (performance.now() - t0)));
+				},
+				get over() { return over; },
+			};
+		})();
+	</script>
+	<div id="rotate-hint"><div class="rh-phone"></div>Gire o celular para jogar<small>Dirty Money é jogado na horizontal</small></div>
+	<div id="main-menu" inert>
+		<div id="mm-ph"></div><div id="mm-bg"></div><div id="mm-bars"></div><div id="mm-shade"></div>
+		<div class="mm-frame">
+			<img class="mm-logo" src="./assets/logo.png" alt="Dirty Money" fetchpriority="high">
+			<div class="mm-buttons">
+				<button type="button" class="mm-btn" id="btn-new">Novo Jogo</button>
+				<button type="button" class="mm-btn" id="btn-load">Carregar Jogo</button>
+				<button type="button" class="mm-btn" id="btn-settings">Configurações</button>
+			</div>
+		</div>
+		<div id="mm-wait"></div>
+		<div id="mm-load">
+			<div class="ml-top"><img class="ml-logo" src="./assets/logo.png" alt=""><div class="ml-tip" id="ml-tip"></div></div>
+			<div class="ml-bar"><i id="ls-fill"></i></div>
+			<div class="ml-row"><span id="ls-text">Carregando…</span><span id="ls-pct">0%</span></div>
+		</div>
+		<div id="mm-settings"><div class="mm-panel">
+			<h2>Configurações</h2>
+			<div class="mm-row"><span>Volume geral</span><span><input type="range" id="set-volume" min="0" max="100"> <span id="set-volume-val"></span></span></div>
+			<div class="mm-row"><span>Efeitos sonoros</span><button type="button" class="mm-toggle" data-key="sfx"></button></div>
+			<div class="mm-row"><span>Minimapa</span><button type="button" class="mm-toggle" data-key="minimap"></button></div>
+			<div class="mm-row"><span>Dicas na tela</span><button type="button" class="mm-toggle" data-key="prompts"></button></div>
+			<div class="mm-row"><span>Mira</span><button type="button" class="mm-toggle" data-key="aimAssist" data-on="Assistida" data-off="Manual"></button></div>
+			<div class="mm-row"><span>Balanço da câmera</span><button type="button" class="mm-toggle" data-key="camBounce"></button></div>
+			<div class="mm-row mm-touch"><span>Volante por giroscópio</span><button type="button" class="mm-toggle" data-key="tiltSteer"></button></div>
+			<button type="button" class="mm-btn" id="btn-settings-back">Voltar</button>
+		</div></div>
+	</div>
+	<script>
+		// Abertura: roda JÁ (antes do Babylon e dos scripts do jogo). Pré-carrega e decodifica os fundos e a logo; só mostra os fundos
+		// quando o 1º está pronto, e a logo/botões quando os fundos E o jogo (MainMenu) estão prontos. O slideshow segue no carregamento.
+		window.Intro = (() => {
+			const root = document.getElementById('main-menu'), bg = document.getElementById('mm-bg'), bars = document.getElementById('mm-bars');
+			const files = [1, 2, 3, 4, 5, 6].map((n) => './assets/bg' + n + '.jpg');
+			const load = (src) => { const im = new Image(); im.src = src; return (im.decode ? im.decode() : new Promise((r, j) => { im.onload = r; im.onerror = j; })).catch(() => {}); };
+			const slides = files.map((f) => { const d = document.createElement('div'); d.className = 'mm-slide'; d.style.backgroundImage = 'url(' + f + ')'; bg.appendChild(d); return d; });
+			const ready = slides.map(() => false);
+			let idx = 0, timer = 0, menuOk = false, bgOk = false, studioOver = !window.Studio;      // (com a tela do estúdio: espera ela sair)
+			let loadingOn = false, dead = false;                    // dead: a abertura já foi desmontada (done) — nada mais mexe nos fundos
+			const pending = new Set();                              // trocas de fundo agendadas (o "glitch" troca 160 ms depois)
+			const later = (fn, ms) => { const id = setTimeout(() => { pending.delete(id); if (!dead) fn(); }, ms); pending.add(id); };
+			const first = Promise.all([load(files[0]), load('./assets/logo.png')]).then(() => { ready[0] = true; slides[0].classList.add('on'); root.classList.add('bg-ready'); bgOk = true; reveal(); });
+			first.then(() => files.slice(1).forEach((f, i) => load(f).then(() => { ready[i + 1] = true; })));     // os outros, em seguida
+			setTimeout(() => { if (!bgOk) { bgOk = true; root.classList.add('bg-ready'); slides[0].classList.add('on'); reveal(); } }, 4000);   // rede lenta: não segura o menu
+			function reveal() { if (bgOk && menuOk && studioOver) root.classList.add('ui-ready'); }
+			function next(glitch) {
+				if (dead) return;
+				let n = idx; for (let k = 1; k <= slides.length; k++) { const j = (idx + k) % slides.length; if (ready[j]) { n = j; break; } }
+				if (n === idx) return;
+				const swap = () => { if (dead || !slides[idx] || !slides[n]) return; slides[idx].classList.remove('on'); idx = n; slides[idx].classList.add('on'); };
+				if (!glitch) return swap();
+				bg.classList.remove('glitch'); void bg.offsetWidth; bg.classList.add('glitch');
+				bars.innerHTML = ''; const cols = ['#ff1e56', '#1effe0', '#ffe81e', '#ffffff'];
+				for (let i = 0; i < 7; i++) { const b = document.createElement('i'); b.style.top = Math.random() * 95 + '%'; b.style.height = 6 + Math.random() * 40 + 'px'; b.style.background = cols[i % 4]; b.style.transform = 'translateX(' + (Math.random() - 0.5) * 60 + 'px)'; bars.appendChild(b); }
+				later(swap, 160); later(() => { bg.classList.remove('glitch'); bars.innerHTML = ''; }, 420);
+			}
+			const play = (ms, glitch) => { if (dead) return; clearInterval(timer); timer = setInterval(() => next(glitch), ms); };
+			if (studioOver) play(3500, true);
+			const TIPS = [
+				'Lave o dinheiro sujo nas fachadas antes de comprar imóveis fora da favela.',
+				'Fugir é sumir de vista: entre num beco, troque de carro ou se esconda numa caçamba.',
+				'Cada carreira tem patentes, habilidades e trabalhos próprios — veja a aba Carreiras.',
+				'O jogo salva sozinho a cada 2 minutos em momento calmo, e sempre que você dorme.',
+				'Dinheiro marcado de banco pesa na mochila: guarde no cofre do galpão.',
+				'Delegados com 10 ❤ deixam o distrito bem mais tranquilo para você.',
+				'Energia zerada ou acordado depois das 2h = desmaio. Durma em casa.',
+			];
+			let tipI = Math.floor(Math.random() * TIPS.length), tipT = 0;
+			const tipEl = document.getElementById('ml-tip');
+			const showTip = () => { tipEl.style.opacity = 0; setTimeout(() => { tipEl.innerHTML = '<b>Dica</b>' + TIPS[tipI++ % TIPS.length]; tipEl.style.opacity = 1; }, 350); };
+			return {
+				menuReady() { menuOk = true; reveal(); },
+				// a tela do estúdio saiu: o menu entra (se o jogo já está carregando, segue o slideshow suave do carregamento)
+				start() { if (studioOver || dead) return; studioOver = true; if (!loadingOn) play(3500, true); reveal(); },
+				// Novo jogo / carregar: some a logo e os botões, aparece a faixa de carregamento; fundos passam com fusão suave.
+				loading() { if (dead) return; loadingOn = true; root.classList.add('loading'); play(4200, false); showTip(); clearInterval(tipT); tipT = setInterval(showTip, 5200); },
+				progress(p) { const e = document.getElementById('ls-pct'); if (e) e.textContent = Math.round(p * 100) + '%'; },
+				done() {
+					root.classList.add('fade');
+					setTimeout(() => {                                   // solta tudo: as 6 imagens de fundo decodificadas (~50 MB) e a própria abertura
+						dead = true;
+						clearInterval(timer); clearInterval(tipT);
+						for (const id of pending) clearTimeout(id); pending.clear();
+						for (const d of slides) d.style.backgroundImage = 'none';
+						slides.length = 0; root.remove(); window.Intro = null;
+					}, 750);
+				},
+			};
+		})();
+	</script>
+	<canvas id="canvas"></canvas>
+	<div id="hud">
+		<div class="hud-row">
+			<span class="hud-label">≡ DIRTY MONEY</span>
+			<span class="hud-value" style="font-size: 11px;">Checkpoint de arte</span>
+		</div>
+		<div class="hud-section">
+			<div class="hud-row">
+				<span class="hud-label">Mode</span>
+				<span class="hud-value" id="controlMode">A PÉ</span>
+			</div>
+			<div class="hud-row">
+				<span class="hud-label">Hora</span>
+				<span class="hud-value" id="clock">--:--</span>
+			</div>
+			<div class="hud-row">
+				<span class="hud-label">Clima</span>
+				<span class="hud-value" id="weatherText">Céu limpo</span>
+			</div>
+			<div class="hud-row">
+				<span class="hud-label">Vida</span>
+				<span class="hud-value" id="hpText">██████████ 100</span>
+			</div>
+			<div class="hud-row">
+				<span class="hud-label">Arma</span>
+				<span class="hud-value" id="weaponText">—</span>
+			</div>
+			<div class="hud-row">
+				<span class="hud-label">Dinheiro</span>
+				<span class="hud-value" id="cashText" style="color:#ffd23f;">$ 0</span>
+			</div>
+			<div class="hud-row">
+				<span class="hud-label">Position</span>
+				<span class="hud-value" id="playerPos">X: 0.00 Z: 0.00</span>
+			</div>
+			<div class="hud-row">
+				<span class="hud-label">Speed</span>
+				<span class="hud-value" id="playerVel">0.00 m/s</span>
+			</div>
+			<div class="hud-row">
+				<span class="hud-label">State</span>
+				<span class="hud-value" id="playerState">IDLE</span>
+			</div>
+			<div class="hud-row">
+				<span class="hud-label">NPCs</span>
+				<span class="hud-value" id="npcCount">carregando…</span>
+			</div>
+			<div class="hud-row">
+				<span class="hud-label">Procurado</span>
+				<span class="hud-value" id="wantedLevel" style="color:#ffd23f;">LIMPO</span>
+			</div>
+			<div class="hud-row" id="forcesRow" style="display:none;">
+				<span class="hud-label">Forças</span>
+				<span class="hud-value" id="forcesText" style="font-size: 11px; color:#8fb4ff;"></span>
+			</div>
+			<div class="hud-row">
+				<span class="hud-label">FPS</span>
+				<span class="hud-value" id="fps">0</span>
+			</div>
+		</div>
+		<div class="hud-section" style="min-height: 16px; color: #ffe14d;">
+			<span id="actionLog"></span>
+		</div>
+		<div class="hud-section" style="font-size: 11px; color: #888;">
+			<div>WASD mover · Shift correr · Z/X zoom</div>
+			<div>Clique/Espaço golpe-tiro (sem arma: soco + soco + chute)</div>
+			<div>1-9 armas: punhos pistola SMG escopeta taco revólver AK fuzil faca</div>
+			<div>R recarregar · M kit médico · I inventário · O carreiras do crime · ESC/P menu (mapa e marcador)</div>
+			<div>E assaltar / esconder-se (caçamba, caixote, latão) · V pular grade/muro</div>
+			<div>F carro/moto/bike/jet ski/lancha/barco (derruba o piloto) · Marina na orla leste</div>
+			<div>Carro estacionado: F quebra o vidro (alarme) · G arromba (furtivo)</div>
+			<div>F em movimento: pula rolando (perde vida)</div>
+			<div>★ fuja do raio/visão da polícia · 3★ heli · 4★ SWAT · 5★ ruas fechadas</div>
+			<div>Carros amassam, fumegam e explodem · carro rápido atropela (você também)</div>
+			<div>No carro: H buzina · L faróis · T avança 2h · Y muda o clima · segure E num posto p/ abastecer (chuva, tempestade)</div>
+		</div>
+	</div>
 
-    <canvas id="minimap"></canvas>
+	<canvas id="minimap"></canvas>
 
-    <!-- Vinheta vermelha ao levar dano. -->
-    <div id="hit"></div>
+	<!-- Vinheta vermelha ao levar dano. -->
+	<div id="hit"></div>
 
-    <!-- Dica de interação (veículo por perto). -->
-    <div id="prompt"></div>
+	<!-- Dica de interação (veículo por perto). -->
+	<div id="prompt"></div>
 
-    <!-- Inventário (tecla I). -->
-    <div id="inventory">
-        <h3>≡ INVENTÁRIO</h3>
-        <div id="invBody"></div>
-        <div class="inv-hint">I/Esc fecha · 1-5 equipa · M kit médico · R recarrega</div>
-    </div>
+	<!-- Inventário (tecla I). -->
+	<div id="inventory">
+		<h3>≡ INVENTÁRIO</h3>
+		<div id="invBody"></div>
+		<div class="inv-hint">I/Esc fecha · 1-5 equipa · M kit médico · R recarrega</div>
+	</div>
 
-    <!-- Bibliotecas LOCAIS (pasta vendor/): o jogo abre sem internet e com versões congeladas. Antes vinham da CDN a cada abertura —
-         offline, o Havok não carregava e o jogo seguia sem física (sem carros, polícia nem pedestres). -->
-    <!-- Babylon.js 6.40.0 (UMD -> global BABYLON). -->
-    <script src="./vendor/babylon.min.js"></script>
-    <!-- Havok (física) — expõe o global HavokPhysics(); o .wasm vai embutido em base64 (file:// não deixa buscar o arquivo). -->
-    <script src="./vendor/HavokPhysics_umd.js"></script>
-    <script src="./vendor/HavokPhysics.wasm.js"></script>
+	<!-- Bibliotecas LOCAIS (pasta vendor/): o jogo abre sem internet e com versões congeladas. Antes vinham da CDN a cada abertura —
+		 offline, o Havok não carregava e o jogo seguia sem física (sem carros, polícia nem pedestres). -->
+	<!-- Babylon.js 6.40.0 (UMD -> global BABYLON). -->
+	<script src="./vendor/babylon.min.js"></script>
+	<!-- Havok (física) — expõe o global HavokPhysics(); o .wasm vai embutido em base64 (file:// não deixa buscar o arquivo). -->
+	<script src="./vendor/HavokPhysics_umd.js"></script>
+	<script src="./vendor/HavokPhysics.wasm.js"></script>
 
-    <!-- Nosso código como scripts clássicos, em ordem de dependência.
-         (Sem ES Modules => abre por duplo-clique no index.html, file:// funciona.) -->
-    <script src="./src/config.js"></script>
-    <script src="./src/ui/Theme.js"></script>
-    <script src="./src/ui/Panel.js"></script>
-    <script src="./src/player/SkillTree.js"></script>
-    <script src="./src/audio/AudioFX.js"></script>
-    <script src="./src/audio/EngineAudio.js"></script>
-    <script src="./src/audio/Footsteps.js"></script>
-    <script src="./src/art/Pixel.js"></script>
-    <script src="./src/art/SpriteIO.js"></script>
-    <script src="./src/player/Outfit.js"></script>
-    <script src="./src/economy/Economy.js"></script>
-    <script src="./src/economy/Laundry.js"></script>
-    <script src="./src/economy/RealEstate.js"></script>
-    <script src="./src/economy/Garage.js"></script>
-    <script src="./src/economy/Dealers.js"></script>
-    <script src="./src/economy/Business.js"></script>
-    <script src="./src/world/Interiors.js"></script>
-    <script src="./src/art/TileFactory.js"></script>
-    <script src="./src/art/SpriteBaker.js"></script>
-    <script src="./src/art/CharacterRig.js"></script>
-    <script src="./assets/chars/personagens-atlas.js"></script>
-    <script src="./src/art/CharArt.js"></script>
-    <!-- Personagens 2,5D: atlas PRONTOS, gerados no build (tools/asset_baker/bake.cjs → assets/baked). Aqui só os dados (NpcData lê
-         npc-data.json), o decodificador das páginas WebP (num Worker) e o NpcArt, que lê os manifestos JSON e pede cada página quando um
-         personagem precisa dela. O gerador procedural NÃO é carregado no jogo: só a tela de equipamento o abre, num Worker (Wardrobe). -->
-    <script src="./src/art/NpcData.js"></script>
-    <script src="./src/art/AtlasDecoder.js"></script>
-    <script src="./src/art/NpcArt.js"></script>
-    <script src="./src/art/CharacterSheet.js"></script>
-    <script src="./src/art/SpriteActor.js"></script>
-    <script src="./src/art/PropSprites.js"></script>
-    <script src="./src/art/ItemSprites.js"></script>
-    <script src="./src/art/WeaponArt.js"></script>
-    <script src="./src/art/HideSprites.js"></script>
-    <script src="./src/art/HouseArt.js"></script>
-    <script src="./src/art/ShopArt.js"></script>
-    <script src="./src/art/ShopStyles.js"></script>
-    <script src="./src/art/HomeStyles.js"></script>
-    <script src="./src/art/BankStyles.js"></script>
-    <script src="./src/art/JewelryStyles.js"></script>
-    <script src="./assets/cars/carros-atlas.js"></script>
-    <script src="./src/art/CarArt.js"></script>
-    <script src="./src/art/CarSheet.js"></script>
-    <!-- Carros em 3D (tools/carros3d): malhas com rodas que rolam/esterçam e suspensão; motos, bicicletas e barcos seguem no atlas -->
-    <script src="./assets/cars/carros3d.js"></script>
-    <script src="./src/art/CarArt3D.js"></script>
-    <script src="./src/art/RiderActor.js"></script>
-    <script src="./src/art/HeliArt.js"></script>
-    <script src="./src/art/BoatSheet.js"></script>
-    <script src="./src/render/GlowBatch.js"></script>
-    <script src="./src/render/ShadowBoxBatch.js"></script>
-    <script src="./src/world/Fireworks.js"></script>
-    <script src="./src/render/RevealPlugin.js"></script>
-    <script src="./src/render/WaterPlugin.js"></script>
-    <script src="./src/render/TerrainSplat.js"></script>
-    <script src="./src/world/TrafficSignals.js"></script>
-    <script src="./src/world/Weather.js"></script>
-    <script src="./src/world/DayNight.js"></script>
-    <script src="./src/world/Pickups.js"></script>
-    <script src="./src/map/WorldMap.js"></script>
-    <script src="./src/map/RoadPlan.js"></script>
-    <script src="./src/map/RuralPlan.js"></script>
-    <script src="./src/map/Marina.js"></script>
-    <script src="./src/map/SafeHouse.js"></script>
-    <script src="./src/map/FavelaPlan.js"></script>
-    <script src="./src/map/RuralRoads.js"></script>
-    <script src="./src/map/CityGrid.js"></script>
-    <script src="./src/map/MeshBatch.js"></script>
-    <script src="./src/map/TerrainBuilder.js"></script>
-    <script src="./src/world/HouseView.js"></script>
-    <script src="./src/world/BridgeShadows.js"></script>
-    <script src="./src/map/WorldBuilder.js"></script>
-    <script src="./src/map/MapRenderer.js"></script>
-    <script src="./src/map/MapGeo.js"></script>
-    <script src="./src/ai/StateMachine.js"></script>
-    <script src="./src/core/engine.js"></script>
-    <script src="./src/core/camera.js"></script>
-    <script src="./src/render/SpeedBlur.js"></script>
-    <script src="./src/render/Smooth.js"></script>
-    <script src="./src/core/navigation.js"></script>
-    <script src="./src/core/physics.js"></script>
-    <script src="./src/core/ColliderStreamer.js"></script>
-    <script src="./src/core/HangProbe.js"></script>
-    <script src="./src/core/Perf.js"></script>
-    <script src="./src/core/Spatial.js"></script>
-    <script src="./src/core/AutoQuality.js"></script>
-    <script src="./src/input/PadGlyphs.js"></script>
-    <script src="./src/input/inputManager.js"></script>
-    <script src="./src/input/PadNav.js"></script>
-    <script src="./src/player/Inventory.js"></script>
-    <script src="./src/player/Items.js"></script>
-    <script src="./src/player/Bags.js"></script>
-    <script src="./src/player/Physique.js"></script>
-    <script src="./src/player/Stash.js"></script>
-    <script src="./src/player/Standing.js"></script>
-    <script src="./src/player/Missions.js"></script>
-    <script src="./src/player/Goals.js"></script>
-    <script src="./src/player/Achievements.js"></script>
-    <script src="./src/ui/CareerUI.js"></script>
-    <script src="./src/ui/GuideUI.js"></script>
-    <script src="./src/ui/GuideCrime.js"></script>
-    <script src="./src/careers/CareerCore.js"></script>
-    <script src="./src/careers/CareerChop.js"></script>
-    <script src="./src/careers/CareerBurglar.js"></script>
-    <script src="./src/careers/CareerGunsmith.js"></script>
-    <script src="./src/careers/CareerScam.js"></script>
-    <script src="./src/careers/CareerBicho.js"></script>
-    <script src="./src/careers/CareerRobber.js"></script>
-    <script src="./src/crime/Traces.js"></script>
-    <script src="./src/crime/Robbery.js"></script>
-    <script src="./src/crime/Heists.js"></script>
-    <script src="./src/banks/Banks.js"></script>
-    <script src="./src/minigames/Pool.js"></script>
-    <script src="./src/minigames/Gym.js"></script>
-    <script src="./src/empire/EmpireSystems.js"></script>
-    <script src="./src/empire/Empire.js"></script>
-    <script src="./src/ui/EmpireUI.js"></script>
-    <script src="./src/ui/BusinessUI.js"></script>
-    <script src="./src/player/Aid.js"></script>
-    <script src="./src/player/SaveGame.js"></script>
-    <script src="./src/player/PlayerLook.js"></script>
-    <script src="./src/player/Wardrobe.js"></script>
-    <script src="./src/player/player.js"></script>
-    <script src="./src/npc/npcStates.js"></script>
-    <script src="./src/npc/npcActivities.js"></script>
-    <script src="./src/npc/NPC.js"></script>
-    <script src="./src/npc/NPCManager.js"></script>
-    <script src="./src/npc/GangManager.js"></script>
-    <script src="./src/npc/StreetCrime.js"></script>
-    <script src="./src/npc/FavelaWatch.js"></script>
-    <script src="./src/npc/Barricades.js"></script>
-    <script src="./src/npc/Baile.js"></script>
-    <script src="./src/npc/MotoTaxi.js"></script>
-    <script src="./src/npc/MotoStands.js"></script>
-    <script src="./src/world/RoadNet.js"></script>
-    <script src="./src/world/Gps.js"></script>
-    <script src="./src/world/Waves.js"></script>
-    <script src="./src/world/WaterSpray.js"></script>
-    <script src="./src/world/WaterFx.js"></script>
-    <script src="./src/world/Birds.js"></script>
-    <script src="./src/world/StreetProps.js"></script>
-    <script src="./src/world/Puddles.js"></script>
-    <script src="./src/world/SkidMarks.js"></script>
-    <script src="./src/world/Blood.js"></script>
-    <script src="./src/world/Footprints.js"></script>
-    <script src="./src/world/SparkFx.js"></script>
-    <script src="./src/vehicle/Bikes.js"></script>
-    <script src="./src/vehicle/Vehicle.js"></script>
-    <script src="./src/vehicle/TrafficCar.js"></script>
-    <script src="./src/vehicle/Boat.js"></script>
-    <script src="./src/vehicle/Chopper.js"></script>
-    <script src="./src/vehicle/VehicleManager.js"></script>
-    <script src="./src/npc/Couriers.js"></script>
-    <script src="./src/vehicle/TrafficManager.js"></script>
-    <script src="./src/vehicle/CarLights.js"></script>
-    <script src="./src/vehicle/CarDoors.js"></script>
-    <script src="./src/vehicle/CarDamage.js"></script>
-    <script src="./src/vehicle/CarCare.js"></script>
-    <script src="./src/economy/Mechanic.js"></script>
-    <script src="./src/vehicle/Collisions.js"></script>
-    <script src="./src/combat/Combat.js"></script>
-    <script src="./src/combat/Cover.js"></script>
-    <script src="./src/combat/Aim.js"></script>
-    <script src="./src/combat/Throwables.js"></script>
-    <script src="./src/combat/Rockets.js"></script>
-    <script src="./src/combat/Ragdoll.js"></script>
-    <script src="./src/police/WantedSystem.js"></script>
-    <script src="./src/police/policeStates.js"></script>
-    <script src="./src/police/PoliceCar.js"></script>
-    <script src="./src/police/PoliceOfficer.js"></script>
-    <script src="./src/police/PoliceOperation.js"></script>
-    <script src="./src/police/Helicopter.js"></script>
-    <script src="./src/police/Roadblocks.js"></script>
-    <script src="./src/police/PoliceManager.js"></script>
-    <script src="./src/ui/Minimap.js"></script>
-    <script src="./src/ui/Lockpick.js"></script>
-    <script src="./src/ui/EndScreen.js"></script>
-    <script src="./src/ui/StashUI.js"></script>
-    <script src="./src/ui/PropertyUI.js"></script>
-    <script src="./src/ui/CarUI.js"></script>
-    <script src="./src/ui/TribunalUI.js"></script>
-    <script src="./src/ui/ShopUI.js"></script>
-    <script src="./src/ui/Hud.js"></script>
-    <script src="./src/ui/WeaponWheel.js"></script>
-    <script src="./src/ui/TouchControls.js"></script>
-    <script src="./src/ui/EquipUI.js"></script>
-    <script src="./src/ui/PauseMenu.js"></script>
-    <script src="./src/tools/DevMode.js"></script>
-    <script src="./src/tools/debug.js"></script>
-    <script src="./src/tools/SpriteExport.js"></script>
-    <script src="./src/game.js"></script>
-    <script src="./src/sim/schema.js"></script>
-    <script src="./src/sim/worker.js"></script>
-    <script src="./src/main.js"></script>
+	<!-- Nosso código como scripts clássicos, em ordem de dependência.
+		 (Sem ES Modules => abre por duplo-clique no index.html, file:// funciona.) -->
+	<script src="./src/config.js"></script>
+	<script src="./src/ui/Theme.js"></script>
+	<script src="./src/ui/Panel.js"></script>
+	<script src="./src/player/SkillTree.js"></script>
+	<script src="./src/audio/AudioFX.js"></script>
+	<script src="./src/audio/EngineAudio.js"></script>
+	<script src="./src/audio/Footsteps.js"></script>
+	<script src="./src/art/Pixel.js"></script>
+	<script src="./src/art/SpriteIO.js"></script>
+	<script src="./src/player/Outfit.js"></script>
+	<script src="./src/economy/Economy.js"></script>
+	<script src="./src/economy/Laundry.js"></script>
+	<script src="./src/economy/RealEstate.js"></script>
+	<script src="./src/economy/Garage.js"></script>
+	<script src="./src/economy/Dealers.js"></script>
+	<script src="./src/economy/Business.js"></script>
+	<script src="./src/world/Interiors.js"></script>
+	<script src="./src/art/TileFactory.js"></script>
+	<script src="./src/art/SpriteBaker.js"></script>
+	<script src="./src/art/CharacterRig.js"></script>
+	<script src="./assets/chars/personagens-atlas.js"></script>
+	<script src="./src/art/CharArt.js"></script>
+	<!-- Personagens 2,5D: atlas PRONTOS, gerados no build (tools/asset_baker/bake.cjs → assets/baked). Aqui só os dados (NpcData lê
+		 npc-data.json), o decodificador das páginas WebP (num Worker) e o NpcArt, que lê os manifestos JSON e pede cada página quando um
+		 personagem precisa dela. O gerador procedural NÃO é carregado no jogo: só a tela de equipamento o abre, num Worker (Wardrobe). -->
+	<script src="./src/art/NpcData.js"></script>
+	<script src="./src/art/AtlasDecoder.js"></script>
+	<script src="./src/art/NpcArt.js"></script>
+	<script src="./src/art/CharacterSheet.js"></script>
+	<script src="./src/art/SpriteActor.js"></script>
+	<script src="./src/art/PropSprites.js"></script>
+	<script src="./src/art/ItemSprites.js"></script>
+	<script src="./src/art/WeaponArt.js"></script>
+	<script src="./src/art/HideSprites.js"></script>
+	<script src="./src/art/HouseArt.js"></script>
+	<script src="./src/art/ShopArt.js"></script>
+	<script src="./src/art/ShopStyles.js"></script>
+	<script src="./src/art/HomeStyles.js"></script>
+	<script src="./src/art/BankStyles.js"></script>
+	<script src="./src/art/JewelryStyles.js"></script>
+	<script src="./assets/cars/carros-atlas.js"></script>
+	<script src="./src/art/CarArt.js"></script>
+	<script src="./src/art/CarSheet.js"></script>
+	<!-- Carros em 3D (tools/carros3d): malhas com rodas que rolam/esterçam e suspensão; motos, bicicletas e barcos seguem no atlas -->
+	<script src="./assets/cars/carros3d.js"></script>
+	<script src="./src/art/CarArt3D.js"></script>
+	<script src="./src/art/RiderActor.js"></script>
+	<script src="./src/art/HeliArt.js"></script>
+	<script src="./src/art/BoatSheet.js"></script>
+	<script src="./src/render/GlowBatch.js"></script>
+	<script src="./src/render/ShadowBoxBatch.js"></script>
+	<script src="./src/world/Fireworks.js"></script>
+	<script src="./src/render/RevealPlugin.js"></script>
+	<script src="./src/render/WaterPlugin.js"></script>
+	<script src="./src/render/TerrainSplat.js"></script>
+	<script src="./src/world/TrafficSignals.js"></script>
+	<script src="./src/world/Weather.js"></script>
+	<script src="./src/world/DayNight.js"></script>
+	<script src="./src/world/Pickups.js"></script>
+	<script src="./src/map/WorldMap.js"></script>
+	<script src="./src/map/RoadPlan.js"></script>
+	<script src="./src/map/RuralPlan.js"></script>
+	<script src="./src/map/Marina.js"></script>
+	<script src="./src/map/SafeHouse.js"></script>
+	<script src="./src/map/FavelaPlan.js"></script>
+	<script src="./src/map/RuralRoads.js"></script>
+	<script src="./src/map/CityGrid.js"></script>
+	<script src="./src/map/MeshBatch.js"></script>
+	<script src="./src/map/TerrainBuilder.js"></script>
+	<script src="./src/world/HouseView.js"></script>
+	<script src="./src/world/BridgeShadows.js"></script>
+	<script src="./src/map/WorldBuilder.js"></script>
+	<script src="./src/map/MapRenderer.js"></script>
+	<script src="./src/map/MapGeo.js"></script>
+	<script src="./src/ai/StateMachine.js"></script>
+	<script src="./src/core/engine.js"></script>
+	<script src="./src/core/camera.js"></script>
+	<script src="./src/render/SpeedBlur.js"></script>
+	<script src="./src/render/Smooth.js"></script>
+	<script src="./src/core/navigation.js"></script>
+	<script src="./src/core/physics.js"></script>
+	<script src="./src/core/ColliderStreamer.js"></script>
+	<script src="./src/core/HangProbe.js"></script>
+	<script src="./src/core/Perf.js"></script>
+	<script src="./src/core/Spatial.js"></script>
+	<script src="./src/core/AutoQuality.js"></script>
+	<script src="./src/input/PadGlyphs.js"></script>
+	<script src="./src/input/inputManager.js"></script>
+	<script src="./src/input/PadNav.js"></script>
+	<script src="./src/player/Inventory.js"></script>
+	<script src="./src/player/Items.js"></script>
+	<script src="./src/player/Bags.js"></script>
+	<script src="./src/player/Physique.js"></script>
+	<script src="./src/player/Stash.js"></script>
+	<script src="./src/player/Standing.js"></script>
+	<script src="./src/player/Missions.js"></script>
+	<script src="./src/player/Goals.js"></script>
+	<script src="./src/player/Achievements.js"></script>
+	<script src="./src/ui/CareerUI.js"></script>
+	<script src="./src/ui/GuideUI.js"></script>
+	<script src="./src/ui/GuideCrime.js"></script>
+	<script src="./src/careers/CareerCore.js"></script>
+	<script src="./src/careers/CareerChop.js"></script>
+	<script src="./src/careers/CareerBurglar.js"></script>
+	<script src="./src/careers/CareerGunsmith.js"></script>
+	<script src="./src/careers/CareerScam.js"></script>
+	<script src="./src/careers/CareerBicho.js"></script>
+	<script src="./src/careers/CareerRobber.js"></script>
+	<script src="./src/crime/Traces.js"></script>
+	<script src="./src/crime/Robbery.js"></script>
+	<script src="./src/crime/Heists.js"></script>
+	<script src="./src/banks/Banks.js"></script>
+	<script src="./src/minigames/Pool.js"></script>
+	<script src="./src/minigames/Gym.js"></script>
+	<script src="./src/empire/EmpireSystems.js"></script>
+	<script src="./src/empire/Empire.js"></script>
+	<script src="./src/ui/EmpireUI.js"></script>
+	<script src="./src/ui/BusinessUI.js"></script>
+	<script src="./src/player/Aid.js"></script>
+	<script src="./src/player/SaveGame.js"></script>
+	<script src="./src/player/PlayerLook.js"></script>
+	<script src="./src/player/Wardrobe.js"></script>
+	<script src="./src/player/player.js"></script>
+	<script src="./src/npc/npcStates.js"></script>
+	<script src="./src/npc/npcActivities.js"></script>
+	<script src="./src/npc/NPC.js"></script>
+	<script src="./src/npc/NPCManager.js"></script>
+	<script src="./src/npc/GangManager.js"></script>
+	<script src="./src/npc/StreetCrime.js"></script>
+	<script src="./src/npc/FavelaWatch.js"></script>
+	<script src="./src/npc/Barricades.js"></script>
+	<script src="./src/npc/Baile.js"></script>
+	<script src="./src/npc/MotoTaxi.js"></script>
+	<script src="./src/npc/MotoStands.js"></script>
+	<script src="./src/world/RoadNet.js"></script>
+	<script src="./src/world/Gps.js"></script>
+	<script src="./src/world/Waves.js"></script>
+	<script src="./src/world/WaterSpray.js"></script>
+	<script src="./src/world/WaterFx.js"></script>
+	<script src="./src/world/Birds.js"></script>
+	<script src="./src/world/StreetProps.js"></script>
+	<script src="./src/world/Puddles.js"></script>
+	<script src="./src/world/SkidMarks.js"></script>
+	<script src="./src/world/Blood.js"></script>
+	<script src="./src/world/Footprints.js"></script>
+	<script src="./src/world/SparkFx.js"></script>
+	<script src="./src/vehicle/Bikes.js"></script>
+	<script src="./src/vehicle/Vehicle.js"></script>
+	<script src="./src/vehicle/TrafficCar.js"></script>
+	<script src="./src/vehicle/Boat.js"></script>
+	<script src="./src/vehicle/Chopper.js"></script>
+	<script src="./src/vehicle/VehicleManager.js"></script>
+	<script src="./src/npc/Couriers.js"></script>
+	<script src="./src/vehicle/TrafficManager.js"></script>
+	<script src="./src/vehicle/CarLights.js"></script>
+	<script src="./src/vehicle/CarDoors.js"></script>
+	<script src="./src/vehicle/CarDamage.js"></script>
+	<script src="./src/vehicle/CarCare.js"></script>
+	<script src="./src/economy/Mechanic.js"></script>
+	<script src="./src/vehicle/Collisions.js"></script>
+	<script src="./src/combat/Combat.js"></script>
+	<script src="./src/combat/Cover.js"></script>
+	<script src="./src/combat/Aim.js"></script>
+	<script src="./src/combat/Throwables.js"></script>
+	<script src="./src/combat/Rockets.js"></script>
+	<script src="./src/combat/Ragdoll.js"></script>
+	<script src="./src/police/WantedSystem.js"></script>
+	<script src="./src/police/policeStates.js"></script>
+	<script src="./src/police/PoliceCar.js"></script>
+	<script src="./src/police/PoliceOfficer.js"></script>
+	<script src="./src/police/PoliceOperation.js"></script>
+	<script src="./src/police/Helicopter.js"></script>
+	<script src="./src/police/Roadblocks.js"></script>
+	<script src="./src/police/PoliceManager.js"></script>
+	<script src="./src/ui/Minimap.js"></script>
+	<script src="./src/ui/Lockpick.js"></script>
+	<script src="./src/ui/EndScreen.js"></script>
+	<script src="./src/ui/StashUI.js"></script>
+	<script src="./src/ui/PropertyUI.js"></script>
+	<script src="./src/ui/CarUI.js"></script>
+	<script src="./src/ui/TribunalUI.js"></script>
+	<script src="./src/ui/ShopUI.js"></script>
+	<script src="./src/ui/Hud.js"></script>
+	<script src="./src/ui/WeaponWheel.js"></script>
+	<script src="./src/ui/TouchControls.js"></script>
+	<script src="./src/ui/EquipUI.js"></script>
+	<script src="./src/ui/PauseMenu.js"></script>
+	<script src="./src/tools/DevMode.js"></script>
+	<script src="./src/tools/debug.js"></script>
+	<script src="./src/tools/SpriteExport.js"></script>
+	<script src="./src/game.js"></script>
+	<script src="./src/sim/schema.js"></script>
+	<script src="./src/sim/worker.js"></script>
+	<script src="./src/main.js"></script>
 </body>
 </html>

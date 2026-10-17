@@ -10,6 +10,15 @@ tab_width = 4
 end_of_line = lf
 insert_final_newline = true
 
+# Legacy game and asset tools: files are moving to tabs one by one as they are touched, so only the tab width is fixed here
+# (indent_style is left to each file's existing indentation).
+[{src,tools}/**.{js,cjs,mjs}]
+indent_size = 4
+tab_width = 4
+
+[index.html]
+tab_width = 4
+
 [package.json]
 indent_style = tab
 indent_size = 4
