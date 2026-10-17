@@ -114,6 +114,7 @@ const NpcArt = {
 		if (P.tex) return true;
 		if (P.px) { if (this._scene) this._upload(P, pri); return !!P.tex; }       // (sobe em faixas: pronta numa das próximas vezes — _upStep)
 		if (P.dead || P.unused || !this._dirOk(P)) return false;
+		if (pri >= 0 && this._pins().includes(P.A.id)) pri -= 10;            // (the player's atlases decode ahead of everyone, as they upload: _upload)
 		if (P.st === 'idle' || (P.st === 'failed' && performance.now() >= P.retry)) { P.st = 'queued'; P.pri = pri; P.seq = ++this._seq; this._q.push(P); this._pump(); }
 		else if (pri < P.pri && P.st === 'queued') P.pri = pri;
 		return false;
