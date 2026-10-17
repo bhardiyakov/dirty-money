@@ -12,6 +12,7 @@
 // ============================================================================
 
 class NPC {
+	static WADE_DIVE_S = 0.75;          // wade_dive: 9 frames at 12 fps
 	// ctx = { signals } (serviços compartilhados do mundo).
 	constructor(scene, nav, startPos, id, sprites, ctx, role = null) {
 		this.role = role;
@@ -131,7 +132,7 @@ class NPC {
 	_clearActivity() {
 		this.umbrella = false;
 		this._dropTowel();
-		this.free = null; this.freeAnim = null; this._dive = null;
+		this.free = null; this.freeAnim = null; this._dive = null; this._plunge = 0;
 		this.actor.mesh.position.y = 0.5;
 	}
 
@@ -182,6 +183,10 @@ class NPC {
 		this.freeAnim = deep ? (crawl || !has('swim_breast') ? { clip: 'swim', rate: Math.max(0.7, Math.min(1.4, v / 2.2)) } : { clip: 'swim_breast', rate: Math.max(0.6, Math.min(1.4, v / 1.4)) })
 			: wadeDeep && has('wade') ? { clip: 'wade', rate: Math.max(0.5, v / (Config.anim.walk * 0.54)) }
 			: { clip: 'walk', rate: Math.max(0.5, v / Config.anim.walk) };
+		// a água passou do peito andando: mergulha no nado (wade_dive, uma vez, enquanto segue em frente)
+		if (deep && this._wasDeep === false && has('wade_dive')) this._plunge = NPC.WADE_DIVE_S;
+		this._wasDeep = deep;
+		if (this._plunge > 0) { this._plunge -= dt; this.freeAnim = { clip: 'wade_dive', rate: 1 }; }
 		if (!deep) this._dive = null;
 		else if (this._dive) {                                                                 // mergulhando: afunda → debaixo d'água → sobe
 			const D = this._dive;

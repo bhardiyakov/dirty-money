@@ -41,6 +41,7 @@ function NpcGenTypes(G) {
         ...KNIFE, 'holdup:knife',
         'swim_in:none', 'swim_out:none', 'dive_in:none', 'dive:none', 'dive_out:none',      // começar/parar de nadar, mergulho
         'swim_stand:none',                                               // chegou ao raso nadando crawl: fica de pé (swim_out → isto → wade_idle)
+        'wade_dive:none', 'bridge_dive:none',                            // do fundo ao nado (o mergulho no nado); salto de cabeça da ponte
         'run_heavy:none', 'idle_heavy:none',                             // o fardo da sobrecarga também correndo e parado (o andar fica no principal)
         'swim_breast:none', 'wade:none', 'wade_idle:none',               // nado peito na superfície; vadeando com a água acima da cintura
         ...GYM,                                                          // academia: rosca direta, supino, agachamento (3 faixas de peso)
@@ -79,7 +80,9 @@ function NpcGenTypes(G) {
     };
 
     // id → { vary, nvar, groups (lugares: casual, biz, poor, beach, sport, tourist), clips, guns: arma do jogo → objeto desenhado }
-    const T = (vary, nvar, groups, clips, guns = {}) => ({ vary, nvar, groups, clips, guns });
+    // Who goes to the beach (the 'beach' group: bathers swim — SwimState) also gets the dive from wading into the swim.
+    const SWIMMER = ['wade_dive:none'];
+    const T = (vary, nvar, groups, clips, guns = {}) => ({ vary, nvar, groups, clips: groups.includes('beach') ? [...clips, ...SWIMMER] : clips, guns });
     const TYPES = {
         civil_trabalhador: T('civil', 10, ['casual', 'poor'], CIV),
         civil_senhor: T('social', 8, ['biz', 'casual', 'tourist'], CIV),

@@ -10,7 +10,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 
 const COLORS = ['#d9453a', '#2f6fd0', '#e8c22c', '#2fa36a', '#7a4fb8', '#3a404a', '#e8742c', '#e86aa0'];
 const CELL = 176, PITCH = 256, PPU = 36, ELEVATION = 56;
-const SOURCES = ['src/config.js', 'src/art/Pixel.js', 'src/art/SpriteBaker.js'];
+const SOURCES = ['src/storage/Store.js', 'src/config.js', 'src/art/Pixel.js', 'src/art/SpriteBaker.js'];      // (config.js reads the saved settings through Store)
 
 // The game's art code (classic scripts) in a sandbox: { Pixel, SpriteBaker }.
 function loadArt(root) {
