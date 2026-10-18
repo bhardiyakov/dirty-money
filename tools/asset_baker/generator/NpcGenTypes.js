@@ -36,6 +36,7 @@ function NpcGenTypes(G) {
     const GYM = ['gym_curl', 'gym_bench', 'gym_squat'].flatMap((c) => ['w1', 'w2', 'w3'].map((w) => `${c}:${w}`));
     const PLAYER_TAC = [
         ...['none', 'pistol', 'smg', 'shotgun'].flatMap((w) => [`crouch:${w}`, `sneak:${w}`]),
+        ...['none', 'pistol', 'smg', 'shotgun'].map((w) => `cover:${w}`), ...['pistol', 'smg', 'shotgun'].flatMap((w) => [`crouch_aim:${w}`, `crouch_shoot:${w}`]),   // cobertura e tiro ajoelhado
         ...['pistol', 'smg', 'shotgun'].map((w) => `strafe:${w}`), 'roll:none',
         'sitin:L', 'sitin:R', 'sitout:L', 'sitout:R',                    // sentar no carro / sair dele (pela porta da esquerda / da direita)
         ...KNIFE, 'holdup:knife',
@@ -52,7 +53,7 @@ function NpcGenTypes(G) {
     // ARMAS NOVAS do jogador (pistola com silenciador, RPG, lança-foguetes, minigun): outro atlas companheiro (protagonista_armas;
     // nos visuais gerados, "hero:N:w") — o principal e o tático já estão cheios. Tudo o que o jogador faz com elas na mão.
     const ARMS = ['pistol_sil', 'rpg', 'launcher', 'minigun'];
-    const PLAYER_ARMS = ARMS.flatMap((w) => [`idle:${w}`, `walk:${w}`, `run:${w}`, `draw:${w}`, `aim:${w}`, `shoot:${w}`, `crouch:${w}`, `sneak:${w}`, `strafe:${w}`, `holdup:${w}`]);
+    const PLAYER_ARMS = ARMS.flatMap((w) => [`idle:${w}`, `walk:${w}`, `run:${w}`, `draw:${w}`, `aim:${w}`, `shoot:${w}`, `crouch:${w}`, `sneak:${w}`, `strafe:${w}`, `holdup:${w}`, `cover:${w}`, `crouch_aim:${w}`, `crouch_shoot:${w}`]);
     const PLAYER_HAND = ['idle_hold:none', 'walk_hold:none', 'run_hold:none', 'idle_hold:pistol', 'walk_hold:pistol', 'run_hold:pistol'];
     const PLAYER_PULL = ['idle_pull:none', 'walk_pull:none'];
     const PLAYER_HEAVY = ['walk_heavy:none'];
