@@ -1,13 +1,42 @@
 // ============================================================================
-// SaveGame — grava e carrega o progresso (storage/Store.js, chave 'save'; o menu principal lê a mesma chave).
-// Salva ao DORMIR na cama da safe house (Game.sleep). Guarda: hora e clima, vida/colete/arma, posição, mochila e o
+// SaveGame — grava e carrega o progresso em 3 ESPAÇOS (storage/Store.js, chaves 'save1'..'save3'; o save antigo, 'save', vira o
+// espaço 1). Nada é salvo sozinho: só quando o jogador SALVA no menu de pausa (aba Salvar, ui/SaveSlots.js) ou DORME (Game.sleep, no
+// espaço do jogo em andamento, `slot`). O menu principal escolhe o espaço ao carregar ou ao começar um jogo novo. Guarda: hora e clima, vida/colete/arma, posição, mochila e o
 // que está guardado em casa (Stash) e os SEUS carros (Garage: os das garagens). Não guarda o trânsito, pedestres nem a polícia
-// (o mundo recomeça "fresco" ao carregar).
+// (o mundo recomeça "fresco" ao carregar). Os móveis da decoração (world/HomeDecor.js) vão junto: a grade é gravada no mesmo espaço.
 // ============================================================================
 
 const SaveGame = {
 	KEY: 'save',
 	VERSION: 1,
+	SLOTS: 3,
+	slot: 1,                    // o espaço do jogo em andamento (dormir salva nele; o menu escolhe outro)
+
+	keyOf(i) { return this.KEY + i; },
+	// O save de antes dos espaços ('save') passa a ser o espaço 1, uma vez.
+	_migrate() {
+		if (this._migrated) return;
+		this._migrated = true;
+		const old = Store.getJSON(this.KEY);
+		if (old && !Store.getJSON(this.keyOf(1)) && Store.setJSON(this.keyOf(1), old)) Store.remove(this.KEY);
+	},
+	// Os 3 espaços: [save | null] (índice 0 = espaço 1).
+	list() { this._migrate(); return [...Array(this.SLOTS).keys()].map((i) => { const s = Store.getJSON(this.keyOf(i + 1)); return s && s.v === this.VERSION ? s : null; }); },
+	firstEmpty() { const L = this.list(), i = L.indexOf(null); return i < 0 ? 0 : i + 1; },
+	latest() { const L = this.list(); let b = 0; L.forEach((s, i) => { if (s && (!b || s.savedAt > L[b - 1].savedAt)) b = i + 1; }); return b; },
+	remove(slot) {
+		if (typeof GridPersistence !== 'undefined') GridPersistence.detectBackend().deleteSlot(slot).catch((e) => console.warn('[SAVE] móveis do espaço não apagados:', e));
+		return Store.remove(this.keyOf(slot));
+	},
+	// Dá para salvar agora? (null = sim; senão, o motivo)
+	blocked(g) {
+		if (!g || !g._bootDone) return 'O jogo ainda está carregando';
+		if (g.death || !g.player.alive) return 'Não dá para salvar morto';
+		if (g.arrest) return 'Não dá para salvar sendo preso';
+		if (g.wanted && g.wanted.level > 0) return 'Com a polícia no seu rastro não dá para salvar';
+		if ((typeof Robbery !== 'undefined' && Robbery.session) || (typeof Heists !== 'undefined' && Heists.run)) return 'Termine o assalto antes de salvar';
+		return null;
+	},
 
 	snapshot(g) {
 		const p = g.player, inv = g.inventory, at = this._where(g);
@@ -16,24 +45,27 @@ const SaveGame = {
 		return {
 			v: this.VERSION, savedAt: Date.now(),
 			hour: g.dayNight.hour, weather: g.weather.state,
+			info: { cash: Math.round((g.inventory.cash || 0) + (g.inventory.clean || 0)), place: this._place(g), played: Math.round(g.time || 0) },
 			player: { x: at.x, z: at.z, rot: at.rot, hp: p.hp, armor: p.armor, armorMax: p.armorMax, weapon: p.weapon },
 			inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, bag: inv.bag, spareBags: inv.spareBags.slice(), weapons, gear: Object.assign({}, inv.gear || {}), booster: inv.boosterUses || 0 },
 			fitness: p.fit ? p.fit.xp : 0, strength: p.str ? p.str.xp : 0, physique: Physique.serialize(),
 			stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
 			traces: Traces.serialize(), robbery: Robbery.serialize(), heists: Heists.serialize(), business: Business.serialize(),
+			decor: HomeDecor.serialize(),
 		};
 	},
 
-	write(g) {
+	write(g, slot = this.slot) {
 		let snap;
 		try { snap = this.snapshot(g); } catch (e) { console.error('[SAVE] falha ao montar o save:', e); return false; }
-		if (Store.setJSON(this.KEY, snap)) return true;
+		this._migrate();
+		if (Store.setJSON(this.keyOf(slot), snap)) { this.slot = slot; HomeDecor.commitToSlot(slot); return true; }
 		console.error('[SAVE] falha ao gravar: sem onde guardar');
 		return false;
 	},
 
-	read() {
-		return Store.getJSON(this.KEY);
+	read(slot = this.latest()) {
+		return slot ? this.list()[slot - 1] : null;
 	},
 
 	// Aplica um save no jogo recém-carregado (chamado no fim do boot).
@@ -52,6 +84,7 @@ const SaveGame = {
 		Physique.load(s.physique || null);
 		g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Garage.load(s.garage || null); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
 		Traces.load(s.traces || null); Robbery.load(s.robbery || null); Heists.load(s.heists || null); Business.load(s.business || null);
+		HomeDecor.load(s.decor || null);                                      // (os móveis em si vêm da grade: HomeDecor.startSession)
 		const pl = s.player || {};
 		p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));
 		if (CityGrid.blockedAt(pl.x, pl.z, 0.4)) p.teleport(g.nav.closestPoint(new BABYLON.Vector3(pl.x, 0, pl.z), 30));      // (o mapa mudou: salvou onde agora tem parede)
@@ -71,6 +104,11 @@ const SaveGame = {
 		if (!a) return { x: p.position.x, z: p.position.z, rot: p.root.rotation.y };
 		const bed = a.shop.safehouse && SafeHouse.spawnWorld();
 		return bed ? { x: bed.x, z: bed.z, rot: bed.face } : { x: a.ret.x, z: a.ret.z, rot: a.ret.face };
+	},
+
+	// Nome do lugar onde salvou (a região do mapa), para o card do espaço.
+	_place(g) {
+		try { const p = g.player.position; return (typeof RealEstate !== 'undefined' && RealEstate.locate) ? RealEstate.locate(p.x, p.z).region || '' : ''; } catch (e) { return ''; }
 	},
 
 	// "dd/mm hh:mm" do último save (para o menu principal).

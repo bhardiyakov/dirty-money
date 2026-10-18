@@ -7,6 +7,8 @@
 //   home_mansion    mansão / cobertura de luxo da ilha      (salão com colunas, piano, bar, suíte)
 // Cada sala marca os móveis de USO (S.use): 'bed' (dormir e salvar), 'fridge', 'safe', 'chest' (StashUI) e 'desk' (notebook →
 // ficha do imóvel: mercado, mudar-se, vender). Interiors.enterHome monta a sala no palco; sem atendente nem fregueses.
+// `empty` = imóvel comprado SEM MÓVEIS: só piso, paredes e janelas (e as colunas da mansão); os móveis vêm do modo decoração
+// (world/HomeDecor.js — cama, geladeira, baú, cofre e notebook também são vendidos lá).
 // ============================================================================
 
 Object.assign(ShopStyles, {
@@ -75,15 +77,21 @@ Object.assign(ShopStyles, {
         const side = Math.ceil(n / 2);
         for (let i = 0; i < side; i++) { const x = cx - w / 2 + (i + 0.5) * w / side; S.chair(x, cz + d / 2 + 0.7, 'n'); S.chair(x, cz - d / 2 - 0.7, 's'); }
     },
+    // Sala vazia (sem móveis): só a luz do teto.
+    _emptyHome(S, W, D, finishShade) {
+        S.light(W / 2, D / 2, Math.max(W, D) * 0.45, [255, 228, 180], 0.4);
+        return finishShade === undefined ? S.finish() : S.finish(finishShade);
+    },
     _windowN(S, xa, xb, h = 24, day = '#7ab4d8') { const bd = S.band(S.P(xa), S.P(xb)); S.window(bd.x + 2, bd.y + Math.max(2, (bd.h - h) / 2 | 0), bd.w - 4, h, day); },
 
     // ======================================================================= SIMPLES (barraco / casa popular / kitnet)
-    home_simple(v, lvl = 0) {
+    home_simple(v, lvl = 0, empty = false) {
         const W = 11.5 + (v % 3), D = 9.5, S = this._ctx('home_simple', v, W, D, 0.5), T = S.T;
         const pal = this._pal(v, [['#9aa89a', '#84927f', '#8a6a44'], ['#c8b890', '#b4a47c', '#7a5a38'], ['#a8b4c0', '#909ca8', '#6a4a30'], ['#c4a898', '#b09484', '#7a5236'], ['#b8c0a8', '#a0a890', '#6a5a3a']]);
         S.floor(...this._rf(lvl, [v % 2 ? 'concrete' : 'planks', v % 2 ? '#8a8a82' : pal[2], v % 2 ? '#74746c' : '#9a7a50', { size: 24 }]));
         S.shell({ n: this._rw(lvl, { kind: v % 2 ? 'paint' : 'wood', A: pal[0], B: pal[1] }), cap: '#7b7568', side: '#8a6a48', front: '#8a5a3c', mat: '#4a3a2a' });
         this._windowN(S, 2.0, 4.0, 22); this._windowN(S, W - 4.6, W - 2.4, 22, '#9ac4e0');
+        if (empty) return this._emptyHome(S, W, D);
         S.rug(S.R(W / 2 - 2.0, 3.0, W / 2 + 2.0, 5.6), pal[1], S.t(pal[1], 0.6));
         const bed = this._bed(S, S.R(T + 0.2, D - T - 3.0, T + 2.3, D - T - 0.1), v % 2 ? '#d8c8a8' : '#cfd8dc', '#6a4a2a'); S.use('bed', S.R(T, D - T - 3.4, T + 2.8, D - T));
         this._chest(S, S.R(T + 0.3, D - T - 3.8, T + 1.6, D - T - 3.1)); S.use('chest', S.R(T, D - T - 4.3, T + 2.1, D - T - 2.8));
@@ -100,12 +108,13 @@ Object.assign(ShopStyles, {
     },
 
     // ======================================================================= APARTAMENTO (médio e alto padrão)
-    home_apto(v, lvl = 0) {
+    home_apto(v, lvl = 0, empty = false) {
         const W = 17 + (v % 3) * 1.5, D = 11.5, S = this._ctx('home_apto', v, W, D, 0.14), T = S.T;
         const pal = this._pal(v, [['#e6dcc8', '#d4c8b0', '#a07848'], ['#d8e0e4', '#c4ced4', '#8a6a48'], ['#e8d8d0', '#d6c4bb', '#6a4a30'], ['#d4dccc', '#bfc9b6', '#9a7a50'], ['#e0dce8', '#cbc6d8', '#7a5a3a']]);
         S.floor(...this._rf(lvl, ['planks', pal[2], '#b08a5a']));
         S.shell({ n: this._rw(lvl, { kind: 'panel', A: pal[0], B: pal[2] }), cap: '#8a8478', side: '#9a8a70', front: '#7a6a58', mat: '#3a3a44', rail: pal[2] });
         this._windowN(S, 2.6, 5.4, 26); this._windowN(S, W / 2 - 1.4, W / 2 + 1.6, 26); this._windowN(S, W - 6.0, W - 3.0, 26, '#9ac4e0');
+        if (empty) return this._emptyHome(S, W, D);
         // quarto (noroeste)
         S.rug(S.R(T + 3.2, D - T - 4.2, T + 6.6, D - T - 0.6), '#7a8aa0', '#4a5a70');
         this._bed(S, S.R(T + 0.3, D - T - 3.4, T + 2.9, D - T - 0.2), '#e6e0d4', '#5a3e24', true); S.use('bed', S.R(T, D - T - 4.0, T + 3.4, D - T));
@@ -131,11 +140,12 @@ Object.assign(ShopStyles, {
     },
 
     // ======================================================================= COBERTURA FRENTE-MAR
-    home_cobertura(v, lvl = 0) {
+    home_cobertura(v, lvl = 0, empty = false) {
         const W = 22 + (v % 3), D = 13.5, S = this._ctx('home_cobertura', v, W, D, 0.12), T = S.T;
         S.floor(...this._rf(lvl, ['marble', v % 2 ? '#ecebe6' : '#e6e2da', '#b8b4aa']));
         S.shell({ n: this._rw(lvl, { kind: 'paint', A: '#e8e4dc', B: '#d8d2c6' }), cap: '#9a948a', side: '#a89c88', front: '#8a7e6e', mat: '#2a2a32', rail: '#c8a860' });
         for (let k = 0; k < 4; k++) this._windowN(S, 2.0 + k * ((W - 4.8) / 4), 2.0 + k * ((W - 4.8) / 4) + (W - 4.8) / 4 - 0.8, 30, '#5aa8d8');      // janelões com vista do mar
+        if (empty) return this._emptyHome(S, W, D, 0.24);
         S.rug(S.R(W / 2 - 4.8, 3.2, W / 2 + 4.2, 8.4), '#2f4a68', '#c8a860');
         this._sofa(S, S.R(W / 2 - 4.0, 3.4, W / 2 - 0.4, 4.6), '#e8e0d0', 'n'); this._sofa(S, S.R(W / 2 - 4.4, 4.8, W / 2 - 3.3, 7.8), '#e8e0d0', 'n');
         S.table(W / 2 - 1.4, 5.8, 2.0, 1.0, 'wood', '#3a3a40');
@@ -161,17 +171,19 @@ Object.assign(ShopStyles, {
     },
 
     // ======================================================================= MANSÃO / COBERTURA DE LUXO
-    home_mansion(v, lvl = 0) {
+    home_mansion(v, lvl = 0, empty = false) {
         const W = 26 + (v % 3) * 1.5, D = 14.5, S = this._ctx('home_mansion', v, W, D, 0.5), T = S.T;
         S.floor(...this._rf(lvl, ['marble', '#efece4', '#a8a398']));
         S.shell({ n: { kind: 'panel', A: '#e4dccc', B: '#6a4a30' }, cap: '#a89c88', side: '#6a4a30', front: '#5a4030', mat: '#6a1a24', rail: '#c8a860' });
         for (let k = 0; k < 5; k++) this._windowN(S, 2.2 + k * ((W - 5) / 5), 2.2 + k * ((W - 5) / 5) + (W - 5) / 5 - 1.0, 30, '#4a9ad0');
+        const columns = () => { for (const cx of [W / 2 - 7.2, W / 2 + 7.2]) { S.blk(S.R(cx - 0.45, 4.0, cx + 0.45, 4.9), 3.0, '#f0ece4', '#cfc8ba'); S.blk(S.R(cx - 0.45, 9.2, cx + 0.45, 10.1), 3.0, '#f0ece4', '#cfc8ba'); } };
+        if (empty) { columns(); return this._emptyHome(S, W, D, 0.22); }
         // salão: tapete grande, dois sofás, piano de cauda e colunas
         S.rug(S.R(W / 2 - 6.0, 3.6, W / 2 + 6.0, 9.4), '#6a1a24', '#c8a860');
         this._sofa(S, S.R(W / 2 - 5.0, 4.0, W / 2 - 1.6, 5.2), '#2a3a52', 'n'); this._sofa(S, S.R(W / 2 + 1.6, 4.0, W / 2 + 5.0, 5.2), '#2a3a52', 'n');
         S.table(W / 2, 6.4, 2.6, 1.2, 'wood', '#2a2a30');
         const pia = S.blk(S.R(W / 2 - 1.8, 9.4, W / 2 + 1.8, 11.6), 1.0, '#121216', '#0a0a0e'); S.c.fr(pia.x + 3, pia.top + 3, pia.w - 6, 4, '#f4f4f0'); for (let i = 5; i < pia.w - 5; i += 3) S.c.fr(pia.x + i, pia.top + 3, 1, 3, '#16161a');
-        for (const cx of [W / 2 - 7.2, W / 2 + 7.2]) { S.blk(S.R(cx - 0.45, 4.0, cx + 0.45, 4.9), 3.0, '#f0ece4', '#cfc8ba'); S.blk(S.R(cx - 0.45, 9.2, cx + 0.45, 10.1), 3.0, '#f0ece4', '#cfc8ba'); }
+        columns();
         this._tv(S, S.R(W / 2 - 2.6, 12.0, W / 2 + 2.6, 12.7), true);
         S.plant(S.P(T + 1.2), 3.6); S.plant(S.P(W - T - 1.2), 3.6); S.plant(S.P(T + 1.2), 8.6); S.plant(S.P(W - T - 1.2), 8.6);
         // suíte (oeste) com cofre e baú

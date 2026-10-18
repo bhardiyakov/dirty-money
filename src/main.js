@@ -17,8 +17,16 @@ class MainMenu {
 		this.btnLoad.classList.toggle('mm-disabled', !hasSave);
 		if (hasSave) { this.btnLoad.title = I18n.t('menu.lastSave', { label: SaveGame.label(this.save) }); this.btnLoad.innerHTML = `${I18n.t('menu.load')}<small>${SaveGame.label(this.save)}</small>`; }
 
-		this.btnNew.addEventListener('click', () => this._start('new'));
-		this.btnLoad.addEventListener('click', () => this._start('load'));
+		// Novo jogo: no 1º espaço livre; com os 3 ocupados, escolhe qual o jogo novo vai usar. Carregar: escolhe o espaço.
+		this.btnNew.addEventListener('click', () => {
+			if (this.started) return;
+			if (SaveGame.list().includes(null)) { SaveGame.slot = SaveGame.firstEmpty(); this._start('new'); return; }
+			SaveSlots.open('new', (i) => { SaveGame.slot = i; this._start('new'); }, { title: 'Novo jogo', sub: 'Os 3 espaços estão ocupados: escolha qual o jogo novo vai usar' });
+		});
+		this.btnLoad.addEventListener('click', () => {
+			if (this.started || this.btnLoad.disabled) return;
+			SaveSlots.open('load', (i, s) => { SaveGame.slot = i; this.save = s; this._start('load'); }, { title: 'Carregar jogo', sub: 'Escolha o save' });
+		});
 		this.btnNew.focus();
 		this._initSettings();
 		if (window.Intro) Intro.menuReady();                          // a abertura (script inline no index.html) mostra logo e botões

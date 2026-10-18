@@ -1,7 +1,8 @@
 // ============================================================================
 // PropertyUI — a ficha de um imóvel (economy/RealEstate.js): padrão, região, metragem, preço e R$/m² comparado com a ilha.
-// À venda: COMPRAR (limpo fora da favela, sujo só na favela). Seu: DORMIR (salva), BAÚ/COFRE/GELADEIRA (StashUI), MORAR AQUI,
-// VENDER. ↑/↓ escolhe · Enter confirma · Esc/E fecha. Enquanto aberta o jogo segue parado atrás (Game consulta `open`).
+// À venda: COMPRAR SEM MÓVEIS (mais barato) ou PORTEIRA FECHADA (mais caro, mobiliado e abastecido) — limpo fora da favela, sujo
+// só na favela. Seu: DORMIR (salva), BAÚ/COFRE/GELADEIRA (StashUI; sem móveis, só com a peça comprada no modo decoração),
+// MOBILIAR (sem móveis → porteira fechada), MORAR AQUI, VENDER (com metade do valor dos seus móveis). ↑/↓ escolhe · Enter confirma · Esc/E fecha. Enquanto aberta o jogo segue parado atrás (Game consulta `open`).
 // ============================================================================
 
 class PropertyUI {
@@ -42,25 +43,32 @@ class PropertyUI {
         this.$h.textContent = `${p.type.toUpperCase()}`;
         this.$sub.innerHTML = `${p.region.toUpperCase()} · ${'★'.repeat(p.stars)}${'☆'.repeat(5 - p.stars)}<br>SEU DINHEIRO: ${brl(inv.cash)} · LIMPO: <span style="color:#7fe0a0">${brl(inv.clean)}</span>`;
         const pct = Math.round(ppm / isl * 100);
-        this.$tbl.innerHTML = `<div><span>ÁREA</span><b>${p.size} m²</b></div><div><span>${own ? 'VALOR DE MERCADO HOJE' : 'PREÇO'}</span><b>${brl(price)}</b></div>`
+        this.$tbl.innerHTML = `<div><span>ÁREA</span><b>${p.size} m²</b></div><div><span>${own ? 'VALOR DE MERCADO HOJE' : 'PREÇO (SEM MÓVEIS)'}</span><b>${brl(price)}</b></div>`
             + `<div><span>GARAGEM</span><b>${(Garage.byId(p.id) || { cap: 0 }).cap} vaga(s) na rua em frente</b></div>`
             + `<div><span>VALOR DO m²</span><b>${brl(ppm)}</b></div><div><span>REFERÊNCIA: ILHA (m²)</span><b>${brl(isl)}</b></div><div><span>ESTE LUGAR vs ILHA</span><b>${pct}%</b></div>`
-            + (own ? `<div><span>VOCÊ PAGOU</span><b>${brl(R.owned[p.id].paid)}</b></div><div><span>REFORMA</span><b>${R.reformLevel(p) ? R.REFORMS[R.reformLevel(p)].name.toUpperCase() : 'ORIGINAL'}</b></div>` : '');
+            + (own ? `<div><span>VOCÊ PAGOU</span><b>${brl(R.owned[p.id].paid)}</b></div><div><span>REFORMA</span><b>${R.reformLevel(p) ? R.REFORMS[R.reformLevel(p)].name.toUpperCase() : 'ORIGINAL'}</b></div>`
+                + `<div><span>MOBÍLIA</span><b>${R.FURNISH[R.isFurnished(p) ? 'full' : 'empty'].name.toUpperCase()}</b></div>`
+                + (HomeDecor.valueOf(p.id) ? `<div><span>SEUS MÓVEIS (DECORAÇÃO)</span><b>${brl(HomeDecor.valueOf(p.id))}</b></div>` : '') : '');
         this.$note.textContent = own ? (R.homeId === p.id ? 'Sua casa atual.' : 'Você é dono deste imóvel.')
             : (R.needsClean(p) ? 'Fora da favela: só dinheiro LIMPO (lave nas fachadas).' : 'Na favela: aceita dinheiro sujo.')
             + ' Quanto mais perto da orla e da ilha, mais caro e sofisticado. Favela e entorno são bem mais baratos.';
         const o = [], inside = !!(Interiors.active && Interiors.active.shop.home === p);
         if (!own) {
-            const wallet = R.needsClean(p) ? inv.clean : inv.cash;
+            const wallet = R.wallet(g, p), money = R.needsClean(p) ? 'dinheiro limpo' : 'dinheiro sujo';
             if (!inside) o.push({ label: 'VISITAR O IMÓVEL', sub: 'entre e conheça por dentro antes de decidir (sem a polícia no seu rastro)', ok: true, fn: () => this._visit() });
-            o.push({ label: `COMPRAR POR ${brl(price)}`, sub: R.needsClean(p) ? 'dinheiro limpo' : 'dinheiro sujo', ok: wallet >= price, fn: () => R.buy(g, p) });
+            for (const furnished of [false, true]) {
+                const F = R.FURNISH[furnished ? 'full' : 'empty'], cost = R.purchasePrice(p, furnished);
+                o.push({ label: `COMPRAR ${F.name.toUpperCase()} — ${brl(cost)}`, sub: `${money} · ${F.sub}`, ok: wallet >= cost, fn: () => R.buy(g, p, furnished) });
+            }
             if (inside) o.push({ label: 'CONTINUAR VISITANDO', sub: 'fechar a proposta', ok: true, fn: () => { this.close(); return null; } });
         } else {
-            const hrs = R.sleepHours(p);
-            o.push({ label: 'DORMIR E SALVAR', sub: `${hrs} horas de sono: recupera a vida e grava o progresso`, ok: true, fn: () => this._sleep() });
-            o.push({ label: 'BAÚ', sub: 'armas, munição, kits e o que quiser', ok: true, fn: () => this._stash('chest') });
-            o.push({ label: 'COFRE', sub: 'dinheiro e joias', ok: true, fn: () => this._stash('safe') });
-            o.push({ label: 'GELADEIRA', sub: 'comida e água', ok: true, fn: () => this._stash('fridge') });
+            const hrs = R.sleepHours(p), has = (use) => R.isFurnished(p) || HomeDecor.hasUse(p.id, use);
+            const missing = (piece) => `a casa não tem ${piece}: compre no modo decoração (B dentro de casa)`;
+            o.push({ label: 'DORMIR E SALVAR', sub: has('bed') ? `${hrs} horas de sono: recupera a vida e grava o progresso` : missing('cama'), ok: has('bed'), fn: () => this._sleep() });
+            o.push({ label: 'BAÚ', sub: has('chest') ? 'armas, munição, kits e o que quiser' : missing('baú'), ok: has('chest'), fn: () => this._stash('chest') });
+            o.push({ label: 'COFRE', sub: has('safe') ? 'dinheiro e joias' : missing('cofre'), ok: has('safe'), fn: () => this._stash('safe') });
+            o.push({ label: 'GELADEIRA', sub: has('fridge') ? 'comida e água' : missing('geladeira'), ok: has('fridge'), fn: () => this._stash('fridge') });
+            if (!R.isFurnished(p)) o.push({ label: `MOBILIAR: PORTEIRA FECHADA — ${brl(R.furnishCost(p))}`, sub: `${R.needsClean(p) ? 'dinheiro limpo' : 'dinheiro sujo'} · ${R.FURNISH.full.sub} (aparece ao entrar de novo)`, ok: R.wallet(g, p) >= R.furnishCost(p), fn: () => R.furnish(g, p) });
             const G = Garage.byId(p.id);
             if (G && G.cap) o.push({ label: `GARAGEM — ${Garage.carsIn(G).length}/${G.cap} VAGA(S)`, sub: 'seus carros: onde estão, levar para outra casa, vender', ok: true, fn: () => { this.close(); this.g.carUI.showGarage(G); return null; } });
             const rf = R.reformInfo(p), lv = R.reformLevel(p);
@@ -68,7 +76,8 @@ class PropertyUI {
                 : { label: 'REFORMA: PADRÃO MÁXIMO', sub: 'nada mais a reformar neste imóvel', ok: false, fn: () => null });
             if (R.homeId !== p.id) o.push({ label: 'TORNAR ESTA A MINHA SAFE HOUSE', sub: Standing.territoryAt(p.x, p.z) ? 'fica no território do C.V' : 'fora da favela: o C.V passa a te ver como ESTRANHO e você acorda aqui', ok: true, fn: () => R.moveIn(p) });
             else o.push({ label: 'VOLTAR PARA A SAFE HOUSE DA FAVELA', sub: 'volta a ser morador do C.V', ok: true, fn: () => R.moveBack() });
-            o.push({ label: `VENDER POR ${brl(Math.round(price * 0.8 / 100) * 100)}`, sub: '80% do valor de mercado (inclui a valorização das reformas), em dinheiro limpo', ok: R.homeId !== p.id && !inside, fn: () => R.sell(g, p) });
+            const furnitureValue = R.furnitureSaleValue(p);
+            o.push({ label: `VENDER POR ${brl(R.sellValue(p))}`, sub: `80% do valor de mercado (inclui reformas e mobília)${furnitureValue ? ` + ${brl(furnitureValue)} pelos seus móveis` : ''}, em dinheiro limpo`, ok: R.homeId !== p.id && !inside, fn: () => R.sell(g, p) });
         }
         this.opts = o;
         this.sel = Math.max(0, Math.min(this.sel, o.length - 1));

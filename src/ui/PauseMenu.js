@@ -13,7 +13,7 @@
 
 class PauseMenu {
 	static get TABS() {
-		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['settings', '⚙️ Ajustes']];
+		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['save', '💾 Salvar'], ['settings', '⚙️ Ajustes']];
 	}
 	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
@@ -246,6 +246,7 @@ class PauseMenu {
 			  <div class="pm-page" data-page="business"><div id="pmBiz"></div></div>
 			  <div class="pm-page" data-page="empire"><div id="pmEmpire"></div></div>
 			  <div class="pm-page" data-page="guide"><div id="pmGuide"></div></div>
+			  <div class="pm-page" data-page="save" style="overflow-y:auto"><div id="pmSave" style="width:100%"></div></div>
 			  <div class="pm-page" data-page="settings">
 				<div class="px pm-set"><div class="px-title">Configurações</div><div id="pmSet"></div>
 				  <div class="pm-keys">${PauseMenu.KEYS_HTML}</div></div>
@@ -424,6 +425,19 @@ class PauseMenu {
 		else if (id === 'business') (this.bizUI || (this.bizUI = new BusinessUI(this.g))).render(this.$('pmBiz'));
 		else if (id === 'guide') { (this.guide || (this.guide = new GuideUI(this.g))).render(this.$('pmGuide')); }
 		else if (id === 'settings') this._renderSettings();
+		else if (id === 'save') this._renderSave();
+	}
+
+	// Salvar o jogo num dos 3 espaços (só aqui e dormindo: não há autosave).
+	_renderSave() {
+		const why = SaveGame.blocked(this.g);
+		SaveSlots.render(this.$('pmSave'), 'save', (i) => {
+			const no = SaveGame.blocked(this.g);
+			if (no) return { ok: false, msg: no };
+			const ok = SaveGame.write(this.g, i);
+			if (typeof AudioFX !== 'undefined') AudioFX.blip(ok ? 820 : 200, 0.1, 0.16);
+			return { ok, msg: ok ? `Jogo salvo no espaço ${i}` : 'Não foi possível salvar' };
+		}, { title: 'Salvar jogo', sub: why ? `⚠ ${why}` : 'O jogo só é salvo aqui ou quando você dorme (no espaço do jogo atual)' });
 	}
 
 	_fitCanvas() {

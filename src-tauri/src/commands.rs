@@ -5,6 +5,7 @@ use serde::Serialize;
 use tauri::ipc::{Channel, InvokeBody, InvokeResponseBody, Request, Response};
 use tauri::State;
 
+use crate::grid::GridService;
 use crate::nav::{self, NavService};
 use crate::net::protocol::TICK_RATE;
 use crate::runtime::SimRuntime;
@@ -70,4 +71,41 @@ pub async fn nav_find_paths(request: Request<'_>, nav: State<'_, NavService>) ->
 #[tauri::command]
 pub fn get_chunk(chunk_x: i32, chunk_z: i32, sim: State<'_, SimRuntime>) -> Response {
 	Response::new(sim.world_pack().chunk_bytes(chunk_x, chunk_z).to_vec())
+}
+
+/// Build mode: a batch of grid deltas (raw bytes, see grid/mod.rs). Applied in memory; nothing touches the disk until a save.
+#[tauri::command]
+pub fn grid_apply_deltas(request: Request<'_>, grid: State<'_, GridService>) -> Result<usize, String> {
+	let InvokeBody::Raw(bytes) = request.body() else {
+		return Err("grid_apply_deltas expects a raw Uint8Array body".into());
+	};
+	grid.apply_deltas(bytes)
+}
+
+/// Build mode: every placement overlapping one chunk, as raw records.
+#[tauri::command]
+pub fn grid_load_chunk(level: i16, chunk_x: i32, chunk_z: i32, grid: State<'_, GridService>) -> Response {
+	Response::new(grid.load_chunk(level, chunk_x, chunk_z))
+}
+
+/// Build mode: loading a save makes that slot's grid the working grid. Returns the next free placement id.
+#[tauri::command]
+pub fn grid_open_slot(save_slot: u8, grid: State<'_, GridService>) -> Result<u32, String> {
+	grid.open_slot(save_slot)
+}
+
+#[tauri::command]
+pub fn grid_reset_working(grid: State<'_, GridService>) {
+	grid.reset_working();
+}
+
+/// Build mode: saving the game writes the working grid to the slot's file (on the grid writer thread).
+#[tauri::command]
+pub fn grid_commit_slot(save_slot: u8, grid: State<'_, GridService>) -> Result<(), String> {
+	grid.commit_slot(save_slot)
+}
+
+#[tauri::command]
+pub fn grid_delete_slot(save_slot: u8, grid: State<'_, GridService>) -> Result<(), String> {
+	grid.delete_slot(save_slot)
 }

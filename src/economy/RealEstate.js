@@ -47,7 +47,18 @@ const RealEstate = {
     },
     ppm(idx) { return 140 * (1 + 85 * Math.pow(idx, 1.6)) * 0.4; },                    // R$/m² de referência
     market() { const d = (typeof Economy !== 'undefined' ? Economy.day : 0); return 1 + 0.07 * Math.sin(d * 0.9) + 0.04 * Math.sin(d * 2.3 + 1); },
-    price(p) { return Math.round(p.size * this.ppm(p.idx) * this.market() * (1 + this.reformGain(p)) / 100) * 100; },
+    // Mobília: SEM MÓVEIS (só piso e paredes; mobília no modo decoração, world/HomeDecor.js) ou PORTEIRA FECHADA (tudo pintado na
+    // sala: cama, geladeira, cofre, baú, notebook, sofá... e a casa entregue abastecida). O valor de mercado acompanha a escolha.
+    FURNISH: {
+        empty: { factor: 0.85, name: 'Sem móveis', sub: 'só piso e paredes: mobilie do seu jeito (B dentro de casa)' },
+        full: { factor: 1.15, name: 'Porteira fechada', sub: 'tudo mobiliado, geladeira abastecida e kit médico no baú' },
+    },
+    isFurnished(p) { const o = this.owned[p.id]; return !o || o.furnished !== false; },      // (saves antigos e visitas: mobiliado)
+    furnishFactor(p) { return this.FURNISH[this.isOwned(p) && this.isFurnished(p) ? 'full' : 'empty'].factor; },
+    // Valor de mercado: o imóvel como está (dono) ou a partir do preço sem móveis (à venda).
+    price(p) { return Math.round(p.size * this.ppm(p.idx) * this.market() * (1 + this.reformGain(p)) * this.furnishFactor(p) / 100) * 100; },
+    purchasePrice(p, furnished) { return Math.round(this.basePrice(p) * this.FURNISH[furnished ? 'full' : 'empty'].factor / 100) * 100; },
+    furnishCost(p) { return Math.round(this.basePrice(p) * (this.FURNISH.full.factor - this.FURNISH.empty.factor) / 100) * 100; },
     basePrice(p) { return Math.round(p.size * this.ppm(p.idx) * this.market() / 100) * 100; },       // sem reforma (o que se paga ao comprar)
     pricePerM2(p) { return Math.round(this.ppm(p.idx) * this.market()); },
     islandPpm() { return Math.round(this.ppm(1) * this.market()); },
@@ -148,22 +159,48 @@ const RealEstate = {
 
     // ---------------------------------------------------------------- compra / venda
     needsClean(p) { return p.region !== this.FAVELA_PPM_NAME; },
-    buy(game, p) {
-        if (this.isOwned(p)) return { ok: false, msg: 'Esse imóvel já é seu' };
-        const price = this.price(p), inv = game.inventory, clean = this.needsClean(p);
-        if (clean && inv.clean < price) return { ok: false, msg: inv.cash >= price ? 'Imóvel fora da favela: só dinheiro LIMPO. Lave o seu nas fachadas' : `Faltam ${brl(price - inv.clean)} de dinheiro limpo` };
-        if (!clean && inv.cash < price) return { ok: false, msg: `Faltam ${brl(price - inv.cash)}` };
-        if (clean) inv.clean -= price; else inv.cash -= price;
-        this.owned[p.id] = { paid: price, day: Economy.day, reform: 0, x: p.x, z: p.z, type: p.type };      // (âncora: ver _migrate)
-        this._poi(p);
-        return { ok: true, msg: `Comprou: ${p.type} em ${p.region} (-${brl(price)})` };
+    wallet(game, p) { return this.needsClean(p) ? game.inventory.clean : game.inventory.cash; },
+    _pay(game, p, amount) {
+        const inv = game.inventory, clean = this.needsClean(p);
+        if (clean && inv.clean < amount) return { ok: false, msg: inv.cash >= amount ? 'Imóvel fora da favela: só dinheiro LIMPO. Lave o seu nas fachadas' : `Faltam ${brl(amount - inv.clean)} de dinheiro limpo` };
+        if (!clean && inv.cash < amount) return { ok: false, msg: `Faltam ${brl(amount - inv.cash)}` };
+        if (clean) inv.clean -= amount; else inv.cash -= amount;
+        return null;
     },
+    buy(game, p, furnished = true) {
+        if (this.isOwned(p)) return { ok: false, msg: 'Esse imóvel já é seu' };
+        const price = this.purchasePrice(p, furnished), refused = this._pay(game, p, price);
+        if (refused) return refused;
+        this.owned[p.id] = { paid: price, day: Economy.day, reform: 0, furnished, x: p.x, z: p.z, type: p.type };      // (âncora: ver _migrate)
+        if (furnished) this._stockFurnished(game);
+        this._poi(p);
+        return { ok: true, msg: `Comprou: ${p.type} em ${p.region}, ${this.FURNISH[furnished ? 'full' : 'empty'].name.toLowerCase()} (-${brl(price)})${furnished ? ' — geladeira abastecida e kit médico no baú' : ' — aperte B lá dentro para mobiliar'}` };
+    },
+    // Sem móveis → porteira fechada: paga a diferença; a sala nova aparece ao entrar de novo (móveis seus que ficarem no caminho voltam pagos).
+    furnish(game, p) {
+        if (!this.isOwned(p)) return { ok: false, msg: 'Não é seu' };
+        if (this.isFurnished(p)) return { ok: false, msg: 'Já está mobiliado' };
+        const cost = this.furnishCost(p), refused = this._pay(game, p, cost);
+        if (refused) return refused;
+        this.owned[p.id].furnished = true; this._stockFurnished(game); this._poi(p);
+        return { ok: true, msg: `Imóvel mobiliado (-${brl(cost)}): a mobília chega quando você sair e entrar de novo` };
+    },
+    // Porteira fechada vem abastecida: comida e água na geladeira, um kit médico no baú.
+    _stockFurnished(game) {
+        const boxes = game.stash && game.stash.boxes; if (!boxes) return;
+        boxes.fridge.food = (boxes.fridge.food || 0) + 3; boxes.fridge.water = (boxes.fridge.water || 0) + 3;
+        boxes.chest.medkit = (boxes.chest.medkit || 0) + 1;
+    },
+    // Venda: 80% do valor de mercado + metade do que os móveis da decoração custaram (vão junto com o imóvel).
+    furnitureSaleValue(p) { return typeof HomeDecor !== 'undefined' ? Math.round(HomeDecor.valueOf(p.id) * 0.5 / 100) * 100 : 0; },
+    sellValue(p) { return Math.round(this.price(p) * 0.8 / 100) * 100 + this.furnitureSaleValue(p); },
     sell(game, p) {
         if (!this.isOwned(p)) return { ok: false, msg: 'Não é seu' };
         if (this.homeId === p.id) return { ok: false, msg: 'Você mora aqui: escolha outra casa antes de vender' };
-        const v = Math.round(this.price(p) * 0.8 / 100) * 100;
+        const v = this.sellValue(p), furniture = this.furnitureSaleValue(p);
         game.inventory.clean += v; delete this.owned[p.id]; this._poi(p);
-        return { ok: true, msg: `Vendeu por ${brl(v)} (80% do valor de mercado, em dinheiro limpo)` };
+        if (typeof HomeDecor !== 'undefined') HomeDecor.forgetHome(p.id);         // os móveis vão junto com o imóvel
+        return { ok: true, msg: `Vendeu por ${brl(v)} em dinheiro limpo (80% do valor de mercado${furniture ? ` + ${brl(furniture)} pelos móveis` : ''})` };
     },
 
     // ---------------------------------------------------------------- reformas (dinheiro LIMPO)
@@ -232,7 +269,7 @@ const RealEstate = {
         const p = this.near(game);
         if (!p) return '';
         return this.isOwned(p) ? `<b>E</b> entrar em casa — ${p.type}<small>${p.region} · ${this.homeId === p.id ? 'sua casa atual' : 'seu imóvel'}</small>`
-            : `<b>E</b> ver imóvel à venda — ${p.type}<small>${p.region} · ${p.size} m² · ${brl(this.price(p))}</small>`;
+            : `<b>E</b> ver imóvel à venda — ${p.type}<small>${p.region} · ${p.size} m² · a partir de ${brl(this.price(p))}</small>`;
     },
     interact(game) {
         const p = this.near(game);
