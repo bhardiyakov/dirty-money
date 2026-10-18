@@ -62,6 +62,21 @@ class CarSheet {
             { name: 'verde retro', paint: '#6e9a7a', paint2: '#f6f3ec' },
             { name: 'cobre', paint: '#b5651d', paint2: '#8a4a12' },
             { name: 'vinho perolado', paint: '#5c1230', paint2: '#3f0b20' },
+            // Só da loja de TUNAGEM (Tuning): fx = acabamento no carro 3D — 1 fosco (sem verniz), 2 cromado (espelho), 3 perolizado
+            // (muda de cor com o ângulo: de `paint` para `paint2`).
+            { name: 'preto fosco', paint: '#1d1e21', paint2: '#1d1e21', fx: 1 },
+            { name: 'grafite fosco', paint: '#4f535a', paint2: '#4f535a', fx: 1 },
+            { name: 'verde oliva fosco', paint: '#4c5a3a', paint2: '#4c5a3a', fx: 1 },
+            { name: 'azul petróleo fosco', paint: '#24465a', paint2: '#24465a', fx: 1 },
+            { name: 'areia fosco', paint: '#b7a27a', paint2: '#b7a27a', fx: 1 },
+            { name: 'cromado', paint: '#c9ced6', paint2: '#c9ced6', fx: 2 },
+            { name: 'cromado dourado', paint: '#d4af37', paint2: '#d4af37', fx: 2 },
+            { name: 'cromado rosé', paint: '#c98f86', paint2: '#c98f86', fx: 2 },
+            { name: 'perolizado azul-roxo', paint: '#2448c8', paint2: '#8a2be2', fx: 3 },
+            { name: 'perolizado verde-dourado', paint: '#1d7a52', paint2: '#c9a52c', fx: 3 },
+            { name: 'candy vermelho', paint: '#8e0816', paint2: '#ff4040', fx: 3 },
+            { name: 'perolizado branco-rosa', paint: '#f2efe8', paint2: '#e3a9c8', fx: 3 },
+            { name: 'camaleão', paint: '#1aa39a', paint2: '#b0249c', fx: 3 },
         ];
     }
 

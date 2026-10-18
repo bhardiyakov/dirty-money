@@ -43,9 +43,12 @@ class CarUI {
     update(dt) { if (this.cool > 0) this.cool -= dt; }
 
     showDealer(d) {                                                                  // destino inicial: a casa onde mora, ou a 1ª com vaga
-        const mine = Garage.mine(), G = Garage.defaultFor();
-        this.mode = 'dealer'; this.d = d; this.paintIx = 0; this.dest = Math.max(0, mine.indexOf(G)); this._open();
+        this.mode = 'dealer'; this.d = d;
+        const mine = this._dests(), G = d.kind === 'boat' ? mine[0] : Garage.defaultFor();
+        this.paintIx = 0; this.dest = Math.max(0, mine.indexOf(G)); this._open();
     }
+    // Para onde vai o que se compra nesta loja: barco → a vaga da marina; carro e moto → as garagens das suas casas.
+    _dests() { return this.mode === 'dealer' && this.d && this.d.kind === 'boat' ? [Garage.byId('marina')].filter(Boolean) : Garage.mine(); }
     showGarage(G) { this.mode = 'garage'; this.G = G; this.dest = 0; this._open(); }
     _open() {
         this.open = true; this.sel = 0; this.$msg.textContent = '';
@@ -59,14 +62,14 @@ class CarUI {
 
     _thumb(model, paint) {
         const k = model + '|' + paint;
-        if (!this._thumbs[k]) this._thumbs[k] = CarSheet.preview(model, paint);
+        if (!this._thumbs[k]) this._thumbs[k] = Catalog.preview(model, paint);
         const c = this._thumbs[k];
         if (!c) return document.createElement('span');
         const out = document.createElement('canvas'); out.width = c.width; out.height = c.height;
         out.getContext('2d').drawImage(c, 0, 0);
         return out;
     }
-    _specs(model) { const s = CarSheet.MODELS[model]; return { top: Math.round(s.maxSpeed * 3.6), t100: s.t100 }; }
+    _specs(model) { const s = Catalog.spec(model); return { top: Math.round(s.maxSpeed * 3.6), t100: s.t100 }; }
     _sw(row) { const P = CarSheet.PAINTS[row]; return P ? `<i class="sw" style="background:${P.paint}"></i>${P.name}` : ''; }
 
     // ---------------------------------------------------------------- desenho
@@ -80,8 +83,8 @@ class CarUI {
             this.$sub.innerHTML = `${d.tier.label.toUpperCase()} · ${d.region.toUpperCase()} · ${d.tier.dirty ? 'aceita dinheiro sujo' : 'só dinheiro limpo'}<br>${money}`;
             const wallet = Dealers.needsClean(d) ? inv.clean : inv.cash;
             this.$rows.replaceChildren(...models.map((m, i) => {
-                const s = CarSheet.MODELS[m], sp = this._specs(m), price = Dealers.price(m);
-                return this._row(i, this._thumb(m, CarSheet.POOLS[m][0]), `${s.name} ${s.model}<small>${d.tier.cond} · máx ${sp.top} km/h · 0–100 ${sp.t100 ? sp.t100.toLocaleString('pt-BR') + ' s' : '—'}</small>`, brl(price), wallet >= price);
+                const sp = this._specs(m), price = Dealers.price(m);
+                return this._row(i, this._thumb(m, Catalog.pool(m)[0]), `${Catalog.label(m)}<small>${d.tier.cond} · máx ${sp.top} km/h · 0–100 ${sp.t100 ? sp.t100.toLocaleString('pt-BR') + ' s' : '—'}</small>`, brl(price), wallet >= price);
             }));
             this._dealerDetail(wallet);
         } else {
@@ -121,32 +124,33 @@ class CarUI {
     }
 
     _dealerDetail(wallet) {
-        const d = this.d, m = this.items[this.sel], s = CarSheet.MODELS[m], sp = this._specs(m), price = Dealers.price(m);
-        const pool = CarSheet.POOLS[m], paint = pool[this.paintIx % pool.length];
-        const dests = Garage.mine(), G = dests.length ? dests[this.dest % dests.length] : null, room = G ? Garage.free(G) : 0;
+        const d = this.d, m = this.items[this.sel], sp = this._specs(m), price = Dealers.price(m);
+        const pool = Catalog.pool(m), paint = pool[this.paintIx % pool.length];
+        const dests = this._dests(), G = dests.length ? dests[this.dest % dests.length] : null, room = G ? Garage.free(G) : 0;
         const big = document.createElement('div'); big.className = 'big'; big.append(this._thumb(m, paint));
-        const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = `${s.name} ${s.model}`;
+        const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = Catalog.label(m);
         const kv = (k, v) => Object.assign(document.createElement('div'), { className: 'kv', innerHTML: `<span>${k}</span><b>${v}</b>` });
         const ok = !!G && room > 0 && wallet >= price;
-        const why = !G ? 'compre um imóvel ou use a safe house' : room <= 0 ? 'garagem cheia — escolha outra casa' : wallet < price ? `faltam ${brl(price - wallet)}${Dealers.needsClean(d) ? ' de dinheiro limpo' : ''}` : '';
+        const why = !G ? 'compre um imóvel ou use a safe house' : room <= 0 ? (G.boat ? 'suas vagas da marina estão ocupadas' : 'garagem cheia — escolha outra casa') : wallet < price ? `faltam ${brl(price - wallet)}${Dealers.needsClean(d) ? ' de dinheiro limpo' : ''}` : '';
         this.$det.replaceChildren(big, nm, kv('PREÇO', brl(price)), kv('VELOCIDADE MÁXIMA', `${sp.top} km/h`), kv('0–100 km/h (referência)', sp.t100 ? `${sp.t100.toLocaleString('pt-BR')} s` : '—'),
             this._pick('COR (← →)', this._sw(paint), () => { this.paintIx = (this.paintIx + pool.length - 1) % pool.length; this.render(); }, () => { this.paintIx = (this.paintIx + 1) % pool.length; this.render(); }),
-            this._pick('VAI PARA A GARAGEM (Tab)', G ? `${G.name} <small>(${room} vaga${room === 1 ? '' : 's'})</small>` : '— nenhuma casa sua —', () => this._dest(-1), () => this._dest(1)),
+            this._pick(G && G.boat ? 'FICA NA SUA VAGA DA MARINA' : 'VAI PARA A GARAGEM (Tab)', G ? `${G.name} <small>(${room} vaga${room === 1 ? '' : 's'})</small>` : '— nenhuma casa sua —', () => this._dest(-1), () => this._dest(1)),
             this._btn(`COMPRAR — ${brl(price)}${why ? `<br><small>${why}</small>` : ''}`, () => this.choose(), 'btn pri go', ok));
     }
-    _dest(k) { const n = Garage.mine().length || 1; this.dest = (this.dest + k + n) % n; this.render(); }
+    _dest(k) { const n = this._dests().length || 1; this.dest = (this.dest + k + n) % n; this.render(); }
 
     _garageDetail() {
         const r = this.items[this.sel];
         if (!r) { this.$det.replaceChildren(Object.assign(document.createElement('div'), { className: 'note', textContent: 'As vagas ficam no meio-fio em frente à porta (marcadas em azul no chão).' })); return; }
         const car = Garage._live(r), withYou = !!(car && car.controlled), ins = r.readyAt > Garage._now();
-        const dests = Garage.mine().filter((G) => G.id !== r.garage && Garage.free(G) > 0), G = dests.length ? dests[this.dest % dests.length] : null;
+        const dests = (Catalog.kind(r.model) === 'boat' ? [] : Garage.mine()).filter((G) => G.id !== r.garage && Garage.free(G) > 0), G = dests.length ? dests[this.dest % dests.length] : null;
         const big = document.createElement('div'); big.className = 'big'; big.append(this._thumb(r.model, r.paint));
         const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = Garage.label(r);
         const kv = (k, v) => Object.assign(document.createElement('div'), { className: 'kv', innerHTML: `<span>${k}</span><b>${v}</b>` });
         const out = [big, nm, kv('ONDE ESTÁ', Garage.where(r)), kv('ORIGEM', r.bought ? `comprado (${brl(r.paid)})` : 'roubado — sem seguro'), kv('LATARIA', `${Math.round(r.hp * 100)}%`), kv('GASOLINA', `${Math.round((r.fuel || 0) * 100)}%`)];
-        const mods = Object.keys(r.mods || {}).filter((k) => r.mods[k]);
-        if (mods.length) out.push(kv('PEÇAS DO DESMANCHE', mods.map((k) => ({ engine: 'motor', armor: 'blindagem', hidden: 'fundo falso' }[k] || k)).join(', ')));
+        const M = r.mods || {}, mods = Object.keys(M).filter((k) => M[k]);
+        const nm2 = { engine: 'motor (desmanche)', armor: 'blindagem', hidden: 'fundo falso', turbo: 'turbo', tEng: `motor estágio ${M.tEng}`, tBrk: `freios ${M.tBrk}`, tSus: `suspensão ${M.tSus}`, wing: 'aerofólio', kit: ['', 'kit de rua', 'kit de corrida', 'wide body'][M.kit] || 'bodykit', neon: `neon ${Tuning.NEON_NAMES[M.neon] || ''}` };
+        if (mods.length) out.push(kv('PEÇAS', mods.map((k) => nm2[k] || k).join(', ')));
         out.push(this._pick('MANOBRISTA LEVA PARA (Tab)', G ? `${G.name} <small>(${Garage.free(G)} vaga(s))</small>` : '— nenhuma outra casa com vaga —', () => this._dest(-1), () => this._dest(1)));
         const can = !!G && !withYou && !ins && this.g.inventory.cash >= Garage.VALET;
         out.push(this._btn(`LEVAR PARA LÁ — ${brl(Garage.VALET)}${withYou ? '<br><small>você está dirigindo este carro</small>' : ins ? '<br><small>está no seguro</small>' : ''}`, () => this.choose(), 'btn pri go', can));
@@ -160,12 +164,12 @@ class CarUI {
         const g = this.g;
         let res;
         if (this.mode === 'dealer') {
-            const m = this.items[this.sel], pool = CarSheet.POOLS[m], dests = Garage.mine(), G = dests[this.dest % (dests.length || 1)];
+            const m = this.items[this.sel], pool = Catalog.pool(m), dests = this._dests(), G = dests[this.dest % (dests.length || 1)];
             res = G ? Dealers.buy(g, this.d, m, pool[this.paintIx % pool.length], G.id) : { ok: false, msg: 'Você não tem garagem' };
         } else {
             const r = this.items[this.sel];
             if (!r) return;
-            const dests = Garage.mine().filter((G) => G.id !== r.garage && Garage.free(G) > 0), G = dests[this.dest % (dests.length || 1)];
+            const dests = (Catalog.kind(r.model) === 'boat' ? [] : Garage.mine()).filter((G) => G.id !== r.garage && Garage.free(G) > 0), G = dests[this.dest % (dests.length || 1)];
             const car = Garage._live(r);
             if (!G) res = { ok: false, msg: 'Nenhuma outra casa sua tem vaga' };
             else if (car && car.controlled) res = { ok: false, msg: 'Você está dirigindo este carro' };
@@ -196,8 +200,8 @@ class CarUI {
         if (k === 'Escape' || k === 'e' || k === 'E' || k === 'Backspace') { this.close(); e.preventDefault(); e.stopPropagation(); return; }
         if ((k === 'ArrowUp' || k === 'w' || k === 'W') && n) { this.sel = (this.sel + n - 1) % n; this.paintIx = 0; }
         else if ((k === 'ArrowDown' || k === 's' || k === 'S') && n) { this.sel = (this.sel + 1) % n; this.paintIx = 0; }
-        else if (k === 'ArrowLeft' || k === 'a' || k === 'A') { if (this.mode === 'dealer') { const L = CarSheet.POOLS[this.items[this.sel]].length; this.paintIx = (this.paintIx + L - 1) % L; } else this._dest(-1); }
-        else if (k === 'ArrowRight' || k === 'd' || k === 'D') { if (this.mode === 'dealer') this.paintIx = (this.paintIx + 1) % CarSheet.POOLS[this.items[this.sel]].length; else this._dest(1); }
+        else if (k === 'ArrowLeft' || k === 'a' || k === 'A') { if (this.mode === 'dealer') { const L = Catalog.pool(this.items[this.sel]).length; this.paintIx = (this.paintIx + L - 1) % L; } else this._dest(-1); }
+        else if (k === 'ArrowRight' || k === 'd' || k === 'D') { if (this.mode === 'dealer') this.paintIx = (this.paintIx + 1) % Catalog.pool(this.items[this.sel]).length; else this._dest(1); }
         else if (k === 'Tab') this._dest(1);
         else if (k === 'Enter' || k === ' ') { this.choose(); e.preventDefault(); e.stopPropagation(); return; }
         else return;

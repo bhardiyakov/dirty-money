@@ -44,6 +44,7 @@ class WorldBuilder {
         this._viaducts();
         this._blocks();
         this._favela();
+        Rooftops.build();                     // helipontos no telhado (antes dos prédios: marca lot.helipad)
         this._buildings();
         this._shops();
         this._rural();
@@ -701,11 +702,16 @@ class WorldBuilder {
                 const fav = blk.district === 'favela';
                 const t = fav ? 0.3 : 0.45, ph = fav ? 0.35 : 0.5;
                 if (!fav || lot.roof.startsWith('slab')) {
-                    const pc = fav ? [0.58, 0.55, 0.5] : hexTrim;
-                    trim.solid(x0, z0, x1, z0 + t, H, H + ph, pc);
-                    trim.solid(x0, z1 - t, x1, z1, H, H + ph, pc);
-                    trim.solid(x0, z0 + t, x0 + t, z1 - t, H, H + ph, pc);
-                    trim.solid(x1 - t, z0 + t, x1, z1 - t, H, H + ph, pc);
+                    const pc = fav ? [0.58, 0.55, 0.5] : hexTrim, L = lot.helipad && lot.helipad.land;
+                    const seg = (a0, b0, a1, b1) => {                                   // (heliponto: vão no patamar da escada)
+                        if (!L || a1 <= L[0] || a0 >= L[2] || b1 <= L[1] || b0 >= L[3]) { trim.solid(a0, b0, a1, b1, H, H + ph, pc); return; }
+                        if (a1 - a0 > b1 - b0) { if (L[0] > a0) trim.solid(a0, b0, L[0], b1, H, H + ph, pc); if (L[2] < a1) trim.solid(L[2], b0, a1, b1, H, H + ph, pc); }
+                        else { if (L[1] > b0) trim.solid(a0, b0, a1, L[1], H, H + ph, pc); if (L[3] < b1) trim.solid(a0, L[3], a1, b1, H, H + ph, pc); }
+                    };
+                    seg(x0, z0, x1, z0 + t);
+                    seg(x0, z1 - t, x1, z1);
+                    seg(x0, z0 + t, x0 + t, z1 - t);
+                    seg(x1 - t, z0 + t, x1, z1 - t);
                 }
 
                 // Hospital / delegacia: letreiro e emblema pintados no telhado (sem caixas de ar-condicionado).
@@ -713,7 +719,7 @@ class WorldBuilder {
 
                 // Caixas no telhado (casa de máquinas / ar-condicionado): só nos prédios de verdade.
                 const w = x1 - x0, d = z1 - z0;
-                const n = fav ? 0 : (w * d > 200 ? 2 : 1);
+                const n = fav || lot.marina || lot.helipad ? 0 : (w * d > 200 ? 2 : 1);      // (marina: letreiro; heliponto: H no meio)
                 for (let k = 0; k < n; k++) {
                     const bw = 1.6 + rng() * 2.2, bd = 1.6 + rng() * 2.2, bh = 0.9 + rng() * 1.2;
                     const bx = x0 + 1.5 + rng() * Math.max(0.1, w - 3 - bw);
@@ -825,6 +831,14 @@ class WorldBuilder {
             const tr = this._batch('trim', lot.x0, lot.z0);                                      // faixa azul do telhado
             tr.solid(lot.x0 + 1.5, lot.z0 + 3, lot.x1 - 1.5, lot.z0 + 4.6, lot.height + 0.03, lot.height + 0.06, [0.2, 0.45, 0.75]);
         }
+        const N = Marina.nautica && Marina.nautica.lot;                                          // loja náutica: letreiro, toldo e vitrine
+        if (N) {
+            const cx = (N.x0 + N.x1) / 2, tr = this._batch('trim', N.x0, N.z0), H = N.height;
+            this._roofText('NAUTICA', cx, N.z1 - 2.6, H + 0.03, 0.36, [0.95, 0.97, 1]);
+            tr.solid(N.x0 + 1.2, N.z0 + 2, N.x1 - 1.2, N.z0 + 3.4, H + 0.03, H + 0.06, [0.95, 0.55, 0.12]);
+            tr.solid(N.x1, N.z0 + 2, N.x1 + 1.6, N.z1 - 2, H - 0.6, H - 0.45, [0.12, 0.42, 0.78]);                 // toldo azul sobre a porta
+            tr.solid(N.x1 + 0.01, N.z0 + 2.5, N.x1 + 0.05, N.z1 - 2.5, 0.4, H - 0.9, [0.55, 0.72, 0.85]);         // vitrine
+        }
     }
 
     // Letras 5×7 (colunas × linhas) para pintar letreiros no telhado com blocos.
@@ -842,6 +856,7 @@ class WorldBuilder {
             A: ['.XXX.', 'X...X', 'X...X', 'XXXXX', 'X...X', 'X...X', 'X...X'],
             L: ['X....', 'X....', 'X....', 'X....', 'X....', 'X....', 'XXXXX'],
             C: ['.XXXX', 'X....', 'X....', 'X....', 'X....', 'X....', '.XXXX'],
+            U: ['X...X', 'X...X', 'X...X', 'X...X', 'X...X', 'X...X', '.XXX.'],
         };
     }
 
@@ -1178,46 +1193,49 @@ class WorldBuilder {
         this.shopGlow.setLevel(0);
     }
 
-    // Helipontos: laje de concreto com um H amarelo, onde os helicópteros civis ficam estacionados (ver Chopper / Game._spawnChoppers).
-    // Um fica no pátio livre mais perto do ponto de partida; os outros em parques, na orla e no porto. Limpa as árvores/props em cima da laje.
+    // Helipontos NO TELHADO (Rooftops): laje de concreto com anel e H amarelos sobre o telhado, e a escada externa de metal (lance de
+    // degraus com corrimão, pilares até o chão e o patamar que passa pelo vão da platibanda). Os helicópteros: Game._spawnChoppers.
     _helipads() {
-        const c = CityGrid.center(), pads = [], H = 7;
-        const freeSquare = (b) => {                                                         // quadrado de 2H×2H sem lotes (prédios) nem contêineres
-            const [x0, z0, x1, z1] = b.foot, R = H + 1.6;
-            for (let z = z0 + R; z <= z1 - R; z += 3) for (let x = x0 + R; x <= x1 - R; x += 3) {
-                let ok = true;
-                for (const l of b.lots) if (x + R > l.x0 && x - R < l.x1 && z + R > l.z0 && z - R < l.z1) { ok = false; break; }
-                if (ok) for (const p of b.props) if (p.type === 'container' && Math.abs(p.x - x) < R + p.w / 2 && Math.abs(p.z - z) < R + p.d / 2) { ok = false; break; }
-                if (ok) return [x, z];
+        const slab = [0.46, 0.48, 0.5], yel = [0.95, 0.8, 0.15], iron = [0.32, 0.34, 0.37], tread = [0.5, 0.52, 0.55], red = [0.75, 0.16, 0.12];
+        for (const pad of Rooftops.pads) {
+            const { x: cx, z: cz, H, P } = pad, t = this._batch('trim', cx, cz), y = H + 0.02;
+            t.solid(cx - P, cz - P, cx + P, cz + P, y, y + 0.08, slab);
+            const w = 0.32, e = P - 0.7, yy = y + 0.08, yt = yy + 0.03;                    // anel amarelo
+            t.solid(cx - e, cz - e, cx + e, cz - e + w, yy, yt, yel); t.solid(cx - e, cz + e - w, cx + e, cz + e, yy, yt, yel);
+            t.solid(cx - e, cz - e, cx - e + w, cz + e, yy, yt, yel); t.solid(cx + e - w, cz - e, cx + e, cz + e, yy, yt, yel);
+            const k = P / 7;                                                               // o "H"
+            t.solid(cx - 2.6 * k, cz - 3.2 * k, cx - 1.8 * k, cz + 3.2 * k, yy, yt, yel);
+            t.solid(cx + 1.8 * k, cz - 3.2 * k, cx + 2.6 * k, cz + 3.2 * k, yy, yt, yel);
+            t.solid(cx - 1.8 * k, cz - 0.4 * k, cx + 1.8 * k, cz + 0.4 * k, yy, yt, yel);
+            for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) t.solid(cx + sx * (P - 0.25) - 0.15, cz + sz * (P - 0.25) - 0.15, cx + sx * (P - 0.25) + 0.15, cz + sz * (P - 0.25) + 0.15, yy, yy + 0.25, red);   // luzes
+
+            // Escada: (u ao longo do lance, w para fora da parede) → retângulo no mundo.
+            const { o, a, n, Lr, Ld } = pad, W = Rooftops.W;
+            const R = (u0, w0, u1, w1, y0, y1, c) => {
+                const p = [o.x + a.x * u0 + n.x * w0, o.z + a.z * u0 + n.z * w0], q = [o.x + a.x * u1 + n.x * w1, o.z + a.z * u1 + n.z * w1];
+                this._batch('trim', p[0], p[1]).solid(Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.max(p[0], q[0]), Math.max(p[1], q[1]), y0, y1, c);
+            };
+            const steps = Math.max(4, Math.round(H / 0.32)), du = Lr / steps;
+            for (let i = 0; i < steps; i++) {
+                const yh = H * (i + 1) / steps;
+                R(i * du, 0.1, (i + 1) * du + 0.02, W - 0.1, yh - 0.1, yh, tread);
             }
-            return null;
-        };
-        const spot = (b) => (b._pad !== undefined ? b._pad : (b._pad = (!b.poly && !b.organic && b.foot[2] - b.foot[0] >= 24 && b.foot[3] - b.foot[1] >= 24 && b.biome !== 'downtown') ? (b.open ? [(b.foot[0] + b.foot[2]) / 2, (b.foot[1] + b.foot[3]) / 2] : freeSquare(b)) : null));
-        const near = (list, x, z) => list.filter((b) => spot(b)).sort((a, b) => hypot(spot(a)[0] - x, spot(a)[1] - z) - hypot(spot(b)[0] - x, spot(b)[1] - z));
-        const all = CityGrid.blocks, chosen = [];
-        const take = (b) => { if (b && !chosen.includes(b) && chosen.every((o) => hypot(spot(o)[0] - spot(b)[0], spot(o)[1] - spot(b)[1]) > 60)) chosen.push(b); };
-        take(near(all, c.x, c.z)[0]);                                                       // o do ponto de partida
-        const parks = all.filter((b) => b.biome === 'park');
-        take(near(parks, c.x, c.z)[0]);
-        take(near(parks, -470, 500)[0]);
-        take(near(all.filter((b) => b.biome === 'port'), c.x, c.z)[0]);
-        take(near(all.filter((b) => b.biome === 'beach' || b.biome === 'resort'), 610, 0)[0]);
-        const slab = [0.46, 0.48, 0.5], yel = [0.95, 0.8, 0.15];
-        for (const b of chosen) {
-            const [cx, cz] = spot(b);
-            b.props = b.props.filter((p) => !(Math.abs(p.x - cx) < H + 3 && Math.abs(p.z - cz) < H + 3));
-            const t = this._batch('trim', cx, cz);
-            t.solid(cx - H, cz - H, cx + H, cz + H, 0.05, 0.27, slab);
-            const w = 0.35, e = H - 0.9;                                                   // anel amarelo
-            t.solid(cx - e, cz - e, cx + e, cz - e + w, 0.27, 0.3, yel); t.solid(cx - e, cz + e - w, cx + e, cz + e, 0.27, 0.3, yel);
-            t.solid(cx - e, cz - e, cx - e + w, cz + e, 0.27, 0.3, yel); t.solid(cx + e - w, cz - e, cx + e, cz + e, 0.27, 0.3, yel);
-            t.solid(cx - 2.6, cz - 3.2, cx - 1.8, cz + 3.2, 0.27, 0.3, yel);               // o "H"
-            t.solid(cx + 1.8, cz - 3.2, cx + 2.6, cz + 3.2, 0.27, 0.3, yel);
-            t.solid(cx - 1.8, cz - 0.4, cx + 1.8, cz + 0.4, 0.27, 0.3, yel);
-            pads.push({ x: cx, z: cz, heading: ((pads.length * 1.7) % 6.28) });
+            const rail = 0.95, segs = Math.ceil(Lr / 1.2);                               // longarinas e corrimão (dos dois lados)
+            for (let i = 0; i < segs; i++) {
+                const u0 = (Lr * i) / segs, u1 = (Lr * (i + 1)) / segs, h0 = (H * i) / segs, h1 = (H * (i + 1)) / segs;
+                for (const [w0, w1] of [[0, 0.1], [W - 0.1, W]]) {
+                    R(u0, w0, u1, w1, Math.max(0, h0 - 0.35), h1, iron);
+                    R(u0, w0, u1, w1, h0 + rail - 0.06, h1 + rail, iron);
+                    R(u0, w0, u0 + 0.08, w1, h0, h0 + rail, iron);
+                }
+            }
+            R(Lr, 0, Lr + Ld, W, H - 0.15, H, tread);                                       // patamar (por cima da platibanda aberta)
+            R(Lr, -0.6, Lr + Ld, 0, H - 0.15, H + 0.01, tread);
+            R(Lr, W - 0.1, Lr + Ld, W, H, H + rail, iron); R(Lr + Ld - 0.1, 0, Lr + Ld, W, H, H + rail, iron);
+            for (let u = Lr * 0.5; u <= Lr + Ld; u += Lr * 0.5) for (const w0 of [0, W - 0.18]) R(u - 0.18, w0, u, w0 + 0.18, 0, H * Math.min(1, u / Lr) - 0.12, iron);   // pilares
+            const [x0, z0, x1, z1] = pad.solid;
+            this._collider(`stair_${cx.toFixed(0)}`, x0, z0, x1, z1, 2);
         }
-        CityGrid.helipads = pads;
-        console.log(`[HELIPONTOS] ${pads.length} helipontos`);
     }
 
     // Contêineres e vegetação vindos de CityGrid.blocks[].props.

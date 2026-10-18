@@ -43,6 +43,7 @@ class CarLights {
         if (!s) return;
         for (const k of ['hl', 'tl', 'sig', 'siren']) for (const i of s[k]) this.glow.free(i);
         this.glow.free(s.pool); this.glow.free(s.beam);
+        if (s.neon) for (const i of s.neon) this.glow.free(i);
         for (const i of s.cone) this.cones.free(i);
         this.slots.delete(car);
         if (car.visual && car.visual.setLamps) car.visual.setLamps(0, 0, false, false, 0, false);      // (carro 3D: apaga as lâmpadas do modelo)
@@ -150,6 +151,18 @@ class CarLights {
             } else {
                 g.off(s.siren[0]); g.off(s.siren[1]); g.off(s.pool);
             }
+
+            // ---- Neon da tunagem (Tuning): luz colorida no chão, embaixo do carro ligado — fraca de dia, forte à noite.
+            const nc = car.mods && car.mods.neon && typeof Tuning !== 'undefined' && Tuning.NEON[car.mods.neon];
+            if (nc && (alive || car.controlled) && !car.destroyed) {
+                if (!s.neon) s.neon = [g.alloc(), g.alloc(), g.alloc()];
+                const a = Math.min(1, 0.4 + 0.6 * night) * (0.88 + 0.12 * Math.sin(this.time * 2.2)), hl = car.halfLen || 2, el = car.elev || 0;
+                for (let k = 0; k < 3; k++) {
+                    const o = (k - 1) * hl * 0.62;
+                    g.place(s.neon[k], p.x + fx * o, 0.24 + el, p.z + fz * o, hl * 2.1);
+                    g.color(s.neon[k], nc[0], nc[1], nc[2], a);
+                }
+            } else if (s.neon) for (const i of s.neon) g.off(i);
 
             // ---- Carro 3D: as próprias lâmpadas do modelo acendem (faróis, lanternas/freio, setas piscando, ré, giroflex, luminoso)
             if (vis && vis.setLamps) {

@@ -827,6 +827,7 @@ class Player {
     // O mundo é plano (2D): "estar em cima" do viaduto ou "embaixo" de uma ponte é só um estado, que decide a altura do desenho,
     // com o que se bate e se o furo (RevealPlugin) se abre — ele só abre quando há algo ACIMA do personagem.
     //   onDeck       no tabuleiro do viaduto: entra pelo pé da rampa andando ao longo da via e fica até sair pela outra ponta.
+    //                (com `roof` = um heliponto de Rooftops: na escada externa ou no telhado do prédio — sai descendo pelo pé da escada)
     //   underBridge  sob uma ponte cidade ↔ ilha: chegou à área do tabuleiro sem ser pela pista (nadando, no raso ou pela margem) e fica
     //                até sair dela.
     get baseY() { return this.underBridge ? 0.1 : 0.5 + (this.deckH || 0); }
@@ -843,7 +844,13 @@ class Player {
         else if (!this.underBridge && this._fromBelow) this.underBridge = true;
         if (!onB) this._fromBelow = MapGeo.waterDepth(p.x, p.z) > 0 || !RoadPlan.onPavement(p.x, p.z, 1.5);
 
-        if (RoadPlan.viaducts && RoadPlan.viaducts.length) {
+        // Escada externa do heliponto (Rooftops): entra pelo pé andando para ela; daí, a altura é a do degrau / telhado.
+        if (this.roof) this.deckH = Rooftops.heightAt(this.roof, p.x, p.z);
+        else if (!this.onDeck && !this.underBridge && this.speed > 0.3 && typeof Rooftops !== 'undefined') {
+            const r = Rooftops.entry(p.x, p.z, this.velocity.x, this.velocity.z);
+            if (r) { this.roof = r; this._roofLast = { x: p.x, z: p.z }; this.onDeck = true; this.deckH = Rooftops.heightAt(r, p.x, p.z); }
+        }
+        if (!this.roof && RoadPlan.viaducts && RoadPlan.viaducts.length) {
             if (this.onDeck) {
                 this.deckH = RoadPlan.elevAt(p.x, p.z);
                 if (this.deckH <= 0) { this.onDeck = false; this.deckH = 0; }
@@ -864,6 +871,10 @@ class Player {
 
     // No tabuleiro do viaduto: as muretas seguram de lado (largura da pista).
     _clampToDeck(p) {
+        if (this.roof) {                                                    // escada / telhado do heliponto (desceu pelo pé: volta ao chão)
+            if (!Rooftops.clamp(this.roof, this._roofLast, p, Config.player.radius)) { this.roof = null; this.onDeck = false; this.deckH = 0; }
+            return;
+        }
         const r = Config.player.radius + 0.2;
         for (const e of RoadPlan.viaducts) {
             if (!e.v) continue;
@@ -879,7 +890,7 @@ class Player {
     teleport(pos) {
         this.cancelSequence();
         this.resetTactics();
-        this.onDeck = false; this.deckH = 0; this.underBridge = false; this._fromBelow = false;
+        this.onDeck = false; this.deckH = 0; this.underBridge = false; this._fromBelow = false; this.roof = null;
         this.diving = false; this._wasSwim = undefined;                // (sem mergulho nem "começar a nadar" de um teleporte)
         if (this.frozen) { this.frozen = false; this.actor.setVisible(true); }
         this.root.position.copyFrom(pos);

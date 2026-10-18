@@ -66,8 +66,16 @@ const EngineAudio = {
 
     profileOf(car) {
         if (!car || !car.spec || car.spec.bike === 'bike' || car.spec.id === 'bicycle') return null;
-        const k = this.MODEL[car.spec.id] || (car.spec.boat ? 'outboard' : car.spec.bike ? 'moto1' : 'sedan4');
-        return Object.assign({ key: k }, this.PROFILES[k]);
+        const k = this.MODEL[car.spec.id] || (car.spec.boat ? 'outboard' : car.spec.bike ? 'moto1' : 'sedan4'), P = Object.assign({ key: k }, this.PROFILES[k]);
+        if (car.mods && car.mods.turbo && !P.electric) { P.turbo = Math.max(P.turbo || 0, 0.9); P.pops = Math.max(P.pops || 0, 0.35); }     // turbo da tunagem: assobio, blow-off e estalos
+        return P;
+    },
+    // O carro do jogador mudou de peças (Tuning): refaz a voz do motor com o perfil novo, sem desligar.
+    refresh(car) {
+        const cur = this.player;
+        if (!cur || cur.car !== car) return;
+        this._free(cur.voice);
+        cur.voice = this._voice(this.profileOf(car));
     },
 
     // ------------------------------------------------------------------ buffers do ciclo do motor (assados num Worker, fora da main thread)

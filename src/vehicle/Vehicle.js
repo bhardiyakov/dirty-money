@@ -431,7 +431,8 @@ class Vehicle {
         }
         this.accelerating = throttle > 0 && fwd >= -0.5 && fwd < this.spec.maxSpeed * 0.7;
         if (throttle !== 0) {
-            fwd += throttle * accel * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1) * (cc ? (this.braking ? this._ccBrake || 1 : this._ccPow || 1) : 1);       // freio na chuva rende menos · freio gasto / motor fraco
+            fwd += throttle * accel * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1) * (cc ? (this.braking ? this._ccBrake || 1 : this._ccPow || 1) : 1)       // freio na chuva rende menos · freio gasto / motor fraco
+                * (this.braking ? this.tuneBrake || 1 : 1);                                                                                                // freios da tunagem (Tuning)
         } else {
             // Freio-motor / resistência ao rolamento: desacelera suave até parar.
             const drop = (this.spec.brakeDrag || Config.vehicle.brakeDrag * (Weather.cur ? Weather.cur.brakeMul : 1)) * dt;
@@ -522,7 +523,7 @@ class Vehicle {
             yaw *= 1 - V.understeer * hs * hs;
             const kI = V.yawInertia * Math.sqrt(1000 / this.spec.mass);
             this._yaw += (yaw - this._yaw) * (1 - Math.exp(-kI * dt));
-            const limit = V.slipLimit * (Weather.cur ? Weather.cur.gripMul : 1) * Vehicle.playerGrip;
+            const limit = V.slipLimit * (Weather.cur ? Weather.cur.gripMul : 1) * Vehicle.playerGrip * (this.tuneGrip || 1);        // (suspensão da tunagem)
             const over = af > V.slipMinSpeed ? Math.max(0, Math.abs(fwd * this._yaw) - limit) / limit : 0;
             const want = Math.min(1, over * V.slipGain);
             this.slide += (want - this.slide) * (1 - Math.exp(-(want > this.slide ? 7 : 2.2) * dt));

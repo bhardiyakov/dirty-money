@@ -12,6 +12,9 @@
 //     mas se for DESTRUÍDO, já era (sem seguro).
 //   • Estacionar um carro seu na vaga de OUTRA casa sua e apertar E muda a garagem dele; ou, pela janela da garagem (ui/CarUI.js,
 //     modo 'garage'), o manobrista leva para outra casa com vaga (R$ 150).
+// MOTOS também (compradas nas concessionárias de moto ou roubadas): ocupam uma vaga como um carro. BARCOS ficam na sua VAGA DA
+// MARINA (garagem 'marina': as duas vagas reservadas do cais, Marina.BERTHS) — comprados na loja náutica ou um roubado que você
+// atraca lá e aperta E. O tipo de cada modelo vem do Catalog.
 // Tudo é salvo com o jogo (SaveGame: serialize/load).
 // ============================================================================
 
@@ -48,12 +51,17 @@ const Garage = {
     byId(id) {
         if (this._g[id]) return this._g[id];
         let name, x, z, cap;
+        if (id === 'marina') {                                                    // as vagas reservadas do cais (barcos)
+            if (typeof Marina === 'undefined' || !Marina.slips) return null;
+            const slots = Marina.BERTHS.map((i) => Marina.slips[i]).filter(Boolean).map((s) => ({ x: Marina.xe + 6.5, z: s.z, h: Math.PI / 2, boat: true }));
+            return (this._g[id] = { id, name: 'Vaga na Marina Dirty Bay', x: Marina.xe + 4, z: Marina.ZC, cap: slots.length, slots, boat: true });
+        }
         if (id === 'safehouse') { const d = SafeHouse.doorWorld(); name = 'Safe house da favela'; x = d.x; z = d.z - 1.2; cap = 2; }
         else { const p = RealEstate.byId[id]; if (!p) return null; name = `${p.type} (${p.region})`; x = p.x; z = p.z; cap = this.CAP[p.type] || 1; }
         const slots = (id === 'safehouse' && FavelaPlan.built && FavelaPlan.yardSlots()) || this.curbSlots(x, z, cap);      // safe house: no quintal
         return (this._g[id] = { id, name, x, z, cap: slots.length, slots });
     },
-    usable(G) { return !!G && G.cap > 0 && (G.id === 'safehouse' || RealEstate.owned[G.id]); },
+    usable(G) { return !!G && G.cap > 0 && (G.id === 'safehouse' || G.id === 'marina' || RealEstate.owned[G.id]); },
     // Todas as garagens que você tem (a da safe house primeiro).
     mine() { return ['safehouse', ...Object.keys(RealEstate.owned)].map((id) => this.byId(id)).filter((G) => this.usable(G)); },
     carsIn(G) { return this.cars.filter((c) => c.garage === G.id); },
@@ -86,26 +94,41 @@ const Garage = {
         const car = this._live(rec);
         if (car) car.ownedRec = null;
     },
-    label(rec) { const s = CarSheet.MODELS[rec.model]; return s ? `${s.name} ${s.model}` : rec.model; },
+    label(rec) { return Catalog.label(rec.model); },
+    // Onde um veículo pode ser guardado: barco na marina, o resto nas casas.
+    garagesFor(car) { return car && car.isBoat ? [this.byId('marina')].filter(Boolean) : this.mine(); },
     where(rec) { const car = this._live(rec); if (car && car.controlled) return 'com você'; const G = this.byId(rec.garage); return rec.readyAt > this._now() ? `no seguro (volta para ${G ? G.name : '?'})` : (G ? G.name : '?'); },
 
     // ---------------------------------------------------------------- carros de verdade
     _live(rec) { return rec && rec._car && !rec._car._gone ? rec._car : null; },
     _now() { return this.game ? (this.game.time || performance.now() / 1000) : 0; },
 
-    // Um carro estacionado (aberto, sem motorista) em (x, z) virado para h. Fora do trânsito (não é reciclado).
+    // Um carro (moto, barco) estacionado — aberto, sem motorista — em (x, z) virado para h. Fora do trânsito (não é reciclado).
+    // Barco: atracado com a POPA em (x, z) (a vaga da marina começa no cais).
     spawnCar(g, model, paint, x, z, h) {
-        if (!g.vehicleManager || !g.carLib || !CarSheet.MODELS[model]) return null;
-        const car = new TrafficCar(g.scene, g.physics, { x, z }, g.traffic._nextId++, g.carLib.sheet(model), paint, h, g.traffic);
+        const kind = Catalog.kind(model);
+        if (!g.vehicleManager || !kind) return null;
+        let car;
+        if (kind === 'boat') {
+            if (!g.boats) return null;
+            const half = BoatSheet.MODELS[model].len * CarArt.K / 2;
+            car = g.boats._make(model, x + Math.sin(h) * half, z + Math.cos(h) * half, h, paint, 'parked');
+            car.locked = false; car.keep = true;
+            return car;
+        }
+        const sheet = kind === 'moto' ? Bikes.sheet(g.sprites, model, 'park') : g.carLib && g.carLib.sheet(model);
+        if (!sheet) return null;
+        car = new TrafficCar(g.scene, g.physics, { x, z }, g.traffic._nextId++, sheet, paint, h, g.traffic);
         if (g.gameEngine.shadowGenerator) g.gameEngine.shadowGenerator.addShadowCaster(car.body);
         g.vehicleManager.vehicles.push(car);
         car.baseMode = 'parked'; car.park(); car.locked = false; car.keep = true;
+        if (kind === 'moto') { car.frameVariant = 2; if (car.visual && car.visual.setVariant) car.visual.setVariant(paint); }
         return car;
     },
     despawn(g, car) {
         if (!car || car._gone) return;
         car._gone = true;
-        const V = g.vehicleManager.vehicles, i = V.indexOf(car);
+        const V = car.isBoat ? g.vehicleManager.boats : g.vehicleManager.vehicles, i = V.indexOf(car);
         if (i >= 0) V.splice(i, 1);
         if (g.doors) g.doors.reset(car);
         if (g.carLights) g.carLights.release(car);
@@ -118,9 +141,9 @@ const Garage = {
         if (!car) return;
         car.ownedRec = rec; rec._car = car; car._xpGiven = true;
         const m = rec.mods || {};
-        if (m.engine) car.spec = Object.assign({}, car.spec, { power: car.spec.power * 1.25, t100: car.spec.t100 ? car.spec.t100 / 1.25 : undefined, maxSpeed: car.spec.maxSpeed + 4 });
         if (m.armor) car.maxHp = Math.round(car.maxHp * 1.6);
         car.mods = Object.assign({}, m);
+        Tuning.apply(car);                                                      // motor (desmanche e tunagem), turbo, freios, suspensão, aerofólio
         car.hp = Math.max(1, rec.hp * car.maxHp);
         car.dent = rec.hp > 0.75 ? 0 : rec.hp > 0.5 ? 1 : rec.hp > 0.25 ? 2 : 3;
         if (car.tank > 0) car.fuel = rec.fuel * car.tank;
@@ -136,19 +159,25 @@ const Garage = {
 
     // ---------------------------------------------------------------- guardar um carro na garagem (dirigindo)
     // Vaga de uma casa sua ao alcance do carro: { G, slot } ou null.
-    slotNear(x, z, maxD = 4.5) {
+    slotNear(x, z, maxD = 4.5, list = this.mine()) {
         let best = null, bd = maxD;
-        for (const G of this.mine()) for (let i = 0; i < G.slots.length; i++) {
+        for (const G of list) for (let i = 0; i < G.slots.length; i++) {
             const s = G.slots[i], d = hypot(s.x - x, s.z - z);
             if (d < bd) { bd = d; best = { G, slot: i }; }
         }
         return best;
     },
-    _storable(car) { return car && !car.isBoat && !car.isChopper && !car.display && !car.destroyed && car.spec && CarSheet.MODELS[car.spec.id]; },
+    _storable(car) { return car && !car.isChopper && !car.display && !car.personal && !car.destroyed && car.spec && !!Catalog.kind(car.spec.id); },
+    // Vaga ao alcance do veículo (barco: a vaga começa no cais — mede pela popa).
+    _slotFor(car) {
+        if (!car.isBoat) return this.slotNear(car.position.x, car.position.z);
+        const f = car.body.getDirection(BABYLON.Axis.Z), half = car.halfLen || 3;
+        return this.slotNear(car.position.x - f.x * half, car.position.z - f.z * half, 6, this.garagesFor(car));
+    },
     carPrompt(game) {
         const car = game.activeCar;
         if (game.mode !== 'car' || !this._storable(car) || car.speed > 1.5) return '';
-        const n = this.slotNear(car.position.x, car.position.z);
+        const n = this._slotFor(car);
         if (!n) return '';
         const rec = car.ownedRec;
         if (rec && rec.garage === n.G.id) return `<b>GARAGEM</b> ${n.G.name}<small>esta vaga é dele — é só descer (F)</small>`;
@@ -160,7 +189,7 @@ const Garage = {
     carInteract(game) {
         const car = game.activeCar;
         if (!this.carPrompt(game) || !this._storable(car)) return false;
-        const n = this.slotNear(car.position.x, car.position.z);
+        const n = this._slotFor(car);
         if (!n || this.free(n.G) <= 0 || (car.ownedRec && car.ownedRec.garage === n.G.id)) return false;
         let rec = car.ownedRec;
         if (rec) { rec.garage = n.G.id; rec.slot = this._freeSlot(n.G); }
@@ -170,10 +199,10 @@ const Garage = {
             if (game.achievements && game.achievements.bump) game.achievements.bump('garage');
         }
         this._sync(rec, car);
-        const s = n.G.slots[rec.slot];
-        car.teleport(s.x, s.z, s.h);                                              // encosta certinho na vaga e desce
+        const s = n.G.slots[rec.slot], half = car.isBoat ? (car.halfLen || 3) : 0;
+        car.teleport(s.x + Math.sin(s.h) * half, s.z + Math.cos(s.h) * half, s.h);       // encosta certinho na vaga e desce
         game._leaveVehicle();
-        car.park();
+        if (car.park) car.park();
         game._flash(rec.bought ? `${this.label(rec)} agora fica na garagem de ${n.G.name}` : `${this.label(rec)} guardado na garagem de ${n.G.name} — agora é seu (se for destruído, já era)`);
         return true;
     },
@@ -192,7 +221,7 @@ const Garage = {
             if (car) {
                 if (car.destroyed && !car.canRaise) { this._destroyed(rec, car); continue; }      // (moto só caída não é perda: dá para levantar)
                 if (car.controlled || car.hold) { this._sync(rec, car); continue; }
-                const s = G.slots[rec.slot], home = s && hypot(car.position.x - s.x, car.position.z - s.z) < 4;
+                const s = G.slots[rec.slot], home = s && hypot(car.position.x - s.x, car.position.z - s.z) < (s.boat ? 9 : 4);
                 const dP = hypot(car.position.x - P.x, car.position.z - P.z);
                 if (home ? dP > this.DESPAWN_R : dP > this.RETURN_R) {               // longe: some (o registro guarda tudo) e volta para a vaga
                     this._sync(rec, car); this.despawn(g, car); rec._car = null;
@@ -205,7 +234,11 @@ const Garage = {
         }
         this._paint();
     },
-    _clear(s) { for (const c of this.game.vehicleManager.vehicles) if (hypot(c.position.x - s.x, c.position.z - s.z) < 3.2) return false; return true; },
+    _clear(s) {
+        const V = this.game.vehicleManager, r = s.boat ? 5 : 3.2, x = s.boat ? s.x + 3 : s.x;
+        for (const c of s.boat ? V.boats : V.vehicles) if (hypot(c.position.x - x, c.position.z - s.z) < r) return false;
+        return true;
+    },
     _destroyed(rec, car) {
         const g = this.game;
         car.ownedRec = null; car.keep = false; rec._car = null;
@@ -258,6 +291,6 @@ const Garage = {
         this.cars = []; this.nextUid = 1; this._g = {};
         if (!s) return;
         this.nextUid = s.next || 1;
-        for (const r of s.cars || []) if (CarSheet.MODELS[r.model]) this.cars.push(Object.assign({ readyAt: 0 }, r, typeof RealEstate !== 'undefined' && RealEstate.remap[r.garage] !== undefined ? { garage: RealEstate.remap[r.garage] } : {}));      // (imóvel que mudou de código: RealEstate._migrate)
+        for (const r of s.cars || []) if (Catalog.kind(r.model)) this.cars.push(Object.assign({ readyAt: 0 }, r, typeof RealEstate !== 'undefined' && RealEstate.remap[r.garage] !== undefined ? { garage: RealEstate.remap[r.garage] } : {}));      // (imóvel que mudou de código: RealEstate._migrate)
     },
 };
