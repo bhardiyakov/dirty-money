@@ -95,9 +95,6 @@ const Config = {
 		// roll = inclinação (rad) por rad/s de giro, até rollMax; bump = força dos trancos do asfalto (pulso no zoom, mola hStiff/hDamp);
 		// rumble = trepidação (u) a partir de rumbleRef m/s.
 		bounce: { lag: 0.07, maxAcc: 22, accLerp: 10, stiff: 26, damp: 3.6, roll: 0.012, rollMax: 0.03, bump: 0.18, hStiff: 60, hDamp: 6, rumble: 0.05, rumbleRef: 30 },
-		// Borrão de velocidade (SpeedBlur): começa a 80% da velocidade máxima do veículo e chega ao máximo nela.
-		blurFrom: 0.8,
-		blurMax: 0.04,         // força máxima (fração da distância ao carro que cada pixel "arrasta")
 	},
 
 	// Relógio do jogo: 24h do jogo duram `cycleSeconds` reais. Começa no fim da tarde para
@@ -345,7 +342,8 @@ const Config = {
 		linearDamping: 0.1,    // Arrasto do chassi.
 		brakeDrag: 8,          // Freio-motor (m/s²) quando solta o acelerador.
 		waterDrag: 6,          // Atola o carro fora da terra (não atravessa água).
-		hijackRange: 5,        // Distância do player ao carro para roubá-lo (do centro do carro: acompanha o vehicle.scale).
+		hijackRange: 5,        // Distância do player ao carro para procurá-lo (do centro do carro: acompanha o vehicle.scale).
+		jackReach: 1.6,        // ...mas só rouba ENCOSTADO: a até isto (m) da porta do carro (qualquer lado) ou do lado da moto/bicicleta
 		scale: 1.3,            // Tamanho de TODOS os veículos — carros, motos, bicicletas, jet skis, barcos (desenho, física, sombra, portas, luzes).
 	},
 

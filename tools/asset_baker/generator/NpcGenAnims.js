@@ -2448,6 +2448,41 @@ function NpcGenAnims(G) {
         return out;
     }
 
+    // SUBIR NO BARCO PELA ÁGUA (jet ski, lancha, barco — só o jogador): do 1º quadro do `swim_idle` (boiando de pé ao lado do casco),
+    // as mãos sobem e agarram a borda (o corpo ainda na água, olhando para cima), puxa — o tronco sai da água inclinando por cima da
+    // borda, as mãos descem e empurram —, a perna direita sobe e apoia no convés, o corpo passa agachado e se levanta DE PÉ no convés
+    // (um pouco acima da linha d'água). A régua é a do nado do começo ao fim (a linha d'água na origem do desenho: p.water = 0 — o que
+    // fica abaixo dela some), então o corpo SAI da água no próprio clipe; o jogo só desliza o jogador da borda para dentro do barco.
+    // O fim é o repouso de pé no mapeamento adulto "molhado" (Pose.adult: dz, como no swim_stand), erguido à altura do convés.
+    function boardBoat(n = 14) {
+        const out = [], T0 = treadAt(0), zS = RIG.pelvis[1][2], UM = ((G.PPU || 26) * 1.04) / 0.5 / (CTX.scale || 1), DZ = 0.2 * UM;
+        const E = idle(1)[0], Ew = clonePose(E);
+        Ew.water = 0.0;
+        const dz = E.adult().B.pelvis.t[2] - Ew.adult().B.pelvis.t[2], zE = zS + dz + DZ;
+        const st = (o, aR, aL = aR) => { const P = o.pitch + o.bend; return swFlat(Object.assign({ roll: 0, twist: 0, hturn: 0 }, o, { aR: swUp(aR, P), aL: swUp(aL, P) })); };
+        const tread = [20, 18, 50, -30];
+        const K = [[0, swFlat(T0)],
+            // agarra a borda: as mãos sobem à frente, acima dos ombros; olha para cima
+            [0.18, st({ hip: [0, 2, zS - 43], pitch: 8, bend: 6, htilt: 14, lR: tread, lL: [24, 18, 56, -30] }, [swLat(16), 0.55, 0.62, 1, -0.3, 0.2])],
+            // puxa: o tronco sai da água inclinando para a frente, cotovelos dobrados (as mãos na borda, agora na altura do peito)
+            [0.38, st({ hip: [0, 4, zS - 30], pitch: 30, bend: 20, htilt: 16, lR: [12, 10, 34, -40], lL: [8, 10, 26, -40] }, [swLat(18), 0.48, -0.08, 1, -0.4, -0.3])],
+            // por cima da borda: empurra com as mãos junto ao quadril; a perna direita sobe e apoia no convés
+            [0.56, st({ hip: [0, 7, zS - 15 + dz * 0.4], pitch: 52, bend: 20, htilt: 20, lR: [84, 12, 104, -10], lL: [6, 8, 18, -40] }, [swLat(20), 0.18, -0.74, 1, -0.4, -0.5])],
+            // agachado no convés: a outra perna vem junto, uma mão no joelho
+            [0.76, st({ hip: [0, 7, zE - 21], pitch: 28, bend: 12, htilt: 8, lR: [92, 6, 118, -6], lL: [74, 8, 112, -12] }, [swLat(15), 0.36, -0.55, 1, -0.4, -0.4], [swLat(17), 0.26, -0.62, 1, -0.4, -0.4])],
+            // de pé no convés (o repouso, erguido à altura dele)
+            [1, st({ hip: [0, 5, zE], pitch: 0, bend: 0, htilt: 0, lR: [0, 4, 0, 0], lL: [0, 4, 0, 0] }, [swLat(14), 0.04, -0.86, 1, -0.3, -0.4])]];
+        for (let i = 0; i < n; i++) {
+            const t = n > 1 ? i / (n - 1) : 1, p = wetPose(swUnflat(keysN(K, t)));
+            p.water = 0.0;
+            if (t > 0.2 && t < 0.62) for (const sd of ['R', 'L']) p.effects.push({ type: 'splash', pos: swFx(swFist(p, sd)), n: 5, spread: 2.2, seed: 160 + i + (sd === 'R' ? 1 : 0) });
+            const u = t / 0.7;                                              // marola deixada pelo corpo saindo da água (some no fim)
+            if (u < 1) p.effects.push({ type: 'ring', pos: [0, 4.0, 0], r: 15 + 14 * u, alpha: Math.trunc(210 * (1 - u)), gaps: 8, phase: u });
+            out.push(p);
+        }
+        return out;
+    }
+
     // MERGULHO: o corpo inteiro logo abaixo da superfície (onde o desenho ainda aparece — esmaecido e azulado), quase na horizontal, nadando
     // peito: puxada (braços abrem e descem), recolhe as mãos sob o peito, estica à frente e desliza; pernada de sapo enquanto estica.
     const DIVE_Y = 0.0, DIVE_Z = -14.0;                                    // quadril (o centro do corpo abaixo da linha d'água)
@@ -2733,6 +2768,7 @@ function NpcGenAnims(G) {
         dive_in: { fps: 12, loop: false, k: 9, n: 10, fn: (w, o, n) => diveIn(n) },                // afundar (nado peito → mergulho)
         wade_dive: { fps: 12, loop: false, k: 9, n: 10, fn: (w, o, n) => wadeDive(n) },            // vadeando no fundo → nado peito (o mergulho no nado)
         bridge_dive: { fps: 12, loop: false, k: 10, n: 10, fn: (w, o, n) => bridgeDive(n) },       // salto de cabeça da ponte (no ar: o jogo faz o arco)
+        board_boat: { fps: 11, loop: false, k: 14, n: 14, fn: (w, o, n) => boardBoat(n) },        // da água para dentro do barco (jet ski, lancha, barco)
         dive: { fps: 10, loop: true, k: 12, n: 12, fn: (w, o, n) => dive(n) },                     // nado peito debaixo d'água
         dive_out: { fps: 12, loop: false, k: 8, n: 9, fn: (w, o, n) => diveOut(n) },              // voltar à tona (mergulho → nado peito)
         flail: { fps: 12, loop: true, k: 4, n: 6, fn: (w, o, n) => flail(n) },

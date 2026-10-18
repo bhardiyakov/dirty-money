@@ -704,13 +704,15 @@ Vehicle.physFrame = 0;
 Vehicle._ZERO = new BABYLON.Vector3(0, 0, 0);          // (só leitura: velocidade zero sem alocar)
 
 // NÍVEL de quem está no mundo, para separar quem passa POR CIMA de quem está EMBAIXO (m): tabuleiro do viaduto = a altura dele,
-// chão (e ponte sobre a água, que é a pista) = 0, água SOB a ponte = -1. Carro em cima do viaduto não freia nem atropela quem
-// anda lá embaixo; quem nada sob a ponte não é "visto" pelos carros que passam nela nem entra num deles.
+// chão (e ponte sobre a água, que é a pista) = 0, SOB a ponte (na água ou na margem) = UNDER. Carro em cima do viaduto não freia nem
+// atropela quem anda lá embaixo; quem está sob a ponte não é "visto" pelos carros e pedestres que passam nela, não é atropelado por
+// eles e não entra num deles (sameLevel: menos de 1,5 m de diferença — UNDER fica bem longe do 0 da pista).
+Vehicle.UNDER = -3;
 Vehicle.levelOf = (e) => {
     if (!e) return 0;
-    if (e.isBoat) { const p = e.position; return RoadPlan.onBridge(p.x, p.z) ? -1 : 0; }
+    if (e.isBoat) { const p = e.position; return RoadPlan.onBridge(p.x, p.z) ? Vehicle.UNDER : 0; }
     if (e.body && e.phys) return e._onDeck ? (e.elev || 0) : 0;                         // veículo terrestre
-    return e.underBridge ? -1 : (e.onDeck ? (e.deckH || 0) : 0);                      // jogador / pedestre
+    return e.underBridge ? Vehicle.UNDER : (e.onDeck ? (e.deckH || 0) : 0);           // jogador / pedestre
 };
 Vehicle.sameLevel = (a, b) => Math.abs(Vehicle.levelOf(a) - Vehicle.levelOf(b)) < 1.5;
 // Camada de obstáculo do trânsito (TrafficCar compara com a do carro: 0 chão, 1 viaduto, -1 água sob a ponte).

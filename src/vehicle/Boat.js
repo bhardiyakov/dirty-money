@@ -55,6 +55,16 @@ class Boat extends Vehicle {
         return { x: c.x + fx * lf + rx * lr, z: c.z + fz * lf + rz * lr };
     }
 
+    // Subindo pela água (Game._boardBoat): o ponto na água junto à borda do lado de quem chega (out), onde ele fica de pé no convés
+    // (in) e para onde olha subindo (face) — na altura do casco mais perto de pos.
+    sidePoints(pos) {
+        const c = this.position, f = this.body.getDirection(BABYLON.Axis.Z), l = hypot(f.x, f.z) || 1;
+        const fx = f.x / l, fz = f.z / l, rx = fz, rz = -fx, dx = pos.x - c.x, dz = pos.z - c.z, s = dx * rx + dz * rz < 0 ? -1 : 1;
+        const lf = Math.max(-this.halfLen + 0.6, Math.min(this.halfLen - 0.9, dx * fx + dz * fz));
+        const at = (o) => ({ x: c.x + fx * lf + rx * s * o, z: c.z + fz * lf + rz * s * o });
+        return { out: at(this.halfW + 0.35), in: at(Math.min(this.halfW * 0.35, 0.5)), face: Math.atan2(-rx * s, -rz * s) };
+    }
+
     // --------------------------------------------------------------- aparência
     _refreshLook() {
         const lib = this.carSheet && this.carSheet.lib;

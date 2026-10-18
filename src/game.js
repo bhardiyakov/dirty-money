@@ -647,7 +647,6 @@ class Game {
 			this.camera.follow(this.player.position, dt);
 		}
 
-		SpeedBlur.update(this, dt);                                  // borrão de alta velocidade (≥ 80% da máxima do carro)
 		AudioFX.screech(this.mode === 'car' && this.activeCar ? this.activeCar.slide || 0 : 0);      // pneu cantando na derrapagem (Vehicle.slide)
 		Perf.lap('jogador');
 		this._updateHeliFall(dt);
@@ -1451,7 +1450,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		const car = this._hijackTarget();
 		const ch = this._chopperNear();
 		if (ch && (!car || ch.distanceTo(this.player.position) < hypot(car.position.x - this.player.position.x, car.position.z - this.player.position.z))) { this._boardChopper(ch); return; }
-		if (!car) { this._flash('Nenhum veículo por perto'); return; }
+		if (!car) { this._flash(this._hijackTarget(false) ? 'Chegue mais perto da porta' : 'Nenhum veículo por perto'); return; }
 		if (car.isBoat) this._boardBoat(car);
 		else if (car.isBike) this._mountBike(car);
 		else if (car.locked && this.inventory.keys > 0) {                                // chave roubada: destranca sem barulho
@@ -1471,10 +1470,17 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		this._enterCar(car, 'pick');
 	}
 
-	// Veículo roubável mais próximo do jogador a pé (ou null).
-	_hijackTarget() {
+	// Veículo roubável mais próximo do jogador a pé (ou null) — e só se ele está ENCOSTADO nele (reach): a até Config.vehicle.jackReach
+	// da porta de um dos lados do carro, ou do lado da moto/bicicleta (o roubo começa dali, sem puxar ninguém de longe). Barco: pela
+	// distância ao casco (sobe pela borda). reach = false: o mais próximo no raio de procura, perto ou não.
+	_hijackTarget(reach = true) {
 		if (!this.physicsReady || this.mode === 'car' || this.mode === 'heli' || !this.player.alive) return null;
-		return this.vehicleManager.nearest(this.player.position, Config.vehicle.hijackRange, this.player);
+		const car = this.vehicleManager.nearest(this.player.position, Config.vehicle.hijackRange, this.player);
+		if (!car || !reach || car.isBoat) return car;
+		const p = this.player.position, R = Config.vehicle.jackReach;
+		if (car.isBike) return hypot(car.position.x - p.x, car.position.z - p.z) <= R + 0.8 ? car : null;
+		for (const s of [-1, 1]) { const q = this.doors.doorPoint(car, s); if (hypot(q.x - p.x, q.z - p.z) <= R) return car; }
+		return null;
 	}
 
 	// Entrar num carro, com a porta de verdade: o personagem vai até a porta, abre, entra, e a porta fecha.
@@ -1502,10 +1508,11 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 				face: () => { const q = door(), p = pl.position; return hypot(q.x - p.x, q.z - p.z) > 0.25 ? Math.atan2(q.x - p.x, q.z - p.z) : q.face; } });
 		}
 		// 2) abre a porta (trancado: quebra o vidro ou arromba antes) e, com motorista, arranca ele lá de dentro
-		if (how === 'smash') steps.push({ clip: 'punch', face: atDoor, yank: () => this._smashWindow(car, sign) });
+		// (cada gesto na porta encosta nela de novo — glide: o carro que ainda freava não deixa o ladrão puxando de longe)
+		if (how === 'smash') steps.push({ clip: 'punch', face: atDoor, glide: door, yank: () => this._smashWindow(car, sign) });
 		if (how === 'pick') steps.push({ clip: 'pick', face: atDoor, timer: 600, onStart: () => this._startLockpick(car) });
-		if (driver) steps.push({ clip: 'carjack', face: atDoor, onStart: open, yank: () => this._yankDriver(car, sign) });
-		else steps.push({ clip: 'opendoor', face: atDoor, onStart: open });
+		if (driver) steps.push({ clip: 'carjack', face: atDoor, glide: door, onStart: open, yank: () => this._yankDriver(car, sign) });
+		else steps.push({ clip: 'opendoor', face: atDoor, glide: door, onStart: open });
 		// 3) entra: põe o pé lá dentro, gira, senta no banco e recolhe a outra perna, deslizando da porta até o banco enquanto a
 		//    carroceria esconde o que já entrou (clipe `sitin`; sem ele — visual antigo guardado no aparelho —, o `enter` de antes)
 		const side = sign < 0 ? 'L' : 'R', SI = NpcData.SIT_IN, sc = SI && pl.actor.sheet.getClip('sitin', side);
@@ -1682,8 +1689,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			else if (fence) html = fence.bridgeRail ? '<b>V</b> pular da ponte na água' : `<b>V</b> pular ${fence.kind === 'wall' ? 'o muro' : 'a grade'}`;
 			else if (!car && this.npcManager) {
 				const R = Config.robbery, pp = this.player.position;
-				const steal = this.npcManager.nearestTarget(pp, R.theftRange, (n) => !n.surrendered && !n.fleeing && !n.pickpocketed && n.state !== 'HURT');
-				const rob = this.npcManager.nearestTarget(pp, R.holdRange, (n) => !n.surrendered);
+				const steal = this.npcManager.nearestTarget(pp, R.theftRange, (n) => !n.surrendered && !n.fleeing && !n.pickpocketed && n.state !== 'HURT', this.player);
+				const rob = this.npcManager.nearestTarget(pp, R.holdRange, (n) => !n.surrendered, this.player);
 				if (rob) html = `<b>E</b> assaltar${this.player.weapon === 'none' ? ' <small>(precisa de arma na mão)</small>' : '<small>arriscado: chama muito a atenção da polícia</small>'}`;
 				if (steal) html += `${html ? '<br>' : ''}<b>C</b> furtar<small>discreto, mas pode dar errado</small>`;
 			}
@@ -1767,15 +1774,25 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 
 	// Barco: o jogador vai até o casco (de qualquer lado do píer, ou nadando) e sobe. Se há piloto ao leme (barco navegando), ele
 	// é jogado na água na hora — é crime à vista. Sem porta: só "entra" e o barco fica sob controle.
+	// Nadando: vai até a borda do lado dele, agarra, sobe e fica de pé no convés (clipe `board_boat`; sem ele — visual antigo guardado
+	// no aparelho —, o jeito de antes). Com piloto, ele cai na água quando o jogador sobe. Do píer/raso: chega e entra.
 	_boardBoat(boat) {
 		const pl = this.player, pp = pl.position;
 		if (pl.busy) return;
 		boat.hold = true;
 		const spot = boat.boardPoint(pp), face = Math.atan2(boat.position.x - pp.x, boat.position.z - pp.z);
-		const ok = pl.runSequence([
+		const bc = pl.swimming && pl.actor.sheet.getClip('board_boat', 'none');
+		let steps;
+		if (bc) {
+			const S0 = boat.sidePoints(pp), d = hypot(S0.out.x - pp.x, S0.out.z - pp.z), dur = bc.frames / bc.fps;
+			steps = [];
+			if (d > 0.3) steps.push({ clip: 'swim_breast', timer: Math.max(0.3, Math.min(1.4, d / 1.4)), glide: () => boat.sidePoints(pl.position).out, face: () => { const q = boat.sidePoints(pl.position).out, p = pl.position; return Math.atan2(q.x - p.x, q.z - p.z); } });
+			steps.push({ clip: 'board_boat', timer: dur, fit: true, face: () => boat.sidePoints(pl.position).face, glide: () => boat.sidePoints(pl.position).in, onStart: () => { if (boat.pilot) this._dumpPilot(boat); } });
+		} else steps = [
 			{ clip: pl.swimming ? 'swim' : 'walk', timer: 0.3, glide: () => boat.boardPoint(pl.position) },
 			{ clip: boat.pilot ? 'carjack' : 'enter', yank: () => this._dumpPilot(boat) },
-		], {
+		];
+		const ok = pl.runSequence(steps, {
 			face,
 			onDone: () => {
 				boat.hold = false;
@@ -1905,10 +1922,14 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			if (!ok) { this.player.boarding = null; if (bike.visual) bike.visual.setVisible(true); bike.hold = false; }
 		};
 		if (bike.riderVariant != null) {
+			// vai até o lado do piloto (andando; a moto freia) e só então o puxa do banco — encostado nele
+			const pl = this.player, p = pl.position, s = start(), d = hypot(s.x - p.x, s.z - p.z), toBike = () => Math.atan2(bike.position.x - pl.position.x, bike.position.z - pl.position.z);
+			const steps = [];
+			if (d > 0.25) steps.push({ clip: d > 1.4 ? 'run' : 'walk', timer: Math.max(0.25, Math.min(0.8, d / (d > 1.4 ? 5.5 : 3))), glide: start, face: () => Math.atan2(start().x - pl.position.x, start().z - pl.position.z) });
+			steps.push({ clip: 'carjack', face: toBike, glide: start, yank: () => bike.throwRider(S.rx * S.sign, S.rz * S.sign, 6.5, 'eject') });
+			const ok = pl.runSequence(steps, { face: toBike(), onDone: go, onAbort: () => { bike.hold = false; } });
+			if (!ok) { bike.hold = false; return; }
 			this._flash('Derrubando o piloto…');
-			this.player.startCarjack(bike.position, go, () => {
-				bike.throwRider(S.rx * S.sign, S.rz * S.sign, 6.5, 'eject');
-			}, true);
 		} else {
 			this._flash(`Subindo na ${bike.spec.name.toLowerCase()}…`);
 			go();
@@ -2243,7 +2264,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 	_tryRob() {
 		const pl = this.player, R = Config.robbery;
 		if (pl.busy || this.holdup) return;
-		const victim = this.npcManager.nearestTarget(pl.position, R.holdRange, (n) => !n.surrendered);
+		const victim = this.npcManager.nearestTarget(pl.position, R.holdRange, (n) => !n.surrendered, this.player);
 		if (!victim) { this._flash('Ninguém por perto pra assaltar…'); return; }
 		if (pl.weapon === 'none') { this._flash(this.inventory.armed ? 'Saque uma arma pra assaltar (teclas 1-9)' : 'Sem arma não tem assalto — arrume uma'); return; }
 		pl.setCrouch(false);                                           // (anunciar o assalto é de pé)
@@ -2304,7 +2325,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 	_tryPickpocket() {
 		const pl = this.player, R = Config.robbery;
 		if (pl.busy || this.holdup) return;
-		const target = this.npcManager.nearestTarget(pl.position, R.theftRange, (n) => !n.surrendered && !n.fleeing && n.state !== 'HURT');
+		const target = this.npcManager.nearestTarget(pl.position, R.theftRange, (n) => !n.surrendered && !n.fleeing && n.state !== 'HURT', this.player);
 		if (!target) { this._flash('Ninguém por perto pra furtar…'); return; }
 		if (target.pickpocketed) { this._flash('Esse já está sem nada no bolso'); return; }
 		pl.pickpocket(target.position, () => this._resolveTheft(target));
@@ -2707,7 +2728,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		const people = this.policeManager ? this.npcManager.npcs.concat(this.policeManager.officers) : this.npcManager.npcs;
 		let hit = false;
 		for (const n of people) {
-			if (!n.alive || n.rag || !n.position) continue;
+			if (!n.alive || n.rag || !n.position || !Vehicle.sameLevel(n, pl)) continue;      // (sob a ponte: quem anda lá em cima não esbarra)
 			const q = n.position, dx = p.x - q.x, dz = p.z - q.z, d2 = dx * dx + dz * dz, rr = R + ((n.params && n.params.radius) || 0.4);
 			if (d2 >= rr * rr || d2 < 1e-6) continue;
 			const d = Math.sqrt(d2), over = rr - d, ux = dx / d, uz = dz / d, into = -(v.x * ux + v.z * uz);

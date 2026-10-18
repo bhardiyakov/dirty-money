@@ -186,7 +186,7 @@ class Combat {
     // no jogador (a pé e de pé).
     _meleeTargets(source, out = []) {
         out.length = 0;
-        const g = this.game, ok = (t) => t.alive && !t.rag && (!t.actor || t.actor.visible !== false);
+        const g = this.game, pl = g.player, ok = (t) => t.alive && !t.rag && (!t.actor || t.actor.visible !== false) && (!pl || Vehicle.sameLevel(t, pl));
         if (source !== 'player') {
             const p = g.player;
             if (p && p.alive && g.mode === 'player' && !p.rag && !p.invulnerable && !g.hiding && !p.dodging) out.push(p);

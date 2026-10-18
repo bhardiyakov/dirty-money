@@ -217,11 +217,13 @@ class NPCManager {
 
     // Pedestre mais próximo de `pos` (até `range`) que dá para abordar: vivo, de pé no NavMesh (não deitado/nadando),
     // à vista e que passa em `ok(npc)`. Usado pelo assalto e pelo furto.
-    nearestTarget(pos, range, ok = null) {
+    // who: quem procura (o jogador) — só vale quem está no mesmo nível dele (Vehicle.sameLevel: sob a ponte ≠ em cima dela).
+    nearestTarget(pos, range, ok = null, who = null) {
         let nearest = null, best = range;
         for (const npc of this.npcs) {
             if (!npc.alive || npc.rag || npc.free || npc.index < 0) continue;
             if (ok && !ok(npc)) continue;
+            if (who && !Vehicle.sameLevel(npc, who)) continue;
             const d = hypot(npc.position.x - pos.x, npc.position.z - pos.z);
             if (d < best && this._sees(npc, pos)) { best = d; nearest = npc; }
         }
