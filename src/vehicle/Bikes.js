@@ -10,7 +10,7 @@
 // A "folha de veículo" abaixo (BikeSheet) só adapta a interface que o Vehicle espera.
 //
 // Motos em 3D (CarArt3D, assets/cars/veiculos3d.js): a de rua ('moto', a do motoboy — com baú no entregador), a scooter, a de trilha,
-// a esportiva e a custom de viagem. Sem o arquivo 3D, todas usam o desenho da moto do atlas.
+// a esportiva e a custom de viagem — e a bicicleta. Sem o arquivo 3D, as motos usam o desenho da moto do atlas (e a bicicleta, o dela).
 // ============================================================================
 
 class BikeSheet {

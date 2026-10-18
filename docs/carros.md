@@ -138,6 +138,8 @@ carros; sem argumento, os dois).
   para as mãos do piloto 2,5D (clipes `ride_*`) caírem no guidão; o sprite do piloto sobe à altura do banco do modelo. No
   trânsito: `Bikes.pickMoto` sorteia o modelo; `Bikes.MODELS` tem o desempenho de cada um. Sem o arquivo 3D, todas usam a moto do
   atlas.
+- **Bicicleta** (também em `motos.js`): urbana aro 26, quadro de tubos, selim, guidão, pedivela, para-lamas e bagageiro, montada
+  em volta dos pontos onde o piloto pedalando (`ride_bike`) põe as mãos e os pés; deita um pouco na curva.
 - **Ré de moto e bicicleta**: não tem marcha a ré — o piloto fica de pé, montado, e anda para trás com os pés no chão
   (`RiderActor.walkBack`, o clipe de andar tocado ao contrário), no passo (`Config.vehicle.bikeReverse`).
 - **Helicópteros** (`gerador/veiculos/helis.js`): o civil (estilo Bell 206) e o da polícia (Águia, com giroflex e holofote). Os

@@ -364,3 +364,52 @@ export const moto_custom = moto({
     for (const s of [-1, 1]) mb.add('metal_escuro', roundedBox(0.28, 0.025, 0.12, 0.01, 1), m4t(0.32, 0.3, s * 0.26));
   },
 });
+
+// ---------------------------------------------------------------------------
+// BICICLETA urbana: quadro de tubos, aro 26 raiado, selim, guidão, para-lamas e bagageiro. O piloto pedalando (ride_bike) tem os
+// pés no pedivela ~0,26 m à frente e ~0,25 m abaixo do banco e as mãos ~0,71 m à frente e ~0,28 m acima, ~0,27 m para cada lado —
+// medidas do jogo ÷ 1,17 (NpcGenAnims RIDE.bike) — e o quadro é montado em volta desses pontos.
+export const bicicleta = moto({
+  slug: 'bicicleta', L: 1.75, W: 0.62, xf: 0.53, xr: -0.52, seat: [-0.2, 0.62],
+  wheel: { R: 0.31, w: 0.045, rimR: 0.27, style: 'raios', rimMat: 'aluminio', disc: false, seg: 24 },
+  colors: { pintura: '#2a7fd0' },
+  parts(mb, o) {
+    const R = o.wheel.R, [sx, sy] = o.seat, bb = [sx + 0.26, sy - 0.25], gx = sx + 0.71, gy = sy + 0.28, head = [gx - 0.1, gy - 0.1];
+    const T = (a, b, r = 0.016, mat = 'pintura') => bar(mb, mat, [a, b], r, 8);
+    // quadro: superior, inferior, do selim, e os garfos traseiros (dos dois lados)
+    T([sx + 0.02, sy - 0.04, 0], [head[0], head[1] - 0.03, 0], 0.017);
+    T([head[0], head[1] - 0.1, 0], [bb[0], bb[1], 0], 0.02);
+    T([bb[0], bb[1], 0], [sx + 0.01, sy - 0.03, 0], 0.017);
+    T([head[0] - 0.01, head[1] + 0.02, 0], [head[0] + 0.02, head[1] - 0.14, 0], 0.022);              // caixa de direção
+    for (const s of [-1, 1]) {
+      T([bb[0], bb[1], s * 0.03], [o.xr, R, s * 0.055], 0.011);
+      T([sx + 0.01, sy - 0.05, s * 0.02], [o.xr, R, s * 0.055], 0.01);
+      T([head[0] + 0.02, head[1] - 0.12, s * 0.035], [o.xf, R, s * 0.045], 0.012, 'cromado');      // garfo dianteiro
+    }
+    // selim e canote
+    T([sx + 0.01, sy - 0.03, 0], [sx - 0.01, sy + 0.04, 0], 0.012, 'cromado');
+    mb.add('estofado_preto', roundedBox(0.26, 0.05, 0.13, 0.025, 2), m4chain(m4t(sx - 0.02, sy + 0.07, 0), m4rz(0.05)));
+    mb.add('estofado_preto', roundedBox(0.1, 0.045, 0.06, 0.02, 1), m4t(sx + 0.12, sy + 0.065, 0));
+    // guidão (mesa, barra, manoplas) e campainha
+    T([head[0] + 0.01, head[1] + 0.02, 0], [head[0], gy - 0.02, 0], 0.013, 'cromado');
+    bar(mb, 'cromado', [[gx, gy, -0.27], [gx - 0.05, gy, -0.12], [head[0], gy - 0.01, 0], [gx - 0.05, gy, 0.12], [gx, gy, 0.27]], 0.011);
+    for (const s of [-1, 1]) mb.add('estofado_preto', cylinder(0.016, 0.1, 10, { bevel: 0.004 }), m4chain(m4t(gx, gy, s * 0.23), m4rx(PI / 2)));
+    mb.add('cromado', cylinder(0.018, 0.012, 10), m4t(gx - 0.06, gy + 0.012, -0.15));
+    // pedivela: coroa, braços e pedais (parados — os pés do piloto giram no sprite)
+    mb.add('metal', cylinder(0.09, 0.006, 20), m4chain(m4t(bb[0], bb[1], 0.05), m4rx(PI / 2)));
+    mb.add('metal_escuro', cylinder(0.025, 0.12, 10), m4chain(m4t(bb[0], bb[1], 0), m4rx(PI / 2)));
+    for (const s of [-1, 1]) {
+      T([bb[0], bb[1], s * 0.065], [bb[0] + s * 0.15, bb[1], s * 0.07], 0.009, 'metal');
+      mb.add('preto', roundedBox(0.09, 0.018, 0.07, 0.006, 1), m4t(bb[0] + s * 0.15, bb[1], s * 0.11));
+    }
+    bar(mb, 'metal_escuro', [[bb[0], bb[1] + 0.09, 0.05], [o.xr, R + 0.04, 0.06]], 0.004, 4);       // corrente
+    bar(mb, 'metal_escuro', [[bb[0], bb[1] - 0.09, 0.05], [o.xr, R - 0.04, 0.06]], 0.004, 4);
+    // para-lamas, bagageiro traseiro, refletores
+    fender(mb, { cx: o.xf, R, a0: 0.4, a1: 2.0, mat: 'pintura', w: 0.06, gap: 0.035, t: 0.008 });
+    fender(mb, { cx: o.xr, R, a0: 1.1, a1: 2.9, mat: 'pintura', w: 0.06, gap: 0.035, t: 0.008 });
+    for (const s of [-1, 1]) bar(mb, 'metal_escuro', [[o.xr + 0.02, R + 0.02, s * 0.06], [o.xr + 0.05, R + 0.36, s * 0.07]], 0.007, 4);
+    mb.add('metal_escuro', roundedBox(0.36, 0.012, 0.13, 0.005, 1), m4t(o.xr + 0.08, R + 0.37, 0));
+    mb.add('lanterna', roundedBox(0.012, 0.035, 0.06, 0.006, 1), m4t(o.xr - 0.12, R + 0.36, 0));
+    mb.add('farol', roundedBox(0.03, 0.035, 0.045, 0.01, 1), m4t(head[0] + 0.05, head[1] - 0.04, 0));
+  },
+});

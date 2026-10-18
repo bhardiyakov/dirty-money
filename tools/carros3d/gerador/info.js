@@ -47,6 +47,7 @@ export const INFO = [
   ['moto_trilha', 'Moto de trilha (estilo XR / Bros)', 'Motos', 2.15, 0.84],
   ['moto_esportiva', 'Esportiva (estilo CBR)', 'Motos', 2.08, 0.72],
   ['moto_custom', 'Custom de viagem (estilo Harley-Davidson)', 'Motos', 2.45, 0.98],
+  ['bicicleta', 'Bicicleta urbana (aro 26)', 'Motos', 1.75, 0.62],
   ['heli', 'Helicóptero (estilo Bell 206)', 'Helicópteros', 9.6, 2.2],
   ['heli_policia', 'Helicóptero da polícia (Águia)', 'Helicópteros', 9.6, 2.2],
 ].map(([slug, nome, categoria, comprimento, largura]) => ({ slug, nome, categoria, comprimento, largura, pinturaFixa: ['viatura', 'swat_van', 'militar', 'taxi_sp', 'taxi_rio', 'heli_policia'].includes(slug), barco: categoria === 'Barcos', moto: categoria === 'Motos', heli: categoria === 'Helicópteros' }));

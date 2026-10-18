@@ -360,6 +360,7 @@ class Vehicle {
             // (o ride_bike dos personagens 2,5D foi assado girando o pedivela para trás — de baixo para a frente: tocado ao contrário,
             // pedala para a frente; o do boneco antigo já gira para a frente)
             v.update(dt, riding ? (Bikes.npc() ? -1 : 1) * Math.min(2.2, sp / 3.6) : 0);
+            if (riding && v.setLean) v.setLean(this.lastSteer * Math.min(1, sp / 4) * 0.6, dt);      // (bicicleta 3D: deita um pouco na curva)
         } else {
             v.update(dt, 0);
             if (riding && v.setLean) v.setLean(this.lastSteer * Math.min(1, sp / 5), dt);
