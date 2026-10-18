@@ -198,6 +198,12 @@ class GlowBatch {
         scene.setRenderingAutoClearDepthStencil(1, false);   // mantém a profundidade do mundo.
     }
 
+    // Luz do MUNDO que cai no chão (poça de poste, porta, vitrine): desenhada ANTES dos personagens 2,5D (NpcArt.ALPHA = −1,5), não
+    // depois de tudo. Desenhada por último ela somava luz por cima deles (o boneco "estourava" de branco), mas não por cima das motos e
+    // carros 3D (que gravam profundidade) — à noite o veículo parecia uma sombra escura sobreposta ao personagem.
+    static get UNDER() { return -1.8; }
+    under() { this.mesh.alphaIndex = GlowBatch.UNDER; return this; }
+
     // Intensidade GLOBAL do lote (0..1), multiplicada no shader: acender/apagar todos os postes ao anoitecer custa um uniform, não um
     // reenvio do buffer. Em 0 a malha nem é desenhada.
     setLevel(v) {
@@ -318,6 +324,7 @@ class GlowGrid {
     }
 
     _key(x, z) { return Math.floor(x / this.cell) + ',' + Math.floor(z / this.cell); }
+    under() { for (const b of this.batches) b.under(); return this; }       // (ver GlowBatch.under)
 
     alloc(x, z) {
         const bi = this._byKey.get(this._key(x, z));
