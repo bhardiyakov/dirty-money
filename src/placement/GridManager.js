@@ -15,6 +15,8 @@
 //   collectChunksOutside(level, x, z, radius)   unloads every chunk farther than `radius` (call it when the player moves)
 //   validatePlacement(request) → { isValid, reason }   overlap test against the matrices only (no physics, no bounding boxes)
 //   place(request) → record | null · removePlacement(id) · placementAtCell(layer, level, cellX, cellZ)
+//   markStaticBlockers / clearStaticBlockers   cells the scene already fills (walls, built-in furniture, a doorway): STATIC_BLOCKER,
+//                                               never persisted, never a record; written only into free cells, dropped with the chunk
 //   on(eventName, listener)   'placed' · 'removed' · 'chunkLoaded' · 'chunkUnloaded'
 //
 // A request is { definition, layer, level, cellX, cellZ, rotation } with the cell in its own layer's coordinates. Definitions:
@@ -33,6 +35,7 @@ class GridManager {
     static CHUNK_WORLD_SIZE = GridManager.CHUNK_MACRO_CELLS * GridManager.MACRO_CELL_SIZE;
     static LAYERS = ['macro', 'micro'];
     static EMPTY_CELL = 0;
+    static STATIC_BLOCKER = 0xffffffff;
 
     constructor(definitionRegistry) {
         this.definitionRegistry = definitionRegistry;      // numericId → definition (to rebuild records loaded from disk)
@@ -215,6 +218,38 @@ class GridManager {
         return chunkX >= range.minChunkX && chunkX <= range.maxChunkX && chunkZ >= range.minChunkZ && chunkZ <= range.maxChunkZ;
     }
 
+    // ---- static blockers -----------------------------------------------------------------------------------------------------
+
+    // Cells [minCellX, maxCellX) × [minCellZ, maxCellZ) of loaded chunks: free → STATIC_BLOCKER. Returns how many were marked.
+    markStaticBlockers(layer, level, minCellX, minCellZ, maxCellX, maxCellZ) {
+        return this.replaceCells(layer, level, minCellX, minCellZ, maxCellX, maxCellZ, GridManager.EMPTY_CELL, GridManager.STATIC_BLOCKER);
+    }
+
+    clearStaticBlockers(layer, level, minCellX, minCellZ, maxCellX, maxCellZ) {
+        return this.replaceCells(layer, level, minCellX, minCellZ, maxCellX, maxCellZ, GridManager.STATIC_BLOCKER, GridManager.EMPTY_CELL);
+    }
+
+    replaceCells(layer, level, minCellX, minCellZ, maxCellX, maxCellZ, fromValue, toValue) {
+        const chunkCells = GridManager.chunkCellsOf(layer);
+        let replacedCount = 0;
+        for (const chunk of this.loadedChunks.values()) {
+            if (chunk.level !== level) continue;
+            const chunkMinX = chunk.chunkX * chunkCells, chunkMinZ = chunk.chunkZ * chunkCells;
+            const fromX = Math.max(minCellX, chunkMinX), toX = Math.min(maxCellX, chunkMinX + chunkCells);
+            const fromZ = Math.max(minCellZ, chunkMinZ), toZ = Math.min(maxCellZ, chunkMinZ + chunkCells);
+            const cells = layer === 'macro' ? chunk.macroCells : chunk.microCells;
+            for (let cellZ = fromZ; cellZ < toZ; cellZ++) {
+                const rowOffset = (cellZ - chunkMinZ) * chunkCells - chunkMinX;
+                for (let cellX = fromX; cellX < toX; cellX++) {
+                    if (cells[rowOffset + cellX] !== fromValue) continue;
+                    cells[rowOffset + cellX] = toValue;
+                    replacedCount++;
+                }
+            }
+        }
+        return replacedCount;
+    }
+
     // ---- validation (matrix data only) ---------------------------------------------------------------------------------------
 
     validatePlacement({ definition, layer = definition.layer, level = 0, cellX, cellZ, rotation = 0 }) {
@@ -224,6 +259,7 @@ class GridManager {
             for (let offsetX = 0; offsetX < width; offsetX++) {
                 const occupantId = this.occupantAt(layer, level, cellX + offsetX, cellZ + offsetZ);
                 if (occupantId === undefined) return { isValid: false, reason: 'area not loaded' };
+                if (occupantId === GridManager.STATIC_BLOCKER) return { isValid: false, reason: 'blocked' };
                 if (occupantId !== GridManager.EMPTY_CELL) return { isValid: false, reason: 'cell occupied', blockingPlacementId: occupantId };
             }
         }
@@ -257,7 +293,7 @@ class GridManager {
         for (let cellZ = microMinZ; cellZ < microMinZ + record.depth * microPerMacro; cellZ++) {
             for (let cellX = microMinX; cellX < microMinX + record.width * microPerMacro; cellX++) {
                 const occupantId = this.occupantAt('micro', record.level, cellX, cellZ);
-                if (occupantId) return { isValid: false, reason: 'remove the furniture on it first', blockingPlacementId: occupantId };
+                if (occupantId && occupantId !== GridManager.STATIC_BLOCKER) return { isValid: false, reason: 'remove the furniture on it first', blockingPlacementId: occupantId };
             }
         }
         return { isValid: true, reason: null };

@@ -192,6 +192,7 @@ GuideUI.PAGES = {
     home: () => `<h2>Casa, imóveis e save</h2>
         <ul><li>A safe house da favela é sua desde o começo: <b>cama</b> (dormir e salvar), <b>baú</b>, <b>cofre</b> e <b>geladeira</b>.</li>
         <li><b>Imóveis</b> à venda pela cidade (marcados no mapa): na favela com sujo, fora dela só com limpo. Dá para visitar, comprar, reformar, mudar a safe house e vender.</li>
+        <li><b>Decorar</b>: dentro da safe house ou de um imóvel seu, <kbd>B</kbd> abre os móveis. Clique para colocar, <kbd>R</kbd> gira, botão direito num móvel o retira (metade do preço de volta); <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> movem a câmera. Os móveis são salvos junto com o save; vender o imóvel deixa os móveis lá.</li>
         <li><b>Save</b>: 3 espaços. Salve no menu (<kbd>ESC</kbd> → 💾 Salvar, sem procurado) ou dormindo (no espaço do jogo atual) — não há save automático. "Carregar jogo" no menu inicial escolhe o espaço.</li></ul>`,
 
     goals: () => `<h2>Metas de carreira</h2>

@@ -163,7 +163,8 @@ const RealEstate = {
         if (this.homeId === p.id) return { ok: false, msg: 'Você mora aqui: escolha outra casa antes de vender' };
         const v = Math.round(this.price(p) * 0.8 / 100) * 100;
         game.inventory.clean += v; delete this.owned[p.id]; this._poi(p);
-        return { ok: true, msg: `Vendeu por ${brl(v)} (80% do valor de mercado, em dinheiro limpo)` };
+        if (typeof HomeDecor !== 'undefined') HomeDecor.forgetHome(p.id);         // os móveis ficam com o imóvel
+        return { ok: true, msg: `Vendeu por ${brl(v)} (80% do valor de mercado, em dinheiro limpo; os móveis ficam com o imóvel)` };
     },
 
     // ---------------------------------------------------------------- reformas (dinheiro LIMPO)

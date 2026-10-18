@@ -12,6 +12,7 @@
 //
 //   beginPlacement(definition) · rotatePreview() · updatePreview(pointerX, pointerY) · confirmPlacement() · cancelPlacement()
 //   removeAtPointer(pointerX, pointerY) · setFloorLevel(level) · bindPointerInput() (optional default mouse/keyboard bindings)
+//   setGridOffset(offset)   world = grid + offset: the grid region is drawn elsewhere (pair it with InstancedRenderer's rootNode)
 // ============================================================================
 
 class PlacementSystem {
@@ -25,7 +26,8 @@ class PlacementSystem {
         this.gridManager = gridManager;
         this.instancedRenderer = instancedRenderer;
         this.floorLevel = 0;
-        this.floorPlane = PlacementSystem.createFloorPlane(this.floorLevel);
+        this.gridOffset = BABYLON.Vector3.Zero();
+        this.floorPlane = this.createFloorPlane();
         this.activeDefinition = null;
         this.previewRotation = 0;
         this.previewMesh = null;
@@ -37,24 +39,32 @@ class PlacementSystem {
         this.inputObservers = [];
     }
 
-    static createFloorPlane(level) {
-        return BABYLON.Plane.FromPositionAndNormal(new BABYLON.Vector3(0, level * PlacementSystem.FLOOR_HEIGHT, 0), BABYLON.Vector3.Up());
+    createFloorPlane() {
+        const floorHeight = this.gridOffset.y + this.floorLevel * PlacementSystem.FLOOR_HEIGHT;
+        return BABYLON.Plane.FromPositionAndNormal(new BABYLON.Vector3(0, floorHeight, 0), BABYLON.Vector3.Up());
     }
 
     setFloorLevel(level) {
         this.floorLevel = level;
-        this.floorPlane = PlacementSystem.createFloorPlane(level);
+        this.floorPlane = this.createFloorPlane();
+        this.lastSnappedCell = null;
+    }
+
+    setGridOffset(offset) {
+        this.gridOffset.copyFrom(offset);
+        this.floorPlane = this.createFloorPlane();
         this.lastSnappedCell = null;
     }
 
     // ---- picking and snapping ------------------------------------------------------------------------------------------------
 
-    // Pointer (canvas pixels) → point on the current floor plane, or null when the ray misses it (pointing at the sky).
+    // Pointer (canvas CSS pixels) → point on the current floor plane in GRID space (world minus the grid offset), or null when the
+    // ray misses it (pointing at the sky).
     pickFloorPoint(pointerX, pointerY) {
         this.scene.createPickingRayToRef(pointerX, pointerY, this.identityMatrix, this.pickingRay, this.camera);
         const hitDistance = this.pickingRay.intersectsPlane(this.floorPlane);
         if (hitDistance === null || hitDistance < 0) return null;
-        return this.pickingRay.origin.add(this.pickingRay.direction.scale(hitDistance));
+        return this.pickingRay.origin.add(this.pickingRay.direction.scale(hitDistance)).subtractInPlace(this.gridOffset);
     }
 
     // Min-corner cell of a footprint centred on `worldPoint`, in `layer` cells.
@@ -117,7 +127,7 @@ class PlacementSystem {
 
     movePreviewTo(snappedCell, width, depth) {
         const center = GridManager.footprintCenter(this.activeDefinition.layer, snappedCell.cellX, snappedCell.cellZ, width, depth);
-        this.previewMesh.position.set(center.x, this.floorLevel * PlacementSystem.FLOOR_HEIGHT, center.z);
+        this.previewMesh.position.set(center.x, this.floorLevel * PlacementSystem.FLOOR_HEIGHT, center.z).addInPlace(this.gridOffset);
         this.previewMesh.rotation.y = this.previewRotation * Math.PI / 2;
         this.previewMesh.setEnabled(true);
     }

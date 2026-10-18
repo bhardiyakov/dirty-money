@@ -32,7 +32,7 @@ class GridPersistence {
         this.pendingDeltasByPlacementId = new Map();
         this.isFlushScheduled = false;
         this.lastWritePromise = Promise.resolve();
-        this.chunkRequestsInFlight = new Set();
+        this.chunkRequestsInFlight = new Map();               // chunkKey → Promise
         this.unsubscribers = [
             gridManager.on('placed', (record) => { if (!record.isRestored) this.queueDelta(record, GridPersistence.DELTA_PLACE); }),
             gridManager.on('removed', (record) => this.queueDelta(record, GridPersistence.DELTA_REMOVE)),
@@ -130,10 +130,16 @@ class GridPersistence {
         }
     }
 
-    async requestChunk(level, chunkX, chunkZ) {
+    // Resolves once the chunk is in the GridManager (a second request for a chunk on its way shares the first one).
+    requestChunk(level, chunkX, chunkZ) {
         const chunkKey = GridManager.chunkKey(level, chunkX, chunkZ);
-        if (this.chunkRequestsInFlight.has(chunkKey)) return;
-        this.chunkRequestsInFlight.add(chunkKey);
+        if (this.chunkRequestsInFlight.has(chunkKey)) return this.chunkRequestsInFlight.get(chunkKey);
+        const request = this.loadChunkFromBackend(level, chunkX, chunkZ).finally(() => this.chunkRequestsInFlight.delete(chunkKey));
+        this.chunkRequestsInFlight.set(chunkKey, request);
+        return request;
+    }
+
+    async loadChunkFromBackend(level, chunkX, chunkZ) {
         try {
             await this.flushPendingDeltas();              // the backend must know our last edits before it answers for this chunk
             const recordBytes = await this.backend.loadChunk(level, chunkX, chunkZ);
@@ -141,9 +147,7 @@ class GridPersistence {
                 this.gridManager.loadChunk(level, chunkX, chunkZ, GridPersistence.decodeRecords(recordBytes));
             }
         } catch (error) {
-            console.warn(`[GRID] chunk ${chunkKey} failed to load:`, error);
-        } finally {
-            this.chunkRequestsInFlight.delete(chunkKey);
+            console.warn(`[GRID] chunk ${GridManager.chunkKey(level, chunkX, chunkZ)} failed to load:`, error);
         }
     }
 

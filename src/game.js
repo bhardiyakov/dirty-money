@@ -372,6 +372,8 @@ class Game {
 		this._loading(this._preFailed ? 'Falha ao carregar (veja o console) — iniciando assim mesmo' : 'Pronto!', 1);
 		if (this._preDone) await wait(450);                         // (a barra chega aos 100% antes da tela sair)
 		this._bootDone = true;
+		HomeDecor.init(this);
+		try { await HomeDecor.startSession(this._pendingSave ? SaveGame.slot : null); } catch (e) { console.error('[DECOR] falha ao abrir os móveis do save:', e); }
 		if (this._pendingSave) {
 			try { if (SaveGame.apply(this, this._pendingSave)) this._flash('Jogo carregado — ' + SaveGame.label(this._pendingSave)); } catch (e) { console.error('[SAVE] falha ao aplicar:', e); }
 		}
@@ -867,7 +869,8 @@ class Game {
 
 	// Dentro de uma loja (Interiors): só o jogador, a câmera, o relógio e a interface rodam; trânsito, pedestres, polícia e física ficam parados.
 	_updateInterior(dt) {
-		const frozen = this.shopUI.open || Interiors.busy || this.stashUI.open || this.propertyUI.open || !!this.sleeping || Panel.anyOpen();
+		const decorating = HomeDecor.active;
+		const frozen = this.shopUI.open || Interiors.busy || this.stashUI.open || this.propertyUI.open || !!this.sleeping || Panel.anyOpen() || decorating;
 		if (frozen) for (const k of Object.keys(this.input.justPressed)) delete this.input.justPressed[k];
 		AudioFX.setListener(this.player.position.x, this.player.position.z);           // (os sons de dentro da sala: tiro de aviso, alarme)
 		if (Traces._el && Traces._el.style.display !== 'none') Traces._el.style.display = 'none';      // (os avisos de rastro são da rua)
@@ -881,9 +884,11 @@ class Game {
 		this.player.update(move, this.input.isSprinting(), dt);
 		this.camera.setAutoZoom(1, dt, true);                                            // (a loja já tem o enquadramento dela: sem zoom automático)
 		this.camera.setFlat(true);                                                       // (interiors are painted for the top-down camera)
-		this.camera.follow(Interiors.focus(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
+		HomeDecor.update(dt, this);                                                      // modo decoração: WASD move a câmera, o mouse a peça
+		this.camera.follow(decorating ? HomeDecor.cameraFocus : Interiors.focus(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
 		Interiors.update(dt, this);
 		if (!frozen && this.input.consumePress('e')) Interiors.interact(this);
+		if (!frozen && this.input.consumePress('b')) HomeDecor.toggle(this);
 		this.gameEngine.update(dt, this.camera.target, this.camera.groundHalf());
 		this.player.tickHealth(dt);
 		this.weather.update(dt);
@@ -1091,13 +1096,13 @@ class Game {
 	// Alguma janela/diálogo que usa o ESC está aberta (ou acabou de fechar)? Então o ESC não deve abrir o menu de pausa.
 	_modalUiOpen() {
 		return !!(Gym.active || Pool.active || Panel.anyOpen() || this.stashUI.open || this.shopUI.open || this.propertyUI.open || this.carUI.open || this.motoUI.open || this.tribunal.open
-			|| this.endScreen.visible || this.sleeping || this.motoRide);          // (arrombar e inventário legado consomem o ESC sozinhos; _canPause já bloqueia a pausa neles)
+			|| this.endScreen.visible || this.sleeping || this.motoRide || HomeDecor.active);          // (arrombar e inventário legado consomem o ESC sozinhos; _canPause já bloqueia a pausa neles)
 	}
 
 	// Dá para pausar? Não durante as telas de fim (detido/morte), enquanto arromba (Esc cancela o mini-game) nem sem o jogo pronto.
 	_canPause() {
 		if (this.menu.isOpen) return false;
-		if (Gym.active || Pool.active || Panel.anyOpen() || Panel.anyCool() || (Robbery.session && Robbery.session.siege) || this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.carUI.open || this.carUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping) return false;
+		if (Gym.active || Pool.active || Panel.anyOpen() || Panel.anyCool() || (Robbery.session && Robbery.session.siege) || this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.carUI.open || this.carUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping || HomeDecor.active) return false;
 		if ((this.arrest && this.arrest.phase === 'screen') || (this.death && this.death.phase === 'screen')) return false;
 		return true;
 	}

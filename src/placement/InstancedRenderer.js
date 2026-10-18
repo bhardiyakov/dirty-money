@@ -14,14 +14,16 @@
 //
 // The cursor preview is NOT a thin instance (see PlacementSystem): only confirmed placements reach these buffers.
 // createTemplateMesh(definition, scene) → a mesh to be cloned per batch (clones share its geometry); it is kept disabled.
+// options.rootNode: parent of every batch mesh, so a grid region can be drawn somewhere else in the world (a home on the stage).
 // ============================================================================
 
 class InstancedRenderer {
     static FLOATS_PER_MATRIX = 16;
     static INITIAL_CAPACITY = 16;
 
-    constructor(scene, gridManager, createTemplateMesh) {
+    constructor(scene, gridManager, createTemplateMesh, { rootNode = null } = {}) {
         this.scene = scene;
+        this.rootNode = rootNode;
         this.gridManager = gridManager;
         this.createTemplateMesh = createTemplateMesh;
         this.templateMeshByDefinitionId = new Map();
@@ -88,6 +90,7 @@ class InstancedRenderer {
         let batch = chunkBatches.get(definition.numericId);
         if (batch) return batch;
         const mesh = this.templateFor(definition).clone(`placed_${definition.name}_${chunkKey}`);
+        mesh.parent = this.rootNode;
         mesh.setEnabled(true);
         mesh.isPickable = false;                          // picking is mathematical (PlacementSystem), never against these meshes
         batch = { mesh, definitionNumericId: definition.numericId, matrixBuffer: null, capacity: 0, count: 0, slotByPlacementId: new Map(), placementIdBySlot: [] };

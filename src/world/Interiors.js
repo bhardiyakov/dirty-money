@@ -121,6 +121,7 @@ const Interiors = {
 			if (typeof Robbery !== 'undefined' && !game.shopUI.open) { const rp = Robbery.prompt(game); if (rp !== null) return rp; }
 			const a = this.active, o = this.STAGE;
 			if (game.shopUI.open || game.stashUI.open || game.propertyUI.open || game.sleeping) return '';
+			if (HomeDecor.active) return '';                                       // (decorando: a barra de móveis tem as instruções)
 			if (a.shop.home || a.shop.safehouse) { const hu = this.homeUse(game); if (hu) return this._owned(a.shop) ? (this.HOME_PROMPT[hu.kind] || '') : (hu.kind === 'desk' ? '<b>E</b> ver a proposta de compra<small>você está só visitando o imóvel</small>' : '<b>VISITA</b><small>só dá para usar depois de comprar o imóvel</small>'); }
 			const door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2, nearExit = hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3;
 			const cl = a.data.clerk, nearClerk = cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
@@ -130,6 +131,7 @@ const Interiors = {
 			if (gu) { const ex = Gym.EX[gu.kind]; return `<b>E</b> ${ex.verb}<small>${!Physique.hasPass() ? 'compre a diária ou a mensalidade na recepção' : Physique.setsLeft(ex.id) > 0 ? `séries hoje: ${Physique.SETS_PER_DAY - Physique.setsLeft(ex.id)}/${Physique.SETS_PER_DAY} · ${ex.min}–${ex.max} kg` : 'séries de hoje feitas — volte amanhã'}</small>`; }
 			if (nearClerk) return `<b>E</b> ${S.guns ? 'ver o que tem à venda' : S.clothes ? 'ver roupas, tênis e bolsas' : S.gym ? 'diária, mensalidade e suplementos' : 'ver o cardápio'}<small>${shop.name} · ${Economy.zoneOf(shop).label}${S.gym ? (Physique.hasPass() ? ' · treino liberado' : ' · sem plano') : ''}</small>`;
 			if (nearExit) return `<b>E</b> sair ${shop.safehouse ? 'de casa' : 'da loja'}<small>ou ande até a porta</small>`;
+			if (HomeDecor.canOpen(game)) return HomeDecor.active ? '' : '<b>B</b> decorar a casa<small>compre e posicione móveis</small>';
 			return '';
 		}
 		const shop = this.shopNear(p.x, p.z);
@@ -390,11 +392,13 @@ const Interiors = {
 		this._unloadCity(game, true);
 		if (shop.bank) Banks.onEnter(game, shop);
 		if (typeof Heists !== 'undefined') Heists.onEnter(game, shop);         // golpe em execução: a equipe entra junto
+		HomeDecor.onEnterInterior(game, shop);                                  // casa própria: os móveis colocados por você
 	},
 
 	_doLeave(game) {
 		const a = this.active; if (!a) return;
 		const pl = game.player;
+		HomeDecor.onLeaveInterior(game);
 		a.room.mesh.setEnabled(false); this._bd.setEnabled(false);
 		if (this._arrow) this._arrow.setEnabled(false);
 		for (const x of this._actors) x.setVisible(false);

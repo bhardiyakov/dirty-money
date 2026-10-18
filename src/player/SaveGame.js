@@ -3,7 +3,7 @@
 // espaço 1). Nada é salvo sozinho: só quando o jogador SALVA no menu de pausa (aba Salvar, ui/SaveSlots.js) ou DORME (Game.sleep, no
 // espaço do jogo em andamento, `slot`). O menu principal escolhe o espaço ao carregar ou ao começar um jogo novo. Guarda: hora e clima, vida/colete/arma, posição, mochila e o
 // que está guardado em casa (Stash) e os SEUS carros (Garage: os das garagens). Não guarda o trânsito, pedestres nem a polícia
-// (o mundo recomeça "fresco" ao carregar).
+// (o mundo recomeça "fresco" ao carregar). Os móveis da decoração (world/HomeDecor.js) vão junto: a grade é gravada no mesmo espaço.
 // ============================================================================
 
 const SaveGame = {
@@ -24,7 +24,10 @@ const SaveGame = {
 	list() { this._migrate(); return [...Array(this.SLOTS).keys()].map((i) => { const s = Store.getJSON(this.keyOf(i + 1)); return s && s.v === this.VERSION ? s : null; }); },
 	firstEmpty() { const L = this.list(), i = L.indexOf(null); return i < 0 ? 0 : i + 1; },
 	latest() { const L = this.list(); let b = 0; L.forEach((s, i) => { if (s && (!b || s.savedAt > L[b - 1].savedAt)) b = i + 1; }); return b; },
-	remove(slot) { return Store.remove(this.keyOf(slot)); },
+	remove(slot) {
+		if (typeof GridPersistence !== 'undefined') GridPersistence.detectBackend().deleteSlot(slot).catch((e) => console.warn('[SAVE] móveis do espaço não apagados:', e));
+		return Store.remove(this.keyOf(slot));
+	},
 	// Dá para salvar agora? (null = sim; senão, o motivo)
 	blocked(g) {
 		if (!g || !g._bootDone) return 'O jogo ainda está carregando';
@@ -48,6 +51,7 @@ const SaveGame = {
 			fitness: p.fit ? p.fit.xp : 0, strength: p.str ? p.str.xp : 0, physique: Physique.serialize(),
 			stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
 			traces: Traces.serialize(), robbery: Robbery.serialize(), heists: Heists.serialize(), business: Business.serialize(),
+			decor: HomeDecor.serialize(),
 		};
 	},
 
@@ -55,7 +59,7 @@ const SaveGame = {
 		let snap;
 		try { snap = this.snapshot(g); } catch (e) { console.error('[SAVE] falha ao montar o save:', e); return false; }
 		this._migrate();
-		if (Store.setJSON(this.keyOf(slot), snap)) { this.slot = slot; return true; }
+		if (Store.setJSON(this.keyOf(slot), snap)) { this.slot = slot; HomeDecor.commitToSlot(slot); return true; }
 		console.error('[SAVE] falha ao gravar: sem onde guardar');
 		return false;
 	},
@@ -80,6 +84,7 @@ const SaveGame = {
 		Physique.load(s.physique || null);
 		g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Garage.load(s.garage || null); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
 		Traces.load(s.traces || null); Robbery.load(s.robbery || null); Heists.load(s.heists || null); Business.load(s.business || null);
+		HomeDecor.load(s.decor || null);                                      // (os móveis em si vêm da grade: HomeDecor.startSession)
 		const pl = s.player || {};
 		p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));
 		if (CityGrid.blockedAt(pl.x, pl.z, 0.4)) p.teleport(g.nav.closestPoint(new BABYLON.Vector3(pl.x, 0, pl.z), 30));      // (o mapa mudou: salvou onde agora tem parede)
