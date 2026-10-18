@@ -980,8 +980,8 @@ const CharacterRig = {
         const out = [];
         const base = { metal: '#b4bdc9', wood: '#9a6432', dark: '#4a4d58', gold: '#e8c24a', cap: '#1b2a5a', flash: '#ffe27a', blood: '#8a1219' };
         const mk = (o) => Object.assign({}, base, o);
-        // 0: jogador — jaqueta laranja forte, calça escura, cabelo preto.
-        out.push(mk({ skin: '#e0ac80', hair: '#15151a', shirt: '#e8742c', sleeve: '#e8742c', forearm: '#e0ac80', pants: '#2a2f45', shoes: '#f0f0f4' }));
+        // 0: jogador — camiseta branca, calça preta, pele parda, cabelo preto (Outfit.DEFAULT / APPEARANCE_DEFAULT).
+        out.push(mk({ skin: '#8d5435', hair: '#15151a', shirt: '#eceae4', sleeve: '#eceae4', forearm: '#8d5435', pants: '#1c1d22', shoes: '#f0f0f4' }));
         // 1: policial — uniforme azul-marinho, boné e distintivo.
         out.push(mk({ skin: '#e0ac80', hair: '#2a1b12', shirt: '#26407e', sleeve: '#26407e', forearm: '#26407e', pants: '#14182e', shoes: '#101014', cap: '#1b2a5a' }));
         // 2..: civis (combinações determinísticas).

@@ -10,8 +10,11 @@
 class CarLights {
     // maxCars: carros COM LUZ ao mesmo tempo (só os perto da câmera têm); se passar, os lotes crescem sozinhos.
     constructor(scene, maxCars = 48) {
-        this.glow = new GlowBatch(scene, maxCars * 10, 'carGlow', 'glow');
-        this.cones = new GlowBatch(scene, maxCars * 2, 'carCone', 'cone');
+        // under(): os faróis, lanternas e o cone no chão são luz do mundo como a dos postes — desenhados antes dos personagens 2,5D.
+        // Por último, somavam luz por cima do piloto (que ficava "lavado") menos onde o quadro 3D da bicicleta/moto tapava o brilho:
+        // ali o piloto ficava com a cor de verdade, mais escura, e parecia uma sombra do veículo por cima dele.
+        this.glow = new GlowBatch(scene, maxCars * 10, 'carGlow', 'glow').under();
+        this.cones = new GlowBatch(scene, maxCars * 2, 'carCone', 'cone').under();
         this.puffs = new PuffSystem(scene, 420);
         this.slots = new Map();          // carro -> { hl:[2], tl:[2], sig:[2], siren:[2], pool, cone }
         this.time = 0;
@@ -86,8 +89,9 @@ class CarLights {
 
             // ---- Faróis: ligados à noite para quem está em uso (circulando, dirigido pelo jogador, viatura)
             const on = (alive || (car.controlled && !car.destroyed)) && (car.lightsOn || night > 0.3);
-            const hazard = !!car.hazard && !car.destroyed;                // alarme tocando: pisca-alerta + faróis piscando
-            const hI = hazard ? 0.9 : (on ? Math.min(1, (night - 0.15) / 0.5) : 0);
+            const pedal = car.spec.bike === 'bike';                       // bicicleta: sem farol, sem luz no chão, sem freio aceso — só o refletor
+            const hazard = !!car.hazard && !car.destroyed && !pedal;      // alarme tocando: pisca-alerta + faróis piscando
+            const hI = pedal ? 0 : hazard ? 0.9 : (on ? Math.min(1, (night - 0.15) / 0.5) : 0);
             const el = car.elev || 0, hy = (G3 ? G3.y : 1.7) + el;
             const front = facing(fx, fz), rear = facing(-fx, -fz), out = 0.25 * gk;          // (the glow sits just outside the body)
             for (let k = 0; k < 2; k++) {
@@ -113,8 +117,8 @@ class CarLights {
             if (hI > 0.02) { g.place(s.beam, p.x + fx * (L.zF - 0.8), 0.23, p.z + fz * (L.zF - 0.8), 21); g.color(s.beam, 1.0, 0.82, 0.5, 0.34 * hI); } else g.off(s.beam);   // poça morna e grande em volta do carro
 
             // ---- Lanternas: vermelho fraco com os faróis ligados; forte e maior ao frear.
-            const braking = car.braking && (alive || car.controlled);
-            const tI = braking ? 1.0 : (hI > 0.02 ? 0.5 * hI : (alive || car.controlled ? 0.18 : 0));
+            const braking = car.braking && (alive || car.controlled) && !pedal;
+            const tI = pedal ? (night > 0.3 ? 0.22 : 0) : braking ? 1.0 : (hI > 0.02 ? 0.5 * hI : (alive || car.controlled ? 0.18 : 0));
             for (let k = 0; k < 2; k++) {
                 const sx = k === 0 ? -L.x : L.x;
                 g.place(s.tl[k], p.x + fx * (L.zR - out) + rx * sx, hy, p.z + fz * (L.zR - out) + rz * sx, (braking ? 2.0 : 1.2) * gk);
@@ -122,7 +126,7 @@ class CarLights {
                 if (rear <= 0.02) g.off(s.tl[k]);
                 else if (hazard) {
                     g.color(s.tl[k], 1.0, 0.62, 0.08, 0.95 * rear);
-                } else if (car.signal === (k === 0 ? -1 : 1) && alive) {
+                } else if (car.signal === (k === 0 ? -1 : 1) && alive && !pedal) {
                     if (blink) g.color(s.tl[k], 1.0, 0.62, 0.08, 0.95 * rear); else g.off(s.tl[k]);
                 } else if (tI > 0.02) g.color(s.tl[k], 1.0, 0.1, 0.07, 0.95 * tI * rear);
                 else g.off(s.tl[k]);
@@ -132,7 +136,7 @@ class CarLights {
             for (let k = 0; k < 2; k++) {
                 const side = k === 0 ? -1 : 1;
                 g.place(s.sig[k], p.x + fx * (L.zF - 0.45) + rx * side * (L.x + 0.62), hy, p.z + fz * (L.zF - 0.45) + rz * side * (L.x + 0.62), 0.7 * gk);
-                if (front > 0.02 && (hazard || (car.signal === side && blink && alive))) g.color(s.sig[k], 1.0, 0.62, 0.08, 0.95 * front); else g.off(s.sig[k]);
+                if (front > 0.02 && (hazard || (car.signal === side && blink && alive && !pedal))) g.color(s.sig[k], 1.0, 0.62, 0.08, 0.95 * front); else g.off(s.sig[k]);
             }
 
             // ---- Giroflex (viaturas em perseguição) + reflexo colorido no chão.
@@ -166,7 +170,7 @@ class CarLights {
 
             // ---- Carro 3D: as próprias lâmpadas do modelo acendem (faróis, lanternas/freio, setas piscando, ré, giroflex, luminoso)
             if (vis && vis.setLamps) {
-                const sigOn = (side) => hazard || (car.signal === side && blink && alive);
+                const sigOn = (side) => hazard || (car.signal === side && blink && alive && !pedal);
                 const rev = (alive || car.controlled) && !car.destroyed && car.forwardSpeed < -0.4;
                 vis.setLamps(hI, tI, sigOn(-1), sigOn(1), car.sirenOn ? (sirenPhase ? 1 : 2) : 0, rev);
             }

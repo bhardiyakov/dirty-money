@@ -34,8 +34,8 @@ const Outfit = {
         coturno:        { slot: 'shoes', name: 'Coturno tático', base: 650, col: { shoes: '#2a2820' }, look: { shoes: 'boots', shoe_color: 'couro_preto', sole_color: 'sola_escura' }, fx: { melee: 0.25, dmgTaken: 0.04, sprint: -0.03 }, desc: 'Chute e pancada 25% mais fortes, −4% de dano; mais pesado' },
         sapato_social:  { slot: 'shoes', name: 'Sapato social', base: 700, col: { shoes: '#1c1410' }, look: { shoes: 'dress', shoe_color: 'couro_preto', sole_color: 'sola_escura' }, fx: { price: 0.03, sprint: -0.04 }, desc: '−3% no comércio (combina com o terno); ruim para correr' },
         // ---- parte de cima
-        jaqueta_laranja: { slot: 'top', name: 'Jaqueta laranja', base: 0, col: { shirt: '#e8742c', sleeve: '#e8742c', forearm: 'skin' }, look: { top: 'jacket', top_color: 'laranja' }, fx: {}, desc: 'A de sempre' },
-        camiseta_branca: { slot: 'top', name: 'Camiseta', base: 40, col: { shirt: '#eceae4', sleeve: '#eceae4', forearm: 'skin' }, look: { top: 'tshirt', top_color: 'branco' }, fx: {}, desc: 'Básica (dá para tingir de qualquer cor)' },
+        camiseta_branca: { slot: 'top', name: 'Camiseta branca', base: 0, col: { shirt: '#eceae4', sleeve: '#eceae4', forearm: 'skin' }, look: { top: 'tshirt', top_color: 'branco' }, fx: {}, desc: 'A de sempre (dá para tingir de qualquer cor)' },
+        jaqueta_laranja: { slot: 'top', name: 'Jaqueta laranja', base: 260, col: { shirt: '#e8742c', sleeve: '#e8742c', forearm: 'skin' }, look: { top: 'jacket', top_color: 'laranja' }, fx: {}, desc: 'Jaqueta de náilon com zíper' },
         camiseta_estampa: { slot: 'top', name: 'Camiseta estampada', base: 90, col: { shirt: '#1f1f24', sleeve: '#1f1f24', forearm: 'skin' }, look: { top: 'tshirt', top_color: 'roupa_preta', pattern: 'logo', accent: 'amarelo' }, fx: { favela: 0.02 }, desc: 'Estampa no peito: −2% nos preços da favela' },
         camiseta_listrada: { slot: 'top', name: 'Camiseta listrada', base: 110, col: { shirt: '#3c62ac', sleeve: '#3c62ac', forearm: 'skin' }, look: { top: 'tshirt', top_color: 'azul', pattern: 'stripes_h', accent: 'branco' }, fx: { lose: 0.03 }, desc: 'Listras: a polícia perde o rastro 3% mais rápido' },
         regata_academia: { slot: 'top', name: 'Regata de academia', base: 90, col: { shirt: '#1f1f24', sleeve: 'skin', forearm: 'skin' }, look: { top: 'tank', top_color: 'roupa_preta' }, fx: { regen: 0.35, staminaMax: 20 }, desc: '+20 de fôlego máximo e recupera 35% mais rápido' },
@@ -47,7 +47,8 @@ const Outfit = {
         colete_carga:    { slot: 'top', name: 'Colete de carga', base: 1600, col: { shirt: '#4a5034', sleeve: '#2a2c30', forearm: 'skin' }, look: { top: 'tshirt', top_color: 'cinza', vest: 'tactical', vest_color: 'oliva' }, fx: { carry: 0.2 }, desc: 'Bolsos e alças: carrega 20% mais peso sem pesar' },
         terno:           { slot: 'top', name: 'Terno', base: 2800, col: { shirt: '#22252e', sleeve: '#22252e', forearm: '#22252e' }, look: { top: 'jacket', top_color: 'marinho', belt: true }, fx: { price: 0.08, fence: 0.1, sight: 0.05 }, desc: '−8% no comércio, receptador paga 10% mais, chama menos atenção' },
         // ---- calças
-        calca_jeans:   { slot: 'legs', name: 'Calça jeans escura', base: 0, col: { pants: '#2a2f45' }, look: { bottom: 'jeans', bottom_color: 'jeans_escuro' }, fx: {}, desc: 'A de sempre' },
+        calca_preta:   { slot: 'legs', name: 'Calça preta', base: 0, col: { pants: '#1c1d22' }, look: { bottom: 'pants', bottom_color: 'roupa_preta' }, fx: {}, desc: 'A de sempre' },
+        calca_jeans:   { slot: 'legs', name: 'Calça jeans escura', base: 120, col: { pants: '#2a2f45' }, look: { bottom: 'jeans', bottom_color: 'jeans_escuro' }, fx: {}, desc: 'Jeans escuro, cinco bolsos' },
         bermuda:       { slot: 'legs', name: 'Bermuda tactel', base: 60, col: { pants: '#5a7a9a' }, look: { bottom: 'shorts', bottom_color: 'azul_claro' }, fx: { walk: 0.03 }, desc: 'Leve: anda 3% mais rápido' },
         bermuda_jeans: { slot: 'legs', name: 'Bermuda jeans', base: 80, col: { pants: '#355074' }, look: { bottom: 'shorts', bottom_color: 'jeans' }, fx: { walk: 0.02, favela: 0.02 }, desc: 'Anda 2% mais rápido; −2% nos preços da favela' },
         calca_moletom: { slot: 'legs', name: 'Calça de moletom', base: 150, col: { pants: '#30323a' }, look: { bottom: 'pants', bottom_color: 'cinza' }, fx: { sprint: 0.04, stamina: 0.05 }, desc: 'Corre 4% mais rápido' },
@@ -70,7 +71,10 @@ const Outfit = {
         bandana:        { slot: 'face', name: 'Bandana no rosto', base: 35, mask: true, look: { mask: 'bandana', accent: 'vermelho' }, fx: { sight: -0.18 }, desc: 'Cobre o nariz e a boca: a câmera não pega o rosto, mas testemunha de perto ainda descreve você (K tira)' },
         corrente_ouro:  { slot: 'neck', name: 'Corrente de ouro', base: 3200, look: { chain: true }, fx: { favela: 0.1 }, desc: 'Respeito no morro: −10% nos preços da favela' },
     },
-    DEFAULT: { shoes: 'tenis_branco', top: 'jaqueta_laranja', legs: 'calca_jeans' },
+    // O visual de sempre (o mesmo da ficha do jogador no gerador — tools/asset_baker/generator/NpcGenTypes.js PLAYER_DEFAULT —, que
+    // assa os atlas do protagonista: vestido assim, todas as animações vêm prontas, sem montar nada no guarda-roupa).
+    DEFAULT: { shoes: 'tenis_branco', top: 'camiseta_branca', legs: 'calca_preta' },
+    LOOK_VERSION: 2,             // 2 = camiseta branca, calça preta, pele parda, cabelo preto raspado (1: jaqueta laranja, jeans, pêssego, espetado)
 
     // ---- aparência (de graça) e tingimento das peças
     APPEARANCE: {
@@ -83,7 +87,7 @@ const Outfit = {
         // (o PORTE — magro, normal, forte, gordo — não se escolhe: vem do físico, player/Physique.js)
     },
     APPEARANCE_NAME: { skin: 'Pele', hair: 'Cabelo', hair_color: 'Cor do cabelo', beard: 'Barba', gender: 'Corpo' },
-    APPEARANCE_DEFAULT: { skin: 'pele_pessego', hair: 'spiky', hair_color: 'castanho', beard: '', body: 'normal', gender: 'm' },
+    APPEARANCE_DEFAULT: { skin: 'pele_parda', hair: 'buzz', hair_color: 'preto', beard: '', body: 'normal', gender: 'm' },
     // Cores para tingir (nome na paleta do gerador → rótulo). Por encaixe: o campo da ficha que muda.
     TINT_FIELD: { top: 'top_color', legs: 'bottom_color', shoes: 'shoe_color', head: 'hat_color', bag: 'bag_color' },
     TINTS: {
@@ -98,8 +102,8 @@ const Outfit = {
     },
     tintList(slot) { return slot === 'legs' ? this.TINTS.legs : slot === 'shoes' ? this.TINTS.shoes : slot === 'bag' ? this.TINTS.bag : this.TINTS.cloth; },
 
-    owned: new Set(['tenis_branco', 'jaqueta_laranja', 'calca_jeans']),
-    worn: { shoes: 'tenis_branco', top: 'jaqueta_laranja', legs: 'calca_jeans' },
+    owned: new Set(['tenis_branco', 'camiseta_branca', 'calca_preta']),
+    worn: { shoes: 'tenis_branco', top: 'camiseta_branca', legs: 'calca_preta' },
     appearance: {},
     tint: {},                    // encaixe → cor (nome da paleta) escolhida pelo jogador
     m: { sprint: 0, walk: 0, stamina: 0, staminaMax: 0, regen: 0, carry: 0, dmgTaken: 0, melee: 0, sight: 0, lose: 0, price: 0, fence: 0, favela: 0 },
@@ -213,9 +217,9 @@ const Outfit = {
         return out.join(' · ') || 'sem efeitos';
     },
 
-    serialize() { return { owned: [...this.owned], worn: Object.assign({}, this.worn), appearance: Object.assign({}, this.appearance), tint: Object.assign({}, this.tint) }; },
+    serialize() { return { v: this.LOOK_VERSION, owned: [...this.owned], worn: Object.assign({}, this.worn), appearance: Object.assign({}, this.appearance), tint: Object.assign({}, this.tint) }; },
     load(s) {
-        this.owned = new Set(['tenis_branco', 'jaqueta_laranja', 'calca_jeans']);
+        this.owned = new Set(Object.values(this.DEFAULT));
         this.worn = Object.assign({}, this.DEFAULT);
         this.appearance = {};
         this.tint = {};
@@ -224,7 +228,16 @@ const Outfit = {
             for (const [slot, id] of Object.entries(s.worn || {})) if (this.ITEMS[id] && this.owned.has(id) && this.ITEMS[id].slot === slot) this.worn[slot] = id;
             for (const [k, v] of Object.entries(s.appearance || {})) if (this.APPEARANCE[k] && this.APPEARANCE[k].some(([o]) => o === v)) this.appearance[k] = v;
             for (const [k, v] of Object.entries(s.tint || {})) if (this.TINT_FIELD[k] && typeof v === 'string') this.tint[k] = v;
+            if ((s.v || 1) < 2) this._fromLook1(s);
         }
         this.apply();
+    },
+    // Save do visual antigo: a jaqueta laranja e o jeans eram as peças de sempre (vêm no guarda-roupa, agora à venda). Quem nunca mexeu
+    // no visual (as duas vestidas, sem tingir) passa ao visual de sempre de agora; quem escolheu a aparência continua com a dele.
+    _fromLook1(s) {
+        this.owned.add('jaqueta_laranja'); this.owned.add('calca_jeans');
+        const worn = s.worn || {}, untouched = (worn.top || 'jaqueta_laranja') === 'jaqueta_laranja' && (worn.legs || 'calca_jeans') === 'calca_jeans' && !this.tint.top && !this.tint.legs;
+        if (untouched) { this.worn.top = this.DEFAULT.top; this.worn.legs = this.DEFAULT.legs; }
+        else for (const [field, old] of [['skin', 'pele_pessego'], ['hair', 'spiky'], ['hair_color', 'castanho']]) if (!this.appearance[field]) this.appearance[field] = old;
     },
 };
