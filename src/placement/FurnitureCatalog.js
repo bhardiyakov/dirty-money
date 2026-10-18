@@ -6,7 +6,9 @@
 // boxes and octagonal prisms whose shading is BAKED into the vertex colours (top lit, the sides darker by direction). One shared
 // material for every piece; the template is built once and cloned per (chunk, piece) batch.
 //
-// Definition: { numericId, key, name, icon, price, layer: 'micro', width, depth, walkable?, parts(widthU, depthU) → part[] }
+// Definition: { numericId, key, name, icon, price, layer: 'micro', width, depth, walkable?, use?, parts(widthU, depthU) → part[] }
+//   use: the piece WORKS like the painted one (Interiors.homeUse): 'bed' sleeps and saves, 'fridge' / 'safe' / 'chest' open the
+//   stash, 'desk' opens the property's sheet — what makes a home bought without furniture livable.
 //   numericId is what the saves store: never renumber a piece, only append new ones.
 //   part: ['box', x0, y0, z0, x1, y1, z1, colorHex] | ['round', centerX, centerZ, radius, y0, y1, colorHex]
 //   (local units, footprint centred on the origin, front of the piece = −z)
@@ -63,7 +65,7 @@ class FurnitureCatalog {
             ],
         },
         {
-            numericId: 6, key: 'doubleBed', name: 'Cama de casal', icon: '🛏️', price: 2500, width: 7, depth: 10,
+            numericId: 6, key: 'doubleBed', name: 'Cama de casal', icon: '🛏️', price: 2500, width: 7, depth: 10, use: 'bed',
             parts: (w, d) => [
                 ['box', -w / 2 + 0.05, 0, -d / 2 + 0.05, w / 2 - 0.05, 0.45, d / 2 - 0.05, '#6e4526'],
                 ['box', -w / 2 + 0.05, 0.45, d / 2 - 0.3, w / 2 - 0.05, 1.3, d / 2 - 0.05, '#5c3a20'],
@@ -129,6 +131,49 @@ class FurnitureCatalog {
                 ['box', -0.4, 0, -0.3, 0.4, 0.3, 0.3, '#3f8a4a'],
                 ['box', -0.3, 0.3, -0.25, 0.35, 0.55, 0.25, '#4caa5a'],
                 ['box', -0.2, 0.55, -0.2, 0.25, 0.75, 0.2, '#3f8a4a'],
+            ],
+        },
+        {
+            numericId: 14, key: 'singleBed', name: 'Cama de solteiro', icon: '🛌', price: 900, width: 4, depth: 8, use: 'bed',
+            parts: (w, d) => [
+                ['box', -w / 2 + 0.05, 0, -d / 2 + 0.05, w / 2 - 0.05, 0.4, d / 2 - 0.05, '#8a6a44'],
+                ['box', -w / 2 + 0.05, 0.4, d / 2 - 0.25, w / 2 - 0.05, 1.1, d / 2 - 0.05, '#6e4526'],
+                ['box', -w / 2 + 0.12, 0.4, -d / 2 + 0.12, w / 2 - 0.12, 0.68, d / 2 - 0.25, '#e8e2d4'],
+                ['box', -w / 2 + 0.12, 0.68, -d / 2 + 0.12, w / 2 - 0.12, 0.74, d / 2 - 1.3, '#5a8a5a'],
+                ['box', -w / 2 + 0.3, 0.68, d / 2 - 1.1, w / 2 - 0.3, 0.86, d / 2 - 0.35, '#ffffff'],
+            ],
+        },
+        {
+            numericId: 15, key: 'fridge', name: 'Geladeira', icon: '🧊', price: 1400, width: 2, depth: 2, use: 'fridge',
+            parts: (w, d) => [
+                ['box', -w / 2 + 0.04, 0, -d / 2 + 0.04, w / 2 - 0.04, 1.95, d / 2 - 0.04, '#e8ecef'],
+                ['box', w / 2 - 0.2, 1.95, -d / 2 + 0.1, w / 2 - 0.12, 1.97, d / 2 - 0.1, '#8a9096'],
+            ],
+        },
+        {
+            numericId: 16, key: 'chest', name: 'Baú', icon: '🧰', price: 600, width: 3, depth: 2, use: 'chest',
+            parts: (w, d) => [
+                ['box', -w / 2 + 0.05, 0, -d / 2 + 0.05, w / 2 - 0.05, 0.7, d / 2 - 0.05, '#8a5a30'],
+                ['box', -w / 2 + 0.2, 0.7, -d / 2 + 0.05, -w / 2 + 0.32, 0.72, d / 2 - 0.05, '#3a3d44'],
+                ['box', w / 2 - 0.32, 0.7, -d / 2 + 0.05, w / 2 - 0.2, 0.72, d / 2 - 0.05, '#3a3d44'],
+                ['box', -0.1, 0.7, -d / 2 + 0.05, 0.1, 0.73, -d / 2 + 0.3, '#d9b030'],
+            ],
+        },
+        {
+            numericId: 17, key: 'safe', name: 'Cofre', icon: '🔐', price: 2200, width: 2, depth: 2, use: 'safe',
+            parts: (w, d) => [
+                ['box', -w / 2 + 0.06, 0, -d / 2 + 0.06, w / 2 - 0.06, 0.95, d / 2 - 0.06, '#3a4048'],
+                ['round', 0, -0.05, 0.18, 0.95, 0.98, '#6a727c'],
+                ['round', 0, -0.05, 0.06, 0.98, 1.0, '#d9b030'],
+            ],
+        },
+        {
+            numericId: 18, key: 'desk', name: 'Escrivaninha com notebook', icon: '💻', price: 1600, width: 4, depth: 2, use: 'desk',
+            parts: (w, d) => [
+                ...FurnitureCatalog.legs(w / 2 - 0.12, d / 2 - 0.12, 0.8, 0.1, '#5a3e24'),
+                ['box', -w / 2 + 0.05, 0.8, -d / 2 + 0.05, w / 2 - 0.05, 0.9, d / 2 - 0.05, '#7a5a3a'],
+                ['box', -0.45, 0.9, -0.3, 0.45, 0.94, 0.25, '#2a2c32'],
+                ['box', -0.38, 0.94, -0.22, 0.38, 0.95, 0.18, '#6ac0e8'],
             ],
         },
     ];

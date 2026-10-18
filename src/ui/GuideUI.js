@@ -192,7 +192,8 @@ GuideUI.PAGES = {
     home: () => `<h2>Casa, imóveis e save</h2>
         <ul><li>A safe house da favela é sua desde o começo: <b>cama</b> (dormir e salvar), <b>baú</b>, <b>cofre</b> e <b>geladeira</b>.</li>
         <li><b>Imóveis</b> à venda pela cidade (marcados no mapa): na favela com sujo, fora dela só com limpo. Dá para visitar, comprar, reformar, mudar a safe house e vender.</li>
-        <li><b>Decorar</b>: dentro da safe house ou de um imóvel seu, <kbd>B</kbd> abre os móveis. Clique para colocar, <kbd>R</kbd> gira, botão direito num móvel o retira (metade do preço de volta); <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> movem a câmera. Os móveis são salvos junto com o save; vender o imóvel deixa os móveis lá.</li>
+        <li>Na compra: <b>sem móveis</b> (15% mais barato — só piso e paredes; cama, geladeira, cofre, baú e notebook você compra no modo decoração) ou <b>porteira fechada</b> (15% mais caro — tudo mobiliado, geladeira abastecida e kit médico no baú). Dá para mobiliar depois pela ficha do imóvel, pagando a diferença.</li>
+        <li><b>Decorar</b>: dentro da safe house ou de um imóvel seu, <kbd>B</kbd> abre os móveis. Clique para colocar, <kbd>R</kbd> gira, clique num móvel para mudá-lo de lugar (de graça), botão direito num móvel o retira (metade do preço de volta); <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> movem a câmera. Cama, geladeira, cofre, baú e notebook comprados funcionam como os da casa. Os móveis são salvos junto com o save; vender o imóvel paga metade do que eles custaram.</li>
         <li><b>Save</b>: 3 espaços. Salve no menu (<kbd>ESC</kbd> → 💾 Salvar, sem procurado) ou dormindo (no espaço do jogo atual) — não há save automático. "Carregar jogo" no menu inicial escolhe o espaço.</li></ul>`,
 
     goals: () => `<h2>Metas de carreira</h2>

@@ -131,7 +131,7 @@ const Interiors = {
 			if (gu) { const ex = Gym.EX[gu.kind]; return `<b>E</b> ${ex.verb}<small>${!Physique.hasPass() ? 'compre a diária ou a mensalidade na recepção' : Physique.setsLeft(ex.id) > 0 ? `séries hoje: ${Physique.SETS_PER_DAY - Physique.setsLeft(ex.id)}/${Physique.SETS_PER_DAY} · ${ex.min}–${ex.max} kg` : 'séries de hoje feitas — volte amanhã'}</small>`; }
 			if (nearClerk) return `<b>E</b> ${S.guns ? 'ver o que tem à venda' : S.clothes ? 'ver roupas, tênis e bolsas' : S.gym ? 'diária, mensalidade e suplementos' : 'ver o cardápio'}<small>${shop.name} · ${Economy.zoneOf(shop).label}${S.gym ? (Physique.hasPass() ? ' · treino liberado' : ' · sem plano') : ''}</small>`;
 			if (nearExit) return `<b>E</b> sair ${shop.safehouse ? 'de casa' : 'da loja'}<small>ou ande até a porta</small>`;
-			if (HomeDecor.canOpen(game)) return HomeDecor.active ? '' : '<b>B</b> decorar a casa<small>compre e posicione móveis</small>';
+			if (HomeDecor.canOpen(game)) return HomeDecor.active ? '' : a.shop.empty && !HomeDecor.uses().length ? '<b>B</b> mobiliar a casa<small>imóvel sem móveis: compre cama, geladeira, cofre, baú e notebook</small>' : '<b>B</b> decorar a casa<small>compre, mova e posicione móveis</small>';
 			return '';
 		}
 		const shop = this.shopNear(p.x, p.z);
@@ -190,7 +190,7 @@ const Interiors = {
 		if (game.wanted.level > 0) { game._flash('A polícia está na sua cola — não dá para entrar'); return true; }
 		const style = this.HOME_STYLE[prop.type] || 'home_apto';
 		const v = Math.floor(Pixel.hash(Economy._h(prop.id), 17, 3) * 5) % 5;
-		const shop = { id: 'home' + prop.id, kind: style, style, name: prop.type, district: 'city', biome: 'residential', variant: v, x: prop.x, z: prop.z, face: 0, home: prop, reform: RealEstate.reformLevel(prop) };
+		const shop = { id: 'home' + prop.id, kind: style, style, name: prop.type, district: 'city', biome: 'residential', variant: v, x: prop.x, z: prop.z, face: 0, home: prop, reform: RealEstate.reformLevel(prop), empty: !RealEstate.isFurnished(prop) };
 		this.enter(game, shop);
 		return true;
 	},
@@ -210,7 +210,7 @@ const Interiors = {
 		const a = this.active; if (!a || !(a.shop.home || a.shop.safehouse)) return null;
 		const o = this.STAGE, p = game.player.position;
 		let best = null, bs = 1e9;
-		for (const u of a.data.uses || []) {                                             // ao alcance (≤ maxD do retângulo): vence o de centro mais perto
+		for (const u of (a.data.uses || []).concat(HomeDecor.uses())) {                 // ao alcance (≤ maxD do retângulo): vence o de centro mais perto (móveis da decoração também)
 			const cx = Math.max(o.x + u.x0, Math.min(p.x, o.x + u.x1)), cz = Math.max(o.z + u.z0, Math.min(p.z, o.z + u.z1));
 			if (hypot(p.x - cx, p.z - cz) > maxD) continue;
 			const s = hypot(p.x - (o.x + (u.x0 + u.x1) / 2), p.z - (o.z + (u.z0 + u.z1) / 2));
@@ -307,7 +307,7 @@ const Interiors = {
 	},
 
 	_room(shop) {
-		const key = shop.style + shop.variant + (shop.reform ? 'r' + shop.reform : '');
+		const key = ShopStyles.key(shop.style, shop.variant, shop.reform || 0, !!shop.empty);
 		let r = this._rooms[key];
 		const lru = this._lru || (this._lru = []);
 		const touch = () => { const i = lru.indexOf(key); if (i >= 0) lru.splice(i, 1); lru.push(key); };
@@ -318,9 +318,9 @@ const Interiors = {
 			if (o && (!this.active || this.active.room !== o)) { const m = o.mesh.material; o.mesh.dispose(); if (m) { if (m.diffuseTexture) m.diffuseTexture.dispose(); m.dispose(); } delete this._rooms[old]; }
 		}
 		touch();
-		const data = shop.safehouse ? HouseView.stageRoom() : ShopStyles.get(shop.style, shop.variant, shop.reform || 0), IN = data.in, o = this.STAGE;
+		const data = shop.safehouse ? HouseView.stageRoom() : ShopStyles.get(shop.style, shop.variant, shop.reform || 0, !!shop.empty), IN = data.in, o = this.STAGE;
 		const tex = data.canvas.toTexture(game.scene, { wrap: false, mips: false });
-		data.canvas = null; delete ShopStyles._cache[shop.style + shop.variant + (shop.reform ? 'r' + shop.reform : '')];   // os pixels já estão na GPU
+		data.canvas = null; delete ShopStyles._cache[key];                             // os pixels já estão na GPU
 		tex.hasAlpha = true;
 		const m = new BABYLON.StandardMaterial('shop_' + key, game.scene);
 		m.diffuseTexture = tex; m.useAlphaFromDiffuseTexture = true; m.diffuseColor = BABYLON.Color3.Black(); m.specularColor = BABYLON.Color3.Black();

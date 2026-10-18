@@ -7,10 +7,11 @@
 
 const ShopStyles = {
     _cache: {},
-    get(style, v, lvl = 0) {                                       // lvl = nível de reforma (só as casas usam: art/HomeStyles.js)
-        const k = style + v + (lvl ? "r" + lvl : "");
-        return this._cache[k] || (this._cache[k] = this[style](v, lvl));
+    get(style, v, lvl = 0, empty = false) {                        // lvl = nível de reforma; empty = casa sem móveis (só as casas: art/HomeStyles.js)
+        const k = this.key(style, v, lvl, empty);
+        return this._cache[k] || (this._cache[k] = this[style](v, lvl, empty));
     },
+    key(style, v, lvl = 0, empty = false) { return style + v + (lvl ? "r" + lvl : "") + (empty ? "e" : ""); },
 
     _ctx(style, v, W, D, door = 0.5) { return new ShopCtx(style, v, W, D, { mirror: !!(v & 1), door }); },
     _face(S, f) { return S.m && Math.abs(f) === Math.PI / 2 ? -f : f; },
