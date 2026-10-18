@@ -775,11 +775,16 @@ function NpcGenAnims(G) {
         }
         return out;
     }
+    // KNEELING: o mesmo tiro com um joelho no chão (crouch_shoot: kneelLegs no lugar das pernas em pé).
+    let KNEELING = false;
     function gunShoot(name, seq, standFwd = [-1.5, 2.5]) {
         return seq.map((s) => {
             const p = base();
-            p.pelvis_t = [0, name === 'shotgun' ? -0.4 * (s.kick || 0) : 0, name === 'shotgun' ? -1.0 : -0.9];
-            standLegs(p, 11.5, standFwd);
+            if (KNEELING) kneelLegs(p, 0, 0.6 * (s.kick || 0));
+            else {
+                p.pelvis_t = [0, name === 'shotgun' ? -0.4 * (s.kick || 0) : 0, name === 'shotgun' ? -1.0 : -0.9];
+                standLegs(p, 11.5, standFwd);
+            }
             holdWeapon(p, name, s);
             return p;
         });
@@ -1682,6 +1687,57 @@ function NpcGenAnims(G) {
             else { const u = (ph - stance) / (1 - stance); x = hermite(-S, S, m, m, u); z = lift * kl * bump(u, 0.45); }
             p.leg_ik(side, [x0 + x, s * 0.6 * kl, ANKLE_H + z], [0.15 * s, 1.0, -0.3], footRot(-s * 10, 0));
         }
+    }
+    // AJOELHADO EM UM JOELHO (cobertura e tiro agachado, como o soldado atrás da mureta): o joelho DIREITO no chão com o peito do pé
+    // deitado atrás, o pé ESQUERDO plantado à frente (a canela em pé), o quadril baixo. b = respiração (sobe/desce), kick = o tranco do
+    // tiro empurra o quadril um tico para trás.
+    function kneelLegs(p, b = 0, kick = 0) {
+        const K = KNEEL;
+        hipAt(p, 2.0 - kick, 20.0 + 0.3 * b, -4);
+        ankleAt(p, 'R', K.ankX, K.ankY - 2.5, K.ankZ, footRot(-12, K.pitch));
+        placeFoot(p, 'L', [-8.5, 10.5, 0], 8);
+    }
+    // MIRANDO AJOELHADO (crouch_aim): um joelho no chão, a arma no ombro apontada, o tronco um pouco à frente.
+    function kneelAim(name, n = 4) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const b = sin(TAU * (i + 0.25) / n), p = base();
+            kneelLegs(p, b);
+            holdWeapon(p, name, { chest_extra: 5, bob: [0, 0, 0.2 * b] });
+            out.push(p);
+        }
+        return out;
+    }
+    // ATIRANDO AJOELHADO (crouch_shoot): a sequência de tiro da arma (recuo, clarão, cápsula) com as pernas ajoelhadas.
+    function kneelShoot(name, n) { KNEELING = true; try { return shootFn(name, n); } finally { KNEELING = false; } }
+    // NA COBERTURA (cover): ajoelhado de COSTAS para a mureta (o jogo vira o corpo para fora dela), a mão esquerda espalmada na mureta
+    // atrás, a cabeça virada de lado (olhando ao longo dela) e a arma baixa, pronta — o cano para baixo e para a frente; pistola junto ao
+    // peito; sem arma, o antebraço apoiado no joelho. Respira devagar.
+    function coverIdle(name, n = 4) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = (i + 0.25) / n, b = sin(TAU * t), p = base();
+            kneelLegs(p, b);
+            p.chest_R = mm3(Rz(deg(14)), Rx(deg(6 + 1.5 * b)));                // (o peito vira para a mão que vai na mureta e encosta nela)
+            p.head_R = mm3(Rz(deg(32)), Rx(deg(HEAD_TILT - 2)));
+            const co = chestOrg(p);
+            p.arm_ik('L', V.add(co, [-13.5, -11.0, 6.0 + 0.4 * b]), [-1.0, 0.3, -0.4]);   // a mão na mureta, atrás e ao lado
+            if (name !== 'none' && WEAPON_HOLD[name]) {
+                if (WEAPON_HOLD[name].one_hand) {
+                    const grip = V.add(co, [7.0, 9.0, -3.0 + 0.3 * b]);
+                    placeProp(p, name, grip, nrm([-0.15, 0.75, -0.65]));
+                    p.arm_ik('R', grip, [1.0, -0.4, -0.8]);
+                } else {
+                    const grip = V.add(co, [8.0, 7.5, -4.5 + 0.3 * b]);
+                    const Mp = placeProp(p, name, grip, nrm([-0.35, 0.7, -0.62]));
+                    if (name === 'shotgun') p.props.push(['pump', mm4(Mp, M4(null, [0, PUMP_Y, 0.7]))]);
+                    subProps(p, name, Mp);
+                    p.arm_ik('R', grip, [1.0, -0.6, -0.7]);
+                }
+            } else p.arm_fk('R', { flex: 34 + 2 * b, abd: 18, elbow: 64 });
+            out.push(p);
+        }
+        return out;
     }
     // NOVO: andando de lado MIRANDO (strafe): passo lateral com a arma apontada; a pélvis desce com os pés afastados e sobe com eles
     // juntos. Para a frente/para trás mirando, o jogo usa o andar armado (walk:arma), normal ou ao contrário.
@@ -2803,6 +2859,10 @@ function NpcGenAnims(G) {
         mount: { fps: 8, loop: false, k: 6, n: 12, fn: (w, o, n) => mountAnim(w, n) },          // (só o jogador: moto/motoL/bike/bikeL)
         // tático (só o jogador): agachado/cobertura, andar agachado (furtivo), passo lateral mirando e rolamento de esquiva
         crouch: { fps: 3, loop: true, k: 4, n: 6, fn: (w, o, n) => crouchIdle(w, n) },
+        cover: { fps: 3, loop: true, k: 4, n: 6, fn: (w, o, n) => coverIdle(w, n) },                 // ajoelhado de costas para a cobertura
+        crouch_aim: { fps: 3, loop: true, k: 4, n: 4, fn: (w, o, n) => kneelAim(w === 'none' ? 'pistol' : w, n) },     // mirando ajoelhado
+        crouch_shoot: { fps: 16, loop: false, k: { shotgun: 7, rpg: 5, '*': 4 }, n: { shotgun: 10, rpg: 8, '*': 6 }, fn: (w, o, n) => kneelShoot(w, n),     // atirando ajoelhado
+            fpsFor: { pistol: 15, shotgun: 12, smg: 18, pistol_sil: 15, rpg: 10, launcher: 12, minigun: 22 }, loopFor: { minigun: true } },
         sneak: { fps: 9, loop: true, k: 8, n: 12, fn: (w, o, n) => sneakWalk(w, n) },
         strafe: { fps: 10, loop: true, k: 8, n: 12, fn: (w, o, n) => strafeWalk(w === 'none' ? 'pistol' : w, n) },
         roll: { fps: 16, loop: false, k: 10, n: 14, fn: (w, o, n) => dodgeRoll(n) },

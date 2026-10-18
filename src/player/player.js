@@ -431,6 +431,7 @@ class Player {
             } else {
                 ok = this.playAction('shoot', { lock: 0.6, weapon: look, holdAim: true });
                 if (ok) this.action.timer = dur;
+                if (ok && this.crouched && !this.swimming) this.actor.play('crouch_shoot', look, { restart: true });      // agachado: atira ajoelhado (por cima da mureta)
             }
         }
         return ok ? this.action.name : null;
@@ -679,7 +680,9 @@ class Player {
             if (this.speed >= 0.3) {
                 if (this.crouched && !this.inCover && this.actor.play('sneak', w)) rate = (Math.cos(this._relMove()) < -0.5 ? -1 : 1) * base / 0.72;
                 else rate = this._aimGait(w, base);
-            } else if (this.actor.clipName !== 'shoot') this.actor.play(this.crouched && !this.inCover && this.actor.sheet.getClip('crouch', w) ? 'crouch' : 'aim', w);
+            } else if (this.actor.clipName !== 'shoot' && this.actor.clipName !== 'crouch_shoot') {
+                if (!(this.crouched && this.actor.play('crouch_aim', w))) this.actor.play(this.crouched && !this.inCover && this.actor.sheet.getClip('crouch', w) ? 'crouch' : 'aim', w);
+            }
             this._syncSprite(); this.actor.update(dt, rate); return;
         }
         if (!this.action) {
@@ -715,7 +718,11 @@ class Player {
             }
             this._wRate = null;
             const gun = Player.GUN_LOOKS.has(w);
-            // Agachado (furtivo / cobertura). Mirando EM COBERTURA ele levanta para atirar por cima (desenho de pé, abaixo).
+            // Agachado (furtivo / cobertura): andando, o passo furtivo; parado, mirando = ajoelhado com a arma no ombro (crouch_aim);
+            // encostado na cobertura = ajoelhado de costas para ela, a mão na mureta (cover); senão, agachado. (Sem esses clipes no
+            // atlas: mirando em cobertura ele levanta para atirar por cima — o desenho de pé, abaixo.)
+            const kneel = this.crouched && this.speed < 0.3 && (gun && aiming ? this.actor.play('crouch_aim', w) : this.inCover && (this.actor.play('cover', w) || this.actor.play('cover', 'none')));
+            if (kneel) { this.state = aiming ? 'aim' : 'crouch'; this._syncSprite(); this.actor.update(dt, 1); return; }
             if (this.crouched && !(aiming && this.inCover)) {
                 const moving = this.speed >= 0.3, cn = moving ? 'sneak' : 'crouch';
                 if (this.actor.play(cn, w) || this.actor.play(cn, 'none')) {
