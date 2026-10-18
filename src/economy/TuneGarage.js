@@ -69,9 +69,9 @@ const TuneGarage = {
             for (const m of this.meshes) m.setEnabled(true);
             // o carro da plataforma: o mesmo modelo, com as peças e a cor da prévia, faróis acesos
             const v = this.car.visual, o = this.STAGE;
-            const a = this.actor = CarArt3D.actor(this.car.spec.id, v.variant);
-            a.studio = true; a.shade = 1;
-            a.setPosition(o.x, o.z); a.setY(1.5 + 0.13); a.setHeading(0);
+            this.actor = this._actor(this.car.spec.id, v.variant);
+            const car = this.car;                                                   // o modelo em ALTA definição chega em seguida e substitui o do jogo
+            CarArt3D.loadHD(car.spec.id).then((k) => { if (k && this.active && this.car === car && this.actor && this.actor.modelId !== k) { this.actor.dispose(); this.actor = this._actor(k, car.visual.variant); this.sync(car, this.cat, true); } });
             this.user = { a: 0, b: 0, r: 0 }; this.cat = null;
             this.sync(this.car, (typeof Tuning !== 'undefined' && Tuning._cat) || 'paint');
             CarArt3D.studio = { l: new BABYLON.Vector3(0.35, 0.86, 0.38).normalize(), c: new BABYLON.Color3(1, 0.98, 0.95), tint: new BABYLON.Color3(1, 1, 1) };
@@ -81,6 +81,9 @@ const TuneGarage = {
             cam.fov = 0.78; cam.minZ = 0.05; cam.maxZ = 120;
             cam.targetScreenOffset = new BABYLON.Vector2(window.innerWidth > 700 ? -1.7 : 0, window.innerWidth > 700 ? 0 : 1.1);      // (o carro fica no lado livre da tela, fora da janela da loja)
             sc.activeCamera = cam;
+            const eng = sc.getEngine();                                             // antisserrilhado (o MSAA do jogo fica na câmera da cidade)
+            if (eng.webGLVersion >= 2 && eng.getCaps().maxMSAASamples > 1) { this.aa = new BABYLON.PassPostProcess('tuneMsaa', 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng); this.aa.samples = Math.min(4, eng.getCaps().maxMSAASamples); }
+            else this.aa = new BABYLON.FxaaPostProcess('tuneFxaa', 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
             this.cur = { a: V.a + 0.9, b: V.b - 0.25, r: V.r + 3, tz: 0, ty: V.ty };            // (entra "voando" até o enquadramento)
             this.spin = V.a;
             this._fog = [sc.fogStart, sc.fogEnd];
@@ -94,6 +97,7 @@ const TuneGarage = {
         if (this._obs) { sc.onBeforeRenderObservable.remove(this._obs); this._obs = null; }
         this._input(false);
         if (this._prevCam) sc.activeCamera = this._prevCam;
+        if (this.aa) { this.aa.dispose(); this.aa = null; }
         if (this.cam) { this.cam.dispose(); this.cam = null; }
         if (this._fog) { sc.fogStart = this._fog[0]; sc.fogEnd = this._fog[1]; }
         CarArt3D.studio = null;
@@ -104,8 +108,16 @@ const TuneGarage = {
         document.body.classList.remove('tuneGarage');
     },
 
+    // O carro da plataforma (modelo id: o do jogo ou o '<id>@hd'), só desenhado no estúdio.
+    _actor(id, variant) {
+        const a = CarArt3D.actor(id, variant), o = this.STAGE;
+        a.studio = true; a.shade = 1;
+        a.setPosition(o.x, o.z); a.setY(1.5 + 0.13); a.setHeading(0);
+        return a;
+    },
+
     // A prévia mudou (Tuning._preview): o carro da plataforma copia cor, peças, rebaixamento e o neon; a câmera vai para a categoria.
-    sync(car, cat) {
+    sync(car, cat, keepView = false) {
         if (!this.actor || car !== this.car) return;
         const v = car.visual, a = this.actor, m = car.mods || {};
         a.setVariant(v.variant); a.wing = v.wing | 0; a.kit = v.kit | 0; a.lower = v.lower || 0;
@@ -115,7 +127,7 @@ const TuneGarage = {
             this.neon.isVisible = !!nc;
             if (nc) this.neon.material.emissiveColor.set(nc[0], nc[1], nc[2]);
         }
-        if (cat !== this.cat) { this.cat = cat; this.user.a = this.user.b = this.user.r = 0; const V = this.VIEWS[cat] || this.VIEWS.paint; this.spin = V.a; }
+        if (cat !== this.cat && !keepView) { this.cat = cat; this.user.a = this.user.b = this.user.r = 0; const V = this.VIEWS[cat] || this.VIEWS.paint; this.spin = V.a; }
     },
 
     // Por quadro (antes do render): câmera desliza até o enquadramento da categoria, plataforma e anel giram, sem a névoa da borda.
