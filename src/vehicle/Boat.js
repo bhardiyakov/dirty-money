@@ -55,6 +55,16 @@ class Boat extends Vehicle {
         return { x: c.x + fx * lf + rx * lr, z: c.z + fz * lf + rz * lr };
     }
 
+    // Subindo pela água (Game._boardBoat): o ponto na água junto à borda do lado de quem chega (out), onde ele fica de pé no convés
+    // (in) e para onde olha subindo (face) — na altura do casco mais perto de pos.
+    sidePoints(pos) {
+        const c = this.position, f = this.body.getDirection(BABYLON.Axis.Z), l = hypot(f.x, f.z) || 1;
+        const fx = f.x / l, fz = f.z / l, rx = fz, rz = -fx, dx = pos.x - c.x, dz = pos.z - c.z, s = dx * rx + dz * rz < 0 ? -1 : 1;
+        const lf = Math.max(-this.halfLen + 0.6, Math.min(this.halfLen - 0.9, dx * fx + dz * fz));
+        const at = (o) => ({ x: c.x + fx * lf + rx * s * o, z: c.z + fz * lf + rz * s * o });
+        return { out: at(this.halfW + 0.35), in: at(Math.min(this.halfW * 0.35, 0.5)), face: Math.atan2(-rx * s, -rz * s) };
+    }
+
     // --------------------------------------------------------------- aparência
     _refreshLook() {
         const lib = this.carSheet && this.carSheet.lib;
@@ -81,19 +91,23 @@ class Boat extends Vehicle {
         this.bobT += dt;
         // ondas (Waves): o desenho sobe e desce com a onda (sobe na tela, como a altura de tudo no jogo) e gira de leve com a água
         // inclinada sob o casco; o barco grande "corta" a onda e balança menos
-        let bx = 0, bz = 0, rock = 0;
+        // (casco 3D — CarArt3D: a onda o sobe de verdade, em y, e não "para cima da tela")
+        const solid = this.visual.body && this.visual.body.kind === 'boat';
+        let bx = 0, bz = 0, rock = 0, up = 0;
         const hd = Math.atan2(f.x, f.z), wd = WorldMap.waterDepth(p.x, p.z), wf = typeof Waves !== 'undefined' && !RoadPlan.onBridge(p.x, p.z) ? Waves.open(p.x, p.z, wd) : 0;
         if (wf > 0) {
             const S = Waves.sample(p.x, p.z, this._wv || (this._wv = {})), big = ({ jetski: 1, lancha: 0.7, barco: 0.45 }[this.spec.id] || 0.7) * wf;
             const lift = S.h * Waves.UP * big, yaw = CompassCamera.yaw || 0;
-            bx = Math.sin(yaw) * lift; bz = Math.cos(yaw) * lift;
+            if (solid) up = S.h * big;
+            else { bx = Math.sin(yaw) * lift; bz = Math.cos(yaw) * lift; }
             rock = Math.max(-0.07, Math.min(0.07, (S.gx * Math.cos(hd) - S.gz * Math.sin(hd)) * big * 0.9));
         }
         this.visual.setPosition(p.x + bx, p.z + bz);
         this.visual.setHeading(hd + rock);
-        // Debaixo de uma ponte o sprite fica ABAIXO do tabuleiro (a ponte o esconde; o círculo de visibilidade o revela).
+        // Debaixo de uma ponte o sprite fica ABAIXO do tabuleiro (a ponte o esconde; o círculo de visibilidade o revela). O casco 3D
+        // não precisa: a profundidade dele já fica abaixo do tabuleiro.
         const sea = 1 + (Weather.cur ? Weather.cur.k * 2.2 : 0);            // mar agitado com chuva: o barco balança mais
-        const y = RoadPlan.onBridge(p.x, p.z) ? 0.1 : 0.8 + Math.sin(this.bobT * 1.6 * sea + this.id) * 0.04 * sea;
+        const y = RoadPlan.onBridge(p.x, p.z) && !solid ? 0.1 : 0.8 + up + Math.sin(this.bobT * 1.6 * sea + this.id) * 0.04 * sea;
         if (this.visual.setY) this.visual.setY(y); else this.visual.mesh.position.y = y;
         this._bodyMotion(dt, f);                                            // (o casco "senta" na arrancada e mergulha na freada)
         if (!this.wrecked && this.visual.setDamage) this.visual.setDamage(this.dent);

@@ -15,7 +15,7 @@ const Aid = {
         if (g.mode !== 'player' || g.player.weapon !== 'none' || g.player.busy || g.holdup || !g.npcManager) return null;
         const p = g.player.position;
         if (!Standing.inFavela(p.x, p.z)) return null;
-        const n = g.npcManager.nearestTarget(p, 2.4, (q) => !q.aided && !q.surrendered && !q.fleeing && q.state !== 'HURT');
+        const n = g.npcManager.nearestTarget(p, 2.4, (q) => !q.aided && !q.surrendered && !q.fleeing && q.state !== 'HURT', g.player);
         return n || null;
     },
 

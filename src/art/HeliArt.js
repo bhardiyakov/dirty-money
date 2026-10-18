@@ -249,28 +249,65 @@ const HeliArt = {
 };
 
 // O desenho de um helicóptero no mundo (ver o topo). y = altura do corpo; o rotor fica 0,45 m acima.
+// Com os veículos 3D (CarArt3D: 'heli' e 'heli_policia' do VEH3D) o corpo e os rotores são o modelo 3D — inclina para a frente
+// voando e deita nas curvas, rotores girando no shader; o disco borrado (girando rápido) e a sombra continuam sendo os quads.
+// lift = quanto o y recebido está acima dos esquis (Chopper: alt + 1,7; polícia: a altitude direto).
 class HeliVisual {
-    constructor(scene, variant, name = 'heli') {
+    constructor(scene, variant, name = 'heli', lift = 0) {
         const S = HeliArt.SIZE;
         const quad = (n, mat, group) => {
             const q = BABYLON.MeshBuilder.CreateGround(n, { width: S, height: S }, scene);
             q.material = mat; q.renderingGroupId = group; q.isPickable = false; q.alwaysSelectAsActiveMesh = true;
             return q;
         };
-        this.body = quad(name + 'Body', HeliArt.body(scene, variant), 2);
-        this.blades = quad(name + 'Blades', HeliArt.rotor(scene, false), 2);
+        const id = name === 'policeHeli' ? 'heli_policia' : 'heli';
+        this.solid = typeof CarArt3D !== 'undefined' && CarArt3D.has(id) ? CarArt3D.actor(id, variant, HeliVisual.K / CarArt3D.K) : null;
+        this.lift = lift;
+        if (!this.solid) {
+            this.body = quad(name + 'Body', HeliArt.body(scene, variant), 2);
+            this.blades = quad(name + 'Blades', HeliArt.rotor(scene, false), 2);
+        }
         this.blur = quad(name + 'RotorBlur', HeliArt.rotor(scene, true), 2);
         this.shadow = quad(name + 'Shadow', HeliArt.shadow(scene), 0);
         this.shadow.alphaIndex = -98;                                          // logo depois das marcas de chão
         this._rot = 0;
+        this._prev = null; this._vel = { f: 0, r: 0 }; this._ph = 0;
         this.visible = true;
     }
+    // escala do modelo 3D (m no jogo por m do modelo): o rotor de 5,1 m vira o de HeliArt.R
+    static get K() { return HeliArt.R / 5.1; }
 
     // rpm 0..1 (rotação do rotor); spinRate: rad/s a mais (pane); dt para girar.
     place(x, y, z, heading, rpm, dt, spinExtra = 0) {
-        this.body.position.set(x, y, z); this.body.rotation.y = heading;
         this._rot += (rpm * 30 + spinExtra) * dt;
         const blurA = Math.min(1, Math.max(0, (rpm - 0.25) / 0.45)), bladeA = Math.max(0, 1 - blurA * 1.15);
+        if (this.solid) {
+            // voo: velocidade no referencial do helicóptero (frente / direita) e o giro → nariz baixa andando, deita na curva
+            const A = this.solid, d = Math.min(Math.max(dt, 1e-3), 0.1);
+            if (this._prev && Math.hypot(x - this._prev.x, z - this._prev.z) < 30) {
+                const vx = (x - this._prev.x) / d, vz = (z - this._prev.z) / d, s = Math.sin(heading), c = Math.cos(heading);
+                const k = 1 - Math.exp(-3 * d);
+                this._vel.f += (vx * s + vz * c - this._vel.f) * k;
+                this._vel.r += (vx * c - vz * s - this._vel.r) * k;
+            }
+            let yr = this._prev ? heading - this._prev.h : 0;
+            yr = Math.atan2(Math.sin(yr), Math.cos(yr)) / d;
+            this._prev = { x, z, h: heading };
+            const lim = (v, m) => Math.max(-m, Math.min(m, v));
+            const tilt = lim(this._vel.f * 0.012, 0.22), bank = lim(this._vel.r * 0.01 + yr * this._vel.f * 0.006, 0.3);
+            const kk = 1 - Math.exp(-4 * d);
+            this._tilt = (this._tilt || 0) + (tilt - (this._tilt || 0)) * kk;
+            this._bank = (this._bank || 0) + (bank - (this._bank || 0)) * kk;
+            // (o rotor "parece" girar mais devagar do que gira — sem o efeito estroboscópico; a cauda vai mais rápido)
+            A.setFlight(this._tilt, this._bank, this._rot * 0.35, this._rot * 0.9);
+            A.setPosition(x, z); A.setHeading(heading); A.setY(y - this.lift + 1.5);
+            const top = y - this.lift + 2.75 * HeliVisual.K;
+            this.blur.position.set(x, top, z); this.blur.rotation.y = heading + this._rot * 0.12;
+            this.blur.visibility = blurA * 0.55;
+            this.blur.setEnabled(this.visible && blurA > 0.02);
+            return;
+        }
+        this.body.position.set(x, y, z); this.body.rotation.y = heading;
         this.blades.position.set(x, y + 0.45, z); this.blades.rotation.y = heading + this._rot;
         this.blur.position.set(x, y + 0.46, z); this.blur.rotation.y = heading + this._rot * 0.12;       // o borrão "gira" devagar
         this.blades.visibility = bladeA; this.blur.visibility = blurA;
@@ -289,8 +326,13 @@ class HeliVisual {
 
     setVisible(v) {
         this.visible = v;
-        this.body.setEnabled(v);
-        if (!v) { this.blades.setEnabled(false); this.blur.setEnabled(false); this.shadow.setEnabled(false); }
+        if (this.solid) this.solid.setVisible(v);
+        else this.body.setEnabled(v);
+        if (!v) { if (this.blades) this.blades.setEnabled(false); this.blur.setEnabled(false); this.shadow.setEnabled(false); }
     }
-    dispose() { this.body.dispose(); this.blades.dispose(); this.blur.dispose(); this.shadow.dispose(); }
+    dispose() {
+        if (this.solid) this.solid.dispose();
+        else { this.body.dispose(); this.blades.dispose(); }
+        this.blur.dispose(); this.shadow.dispose();
+    }
 }

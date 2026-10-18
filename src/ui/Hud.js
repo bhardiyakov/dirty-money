@@ -201,7 +201,10 @@ class Hud {
 		let img;
 		try {
 			if (car.isChopper) img = null;
-			else if (car.visual instanceof RiderActor) img = CarArt.preview(car.visual.modelId.replace('_caida', ''), car.visual.variant);      // (moto, bicicleta, barco: o mesmo atlas dos carros)
+			else if (car.visual instanceof RiderActor) {                       // (moto, bicicleta, barco: o mesmo atlas dos carros; moto só em 3D: a do atlas)
+				const id = car.visual.modelId.replace('_caida', '');
+				img = CarArt.preview(CarArt.model(id) ? id : car.spec.bike === 'moto' ? 'moto' : id, car.visual.variant);
+			}
 			else if (car.isBoat) img = BoatSheet.preview(spec.id, car.visual ? car.visual.variant : 4);
 			else if (car.isBike) img = this._bikePreview(car);
 			else img = CarSheet.preview(spec.id, car.visual ? car.visual.variant : 0);

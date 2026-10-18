@@ -85,9 +85,9 @@ class TrafficManager {
         return car;
     }
 
-    // Bicicleta ('bicycle') ou moto ('moto'): circulando (com piloto, pela IA de trânsito) ou estacionada no meio-fio
+    // Bicicleta ('bicycle') ou moto (Bikes.MOTOS): circulando (com piloto, pela IA de trânsito) ou estacionada no meio-fio
     // (sem piloto, só o veículo). avoid/near: como em _spawnCar.
-    _spawnBike(kind, mode, avoid = null, near = this.ring()) {
+    _spawnBike(kind, mode, avoid = null, near = this.ring(), courier = false) {
         const id = this._nextId++;
         let place = null;
         for (let tries = 0; tries < 60 && !place; tries++) {
@@ -100,7 +100,7 @@ class TrafficManager {
         if (!place) return null;
         const d = place.d, civ = this.sprites.civilianVariants;
         // paint 4 só dá a cor do corpo 3D (embaixo do sprite); a cor do quadro/roupa vem da variante de paleta.
-        const bike = new TrafficCar(this.scene, this.physics, place.point, id, Bikes.sheet(this.sprites, kind, mode === 'drive' ? 'ride' : 'park'), 4, Math.atan2(d.dx, d.dz), this);
+        const bike = new TrafficCar(this.scene, this.physics, place.point, id, Bikes.sheet(this.sprites, kind, mode === 'drive' ? 'ride' : 'park', courier ? 'courier' : 'rider'), 4, Math.atan2(d.dx, d.dz), this);
         bike.baseMode = mode;
         bike.frameVariant = 2 + (id * 5) % civ;
         bike.setRider(mode === 'drive' ? 2 + (id * 7) % civ : null);
@@ -112,7 +112,7 @@ class TrafficManager {
 
     // Entregador de aplicativo: moto circulando com piloto de baú vermelho, guiada por Couriers (restaurante → cliente).
     _spawnCourier(avoid = null, near = this.ring()) {
-        const bike = this._spawnBike('moto', 'drive', avoid, near);
+        const bike = this._spawnBike('moto', 'drive', avoid, near, true);              // (a moto de rua com o baú)
         if (!bike) return null;
         Couriers.make(bike);
         return bike;
@@ -139,8 +139,8 @@ class TrafficManager {
         for (let i = 0; i < S(count); i++) this._spawnCar('drive', null, r);
         for (let i = 0; i < S(parked); i++) this._spawnCar('parked', null, r);
         if (this.sprites) {
-            for (let i = 0; i < S(T.motos); i++) this._spawnBike('moto', 'drive', null, r);
-            for (let i = 0; i < S(T.motosParked); i++) this._spawnBike('moto', 'parked', null, r);
+            for (let i = 0; i < S(T.motos); i++) this._spawnBike(Bikes.pickMoto(), 'drive', null, r);
+            for (let i = 0; i < S(T.motosParked); i++) this._spawnBike(Bikes.pickMoto(), 'parked', null, r);
             for (let i = 0; i < S(T.bicycles); i++) this._spawnBike('bicycle', 'drive', null, r);
             for (let i = 0; i < S(T.bicyclesParked); i++) this._spawnBike('bicycle', 'parked', null, r);
             for (let i = 0; i < S(T.couriers || 0); i++) this._spawnCourier(null, r);

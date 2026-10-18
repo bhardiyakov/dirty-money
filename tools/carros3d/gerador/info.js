@@ -1,5 +1,5 @@
 // Metadados do catálogo (nomes e categorias como no catálogo 2D do jogo)
-export const CATEGORIAS = ['Hatches', 'Antigos', 'SUVs', 'Sedãs', 'Esportivos', 'Superesportivos', 'Picapes', 'Vans', 'Táxis', 'Polícia / Forças', 'Barcos'];
+export const CATEGORIAS = ['Hatches', 'Antigos', 'SUVs', 'Sedãs', 'Esportivos', 'Superesportivos', 'Picapes', 'Vans', 'Táxis', 'Polícia / Forças', 'Barcos', 'Motos', 'Helicópteros'];
 
 export const INFO = [
   ['hatch_moderno', 'Hatch moderno (estilo Onix)', 'Hatches', 4.1, 1.74],
@@ -41,6 +41,15 @@ export const INFO = [
   ['jetski', 'Jet ski (Aqua Rider 300)', 'Barcos', 3.0, 1.11],
   ['lancha', 'Lancha (Marlin 21 Sport)', 'Barcos', 6.4, 2.3],
   ['barco', 'Barco de pesca (Caiçara 30)', 'Barcos', 9.0, 3.2],
-].map(([slug, nome, categoria, comprimento, largura]) => ({ slug, nome, categoria, comprimento, largura, pinturaFixa: ['viatura', 'swat_van', 'militar', 'taxi_sp', 'taxi_rio'].includes(slug), barco: categoria === 'Barcos' }));
+  ['moto', 'Moto de rua (estilo CG 160)', 'Motos', 2.0, 0.78],
+  ['moto_entrega', 'Moto de entrega com baú (estilo CG Cargo)', 'Motos', 2.0, 0.78],
+  ['moto_scooter', 'Scooter (estilo PCX)', 'Motos', 1.95, 0.74],
+  ['moto_trilha', 'Moto de trilha (estilo XR / Bros)', 'Motos', 2.15, 0.84],
+  ['moto_esportiva', 'Esportiva (estilo CBR)', 'Motos', 2.08, 0.72],
+  ['moto_custom', 'Custom de viagem (estilo Harley-Davidson)', 'Motos', 2.45, 0.98],
+  ['bicicleta', 'Bicicleta urbana (aro 26)', 'Motos', 1.75, 0.62],
+  ['heli', 'Helicóptero (estilo Bell 206)', 'Helicópteros', 9.6, 2.2],
+  ['heli_policia', 'Helicóptero da polícia (Águia)', 'Helicópteros', 9.6, 2.2],
+].map(([slug, nome, categoria, comprimento, largura]) => ({ slug, nome, categoria, comprimento, largura, pinturaFixa: ['viatura', 'swat_van', 'militar', 'taxi_sp', 'taxi_rio', 'heli_policia'].includes(slug), barco: categoria === 'Barcos', moto: categoria === 'Motos', heli: categoria === 'Helicópteros' }));
 
 export const INFO_BY_SLUG = Object.fromEntries(INFO.map((i) => [i.slug, i]));

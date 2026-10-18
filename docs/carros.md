@@ -124,3 +124,27 @@ src/art/CarArt3D.js       carrega, monta as malhas, o shader e o ator (Car3DActo
    câmera de cima vê") e confira na vista (pintura, amassado, luzes, câmera do jogo). **Salvar carros3d.js** grava o arquivo.
 3. Modelo novo: também no `MODELS`/`POOLS` do `CarSheet` e no atlas 2D (`tools/carros`), que segue dando as medidas, a porta e a
    miniatura.
+
+## Motos, helicópteros e barcos em 3D (outubro/2026)
+
+O mesmo gerador e o mesmo shader dos carros agora fazem os **outros veículos**, num arquivo à parte (`assets/cars/veiculos3d.js`,
+`VEH3D`; o `carros3d.js` não muda). `node tools/carros3d/gerar.mjs veiculos` gera o arquivo sem o navegador (`carros` gera o dos
+carros; sem argumento, os dois).
+
+- **Motos** (`gerador/veiculos/motos.js`): de rua (estilo CG 160, a do dia a dia e a do motoboy — o entregador anda na versão com
+  **baú**), **scooter** (estilo PCX), **trilha** (estilo XR/Bros, pneus com cravos), **esportiva** (estilo CBR, carenagem e bolha)
+  e **custom de viagem** (estilo Harley: V2 cromado, alforjes, para-brisa, encosto). Duas rodas que rolam (a da frente esterça) e
+  a moto INTEIRA deita para dentro da curva; caída, fica de lado. As manoplas ficam no mesmo lugar em todas, a partir do banco,
+  para as mãos do piloto 2,5D (clipes `ride_*`) caírem no guidão; o sprite do piloto sobe à altura do banco do modelo. No
+  trânsito: `Bikes.pickMoto` sorteia o modelo; `Bikes.MODELS` tem o desempenho de cada um. Sem o arquivo 3D, todas usam a moto do
+  atlas.
+- **Bicicleta** (também em `motos.js`): urbana aro 26, quadro de tubos, selim, guidão, pedivela, para-lamas e bagageiro, montada
+  em volta dos pontos onde o piloto pedalando (`ride_bike`) põe as mãos e os pés; deita um pouco na curva.
+- **Ré de moto e bicicleta**: não tem marcha a ré — o piloto fica de pé, montado, e anda para trás com os pés no chão
+  (`RiderActor.walkBack`, o clipe de andar tocado ao contrário), no passo (`Config.vehicle.bikeReverse`).
+- **Helicópteros** (`gerador/veiculos/helis.js`): o civil (estilo Bell 206) e o da polícia (Águia, com giroflex e holofote). Os
+  rotores são partes à parte que giram no shader; o helicóptero inclina para a frente voando e deita nas curvas (`HeliVisual`).
+  Desenhado no grupo 2 (por cima da cidade) com profundidade de verdade; o disco borrado do rotor e a sombra continuam sendo quads.
+- **Barcos** (`gerador/veiculos/barcos.js`, que já existiam no gerador): jet ski, lancha e barco de pesca. Origem na linha
+  d'água: o que fica abaixo dela não é desenhado; sobem e descem com as ondas de verdade (`Waves`), empinam acelerando e
+  inclinam na curva. O piloto senta no banco do modelo (`seat`).

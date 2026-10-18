@@ -2,6 +2,7 @@
 // FavelaWatch — o sistema de alarme da favela:
 //   • FOGUETEIROS: ficam SEMPRE nos telhados (sprite no alto de uma laje; ~14, mais perto da entrada). Parados e fora de alcance,
 //     soltam pipas de dia (sem chuva) e UMA salva de fogos (~8 s) quando o alarme liga (a polícia entra) e param, mesmo que o alarme (e a invasão) continue.
+//     Dá para abatê-los mirando no telhado (combat/Aim: a bala passa por cima dos prédios); voltam à laje ~3 min depois, longe da vista.
 //   • OLHEIROS: nos cantos da favela e nas vielas de entrada (~8). Enxergam a polícia que entra na favela (alcance 55 u + linha de
 //     visada; na operação, o rádio avisa) e ligam o alarme. Aí FOGEM "para cima" — favela adentro, rumo aos traficantes (em
 //     saltos pelas vielas) — e, passado o alarme, voltam ao posto.
@@ -31,7 +32,14 @@ class FavelaWatch {
                 slices[k].push({ x, z, h: l.height });
             }
         }
-        for (const s of slices) if (s.length) { const l = s[Math.floor(rng() * s.length)]; this.rockets.push({ x: l.x, z: l.z, h: l.h, actor: null, fire: rng() * 2 }); }
+        for (const s of slices) {
+            if (!s.length) continue;
+            const l = s[Math.floor(rng() * s.length)];
+            // (onDeck/baseY: o sangue cai na laje — Blood._y)
+            const R = { x: l.x, z: l.z, h: l.h, actor: null, fire: rng() * 2, alive: true, hp: 40, respawn: 0, position: { x: l.x, y: l.h, z: l.z }, kind: 'rocket', onDeck: true, baseY: l.h + 0.5 };
+            R.takeDamage = (amount, from, source) => this._hitRocket(R, amount, source);
+            this.rockets.push(R);
+        }
         // olheiros: 4 cantos (no beco mais perto) + as entradas das 3 ruas do lado da cidade (na beira da rua)
         const anchors = [[b.x0 + 16, b.z0 + 16, 'beco'], [b.x0 + 16, b.z1 - 16, 'beco'], [b.x1 - 16, b.z0 + 16, 'beco'], [b.x1 - 16, b.z1 - 16, 'beco']];
         for (const m of FavelaPlan.MAIN) anchors.push([b.x1 - 10, m.pts[0][1], 'rua']);
@@ -56,7 +64,7 @@ class FavelaWatch {
             const on = this._vis(R.x, R.z);
             if (on && !R.actor) {
                 R.actor = new SpriteActor(scene, this.sheet, va + Math.floor(Math.random() * (vb - va + 1)), 'fogueteiro');
-                R.actor.play('idle'); R.actor.setPosition(R.x, R.z); R.actor.mesh.position.y = R.h + 0.5; R.actor.setHeading(Math.random() * Math.PI * 2);
+                R.actor.play(R.alive ? 'idle' : 'dead', 'none'); R.actor.setPosition(R.x, R.z); R.actor.mesh.position.y = R.h + 0.5; R.actor.setHeading(Math.random() * Math.PI * 2);
             } else if (!on && R.actor) { R.actor.dispose(); R.actor = null; this._kiteDrop(R); }
         }
         for (const L of this.lookouts) {
@@ -85,6 +93,21 @@ class FavelaWatch {
             Standing.add('traffic', -6);
             this.game._flash('Você abateu um olheiro do C.V! (moral com o tráfico −6)');
             if (this.game.gangs) this.game.gangs._provoke(L);
+        }
+    }
+
+    // Fogueteiro baleado no telhado: cai na laje e para de soltar pipa e fogos; matá-lo também azeda a moral com o tráfico.
+    _hitRocket(R, amount, source) {
+        if (!R.alive) return;
+        R.hp -= amount;
+        if (R.hp > 0) return;
+        R.alive = false; R.respawn = 180;
+        this._kiteDrop(R);
+        if (R.actor) R.actor.play('dead', 'none', { restart: true });
+        if (source === 'player') {
+            Standing.add('traffic', -4);
+            this.game._flash('Você abateu um fogueteiro do C.V! (moral com o tráfico −4)');
+            if (this.game.gangs) this.game.gangs._provoke(R);
         }
     }
 
@@ -174,6 +197,11 @@ class FavelaWatch {
 
         // fogueteiros: fogos enquanto o alarme durar (só gasta efeito perto da câmera)
         for (const R of this.rockets) {
+            if (!R.alive) {                                                    // abatido: o corpo fica na laje; longe da vista, outro sobe
+                if (R.actor) R.actor.update(dt, 1);
+                else if ((R.respawn -= dt) <= 0) { R.alive = true; R.hp = 40; }
+                continue;
+            }
             if (R.actor) {
                 R.actor.update(dt, 1);
                 const kw = this._kiteWanted();                                // pipa na mão de dia; some à noite, na chuva e no alarme

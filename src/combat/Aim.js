@@ -162,6 +162,7 @@ class Aim {
 		}
 		if (g.gangs) for (const o of g.gangs.members) person(o);
 		if (g.watch && g.watch.lookouts) for (const o of g.watch.lookouts) if (o.actor) person(o);
+		if (g.watch && g.watch.rockets) for (const o of g.watch.rockets) if (o.actor) person(o);           // (fogueteiros nos telhados)
 		if (g.carDamage) for (const c of g.carDamage.allCars()) if (!c.destroyed && c !== g.activeCar) fn(c, 'car', c.elev || 0);
 	}
 

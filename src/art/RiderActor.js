@@ -12,6 +12,13 @@
 //   setLean(v, dt)                   inclinação do piloto pelo guidão (moto, jet ski): v = −1..+1, + = curva para a DIREITA
 //                                    (Vehicle.lastSteer > 0, rumo aumentando); dt > 0 = suaviza (o corpo deita aos poucos)
 //   setFrame(f)                      quadro do clipe do piloto (código antigo: prefira setLean)
+//   setLamps / lampGeom              luzes do veículo 3D (CarLights), repassadas ao corpo
+//   walkBack(on)                     dando ré (moto, bicicleta): o piloto fica DE PÉ, montado, e anda para trás com os pés no chão
+//                                    (o clipe de andar tocado ao contrário: update(dt, rate < 0))
+//
+// Veículo 3D (CarArt3D: motos e barcos do VEH3D): o piloto vai no BANCO do modelo (Car3DActor.seat: frente, altura e lado em m) —
+// o sprite sobe à altura do banco, porque o veículo agora tem altura — e a moto deita junto com ele (setLean). Parada sem piloto,
+// a moto fica apoiada no descanso (um pouco deitada para a esquerda).
 // ============================================================================
 
 class RiderActor {
@@ -19,7 +26,8 @@ class RiderActor {
     constructor(scene, modelId, paint, seat = null, scale = 1) {
         this.scene = scene;
         this.body = CarArt.actor(modelId, paint, scale);
-        this.seat = seat || { z: 0, x: 0 };
+        const S3 = this.body.seat;                  // (veículo 3D: o banco do modelo)
+        this.seat = S3 ? { z: S3.z, x: S3.x || 0, y: S3.y } : seat || { z: 0, x: 0 };
         this.rider = null;
         this.riderVariant = null;
         this._clipName = null;
@@ -35,11 +43,14 @@ class RiderActor {
     play() { return true; }
 
     setModel(id) { this.body.setModel(id); }
+    get lampGeom() { return this.body.lampGeom; }
+    setLamps(...a) { if (this.body.setLamps) this.body.setLamps(...a); }
 
     setRider(variant, sheet = null, clip = 'ride_moto') {
         if (variant == null || !sheet) {
             this.riderVariant = null;
             if (this.rider) this.rider.setVisible(false);
+            if (this.body.setLean) this.body.setLean(RiderActor.STAND);      // (no descanso)
             return;
         }
         if (!this.rider) {
@@ -52,7 +63,8 @@ class RiderActor {
         if (this.riderVariant !== variant) this.rider.setVariant(variant);
         this.riderVariant = variant;
         // (2,5D: ride_moto/bike/jetski/boat em 16 direções; o boneco antigo só tem ride_moto/ride_bike — jet ski e lancha usam o da moto)
-        if (this._clipName !== clip) { if (this.rider.play(clip, 'none', { restart: true }) || this.rider.play('ride_moto', 'none', { restart: true })) this._clipName = clip; }
+        if (this._clipName !== clip || this._back) { if (this.rider.play(clip, 'none', { restart: true }) || this.rider.play('ride_moto', 'none', { restart: true })) this._clipName = clip; }
+        this._back = false;
         this.rider.setVisible(this.visible);
         this._place();
     }
@@ -61,9 +73,13 @@ class RiderActor {
         const r = this.rider;
         if (!r || this.riderVariant == null) return;
         const s = Math.sin(this.heading), c = Math.cos(this.heading), S = this.seat;
-        r.setPosition(this.x + s * S.z + c * S.x + s * this.body.sz, this.z + c * S.z - s * S.x + c * this.body.sz);     // (vai junto com a suspensão)
+        const sz = this.body.sz || 0;
+        r.setPosition(this.x + s * S.z + c * S.x + s * sz, this.z + c * S.z - s * S.x + c * sz);     // (vai junto com a suspensão)
         r.setHeading(this.heading);
-        r.mesh.position.y = this.y + 0.08;
+        // (a origem do clipe ride_* é o banco, na linha dos pés do sprite — mesh.y − 0,5; o veículo 3D tem o banco na altura dele;
+        // andando para trás, os pés vão no chão)
+        const base = this.y - (this.body.kind === 'boat' ? 0.8 : 1.5);
+        r.mesh.position.y = this._back ? base + 0.5 : S.y != null ? base + S.y + 0.5 : this.y + 0.08;
     }
 
     setPosition(x, z) { this.x = x; this.z = z; this.body.setPosition(x, z); this._place(); }
@@ -85,6 +101,18 @@ class RiderActor {
         const L = this._leanV = dt > 0 && this._leanV != null ? this._leanV + (v - this._leanV) * (1 - Math.exp(-RiderActor.LEAN_K * dt)) : v;
         const r = this.rider;
         if (r && this.riderVariant != null && RiderActor.LEAN.test(r.clipName)) r.setLean(L);
+        if (this.body.setLean && this.riderVariant != null) this.body.setLean(L);
+    }
+    static get STAND() { return -0.3; }
+
+    // Ré com os pés: de pé sobre o chão, montado no banco, andando para trás (o Vehicle toca o clipe com rate < 0).
+    walkBack(on) {
+        const r = this.rider;
+        if (!r || this.riderVariant == null || !!on === !!this._back) return;
+        this._back = !!on;
+        if (on) r.play('walk', 'none', { restart: true });
+        else if (this._clipName) r.play(this._clipName, 'none', { restart: true });
+        this._place();
     }
     static get LEAN() { return /^ride_(moto|jetski)$/; }
     static get LEAN_K() { return 7; }

@@ -84,6 +84,9 @@ const Config = {
 		// Dirigindo: câmera "bússola" — gira com o veículo (frente sempre para cima) e o deixa mais ao sul da tela.
 		carCompass: true,
 		carLead: 0.45,         // adianto à frente do veículo (fração da meia-altura visível): 0,45 = carro a ~72% da altura da tela
+		carSmooth: true,       // gira suave atrás do veículo (false = em passos de 90°, com carTurnTrigger)
+		carYawLerp: 1.6,       // rapidez com que a direção da câmera alcança a do veículo (carSmooth), já em velocidade
+		carYawSpeed: 10,       // m/s: abaixo disso a câmera gira mais devagar (parado não gira — manobras não balançam a tela)
 		carTurnTrigger: 1.13,  // só gira (em passos de 90°) quando o carro se afasta ~65° da direção da câmera: desvios não balançam a tela
 		yawLerp: 3.5,          // rapidez do giro da câmera quando ela gira (maior = mais rápido; menor = mais suave)
 		leadLerp: 2.5,         // rapidez com que o adianto entra (ao entrar no carro) e sai (ao descer)
@@ -92,9 +95,6 @@ const Config = {
 		// roll = inclinação (rad) por rad/s de giro, até rollMax; bump = força dos trancos do asfalto (pulso no zoom, mola hStiff/hDamp);
 		// rumble = trepidação (u) a partir de rumbleRef m/s.
 		bounce: { lag: 0.07, maxAcc: 22, accLerp: 10, stiff: 26, damp: 3.6, roll: 0.012, rollMax: 0.03, bump: 0.18, hStiff: 60, hDamp: 6, rumble: 0.05, rumbleRef: 30 },
-		// Borrão de velocidade (SpeedBlur): começa a 80% da velocidade máxima do veículo e chega ao máximo nela.
-		blurFrom: 0.8,
-		blurMax: 0.04,         // força máxima (fração da distância ao carro que cada pixel "arrasta")
 	},
 
 	// Relógio do jogo: 24h do jogo duram `cycleSeconds` reais. Começa no fim da tarde para
@@ -324,6 +324,7 @@ const Config = {
 		enginePower: 10000,    // "Empuxo" do motor; aceleração = enginePower/mass (~11 m/s²).
 		maxSpeed: 26,          // Velocidade máx. à frente (m/s).
 		maxReverse: 9,         // Velocidade máx. de ré (m/s).
+		bikeReverse: 1.4,      // moto e bicicleta "de ré": o piloto anda para trás com os pés no chão (m/s)
 		hpMul: 2.2,            // Resistência de TODOS os veículos × a do catálogo (spec.hp): lataria mais dura (batidas e tiros).
 		turnRate: 2.0,         // Guinada máx. (rad/s) em velocidade plena.
 		turnSpeedRef: 6,       // Velocidade (m/s) para direção com autoridade total.
@@ -341,7 +342,8 @@ const Config = {
 		linearDamping: 0.1,    // Arrasto do chassi.
 		brakeDrag: 8,          // Freio-motor (m/s²) quando solta o acelerador.
 		waterDrag: 6,          // Atola o carro fora da terra (não atravessa água).
-		hijackRange: 5,        // Distância do player ao carro para roubá-lo (do centro do carro: acompanha o vehicle.scale).
+		hijackRange: 5,        // Distância do player ao carro para procurá-lo (do centro do carro: acompanha o vehicle.scale).
+		jackReach: 1.6,        // ...mas só rouba ENCOSTADO: a até isto (m) da porta do carro (qualquer lado) ou do lado da moto/bicicleta
 		scale: 1.3,            // Tamanho de TODOS os veículos — carros, motos, bicicletas, jet skis, barcos (desenho, física, sombra, portas, luzes).
 	},
 

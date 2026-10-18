@@ -827,7 +827,8 @@ class Player {
     // O mundo é plano (2D): "estar em cima" do viaduto ou "embaixo" de uma ponte é só um estado, que decide a altura do desenho,
     // com o que se bate e se o furo (RevealPlugin) se abre — ele só abre quando há algo ACIMA do personagem.
     //   onDeck       no tabuleiro do viaduto: entra pelo pé da rampa andando ao longo da via e fica até sair pela outra ponta.
-    //   underBridge  sob uma ponte cidade ↔ ilha: chegou à área do tabuleiro vindo da ÁGUA (nadando ou no raso) e fica até sair dela.
+    //   underBridge  sob uma ponte cidade ↔ ilha: chegou à área do tabuleiro sem ser pela pista (nadando, no raso ou pela margem) e fica
+    //                até sair dela.
     get baseY() { return this.underBridge ? 0.1 : 0.5 + (this.deckH || 0); }
 
     // Altura do furo: a CABEÇA (a pé, a mureta ao lado não abre furo); sob a ponte, abaixo do tabuleiro.
@@ -835,10 +836,12 @@ class Player {
 
     _updateLevel() {
         const p = this.root.position, wasY = this.baseY;
+        // Ponte sobre a água: chegou à área do tabuleiro pela PISTA (rua, calçada) = em cima dela; por qualquer outro lado (nadando,
+        // pela água rasa ou andando pela margem/areia que passa por baixo) = embaixo, até sair da área.
         const onB = RoadPlan.onBridge(p.x, p.z);
         if (!onB) this.underBridge = false;
-        else if (!this.underBridge && this._wasInWater) this.underBridge = true;
-        this._wasInWater = !onB && MapGeo.waterDepth(p.x, p.z) > 0;
+        else if (!this.underBridge && this._fromBelow) this.underBridge = true;
+        if (!onB) this._fromBelow = MapGeo.waterDepth(p.x, p.z) > 0 || !RoadPlan.onPavement(p.x, p.z, 1.5);
 
         if (RoadPlan.viaducts && RoadPlan.viaducts.length) {
             if (this.onDeck) {
@@ -876,7 +879,7 @@ class Player {
     teleport(pos) {
         this.cancelSequence();
         this.resetTactics();
-        this.onDeck = false; this.deckH = 0; this.underBridge = false; this._wasInWater = false;
+        this.onDeck = false; this.deckH = 0; this.underBridge = false; this._fromBelow = false;
         this.diving = false; this._wasSwim = undefined;                // (sem mergulho nem "começar a nadar" de um teleporte)
         if (this.frozen) { this.frozen = false; this.actor.setVisible(true); }
         this.root.position.copyFrom(pos);

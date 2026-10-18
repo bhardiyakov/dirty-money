@@ -43,7 +43,7 @@ class Chopper {
         this._rot = 0; this._smokeT = 0; this._dustT = 0;
         this.input = { fwd: 0, strafe: 0, yaw: 0, climb: 0 };
 
-        this.visual = new HeliVisual(this.scene, variant, 'chopper');
+        this.visual = new HeliVisual(this.scene, variant, 'chopper', 1.7);      // (y = alt + 1,7)
         Chopper._fx(this.scene);
         this._place(0);
     }

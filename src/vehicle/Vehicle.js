@@ -87,9 +87,11 @@ class Vehicle {
 
         // Moto, bicicleta e barcos: a sombra segue o DESENHO (a ficha de física é só aproximada) e tem formato próprio — cápsula para
         // duas rodas, casco com proa para barcos — e altura de verdade (o piloto da moto já tem a sombra dele, no sprite).
-        if ((this.spec.bike || this.spec.boat) && this.visual && this.visual.body && CarArt.model(this.visual.body.modelId)) {
-            const m = CarArt.model(this.visual.body.modelId), k = this.visual.body.scale || 1;
-            const H = { moto: 0.8, bicycle: 0.7, jetski: 1.1, lancha: 1.6, barco: 2.4 }[this.spec.id] || 1;
+        const D3 = this.visual && this.visual.body && typeof CarArt3D !== 'undefined' ? CarArt3D.def(this.visual.body.modelId) : null;
+        const m = this.visual && this.visual.body ? CarArt.model(this.visual.body.modelId) || (D3 && { len: D3.len * CarArt3D.K, wid: D3.wid * CarArt3D.K }) : null;
+        if ((this.spec.bike || this.spec.boat) && m) {
+            const k = this.visual.body.scale || 1;
+            const H = { moto: 0.8, bicycle: 0.7, jetski: 1.1, lancha: 1.6, barco: 2.4 }[this.spec.id] || (this.spec.bike === 'moto' ? 0.85 : 1);
             const L = m.len * k, W = m.wid * k;
             if (this.spec.boat) {
                 this.body._dmShadowBox = [W * 0.95, H, L * 0.97];
@@ -348,10 +350,17 @@ class Vehicle {
 
     // Bicicleta: os pedais giram conforme a velocidade. Moto: o piloto deita para o lado da curva (degraus de inclinação do clipe,
     // contínuos: setLean) conforme o guidão e a velocidade — volante à direita (lastSteer > 0) = deitado para a direita.
+    // Dando RÉ (moto ou bicicleta): não tem marcha a ré — o piloto anda para trás com os pés no chão, montado (RiderActor.walkBack).
     _animateBike(dt) {
-        const v = this.visual, sp = Math.abs(this.forwardSpeed), riding = this.riderVariant != null && !this.wrecked;
+        const v = this.visual, fwd = this.forwardSpeed, sp = Math.abs(fwd), riding = this.riderVariant != null && !this.wrecked;
+        const back = riding && fwd < -0.15 && v.walkBack;
+        if (v.walkBack) v.walkBack(back);
+        if (back) { v.update(dt, -Math.min(1.6, sp / 1.1)); if (v.setLean) v.setLean(0, dt); return; }
         if (this.spec.bike === 'bike') {
-            v.update(dt, riding ? Math.min(2.2, sp / 3.6) : 0);
+            // (o ride_bike dos personagens 2,5D foi assado girando o pedivela para trás — de baixo para a frente: tocado ao contrário,
+            // pedala para a frente; o do boneco antigo já gira para a frente)
+            v.update(dt, riding ? (Bikes.npc() ? -1 : 1) * Math.min(2.2, sp / 3.6) : 0);
+            if (riding && v.setLean) v.setLean(this.lastSteer * Math.min(1, sp / 4) * 0.6, dt);      // (bicicleta 3D: deita um pouco na curva)
         } else {
             v.update(dt, 0);
             if (riding && v.setLean) v.setLean(this.lastSteer * Math.min(1, sp / 5), dt);
@@ -428,7 +437,8 @@ class Vehicle {
             const drop = (this.spec.brakeDrag || Config.vehicle.brakeDrag * (Weather.cur ? Weather.cur.brakeMul : 1)) * dt;
             fwd = Math.abs(fwd) <= drop ? 0 : fwd - Math.sign(fwd) * drop;
         }
-        fwd = BABYLON.Scalar.Clamp(fwd, -(this.spec.maxReverse || Config.vehicle.maxReverse), top);
+        // (moto e bicicleta não têm ré: o piloto empurra com os pés — devagar, no passo)
+        fwd = BABYLON.Scalar.Clamp(fwd, -(this.spec.maxReverse || (this.spec.bike ? Config.vehicle.bikeReverse : Config.vehicle.maxReverse)), top);
         this._applyMotion(fwd, lat, steer, dt, vel, forward, right);
     }
 
@@ -694,13 +704,15 @@ Vehicle.physFrame = 0;
 Vehicle._ZERO = new BABYLON.Vector3(0, 0, 0);          // (só leitura: velocidade zero sem alocar)
 
 // NÍVEL de quem está no mundo, para separar quem passa POR CIMA de quem está EMBAIXO (m): tabuleiro do viaduto = a altura dele,
-// chão (e ponte sobre a água, que é a pista) = 0, água SOB a ponte = -1. Carro em cima do viaduto não freia nem atropela quem
-// anda lá embaixo; quem nada sob a ponte não é "visto" pelos carros que passam nela nem entra num deles.
+// chão (e ponte sobre a água, que é a pista) = 0, SOB a ponte (na água ou na margem) = UNDER. Carro em cima do viaduto não freia nem
+// atropela quem anda lá embaixo; quem está sob a ponte não é "visto" pelos carros e pedestres que passam nela, não é atropelado por
+// eles e não entra num deles (sameLevel: menos de 1,5 m de diferença — UNDER fica bem longe do 0 da pista).
+Vehicle.UNDER = -3;
 Vehicle.levelOf = (e) => {
     if (!e) return 0;
-    if (e.isBoat) { const p = e.position; return RoadPlan.onBridge(p.x, p.z) ? -1 : 0; }
+    if (e.isBoat) { const p = e.position; return RoadPlan.onBridge(p.x, p.z) ? Vehicle.UNDER : 0; }
     if (e.body && e.phys) return e._onDeck ? (e.elev || 0) : 0;                         // veículo terrestre
-    return e.underBridge ? -1 : (e.onDeck ? (e.deckH || 0) : 0);                      // jogador / pedestre
+    return e.underBridge ? Vehicle.UNDER : (e.onDeck ? (e.deckH || 0) : 0);           // jogador / pedestre
 };
 Vehicle.sameLevel = (a, b) => Math.abs(Vehicle.levelOf(a) - Vehicle.levelOf(b)) < 1.5;
 // Camada de obstáculo do trânsito (TrafficCar compara com a do carro: 0 chão, 1 viaduto, -1 água sob a ponte).

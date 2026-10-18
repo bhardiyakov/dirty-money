@@ -198,7 +198,8 @@ class DevMode {
         H('CARROS');
         for (const id of Object.keys(CarSheet.MODELS)) B(CarSheet.MODELS[id].model, () => this.spawnCar(id));
         H('DUAS RODAS');
-        B('Moto', () => this.spawnBike('moto')); B('Bicicleta', () => this.spawnBike('bicycle'));
+        for (const k of Bikes.MOTOS) B(Bikes.MODELS[k].name, () => this.spawnBike(k));
+        B('Bicicleta', () => this.spawnBike('bicycle'));
         H('BARCOS (na água mais próxima)');
         for (const id of Object.keys(BoatSheet.MODELS)) B(BoatSheet.MODELS[id].name, () => this.spawnBoat(id));
         H('VEÍCULO ATUAL');
