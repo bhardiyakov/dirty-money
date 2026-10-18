@@ -132,7 +132,7 @@ const Tuning = {
     // ---------------------------------------------------------------- a janela (prévia ao vivo)
     _panel(game) {
         if (!this._p) {
-            this._p = new Panel('tuneUI', { width: 470, onAct: (a, arg) => this._act(game, a, arg), onClose: () => { this._revert(); if (typeof TuneGarage !== 'undefined') TuneGarage.leave(game); } });
+            this._p = new Panel('tuneUI', { width: 470, onAct: (a, arg) => this._act(game, a, arg), onClose: () => { this._revert(); TuneHUD.show(false); document.body.classList.remove('tuneNfs'); if (typeof TuneGarage !== 'undefined') TuneGarage.leave(game); } });
             const st = document.createElement('style');
             st.textContent = `#tuneUI.dm-modal{background:transparent!important;justify-content:flex-end;pointer-events:none}
                 #tuneUI .dm-pp{pointer-events:auto;margin-right:2vw}
@@ -141,6 +141,7 @@ const Tuning = {
                 #tuneUI .tn-row .btn.on{outline:2px solid #f0abfc;background:rgba(240,171,252,.18)}
                 #tuneUI .tn-sw{display:inline-block;width:16px;height:16px;border-radius:5px;vertical-align:-3px;border:1px solid rgba(255,255,255,.45)}
                 #tuneUI .tn-cap{font-size:12px;color:var(--tx-2);margin-top:8px}
+                body.tuneNfs #tuneUI{display:none!important}
                 @media (max-width:640px){#tuneUI.dm-modal{justify-content:center;align-items:flex-end}#tuneUI .dm-pp{margin:0;max-height:55vh}}`;
             document.head.appendChild(st);
         }
@@ -152,7 +153,10 @@ const Tuning = {
         this._orig = { paint: car.visual ? car.visual.variant : car.ownedRec.paint, mods: Object.assign({}, car.mods || {}) };
         this._sel = { paint: this._orig.paint, tEng: car.mods.tEng | 0, turbo: car.mods.turbo | 0, tBrk: car.mods.tBrk | 0, tSus: car.mods.tSus | 0, kit: car.mods.kit | 0, wing: car.mods.wing | 0, neon: car.mods.neon | 0 };
         this._cat = 'paint';
-        if (typeof TuneGarage !== 'undefined') TuneGarage.enter(game, car, shop);        // a garagem por dentro (showroom 3D), se o carro tem modelo 3D
+        this._origSpec = Object.assign({}, car.spec);
+        // a garagem por dentro (showroom 3D, tela de carrossel: TuneHUD), se o carro tem modelo 3D; senão, a janela na rua
+        this._nfs = typeof TuneGarage !== 'undefined' && TuneGarage.enter(game, car, shop);
+        document.body.classList.toggle('tuneNfs', !!this._nfs);
         this._render(game);
     },
     // O que mudou e quanto custa: [{ k, name, price }]
@@ -209,6 +213,7 @@ const Tuning = {
         h += `<div class="dm-btns" style="justify-content:space-between;margin-top:10px">${B('close', 'Fechar')}${B('pay', `Pagar ${brl(total)}`, { pri: true, on: bill.length > 0 })}</div>
               <p class="dm-note">Acima de R$ 800, só dinheiro limpo. Você tem ${brl(inv.cash)} sujos e ${brl(inv.clean)} limpos.</p>`;
         P.show(`🏁 ${this._shop.name.toUpperCase()}`, `${car.spec.name} ${car.spec.model} · ${o.paint === s.paint ? CarSheet.PAINTS[s.paint].name : `${CarSheet.PAINTS[o.paint].name} → ${CarSheet.PAINTS[s.paint].name}`}`, h);
+        if (this._nfs) { TuneHUD.render(game, this); TuneHUD.show(true); }
     },
     _act(game, a, arg) {
         const P = this._p, s = this._sel;
@@ -225,14 +230,16 @@ const Tuning = {
         const car = this._car, bill = this._bill(), total = bill.reduce((t, b) => t + b.price, 0);
         if (!bill.length) return;
         const err = Mechanic.pay(game, { kind: 'tuning' }, total);
-        if (err) { this._p.msg(err, false); AudioFX.blip(200, 0.1, 0.16); return; }
+        if (err) { this._p.msg(err, false); TuneHUD.msg(err, false); AudioFX.blip(200, 0.1, 0.16); return; }
         const rec = car.ownedRec, turboWas = !!this._orig.mods.turbo;
         this._preview(game);
         rec.paint = this._sel.paint; rec.mods = Object.assign({}, car.mods);
         if (!!car.mods.turbo !== turboWas && typeof EngineAudio !== 'undefined') EngineAudio.refresh(car);
         this._orig = { paint: this._sel.paint, mods: Object.assign({}, car.mods) };
+        this._origSpec = Object.assign({}, car.spec);
         AudioFX.blip(820, 0.12, 0.18);
         this._render(game);
         this._p.msg(`Pronto: ${bill.length} serviço(s) feito(s) por ${brl(total)}`);
+        TuneHUD.msg(`Instalado: ${bill.map((b) => b.name.split(' — ')[0]).join(' · ')} (−${brl(total)})`);
     },
 };

@@ -79,7 +79,7 @@ const TuneGarage = {
             this._prevCam = sc.activeCamera;
             const V = this.VIEWS.paint, cam = this.cam = new BABYLON.ArcRotateCamera('tuneCam', V.a, V.b, V.r, new BABYLON.Vector3(o.x, V.ty, o.z), sc);
             cam.fov = 0.78; cam.minZ = 0.05; cam.maxZ = 120;
-            cam.targetScreenOffset = new BABYLON.Vector2(window.innerWidth > 700 ? -1.7 : 0, window.innerWidth > 700 ? 0 : 1.1);      // (o carro fica no lado livre da tela, fora da janela da loja)
+            cam.targetScreenOffset = new BABYLON.Vector2(0, 0.4);         // (o carro no meio da tela, um pouco acima do carrossel de peças — TuneHUD)
             sc.activeCamera = cam;
             const eng = sc.getEngine();                                             // antisserrilhado (o MSAA do jogo fica na câmera da cidade)
             if (eng.webGLVersion >= 2 && eng.getCaps().maxMSAASamples > 1) { this.aa = new BABYLON.PassPostProcess('tuneMsaa', 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng); this.aa.samples = Math.min(4, eng.getCaps().maxMSAASamples); }

@@ -145,7 +145,7 @@ const HouseView = {
 		world._collider('hs_door', ox + d.x0, oz, ox + d.x1, oz + T, d.h);
 
 		// --- brilhos: luz saindo pela porta e pelas janelas ---
-		const G = new GlowBatch(scene, 8, 'houseGlow', 'glow');
+		const G = new GlowBatch(scene, 8, 'houseGlow', 'glow').under();      // (sob os personagens: ver GlowBatch.under)
 		this.glow = G;
 		this.g = { door: G.alloc(), doorCore: G.alloc(), win: [G.alloc(), G.alloc(), G.alloc()] };
 		const dc = S.doorWorld();

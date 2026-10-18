@@ -949,7 +949,7 @@ class WorldBuilder {
 
         // Brilhos: cabeçote (alto) + poça no chão, por poste.
         // Cores fixas (acesas); quem acende/apaga é a intensidade global do lote (setNight → setLevel). Poste quebrado = quad apagado.
-        this.lampGlow = new GlowGrid(this.scene, 'lampGlow', lamps.flatMap((l) => [[l.hx, l.hz], [l.hx, l.hz]]));
+        this.lampGlow = new GlowGrid(this.scene, 'lampGlow', lamps.flatMap((l) => [[l.hx, l.hz], [l.hx, l.hz]])).under();
         this._lampIds = lamps.map((l) => {
             const a = this.lampGlow.alloc(l.hx, l.hz), b = this.lampGlow.alloc(l.hx, l.hz);
             this.lampGlow.place(a, l.hx, 5.75, l.hz, 2.6);
@@ -1137,7 +1137,7 @@ class WorldBuilder {
         }
 
         // Luz precária: 2 brilhos por lâmpada (cabeça pequena + poça fraca no chão), amarelo-esverdeado doente.
-        this.favGlow = new GlowGrid(this.scene, 'favGlow', this._favLamps.flatMap((l) => [[l.x, l.z], [l.x, l.z]]));
+        this.favGlow = new GlowGrid(this.scene, 'favGlow', this._favLamps.flatMap((l) => [[l.x, l.z], [l.x, l.z]])).under();
         this._favLamps.forEach((l) => {
             l.a = this.favGlow.alloc(l.x, l.z); l.b = this.favGlow.alloc(l.x, l.z);
             this.favGlow.place(l.a, l.x, 5.5, l.z, 1.8);
@@ -1187,7 +1187,7 @@ class WorldBuilder {
             const c = Pixel.hex(TileFactory.SHOPS[s.kind].sign), m = s.a + 3, o = 2.6;
             list.push({ x: s.side === 'W' ? l.x0 - o : (s.side === 'E' ? l.x1 + o : m), z: s.side === 'S' ? l.z0 - o : (s.side === 'N' ? l.z1 + o : m), c: [c[0] / 255, c[1] / 255, c[2] / 255] });
         }
-        this.shopGlow = new GlowGrid(this.scene, 'shopGlow', list.map((s) => [s.x, s.z]));
+        this.shopGlow = new GlowGrid(this.scene, 'shopGlow', list.map((s) => [s.x, s.z])).under();
         this._shopIds = list.map((s) => { const i = this.shopGlow.alloc(s.x, s.z); this.shopGlow.place(i, s.x, 0.26, s.z, 9); this.shopGlow.color(i, s.c[0], s.c[1], s.c[2], 0.42); s.id = i; return s; });
         this.shopGlow.seal();
         this.shopGlow.setLevel(0);
