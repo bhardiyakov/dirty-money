@@ -281,6 +281,7 @@ class Game {
 		window.addEventListener('keydown', (e) => { if (e.key === 'Escape') this._escModal = this._modalUiOpen(); }, true);
 		this.propertyUI = new PropertyUI(this);              // ficha dos imóveis à venda / casas compradas
 		this.carUI = new CarUI(this); Garage.game = this;      // concessionárias e garagens (economy/Dealers.js, economy/Garage.js)
+		PersonalBike.init(this);                     // a bicicleta do jogador, no quintal de casa (economy/PersonalBike.js)
 		this.goals = new Goals(this);                        // metas de carreira (o que fazer a seguir + recompensas)
 		this.missions = new Missions(this);                  // missões do tráfico (pedidas na boca de fumo)
 		this.careers = new Careers(this);                    // carreiras do crime: desmanche, ladrão, armeiro, estelionato, jogo do bicho
@@ -809,7 +810,7 @@ class Game {
 			RealEstate.build(this); RealEstate.update(dt); this.propertyUI.update(dt);
 			Laundry.syncMap(this, dt);                                                       // fachadas compradas → mapa e radar
 			Heists.build(this); Mechanic.build(this); Business.syncMap(this, dt);           // joalherias, oficinas, seus negócios no mapa
-			Dealers.build(this); Dealers.update(dt); Garage.update(dt); this.carUI.update(dt);      // concessionárias (vitrine) e garagens (seus carros)
+			Dealers.build(this); Dealers.update(dt); Garage.update(dt); PersonalBike.update(dt); this.carUI.update(dt);      // concessionárias (vitrine) e garagens (seus carros)
 		}
 
 		Perf.lap('favela (gangues/moto/missões)');
@@ -1232,7 +1233,7 @@ class Game {
 		const blips = [];
 		if (this.physicsReady) {
 			for (const v of this.vehicleManager.vehicles) {
-				blips.push({ pos: v.position, color: v === this.activeCar ? '#ffe14d' : '#ff5050' });
+				blips.push({ pos: v.position, color: v === this.activeCar ? '#ffe14d' : v.personal ? '#5ad1ff' : '#ff5050' });      // (azul-claro: a sua bicicleta)
 			}
 			for (const b of this.vehicleManager.boats) blips.push({ pos: b.position, color: b === this.activeCar ? '#ffe14d' : '#4fd8ff' });
 		}
@@ -1282,6 +1283,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		let best = null, bd = 7.5;
 		for (const c of this.choppers) {
 			if (!c.alive || c.pilot || c.state === 'failing' || c.alt > c.floor + 0.6) continue;
+			if (Math.abs(c.alt - (this.player.onDeck ? this.player.deckH || 0 : 0)) > 1.5) continue;      // (no telhado: só subindo a escada)
 			const d = c.distanceTo(pp);
 			if (d < bd) { bd = d; best = c; }
 		}
@@ -1292,6 +1294,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		const pl = this.player;
 		if (pl.busy || this.heliFall) return;
 		ch.board();
+		pl.roof = null; pl.onDeck = false; pl.deckH = 0;
 		pl.cancelSequence();
 		pl.action = null;
 		pl.velocity.setAll(0);
@@ -1347,6 +1350,14 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			const rx = Math.cos(ch.heading), rz = -Math.sin(ch.heading), p = ch.position;
 			ch.release();
 			this._chopperRelease();
+			const pad = ch.floor > 2 && Rooftops.padUnder(p.x, p.z);
+			if (pad) {                                                          // pousado num heliponto: desce no telhado (volta pela escada)
+				const q = Rooftops.onRoof(pad, p.x + rx * 3.6, p.z + rz * 3.6, 1.2);
+				pl.teleport(new BABYLON.Vector3(q.x, 0, q.z));
+				pl.roof = pad; pl._roofLast = { x: q.x, z: q.z }; pl.onDeck = true; pl.deckH = pad.H; pl.actor.mesh.position.y = pl.baseY;
+				this._flash('Você desceu do helicóptero — a escada externa fica na beira do telhado');
+				return;
+			}
 			pl.teleport(new BABYLON.Vector3(p.x + rx * 3.6, 0, p.z + rz * 3.6));
 			this._flash('Você desceu do helicóptero');
 			return;
@@ -1452,6 +1463,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (ch && (!car || ch.distanceTo(this.player.position) < hypot(car.position.x - this.player.position.x, car.position.z - this.player.position.z))) { this._boardChopper(ch); return; }
 		if (!car) { this._flash(this._hijackTarget(false) ? 'Chegue mais perto da porta' : 'Nenhum veículo por perto'); return; }
 		if (car.isBoat) this._boardBoat(car);
+		else if (car.isBike && car.display) this._flash('Moto de vitrine (presa no cavalete) — compre uma na loja');
 		else if (car.isBike) this._mountBike(car);
 		else if (car.locked && this.inventory.keys > 0) {                                // chave roubada: destranca sem barulho
 			this.inventory.keys--;
@@ -1917,7 +1929,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 				this.activeCar = bike;
 				this.mode = 'car';
 				this.ui.showVehicle(bike);
-				this._flash(`${bike.spec.name} roubada! (F pra descer)`);
+				this._flash(bike.personal ? 'Sua bicicleta (F pra descer) — largada longe, ela volta para o quintal de casa' : `${bike.spec.name} roubada! (F pra descer)`);
 			});
 			if (!ok) { this.player.boarding = null; if (bike.visual) bike.visual.setVisible(true); bike.hold = false; }
 		};

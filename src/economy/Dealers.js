@@ -7,6 +7,9 @@
 // imóveis (~40% do mercado real), para o carro popular custar como um apartamento simples dividido por 3 e a Ferrari, como uma
 // cobertura de luxo. Variação de ±5% conforme o dia. O carro comprado vai para a GARAGEM de uma das suas casas (Garage); na
 // calçada da loja ficam 2 carros de VITRINE (trancados e sem gasolina — dá para arrombar, não dá para levar).
+// CONCESSIONÁRIAS DE MOTO (kind 'moto'): a popular (rua, scooter, trilha; aceita dinheiro sujo, como a de usados) nos bairros comuns
+// e a de motos premium (esportiva, custom de viagem) perto da orla; a moto comprada também vai para a garagem de uma casa sua.
+// LOJA NÁUTICA (kind 'boat', na marina — Marina.nautica): jet ski, barco de pesca e lancha; o comprado fica na sua vaga da marina.
 // Interface: ui/CarUI.js (modo 'dealer'). Marcador brilhante na porta e POI no mapa.
 // ============================================================================
 
@@ -23,23 +26,35 @@ const Dealers = {
         esportivo: 850000, muscle: 560000, super: 3600000, super2: 4200000,
         picape_pequena: 112000, picape_media: 305000, picape_grande: 490000,
         van_furgao: 330000, minivan: 128000,
+        // motos (estilo CG 160, PCX, XRE 300, CBR 1000RR, Harley Road King)
+        moto: 18000, moto_scooter: 22000, moto_trilha: 30000, moto_esportiva: 150000, moto_custom: 185000,
+        // barcos (jet ski, barco de pesca, lancha de 21 pés)
+        jetski: 95000, barco: 240000, lancha: 380000,
     },
 
-    // Padrão da loja pelo índice de localização (max = limite superior do idx) e o que ela vende.
+    // Padrão da loja pelo índice de localização (de min a max do idx) e o que ela vende. kind: 'car' (padrão) | 'moto'.
     TIERS: [
-        { id: 'usados', max: 0.12, n: 1, dirty: true, label: 'Feirão de usados', cond: 'usado',
+        { id: 'usados', min: 0, max: 0.12, n: 1, dirty: true, label: 'Feirão de usados', cond: 'usado',
           names: ['Feirão do Zé', 'Auto Usados da Quebrada'],
           models: ['quadradinho', 'besouro', 'seda_classico', 'hatch_90', 'hatch_80', 'brasilia', 'kombi', 'perua_antiga', 'sedan_70'] },
-        { id: 'popular', max: 0.40, n: 2, label: 'Concessionária', cond: '0 km',
+        { id: 'popular', min: 0.12, max: 0.40, n: 2, label: 'Concessionária', cond: '0 km',
           names: ['Autovia Veículos', 'Rede Popular Motors', 'Avenida Automóveis'],
           models: ['compacto_aventureiro', 'hatch_moderno2', 'sedan_popular', 'hatch_moderno', 'picape_pequena', 'mini_eletrico', 'minivan'] },
-        { id: 'medio', max: 0.65, n: 2, label: 'Concessionária premium', cond: '0 km',
+        { id: 'medio', min: 0.40, max: 0.65, n: 2, label: 'Concessionária premium', cond: '0 km',
           names: ['Prime Motors', 'Estrela Automóveis', 'Litoral Car'],
           models: ['suv_cupe', 'sedan_medio', 'suv_compacto', 'suv_quadrado', 'hatch_esportivo', 'jipe_offroad', 'picape_media', 'van_furgao'] },
-        { id: 'luxo', max: 1.01, n: 2, label: 'Importados e superesportivos', cond: '0 km',
+        { id: 'luxo', min: 0.65, max: 1.01, n: 2, label: 'Importados e superesportivos', cond: '0 km',
           names: ['Atlântica Prestige', 'Ilha Exotic Cars'],
           models: ['suv_grande', 'picape_grande', 'sedan_luxo', 'muscle', 'esportivo', 'super', 'super2'] },
+        { id: 'motos', kind: 'moto', min: 0.06, max: 0.5, n: 2, dirty: true, label: 'Concessionária de motos', cond: '0 km',
+          names: ['Duas Rodas Motos', 'Rio Moto Center'],
+          models: ['moto', 'moto_scooter', 'moto_trilha'] },
+        { id: 'motos_premium', kind: 'moto', min: 0.45, max: 1.01, n: 1, label: 'Motos premium', cond: '0 km',
+          names: ['Atlântica Motorcycles'],
+          models: ['moto_trilha', 'moto_esportiva', 'moto_custom'] },
     ],
+    // A loja náutica (uma só, na marina).
+    BOATS: { id: 'nautica', kind: 'boat', label: 'Loja náutica', cond: '0 km', models: ['jetski', 'barco', 'lancha'] },
 
     // ---------------------------------------------------------------- preço
     market() { const d = typeof Economy !== 'undefined' ? Economy.day : 0; return 1 + 0.05 * Math.sin(d * 1.3 + 2); },
@@ -52,7 +67,7 @@ const Dealers = {
         if (this.built || !RealEstate.built) return;
         this.built = true; this.game = game;
         const rng = Pixel.rng(71717), home = SafeHouse.spawnWorld();
-        const buckets = this.TIERS.map(() => []);
+        const cands = [];
         for (const b of CityGrid.blocks) {
             if (b.open || b.virtual || b.organic) continue;                // (favela: carro não chega na porta dos barracos)
             for (const l of b.lots) {
@@ -62,26 +77,31 @@ const Dealers = {
                 const cx = (l.x0 + l.x1) / 2, cz = (l.z0 + l.z1) / 2, door = { x: d.x, z: d.z, face: d.face };
                 if (home && hypot(door.x - home.x, door.z - home.z) < 40) continue;
                 if (RealEstate.list.some((p) => hypot(p.x - door.x, p.z - door.z) < 16)) continue;          // (não em cima da porta de um imóvel)
-                const loc = RealEstate.locate(cx, cz, b), ti = this.TIERS.findIndex((t) => loc.idx < t.max);
-                buckets[ti < 0 ? this.TIERS.length - 1 : ti].push({ b, door, loc });
+                cands.push({ b, door, loc: RealEstate.locate(cx, cz, b) });
             }
         }
-        this.TIERS.forEach((t, ti) => {
-            const pool = buckets[ti];
+        this.TIERS.forEach((t) => {
+            const kind = t.kind || 'car', pool = cands.filter((c) => c.loc.idx >= t.min && c.loc.idx < t.max);
             let made = 0;
             while (made < t.n && pool.length) {
                 const c = pool.splice(Math.floor(rng() * pool.length), 1)[0];
-                if (this.list.some((o) => hypot(o.x - c.door.x, o.z - c.door.z) < 220)) continue;            // espalhadas pela cidade
+                // espalhadas pela cidade (220 u das do mesmo ramo; 60 u de qualquer outra)
+                if (this.list.some((o) => hypot(o.x - c.door.x, o.z - c.door.z) < (o.kind === kind ? 220 : 60))) continue;
                 const slots = Garage.curbSlots(c.door.x, c.door.z, 3).slice(1);      // (as vagas dos lados: na frente da porta, o "F roubar" taparia o "E entrar")
                 if (slots.length < 2) continue;
                 const id = 'dealer' + this.list.length, models = t.models.slice().sort((a, z) => this.REF[a] - this.REF[z]);
-                const d = { id, name: t.names[made % t.names.length], tier: t, x: c.door.x, z: c.door.z, region: c.loc.region, models,
-                    display: slots.map((s, i) => ({ x: s.x, z: s.z, h: s.h, model: models[models.length - 1 - i], paint: CarSheet.POOLS[models[models.length - 1 - i]][0] })), cars: [] };
+                const d = { id, kind, name: t.names[made % t.names.length], tier: t, x: c.door.x, z: c.door.z, region: c.loc.region, models,
+                    display: slots.map((s, i) => ({ x: s.x, z: s.z, h: s.h, model: models[models.length - 1 - i], paint: Catalog.pool(models[models.length - 1 - i])[0] })), cars: [] };
                 this.list.push(d);
-                CityGrid.addPoi({ type: 'dealer', name: `${d.name} — ${t.label.toLowerCase()}`, x: d.x, z: d.z, dealer: id });
+                CityGrid.addPoi({ type: kind === 'moto' ? 'motodealer' : 'dealer', name: `${d.name} — ${t.label.toLowerCase()}`, x: d.x, z: d.z, dealer: id });
                 made++;
             }
         });
+        const N = typeof Marina !== 'undefined' && Marina.nautica;                 // a loja náutica, na marina (o POI é dela: Marina._nautica)
+        if (N) {
+            const B = this.BOATS, models = B.models.slice().sort((a, z) => this.REF[a] - this.REF[z]);
+            this.list.push({ id: B.id, kind: 'boat', name: 'Náutica Dirty Bay', tier: B, x: N.door.x, z: N.door.z, region: 'Marina', models, display: [], cars: [] });
+        }
         this.glow = new GlowBatch(game.scene, this.list.length + 1, 'dealerGlow', 'glow');
         for (let i = 0; i <= this.list.length; i++) { this.glow.alloc(); this.glow.off(i); }
         this._t = 0;
@@ -95,14 +115,13 @@ const Dealers = {
         const price = this.price(model), inv = game.inventory, clean = this.needsClean(d);
         if (!d.models.includes(model)) return { ok: false, msg: 'Esta loja não vende esse modelo' };
         const G = Garage.byId(garageId);
-        if (!G || !Garage.usable(G)) return { ok: false, msg: 'Escolha uma garagem de uma casa sua' };
+        if (!G || !Garage.usable(G) || !!G.boat !== (d.kind === 'boat')) return { ok: false, msg: d.kind === 'boat' ? 'Barco fica na vaga da marina' : 'Escolha uma garagem de uma casa sua' };
         if (Garage.free(G) <= 0) return { ok: false, msg: `A garagem de ${G.name} está cheia` };
         if (clean && inv.clean < price) return { ok: false, msg: inv.cash >= price ? 'Aqui só aceitam dinheiro LIMPO. Lave o seu nas fachadas' : `Faltam ${brl(price - inv.clean)} de dinheiro limpo` };
         if (!clean && inv.cash < price) return { ok: false, msg: `Faltam ${brl(price - inv.cash)}` };
         if (clean) inv.clean -= price; else inv.cash -= price;
-        const spec = CarSheet.MODELS[model];
         Garage.add({ model, paint, hp: 1, fuel: 1, mods: {}, bought: true, paid: price, dirty: !clean, day: Economy.day }, G);
-        return { ok: true, msg: `${spec.name} ${spec.model} comprado (-${brl(price)}) — está na garagem de ${G.name}` };
+        return { ok: true, msg: `Comprado: ${Catalog.label(model)} (-${brl(price)}) — ${G.boat ? 'está na sua vaga da marina' : `está na garagem de ${G.name}`}` };
     },
 
     // ---------------------------------------------------------------- interação

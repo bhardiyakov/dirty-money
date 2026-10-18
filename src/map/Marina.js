@@ -12,8 +12,10 @@ const Marina = {
     ZC: -437,               // centro da marina (z), no quarteirão de praia da orla leste
     SLIPS: 8, PITCH: 8, LEN: 38,
 
-    // Ocupação das vagas, do sul para o norte: [modelo, quantidade]. (a 4ª vaga fica vazia, de propósito)
-    LAYOUT: [['barco', 1], ['barco', 1], ['lancha', 1], null, ['lancha', 1], ['jetski', 3], ['jetski', 3], ['jetski', 2]],
+    // Ocupação das vagas, do sul para o norte: [modelo, quantidade]. A 4ª e a última ficam vazias: são as vagas do JOGADOR
+    // (BERTHS — onde ficam os barcos que ele compra na loja náutica ou atraca e guarda: Garage, garagem 'marina').
+    LAYOUT: [['barco', 1], ['barco', 1], ['lancha', 1], null, ['lancha', 1], ['jetski', 3], ['jetski', 3], null],
+    BERTHS: [3, 7],
 
     build() {
         const zc = this.ZC, P = this.PITCH, N = this.SLIPS, L = this.LEN;
@@ -44,6 +46,7 @@ const Marina = {
             this.slips.push(slip);
         }
         this._clubhouse(z0, z1);
+        this._nautica();
         console.log(`[MARINA] ${docks.length} píeres, ${this.slips.reduce((s, v) => s + v.boats.length, 0)} barcos atracados, margem em x=${xe}`);
     },
 
@@ -58,5 +61,21 @@ const Marina = {
         blk.props = blk.props.filter((p) => !(p.x > lot.x0 - 3 && p.x < lot.x1 + 5 && p.z > lot.z0 - 3 && p.z < lot.z1 + 3));     // sem árvore no terreno da sede
         this.lot = lot;
         CityGrid.addPoi({ type: 'marina', name: 'Marina Dirty Bay', x: this.xe + 20, z: this.ZC });
+        this.block = blk;
+    },
+
+    // LOJA NÁUTICA ao sul da sede, na mesma areia: térreo com "NAUTICA" no telhado e a porta de frente para o cais (Dealers: vende
+    // jet ski, lancha e barco — o comprado fica na sua vaga da marina). door = onde o jogador aperta E.
+    _nautica() {
+        const blk = this.block, c = this.lot;
+        this.nautica = null;
+        if (!blk || !c) return;
+        const x1 = c.x1, z1 = c.z0 - 5, lot = { x0: x1 - 16, z0: z1 - 14, x1, z1, floors: 1, height: Config.city.floorH, facade: 'concrete1', roof: 'tile0', marina: true, nautica: true };
+        if (lot.z0 < blk.slab[1] + 2) return;
+        blk.lots.push(lot);
+        CityGrid.addObstacles([{ x0: lot.x0, z0: lot.z0, x1: lot.x1, z1: lot.z1, h: lot.height }]);
+        blk.props = blk.props.filter((p) => !(p.x > lot.x0 - 3 && p.x < lot.x1 + 5 && p.z > lot.z0 - 3 && p.z < lot.z1 + 3));
+        this.nautica = { lot, door: { x: lot.x1 + 1.4, z: (lot.z0 + lot.z1) / 2, face: -Math.PI / 2 } };
+        CityGrid.addPoi({ type: 'boatshop', name: 'Náutica Dirty Bay — jet skis, lanchas e barcos', x: this.nautica.door.x, z: this.nautica.door.z });
     },
 };

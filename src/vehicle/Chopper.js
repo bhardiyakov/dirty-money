@@ -45,6 +45,7 @@ class Chopper {
 
         this.visual = new HeliVisual(this.scene, variant, 'chopper', 1.7);      // (y = alt + 1,7)
         Chopper._fx(this.scene);
+        this.alt = this.floor = this.floorAt(x, z);                         // (no heliponto do telhado)
         this._place(0);
     }
 
@@ -73,7 +74,7 @@ class Chopper {
         this.position.set(h.x, 0, h.z);
         this.heading = h.heading;
         this.vx = this.vz = this.vy = this.yawRate = 0;
-        this.alt = this.floor = 0;
+        this.alt = this.floor = this.floorAt(h.x, h.z);
         this.rpm = 0; this.hp = this.maxHp;
         this.state = 'parked'; this.alive = true; this.pilot = false; this.lastHitBy = 'env';
         this.visual.setVisible(true);
