@@ -170,7 +170,7 @@ class ChopCareer extends Career {
             if (m[arg]) return 'Esse carro já tem isso';
             if (d.parts < M.parts) return `Faltam ${M.parts - d.parts} peça(s)`;
             d.parts -= M.parts; m[arg] = 1;
-            if (arg === 'engine') car.spec = Object.assign({}, car.spec, { power: car.spec.power * 1.25, t100: car.spec.t100 ? car.spec.t100 / 1.25 : undefined, maxSpeed: car.spec.maxSpeed + 4 });
+            if (arg === 'engine') Tuning.apply(car);
             if (arg === 'armor') { const f = car.hpFrac; car.maxHp = Math.round(car.maxHp * 1.6); car.hp = car.maxHp * f; }
             this.addXp(40 + M.parts * 10);
             if (m.engine && m.armor && m.hidden && this.g.achievements) this.g.achievements.bump('fullmod');

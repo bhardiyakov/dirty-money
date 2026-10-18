@@ -161,6 +161,9 @@ const CarArt3D = {
 		// a roda do arquivo é a da DIREITA; a da esquerda é ela girada 180° em volta do eixo vertical (x, z → -x, -z), como no glTF
 		for (const c of W) put(wheel, !c[4], c, 1 + (c[3] ? 0 : 2) + (c[4] ? 1 : 0));
 		for (const { r, g } of rotors) put(g, false, r.c, r.axis === 'y' ? 5 : 6);
+		return (this._models[id] = this._mesh(id, D, W, pos, nor, col, pbr, wc, idx));
+	},
+	_mesh(id, D, W, pos, nor, col, pbr, wc, idx) {
 		const scene = this._scene, mesh = new BABYLON.Mesh('car3d_' + id, scene);
 		const vd = new BABYLON.VertexData();
 		vd.positions = pos; vd.normals = nor; vd.colors = col; vd.indices = idx;
@@ -168,7 +171,7 @@ const CarArt3D = {
 		mesh.setVerticesData('pbr', pbr, false, 4);
 		mesh.setVerticesData('wc', wc, false, 4);
 		const front = W.filter((c) => c[3]), rear = W.filter((c) => !c[3]);
-		m = { id, mesh, n: 0, cap: 0, D, R: D.R || 0.3, zf: front.length ? front[0][2] : D.len * 0.3, zr: rear.length ? rear[0][2] : -D.len * 0.3 };
+		const m = { id, mesh, n: 0, cap: 0, D, R: D.R || 0.3, zf: front.length ? front[0][2] : D.len * 0.3, zr: rear.length ? rear[0][2] : -D.len * 0.3 };
 		// (vai em cada instância: o material é um só; raio −1 = barco: o shader corta o que fica abaixo da linha d'água)
 		m.dims = [Math.max(D.max[2], -D.min[2]), D.h, D.wid / 2, D.kind === 'boat' ? -1 : D.R || 0.3];
 		const air = D.kind === 'heli';
@@ -179,8 +182,47 @@ const CarArt3D = {
 		mesh.alwaysSelectAsActiveMesh = true;      // (o recorte é feito aqui: só os carros perto da câmera viram instância)
 		mesh.doNotSyncBoundingInfo = true;
 		this._grow(m, 8);
-		this._models[id] = m;
 		return m;
+	},
+
+	// AEROFÓLIO da tunagem (Tuning: style 1 = lip na tampa, 2 = asa GT na cor do carro, 3 = asa GT de carbono): caixas montadas na
+	// beira traseira do modelo — a altura vem da própria lataria (o ponto mais alto da faixa de trás, longe dos retrovisores) — numa
+	// malha com os mesmos atributos do carro (sobe, desce e inclina junto com a carroceria). Uma por modelo e estilo, na 1ª vez.
+	_wing(id, style) {
+		const D = this._defs[id], body = this._read(D.body, D.q, D.pack), zr = D.min[2], hw = D.wid / 2;
+		let top = D.h * 0.6;
+		for (let i = 0; i < body.nv; i++) {
+			const x = body.P[i * 3] * body.q, y = body.P[i * 3 + 1] * body.q, z = body.P[i * 3 + 2] * body.q;
+			if (z < zr + 0.5 && Math.abs(x) < hw * 0.6 && y > top) top = y;
+		}
+		const pm = D.mats.find((t) => t.k === 1) || { c: [0.5, 0.5, 0.5], r: 0.35, m: 0.2, cc: 0.8 };
+		const paint = [pm.c, 1, pm.r, pm.m, pm.cc], carbon = [[0.05, 0.055, 0.06], 0, 0.28, 0.15, 0.9], black = [[0.04, 0.04, 0.045], 0, 0.6, 0.1, 0.2];
+		const skin = style === 3 ? carbon : paint, pos = [], nor = [], col = [], pbr = [], wc = [], idx = [];
+		const box = (x0, y0, z0, x1, y1, z1, mt) => {
+			const F = [[[1, 0, 0], [[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]]], [[-1, 0, 0], [[x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [x0, y0, z0]]],
+				[[0, 1, 0], [[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]]], [[0, -1, 0], [[x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1]]],
+				[[0, 0, 1], [[x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [x0, y0, z1]]], [[0, 0, -1], [[x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0]]]];
+			for (const [n, Q] of F) {
+				const b = pos.length / 3;
+				for (const q of Q) { pos.push(...q); nor.push(...n); col.push(...mt[0], mt[1]); pbr.push(mt[2], mt[3], mt[4], 0); wc.push(0, 0, 0, 0); }
+				idx.push(b, b + 1, b + 2, b, b + 2, b + 3, b, b + 2, b + 1, b, b + 3, b + 2);       // (as duas faces: a malha do carro tem a sua orientação)
+			}
+		};
+		// (de cima, peça na cor do carro some sobre a tampa: as bordas pretas e a asa passando um pouco da traseira desenham o contorno)
+		if (style === 1) {
+			box(-hw * 0.84, top - 0.02, zr + 0.12, hw * 0.84, top + 0.05, zr + 0.42, skin);
+			box(-hw * 0.86, top + 0.03, zr + 0.02, hw * 0.86, top + 0.12, zr + 0.13, black);                                    // borda do lip
+		} else {
+			const lift = 0.32, edge = style === 3 ? carbon : black;
+			for (const s of [-1, 1]) {
+				box(s * hw * 0.5 - 0.035, top - 0.03, zr + 0.18, s * hw * 0.5 + 0.035, top + lift, zr + 0.34, black);       // suportes
+				box(s * hw * 0.98 - 0.04, top + lift - 0.12, zr - 0.16, s * hw * 0.98 + 0.04, top + lift + 0.1, zr + 0.44, edge);   // placas das pontas
+			}
+			box(-hw * 0.96, top + lift - 0.01, zr - 0.08, hw * 0.96, top + lift + 0.05, zr + 0.4, skin);                        // a asa
+			box(-hw * 0.96, top + lift + 0.04, zr - 0.14, hw * 0.96, top + lift + 0.1, zr - 0.04, edge);                        // borda de fuga (gurney)
+		}
+		const W = D.wheels || [];
+		return (this._models[id + '#w' + style] = this._mesh(id + '#w' + style, D, W, new Float32Array(pos), new Float32Array(nor), new Float32Array(col), new Float32Array(pbr), new Float32Array(wc), new Uint16Array(idx)));
 	},
 
 	// Capacidade de instâncias do modelo: as matrizes (thin instances do Babylon) e UM buffer com os 4 atributos por instância
@@ -334,7 +376,7 @@ const CarArt3D = {
 				vec3 N = normalize(vNK.xyz);
 				vec3 V = normalize(eye - vWS.xyz);
 				float row = (floor(vCR.w + 0.5) + 0.5) / paintRows;
-				vec2 fx = texture2D(paints, vec2(0.625, row)).rg;          // r = carcaça queimada, g = desbotada
+				vec3 fx = texture2D(paints, vec2(0.625, row)).rgb;         // r = carcaça queimada, g = desbotada, b = acabamento (tunagem)
 				vec3 c = vCR.rgb;
 				float rough = vPD.x, metal = vPD.y, coat = vPD.z, dent = vPD.w;
 				bool painted = is(kind, 1.0) || is(kind, 2.0);
@@ -386,6 +428,17 @@ const CarArt3D = {
 					float l = dot(c, vec3(0.3, 0.59, 0.11));
 					c = mix(c, vec3(l) * 0.96, fx.g * 0.35);
 					coat *= 1.0 - fx.g; rough = mix(rough, 0.75, fx.g);
+				}
+				// ---- acabamento da TUNAGEM (CarSheet.PAINTS[].fx): fosco (sem verniz), cromado (espelho que reflete o céu) e perolizado
+				// (a cor vira da pintura para a pintura 2 conforme o ângulo: o teto mostra uma, as laterais e as curvas a outra)
+				if (painted && fx.b > 0.1) {
+					if (fx.b < 0.37) { rough = 0.72; coat = 0.0; metal = 0.0; c *= 0.92; }
+					else if (fx.b < 0.62) { rough = 0.04; metal = 1.0; coat = 0.3; }
+					else {
+						float fl = smoothstep(0.05, 0.8, 1.0 - clamp(dot(N, V), 0.0, 1.0)) * 0.85 + 0.15 * smoothstep(0.3, -0.3, N.y);
+						c = mix(texture2D(paints, vec2(0.125, row)).rgb, texture2D(paints, vec2(0.375, row)).rgb, clamp(fl, 0.0, 1.0));
+						coat = 1.0; rough = min(rough, 0.16); metal = max(metal, 0.4);
+					}
 				}
 				if (fx.r > 0.5) {
 					float l = n2(L.xz * 5.0 + L.y * 2.0);
@@ -472,6 +525,11 @@ const CarArt3D = {
 			const m = M[a.modelId] || this._model(a.modelId);
 			if (m.n >= m.cap) this._grow(m, m.cap * 2);
 			a._write(m, m.n++);
+			if (a.wing && a.kind === 'car') {                                  // aerofólio da tunagem: outra malha, com os mesmos atributos do carro
+				const w = M[a.modelId + '#w' + a.wing] || this._wing(a.modelId, a.wing);
+				if (w.n >= w.cap) this._grow(w, w.cap * 2);
+				a._write(w, w.n++);
+			}
 		}
 		const s = CarArt._sun, d = Config.light.sunDir, dl = Math.hypot(d[0], d[1], d[2]);
 		const tint = typeof SpriteMaterial !== 'undefined' ? SpriteMaterial.sharedTint() : null;
@@ -537,6 +595,8 @@ class Car3DActor {
 		this._px = null; this._pz = 0;
 		// luzes (CarLights.setLamps) e pneus furados
 		this.lamps = { head: 0, tail: 0, bits: 0 };
+		this.wing = 0;                               // aerofólio da tunagem (0 = nenhum; CarArt3D._wing)
+		this.lower = 0;                              // rebaixamento da suspensão (m)
 		this.flatBits = 0;
 		this.glassBits = 0;
 		CarArt3D.live.add(this);
@@ -659,7 +719,7 @@ class Car3DActor {
 		M[o + 12] = this.x; M[o + 13] = this.y - 1.5; M[o + 14] = this.z; M[o + 15] = 1;
 		const A = m.inst, L = this.lamps, d = m.dims;
 		A[o] = this.spin; A[o + 1] = this.steer; A[o + 2] = this.pitch; A[o + 3] = this.roll;                       // ia
-		A[o + 4] = this.heave / k; A[o + 5] = this.yaw; A[o + 6] = this.variant; A[o + 7] = this.dent;                  // ib
+		A[o + 4] = (this.heave - this.lower) / k; A[o + 5] = this.yaw; A[o + 6] = this.variant; A[o + 7] = this.dent;    // ib
 		A[o + 8] = this.shade; A[o + 9] = L.head; A[o + 10] = L.tail; A[o + 11] = L.bits + this.flatBits + this.glassBits;              // ic
 		A[o + 12] = d[0]; A[o + 13] = d[1]; A[o + 14] = d[2]; A[o + 15] = d[3];                                       // dm
 	}

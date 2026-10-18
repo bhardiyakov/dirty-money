@@ -43,6 +43,7 @@ class PauseMenu {
 			dealer: { label: 'Concessionária (carros à venda)', icon: 'dealer' },
 			motodealer: { label: 'Concessionária de motos', icon: 'moto' },
 			boatshop: { label: 'Loja náutica (jet skis, lanchas, barcos)', icon: 'boat' },
+			tuning: { label: 'Loja de tunagem (motor, turbo, pintura, neon, aerofólio)', icon: 'tune' },
 			helipad: { label: 'Heliponto (escada externa até o telhado)', icon: 'heli' },
 			fachada: { label: 'Suas fachadas (lavagem)', icon: 'cash_bag', mine: true },      // pontos e negócios comprados para lavar dinheiro (Laundry.syncMap)
 		};

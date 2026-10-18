@@ -112,13 +112,14 @@ const CarArt = {
         console.log(`[CARROS] atlas ${W}×${H} (${this.stats.models} modelos): PNG ${this.stats.decodeMs} ms (${how}), GPU ${this.stats.gpuMs} ms`);
     },
 
-    // Tabela de pinturas (linha = variante): [pintura, pintura 2, efeitos (r = carcaça queimada, g = desbotado), -].
+    // Tabela de pinturas (linha = variante): [pintura, pintura 2, efeitos (r = carcaça queimada, g = desbotado, b = acabamento da
+    // tunagem: 64 fosco, 128 cromado, 192 perolizado — ver CarArt3D), -].
     _paintTable(scene) {
         const P = CarSheet.PAINTS, n = P.length, d = new Uint8Array(4 * n * 4);
         const hex = (h) => [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16));
         P.forEach((p, row) => {
             const a = hex(p.paint), b = hex(p.paint2 || p.paint), o = row * 16;
-            d.set([a[0], a[1], a[2], 255, b[0], b[1], b[2], 255, p.burnt ? 255 : 0, p.worn ? 255 : 0, 0, 255, 0, 0, 0, 255], o);
+            d.set([a[0], a[1], a[2], 255, b[0], b[1], b[2], 255, p.burnt ? 255 : 0, p.worn ? 255 : 0, (p.fx || 0) * 64, 255, 0, 0, 0, 255], o);
         });
         const t = BABYLON.RawTexture.CreateRGBATexture(d, 4, n, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
         t.wrapU = t.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;

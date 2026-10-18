@@ -148,8 +148,9 @@ class CarUI {
         const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = Garage.label(r);
         const kv = (k, v) => Object.assign(document.createElement('div'), { className: 'kv', innerHTML: `<span>${k}</span><b>${v}</b>` });
         const out = [big, nm, kv('ONDE ESTÁ', Garage.where(r)), kv('ORIGEM', r.bought ? `comprado (${brl(r.paid)})` : 'roubado — sem seguro'), kv('LATARIA', `${Math.round(r.hp * 100)}%`), kv('GASOLINA', `${Math.round((r.fuel || 0) * 100)}%`)];
-        const mods = Object.keys(r.mods || {}).filter((k) => r.mods[k]);
-        if (mods.length) out.push(kv('PEÇAS DO DESMANCHE', mods.map((k) => ({ engine: 'motor', armor: 'blindagem', hidden: 'fundo falso' }[k] || k)).join(', ')));
+        const M = r.mods || {}, mods = Object.keys(M).filter((k) => M[k]);
+        const nm2 = { engine: 'motor (desmanche)', armor: 'blindagem', hidden: 'fundo falso', turbo: 'turbo', tEng: `motor estágio ${M.tEng}`, tBrk: `freios ${M.tBrk}`, tSus: `suspensão ${M.tSus}`, wing: 'aerofólio', neon: `neon ${Tuning.NEON_NAMES[M.neon] || ''}` };
+        if (mods.length) out.push(kv('PEÇAS', mods.map((k) => nm2[k] || k).join(', ')));
         out.push(this._pick('MANOBRISTA LEVA PARA (Tab)', G ? `${G.name} <small>(${Garage.free(G)} vaga(s))</small>` : '— nenhuma outra casa com vaga —', () => this._dest(-1), () => this._dest(1)));
         const can = !!G && !withYou && !ins && this.g.inventory.cash >= Garage.VALET;
         out.push(this._btn(`LEVAR PARA LÁ — ${brl(Garage.VALET)}${withYou ? '<br><small>você está dirigindo este carro</small>' : ins ? '<br><small>está no seguro</small>' : ''}`, () => this.choose(), 'btn pri go', can));

@@ -624,6 +624,7 @@ class Game {
 			this._fuelUpdate(dt);
 			if (this.careers && !frozenUI && this.careers.carPrompt() && this.input.consumePress('e')) this.careers.carInteract();      // desmanche: E desmancha o carro
 			else if (!frozenUI && Garage.carPrompt(this) && this.input.consumePress('e')) Garage.carInteract(this);      // garagem: E guarda o carro na vaga
+			else if (!frozenUI && !Panel.anyCool() && Tuning.carPrompt(this) && this.input.consumePress('e')) Tuning.carInteract(this);      // loja de tunagem
 			else if (!frozenUI && !Panel.anyCool() && Mechanic.carPrompt(this) && this.input.consumePress('e')) Mechanic.carInteract(this);      // oficina / borracharia / mecânico do morro
 			// (uma batida forte pode arremessar o piloto de dentro do drive(): aí o foco é o jogador)
 			const drv = this.mode === 'car' && this.activeCar ? this.activeCar : null;
@@ -810,7 +811,7 @@ class Game {
 			RealEstate.build(this); RealEstate.update(dt); this.propertyUI.update(dt);
 			Laundry.syncMap(this, dt);                                                       // fachadas compradas → mapa e radar
 			Heists.build(this); Mechanic.build(this); Business.syncMap(this, dt);           // joalherias, oficinas, seus negócios no mapa
-			Dealers.build(this); Dealers.update(dt); Garage.update(dt); PersonalBike.update(dt); this.carUI.update(dt);      // concessionárias (vitrine) e garagens (seus carros)
+			Dealers.build(this); Dealers.update(dt); Tuning.build(this); Tuning.update(dt); Garage.update(dt); PersonalBike.update(dt); this.carUI.update(dt);      // concessionárias (vitrine) e garagens (seus carros)
 		}
 
 		Perf.lap('favela (gangues/moto/missões)');
@@ -1683,6 +1684,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			html = this.careers.carPrompt();
 		} else if (this.mode === 'car' && Garage.carPrompt(this)) {
 			html = Garage.carPrompt(this);
+		} else if (this.mode === 'car' && Tuning.carPrompt(this)) {
+			html = Tuning.carPrompt(this);
 		} else if (this.mode === 'car' && Mechanic.carPrompt(this)) {
 			html = Mechanic.carPrompt(this);
 		} else if (this.mode === 'car' && this._fuelPrompt) {

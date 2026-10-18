@@ -141,9 +141,9 @@ const Garage = {
         if (!car) return;
         car.ownedRec = rec; rec._car = car; car._xpGiven = true;
         const m = rec.mods || {};
-        if (m.engine) car.spec = Object.assign({}, car.spec, { power: car.spec.power * 1.25, t100: car.spec.t100 ? car.spec.t100 / 1.25 : undefined, maxSpeed: car.spec.maxSpeed + 4 });
         if (m.armor) car.maxHp = Math.round(car.maxHp * 1.6);
         car.mods = Object.assign({}, m);
+        Tuning.apply(car);                                                      // motor (desmanche e tunagem), turbo, freios, suspensão, aerofólio
         car.hp = Math.max(1, rec.hp * car.maxHp);
         car.dent = rec.hp > 0.75 ? 0 : rec.hp > 0.5 ? 1 : rec.hp > 0.25 ? 2 : 3;
         if (car.tank > 0) car.fuel = rec.fuel * car.tank;
