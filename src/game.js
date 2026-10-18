@@ -859,21 +859,10 @@ class Game {
 		if (this.achievements) this.achievements.update(dt);
 		if (this.empire) { this.empire.update(dt); EmpireUI.hud(this); }
 		Perf.lap('HUD/carreiras/império');
-		this._autosave(dt);
 		this._geoT = (this._geoT || 0) + dt;
 		if (this._geoT > 15) { this._geoT = 0; this._releaseStaticGeometry(); }
 		this._sweepT = (this._sweepT || 0) + dt;
 		if (this._sweepT > 3) { this._sweepT = 0; this._sweep(); }
-	}
-
-	// Autosave: a cada 2 min de jogo, só em momento calmo (sem procurado, preso, morto, dormindo, em missão de tempo). Antes só dormir salvava,
-	// e perder 1 h de progresso por um crash/aba fechada é o jeito mais rápido de o jogador não voltar.
-	_autosave(dt) {
-		this._asT = (this._asT || 0) + dt;
-		if (this._asT < 120) return;
-		if (this.wanted.level > 0 || this.arrest || this.death || this.sleeping || this.hiding || this.holdup || this.player.rag || Robbery.session || Heists.run || Interiors.active || (this.missions && this.missions.cur && this.missions.cur.type !== 'defend') || (this.careers && this.careers.job)) return;
-		this._asT = 0;
-		if (SaveGame.write(this)) this._flash('💾 Progresso salvo automaticamente');
 	}
 
 	// Dentro de uma loja (Interiors): só o jogador, a câmera, o relógio e a interface rodam; trânsito, pedestres, polícia e física ficam parados.

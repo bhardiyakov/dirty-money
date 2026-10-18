@@ -80,7 +80,7 @@ GuideUI.PAGES = {
         <li>Abra a aba <b>CARREIRAS</b> (<kbd>O</kbd>) e aceite um trabalho de patente inicial: <b>Puxada</b> (desmanche), <b>Levantar a fita</b> (ladrão), <b>Catar sucata</b> (armeiro), <b>Chupa-cabra</b> (estelionato) ou <b>Abrir a banca</b> (bicho).</li>
         <li>Na <b>boca de fumo</b> da favela, peça serviço para subir no tráfico e comprar suas primeiras armas.</li>
         <li>Junte dinheiro, compre uma <b>fachada</b> para lavar e comece a investir em imóveis.</li></ul>
-        <div class="gd-tip">O painel embaixo da tela mostra as <b>metas</b>: cada uma paga um prêmio na hora. O jogo <b>salva sozinho</b> a cada 2 minutos em momento calmo e quando você dorme.</div>`,
+        <div class="gd-tip">O painel embaixo da tela mostra as <b>metas</b>: cada uma paga um prêmio na hora. O jogo <b>não salva sozinho</b>: salve no menu (<kbd>ESC</kbd> → 💾 Salvar) ou dormindo.</div>`,
 
     controls: () => `<h2>Controles</h2>
         <h3>Teclado e mouse</h3><table>
@@ -192,7 +192,7 @@ GuideUI.PAGES = {
     home: () => `<h2>Casa, imóveis e save</h2>
         <ul><li>A safe house da favela é sua desde o começo: <b>cama</b> (dormir e salvar), <b>baú</b>, <b>cofre</b> e <b>geladeira</b>.</li>
         <li><b>Imóveis</b> à venda pela cidade (marcados no mapa): na favela com sujo, fora dela só com limpo. Dá para visitar, comprar, reformar, mudar a safe house e vender.</li>
-        <li><b>Save</b>: dormir salva; o jogo também salva sozinho a cada 2 minutos quando você está calmo (sem procurado, sem trabalho com prazo). "Carregar jogo" no menu inicial.</li></ul>`,
+        <li><b>Save</b>: 3 espaços. Salve no menu (<kbd>ESC</kbd> → 💾 Salvar, sem procurado) ou dormindo (no espaço do jogo atual) — não há save automático. "Carregar jogo" no menu inicial escolhe o espaço.</li></ul>`,
 
     goals: () => `<h2>Metas de carreira</h2>
         <p>O painel embaixo da tela mostra a próxima meta de cada trilha — <b>Patrimônio</b>, <b>Carreiras</b>, <b>Morro</b>, <b>Lavagem</b>, <b>Imóveis</b> e <b>Fuga</b> — com barra de progresso. Cada meta batida paga na hora (dinheiro e, nas maiores, kits médicos) e libera a próxima.</p>`,
