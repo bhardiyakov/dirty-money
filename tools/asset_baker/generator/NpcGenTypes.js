@@ -127,8 +127,8 @@ function NpcGenTypes(G) {
     // O jogador no começo do jogo (a roupa de sempre do Outfit). Só os campos de FORMA importam para o atlas pronto; as cores vêm
     // da paleta (a roupa muda de cor na hora). Trocar a forma (boné, mochila, regata…) é outro visual: monta-se no guarda-roupa (Wardrobe).
     const PLAYER_DEFAULT = {
-        id: 'protagonista', label: 'Protagonista', group: 'Protagonista', skin: 'pele_pessego', hair: 'spiky', hair_color: 'castanho', eyes: 'angry',
-        top: 'jacket', top_color: 'laranja', pattern: null, bottom: 'jeans', bottom_color: 'jeans_escuro', shoes: 'sneaker', shoe_color: 'tenis_branco',
+        id: 'protagonista', label: 'Protagonista', group: 'Protagonista', skin: 'pele_parda', hair: 'buzz', hair_color: 'preto', eyes: 'angry',
+        top: 'tshirt', top_color: 'branco', pattern: null, bottom: 'pants', bottom_color: 'roupa_preta', shoes: 'sneaker', shoe_color: 'tenis_branco',
         sole_color: 'tenis_branco', lace_color: 'cadarco', head: null, hat_color: 'roupa_preta', bag: null, body: 'normal', gender: 'm',
     };
     G.BY_ID.protagonista = PLAYER_DEFAULT;
