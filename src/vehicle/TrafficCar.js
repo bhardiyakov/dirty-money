@@ -47,7 +47,7 @@ class TrafficCar extends Vehicle {
     park() {
         this.clearDeadDriver();
         this.mode = 'parked'; this.route = null;
-        this.locked = true; this.driver = false;
+        this.locked = !this.ownedRec && !this.personal; this.driver = false;      // (o carro SEU — garagem, bicicleta própria — fica sempre aberto)
         this.alarm = 0; this.hazard = false;
     }
 

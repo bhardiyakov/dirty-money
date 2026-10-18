@@ -626,6 +626,7 @@ class Player {
             const t = 1 - Math.exp(-(this.swimming ? W.accel : Config.player.accel * 0.5) * dt);
             this.velocity = BABYLON.Vector3.Lerp(this.velocity, moveDir.scale(maxSpeed), t);
             this.skidding = false;
+            this._steered = false;                                                  // (na água o corpo vira para onde nada — o giro abaixo; o de terra não roda aqui)
         } else this._landVelocity(moveDir, maxSpeed, dt, aiming || !!this.coverLock || !!this.action);
         if (this.velocity.lengthSquared() < 1e-4) this.velocity.setAll(0);
 
