@@ -200,6 +200,8 @@ const PadNav = {
             this.hold('ArrowLeft', btn(14) || ax < -0.35); this.hold('ArrowRight', btn(15) || ax > 0.35);
             this.hold('Shift', btn(5));
             this.hold(' ', btn(0));
+            Pool.padSpin(p.axes[2] || 0, p.axes[3] || 0);                    // efeito: analógico direito
+            if (edge(12)) this.key('ArrowUp'); if (edge(13)) this.key('ArrowDown'); if (edge(3)) this.key('c');
             if (edge(1)) this.key('Escape');
             return;
         }
