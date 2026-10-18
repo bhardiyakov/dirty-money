@@ -10,8 +10,11 @@
 class CarLights {
     // maxCars: carros COM LUZ ao mesmo tempo (só os perto da câmera têm); se passar, os lotes crescem sozinhos.
     constructor(scene, maxCars = 48) {
-        this.glow = new GlowBatch(scene, maxCars * 10, 'carGlow', 'glow');
-        this.cones = new GlowBatch(scene, maxCars * 2, 'carCone', 'cone');
+        // under(): os faróis, lanternas e o cone no chão são luz do mundo como a dos postes — desenhados antes dos personagens 2,5D.
+        // Por último, somavam luz por cima do piloto (que ficava "lavado") menos onde o quadro 3D da bicicleta/moto tapava o brilho:
+        // ali o piloto ficava com a cor de verdade, mais escura, e parecia uma sombra do veículo por cima dele.
+        this.glow = new GlowBatch(scene, maxCars * 10, 'carGlow', 'glow').under();
+        this.cones = new GlowBatch(scene, maxCars * 2, 'carCone', 'cone').under();
         this.puffs = new PuffSystem(scene, 420);
         this.slots = new Map();          // carro -> { hl:[2], tl:[2], sig:[2], siren:[2], pool, cone }
         this.time = 0;
