@@ -1,10 +1,12 @@
 // ============================================================================
 // Tuning — as LOJAS DE TUNAGEM: chegue DIRIGINDO um carro SEU (comprado ou guardado na sua garagem), pare na frente e aperte E.
-// A janela fica de lado e o carro aparece com as peças escolhidas na hora (prévia); só fica se você pagar — fechar desfaz tudo.
+// A loja abre a GARAGEM POR DENTRO (TuneGarage: showroom 3D, câmera que vai até a peça) com a janela de lado; o carro aparece com as
+// peças escolhidas na hora (prévia) e só fica com elas se você pagar — fechar desfaz tudo.
 //   PINTURA      as cores de fábrica (R$ 1.800) e as ESPECIAIS (fosco, cromado, perolizado/camaleão: CarSheet.PAINTS[].fx)
 //   MOTOR        estágios 1..3 (mais força e máxima) · TURBO: força, máxima e o assobio/blow-off no som (EngineAudio.profileOf)
 //   FREIOS       1..3 (frenagem mais forte: Vehicle.tuneBrake) · SUSPENSÃO 1..3 (rebaixa o carro 3D e segura mais na curva: tuneGrip)
 //   NEON         luz colorida no chão embaixo do carro (CarLights) · AEROFÓLIO: lip, asa GT, asa GT de carbono (CarArt3D._wing)
+//   BODYKIT      kit de rua, kit de corrida (splitter, canards, difusor de carbono) e wide body (alargadores) — CarArt3D._kit
 // As peças moram em car.mods / registro da Garage (salvo com o jogo); Tuning.apply refaz o carro a partir delas (spawn da garagem,
 // desmanche). Preço × porte do carro (um superesportivo paga mais caro pela mesma peça). Acima de R$ 800, só dinheiro limpo.
 // ============================================================================
@@ -21,6 +23,7 @@ const Tuning = {
         turbo: { name: 'Turbo', icon: '🌀', lv: [['Aspirado', 0], ['Kit turbo com intercooler e blow-off', 14000]] },
         tBrk: { name: 'Freios', icon: '🛑', lv: [['De fábrica', 0], ['Pastilhas cerâmicas e fluido de corrida', 2500], ['Discos ventilados e pinças de 4 pistões', 6000], ['Big brake de 6 pistões', 12000]] },
         tSus: { name: 'Suspensão', icon: '🔩', lv: [['De fábrica', 0], ['Molas esportivas (−2,5 cm)', 3000], ['Coilover regulável (−5 cm)', 7000], ['Suspensão a ar (−7,5 cm)', 13000]] },
+        kit: { name: 'Bodykit', icon: '🧩', lv: [['De fábrica', 0], ['Kit de rua — lip, saias e saia traseira na cor do carro', 5500], ['Kit de corrida — splitter, canards e difusor de carbono', 9000], ['Wide body — alargadores nas 4 rodas, saias largas e difusor', 16000]] },
         wing: { name: 'Aerofólio', icon: '🪽', lv: [['Nenhum', 0], ['Lip na tampa (cor do carro)', 2200], ['Asa GT (cor do carro)', 4800], ['Asa GT de carbono', 8500]] },
     },
     NEON_PRICE: 3500, PAINT_PRICE: 1800, SPECIAL_PRICE: 6500, REMOVE: 300,
@@ -93,7 +96,7 @@ const Tuning = {
         else car.spec = Object.assign({}, base, { power: base.power * pm, t100: base.t100 ? base.t100 / pm : undefined, maxSpeed: base.maxSpeed * (1 + this.ENG_TOP[eng] + (m.turbo ? 0.05 : 0)) + (m.engine ? 4 : 0) });
         car.tuneBrake = this.BRK[brk]; car.tuneGrip = this.SUS_GRIP[sus];
         const v = car.visual;
-        if (v && 'wing' in v) { v.wing = m.wing | 0; v.lower = this.SUS_LOW[sus]; }
+        if (v && 'wing' in v) { v.wing = m.wing | 0; v.kit = m.kit | 0; v.lower = this.SUS_LOW[sus]; }
     },
     // Ficha de comparação: máxima (km/h) e 0–100 (s).
     stats(car) { return { top: Math.round(car.spec.maxSpeed * 3.6), t100: car.spec.t100 ? car.spec.t100.toFixed(1).replace('.', ',') : '—' }; },
@@ -116,7 +119,7 @@ const Tuning = {
         if (game.mode !== 'car' || !this.tunable(car) || car.speed > 1.5) return '';
         const s = this.at(car.position.x, car.position.z);
         if (!s) return '';
-        return `<b>E</b> tunar o carro<small>${s.name} · ${car.ownedRec ? 'motor, turbo, freios, suspensão, pintura, neon e aerofólio' : '⚠ só tunamos carro SEU (comprado ou guardado na sua garagem)'}</small>`;
+        return `<b>E</b> tunar o carro<small>${s.name} · ${car.ownedRec ? 'bodykit, motor, turbo, freios, suspensão, pintura, neon e aerofólio' : '⚠ só tunamos carro SEU (comprado ou guardado na sua garagem)'}</small>`;
     },
     carInteract(game) {
         if (!this.carPrompt(game)) return false;
@@ -129,7 +132,7 @@ const Tuning = {
     // ---------------------------------------------------------------- a janela (prévia ao vivo)
     _panel(game) {
         if (!this._p) {
-            this._p = new Panel('tuneUI', { width: 470, onAct: (a, arg) => this._act(game, a, arg), onClose: () => this._revert() });
+            this._p = new Panel('tuneUI', { width: 470, onAct: (a, arg) => this._act(game, a, arg), onClose: () => { this._revert(); if (typeof TuneGarage !== 'undefined') TuneGarage.leave(game); } });
             const st = document.createElement('style');
             st.textContent = `#tuneUI.dm-modal{background:transparent!important;justify-content:flex-end;pointer-events:none}
                 #tuneUI .dm-pp{pointer-events:auto;margin-right:2vw}
@@ -147,8 +150,9 @@ const Tuning = {
         this._car = car; this._shop = shop;
         if (!car.mods) car.mods = {};
         this._orig = { paint: car.visual ? car.visual.variant : car.ownedRec.paint, mods: Object.assign({}, car.mods || {}) };
-        this._sel = { paint: this._orig.paint, tEng: car.mods.tEng | 0, turbo: car.mods.turbo | 0, tBrk: car.mods.tBrk | 0, tSus: car.mods.tSus | 0, wing: car.mods.wing | 0, neon: car.mods.neon | 0 };
+        this._sel = { paint: this._orig.paint, tEng: car.mods.tEng | 0, turbo: car.mods.turbo | 0, tBrk: car.mods.tBrk | 0, tSus: car.mods.tSus | 0, kit: car.mods.kit | 0, wing: car.mods.wing | 0, neon: car.mods.neon | 0 };
         this._cat = 'paint';
+        if (typeof TuneGarage !== 'undefined') TuneGarage.enter(game, car, shop);        // a garagem por dentro (showroom 3D), se o carro tem modelo 3D
         this._render(game);
     },
     // O que mudou e quanto custa: [{ k, name, price }]
@@ -165,10 +169,11 @@ const Tuning = {
     // Põe a seleção no carro (prévia: ainda não pago).
     _preview(game) {
         const car = this._car, s = this._sel;
-        car.mods = Object.assign({}, this._orig.mods, { tEng: s.tEng, turbo: s.turbo, tBrk: s.tBrk, tSus: s.tSus, wing: s.wing, neon: s.neon });
+        car.mods = Object.assign({}, this._orig.mods, { tEng: s.tEng, turbo: s.turbo, tBrk: s.tBrk, tSus: s.tSus, kit: s.kit, wing: s.wing, neon: s.neon });
         if (car.visual && car.visual.setVariant) car.visual.setVariant(s.paint);
         this.apply(car);
         if (game.carLights) game.carLights.update(0, game.dayNight.night, game.camera.target, game.carDamage.allCars());
+        if (typeof TuneGarage !== 'undefined') TuneGarage.sync(car, this._cat);
     },
     _revert() {
         const car = this._car;
@@ -182,7 +187,7 @@ const Tuning = {
         const P = this._panel(game), car = this._car, s = this._sel, B = Panel.btn, inv = game.inventory;
         this._preview(game);
         const st = this.stats(car), bill = this._bill(), total = bill.reduce((t, b) => t + b.price, 0);
-        const cats = [['paint', '🎨 Pintura'], ['tEng', '⚙️ Motor'], ['turbo', '🌀 Turbo'], ['tBrk', '🛑 Freios'], ['tSus', '🔩 Suspensão'], ['neon', '💡 Neon'], ['wing', '🪽 Aerofólio']];
+        const cats = [['paint', '🎨 Pintura'], ['kit', '🧩 Bodykit'], ['tEng', '⚙️ Motor'], ['turbo', '🌀 Turbo'], ['tBrk', '🛑 Freios'], ['tSus', '🔩 Suspensão'], ['neon', '💡 Neon'], ['wing', '🪽 Aerofólio']];
         const on = (cond) => (cond ? ' on' : '');
         let h = `<div class="tn-row">${cats.map(([k, n]) => `<button class="btn${on(this._cat === k)}" data-act="cat" data-arg="${k}">${n}</button>`).join('')}</div>`;
         const sw = (row) => `<i class="tn-sw" style="background:linear-gradient(135deg,${CarSheet.PAINTS[row].paint} 55%,${CarSheet.PAINTS[row].paint2 || CarSheet.PAINTS[row].paint})"></i>`;
