@@ -111,6 +111,35 @@ const CarArt3D = {
 		this.init(scene);
 	},
 
+	// ALTA DEFINIÇÃO (só a garagem da tunagem, TuneGarage): baixa assets/cars/hd/<id>.js (gerado por `gerar.mjs hd`: detalhe 2, sem
+	// simplificar, todos os lados — bordas redondas e superfícies lisas de perto) e registra o modelo '<id>@hd', que o ator usa como
+	// qualquer outro. Promise → o id HD, ou null (sem o arquivo / falhou: a garagem fica com o modelo do jogo).
+	_hdBins: {},
+	loadHD(id) {
+		const k = id + '@hd';
+		if (!this.available()) return Promise.resolve(null);
+		if (this._defs[k]) return Promise.resolve(k);
+		const L = this._hdLoads || (this._hdLoads = {});
+		if (L[id]) return L[id];
+		const got = () => {
+			const H = window.CAR3D_HD && window.CAR3D_HD[id];
+			if (!H) return null;
+			const z = this._bytes(H.z);
+			const buf = typeof DecompressionStream === 'function'
+				? new Response(new Blob([z]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer()
+				: Promise.resolve().then(() => { const u = Inflate.zlib(z, H.raw); return u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength); });
+			return buf.then((b) => { this._hdBins[id] = b; this._defs[k] = Object.assign({}, H.model, { pack: 'hd:' + id }); delete window.CAR3D_HD[id]; return k; });
+		};
+		return (L[id] = new Promise((res) => {
+			if (window.CAR3D_HD && window.CAR3D_HD[id]) { res(got()); return; }
+			const s = document.createElement('script');
+			s.src = `./assets/cars/hd/${encodeURIComponent(id)}.js`; s.async = true;
+			s.onload = () => res(got());
+			s.onerror = () => { L[id] = null; res(null); };
+			document.head.appendChild(s);
+		}).catch(() => { L[id] = null; return null; }));
+	},
+
 	actor(modelId, variant, scale = 1) {
 		if (!this._scene) this.init(CarArt.scene || CarArt._scene);
 		const a = new Car3DActor(CarArt3D.baseId(modelId), variant, scale);
@@ -121,7 +150,7 @@ const CarArt3D = {
 	// ---------------------------------------------------------------- malhas
 	// Lê uma seção do binário: posições (Int16 × q), normais (Int8), material (Uint8) e índices.
 	_read(sec, q, pack = 'car') {
-		const buf = pack === 'veh' ? this._binV : this._bin, nv = sec.nv, al = (n) => (n + 3) & ~3;
+		const buf = pack === 'veh' ? this._binV : pack.startsWith('hd:') ? this._hdBins[pack.slice(3)] : this._bin, nv = sec.nv, al = (n) => (n + 3) & ~3;
 		let o = sec.at;
 		const P = new Int16Array(buf, o, nv * 3); o += al(nv * 6);
 		const N = new Int8Array(buf, o, nv * 3); o += al(nv * 3);
@@ -194,14 +223,52 @@ const CarArt3D = {
 		const D = this._defs[id], body = this._read(D.body, D.q, D.pack), pos = [], nor = [], col = [], pbr = [], wc = [], idx = [];
 		const pm = D.mats.find((t) => t.k === 1) || { c: [0.5, 0.5, 0.5], r: 0.35, m: 0.2, cc: 0.8 };
 		const mats = { paint: [pm.c, 1, pm.r, pm.m, pm.cc], carbon: [[0.05, 0.055, 0.06], 0, 0.28, 0.15, 0.9], black: [[0.04, 0.04, 0.045], 0, 0.6, 0.1, 0.2] };
+		// Polígono plano (3 ou 4 pontos) com a normal n, dos dois lados (a malha do carro tem a sua orientação; a peça vale dos dois).
+		const poly = (Q, n, mt) => {
+			const b = pos.length / 3;
+			for (const q of Q) { pos.push(...q); nor.push(...n); col.push(...mt[0], mt[1]); pbr.push(mt[2], mt[3], mt[4], 0); wc.push(0, 0, 0, 0); }
+			if (Q.length === 4) idx.push(b, b + 1, b + 2, b, b + 2, b + 3, b, b + 2, b + 1, b, b + 3, b + 2);
+			else idx.push(b, b + 1, b + 2, b, b + 2, b + 1);
+		};
+		// Caixa com as BORDAS CHANFRADAS (faces recuadas, uma faixa inclinada em cada aresta e um triângulo em cada canto): a quina pega
+		// o brilho como uma peça de verdade, em vez do corte seco de um cubo.
 		const box = (x0, y0, z0, x1, y1, z1, mt) => {
-			const F = [[[1, 0, 0], [[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]]], [[-1, 0, 0], [[x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [x0, y0, z0]]],
-				[[0, 1, 0], [[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]]], [[0, -1, 0], [[x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1]]],
-				[[0, 0, 1], [[x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [x0, y0, z1]]], [[0, 0, -1], [[x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0]]]];
-			for (const [n, Q] of F) {
-				const b = pos.length / 3;
-				for (const q of Q) { pos.push(...q); nor.push(...n); col.push(...mt[0], mt[1]); pbr.push(mt[2], mt[3], mt[4], 0); wc.push(0, 0, 0, 0); }
-				idx.push(b, b + 1, b + 2, b, b + 2, b + 3, b, b + 2, b + 1, b, b + 3, b + 2);       // (as duas faces: a malha do carro tem a sua orientação)
+			const c = [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], h = [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2];
+			const b = Math.min(0.035, Math.min(h[0], h[1], h[2]) * 0.45), H = (k) => h[k] - b, r2 = Math.SQRT1_2, r3 = 1 / Math.sqrt(3);
+			const pt = (v) => [c[0] + v[0], c[1] + v[1], c[2] + v[2]];
+			const other = (a) => [0, 1, 2].filter((k) => k !== a);
+			for (let a = 0; a < 3; a++) for (const s of [-1, 1]) {                                        // faces
+				const [u, w] = other(a), n = [0, 0, 0]; n[a] = s;
+				poly([[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => { const v = [0, 0, 0]; v[a] = s * h[a]; v[u] = i * H(u); v[w] = j * H(w); return pt(v); }), n, mt);
+			}
+			for (let a = 0; a < 3; a++) for (let e = a + 1; e < 3; e++) for (const sa of [-1, 1]) for (const se of [-1, 1]) {      // arestas
+				const k = 3 - a - e, n = [0, 0, 0]; n[a] = sa * r2; n[e] = se * r2;
+				const P = (onA, sk) => { const v = [0, 0, 0]; v[a] = sa * (onA ? h[a] : H(a)); v[e] = se * (onA ? H(e) : h[e]); v[k] = sk * H(k); return pt(v); };
+				poly([P(true, -1), P(true, 1), P(false, 1), P(false, -1)], n, mt);
+			}
+			for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {               // cantos
+				const S = [sx, sy, sz], C = (a) => pt(S.map((s, k) => s * (k === a ? h[k] : H(k))));
+				poly([C(0), C(1), C(2)], [sx * r3, sy * r3, sz * r3], mt);
+			}
+		};
+		// Arco extrudado para o lado (sx = ±1): anel entre os raios ri e ro em volta do centro (cy, cz), de a0 a a1 (0 = frente, π/2 =
+		// em cima), de |x| = xi (dentro da lataria) a xo, com a borda de fora chanfrada nos dois raios.
+		const arch = (sx, xi, xo, cy, cz, ri, ro, a0, a1, mt) => {
+			const N = 16, bv = Math.min(0.04, (ro - ri) * 0.3, (xo - xi) * 0.4), xm = xo - bv;
+			const P = (x, r, a) => [sx * x, cy + Math.sin(a) * r, cz + Math.cos(a) * r];
+			for (let i = 0; i < N; i++) {
+				const a = a0 + (a1 - a0) * i / N, b = a0 + (a1 - a0) * (i + 1) / N, m = (a + b) / 2, rad = [0, Math.sin(m), Math.cos(m)];
+				const ring = (r0, x0, r1, x1, n) => poly([P(x0, r0, a), P(x0, r0, b), P(x1, r1, b), P(x1, r1, a)], n, mt);
+				ring(ro, xi, ro, xm, rad);                                                                                     // em cima (raio de fora)
+				ring(ro, xm, ro - bv, xo, [sx * Math.SQRT1_2, rad[1] * Math.SQRT1_2, rad[2] * Math.SQRT1_2]);                  // chanfro de fora
+				ring(ro - bv, xo, ri + bv, xo, [sx, 0, 0]);                                                                     // a face lateral
+				ring(ri + bv, xo, ri, xm, [sx * Math.SQRT1_2, -rad[1] * Math.SQRT1_2, -rad[2] * Math.SQRT1_2]);                // chanfro de dentro
+				ring(ri, xm, ri, xi, [0, -rad[1], -rad[2]]);                                                                   // por baixo (raio de dentro)
+			}
+			for (const [a, s] of [[a0, -1], [a1, 1]]) {                                                                       // as duas pontas
+				const t = [0, Math.cos(a) * s, -Math.sin(a) * s];
+				poly([P(xi, ri, a), P(xm, ri, a), P(xo, ri + bv, a), P(xo, ro - bv, a)], t, mt);
+				poly([P(xi, ri, a), P(xo, ro - bv, a), P(xm, ro, a), P(xi, ro, a)], t, mt);
 			}
 		};
 		// Lataria: maior |x| e menor/maior y dos vértices dentro de uma faixa (z0..z1, y0..y1).
@@ -214,7 +281,7 @@ const CarArt3D = {
 			}
 			return { w: w || D.wid / 2, lo: lo < 9 ? lo : y0, hi: hi > -9 ? hi : y1 };
 		};
-		build({ box, scan, M: mats, hw: D.wid / 2, zr: D.min[2], zf: D.max[2], R: D.R || 0.3, W: D.wheels || [], TW: D.tw || 0.22 });
+		build({ box, arch, scan, M: mats, hw: D.wid / 2, zr: D.min[2], zf: D.max[2], R: D.R || 0.3, W: D.wheels || [], TW: D.tw || 0.22 });
 		const k = id + key;
 		return (this._models[k] = this._mesh(k, D, D.wheels || [], new Float32Array(pos), new Float32Array(nor), new Float32Array(col), new Float32Array(pbr), new Float32Array(wc), pos.length / 3 > 65535 ? new Uint32Array(idx) : new Uint16Array(idx)));
 	},
@@ -244,7 +311,7 @@ const CarArt3D = {
 	//   corrida    splitter de carbono que passa da frente, canards nas quinas, saias com friso de carbono e difusor com aletas
 	//   wide body  alargadores sobre as quatro rodas (o carro fica mais largo), saias largas, splitter e difusor pretos
 	_kit(id, style) {
-		return this._extra(id, '#k' + style, ({ box, scan, M, zr, zf, R, W, TW }) => {
+		return this._extra(id, '#k' + style, ({ box, arch, scan, M, zr, zf, R, W, TW }) => {
 			const fr = W.filter((c) => c[3]), rr = W.filter((c) => !c[3]);
 			const zF = fr.length ? fr[0][2] : zf * 0.62, zR = rr.length ? rr[0][2] : zr * 0.62;
 			const nose = scan(zf - 0.45, zf + 1, 0, 0.75), tail = scan(zr - 1, zr + 0.45, 0, 0.8), sill = scan(zR + R, zF - R, 0, 0.6);
@@ -252,10 +319,10 @@ const CarArt3D = {
 			const accent = style === 2 ? M.carbon : M.black, wide = style === 3 ? 0.13 : 0;
 			// FRENTE: lip/splitter embaixo do para-choque, um pouco à frente dele
 			if (style === 2) {
-				box(-nw - 0.04, lo - 0.06, zf - 0.5, nw + 0.04, lo - 0.01, zf + 0.12, M.carbon);                                      // splitter
+				box(-nw, lo - 0.05, zf - 0.34, nw, lo - 0.015, zf + 0.07, M.carbon);                                                // splitter
 				for (const s of [-1, 1]) box(s * nw - 0.1 * s - 0.08, lo + 0.12, zf - 0.32, s * nw - 0.1 * s + 0.08, lo + 0.17, zf + 0.04, M.carbon);   // canards
 			} else {
-				box(-nw, lo - 0.05, zf - 0.42, nw, lo + 0.04, zf + 0.06, style === 1 ? M.paint : M.black);
+				box(-nw, lo - 0.04, zf - (style === 1 ? 0.42 : 0.3), nw, lo + (style === 1 ? 0.04 : 0.01), zf + 0.06, style === 1 ? M.paint : M.black);
 				box(-nw * 0.98, lo - 0.07, zf - 0.04, nw * 0.98, lo - 0.02, zf + 0.09, M.black);                                       // borda
 			}
 			// SAIAS entre as rodas
@@ -273,15 +340,10 @@ const CarArt3D = {
 				box(-tw * 0.8, lo - 0.05, zr - 0.12, tw * 0.8, lo + 0.02, zr + 0.45, accent);                                            // difusor
 				for (let i = -2; i <= 2; i++) box(i * tw * 0.3 - 0.025, lo, zr - 0.12, i * tw * 0.3 + 0.025, lo + 0.18, zr + 0.3, accent);   // aletas
 			}
-			// ALARGADORES (wide body): uma caixa sobre a parte de cima de cada roda, saindo da lateral da lataria
+			// ALARGADORES (wide body): um ARCO em volta de cada roda, saindo da lateral da lataria, com a borda de fora arredondada
 			if (style === 3) for (const c of W) {
-				const side = c[0] < 0 ? -1 : 1, here = scan(c[2] - R, c[2] + R, R * 1.1, R * 2.4), x0 = here.w - 0.04, x1 = Math.max(here.w, Math.abs(c[0]) + TW / 2) + 0.14;
-				const X0 = side > 0 ? x0 : -x1, X1 = side > 0 ? x1 : -x0;
-				box(X0, R * 1.55, c[2] - R * 1.0, X1, R * 2.02, c[2] + R * 1.0, M.paint);                                              // arco em degraus (de lado
-				box(X0, R * 1.2, c[2] - R * 1.22, X1, R * 1.6, c[2] + R * 1.22, M.paint);                                              //  parece redondo)
-				box(X0, R * 0.92, c[2] - R * 1.32, X1, R * 1.24, c[2] - R * 0.7, M.paint); box(X0, R * 0.92, c[2] + R * 0.7, X1, R * 1.24, c[2] + R * 1.32, M.paint);
-				const e0 = side > 0 ? x1 - 0.03 : -x1, e1 = side > 0 ? x1 : -x1 + 0.03;
-				box(e0, R * 0.92, c[2] - R * 1.32, e1, R * 1.0, c[2] + R * 1.32, M.black);                                             // borda de baixo
+				const here = scan(c[2] - R, c[2] + R, c[1] + R * 0.1, c[1] + R * 1.4), xi = here.w - 0.05, xo = Math.max(here.w, Math.abs(c[0]) + TW / 2) + 0.12;
+				arch(c[0] < 0 ? -1 : 1, xi, xo, c[1], c[2], R * 1.08, R * 1.42, -0.18, Math.PI + 0.18, M.paint);
 			}
 		});
 	},
@@ -356,6 +418,8 @@ const CarArt3D = {
 					p += wc.xyz;
 				} else {
 					// CARROCERIA: amassados (no repouso), depois a suspensão (gira em volta do eixo das rodas)
+					// (profundidade de verdade — estúdio, ferramenta: a estampa e as lâmpadas saem um tico da superfície de baixo, sem brigar com ela)
+					if (squash < 0.5) { float kd = floor(color.a + 0.5); p += n * (pbr.w * 0.004 + (kd > 5.5 && kd < 9.5 ? 0.004 : 0.0)); }
 					float d = ib.w;
 					if (d > 0.5) {
 						float fr = smoothstep(dims.x * 0.35, dims.x, p.z), rr = smoothstep(dims.x * 0.5, dims.x, -p.z) * 0.6;
