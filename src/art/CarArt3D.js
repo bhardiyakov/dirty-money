@@ -21,11 +21,22 @@
 //
 // Mesma interface do CarActor (setPosition / setHeading / setY / setVariant / setDamage / setVisible / update / animate / dispose,
 // rotates, tire, variant, shade, y), mais setLamps (CarLights) e setFlat (pneus furados, Vehicle).
+//
+// OUTROS VEÍCULOS (assets/cars/veiculos3d.js, VEH3D — o mesmo gerador, o mesmo material): motos, helicópteros e barcos. Cada modelo
+// tem um `kind` e o ator muda o jeito de andar:
+//   • moto: duas rodas no plano do meio (a da frente esterça); o veículo INTEIRO deita na curva (setLean, pela linha das rodas no
+//     chão) e cai de lado (setModel('<id>_caida')); `seat` = o ponto do banco, onde o RiderActor põe o piloto 2,5D.
+//   • barco: origem na linha d'água (y do sprite antigo − 0,8); o que fica abaixo dela não é desenhado (o casco "entra" na água);
+//     empina com a aceleração e inclina na curva.
+//   • helicóptero: os rotores giram no shader (o principal em volta de Y, o de cauda em volta do eixo lateral); desenhado no grupo 2
+//     (por cima da cidade, como o desenho antigo) com profundidade de verdade — HeliVisual (HeliArt.js) é quem o move.
 // ============================================================================
 
 const CarArt3D = {
 	ready: null,           // Promise: binário descomprimido (começa ao carregar a página)
-	_bin: null,            // ArrayBuffer com as malhas (descomprimido)
+	_bin: null,            // ArrayBuffer com as malhas dos carros (descomprimido)
+	_binV: null,           // … e o dos outros veículos (VEH3D)
+	_defs: null,           // id -> modelo (CAR3D e VEH3D juntos; D.pack diz de qual binário)
 	_scene: null,
 	_models: {},           // id -> { mesh, n, cap, mat (matrizes: Float32Array 16×cap), inst (atributos: 16×cap), buf, dims }
 	material: null,        // UM material para todos os modelos (entre malhas seguidas o Babylon não reenvia os uniformes)
@@ -37,10 +48,19 @@ const CarArt3D = {
 	// Ligado (Config.art.cars3d, ?cars2d desliga) e com o arquivo carregado.
 	available() {
 		if (typeof CAR3D === 'undefined' || !CAR3D.models) return false;
+		if (!this._defs) {
+			// todos os modelos dos dois arquivos, cada um sabendo de qual binário ele é
+			this._defs = {};
+			for (const [k, D] of Object.entries(CAR3D.models)) { D.pack = 'car'; this._defs[k] = D; }
+			if (typeof VEH3D !== 'undefined' && VEH3D.models) for (const [k, D] of Object.entries(VEH3D.models)) { D.pack = 'veh'; this._defs[k] = D; }
+		}
 		if (typeof Config !== 'undefined' && Config.art && Config.art.cars3d === false) return false;
 		return !(typeof location !== 'undefined' && /[?&]cars2d/.test(location.search));
 	},
-	has(id) { return this.available() && !!CAR3D.models[id]; },
+	has(id) { return this.available() && !!this._defs[CarArt3D.baseId(id)]; },
+	// Modelo de uma folha: as motos caídas ('<id>_caida') são o mesmo modelo deitado.
+	baseId(id) { return String(id).replace(/_caida$/, ''); },
+	def(id) { return this.available() ? this._defs[CarArt3D.baseId(id)] || null : null; },
 	get K() { return (typeof Config !== 'undefined' && Config.vehicle && Config.vehicle.scale) || 1; },
 
 	_bytes(b64) { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; },
@@ -48,11 +68,16 @@ const CarArt3D = {
 	// Descomprime o binário (nativo do navegador, em segundo plano). A carga do jogo espera `ready` antes de criar o trânsito.
 	load() {
 		if (this.ready) return this.ready;
-		const t0 = performance.now(), z = this._bytes(CAR3D.z);
-		this.ready = (typeof DecompressionStream === 'function'
-			? new Response(new Blob([z]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer()
-			: Promise.resolve(Inflate.zlib(z, CAR3D.raw).buffer))
-			.then((buf) => { this._bin = buf; this._ms = performance.now() - t0; })
+		const t0 = performance.now();
+		const inflate = (P) => {
+			const z = this._bytes(P.z);
+			return typeof DecompressionStream === 'function'
+				? new Response(new Blob([z]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer()
+				: Promise.resolve(Inflate.zlib(z, P.raw).buffer);
+		};
+		const veh = typeof VEH3D !== 'undefined' && VEH3D.z;
+		this.ready = Promise.all([inflate(CAR3D), veh ? inflate(VEH3D) : null])
+			.then(([buf, bufV]) => { this._bin = buf; this._binV = bufV; this._ms = performance.now() - t0; })
 			.catch((e) => console.warn('[CARROS 3D] descompressão assíncrona falhou, vai na hora', e));
 		return this.ready;
 	},
@@ -60,14 +85,17 @@ const CarArt3D = {
 	// Prepara a cena (uma vez). Sem o binário pronto, descomprime na hora (síncrono).
 	init(scene) {
 		if (this._scene === scene) return;
-		if (!this._bin) { const t0 = performance.now(); const u = Inflate.zlib(this._bytes(CAR3D.z), CAR3D.raw); this._bin = u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength); this._ms = performance.now() - t0; }
+		const now = (P) => { const u = Inflate.zlib(this._bytes(P.z), P.raw); return u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength); };
+		if (!this._bin) { const t0 = performance.now(); this._bin = now(CAR3D); this._ms = performance.now() - t0; }
+		if (!this._binV && typeof VEH3D !== 'undefined' && VEH3D.z) this._binV = now(VEH3D);
 		this._scene = scene;
 		this._models = {};
 		this._paints = CarArt._paintTable(scene);
 		this._register();
 		this.material = this._material();
+		this.materialAir = this._material();       // (helicópteros: no grupo 2, sem a profundidade achatada)
 		this._obs = scene.onBeforeRenderObservable.add(() => this.flush());
-		this.stats = { decodeMs: Math.round(this._ms || 0), models: Object.keys(CAR3D.models).length, bytes: CAR3D.raw };
+		this.stats = { decodeMs: Math.round(this._ms || 0), models: Object.keys(this._defs).length, bytes: CAR3D.raw + (typeof VEH3D !== 'undefined' ? VEH3D.raw || 0 : 0) };
 		console.log(`[CARROS 3D] ${this.stats.models} modelos (detalhe ${CAR3D.detail}): ${(CAR3D.raw / 1048576).toFixed(1)} MB descomprimidos em ${this.stats.decodeMs} ms`);
 	},
 
@@ -75,21 +103,24 @@ const CarArt3D = {
 	async reload(scene) {
 		for (const m of Object.values(this._models)) { m.mesh.dispose(); m.buf.dispose(); }
 		if (this.material) this.material.dispose();
+		if (this.materialAir) this.materialAir.dispose();
 		if (this._scene && this._obs) this._scene.onBeforeRenderObservable.remove(this._obs);
-		this._models = {}; this._scene = null; this._bin = null; this.ready = null;
+		this._models = {}; this._scene = null; this._bin = null; this._binV = null; this._defs = null; this.ready = null;
 		await this.load();
 		this.init(scene);
 	},
 
 	actor(modelId, variant, scale = 1) {
 		if (!this._scene) this.init(CarArt.scene || CarArt._scene);
-		return new Car3DActor(modelId, variant, scale);
+		const a = new Car3DActor(CarArt3D.baseId(modelId), variant, scale);
+		if (modelId !== a.modelId) a.setModel(modelId);
+		return a;
 	},
 
 	// ---------------------------------------------------------------- malhas
 	// Lê uma seção do binário: posições (Int16 × q), normais (Int8), material (Uint8) e índices.
-	_read(sec, q) {
-		const buf = this._bin, nv = sec.nv, al = (n) => (n + 3) & ~3;
+	_read(sec, q, pack = 'car') {
+		const buf = pack === 'veh' ? this._binV : this._bin, nv = sec.nv, al = (n) => (n + 3) & ~3;
 		let o = sec.at;
 		const P = new Int16Array(buf, o, nv * 3); o += al(nv * 6);
 		const N = new Int8Array(buf, o, nv * 3); o += al(nv * 3);
@@ -98,14 +129,18 @@ const CarArt3D = {
 		return { nv, ni: sec.ni, P, N, M, I, q };
 	},
 
-	// Malha do modelo (na 1ª vez que um carro dele aparece): carroceria + 4 cópias da roda, atributos por vértice:
+	// Malha do modelo (na 1ª vez que um carro dele aparece): carroceria + 4 cópias da roda (+ os rotores), atributos por vértice:
 	//   position/normal (eixos do jogo, m reais) | color = (cor sRGB, tipo) | pbr = (rugosidade, metal, verniz, estampa)
-	//   wc = (centro da roda, qual roda: 0 carroceria, 1 diant. esq., 2 diant. dir., 3 tras. esq., 4 tras. dir.)
+	//   wc = (centro da roda / do rotor, qual parte: 0 carroceria, 1 diant. esq., 2 diant. dir., 3 tras. esq., 4 tras. dir.,
+	//        5 rotor principal, 6 rotor de cauda)
 	_model(id) {
 		let m = this._models[id];
 		if (m) return m;
-		const D = CAR3D.models[id], body = this._read(D.body, D.q), wheel = D.wheel ? this._read(D.wheel, D.q) : null;
-		const W = wheel ? D.wheels : [], nv = body.nv + (wheel ? wheel.nv * W.length : 0), ni = body.ni + (wheel ? wheel.ni * W.length : 0);
+		const D = this._defs[id], P = D.pack, body = this._read(D.body, D.q, P), wheel = D.wheel ? this._read(D.wheel, D.q, P) : null;
+		const rotors = (D.rotors || []).map((r) => ({ r, g: this._read(r.sec, D.q, P) }));
+		const W = wheel ? D.wheels : [];
+		const nv = body.nv + (wheel ? wheel.nv * W.length : 0) + rotors.reduce((a, o) => a + o.g.nv, 0);
+		const ni = body.ni + (wheel ? wheel.ni * W.length : 0) + rotors.reduce((a, o) => a + o.g.ni, 0);
 		const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 4), pbr = new Float32Array(nv * 4), wc = new Float32Array(nv * 4);
 		const idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
 		const mats = D.mats;
@@ -125,6 +160,7 @@ const CarArt3D = {
 		put(body, false, null, 0);
 		// a roda do arquivo é a da DIREITA; a da esquerda é ela girada 180° em volta do eixo vertical (x, z → -x, -z), como no glTF
 		for (const c of W) put(wheel, !c[4], c, 1 + (c[3] ? 0 : 2) + (c[4] ? 1 : 0));
+		for (const { r, g } of rotors) put(g, false, r.c, r.axis === 'y' ? 5 : 6);
 		const scene = this._scene, mesh = new BABYLON.Mesh('car3d_' + id, scene);
 		const vd = new BABYLON.VertexData();
 		vd.positions = pos; vd.normals = nor; vd.colors = col; vd.indices = idx;
@@ -133,10 +169,12 @@ const CarArt3D = {
 		mesh.setVerticesData('wc', wc, false, 4);
 		const front = W.filter((c) => c[3]), rear = W.filter((c) => !c[3]);
 		m = { id, mesh, n: 0, cap: 0, D, R: D.R || 0.3, zf: front.length ? front[0][2] : D.len * 0.3, zr: rear.length ? rear[0][2] : -D.len * 0.3 };
-		m.dims = [Math.max(D.max[2], -D.min[2]), D.h, D.wid / 2, D.R || 0.3];      // (vai em cada instância: o material é um só)
-		mesh.material = this.material;
+		// (vai em cada instância: o material é um só; raio −1 = barco: o shader corta o que fica abaixo da linha d'água)
+		m.dims = [Math.max(D.max[2], -D.min[2]), D.h, D.wid / 2, D.kind === 'boat' ? -1 : D.R || 0.3];
+		const air = D.kind === 'heli';
+		mesh.material = air ? this.materialAir : this.material;
 		mesh.freezeWorldMatrix();                  // (a malha fica na origem: a posição de cada carro está na instância)
-		mesh.renderingGroupId = 1;                 // depois do chão (marcas de pneu, sangue, poças), antes dos personagens 2,5D e das copas
+		mesh.renderingGroupId = air ? 2 : 1;       // depois do chão (marcas de pneu, sangue, poças), antes dos personagens 2,5D e das copas
 		mesh.isPickable = false;
 		mesh.alwaysSelectAsActiveMesh = true;      // (o recorte é feito aqui: só os carros perto da câmera viram instância)
 		mesh.doNotSyncBoundingInfo = true;
@@ -181,6 +219,7 @@ const CarArt3D = {
 			varying vec4 vLP;         // posição de repouso (modelo / roda) + qual roda
 			varying vec4 vLt;         // faróis, lanternas, bits, -
 			varying vec4 vDm;         // medidas do modelo
+			varying float vBase;      // altura da base (barco: a linha d'água)
 
 			float h3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 			float vnoise(vec3 p) {
@@ -201,7 +240,11 @@ const CarArt3D = {
 				vec4 dims = dm;
 				vec3 p = position, n = normal;
 				float part = wc.w;
-				if (part > 0.5) {
+				if (part > 4.5) {
+					// ROTOR do helicóptero: o principal gira em volta de Y (ângulo ia.x), o de cauda em volta do eixo lateral (ia.y)
+					if (part < 5.5) { p = ry(p, ia.x); n = ry(n, ia.x); } else { p = rx(p, ia.y); n = rx(n, ia.y); }
+					p += wc.xyz;
+				} else if (part > 0.5) {
 					// RODA: rola, esterça (dianteiras) e vai para o canto dela; pneu furado = o aro desce
 					p = rx(p, ia.x); n = rx(n, ia.x);
 					if (part < 2.5) { p = ry(p, ia.y); n = ry(n, ia.y); }
@@ -222,7 +265,7 @@ const CarArt3D = {
 							n = normalize(n + (vec3(vnoise(p * 6.0), vnoise(p * 6.0 + 7.1), vnoise(p * 6.0 + 3.3)) - 0.5) * 0.9);
 						} else n = normalize(n + (vec3(vnoise(p * 6.0), vnoise(p * 6.0 + 7.1), vnoise(p * 6.0 + 3.3)) - 0.5) * 0.35 * d * max(fr, sd));
 					}
-					float py = dims.w;
+					float py = max(dims.w, 0.0);
 					p.y -= py;
 					p = rx(p, ia.z); n = rx(n, ia.z);
 					p = rz(p, ia.w); n = rz(n, ia.w);
@@ -244,6 +287,7 @@ const CarArt3D = {
 				vLP = vec4(position, part);
 				vLt = vec4(ic.y, ic.z, ic.w, 0.0);
 				vDm = dm;
+				vBase = finalWorld[3].y;
 			}`;
 		BABYLON.Effect.ShadersStore.car3dFragmentShader = `
 			precision highp float;
@@ -254,6 +298,7 @@ const CarArt3D = {
 			varying vec4 vLP;
 			varying vec4 vLt;
 			varying vec4 vDm;
+			varying float vBase;
 			uniform sampler2D paints;
 			uniform float paintRows;
 			uniform vec3 eye;
@@ -284,6 +329,7 @@ const CarArt3D = {
 
 			void main(void) {
 				vec4 dims = vDm;
+				if (dims.w < -0.5 && vWS.y < vBase - 0.02) discard;                 // barco: o casco abaixo da linha d'água fica na água
 				float kind = floor(vNK.w + 0.5);
 				vec3 N = normalize(vNK.xyz);
 				vec3 V = normalize(eye - vWS.xyz);
@@ -422,7 +468,7 @@ const CarArt3D = {
 		for (const a of this.live) {
 			if (!a.visible || !a._placed) continue;
 			const dx = a.x - cx, dz = a.z - cz;
-			if (this.squash && dx * dx + dz * dz > r2) continue;
+			if (this.squash && dx * dx + dz * dz > r2 + (a.kind === 'heli' ? 900 : 0)) continue;
 			const m = M[a.modelId] || this._model(a.modelId);
 			if (m.n >= m.cap) this._grow(m, m.cap * 2);
 			a._write(m, m.n++);
@@ -432,9 +478,10 @@ const CarArt3D = {
 		const u = this._u || (this._u = { l: new BABYLON.Vector3(), c: new BABYLON.Color3(), e: new BABYLON.Vector3() });
 		if (s) { u.l.set(s.x, s.y, s.z); u.c.set(s.r, s.g, s.b); } else { u.l.set(-d[0] / dl, -d[1] / dl, -d[2] / dl); u.c.set(1, 1, 1); }
 		u.e.copyFrom(cp);
-		const mt = this.material;
-		mt.setVector3('eye', u.e); mt.setVector3('sunL', u.l); mt.setColor3('sunC', u.c); mt.setFloat('squash', this.squash);
-		if (tint) mt.setColor3('tint', tint);
+		for (const mt of [this.material, this.materialAir]) {
+			mt.setVector3('eye', u.e); mt.setVector3('sunL', u.l); mt.setColor3('sunC', u.c); mt.setFloat('squash', mt === this.material ? this.squash : 0);
+			if (tint) mt.setColor3('tint', tint);
+		}
 		for (const id in M) {
 			const m = M[id], mesh = m.mesh;
 			mesh.isVisible = m.n > 0;
@@ -455,8 +502,9 @@ const CarArt3D = {
 // ----------------------------------------------------------------------------
 class Car3DActor {
 	constructor(modelId, variant, scale = 1) {
-		const D = CAR3D.models[modelId];
+		const D = CarArt3D._defs[modelId];
 		this.modelId = modelId;
+		this.kind = D.kind || 'car';                 // 'car' | 'moto' | 'boat' | 'heli' (ver o topo)
 		this.variant = variant;
 		this.scale = scale;
 		this.k = CarArt3D.K * scale;
@@ -473,7 +521,15 @@ class Car3DActor {
 		this.tire = f ? { z: ((f[2] - (r ? r[2] : -f[2])) / 2) * this.k, x: Math.abs(f[0]) * this.k, len: this.R * 2, wid: (D.tw || 0.2) * this.k } : null;
 		this.hl = D.len / 2 * this.k; this.hw = D.wid / 2 * this.k;
 		// where the model's lamps are (CarLights puts its glows there): height above the road, half spacing, front / rear offsets
-		this.lampGeom = { y: D.h * this.k * 0.42, roof: D.h * this.k, x: this.hw * 0.68, zF: this.hl * 0.96, zR: -this.hl * 0.96 };
+		this.lampGeom = this.kind === 'moto' ? { y: D.h * this.k * 0.72, roof: D.h * this.k, x: 0.04 * this.k, zF: this.hl * 0.88, zR: -this.hl * 0.92 }
+			: this.kind === 'boat' ? { y: D.h * this.k * 0.6, roof: D.h * this.k, x: this.hw * 0.5, zF: this.hl * 0.9, zR: -this.hl * 0.95 }
+			: { y: D.h * this.k * 0.42, roof: D.h * this.k, x: this.hw * 0.68, zF: this.hl * 0.96, zR: -this.hl * 0.96 };
+		// moto: o ponto do banco (m no jogo, a partir do centro: z = frente, y = altura) — o RiderActor põe o piloto ali
+		this.seat = D.seat ? { z: D.seat[0] * this.k, y: D.seat[1] * this.k } : null;
+		// inclinação do veículo inteiro (moto, barco, helicóptero): bank = deita para a direita (+), tilt = nariz para baixo (+)
+		this.bank = 0; this._vb = 0; this.lean = 0; this.tilt = 0; this._vt = 0; this.fallen = false;
+		this.rotorA = 0; this.rotorB = 0;            // (helicóptero: ângulos dos rotores, postos pelo HeliVisual)
+		this._t = Math.random() * 10;
 		// estado da suspensão (rad / m) e das rodas
 		this.steer = 0; this.spin = 0;
 		this.pitch = 0; this._vp = 0; this.roll = 0; this._vr = 0; this.yaw = 0; this._vy = 0; this.heave = 0; this._vh = 0;
@@ -492,7 +548,10 @@ class Car3DActor {
 	setVariant(v) { this.variant = v; }
 	setDamage(d) { this.dent = Math.max(0, Math.min(3, d | 0)); }
 	setVisible(v) { this.visible = !!v; }
-	setModel() { /* (só motos trocam de desenho; carro 3D não) */ }
+	// Moto: '<id>_caida' = o mesmo modelo deitado de lado (piloto arremessado; Vehicle._bikeLook, MotoTaxi).
+	setModel(id) { this.fallen = /_caida$/.test(String(id)); }
+	// Moto: inclinação do guidão (RiderActor.setLean, já suavizada): −1..+1, + = curva para a direita — a moto deita para dentro.
+	setLean(v) { this.lean = +v || 0; }
 
 	// Luzes (CarLights, a cada quadro, só para os carros perto): head/tail = 0..1 (lanterna 1 = freio), sigL/sigR = seta piscando
 	// AGORA (já com o pisca), siren = 0 desligado | 1 fase azul | 2 fase vermelha, reverse = luz de ré.
@@ -513,6 +572,7 @@ class Car3DActor {
 	// curva inclina para fora e "atrasa" a carroceria um pouco; em velocidade, buracos e emendas do asfalto dão trancos.
 	animate(dt, aF, aL, steer, yr = null) {
 		if (dt <= 0) return;
+		if (this.kind !== 'car') { this._animated = true; return this._animateOther(dt, aF, aL, steer); }
 		const lim = (v, m) => Math.max(-m, Math.min(m, v));
 		this.steer += (lim(steer || 0, 1) * 0.47 - this.steer) * Math.min(1, dt * 10);
 		// rodas: rolam pela distância andada ao longo da frente (teleporte = ignora); o giro por quadro tem teto para não "andar para
@@ -549,8 +609,36 @@ class Car3DActor {
 		this._vh += (-260 * this.heave - 13 * this._vh) * h; this.heave += this._vh * h;
 	}
 
+	// Moto e barco: rodas (moto) e o veículo inteiro inclinando por molas. Moto: deita para dentro da curva (setLean) e mergulha na
+	// freada; caída, fica de lado. Barco: empina com a aceleração e a velocidade (planando), inclina para dentro da curva e balança.
+	_animateOther(dt, aF, aL, steer) {
+		const lim = (v, m) => Math.max(-m, Math.min(m, v)), h = Math.min(dt, 1 / 30);
+		this._t += dt;
+		if (this.kind === 'moto') {
+			this.steer += (lim(steer || 0, 1) * 0.35 - this.steer) * Math.min(1, dt * 10);
+			if (this._px !== null) {
+				let d = (this.x - this._px) * Math.sin(this.heading) + (this.z - this._pz) * Math.cos(this.heading);
+				if (Math.abs(d) > 4) d = 0;
+				this._speed = d / dt;
+				this.spin = (this.spin + lim(d / this.R, 0.42)) % (Math.PI * 2);
+			}
+		} else if (this._px !== null) this._speed = Math.hypot(this.x - this._px, this.z - this._pz) / dt;
+		this._px = this.x; this._pz = this.z;
+		const sp = Math.abs(this._speed || 0);
+		let tb, tt;
+		if (this.kind === 'moto') { tb = this.fallen ? 1.42 : this.lean * 0.5; tt = this.fallen ? 0 : lim(-aF * 0.004, 0.05); }
+		else { tb = lim(aL * 0.008, 0.14) + Math.sin(this._t * 1.7) * 0.012; tt = -Math.min(0.09, sp * 0.004) - lim(aF * 0.006, 0.05) + Math.sin(this._t * 1.3 + 1) * 0.01; }
+		this._vb += (110 * (tb - this.bank) - 14 * this._vb) * h; this.bank += this._vb * h;
+		this._vt += (120 * (tt - this.tilt) - 12 * this._vt) * h; this.tilt += this._vt * h;
+	}
+	// Helicóptero (HeliVisual): inclinação do voo e ângulos dos rotores, direto.
+	setFlight(tilt, bank, rotorA, rotorB) { this.tilt = tilt; this.bank = bank; this.rotorA = rotorA; this.rotorB = rotorB; }
+
 	// Escurece na sombra de um prédio (suave, a ~4 consultas/s) — como o CarActor.
 	update(dt) {
+		// (motos de enfeite — mototáxi, pontos de moto — não chamam animate: a moto deita/cai mesmo assim)
+		if (this.kind === 'moto' && !this._animated && dt > 0) this._animateOther(dt, 0, 0, 0);
+		this._animated = false;
 		this._shadeTimer -= dt;
 		if (this._shadeTimer <= 0) {
 			this._shadeTimer = 0.25;
@@ -563,6 +651,7 @@ class Car3DActor {
 	// Escreve a instância `i` do modelo m: matriz (posição, rumo, escala; a base no chão = y − 1,5 — o y é o do sprite antigo) e os
 	// atributos ia/ib/ic/dm (ver o shader), no mesmo deslocamento das matrizes (16 floats por instância nos dois buffers).
 	_write(m, i) {
+		if (this.kind !== 'car') return this._writeOther(m, i);
 		const s = Math.sin(this.heading), c = Math.cos(this.heading), k = this.k, M = m.mat, o = i * 16;
 		M[o] = c * k; M[o + 1] = 0; M[o + 2] = -s * k; M[o + 3] = 0;
 		M[o + 4] = 0; M[o + 5] = k; M[o + 6] = 0; M[o + 7] = 0;
@@ -573,6 +662,26 @@ class Car3DActor {
 		A[o + 4] = this.heave / k; A[o + 5] = this.yaw; A[o + 6] = this.variant; A[o + 7] = this.dent;                  // ib
 		A[o + 8] = this.shade; A[o + 9] = L.head; A[o + 10] = L.tail; A[o + 11] = L.bits + this.flatBits + this.glassBits;              // ic
 		A[o + 12] = d[0]; A[o + 13] = d[1]; A[o + 14] = d[2]; A[o + 15] = d[3];                                       // dm
+	}
+
+	// Moto, barco, helicóptero: o veículo INTEIRO gira (rumo, deitar, empinar) em volta da origem do modelo — o chão sob o centro
+	// (moto: a linha das rodas; barco: a linha d'água) — e o y do sprite antigo vira a base (barco: −0,8; o resto: −1,5).
+	_writeOther(m, i) {
+		const k = this.k, M = m.mat, o = i * 16, h = this.heading, b = this.bank, t = this.tilt;
+		const ch = Math.cos(h), sh = Math.sin(h), cb = Math.cos(b), sb = Math.sin(b), ct = Math.cos(t), st = Math.sin(t);
+		// imagem de um eixo local: Rx(tilt) → Rz(bank) → Ry(rumo)
+		const img = (x, y, z, out) => {
+			const y1 = y * ct - z * st, z1 = y * st + z * ct;
+			const x2 = x * cb + y1 * sb, y2 = -x * sb + y1 * cb;
+			M[out] = (x2 * ch + z1 * sh) * k; M[out + 1] = y2 * k; M[out + 2] = (-x2 * sh + z1 * ch) * k; M[out + 3] = 0;
+		};
+		img(1, 0, 0, o); img(0, 1, 0, o + 4); img(0, 0, 1, o + 8);
+		M[o + 12] = this.x; M[o + 13] = this.y - (this.kind === 'boat' ? 0.8 : 1.5) + (this.fallen ? 0.06 : 0); M[o + 14] = this.z; M[o + 15] = 1;
+		const A = m.inst, L = this.lamps, d = m.dims, air = this.kind === 'heli';
+		A[o] = air ? this.rotorA : this.spin; A[o + 1] = air ? this.rotorB : this.steer; A[o + 2] = 0; A[o + 3] = 0;    // ia
+		A[o + 4] = 0; A[o + 5] = 0; A[o + 6] = this.variant; A[o + 7] = this.dent;                                       // ib
+		A[o + 8] = this.shade; A[o + 9] = this.fallen ? 0 : L.head; A[o + 10] = this.fallen ? 0 : L.tail; A[o + 11] = L.bits + this.flatBits;      // ic
+		A[o + 12] = d[0]; A[o + 13] = d[1]; A[o + 14] = d[2]; A[o + 15] = d[3];                                          // dm
 	}
 
 	dispose() {

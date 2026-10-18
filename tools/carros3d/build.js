@@ -11,11 +11,17 @@
 // Binário (comprimido em zlib, base64 no .js), por modelo, cada seção alinhada em 4 bytes:
 //   corpo: posições Int16×3 (÷ q) | normais Int8×3 (÷ 127) | material Uint8 | índices Uint16/Uint32
 //   roda:  o mesmo, com as posições relativas ao centro do cubo
+//   rotor: o mesmo (helicópteros), relativo ao centro do cubo do rotor
+//
+// Dois arquivos: os CARROS (assets/cars/carros3d.js, CAR3D) e os OUTROS veículos — motos, helicópteros e barcos
+// (assets/cars/veiculos3d.js, VEH3D: buildVehicles). Moto: duas rodas no plano do meio e o ponto do banco (seat, para o piloto 2,5D);
+// helicóptero: os rotores à parte; barco: origem na linha d'água. `node tools/carros3d/gerar.mjs` grava os dois.
 // ============================================================================
 import { SLUGS, INFO, criarVeiculo } from './gerador/index.js';
 import { hex } from './gerador/math.js';
 import { simplify } from './simplify.js';
 import { STAMP } from './gerador/stamp.js';
+import { SPECS } from './gerador/catalog.js';
 
 export const KIND = { generic: 0, paint: 1, paint2: 2, glass: 3, metal: 4, tire: 5, head: 6, tail: 7, signal: 8, reverse: 9, sirenB: 10, sirenR: 11, sign: 12 };
 
@@ -24,7 +30,8 @@ export const KIND = { generic: 0, paint: 1, paint2: 2, glass: 3, metal: 4, tire:
 const P2 = new Set(['mini_eletrico', 'sedan_70', 'esportivo', 'muscle', 'kombi']);
 const METAL = new Set(['cromado', 'aluminio', 'espelho', 'farol_refletor', 'metal', 'metal_escuro', 'aro_aco', 'aro_escuro', 'aro_preto', 'freio']);
 
-function kindOf(slug, name, mats, fixed) {
+function kindOf(slug, name, mats, fixed, paintKey = 'pintura') {
+  if (paintKey !== 'pintura' && name === paintKey) return fixed ? KIND.generic : KIND.paint;      // (barcos: a pintura é a do casco)
   const same = (a, b) => a && b && Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) < 1e-3;
   switch (name) {
     case 'pintura': return fixed ? KIND.generic : KIND.paint;
@@ -185,7 +192,7 @@ export function buildModel(slug, chunks, { detail = 0.3, maxErr = 0.004, topOnly
   try { v = criarVeiculo(slug, { detalhe: detail }); } finally { STAMP.tag = false; }
   const done = new Map(), simp = (list) => (maxErr > 0 ? list.map(({ prim, M }) => ({ prim: done.get(prim) || done.set(prim, simplify(prim, maxErr)).get(prim), M })) : list);
   const info = INFO.find((i) => i.slug === slug);
-  const fixed = !!info.pinturaFixa;
+  const fixed = !!info.pinturaFixa, spec = SPECS[slug];
   const mats = v.materials, used = [], index = new Map();
   // s = 1: geometria ESTAMPADA sobre a lataria (o jogo dá a ela uma vantagem de profundidade: nunca afunda na superfície de baixo)
   const matIndex = (key) => {
@@ -193,34 +200,41 @@ export function buildModel(slug, chunks, { detail = 0.3, maxErr = 0.004, topOnly
     const s = key.endsWith('@e') ? 1 : 0, name = s ? key.slice(0, -2) : key;
     const m = mats[name] || { color: [1, 0, 1] };
     const r3 = (x) => Math.round(x * 1000) / 1000;
-    used.push({ n: name, s, c: m.color.map(r3), r: r3(m.rough ?? 0.5), m: r3(m.metal ?? 0), cc: r3(m.clearcoat ?? 0), k: kindOf(slug, name, mats, fixed), e: m.emissive ? m.emissive.map(r3) : null });
+    used.push({ n: name, s, c: m.color.map(r3), r: r3(m.rough ?? 0.5), m: r3(m.metal ?? 0), cc: r3(m.clearcoat ?? 0), k: kindOf(slug, name, mats, fixed, spec.paintKey), e: m.emissive ? m.emissive.map(r3) : null });
     index.set(key, used.length - 1);
     return used.length - 1;
   };
   const root = v.root;
-  const body = collect({ children: root.children.filter((c) => !c.name.startsWith('roda_')) }, I4, []);
+  const part = (c) => c.name.startsWith('roda_') || c.name.startsWith('rotor_');
+  const body = collect({ children: root.children.filter((c) => !part(c)) }, I4, []);
   const wheels = root.children.filter((c) => c.name.startsWith('roda_'));
   const full = merge(simp(body), matIndex);
   // a simplificação mexe até maxErr na lataria e na estampa: a estampa sobe esse tanto a mais (some um eventual "afundar")
   for (let i = 0; i < full.nv; i++) if (used[full.Mt[i]].s) for (let k = 0; k < 3; k++) full.P[i * 3 + k] += full.N[i * 3 + k] * maxErr;
-  const bodyMesh = topOnly ? visibleFromAbove(full) : full;
+  // moto (deita nas curvas) e helicóptero (inclina no voo, visto de qualquer lado): sem o recorte do "só o que se vê de cima"
+  const cull = topOnly && !info.moto && !info.heli;
+  const bodyMesh = cull ? visibleFromAbove(full) : full;
   let wheelMesh = null, centers = [], R = 0, W = 0;
   if (wheels.length) {
     // gabarito: a roda dianteira DIREITA, sem a translação do cubo (o malha da direita não tem o giro de 180° da esquerda)
     const fr = wheels.find((w) => w.name === 'roda_dd') || wheels[0];
     const t = [fr.matrix[12], fr.matrix[13], fr.matrix[14]];
     wheelMesh = merge(simp(collect(fr, I4, [])), matIndex, t);
-    if (topOnly) wheelMesh = wheelOutside(wheelMesh, used);
+    if (cull) wheelMesh = wheelOutside(wheelMesh, used);
     R = fr.extras.raio;
     for (let i = 0; i < wheelMesh.nv; i++) W = Math.max(W, Math.abs(wheelMesh.P[i * 3]));
     // centros nos eixos do jogo: [x (direita), y, z (frente), front?1:0, right?1:0]
     for (const w of wheels) centers.push([w.matrix[14], w.matrix[13], w.matrix[12], w.extras.eixo === 'dianteiro' ? 1 : 0, w.extras.lado === 'direito' ? 1 : 0].map((x) => Math.round(x * 1000) / 1000));
   }
+  // rotores (helicóptero): malha relativa ao cubo + centro e eixo nos eixos do jogo (y = rotor principal; x = o de cauda)
+  const rotorNodes = root.children.filter((c) => c.name.startsWith('rotor_'));
+  const rotorMeshes = rotorNodes.map((n) => merge(simp(collect(n, I4, [])), matIndex, [n.matrix[12], n.matrix[13], n.matrix[14]]));
   let ext = 0;
-  for (const m of [bodyMesh, wheelMesh]) if (m) for (let i = 0; i < m.P.length; i++) ext = Math.max(ext, Math.abs(m.P[i]));
+  for (const m of [bodyMesh, wheelMesh, ...rotorMeshes]) if (m) for (let i = 0; i < m.P.length; i++) ext = Math.max(ext, Math.abs(m.P[i]));
   const q = (ext + 0.01) / 32767;
   const b = pack(chunks, bodyMesh, q);
   const w = wheelMesh ? pack(chunks, wheelMesh, q) : null;
+  const rotors = rotorNodes.map((n, i) => ({ sec: pack(chunks, rotorMeshes[i], q), c: [n.matrix[14], n.matrix[13], n.matrix[12]].map((x) => Math.round(x * 1000) / 1000), axis: n.extras.eixo === 'y' ? 'y' : 'x' }));
   // medidas (eixos do jogo): limites da carroceria, altura, teto
   const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < full.P.length; i += 3) for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], full.P[i + k]); mx[k] = Math.max(mx[k], full.P[i + k]); }
@@ -229,41 +243,49 @@ export function buildModel(slug, chunks, { detail = 0.3, maxErr = 0.004, topOnly
     meta: {
       name: info.nome, fixed, q, mats: used, body: b, wheel: w, wheels: centers, R: r3(R), tw: r3(W * 2),
       min: mn.map(r3), max: mx.map(r3), len: r3(mx[2] - mn[2]), wid: r3(info.largura), h: r3(mx[1]),
+      ...(info.moto ? { kind: 'moto' } : info.heli ? { kind: 'heli', rotors } : info.barco ? { kind: 'boat' } : {}),
+      // ponto do banco do piloto, nos eixos do jogo: [frente, altura, direita] (spec.seat do gerador: [x, y, z] do glTF)
+      ...(spec.seat ? { seat: [r3(spec.seat[0]), r3(spec.seat[1]), r3(spec.seat[2] || 0)] } : {}),
     },
-    tris: (bodyMesh.ni + (wheelMesh ? wheelMesh.ni * centers.length : 0)) / 3,
+    tris: (bodyMesh.ni + (wheelMesh ? wheelMesh.ni * centers.length : 0) + rotorMeshes.reduce((a, m) => a + m.ni, 0)) / 3,
     verts: bodyMesh.nv + (wheelMesh ? wheelMesh.nv * centers.length : 0),
   };
 }
 
-export const WHEELED = SLUGS.filter((s) => !INFO.find((i) => i.slug === s).barco);
+const infoOf = (s) => INFO.find((i) => i.slug === s);
+export const WHEELED = SLUGS.filter((s) => { const i = infoOf(s); return !i.barco && !i.moto && !i.heli; });
+// Os outros veículos (assets/cars/veiculos3d.js): motos, helicópteros e barcos.
+export const VEHICLES = SLUGS.filter((s) => { const i = infoOf(s); return i.barco || i.moto || i.heli; });
 
-// Todos os modelos de rodas → { models, bytes (sem comprimir), stats }.
-export function buildAll(opts, onProgress = null) {
+// Todos os carros (ou a lista `slugs`) → { models, bytes (sem comprimir), stats }.
+export function buildAll(opts, onProgress = null, slugs = WHEELED) {
   const chunks = new Chunks(), models = {}, stats = [];
-  for (const slug of WHEELED) {
+  for (const slug of slugs) {
     const t0 = performance.now();
     const r = buildModel(slug, chunks, opts);
     models[slug] = r.meta;
     stats.push({ slug, tris: r.tris, verts: r.verts, ms: Math.round(performance.now() - t0) });
-    if (onProgress) onProgress(slug, stats.length, WHEELED.length);
+    if (onProgress) onProgress(slug, stats.length, slugs.length);
   }
   return { models, bytes: chunks.bytes(), stats };
 }
+export const buildVehicles = (opts, onProgress = null) => buildAll(opts, onProgress, VEHICLES);
 
-// Comprime (zlib, nativo do navegador) e monta o texto do assets/cars/carros3d.js.
-export async function toScript(result, opts) {
+// Comprime (zlib, nativo do navegador) e monta o texto do assets/cars/carros3d.js — ou, com vehicles, do assets/cars/veiculos3d.js.
+export async function toScript(result, opts, vehicles = false) {
   const detail = opts.detail;
   const z = new Uint8Array(await new Response(new Blob([result.bytes]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer());
   let s = '';
   for (let i = 0; i < z.length; i += 0x8000) s += String.fromCharCode.apply(null, z.subarray(i, i + 0x8000));
   const tris = result.stats.reduce((a, b) => a + b.tris, 0);
+  const what = vehicles ? 'motos, helicópteros e barcos' : 'carros';
   const head = `// ============================================================================
-// GERADO por tools/carros3d/index.html (gerador procedural de veículos 3D) — não edite à mão: mude o gerador e gere de novo.
-// ${Object.keys(result.models).length} carros em 3D (carroceria + roda), detalhe ${detail}, simplificação ${opts.maxErr * 1000} mm, ${tris} triângulos no total; ${(result.bytes.length / 1048576).toFixed(2)} MB sem comprimir.
+// GERADO por tools/carros3d (gerador procedural de veículos 3D) — não edite à mão: mude o gerador e gere de novo.
+// ${Object.keys(result.models).length} ${what} em 3D, detalhe ${detail}, simplificação ${opts.maxErr * 1000} mm, ${tris} triângulos no total; ${(result.bytes.length / 1048576).toFixed(2)} MB sem comprimir.
 // Eixos do jogo: +X direita, +Y cima, +Z frente; metros reais (o jogo aplica Config.vehicle.scale). Lido por src/art/CarArt3D.js.
 // ============================================================================
 `;
-  return { text: head + 'var CAR3D = ' + JSON.stringify({ version: 1, detail, maxErr: opts.maxErr, raw: result.bytes.length, models: result.models, z: btoa(s) }) + ';\n', zBytes: z.length };
+  return { text: head + (vehicles ? 'var VEH3D = ' : 'var CAR3D = ') + JSON.stringify({ version: 1, detail, maxErr: opts.maxErr, raw: result.bytes.length, models: result.models, z: btoa(s) }) + ';\n', zBytes: z.length };
 }
 
 export { hex };

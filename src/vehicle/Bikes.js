@@ -8,6 +8,9 @@
 //   ride_moto   pilotando: degraus de inclinação escolhidos pelo guidão (RiderActor.setLean: contínuo, + = deitado para a direita)
 // Estacionada = só o veículo; caída = o desenho de lado (piloto arremessado numa batida).
 // A "folha de veículo" abaixo (BikeSheet) só adapta a interface que o Vehicle espera.
+//
+// Motos em 3D (CarArt3D, assets/cars/veiculos3d.js): a de rua ('moto', a do motoboy — com baú no entregador), a scooter, a de trilha,
+// a esportiva e a custom de viagem. Sem o arquivo 3D, todas usam o desenho da moto do atlas.
 // ============================================================================
 
 class BikeSheet {
@@ -22,8 +25,8 @@ class BikeSheet {
         this.lib = null;                 // SpriteLibrary (folhas dos pilotos)
         this.art = Bikes.art() ? 'rider' : false;      // o Vehicle cria um RiderActor (veículo do atlas + piloto por cima)
         this.vehModel = Bikes.ART[kind];
-        this.seat = CarArt.scaledSeat(Bikes.SEAT[kind]);
-        this.scale = Bikes.SCALE[kind];
+        this.seat = CarArt.scaledSeat(Bikes.SEAT[Bikes.base(kind)]);
+        this.scale = Bikes.SCALE[Bikes.base(kind)];
     }
     getClip() { return this.cs.getClip(this.clipName); }
 }
@@ -36,6 +39,26 @@ const Bikes = {
             bike: 'moto', bodyH: 0.5, noCabin: true, fire: true, blast: 0.55, open: true,
             lamps: { x: 0.0, zF: 0.95, zR: -1.0 },
         },
+        moto_scooter: {
+            name: 'Scooter', model: 'Urban 160', len: 2.6, wid: 0.85, mass: 150, power: 2600, maxSpeed: 24, turn: 3.0, cruise: 1.0, weight: 1, hp: 38,
+            bike: 'moto', bodyH: 0.5, noCabin: true, fire: true, blast: 0.5, open: true,
+            lamps: { x: 0.0, zF: 0.9, zR: -0.95 },
+        },
+        moto_trilha: {
+            name: 'Moto de trilha', model: 'Trilheira 300', len: 2.9, wid: 0.95, mass: 180, power: 3500, maxSpeed: 30, turn: 3.0, cruise: 1.2, weight: 1, hp: 48,
+            bike: 'moto', bodyH: 0.6, noCabin: true, fire: true, blast: 0.55, open: true,
+            lamps: { x: 0.0, zF: 1.0, zR: -1.05 },
+        },
+        moto_esportiva: {
+            name: 'Esportiva', model: 'Furia 1000RR', len: 2.9, wid: 0.85, mass: 200, power: 5800, maxSpeed: 44, turn: 2.6, cruise: 1.3, weight: 1, hp: 45,
+            bike: 'moto', bodyH: 0.5, noCabin: true, fire: true, blast: 0.6, open: true,
+            lamps: { x: 0.0, zF: 1.0, zR: -1.05 },
+        },
+        moto_custom: {
+            name: 'Custom', model: 'Estradeira 1800', len: 3.3, wid: 1.05, mass: 330, power: 4800, maxSpeed: 34, turn: 2.3, cruise: 1.1, weight: 1, hp: 62,
+            bike: 'moto', bodyH: 0.5, noCabin: true, fire: true, blast: 0.65, open: true,
+            lamps: { x: 0.0, zF: 1.15, zR: -1.2 },
+        },
         bicycle: {
             name: 'Bicicleta', model: 'Urbana BMX', len: 2.6, wid: 0.7, mass: 90, power: 380, maxSpeed: 8, turn: 2.3, cruise: 0.45, weight: 1, hp: 18,
             bike: 'bike', bodyH: 0.5, noCabin: true, fire: false, noExhaust: true, open: true,
@@ -43,8 +66,25 @@ const Bikes = {
         },
     },
 
-    // Desenho no atlas dos carros, e onde fica a origem do piloto (m: z = frente, x = direita) — as mãos do rig no guidão.
-    ART: { moto: 'moto', bicycle: 'bicicleta' },
+    // Desenho do veículo (modelo 3D; sem ele, o do atlas dos carros), e onde fica a origem do piloto (m: z = frente, x = direita) — as
+    // mãos do rig no guidão. Toda moto que não é a 'moto' cai na tabela da 'moto' (base) para o banco, a escala e as cores.
+    MOTOS: ['moto', 'moto_scooter', 'moto_trilha', 'moto_esportiva', 'moto_custom'],
+    base(kind) { return kind === 'bicycle' ? 'bicycle' : 'moto'; },
+    art3d(id) { return typeof CarArt3D !== 'undefined' && CarArt3D.has(id); },
+    get ART() {
+        const A = { moto: 'moto', bicycle: 'bicicleta' };
+        for (const k of this.MOTOS) A[k] = this.art3d(k) ? k : 'moto';
+        return A;
+    },
+    // Entregador: a moto de rua com o baú (3D) — no atlas, a mesma moto.
+    courierArt() { return this.art3d('moto_entrega') ? 'moto_entrega' : 'moto'; },
+    // Motos que circulam (peso de cada modelo no trânsito); só as que existem em 3D.
+    pickMoto(r = Math.random()) {
+        const W = [['moto', 5], ['moto_scooter', 3], ['moto_trilha', 1.5], ['moto_esportiva', 1.2], ['moto_custom', 1]].filter(([k]) => k === 'moto' || this.art3d(k));
+        let t = r * W.reduce((a, w) => a + w[1], 0);
+        for (const [k, w] of W) if ((t -= w) <= 0) return k;
+        return 'moto';
+    },
     // Piloto 2,5D (NpcArt): a origem é o BANCO do desenho (moto: a frente do banco; bicicleta: o selim), em m do desenho × SCALE —
     // as mãos e pés das animações ride_* já vêm nas manoplas/pedais (NpcGenAnims.RIDE). Boneco antigo: as mãos do rig no guidão.
     get SEAT() {
@@ -61,7 +101,7 @@ const Bikes = {
     COURIER_PAINT: 0,
 
     art() { return typeof CarArt !== 'undefined' && CarArt.available() && !!CarArt.model('moto'); },
-    paintOf(kind, id) { const P = this.PAINTS[kind] || this.PAINTS.moto; return P[(id * 7 + 3) % P.length]; },
+    paintOf(kind, id) { const P = this.PAINTS[this.base(kind)]; return P[(id * 7 + 3) % P.length]; },
 
     // Folha de veículo (cacheada) para `kind` ('moto'|'bicycle') no estado `state` ('ride'|'park'|'fallen').
     sheet(sprites, kind, state, sheetName = 'rider') {
@@ -71,6 +111,7 @@ const Bikes = {
             const spec = Object.assign({ id: kind }, CarArt.scaledSpec(Bikes.MODELS[kind]));         // (medidas em Config.vehicle.scale)
             const clip = `${state}_${spec.bike}`;
             cache[key] = new BikeSheet(sprites.sheets[sheetName], clip, spec, kind);
+            if (sheetName === 'courier') cache[key].vehModel = Bikes.courierArt();
             cache[key].lib = sprites;
         }
         return cache[key];
@@ -84,7 +125,8 @@ const Bikes = {
             a.setY = (y) => { a.mesh.position.y = y; };
             return a;
         }
-        const a = new RiderActor(game.scene, this.ART[kind], this.paintOf(kind, Math.floor(Math.random() * 97)), CarArt.scaledSeat(this.SEAT[kind]), this.SCALE[kind]);
+        const b = this.base(kind);
+        const a = new RiderActor(game.scene, this.ART[kind], this.paintOf(kind, Math.floor(Math.random() * 97)), CarArt.scaledSeat(this.SEAT[b]), this.SCALE[b]);
         a.setRider(variant, game.sprites.sheets.rider, kind === 'moto' ? 'ride_moto' : 'ride_bike');
         return a;
     },

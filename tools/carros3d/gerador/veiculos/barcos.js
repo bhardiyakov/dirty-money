@@ -110,6 +110,7 @@ export const jetski = (() => {
     details(ctx) {
       const { mb, X } = ctx;
       const yd = deckY(ctx, X(0.4), 0.0001);
+      ctx.spec.seat = [X(0.43), yd + 0.21, 0];                // (onde o jogo senta o piloto 2,5D)
       // banco
       mb.add('plastico', roundedBox(1.25, 0.12, 0.42, 0.05, 2), m4t(X(0.385), yd + 0.05, 0));
       mb.add('estofado_preto', roundedBox(1.18, 0.12, 0.36, 0.06, 3), m4t(X(0.385), yd + 0.15, 0));
@@ -171,6 +172,7 @@ export const lancha = (() => {
       const { mb } = ctx;
       const yf = deckY(ctx, X(0.35), 0.0001); // piso do cockpit
       const yg = deckY(ctx, X(0.35), 1.0); // altura da borda
+      ctx.spec.seat = [X(0.47), yf + 0.49, 0.6];              // (o banco do piloto, atrás do timão: onde o jogo senta o piloto 2,5D)
       // para-brisa curvo
       const path = [];
       for (let k = 0; k <= 16; k++) {

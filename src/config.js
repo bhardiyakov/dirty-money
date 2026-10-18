@@ -324,6 +324,7 @@ const Config = {
 		enginePower: 10000,    // "Empuxo" do motor; aceleração = enginePower/mass (~11 m/s²).
 		maxSpeed: 26,          // Velocidade máx. à frente (m/s).
 		maxReverse: 9,         // Velocidade máx. de ré (m/s).
+		bikeReverse: 1.4,      // moto e bicicleta "de ré": o piloto anda para trás com os pés no chão (m/s)
 		hpMul: 2.2,            // Resistência de TODOS os veículos × a do catálogo (spec.hp): lataria mais dura (batidas e tiros).
 		turnRate: 2.0,         // Guinada máx. (rad/s) em velocidade plena.
 		turnSpeedRef: 6,       // Velocidade (m/s) para direção com autoridade total.
