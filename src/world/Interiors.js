@@ -446,6 +446,7 @@ const Interiors = {
 		HomeDecor.onEnterInterior(game, shop);                                  // casa própria: os móveis colocados por você
 		if (typeof Bubbles !== 'undefined') Bubbles.clear();
 		if (!shop.home && !shop.safehouse && typeof WorldMemory !== 'undefined') this._greet(game, shop, life);
+		if (typeof News !== 'undefined') News.tvOn(shop);                     // bar, lanchonete, padaria, pizzaria: a TV ligada no jornal
 	},
 
 	// O atendente te reconhece (WorldMemory): cumprimenta pelo que lembra de você; um cliente cochicha; a loja assaltada avisa do PM.
@@ -477,6 +478,7 @@ const Interiors = {
 		HomeDecor.onLeaveInterior(game);
 		this._dropLife();
 		if (typeof Bubbles !== 'undefined') Bubbles.clear();
+		if (typeof News !== 'undefined') News.tvOff();
 		a.room.mesh.setEnabled(false); this._bd.setEnabled(false);
 		if (this._arrow) this._arrow.setEnabled(false);
 		for (const x of this._actors) x.setVisible(false);
@@ -527,6 +529,7 @@ const Interiors = {
 		const a = this.active; if (!a) return;
 		a.t += dt;
 		if (this._later) for (let i = this._later.length - 1; i >= 0; i--) { const d = this._later[i]; d.t -= dt; if (d.t <= 0) { this._later.splice(i, 1); d.fn(); } }
+		if (typeof News !== 'undefined') News.tvUpdate(dt);
 		for (const x of this._actors) if (x.mesh.isEnabled()) x.update(dt, 1);
 		for (const x of this._gymActors || []) if (x.mesh.isEnabled() && x.mesh.isVisible) this._gymActor(x, dt);
 		if (ShopLife.active) {

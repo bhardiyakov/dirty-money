@@ -701,6 +701,7 @@ class Game {
 		Perf.lap('outros');
 		this.combat.update(dt);
 		this.fireworks.update(dt);
+		if (typeof News !== 'undefined') News.radioUpdate(dt, this);          // boletim no rádio do carro
 		for (let i = this._delayed.length - 1; i >= 0; i--) {
 			const d = this._delayed[i];
 			d.t -= dt;
@@ -2507,6 +2508,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 	_busted(lost = null, hours = null, stars = this.wanted.level) {
 		const light = stars === 1, O = Config.police.oneStar;
 		HangProbe.arm('preso', 600);
+		if (typeof WorldMemory !== 'undefined' && stars >= 1) { const p = this.player.position; WorldMemory.log('busted', { district: this.empire ? this.empire.districtAt(p.x, p.z) : null, stars }); }
 		HangProbe.mark('preso: zerar procurado');
 		this.wanted.bust();            // zera procurado -> polícia volta a patrulhar.
 		this.bustTimer = 0;
@@ -2695,6 +2697,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (this.empire && n > prev) this.empire.spend(0, 10 * (n - prev));
 		const fled = n === 0 && (why === 'escape' || why === 'paint');                     // (pintura express na oficina também é fuga)
 		if (this.skills && fled) this.skills.addXp(25 * prev * prev);
+		if (fled && prev >= 2 && typeof WorldMemory !== 'undefined') { const p = this.player.position; WorldMemory.log('escape', { district: this.empire ? this.empire.districtAt(p.x, p.z) : null, stars: prev }); }
 		if (this.achievements && fled && prev >= 5) this.achievements.bump('escape5');      // fugir de muitas estrelas vale muito
 		if (n > prev && msg[n]) this._flash(msg[n]);
 		else if (n === 0 && why === 'escape') this._flash('Você se safou! A polícia perdeu o seu rastro');

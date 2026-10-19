@@ -554,6 +554,24 @@ const ShopLife = {
         }
     },
 
+    // Conversa no salão: de tempos em tempos um cliente parado (sentado, no balcão, na fila) comenta a notícia do bairro ou joga
+    // conversa fora; às vezes o vizinho responde. Só perto do jogador (Bubbles: até RANGE m).
+    updateChatter(dt) {
+        if (typeof Bubbles === 'undefined' || typeof News === 'undefined') return;
+        this.chatT = (this.chatT == null ? 3 + this.random() * 3 : this.chatT) - dt;
+        if (this.chatT > 0) return;
+        this.chatT = (this.family === 'bar' ? 5 : 8) + this.random() * 7;
+        const still = this.agents.filter((a) => a.role === 'customer' && a.actor && a.fade > 0.9 && !a.path && !a.outside && a.state !== 'leaving');
+        if (!still.length) return;
+        const a = still[Math.floor(this.random() * still.length)], d = this.game && this.game.empire ? this.game.empire.districtAt(this.shop.x, this.shop.z) : null;
+        Bubbles.say(a.actor, News.chatter(d), { ms: 3400 });
+        const near = still.filter((b) => b !== a && Math.hypot(b.x - a.x, b.z - a.z) < 2.6);
+        if (near.length && this.random() < 0.6) {
+            const b = near[0], reply = ['Pois é…', 'Nem me fala!', 'Sério?!', 'Não acredito…', 'É o que eu digo!', 'Hahaha, verdade.', 'Tá louco…'];
+            setTimeout(() => { if (this.active && b.actor) Bubbles.say(b.actor, reply[Math.floor(Math.random() * reply.length)], { ms: 2400 }); }, 1500);
+        }
+    },
+
     // O PM de plantão: parado, olhando a loja; de vez em quando vira para a porta (quem entra) e volta.
     updateGuard(agent, dt) {
         agent.timer -= dt;
@@ -988,6 +1006,7 @@ const ShopLife = {
         if (this.robbed) this.afterRobbery();
         const heist = typeof Heists !== 'undefined' && Heists.run && Interiors.active;
         if (heist) { this.heistFreeze(); for (const agent of this.agents) if (agent.actor) agent.actor.update(dt, 1); return; }
+        this.updateChatter(dt);
 
         this.spawnTimer -= dt;
         const customers = this.agents.filter((a) => a.role === 'customer').length, target = this.targetCustomers();

@@ -356,10 +356,20 @@ class PauseMenu {
 				+ bar('PRESSÃO POLICIAL NA FAVELA', Standing.heat, Standing.heat >= 65 ? '#ff3a2a' : '#ff9a3a', Math.round(Standing.heat) + '%')
 				+ row('Operação policial', Standing.policeOp ? '<span style="color:#ff5a4d">EM ANDAMENTO</span>' : 'não') + row('Baile funk', Baile.on ? 'rolando (21h–5h)' : 'não'))
 			+ panel('REPUTAÇÃO · O QUE O MUNDO LEMBRA', this._memoryHtml(bar, row))
+			+ panel('📰 JORNAL · ÚLTIMAS MANCHETES', this._newsHtml(row))
 			+ panel('DINHEIRO E NEGÓCIOS', row('Dinheiro sujo', brl(inv.cash)) + row('Dinheiro limpo', brl(inv.clean)) + row('Fachadas', Laundry.count) + row('Contabilidade', `nv ${Laundry.level} · perda ${Math.round(Laundry.lossRate * 100)}%`)
 				+ bar('RECEITA / PF', Laundry.taxHeat, '#9a7aff', Math.round(Laundry.taxHeat) + '%'))
 			+ panel('CASA E IMÓVEIS', row('Safe house', home ? `${home.type} (${home.region})` : 'Casa na favela') + row('Imóveis seus', owned.length) + row('Valor de mercado', brl(worth)) + (home ? row('Reforma', RealEstate.reformLevel(home) ? RealEstate.REFORMS[RealEstate.reformLevel(home)].name : 'original') : ''))
 			+ panel('PROCURADO', row('Nível', `${g.wanted.level}★`) + row('Situação', g.wanted.level > 0 ? 'A polícia está atrás de você' : 'Limpo'));
+	}
+
+	_newsHtml(row) {
+		if (typeof News === 'undefined') return '';
+		News.tick();
+		const L = News.items.slice(-6).reverse();
+		const city = News.city().slice(0, Math.max(1, 4 - L.length));
+		return L.map((it) => `<div class="sr"><span style="white-space:normal">${it.mine ? '🔴 ' : ''}${it.text}</span><b style="font-weight:500;opacity:.6">dia ${it.day}</b></div>`).join('')
+			+ city.map((t) => `<div class="sr"><span style="white-space:normal;opacity:.75">${t}</span><b></b></div>`).join('');
 	}
 
 	// Medo e respeito por bairro, os lugares que te conhecem e o placar contra os adversários do bar (WorldMemory).

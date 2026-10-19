@@ -51,7 +51,7 @@ const SaveGame = {
 			fitness: p.fit ? p.fit.xp : 0, strength: p.str ? p.str.xp : 0, physique: Physique.serialize(),
 			stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
 			traces: Traces.serialize(), robbery: Robbery.serialize(), heists: Heists.serialize(), business: Business.serialize(),
-			decor: HomeDecor.serialize(), worldMemory: WorldMemory.serialize(),
+			decor: HomeDecor.serialize(), worldMemory: WorldMemory.serialize(), news: News.serialize(),
 		};
 	},
 
@@ -85,7 +85,7 @@ const SaveGame = {
 		g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Garage.load(s.garage || null); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
 		Traces.load(s.traces || null); Robbery.load(s.robbery || null); Heists.load(s.heists || null); Business.load(s.business || null);
 		HomeDecor.load(s.decor || null);
-		WorldMemory.load(s.worldMemory || null);                              // o que o mundo lembra de você (saves antigos: ninguém te conhece)                                      // (os móveis em si vêm da grade: HomeDecor.startSession)
+		WorldMemory.load(s.worldMemory || null); News.load(s.news || null);                              // o que o mundo lembra de você (saves antigos: ninguém te conhece)                                      // (os móveis em si vêm da grade: HomeDecor.startSession)
 		const pl = s.player || {};
 		p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));
 		if (CityGrid.blockedAt(pl.x, pl.z, 0.4)) p.teleport(g.nav.closestPoint(new BABYLON.Vector3(pl.x, 0, pl.z), 30));      // (o mapa mudou: salvou onde agora tem parede)
