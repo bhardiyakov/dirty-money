@@ -64,6 +64,10 @@ const Robbery = {
     start(game, heist = null) {
         const a = Interiors.active; if (!a || this.session) return false;
         const shop = a.shop, tier = this.tierOf(shop), o = Interiors.STAGE, d = a.data, R = this.robber(game);
+        if (!heist && typeof WorldMemory !== 'undefined' && WorldMemory.guarded(shop)) {          // assaltada há poucos dias: PM de plantão na porta
+            game._flash('👮 Tem um PM de plantão aqui desde o último assalto — agora não dá');
+            return false;
+        }
         const intim = R ? R.skill('intimidacao') : 0;
         // atores: [atendente, ...fregueses] na ordem do Interiors (os com tipo do gerador vão para os atores "de academia")
         const list = (d.clerk ? [d.clerk] : []).concat(d.patrons), typed = [], plain = [];
@@ -267,8 +271,9 @@ const Robbery = {
         const range = (r) => Math.round((r[0] + Math.random() * (r[1] - r[0])) * zone / 10) * 10;
         if (A.kind === 'register') {
             s.done.register = true;
-            const v = range(this.REG[s.tier]); inv.addCash(v); s.loot.cash += v;
-            game._flash(`💵 Caixa: +${brl(v)}`); AudioFX.blip(980, 0.12, 0.2);
+            const ago = typeof WorldMemory !== 'undefined' ? WorldMemory.daysSinceRobbed(s.shop) : null, thin = ago != null && ago <= 10;
+            const v = Math.round(range(this.REG[s.tier]) * (thin ? 0.4 : 1) / 10) * 10; inv.addCash(v); s.loot.cash += v;
+            game._flash(`💵 Caixa: +${brl(v)}${thin ? ' — depois do último assalto eles quase não deixam dinheiro no caixa' : ''}`); AudioFX.blip(980, 0.12, 0.2);
         } else if (A.kind === 'safe') {
             s.done[A.key] = 1;
             const v = range(this.SAFE[s.tier]);
@@ -461,6 +466,7 @@ const Robbery = {
         this._hideSiege(); this._hudOn(false); this._markersOff();
         const shop = s.shop, pos = { x: shop.x, z: shop.z }, R = this.robber(game), pm = game.policeManager;
         this.robbedDay[shop.id] = Economy.day; this.count++;
+        if (typeof WorldMemory !== 'undefined' && !s.heist) WorldMemory.onRobbed(shop, how, s.loot.cash + s.loot.goods + s.loot.jv);
         for (const h of [s.clerk, s.guard, ...s.hostages]) if (h && h.a) h.a.play('idle');      // (o Interiors repõe posição e visibilidade na próxima loja)
         const awake = [s.clerk, s.guard, ...s.hostages].filter((h) => h && h.st !== 'asleep').length + s.out;
         const total = s.loot.cash + s.loot.goods + s.loot.jv;

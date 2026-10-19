@@ -213,7 +213,7 @@ const Truco = {
             <p class="sub">${this.shop ? this.shop.name + ' · ' : ''}Escolha a mesa. Quanto maior a aposta, mais esperto o adversário.<br>Você tem <b style="color:#86efac">${brl(cash)}</b> (dinheiro vivo).</p>
             <div class="tr-mode"><button id="trSolo" class="${duo ? '' : 'on'}">🙂 Sozinho · 1 × 1<small>você contra um</small></button><button id="trDuo" class="${duo ? 'on' : ''}">🤝 Em dupla · 2 × 2<small>você e um parceiro da casa</small></button></div>
             ${this.STAKES.map((o, i) => `<button class="tr-opp" data-i="${i}" ${cash < o.bet ? 'disabled' : ''}><span class="av">${duo ? o.duo[1] + o.duo[3] : o.emo}</span>
-                <span class="t"><b>${duo ? o.duo[0] + ' e ' + o.duo[2] : o.name}</b> <span class="lv">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><small>${o.desc}${duo ? ` Seu parceiro: <b>${o.mate[1]} ${o.mate[0]}</b>.` : ''}</small></span>
+                <span class="t"><b>${duo ? o.duo[0] + ' e ' + o.duo[2] : o.name}</b> <span class="lv">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><small>${o.desc}${duo ? ` ${o.mate[2] === 'f' ? 'Sua parceira' : 'Seu parceiro'}: <b>${o.mate[1]} ${o.mate[0]}</b>.` : ''}${this._recordTxt(i, duo)}</small></span>
                 <span class="bet">${brl(o.bet)}<small>prêmio ${brl(o.bet * 2)}</small></span></button>`).join('')}
             <div class="tr-rules"><b>Como joga:</b> 40 cartas, força <b>4 5 6 7 Q J K A 2 3</b>. A <b>vira</b> define a manilha (a carta seguinte), que ganha de todas: ♣ <b>zap</b> &gt; ♥ copas &gt; ♠ espadilha &gt; ♦ pica-fumo.
             Três cartas, melhor de três rodadas; a mão vale 1. <b>Truco</b> pede 3 — o outro lado aceita, <b>corre</b> (você leva o que valia) ou aumenta para 6, 9, 12.
@@ -228,11 +228,20 @@ const Truco = {
         this._hud();
     },
 
-    _startMatch(lvl) {
+    // Histórico contra esta mesa (WorldMemory): "você 3 × 1 ele" e a provocação.
+    _recordTxt(lvl, duo) {
+        if (typeof WorldMemory === 'undefined') return '';
+        const k = this._oppKey(lvl, duo), r = WorldMemory.record('truco', k);
+        if (!r.w && !r.l) return '';
+        const t = WorldMemory.taunt('truco', k);
+        return `<br><b style="color:${r.w >= r.l ? '#86efac' : '#fda4af'}">Você ${r.w} × ${r.l}</b>${t ? ` · <i>“${t}”</i>` : ''}`;
+    },
+    _startMatch(lvl, bet = null) {
         const o = this.STAKES[lvl], inv = this.g.inventory;
-        if (inv.cash < o.bet) return;
-        inv.cash -= o.bet;
-        this.lvl = lvl; this.opp = o; this.sk = this.SKILL[lvl];
+        bet = bet || o.bet;
+        if (inv.cash < bet) return;
+        inv.cash -= bet;
+        this.lvl = lvl; this.opp = o; this.sk = this.SKILL[lvl]; this.bet = bet;
         this._reset();
         this.$('trModal').style.display = 'none';
         this.phase = 'play';
@@ -241,7 +250,10 @@ const Truco = {
         const gen = this._gen = (this._gen || 0) + 1;
         this._match(gen).catch((e) => { if (e !== this.CANCEL) console.error('[TRUCO]', e); });
         this._hud();
+        const tt = typeof WorldMemory !== 'undefined' ? WorldMemory.taunt('truco', this._oppKey()) : '';
+        if (tt) setTimeout(() => { if (this.active && this._gen === gen) this._say(1, tt, 2200); }, 600);
     },
+    _oppKey(lvl = this.lvl, duo = this.duo) { const o = this.STAKES[lvl]; return duo ? o.duo[0] + ' e ' + o.duo[2] : o.name; },
     CANCEL: { cancel: true },
 
     async _match(gen) {
@@ -770,9 +782,10 @@ const Truco = {
 
     _end(winner, quit = false) {
         this.phase = 'end';
-        const won = winner === 0, o = this.opp, g = this.g;
+        const won = winner === 0, o = this.opp, g = this.g, bet = this.bet || o.bet;
+        if (typeof WorldMemory !== 'undefined') WorldMemory.onGame('truco', this.shop, this._oppKey(), won, bet);
         if (won) {
-            g.inventory.cash += o.bet * 2;
+            g.inventory.cash += bet * 2;
             const A = g.achievements; if (A) { A.bump('trucoWins'); if (this.lvl === 4) A.bump('trucoBoss'); }
             AudioFX.blip(880, 0.12, 0.2); setTimeout(() => AudioFX.blip(1320, 0.18, 0.2), 140);
         } else AudioFX.blip(140, 0.4, 0.2);
@@ -781,8 +794,10 @@ const Truco = {
         this.$('trModal').style.display = 'flex';
         this.$('trModal').innerHTML = `<div class="tr-box tr-end"><div style="font-family:var(--emoji);font-size:46px">${won ? '🏆' : (this.duo ? o.duo[1] + o.duo[3] : o.emo)}</div>
             <div class="big" style="color:${won ? '#86efac' : '#fb7185'}">${won ? (this.duo ? 'Vocês venceram!' : 'Você venceu!') : (this.duo ? 'Vocês perderam' : 'Você perdeu')}</div>
-            <p class="sub">${quit ? 'Você desistiu da partida.' : `Placar final: <b>${this.score[0]} × ${this.score[1]}</b>.`} ${won ? `Prêmio: <b style="color:#86efac">+${brl(o.bet * 2)}</b>` : `A aposta de ${brl(o.bet)} ficou com ${them}.`}</p>
-            <div class="row"><button class="ui-btn pri" id="trAgain">Jogar de novo</button><button class="ui-btn" id="trBack">Voltar ao bar</button></div></div>`;
+            <p class="sub">${quit ? 'Você desistiu da partida.' : `Placar final: <b>${this.score[0]} × ${this.score[1]}</b>.`} ${won ? `Prêmio: <b style="color:#86efac">+${brl(bet * 2)}</b>` : `A aposta de ${brl(bet)} ficou com ${them}.`}</p>
+            ${!quit ? `<p class="sub" style="font-style:italic">${won ? `${this.duo ? o.duo[1] : o.emo} “Revanche! Dobro ou nada: ${brl(bet * 2)}.”` : `Você pode pedir a revanche pela mesma aposta (${brl(bet)}).`}</p>` : ''}
+            <div class="row">${!quit ? `<button class="ui-btn pri" id="trRematch" ${g.inventory.cash < (won ? bet * 2 : bet) ? 'disabled' : ''}>${won ? `Aceitar revanche (${brl(bet * 2)})` : `Pedir revanche (${brl(bet)})`}</button>` : ''}<button class="ui-btn ${quit ? 'pri' : ''}" id="trAgain">Outra mesa</button><button class="ui-btn" id="trBack">Voltar ao bar</button></div></div>`;
+        if (this.$('trRematch')) this.$('trRematch').onclick = () => { const L = this.lvl; this._reset(); this._startMatch(L, won ? bet * 2 : bet); };
         this.$('trAgain').onclick = () => { this._reset(); this._renderSetup(); };
         this.$('trBack').onclick = () => this.close();
         this._hud();
@@ -795,7 +810,7 @@ const Truco = {
         this.$('trUs').innerHTML = `<b>${this.score[0]}</b><small>${this.duo ? 'nós' : 'você'}</small>`;
         this.$('trThem').innerHTML = `<b>${this.score[1]}</b><small>${this._themLabel().toLowerCase()}</small>`;
         this.$('trVal').innerHTML = `<b>${this.value === 1 ? '1' : this.value}</b><small>${this.ferro ? 'mão de ferro' : this.onze != null ? 'mão de onze' : this.value === 1 ? 'vale a mão' : this.CALL_NAME[this.value].toLowerCase()}</small>`;
-        this.$('trPot').innerHTML = `<b>${this.opp ? brl(this.opp.bet * 2) : '—'}</b><small>na mesa</small>`;
+        this.$('trPot').innerHTML = `<b>${this.opp ? brl((this.bet || this.opp.bet) * 2) : '—'}</b><small>na mesa</small>`;
         for (const id of ['trUs', 'trThem', 'trVal', 'trPot']) this.$(id).style.visibility = playing ? 'visible' : 'hidden';
         this.$('trCover').parentElement.style.visibility = playing ? 'visible' : 'hidden';
         const myTurn = !!this.wait && !this.ask;

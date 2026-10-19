@@ -191,6 +191,7 @@ const Economy = {
         if (typeof Business !== 'undefined' && Business.isOwned(shop)) out.push({ label: 'Seu negócio', mul: 0.5 });               // dono paga o preço de custo
         if (Outfit.m.price > 0) out.push({ label: 'Bem vestido', mul: 1 - Outfit.m.price });                        // terno, sapato social… (Outfit)
         if (shop.district === 'favela' && Outfit.m.favela > 0) out.push({ label: 'Estilo do morro', mul: 1 - Outfit.m.favela });   // chinelo, camisa de time, corrente
+        if (typeof WorldMemory !== 'undefined') out.push(...WorldMemory.priceFactors(shop));                      // freguês, VIP, desconfiança, medo
         return out;
     },
 
@@ -253,6 +254,7 @@ const Economy = {
         if (entry.qty !== Infinity) entry.qty--;
         const msg = this.grant(game, id, `(-${brl(price)})`);
         Standing.shopped(shop, price);
+        if (typeof WorldMemory !== 'undefined') WorldMemory.onSpend(shop, price);
         return { ok: true, msg };
     },
 

@@ -183,7 +183,7 @@ const Pool = {
         this.$('plModal').innerHTML = `<div class="pl-box"><h2>🎱 Sinuca · bola 8</h2>
             <p class="sub">${this.shop ? this.shop.name + ' · ' : ''}Escolha o adversário. Quanto maior a aposta, melhor ele joga.<br>Você tem <b style="color:#86efac">${brl(cash)}</b> (dinheiro vivo).</p>
             ${this.STAKES.map((o, i) => `<button class="pl-opp" data-i="${i}" ${cash < o.bet ? 'disabled' : ''}><span class="av">${o.emo}</span>
-                <span class="t"><b>${o.name}</b> <span class="lv">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><small>${o.desc}</small></span>
+                <span class="t"><b>${o.name}</b> <span class="lv">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><small>${o.desc}${this._recordTxt(o.name)}</small></span>
                 <span class="bet">${brl(o.bet)}<small>prêmio ${brl(o.bet * 2)}</small></span></button>`).join('')}
             <div class="pl-rules"><b>Regras:</b> quem encaçapa primeiro fica com o grupo (lisas 1–7 ou listradas 9–15). Encaçape o seu grupo e depois a 8.
             <b>Falta</b> (branca na caçapa, não tocar em nada ou tocar primeiro a bola errada) dá <b>bola na mão</b> ao adversário. Encaçapar a 8 antes da hora = derrota.<br>
@@ -197,6 +197,13 @@ const Pool = {
         this._hud();
     },
 
+    // Histórico contra este adversário (WorldMemory) e a provocação dele.
+    _recordTxt(name) {
+        if (typeof WorldMemory === 'undefined') return '';
+        const r = WorldMemory.record('pool', name); if (!r.w && !r.l) return '';
+        const t = WorldMemory.taunt('pool', name);
+        return `<br><b style="color:${r.w >= r.l ? '#86efac' : '#fda4af'}">Você ${r.w} × ${r.l}</b>${t ? ` · <i>“${t}”</i>` : ''}`;
+    },
     _startMatch(lvl) {
         const o = this.STAKES[lvl], inv = this.g.inventory;
         if (inv.cash < o.bet) return;
@@ -445,6 +452,7 @@ const Pool = {
     _end(winner, why) {
         this.phase = 'end';
         const won = winner === 0, o = this.opp, g = this.g;
+        if (typeof WorldMemory !== 'undefined') WorldMemory.onGame('pool', this.shop, o.name, won, o.bet);
         if (won) {
             g.inventory.cash += o.bet * 2;
             const A = g.achievements; if (A) { A.bump('poolWins'); if (this.lvl === 4) A.bump('poolBoss'); }

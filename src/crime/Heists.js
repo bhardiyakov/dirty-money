@@ -154,6 +154,7 @@ const Heists = {
     // Chegou ao ponto de entrega sem estrelas: o receptador paga, a equipe recebe e o azar de quem é ruim pesa.
     payout(game) {
         const R = this.run, p = this.plan, J = this.get(p.store), lines = [];
+        if (typeof WorldMemory !== 'undefined' && J) WorldMemory.crime('heist', J.x, J.z, { place: J.name, value: Math.round(R.take || 0) });
         let gross = R.take;
         const gm = this.stars(this.member('gunman', p.crew.gunman)), dr = this.stars(this.member('driver', p.crew.driver)), hk = this.stars(this.member('hacker', p.crew.hacker));
         if (Math.random() < [0, 0.3, 0.1, 0][gm]) { const l = Math.round(gross * 0.15); gross -= l; lines.push(`🩸 ${this.member('gunman', p.crew.gunman).name} tomou um tiro na fuga e a bolsa dele ficou: −${brl(l)}`); }

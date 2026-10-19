@@ -75,6 +75,7 @@ class Game {
 			onOfficerKilled: (o, source) => {
 				// O policial solta munição, dinheiro e, às vezes, uma arma ou kit (tropa de elite e exército: fuzil e mais $).
 				if (source !== 'gang' && source !== 'police') this.pickups.dropLoot(o.position, o.kind || 'cop');      // (morto pelo tráfico: sem loot)
+				if (source === 'player' && typeof WorldMemory !== 'undefined') WorldMemory.crime('cop', o.position.x, o.position.z);
 				if (source === 'player') { this.wanted.addStars(1, 'kill'); this._flash('Policial morto! Eles não vão deixar barato!'); if (o.op) { Standing.add('traffic', 4); if (this.missions) this.missions.onCopKilled(); } if (Standing.nearFavela(o.position.x, o.position.z)) Standing.addHeat(30, 'policial morto'); }       // (na operação o tráfico gosta; perto da favela, a pressão sobe)
 			},
 		};
@@ -88,6 +89,7 @@ class Game {
 					// Quem morre solta dinheiro (de qualquer causa); matar é crime se foi o jogador.
 					this.pickups.dropLoot(npc.position, 'civilian');
 					if (source !== 'player') return;
+					if (typeof WorldMemory !== 'undefined') WorldMemory.crime(npc.mugger ? 'fight' : 'kill', npc.position.x, npc.position.z);
 					this.wanted.reportCrime();
 					if (!npc.mugger) Standing.harm(this, 6);                 // (o assaltante de rua: o bairro não chora — ver StreetCrime)
 					if (this.npcManager) this.npcManager.alertViolence(npc.position, 18);
@@ -1518,7 +1520,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		// (cada gesto na porta encosta nela de novo — glide: o carro que ainda freava não deixa o ladrão puxando de longe)
 		if (how === 'smash') steps.push({ clip: 'punch', face: atDoor, glide: door, yank: () => this._smashWindow(car, sign) });
 		if (how === 'pick') steps.push({ clip: 'pick', face: atDoor, timer: 600, onStart: () => this._startLockpick(car) });
-		if (driver) steps.push({ clip: 'carjack', face: atDoor, glide: door, onStart: open, yank: () => this._yankDriver(car, sign) });
+		if (driver) steps.push({ clip: 'carjack', face: atDoor, glide: door, onStart: open, yank: () => { if (typeof WorldMemory !== 'undefined') WorldMemory.crime('carjack', pl.position.x, pl.position.z); this._yankDriver(car, sign); } });
 		else steps.push({ clip: 'opendoor', face: atDoor, glide: door, onStart: open });
 		// 3) entra: põe o pé lá dentro, gira, senta no banco e recolhe a outra perna, deslizando da porta até o banco enquanto a
 		//    carroceria esconde o que já entrou (clipe `sitin`; sem ele — visual antigo guardado no aparelho —, o `enter` de antes)
@@ -2310,6 +2312,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		this.holdup = null;
 		const loot = R.holdLoot[0] + Math.floor(Math.random() * (R.holdLoot[1] - R.holdLoot[0] + 1));
 		this.inventory.addCash(loot);
+		if (typeof WorldMemory !== 'undefined') WorldMemory.crime('holdup', pl.position.x, pl.position.z, { value: loot });
 		AudioFX.blip(980, 0.12, 0.2);
 		v.endSurrender(pl.position);
 		Standing.harm(this, 4);
@@ -2354,6 +2357,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			if (this.careers) this.careers.onPickpocket(npc, pl.position);
 			if (this.skills) this.skills.addXp(5);
 			if (this.achievements) this.achievements.bump('thefts');
+			if (typeof WorldMemory !== 'undefined') WorldMemory.crime('theft', npc.position.x, npc.position.z);
 			if (this.empire) this.empire.spend(2, 3);
 			AudioFX.blip(1180, 0.08, 0.14);
 			this._flash(`Furto: +${brl(loot)} — ele nem percebeu`);

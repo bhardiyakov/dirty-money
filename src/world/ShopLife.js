@@ -541,6 +541,27 @@ const ShopLife = {
             this.playAnim(agent, 'idle');
             this.waiter = agent;
         }
+        // assaltada há poucos dias (WorldMemory): um PM de plantão do lado de dentro da porta, de olho em quem entra
+        this.guard = null;
+        if (typeof WorldMemory !== 'undefined' && WorldMemory.guarded(this.shop) && NpcArt.atlases.pm_policial) {
+            const D = this.points.door, side = D.x > this.data.W / 2 ? -1 : 1;
+            const agent = this.createAgent('guard', 'pm_policial', uniform + 7);
+            this.place(agent, D.x + side * 1.9, 1.35, 0);
+            agent.home = { x: D.x + side * 1.9, z: 1.35, heading: 0 };
+            agent.timer = 2 + this.random() * 4;
+            this.playAnim(agent, 'idle');
+            this.guard = agent;
+        }
+    },
+
+    // O PM de plantão: parado, olhando a loja; de vez em quando vira para a porta (quem entra) e volta.
+    updateGuard(agent, dt) {
+        agent.timer -= dt;
+        if (agent.timer > 0) return;
+        agent.timer = 3 + this.random() * 6;
+        const P = this.game && this.game.player && this.game.player.position, o = Interiors.STAGE;
+        if (P && this.random() < 0.6) agent.targetHeading = Math.atan2(P.x - o.x - agent.x, P.z - o.z - agent.z);
+        else agent.targetHeading = agent.home.heading + (this.random() - 0.5) * 1.6;
     },
 
     updateClerk(agent, dt) {
@@ -980,6 +1001,7 @@ const ShopLife = {
             agent.outside = agent.z < 0.35;
             if (agent.role === 'clerk') this.updateClerk(agent, dt);
             else if (agent.role === 'waiter') this.updateWaiter(agent, dt);
+            else if (agent.role === 'guard') this.updateGuard(agent, dt);
             else this.updateCustomer(agent, dt);
             if (agent.path) this.stepAlong(agent, dt);
             this.turn(agent, dt);
