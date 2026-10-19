@@ -33,7 +33,7 @@ function NpcGenBuild(G) {
             'molotov_light', 'molotov_hold', 'molotov_throw', 'roll', 'vault', 'baton_idle', 'baton_walk'],
         fall: ['dead', 'flail', 'tumble', 'lie', 'getup', 'climb'],
         water: ['swim', 'swim_idle', 'swim_breast', 'wade', 'wade_idle', 'swim_in', 'swim_out', 'swim_stand', 'dive_in', 'dive', 'dive_out', 'board_boat'],
-        car: ['opendoor', 'enter', 'carjack', 'sitin', 'sitout', 'pick', 'pickpocket', 'rummage', 'ride_moto', 'ride_jetski', 'ride_bike', 'ride_boat', 'mount'],
+        car: ['opendoor', 'enter', 'carjack', 'sitin', 'sitout', 'pick', 'pickpocket', 'rummage', 'ride_moto', 'ride_jetski', 'ride_bike', 'ride_boat', 'ride_back', 'mount'],
         gym: ['gym_curl', 'gym_bench', 'gym_squat'],
     };
     const GROUP_OF = {}, ORDER = Object.keys(GROUPS);

@@ -105,12 +105,13 @@ class RiderActor {
     }
     static get STAND() { return -0.3; }
 
-    // Ré com os pés: de pé sobre o chão, montado no banco, andando para trás (o Vehicle toca o clipe com rate < 0).
+    // Ré com os pés: de pé sobre o chão, montado no banco, andando para trás (o Vehicle toca o clipe com rate < 0) com as MÃOS NO
+    // GUIDÃO (ride_back:moto / ride_back:bike, assado para o guidão desse veículo; atlas antigo sem ele: o andar comum).
     walkBack(on) {
         const r = this.rider;
         if (!r || this.riderVariant == null || !!on === !!this._back) return;
         this._back = !!on;
-        if (on) r.play('walk', 'none', { restart: true });
+        if (on) r.play('ride_back', this._clipName === 'ride_bike' ? 'bike' : 'moto', { restart: true }) || r.play('walk', 'none', { restart: true });
         else if (this._clipName) r.play(this._clipName, 'none', { restart: true });
         this._place();
     }
