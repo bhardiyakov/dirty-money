@@ -323,13 +323,13 @@ const ShopStyles = {
           c.fr(x - 2, y - 2, w + 4, h + 4, '#3a2a18'); for (let j = 0; j < h; j += 40) for (let i = 0; i < w; i += 80) { c.fr(x + i, y + j, Math.min(80, w - i), Math.min(40, h - j), '#a8bc78'); c.fr(x + i, y + j, Math.min(80, w - i), 1, '#c8dc98'); c.fr(x + i, y + j, 1, Math.min(40, h - j), '#7a8e50'); c.fr(x + i + 1, y + j + 1, Math.min(80, w - i) - 2, 2, '#3a4a28'); }
           HouseArt._grain(c, x, y, w, h, 7, S.seed); }
         { const t = S.table(S.P(W - 5.4), 5.2, 2.6, 2.0, 'wood', '#5a3a22'); S.plate(t.x + 10, t.top + 9, true); S.plate(t.x + t.w - 10, t.top + 9, true); S.c.fr(t.x + (t.w / 2 | 0) - 2, t.top + 6, 4, 8, '#e8e0c8');
-          for (const [cx2, cz2] of [[W - 7.8, 5.2], [W - 3.0, 5.2], [W - 5.4, 7.4], [W - 5.4, 3.0]]) { const b = S.base([S.P(cx2) - 0.5, cz2 - 0.5, S.P(cx2) + 0.5, cz2 + 0.5], 0.2); S.c.box(b.x, b.y, b.w, b.h, '#b8382c', '#d8584a', '#7a2018', '#301008'); } }
+          for (const [cx2, cz2] of [[W - 7.8, 5.2], [W - 3.0, 5.2], [W - 5.4, 7.4], [W - 5.4, 3.0]]) { S.seats.push({ kind: 'cushion', x: S.P(cx2), z: cz2, back: null }); const b = S.base([S.P(cx2) - 0.5, cz2 - 0.5, S.P(cx2) + 0.5, cz2 + 0.5], 0.2); S.c.box(b.x, b.y, b.w, b.h, '#b8382c', '#d8584a', '#7a2018', '#301008'); } }
         // balcão de sushi (vidro) com chef atrás
         { const b = S.counter(S.R(2.0, 8.2, W - 10.8, 9.8), 1.05, '#d8c8a0', '#4a3418', []); const c = S.c;
           c.fr(b.x + 2, b.top + 2, b.w - 4, b.h - 4, '#a8c8c8'); c.fr(b.x + 2, b.top + 2, b.w - 4, 2, '#d8f0f0');
           for (let i = 6; i < b.w - 8; i += 11) { c.box(b.x + i, b.top + 6, 9, 5, '#2a2a2e', '#4a4a50', '#101012', '#000'); c.fr(b.x + i + 1, b.top + 6, 7, 3, ['#e8e0d0', '#e87a5a', '#e8a8a0', '#f0c860'][(i / 11 | 0) % 4]); c.px(b.x + i + 4, b.top + 5, '#3f9a52'); }
           for (let i = 8; i < b.w - 10; i += 22) { c.disk(b.x + i, b.top + 19, 4, '#e8e4dc'); c.disk(b.x + i, b.top + 19, 2, ['#e87a5a', '#f0c860'][(i / 22 | 0) % 2]); } }
-        for (let k = 0; k < 5; k++) { const b = S.base(S.R(2.6 + k * 2.4, 6.3, 3.4 + k * 2.4, 7.1), 0.6); S.c.box(b.x, b.y - 4, b.w, b.h + 4, '#8a5a30', '#b88850', '#4a3018', '#201408'); S.solid(S.R(2.6 + k * 2.4, 6.3, 3.4 + k * 2.4, 7.1), 0.6); }
+        for (let k = 0; k < 5; k++) { S.seats.push({ kind: 'stool', x: S.P(3.0 + k * 2.4), z: 6.7, back: null }); const b = S.base(S.R(2.6 + k * 2.4, 6.3, 3.4 + k * 2.4, 7.1), 0.6); S.c.box(b.x, b.y - 4, b.w, b.h + 4, '#8a5a30', '#b88850', '#4a3018', '#201408'); S.solid(S.R(2.6 + k * 2.4, 6.3, 3.4 + k * 2.4, 7.1), 0.6); }
         // noren vermelho e quadro na parede
         let bd = S.band(S.P(W - 8.0), S.P(W - 4.0)); S.c.fr(bd.x, bd.y + 6, bd.w, 5, '#2a1c10'); for (let i = 0; i < bd.w - 10; i += 14) { S.c.fr(bd.x + 2 + i, bd.y + 11, 12, 30, '#b8282f'); S.c.fr(bd.x + 2 + i, bd.y + 11, 12, 1, '#e0585a'); S.c.fr(bd.x + 7 + i, bd.y + 20, 2, 10, '#f4ecd8'); }
         bd = S.band(S.P(3.0), S.P(8.0)); S.poster(bd.x, bd.y + 10, bd.w, 24, '#e8e0c0', '#1a1a1a', 'landscape');

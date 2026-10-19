@@ -382,7 +382,10 @@ const Interiors = {
 		this.obstacles.push({ x0: o.x + data.door.x0 - 0.1, z0: o.z - 6, x1: o.x + data.door.x1 + 0.1, z1: o.z - 0.25, h: 3 });      // tampa o vão da porta por fora: sem cair no vazio (a saída é o gatilho antes dele)
 		pl.teleport(new BABYLON.Vector3(o.x + data.spawn.x, 0, o.z + data.spawn.z));
 		pl.root.rotation.y = 0; pl.velocity.setAll(0);
-		this._useActors(game, (data.clerk ? [data.clerk] : []).concat(data.patrons), shop);
+		// Loja com clientela viva (ShopLife: atendente, clientes e garçom com rotina): os figurantes fixos saem (fica só quem tem
+		// tipo do gerador e papel próprio — o segurança da joalheria, os da academia).
+		const life = ShopLife.enter(game, shop, data);
+		this._useActors(game, life ? data.patrons.filter((e) => e.type) : (data.clerk ? [data.clerk] : []).concat(data.patrons), shop);
 		const ar = this._exitArrow(game.scene); ar.setEnabled(true); ar.visibility = 0; this._tickArrow(game, 0);
 		game.camera.setZoomMul(0.5);
 		game.camera.snapTo(this.focus(pl.position, game.camera, game.gameEngine.engine.getAspectRatio(game.camera.camera)));
@@ -399,6 +402,7 @@ const Interiors = {
 		const a = this.active; if (!a) return;
 		const pl = game.player;
 		HomeDecor.onLeaveInterior(game);
+		ShopLife.leave();
 		a.room.mesh.setEnabled(false); this._bd.setEnabled(false);
 		if (this._arrow) this._arrow.setEnabled(false);
 		for (const x of this._actors) x.setVisible(false);
@@ -429,6 +433,7 @@ const Interiors = {
 			const lim = this.STAGE.x - 400, keep = this._hidden = [], stage = new Set([this._bd, this.active && this.active.room.mesh]);
 			for (const x of this._actors) stage.add(x.mesh);
 			for (const x of this._gymActors || []) stage.add(x.mesh);
+			for (const m of ShopLife.meshes()) stage.add(m);
 			if (this._arrow) stage.add(this._arrow);
 			for (const m of game.scene.meshes) {
 				if (!m.isEnabled(false) || stage.has(m)) continue;
@@ -449,6 +454,7 @@ const Interiors = {
 		a.t += dt;
 		for (const x of this._actors) if (x.mesh.isEnabled()) x.update(dt, 1);
 		for (const x of this._gymActors || []) if (x.mesh.isEnabled() && x.mesh.isVisible) this._gymActor(x, dt);
+		ShopLife.update(dt, game);
 		if (a.shop.bank) Banks.update(dt, game);
 		if (typeof Robbery !== 'undefined') Robbery.update(dt, game);
 		if (typeof Heists !== 'undefined') { Heists.interiorTick(dt); Heists.scoutTick(dt, game); }
