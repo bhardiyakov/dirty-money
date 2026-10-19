@@ -192,7 +192,18 @@ const PadNav = {
         this._prev = Array.from(p.buttons, (x) => !!(x && x.pressed));
         if (any && g && g.input) { g.input.usingPad = true; g.input.padType = PadGlyphs.type(p.id); }
 
-        // 1) Sinuca
+        // 1) Truco: ← → escolhem a carta, A joga (ou aceita), Y truco/aumenta, X encobre, B corre/desiste; a tela de mesas é um modal
+        if (typeof Truco !== 'undefined' && Truco.active) {
+            const modal = document.getElementById('trModal');
+            if (modal && modal.style.display !== 'none' && modal.getClientRects().length) { this.releaseAll(); this._focusScreen(modal, p, dt, edge); if (edge(1)) this.key('Escape'); return; }
+            this.releaseAll();
+            const ax = p.axes[0] || 0, dir = btn(14) || ax < -0.5 ? -1 : btn(15) || ax > 0.5 ? 1 : 0;
+            if (dir && dir !== this._trDir) Truco.pad(dir < 0 ? 'left' : 'right');
+            this._trDir = dir;
+            if (edge(0)) Truco.pad('a'); if (edge(3)) Truco.pad('y'); if (edge(2)) Truco.pad('x'); if (edge(1)) Truco.pad('b');
+            return;
+        }
+        // 2) Sinuca
         if (typeof Pool !== 'undefined' && Pool.active) {
             const modal = document.getElementById('plModal');
             if (modal && modal.style.display !== 'none' && modal.getClientRects().length) { this.releaseAll(); this._focusScreen(modal, p, dt, edge); if (edge(1)) this.key('Escape'); return; }

@@ -463,7 +463,7 @@ class Game {
 		eng.onEndFrameObservable.add(() => HangProbe.mark('motor: fim do quadro'));
 		this.gameEngine.runRenderLoop(() => {
 			const now = performance.now();
-			if (Pool.active) { last = now; return; }                  // sinuca: o mundo para por completo (sem update nem render)
+			if (Pool.active || Truco.active) { last = now; return; }  // sinuca e truco: o mundo para por completo (sem update nem render)
 			HangProbe.mark('laço: AutoQuality');
 			this.autoQuality.tick((now - last) / 1000, this.menu.isOpen);
 			const dt = Math.min((now - last) / 1000 * (this.timeScale || 1), 0.05);
@@ -1095,14 +1095,14 @@ class Game {
 
 	// Alguma janela/diálogo que usa o ESC está aberta (ou acabou de fechar)? Então o ESC não deve abrir o menu de pausa.
 	_modalUiOpen() {
-		return !!(Gym.active || Pool.active || Panel.anyOpen() || this.stashUI.open || this.shopUI.open || this.propertyUI.open || this.carUI.open || this.motoUI.open || this.tribunal.open
+		return !!(Gym.active || Pool.active || Truco.active || Panel.anyOpen() || this.stashUI.open || this.shopUI.open || this.propertyUI.open || this.carUI.open || this.motoUI.open || this.tribunal.open
 			|| this.endScreen.visible || this.sleeping || this.motoRide || HomeDecor.active);          // (arrombar e inventário legado consomem o ESC sozinhos; _canPause já bloqueia a pausa neles)
 	}
 
 	// Dá para pausar? Não durante as telas de fim (detido/morte), enquanto arromba (Esc cancela o mini-game) nem sem o jogo pronto.
 	_canPause() {
 		if (this.menu.isOpen) return false;
-		if (Gym.active || Pool.active || Panel.anyOpen() || Panel.anyCool() || (Robbery.session && Robbery.session.siege) || this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.carUI.open || this.carUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping || HomeDecor.active) return false;
+		if (Gym.active || Pool.active || Truco.active || Panel.anyOpen() || Panel.anyCool() || (Robbery.session && Robbery.session.siege) || this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.carUI.open || this.carUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping || HomeDecor.active) return false;
 		if ((this.arrest && this.arrest.phase === 'screen') || (this.death && this.death.phase === 'screen')) return false;
 		return true;
 	}

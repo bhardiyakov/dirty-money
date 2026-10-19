@@ -134,6 +134,7 @@ const Interiors = {
 			const cl = a.data.clerk, nearClerk = cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
 			const shop = a.shop, S = Economy.STYLES[shop.style] || {};
 			if (this.useNear(game, 'pool')) return `<b>E</b> jogar sinuca<small>bola 8 apostada · de ${brl(Pool.STAKES[0].bet)} a ${brl(Pool.STAKES[Pool.STAKES.length - 1].bet)}</small>`;
+			if (this.useNear(game, 'truco')) return `<b>E</b> jogar truco<small>1 × 1 ou em dupla, apostado · de ${brl(Truco.STAKES[0].bet)} a ${brl(Truco.STAKES[Truco.STAKES.length - 1].bet)}</small>`;
 			const gu = this.gymUse(game);
 			if (gu) { const ex = Gym.EX[gu.kind]; return `<b>E</b> ${ex.verb}<small>${!Physique.hasPass() ? 'compre a diária ou a mensalidade na recepção' : Physique.setsLeft(ex.id) > 0 ? `séries hoje: ${Physique.SETS_PER_DAY - Physique.setsLeft(ex.id)}/${Physique.SETS_PER_DAY} · ${ex.min}–${ex.max} kg` : 'séries de hoje feitas — volte amanhã'}</small>`; }
 			if (nearClerk) return `<b>E</b> ${S.guns ? 'ver o que tem à venda' : S.clothes ? 'ver roupas, tênis e bolsas' : S.gym ? 'diária, mensalidade e suplementos' : 'ver o cardápio'}<small>${shop.name} · ${Economy.zoneOf(shop).label}${S.gym ? (Physique.hasPass() ? ' · treino liberado' : ' · sem plano') : ''}</small>`;
@@ -175,6 +176,7 @@ const Interiors = {
 			const a = this.active, o = this.STAGE, door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2;
 			const cl = a.data.clerk;
 			if (this.useNear(game, 'pool')) { Pool.open(game, a.shop); return true; }
+			if (this.useNear(game, 'truco')) { Truco.open(game, a.shop); return true; }
 			const gu = this.gymUse(game);
 			if (gu) { Gym.open(game, gu); return true; }
 			if (cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6) { game.shopUI.show(a.shop); return true; }

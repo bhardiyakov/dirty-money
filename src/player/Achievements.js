@@ -67,6 +67,8 @@ class Achievements {
             ['transfer5', 'BANCOS', 'Laranjal', 'Faça 5 transferências via laranjas', () => [st('transfers'), 5]],
             ['pool10', 'BAR', 'Taco de ouro', 'Vença 10 partidas de sinuca apostadas', () => [st('poolWins'), 10]],
             ['poolBoss', 'BAR', 'Caça-fantasma', 'Vença O Fantasma na sinuca', () => [st('poolBoss'), 1]],
+            ['truco10', 'BAR', 'Zap na manga', 'Vença 10 partidas de truco apostadas', () => [st('trucoWins'), 10]],
+            ['trucoBoss', 'BAR', 'Aula do Professor', 'Vença O Professor no truco', () => [st('trucoBoss'), 1]],
             ['crew12', 'IMPÉRIO', 'Exército particular', 'Tenha 12 soldados', () => [g.empire ? g.empire.biz.soldiers.length : 0, 12]],
         );
         return out;
