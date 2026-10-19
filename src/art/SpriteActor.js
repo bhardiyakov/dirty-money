@@ -98,9 +98,13 @@ class SpriteActor {
 		this.mesh.updateVerticesData(BABYLON.VertexBuffer.ColorKind, this._colors);
 	}
 
-	// Caixa envolvente do quad (lado 2h) com um pouco de altura: o frustum descarta o sprite fora da tela.
+	// Caixa envolvente do quad (lado 2h) com um pouco de altura: o frustum descarta o sprite fora da tela. Já posta no mundo: a caixa
+	// nova só seria levada à posição na próxima vez que a matriz mudasse — quem fica PARADO (atendente, freguês sentado) ficava com a
+	// caixa na origem e o frustum o descartava (sumia da tela).
 	_setBounds(h) {
-		this.mesh.setBoundingInfo(new BABYLON.BoundingInfo(new BABYLON.Vector3(-h, -1, -h), new BABYLON.Vector3(h, 3, h)));
+		const bi = new BABYLON.BoundingInfo(new BABYLON.Vector3(-h, -1, -h), new BABYLON.Vector3(h, 3, h));
+		bi.update(this.mesh.computeWorldMatrix(true));
+		this.mesh.setBoundingInfo(bi);
 	}
 
 	// Fixa o frame do clipe (animação dirigida por código). O update() volta a avançar daqui. (Prefira setPhase/setLean: o número de

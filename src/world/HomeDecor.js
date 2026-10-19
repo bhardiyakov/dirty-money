@@ -116,7 +116,7 @@ const HomeDecor = {
 
     // Interiors._doEnter: an owned home loads its furniture.
     onEnterInterior(game, shop) {
-        if (!this.ready || !Interiors._owned(shop)) return;
+        if (!this.ready || !(shop.home || shop.safehouse) || !Interiors._owned(shop)) return;      // (lojas: nada a carregar)
         const homeId = this.homeIdOf(shop);
         if (!homeId) return;
         const regionIndex = this.regionFor(homeId), stage = Interiors.STAGE;
