@@ -69,6 +69,13 @@ const Interiors = {
 	// Todo quadro (a pé): atravessou a soleira → entra. Fechada/bloqueada: a porta "trava" e o jogador volta para a calçada.
 	autoEnter(game) {
 		if (this.active || this.busy || game.mode !== 'player' || game.player.busy || game.motoRide) return;
+		// Chegando perto de uma loja: as páginas de quem vai estar lá dentro já vão para a fila (ninguém surge depois de entrar).
+		const now = performance.now();
+		if (!this._pfT || now - this._pfT > 500) {
+			this._pfT = now;
+			const pp = game.player.position, near = this.shopNear(pp.x, pp.z, 14);
+			if (near) { try { ShopLife.prefetch(near); } catch (e) { console.warn('[LOJAS] pré-carga:', e); } }
+		}
 		if (this._needRelease) { const ax = game.input.getMoveAxis(); if (Math.abs(ax.x) + Math.abs(ax.z) < 0.1 || performance.now() - this._leftAt > 4000) this._needRelease = false; else { const pp = game.player.position, hs = this.doorHit(pp.x, pp.z); if (hs) { pp.x = hs.x; pp.z = hs.z; } return; } }
 		const p = game.player.position, s = this.doorHit(p.x, p.z);
 		if (!s) return;
@@ -291,12 +298,41 @@ const Interiors = {
 		return this._el;
 	},
 	_fade(cb) { this.busy = true; this._f = { phase: 'out', t: 0, cb }; this._fadeEl().style.display = 'block'; },
+	// out (escurece) → troca de lugar → hold (preto até quem está na sala já estar desenhado, no máximo HOLD s) → in (clareia).
+	// Uma troca que falha não pode prender a tela no preto: volta para a rua e clareia.
+	HOLD: 2.5,
 	tickFade(dt) {
 		const f = this._f; if (!f) return;
 		f.t += dt;
 		const el = this._fadeEl(), D = 0.22;
-		if (f.phase === 'out') { el.style.opacity = String(Math.min(1, f.t / D)); if (f.t >= D) { f.cb(); f.phase = 'in'; f.t = 0; } }
-		else { el.style.opacity = String(Math.max(0, 1 - f.t / D)); if (f.t >= D) { el.style.display = 'none'; this._f = null; this.busy = false; } }
+		if (f.phase === 'out') {
+			el.style.opacity = String(Math.min(1, f.t / D));
+			if (f.t >= D) {
+				f.phase = 'hold'; f.t = 0;
+				try { f.cb(); } catch (e) { console.error('[LOJAS] a troca de lugar falhou:', e); this._recover(); }
+			}
+		} else if (f.phase === 'hold') {
+			el.style.opacity = '1';
+			if (f.t >= this.HOLD || this._stageReady()) { f.phase = 'in'; f.t = 0; }
+		} else { el.style.opacity = String(Math.max(0, 1 - f.t / D)); if (f.t >= D) { el.style.display = 'none'; this._f = null; this.busy = false; } }
+	},
+	// Todos os bonecos da sala já desenhados (a página deles na GPU)? Fora (ou na casa, sem figurantes): pronto.
+	_stageReady() {
+		if (!this.active) return true;
+		const drawn = (x) => !x.mesh.isEnabled() || !x.mesh.isVisible || !x.clip || !x.clip.npc || (x._pg && !x._npcWait);
+		return this._actors.every(drawn) && (this._gymActors || []).every(drawn) && ShopLife.ready();
+	},
+	// Entrar/sair quebrou no meio: de volta à calçada, com a cidade de volta (melhor que a tela preta para sempre).
+	_recover() {
+		this._dropLife();
+		if (this.active) {
+			try { this._doLeave(game); } catch (e) {
+				console.error('[LOJAS] e a saída também:', e);
+				const a = this.active; this.active = null; this.obstacles = [];
+				try { game.player.teleport(new BABYLON.Vector3(a.ret.x, 0, a.ret.z)); game.camera.setZoomMul(1); game.camera.snapTo(game.player.position); game.scene.physicsEnabled = true; this._unloadCity(game, false); } catch (e2) { console.error(e2); }
+			}
+		}
+		if (game._flash) game._flash('Não deu para entrar agora');
 	},
 
 	enter(game, shop) {
@@ -384,7 +420,8 @@ const Interiors = {
 		pl.root.rotation.y = 0; pl.velocity.setAll(0);
 		// Loja com clientela viva (ShopLife: atendente, clientes e garçom com rotina): os figurantes fixos saem (fica só quem tem
 		// tipo do gerador e papel próprio — o segurança da joalheria, os da academia).
-		const life = ShopLife.enter(game, shop, data);
+		let life = false;
+		try { life = ShopLife.enter(game, shop, data); } catch (e) { console.error('[LOJAS] clientela:', e); this._dropLife(); }
 		this._useActors(game, life ? data.patrons.filter((e) => e.type) : (data.clerk ? [data.clerk] : []).concat(data.patrons), shop);
 		const ar = this._exitArrow(game.scene); ar.setEnabled(true); ar.visibility = 0; this._tickArrow(game, 0);
 		game.camera.setZoomMul(0.5);
@@ -398,11 +435,16 @@ const Interiors = {
 		HomeDecor.onEnterInterior(game, shop);                                  // casa própria: os móveis colocados por você
 	},
 
+	// Clientela fora (quebrou): os bonecos dela somem, o resto da loja segue.
+	_dropLife() {
+		try { ShopLife.leave(); } catch (e) { for (const ag of ShopLife.agents) if (ag.actor) ag.actor.setVisible(false); ShopLife.agents = []; ShopLife.active = false; }
+	},
+
 	_doLeave(game) {
 		const a = this.active; if (!a) return;
 		const pl = game.player;
 		HomeDecor.onLeaveInterior(game);
-		ShopLife.leave();
+		this._dropLife();
 		a.room.mesh.setEnabled(false); this._bd.setEnabled(false);
 		if (this._arrow) this._arrow.setEnabled(false);
 		for (const x of this._actors) x.setVisible(false);
@@ -454,7 +496,13 @@ const Interiors = {
 		a.t += dt;
 		for (const x of this._actors) if (x.mesh.isEnabled()) x.update(dt, 1);
 		for (const x of this._gymActors || []) if (x.mesh.isEnabled() && x.mesh.isVisible) this._gymActor(x, dt);
-		ShopLife.update(dt, game);
+		if (ShopLife.active) {
+			try { ShopLife.update(dt, game); } catch (e) {                             // (clientela quebrou: a loja fica com os figurantes fixos)
+				console.error('[LOJAS] clientela:', e);
+				this._dropLife();
+				this._useActors(game, (a.data.clerk ? [a.data.clerk] : []).concat(a.data.patrons), a.shop);
+			}
+		}
 		if (a.shop.bank) Banks.update(dt, game);
 		if (typeof Robbery !== 'undefined') Robbery.update(dt, game);
 		if (typeof Heists !== 'undefined') { Heists.interiorTick(dt); Heists.scoutTick(dt, game); }

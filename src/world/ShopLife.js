@@ -77,6 +77,7 @@ const ShopLife = {
         this.shop = shop;
         this.data = data;
         this.family = family;
+        this.cast = this.castFor(shop);
         this.seed = Economy._h(shop.id || shop.style) >>> 0;
         this.random = Pixel.rng(this.seed ^ ((Date.now() / 1000) | 0));
         this.nav = this.navFor(data);
@@ -104,6 +105,45 @@ const ShopLife = {
 
     // Meshes that must stay on when Interiors unloads the city (they are on the stage).
     meshes() { return this.agents.filter((agent) => agent.actor).map((agent) => agent.actor.mesh); },
+
+    // ======================================================================================== cast and prefetch
+    // The NPC pages load on demand (NpcArt): a type nobody drew yet only reaches the GPU seconds after its first actor appears, so the
+    // people inside popped in after the fade. The cast of a visit (the staff and a few customer types) is picked as the player nears
+    // the door and its pages are requested then (Interiors.autoEnter → prefetch); the fade stays black until they are drawn (ready).
+    CAST_CUSTOMER_TYPES: 3,
+    CAST_TTL: 90,                   // seconds a picked cast is kept for the door (walking back in soon meets the same people)
+
+    castFor(shop) {
+        const now = performance.now() / 1000, old = shop._lifeCast;
+        if (old && now - old.at < this.CAST_TTL) { old.at = now; return old; }
+        const family = this.FAMILY_OF[shop.style];
+        const wanted = (this.CUSTOMER_TYPES[family] || this.CUSTOMER_TYPES.default).filter((id) => NpcArt.atlases[id]);
+        const distinct = [...new Set(wanted)];
+        for (let i = distinct.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [distinct[i], distinct[j]] = [distinct[j], distinct[i]]; }
+        const chosen = new Set(distinct.slice(0, this.CAST_CUSTOMER_TYPES));
+        const uniform = Economy._h(shop.id || shop.style) >>> 0;
+        const staff = [...new Set([this.staffType(uniform), this.staffType(uniform + 1)])];
+        return (shop._lifeCast = { at: now, customers: wanted.filter((id) => chosen.has(id)), staff });    // (repeated ids keep their weight)
+    },
+
+    // Requests the pages of the cast of `shop` (all but the falls). true = all of them are already on the GPU.
+    prefetch(shop) {
+        if (!this.FAMILY_OF[shop.style] || shop.home || shop.safehouse || !this.available()) return true;
+        const cast = this.castFor(shop);
+        let ready = true;
+        for (const type of cast.staff.concat(cast.customers)) {
+            const atlas = NpcArt.atlases[type];
+            if (!atlas) continue;
+            for (const page of atlas.pages) if (page.g !== 'fall' && !NpcArt.want(page)) ready = false;
+        }
+        return ready;
+    },
+
+    // Every person on stage already drawn (their page on the GPU)? Interiors holds the fade on black until then.
+    ready() {
+        if (!this.active) return true;
+        return this.agents.every((agent) => !agent.actor || !agent.actor.mesh.isEnabled() || (agent.actor._pg && !agent.actor._npcWait));
+    },
 
     // ======================================================================================== navigation grid
 
@@ -432,7 +472,7 @@ const ShopLife = {
     },
 
     pickCustomerType() {
-        const wanted = this.CUSTOMER_TYPES[this.family] || this.CUSTOMER_TYPES.default;
+        const wanted = this.cast && this.cast.customers.length ? this.cast.customers : this.CUSTOMER_TYPES[this.family] || this.CUSTOMER_TYPES.default;
         const list = wanted.filter((id) => NpcArt.atlases[id]);
         return list.length ? list[Math.floor(this.random() * list.length)] : 'loja_homem';
     },
