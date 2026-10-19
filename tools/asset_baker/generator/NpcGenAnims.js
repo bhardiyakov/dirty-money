@@ -2711,6 +2711,28 @@ function NpcGenAnims(G) {
         return out;
     }
 
+    // Dando RÉ na moto/bicicleta (RiderActor.walkBack): de pé, montado (um pé de cada lado do veículo), andando — o jogo toca o clipe
+    // AO CONTRÁRIO: anda para trás — com as DUAS MÃOS NO GUIDÃO. O sprite fica no banco com os pés no chão: o guidão está
+    // RIDE.<tipo>.grip à frente e a gz acima do banco, e o banco a BACK.<tipo>.seat m do chão (média dos modelos: VEH3D seat[1]). Para
+    // alcançar, a pélvis vai BACK.fwd m à frente (os pés juntos) e o tronco inclina; os braços (alvo ABS) quase não mexem com o passo.
+    const BACK = { moto: { seat: 0.76, fwd: 0.24, lean: 26 }, bike: { seat: 0.9, fwd: 0.2, lean: 28 } };
+    function rideBack(kind = 'moto', n = 8) {
+        const K = kind === 'bike' ? 'bike' : 'moto', R = RIDE[K], B = BACK[K], u = U(), kl = G.ADULT ? G.ADULT.leg : 1, d = (B.fwd * u) / kl, out = [];
+        const legs = Object.assign({}, WALK, { stride: 6.2, lift: 1.2, width: 11.0, fwd: d });           // (passo curto, pernas abertas: o veículo no meio)
+        for (let i = 0; i < n; i++) {
+            const t = i / n, c = cos(TAU * t), p = base();
+            walkLegs(p, t, legs);
+            p.pelvis_t = V.add(p.pelvis_t, [0, d, -1.2]);
+            p.pelvis_R = mm3(Rz(deg(4 * c)), Rx(deg(-10)));
+            p.chest_R = mm3(Rz(deg(-3 * c)), Rx(deg(-B.lean)));
+            p.head_R = mm3(Rz(deg(2 * c)), Rx(deg(HEAD_TILT + B.lean * 0.75)));
+            p.abs = Object.assign(p.abs || {}, { armR: true, armL: true });
+            for (const [sd, s] of [['R', 1], ['L', -1]]) p.arm_ik(sd, absReach(p, sd, [s * R.grip[0] * u, R.grip[1] * u, B.seat * u + R.gz]), [s * 1.0, -0.3, -0.7]);
+            out.push(p);
+        }
+        return out;
+    }
+
     // Subir na moto/bicicleta (o jogador): do REPOUSO de pé ao lado (idle quadro 0, no adulto), dobra o tronco e pega as manoplas (a de
     // perto primeiro; a de longe por cima do tanque), passa por cima a perna do lado do veículo enquanto o quadril desce para o banco,
     // e recolhe a outra perna para a pedaleira/pedal. w = 'moto' | 'motoL' | 'bike' | 'bikeL' (L = chegou pela esquerda). Origem no
@@ -3011,6 +3033,7 @@ function NpcGenAnims(G) {
         ride_jetski: { fps: 0, loop: true, k: 5, n: 5, fn: (w, o, n) => rideLean('jetski', n) },
         ride_bike: { fps: 10, loop: true, k: 8, n: 12, fn: (w, o, n) => rideBike(n) },
         ride_boat: { fps: 3, loop: true, k: 4, n: 6, fn: (w, o, n) => rideBoat(n) },
+        ride_back: { fps: 10, loop: true, k: 8, n: 8, fn: (w, o, n) => rideBack(w, n) },                  // (ré: moto/bike; o jogo toca ao contrário)
         mount: { fps: 8, loop: false, k: 6, n: 12, fn: (w, o, n) => mountAnim(w, n) },          // (só o jogador: moto/motoL/bike/bikeL)
         // tático (só o jogador): agachado/cobertura, andar agachado (furtivo), passo lateral mirando e rolamento de esquiva
         crouch: { fps: 3, loop: true, k: 4, n: 6, fn: (w, o, n) => crouchIdle(w, n) },

@@ -14,7 +14,7 @@ function NpcGenTypes(G) {
         'dive_in:none', 'dive:none', 'dive_out:none',                      // mergulho (banhistas)
         'swim_breast:none', 'wade:none', 'wade_idle:none'];                // nado peito na superfície; vadeando com a água acima da cintura
     // Pilotando (16 direções): moto, bicicleta, jet ski e lancha — civis (trânsito, mototáxi, barcos), o entregador e o jogador.
-    const RIDE = ['ride_moto:none', 'ride_bike:none', 'ride_jetski:none', 'ride_boat:none'];
+    const RIDE = ['ride_moto:none', 'ride_bike:none', 'ride_jetski:none', 'ride_boat:none', 'ride_back:moto', 'ride_back:bike'];      // (ride_back: dando ré, mãos no guidão)
     const CIV0 = [...BASE, 'scared:none', 'surrender:none', 'kneel:none', 'punch:none', 'punchL:none', 'kick:none', 'opendoor:none', 'enter:none'];
     const CIV = [...CIV0, ...RIDE];
     const armed = (w) => [`idle:${w}`, `walk:${w}`, `run:${w}`, `draw:${w}`, `aim:${w}`, `shoot:${w}`];
