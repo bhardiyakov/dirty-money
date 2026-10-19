@@ -18,6 +18,8 @@ class ShopCtx {
         const dw = 2.6, dc = mirror ? W - door * W : door * W;
         this.door = { x0: Math.round((dc - dw / 2) * 2) / 2, x1: Math.round((dc + dw / 2) * 2) / 2 };
         this.uses = []; this.obs = []; this.lights = []; this.patrons = []; this.clerk = null; this.seed = v * 131 + Economy._h(style);
+        // Onde a clientela faz as coisas (world/ShopLife.js): assentos (cadeira/banqueta, com o lado do encosto), mesas e balcões.
+        this.seats = []; this.tables = []; this.counters = [];
         this.nY = this.Y(D - this.T); this.faceH = this.hp(this.H);
     }
 
@@ -180,7 +182,8 @@ class ShopCtx {
         c.bl(px - 5, py - 2, 14, 12, [8, 5, 3], 0.3);
         c.fr(px - 1, py - 2, 3, 12, '#3a3d44'); c.fr(px - 5, py + 8, 11, 2, '#2a2c32');
         c.disk(px, py - 4, 7, '#2a2c30'); c.disk(px, py - 5, 6, '#b8382c'); c.disk(px - 1, py - 6, 3, '#d8584a'); c.ring(px, py - 5, 6, '#7a2018');
-        this.solid([x - 0.35, z - 0.35, x + 0.35, z + 0.35], 0.7);
+        this.solid([x - 0.35, z - 0.35, x + 0.35, z + 0.35], 0.7, { seat: true });
+        this.seats.push({ kind: 'stool', x, z, back: null });
     }
     chair(x, z, face = 's', col = '#7a5230') {
         const c = this.c, px = this.X(x), py = this.Y(z);
@@ -191,7 +194,8 @@ class ShopCtx {
         else if (face === 'n') c.box(px - 6, py + 2, 12, 4, this.t(col, 0.9), this.t(col, 1.3), this.t(col, 0.6), this.t(col, 0.3));
         else if (face === 'e') c.box(px - 8, py - 11, 3, 13, this.t(col, 0.9), this.t(col, 1.3), this.t(col, 0.6), this.t(col, 0.3));
         else c.box(px + 5, py - 11, 3, 13, this.t(col, 0.9), this.t(col, 1.3), this.t(col, 0.6), this.t(col, 0.3));
-        this.solid([x - 0.4, z - 0.4, x + 0.4, z + 0.4], 0.6);
+        this.solid([x - 0.4, z - 0.4, x + 0.4, z + 0.4], 0.6, { seat: true });
+        this.seats.push({ kind: 'chair', x, z, back: face });                        // back: 's' = encosto ao norte (quem senta olha para o sul)…
     }
     // Mesa: toalha 'check' (xadrez vermelho), 'white' (toalha branca com pratos), 'wood' (madeira) ou 'round'.
     table(cx, cz, w, d, cloth = 'wood', col = null) {
@@ -213,6 +217,7 @@ class ShopCtx {
             for (let i = 6; i < b.w - 4; i += 9) c.fr(b.x + i, b.top + 2, 1, b.h - 4, this.t(wc, 0.8));
         }
         this.solid(r, 0.85);
+        this.tables.push({ x0: r[0], z0: r[1], x1: r[2], z1: r[3] });
         return b;
     }
     plate(px, py, fancy = false) { const c = this.c; c.disk(px, py, 5, fancy ? '#fafaf5' : '#e8e8e4'); c.ring(px, py, 5, '#a8a8a0'); c.disk(px, py, 2, fancy ? '#e8e0d0' : '#c8b88a'); }
@@ -232,6 +237,7 @@ class ShopCtx {
     // Balcão: rect local, altura, cor do tampo e da frente; `items` pinta coisas em cima. Devolve a base.
     counter(r, h, top, front, items = []) {
         const b = this.blk(r, h, top, front), c = this.c, rng = this.rng;
+        this.counters.push({ x0: r[0], z0: r[1], x1: r[2], z1: r[3], h, register: items.includes('register') });
         for (let i = 6; i < b.w - 4; i += 18) c.fr(b.x + i, b.fy + 3, 1, b.hp - 4, this.t(front, 0.6));
         c.fr(b.x + 1, b.top + b.h - 3, b.w - 2, 1, this.t(top, 1.4));
         let px = b.x + 6;
@@ -713,7 +719,7 @@ class ShopCtx {
         }
         return {
             canvas: c, in: this.IN, W: this.W, D: this.D, obs: this.obs, door: this.door, clerk: this.clerk, patrons: this.patrons,
-            spawn: this._spawn(), uses: this.uses,
+            spawn: this._spawn(), uses: this.uses, life: { seats: this.seats, tables: this.tables, counters: this.counters, style: this.style },
         };
     }
 }

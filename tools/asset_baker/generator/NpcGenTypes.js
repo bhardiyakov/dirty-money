@@ -34,6 +34,11 @@ function NpcGenTypes(G) {
     // Ficam num atlas COMPANHEIRO (protagonista_tatico; nos visuais gerados, "hero:N:t"): o atlas principal em alta definição já
     // ocupa quase todo o espaço endereçável (4096 × 4096) — ver NpcSheet.extraAtlas.
     const GYM = ['gym_curl', 'gym_bench', 'gym_squat'].flatMap((c) => ['w1', 'w2', 'w3'].map((w) => `${c}:${w}`));
+    // Dentro das lojas (world/ShopLife.js): clientes (sentar, comer, beber, olhar, pagar, celular) e atendentes (trabalhar no balcão);
+    // os do assalto (crime/Robbery.js): ajoelhar, render-se, assustar, correr e o "dormindo" (dead) do golpe furtivo.
+    const SHOP_ROBBED = ['scared:none', 'surrender:none', 'kneel:none', 'run:none', 'dead:none'];
+    const SHOPPER = ['idle:none', 'walk:none', 'sit:none', 'sit_table:none', 'sit_eat:none', 'sit_drink:none', 'browse:none', 'pay:none', 'phone:none', 'drink:none', ...SHOP_ROBBED];
+    const SHOP_STAFF = ['idle:none', 'walk:none', 'work:none', 'pay:none', ...SHOP_ROBBED];
     const PLAYER_TAC = [
         ...['none', 'pistol', 'smg', 'shotgun'].flatMap((w) => [`crouch:${w}`, `sneak:${w}`]),
         ...['none', 'pistol', 'smg', 'shotgun'].map((w) => `cover:${w}`), ...['pistol', 'smg', 'shotgun'].flatMap((w) => [`crouch_aim:${w}`, `crouch_shoot:${w}`]),   // cobertura e tiro ajoelhado
@@ -76,6 +81,7 @@ function NpcGenTypes(G) {
     const VARY = {
         civil: { skin: SKINS, hair_color: HAIRS, top_color: TOPS, bottom_color: null, shoe_color: null, hat_color: HATS, accent: TOPS, accent2: TOPS },
         social: { skin: SKINS, hair_color: HAIRS, top_color: LIGHTTOPS, bottom_color: DARKTOPS, hat_color: null },
+        staff: { skin: SKINS, hair_color: HAIRS, top_color: ['vermelho', 'azul', 'verde', 'amarelo', 'laranja', 'roupa_preta', 'marinho', 'vinho', 'turquesa', 'cinza'], accent: null, hat_color: null },
         suit: { skin: SKINS, hair_color: HAIRS, top_color: DARKTOPS, bottom_color: DARKTOPS },
         farda: { skin: SKINS, hair_color: ['preto', 'castanho', 'preto', 'loiro'] },
         gang: { skin: SKINS, hair_color: HAIRS, top_color: TOPS, hat_color: HATS, accent: TOPS, accent2: TOPS },
@@ -122,6 +128,15 @@ function NpcGenTypes(G) {
         // frequentadores da academia (Interiors: só dentro das academias — nenhum lugar da rua sorteia estes tipos)
         academia_m: T('civil', 8, ['gym'], ['idle:none', 'walk:none', ...GYM]),
         academia_f: T('civil', 8, ['gym'], ['idle:none', 'walk:none', ...GYM]),
+        // clientes e atendentes das lojas (só lá dentro — nenhum lugar da rua sorteia estes tipos)
+        loja_homem: T('civil', 10, ['shop'], SHOPPER),
+        loja_mulher: T('civil', 10, ['shop'], SHOPPER),
+        loja_jovem: T('civil', 10, ['shop'], SHOPPER),
+        loja_executivo: T('social', 8, ['shop_biz'], SHOPPER),
+        loja_executiva: T('social', 8, ['shop_biz'], SHOPPER),
+        loja_senhor: T('social', 8, ['shop', 'shop_biz'], SHOPPER),
+        loja_atendente: T('staff', 10, ['shop_staff'], SHOP_STAFF),            // (a cor da camisa polo = a do uniforme da loja: ShopLife escolhe a variante pela loja)
+        loja_atendente_f: T('staff', 10, ['shop_staff'], SHOP_STAFF),
     };
 
     // O jogador no começo do jogo (a roupa de sempre do Outfit). Só os campos de FORMA importam para o atlas pronto; as cores vêm

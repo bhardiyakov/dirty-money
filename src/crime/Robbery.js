@@ -70,13 +70,17 @@ const Robbery = {
         for (const e of list) (e.type && typeof NpcArt !== 'undefined' && NpcArt.atlases && NpcArt.atlases[e.type] ? typed : plain).push(e);
         const actorOf = (e) => { const i = typed.indexOf(e); return i >= 0 ? (Interiors._gymActors || [])[i] : Interiors._actors[plain.indexOf(e)]; };
         const mk = (e, role) => { const ac = actorOf(e); if (!ac) return null; if (ac.gym) ac.gym = null; return { a: ac, e, role, x: o.x + e.x, z: o.z + e.z, fear: 50, st: 'down', t: 0 }; };
+        // Loja com clientela viva (world/ShopLife.js): o atendente e os clientes que estão lá dentro AGORA viram atendente e reféns.
+        const cast = typeof ShopLife !== 'undefined' && ShopLife.active ? ShopLife.robberyCast() : null;
+        const mkLive = (c, role) => (c ? { a: c.a, e: { x: c.x, z: c.z }, role, x: o.x + c.x, z: o.z + c.z, fear: 50, st: 'down', t: 0 } : null);
         const gunMul = this._gunMul(game);
         const s = this.session = {
             shop, tier, t: 0, heist, phase: 'hold', police: null, siege: null, done: {}, act: null, shoutCd: 0, shots: 0,
             loot: { cash: 0, goods: 0, kg: 0, jewels: 0, jv: 0 }, prints: false, dvr: !d.uses.some((u) => u.kind === 'dvr'), out: 0, noticed: 0,
-            clerk: d.clerk ? mk(d.clerk, 'clerk') : null, hostages: [], guard: null, alarmWhy: '', armedLeft: 2,
+            clerk: cast ? mkLive(cast.clerk, 'clerk') : d.clerk ? mk(d.clerk, 'clerk') : null, hostages: [], guard: null, alarmWhy: '', armedLeft: 2,
         };
-        for (const e of d.patrons) { const h = mk(e, e.guard ? 'guard' : 'hostage'); if (!h) continue; if (e.guard) s.guard = h; else s.hostages.push(h); }
+        for (const e of d.patrons) { if (cast && !e.type) continue; const h = mk(e, e.guard ? 'guard' : 'hostage'); if (!h) continue; if (e.guard) s.guard = h; else s.hostages.push(h); }
+        if (cast) for (const c of cast.hostages) s.hostages.push(mkLive(c, 'hostage'));
         if (s.clerk) { s.clerk.fear = 38 + 9 * intim + gunMul * 12 - (shop.style === 'guns' ? 22 : 0); s.clerk.armed = shop.style === 'guns'; }
         if (s.guard) { s.guard.fear = 22 + 6 * intim; s.guard.armed = true; }
         for (const h of s.hostages) h.fear = 55 + 6 * intim + gunMul * 8;

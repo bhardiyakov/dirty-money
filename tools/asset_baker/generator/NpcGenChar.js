@@ -932,6 +932,15 @@ function NpcGenChar(G) {
         ]);
         props.wallet = new Part('wallet', 'prop', GR.prop, [new RoundBox([0, 0, 0], [3.0, 0.9, 2.2], 0.6, S.batwood)]);
         props.phone = new Part('phone', 'prop', GR.prop, [new RoundBox([0, 0, 0], [1.8, 0.6, 3.4], 0.5, S.tape), new RoundBox([0, 0.5, 0.2], [1.4, 0.2, 2.8], 0.2, S.lens)]);
+        // clientes das lojas (world/ShopLife.js): copo (de pé no eixo z, a boca em cima) e garfo (cabo ao longo de +y)
+        props.cup = new Part('cup', 'prop', GR.prop, [
+            new RoundCone([0, 0, -1.7], [0, 0, 1.7], 1.05, 1.35, S.eyew),
+            new RoundCone([0, 0, 1.7], [0, 0, 2.05], 1.45, 1.45, S.accent),
+        ]);
+        props.fork = new Part('fork', 'prop', GR.prop, [
+            new RoundCone([0, -1.4, 0], [0, 3.6, 0], 0.22, 0.22, S.chrome),
+            new RoundBox([0, 4.4, 0], [0.55, 0.9, 0.14], 0.1, S.chrome),
+        ]);
         props.pick = new Part('pick', 'prop', GR.prop, [new RoundCone([0, -1.5, 0], [0, 5.5, 0], 0.4, 0.3, S.chrome), new RoundBox([0, -2.4, 0], [1.0, 1.0, 1.0], 0.4, S.tape)]);
         props.briefcase = new Part('briefcase', 'prop', GR.prop, [                    // maleta (alça em cima)
             new RoundBox([0, 0, -6.6], [2.6, 9.0, 6.0], 1.0, S.cargo),
@@ -1002,6 +1011,15 @@ function NpcGenChar(G) {
         // frequentadores da ACADEMIA (só lá dentro: Interiors — rosca, supino e agachamento)
         Object.assign({}, CIVIL, { id: 'academia_m', label: 'Marombeiro', group: 'Academia', skin: 'pele_morena', hair: 'buzz', hair_color: 'preto', top: 'tank', top_color: 'roupa_preta', bottom: 'shorts', bottom_color: 'cinza', shoes: 'sneaker', shoe_color: 'tenis_preto', sole_color: 'tenis_branco', body: 'muscular', watch: true, scale: 1.03 }),
         Object.assign({}, CIVIL, { id: 'academia_f', label: 'Frequentadora da academia', group: 'Academia', gender: 'f', skin: 'pele_parda', hair: 'ponytail', hair_color: 'castanho', top: 'tank', top_color: 'rosa', bottom: 'pants', bottom_color: 'roupa_preta', shoes: 'sneaker', shoe_color: 'tenis_branco', sole_color: 'tenis_branco', body: 'normal', scale: 0.97 }),
+        // clientes e atendentes das LOJAS (só lá dentro: world/ShopLife.js — sentam, comem, bebem, olham prateleira, pagam, celular)
+        Object.assign({}, CIVIL, { id: 'loja_homem', label: 'Cliente', group: 'Lojas', skin: 'pele_parda', hair: 'short', hair_color: 'preto', top: 'tshirt', top_color: 'azul', bottom: 'jeans', bottom_color: 'jeans', shoes: 'sneaker', shoe_color: 'tenis_branco', sole_color: 'tenis_branco', scale: 1.0 }),
+        Object.assign({}, CIVIL, { id: 'loja_mulher', label: 'Cliente (fem.)', group: 'Lojas', gender: 'f', skin: 'pele_morena', hair: 'long', hair_color: 'castanho', top: 'tshirt', top_color: 'rosa', bottom: 'jeans', bottom_color: 'jeans_claro', shoes: 'sneaker', shoe_color: 'tenis_branco', sole_color: 'tenis_branco', body: 'slim', scale: 0.96 }),
+        Object.assign({}, CIVIL, { id: 'loja_jovem', label: 'Cliente jovem', group: 'Lojas', skin: 'pele_negra', hair: 'curly', hair_color: 'preto', top: 'hoodie', top_color: 'cinza', bottom: 'shorts', bottom_color: 'roupa_preta', shoes: 'hightop', shoe_color: 'tenis_vermelho', sole_color: 'tenis_branco', body: 'slim', scale: 0.98 }),
+        Object.assign({}, CIVIL, { id: 'loja_executivo', label: 'Cliente de terno', group: 'Lojas', skin: 'pele_clara', hair: 'side', hair_color: 'castanho', top: 'jacket', top_color: 'marinho', bottom: 'pants', bottom_color: 'marinho', shoes: 'dress', shoe_color: 'couro_preto', sole_color: 'sola_escura', belt: true, scale: 1.01 }),
+        Object.assign({}, CIVIL, { id: 'loja_executiva', label: 'Cliente social (fem.)', group: 'Lojas', gender: 'f', skin: 'pele_pessego', hair: 'bob', hair_color: 'preto', top: 'jacket', top_color: 'vinho', bottom: 'pants', bottom_color: 'roupa_preta', shoes: 'dress', shoe_color: 'couro_preto', sole_color: 'sola_escura', body: 'slim', scale: 0.97 }),
+        Object.assign({}, CIVIL, { id: 'loja_senhor', label: 'Cliente idoso', group: 'Lojas', skin: 'pele_morena', hair: 'short', hair_color: 'grisalho', top: 'polo', top_color: 'bege', accent: 'marrom', bottom: 'pants', bottom_color: 'caqui', shoes: 'dress', shoe_color: 'couro_marrom', sole_color: 'sola_escura', beard: 'mustache', body: 'heavy', scale: 0.98 }),
+        Object.assign({}, CIVIL, { id: 'loja_atendente', label: 'Atendente', group: 'Lojas', skin: 'pele_parda', hair: 'short', hair_color: 'preto', top: 'polo', top_color: 'vermelho', accent: 'branco', bottom: 'pants', bottom_color: 'roupa_preta', shoes: 'sneaker', shoe_color: 'tenis_preto', sole_color: 'tenis_branco', scale: 1.0 }),
+        Object.assign({}, CIVIL, { id: 'loja_atendente_f', label: 'Atendente (fem.)', group: 'Lojas', gender: 'f', skin: 'pele_morena', hair: 'ponytail', hair_color: 'preto', top: 'polo', top_color: 'vermelho', accent: 'branco', bottom: 'pants', bottom_color: 'roupa_preta', shoes: 'sneaker', shoe_color: 'tenis_preto', sole_color: 'tenis_branco', body: 'slim', scale: 0.97 }),
         Object.assign({}, CIVIL, { id: 'civil_executivo', label: 'Executivo', skin: 'pele_parda', hair: 'short', hair_color: 'preto', top: 'jacket', top_color: 'marinho', bottom: 'pants', bottom_color: 'marinho', shoes: 'dress', shoe_color: 'couro_preto', sole_color: 'sola_escura', glasses: false, belt: true, body: 'normal', scale: 1.01 }),
         // ---- polícia
         { id: 'pm_policial', label: 'Policial militar', group: 'Polícia', skin: 'pele_negra', hair: 'buzz', hair_color: 'preto', eyes: 'neutral', head: 'police_cap', hat_color: 'pm_calca', top: 'uniform', top_color: 'pm_camisa', bottom: 'pants', bottom_color: 'pm_calca', shoes: 'boots', shoe_color: 'couro_preto', sole_color: 'sola_escura', vest: 'police', vest_color: 'tatico', bag: null, body: 'muscular', scale: 1.03 },
