@@ -198,7 +198,7 @@ const Traces = {
         if (this.warrant) chips.push(chip('⚖ MANDADO DE PRISÃO', 'rgba(244,63,94,0.9)'));
         else if (this.heat >= 20) chips.push(chip(`📁 inquérito ${Math.round(this.heat)}%`, 'rgba(96,165,250,0.6)'));
         const html = chips.join(''), h2 = document.getElementById('hud2');
-        if (h2 && html) { const b = h2.getBoundingClientRect().bottom; if (b > 0) el.style.top = Math.round(b + 8) + 'px'; }
+        if (h2 && html && !document.body.classList.contains('mobile')) { const b = h2.getBoundingClientRect().bottom; if (b > 0) el.style.top = Math.round(b + 8) + 'px'; }      // (celular: MobileUI põe abaixo dos atalhos)
         if (html !== this._html) { this._html = html; el.innerHTML = html; }
         el.style.display = html && !game.menu.isOpen && !Interiors.active ? 'flex' : 'none';
     },

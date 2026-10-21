@@ -589,7 +589,7 @@ class Game {
 		Interiors.tickFade(dt);
 		Needs.update(this, dt);                                                  // fome e cansaço (leves)
 		Phone.update(this, dt);                                                  // o celular: mensagens, compromissos, entregas
-		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); Calendar.update(this, dt); Personas.update(this, dt);                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
+		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); Calendar.update(this, dt); Personas.update(this, dt); MobileUI.start();                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
 		// Assa sprites pendentes (personagens; os carros vêm prontos do atlas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
 		// de folga) menos o trabalho medido do quadro, entre 1 e 8 ms. Antes eram 9 ms fixos — num celular que já gasta 25 ms por quadro,
 		// isso derrubava o FPS enquanto havia fila.

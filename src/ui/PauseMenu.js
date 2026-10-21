@@ -345,7 +345,18 @@ class PauseMenu {
 		const armor = pl.armorMax > 0 ? Math.round(pl.armor / pl.armorMax * 100) : 0;
 		const owned = RealEstate.list.filter((q) => RealEstate.isOwned(q)), worth = owned.reduce((s, q) => s + RealEstate.price(q), 0);
 		const home = RealEstate.home;
-		const panel = (title, body) => `<div class="px"><div class="px-title">${title}</div><div class="body">${body}</div></div>`;
+		// Resumo de uma linha de cada bloco (aparece no título quando o acordeão está fechado — ui/MobileUI.js).
+		const S = {
+			'PERSONAGEM': `❤️ ${Math.round(pl.hp)}/${pl.maxHp} · 🛡️ ${armor}% · 🎯 ${Math.round(Aim.quality() * 100)}% · ${pl.weapon === 'none' ? 'punhos' : Weapons[pl.weapon].name}`,
+			'FÍSICO E ATRIBUTOS': `${Physique.label()} · força ${Math.round(Physique.strength(pl))} · músculo ${Math.round(Physique.muscle)} · ${Physique.hungerLabel().toLowerCase()}`,
+			'DINHEIRO E NEGÓCIOS': `💵 sujo ${brl(inv.cash)} · limpo ${brl(inv.clean)} · ${Laundry.count} fachada(s)`,
+			'CASA E IMÓVEIS': `🏠 ${home ? home.type : 'Casa na favela'} · ${owned.length} imóvel(is)`,
+			'PROCURADO': g.wanted.level ? `${'★'.repeat(g.wanted.level)} a polícia está atrás de você` : 'Limpo',
+			'📰 JORNAL · ÚLTIMAS MANCHETES': typeof News !== 'undefined' && News.items.length ? News.items[News.items.length - 1].text : '',
+			'💰 LIVRO-CAIXA · DE ONDE VEM O DINHEIRO': (() => { const L = Ledger.summary(3); return L.rows.length ? `${L.perHour >= 0 ? '+' : ''}${brl(L.perHour)} por hora de jogo` : 'sem movimento ainda'; })(),
+		};
+		const fac = `${res ? (hos ? 'morador · hostil' : 'morador · neutro') : 'estranho'} · tráfico ${Math.round(Standing.traffic)} · comunidade ${Math.round(Standing.community)}`;
+		const panel = (title, body) => { const s = S[title] || (title.startsWith('FACÇÃO') ? fac : ''); return `<div class="px"${s ? ` data-sum="${String(s).replace(/"/g, '&quot;')}"` : ''}><div class="px-title">${title}</div><div class="body">${body}</div></div>`; };
 		el.innerHTML =
 			panel('PERSONAGEM', bar('VIDA', pl.hp / pl.maxHp * 100, 'linear-gradient(90deg,#ff3a8a,#4a7cff)', `${Math.round(pl.hp)}/${pl.maxHp}`) + bar('COLETE', armor, 'linear-gradient(90deg,#2a7cff,#35c8ff)', `${armor}%`)
 				+ bar('FÔLEGO', (pl.stamina == null ? 1 : pl.stamina / (pl.staminaMax || 100)) * 100, 'linear-gradient(90deg,#10b981,#a3e635)', `condicionamento ${Bags.fitLevel(pl.fit)}/20`) + row('Carga', Bags.label(g))
