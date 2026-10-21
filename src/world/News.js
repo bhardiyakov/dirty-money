@@ -42,6 +42,14 @@ const News = {
             case 'escape': return this._pick([`Suspeito despista a polícia depois de perseguição ${at}`, `Fuga cinematográfica ${at}: viaturas perdem o rastro`]);
             case 'busted': return this._pick([`Polícia prende suspeito ${at}`, `Preso em flagrante ${at} depois de perseguição`]);
             case 'tourney': return `${p ? p + ': f' : 'F'}orasteiro vence o torneio de truco de sábado e leva ${v}`;
+            case 'agenda': case 'futebol': return e.text;
+            case 'raid': return e.found ? `Polícia Civil faz busca e apreensão e encontra dinheiro e armas ${at}` : `Busca e apreensão ${at} termina sem nada encontrado`;
+            case 'boca': return this._pick([`Ponto de venda de drogas é destruído ${at}; moradores falam em guerra entre grupos`, `Tiroteio ${at}: boca do tráfico é desmontada`]);
+            case 'rivalboca': return this._pick([`Moradores denunciam novo ponto de venda de drogas ${at}`, `Tráfico se espalha: nova boca é vista ${at}`]);
+            case 'rivalwar': return 'Polícia teme guerra entre grupos rivais no porto';
+            case 'rivaldead': return 'Chefe do tráfico conhecido como "Dentinho" é encontrado morto no porto';
+            case 'rivalgone': return '"Dentinho", nome conhecido do crime, é visto deixando a cidade de ônibus';
+            case 'rivalbetray': return 'Denúncia anônima entrega nome de suspeito à Polícia Civil';
             case 'bigwin': return e.game === 'truco' ? `Jogador fatura ${v} no truco ${p ? 'no ' + p : at} e humilha a mesa` : `Taco de ouro: apostador leva ${v} na sinuca ${p ? 'do ' + p : at}`;
             default: return null;
         }
@@ -145,7 +153,8 @@ const News = {
     _nextItem() {
         const tx = document.getElementById('newsTVtx'); if (!tx) return;
         if (!this._reel || !this._reel.length) this._reel = this.reel(8);
-        tx.textContent = '▸ ' + this._reel[this._ri++ % this._reel.length];
+        const live = typeof Calendar !== 'undefined' ? Calendar.tvLive() : null;          // (jogo rolando: o placar a cada duas passadas)
+        tx.textContent = '▸ ' + (live && this._ri % 2 === 0 ? (this._ri++, live) : this._reel[this._ri++ % this._reel.length]);
         this._x = null;
     },
     // Por quadro dentro da loja (Interiors.update): o letreiro anda.

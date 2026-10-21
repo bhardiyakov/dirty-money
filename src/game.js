@@ -589,6 +589,7 @@ class Game {
 		Interiors.tickFade(dt);
 		Needs.update(this, dt);                                                  // fome e cansaço (leves)
 		Phone.update(this, dt);                                                  // o celular: mensagens, compromissos, entregas
+		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); Calendar.update(this, dt); Personas.update(this, dt);                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
 		// Assa sprites pendentes (personagens; os carros vêm prontos do atlas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
 		// de folga) menos o trabalho medido do quadro, entre 1 e 8 ms. Antes eram 9 ms fixos — num celular que já gasta 25 ms por quadro,
 		// isso derrubava o FPS enquanto havia fila.
@@ -808,6 +809,7 @@ class Game {
 			const gs = this._playerState();
 			this.gangs.update(dt, gs.pos, gs.vel, !!(this.hiding && !this.hiding.seen) || this.mode === 'heli');
 			if (this.op) this.op.update(dt, gs.pos);
+			RivalArc.update(this, dt);                                          // o arco do Dentinho: bocas, capangas, emboscadas, o galpão
 			if (this.watch) this.watch.update(dt, gs.pos);
 			if (this.barricades) this.barricades.update(dt, this.op, Standing.nearFavela(gs.pos.x, gs.pos.z, 20));
 			Baile.update(dt, this);
@@ -1697,7 +1699,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			const chop = this._chopperNear();
 			const spot = !car && !chop && this._nearHideSpot();
 			const fence = !car && !spot && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.6);
-			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || StreetLife.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
+			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || StreetLife.prompt(this) || Witnesses.prompt(this) || Calendar.prompt(this) || Personas.prompt(this) || RivalArc.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
 			if (shopP) html = shopP;
 			else if (spot) html = `<b>E</b> esconder-se ${spot.kind === 'dumpster' ? 'na caçamba' : (spot.kind === 'barrel' ? 'no latão' : 'no caixote')}<small>se a polícia não te viu entrar, você some do radar</small>`;
 			else if (fence && fence.bridgeRail && (this.player.underBridge || this.player.depth > 0)) html = '';      // (nadando sob a ponte: não dá para subir)
@@ -2136,6 +2138,10 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (this.holdup) { this._cancelHoldup('Você baixou a arma — a vítima fugiu'); return; }
 		if (this.player.busy) return;
 		if (StreetLife.interact(this)) return;                           // separar a briga, devolver a bolsa, comprar no carrinho
+		if (Witnesses.interact(this)) return;                            // intimidar ou subornar a testemunha
+		if (Calendar.interact(this)) return;                             // a barraca da festa junina
+		if (Personas.interact(this)) return;                             // conversar com Seu Zé, Tia Nena, o pastor, o Jorginho, Dona Rosa
+		if (RivalArc.interact(this)) return;                             // estourar a boca do Dentinho; o destino dele
 		if (Aid.interact(this)) return;                                  // desarmado perto de um morador da favela: ajudar (dar comida/água/kit)
 		const spot = this._nearHideSpot();
 		if (spot) this._startHiding(spot); else this._tryRob();

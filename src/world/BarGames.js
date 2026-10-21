@@ -100,7 +100,7 @@ const BarGames = {
         if (this._spawnT <= 0) {
             this._spawnT = 40 + Math.random() * 60;
             const h = L.game.dayNight.hour;
-            if (h >= 10 || h < 3) for (const kind of ['pool', 'truco']) if (!this.busy(kind) && !(this.matches[kind] && this.matches[kind].over) && Math.random() < 0.5 && !(typeof Pool !== 'undefined' && Pool.active)) { this._start(L, kind, 0); break; }
+            if (h >= 10 || h < 3) for (const kind of ['pool', 'truco']) if (!this.busy(kind) && !(this.matches[kind] && this.matches[kind].over) && Math.random() < 0.5 * (typeof Life !== 'undefined' ? Life.mul() : 1) && !(typeof Pool !== 'undefined' && Pool.active)) { this._start(L, kind, 0); break; }
         }
     },
 
@@ -191,12 +191,14 @@ const BarGames = {
             else if (a === 'porrinha') Porrinha.open(game, shop);
             else if (a === 'bet') this.open(game, 'truco');
             else if (a === 'tourney') this.tourneyStart(game, shop);
+            else if (a === 'futebol') Calendar.betPanel(game);
         } });
         const card = (act, icon, t, sub, on = true) => `<button class="btn${act === 'tourney' ? ' pri' : ''}" data-act="${act}" ${on ? '' : 'disabled'} style="display:flex;gap:12px;align-items:center;width:100%;text-align:left;padding:12px 14px;margin-top:8px">
             <span style="font-family:var(--emoji);font-size:28px">${icon}</span><span><b style="display:block;font:700 15px var(--font-d)">${t}</b><small style="color:var(--tx-2)">${sub}</small></span></button>`;
-        const m = this.matches.truco;
+        const m = this.matches.truco, fb = typeof Calendar !== 'undefined' ? Calendar.betCard() : null;
         this._tp.show('🍺 Mesa de jogos', shop ? shop.name : '',
             (T ? card('tourney', '🏆', `Torneio de truco — inscrição ${brl(this.TOURNEY.fee)}`, `Sábado à noite: 8 jogadores, mata-mata até 6 pontos. Campeão leva ${brl(this.TOURNEY.prize[0])}.`, game.inventory.cash >= this.TOURNEY.fee) : '')
+            + (fb ? card('futebol', '⚽', fb.title, fb.sub) : '')
             + card('truco', '🃏', busy ? 'Truco — desafiar quem está jogando' : 'Truco', busy ? `${m.sides.map((sd) => sd.map((i) => m.people[i].name).join(' e ')).join(' × ')} estão na mesa` : '1 × 1 ou em dupla, apostado')
             + (busy ? card('bet', '💰', 'Apostar na partida de truco', 'Escolha um lado, aposte e assista (ou espere)') : '')
             + card('domino', '🁣', 'Dominó em dupla', 'Você e um parceiro da casa; batida e fechada, até 50 pontos')

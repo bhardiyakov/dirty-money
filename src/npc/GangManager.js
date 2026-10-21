@@ -173,6 +173,7 @@ class GangManager {
         }
         for (let i = this.members.length - 1; i >= 0; i--) {
             const u = this.members[i], G = u.group;
+            if (u.crew) continue;                                    // (capangas do Dentinho: RivalArc cuida deles)
             if (!u.alive) {
                 if (!u._counted) { u._counted = true; if (G && G.alive > 0) { G.alive--; G.regrow = 60; } }
                 u.update(dt);

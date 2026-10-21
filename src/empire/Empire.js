@@ -140,6 +140,7 @@ class Empire {
 
     // Virou o dia (Economy.tick): estação avança; negócios, influência e domínio rodam o dia.
     onNewDay() {
+        if (typeof Ledger !== 'undefined') Ledger.hold('Império (galpões, lavagem, juros)', 1.5);
         const s = this.season;
         s.day++;
         if (s.day >= this.seasonDef.days) {

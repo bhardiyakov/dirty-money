@@ -100,7 +100,11 @@ const Phone = {
         if (Math.random() < 0.4 && !this.loans.length) opts.push(['cida', 'loan', 1]);
         if (!this.jobs.length) opts.push(['baiano', 'job', 2]);
         if (typeof Standing !== 'undefined' && Standing.heat > 35) opts.push(['brito', 'warn', 3]);
-        if (!this.rival.friend) { opts.push(['dentinho', 'taunt', 1]); if (!this.appts.some((a) => a.kind === 'rival')) opts.push(['dentinho', 'challenge', 1.5]); if (this.interest.length) opts.push(['dentinho', 'property', 1.2]); }
+        if (typeof Personas !== 'undefined' && Object.values(Personas.rel).some((r) => r.contact)) opts.push([null, 'persona', 2]);
+        const arc = typeof RivalArc !== 'undefined' ? RivalArc.outcome : null;
+        if (arc === 'dead' || arc === 'exiled') { /* (o Dentinho saiu da história) */ }
+        else if (arc === 'partner') opts.push(['dentinho', 'tip', 1]);
+        else if (!this.rival.friend) { opts.push(['dentinho', 'taunt', 1]); if (!this.appts.some((a) => a.kind === 'rival')) opts.push(['dentinho', 'challenge', 1.5]); if (this.interest.length) opts.push(['dentinho', 'property', 1.2]); }
         else opts.push(['dentinho', 'tip', 1]);
         let s = Math.random() * opts.reduce((a, o) => a + o[2], 0);
         for (const [who, kind, w] of opts) { if ((s -= w) <= 0) { this['_gen_' + kind](g, who); return; } }
@@ -126,6 +130,7 @@ const Phone = {
         this._msg('cida', F.fear >= 40 ? this._pick(['O bairro todo tá falando de você… tão com medo, meu filho. Cuidado, viu?', 'Ouvi na padaria que você anda aprontando. Juízo!']) : this._pick(['Todo mundo te elogiando por aqui, que orgulho! 🥰', 'A vizinhança gosta muito de você, sabia?']));
         this._t('cida', 1);
     },
+    _gen_persona() { const r = Personas.phoneGen(); if (r) this._msg(r[0], r[1]); },
     _gen_loan() { this._msg('cida', 'Meu filho, me empresta R$ 200 pra pagar a conta de luz? Te devolvo semana que vem, prometo 🙏', [{ label: 'Empresto (R$ 200)', act: 'loanYes' }, { label: 'Agora não dá', act: 'loanNo' }]); },
     _gen_job(g) {
         const P = g.player.position, M = g.nav && g.nav.map; if (!M) return;
@@ -179,6 +184,7 @@ const Phone = {
             case 'bribeNo': this._me(who, 'Não vou pagar.'); this._t('brito', -8); this._msg('brito', 'Depois não reclama.', null, true); break;
             case 'rivalYes': this._me(who, 'Aceito. Leva o dinheiro.'); this.appts.push(Object.assign({ kind: 'rival', who }, d)); g.setGps(d.x, d.z, `Desafio do Dentinho — ${d.name} (amanhã, 20h)`); break;
             case 'rivalNo': this._me(who, 'Não tô a fim.'); this.rival.l++; this._msg('dentinho', 'Sabia que ia amarelar 🐔', null, true); break;
+            default: { const r = (typeof RivalArc !== 'undefined' && RivalArc.onPhoneAct(act)) || (typeof Witnesses !== 'undefined' && Witnesses.onPhoneAct(act)); if (r) this._me(who, r); else if (r === null && act.startsWith('raid')) { m.done = false; return; } }
         }
         this._render();
     },
@@ -219,7 +225,7 @@ const Phone = {
     onEvent(e) {
         if (e.kind === 'bigwin') this.onBigWin(e);
         else if (e.kind === 'tourney') this.onTourney();
-        else if (e.kind === 'robbery' && !this.rival.friend && Math.random() < 0.2) {          // o Dentinho viu… e dedurou
+        else if (e.kind === 'robbery' && !this.rival.friend && !(typeof RivalArc !== 'undefined' && RivalArc.outcome) && Math.random() < 0.2) {          // o Dentinho viu… e dedurou
             const g = window.game;
             setTimeout(() => { if (g && g.wanted) g.wanted.ensureLevel(1); }, 4000);
             this._msg('dentinho', 'Vi você saindo daquela loja 👀 Liguei pro 190. Tchau, freguês 😁');
@@ -271,12 +277,12 @@ const Phone = {
             #phone .hd { display: flex; align-items: center; gap: 8px; padding: 4px 0 8px; border-bottom: 1px solid #1f2633; margin-bottom: 4px; }
             #phone .hd button { border: 0; background: none; color: #93c5fd; font: 700 13px var(--font-d); cursor: pointer; }
             #phone .news { padding: 9px 2px; border-bottom: 1px solid #1c2230; font-size: 13px; } #phone .news small { color: #94a3b8; font-size: 11px; display: block; }
-            #phoneBadge { position: fixed; right: 18px; bottom: 210px; z-index: 31; padding: 8px 12px; border-radius: 16px; background: var(--glass); border: 1px solid var(--line-2); cursor: pointer;
+            #phoneBadge { position: fixed; right: 18px; bottom: 210px; z-index: 12; padding: 8px 12px; border-radius: 16px; background: var(--glass); border: 1px solid var(--line-2); cursor: pointer;
                 font: 700 13px var(--font-d); color: var(--tx); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
             #phoneBadge b { margin-left: 4px; padding: 1px 7px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; }`;
         document.head.appendChild(st);
         const r = this.root = document.createElement('div'); r.id = 'phone';
-        r.innerHTML = '<div class="scr"><div class="notch"></div><div class="bar"><span id="phClock"></span><span>📶 🔋</span></div><div class="tabs"><button data-tab="msgs">Mensagens</button><button data-tab="contacts">Contatos</button><button data-tab="news">Jornal</button></div><div class="body" id="phBody"></div></div>';
+        r.innerHTML = '<div class="scr"><div class="notch"></div><div class="bar"><span id="phClock"></span><span>📶 🔋</span></div><div class="tabs"><button data-tab="msgs">Mensagens</button><button data-tab="contacts">Contatos</button><button data-tab="agenda">Agenda</button><button data-tab="news">Jornal</button></div><div class="body" id="phBody"></div></div>';
         document.body.appendChild(r);
         r.addEventListener('click', (e) => {
             const t = e.target.closest('[data-tab]'); if (t) { this.tab = t.dataset.tab; this.thread = null; this._render(); return; }
@@ -336,6 +342,7 @@ const Phone = {
             }).join('');
             return;
         }
+        if (this.tab === 'agenda') { B.innerHTML = typeof Calendar !== 'undefined' ? Calendar.agendaHtml(esc) : ''; return; }
         if (typeof News !== 'undefined') { News.tick(); B.innerHTML = News.items.slice(-12).reverse().map((it) => `<div class="news">${it.mine ? '🔴 ' : ''}${esc(it.text)}<small>dia ${it.day}</small></div>`).join('') + News.city().slice(0, 4).map((t) => `<div class="news" style="opacity:.7">${esc(t)}</div>`).join(''); }
     },
 };
