@@ -27,6 +27,7 @@ const Truco = {
     RAISE: { 1: 3, 3: 6, 6: 9, 9: 12 },
     CALL_NAME: { 3: 'TRUCO', 6: 'SEIS', 9: 'NOVE', 12: 'DOZE' },
     GOAL: 12,
+    _goal() { return (this.custom && this.custom.goal) || this.GOAL; },
 
     STAKES: [
         { bet: 50, name: 'Seu Zé da Quitanda', emo: '👴', duo: ['Seu Zé', '👴', 'Tonhão', '🧔'], mate: ['Juninho', '🧒'], desc: 'Joga para passar o tempo. Pede truco com qualquer coisa.' },
@@ -185,6 +186,7 @@ const Truco = {
     _people() {
         if (this.watching) return this.watching.people;
         const L = this.lvl != null ? this.STAKES[this.lvl] : this.STAKES[0];
+        if (this.custom) return [{ name: 'Você', emo: '🙂' }, { name: this.custom.name, emo: this.custom.emo }];
         if (!this.duo) return [{ name: 'Você', emo: '🙂' }, { name: L.name, emo: L.emo }];
         return [{ name: 'Você', emo: '🙂' }, { name: L.duo[0], emo: L.duo[1] }, { name: L.mate[0], emo: L.mate[1], f: L.mate[2] === 'f' }, { name: L.duo[2], emo: L.duo[3] }];
     },
@@ -231,6 +233,21 @@ const Truco = {
     },
 
     // Histórico contra esta mesa (WorldMemory): "você 3 × 1 ele" e a provocação.
+    // Partida de torneio (BarGames.Tourney): 1 × 1, sem aposta, até `goal` pontos, contra um adversário com nome.
+    tournament(game, shop, { lvl, name, emo, goal = 6, onEnd }) {
+        if (this.active) return;
+        this.duo = false;
+        this.open(game, shop);
+        this.custom = { name, emo, goal, onEnd };
+        this.lvl = lvl; this.opp = this.STAKES[lvl]; this.sk = this.SKILL[lvl]; this.bet = 0;
+        this._reset();
+        this.$('trModal').style.display = 'none';
+        this.phase = 'play';
+        this.bluffSeen = this.bluffSeen || { calls: 0, weak: 0 };
+        const gen = this._gen = (this._gen || 0) + 1;
+        this._match(gen).catch((e) => { if (e !== this.CANCEL) console.error('[TRUCO]', e); });
+        this._hud();
+    },
     _recordTxt(lvl, duo) {
         if (typeof WorldMemory === 'undefined') return '';
         const k = this._oppKey(lvl, duo), r = WorldMemory.record('truco', k);
@@ -292,12 +309,12 @@ const Truco = {
         this.score = [0, 0];
         this.dealer = Math.floor(Math.random() * this.seatsN);
         await this._sleep(gen, 300);
-        while (this.score[0] < this.GOAL && this.score[1] < this.GOAL) {
+        while (this.score[0] < this._goal() && this.score[1] < this._goal()) {
             await this._hand(gen);
             this._hud();
         }
-        if (this.watching) this._endWatch(this.score[0] >= this.GOAL ? 0 : 1);
-        else this._end(this.score[0] >= this.GOAL ? 0 : 1);
+        if (this.watching) this._endWatch(this.score[0] >= this._goal() ? 0 : 1);
+        else this._end(this.score[0] >= this._goal() ? 0 : 1);
     },
 
     _sleep(gen, ms) {
@@ -315,8 +332,8 @@ const Truco = {
         this.value = 1; this.raiser = null; this.results = []; this.hands = []; this.played = []; this.piles = [];
         for (let i = 0; i < n; i++) { this.hands.push([]); this.piles.push([]); }
         const s0 = this.score[0], s1 = this.score[1];
-        this.ferro = s0 === this.GOAL - 1 && s1 === this.GOAL - 1;
-        this.onze = this.ferro ? null : s0 === this.GOAL - 1 ? 0 : s1 === this.GOAL - 1 ? 1 : null;
+        this.ferro = s0 === this._goal() - 1 && s1 === this._goal() - 1;
+        this.onze = this.ferro ? null : s0 === this._goal() - 1 ? 0 : s1 === this._goal() - 1 ? 1 : null;
         this.revealMate = false; this.calls = [];
         // o baralho chega no canto, embaralha e dá as cartas (uma de cada vez, a partir do jogador à direita de quem dá)
         const D = this._deckXY(), deckSp = this.deckSp = this._sprite(null, D.x, D.y, -0.08, 0.86);
@@ -467,7 +484,7 @@ const Truco = {
         this.phase = 'award';
         // o que ainda estava na mão aparece para todo mundo (só no fim da mão; quem correu não mostra)
         if (team != null && pts > 0) {
-            this.score[team] = Math.min(this.GOAL, this.score[team] + pts);
+            this.score[team] = Math.min(this._goal(), this.score[team] + pts);
             this._banner(`+${pts} ${this._sideShort(team).toUpperCase()}`, team === 0 ? '#86efac' : '#fda4af', 1.4);
             this._msg(`${this._teamName(team)} leva ${pts} ${pts === 1 ? 'ponto' : 'pontos'}${why ? ' — ' + why : ''}`);
             AudioFX.blip(team === 0 ? 880 : 220, 0.16, 0.16);
@@ -821,6 +838,17 @@ const Truco = {
     },
 
     _end(winner, quit = false) {
+        if (this.custom) {                                                  // partida de torneio (BarGames): sem aposta, o torneio decide
+            const C = this.custom; this.custom = null; this.phase = 'end';
+            this.$('trModal').style.display = 'flex';
+            this.$('trModal').innerHTML = `<div class="tr-box tr-end"><div style="font-family:var(--emoji);font-size:44px">${winner === 0 ? '🏆' : C.emo}</div>
+                <div class="big" style="color:${winner === 0 ? '#86efac' : '#fb7185'}">${winner === 0 ? 'Você passou!' : 'Você caiu'}</div>
+                <p class="sub">${quit ? 'Você desistiu.' : `Placar: <b>${this.score[0]} × ${this.score[1]}</b> contra ${C.name}.`}</p>
+                <div class="row"><button class="ui-btn pri" id="trBack">Continuar</button></div></div>`;
+            this.$('trBack').onclick = () => { this.close(); if (C.onEnd) C.onEnd(winner === 0); };
+            this._hud();
+            return;
+        }
         this.phase = 'end';
         const won = winner === 0, o = this.opp, g = this.g, bet = this.bet || o.bet;
         if (typeof WorldMemory !== 'undefined') WorldMemory.onGame('truco', this.shop, this._oppKey(), won, bet);
@@ -851,7 +879,8 @@ const Truco = {
         this.$('trThem').innerHTML = `<b>${this.score[1]}</b><small>${this._sideShort(1)}</small>`;
         this.$('trVal').innerHTML = `<b>${this.value === 1 ? '1' : this.value}</b><small>${this.ferro ? 'mão de ferro' : this.onze != null ? 'mão de onze' : this.value === 1 ? 'vale a mão' : this.CALL_NAME[this.value].toLowerCase()}</small>`;
         const wb = this.watching && this.watching.bet;
-        this.$('trPot').innerHTML = this.watching ? `<b>${wb ? brl(Math.round(wb.bet * wb.odds)) : '—'}</b><small>${wb ? 'sua aposta paga' : 'assistindo'}</small>` : `<b>${this.opp ? brl((this.bet || this.opp.bet) * 2) : '—'}</b><small>na mesa</small>`;
+        if (this.custom) { this.$('trPot').innerHTML = `<b>🏆</b><small>torneio · até ${this._goal()}</small>`; }
+        else this.$('trPot').innerHTML = this.watching ? `<b>${wb ? brl(Math.round(wb.bet * wb.odds)) : '—'}</b><small>${wb ? 'sua aposta paga' : 'assistindo'}</small>` : `<b>${this.opp ? brl((this.bet || this.opp.bet) * 2) : '—'}</b><small>na mesa</small>`;
         for (const id of ['trUs', 'trThem', 'trVal', 'trPot']) this.$(id).style.visibility = playing ? 'visible' : 'hidden';
         this.$('trCover').parentElement.style.visibility = playing ? 'visible' : 'hidden';
         const myTurn = !!this.wait && !this.ask, W = !!this.watching;

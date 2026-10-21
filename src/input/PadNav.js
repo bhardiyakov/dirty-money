@@ -192,6 +192,15 @@ const PadNav = {
         this._prev = Array.from(p.buttons, (x) => !!(x && x.pressed));
         if (any && g && g.input) { g.input.usingPad = true; g.input.padType = PadGlyphs.type(p.id); }
 
+        // 0) Porrinha / dominó: as telas (mesa, fim) são modais; durante o jogo, B sai
+        for (const M of [typeof Porrinha !== 'undefined' && Porrinha, typeof Domino !== 'undefined' && Domino]) {
+            if (!M || !M.active) continue;
+            const modal = M.root && M.root.querySelector('.po-modal, .do-modal, .po-bar');
+            this.releaseAll();
+            if (modal && modal.style.display !== 'none' && modal.getClientRects().length) this._focusScreen(modal, p, dt, edge);
+            if (edge(1)) this.key('Escape');
+            return;
+        }
         // 1) Truco: ← → escolhem a carta, A joga (ou aceita), Y truco/aumenta, X encobre, B corre/desiste; a tela de mesas é um modal
         if (typeof Truco !== 'undefined' && Truco.active) {
             const modal = document.getElementById('trModal');

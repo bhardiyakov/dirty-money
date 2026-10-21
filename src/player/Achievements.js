@@ -69,6 +69,7 @@ class Achievements {
             ['poolBoss', 'BAR', 'Caça-fantasma', 'Vença O Fantasma na sinuca', () => [st('poolBoss'), 1]],
             ['truco10', 'BAR', 'Zap na manga', 'Vença 10 partidas de truco apostadas', () => [st('trucoWins'), 10]],
             ['trucoBoss', 'BAR', 'Aula do Professor', 'Vença O Professor no truco', () => [st('trucoBoss'), 1]],
+            ['trucoCup', 'BAR', 'Rei do sábado', 'Seja campeão de um torneio de truco no bar', () => [st('trucoCup'), 1]],
             ['crew12', 'IMPÉRIO', 'Exército particular', 'Tenha 12 soldados', () => [g.empire ? g.empire.biz.soldiers.length : 0, 12]],
         );
         return out;

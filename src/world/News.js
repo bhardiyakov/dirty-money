@@ -41,6 +41,7 @@ const News = {
             case 'theft': return null;                                   // (furtos: só em onda — ver _waves)
             case 'escape': return this._pick([`Suspeito despista a polícia depois de perseguição ${at}`, `Fuga cinematográfica ${at}: viaturas perdem o rastro`]);
             case 'busted': return this._pick([`Polícia prende suspeito ${at}`, `Preso em flagrante ${at} depois de perseguição`]);
+            case 'tourney': return `${p ? p + ': f' : 'F'}orasteiro vence o torneio de truco de sábado e leva ${v}`;
             case 'bigwin': return e.game === 'truco' ? `Jogador fatura ${v} no truco ${p ? 'no ' + p : at} e humilha a mesa` : `Taco de ouro: apostador leva ${v} na sinuca ${p ? 'do ' + p : at}`;
             default: return null;
         }

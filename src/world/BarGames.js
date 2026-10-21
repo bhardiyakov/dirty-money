@@ -176,6 +176,106 @@ const BarGames = {
         if (typeof WorldMemory !== 'undefined' && winSide === b.side && b.bet >= 1000) WorldMemory.log('bigwin', { game: 'aposta', value: Math.round(b.bet * b.odds), place: g && Interiors.active ? Interiors.active.shop.name : '' });
     },
 
+    // ------------------------------------------------------------------ a mesa de jogos (a de madeira, com 4 cadeiras)
+    // E abre o menu: truco, dominó, porrinha — e, se tiver gente jogando, apostar; no sábado à noite, o torneio de truco.
+    tablePrompt() {
+        const t = this.tourneyOpen();
+        return `<b>E</b> mesa de jogos<small>truco · dominó · porrinha${this.busy('truco') ? ' · apostar na partida' : ''}${t ? ' · 🏆 torneio hoje!' : ''}</small>`;
+    },
+    table(game) {
+        const shop = Interiors.active && Interiors.active.shop, T = this.tourneyOpen(), busy = this.busy('truco');
+        if (!this._tp) this._tp = new Panel('barTable', { width: 520, onAct: (a) => {
+            this._tp.close();
+            if (a === 'truco') { if (this.busy('truco')) this._yield(game, this.matches.truco); else Truco.open(game, shop); }
+            else if (a === 'domino') Domino.open(game, shop);
+            else if (a === 'porrinha') Porrinha.open(game, shop);
+            else if (a === 'bet') this.open(game, 'truco');
+            else if (a === 'tourney') this.tourneyStart(game, shop);
+        } });
+        const card = (act, icon, t, sub, on = true) => `<button class="btn${act === 'tourney' ? ' pri' : ''}" data-act="${act}" ${on ? '' : 'disabled'} style="display:flex;gap:12px;align-items:center;width:100%;text-align:left;padding:12px 14px;margin-top:8px">
+            <span style="font-family:var(--emoji);font-size:28px">${icon}</span><span><b style="display:block;font:700 15px var(--font-d)">${t}</b><small style="color:var(--tx-2)">${sub}</small></span></button>`;
+        const m = this.matches.truco;
+        this._tp.show('🍺 Mesa de jogos', shop ? shop.name : '',
+            (T ? card('tourney', '🏆', `Torneio de truco — inscrição ${brl(this.TOURNEY.fee)}`, `Sábado à noite: 8 jogadores, mata-mata até 6 pontos. Campeão leva ${brl(this.TOURNEY.prize[0])}.`, game.inventory.cash >= this.TOURNEY.fee) : '')
+            + card('truco', '🃏', busy ? 'Truco — desafiar quem está jogando' : 'Truco', busy ? `${m.sides.map((sd) => sd.map((i) => m.people[i].name).join(' e ')).join(' × ')} estão na mesa` : '1 × 1 ou em dupla, apostado')
+            + (busy ? card('bet', '💰', 'Apostar na partida de truco', 'Escolha um lado, aposte e assista (ou espere)') : '')
+            + card('domino', '🁣', 'Dominó em dupla', 'Você e um parceiro da casa; batida e fechada, até 50 pontos')
+            + card('porrinha', '✊', 'Porrinha', 'Os palitinhos: esconda, chute o total, largue os seus primeiro'));
+    },
+
+    // ------------------------------------------------------------------ torneio de truco (sábado, 19h–24h, em qualquer bar)
+    TOURNEY: { fee: 500, prize: [3600, 900], goal: 6 },
+    tourney: null,
+    tourneyOpen() {
+        const g = window.game; if (!g) return false;
+        const h = g.dayNight.hour, day = Economy.day, sat = day % 7 === 5;
+        const t = this.tourney;
+        return sat && h >= 19 && !(t && t.day === day && t.over);
+    },
+    tourneyStart(game, shop) {
+        const T = this.TOURNEY;
+        if (!this.tourneyOpen() || game.inventory.cash < T.fee) return;
+        game.inventory.cash -= T.fee;
+        const ppl = this.NAMES.filter(([n]) => n !== 'Dentinho').slice().sort(() => Math.random() - 0.5).slice(0, 6).map(([name, emo], i) => ({ name, emo, lvl: [0, 1, 1, 2, 2, 3][i] }));
+        ppl.push({ name: 'Dentinho', emo: '😁', lvl: 3, rival: true });
+        const field = [{ name: 'Você', emo: '🙂', me: true }].concat(ppl.sort(() => Math.random() - 0.5));
+        // (o Dentinho, o campeão da casa, cai do outro lado da chave: só na final)
+        const di = field.findIndex((p) => p.rival); if (di < 4) { const j = 4 + Math.floor(Math.random() * 4); [field[di], field[j]] = [field[j], field[di]]; }
+        this.tourney = { day: Economy.day, shop, field, round: 0, alive: field.slice(), results: [], over: false };
+        AudioFX.blip(620, 0.1, 0.14);
+        this._bracket(game);
+    },
+    // Os jogos da rodada que não são o seu: sorteados pelo nível.
+    _simPair(a, b) { const pa = Math.max(0.15, Math.min(0.85, 0.5 + 0.12 * (a.lvl - b.lvl))); return Math.random() < pa ? a : b; },
+    _bracket(game, note = '') {
+        const t = this.tourney, R = ['Quartas de final', 'Semifinal', 'Final'];
+        if (!this._bp) this._bp = new Panel('barTourney', { width: 620, closable: false, onAct: (a) => this._tourneyAct(game, a) });
+        const rows = [];
+        for (let r = 0; r <= Math.min(t.round, 2); r++) {
+            const list = r === t.round ? t.alive : t.results[r] ? t.results[r].alive : [];
+            const pairs = []; for (let i = 0; i < list.length; i += 2) pairs.push([list[i], list[i + 1]]);
+            rows.push(`<div style="margin-top:10px"><b style="font:700 13px var(--font-d);color:var(--gold)">${R[r]}</b>${pairs.map(([a, b]) => `<div class="dm-kv"><span>${a.emo} ${a.me ? '<b>Você</b>' : a.name} × ${b ? b.emo + ' ' + (b.me ? '<b>Você</b>' : b.name) : ''}</span><b>${t.results[r] ? (t.results[r].win.includes(a) ? a.name.split(' ')[0] : b ? b.name.split(' ')[0] : '') : '—'}</b></div>`).join('')}</div>`);
+        }
+        const me = t.alive.find((p) => p.me), myOpp = me ? t.alive[t.alive.indexOf(me) ^ 1] : null;
+        const body = `${note ? `<p style="text-align:center;margin-bottom:6px">${note}</p>` : ''}${rows.join('')}
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">${t.over ? Panel.btn('close', 'Voltar ao bar', { pri: true }) : me ? Panel.btn('play', `Jogar: ${R[t.round]} contra ${myOpp.name}`, { pri: true }) : Panel.btn('close', 'Voltar ao bar', { pri: true })}</div>
+            <p style="font-size:11px;color:var(--tx-3);text-align:center;margin-top:8px">Mata-mata em partidas de truco até ${this.TOURNEY.goal} pontos. Campeão ${brl(this.TOURNEY.prize[0])} · vice ${brl(this.TOURNEY.prize[1])}.</p>`;
+        this._bp.show(`🏆 Torneio de truco · ${t.shop ? t.shop.name : 'bar'}`, 'Sábado à noite: quem perde, sai.', body);
+    },
+    _tourneyAct(game, a) {
+        const t = this.tourney;
+        if (a === 'close') { this._bp.close(); return; }
+        if (a !== 'play') return;
+        const me = t.alive.find((p) => p.me), opp = t.alive[t.alive.indexOf(me) ^ 1];
+        this._bp.close();
+        Truco.tournament(game, t.shop, { lvl: Math.min(4, opp.lvl + t.round), name: opp.name, emo: opp.emo, goal: this.TOURNEY.goal, onEnd: (won) => this._tourneyNext(game, won) });
+    },
+    _tourneyNext(game, won) {
+        const t = this.tourney, list = t.alive, win = [];
+        for (let i = 0; i < list.length; i += 2) {
+            const a = list[i], b = list[i + 1];
+            win.push(a.me ? (won ? a : b) : b.me ? (won ? b : a) : this._simPair(a, b));
+        }
+        t.results[t.round] = { alive: list.slice(), win };
+        t.alive = win; t.round++;
+        const meIn = win.some((p) => p.me);
+        let note;
+        if (!meIn) {
+            t.over = true;
+            const vice = t.round === 3;
+            if (vice) game.inventory.cash += this.TOURNEY.prize[1];
+            note = vice ? `Vice-campeão! Você leva ${brl(this.TOURNEY.prize[1])}. ${win[0].name} ficou com o troféu.` : `Você foi eliminado. ${['Nas quartas', 'Na semifinal'][t.round - 1]}, não deu.`;
+            if (vice && win[0].rival) note += ' O Dentinho ri da sua cara: "Semana que vem tem mais, freguês!"';
+        } else if (t.round === 3) {
+            t.over = true;
+            game.inventory.cash += this.TOURNEY.prize[0];
+            note = `🏆 CAMPEÃO! Você leva ${brl(this.TOURNEY.prize[0])} e o bar inteiro canta o seu nome.`;
+            if (typeof WorldMemory !== 'undefined') WorldMemory.log('tourney', { place: t.shop && t.shop.name, value: this.TOURNEY.prize[0], district: t.shop ? WorldMemory._dist(t.shop.x, t.shop.z) : null });
+            if (game.achievements) game.achievements.bump('trucoCup');
+        } else note = won ? `Você passou! Próxima: ${['', 'semifinal', 'final'][t.round]}.` : '';
+        this._bracket(game, note);
+    },
+
     // ------------------------------------------------------------------ a janela da aposta
     prompt(kind) {
         const m = this.matches[kind]; if (!m || m.over || !m.people) return '';
@@ -196,7 +296,7 @@ const BarGames = {
         const side = (s) => {
             const ppl = m.sides[s].map((i) => m.people[i]);
             const on = S.side === s;
-            return `<button class="dm-btn${on ? ' pri' : ''}" data-act="side" data-arg="${s}" style="flex:1;padding:12px;text-align:left${mine ? ';opacity:.5' : ''}" ${mine ? 'disabled' : ''}>
+            return `<button class="btn${on ? ' pri' : ''}" data-act="side" data-arg="${s}" style="flex:1;padding:12px;text-align:left${mine ? ';opacity:.5' : ''}" ${mine ? 'disabled' : ''}>
                 <div style="font-family:var(--emoji);font-size:24px">${ppl.map((p) => p.emo).join(' ')}</div>
                 <b style="display:block;font:700 14px var(--font-d)">${ppl.map((p) => p.name).join(' e ')}</b>
                 <small style="color:var(--gold)">${'★'.repeat(m.lvl[s] + 1)}${'☆'.repeat(3 - m.lvl[s])}</small> <small>· paga <b style="color:#86efac">${String(m.odds[s]).replace('.', ',')}×</b></small></button>`;
