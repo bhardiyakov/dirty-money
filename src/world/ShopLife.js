@@ -434,6 +434,13 @@ const ShopLife = {
         }
     },
 
+    // Chovendo, o bar e a lanchonete enchem (gente se abrigando, a cerveja); o mercado e a farmácia um pouco.
+    weatherMul() {
+        const k = typeof Weather !== 'undefined' && Weather.cur ? Weather.cur.k : 0;
+        if (k < 0.15) return 1;
+        return 1 + k * ({ bar: 0.6, food: 0.45, fine: 0.25, store: 0.2 }[this.family] || 0);
+    },
+
     capacity() {
         const P = this.points, seats = P.seats.length;
         const byFamily = { food: Math.min(10, Math.max(3, seats + 3)), fine: Math.min(10, Math.max(2, seats)), bar: Math.min(11, Math.max(3, seats + Math.min(3, P.barStand.length))),
@@ -446,7 +453,7 @@ const ShopLife = {
     targetCustomers() {
         const hour = this.game.dayNight.hour;
         if (!Economy.isOpen(this.shop.style, hour) || this.robbed) return 0;
-        return Math.round(this.capacity() * this.demand(hour));
+        return Math.round(this.capacity() * Math.min(1, this.demand(hour) * this.weatherMul()));
     },
 
     // ======================================================================================== actors

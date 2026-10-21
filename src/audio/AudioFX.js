@@ -22,6 +22,7 @@ const AudioFX = {
             this.master = this.ctx.createGain();
             this.master.gain.value = this.volume;
             this.master.connect(this.ctx.destination);
+            if (typeof Ambience !== 'undefined') Ambience.start();           // o som do lugar (trânsito, mar, rádio do bar…)
         } catch (e) { this.ctx = null; }
     },
 

@@ -48,7 +48,9 @@ const StreetLife = {
     // Rush / almoço: pedestres EXTRAS perto do jogador (somem quando o movimento cai ou ficam longe).
     _extras(game, dt, d) {
         this._exT = (this._exT || 0) - dt; if (this._exT > 0) return; this._exT = 1.2;
-        const M = game.npcManager, P = game.player.position, want = Math.round(Math.max(0, d - 1) * 55);
+        const M = game.npcManager, P = game.player.position, h = game.dayNight.hour, W = typeof Weather !== 'undefined' && Weather.cur;
+        const b = CityGrid._blockAtPoint(P.x, P.z), beachHot = b && (b.biome === 'beach' || b.biome === 'resort') && h >= 10.5 && h < 16 && !(W && W.k > 0.1);
+        const want = Math.round(Math.max(0, d - 1) * 55) + (beachHot ? 30 : 0);          // (sol quente: a praia lota)
         this.extras = this.extras.filter((n) => n.alive);
         for (const n of this.extras.slice()) {
             if (this.extras.length > want || hypot(n.position.x - P.x, n.position.z - P.z) > 230) { M.removeNpc(n); this.extras.splice(this.extras.indexOf(n), 1); if (this.extras.length <= want) break; }
