@@ -8,7 +8,20 @@
 
 const SaveGame = {
 	KEY: 'save',
-	VERSION: 1,
+	VERSION: 2,
+	// Migrações: MIGRATE[n] converte um save da versão n para a n+1 (nunca apaga progresso; o que é novo começa vazio). Um save de
+	// versão ANTIGA é convertido ao listar e ao carregar; de versão mais NOVA que este jogo (voltou para um jogo velho) fica intocado.
+	MIGRATE: {
+		// 1 → 2: Primeiros passos (world/Tutorial.js) — quem já tinha jogo salvo não recebe as missões de introdução.
+		1: (s) => { s.tutorial = s.tutorial || { done: true, step: 99 }; return s; },
+	},
+	upgrade(s) {
+		if (!s || typeof s !== 'object') return null;
+		let v = typeof s.v === 'number' ? s.v : 1;
+		if (v > this.VERSION) return null;
+		while (v < this.VERSION) { const f = this.MIGRATE[v]; if (!f) return null; s = f(s) || s; v++; s.v = v; }
+		return s;
+	},
 	SLOTS: 3,
 	slot: 1,                    // o espaço do jogo em andamento (dormir salva nele; o menu escolhe outro)
 
@@ -21,7 +34,7 @@ const SaveGame = {
 		if (old && !Store.getJSON(this.keyOf(1)) && Store.setJSON(this.keyOf(1), old)) Store.remove(this.KEY);
 	},
 	// Os 3 espaços: [save | null] (índice 0 = espaço 1).
-	list() { this._migrate(); return [...Array(this.SLOTS).keys()].map((i) => { const s = Store.getJSON(this.keyOf(i + 1)); return s && s.v === this.VERSION ? s : null; }); },
+	list() { this._migrate(); return [...Array(this.SLOTS).keys()].map((i) => this.upgrade(Store.getJSON(this.keyOf(i + 1)))); },
 	firstEmpty() { const L = this.list(), i = L.indexOf(null); return i < 0 ? 0 : i + 1; },
 	latest() { const L = this.list(); let b = 0; L.forEach((s, i) => { if (s && (!b || s.savedAt > L[b - 1].savedAt)) b = i + 1; }); return b; },
 	remove(slot) {
@@ -51,7 +64,7 @@ const SaveGame = {
 			fitness: p.fit ? p.fit.xp : 0, strength: p.str ? p.str.xp : 0, physique: Physique.serialize(),
 			stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
 			traces: Traces.serialize(), robbery: Robbery.serialize(), heists: Heists.serialize(), business: Business.serialize(),
-			decor: HomeDecor.serialize(), worldMemory: WorldMemory.serialize(), news: News.serialize(), needs: Needs.serialize(), phone: Phone.serialize(), ledger: Ledger.serialize(), rivalArc: RivalArc.serialize(), witnesses: Witnesses.serialize(), calendar: Calendar.serialize(), personas: Personas.serialize(),
+			decor: HomeDecor.serialize(), worldMemory: WorldMemory.serialize(), news: News.serialize(), needs: Needs.serialize(), phone: Phone.serialize(), ledger: Ledger.serialize(), rivalArc: RivalArc.serialize(), witnesses: Witnesses.serialize(), calendar: Calendar.serialize(), personas: Personas.serialize(), tutorial: Tutorial.serialize(),
 		};
 	},
 
@@ -70,7 +83,8 @@ const SaveGame = {
 
 	// Aplica um save no jogo recém-carregado (chamado no fim do boot).
 	apply(g, s) {
-		if (!s || s.v !== this.VERSION) return false;
+		s = this.upgrade(s);
+		if (!s) return false;
 		const p = g.player, inv = g.inventory, I = s.inventory || {};
 		for (const k of ['cash', 'clean', 'medkits', 'hacks', 'keys', 'food', 'water', 'jewels', 'jewelValue']) if (typeof I[k] === 'number') inv[k] = I[k];
 		for (const k of Object.keys(I.weapons || {})) if (inv.weapons[k]) Object.assign(inv.weapons[k], I.weapons[k]);
@@ -85,7 +99,7 @@ const SaveGame = {
 		g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Garage.load(s.garage || null); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
 		Traces.load(s.traces || null); Robbery.load(s.robbery || null); Heists.load(s.heists || null); Business.load(s.business || null);
 		HomeDecor.load(s.decor || null);
-		WorldMemory.load(s.worldMemory || null); News.load(s.news || null); Needs.load(s.needs || null); Phone.load(s.phone || null); Ledger.load(s.ledger || null); RivalArc.load(s.rivalArc || null); Witnesses.load(s.witnesses || null); Calendar.load(s.calendar || null); Personas.load(s.personas || null); Phone._ready = true;                              // o que o mundo lembra de você (saves antigos: ninguém te conhece)                                      // (os móveis em si vêm da grade: HomeDecor.startSession)
+		WorldMemory.load(s.worldMemory || null); News.load(s.news || null); Needs.load(s.needs || null); Phone.load(s.phone || null); Ledger.load(s.ledger || null); RivalArc.load(s.rivalArc || null); Witnesses.load(s.witnesses || null); Calendar.load(s.calendar || null); Personas.load(s.personas || null); Tutorial.load(s.tutorial || { done: true }); Phone._ready = true;                              // o que o mundo lembra de você (saves antigos: ninguém te conhece)                                      // (os móveis em si vêm da grade: HomeDecor.startSession)
 		const pl = s.player || {};
 		p.teleport(new BABYLON.Vector3(pl.x, 0, pl.z));
 		if (CityGrid.blockedAt(pl.x, pl.z, 0.4)) p.teleport(g.nav.closestPoint(new BABYLON.Vector3(pl.x, 0, pl.z), 30));      // (o mapa mudou: salvou onde agora tem parede)

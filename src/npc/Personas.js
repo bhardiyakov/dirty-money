@@ -48,6 +48,7 @@ const Personas = {
     // Onde a pessoa está agora (null: fora da rotina — em casa, dormindo…).
     where(id, h) {
         const A = this.anchors && this.anchors[id]; if (!A) return null;
+        if (typeof Tutorial !== 'undefined' && Tutorial.forces(id)) return A;      // (primeiros passos: a pessoa está lá a qualquer hora)
         const wd = Economy.day % 7;
         switch (id) {
             case 'ze': return (h >= 8 && h < 10) || (h >= 16 && h < 23) ? A : null;
