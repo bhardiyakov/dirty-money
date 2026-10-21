@@ -93,6 +93,7 @@ class Goals {
         for (const p of this.pending()) {
             if (p.cur < p.target) continue;
             this.done[p.id] = 1;
+            if (typeof Ledger !== 'undefined') Ledger.hold('Metas (recompensas)', 0.6);
             g.inventory.addCash(p.money);
             if (p.kits) g.inventory.medkits += p.kits;
             if (g.skills) g.skills.addXp(60);

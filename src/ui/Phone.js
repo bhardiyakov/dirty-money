@@ -271,7 +271,7 @@ const Phone = {
             #phone .hd { display: flex; align-items: center; gap: 8px; padding: 4px 0 8px; border-bottom: 1px solid #1f2633; margin-bottom: 4px; }
             #phone .hd button { border: 0; background: none; color: #93c5fd; font: 700 13px var(--font-d); cursor: pointer; }
             #phone .news { padding: 9px 2px; border-bottom: 1px solid #1c2230; font-size: 13px; } #phone .news small { color: #94a3b8; font-size: 11px; display: block; }
-            #phoneBadge { position: fixed; right: 18px; bottom: 210px; z-index: 31; padding: 8px 12px; border-radius: 16px; background: var(--glass); border: 1px solid var(--line-2); cursor: pointer;
+            #phoneBadge { position: fixed; right: 18px; bottom: 210px; z-index: 12; padding: 8px 12px; border-radius: 16px; background: var(--glass); border: 1px solid var(--line-2); cursor: pointer;
                 font: 700 13px var(--font-d); color: var(--tx); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
             #phoneBadge b { margin-left: 4px; padding: 1px 7px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; }`;
         document.head.appendChild(st);

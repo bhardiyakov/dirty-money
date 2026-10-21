@@ -15,7 +15,7 @@ class PauseMenu {
 	static get TABS() {
 		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['save', '💾 Salvar'], ['settings', '⚙️ Ajustes']];
 	}
-	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
+	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'life', 'hints', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
 		return '<b>WASD</b> mover · <b>SHIFT</b> correr · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
@@ -59,7 +59,7 @@ class PauseMenu {
 		this.setRow = 0;                 // linha das configurações
 		this._icons = {};
 		this._legendIdx = {};
-		this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
+		this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false, life: 'auto', hints: true }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
 		delete this.settings.hd; delete this.settings.smooth; delete this.settings.aimAssist;          // (escolhas antigas: o jogo é sempre em alta definição com o gráfico suave e a mira manual)
 		this.settings.cars3d = typeof CarArt3D !== 'undefined' && CarArt3D.available();      // (já resolvido em config.js: escolha salva; ?cars2d)
 		this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
@@ -357,6 +357,7 @@ class PauseMenu {
 				+ row('Operação policial', Standing.policeOp ? '<span style="color:#ff5a4d">EM ANDAMENTO</span>' : 'não') + row('Baile funk', Baile.on ? 'rolando (21h–5h)' : 'não'))
 			+ panel('REPUTAÇÃO · O QUE O MUNDO LEMBRA', this._memoryHtml(bar, row))
 			+ panel('📰 JORNAL · ÚLTIMAS MANCHETES', this._newsHtml(row))
+			+ panel('💰 LIVRO-CAIXA · DE ONDE VEM O DINHEIRO', Ledger.html(row))
 			+ panel('DINHEIRO E NEGÓCIOS', row('Dinheiro sujo', brl(inv.cash)) + row('Dinheiro limpo', brl(inv.clean)) + row('Fachadas', Laundry.count) + row('Contabilidade', `nv ${Laundry.level} · perda ${Math.round(Laundry.lossRate * 100)}%`)
 				+ bar('RECEITA / PF', Laundry.taxHeat, '#9a7aff', Math.round(Laundry.taxHeat) + '%'))
 			+ panel('CASA E IMÓVEIS', row('Safe house', home ? `${home.type} (${home.region})` : 'Casa na favela') + row('Imóveis seus', owned.length) + row('Valor de mercado', brl(worth)) + (home ? row('Reforma', RealEstate.reformLevel(home) ? RealEstate.REFORMS[RealEstate.reformLevel(home)].name : 'original') : ''))
@@ -972,6 +973,8 @@ class PauseMenu {
 		if (this.setRow === 0) s.volume = Math.max(0, Math.min(1, Math.round((s.volume + d * 0.1) * 10) / 10));
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'graphics') this._cycle('graphics', Graphics.CHOICES, 'auto', d, (c) => I18n.t('settings.graphics.flash', { choice: Graphics.label(c) }));
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'language') this._cycle('language', I18n.LANGS, I18n.lang, d, (c) => I18n.t('settings.language.flash', { choice: I18n.label(c) }));
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'life') { const C = Life.LEVELS, i = Math.max(0, C.indexOf(s.life || 'auto')); s.life = d < 0 ? C[(i + C.length - 1) % C.length] : C[(i + 1) % C.length]; if (this.g._flash) this.g._flash(`🏙️ Vida da cidade: ${Life.label(s.life)}`); }
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'hints') { s.hints = d === 0 ? s.hints === false : d > 0; if (s.hints && d === 0) Hints.reset(); }
 		else if (d === 0 || true) { const k = PauseMenu.SET_KEYS[this.setRow]; if (this.setRow > 0) s[k] = d === 0 ? !s[k] : d > 0; }
 		this._saveSettings(); this.applySettings();
 	}
@@ -996,6 +999,8 @@ class PauseMenu {
 			language: ['🌐 ' + T('settings.language') + ' ' + sub(T('settings.language.hint')), `<div class="pm-toggle is-on">${I18n.label(s.language || I18n.lang)}</div>`],
 			tiltSteer: ['📱 ' + T('settings.tilt') + ' ' + sub(T('settings.tilt.hint')), tog(s.tiltSteer)],
 			cars3d: ['🚘 ' + T('settings.cars3d') + ' ' + sub(T('settings.cars3d.hint')), tog(s.cars3d)],
+			life: ['🏙️ Vida da cidade ' + sub('pedestres no rush, acontecimentos de rua, jogos no bar e movimento das lojas — baixe se o celular engasgar'), `<div class="pm-toggle is-on">${Life.label(s.life || 'auto')}</div>`],
+			hints: ['💡 Dicas de primeira vez ' + sub('religar mostra todas as dicas de novo'), tog(s.hints !== false)],
 			dev: ['🛠️ ' + T('settings.dev'), tog(s.dev)],
 		};
 		const rows = PauseMenu.SET_KEYS.map((k) => R[k]);

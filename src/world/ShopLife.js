@@ -453,7 +453,7 @@ const ShopLife = {
     targetCustomers() {
         const hour = this.game.dayNight.hour;
         if (!Economy.isOpen(this.shop.style, hour) || this.robbed) return 0;
-        return Math.round(this.capacity() * Math.min(1, this.demand(hour) * this.weatherMul()));
+        return Math.round(this.capacity() * Math.min(1, this.demand(hour) * this.weatherMul()) * (typeof Life !== 'undefined' ? 0.55 + 0.45 * Life.mul() : 1));
     },
 
     // ======================================================================================== actors

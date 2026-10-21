@@ -100,7 +100,7 @@ const BarGames = {
         if (this._spawnT <= 0) {
             this._spawnT = 40 + Math.random() * 60;
             const h = L.game.dayNight.hour;
-            if (h >= 10 || h < 3) for (const kind of ['pool', 'truco']) if (!this.busy(kind) && !(this.matches[kind] && this.matches[kind].over) && Math.random() < 0.5 && !(typeof Pool !== 'undefined' && Pool.active)) { this._start(L, kind, 0); break; }
+            if (h >= 10 || h < 3) for (const kind of ['pool', 'truco']) if (!this.busy(kind) && !(this.matches[kind] && this.matches[kind].over) && Math.random() < 0.5 * (typeof Life !== 'undefined' ? Life.mul() : 1) && !(typeof Pool !== 'undefined' && Pool.active)) { this._start(L, kind, 0); break; }
         }
     },
 
