@@ -33,7 +33,8 @@ const Couriers = {
     // Escolhe o próximo destino: um restaurante perto (pegar) ou um cliente a algumas quadras (entregar).
     _next(bike) {
         const c = bike.courier, p = bike.position, f = bike.traffic ? bike.traffic.focus() : p;
-        const inZone = (x, z, lo, hi) => { const k = hypot(x - p.x, z - p.z); return k > lo && k < hi && hypot(x - f.x, z - f.z) < 165; };   // destino dentro da área viva (perto do jogador)
+        const fav = (x, z) => typeof Standing !== 'undefined' && Standing.nearFavela && Standing.nearFavela(x, z, 10);
+        const inZone = (x, z, lo, hi) => { const k = hypot(x - p.x, z - p.z); return k > lo && k < hi && hypot(x - f.x, z - f.z) < 165 && !fav(x, z); };   // destino dentro da área viva (perto do jogador) e fora do morro (beco não é lugar de moto de entrega)
         let goal = null;
         if (c.state === 'toShop') {
             const doors = (Interiors._doors || []).filter((d) => this.FOOD.includes(d.style));
@@ -46,7 +47,7 @@ const Couriers = {
             const h = homes[Math.floor(Math.random() * homes.length)];
             if (h) goal = { x: h.x, z: h.z, name: 'cliente' };
         }
-        if (!goal) { const a = Math.random() * Math.PI * 2, r = 40 + Math.random() * 110; goal = { x: f.x + Math.cos(a) * r, z: f.z + Math.sin(a) * r, name: 'cliente' }; }
+        for (let k = 0; k < 10 && !goal; k++) { const a = Math.random() * Math.PI * 2, r = 40 + Math.random() * 110, x = f.x + Math.cos(a) * r, z = f.z + Math.sin(a) * r; if (!fav(x, z) || k === 9) goal = { x, z, name: 'cliente' }; }
         if (goal && goal.name !== 'cliente') c.retry = false;
         c.goal = goal; c.t = 0;
         if (bike.route) { bike.route.goal = goal; bike.route.replanAhead(); }
@@ -57,6 +58,12 @@ const Couriers = {
         const c = bike.courier;
         if (!c || bike.controlled || bike.wrecked || bike.riderVariant == null || bike.mode !== 'drive') return;
         c.t += dt;
+        // Preso (beco, fila, obstáculo que não sai): outro pedido em 8 s; preso há muito e longe da vista: volta ao trânsito em outro lugar.
+        const P = bike.traffic && bike.traffic.focus ? bike.traffic.focus() : null, far = P && hypot(bike.position.x - P.x, bike.position.z - P.z) > 55;
+        c.stuckT = c.stop <= 0 && Math.abs(bike.forwardSpeed || 0) < 0.5 ? (c.stuckT || 0) + dt : 0;
+        if (c.stuckT > 8 && !c._unstuck) { c._unstuck = true; this._next(bike); }
+        if (c.stuckT > 18 && far && bike.traffic && bike.traffic._relocate) { c.stuckT = 0; c._unstuck = false; bike.honks = 0; bike.traffic._relocate(bike, 'drive'); this._next(bike); }
+        if (c.stuckT === 0) c._unstuck = false;
         if (bike.route && bike.route.goal !== c.goal) { bike.route.goal = c.goal; bike.route.replanAhead(); }      // (rota refeita pelo trânsito)
         if (c.stop > 0) {                                                // parado: pegando ou entregando o pedido
             c.stop -= dt;

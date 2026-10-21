@@ -42,6 +42,8 @@ class ChopCareer extends Career {
 
     // Jogador dirigindo dentro do desmanche (parado ou devagar)?
     inShop() { const g = this.g, car = g.activeCar, y = this.yard; return g.mode === 'car' && car && !car.isBoat && hypot(car.position.x - y.x, car.position.z - y.z) < 10; }
+    // Comprado (concessionária/garagem) ou a bicicleta própria: não se desmancha.
+    owned(car) { return !!(car && (car.ownedRec || car.personal)); }
     scrapValue(car) { return Math.round(ChopCareer.value(car.spec) * 0.3 * Math.pow(Math.max(0, car.hpFrac), 1.5) / 10) * 10; }
 
     // Prompt no carro (tecla E): desmanchar o carro roubado.
@@ -49,11 +51,13 @@ class ChopCareer extends Career {
         if (!this.inShop()) return '';
         const car = this.g.activeCar, job = this.mgr.job;
         if (job && job.car === car) return '';
+        if (this.owned(car)) return `<b>🔧 OFICINA</b><small>este ${car.isBike ? 'veículo' : 'carro'} é SEU (comprado): o desmanche só pega roubado · <b>O</b> oficina: funilaria, motor, blindagem, fundo falso</small>`;
         return `<b>E</b> desmanchar este carro (${brl(this.scrapValue(car))})<small><b>O</b> oficina: funilaria, motor, blindagem, fundo falso</small>`;
     }
     carInteract() {
         if (!this.carPrompt()) return false;
         const g = this.g, car = g.activeCar, v = this.scrapValue(car);
+        if (this.owned(car)) { g._flash('🔧 Esse é o seu carro (comprado com documento) — o desmanche só aceita carro roubado'); return true; }
         g._leaveVehicle();
         g._delayed.push({ t: 2.0, fn: () => { if (g.activeCar !== car && g.traffic && !car.destroyed) g.traffic._relocate(car, 'parked'); } });
         g.inventory.addCash(v);

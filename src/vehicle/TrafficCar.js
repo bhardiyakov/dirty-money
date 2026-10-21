@@ -235,7 +235,7 @@ class TrafficCar extends Vehicle {
             // APRESSADO (entregador): não fica atrás de ninguém mais lento — ultrapassa pela faixa contrária assim que ela está livre,
             // buzinando para o da frente; pedestre lento no caminho também é contornado sem esperar.
             if (this.impatient && !this.detour && gap < 14 && lim < this.cruise * 0.8 && (this._ovT = (this._ovT || 0) - dt) <= 0 && ((this._ovT = 0.35), this._startDetour(hit, env, u, true))) {
-                if (this.honkCd <= 0) { this.honks = Math.min(1, this.honks); this.honk('freada', { v, gap, kind: hit.kind }); }
+                if (this.honkCd <= 0 && this.honks < 2) { this.honks++; this.honk('freada', { v, gap, kind: hit.kind }); }      // (no máximo duas por bloqueio, como os outros)
             }
         }
 
@@ -244,7 +244,7 @@ class TrafficCar extends Vehicle {
             const d = this.detour, rp = d.ref && d.ref.position ? d.ref.position : null;
             d.t += dt;
             const along = rp ? (rp.x - p.x) * f.x + (rp.z - p.z) * f.z : -99;
-            if (along < -(this.halfLen + d.half + 1.2) || d.t > 14) { this.detour = null; this.latTarget = 0; this.latRate = 1.6; this.honks = 0; this.waitAfter = 0; }
+            if (along < -(this.halfLen + d.half + 1.2) || d.t > 14) { this.detour = null; this.latTarget = 0; this.latRate = 1.6; this.waitAfter = 0; }      // (a conta de buzinadas só zera quando volta a andar: _freeT)
             else vt = Math.min(vt, d.emergency ? Math.max(v * 0.85, 6) : 8);        // contornando: devagar
         }
         const dl = this.latTarget - this.lat;

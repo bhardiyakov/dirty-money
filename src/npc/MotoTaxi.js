@@ -106,11 +106,19 @@ class MotoTaxis {
             const av = d < 90 ? this._avoid(m, ux, uz) : null;
             m.latT = av ? av.lat : 0;
             const dl = Math.max(-m.LAT, Math.min(m.LAT, m.latT)) - (m.lat || 0); m.lat = (m.lat || 0) + Math.sign(dl) * Math.min(Math.abs(dl), (av && av.ahead < 5 ? 6 : 3.5) * dt);
+            m.honkCd = (m.honkCd || 0) - dt;
             if (av) {
                 vt *= av.brake;
-                m.honkCd = (m.honkCd || 0) - dt;
-                if (av.brake < 0.9 && m.honkCd <= 0 && d < 60) { m.honkCd = av.brake < 0.4 ? 0.7 : 1.6; AudioFX.honk(m.x, m.z, m.pitch || (m.pitch = 1.15 + Math.random() * 0.3), av.brake < 0.4 ? 0.45 : 0.22); }
+                // buzina no máximo duas vezes por travada (antes buzinava a cada 0,7 s enquanto ficasse preso)
+                if (av.brake < 0.9 && m.honkCd <= 0 && (m.honks || 0) < 2 && d < 60) { m.honks = (m.honks || 0) + 1; m.honkCd = 1.4; AudioFX.honk(m.x, m.z, m.pitch || (m.pitch = 1.15 + Math.random() * 0.3), av.brake < 0.4 ? 0.45 : 0.22); }
             }
+            // andando livre de novo: zera a conta de buzinadas; preso no beco: dá meia-volta; preso há muito e longe da vista: sai de cena
+            if (m.v > 3) { m.freeT = (m.freeT || 0) + dt; if (m.freeT > 2) { m.honks = 0; m.blk = 0; } } else m.freeT = 0;
+            if (m.v < 0.8) {
+                m.blk = (m.blk || 0) + dt;
+                if (m.blk > (m.turnAt || (m.turnAt = 2.2 + Math.random() * 1.5)) && m.from) { const t = m.to; m.to = m.from; m.from = t; m.prev = t; m.turnAt = m.blk + 3 + Math.random() * 2; this._lane(m); }
+                if (m.blk > 14 && d > 55) { this._remove(i); continue; }
+            } else m.turnAt = 0;
             m.v += (vt - m.v) * (1 - Math.exp(-(vt < m.v ? 9 : 5) * dt));       // freia forte, arranca forte
             const step = m.v * dt;
             if (step >= L) { m.x = m.to.x; m.z = m.to.z; this._next(m); } else { m.x += ux * step; m.z += uz * step; }
