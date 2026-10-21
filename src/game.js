@@ -587,6 +587,7 @@ class Game {
 		Panel.tick(dt);
 		this.dev.update(dt);
 		Interiors.tickFade(dt);
+		Needs.update(this, dt);                                                  // fome e cansaço (leves)
 		// Assa sprites pendentes (personagens; os carros vêm prontos do atlas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
 		// de folga) menos o trabalho medido do quadro, entre 1 e 8 ms. Antes eram 9 ms fixos — num celular que já gasta 25 ms por quadro,
 		// isso derrubava o FPS enquanto havia fila.
@@ -2100,6 +2101,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 				const pl = this.player;
 				this.dayNight.skip(RealEstate.sleepHours(s.prop));
 				pl.hp = pl.maxHp;
+				Needs.sleep();                                                       // acordou descansado
 				if (s.at !== 'here') Interiors.wakeAtSafeHouse(this);
 				if (this.policeManager) this.policeManager.scatter(pl.position);
 				s.perks = RealEstate.wakePerks(this, s.prop);

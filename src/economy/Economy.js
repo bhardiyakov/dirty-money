@@ -269,6 +269,7 @@ const Economy = {
                 pl.hp = Math.min(pl.maxHp, pl.hp + it.heal);
                 if (it.protein) Physique.protein = Math.min(2, (Physique.protein || 0) + it.protein);      // (whey: o próximo treino rende mais)
                 const fx = it.icon === 'medkit' ? '' : Physique.eat(it.kcal != null ? it.kcal : it.icon === 'water' ? it.heal * 0.4 : it.heal);
+                if (typeof Needs !== 'undefined' && it.icon !== 'medkit') Needs.onEat(id, it.kcal != null ? it.kcal : it.heal * 10);       // (café: um gás na energia)
                 msg = `${it.name}: +${it.heal} de vida${t} · ${Physique.hungerLabel().toLowerCase()}${fx}`;
                 break;
             }

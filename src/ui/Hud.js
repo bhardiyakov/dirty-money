@@ -58,6 +58,9 @@ class Hud {
 			.px-fill.hp.low { background: linear-gradient(90deg, #f97316, #f43f5e); animation: hpBlink .7s ease-in-out infinite; }
 			.px-fill.st { background: linear-gradient(90deg, #10b981, #a3e635); box-shadow: 0 0 10px rgba(16,185,129,0.5); }
 			.px-fill.st.low { background: linear-gradient(90deg, #f59e0b, #facc15); }
+			.px-fill.food { background: linear-gradient(90deg, #f97316, #fbbf24); } .px-fill.food.low { background: linear-gradient(90deg, #dc2626, #f97316); }
+			.px-fill.en { background: linear-gradient(90deg, #8b5cf6, #c4b5fd); } .px-fill.en.low { background: linear-gradient(90deg, #6d28d9, #a78bfa); }
+			#needsDim { position: fixed; inset: 0; background: #000; pointer-events: none; z-index: 25; opacity: 0; }
 			.h-load { font: 600 12px var(--font); color: var(--tx-2); margin: 2px 0 0 2px; font-variant-numeric: tabular-nums; }
 			.h-load.heavy { color: #fbbf24; } .h-load.over { color: #fb7185; }
 			.px-fill.ar { background: linear-gradient(90deg, #3b82f6, #22d3ee); box-shadow: 0 0 10px rgba(59,130,246,0.5); }
@@ -134,6 +137,8 @@ class Hud {
 			  <div class="vrow">${E('heart')}<div class="vcol"><div class="px-label"><span>Vida <span class="h-kit" id="hKit2"></span></span><span class="px-pct" id="hHpT"></span></div><div class="px-bar"><div class="px-fill hp" id="hHp"></div></div></div></div>
 			  <div class="vrow" id="hArmorRow">${E('shield')}<div class="vcol"><div class="px-label"><span>Colete<span class="px-lvl" id="hArL"></span></span><span class="px-pct" id="hArT">0%</span></div><div class="px-bar"><div class="px-fill ar" id="hAr"></div></div></div></div>
 			  <div class="vrow" id="hStRow">${E('wind')}<div class="vcol"><div class="px-label"><span>Fôlego<span class="px-lvl" id="hStL"></span></span><span class="px-pct" id="hStT"></span></div><div class="px-bar"><div class="px-fill st" id="hSt"></div></div></div></div>
+			  <div class="vrow" id="hFoodRow" style="display:none">${E('food')}<div class="vcol"><div class="px-label"><span>Fome</span><span class="px-pct" id="hFoodT"></span></div><div class="px-bar"><div class="px-fill food" id="hFood"></div></div></div></div>
+			  <div class="vrow" id="hEnRow" style="display:none">${E('coffee')}<div class="vcol"><div class="px-label"><span>Energia</span><span class="px-pct" id="hEnT"></span></div><div class="px-bar"><div class="px-fill en" id="hEn"></div></div></div></div>
 			  <div class="h-load" id="hLoad"></div>
 			</div>`);
 		// DINHEIRO (sujo e limpo), HORA e MISSÕES (troféu)
@@ -306,6 +311,14 @@ class Hud {
 		// ---- fôlego (estamina) e peso carregado
 		const stMax = pl.staminaMax || 100, sp = Math.round(Math.max(0, Math.min(1, (pl.stamina == null ? stMax : pl.stamina) / stMax)) * 100);
 		this._set('st', sp + (pl.winded ? 'w' : ''), () => { this.$('hSt').style.width = sp + '%'; this.$('hStT').textContent = pl.winded ? 'sem fôlego' : sp; this.$('hSt').classList.toggle('low', !!pl.winded || sp < 25); this.$('hStRow').classList.toggle('off', sp >= 100 && !pl.winded); });
+		// ---- fome e energia (Needs): só aparecem quando caem de 70
+		if (typeof Needs !== 'undefined') {
+			const fd = Math.round(typeof Physique !== 'undefined' ? Physique.fed : 70), en = Math.round(Needs.energy);
+			this._set('fd', fd, (v) => { this.$('hFood').style.width = v + '%'; this.$('hFoodT').textContent = v < 15 ? 'faminto' : v; this.$('hFood').classList.toggle('low', v < 15); this.$('hFoodRow').style.display = v < 70 ? '' : 'none'; });
+			this._set('en', en, (v) => { this.$('hEn').style.width = v + '%'; this.$('hEnT').textContent = v < 8 ? 'exausto' : v < 20 ? 'cansado' : v; this.$('hEn').classList.toggle('low', v < 20); this.$('hEnRow').style.display = v < 70 ? '' : 'none'; });
+			const dim = document.getElementById('needsDim') || (() => { const d = document.createElement('div'); d.id = 'needsDim'; document.body.appendChild(d); return d; })();
+			dim.style.opacity = String(Needs.blink(performance.now() / 1000));
+		}
 		const fl = Bags.fitLevel(pl.fit);
 		this._set('stl', fl, (v) => { this.$('hStL').textContent = v ? 'cond. ' + v : ''; });
 		const D = Bags.def(inv), kg = Math.round((Bags.kg || 0) * 10) / 10, r = Bags.ratio || 0;

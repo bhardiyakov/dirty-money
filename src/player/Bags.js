@@ -145,13 +145,13 @@ const Bags = {
         } else {
             pl._rest = (pl._rest || 0) + dt;
             // recupera proporcional ao máximo: cheio em ~12 s andando / ~7 s parado (no nível 0)
-            if (pl._rest > 0.6) pl.stamina = Math.min(max, pl.stamina + max * (moving ? 0.08 : 0.14) * (1 + lvl * 0.03 + (O.regen || 0)) * dt);
+            if (pl._rest > 0.6) pl.stamina = Math.min(max, pl.stamina + max * (moving ? 0.08 : 0.14) * (1 + lvl * 0.03 + (O.regen || 0)) * (typeof Needs !== 'undefined' ? Needs.regenMul() : 1) * dt);      // (faminto/cansado: volta devagar)
             if (pl.winded && pl.stamina >= max * 0.35) pl.winded = false;
         }
         return can;
     },
     fitLevel(F) { return Math.min(20, Math.floor(Math.sqrt((F && F.xp || 0) / 25))); },     // 0..20 (nível 20 ≈ 2,8 h correndo)
-    staminaMax(lvl, O) { const P = Config.player; return Math.round((P.staminaBase + lvl * P.staminaPerLvl + ((O && O.staminaMax) || 0)) * (typeof Physique !== 'undefined' ? Physique.staminaMaxMul() : 1)); },
+    staminaMax(lvl, O) { const P = Config.player; return Math.round((P.staminaBase + lvl * P.staminaPerLvl + ((O && O.staminaMax) || 0)) * (typeof Physique !== 'undefined' ? Physique.staminaMaxMul() : 1) * (typeof Needs !== 'undefined' ? Needs.staminaMaxMul() : 1)); },
 
     // Velocidade correndo (m/s): o pique cresce com o condicionamento (24 → 27 km/h) e cai com o fôlego até ~10 km/h — começa bem
     // e vai perdendo o pace aos poucos (raiz: segura perto do pique com o fôlego cheio e despenca no fim). Tênis/árvore somam ao
