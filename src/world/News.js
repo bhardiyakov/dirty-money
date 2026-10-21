@@ -42,6 +42,7 @@ const News = {
             case 'escape': return this._pick([`Suspeito despista a polícia depois de perseguição ${at}`, `Fuga cinematográfica ${at}: viaturas perdem o rastro`]);
             case 'busted': return this._pick([`Polícia prende suspeito ${at}`, `Preso em flagrante ${at} depois de perseguição`]);
             case 'tourney': return `${p ? p + ': f' : 'F'}orasteiro vence o torneio de truco de sábado e leva ${v}`;
+            case 'raid': return e.found ? `Polícia Civil faz busca e apreensão e encontra dinheiro e armas ${at}` : `Busca e apreensão ${at} termina sem nada encontrado`;
             case 'boca': return this._pick([`Ponto de venda de drogas é destruído ${at}; moradores falam em guerra entre grupos`, `Tiroteio ${at}: boca do tráfico é desmontada`]);
             case 'rivalboca': return this._pick([`Moradores denunciam novo ponto de venda de drogas ${at}`, `Tráfico se espalha: nova boca é vista ${at}`]);
             case 'rivalwar': return 'Polícia teme guerra entre grupos rivais no porto';

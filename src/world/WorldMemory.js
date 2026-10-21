@@ -11,7 +11,7 @@
 
 const WorldMemory = {
     shops: {}, districts: {}, opps: {}, events: [], seq: 0,
-    W: { robbery: 6, heist: 12, kill: 10, cop: 15, holdup: 3, theft: 1, carjack: 2, fight: 1.5, shootout: 4, boca: 5 },
+    W: { robbery: 6, heist: 12, kill: 10, cop: 15, holdup: 3, theft: 1, carjack: 2, fight: 1.5, shootout: 4, boca: 5, threat: 1 },
     HALF: 14,                        // dias: meia-vida do medo (o bairro esquece aos poucos)
 
     serialize() { return { shops: this.shops, districts: this.districts, opps: this.opps, events: this.events.slice(-60), seq: this.seq }; },
@@ -36,6 +36,7 @@ const WorldMemory = {
         return e;
     },
     crime(kind, x, z, extra = {}) {
+        if (typeof Witnesses !== 'undefined' && x != null) Witnesses.onCrime(kind, x, z);      // quem viu sai correndo para ligar
         const d = extra.district || this._dist(x, z), D = this.district(d);
         D.ev.push([this._day(), this.W[kind] || 1]);
         if (D.ev.length > 80) D.ev.splice(0, D.ev.length - 80);

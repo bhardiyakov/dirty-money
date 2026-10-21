@@ -182,7 +182,7 @@ const Phone = {
             case 'bribeNo': this._me(who, 'Não vou pagar.'); this._t('brito', -8); this._msg('brito', 'Depois não reclama.', null, true); break;
             case 'rivalYes': this._me(who, 'Aceito. Leva o dinheiro.'); this.appts.push(Object.assign({ kind: 'rival', who }, d)); g.setGps(d.x, d.z, `Desafio do Dentinho — ${d.name} (amanhã, 20h)`); break;
             case 'rivalNo': this._me(who, 'Não tô a fim.'); this.rival.l++; this._msg('dentinho', 'Sabia que ia amarelar 🐔', null, true); break;
-            default: if (typeof RivalArc !== 'undefined') { const r = RivalArc.onPhoneAct(act); if (r) this._me(who, r); }
+            default: { const r = (typeof RivalArc !== 'undefined' && RivalArc.onPhoneAct(act)) || (typeof Witnesses !== 'undefined' && Witnesses.onPhoneAct(act)); if (r) this._me(who, r); else if (r === null && act.startsWith('raid')) { m.done = false; return; } }
         }
         this._render();
     },
