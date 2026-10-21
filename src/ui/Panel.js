@@ -11,8 +11,10 @@ class Panel {
         this.id = id; this.open = false; this.cool = 0; this.onAct = onAct; this.onClose = onClose; this.closable = closable;
         const r = this.root = document.createElement('div');
         r.id = id; r.className = 'dm-modal';
-        r.innerHTML = `<div class="dm-pp" style="width:min(${width}px,96vw)"><h3></h3><div class="sub"></div><div class="dm-body"></div><div class="msg"></div></div>`;
+        r.innerHTML = `<div class="dm-pp" style="width:min(${width}px,96vw)"><div class="mx-wrap"><button type="button" class="mx-close" aria-label="Fechar">✕</button></div><h3></h3><div class="sub"></div><div class="dm-body"></div><div class="msg"></div></div>`;
         document.body.appendChild(r);
+        this.$x = r.querySelector('.mx-wrap');
+        r.querySelector('.mx-close').addEventListener('click', (e) => { e.stopPropagation(); if (this.closable) this.close(); });
         this.$h = r.querySelector('h3'); this.$sub = r.querySelector('.sub'); this.$body = r.querySelector('.dm-body'); this.$msg = r.querySelector('.msg');
         r.addEventListener('mousedown', (e) => { if (e.target === r && this.closable) this.close(); });
         r.addEventListener('click', (e) => {
@@ -32,6 +34,7 @@ class Panel {
     show(title, sub, body) {
         this.$h.textContent = title; this.$sub.innerHTML = sub || ''; this.$body.innerHTML = body || '';
         if (!this.open) { this.msg(''); AudioFX.blip(540, 0.1, 0.14); }
+        this.$x.style.display = this.closable ? '' : 'none';
         this.open = true; this.root.style.display = 'flex';
         const g = window.game; if (g && g.input && g.input.releaseVirtual) g.input.releaseVirtual('pad');
     }
