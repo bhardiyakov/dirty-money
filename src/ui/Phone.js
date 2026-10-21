@@ -280,7 +280,7 @@ const Phone = {
             #phoneBadge b { margin-left: 4px; padding: 1px 7px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; }`;
         document.head.appendChild(st);
         const r = this.root = document.createElement('div'); r.id = 'phone';
-        r.innerHTML = '<div class="scr"><div class="notch"></div><div class="bar"><span id="phClock"></span><span>📶 🔋</span></div><div class="tabs"><button data-tab="msgs">Mensagens</button><button data-tab="contacts">Contatos</button><button data-tab="news">Jornal</button></div><div class="body" id="phBody"></div></div>';
+        r.innerHTML = '<div class="scr"><div class="notch"></div><div class="bar"><span id="phClock"></span><span>📶 🔋</span></div><div class="tabs"><button data-tab="msgs">Mensagens</button><button data-tab="contacts">Contatos</button><button data-tab="agenda">Agenda</button><button data-tab="news">Jornal</button></div><div class="body" id="phBody"></div></div>';
         document.body.appendChild(r);
         r.addEventListener('click', (e) => {
             const t = e.target.closest('[data-tab]'); if (t) { this.tab = t.dataset.tab; this.thread = null; this._render(); return; }
@@ -340,6 +340,7 @@ const Phone = {
             }).join('');
             return;
         }
+        if (this.tab === 'agenda') { B.innerHTML = typeof Calendar !== 'undefined' ? Calendar.agendaHtml(esc) : ''; return; }
         if (typeof News !== 'undefined') { News.tick(); B.innerHTML = News.items.slice(-12).reverse().map((it) => `<div class="news">${it.mine ? '🔴 ' : ''}${esc(it.text)}<small>dia ${it.day}</small></div>`).join('') + News.city().slice(0, 4).map((t) => `<div class="news" style="opacity:.7">${esc(t)}</div>`).join(''); }
     },
 };
