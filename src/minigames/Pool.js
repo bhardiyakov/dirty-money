@@ -134,7 +134,7 @@ const Pool = {
             <div class="pl-msg" id="plMsg" style="opacity:0"></div>
             <div class="pl-spin" id="plSpin"><div class="face"><i class="tip"></i></div><b>EFEITO</b><small id="plSpinTx"></small></div>
             <div class="pl-pow" id="plPow"><i></i><span>FORÇA</span></div>
-            <div class="pl-bot"><button class="ui-btn" id="plQuit">Desistir</button><span class="pl-help" id="plHelp"></span></div>
+            <div class="pl-bot"><button class="ui-btn" id="plQuit">Desistir</button><button class="ui-btn pri" id="plSkip" style="display:none">⏩ Resultado</button><span class="pl-help" id="plHelp"></span></div>
             <div class="pl-modal" id="plModal"></div>`;
         document.body.appendChild(r);
         this.cv = r.querySelector('canvas'); this.ctx = this.cv.getContext('2d');
@@ -161,6 +161,7 @@ const Pool = {
         this.spinFace.addEventListener('pointerup', () => { this._spinDrag = false; });
         this.spinFace.addEventListener('dblclick', () => this._setSpin(0, 0));
         this.$('plQuit').addEventListener('click', () => this._quit());
+        this.$('plSkip').addEventListener('click', () => this._skipWatch());
         window.addEventListener('keydown', (e) => this._key(e, true), true);
         window.addEventListener('keyup', (e) => this._key(e, false), true);
     },
@@ -183,7 +184,7 @@ const Pool = {
         this.$('plModal').innerHTML = `<div class="pl-box"><h2>🎱 Sinuca · bola 8</h2>
             <p class="sub">${this.shop ? this.shop.name + ' · ' : ''}Escolha o adversário. Quanto maior a aposta, melhor ele joga.<br>Você tem <b style="color:#86efac">${brl(cash)}</b> (dinheiro vivo).</p>
             ${this.STAKES.map((o, i) => `<button class="pl-opp" data-i="${i}" ${cash < o.bet ? 'disabled' : ''}><span class="av">${o.emo}</span>
-                <span class="t"><b>${o.name}</b> <span class="lv">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><small>${o.desc}</small></span>
+                <span class="t"><b>${o.name}</b> <span class="lv">${'★'.repeat(i + 1)}${'☆'.repeat(4 - i)}</span><small>${o.desc}${this._recordTxt(o.name)}</small></span>
                 <span class="bet">${brl(o.bet)}<small>prêmio ${brl(o.bet * 2)}</small></span></button>`).join('')}
             <div class="pl-rules"><b>Regras:</b> quem encaçapa primeiro fica com o grupo (lisas 1–7 ou listradas 9–15). Encaçape o seu grupo e depois a 8.
             <b>Falta</b> (branca na caçapa, não tocar em nada ou tocar primeiro a bola errada) dá <b>bola na mão</b> ao adversário. Encaçapar a 8 antes da hora = derrota.<br>
@@ -197,6 +198,59 @@ const Pool = {
         this._hud();
     },
 
+    // Histórico contra este adversário (WorldMemory) e a provocação dele.
+    _recordTxt(name) {
+        if (typeof WorldMemory === 'undefined') return '';
+        const r = WorldMemory.record('pool', name); if (!r.w && !r.l) return '';
+        const t = WorldMemory.taunt('pool', name);
+        return `<br><b style="color:${r.w >= r.l ? '#86efac' : '#fda4af'}">Você ${r.w} × ${r.l}</b>${t ? ` · <i>“${t}”</i>` : ''}`;
+    },
+    // Assistir uma partida do bar (BarGames): a IA joga os dois lados. opts: { people: [A, B], lvl: [nível A, nível B], onEnd(vencedor), bet }.
+    watch(game, shop, opts) {
+        if (this.active) return;
+        this.open(game, shop);
+        this.watching = opts; this.skBy = [this.SKILL[opts.lvl[0]], this.SKILL[opts.lvl[1]]];
+        this.opp = { name: opts.people[1].name, emo: opts.people[1].emo, bet: 0 }; this.lvl = Math.max(opts.lvl[0], opts.lvl[1]);
+        this.$('plModal').style.display = 'none';
+        this._setupTable();
+        this.turn = 0; this.groups = [null, null]; this.broken = false; this.inHand = false; this.phase = 'aim';
+        this.aim = 0; this.power = 0; this.pull = null; this.shots = 0; this._setSpin(0, 0);
+        this._msg(`${opts.people[0].name} abre o jogo`);
+        this._aiStart();
+        this._hud();
+    },
+    // Pular: o resultado sai pelo nível de cada um (como no salão).
+    _skipWatch() {
+        const W = this.watching; if (!W || this.phase === 'end') return;
+        const pA = Math.max(0.18, Math.min(0.82, 0.5 + 0.11 * (W.lvl[0] - W.lvl[1])));
+        this._endWatch(Math.random() < pA ? 0 : 1, 'levou a partida');
+    },
+    _endWatch(winner, why) {
+        const W = this.watching; this.watching = null; this.skBy = null;
+        this.phase = 'end';
+        if (W.onEnd) W.onEnd(winner);
+        const b = W.bet, won = b && b.side === winner, P = W.people[winner];
+        this.$('plModal').style.display = 'flex';
+        this.$('plModal').innerHTML = `<div class="pl-box pl-end"><div style="font-family:var(--emoji);font-size:46px">${P.emo}</div>
+            <div class="big" style="color:#fde047">${P.name} venceu</div>
+            <p class="sub">${P.name} ${why}.${b ? (won ? ` Sua aposta pagou <b style="color:#86efac">+${brl(Math.round(b.bet * b.odds))}</b>.` : ` Você perdeu a aposta de ${brl(b.bet)}.`) : ''}</p>
+            <div class="row"><button class="ui-btn pri" id="plBack">Voltar ao bar</button></div></div>`;
+        this.$('plBack').onclick = () => this.close();
+        this._hud();
+    },
+    // Desafio marcado (o rival do celular): adversário próprio, aposta fixa, resultado em onEnd(venceu). opts: { name, emo, lvl, bet, onEnd }.
+    challenge(game, shop, opts) {
+        if (this.active) return;
+        this.open(game, shop);
+        const inv = this.g.inventory; inv.cash -= opts.bet;
+        this.custom = opts; this.lvl = opts.lvl; this.opp = { name: opts.name, emo: opts.emo, bet: opts.bet }; this.sk = this.SKILL[opts.lvl];
+        this.$('plModal').style.display = 'none';
+        this._setupTable();
+        this.turn = 0; this.groups = [null, null]; this.broken = false; this.inHand = false; this.phase = 'aim';
+        this.aim = 0; this.power = 0; this.pull = null; this.shots = 0; this._setSpin(0, 0);
+        this._msg(`${opts.emo} ${opts.name}: “Abre aí, freguês.” — sua vez de abrir`);
+        this._hud();
+    },
     _startMatch(lvl) {
         const o = this.STAKES[lvl], inv = this.g.inventory;
         if (inv.cash < o.bet) return;
@@ -414,23 +468,23 @@ const Pool = {
         // define os grupos
         if (!foul && !grp[me] && this.broken) {
             const firstIn = ev.pocketed.find((n) => n !== 0 && n !== 8);
-            if (firstIn != null) { grp[me] = firstIn < 8 ? 'solid' : 'stripe'; grp[op] = firstIn < 8 ? 'stripe' : 'solid'; this._msg(`${me === 0 ? 'Você fica' : this.opp.name + ' fica'} com as ${grp[me] === 'solid' ? 'lisas' : 'listradas'}`); }
+            if (firstIn != null) { grp[me] = firstIn < 8 ? 'solid' : 'stripe'; grp[op] = firstIn < 8 ? 'stripe' : 'solid'; this._msg(`${this._nm(me)} fica com as ${grp[me] === 'solid' ? 'lisas' : 'listradas'}`); }
         }
         const wasBreak = !this.broken; this.broken = true;
         if (scratch) { const c = B[0]; c.in = false; c.drop = null; c.x = this.W * 0.25; c.y = this.H / 2; this._still(c); this._freeSpot(c); }
         const scoredMine = ev.pocketed.some((n) => n !== 0 && n !== 8 && (grp[me] ? isMine(n, me) : true));
         if (foul) {
             this.turn = op; this.inHand = true;
-            this._msg(`Falta: ${why}. ${op === 0 ? 'Bola na mão para você — arraste a branca.' : 'Bola na mão para ' + this.opp.name + '.'}`);
+            this._msg(`Falta: ${why}. ${op === 0 && !this.watching ? 'Bola na mão para você — arraste a branca.' : 'Bola na mão para ' + this._nm(op) + '.'}`);
             AudioFX.blip(160, 0.2, 0.15);
         } else if (scoredMine || (wasBreak && ev.pocketed.length)) {
-            this._msg(me === 0 ? (left(0) === 0 && grp[0] ? 'Agora é a 8! Escolha a caçapa.' : 'Boa! Joga de novo.') : `${this.opp.name} continua.`);
+            this._msg(me === 0 && !this.watching ? (left(0) === 0 && grp[0] ? 'Agora é a 8! Escolha a caçapa.' : 'Boa! Joga de novo.') : `${this._nm(me)} continua.`);
         } else {
             this.turn = op;
-            this._msg(op === 0 ? 'Sua vez.' : `Vez de ${this.opp.name}.`);
+            this._msg(op === 0 && !this.watching ? 'Sua vez.' : `Vez de ${this._nm(op)}.`);
         }
         this.phase = 'aim'; this.power = 0;
-        if (this.turn === 1) this._aiStart();
+        if (this.turn === 1 || this.watching) this._aiStart();
         this._hud();
     },
 
@@ -443,8 +497,12 @@ const Pool = {
     },
 
     _end(winner, why) {
+        if (this.watching) return this._endWatch(winner, why);
         this.phase = 'end';
         const won = winner === 0, o = this.opp, g = this.g;
+        if (typeof WorldMemory !== 'undefined') WorldMemory.onGame('pool', this.shop, o.name, won, o.bet);
+        const C = this.custom; this.custom = null;
+        if (C && C.onEnd) C.onEnd(won);
         if (won) {
             g.inventory.cash += o.bet * 2;
             const A = g.achievements; if (A) { A.bump('poolWins'); if (this.lvl === 4) A.bump('poolBoss'); }
@@ -455,6 +513,7 @@ const Pool = {
             <div class="big" style="color:${won ? '#86efac' : '#fb7185'}">${won ? 'Você venceu!' : 'Você perdeu'}</div>
             <p class="sub">${won ? 'Você' : o.name} ${why}. ${won ? `Prêmio: <b style="color:#86efac">+${brl(o.bet * 2)}</b>` : `A aposta de ${brl(o.bet)} ficou com ${o.name}.`}</p>
             <div class="row"><button class="ui-btn pri" id="plAgain">Jogar de novo</button><button class="ui-btn" id="plBack">Voltar ao bar</button></div></div>`;
+        if (C) this.$('plAgain').style.display = 'none';
         this.$('plAgain').onclick = () => this._renderSetup();
         this.$('plBack').onclick = () => this.close();
         this._hud();
@@ -462,6 +521,7 @@ const Pool = {
 
     _quit() {
         if (this.phase === 'setup' || this.phase === 'end') { this.close(); return; }
+        if (this.watching) { this.watching = null; this.skBy = null; this.close(); return; }      // (a partida segue no salão)
         if (!this._quitT || performance.now() - this._quitT > 2500) { this._quitT = performance.now(); this._msg('Desistir perde a aposta — clique/ESC de novo para confirmar'); return; }
         this._end(1, 'ganhou por desistência');
     },
@@ -534,24 +594,25 @@ const Pool = {
         return mine.length ? mine : B.filter((b) => !b.in && b.n === 8);
     },
     _aiStart() {
+        if (this.skBy) this.sk = this.skBy[this.turn];                     // (assistindo: cada um com o nível dele)
         this.phase = 'ai'; this.ai = { t: 0, plan: null, gen: this._aiThink(), shown: this.aim };
     },
     // Pensa em fatias (gerador): poucas simulações por quadro, sem travar a animação.
     *_aiThink() {
-        const sk = this.sk, B = this.balls, cue = B[0];
+        const sk = this.sk, B = this.balls, cue = B[0], me = this.turn;
         if (this.inHand) {                                             // bola na mão: testa posições e fica com a de melhor jogada
             let best = null;
             for (let k = 0; k < 40; k++) {
                 const x = this.R + Math.random() * (this.W - 2 * this.R), y = this.R + Math.random() * (this.H - 2 * this.R);
                 if (B.some((b) => b !== cue && !b.in && hypot(b.x - x, b.y - y) < 2 * this.R + 0.5)) continue;
-                const c = this._candidates(B, { x, y }, this._legal(1))[0];
+                const c = this._candidates(B, { x, y }, this._legal(me))[0];
                 if (c && (!best || c.score > best.s)) best = { x, y, s: c.score };
                 if (k % 10 === 9) yield;
             }
             if (best) { cue.x = best.x; cue.y = best.y; cue.key = null; }
             this.inHand = false;
         }
-        const cands = this._candidates(B, cue, this._legal(1)).slice(0, sk.cand);
+        const cands = this._candidates(B, cue, this._legal(me)).slice(0, sk.cand);
         let plan = null;
         if (sk.sim && cands.length) {
             let bestS = -1e9;
@@ -560,7 +621,7 @@ const Pool = {
             const spins = sk.spin ? [0, -0.35, 0.3] : [0];
             for (const c of cands.slice(0, Math.ceil(sk.sim / 2))) for (const m of [0.92, 1.12]) for (const sb of spins) {
                 const pow = Math.min(1, c.pow * m * (sb < 0 ? 1.08 : 1));
-                let s = 0; for (const da of [-dA, 0, dA]) s += this._evalSim(this._simulate(B, c.ang + da, pow, 0, sb), 1);
+                let s = 0; for (const da of [-dA, 0, dA]) s += this._evalSim(this._simulate(B, c.ang + da, pow, 0, sb), me);
                 s = s / 3 + c.score * 3;
                 if (s > bestS) { bestS = s; plan = { ang: c.ang, pow, a: 0, b: sb }; }
                 yield;
@@ -570,15 +631,15 @@ const Pool = {
         }
         if (!plan) {                                                   // sem jogada direta: defesa — encostar numa bola legal sem cometer falta
             let bestS = -1e9;
-            const L = this._legal(1).length ? this._legal(1) : B.filter((b) => !b.in && b.n !== 0);
+            const L = this._legal(me).length ? this._legal(me) : B.filter((b) => !b.in && b.n !== 0);
             for (let k = 0; k < (sk.sim ? 24 : 6) && L.length; k++) {
                 const t = L[Math.floor(Math.random() * L.length)], ang = Math.atan2(t.y - cue.y, t.x - cue.x) + (Math.random() - 0.5) * (k < 4 ? 0 : 0.6), pow = 0.22 + Math.random() * 0.3;
-                const s = sk.sim ? this._evalSim(this._simulate(B, ang, pow), 1) : 0;
+                const s = sk.sim ? this._evalSim(this._simulate(B, ang, pow), me) : 0;
                 if (s > bestS) { bestS = s; plan = { ang, pow, a: 0, b: 0 }; }
                 if (sk.sim) yield;
             }
         }
-        if (!plan) { const t = this._legal(1)[0] || B[1]; plan = { ang: Math.atan2(t.y - cue.y, t.x - cue.x), pow: 0.35, a: 0, b: 0 }; }
+        if (!plan) { const t = this._legal(me)[0] || B[1]; plan = { ang: Math.atan2(t.y - cue.y, t.x - cue.x), pow: 0.35, a: 0, b: 0 }; }
         // erro humano: mira, força e ponto do taco com ruído (e de vez em quando um vacilo)
         const g = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
         const blunder = Math.random() < sk.blunder ? 3 : 1;
@@ -605,7 +666,8 @@ const Pool = {
     },
 
     // ------------------------------------------------------------------ entrada do jogador
-    _canAim() { return this.active && this.phase === 'aim' && this.turn === 0; },
+    _canAim() { return this.active && this.phase === 'aim' && this.turn === 0 && !this.watching; },
+    _nm(i) { return this.watching ? this.watching.people[i].name : i === 0 ? 'Você' : this.opp.name; },
     _toTable(e) { return { x: (e.clientX - this.ox) / this.sc, y: (e.clientY - this.oy) / this.sc }; },
     _pDown(e) {
         if (!this._canAim()) return;
@@ -722,11 +784,15 @@ const Pool = {
             return ns.map((n) => { const b = B.find((x) => x.n === n); return `<i class="${n > 8 ? 'st' : ''} ${b && b.in ? 'out' : ''}" style="--c:${this.COLORS[n % 8 || 8]};background:${this.COLORS[n % 8 || 8]}"></i>`; }).join('') + ' <i style="background:#121212"></i>';
         };
         const o = this.opp || this.STAKES[0], playing = this.phase !== 'setup';
-        this.$('plP0').innerHTML = `<span class="av">😎</span><span><b>Você</b><small>${playing ? pips(0) : ''}</small></span>`;
+        const W = this.watching;
+        this.$('plP0').innerHTML = `<span class="av">${W ? W.people[0].emo : '😎'}</span><span><b>${W ? W.people[0].name : 'Você'}</b><small>${playing ? pips(0) : ''}</small></span>`;
         this.$('plP1').innerHTML = `<span><b style="text-align:right">${playing ? o.name : '—'}</b><small style="justify-content:flex-end">${playing ? pips(1) : ''}</small></span><span class="av">${playing ? o.emo : '❔'}</span>`;
         this.$('plP0').classList.toggle('turn', playing && this.phase !== 'end' && this.turn === 0);
         this.$('plP1').classList.toggle('turn', playing && this.phase !== 'end' && this.turn === 1);
-        this.$('plPot').innerHTML = playing ? `<b>${brl(o.bet * 2)}</b><small>em jogo · aposta ${brl(o.bet)}</small>` : `<b>🎱</b><small>sinuca</small>`;
+        const wb = W && W.bet;
+        this.$('plPot').innerHTML = W ? `<b>${wb ? brl(Math.round(wb.bet * wb.odds)) : '👀'}</b><small>${wb ? 'sua aposta paga' : 'assistindo'}</small>` : playing ? `<b>${brl(o.bet * 2)}</b><small>em jogo · aposta ${brl(o.bet)}</small>` : `<b>🎱</b><small>sinuca</small>`;
+        if (this.$('plSkip')) this.$('plSkip').style.display = W && playing && this.phase !== 'end' ? '' : 'none';
+        this.$('plQuit').textContent = W ? 'Sair (a partida segue)' : 'Desistir';
         this.$('plHelp').textContent = this.vw < 700 ? '' : 'Mire no pano · força na barra ou puxe com o mouse · ESPAÇO segura/solta · ← → ajuste fino · efeito: círculo, ↑ ↓ Q E';
     },
 

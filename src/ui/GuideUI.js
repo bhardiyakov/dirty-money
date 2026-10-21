@@ -31,7 +31,7 @@ class GuideUI {
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'], ['bags', 'Bolsas, peso e fôlego'],
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
-            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], [null, 'ASSALTOS, NEGÓCIOS E CARROS'], ['robbery', 'Assalto a lojas'], ['traces', 'Rastros e fuga'], ['heists', 'Joalherias e golpes'], ['business', 'Negócios próprios'], ['mechanic', 'Mecânica e porta-malas'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
+            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], ['truco', 'Truco no bar'], [null, 'ASSALTOS, NEGÓCIOS E CARROS'], ['robbery', 'Assalto a lojas'], ['traces', 'Rastros e fuga'], ['heists', 'Joalherias e golpes'], ['business', 'Negócios próprios'], ['mechanic', 'Mecânica e porta-malas'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas']);
         return out;
@@ -237,6 +237,22 @@ GuideUI.PAGES = {
         <li><b>Força</b>: arraste a barra da direita e solte. No PC, também dá para segurar o botão do mouse e puxar para trás, ou segurar <kbd>ESPAÇO</kbd> e soltar.</li>
         <li>A linha de mira mostra onde a branca bate. A linha fica <b style="color:#fb7185">vermelha</b> se a bola atingida não for sua.</li></ul>
         <div class="gd-tip">Com bola na mão, arraste a branca para uma posição de tacada fácil antes de mirar.</div>`,
+    truco: () => `<h2>Truco no bar</h2>
+        <p>Todo <b>bar</b> tem uma mesa de truco (a de madeira, com quatro cadeiras). Chegue perto e aperte <kbd>E</kbd>. Dá para jogar <b>sozinho (1 × 1)</b> ou <b>em dupla (2 × 2)</b>, com um parceiro da casa. Durante a partida o resto do mundo para.</p>
+        <h3>Apostas e adversários</h3>
+        <table><tr><th>Mesa</th><th>Aposta</th><th>Como joga</th></tr>
+        ${Truco.STAKES.map((o, i) => `<tr><td>${o.emo} ${o.name}</td><td>${brl(o.bet)}</td><td>${['pede truco com qualquer coisa', 'grita alto, corre fácil', 'conta as cartas, não cai em blefe bobo', 'lê a mesa e blefa na hora certa', 'calcula tudo e lembra dos seus blefes'][i]}</td></tr>`).join('')}</table>
+        <p>A aposta sai do dinheiro vivo. Ganhando o jogo (12 pontos), você leva o <b>dobro</b>.</p>
+        <h3>Regras (truco paulista)</h3>
+        <ul><li>Baralho de 40 cartas, força <b>4 5 6 7 Q J K A 2 3</b>. A <b>vira</b> define a manilha (a carta seguinte), que ganha de todas: ♣ <b>zap</b> &gt; ♥ copas &gt; ♠ espadilha &gt; ♦ pica-fumo.</li>
+        <li>Três cartas para cada um; a mão é melhor de três rodadas e vale 1 ponto. Empate ("cangou"): vale quem fez a primeira, ou quem desempatar depois.</li>
+        <li><b>Truco</b> pede 3 pontos: o outro lado aceita, <b>corre</b> (quem pediu leva o que valia) ou aumenta para <b>seis</b>, <b>nove</b> e <b>doze</b>. A mesma dupla não aumenta duas vezes seguidas.</li>
+        <li>Da 2ª rodada em diante, dá para jogar a carta <b>encoberta</b> (virada para baixo, não vale nada).</li>
+        <li><b>Mão de onze</b>: quem chega a 11 vê as cartas do parceiro e decide se joga (vale 3) ou corre (o outro leva 1). <b>Mão de ferro</b> (11 × 11): todo mundo joga às cegas.</li></ul>
+        <h3>Controles</h3>
+        <ul><li>Clique na carta (ou <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>) para jogar · botão direito joga encoberta · <kbd>T</kbd> truco / aumentar · <kbd>A</kbd> aceitar · <kbd>C</kbd> correr · <kbd>X</kbd> encobrir · <kbd>ESC</kbd> desistir.</li>
+        <li>Controle: ← → escolhem a carta, A joga ou aceita, Y truco, X encobre, B corre.</li></ul>
+        <div class="gd-tip">Em dupla, quando pedem truco para vocês, olhe a cara do seu parceiro: ele avisa se está forte ou fraco. Os melhores adversários lembram dos seus blefes — não peça truco toda mão.</div>`,
     banks: () => `<h2>Bancos</h2>
         <p>A cidade tem <b>3 sedes</b> (no Distrito Financeiro) e <b>7 agências</b>, de três marcas (marcadores coloridos na porta; lista na aba IMPÉRIO, com botão para marcar no mapa):</p>
         <ul><li><b style="color:#ec7000">Banco Inaú</b> — tecnologia: o melhor alvo do cibercrime (transferências rendem mais).</li>

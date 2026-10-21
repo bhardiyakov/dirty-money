@@ -221,7 +221,11 @@ const ShopStyles = {
         // balcão do bar + banquetas
         S.counter(S.R(2.0, 8.4, W - 9.6, 9.8), 1.05, '#9a6a3a', '#6a4426', ['bottles', 'cups', 'bell', 'tray']);
         for (let k = 0; k < 5; k++) S.stool(S.P(2.8 + k * 2.4), 7.2);
-        S.table(S.P(4.5), 3.6, 1.8, 1.8, 'wood', '#8a6238'); S.chair(S.P(4.5), 5.2, 's'); S.chair(S.P(4.5), 2.0, 'n'); S.chair(S.P(6.4), 3.6, 'w');
+        // mesa de truco (Truco.js): quatro cadeiras, baralho e os tentos de palito em cima
+        S.table(S.P(4.5), 3.6, 1.8, 1.8, 'wood', '#8a6238'); S.chair(S.P(4.5), 5.2, 's'); S.chair(S.P(4.5), 2.0, 'n'); S.chair(S.P(6.4), 3.6, S.m ? 'e' : 'w'); S.chair(S.P(2.6), 3.6, S.m ? 'w' : 'e');
+        { const c = S.c, px = S.X(S.P(4.5)), py = S.Y(3.6) - Math.round(0.6 * S.PPU); S.use('truco', S.R(2.4, 1.6, 6.6, 5.6));
+          c.fr(px - 9, py - 4, 6, 9, '#f4f1e8'); c.fr(px - 8, py - 3, 4, 7, '#a8283a'); c.fr(px + 1, py - 2, 6, 9, '#f4f1e8'); c.px(px + 4, py + 1, '#c8102e');
+          c.fr(px - 3, py + 6, 7, 9, '#f4f1e8'); c.px(px, py + 9, '#16161a'); for (let k = 0; k < 4; k++) c.fr(px + 9 + k * 2, py + 5, 1, 5, '#e8d0a0'); }
         // mesa de sinuca
         { const r = S.R(W - 8.8, 2.6, W - 3.0, 5.8), b = S.blk(r, 0.9, '#2f7a40', '#4a3018'); const c = S.c; S.use('pool', r);
           c.box(b.x, b.top, b.w, b.h, '#5a3a1c', '#8a6238', '#33220f', '#1a1008'); c.fr(b.x + 4, b.top + 4, b.w - 8, b.h - 8, '#2f8a48'); c.fr(b.x + 4, b.top + 4, b.w - 8, 1, '#3fa05a');

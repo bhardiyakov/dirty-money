@@ -133,9 +133,14 @@ const Interiors = {
 			const door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2, nearExit = hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3;
 			const cl = a.data.clerk, nearClerk = cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
 			const shop = a.shop, S = Economy.STYLES[shop.style] || {};
+			if (typeof Phone !== 'undefined' && this.useNear(game, 'pool') && Phone.rivalPrompt(shop)) return Phone.rivalPrompt(shop);      // o Dentinho te esperando na sinuca
+			if (typeof BarGames !== 'undefined' && BarGames.busy('pool') && this.useNear(game, 'pool')) return BarGames.prompt('pool');
+			if (typeof BarGames !== 'undefined' && this.useNear(game, 'truco')) return BarGames.tablePrompt();      // a mesa de jogos: truco, dominó, porrinha, torneio
 			if (this.useNear(game, 'pool')) return `<b>E</b> jogar sinuca<small>bola 8 apostada · de ${brl(Pool.STAKES[0].bet)} a ${brl(Pool.STAKES[Pool.STAKES.length - 1].bet)}</small>`;
+			if (this.useNear(game, 'truco')) return `<b>E</b> jogar truco<small>1 × 1 ou em dupla, apostado · de ${brl(Truco.STAKES[0].bet)} a ${brl(Truco.STAKES[Truco.STAKES.length - 1].bet)}</small>`;
 			const gu = this.gymUse(game);
 			if (gu) { const ex = Gym.EX[gu.kind]; return `<b>E</b> ${ex.verb}<small>${!Physique.hasPass() ? 'compre a diária ou a mensalidade na recepção' : Physique.setsLeft(ex.id) > 0 ? `séries hoje: ${Physique.SETS_PER_DAY - Physique.setsLeft(ex.id)}/${Physique.SETS_PER_DAY} · ${ex.min}–${ex.max} kg` : 'séries de hoje feitas — volte amanhã'}</small>`; }
+			if (nearClerk && typeof WorldMemory !== 'undefined' && WorldMemory.refuses(shop)) return `<b>E</b> falar com o atendente<small>ele lembra do assalto — não quer te atender</small>`;
 			if (nearClerk) return `<b>E</b> ${S.guns ? 'ver o que tem à venda' : S.clothes ? 'ver roupas, tênis e bolsas' : S.gym ? 'diária, mensalidade e suplementos' : 'ver o cardápio'}<small>${shop.name} · ${Economy.zoneOf(shop).label}${S.gym ? (Physique.hasPass() ? ' · treino liberado' : ' · sem plano') : ''}</small>`;
 			if (nearExit) return `<b>E</b> sair ${shop.safehouse ? 'de casa' : 'da loja'}<small>ou ande até a porta</small>`;
 			if (HomeDecor.canOpen(game)) return HomeDecor.active ? '' : a.shop.empty && !HomeDecor.uses().length ? '<b>B</b> mobiliar a casa<small>imóvel sem móveis: compre cama, geladeira, cofre, baú e notebook</small>' : '<b>B</b> decorar a casa<small>compre, mova e posicione móveis</small>';
@@ -174,10 +179,22 @@ const Interiors = {
 			}
 			const a = this.active, o = this.STAGE, door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2;
 			const cl = a.data.clerk;
+			if (typeof Phone !== 'undefined' && this.useNear(game, 'pool') && Phone.rivalPlay(game, a.shop)) return true;
+			if (typeof BarGames !== 'undefined' && BarGames.busy('pool') && this.useNear(game, 'pool')) { BarGames.open(game, 'pool'); return true; }
+			if (typeof BarGames !== 'undefined' && this.useNear(game, 'truco')) { BarGames.table(game); return true; }
 			if (this.useNear(game, 'pool')) { Pool.open(game, a.shop); return true; }
+			if (this.useNear(game, 'truco')) { Truco.open(game, a.shop); return true; }
 			const gu = this.gymUse(game);
 			if (gu) { Gym.open(game, gu); return true; }
-			if (cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6) { game.shopUI.show(a.shop); return true; }
+			if (cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6) {
+				if (typeof WorldMemory !== 'undefined' && WorldMemory.refuses(a.shop)) {                // assaltou aqui há pouco: sem atendimento
+					const ca = ShopLife.active && ShopLife.clerk ? ShopLife.clerk.actor : this._actors[0];
+					if (ca) Bubbles.say(ca, ['Não vou te atender. Vai embora!', 'Sai daqui! Eu chamo a polícia!', 'Some da minha loja!'][Math.floor(Math.random() * 3)], { tone: 'angry', ms: 2800, key: 'clerk' });
+					game._flash('O atendente se recusa a te atender (ele lembra do assalto)');
+					return true;
+				}
+				game.shopUI.show(a.shop); return true;
+			}
 			if (hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3) { this.leave(game); return true; }
 			return false;
 		}
@@ -433,6 +450,28 @@ const Interiors = {
 		if (shop.bank) Banks.onEnter(game, shop);
 		if (typeof Heists !== 'undefined') Heists.onEnter(game, shop);         // golpe em execução: a equipe entra junto
 		HomeDecor.onEnterInterior(game, shop);                                  // casa própria: os móveis colocados por você
+		if (typeof Bubbles !== 'undefined') Bubbles.clear();
+		if (!shop.home && !shop.safehouse && typeof WorldMemory !== 'undefined') this._greet(game, shop, life);
+		if (typeof News !== 'undefined') News.tvOn(shop);                     // bar, lanchonete, padaria, pizzaria: a TV ligada no jornal
+		if (typeof Phone !== 'undefined' && !shop.home && !shop.safehouse) Phone.onEnterShop(game, shop);      // compromissos do celular (Neguinho, Dentinho)
+	},
+
+	// O atendente te reconhece (WorldMemory): cumprimenta pelo que lembra de você; um cliente cochicha; a loja assaltada avisa do PM.
+	// (espera a tela clarear: a transição pode segurar no preto até os bonecos chegarem)
+	_greet(game, shop, life) {
+		const v = WorldMemory.onVisit(shop), G = WorldMemory.greeting(shop, v.first), M = WorldMemory.murmur(shop);
+		const here = () => this.active && this.active.shop === shop;
+		const L = this._later = [];                                               // (o game._delayed não roda dentro das lojas: Interiors.update)
+		const later = (t, fn) => L.push({ t, fn: () => { if (!here()) return; if (this.busy) { later(0.25, fn); return; } fn(); } });
+		later(0.7, () => {
+			const clerk = life && ShopLife.clerk ? ShopLife.clerk.actor : (this._actors[0] && this._actors[0].mesh.isEnabled() ? this._actors[0] : null);
+			if (clerk) Bubbles.say(clerk, G.text, { tone: G.tone, ms: 3800, key: 'clerk' });
+		});
+		if (M.length && life) later(2.8, () => {
+			const cs = ShopLife.agents.filter((a) => a.role === 'customer' && a.actor && a.fade > 0.5 && !a.outside);
+			if (cs.length) Bubbles.say(cs[Math.floor(Math.random() * cs.length)].actor, M[Math.floor(Math.random() * M.length)], { tone: 'whisper', ms: 3200 });
+		});
+		if (WorldMemory.guarded(shop)) later(1.6, () => game._flash('👮 Desde o assalto, tem um PM de plantão na loja'));
 	},
 
 	// Clientela fora (quebrou): os bonecos dela somem, o resto da loja segue.
@@ -445,6 +484,8 @@ const Interiors = {
 		const pl = game.player;
 		HomeDecor.onLeaveInterior(game);
 		this._dropLife();
+		if (typeof Bubbles !== 'undefined') Bubbles.clear();
+		if (typeof News !== 'undefined') News.tvOff();
 		a.room.mesh.setEnabled(false); this._bd.setEnabled(false);
 		if (this._arrow) this._arrow.setEnabled(false);
 		for (const x of this._actors) x.setVisible(false);
@@ -494,6 +535,8 @@ const Interiors = {
 	update(dt, game) {
 		const a = this.active; if (!a) return;
 		a.t += dt;
+		if (this._later) for (let i = this._later.length - 1; i >= 0; i--) { const d = this._later[i]; d.t -= dt; if (d.t <= 0) { this._later.splice(i, 1); d.fn(); } }
+		if (typeof News !== 'undefined') News.tvUpdate(dt);
 		for (const x of this._actors) if (x.mesh.isEnabled()) x.update(dt, 1);
 		for (const x of this._gymActors || []) if (x.mesh.isEnabled() && x.mesh.isVisible) this._gymActor(x, dt);
 		if (ShopLife.active) {

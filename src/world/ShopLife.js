@@ -91,11 +91,13 @@ const ShopLife = {
         this._heistFrozen = false;
         this.createStaff();
         this.warmStart();
+        if (typeof BarGames !== 'undefined') BarGames.onEnter(this);          // (bar: gente jogando sinuca e truco)
         return true;
     },
 
     leave() {
         if (!this.active) return;
+        if (typeof BarGames !== 'undefined') BarGames.onLeave();
         for (const agent of this.agents) this.releaseActor(agent);
         this.agents = [];
         this.queue = [];
@@ -432,6 +434,13 @@ const ShopLife = {
         }
     },
 
+    // Chovendo, o bar e a lanchonete enchem (gente se abrigando, a cerveja); o mercado e a farmácia um pouco.
+    weatherMul() {
+        const k = typeof Weather !== 'undefined' && Weather.cur ? Weather.cur.k : 0;
+        if (k < 0.15) return 1;
+        return 1 + k * ({ bar: 0.6, food: 0.45, fine: 0.25, store: 0.2 }[this.family] || 0);
+    },
+
     capacity() {
         const P = this.points, seats = P.seats.length;
         const byFamily = { food: Math.min(10, Math.max(3, seats + 3)), fine: Math.min(10, Math.max(2, seats)), bar: Math.min(11, Math.max(3, seats + Math.min(3, P.barStand.length))),
@@ -444,7 +453,7 @@ const ShopLife = {
     targetCustomers() {
         const hour = this.game.dayNight.hour;
         if (!Economy.isOpen(this.shop.style, hour) || this.robbed) return 0;
-        return Math.round(this.capacity() * this.demand(hour));
+        return Math.round(this.capacity() * Math.min(1, this.demand(hour) * this.weatherMul()));
     },
 
     // ======================================================================================== actors
@@ -541,6 +550,45 @@ const ShopLife = {
             this.playAnim(agent, 'idle');
             this.waiter = agent;
         }
+        // assaltada há poucos dias (WorldMemory): um PM de plantão do lado de dentro da porta, de olho em quem entra
+        this.guard = null;
+        if (typeof WorldMemory !== 'undefined' && WorldMemory.guarded(this.shop) && NpcArt.atlases.pm_policial) {
+            const D = this.points.door, side = D.x > this.data.W / 2 ? -1 : 1;
+            const agent = this.createAgent('guard', 'pm_policial', uniform + 7);
+            this.place(agent, D.x + side * 1.9, 1.35, 0);
+            agent.home = { x: D.x + side * 1.9, z: 1.35, heading: 0 };
+            agent.timer = 2 + this.random() * 4;
+            this.playAnim(agent, 'idle');
+            this.guard = agent;
+        }
+    },
+
+    // Conversa no salão: de tempos em tempos um cliente parado (sentado, no balcão, na fila) comenta a notícia do bairro ou joga
+    // conversa fora; às vezes o vizinho responde. Só perto do jogador (Bubbles: até RANGE m).
+    updateChatter(dt) {
+        if (typeof Bubbles === 'undefined' || typeof News === 'undefined') return;
+        this.chatT = (this.chatT == null ? 3 + this.random() * 3 : this.chatT) - dt;
+        if (this.chatT > 0) return;
+        this.chatT = (this.family === 'bar' ? 5 : 8) + this.random() * 7;
+        const still = this.agents.filter((a) => a.role === 'customer' && a.actor && a.fade > 0.9 && !a.path && !a.outside && a.state !== 'leaving');
+        if (!still.length) return;
+        const a = still[Math.floor(this.random() * still.length)], d = this.game && this.game.empire ? this.game.empire.districtAt(this.shop.x, this.shop.z) : null;
+        Bubbles.say(a.actor, News.chatter(d), { ms: 3400 });
+        const near = still.filter((b) => b !== a && Math.hypot(b.x - a.x, b.z - a.z) < 2.6);
+        if (near.length && this.random() < 0.6) {
+            const b = near[0], reply = ['Pois é…', 'Nem me fala!', 'Sério?!', 'Não acredito…', 'É o que eu digo!', 'Hahaha, verdade.', 'Tá louco…'];
+            setTimeout(() => { if (this.active && b.actor) Bubbles.say(b.actor, reply[Math.floor(Math.random() * reply.length)], { ms: 2400 }); }, 1500);
+        }
+    },
+
+    // O PM de plantão: parado, olhando a loja; de vez em quando vira para a porta (quem entra) e volta.
+    updateGuard(agent, dt) {
+        agent.timer -= dt;
+        if (agent.timer > 0) return;
+        agent.timer = 3 + this.random() * 6;
+        const P = this.game && this.game.player && this.game.player.position, o = Interiors.STAGE;
+        if (P && this.random() < 0.6) agent.targetHeading = Math.atan2(P.x - o.x - agent.x, P.z - o.z - agent.z);
+        else agent.targetHeading = agent.home.heading + (this.random() - 0.5) * 1.6;
     },
 
     updateClerk(agent, dt) {
@@ -967,6 +1015,8 @@ const ShopLife = {
         if (this.robbed) this.afterRobbery();
         const heist = typeof Heists !== 'undefined' && Heists.run && Interiors.active;
         if (heist) { this.heistFreeze(); for (const agent of this.agents) if (agent.actor) agent.actor.update(dt, 1); return; }
+        this.updateChatter(dt);
+        if (typeof BarGames !== 'undefined') BarGames.update(this, dt);
 
         this.spawnTimer -= dt;
         const customers = this.agents.filter((a) => a.role === 'customer').length, target = this.targetCustomers();
@@ -980,6 +1030,8 @@ const ShopLife = {
             agent.outside = agent.z < 0.35;
             if (agent.role === 'clerk') this.updateClerk(agent, dt);
             else if (agent.role === 'waiter') this.updateWaiter(agent, dt);
+            else if (agent.role === 'guard') this.updateGuard(agent, dt);
+            else if (agent.role === 'gamer') BarGames.updateAgent(this, agent, dt);
             else this.updateCustomer(agent, dt);
             if (agent.path) this.stepAlong(agent, dt);
             this.turn(agent, dt);
@@ -1068,6 +1120,7 @@ const ShopLife = {
     robberyCast() {
         if (!this.active) return null;
         this.robbed = true;
+        if (typeof BarGames !== 'undefined') BarGames.abort(this);            // (os jogadores largam a partida: viram reféns como os outros)
         const inside = this.agents.filter((a) => a.role === 'customer' && a.actor && a.z > 0.8 && a.fade > 0.5);
         for (const agent of this.agents) { agent.path = null; agent.onArrive = null; if (agent.seat) this.place(agent, agent.seat.approach.x, agent.seat.approach.z); }
         for (const agent of this.agents.filter((a) => a.role === 'customer' && !inside.includes(a))) this.removeAgent(agent);

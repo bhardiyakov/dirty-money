@@ -75,6 +75,7 @@ class Game {
 			onOfficerKilled: (o, source) => {
 				// O policial solta munição, dinheiro e, às vezes, uma arma ou kit (tropa de elite e exército: fuzil e mais $).
 				if (source !== 'gang' && source !== 'police') this.pickups.dropLoot(o.position, o.kind || 'cop');      // (morto pelo tráfico: sem loot)
+				if (source === 'player' && typeof WorldMemory !== 'undefined') WorldMemory.crime('cop', o.position.x, o.position.z);
 				if (source === 'player') { this.wanted.addStars(1, 'kill'); this._flash('Policial morto! Eles não vão deixar barato!'); if (o.op) { Standing.add('traffic', 4); if (this.missions) this.missions.onCopKilled(); } if (Standing.nearFavela(o.position.x, o.position.z)) Standing.addHeat(30, 'policial morto'); }       // (na operação o tráfico gosta; perto da favela, a pressão sobe)
 			},
 		};
@@ -88,6 +89,7 @@ class Game {
 					// Quem morre solta dinheiro (de qualquer causa); matar é crime se foi o jogador.
 					this.pickups.dropLoot(npc.position, 'civilian');
 					if (source !== 'player') return;
+					if (typeof WorldMemory !== 'undefined') WorldMemory.crime(npc.mugger ? 'fight' : 'kill', npc.position.x, npc.position.z);
 					this.wanted.reportCrime();
 					if (!npc.mugger) Standing.harm(this, 6);                 // (o assaltante de rua: o bairro não chora — ver StreetCrime)
 					if (this.npcManager) this.npcManager.alertViolence(npc.position, 18);
@@ -463,7 +465,7 @@ class Game {
 		eng.onEndFrameObservable.add(() => HangProbe.mark('motor: fim do quadro'));
 		this.gameEngine.runRenderLoop(() => {
 			const now = performance.now();
-			if (Pool.active) { last = now; return; }                  // sinuca: o mundo para por completo (sem update nem render)
+			if (Pool.active || Truco.active || Porrinha.active || Domino.active) { last = now; return; }  // mini-jogos do bar: o mundo para por completo
 			HangProbe.mark('laço: AutoQuality');
 			this.autoQuality.tick((now - last) / 1000, this.menu.isOpen);
 			const dt = Math.min((now - last) / 1000 * (this.timeScale || 1), 0.05);
@@ -585,6 +587,8 @@ class Game {
 		Panel.tick(dt);
 		this.dev.update(dt);
 		Interiors.tickFade(dt);
+		Needs.update(this, dt);                                                  // fome e cansaço (leves)
+		Phone.update(this, dt);                                                  // o celular: mensagens, compromissos, entregas
 		// Assa sprites pendentes (personagens; os carros vêm prontos do atlas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
 		// de folga) menos o trabalho medido do quadro, entre 1 e 8 ms. Antes eram 9 ms fixos — num celular que já gasta 25 ms por quadro,
 		// isso derrubava o FPS enquanto havia fila.
@@ -699,6 +703,7 @@ class Game {
 		Perf.lap('outros');
 		this.combat.update(dt);
 		this.fireworks.update(dt);
+		if (typeof News !== 'undefined') News.radioUpdate(dt, this);          // boletim no rádio do carro
 		for (let i = this._delayed.length - 1; i >= 0; i--) {
 			const d = this._delayed[i];
 			d.t -= dt;
@@ -806,6 +811,7 @@ class Game {
 			if (this.watch) this.watch.update(dt, gs.pos);
 			if (this.barricades) this.barricades.update(dt, this.op, Standing.nearFavela(gs.pos.x, gs.pos.z, 20));
 			Baile.update(dt, this);
+			StreetLife.update(this, dt);                                  // a rua viva: movimento por hora, acontecimentos, conversas
 			if (this.motoTaxis) this.motoTaxis.update(dt, gs.pos);
 			MotoStands.update(dt, this, gs.pos); this.motoUI.update(dt);
 			if (this.motoRide) this.motoRide.update(dt);
@@ -1095,14 +1101,14 @@ class Game {
 
 	// Alguma janela/diálogo que usa o ESC está aberta (ou acabou de fechar)? Então o ESC não deve abrir o menu de pausa.
 	_modalUiOpen() {
-		return !!(Gym.active || Pool.active || Panel.anyOpen() || this.stashUI.open || this.shopUI.open || this.propertyUI.open || this.carUI.open || this.motoUI.open || this.tribunal.open
+		return !!(Gym.active || Pool.active || Truco.active || Porrinha.active || Domino.active || Panel.anyOpen() || this.stashUI.open || this.shopUI.open || this.propertyUI.open || this.carUI.open || this.motoUI.open || this.tribunal.open
 			|| this.endScreen.visible || this.sleeping || this.motoRide || HomeDecor.active);          // (arrombar e inventário legado consomem o ESC sozinhos; _canPause já bloqueia a pausa neles)
 	}
 
 	// Dá para pausar? Não durante as telas de fim (detido/morte), enquanto arromba (Esc cancela o mini-game) nem sem o jogo pronto.
 	_canPause() {
 		if (this.menu.isOpen) return false;
-		if (Gym.active || Pool.active || Panel.anyOpen() || Panel.anyCool() || (Robbery.session && Robbery.session.siege) || this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.carUI.open || this.carUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping || HomeDecor.active) return false;
+		if (Gym.active || Pool.active || Truco.active || Porrinha.active || Domino.active || Panel.anyOpen() || Panel.anyCool() || (Robbery.session && Robbery.session.siege) || this.lockpick.active || this.endScreen.visible || this.tribunal.open || this.motoUI.open || this.motoUI.cool > 0 || this.inventoryOpen || !!this.motoRide || this.propertyUI.open || this.propertyUI.cool > 0 || this.carUI.open || this.carUI.cool > 0 || this.shopUI.open || this.shopUI.cool > 0 || Interiors.busy || this.stashUI.open || this.stashUI.cool > 0 || this.sleeping || HomeDecor.active) return false;
 		if ((this.arrest && this.arrest.phase === 'screen') || (this.death && this.death.phase === 'screen')) return false;
 		return true;
 	}
@@ -1518,7 +1524,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		// (cada gesto na porta encosta nela de novo — glide: o carro que ainda freava não deixa o ladrão puxando de longe)
 		if (how === 'smash') steps.push({ clip: 'punch', face: atDoor, glide: door, yank: () => this._smashWindow(car, sign) });
 		if (how === 'pick') steps.push({ clip: 'pick', face: atDoor, timer: 600, onStart: () => this._startLockpick(car) });
-		if (driver) steps.push({ clip: 'carjack', face: atDoor, glide: door, onStart: open, yank: () => this._yankDriver(car, sign) });
+		if (driver) steps.push({ clip: 'carjack', face: atDoor, glide: door, onStart: open, yank: () => { if (typeof WorldMemory !== 'undefined') WorldMemory.crime('carjack', pl.position.x, pl.position.z); this._yankDriver(car, sign); } });
 		else steps.push({ clip: 'opendoor', face: atDoor, glide: door, onStart: open });
 		// 3) entra: põe o pé lá dentro, gira, senta no banco e recolhe a outra perna, deslizando da porta até o banco enquanto a
 		//    carroceria esconde o que já entrou (clipe `sitin`; sem ele — visual antigo guardado no aparelho —, o `enter` de antes)
@@ -1691,7 +1697,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			const chop = this._chopperNear();
 			const spot = !car && !chop && this._nearHideSpot();
 			const fence = !car && !spot && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.6);
-			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
+			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || StreetLife.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
 			if (shopP) html = shopP;
 			else if (spot) html = `<b>E</b> esconder-se ${spot.kind === 'dumpster' ? 'na caçamba' : (spot.kind === 'barrel' ? 'no latão' : 'no caixote')}<small>se a polícia não te viu entrar, você some do radar</small>`;
 			else if (fence && fence.bridgeRail && (this.player.underBridge || this.player.depth > 0)) html = '';      // (nadando sob a ponte: não dá para subir)
@@ -2096,6 +2102,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 				const pl = this.player;
 				this.dayNight.skip(RealEstate.sleepHours(s.prop));
 				pl.hp = pl.maxHp;
+				Needs.sleep();                                                       // acordou descansado
 				if (s.at !== 'here') Interiors.wakeAtSafeHouse(this);
 				if (this.policeManager) this.policeManager.scatter(pl.position);
 				s.perks = RealEstate.wakePerks(this, s.prop);
@@ -2128,6 +2135,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (this.hiding) { if (this.hiding.phase === 'hidden') this._leaveHiding(); return; }
 		if (this.holdup) { this._cancelHoldup('Você baixou a arma — a vítima fugiu'); return; }
 		if (this.player.busy) return;
+		if (StreetLife.interact(this)) return;                           // separar a briga, devolver a bolsa, comprar no carrinho
 		if (Aid.interact(this)) return;                                  // desarmado perto de um morador da favela: ajudar (dar comida/água/kit)
 		const spot = this._nearHideSpot();
 		if (spot) this._startHiding(spot); else this._tryRob();
@@ -2310,6 +2318,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		this.holdup = null;
 		const loot = R.holdLoot[0] + Math.floor(Math.random() * (R.holdLoot[1] - R.holdLoot[0] + 1));
 		this.inventory.addCash(loot);
+		if (typeof WorldMemory !== 'undefined') WorldMemory.crime('holdup', pl.position.x, pl.position.z, { value: loot });
 		AudioFX.blip(980, 0.12, 0.2);
 		v.endSurrender(pl.position);
 		Standing.harm(this, 4);
@@ -2354,6 +2363,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			if (this.careers) this.careers.onPickpocket(npc, pl.position);
 			if (this.skills) this.skills.addXp(5);
 			if (this.achievements) this.achievements.bump('thefts');
+			if (typeof WorldMemory !== 'undefined') WorldMemory.crime('theft', npc.position.x, npc.position.z);
 			if (this.empire) this.empire.spend(2, 3);
 			AudioFX.blip(1180, 0.08, 0.14);
 			this._flash(`Furto: +${brl(loot)} — ele nem percebeu`);
@@ -2503,6 +2513,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 	_busted(lost = null, hours = null, stars = this.wanted.level) {
 		const light = stars === 1, O = Config.police.oneStar;
 		HangProbe.arm('preso', 600);
+		if (typeof WorldMemory !== 'undefined' && stars >= 1) { const p = this.player.position; WorldMemory.log('busted', { district: this.empire ? this.empire.districtAt(p.x, p.z) : null, stars }); }
 		HangProbe.mark('preso: zerar procurado');
 		this.wanted.bust();            // zera procurado -> polícia volta a patrulhar.
 		this.bustTimer = 0;
@@ -2691,6 +2702,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (this.empire && n > prev) this.empire.spend(0, 10 * (n - prev));
 		const fled = n === 0 && (why === 'escape' || why === 'paint');                     // (pintura express na oficina também é fuga)
 		if (this.skills && fled) this.skills.addXp(25 * prev * prev);
+		if (fled && prev >= 2 && typeof WorldMemory !== 'undefined') { const p = this.player.position; WorldMemory.log('escape', { district: this.empire ? this.empire.districtAt(p.x, p.z) : null, stars: prev }); }
 		if (this.achievements && fled && prev >= 5) this.achievements.bump('escape5');      // fugir de muitas estrelas vale muito
 		if (n > prev && msg[n]) this._flash(msg[n]);
 		else if (n === 0 && why === 'escape') this._flash('Você se safou! A polícia perdeu o seu rastro');

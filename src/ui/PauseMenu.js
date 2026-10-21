@@ -355,10 +355,41 @@ class PauseMenu {
 				+ bar('MORAL COM O TRÁFICO', Standing.traffic, '#d65a4a', Math.round(Standing.traffic)) + bar('MORAL COM A COMUNIDADE', Standing.community, '#5ac07a', Math.round(Standing.community))
 				+ bar('PRESSÃO POLICIAL NA FAVELA', Standing.heat, Standing.heat >= 65 ? '#ff3a2a' : '#ff9a3a', Math.round(Standing.heat) + '%')
 				+ row('Operação policial', Standing.policeOp ? '<span style="color:#ff5a4d">EM ANDAMENTO</span>' : 'não') + row('Baile funk', Baile.on ? 'rolando (21h–5h)' : 'não'))
+			+ panel('REPUTAÇÃO · O QUE O MUNDO LEMBRA', this._memoryHtml(bar, row))
+			+ panel('📰 JORNAL · ÚLTIMAS MANCHETES', this._newsHtml(row))
 			+ panel('DINHEIRO E NEGÓCIOS', row('Dinheiro sujo', brl(inv.cash)) + row('Dinheiro limpo', brl(inv.clean)) + row('Fachadas', Laundry.count) + row('Contabilidade', `nv ${Laundry.level} · perda ${Math.round(Laundry.lossRate * 100)}%`)
 				+ bar('RECEITA / PF', Laundry.taxHeat, '#9a7aff', Math.round(Laundry.taxHeat) + '%'))
 			+ panel('CASA E IMÓVEIS', row('Safe house', home ? `${home.type} (${home.region})` : 'Casa na favela') + row('Imóveis seus', owned.length) + row('Valor de mercado', brl(worth)) + (home ? row('Reforma', RealEstate.reformLevel(home) ? RealEstate.REFORMS[RealEstate.reformLevel(home)].name : 'original') : ''))
 			+ panel('PROCURADO', row('Nível', `${g.wanted.level}★`) + row('Situação', g.wanted.level > 0 ? 'A polícia está atrás de você' : 'Limpo'));
+	}
+
+	_newsHtml(row) {
+		if (typeof News === 'undefined') return '';
+		News.tick();
+		const L = News.items.slice(-6).reverse();
+		const city = News.city().slice(0, Math.max(1, 4 - L.length));
+		return L.map((it) => `<div class="sr"><span style="white-space:normal">${it.mine ? '🔴 ' : ''}${it.text}</span><b style="font-weight:500;opacity:.6">dia ${it.day}</b></div>`).join('')
+			+ city.map((t) => `<div class="sr"><span style="white-space:normal;opacity:.75">${t}</span><b></b></div>`).join('');
+	}
+
+	// Medo e respeito por bairro, os lugares que te conhecem e o placar contra os adversários do bar (WorldMemory).
+	_memoryHtml(bar, row) {
+		if (typeof WorldMemory === 'undefined') return '';
+		const W = WorldMemory, D = typeof Empire !== 'undefined' ? Empire.DISTRICTS : {}, here = this.g.empire ? this.g.empire.here : null;
+		let h = '';
+		const ds = Object.keys(D).map((d) => ({ d, F: W.fame(d) })).filter((x) => x.F.fear || x.F.respect || x.d === here);
+		for (const { d, F } of ds) h += `<div class="sr"><span>${D[d].name}${d === here ? ' <b style="color:#8fb4ff">(aqui)</b>' : ''}</span><b>${W.fameLabel(F)}</b></div>` + bar('MEDO', F.fear, 'linear-gradient(90deg,#f97316,#ef4444)', F.fear) + bar('RESPEITO', F.respect, 'linear-gradient(90deg,#22c55e,#a3e635)', F.respect);
+		if (!ds.length) h += row('Bairros', 'ninguém te conhece ainda');
+		const tierName = ['', 'conhecido', 'freguês', 'VIP'];
+		const places = Object.entries(W.shops).filter(([, r]) => r.v > 0 || r.robbed.length).sort((a, b) => (b[1].v + b[1].robbed.length * 3) - (a[1].v + a[1].robbed.length * 3)).slice(0, 5);
+		for (const [id, r] of places) {
+			const ago = r.robbed.length ? Economy.day - r.robbed[r.robbed.length - 1] : null;
+			const t = W.tier({ id });
+			h += row(r.name || 'Loja', ago != null && ago <= 10 ? `<span style="color:#ff7a6a">assaltada há ${ago} ${ago === 1 ? 'dia' : 'dias'}</span>` : `${tierName[t] || 'conhecido'} · ${r.v} ${r.v === 1 ? 'visita' : 'visitas'}`);
+		}
+		const opps = Object.entries(W.opps).sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l)).slice(0, 4);
+		for (const [k, o] of opps) { const [kind, name] = k.split(':'); h += row(`${kind === 'pool' ? '🎱' : '🃏'} ${name}`, `<span style="color:${o.w >= o.l ? '#86efac' : '#fda4af'}">${o.w} × ${o.l}</span>`); }
+		return h;
 	}
 
 	// ------------------------------------------------------------------ abrir / fechar

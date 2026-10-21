@@ -137,6 +137,7 @@ class Aim {
 		const steady = 0.42 - 0.22 * qa;                                            // dispersão com a mira firme
 		let mul = 1.1 + (steady - 1.1) * ease;
 		if (this.g.player.speed > 0.6) mul *= 1.35;                                 // andando mirando: mais aberto
+		if (typeof Needs !== 'undefined') mul *= Needs.spreadMul();                // cansado: a mão treme
 		return base * mul;
 	}
 
