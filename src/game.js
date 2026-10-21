@@ -809,6 +809,7 @@ class Game {
 			const gs = this._playerState();
 			this.gangs.update(dt, gs.pos, gs.vel, !!(this.hiding && !this.hiding.seen) || this.mode === 'heli');
 			if (this.op) this.op.update(dt, gs.pos);
+			RivalArc.update(this, dt);                                          // o arco do Dentinho: bocas, capangas, emboscadas, o galpão
 			if (this.watch) this.watch.update(dt, gs.pos);
 			if (this.barricades) this.barricades.update(dt, this.op, Standing.nearFavela(gs.pos.x, gs.pos.z, 20));
 			Baile.update(dt, this);
@@ -1698,7 +1699,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			const chop = this._chopperNear();
 			const spot = !car && !chop && this._nearHideSpot();
 			const fence = !car && !spot && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.6);
-			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || StreetLife.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
+			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || StreetLife.prompt(this) || RivalArc.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
 			if (shopP) html = shopP;
 			else if (spot) html = `<b>E</b> esconder-se ${spot.kind === 'dumpster' ? 'na caçamba' : (spot.kind === 'barrel' ? 'no latão' : 'no caixote')}<small>se a polícia não te viu entrar, você some do radar</small>`;
 			else if (fence && fence.bridgeRail && (this.player.underBridge || this.player.depth > 0)) html = '';      // (nadando sob a ponte: não dá para subir)
@@ -2137,6 +2138,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (this.holdup) { this._cancelHoldup('Você baixou a arma — a vítima fugiu'); return; }
 		if (this.player.busy) return;
 		if (StreetLife.interact(this)) return;                           // separar a briga, devolver a bolsa, comprar no carrinho
+		if (RivalArc.interact(this)) return;                             // estourar a boca do Dentinho; o destino dele
 		if (Aid.interact(this)) return;                                  // desarmado perto de um morador da favela: ajudar (dar comida/água/kit)
 		const spot = this._nearHideSpot();
 		if (spot) this._startHiding(spot); else this._tryRob();

@@ -28,6 +28,7 @@ class PauseMenu {
 			paynspray: { label: 'Oficina mecânica (Pay n Pay)', icon: 'wrench' },
 			joalheria: { label: 'Joalheria', icon: 'jewels' },
 			negocio: { label: 'Seus negócios', icon: 'biz', mine: true },
+			boca_rival: { label: 'Dentinho', icon: 'drugs' },
 			home: { label: 'Safe house', icon: 'home' },
 			imovel: { label: 'Imóvel à venda', icon: 'home' },
 			baile: { label: 'Baile funk', icon: 'music' },
@@ -357,6 +358,7 @@ class PauseMenu {
 				+ row('Operação policial', Standing.policeOp ? '<span style="color:#ff5a4d">EM ANDAMENTO</span>' : 'não') + row('Baile funk', Baile.on ? 'rolando (21h–5h)' : 'não'))
 			+ panel('REPUTAÇÃO · O QUE O MUNDO LEMBRA', this._memoryHtml(bar, row))
 			+ panel('📰 JORNAL · ÚLTIMAS MANCHETES', this._newsHtml(row))
+			+ panel('😁 O RIVAL · DENTINHO', RivalArc.statusHtml(row))
 			+ panel('💰 LIVRO-CAIXA · DE ONDE VEM O DINHEIRO', Ledger.html(row))
 			+ panel('DINHEIRO E NEGÓCIOS', row('Dinheiro sujo', brl(inv.cash)) + row('Dinheiro limpo', brl(inv.clean)) + row('Fachadas', Laundry.count) + row('Contabilidade', `nv ${Laundry.level} · perda ${Math.round(Laundry.lossRate * 100)}%`)
 				+ bar('RECEITA / PF', Laundry.taxHeat, '#9a7aff', Math.round(Laundry.taxHeat) + '%'))

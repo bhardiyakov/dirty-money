@@ -11,7 +11,7 @@
 
 const WorldMemory = {
     shops: {}, districts: {}, opps: {}, events: [], seq: 0,
-    W: { robbery: 6, heist: 12, kill: 10, cop: 15, holdup: 3, theft: 1, carjack: 2, fight: 1.5, shootout: 4 },
+    W: { robbery: 6, heist: 12, kill: 10, cop: 15, holdup: 3, theft: 1, carjack: 2, fight: 1.5, shootout: 4, boca: 5 },
     HALF: 14,                        // dias: meia-vida do medo (o bairro esquece aos poucos)
 
     serialize() { return { shops: this.shops, districts: this.districts, opps: this.opps, events: this.events.slice(-60), seq: this.seq }; },

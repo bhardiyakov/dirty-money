@@ -70,6 +70,8 @@ class Achievements {
             ['truco10', 'BAR', 'Zap na manga', 'Vença 10 partidas de truco apostadas', () => [st('trucoWins'), 10]],
             ['trucoBoss', 'BAR', 'Aula do Professor', 'Vença O Professor no truco', () => [st('trucoBoss'), 1]],
             ['trucoCup', 'BAR', 'Rei do sábado', 'Seja campeão de um torneio de truco no bar', () => [st('trucoCup'), 1]],
+            ['rivalBocas', 'RIVAL', 'Fecha a boca', 'Estoure 3 bocas do Dentinho', () => [st('rivalBocas'), 3]],
+            ['rivalEnd', 'RIVAL', 'Só pode haver um', 'Resolva de vez a história com o Dentinho', () => [st('rivalEnd'), 1]],
             ['crew12', 'IMPÉRIO', 'Exército particular', 'Tenha 12 soldados', () => [g.empire ? g.empire.biz.soldiers.length : 0, 12]],
         );
         return out;

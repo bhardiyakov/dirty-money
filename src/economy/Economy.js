@@ -191,7 +191,8 @@ const Economy = {
         if (typeof Business !== 'undefined' && Business.isOwned(shop)) out.push({ label: 'Seu negócio', mul: 0.5 });               // dono paga o preço de custo
         if (Outfit.m.price > 0) out.push({ label: 'Bem vestido', mul: 1 - Outfit.m.price });                        // terno, sapato social… (Outfit)
         if (shop.district === 'favela' && Outfit.m.favela > 0) out.push({ label: 'Estilo do morro', mul: 1 - Outfit.m.favela });   // chinelo, camisa de time, corrente
-        if (typeof WorldMemory !== 'undefined') out.push(...WorldMemory.priceFactors(shop));                      // freguês, VIP, desconfiança, medo
+        if (typeof WorldMemory !== 'undefined') out.push(...WorldMemory.priceFactors(shop));
+        if (typeof RivalArc !== 'undefined') out.push(...RivalArc.priceFactors(shop));                            // a taxa do Dentinho no bairro                      // freguês, VIP, desconfiança, medo
         return out;
     },
 

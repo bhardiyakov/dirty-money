@@ -100,7 +100,10 @@ const Phone = {
         if (Math.random() < 0.4 && !this.loans.length) opts.push(['cida', 'loan', 1]);
         if (!this.jobs.length) opts.push(['baiano', 'job', 2]);
         if (typeof Standing !== 'undefined' && Standing.heat > 35) opts.push(['brito', 'warn', 3]);
-        if (!this.rival.friend) { opts.push(['dentinho', 'taunt', 1]); if (!this.appts.some((a) => a.kind === 'rival')) opts.push(['dentinho', 'challenge', 1.5]); if (this.interest.length) opts.push(['dentinho', 'property', 1.2]); }
+        const arc = typeof RivalArc !== 'undefined' ? RivalArc.outcome : null;
+        if (arc === 'dead' || arc === 'exiled') { /* (o Dentinho saiu da história) */ }
+        else if (arc === 'partner') opts.push(['dentinho', 'tip', 1]);
+        else if (!this.rival.friend) { opts.push(['dentinho', 'taunt', 1]); if (!this.appts.some((a) => a.kind === 'rival')) opts.push(['dentinho', 'challenge', 1.5]); if (this.interest.length) opts.push(['dentinho', 'property', 1.2]); }
         else opts.push(['dentinho', 'tip', 1]);
         let s = Math.random() * opts.reduce((a, o) => a + o[2], 0);
         for (const [who, kind, w] of opts) { if ((s -= w) <= 0) { this['_gen_' + kind](g, who); return; } }
@@ -179,6 +182,7 @@ const Phone = {
             case 'bribeNo': this._me(who, 'Não vou pagar.'); this._t('brito', -8); this._msg('brito', 'Depois não reclama.', null, true); break;
             case 'rivalYes': this._me(who, 'Aceito. Leva o dinheiro.'); this.appts.push(Object.assign({ kind: 'rival', who }, d)); g.setGps(d.x, d.z, `Desafio do Dentinho — ${d.name} (amanhã, 20h)`); break;
             case 'rivalNo': this._me(who, 'Não tô a fim.'); this.rival.l++; this._msg('dentinho', 'Sabia que ia amarelar 🐔', null, true); break;
+            default: if (typeof RivalArc !== 'undefined') { const r = RivalArc.onPhoneAct(act); if (r) this._me(who, r); }
         }
         this._render();
     },
@@ -219,7 +223,7 @@ const Phone = {
     onEvent(e) {
         if (e.kind === 'bigwin') this.onBigWin(e);
         else if (e.kind === 'tourney') this.onTourney();
-        else if (e.kind === 'robbery' && !this.rival.friend && Math.random() < 0.2) {          // o Dentinho viu… e dedurou
+        else if (e.kind === 'robbery' && !this.rival.friend && !(typeof RivalArc !== 'undefined' && RivalArc.outcome) && Math.random() < 0.2) {          // o Dentinho viu… e dedurou
             const g = window.game;
             setTimeout(() => { if (g && g.wanted) g.wanted.ensureLevel(1); }, 4000);
             this._msg('dentinho', 'Vi você saindo daquela loja 👀 Liguei pro 190. Tchau, freguês 😁');

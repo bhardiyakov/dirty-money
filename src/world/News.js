@@ -42,6 +42,12 @@ const News = {
             case 'escape': return this._pick([`Suspeito despista a polícia depois de perseguição ${at}`, `Fuga cinematográfica ${at}: viaturas perdem o rastro`]);
             case 'busted': return this._pick([`Polícia prende suspeito ${at}`, `Preso em flagrante ${at} depois de perseguição`]);
             case 'tourney': return `${p ? p + ': f' : 'F'}orasteiro vence o torneio de truco de sábado e leva ${v}`;
+            case 'boca': return this._pick([`Ponto de venda de drogas é destruído ${at}; moradores falam em guerra entre grupos`, `Tiroteio ${at}: boca do tráfico é desmontada`]);
+            case 'rivalboca': return this._pick([`Moradores denunciam novo ponto de venda de drogas ${at}`, `Tráfico se espalha: nova boca é vista ${at}`]);
+            case 'rivalwar': return 'Polícia teme guerra entre grupos rivais no porto';
+            case 'rivaldead': return 'Chefe do tráfico conhecido como "Dentinho" é encontrado morto no porto';
+            case 'rivalgone': return '"Dentinho", nome conhecido do crime, é visto deixando a cidade de ônibus';
+            case 'rivalbetray': return 'Denúncia anônima entrega nome de suspeito à Polícia Civil';
             case 'bigwin': return e.game === 'truco' ? `Jogador fatura ${v} no truco ${p ? 'no ' + p : at} e humilha a mesa` : `Taco de ouro: apostador leva ${v} na sinuca ${p ? 'do ' + p : at}`;
             default: return null;
         }

@@ -14,7 +14,7 @@ class Minimap {
     }
     // Pontos do mapa (CityGrid.pois) que também vão para o radar: os que não são porta de loja (as lojas vêm TODAS das portas do
     // Interiors, não só a amostra do mapa de pausa). Safe house, fachadas, baile e mototáxi já têm marcador próprio. Imóvel: só os seus.
-    static get RADAR_POIS() { return ['hospital', 'station', 'gas', 'marina', 'dealer', 'motodealer', 'boatshop', 'helipad', 'tuning', 'paynspray', 'chop', 'imovel', 'negocio']; }
+    static get RADAR_POIS() { return ['hospital', 'station', 'gas', 'marina', 'dealer', 'motodealer', 'boatshop', 'helipad', 'tuning', 'paynspray', 'chop', 'imovel', 'negocio', 'boca_rival']; }
 
     // Lugares com ícone: [{ x, z, icon, name, label?, door }]. Conferido no máximo 1×/s e refeito só quando algo mudou (bancos tomam
     // portas de loja, imóveis são comprados e vendidos, POIs entram no CityGrid) — a mesma lista serve de cache para o mapa de pausa.
