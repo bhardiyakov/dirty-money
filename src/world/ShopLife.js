@@ -91,11 +91,13 @@ const ShopLife = {
         this._heistFrozen = false;
         this.createStaff();
         this.warmStart();
+        if (typeof BarGames !== 'undefined') BarGames.onEnter(this);          // (bar: gente jogando sinuca e truco)
         return true;
     },
 
     leave() {
         if (!this.active) return;
+        if (typeof BarGames !== 'undefined') BarGames.onLeave();
         for (const agent of this.agents) this.releaseActor(agent);
         this.agents = [];
         this.queue = [];
@@ -1007,6 +1009,7 @@ const ShopLife = {
         const heist = typeof Heists !== 'undefined' && Heists.run && Interiors.active;
         if (heist) { this.heistFreeze(); for (const agent of this.agents) if (agent.actor) agent.actor.update(dt, 1); return; }
         this.updateChatter(dt);
+        if (typeof BarGames !== 'undefined') BarGames.update(this, dt);
 
         this.spawnTimer -= dt;
         const customers = this.agents.filter((a) => a.role === 'customer').length, target = this.targetCustomers();
@@ -1021,6 +1024,7 @@ const ShopLife = {
             if (agent.role === 'clerk') this.updateClerk(agent, dt);
             else if (agent.role === 'waiter') this.updateWaiter(agent, dt);
             else if (agent.role === 'guard') this.updateGuard(agent, dt);
+            else if (agent.role === 'gamer') BarGames.updateAgent(this, agent, dt);
             else this.updateCustomer(agent, dt);
             if (agent.path) this.stepAlong(agent, dt);
             this.turn(agent, dt);
@@ -1109,6 +1113,7 @@ const ShopLife = {
     robberyCast() {
         if (!this.active) return null;
         this.robbed = true;
+        if (typeof BarGames !== 'undefined') BarGames.abort(this);            // (os jogadores largam a partida: viram reféns como os outros)
         const inside = this.agents.filter((a) => a.role === 'customer' && a.actor && a.z > 0.8 && a.fade > 0.5);
         for (const agent of this.agents) { agent.path = null; agent.onArrive = null; if (agent.seat) this.place(agent, agent.seat.approach.x, agent.seat.approach.z); }
         for (const agent of this.agents.filter((a) => a.role === 'customer' && !inside.includes(a))) this.removeAgent(agent);

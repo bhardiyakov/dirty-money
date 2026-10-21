@@ -125,7 +125,7 @@ const Truco = {
         r.id = 'truco';
         r.innerHTML = `<canvas></canvas>
             <div class="tr-top"><div class="tr-chip us" id="trUs"></div><div class="tr-chip val" id="trVal"></div><div class="tr-chip pot" id="trPot"></div><div class="tr-chip them" id="trThem"></div></div>
-            <div class="tr-act"><button class="ui-btn tr-btn-cover" id="trCover">Encobrir <small>(X)</small></button><button class="ui-btn tr-btn-truco" id="trTruco">TRUCO!</button></div>
+            <div class="tr-act"><button class="ui-btn tr-btn-cover" id="trCover">Encobrir <small>(X)</small></button><button class="ui-btn tr-btn-truco" id="trTruco">TRUCO!</button><button class="ui-btn pri" id="trSkip" style="display:none">⏩ Pular para o resultado</button></div>
             <div class="tr-bot"><button class="ui-btn" id="trQuit">Desistir</button><span class="tr-help" id="trHelp">Clique numa carta (ou 1 2 3) para jogar · T pede truco · X encobre</span></div>
             <div class="tr-ask" id="trAsk"></div>
             <div class="tr-modal" id="trModal"></div>`;
@@ -140,6 +140,7 @@ const Truco = {
         this.$('trTruco').addEventListener('click', () => this._humanTruco());
         this.$('trCover').addEventListener('click', () => this._toggleCover());
         this.$('trQuit').addEventListener('click', () => this._quit());
+        this.$('trSkip').addEventListener('click', () => { if (this.watching) { this.fast = true; this._msg('Acelerando a partida…'); } });
         window.addEventListener('keydown', (e) => this._key(e), true);
     },
 
@@ -182,6 +183,7 @@ const Truco = {
         return { x: A.x + 4, y: A.y + o * cw * sc * 0.5 + ch * 0.62, r: Math.PI / 2 + o * 0.12, s: sc };
     },
     _people() {
+        if (this.watching) return this.watching.people;
         const L = this.lvl != null ? this.STAKES[this.lvl] : this.STAKES[0];
         if (!this.duo) return [{ name: 'Você', emo: '🙂' }, { name: L.name, emo: L.emo }];
         return [{ name: 'Você', emo: '🙂' }, { name: L.duo[0], emo: L.duo[1] }, { name: L.mate[0], emo: L.mate[1], f: L.mate[2] === 'f' }, { name: L.duo[2], emo: L.duo[3] }];
@@ -256,6 +258,36 @@ const Truco = {
     _oppKey(lvl = this.lvl, duo = this.duo) { const o = this.STAKES[lvl]; return duo ? o.duo[0] + ' e ' + o.duo[2] : o.name; },
     CANCEL: { cancel: true },
 
+    // Assistir uma partida do bar (BarGames): todo mundo é a IA, cada lado com o nível dele. opts: { people (por lugar), duo, lvl: [lado A,
+    // lado B], onEnd(lado vencedor), bet }. O resultado é o da partida de verdade.
+    watch(game, shop, opts) {
+        if (this.active) return;
+        this.duo = !!opts.duo; this.watching = opts;
+        this.open(game, shop);
+        this.lvl = Math.max(opts.lvl[0], opts.lvl[1]); this.opp = this.STAKES[this.lvl];
+        this.skT = [this.SKILL[opts.lvl[0]], this.SKILL[opts.lvl[1]]]; this.sk = this.skT[1]; this.bet = 0;
+        this._reset(); this.fast = false;
+        this.$('trModal').style.display = 'none';
+        this.phase = 'play';
+        const gen = this._gen = (this._gen || 0) + 1;
+        this._match(gen).catch((e) => { if (e !== this.CANCEL) console.error('[TRUCO]', e); });
+        this._hud();
+    },
+    _endWatch(winner) {
+        const W = this.watching; this.watching = null; this.skT = null; this.fast = false;
+        const b = W.bet, names = (t) => this._teamSeats(t).map((i) => W.people[i].name).join(' e ');
+        if (W.onEnd) W.onEnd(winner);
+        const won = b && b.side === winner;
+        this.$('trModal').style.display = 'flex';
+        this.$('trModal').innerHTML = `<div class="tr-box tr-end"><div style="font-family:var(--emoji);font-size:42px">${this._teamSeats(winner).map((i) => W.people[i].emo).join('')}</div>
+            <div class="big" style="color:#fde047">${names(winner)} ${this._teamSeats(winner).length > 1 ? 'venceram' : 'venceu'}</div>
+            <p class="sub">Placar final: <b>${this.score[winner]} × ${this.score[1 - winner]}</b>.${b ? (won ? ` Sua aposta pagou <b style="color:#86efac">+${brl(Math.round(b.bet * b.odds))}</b>.` : ` Você perdeu a aposta de ${brl(b.bet)}.`) : ''}</p>
+            <div class="row"><button class="ui-btn pri" id="trBack">Voltar ao bar</button></div></div>`;
+        this.$('trBack').onclick = () => this.close();
+        this.phase = 'end';
+        this._hud();
+    },
+
     async _match(gen) {
         this.score = [0, 0];
         this.dealer = Math.floor(Math.random() * this.seatsN);
@@ -264,10 +296,12 @@ const Truco = {
             await this._hand(gen);
             this._hud();
         }
-        this._end(this.score[0] >= this.GOAL ? 0 : 1);
+        if (this.watching) this._endWatch(this.score[0] >= this.GOAL ? 0 : 1);
+        else this._end(this.score[0] >= this.GOAL ? 0 : 1);
     },
 
     _sleep(gen, ms) {
+        if (this.fast) ms = 0;
         return new Promise((ok, no) => { const t0 = performance.now(); this.fx.push({ wake: t0 + ms, ok: () => (gen === this._gen ? ok() : no(this.CANCEL)) }); });
     },
     _check(gen) { if (gen !== this._gen) throw this.CANCEL; },
@@ -338,7 +372,11 @@ const Truco = {
     },
 
     _viraTxt() { const v = this.vira; return v ? this.RANKS[v.r] + ' ' + this.SUITS[v.s] : ''; },
-    _teamName(t) { return t === 0 ? (this.duo ? 'Sua dupla' : 'Você') : (this.duo ? 'A dupla de lá' : this._people()[1].name); },
+    _teamName(t) {
+        if (this.watching) return this._teamSeats(t).map((i) => this._people()[i].name).join(' e ');
+        return t === 0 ? (this.duo ? 'Sua dupla' : 'Você') : (this.duo ? 'A dupla de lá' : this._people()[1].name);
+    },
+    _sideShort(t) { return this.watching ? this._people()[this._teamSeats(t)[0]].name.split(' ')[0] : t === 0 ? (this.duo ? 'nós' : 'você') : this._themLabel().toLowerCase(); },
 
     // Melhor carta da rodada: maior força; se a maior empata entre as duplas, a rodada empata ("cangou"). Encoberta não vale nada.
     _roundWinner(plays) {
@@ -370,7 +408,7 @@ const Truco = {
         this.turn = i; this._hud();
         for (;;) {
             this._check(gen);
-            if (i === 0) {
+            if (i === 0 && !this.watching) {
                 const act = await this._waitHuman(gen);
                 if (act.type === 'truco') { const r = await this._truco(gen, 0); if (r === 'ended') return 'ended'; continue; }
                 await this._playCard(gen, 0, act.k, act.covered);
@@ -412,7 +450,7 @@ const Truco = {
         // a carta que ganhou brilha; a rodada vai para os montinhos de cada um
         const win = this.played.find((p) => p.seat === rw.seat);
         if (rw.team === 't') { this._msg('Empatou a rodada! (cangou)'); for (const p of this.played) if (!p.covered && this._pow(p.sp.c) === rw.best) p.sp.glow = 1; }
-        else { if (win) win.sp.glow = 1; this._msg(`${rw.team === 0 ? (rw.seat === 0 ? 'Você fez' : 'Sua dupla fez') : (this._people()[rw.seat].name + ' fez')} a ${['primeira', 'segunda', 'terceira'][this.round]}${win && !win.covered ? ' com ' + this._name(win.sp.c) : ''}`); }
+        else { if (win) win.sp.glow = 1; this._msg(`${this.watching ? this._people()[rw.seat].name + ' fez' : rw.team === 0 ? (rw.seat === 0 ? 'Você fez' : 'Sua dupla fez') : (this._people()[rw.seat].name + ' fez')} a ${['primeira', 'segunda', 'terceira'][this.round]}${win && !win.covered ? ' com ' + this._name(win.sp.c) : ''}`); }
         AudioFX.blip(rw.team === 0 ? 760 : rw.team === 't' ? 500 : 300, 0.1, 0.12);
         await this._sleep(gen, 950);
         for (const p of this.played) {
@@ -430,7 +468,7 @@ const Truco = {
         // o que ainda estava na mão aparece para todo mundo (só no fim da mão; quem correu não mostra)
         if (team != null && pts > 0) {
             this.score[team] = Math.min(this.GOAL, this.score[team] + pts);
-            this._banner(`+${pts} ${team === 0 ? (this.duo ? 'NÓS' : 'VOCÊ') : this._themLabel().toUpperCase()}`, team === 0 ? '#86efac' : '#fda4af', 1.4);
+            this._banner(`+${pts} ${this._sideShort(team).toUpperCase()}`, team === 0 ? '#86efac' : '#fda4af', 1.4);
             this._msg(`${this._teamName(team)} leva ${pts} ${pts === 1 ? 'ponto' : 'pontos'}${why ? ' — ' + why : ''}`);
             AudioFX.blip(team === 0 ? 880 : 220, 0.16, 0.16);
             if (team === 0) setTimeout(() => AudioFX.blip(1180, 0.14, 0.14), 120);
@@ -472,7 +510,7 @@ const Truco = {
             this._shout(who, prop);
             await this._sleep(gen, 900);
             const other = 1 - team;
-            const resp = other === 0 ? await this._askHuman(gen, prop, who) : await this._aiRespond(gen, other, prop, who);
+            const resp = other === 0 && !this.watching ? await this._askHuman(gen, prop, who) : await this._aiRespond(gen, other, prop, who);
             if (resp.type === 'run') {
                 this._say(resp.seat, ['Corro!', 'Tô fora.', 'Pode levar…', 'Corri, corri.'][Math.floor(Math.random() * 4)], 1200);
                 await this._sleep(gen, 700);
@@ -520,7 +558,7 @@ const Truco = {
     },
 
     async _onzeDecide(gen, team) {
-        if (team === 0) {
+        if (team === 0 && !this.watching) {
             // vê as cartas do parceiro (2 × 2)
             if (this.duo) { this.revealMate = true; this.hands[2].forEach((sp, k) => this._flip(sp, true, 0.26, k * 0.08)); await this._sleep(gen, 400); }
             const box = this.$('trAsk');
@@ -539,12 +577,13 @@ const Truco = {
         }
         await this._sleep(gen, 900);
         const seats = this._teamSeats(team), p = Math.max(...seats.map((i) => this._winProb(i, { value: 3 })));
-        const go = p + (Math.random() - 0.5) * this.sk.noise > 0.42;
+        const go = p + (Math.random() - 0.5) * this._skOf(seats[0]).noise > 0.42;
         this._say(seats[0], go ? 'Vamos jogar essa.' : 'Essa não dá… corremos.', 1300);
         await this._sleep(gen, 900);
         return go;
     },
     _teamSeats(team) { return this.duo ? [team, team + 2] : [team]; },
+    _skOf(i) { return this.skT ? this.skT[this._team(i)] : this.sk; },          // (assistindo: cada lado com o nível dele)
 
     // ------------------------------------------------------------------ IA
     // O que o jogador i sabe: a própria mão, as cartas na mesa e nos montinhos (abertas), a vira. O resto é sorteado.
@@ -563,7 +602,7 @@ const Truco = {
     // Chance de a dupla de i ganhar a mão (Monte Carlo). opts: { first: carta que i joga agora (índice) | null, covered, bias: dupla
     // que pediu truco (as mãos dela são sorteadas mais fortes, conforme a desconfiança) }.
     _winProb(i, opts = {}) {
-        const sk = this.sk, N = Math.max(24, sk.mc || 30), man = this.man, n = this.seatsN, myTeam = this._team(i);
+        const sk = this._skOf(i), N = Math.max(24, sk.mc || 30), man = this.man, n = this.seatsN, myTeam = this._team(i);
         const unknown = this._known(i);
         let win = 0, tot = 0;
         for (let it = 0; it < N; it++) {
@@ -578,7 +617,7 @@ const Truco = {
             }
             let w = 1;
             if (opts.bias != null) {                                     // quem trucou deve ter mão boa (o quanto eu acredito nisso)
-                const belief = this._belief(), str = this._teamStrength(H, opts.bias, i);
+                const belief = this._belief(sk), str = this._teamStrength(H, opts.bias, i);
                 w = (1 - belief) + belief * (0.15 + 1.7 * str * str);
             }
             const r = this._simHand(H, i, opts, man);
@@ -592,8 +631,8 @@ const Truco = {
         return k ? s / k : 0.5;
     },
     // O quanto a IA acredita que quem pede truco tem jogo (os mais espertos lembram dos seus blefes).
-    _belief() {
-        const sk = this.sk, B = this.bluffSeen || { calls: 0, weak: 0 };
+    _belief(sk = this.sk) {
+        const B = (this.watching ? null : this.bluffSeen) || { calls: 0, weak: 0 };
         const rate = B.calls >= 2 ? B.weak / B.calls : 0.3;
         return Math.max(0, Math.min(1, sk.read * (1 - rate) * 0.9 + (1 - sk.read) * 0.25));
     },
@@ -662,7 +701,7 @@ const Truco = {
 
     // Qual carta jogar: os melhores simulam cada opção (e a encoberta); os fracos jogam no guloso com uns vacilos.
     _aiChoose(i) {
-        const hand = this.hands[i], sk = this.sk;
+        const hand = this.hands[i], sk = this._skOf(i);
         if (this.ferro || hand.length === 1) return { k: Math.floor(Math.random() * hand.length) * (this.ferro ? 1 : 0), covered: false };
         const cards = hand.map((sp) => sp.c), plays = this.played.map((p) => ({ seat: p.seat, c: p.covered ? null : p.sp.c }));
         const g = this._greedy(cards, plays, i, this.round, this.man, this.results);
@@ -689,7 +728,7 @@ const Truco = {
     },
 
     _aiWantsTruco(i) {
-        const sk = this.sk, prop = this.RAISE[this.value];
+        const sk = this._skOf(i), prop = this.RAISE[this.value];
         if (!prop) return false;
         const p = (sk.mc ? this._winProb(i) : this._strengthHeur(i)) + (Math.random() - 0.5) * sk.noise * 2;
         // quanto mais perto do fim (o adversário com muitos pontos), mais vale arriscar
@@ -703,7 +742,7 @@ const Truco = {
     // A dupla que recebe o truco decide (o melhor dos dois fala por ela).
     async _aiRespond(gen, team, prop, who) {
         await this._sleep(gen, 600 + Math.random() * 600);
-        const sk = this.sk, seats = this._teamSeats(team);
+        const seats = this._teamSeats(team), sk = this._skOf(seats[0]);
         let p = -1, seat = seats[0];
         for (const i of seats) {
             const q = (sk.mc ? this._winProb(i, { bias: 1 - team }) : this._strengthHeur(i) * 0.9) + (Math.random() - 0.5) * sk.noise * 2;
@@ -719,7 +758,7 @@ const Truco = {
 
     // Fim da mão: quem pediu truco mostrando carta fraca entra na conta dos blefes (o que a mesa viu).
     _learnBluffs() {
-        const B = this.bluffSeen; if (!B) return;
+        const B = this.bluffSeen; if (!B || this.watching) { this.calls = []; return; }
         for (const c of this.calls || []) {
             if (c.team !== 0) continue;
             const mine = this.piles[c.seat] || [];
@@ -774,6 +813,7 @@ const Truco = {
 
     _quit() {
         if (this.phase === 'setup' || this.phase === 'end') { this.close(); return; }
+        if (this.watching) { this.watching = null; this.skT = null; this.fast = false; this.close(); return; }      // (a partida segue no salão)
         if (!this._quitT || performance.now() - this._quitT > 2500) { this._quitT = performance.now(); this._msg('Desistir perde a aposta — clique/ESC de novo para confirmar'); return; }
         this._gen++;
         this.$('trAsk').style.display = 'none'; this.ask = null; this.wait = null;
@@ -807,13 +847,16 @@ const Truco = {
     _hud() {
         if (!this.root) return;
         const playing = this.phase !== 'setup' && this.phase !== 'end', T = this.$('trTruco'), C = this.$('trCover');
-        this.$('trUs').innerHTML = `<b>${this.score[0]}</b><small>${this.duo ? 'nós' : 'você'}</small>`;
-        this.$('trThem').innerHTML = `<b>${this.score[1]}</b><small>${this._themLabel().toLowerCase()}</small>`;
+        this.$('trUs').innerHTML = `<b>${this.score[0]}</b><small>${this._sideShort(0)}</small>`;
+        this.$('trThem').innerHTML = `<b>${this.score[1]}</b><small>${this._sideShort(1)}</small>`;
         this.$('trVal').innerHTML = `<b>${this.value === 1 ? '1' : this.value}</b><small>${this.ferro ? 'mão de ferro' : this.onze != null ? 'mão de onze' : this.value === 1 ? 'vale a mão' : this.CALL_NAME[this.value].toLowerCase()}</small>`;
-        this.$('trPot').innerHTML = `<b>${this.opp ? brl((this.bet || this.opp.bet) * 2) : '—'}</b><small>na mesa</small>`;
+        const wb = this.watching && this.watching.bet;
+        this.$('trPot').innerHTML = this.watching ? `<b>${wb ? brl(Math.round(wb.bet * wb.odds)) : '—'}</b><small>${wb ? 'sua aposta paga' : 'assistindo'}</small>` : `<b>${this.opp ? brl((this.bet || this.opp.bet) * 2) : '—'}</b><small>na mesa</small>`;
         for (const id of ['trUs', 'trThem', 'trVal', 'trPot']) this.$(id).style.visibility = playing ? 'visible' : 'hidden';
         this.$('trCover').parentElement.style.visibility = playing ? 'visible' : 'hidden';
-        const myTurn = !!this.wait && !this.ask;
+        const myTurn = !!this.wait && !this.ask, W = !!this.watching;
+        this.$('trSkip').style.display = W && playing ? '' : 'none'; T.style.display = C.style.display = W ? 'none' : '';
+        this.$('trQuit').textContent = W ? 'Sair (a partida segue)' : 'Desistir';
         const prop = this.RAISE[this.value];
         T.textContent = (prop ? this.CALL_NAME[prop] : 'DOZE') + '!';
         T.disabled = !(myTurn && this._canCall(0));
@@ -964,7 +1007,7 @@ const Truco = {
         if (this.phase === 'setup') return;
         const P = this._people();
         for (let i = 0; i < this.seatsN; i++) {
-            if (i === 0) continue;
+            if (i === 0 && !this.watching) continue;
             const A = this._seatXY(i), r = Math.max(20, this.cw * 0.3), turn = this.turn === i && this.phase === 'play';
             x.save();
             x.shadowColor = 'rgba(0,0,0,0.6)'; x.shadowBlur = 12;
@@ -976,7 +1019,7 @@ const Truco = {
             x.font = `${Math.round(r * 1.15)}px ${this._emoji}`; x.textAlign = 'center'; x.textBaseline = 'middle';
             x.fillText(P[i].emo, A.x, A.y + r * 0.06);
             x.font = `700 ${Math.max(11, Math.round(r * 0.48))}px system-ui, sans-serif`;
-            const label = P[i].name + (this.duo && i === 2 ? (P[i].f ? ' (parceira)' : ' (parceiro)') : ''), tw = x.measureText(label).width + 16, ly = this._seatOf(i) === 'N' ? A.y - r - 14 : A.y + r + 14;
+            const label = P[i].name + (this.duo && i === 2 && !this.watching ? (P[i].f ? ' (parceira)' : ' (parceiro)') : ''), tw = x.measureText(label).width + 16, ly = this._seatOf(i) === 'N' ? A.y - r - 14 : A.y + r + 14;
             x.fillStyle = 'rgba(10,8,6,0.72)'; this._rr(x, A.x - tw / 2, ly - 10, tw, 20, 10); x.fill();
             x.fillStyle = this._team(i) === 0 ? '#bbf7d0' : '#fecdd3'; x.fillText(label, A.x, ly + 0.5);
             x.restore();
@@ -1053,7 +1096,7 @@ const Truco = {
                 x.restore();
             }
             x.font = `800 ${Math.max(11, Math.round(this.cw * 0.14))}px system-ui, sans-serif`; x.fillStyle = S.t === 0 ? 'rgba(187,247,208,0.85)' : 'rgba(254,205,211,0.85)';
-            x.textAlign = 'left'; x.fillText(`${S.t === 0 ? (this.duo ? 'NÓS' : 'VOCÊ') : this._themLabel().toUpperCase()} ${n}`, 0, -L * 0.75);
+            x.textAlign = 'left'; x.fillText(`${this._sideShort(S.t).toUpperCase()} ${n}`, 0, -L * 0.75);
             x.restore();
         }
     },

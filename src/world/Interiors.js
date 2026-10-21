@@ -133,6 +133,7 @@ const Interiors = {
 			const door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2, nearExit = hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3;
 			const cl = a.data.clerk, nearClerk = cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
 			const shop = a.shop, S = Economy.STYLES[shop.style] || {};
+			for (const k of ['pool', 'truco']) if (typeof BarGames !== 'undefined' && BarGames.busy(k) && this.useNear(game, k)) return BarGames.prompt(k);
 			if (this.useNear(game, 'pool')) return `<b>E</b> jogar sinuca<small>bola 8 apostada · de ${brl(Pool.STAKES[0].bet)} a ${brl(Pool.STAKES[Pool.STAKES.length - 1].bet)}</small>`;
 			if (this.useNear(game, 'truco')) return `<b>E</b> jogar truco<small>1 × 1 ou em dupla, apostado · de ${brl(Truco.STAKES[0].bet)} a ${brl(Truco.STAKES[Truco.STAKES.length - 1].bet)}</small>`;
 			const gu = this.gymUse(game);
@@ -176,6 +177,7 @@ const Interiors = {
 			}
 			const a = this.active, o = this.STAGE, door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2;
 			const cl = a.data.clerk;
+			for (const k of ['pool', 'truco']) if (typeof BarGames !== 'undefined' && BarGames.busy(k) && this.useNear(game, k)) { BarGames.open(game, k); return true; }
 			if (this.useNear(game, 'pool')) { Pool.open(game, a.shop); return true; }
 			if (this.useNear(game, 'truco')) { Truco.open(game, a.shop); return true; }
 			const gu = this.gymUse(game);
