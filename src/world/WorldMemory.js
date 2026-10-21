@@ -32,6 +32,7 @@ const WorldMemory = {
         this.events.push(e);
         if (this.events.length > 60) this.events.splice(0, this.events.length - 60);
         if (typeof News !== 'undefined' && News.onEvent) News.onEvent(e);
+        if (typeof Phone !== 'undefined' && Phone.onEvent) Phone.onEvent(e);      // os contatos do celular reagem
         return e;
     },
     crime(kind, x, z, extra = {}) {

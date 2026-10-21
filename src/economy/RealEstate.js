@@ -169,6 +169,8 @@ const RealEstate = {
     },
     buy(game, p, furnished = true) {
         if (this.isOwned(p)) return { ok: false, msg: 'Esse imóvel já é seu' };
+        const rt = this.rivalTaken && this.rivalTaken[p.id];
+        if (rt && Economy.day < rt) return { ok: false, msg: `O Dentinho comprou esse imóvel antes de você 😁 — volta ao mercado em ${rt - Economy.day} dia(s)` };
         const price = this.purchasePrice(p, furnished), refused = this._pay(game, p, price);
         if (refused) return refused;
         this.owned[p.id] = { paid: price, day: Economy.day, reform: 0, furnished, x: p.x, z: p.z, type: p.type };      // (âncora: ver _migrate)
@@ -275,6 +277,7 @@ const RealEstate = {
         const p = this.near(game);
         if (!p || !game.propertyUI) return false;
         if (this.isOwned(p)) return Interiors.enterHome(game, p);                // dono: entra na casa (interior pintado)
+        if (typeof Phone !== 'undefined') Phone.onViewProperty(p);                // (o rival fica sabendo do que você olhou…)
         game.propertyUI.show(p);                                                  // à venda: ficha com preço e compra
         return true;
     },
@@ -295,10 +298,10 @@ const RealEstate = {
         G.flush();
     },
 
-    serialize() { return { owned: this.owned, home: this.homeId }; },
+    serialize() { return { owned: this.owned, home: this.homeId, rivalTaken: this.rivalTaken || {} }; },
     load(s) {
         if (!s) return;
-        this.owned = s.owned || {}; this.homeId = s.home || 'safehouse';
+        this.owned = s.owned || {}; this.homeId = s.home || 'safehouse'; this.rivalTaken = s.rivalTaken || {};
         if (this.built) { this._migrate(); this.refreshHomePois(); } else this._pendingMigrate = true;
     },
 };

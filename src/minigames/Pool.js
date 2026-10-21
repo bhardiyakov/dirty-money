@@ -238,6 +238,19 @@ const Pool = {
         this.$('plBack').onclick = () => this.close();
         this._hud();
     },
+    // Desafio marcado (o rival do celular): adversário próprio, aposta fixa, resultado em onEnd(venceu). opts: { name, emo, lvl, bet, onEnd }.
+    challenge(game, shop, opts) {
+        if (this.active) return;
+        this.open(game, shop);
+        const inv = this.g.inventory; inv.cash -= opts.bet;
+        this.custom = opts; this.lvl = opts.lvl; this.opp = { name: opts.name, emo: opts.emo, bet: opts.bet }; this.sk = this.SKILL[opts.lvl];
+        this.$('plModal').style.display = 'none';
+        this._setupTable();
+        this.turn = 0; this.groups = [null, null]; this.broken = false; this.inHand = false; this.phase = 'aim';
+        this.aim = 0; this.power = 0; this.pull = null; this.shots = 0; this._setSpin(0, 0);
+        this._msg(`${opts.emo} ${opts.name}: “Abre aí, freguês.” — sua vez de abrir`);
+        this._hud();
+    },
     _startMatch(lvl) {
         const o = this.STAKES[lvl], inv = this.g.inventory;
         if (inv.cash < o.bet) return;
@@ -488,6 +501,8 @@ const Pool = {
         this.phase = 'end';
         const won = winner === 0, o = this.opp, g = this.g;
         if (typeof WorldMemory !== 'undefined') WorldMemory.onGame('pool', this.shop, o.name, won, o.bet);
+        const C = this.custom; this.custom = null;
+        if (C && C.onEnd) C.onEnd(won);
         if (won) {
             g.inventory.cash += o.bet * 2;
             const A = g.achievements; if (A) { A.bump('poolWins'); if (this.lvl === 4) A.bump('poolBoss'); }
@@ -498,6 +513,7 @@ const Pool = {
             <div class="big" style="color:${won ? '#86efac' : '#fb7185'}">${won ? 'Você venceu!' : 'Você perdeu'}</div>
             <p class="sub">${won ? 'Você' : o.name} ${why}. ${won ? `Prêmio: <b style="color:#86efac">+${brl(o.bet * 2)}</b>` : `A aposta de ${brl(o.bet)} ficou com ${o.name}.`}</p>
             <div class="row"><button class="ui-btn pri" id="plAgain">Jogar de novo</button><button class="ui-btn" id="plBack">Voltar ao bar</button></div></div>`;
+        if (C) this.$('plAgain').style.display = 'none';
         this.$('plAgain').onclick = () => this._renderSetup();
         this.$('plBack').onclick = () => this.close();
         this._hud();

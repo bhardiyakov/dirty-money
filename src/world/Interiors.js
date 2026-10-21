@@ -133,6 +133,7 @@ const Interiors = {
 			const door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2, nearExit = hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3;
 			const cl = a.data.clerk, nearClerk = cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
 			const shop = a.shop, S = Economy.STYLES[shop.style] || {};
+			if (typeof Phone !== 'undefined' && this.useNear(game, 'pool') && Phone.rivalPrompt(shop)) return Phone.rivalPrompt(shop);      // o Dentinho te esperando na sinuca
 			if (typeof BarGames !== 'undefined' && BarGames.busy('pool') && this.useNear(game, 'pool')) return BarGames.prompt('pool');
 			if (typeof BarGames !== 'undefined' && this.useNear(game, 'truco')) return BarGames.tablePrompt();      // a mesa de jogos: truco, dominó, porrinha, torneio
 			if (this.useNear(game, 'pool')) return `<b>E</b> jogar sinuca<small>bola 8 apostada · de ${brl(Pool.STAKES[0].bet)} a ${brl(Pool.STAKES[Pool.STAKES.length - 1].bet)}</small>`;
@@ -178,6 +179,7 @@ const Interiors = {
 			}
 			const a = this.active, o = this.STAGE, door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2;
 			const cl = a.data.clerk;
+			if (typeof Phone !== 'undefined' && this.useNear(game, 'pool') && Phone.rivalPlay(game, a.shop)) return true;
 			if (typeof BarGames !== 'undefined' && BarGames.busy('pool') && this.useNear(game, 'pool')) { BarGames.open(game, 'pool'); return true; }
 			if (typeof BarGames !== 'undefined' && this.useNear(game, 'truco')) { BarGames.table(game); return true; }
 			if (this.useNear(game, 'pool')) { Pool.open(game, a.shop); return true; }
@@ -451,6 +453,7 @@ const Interiors = {
 		if (typeof Bubbles !== 'undefined') Bubbles.clear();
 		if (!shop.home && !shop.safehouse && typeof WorldMemory !== 'undefined') this._greet(game, shop, life);
 		if (typeof News !== 'undefined') News.tvOn(shop);                     // bar, lanchonete, padaria, pizzaria: a TV ligada no jornal
+		if (typeof Phone !== 'undefined' && !shop.home && !shop.safehouse) Phone.onEnterShop(game, shop);      // compromissos do celular (Neguinho, Dentinho)
 	},
 
 	// O atendente te reconhece (WorldMemory): cumprimenta pelo que lembra de você; um cliente cochicha; a loja assaltada avisa do PM.
