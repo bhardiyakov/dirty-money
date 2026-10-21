@@ -100,6 +100,7 @@ const Phone = {
         if (Math.random() < 0.4 && !this.loans.length) opts.push(['cida', 'loan', 1]);
         if (!this.jobs.length) opts.push(['baiano', 'job', 2]);
         if (typeof Standing !== 'undefined' && Standing.heat > 35) opts.push(['brito', 'warn', 3]);
+        if (typeof Personas !== 'undefined' && Object.values(Personas.rel).some((r) => r.contact)) opts.push([null, 'persona', 2]);
         const arc = typeof RivalArc !== 'undefined' ? RivalArc.outcome : null;
         if (arc === 'dead' || arc === 'exiled') { /* (o Dentinho saiu da história) */ }
         else if (arc === 'partner') opts.push(['dentinho', 'tip', 1]);
@@ -129,6 +130,7 @@ const Phone = {
         this._msg('cida', F.fear >= 40 ? this._pick(['O bairro todo tá falando de você… tão com medo, meu filho. Cuidado, viu?', 'Ouvi na padaria que você anda aprontando. Juízo!']) : this._pick(['Todo mundo te elogiando por aqui, que orgulho! 🥰', 'A vizinhança gosta muito de você, sabia?']));
         this._t('cida', 1);
     },
+    _gen_persona() { const r = Personas.phoneGen(); if (r) this._msg(r[0], r[1]); },
     _gen_loan() { this._msg('cida', 'Meu filho, me empresta R$ 200 pra pagar a conta de luz? Te devolvo semana que vem, prometo 🙏', [{ label: 'Empresto (R$ 200)', act: 'loanYes' }, { label: 'Agora não dá', act: 'loanNo' }]); },
     _gen_job(g) {
         const P = g.player.position, M = g.nav && g.nav.map; if (!M) return;

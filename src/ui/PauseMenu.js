@@ -29,6 +29,7 @@ class PauseMenu {
 			joalheria: { label: 'Joalheria', icon: 'jewels' },
 			negocio: { label: 'Seus negócios', icon: 'biz', mine: true },
 			boca_rival: { label: 'Dentinho', icon: 'drugs' },
+			persona: { label: 'Conhecido', icon: 'home' },
 			home: { label: 'Safe house', icon: 'home' },
 			imovel: { label: 'Imóvel à venda', icon: 'home' },
 			baile: { label: 'Baile funk', icon: 'music' },
