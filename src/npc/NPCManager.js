@@ -67,7 +67,7 @@ class NPCManager {
     }
 
     _roleFor(r) {
-        const M = Config.npc.mix;
+        const M = (typeof StreetLife !== 'undefined' && StreetLife.mix()) || Config.npc.mix;      // (a hora do dia muda quem corre, toma sol, nada)
         return r < M.jog ? 'jog' : (r < M.jog + M.sun ? 'sun' : (r < M.jog + M.sun + M.swim ? 'swim' : null));
     }
 
@@ -101,7 +101,7 @@ class NPCManager {
             if (npc.party || !npc.alive || npc.rag || npc.state === 'HURT' || npc.surrendered || npc.state === 'FLEE') continue;
             const dx = npc.position.x - f.x, dz = npc.position.z - f.z;
             if (dx * dx + dz * dz < far2) continue;
-            const { pos, role } = this._place(this._roleFor(Math.random()), 75, 200);
+            const { pos, role } = this._place(this._roleFor(Math.random()), this.recycleMin || 75, 200);      // (de madrugada: reaparece longe — StreetLife)
             npc.relocate(pos, role, this._style(pos, role));
             return;                                            // um por vez (sem engasgo)
         }

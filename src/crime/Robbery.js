@@ -272,7 +272,9 @@ const Robbery = {
         if (A.kind === 'register') {
             s.done.register = true;
             const ago = typeof WorldMemory !== 'undefined' ? WorldMemory.daysSinceRobbed(s.shop) : null, thin = ago != null && ago <= 10;
-            const v = Math.round(range(this.REG[s.tier]) * (thin ? 0.4 : 1) / 10) * 10; inv.addCash(v); s.loot.cash += v;
+            const tip = typeof StreetLife !== 'undefined' ? StreetLife.tipMul(s.shop) : 1;          // (a dica da rua: o caixa cheio nesse horário)
+            const v = Math.round(range(this.REG[s.tier]) * (thin ? 0.4 : 1) * tip / 10) * 10; inv.addCash(v); s.loot.cash += v;
+            if (tip > 1) game._delayed.push({ t: 1.4, fn: () => game._flash('💡 A dica era boa: o caixa estava cheio') });
             game._flash(`💵 Caixa: +${brl(v)}${thin ? ' — depois do último assalto eles quase não deixam dinheiro no caixa' : ''}`); AudioFX.blip(980, 0.12, 0.2);
         } else if (A.kind === 'safe') {
             s.done[A.key] = 1;
