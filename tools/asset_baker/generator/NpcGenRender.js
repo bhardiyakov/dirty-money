@@ -281,11 +281,15 @@ function NpcGenRender(G) {
         // Vincos entre partes (braço na frente do corpo) escurecem em vez de virar linha preta. Visual "3D" (G.LINES = false, o padrão):
         // SEM contorno preto — nem o externo nem os traços onde uma parte passa na frente da outra (viram sombra de contato macia) — e a
         // sombra no chão sai com borda suave (alfa em degradê). G.LINES = true volta aos traços do desenho cartunesco.
+        // Estilo CARTUM (G.TOON, protótipo — desligado; junto com G.LINES = true): a luz vira 3 faixas chapadas (sombra, base, luz:
+        // abaixo de `dark`, até `lit`, acima), a textura (listras, mechas) por cima com peso `tex`, o brilho só acima de `spec`, e o
+        // contorno externo com `outline` px na resolução de referência (o dobro em alta). Sombra no chão macia, como no visual 3D.
         _smooth(out, c) {
             const { F, DOM, ZZ, HH, MAT, NXa, NYa, NZa, TN, cw, ch, bx0, by0, np_, water, depth } = c;
             const W = this.W, code = out.code, alpha = out.alpha, light = out.light = new Uint8Array(W * this.H), L = this.cam.L, k = this.k;
             const UP = [0, this.cam.cos, -this.cam.sin], HV = nrm([L[0], L[1], L[2] - 1]), RIM = nrm([0.62, 0.42, 0.66]);
             const rad = max(2, Math.round(4 * k)), thr = 5.2 * k, nwin = (2 * rad + 1) * (2 * rad + 1) - 1, kk = k / 0.5;
+            const toon = !!G.TOON, TOON = toon && Object.assign({ dark: 0.42, lit: 0.78, tex: 0.1, spec: 0.2, outline: 2 }, G.TOON);
             const idx = (y, x) => (((y % ch) + ch) % ch) * cw + (((x % cw) + cw) % cw);
             const LT = new Uint8Array(np_), LN = new Uint8Array(np_);
             for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
@@ -326,6 +330,11 @@ function NpcGenRender(G) {
                 let lv = (0.07 + 0.17 * hemi + 0.8 * dif) * ao * crease + rim + 0.06 * TN[i];
                 const S = SHINE[m];
                 let sp = S ? max(0, nx * HV[0] + ny * HV[1] + nz * HV[2]) ** S[0] * S[1] * ao * crease : 0;
+                if (toon) {
+                    const s = (0.25 + 0.75 * dif) * ao * crease + rim * 0.6;
+                    lv = (s < TOON.dark ? 0.25 : s < TOON.lit ? 0.5 : 0.75) + TOON.tex * TN[i];
+                    sp = sp > TOON.spec ? 0.4 : 0;
+                }
                 if (m === M.eye) { lv = 0.08; sp = sp > 0.15 ? 0.9 : 0; }                // pupila escura com um brilho
                 else if (m === M.eyew) lv = 0.6 + 0.25 * dif;
                 else if (m === M.brow) { lv = 0.1; sp = 0; }
@@ -362,6 +371,16 @@ function NpcGenRender(G) {
                 if (F[i] || !lines) continue;
                 CO[i] = C.OUTLINE; AL[i] = 255; F[i] = 2;
             }
+            // contorno externo mais grosso (G.TOON.outline px na resolução de referência × k)
+            const ow = toon ? max(1, Math.round(TOON.outline * kk / 2)) : 1;
+            for (let r = 2; r <= ow; r++) {
+                for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+                    const i = y * cw + x;
+                    if (F[i] || UNDER[i]) continue;
+                    if (at(F, y, x - 1) === r || at(F, y, x + 1) === r || at(F, y - 1, x) === r || at(F, y + 1, x) === r) F[i] = 100 + r;
+                }
+                for (let i = 0; i < np_; i++) if (F[i] === 100 + r) { F[i] = r + 1; CO[i] = C.OUTLINE; AL[i] = 255; }
+            }
             // luz em 64 níveis (bits altos) + cobertura da borda nos 2 bits baixos (0 = cheio, 1–3 = 75/50/25%: o jogo vira alfa)
             const COV = c.COV, sq = c.sq || 4;
             for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
@@ -372,7 +391,7 @@ function NpcGenRender(G) {
             }
             for (const fx of c.effects) this._effect(code, alpha, depth, fx, c.Ryaw);
             if (c.shadow && c.pose.shadow && !hasWater) {
-                if (lines) {
+                if (lines && !toon) {
                     const sh = this._shadow(c.nsh, c.pose);
                     for (let i = 0; i < W * this.H; i++) if (sh[i] && alpha[i] === 0) { code[i] = C.SHADOW; alpha[i] = SHADOW_RGBA[3]; }
                 } else {

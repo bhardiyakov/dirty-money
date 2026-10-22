@@ -48,6 +48,12 @@
     <script src="./generator/NpcGenMesh.js"></script>
     <script>
         const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G);
+        // ?estilo=a | b: o protótipo do estilo cartum (docs/npcs.md) — a: proporções de adulto; b: robusto, como a arte de referência
+        const EST = new URLSearchParams(location.search).get('estilo');
+        if (EST) {
+            G.LINES = true; G.TOON = { face: 1.25 };
+            G.ADULT = Object.assign({}, G.ADULT, EST === 'b' ? { leg: 1.3, torso: 1.15, arm: 1.2, head: 0.98, hand: 1.15, neck: 1.2, width: 1.0, headUp: 12 } : { head: 0.86, hand: 1.1, headUp: 14 });
+        }
         const $ = (id) => document.getElementById(id);
         for (const id of Object.keys(G.TYPES)) $('type').insertAdjacentHTML('beforeend', `<option>${id}</option>`);
         // direções do JOGO (0 = norte, de costas; sentido horário, 22,5° cada); a lista começa no sul (de frente)

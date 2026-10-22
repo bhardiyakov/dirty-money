@@ -173,6 +173,7 @@ function NpcGenAnims(G) {
             B.pelvis = M4(Rp, V.sub(hc2, down));
             B.chest = mm4(B.pelvis, M4(loc(Bo.pelvis, Bo.chest), V.mul(RIG.chest[1], kt)));
             B.head = mm4(B.chest, M4(loc(Bo.chest, Bo.head), [0, 0, RIG.head[1][2] * kt + (A.neck || 0)]));
+            if (A.headUp) B.head = mm4(B.head, M4(Rx(deg(A.headUp))));
             const UP2 = UPPER * ka, LO2 = LOWER * ka;
             const dzW = water ? pt4(Bo.chest, [0, 0, RIG.uarm_R[1][2]])[2] - pt4(B.chest, [0, 0, RIG.uarm_R[1][2] * kt])[2] : null;      // (o deslocamento da água, abaixo)
             const ikT = {};                                                       // alvos adultos usados nos braços IK (para medir: motion.cjs)

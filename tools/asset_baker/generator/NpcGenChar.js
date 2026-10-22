@@ -115,6 +115,7 @@ function NpcGenChar(G) {
     // adulto (NpcGenAnims: Pose.adult) e cada parte assada é esticada no comprimento do osso (shapeFor). Resultado: ~5,3 cabeças.
     // ADULT = null volta ao desenho original do pacote (validate.html compara com os PNGs dele).
     // (cabeça 0,66: um pouco maior que a do adulto real — vista do alto, o rosto e o cabelo é que dizem quem é quem)
+    // (headUp, opcional: a cabeça erguida em graus — com a câmera a 56°, o rosto aparece mais; usado no protótipo do estilo cartum)
     const ADULT = { leg: 1.7, torso: 1.35, arm: 1.38, head: 0.66, hand: 0.85, neck: 2.0, width: 0.9 };
     // Abertura dos braços nas poses FK de descanso (abdução ≤ 18°) — 0,6: soltos ao lado do corpo, sem o ar de "gorila" do pacote.
     G.ARM_ABD = 0.6;
@@ -204,7 +205,8 @@ function NpcGenChar(G) {
         const angry = s.eyes === 'angry', female = s.gender === 'f';
         return (P, N, mat, pid, d1, d2, n) => {
             const tone = new Int16Array(n);
-            const ex = 5.4, ez = 10.2, rx = 3.0, rz = angry ? 2.0 : 1.8, slope = angry ? 0.42 : 0.1;
+            const fk = (G.TOON && G.TOON.face) || 1;                            // estilo cartum (G.TOON.face): olhos e sobrancelhas maiores
+            const ex = 5.4, ez = 10.2, rx = 3.0 * fk, rz = (angry ? 2.0 : 1.8) * fk, slope = angry ? 0.42 : 0.1;
             for (let i = 0; i < n; i++) {
                 const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2], front = N[i * 3 + 1] > 0.25, skin = mat[i] === M.skin, ax = abs(x);
                 const inside = ((ax - ex) / rx) ** 2 + ((z - ez) / rz) ** 2 < 1.0;
@@ -212,7 +214,7 @@ function NpcGenChar(G) {
                 const eye = skin && front && inside && lid && y > 6;
                 if (eye) mat[i] = M.eye;
                 if (eye && ax - ex > 0.55 && z > ez - 0.9) mat[i] = M.eyew;
-                const bz = ez + (angry ? 2.45 : 2.9) + slope * (ax - ex), bw = female ? 0.42 : 0.55;
+                const bz = ez + (angry ? 2.45 : 2.9) * fk + slope * (ax - ex), bw = (female ? 0.42 : 0.55) * fk * fk;
                 if (skin && front && abs(z - bz) < bw && ax > 2.2 && ax < 7.8 && y > 6) mat[i] = M.brow;
                 const mouth = skin && front && ax < (female ? 1.6 : 1.8) && abs(z - 3.4) < 0.5 && y > 6;
                 if (mouth) mat[i] = M.mouth;

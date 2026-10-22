@@ -48,6 +48,19 @@ arquivos estáticos em `assets/baked/` — páginas `.webp` sem perdas, manifest
 - **Redução no jogo** (`NpcArt`, uniform `mini`): com o boneco menor que o atlas (texels por pixel > 1,3 — dirigindo, celular), o
   shader tira a média de n×n amostras sobre a pegada do pixel (até 4×4) em vez do bilinear de 4 amostras, que serrilhava e tremia.
 
+## Estilo cartum (protótipo, desligado)
+
+Para chegar perto de uma arte de referência "cartum" (contorno grosso, sombras chapadas, cabeça e mãos grandes), o gerador tem
+opções que **não mudam nada** enquanto estão desligadas (o desenho padrão sai idêntico, pixel a pixel):
+
+- `G.LINES = true` + `G.TOON = { dark, lit, tex, spec, outline, face }` (`NpcGenRender._smooth`): a luz vira 3 faixas chapadas,
+  brilho só acima de `spec`, contorno externo de `outline` px (o dobro em alta), olhos e sobrancelhas × `face` (`makeTexHead`).
+- `G.ADULT.headUp` (graus, `Pose.adult`): a cabeça um pouco erguida — com a câmera a 56°, o rosto aparece mais.
+- Prévia: `tools/asset_baker/preview.html?estilo=a` (proporções de adulto, cabeça 0,86) ou `?estilo=b` (robusto: cabeça 0,98, pernas
+  curtas, mãos grandes). Nada disso está nos atlas: para valer no jogo, ligar no `bake.cjs` e gerar tudo de novo (`npm run bake`).
+- O tamanho manda: no jogo um adulto tem ~90 px de altura na tela (zoom padrão, 1080p). A referência reduzida a esse tamanho
+  continua legível por causa do estilo (contorno, cores chapadas, cabeça grande), não da resolução — o atlas já tem a resolução da tela.
+
 ## Corpo da malha 3D (`NpcGenMesh`, `assets/npcs/malha3d.js`)
 
 O corpo de todos os personagens (NPCs e jogador) vem do **personagem realista 3D** (pacote "personagem_3d_realista", MakeHuman, CC0:
