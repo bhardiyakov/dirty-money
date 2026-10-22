@@ -234,7 +234,7 @@ const RivalArc = {
         if (!on) { if (G.meshes) for (const m of G.meshes) m.dispose(); G.meshes = null; return; }
         if (G.meshes) return;
         const sc = this.game.scene, out = G.meshes = [], x = G.x, z = G.z;
-        const mat = (c) => { const m = new BABYLON.StandardMaterial('rvM', sc); m.diffuseColor = BABYLON.Color3.FromHexString(c); m.specularColor = BABYLON.Color3.Black(); return m; };
+        const mat = (c) => FlatMat.get(sc, c);
         const box = (w, h, d, px, py, pz, c) => { const b = BABYLON.MeshBuilder.CreateBox('rvBox', { width: w, height: h, depth: d }, sc); b.position.set(px, py, pz); b.material = mat(c); b.isPickable = false; out.push(b); return b; };
         if (G.boca && !G.boca.razed) {
             box(1.2, 0.08, 0.8, x, 0.75, z, '#e8e8e8'); box(0.06, 0.72, 0.06, x - 0.5, 0.36, z - 0.32, '#cfcfcf'); box(0.06, 0.72, 0.06, x + 0.5, 0.36, z + 0.32, '#cfcfcf');

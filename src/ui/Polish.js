@@ -9,6 +9,24 @@
 //              atribuído pelo que você estava fazendo quando o patrimônio mudou. Aparece no Status (menu) — serve para equilibrar.
 // ============================================================================
 
+// Materiais de cor lisa COMPARTILHADOS (festas, boca do Dentinho, carrinho do ambulante, a cadeira do Zé): um por cor, nunca
+// descartados. Antes cada caixinha criava o seu e a malha descartada deixava o material para trás (vazava a cada festa).
+const FlatMat = {
+    _c: new Map(),
+    get(sc, hex, emissive = false, twoSided = false) {
+        const k = `${sc.uid}|${hex}|${emissive ? 1 : 0}|${twoSided ? 1 : 0}`;
+        let m = this._c.get(k);
+        if (m) return m;                              // (a chave inclui a cena: cena nova → material novo)
+        m = new BABYLON.StandardMaterial('flat' + hex, sc);
+        m.diffuseColor = BABYLON.Color3.FromHexString(hex); m.specularColor = BABYLON.Color3.Black();
+        if (emissive) m.emissiveColor = BABYLON.Color3.FromHexString(hex);
+        if (twoSided) m.backFaceCulling = false;
+        m.freeze();
+        this._c.set(k, m);
+        return m;
+    },
+};
+
 const Life = {
     LEVELS: ['auto', 'baixa', 'media', 'alta'],
     LABEL: { auto: 'Automático', baixa: 'Baixa', media: 'Média', alta: 'Alta' },

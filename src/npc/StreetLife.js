@@ -174,7 +174,7 @@ const StreetLife = {
     },
     _cart(game, x, z) {
         const sc = game.scene, out = [];
-        const mat = (c) => { const m = new BABYLON.StandardMaterial('cartM', sc); m.diffuseColor = BABYLON.Color3.FromHexString(c); m.specularColor = BABYLON.Color3.Black(); return m; };
+        const mat = (c) => FlatMat.get(sc, c);
         const box = BABYLON.MeshBuilder.CreateBox('cart', { width: 1.0, height: 0.75, depth: 0.6 }, sc); box.position.set(x, 0.55, z); box.material = mat('#d9d2c0'); out.push(box);
         const top = BABYLON.MeshBuilder.CreateCylinder('cartUmb', { diameterTop: 0, diameterBottom: 1.7, height: 0.35, tessellation: 12 }, sc); top.position.set(x, 1.85, z); top.material = mat(this._pick(['#d9453a', '#f2b705', '#2f6fb5', '#2f8a48'])); out.push(top);
         const pole = BABYLON.MeshBuilder.CreateCylinder('cartPole', { diameter: 0.05, height: 1.3 }, sc); pole.position.set(x, 1.15, z); pole.material = mat('#777777'); out.push(pole);
