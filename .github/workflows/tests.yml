@@ -15,14 +15,14 @@ permissions:
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04            # (o Playwright 1.56 ainda não suporta o Ubuntu 26.04 do ubuntu-latest)
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Instalar o Playwright e o Chromium
         run: |
