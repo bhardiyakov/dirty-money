@@ -128,7 +128,20 @@ class EquipUI {
             .eq-doll canvas { image-rendering: pixelated; cursor: pointer; }
             @media (max-width: 1180px) { .eq-wrap { grid-template-columns: minmax(400px, 1fr) minmax(300px, 380px); } .eq-attr { grid-column: 1 / -1; order: 3; } .eq-attr .body { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); column-gap: 18px; } }
             @media (max-height: 820px) { .eq-slots { gap: 4px; } .eq-slot .bx { width: 54px; height: 54px; font-size: 26px; } .eq-slot .bx img { width: 44px; } .eq-slot .nm { min-height: 0; } }
-            @media (max-width: 860px) { .eq-wrap { grid-template-columns: 1fr; } .eq-center { min-height: 430px; } .eq-stage { grid-template-columns: 92px 1fr 92px; } .eq-slot .bx { width: 54px; height: 54px; font-size: 26px; } }`;
+            @media (max-width: 860px) { .eq-wrap { grid-template-columns: 1fr; } .eq-center { min-height: 430px; } .eq-stage { grid-template-columns: 92px 1fr 92px; } .eq-slot .bx { width: 54px; height: 54px; font-size: 26px; } }
+            /* celular deitado (tela baixa): boneco e encaixes à esquerda, itens à direita, atributos embaixo; tudo menor */
+            @media (max-height: 480px) {
+                .eq-wrap { grid-template-columns: minmax(280px, 1fr) minmax(240px, 1fr); gap: 8px; grid-auto-rows: auto; }
+                .eq-attr { grid-column: 1 / -1; order: 3; }
+                .eq-center { min-height: 290px; } .eq-center .px-title, .eq-col .px-title { padding: 8px 12px 4px !important; }
+                .eq-stage { grid-template-columns: 64px 1fr 64px; padding: 0 6px 6px; }
+                .eq-slots { gap: 2px; } .eq-slot { gap: 1px; } .eq-slot .lb { font-size: 8px; letter-spacing: 0.04em; } .eq-slot .nm { display: none; }
+                .eq-slot .bx { width: 40px; height: 40px; font-size: 19px; border-radius: 10px; } .eq-slot .bx img { width: 32px; }
+                .eq-cats { padding: 0 8px 6px; gap: 3px; } .eq-cat { width: 34px; height: 32px; font-size: 16px; } .eq-catname { padding: 0 10px 4px; }
+                .eq-grid { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 6px; padding: 2px 8px 8px; min-height: 90px; }
+                .eq-card { padding: 5px 3px; } .eq-card .em { font-size: 24px; height: 30px; } .eq-card .em img { width: 44px; } .eq-card .t { font-size: 10px; min-height: 0; }
+                .eq-det { margin: 0 8px 8px; padding: 8px 10px; font-size: 12px; } .eq-det h4 { font-size: 15px; }
+            }`;
         document.head.appendChild(css);
     }
 
