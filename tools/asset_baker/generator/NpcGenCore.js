@@ -263,6 +263,16 @@ function NpcGenCore(G) {
             m++;
         }
         const P32 = pos.subarray(0, m * 3), N32 = nr.subarray(0, m * 3), MT = mat.subarray(0, m), TN = tone.subarray(0, m);
+        // expressões do rosto (part.faces: textura de cada uma): os mesmos pontos, só o material e o tom mudam — { expr: { mat, tone } }
+        let faces = null;
+        if (part.faces) {
+            faces = {};
+            for (const [e, tex] of Object.entries(part.faces)) {
+                const fm = new Int16Array(MT), ft = tex(P32, N32, fm, pid.subarray(0, m), d1.subarray(0, m), d2.subarray(0, m), m), f8 = new Int8Array(m);
+                for (let i = 0; i < m; i++) f8[i] = max(-3, min(3, TN[i] + ft[i]));
+                faces[e] = { mat: fm, tone: f8 };
+            }
+        }
         if (part.tex) {
             // textura procedural (olhos, listras, cadarço…): pode trocar o material e mexe no tom
             const t2 = part.tex(P32, N32, MT, pid.subarray(0, m), d1.subarray(0, m), d2.subarray(0, m), m);
@@ -270,7 +280,7 @@ function NpcGenCore(G) {
         }
         const T8 = new Int8Array(m);
         for (let i = 0; i < m; i++) T8[i] = max(-3, min(3, TN[i]));
-        return { name: part.name, bone: part.bone, group: part.group, pos: new Float32Array(P32), nrm: new Float32Array(N32), mat: new Int16Array(MT), tone: T8, n: m };
+        return { name: part.name, bone: part.bone, group: part.group, pos: new Float32Array(P32), nrm: new Float32Array(N32), mat: new Int16Array(MT), tone: T8, n: m, faces };
     }
 
     // ------------------------------------------------------------------ câmera ortográfica (elevação 56°)

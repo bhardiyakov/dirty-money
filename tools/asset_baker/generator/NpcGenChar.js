@@ -115,8 +115,9 @@ function NpcGenChar(G) {
     // adulto (NpcGenAnims: Pose.adult) e cada parte assada é esticada no comprimento do osso (shapeFor). Resultado: ~5,3 cabeças.
     // ADULT = null volta ao desenho original do pacote (validate.html compara com os PNGs dele).
     // (cabeça 0,66: um pouco maior que a do adulto real — vista do alto, o rosto e o cabelo é que dizem quem é quem)
-    // (headUp 10: a cabeça um pouco erguida, em graus — com a câmera a 56°, o rosto aparece ~25% mais alto)
-    const ADULT = { leg: 1.7, torso: 1.35, arm: 1.38, head: 0.66, hand: 0.85, neck: 2.0, width: 0.9, headUp: 10 };
+    // (headUp 10: a cabeça um pouco erguida, em graus — com a câmera a 56°, o rosto aparece ~25% mais alto; head 0,72: o rosto com as
+    // expressões ganha uns pixels, sem mudar o porte de adulto)
+    const ADULT = { leg: 1.7, torso: 1.35, arm: 1.38, head: 0.72, hand: 0.85, neck: 2.0, width: 0.9, headUp: 10 };
     // Abertura dos braços nas poses FK de descanso (abdução ≤ 18°) — 0,6: soltos ao lado do corpo, sem o ar de "gorila" do pacote.
     G.ARM_ABD = 0.6;
     // Escala [x, y, z] de uma parte no espaço do osso (z = ao longo do osso). null = sem mudança.
@@ -201,43 +202,70 @@ function NpcGenChar(G) {
 
     // ------------------------------------------------------------------ texturas procedurais (sobre a nuvem de pontos)
     // Assinatura: (P, N, mat, pid, d1, d2, n) → tons (Int16Array); `mat` pode ser alterado no lugar.
+    // Rosto (olhos, sobrancelhas, boca) conforme a EXPRESSÃO em s.eyes: 'neutral' ou 'angry' (o jeito de cada um, parado) e as do
+    // momento (FACES — o clipe escolhe, NpcGenAnims.exprOf): 'angry' (de arma na mão), 'rage' (batendo, atirando: sobrancelhas em V
+    // baixas, olhos apertados, dentes trincados), 'scared' (olhos redondos arregalados, pupila pequena, sobrancelhas erguidas, boca em
+    // "O"), 'pain' (olhos espremidos "> <", sobrancelhas franzidas, boca aberta) e 'closed' (olhos fechados: desmaiado, morto).
+    // Coordenadas da cabeça: olho direito em (ex, ez), frente = +y.
+    const FACES = ['angry', 'rage', 'scared', 'pain', 'closed'];
     function makeTexHead(s) {
-        const angry = s.eyes === 'angry', female = s.gender === 'f';
+        const ey = s.eyes || 'neutral', angry = ey === 'angry', female = s.gender === 'f';
         return (P, N, mat, pid, d1, d2, n) => {
             const tone = new Int16Array(n);
             const fk = (G.TOON && G.TOON.face) || 1;                            // estilo cartum (G.TOON.face): olhos e sobrancelhas maiores
-            const ex = 5.4, ez = 10.2, rx = 3.0 * fk, rz = (angry ? 2.0 : 1.8) * fk, slope = angry ? 0.42 : 0.1;
+            const ex = 5.4, ez = 10.2, rx = 3.0 * fk, rz = (angry ? 2.0 : 1.8) * fk, slope = angry ? 0.42 : 0.1, bw0 = (female ? 0.42 : 0.55) * fk * fk;
             for (let i = 0; i < n; i++) {
                 const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2], front = N[i * 3 + 1] > 0.25, skin = mat[i] === M.skin, ax = abs(x);
-                const inside = ((ax - ex) / rx) ** 2 + ((z - ez) / rz) ** 2 < 1.0;
-                const lid = z < ez + 0.95 + slope * (ax - ex);
-                const eye = skin && front && inside && lid && y > 6;
-                if (eye) mat[i] = M.eye;
-                if (eye && ax - ex > 0.55 && z > ez - 0.9) mat[i] = M.eyew;
-                const bz = ez + (angry ? 2.45 : 2.9) * fk + slope * (ax - ex), bw = (female ? 0.42 : 0.55) * fk * fk;
-                if (skin && front && abs(z - bz) < bw && ax > 2.2 && ax < 7.8 && y > 6) mat[i] = M.brow;
-                const mouth = skin && front && ax < (female ? 1.6 : 1.8) && abs(z - 3.4) < 0.5 && y > 6;
+                const face = skin && front && y > 6, ox = ax - ex, oz = z - ez;
+                let mouth = false;
+                if (!face) { /* (só a pele da frente recebe o rosto) */ }
+                else if (ey === 'scared') {
+                    const r = 2.5 * fk;
+                    if (ox * ox + oz * oz < r * r) mat[i] = (ox + 0.25) ** 2 + (oz + 0.1) ** 2 < (1.05 * fk) ** 2 ? M.eye : M.eyew;
+                    if (abs(z - (ez + 3.5 * fk - 0.32 * ox)) < bw0 && ax > 2.2 && ax < 7.8) mat[i] = M.brow;
+                    mouth = (x / 1.35) ** 2 + ((z - 3.0) / 1.15) ** 2 < 1;
+                } else if (ey === 'pain') {
+                    if (ox > -2.5 && ox < 2.5 && abs(abs(oz) - 0.5 * (ox + 2.5) * 0.5) < 0.42 * fk) mat[i] = M.eye;
+                    if (abs(z - (ez + 2.6 * fk - 0.45 * ox)) < bw0 * 1.15 && ax > 2.2 && ax < 7.8) mat[i] = M.brow;
+                    mouth = ax < 2.3 && abs(z - 3.2) < 0.7;
+                    if (mouth && ax < 1.9 && abs(z - 3.45) < 0.22) { mat[i] = M.eyew; mouth = false; }        // (dentes)
+                } else if (ey === 'closed') {
+                    if (abs(ox) < 2.4 * fk && abs(oz + 0.5 + 0.08 * ox * ox) < 0.38 * fk) mat[i] = M.eye;
+                    if (abs(z - (ez + 2.9 * fk + 0.1 * ox)) < bw0 * 0.9 && ax > 2.2 && ax < 7.8) mat[i] = M.brow;
+                    mouth = ax < 1.2 && abs(z - 3.3) < 0.45;
+                } else {
+                    const rage = ey === 'rage', sl = rage ? 0.7 : slope, lidZ = rage ? 0.35 : 0.95;
+                    const eye = (ox / rx) ** 2 + (oz / (rage ? 2.0 * fk : rz)) ** 2 < 1.0 && oz < lidZ + sl * ox;
+                    if (eye) mat[i] = ox > 0.55 && oz > -0.9 ? M.eyew : M.eye;
+                    const bz = ez + (rage ? 1.75 : angry ? 2.45 : 2.9) * fk + sl * ox;
+                    if (abs(z - bz) < bw0 * (rage ? 1.3 : 1) && ax > 2.2 && ax < 7.8) mat[i] = M.brow;
+                    if (rage) {
+                        mouth = ax < 2.5 && abs(z - 3.2 + 0.12 * ax) < 0.62;
+                        if (mouth && ax < 2.1 && abs(z - 3.2 + 0.12 * ax) < 0.25) { mat[i] = M.eyew; mouth = false; }      // (dentes trincados)
+                    } else mouth = ax < (female ? 1.6 : 1.8) && abs(z - 3.4) < 0.5;
+                }
                 if (mouth) mat[i] = M.mouth;
                 if (skin && front && ax < 1.3 && z > 5.3 && z < 6.2 && y > 9) tone[i] -= 1;
                 if (s.beard === 'beard' || s.beard === 'goatee') {
-                    let jaw = skin && z < 6.6 && y > -1.5 && !mouth;
+                    let jaw = mat[i] === M.skin && z < 6.6 && y > -1.5;
                     if (s.beard === 'goatee') jaw = jaw && ax < 3.2 && z < 3.0;
                     else jaw = jaw && !(ax < 2.4 && z > 3.9);
                     if (jaw) mat[i] = M.beard;
                 }
                 if (s.beard === 'beard' || s.beard === 'mustache') {
-                    if (skin && front && ax < 3.0 && z > 3.9 && z < 5.1 && y > 8) mat[i] = M.beard;
+                    if (mat[i] === M.skin && front && ax < 3.0 && z > 3.9 && z < 5.1 && y > 8) mat[i] = M.beard;
                 }
                 if (s.glasses) {
                     const band = front && abs(z - (ez + 0.3)) < 1.75 && ax < 8.8 && y > 5 && mat[i] !== M.hair;
                     if (band) { mat[i] = M.lens; if (x < -5.0 && x > -6.4 && z > ez + 0.6) tone[i] += 3; }
+                    else if (z > 6.5 && (mat[i] === M.eye || mat[i] === M.eyew)) mat[i] = M.skin;      // (o olho arregalado não escapa da lente)
                 }
                 if (s.mask === 'balaclava') {
                     const hole = front && abs(z - ez) < 2.6 && ax < 8.8 && y > 4;
-                    if (!hole && (mat[i] === M.skin || mat[i] === M.mouth || mat[i] === M.brow)) mat[i] = M.hat;
+                    if (!hole && (mat[i] === M.skin || mat[i] === M.mouth || mat[i] === M.brow || mat[i] === M.eyew || mat[i] === M.eye)) mat[i] = M.hat;      // (os dentes também)
                 } else if (s.mask === 'bandana') {
-                    const low = z < 6.4 && y > -3.0 && mat[i] !== M.eye && mat[i] !== M.eyew;
-                    if (low && (mat[i] === M.skin || mat[i] === M.mouth || mat[i] === M.beard)) mat[i] = M.accent;
+                    const low = z < 6.4 && y > -3.0;                                  // (abaixo dos olhos: os dentes também somem)
+                    if (low && (mat[i] === M.skin || mat[i] === M.mouth || mat[i] === M.beard || mat[i] === M.eyew)) mat[i] = M.accent;
                 }
             }
             return tone;
@@ -545,6 +573,8 @@ function NpcGenChar(G) {
         ];
         if (s.beard === 'beard') head.push(new Ellipsoid([0, 5.2, 3.6], [9.4, 8.2, 5.0], S.skin, { blend: 2.0 }));
         parts.head = new Part('head', 'head', GR.face, head, makeTexHead(s));
+        parts.head.faces = {};                                                // as expressões do momento (as que a ficha já não tem parada)
+        for (const e of FACES) if (e !== s.eyes) parts.head.faces[e] = makeTexHead(Object.assign({}, s, { eyes: e }));
         const hp = hairPart(s);
         if (hp) parts.hair = hp;
         const hat = hatPart(s);
@@ -1094,7 +1124,7 @@ function NpcGenChar(G) {
     }
 
     Object.assign(G, {
-        M, PAL, OUTLINE, SHADOW_RGBA, GR, SKEL, UPPER, LOWER, FIST, THIGH, SHIN, ANKLE_H, ADULT, shapeFor, DEFAULT, BODY, fullSpec, bodyFactors, rigFor, rampsFor,
+        M, PAL, OUTLINE, SHADOW_RGBA, GR, SKEL, FACES, UPPER, LOWER, FIST, THIGH, SHIN, ANKLE_H, ADULT, shapeFor, DEFAULT, BODY, fullSpec, bodyFactors, rigFor, rampsFor,
         buildParts, buildProps, PROP_MUZZLE, PROP_GRIP, PUMP_Y, PUMP_TRAVEL, ROSTER, BY_ID, loadBaked, bakeProps, propK, propPivot, HAT_CUT,
     });
     return G;

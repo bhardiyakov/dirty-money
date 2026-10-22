@@ -406,16 +406,27 @@ function NpcGenMesh(G) {
                 }
             }
             const name = b, sp = sdf[name];
-            let tone = tone0;
-            if (sp && sp.tex) {                                                   // a textura procedural da ficha (rosto, estampa, cadarço…) no espaço do osso
-                const pid = new Int16Array(n), d1 = new Float64Array(n), d2 = new Float64Array(n).fill(1e9);
-                const t2 = sp.tex(pos, nrm, mat, pid, d1, d2, n);
-                for (let j = 0; j < n; j++) tone[j] += t2[j];
+            // a textura procedural da ficha (rosto, estampa, cadarço…) no espaço do osso e o estado de dano (s.dmg: terra, cortes, rasgos,
+            // sangue) — também em cada expressão do rosto (sp.faces: os mesmos pontos, outro material/tom)
+            const paint = (tex, mat1) => {
+                const tone = Int16Array.from(tone0);
+                if (tex) {
+                    const pid = new Int16Array(n), d1 = new Float64Array(n), d2 = new Float64Array(n).fill(1e9);
+                    const t2 = tex(pos, nrm, mat1, pid, d1, d2, n);
+                    for (let j = 0; j < n; j++) tone[j] += t2[j];
+                }
+                paintDamage(s, b, pos, nrm, mat1, tone, n);
+                const T8 = new Int8Array(n);
+                for (let j = 0; j < n; j++) T8[j] = max(-3, min(3, tone[j]));
+                return T8;
+            };
+            let faces = null;
+            if (sp && sp.faces) {
+                faces = {};
+                for (const [e, tex] of Object.entries(sp.faces)) { const fm = Int16Array.from(mat); faces[e] = { mat: fm, tone: paint(tex, fm) }; }
             }
-            paintDamage(s, b, pos, nrm, mat, tone, n);                                  // estado de dano (s.dmg): terra, cortes, rasgos, sangue
-            const T8 = new Int8Array(n);
-            for (let j = 0; j < n; j++) T8[j] = max(-3, min(3, tone[j]));
-            out[name] = { name, bone: b, group: PART_GROUP[b], pos, nrm, mat, tone: T8, n, pos2, nrm2, b2, w2, mesh: true };
+            const T8 = paint(sp && sp.tex, mat);
+            out[name] = { name, bone: b, group: PART_GROUP[b], pos, nrm, mat, tone: T8, n, pos2, nrm2, b2, w2, mesh: true, faces };
         }
         if (hairCloud) {
             const cl = hairCloud, Fm = cl.F, cut = s.head in G.HAT_CUT && G.HAT_CUT[s.head] < 90 ? G.HAT_CUT[s.head] : Infinity;

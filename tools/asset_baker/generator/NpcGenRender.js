@@ -16,6 +16,9 @@ function NpcGenRender(G) {
     GROUP_W[GR.weapon] = 2.2; GROUP_W[GR.prop] = 2.2; GROUP_W[GR.pump] = 2.2; GROUP_W[GR.face] = 1.15;
     const DECALS = [M.brow, M.mouth, M.gold, M.eye, M.eyew];                        // prioridade crescente
     const DECAL_MIN = { [M.brow]: 5, [M.mouth]: 4, [M.gold]: 3, [M.eye]: 4, [M.eyew]: 3 };
+    // Com 2×2 subpixels (alta definição) os mínimos acima (de 4×4) nunca davam: olho, boca e sobrancelha só ganhavam o pixel na maioria
+    // e perdiam os empates para a pele — o rosto se apagava. Aqui, metade do pixel basta.
+    const DECAL_MIN2 = { [M.brow]: 2, [M.mouth]: 2, [M.gold]: 1, [M.eye]: 2, [M.eyew]: 2 };
     const isDecal = new Uint8Array(NM); for (const d of DECALS) isDecal[d] = 1;
     const noLine = new Uint8Array(NM); for (const d of [...DECALS, M.lace, M.chrome, M.accent, M.accent2, M.beard, M.lens]) noLine[d] = 1;
     const isWeaponGroup = (g) => g === GR.weapon || g === GR.prop || g === GR.pump;
@@ -95,7 +98,13 @@ function NpcGenRender(G) {
             const Rk = this._Rk = sc0 === 1 ? this.Rk : R.map((v) => v * this.k * sc0);
             const P = pose.adult ? pose.adult() : pose, B = P.B || pose.bones(), Ryaw = Rz(deg(yaw)), items = [];        // (esqueleto adulto: Pose.adult)
             const cv = G.tmv3(Ryaw, [R[6], R[7], R[8]]);
-            for (const bk of this.body) items.push(bk.pos2 ? { bk: skinPose(bk, B, cv), M: M4ID } : { bk, M: B[bk.bone] });          // (malha 3D: skin de 2 ossos)
+            const fx = pose.expr;                                                   // expressão do rosto (NpcGenAnims.exprOf): material/tom da variante
+            for (const bk of this.body) {
+                const it = bk.pos2 ? { bk: skinPose(bk, B, cv), M: M4ID } : { bk, M: B[bk.bone] };          // (malha 3D: skin de 2 ossos)
+                const f = fx && bk.faces && bk.faces[fx];
+                if (f) it.bk = Object.assign({}, it.bk, f);
+                items.push(it);
+            }
             for (const [name, Mp] of P.props) items.push({ bk: this.baked.props[name], M: Mp });
             let n = 0;
             for (const it of items) { it.R = mm3(Ryaw, it.M.R); it.t = mv3(Ryaw, it.M.t); n += it.bk.n; }
@@ -141,7 +150,7 @@ function NpcGenRender(G) {
             // Visual 3D (sem traços): pixel de borda com qualquer cobertura entra, e a fração coberta vira o alfa (borda suavizada — COV).
             const aa = smooth && !G.LINES, COV = aa ? new Uint8Array(np_) : null;
             const SM = smooth && G.TOON ? new Uint8Array(np_ * ss * ss) : null;      // (cartum: os subpixels cobertos — contorno suavizado)
-            const fillMin = aa ? 1 : (ss * ss) >> 1, weapMin = Math.ceil((ss * ss * 5) / 16);
+            const fillMin = aa ? 1 : (ss * ss) >> 1, weapMin = Math.ceil((ss * ss * 5) / 16), DMIN = ss === 2 && G.TOON ? DECAL_MIN2 : DECAL_MIN;
             const gcount = new Float64Array(NG), mcount = new Int32Array(NM);
             const subI = new Int16Array(ss * ss), subL = new Int32Array(ss * ss), subZ = new Float64Array(ss * ss);
             for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
@@ -177,7 +186,7 @@ function NpcGenRender(G) {
                 const zz = zs / sc, hh = hs / sc;
                 let mat = 0, mb = 0;
                 for (let k = 1; k < NM; k++) if (mcount[k] > mb) { mb = mcount[k]; mat = k; }
-                for (const dm of DECALS) if (mcount[dm] >= DECAL_MIN[dm]) mat = dm;
+                for (const dm of DECALS) if (mcount[dm] >= DMIN[dm]) mat = dm;
                 let tc = 0, ts = 0, tsa = 0;
                 for (let k = 0; k < s; k++) {
                     const w = subI[k], it = w >= 0 ? items[w].bk : null, g = it ? it.group : 0;
