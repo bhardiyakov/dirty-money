@@ -48,6 +48,7 @@ const Personas = {
     // Onde a pessoa está agora (null: fora da rotina — em casa, dormindo…).
     where(id, h) {
         const A = this.anchors && this.anchors[id]; if (!A) return null;
+        if (typeof Tutorial !== 'undefined' && Tutorial.forces(id)) return A;      // (primeiros passos: a pessoa está lá a qualquer hora)
         const wd = Economy.day % 7;
         switch (id) {
             case 'ze': return (h >= 8 && h < 10) || (h >= 16 && h < 23) ? A : null;
@@ -85,7 +86,7 @@ const Personas = {
         const actor = StreetLife._actor(g, D.type, w.x, w.z, heading, id === 'jorginho' ? 'walk' : 'idle');
         const out = { actor, meshes: [], x: w.x, z: w.z, sayT: 3 + Math.random() * 6, ph: Math.random() * 6 };
         if (id === 'nena') out.meshes = StreetLife._cart(g, w.x + 0.9, w.z);
-        if (id === 'ze') { const sc = g.scene, m = new BABYLON.StandardMaterial('pzM', sc); m.diffuseColor = new BABYLON.Color3(0.9, 0.9, 0.9); m.specularColor = BABYLON.Color3.Black(); const c = BABYLON.MeshBuilder.CreateBox('pzChair', { width: 0.45, height: 0.45, depth: 0.45 }, sc); c.position.set(w.x + 0.7, 0.23, w.z); c.material = m; c.isPickable = false; out.meshes.push(c); }
+        if (id === 'ze') { const sc = g.scene, m = FlatMat.get(sc, '#e6e6e6'); const c = BABYLON.MeshBuilder.CreateBox('pzChair', { width: 0.45, height: 0.45, depth: 0.45 }, sc); c.position.set(w.x + 0.7, 0.23, w.z); c.material = m; c.isPickable = false; out.meshes.push(c); }
         this.actors[id] = out;
     },
     _despawn(id) { const a = this.actors[id]; if (!a) return; try { a.actor.dispose(); } catch (e) { /* ok */ } for (const m of a.meshes) { try { m.dispose(); } catch (e) { /* ok */ } } delete this.actors[id]; },

@@ -178,7 +178,8 @@ const Calendar = {
         for (const m of F.meshes || []) { try { m.dispose(); } catch (e) { /* ok */ } }
         if (F.light) F.light.dispose();
     },
-    _mat(sc, c, emis = false) { const m = new BABYLON.StandardMaterial('calM', sc); m.diffuseColor = BABYLON.Color3.FromHexString(c); m.specularColor = BABYLON.Color3.Black(); if (emis) m.emissiveColor = BABYLON.Color3.FromHexString(c); return m; },
+    _mat(sc, c, emis = false) { return FlatMat.get(sc, c, emis); },
+    _crowd(n, min = 4) { return Math.max(min, Math.round(n * (typeof Life !== 'undefined' ? Life.mul() : 1))); },      // (vida da cidade baixa: festa mais vazia)
     _box(F, sc, w, hh, d, x, y, z, c, emis) { const b = BABYLON.MeshBuilder.CreateBox('calBox', { width: w, height: hh, depth: d }, sc); b.position.set(x, y, z); b.material = this._mat(sc, c, emis); b.isPickable = false; F.meshes.push(b); return b; },
     _walkPt(g, x, z, r = 6) { const M = g.nav.map; const q = M.closestPoint(x, z, r); return q && M.walk(q.x, q.z) ? q : null; },
     _tone(x, z, f, dur, vol, type = 'sawtooth', maxDist = 70) {
@@ -210,15 +211,18 @@ const Calendar = {
         F.light = new BABYLON.PointLight('calFireL', new BABYLON.Vector3(s.x, 2, s.z), sc); F.light.diffuse = new BABYLON.Color3(1, 0.55, 0.2); F.light.range = 14; F.light.intensity = 1.2;
         // bandeirinhas: 4 varais em zigue-zague
         const cols = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ec4899'];
-        for (let r = 0; r < 4; r++) for (let k = -8; k <= 8; k++) { const a = r * Math.PI / 4, x = s.x + Math.cos(a) * k * 0.9, z = s.z + Math.sin(a) * k * 0.9; this._box(F, sc, 0.32, 0.02, 0.32, x, 3.1 - Math.abs(k) * 0.03, z, cols[(k + 8 + r) % cols.length]); }
+        const byCol = {};                                               // (uma malha por cor: 6 desenhos em vez de 68)
+        for (let r = 0; r < 4; r++) for (let k = -8; k <= 8; k++) { const a = r * Math.PI / 4, x = s.x + Math.cos(a) * k * 0.9, z = s.z + Math.sin(a) * k * 0.9, col = cols[(k + 8 + r) % cols.length]; const b = BABYLON.MeshBuilder.CreateBox('calFlagB', { width: 0.32, height: 0.02, depth: 0.32 }, sc); b.position.set(x, 3.1 - Math.abs(k) * 0.03, z); (byCol[col] || (byCol[col] = [])).push(b); }
+        for (const [col, L] of Object.entries(byCol)) { const m = BABYLON.Mesh.MergeMeshes(L, true); if (m) { m.material = this._mat(sc, col); m.isPickable = false; m.freezeWorldMatrix(); F.meshes.push(m); } }
         // barraca de comida
         const bx = s.x + 6, bz = s.z + 4; this._box(F, sc, 2.2, 0.9, 1.0, bx, 0.45, bz, '#c2a36b'); this._box(F, sc, 2.6, 0.1, 1.4, bx, 2.0, bz, '#dc2626'); F.stall = { x: bx, z: bz };
         F.actors.push(StreetLife._actor(g, 'civil_vovo', bx, bz - 1, 0));
         // sanfoneiro e zabumbeiro
         F.actors.push(StreetLife._actor(g, StreetLife._civ(), s.x - 5, s.z - 3, Math.atan2(5, 3))); F.actors.push(StreetLife._actor(g, StreetLife._civ(), s.x - 5.8, s.z - 2, Math.atan2(5.8, 2)));
         // quadrilha: duas filas de 6, frente a frente, indo e voltando
-        for (let i = 0; i < 12; i++) {
-            const side = i < 6 ? -1 : 1, k = i % 6, x = s.x - 4 + k * 1.6, z = s.z + side * 2.6 - 4;
+        const nq = this._crowd(12, 6), half = Math.ceil(nq / 2);
+        for (let i = 0; i < nq; i++) {
+            const side = i < half ? -1 : 1, k = i % half, x = s.x - 4 + k * 1.6, z = s.z + side * 2.6 - 4;
             const a = StreetLife._actor(g, StreetLife._civ(), x, z, side < 0 ? 0 : Math.PI, 'walk');
             F.actors.push(a); F.dancers.push({ a, x, z, side, ph: k * 0.5 });
         }
@@ -255,8 +259,8 @@ const Calendar = {
                 if (n < 10) continue;
                 const sc = g.scene, F = this.fest = { kind: 'bloco', x: s.x, z: s.z, sx: s.x, sz: s.z, dx, dz, len: n * 8, pos: 0, dir: 1, actors: [], meshes: [], dancers: [], beat: 0, step: 0, singT: 2 };
                 F.name = this._pick(['Bloco do Vira-Lata', 'Simpatia é Quase Amor', 'Cordão do Bola Preta', 'Bloco das Piranhas', 'Suvaco do Cristo', 'Bloco da Orla']);
-                const flag = BABYLON.MeshBuilder.CreatePlane('calFlag', { width: 1.6, height: 1.1 }, sc); flag.material = this._mat(sc, this._pick(['#f59e0b', '#16a34a', '#db2777', '#2563eb']), true); flag.material.backFaceCulling = false; flag.isPickable = false; F.meshes.push(flag); F.flag = flag;
-                for (let i = 0; i < 20; i++) { const a2 = StreetLife._actor(g, StreetLife._civ(), s.x, s.z, 0, 'walk'); F.actors.push(a2); F.dancers.push({ a: a2, ox: (Math.random() - 0.5) * 5, oz: -1.5 - Math.random() * 9, ph: Math.random() * 6.28 }); }
+                const flag = BABYLON.MeshBuilder.CreatePlane('calFlag', { width: 1.6, height: 1.1 }, sc); flag.material = FlatMat.get(sc, this._pick(['#f59e0b', '#16a34a', '#db2777', '#2563eb']), true, true); flag.isPickable = false; F.meshes.push(flag); F.flag = flag;
+                for (let i = 0, nb = this._crowd(20, 8); i < nb; i++) { const a2 = StreetLife._actor(g, StreetLife._civ(), s.x, s.z, 0, 'walk'); F.actors.push(a2); F.dancers.push({ a: a2, ox: (Math.random() - 0.5) * 5, oz: -1.5 - Math.random() * 9, ph: Math.random() * 6.28 }); }
                 g._flash(`🎉 O ${F.name} está passando aqui perto!`);
                 return;
             }
@@ -296,7 +300,7 @@ const Calendar = {
         if (!best || bd > 300) return;
         const s = this._walkPt(g, best.x, best.z, 20) || best;
         const F = this.fest = { kind: 'reveillon', x: s.x, z: s.z, actors: [], meshes: [], dancers: [], count: null, show: 0, fireT: 0 };
-        for (let i = 0; i < 34; i++) { const a = Math.random() * 6.28, r = 2 + Math.random() * 14, x = s.x + Math.cos(a) * r, z = s.z + Math.sin(a) * r; const act = StreetLife._actor(g, this._pick(['civil_praia', 'civil_senhor', 'civil_executiva', 'civil_estudante', 'civil_vovo', 'civil_trancas']), x, z, Math.random() * 6.28, 'idle'); F.actors.push(act); F.dancers.push({ a: act, x, z, ph: Math.random() * 6.28 }); }
+        for (let i = 0, nr = this._crowd(34, 10); i < nr; i++) { const a = Math.random() * 6.28, r = 2 + Math.random() * 14, x = s.x + Math.cos(a) * r, z = s.z + Math.sin(a) * r; const act = StreetLife._actor(g, this._pick(['civil_praia', 'civil_senhor', 'civil_executiva', 'civil_estudante', 'civil_vovo', 'civil_trancas']), x, z, Math.random() * 6.28, 'idle'); F.actors.push(act); F.dancers.push({ a: act, x, z, ph: Math.random() * 6.28 }); }
         g._flash('🎆 Réveillon na orla: a multidão está esperando a meia-noite!');
     },
     _upd_reveillon(g, dt, F) {

@@ -587,9 +587,11 @@ class Game {
 		Panel.tick(dt);
 		this.dev.update(dt);
 		Interiors.tickFade(dt);
+		Perf.lap('outros');
 		Needs.update(this, dt);                                                  // fome e cansaço (leves)
 		Phone.update(this, dt);                                                  // o celular: mensagens, compromissos, entregas
-		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); Calendar.update(this, dt); Personas.update(this, dt); MobileUI.start();                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
+		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); Calendar.update(this, dt); Personas.update(this, dt); Tutorial.update(this, dt); MobileUI.start();                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
+		Perf.lap('mundo vivo (celular/festas/personagens)');
 		// Assa sprites pendentes (personagens; os carros vêm prontos do atlas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
 		// de folga) menos o trabalho medido do quadro, entre 1 e 8 ms. Antes eram 9 ms fixos — num celular que já gasta 25 ms por quadro,
 		// isso derrubava o FPS enquanto havia fila.
@@ -809,11 +811,15 @@ class Game {
 			const gs = this._playerState();
 			this.gangs.update(dt, gs.pos, gs.vel, !!(this.hiding && !this.hiding.seen) || this.mode === 'heli');
 			if (this.op) this.op.update(dt, gs.pos);
+			Perf.lap('favela (gangues/moto/missões)');
 			RivalArc.update(this, dt);                                          // o arco do Dentinho: bocas, capangas, emboscadas, o galpão
+			Perf.lap('Dentinho (bocas/capangas)');
 			if (this.watch) this.watch.update(dt, gs.pos);
 			if (this.barricades) this.barricades.update(dt, this.op, Standing.nearFavela(gs.pos.x, gs.pos.z, 20));
 			Baile.update(dt, this);
+			Perf.lap('favela (gangues/moto/missões)');
 			StreetLife.update(this, dt);                                  // a rua viva: movimento por hora, acontecimentos, conversas
+			Perf.lap('rua viva');
 			if (this.motoTaxis) this.motoTaxis.update(dt, gs.pos);
 			MotoStands.update(dt, this, gs.pos); this.motoUI.update(dt);
 			if (this.motoRide) this.motoRide.update(dt);
