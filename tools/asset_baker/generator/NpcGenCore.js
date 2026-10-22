@@ -287,6 +287,12 @@ function NpcGenCore(G) {
 
     const hexrgb = (h) => { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
 
+    // ------------------------------------------------------------------ estilo do desenho
+    // CARTUM (o padrão): contorno escuro suavizado, luz em 3 faixas chapadas, rosto marcado (olhos e sobrancelhas × face) — os campos
+    // em NpcGenRender._smooth. G.LINES = false e G.TOON = null = o visual "3D" sem contorno (antes de outubro/2026).
+    G.LINES = true;
+    G.TOON = { dark: 0.42, lit: 0.78, soft: 0.06, tex: 0.08, spec: 0.2, outline: 1.75, face: 1.4 };
+
     Object.assign(G, {
         deg, V, nrm, I3, Rx, Ry, Rz, mm3, mv3, tmv3, col3, fromCols, M4, mm4, pt4, lookRot, arange, rint,
         Prim, Sphere, Ellipsoid, RoundCone, RoundBox, CapCone, Part, bake, Camera, hexrgb,

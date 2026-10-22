@@ -115,8 +115,8 @@ function NpcGenChar(G) {
     // adulto (NpcGenAnims: Pose.adult) e cada parte assada é esticada no comprimento do osso (shapeFor). Resultado: ~5,3 cabeças.
     // ADULT = null volta ao desenho original do pacote (validate.html compara com os PNGs dele).
     // (cabeça 0,66: um pouco maior que a do adulto real — vista do alto, o rosto e o cabelo é que dizem quem é quem)
-    // (headUp, opcional: a cabeça erguida em graus — com a câmera a 56°, o rosto aparece mais; usado no protótipo do estilo cartum)
-    const ADULT = { leg: 1.7, torso: 1.35, arm: 1.38, head: 0.66, hand: 0.85, neck: 2.0, width: 0.9 };
+    // (headUp 10: a cabeça um pouco erguida, em graus — com a câmera a 56°, o rosto aparece ~25% mais alto)
+    const ADULT = { leg: 1.7, torso: 1.35, arm: 1.38, head: 0.66, hand: 0.85, neck: 2.0, width: 0.9, headUp: 10 };
     // Abertura dos braços nas poses FK de descanso (abdução ≤ 18°) — 0,6: soltos ao lado do corpo, sem o ar de "gorila" do pacote.
     G.ARM_ABD = 0.6;
     // Escala [x, y, z] de uma parte no espaço do osso (z = ao longo do osso). null = sem mudança.

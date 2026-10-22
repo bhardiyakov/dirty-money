@@ -19,6 +19,8 @@ function NpcGenRender(G) {
     const isDecal = new Uint8Array(NM); for (const d of DECALS) isDecal[d] = 1;
     const noLine = new Uint8Array(NM); for (const d of [...DECALS, M.lace, M.chrome, M.accent, M.accent2, M.beard, M.lens]) noLine[d] = 1;
     const isWeaponGroup = (g) => g === GR.weapon || g === GR.prop || g === GR.pump;
+    // Estilo cartum: só o que é duro e liso ganha o brilho (metal, couro, lente, capacete); cabelo, pele e pano ficam chapados.
+    const toonShine = new Uint8Array(NM); for (const m of [M.metal, M.chrome, M.eyew, M.lens, M.gold, M.visor, M.shoe, M.hat, M.green, M.batwood]) toonShine[m] = 1;
     // Brilho especular por material (sombreado contínuo): [expoente (maior = brilho menor e mais duro), intensidade].
     const SHINE = [];
     for (const [m, e, s] of [[M.skin, 18, 0.1], [M.hair, 30, 0.22], [M.shirt, 10, 0.04], [M.jeans, 8, 0.03], [M.shoe, 40, 0.35], [M.sole, 10, 0.05],
@@ -138,6 +140,7 @@ function NpcGenRender(G) {
             const NXa = smooth ? new Float32Array(np_) : null, NYa = smooth ? new Float32Array(np_) : null, NZa = smooth ? new Float32Array(np_) : null, TN = smooth ? new Float32Array(np_) : null;
             // Visual 3D (sem traços): pixel de borda com qualquer cobertura entra, e a fração coberta vira o alfa (borda suavizada — COV).
             const aa = smooth && !G.LINES, COV = aa ? new Uint8Array(np_) : null;
+            const SM = smooth && G.TOON ? new Uint8Array(np_ * ss * ss) : null;      // (cartum: os subpixels cobertos — contorno suavizado)
             const fillMin = aa ? 1 : (ss * ss) >> 1, weapMin = Math.ceil((ss * ss * 5) / 16);
             const gcount = new Float64Array(NG), mcount = new Int32Array(NM);
             const subI = new Int16Array(ss * ss), subL = new Int32Array(ss * ss), subZ = new Float64Array(ss * ss);
@@ -187,13 +190,14 @@ function NpcGenRender(G) {
                 const i = py * cw + px;
                 F[i] = filled ? 1 : 0; DOM[i] = dom; ZZ[i] = zz; HH[i] = hh; MAT[i] = mat;
                 if (COV) COV[i] = filledN;
+                if (SM && filledN) for (let k = 0, b = py * ss * cw * ss + px * ss; k < s; k++) SM[b + ((k / ss) | 0) * cw * ss + (k % ss)] = subI[k] >= 0 ? 1 : 0;
                 const d = (nx / nl) * L[0] + (ny / nl) * L[1] + (nz / nl) * L[2];
                 DOT[i] = d;
                 IDX[i] = 1 + (d > -0.3) + (d > 0.3) + (d > 0.8) + rint(tone);
                 if (smooth) { NXa[i] = nx / nl; NYa[i] = ny / nl; NZa[i] = nz / nl; TN[i] = tone; }
             }
             const at = (A, y, x) => A[((y % ch) + ch) % ch * cw + ((x % cw) + cw) % cw];
-            if (smooth) return this._smooth(out, { F, DOM, ZZ, HH, MAT, NXa, NYa, NZa, TN, COV, sq: ss * ss, cw, ch, bx0, by0, np_, water, depth, effects: P.effects, Ryaw, nsh, pose, shadow });
+            if (smooth) return this._smooth(out, { F, DOM, ZZ, HH, MAT, NXa, NYa, NZa, TN, COV, SM, ss, sq: ss * ss, cw, ch, bx0, by0, np_, water, depth, effects: P.effects, Ryaw, nsh, pose, shadow });
             // ---------------- sombreamento: oclusão + materiais especiais
             for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
                 const i = y * cw + x, zz = ZZ[i];
@@ -278,18 +282,19 @@ function NpcGenRender(G) {
         //   luz difusa com "wrap" (passagem suave para a sombra) + céu (de cima mais claro) + oclusão ambiente (dobras, axilas, entre
         //   as pernas escurecem) + luz de recorte nas bordas + o desenho das texturas (listras, costuras) + brilho especular por
         //   material (couro, cabelo, metal brilham; jeans e algodão não). Acima de 204 = além do tom mais claro (o brilho, quase branco).
-        // Vincos entre partes (braço na frente do corpo) escurecem em vez de virar linha preta. Visual "3D" (G.LINES = false, o padrão):
-        // SEM contorno preto — nem o externo nem os traços onde uma parte passa na frente da outra (viram sombra de contato macia) — e a
-        // sombra no chão sai com borda suave (alfa em degradê). G.LINES = true volta aos traços do desenho cartunesco.
-        // Estilo CARTUM (G.TOON, protótipo — desligado; junto com G.LINES = true): a luz vira 3 faixas chapadas (sombra, base, luz:
-        // abaixo de `dark`, até `lit`, acima), a textura (listras, mechas) por cima com peso `tex`, o brilho só acima de `spec`, e o
-        // contorno externo com `outline` px na resolução de referência (o dobro em alta). Sombra no chão macia, como no visual 3D.
+        // Vincos entre partes (braço na frente do corpo) escurecem em vez de virar linha preta. Visual "3D" (G.LINES = false, G.TOON =
+        // null): SEM contorno preto — nem o externo nem os traços onde uma parte passa na frente da outra (viram sombra de contato macia) —
+        // e a sombra no chão sai com borda suave (alfa em degradê). G.LINES = true volta aos traços do desenho cartunesco.
+        // Estilo CARTUM (G.TOON, o padrão — ver NpcGenCore): a luz vira 3 faixas chapadas (sombra, base, luz: abaixo de `dark`, até `lit`,
+        // acima; a passagem com `soft` de largura), a textura (mechas, costuras) por cima com peso `tex`, o brilho só em material duro e
+        // acima de `spec`, pixels soltos limpos, e o contorno externo SUAVIZADO com `outline` px na resolução de referência (o dobro em
+        // alta — _toonOutline). Sombra no chão macia, como no visual 3D.
         _smooth(out, c) {
             const { F, DOM, ZZ, HH, MAT, NXa, NYa, NZa, TN, cw, ch, bx0, by0, np_, water, depth } = c;
             const W = this.W, code = out.code, alpha = out.alpha, light = out.light = new Uint8Array(W * this.H), L = this.cam.L, k = this.k;
             const UP = [0, this.cam.cos, -this.cam.sin], HV = nrm([L[0], L[1], L[2] - 1]), RIM = nrm([0.62, 0.42, 0.66]);
             const rad = max(2, Math.round(4 * k)), thr = 5.2 * k, nwin = (2 * rad + 1) * (2 * rad + 1) - 1, kk = k / 0.5;
-            const toon = !!G.TOON, TOON = toon && Object.assign({ dark: 0.42, lit: 0.78, tex: 0.1, spec: 0.2, outline: 2 }, G.TOON);
+            const toon = !!G.TOON, TOON = G.TOON;
             const idx = (y, x) => (((y % ch) + ch) % ch) * cw + (((x % cw) + cw) % cw);
             const LT = new Uint8Array(np_), LN = new Uint8Array(np_);
             for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
@@ -332,14 +337,31 @@ function NpcGenRender(G) {
                 let sp = S ? max(0, nx * HV[0] + ny * HV[1] + nz * HV[2]) ** S[0] * S[1] * ao * crease : 0;
                 if (toon) {
                     const s = (0.25 + 0.75 * dif) * ao * crease + rim * 0.6;
-                    lv = (s < TOON.dark ? 0.25 : s < TOON.lit ? 0.5 : 0.75) + TOON.tex * TN[i];
-                    sp = sp > TOON.spec ? 0.4 : 0;
+                    const st = (e) => { const t = min(max((s - e) / TOON.soft + 0.5, 0), 1); return t * t * (3 - 2 * t); };
+                    lv = 0.25 + 0.25 * st(TOON.dark) + 0.25 * st(TOON.lit) + TOON.tex * TN[i];
+                    sp = sp > TOON.spec && toonShine[m] ? 0.4 : 0;
                 }
                 if (m === M.eye) { lv = 0.08; sp = sp > 0.15 ? 0.9 : 0; }                // pupila escura com um brilho
                 else if (m === M.eyew) lv = 0.6 + 0.25 * dif;
                 else if (m === M.brow) { lv = 0.1; sp = 0; }
                 else if (m === M.mouth) { lv = 0.32 * crease; sp = 0; }
                 LT[i] = min(255, max(0, Math.round(min(lv, 0.97) * 204 + sp * 255)));          // (só o brilho passa do tom mais claro)
+            }
+            if (toon) {
+                // pixels soltos (a textura ou a média das normais deu outra faixa num pixel só): ficam com a faixa dos vizinhos
+                const LT2 = Uint8Array.from(LT), nb = new Int16Array(4);
+                for (let y = 1; y < ch - 1; y++) for (let x = 1; x < cw - 1; x++) {
+                    const i = y * cw + x, m = MAT[i];
+                    if (!F[i] || isDecal[m] || LN[i]) continue;
+                    let n = 0;
+                    for (const j of [i - 1, i + 1, i - cw, i + cw]) if (F[j] && MAT[j] === m && !LN[j]) nb[n++] = LT[j];
+                    if (n < 3) continue;
+                    const v = nb.subarray(0, n).sort()[n >> 1];
+                    let near = 0;
+                    for (let q = 0; q < n; q++) if (abs(nb[q] - v) <= 6) near++;
+                    if (near >= 3 && abs(LT[i] - v) > 10) LT2[i] = v;
+                }
+                LT.set(LT2);
             }
             // cor (material + luz) + água + contorno externo
             const UNDER = new Uint8Array(np_), ABOVE = new Uint8Array(np_), AL = new Uint8Array(np_), CO = new Uint8Array(np_);
@@ -368,19 +390,10 @@ function NpcGenRender(G) {
                 const dil = at(ABOVE, y, x - 1) || at(ABOVE, y, x + 1) || at(ABOVE, y - 1, x) || at(ABOVE, y + 1, x);
                 if (!dil) continue;
                 if (hasWater && UNDER[i]) { CO[i] = C.FOAM; AL[i] = 235; continue; }
-                if (F[i] || !lines) continue;
+                if (F[i] || !lines || toon) continue;
                 CO[i] = C.OUTLINE; AL[i] = 255; F[i] = 2;
             }
-            // contorno externo mais grosso (G.TOON.outline px na resolução de referência × k)
-            const ow = toon ? max(1, Math.round(TOON.outline * kk / 2)) : 1;
-            for (let r = 2; r <= ow; r++) {
-                for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
-                    const i = y * cw + x;
-                    if (F[i] || UNDER[i]) continue;
-                    if (at(F, y, x - 1) === r || at(F, y, x + 1) === r || at(F, y - 1, x) === r || at(F, y + 1, x) === r) F[i] = 100 + r;
-                }
-                for (let i = 0; i < np_; i++) if (F[i] === 100 + r) { F[i] = r + 1; CO[i] = C.OUTLINE; AL[i] = 255; }
-            }
+            if (toon) this._toonOutline(c, CO, AL, UNDER, max(1.2, TOON.outline * kk / 2));      // (no mínimo 1,2 px: nas resoluções menores)
             // luz em 64 níveis (bits altos) + cobertura da borda nos 2 bits baixos (0 = cheio, 1–3 = 75/50/25%: o jogo vira alfa)
             const COV = c.COV, sq = c.sq || 4;
             for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
@@ -400,6 +413,35 @@ function NpcGenRender(G) {
                 }
             }
             return out;
+        }
+
+        // Contorno externo SUAVIZADO do estilo cartum: um traço de raio R px em volta da silhueta, com a borda de fora em degradê (alfa
+        // pela distância do centro do pixel ao subpixel coberto mais perto) — ampliado, não fica serrilhado. A borda de dentro fica
+        // debaixo do corpo (os pixels do corpo são opacos).
+        _toonOutline(c, CO, AL, UNDER, R) {
+            const { F, SM, ss, cw, ch } = c, SW = cw * ss, n = Math.ceil(R + 1), inv = 1 / ss;
+            const any = new Uint8Array(cw * ch);
+            for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+                let v = 0;
+                for (let sy = 0; sy < ss && !v; sy++) for (let sx = 0; sx < ss; sx++) if (SM[(y * ss + sy) * SW + x * ss + sx]) { v = 1; break; }
+                any[y * cw + x] = v;
+            }
+            for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+                const i = y * cw + x;
+                if (F[i] || UNDER[i]) continue;
+                let d2 = Infinity;
+                const y0 = max(0, y - n), y1 = min(ch - 1, y + n), x0 = max(0, x - n), x1 = min(cw - 1, x + n);
+                for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
+                    if (!any[yy * cw + xx]) continue;
+                    for (let sy = 0; sy < ss; sy++) for (let sx = 0; sx < ss; sx++) {
+                        if (!SM[(yy * ss + sy) * SW + xx * ss + sx]) continue;
+                        const dx = xx + (sx + 0.5) * inv - x - 0.5, dy = yy + (sy + 0.5) * inv - y - 0.5, q = dx * dx + dy * dy;
+                        if (q < d2) d2 = q;
+                    }
+                }
+                const a = min(max(R + 0.5 * inv + 0.5 - sqrt(d2), 0), 1);
+                if (a > 0.02) { CO[i] = C.OUTLINE; AL[i] = Math.round(a * 255); F[i] = 2; }
+            }
         }
 
         // Sombra: a projeção vertical de um a cada 3 pontos do corpo (gx/gy, calculados na passada do render). soft = degradê 0..1 (borda
