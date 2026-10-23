@@ -263,6 +263,16 @@ function NpcGenCore(G) {
             m++;
         }
         const P32 = pos.subarray(0, m * 3), N32 = nr.subarray(0, m * 3), MT = mat.subarray(0, m), TN = tone.subarray(0, m);
+        // expressões do rosto (part.faces: textura de cada uma): os mesmos pontos, só o material e o tom mudam — { expr: { mat, tone } }
+        let faces = null;
+        if (part.faces) {
+            faces = {};
+            for (const [e, tex] of Object.entries(part.faces)) {
+                const fm = new Int16Array(MT), ft = tex(P32, N32, fm, pid.subarray(0, m), d1.subarray(0, m), d2.subarray(0, m), m), f8 = new Int8Array(m);
+                for (let i = 0; i < m; i++) f8[i] = max(-3, min(3, TN[i] + ft[i]));
+                faces[e] = { mat: fm, tone: f8 };
+            }
+        }
         if (part.tex) {
             // textura procedural (olhos, listras, cadarço…): pode trocar o material e mexe no tom
             const t2 = part.tex(P32, N32, MT, pid.subarray(0, m), d1.subarray(0, m), d2.subarray(0, m), m);
@@ -270,7 +280,7 @@ function NpcGenCore(G) {
         }
         const T8 = new Int8Array(m);
         for (let i = 0; i < m; i++) T8[i] = max(-3, min(3, TN[i]));
-        return { name: part.name, bone: part.bone, group: part.group, pos: new Float32Array(P32), nrm: new Float32Array(N32), mat: new Int16Array(MT), tone: T8, n: m };
+        return { name: part.name, bone: part.bone, group: part.group, pos: new Float32Array(P32), nrm: new Float32Array(N32), mat: new Int16Array(MT), tone: T8, n: m, faces };
     }
 
     // ------------------------------------------------------------------ câmera ortográfica (elevação 56°)
@@ -286,6 +296,12 @@ function NpcGenCore(G) {
     }
 
     const hexrgb = (h) => { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
+
+    // ------------------------------------------------------------------ estilo do desenho
+    // CARTUM (o padrão): contorno escuro suavizado, luz em 3 faixas chapadas, rosto marcado (olhos e sobrancelhas × face) — os campos
+    // em NpcGenRender._smooth. G.LINES = false e G.TOON = null = o visual "3D" sem contorno (antes de outubro/2026).
+    G.LINES = true;
+    G.TOON = { dark: 0.42, lit: 0.78, soft: 0.06, tex: 0.08, spec: 0.2, outline: 1.75, face: 1.4 };
 
     Object.assign(G, {
         deg, V, nrm, I3, Rx, Ry, Rz, mm3, mv3, tmv3, col3, fromCols, M4, mm4, pt4, lookRot, arange, rint,

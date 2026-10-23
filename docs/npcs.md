@@ -38,15 +38,47 @@ arquivos estáticos em `assets/baked/` — páginas `.webp` sem perdas, manifest
 - Escala no jogo: `Config.art.npcPpu` = 26 px/m (= `NpcGenBuild.PPU`): adultos na mesma escala dos veículos (que são 1,3× o real).
 
 - **Postura e silhueta** (outubro/2026): `G.ARM_ABD = 0,6` fecha os braços nas poses FK de descanso (abdução ≤ 18°: parado,
-  andando, correndo — sem o ar de "gorila"); `ADULT.head = 0,66` (era 0,6: de cima, o rosto e o cabelo dizem quem é quem); corpo
+  andando, correndo — sem o ar de "gorila"); `ADULT.head = 0,72` (era 0,6, depois 0,66: de cima, o rosto e o cabelo dizem quem é quem; 0,72 com as expressões); corpo
   feminino com ombros 0,84, braços 0,8 e quadril 1,08 (`bodyFactors`) e, na malha, braços 20% mais finos (`fitFor('f')`).
-- **Visual 3D, sem contorno** (outubro/2026, `G.LINES = false`, o padrão): o renderizador não desenha mais o contorno preto em volta
+- **Visual 3D, sem contorno** (outubro/2026, `G.LINES = false`, `G.TOON = null`; o padrão até o estilo cartum, abaixo): o renderizador não desenha mais o contorno preto em volta
   do boneco nem os traços onde uma parte passa na frente da outra (viram sombra de contato macia); a sombra no chão sai em degradê
   (alfa); e o pixel de borda guarda a fração coberta (dos 2×2 subpixels) nos 2 bits baixos da luz — o shader vira isso em alfa, então a
   silhueta sai suavizada, como um render 3D. De perto, a ampliação fica lisa (`sharp` até 1,6, sem os "quadradinhos" de pixel art).
   `G.LINES = true` volta ao desenho cartunesco com traços.
 - **Redução no jogo** (`NpcArt`, uniform `mini`): com o boneco menor que o atlas (texels por pixel > 1,3 — dirigindo, celular), o
   shader tira a média de n×n amostras sobre a pegada do pixel (até 4×4) em vez do bilinear de 4 amostras, que serrilhava e tremia.
+
+## Estilo cartum (o padrão desde outubro/2026)
+
+Os bonecos seguem uma arte de referência "cartum HD" (contorno escuro, cores chapadas, rosto marcado), com as mesmas proporções de
+adulto. Tudo no gerador (`NpcGenCore`: `G.LINES = true` e `G.TOON`; o desenho em `NpcGenRender._smooth`):
+
+- **Luz em 3 faixas chapadas** (sombra, base, luz — `dark`/`lit`, passagem de `soft` de largura) em vez do degradê contínuo; as mechas e
+  costuras por cima, fracas (`tex`); brilho só em material duro (metal, couro, lente, capacete — `toonShine`); pixels soltos limpos.
+- **Contorno externo suavizado** (`_toonOutline`, `outline` = 1,75 px na alta): a distância de cada pixel à silhueta, medida nos
+  subpixels, vira o alfa da borda de fora — ampliado no jogo (zoom, telas de alta densidade), o contorno sai liso, sem degraus. Onde uma
+  parte passa na frente da outra, traço escuro de 1 px.
+- **Rosto**: olhos e sobrancelhas × `face` (1,4, `makeTexHead`) e a cabeça erguida 10° (`ADULT.headUp`, em `Pose.adult`) — com a câmera
+  a 56°, o rosto aparece ~25% mais alto. Em alta (2×2 subpixels), olho, boca e sobrancelha ganham o pixel com metade dele coberta
+  (`DECAL_MIN2`; os mínimos de 4×4 nunca davam e o rosto se apagava na pele).
+- **Expressões** (`NpcGenChar.FACES`, `NpcGenAnims.exprOf`): a cabeça assada guarda, além do rosto da ficha (`eyes`: `neutral` ou
+  `angry`, o jeito parado de cada um), uma variante por expressão — os mesmos pontos, só o material e o tom (`faces` da parte, também com
+  o dano pintado) — e o renderizador usa a do quadro (`pose.expr`, marcada em `clipPoses`):
+
+  | expressão | rosto | clipes |
+  |---|---|---|
+  | `angry` | cara fechada | de arma na mão (parado, andando, correndo, agachado), mirar, sacar, passo lateral, granada/molotov armados, cassetete |
+  | `rage` | sobrancelhas em V baixas, olhos apertados, dentes trincados | soco, chute, taco, faca, atirar, render alguém, arremessar, roubar carro |
+  | `scared` | olhos redondos arregalados, pupila pequena, sobrancelhas erguidas, boca em "O" | fugindo em pânico, render-se, ajoelhado, mãos ao alto, arremessado |
+  | `pain` | olhos espremidos "> <", sobrancelhas franzidas, boca aberta | apanhando, levantando, academia, carregando peso, escalando |
+  | `closed` | olhos fechados | caído; morrendo (dor e depois fechados); cambalhota: medo e depois dor |
+
+  Máscara e touca escondem a boca (e os dentes); óculos escuros, os olhos. Outro clipe ou expressão: a tabela `EXPR` em `NpcGenAnims`.
+- Sombra no chão macia, como no visual 3D. O formato dos atlas não muda (código + luz; o contorno é cor fixa com alfa de 8 bits).
+- Comparar com o visual anterior: `tools/asset_baker/preview.html?estilo=3d`. Mudou alguma coisa aqui? `npm run bake` (todos os tipos).
+- O tamanho manda: o atlas tem 52 px/m (~90 px por adulto). Na tela, a pé, no zoom padrão (o enquadramento "pixel a pixel" do chão,
+  `fitPixelScale`, × `footZoom`) um adulto tem ~40 px de altura numa tela 1080p; no zoom máximo, ~130 px. Rosto e detalhes só aparecem
+  de perto. Mais nitidez ampliado pede atlas maiores (k = 1,5: 2,25× a memória de vídeo e o download, e o guarda-roupa mais lento).
 
 ## Corpo da malha 3D (`NpcGenMesh`, `assets/npcs/malha3d.js`)
 

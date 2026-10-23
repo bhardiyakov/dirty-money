@@ -48,6 +48,8 @@
     <script src="./generator/NpcGenMesh.js"></script>
     <script>
         const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G);
+        // ?estilo=3d: o visual anterior ao estilo cartum (sem contorno, sombreado contínuo, cabeça reta) — para comparar
+        if (new URLSearchParams(location.search).get('estilo') === '3d') { G.LINES = false; G.TOON = null; G.ADULT = Object.assign({}, G.ADULT, { headUp: 0 }); }
         const $ = (id) => document.getElementById(id);
         for (const id of Object.keys(G.TYPES)) $('type').insertAdjacentHTML('beforeend', `<option>${id}</option>`);
         // direções do JOGO (0 = norte, de costas; sentido horário, 22,5° cada); a lista começa no sul (de frente)

@@ -173,6 +173,7 @@ function NpcGenAnims(G) {
             B.pelvis = M4(Rp, V.sub(hc2, down));
             B.chest = mm4(B.pelvis, M4(loc(Bo.pelvis, Bo.chest), V.mul(RIG.chest[1], kt)));
             B.head = mm4(B.chest, M4(loc(Bo.chest, Bo.head), [0, 0, RIG.head[1][2] * kt + (A.neck || 0)]));
+            if (A.headUp) B.head = mm4(B.head, M4(Rx(deg(A.headUp))));
             const UP2 = UPPER * ka, LO2 = LOWER * ka;
             const dzW = water ? pt4(Bo.chest, [0, 0, RIG.uarm_R[1][2]])[2] - pt4(B.chest, [0, 0, RIG.uarm_R[1][2] * kt])[2] : null;      // (o deslocamento da água, abaixo)
             const ikT = {};                                                       // alvos adultos usados nos braços IK (para medir: motion.cjs)
@@ -3058,6 +3059,24 @@ function NpcGenAnims(G) {
     // nº de quadros de um clipe para a arma desenhada w (n ou k da tabela)
     const nFor = (v, w) => (typeof v === 'number' ? v : v[w] !== undefined ? v[w] : v['*']);
     for (const d of Object.values(CLIPS)) { const f = d.fn; if (d.k === undefined) d.k = d.n; d.fn = (w = 'none', o = {}, n = null) => f(w, o || {}, n || nFor(d.n, w)); }
+    // EXPRESSÃO do rosto em cada quadro de um clipe (NpcGenChar.FACES; null = a da ficha, parada — 'neutral' ou 'angry'). w0 = a arma
+    // do JOGO: de arma na mão, cara fechada; batendo, atirando, rendendo alguém = raiva; fugindo, rendido, arremessado = medo; apanhando,
+    // levantando, fazendo força = dor; caído/morto = olhos fechados (morrendo: dor e depois fechados).
+    const EXPR = {};
+    for (const [e, l] of Object.entries({
+        rage: ['punch', 'punchL', 'kick', 'swing', 'stab', 'shoot', 'crouch_shoot', 'holdup', 'grenade_throw', 'molotov_throw', 'throw', 'carjack'],
+        angry: ['aim', 'crouch_aim', 'draw', 'strafe', 'grenade_pin', 'grenade_hold', 'molotov_light', 'molotov_hold', 'baton_idle', 'baton_walk'],
+        scared: ['scared', 'surrender', 'kneel', 'handsup', 'flail'],
+        pain: ['hurt', 'getup', 'gym_curl', 'gym_bench', 'gym_squat', 'walk_heavy', 'run_heavy', 'climb'],
+        closed: ['lie'],
+    })) for (const n of l) EXPR[n] = e;
+    const ARMED = new Set(['idle', 'walk', 'run', 'crouch', 'sneak', 'cover', 'walk_up']);
+    function exprOf(name, w0, i, n) {
+        if (name === 'dead') return i < n * 0.4 ? 'pain' : 'closed';
+        if (name === 'tumble') return i < n * 0.5 ? 'scared' : 'pain';
+        if (EXPR[name]) return EXPR[name];
+        return ARMED.has(name) && w0 && w0 !== 'none' ? 'angry' : null;
+    }
     // O clipe pronto para o atlas: as poses (n quadros), fps (= fps de referência · n/k), loop e direções. w0 = a arma do JOGO; com
     // typeId, vira a desenhada (G.weaponFor). opts: { hand } do jogador, n (forçar outro nº de quadros: o fps acompanha).
     function clipPoses(name, w0 = 'none', typeId = null, opts = {}) {
@@ -3065,9 +3084,15 @@ function NpcGenAnims(G) {
         if (!d) throw new Error('clipe desconhecido: ' + name);
         const w = typeId && G.weaponFor ? G.weaponFor(typeId, w0) : w0;
         const poses = d.fn(w, opts, opts.n || nFor(d.n, w)), fps0 = (d.fpsFor && d.fpsFor[w0]) || d.fps;
+        const tagged = new Set();                                             // (a mesma pose em dois quadros com outra expressão: uma cópia)
+        poses.forEach((p, i) => {
+            const e = exprOf(name, w0, i, poses.length);
+            if (tagged.has(p) && p.expr !== e) poses[i] = p = clonePose(p);
+            tagged.add(p); p.expr = e;
+        });
         return { poses, fps: Math.round(((fps0 * poses.length) / nFor(d.k, w)) * 1e4) / 1e4, loop: d.loopFor && w0 in d.loopFor ? d.loopFor[w0] : d.loop, dirs: d.dirs || 16, n: poses.length };
     }
 
-    Object.assign(G, { Pose, setRig, RIG, ik2, armTarget, resample, clonePose, clipPoses, HEAD_TILT, ANIMS, CLIPS, CTX, WEAPON_HOLD, SIT_IN, anim: { idle, walk, run, gunIdle, gunWalk, gunRun, gunDraw, holdWeapon, kneelPose, death, getUp } });
+    Object.assign(G, { Pose, setRig, RIG, ik2, armTarget, resample, clonePose, clipPoses, exprOf, HEAD_TILT, ANIMS, CLIPS, CTX, WEAPON_HOLD, SIT_IN, anim: { idle, walk, run, gunIdle, gunWalk, gunRun, gunDraw, holdWeapon, kneelPose, death, getUp } });
     return G;
 }
