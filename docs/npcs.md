@@ -23,7 +23,7 @@ arquivos estáticos em `assets/baked/` — páginas `.webp` sem perdas, manifest
 | **Jogador** | o protagonista 2,5D. Roupa, boné/chapéu, bolsa e aparência mudam o desenho (ver abaixo) |
 | **Golpes** | soco, chute, taco e cassetete com colisão de verdade (ver abaixo); pedestres revidam — no braço, de faca, taco ou revólver (*Quem revida*), a PM usa o cassetete |
 | **Briga de trânsito** | parte das batidas entre veículos vira briga: o motorista desce, xinga, chuta a porta e sai no braço (*Briga de trânsito*) |
-| **Pilotando** | moto, bicicleta (pedalando), jet ski e lancha (no timão), em **16 direções**; moto e jet ski inclinam na curva. O jogador **sobe na moto/bicicleta** passando a perna por cima (dos dois lados). Entregadores: o tipo **motoboy** (capacete, baú vermelho). Quem cai da moto mantém o visual |
+| **Pilotando** | moto (**64 direções**, o corpo deitando junto com a moto, pés nas pedaleiras e joelhos no tanque, recortado pela moto 3D), scooter (pés no assoalho), bicicleta (pedalando, 32 direções), jet ski e lancha (no timão, 16); moto e jet ski inclinam na curva. O jogador **sobe na moto/bicicleta** passando a perna por cima (dos dois lados). Entregadores: o tipo **motoboy** (capacete, baú vermelho). Quem cai da moto mantém o visual |
 | **Proporções de adulto** | o pacote é "chibi" (~3,3 cabeças: parecia criança). As poses continuam escritas no esqueleto do pacote e são **redirecionadas** para um esqueleto adulto na hora de desenhar (`G.ADULT`: pernas ×1,7, tronco ×1,35, braços ×1,38, cabeça ×0,6 → ~5,3 cabeças); armas e objetos 20% maiores |
 
 `?npc=0` na URL volta tudo aos bonecos antigos (comparar/depurar).
@@ -130,11 +130,50 @@ cartunesca:
 
 ## Pilotando (`ride_*`, `mount`)
 
-O veículo é o desenho do atlas dos carros (visto de cima, "achatado"); o piloto 2,5D vai por cima com a origem no **banco** e os
-quadris rente ao chão — o tronco sobe e as pernas descem em volta do veículo. Mãos e pés vão nas manoplas, pedaleiras, pedais e timão
-do desenho: `RIDE` em NpcGenAnims (medidas em m no jogo, já com `Config.vehicle.scale` × `Bikes.SCALE`), e os bancos em
-`Bikes.SEAT` / `BoatSheet.SEATS`. Mudou a escala de um veículo ou o `npcPpu`? Ajuste `RIDE` e gere os atlas de novo.
+O veículo é 3D (`CarArt3D`, `assets/cars/veiculos3d.js`) e o piloto 2,5D vai por cima com a origem no **banco** do modelo. Mãos e
+pés vão nas manoplas, pedaleiras, assoalho, pedais e timão do modelo: `RIDE` em NpcGenAnims (medidas em m no jogo tiradas da malha —
+moto = a CG 160, scooter = a PCX, bike = a bicicleta urbana — × `Config.vehicle.scale` × `Bikes.SCALE` = 1,17, `VEH_K`). Mudou a
+escala de um veículo, o `npcPpu` ou a malha? Ajuste `RIDE`, rode `node tools/asset_baker/vehocc.cjs` e gere os atlas de novo.
 As folhas antigas `rider`/`courier` viram tipos 2,5D sozinhas (`NpcArt.attach`); variante 0 = o jogador (a folha dele).
+
+**Piloto colado na moto 3D** (outubro/2026):
+- **Inclinação**: `ride_moto` tem 7 degraus (+28,6° … 0 … −28,6°, `rideBank`) e cada um é a pose reta INTEIRA (pélvis, tronco, mãos nas
+  manoplas, pés nas pedaleiras) girada em volta do eixo da frente que passa no **banco** (a origem do desenho). A moto 3D deita o mesmo
+  ângulo em volta da linha das rodas (`CarArt3D`: bank = inclinação × 0,5 rad = `RiderActor.BANK` = `RIDE_BANK`), **na hora** — com
+  piloto, sem a mola que atrasava e passava do ponto — e o `RiderActor._place` põe a origem do piloto no banco **já deitado e
+  empinado** (a mesma conta da matriz do modelo). Antes o piloto deitava ~12° só na pélvis enquanto a moto deitava ~29° com mola: o banco
+  escorregava de baixo dele nas curvas.
+- **Ângulo da curva pela física**: atan(velocidade × giro / g) — a curva que está acontecendo, não o guidão (`Vehicle._animateBike`). A
+  bicicleta deita 20% disso (o ciclista pedalando não tem degraus de inclinação).
+- **Direções**: a moto 3D gira livre; o piloto tinha 16 direções (22,5°) e ficava torto em relação ao guidão entre uma e outra. Agora
+  `ride_moto` tem **64** (desvio máximo ~4°, com a histerese) e `ride_bike` 32 (`dirs` na tabela `CLIPS`).
+- **Pernas encaixadas**: os pés vão nas **pedaleiras da malha** (antes ficavam ~25 cm acima, com os joelhos dobrados e abertos para
+  fora — 29 cm do meio) e os joelhos para a frente, fechados no tanque (`RIDE.moto.knee`). Scooter: clipe próprio, `ride_scooter`
+  (sentado reto, pés à frente no assoalho, atrás do escudo) — o `RiderActor` escolhe pelo modelo.
+- **Recorte pela moto** (`pose.occ`, `NpcGenRender._occBuf`): o piloto é desenhado POR CIMA da moto no jogo, então o que a moto
+  esconde daquele ângulo não podia aparecer — a perna do outro lado atrás do tanque e do motor, o meio das coxas atrás do tanque e do
+  farol (vindo de frente), os pés atrás do escudo da scooter. O gerador desenha a carroceria 3D (`generator/veiculos_occ.js`, tirada
+  do `veiculos3d.js` por `tools/asset_baker/vehocc.cjs`) só na profundidade, no banco e deitada como a moto daquele quadro: ponto do
+  corpo atrás dela não entra. Um clipe serve a várias motos (`ride_moto`: CG, trilha, esportiva e custom) — vale a **interseção** das
+  carrocerias (só some o que todas escondem: nunca abre buraco no piloto de nenhuma) e também a de alguns rumos em volta do desenhado
+  (`sweep`: a direção do sprite fica até ~0,7 passo fora do rumo da moto), com 1 subpixel de erosão na borda.
+- **Subida** (`mount`): termina EXATAMENTE na pose de pilotar, no banco da moto 3D (antes o banco ficava no chão e o piloto pulava
+  ~1 m para cima ao terminar), a perna passa por cima do banco por trás, e o recorte esconde o que fica atrás da moto. O jogo tira a
+  moto do descanso (em pé) e desenha o jogador no rumo exato dela (`Player.startMount`, sem a histerese da direção).
+
+**Física da moto do jogador** (`Bikes.MODELS`, `Vehicle.accelOf`, `Config.vehicle.bikeLat`/`bikeLeanIn`): arrancada pelo 0–100 do
+modelo (`t100`, como nos carros — antes era `power/mass`: a moto de rua ia de 0 a 100 em ~1,7 s e a esportiva em ~1 s) e freio de no
+máximo `brakeA` (~1 g; antes passava de 3 g). Na curva, a aceleração lateral (velocidade × giro) não passa de `bikeLat` (8,5 m/s², ~0,9 g)
+e o giro entra e sai com `bikeLeanIn` (o tempo de deitar a moto) — antes o giro era o do guidão em qualquer velocidade (a 100 km/h, ~8 g).
+
+| | 0–100 km/h | máxima | freio |
+|---|---|---|---|
+| Rider 250 (moto) | 8,0 s | 112 km/h | 9 m/s² |
+| Urban 160 (scooter) | — (0–86 em 11 s) | 86 km/h | 8 |
+| Trilheira 300 | 7,9 s | 108 km/h | 8,5 |
+| Furia 1000RR (esportiva) | 3,3 s | 158 km/h | 10,5 |
+| Estradeira 1800 (custom) | 5,5 s | 122 km/h | 9 |
+| Bicicleta | — (~1,5 m/s² pedalando) | 29 km/h | 5 |
 
 ## Golpes corpo a corpo (`Melee` / `Combat.strike`)
 
@@ -190,6 +229,32 @@ mesmo tempo. O sorteio é feito uma vez por par de veículos (os dois carros avi
   se arranca e passa de `giveUp` (18 m), desiste. A pé (a moto pegou o jogador, ou ele voou da própria moto), briga com ele.
 - Apanhou do jogador antes da briga começar: parte para cima dele (`Temper`) ou foge. Susto (tiro por perto, polícia): foge — menos
   quem está trocando tiro. O jogador se afastou: os pedestres voltam ao pool e os veículos seguem (`_dissolve`).
+
+## Pelada na quadra da favela (`src/npc/Pelada.js`)
+
+De dia (8h–18h30, sem chuva forte) e com o jogador a menos de 70 m (`BUILD`; desmonta a 100 m), os meninos jogam **futsal 5 × 5** na quadra da favela
+(`FavelaPlan.squares` 'quadra' — a mesma do baile, à noite): **camisa × sem camisa** (os sem camisa são `civil_banhista`), com goleiro,
+fixo, dois alas e pivô. Antes era um acontecimento da rua (`StreetLife`) com sprites soltos que corriam no lugar e uma bola que
+atravessava as pessoas.
+
+- **Os meninos** são NPCs de verdade (`NPCManager`, `party`: não são reciclados) no **modo livre** (`NPC.free`: a pelada move todos
+  juntos, todo quadro; desenho por `PeladaState.anim` — correr, andar, chutar). O mais perto da bola de cada time vai nela (o goleiro
+  só sai na área dele); os outros ocupam a formação puxada para a bola (avançam com a posse, recuam sem ela; cada time numa faixa
+  lateral, sem grudar no adversário). Na bola: **chute** a gol perto da área, **passe** para quem está mais à frente e livre, ou
+  **condução** escapando da marcação. Goleiro **segura** e repõe com a mão. Juiz: **gol** (a bola na rede), lateral, tiro de meta e
+  escanteio (repõe o time que não tocou por último); comemoração e saída de bola.
+- **A bola** (raio 12 cm, desenhada um pouco maior): gravidade, quique amortecido, atrito de rolar, ar, as paredes dos barracos
+  (`MapGeo.resolveCircle`: a normal do empurrão reflete), **traves e travessão** (rebatem), **rede** (entrou pela boca, fica e
+  amortece; por fora/por cima, volta). Bate nas pernas de quem está no caminho; o **jogador** correndo nela **conduz** (sai com a
+  velocidade dele); com o golpe perto dela, **chuta** (o soco é "mão na bola"); carro e moto também levam a bola.
+- **Invadir irrita** (`anger`, 0–100): ficar na quadra perto do jogo (+5/s; longe da bola, +1,5/s), encostar na bola (+9), chutar (+22)
+  ou mandar para longe (+18 na reposição), trombar num menino correndo (+8), entrar de carro (+40/s, e os de perto correm). Com
+  **30** (`STOP`) o jogo para, todos encaram e o mais perto vem tirar satisfação (`Bubbles`); com **70** (`FIGHT`) — ou na hora, se o
+  jogador bater em um — 2–3 partem para a briga (`FightState`, a mão livre) e o resto grita em volta. Fora da quadra a raiva baixa
+  (−4/s; −7/s a mais de 18 m); abaixo de 12 o jogo recomeça e quem fugiu ou brigou volta (`WANDER` por perto → `PeladaState`).
+- **Susto**: tiro por perto, arma de fogo na mão depois de irritar ou carro em cima — todo mundo corre (`PeladaState.onPanic` → o
+  susto de um vale para a turma). **Temido** no bairro (`WorldMemory` medo ≥ 45): reclamam baixinho e, em vez de brigar, vão embora.
+- Teste: `Pelada.force = true` (joga a qualquer hora); `Pelada.info()` dá o placar, a raiva e a bola.
 
 ## Antisserrilhado dos personagens (`NpcArt`, `Config.art.npcAA`)
 

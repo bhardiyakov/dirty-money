@@ -11,7 +11,7 @@ Leitura do código (sistemas, números e fluxos), não de testes com jogadores. 
 | Economia suja/limpa, fachadas, auditoria da Receita | `Laundry`, `Economy` | Loop "ganhar → lavar → gastar" com risco (taxHeat). |
 | Imóveis (comprar, reformar, dormir, baú, cofre) | `RealEstate`, `HomeStyles` | Sumidouro de dinheiro e âncora de progresso. |
 | Missões do morro com patentes (Aviãozinho → Soldado → Gerente) | `Missions` | 3 tipos; prazo e moral em jogo. |
-| Eventos de mundo: operação policial, baile funk, olheiros, barricadas | `PoliceOperation`, `Baile`, `FavelaWatch` | Dão "histórias" emergentes. |
+| Eventos de mundo: operação policial, baile funk, pelada na quadra, olheiros, barricadas | `PoliceOperation`, `Baile`, `Pelada`, `FavelaWatch` | Dão "histórias" emergentes. |
 | Veículos (carros, motos, bikes, barcos, helicóptero), lojas, armas | `vehicle/*`, `Interiors` | Variedade de brinquedos grande. |
 
 ## Onde o ciclo de vício ainda falha

@@ -348,22 +348,25 @@ class Vehicle {
         this.visual.setVariant(variant);
     }
 
-    // Bicicleta: os pedais giram conforme a velocidade. Moto: o piloto deita para o lado da curva (degraus de inclinação do clipe,
-    // contínuos: setLean) conforme o guidão e a velocidade — volante à direita (lastSteer > 0) = deitado para a direita.
+    // Bicicleta: os pedais giram conforme a velocidade. Moto: moto e piloto DEITAM JUNTOS para dentro da curva — o ângulo é o da
+    // física (atan(velocidade × giro / g): a aceleração lateral da curva que está acontecendo), não o do guidão; a moto 3D deita esse
+    // ângulo e o piloto toca o degrau de inclinação dele (RiderActor.setLean: contínuo, + = deitado para a direita; o degrau extremo,
+    // 1, = RiderActor.BANK rad). Bicicleta: deita bem pouco (o ciclista pedalando não tem degraus de inclinação).
     // Dando RÉ (moto ou bicicleta): não tem marcha a ré — o piloto anda para trás com os pés no chão, montado (RiderActor.walkBack).
     _animateBike(dt) {
         const v = this.visual, fwd = this.forwardSpeed, sp = Math.abs(fwd), riding = this.riderVariant != null && !this.wrecked;
         const back = riding && fwd < -0.15 && v.walkBack;
         if (v.walkBack) v.walkBack(back);
-        if (back) { v.update(dt, -Math.min(1.6, sp / 1.1)); if (v.setLean) v.setLean(0, dt); return; }
+        if (back) { if (v.setLean) v.setLean(0, dt); v.update(dt, -Math.min(1.6, sp / 1.1)); return; }
+        const lean = riding ? Math.atan((fwd * (this._yaw || 0)) / 9.81) / (typeof RiderActor !== 'undefined' ? RiderActor.BANK : 0.5) : 0;
         if (this.spec.bike === 'bike') {
+            if (riding && v.setLean) v.setLean(lean * 0.2, dt);                // (bicicleta 3D: deita um pouco na curva)
             // (o ride_bike dos personagens 2,5D foi assado girando o pedivela para trás — de baixo para a frente: tocado ao contrário,
             // pedala para a frente; o do boneco antigo já gira para a frente)
             v.update(dt, riding ? (Bikes.npc() ? -1 : 1) * Math.min(2.2, sp / 3.6) : 0);
-            if (riding && v.setLean) v.setLean(this.lastSteer * Math.min(1, sp / 4) * 0.6, dt);      // (bicicleta 3D: deita um pouco na curva)
         } else {
+            if (riding && v.setLean) v.setLean(lean, dt);
             v.update(dt, 0);
-            if (riding && v.setLean) v.setLean(this.lastSteer * Math.min(1, sp / 5), dt);
         }
     }
 
@@ -423,12 +426,8 @@ class Vehicle {
         this.braking = (throttle < 0 && fwd > 0.5) || (throttle > 0 && fwd < -0.5);
         // Aceleração (m/s²). Freio: forte, como sempre (power/mass). Motor: pela arrancada do modelo (spec.t100 = 0–100 km/h em s,
         // ver CarSheet) — popular leva ~16 s, superesportivo ~3 s —, perdendo força perto da máxima (arrasto do ar). Ré: marcha curta,
-        // um pouco mais forte. Sem t100 (barcos, motos, bicicletas): o modelo antigo, power/mass.
-        let accel = this.spec.power / this.spec.mass;
-        if (this.spec.t100 && !this.braking) {
-            const r = Math.min(1, Math.abs(fwd) / top);
-            accel = Math.min(accel, (27.78 / this.spec.t100) * (throttle < 0 ? 1.6 : 1) * (1 - 0.6 * r * r * r));
-        }
+        // um pouco mais forte. Sem t100 (barcos): o modelo antigo, power/mass. Freio: até brakeA, se o modelo tem (motos e bicicletas).
+        const accel = Vehicle.accelOf(this.spec, fwd, top, throttle, this.braking);
         this.accelerating = throttle > 0 && fwd >= -0.5 && fwd < this.spec.maxSpeed * 0.7;
         if (throttle !== 0) {
             fwd += throttle * accel * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1) * (cc ? (this.braking ? this._ccBrake || 1 : this._ccPow || 1) : 1)       // freio na chuva rende menos · freio gasto / motor fraco
@@ -441,6 +440,17 @@ class Vehicle {
         // (moto e bicicleta não têm ré: o piloto empurra com os pés — devagar, no passo)
         fwd = BABYLON.Scalar.Clamp(fwd, -(this.spec.maxReverse || (this.spec.bike ? Config.vehicle.bikeReverse : Config.vehicle.maxReverse)), top);
         this._applyMotion(fwd, lat, steer, dt, vel, forward, right);
+    }
+
+    // Aceleração (m/s²) do modelo `spec` a `fwd` m/s (máxima `top`): freando, power/mass (até brakeA); acelerando, pela arrancada (t100).
+    static accelOf(spec, fwd, top, throttle = 1, braking = false) {
+        let a = spec.power / spec.mass;
+        if (braking && spec.brakeA) a = Math.min(a, spec.brakeA);
+        if (spec.t100 && !braking) {
+            const r = Math.min(1, Math.abs(fwd) / top);
+            a = Math.min(a, (27.78 / spec.t100) * (throttle < 0 ? 1.6 : 1) * (1 - 0.6 * r * r * r));
+        }
+        return a;
     }
 
     // Controle por VELOCIDADE-ALVO (usado pela IA do trânsito): acelera/freia até `target`
@@ -511,6 +521,14 @@ class Vehicle {
         const speedFactor = Math.min(1, Math.abs(fwd) / (this.spec.turnRef || Config.vehicle.turnSpeedRef));
         if (this.controlled && this.cond) { gripK *= this._ccGrip || 1; pull += this._ccPull || 0; }      // pneu careca / suspensão desalinhada (CarCare)
         let yaw = (steer * this.spec.turn * (this.controlled ? Vehicle.playerTurn : 1) + pull + wob) * speedFactor * (fwd < 0 ? -1 : 1);
+        // Moto/bicicleta do jogador: a curva é a que a INCLINAÇÃO aguenta — a aceleração lateral (velocidade × giro) não passa de
+        // Config.vehicle.bikeLat (~0,9 g: a moto deitada ~42°) — e o giro entra e sai com um pouco de atraso (o tempo de deitar e
+        // levantar a moto). Antes o giro era o do guidão em qualquer velocidade: a 100 km/h, uma curva de 8 g.
+        if (this.controlled && this.isBike) {
+            const V = Config.vehicle, af = Math.abs(fwd), cap = V.bikeLat / Math.max(af, 1);
+            if (Math.abs(yaw) > cap) yaw = Math.sign(yaw) * cap;
+            yaw = this._byaw = (this._byaw || 0) + (yaw - (this._byaw || 0)) * (1 - Math.exp(-V.bikeLeanIn * dt));
+        }
 
         // --- PESO e DERRAPAGEM (só o carro que o jogador dirige; IA, motos, bicicletas e barcos seguem o modelo de sempre) ---
         //   peso:       rápido, o carro vira menos (subesterço) e a guinada não muda na hora — cresce e some com a inércia da massa

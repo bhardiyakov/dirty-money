@@ -225,6 +225,7 @@ class NPC {
 	panic(threatPos, force = false) {
 		if (this.rag) return;                       // voando/caído: só entra em pânico quando levantar
 		if (this._rage && this.fsm.current === this._rage) { this._rage.scare(threatPos, force); return; }      // (briga de trânsito, na pista: RoadRage)
+		if (this.fsm.current && this.fsm.current.onPanic && this.fsm.current.onPanic(threatPos, force)) return;      // (o estado cuida do susto: Pelada)
 		if ((this.fsm.name === 'SURRENDER' || this.fsm.name === 'MUG' || this.fsm.name === 'FIGHT') && !force) return;      // (o assaltante de rua e quem está brigando não se assustam)
 		this.umbrella = false;                      // (larga o guarda-chuva)
 		if (this.fsm.name === "SWIM" && this.fsm.current.inWater()) { this.fsm.current.scare(threatPos); return; }   // nadando: volta à areia primeiro

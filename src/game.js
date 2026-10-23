@@ -818,6 +818,7 @@ class Game {
 			if (this.watch) this.watch.update(dt, gs.pos);
 			if (this.barricades) this.barricades.update(dt, this.op, Standing.nearFavela(gs.pos.x, gs.pos.z, 20));
 			Baile.update(dt, this);
+			Pelada.update(dt, this);                                     // o futebol dos meninos na quadra da favela (de dia)
 			Perf.lap('favela (gangues/moto/missões)');
 			StreetLife.update(this, dt);                                  // a rua viva: movimento por hora, acontecimentos, conversas
 			Perf.lap('rua viva');
@@ -1203,6 +1204,9 @@ class Game {
 			if (this.birds) this.birds.scare(pos.x, pos.z, 28);
 			return;
 		}
+
+		// Chute NA BOLA da pelada (Player.primary escolheu o chute perto dela): vira para a bola e não acerta ninguém — a Pelada chuta.
+		if (kind === 'kick' && Pelada.ballNear(pos, heading)) { const B = Pelada.E.ball; p.root.rotation.y = Math.atan2(B.x - pos.x, B.z - pos.z); return; }
 
 		// Corpo a corpo: vira para o alvo mais perto à frente (mira assistida) e o golpe vira uma COLISÃO testada durante a animação
 		// (Combat.strike: punho/pé/taco estendido). Quem leva cambaleia e é empurrado; chute e taco derrubam. Quem vê, foge.
@@ -1931,7 +1935,10 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			if (!ok) { pl.boarding = null; bike.hold = false; }
 		};
 		const mount = () => {
-			// (o veículo continua à vista: o sprite da subida só desenha a pessoa — RiderActor)
+			// (o veículo continua à vista: o sprite da subida só desenha a pessoa — RiderActor; a moto sai do descanso e fica em pé, como no
+			// recorte assado do clipe)
+			const B3 = bike.visual && bike.visual.body;
+			if (B3 && B3.setLean) B3.setLean(0);
 			const ok = this.player.startMount(kind, bike.position, heading, S.sign, () => {
 				this.player.boarding = null;
 				if (bike.visual) bike.visual.setVisible(true);

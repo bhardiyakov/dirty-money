@@ -9,16 +9,21 @@
 // heading, y, rotates), mais:
 //   setModel(id)                     troca o desenho (moto em pé ↔ caída)
 //   setRider(variante, folha, clipe) põe/tira o piloto (variante = linha da paleta dos personagens; null = sem piloto)
-//   setLean(v, dt)                   inclinação do piloto pelo guidão (moto, jet ski): v = −1..+1, + = curva para a DIREITA
-//                                    (Vehicle.lastSteer > 0, rumo aumentando); dt > 0 = suaviza (o corpo deita aos poucos)
+//   setLean(v, dt)                   inclinação na curva (moto, jet ski): v = −1..+1 (1 = BANK rad), + = curva para a DIREITA
+//                                    (rumo aumentando; Vehicle._animateBike: pela física da curva); dt > 0 = suaviza (deita aos poucos)
 //   setFrame(f)                      quadro do clipe do piloto (código antigo: prefira setLean)
 //   setLamps / lampGeom              luzes do veículo 3D (CarLights), repassadas ao corpo
 //   walkBack(on)                     dando ré (moto, bicicleta): o piloto fica DE PÉ, montado, e anda para trás com os pés no chão
 //                                    (o clipe de andar tocado ao contrário: update(dt, rate < 0))
 //
-// Veículo 3D (CarArt3D: motos e barcos do VEH3D): o piloto vai no BANCO do modelo (Car3DActor.seat: frente, altura e lado em m) —
-// o sprite sobe à altura do banco, porque o veículo agora tem altura — e a moto deita junto com ele (setLean). Parada sem piloto,
-// a moto fica apoiada no descanso (um pouco deitada para a esquerda).
+// Veículo 3D (CarArt3D: motos e barcos do VEH3D): o piloto vai no BANCO do modelo (Car3DActor.seat: frente, altura e lado em m) já
+// girado com o veículo — a moto deita em volta da linha das rodas e empina/mergulha, e o banco vai junto (_place) — e o sprite sobe à
+// altura dele. Moto: corpo e moto deitam o MESMO ângulo, na hora (setLean → body.setLean(…, direto): sem a mola que atrasava a moto):
+// o degrau de inclinação do piloto foi assado girando a pose inteira em volta do banco (NpcGenAnims.rideBank, ±BANK rad), então os
+// dois viram uma peça só. Parada sem piloto, a moto fica apoiada no descanso (um pouco deitada para a esquerda, pela mola).
+// O piloto continua desenhado POR CIMA da moto, mas os quadros ride_* já saem RECORTADOS pela carroceria 3D (NpcGenRender: pose.occ):
+// a perna do outro lado atrás do tanque e do motor e a coxa por dentro do tanque não são desenhadas — ali aparece a moto. Pés nas
+// pedaleiras e joelhos fechados no tanque (moto de rua: NpcGenAnims.RIDE.moto, medidas da malha); scooter: ride_scooter (pés no assoalho).
 // ============================================================================
 
 class RiderActor {
@@ -62,7 +67,9 @@ class RiderActor {
         } else if (this.rider.sheet !== sheet) { this.rider.useSheet(sheet); this._clipName = null; }
         if (this.riderVariant !== variant) this.rider.setVariant(variant);
         this.riderVariant = variant;
-        // (2,5D: ride_moto/bike/jetski/boat em 16 direções; o boneco antigo só tem ride_moto/ride_bike — jet ski e lancha usam o da moto)
+        // (scooter: pés no assoalho — ride_scooter; atlas sem ele, o da moto)
+        if (clip === 'ride_moto' && RiderActor.SCOOTER.test(this.body.modelId || '') && this.rider.sheet.getClip('ride_scooter', 'none')) clip = 'ride_scooter';
+        // (2,5D: ride_moto/scooter/bike/jetski/boat; o boneco antigo só tem ride_moto/ride_bike — jet ski e lancha usam o da moto)
         if (this._clipName !== clip || this._back) { if (this.rider.play(clip, 'none', { restart: true }) || this.rider.play('ride_moto', 'none', { restart: true })) this._clipName = clip; }
         this._back = false;
         this.rider.setVisible(this.visible);
@@ -72,13 +79,22 @@ class RiderActor {
     _place() {
         const r = this.rider;
         if (!r || this.riderVariant == null) return;
-        const s = Math.sin(this.heading), c = Math.cos(this.heading), S = this.seat;
-        const sz = this.body.sz || 0;
-        r.setPosition(this.x + s * S.z + c * S.x + s * sz, this.z + c * S.z - s * S.x + c * sz);     // (vai junto com a suspensão)
-        r.setHeading(this.heading);
+        const h = this.heading, s = Math.sin(h), c = Math.cos(h), S = this.seat, B = this.body;
         // (a origem do clipe ride_* é o banco, na linha dos pés do sprite — mesh.y − 0,5; o veículo 3D tem o banco na altura dele;
         // andando para trás, os pés vão no chão)
-        const base = this.y - (this.body.kind === 'boat' ? 0.8 : 1.5);
+        const base = this.y - (B.kind === 'boat' ? 0.8 : 1.5);
+        if (S.y != null && !this._back) {
+            // veículo 3D: o banco girado como o modelo (CarArt3D._writeOther: arfagem → inclinação → rumo, em volta da base)
+            const b = B.bank || 0, t = B.tilt || 0, cb = Math.cos(b), sb = Math.sin(b), ct = Math.cos(t), st = Math.sin(t);
+            const y1 = S.y * ct - S.z * st, z1 = S.y * st + S.z * ct, x2 = S.x * cb + y1 * sb, y2 = -S.x * sb + y1 * cb;
+            r.setPosition(this.x + x2 * c + z1 * s, this.z - x2 * s + z1 * c);
+            r.setHeading(h);
+            r.mesh.position.y = base + y2 + 0.5;
+            return;
+        }
+        const sz = B.sz || 0;
+        r.setPosition(this.x + s * S.z + c * S.x + s * sz, this.z + c * S.z - s * S.x + c * sz);     // (vai junto com a suspensão)
+        r.setHeading(h);
         r.mesh.position.y = this._back ? base + 0.5 : S.y != null ? base + S.y + 0.5 : this.y + 0.08;
     }
 
@@ -93,17 +109,20 @@ class RiderActor {
         if (this.rider) this.rider.setVisible(this.visible && this.riderVariant != null);
     }
     setFrame(f) { if (this.rider && this.riderVariant != null) this.rider.setFrame(f); }
-    // Inclinação pilotando: os quadros de ride_moto/ride_jetski são degraus de inclinação (o 1º, +12°, deitado para a direita — o do
-    // meio, reto — o último, para a esquerda; SpriteActor.setLean escolhe/mistura pelo valor contínuo). Os outros clipes (bicicleta
+    // Inclinação pilotando: os quadros de ride_moto/ride_scooter/ride_jetski são degraus de inclinação (o 1º deitado para a direita — o
+    // do meio, reto — o último, para a esquerda; SpriteActor.setLean escolhe/mistura pelo valor contínuo). Os outros clipes (bicicleta
     // pedalando, lancha) seguem o próprio ritmo. v = −1..+1 (+ = curva para a direita); dt > 0: segue o alvo a LEAN_K/s, sem pulo.
     setLean(v, dt = 0) {
         v = Math.max(-1, Math.min(1, +v || 0));
         const L = this._leanV = dt > 0 && this._leanV != null ? this._leanV + (v - this._leanV) * (1 - Math.exp(-RiderActor.LEAN_K * dt)) : v;
         const r = this.rider;
         if (r && this.riderVariant != null && RiderActor.LEAN.test(r.clipName)) r.setLean(L);
-        if (this.body.setLean && this.riderVariant != null) this.body.setLean(L);
+        if (this.body.setLean && this.riderVariant != null) this.body.setLean(L, !this._back);       // (a moto deita junto, na hora)
+        this._place();
     }
     static get STAND() { return -0.3; }
+    // Ângulo (rad) do degrau extremo de inclinação da moto: o do piloto assado (NpcGenAnims.RIDE_BANK) = o da moto 3D (CarArt3D).
+    static get BANK() { return 0.5; }
 
     // Ré com os pés: de pé sobre o chão, montado no banco, andando para trás (o Vehicle toca o clipe com rate < 0) com as MÃOS NO
     // GUIDÃO (ride_back:moto / ride_back:bike, assado para o guidão desse veículo; atlas antigo sem ele: o andar comum).
@@ -115,12 +134,14 @@ class RiderActor {
         else if (this._clipName) r.play(this._clipName, 'none', { restart: true });
         this._place();
     }
-    static get LEAN() { return /^ride_(moto|jetski)$/; }
+    static get LEAN() { return /^ride_(moto|scooter|jetski)$/; }
+    static get SCOOTER() { return /scooter/; }
     static get LEAN_K() { return 7; }
     animate(dt, aF, aL, steer) { this.body.animate(dt, aF, aL, steer); }
 
     update(dt, rate = 1) {
         this.body.update(dt);
+        this._place();                                   // (o banco onde o veículo está AGORA: inclinação e arfagem deste quadro)
         if (this.rider && this.riderVariant != null && this.visible) this.rider.update(dt, rate);
     }
 

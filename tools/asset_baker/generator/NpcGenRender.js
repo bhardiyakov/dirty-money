@@ -4,6 +4,7 @@
 //
 // Em vez de RGB, cada pixel sai como (CÓDIGO, ALFA): código = material × 8 + tom (0–4); material 0 / tons 5–7 = cores fixas (SPECIAL).
 // Corpo debaixo d'água = código de material com alfa < 255 (a cor é misturada com a da água conforme o alfa — ver colorize / NpcArt).
+// Piloto (pose.occ): a carroceria do veículo 3D entra só na profundidade — o que fica atrás dela não é desenhado (_occBuf).
 // ============================================================================
 
 function NpcGenRender(G) {
@@ -70,6 +71,20 @@ function NpcGenRender(G) {
         return o;
     }
 
+    // Carroceria de um veículo 3D (generator/veiculos_occ.js: NPC_VEH_OCC, tirado do assets/cars/veiculos3d.js): P = vértices em m DO
+    // MODELO nos eixos do gerador (x direita, y frente, z cima; origem no centro do modelo, no chão), I = triângulos, seat = [frente,
+    // altura] do banco. null sem o arquivo (o piloto sai sem recorte).
+    const _occ = {};
+    G.vehOcc = (id) => {
+        if (id in _occ) return _occ[id];
+        const S = typeof NPC_VEH_OCC !== 'undefined' && NPC_VEH_OCC[id];
+        if (!S) return (_occ[id] = null);
+        const bytes = (b64) => { const b = atob(b64), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+        const q = new Int16Array(bytes(S.P).buffer), P = new Float32Array(q.length);
+        for (let i = 0; i < q.length; i += 3) { P[i] = q[i] * S.q; P[i + 1] = q[i + 2] * S.q; P[i + 2] = q[i + 1] * S.q; }
+        return (_occ[id] = { P, I: new Uint16Array(bytes(S.I).buffer), seat: S.seat });
+    };
+
     class Renderer {
         // baked = { body: {nome: parte assada}, props: {...} }; W×H = quadro; pivot = pés (px); charScale = escala da ficha × escala de saída.
         constructor(baked, cam, { W = 144, H = 144, pivot = [72, 110], ss = SS, charScale = 1.0 } = {}) {
@@ -111,6 +126,7 @@ function NpcGenRender(G) {
             const nsh = Math.ceil(n / 3);
             this._scratch(nsh);
             const zb = this._zb, wi = this._wi, wl = this._wl, gxs = this._gx, gys = this._gy, Wf = W * ss, Hf = H * ss;
+            const oz = pose.occ && pose.occ.length ? this._occBuf(pose.occ, Ryaw, Rk) : null;          // (piloto: atrás do veículo não entra)
             const code = new Uint8Array(W * H), alpha = new Uint8Array(W * H), depth = new Float64Array(W * H).fill(Infinity);
             const out = { code, alpha, W, H };
             const water = pose.water, hasW = water !== null && water !== undefined, wcut = hasW ? water - 10.0 : 0;
@@ -132,6 +148,7 @@ function NpcGenRender(G) {
                     const cx = wx * k0 + wy * k1 + wz * k2, cy = wx * k3 + wy * k4 + wz * k5, cz = wx * k6 + wy * k7 + wz * k8;
                     const xi = floor((pvx + cx) * ss), yi = floor((pvy - cy) * ss);
                     if (xi < 0 || xi >= Wf || yi < 0 || yi >= Hf) continue;
+                    if (oz !== null && cz > oz[yi * Wf + xi]) continue;
                     kept++;
                     if (xi < x0) x0 = xi; if (xi > x1) x1 = xi; if (yi < y0) y0 = yi; if (yi > y1) y1 = yi;
                     const lin = yi * Wf + xi;
@@ -518,6 +535,52 @@ function NpcGenRender(G) {
 
         // Escala dos efeitos desenhados em px (clarão, respingos): acompanha a resolução do atlas (o pacote original: 1).
         _fxk() { return G.SHADE === 'cel' ? 1 : this.k / 0.5; }
+
+        // Profundidade do veículo que esconde o piloto, por subpixel (pose.occ = [{ id, M, t, s }]: vértice do modelo × s → M · … + t,
+        // em unidades do gerador — NpcGenAnims.rideOcc). Cada modelo dá a superfície mais PERTO dele; com vários, vale a INTERSEÇÃO (a mais
+        // longe, e só onde todos cobrem): um clipe serve a motos parecidas sem abrir buraco no piloto de nenhuma. Depois, erosão de 1
+        // subpixel (~1 cm): na borda sobra um fio de piloto por cima da moto em vez de um buraco entre os dois.
+        _occBuf(list, Ryaw, Rk) {
+            const ss = this.ss, Wf = this.W * ss, Hf = this.H * ss, n = Wf * Hf, pvx = this.px, pvy = this.py;
+            if (!this._oz || this._oz.length !== n) { this._oz = new Float32Array(n); this._oz1 = new Float32Array(n); this._oz2 = new Float32Array(n); }
+            const all = this._oz, one = this._oz1, out = this._oz2;
+            all.fill(-Infinity);
+            let used = 0;
+            for (const o of list) {
+                const m = G.vehOcc(o.id);
+                if (!m) continue;
+                used++;
+                const A = mm3(Ryaw, o.M), T = mv3(Ryaw, o.t), s = o.s, P = m.P, I = m.I, nv = P.length / 3;
+                const sx = this._occX && this._occX.length >= nv ? this._occX : (this._occX = new Float32Array(nv)), sy = this._occY && this._occY.length >= nv ? this._occY : (this._occY = new Float32Array(nv)), sz = this._occZ && this._occZ.length >= nv ? this._occZ : (this._occZ = new Float32Array(nv));
+                for (let i = 0; i < nv; i++) {
+                    const x = P[i * 3] * s, y = P[i * 3 + 1] * s, z = P[i * 3 + 2] * s;
+                    const wx = A[0] * x + A[1] * y + A[2] * z + T[0], wy = A[3] * x + A[4] * y + A[5] * z + T[1], wz = A[6] * x + A[7] * y + A[8] * z + T[2];
+                    sx[i] = (pvx + wx * Rk[0] + wy * Rk[1] + wz * Rk[2]) * ss; sy[i] = (pvy - (wx * Rk[3] + wy * Rk[4] + wz * Rk[5])) * ss; sz[i] = wx * Rk[6] + wy * Rk[7] + wz * Rk[8];
+                }
+                one.fill(Infinity);
+                for (let t = 0; t < I.length; t += 3) {
+                    const a = I[t], b = I[t + 1], c = I[t + 2], ax = sx[a], ay = sy[a], bx = sx[b], by = sy[b], cx = sx[c], cy = sy[c];
+                    const den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+                    if (abs(den) < 1e-9) continue;
+                    const x0 = max(0, floor(min(ax, bx, cx))), x1 = min(Wf - 1, floor(max(ax, bx, cx))), y0 = max(0, floor(min(ay, by, cy))), y1 = min(Hf - 1, floor(max(ay, by, cy)));
+                    const az = sz[a], bz = sz[b], cz = sz[c];
+                    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+                        const px = x + 0.5, py = y + 0.5;
+                        const l1 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den, l2 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den, l3 = 1 - l1 - l2;
+                        if (l1 < 0 || l2 < 0 || l3 < 0) continue;
+                        const z = l1 * az + l2 * bz + l3 * cz, k = y * Wf + x;
+                        if (z < one[k]) one[k] = z;
+                    }
+                }
+                for (let k = 0; k < n; k++) if (one[k] > all[k]) all[k] = one[k];
+            }
+            if (!used) { out.fill(Infinity); return out; }
+            for (let y = 0; y < Hf; y++) for (let x = 0; x < Wf; x++) {
+                const k = y * Wf + x;
+                out[k] = x > 0 && x < Wf - 1 && y > 0 && y < Hf - 1 && all[k - 1] < Infinity && all[k + 1] < Infinity && all[k - Wf] < Infinity && all[k + Wf] < Infinity ? all[k] : Infinity;
+            }
+            return out;
+        }
 
         project(p, Ryaw) {
             const q = mv3(Ryaw, p), Rk = this._Rk || this.Rk;

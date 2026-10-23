@@ -410,9 +410,10 @@ class Player {
         } else if (look === 'none' || look === 'knife') {           // punhos (e a faca sem o desenho novo): COMBO soco esquerdo → soco direito → chute
             const now = performance.now() / 1000;
             if (now - (this._comboEnd || 0) > Player.COMBO_GAP) this._combo = 0;     // demorou: recomeça do 1º soco
-            const name = Player.COMBO[this._combo % Player.COMBO.length];
+            const ball = look === 'none' && typeof Pelada !== 'undefined' && Pelada.ballNear(this.position, this.root.rotation.y);      // (perto da bola da pelada: chuta a bola)
+            const name = ball ? 'kick' : Player.COMBO[this._combo % Player.COMBO.length];
             ok = this.playAction(name, { lock: name === 'kick' ? 0.2 : 0.25, onDone: () => { this._comboEnd = performance.now() / 1000; } });
-            if (ok) this._combo = (this._combo + 1) % Player.COMBO.length;
+            if (ok && !ball) this._combo = (this._combo + 1) % Player.COMBO.length;
         } else if (w === 'bat') {
             ok = this.playAction('swing', { lock: 0.3, weapon: w });
         } else {
@@ -499,6 +500,7 @@ class Player {
         if (!this.actor.sheet.isNpc) { this._baseSheet = this.actor.sheet; this.actor.useSheet(this.lib.sheets.rider); }
         this.root.position.set(bikePos.x, 0, bikePos.z);
         this.root.rotation.y = bikeHeading;
+        this.actor._dirD = 0;                    // (sem a histerese: a direção desenhada mais perto do rumo da moto — o recorte do clipe conta com ela)
         this.velocity.setAll(0);
         const ok = this.playAction('mount', {
             weapon: side < 0 ? kind + 'L' : kind, lock: 0,

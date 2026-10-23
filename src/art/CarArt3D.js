@@ -737,8 +737,13 @@ class Car3DActor {
 	setVisible(v) { this.visible = !!v; }
 	// Moto: '<id>_caida' = o mesmo modelo deitado de lado (piloto arremessado; Vehicle._bikeLook, MotoTaxi).
 	setModel(id) { this.fallen = /_caida$/.test(String(id)); }
-	// Moto: inclinação do guidão (RiderActor.setLean, já suavizada): −1..+1, + = curva para a direita — a moto deita para dentro.
-	setLean(v) { this.lean = +v || 0; }
+	// Moto: inclinação na curva (RiderActor.setLean, já suavizada): −1..+1, + = curva para a direita — a moto deita para dentro.
+	// direct: com piloto, deita ESSE ângulo na hora (o piloto tem o mesmo: corpo e moto juntos); sem (descanso), pela mola.
+	setLean(v, direct = false) {
+		this.lean = +v || 0;
+		this._direct = !!direct && this.kind === 'moto';
+		if (this._direct && !this.fallen) { this.bank = this.lean * 0.5; this._vb = 0; }
+	}
 
 	// Luzes (CarLights, a cada quadro, só para os carros perto): head/tail = 0..1 (lanterna 1 = freio), sigL/sigR = seta piscando
 	// AGORA (já com o pisca), siren = 0 desligado | 1 fase azul | 2 fase vermelha, reverse = luz de ré.
@@ -815,7 +820,8 @@ class Car3DActor {
 		let tb, tt;
 		if (this.kind === 'moto') { tb = this.fallen ? 1.42 : this.lean * 0.5; tt = this.fallen ? 0 : lim(-aF * 0.004, 0.05); }
 		else { tb = lim(aL * 0.008, 0.14) + Math.sin(this._t * 1.7) * 0.012; tt = -Math.min(0.09, sp * 0.004) - lim(aF * 0.006, 0.05) + Math.sin(this._t * 1.3 + 1) * 0.01; }
-		this._vb += (110 * (tb - this.bank) - 14 * this._vb) * h; this.bank += this._vb * h;
+		if (this.kind === 'moto' && this._direct && !this.fallen) { this.bank = tb; this._vb = 0; }      // (com piloto: o ângulo dele, sem mola)
+		else { this._vb += (110 * (tb - this.bank) - 14 * this._vb) * h; this.bank += this._vb * h; }
 		this._vt += (120 * (tt - this.tilt) - 12 * this._vt) * h; this.tilt += this._vt * h;
 	}
 	// Helicóptero (HeliVisual): inclinação do voo e ângulos dos rotores, direto.
