@@ -8,9 +8,9 @@
 
 const PadGlyphs = {
     // Tecla do teclado (como aparece no <b>) -> botão "standard". Espelha o layout GTA / Watch Dogs do InputManager.poll.
-    // (SHIFT só aparece nas dicas do helicóptero, onde desce com LT; a pé correr é A/✕.)
+    // (SHIFT só aparece nas dicas do helicóptero, onde desce com LT; a pé o sprint é L3. Furtar e arrombar dividem o ↓: o Game decide.)
     KEY_BTN: {
-        'F': 'y', 'E': 'x', 'V': 'a', 'Q': 'l3', 'R': 'b', 'J': 'b', 'K': 'rb', 'G': 'down', 'C': 'rs', 'M': 'up', 'L': 'down', 'H': 'l3', 'I': 'back',
+        'F': 'y', 'E': 'x', 'V': 'a', 'Q': 'rs', 'R': 'b', 'J': 'b', 'K': 'rb', 'G': 'down', 'C': 'down', 'M': 'up', 'L': 'down', 'H': 'l3', 'I': 'back',
         'ESPAÇO': 'rt', 'ESPAÇO/CLIQUE': 'rt', 'SHIFT': 'lt', 'ESC': 'start', 'ENTER': 'a',
         'WASD': 'ls', 'W/S': 'ls', 'A/D': 'ls', 'Q/E': 'rstick', '1-9': 'dpadlr',
     },

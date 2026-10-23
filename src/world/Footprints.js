@@ -167,7 +167,7 @@ const Footprints = {
         if (game) {
             const pl = game.player;
             if (pl && game.mode === 'player' && pl.alive && !pl.rag && !pl.swimming && !(typeof Interiors !== 'undefined' && Interiors.active) && !pl.onDeck)
-                this._walk(pl, pl.position.x, pl.position.z, pl.state === 'sprint');
+                this._walk(pl, pl.position.x, pl.position.z, pl.state === 'sprint' || pl.state === 'jog');
             const near = (e) => e.alive && !e.rag && e.actor && (typeof Zones === 'undefined' || Zones.near(e.position.x, e.position.z, 12));
             const M = game.npcManager;
             if (M) for (const n of M.npcs) if (near(n)) this._walk(n, n.position.x, n.position.z, n.fleeing || n.state === 'FLEE');

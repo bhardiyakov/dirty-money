@@ -52,9 +52,9 @@ const Physique = {
         if (h > 0.5) h = Math.min(h, 72);                                         // dormiu/esperou horas: aplica de uma vez (até 3 dias)
         const day = Math.floor(now / 24);
         if (day !== this.day) { this.day = day; this.sets = {}; this.gainToday = 0; }
-        // correndo gasta comida (e, sem comida, gordura)
+        // correndo gasta comida (e, sem comida, gordura): o sprint inteiro; o trote (o passo padrão), um pouco
         const pl = g && g.player;
-        const run = pl && g.mode === 'player' && pl.state === 'sprint' ? dt : 0;
+        const run = pl && g.mode === 'player' ? (pl.state === 'sprint' ? dt : pl.state === 'jog' ? dt * 0.25 : 0) : 0;
         this._tick(h, run);
     },
     _tick(h, run = 0) {

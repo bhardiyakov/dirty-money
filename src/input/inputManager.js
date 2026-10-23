@@ -4,14 +4,16 @@
 // "apertam teclas virtuais" (setVirtual) — assim cada sistema (menu, mini-game de arrombar, tela de preso) funciona sem mudança.
 //
 //   Controle (Gamepad API, layout "standard" — Xbox/PlayStation/Switch Pro), no padrão dos jogos de mundo aberto (GTA V / Watch Dogs):
-//     A pé:   analógico esq. mover · A/✕ correr (segurar) e pular grade/muro (tocar perto) · L3 agachar/cobertura (Q) · RB rolar
+//     A pé:   analógico esq. mover (pouco inclinado: anda; inclinado: trota) · L3 SPRINT (Shift: tocar repetido = mais rápido, segurar =
+//             sprint médio; também no nado) · A/✕ pular grade/muro (perto de um) · R3 agachar/cobertura/mergulhar (Q) · RB rolar
 //             · X/□ interagir (E)
 //             Y/△ entrar no veículo (F) · B/○ recarregar · RT/R2 golpe (sem arma: combo soco+soco+chute)/tiro · LT/L2 MIRAR (ver Aim)
-//             LB/L1 segurado: RODA DE ARMAS (WeaponWheel; toque rápido = próxima) · direcional ←/→ troca de arma · R3 furtar (C)
-//             · ↑ kit médico · ↓ arrombar (G)
+//             LB/L1 segurado: RODA DE ARMAS (WeaponWheel; toque rápido = próxima) · direcional ←/→ troca de arma
+//             · ↑ kit médico · ↓ arrombar o carro trancado encostado (G) — sem carro, furtar quem está perto (C) ('padsteal': Game)
 //             Mirando: analógico dir. aponta (manual) ou troca de alvo (assistida). Teclado/mouse: botão direito mira, o cursor aponta.
 //             Mira manual com arma de fogo: mesmo sem mirar, o analógico dir. aponta (e não dá zoom) e o cursor do mouse é a mira.
 //     Carro:  RT acelera · LT freia/ré · Y/△ sair · X/□ interagir (abastecer/desmanche) · L3 buzina · ↓ faróis
+//             Bicicleta: L3 é o SPRINT (pedalar forte, como o sprint a pé: toque repetido = mais forte)
 //     Helicóptero: RT sobe · LT desce · analógico esq. mover · analógico dir. ↔ gira · Y/△ descer/pular
 //     Sempre: Back/SHARE inventário · Start/OPTIONS pausa (Game) · analógico dir. ↕ zoom
 //     As dicas na tela mostram os botões do controle conectado (Xbox ou PlayStation): ver PadGlyphs (que espelha esta tabela).
@@ -28,6 +30,9 @@ class InputManager {
         this.zoomAxis = 0;                  // zoom contínuo analógico (+ afasta)
         this.carMode = false;               // o Game avisa: dirigindo (RT/LT viram acelerador/freio)
         this.heliMode = false;              // o Game avisa: pilotando o helicóptero (RT sobe, LT desce)
+        this.bikeMode = false;              // o Game avisa: pedalando a bicicleta (L3 = sprint, não buzina)
+        this.sprint = 0;                    // IMPULSO do sprint, 0–1 (sprintTick: cada toque soma, segurar mantém um mínimo)
+        this._sprintWas = false;
         this.gunInHand = false;             // o Game avisa: arma de fogo na mão (B recarrega; sem ela, B dá soco)
         this.padConnected = false;          // há controle conectado?
         this.padName = '';
@@ -177,16 +182,15 @@ class InputManager {
         set('r', foot && btn(1) && this.gunInHand);         // B: recarregar (arma de fogo na mão)
         // (sem arma, B não faz nada: o combo de mãos — soco + soco + chute — sai do RT)
         set('padcancel', btn(1));                           // B: cancelar (mini-game de arrombar)
-        set('g', foot && btn(13));                          // ↓: arrombar na manha
-        set('c', foot && btn(11));                          // R3: furtar
+        set('padsteal', foot && btn(13));                   // ↓: arrombar na manha (carro trancado encostado) ou furtar (Game)
         set('m', btn(12));                                  // ↑: kit médico
         set('l', car && btn(13));                           // ↓ no carro: faróis
-        set('h', car && btn(10));                           // L3: buzina
-        set('q', foot && btn(10));                          // L3 a pé: agachar / cobertura
+        set('h', car && !this.bikeMode && btn(10));         // L3 no carro/moto: buzina
+        set('q', foot && btn(11));                          // R3 a pé: agachar / cobertura (nadando: mergulhar)
         set('roll', foot && btn(5));                        // RB a pé: rolar (esquiva)
         set('i', btn(8));                                   // Back/SHARE: inventário
         set(' ', !car && rt);                               // RT: golpe/tiro (rajada segurando) · helicóptero: sobe
-        set('shift', (foot && !lt && btn(0)) || (heli && lt));           // A segurado: correr (mirando, não corre) · helicóptero: LT desce
+        set('shift', ((foot || this.bikeMode) && !lt && btn(10)) || (heli && lt));      // L3: sprint (mirando, não corre) · helicóptero: LT desce
         set('padwheel', foot && btn(4));                    // LB: roda de armas (segurar) / próxima arma (toque) — WeaponWheel
         const edge = (i) => btn(i) && !this._padPrev[i];
         if (foot && this.onWeaponCycle) {                   // ←/→: troca de arma (com a roda aberta: troca dentro da categoria)
@@ -215,8 +219,28 @@ class InputManager {
         return { x: Math.max(-1, Math.min(1, x)), z: Math.max(-1, Math.min(1, z)) };
     }
 
+    // Inclinação do movimento (0–1): o analógico (controle/joystick da tela) pouco inclinado = andar; teclado = 1.
+    get moveTilt() {
+        const k = this.keys;
+        if (k['w'] || k['s'] || k['a'] || k['d'] || k['arrowup'] || k['arrowdown'] || k['arrowleft'] || k['arrowright']) return 1;
+        return Math.min(1, Math.hypot(this.analog.x, this.analog.z));
+    }
+
+    // Sprint PROPORCIONAL, como no GTA San Andreas (Shift · L3 · botão CORRER do celular — todos viram a tecla 'shift'): cada toque
+    // soma Config.player.sprintTap ao impulso, segurar o mantém em pelo menos sprintHold, e ele cai sprintDecay/s até esse mínimo
+    // (solto: até 0 — de volta ao trote). Uma vez por quadro (Game); o mesmo impulso serve a pé, nadando e pedalando. O toque conta
+    // pela borda (justPressed): um toque rápido que aperta e solta entre dois quadros não se perde.
+    sprintTick(dt) {
+        const P = Config.player, held = !!this.keys['shift'];
+        if (this.consumePress('shift') || (held && !this._sprintWas)) this.sprint = Math.min(1, Math.max(this.sprint, P.sprintHold * 0.5) + P.sprintTap);
+        this._sprintWas = held;
+        const floor = held ? P.sprintHold : 0;
+        this.sprint = this.sprint > floor ? Math.max(floor, this.sprint - P.sprintDecay * dt) : (held ? floor : 0);
+        return this.sprint;
+    }
+
     isSprinting() {
-        return !!this.keys['shift'];
+        return this.sprint > 0.02 || !!this.keys['shift'];
     }
 
     // Segurando o botão de mirar (LT/L2 ou botão direito do mouse)?
