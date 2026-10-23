@@ -35,6 +35,7 @@ function NpcGenBuild(G) {
         water: ['swim', 'swim_idle', 'swim_breast', 'wade', 'wade_idle', 'swim_in', 'swim_out', 'swim_stand', 'dive_in', 'dive', 'dive_out', 'board_boat'],
         car: ['opendoor', 'enter', 'carjack', 'sitin', 'sitout', 'pick', 'pickpocket', 'rummage', 'ride_moto', 'ride_jetski', 'ride_bike', 'ride_boat', 'ride_back', 'mount'],
         gym: ['gym_curl', 'gym_bench', 'gym_squat'],
+        arm: [],               // (por tipo, não por nome: os clipes `lazy` do tipo — a faca, o revólver e o taco dos civis que revidam)
     };
     const GROUP_OF = {}, ORDER = Object.keys(GROUPS);
     for (const [g, l] of Object.entries(GROUPS)) for (const n of l) GROUP_OF[n] = g;
@@ -92,7 +93,8 @@ function NpcGenBuild(G) {
             for (const p of c.poses) { row.push(trim(R.render(p, (-360 / D) * d), [R.px, R.py])); yield; }
             frames.push(row);
         }
-        return { key, fps: c.fps, loop: !!c.loop, n: c.poses.length, dirs: D, frames };
+        const t = typeId && G.TYPES && G.TYPES[typeId], group = t && t.lazy && t.lazy.includes(key) ? 'arm' : undefined;
+        return { key, fps: c.fps, loop: !!c.loop, n: c.poses.length, dirs: D, frames, group };
     }
 
     // Recorta o quadro no que tem pixel (com a posição relativa aos pés).
@@ -127,7 +129,7 @@ function NpcGenBuild(G) {
     function packPages(clips) {
         const buckets = new Map();                                  // "g|par" → [{ c, d }]
         for (const c of clips) {
-            const g = GROUP_OF[c.key.split(':')[0]] || 'act';
+            const g = c.group || GROUP_OF[c.key.split(':')[0]] || 'act';
             for (let d = 0; d < c.dirs; d++) {
                 const k = g + '|' + (c.dirs > 8 ? d & 1 : 0);
                 if (!buckets.has(k)) buckets.set(k, []);

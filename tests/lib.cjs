@@ -35,7 +35,8 @@ function serve() {
     });
 }
 
-// Abre o jogo, começa um jogo novo e espera a tela de carregamento sumir. opts: { touch, width, height, outside (sai do esconderijo) }
+// Abre o jogo, começa um jogo novo e espera a tela de carregamento sumir. opts: { touch, width, height, outside (sai do esconderijo),
+// query (mais parâmetros na URL: 'gfx=high') }
 async function boot(ctx, opts = {}) {
     const { chromium } = playwright();
     const browser = ctx.browser || (ctx.browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] }));
@@ -44,7 +45,8 @@ async function boot(ctx, opts = {}) {
     const errors = [];
     page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + ' ' + (e.stack || '').split('\n').slice(1, 3).join(' | ')));
     page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 300)); });
-    await page.goto(ctx.url + '/index.html' + (opts.touch ? '?touch' : ''));
+    const q = [opts.touch ? 'touch' : '', opts.query || ''].filter(Boolean).join('&');
+    await page.goto(ctx.url + '/index.html' + (q ? '?' + q : ''));
     await page.waitForFunction(() => window.mainMenu, null, { timeout: 300000 });
     await page.evaluate(() => window.mainMenu._start('new'));
     await page.waitForFunction(() => window.game && window.game._loadingHidden, null, { timeout: 300000 });

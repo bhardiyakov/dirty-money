@@ -3,11 +3,13 @@
 // from what the device tells about itself. Applied once, on page load, right after config.js and before anything reads Config — a change
 // in the settings is saved (dm_settings.graphics) and takes effect the next time the game opens.
 //
-//   level    resolution                     anti-aliasing   sun shadows   2.5D characters      people / traffic   frame cap
-//   low      75% of the window's pixels     off             off           8 directions, 160 MB  ½ / ½             30
-//   medium   the screen's density (up to 1.5×) on            1024          8 directions, 256 MB  the light profile 30
-//   high     the screen's density (up to 2×) on             2048          16 directions, 640 MB full               30 (60 in the PC app)
-//   hd       the screen's density (up to 3×) on             4096          16 directions, 1 GB   full               60
+//   level    resolution                     anti-aliasing    sun shadows   2.5D characters                    people / traffic   frame cap
+//   low      75% of the window's pixels     off              off           8 directions, 160 MB, no AA        ½ / ½             30
+//   medium   the screen's density (up to 1.5×) MSAA 4×        1024          8 directions, 256 MB, 4× SSAA      the light profile 30
+//   high     the screen's density (up to 2×) MSAA 4×          2048          16 directions, 640 MB, 16× SSAA    full               30 (60 in the PC app)
+//   hd       the screen's density (up to 3×) MSAA 8×          4096          16 directions, 1 GB, 16× SSAA      full               60
+// (MSAA = the scene's geometry edges, render/Smooth.js — 8× only while the frame is ≤ 4 Mpx; SSAA = up to that many samples per pixel
+// inside the characters' own shader, NpcArt: MSAA cannot smooth the inside of a sprite.)
 //
 // Automatic: a weak GPU (software renderers, old Mali / Adreno / PowerVR / Intel HD), very little memory or very few cores = low; a phone
 // or tablet, ≤ 4 GB or ≤ 4 cores = medium; anything else = high (HD is only ever chosen by hand). The AutoQuality still steps the
@@ -20,10 +22,10 @@ const Graphics = {
 	CHOICES: ['auto', 'low', 'medium', 'high', 'hd'],
 	LABEL: { auto: 'Automático', low: 'Low', medium: 'Medium', high: 'High', hd: 'HD' },
 	PRESETS: {
-		low: { renderScale: 0.75, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30 },
-		medium: { renderScale: 1, dprCap: 1.5, smooth: true, shadows: true, shadowSize: 1024, npcDirs: 8, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30 },
-		high: { renderScale: 1, dprCap: 2, smooth: true, shadows: true, shadowSize: 2048, npcDirs: 16, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 30 },
-		hd: { renderScale: 1, dprCap: 3, smooth: true, shadows: true, shadowSize: 4096, npcDirs: 16, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60 },
+		low: { renderScale: 0.75, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcAA: 1, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30 },
+		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, shadows: true, shadowSize: 1024, npcDirs: 8, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30 },
+		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, shadows: true, shadowSize: 2048, npcDirs: 16, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 30 },
+		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, shadows: true, shadowSize: 4096, npcDirs: 16, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60 },
 	},
 	// GPUs that cannot carry the high preset (WEBGL_debug_renderer_info): software rasterisers and old mobile/integrated chips.
 	WEAK_GPU: /swiftshader|llvmpipe|software|mali-[2-4]\d\d|mali-t|adreno \(tm\) [2-5]\d\d|powervr sgx|powervr rogue g[e6]|intel.*hd graphics [2-5]\d{2,3}\b|gma/i,
@@ -83,7 +85,7 @@ const Graphics = {
 		const fps60 = desktopApp || (typeof location !== 'undefined' && location.search.includes('fps60'));      // (PC app, or `?fps60` to test)
 		P.fpsCap = p.fps > 30 || (fps60 && this.level === 'high') ? 60 : 30;
 		P.lite = this.level === 'low' || this.level === 'medium';
-		A.smooth = p.smooth; A.npcDirs = p.npcDirs; A.vramMB = p.vramMB; A.uploadMB = p.uploadMB;
+		A.smooth = p.smooth; A.msaa = p.msaa || 0; A.npcDirs = p.npcDirs; A.npcAA = p.npcAA || 1; A.vramMB = p.vramMB; A.uploadMB = p.uploadMB;
 		this._crowd(p.crowd);
 		if (P.lite && typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // (no frosted-glass panels: ver Theme)
 	},

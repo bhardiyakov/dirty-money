@@ -3,8 +3,9 @@
 //   WANDER — caminha entre destinos, obedecendo semáforos de pedestre.
 //   IDLE   — para um pouco (olha a vitrine, confere o celular...).
 //   FLEE   — foge em pânico (assalto, tiro, perseguição).
-//   HURT   — levou um golpe: cambaleia e depois foge do agressor (ou, se for brigão, revida).
-//   FIGHT  — revida: vai até o jogador e troca socos e chutes (Combat.strike) até cansar ou apanhar demais.
+//   HURT   — levou um golpe: cambaleia e depois foge do agressor (ou revida: Temper).
+//   FIGHT  — revida: vai até o adversário e briga — soco e chute, faca, taco ou revólver (Combat.strike / fire) — até cansar ou
+//            apanhar demais; quem anda armado saca quando a coisa aperta.
 // Os estados só decidem PARA ONDE ir; o Recast Crowd resolve o caminho.
 // ============================================================================
 
@@ -176,89 +177,227 @@ class SurrenderState {
     get kneeling() { return this.t > 0.9; }                 // fim do clipe de rendição (8 quadros a 9 fps)
 }
 
-// --- HURT: cambaleia por um instante; depois foge de quem bateu. -------------
+// --- HURT: cambaleia por um instante; depois revida (Temper) ou foge de quem bateu. ---------------------
 class HurtState {
     constructor(npc) {
         this.npc = npc;
         this.name = 'HURT';
         this.timer = 0;
+        this.reply = null;
     }
 
     enter() {
         this.timer = 0.55;
         this.npc.setSpeed(0);
+        this.reply = FightState.wants(this.npc);                       // (já decide: as páginas da arma chegam enquanto ele cambaleia)
+        if (this.reply) Temper.prefetch(this.npc, this.reply.weapon !== 'none' ? this.reply.weapon : this.reply.armed);
     }
 
     update(dt) {
         this.timer -= dt;
         if (this.timer > 0) return;
-        const npc = this.npc;
-        if (FightState.wants(npc)) npc.fsm.setState(new FightState(npc, npc.ctx.game.player));
+        const npc = this.npc, R = this.reply && FightState.wants(npc);      // (ainda vale: o jogador pode ter sacado, entrado no carro…)
+        if (R) npc.fsm.setState(new FightState(npc, npc.ctx.game.player, R));
         else npc.panic(npc.threat, true);
     }
 }
 
-// --- FIGHT: o brigão revida — vai até quem bateu e troca socos e chutes (golpes de verdade: Combat.strike) até cansar, apanhar
-// demais, o outro sumir/entrar num carro ou puxar uma arma de fogo. Aí foge.
+// --- FIGHT: revida — vai até o adversário (o jogador; numa briga de rua ou de trânsito, outro pedestre) e briga com o que tem na mão:
+// soco e chute, facada, taco (golpes de verdade: Combat.strike) ou revólver (Combat.fire, de longe e com a linha de tiro livre), até
+// cansar, apanhar demais, o outro sumir/entrar num carro — ou aparecer uma arma que ele não encara (Temper). Quem anda armado e está
+// levando a pior no braço, ou vê o outro sacar, SACA a dele (escalada). Fora do NavMesh (briga de trânsito, na pista: npc.free) anda
+// em linha reta (NPC.walkFree).
 class FightState {
-    // Revida? Só o brigão (NPC.brawler), batido pelo jogador a pé, com fôlego e o jogador sem arma de fogo na mão.
+    // Revida o jogador? → null ou { weapon (com que entra), armed (a arma que tem) } — Temper: homens a mão livre; contra faca, taco
+    // ou arma de fogo, só os armados; mulheres com faca ou taco, mais na periferia.
     static wants(npc) {
         const g = npc.ctx.game, p = g && g.player;
-        if (!p || !npc.brawler || npc._hitBy !== 'player' || npc.hp < npc.maxHp * 0.4 || !g.combat) return false;
-        if (g.mode !== 'player' || !p.alive || p.rag || FightState.armed(p)) return false;
-        return hypot(p.position.x - npc.position.x, p.position.z - npc.position.z) < 9;
+        if (!p || npc._hitBy !== 'player' || npc.hp < npc.maxHp * 0.4 || !g.combat) return null;
+        if (g.mode !== 'player' || !p.alive || p.rag || (npc.free && (npc._freeDepth || 0) > 0)) return null;      // (nadando: foge)
+        const R = Temper.reply(npc, Temper.attackOf(npc._hitKind), p, g);
+        if (!R) return null;
+        return hypot(p.position.x - npc.position.x, p.position.z - npc.position.z) < (R.weapon === 'pistol' ? 30 : 9) ? R : null;
     }
-    static armed(p) { const W = Weapons[p.weapon]; return !!(W && W.gun); }
+    static LINES = {
+        draw: ['Agora tu vai ver!', 'Tá achando que eu sou otário?!', 'Quer brincar? Então vem!'],
+        pistol: ['Mexeu com a pessoa errada!', 'Vai morrer, vagabundo!'],
+    };
 
-    constructor(npc, foe) {
+    constructor(npc, foe, opts = {}) {
         this.npc = npc;
         this.foe = foe;
         this.name = 'FIGHT';
-        this.clip = null;          // golpe tocando (o NPC.update toca o clipe)
-        this.attackT = 0;          // tempo até o golpe acabar
+        this.weapon = opts.weapon || 'none';      // na mão: 'none' | 'knife' | 'bat' | 'pistol'
+        this.armed = opts.armed || (this.weapon !== 'none' ? this.weapon : null);      // a arma que ele TEM (saca na escalada)
+        this.clip = null;          // clipe tocando (golpe, sacar, mirar, atirar) e a arma dele
+        this.clipW = null;
+        this.attackT = 0;          // tempo até o golpe/tiro acabar
         this.cd = 0.25;            // até o próximo golpe
         this.timer = 0;            // fôlego
         this.repath = 0;
+        this.stagger = 0;          // levou um golpe: cambaleia (onHurt)
+        this.aimT = 0; this.ammo = 6; this.reload = 0;      // revólver: mirando, balas no tambor, recarregando
+        this._dt = 0;
     }
 
     enter() {
-        this.timer = 9 + Math.random() * 6;
-        this.npc.waiting = null; this.npc.crossing = null;
-        this.npc.fleeAge = 0;
+        const npc = this.npc;
+        this.timer = this.weapon === 'pistol' ? 14 + Math.random() * 8 : 9 + Math.random() * 6;
+        npc.waiting = null; npc.crossing = null;
+        npc.fleeAge = 0;
+        if (this.weapon !== 'none') this._draw(this.weapon, false);
     }
 
     update(dt) {
         const npc = this.npc, g = npc.ctx.game, foe = this.foe, p = npc.position;
+        this._dt = dt;
         this.timer -= dt; this.cd -= dt; this.repath -= dt;
-        if (this.attackT > 0 && (this.attackT -= dt) <= 0) this.clip = null;
+        if (this.attackT > 0 && (this.attackT -= dt) <= 0) { this.clip = null; this.clipW = null; }
+        if (this.stagger > 0) { this.stagger -= dt; this._stop(); return; }
         const dx = foe.position.x - p.x, dz = foe.position.z - p.z, d = hypot(dx, dz);
-        if (g.mode !== 'player' || !foe.alive || g.hiding || this.timer <= 0 || d > 14 || npc.hp < npc.maxHp * 0.3 || FightState.armed(foe)) {
-            this.clip = null;
-            npc.panic(foe.position, true);
-            return;
-        }
-        if (foe.rag) { if (this.attackT <= 0) { npc.setSpeed(0); this.clip = null; } return; }          // caiu: espera levantar
+        const lost = npc.hp < npc.maxHp * 0.3;
+        const away = foe === g.player ? g.mode !== 'player' || !!g.hiding : !!(foe.fsm && /^(FLEE|DEAD|RAG)$/.test(foe.fsm.name) && !foe.rag);
+        if (!foe.alive || away || this.timer <= 0 || d > (this.weapon === 'pistol' ? 34 : 14) || lost) { this._quit(lost); return; }
+        // A arma na mão do outro: encara, saca a dele (escalada) ou foge.
+        const t = Temper.threat(foe, g);
+        if (!this._faces(this.weapon, t, d)) {
+            if (this.armed && this.armed !== this.weapon && this._faces(this.armed, t, d)) this._draw(this.armed);
+            else { this._quit(true); return; }
+        } else if (this.weapon === 'none' && this.armed && npc.hp < npc.maxHp * 0.55 && this.attackT <= 0) this._draw(this.armed);   // apanhando no braço
+        if (foe.rag) { if (this.attackT <= 0) { this._stop(); this.clip = null; } return; }          // caiu: espera levantar
         npc.heading = Math.atan2(dx, dz);
-        if (this.attackT > 0 || d < 0.95) {                                       // golpeando ou colado: para
-            npc.setSpeed(0);
-            if (this.repath <= 0) { npc.gotoTarget(p); this.repath = 0.3; }
-        } else {                                                                  // avança
-            npc.setSpeed(Config.npc.fleeSpeed * 0.8);
-            if (this.repath <= 0) { npc.gotoTarget(foe.position); this.repath = 0.3; }
+        if (this.weapon === 'pistol') this._gunfight(g, d);
+        else this._melee(g, d);
+    }
+
+    // Com `w` na mão, encara a ameaça `t` a `d` m? (mão livre: só mão livre; faca/taco: contra arma de fogo, só colado)
+    _faces(w, t, d) {
+        if (t === 'hand') return true;
+        if (w === 'none' || !w) return false;
+        return t !== 'gun' || w === 'pistol' || d <= Config.npc.temper.closeVsGun;
+    }
+
+    // Saca `w` (o revólver com o clipe de sacar; a faca e o taco já aparecem na mão).
+    _draw(w, say = true) {
+        const npc = this.npc;
+        this.weapon = w; this.armed = w;
+        this.clip = null; this.clipW = null; this.attackT = 0;
+        Temper.prefetch(npc, w);
+        if (w === 'pistol' && npc.actor.play('draw', 'pistol', { restart: true })) {
+            this.clip = 'draw'; this.clipW = 'pistol';
+            this.attackT = Math.min(0.7, this._dur(0.5)); this.cd = this.attackT + 0.25;
         }
-        if (d < 1.45 && this.cd <= 0 && this.attackT <= 0) this._attack(g);
+        this.timer = Math.max(this.timer, w === 'pistol' ? 12 : 8);
+        const L = FightState.LINES[w === 'pistol' && Math.random() < 0.5 ? 'pistol' : 'draw'];
+        if (say && typeof Bubbles !== 'undefined') Bubbles.say(npc, L[Math.floor(Math.random() * L.length)], { tone: 'angry', ms: 2200 });
+    }
+    _dur(def) { const c = this.npc.actor.clip; return c && c.fps > 0 ? c.frames / c.fps : def; }
+
+    // Anda até (x, z) (crowd do Recast; fora dele, em linha reta) / para.
+    _go(x, z, speed) {
+        const npc = this.npc;
+        if (npc.free) { npc.walkFree(x, z, speed, this._dt); return; }
+        npc.setSpeed(speed);
+        if (this.repath <= 0) { npc.gotoTarget(new BABYLON.Vector3(x, 0, z)); this.repath = 0.3; }
+    }
+    _stop() {
+        const npc = this.npc;
+        if (npc.free) { npc._freeV = 0; return; }
+        npc.setSpeed(0);
+        if (this.repath <= 0) { npc.gotoTarget(npc.position); this.repath = 0.3; }
+    }
+
+    // Corpo a corpo: avança e, ao alcance, golpeia.
+    _melee(g, d) {
+        const foe = this.foe, reach = this.weapon === 'bat' ? 1.85 : this.weapon === 'knife' ? 1.5 : 1.45;
+        if (this.attackT > 0 || d < 0.95) this._stop();                           // golpeando ou colado: para
+        else this._go(foe.position.x, foe.position.z, Config.npc.fleeSpeed * 0.8);    // avança
+        if (d < reach && this.cd <= 0 && this.attackT <= 0) this._attack(g);
     }
 
     _attack(g) {
-        const npc = this.npc, r = Math.random();
-        const kind = r < 0.25 ? 'kick' : (this._jab = !this._jab) ? 'punchL' : 'punch';
-        if (!npc.actor.play(kind, 'none', { restart: true })) return;
-        this.clip = kind;
-        const c = npc.actor.clip;                                                 // (o golpe dura o clipe: n/fps — mais quadros, o mesmo tempo)
-        this.attackT = c && c.fps > 0 ? c.frames / c.fps : { punch: 0.43, punchL: 0.36, kick: 0.58 }[kind];
+        const npc = this.npc, w = this.weapon, cw = w === 'knife' || w === 'bat' ? w : 'none';
+        const kind = cw !== 'none' ? Temper.BLOW[cw] : Math.random() < 0.25 ? 'kick' : (this._jab = !this._jab) ? 'punchL' : 'punch';
+        if (!npc.actor.play(kind, cw, { restart: true })) return;
+        this.clip = kind; this.clipW = cw;
+        this.attackT = this._dur({ punch: 0.43, punchL: 0.36, kick: 0.58, stab: 0.45, swing: 0.6 }[kind]);      // (o golpe dura o clipe)
         this.cd = this.attackT + 0.35 + Math.random() * 0.6;
         g.combat.strike({ position: npc.position, heading: () => npc.heading, ok: () => npc.alive && !npc.rag && npc.fsm.current === this && this.clip === kind },
-            kind, { source: 'npc', ref: npc, dmgMul: 0.75 });
+            kind, { source: 'npc', ref: npc, foe: this.foe, dmgMul: cw === 'none' ? 0.75 : 0.6 });
+    }
+
+    // Revólver: chega até ter a linha de tiro (e no máximo 14 m), mira e atira; 6 balas no tambor e recarrega.
+    _gunfight(g, d) {
+        const npc = this.npc, foe = this.foe, p = npc.position, dt = this._dt;
+        if (this.attackT > 0) { this._stop(); return; }                           // sacando / atirando
+        if (this.reload > 0) {
+            this._stop(); this.clip = null;
+            if ((this.reload -= dt) <= 0) { this.ammo = 6; this.aimT = 0; }
+            return;
+        }
+        if (d > 14 || !MapGeo.hasLineOfSight(p.x, p.z, foe.position.x, foe.position.z)) {
+            this.aimT = 0; this.clip = null;
+            this._go(foe.position.x, foe.position.z, Config.npc.fleeSpeed * 0.7);
+            return;
+        }
+        const by = this._inLine(g);
+        if (by) {                                                                  // alguém no meio: dá um passo de lado em vez de atirar nele
+            const l = d || 1, k = npc.id % 2 ? 1 : -1, dx = (foe.position.x - p.x) / l, dz = (foe.position.z - p.z) / l;
+            this.aimT = 0; this.clip = null;
+            this._go(p.x - dz * 2 * k, p.z + dx * 2 * k, Config.npc.fleeSpeed * 0.5);
+            return;
+        }
+        this._stop();
+        this.aimT += dt; this.clip = 'aim'; this.clipW = 'pistol';
+        if (this.aimT > 0.45 && this.cd <= 0) this._shoot(g);
+    }
+    // Um pedestre (que não ele nem o alvo) na linha de tiro?
+    _inLine(g) {
+        const p = this.npc.position, f = this.foe.position, sx = f.x - p.x, sz = f.z - p.z, L2 = sx * sx + sz * sz || 1;
+        for (const n of g.npcManager ? g.npcManager.npcs : []) {
+            if (n === this.npc || n === this.foe || !n.alive || n.rag) continue;
+            const q = n.position, k = ((q.x - p.x) * sx + (q.z - p.z) * sz) / L2;
+            if (k <= 0.05 || k >= 0.95) continue;
+            const cx = p.x + sx * k - q.x, cz = p.z + sz * k - q.z;
+            if (cx * cx + cz * cz < 0.36) return n;
+        }
+        return null;
+    }
+
+    _shoot(g) {
+        const npc = this.npc, p = npc.position;
+        if (!npc.actor.play('shoot', 'pistol', { restart: true })) return;
+        this.clip = 'shoot'; this.clipW = 'pistol';
+        this.attackT = Math.min(0.4, this._dur(0.3));
+        this.cd = this.attackT + 0.5 + Math.random() * 0.7; this.aimT = 0.25;
+        g.combat.fire({ x: p.x, z: p.z, angle: g.combat.leadAngle(p.x, p.z, this.foe, Weapons.revolver.speed), owner: 'npc', ref: npc, spreadMul: 2.4, dmgMul: 0.7 }, 'revolver');
+        if (--this.ammo <= 0) this.reload = 1.8;
+        if (g.npcManager) g.npcManager.alertShot(p);                              // quem ouve, foge
+    }
+
+    // Levou um golpe/tiro brigando (NPC.hurt): cambaleia e continua — e quem bateu foi o jogador, se ele topa, a briga passa a ser com ele.
+    onHurt() {
+        const npc = this.npc, g = npc.ctx.game;
+        this.stagger = 0.4; this.clip = null; this.clipW = null; this.attackT = 0;
+        if (npc._hitBy === 'player' && this.foe !== g.player) {
+            const R = FightState.wants(npc);
+            if (R) { this.foe = g.player; if (R.weapon !== 'none' && this.weapon === 'none') this._draw(R.weapon); }
+        }
+    }
+
+    // Acabou a briga: foge do adversário (cansou, apanhou demais, ele sumiu ou sacou o que não dá para encarar).
+    _quit() {
+        this.clip = null;
+        this.npc.panic(this.foe.position, true);
+    }
+
+    // O que o desenho toca agora (NPC.update): cambaleando, o golpe/o tiro, correndo ou em guarda — com a arma na mão.
+    anim(speed) {
+        const w = this.weapon;
+        if (this.stagger > 0) return { clip: 'hurt', w: 'none', rate: 1 };
+        if (this.clip) return { clip: this.clip, w: this.clipW || w, rate: 1 };
+        if (speed > 0.5) return { clip: 'run', w, rate: Math.max(0.5, speed / Config.anim.run) };
+        return { clip: 'idle', w, rate: 1 };
     }
 
     exit() { this.clip = null; }
