@@ -1931,7 +1931,10 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			if (!ok) { pl.boarding = null; bike.hold = false; }
 		};
 		const mount = () => {
-			// (o veículo continua à vista: o sprite da subida só desenha a pessoa — RiderActor)
+			// (o veículo continua à vista: o sprite da subida só desenha a pessoa — RiderActor; a moto sai do descanso e fica em pé, como no
+			// recorte assado do clipe)
+			const B3 = bike.visual && bike.visual.body;
+			if (B3 && B3.setLean) B3.setLean(0);
 			const ok = this.player.startMount(kind, bike.position, heading, S.sign, () => {
 				this.player.boarding = null;
 				if (bike.visual) bike.visual.setVisible(true);

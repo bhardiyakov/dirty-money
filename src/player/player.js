@@ -499,6 +499,7 @@ class Player {
         if (!this.actor.sheet.isNpc) { this._baseSheet = this.actor.sheet; this.actor.useSheet(this.lib.sheets.rider); }
         this.root.position.set(bikePos.x, 0, bikePos.z);
         this.root.rotation.y = bikeHeading;
+        this.actor._dirD = 0;                    // (sem a histerese: a direção desenhada mais perto do rumo da moto — o recorte do clipe conta com ela)
         this.velocity.setAll(0);
         const ok = this.playAction('mount', {
             weapon: side < 0 ? kind + 'L' : kind, lock: 0,

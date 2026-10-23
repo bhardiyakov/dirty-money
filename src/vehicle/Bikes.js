@@ -6,7 +6,9 @@
 // por cima (RiderActor), com os clipes do rig:
 //   ride_bike   pedalando (os pés giram com a velocidade)
 //   ride_moto   pilotando: 7 degraus de inclinação (±28,6°, o corpo todo deitando com a moto; 64 direções), escolhidos pela física
-//               da curva (Vehicle._animateBike → RiderActor.setLean: contínuo, + = deitado para a direita)
+//               da curva (Vehicle._animateBike → RiderActor.setLean: contínuo, + = deitado para a direita); pés nas pedaleiras,
+//               joelhos no tanque e o desenho recortado pela moto 3D (o que ela esconde não sai por cima dela)
+//   ride_scooter o mesmo na scooter, com os pés no assoalho (o RiderActor escolhe pelo modelo)
 // Estacionada = só o veículo; caída = o desenho de lado (piloto arremessado numa batida).
 // A "folha de veículo" abaixo (BikeSheet) só adapta a interface que o Vehicle espera.
 //

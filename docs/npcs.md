@@ -23,7 +23,7 @@ arquivos estáticos em `assets/baked/` — páginas `.webp` sem perdas, manifest
 | **Jogador** | o protagonista 2,5D. Roupa, boné/chapéu, bolsa e aparência mudam o desenho (ver abaixo) |
 | **Golpes** | soco, chute, taco e cassetete com colisão de verdade (ver abaixo); pedestres revidam — no braço, de faca, taco ou revólver (*Quem revida*), a PM usa o cassetete |
 | **Briga de trânsito** | parte das batidas entre veículos vira briga: o motorista desce, xinga, chuta a porta e sai no braço (*Briga de trânsito*) |
-| **Pilotando** | moto (**64 direções**, o corpo deitando junto com a moto), bicicleta (pedalando, 32 direções), jet ski e lancha (no timão, 16); moto e jet ski inclinam na curva. O jogador **sobe na moto/bicicleta** passando a perna por cima (dos dois lados). Entregadores: o tipo **motoboy** (capacete, baú vermelho). Quem cai da moto mantém o visual |
+| **Pilotando** | moto (**64 direções**, o corpo deitando junto com a moto, pés nas pedaleiras e joelhos no tanque, recortado pela moto 3D), scooter (pés no assoalho), bicicleta (pedalando, 32 direções), jet ski e lancha (no timão, 16); moto e jet ski inclinam na curva. O jogador **sobe na moto/bicicleta** passando a perna por cima (dos dois lados). Entregadores: o tipo **motoboy** (capacete, baú vermelho). Quem cai da moto mantém o visual |
 | **Proporções de adulto** | o pacote é "chibi" (~3,3 cabeças: parecia criança). As poses continuam escritas no esqueleto do pacote e são **redirecionadas** para um esqueleto adulto na hora de desenhar (`G.ADULT`: pernas ×1,7, tronco ×1,35, braços ×1,38, cabeça ×0,6 → ~5,3 cabeças); armas e objetos 20% maiores |
 
 `?npc=0` na URL volta tudo aos bonecos antigos (comparar/depurar).
@@ -130,10 +130,10 @@ cartunesca:
 
 ## Pilotando (`ride_*`, `mount`)
 
-O veículo é o desenho do atlas dos carros (visto de cima, "achatado"); o piloto 2,5D vai por cima com a origem no **banco** e os
-quadris rente ao chão — o tronco sobe e as pernas descem em volta do veículo. Mãos e pés vão nas manoplas, pedaleiras, pedais e timão
-do desenho: `RIDE` em NpcGenAnims (medidas em m no jogo, já com `Config.vehicle.scale` × `Bikes.SCALE`), e os bancos em
-`Bikes.SEAT` / `BoatSheet.SEATS`. Mudou a escala de um veículo ou o `npcPpu`? Ajuste `RIDE` e gere os atlas de novo.
+O veículo é 3D (`CarArt3D`, `assets/cars/veiculos3d.js`) e o piloto 2,5D vai por cima com a origem no **banco** do modelo. Mãos e
+pés vão nas manoplas, pedaleiras, assoalho, pedais e timão do modelo: `RIDE` em NpcGenAnims (medidas em m no jogo tiradas da malha —
+moto = a CG 160, scooter = a PCX, bike = a bicicleta urbana — × `Config.vehicle.scale` × `Bikes.SCALE` = 1,17, `VEH_K`). Mudou a
+escala de um veículo, o `npcPpu` ou a malha? Ajuste `RIDE`, rode `node tools/asset_baker/vehocc.cjs` e gere os atlas de novo.
 As folhas antigas `rider`/`courier` viram tipos 2,5D sozinhas (`NpcArt.attach`); variante 0 = o jogador (a folha dele).
 
 **Piloto colado na moto 3D** (outubro/2026):
@@ -147,6 +147,19 @@ As folhas antigas `rider`/`courier` viram tipos 2,5D sozinhas (`NpcArt.attach`);
   bicicleta deita 20% disso (o ciclista pedalando não tem degraus de inclinação).
 - **Direções**: a moto 3D gira livre; o piloto tinha 16 direções (22,5°) e ficava torto em relação ao guidão entre uma e outra. Agora
   `ride_moto` tem **64** (desvio máximo ~4°, com a histerese) e `ride_bike` 32 (`dirs` na tabela `CLIPS`).
+- **Pernas encaixadas**: os pés vão nas **pedaleiras da malha** (antes ficavam ~25 cm acima, com os joelhos dobrados e abertos para
+  fora — 29 cm do meio) e os joelhos para a frente, fechados no tanque (`RIDE.moto.knee`). Scooter: clipe próprio, `ride_scooter`
+  (sentado reto, pés à frente no assoalho, atrás do escudo) — o `RiderActor` escolhe pelo modelo.
+- **Recorte pela moto** (`pose.occ`, `NpcGenRender._occBuf`): o piloto é desenhado POR CIMA da moto no jogo, então o que a moto
+  esconde daquele ângulo não podia aparecer — a perna do outro lado atrás do tanque e do motor, o meio das coxas atrás do tanque e do
+  farol (vindo de frente), os pés atrás do escudo da scooter. O gerador desenha a carroceria 3D (`generator/veiculos_occ.js`, tirada
+  do `veiculos3d.js` por `tools/asset_baker/vehocc.cjs`) só na profundidade, no banco e deitada como a moto daquele quadro: ponto do
+  corpo atrás dela não entra. Um clipe serve a várias motos (`ride_moto`: CG, trilha, esportiva e custom) — vale a **interseção** das
+  carrocerias (só some o que todas escondem: nunca abre buraco no piloto de nenhuma) e também a de alguns rumos em volta do desenhado
+  (`sweep`: a direção do sprite fica até ~0,7 passo fora do rumo da moto), com 1 subpixel de erosão na borda.
+- **Subida** (`mount`): termina EXATAMENTE na pose de pilotar, no banco da moto 3D (antes o banco ficava no chão e o piloto pulava
+  ~1 m para cima ao terminar), a perna passa por cima do banco por trás, e o recorte esconde o que fica atrás da moto. O jogo tira a
+  moto do descanso (em pé) e desenha o jogador no rumo exato dela (`Player.startMount`, sem a histerese da direção).
 
 **Física da moto do jogador** (`Bikes.MODELS`, `Vehicle.accelOf`, `Config.vehicle.bikeLat`/`bikeLeanIn`): arrancada pelo 0–100 do
 modelo (`t100`, como nos carros — antes era `power/mass`: a moto de rua ia de 0 a 100 em ~1,7 s e a esportiva em ~1 s) e freio de no

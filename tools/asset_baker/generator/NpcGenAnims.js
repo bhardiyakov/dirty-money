@@ -566,6 +566,7 @@ function NpcGenAnims(G) {
             p.shadow = near.shadow;
             if (near.abs) p.abs = Object.assign({}, near.abs);
             if (near.absPelvis) p.absPelvis = near.absPelvis;
+            if (near.occ) p.occ = near.occ;
             for (const sd of ['R', 'L']) { p.arm[sd] = limb(a, b, c, d, 'arm', sd, f, near); p.leg[sd] = limb(a, b, c, d, 'leg', sd, f, near); }
             p.props = props(a, b, c, d, f, near, p);
             p._src = near;
@@ -2635,19 +2636,41 @@ function NpcGenAnims(G) {
     }
 
     // ------------------------------------------------------------------ pilotando: moto, bicicleta, jet ski, lancha (NOVO)
-    // O veículo é o desenho do atlas dos carros (visto de cima, "achatado" no chão) e o piloto 2,5D vai por cima, com a ORIGEM no
-    // banco. Para casar com um desenho sem altura, o banco fica rente ao chão (quadris em z ≈ 6): o tronco sobe dele e as pernas
-    // descem um pouco abaixo, abraçando o veículo. Mãos e pés vão direto no esqueleto ADULTO (Pose.abs) nas manoplas, pedaleiras,
-    // pedais e timão do desenho — medidas abaixo em METROS NO JOGO a partir do banco (x = direita, y = frente; o veículo já na escala
-    // do jogo: Config.vehicle.scale × Bikes.SCALE) e alturas (z) em unidades. 16 direções (o veículo gira livre): tudo no referencial
-    // do veículo, então o piloto fica no banco e com as mãos no guidão em qualquer direção.
+    // O veículo é 3D (CarArt3D: assets/cars/veiculos3d.js) e o piloto 2,5D vai por cima, com a ORIGEM no BANCO do modelo (RiderActor:
+    // seat do VEH3D, já na escala do jogo). Mãos e pés vão direto no esqueleto ADULTO (Pose.abs) nas manoplas, pedaleiras, assoalho,
+    // pedais e timão — medidas abaixo em METROS NO JOGO a partir do banco (x = direita, y = frente; o modelo × VEH_K) e alturas (z) em
+    // unidades, tiradas da malha (moto = CG 160; scooter = PCX; bike = a bicicleta urbana). seat/sh = o banco a partir do centro do
+    // modelo, no chão (frente, altura: a subida e a ré). occ = as carrocerias que RECORTAM o piloto (rideOcc): o que a moto esconde daquele
+    // ângulo — a perna do outro lado atrás do tanque e do motor, a coxa por dentro do tanque — não é desenhado (no jogo a moto aparece ali).
     const RIDE = {
-        moto: { seat: 0.151, grip: [0.35, 0.81], gz: 19, peg: [0.19, 0.07], pz: -14, lean: 30, hip: 6, yaw: 4 },          // (yaw: o peito acompanha o guidão virado)
-        bike: { seat: 0.317, grip: [0.32, 0.83], gz: 17, crank: 0.30, cz: -15, crankR: 0.16, lean: 32, hip: 7 },      // (lean: as mãos alcançam o guidão)
+        // moto de rua: pés nas pedaleiras (o tornozelo um pouco atrás, o peito do pé no apoio) e os JOELHOS fechados no tanque (knee: o polo)
+        moto: { seat: 0.234, sh: 0.936, grip: [0.31, 0.83], gz: 19.5, peg: [0.21, 0.17], pz: -17.7, knee: [0.14, 1.0, 0.25], lean: 26, hip: 6, yaw: 4,
+            occ: ['moto', 'moto_trilha', 'moto_esportiva', 'moto_custom'] },
+        // scooter: sentado reto, pés à frente no assoalho, joelhos juntos atrás do escudo
+        scooter: { seat: 0.316, sh: 0.913, grip: [0.31, 0.80], gz: 18.9, peg: [0.16, 0.38], pz: -22.3, knee: [0.15, 1.0, 0.4], lean: 12, hip: 6, yaw: 4, occ: ['moto_scooter'] },
+        bike: { seat: 0.234, sh: 0.725, grip: [0.32, 0.83], gz: 17, crank: 0.30, cz: -15, crankR: 0.16, lean: 32, hip: 7, occ: ['bicicleta'] },      // (lean: as mãos alcançam o guidão)
         jetski: { grip: [0.48, 0.70], gz: 18, peg: [0.33, 0.12], pz: -10, lean: 20, hip: 6, yaw: 10 },
         boat: { wheel: 0.53, wz: 22, wheelR: 0.11, peg: [0.15, 0.3], pz: -9, lean: 4, hip: 8 },
     };
-    const U = () => (G.PPU || 26) / 0.5;                                  // unidades do gerador por metro no jogo (não depende da resolução)
+    // Unidades do gerador por metro no jogo (não depende da resolução). A ficha desenhada maior/menor (spec.scale: G.CTX.scale, posto
+    // pelo rendererFor) aumenta o desenho todo — o alvo em metros desconta, para as mãos e os pés continuarem no veículo.
+    const U = () => (G.PPU || 26) / 0.5 / ((G.CTX && G.CTX.scale) || 1);
+    const VEH_K = 1.17;                                                   // m do modelo 3D → m no jogo: Config.vehicle.scale (1,3) × Bikes.SCALE (0,9)
+    // Recorte (NpcGenRender: pose.occ) pelas carrocerias `ids` (vários = a interseção): a origem do desenho no BANCO de cada modelo (at =
+    // 'center': o centro do modelo, no chão — a subida; 'under': o chão debaixo do banco — a ré), deitado Rb em volta dela. sweep (graus):
+    // o clipe tem poucas direções (16: o desenho fica até meio passo fora do rumo da moto) — vale a interseção da moto girada de −sweep a
+    // +sweep em volta da origem: só some o que ela esconde em qualquer desses rumos (nunca um buraco no piloto).
+    function rideOcc(ids, at = 'seat', Rb = null, sweep = 0) {
+        const s = VEH_K * U(), out = [];
+        for (const id of (ids || []).filter((i) => G.vehOcc && G.vehOcc(i))) {
+            const S = G.vehOcc(id).seat, t0 = at === 'center' ? [0, 0, 0] : at === 'under' ? [0, -S[0] * s, 0] : [0, -S[0] * s, -S[1] * s];
+            for (const a of sweep ? [-1, -0.5, 0, 0.5, 1] : [0]) {
+                const M = mm3(Rz(deg(a * sweep)), Rb || I3());
+                out.push({ id, s, M, t: mv3(M, t0) });
+            }
+        }
+        return out;
+    }
     // Alvo de braço ABS (já no adulto) puxado para dentro do alcance do braço adulto, a partir do ombro desta pose (não trava reto além).
     function absReach(p, sd, T, k = 0.995) {
         const A = G.ADULT || { arm: 1, hand: 1 }, r = k * (A.arm * (UPPER + LOWER) - FIST[2] * (A.hand || 1));
@@ -2686,20 +2709,24 @@ function NpcGenAnims(G) {
     // desenho). O jogo põe essa origem no banco da moto já deitada (RiderActor._place) e a moto deita o mesmo ângulo em volta da linha
     // das rodas (CarArt3D: bank = inclinação × RIDE_BANK): corpo e moto viram uma peça só. A cabeça compensa um pouco (olha a estrada)
     // e o guidão vira para dentro da curva, como em rideLean.
+    // Pernas: o tornozelo em RIDE.peg/pz (o pé apoiado na pedaleira ou no assoalho) e o joelho para a frente e só um pouco para fora
+    // (RIDE.knee): fechado no tanque — a parte da coxa que entra nele some no recorte, como a de quem aperta a moto com os joelhos.
+    // E o recorte (rideOcc) gira junto: a moto do desenho deita com o piloto.
     const RIDE_BANK = 0.5;                                                // rad no degrau extremo = CarArt3D (bank = lean × 0,5)
     function rideBank(kind, n = 7) {
         const R = RIDE[kind], u = U(), out = [], P0 = RIG.pelvis[1];
         const rot = (Rb, q) => mv3(Rb, q);
         for (let i = 0; i < n; i++) {
-            const st = 1 - (2 * i) / (n - 1), Rb = Ry(RIDE_BANK * st), p = rideBase(R, { yaw: -R.yaw * st });
+            const st = n > 1 ? 1 - (2 * i) / (n - 1) : 0, Rb = Ry(RIDE_BANK * st), p = rideBase(R, { yaw: -R.yaw * st });
             p.pelvis_t = V.sub(rot(Rb, V.add(P0, p.pelvis_t)), P0);
             p.pelvis_R = mm3(Rb, p.pelvis_R);
             p.head_R = mm3(Ry(-RIDE_BANK * st * 0.35), p.head_R);
             for (const [sd, s] of [['R', 1], ['L', -1]]) {
                 const grip = rot(Rb, [s * R.grip[0] * u, R.grip[1] * u - s * st * 2.5, R.gz - s * st * 1.2]);
                 p.arm_ik(sd, absReach(p, sd, grip), rot(Rb, [s * 1.0, -0.2, -0.7]));
-                p.leg_ik(sd, rot(Rb, [s * R.peg[0] * u, R.peg[1] * u, R.pz]), rot(Rb, [s * 0.45, 1.0, 0.35]), mm3(Rb, footRot(-s * 14, -12)));
+                p.leg_ik(sd, rot(Rb, [s * R.peg[0] * u, R.peg[1] * u, R.pz]), rot(Rb, nrm([s * R.knee[0], R.knee[1], R.knee[2]])), mm3(Rb, footRot(-s * 8, -12)));
             }
+            p.occ = rideOcc(R.occ, 'seat', Rb, 3.8);                  // (64 direções: até 0,68 passo fora do rumo — a histerese do SpriteActor)
             out.push(p);
         }
         return out;
@@ -2715,6 +2742,7 @@ function NpcGenAnims(G) {
                 const ped = [s * 7.5, R.crank * u + sin(ph) * R.crankR * u, R.cz - cos(ph) * R.crankR * u];
                 p.leg_ik(sd, ped, [s * 0.2, 1.0, 0.25], footRot(-s * 6, -8 + 14 * sin(ph)));
             }
+            p.occ = rideOcc(R.occ, 'seat', null, 7.6);                  // (32 direções)
             out.push(p);
         }
         return out;
@@ -2737,10 +2765,10 @@ function NpcGenAnims(G) {
     }
 
     // Dando RÉ na moto/bicicleta (RiderActor.walkBack): de pé, montado (um pé de cada lado do veículo), andando — o jogo toca o clipe
-    // AO CONTRÁRIO: anda para trás — com as DUAS MÃOS NO GUIDÃO. O sprite fica no banco com os pés no chão: o guidão está
-    // RIDE.<tipo>.grip à frente e a gz acima do banco, e o banco a BACK.<tipo>.seat m do chão (média dos modelos: VEH3D seat[1]). Para
-    // alcançar, a pélvis vai BACK.fwd m à frente (os pés juntos) e o tronco inclina; os braços (alvo ABS) quase não mexem com o passo.
-    const BACK = { moto: { seat: 0.76, fwd: 0.24, lean: 26 }, bike: { seat: 0.9, fwd: 0.2, lean: 28 } };
+    // AO CONTRÁRIO: anda para trás — com as DUAS MÃOS NO GUIDÃO. O sprite fica debaixo do banco, no chão: o guidão está RIDE.<tipo>.grip
+    // à frente e a gz acima do banco, e o banco a RIDE.<tipo>.sh m do chão. Para alcançar, a pélvis vai BACK.fwd m à frente (os pés
+    // juntos) e o tronco inclina; os braços (alvo ABS) quase não mexem com o passo. Recorte: a moto em pé com o banco em cima da origem.
+    const BACK = { moto: { fwd: 0.24, lean: 26 }, bike: { fwd: 0.2, lean: 28 } };
     function rideBack(kind = 'moto', n = 8) {
         const K = kind === 'bike' ? 'bike' : 'moto', R = RIDE[K], B = BACK[K], u = U(), kl = G.ADULT ? G.ADULT.leg : 1, d = (B.fwd * u) / kl, out = [];
         const legs = Object.assign({}, WALK, { stride: 6.2, lift: 1.2, width: 11.0, fwd: d });           // (passo curto, pernas abertas: o veículo no meio)
@@ -2752,31 +2780,33 @@ function NpcGenAnims(G) {
             p.chest_R = mm3(Rz(deg(-3 * c)), Rx(deg(-B.lean)));
             p.head_R = mm3(Rz(deg(2 * c)), Rx(deg(HEAD_TILT + B.lean * 0.75)));
             p.abs = Object.assign(p.abs || {}, { armR: true, armL: true });
-            for (const [sd, s] of [['R', 1], ['L', -1]]) p.arm_ik(sd, absReach(p, sd, [s * R.grip[0] * u, R.grip[1] * u, B.seat * u + R.gz]), [s * 1.0, -0.3, -0.7]);
+            for (const [sd, s] of [['R', 1], ['L', -1]]) p.arm_ik(sd, absReach(p, sd, [s * R.grip[0] * u, R.grip[1] * u, R.sh * u + R.gz]), [s * 1.0, -0.3, -0.7]);
+            p.occ = rideOcc(R.occ, 'under', null, 11.25);                // (16 direções)
             out.push(p);
         }
         return out;
     }
 
     // Subir na moto/bicicleta (o jogador): do REPOUSO de pé ao lado (idle quadro 0, no adulto), dobra o tronco e pega as manoplas (a de
-    // perto primeiro; a de longe por cima do tanque), passa por cima a perna do lado do veículo enquanto o quadril desce para o banco,
-    // e recolhe a outra perna para a pedaleira/pedal. w = 'moto' | 'motoL' | 'bike' | 'bikeL' (L = chegou pela esquerda). Origem no
-    // CENTRO do veículo (o jogador fica no lugar dele): o banco está RIDE.<tipo>.seat m atrás — o último quadro é EXATAMENTE a pose de
-    // pilotar (ride_moto do meio / ride_bike quadro 0) levada ao banco. Mãos sempre dentro do alcance adulto.
+    // perto primeiro; a de longe por cima do tanque), passa a perna do lado do veículo por cima do banco, por trás, enquanto o quadril
+    // sobe para o banco, e recolhe a outra perna para a pedaleira/pedal. w = 'moto' | 'motoL' | 'bike' | 'bikeL' (L = chegou pela
+    // esquerda). Origem no CENTRO do veículo, no chão (o jogador fica no lugar dele): o banco está RIDE.<tipo>.seat m atrás e sh m acima
+    // — o último quadro é EXATAMENTE a pose de pilotar (ride_moto reto / ride_bike quadro 0) no banco da moto 3D, e o recorte (a moto em
+    // pé, rideOcc 'center') esconde o que fica atrás dela durante a subida. Mãos sempre dentro do alcance adulto.
     function mountAnim(w = 'moto', n = 9) {
         const kind = String(w).startsWith('bike') ? 'bike' : 'moto', R = RIDE[kind], u = U(), sd = String(w).endsWith('L') ? -1 : 1;
-        const sy = -R.seat * u, ss = -sd;                                   // ss: lado da perna que passa por cima (a do lado do veículo)
+        const sy = -R.seat * u, sz = R.sh * u, ss = -sd;                    // ss: lado da perna que passa por cima (a do lado do veículo)
         const swing = ss > 0 ? 'R' : 'L', stand = ss > 0 ? 'L' : 'R', near = sd > 0 ? 'R' : 'L', far = near === 'R' ? 'L' : 'R';
-        const E = kind === 'bike' ? rideBike(12)[0] : rideLean('moto', 5)[2], sh = (q) => V.add(q, [0, sy, 0]);
+        const E = kind === 'bike' ? rideBike(12)[0] : rideBank('moto', 7)[3], sh = (q) => V.add(q, [0, sy, sz]);
         const A = G.ADULT || { arm: 1, hand: 1 }, rest = idle(1)[0], RB = rest.adult().B, o0 = [sd * 30, sy + 3, 0];
         const hip0 = V.add(V.add(RB.pelvis.t, mv3(RB.pelvis.R, [0, 0, -3.0])), o0), hipE = sh(V.add(V.add(RIG.pelvis[1], E.pelvis_t), mv3(E.pelvis_R, [0, 0, -3.0])));
         const ank0 = (q) => V.add(RB['foot_' + q].t, o0), hand0 = (q) => V.add(pt4(RB['farm_' + q], [0, 0, -(LOWER * A.arm - FIST[2] * (A.hand || 1))]), o0);
-        const pole0 = (q) => nrm(V.sub(RB['farm_' + q].t, RB['uarm_' + q].t)), lean0 = R.lean;
-        const hipK = [[0, hip0], [0.3, [sd * 27, sy + 1, hip0[2] - 7]], [0.55, [sd * 15, sy, hip0[2] - 13]], [0.8, [sd * 4, sy - 1, hipE[2] + 7]], [1, hipE]];
-        const leanK = [[0, 0], [0.3, 26], [0.55, 22], [0.8, lean0 - 4], [1, lean0]];
+        const pole0 = (q) => nrm(V.sub(RB['farm_' + q].t, RB['uarm_' + q].t)), lean0 = R.lean, hz = max(hip0[2], hipE[2]);
+        const hipK = [[0, hip0], [0.3, [sd * 27, sy + 1, hip0[2] - 4]], [0.55, [sd * 15, sy - 1, hz + 1]], [0.8, [sd * 4, sy - 1, hz + 3]], [1, hipE]];
+        const leanK = [[0, 0], [0.3, 26], [0.55, 24], [0.8, lean0 - 4], [1, lean0]];
         const gE = (q) => sh(E.arm[q][1]), aE = (q) => sh(E.leg[q][1]);
         const handK = { [near]: [[0, hand0(near)], [0.3, gE(near)], [1, gE(near)]], [far]: [[0, hand0(far)], [0.3, V.lerp(hand0(far), gE(far), 0.6)], [0.55, gE(far)], [1, gE(far)]] };
-        const legK = { [swing]: [[0, ank0(swing)], [0.12, ank0(swing)], [0.4, [sd * 16, sy - 12, 22]], [0.62, [0, sy - 8, 24]], [0.82, [ss * 14, sy + 2, 8]], [1, aE(swing)]],
+        const legK = { [swing]: [[0, ank0(swing)], [0.12, ank0(swing)], [0.4, [sd * 18, sy - 16, sz * 0.55]], [0.62, [0, sy - 22, sz + 8]], [0.82, [ss * 15, sy - 4, sz * 0.75]], [1, aE(swing)]],
             [stand]: [[0, ank0(stand)], [0.6, ank0(stand)], [0.82, V.add(V.lerp(ank0(stand), aE(stand), 0.6), [0, 0, 6])], [1, aE(stand)]] };
         const legW = { [swing]: [0.12, 0.8], [stand]: [0.6, 1] };                // trecho em que o pé sai do chão (polo e giro do pé)
         const out = [];
@@ -2785,12 +2815,14 @@ function NpcGenAnims(G) {
             if (i === n - 1) {                                              // = a pose de pilotar, no banco
                 const p = clonePose(E);
                 p.pelvis_t = sh(E.pelvis_t);
+                p.occ = rideOcc(R.occ, 'center', null, 11.25);
                 for (const q of ['R', 'L']) { p.arm[q][1] = gE(q); p.leg[q][1] = aE(q); }
                 out.push(p);
                 continue;
             }
             const p = base(), hip = keys(hipK, s), lean = keys(leanK, s);
             p.shadow = s < 0.75;
+            p.occ = rideOcc(R.occ, 'center', null, 11.25);              // (16 direções: o jogador encara o rumo exato da moto — Player.startMount)
             p.absPelvis = true;
             p.abs = { armR: true, armL: true, legR: true, legL: true };
             p.pelvis_R = mm3(Rz(deg(-sd * 22 * sin(PI * s) * (1 - s))), Rx(deg(-6 * ease(s))));
@@ -3056,6 +3088,7 @@ function NpcGenAnims(G) {
         // (+12° … −12°) — fps 0: o jogo escolhe o quadro pela inclinação (SpriteActor.setLean); bicicleta pedalando, lancha.
         // A moto e a bicicleta giram livres (3D): o piloto tem mais direções (64 / 32) para não ficar torto em relação ao guidão.
         ride_moto: { fps: 0, loop: true, k: 7, n: 7, dirs: 64, fn: (w, o, n) => rideBank('moto', n) },
+        ride_scooter: { fps: 0, loop: true, k: 7, n: 7, dirs: 64, fn: (w, o, n) => rideBank('scooter', n) },          // (scooter: pés no assoalho)
         ride_jetski: { fps: 0, loop: true, k: 5, n: 5, fn: (w, o, n) => rideLean('jetski', n) },
         ride_bike: { fps: 10, loop: true, k: 8, n: 12, dirs: 32, fn: (w, o, n) => rideBike(n) },
         ride_boat: { fps: 3, loop: true, k: 4, n: 6, fn: (w, o, n) => rideBoat(n) },

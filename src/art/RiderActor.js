@@ -21,6 +21,9 @@
 // altura dele. Moto: corpo e moto deitam o MESMO ângulo, na hora (setLean → body.setLean(…, direto): sem a mola que atrasava a moto):
 // o degrau de inclinação do piloto foi assado girando a pose inteira em volta do banco (NpcGenAnims.rideBank, ±BANK rad), então os
 // dois viram uma peça só. Parada sem piloto, a moto fica apoiada no descanso (um pouco deitada para a esquerda, pela mola).
+// O piloto continua desenhado POR CIMA da moto, mas os quadros ride_* já saem RECORTADOS pela carroceria 3D (NpcGenRender: pose.occ):
+// a perna do outro lado atrás do tanque e do motor e a coxa por dentro do tanque não são desenhadas — ali aparece a moto. Pés nas
+// pedaleiras e joelhos fechados no tanque (moto de rua: NpcGenAnims.RIDE.moto, medidas da malha); scooter: ride_scooter (pés no assoalho).
 // ============================================================================
 
 class RiderActor {
@@ -64,7 +67,9 @@ class RiderActor {
         } else if (this.rider.sheet !== sheet) { this.rider.useSheet(sheet); this._clipName = null; }
         if (this.riderVariant !== variant) this.rider.setVariant(variant);
         this.riderVariant = variant;
-        // (2,5D: ride_moto/bike/jetski/boat em 16 direções; o boneco antigo só tem ride_moto/ride_bike — jet ski e lancha usam o da moto)
+        // (scooter: pés no assoalho — ride_scooter; atlas sem ele, o da moto)
+        if (clip === 'ride_moto' && RiderActor.SCOOTER.test(this.body.modelId || '') && this.rider.sheet.getClip('ride_scooter', 'none')) clip = 'ride_scooter';
+        // (2,5D: ride_moto/scooter/bike/jetski/boat; o boneco antigo só tem ride_moto/ride_bike — jet ski e lancha usam o da moto)
         if (this._clipName !== clip || this._back) { if (this.rider.play(clip, 'none', { restart: true }) || this.rider.play('ride_moto', 'none', { restart: true })) this._clipName = clip; }
         this._back = false;
         this.rider.setVisible(this.visible);
@@ -104,8 +109,8 @@ class RiderActor {
         if (this.rider) this.rider.setVisible(this.visible && this.riderVariant != null);
     }
     setFrame(f) { if (this.rider && this.riderVariant != null) this.rider.setFrame(f); }
-    // Inclinação pilotando: os quadros de ride_moto/ride_jetski são degraus de inclinação (o 1º, +12°, deitado para a direita — o do
-    // meio, reto — o último, para a esquerda; SpriteActor.setLean escolhe/mistura pelo valor contínuo). Os outros clipes (bicicleta
+    // Inclinação pilotando: os quadros de ride_moto/ride_scooter/ride_jetski são degraus de inclinação (o 1º deitado para a direita — o
+    // do meio, reto — o último, para a esquerda; SpriteActor.setLean escolhe/mistura pelo valor contínuo). Os outros clipes (bicicleta
     // pedalando, lancha) seguem o próprio ritmo. v = −1..+1 (+ = curva para a direita); dt > 0: segue o alvo a LEAN_K/s, sem pulo.
     setLean(v, dt = 0) {
         v = Math.max(-1, Math.min(1, +v || 0));
@@ -129,7 +134,8 @@ class RiderActor {
         else if (this._clipName) r.play(this._clipName, 'none', { restart: true });
         this._place();
     }
-    static get LEAN() { return /^ride_(moto|jetski)$/; }
+    static get LEAN() { return /^ride_(moto|scooter|jetski)$/; }
+    static get SCOOTER() { return /scooter/; }
     static get LEAN_K() { return 7; }
     animate(dt, aF, aL, steer) { this.body.animate(dt, aF, aL, steer); }
 

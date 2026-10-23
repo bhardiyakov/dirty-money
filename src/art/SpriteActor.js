@@ -439,7 +439,12 @@ class SpriteActor {
 		const n = Math.min(c.frames, c.pk.n), R = this._fr2, P = this._pg;
 		let w = 0, f2 = this.frame;
 		if (this._drawClip === c && P && P.tex && typeof Smooth !== 'undefined' && Smooth.on && n > 1 && (c.loop || this.frame < n - 1)) {
-			if (this._lean === c) { w = this.time - Math.floor(this.time); f2 = Math.min(this.frame + 1, n - 1); }
+			if (this._lean === c) {
+				// (degraus de inclinação: mistura só no meio do caminho entre dois — perto de um degrau, o desenho dele inteiro; a mistura
+				// o tempo todo dava um piloto "fantasma", com dois pares de braços, na curva)
+				const k = Math.max(0, Math.min(1, (this.time - Math.floor(this.time) - 0.3) / 0.4));
+				w = k * k * (3 - 2 * k); f2 = Math.min(this.frame + 1, n - 1);
+			}
 			else {
 				let t = this.time - Math.floor(this.time);
 				if (this._rate < 0) t = 1 - t;                         // (andando para trás no ciclo: o próximo é o anterior)
