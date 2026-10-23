@@ -117,6 +117,8 @@ module.exports = {
             B.teleport(p.x - f.x * (A.halfLen + B.halfLen + 0.2), p.z - f.z * (A.halfLen + B.halfLen + 0.2), h);
             game.player.teleport(new BABYLON.Vector3(p.x + f.z * 6, 0, p.z - f.x * 6));
             game.camera.snapTo(game.player.position);
+            window.__phases = new Set();                                          // (toda fase por onde passaram — a briga pode ser rápida demais para amostrar)
+            const to0 = RageState.prototype._to; RageState.prototype._to = function (ph) { __phases.add(ph); return to0.call(this, ph); };
             const inc = RoadRage._crash(game, A, f.x * 6, f.z * 6);
             window.__inc = inc; window.__AB = [A, B];
             const o = RoadRage._contact(game, A, f.x * 6, f.z * 6);
@@ -134,7 +136,7 @@ module.exports = {
             for (let k = 0; k < 12 && !done; k++) {
                 await gameWait(page, 3);
                 const s = await page.evaluate(() => ({ ph: __inc.parties.map((P) => P.state && P.state.phase), open: RoadRage.list.includes(__inc), modes: __AB.map((v) => v.mode), hp: __AB.map((v) => v.hp / v.maxHp) }));
-                for (const p of s.ph) if (p) seen.add(p);
+                for (const p of s.ph.concat(await page.evaluate(() => [...__phases]))) if (p) seen.add(p);
                 if (!s.open) { done = true; c.note(`fim da briga: fases ${[...seen].join(' → ')}; carros ${s.modes.join('/')}`); }
             }
             c.ok(seen.has('argue') || seen.has('fight'), `tirou satisfação (fases: ${[...seen].join(', ')})`);
