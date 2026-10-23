@@ -79,17 +79,20 @@ const RoadRage = {
         return v.mode === 'drive' && v.driver !== false && !v.driverDead ? { who: 'npc', veh: v } : null;
     },
 
-    // O veículo encostado em `v` do lado de −dv (de onde veio o tranco).
+    // O veículo encostado em `v` do lado de −dv (de onde veio o tranco): o mais alinhado com o tranco, não o mais perto — numa batida de
+    // traseira, o carro estacionado ao lado está mais perto que o que bateu.
     _contact(game, v, dvx, dvz) {
         const p = v.position, dl = hypot(dvx, dvz);
-        let best = null, bd = Infinity;
+        let best = null, bs = Infinity;
         const look = (o) => {
             if (o === v || o.isBoat || !o.position) return;
             const dx = o.position.x - p.x, dz = o.position.z - p.z, d = hypot(dx, dz);
             const reach = Math.max(v.halfLen || 2, v.halfW || 1) + Math.max(o.halfLen || 2, o.halfW || 1) + 0.8;
-            if (d > reach || d >= bd) return;
-            if (dl > 0.5 && d > 0.3 && (dx * -dvx + dz * -dvz) / (d * dl) < -0.2) return;          // (do outro lado: só encostado na fila)
-            bd = d; best = o;
+            if (d > reach) return;
+            const cos = dl > 0.5 && d > 0.3 ? (dx * -dvx + dz * -dvz) / (d * dl) : 1;
+            if (cos < 0.35) return;                                                  // (fora do lado do tranco: só encostado na fila, estacionado ao lado)
+            const sc = d / (0.5 + cos);
+            if (sc < bs) { bs = sc; best = o; }
         };
         for (const o of game.vehicleManager.vehicles) look(o);
         if (game.policeManager) for (const o of game.policeManager.cars) look(o);

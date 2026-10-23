@@ -119,11 +119,14 @@ module.exports = {
             game.camera.snapTo(game.player.position);
             const inc = RoadRage._crash(game, A, f.x * 6, f.z * 6);
             window.__inc = inc; window.__AB = [A, B];
-            return { inc: !!inc, ab: [A.mode, B.mode] };
+            const o = RoadRage._contact(game, A, f.x * 6, f.z * 6);
+            return { inc: !!inc, ab: [A.mode, B.mode], why: inc ? '' : `contato ${o === B ? 'B' : o ? 'outro: ' + (o.mode || '?') : 'nenhum'}, câmera a ${Math.round(hypot(p.x - game.camera.target.x, p.z - game.camera.target.z))} m` };
         });
         if (rr.skip) c.note('briga de trânsito: ' + rr.skip);
         else {
-            c.ok(rr.inc, 'batida entre dois carros abre a briga (chance 100%)');
+            c.ok(rr.inc, `batida entre dois carros abre a briga (chance 100%) ${rr.why}`);
+        }
+        if (!rr.skip && rr.inc) {
             await gameWait(page, 3);
             const s1 = await page.evaluate(() => __inc.parties.map((P) => ({ npc: !!P.npc, st: P.npc && P.npc.state, ph: P.state && P.state.phase, stay: P.stay, free: !!(P.npc && P.npc.free) })));
             c.ok(s1.some((p) => p.npc && p.st === 'RAGE' && p.free), `um motorista desceu para a pista (${JSON.stringify(s1)})`);
