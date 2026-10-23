@@ -2,8 +2,9 @@
 // Smooth — GRÁFICO SUAVE (sempre ligado: o jogo é só em alta definição):
 //   • resolução real do monitor: a tela é desenhada na densidade de pixels do aparelho (até Config.perf.dprCap), sem o navegador
 //     ampliar a imagem (Windows a 125%/150%, telas retina) — ver GameEngine._applyScale;
-//   • MSAA 4× nas bordas da geometria (prédios, meios-fios, postes, carros 3D): o jogo é desenhado num alvo multiamostrado — o 1º
-//     pós-processamento da câmera — e resolvido na tela. Sem WebGL 2: FXAA;
+//   • MSAA nas bordas da geometria (prédios, meios-fios, postes, carros 3D; 4×, 8× no preset HD): o jogo é desenhado num alvo
+//     multiamostrado — o 1º pós-processamento da câmera — e resolvido na tela. Sem WebGL 2: FXAA. (Os personagens 2,5D são sprites:
+//     o antisserrilhado deles é o supersampling no próprio shader — NpcArt, Config.art.npcAA);
 //   • texturas do mundo (asfalto, calçada, faixas, telhados: Pixel.toTexture) com filtro trilinear e anisotrópico, e o chão do mundo
 //     grande (TerrainSplat) sem a grade de 5 cm: sem o grão "serrilhado" nem pixels de tamanhos desiguais com a câmera andando;
 //   • sombras com borda macia (PCF de qualidade média em vez da baixa).
@@ -53,7 +54,7 @@ const Smooth = {
 		if (on && !this.pp) {
 			if (eng.webGLVersion >= 2 && eng.getCaps().maxMSAASamples > 1) {
 				this.pp = new BABYLON.PassPostProcess('msaa', 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
-				this.pp.samples = Math.min(4, eng.getCaps().maxMSAASamples);
+				this.pp.samples = this.samples(eng);
 			} else this.pp = new BABYLON.FxaaPostProcess('fxaa', 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
 			// o MSAA só vale no 1º pós-processamento (é nele que a cena é desenhada): na frente do borrão de velocidade, se houver
 			if (cam._postProcesses[0] !== this.pp) { cam.detachPostProcess(this.pp); cam.attachPostProcess(this.pp, 0); }
@@ -62,6 +63,13 @@ const Smooth = {
 			this.pp.dispose();
 			this.pp = null;
 		}
+	},
+
+	// Amostras do MSAA: as do preset (Config.art.msaa — 4; 8 no HD), até o que a placa aceita; 8× só com a tela de até 4 Mpx (num
+	// monitor 4K o alvo multiamostrado passaria de meio GB).
+	samples(eng) {
+		const want = Config.art.msaa || 4, px = eng.getRenderWidth() * eng.getRenderHeight();
+		return Math.max(2, Math.min(want > 4 && px > 4.2e6 ? 4 : want, eng.getCaps().maxMSAASamples));
 	},
 
 	// Amostragem das texturas do mundo (as feitas por Pixel.toTexture com mipmaps e repetição: os ladrilhos do chão e dos telhados).

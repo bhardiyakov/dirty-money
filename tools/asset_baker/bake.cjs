@@ -49,7 +49,7 @@ const LOOK_STORE = path.join(ROOT, 'src', 'storage', 'LookStore.js');
 
 // Clipes que ganham camada de dano. NPCs: o que eles fazem machucados (fugir, render-se, cair, brigar, atirar). Jogador (os três atlas
 // do protagonista e os visuais montados no guarda-roupa): também o que ele mais faz andando por aí machucado.
-const DMG_NPC = ['idle', 'walk', 'run', 'scared', 'hurt', 'dead', 'surrender', 'kneel', 'aim', 'shoot', 'draw', 'holdup', 'punch', 'punchL', 'kick',
+const DMG_NPC = ['idle', 'walk', 'run', 'scared', 'hurt', 'dead', 'surrender', 'kneel', 'aim', 'shoot', 'draw', 'holdup', 'punch', 'punchL', 'kick', 'stab',
 	'flail', 'lie', 'getup', 'tumble', 'swing'];
 const DMG_PLAYER = DMG_NPC.concat(['crouch', 'sneak', 'strafe', 'roll', 'walk_up', 'climb', 'walk_heavy', 'run_heavy', 'idle_heavy', 'stab',
 	'idle_hold', 'walk_hold', 'run_hold', 'idle_pull', 'walk_pull']);

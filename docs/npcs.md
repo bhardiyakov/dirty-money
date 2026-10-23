@@ -21,7 +21,8 @@ arquivos estáticos em `assets/baked/` — páginas `.webp` sem perdas, manifest
 | **Animações** | as do pacote (parado, andando, correndo, soco, chute, armas, cassetete, granada, apanhar, morrer, levantar, mãos ao alto, nadar) e as novas para o que o jogo já fazia: **roubar carro** (puxa o motorista), **abrir a porta**, **entrar no carro**, **assalto** (sacar, anunciar com a arma), **render-se e ajoelhar**, **furto** (carteirada), **arrombar** fechadura, **pular grade**, **pânico** (correr com as mãos pra cima), **cambalhota**, **arremessado no ar**, caído, morto **com poça de sangue**, correr armado (pistola / submetralhadora / escopeta / fuzil / taco), mexer na bolsa, carregar maleta/sacola, puxar mala de rodinhas, andar sobrecarregado, boiar parado |
 | **Crime de rua** (`src/npc/StreetCrime.js`) | de tempos em tempos, perto do jogador, um pedestre vira assaltante (visual de traficante), rende outro pedestre (que ergue as mãos e ajoelha) e foge correndo armado. Quem vê foge; derrubar o assaltante liberta a vítima |
 | **Jogador** | o protagonista 2,5D. Roupa, boné/chapéu, bolsa e aparência mudam o desenho (ver abaixo) |
-| **Golpes** | soco, chute, taco e cassetete com colisão de verdade (ver abaixo); pedestres brigões revidam, a PM usa o cassetete |
+| **Golpes** | soco, chute, taco e cassetete com colisão de verdade (ver abaixo); pedestres revidam — no braço, de faca, taco ou revólver (*Quem revida*), a PM usa o cassetete |
+| **Briga de trânsito** | parte das batidas entre veículos vira briga: o motorista desce, xinga, chuta a porta e sai no braço (*Briga de trânsito*) |
 | **Pilotando** | moto, bicicleta (pedalando), jet ski e lancha (no timão), em **16 direções**; moto e jet ski inclinam na curva. O jogador **sobe na moto/bicicleta** passando a perna por cima (dos dois lados). Entregadores: o tipo **motoboy** (capacete, baú vermelho). Quem cai da moto mantém o visual |
 | **Proporções de adulto** | o pacote é "chibi" (~3,3 cabeças: parecia criança). As poses continuam escritas no esqueleto do pacote e são **redirecionadas** para um esqueleto adulto na hora de desenhar (`G.ADULT`: pernas ×1,7, tronco ×1,35, braços ×1,38, cabeça ×0,6 → ~5,3 cabeças); armas e objetos 20% maiores |
 
@@ -119,7 +120,7 @@ cartunesca:
 - **Alta definição, sempre** (`Config.art.hd`): os atlas assados já saem com o **dobro da resolução** (`HD_K` = 1: 52 px por metro);
   os visuais do guarda-roupa, idem.
 - **Atlas em PÁGINAS de até 4096 px de lado.** O jogo endereça cada quadro como x·4096 + y (exato em float). `NpcGenBuild.packPages`
-  separa os quadros por grupo de clipes (`GROUPS`: hot = parado/andar/correr/armas, act, fall, water, car, gym) e paridade da direção
+  separa os quadros por grupo de clipes (`GROUPS`: hot = parado/andar/correr/armas, act, fall, water, car, gym; arm = os clipes `lazy` de um tipo — a faca, o revólver e o taco dos civis) e paridade da direção
   (pares / ímpares), páginas de até ~8 Mpx; todas as direções de uma paridade de um clipe ficam na mesma página (o quadro seguinte,
   `fr2`, sai da mesma textura). Formato dos arquivos: cabeçalho de `tools/asset_baker/bake.cjs`.
 - **Dano pintado** (1 sujo, 2 machucado, 3 muito machucado — `NpcGenMesh.paintDamage`): o dano só repinta a roupa e a pele, então cada
@@ -141,9 +142,72 @@ Soco, chute, taco e cassetete são **colisões de verdade**, casadas com a anima
 estendido (`t0..t1`), a cada quadro uma cápsula vai do peito de quem bate até a ponta do golpe e acerta quem o corpo encostar
 (com linha de visada; o taco varre um arco e pega mais de um). Quem apanha cambaleia e é **empurrado**; chute e taco **derrubam**
 (Ragdoll: voa, cai, levanta). O jogador vira para o alvo mais perto à frente ao golpear (mira assistida) e também amassa carros.
-Quem bate de volta: pedestres "brigões" (alguns tipos, ~45% deles) **revidam** (`FightState`: socos e chutes até cansar ou apanhar
-demais; fogem se você puxar uma arma de fogo), a **PM usa o cassetete** de perto (sem armas liberadas) e **traficantes/BOPE/Exército
-dão soco ou chute** colados em você — o jogador cambaleia, é empurrado e cai com chute.
+Quem bate de volta: pedestres **revidam** conforme o temperamento (abaixo — `FightState`: no braço, de faca, taco ou revólver), a **PM
+usa o cassetete** de perto (sem armas liberadas) e **traficantes/BOPE/Exército dão soco ou chute** colados em você — o jogador
+cambaleia, é empurrado e cai com chute. Golpe de pedestre em pedestre (briga de rua, de trânsito) acerta de verdade: `Combat.strike`
+com `foe` (antes, quem não era o jogador só conseguia acertar o jogador).
+
+## Quem revida (`src/npc/Temper.js`, `Config.npc.temper`)
+
+O sorteio é **fixo por pessoa** (o pedestre do pool + o desenho e a cor que ele veste: o mesmo pedestre reage sempre igual); a região
+conta na hora da briga — **periferia** = distritos `favela`, `periferia` e `industrial` (`Empire.districtAt`).
+
+| | revida | com quê |
+|---|---|---|
+| **Homens** | 60% (`men`) | atacado **a mão livre** (soco, chute): no braço. Atacado de **faca, taco ou arma de fogo**: só quem também anda **armado** — dos que revidam, 25% levam faca (`knife`) e 12% revólver (`gun`), × 1,5 na periferia. Armado e levando a pior no braço (vida < 55%) ou vendo o outro sacar, **saca** a dele |
+| **Mulheres** | 10% (`women`); **40% na periferia** (`womenPeriphery`) | sempre de **faca ou taco** (55% taco: `womenBat`) |
+| Idosos (vovó, senhores grisalhos) | × 0,4 (`oldK`) | |
+
+- Faca ou taco contra **arma de fogo**: só com o atirador colado (`closeVsGun` = 4 m); mais longe, foge. Revólver encara tudo.
+- O tipo de agressão vem do golpe que acertou (`NPC.takeDamage(…, kind)`: `punch`/`punchL`/`kick` = mão livre, `stab`/`swing`/`baton` =
+  arma branca, `gun` = tiro); atropelamento e explosão não fazem ninguém revidar.
+- **Tiro do jogador** conta como ataque com arma para quem ele mirou (a bala passa a < 2,5 m) ou que estava a ≤ 6 m dele, à vista —
+  não só para quem a bala pega (um tiro de pistola deixa o pedestre com 20% da vida: ninguém revidaria). Quem anda de revólver (ou de
+  faca, colado) saca e responde; o resto foge com o alerta do tiro (`Temper.onPlayerShot`, antes do `alertShot`).
+- **Revólver** (`Weapons.revolver`, `owner: 'npc'`): chega até ter a linha de tiro (≤ 14 m), mira 0,45 s e atira (espalhamento × 2,4,
+  dano × 0,7); 6 balas e recarrega. Quem ouve, foge (`alertShot`).
+- **Desenho**: os civis ganharam `idle/walk/run/stab:knife` + `idle/walk/run/draw/aim/shoot:pistol` (homens) ou
+  `idle/walk/run/stab:knife` + `idle/walk/run/swing:bat` (mulheres) — `NpcGenTypes` (`ARM_M`/`ARM_F`). Ficam em **páginas à parte**
+  (`lazy` → grupo `arm` do `NpcGenBuild`): só vão para a placa de vídeo quando alguém saca (`Temper.prefetch` pede assim que ele
+  decide revidar, enquanto cambaleia). Sem esses clipes no atlas, briga a mão livre.
+
+## Briga de trânsito (`src/npc/RoadRage.js`, `Config.roadRage`)
+
+Numa batida entre dois veículos (`Game._onCarImpact`; o piloto que voou da moto: `Game._onThrow`) com motorista da cidade de pelo
+menos um lado, **45%** (`chance`) viram briga — com **moto ou bicicleta** no meio (motoboy, entregador, mototaxista, ciclista),
+**80%** (`motoChance`). Só perto do jogador (`radius` = 45 m, dentro do raio em que o trânsito não remove carro largado) e no máximo 2 ao
+mesmo tempo. O sorteio é feito uma vez por par de veículos (os dois carros avisam a mesma batida).
+
+- **Quem desce**: um pedestre do pool vira o motorista (`NPCManager.borrow`: o mais longe da tela; sai do crowd e anda na pista —
+  `NPC.walkFree`); o piloto que voou da moto **veste o desenho dele** (`NPC.wearLook`) e levanta da queda. Os veículos param na hora.
+- **Quem puxa a briga**: o motoboy, se tiver um; com o jogador na batida, o motorista da cidade; entre dois carros, um deles. Ele
+  sempre desce. O outro só desce se for de revidar (`Temper`) — senão fica no carro levando chute na porta.
+- **Fases** (`RageState`, um `FightState`): `out` (abre a porta e desce) · `rag` (voou da moto) · `approach` · `argue` (encara e xinga —
+  `Bubbles` —, chuta a porta do outro: amassa a lataria) · `fight` (soco e chute; armado saca quando aperta) · `back` (volta, levanta
+  a moto caída, entra e o veículo segue — o pedestre volta ao pool) · `flee` (levou a pior: corre até a calçada e vira um pedestre
+  assustado; o veículo fica largado).
+- **Com o jogador**: dentro do carro, o motorista vem até a porta, chuta a lataria e manda descer; se o jogador sai, briga com ele;
+  se arranca e passa de `giveUp` (18 m), desiste. A pé (a moto pegou o jogador, ou ele voou da própria moto), briga com ele.
+- Apanhou do jogador antes da briga começar: parte para cima dele (`Temper`) ou foge. Susto (tiro por perto, polícia): foge — menos
+  quem está trocando tiro. O jogador se afastou: os pedestres voltam ao pool e os veículos seguem (`_dissolve`).
+
+## Antisserrilhado dos personagens (`NpcArt`, `Config.art.npcAA`)
+
+O MSAA da cena (`render/Smooth.js`) só alisa bordas de **geometria**; o boneco 2,5D é um quad com alfa, então por dentro dele o MSAA
+não faz nada. O shader do personagem faz o próprio **supersampling**: n×n amostras bilineares numa grade girada 26,6° (RGSS — bordas
+quase retas também saem lisas) espalhadas pela pegada exata do pixel no atlas (`dFdx/dFdy`), com n pela redução (de longe, uma
+amostra por texel: nenhum é pulado) entre 2 e `npcAA`. Com a mistura de quadros, cada amostra lê um dos dois quadros na proporção da
+mistura (o custo não dobra; com 4 amostras, lê os dois). Ligado, o realce "nítido" da ampliação fica bem mais brando (× 0,3): o
+miolo duro de cada texel ampliado era o que fazia o degrau no contorno.
+
+| preset | MSAA da cena | personagens |
+|---|---|---|
+| Low | — | o filtro de caixa de antes (`npcAA` 1) |
+| Medium | 4× | até 4 amostras por pixel (`npcAA` 2) |
+| High | 4× | até **16** amostras por pixel (`npcAA` 4) |
+| HD | **8×** (só com a tela ≤ 4 Mpx; acima, 4×) | até **16** |
+
+Sem derivadas na placa (WebGL 1 sem `OES_standard_derivatives`), fica o filtro de caixa.
 
 ## Como funciona
 
@@ -273,9 +337,10 @@ ficam plantados com a passada do adulto — `STRIDE_K` em `NpcGenAnims.gait`). M
 
 ## Números
 
-- Atlas assados (k = 1, 16 direções, páginas): 34 tipos + 3 de bolsa da mão, ~163 mil quadros, 332 páginas (803 Mpx) — **283 MB de
-  WebP** (antes: 408 MB de `.js` com PNG em base64) **+ 109 MB das camadas de dano** (3 níveis; antes o dano era gerado no aparelho de cada jogador). Se TODAS
-  as páginas estivessem na placa de vídeo seriam ~1,5 GB, mas só as páginas em uso ficam (orçamento `Config.art.vramMB`: 640 MB;
+- Atlas assados (k = 1, 16 direções, páginas): 42 tipos + 3 de bolsa da mão, ~220 mil quadros, 424 páginas (1,14 Gpx) — **244 MB de
+  WebP** (antes: 408 MB de `.js` com PNG em base64) **+ 107 MB das camadas de dano** (3 níveis; antes o dano era gerado no aparelho de cada
+  jogador). As armas dos civis (grupo `arm`) somam ~1 300 quadros por tipo civil e só carregam quando alguém saca. Se TODAS
+  as páginas estivessem na placa de vídeo seriam ~2,2 GB, mas só as páginas em uso ficam (orçamento `Config.art.vramMB`: 640 MB;
   perfil leve 256 MB e só as direções pares). As páginas assadas são idênticas, pixel a pixel, às que o gerador desenha.
 - Carga: na abertura `npc-data.json` + os 34 manifestos JSON (e as páginas do protagonista); cada página é buscada e decodificada num
   Worker (`AtlasDecoder`, decodificador WebP nativo do navegador) quando alguém precisa dela. Nenhum desenho é gerado durante o jogo.

@@ -11,7 +11,7 @@
 //
 // ATLAS PAGINADO: assets/baked/npcs/<tipo>.json (lido na abertura: boot) é só o MANIFESTO — clipes, retângulos e em que página mora
 // cada direção de cada clipe (pd). Os pixels ficam nas PÁGINAS assets/baked/npcs/<tipo>/p<i>.webp (WebP sem perdas: R e G = os 2 bytes
-// do pixel), cada uma com um GRUPO de clipes (hot = parado/andar/correr/mirar…, act, fall, water, car, gym) e uma PARIDADE de direção
+// do pixel), cada uma com um GRUPO de clipes (hot = parado/andar/correr/mirar…, act, fall, water, car, gym, arm — as armas dos civis) e uma PARIDADE de direção
 // (0 = as pares — e todas as de um clipe de até 8 direções —, 1 = as ímpares): o quadro e o próximo (mistura) estão na mesma textura.
 // Os dados que não são desenho (tipos, variantes, paletas) vêm de assets/baked/npc-data.json (NpcData).
 //   • Na carga da página só o protagonista é decodificado (pares primeiro); o resto vem quando um ator precisa: Worker busca e
@@ -476,7 +476,15 @@ const NpcArt = {
 		// Bilinear feito à mão sobre a cor JÁ pintada (o atlas tem códigos, não cores): suave de longe; `sharp` > 1 = de perto, nítido.
 		// De longe (`mini` = texels do atlas por pixel da tela > 1,3: dirigindo, celular, tela pequena), o bilinear de 4 amostras pulava
 		// texels — o boneco serrilhava e "fervia" andando. Aí vale a MÉDIA de n×n amostras sobre a pegada do pixel (filtro de caixa).
+		// ANTISSERRILHADO (`aa` = Config.art.npcAA, amostras por lado; 1 = desligado): o MSAA da cena não age DENTRO de um sprite (só na
+		// borda do quad, que é transparente), então o próprio shader faz o supersampling — n×n amostras bilineares numa grade girada
+		// (RGSS: bordas quase retas também) espalhadas pela pegada exata do pixel no atlas (derivadas), n pela redução (de longe, uma
+		// amostra por texel: nenhum é pulado) entre 2 e `aa`. Com a mistura de quadros, cada amostra lê um dos dois quadros (na proporção
+		// da mistura): o custo não dobra.
 		BABYLON.Effect.ShadersStore.npcArtFragmentShader = `
+			#ifdef AA
+			#extension GL_OES_standard_derivatives : enable
+			#endif
 			precision highp float;
 			varying vec2 vPx;
 			varying vec4 vFr;
@@ -488,6 +496,7 @@ const NpcArt = {
 			uniform vec3 tint;
 			uniform float sharp;
 			uniform float mini;
+			uniform float aa;
 			uniform float la;
 			uniform float fmt;
 			uniform float wt;
@@ -532,7 +541,12 @@ const NpcArt = {
 				if (code > 0.5) c *= tint * vC.y;
 				return vec4(c * a, a);
 			}
-			// bilinear do quadro cujo retângulo no atlas é R (px), no ponto p (px)
+			// bilinear do quadro cujo retângulo no atlas é R (px), no ponto p (px); sharp > 1: o miolo do texel fica duro
+			vec4 bilin(vec2 px, vec4 R) {
+				vec2 p = px - 0.5, i = floor(p), f = clamp((p - i - 0.5) * sharp + 0.5, 0.0, 1.0);
+				return mix(mix(tap(i, R), tap(i + vec2(1.0, 0.0), R), f.x), mix(tap(i + vec2(0.0, 1.0), R), tap(i + vec2(1.0, 1.0), R), f.x), f.y);
+			}
+			// o mesmo, de longe sem o antisserrilhado: a média de n×n texels sobre a pegada do pixel
 			vec4 sampleFrame(vec2 px, vec4 R) {
 				if (mini > 1.3) {
 					float n = min(4.0, ceil(mini));
@@ -543,13 +557,37 @@ const NpcArt = {
 					}
 					return acc / (n * n);
 				}
-				vec2 p = px - 0.5, i = floor(p), f = clamp((p - i - 0.5) * sharp + 0.5, 0.0, 1.0);
-				return mix(mix(tap(i, R), tap(i + vec2(1.0, 0.0), R), f.x), mix(tap(i + vec2(0.0, 1.0), R), tap(i + vec2(1.0, 1.0), R), f.x), f.y);
+				return bilin(px, R);
 			}
+			#ifdef AA
+			// supersampling: n×n amostras na grade girada sobre a pegada do pixel (ex, ey: texels do atlas por pixel da tela)
+			vec4 supersample() {
+				vec2 ex = dFdx(vPx), ey = dFdy(vPx);
+				float n = clamp(ceil(max(length(ex), length(ey)) * 1.4), 2.0, aa), z = vPx2.z;
+				bool both = n < 2.5 && z > 0.004;                                   // (só 4 amostras: a mistura exata, lendo os dois quadros)
+				vec4 acc = vec4(0.0);
+				for (int j = 0; j < 4; j++) for (int k = 0; k < 4; k++) {
+					if (float(k) >= n || float(j) >= n) continue;
+					vec2 u = (vec2(float(k), float(j)) + 0.5) / n - 0.5;
+					u = vec2(u.x * 0.8944 - u.y * 0.4472, u.x * 0.4472 + u.y * 0.8944);      // girada 26,6° (atan ½)
+					vec2 o = ex * u.x + ey * u.y;
+					if (both) acc += mix(bilin(vPx + o, vFr), bilin(vPx2.xy + o, vFr2), z);
+					else if (z > 0.004 && fract((float(j) * n + float(k) + 0.5) * 0.618034) < z) acc += bilin(vPx2.xy + o, vFr2);
+					else acc += bilin(vPx + o, vFr);
+				}
+				return acc / (n * n);
+			}
+			#endif
 			void main(void) {
-				vec4 c = sampleFrame(vPx, vFr);
-				// mistura com o PRÓXIMO quadro da animação (gráfico suave): a pose muda em degradê, sem o salto seco entre quadros
-				if (vPx2.z > 0.004) c = mix(c, sampleFrame(vPx2.xy, vFr2), vPx2.z);
+				vec4 c;
+				#ifdef AA
+				if (aa > 1.5) c = supersample(); else
+				#endif
+				{
+					c = sampleFrame(vPx, vFr);
+					// mistura com o PRÓXIMO quadro da animação (gráfico suave): a pose muda em degradê, sem o salto seco entre quadros
+					if (vPx2.z > 0.004) c = mix(c, sampleFrame(vPx2.xy, vFr2), vPx2.z);
+				}
 				// Vadeando (vW.z = profundidade da água no corpo, m): abaixo da linha d'água o desenho fica tingido de mar e some aos
 				// poucos com a profundidade, e a linha balança com uma franja de espuma. Na imagem, 1 m de altura sobe 0,56 m (câmera 56°).
 				if (vW.z > 0.01 && c.a > 0.02) {
@@ -592,10 +630,12 @@ const NpcArt = {
 	_newMaterial(P, prefix) {
 		const A = P.A, m = new BABYLON.ShaderMaterial(prefix + A.id + '_' + P.i, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
 			attributes: ['position', 'color', 'fr', 'fr2'],
-			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'palRows', 'tint', 'sharp', 'mini', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette'],
+			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'palRows', 'tint', 'sharp', 'mini', 'aa', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette'],
 			samplers: ['atlas', 'palette'],
+			defines: this.aa > 1 ? ['#define AA'] : [],
 			needAlphaBlending: true,
 		});
+		m.setFloat('aa', this.aa);
 		m.setTexture('palette', this._pal.tex);
 		m.setFloat('ppu', this.ppuOf(A));
 		m.setFloat('fmt', A.data.v || 1);
@@ -641,7 +681,14 @@ const NpcArt = {
 	// Nitidez conforme o zoom: px de tela por texel do atlas (> 1 = ampliado: sem borrar). Chamado a cada quadro pelo jogo.
 	_spm: 0,
 	// (até 1,6: de perto o boneco fica nítido, mas liso — sem os "quadradinhos" de pixel art ampliada)
-	_sharpOf(A) { return Math.max(1, Math.min(1.6, (this._spm || this.ppu) / this.ppuOf(A))); },
+	// Com o antisserrilhado ligado, o realce é bem mais brando (o miolo duro de cada texel ampliado fazia o degrau no contorno).
+	_sharpOf(A) { const r = Math.max(1, Math.min(1.6, (this._spm || this.ppu) / this.ppuOf(A))); return this.aa > 1 ? 1 + (r - 1) * 0.3 : r; },
+	// Antisserrilhado no shader (amostras por lado do pixel, 1 = desligado): Config.art.npcAA, se a placa tem derivadas (WebGL 2 ou a
+	// extensão no WebGL 1) — sem elas, o filtro de caixa de sempre.
+	get aa() {
+		if (this._aa === undefined && this._scene) this._aa = this._scene.getEngine().getCaps().standardDerivatives ? Math.max(1, Math.min(4, Math.round((Config.art && Config.art.npcAA) || 1))) : 1;
+		return this._aa || 1;
+	},
 	_miniOf(A) { return Math.max(1, Math.min(6, this.ppuOf(A) / (this._spm || this.ppu))); },
 
 	// Standing sprites (2.5D camera, SpriteActor.standing): the feet drop from the top-down layer height (0.5) back to the ground, and

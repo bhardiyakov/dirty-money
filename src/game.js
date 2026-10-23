@@ -799,6 +799,7 @@ class Game {
 			Perf.lap('navegação (crowd)');
 			this.npcManager.update(dt, { playerPos: ps0.pos, wanted: this.wanted.level, chasers });
 			if (typeof StreetCrime !== 'undefined') StreetCrime.update(this, dt);          // assalto entre NPCs (de vez em quando, perto do jogador)
+			RoadRage.update(this, dt);                                                     // brigas de trânsito (motoristas que desceram do carro)
 			Perf.lap('pedestres');
 
 			if (this.mode === 'player' && this.input.consumePress('e')) this._interact();
@@ -1186,6 +1187,7 @@ class Game {
 			const crit = Math.random() < (SkillTree.m.crit || 0);
 			this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p, over: !!high, only: high ? high.only : null, spreadMul: this.aim ? this.aim.spreadMul() : 1 - (SkillTree.m.spread || 0), dmgMul: (1 + (SkillTree.m.gunDmg || 0)) * (crit ? 2 : 1) }, p.weapon);
 			if (this.aim) this.aim.onShot(p.weapon);                          // coice: desfirma a mira um pouco
+			Temper.onPlayerShot(this, pos, angle);                              // quem ele mirou e anda armado revida (antes do alerta: o resto foge)
 			if ((Weapons[p.weapon] && Weapons[p.weapon].silenced) || (this.careers && this.careers.silenced(p.weapon))) {      // silenciador (a pistola com ele, ou o do Armeiro): só quem está muito perto e vê percebe
 				this.npcManager.alertViolence(pos, 8);
 				this.wanted.reportCrime();
@@ -2049,6 +2051,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 	_onThrow(bike, variant, dx, dz, power, kind) {
 		if (bike === this.activeCar) {
 			const pl = this.player, p = bike.position;
+			bike._playerFell = RoadRage.now;                              // (numa batida: o outro motorista vem tirar satisfação com ele a pé)
 			bike.setControlled(false);
 			this.player.teleport(new BABYLON.Vector3(p.x, 0, p.z));
 			this.player.setVisible(true);
@@ -2065,10 +2068,13 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		// Queda numa BATIDA (kind 'crash': bateu num carro, numa pessoa): piloto do trânsito/entregador cai, levanta e volta para a moto
 		// (Casualty.remount) — não sai correndo apavorado. Tiro, fogo e roubo continuam como antes (foge).
 		const lethal = kind !== 'eject' && power > 15, back = kind === 'crash' && !lethal && bike.mode !== undefined;
-		if (bike.courier && variant >= CharacterRig.VARIANT_COURIER && !back) Couriers.onThrown(this, bike);       // o pedido cai no chão
 		const ra = bike.visual && bike.visual.rider;                       // (2,5D: quem cai é o mesmo tipo/visual que pilotava)
+		const look = ra && ra.sheet && ra.sheet.isNpc ? { sheet: ra.sheet, row: ra.npcRow } : null;
+		// Briga de trânsito: quem voou levanta brigando (um pedestre do pool com o desenho do piloto) em vez da Casualty de sempre.
+		if (back && RoadRage.onThrow(this, bike, variant, dx, dz, power, look)) { bike.mode = 'abandoned'; bike.route = null; return; }
+		if (bike.courier && variant >= CharacterRig.VARIANT_COURIER && !back) Couriers.onThrown(this, bike);       // o pedido cai no chão
 		this.casualties.push(new Casualty(this, p, {
-			variant, sheet: variant % 2 ? 'civB' : 'civA', look: ra && ra.sheet && ra.sheet.isNpc ? { sheet: ra.sheet, row: ra.npcRow } : null, threat: kind === 'eject' ? this.player.position : p,
+			variant, sheet: variant % 2 ? 'civB' : 'civA', look, threat: kind === 'eject' ? this.player.position : p,
 			dx, dz, power, kind: kind === 'eject' ? 'eject' : 'hit', lethal,
 			remount: back ? { bike, variant, onMount: (b) => { if (b.courier) Couriers.onRemount(b); } } : null,
 		}));
@@ -2666,6 +2672,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			car.throwRider(-dvx, -dvz, dv * 0.9, car.controlled ? 'hit' : 'crash');
 			if (dv > (car.courier ? 6 : 8)) car.fall();
 		}
+
+		RoadRage.onImpact(this, car, dv, dvx, dvz);                       // batida entre dois veículos: às vezes vira briga de trânsito
 
 		const p = car.position;
 		AudioFX.crash(p.x, p.z, Math.min(1, dv / 16));

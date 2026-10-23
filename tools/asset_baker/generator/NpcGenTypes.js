@@ -21,6 +21,10 @@ function NpcGenTypes(G) {
     const FORCE = (w) => [...BASE, 'vault:none', 'punch:none', 'kick:none', 'opendoor:none', 'enter:none', 'surrender:none', 'kneel:none', ...armed(w)];
     const KNIFE = ['idle:knife', 'walk:knife', 'run:knife', 'stab:knife'];          // faca na mão e a facada
     const GANG = (ws) => [...CIV0, 'vault:none', ...ws.flatMap((w) => [...armed(w), `holdup:${w}`]), ...KNIFE, 'holdup:knife'];
+    // Civis que REVIDAM armados (src/npc/Temper.js): os homens com faca ou revólver, as mulheres com faca ou taco. Esses clipes ficam em
+    // páginas à parte (`lazy` → grupo 'arm' do NpcGenBuild): só vão para a placa de vídeo quando alguém saca.
+    const ARM_M = [...KNIFE, ...armed('pistol')];
+    const ARM_F = [...KNIFE, 'idle:bat', 'walk:bat', 'run:bat', 'swing:bat'];
     // Clipes do jogador (Bags.PLAYER_CLIPS + os novos). Os de carregar bolsa na mão saem só quando o jogador tem uma.
     const PLAYER = [
         'idle:none', 'walk:none', 'run:none', 'walk_up:none', 'climb:none',
@@ -91,29 +95,31 @@ function NpcGenTypes(G) {
     // Who goes to the beach (the 'beach' group: bathers swim — SwimState) also gets the dive from wading into the swim.
     const SWIMMER = ['wade_dive:none'];
     const T = (vary, nvar, groups, clips, guns = {}) => ({ vary, nvar, groups, clips: groups.includes('beach') ? [...clips, ...SWIMMER] : clips, guns });
+    // civil: homem (m) ou mulher (f) — os clipes de revidar armado de cada um (lazy: páginas à parte)
+    const C = (sex, vary, nvar, groups) => { const arms = sex === 'f' ? ARM_F : ARM_M; return Object.assign(T(vary, nvar, groups, [...CIV, ...arms]), { lazy: arms }); };
     const TYPES = {
-        civil_trabalhador: T('civil', 10, ['casual', 'poor'], CIV),
-        civil_senhor: T('social', 8, ['biz', 'casual', 'tourist'], CIV),
-        civil_praia: T('civil', 10, ['beach', 'sport', 'casual'], CIV),
-        civil_executiva: T('social', 8, ['biz'], CIV),
-        civil_turista: T('civil', 8, ['tourist', 'beach'], CIV),
-        civil_estudante: T('civil', 10, ['casual', 'sport'], CIV),
-        civil_ambulante: T('civil', 10, ['poor', 'beach', 'casual'], CIV),
-        civil_black_power: T('civil', 10, ['casual', 'poor'], CIV),
-        civil_entregador: T('civil', 8, ['casual', 'poor'], CIV),
-        civil_torcedor: T('civil', 10, ['poor', 'casual', 'beach'], CIV),
-        civil_banhista: T('civil', 10, ['beach', 'sport', 'poor'], CIV),
-        civil_corredora: T('civil', 10, ['sport', 'beach'], CIV),
-        civil_executivo: T('suit', 8, ['biz'], CIV),
-        civil_vovo: T('social', 8, ['casual', 'poor'], CIV),
-        civil_skatista: T('civil', 10, ['casual', 'sport'], CIV),
-        civil_mano: T('civil', 10, ['poor', 'casual'], CIV),
-        civil_motoboy: T('farda', 8, ['courier'], CIV),
+        civil_trabalhador: C('m', 'civil', 10, ['casual', 'poor']),
+        civil_senhor: C('m', 'social', 8, ['biz', 'casual', 'tourist']),
+        civil_praia: C('f', 'civil', 10, ['beach', 'sport', 'casual']),
+        civil_executiva: C('f', 'social', 8, ['biz']),
+        civil_turista: C('m', 'civil', 8, ['tourist', 'beach']),
+        civil_estudante: C('m', 'civil', 10, ['casual', 'sport']),
+        civil_ambulante: C('m', 'civil', 10, ['poor', 'beach', 'casual']),
+        civil_black_power: C('f', 'civil', 10, ['casual', 'poor']),
+        civil_entregador: C('m', 'civil', 8, ['casual', 'poor']),
+        civil_torcedor: C('m', 'civil', 10, ['poor', 'casual', 'beach']),
+        civil_banhista: C('m', 'civil', 10, ['beach', 'sport', 'poor']),
+        civil_corredora: C('f', 'civil', 10, ['sport', 'beach']),
+        civil_executivo: C('m', 'suit', 8, ['biz']),
+        civil_vovo: C('f', 'social', 8, ['casual', 'poor']),
+        civil_skatista: C('m', 'civil', 10, ['casual', 'sport']),
+        civil_mano: C('m', 'civil', 10, ['poor', 'casual']),
+        civil_motoboy: C('m', 'farda', 8, ['courier']),
         // penteados e portes da malha 3D (NpcGenMesh): chanel, tranças, topete, repartido
-        civil_chanel: T('civil', 10, ['casual', 'biz', 'tourist'], CIV),
-        civil_trancas: T('civil', 10, ['casual', 'poor', 'beach'], CIV),
-        civil_topete: T('civil', 10, ['casual', 'sport'], CIV),
-        civil_repartido: T('social', 8, ['biz', 'casual'], CIV),
+        civil_chanel: C('f', 'civil', 10, ['casual', 'biz', 'tourist']),
+        civil_trancas: C('f', 'civil', 10, ['casual', 'poor', 'beach']),
+        civil_topete: C('m', 'civil', 10, ['casual', 'sport']),
+        civil_repartido: C('m', 'social', 8, ['biz', 'casual']),
         pm_policial: T('farda', 6, ['police'], [...FORCE('pistol'), 'swing:baton']),
         pm_policial_f: T('farda', 6, ['police'], [...FORCE('pistol'), 'swing:baton']),
         bope_capacete: T('farda', 5, ['swat'], FORCE('smg'), { smg: 'rifle' }),

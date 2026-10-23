@@ -224,6 +224,7 @@ class NPC {
 	// (Quem está rendido fica congelado de medo: só `force` — o fim do assalto — o tira dali.)
 	panic(threatPos, force = false) {
 		if (this.rag) return;                       // voando/caído: só entra em pânico quando levantar
+		if (this._rage && this.fsm.current === this._rage) { this._rage.scare(threatPos, force); return; }      // (briga de trânsito, na pista: RoadRage)
 		if ((this.fsm.name === 'SURRENDER' || this.fsm.name === 'MUG' || this.fsm.name === 'FIGHT') && !force) return;      // (o assaltante de rua e quem está brigando não se assustam)
 		this.umbrella = false;                      // (larga o guarda-chuva)
 		if (this.fsm.name === "SWIM" && this.fsm.current.inWater()) { this.fsm.current.scare(threatPos); return; }   // nadando: volta à areia primeiro
@@ -238,33 +239,24 @@ class NPC {
 		}
 	}
 
-	// Brigão: levou um soco e REVIDA (FightState) em vez de fugir. Só alguns tipos de pedestre (os mais "de rua") e nem todos eles;
-	// fixo por pedestre. Sem o atlas 2,5D (bonecos antigos): 1 em 4.
-	get brawler() {
-		if (this._brawler === undefined) {
-			const id = this.actor && this.actor.sheet && this.actor.sheet.isNpc ? this.actor.sheet.id : null;
-			const tough = !id || /trabalhador|mano|torcedor|banhista|ambulante|entregador|estudante|skatista|black_power|turista/.test(id);
-			const r = ((this.id * 2654435761) >>> 0) % 100;
-			this._brawler = tough && r < (id ? 45 : 25);
-		}
-		return this._brawler;
-	}
-
-	// Levou um golpe: cambaleia e, em seguida, foge do agressor (ou revida — ver HurtState).
+	// Levou um golpe: cambaleia e, em seguida, foge do agressor (ou revida — ver HurtState e Temper). Brigando, só cambaleia e continua.
 	hurt(fromPos) {
 		if (this.rag) return;
 		this.threat.set(fromPos.x, 0, fromPos.z);
+		if (this.fsm.current && this.fsm.current.onHurt) { this.fsm.current.onHurt(fromPos); return; }
 		this.waiting = null;
 		this.crossing = null;
 		this.fsm.setState(new HurtState(this));
 	}
 
-	// Dano de bala/golpe/atropelamento. source: 'player' | 'police'. Zerou a vida: morre.
+	// Dano de bala/golpe/atropelamento. source: 'player' | 'police' | 'npc'. Zerou a vida: morre.
 	// impact: { dx, dz, power } (atropelamento) — com força suficiente o pedestre é ARREMESSADO (ragdoll).
-	takeDamage(amount, from, source, impact) {
+	// kind: o golpe (Melee: punch, kick, stab, swing…) ou 'gun' — decide se ele revida e com quê (Temper, HurtState).
+	takeDamage(amount, from, source, impact, kind = null) {
 		if (!this.alive) return;
 		this.hp -= amount;
-		this._hitBy = source;                                   // (quem bateu: o brigão revida o jogador — ver HurtState)
+		this._hitBy = source;                                   // (quem bateu e com quê: quem revida, revida o jogador — ver HurtState)
+		this._hitKind = kind;
 		if (this.hp <= 0) this.die(from, source, impact);
 		else if (impact && impact.power >= Config.ragdoll.minPower) this.ragdoll(from, impact, false);
 		else this.hurt(from);
@@ -295,6 +287,7 @@ class NPC {
 			if (this.ctx.events) this.ctx.events.onKill(this, this._killSource, 'npc');
 			return;
 		}
+		if (this._rage && this._rage.getUp()) return;                  // briga de trânsito: levanta ali mesmo, na pista (RoadRage)
 		// Levantou: volta ao NavMesh onde caiu e sai correndo.
 		const pos = this.nav.closestPoint(this.transform.position);
 		this.transform.position.copyFrom(pos);
@@ -308,6 +301,7 @@ class NPC {
 	// Com `impact`, antes disso ele é arremessado (o evento de morte só dispara ao pousar).
 	die(from, source, impact) {
 		this.alive = false;
+		this._rage = null;                                      // (morreu na briga de trânsito: o corpo não é mais dela — RoadRage)
 		this._clearActivity();
 		this.waiting = null; this.crossing = null;
 		if (impact && impact.power >= Config.ragdoll.minPower) {
@@ -327,6 +321,7 @@ class NPC {
 	// Volta à vida como "outro" pedestre em outro lugar, longe do jogador.
 	respawn() {
 		this.mugger = false;                                    // (era o assaltante de um StreetCrime)
+		this.restoreLook();
 		let pos = null;
 		for (let i = 0; i < 12; i++) {
 			const p = this.nav.randomWalkable();
@@ -350,9 +345,36 @@ class NPC {
 		this.actor.setVariant(G[0] + Math.floor(Math.random() * (G[1] - G[0] + 1)));
 	}
 
+	// Veste outro desenho por um tempo (o piloto que caiu da moto numa briga de trânsito: o mesmo tipo e cores dele). O de antes volta
+	// quando ele volta ao pool (relocate / respawn).
+	wearLook(sheet, row) {
+		if (!this._look0) this._look0 = { sheet: this.actor.sheet, row: this.actor.npcRow };
+		this.actor.useSheet(sheet); this.actor.npcRow = row;
+	}
+	restoreLook() {
+		this._rage = null;
+		if (!this._look0) return;
+		this.actor.useSheet(this._look0.sheet); this.actor.npcRow = this._look0.row;
+		this._look0 = null;
+	}
+
+	// Fora do crowd (briga de trânsito, na pista): anda em linha reta até (x, z) a `speed` m/s, sem atravessar prédio, virando para lá.
+	// Devolve a distância que faltava.
+	walkFree(x, z, speed, dt) {
+		const p = this.transform.position, dx = x - p.x, dz = z - p.z, d = hypot(dx, dz);
+		if (d < 0.05 || speed <= 0) { this._freeV = 0; return d; }
+		const k = Math.min(d, speed * dt);
+		p.x += dx / d * k; p.z += dz / d * k;
+		MapGeo.resolveCircle(p, Config.npc.radius);
+		this.heading = this._lerpAngle(this.heading, Math.atan2(dx, dz), 1 - Math.exp(-10 * dt));
+		this._freeV = speed;
+		return d;
+	}
+
 	// Reaparece em `pos` (perto do jogador, fora da tela) com a vocação `role`: o pedestre "novo" que o mundo grande precisa.
 	relocate(pos, role, style = null) {
 		if (this.rag || !this.alive) return false;
+		this.restoreLook();
 		this.fsm.setState(new IdleState(this));               // sai do estado atual direito (solta a toalha/vaga, volta ao crowd)
 		this._clearActivity();
 		this.waiting = null; this.crossing = null; this.fleeAge = 99;
@@ -516,9 +538,9 @@ class NPC {
 
 		// Deitado na areia ou nadando: sem crowd — o estado move o NPC; aqui só o sprite.
 		if (this.free) {
-			const A = this.freeAnim || { clip: 'idle', rate: 1 };
+			const S = this.fsm.current, A = (S && S.anim ? S.anim(this._freeV || 0) : this.freeAnim) || { clip: 'idle', rate: 1 };
 			this.transform.rotation.y = this.heading;
-			this.actor.play(A.clip, 'none');
+			if (!this.actor.play(A.clip, A.w || 'none')) this.actor.play(A.clip, 'none');
 			const b = this._waveTick(dt), yaw = b ? CompassCamera.yaw || 0 : 0;
 			this.actor.setPosition(this.transform.position.x + Math.sin(yaw) * b, this.transform.position.z + Math.cos(yaw) * b);
 			this.actor.setHeading(this.heading);
@@ -543,11 +565,10 @@ class NPC {
 		const st = this.fsm.name;
 		let rate = 1;
 		if (st === 'HURT') this.actor.play('hurt');
-		else if (st === 'FIGHT') {                                                // brigando: golpe (o estado reinicia o clipe) ou guarda/avanço
-			const S = this.fsm.current;
-			if (S.clip) this.actor.play(S.clip, 'none');
-			else if (speed > 0.5) { this.actor.play('run'); rate = Math.max(0.5, speed / Config.anim.run); }
-			else this.actor.play('idle');
+		else if (st === 'FIGHT') {                                                // brigando: golpe/tiro (o estado reinicia o clipe) ou guarda/avanço, com a arma na mão
+			const A = this.fsm.current.anim(speed);
+			if (!this.actor.play(A.clip, A.w)) this.actor.play(A.clip, 'none');
+			rate = A.rate;
 		}
 		else if (st === 'SURRENDER') this.actor.play(this.fsm.current.kneeling ? 'kneel' : 'surrender');
 		else if (st === 'MUG') {                                                  // assaltante (StreetCrime): sacar/anunciar parado; andar/correr armado

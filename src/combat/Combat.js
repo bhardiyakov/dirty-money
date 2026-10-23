@@ -67,7 +67,7 @@ class Combat {
         this.sparks = [];
         for (let i = 0; i < this.MAXS; i++) this.sparks.push({ on: false });
         this._targets = [];
-        this.shots = { player: 0, police: 0, gang: 0 };      // contadores (HUD/testes)
+        this.shots = { player: 0, police: 0, gang: 0, npc: 0 };      // contadores (HUD/testes)
     }
 
     // --------------------------------------------------------------- disparo
@@ -218,12 +218,13 @@ class Combat {
     }
 
     // Começa um golpe. who = { position (vivo), heading(): rad, ok(): ainda pode bater (não apanhou/caiu) } ;
-    // opts: { source: 'player'|'npc'|'police'|'gang', dmgMul, kind (Melee), onHit(alvo, golpe), ref (quem bate: não se acerta) }.
+    // opts: { source: 'player'|'npc'|'police'|'gang', dmgMul, kind (Melee), onHit(alvo, golpe), ref (quem bate: não se acerta),
+    //         foe (só ele pode levar o golpe: briga entre pedestres, de rua ou de trânsito — sem isso, quem não é o jogador só acerta o jogador) }.
     // A colisão é testada em update() durante a janela do golpe. Retorna o golpe (ou null).
     strike(who, kind, opts = {}) {
         const M = Melee[kind];
         if (!M) return null;
-        const s = { who, kind, M, t: 0, hit: new Set(), source: opts.source || 'player', dmgMul: opts.dmgMul || 1, onHit: opts.onHit || null, ref: opts.ref || who, carHit: false };
+        const s = { who, kind, M, t: 0, hit: new Set(), source: opts.source || 'player', dmgMul: opts.dmgMul || 1, onHit: opts.onHit || null, ref: opts.ref || who, foe: opts.foe || null, carHit: false };
         (this.strikes || (this.strikes = [])).push(s);
         return s;
     }
@@ -250,7 +251,7 @@ class Combat {
         const bx = P.x + Math.sin(a) * reach, bz = P.z + Math.cos(a) * reach;
         const sx = bx - ax, sz = bz - az, sl2 = sx * sx + sz * sz || 1e-6, R = M.w + BODY_R;
         let landed = false;
-        for (const t of this._meleeTargets(s.source, this._mt || (this._mt = []))) {
+        for (const t of this._strikeTargets(s)) {
             if (t === s.ref || s.hit.has(t)) continue;
             if (!M.multi && s.hit.size) break;
             const p = t.position, k = Math.max(0, Math.min(1, ((p.x - ax) * sx + (p.z - az) * sz) / sl2));
@@ -275,6 +276,16 @@ class Combat {
         }
     }
 
+    // Quem o golpe `s` pode acertar: o adversário dele (foe: um pedestre — ou o jogador, nas condições de sempre) ou, sem foe, os de
+    // _meleeTargets.
+    _strikeTargets(s) {
+        const out = this._mt || (this._mt = []), f = s.foe;
+        if (!f || f === this.game.player) return this._meleeTargets(s.source, out);
+        out.length = 0;
+        if (f.alive && !f.rag && f.position && (!f.actor || f.actor.visible !== false)) out.push(f);
+        return out;
+    }
+
     // Acertou `t` (ponto de contato cx, cz): dano, empurrão, queda (com força) e efeitos.
     _land(s, t, cx, cz) {
         const M = s.M, P = s.who.position, g = this.game;
@@ -284,7 +295,7 @@ class Combat {
         const fall = M.fall >= Config.ragdoll.minPower ? { dx, dz, power: M.fall * (0.9 + Math.random() * 0.2) } : null;
         if (t === g.player) t.meleeHit(dmg, dx, dz, M);
         else {
-            t.takeDamage(dmg, { x: P.x, z: P.z }, s.source, fall);
+            t.takeDamage(dmg, { x: P.x, z: P.z }, s.source, fall, s.kind);          // (o golpe: quem revida, revida com quê — Temper)
             if (t.alive && !t.rag) this.shove(t, dx * M.push, dz * M.push);
         }
         if (typeof Blood !== 'undefined' && M.cut) {                          // faca: corte — espirra e sangra (machucado, como um tiro)
@@ -483,7 +494,7 @@ class Combat {
                 }
                 else {
                     const wasAlive = hit.ref.alive !== false;
-                    hit.ref.takeDamage(b.dmg, { x: b.px, z: b.pz }, b.owner);
+                    hit.ref.takeDamage(b.dmg, { x: b.px, z: b.pz }, b.owner, undefined, 'gun');
                     if (wasAlive && hit.kind !== 'heli' && typeof Blood !== 'undefined') {     // sangue: respingo atrás do alvo e ferida que sangra
                         const p = hit.ref.position;
                         Blood.hit(p.x, p.z, b.vx, b.vz, b.dmg, hit.ref);

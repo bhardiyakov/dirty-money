@@ -44,6 +44,7 @@ const Config = {
 		cars3d: true,          // carros em 3D (CarArt3D, assets/cars/carros3d.js): rodas que rolam e esterçam, carroceria balançando na suspensão. false (ou ?cars2d) = sprites do atlas.
 		charScale: 0.8,        // escala do DESENHO dos personagens (atlas vetorial). Os carros são de tamanho real; isto aproxima a proporção.
 		npcPpu: 26,            // personagens 2,5D (NpcArt): px do atlas por metro — adultos na mesma escala dos veículos. = NpcGenBuild.PPU (pilotos × motos)
+		npcAA: 4,              // antisserrilhado dos personagens 2,5D: amostras por lado do pixel no shader (4 = até 16 por pixel; 1 = desligado). Ver NpcArt
 		npcDirs: 16,           // direções desenhadas dos personagens 2,5D. Perfil leve: 8 (só as páginas pares dos atlas; os visuais do guarda-roupa saem com 8)
 		vramMB: 640,           // orçamento das páginas dos atlas 2,5D na GPU (MB): passou, as sem uso há 15 s saem (NpcArt._lru). Perfil leve: 256
 		uploadMB: 3,           // envio das páginas 2,5D à GPU: MB por quadro, em faixas (NpcArt._upStep — sem travar quando um tipo novo aparece). Perfil leve: 1
@@ -245,6 +246,31 @@ const Config = {
 		wantedRadius: 9,       // Foge de VOCÊ (procurado) até esta distância.
 		herdRadius: 5.5,       // Pânico contagia vizinhos até esta distância.
 		herdChance: 0.6,
+
+		// Quem REVIDA uma agressão (npc/Temper.js). Sorteio fixo por pessoa; a periferia (favela, periferia, porto) conta na hora.
+		temper: {
+			men: 0.6,              // homens que revidam. A mão livre, no braço; contra faca/taco/arma de fogo, só os armados
+			knife: 0.25,           // ...dos que revidam: andam com faca
+			gun: 0.12,             // ...e com revólver (na periferia, as duas × periphery)
+			periphery: 1.5,
+			women: 0.1,            // mulheres que revidam (sempre com faca ou taco)
+			womenPeriphery: 0.4,   // ...na periferia
+			womenBat: 0.55,        // fração delas com taco (o resto, faca)
+			oldK: 0.4,             // idosos: esta fração da chance
+			closeVsGun: 4,         // faca/taco contra arma de fogo: só com o atirador a menos disto (m); mais longe, foge
+		},
+	},
+
+	// BRIGA DE TRÂNSITO (npc/RoadRage.js): numa batida entre dois veículos, quem dirige desce para tirar satisfação.
+	roadRage: {
+		chance: 0.45,          // das batidas entre veículos (com motorista da cidade de um dos lados) que viram briga
+		motoChance: 0.8,       // ...com moto/bicicleta no meio (motoboy, entregador, mototaxista, ciclista)
+		minDv: 4.0,            // batida (m/s de queda de velocidade) a partir da qual alguém desce
+		radius: 45,            // só perto do jogador (m): longe, ninguém vê — o trânsito segue (< traffic.abandonDist: o carro parado não some)
+		max: 2,                // brigas ao mesmo tempo
+		argue: [2.2, 4.5],     // s encarando e xingando antes do primeiro soco
+		giveUp: 18,            // o outro sumiu (o carro do jogador foi embora): desiste a esta distância (m)
+		life: 60,              // s no máximo: depois todo mundo volta para o seu veículo
 	},
 
 	// TÁTICO do jogador a pé (player.js e combat/Cover.js): AGACHAR (Q · L3 no controle) = furtivo; agachado encostado num prédio,

@@ -98,7 +98,7 @@ class NPCManager {
         this._recT = 0.4;
         const f = this.nav.focus, far2 = Config.npc.recycleDist * Config.npc.recycleDist;
         for (const npc of this.npcs) {
-            if (npc.party || !npc.alive || npc.rag || npc.state === 'HURT' || npc.surrendered || npc.state === 'FLEE') continue;
+            if (npc.party || npc._rage || !npc.alive || npc.rag || npc.state === 'HURT' || npc.surrendered || npc.state === 'FLEE') continue;
             const dx = npc.position.x - f.x, dz = npc.position.z - f.z;
             if (dx * dx + dz * dz < far2) continue;
             const { pos, role } = this._place(this._roleFor(Math.random()), this.recycleMin || 75, 200);      // (de madrugada: reaparece longe — StreetLife)
@@ -134,6 +134,33 @@ class NPCManager {
         if (env) this._perceive(dt, env);
     }
 
+    // Um pedestre do pool vira OUTRA pessoa por um tempo (o motorista de uma briga de trânsito — RoadRage): o mais longe do jogador (fora
+    // da tela: ninguém o vê sumir), calmo e fora de outras histórias; `prefer(npc)` passa na frente. Sai do crowd (npc.free) e vai para
+    // (x, z). null = ninguém disponível.
+    borrow(x, z, prefer = null) {
+        const f = this.nav.focus, ok = (n) => n.alive && !n.rag && !n.party && !n.mugger && !n.thief && !n._rage && !n.free && n.index >= 0 && /^(WANDER|IDLE|JOG)$/.test(n.state);
+        let best = null, bs = -Infinity;
+        for (const n of this.npcs) {
+            if (!ok(n)) continue;
+            const sc = hypot(n.position.x - f.x, n.position.z - f.z) + (prefer && prefer(n) ? 1e4 : 0);
+            if (sc > bs) { bs = sc; best = n; }
+        }
+        if (!best) return null;
+        best.fsm.setState(new IdleState(best));                 // (sai do estado de antes direito)
+        best._clearActivity();
+        best.waiting = null; best.crossing = null; best.fleeAge = 99;
+        best.enterFree();
+        best.transform.position.set(x, 0, z);
+        best.hp = best.maxHp;
+        return best;
+    }
+    // Devolve um pedestre emprestado: reaparece longe, fora da tela, como outra pessoa (o desenho de antes volta — NPC.restoreLook).
+    release(npc) {
+        if (!npc.alive || npc.rag) { npc._rage = null; return; }      // (o corpo / quem está voando segue o caminho normal)
+        const { pos, role } = this._place(this._roleFor(Math.random()), this.recycleMin || 75, 200);
+        npc.relocate(pos, role, this._style(pos, role));
+    }
+
     // ------------------------------------------------------------- chuva
     // Começou a chover: cada pedestre (escalonado em ~5 s; na garoa nem todos ligam) corre para o abrigo mais perto (toldo de loja,
     // cobertura de posto) e abre o guarda-chuva (ShelterState). Quando a chuva passa, fecha e volta à vida normal.
@@ -147,7 +174,7 @@ class NPCManager {
             }
             if (k < 0.2 || !npc.alive || npc.rag || npc.umbrella) continue;
             const st = npc.state;
-            if (st === 'SHELTER' || st === 'FLEE' || st === 'HURT' || st === 'SURRENDER' || st === 'RAG' || st === 'DEAD') continue;
+            if (st === 'SHELTER' || st === 'FLEE' || st === 'HURT' || st === 'SURRENDER' || st === 'RAG' || st === 'DEAD' || st === 'RAGE' || st === 'FIGHT') continue;
             if (npc._rainT == null) npc._rainT = Math.random() * 5;
             npc._rainT -= dt;
             if (npc._rainT > 0) continue;
@@ -189,7 +216,7 @@ class NPCManager {
         for (const a of this.npcs) {
             if (!a.alive || a.state !== 'FLEE' || a.fleeAge > 1.2) continue;
             for (const b of G.query(a.position.x, a.position.z, C.herdRadius, q)) {
-                if (b === a || !b.alive || b.state === 'FLEE' || b.state === 'HURT') continue;
+                if (b === a || !b.alive || b.state === 'FLEE' || b.state === 'HURT' || b._rage) continue;      // (o motorista da briga de trânsito não se assusta com quem passa correndo)
                 if (BABYLON.Vector3.Distance(a.position, b.position) < C.herdRadius && Math.random() < C.herdChance) b.panic(a.threat);
             }
         }
