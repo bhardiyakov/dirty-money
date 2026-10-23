@@ -7,8 +7,8 @@
 //       pivete      um moleque arranca a bolsa de alguém e corre — pegue ele (bater) e devolva a bolsa (E) ou fique com ela
 //       ambulante   vendedor com carrinho (água, milho, churros, picolé) — E compra (mata a fome, cura um pouco)
 //       samba       roda de samba/pagode no fim de semana à noite na praça — gente sambando, batucada de verdade (som 3D)
-//       pelada      futebol de rua de dia (fim de semana): a bola rolando, todo mundo correndo atrás
 //       pregação    domingo de manhã: o pastor na praça e os fiéis ouvindo
+//     (o futebol dos meninos virou a pelada da quadra da favela, todo dia: Pelada.js)
 //   • CONVERSAS: quem passa perto fala (balão): o que deu no jornal do bairro, conversa fiada e, às vezes, uma DICA de verdade
 //     ("o caixa da Farmácia X fica cheio depois das 18h" — vale: Robbery paga mais nesse horário). No bairro onde você é temido,
 //     cochicham ("É ele…").
@@ -74,7 +74,6 @@ const StreetLife = {
         const opts = [['briga', 3], ['pivete', 3]];
         if (h >= 8 && h < 20 && rain < 0.3) opts.push(['ambulante', 4]);
         if ((wd === 4 || wd === 5 || wd === 6) && h >= 18 && h < 24 && rain < 0.3) opts.push(['samba', 5]);
-        if ((wd === 5 || wd === 6 || h >= 16) && h >= 8 && h < 18.5 && rain < 0.3) opts.push(['pelada', 3]);
         if (wd === 6 && h >= 8 && h < 12) opts.push(['pregacao', 4]);
         let s = Math.random() * opts.reduce((a, o) => a + o[1], 0), kind = opts[0][0];
         for (const [k, w] of opts) { if ((s -= w) <= 0) { kind = k; break; } }
@@ -215,39 +214,6 @@ const StreetLife = {
         }
         E.singT -= dt;
         if (E.singT <= 0) { E.singT = 5 + Math.random() * 5; Bubbles.say(this._pick(E.actors), this._pick(['♪ Deixa a vida me levar… ♪', '♪ Vou festejar, vou festejar! ♪', '♪ É o samba que mexe com a gente ♪', 'Alô, alô! Mais uma!', '♪ Lá lá laiá… ♪']), { ms: 2600 }); }
-    },
-    // --- pelada
-    _start_pelada(game) {
-        const s = this._spot(game, 20, 60, ['park', 'favela', 'plaza', 'residential']); if (!s) return;
-        const sc = game.scene, ball = BABYLON.MeshBuilder.CreateSphere('peladaBall', { diameter: 0.28, segments: 8 }, sc);
-        const bm = new BABYLON.StandardMaterial('ballM', sc); bm.diffuseColor = new BABYLON.Color3(0.96, 0.96, 0.94); bm.emissiveColor = new BABYLON.Color3(0.25, 0.25, 0.25); ball.material = bm; ball.isPickable = false;
-        ball.position.set(s.x, 0.16, s.z);
-        const P = [];
-        for (let k = 0; k < 8; k++) { const x = s.x + (Math.random() - 0.5) * 10, z = s.z + (Math.random() - 0.5) * 6; P.push({ a: this._actor(game, Math.random() < 0.5 ? 'civil_estudante' : 'civil_torcedor', x, z, 0, 'run'), x, z, team: k % 2 }); }
-        this.ev = { kind: 'pelada', t: 0, life: 240, x: s.x, z: s.z, actors: P.map((p) => p.a), meshes: [ball], P, ball: { x: s.x, z: s.z, vx: 0, vz: 0, m: ball }, shoutT: 3 };
-    },
-    _upd_pelada(game, dt, E) {
-        const B = E.ball, nav = game.nav;
-        // a bola: rola e freia; não sai do campinho (raio 9 m)
-        B.x += B.vx * dt; B.z += B.vz * dt; B.vx *= Math.pow(0.35, dt); B.vz *= Math.pow(0.35, dt);
-        const dx = B.x - E.x, dz = B.z - E.z, r = hypot(dx, dz);
-        if (r > 9 || !nav.walk(B.x, B.z)) { B.vx = -B.vx * 0.6 - dx * 0.3; B.vz = -B.vz * 0.6 - dz * 0.3; B.x -= dx * 0.05; B.z -= dz * 0.05; }
-        B.m.position.set(B.x, 0.16, B.z); B.m.rotation.x += B.vz * dt * 3; B.m.rotation.z -= B.vx * dt * 3;
-        // cada um corre atrás da bola (os dois mais perto); os outros se posicionam
-        const order = E.P.slice().sort((p, q) => hypot(p.x - B.x, p.z - B.z) - hypot(q.x - B.x, q.z - B.z));
-        E.P.forEach((p) => {
-            const chase = order.indexOf(p) < 3, tx = chase ? B.x : E.x + (p.team ? 4 : -4) + Math.sin(E.t * 0.7 + p.x) * 2, tz = chase ? B.z : E.z + Math.cos(E.t * 0.5 + p.z) * 3;
-            const ex = tx - p.x, ez = tz - p.z, d = hypot(ex, ez), sp = chase ? 4.2 : 1.6;
-            if (d > 0.35) { const k = Math.min(1, sp * dt / d); const nx = p.x + ex * k, nz = p.z + ez * k; if (nav.walk(nx, nz)) { p.x = nx; p.z = nz; } p.a.setHeading(Math.atan2(ex, ez)); }
-            p.a.setPosition(p.x, p.z); p.a.play(d > 0.6 ? (chase ? 'run' : 'walk') : 'idle', 'none'); p.a.update(dt, 1);
-            if (chase && d < 0.55 && hypot(B.vx, B.vz) < 3) {                     // chuta (para o gol do outro time)
-                const gx = E.x + (p.team ? -9 : 9) - B.x, gz = E.z + (Math.random() - 0.5) * 4 - B.z, gl = hypot(gx, gz) || 1, v = 6 + Math.random() * 5;
-                B.vx = gx / gl * v; B.vz = gz / gl * v;
-                if (typeof AudioFX !== 'undefined' && AudioFX._burst) AudioFX._burst(B.x, B.z, { vol: 0.25, dur: 0.05, f0: 900, f1: 300, maxDist: 40 });
-            }
-        });
-        E.shoutT -= dt;
-        if (E.shoutT <= 0) { E.shoutT = 4 + Math.random() * 5; Bubbles.say(this._pick(E.actors), this._pick(['Toca! Toca!', 'GOOOL!', 'Ladrão! Foi falta!', 'Passa a bola, fominha!', 'Olha a marcação!', 'Chuta!']), { tone: Math.random() < 0.3 ? 'shout' : 'talk', ms: 1800 }); }
     },
     // --- pregação (domingo de manhã)
     _start_pregacao(game) {

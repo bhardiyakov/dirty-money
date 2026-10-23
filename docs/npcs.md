@@ -230,6 +230,32 @@ mesmo tempo. O sorteio é feito uma vez por par de veículos (os dois carros avi
 - Apanhou do jogador antes da briga começar: parte para cima dele (`Temper`) ou foge. Susto (tiro por perto, polícia): foge — menos
   quem está trocando tiro. O jogador se afastou: os pedestres voltam ao pool e os veículos seguem (`_dissolve`).
 
+## Pelada na quadra da favela (`src/npc/Pelada.js`)
+
+De dia (8h–18h30, sem chuva forte) e com o jogador a menos de 110 m, os meninos jogam **futsal 5 × 5** na quadra da favela
+(`FavelaPlan.squares` 'quadra' — a mesma do baile, à noite): **camisa × sem camisa** (os sem camisa são `civil_banhista`), com goleiro,
+fixo, dois alas e pivô. Antes era um acontecimento da rua (`StreetLife`) com sprites soltos que corriam no lugar e uma bola que
+atravessava as pessoas.
+
+- **Os meninos** são NPCs de verdade (`NPCManager`, `party`: não são reciclados) no **modo livre** (`NPC.free`: a pelada move todos
+  juntos, todo quadro; desenho por `PeladaState.anim` — correr, andar, chutar). O mais perto da bola de cada time vai nela (o goleiro
+  só sai na área dele); os outros ocupam a formação puxada para a bola (avançam com a posse, recuam sem ela; cada time numa faixa
+  lateral, sem grudar no adversário). Na bola: **chute** a gol perto da área, **passe** para quem está mais à frente e livre, ou
+  **condução** escapando da marcação. Goleiro **segura** e repõe com a mão. Juiz: **gol** (a bola na rede), lateral, tiro de meta e
+  escanteio (repõe o time que não tocou por último); comemoração e saída de bola.
+- **A bola** (raio 12 cm, desenhada um pouco maior): gravidade, quique amortecido, atrito de rolar, ar, as paredes dos barracos
+  (`MapGeo.resolveCircle`: a normal do empurrão reflete), **traves e travessão** (rebatem), **rede** (entrou pela boca, fica e
+  amortece; por fora/por cima, volta). Bate nas pernas de quem está no caminho; o **jogador** correndo nela **conduz** (sai com a
+  velocidade dele); com o golpe perto dela, **chuta** (o soco é "mão na bola"); carro e moto também levam a bola.
+- **Invadir irrita** (`anger`, 0–100): ficar na quadra perto do jogo (+5/s; longe da bola, +1,5/s), encostar na bola (+9), chutar (+22)
+  ou mandar para longe (+18 na reposição), trombar num menino correndo (+8), entrar de carro (+40/s, e os de perto correm). Com
+  **30** (`STOP`) o jogo para, todos encaram e o mais perto vem tirar satisfação (`Bubbles`); com **70** (`FIGHT`) — ou na hora, se o
+  jogador bater em um — 2–3 partem para a briga (`FightState`, a mão livre) e o resto grita em volta. Fora da quadra a raiva baixa
+  (−4/s; −7/s a mais de 18 m); abaixo de 12 o jogo recomeça e quem fugiu ou brigou volta (`WANDER` por perto → `PeladaState`).
+- **Susto**: tiro por perto, arma de fogo na mão depois de irritar ou carro em cima — todo mundo corre (`PeladaState.onPanic` → o
+  susto de um vale para a turma). **Temido** no bairro (`WorldMemory` medo ≥ 45): reclamam baixinho e, em vez de brigar, vão embora.
+- Teste: `Pelada.force = true` (joga a qualquer hora); `Pelada.info()` dá o placar, a raiva e a bola.
+
 ## Antisserrilhado dos personagens (`NpcArt`, `Config.art.npcAA`)
 
 O MSAA da cena (`render/Smooth.js`) só alisa bordas de **geometria**; o boneco 2,5D é um quad com alfa, então por dentro dele o MSAA
