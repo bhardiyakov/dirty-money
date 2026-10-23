@@ -363,7 +363,7 @@ class Vehicle {
             if (riding && v.setLean) v.setLean(lean * 0.2, dt);                // (bicicleta 3D: deita um pouco na curva)
             // (o ride_bike dos personagens 2,5D foi assado girando o pedivela para trás — de baixo para a frente: tocado ao contrário,
             // pedala para a frente; o do boneco antigo já gira para a frente)
-            v.update(dt, riding ? (Bikes.npc() ? -1 : 1) * Math.min(2.2, sp / 3.6) : 0);
+            v.update(dt, riding ? (Bikes.npc() ? -1 : 1) * Math.min(2.6, sp / 3.6 * (1 + 0.35 * (this.controlled ? this.pedal || 0 : 0))) : 0);      // (pedalando forte: cadência maior)
         } else {
             if (riding && v.setLean) v.setLean(lean, dt);
             v.update(dt, 0);
@@ -427,7 +427,13 @@ class Vehicle {
         // Aceleração (m/s²). Freio: forte, como sempre (power/mass). Motor: pela arrancada do modelo (spec.t100 = 0–100 km/h em s,
         // ver CarSheet) — popular leva ~16 s, superesportivo ~3 s —, perdendo força perto da máxima (arrasto do ar). Ré: marcha curta,
         // um pouco mais forte. Sem t100 (barcos): o modelo antigo, power/mass. Freio: até brakeA, se o modelo tem (motos e bicicletas).
-        const accel = Vehicle.accelOf(this.spec, fwd, top, throttle, this.braking);
+        // Bicicleta do jogador: pedalando normal, ela vai a 80% da máxima (pouco mais que o trote a pé); o SPRINT pedala FORTE (this.pedal: o impulso do sprint —
+        // InputManager.sprintTick, posto pelo Game, que também gasta o fôlego) — até a máxima e com mais arrancada. Passou do ritmo
+        // da pedalada (soltou o sprint embalado), só rola.
+        const pedal = this.controlled && this.spec.bike === 'bike' ? Math.max(0, Math.min(1, this.pedal || 0)) : null;
+        const topP = pedal === null ? top : top * (0.8 + 0.2 * pedal);
+        if (pedal !== null && throttle > 0 && fwd >= topP) throttle = 0;
+        const accel = Vehicle.accelOf(this.spec, fwd, topP, throttle, this.braking) * (pedal === null || this.braking ? 1 : 0.85 + 0.9 * pedal);
         this.accelerating = throttle > 0 && fwd >= -0.5 && fwd < this.spec.maxSpeed * 0.7;
         if (throttle !== 0) {
             fwd += throttle * accel * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1) * (cc ? (this.braking ? this._ccBrake || 1 : this._ccPow || 1) : 1)       // freio na chuva rende menos · freio gasto / motor fraco

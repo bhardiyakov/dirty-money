@@ -241,8 +241,9 @@ class BurglaryJob extends CareerJob {
             return;
         }
         const sp = g.mode === 'player' ? g.player.speed : 0;
-        this.noise += (sp > 5.5 ? 16 : (sp > 0.6 ? 1.5 : 0)) * this.mul * dt;
-        if (sp > 5.5) {                                                          // ONDA SONORA dos passos rápidos (raio menor com Furtividade)
+        const P = Config.player;
+        this.noise += (sp > P.jogSpeed * 1.15 ? 16 : sp > P.maxSpeed * 1.3 ? 5 : sp > 0.6 ? 1.5 : 0) * this.mul * dt;      // sprint · trote · andando
+        if (sp > P.jogSpeed * 1.15) {                                           // ONDA SONORA do sprint (raio menor com Furtividade)
             this._wave -= dt;
             if (this._wave <= 0) {
                 this._wave = 0.6;

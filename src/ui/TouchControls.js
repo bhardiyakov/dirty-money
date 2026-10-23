@@ -2,8 +2,8 @@
 // TouchControls — controles NA TELA para celular/tablet, só quando é tela de toque E não há controle (Xbox) conectado.
 //
 //   JOYSTICK FLUTUANTE   não fica preso num canto: encostar o dedo em QUALQUER ponto da metade esquerda da tela faz o joystick
-//                        nascer ali; soltar, ele volta (apagadinho) para o canto como dica. A pé: anda — empurrar até a borda CORRE
-//                        (não há botão de correr). Dirigindo: vira um volante HORIZONTAL (só esquerda/direita) — acelerar e ré ficam
+//                        nascer ali; soltar, ele volta (apagadinho) para o canto como dica. A pé: pouco inclinado ANDA, inclinado TROTA
+//                        (Config.player.walkTilt). Dirigindo: vira um volante HORIZONTAL (só esquerda/direita) — acelerar e ré ficam
 //                        nos botões. Com o VOLANTE POR GIROSCÓPIO ligado (Ajustes; TiltSteer, abaixo), inclinar o celular vira o
 //                        carro, o RÉ/FREIO vai para o canto esquerdo (polegar esquerdo freia, o direito acelera) e o joystick, se
 //                        tocado, ainda manda por cima.
@@ -15,6 +15,9 @@
 //                                        · 2ª ação do lugar (só aparece quando há)
 //                          Dirigindo:    ACELERAR · RÉ/FREIO · SAIR · ação do lugar (ABASTECER, DESMANCHAR…; só quando há) · BUZINA
 //                          Helicóptero:  SUBIR · DESCER · SAIR · GIRAR
+//   SPRINT               o botão de correr (a tecla Shift): como no GTA San Andreas, TOCAR repetido corre cada vez mais rápido e
+//                        SEGURAR mantém um sprint médio (InputManager.sprintTick) — e gasta fôlego. Nadando, nada mais rápido (crawl);
+//                        na bicicleta, pedala forte. Some dentro de loja/casa (lá só se anda, fora de assalto/missão).
 //   ✚ KIT (chip)         aparece só com vida baixa e kit na mochila
 //   topo (sob o HUD)     ⋯ o resto (recarregar, mochila, farol, zoom…) · CRIME (carreiras) · pausa
 //   pinça (2 dedos)      zoom
@@ -28,7 +31,7 @@ class TouchControls {
         this.g = game;
         this.input = game.input;
         this.shown = false;
-        this.stick = { id: null, ox: 0, oy: 0, run: false };
+        this.stick = { id: null, ox: 0, oy: 0 };
         this._mode = '';
         this._tilt = false;
         this._build();
@@ -70,7 +73,6 @@ class TouchControls {
             #tcStick.wheel { height: calc(var(--u) * 0.9); margin-top: calc(var(--u) * -0.45); border-radius: 99px; }
             #tcKnob { position: absolute; left: 50%; top: 50%; width: calc(var(--u) * 1.05); height: calc(var(--u) * 1.05); margin: calc(var(--u) * -0.525) 0 0 calc(var(--u) * -0.525);
                 border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.88), rgba(210,218,235,0.55)); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
-            #tcStick.run #tcKnob { background: radial-gradient(circle at 35% 30%, #d1fae5, #34d399); }
             #tcStick.tilt:not(.on) { opacity: 0.55; }
             #tcStick.tilt:not(.on) #tcKnob { transition: transform .08s linear; }
             /* botões de ação: o principal (A) no canto e os outros em arco em volta dele. --r/--b: distância da borda direita/de baixo,
@@ -93,6 +95,8 @@ class TouchControls {
             #tcE { --s: 1; --r: 3.75; --b: 0.25; font-size: calc(var(--u) * 0.15); }             /* pequeno, mais à esquerda: AGACHAR / BUZINA */
             #tcE i { font-size: calc(var(--u) * 0.3); }
             #tcF { --s: 1.1; --r: 2.03; --b: 3.63; }                                             /* 2ª ação do lugar (só quando há) */
+            #tcRun { --s: 1.15; --r: 3.6; --b: 1.5; font-size: calc(var(--u) * 0.15); }          /* SPRINT: tocar repetido = mais rápido, segurar = sprint médio */
+            #tcRun.drive { box-shadow: 0 0 0 calc(var(--u) * 0.06 * var(--k, 0)) rgba(74,222,128,0.55), 0 6px 16px rgba(0,0,0,0.35); }
             /* volante por giroscópio: o RÉ/FREIO vai para o polegar esquerdo (o joystick continua valendo no resto da metade esquerda) */
             #touchUI.tilt #tcB { --s: 1.6; right: auto; left: calc(var(--sl) + var(--u) * 0.45); bottom: calc(var(--sb) + var(--u) * 0.45); font-size: calc(var(--u) * 0.2); }
             #touchUI.tilt #tcB i { font-size: calc(var(--u) * 0.46); }
@@ -106,7 +110,7 @@ class TouchControls {
             .tcchip { position: absolute; pointer-events: auto; display: flex; align-items: center; gap: 6px; padding: 0 12px; height: calc(var(--u) * 0.62); border-radius: 12px;
                 font-size: calc(var(--u) * 0.2); font-weight: 700; color: #fff; background: rgba(14,17,26,0.6); border: 1.5px solid rgba(255,255,255,0.2); white-space: nowrap; }
             .tcchip.down { background: rgba(52,211,153,0.75); }
-            #tcKit { right: calc(var(--sr) + var(--u) * 3.35); bottom: calc(var(--sb) + var(--u) * 2.2); color: #fda4af; }
+            #tcKit { right: calc(var(--sr) + var(--u) * 3.35); bottom: calc(var(--sb) + var(--u) * 2.85); color: #fda4af; }
             /* atalhos do topo, logo abaixo do HUD (o top é posto em _placeTop): ⋯ · CRIME · pausa; o painel do ⋯ abre embaixo deles */
             #tcTop { position: absolute; right: max(6px, var(--sr)); top: 8px; display: flex; gap: 6px; pointer-events: none; }
             .tct { pointer-events: auto; min-width: calc(var(--u) * 0.72); height: calc(var(--u) * 0.72); padding: 0 calc(var(--u) * 0.16); border-radius: 99px; font-size: calc(var(--u) * 0.2);
@@ -184,6 +188,8 @@ class TouchControls {
         this.slots = [null, null, null, null, null, null];
         this.btns = ['tcA', 'tcB', 'tcC', 'tcD', 'tcE', 'tcF'].map((id, i) => { const b = mk(id, 'tcb hide'); this._bindSlot(b, i); return b; });
         this._sig = this.slots.map(() => '');
+        this.run = mk('tcRun', 'tcb c-green hide', '<i>🏃</i>SPRINT');                    // (segura a tecla do sprint: cada toque é um impulso)
+        this._bindButton(this.run, 'shift', true);
         this.kit = mk('tcKit', 'tcchip hide', '✚ KIT');
         this._bindButton(this.kit, 'm', false);
         // atalhos do topo (abaixo do HUD): ⋯ (o resto), carreiras e pausa/mapa
@@ -337,7 +343,7 @@ class TouchControls {
     }
 
     // ------------------------------------------------------------------ joystick flutuante
-    // Nasce onde o dedo encosta (metade esquerda). A pé: analógico 2D (borda = correr). Dirigindo: volante horizontal.
+    // Nasce onde o dedo encosta (metade esquerda). A pé: analógico 2D (pouco inclinado anda, inclinado trota). Dirigindo: volante horizontal.
     _bindStick() {
         const S = this.stick, z = this.zone;
         const R = () => this.stickEl.offsetWidth / 2 || 60;
@@ -350,12 +356,10 @@ class TouchControls {
             if (d > r * 1.35) { S.ox += ux * (d - r * 1.35); if (!car) S.oy += uy * (d - r * 1.35); this._placeStick(S.ox, S.oy); }
             this.knob.style.transform = `translate(${ux * k * r * 0.72}px, ${uy * k * r * 0.72}px)`;
             this.input.analog.x = ux * m; this.input.analog.z = car ? 0 : -uy * m;
-            S.run = !car && k > 0.92;
-            this.stickEl.classList.toggle('run', S.run && this._mode === 'foot');
         };
         const end = (e) => {
             if (e.pointerId !== S.id) return;
-            S.id = null; S.run = false;
+            S.id = null;
             this.input.analog.x = 0; this.input.analog.z = 0;
             this._parkStick();
         };
@@ -376,7 +380,7 @@ class TouchControls {
     _parkStick() {
         const u = this._u || 60, t = this._tilt;
         this._placeStick(u * (t ? 3.4 : 1.5), window.innerHeight - u * (t ? 1.25 : 1.5));
-        this.stickEl.classList.remove('on', 'run');
+        this.stickEl.classList.remove('on');
         this.knob.style.transform = '';
         this._knobV = null;
     }
@@ -447,7 +451,7 @@ class TouchControls {
         ];
     }
 
-    // Todo frame (Game): monta os botões conforme o modo e a dica, o chip do kit, o correr (joystick na borda) e o volante por giroscópio.
+    // Todo frame (Game): monta os botões conforme o modo e a dica, o chip do kit, o SPRINT e o volante por giroscópio.
     update() {
         this.back.classList.toggle('on', this.shown && this.g.menu.isOpen);
         this.root.style.display = this.shown && !this.g.menu.isOpen ? 'block' : 'none';
@@ -476,8 +480,22 @@ class TouchControls {
             b.innerHTML = `<i>${s.icon}</i>${s.label}${s.sub ? `<small>${s.sub}</small>` : ''}`;
             if (changed) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
         }
-        // correr: joystick empurrado até a borda (só a pé; no helicóptero o shift é o DESCER)
-        if (mode === 'foot') this.input.setVirtual('shift', this.stick.run, 'touch');
+        // SPRINT: a pé (e nadando) e pedalando a bicicleta — não dentro de loja/casa, onde só se anda (Game._walkIndoors); o anel acende
+        // com o impulso (tocar repetido = mais forte)
+        const bike = mode === 'car' && g.activeCar.spec && g.activeCar.spec.bike === 'bike';
+        const inside = Interiors.active || (typeof HouseView !== 'undefined' && HouseView.inside);
+        const runOn = (mode === 'foot' && !(inside && g._walkIndoors())) || bike;
+        if (runOn !== this._runOn) {
+            this._runOn = runOn;
+            this.run.classList.toggle('hide', !runOn);
+            if (!runOn) { this.input.setVirtual('shift', false, 'touch'); this.run.classList.remove('down'); }
+        }
+        if (runOn) {
+            const icon = bike ? '🚴' : g.player.swimming ? '🏊' : '🏃';
+            if (icon !== this._runIcon) { this._runIcon = icon; this.run.innerHTML = `<i>${icon}</i>SPRINT`; }
+            const k = Math.round(this.input.sprint * 10) / 10;
+            if (k !== this._runK) { this._runK = k; this.run.classList.toggle('drive', k > 0); this.run.style.setProperty('--k', k); }
+        }
         // volante por giroscópio: dirigindo e sem dedo no joystick, a inclinação do celular é o volante
         const tilt = mode === 'car' && TiltSteer.active;
         if (tilt !== this._tilt) {

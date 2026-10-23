@@ -561,6 +561,7 @@ class Game {
 		const inp = this.input;
 		inp.carMode = this.mode === 'car' && !!this.activeCar;
 		inp.heliMode = this.mode === 'heli' && !!this.chopper;
+		inp.bikeMode = inp.carMode && !!this.activeCar.spec && this.activeCar.spec.bike === 'bike';      // (pedalando: L3 é o sprint)
 		const W = this.player && Weapons[this.player.weapon];
 		inp.gunInHand = !!(W && W.gun);
 		// Menu de pausa ou janela aberta (loja, baú, imóvel, mototáxi, Tribunal): o controle navega nela (PauseMenu._pad / PadNav), não no jogo.
@@ -568,6 +569,21 @@ class Game {
 		if (ui) inp.releaseVirtual('pad'); else { if (this._uiWas) inp.suppressPad = true; inp.poll(); }      // (ao voltar, o botão que fechou a janela ainda está apertado)
 		this._uiWas = ui;
 		if (this.touch) this.touch.update();
+	}
+
+	// Nos interiores (lojas, casas, a safe house) o personagem só ANDA — menos no meio de um assalto, de um golpe, de uma missão ou
+	// de um trabalho de carreira, ou fugindo da polícia: aí trota e corre como na rua (Config.player).
+	_walkIndoors() {
+		if (Robbery.session || (typeof Heists !== 'undefined' && Heists.run)) return false;
+		if ((this.missions && this.missions.cur) || (this.careers && this.careers.job) || (this.wanted && this.wanted.level > 0)) return false;
+		return true;
+	}
+
+	// Bicicleta: o sprint (o mesmo impulso proporcional de correr e nadar) pedala forte — Vehicle.drive lê car.pedal — e gasta fôlego
+	// como correr (Bags.stamina); sem fôlego, só pedala normal.
+	_pedal(car, dt) {
+		const drive = this.empire && this.empire.tired ? 0 : this.input.sprint, moving = Math.abs(car.forwardSpeed || 0) > 0.5;
+		car.pedal = Bags.stamina(this.player, drive > 0.02, moving, dt, drive) ? drive : 0;
 	}
 
 	// Próxima/anterior arma que o jogador tem (D-pad ←/→ e botão da tela): aperta a tecla de troca dela.
@@ -584,6 +600,7 @@ class Game {
 	_update(dt) {
 		this._dt = dt;
 		this._pollInput();
+		this.input.sprintTick(dt);                                              // impulso do sprint (a pé, nadando, pedalando): InputManager
 		Panel.tick(dt);
 		this.dev.update(dt);
 		Interiors.tickFade(dt);
@@ -629,6 +646,7 @@ class Game {
 		if (this.mode === 'car' && this.activeCar) {
 			// Direção crua (estilo veículo): W/S = acelerador, A/D = volante.
 			const car = this.activeCar;
+			if (car.spec && car.spec.bike === 'bike') this._pedal(car, dt);    // bicicleta: o sprint pedala forte (e gasta fôlego)
 			car.drive(axis.z, axis.x, dt);
 			this._fuelUpdate(dt);
 			if (this.careers && !frozenUI && this.careers.carPrompt() && this.input.consumePress('e')) this.careers.carInteract();      // desmanche: E desmancha o carro
@@ -650,7 +668,9 @@ class Game {
 
 			this.lockpick.update(dt);
 			if (!this.lockpick.active && !this.arrest && !this.death && !this.hiding && !frozenUI) this._playerActions(dt);      // (arrombando/rendido: sem ações)
-			this.player.update(move, this.input.isSprinting() && !(this.empire && this.empire.tired), dt);      // (exausto: não corre)
+			// trote padrão; sprint pelo impulso (exausto: não corre); andar com o analógico pouco inclinado ou dentro da safe house
+			const walk = this.input.moveTilt < Config.player.walkTilt || (typeof HouseView !== 'undefined' && HouseView.inside && this._walkIndoors());
+			this.player.update(move, this.empire && this.empire.tired ? 0 : this.input.sprint, dt, walk);
 			this._bumpPeople();                                  // esbarra em quem está no caminho (não atravessa as pessoas)
 			if (!frozenUI) Interiors.autoEnter(this);            // lojas: atravessar o vão da porta = entrar
 			HouseView.update(dt, this);                          // safe house: porta, luzes, seta (entrar = a porta de Interiors)
@@ -694,7 +714,7 @@ class Game {
 		if (this.mode === 'player' && rollKey) this._tryRoll();
 		if (this.mode === 'player' && this.input.consumePress('v')) this._tryVault();
 		if (this.input.consumePress('k') && this.mode === 'player' && !frozenUI) Traces.toggleMask(this);      // máscara (crime/Traces.js)
-		if (this.mode === 'player' && this.input.consumePress('padjump') && !this.player.busy && !this.lockpick.active && !this.hiding && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.5)) this._tryVault();      // controle: A/✕ (que também é correr) só pula se houver grade/muro
+		if (this.mode === 'player' && this.input.consumePress('padjump') && !this.player.busy && !this.lockpick.active && !this.hiding && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.5)) this._tryVault();      // controle: A/✕ só pula se houver grade/muro
 
 		if (this.arrest) this._updateArrest(dt);
 		if (this.holdup) this._updateHoldup(dt);
@@ -804,6 +824,11 @@ class Game {
 
 			if (this.mode === 'player' && this.input.consumePress('e')) this._interact();
 			if (this.mode === 'player' && this.input.consumePress('c') && !this.hiding && !this.arrest && !this.death && !this.lockpick.active && !this.inventoryOpen) this._tryPickpocket();
+			// controle ↓: arromba o carro trancado encostado (G) ou, sem ele, furta quem está perto (C)
+			if (this.mode === 'player' && this.input.consumePress('padsteal') && !this.hiding && !this.arrest && !this.death && !this.lockpick.active && !this.inventoryOpen) {
+				const car = this._hijackTarget();
+				if (car && !car.isBike && !car.isBoat && car.locked && this.physicsReady) this._lockpickKey(); else this._tryPickpocket();
+			}
 			if (this.input.consumePress('n')) this._toggleNavDebug();
 		}
 
@@ -897,7 +922,8 @@ class Game {
 		const { forward, right } = this.camera.getGroundBasis();
 		const move = right.scale(axis.x).add(forward.scale(axis.z));
 		if (move.lengthSquared() > 1e-4) move.normalize(); else move.setAll(0);
-		this.player.update(move, this.input.isSprinting(), dt);
+		const indoors = this._walkIndoors();                                     // (lojas e casas: só anda — menos em assalto, golpe, missão, fuga)
+		this.player.update(move, indoors ? 0 : this.input.sprint, dt, indoors || this.input.moveTilt < Config.player.walkTilt);
 		this.camera.setAutoZoom(1, dt, true);                                            // (a loja já tem o enquadramento dela: sem zoom automático)
 		this.camera.setFlat(true);                                                       // (interiors are painted for the top-down camera)
 		HomeDecor.update(dt, this);                                                      // modo decoração: WASD move a câmera, o mouse a peça
@@ -930,6 +956,7 @@ class Game {
 		}
 		if (inp.consumePress('r')) this._startReload();
 		if (inp.consumePress('k')) Traces.toggleMask(this);
+		if (inp.consumePress('padsteal')) inp.justPressed['g'] = true;                                                   // (controle ↓ aqui dentro: G, gritar no assalto)
 		if (this.wheel.open) { inp.consumePress('mouse0'); inp.consumePress(' '); inp.consumePress('g'); return; }      // (roda de armas aberta)
 		Robbery.input(this);
 		if (!Robbery.session) { inp.consumePress('mouse0'); inp.consumePress(' '); inp.consumePress('g'); }      // (sem assalto, ataque e G não fazem nada aqui)
@@ -1328,7 +1355,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		return {
 			fwd: ax.z, strafe: ax.x,
 			yaw: Math.max(-1, Math.min(1, (k['e'] ? 1 : 0) - (k['q'] ? 1 : 0) + inp.yawAxis)),        // (controle: analógico direito)
-			climb: (k[' '] ? 1 : 0) - ((k['shift'] || inp.isSprinting()) ? 1 : 0),
+			climb: (k[' '] ? 1 : 0) - (k['shift'] ? 1 : 0),
 		};
 	}
 

@@ -16,6 +16,20 @@ module.exports = {
         c.ok(!overlap(R.top, R.chips), 'avisos de rastro não cobrem os atalhos');
         c.ok(!overlap(R.top, R.badge), 'o 📱 não cobre os atalhos');
         c.ok(!overlap(R.hud, R.chips), 'avisos de rastro não cobrem o HUD');
+        // SPRINT (como no GTA San Andreas: o padrão é trotar): botão próprio a pé, sem cobrir os outros; um toque rápido já dá impulso
+        const SP = await page.evaluate(() => {
+            const r = (e) => { const b = e.getBoundingClientRect(); return { left: b.left, right: b.right, top: b.top, bottom: b.bottom }; };
+            const run = document.getElementById('tcRun'), on = (e) => e && !e.classList.contains('hide') && e.getClientRects().length > 0;
+            return { vis: on(run), box: run && r(run), others: [...document.querySelectorAll('.tcb')].filter((e) => e !== run && on(e)).map((e) => Object.assign(r(e), { id: e.id })) };
+        });
+        c.ok(SP.vis, 'botão SPRINT visível a pé');
+        const cover = SP.box ? SP.others.filter((o) => overlap(SP.box, o)).map((o) => o.id) : [];
+        c.ok(SP.box && !cover.length, `o SPRINT não cobre os outros botões (${cover.join(', ')})`);
+        if (SP.vis) {
+            await page.touchscreen.tap((SP.box.left + SP.box.right) / 2, (SP.box.top + SP.box.bottom) / 2);
+            const k = await page.waitForFunction(() => game.input.sprint > 0.3 && game.input.sprint, null, { timeout: 4000 }).then((h) => h.jsonValue()).catch(() => 0);
+            c.ok(k > 0.3, `um toque no SPRINT dá impulso (${(+k).toFixed(2)})`);
+        }
         // ✕ nas janelas
         await page.evaluate(() => { Phone.toggle(true); });
         await page.waitForTimeout(700);

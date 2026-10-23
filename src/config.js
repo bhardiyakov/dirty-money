@@ -112,16 +112,23 @@ const Config = {
 	},
 
 	player: {
-		// Velocidades (1 u = 1 m) no ritmo de jogo (2× o real): andar 10 km/h; correr de 20 a 54 km/h conforme o fôlego (Bags.runSpeed).
-		// Correndo, começa no pique e vai perdendo o pace conforme o fôlego acaba.
+		// Velocidades (1 u = 1 m) no ritmo de jogo (2× o real), como no GTA San Andreas: o padrão é TROTAR (20 km/h, sem gastar fôlego);
+		// o SPRINT (Shift · L3 · botão CORRER no celular) gasta fôlego e vai do trote ao pique (54 km/h) conforme o IMPULSO — cada toque
+		// soma, segurar mantém um sprint médio (InputManager.sprintTick) — e o fôlego (Bags.runSpeed: perde o pace quando ele acaba).
+		// ANDAR (10 km/h): nos interiores (fora de assalto/missão/fuga — Game._walkIndoors) e com o analógico pouco inclinado (walkTilt).
 		maxSpeed: 2.78,        // Velocidade de caminhada (m/s) = 10 km/h.
+		jogSpeed: 5.5,         // Trote, o passo padrão (m/s) = 20 km/h — um pouco abaixo do PM a pé (police.officerChaseSpeed): fugir pede sprint.
 		sprintSpeed: 15,       // Pique máximo correndo (m/s) = 54 km/h, com o condicionamento no máximo (nível 20).
 		sprintStart: 0.89,     // Pique no condicionamento 0 (× sprintSpeed ≈ 48 km/h); cresce até 1 no nível 20.
-		sprintMin: 0.37,       // Correndo sem fôlego (× sprintSpeed ≈ 20 km/h).
+		sprintMin: 0.42,       // Sprint com o fôlego no fim (× sprintSpeed ≈ 23 km/h, pouco acima do trote).
+		sprintTap: 0.34,       // Impulso do sprint (0–1) que cada toque no botão soma...
+		sprintHold: 0.6,       // ...o mínimo segurando o botão (sprint médio sem tocar)...
+		sprintDecay: 1.1,      // ...e quanto ele cai por segundo até esse mínimo (soltou: até 0, de volta ao trote).
+		walkTilt: 0.55,        // Analógico (controle/celular) inclinado menos que isto: anda em vez de trotar.
 		stride: 2,             // Passada do jogador × a normal (Config.anim): no ritmo 2×, as pernas mantêm a cadência em vez de dobrá-la.
 		staminaBase: 100,      // Fôlego no condicionamento 0 (+staminaPerLvl por nível).
 		staminaPerLvl: 8,
-		staminaDrain: 4,       // Fôlego gasto por segundo correndo (≈ 25 s de corrida no nível 0; ≈ 90 s no nível 20).
+		staminaDrain: 4,       // Fôlego gasto por segundo no sprint de pique (≈ 25 s no nível 0; ≈ 90 s no nível 20); segurando, ~60% disso.
 		accel: 12,             // Taxa de aproximação da velocidade alvo (maior = mais responsivo).
 		// Heavy steps (on land, not aiming): the body turns toward the stick at a limited rate and only moves where it faces — no
 		// sideways drift; speed builds up and drops with the steps (constant acceleration / braking), less of it while still turning.
@@ -134,7 +141,7 @@ const Config = {
 		skidFriction: 46,      // Braking (m/s²) along the old direction during the skid, before turning to the new one.
 		skidExitSpeed: 0.8,    // The skid ends below this speed (m/s); then he pivots and sets off in the new direction.
 		runEnter: 1.5,         // Run vs walk clip by the ACTUAL speed (× walking speed), with hysteresis: in above this...
-		runExit: 1.2,          // ...out below this — releasing sprint, he decelerates running until he drops into a walk.
+		runExit: 1.2,          // ...out below this — slowing down, he keeps the running stride until he drops into a walk.
 		turnLerp: 16,          // Velocidade de giro do corpo em direção ao movimento.
 		radius: 0.55,          // Raio de colisão contra prédios.
 	},

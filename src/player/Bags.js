@@ -130,7 +130,8 @@ const Bags = {
 
     // --------------------------------------------------------------- fôlego (chamado pelo Player.update)
     // Devolve se o jogador PODE correr agora (e gasta/recupera o fôlego).
-    stamina(pl, wantSprint, moving, dt) {
+    // drive (0–1): o impulso do sprint (InputManager.sprintTick) — o pique gasta tudo, o sprint segurado ~60%.
+    stamina(pl, wantSprint, moving, dt, drive = 1) {
         const F = pl.fit || (pl.fit = { xp: 0 });
         const O = typeof Outfit !== 'undefined' ? Outfit.m : {};          // roupa: tênis de corrida, roupa de academia (ver Outfit)
         const lvl = this.fitLevel(F), max = this.staminaMax(lvl, O), r = pl.loadRatio != null ? pl.loadRatio : (this.ratio || 0);
@@ -138,7 +139,7 @@ const Bags = {
         pl.staminaMax = max;
         const can = wantSprint && moving && !pl.winded && !pl.overloaded && pl.stamina > 0;
         if (can) {
-            pl.stamina -= Config.player.staminaDrain * (1 + 0.5 * Math.max(0, Math.min(1.5, r) - 0.3)) * (1 - Math.min(0.3, lvl * 0.015)) * (1 - (O.stamina || 0)) * (typeof Physique !== 'undefined' ? Physique.staminaDrainMul() : 1) * dt;      // (gordo cansa mais)
+            pl.stamina -= Config.player.staminaDrain * (0.35 + 0.65 * Math.max(0, Math.min(1, drive))) * (1 + 0.5 * Math.max(0, Math.min(1.5, r) - 0.3)) * (1 - Math.min(0.3, lvl * 0.015)) * (1 - (O.stamina || 0)) * (typeof Physique !== 'undefined' ? Physique.staminaDrainMul() : 1) * dt;      // (gordo cansa mais)
             pl._rest = 0;
             F.xp += dt * (1 + r);                                                   // treino: correr (com peso, treina mais)
             if (pl.stamina <= 0) { pl.stamina = 0; pl.winded = true; }
@@ -153,9 +154,9 @@ const Bags = {
     fitLevel(F) { return Math.min(20, Math.floor(Math.sqrt((F && F.xp || 0) / 25))); },     // 0..20 (nível 20 ≈ 2,8 h correndo)
     staminaMax(lvl, O) { const P = Config.player; return Math.round((P.staminaBase + lvl * P.staminaPerLvl + ((O && O.staminaMax) || 0)) * (typeof Physique !== 'undefined' ? Physique.staminaMaxMul() : 1) * (typeof Needs !== 'undefined' ? Needs.staminaMaxMul() : 1)); },
 
-    // Velocidade correndo (m/s): o pique cresce com o condicionamento (24 → 27 km/h) e cai com o fôlego até ~10 km/h — começa bem
-    // e vai perdendo o pace aos poucos (raiz: segura perto do pique com o fôlego cheio e despenca no fim). Tênis/árvore somam ao
-    // pique, sem passar do máximo (Config.player.sprintSpeed).
+    // Pique do SPRINT (m/s): cresce com o condicionamento (24 → 27 km/h reais) e cai com o fôlego até ~11 km/h (pouco acima do trote)
+    // — começa bem e vai perdendo o pace aos poucos (raiz: segura perto do pique com o fôlego cheio e despenca no fim). Tênis/árvore
+    // somam ao pique, sem passar do máximo (Config.player.sprintSpeed). O sprint de verdade vai do trote a isto pelo impulso (Player).
     runSpeed(pl) {
         const P = Config.player, lvl = this.fitLevel(pl.fit), O = typeof Outfit !== 'undefined' ? Outfit.m : {};
         const S = typeof SkillTree !== 'undefined' ? SkillTree.m : {};

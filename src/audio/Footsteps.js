@@ -54,7 +54,7 @@ const Footsteps = {
 
 	update(game, dt) {
 		const pl = game.player;
-		if (!AudioFX._ok() || game.mode !== 'player' || !pl || !pl.alive || pl.frozen || pl.swimming || !(pl.state === 'walk' || pl.state === 'sprint' || pl.state === 'wade' || pl.state === 'sneak')) { this._phase = null; return; }
+		if (!AudioFX._ok() || game.mode !== 'player' || !pl || !pl.alive || pl.frozen || pl.swimming || !(pl.state === 'walk' || pl.state === 'jog' || pl.state === 'sprint' || pl.state === 'wade' || pl.state === 'sneak')) { this._phase = null; return; }
 		const a = pl.actor, c = a && a.clip, name = a && a.clipName;
 		if (!c || !c.loop || !c.frames || !this.GAIT.test(name || '')) { this._phase = null; return; }
 		const ph = a.phase;                                                                 // (0..1; clipe tocado ao contrário: o tempo é negativo)
