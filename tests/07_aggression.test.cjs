@@ -84,6 +84,8 @@ module.exports = {
             });
             if (sh) c.ok(sh.k >= 1 && sh.st === 'FIGHT' && sh.w === 'pistol', `tiro na direção de um homem de revólver: ele saca (${sh.st}/${sh.w})`);
         }
+        await page.evaluate(() => { for (const n of game.npcManager.npcs) if (n.state === 'FIGHT' || n.state === 'HURT') n.panic(n.position, true); });      // (sem tiro por perto: ele assustaria a próxima)
+        await gameWait(page, 0.5);
         if (r.womenWeapons && await scene(0.01, 0.1, 'punch', 'f')) { await gameWait(page, 1.2); const a = await after(); c.ok(a.st === 'FIGHT' && a.w === 'bat', `soco numa mulher que revida: ela vem de taco (${a.st}/${a.w})`); }
         await page.evaluate(() => { for (const n of game.npcManager.npcs) if (n.state === 'FIGHT' || n.state === 'HURT') n.panic(n.position, true); });
 
@@ -134,7 +136,12 @@ module.exports = {
             }
             c.ok(seen.has('argue') || seen.has('fight'), `tirou satisfação (fases: ${[...seen].join(', ')})`);
             c.ok(done, 'a briga termina e cada um segue o seu caminho');
-            const back = await page.evaluate(() => ({ rage: game.npcManager.npcs.filter((n) => n._rage).length, free: game.npcManager.npcs.filter((n) => n.free && n.state === 'RAGE').length }));
+            let back = null;                                                      // (quem perdeu ainda corre até a calçada — até 6 s — antes de virar pedestre)
+            for (let k = 0; k < 6; k++) {
+                back = await page.evaluate(() => ({ rage: game.npcManager.npcs.filter((n) => n._rage).length, free: game.npcManager.npcs.filter((n) => n.free && n.state === 'RAGE').length }));
+                if (!back.rage && !back.free) break;
+                await gameWait(page, 2);
+            }
             c.ok(back.rage === 0 && back.free === 0, `pedestres emprestados voltaram ao pool (${back.rage} ainda na briga)`);
         }
         await page.evaluate(() => { game.player.invulnerable = false; });
