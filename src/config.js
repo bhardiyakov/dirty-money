@@ -354,6 +354,8 @@ const Config = {
 		hpMul: 2.2,            // Resistência de TODOS os veículos × a do catálogo (spec.hp): lataria mais dura (batidas e tiros).
 		turnRate: 2.0,         // Guinada máx. (rad/s) em velocidade plena.
 		turnSpeedRef: 6,       // Velocidade (m/s) para direção com autoridade total.
+		bikeLat: 8.5,          // MOTO/bicicleta do jogador: aceleração lateral máxima na curva (m/s²; ~0,9 g — a moto deitada ~41°). Vehicle._applyMotion
+		bikeLeanIn: 7,         // ...rapidez com que a curva entra e sai (1/s): o tempo de deitar e levantar a moto
 		grip: 10,              // Aderência lateral: maior = mata a derrapagem mais rápido.
 		// PESO e DERRAPAGEM do carro que o jogador dirige (Vehicle._applyMotion; motos, bicicletas e barcos ficam de fora):
 		understeer: 0.3,       // quanto a guinada cai na velocidade understeerRef (m/s) ou acima: carro rápido vira menos

@@ -2680,6 +2680,30 @@ function NpcGenAnims(G) {
             return p;
         });
     }
+    // MOTO: n degraus de inclinação (n = 7: +BANK … 0 … −BANK; o 1º deitado para a direita, o do meio reto, o último para a esquerda;
+    // fps 0 — o jogo escolhe pela inclinação: SpriteActor.setLean). O piloto deita JUNTO com a moto 3D: a pose reta INTEIRA (pélvis,
+    // tronco, alvos das mãos nas manoplas e dos pés nas pedaleiras) gira em volta do eixo da frente que passa no BANCO (a origem do
+    // desenho). O jogo põe essa origem no banco da moto já deitada (RiderActor._place) e a moto deita o mesmo ângulo em volta da linha
+    // das rodas (CarArt3D: bank = inclinação × RIDE_BANK): corpo e moto viram uma peça só. A cabeça compensa um pouco (olha a estrada)
+    // e o guidão vira para dentro da curva, como em rideLean.
+    const RIDE_BANK = 0.5;                                                // rad no degrau extremo = CarArt3D (bank = lean × 0,5)
+    function rideBank(kind, n = 7) {
+        const R = RIDE[kind], u = U(), out = [], P0 = RIG.pelvis[1];
+        const rot = (Rb, q) => mv3(Rb, q);
+        for (let i = 0; i < n; i++) {
+            const st = 1 - (2 * i) / (n - 1), Rb = Ry(RIDE_BANK * st), p = rideBase(R, { yaw: -R.yaw * st });
+            p.pelvis_t = V.sub(rot(Rb, V.add(P0, p.pelvis_t)), P0);
+            p.pelvis_R = mm3(Rb, p.pelvis_R);
+            p.head_R = mm3(Ry(-RIDE_BANK * st * 0.35), p.head_R);
+            for (const [sd, s] of [['R', 1], ['L', -1]]) {
+                const grip = rot(Rb, [s * R.grip[0] * u, R.grip[1] * u - s * st * 2.5, R.gz - s * st * 1.2]);
+                p.arm_ik(sd, absReach(p, sd, grip), rot(Rb, [s * 1.0, -0.2, -0.7]));
+                p.leg_ik(sd, rot(Rb, [s * R.peg[0] * u, R.peg[1] * u, R.pz]), rot(Rb, [s * 0.45, 1.0, 0.35]), mm3(Rb, footRot(-s * 14, -12)));
+            }
+            out.push(p);
+        }
+        return out;
+    }
     // Bicicleta: pedalando (n quadros: uma volta do pedivela; o tronco balança com a pedalada).
     function rideBike(n = 12) {
         const R = RIDE.bike, u = U(), out = [];
@@ -3028,11 +3052,12 @@ function NpcGenAnims(G) {
         idle_heavy: { fps: 4, loop: true, k: 6, n: 8, fn: (w, o, n) => idleHeavy(n) },
         baton_idle: { fps: 6, loop: true, k: 4, n: 4, fn: (w, o, n) => batonIdle(n) },
         baton_walk: { fps: 10, loop: true, k: 8, n: 8, fn: (w, o, n) => batonWalk(n) },
-        // pilotando: moto/jet ski = 5 degraus de inclinação (+12° … −12°; fps 0: o jogo escolhe o quadro pela inclinação —
-        // SpriteActor.setLean), bicicleta pedalando, lancha
-        ride_moto: { fps: 0, loop: true, k: 5, n: 5, fn: (w, o, n) => rideLean('moto', n) },
+        // pilotando: moto = 7 degraus de inclinação, o corpo todo deitando com a moto (±28,6°: rideBank); jet ski = 5 degraus
+        // (+12° … −12°) — fps 0: o jogo escolhe o quadro pela inclinação (SpriteActor.setLean); bicicleta pedalando, lancha.
+        // A moto e a bicicleta giram livres (3D): o piloto tem mais direções (64 / 32) para não ficar torto em relação ao guidão.
+        ride_moto: { fps: 0, loop: true, k: 7, n: 7, dirs: 64, fn: (w, o, n) => rideBank('moto', n) },
         ride_jetski: { fps: 0, loop: true, k: 5, n: 5, fn: (w, o, n) => rideLean('jetski', n) },
-        ride_bike: { fps: 10, loop: true, k: 8, n: 12, fn: (w, o, n) => rideBike(n) },
+        ride_bike: { fps: 10, loop: true, k: 8, n: 12, dirs: 32, fn: (w, o, n) => rideBike(n) },
         ride_boat: { fps: 3, loop: true, k: 4, n: 6, fn: (w, o, n) => rideBoat(n) },
         ride_back: { fps: 10, loop: true, k: 8, n: 8, fn: (w, o, n) => rideBack(w, n) },                  // (ré: moto/bike; o jogo toca ao contrário)
         mount: { fps: 8, loop: false, k: 6, n: 12, fn: (w, o, n) => mountAnim(w, n) },          // (só o jogador: moto/motoL/bike/bikeL)

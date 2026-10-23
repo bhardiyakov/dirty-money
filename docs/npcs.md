@@ -23,7 +23,7 @@ arquivos estáticos em `assets/baked/` — páginas `.webp` sem perdas, manifest
 | **Jogador** | o protagonista 2,5D. Roupa, boné/chapéu, bolsa e aparência mudam o desenho (ver abaixo) |
 | **Golpes** | soco, chute, taco e cassetete com colisão de verdade (ver abaixo); pedestres revidam — no braço, de faca, taco ou revólver (*Quem revida*), a PM usa o cassetete |
 | **Briga de trânsito** | parte das batidas entre veículos vira briga: o motorista desce, xinga, chuta a porta e sai no braço (*Briga de trânsito*) |
-| **Pilotando** | moto, bicicleta (pedalando), jet ski e lancha (no timão), em **16 direções**; moto e jet ski inclinam na curva. O jogador **sobe na moto/bicicleta** passando a perna por cima (dos dois lados). Entregadores: o tipo **motoboy** (capacete, baú vermelho). Quem cai da moto mantém o visual |
+| **Pilotando** | moto (**64 direções**, o corpo deitando junto com a moto), bicicleta (pedalando, 32 direções), jet ski e lancha (no timão, 16); moto e jet ski inclinam na curva. O jogador **sobe na moto/bicicleta** passando a perna por cima (dos dois lados). Entregadores: o tipo **motoboy** (capacete, baú vermelho). Quem cai da moto mantém o visual |
 | **Proporções de adulto** | o pacote é "chibi" (~3,3 cabeças: parecia criança). As poses continuam escritas no esqueleto do pacote e são **redirecionadas** para um esqueleto adulto na hora de desenhar (`G.ADULT`: pernas ×1,7, tronco ×1,35, braços ×1,38, cabeça ×0,6 → ~5,3 cabeças); armas e objetos 20% maiores |
 
 `?npc=0` na URL volta tudo aos bonecos antigos (comparar/depurar).
@@ -135,6 +135,32 @@ quadris rente ao chão — o tronco sobe e as pernas descem em volta do veículo
 do desenho: `RIDE` em NpcGenAnims (medidas em m no jogo, já com `Config.vehicle.scale` × `Bikes.SCALE`), e os bancos em
 `Bikes.SEAT` / `BoatSheet.SEATS`. Mudou a escala de um veículo ou o `npcPpu`? Ajuste `RIDE` e gere os atlas de novo.
 As folhas antigas `rider`/`courier` viram tipos 2,5D sozinhas (`NpcArt.attach`); variante 0 = o jogador (a folha dele).
+
+**Piloto colado na moto 3D** (outubro/2026):
+- **Inclinação**: `ride_moto` tem 7 degraus (+28,6° … 0 … −28,6°, `rideBank`) e cada um é a pose reta INTEIRA (pélvis, tronco, mãos nas
+  manoplas, pés nas pedaleiras) girada em volta do eixo da frente que passa no **banco** (a origem do desenho). A moto 3D deita o mesmo
+  ângulo em volta da linha das rodas (`CarArt3D`: bank = inclinação × 0,5 rad = `RiderActor.BANK` = `RIDE_BANK`), **na hora** — com
+  piloto, sem a mola que atrasava e passava do ponto — e o `RiderActor._place` põe a origem do piloto no banco **já deitado e
+  empinado** (a mesma conta da matriz do modelo). Antes o piloto deitava ~12° só na pélvis enquanto a moto deitava ~29° com mola: o banco
+  escorregava de baixo dele nas curvas.
+- **Ângulo da curva pela física**: atan(velocidade × giro / g) — a curva que está acontecendo, não o guidão (`Vehicle._animateBike`). A
+  bicicleta deita 20% disso (o ciclista pedalando não tem degraus de inclinação).
+- **Direções**: a moto 3D gira livre; o piloto tinha 16 direções (22,5°) e ficava torto em relação ao guidão entre uma e outra. Agora
+  `ride_moto` tem **64** (desvio máximo ~4°, com a histerese) e `ride_bike` 32 (`dirs` na tabela `CLIPS`).
+
+**Física da moto do jogador** (`Bikes.MODELS`, `Vehicle.accelOf`, `Config.vehicle.bikeLat`/`bikeLeanIn`): arrancada pelo 0–100 do
+modelo (`t100`, como nos carros — antes era `power/mass`: a moto de rua ia de 0 a 100 em ~1,7 s e a esportiva em ~1 s) e freio de no
+máximo `brakeA` (~1 g; antes passava de 3 g). Na curva, a aceleração lateral (velocidade × giro) não passa de `bikeLat` (8,5 m/s², ~0,9 g)
+e o giro entra e sai com `bikeLeanIn` (o tempo de deitar a moto) — antes o giro era o do guidão em qualquer velocidade (a 100 km/h, ~8 g).
+
+| | 0–100 km/h | máxima | freio |
+|---|---|---|---|
+| Rider 250 (moto) | 8,0 s | 112 km/h | 9 m/s² |
+| Urban 160 (scooter) | — (0–86 em 11 s) | 86 km/h | 8 |
+| Trilheira 300 | 7,9 s | 108 km/h | 8,5 |
+| Furia 1000RR (esportiva) | 3,3 s | 158 km/h | 10,5 |
+| Estradeira 1800 (custom) | 5,5 s | 122 km/h | 9 |
+| Bicicleta | — (~1,5 m/s² pedalando) | 29 km/h | 5 |
 
 ## Golpes corpo a corpo (`Melee` / `Combat.strike`)
 
