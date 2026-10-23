@@ -107,7 +107,7 @@ module.exports = {
                 const bb = B.bank, t = B.tilt, h = B.heading, cb = Math.cos(bb), sb = Math.sin(bb), ct = Math.cos(t), st = Math.sin(t);
                 const y1 = St.y * ct - St.z * st, z1 = St.y * st + St.z * ct, x2 = (St.x || 0) * cb + y1 * sb, y2 = -(St.x || 0) * sb + y1 * cb;
                 const sx = B.x + x2 * Math.cos(h) + z1 * Math.sin(h), sz = B.z - x2 * Math.sin(h) + z1 * Math.cos(h);
-                const D = R.clip.dirs, drawn = (R.dir * Math.PI * 2) / D + (CompassCamera.yaw || 0);
+                const D = R.clip.dirs, drawn = (R.dir * Math.PI * 2) / D + (R._yaw || 0);      // (o giro da câmera que o sprite usou: no carro ela gira com a moto)
                 let dh = drawn - h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
                 const n = R.clip.frames, leanFrame = 1 - (2 * R.time) / (n - 1);          // (o degrau desenhado, contínuo: +1 = deitado para a direita)
                 return { sp: b.forwardSpeed, lat: b.forwardSpeed * (b._yaw || 0), bank: bb, lean: V._leanV, leanFrame, seat: Math.hypot(sx - mp.x, sz - mp.z), y: Math.abs(B.y - 1.5 + y2 + 0.5 - mp.y), dirErr: Math.abs(dh) * 57.3, step: 360 / D };

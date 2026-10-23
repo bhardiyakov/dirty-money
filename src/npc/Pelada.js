@@ -1,6 +1,6 @@
 // ============================================================================
 // Pelada — o FUTEBOL na QUADRA da favela (FavelaPlan.squares 'quadra': cimento, linhas e traves de futsal, na beira da Estrada do
-// Morro). De dia (8h–18h30, sem chuva forte), com o jogador por perto, os meninos jogam 5 contra 5 — CAMISA × SEM CAMISA (os sem
+// Morro). De dia (8h–18h30, sem chuva forte), com o jogador a menos de BUILD m, os meninos jogam 5 contra 5 — CAMISA × SEM CAMISA (os sem
 // camisa: civil_banhista) —, com goleiro, condução, passe, chute a gol, lateral, tiro de meta e comemoração.
 //   • A BOLA tem física (gravidade, quique, atrito de rolar, trave, travessão, rede, as paredes dos barracos) e bate em quem estiver
 //     no caminho: os meninos, o jogador (correndo, ele empurra a bola — conduz; com o golpe, CHUTA: soco = "mão na bola") e carro/moto.
@@ -36,6 +36,8 @@ const Pelada = {
     R: 0.12,                                   // raio da bola (futsal: ~22 cm; desenhada um pouco maior — VIS — para aparecer na câmera de cima)
     VIS: 1.35,
     STOP: 30, FIGHT: 70,                       // raiva: o jogo para / partem para a briga
+    BUILD: 70, DROP: 100,                      // monta o jogo a BUILD m da quadra e desmonta a DROP (a quadra aparece na tela a ~35 m; a casa
+                                               // do começo do jogo fica a ~110 m: lá não pesa)
     TYPES_B: ['civil_estudante', 'civil_mano', 'civil_torcedor', 'civil_skatista', 'civil_topete'],      // time com camisa
     FANS: [['civil_vovo', -9, 1], ['civil_black_power', -3.5, 1], ['civil_trabalhador', 4, 1], ['civil_trancas', 9.5, 1], ['civil_senhor', 6.5, -1]],      // torcida: [tipo, x do meio, lado (1 = norte)]
     ROLES: [['gk', 0.03, 0], ['fixo', 0.24, 0], ['ala', 0.46, -0.62], ['ala', 0.46, 0.62], ['pivo', 0.7, 0]],      // [papel, u, v] (u: do gol dele, 0, ao do outro, 1)
@@ -86,9 +88,9 @@ const Pelada = {
         const q = this.q, p = g._playerState().pos, dist = hypot(p.x - q.mx, p.z - q.mz);
         this.on = this.scheduled(g);
         const E = this.E;
-        if (!E) { if (this.on && dist < 110 && !Interiors.active) this._build(g); return; }
+        if (!E) { if (this.on && dist < this.BUILD && !Interiors.active) this._build(g); return; }
         const fighting = E.kids.some((k) => k.npc.alive && k.npc.fsm.name === 'FIGHT');
-        if (!fighting && (dist > 150 || Interiors.active || (!this.on && dist > 40) || E.over && dist > 60)) { this._destroy(); return; }
+        if (!fighting && (dist > this.DROP || Interiors.active || (!this.on && dist > 40) || E.over && dist > 60)) { this._destroy(); return; }
         dt = Math.min(dt, 0.1);
         E.t += dt;
         this._ballStep(dt);

@@ -232,7 +232,7 @@ mesmo tempo. O sorteio é feito uma vez por par de veículos (os dois carros avi
 
 ## Pelada na quadra da favela (`src/npc/Pelada.js`)
 
-De dia (8h–18h30, sem chuva forte) e com o jogador a menos de 110 m, os meninos jogam **futsal 5 × 5** na quadra da favela
+De dia (8h–18h30, sem chuva forte) e com o jogador a menos de 70 m (`BUILD`; desmonta a 100 m), os meninos jogam **futsal 5 × 5** na quadra da favela
 (`FavelaPlan.squares` 'quadra' — a mesma do baile, à noite): **camisa × sem camisa** (os sem camisa são `civil_banhista`), com goleiro,
 fixo, dois alas e pivô. Antes era um acontecimento da rua (`StreetLife`) com sprites soltos que corriam no lugar e uma bola que
 atravessava as pessoas.
