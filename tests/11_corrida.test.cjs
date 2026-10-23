@@ -38,7 +38,7 @@ module.exports = {
                 for (const s of H) cnt[s.st] = (cnt[s.st] || 0) + 1;
                 const sta = S.length > 1 ? (S[S.length - 1].sta - S[0].sta) / Math.max(1e-3, T - S[0].dt) : 0;
                 return { v: H.reduce((a, s) => a + s.v, 0) / n, vmax: Math.max(0, ...S.map((s) => s.v)), st: Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0], k: H.reduce((a, s) => a + s.k, 0) / n,
-                    kmax: Math.max(0, ...S.map((s) => s.k)), kend: S.length ? S[S.length - 1].k : 0, dsta: sta, swim: H.filter((s) => s.swim).length / n, crawl: H.filter((s) => s.crawl).length / n };
+                    kmax: Math.max(0, ...S.map((s) => s.k)), kend: S.length ? S[S.length - 1].k : 0, sprint: S.filter((s) => s.st === 'sprint').length / Math.max(1, S.length), dsta: sta, swim: H.filter((s) => s.swim).length / n, crawl: H.filter((s) => s.crawl).length / n };
             });
         };
         const f1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
@@ -140,9 +140,9 @@ module.exports = {
         // 4) teclado: Shift é o sprint
         await restart(true);
         await page.keyboard.down('Shift');
-        const kb = await phase(1.0);
+        const kb = await phase(1.6);                                     // (do trote ao sprint ~0,7 s: vale o pico, não o estado mais comum)
         await page.keyboard.up('Shift');
-        c.ok(kb.st === 'sprint' && kb.kmax >= 0.5, `teclado: Shift dá o sprint (${kb.st}, impulso ${kb.kmax.toFixed(2)})`);
+        c.ok(kb.sprint > 0 && kb.vmax > V.jog * 1.15 && kb.kmax >= 0.5, `teclado: Shift dá o sprint (pico ${f1(kb.vmax)} m/s, ${Math.round(kb.sprint * 100)}% em sprint, impulso ${kb.kmax.toFixed(2)} → ${kb.kend.toFixed(2)})`);
 
         // 5) controle: L3 é o sprint, R3 agacha, ↓ arromba/furta (controle "standard" de mentira)
         await page.evaluate(() => {
@@ -154,7 +154,7 @@ module.exports = {
         });
         await restart(true);
         await page.evaluate(() => { window.__pad.b[10] = true; });
-        const pad = await phase(1.0);
+        const pad = await phase(1.6);
         const padKeys = await page.evaluate(() => { const k = game.input.keys; return { shift: !!k['shift'], q: !!k['q'], h: !!k['h'], src: game.input._virt['shift'] }; });
         await page.evaluate(() => { window.__pad.b[10] = false; window.__pad.b[11] = true; });
         await gameWait(page, 0.2);
@@ -165,7 +165,7 @@ module.exports = {
         await page.evaluate(() => { window.__pad.b = {}; navigator.getGamepads = () => []; game.input._lastPadCheck = 0; });
         await gameWait(page, 0.2);
         await page.evaluate(() => { navigator.getGamepads = window.__padGet; if (game.player.crouched) game.player.setCrouch(false); });
-        c.ok(padKeys.shift && padKeys.src === 'pad' && !padKeys.q && pad.st === 'sprint', `controle: L3 é o sprint (${pad.st}, ${JSON.stringify(padKeys)})`);
+        c.ok(padKeys.shift && padKeys.src === 'pad' && !padKeys.q && pad.sprint > 0 && pad.vmax > V.jog * 1.15, `controle: L3 é o sprint (pico ${f1(pad.vmax)} m/s, ${Math.round(pad.sprint * 100)}% em sprint, ${JSON.stringify(padKeys)})`);
         c.ok(r3.q && !r3.shift, `controle: R3 agacha (${JSON.stringify(r3)})`);
         c.ok(down.steal, 'controle: ↓ arromba o carro encostado ou furta');
 
