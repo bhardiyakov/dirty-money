@@ -216,7 +216,7 @@ class NPCManager {
         for (const a of this.npcs) {
             if (!a.alive || a.state !== 'FLEE' || a.fleeAge > 1.2) continue;
             for (const b of G.query(a.position.x, a.position.z, C.herdRadius, q)) {
-                if (b === a || !b.alive || b.state === 'FLEE' || b.state === 'HURT') continue;
+                if (b === a || !b.alive || b.state === 'FLEE' || b.state === 'HURT' || b._rage) continue;      // (o motorista da briga de trânsito não se assusta com quem passa correndo)
                 if (BABYLON.Vector3.Distance(a.position, b.position) < C.herdRadius && Math.random() < C.herdChance) b.panic(a.threat);
             }
         }
