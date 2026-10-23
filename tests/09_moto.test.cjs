@@ -86,19 +86,35 @@ module.exports = {
             game.player.invulnerable = true;
             const vm = game.vehicleManager, P = game.player.position, b = vm.vehicles.find((v) => v.isBike && v.spec.bike === 'moto' && !v.controlled && v.visual && v.visual.body && v.visual.body.seat);
             if (!b) return false;
-            const s = RoadNet.randomLanePoint(45, { x: P.x, z: P.z, rMin: 0, rMax: 150 });
+            // A curva precisa de espaço: numa rua qualquer, o muro ou o carro parado do lado acabava a curva numa batida (e as amostras
+            // de ré). Vira para o lado (direita +1 / esquerda -1) com a área da curva livre de obstáculos e sem outro veículo perto.
+            const hit = (x, z) => CityGrid.obstaclesAround(x, z, 2).some((o) => x > o.x0 - 1.2 && x < o.x1 + 1.2 && z > o.z0 - 1.2 && z < o.z1 + 1.2);
+            const clear = (q, side) => {
+                const fx = q.d.dx, fz = q.d.dz, rx = fz * side, rz = -fx * side, x0 = q.point.x, z0 = q.point.z;
+                if (vm.vehicles.some((v) => v !== b && v.position && Math.hypot(v.position.x - x0, v.position.z - z0) < 22)) return false;
+                for (let f = 0; f <= 16; f += 2) for (let l = 0; l <= 12; l += 2) if (hit(x0 + fx * f + rx * l, z0 + fz * f + rz * l)) return false;
+                return true;
+            };
+            let s = null, side = 1, room = false;
+            for (let i = 0; i < 120 && !room; i++) {
+                const q = RoadNet.randomLanePoint(45, { x: P.x, z: P.z, rMin: 0, rMax: 150 + i * 15 });
+                if (!q) continue;
+                s = s || q;
+                for (const d of [1, -1]) if (!room && clear(q, d)) { s = q; side = d; room = true; }
+            }
+            if (!s) return false;
             game.player.teleport(new BABYLON.Vector3(s.point.x, 0, s.point.z));
             b.teleport(s.point.x, s.point.z, Math.atan2(s.d.dx, s.d.dz));
             b.riderVariant = null; b.mode = 'parked'; b.route = null;
             b.setRider(0); game.player.setVisible(false); b.setControlled(true); game.activeCar = b; game.mode = 'car';
             game.camera.snapTo(b.position);
-            window.__b = b; window.__ax = { x: 0, z: 0.5 };
+            window.__b = b; window.__ax = { x: 0, z: 0.5 }; window.__side = side; window.__room = room;
             game.input.getMoveAxis = () => window.__ax;
             return true;
         });
         if (!c.ok(ok, 'achou uma moto para pilotar')) { await close(); return; }
         await gameWait(page, 1.5);
-        await page.evaluate(() => { __ax.x = 1; __ax.z = 0.3; });
+        const turn = await page.evaluate(() => { __ax.x = __side; __ax.z = 0.3; return { side: __side, room: __room }; });      // (+1 direita, -1 esquerda)
         const S = [];
         for (let k = 0; k < 4; k++) {
             await gameWait(page, 0.6);
@@ -115,9 +131,9 @@ module.exports = {
             }));
         }
         const last = S[S.length - 1], R = S.filter((q) => !q.back);                // (bateu e voltou de ré: o piloto desce do banco — RiderActor.walkBack)
-        c.ok(R.length >= 2, `pilotando para a frente na curva (${R.length}/${S.length} amostras)`);
+        c.ok(R.length >= 2, `pilotando para a frente na curva (${R.length}/${S.length} amostras; curva para a ${turn.side > 0 ? 'direita' : 'esquerda'}${turn.room ? '' : ', sem achar rua com espaço'})`);
         c.ok(S.every((q) => Math.abs(q.lat) <= 8.5 + 0.3), `curva no limite da inclinação (aceleração lateral ${S.map((q) => q.lat.toFixed(1)).join(' / ')} m/s² ≤ 8,5)`);
-        c.ok(S.some((q) => q.bank > 0.1 && q.sp > 1), `a moto deita para dentro da curva (${S.map((q) => (q.bank * 57.3).toFixed(1) + '° a ' + (q.sp * 3.6).toFixed(0) + ' km/h').join(', ')})`);
+        c.ok(S.some((q) => q.bank * turn.side > 0.1 && q.sp > 1), `a moto deita para dentro da curva (${S.map((q) => (q.bank * 57.3).toFixed(1) + '° a ' + (q.sp * 3.6).toFixed(0) + ' km/h').join(', ')})`);
         c.ok(R.every((q) => Math.abs(q.bank - q.lean * 0.5) < 0.01), 'moto e piloto no MESMO ângulo (a moto sem a mola que atrasava)');
         c.ok(R.every((q) => Math.abs(q.leanFrame - q.lean) < 0.05), `o piloto desenhado no degrau de inclinação da moto (${R.map((q) => q.leanFrame.toFixed(2) + '/' + q.lean.toFixed(2)).join(' ')})`);
         c.ok(R.every((q) => q.seat < 0.01 && q.y < 0.01), `piloto no banco da moto deitada (erro ${Math.max(0, ...R.map((q) => q.seat)).toFixed(3)} m)`);
