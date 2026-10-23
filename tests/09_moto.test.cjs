@@ -110,16 +110,18 @@ module.exports = {
                 const D = R.clip.dirs, drawn = (R.dir * Math.PI * 2) / D + (R._yaw || 0);      // (o giro da câmera que o sprite usou: no carro ela gira com a moto)
                 let dh = drawn - h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
                 const n = R.clip.frames, leanFrame = 1 - (2 * R.time) / (n - 1);          // (o degrau desenhado, contínuo: +1 = deitado para a direita)
-                return { sp: b.forwardSpeed, lat: b.forwardSpeed * (b._yaw || 0), bank: bb, lean: V._leanV, leanFrame, seat: Math.hypot(sx - mp.x, sz - mp.z), y: Math.abs(B.y - 1.5 + y2 + 0.5 - mp.y), dirErr: Math.abs(dh) * 57.3, step: 360 / D };
+                const lite = D > 8 && NpcArt.lite ? 2 : 1;                                // (perfil leve: só as direções pares — SpriteActor.setHeading)
+                return { back: !!V._back || b.forwardSpeed < 0.3, sp: b.forwardSpeed, lat: b.forwardSpeed * (b._yaw || 0), bank: bb, lean: V._leanV, leanFrame, seat: Math.hypot(sx - mp.x, sz - mp.z), y: Math.abs(B.y - 1.5 + y2 + 0.5 - mp.y), dirErr: Math.abs(dh) * 57.3, step: (360 / D) * lite };
             }));
         }
-        const last = S[S.length - 1];
+        const last = S[S.length - 1], R = S.filter((q) => !q.back);                // (bateu e voltou de ré: o piloto desce do banco — RiderActor.walkBack)
+        c.ok(R.length >= 2, `pilotando para a frente na curva (${R.length}/${S.length} amostras)`);
         c.ok(S.every((q) => Math.abs(q.lat) <= 8.5 + 0.3), `curva no limite da inclinação (aceleração lateral ${S.map((q) => q.lat.toFixed(1)).join(' / ')} m/s² ≤ 8,5)`);
-        c.ok(last.bank > 0.1, `a moto deita para dentro da curva (${(last.bank * 57.3).toFixed(1)}°)`);
-        c.ok(S.every((q) => Math.abs(q.bank - q.lean * 0.5) < 0.01), 'moto e piloto no MESMO ângulo (a moto sem a mola que atrasava)');
-        c.ok(S.every((q) => Math.abs(q.leanFrame - q.lean) < 0.05), `o piloto desenhado no degrau de inclinação da moto (${S.map((q) => q.leanFrame.toFixed(2) + '/' + q.lean.toFixed(2)).join(' ')})`);
-        c.ok(S.every((q) => q.seat < 0.01 && q.y < 0.01), `piloto no banco da moto deitada (erro ${Math.max(...S.map((q) => q.seat)).toFixed(3)} m)`);
-        c.ok(S.every((q) => q.dirErr <= q.step * 0.7), `piloto na direção da moto (desvio ${Math.max(...S.map((q) => q.dirErr)).toFixed(1)}°, passo ${last.step.toFixed(1)}°)`);
+        c.ok(S.some((q) => q.bank > 0.1 && q.sp > 1), `a moto deita para dentro da curva (${S.map((q) => (q.bank * 57.3).toFixed(1) + '° a ' + (q.sp * 3.6).toFixed(0) + ' km/h').join(', ')})`);
+        c.ok(R.every((q) => Math.abs(q.bank - q.lean * 0.5) < 0.01), 'moto e piloto no MESMO ângulo (a moto sem a mola que atrasava)');
+        c.ok(R.every((q) => Math.abs(q.leanFrame - q.lean) < 0.05), `o piloto desenhado no degrau de inclinação da moto (${R.map((q) => q.leanFrame.toFixed(2) + '/' + q.lean.toFixed(2)).join(' ')})`);
+        c.ok(R.every((q) => q.seat < 0.01 && q.y < 0.01), `piloto no banco da moto deitada (erro ${Math.max(0, ...R.map((q) => q.seat)).toFixed(3)} m)`);
+        c.ok(R.every((q) => q.dirErr <= q.step * 0.7), `piloto na direção da moto (desvio ${Math.max(0, ...R.map((q) => q.dirErr)).toFixed(1)}°, passo ${last.step.toFixed(1)}°)`);
         c.noErrors(errors, 'moto');
         await close();
     },
