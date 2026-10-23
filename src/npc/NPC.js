@@ -301,6 +301,7 @@ class NPC {
 	// Com `impact`, antes disso ele é arremessado (o evento de morte só dispara ao pousar).
 	die(from, source, impact) {
 		this.alive = false;
+		this._rage = null;                                      // (morreu na briga de trânsito: o corpo não é mais dela — RoadRage)
 		this._clearActivity();
 		this.waiting = null; this.crossing = null;
 		if (impact && impact.power >= Config.ragdoll.minPower) {
