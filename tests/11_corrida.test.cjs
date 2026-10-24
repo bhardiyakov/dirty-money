@@ -202,7 +202,10 @@ module.exports = {
         // 7) bicicleta: o sprint pedala forte (mais rápido, gasta fôlego)
         const bk = await page.evaluate(() => {
             const vm = game.vehicleManager, pl = game.player, s0 = RoadNet.randomLanePoint(45, { x: pl.position.x, z: pl.position.z, rMin: 0, rMax: 300 });
-            const b = vm.vehicles.find((v) => v.spec && v.spec.bike === 'bike' && !v.controlled);
+            const free = () => vm.vehicles.find((v) => v.spec && v.spec.bike === 'bike' && !v.controlled);
+            // (o trânsito sorteia as bicicletas: sem nenhuma solta agora, uma estacionada no meio-fio, como o TrafficManager põe)
+            for (let i = 0; i < 20 && !free(); i++) game.traffic._spawnBike('bicycle', 'parked', null, { x: pl.position.x, z: pl.position.z, rMin: 0, rMax: 400 });
+            const b = free();
             if (!b || !s0) return null;
             window.__start = { x: s0.point.x, z: s0.point.z, d: { x: s0.d.dx, z: s0.d.dz } };
             b.riderVariant = null; b.mode = 'parked'; b.route = null;
