@@ -52,7 +52,7 @@ A aba **GUIA** do menu explica o jogo inteiro e cada carreira (os capítulos das
 
 ## Controles de celular
 
-Joystick (pouco inclinado = andar; inclinado = trote, o passo padrão) + **SPRINT** (como no GTA San Andreas: cada toque soma impulso, segurar mantém um sprint médio; gasta fôlego; também no nado e na bicicleta; some nos interiores, onde só se anda — menos em assalto/missão/fuga) + ATACAR + até 2 botões de contexto que aparecem sozinhos (lidos da dica de interação) + chip da arma (toque troca, segurar recarrega) + ✚ KIT com vida baixa + menu ⋯ com as ações raras; topo: pausa e carreiras; pinça = zoom.
+Joystick (pouco inclinado = andar; inclinado = trote, o passo padrão) + **câmera 360°** (arrastar um dedo no lado direito da tela; no PC, botão direito arrastando — o do meio com arma de fogo na mão; no controle, analógico direito) + **SPRINT** (como no GTA San Andreas: cada toque soma impulso, segurar mantém um sprint médio; gasta fôlego; também no nado e na bicicleta; some nos interiores, onde só se anda — menos em assalto/missão/fuga) + ATACAR + até 2 botões de contexto que aparecem sozinhos (lidos da dica de interação) + chip da arma (toque troca, segurar recarrega) + ✚ KIT com vida baixa + menu ⋯ com as ações raras; topo: pausa e carreiras; pinça = zoom.
 
 ## Império (`src/empire/`, aba IMPÉRIO)
 

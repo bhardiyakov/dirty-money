@@ -2,8 +2,9 @@
 // Aim — the player's AIM with a firearm. Always manual: the shot goes where the reticle is, wherever that is on the screen.
 //   PC (mouse):   the cursor is the reticle. Holding the right button = STEADY aim (the body faces the reticle, walks slowly and the
 //                 circle tightens with time).
-//   GAMEPAD:      the right stick places the reticle around the player (direction and distance = how far it is pushed); RT fires.
-//                 LT = steady aim.
+//   GAMEPAD:      holding LT (aiming), the right stick places the reticle around the player (direction and distance = how far it is
+//                 pushed; at rest, ahead of the player); RT fires. Without LT the right stick turns the camera (360°: Game._look) and RT
+//                 fires where the player faces.
 //   PHONE:        the fire button turns into a right stick: dragging it places the reticle the same way, and the gun fires by
 //                 itself while the reticle is over a target (a person, the helicopter, a car).
 // Targets are found on the SCREEN, where they are drawn — a helicopter high in the air, someone on a deck or a roof, a car — not on
@@ -46,7 +47,8 @@ class Aim {
 		const g = this.g, p = g.player, inp = g.input, W = Weapons[p.weapon];
 		const can = g.mode === 'player' && p.alive && W && W.gun && !p.swimming && !p.rag && !g.lockpick.active && !g.hiding && !g.holdup
 			&& !g.arrest && !g.death && !g.inventoryOpen && !g.menu.isOpen && !(g.motoUI && g._modalUiOpen());
-		inp.stickAim = can || !!(W && W.throwable && g.mode === 'player');      // (gun or grenade in hand: the right stick aims instead of zooming)
+		// the right stick aims (instead of turning the camera and zooming): LT held with a gun ready, or a grenade being readied (Throwables)
+		inp.stickAim = (can && inp.padAim) || !!(W && W.throwable && g.mode === 'player' && Throwables.s && Throwables.s.phase !== 'throw');
 		const src = can ? this._reticle(dt) : null;
 		if (!src) { this._release(); return; }
 		const q = Aim.quality();
@@ -76,12 +78,13 @@ class Aim {
 	}
 
 	// Where the reticle is (CSS px of the window) and what moves it, or null. Phone: the fire button dragged as a stick
-	// (input.touchAim). Gamepad: the right stick, held a moment after release; with LT and the stick at rest, ahead of the player.
-	// Mouse: the cursor.
+	// (input.touchAim). Gamepad: only while LT is held — the right stick, held a moment after release, and with the stick at rest
+	// ahead of the player (without LT the stick is the camera's). Mouse: the cursor.
 	_reticle(dt) {
 		const inp = this.g.input;
 		if (inp.touchAim) return this._fromStick(inp.touchAim, 'touch');
 		if (inp.usingPad) {
+			if (!inp.aimHeld) { this._sT = 0; return null; }
 			const rs = inp.rstick;
 			if (Math.hypot(rs.x, rs.y) > 0.25) { this._last.x = rs.x; this._last.y = rs.y; this._sT = 0.3; } else this._sT -= dt;
 			if (this._sT > 0) return this._fromStick(this._last, 'stick');

@@ -82,7 +82,8 @@ const Config = {
 		speedRef: 38,          // m/s (≈ 137 km/h): acima disso o afastamento já é o máximo
 		zoomOutLerp: 1.4,
 		zoomInLerp: 0.9,
-		// Dirigindo: câmera "bússola" — gira com o veículo (frente sempre para cima) e o deixa mais ao sul da tela.
+		// Dirigindo: câmera "bússola" — gira com o veículo (frente sempre para cima) e o deixa mais ao sul da tela. A pé, ela fica para
+		// onde o jogador a girou (360°: lookPad/lookMouse/lookTouch abaixo).
 		carCompass: true,
 		carLead: 0.45,         // adianto à frente do veículo (fração da meia-altura visível): 0,45 = carro a ~72% da altura da tela
 		carSmooth: true,       // gira suave atrás do veículo (false = em passos de 90°, com carTurnTrigger)
@@ -90,6 +91,15 @@ const Config = {
 		carYawSpeed: 10,       // m/s: abaixo disso a câmera gira mais devagar (parado não gira — manobras não balançam a tela)
 		carTurnTrigger: 1.13,  // só gira (em passos de 90°) quando o carro se afasta ~65° da direção da câmera: desvios não balançam a tela
 		yawLerp: 3.5,          // rapidez do giro da câmera quando ela gira (maior = mais rápido; menor = mais suave)
+		// GIRO 360° pelo jogador (CompassCamera.turn, Game._look): analógico direito (rad/s com ele no fim; a resposta é quadrática —
+		// pouco inclinado gira devagar), mouse arrastando com o botão direito (rad por pixel) e o dedo arrastado no lado direito da
+		// tela do celular (rad por pixel CSS). Dirigindo, a olhada em volta volta para trás do veículo depois de lookHold s sem mexer
+		// (rapidez lookReturn).
+		lookPad: 2.8,
+		lookMouse: 0.006,
+		lookTouch: 0.009,
+		lookHold: 1.2,
+		lookReturn: 2.2,
 		leadLerp: 2.5,         // rapidez com que o adianto entra (ao entrar no carro) e sai (ao descer)
 		// BALANÇO ao dirigir (CompassCamera._bounce): a câmera presa ao veículo por uma mola. lag = deslocamento (u) por m/s² de
 		// aceleração (arrancada, freada, curva), até maxAcc; stiff/damp = a mola (pouco amortecida: passa do ponto e assenta);

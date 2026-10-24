@@ -14,9 +14,15 @@
 // DIRIGINDO (Config.camera.carCompass): a câmera gira atrás do veículo, suave (Config.camera.carSmooth: acompanha a direção dele aos
 // poucos, conforme a velocidade) ou como uma bússola, em passos de 90° — só quando o veículo vira uma esquina ou faz o retorno
 // (Config.camera.carTurnTrigger), nunca a cada desvio — para a frente dele ficar para cima, e se adianta
-// na direção dele, deixando o carro mais ao sul da tela (vê-se mais do que vem pela frente). A pé, volta suavemente ao norte.
+// na direção dele, deixando o carro mais ao sul da tela (vê-se mais do que vem pela frente).
 // O giro atual fica em CompassCamera.yaw (rad, 0 = norte em cima, +X = leste): os personagens 2,5D (SpriteActor), a ordem de
 // desenho deles (NpcArt) e o minimapa acompanham.
+//
+// GIRO 360° PELO JOGADOR (turn; Game._look: analógico direito, botão direito do mouse arrastando, dedo arrastado no lado direito da
+// tela): a pé, a câmera fica para onde ele a virou (userYaw — começa no norte; ao descer de um veículo, fica a direção de onde ela
+// estava); dirigindo, é uma OLHADA em volta (lookYaw) somada à direção atrás do veículo, que volta sozinha depois de lookHold s sem
+// mexer (Config.camera). O giro do jogador entra na hora, sem a suavização. Nos interiores (setFlat) não gira: a arte é pintada
+// para o norte em cima.
 //
 // ZOOM AUTOMÁTICO (setAutoZoom, Config.camera.footZoom/carZoom/speedZoom): a pé a câmera se aproxima; no veículo ela se afasta
 // proporcionalmente à velocidade (vê-se mais longe quando se anda rápido). Multiplica o zoom escolhido pelo jogador, sem passar de maxView.
@@ -39,6 +45,9 @@ class CompassCamera {
 		this.viewHalf = Config.camera.viewHalf;
 		this.target = targetPos.clone();
 		this.yaw = 0;              // giro da bússola (rad; 0 = norte em cima)
+		this.userYaw = 0;          // a pé: para onde o jogador virou a câmera (turn)
+		this.lookYaw = 0;          // dirigindo: a olhada em volta, somada à direção atrás do veículo (volta sozinha)
+		this._lookIdle = 0;        // s desde o último giro do jogador (a olhada volta depois de Config.camera.lookHold)
 		this.lead = 0;             // adianto na direção do veículo (fração de `view`)
 		this.autoMul = 1;          // zoom automático (a pé aproxima, veículo rápido afasta): ver setAutoZoom
 		this.bounceMul = 1;        // pulso do zoom pelos trancos do asfalto (balanço ao dirigir)
@@ -159,10 +168,20 @@ class CompassCamera {
 		this._applyFov();
 	}
 
+	static wrap(a) { a %= Math.PI * 2; return a > Math.PI ? a - Math.PI * 2 : (a < -Math.PI ? a + Math.PI * 2 : a); }
+
+	// O jogador gira a câmera `d` rad (+ = para a direita: o que estava à direita vem para o meio). Ver o topo (GIRO 360°).
+	turn(d) {
+		if (!d || this.flat) return;
+		const wrap = CompassCamera.wrap;
+		if (this._carVeh) { this.lookYaw = wrap(this.lookYaw + d); this._lookIdle = 0; }
+		else this.userYaw = wrap(this.userYaw + d);
+		this.yaw = wrap(this.yaw + d);
+	}
+
 	// Acompanha o alvo (suavização independente de framerate; alta = colada). `vehicle`: dirigindo — modo bússola (ver o topo).
 	follow(targetPos, dt, vehicle = null) {
-		const C = Config.camera;
-		const wrap = (a) => { a %= Math.PI * 2; return a > Math.PI ? a - Math.PI * 2 : (a < -Math.PI ? a + Math.PI * 2 : a); };
+		const C = Config.camera, wrap = CompassCamera.wrap;
 		let goalYaw = 0, goalLead = 0;
 		if (vehicle && C.carCompass) {
 			const f = vehicle.fwdToRef(this._f || (this._f = new BABYLON.Vector3()));
@@ -170,7 +189,7 @@ class CompassCamera {
 			// carSmooth: a câmera vai atrás do carro, girando com ele aos poucos — mais rápido quanto mais rápido ele anda, parado ela
 			// fica (dar ré não vira a tela). Sem ele: guarda uma direção (_carYaw) e só gira em passos de 90° quando o carro se afasta
 			// dela mais que carTurnTrigger (virou uma esquina, fez o retorno). Ao entrar no carro, parte da direção dele.
-			if (this._carVeh !== vehicle) { this._carVeh = vehicle; this._carYaw = h != null ? h : this.yaw; }
+			if (this._carVeh !== vehicle) { this._carVeh = vehicle; this._carYaw = h != null ? h : this.yaw; this.lookYaw = 0; this._lookIdle = 0; }
 			else if (h != null && C.carSmooth) {
 				const k = C.carYawLerp * Math.min(1, (vehicle.speed || 0) / C.carYawSpeed);
 				this._carYaw = wrap(this._carYaw + wrap(h - this._carYaw) * (1 - Math.exp(-k * dt)));
@@ -178,12 +197,21 @@ class CompassCamera {
 				const off = wrap(h - this._carYaw);
 				if (Math.abs(off) > C.carTurnTrigger) this._carYaw = wrap(this._carYaw + Math.round(off / (Math.PI / 2)) * (Math.PI / 2));
 			}
-			goalYaw = this._carYaw;
+			this._lookIdle += dt;                                                       // (a olhada em volta volta para trás do veículo)
+			if (this._lookIdle > C.lookHold) this.lookYaw *= Math.exp(-C.lookReturn * dt);
+			goalYaw = wrap(this._carYaw + this.lookYaw);
 			goalLead = C.carLead;
-		} else this._carVeh = null;
+		} else {
+			if (this._carVeh) { this.userYaw = wrap(this.yaw); this.lookYaw = 0; }          // desceu: a pé, a câmera fica de onde estava
+			this._carVeh = null;
+			goalYaw = this.flat ? 0 : this.userYaw;
+		}
 		const d = wrap(goalYaw - this.yaw);
-		this.yaw += d * (1 - Math.exp(-C.yawLerp * dt));
-		if (Math.abs(this.yaw) < 1e-4 && !vehicle) this.yaw = 0;
+		// interiores: norte em cima na hora (e, ao sair, a direção de antes na hora — atrás da transição); no resto, suave
+		if (this.flat || this._wasFlat) this.yaw = goalYaw;
+		else this.yaw = wrap(this.yaw + d * (1 - Math.exp(-C.yawLerp * dt)));
+		this._wasFlat = this.flat;
+		if (Math.abs(wrap(goalYaw - this.yaw)) < 1e-4) this.yaw = goalYaw;
 		this.lead += (goalLead - this.lead) * (1 - Math.exp(-C.leadLerp * dt));
 		const bo = this._bounce(vehicle, dt);
 		CompassCamera.yaw = this.yaw + this.roll;
@@ -285,7 +313,7 @@ class CompassCamera {
 		this._applyFov();
 	}
 
-	// Base de movimento alinhada à TELA: "cima" = norte girado pelo yaw (a pé o yaw volta a 0 — norte fixo).
+	// Base de movimento alinhada à TELA: "cima" = norte girado pelo yaw (o giro do jogador ou o do veículo).
 	getGroundBasis() {
 		const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
 		return {

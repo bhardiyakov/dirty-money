@@ -305,14 +305,21 @@ class TouchControls {
         el.style.setProperty('--ax', '0px'); el.style.setProperty('--ay', '0px');
     }
 
-    // Pinça com dois dedos no jogo = zoom (substitui os botões + e −).
+    // Pinça com dois dedos no jogo = zoom (substitui os botões + e −). Um dedo arrastado no LADO DIREITO da tela (fora dos botões; a
+    // metade esquerda é do joystick) gira a câmera 360° (InputManager.takeLook → Game._look): arrastar para a direita gira para a direita.
     _bindPinch() {
         const cv = this.g.gameEngine && this.g.gameEngine.canvas; if (!cv) return;
         const pts = new Map(); let d0 = 0;
         const dist = () => { const [a, b] = [...pts.values()]; return hypot(a.x - b.x, a.y - b.y); };
-        cv.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 2) d0 = dist(); });
+        cv.addEventListener('pointerdown', (e) => {
+            if (e.pointerType !== 'touch') return;
+            pts.set(e.pointerId, { x: e.clientX, y: e.clientY, look: e.clientX > window.innerWidth * 0.45 });
+            if (pts.size === 2) d0 = dist();
+        });
         cv.addEventListener('pointermove', (e) => {
-            if (!pts.has(e.pointerId)) return; pts.get(e.pointerId).x = e.clientX; pts.get(e.pointerId).y = e.clientY;
+            const P = pts.get(e.pointerId); if (!P) return;
+            const dx = e.clientX - P.x; P.x = e.clientX; P.y = e.clientY;
+            if (pts.size === 1) { if (P.look) this.input.touchLook(dx); return; }
             if (pts.size !== 2 || !this.g.camera) return;
             const d = dist(); this.g.camera.zoom(-(d - d0) * 0.04); d0 = d;
         });

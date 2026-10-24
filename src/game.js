@@ -571,6 +571,17 @@ class Game {
 		if (this.touch) this.touch.update();
 	}
 
+	// CÂMERA 360° (CompassCamera.turn): o arrasto do mouse (botão direito — o do meio com arma de fogo na mão, onde o direito é a mira
+	// firme) e do dedo no lado direito da tela (InputManager.takeLook, lido no começo do quadro) e o analógico direito ↔ (resposta
+	// quadrática), a não ser quando ele aponta (LT mirando, granada sendo preparada), no helicóptero (gira ele) ou na roda de armas.
+	_look(dt) {
+		const inp = this.input, C = Config.camera;
+		if (inp.wheelOpen) return;
+		let d = this._lookD || 0;
+		if (inp.padConnected && !inp.stickAim && this.mode !== 'heli') { const x = inp.rstick.x; d += Math.sign(x) * x * x * C.lookPad * dt; }
+		if (d) this.camera.turn(d);
+	}
+
 	// Nos interiores (lojas, casas, a safe house) o personagem só ANDA — menos no meio de um assalto, de um golpe, de uma missão ou
 	// de um trabalho de carreira, ou fugindo da polícia: aí trota e corre como na rua (Config.player).
 	_walkIndoors() {
@@ -601,6 +612,7 @@ class Game {
 		this._dt = dt;
 		this._pollInput();
 		this.input.sprintTick(dt);                                              // impulso do sprint (a pé, nadando, pedalando): InputManager
+		this._lookD = this.input.takeLook(this.mode === 'player' && this.input.gunInHand);      // giro da câmera arrastando (aplicado em _look)
 		Panel.tick(dt);
 		this.dev.update(dt);
 		Interiors.tickFade(dt);
@@ -641,6 +653,7 @@ class Game {
 		if (this.sleeping) this._updateSleep(dt);
 		const axis = frozenUI ? { x: 0, z: 0 } : this.input.getMoveAxis();
 		if (this.aim) this.aim.update(dt);                   // mira (LT / botão direito): vira o corpo e mostra o círculo
+		if (!frozenUI) this._look(dt);                       // câmera 360° (analógico direito, mouse arrastando, dedo no lado direito)
 
 		// --- Controle desacoplado: player OU carro recebem o input ---
 		if (this.mode === 'car' && this.activeCar) {
