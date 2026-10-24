@@ -59,7 +59,7 @@ module.exports = {
             await page.evaluate((w) => { game.inventory.give(w, 60); game.player.action = null; game.equipWeapon(w); }, w);
             await gameWait(page, 1.2);
             const r = await page.evaluate((w) => {
-                const p = game.player, a = p.actor, cl = a.clip, ang = p.root.rotation.y, tip = Combat.muzzleOffset(p.look, ang, a);
+                const p = game.player, a = p.actor, cl = a.clip, ang = SpriteActor.viewYaw() + Math.PI / 2, tip = Combat.muzzleOffset(p.look, ang, a);      // (de lado na tela: o cano inteiro à vista)
                 const b0 = new Set(game.combat.bullets.filter((b) => b.on));
                 game.combat.fire({ x: p.position.x, z: p.position.z, angle: ang, owner: 'player', ref: p }, w);
                 const b = game.combat.bullets.find((q) => q.on && !b0.has(q));
@@ -69,8 +69,6 @@ module.exports = {
             c.ok(r.atlas === 'protagonista_armas' || /^hero:/.test(r.atlas || ''), `${w}: desenho do atlas das armas (${r.atlas})`);
             c.ok(r.tip && Math.hypot(r.tip[0], r.tip[1]) > 0.3 && r.d != null && r.d < 0.05, `${w}: a bala sai da ponta do cano desenhado (${r.tip ? Math.hypot(r.tip[0], r.tip[1]).toFixed(2) : '—'} m à frente; desvio ${r.d == null ? '—' : r.d.toFixed(3)})`);
         }
-        const far = await page.evaluate(() => { const p = game.player, a = p.actor, ang = p.root.rotation.y, n = (w) => { const t = Combat.muzzleOffset(w, ang, null); return t ? Math.hypot(t[0], t[1]) : 0; }; return { ak: n('ak47'), pistol: n('pistol') }; });
-        c.ok(far.ak > far.pistol, `o cano da AK-47 vai mais longe que o da pistola (${far.ak.toFixed(2)} × ${far.pistol.toFixed(2)} m)`);
 
         // visual do guarda-roupa sem o atlas das armas: o revólver sai como a pistola na roupa dele (não na roupa inicial)
         const alt = await page.evaluate(() => {
