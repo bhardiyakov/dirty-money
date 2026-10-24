@@ -47,6 +47,7 @@ class InputManager {
         this.mouseAim = false;              // botão direito do mouse segurado sobre o jogo: mirando
         this._dragR = false; this._dragM = false;      // botão direito / do meio segurado sobre o jogo: arrastar gira a câmera (takeLook)
         this._lookR = 0; this._lookM = 0; this._lookTouch = 0; this._mx = null;      // px arrastados desde o último takeLook
+        this.touchLookDown = false;         // one finger on the look side of the screen (TouchControls): the turn is being held
         this.mouseX = -1; this.mouseY = -1; this.mouseMovedAt = 0;
         this.touchDevice = (typeof window !== 'undefined') && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /[?&]touch\b/.test(location.search));
         this.onChange = null;               // callback: conectou/desconectou controle (TouchControls e o Game)
@@ -275,6 +276,10 @@ class InputManager {
     }
 
     touchLook(dx) { this._lookTouch += dx; }      // (TouchControls: o dedo arrastado no lado direito da tela, px CSS)
+
+    // The player is still holding the camera turn (mouse button down, a finger on the look side, right stick pushed): the car's
+    // look-around must not swing back behind the vehicle meanwhile.
+    lookHeld(gun = false) { return (this._dragR && !gun) || this._dragM || this.touchLookDown || (this.padConnected && Math.abs(this.rstick.x) > 0.05 && !this.stickAim); }
 
     isSprinting() {
         return this.sprint > 0.02 || !!this.keys['shift'];

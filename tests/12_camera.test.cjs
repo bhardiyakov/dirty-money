@@ -112,6 +112,14 @@ module.exports = {
             await drag('right', 200);
             const m1 = await cam();
             c.ok(Math.abs(wrap(m1.yaw - m0.yaw) - 200 * K.mouse) < 0.08 && Math.abs(m1.look) > 0.8, `olhada em volta na moto (${(wrap(m1.yaw - m0.yaw) * 57.3).toFixed(0)}°)`);
+            // segurando o botão parado: a olhada fica onde está (só volta depois de soltar)
+            await page.mouse.move(640, 300); await page.mouse.down({ button: 'right' });
+            for (let i = 1; i <= 8; i++) await page.mouse.move(640 + (120 * i) / 8, 300);
+            const h0 = await cam();
+            await gameWait(page, 3);
+            const h1 = await cam();
+            await page.mouse.up({ button: 'right' });
+            c.ok(Math.abs(wrap(h1.yaw - h0.yaw)) < 0.05 && Math.abs(h1.look) > 1, `segurando o giro parado, a câmera não volta sozinha (${(wrap(h1.yaw - h0.yaw) * 57.3).toFixed(0)}°)`);
             await gameWait(page, 3.5);
             const m2 = await cam();
             c.ok(Math.abs(wrap(m2.yaw - rode.h)) < 0.2, `sem mexer, a câmera volta para trás da moto (${(wrap(m2.yaw - rode.h) * 57.3).toFixed(0)}°)`);

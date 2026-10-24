@@ -580,6 +580,7 @@ class Game {
 		if (inp.wheelOpen) return;
 		let d = this._lookD || 0;
 		if (inp.padConnected && !inp.stickAim && this.mode !== 'heli') { const x = inp.rstick.x; d += Math.sign(x) * x * x * C.lookPad * dt; }
+		this.camera.lookHeld = inp.lookHeld(this.mode === 'player' && inp.gunInHand);
 		if (d) this.camera.turn(d);
 	}
 

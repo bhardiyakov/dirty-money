@@ -21,7 +21,7 @@
 // GIRO 360° PELO JOGADOR (turn; Game._look: analógico direito, botão direito do mouse arrastando, dedo arrastado no lado direito da
 // tela): a pé, a câmera fica para onde ele a virou (userYaw — começa no norte; ao descer de um veículo, fica a direção de onde ela
 // estava); dirigindo, é uma OLHADA em volta (lookYaw) somada à direção atrás do veículo, que volta sozinha depois de lookHold s sem
-// mexer (Config.camera). O giro do jogador entra na hora, sem a suavização. Nos interiores (setFlat) não gira: a arte é pintada
+// mexer — e só depois que ele SOLTA o giro (lookHeld: botão do mouse, dedo ou analógico ainda segurando; Config.camera). O giro do jogador entra na hora, sem a suavização. Nos interiores (setFlat) não gira: a arte é pintada
 // para o norte em cima.
 //
 // ZOOM AUTOMÁTICO (setAutoZoom, Config.camera.footZoom/carZoom/speedZoom): a pé a câmera se aproxima; no veículo ela se afasta
@@ -48,6 +48,7 @@ class CompassCamera {
 		this.userYaw = 0;          // a pé: para onde o jogador virou a câmera (turn)
 		this.lookYaw = 0;          // dirigindo: a olhada em volta, somada à direção atrás do veículo (volta sozinha)
 		this._lookIdle = 0;        // s desde o último giro do jogador (a olhada volta depois de Config.camera.lookHold)
+		this.lookHeld = false;     // o jogador segura o giro (botão do mouse, dedo ou analógico): a olhada não volta (Game._look)
 		this.lead = 0;             // adianto na direção do veículo (fração de `view`)
 		this.autoMul = 1;          // zoom automático (a pé aproxima, veículo rápido afasta): ver setAutoZoom
 		this.bounceMul = 1;        // pulso do zoom pelos trancos do asfalto (balanço ao dirigir)
@@ -197,7 +198,7 @@ class CompassCamera {
 				const off = wrap(h - this._carYaw);
 				if (Math.abs(off) > C.carTurnTrigger) this._carYaw = wrap(this._carYaw + Math.round(off / (Math.PI / 2)) * (Math.PI / 2));
 			}
-			this._lookIdle += dt;                                                       // (a olhada em volta volta para trás do veículo)
+			this._lookIdle = this.lookHeld ? 0 : this._lookIdle + dt;                  // (a olhada volta para trás do veículo só depois de soltar)
 			if (this._lookIdle > C.lookHold) this.lookYaw *= Math.exp(-C.lookReturn * dt);
 			goalYaw = wrap(this._carYaw + this.lookYaw);
 			goalLead = C.carLead;
