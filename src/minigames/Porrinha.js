@@ -255,7 +255,7 @@ const Porrinha = {
         const P = this.players, n = P.length, time = performance.now() / 1000;
         P.forEach((p, i) => this._drawPlayer(x, p, this._seat(i, n), time, i));
         if (this.msg) {
-            x.save(); x.font = '600 15px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+            x.save(); x.font = '600 15px system-ui, "DM Icons", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
             const tw = Math.min(this.vw - 24, x.measureText(this.msg).width + 36);
             x.fillStyle = 'rgba(16,13,10,0.85)'; this._rr(x, this.cx - tw / 2, this.cy - 18, tw, 36, 18); x.fill();
             x.fillStyle = '#f5efe3'; x.fillText(this.msg, this.cx, this.cy + 0.5, tw - 20); x.restore();
@@ -269,7 +269,7 @@ const Porrinha = {
         x.fillStyle = i === 0 ? '#1f4d3a' : '#4d1f2a'; x.beginPath(); x.arc(S.x, ay, r, 0, Math.PI * 2); x.fill();
         x.strokeStyle = 'rgba(255,255,255,0.3)'; x.lineWidth = 1.5; x.stroke();
         x.font = `${Math.round(r * 1.15)}px ${this._emoji}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(p.emo, S.x, ay + r * 0.05);
-        x.font = '700 13px system-ui, sans-serif'; x.fillStyle = p.out ? '#86efac' : '#f5efe3';
+        x.font = '700 13px system-ui, "DM Icons", sans-serif'; x.fillStyle = p.out ? '#86efac' : '#f5efe3';
         x.fillText(p.name + (p.out ? ' ✓' : ''), S.x, i === 0 ? ay + r + 12 : ay - r - 12);
         // palitos que ainda tem (deitados na frente)
         for (let k = 0; k < p.left; k++) this._stick(x, S.x - this.cw * 0.95 + k * 9, S.y + (i === 0 ? -this.cw * 0.1 : this.cw * 0.1), Math.PI / 2 + (k - 1) * 0.08, this.cw * 0.42);
@@ -282,12 +282,12 @@ const Porrinha = {
         x.restore();
         // chute
         if (p.guess != null) {
-            x.font = '800 14px system-ui, sans-serif'; x.fillStyle = '#fde68a';
+            x.font = '800 14px system-ui, "DM Icons", sans-serif'; x.fillStyle = '#fde68a';
             x.fillText(`chute: ${p.guess}`, S.x + this.cw * 1.15, S.y);
         }
         const b = (this.bubbles || []).find((q) => q.p === p);
         if (b) {
-            const k = Math.min(1, b.t / 0.12), tx = b.text; x.font = '800 15px system-ui, sans-serif';
+            const k = Math.min(1, b.t / 0.12), tx = b.text; x.font = '800 15px system-ui, "DM Icons", sans-serif';
             const tw = x.measureText(tx).width + 22, by = i === 0 ? S.y - this.cw * 0.75 : S.y + this.cw * 0.45;
             x.globalAlpha = Math.min(1, (b.life - b.t) / 0.25); x.save(); x.translate(S.x - this.cw * 0.9, by); x.scale(0.7 + 0.3 * k, 0.7 + 0.3 * k);
             x.fillStyle = '#fffaf0'; this._rr(x, -tw / 2, -15, tw, 30, 15); x.fill(); x.fillStyle = '#1f1308'; x.fillText(tx, 0, 1); x.restore();

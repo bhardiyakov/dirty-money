@@ -1,27 +1,33 @@
 // ============================================================================
-// Theme — o visual da interface: moderno, em alta resolução (HD), com fontes vetoriais e ícones no estilo EMOJI.
+// Theme — o visual da interface: moderno, em alta resolução (HD), com fontes vetoriais e ícones próprios do jogo.
 //   • Tokens de cor/raio/sombra em :root (todas as telas usam var(--…)).
-//   • Fontes: Inter (texto), Outfit (títulos e números) e Noto Color Emoji (ícones iguais em todo aparelho).
-//   • Emoji.canvas(key) / Emoji.html(key): o ícone de um item, arma, lugar ou indicador em HD. Itens com emoji próprio usam o
-//     glifo; as armas de fogo (não há emoji decente para elas) usam a arte vetorial de WeaponArt no mesmo estilo.
+//   • Fontes: Inter (texto), Outfit (títulos e números) e DM Icons (assets/ui/dm-icons.woff2 — tools/ui_icons): a fonte de ícones do
+//     jogo, um desenho próprio (adesivo com contorno escuro, faixas de sombra e luz) para cada emoji que a interface usa. Ela vem
+//     PRIMEIRO nas pilhas: todo emoji de texto, HTML ou canvas sai com o desenho do jogo, sem mudar os textos (o que ela não tem cai
+//     no emoji do aparelho).
+//   • Emoji.canvas(key) / Emoji.html(key): o ícone de um item, arma, lugar ou indicador em HD. Itens com emoji usam o glifo (da DM
+//     Icons); as armas usam a arte pintada de WeaponArt.
 // O mundo do jogo continua em pixel art; só a interface muda.
 // ============================================================================
 
 const Theme = {
-    FONT: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif",
-    DISPLAY: "'Outfit', 'Inter', system-ui, 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif",
-    EMOJI: "'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif",
+    FONT: "'DM Icons', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif",
+    DISPLAY: "'DM Icons', 'Outfit', 'Inter', system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif",
+    EMOJI: "'DM Icons', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif",
+    ICONS_URL: 'assets/ui/dm-icons.woff2',
 
     install() {
         if (this._on) return;
         this._on = true;
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=Noto+Color+Emoji&display=swap';
+        link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap';
         document.head.appendChild(link);
         const st = document.createElement('style');
         st.id = 'theme';
         st.textContent = `
+            @font-face { font-family: 'DM Icons'; src: url(${this.ICONS_URL}) format('woff2'); font-display: block;
+                unicode-range: U+200D, U+231A-23FF, U+2600-27BF, U+2B00-2BFF, U+FE0F, U+1F000-1FAFF; }   /* (só os emojis esperam por ela) */
             :root {
                 --font: ${this.FONT}; --font-d: ${this.DISPLAY}; --emoji: ${this.EMOJI};
                 --glass: rgba(14, 17, 26, 0.74); --glass-2: rgba(22, 26, 38, 0.86); --solid: #10131b; --solid-2: #171b26;
@@ -152,7 +158,10 @@ const Emoji = {
         // indicadores do HUD
         heart: '❤️', shield: '🛡️', cash: '💵', clean: '💳', clock: '🕒', trophy: '🏆', star: '⭐', energy: '⚡', heat: '🔥', medal: '🏅', siren: '🚨',
     },
-    // armas de fogo: arte vetorial (WeaponArt) no lugar do emoji
+    // armas pintadas (folha de ícones das armas: WeaponArt.square) no lugar do emoji: a mão, as armas brancas e as arremessáveis
+    ART: { fists: 'fists', none: 'fists', knife: 'knife', bat: 'bat', grenade: 'grenade', molotov: 'molotov' },
+    art(key) { const a = this.ART[key]; return a && typeof WeaponArt !== 'undefined' && WeaponArt.has(a) && WeaponArt.sheet ? a : null; },
+    // armas de fogo: arte (WeaponArt: a pintada da folha, ou a vetorial) no lugar do emoji
     VECTOR: { pistol: 1, revolver: 1, smg: 1, shotgun: 1, rifle: 1, ak47: 1, pistol_sil: 1, rpg: 1, launcher: 1, minigun: 1, gun: 'pistol', ammo_pistol: 1, ammo_rifle: 1, ammo_rocket: 'rocket' },
     _cache: {},
 
@@ -160,6 +169,7 @@ const Emoji = {
 
     // HTML de um ícone (span com o emoji, ou <img> com a arte vetorial).
     html(key, size = 20) {
+        if (this.art(key)) return `<img src="${this.canvas(key, size * 2).toDataURL()}" style="height:${size}px;width:${size}px;vertical-align:middle" alt="">`;
         const ch = this.CHAR[key];
         if (ch && !this.VECTOR[key]) return `<span class="emo" style="font-size:${size}px">${ch}</span>`;
         const c = this.canvas(key, size * 2);
@@ -171,8 +181,9 @@ const Emoji = {
         const ck = key + '@' + px;
         if (this._cache[ck]) return this._cache[ck];
         let c;
-        const v = this.VECTOR[key];
-        if (v && typeof WeaponArt !== 'undefined') {
+        const v = this.VECTOR[key], a = this.art(key);
+        if (a) c = WeaponArt.square(a, px);
+        else if (v && typeof WeaponArt !== 'undefined') {
             if (key.startsWith('ammo') && typeof v !== 'string') c = this._ammo(px, key === 'ammo_rifle');
             else c = WeaponArt.canvas(typeof v === 'string' ? v : key);
         } else {
@@ -202,11 +213,10 @@ const Emoji = {
         return c;
     },
 
-    // Carrega a fonte de emoji antes de desenhar os ícones em canvas (sem ela, o glifo do sistema é usado).
+    // Carrega a fonte de ícones (DM Icons) antes de desenhar os ícones em canvas — o boot espera (main.js); sem ela, o emoji do aparelho.
     preload() {
-        if (!document.fonts || !document.fonts.load) return;
-        const all = Object.values(this.CHAR).join('');
-        this.ready = document.fonts.load(`32px "Noto Color Emoji"`, all).then(() => { this._cache = {}; }).catch(() => {});
+        if (!document.fonts || !document.fonts.load) { this.ready = Promise.resolve(); return; }
+        this.ready = document.fonts.load('32px "DM Icons"', '🚨').then(() => { this._cache = {}; }).catch(() => {});
     },
 };
 

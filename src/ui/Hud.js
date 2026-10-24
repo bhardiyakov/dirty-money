@@ -5,7 +5,7 @@
 //   canto inferior esquerdo: o mapa (minimapa, canvas #minimap, com moldura de pixel)
 //   canto inferior direito:  ao entrar num veículo, por 3 s, o MODELO dele (nome + imagem em pixel art)
 //   topo, no centro:         mensagens curtas (Pegou: AK-47, Roubando o carro…) — `toast`
-// Os painéis são DOM com fundo translúcido desfocado; ícones são emojis (Noto Color Emoji) e as armas, arte vetorial HD.
+// Os painéis são DOM com fundo translúcido desfocado; ícones são os do jogo (fonte DM Icons, ver Theme) e as armas, a arte pintada (WeaponArt).
 // No celular (body.mobile) o HUD vira uma faixa enxuta — só vida, colete vestido, fôlego gasto, dinheiro, hora e procurado: CSS em
 // TouchControls.
 // ============================================================================
@@ -185,7 +185,7 @@ class Hud {
 	// Ícone de uma arma (do atlas de itens) em canvas, ampliado 2×.
 	_weaponIcon(key) {
 		if (!this._icons[key]) {
-			const ch = Emoji.VECTOR[key] ? null : Emoji.char(key);                 // faca, taco, mão: emoji; armas de fogo: arte vetorial HD
+			const ch = Emoji.VECTOR[key] || WeaponArt.has(key) ? null : Emoji.char(key);      // armas (e a mão, a granada, o molotov): a arte pintada da folha
 			if (ch) { const e = document.createElement('span'); e.className = 'emo'; e.textContent = ch; this._icons[key] = e; }
 			else { const c = WeaponArt.canvas(key); c.style.width = '100%'; c.style.height = 'auto'; this._icons[key] = c; }
 		}

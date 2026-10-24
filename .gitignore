@@ -5,3 +5,4 @@ src-tauri/gen/
 *:Zone.Identifier
 dist-game/
 .vendor-cache/
+__pycache__/

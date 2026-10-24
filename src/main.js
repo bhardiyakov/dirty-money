@@ -175,11 +175,14 @@ window.addEventListener('DOMContentLoaded', async () => {
 			for (let i = 0; i < L.length; i++) await step(L[i].label, 0.26 + 0.26 * (i + 1) / L.length, MS[i] || 300, L[i].run);
 		}
 		// Arte em PNG (assets/sprites, ver SpriteIO): espera só as paletas e os clipes do 1º segundo de jogo; o resto baixa em segundo
-		// plano (a carga do jogo espera SpriteIO.ready). Sem manifesto/em file://: tudo procedural.
+		// plano (a carga do jogo espera SpriteIO.ready). Sem manifesto/em file://: tudo procedural. Junto, os ícones pintados das armas
+		// (WeaponArt.load: o HUD e os menus desenham com eles; sem eles, o desenho em código) e a fonte de ícones do jogo (Emoji.ready:
+		// os ícones em canvas são desenhados com ela).
 		await step('Preparando a arte…', 0.55, 400, async () => {
 			const ess = new Set();
 			for (const [sheet, list] of Object.entries(CharacterSheet.ESSENTIAL)) for (const [n, w] of list) ess.add(CharacterSheet.fileKey(sheet, n, w || 'none'));
-			await SpriteIO.init((k) => k.startsWith('pal/') || ess.has(k));
+			const icons = Promise.all([WeaponArt.load(), Emoji.ready]);
+			await Promise.all([SpriteIO.init((k) => k.startsWith('pal/') || ess.has(k)), Promise.race([icons, new Promise((r) => setTimeout(r, 8000))])]);
 		});
 		// Personagens 2,5D: npc-data.json e os manifestos dos atlas prontos (assets/baked — já pedidos desde a carga do NpcArt.js);
 		// sem eles (file://, rede fora) o jogo segue com os bonecos antigos.

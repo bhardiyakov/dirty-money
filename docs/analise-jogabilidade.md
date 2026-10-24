@@ -171,7 +171,7 @@ da tela (até 94%).
 
 ## Interface (`src/ui/Theme.js`)
 
-Interface moderna em HD, separada do mundo em pixel art: tokens de cor/raio/sombra em `:root`, fontes Inter (texto) e Outfit (títulos/números), cartões de vidro desfocado, botões arredondados. Ícones no estilo emoji (Noto Color Emoji, igual em todo aparelho); armas de fogo e munição são arte vetorial HD (`WeaponArt.VGrid`) no mesmo estilo.
+Interface moderna em HD, separada do mundo em pixel art: tokens de cor/raio/sombra em `:root`, fontes Inter (texto) e Outfit (títulos/números), cartões de vidro desfocado, botões arredondados. Ícones próprios do jogo no lugar dos emojis: a fonte **DM Icons** (`assets/ui/dm-icons.woff2`, gerada por `tools/ui_icons`) tem um desenho para cada emoji que a interface usa — adesivo com borda clara, contorno escuro grosso e faixas de sombra e luz, como as armas pintadas — e vem na frente das pilhas de fonte, então texto, HTML e canvas saem com ela sem mudar os textos. As armas (HUD, roda, inventário, lojas) são a arte pintada da folha `tools/ui_icons/source/armas_hud.jpg` (`WeaponArt.load`); a SMG, a escopeta e o foguete, que não estão na folha, seguem com o desenho vetorial (`WeaponArt.VGrid`).
 
 ## Próximos passos recomendados (por impacto × custo)
 
