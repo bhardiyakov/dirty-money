@@ -14,7 +14,7 @@
 
 function NpcGenAnims(G) {
     'use strict';
-    const { Rx, Ry, Rz, deg, nrm, V, M4, mm4, mm3, mv3, tmv3, pt4, lookRot, I3, PROP_GRIP, PROP_MUZZLE, ANKLE_H, SKEL, PUMP_Y, PUMP_TRAVEL, UPPER, LOWER, FIST, THIGH, SHIN } = G;
+    const { Rx, Ry, Rz, deg, nrm, V, M4, mm4, mm3, mv3, tmv3, pt4, lookRot, I3, PROP_GRIP, PROP_MUZZLE, PROP_MOUNT, ANKLE_H, SKEL, PUMP_Y, PUMP_TRAVEL, UPPER, LOWER, FIST, THIGH, SHIN } = G;
     const sin = Math.sin, cos = Math.cos, abs = Math.abs, max = Math.max, min = Math.min, PI = Math.PI, TAU = 2 * PI;
     const clip = (v, a, b) => min(max(v, a), b);
 
@@ -711,17 +711,20 @@ function NpcGenAnims(G) {
         // armas novas do jogador: a pistola com silenciador como a pistola; RPG e lança-foguetes no ombro direito (o tubo passa ao
         // lado da cabeça); a minigun na altura do quadril, as duas mãos nela
         pistol_sil: { grip: [8.0, 25.0, 9.5], chest_yaw: 12, head_yaw: -8, poleR: [1.0, -0.3, -1.0], poleL: [-1.0, -0.2, -0.9], one_hand: true },
+        revolver: { grip: [8.0, 25.0, 9.5], chest_yaw: 12, head_yaw: -8, poleR: [1.0, -0.3, -1.0], poleL: [-1.0, -0.2, -0.9], one_hand: true },      // (o revólver da folha: como a pistola)
         rpg: { grip: [12.0, 0.0, 16.0], chest_yaw: -26, head_yaw: 20, poleR: [1.0, -0.3, -1.0], poleL: [-0.4, -0.3, -1.0] },
         launcher: { grip: [12.0, 0.0, 15.0], chest_yaw: -26, head_yaw: 20, poleR: [1.0, -0.3, -1.0], poleL: [-0.4, -0.3, -1.0] },
         minigun: { grip: [9.5, 7.0, -3.0], chest_yaw: -12, head_yaw: 8, poleR: [1.0, -0.6, -0.5], poleL: [-0.7, -0.2, -0.8] },
     };
     // peças que vão presas na arma anterior (Pose.adult): a bomba da escopeta, a ogiva do RPG, o feixe de canos da minigun
     const SUB_PROPS = { pump: 1, rpg_head: 1, minibar: 1 };
+    const FOGOS = Object.keys(G.ARMA_PROPS || {}).filter((n) => /^molotov_fogo\d+$/.test(n)).sort();      // o fogo do molotov (quadros da folha)
+    for (const n of FOGOS) SUB_PROPS[n] = 1;
     const HEAVY = (name) => name === 'rpg' || name === 'launcher' || name === 'minigun';
     // As peças móveis de cada arma: ogiva (some depois do disparo: fired) e os canos girando (spin, graus).
     function subProps(p, name, Mp, { fired = false, spin = 0 } = {}) {
-        if (name === 'rpg' && !fired) p.props.push(['rpg_head', mm4(Mp, M4(null, [0, 13.5, 4.6]))]);
-        if (name === 'minigun') p.props.push(['minibar', mm4(Mp, M4(Ry(deg(spin)), [0, 7.4, 2.4]))]);
+        if (name === 'rpg' && !fired) p.props.push(['rpg_head', mm4(Mp, M4(null, (PROP_MOUNT && PROP_MOUNT.rpg) || [0, 13.5, 4.6]))]);
+        if (name === 'minigun') p.props.push(['minibar', mm4(Mp, M4(Ry(deg(spin)), (PROP_MOUNT && PROP_MOUNT.minigun) || [0, 7.4, 2.4]))]);
     }
     const CTX = { rifle: 'rifle', melee: 'bat' };          // escolhas de arma do personagem (o build define antes de gerar as poses)
     const LONG = (name) => name === 'smg' || name === 'shotgun' || name === 'rifle' || name === 'rifle_ak' || HEAVY(name);
@@ -798,6 +801,8 @@ function NpcGenAnims(G) {
     const rifleShoot = (name = CTX.rifle) => gunShoot(name, [{ recoil: 4, kick: 1.5, flash: [1.4, 0], casing: [3, 0, 2] }, { recoil: 1.5, kick: 0.5, casing: [6, -2, 0] }, { recoil: 5, kick: 1.7, flash: [1.2, 1], casing: [3, 0, 2] }, { recoil: 1.5, kick: 0.5, casing: [6, -2, 0] }]);
     // silenciador: clarão pequeno; RPG: a ogiva sai (some) e o tubo dá o tranco no ombro; lança-foguetes: tranco menor;
     // minigun (loop): os canos giram 60°/n por quadro (6 canos: o ciclo fecha em 60°; 6 quadros = 10° por quadro), clarão em todos.
+    // revólver: um tiro só, mais forte (o cano sobe mais e a mão recua mais que na pistola), o clarão maior
+    const revolverShoot = () => gunShoot('revolver', [{ recoil: 4, kick: 0.8, flash: [1.55, 0] }, { recoil: 26, kick: 3.2 }, { recoil: 11, kick: 1.5 }, { recoil: 2, kick: 0.3 }]);
     const silShoot = () => gunShoot('pistol_sil', [{ recoil: 2, kick: 0.5, flash: [0.55, 0] }, { recoil: 11, kick: 1.8, casing: [2.5, -1, 2] }, { recoil: 4, kick: 0.7, casing: [5.5, -2.5, 0] }, { recoil: 1, kick: 0.2 }]);
     const rpgShoot = () => gunShoot('rpg', [{ recoil: 1, kick: 0.3, flash: [2.2, 0] }, { recoil: 9, kick: 2.8, fired: true }, { recoil: 5, kick: 1.5, fired: true }, { recoil: 2, kick: 0.6, fired: true }, { recoil: 0.5, kick: 0.1, fired: true }], [-3.0, 4.0]);
     const launcherShoot = () => gunShoot('launcher', [{ recoil: 1, kick: 0.3, flash: [1.9, 0] }, { recoil: 7, kick: 2.2 }, { recoil: 3.5, kick: 1.0 }, { recoil: 1, kick: 0.2 }], [-3.0, 4.0]);
@@ -1201,16 +1206,25 @@ function NpcGenAnims(G) {
         p.props.push(['grenade', M4(hR, V.add(fist, mv3(hR, [0, 3.4, -0.5])))]);
     }
     // Garrafa na mão direita; `fwd` = para onde aponta o gargalo (o "para cima" do desenho varia contínuo com ele). Devolve o ponto do pano.
+    const RAG_PT = (PROP_MOUNT && PROP_MOUNT.molotov) || [0, 12.6, 0];          // o pano no gargalo (a boca da garrafa da folha)
     function molotovInHand(p, fwd) {
         const B = p.bones(), fist = p.fist_world(B, 'R'), f = nrm(fwd);
         const Mp = placeProp(p, 'molotov', fist, f, nrm(V.cross([1, 0, 0], f)));
-        return propPt(Mp, [0, 12.6, 0]);
+        p._mol = Mp;
+        return propPt(Mp, RAG_PT);
     }
     // fogo no pano: língua (clarão para cima) que tremula no TEMPO (ts, s; não no nº do quadro): as frequências fecham o loop do
     // molotov_hold (RAG_T) e o padrão é o mesmo com qualquer nº de quadros. k = tamanho (o pano pegando fogo).
+    // Com as armas da folha, o fogo é o DESENHO da folha (molotov_fogoN: um desenho por quadro, trocando no tempo como o clarão) preso na
+    // boca da garrafa — logo depois dela em p.props (peça presa: Pose.adult a leva junto) — e o clarão fica menor, só o brilho em volta.
     function ragFire(p, pos, ts, k = 1) {
-        const f = TAU / RAG_T;
-        p.effects.push({ type: 'flash', pos, dir: [0.15 * sin(3 * f * ts), -0.25, 1.0], size: (0.6 + 0.18 * abs(sin(2 * f * ts + 0.7))) * k, variant: Math.floor((8 * ts) / RAG_T + 1e-6) % 2 });
+        const f = TAU / RAG_T, fi = Math.floor((8 * ts) / RAG_T + 1e-6);
+        const sheet = FOGOS.length && p._mol && k >= 0.7;
+        p.effects.push({ type: 'flash', pos, dir: [0.15 * sin(3 * f * ts), -0.25, 1.0], size: (0.6 + 0.18 * abs(sin(2 * f * ts + 0.7))) * k * (sheet ? 0.55 : 1), variant: fi % 2 });
+        if (sheet) {
+            const j = p.props.findIndex((q) => q[0] === 'molotov');
+            if (j >= 0) p.props.splice(j + 1, 0, [FOGOS[fi % FOGOS.length], mm4(p.props[j][1], M4(null, RAG_PT))]);
+        }
     }
     // Segurando (granada armada / molotov aceso) enquanto mira e carrega a força: o braço vai um pouco mais para trás e volta,
     // respirando — o esquerdo aponta o alvo. Quadro 0 = HOLD exato (as oscilações valem 0 em t = 0: o fim do pin/light e o começo do
@@ -1258,7 +1272,7 @@ function NpcGenAnims(G) {
         for (let i = 0; i < n; i++) {
             const s = i / (n - 1), ts = (i * LIGHT_T) / n;
             if (i === 0) { out.push(clonePose(rest)); continue; }
-            if (i === n - 1) { const p = clonePose(hold); p.effects = []; ragFire(p, pt4(p.props[0][1], [0, 12.6, 0]), ts); out.push(p); continue; }
+            if (i === n - 1) { const p = clonePose(hold); p.effects = []; p.props = p.props.filter((q) => !SUB_PROPS[q[0]]); p._mol = p.props[0][1]; ragFire(p, pt4(p._mol, RAG_PT), ts); out.push(p); continue; }
             const p = base(), lf0 = [[0, REST], [0.12, [-7.0, 8.0, 2.0]]];
             // a mão esquerda é refeita abaixo (o alvo dela depende da garrafa): aqui só para o corpo
             const C0 = throwBody(p, rest, hold, rh, s, { e: ease(s), uR: (s - 0.55) / 0.24, uL: (s - 0.74) / 0.24, cy: keys([[0, 0], [0.7, -6], [1, HOLD.cy]], s), cp: keys([[0, 0], [0.2, -4], [0.7, -3], [1, HOLD.cp]], s),
@@ -2858,7 +2872,7 @@ function NpcGenAnims(G) {
     // quadros (a duração do clipe = k/fps, que os pés plantados e o jogo usam) e o atlas sai com n quadros a fps·n/k (clipPoses).
     // n e k: número ou { arma desenhada: nº, '*': o resto }. fn(w, o, n): os quadros (os de ciclo/progresso são recalculados com n; as
     // sequências escritas à mão passam pelo resample). dirs: 16 em todos (o padrão de clipPoses). loopFor/fpsFor: pela arma do JOGO.
-    const SHOOT = { pistol: pistolShoot, shotgun: shotgunShoot, smg: () => smgShoot('smg'), pistol_sil: silShoot, rpg: rpgShoot, launcher: launcherShoot, minigun: minigunShoot };
+    const SHOOT = { pistol: pistolShoot, revolver: revolverShoot, shotgun: shotgunShoot, smg: () => smgShoot('smg'), pistol_sil: silShoot, rpg: rpgShoot, launcher: launcherShoot, minigun: minigunShoot };
     const shootFn = (w, n) => (w === 'minigun' ? minigunShoot(n) : resample(SHOOT[w] ? SHOOT[w]() : rifleShoot(w), n));
     const seq = (f) => (w, o, n) => resample(f(w, o), n);                // sequência escrita à mão → n quadros (o mesmo tempo)
     // ------------------------------------------------------------------ CLIENTES E ATENDENTES DAS LOJAS (world/ShopLife.js)
@@ -3025,7 +3039,7 @@ function NpcGenAnims(G) {
         climb: { fps: 10, loop: true, k: 10, n: 12, fn: (w, o, n) => climb(n) },
         draw: { fps: 14, loop: false, k: 5, n: 8, fn: (w, o, n) => gunDraw(w, n) },
         aim: { fps: 1, loop: true, k: 1, n: 1, fn: (w) => gunAim(w) },
-        shoot: { fps: 16, loop: false, k: { shotgun: 7, rpg: 5, '*': 4 }, n: { shotgun: 10, rpg: 8, '*': 6 }, fn: (w, o, n) => shootFn(w, n), fpsFor: { pistol: 15, shotgun: 12, smg: 18, pistol_sil: 15, rpg: 10, launcher: 12, minigun: 22 }, loopFor: { minigun: true } },
+        shoot: { fps: 16, loop: false, k: { shotgun: 7, rpg: 5, '*': 4 }, n: { shotgun: 10, rpg: 8, '*': 6 }, fn: (w, o, n) => shootFn(w, n), fpsFor: { pistol: 15, revolver: 13, shotgun: 12, smg: 18, pistol_sil: 15, rpg: 10, launcher: 12, minigun: 22 }, loopFor: { minigun: true } },
         holdup: { fps: 6, loop: true, k: 4, n: 6, fn: (w, o, n) => (w === 'knife' ? knifeHoldup(n) : holdup(w === 'none' ? 'pistol' : w, n)) },
         swing: { fps: 14, loop: false, k: 7, n: 10, fn: seq((w) => batSwing(w === 'baton' ? 'baton' : 'bat')) },
         punch: { fps: 14, loop: false, k: 6, n: 9, fn: seq(() => punchCross()) },
@@ -3099,7 +3113,7 @@ function NpcGenAnims(G) {
         cover: { fps: 3, loop: true, k: 4, n: 6, fn: (w, o, n) => coverIdle(w, n) },                 // ajoelhado de costas para a cobertura
         crouch_aim: { fps: 3, loop: true, k: 4, n: 4, fn: (w, o, n) => kneelAim(w === 'none' ? 'pistol' : w, n) },     // mirando ajoelhado
         crouch_shoot: { fps: 16, loop: false, k: { shotgun: 7, rpg: 5, '*': 4 }, n: { shotgun: 10, rpg: 8, '*': 6 }, fn: (w, o, n) => kneelShoot(w, n),     // atirando ajoelhado
-            fpsFor: { pistol: 15, shotgun: 12, smg: 18, pistol_sil: 15, rpg: 10, launcher: 12, minigun: 22 }, loopFor: { minigun: true } },
+            fpsFor: { pistol: 15, revolver: 13, shotgun: 12, smg: 18, pistol_sil: 15, rpg: 10, launcher: 12, minigun: 22 }, loopFor: { minigun: true } },
         sneak: { fps: 9, loop: true, k: 8, n: 12, fn: (w, o, n) => sneakWalk(w, n) },
         strafe: { fps: 10, loop: true, k: 8, n: 12, fn: (w, o, n) => strafeWalk(w === 'none' ? 'pistol' : w, n) },
         roll: { fps: 16, loop: false, k: 10, n: 14, fn: (w, o, n) => dodgeRoll(n) },

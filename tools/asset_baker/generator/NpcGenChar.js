@@ -9,8 +9,8 @@
 
 function NpcGenChar(G) {
     'use strict';
-    const { Sphere, Ellipsoid, RoundCone, RoundBox, CapCone, Part, bake, Rx, Ry, Rz, deg, nrm, V, mm3, fromCols } = G;
-    const sqrt = Math.sqrt, abs = Math.abs, floor = Math.floor, sin = Math.sin;
+    const { Sphere, Ellipsoid, RoundCone, RoundBox, CapCone, Part, Prim, bake, Rx, Ry, Rz, deg, nrm, V, mm3, fromCols } = G;
+    const sqrt = Math.sqrt, abs = Math.abs, floor = Math.floor, sin = Math.sin, min = Math.min, max = Math.max;
     const pmod = (a, b) => ((a % b) + b) % b;          // % do Python (sinal do divisor)
 
     // ------------------------------------------------------------------ materiais (slots da paleta: 0 = cores fixas, 1..31)
@@ -775,6 +775,103 @@ function NpcGenChar(G) {
         return prims;
     }
 
+    // ------------------------------------------------------------------ ARMAS DA FOLHA (tools/asset_baker/armas.cjs → armas_sprites.js)
+    // Cada arma é o desenho da folha (uma vista de lado) levantado em 3D: o contorno do desenho vira a silhueta e a espessura cresce
+    // para dentro dele (h = h0 + k × distância até a borda, até hmax: k ≈ 0,9 dá tubos redondos, menor deixa chapado), com as pontas
+    // arredondadas; a superfície é pintada com o material e o tom de cada pixel do desenho (projeção pelo lado, eixo x). De qualquer
+    // ângulo a arma tem o volume de um objeto e, de lado, é o desenho da folha — com a luz e o contorno do resto do personagem.
+    // Espaço da arma: a empunhadura (grip) na origem, o cano em +y, o alto em +z (eixo 'gun'); a garrafa: o alto do desenho em +y ('up').
+    const ARMAS = typeof NPC_ARMAS !== 'undefined' ? NPC_ARMAS : null;
+    const ARMA_MAT = { metal: M.metal, fita: M.tape, cromo: M.chrome, madeira: M.wood, granada: M.green, taco: M.batwood, dourado: M.gold, pano: M.sock };
+    const ARMA_MATS = typeof NPC_ARMAS_MATS !== 'undefined' ? NPC_ARMAS_MATS.map((n) => ARMA_MAT[n]) : [];
+    // pixel do desenho (contínuo: o pixel i,j ocupa [i, i+1] × [j, j+1]) ↔ (y, z) da arma
+    const armaYZ = (S, px, py) => (S.axis === 'up' ? [(S.grip[1] - py) * S.s * S.sz, (px - S.grip[0]) * S.s] : [(px - S.grip[0]) * S.s, (S.grip[1] - py) * S.s * S.sz]);
+    const armaPX = (S, y, z) => (S.axis === 'up' ? [z / S.s + S.grip[0], S.grip[1] - y / (S.s * S.sz)] : [y / S.s + S.grip[0], S.grip[1] - z / (S.s * S.sz)]);
+    // Ponto do desenho → ponto da arma (x = 0, no meio da espessura): as âncoras (apoio, boca do cano, peças presas).
+    const armaPt = (S, a) => { const [y, z] = armaYZ(S, a[0], a[1]); return [0, y, z]; };
+    const _armaGrid = new Map();
+    // Grade da distância com sinal até o contorno (unidades da arma; negativa dentro) e da meia-espessura, meio pixel por célula.
+    function armaGrid(key) {
+        if (_armaGrid.has(key)) return _armaGrid.get(key);
+        const S = ARMAS[key], { w, h, rows } = S, op = (x, y) => x >= 0 && y >= 0 && x < w && y < h && rows[y][x] !== '.';
+        const segs = [];                                                       // bordas pixel cheio | vazio, já no espaço da arma
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            if (!op(x, y)) continue;
+            if (!op(x - 1, y)) segs.push(armaYZ(S, x, y), armaYZ(S, x, y + 1));
+            if (!op(x + 1, y)) segs.push(armaYZ(S, x + 1, y), armaYZ(S, x + 1, y + 1));
+            if (!op(x, y - 1)) segs.push(armaYZ(S, x, y), armaYZ(S, x + 1, y));
+            if (!op(x, y + 1)) segs.push(armaYZ(S, x, y + 1), armaYZ(S, x + 1, y + 1));
+        }
+        const c = [armaYZ(S, 0, 0), armaYZ(S, w, h)], m = 2.5, g = min(S.s, S.s * S.sz) * 0.5;
+        const y0 = min(c[0][0], c[1][0]) - m, y1 = max(c[0][0], c[1][0]) + m, z0 = min(c[0][1], c[1][1]) - m, z1 = max(c[0][1], c[1][1]) + m;
+        const nx = Math.ceil((y1 - y0) / g) + 1, nz = Math.ceil((z1 - z0) / g) + 1, D = new Float32Array(nx * nz);
+        for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+            const py = y0 + i * g, pz = z0 + j * g;
+            let best = 1e9;
+            for (let q = 0; q < segs.length; q += 2) {
+                const a = segs[q], b = segs[q + 1], vy = b[0] - a[0], vz = b[1] - a[1], l2 = vy * vy + vz * vz || 1e-9;
+                const t = max(0, min(1, ((py - a[0]) * vy + (pz - a[1]) * vz) / l2)), dy = py - a[0] - vy * t, dz = pz - a[1] - vz * t, d = dy * dy + dz * dz;
+                if (d < best) best = d;
+            }
+            const [px, pyy] = armaPX(S, py, pz);
+            D[j * nx + i] = op(Math.floor(px), Math.floor(pyy)) ? -sqrt(best) : sqrt(best);
+        }
+        const Ds = new Float32Array(D);                                        // (um borrão leve: a escada dos pixels some)
+        for (let j = 1; j < nz - 1; j++) for (let i = 1; i < nx - 1; i++) {
+            let a = 0;
+            for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) a += D[(j + dj) * nx + i + di] * (di || dj ? 1 : 4);
+            Ds[j * nx + i] = a / 12;
+        }
+        const H = new Float32Array(nx * nz), h0 = 0.35;
+        for (let i = 0; i < H.length; i++) H[i] = Ds[i] < 0 ? min(S.hmax, h0 + S.k * -Ds[i]) : h0;
+        // pixel cheio mais perto de cada pixel (até 4 de distância): a cor de um ponto da superfície que caiu fora do desenho
+        const near = new Int32Array(w * h).fill(-1);
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            if (op(x, y)) { near[y * w + x] = y * w + x; continue; }
+            let bd = 99;
+            for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { const d = dx * dx + dy * dy; if (d < bd && op(x + dx, y + dy)) { bd = d; near[y * w + x] = (y + dy) * w + x + dx; } }
+        }
+        const out = { S, D: Ds, H, nx, nz, y0, z0, g, near };
+        _armaGrid.set(key, out);
+        return out;
+    }
+    class SpriteSolid extends Prim {
+        constructor(key, mat) {
+            super(mat, {});
+            this.key = key;
+            const A = armaGrid(key);
+            Object.defineProperty(this, 'A', { value: A, enumerable: false });      // (fora da assinatura do cache: JSON.stringify)
+            this.r = 0.3; this.L = sqrt(1 + A.S.k * A.S.k);
+        }
+        _lerp(G2, y, z) {
+            const A = this.A, fx = (y - A.y0) / A.g, fz = (z - A.z0) / A.g, i = max(0, min(A.nx - 2, Math.floor(fx))), j = max(0, min(A.nz - 2, Math.floor(fz)));
+            const tx = max(0, min(1, fx - i)), tz = max(0, min(1, fz - j)), o = j * A.nx + i;
+            return (G2[o] * (1 - tx) + G2[o + 1] * tx) * (1 - tz) + (G2[o + A.nx] * (1 - tx) + G2[o + A.nx + 1] * tx) * tz;
+        }
+        sdf(x, y, z) {
+            const A = this.A, ey = max(0, A.y0 - y, y - (A.y0 + (A.nx - 1) * A.g)), ez = max(0, A.z0 - z, z - (A.z0 + (A.nz - 1) * A.g));
+            const r = this.r, w1 = this._lerp(A.D, y, z) + sqrt(ey * ey + ez * ez) + r, w2 = (abs(x) - this._lerp(A.H, y, z) + r) / this.L;
+            return min(max(w1, w2), 0) + sqrt(max(w1, 0) ** 2 + max(w2, 0) ** 2) - r;
+        }
+        bounds() {
+            const A = this.A, hm = A.S.hmax + 0.6;
+            return [[-hm, A.y0, A.z0], [hm, A.y0 + (A.nx - 1) * A.g, A.z0 + (A.nz - 1) * A.g]];
+        }
+    }
+    // Pinta a superfície com o desenho: o pixel do ponto (projetado pelo lado) dá o material e o tom.
+    const texArma = (key) => (P, N, mat, pid, d1, d2, n) => {
+        const A = armaGrid(key), S = A.S, tone = new Int16Array(n);
+        for (let i = 0; i < n; i++) {
+            const [px, py] = armaPX(S, P[i * 3 + 1], P[i * 3 + 2]), x = max(0, min(S.w - 1, Math.floor(px))), y = max(0, min(S.h - 1, Math.floor(py)));
+            const k = A.near[y * S.w + x];
+            if (k < 0) continue;
+            const code = S.rows[(k / S.w) | 0].charCodeAt(k % S.w) - 65;
+            mat[i] = ARMA_MATS[(code / 5) | 0]; tone[i] = (code % 5) - 2;
+        }
+        return tone;
+    };
+    const armaPart = (key, name, group, mat0) => { const p = new Part(name, 'weapon', group, [new SpriteSolid(key, mat0)], texArma(key)); p.texKey = 'arma:' + key; return p; };
+
     // ------------------------------------------------------------------ armas e objetos (empunhadura na origem, cano em +y, cima +z)
     function buildProps() {
         const S = M, props = {};
@@ -1001,6 +1098,23 @@ function NpcGenChar(G) {
             new RoundCone([0, 0, -14.0], [0, 3.0, -16.5], 0.6, 0.6, S.tape),
         ]);
         props.blood = new Part('blood', 'prop', GR.prop, [new Ellipsoid([0, 0, 0], [22.0, 17.0, 0.5], S.flesh), new Ellipsoid([16.0, 10.0, 0], [9.0, 6.0, 0.5], S.flesh, { blend: 2.0 }), new Ellipsoid([-14.0, -12.0, 0], [7.0, 5.0, 0.5], S.flesh, { blend: 2.0 })]);
+        if (ARMAS) {
+            // ---- as armas da folha (ver ARMAS DA FOLHA): trocam as feitas de primitivas
+            for (const name of ['pistol', 'revolver', 'pistol_sil', 'smg', 'rifle_ak', 'rpg', 'launcher', 'minigun']) props[name] = armaPart(name, name, GR.weapon, S.metal);
+            props.rpg_head = armaPart('rpg_head', 'rpg_head', GR.pump, S.green);                                   // a ogiva (some depois do disparo)
+            props.grenade = armaPart('grenade', 'grenade', GR.prop, S.green);
+            props.molotov = armaPart('molotov', 'molotov', GR.prop, S.batwood);                                    // a garrafa com o pano (apagada)
+            for (let f = 0; ARMAS['molotov_fogo' + f]; f++) props['molotov_fogo' + f] = armaPart('molotov_fogo' + f, 'molotov_fogo' + f, GR.pump, S.gold);      // o fogo aceso (quadros)
+            // os canos da minigun (giram no tiro: peça à parte, em 3D) com o comprimento e a grossura do desenho da folha
+            const mg = ARMAS.minigun, L = (mg.muzzle[0] - mg.mount[0]) * mg.s, Rr = 2.9;
+            props.minibar = new Part('minibar', 'weapon', GR.pump, [
+                new CapCone([0, -0.4, 0], [0, 1.6, 0], Rr, Rr, S.metal, { rround: 0.4 }),
+                ...[0, 1, 2, 3, 4, 5].map((k) => { const a = k * Math.PI / 3, x = sin(a) * 1.75, z = Math.cos(a) * 1.75; return new CapCone([x, 0, z], [x, L, z], 0.62, 0.62, S.metal, { rround: 0.18, tone: 1 }); }),
+                new CapCone([0, L * 0.36, 0], [0, L * 0.36 + 1.2, 0], Rr - 0.1, Rr - 0.1, S.metal, { rround: 0.3 }),
+                new CapCone([0, L - 1.6, 0], [0, L - 0.4, 0], Rr - 0.1, Rr - 0.1, S.metal, { rround: 0.3 }),
+                new CapCone([0, 0, 0], [0, L - 0.5, 0], 0.7, 0.7, S.tape),
+            ]);
+        }
         return props;
     }
 
@@ -1022,6 +1136,20 @@ function NpcGenChar(G) {
         minigun: [[0, -0.8, -0.1], [0, 6.0, 7.6]],
     };
     const PUMP_Y = 13.3, PUMP_TRAVEL = 4.5;
+    // Armas da folha: a empunhadura é a origem; o apoio e a boca do cano vêm das âncoras do desenho. PROP_MOUNT: onde vai presa a
+    // peça que se mexe (a ogiva do RPG, os canos da minigun, o fogo do molotov), no espaço da arma. ARMA_PROPS: o tamanho já é o
+    // de verdade (propK 1: não aumentam no corpo adulto).
+    const PROP_MOUNT = {}, ARMA_PROPS = {};
+    if (ARMAS) {
+        for (const [name, S] of Object.entries(ARMAS)) {
+            ARMA_PROPS[name] = 1;
+            if (S.muzzle) PROP_MUZZLE[name] = armaPt(S, S.muzzle);
+            if (S.sup) PROP_GRIP[name] = [[0, 0, 0], armaPt(S, S.sup)];
+            if (S.mount) PROP_MOUNT[name] = armaPt(S, S.mount);
+        }
+        ARMA_PROPS.minibar = 1;
+        for (const name of ['pistol', 'revolver', 'pistol_sil']) PROP_GRIP[name][1][0] = -2.9;          // (a mão de apoio da pistola: por fora, à esquerda do cabo)
+    }
 
     // ------------------------------------------------------------------ fichas dos NPCs (npcs.py) + as novas
     const CIVIL = { bag: null, eyes: 'neutral', body: 'normal', group: 'Civis' };
@@ -1074,7 +1202,7 @@ function NpcGenChar(G) {
     // Objetos maiores no corpo adulto (as armas do pacote eram do tamanho do boneco chibi): escala em volta da empunhadura.
     // (as pesadas — RPG, lança-foguetes, minigun e as peças delas — maiores ainda: o tamanho de verdade perto do corpo adulto)
     const PROP_BIG = { rpg: 1.55, rpg_head: 1.55, launcher: 1.5, minigun: 1.6, minibar: 1.6 };
-    const propK = (name) => (G.ADULT ? (name === 'blood' ? 1.35 : PROP_BIG[name] || 1.2) : 1);
+    const propK = (name) => (G.ADULT && !ARMA_PROPS[name] ? (name === 'blood' ? 1.35 : PROP_BIG[name] || 1.2) : 1);
     const propPivot = (name) => (PROP_GRIP[name] ? PROP_GRIP[name][0] : [0, 0, 0]);
     function bakeProps(spacing) {
         const k = spacing.toFixed(4) + '|' + propK('x');
@@ -1125,7 +1253,7 @@ function NpcGenChar(G) {
 
     Object.assign(G, {
         M, PAL, OUTLINE, SHADOW_RGBA, GR, SKEL, FACES, UPPER, LOWER, FIST, THIGH, SHIN, ANKLE_H, ADULT, shapeFor, DEFAULT, BODY, fullSpec, bodyFactors, rigFor, rampsFor,
-        buildParts, buildProps, PROP_MUZZLE, PROP_GRIP, PUMP_Y, PUMP_TRAVEL, ROSTER, BY_ID, loadBaked, bakeProps, propK, propPivot, HAT_CUT,
+        buildParts, buildProps, PROP_MUZZLE, PROP_GRIP, PROP_MOUNT, ARMA_PROPS, PUMP_Y, PUMP_TRAVEL, ROSTER, BY_ID, loadBaked, bakeProps, propK, propPivot, HAT_CUT,
     });
     return G;
 }

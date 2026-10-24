@@ -24,7 +24,7 @@ arquivos estáticos em `assets/baked/` — páginas `.webp` sem perdas, manifest
 | **Golpes** | soco, chute, taco e cassetete com colisão de verdade (ver abaixo); pedestres revidam — no braço, de faca, taco ou revólver (*Quem revida*), a PM usa o cassetete |
 | **Briga de trânsito** | parte das batidas entre veículos vira briga: o motorista desce, xinga, chuta a porta e sai no braço (*Briga de trânsito*) |
 | **Pilotando** | moto (**64 direções**, o corpo deitando junto com a moto, pés nas pedaleiras e joelhos no tanque, recortado pela moto 3D), scooter (pés no assoalho), bicicleta (pedalando, 32 direções), jet ski e lancha (no timão, 16); moto e jet ski inclinam na curva. O jogador **sobe na moto/bicicleta** passando a perna por cima (dos dois lados). Entregadores: o tipo **motoboy** (capacete, baú vermelho). Quem cai da moto mantém o visual |
-| **Proporções de adulto** | o pacote é "chibi" (~3,3 cabeças: parecia criança). As poses continuam escritas no esqueleto do pacote e são **redirecionadas** para um esqueleto adulto na hora de desenhar (`G.ADULT`: pernas ×1,7, tronco ×1,35, braços ×1,38, cabeça ×0,6 → ~5,3 cabeças); armas e objetos 20% maiores |
+| **Proporções de adulto** | o pacote é "chibi" (~3,3 cabeças: parecia criança). As poses continuam escritas no esqueleto do pacote e são **redirecionadas** para um esqueleto adulto na hora de desenhar (`G.ADULT`: pernas ×1,7, tronco ×1,35, braços ×1,38, cabeça ×0,6 → ~5,3 cabeças); objetos 20% maiores; as armas da folha (abaixo) no tamanho de verdade |
 
 `?npc=0` na URL volta tudo aos bonecos antigos (comparar/depurar).
 
@@ -284,6 +284,8 @@ tools/asset_baker/generator/NpcGenAnims.js   esqueleto (IK) e TODAS as animaçõ
 tools/asset_baker/generator/NpcGenTypes.js   tipos do jogo: clipes de cada um, arma desenhada, lugares onde aparece, regras de variação
 tools/asset_baker/generator/NpcGenBuild.js   monta o atlas: 16 direções, recorte, quadros repetidos juntados, páginas
 tools/asset_baker/generator/NpcGenMesh.js    corpo da malha 3D (+ malha3d.js) e o dano pintado
+tools/asset_baker/armas.cjs                  folha de armas (source/armas.jpg) → generator/armas_sprites.js (material e tom por pixel)
+tools/asset_baker/weapons_preview.cjs        folha de conferência: clipes escolhidos, em algumas direções, num PNG ampliado
 tools/asset_baker/bake.cjs                   o BUILD: renderiza tudo no Node (worker_threads) → assets/baked (WebP + JSON + camadas de dano)
 tools/asset_baker/wardrobe/worker-main.js    o Worker do guarda-roupa (vai empacotado com o gerador em assets/baked/wardrobe.worker.js)
 tools/asset_baker/preview.html               prévia de qualquer tipo/variante/clipe/direção (renderiza na hora, no navegador)
@@ -345,12 +347,32 @@ src/storage/LookStore.js                     o IndexedDB dos visuais: o esquema 
   continua na próxima visita. Recarregou o jogo com a mesma roupa: lido do IndexedDB, sem gerar de novo. Depois do primeiro visual
   gravado o jogo pede armazenamento persistente (`navigator.storage.persist`), para o navegador não apagar o IndexedDB por falta de espaço. A chave leva o hash do gerador
   (`npc-data.json` → `genHash`): mudou o desenho no build, os visuais guardados são montados de novo.
-- **Armas novas** (pistola com silenciador, RPG, lança-foguetes, minigun): moram num terceiro atlas, `protagonista_armas`
+- **Armas novas** (pistola com silenciador, RPG, lança-foguetes, minigun, revólver e AK-47): moram num terceiro atlas, `protagonista_armas`
   (`NpcGenTypes.PLAYER_ARMS`: parado, andando, correndo, sacar, mirar, atirar, agachado, andar agachado, passo lateral e assalto com
   cada uma; `NpcSheet.armsAtlas`). Os objetos estão em `NpcGenChar.buildProps` (ogiva do RPG e feixe de canos da minigun são peças
   à parte — `SUB_PROPS` —: a ogiva some depois do disparo e os canos giram 15° por quadro no tiro em loop) e as pegadas em
   `WEAPON_HOLD` (RPG e lança-foguetes no ombro direito; minigun no quadril). Num visual do guarda-roupa esse atlas só é montado quando
-  o jogador TEM uma delas; até lá o desenho delas sai do visual de sempre.
+  o jogador TEM uma delas; até lá o desenho delas sai do visual de sempre — menos o revólver e a AK-47, que até lá saem como a
+  pistola e a SMG na roupa dele (`Player.LOOK_ALT`, `PlayerLook.drawsArms`).
+- **Armas da folha** (`tools/asset_baker/source/armas.jpg`: pistola, revólver, pistola com silenciador, submetralhadora, AK-47, RPG,
+  lança-foguetes, minigun, granada e molotov). `armas.cjs` escolhe uma vista de lado limpa de cada uma e grava o desenho como
+  material + tom por pixel (`generator/armas_sprites.js`), com a empunhadura, o ponto da mão de apoio, a boca do cano e onde
+  prendem as peças que se mexem. No gerador (`NpcGenChar`, "ARMAS DA FOLHA") o desenho vira um sólido (`SpriteSolid`): o contorno
+  é a silhueta, a espessura cresce para dentro dele (tubos redondos, pistolas chapadas) e a superfície é pintada com o pixel do
+  desenho. De lado ela é a folha; de qualquer outro ângulo tem volume, com a luz e o contorno do resto do personagem.
+  - **Proporções**: comprimento de verdade no corpo adulto (1 u ≈ 1,9 cm: AK-47 47 u ≈ 89 cm, RPG 50 u, minigun 44 u, revólver
+    18 u); pistolas, granada e garrafa ~25–30% maiores para lerem na tela. Elas não passam pelo aumento de 20% dos objetos (`ARMA_PROPS`).
+  - **Quem usa**: pistola → polícia, traficantes e o jogador; revólver → civis homens que revidam armados (`guns: { pistol:
+    'revolver' }`) e o jogador; submetralhadora → traficante da pistola e o jogador; AK-47 → traficantes de fuzil (`rifle:
+    'rifle_ak'`) e a AK-47 do jogador (`PLAYER_GUNS`); granada e molotov → jogador. O fuzil do BOPE/Exército/jogador e a escopeta
+    não estão na folha e continuam os de primitivas.
+  - **Animações**: as de sempre (sacar, mirar, atirar, andar/correr armado, agachado, cobertura, assalto). O revólver tem coice
+    próprio (`revolverShoot`), a ogiva do RPG some no disparo, os canos da minigun giram e o fogo do molotov aceso, preso no pano
+    da garrafa, troca entre 4 desenhos da folha (`molotov_fogo0..3`). A boca do cano de cada arma do jogador é medida no
+    build (`npc-data.json` → `muzzle`), então o clarão e a bala saem da ponta do desenho.
+  - Mudou a folha ou os ajustes (`PICK` em `armas.cjs`): `node tools/asset_baker/armas.cjs`, confira com
+    `node tools/asset_baker/weapons_preview.cjs saida.png protagonista_armas:aim:ak47 --dirs 4,8,12` e asse os tipos que desenham
+    armas.
 - A tela de equipamento mostra o **próprio personagem** girando (clique para girar), renderizado pelo gerador no Worker do guarda-roupa.
 
 ## Mudar ou criar personagens

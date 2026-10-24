@@ -442,11 +442,12 @@ class Player {
     // Arma pesada na mão (RPG, lança-foguetes, minigun): fator da velocidade a pé (Weapons[...].heavy).
     get heavyMul() { const W = Weapons[this.weapon]; return (W && W.heavy) || 1; }
 
-    // Arma desenhada na mão (as armas novas reaproveitam o desenho de pistola/SMG).
+    // Arma desenhada na mão (o fuzil reaproveita o desenho da SMG; as outras têm o seu). O revólver e a AK-47, num visual do
+    // guarda-roupa que ainda não montou o atlas das armas, saem como a pistola e a SMG na roupa dele (e não na roupa inicial).
     get look() {
         if (this.weapon === 'none') return 'none';
-        const W = Weapons[this.weapon];
-        return (W && W.look) || this.weapon;
+        const W = Weapons[this.weapon], look = (W && W.look) || this.weapon, alt = Player.LOOK_ALT[look];
+        return alt && typeof PlayerLook !== 'undefined' && !PlayerLook.drawsArms() ? alt : look;
     }
 
     // Troca de arma: saca (com animação) ou guarda.
@@ -940,7 +941,9 @@ Player.COMBO_GAP = 0.6;
 // "quadro 3 de 6": carjack (as duas mãos agarraram o motorista, logo antes de jogar o corpo para trás), pickpocket (a mão no bolso:
 // pegou), enter. opendoor: 3 de 5 (puxou a porta: a moto tombada sobe). punch (quebrar o vidro): o punho esticado (0,17 s de 0,43).
 Player.YANK = { opendoor: 0.6, punch: 0.4 };
-// Desenhos de arma de fogo com pose de mirar / passo lateral (o revólver usa o da pistola; fuzil e AK, o da SMG).
-Player.GUN_LOOKS = new Set(['pistol', 'smg', 'shotgun', 'pistol_sil', 'rpg', 'launcher', 'minigun']);
+// Desenho do revólver e da AK-47 enquanto o visual não tem o deles (Player.look): o da pistola e o da SMG.
+Player.LOOK_ALT = { revolver: 'pistol', ak47: 'smg' };
+// Desenhos de arma de fogo com pose de mirar / passo lateral (o fuzil usa o da SMG).
+Player.GUN_LOOKS = new Set(['pistol', 'smg', 'shotgun', 'pistol_sil', 'rpg', 'launcher', 'minigun', 'revolver', 'ak47']);
 
 Player.ZERO = new BABYLON.Vector3(0, 0, 0);          // (só leitura: "sem movimento" sem alocar)
