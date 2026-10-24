@@ -10,12 +10,13 @@
 //             Y/△ entrar no veículo (F) · B/○ recarregar · RT/R2 golpe (sem arma: combo soco+soco+chute)/tiro · LT/L2 MIRAR (ver Aim)
 //             LB/L1 segurado: RODA DE ARMAS (WeaponWheel; toque rápido = próxima) · direcional ←/→ troca de arma
 //             · ↑ kit médico · ↓ arrombar o carro trancado encostado (G) — sem carro, furtar quem está perto (C) ('padsteal': Game)
-//             Mirando: analógico dir. aponta (manual) ou troca de alvo (assistida). Teclado/mouse: botão direito mira, o cursor aponta.
-//             Mira manual com arma de fogo: mesmo sem mirar, o analógico dir. aponta (e não dá zoom) e o cursor do mouse é a mira.
+//             CÂMERA 360°: analógico dir. ↔ gira (↕ zoom). Mirando (LT com arma de fogo) ou preparando a granada, ele aponta.
+//             Teclado/mouse: o cursor é a mira da arma de fogo e o botão direito a firma; sem arma de fogo na mão, botão direito
+//             ARRASTANDO gira a câmera (com ou sem arma: botão do meio arrastando). Celular: arrastar o dedo no lado direito da tela.
 //     Carro:  RT acelera · LT freia/ré · Y/△ sair · X/□ interagir (abastecer/desmanche) · L3 buzina · ↓ faróis
 //             Bicicleta: L3 é o SPRINT (pedalar forte, como o sprint a pé: toque repetido = mais forte)
 //     Helicóptero: RT sobe · LT desce · analógico esq. mover · analógico dir. ↔ gira · Y/△ descer/pular
-//     Sempre: Back/SHARE inventário · Start/OPTIONS pausa (Game) · analógico dir. ↕ zoom
+//     Sempre: Back/SHARE inventário · Start/OPTIONS pausa (Game) · analógico dir. ↔ câmera 360° (no helicóptero: gira ele) e ↕ zoom
 //     As dicas na tela mostram os botões do controle conectado (Xbox ou PlayStation): ver PadGlyphs (que espelha esta tabela).
 //   Celular: TouchControls (src/ui/TouchControls.js) aparece quando é tela de toque e NÃO há controle conectado.
 // ============================================================================
@@ -42,8 +43,10 @@ class InputManager {
         this.rstick = { x: 0, y: 0 };       // analógico direito cru (x direita +, y baixo +), com zona morta — a mira manual aponta com ele
         this.padAim = false;                // LT/L2 segurado a pé: mirando
         this.touchAim = null;               // phone: the fire button dragged as a right stick ({ x, y }: x right +, y down +, length ≤ 1) — Aim
-        this.stickAim = false;              // o Aim avisa: mira manual com arma de fogo na mão (o analógico direito aponta, sem zoom)
+        this.stickAim = false;              // o Aim avisa: o analógico direito está apontando (LT com arma de fogo, granada sendo preparada)
         this.mouseAim = false;              // botão direito do mouse segurado sobre o jogo: mirando
+        this._dragR = false; this._dragM = false;      // botão direito / do meio segurado sobre o jogo: arrastar gira a câmera (takeLook)
+        this._lookR = 0; this._lookM = 0; this._lookTouch = 0; this._mx = null;      // px arrastados desde o último takeLook
         this.mouseX = -1; this.mouseY = -1; this.mouseMovedAt = 0;
         this.touchDevice = (typeof window !== 'undefined') && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /[?&]touch\b/.test(location.search));
         this.onChange = null;               // callback: conectou/desconectou controle (TouchControls e o Game)
@@ -87,23 +90,38 @@ class InputManager {
             if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;        // (toque na tela virou "clique": só os controles da tela agem)
             this.usingPad = false;
             if (e.button === 0) { this.justPressed['mouse0'] = true; this.mouseDown = true; }
-            if (e.button === 2 && e.target && e.target.id === 'canvas') this.mouseAim = true;              // botão direito sobre o jogo: mirar
+            const onGame = e.target && e.target.id === 'canvas';
+            if (e.button === 2 && onGame) { this.mouseAim = true; this._dragR = true; this._mx = e.clientX; }      // botão direito sobre o jogo: mirar / arrastar gira
+            if (e.button === 1 && onGame) { this._dragM = true; this._mx = e.clientX; }
         };
         window.addEventListener('pointerdown', down, true);
         window.addEventListener('mousedown', down);
-        const up = (e) => { if (e.type === 'pointerup' && e.pointerType !== 'mouse') return; if (e.button === 0) this.mouseDown = false; if (e.button === 2) this.mouseAim = false; };
+        window.addEventListener('mousedown', (e) => { if (e.button === 1 && e.target && e.target.id === 'canvas') e.preventDefault(); });      // (botão do meio: sem a rolagem automática)
+        const up = (e) => {
+            if (e.type === 'pointerup' && e.pointerType !== 'mouse') return;
+            if ((e.button === 2 && this._dragR) || (e.button === 1 && this._dragM)) this._dragTo(e.clientX);      // (o arrasto vai até onde soltou)
+            if (e.button === 0) this.mouseDown = false;
+            if (e.button === 2) { this.mouseAim = false; this._dragR = false; }
+            if (e.button === 1) this._dragM = false;
+        };
         window.addEventListener('pointerup', up, true);
         window.addEventListener('mouseup', up);
-        // Posição do mouse (mira manual: o personagem aponta para o cursor).
-        window.addEventListener('mousemove', (e) => {
+        // Posição do mouse (mira manual: o personagem aponta para o cursor) e o arrasto que gira a câmera. Também pelo pointermove: o
+        // Babylon cancela o pointerdown no canvas e, com um botão segurado, o navegador não manda mousemove (a câmera não girava
+        // arrastando e a mira parava no lugar durante a rajada). Os dois chegam: o 2º não muda nada.
+        const move = (e) => {
+            if (e.type === 'pointermove' && e.pointerType !== 'mouse') return;
             if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
+            this._dragTo(e.clientX);
             this.mouseX = e.clientX; this.mouseY = e.clientY;
             if (Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0) > 2) { this.mouseMovedAt = performance.now(); this.usingPad = false; }
-        });
+        };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('pointermove', move, true);
         window.addEventListener('contextmenu', (e) => { if (e.target && e.target.id === 'canvas') e.preventDefault(); });
 
         // Perder o foco não pode deixar tecla "presa".
-        window.addEventListener('blur', () => { this.keys = {}; this._virt = {}; this.mouseDown = false; this.mouseAim = false; this.analog.x = this.analog.z = 0; });
+        window.addEventListener('blur', () => { this.keys = {}; this._virt = {}; this.mouseDown = false; this.mouseAim = false; this._dragR = this._dragM = false; this.analog.x = this.analog.z = 0; });
 
         // Controle conectado/desconectado (o navegador só avisa depois do 1º botão apertado).
         window.addEventListener('gamepadconnected', (e) => { this.padName = e.gamepad ? e.gamepad.id : ''; this._refreshPad(); });
@@ -171,7 +189,8 @@ class InputManager {
         const rt = val(7) > 0.35, lt = val(6) > 0.35;
         this.padAim = foot && lt;                                                                    // LT a pé: mirar (ver Aim)
         this.rstick.x = dz(p.axes[2] || 0); this.rstick.y = dz(p.axes[3] || 0);
-        this.zoomAxis = this.padAim || this.stickAim || this.wheelOpen ? 0 : this.rstick.y;          // (mirando, na mira manual armado ou na roda de armas, o analógico direito aponta)
+        // (mirando ou na roda de armas, o analógico direito aponta; girando a câmera — mais de lado que de pé — ele não dá zoom)
+        this.zoomAxis = this.padAim || this.stickAim || this.wheelOpen || Math.abs(this.rstick.y) <= Math.abs(this.rstick.x) ? 0 : this.rstick.y;
         this.yawAxis = this.rstick.x;
 
         // botões -> teclas (layout GTA / Watch Dogs: ver o cabeçalho)
@@ -238,6 +257,24 @@ class InputManager {
         this.sprint = this.sprint > floor ? Math.max(floor, this.sprint - P.sprintDecay * dt) : (held ? floor : 0);
         return this.sprint;
     }
+
+    // Giro da câmera arrastando (rad) desde a última chamada, e zera: o mouse com o botão direito (a não ser com a arma de fogo na mão
+    // — `gun`: aí o botão direito é a mira firme) ou o do meio, e o dedo no lado direito da tela (TouchControls). O analógico direito
+    // é lido pelo Game (Game._look). + = para a direita.
+    takeLook(gun = false) {
+        const C = Config.camera, d = ((gun ? 0 : this._lookR) + this._lookM) * C.lookMouse + this._lookTouch * C.lookTouch;
+        this._lookR = this._lookM = this._lookTouch = 0;
+        return d;
+    }
+
+    // Arrasto do mouse (botão direito / do meio): soma o quanto andou desde o último ponto. Ancorado no ponto em que o botão desceu e
+    // fechado no ponto em que subiu: o giro é exatamente o arrasto, mesmo que algum movimento do meio chegue fora de ordem.
+    _dragTo(x) {
+        if ((this._dragR || this._dragM) && this._mx != null) { const dx = x - this._mx; if (this._dragR) this._lookR += dx; if (this._dragM) this._lookM += dx; }
+        this._mx = x;
+    }
+
+    touchLook(dx) { this._lookTouch += dx; }      // (TouchControls: o dedo arrastado no lado direito da tela, px CSS)
 
     isSprinting() {
         return this.sprint > 0.02 || !!this.keys['shift'];

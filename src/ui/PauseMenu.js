@@ -17,7 +17,7 @@ class PauseMenu {
 	}
 	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'life', 'hints', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
-		return '<b>WASD</b> mover (trote) · <b>SHIFT</b> sprint (tocar repetido = mais rápido) · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> mirar (o cursor aponta) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
+		return '<b>WASD</b> mover (trote) · <b>SHIFT</b> sprint (tocar repetido = mais rápido) · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> arrastando: gira a câmera 360° (com arma de fogo ele mira — o cursor aponta — e o <b>BOTÃO DO MEIO</b> arrastando gira) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
 
 	// Legenda do mapa: tipos de lugar (a chave é o `type` dos POIs).
@@ -306,10 +306,10 @@ class PauseMenu {
 		}
 		const keys = this.root.querySelector('.pm-keys');
 		if (keys) keys.innerHTML = pad
-			? `<b style="background:none;padding:0">A pé:</b> ${g('ls')} mover (pouco inclinado anda, inclinado trota) · ${g('l3')} sprint (tocar repetido = mais rápido) · ${g('a')} pular grade · ${g('rs')} agachar / cobertura · ${g('rb')} rolar · ${g('x')} interagir/assaltar/esconder · ${g('y')} veículo · ${g('rt')} atacar (sem arma: combo soco + soco + chute) · ${g('b')} recarregar · ${g('lt')} mirar (${g('rstick')} aponta/troca de alvo) · ${g('down')} arrombar (carro trancado) / furtar · ${g('lb')} roda de armas (segurar) · ${g('dpadlr')} armas · ${g('up')} kit médico<br>`
+			? `<b style="background:none;padding:0">A pé:</b> ${g('ls')} mover (pouco inclinado anda, inclinado trota) · ${g('l3')} sprint (tocar repetido = mais rápido) · ${g('a')} pular grade · ${g('rs')} agachar / cobertura · ${g('rb')} rolar · ${g('x')} interagir/assaltar/esconder · ${g('y')} veículo · ${g('rt')} atacar (sem arma: combo soco + soco + chute) · ${g('b')} recarregar · ${g('lt')} mirar (${g('rstick')} aponta) · ${g('down')} arrombar (carro trancado) / furtar · ${g('lb')} roda de armas (segurar) · ${g('dpadlr')} armas · ${g('up')} kit médico<br>`
 			+ `<b style="background:none;padding:0">Carro:</b> ${g('rt')} acelerar · ${g('lt')} freio/ré · ${g('y')} sair · ${g('x')} abastecer/desmanchar · ${g('l3')} buzina (bicicleta: pedalar forte) · ${g('down')} faróis<br>`
 			+ `<b style="background:none;padding:0">Helicóptero:</b> ${g('rt')} sobe · ${g('lt')} desce · ${g('rstick')} gira · ${g('y')} descer/pular<br>`
-			+ `${g('back')} inventário · ${g('start')} menu · ${g('rstick')} zoom (na mira manual com arma, ${g('rstick')} aponta)`
+			+ `${g('back')} inventário · ${g('start')} menu · ${g('rstick')} câmera 360° (↔ gira, ↕ zoom; mirando com ${g('lt')} ou preparando a granada, aponta)`
 			: PauseMenu.KEYS_HTML;
 	}
 
