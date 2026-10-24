@@ -91,14 +91,15 @@ class InputManager {
             this.usingPad = false;
             if (e.button === 0) { this.justPressed['mouse0'] = true; this.mouseDown = true; }
             const onGame = e.target && e.target.id === 'canvas';
-            if (e.button === 2 && onGame) { this.mouseAim = true; this._dragR = true; }      // botão direito sobre o jogo: mirar / arrastar gira
-            if (e.button === 1 && onGame) this._dragM = true;
+            if (e.button === 2 && onGame) { this.mouseAim = true; this._dragR = true; this._mx = e.clientX; }      // botão direito sobre o jogo: mirar / arrastar gira
+            if (e.button === 1 && onGame) { this._dragM = true; this._mx = e.clientX; }
         };
         window.addEventListener('pointerdown', down, true);
         window.addEventListener('mousedown', down);
         window.addEventListener('mousedown', (e) => { if (e.button === 1 && e.target && e.target.id === 'canvas') e.preventDefault(); });      // (botão do meio: sem a rolagem automática)
         const up = (e) => {
             if (e.type === 'pointerup' && e.pointerType !== 'mouse') return;
+            if ((e.button === 2 && this._dragR) || (e.button === 1 && this._dragM)) this._dragTo(e.clientX);      // (o arrasto vai até onde soltou)
             if (e.button === 0) this.mouseDown = false;
             if (e.button === 2) { this.mouseAim = false; this._dragR = false; }
             if (e.button === 1) this._dragM = false;
@@ -111,8 +112,7 @@ class InputManager {
         const move = (e) => {
             if (e.type === 'pointermove' && e.pointerType !== 'mouse') return;
             if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
-            if ((this._dragR || this._dragM) && this._mx != null) { const dx = e.clientX - this._mx; if (this._dragR) this._lookR += dx; if (this._dragM) this._lookM += dx; }
-            this._mx = e.clientX;
+            this._dragTo(e.clientX);
             this.mouseX = e.clientX; this.mouseY = e.clientY;
             if (Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0) > 2) { this.mouseMovedAt = performance.now(); this.usingPad = false; }
         };
@@ -265,6 +265,13 @@ class InputManager {
         const C = Config.camera, d = ((gun ? 0 : this._lookR) + this._lookM) * C.lookMouse + this._lookTouch * C.lookTouch;
         this._lookR = this._lookM = this._lookTouch = 0;
         return d;
+    }
+
+    // Arrasto do mouse (botão direito / do meio): soma o quanto andou desde o último ponto. Ancorado no ponto em que o botão desceu e
+    // fechado no ponto em que subiu: o giro é exatamente o arrasto, mesmo que algum movimento do meio chegue fora de ordem.
+    _dragTo(x) {
+        if ((this._dragR || this._dragM) && this._mx != null) { const dx = x - this._mx; if (this._dragR) this._lookR += dx; if (this._dragM) this._lookM += dx; }
+        this._mx = x;
     }
 
     touchLook(dx) { this._lookTouch += dx; }      // (TouchControls: o dedo arrastado no lado direito da tela, px CSS)
