@@ -59,9 +59,11 @@ function NpcGenTypes(G) {
         'grenade_pin:none', 'grenade_hold:none', 'grenade_throw:none',   // granada: puxar o pino, mirar, arremessar (Throwables)
         'molotov_light:none', 'molotov_hold:none', 'molotov_throw:none', // molotov: acender, mirar, arremessar
     ];
-    // ARMAS NOVAS do jogador (pistola com silenciador, RPG, lança-foguetes, minigun): outro atlas companheiro (protagonista_armas;
-    // nos visuais gerados, "hero:N:w") — o principal e o tático já estão cheios. Tudo o que o jogador faz com elas na mão.
-    const ARMS = ['pistol_sil', 'rpg', 'launcher', 'minigun'];
+    // ARMAS NOVAS do jogador (pistola com silenciador, RPG, lança-foguetes, minigun, e o revólver e a AK-47 da folha de armas — antes
+    // desenhados como a pistola e a SMG): outro atlas companheiro (protagonista_armas; nos visuais gerados, "hero:N:w") — o principal
+    // e o tático já estão cheios. Tudo o que o jogador faz com elas na mão. (ak47 é desenhada como o fuzil da AK: PLAYER_GUNS)
+    const ARMS = ['pistol_sil', 'rpg', 'launcher', 'minigun', 'revolver', 'ak47'];
+    const PLAYER_GUNS = { ak47: 'rifle_ak' };
     const PLAYER_ARMS = ARMS.flatMap((w) => [`idle:${w}`, `walk:${w}`, `run:${w}`, `draw:${w}`, `aim:${w}`, `shoot:${w}`, `crouch:${w}`, `sneak:${w}`, `strafe:${w}`, `holdup:${w}`, `cover:${w}`, `crouch_aim:${w}`, `crouch_shoot:${w}`]);
     const PLAYER_HAND = ['idle_hold:none', 'walk_hold:none', 'run_hold:none', 'idle_hold:pistol', 'walk_hold:pistol', 'run_hold:pistol'];
     const PLAYER_PULL = ['idle_pull:none', 'walk_pull:none'];
@@ -95,8 +97,9 @@ function NpcGenTypes(G) {
     // Who goes to the beach (the 'beach' group: bathers swim — SwimState) also gets the dive from wading into the swim.
     const SWIMMER = ['wade_dive:none'];
     const T = (vary, nvar, groups, clips, guns = {}) => ({ vary, nvar, groups, clips: groups.includes('beach') ? [...clips, ...SWIMMER] : clips, guns });
-    // civil: homem (m) ou mulher (f) — os clipes de revidar armado de cada um (lazy: páginas à parte)
-    const C = (sex, vary, nvar, groups) => { const arms = sex === 'f' ? ARM_F : ARM_M; return Object.assign(T(vary, nvar, groups, [...CIV, ...arms]), { lazy: arms }); };
+    // civil: homem (m) ou mulher (f) — os clipes de revidar armado de cada um (lazy: páginas à parte). A arma de fogo do homem que
+    // revida é o revólver (Temper): os clipes de pistola dele desenham o revólver da folha.
+    const C = (sex, vary, nvar, groups) => { const arms = sex === 'f' ? ARM_F : ARM_M; return Object.assign(T(vary, nvar, groups, [...CIV, ...arms], sex === 'm' ? { pistol: 'revolver' } : {}), { lazy: arms }); };
     const TYPES = {
         civil_trabalhador: C('m', 'civil', 10, ['casual', 'poor']),
         civil_senhor: C('m', 'social', 8, ['biz', 'casual', 'tourist']),
@@ -128,9 +131,9 @@ function NpcGenTypes(G) {
         trafic_fuzil: T('gang', 8, ['gang3', 'gang2'], GANG(['shotgun', 'smg']), { shotgun: 'rifle_ak', smg: 'rifle_ak' }),
         trafic_pistola: T('gang', 8, ['gang1', 'gang2'], GANG(['pistol', 'smg'])),
         trafic_mascarado: T('gang', 8, ['gang1', 'gang3'], GANG(['pistol', 'shotgun']), { shotgun: 'rifle_ak' }),
-        protagonista: T(null, 1, ['player'], [...PLAYER, 'walk_heavy:none']),
-        protagonista_tatico: T(null, 1, [], PLAYER_TAC),             // (companheiro do protagonista: nenhum lugar sorteia este tipo)
-        protagonista_armas: T(null, 1, [], PLAYER_ARMS),             // (o outro companheiro: as armas novas)
+        protagonista: T(null, 1, ['player'], [...PLAYER, 'walk_heavy:none'], PLAYER_GUNS),
+        protagonista_tatico: T(null, 1, [], PLAYER_TAC, PLAYER_GUNS),             // (companheiro do protagonista: nenhum lugar sorteia este tipo)
+        protagonista_armas: T(null, 1, [], PLAYER_ARMS, PLAYER_GUNS),             // (o outro companheiro: as armas novas)
         // frequentadores da academia (Interiors: só dentro das academias — nenhum lugar da rua sorteia estes tipos)
         academia_m: T('civil', 8, ['gym'], ['idle:none', 'walk:none', ...GYM]),
         academia_f: T('civil', 8, ['gym'], ['idle:none', 'walk:none', ...GYM]),

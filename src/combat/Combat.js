@@ -17,9 +17,10 @@ const Weapons = {
     shotgun: { name: 'Escopeta',        gun: true, dmg: 10, cooldown: 0.95, spread: 0.17, range: 22, speed: 64, mag: 6, pellets: 8, auto: false },
     // Fuzil automático (polícia/exército e agora também achado no chão).
     rifle:   { name: 'Fuzil',           gun: true, dmg: 14, cooldown: 0.1, spread: 0.055, range: 46, speed: 82, mag: 30, pellets: 1, auto: true, look: 'smg' },
-    // Armas achadas no chão. `look` = qual arma do boneco é desenhada na mão (só há pistola/SMG/escopeta/taco no rig).
-    revolver: { name: 'Revólver',       gun: true, dmg: 38, cooldown: 0.55, spread: 0.03, range: 48, speed: 80, mag: 6, pellets: 1, auto: false, look: 'pistol' },
-    ak47:    { name: 'AK-47',           gun: true, dmg: 19, cooldown: 0.12, spread: 0.07, range: 46, speed: 80, mag: 30, pellets: 1, auto: true, look: 'smg' },
+    // Armas achadas no chão. `look` = qual arma do boneco é desenhada na mão (o revólver e a AK-47: os desenhos da folha de armas,
+    // no atlas protagonista_armas).
+    revolver: { name: 'Revólver',       gun: true, dmg: 38, cooldown: 0.55, spread: 0.03, range: 48, speed: 80, mag: 6, pellets: 1, auto: false },
+    ak47:    { name: 'AK-47',           gun: true, dmg: 19, cooldown: 0.12, spread: 0.07, range: 46, speed: 80, mag: 30, pellets: 1, auto: true },
     knife:   { name: 'Faca',            melee: true, dmg: 24, range: 2.0, cooldown: 0.32, look: 'knife' },     // (na mão: o desenho da faca; golpe: a facada — Melee.stab)
     // Armas novas (desenho no atlas protagonista_armas). silenced: o tiro só é percebido bem de perto (não chama a polícia de longe).
     // rocket: dispara um foguete (combat/Rockets.js) — dmg = acerto direto (o helicóptero tem Config.heli.hp: um acerto derruba).

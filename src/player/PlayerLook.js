@@ -62,6 +62,9 @@ const PlayerLook = {
 	handClips(kind) { const P = this.P; return P.HAND.concat(kind === 'suitcase' ? P.PULL : []); },
 	ownsArms() { const inv = this.game && this.game.inventory; return !!inv && this.P.ARMS_LOOKS.some((w) => inv.owned(w)); },
 	sets(s) { return { main: this.clipsFor(), tac: this.P.TAC, arms: this.ownsArms() ? this.P.ARMS : null, hand: s.hand ? { kind: s.hand, keys: this.handClips(s.hand) } : null }; },
+	// O visual em uso desenha as armas novas com a roupa dele? (a roupa inicial sim; um do guarda-roupa, depois de montado o atlas das
+	// armas; sem os personagens 2,5D — o boneco antigo —, não)
+	drawsArms() { if (!this.ok) return false; const L = this.shown && !this.isDefault(this.shown) && this.looks.get(this.shown); return !L || !!L.arms; },
 
 	get defaultKey() { return this._dk || (this._dk = NpcData.shapeKey(this.P.DEFAULT)); },
 	isDefault(key) { return key === this.defaultKey; },

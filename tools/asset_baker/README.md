@@ -9,11 +9,13 @@ npm run bake                # todos os tipos (~1 h com 4 núcleos); --help para 
 node tools/asset_baker/bake.cjs civil_vovo pm_policial      # só alguns tipos
 node tools/asset_baker/bake.cjs --data                      # só npc-data.json + wardrobe.worker.js (sem renderizar)
 node tools/asset_baker/bake.cjs --props                     # só os props (o guarda-chuva dos pedestres), em ~1 s
+node tools/asset_baker/armas.cjs                            # folha de armas (source/armas.jpg) → generator/armas_sprites.js
+node tools/asset_baker/weapons_preview.cjs a.png protagonista_armas:aim:rpg --dirs 4,8   # conferir armas na mão (PNG)
 ```
 
 | Entrada | Saída (`assets/baked/`) |
 |---|---|
-| `generator/` (o gerador + `malha3d.js`) | `npcs/<tipo>.json` (manifesto) · `npcs/<tipo>/p<i>.webp` (páginas) · `npcs/<tipo>/d<n>p<i>.webp` (camadas de dano 1–3) |
+| `generator/` (o gerador + `malha3d.js` + `armas_sprites.js`, a folha de armas convertida por `armas.cjs`) | `npcs/<tipo>.json` (manifesto) · `npcs/<tipo>/p<i>.webp` (páginas) · `npcs/<tipo>/d<n>p<i>.webp` (camadas de dano 1–3) |
 | tipos, variantes, paletas, ficha do jogador | `npc-data.json` (lido por `src/art/NpcData.js`) |
 | `props/umbrella.cjs` (o `SpriteBaker` do jogo) | `props/umbrella.webp` — o guarda-chuva dos pedestres, uma célula por cor (lido por `src/npc/NPC.js`) |
 | `generator/` + `src/storage/LookStore.js` + `wardrobe/worker-main.js` | `wardrobe.worker.js` — o gerador num Worker, carregado **só** pela tela de equipamento (`src/player/Wardrobe.js`) |

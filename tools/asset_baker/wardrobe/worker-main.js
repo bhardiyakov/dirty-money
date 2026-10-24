@@ -84,6 +84,7 @@ async function breathe(job) {
 }
 const partKey = (ck, part, key) => `part|${ck}|${part}|${key}`;
 
+const HERO = 'protagonista';          // (a arma do jogo → a desenhada: a AK-47 do jogador é o fuzil da AK — NpcGenTypes.PLAYER_GUNS)
 async function runClips(m) {
 	await touchParts(m.ck);
 	const opts = { hand: m.spec.hand || null, dirs: m.dirs || undefined };
@@ -91,8 +92,8 @@ async function runClips(m) {
 	for (const key of m.keys) {
 		const pk = partKey(m.ck, m.part, key);
 		if (await LookStore.has(pk)) { self.postMessage({ job: m.job, clip: key, cached: true }); continue; }
-		const R = G.rendererFor(m.spec, { k: m.k }), [name, w0] = key.split(':'), cd = G.clipDef(name, w0, null, opts);
-		const total = cd.poses.length * (opts.dirs && opts.dirs < cd.dirs ? opts.dirs : cd.dirs), it = G.clipSteps(R, key, null, opts);
+		const R = G.rendererFor(m.spec, { k: m.k }), [name, w0] = key.split(':'), cd = G.clipDef(name, w0, HERO, opts);
+		const total = cd.poses.length * (opts.dirs && opts.dirs < cd.dirs ? opts.dirs : cd.dirs), it = G.clipSteps(R, key, HERO, opts);
 		let c, i = 0;
 		for (let r = it.next(); ; r = it.next(), i++) {
 			if (r.done) { c = r.value; break; }
@@ -128,7 +129,7 @@ async function runPack(m) {
 	return done;
 }
 function runPreview(m) {
-	const k = m.k || G.OUT_K, R = G.rendererFor(m.spec, { k }), pose = G.CLIPS.idle.fn(m.spec.weaponLook || 'none')[0], ramps = G.rampsFor(m.spec), frames = [];
+	const k = m.k || G.OUT_K, R = G.rendererFor(m.spec, { k }), pose = G.CLIPS.idle.fn(G.weaponFor(HERO, m.spec.weaponLook || 'none'))[0], ramps = G.rampsFor(m.spec), frames = [];
 	const D = m.dirs || 8;
 	for (let d = 0; d < D; d++) frames.push(G.colorize(R.render(pose, (-360 / D) * d, false), ramps));      // (sem a sombra no chão: o pedestal já é o chão)
 	self.postMessage({ job: m.job, frames, W: G.frameFor(k), H: G.frameFor(k), k }, frames.map((f) => f.buffer));
