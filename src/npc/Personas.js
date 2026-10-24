@@ -5,7 +5,7 @@
 //                     Pedido: cobrar um caloteiro (com jeito ou na marra).
 //   🌽 Tia Nena       ambulante da orla (9h–17h): vende milho e água de coco. Pedido: o fiscal da prefeitura que quer o carrinho dela.
 //   📖 Pastor Valdir  na praça de manhã e no fim da tarde. Aceita doações (o bairro passa a te respeitar). Pedido: a reforma da igreja.
-//   🧽 Jorginho       flanelinha do comércio (8h–20h). Serviço: "conhece um cara" que esquenta placa marcada pela polícia.
+//   🧽 Jorginho       flanelinha do comércio (8h–20h). "Conhece um cara pra tudo".
 //   🌸 Dona Rosa      na porta de casa, na entrada do morro (7h–19h). Com confiança, te dá remédio. Pedido: o neto que sumiu no baile.
 //   • RELAÇÃO: conversar (E) uma vez por dia aproxima; com medo de você, falam pouco. Com confiança, te dão o número (viram contato no
 //     celular) e passam a mandar mensagem — e aí aparece o PEDIDO de cada um (uma vez; recompensa e confiança).
@@ -163,7 +163,6 @@ const Personas = {
     _menu(g, id) {
         const D = this.DEFS[id], r = this.R(id), opts = [];
         if (id === 'valdir') opts.push(['donate', `🙏 Doar ${brl(500)} para a igreja`, 'o bairro passa a te respeitar']);
-        if (id === 'jorginho' && typeof Traces !== 'undefined' && Traces.plates.length) opts.push(['plate', `🚗 Esquentar placa marcada — ${brl(800)}`, 'o cara dele troca a placa dos seus carros marcados']);
         if (id === 'nena') opts.push(['milho', r.quest === 2 ? '🌽 Pegar um milho (de graça pra você)' : `🌽 Comprar milho — ${brl(8)}`, 'mata a fome']);
         if (id === 'ze') opts.push(['gelada', r.quest === 2 ? '🍺 Uma gelada (por conta da casa)' : `🍺 Uma gelada — ${brl(12)}`, 'refresca (e dá um gás)']);
         if (id === 'rosa' && r.trust >= 30 && r.gift !== Economy.day) opts.push(['gift', '💊 Aceitar o remedinho da Dona Rosa', '+1 kit médico']);
@@ -177,7 +176,6 @@ const Personas = {
     _do(g, id, act) {
         const inv = g.inventory, r = this.R(id), pay = (v) => { if (inv.cash < v) { g._flash(`Dinheiro vivo insuficiente (${brl(v)})`); return false; } inv.cash -= v; return true; };
         if (act === 'donate' && pay(500)) { const P = g.player.position; if (typeof WorldMemory !== 'undefined') WorldMemory.good(P.x, P.z, 5, 'doou para a igreja'); r.trust = Math.min(100, r.trust + 6); g._flash('🙏 "Deus te pague, irmão." O bairro ficou sabendo da doação.'); }
-        if (act === 'plate' && pay(800)) { Traces.plates = []; g._flash('🚗 Placas esquentadas: a polícia não reconhece mais seus carros marcados'); }
         if (act === 'milho') { if (r.quest === 2 || pay(8)) { if (typeof Physique !== 'undefined') Physique.eat(280); g.player.hp = Math.min(g.player.maxHp, g.player.hp + 6); g._flash('🌽 Milho quentinho com manteiga!'); } }
         if (act === 'gelada' && (r.quest === 2 || pay(12))) { if (typeof Needs !== 'undefined') Needs.drink(30); g._flash('🍺 Desceu redonda.'); }
         if (act === 'gift') { r.gift = Economy.day; inv.medkits = (inv.medkits || 0) + 1; g._flash('💊 "Toma, meu filho, pra qualquer coisa." +1 kit médico'); }

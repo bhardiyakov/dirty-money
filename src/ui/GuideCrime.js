@@ -29,11 +29,12 @@ Object.assign(GuideUI.PAGES, {
     traces: () => `<h2>Rastros e fuga</h2>
         <p>O que você deixa para trás num assalto vira prova (painel no canto direito, abaixo do HUD):</p><ul>
         <li><b>Descrição da roupa</b>: testemunhas e câmeras descrevem parte de cima, calça e cabeça. Por 2 dias, um policial que te veja de perto com 2 dessas 3 peças te reconhece. <b>Troque de roupa</b> longe da polícia (leve uma muda).</li>
-        <li><b>Rosto</b>: sem máscara, o inquérito sobe muito. <b>Balaclava</b> esconde tudo; <b>bandana</b> esconde da câmera. <b>K</b> põe/tira a máscara — mascarado na rua a polícia estranha e aborda.</li>
-        <li><b>Câmeras</b>: arranque o HD do gravador (DVR) antes de sair.</li>
-        <li><b>Digitais</b>: use <b>luvas</b> (boutique ou boca).</li>
-        <li><b>Placa</b>: sair dirigindo de perto da loja com testemunha acordada marca o carro. Some com <b>pintura nova</b> na oficina, <b>placa fria</b> no mecânico do morro ou largando o carro.</li>
-        <li><b>Inquérito</b> (0–100%): soma tudo e cai 7% por dia. Em 100% sai o <b>mandado de prisão</b> — qualquer policial te reconhece pela cara. O <b>advogado</b> (aba CARREIRAS › Assaltante, dinheiro limpo) esfria 45%.</li>
+        <li><b>Flagrante</b>: só conta quem te viu NA HORA do crime — policial (cone de visão), câmera de fachada ou da loja, ou pedestre olhando. Ninguém viu = crime perfeito, nada na ficha. Visto pela polícia: estrelas pela gravidade; só câmera/testemunha: 1★.</li>
+        <li><b>Máscara</b>: sem máscara, o flagrante vai para a sua <b>ficha</b>. Mascarado, a polícia te persegue mas não sabe quem é — fuja e tire a máscara longe dela. Tirar na frente de um policial durante a perseguição te identifica. <b>K</b> põe/tira — mascarado na rua a polícia estranha e aborda.</li>
+        <li><b>Câmeras</b>: arranque o HD do gravador (DVR) — ou corte a energia do banco — antes de agir.</li>
+        <li><b>Ficha</b>: com crimes na ficha você fica <b>sob investigação</b> (a polícia não atira à primeira vista). Crimes graves somados dão <b>mandado</b>: o policial que vê seu rosto de perto tenta te prender. Os crimes prescrevem com os dias (os leves antes).</li>
+        <li><b>Hacker</b> apaga a ficha (dinheiro sujo; fica mais barato quanto mais tempo desde o último crime). <b>Advogado</b> contratado (7 dias, dinheiro limpo) corta a fiança pela metade e livra as armas se você for preso. <b>Delegado comprado</b> (5♥ no Império) engaveta o que a polícia não viu ao vivo no distrito dele. Aba CARREIRAS › Assaltante.</li>
+        <li><b>Preso</b>: fiança, armas e itens ilícitos confiscados, ficha zerada e <b>condicional de 48 h</b> — qualquer flagrante nela já vem com 3★.</li>
         <li><b>Área de busca</b>: quando as testemunhas ligam depois que você saiu, o radar mostra um círculo <b style="color:#f5be28">amarelo</b> onde as viaturas procuram. Saia dele, não corra perto da polícia e se esconda se precisar.</li></ul>`,
 
     heists: () => `<h2>Joalherias e golpes</h2>

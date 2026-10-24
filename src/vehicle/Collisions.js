@@ -161,7 +161,7 @@ class Collisions {
 
         if (byPlayer) {
             // Sobreviveu: ainda é crime (matar já é reportado pelo evento de morte do NPC).
-            if (kind === 'npc' && e.alive) { g.wanted.reportCrime(); if (g.npcManager) g.npcManager.alertViolence(e.position, 18); }
+            if (kind === 'npc' && e.alive) { g.heat.commit('hit_and_run'); if (g.npcManager) g.npcManager.alertViolence(e.position, 18); }
             if (kind === 'npc' && !e.alive) { /* onKill já reportou e alertou */ }
         }
     }

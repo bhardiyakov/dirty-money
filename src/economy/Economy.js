@@ -163,8 +163,21 @@ const Economy = {
     // ------------------------------------------------------------------ tempo
     // Chamado todo quadro com a hora do relógio do jogo: vira o dia → novos preços e estoque.
     tick(hour) {
-        if (this._lastHour >= 0 && hour < this._lastHour - 12) { this.day++; this.shops = {}; for (const fn of this.dayHooks) { try { fn(this.day); } catch (e) { console.error('[DIA] gancho falhou:', e); } } if (typeof Laundry !== 'undefined') Laundry.onNewDay(); if (typeof Careers !== 'undefined' && Careers.instance) Careers.instance.onNewDay(); if (typeof Empire !== 'undefined' && Empire.instance) Empire.instance.onNewDay(); if (typeof Banks !== 'undefined') Banks.onNewDay(); }
+        if (this._lastHour >= 0 && hour < this._lastHour - 12) this.passMidnight();
         this._lastHour = hour;
+    },
+
+    // The day turns `days` times (DayNight.skip calls it for every midnight a time jump crosses).
+    passMidnight(days = 1) {
+        for (let i = 0; i < days; i++) {
+            this.day++; this.shops = {};
+            for (const fn of this.dayHooks) { try { fn(this.day); } catch (e) { console.error('[DIA] gancho falhou:', e); } }
+            if (typeof Laundry !== 'undefined') Laundry.onNewDay();
+            if (typeof Careers !== 'undefined' && Careers.instance) Careers.instance.onNewDay();
+            if (typeof Empire !== 'undefined' && Empire.instance) Empire.instance.onNewDay();
+            if (typeof Banks !== 'undefined') Banks.onNewDay();
+        }
+        this._lastHour = -1;                 // the jump already turned the day: the next tick must not count it again
     },
 
     isOpen(style, hour) {

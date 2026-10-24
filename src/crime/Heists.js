@@ -108,7 +108,7 @@ const Heists = {
         const p = this.plan, hk = this.stars(this.member('hacker', p.crew.hacker)), gm = this.stars(this.member('gunman', p.crew.gunman));
         const stealth = p.approach === 'stealth';
         let window = stealth ? [0, 40, 60, 85][hk] : 0;
-        if (stealth && Math.random() < [0, 0.25, 0.08, 0][hk]) { window = Math.round(window * 0.5); game._flash('💻 O hacker foi detectado no meio — a janela vai ser curta!'); Traces.addHeat(15); }
+        if (stealth && Math.random() < [0, 0.25, 0.08, 0][hk]) { window = Math.round(window * 0.5); game._flash('💻 O hacker foi detectado no meio — a janela vai ser curta!'); game.heat.fileEvidence('cybercrime'); }
         const H = { approach: p.approach, hacker: hk, gunman: gm, window, valueMul: J.mul };
         Robbery.start(game, H);
         if (stealth && Robbery.session) { Robbery.session.dvr = true; Robbery.session.camsLooped = true; }      // (o hacker põe as câmeras em loop: não grava nada)
@@ -159,7 +159,7 @@ const Heists = {
         const gm = this.stars(this.member('gunman', p.crew.gunman)), dr = this.stars(this.member('driver', p.crew.driver)), hk = this.stars(this.member('hacker', p.crew.hacker));
         if (Math.random() < [0, 0.3, 0.1, 0][gm]) { const l = Math.round(gross * 0.15); gross -= l; lines.push(`🩸 ${this.member('gunman', p.crew.gunman).name} tomou um tiro na fuga e a bolsa dele ficou: −${brl(l)}`); }
         if (Math.random() < [0, 0.22, 0.08, 0][dr]) { const l = Math.round(gross * 0.1); gross -= l; lines.push(`💥 ${this.member('driver', p.crew.driver).name} bateu a van da equipe: −${brl(l)}`); }
-        if (Math.random() < [0, 0.2, 0.05, 0][hk]) { Traces.addHeat(20); lines.push(`📡 ${this.member('hacker', p.crew.hacker).name} deixou rastro digital: inquérito +20`); }
+        if (Math.random() < [0, 0.2, 0.05, 0][hk]) { game.heat.fileEvidence('cybercrime'); lines.push(I18n.t('heat.heist.digitalTrail', { name: this.member('hacker', p.crew.hacker).name })); }
         const fenced = Math.round(gross * 0.85), cutPct = this.cuts(), cuts = Math.round(fenced * cutPct), mine = fenced - cuts;
         const pay = game.careers.payout(game.careers.by.robber, mine);
         game.inventory.addCash(pay);
@@ -382,7 +382,7 @@ class HeistPrepJob extends CareerJob {
         }
         this.mgr.act('rummage', 2);
         this.stage = 1;
-        if (this.mgr.copDist(g.player.position) < 24) { g.wanted.reportCrime(); g._flash('Um policial viu você mexendo na van!'); }
+        if (this.mgr.copDist(g.player.position) < 24) { g.heat.commit('burglary', CrimeExposure.POLICE); g._flash('Um policial viu você mexendo na van!'); }
         const f = this.mgr.favelaSpot(9301, 0.12, 0.3); this.target(f.x, f.z, 'Esconderijo da equipe', '#c084fc');
         g._flash('🧥 Uniformes pegos — leve para a favela ou para casa');
         return true;

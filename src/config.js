@@ -518,14 +518,11 @@ const Config = {
 		hearMemory: 22,        // Quanto tempo (s) quem ouviu um tiro continua indo ao local.
 		weaponsFreeTime: 24,   // Segundos de "armas liberadas" após um tiro do jogador.
 		shootRange: 44,        // Alcance em que policiais (a pé e nas viaturas) atiram com armas liberadas.
-		// RADAR da polícia: um crime só vira procurado se a polícia estiver PERTO — presenciando (sightRange, com linha de visada,
-		// até crimeVisibleTime s depois) ou ouvindo/sendo chamada (hearRadius/callRadius: aí ela vai ao local e o flagrante fica aberto
-		// por investigateTime enquanto investiga). Longe da polícia, tiro e assalto não dão estrela.
+		// Flagrants are decided at the exact moment of the crime (police/CrimeExposure.js, police/HeatStateMachine.js): a unit that
+		// sees the player (sightRange, line of sight), a camera or a witness. Hearing a shot only sends units to the spot.
 		hearRadius: 55,        // Policial a até isto de um tiro do jogador OUVE: vai ao local e passa a atirar (armas liberadas).
 		maxOfficers: 42,       // Teto de policiais a pé (patrulha + reforços que descem das viaturas).
 		sightRange: 28,        // SEM estrelas: alcance em que um policial presencia um crime (≈ a tela). Com ★ vale o `sight` do nível.
-		crimeVisibleTime: 3,   // O crime precisa ser visto na hora (até isto de s depois)...
-		investigateTime: 10,   // ...ou, se a polícia por perto ouviu/foi chamada, enquanto ela investiga o local.
 		callRadius: 70,        // Testemunhas que ligam (assalto) só trazem a polícia que estiver a até isto do local.
 
 		bustRange: 8,          // Distância da polícia que conta para a prisão.
@@ -543,10 +540,9 @@ const Config = {
 		closeNoEscape: 16,     // Policial a menos disso (u), mesmo sem te ver (atrás de parede), PAUSA a contagem da fuga.
 		movingSpread: 14,      // Atirar num carro em movimento: o erro cresce 1× a cada isto de m/s (até 2,4×).
 		maxChasers: 1.5,       // Viaturas de reforço no máximo = viaturas do nível × isto (o resto patrulha).
-		// 1★ (delito leve): a polícia é bem menos punitiva — corre menos, precisa chegar mais perto para prender, perde você mais fácil
-		// atrás de paredes; preso com 1★ = multa pequena, armas NÃO são confiscadas e você é liberado em poucas horas.
-		oneStar: { bustRange: 4.5, closeNoEscape: 14, chaseMul: 0.8, fine: 0.15, keepWeapons: true, hours: [3, 5] },
-		fineBase: 0.5, finePerStar: 0.1,    // Multa ao ser preso: fração do dinheiro = fineBase + finePerStar × ★ (máx. 0,75).
+		// 1★ (minor offense): the police run slower, must get closer to arrest and lose the player more easily behind walls; arrested
+		// at 1★ the player is released within a few hours. Bail and confiscation: HeatStateMachine (HEAT_TUNING).
+		oneStar: { bustRange: 4.5, closeNoEscape: 14, chaseMul: 0.8, hours: [3, 5] },
 	},
 };
 

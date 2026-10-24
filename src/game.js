@@ -71,12 +71,12 @@ class Game {
 		// Eventos de combate que mexem em "procurado".
 		this.policeEvents = {
 			// Ferir policial sobe ★ no ritmo normal; matar sobe 1★ na hora.
-			onOfficerHit: (o, source) => { if (source === 'player') this.wanted.bump('hit'); },
+			onOfficerHit: (o, source) => { if (source === 'player') this.heat.commit('cop_assault', CrimeExposure.POLICE); },
 			onOfficerKilled: (o, source) => {
 				// O policial solta munição, dinheiro e, às vezes, uma arma ou kit (tropa de elite e exército: fuzil e mais $).
 				if (source !== 'gang' && source !== 'police') this.pickups.dropLoot(o.position, o.kind || 'cop');      // (morto pelo tráfico: sem loot)
 				if (source === 'player' && typeof WorldMemory !== 'undefined') WorldMemory.crime('cop', o.position.x, o.position.z);
-				if (source === 'player') { this.wanted.addStars(1, 'kill'); this._flash('Policial morto! Eles não vão deixar barato!'); if (o.op) { Standing.add('traffic', 4); if (this.missions) this.missions.onCopKilled(); } if (Standing.nearFavela(o.position.x, o.position.z)) Standing.addHeat(30, 'policial morto'); }       // (na operação o tráfico gosta; perto da favela, a pressão sobe)
+				if (source === 'player') { this.heat.commit('cop_killed'); this._flash('Policial morto! Eles não vão deixar barato!'); if (o.op) { Standing.add('traffic', 4); if (this.missions) this.missions.onCopKilled(); } if (Standing.nearFavela(o.position.x, o.position.z)) Standing.addHeat(30, 'policial morto'); }       // (na operação o tráfico gosta; perto da favela, a pressão sobe)
 			},
 		};
 		this.npcCtx = {
@@ -90,7 +90,7 @@ class Game {
 					this.pickups.dropLoot(npc.position, 'civilian');
 					if (source !== 'player') return;
 					if (typeof WorldMemory !== 'undefined') WorldMemory.crime(npc.mugger ? 'fight' : 'kill', npc.position.x, npc.position.z);
-					this.wanted.reportCrime();
+					this.heat.commit(npc.mugger ? 'assault' : 'homicide');
 					if (!npc.mugger) Standing.harm(this, 6);                 // (o assaltante de rua: o bairro não chora — ver StreetCrime)
 					if (this.npcManager) this.npcManager.alertViolence(npc.position, 18);
 					this._flash(npc.mugger ? 'Assaltante abatido! A vítima escapou' : `Pedestre #${npc.id} morto!`);
@@ -125,7 +125,8 @@ class Game {
 
 		// Procurado + polícia (PoliceManager criado quando física E NavMesh prontos).
 		this.wanted = new WantedSystem();
-		this.wanted.onChange = (n, prev, why) => this._onWantedChange(n, prev, why);
+		this.heat = new HeatStateMachine(this);                       // flagrant, crime record, arrest and parole (police/HeatStateMachine.js)
+		this.wanted.onChange = (n, prev, why) => { this.heat.onWantedChange(n); this._onWantedChange(n, prev, why); };
 		this.policeManager = null;
 		this.bustTimer = 0;
 
@@ -879,7 +880,6 @@ class Game {
 			if (this.skills) this.wanted.loseMul = this.skills.policeMul * (1 - (SkillTree.m.lose || 0) - Outfit.m.lose - (this.mode === 'car' ? (SkillTree.m.carLose || 0) : 0));
 			this.policeManager.update(dt, ps.pos, ps.vel, this.wanted.level);
 			const seen = this.policeManager.playerSeen;
-			if (seen) this.wanted.seenByPolice();
 
 			// (Estar armado e à vista NÃO libera mais a polícia: só atirar — ver _onAttack/notifyPlayerShot.)
 			// Fuga: policial colado (mesmo atrás de parede) PAUSA a contagem; fora da área de busca ela anda mais rápido.
@@ -888,7 +888,7 @@ class Game {
 			const rate = S && hypot(ps.pos.x - S.x, ps.pos.z - S.z) > S.r ? Config.wanted.outsideRate : 1;
 			this.wanted.update(dt, seen, hold, rate);
 
-			Traces.update(dt, this);                                                         // descrição, placa, mandado, área de busca
+			Traces.update(dt, this); this.heat.update(dt);                                                         // descrição, placa, mandado, área de busca
 			const alerted = this.wanted.level > 0;
 
 			// Prisão: polícia colada em você por bustTime segundos (só quando procurado).
@@ -1231,14 +1231,14 @@ class Game {
 			Temper.onPlayerShot(this, pos, angle);                              // quem ele mirou e anda armado revida (antes do alerta: o resto foge)
 			if ((Weapons[p.weapon] && Weapons[p.weapon].silenced) || (this.careers && this.careers.silenced(p.weapon))) {      // silenciador (a pistola com ele, ou o do Armeiro): só quem está muito perto e vê percebe
 				this.npcManager.alertViolence(pos, 8);
-				this.wanted.reportCrime();
+				this.heat.commit('gunfire');
 			} else if (Baile.covers(pos.x, pos.z)) {                                // o baile abafa o tiro: só quem está a < 14 u (e a vista) percebe
 				this.npcManager.alertViolence(pos, 14);
-				this.wanted.reportCrime();
+				this.heat.commit('gunfire');
 				Baile.onShot(pos);
 			} else {
 				this.npcManager.alertShot(pos);
-				this.wanted.reportCrime();
+				this.heat.commit('gunfire');
 				if (this.policeManager) this.policeManager.notifyPlayerShot(pos);
 			}
 			if (this.birds) this.birds.scare(pos.x, pos.z, 28);
@@ -1261,7 +1261,7 @@ class Game {
 			onHit: (t) => {
 				if (t.halfLen) { this.npcManager.alertViolence(p.position, 10); return; }      // (carro: vandalismo, só assusta)
 				this.npcManager.alertViolence(p.position, this._witnessR(), [t]);
-				this.wanted.reportCrime();
+				this.heat.commit('assault');
 				this._flash(`Agrediu #${t.id}!`);
 			},
 		});
@@ -1295,7 +1295,7 @@ class Game {
 		if (this.policeManager) {
 			// RADAR: sem estrelas e armado (ou com um crime em flagrante), cada policial aparece com o círculo do que ele enxerga —
 			// crime cometido fora dos círculos (e longe o bastante para não ouvirem o tiro) não dá estrela.
-			const pm = this.policeManager, armed = this.wanted.level === 0 && this.mode === 'player' && (this.player.weapon !== 'none' || this.wanted.pending), ring = 0;
+			const pm = this.policeManager, armed = this.wanted.level === 0 && this.mode === 'player' && (this.player.weapon !== 'none'), ring = 0;
 			// Procurado (ou armado / com crime em flagrante): cada unidade a menos de ~1 tela mostra o CONE do que ela enxerga (como no GTA V)
 			// — a polícia só vê o que está à frente dela; fora dos cones (e longe o bastante para não ouvir), dá para agir.
 			const cones = (this.wanted.level > 0 || armed) && pm.sightR, cp = this._playerState().pos;
@@ -1674,7 +1674,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (car.alarm > 0) return;
 		car.alarm = Config.theft.alarmTime;
 		car._alarmT = 0;
-		this.wanted.reportCrime();
+		this.heat.commit('car_theft');
 		if (this.npcManager) this.npcManager.alertViolence(car.position, Config.theft.alarmRadius);
 		this._flash(msg);
 	}
@@ -1886,7 +1886,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		for (let k = 0; k < 3; k++) this.waterFx.ripple(p.x + (Math.random() - 0.5) * 2, p.z + (Math.random() - 0.5) * 2, 0.8, 4.5, 1.3, 0.7);
 		for (let k = 0; k < 6; k++) this.carLights.puffs.emit(p.x, 0.5, p.z, (Math.random() - 0.5) * 3, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 3, 0.4, 1.4, 0.8, 0.6, [0.93, 0.97, 1]);
 		AudioFX.thud(p.x, p.z);
-		this.wanted.reportCrime();
+		this.heat.commit('carjacking');
 		if (this.npcManager) this.npcManager.alertViolence(p, 22);
 		this._flash('O piloto caiu na água!');
 	}
@@ -1931,7 +1931,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			variant: 2 + (car.id * 7) % this.sprites.civilianVariants, sheet: car.id % 2 ? 'civB' : 'civA',
 			threat: this.player.position, dx: S.rx * S.sign, dz: S.rz * S.sign, power: dead ? 4.5 : 6.5, kind: 'eject', lethal: dead,
 		}));
-		this.wanted.reportCrime();
+		this.heat.commit('carjacking');
 		if (this.npcManager) this.npcManager.alertViolence(c, 20);
 		AudioFX.thud(c.x, c.z);
 	}
@@ -2128,7 +2128,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 
 		if (bike.mode !== undefined && !bike.controlled) { bike.mode = 'abandoned'; bike.route = null; }     // sem piloto, para
 		if (kind === 'eject') {
-			this.wanted.reportCrime();
+			this.heat.commit('carjacking');
 			if (this.npcManager) this.npcManager.alertViolence(p, 20);
 			AudioFX.thud(p.x, p.z);
 		}
@@ -2355,7 +2355,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		pl.velocity.setAll(0);
 		this.holdup = { victim, t: 0, dur: R.holdTime, alertT: 0, seen: false };
 		if (this.empire) this.empire.spend(5, 12);
-		this.wanted.reportCrime();                                     // flagrante: só um policial perto vendo a cena (renovado a cada 1 s)
+		this.heat.commit('mugging');                                     // flagrante: só um policial perto vendo a cena (renovado a cada 1 s)
 		this.holdup.seen = this.npcManager.alertViolence(pl.position, R.witnessRadius + 8, victim) > 0;
 		AudioFX.blip(320, 0.18, 0.22);
 		this._flash('Mãos pra cima! Mantenha a mira…');
@@ -2374,7 +2374,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		H.alertT -= dt;
 		if (H.alertT <= 0) {                                           // quem chega e vê a cena foge e vira testemunha
 			H.alertT = 1;
-			this.wanted.reportCrime();
+			this.heat.commit('mugging');
 			if (this.npcManager.alertViolence(pl.position, R.witnessRadius, v) > 0) H.seen = true;
 		}
 		if (H.t < H.dur) return;
@@ -2387,7 +2387,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		AudioFX.blip(980, 0.12, 0.2);
 		v.endSurrender(pl.position);
 		Standing.harm(this, 4);
-		this.wanted.reportCrime();
+		this.heat.commit('mugging');
 		// Testemunhas ligam — mas só vem a polícia que estiver por perto (Config.police.callRadius); ela vai ao local e, se te achar
 		// enquanto investiga, você vira procurado. Sem polícia por perto a ligação não dá em nada.
 		const coming = H.seen && this.policeManager ? this.policeManager.callPolice(pl.position) : 0;
@@ -2436,7 +2436,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			npc.panic(pl.position);                                    // percebeu: grita e sai correndo
 			if (this.empire) this.empire.spend(2, 10);
 			Standing.harm(this, 3);
-			this.wanted.reportCrime();
+			this.heat.commit('theft');
 			this.npcManager.alertViolence(pl.position, this._witnessR(9), npc);
 			AudioFX.blip(190, 0.2, 0.22);
 			this._flash('Te pegaram no flagra! Ladrão!');
@@ -2507,12 +2507,11 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			if (A.t > 0.9) {                                               // policial parado diante do ajoelhado: tela de detido
 				A.phase = 'screen'; A.t = 0;
 				const light = A.stars === 1, O = Config.police.oneStar;
-				A.lost = this.inventory.fine(light ? O.fine * (1 - (SkillTree.m.fine || 0)) : Math.min(0.9, Config.police.fineBase + Config.police.finePerStar * A.stars));
+				A.report = this.heat.arrest(A.stars);                     // ARRESTED: bail, confiscation, record wiped → PAROLE
 				A.wake = this._wakeInfo(light ? O.hours : null);
-				this.endScreen.show({ title: 'DETIDO', lines: [
-					{ text: `MULTA: ${brl(A.lost)}`, color: '#ffd23f' },
-					...(this.inventory.armed ? [light ? { text: 'DELITO LEVE: VOCÊ FICA COM SUAS ARMAS', color: '#86efac' } : { text: 'TODAS AS ARMAS FORAM CONFISCADAS', color: '#ff7a6e' }] : []),
-					{ text: light ? `LIBERADO DA DELEGACIA ÀS ${A.wake.label}` : `VOCÊ ACORDA NA DELEGACIA ÀS ${A.wake.label}`, color: '#9ec5ff' },
+				this.endScreen.show({ title: I18n.t('heat.arrest.title'), lines: [
+					...this.heat.arrestLines(A.report),
+					{ text: I18n.t(light ? 'heat.arrest.released' : 'heat.arrest.wake', { time: A.wake.label }), color: '#9ec5ff' },
 				] });
 				AudioFX.blip(180, 0.5, 0.25);
 				this._anyPress();                                          // (descarta teclas apertadas antes da tela)
@@ -2538,7 +2537,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		this.player.invulnerable = false;
 		HangProbe.mark('prisão: policial termina a prisão');
 		if (A.officer) A.officer.endArrest();
-		this._busted(A.lost, A.wake ? A.wake.hours : null, A.stars);
+		this._busted(A.report, A.wake ? A.wake.hours : null, A.stars);
 	}
 
 	// Horas que passam até o jogador acordar (no mínimo Config.respawn.hoursMin) e a hora do relógio em que isso cai.
@@ -2575,25 +2574,22 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 	}
 
 	// Preso: multa e acorda na DELEGACIA, 12h+ depois.
-	_busted(lost = null, hours = null, stars = this.wanted.level) {
+	_busted(report = null, hours = null, stars = this.wanted.level) {
 		const light = stars === 1, O = Config.police.oneStar;
 		HangProbe.arm('preso', 600);
 		if (typeof WorldMemory !== 'undefined' && stars >= 1) { const p = this.player.position; WorldMemory.log('busted', { district: this.empire ? this.empire.districtAt(p.x, p.z) : null, stars }); }
-		HangProbe.mark('preso: zerar procurado');
-		this.wanted.bust();            // zera procurado -> polícia volta a patrulhar.
+		HangProbe.mark('preso: ficha, fiança e confisco');
+		if (!report) report = this.heat.arrest(stars);                 // ARRESTED: stars and record wiped, bail, confiscation → PAROLE
 		this.bustTimer = 0;
 		HangProbe.mark('preso: sair do veículo');
 		const trunkMsg = CarCare.onBusted(this, this.activeCar || this._lastCar);      // revista do porta-malas (o fundo falso esconde)
 		Robbery.abort(); Traces.onBusted();
 		this._dropFromCar();
 		this._closeInventory();
-		HangProbe.mark('preso: multa e confisco');
-		if (lost === null) lost = this.inventory.fine((light ? O.fine : Config.police.fineBase) * (1 - (SkillTree.m.fine || 0)));
-		if (!(light && O.keepWeapons)) this.inventory.confiscate();        // preso: perde TODAS as armas (1★: delito leve, fica com elas)
 		HangProbe.mark('preso: cédulas marcadas');
 		if (typeof Banks !== 'undefined') Banks.lose();                    // (e as cédulas marcadas)
 		this._respawn('station', hours === null && light ? this._wakeInfo(O.hours).hours : hours);
-		this._flash((light ? `⚠ Detido por delito leve: multa de ${brl(lost)}. Liberado com seus pertences` : `⚠ PRESO! Multa de ${brl(lost)}. Armas confiscadas. Você acordou na delegacia`) + (trunkMsg || ''));
+		this._flash(this.heat.arrestSummary(report) + (trunkMsg || ''));
 	}
 
 	// Desce do veículo no lugar onde ele parou (o jogador a pé fica sem posição enquanto dirige).
@@ -2685,7 +2681,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 	_wasted(lost = null, hours = null, where = 'hospital') {
 		HangProbe.arm('morte: ' + where, 600);
 		HangProbe.mark('morte: zerar procurado');
-		this.wanted.bust();
+		const custody = this.heat.onPlayerDown();                      // killed during a chase: the police take the player in (ARRESTED)
 		this.bustTimer = 0;
 		HangProbe.mark('morte: sair do veículo');
 		Robbery.abort();
@@ -2698,6 +2694,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (lost === null) { lost = this.inventory.fine(0.5 * (1 - (SkillTree.m.hospital || 0))); this.inventory.ravage(); }
 		this._respawn(where, hours);
 		if (where === 'hospital') this._flash(`☠ Você acordou no hospital. Conta: -${brl(lost)}`);
+		if (custody) this._flash(this.heat.arrestSummary(custody));
 	}
 
 	_closeInventory() {
@@ -2733,7 +2730,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			// O motorista também sente a batida forte.
 			if (dv > 8) this.player.takeDamage((dv - 8) * 3);
 		} else if (src === 'player' && dv > 5 && this.wanted) {
-			this.wanted.reportCrime();
+			this.heat.commit('hit_and_run');
 		}
 	}
 

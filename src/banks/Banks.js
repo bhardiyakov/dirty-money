@@ -420,7 +420,7 @@ class BankPowerJob extends CareerJob {
         g.lockpick.start({ difficulty: 1.25 * (1 - 0.07 * g.careers.by.burglar.skill('eletronica')), onEnd: (res) => {
             if (g.player.action && g.player.action.name === 'pick') g.player.action.timer = 0;
             if (res === 'ok') { Banks.plans[this.bank.id].power = Economy.day; this.succeed(0, 200, `energia cortada: a ${this.bank.name} está às escuras até a meia-noite (câmeras e laser desligados)`); }
-            else if (res === 'alarm') { g.wanted.reportCrime(); g.wanted.ensureLevel(1); this.fail('curto-circuito — a polícia foi chamada'); }
+            else if (res === 'alarm') { g.heat.commit('burglary', CrimeExposure.CAMERA); this.fail('curto-circuito — a polícia foi chamada'); }
         } });
         return true;
     }

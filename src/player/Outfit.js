@@ -64,7 +64,7 @@ const Outfit = {
         // ---- acessórios
         oculos_escuros: { slot: 'eyes', name: 'Óculos escuros', base: 180, look: { glasses: true }, fx: { sight: 0.08 }, desc: 'A polícia te reconhece 8% mais de perto' },
         relogio_ouro:   { slot: 'wrist', name: 'Relógio de ouro', base: 5500, look: { watch: true }, fx: { fence: 0.12, price: 0.02 }, desc: 'Status: receptador paga 12% mais' },
-        luvas:          { slot: 'hands', name: 'Luvas de couro', base: 120, look: { gloves: true }, fx: { lose: 0.08, melee: 0.05 }, desc: 'Sem digitais: a polícia perde o rastro mais rápido' },
+        luvas:          { slot: 'hands', name: 'Luvas de couro', base: 120, look: { gloves: true }, fx: { lose: 0.08, melee: 0.05 }, desc: 'A polícia perde o rastro mais rápido' },
         // ---- rosto (máscaras): escondem o rosto de testemunhas e câmeras nos assaltos (crime/Traces.js) — mas mascarado na rua a polícia
         //      estranha de longe. Tecla K põe/tira a última máscara usada.
         balaclava:      { slot: 'face', name: 'Balaclava (touca ninja)', base: 90, mask: true, look: { mask: 'balaclava' }, fx: { sight: -0.3 }, desc: 'Rosto coberto: testemunha e câmera não te identificam. Na rua, a polícia estranha de longe (K tira)' },

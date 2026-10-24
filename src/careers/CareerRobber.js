@@ -47,18 +47,34 @@ class RobberCareer extends Career {
         const H = typeof Heists !== 'undefined' ? Heists.summary(g) : '';
         return `<div class="cr-row"><span>Assaltos</span><b>${d.robs || 0}</b></div><div class="cr-row"><span>Maior assalto</span><b>${brl(d.best || 0)}</b></div><div class="cr-row"><span>Total roubado</span><b>${brl(d.total || 0)}</b></div>
             <h3 style="font-size:13px;margin-top:6px">PORTE QUE VOCÊ JÁ ASSALTA</h3>${tiers}
-            <h3 style="font-size:13px;margin-top:6px">RASTROS E INQUÉRITO</h3>
-            <div class="cr-row"><span>Inquérito da Polícia Civil</span><b>${Math.round(T.heat)}%${T.warrant ? ' · MANDADO' : ''}</b></div>
+            <h3 style="font-size:13px;margin-top:6px">${I18n.t('heat.panel.title')}</h3>
+            ${this._recordRows(g.heat)}
             <div class="cr-row"><span>Descrição da sua roupa</span><b>${T.desc ? (T.matches() ? 'BATE COM VOCÊ' : 'roupa trocada') : '—'}</b></div>
-            <div class="cr-row"><span>Placas marcadas</span><b>${T.plates.length ? T.plates.map((p) => p.label).join(', ') : '—'}</b></div>
-            <div class="cr-btns"><button data-act="lawyer" ${T.heat < 5 && !T.warrant ? 'disabled' : ''}>⚖ Advogado: esfriar o inquérito (−45%) — ${brl(T.lawyerCost())} limpos</button></div>
             <h3 style="font-size:13px;margin-top:6px">GOLPES (joalherias)</h3>${H}
             <div class="cr-btns"><button data-act="board">🗺 Abrir o quadro do golpe</button></div>
-            <p class="cr-dim">Antes de entrar: balaclava (K põe/tira), luvas e uma muda de roupa. Lá dentro: arranque o HD do DVR, não deixe refém fugir e saia antes do cronômetro. Mercadoria pesada vai para o receptador da favela.</p>`;
+            <p class="cr-dim">Antes de entrar: balaclava (K põe/tira) e uma muda de roupa. Lá dentro: arranque o HD do DVR, não deixe refém fugir e saia antes do cronômetro. Mercadoria pesada vai para o receptador da favela.</p>`;
+    }
+
+    // The police record (HeatStateMachine) and its two money sinks: a lawyer on retainer and the hacker who wipes the record.
+    _recordRows(heat) {
+        const record = heat.record, hacker = heat.hackerQuote();
+        const row = (label, value) => `<div class="cr-row"><span>${I18n.t(label)}</span><b>${value}</b></div>`;
+        const crimes = record.isDirty
+            ? I18n.t('heat.panel.crimesValue', { count: record.count, severity: record.totalSeverity }) + (heat.hasWarrant ? ' · ' + I18n.t('heat.panel.warrant') : '')
+            : '—';
+        const lawyer = heat.hasLawyer ? I18n.t('heat.panel.lawyerUntil', { hours: Math.ceil(heat.lawyerUntil - heat.now()) }) : '—';
+        return row('heat.panel.state', I18n.t('heat.state.' + heat.state))
+            + row('heat.panel.crimes', crimes)
+            + row('heat.panel.lawyerRow', lawyer)
+            + `<div class="cr-btns">
+                <button data-act="lawyer" ${heat.hasLawyer ? 'disabled' : ''}>${I18n.t('heat.panel.lawyerButton', { cost: brl(HEAT_TUNING.lawyer.retainer), days: HEAT_TUNING.lawyer.days })}</button>
+                <button data-act="hacker" ${hacker ? '' : 'disabled'}>${hacker ? I18n.t('heat.panel.hackerButton', { cost: brl(hacker) }) : I18n.t('heat.panel.hackerNothing')}</button>
+            </div>`;
     }
 
     action(name) {
-        if (name === 'lawyer') return Traces.lawyer(this.g);
+        if (name === 'lawyer') return this.g.heat.hireLawyer();
+        if (name === 'hacker') return this.g.heat.hireHacker();
         if (name === 'board') { if (this.g.menu.isOpen) this.g.menu.close(); Heists.openBoard(this.g); return null; }
         return null;
     }

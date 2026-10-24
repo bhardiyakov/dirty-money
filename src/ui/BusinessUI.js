@@ -118,7 +118,7 @@ class BusinessUI {
         h += `<div class="bz-box"><h3>🛒 À VENDA PERTO DE VOCÊ <small>compra no balcão da loja · dinheiro limpo</small></h3>
             <table><tr><th>Loja</th><th>Tipo</th><th>Preço</th><th>Lucro/dia (est.)</th><th>Distância</th><th></th></tr>
             ${M.map((m) => { const fake = { price: Business.price(m.d), up: {}, mkt: 0, style: m.d.style }; return `<tr><td>${m.name}</td><td>${(Economy.STYLES[m.d.style] || {}).label || ''}</td><td>${brl(fake.price)}</td><td>${brl(Business.estimate(fake))}</td><td>${Math.round(m.dist)} m</td><td><button data-biz="map" data-id="${m.id}">📍</button></td></tr>`; }).join('')}</table>
-            <p class="bz-dim">Lojas da favela viram fachada do C.V (comprar o ponto, no balcão). Loja de armas pede ficha limpa (inquérito abaixo de 40%).</p></div>`;
+            <p class="bz-dim">Lojas da favela viram fachada do C.V (comprar o ponto, no balcão). Loja de armas pede ficha limpa (nenhum crime na ficha).</p></div>`;
         el.innerHTML = h;
     }
 }

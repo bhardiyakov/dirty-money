@@ -218,7 +218,7 @@ class CarDamage {
 
 		// Consequências para o procurado.
 		if (src === 'player') {
-			g.wanted.reportCrime();
+			g.heat.commit('explosion');
 			if (g.policeManager) {
 				g.policeManager.alertNear(p, 90);                              // a polícia ouve e vai ao local
 				if (car.role && car.role !== 'block') g.wanted.addStars(1, 'kill');   // destruiu uma viatura/veículo militar
@@ -246,7 +246,7 @@ class CarDamage {
 		if (fd < 90) g.camera.shake(1.8 * (1 - fd / 90));
 		this._blast(x, z, Config.crash.explosionR * bl, src, null, bl);
 		if (src === 'player') {
-			g.wanted.reportCrime();
+			g.heat.commit('explosion');
 			if (g.policeManager) g.policeManager.alertNear({ x, z }, 110);
 		}
 		if (g.npcManager) g.npcManager.alertViolence({ x, z }, 55);
