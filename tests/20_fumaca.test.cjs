@@ -25,9 +25,10 @@ module.exports = {
             const ex = await page.evaluate(() => {
                 const b = game.activeCar, G = b.visual.lampGeom, f = b.fwdToRef(new BABYLON.Vector3()), rx = f.z, rz = -f.x;
                 const X = b.position.x + f.x * G.ez + rx * G.ex, Z = b.position.z + f.z * G.ez + rz * G.ex;
-                // a baforada mais nova: perto da boca do cano
-                const young = game.carLights.puffs.p.filter((q) => q.on).sort((a, q) => a.age - q.age)[0];
-                return young ? { d: Math.hypot(young.x - X, young.z - Z), y: young.y, ey: G.ey, age: young.age, n: game.carLights.puffs.live } : null;
+                // a baforada nova (até 0,3 s) mais perto da boca do cano — a mais nova de todas pode ser de outro carro por perto
+                const near = (q) => Math.hypot(q.x - X, q.z - Z);
+                const young = game.carLights.puffs.p.filter((q) => q.on && q.age < 0.3).sort((a, q) => near(a) - near(q))[0];
+                return young ? { d: near(young), y: young.y, ey: G.ey, age: young.age, n: game.carLights.puffs.live } : null;
             });
             c.ok(!!ex, 'o carro do jogador (pego estacionado, motor ligado) solta fumaça do escapamento');
             if (ex) c.ok(ex.d < 0.6 && Math.abs(ex.y - ex.ey) < 0.3, `a fumaça sai da boca do cano (${ex.d.toFixed(2)} m dela, altura ${ex.y.toFixed(2)}/${ex.ey.toFixed(2)} m)`);

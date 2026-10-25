@@ -33,7 +33,7 @@ class CarLights {
                 beam: this.glow.alloc(),
                 cone: [this.cones.alloc(), this.cones.alloc()],
                 lamps: car._lamps || (car._lamps = car.spec.lamps || CarSheet.lamps(car.spec.id)),      // (guardado no carro: ele entra e sai do alcance)
-                puffT: Math.random(),
+                puffT: Math.random() * 0.25,       // (defasa os carros, mas no máximo um intervalo da marcha lenta: o carro que entra no alcance — ou que você pega — já solta fumaça; até 1 s demorava)
             };
             this.slots.set(car, s);
         }
