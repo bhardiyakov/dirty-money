@@ -161,9 +161,13 @@ Referências: Need for Speed Underground 2 (rachas, reputação no meio, carros 
 - **Prêmios e reputação**: rua paga sujo (+25% à noite), autódromo paga limpo; 2º leva 40% e 3º 15% (no 1×1, só o vencedor).
   Reputação por colocação + 25 por takedown + 10 pela largada perfeita; 7 níveis (Desconhecido → Rei das ruas) liberam as provas
   maiores. Polícia a menos de 55 m de um racha na rua = 1★. Reputação, estatísticas e recordes vão no save (`racing`).
-- **Burnout** (`Game._burnout`, `Vehicle.rollover`, `Config.crash`): acima de `rollDv` a batida pode capotar o carro (de lado ou,
-  de frente, cambalhota — meias-voltas animadas no CarArt3D); acima de `rollAlways` capota sempre; acima de `explodeDv` explode
-  (o do jogador, só 6 m/s acima), com câmera lenta e tremor. Capotou de teto para baixo = carro perdido.
+- **Burnout** (`Game._burnout`, `Game._crashPair`, `Vehicle.rollover`, `Config.crash`): a força da batida é a queda brusca de
+  velocidade (dv) contra muro e poste e, carro contra carro, a velocidade com que os dois se aproximavam antes da pancada (o dv medido
+  fica em 13–16 m/s mesmo a 140 km/h: o choque divide o impulso e a física espalha a pancada; e carro estacionado atingido nem
+  registra batida própria — antes disso, batida entre carros nunca capotava). Pancada **de lado** acima de `rollDv` faz rolar (sempre
+  acima de `rollAlways`, ≈ 85 km/h na porta de outro carro); **de frente ou de trás**, só acima de `flipDv`, e dá cambalhota (≈ muro de
+  frente acima de 100–110 km/h); acima de `explodeDv` explode (o do jogador, só 8 m/s acima). Valem os dois carros da batida, cada um
+  uma vez; com o carro do jogador, câmera lenta e tremor. Capotou de teto para baixo = carro perdido.
 
 ## Polícia: fuga possível a partir de 3★ (`src/police/*`, `Config.wanted` / `Config.heli`)
 

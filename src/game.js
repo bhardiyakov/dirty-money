@@ -2730,7 +2730,15 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		}
 
 		RoadRage.onImpact(this, car, dv, dvx, dvz);                       // batida entre dois veículos: às vezes vira briga de trânsito
-		this._burnout(car, dv, dvx, dvz, src);                             // capota / explode (batida muito forte)
+		// capota / explode (batida muito forte): carro contra carro, vale a velocidade de aproximação — para os DOIS (o atingido, parado,
+		// nem registra batida própria: estacionado não passa pelo detector)
+		const hit = this._crashPair(car);
+		this._burnout(car, hit ? Math.max(dv, hit.closing) : dv, dvx, dvz, src);
+		if (hit) {
+			const o = hit.car, oSrc = car === ac ? 'player' : 'crash';
+			this._burnout(o, hit.closing, hit.nx * hit.closing, hit.nz * hit.closing, oSrc);
+			if (typeof StreetRacing !== 'undefined') StreetRacing.onImpact(this, o, hit.closing, oSrc);
+		}
 		if (typeof StreetRacing !== 'undefined') StreetRacing.onImpact(this, car, dv, src);      // corrida: takedown, carro de corrida batido
 
 		const p = car.position;
@@ -2748,15 +2756,36 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		}
 	}
 
-	// BATIDA DE BURNOUT: acima de Config.crash.rollDv o carro pode capotar (rola de lado, ou dá cambalhota numa batida de frente — ver
-	// Vehicle.rollover) e acima de explodeDv explode na hora (o do jogador, só bem acima). Com o carro do jogador: câmera lenta e tremor.
+	// O outro carro encostado nesta batida e a velocidade com que os dois se aproximavam (m/s, na linha entre eles, com as velocidades de
+	// ANTES da pancada: _cmd é a que o carro tinha comandado no quadro anterior; estacionado = parado). null = bateu em muro, poste, gente.
+	_crashPair(car) {
+		if (!this.vehicleManager || car.isBike || car.spec.boat || car.isChopper) return null;
+		const p = car.position;
+		let best = null, bd = Infinity;
+		for (const o of this.vehicleManager.vehicles) {
+			if (o === car || o.isBike || o.spec.boat || o.isChopper || o._asleep) continue;
+			const d = hypot(o.position.x - p.x, o.position.z - p.z);
+			if (d < car.halfLen + o.halfLen + 0.8 && d < bd) { bd = d; best = o; }
+		}
+		if (!best) return null;
+		const nx = (best.position.x - p.x) / (bd || 1), nz = (best.position.z - p.z) / (bd || 1);
+		const a = car._cmd || car.velocity, still = !best.controlled && (best.mode === 'parked' || best.mode === 'abandoned'), b = !still && best._cmd;
+		const closing = (a.x * nx + a.z * nz) - (b ? b.x * nx + b.z * nz : 0);
+		return closing > 0 ? { car: best, closing, nx, nz } : null;
+	}
+
+	// BATIDA DE BURNOUT (força `dv`, ver Config.crash): pancada DE LADO acima de rollDv pode fazer o carro rolar; DE FRENTE ou DE TRÁS,
+	// só acima de flipDv, e aí ele dá cambalhota (Vehicle.rollover). Acima de explodeDv explode na hora (o do jogador, só bem acima).
+	// Com o carro do jogador: câmera lenta e tremor. (dvx, dvz) = para onde o carro foi empurrado; cada carro conta uma vez por batida.
 	_burnout(car, dv, dvx, dvz, src) {
-		const C = Config.crash;
-		if (car.isBike || car.spec.boat || car.isChopper || dv < C.rollDv || car.tumble || car.destroyed) return;
-		const f = car.fwdToRef(this._bf || (this._bf = new BABYLON.Vector3())), l = Math.hypot(f.x, f.z) || 1, fx = f.x / l, fz = f.z / l;
-		const side = (dvx * fz - dvz * fx) / dv, front = (dvx * fx + dvz * fz) / dv;           // de onde veio a pancada (no referencial do carro)
-		const mine = car === this.activeCar && this.mode === 'car';
-		const chance = dv >= C.rollAlways ? 1 : (dv - C.rollDv) / (C.rollAlways - C.rollDv) * 0.65;
+		const C = Config.crash, now = performance.now();
+		if (car.isBike || car.spec.boat || car.isChopper || dv < C.rollDv || car.tumble || car.destroyed || now - (car._burnT || -1e9) < 400) return;
+		car._burnT = now;
+		const f = car.fwdToRef(this._bf || (this._bf = new BABYLON.Vector3())), l = Math.hypot(f.x, f.z) || 1, fx = f.x / l, fz = f.z / l, m = Math.hypot(dvx, dvz) || 1;
+		const side = (dvx * fz - dvz * fx) / m, front = (dvx * fx + dvz * fz) / m;             // de onde veio a pancada (no referencial do carro)
+		const mine = car === this.activeCar && this.mode === 'car', frontal = Math.abs(front) > Math.abs(side);
+		const lo = frontal ? C.flipDv : C.rollDv, hi = frontal ? C.flipAlways : C.rollAlways;
+		const chance = dv >= hi ? 1 : dv < lo ? 0 : 0.25 + 0.75 * (dv - lo) / (hi - lo);
 		const rolled = Math.random() < chance && car.rollover(dv, side, front);
 		if (dv > C.explodeDv + (mine ? C.playerExplodeExtra : 0) && car.spec.fire !== false) {
 			car.takeDamage(car.hp + 1, src);
