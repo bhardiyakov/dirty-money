@@ -3,7 +3,7 @@
 // atualizável: 1 draw call. Três tipos de visual (kind):
 //   'glow'  brilho aditivo: núcleo + halo com degradê suave/borrado (lâmpadas, faróis, giroflex, postes)
 //   'cone'  feixe de luz aditivo no chão (faróis): trapézio com bordas e ponta difusas
-//   'puff'  fumaça com blending normal: disco em 3 tons (escapamento)
+//   'puff'  disco em 3 tons com blending normal (gotas, objetos arremessados; a fumaça dos veículos é a PuffSystem, em CarLights)
 //   'ring'  anel suave que se abre (marolas)   'arc'  o pedaço da FRENTE de um anel (a borda v = 0 do quad): onda que vai numa direção
 //   'flame' língua de fogo (CarDamage.FireField): cor = (calor 0..1, semente, -, alfa); a base é a borda v = 1, a ponta a v = 0
 //   'dash'  traço nítido (blending normal): cápsula clara com contorno escuro ao longo de v — a linha tracejada da mira de arremesso

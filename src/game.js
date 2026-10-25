@@ -170,6 +170,7 @@ class Game {
 		this.heliFall = null;                         // jogador caindo do helicóptero
 		this._spawnChoppers();
 		this.waterFx = new WaterFx(this.scene);       // marolas ao vadear/nadar
+		this.carLights.waterFx = this.waterFx;        // (a água que os pneus levantam na chuva)
 		this.dev = new DevMode(this);                // modo dev (ligado nas Configurações): painel de testes
 		this.menu = new PauseMenu(this);             // menu de pausa (mapa HD, inventário, configurações)
 		this.minimap.iconOf = (k) => this.menu.icon(k);      // selos dos lugares no radar (os mesmos do mapa de pausa)

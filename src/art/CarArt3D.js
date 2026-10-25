@@ -708,6 +708,11 @@ class Car3DActor {
 		this.lampGeom = this.kind === 'moto' ? { y: D.h * this.k * 0.72, roof: D.h * this.k, x: 0.04 * this.k, zF: this.hl * 0.88, zR: -this.hl * 0.92 }
 			: this.kind === 'boat' ? { y: D.h * this.k * 0.6, roof: D.h * this.k, x: this.hw * 0.5, zF: this.hl * 0.9, zR: -this.hl * 0.95 }
 			: { y: D.h * this.k * 0.42, roof: D.h * this.k, x: this.hw * 0.68, zF: this.hl * 0.96, zR: -this.hl * 0.96 };
+		// the tailpipe's mouth (CarLights puts the exhaust smoke there; m from the centre: x = right, y = above the road, z = forward):
+		// a car's under the rear bumper on the left; a motorbike's beside the rear wheel on the right, a little higher
+		const G = this.lampGeom, R = this.R;
+		if (this.kind === 'moto') { G.ex = this.hw * 0.42; G.ey = R * 1.15; G.ez = -this.hl * 0.8; }
+		else if (this.kind === 'car') { G.ex = -this.hw * 0.55; G.ey = Math.min(0.42, R * 0.95); G.ez = -this.hl * 1.0; }
 		// moto: o ponto do banco (m no jogo, a partir do centro: z = frente, y = altura) — o RiderActor põe o piloto ali
 		this.seat = D.seat ? { z: D.seat[0] * this.k, y: D.seat[1] * this.k } : null;
 		// inclinação do veículo inteiro (moto, barco, helicóptero): bank = deita para a direita (+), tilt = nariz para baixo (+)

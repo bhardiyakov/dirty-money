@@ -175,33 +175,48 @@ class CarLights {
                 vis.setLamps(hI, tI, sigOn(-1), sigOn(1), car.sirenOn ? (sirenPhase ? 1 : 2) : 0, rev);
             }
 
-            // ---- Fumaça do escapamento (cano traseiro, lado esquerdo). Bicicleta não tem.
-            if (alive && !car.spec.noExhaust) {
-                const speed = Math.abs(car.forwardSpeed);
-                const rate = car.sirenOn ? 11 : (car.accelerating ? 9 : (speed > 1 ? 2.6 : 1.4));
+            // ---- Fumaça do escapamento: sai da BOCA do cano (carro 3D: embaixo do para-choque, à esquerda; moto: ao lado da roda de
+            // trás, à direita — CarArt3D.lampGeom ex/ey/ez; desenho: atrás da lanterna esquerda), para trás e para cima. Pequena e densa
+            // na saída, abrindo e clareando até sumir; muitas e pequenas, num rastro contínuo (acelerando, mais e mais escura).
+            // Bicicleta não tem.
+            // (o carro do jogador conta com o motor ligado, mesmo tendo sido pego estacionado)
+            if ((alive || (car.controlled && !car.destroyed && !car.engineDead)) && !car.spec.noExhaust) {
+                const speed = Math.abs(car.forwardSpeed), acc = !!car.accelerating;
+                const rate = car.sirenOn ? 16 : (acc ? 18 : (speed > 1 ? 7 : 4));
                 s.puffT -= dt;
-                if (s.puffT <= 0) {
-                    s.puffT = (0.7 + Math.random() * 0.6) / rate;
-                    const ex = p.x + fx * (L.zR + 0.15) - rx * 0.55, ez = p.z + fz * (L.zR + 0.15) - rz * 0.55;
-                    const heavy = car.accelerating ? 1 : 0.55;
-                    this.puffs.emit(ex, 0.9, ez, -fx * (1.0 + Math.random()) + (Math.random() - 0.5) * 0.9, 0.7 + Math.random() * 0.4, -fz * (1.0 + Math.random()) + (Math.random() - 0.5) * 0.9,
-                        0.3 * heavy + 0.1, 0.95 + heavy * 0.7, 0.7 + Math.random() * 0.5, car.accelerating ? 0.55 : 0.32);
+                for (let guard = 0; s.puffT <= 0 && guard < 4; guard++) {
+                    s.puffT += (0.75 + Math.random() * 0.5) / rate;
+                    const ez = G3 && G3.ez != null ? G3.ez : L.zR, ex = G3 && G3.ex != null ? G3.ex : -L.x * 0.75, ey = (G3 && G3.ey != null ? G3.ey : 0.32) + el;
+                    const x0 = p.x + fx * ez + rx * ex, z0 = p.z + fz * ez + rz * ex, v = car.velocity, out = 1.4 + Math.random() * 1.2;
+                    // (a fumaça nasce com um pouco da velocidade do carro — sai do cano, não aparece parada atrás dele)
+                    this.puffs.emit(x0, ey, z0, v.x * 0.35 - fx * out + (Math.random() - 0.5) * 0.35, 0.35 + Math.random() * 0.35, v.z * 0.35 - fz * out + (Math.random() - 0.5) * 0.35,
+                        0.16, acc ? 1.7 : 1.15, acc ? 1.2 + Math.random() * 0.5 : 0.9 + Math.random() * 0.45, acc ? 0.55 : 0.36, acc ? CarLights.EXHAUST_HARD : CarLights.EXHAUST);
                 }
+                if (s.puffT < 0) s.puffT = 0;
             }
 
-            // ---- Chuva: o carro em movimento levanta água dos pneus (leque branco-azulado que sobe e se espalha atrás das rodas).
-            const W = Weather.cur;
-            if ((alive || car.controlled) && W && W.k > 0.12 && !car.spec.boat) {
+            // ---- Chuva: o veículo em movimento levanta ÁGUA dos pneus — não fumaça: jorros de água (WaterSpray, o mesmo desenho dos
+            // barcos: jato azul que sobe, estoura em espuma e cai) atrás das rodas e gotas que voam e caem (WaterFx.splash). Visto de
+            // lado, o leque inclinado para trás; de trás/de frente, a coroa. Carro, moto e bicicleta, cada um no seu tamanho.
+            const W = Weather.cur, wfx = this.waterFx;
+            if (wfx && (alive || car.controlled) && W && W.k > 0.12 && !car.spec.boat && !Interiors.active) {
                 const v = car.velocity, sp = hypot(v.x, v.z);
                 if (sp > 2.5) {
                     s.sprayT = (s.sprayT || 0) - dt;
                     if (s.sprayT <= 0) {
-                        s.sprayT = 1 / Math.min(60, sp * (0.9 + 2.2 * W.k));
-                        const hl = car.halfLen, hw = car.halfW, vx = v.x / sp, vz = v.z / sp, front = Math.random() < 0.35, side = Math.random() < 0.5 ? -1 : 1;
-                        const wz = front ? hl * 0.62 : -hl * 0.62, wx = side * (hw - 0.12);
-                        const px = p.x + fx * wz + rx * wx, pz = p.z + fz * wz + rz * wx, spd = Math.min(sp, 22);
-                        this.puffs.emit(px, 0.28, pz, -vx * spd * 0.22 + rx * side * (0.7 + Math.random() * 1.1) + (Math.random() - 0.5) * 0.6, 0.5 + Math.random() * 0.6 + spd * 0.03,
-                            -vz * spd * 0.22 + rz * side * (0.7 + Math.random() * 1.1) + (Math.random() - 0.5) * 0.6, 0.3, 1.1 + spd * 0.06, 0.5 + Math.random() * 0.3, 0.42 + 0.25 * W.k, [0.86, 0.93, 1.0]);
+                        const bike = car.spec.bike === 'bike', moto = !!car.isBike && !bike, kW = 0.45 + W.k;
+                        s.sprayT = (bike ? 0.16 : moto ? 0.11 : 0.075) / Math.min(1.6, kW * Math.min(1.5, sp / 9));
+                        const hl = car.halfLen, hw = car.halfW, vx = v.x / sp, vz = v.z / sp;
+                        // roda de trás (de vez em quando a da frente); carro: um lado por vez
+                        const front = Math.random() < 0.2, side = car.isBike ? 0 : (s.sprayS = -(s.sprayS || 1));
+                        const wz = (front ? 0.62 : -0.66) * hl, wx = side * (hw - 0.15);
+                        const px = p.x + fx * wz + rx * wx - vx * 0.25, pz = p.z + fz * wz + rz * wx - vz * 0.25;
+                        const yaw = CompassCamera.yaw || 0, sx = Math.cos(yaw), sz = -Math.sin(yaw);      // ("direita" da tela, no chão)
+                        const across = Math.abs(-vx * sx - vz * sz) > 0.55;                          // (água indo para o lado da tela)
+                        const kind = bike ? 'kick' : moto ? 'stroke' : (across ? 'tail' : 'tailC');
+                        const keep = Math.min(sp, 20) * 0.3;
+                        wfx.spray.emit(px, pz, { kind, dir: [-vx, -vz], vx: vx * keep, vz: vz * keep, drag: 3.5, a: (car.isBike ? 0.6 : 0.75) + 0.25 * W.k, life: (bike ? 0.34 : 0.48) + Math.random() * 0.12 });
+                        if (Math.random() < 0.5 + 0.4 * W.k) wfx.splash(px, pz, bike ? 2 : moto ? 3 : 4, (bike ? 0.55 : 0.8) + Math.min(sp, 20) * 0.02, -vx * 0.6 + vx * keep * 0.4, -vz * 0.6 + vz * keep * 0.4, 0.12);
                     }
                 }
             }
@@ -212,20 +227,101 @@ class CarLights {
     }
 }
 
+// Cores da fumaça do escapamento: cinza claro em marcha lenta, mais escura acelerando forte.
+CarLights.EXHAUST = [0.78, 0.79, 0.82];
+CarLights.EXHAUST_HARD = [0.56, 0.57, 0.6];
+
 // Cores do giroflex (azul forte/fraco, vermelho fraco/forte) e do reflexo no chão (azul/vermelho): constantes, sem array novo por quadro.
 CarLights.SIREN = [[0.2, 0.45, 1.0], [0.12, 0.2, 0.5], [0.5, 0.08, 0.08], [1.0, 0.18, 0.15], [0.15, 0.3, 0.9], [0.9, 0.12, 0.1]];
 
 // ----------------------------------------------------------------------------
-// PuffSystem — pool de baforadas de fumaça (cada uma é um quad do GlowBatch 'puff').
+// PuffSystem — pool de baforadas de fumaça (escapamento, pneu cantando, motor quebrado, fogo, explosões): uma malha só (1 draw call).
+// Cada baforada é um quad VIRADO PARA A CÂMERA (billboard, montado no shader a partir do centro, do canto e do tamanho) e desenhado
+// MACIO: o alfa cai como uma gaussiana até a borda (sem disco recortado) e uma névoa de ruído — diferente em cada baforada e girando
+// devagar com a idade — faz o volume de fumaça; o lado de cima, mais claro (a luz vem de cima). Muitas baforadas pequenas se somam
+// num rastro contínuo e borrado. A profundidade é puxada para a câmera (meia baforada): a parte de baixo, perto do chão, não some
+// dentro dele, e o carro 3D na frente continua escondendo a fumaça que sai atrás dele.
 // ----------------------------------------------------------------------------
 class PuffSystem {
+    static register() {
+        if (BABYLON.Effect.ShadersStore.smokePuffVertexShader) return;
+        BABYLON.Effect.ShadersStore.smokePuffVertexShader = `
+            precision highp float;
+            attribute vec3 position;         // centro da baforada (o mesmo nos 4 cantos)
+            attribute vec2 uv;               // canto (0..1)
+            attribute vec4 color;
+            attribute vec3 data;             // tamanho (m), semente, idade (0..1)
+            uniform mat4 view;
+            uniform mat4 projection;
+            varying vec2 vUV;
+            varying vec4 vColor;
+            varying vec3 vData;
+            void main(void) {
+                vUV = uv; vColor = color; vData = data;
+                vec4 p = view * vec4(position, 1.0);
+                p.xy += (uv - 0.5) * vec2(1.0, -1.0) * data.x * 1.35;            // (a borda macia: o quad passa do tamanho visível)
+                p.z -= data.x * 0.5;                                          // (puxada para a câmera: não entra no chão)
+                gl_Position = projection * p;
+            }`;
+        BABYLON.Effect.ShadersStore.smokePuffFragmentShader = `
+            precision highp float;
+            varying vec2 vUV;
+            varying vec4 vColor;
+            varying vec3 vData;
+            uniform vec3 tint;
+            float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+            float vnoise(vec2 p) {
+                vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+                return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+            }
+            void main(void) {
+                if (vColor.a <= 0.003) discard;
+                vec2 p = vUV * 2.0 - 1.0;
+                float r2 = dot(p, p);
+                if (r2 >= 1.0) discard;
+                float a = exp(-r2 * 2.2) * sqrt(1.0 - r2);                       // gaussiana que chega a 0 na borda: sem contorno
+                float ang = vData.y * 6.2832 + vData.z * 1.4, cs = cos(ang), sn = sin(ang);
+                vec2 q = mat2(cs, -sn, sn, cs) * p * 1.9 + vData.y * 37.0;
+                float n = vnoise(q) * 0.55 + vnoise(q * 2.07 + 11.0) * 0.3 + vnoise(q * 4.3 + 23.0) * 0.15;   // volume (três oitavas)
+                float lump = smoothstep(0.18, 0.78, n + 0.32 * (1.0 - r2) - 0.12 * vData.z);                    // tufos, que se desfazem
+                a *= mix(1.0, 0.04 + 1.45 * lump, 0.95 - 0.3 * vData.z);
+                float shade = 0.78 + 0.22 * lump + 0.12 * clamp(-p.y, -1.0, 1.0); // (miolo dos tufos claro, frestas e base mais escuras)
+                gl_FragColor = vec4(vColor.rgb * shade * tint, clamp(a, 0.0, 1.0) * vColor.a);
+            }`;
+    }
+
     constructor(scene, capacity) {
-        this.batch = new GlowBatch(scene, capacity, 'puffs', 'puff');
+        PuffSystem.register();
         this.n = capacity;
-        for (let i = 0; i < capacity; i++) this.batch.alloc();
+        this.pos = new Float32Array(capacity * 12);
+        this.col = new Float32Array(capacity * 16);
+        this.dat = new Float32Array(capacity * 12);
+        const uv = new Float32Array(capacity * 8), idx = new Uint32Array(capacity * 6);
+        for (let i = 0; i < capacity; i++) {
+            const u = i * 8, b = i * 4, o = i * 6;
+            uv[u + 2] = 1; uv[u + 5] = 1; uv[u + 6] = 1; uv[u + 7] = 1;         // (0,0) (1,0) (0,1) (1,1)
+            idx[o] = b; idx[o + 1] = b + 1; idx[o + 2] = b + 2; idx[o + 3] = b + 2; idx[o + 4] = b + 1; idx[o + 5] = b + 3;
+        }
+        const mesh = this.mesh = new BABYLON.Mesh('puffs', scene), vd = new BABYLON.VertexData();
+        vd.positions = this.pos; vd.colors = this.col; vd.uvs = uv; vd.indices = idx;
+        vd.applyToMesh(mesh, true);
+        mesh.setVerticesData('data', this.dat, true, 3);
+        const m = new BABYLON.ShaderMaterial('puffsMat', scene, { vertex: 'smokePuff', fragment: 'smokePuff' }, {
+            attributes: ['position', 'uv', 'color', 'data'], uniforms: ['view', 'projection', 'tint'], needAlphaBlending: true,
+        });
+        m.alphaMode = BABYLON.Engine.ALPHA_COMBINE;
+        m.backFaceCulling = false;
+        m.disableDepthWrite = true;
+        m.setColor3('tint', SpriteMaterial.sharedTint());
+        mesh.material = m;
+        mesh.renderingGroupId = 1;
+        mesh.isPickable = false;
+        mesh.alwaysSelectAsActiveMesh = true;
+        mesh.doNotSyncBoundingInfo = true;
         this.p = [];
-        for (let i = 0; i < capacity; i++) this.p.push({ on: false, age: 0, life: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s0: 0.3, s1: 1, a0: 0.4 });
+        for (let i = 0; i < capacity; i++) this.p.push({ on: false, age: 0, life: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s0: 0.3, s1: 1, a0: 0.4, seed: 0 });
         this.next = 0;
+        this.live = 0;
     }
 
     // color: [r,g,b] da baforada (padrão: cinza do escapamento); fumaça de motor quebrado/fogo usa tons escuros.
@@ -233,30 +329,44 @@ class PuffSystem {
         for (let k = 0; k < this.n; k++) {
             const q = this.p[(this.next + k) % this.n];
             if (q.on) continue;
-            q.on = true; q.age = 0; q.life = life; q.c = color;
+            q.on = true; q.age = 0; q.life = life; q.c = color; q.seed = Math.random();
             q.x = x; q.y = y; q.z = z; q.vx = vx; q.vy = vy; q.vz = vz; q.s0 = s0; q.s1 = s1; q.a0 = alpha;
             this.next = (this.next + k + 1) % this.n;
+            this.live++;
             return;
         }
     }
 
     update(dt) {
-        const b = this.batch;
+        if (!this.live && !this._drawn) return;
+        const P = this.pos, C = this.col, D = this.dat;
+        let live = 0;
         for (let i = 0; i < this.n; i++) {
             const q = this.p[i];
             if (!q.on) continue;
             q.age += dt;
-            if (q.age >= q.life) { q.on = false; b.off(i); continue; }
+            if (q.age >= q.life) { q.on = false; for (let k = 3; k < 16; k += 4) C[i * 16 + k] = 0; continue; }
+            live++;
             const t = q.age / q.life;
             const damp = Math.exp(-1.8 * dt);
             q.vx *= damp; q.vz *= damp; q.vy *= Math.exp(-0.6 * dt);
             q.x += q.vx * dt; q.y += q.vy * dt; q.z += q.vz * dt;
             const size = q.s0 + (q.s1 - q.s0) * Math.sqrt(t);
-            b.place(i, q.x, q.y, q.z, size);
-            const a = q.a0 * (1 - t) * (1 - t * 0.4);
-            const c = q.c;
-            if (c) b.color(i, c[0], c[1], c[2], a); else b.color(i, 0.8, 0.8, 0.82, a);
+            const a = q.a0 * Math.min(1, t * 8) * (1 - t) * (1 - t * 0.4);     // (nasce em 1/8 da vida: sem "estalo" no escapamento)
+            const c = q.c, r = c ? c[0] : 0.8, g = c ? c[1] : 0.8, b = c ? c[2] : 0.82;
+            for (let k = 0; k < 4; k++) {
+                const o = i * 12 + k * 3, oc = i * 16 + k * 4;
+                P[o] = q.x; P[o + 1] = q.y; P[o + 2] = q.z;
+                D[o] = size; D[o + 1] = q.seed; D[o + 2] = t;
+                C[oc] = r; C[oc + 1] = g; C[oc + 2] = b; C[oc + 3] = a;
+            }
         }
-        b.flush();
+        const m = this.mesh;
+        m.updateVerticesData(BABYLON.VertexBuffer.PositionKind, P, false, false);
+        m.updateVerticesData(BABYLON.VertexBuffer.ColorKind, C, false, false);
+        m.updateVerticesData('data', D, false, false);
+        m.isVisible = live > 0;
+        this._drawn = live > 0;
+        this.live = live;
     }
 }
