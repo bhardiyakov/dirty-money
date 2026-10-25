@@ -2,7 +2,8 @@
 // de racha monta os traçados (reta do racha, corrida pela cidade, circuito em volta do quarteirão — sem meia-volta nem trecho por
 // cima de outro); no autódromo, a prova dos estreantes larga com semáforo (o jogador fica segurado no grid), os rivais andam de
 // verdade pelo oval, o takedown conta, a chegada dá o resultado (reputação, estatística) e o fim devolve o carro ao portão e
-// os rivais ao mundo. Batida de Burnout: acima de rollAlways o carro capota; acima de explodeDv explode. A reputação vai no save.
+// os rivais ao mundo. Batida de Burnout: acima de rollAlways o carro capota; acima de explodeDv explode; carro contra carro vale a
+// velocidade de aproximação (batida na porta de um estacionado faz ele rolar). A reputação vai no save.
 const { boot, gameWait } = require('./lib.cjs');
 
 module.exports = {
@@ -108,6 +109,19 @@ module.exports = {
             return { roll: !!a.tumble, boom: b.burning > 0 || b.destroyed };
         });
         if (c.ok(!!crash, 'achou carros para bater')) c.ok(crash.roll && crash.boom, 'batida forte capota; muito forte, explode');
+        // carro contra carro: o dv medido fica baixo (~11 m/s), vale a velocidade de aproximação — a 90 km/h na porta de um carro
+        // estacionado (que nem registra batida própria), ele rola
+        const tb = await page.evaluate(() => {
+            const P = game.player.position, cars = game.vehicleManager.vehicles.filter((v) => !v.controlled && !v.isBike && !v.spec.boat && !v.destroyed && !v.tumble && !v.R && v.mode !== 'abandoned').slice(2, 4);
+            if (cars.length < 2) return null;
+            const [vic, att] = cars, x = P.x - 40, z = P.z + 40;
+            vic.teleport(x, z, 0); vic.mode = 'parked'; vic.route = null;
+            att.teleport(x - vic.halfW - att.halfLen - 0.3, z, Math.PI / 2);
+            att._cmd = new BABYLON.Vector3(25, 0, 0); vic._burnT = att._burnT = 0;
+            game._onCarImpact(att, 11, 5, -11, 0);
+            return { vic: !!vic.tumble, att: !!att.tumble };
+        });
+        if (c.ok(!!tb, 'achou carros para a batida de lado')) c.ok(tb.vic && !tb.att, `batida na porta a 90 km/h: o atingido rola${tb.att ? ' (e quem bateu de frente também capotou — não devia)' : ''}`);
 
         // ---- save
         const save = await page.evaluate(() => { const s = SaveGame.snapshot(game); const r = s.racing; StreetRacing.load(null); const z = StreetRacing.rep; StreetRacing.load(r); return { r: r && r.rep, z, back: StreetRacing.rep }; });
