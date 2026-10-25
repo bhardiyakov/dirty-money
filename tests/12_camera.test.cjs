@@ -1,5 +1,5 @@
 // Câmera 360° (CompassCamera.turn, Game._look): o botão direito do mouse arrastando (com arma de fogo na mão ele é a mira — aí o do meio
-// arrastando gira), o analógico direito (a não ser mirando com LT) e o dedo arrastado no lado direito da tela do celular. A pé ela fica
+// arrastando gira), o analógico direito (a não ser mirando com LT) e dois dedos torcidos no celular. A pé ela fica
 // para onde foi girada e o andar segue a tela; dirigindo é uma olhada em volta que volta para trás do veículo; nos interiores, norte.
 const { boot, gameWait, leave } = require('./lib.cjs');
 
@@ -14,7 +14,7 @@ module.exports = {
             return { yaw: C.yaw, user: C.userYaw, look: C.lookYaw, cy: CompassCamera.yaw, flat: C.flat, lat };
         });
         const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-        const K = await page.evaluate(() => ({ mouse: Config.camera.lookMouse, touch: Config.camera.lookTouch, pad: Config.camera.lookPad }));
+        const K = await page.evaluate(() => ({ mouse: Config.camera.lookMouse, pad: Config.camera.lookPad }));
         // arrasto do mouse com um botão (o centro da tela é o jogo)
         const drag = async (button, dx) => {
             await page.mouse.move(640, 300); await page.mouse.down({ button });
@@ -121,11 +121,12 @@ module.exports = {
             // segurando o botão parado: a olhada fica onde está (só volta depois de soltar)
             await page.mouse.move(640, 300); await page.mouse.down({ button: 'right' });
             for (let i = 1; i <= 8; i++) await page.mouse.move(640 + (120 * i) / 8, 300);
+            await gameWait(page, 0.3);                                        // (o último passo do arrasto entra no quadro seguinte)
             const h0 = await cam();
             await gameWait(page, 3);
             const h1 = await cam();
             await page.mouse.up({ button: 'right' });
-            c.ok(Math.abs(wrap(h1.yaw - h0.yaw)) < 0.05 && Math.abs(h1.look) > 1, `segurando o giro parado, a câmera não volta sozinha (${(wrap(h1.yaw - h0.yaw) * 57.3).toFixed(0)}°)`);
+            c.ok(Math.abs(wrap(h1.look - h0.look)) < 0.02 && Math.abs(h1.look) > 1, `segurando o giro parado, a olhada não volta sozinha (${(wrap(h1.look - h0.look) * 57.3).toFixed(0)}°; a moto parada pode assentar um pouco)`);
             await gameWait(page, 5);                                          // (soltou: espera lookHold e volta suave — a olhada era maior)
             const m2 = await cam();
             c.ok(Math.abs(wrap(m2.yaw - rode.h)) < 0.2, `sem mexer, a câmera volta para trás da moto (${(wrap(m2.yaw - rode.h) * 57.3).toFixed(0)}°)`);
@@ -151,7 +152,8 @@ module.exports = {
         c.noErrors(errors, 'câmera');
         await close();
 
-        // 8) celular: um dedo arrastado no lado direito gira; no esquerdo é o joystick (não gira); dois dedos = pinça (zoom, não gira)
+        // 8) celular: um dedo não gira (o polegar escorregando de um botão virava o mundo); dois dedos: pinça = zoom, torcer = gira; o botão
+        // de bússola ao lado do radar volta o norte para cima
         const M = await boot(ctx, { touch: true, width: 844, height: 390 });
         const tp2 = M.page;
         await tp2.evaluate(() => { Tutorial.skip(); game.player.invulnerable = true; });
@@ -167,15 +169,29 @@ module.exports = {
         };
         const tcam = () => tp2.evaluate(() => ({ yaw: game.camera.yaw, view: game.camera.viewHalf }));
         const t0 = await tcam();
-        await touch([[560, 120, 680, 120]]);                                 // lado direito, longe dos botões
+        await touch([[560, 120, 680, 120]]);                                 // um dedo no lado direito, longe dos botões
         const t1 = await tcam();
-        c.ok(Math.abs(wrap(t1.yaw - t0.yaw) - 120 * K.touch) < 0.06, `celular: arrastar no lado direito gira ${(wrap(t1.yaw - t0.yaw) * 57.3).toFixed(0)}° (esperado ${(120 * K.touch * 57.3).toFixed(0)}°)`);
+        c.ok(Math.abs(wrap(t1.yaw - t0.yaw)) < 0.01, `celular: um dedo arrastado no lado direito não gira (${(wrap(t1.yaw - t0.yaw) * 57.3).toFixed(0)}°)`);
         await touch([[150, 300, 250, 300]]);                                 // lado esquerdo: o joystick
         const t2 = await tcam();
         c.ok(Math.abs(wrap(t2.yaw - t1.yaw)) < 0.01, 'celular: no lado esquerdo (joystick) não gira');
         await touch([[520, 150, 470, 150], [640, 150, 700, 150]]);           // pinça abrindo
         const t3 = await tcam();
-        c.ok(Math.abs(wrap(t3.yaw - t2.yaw)) < 0.01 && t3.view < t2.view, `celular: dois dedos dão zoom e não giram (meia-altura ${t2.view.toFixed(1)} → ${t3.view.toFixed(1)})`);
+        c.ok(Math.abs(wrap(t3.yaw - t2.yaw)) < 0.01 && t3.view < t2.view, `celular: a pinça dá zoom e não gira (meia-altura ${t2.view.toFixed(1)} → ${t3.view.toFixed(1)})`);
+        // torcer 50° no sentido do relógio (dois dedos girando em volta de um ponto): o mundo gira junto, descontada a folga de 12°
+        const twist = (deg) => { const cx = 560, cy = 200, R = 90, p = (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)], A = (deg * Math.PI) / 180;
+            return [[...p(0), ...p(A)], [...p(Math.PI), ...p(Math.PI + A)]]; };
+        await touch(twist(50));
+        const t4 = await tcam(), turned = wrap(t4.yaw - t3.yaw);
+        c.ok(Math.abs(turned + (38 * Math.PI) / 180) < 0.12, `celular: torcer dois dedos 50° gira a câmera ${(turned * 57.3).toFixed(0)}° (esperado −38°: o mundo no sentido do relógio)`);
+        const nb = await tp2.evaluate(() => { const b = document.getElementById('camNorth'); return !!b && b.style.display !== 'none'; });
+        c.ok(nb, 'com a câmera girada aparece o botão de bússola ao lado do radar');
+        if (nb) {
+            await tp2.evaluate(() => document.getElementById('camNorth').click());
+            await gameWait(tp2, 1.5);
+            const t5 = await tcam();
+            c.ok(Math.abs(wrap(t5.yaw)) < 0.03, `o botão de bússola volta o norte para cima (${(wrap(t5.yaw) * 57.3).toFixed(0)}°)`);
+        }
         c.noErrors(M.errors, 'câmera no celular');
         await M.close();
     },

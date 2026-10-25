@@ -46,8 +46,9 @@ class InputManager {
         this.stickAim = false;              // o Aim avisa: o analógico direito está apontando (LT com arma de fogo, granada sendo preparada)
         this.mouseAim = false;              // botão direito do mouse segurado sobre o jogo: mirando
         this._dragR = false; this._dragM = false;      // botão direito / do meio segurado sobre o jogo: arrastar gira a câmera (takeLook)
-        this._lookR = 0; this._lookM = 0; this._lookTouch = 0; this._mx = null;      // px arrastados desde o último takeLook
-        this.touchLookDown = false;         // one finger on the look side of the screen (TouchControls): the turn is being held
+        this._lookR = 0; this._lookM = 0; this._mx = null;      // px arrastados desde o último takeLook
+        this._twist = 0;                    // rad twisted with two fingers since the last takeLook (TouchControls)
+        this.touchLookDown = false;         // two fingers twisting the camera (TouchControls): the turn is being held
         this.mouseX = -1; this.mouseY = -1; this.mouseMovedAt = 0;
         this.touchDevice = (typeof window !== 'undefined') && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /[?&]touch\b/.test(location.search));
         this.onChange = null;               // callback: conectou/desconectou controle (TouchControls e o Game)
@@ -260,11 +261,11 @@ class InputManager {
     }
 
     // Giro da câmera arrastando (rad) desde a última chamada, e zera: o mouse com o botão direito (a não ser com a arma de fogo na mão
-    // — `gun`: aí o botão direito é a mira firme) ou o do meio, e o dedo no lado direito da tela (TouchControls). O analógico direito
+    // — `gun`: aí o botão direito é a mira firme) ou o do meio, e os dois dedos torcidos no celular (TouchControls). O analógico direito
     // é lido pelo Game (Game._look). + = para a direita.
     takeLook(gun = false) {
-        const C = Config.camera, d = ((gun ? 0 : this._lookR) + this._lookM) * C.lookMouse + this._lookTouch * C.lookTouch;
-        this._lookR = this._lookM = this._lookTouch = 0;
+        const C = Config.camera, d = ((gun ? 0 : this._lookR) + this._lookM) * C.lookMouse + this._twist;
+        this._lookR = this._lookM = this._twist = 0;
         return d;
     }
 
@@ -275,7 +276,7 @@ class InputManager {
         this._mx = x;
     }
 
-    touchLook(dx) { this._lookTouch += dx; }      // (TouchControls: o dedo arrastado no lado direito da tela, px CSS)
+    touchTwist(rad) { this._twist += rad; }      // (TouchControls: os dois dedos torcidos, rad; + = para a direita, como turn)
 
     // The player is still holding the camera turn (mouse button down, a finger on the look side, right stick pushed): the car's
     // look-around must not swing back behind the vehicle meanwhile.

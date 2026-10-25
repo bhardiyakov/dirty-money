@@ -18,8 +18,8 @@
 // O giro atual fica em CompassCamera.yaw (rad, 0 = norte em cima, +X = leste): os personagens 2,5D (SpriteActor), a ordem de
 // desenho deles (NpcArt) e o minimapa acompanham.
 //
-// GIRO 360° PELO JOGADOR (turn; Game._look: analógico direito, botão direito do mouse arrastando, dedo arrastado no lado direito da
-// tela): a pé, a câmera fica para onde ele a virou (userYaw — começa no norte; ao descer de um veículo, fica a direção de onde ela
+// GIRO 360° PELO JOGADOR (turn; Game._look: analógico direito, botão direito do mouse arrastando, dois dedos torcidos no
+// celular): a pé, a câmera fica para onde ele a virou (userYaw — começa no norte; ao descer de um veículo, fica a direção de onde ela
 // estava); dirigindo, é uma OLHADA em volta (lookYaw) somada à direção atrás do veículo, que volta sozinha depois de lookHold s sem
 // mexer — e só depois que ele SOLTA o giro (lookHeld: botão do mouse, dedo ou analógico ainda segurando; Config.camera). O giro do jogador entra na hora, sem a suavização. Nos interiores (setFlat) não gira: a arte é pintada
 // para o norte em cima.
@@ -178,6 +178,12 @@ class CompassCamera {
 		if (this._carVeh) { this.lookYaw = wrap(this.lookYaw + d); this._lookIdle = 0; }
 		else this.userYaw = wrap(this.userYaw + d);
 		this.yaw = wrap(this.yaw + d);
+	}
+
+	// Volta o "cima" da tela para o norte (o botão de bússola do radar): a pé, o giro do jogador; dirigindo, a olhada. Suave (yawLerp).
+	resetNorth() {
+		if (this._carVeh) { this.lookYaw = 0; return; }
+		this.userYaw = 0;
 	}
 
 	// Acompanha o alvo (suavização independente de framerate; alta = colada). `vehicle`: dirigindo — modo bússola (ver o topo).

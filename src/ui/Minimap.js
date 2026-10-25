@@ -227,6 +227,36 @@ class Minimap {
         ctx.fillText('N', nx, ny);
 
         if (this.expandHint) this._drawExpandHint(ctx, S);
+        this._northButton(yaw);
+    }
+
+    // Câmera girada a pé (CompassCamera.userYaw): um botão de bússola ao lado do radar, com a seta apontando o norte — tocar volta a câmera
+    // para o norte em cima (CompassCamera.resetNorth). Dirigindo a câmera já volta sozinha para trás do veículo: sem o botão.
+    _northButton(yaw) {
+        const g = typeof window !== 'undefined' && window.game, cam = g && g.camera;
+        const on = !!cam && g.mode !== 'car' && !cam.flat && Math.abs(Math.atan2(Math.sin(cam.userYaw), Math.cos(cam.userYaw))) > 0.09 && this.canvas.offsetParent !== null;
+        let b = this._north;
+        if (!b) {
+            if (!on) return;
+            b = this._north = document.createElement('button');
+            b.id = 'camNorth'; b.type = 'button'; b.title = 'Câmera para o norte';
+            b.innerHTML = '<i></i><span>N</span>';
+            b.style.cssText = 'position:fixed;z-index:11;width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(10,12,18,.82);color:#eef1f7;font:700 11px Inter,Arial,sans-serif;padding:0;cursor:pointer;touch-action:manipulation;display:none';
+            b.querySelector('i').style.cssText = 'position:absolute;left:50%;top:5px;margin-left:-5px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:11px solid #ff5a4f;transform-origin:5px 14px';
+            b.querySelector('span').style.cssText = 'position:absolute;left:0;right:0;bottom:5px;text-align:center';
+            b.addEventListener('pointerdown', (e) => e.stopPropagation());
+            b.addEventListener('click', (e) => { e.stopPropagation(); const gg = window.game; if (gg && gg.camera) gg.camera.resetNorth(); });
+            document.body.appendChild(b);
+        }
+        if (b._on !== on) { b._on = on; b.style.display = on ? 'block' : 'none'; this._northAt = 0; }
+        if (!on) return;
+        const t = performance.now();
+        if (t - (this._northAt || 0) > 500) {                               // (a posição do radar muda com o layout: relida 2× por segundo)
+            this._northAt = t;
+            const r = this.canvas.getBoundingClientRect();
+            b.style.left = Math.round(r.right + 6) + 'px'; b.style.top = Math.round(r.top) + 'px';
+        }
+        b.querySelector('i').style.transform = `rotate(${(-yaw * 180 / Math.PI).toFixed(1)}deg)`;
     }
 
     // Ícones dos lugares à vista (Minimap.places). No celular o CSS encolhe o radar (108 px): os ícones crescem na mesma proporção

@@ -305,26 +305,33 @@ class TouchControls {
         el.style.setProperty('--ax', '0px'); el.style.setProperty('--ay', '0px');
     }
 
-    // Pinça com dois dedos no jogo = zoom (substitui os botões + e −). Um dedo arrastado no LADO DIREITO da tela (fora dos botões; a
-    // metade esquerda é do joystick) gira a câmera 360° (InputManager.takeLook → Game._look): arrastar para a direita gira para a direita.
+    // Dois dedos no jogo: PINÇA = zoom (substitui os botões + e −) e TORCER = gira a câmera 360° (como num mapa; InputManager.touchTwist
+    // → takeLook → Game._look), só depois de TWIST_START rad de torção — a pinça sozinha não gira. Um dedo não gira mais: o polegar
+    // escorregando de um botão (atacar, correr…) virava o mundo e o joystick passava a levar para outro lado.
+    static get TWIST_START() { return 12 * Math.PI / 180; }
     _bindPinch() {
         const cv = this.g.gameEngine && this.g.gameEngine.canvas; if (!cv) return;
-        const pts = new Map(); let d0 = 0;
-        const dist = () => { const [a, b] = [...pts.values()]; return hypot(a.x - b.x, a.y - b.y); };
+        const pts = new Map(); let d0 = 0, a0 = 0, tw = 0, turning = false;
+        const two = () => [...pts.values()];
+        const dist = () => { const [a, b] = two(); return hypot(a.x - b.x, a.y - b.y); };
+        const ang = () => { const [a, b] = two(); return Math.atan2(b.y - a.y, b.x - a.x); };
+        const held = () => { this.input.touchLookDown = pts.size === 2 && turning; };
         cv.addEventListener('pointerdown', (e) => {
             if (e.pointerType !== 'touch') return;
-            pts.set(e.pointerId, { x: e.clientX, y: e.clientY, look: e.clientX > window.innerWidth * 0.45 });
-            if (pts.size === 2) d0 = dist();
-            this.input.touchLookDown = pts.size === 1 && [...pts.values()][0].look;
+            pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            if (pts.size === 2) { d0 = dist(); a0 = ang(); tw = 0; turning = false; }
+            held();
         });
         cv.addEventListener('pointermove', (e) => {
             const P = pts.get(e.pointerId); if (!P) return;
-            const dx = e.clientX - P.x; P.x = e.clientX; P.y = e.clientY;
-            if (pts.size === 1) { if (P.look) this.input.touchLook(dx); return; }
+            P.x = e.clientX; P.y = e.clientY;
             if (pts.size !== 2 || !this.g.camera) return;
             const d = dist(); this.g.camera.zoom(-(d - d0) * 0.04); d0 = d;
+            let da = ang() - a0; da = Math.atan2(Math.sin(da), Math.cos(da)); a0 += da;
+            if (!turning) { tw += da; if (Math.abs(tw) < TouchControls.TWIST_START) return; turning = true; da = tw - Math.sign(tw) * TouchControls.TWIST_START; held(); }
+            this.input.touchTwist(-da);                                     // (torcer no sentido do relógio gira o mundo no sentido do relógio)
         });
-        const end = (e) => { pts.delete(e.pointerId); this.input.touchLookDown = pts.size === 1 && [...pts.values()][0].look; };
+        const end = (e) => { pts.delete(e.pointerId); if (pts.size < 2) turning = false; held(); };
         cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
     }
 
