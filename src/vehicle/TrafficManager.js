@@ -225,7 +225,7 @@ class TrafficManager {
         // com o dt somado. A física do Havok continua andando todo quadro com a velocidade que a IA deixou. Fora da bolha: dorme (abaixo).
         let asleepN = 0;
         for (const car of this.vm.vehicles) {
-            const calm = !car.controlled && !car.hold && !car.wrecked && !(car.burning > 0) && car.mode !== 'abandoned' && !car.ignoreSignals;
+            const calm = !car.controlled && !car.hold && !car.wrecked && !(car.burning > 0) && !car.tumble && car.mode !== 'abandoned' && !car.ignoreSignals;
             // Fora da BOLHA ACORDADA (2× a visão máxima): dorme — sem IA, sem física, sem sprite. Acorda ao entrar nela (fora da tela).
             if (calm && Zones.asleep(car.position.x, car.position.z)) { if (car._asleep) car.sleepTick(); else car.sleep(); asleepN++; continue; }
             if (car._asleep) car.wake();

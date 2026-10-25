@@ -54,6 +54,7 @@ class Game {
 		this.death = null;                           // morte em andamento
 		Vehicle.onImpact = (car, dv, dmg, dvx, dvz) => this._onCarImpact(car, dv, dmg, dvx, dvz);
 		Vehicle.onThrow = (bike, variant, dx, dz, power, kind) => this._onThrow(bike, variant, dx, dz, power, kind);
+		Vehicle.onTumbleEnd = (car, upsideDown) => this._onTumbleEnd(car, upsideDown);
 		this.casualties = [];                        // pessoas avulsas arremessadas (motorista arrancado, ciclista caído)
 		this.combat = new Combat(this.scene, this);
 		Cover.game = this;                                   // cobertura: carros parados também contam (combat/Cover.js)
@@ -553,7 +554,8 @@ class Game {
 		this.scene.render();                                         // (1 passo de 1/60 dentro do render)
 		Perf.lap('render (cena)');
 		const pe = this.scene.getPhysicsEngine();
-		if (pe && this.physicsReady && !Interiors.active && !this.menu.isOpen) for (let n = Math.min(3, Math.round(dt * 60)) - 1; n > 0; n--) pe._step(1 / 60);
+		const step = this._physStep || 1 / 60;                         // (câmera lenta: passos menores — Game.slowMo)
+		if (pe && this.physicsReady && !Interiors.active && !this.menu.isOpen) for (let n = Math.min(3, Math.round(dt / step)) - 1; n > 0; n--) pe._step(step);
 		Vehicle.physFrame++;                                          // a física andou: as velocidades guardadas dos veículos ficam velhas
 		this._rescueStrays(dt);
 		Perf.lap('física');
@@ -613,6 +615,7 @@ class Game {
 	}
 
 	_update(dt) {
+		this._slowTick();
 		this._dt = dt;
 		this._pollInput();
 		this.input.sprintTick(dt);                                              // impulso do sprint (a pé, nadando, pedalando): InputManager
@@ -664,10 +667,12 @@ class Game {
 			// Direção crua (estilo veículo): W/S = acelerador, A/D = volante.
 			const car = this.activeCar;
 			if (car.spec && car.spec.bike === 'bike') this._pedal(car, dt);    // bicicleta: o sprint pedala forte (e gasta fôlego)
-			car.drive(axis.z, axis.x, dt);
+			if (StreetRacing.control(this, car, axis, dt)) car.drive(0, 0, dt);      // corrida: parado no grid até o VAI! (e na largada queimada)
+			else car.drive(axis.z, axis.x, dt);
 			this._fuelUpdate(dt);
 			if (this.careers && !frozenUI && this.careers.carPrompt() && this.input.consumePress('e')) this.careers.carInteract();      // desmanche: E desmancha o carro
 			else if (!frozenUI && Garage.carPrompt(this) && this.input.consumePress('e')) Garage.carInteract(this);      // garagem: E guarda o carro na vaga
+			else if (!frozenUI && !Panel.anyCool() && StreetRacing.carPrompt(this) && this.input.consumePress('e')) StreetRacing.carInteract(this);      // ponto de racha / autódromo: as corridas
 			else if (!frozenUI && !Panel.anyCool() && Tuning.carPrompt(this) && this.input.consumePress('e')) Tuning.carInteract(this);      // loja de tunagem
 			else if (!frozenUI && !Panel.anyCool() && Mechanic.carPrompt(this) && this.input.consumePress('e')) Mechanic.carInteract(this);      // oficina / borracharia / mecânico do morro
 			// (uma batida forte pode arremessar o piloto de dentro do drive(): aí o foco é o jogador)
@@ -795,6 +800,7 @@ class Game {
 		AudioFX.setListener(this.camera.target.x, this.camera.target.z);
 		Perf.lap('clima/hora');
 		if (this.traffic) this.traffic.update(dt, this);
+		if (this.physicsReady) StreetRacing.update(this, dt);                    // corridas: pontos de racha, autódromo, a corrida em andamento
 		Perf.lap('trânsito');
 		if (this.boats) this.boats.update(dt, this);
 		if (this.colliderStream) this.colliderStream.update(dt, this.camera.target.x, this.camera.target.z);
@@ -1321,8 +1327,9 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			blips.push({ pos: { x: it.x, z: it.z }, color: `rgb(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)})` });
 		}
 
+		StreetRacing.blips(blips);                                               // corrida: os rivais e o próximo checkpoint
 		const hp = CityGrid.pois.find((q) => q.type === 'home');                // safe house (ou o imóvel que virou casa): sempre no radar
-		this.minimap.update(center, heading, blips, this.gps, this._pursuit(center), hp ? { x: hp.x, z: hp.z, icon: this.menu.icon('home') } : null,
+		this.minimap.update(center, heading, blips, StreetRacing.gpsTarget() || this.gps, this._pursuit(center), hp ? { x: hp.x, z: hp.z, icon: this.menu.icon('home') } : null,
 			Laundry.mapPois, Laundry.mapPois.length ? this.menu.icon('cash_bag') : null);      // fachadas de lavagem (ícone 💰 no radar)
 	}
 
@@ -1741,6 +1748,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 			html = this.careers.carPrompt();
 		} else if (this.mode === 'car' && Garage.carPrompt(this)) {
 			html = Garage.carPrompt(this);
+		} else if (this.mode === 'car' && StreetRacing.carPrompt(this)) {
+			html = StreetRacing.carPrompt(this);
 		} else if (this.mode === 'car' && Tuning.carPrompt(this)) {
 			html = Tuning.carPrompt(this);
 		} else if (this.mode === 'car' && Mechanic.carPrompt(this)) {
@@ -2721,6 +2730,8 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		}
 
 		RoadRage.onImpact(this, car, dv, dvx, dvz);                       // batida entre dois veículos: às vezes vira briga de trânsito
+		this._burnout(car, dv, dvx, dvz, src);                             // capota / explode (batida muito forte)
+		if (typeof StreetRacing !== 'undefined') StreetRacing.onImpact(this, car, dv, src);      // corrida: takedown, carro de corrida batido
 
 		const p = car.position;
 		AudioFX.crash(p.x, p.z, Math.min(1, dv / 16));
@@ -2732,9 +2743,50 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		if (car === ac && this.mode === 'car') {
 			// O motorista também sente a batida forte.
 			if (dv > 8) this.player.takeDamage((dv - 8) * 3);
-		} else if (src === 'player' && dv > 5 && this.wanted) {
+		} else if (src === 'player' && dv > 5 && this.wanted && !car.R) {      // (rival de corrida: pancada faz parte)
 			this.heat.commit('hit_and_run');
 		}
+	}
+
+	// BATIDA DE BURNOUT: acima de Config.crash.rollDv o carro pode capotar (rola de lado, ou dá cambalhota numa batida de frente — ver
+	// Vehicle.rollover) e acima de explodeDv explode na hora (o do jogador, só bem acima). Com o carro do jogador: câmera lenta e tremor.
+	_burnout(car, dv, dvx, dvz, src) {
+		const C = Config.crash;
+		if (car.isBike || car.spec.boat || car.isChopper || dv < C.rollDv || car.tumble || car.destroyed) return;
+		const f = car.fwdToRef(this._bf || (this._bf = new BABYLON.Vector3())), l = Math.hypot(f.x, f.z) || 1, fx = f.x / l, fz = f.z / l;
+		const side = (dvx * fz - dvz * fx) / dv, front = (dvx * fx + dvz * fz) / dv;           // de onde veio a pancada (no referencial do carro)
+		const mine = car === this.activeCar && this.mode === 'car';
+		const chance = dv >= C.rollAlways ? 1 : (dv - C.rollDv) / (C.rollAlways - C.rollDv) * 0.65;
+		const rolled = Math.random() < chance && car.rollover(dv, side, front);
+		if (dv > C.explodeDv + (mine ? C.playerExplodeExtra : 0) && car.spec.fire !== false) {
+			car.takeDamage(car.hp + 1, src);
+			if (car.burning > 0) car.burning = Math.min(car.burning, rolled ? 0.5 : 0.25);      // (explode já — no ar, se capotou)
+		}
+		if (mine && (rolled || car.burning > 0)) { this.slowMo(0.35, 1.3); this.camera.shake(1.1); this.input.rumble(1, 1, 500); }
+	}
+
+	// O capotamento acabou: de teto para baixo, o carro do trânsito fica largado (some depois, longe — TrafficManager); o do jogador avisa.
+	_onTumbleEnd(car, upsideDown) {
+		const p = car.position;
+		AudioFX.crash(p.x, p.z, 0.8);
+		this.combat.spark(p.x, 0.6, p.z, [1, 0.8, 0.4]);
+		if (upsideDown && !car.controlled && car.mode !== undefined && car.mode !== 'wreck') { car.mode = 'abandoned'; car.route = null; }
+		if (car === this.activeCar && this.mode === 'car') this._flash(upsideDown ? '🔄 Capotou! O carro ficou de teto para baixo — saia dele (F)' : '🔄 Capotou e voltou de rodas no chão!');
+		if (typeof StreetRacing !== 'undefined') StreetRacing.onTumbleEnd(this, car, upsideDown);
+	}
+
+	// Câmera lenta por `dur` s (de relógio): o jogo e a física andam a `k` da velocidade. (A roda de armas usa a mesma escala.)
+	slowMo(k, dur) {
+		this._slowUntil = performance.now() + dur * 1000;
+		this.timeScale = k;
+		this._physStep = k / 60;
+		if (this.physics && this.physics.plugin) this.physics.plugin.setTimeStep(this._physStep);
+	}
+	_slowTick() {
+		if (!this._slowUntil || performance.now() < this._slowUntil) return;
+		this._slowUntil = 0; this._physStep = 1 / 60;
+		if (!(this.wheel && this.wheel.open)) this.timeScale = 1;
+		if (this.physics && this.physics.plugin) this.physics.plugin.setTimeStep(1 / 60);
 	}
 
 	// O carro do jogador explodiu: ele é jogado para fora, ao lado (o dano da explosão vem depois).

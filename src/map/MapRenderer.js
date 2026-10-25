@@ -212,6 +212,8 @@ const MapRenderer = {
         // Marina: cais e píeres de madeira (paredões de concreto nas pontas).
         if (typeof Marina !== 'undefined' && Marina.docks) for (const d of Marina.docks) if (vis(d.x0, d.z0, d.x1, d.z1)) rect(d.x0, d.z0, d.x1, d.z1, d.kind === 'wall' ? '#b9bcbe' : '#a07a4c');
 
+        if (typeof Speedway !== 'undefined') Speedway.drawMap(ctx, X, Y, k, vis);       // o autódromo (oval, arquibancada, chegada)
+
         // 4) Nomes de ruas (com bastante zoom): um por trecho longo.
         if (opts.labels && k >= 3.2) {
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';

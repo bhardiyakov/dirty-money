@@ -153,7 +153,7 @@ const Emoji = {
         burger: '🍔', bacon: '🍔', fries: '🍟', soda: '🥤', shake: '🥤', slice: '🍕', pizza: '🍕', salad: '🥗', juice: '🧃', bowl: '🍧', pasta: '🍝', risotto: '🍚',
         menu_it: '🍽️', wine: '🍷', sushi: '🍣', omakase: '🍱', sake: '🍶', beer: '🍺', shot: '🥃', snack: '🍢', bread: '🥪', coffee: '☕', cake: '🍰', lunch: '🍱', bottle: '💧',
         // lugares do mapa (PauseMenu.POI_TYPES)
-        hospital: '🏥', station: '🚓', cart: '🛒', spray: '🎨', fuel: '⛽', boat: '🚤', heli: '🚁', home: '🏠', dumpster: '🗑️', pin: '📍', chop: '🔧', wrench: '🔧', biz: '🏪', moto: '🛵', bank: '🏦', music: '🎶', gun: '🔫', gym: '🏋️', shirt: '👕', dealer: '🚗', tune: '🏁',
+        hospital: '🏥', station: '🚓', cart: '🛒', spray: '🎨', fuel: '⛽', boat: '🚤', heli: '🚁', home: '🏠', dumpster: '🗑️', pin: '📍', chop: '🔧', wrench: '🔧', biz: '🏪', moto: '🛵', bank: '🏦', music: '🎶', gun: '🔫', gym: '🏋️', shirt: '👕', dealer: '🚗', tune: '🔩', stadium: '🏎️', race: '🏁',
         pharmacy: '💊', bakery: '🥐', drugs: '🌿',      // (lojas que só aparecem no minimapa: Minimap.STYLE_ICON)
         // indicadores do HUD
         heart: '❤️', shield: '🛡️', cash: '💵', clean: '💳', clock: '🕒', trophy: '🏆', star: '⭐', energy: '⚡', heat: '🔥', medal: '🏅', siren: '🚨',

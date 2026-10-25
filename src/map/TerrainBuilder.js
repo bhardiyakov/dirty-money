@@ -255,6 +255,7 @@ class TerrainBuilder {
             else if (a > (bio === B.ROCK ? 0.55 : 0.6) && h < 34) table = TerrainBuilder._atlE || (TerrainBuilder._atlE = TerrainBuilder.ATL_EDGE);
         }
         if (!table || (WorldMap.flags[gj * WorldMap.nx + gi] & 1)) return;
+        if (typeof Speedway !== 'undefined' && Speedway.covers(cx, cz, 4)) return;                          // (o autódromo: sem mato na pista)
         const c = this.W.cell, wb = this.wb;
         for (let t = 0; t < table.length; t++) {
             const [kind, p, s0, s1] = table[t];

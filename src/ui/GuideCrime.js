@@ -1,5 +1,5 @@
 // ============================================================================
-// GuideCrime — capítulos do GUIA (aba GUIA do menu) sobre assaltos, rastros, golpes, negócios e mecânica. Entram em GuideUI.PAGES;
+// GuideCrime — capítulos do GUIA (aba GUIA do menu) sobre assaltos, rastros, golpes, negócios, mecânica e corridas. Entram em GuideUI.PAGES;
 // o índice fica em ui/GuideUI.js (grupo "ASSALTOS, NEGÓCIOS E CARROS").
 // ============================================================================
 
@@ -60,4 +60,14 @@ Object.assign(GuideUI.PAGES, {
         <li><b>Capô</b>: a pé, na frente do carro, <b>E</b> — diagnóstico e troca de peças por você (peças no balcão de peças; pneu e suspensão pedem macaco; freio, radiador e ignição, a caixa de ferramentas). Galão e auxiliar de partida também se usam ali.</li>
         <li><b>Oficinas Pay n Pay</b> (🔧 no mapa): chegue dirigindo e aperte E — orçamento por peça, retífica, vazamento, funilaria e <b>pintura</b> (some com a placa anotada). <b>Borracharia</b> nos postos (pneu, óleo, bateria). <b>Mecânico do morro</b> no desmanche: mais barato, aceita sujo, faz placa fria.</li>
         <li><b>Porta-malas</b>: a pé, atrás do carro, <b>E</b> (na moto, o baú). Guarde armas, dinheiro, joias e peças; o espaço depende do carro. Carro seu guarda tudo no save. Preso perto do carro, a polícia revista — o <b>fundo falso</b> do desmanche esconde.</li></ul>`,
+
+    racing: () => `<h2>Corridas: rachas e autódromo</h2>
+        <p>Pare o carro no <b>anel aceso</b> de um <b>ponto de racha</b> (🏁 no mapa, na rua em frente a alguns postos) ou no portão do <b>Autódromo Arena Sul</b> (🏎️) e aperte <b>E</b>: a lista das corridas do dia (muda a cada 6 horas).</p><ul>
+        <li><b>Racha 1×1</b>: arrancada numa reta de até 400 m — quem cruzar primeiro leva tudo. <b>Corrida de rua</b>: do ponto A ao B pela cidade, com o trânsito, seguindo os <b>checkpoints</b> (o cilindro amarelo, a seta para o próximo e o marcador no radar). <b>Circuito</b>: voltas em torno dos quarteirões. <b>Autódromo</b>: oval fechado, várias voltas, até 8 carros e nenhum trânsito.</li>
+        <li><b>Largada</b>: o semáforo acende 3 · 2 · 1 · VAI!. Acelere no VAI! = <b>largada perfeita</b> (nitro de graça); acelerar antes = <b>queimou a largada</b> (o motor engasga).</li>
+        <li><b>Nitro</b>: <kbd>Shift</kbd>, <kbd>A</kbd> no controle ou o botão <b>NITRO</b> no celular. A carga dura uma corrida; cada <b>takedown</b> enche um pouco.</li>
+        <li><b>Takedown</b> (como no Burnout): jogue um rival no muro ou no trânsito até ele capotar ou explodir. Batida muito forte capota e explode qualquer carro — o seu também, e aí você está fora.</li>
+        <li><b>Prêmios</b>: racha de rua paga <b>dinheiro sujo</b> (à noite, 25% a mais); o autódromo paga <b>limpo</b>. 2º e 3º levam uma parte (no 1×1, o vencedor leva tudo). As provas mais caras cobram inscrição.</li>
+        <li><b>Reputação no meio</b>: de <b>Desconhecido</b> a <b>Rei das ruas</b>. Sobe com a colocação, os takedowns e a largada perfeita, e libera as corridas maiores. Lenda do asfalto libera o <b>racha valendo o documento</b>: só com carro seu — quem ganha leva o carro do outro.</li>
+        <li>Racha na rua com viatura por perto vira <b>procurado</b>. Sair do carro, ser preso ou se afastar do percurso desclassifica.</li></ul>`,
 });

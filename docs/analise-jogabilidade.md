@@ -73,7 +73,7 @@ Joystick (pouco inclinado = andar; inclinado = trote, o passo padrão) + **câme
 - **Cibernético**: pendrive no terminal do gerente (Estelionato) abre uma porta no firewall por 3 dias; de casa, a transferência via laranjas é um mini-jogo de confirmar contas.
 - Ao entrar em qualquer interior, as malhas da cidade são ocultadas e restauradas na saída.
 
-## Assaltos, golpes, negócios e mecânica
+## Assaltos, golpes, negócios, mecânica e corridas
 
 ### Assalto a lojas (`src/crime/Robbery.js`, carreira ASSALTANTE em `src/careers/CareerRobber.js`)
 
@@ -133,6 +133,37 @@ IDLE ─crime─▶ CRIME_COMMITTED ─alguém viu─▶ WANTED ─fugiu─▶ I
 ### Mecânica (`src/vehicle/CarCare.js`, `src/economy/Mechanic.js`, itens em `src/player/Items.js`)
 
 - Motor, arrefecimento, óleo (com vazamento), bateria, freios, pneus e suspensão gastam e mudam a direção (falha, superaquecimento, partida que falha, freio longo, derrapagem, carro puxando). Painel com luzes de aviso. Capô para trocar peças você mesmo; oficinas Pay n Pay (orçamento, retífica, funilaria, pintura), borracharia nos postos, mecânico do morro (sujo, placa fria). Porta-malas por carro (salvo nos carros da garagem; revistado na prisão, menos com fundo falso).
+
+### Corridas (`src/racing/StreetRacing.js`, `RaceCar.js`, `Speedway.js`, `RaceHUD.js`)
+
+Referências: Need for Speed Underground 2 (rachas, reputação no meio, carros tunados, racha valendo o documento) e Burnout
+(takedowns, capotamento e explosão em batida forte).
+
+- **Onde**: pontos de racha na rua em frente a até 5 postos espalhados (anel aceso; 🏁 no mapa) e o **Autódromo Arena Sul**
+  (🏎️), um oval de ~500 m (2 retas de 130 m, curvas de raio 38 m, pista de 15 m) com muros com colisão, arquibancada coberta com
+  torcida, placar, torres de luz acesas à noite e o logo no gramado. Chegue de carro e aperte **E**: as provas do dia (mudam a cada
+  6 h do jogo e com o seu nível).
+- **Modalidades**: *racha 1×1* (reta de até 402 m achada no grafo das ruas, pela perna mais reta de cada cruzamento),
+  *corrida de rua* (do A ao B pela rota do GPS, com o trânsito e **checkpoints** a cada ~150 m como no GTA V: cilindro, seta para o
+  seguinte e o marcador no radar; vale passar pelo cilindro ou já adiante dele no traçado), *circuito* (retângulo em volta de
+  quarteirões montado no grafo — reto, vira, reto, vira… até voltar por trás da largada; rotas de GPS de ida e volta foram
+  descartadas porque repetiam as mesmas ruas e os carros rodavam em círculo), *autódromo* (3 a 8 voltas, até 8 carros) e o *racha
+  valendo o documento* (nível Lenda do asfalto, só com carro seu).
+- **Largada**: semáforo de 4 luzes; acelerar no VAI! dá nitro de graça (largada perfeita); acelerar no fim da contagem queima a
+  largada (o carro fica segurado 0,8 s). **Nitro**: Shift / A do controle / botão NITRO no celular (`Vehicle.NOS_ACC` / `NOS_TOP`),
+  uma carga por corrida, takedown enche 35%.
+- **Rivais** (`RaceCar`, um `TrafficCar` com outro piloto): seguem o traçado por perseguição pura; a velocidade-alvo é o mínimo
+  entre a máxima do carro × habilidade × elástico, as curvas à frente (v = √(μg·R), μg ≈ 20 m/s², freando a tempo) e quem está
+  no caminho (trânsito e outros corredores: troca de lado para ultrapassar). Mantêm a faixa do grid (todos mirando o meio se
+  espremiam e travavam na largada) e somam 2 m/s² à aceleração pedida (o atrito do chão comia metade dela). Presos, dão ré; muito
+  tempo presos fora da tela, voltam para a pista. Carros por dificuldade: populares envenenados → esportivos → superesportivos,
+  com neon, aerofólio e bodykit (Tuning).
+- **Prêmios e reputação**: rua paga sujo (+25% à noite), autódromo paga limpo; 2º leva 40% e 3º 15% (no 1×1, só o vencedor).
+  Reputação por colocação + 25 por takedown + 10 pela largada perfeita; 7 níveis (Desconhecido → Rei das ruas) liberam as provas
+  maiores. Polícia a menos de 55 m de um racha na rua = 1★. Reputação, estatísticas e recordes vão no save (`racing`).
+- **Burnout** (`Game._burnout`, `Vehicle.rollover`, `Config.crash`): acima de `rollDv` a batida pode capotar o carro (de lado ou,
+  de frente, cambalhota — meias-voltas animadas no CarArt3D); acima de `rollAlways` capota sempre; acima de `explodeDv` explode
+  (o do jogador, só 6 m/s acima), com câmera lenta e tremor. Capotou de teto para baixo = carro perdido.
 
 ## Polícia: fuga possível a partir de 3★ (`src/police/*`, `Config.wanted` / `Config.heli`)
 

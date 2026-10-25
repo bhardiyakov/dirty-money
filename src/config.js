@@ -464,6 +464,12 @@ const Config = {
 		smokeBelow: 0.35,      // Fração de vida abaixo da qual sai fumaça.
 		burnTime: [4.5, 6.5],  // Segundos pegando fogo antes de explodir.
 		explosionR: 9,         // Raio da explosão (u).
+		// BATIDAS DE BURNOUT (Game._onCarImpact → Vehicle.rollover): dv = queda brusca de velocidade da batida (m/s; 10 m/s = 36 km/h).
+		rollDv: 17,            // a partir daqui o carro pode CAPOTAR (chance crescente até rollAlways)
+		rollAlways: 24,        // a partir daqui ele sempre capota
+		flipDv: 27,            // batida DE FRENTE acima disto: cambalhota (gira em volta da largura) em vez de rolar de lado
+		explodeDv: 32,         // batida fortíssima: o carro EXPLODE na hora (o do jogador precisa de explodeDv + playerExplodeExtra)
+		playerExplodeExtra: 6,
 		wreckLife: 45,         // Segundos até a carcaça poder sumir (fora da tela) — e nunca antes de o fogo apagar (wreckBurn + 25 s).
 		wreckBurn: [60, 100],  // Segundos que a CARCAÇA continua em chamas depois da explosão (as chamas vão baixando até virar só fumaça).
 	},
