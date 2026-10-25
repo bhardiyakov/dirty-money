@@ -499,15 +499,16 @@ class TouchControls {
         // com o impulso (tocar repetido = mais forte)
         const bike = mode === 'car' && g.activeCar.spec && g.activeCar.spec.bike === 'bike';
         const inside = Interiors.active || (typeof HouseView !== 'undefined' && HouseView.inside);
-        const runOn = (mode === 'foot' && !(inside && g._walkIndoors())) || bike;
+        const nitro = mode === 'car' && !bike && typeof StreetRacing !== 'undefined' && StreetRacing.racing;      // (corrida: o mesmo botão é o NITRO)
+        const runOn = (mode === 'foot' && !(inside && g._walkIndoors())) || bike || nitro;
         if (runOn !== this._runOn) {
             this._runOn = runOn;
             this.run.classList.toggle('hide', !runOn);
             if (!runOn) { this.input.setVirtual('shift', false, 'touch'); this.run.classList.remove('down'); }
         }
         if (runOn) {
-            const icon = bike ? '🚴' : g.player.swimming ? '🏊' : '🏃';
-            if (icon !== this._runIcon) { this._runIcon = icon; this.run.innerHTML = `<i>${icon}</i>SPRINT`; }
+            const icon = nitro ? '💨' : bike ? '🚴' : g.player.swimming ? '🏊' : '🏃';
+            if (icon !== this._runIcon) { this._runIcon = icon; this.run.innerHTML = `<i>${icon}</i>${nitro ? 'NITRO' : 'SPRINT'}`; }
             const k = Math.round(this.input.sprint * 10) / 10;
             if (k !== this._runK) { this._runK = k; this.run.classList.toggle('drive', k > 0); this.run.style.setProperty('--k', k); }
         }

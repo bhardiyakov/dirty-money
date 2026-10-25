@@ -211,7 +211,7 @@ class InputManager {
         set('roll', foot && btn(5));                        // RB a pé: rolar (esquiva)
         set('i', btn(8));                                   // Back/SHARE: inventário
         set(' ', !car && rt);                               // RT: golpe/tiro (rajada segurando) · helicóptero: sobe
-        set('shift', ((foot || this.bikeMode) && !lt && btn(10)) || (heli && lt));      // L3: sprint (mirando, não corre) · helicóptero: LT desce
+        set('shift', ((foot || this.bikeMode) && !lt && btn(10)) || (heli && lt) || (car && !this.bikeMode && btn(0)));      // L3: sprint (mirando, não corre) · helicóptero: LT desce · A no carro: nitro (corridas)
         set('padwheel', foot && btn(4));                    // LB: roda de armas (segurar) / próxima arma (toque) — WeaponWheel
         const edge = (i) => btn(i) && !this._padPrev[i];
         if (foot && this.onWeaponCycle) {                   // ←/→: troca de arma (com a roda aberta: troca dentro da categoria)

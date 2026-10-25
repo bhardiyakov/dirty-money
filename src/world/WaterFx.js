@@ -42,7 +42,7 @@ class WaterFx {
 		this.ar = [];
 		for (let i = 0; i < this.na; i++) { this.arcBatch.alloc(); this.ar.push({ on: false, age: 0, life: 1, x: 0, z: 0, fx: 0, fz: 1, s0: 1, s1: 2, a: 0.5, sq: 1 }); }
 		this.nextA = 0;
-		this.spray = new WaterSpray(scene, 160);
+		this.spray = new WaterSpray(scene, 240);          // (também a água dos pneus na chuva: CarLights)
 		this._later = [];                // [seconds left, fn] — the parts of a plunge that come after the entry
 	}
 

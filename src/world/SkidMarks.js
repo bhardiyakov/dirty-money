@@ -104,11 +104,28 @@ const SkidMarks = {
     lift(car) { const S = car._skid; if (S) for (const s of S) if (s) s.on = false; },
 
     // Fumaça de borracha queimada (branca) saindo da roda.
+    // Fumaça de borracha do pneu cantando (k = força 0..1): nasce rente ao chão na roda, rola baixa e espalhada para trás e para os
+    // lados, abre bastante e sobe devagar — várias baforadas pequenas e macias, branco-acinzentada. Com o asfalto MOLHADO (chuva) o
+    // pneu não solta fumaça: espirra água (o jorro e as gotas da WaterFx).
     smoke(game, x, z, vx, vz, k) {
-        if (!game || !game.carLights || Math.random() > k * 0.55) return;
-        game.carLights.puffs.emit(x, 0.35, z, -vx * 0.15 + (Math.random() - 0.5) * 1.2, 0.5 + Math.random() * 0.6, -vz * 0.15 + (Math.random() - 0.5) * 1.2,
-            0.5, 2.2 + k * 1.6, 1.4 + Math.random() * 0.8, 0.28 + k * 0.25, [0.92, 0.92, 0.94]);
+        if (!game || !game.carLights) return;
+        const W = typeof Weather !== 'undefined' && Weather.cur;
+        if (W && W.k > 0.12 && !(typeof Interiors !== 'undefined' && Interiors.active)) {
+            const wfx = game.waterFx, sp = Math.hypot(vx, vz) || 1;
+            if (wfx && Math.random() < k * 0.35) {
+                wfx.spray.emit(x, z, { kind: 'tailC', vx: vx * 0.25, vz: vz * 0.25, drag: 3.5, a: 0.5 + 0.3 * k });
+                wfx.splash(x, z, 3, 0.7 + k * 0.6, vx / sp * 0.5, vz / sp * 0.5, 0.08);
+            }
+            return;
+        }
+        const P = game.carLights.puffs, n = Math.random() < k * 0.6 ? 2 : Math.random() < k * 0.7 ? 1 : 0;
+        for (let i = 0; i < n; i++) {
+            const a = Math.random() * Math.PI * 2, s = 0.5 + Math.random() * 0.9;
+            P.emit(x + (Math.random() - 0.5) * 0.3, 0.18, z + (Math.random() - 0.5) * 0.3, vx * 0.22 + Math.cos(a) * s, 0.25 + Math.random() * 0.35, vz * 0.22 + Math.sin(a) * s,
+                0.3, 1.6 + k * 2.0 + Math.random() * 0.8, 1.4 + Math.random() * 1.2 + k, 0.1 + k * 0.14, SkidMarks.SMOKE);
+        }
     },
+    SMOKE: [0.9, 0.9, 0.92],
 
     // Relógio do shader + envio do que foi escrito neste quadro.
     update(dt, tint) {

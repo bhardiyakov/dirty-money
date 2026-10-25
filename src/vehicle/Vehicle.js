@@ -223,7 +223,7 @@ class Vehicle {
     get hpFrac() { return this.hp / this.maxHp; }
 
     // Pegando fogo ou carcaça: não é mais dirigível/roubável.
-    get destroyed() { return this.wrecked || this.burning > 0; }
+    get destroyed() { return this.wrecked || this.burning > 0 || !!this.capsized; }      // (capotado: de teto para baixo, não anda nem é roubável)
 
     // Dano (batida, tiro, atropelamento, explosão). source: quem causou ('player'|'police'|'crash'|'shot'|'env').
     takeDamage(amount, source = 'env') {
@@ -370,6 +370,50 @@ class Vehicle {
         }
     }
 
+    // ------------------------------------------------------- CAPOTAMENTO (batida muito forte, como no Burnout)
+    // Game._onCarImpact decide (Config.crash.rollDv…): o carro DECOLA e capota — a carroceria 3D gira em volta do comprimento
+    // (batida de lado: rola de lado; de frente, forte: dá cambalhota) enquanto o corpo físico desliza perdendo velocidade e girando;
+    // quem dirige perde o controle até ele assentar. Termina de rodas no chão (segue, todo amassado) ou de TETO PARA BAIXO: aí fica
+    // capotado (motor morto, não anda mais — o jogador só sai). sideK: −1..1 (lado da pancada, + = veio da direita), dv em m/s.
+    rollover(dv, sideK, frontK) {
+        if (this.tumble || this.capsized || this.isBike || this.spec.boat || this.destroyed) return false;
+        const C = Config.crash, flip = Math.abs(frontK) > Math.abs(sideK) && dv > C.flipDv;
+        // meias-voltas: mais forte = mais giros; ímpar = termina de teto para baixo
+        let halves = Math.max(1, Math.min(5, Math.round((dv - C.rollDv) / 4 + 1 + Math.random() * 1.6)));
+        if (dv < C.rollAlways && Math.random() < 0.55) halves = 2;                        // (batida mais leve: costuma voltar de rodas no chão)
+        const dir = (flip ? (frontK > 0 ? -1 : 1) : (sideK >= 0 ? -1 : 1)), end = dir * halves * Math.PI;
+        const dur = 0.55 + halves * 0.24, h = Math.min(2.6, 0.45 + (dv - C.rollDv) * 0.11);
+        this.tumble = { t: 0, dur, roll: flip ? 0 : end, pitch: flip ? end : (Math.random() - 0.5) * 0.7, h, spin: (Math.random() - 0.5) * 5, wob: (Math.random() - 0.5) * 0.5 };
+        this.engineDead = true;                                                         // (o motor morre no ar; volta se assentar de rodas no chão)
+        this.slide = 0;
+        return true;
+    }
+    // Avança o capotamento (física e desenho; syncVisual, todo quadro). true = ainda capotando.
+    _tumbleTick(dt) {
+        const T = this.tumble;
+        if (!T) return false;
+        T.t += dt;
+        const u = Math.min(1, T.t / T.dur), e = 1 - (1 - u) * (1 - u);                    // (gira rápido no começo, assenta no fim)
+        const v = this._v; this.phys.getLinearVelocityToRef(v);
+        const k = Math.exp(-(u < 0.75 ? 1.1 : 4) * dt);                                 // no ar quase não freia; raspando no chão, freia forte
+        this.phys.setLinearVelocity(this._nv.set(v.x * k, v.y, v.z * k));
+        this.phys.setAngularVelocity(this._av.set(0, T.spin * (1 - u), 0));
+        this._cmd = null;                                                               // (a decolagem não é uma nova batida)
+        const vis = this.visual;
+        if (vis && 'tRoll' in vis) {
+            vis.tRoll = T.roll * e; vis.tPitch = T.pitch * e + Math.sin(u * Math.PI * 3) * T.wob * (1 - u);
+            vis.tLift = T.h * Math.sin(Math.PI * Math.min(1, u * 1.15)) * (1 - u * 0.2);
+        }
+        if (u < 1) return true;
+        const R = ((Math.round(T.roll / Math.PI) % 2) + 2) % 2, P = ((Math.round(T.pitch / Math.PI) % 2) + 2) % 2;
+        this.tumble = null;
+        if (vis && 'tRoll' in vis) { vis.tLift = 0; vis.tRoll = R ? Math.PI : 0; vis.tPitch = P ? Math.PI : 0; }
+        if (R || P) { this.capsized = true; this.engineDead = true; this.dent = 3; }      // de teto para baixo: fica assim
+        else if (!this.destroyed) this.engineDead = false;
+        if (Vehicle.onTumbleEnd) Vehicle.onTumbleEnd(this, !!(R || P));
+        return false;
+    }
+
     // Batida: a velocidade medida caiu bruscamente em relação à que o carro tinha comandado no frame anterior.
     _impact(dv, dvx, dvz) {
         this._crashCd = Config.crash.cooldown;
@@ -396,6 +440,8 @@ class Vehicle {
     // Modelo arcade em espaço de velocidade: decompõe v em frente+lado,
     // mata a componente lateral (grip) e recompõe — velocidade segue o nariz.
     drive(throttle, steer, dt) {
+        if (this.tumble) { this.throttle = 0; this.braking = false; this.accelerating = false; return; }      // capotando: sem controle (syncVisual avança)
+        if (this.capsized) { throttle = 0; steer = 0; }                                    // de teto para baixo: não anda
         this.throttleIn = throttle;                         // pedal do jogador (mesmo com o motor desligado: acelerar tenta dar a partida)
         if (this.engineDead) throttle = 0;                  // motor morto: só rola até parar
         if (this.controlled && typeof EngineAudio !== 'undefined' && EngineAudio.gates(this)) throttle = 0;      // dando a partida / morreu: sem força
@@ -421,7 +467,7 @@ class Vehicle {
         }
 
         // --- Motor: integra a velocidade à frente ---
-        const top = this.spec.maxSpeed * (this.controlled ? 1 + (SkillTree.m.topSpeed || 0) : 1) * (cc ? this._ccTop || 1 : 1);
+        const top = this.spec.maxSpeed * (this.controlled ? 1 + (SkillTree.m.topSpeed || 0) : 1) * (cc ? this._ccTop || 1 : 1) * (this.nosOn ? Vehicle.NOS_TOP : 1);      // (nitro: StreetRacing)
         // Estado lido pelas luzes de freio e pela fumaça do escapamento.
         this.braking = (throttle < 0 && fwd > 0.5) || (throttle > 0 && fwd < -0.5);
         // Aceleração (m/s²). Freio: forte, como sempre (power/mass). Motor: pela arrancada do modelo (spec.t100 = 0–100 km/h em s,
@@ -433,7 +479,7 @@ class Vehicle {
         const pedal = this.controlled && this.spec.bike === 'bike' ? Math.max(0, Math.min(1, this.pedal || 0)) : null;
         const topP = pedal === null ? top : top * (0.8 + 0.2 * pedal);
         if (pedal !== null && throttle > 0 && fwd >= topP) throttle = 0;
-        const accel = Vehicle.accelOf(this.spec, fwd, topP, throttle, this.braking) * (pedal === null || this.braking ? 1 : 0.85 + 0.9 * pedal);
+        const accel = Vehicle.accelOf(this.spec, fwd, topP, throttle, this.braking) * (pedal === null || this.braking ? 1 : 0.85 + 0.9 * pedal) * (this.nosOn && !this.braking ? Vehicle.NOS_ACC : 1);
         this.accelerating = throttle > 0 && fwd >= -0.5 && fwd < this.spec.maxSpeed * 0.7;
         if (throttle !== 0) {
             fwd += throttle * accel * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1) * (cc ? (this.braking ? this._ccBrake || 1 : this._ccPow || 1) : 1)       // freio na chuva rende menos · freio gasto / motor fraco
@@ -462,6 +508,8 @@ class Vehicle {
     // Controle por VELOCIDADE-ALVO (usado pela IA do trânsito): acelera/freia até `target`
     // (m/s, ≥ 0) com os limites accel/brake, em vez de empurrar com o acelerador.
     driveTo(target, steer, dt, accel = 6, brake = 12) {
+        if (this.tumble) { this.braking = false; this.accelerating = false; return; }      // capotando: sem controle (syncVisual avança)
+        if (this.capsized) { target = 0; steer = 0; }
         const forward = this._flatAxes();
         const right = this._rt;
 
@@ -619,12 +667,17 @@ class Vehicle {
         this._preStepFrames = 2;
         this._cmd = null;                       // (o salto não é batida)
         this._onDeck = false;                   // (teleportado: o viaduto é reavaliado pela rampa)
+        if (this.tumble || this.capsized) {    // (reaproveitado: outro carro, de rodas no chão)
+            this.tumble = null; this.capsized = false; this.engineDead = !!this.wrecked;
+            if (this.visual && 'tRoll' in this.visual) this.visual.tRoll = this.visual.tPitch = this.visual.tLift = 0;
+        }
         if (this.visual) { this.visual.setPosition(x, z); this.visual.setHeading(heading); }      // o sprite vai junto já neste quadro
     }
 
     // Leva o sprite para a posição/rotação do corpo físico (chame todo frame).
     syncVisual(dt) {
         if (this._preStepFrames > 0 && --this._preStepFrames === 0) this.phys.disablePreStep = true;
+        if (this.tumble) this._tumbleTick(dt);                   // capotando (rollover)
         if (!this.visual) return;
         this._refreshLook();
         const p = this.position;                                 // (sem recalcular a matriz do corpo: ver o getter `position`)
@@ -746,4 +799,7 @@ Vehicle.layerOfLevel = (lv) => (lv > 2.2 ? 1 : lv < -0.5 ? -1 : 0);
 // Skill Direção (carreira Desmanche): multiplicadores de aderência lateral e de giro só para o veículo que o JOGADOR dirige.
 Vehicle.playerGrip = 1;
 Vehicle.playerTurn = 1;
+// NITRO (as corridas de rua ligam car.nosOn enquanto o jogador segura o botão e ainda tem carga): força × NOS_ACC, máxima × NOS_TOP.
+Vehicle.NOS_ACC = 1.75;
+Vehicle.NOS_TOP = 1.16;
 memoStatics(Vehicle, 'TANK');

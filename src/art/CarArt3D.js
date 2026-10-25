@@ -708,10 +708,18 @@ class Car3DActor {
 		this.lampGeom = this.kind === 'moto' ? { y: D.h * this.k * 0.72, roof: D.h * this.k, x: 0.04 * this.k, zF: this.hl * 0.88, zR: -this.hl * 0.92 }
 			: this.kind === 'boat' ? { y: D.h * this.k * 0.6, roof: D.h * this.k, x: this.hw * 0.5, zF: this.hl * 0.9, zR: -this.hl * 0.95 }
 			: { y: D.h * this.k * 0.42, roof: D.h * this.k, x: this.hw * 0.68, zF: this.hl * 0.96, zR: -this.hl * 0.96 };
+		// the tailpipe's mouth (CarLights puts the exhaust smoke there; m from the centre: x = right, y = above the road, z = forward):
+		// a car's under the rear bumper on the left; a motorbike's beside the rear wheel on the right, a little higher
+		const G = this.lampGeom, R = this.R;
+		if (this.kind === 'moto') { G.ex = this.hw * 0.42; G.ey = R * 1.15; G.ez = -this.hl * 0.8; }
+		else if (this.kind === 'car') { G.ex = -this.hw * 0.55; G.ey = Math.min(0.42, R * 0.95); G.ez = -this.hl * 1.0; }
 		// moto: o ponto do banco (m no jogo, a partir do centro: z = frente, y = altura) — o RiderActor põe o piloto ali
 		this.seat = D.seat ? { z: D.seat[0] * this.k, y: D.seat[1] * this.k } : null;
 		// inclinação do veículo inteiro (moto, barco, helicóptero): bank = deita para a direita (+), tilt = nariz para baixo (+)
 		this.bank = 0; this._vb = 0; this.lean = 0; this.tilt = 0; this._vt = 0; this.fallen = false;
+		// capotamento (Vehicle.rollover): o carro INTEIRO gira em volta do meio da altura dele — tRoll em volta do comprimento (+ = teto
+		// para a esquerda), tPitch em volta da largura (+ = nariz para baixo) — e sobe tLift m (no ar)
+		this.tRoll = 0; this.tPitch = 0; this.tLift = 0;
 		this.rotorA = 0; this.rotorB = 0;            // (helicóptero: ângulos dos rotores, postos pelo HeliVisual)
 		this._t = Math.random() * 10;
 		// estado da suspensão (rad / m) e das rodas
@@ -846,15 +854,33 @@ class Car3DActor {
 	_write(m, i) {
 		if (this.kind !== 'car') return this._writeOther(m, i);
 		const s = Math.sin(this.heading), c = Math.cos(this.heading), k = this.k, M = m.mat, o = i * 16;
-		M[o] = c * k; M[o + 1] = 0; M[o + 2] = -s * k; M[o + 3] = 0;
-		M[o + 4] = 0; M[o + 5] = k; M[o + 6] = 0; M[o + 7] = 0;
-		M[o + 8] = s * k; M[o + 9] = 0; M[o + 10] = c * k; M[o + 11] = 0;
-		M[o + 12] = this.x; M[o + 13] = this.y - 1.5; M[o + 14] = this.z; M[o + 15] = 1;
+		if (this.tRoll || this.tPitch || this.tLift) this._writeTumble(M, o, m.dims);
+		else {
+			M[o] = c * k; M[o + 1] = 0; M[o + 2] = -s * k; M[o + 3] = 0;
+			M[o + 4] = 0; M[o + 5] = k; M[o + 6] = 0; M[o + 7] = 0;
+			M[o + 8] = s * k; M[o + 9] = 0; M[o + 10] = c * k; M[o + 11] = 0;
+			M[o + 12] = this.x; M[o + 13] = this.y - 1.5; M[o + 14] = this.z; M[o + 15] = 1;
+		}
 		const A = m.inst, L = this.lamps, d = m.dims;
 		A[o] = this.spin; A[o + 1] = this.steer; A[o + 2] = this.pitch; A[o + 3] = this.roll;                       // ia
 		A[o + 4] = (this.heave - this.lower) / k; A[o + 5] = this.yaw; A[o + 6] = this.variant; A[o + 7] = this.dent;    // ib
 		A[o + 8] = this.shade; A[o + 9] = L.head; A[o + 10] = L.tail; A[o + 11] = L.bits + this.flatBits + this.glassBits;              // ic
 		A[o + 12] = d[0]; A[o + 13] = d[1]; A[o + 14] = d[2]; A[o + 15] = d[3];                                       // dm
+	}
+
+	// Carro capotando: Rx(tPitch) → Rz(tRoll) → Ry(rumo), em volta do ponto no meio da altura do modelo (dims[1] = altura, sem a escala),
+	// erguido tLift m.
+	_writeTumble(M, o, d) {
+		const k = this.k, h = this.heading, b = this.tRoll, t = this.tPitch;
+		const ch = Math.cos(h), sh = Math.sin(h), cb = Math.cos(b), sb = Math.sin(b), ct = Math.cos(t), st = Math.sin(t);
+		const img = (x, y, z, out) => {
+			const y1 = y * ct - z * st, z1 = y * st + z * ct;
+			const x2 = x * cb - y1 * sb, y2 = x * sb + y1 * cb;
+			M[out] = (x2 * ch + z1 * sh) * k; M[out + 1] = y2 * k; M[out + 2] = (-x2 * sh + z1 * ch) * k; M[out + 3] = 0;
+		};
+		img(1, 0, 0, o); img(0, 1, 0, o + 4); img(0, 0, 1, o + 8);
+		const hc = (d ? d[1] : 1.4) * 0.5;                                    // (pivô: meia altura, no espaço do modelo)
+		M[o + 12] = this.x - M[o + 4] * hc; M[o + 13] = this.y - 1.5 + this.tLift + hc * k - M[o + 5] * hc; M[o + 14] = this.z - M[o + 6] * hc; M[o + 15] = 1;
 	}
 
 	// Moto, barco, helicóptero: o veículo INTEIRO gira (rumo, deitar, empinar) em volta da origem do modelo — o chão sob o centro

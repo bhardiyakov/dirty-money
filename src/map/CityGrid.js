@@ -90,6 +90,7 @@ const CityGrid = {
         this._fillCoast();
         if (typeof RuralPlan !== "undefined") RuralPlan.build();         // campo: fazendas, cabanas, postos, torres, alamedas
         if (typeof Marina !== "undefined") Marina.build();               // marina na orla leste: píeres, vagas e clube náutico
+        if (typeof Speedway !== "undefined") Speedway.build();           // autódromo (oval) no campo ao sul: corridas de estádio (StreetRacing)
         this._purgeVegetation();
         this._roundIslands();
         this._collectWalk();
@@ -119,6 +120,7 @@ const CityGrid = {
             if (!isPlant(p)) return true;
             const m = (CROWN[p.kind] || 1.5) * (p.s || 1);
             if (RoadPlan.onPavement(p.x, p.z, m)) return false;
+            if (typeof Speedway !== 'undefined' && Speedway.covers(p.x, p.z, m)) return false;          // (o autódromo: pista e arquibancada)
             if (blk && !blk.virtual && blk.r > 0.5 && !this._inRoundRect(blk.slab, blk.r, p.x, p.z, m)) return false;      // canto arredondado: o que sobra é asfalto
             return true;
         };
