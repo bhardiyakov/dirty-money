@@ -318,6 +318,7 @@ const NpcArt = {
 		this._empty = null;
 		this._palette();
 		this._register();
+		for (const A of Object.values(this.atlases)) if (A.live) this.dropAtlas(A.id);      // (a look being drawn: only on the old scene's GPU — Wardrobe starts it again)
 		for (const A of Object.values(this.atlases)) for (const P of A.pages) {
 			if (P.up) { P.up = null; P.st = 'ready'; }                     // (envio pela metade na cena antiga: recomeça nesta — os pixels ainda estão em P.px)
 			if (P.tex || P.mat) { P.tex = null; P.mat = P.sil = null; if (A.file && P.st === 'ready' && !P.px) P.st = 'idle'; }
@@ -734,19 +735,7 @@ const NpcArt = {
 		if (!A.hot) { A.hot = true; for (const P of A.pages) if (P.g === 'hot') this._want(P); }       // (o tipo apareceu: o dia a dia dele já vai para a fila)
 		const cache = A.cache || (A.cache = new Map());                 // (fora dos metadados: o atlas do jogador vai inteiro para o IndexedDB)
 		if (cache.has(key)) return cache.get(key);
-		const ppu = this.ppuOf(A), n = c.n, dirs = c.dirs || 8, fr = new Float32Array(n * dirs * 3), pd = new Int16Array(dirs);    // (dirs ausente = cache antigo: 8)
-		for (let d = 0; d < dirs; d++) { const p = c.pd ? c.pd[d] : 0; pd[d] = p >= 0 && p < A.pages.length ? p : 0; }
-		let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-		c.f.forEach((q, i) => {
-			const [x, y, w, h, ox, oy] = q, P = A.pages[pd[Math.min(dirs - 1, Math.floor(i / n))]];
-			if (w && (x + w > Math.min(4096, P.w) || y + h > Math.min(4096, P.h)) && !A.warned) { A.warned = true; console.warn(`[NPCS] ${id}: quadro fora da página (x·4096 + y) em ${key}`); }
-			fr[i * 3] = x * 4096 + y; fr[i * 3 + 1] = w * 4096 + h; fr[i * 3 + 2] = (ox + 2048) * 4096 + (oy + 2048);
-			if (!w) return;
-			x0 = Math.min(x0, ox); y0 = Math.min(y0, oy); x1 = Math.max(x1, ox + w); y1 = Math.max(y1, oy + h);
-		});
-		if (x0 === Infinity) { x0 = y0 = 0; x1 = y1 = 1; }
-		// caixa do quad em metros (x leste, z norte), relativa aos pés: a imagem cresce para baixo = sul
-		const box = [x0 / ppu, -y1 / ppu, x1 / ppu, -y0 / ppu];
+		const n = c.n, dirs = c.dirs || 8, { fr, pd, box } = this._clipTables(A, c, key);    // (dirs ausente = cache antigo: 8)
 		const [name, weapon] = key.split(':');
 		const clip = {
 			name, weapon, npc: true, atlas: id, gen: A.gen || 0, frames: n, dirs, fps: c.fps, loop: c.loop, pk: { fr, box, n }, pages: A.pages, pd, shared: true, frame: 0, W: 0, H: 0,
@@ -756,6 +745,22 @@ const NpcArt = {
 		cache.set(key, clip);
 		return clip;
 	},
+	// Tabelas de um clipe do manifesto: fr (3 números por quadro: ver o cabeçalho), pd (página de cada direção) e a caixa do quad.
+	_clipTables(A, c, key) {
+		const ppu = this.ppuOf(A), n = c.n, dirs = c.dirs || 8, fr = new Float32Array(n * dirs * 3), pd = new Int16Array(dirs);
+		for (let d = 0; d < dirs; d++) { const p = c.pd ? c.pd[d] : 0; pd[d] = p >= 0 && p < A.pages.length ? p : 0; }
+		let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+		c.f.forEach((q, i) => {
+			const [x, y, w, h, ox, oy] = q, P = A.pages[pd[Math.min(dirs - 1, Math.floor(i / n))]];
+			if (w && (x + w > Math.min(4096, P.w) || y + h > Math.min(4096, P.h)) && !A.warned) { A.warned = true; console.warn(`[NPCS] ${A.id}: quadro fora da página (x·4096 + y) em ${key}`); }
+			fr[i * 3] = x * 4096 + y; fr[i * 3 + 1] = w * 4096 + h; fr[i * 3 + 2] = (ox + 2048) * 4096 + (oy + 2048);
+			if (!w) return;
+			x0 = Math.min(x0, ox); y0 = Math.min(y0, oy); x1 = Math.max(x1, ox + w); y1 = Math.max(y1, oy + h);
+		});
+		if (x0 === Infinity) { x0 = y0 = 0; x1 = y1 = 1; }
+		// caixa do quad em metros (x leste, z norte), relativa aos pés: a imagem cresce para baixo = sul
+		return { fr, pd, box: [x0 / ppu, -y1 / ppu, x1 / ppu, -y0 / ppu] };
+	},
 
 	// A wardrobe look read from the device (PlayerLook ← LookStore): its pages stay as Blobs and are decoded on demand like the baked
 	// ones (AtlasDecoder, in a Worker), so they can also leave the GPU and come back. rec = { k, v, frame, clips, pages: [{ w, h, g, par, type, bytes }] }.
@@ -763,6 +768,93 @@ const NpcArt = {
 		if (this.atlases[id]) this.dropAtlas(id);
 		const pages = rec.pages.map((p) => ({ w: p.w, h: p.h, g: p.g || 'hot', par: p.par || 0, blob: new Blob([p.bytes], { type: p.type }) }));
 		return this._atlas(id, { clips: rec.clips, k: rec.k || 0.5, v: rec.v || 2, frame: rec.frame }, pages, true);
+	},
+	// ------------------------------------------------------------------ LIVE atlas: a wardrobe look while it is being drawn
+	// The Worker sends each direction of each clip as soon as it is drawn (Wardrobe → liveAdd); the frames go straight into GPU pages
+	// (texSubImage2D, a few KB each) and the clip table grows in place, so the player wears the new outfit within a moment of the change
+	// instead of after the whole look (~20 000 frames). A direction not drawn yet shows the nearest one that is; a clip not drawn yet
+	// is not in the atlas, and the sheet's chain falls through to the previous look for it. When the look is complete it is packed and
+	// stored (LookStore) and PlayerLook swaps this atlas for the stored one.
+	LIVE_PAGE: 2048,               // side of a live page (8 MB of RG8)
+	liveAtlas(id, data) {
+		if (this.atlases[id]) this.dropAtlas(id);
+		const A = this._atlas(id, { clips: {}, k: data.k || 0.5, v: data.v || 2, frame: data.frame }, [], false);
+		A.live = { x: 0, y: 0, sh: 0 };                                   // (shelf cursor on the last page)
+		A.hot = true;
+		return A;
+	},
+	// m = { key, fps, loop, n, dirs, rows: [[dir, [{ w, h, ox, oy, data }]]] }. false = the atlas is gone (an outfit changed again).
+	liveAdd(id, m) {
+		const A = this.atlases[id];
+		if (!A || !A.live || !this._scene) return false;
+		const n = m.n, D = m.dirs;
+		let c = A.data.clips[m.key];
+		const fresh = !c;
+		if (fresh) c = A.data.clips[m.key] = { fps: m.fps, loop: m.loop, n, dirs: D, pd: new Array(D).fill(0), f: new Array(n * D).fill(this._NOFRAME), src: new Array(D).fill(-1) };
+		for (const [d, row] of m.rows) {
+			c.pd[d] = this._livePlace(A, row);
+			for (let i = 0; i < n; i++) { const q = row[i]; c.f[d * n + i] = q && q.w ? [q.x, q.y, q.w, q.h, q.ox, q.oy] : this._NOFRAME; }
+			c.src[d] = d;
+		}
+		for (let d = 0; d < D; d++) {                                      // (not drawn yet: the nearest drawn direction)
+			if (c.src[d] === d) continue;
+			let s = -1;
+			for (let k = 1; k <= D >> 1 && s < 0; k++) { if (c.src[(d + k) % D] === (d + k) % D) s = (d + k) % D; else if (c.src[(d - k + D) % D] === (d - k + D) % D) s = (d - k + D) % D; }
+			if (s < 0) continue;
+			c.src[d] = s; c.pd[d] = c.pd[s];
+			for (let i = 0; i < n; i++) c.f[d * n + i] = c.f[s * n + i];
+		}
+		const live = typeof SpriteActor !== 'undefined' ? SpriteActor.live : [];
+		if (fresh) {                                                       // a clip the sheet took from the previous look: it now comes from here
+			for (const s of Object.values(this.sheets)) if (s.uses(id)) s.clips = {};
+			for (const a of live) if (a.clip && a.clip.atlas !== id && a.sheet && a.sheet.isNpc && a.sheet.uses(id) && a.clip.name + ':' + a.clip.weapon === m.key) a.replay();
+			return true;
+		}
+		const clip = A.cache && A.cache.get(m.key);
+		if (!clip) return true;
+		const t = this._clipTables(A, c, m.key), b = clip.pk.box;
+		clip.pk.fr.set(t.fr); clip.pd.set(t.pd);
+		if (t.box.some((v, i) => v !== b[i])) clip.pk.box = t.box;
+		for (const a of live) if (a.clip === clip) a._applyUV();
+		return true;
+	},
+	_NOFRAME: [0, 0, 0, 0, 0, 0],
+	// The frames of one direction of a clip, together on one page (the next frame — blending — is read from the same texture): shelves
+	// on the last page, or a new page. Each frame is uploaded right away. → the page index.
+	_livePlace(A, row) {
+		const L = A.live, W = this.LIVE_PAGE;
+		const fits = () => {
+			let x = L.x, y = L.y, sh = L.sh;
+			for (const q of row) { if (!q.w) continue; if (x + q.w > W) { x = 0; y += sh + 1; sh = 0; } x += q.w + 1; sh = Math.max(sh, q.h); }
+			return y + sh <= W;
+		};
+		let P = A.pages[A.pages.length - 1];
+		if (!P || !fits()) { P = this._livePage(A); L.x = L.y = L.sh = 0; }
+		const eng = this._scene.getEngine(), gl = eng._gl, al = gl.getParameter(gl.UNPACK_ALIGNMENT);
+		const fmt = eng._getInternalFormat(this._gl2 ? BABYLON.Constants.TEXTUREFORMAT_RG : BABYLON.Constants.TEXTUREFORMAT_LUMINANCE_ALPHA), type = eng._getWebGLTextureType(BABYLON.Constants.TEXTURETYPE_UNSIGNED_BYTE);
+		eng._bindTextureDirectly(gl.TEXTURE_2D, P.tex.getInternalTexture(), true);
+		eng._unpackFlipY(false);
+		gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
+		for (const q of row) {
+			if (!q.w) continue;
+			if (L.x + q.w > W) { L.x = 0; L.y += L.sh + 1; L.sh = 0; }
+			q.x = L.x; q.y = L.y; L.x += q.w + 1; L.sh = Math.max(L.sh, q.h);
+			gl.texSubImage2D(gl.TEXTURE_2D, 0, q.x, q.y, q.w, q.h, fmt, type, q.data);
+		}
+		eng._bindTextureDirectly(gl.TEXTURE_2D, null);
+		gl.pixelStorei(gl.UNPACK_ALIGNMENT, al);
+		P.used = this.now;
+		return P.i;
+	},
+	_livePage(A) {
+		const W = this.LIVE_PAGE, F = this._gl2 ? BABYLON.Constants.TEXTUREFORMAT_RG : BABYLON.Constants.TEXTUREFORMAT_LUMINANCE_ALPHA;
+		const P = { w: W, h: W, g: 'hot', par: 0, A, i: A.pages.length, st: 'ready', used: this.now, pri: 9, seq: 0, mat: null };
+		P.tex = new BABYLON.RawTexture(null, W, W, F, this._scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE, BABYLON.Constants.TEXTURETYPE_UNSIGNED_BYTE);
+		P.tex.wrapU = P.tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+		A.pages.push(P);
+		this._res += W * W * 2; this._live.add(P);
+		this._bind(P);
+		return P;
 	},
 	// Geração do atlas de um id (o atlas foi trocado: os clipes já tocando são refeitos — SpriteActor.update).
 	// (atlas descartado — o visual antigo do jogador — = -1: quem ainda o usa, como o piloto da moto, também refaz o clipe)

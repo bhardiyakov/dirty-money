@@ -1,13 +1,18 @@
 // ============================================================================
-// Wardrobe Worker (equipment screen). Bundled with the generator and src/storage/LookStore.js into assets/baked/wardrobe.worker.js
-// (bake.cjs) and loaded only by src/player/Wardrobe.js while the equipment screen is open — once it closes, the Worker is terminated and
+// Wardrobe Worker. Bundled with the generator and src/storage/LookStore.js into assets/baked/wardrobe.worker.js (bake.cjs) and loaded
+// only by src/player/Wardrobe.js while a look is being drawn (or the equipment screen is open) — then the Worker is terminated and
 // nothing of the generator stays in the game's memory.
 //
-// Messages (the main thread only orchestrates: no pixel of the look goes through it):
+// Messages:
+//   { type: 'warm', spec, k }                      builds the renderer of a look (the cold start, ~4 s, happens before any outfit change;
+//                                                  then the item under the mouse: wearing it draws at once) → { warmed: true }
 //   { type: 'preview', job, spec, k, dirs }        → { job, frames: [RGBA per direction], W, H, k }    (the spinning figure on screen)
-//   { type: 'clips', job, ck, part, spec, keys, k, dirs }
+//   { type: 'clips', job, ck, part, spec, keys, k, dirs, live, first }
 //        draws the clips not yet on the device and stores each one (deflated) in  part|<ck>|<part>|<clip>
 //        → { job, clip, of } per finished clip, { job, frac } halfway through a clip, { job, done: true } at the end ({ job, cancelled } / { job, error })
+//        live: every direction also goes to the game as soon as it is drawn (a clip already on the device: all of it, at once) →
+//        { job, live: { key, fps, loop, n, dirs, rows: [[dir, [{ w, h, ox, oy, data }]]] } } — the player wears the new look while it is
+//        being drawn (NpcArt.liveAdd). first = where the player faces (0–1 of a turn): that direction is drawn first, then its neighbours.
 //   { type: 'pack', job, ck, sets: [{ key, part, keys }], k }
 //        reads the stored clips of each set, packs the pages (G.packPages), stores the finished atlas in <key> (LookStore format: one
 //        PNG per page, as bytes) and deletes the loose clips → { job, packed: [keys] }
@@ -85,21 +90,44 @@ async function breathe(job) {
 const partKey = (ck, part, key) => `part|${ck}|${part}|${key}`;
 
 const HERO = 'protagonista';          // (a arma do jogo → a desenhada: a AK-47 do jogador é o fuzil da AK — NpcGenTypes.PLAYER_GUNS)
+// Directions of a clip in drawing order: the one the player faces (first, 0–1 of a turn), then outward to both sides.
+function dirOrder(D, first) {
+	const d0 = ((Math.round((first || 0) * D) % D) + D) % D, out = [d0];
+	for (let i = 1; out.length < D; i++) { out.push((d0 + i) % D); if (out.length < D) out.push((d0 - i + D) % D); }
+	return out;
+}
+// Drawn directions → the game (copies: the clip keeps its frames to be stored).
+function postLive(job, c, dirs) {
+	const rows = [], buf = [];
+	for (const d of dirs) rows.push([d, c.frames[d].map((f) => { const data = f.data.slice(); buf.push(data.buffer); return { w: f.w, h: f.h, ox: f.ox, oy: f.oy, data }; })]);
+	self.postMessage({ job, live: { key: c.key, fps: c.fps, loop: c.loop, n: c.n, dirs: c.dirs, rows } }, buf);
+}
 async function runClips(m) {
 	await touchParts(m.ck);
 	const opts = { hand: m.spec.hand || null, dirs: m.dirs || undefined };
 	let lastFrac = 0;
 	for (const key of m.keys) {
-		const pk = partKey(m.ck, m.part, key);
-		if (await LookStore.has(pk)) { self.postMessage({ job: m.job, clip: key, cached: true }); continue; }
+		const pk = partKey(m.ck, m.part, key), rec = m.live ? await LookStore.get(pk) : null;
+		if (rec || (!m.live && await LookStore.has(pk))) {
+			if (rec) { const c = await clipFrom(rec); postLive(m.job, c, c.frames.map((_, d) => d)); }
+			self.postMessage({ job: m.job, clip: key, cached: true });
+			continue;
+		}
 		const R = G.rendererFor(m.spec, { k: m.k }), [name, w0] = key.split(':'), cd = G.clipDef(name, w0, HERO, opts);
-		const total = cd.poses.length * (opts.dirs && opts.dirs < cd.dirs ? opts.dirs : cd.dirs), it = G.clipSteps(R, key, HERO, opts);
-		let c, i = 0;
-		for (let r = it.next(); ; r = it.next(), i++) {
-			if (r.done) { c = r.value; break; }
-			await breathe(m.job);
-			const t = performance.now();
-			if (t - lastFrac > 400) { lastFrac = t; self.postMessage({ job: m.job, frac: i / total }); }
+		const D = opts.dirs && opts.dirs < cd.dirs ? opts.dirs : cd.dirs, total = cd.poses.length * D, piv = [R.px, R.py];
+		const c = { key, fps: cd.fps, loop: !!cd.loop, n: cd.poses.length, dirs: D, frames: new Array(D) };
+		let i = 0;
+		for (const d of dirOrder(D, m.first)) {
+			const row = [];
+			for (const p of cd.poses) {
+				await breathe(m.job);
+				row.push(G.trimFrame(R.render(p, (-360 / D) * d), piv));
+				const t = performance.now();
+				i++;
+				if (t - lastFrac > 400) { lastFrac = t; self.postMessage({ job: m.job, frac: i / total }); }
+			}
+			c.frames[d] = row;
+			if (m.live) postLive(m.job, c, [d]);
 		}
 		await LookStore.put(pk, await clipRecord(c));
 		self.postMessage({ job: m.job, clip: key });
@@ -139,7 +167,8 @@ let chain = Promise.resolve();
 async function run(m) {
 	if (drop.has(m.job)) { self.postMessage({ job: m.job, cancelled: true }); return; }
 	try {
-		if (m.type === 'preview') runPreview(m);
+		if (m.type === 'warm') { try { G.rendererFor(m.spec, { k: m.k || G.OUT_K }); } finally { self.postMessage({ warmed: true }); } }
+		else if (m.type === 'preview') runPreview(m);
 		else if (m.type === 'clips') { await runClips(m); self.postMessage({ job: m.job, done: true }); }
 		else if (m.type === 'pack') self.postMessage({ job: m.job, packed: await runPack(m) });
 	} catch (err) {
