@@ -34,9 +34,9 @@ module.exports = {
         c.ok(turned.vis && turned.pg, 'virando para trás o personagem continua desenhado');
         // trocou de novo no meio: o atlas ao vivo anterior sai, o novo entra
         await page.evaluate(() => { Outfit.owned.add('moletom_capuz'); Outfit.wear('moletom_capuz'); });
-        await page.waitForFunction((old) => PlayerLook.live && PlayerLook.live.id !== old && !NpcArt.atlases[old], s2.id, { timeout: 30000 }).catch(() => {});
+        await page.waitForFunction((old) => PlayerLook.live && PlayerLook.live.id !== old && !NpcArt.atlases[old] && game.sprites.sheets.hero.atlasList()[0] === PlayerLook.live.id, s2.id, { timeout: 30000 }).catch(() => {});
         const s3 = await live();
-        c.ok(s3.id && s3.id !== s2.id && s3.chain[0] === s3.id && !s3.chain.includes(s2.id), `trocar de novo no meio descarta o atlas ao vivo anterior (${s2.id} → ${s3.id})`);
+        c.ok(s3.id && s3.id !== s2.id && s3.chain[0] === s3.id && !s3.chain.includes(s2.id), `trocar de novo no meio descarta o atlas ao vivo anterior (${s2.id} → ${s3.id}; folha ${s3.chain.join(',')})`);
         // de volta à roupa de sempre: os atlas prontos, sem atlas ao vivo
         await page.evaluate(() => Outfit.wear('camiseta_branca'));
         await page.waitForFunction(() => !PlayerLook.live && !PlayerLook.want, null, { timeout: 30000 }).catch(() => {});
