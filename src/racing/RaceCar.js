@@ -122,7 +122,7 @@ class RaceCar extends TrafficCar {
         // obstáculos: o trânsito e os rivais à frente, na faixa por onde vou; troca de lado se o outro lado está livre
         const hw = path.halfW(R.s, R.seg), look = 10 + sp * 1.3;
         const P0 = path.at(R.s, RaceCar._a, R.seg), tx = P0.tx, tz = P0.tz;
-        let block = null, bAlong = Infinity;
+        let block = null, bAlong = Infinity, blockAct = null, aAlong = Infinity;
         const lanes = RaceCar._lanes; lanes.length = 0;
         for (const o of env.grid.query(p.x, p.z, look + 4, RaceCar._q)) {
             if (o.ref === this || (o.layer || 0) !== (this.layer || 0)) continue;
@@ -130,27 +130,34 @@ class RaceCar extends TrafficCar {
             if (along < -2 || along > look) continue;
             const olat = (dx * -tz + dz * tx) + pr.lat, rad = this.halfW + (o.kind === 'car' ? o.hw : 0.5) + 0.6;
             lanes.push({ lat: olat, rad, along, vx: o.vx || 0, vz: o.vz || 0, o });
-            if (Math.abs(olat - R.lat) < rad && along > this.halfLen + 1 && along < bAlong) { bAlong = along; block = lanes[lanes.length - 1]; }      // (quem está AO LADO não é "o da frente": seguir ele trava os dois)
+            // na faixa por onde vou (block) e bem na frente de onde estou de fato (blockAct: ainda mudando de faixa); quem está AO LADO
+            // não é "o da frente" (seguir ele trava os dois)
+            if (along > this.halfLen + 1) {
+                if (Math.abs(olat - R.lat) < rad && along < bAlong) { bAlong = along; block = lanes[lanes.length - 1]; }
+                if (Math.abs(olat - pr.lat) < rad && along < aAlong) { aAlong = along; blockAct = lanes[lanes.length - 1]; }
+            }
         }
-        if (block) {
+        const follow = (q, al) => { const lead = Math.max(0, q.vx * tx + q.vz * tz), gap = Math.max(0, al - this.halfLen - 3); return Math.sqrt(lead * lead + 2 * C.brake * 0.7 * gap); };
+        const clear = (L) => { for (const q of lanes) if (q.along > 0 && q.along < look && Math.abs(q.lat - L) < q.rad) return false; return true; };
+        if (block || blockAct) {
             // lado livre: da esquerda à direita da pista, o mais perto da faixa de agora
             let bestLat = null, bestCost = Infinity;
             for (let L = -hw; L <= hw + 0.01; L += Math.max(1, hw / 3)) {
-                let free = true;
-                for (const q of lanes) if (q.along > 0 && q.along < look && Math.abs(q.lat - L) < q.rad) { free = false; break; }
                 const cost = Math.abs(L - R.lat) + Math.abs(L - R.pref) * 0.3;
-                if (free && cost < bestCost) { bestCost = cost; bestLat = L; }
+                if (cost < bestCost && clear(L)) { bestCost = cost; bestLat = L; }
             }
-            if (bestLat !== null) R.latT = bestLat;
-            else {                                                                  // sem espaço: segue o da frente
-                const lead = Math.max(0, block.vx * tx + block.vz * tz), gap = Math.max(0, bAlong - this.halfLen - 3);
-                vt = Math.min(vt, Math.sqrt(lead * lead + 2 * C.brake * 0.7 * gap));
-            }
-        } else if ((R.latHold -= dt) <= 0) { R.latT = R.pref; R.latHold = 0.8; }
+            if (bestLat !== null) { R.latT = bestLat; R.latHold = 1.2; }
+            else if (block) vt = Math.min(vt, follow(block, bAlong));               // sem espaço: segue o da frente
+        } else if ((R.latHold -= dt) <= 0) { R.latHold = 0.8; if (clear(R.pref)) R.latT = R.pref; }      // (volta para a faixa dele só se ela estiver livre)
+        // ainda bem atrás de alguém, saindo para o lado: devagar (colado num carro parado, a toda, não dá tempo de virar — bate, dá
+        // ré e bate de novo)
+        const dodge = !!blockAct && Math.abs(R.latT - pr.lat) > 0.8;
+        if (dodge) vt = Math.min(vt, Math.max(2.5, follow(blockAct, aAlong)));
         R.latT = Math.max(-hw, Math.min(hw, R.latT));
         R.lat += Math.sign(R.latT - R.lat) * Math.min(Math.abs(R.latT - R.lat), dt * (2.5 + sp * 0.12));
         // direção: perseguição pura num ponto à frente, deslocado para a faixa escolhida
-        const Ld = Math.max(6, Math.min(22, 4 + sp * 0.55)), T = path.at(R.s + Ld, RaceCar._b, R.seg);
+        // (desviando de alguém colado à frente: mira perto, para virar o volante todo — com a mira longe ele vira pouco e bate)
+        const Ld = dodge && aAlong < 14 ? Math.max(2.5, (aAlong - this.halfLen * 2) * 0.6) : Math.max(6, Math.min(22, 4 + sp * 0.55)), T = path.at(R.s + Ld, RaceCar._b, R.seg);
         const ax = T.x - T.tz * R.lat, az = T.z + T.tx * R.lat;
         const f = this._fdir || (this._fdir = new BABYLON.Vector3()); this.fwdToRef(f);
         let delta = Math.atan2(ax - p.x, az - p.z) - Math.atan2(f.x, f.z);
@@ -159,7 +166,8 @@ class RaceCar extends TrafficCar {
         let steer = Math.max(-1, Math.min(1, delta / 0.42));
         // preso (muro, batida): ré curta virando para o outro lado; muito tempo, fora da tela, volta para a pista
         R.stuck = sp < 1.2 ? R.stuck + dt : Math.max(0, R.stuck - dt * 2);
-        if (R.rev > 0) { R.rev -= dt; this.driveTo(-4, -steer, dt, 7, 14); return; }
+        // (ré com o volante invertido: o nariz gira para onde quer ir; preso atrás de alguém, volante todo para o lado livre)
+        if (R.rev > 0) { R.rev -= dt; this.driveTo(-4, dodge ? Math.sign(R.latT - pr.lat) : -steer, dt, 7, 14); return; }
         if (R.stuck > 1.6 && !this.tumble) { R.stuck = 0.6; R.rev = 0.9; R.unstick = (R.unstick || 0) + 1; }
         if (R.unstick > 3 && !Zones.near(p.x, p.z, 25)) this.reset();
         const a = Vehicle.accelOf(this.spec, v, top, 1) * (0.88 + 0.22 * R.skill) * (this.nosOn ? Vehicle.NOS_ACC : 1) + C.fric;

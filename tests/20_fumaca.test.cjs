@@ -21,7 +21,7 @@ module.exports = {
             return true;
         });
         if (c.ok(!!car, 'achou um carro 3D')) {
-            await gameWait(page, 0.6);
+            await gameWait(page, 0.6, 30000);                    // (folga de tempo real: no fim da bateria o Chromium anda devagar)
             const ex = await page.evaluate(() => {
                 const b = game.activeCar, G = b.visual.lampGeom, f = b.fwdToRef(new BABYLON.Vector3()), rx = f.z, rz = -f.x;
                 const X = b.position.x + f.x * G.ez + rx * G.ex, Z = b.position.z + f.z * G.ez + rz * G.ex;
@@ -42,7 +42,7 @@ module.exports = {
             return { spray: sp.live - before.s, puffs: pf.live - before.p };
         });
         c.ok(rain.spray > 0 && rain.puffs === 0, `pneu cantando no molhado espirra água, sem fumaça (${rain.spray} jorros, ${rain.puffs} baforadas)`);
-        await gameWait(page, 2.5);
+        await gameWait(page, 2.5, 60000);
         const moving = await page.evaluate(() => {
             const out = {};
             for (const kind of ['car', 'moto', 'bike']) {

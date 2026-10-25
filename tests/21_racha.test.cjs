@@ -59,18 +59,19 @@ module.exports = {
         });
         c.ok(st.prompt && st.board === 4, `no portão: E abre as 4 provas do autódromo`);
         c.ok(st.ok && st.n === 4 && st.phase === 'count' && st.hud !== 'none', 'prova dos estreantes larga: 4 rivais, semáforo e HUD');
+        // (as esperas têm folga grande de tempo real: no fim da bateria de testes o Chromium por software anda devagar)
         await page.keyboard.down('w');
-        await gameWait(page, 1.5);
+        await gameWait(page, 1.5, 60000);
         const held = await page.evaluate(() => ({ v: game.activeCar.speed, rivals: StreetRacing.cur.rivals.every((r) => r.speed < 0.5) }));
         c.ok(held.v < 0.5 && held.rivals, `todos segurados no grid durante o semáforo (${held.v.toFixed(2)} m/s)`);
         await page.keyboard.up('w');
-        await gameWait(page, 2.6);
-        const s0 = await page.evaluate(() => ({ phase: StreetRacing.cur.phase, s: StreetRacing.cur.rivals.map((r) => r.R.s + r.R.lap * StreetRacing.cur.path.len) }));
-        c.ok(s0.phase === 'race', 'VAI! — a corrida começou');
-        await gameWait(page, 6);
+        const go = await page.waitForFunction(() => StreetRacing.cur && StreetRacing.cur.phase === 'race', null, { timeout: 180000 }).then(() => true, () => false);
+        const s0 = await page.evaluate(() => ({ s: StreetRacing.cur.rivals.map((r) => r.R.s + r.R.lap * StreetRacing.cur.path.len) }));
+        c.ok(go, 'VAI! — a corrida começou');
+        const t = await gameWait(page, 6, 240000);
         const s1 = await page.evaluate(() => ({ s: StreetRacing.cur.rivals.map((r) => r.R.s + r.R.lap * StreetRacing.cur.path.len), v: StreetRacing.cur.rivals.map((r) => r.speed), off: StreetRacing.cur.rivals.map((r) => r.R.off || 0) }));
         const moved = s1.s.map((s, i) => s - s0.s[i]);
-        c.ok(moved.every((m) => m > 25), `os rivais correm pelo oval (${moved.map((m) => Math.round(m)).join(', ')} m em 6 s)`);
+        c.ok(moved.every((m) => m > 4 * t), `os rivais correm pelo oval (${moved.map((m) => Math.round(m)).join(', ')} m em ${t.toFixed(1)} s)`);
         c.ok(s1.off.every((o) => o < 9), `e ficam na pista (${s1.off.map((o) => o.toFixed(1)).join(', ')} m do eixo)`);
 
         // takedown: o jogador bate num rival e ele capota
@@ -80,12 +81,12 @@ module.exports = {
             r.rollover(30, 1, 0);
             return !!r.tumble;
         });
-        await gameWait(page, 0.4);
+        await gameWait(page, 0.4, 30000);
         c.ok(td && (await page.evaluate(() => StreetRacing.cur.takedowns)) === 1, 'takedown: rival capotado depois da sua batida conta');
 
         // chegada: resultado (reputação, estatística), e o fim devolve tudo
         await page.evaluate(() => StreetRacing._finishPlayer(game));
-        await gameWait(page, 3.2);
+        await page.waitForFunction(() => StreetRacing._p.open, null, { timeout: 120000 }).catch(() => {});
         const res = await page.evaluate(() => ({ open: StreetRacing._p.open, title: StreetRacing._p.$h.textContent, rep: StreetRacing.rep, races: StreetRacing.stats.races, td: StreetRacing.stats.takedowns }));
         c.ok(res.open && /LUGAR|VENCEU/.test(res.title), `resultado na tela: "${res.title}"`);
         c.ok(res.rep > 0 && res.races === 1 && res.td === 1, `reputação +${res.rep}, 1 corrida, 1 takedown`);

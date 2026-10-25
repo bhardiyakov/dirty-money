@@ -43,7 +43,7 @@ const StreetRacing = {
     NAMES: ['Japa do Turbo', 'Neguinho do Grau', 'Tatá Nitro', 'Mancha', 'Beto Escapamento', 'Dona Fumaça', 'Kiko Turbina', 'Rafa Rebaixado',
         'Gringo', 'Caveira', 'Lelê Drift', 'Marrento', 'Paty Neon', 'Zé do Opala', 'Dentuço', 'Bia Racha'],
     BOSS: 'Rei da Zona Sul',
-    TYPE: { drag: '🏁 Racha 1×1', sprint: '🏙️ Corrida de rua', circuit: '🔁 Circuito', oval: '🏎️ Autódromo', pink: '👑 Racha valendo o documento' },
+    TYPE: { drag: '🏁 Racha 1×1', sprint: '🏙️ Corrida de rua', circuit: '🔄 Circuito', oval: '🏎️ Autódromo', pink: '👑 Racha valendo o documento' },
 
     get racing() { return !!(this.cur && this.cur.phase === 'race'); },
     tier(rep = this.rep) { let t = 0; for (let i = 0; i < this.TIERS.length; i++) if (rep >= this.TIERS[i][0]) t = i; return t; },
@@ -292,7 +292,7 @@ const StreetRacing = {
             h += `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,${locked ? 0.03 : 0.06});${locked ? 'opacity:.55' : ''}">
                 <div style="flex:1"><b>${this.TYPE[ev.type]}</b> — ${ev.name} <span style="color:#ffb02e">${stars}</span>${ev.night ? ' <span title="à noite paga mais">🌙</span>' : ''}<br>
                 <small>${ev.rivals} ${ev.rivals > 1 ? 'rivais' : 'rival'}${dist ? ' · ' + dist : ''} · ${pink ? 'quem ganha leva o carro do outro' : `prêmio ${brl(ev.prize)} (${money})`} · +${ev.rep} de reputação · inscrição ${ev.fee ? brl(ev.fee) : 'grátis'}${why ? ` · <span style="color:#ff9a8a">${why}</span>` : ''}</small></div>
-                ${Panel.btn('race', locked ? '🔒' : 'Correr', { arg: ev.id, on: !why, pri: !why })}</div>`;
+                ${Panel.btn('race', locked ? '🔐' : 'Correr', { arg: ev.id, on: !why, pri: !why })}</div>`;
         }
         h += '</div>';
         const st = this.stats;
@@ -579,7 +579,7 @@ const StreetRacing = {
         this.rep += rep;
         const S = this.stats;
         S.races++; if (!dnf && place === 0) S.wins++; if (!dnf && place <= 2 && n >= 3) S.podiums++; S.takedowns += C.takedowns; S.earned += money;
-        if (!dnf && C.pl.time && (!this.best[ev.id] || C.pl.time < this.best[ev.id])) { this.best[ev.id] = C.pl.time; extra += '<div class="dm-kv"><span>⏱ Recorde pessoal</span><b>' + RaceHUD.clock(C.pl.time) + '</b></div>'; }
+        if (!dnf && C.pl.time && (!this.best[ev.id] || C.pl.time < this.best[ev.id])) { this.best[ev.id] = C.pl.time; extra += '<div class="dm-kv"><span>🕒 Recorde pessoal</span><b>' + RaceHUD.clock(C.pl.time) + '</b></div>'; }
         const P = this._panel(game), t = this.tier();
         let h = '<div style="display:flex;flex-direction:column;gap:4px">';
         rows.forEach((r, i) => {

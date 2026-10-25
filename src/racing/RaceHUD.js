@@ -80,7 +80,7 @@ const RaceHUD = {
         const L = this._last, set = (k, v, fn) => { if (L[k] !== v) { L[k] = v; fn(v); } };
         set('pos', `${st.pos}|${st.n}`, () => { this.$pos.innerHTML = `${st.pos}º<small>/${st.n}</small>`; });
         set('lap', st.lap, (v) => { this.$lap.textContent = v; });
-        set('time', RaceHUD.clock(st.time), (v) => { this.$time.textContent = '⏱ ' + v; });
+        set('time', RaceHUD.clock(st.time), (v) => { this.$time.textContent = '🕒 ' + v; });
         set('nos', Math.round(st.nos * 100), (v) => { this.$nosBar.style.width = v + '%'; });
         set('nosOn', !!st.nosOn, (v) => this.$nos.classList.toggle('on', v));
         set('rows', st.rows.map((r) => r.name + r.me + r.out + r.done).join(','), () => {
