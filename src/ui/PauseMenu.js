@@ -423,13 +423,13 @@ class PauseMenu {
 		this.lookBadge();
 		this.setTab(tab);
 	}
-	// Ponto amarelo em Inventário e em Equipamento enquanto há um visual novo para montar no guarda-roupa (PlayerLook.want).
+	// Ponto amarelo em Inventário e em Equipamento enquanto o guarda-roupa ainda monta o visual novo (PlayerLook.want).
 	lookBadge() {
 		if (!this.root) return;
-		const on = typeof PlayerLook !== 'undefined' && !!PlayerLook.want, tip = on ? 'Visual novo para montar em Equipamento' : '';
+		const on = typeof PlayerLook !== 'undefined' && !!PlayerLook.want, tip = on ? 'Montando o visual novo' : '';
 		for (const el of this.root.querySelectorAll('.pm-tab[data-tab="inventory"], #pmInvSeg > div[data-view="equip"]')) { el.classList.toggle('pm-new', on); el.title = tip; }
 	}
-	// O guarda-roupa (Wardrobe: o gerador do visual, num Worker) só existe com Inventário → Equipamento aberto.
+	// Inventário → Equipamento aberto: o guarda-roupa (Wardrobe) já aquece o gerador e usa mais núcleos (o jogo está pausado).
 	_syncWardrobe() { if (typeof Wardrobe !== 'undefined') Wardrobe.setActive(this.isOpen && this.tab === 'inventory' && this.invView === 'equip'); }
 
 	// Mapa expandido (toque no minimapa, no celular): abre direto no mapa, de ponta a ponta e centrado em você.

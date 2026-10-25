@@ -327,7 +327,7 @@ class EquipUI {
         box.classList.toggle('on', !!st);
         if (!st) return;
         const txt = st.error ? '⚠️ ' + st.error
-            : st.stage === 'look' ? (st.packing ? '⏳ Vestindo o personagem…' : `⏳ Montando o visual novo… ${Math.round(st.pct * 100)}%`)
+            : st.stage === 'look' ? (st.packing ? '⏳ Guardando o visual novo…' : `⏳ Vestido — desenhando o resto das animações… ${Math.round(st.pct * 100)}%`)
             : `🩹 Preparando o visual machucado (${st.step}/${st.steps})… ${Math.round(st.pct * 100)}%`;
         box.querySelector('span').textContent = txt;
         box.querySelector('s').style.width = (st.error ? 0 : Math.round(st.pct * 100)) + '%';
