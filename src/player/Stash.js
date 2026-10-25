@@ -20,7 +20,7 @@ class Stash {
     static single(id) { return id.startsWith('weapon:') || id.startsWith('bag:'); }      // um só (sem quantidade): armas e bolsas
 
     constructor() {
-        this.boxes = { fridge: {}, safe: {}, chest: {} };
+        this.boxes = { fridge: { food: 3, water: 2 }, safe: {}, chest: {} };      // jogo novo: um pouco de comida e água na geladeira
         this.jv = 0;                  // valor $ das joias guardadas (no cofre)
         this.wstate = {};             // armas guardadas: { arma: { mag, reserve } }
     }

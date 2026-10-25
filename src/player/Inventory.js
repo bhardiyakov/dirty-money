@@ -1,7 +1,7 @@
 // ============================================================================
 // Inventory — o que o jogador carrega: dinheiro, armas (com carregador e munição
-// reserva) e kits médicos. Começa com punhos, taco e uma pistola; SMG e escopeta
-// precisam ser encontradas (caixas pelo mapa ou drops).
+// reserva) e kits médicos. Começa quebrado: só os punhos, nada no bolso (os R$ 200 estão
+// na conta do banco — Banks.account) e o resto se compra, se acha ou se toma.
 // ============================================================================
 
 class Inventory {

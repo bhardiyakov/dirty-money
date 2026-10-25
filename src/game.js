@@ -176,6 +176,7 @@ class Game {
 		this.aim = new Aim(this);                    // mira do jogador (manual: mouse, analógico direito ou o botão de tiro do celular — combat/Aim.js)
 		PadNav.init(this);                           // controle nas telas de mouse/teclado (menus, janelas, tela inicial, sinuca)
 		this.stash = new Stash();                    // geladeira, cofre e baú da safe house
+		Banks.account = 200;                         // jogo novo: quebrado, com R$ 200 na conta do banco (o save, se houver, põe o saldo dele)
 		this.stashUI = new StashUI(this);
 		this.shopUI = new ShopUI(this);              // compra nas lojas (interiores)
 		Traces.game = this; Business.game = this; CarCare.game = this; Mechanic.game = this;      // rastros, negócios, mecânica (crime/, economy/, vehicle/)
