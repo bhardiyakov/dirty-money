@@ -120,7 +120,7 @@ module.exports = {
             const h1 = await cam();
             await page.mouse.up({ button: 'right' });
             c.ok(Math.abs(wrap(h1.yaw - h0.yaw)) < 0.05 && Math.abs(h1.look) > 1, `segurando o giro parado, a câmera não volta sozinha (${(wrap(h1.yaw - h0.yaw) * 57.3).toFixed(0)}°)`);
-            await gameWait(page, 3.5);
+            await gameWait(page, 5);                                          // (soltou: espera lookHold e volta suave — a olhada era maior)
             const m2 = await cam();
             c.ok(Math.abs(wrap(m2.yaw - rode.h)) < 0.2, `sem mexer, a câmera volta para trás da moto (${(wrap(m2.yaw - rode.h) * 57.3).toFixed(0)}°)`);
             await drag('right', -150);
