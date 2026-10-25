@@ -7,7 +7,12 @@ module.exports = {
     name: 'camera',
     async run(ctx, c) {
         const { page, errors, close } = await boot(ctx, { outside: false });
-        const cam = () => page.evaluate(() => ({ yaw: game.camera.yaw, user: game.camera.userYaw, look: game.camera.lookYaw, cy: CompassCamera.yaw, flat: game.camera.flat }));
+        // lat: distância (m) do centro da tela ao eixo do veículo dirigido — olhando em volta, ele não sai do meio
+        const cam = () => page.evaluate(() => {
+            const C = game.camera, v = game.mode === 'car' && game.activeCar, f = v && v.fwdToRef(new BABYLON.Vector3());
+            const lat = v ? Math.abs((C.target.x - v.position.x) * f.z - (C.target.z - v.position.z) * f.x) / (Math.hypot(f.x, f.z) || 1) : 0;
+            return { yaw: C.yaw, user: C.userYaw, look: C.lookYaw, cy: CompassCamera.yaw, flat: C.flat, lat };
+        });
         const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
         const K = await page.evaluate(() => ({ mouse: Config.camera.lookMouse, touch: Config.camera.lookTouch, pad: Config.camera.lookPad }));
         // arrasto do mouse com um botão (o centro da tela é o jogo)
@@ -112,6 +117,7 @@ module.exports = {
             await drag('right', 200);
             const m1 = await cam();
             c.ok(Math.abs(wrap(m1.yaw - m0.yaw) - 200 * K.mouse) < 0.08 && Math.abs(m1.look) > 0.8, `olhada em volta na moto (${(wrap(m1.yaw - m0.yaw) * 57.3).toFixed(0)}°)`);
+            c.ok(m1.lat < 0.5, `olhando em volta, a câmera gira em torno da moto: ela não vai para a borda da tela (${m1.lat.toFixed(1)} m fora do eixo)`);
             // segurando o botão parado: a olhada fica onde está (só volta depois de soltar)
             await page.mouse.move(640, 300); await page.mouse.down({ button: 'right' });
             for (let i = 1; i <= 8; i++) await page.mouse.move(640 + (120 * i) / 8, 300);

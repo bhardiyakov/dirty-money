@@ -2709,7 +2709,7 @@ if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performanc
 		let src = 'crash';
 		const ac = this.activeCar;
 		if (ac && car !== ac && BABYLON.Vector3.Distance(car.position, ac.position) < 5.5) src = 'player';
-		car.takeDamage(dmg, src);
+		if (car.spec.fire !== false) car.takeDamage(dmg, src);             // (bicicleta: sem motor e sem lataria — batida não a estraga; quem cai é o ciclista)
 		if (car.cond) CarCare.onImpact(car, dv, dmg, dvx, dvz);              // radiador, suspensão, vazamento de óleo (vehicle/CarCare.js)
 
 		// Bicicleta/moto: numa batida forte o piloto é ARREMESSADO (continua no sentido em que vinha) e o veículo tomba.

@@ -216,7 +216,10 @@ class CompassCamera {
 		this.lead += (goalLead - this.lead) * (1 - Math.exp(-C.leadLerp * dt));
 		const bo = this._bounce(vehicle, dt);
 		CompassCamera.yaw = this.yaw + this.roll;
-		const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw), L = this.lead * this.view;      // (adianto em fração da meia-altura)
+		// Adianto (fração da meia-altura): para a frente do VEÍCULO, e some conforme o jogador olha em volta — o giro é em torno do
+		// veículo. (Ia para o "cima" da tela: girando a câmera dirigindo, o carro descrevia um arco de ~8 m pela tela e ia parar na borda.)
+		const la = vehicle && this._carVeh ? this._carYaw : this.yaw, lk = vehicle && this._carVeh ? Math.max(0, Math.cos(this.lookYaw)) : 1;
+		const sy = Math.sin(la), cy = Math.cos(la), L = this.lead * this.view * lk;
 		if (!this.tilted) this.camera.upVector.set(Math.sin(this.yaw + this.roll), 0, Math.cos(this.yaw + this.roll));
 		const t = 1 - Math.exp(-C.followLerp * dt);
 		this.target.x += (targetPos.x + sy * L - this.target.x) * t;
