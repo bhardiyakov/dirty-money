@@ -375,7 +375,7 @@ class Vehicle {
         this._crashCd = Config.crash.cooldown;
         const C = Config.crash, dmg = C.dmgK * Math.pow(dv - C.minDv, C.dmgExp);          // curva: leve quase nada, feia muito
         if (Vehicle.onImpact) Vehicle.onImpact(this, dv, dmg, dvx, dvz);
-        else this.takeDamage(dmg, 'crash');
+        else if (this.spec.fire !== false) this.takeDamage(dmg, 'crash');      // (bicicleta: batida não a estraga)
     }
 
     // Mostra no sprite a fase de amassado atual (o atlas já tem as 3 fases: é só um número no shader) e, na carcaça, a pintura

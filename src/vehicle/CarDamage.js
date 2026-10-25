@@ -85,7 +85,7 @@ class CarDamage {
 			const near = hypot(car.position.x - f.x, car.position.z - f.z) < 75;
 			if (car.burning > 0) this._burn(car, dt, near);
 			else if (car.wrecked) this._wreck(car, dt, near);
-			else if (car.hp > 0 && car.hp / car.maxHp < Config.crash.smokeBelow) this._smoke(car, dt, near);
+			else if (car.hp > 0 && car.hp / car.maxHp < Config.crash.smokeBelow && car.spec.fire !== false) this._smoke(car, dt, near);      // (bicicleta: sem motor, sem fumaça)
 		}
 		this._updateGroundFires(dt);
 		this._updateBooms(dt);
