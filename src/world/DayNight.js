@@ -52,9 +52,13 @@ class DayNight {
 		this.apply();
 	}
 
+	// Jumps the clock (sleep, hospital, police station). Every midnight crossed turns the day: Economy.tick only notices the
+	// clock going back by more than 12 h, so a jump from 17:30 to 05:30 would otherwise lose that day.
 	skip(hours) {
-		this.hour = (this.hour + hours) % 24;
+		const total = this.hour + hours;
+		this.hour = total % 24;
 		this.apply();
+		if (total >= 24 && typeof Economy !== 'undefined') Economy.passMidnight(Math.floor(total / 24));
 	}
 
 	// Tempo fechado (Weather): escurece o sol, esfria e acinzenta as cores, acende postes/janelas/faróis com chuva forte e, no

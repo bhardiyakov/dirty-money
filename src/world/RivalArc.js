@@ -337,7 +337,7 @@ const RivalArc = {
         if (!this._cp) this._cp = new Panel('rivalEnd', { width: 560, closable: false, onAct: (a) => { this._cp.close(); this._resolve(g, a); } });
         this._cp.show('😁 O destino do Dentinho', 'Ele está no chão, ferido, de mãos para cima.',
             `<p style="margin:0 0 10px">"Faz o que quiser… mas lembra que eu sei de muita coisa."</p>`
-            + `<p style="margin:0 0 10px;font-size:12px;opacity:.75">Acabar: o bairro passa a ter medo e o inquérito sobe · Expulsar: ele some e o bairro respeita · Sócio: ele reabre duas bocas e te repassa uma parte todo dia — mas pode trair.</p>`
+            + `<p style="margin:0 0 10px;font-size:12px;opacity:.75">Acabar: o bairro passa a ter medo · Expulsar: ele some e o bairro respeita · Sócio: ele reabre duas bocas e te repassa uma parte todo dia — mas pode trair.</p>`
             + Panel.btn('dead', '🔫 Acabar com ele', { pri: true }) + Panel.btn('exiled', '🚌 Expulsar da cidade') + Panel.btn('partner', '🤝 Fazer dele seu sócio'));
     },
     _resolve(g, how) {
@@ -347,7 +347,6 @@ const RivalArc = {
         if (how === 'dead') {
             this.outcome = 'dead'; this.phase = 4;
             if (typeof WorldMemory !== 'undefined') WorldMemory.crime('kill', at.x, at.z, { rival: true });
-            if (typeof Traces !== 'undefined') Traces.addHeat(25);
             g._flash('☠ O Dentinho está morto. A cidade é sua — e todo mundo sabe quem foi.');
             if (typeof Phone !== 'undefined') { Phone.CONTACTS.dentinho.role = 'Falecido'; Phone.CONTACTS.dentinho.about = 'Era o campeão do truco do bairro.'; }
             if (typeof News !== 'undefined') News.onEvent({ kind: 'rivaldead', day: Economy.day, district: 'industrial' });
@@ -370,7 +369,6 @@ const RivalArc = {
     },
     _betray(g) {
         this.outcome = null; this.partner = null; this.phase = 2; this.startDay = Economy.day; this.nextOpen = Economy.day + 1;
-        if (typeof Traces !== 'undefined') Traces.addHeat(30);
         g.wanted.ensureLevel(2);
         if (typeof Phone !== 'undefined') { Phone.CONTACTS.dentinho.role = 'Traidor'; Phone.trust.dentinho = -80; }
         this.msg('Nada pessoal, sócio. Passei teu nome pra polícia e fiquei com tudo 😁 A cidade é pequena demais pra nós dois.');

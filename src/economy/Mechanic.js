@@ -2,7 +2,7 @@
 // Mechanic — as OFICINAS e as telas do CAPÔ e do BALCÃO DE PEÇAS (a condição dos carros mora em vehicle/CarCare.js).
 //   OFICINA PAY N PAY  (as fachadas amarelas de oficina da cidade, quase todas na zona industrial): chegue DIRIGINDO, pare na frente e
 //                      aperte E — diagnóstico com orçamento por peça (peça + mão de obra), "consertar tudo", retífica do motor,
-//                      vazamento de óleo, funilaria e PINTURA (cor nova: a placa anotada num assalto deixa de bater). Pagamento como
+//                      vazamento de óleo, funilaria e PINTURA. Pagamento como
 //                      no comércio legal: acima de R$ 800, só dinheiro limpo. Cada serviço leva um tempinho do relógio.
 //   BORRACHARIA DO POSTO  em todo posto de gasolina, longe das bombas (ou de tanque cheio): pneus, troca de óleo e bateria.
 //   MECÂNICO DO MORRO  no desmanche da favela: todos os serviços 20% mais baratos, aceita dinheiro sujo e faz PLACA FRIA.
@@ -58,7 +58,7 @@ const Mechanic = {
         }
         if (this.nearPump(s, car.position.x, car.position.z) && car.tank > 0 && car.fuel < car.tank - 0.5) return '';      // (nas bombas, o E abastece)
         const c = CarCare.cond(car), w = CarCare.worst(c);
-        return `<b>E</b> ${s.kind === 'posto' ? 'borracharia e troca de óleo' : s.kind === 'morro' ? 'mecânico do morro (aceita sujo, placa fria)' : 'oficina: diagnóstico e orçamento'}<small>${s.name} · ${w < 0.4 || car.hpFrac < 0.5 ? '⚠ o carro precisa de conserto' : w < 0.7 ? 'umas peças gastas' : 'carro em ordem'}</small>`;
+        return `<b>E</b> ${s.kind === 'posto' ? 'borracharia e troca de óleo' : s.kind === 'morro' ? 'mecânico do morro (aceita sujo)' : 'oficina: diagnóstico e orçamento'}<small>${s.name} · ${w < 0.4 || car.hpFrac < 0.5 ? '⚠ o carro precisa de conserto' : w < 0.7 ? 'umas peças gastas' : 'carro em ordem'}</small>`;
     },
     carInteract(game) {
         if (!this.carPrompt(game)) return false;
@@ -79,7 +79,6 @@ const Mechanic = {
         const row = pick[Math.floor(Math.random() * pick.length)] ?? rows[0];
         if (car.visual && car.visual.setVariant) car.visual.setVariant(row);
         if (car.ownedRec) car.ownedRec.paint = row;
-        Traces.clearPlate(car);
         game.wanted._set(0, 'paint');
         if (pm) { for (const u of pm.units) u.mind = null; pm.known = null; pm.search = null; }      // ninguém sabe de mais nada (os reforços voltam a patrulhar e somem depois)
         game.dayNight.skip(0.25);
@@ -105,7 +104,6 @@ const Mechanic = {
         if (k === 'leak') return Math.round(260 * m / 10) * 10;
         if (k === 'body') return Math.round(((1 - car.hpFrac) * (this.carValue(car) * 1.2 + 900) + 150) * m / 10) * 10;
         if (k === 'paint') return Math.round((700 + this.carValue(car) * 0.25) * m / 10) * 10;
-        if (k === 'plate') return 600;
         const part = F ? Items.DEFS[F[0]].price : 0;
         return Math.round((part * 1.15 + this.LABOR[k]) * m / 10) * 10;
     },
@@ -143,8 +141,7 @@ const Mechanic = {
             : '<p class="dm-note" style="text-align:center">Nada para consertar aqui — o carro está em ordem.</p>';
         if (J.length > 1) h += `<div class="dm-btns" style="justify-content:flex-end">${B('all', `Consertar tudo · ${brl(total)}`, { pri: true })}</div>`;
         if (s.kind !== 'posto') {
-            h += `<div class="dm-sec">Pintura nova (${brl(this.price(car, s, 'paint'))}) — a placa anotada num assalto não bate mais</div><div class="dm-btns">${this.PAINT_ROWS.map(([row, nm, hex]) => `<button class="btn" data-act="paint" data-arg="${row}" title="${nm}"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:${hex};vertical-align:-2px;margin-right:5px;border:1px solid rgba(255,255,255,.4)"></span>${nm}</button>`).join('')}</div>`;
-            if (s.kind === 'morro') h += `<div class="dm-btns">${B('plate', `Placa fria (${brl(600)})${Traces.plateFlagged(car) ? ' — sua placa está marcada!' : ''}`)}</div>`;
+            h += `<div class="dm-sec">Pintura nova (${brl(this.price(car, s, 'paint'))})</div><div class="dm-btns">${this.PAINT_ROWS.map(([row, nm, hex]) => `<button class="btn" data-act="paint" data-arg="${row}" title="${nm}"><span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:${hex};vertical-align:-2px;margin-right:5px;border:1px solid rgba(255,255,255,.4)"></span>${nm}</button>`).join('')}</div>`;
         }
         h += `<div class="dm-btns" style="justify-content:space-between">${s.kind === 'morro' ? '' : B('parts', '🧰 Balcão de peças')}${B('close', 'Fechar')}</div>
               <p class="dm-note">${s.kind === 'morro' ? 'Aceita dinheiro sujo (e completa com o limpo).' : 'Acima de R$ 800, só dinheiro limpo.'} Você tem ${brl(inv.cash)} sujos e ${brl(inv.clean)} limpos.</p>`;
@@ -162,7 +159,6 @@ const Mechanic = {
         if (a === 'fix') { const j = this._jobs[+arg]; if (j) { jobs = [j]; price = j.price; } }
         else if (a === 'all') { jobs = this._jobs; price = jobs.reduce((t, j) => t + j.price, 0); }
         else if (a === 'paint') { price = this.price(car, s, 'paint'); extra = 'paint'; }
-        else if (a === 'plate') { price = 600; extra = 'plate'; }
         if (!price) return;
         const err = this.pay(game, s, price);
         if (err) { P.msg(err, false); return; }
@@ -178,10 +174,9 @@ const Mechanic = {
             const row = +arg;
             if (car.visual && car.visual.setVariant) car.visual.setVariant(row);
             if (car.ownedRec) car.ownedRec.paint = row;
-            const was = Traces.clearPlate(car); hours += 1.2;
-            msg = `🎨 Pintura nova (−${brl(price)})${was ? ' · a placa anotada não bate mais com o carro' : ''}`;
+            hours += 1.2;
+            msg = `🎨 Pintura nova (−${brl(price)})`;
         }
-        if (extra === 'plate') { const was = Traces.clearPlate(car); hours += 0.3; msg = `🪪 Placa fria instalada (−${brl(price)})${was ? ' · a polícia não reconhece mais esse carro' : ''}`; }
         if (hours > 0) { game.dayNight.skip(hours); msg += ` · levou ${hours >= 1 ? hours.toFixed(1).replace('.', ',') + ' h' : Math.round(hours * 60) + ' min'}`; }
         CarCare.syncRec(car);
         if (game.careers) game.careers.by.chop.addXp(5);

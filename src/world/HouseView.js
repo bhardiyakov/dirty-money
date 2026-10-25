@@ -55,7 +55,7 @@ const HouseView = {
 		const run = (axis, a0, a1, c0, c1, ops, pick) => {
 			const list = ops.slice().sort((p, q) => p.a - q.a), put = (a, b, y0, y1) => {
 				if (b - a < 1e-3) return;
-				// materiais por trecho (zinco no lado do quarto, tijolo na cozinha)
+				// materiais por trecho (o barraco é remendado: zinco de um lado, bloco do outro)
 				const cuts = pick.cuts ? [a].concat(pick.cuts.filter((c) => c > a && c < b), [b]) : [a, b];
 				for (let i = 0; i + 1 < cuts.length; i++) {
 					const m = pick.fn((cuts[i] + cuts[i + 1]) / 2);
@@ -74,7 +74,7 @@ const HouseView = {
 		const byWall = (w) => S.windows.filter((q) => q.wall === w).map((q) => ({ a: q.a, b: q.b, y0: q.y0, y1: q.y1 }));
 		const d = S.door;
 		const southOps = byWall('S').concat([{ a: d.x0, b: d.x1, y0: 0, y1: d.h }]);
-		const splitPick = { cuts: [S.PX + S.PT], fn: (x) => (x < S.PX ? 'zinc' : 'brick') };
+		const splitPick = { cuts: [S.MAT_CUT], fn: (x) => (x < S.MAT_CUT ? 'zinc' : 'brick') };
 		run('x', 0, W, 0, T, southOps, splitPick);
 		run('x', 0, W, D - T, D, byWall('N'), splitPick);
 		run('z', T, D - T, 0, T, [], { fn: () => 'plank' });                                  // oeste
@@ -107,7 +107,7 @@ const HouseView = {
 		const glass = build('glass', mats.glass, { receiveShadows: false });
 		if (glass) { mats.glass.backFaceCulling = false; }
 
-		// --- telhado: chapa de zinco pintada (24×16 u) com beiral, + laje fina de borda ---
+		// --- telhado: chapa de zinco pintada com beiral, + laje fina de borda ---
 		const rx0 = ox - 0.5, rz0 = oz + 0.05, rx1 = ox + W + 0.5, rz1 = oz + D + 0.5, ry = S.ROOF_Y;      // (sem beiral na frente: a porta fica à vista)
 		const RB = new MeshBatch(), SL = new MeshBatch();
 		SL.solid(rx0, rz0, rx1, rz1, ry - 0.3, ry, [0.4, 0.37, 0.33]);
@@ -150,7 +150,7 @@ const HouseView = {
 		this.g = { door: G.alloc(), doorCore: G.alloc(), win: [G.alloc(), G.alloc(), G.alloc()] };
 		const dc = S.doorWorld();
 		G.place(this.g.door, dc.x, 0.25, dc.z - 2.6, 9); G.place(this.g.doorCore, dc.x, 0.9, dc.z - 0.2, 3);
-		const wins = [S.windows[0], S.windows[1], S.windows[3]];
+		const wins = S.windows.slice(0, 3);
 		wins.forEach((w, i) => {
 			const wx = w.wall === 'E' ? ox + W + 1.3 : ox + (w.a + w.b) / 2, wz = w.wall === 'S' ? oz - 1.2 : (w.wall === 'N' ? oz + D + 1.2 : oz + (w.a + w.b) / 2);
 			G.place(this.g.win[i], wx, 0.2, wz, 5);
@@ -216,7 +216,7 @@ const HouseView = {
 			obs: S.solids().map(([x0, z0, x1, z1, h]) => ({ x0, z0, x1, z1, h })),
 			door: { x0: S.door.x0, x1: S.door.x1 }, clerk: null, patrons: [],
 			spawn: { x: (S.door.x0 + S.door.x1) / 2, z: S.T + 1.4 },
-			uses: S.furniture.filter((f) => f.use).map((f) => ({ kind: f.use, x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1 })),
+			uses: S.furniture.filter((f) => f.use).map((f) => ({ kind: f.use, x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, prompt: f.prompt })),
 		};
 	},
 };

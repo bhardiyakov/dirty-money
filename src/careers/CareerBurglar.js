@@ -249,8 +249,8 @@ class BurglaryJob extends CareerJob {
                 this._wave = 0.6;
                 const R = 10 * this.mul;
                 const npc = this.mgr.watcher(pos, R);
-                if (npc) { npc.panic(pos); g.wanted.reportCrime(); }
-                if (this.mgr.copDist(pos) < R * 1.6) { g.wanted.reportCrime(); if (g.policeManager) g.policeManager.alertNear(pos, R * 1.6); }
+                if (npc) { npc.panic(pos); g.heat.commit('burglary', CrimeExposure.WITNESS); }
+                if (this.mgr.copDist(pos) < R * 1.6) { g.heat.commit('burglary', CrimeExposure.POLICE); if (g.policeManager) g.policeManager.alertNear(pos, R * 1.6); }
             }
         }
         this.noise = Math.max(0, this.noise - 5 * dt);
@@ -312,7 +312,7 @@ class HeistJob extends CareerJob {
             g.lockpick.start({ difficulty: 1.3 * (1 - 0.07 * this.c.skill('eletronica')), onEnd: (res) => {
                 if (g.player.action && g.player.action.name === 'pick') g.player.action.timer = 0;
                 if (res === 'ok') { this.power = true; g._flash('⚡ Energia cortada: câmeras e laser desligados'); }
-                else if (res === 'alarm') { g.wanted.reportCrime(); if (g.policeManager) g.policeManager.alertNear(p, 120); g._flash('Curto-circuito! O alarme do quarteirão tocou — a energia continua ligada'); }
+                else if (res === 'alarm') { g.heat.commit('burglary', CrimeExposure.CAMERA); if (g.policeManager) g.policeManager.alertNear(p, 120); g._flash('Curto-circuito! O alarme do quarteirão tocou — a energia continua ligada'); }
                 else return;
                 this.stage = 1; this.text = 'Vá até a agência e abra o cofre (suborne o vigia na aba O)';
                 this.target(this.bank.x, this.bank.z, 'Agência bancária');

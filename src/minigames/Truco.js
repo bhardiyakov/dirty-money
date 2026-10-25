@@ -1047,7 +1047,7 @@ const Truco = {
             x.lineWidth = turn ? 3 : 1.5; x.strokeStyle = turn ? 'rgba(253,224,71,' + (0.7 + 0.3 * Math.sin(time * 6)) + ')' : 'rgba(255,255,255,0.25)'; x.stroke();
             x.font = `${Math.round(r * 1.15)}px ${this._emoji}`; x.textAlign = 'center'; x.textBaseline = 'middle';
             x.fillText(P[i].emo, A.x, A.y + r * 0.06);
-            x.font = `700 ${Math.max(11, Math.round(r * 0.48))}px system-ui, sans-serif`;
+            x.font = `700 ${Math.max(11, Math.round(r * 0.48))}px system-ui, "DM Icons", sans-serif`;
             const label = P[i].name + (this.duo && i === 2 && !this.watching ? (P[i].f ? ' (parceira)' : ' (parceiro)') : ''), tw = x.measureText(label).width + 16, ly = this._seatOf(i) === 'N' ? A.y - r - 14 : A.y + r + 14;
             x.fillStyle = 'rgba(10,8,6,0.72)'; this._rr(x, A.x - tw / 2, ly - 10, tw, 20, 10); x.fill();
             x.fillStyle = this._team(i) === 0 ? '#bbf7d0' : '#fecdd3'; x.fillText(label, A.x, ly + 0.5);
@@ -1060,7 +1060,7 @@ const Truco = {
             const A = b.i === 0 ? { x: this.cx - this.cw * 2.2, y: this.vh - this.ch * 1.15 } : this._seatXY(b.i), k = Math.min(1, b.t / 0.12), out = Math.max(0, (b.t - b.life + 0.25) / 0.25);
             const S = b.i === 0 ? 'S' : this._seatOf(b.i);
             x.save(); x.globalAlpha = (1 - out);
-            x.font = `800 ${Math.max(13, Math.round(this.cw * 0.17))}px system-ui, sans-serif`;
+            x.font = `800 ${Math.max(13, Math.round(this.cw * 0.17))}px system-ui, "DM Icons", sans-serif`;
             const tw = x.measureText(b.text).width + 22, th = Math.max(26, this.cw * 0.3);
             let bx = A.x - tw / 2, by = A.y - this.cw * 0.45 - th;
             if (S === 'N') { bx = A.x - tw - Math.max(20, this.cw * 0.3) - 12; by = A.y - th / 2; }          // (ao lado: embaixo fica a mensagem)
@@ -1088,7 +1088,7 @@ const Truco = {
         const M = this.msgT; if (!M || M.t > 4.2 || this.phase === 'setup') return;
         const a = Math.min(1, M.t / 0.2) * Math.min(1, (4.2 - M.t) / 0.5);
         x.save(); x.globalAlpha = a;
-        x.font = `600 ${this.vh < 560 ? 12 : 14}px system-ui, sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.font = `600 ${this.vh < 560 ? 12 : 14}px system-ui, "DM Icons", sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
         const tw = Math.min(this.vw - 24, x.measureText(M.text).width + 36), N = this._seatXY(this.duo ? 2 : 1), y = N.y + Math.max(20, this.cw * 0.3) + this.cw * 0.62;
         x.fillStyle = 'rgba(16,13,10,0.82)'; this._rr(x, this.cx - tw / 2, y - 16, tw, 32, 16); x.fill();
         x.strokeStyle = 'rgba(255,255,255,0.12)'; x.stroke();
@@ -1101,7 +1101,7 @@ const Truco = {
         if (!this.vira || this.phase === 'setup') return;
         const D = this._deckXY();
         x.save();
-        x.font = `700 ${Math.max(11, Math.round(this.cw * 0.13))}px system-ui, sans-serif`; x.textAlign = 'center';
+        x.font = `700 ${Math.max(11, Math.round(this.cw * 0.13))}px system-ui, "DM Icons", sans-serif`; x.textAlign = 'center';
         x.fillStyle = 'rgba(255,248,230,0.75)';
         x.fillText(`manilha: ${this.RANKS[this.man]}`, D.x + this.cw * 0.25, D.y + this.ch * 0.72);
         x.restore();
@@ -1124,7 +1124,7 @@ const Truco = {
                 x.fillStyle = hd; x.beginPath(); x.ellipse(-L / 2, 0, 4.2, 3, 0, 0, Math.PI * 2); x.fill();
                 x.restore();
             }
-            x.font = `800 ${Math.max(11, Math.round(this.cw * 0.14))}px system-ui, sans-serif`; x.fillStyle = S.t === 0 ? 'rgba(187,247,208,0.85)' : 'rgba(254,205,211,0.85)';
+            x.font = `800 ${Math.max(11, Math.round(this.cw * 0.14))}px system-ui, "DM Icons", sans-serif`; x.fillStyle = S.t === 0 ? 'rgba(187,247,208,0.85)' : 'rgba(254,205,211,0.85)';
             x.textAlign = 'left'; x.fillText(`${this._sideShort(S.t).toUpperCase()} ${n}`, 0, -L * 0.75);
             x.restore();
         }

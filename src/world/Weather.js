@@ -6,7 +6,8 @@
 //   storm    tempestade    — chuva torrencial, vento forte, RELÂMPAGOS (clarão que ilumina tudo) e TROVÕES (som atrasado pela distância)
 //
 // `k` (0..1) é a intensidade atual, suavizada (a chuva engrossa e some devagar). O que ela muda:
-//   • visual: chuva pixelada em tela (canvas na resolução interna, como o resto do jogo), respingos, clarão dos raios;
+//   • visual: a chuva caindo na cena 3D (render/RainFx: riscos com MSAA, inclinados pelo vento, atrás dos prédios) e, na chuva forte,
+//     pingos batendo no chão (anel + coroa de gotinhas); no canvas por cima, só o céu fechando nas bordas e o clarão dos raios;
 //   • luz: DayNight escurece o sol, esfria a cor e, com tempo fechado, acende postes, janelas e faróis mais cedo;
 //   • som: chuva contínua e trovões (AudioFX.rain / AudioFX.thunder);
 //   • jogo: pista molhada (carros derrapam mais), trânsito mais cauteloso, a polícia enxerga menos longe, barcos balançam mais.
@@ -35,7 +36,7 @@ class Weather {
 		this._boltT = 6; this._pulses = []; this._rumble = [];
 		this.wind = 0.2; this._windT = 0;               // inclinação da chuva (positivo = vem da esquerda)
 		this.gripMul = 1; this.brakeMul = 1; this.sightMul = 1; this.trafficMul = 1;
-		this.drops = []; this.splashes = []; this._splashAcc = 0;
+		this.fx = null;                                 // the rain itself: render/RainFx.js (in the 3D scene, with the MSAA)
 		this._makeOverlay();
 	}
 
@@ -194,85 +195,28 @@ class Weather {
 		this.ctx = c.getContext('2d');
 	}
 
-	// Risca de chuva pronta: camada `a` (cor), `n` px de altura, inclinação `slant` (px de x por px de y). Cache por (a, n); refeito
-	// quando o vento muda de verdade. _ox = deslocamento x do canto esquerdo em relação à cabeça da gota.
-	_dropSprite(a, n, slant) {
-		const q = Math.round(slant * 50);
-		if (q !== this._dropQ) { this._dropQ = q; this._drops = new Map(); }
-		const key = a * 1000 + n;
-		let c = this._drops.get(key);
-		if (c) return c;
-		const xs = [];
-		for (let i = 0; i < n; i++) xs.push(Math.round(-i * slant));
-		const x0 = Math.min(...xs), x1 = Math.max(...xs);
-		c = document.createElement('canvas');
-		c.width = x1 - x0 + 1; c.height = n;
-		const g = c.getContext('2d');
-		g.fillStyle = ['rgb(190,215,245)', 'rgb(205,225,250)', 'rgb(225,238,255)'][a];
-		for (let i = 0; i < n; i++) g.fillRect(xs[i] - x0, n - 1 - i, 1, 1);
-		c._ox = x0;
-		this._drops.set(key, c);
-		return c;
-	}
-
 	_fit() {
 		const e = this.g.gameEngine.engine, w = e.getRenderWidth(), h = e.getRenderHeight();
-		if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; this.drops.length = 0; }
+		if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
 	}
 
 	_draw(dt) {
-		const k = this.k, cv = this.canvas, ctx = this.ctx;
-		const on = (k > 0.02 || this.flash > 0.01) && !Interiors.active;
+		const k = this.k, cv = this.canvas, ctx = this.ctx, g = this.g, indoors = !!Interiors.active;
+		if (!this.fx && g.scene && g.camera && typeof RainFx !== 'undefined') this.fx = new RainFx(g.scene);
+		if (this.fx) this.fx.update(dt, k, this.flash, g.camera, SpriteMaterial.sharedTint(), indoors);
+		const on = (k > 0.2 || this.flash > 0.01) && !indoors;
 		if (!on) { if (cv.style.display !== 'none') { cv.style.display = 'none'; ctx.clearRect(0, 0, cv.width, cv.height); } return; }
 		if (cv.style.display === 'none') cv.style.display = 'block';
 		this._fit();
-		const W = cv.width, H = cv.height, s = H / 560;                 // 1 = a altura interna de referência
+		const W = cv.width, H = cv.height;
 		ctx.clearRect(0, 0, W, H);
 
 		// Escurecimento fechado do céu (além da luz do mundo): vinheta azul-acinzentada nas bordas.
 		if (k > 0.2) {
-			const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
-			g.addColorStop(0, 'rgba(10,18,34,0)'); g.addColorStop(1, `rgba(10,18,34,${0.42 * (k - 0.2)})`);
-			ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+			const gr = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
+			gr.addColorStop(0, 'rgba(10,18,34,0)'); gr.addColorStop(1, `rgba(10,18,34,${0.42 * (k - 0.2)})`);
+			ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
 		}
-
-		// Gotas: 3 camadas de alfa; cada gota é uma risca diagonal de 1 px (passos inteiros = pixel art).
-		const want = Math.min(700, Math.floor(k * 820 * (W / 1000)));
-		const drops = this.drops;
-		while (drops.length < want) drops.push({ x: Math.random() * W, y: Math.random() * H, v: 0.8 + Math.random() * 0.6, l: 0.6 + Math.random() * 0.8, a: Math.floor(Math.random() * 3) });
-		if (drops.length > want) drops.length = want;
-		const slant = this.wind, speed = (560 + 480 * k) * s, len0 = (5 + 8 * k) * s;
-		// Cada gota é um desenho pronto (risca diagonal de 1 px, por comprimento e camada — ver _dropSprite): um drawImage por gota em
-		// vez de um fillRect por PIXEL (eram 5–9 mil chamadas de canvas por quadro na chuva forte). A intensidade de cada camada entra
-		// pelo globalAlpha (as riscas são desenhadas opacas).
-		const alphas = [0.3 + 0.22 * k, 0.42 + 0.25 * k, 0.58 + 0.27 * k];
-		for (let a = 0; a < 3; a++) {
-			ctx.globalAlpha = Math.min(1, alphas[a]);
-			for (const d of drops) {
-				if (d.a !== a) continue;
-				d.y += speed * d.v * dt; d.x += speed * d.v * dt * slant;
-				if (d.y > H + 12) { d.y = -Math.random() * 30; d.x = Math.random() * (W + 120) - 60 - H * slant * 0.5; }
-				const n = Math.max(2, Math.round(len0 * d.l)), sp = this._dropSprite(a, n, slant);
-				ctx.drawImage(sp, Math.round(d.x) + sp._ox, Math.round(d.y) - n + 1);
-			}
-		}
-		ctx.globalAlpha = 1;
-
-		// Respingos no chão (e marolas na água): anelzinhos que abrem e somem.
-		this._splashAcc += dt * k * 110 * (W / 1000);
-		while (this._splashAcc >= 1 && this.splashes.length < 160) { this._splashAcc -= 1; this.splashes.push({ x: Math.random() * W, y: Math.random() * H, t: 0, life: 0.22 + Math.random() * 0.18 }); }
-		this._splashAcc = Math.min(this._splashAcc, 2);
-		ctx.fillStyle = 'rgb(215,232,255)';
-		for (let i = this.splashes.length - 1; i >= 0; i--) {
-			const p = this.splashes[i];
-			p.t += dt;
-			if (p.t >= p.life) { this.splashes.splice(i, 1); continue; }
-			const u = p.t / p.life, r = 1 + Math.floor(u * 3);
-			ctx.globalAlpha = (1 - u) * (0.35 + 0.3 * k);
-			const x = Math.round(p.x), y = Math.round(p.y);
-			ctx.fillRect(x - r, y, 1, 1); ctx.fillRect(x + r, y, 1, 1); ctx.fillRect(x, y - Math.max(1, r - 1), 1, 1); ctx.fillRect(x, y + Math.max(1, r - 1), 1, 1);
-		}
-		ctx.globalAlpha = 1;
 
 		// Clarão do relâmpago.
 		if (this.flash > 0.01) { ctx.fillStyle = `rgba(225,232,255,${Math.min(0.62, this.flash * 0.55)})`; ctx.fillRect(0, 0, W, H); }

@@ -1,23 +1,21 @@
 // ============================================================================
-// WantedSystem — nível de procurado (★) e FUGA.
+// WantedSystem — wanted level (★) and EVASION. HeatStateMachine (police/HeatStateMachine.js) decides WHEN a crime is a flagrant
+// (CrimeExposure, at the exact moment of the crime); this class only keeps the stars and the escape timer of the WANTED state.
 //
-// Subir de nível:
-//   - reportCrime(): você cometeu um crime (abre uma janela de "flagrante").
-//   - seenByPolice(): alguém te viu na janela -> 1★ na hora; já procurado, +1★ só a cada
-//     `escalateEvery` s (um tiroteio escala com o tempo, não em 2 segundos).
-//   - bump()/addStars(): agressão a policial (com o mesmo intervalo) e morte de policial (na hora).
-// Fugir:
-//   - update(dt, seen, hold, rate): com ★, cada segundo SEM ninguém te enxergar conta (× rate: fora da área de busca
-//     conta mais rápido). Passou o `lose` do nível (Config.wanted.levels[n].lose) sem ser visto = você se safou e as ★ zeram.
-//     Ser visto zera a contagem; policial colado sem te ver (hold) só a pausa. Níveis altos enxergam de mais longe e demoram mais.
-// Ser preso/morrer também zera. `onChange(nível, anterior, motivo)` avisa o jogo (mensagens, reforços).
+// Raising the level:
+//   - ensureLevel(n): at least n stars (a flagrant, a recognized face, a scripted alarm).
+//   - bump(): +1★ only every `escalateEvery` s (a shootout escalates over time, not in 2 seconds).
+//   - addStars(): immediate stars for the gravest acts.
+// Escaping:
+//   - update(dt, seen, hold, rate): with ★, every second WITHOUT any unit seeing the player counts (× rate: faster outside the search
+//     area). After the level's `lose` (Config.wanted.levels[n].lose) unseen, the stars drop to 0 ('escape').
+//     Being seen resets the count; an officer right next to the player without seeing them (hold) only pauses it.
+// Arrest/death also reset it. `onChange(level, previous, reason)` tells the game (messages, reinforcements, HeatStateMachine).
 // ============================================================================
 
 class WantedSystem {
     constructor() {
         this.level = 0;
-        this.pending = false;    // crime aguardando ser visto.
-        this.crimeWindow = 0;    // tempo restante da janela de flagrante.
         this.lose = 0;           // segundos seguidos sem ninguém te ver (fuga em andamento).
         this.heatCd = 0;         // tempo até a próxima ★ por crime comum.
         this.rate = 1;           // ritmo atual da fuga (o HUD mostra o tempo que falta nesse ritmo).
@@ -45,22 +43,6 @@ class WantedSystem {
         if (this.onChange) this.onChange(n, prev, why);
     }
 
-    // window: segundos de flagrante (padrão: Config.police.crimeVisibleTime; o assalto usa uma janela maior).
-    reportCrime(window = Config.police.crimeVisibleTime) {
-        this.pending = true;
-        this.crimeWindow = Math.max(this.crimeWindow, window);
-    }
-
-    // Chamado quando QUALQUER policial enxerga o jogador neste frame (só vale com crime pendente).
-    seenByPolice() {
-        if (!this.pending) return;
-        this.pending = false;
-        this.crimeWindow = 0;
-        if (this.level === 0) this._set(1, 'crime');
-        else this.bump('crime');
-        this.lose = 0;
-    }
-
     // +1★ respeitando o intervalo entre estrelas (agressões e crimes repetidos).
     bump(why = 'crime') {
         if (this.level === 0) { this._set(1, why); return; }
@@ -72,12 +54,6 @@ class WantedSystem {
         this.hold = !!hold && !seen;
         this.rate = rate;
         if (this.heatCd > 0) this.heatCd -= dt;
-        // Expira o flagrante se ninguém viu a tempo.
-        if (this.crimeWindow > 0) {
-            this.crimeWindow -= dt;
-            if (this.crimeWindow <= 0) this.pending = false;
-        }
-
         if (this.level <= 0) return;
         if (seen) { this.lose = 0; return; }
         if (this.hold) return;
@@ -86,8 +62,8 @@ class WantedSystem {
     }
 
     // Garante pelo menos `n` estrelas (ex.: ser visto com arma de fogo na mão).
-    ensureLevel(n) {
-        if (this.level < n) this._set(n, 'weapon');
+    ensureLevel(n, why = 'weapon') {
+        if (this.level < n) this._set(n, why);
         this.lose = 0;
     }
 
@@ -98,8 +74,6 @@ class WantedSystem {
     }
 
     bust() {
-        this.pending = false;
-        this.crimeWindow = 0;
         this._set(0, 'bust');
     }
 }

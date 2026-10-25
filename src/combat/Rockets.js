@@ -223,7 +223,7 @@ const Rockets = {
         if (y > 4) {                                                          // no ar: bola de fogo lá em cima, ninguém no chão se machuca
             this._airBoom(x, y, z, D.bl);
             if (src === 'player') {
-                g.wanted.reportCrime();
+                g.heat.commit('explosion');
                 if (g.policeManager) g.policeManager.alertNear({ x, z }, 110);
             }
             if (g.npcManager) g.npcManager.alertViolence({ x, z }, 45);
@@ -237,7 +237,7 @@ const Rockets = {
             if (typeof Throwables !== 'undefined') Throwables._splash(x, z, 3);
             AudioFX._burst(x, z, { vol: 0.8, dur: 0.7, f0: 600, f1: 50, maxDist: 180 });
             g.carDamage._blast(x, z, Config.crash.explosionR * 0.5 * D.bl, src, null, D.bl * 0.5);
-            if (src === 'player') g.wanted.reportCrime();
+            if (src === 'player') g.heat.commit('explosion');
             return;
         }
         g.carDamage.boomAt(x, z, src, D.bl, false);

@@ -315,6 +315,7 @@ class TouchControls {
             if (e.pointerType !== 'touch') return;
             pts.set(e.pointerId, { x: e.clientX, y: e.clientY, look: e.clientX > window.innerWidth * 0.45 });
             if (pts.size === 2) d0 = dist();
+            this.input.touchLookDown = pts.size === 1 && [...pts.values()][0].look;
         });
         cv.addEventListener('pointermove', (e) => {
             const P = pts.get(e.pointerId); if (!P) return;
@@ -323,7 +324,7 @@ class TouchControls {
             if (pts.size !== 2 || !this.g.camera) return;
             const d = dist(); this.g.camera.zoom(-(d - d0) * 0.04); d0 = d;
         });
-        const end = (e) => { pts.delete(e.pointerId); };
+        const end = (e) => { pts.delete(e.pointerId); this.input.touchLookDown = pts.size === 1 && [...pts.values()][0].look; };
         cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
     }
 

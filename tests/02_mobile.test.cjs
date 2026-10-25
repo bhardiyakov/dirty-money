@@ -9,7 +9,7 @@ module.exports = {
         const { page, errors, close } = await boot(ctx, { touch: true, width: 844, height: 390 });
         c.ok(await page.evaluate(() => document.body.classList.contains('mobile')), 'modo celular ligado');
         // avisos de rastro e o 📱 não podem cobrir os atalhos do topo
-        await page.evaluate(() => { Traces.heat = 40; Traces.desc = Object.assign(Traces.sig(), { until: Traces.now() + 48 }); Phone._gen_taunt(); });
+        await page.evaluate(() => { game.heat.fileEvidence('armed_robbery'); Traces.desc = Object.assign(Traces.sig(), { until: Traces.now() + 48 }); Phone._gen_taunt(); });
         await page.waitForTimeout(2500);
         const R = await page.evaluate(() => { const r = (id) => { const e = document.getElementById(id); if (!e || !e.getClientRects().length) return null; const b = e.getBoundingClientRect(); return { left: b.left, right: b.right, top: b.top, bottom: b.bottom }; }; return { top: r('tcTop'), chips: r('traceChips'), badge: r('phoneBadge'), hud: r('hud2') }; });
         c.ok(R.top, 'atalhos do topo visíveis');

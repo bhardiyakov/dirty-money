@@ -2,19 +2,19 @@
 // Witnesses — TESTEMUNHAS na rua e BUSCA E APREENSÃO em casa (complementa crime/Traces.js, que cuida da cena dos assaltos a loja).
 //   • TESTEMUNHAS  matar, assaltar ou arrancar alguém do carro na rua com gente olhando: até 3 pedestres que VIRAM (perto e com
 //                  linha de visão; agachado, menos) saem correndo com o celular na mão (📞 em cima da cabeça). Em ~20–40 s cada um liga:
-//                  a polícia de perto vem ao local (círculo amarelo), a sua roupa vira a descrição e o inquérito sobe (menos se mascarado).
+//                  a polícia de perto vem ao local (círculo amarelo) e a sua roupa vira a descrição. (The flagrant itself — and the
+//                  record — was decided at the moment of the crime by police/HeatStateMachine.js.)
 //                  Alcance a testemunha antes: E com a arma na mão INTIMIDA (o bairro passa a ter medo; às vezes ela grita e liga na hora),
 //                  sem arma SUBORNA (o preço depende do crime). Testemunha que sai de perto (some da rua) também liga.
-//   • BATIDA       com o inquérito alto (≥ 65% ou mandado), a Polícia Civil marca uma busca e apreensão na sua casa para o dia
+//   • BATIDA       with a warrant on the record (HeatStateMachine), a Polícia Civil marca uma busca e apreensão na sua casa para o dia
 //                  seguinte de manhã. O Sargento Brito (se ainda confia em você) avisa na véspera — e, por um cafezinho, segura a batida.
-//                  Na batida levam do cofre e do baú: boa parte do dinheiro sujo, as joias e as armas. Achar coisa sobe o inquérito;
-//                  casa limpa derruba. Estar em casa na hora: a porta vem abaixo e você vira procurado.
+//                  Na batida levam do cofre e do baú: boa parte do dinheiro sujo, as joias e as armas. What they find is filed as
+//                  'possession'. Estar em casa na hora: a porta vem abaixo e você vira procurado.
 // ============================================================================
 
 const Witnesses = {
     list: [], raid: null, _id: 0,
     COST: { kill: 1500, cop: 2500, holdup: 300, carjack: 450 },
-    HEAT: { kill: 12, cop: 16, holdup: 6, carjack: 6 },
     LABEL: { kill: 'homicídio', cop: 'policial morto', holdup: 'assalto', carjack: 'roubo de carro' },
 
     // ---------------------------------------------------------------- testemunhas
@@ -49,11 +49,10 @@ const Witnesses = {
     _end(W) { W.done = true; if (W.npc) W.npc.witness = null; },
     _call(g, W) {
         this._end(W);
-        const masked = typeof Traces !== 'undefined' && Traces.masked(), full = masked && Traces.fullMask();
+        const full = typeof Traces !== 'undefined' && Traces.fullMask();
         if (typeof Traces !== 'undefined') {
             Traces.call(W.x, W.z, 0, `Uma testemunha ligou (${this.LABEL[W.kind]})`);
             if (!full) { Traces.desc = Object.assign(Traces.sig(), { until: Traces.now() + 48, where: 'na rua' }); }
-            Traces.addHeat(this.HEAT[W.kind] * (full ? 0.3 : masked ? 0.6 : 1));
         }
     },
     pending() { return this.list.filter((W) => !W.done).length; },
@@ -101,7 +100,7 @@ const Witnesses = {
     // ---------------------------------------------------------------- busca e apreensão
     onNewDay() {
         const g = window.game; if (!g || typeof Traces === 'undefined') return;
-        if (this.raid || !(Traces.heat >= 65 || Traces.warrant) || Math.random() > 0.5) return;
+        if (this.raid || !g.heat || !g.heat.hasWarrant || Math.random() > 0.5) return;
         this.raid = { day: Economy.day + 1, h: 5.5 + Math.random() * 2, held: false };
         if (typeof Phone !== 'undefined' && (Phone.trust.brito || 0) >= 5) {
             Phone._msg('brito', `Tô te avisando como amigo: a Civil vai fazer busca e apreensão na sua casa amanhã cedo. Tira o que tiver de errado de lá. Ou me dá ${brl(4000)} que eu "perco" o mandado.`,
@@ -131,9 +130,9 @@ const Witnesses = {
         for (const k of guns) { delete B.chest[k]; if (g.stash.wstate) delete g.stash.wstate[k.split(':')[1]]; }
         const found = took > 0 || jewels > 0 || guns.length > 0;
         const home = Interiors.active && (Interiors.active.shop.home || Interiors.active.shop.safehouse);
-        if (found) Traces.addHeat(10); else Traces.heat = Math.max(0, Traces.heat - 20);
+        if (found) g.heat.fileEvidence('possession');
         const parts = [took ? `${brl(took)} do cofre` : '', jewels ? `${jewels} joia(s)` : '', guns.length ? `${guns.length} arma(s)` : ''].filter(Boolean);
-        g._flash(found ? `🚨 BUSCA E APREENSÃO na sua casa: a Civil levou ${parts.join(', ')}` : '🚨 A Civil fez busca e apreensão na sua casa e não achou nada — o inquérito esfriou');
+        g._flash(found ? `🚨 BUSCA E APREENSÃO na sua casa: a Civil levou ${parts.join(', ')}` : '🚨 A Civil fez busca e apreensão na sua casa e não achou nada');
         if (home) { g.wanted.ensureLevel(2); g._flash('🚪 A polícia arrombou a porta com você dentro! Fuja!'); }
         if (typeof WorldMemory !== 'undefined') WorldMemory.log('raid', { found, value: took, district: g.empire ? g.empire.districtAt(g.player.position.x, g.player.position.z) : null });
         AudioFX.blip(150, 0.5, 0.25);

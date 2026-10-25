@@ -63,7 +63,7 @@ const Business = {
         if (!this.canOwn(shop)) return { ok: false, msg: 'Esse ponto não está à venda' };
         if (this.isOwned(shop)) return { ok: false, msg: 'Esse negócio já é seu' };
         const T = this.TYPES[shop.style], p = this.price(shop), inv = game.inventory;
-        if (T.license && typeof Traces !== 'undefined' && (Traces.warrant || Traces.heat >= 40)) return { ok: false, msg: 'A Polícia Federal não dá alvará de loja de armas para quem está sendo investigado (inquérito < 40%)' };
+        if (T.license && game.heat && game.heat.record.isDirty) return { ok: false, msg: I18n.t('heat.license.denied') };
         if (inv.clean < p) return { ok: false, msg: `Compra legal: faltam ${brl(p - inv.clean)} de dinheiro LIMPO` };
         inv.clean -= p;
         this.owned[shop.id] = { id: shop.id, name: shop.name, style: shop.style, label: (Economy.STYLES[shop.style] || {}).label || 'Loja', x: shop.x, z: shop.z, district: shop.district, biome: shop.biome,

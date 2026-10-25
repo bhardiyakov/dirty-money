@@ -19,7 +19,7 @@ module.exports = {
         await page.evaluate(() => {
             const S = window.__soak = { honks: [], issues: {}, t: 0 };
             const o = AudioFX.honk.bind(AudioFX);
-            AudioFX.honk = (x, z, ...a) => { S.honks.push([window.__gt || 0, x, z]); return o(x, z, ...a); };
+            AudioFX.honk = (x, z, pitch, ...a) => { S.honks.push([window.__gt || 0, x, z, pitch]); return o(x, z, pitch, ...a); };
             const issue = (k, msg) => { if (!S.issues[k]) S.issues[k] = msg; };
             const bad = (p) => !p || !isFinite(p.x) || !isFinite(p.z);
             setInterval(() => {
@@ -33,10 +33,11 @@ module.exports = {
                     if (v.mode === 'drive' && !v.controlled && !v.courier && (v.blocked || 0) > 60 && d(v.position) < 60) issue('car:' + v.id, `carro do trânsito travado ${Math.round(v.blocked)} s em (${Math.round(v.position.x)}, ${Math.round(v.position.z)})`);
                 }
                 for (const m of game.motoTaxis ? game.motoTaxis.list : []) if (!m.down && (m.blk || 0) > 15 && Math.hypot(m.x - P.x, m.z - P.z) < 55) issue('moto:' + m.x.toFixed(0), `mototáxi travado ${Math.round(m.blk)} s à vista em (${Math.round(m.x)}, ${Math.round(m.z)})`);
-                // buzina repetida: mais de 6 no mesmo lugar (célula de 8 u) em 15 s de jogo
+                // buzina repetida: o MESMO veículo (cada um tem o seu tom — pitch) mais de 6 vezes no mesmo lugar (célula de 8 u) em 15 s de
+                // jogo. Vários veículos travados juntos (ponto de mototáxi, cruzamento) buzinam cada um no máximo 2 vezes: não é o bug.
                 S.honks = S.honks.filter((h) => gt - h[0] < 15);
                 const cell = {};
-                for (const [, x, z] of S.honks) { const k = Math.round(x / 8) + ',' + Math.round(z / 8); cell[k] = (cell[k] || 0) + 1; if (cell[k] > 6) issue('honk:' + k, `buzina repetida: ${cell[k]} buzinadas em 15 s perto de (${Math.round(x)}, ${Math.round(z)})`); }
+                for (const [, x, z, pitch] of S.honks) { const k = Math.round(x / 8) + ',' + Math.round(z / 8) + '~' + (+pitch || 1).toFixed(3); cell[k] = (cell[k] || 0) + 1; if (cell[k] > 6) issue('honk:' + k, `buzina repetida: ${cell[k]} buzinadas em 15 s perto de (${Math.round(x)}, ${Math.round(z)})`); }
             }, 500);
         });
         // o detector funciona? 8 buzinas falsas no mesmo ponto têm que ser acusadas (e depois a lista é zerada)

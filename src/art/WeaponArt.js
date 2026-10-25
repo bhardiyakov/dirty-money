@@ -5,17 +5,58 @@
 // Todas de lado, cano/ponta para a direita, luz vinda de cima/esquerda, contorno escuro de 1 px.
 // `WeaponArt.canvas(key)` devolve um canvas 80×40 (cache); chaves: fists | knife | bat | pistol | revolver | smg | shotgun | rifle | ak47 |
 // pistol_sil | rpg | launcher | minigun | rocket (o foguete avulso: ícone da munição do RPG e do lança-foguetes).
+//
+// ARTE PINTADA: as armas da folha de ícones (tools/ui_icons/source/armas_hud.jpg → assets/ui/armas_hud.webp + .json, recortadas por
+// tools/ui_icons/armas_hud.cjs) — mão, faca, taco, pistola, silenciador, revólver, fuzil, AK-47, RPG, lança-foguetes, minigun, granada e
+// molotov — substituem o desenho em código quando o atlas carrega (WeaponArt.load, no boot). Cada uma sai num canvas 2:1 (320×160),
+// centrada e no maior tamanho que cabe. A SMG, a escopeta e o foguete não estão na folha: seguem com o desenho em código.
 // ============================================================================
 
 const WeaponArt = {
     W: 80, H: 40,
     KEYS: ['fists', 'knife', 'bat', 'pistol', 'revolver', 'smg', 'shotgun', 'rifle', 'ak47', 'pistol_sil', 'rpg', 'launcher', 'minigun', 'rocket'],
     _cache: {},
-    has(key) { return key === 'none' || this.KEYS.includes(key); },
+    has(key) { return key === 'none' || this.KEYS.includes(key) || !!(this.sheet && this.sheet.rects[key]); },
+
+    // Carrega o atlas da arte pintada (o boot espera; sem ele — file://, rede —, fica o desenho em código).
+    sheet: null,
+    load() {
+        if (this._loading) return this._loading;
+        const base = 'assets/ui/';
+        this._loading = fetch(base + 'armas_hud.json').then((r) => (r.ok ? r.json() : null)).then((d) => {
+            if (!d) return;
+            return new Promise((ok) => {
+                const img = new Image();
+                img.onload = () => { this.sheet = { img, rects: d.rects }; this._cache = {}; if (typeof Emoji !== 'undefined') Emoji._cache = {}; ok(); };
+                img.onerror = () => ok();
+                img.src = base + d.src;
+            });
+        }).catch(() => {});
+        return this._loading;
+    },
+    // Canvas CW × CH (padrão 2:1, W·4 × H·4) com a arma da folha centrada, no maior tamanho que cabe (com uma margem).
+    _painted(key, CW = this.W * 4, CH = this.H * 4) {
+        const r = this.sheet && this.sheet.rects[key];
+        if (!r) return null;
+        const c = document.createElement('canvas'), k = Math.min((CW * 0.96) / r[2], (CH * 0.96) / r[3]);
+        c.width = CW; c.height = CH;
+        const x = c.getContext('2d'), w = r[2] * k, h = r[3] * k;
+        x.imageSmoothingQuality = 'high';
+        x.drawImage(this.sheet.img, r[0], r[1], r[2], r[3], (CW - w) / 2, (CH - h) / 2, w, h);
+        return c;
+    },
+    // Versão quadrada (px × px) da arte pintada — onde o ícone era um emoji (mão, faca, taco, granada, molotov). null sem o atlas.
+    square(key, px = 96) {
+        if (key === 'none') key = 'fists';
+        const ck = key + '#' + px;
+        return this._cache[ck] || (this._cache[ck] = this._painted(key, px, px));
+    },
 
     canvas(key) {
         if (key === 'none') key = 'fists';
         if (this._cache[key]) return this._cache[key];
+        const painted = this._painted(key);
+        if (painted) return (this._cache[key] = painted);
         const g = new WeaponArt.VGrid(this.W, this.H, 4);                 // HD: as mesmas formas, desenhadas em vetor 4× (estilo emoji)
         (this['_' + key] || this._pistol).call(this, g);
         return (this._cache[key] = g.render());

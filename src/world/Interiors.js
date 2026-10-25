@@ -129,7 +129,7 @@ const Interiors = {
 			const a = this.active, o = this.STAGE;
 			if (game.shopUI.open || game.stashUI.open || game.propertyUI.open || game.sleeping) return '';
 			if (HomeDecor.active) return '';                                       // (decorando: a barra de móveis tem as instruções)
-			if (a.shop.home || a.shop.safehouse) { const hu = this.homeUse(game); if (hu) return this._owned(a.shop) ? (this.HOME_PROMPT[hu.kind] || '') : (hu.kind === 'desk' ? '<b>E</b> ver a proposta de compra<small>você está só visitando o imóvel</small>' : '<b>VISITA</b><small>só dá para usar depois de comprar o imóvel</small>'); }
+			if (a.shop.home || a.shop.safehouse) { const hu = this.homeUse(game); if (hu) return this._owned(a.shop) ? (hu.prompt || this.HOME_PROMPT[hu.kind] || '') : (hu.kind === 'desk' ? '<b>E</b> ver a proposta de compra<small>você está só visitando o imóvel</small>' : '<b>VISITA</b><small>só dá para usar depois de comprar o imóvel</small>'); }
 			const door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2, nearExit = hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3;
 			const cl = a.data.clerk, nearClerk = cl && hypot(p.x - (o.x + cl.x), p.z - (o.z + cl.z)) < 5.2 && p.z < o.z + cl.z + 0.6;
 			const shop = a.shop, S = Economy.STYLES[shop.style] || {};
@@ -175,7 +175,7 @@ const Interiors = {
 			if (shop.home || shop.safehouse) {
 				const hu = this.homeUse(game);
 				if (hu && hu.kind !== 'desk' && !this._owned(shop)) { game._flash('Você está só visitando — compre o imóvel para usar isto'); return true; }
-				if (hu) { if (hu.kind === 'bed') { if (!this._owned(shop)) game._flash('Só dá para dormir depois de comprar o imóvel'); else if (shop.safehouse) game._startSleep(); else game._startSleep('here', shop.home); } else if (hu.kind === 'desk') game.propertyUI.show(this.active.shop.home); else game.stashUI.show(hu.kind); return true; }
+				if (hu) { if (hu.kind === 'bed') { if (!this._owned(shop)) game._flash('Só dá para dormir depois de comprar o imóvel'); else if (shop.safehouse) game._startSleep(); else game._startSleep('here', shop.home); } else if (hu.kind === 'desk') game.propertyUI.show(this.active.shop.home); else if (hu.kind === 'wardrobe') { game.menu.invView = 'equip'; game.menu.open('inventory'); } else game.stashUI.show(hu.kind); return true; }
 			}
 			const a = this.active, o = this.STAGE, door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2;
 			const cl = a.data.clerk;
@@ -248,6 +248,7 @@ const Interiors = {
 		safe: '<b>E</b> abrir o cofre<small>dinheiro e joias — dá para vender as joias</small>',
 		chest: '<b>E</b> abrir o baú<small>armas, munição, kits e o que mais quiser</small>',
 		desk: '<b>E</b> usar o notebook<small>mercado imobiliário: mudar-se, vender o imóvel</small>',
+		wardrobe: '<b>E</b> abrir o armário<small>trocar de roupa</small>',
 	},
 
 	// ------------------------------------------------------------------ seta de saída (HD)
@@ -441,7 +442,8 @@ const Interiors = {
 		try { life = ShopLife.enter(game, shop, data); } catch (e) { console.error('[LOJAS] clientela:', e); this._dropLife(); }
 		this._useActors(game, life ? data.patrons.filter((e) => e.type) : (data.clerk ? [data.clerk] : []).concat(data.patrons), shop);
 		const ar = this._exitArrow(game.scene); ar.setEnabled(true); ar.visibility = 0; this._tickArrow(game, 0);
-		game.camera.setZoomMul(0.5);
+		this.zoom = shop.safehouse ? 0.36 : 0.5;                       // (o barraco é um cômodo só: a câmera chega mais perto)
+		game.camera.setZoomMul(this.zoom);
 		game.camera.snapTo(this.focus(pl.position, game.camera, game.gameEngine.engine.getAspectRatio(game.camera.camera)));
 		game.scene.physicsEnabled = false;
 		const mm = document.getElementById('minimap'); if (mm) mm.style.opacity = '0';
@@ -579,7 +581,7 @@ const Interiors = {
 	// Enquadramento da câmera na sala (centro, com folga para a parede norte pintada).
 	focus(pos, cam, aspect) {
 		const a = this.active, o = this.STAGE; if (!a) return pos;
-		const W = a.data.W, D = a.data.D, view = cam.viewHalf * 0.5;
+		const W = a.data.W, D = a.data.D, view = cam.viewHalf * (this.zoom || 0.5);
 		const hx = W / 2 + 0.8, hz = D / 2 + 1.1, cx = o.x + W / 2, cz = o.z + D / 2 + 1.1;
 		const halfW = view * Math.max(1, aspect), halfH = view, cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 		this._f2 = this._f2 || { x: 0, z: 0 };

@@ -1,6 +1,8 @@
 // ============================================================================
-// SafeHouse — o esconderijo (safe house) do protagonista: uma casa DE VERDADE na favela, com interior.
-// É o ponto de partida do jogo. Acesso livre: a porta da frente é só um vão (sem chave, sem tecla) — entrou, está dentro.
+// SafeHouse — o esconderijo (safe house) do protagonista: um BARRACO de um cômodo só na favela, com interior. É o ponto de
+// partida do jogo — o personagem está quebrado: colchão no chão sobre paletes, um armário velho com as poucas mudas de roupa,
+// geladeira pequena, fogareiro de duas bocas com o botijão do lado, um caixote de feira como baú, a lata escondida onde se guarda
+// dinheiro e um balde aparando a goteira. Acesso livre: a porta da frente é só um vão (sem chave, sem tecla) — entrou, está dentro.
 //
 // Este arquivo é só o PLANO (geometria e colisão), carregado antes do CityGrid:
 //   • reserva um quarteirão da favela (CityGrid chama SafeHouse.plan(bloco) no lugar de sortear casinhas);
@@ -12,44 +14,39 @@
 
 const SafeHouse = {
 	blockId: null,                  // (a favela orgânica põe a casa no lugar dela: FavelaPlan.SAFE)
-	W: 23, D: 15,                   // tamanho externo (u)
-	T: 0.7,                         // espessura das paredes externas
-	H: 2.8,                         // altura das paredes
-	ROOF_Y: 3.1,                    // altura do telhado
-	PX: 14.0, PT: 0.6,              // divisória (x e espessura): quarto/sala a oeste, cozinha a leste
+	W: 9.6, D: 7.4,                 // tamanho externo (u): um cômodo só
+	T: 0.45,                        // espessura das paredes externas
+	H: 2.5,                         // altura das paredes
+	ROOF_Y: 2.75,                   // altura do telhado
+	MAT_CUT: 4.4,                   // remendo das paredes sul e norte: zinco a oeste, bloco sem reboco a leste
 	placed: false,
 	ox: 0, oz: 0,
 
-	// Vão da divisória (z) e porta da frente (x, na parede sul).
-	gapZ: [3.4, 6.2],
-	door: { x0: 16.0, x1: 18.2, h: 2.2 },
+	// Porta da frente (x, na parede sul).
+	door: { x0: 6.5, x1: 8.1, h: 2.0 },
 
-	// Janelas: parede ('S' sul, 'N' norte, 'E' leste), faixa [a, b] ao longo dela, peitoril e topo.
+	// Janelas: parede ('S' sul, 'N' norte, 'E' leste), faixa [a, b] ao longo dela, peitoril e topo (pequenas, com plástico).
 	windows: [
-		{ wall: 'S', a: 5.0, b: 8.4, y0: 0.9, y1: 2.0 },
-		{ wall: 'N', a: 9.8, b: 12.4, y0: 1.0, y1: 2.1 },
-		{ wall: 'N', a: 17.8, b: 20.4, y0: 1.0, y1: 2.1 },
-		{ wall: 'E', a: 8.0, b: 11.0, y0: 1.0, y1: 2.1 },
+		{ wall: 'S', a: 1.4, b: 2.8, y0: 1.0, y1: 1.8 },
+		{ wall: 'N', a: 3.9, b: 5.2, y0: 1.1, y1: 1.9 },
+		{ wall: 'E', a: 3.0, b: 4.2, y0: 1.1, y1: 1.8 },
 	],
 
-	// Móveis (base no chão: x0, z0, x1, z1) e altura. `solid`: bloqueia o jogador. A arte desenha cada um (HouseArt).
+	// Móveis (base no chão: x0, z0, x1, z1) e altura. `use`: o que o E faz (Interiors.homeUse); `prompt`: texto próprio do aviso.
+	// A arte desenha cada um (HouseArt).
 	furniture: [
-		{ kind: 'shelf',    x0: 1.0,  z0: 12.4, x1: 6.8,  z1: 14.3, h: 2.2 },
-		{ kind: 'boxes',    x0: 7.3,  z0: 12.9, x1: 9.0,  z1: 14.3, h: 1.1 },
-		{ kind: 'bed',      x0: 1.2,  z0: 1.3,  x1: 6.6,  z1: 4.6,  h: 0.8, use: 'bed' },
-		{ kind: 'stand',    x0: 1.3,  z0: 5.3,  x1: 3.2,  z1: 7.1,  h: 0.9 },
-		{ kind: 'tv',       x0: 9.6,  z0: 8.4,  x1: 12.9, z1: 10.4, h: 1.0 },
-		{ kind: 'stove',    x0: 15.0, z0: 12.3, x1: 18.0, z1: 14.3, h: 0.9 },
-		{ kind: 'gas',      x0: 15.1, z0: 10.5, x1: 16.1, z1: 11.5, h: 1.3 },
-		{ kind: 'fridge',   x0: 18.0, z0: 12.3, x1: 19.9, z1: 14.3, h: 2.0, use: 'fridge' },
-		{ kind: 'counter',  x0: 19.9, z0: 12.3, x1: 22.3, z1: 14.3, h: 0.9 },
-		{ kind: 'sink',     x0: 20.2, z0: 5.4,  x1: 22.3, z1: 12.3, h: 0.95 },
-		{ kind: 'chest',    x0: 20.3, z0: 1.2,  x1: 22.1, z1: 2.9,  h: 0.9, use: 'chest' },
-		{ kind: 'safe',     x0: 0.8,  z0: 8.4,  x1: 2.4,  z1: 10.0, h: 1.1, use: 'safe' },
+		{ kind: 'bed',      x0: 0.7,  z0: 0.8,  x1: 2.9,  z1: 3.8,  h: 0.35, use: 'bed' },
+		{ kind: 'tin',      x0: 3.05, z0: 0.8,  x1: 3.55, z1: 1.3,  h: 0.3,  use: 'safe', prompt: '<b>E</b> abrir a lata escondida<small>onde você guarda dinheiro e joias</small>' },
+		{ kind: 'wardrobe', x0: 0.65, z0: 5.6,  x1: 2.45, z1: 6.9,  h: 1.9,  use: 'wardrobe' },
+		{ kind: 'gas',      x0: 4.5,  z0: 6.25, x1: 5.0,  z1: 6.75, h: 0.7 },
+		{ kind: 'stove',    x0: 5.15, z0: 6.0,  x1: 6.6,  z1: 6.9,  h: 0.8 },
+		{ kind: 'fridge',   x0: 7.55, z0: 5.75, x1: 9.1,  z1: 6.9,  h: 1.5,  use: 'fridge' },
+		{ kind: 'chest',    x0: 7.9,  z0: 0.75, x1: 9.1,  z1: 1.75, h: 0.55, use: 'chest' },
+		{ kind: 'bucket',   x0: 4.4,  z0: 3.3,  x1: 4.9,  z1: 3.8,  h: 0.4 },
 	],
 
-	// Onde o jogador acorda (ao lado da cama, de frente para o sul) e o centro/enquadramento do corte.
-	spawn: { x: 8.4, z: 4.0, face: Math.PI },
+	// Onde o jogador acorda (ao lado do colchão, de frente para o sul).
+	spawn: { x: 3.6, z: 2.5, face: Math.PI },
 
 	// ---------------------------------------------------------------- plano
 	// Chamado pelo FavelaPlan (at = canto sudoeste reservado, com o quintal na frente, ao sul) ou pelo CityGrid no quarteirão
@@ -80,7 +77,6 @@ const SafeHouse = {
 			[0, 0, d.x0, T], [d.x1, 0, W, T],                                               // parede sul, com o vão da porta
 			[0, D - T, W, D],                                                               // norte
 			[0, T, T, D - T], [W - T, T, W, D - T],                                         // oeste e leste
-			[this.PX, T, this.PX + this.PT, this.gapZ[0]], [this.PX, this.gapZ[1], this.PX + this.PT, D - T],   // divisória com vão
 		];
 		return walls.map((r) => [...r, H, 'wall']).concat(this.furniture.map((f) => [f.x0, f.z0, f.x1, f.z1, f.h, f.kind]));
 	},

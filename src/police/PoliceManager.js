@@ -128,15 +128,13 @@ class PoliceManager {
         m.x = x; m.z = z; m.vx = vx; m.vz = vz; m.t = t;
     }
 
-    // Todas as unidades num raio de `pos` OUVEM algo ali (tiro, explosão, chamado) e vão ao local. Se alguém ouviu e há um crime em
-    // flagrante, ele fica aberto enquanto a polícia investiga (Config.police.investigateTime). Devolve quantas unidades ouviram.
+    // Every unit within `radius` of `pos` HEARS something there (shot, explosion, call) and goes to the spot. Hearing is not a
+    // flagrant: only what a unit sees at the moment of a crime counts (HeatStateMachine). Returns how many units heard it.
     alertNear(pos, radius) {
         let n = 0;
         for (const u of this.units) {
             if (u.distanceTo(pos) < radius) { this._note(this._mind(u), pos.x, pos.z, 0, 0, this.time); n++; }
         }
-        const w = this.game.wanted;
-        if (n && w && w.pending) w.reportCrime(Config.police.investigateTime);
         return n;
     }
 

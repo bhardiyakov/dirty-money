@@ -327,7 +327,7 @@ class EmpireTargetJob extends CareerJob {
             this.actor.play('surrender', 'none', { restart: true });
             e.influence.extorted[this.d] = (e.influence.extorted[this.d] || 0) + 1;
             e.spend(6, 12);
-            if (cop) { g.wanted.reportCrime(); g.wanted.ensureLevel(1); }
+            if (cop) g.heat.commit('extortion', CrimeExposure.POLICE);
             e.dominion.check();
             this.succeed(Math.round(3000 * e.fx('extort') * (Empire.DISTRICTS[this.d] ? Empire.DISTRICTS[this.d].rich : 1)), 220, `vereador extorquido em ${e.dName(this.d)} (${e.influence.extorted[this.d]})`);
             return true;
@@ -336,7 +336,7 @@ class EmpireTargetJob extends CareerJob {
         this.actor.play('dead', 'none', { restart: true });
         e.spend(8, witness || cop ? 30 : 10);
         e.influence.add('armeiro', 2.5); e.influence.add('rival', -1);
-        if (witness || cop) { if (witness) witness.panic(p); g.wanted.reportCrime(); g.wanted.ensureLevel(2); }
+        if (witness || cop) { if (witness) witness.panic(p); g.heat.commit('homicide', cop ? CrimeExposure.POLICE : CrimeExposure.WITNESS); g.wanted.ensureLevel(2); }
         this.succeed(4000, 260, `contrato cumprido — o Fornecedor do Porto confia mais em você${witness || cop ? ' (mas alguém viu)' : ''}`);
         return true;
     }
@@ -375,7 +375,7 @@ class EmpireBombJob extends CareerJob {
         AudioFX.explosion(this.tx, this.tz);
         for (let i = 0; i < 16; i++) g.combat.spark(this.tx + (Math.random() - 0.5) * 4, 0.5 + Math.random() * 2, this.tz + (Math.random() - 0.5) * 4, [1, 0.55, 0.15], 0.6);
         if (!far) g.player.takeDamage(60);
-        g.wanted.reportCrime(); g.wanted.ensureLevel(far ? 1 : 2);
+        g.heat.commit('explosion'); g.wanted.ensureLevel(far ? 1 : 2);
         e.spend(8, 25);
         if (this.kind === 'sabotage') { e.influence.add('armeiro', 2); e.influence.add('rival', -1.5); this.succeed(3500, 240, 'carregamento rival pelos ares — o Fornecedor do Porto gostou'); }
         else { e.influence.razed[this.d] = (e.influence.razed[this.d] || 0) + 1; e.influence.add('rival', -1.5); e.dominion.check(); this.succeed(2500, 280, `galpão rival destruído em ${e.dName(this.d)} (${e.influence.razed[this.d]})`); }

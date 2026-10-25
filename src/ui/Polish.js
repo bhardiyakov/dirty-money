@@ -66,7 +66,7 @@ const Hints = {
         this._build();
         this.seen.add(h.id); this._save();
         this.cur = h; this.t = 11;
-        this.el.innerHTML = `<div class="hi">${h.icon}</div><div class="tx"><div class="tt">Dica</div>${h.text}<div class="bt"><button data-h="ok">Entendi</button><button data-h="off" class="off">Desligar dicas</button></div></div>`;
+        this.el.innerHTML = `<div class="hi">${h.icon}</div><div class="tx"><div class="tt">Dica</div>${typeof h.text === 'function' ? h.text() : h.text}<div class="bt"><button data-h="ok">Entendi</button><button data-h="off" class="off">Desligar dicas</button></div></div>`;
         this.el.classList.add('show');
         if (typeof AudioFX !== 'undefined') AudioFX.blip(1046, 0.06, 0.06);
     },
@@ -109,7 +109,7 @@ const Hints = {
     Hints.add('hungry', () => typeof Physique !== 'undefined' && Physique.fed < 20, 'Com fome o fôlego volta devagar. Padaria, lanchonete ou um ambulante resolvem.', '🍽️');
     Hints.add('wanted', (g) => g.wanted && g.wanted.level > 0, 'Procurado! Saia da vista da polícia (o cone das viaturas) e espere: as estrelas somem. Trocar de roupa depois quebra a descrição.', '🚔');
     Hints.add('desc', () => typeof Traces !== 'undefined' && Traces.desc && Traces.matches(), 'A polícia tem a <strong>descrição da sua roupa</strong>. Troque de roupa (longe da polícia) para ela não bater mais.', '👕');
-    Hints.add('inquerito', () => typeof Traces !== 'undefined' && Traces.heat >= 30, 'O inquérito contra você está subindo. Em 100% sai mandado de prisão. Ele esfria sozinho com os dias — ou com um advogado (dinheiro limpo).', '📁');
+    Hints.add('inquerito', () => !!(window.game && window.game.heat && window.game.heat.record.isDirty), () => I18n.t('heat.hint.investigation'), '📁');
     Hints.add('job', () => typeof Phone !== 'undefined' && Phone.jobs.length > 0, 'Entrega aceita: siga o GPS até o ponto marcado antes do prazo. O Baiano paga na hora.', '📦');
     Hints.add('rival', () => typeof Phone !== 'undefined' && Phone.appts.some((a) => a.kind === 'rival'), 'Desafio marcado com o Dentinho: vá ao bar no dia e hora e aperte <kbd>E</kbd> na sinuca. Não aparecer conta como derrota.', '😁');
     Hints.add('fear', (g) => typeof WorldMemory !== 'undefined' && WorldMemory.fameAt(P(g).x, P(g).z).fear >= 30, 'Este bairro está com <strong>medo</strong> de você: comerciantes cobram mais e cochicham quando você passa. Ajudar as pessoas aqui traz respeito.', '😨');

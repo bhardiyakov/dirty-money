@@ -347,12 +347,12 @@ const Domino = {
         const B = this.bubble;
         if (B && performance.now() - B.t < B.ms) {
             const S = B.i === 0 ? { x: this.cx - T * 6, y: this.vh - T * 5 } : this._seatXY(B.i);
-            x.save(); x.font = '800 15px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+            x.save(); x.font = '800 15px system-ui, "DM Icons", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
             const tw = x.measureText(B.text).width + 22, by = B.i === 2 ? S.y + 44 : S.y - 44;
             x.fillStyle = '#fffaf0'; this._rr(x, S.x - tw / 2, by - 15, tw, 30, 15); x.fill(); x.fillStyle = '#1f1308'; x.fillText(B.text, S.x, by + 1); x.restore();
         }
         if (this.msg) {
-            x.save(); x.font = '600 14px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+            x.save(); x.font = '600 14px system-ui, "DM Icons", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
             const tw = Math.min(this.vw - 24, x.measureText(this.msg).width + 36), y = this.cy - this.th * 0.36;
             x.fillStyle = 'rgba(16,13,10,0.85)'; this._rr(x, this.cx - tw / 2, y - 16, tw, 32, 16); x.fill();
             x.fillStyle = '#f5efe3'; x.fillText(this.msg, this.cx, y + 0.5, tw - 20); x.restore();
@@ -364,7 +364,7 @@ const Domino = {
         x.fillStyle = this._team(i) === 0 ? '#1f4d3a' : '#4d1f2a'; x.beginPath(); x.arc(S.x, S.y, r, 0, Math.PI * 2); x.fill();
         x.lineWidth = on ? 3 : 1.5; x.strokeStyle = on ? `rgba(253,224,71,${0.7 + 0.3 * Math.sin(time * 6)})` : 'rgba(255,255,255,0.3)'; x.stroke();
         x.font = `${Math.round(r * 1.15)}px ${this._emoji}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(this.people[i].emo, S.x, S.y + r * 0.05);
-        x.font = '700 12px system-ui, sans-serif'; x.fillStyle = this._team(i) === 0 ? '#bbf7d0' : '#fecdd3';
+        x.font = '700 12px system-ui, "DM Icons", sans-serif'; x.fillStyle = this._team(i) === 0 ? '#bbf7d0' : '#fecdd3';
         x.fillText(this.people[i].name + (i === 2 ? ' (parceiro)' : ''), S.x, i === 2 ? S.y - r - 10 : S.y + r + 12);
         x.restore();
     },

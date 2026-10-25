@@ -295,7 +295,7 @@ const Throwables = {
 		g.inventory.weapons[s.kind].reserve--;
 		this._spawn(s.kind, this._start(s.dir, s.kind, s.dist == null ? this.DEF[s.kind].minR : s.dist), s.fuse, p);
 		if (g.npcManager) g.npcManager.alertViolence(p.position, s.kind === 'grenade' ? 30 : 22);
-		if (g.wanted && (s.kind === 'grenade' || this._peopleNear(p.position.x, p.position.z, 30))) g.wanted.reportCrime();
+		if (g.heat && (s.kind === 'grenade' || this._peopleNear(p.position.x, p.position.z, 30))) g.heat.commit(s.kind === 'grenade' ? 'explosion' : 'arson');
 	},
 
 	_peopleNear(x, z, r) {
@@ -419,7 +419,7 @@ const Throwables = {
 			this._splash(o.x, o.z, 3);
 			AudioFX._burst(o.x, o.z, { vol: 0.7, dur: 0.6, f0: 600, f1: 60, maxDist: 160 });
 			g.carDamage._blast(o.x, o.z, Config.crash.explosionR * 0.45, 'player', null, 0.5);
-			g.wanted.reportCrime();
+			g.heat.commit('explosion');
 			return;
 		}
 		g.carDamage.boomAt(o.x, o.z, 'player', this.BLAST_BL, false);
@@ -464,7 +464,7 @@ const Throwables = {
 		AudioFX._burst(x, z, { vol: 0.55, dur: 0.9, f0: 400, f1: 90, maxDist: 90, att: 0.05 });            // "vuuush"
 		if (g.carDamage) g.carDamage._burst(x, z, 0.45);
 		if (g.npcManager) g.npcManager.alertViolence({ x, z }, 30);
-		if (this._peopleNear(x, z, 25)) g.wanted.reportCrime();
+		if (this._peopleNear(x, z, 25)) g.heat.commit('arson');
 	},
 
 	// ------------------------------------------------------------------ fogo no chão

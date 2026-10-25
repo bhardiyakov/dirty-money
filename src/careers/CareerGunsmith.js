@@ -230,7 +230,7 @@ class ScrapJob extends CareerJob {
     update(dt, pos) {
         const g = this.g;
         if (this.busy > 0) {
-            if (!this.cop && this.mgr.copDist(pos) < 22) { this.cop = true; g.wanted.reportCrime(); g.wanted.ensureLevel(1); g._flash('🚨 Abordagem! A polícia te viu mexendo na cena do crime'); }
+            if (!this.cop && this.mgr.copDist(pos) < 22) { this.cop = true; g.heat.commit('evidence_tampering', CrimeExposure.POLICE); g._flash('🚨 Abordagem! A polícia te viu mexendo na cena do crime'); }
             this.busy -= dt;
             if (this.busy > 0) return;
             const d = this.c.data, sc = 2 + Math.floor(Math.random() * 3), ca = 4 + Math.floor(Math.random() * 10);

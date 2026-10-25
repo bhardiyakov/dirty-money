@@ -357,7 +357,7 @@ class HitJob extends CareerJob {
         const d = this.c.data;
         d.rivalCalm = Math.max(d.rivalCalm, 3);
         for (const z of Object.keys(d.rival)) d.rival[z] = Math.max(0, d.rival[z] - 1);
-        if (witness || cop) { if (witness) witness.panic(p); g.wanted.reportCrime(); g.wanted.ensureLevel(2); this.succeed(0, 150, 'recolhedor eliminado — mas alguém viu: a polícia está atrás de você'); }
+        if (witness || cop) { if (witness) witness.panic(p); g.heat.commit('homicide', cop ? CrimeExposure.POLICE : CrimeExposure.WITNESS); g.wanted.ensureLevel(2); this.succeed(0, 150, 'recolhedor eliminado — mas alguém viu: a polícia está atrás de você'); }
         else this.succeed(0, 260, 'serviço limpo: a família rival perdeu pontos e fica parada por 3 dias');
         return true;
     }

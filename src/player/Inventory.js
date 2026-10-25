@@ -1,7 +1,7 @@
 // ============================================================================
 // Inventory — o que o jogador carrega: dinheiro, armas (com carregador e munição
-// reserva) e kits médicos. Começa com punhos, taco e uma pistola; SMG e escopeta
-// precisam ser encontradas (caixas pelo mapa ou drops).
+// reserva) e kits médicos. Começa quebrado: só os punhos, nada no bolso (os R$ 200 estão
+// na conta do banco — Banks.account) e o resto se compra, se acha ou se toma.
 // ============================================================================
 
 class Inventory {
@@ -200,15 +200,25 @@ class Inventory {
     // Tem alguma arma além dos punhos?
     get armed() { return Object.keys(this.weapons).some((k) => k !== 'fists' && this.weapons[k].owned); }
 
-    // Preso: a polícia confisca TODAS as armas (e a munição). Só restam os punhos.
+    // Arrested: every illicit item goes (HeatStateMachine keeps the guns when a lawyer is on retainer).
     confiscate() {
+        this.confiscateWeapons();
+        this.confiscateContraband();
+    }
+
+    // Every gun and its ammo: only the fists remain.
+    confiscateWeapons() {
         for (const k of Object.keys(this.weapons)) {
             if (k === 'fists') continue;
             const w = this.weapons[k];
             w.owned = false; w.mag = 0; w.reserve = 0;
         }
-        this.hacks = 0; this.keys = 0; this.jewels = 0; this.jewelValue = 0;      // a polícia também leva os itens de crime e as joias
-        if (typeof Items !== 'undefined') for (const id of Object.keys(this.gear || {})) if ((Items.def(id) || {}).cat === 'crime') delete this.gear[id];      // (furadeira, abraçadeiras; peças de carro ficam)
+    }
+
+    // Crime tools and stolen goods: hack modules, stolen car keys, jewels and the 'crime' gear (drill, zip ties; car parts stay).
+    confiscateContraband() {
+        this.hacks = 0; this.keys = 0; this.jewels = 0; this.jewelValue = 0;
+        if (typeof Items !== 'undefined') for (const id of Object.keys(this.gear || {})) if ((Items.def(id) || {}).cat === 'crime') delete this.gear[id];
     }
 
     // Morreu: acorda no hospital sem os suprimentos (kits, comida, água, joias) e com metade da munição.

@@ -83,10 +83,44 @@ Joystick (pouco inclinado = andar; inclinado = trote, o passo padrão) + **câme
 - **Fazer a limpa** nos pontos marcados no chão: caixa (o atendente esvazia), cofre e gravador das câmeras (todo interior de loja ganhou um escritório nos fundos — `ShopCtx._backOffice`), prateleiras (mercadoria para o receptador), carteiras dos reféns, vitrines. Abraçadeiras amarram reféns; a furadeira corta o tempo do cofre.
 - **Polícia**: só depois do chamado começa a contagem (porte, policiamento do distrito, noite, Sangue-frio). Zerou lá dentro: **cerco** (Lábia, escudo humano, sair atirando, render-se). A loja fica fechada até o dia seguinte.
 
+### Flagrante, ficha e condicional (`src/police/HeatStateMachine.js`, `CrimeExposure.js`, `CrimeRecord.js`)
+
+Tudo depende da **exposição do jogador no instante do crime**. O jogo não rastreia arma nem carro abandonado.
+
+```
+IDLE ─crime─▶ CRIME_COMMITTED ─alguém viu─▶ WANTED ─fugiu─▶ INVESTIGATION (nome na ficha) │ IDLE (mascarado / delegado comprado)
+                    │ ninguém viu               │ preso, ou morto durante a perseguição
+                    ▼                           ▼
+              estado anterior               ARRESTED ─▶ PAROLE ─cumpriu─▶ IDLE
+```
+
+- **Quem viu** (`CrimeExposure.evaluate`, só quando o crime acontece). Uma rajada do mesmo crime reaproveita a mesma avaliação.
+  - **Polícia**: lida direto da percepção que o `PoliceManager` já calcula a cada quadro (cone + linha de visada, helicóptero, esconderijo, cobertura). Não custa nenhum raio extra.
+  - **Câmeras**: zonas de CFTV nas fachadas de banco, joalheria, loja de armas, farmácia e conveniência, empacotadas num `Float32Array`. Dentro das lojas, o próprio interior conta como zona: o DVR ou o sistema do banco. Sem energia, o banco não filma.
+  - **Testemunhas**: pedestres com cone de ±60°, ou a até 4 u mesmo de costas. O alcance cai agachado, à noite e com chuva. Na favela vale a lei do silêncio, a não ser que a moral da comunidade esteja baixa.
+- **Linha de visada**: um raio 2D sobre a grade estática de prédios (`MapGeo.hasLineOfSight`), não um raycast do Havok. O Havok só tem os colisores próximos da câmera (`ColliderStreamer`), então um raio longo atravessaria prédios não carregados. A grade cobre o mapa inteiro e não aloca nada. São no máximo 6 raios por avaliação, e a busca para na primeira testemunha confirmada.
+- **WANTED**:
+  - Visto ao vivo pela polícia: estrelas pela gravidade (1–2 → 1★, 3–4 → 2★, 5 → 3★).
+  - Só câmera ou testemunha: 1★, como se alguém tivesse ligado para o 190.
+  - Na condicional: no mínimo 3★.
+  - As estrelas e o cronômetro de fuga, que só corre fora da vista de todos, seguem no `WantedSystem`.
+- **Máscara**: sem máscara, o crime vai para a ficha. Mascarado, vai para uma lista anônima, que só entra na ficha se um policial vir seu rosto durante a mesma perseguição. Fugiu, a lista some e não há inquérito.
+- **Ficha** (`CrimeRecord`): `{ type, severity, timestamp }`, em hora absoluta de jogo.
+  - O mesmo crime em seguida vira uma entrada só.
+  - A ficha guarda no máximo 24 crimes; cheia, sai o mais leve.
+  - Prescrição: gravidade × 2 dias.
+  - Com gravidade total 8 ou mais sai **mandado**: o policial que vê seu rosto de perto inicia uma prisão de 1★, sem atirar.
+- **Drenos de dinheiro**:
+  - **Hacker** apaga a ficha por Σ(base × gravidade) × multiplicador de frequência (um `reduce`). O multiplicador cai com meia-vida de 24 h desde o último crime.
+  - **Advogado** contratado: R$ 3.500 limpos por 7 dias. Corta a fiança pela metade e livra as armas do confisco.
+  - **Delegado comprado**: 5+ corações do delegado do distrito engavetam o crime que a polícia não viu ao vivo. A perseguição continua, mas nunca vira INVESTIGATION.
+- **ARRESTED**: fiança (base + por estrela + pela gravidade da ficha) e confisco de armas, joias, módulos de hack, chaves e ferramentas. Zera a ficha e as estrelas e põe o jogador em **condicional** de 48 h.
+
 ### Rastros e fuga (`src/crime/Traces.js`)
 
-- Descrição da roupa (2 dias, quebra trocando 2 de 3 peças longe da polícia), rosto (sem balaclava), câmeras (DVR), digitais (luvas), placa anotada (quem foge de carro de perto da cena), **inquérito** 0–100% com **mandado de prisão** em 100% e advogado para esfriar.
-- Testemunhas ligam depois que você sai (mais medo = mais demora) e abre a **área de busca** (círculo amarelo no radar). Mascarado na rua a polícia estranha (tecla **K** põe/tira).
+- Descrição da roupa: dura 2 dias e quebra trocando 2 de 3 peças longe da polícia.
+- Testemunhas ligam depois que você sai (mais medo = mais demora) e abrem a **área de busca** (círculo amarelo no radar).
+- Mascarado na rua, a polícia estranha (tecla **K** põe/tira).
 
 ### Joalherias e golpes (`src/crime/Heists.js`, `src/art/JewelryStyles.js`)
 
@@ -171,7 +205,7 @@ da tela (até 94%).
 
 ## Interface (`src/ui/Theme.js`)
 
-Interface moderna em HD, separada do mundo em pixel art: tokens de cor/raio/sombra em `:root`, fontes Inter (texto) e Outfit (títulos/números), cartões de vidro desfocado, botões arredondados. Ícones no estilo emoji (Noto Color Emoji, igual em todo aparelho); armas de fogo e munição são arte vetorial HD (`WeaponArt.VGrid`) no mesmo estilo.
+Interface moderna em HD, separada do mundo em pixel art: tokens de cor/raio/sombra em `:root`, fontes Inter (texto) e Outfit (títulos/números), cartões de vidro desfocado, botões arredondados. Ícones próprios do jogo no lugar dos emojis: a fonte **DM Icons** (`assets/ui/dm-icons.woff2`, gerada por `tools/ui_icons`) tem um desenho para cada emoji que a interface usa — adesivo com borda clara, contorno escuro grosso e faixas de sombra e luz, como as armas pintadas — e vem na frente das pilhas de fonte, então texto, HTML e canvas saem com ela sem mudar os textos. As armas (HUD, roda, inventário, lojas) são a arte pintada da folha `tools/ui_icons/source/armas_hud.jpg` (`WeaponArt.load`); a SMG, a escopeta e o foguete, que não estão na folha, seguem com o desenho vetorial (`WeaponArt.VGrid`).
 
 ## Próximos passos recomendados (por impacto × custo)
 

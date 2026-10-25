@@ -17,7 +17,7 @@
 //              policiamento do distrito, noite, skill Sangue-frio). Zerou com você dentro = CERCO: negociar (Lábia), sair com refém de
 //              ESCUDO, sair atirando ou se render.
 //   SAIR       antes da polícia: as testemunhas ligam depois (quanto mais medo, mais demoram) e abre a ÁREA DE BUSCA. Com a polícia a
-//              caminho: estrelas na porta. Rastros (descrição, rosto, digitais, câmeras, placa) em crime/Traces.js.
+//              caminho: estrelas na porta. Who saw it (flagrant, record): police/HeatStateMachine.js; outfit description: crime/Traces.js.
 // ============================================================================
 
 const Robbery = {
@@ -80,7 +80,7 @@ const Robbery = {
         const gunMul = this._gunMul(game);
         const s = this.session = {
             shop, tier, t: 0, heist, phase: 'hold', police: null, siege: null, done: {}, act: null, shoutCd: 0, shots: 0,
-            loot: { cash: 0, goods: 0, kg: 0, jewels: 0, jv: 0 }, prints: false, dvr: !d.uses.some((u) => u.kind === 'dvr'), out: 0, noticed: 0,
+            loot: { cash: 0, goods: 0, kg: 0, jewels: 0, jv: 0 }, dvr: !d.uses.some((u) => u.kind === 'dvr'), out: 0, noticed: 0,
             clerk: cast ? mkLive(cast.clerk, 'clerk') : d.clerk ? mk(d.clerk, 'clerk') : null, hostages: [], guard: null, alarmWhy: '', armedLeft: 2,
         };
         for (const e of d.patrons) { if (cast && !e.type) continue; const h = mk(e, e.guard ? 'guard' : 'hostage'); if (!h) continue; if (e.guard) s.guard = h; else s.hostages.push(h); }
@@ -261,7 +261,6 @@ const Robbery = {
         act.t = 0;
         s.act = act;
         if (!act.clerk) { pl.playAction('rummage', { lock: 0 }); if (pl.action) pl.action.timer = act.dur + 0.2; }
-        if (['safe', 'stock', 'case', 'register'].includes(act.kind) && !Traces.gloved()) s.prints = true;
         AudioFX.blip(act.kind === 'case' ? 1400 : 600, 0.08, 0.14);
         if (act.kind === 'case') AudioFX.glass && AudioFX.glass(pl.position.x, pl.position.z);
     },
@@ -461,6 +460,13 @@ const Robbery = {
         this._end(game, how);
     },
 
+    // Who saw the robbery when the player walks out (CrimeExposure flags): the people left awake, the cameras that kept
+    // recording, and the police when they are already at the door.
+    _exposure(how, awake, recording, police) {
+        const atTheDoor = how !== 'quiet' && !(how === 'called' && police && police.t >= 14);
+        return (awake > 0 ? CrimeExposure.WITNESS : 0) | (recording ? CrimeExposure.CAMERA : 0) | (atTheDoor ? CrimeExposure.POLICE : 0);
+    },
+
     // Fim do assalto: how = 'quiet' | 'called' | 'truce' | 'shield' | 'fight' | 'busted'
     _end(game, how) {
         const s = this.session; if (!s) return;
@@ -479,7 +485,9 @@ const Robbery = {
             return;
         }
         // rastros e testemunhas
-        const tr = Traces.scene(game, { x: pos.x, z: pos.z, name: shop.name, witnesses: awake, cams: !s.dvr, prints: s.prints, value: total });
+        const recording = !s.dvr && !s.camsLooped;
+        const tr = Traces.scene(game, { x: pos.x, z: pos.z, name: shop.name, witnesses: awake, cams: recording });
+        game.heat.commit('armed_robbery', this._exposure(how, awake, recording, s.police));
         if (tr.length) game._delayed.push({ t: 1.2, fn: () => game._flash(`🧾 Rastros deixados: ${tr.join(', ')}`) });
         // polícia na saída
         if (how === 'quiet') {
@@ -489,7 +497,6 @@ const Robbery = {
             game._flash(`🤫 Saiu sem ninguém chamar a polícia: as testemunhas vão ligar em ~${Math.round(delay)} s — some da área!`);
         } else if (how === 'called') {
             const left = s.police.t;
-            game.wanted.reportCrime(30);
             if (pm) pm.alertNear(pos, 260);
             Traces.startSearch(pos.x, pos.z, 180, 170);
             if (left < 14) { game.wanted.ensureLevel(2); game._flash('🚔 A polícia chegou na hora que você saiu!'); }
@@ -576,7 +583,7 @@ const Robbery = {
         if (s.clerk) rows.push(fearRow('Atendente', s.clerk));
         if (s.guard) rows.push(fearRow(s.guard.armed ? 'Segurança 🔫' : 'Segurança', s.guard));
         if (s.hostages.length) rows.push(`<div class="rr"><span>Reféns</span><div class="hs">${s.hostages.map(icon).join('')}</div></div>`);
-        const ev = [Traces.fullMask() ? '🥷 rosto coberto' : '👤 ROSTO À MOSTRA', s.camsLooped ? '📹 câmeras em loop (hacker)' : s.dvr ? '📹 câmeras apagadas' : '📹 câmeras gravando', s.prints ? '🖐 digitais' : (Traces.gloved() ? '🧤 sem digitais' : '')].filter(Boolean).join(' · ');
+        const ev = [Traces.fullMask() ? '🥷 rosto coberto' : '👤 ROSTO À MOSTRA', s.camsLooped ? '📹 câmeras em loop (hacker)' : s.dvr ? '📹 câmeras apagadas' : '📹 câmeras gravando'].join(' · ');
         const pol = s.siege ? '<b>CERCADO</b>' : P ? `<b>🚨 POLÍCIA EM ${Math.max(0, Math.ceil(P.t))}s</b>` : H && H.window > 0 ? `<b class="hack">💻 HACKER ${Math.ceil(H.window)}s</b>` : '<b class="calm">sem polícia</b>';
         const html = `<div class="rt"><span>${H ? 'GOLPE' : 'ASSALTO'} · ${s.shop.name}</span>${pol}</div>${rows.join('')}<div class="rr"><span>Na sacola</span><b style="color:#fde68a">${brl(l.cash + l.goods + l.jv)}</b></div><div class="ev">${ev}</div>`;
         if (html !== this._hh) { this._hh = html; el.innerHTML = html; }

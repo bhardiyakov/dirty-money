@@ -192,7 +192,7 @@ const Ambience = {
         if (h >= 5 && h < 9 && (W.biome === 'park' || W.biome === 'residential' || W.biome === 'forest' || W.biome === 'plaza') && this._every('bird', 2, 6)) { const p = this._around(8, 30); this._bird(p.x, p.z); }
         if (W.beach > 0.3 && !night && this._every('gull', 6, 16)) { const p = this._around(15, 50); this._gull(p.x, p.z); }
     },
-    _out(x, z, maxD, vol) { const s = AudioFX._spatial(x, z, maxD, vol); if (!s) return null; const ctx = AudioFX.ctx, g = ctx.createGain(); g.gain.value = s.g; if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = s.pan; g.connect(p); p.connect(AudioFX.master); } else g.connect(AudioFX.master); return g; },
+    _out(x, z, maxD, vol) { const s = AudioFX.ctx && AudioFX._spatial(x, z, maxD, vol); if (!s) return null; const ctx = AudioFX.ctx, g = ctx.createGain(); g.gain.value = s.g; if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = s.pan; g.connect(p); p.connect(AudioFX.master); } else g.connect(AudioFX.master); return g; },
     _ping(f, t, vol) { const ctx = AudioFX.ctx, o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35); o.connect(g); g.connect(AudioFX.master); o.start(t); o.stop(t + 0.4); },
     _beep(f, t, vol) { const ctx = AudioFX.ctx, o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.setValueAtTime(0.0001, t + 0.08); o.connect(g); g.connect(AudioFX.master); o.start(t); o.stop(t + 0.1); },
     _honk(x, z) {

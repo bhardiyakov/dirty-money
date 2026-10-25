@@ -2,7 +2,7 @@
 // MobileUI — a interface responsiva (pensada para o celular deitado, mas vale em qualquer tela):
 //   • ✕ EM TODA JANELA: loja, baú, imóvel, carros, celular e as telas de sinuca/truco/dominó/porrinha ganham um ✕ no canto
 //     (no toque não existe ESC). Os Panel já trazem o seu (ui/Panel.js). O ✕ é "grudado" no topo (sticky): não some ao rolar.
-//   • HUD ENXUTO NO CELULAR: o 📱 vai para a fileira de atalhos (⋯ · CRIME · II), os avisos de rastro (roupa, inquérito, placa…)
+//   • HUD ENXUTO NO CELULAR: o 📱 vai para a fileira de atalhos (⋯ · CRIME · II), os avisos de rastro (roupa, ficha, condicional…)
 //     descem para baixo dela em pílulas curtas (antes ficavam por cima dos atalhos), a dica de primeira vez fica menor, o jornal da TV
 //     do bar vai para baixo (no lugar das metas, que somem enquanto a TV está ligada).
 //   • MENU RESUMIDO COM ACORDEÃO: no Status, Império, Negócios e Carreiras cada bloco vira um acordeão — o título com um resumo

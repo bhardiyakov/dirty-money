@@ -132,6 +132,8 @@ class Player {
     get busy() { return !!this.action || !!this.rag || !!this.frozen || !!this.roll; }
 
     // ---------------------------------------------------------------- tático: agachar, cobertura, rolar
+    // Face covered (balaclava or bandana): a flagrant while masked does not name the player (HeatStateMachine).
+    get isMasked() { return typeof Traces !== 'undefined' && !!Traces.masked(); }
     get inCover() { return this.crouched && !!this.cover; }
     // Balas passam por ele (rolando, na janela Config.tactics.rollIframes).
     get dodging() { const r = this.roll, I = Config.tactics.rollIframes; return !!r && r.t >= I[0] && r.t <= I[1]; }

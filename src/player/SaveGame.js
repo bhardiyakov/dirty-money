@@ -63,7 +63,7 @@ const SaveGame = {
 			inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, bag: inv.bag, spareBags: inv.spareBags.slice(), weapons, gear: Object.assign({}, inv.gear || {}), booster: inv.boosterUses || 0 },
 			fitness: p.fit ? p.fit.xp : 0, strength: p.str ? p.str.xp : 0, physique: Physique.serialize(),
 			stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
-			traces: Traces.serialize(), robbery: Robbery.serialize(), heists: Heists.serialize(), business: Business.serialize(),
+			traces: Traces.serialize(), heat: g.heat.serialize(), robbery: Robbery.serialize(), heists: Heists.serialize(), business: Business.serialize(),
 			decor: HomeDecor.serialize(), worldMemory: WorldMemory.serialize(), news: News.serialize(), needs: Needs.serialize(), phone: Phone.serialize(), ledger: Ledger.serialize(), rivalArc: RivalArc.serialize(), witnesses: Witnesses.serialize(), calendar: Calendar.serialize(), personas: Personas.serialize(), tutorial: Tutorial.serialize(),
 		};
 	},
@@ -108,6 +108,7 @@ const SaveGame = {
 		p.weapon = inv.owned(pl.weapon) ? pl.weapon : 'none';
 		g.camera.snapTo(p.position);
 		if (typeof s.hour === 'number') { g.dayNight.hour = s.hour; g.dayNight.apply(); }
+		g.heat.load(s.heat || null, s.traces || null);                  // after the clock: parole and lawyer are measured in game hours
 		if (s.weather && g.weather) g.weather.set(s.weather, true);
 		return true;
 	},

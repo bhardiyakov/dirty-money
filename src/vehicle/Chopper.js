@@ -111,7 +111,7 @@ class Chopper {
         this.alt = this.floor;
         g.carDamage.boomAt(p.x, p.z, inside || this.lastHitBy === 'player' ? 'player' : 'env', 1.6);
         if (inside) g._chopperDown();                                  // o jogador morre com ele
-        else if (this.lastHitBy === 'player') { g.wanted.reportCrime(); }
+        else if (this.lastHitBy === 'player') { g.heat.commit('explosion'); }
         this.visual.setVisible(false);
         this.deadAt = g.time || 0;
         this.pilot = false;

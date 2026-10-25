@@ -31,23 +31,28 @@ module.exports = {
         c.eq(arc.phase2, 2, 'estourar a boca declara guerra'); c.ok(arc.qg && arc.phase3 === 3, 'confronto marcado no galpão');
         c.eq(arc.outcome, 'partner', 'virar sócio'); c.ok(arc.partnerBocas >= 1, 'sócio reabre bocas');
 
-        // testemunhas: o crime gera testemunha; a ligação sobe o inquérito; batida em casa
+        // testemunhas: o crime gera testemunha; a ligação abre a área de busca; batida em casa (com mandado na ficha)
         const wit = await page.evaluate(() => {
             const n = game.npcManager.npcs.find((q) => q.alive && !q.rag);
             if (!n) return { skip: true };
-            const h0 = Traces.heat;
+            Traces.search = null;
             WorldMemory.crime('holdup', n.position.x + 1, n.position.z);
             const got = Witnesses.list.length;
             for (const W of Witnesses.list) W.t = 0;
-            Witnesses.update(game, 0.1);
-            const heat = Traces.heat - h0;
-            Traces.heat = 80; let k = 0; while (!Witnesses.raid && k++ < 60) Witnesses.onNewDay();
+            Witnesses.update(game, 0.1); Traces.update(0.1, game);
+            const search = !!Traces.search;
+            game.heat.record.clear();
+            for (let i = 0; i < 3; i++) game.heat.fileEvidence(i % 2 ? 'homicide' : 'armed_robbery');
+            let k = 0; while (!Witnesses.raid && k++ < 60) Witnesses.onNewDay();
             game.stash.boxes.safe.cash = 10000; Witnesses.raid.day = Economy.day; Witnesses.raid.h = 0; Witnesses.update(game, 0.1);
-            return { got, heat, safe: game.stash.boxes.safe.cash, raid: Witnesses.raid };
+            const out = { got, search, safe: game.stash.boxes.safe.cash, raid: Witnesses.raid, possession: game.heat.record.crimes.some((c) => c.type === 'possession') };
+            game.heat.record.clear(); game.heat.update(0.1);
+            return out;
         });
         if (wit.skip) c.note('sem pedestre por perto para testar testemunhas');
-        else { c.ok(wit.heat > 0 || wit.got === 0, `ligação da testemunha sobe o inquérito (+${wit.heat.toFixed(1)})`); }
+        else c.ok(wit.search || wit.got === 0, 'a ligação da testemunha abre a área de busca');
         c.ok(wit.safe < 10000 && !wit.raid, 'batida leva dinheiro do cofre');
+        c.ok(wit.possession, 'o que a batida acha vai para a ficha (posse)');
 
         // calendário: agenda, jogo, aposta
         const cal = await page.evaluate(() => {

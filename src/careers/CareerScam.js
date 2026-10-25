@@ -234,7 +234,7 @@ class SkimJob extends CareerJob {
             if (!this.near(pos, 3)) { this.stage = 0; g._flash('Você se afastou: instalação cancelada'); return; }
             this._why = '';
             const cop = this.mgr.copDist(pos);
-            if (cop < 10 && !this.flagged) { this.flagged = true; g.wanted.reportCrime(); g._flash('Um policial te viu mexendo no caixa!'); }
+            if (cop < 10 && !this.flagged) { this.flagged = true; g.heat.commit('fraud', CrimeExposure.POLICE); g._flash('Um policial te viu mexendo no caixa!'); }
             if (cop < 20) this._why = 'POLÍCIA OLHANDO';
             else if (this.mgr.watcher(pos, 7)) this._why = 'TEM GENTE OLHANDO';
             if (this._why) return;
