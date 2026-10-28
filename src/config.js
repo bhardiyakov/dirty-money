@@ -93,11 +93,11 @@ const Config = {
 		yawLerp: 3.5,          // rapidez do giro da câmera quando ela gira (maior = mais rápido; menor = mais suave)
 		// GIRO 360° pelo jogador (CompassCamera.turn, Game._look): analógico direito (rad/s com ele no fim; a resposta é quadrática —
 		// pouco inclinado gira devagar), mouse arrastando com o botão direito (rad por pixel); no celular, dois dedos torcidos (o ângulo
-		// torcido, 1:1 — TouchControls). Dirigindo, a olhada em volta volta para trás do veículo depois de lookHold s sem mexer
-		// (rapidez lookReturn).
+		// torcido, 1:1 — TouchControls). Dirigindo, o giro do jogador toma a câmera (o automático para) e ela só volta para trás do
+		// veículo depois de lookHold s sem mexer (rapidez lookReturn).
 		lookPad: 2.8,
 		lookMouse: 0.006,
-		lookHold: 1.2,
+		lookHold: 2.0,
 		lookReturn: 2.2,
 		leadLerp: 2.5,         // rapidez com que o adianto entra (ao entrar no carro) e sai (ao descer)
 		// BALANÇO ao dirigir (CompassCamera._bounce): a câmera presa ao veículo por uma mola. lag = deslocamento (u) por m/s² de

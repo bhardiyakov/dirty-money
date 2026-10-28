@@ -20,8 +20,11 @@
 //
 // GIRO 360° PELO JOGADOR (turn; Game._look: analógico direito, botão direito do mouse arrastando, dois dedos torcidos no
 // celular): a pé, a câmera fica para onde ele a virou (userYaw — começa no norte; ao descer de um veículo, fica a direção de onde ela
-// estava); dirigindo, é uma OLHADA em volta (lookYaw) somada à direção atrás do veículo, que volta sozinha depois de lookHold s sem
-// mexer — e só depois que ele SOLTA o giro (lookHeld: botão do mouse, dedo ou analógico ainda segurando; Config.camera). O giro do jogador entra na hora, sem a suavização. Nos interiores (setFlat) não gira: a arte é pintada
+// estava). Dirigindo, o giro do jogador TOMA a câmera (manual: ela fica parada no mundo, em manYaw, como a pé — o giro automático do
+// veículo para de mexer nela) e só a DEVOLVE depois de lookHold s sem mexer e com o giro solto (lookHeld: botão do mouse, dedo ou
+// analógico ainda segurando; Config.camera): aí ela anda suave até a direção atrás do veículo e o automático volta. Uma coisa ou a
+// outra, nunca as duas somadas (antes a olhada era somada à direção do veículo: o carro virando no meio da olhada girava a tela por
+// cima do giro do jogador). O giro do jogador entra na hora, sem a suavização. Nos interiores (setFlat) não gira: a arte é pintada
 // para o norte em cima.
 //
 // ZOOM AUTOMÁTICO (setAutoZoom, Config.camera.footZoom/carZoom/speedZoom): a pé a câmera se aproxima; no veículo ela se afasta
@@ -46,8 +49,9 @@ class CompassCamera {
 		this.target = targetPos.clone();
 		this.yaw = 0;              // giro da bússola (rad; 0 = norte em cima)
 		this.userYaw = 0;          // a pé: para onde o jogador virou a câmera (turn)
-		this.lookYaw = 0;          // dirigindo: a olhada em volta, somada à direção atrás do veículo (volta sozinha)
-		this._lookIdle = 0;        // s desde o último giro do jogador (a olhada volta depois de Config.camera.lookHold)
+		this.manual = false;       // dirigindo: o jogador girou a câmera — ela fica em manYaw, parada no mundo (devolvida depois)
+		this.manYaw = 0;           // dirigindo, manual: a direção que o jogador deu à câmera (rad)
+		this._lookIdle = 0;        // s desde o último giro do jogador (a câmera volta para trás do veículo depois de Config.camera.lookHold)
 		this.lookHeld = false;     // o jogador segura o giro (botão do mouse, dedo ou analógico): a olhada não volta (Game._look)
 		this.lead = 0;             // adianto na direção do veículo (fração de `view`)
 		this.autoMul = 1;          // zoom automático (a pé aproxima, veículo rápido afasta): ver setAutoZoom
@@ -175,14 +179,20 @@ class CompassCamera {
 	turn(d) {
 		if (!d || this.flat) return;
 		const wrap = CompassCamera.wrap;
-		if (this._carVeh) { this.lookYaw = wrap(this.lookYaw + d); this._lookIdle = 0; }
-		else this.userYaw = wrap(this.userYaw + d);
+		if (this._carVeh) {                                                         // dirigindo: o giro do jogador toma a câmera de onde ela está
+			if (!this.manual) { this.manual = true; this.manYaw = this.yaw; }
+			this.manYaw = wrap(this.manYaw + d); this._lookIdle = 0;
+		} else this.userYaw = wrap(this.userYaw + d);
 		this.yaw = wrap(this.yaw + d);
 	}
 
-	// Volta o "cima" da tela para o norte (o botão de bússola do radar): a pé, o giro do jogador; dirigindo, a olhada. Suave (yawLerp).
+	// Dirigindo com a câmera tomada pelo jogador: quanto ela está girada em relação à direção atrás do veículo (rad; 0 = automática).
+	get lookYaw() { return this._carVeh && this.manual ? CompassCamera.wrap(this.manYaw - this._carYaw) : 0; }
+
+	// Volta o "cima" da tela para o norte (o botão de bússola do radar): a pé, o giro do jogador; dirigindo, devolve a câmera ao
+	// automático (atrás do veículo). Suave (yawLerp).
 	resetNorth() {
-		if (this._carVeh) { this.lookYaw = 0; return; }
+		if (this._carVeh) { this.manual = false; return; }
 		this.userYaw = 0;
 	}
 
@@ -196,7 +206,7 @@ class CompassCamera {
 			// carSmooth: a câmera vai atrás do carro, girando com ele aos poucos — mais rápido quanto mais rápido ele anda, parado ela
 			// fica (dar ré não vira a tela). Sem ele: guarda uma direção (_carYaw) e só gira em passos de 90° quando o carro se afasta
 			// dela mais que carTurnTrigger (virou uma esquina, fez o retorno). Ao entrar no carro, parte da direção dele.
-			if (this._carVeh !== vehicle) { this._carVeh = vehicle; this._carYaw = h != null ? h : this.yaw; this.lookYaw = 0; this._lookIdle = 0; }
+			if (this._carVeh !== vehicle) { this._carVeh = vehicle; this._carYaw = h != null ? h : this.yaw; this.manual = false; this._lookIdle = 0; }
 			else if (h != null && C.carSmooth) {
 				const k = C.carYawLerp * Math.min(1, (vehicle.speed || 0) / C.carYawSpeed);
 				this._carYaw = wrap(this._carYaw + wrap(h - this._carYaw) * (1 - Math.exp(-k * dt)));
@@ -204,12 +214,18 @@ class CompassCamera {
 				const off = wrap(h - this._carYaw);
 				if (Math.abs(off) > C.carTurnTrigger) this._carYaw = wrap(this._carYaw + Math.round(off / (Math.PI / 2)) * (Math.PI / 2));
 			}
-			this._lookIdle = this.lookHeld ? 0 : this._lookIdle + dt;                  // (a olhada volta para trás do veículo só depois de soltar)
-			if (this._lookIdle > C.lookHold) this.lookYaw *= Math.exp(-C.lookReturn * dt);
-			goalYaw = wrap(this._carYaw + this.lookYaw);
+			// manual: a câmera é do jogador (parada no mundo). Só depois de soltar e de lookHold s sem mexer ela é DEVOLVIDA: a direção
+			// manual anda até a de trás do veículo e, chegando, o automático assume — passagem de uma para a outra, não soma.
+			this._lookIdle = this.lookHeld ? 0 : this._lookIdle + dt;
+			if (this.manual && this._lookIdle > C.lookHold) {
+				const off = wrap(this._carYaw - this.manYaw);
+				if (Math.abs(off) < 0.01) this.manual = false;
+				else this.manYaw = wrap(this.manYaw + off * (1 - Math.exp(-C.lookReturn * dt)));
+			}
+			goalYaw = this.manual ? this.manYaw : this._carYaw;
 			goalLead = C.carLead;
 		} else {
-			if (this._carVeh) { this.userYaw = wrap(this.yaw); this.lookYaw = 0; }          // desceu: a pé, a câmera fica de onde estava
+			if (this._carVeh) { this.userYaw = wrap(this.yaw); this.manual = false; }       // desceu: a pé, a câmera fica de onde estava
 			this._carVeh = null;
 			goalYaw = this.flat ? 0 : this.userYaw;
 		}

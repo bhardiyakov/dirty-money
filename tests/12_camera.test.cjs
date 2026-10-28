@@ -1,6 +1,7 @@
 // Câmera 360° (CompassCamera.turn, Game._look): o botão direito do mouse arrastando (com arma de fogo na mão ele é a mira — aí o do meio
 // arrastando gira), o analógico direito (a não ser mirando com LT) e dois dedos torcidos no celular. A pé ela fica
-// para onde foi girada e o andar segue a tela; dirigindo é uma olhada em volta que volta para trás do veículo; nos interiores, norte.
+// para onde foi girada e o andar segue a tela; dirigindo, girar toma a câmera (o giro do veículo não soma) e ela volta para trás dele
+// depois de um tempo sem mexer; nos interiores, norte.
 const { boot, gameWait, leave } = require('./lib.cjs');
 
 module.exports = {
@@ -123,10 +124,16 @@ module.exports = {
             for (let i = 1; i <= 8; i++) await page.mouse.move(640 + (120 * i) / 8, 300);
             await gameWait(page, 0.3);                                        // (o último passo do arrasto entra no quadro seguinte)
             const h0 = await cam();
-            await gameWait(page, 3);
+            // o veículo "vira" 70° no meio da olhada: a câmera é do jogador agora — fica parada no mundo, sem somar o giro automático
+            await page.evaluate(() => { const C = game.camera; C._carYaw = CompassCamera.wrap(C._carYaw + 1.2); });
+            await gameWait(page, 1.5);
+            const hv = await cam();
+            await page.evaluate(() => { const C = game.camera; C._carYaw = CompassCamera.wrap(C._carYaw - 1.2); });
+            await gameWait(page, 1.5);
             const h1 = await cam();
             await page.mouse.up({ button: 'right' });
-            c.ok(Math.abs(wrap(h1.look - h0.look)) < 0.02 && Math.abs(h1.look) > 1, `segurando o giro parado, a olhada não volta sozinha (${(wrap(h1.look - h0.look) * 57.3).toFixed(0)}°; a moto parada pode assentar um pouco)`);
+            c.ok(Math.abs(wrap(hv.yaw - h0.yaw)) < 0.02, `girada pelo jogador, a câmera não soma o giro do veículo virando (${(wrap(hv.yaw - h0.yaw) * 57.3).toFixed(0)}° com a moto virando 70°)`);
+            c.ok(Math.abs(wrap(h1.yaw - h0.yaw)) < 0.02 && Math.abs(h1.look) > 1, `segurando o giro parado, ela não volta sozinha (${(wrap(h1.yaw - h0.yaw) * 57.3).toFixed(0)}°)`);
             await gameWait(page, 5);                                          // (soltou: espera lookHold e volta suave — a olhada era maior)
             const m2 = await cam();
             c.ok(Math.abs(wrap(m2.yaw - rode.h)) < 0.2, `sem mexer, a câmera volta para trás da moto (${(wrap(m2.yaw - rode.h) * 57.3).toFixed(0)}°)`);
