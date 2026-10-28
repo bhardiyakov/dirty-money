@@ -248,8 +248,13 @@ quente, sombras macias e materiais com textura.
   forno esparrama mais), a "temperatura" do lugar, vinheta e um toque de saturação e contraste.
 - **Esconderijo** (`InteriorHDHome.js`): o barraco tem pintor próprio, com contrapiso rachado, zinco e bloco sem reboco, colchão nos
   paletes, armário de porta empenada, fogareiro, geladeira amassada, balde da goteira, varal e lâmpada pelada.
-- **Custo.** A repintura leva de 20 a 170 ms por sala, além do layout de sempre, e só acontece ao entrar. Cada sala é pintada uma vez,
-  e as quatro mais recentes ficam guardadas. Os ladrilhos de ruído são três, compartilhados.
+- **Custo.** Só se pinta ao entrar, durante o escurecimento, e as quatro salas mais recentes ficam guardadas. Medido num ambiente sem
+  placa de vídeo, no gráfico alto: 0,1 a 0,4 s por sala; na pixel art eram cerca de 0,15 s.
+  - O canvas é rasterizado na CPU (`InteriorHD.CTX`). No canvas acelerado a pintura ficava enfileirada e era toda feita na primeira
+    cópia entre canvases; com o navegador ocupado, isso chegou a 17 s numa sala.
+  - Os canvases de apoio (máscara e mapa de luz) são reaproveitados. O mapa de luz é feito na resolução da arte.
+  - O canvas da sala é liberado quando a textura sai do cache. Os ladrilhos de ruído são três, compartilhados.
+  - `tests/24_interiores` repinta todas as salas e confere que sólidos, usos, entrada e assentos saem iguais com e sem o HD.
 - **Volta à pixel art:** `Config.art.interiorHD = false` ou `?pixel` na URL.
 
 ## Personagens (`tools/asset_baker/generator/*` no build, `src/art/NpcArt.js` no jogo)
