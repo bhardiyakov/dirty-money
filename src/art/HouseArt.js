@@ -207,6 +207,7 @@ const HouseArt = {
     // ================================================================= interior
     // Devolve { canvas, in: IN } — o corte da casa. Textura com alfa (fora do desenho fica transparente).
     interior() {
+        if (typeof InteriorHD !== 'undefined' && InteriorHD.on) return { canvas: InteriorHD.safehouse(), in: this.IN, bulb: { x: 4.6, z: 4.6 } };      // alta definição (art/InteriorHDHome.js)
         const S = SafeHouse, IN = this.IN, PPU = this.PPU, K = this.K;
         const WPX = Math.round((IN.x1 - IN.x0) * PPU), HPX = Math.round((IN.z1 - IN.z0) * PPU);
         const c = this._P(WPX, HPX), rng = Pixel.rng(8080);

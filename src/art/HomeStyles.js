@@ -182,7 +182,7 @@ Object.assign(ShopStyles, {
         S.rug(S.R(W / 2 - 6.0, 3.6, W / 2 + 6.0, 9.4), '#6a1a24', '#c8a860');
         this._sofa(S, S.R(W / 2 - 5.0, 4.0, W / 2 - 1.6, 5.2), '#2a3a52', 'n'); this._sofa(S, S.R(W / 2 + 1.6, 4.0, W / 2 + 5.0, 5.2), '#2a3a52', 'n');
         S.table(W / 2, 6.4, 2.6, 1.2, 'wood', '#2a2a30');
-        const pia = S.blk(S.R(W / 2 - 1.8, 9.4, W / 2 + 1.8, 11.6), 1.0, '#121216', '#0a0a0e'); S.c.fr(pia.x + 3, pia.top + 3, pia.w - 6, 4, '#f4f4f0'); for (let i = 5; i < pia.w - 5; i += 3) S.c.fr(pia.x + i, pia.top + 3, 1, 3, '#16161a');
+        S.piano(S.R(W / 2 - 1.8, 9.4, W / 2 + 1.8, 11.6));
         columns();
         this._tv(S, S.R(W / 2 - 2.6, 12.0, W / 2 + 2.6, 12.7), true);
         S.plant(S.P(T + 1.2), 3.6); S.plant(S.P(W - T - 1.2), 3.6); S.plant(S.P(T + 1.2), 8.6); S.plant(S.P(W - T - 1.2), 8.6);
