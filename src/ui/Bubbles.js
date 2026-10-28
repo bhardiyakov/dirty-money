@@ -5,12 +5,19 @@
 //     anchor: { x, z } fixo · um SpriteActor / NPC (usa .mesh.position ou .position) · ou função () => { x, z }
 //     tone: 'talk' (branco) · 'shout' (amarelo, grito) · 'whisper' (cochicho, cinza) · 'hint' (dica, borda dourada) · 'angry' (vermelho)
 //     key: um balão por chave (falar de novo troca o texto em vez de empilhar)
+// Como nos quadrinhos: o balão flutua ACIMA da cabeça (LIFT), com contorno e um rabicho que aponta para quem fala. Na câmera de cima o
+// personagem 2,5D é desenhado deitado, com a cabeça para cima da TELA (1 m de altura = NORTH_PER_METRE para o "cima" da tela, que gira
+// com CompassCamera.yaw): a altura y quase não sobe o ponto projetado, então o balão é empurrado nessa direção; na câmera 2,5D
+// inclinada, a altura projeta de verdade — mas o personagem em pé é esticado (SpriteActor.STAND_SCALE), e o balão sobe junto.
 // ============================================================================
 
 const Bubbles = {
     list: [],
     MAX: 7,
     RANGE: 26,                      // m do jogador: mais longe, ninguém "ouve"
+    LIFT: 0.95,                     // câmera de cima: o quanto o balão sobe acima da cabeça (m para o "cima" da tela)
+    LIFT_Y: 0.45,                   // câmera 2,5D: o mesmo, em altura (acima da cabeça já esticada pelo SpriteActor.STAND_SCALE)
+    TAIL: 15,                       // px do rabicho (a ponta dele fica no ponto acima da cabeça)
 
     _init(scene) {
         if (this.root && this.scene === scene) return;
@@ -19,15 +26,18 @@ const Bubbles = {
             const st = document.createElement('style');
             st.textContent = `
                 #bubbles { position: fixed; inset: 0; pointer-events: none; z-index: 40; overflow: hidden; }
-                #bubbles .bb { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); max-width: 260px; padding: 6px 11px 7px; border-radius: 13px;
-                    font: 600 13px var(--font, system-ui); line-height: 1.3; color: #1d140b; background: #fffaf0; box-shadow: 0 3px 12px rgba(0,0,0,0.35);
+                #bubbles .bb { --bg: #fffdf6; --bd: #1d140b; position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); max-width: 250px;
+                    padding: 7px 13px 8px; border-radius: 18px; border: 2px solid var(--bd); background: var(--bg);
+                    font: 700 13px var(--font, system-ui); line-height: 1.3; color: #1d140b; box-shadow: 0 4px 10px rgba(0,0,0,0.32);
                     white-space: normal; text-align: center; transition: opacity .25s; will-change: transform; }
-                #bubbles .bb::after { content: ''; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent; border-bottom: 0; border-top-color: inherit; }
-                #bubbles .bb { border-top-color: #fffaf0; }
-                #bubbles .bb.shout { background: #fde047; border-top-color: #fde047; font-weight: 800; text-transform: none; color: #2a1600; }
-                #bubbles .bb.whisper { background: rgba(30,30,36,0.86); border-top-color: rgba(30,30,36,0.86); color: #d8d8e0; font-style: italic; font-weight: 500; }
-                #bubbles .bb.hint { background: #1d1a12; border-top-color: #1d1a12; color: #fde68a; box-shadow: 0 0 0 1px #fbbf24, 0 3px 12px rgba(0,0,0,0.4); }
-                #bubbles .bb.angry { background: #fee2e2; border-top-color: #fee2e2; color: #7f1d1d; font-weight: 800; }
+                /* rabicho de quadrinho: um triângulo inclinado com contorno (o de baixo é o contorno, o de cima o preenchimento) */
+                #bubbles .bb::before, #bubbles .bb::after { content: ''; position: absolute; left: 50%; width: 0; height: 0; border-style: solid; }
+                #bubbles .bb::before { bottom: -15px; margin-left: -11px; border-width: 15px 3px 0 12px; border-color: var(--bd) transparent transparent transparent; }
+                #bubbles .bb::after { bottom: -10px; margin-left: -8px; border-width: 11px 2px 0 8px; border-color: var(--bg) transparent transparent transparent; }
+                #bubbles .bb.shout { --bg: #fde047; --bd: #3b2400; font-weight: 800; color: #2a1600; border-width: 3px; }
+                #bubbles .bb.whisper { --bg: rgba(250,250,252,0.92); --bd: #6b7280; border-style: dashed; color: #4b5563; font-style: italic; font-weight: 500; }
+                #bubbles .bb.hint { --bg: #1d1a12; --bd: #fbbf24; color: #fde68a; }
+                #bubbles .bb.angry { --bg: #fee2e2; --bd: #7f1d1d; color: #7f1d1d; font-weight: 800; }
                 #bubbles .bb small { display: block; font-weight: 500; font-size: 11px; opacity: 0.7; margin-top: 1px; }`;
             document.head.appendChild(st);
             this.root = document.createElement('div'); this.root.id = 'bubbles';
@@ -80,9 +90,13 @@ const Bubbles = {
             const p = this._pos(b.anchor);
             const far = !p || p.hidden || (P && Math.hypot(p.x - P.x, p.z - P.z) > this.RANGE);
             if (far || paused) { b.el.style.opacity = '0'; continue; }
-            const v = BABYLON.Vector3.Project(this._v.set(p.x, b.y, p.z), this._I, M, vp);
+            // acima da cabeça: na câmera de cima, para o "cima" da tela (onde o desenho põe a cabeça); na 2,5D, em altura
+            const U = typeof CompassCamera !== 'undefined' ? CompassCamera.NORTH_PER_METRE : 0, yaw = U && typeof CompassCamera !== 'undefined' ? CompassCamera.yaw || 0 : 0;
+            const up = U ? (b.y * U + this.LIFT) : 0;
+            const stand = !U && typeof SpriteActor !== 'undefined' ? SpriteActor.STAND_SCALE : 1;      // (2,5D: o personagem em pé é esticado 1/cos da inclinação)
+            const v = BABYLON.Vector3.Project(this._v.set(p.x + Math.sin(yaw) * up, U ? b.y : b.y * stand + this.LIFT_Y, p.z + Math.cos(yaw) * up), this._I, M, vp);
             if (v.z < 0 || v.z > 1) { b.el.style.opacity = '0'; continue; }
-            const x = r.left + v.x * r.width / w, yy = r.top + v.y * r.height / h;
+            const x = r.left + v.x * r.width / w, yy = r.top + v.y * r.height / h - this.TAIL;
             b.el.style.transform = `translate(${x.toFixed(1)}px, ${yy.toFixed(1)}px) translate(-50%, -100%)`;
             const fadeIn = Math.min(1, age / 160), fadeOut = Math.min(1, (b.ms - age) / 300);
             b.el.style.opacity = String(Math.min(fadeIn, fadeOut));
