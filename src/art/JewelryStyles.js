@@ -38,9 +38,9 @@ Object.assign(ShopStyles, {
         S.floor('marble', P.floor[0], P.floor[1]);
         S.shell({ n: { kind: 'panel', A: P.wall[0], B: P.wall[1] }, rail: P.trim, cap: '#5a5048', side: S.t(P.wall[0], 0.8), front: S.t(P.wall[0], 0.7), mat: P.velvet });
         // letreiro dourado e espelhos com moldura
-        let bd = S.band(S.P(8), S.P(14)); c.fr(bd.x + 4, bd.y + 10, bd.w - 8, 16, '#16121a'); c.fr(bd.x + 6, bd.y + 12, bd.w - 12, 2, P.trim); c.fr(bd.x + 6, bd.y + 22, bd.w - 12, 2, P.trim);
-        for (let k = 0; k < 5; k++) c.disk(bd.x + 14 + k * ((bd.w - 28) >> 2), bd.y + 18, 2, P.trim);
-        for (const xx of [S.P(3.2), S.P(W - 3.2)]) { const b2 = S.band(xx - 1, xx + 1); c.fr(b2.x, b2.y + 6, b2.w, 30, P.trim); c.fr(b2.x + 2, b2.y + 8, b2.w - 4, 26, '#cfe0ea'); c.fr(b2.x + 4, b2.y + 10, 3, 20, '#ffffff'); }
+        S.jewelSign(S.P(8), S.P(14), P.trim);
+        for (const xx of [S.P(3.2), S.P(W - 3.2)]) S.wallMirror(xx - 1, xx + 1, P.trim);
+        void c;
         // vitrines: fileira na parede esquerda, na direita e a ilha do meio (o variante 2 tem uma vitrine a mais)
         let n = 0;
         for (const z of [3.0, 5.6, 8.2]) { this._vitrine(S, S.R(1.0, z, 2.6, z + 1.8), P, v * 97 + n++); }

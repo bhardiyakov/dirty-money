@@ -21,6 +21,7 @@ class ShopCtx {
         // Onde a clientela faz as coisas (world/ShopLife.js): assentos (cadeira/banqueta, com o lado do encosto), mesas e balcões.
         this.seats = []; this.tables = []; this.counters = [];
         this.nY = this.Y(D - this.T); this.faceH = this.hp(this.H);
+        if (typeof InteriorHD !== 'undefined' && InteriorHD.on) InteriorHD.attach(this);         // grava as chamadas para repintar em HD no finish()
     }
 
     // ---------------------------------------------------------------- coordenadas
@@ -253,7 +254,29 @@ class ShopCtx {
             else if (it === 'phone') { c.box(px, y, 8, 12, '#2a2c32', '#5a5e68', '#101216', '#000'); c.fr(px + 1, y + 1, 6, 8, '#6ac0e8'); px += 14; }
             else if (it === 'money') { c.fr(px, y, 14, 8, '#6aa86a'); c.fr(px + 2, y + 2, 10, 1, '#3a6a3a'); c.fr(px + 1, y + 6, 12, 1, '#4a8a4a'); px += 20; }
             else if (it === 'scale') { c.box(px, y, 14, 10, '#c8ccd0', '#fff', '#7a7e84', '#2a2c30'); c.fr(px + 2, y + 2, 6, 3, '#6a7a60'); px += 20; }
+            else if (it === 'juicer') { c.box(px, y, 14, 18, '#c8ccd0', '#f4f6f8', '#7a7e86', '#2a2c32'); c.fr(px + 2, y + 2, 10, 8, '#f0a030'); c.fr(px + 2, y + 10, 10, 3, '#3a3d44'); px += 20; }
+            else if (it === 'dough') { c.disk(px + 9, y + 8, 9, '#e8d8a8'); c.disk(px + 9, y + 8, 7, '#f0e4bc'); px += 24; }
+            else if (it === 'base') { c.disk(px + 8, y + 7, 8, '#d8c890'); px += 22; }
+            else if (it === 'board') { c.fr(px + 8, y + 1, 18, 10, '#d4b070'); c.ln(px, y + 15, px + 14, y + 1, '#7a5230'); px += 30; }
         }
+        return b;
+    }
+
+    // Forno a lenha de tijolo (pizzaria): bloco de tijolos com a boca acesa, chaminé de metal e a luz do fogo.
+    oven(r, h = 2.0) {
+        const b = this.blk(r, h, '#a05030', '#b8603a'), c = this.c;
+        for (let j = 0; j < b.hp; j += 6) c.fr(b.x + 1, b.fy + j, b.w - 2, 1, '#6a3420'); for (let i = 0; i < b.w; i += 10) c.fr(b.x + i, b.fy, 1, b.hp, '#6a3420');
+        const mx = b.x + (b.w / 2 | 0), my = b.fy + b.hp - 4; c.disk(mx, my - 4, 11, '#2a1810'); c.fr(mx - 11, my - 4, 22, 8, '#2a1810'); c.disk(mx, my - 4, 8, '#e8782a'); c.fr(mx - 8, my - 4, 16, 6, '#e8782a'); c.disk(mx - 1, my - 4, 4, '#ffd060'); c.fr(mx - 3, my - 1, 8, 3, '#ffd060');
+        c.box(b.x + (b.w / 2 | 0) - 5, b.top - 24, 10, 28, '#6a6e78', '#9a9ea8', '#3a3e46', '#1a1c20');                                             // chaminé
+        c.disk(mx, my - 6, 2, '#fff2a0'); this.light((r[0] + r[2]) / 2, r[1] - 0.6, 4.5, [255, 140, 50], 0.7);
+        for (let k = 0; k < 4; k++) c.box(b.x + 4 + k * 11, b.fy + b.hp + 1, 9, 5, '#7a5230', '#a87848', '#4a3018', '#201408');
+        return b;
+    }
+    // Pilha de lenha (toras empilhadas).
+    logs(r, h = 0.6) {
+        const b = this.base(r, h); this.shadow(b);
+        for (let k = 0; k < 3; k++) this.c.box(b.x + 1, b.y - 6 - k * 4, b.w - 2, 6, '#8a5a30', '#b88850', '#4a3018', '#201408');
+        this.solid(r, 0.9);
         return b;
     }
 
@@ -420,22 +443,25 @@ class ShopCtx {
             return best;
         };
         const sf = place(0.95, 0.75);
-        if (sf) {
-            const b = this.blk(sf, 1.05, '#5c626a', '#3c424a');
-            c.box(b.x + 3, b.fy + 2, b.w - 6, b.hp - 4, '#4a5058', '#6a7078', '#2a3036', '#14181c');
-            c.disk(b.x + (b.w >> 1), b.fy + (b.hp >> 1), 4, '#9aa2ac'); c.disk(b.x + (b.w >> 1), b.fy + (b.hp >> 1), 1, '#2a2e34'); c.fr(b.x + b.w - 7, b.fy + 4, 2, b.hp - 8, '#9aa2ac');
-            this.use('safe', sf);
-        }
+        if (sf) { this._safeArt(sf); this.use('safe', sf); }
         const dv = place(0.7, 0.55);
-        if (dv) {
-            const b = this.blk(dv, 1.25, '#24272c', '#16181c');
-            for (let k = 0; k < 3; k++) { c.fr(b.x + 2, b.fy + 3 + k * 5, b.w - 4, 3, '#30343a'); c.px(b.x + 3, b.fy + 4 + k * 5, k ? '#3adf6a' : '#ff3a3a'); }
-            c.box(b.x + 1, b.top + 1, b.w - 2, b.h - 2, '#101418', '#3a6a8a', '#060a0c', '#000');
-            for (let k = 0; k < 4; k++) c.fr(b.x + 3 + (k & 1) * ((b.w - 6) >> 1), b.top + 3 + (k >> 1) * ((b.h - 6) >> 1), ((b.w - 8) >> 1), ((b.h - 8) >> 1), ['#5a8a6a', '#6a7a9a', '#8a7a5a', '#5a6a7a'][k]);
-            this.use('dvr', dv);
-        }
-        for (const x of [T + 1.2, W - T - 1.2]) { const bd = this.band(x - 0.35, x + 0.35); c.box(bd.x, bd.y + 3, bd.w, 6, '#2a2c32', '#4a4e58', '#16181c', '#0a0b0d'); c.disk(bd.x + (bd.w >> 1), bd.y + 11, 2, '#ff3030'); }
+        if (dv) { this._dvrArt(dv); this.use('dvr', dv); }
+        for (const x of [T + 1.2, W - T - 1.2]) this._camArt(x);
+        void c;
     }
+    // Cofre do escritório, gravador das câmeras (DVR, com o monitor de 4 imagens em cima) e uma câmera na parede do fundo.
+    _safeArt(sf) {
+        const c = this.c, b = this.blk(sf, 1.05, '#5c626a', '#3c424a');
+        c.box(b.x + 3, b.fy + 2, b.w - 6, b.hp - 4, '#4a5058', '#6a7078', '#2a3036', '#14181c');
+        c.disk(b.x + (b.w >> 1), b.fy + (b.hp >> 1), 4, '#9aa2ac'); c.disk(b.x + (b.w >> 1), b.fy + (b.hp >> 1), 1, '#2a2e34'); c.fr(b.x + b.w - 7, b.fy + 4, 2, b.hp - 8, '#9aa2ac');
+    }
+    _dvrArt(dv) {
+        const c = this.c, b = this.blk(dv, 1.25, '#24272c', '#16181c');
+        for (let k = 0; k < 3; k++) { c.fr(b.x + 2, b.fy + 3 + k * 5, b.w - 4, 3, '#30343a'); c.px(b.x + 3, b.fy + 4 + k * 5, k ? '#3adf6a' : '#ff3a3a'); }
+        c.box(b.x + 1, b.top + 1, b.w - 2, b.h - 2, '#101418', '#3a6a8a', '#060a0c', '#000');
+        for (let k = 0; k < 4; k++) c.fr(b.x + 3 + (k & 1) * ((b.w - 6) >> 1), b.top + 3 + (k >> 1) * ((b.h - 6) >> 1), ((b.w - 8) >> 1), ((b.h - 8) >> 1), ['#5a8a6a', '#6a7a9a', '#8a7a5a', '#5a6a7a'][k]);
+    }
+    _camArt(x) { const c = this.c, bd = this.band(x - 0.35, x + 0.35); c.box(bd.x, bd.y + 3, bd.w, 6, '#2a2c32', '#4a4e58', '#16181c', '#0a0b0d'); c.disk(bd.x + (bd.w >> 1), bd.y + 11, 2, '#ff3030'); }
 
     // ---------------------------------------------------------------- acabamento de TODO interior (lojas, casas, bancos, joalherias)
     // Antes da luz, sobre a sala já mobiliada: (1) objetos de canto e de parede onde sobra chão (lixeira, planta, placa de piso molhado,
@@ -696,6 +722,7 @@ class ShopCtx {
     finish(vignette = 0.34) {
         if (ShopCtx.ROBBABLE.includes(this.style)) this._backOffice();
         this._polish();
+        if (this._hd) return this._done(InteriorHD.render(this, { vignette }));
         const c = this.c, WP = this.wpx, HP = this.hpxTot;
         const lights = this.lights;
         // Luz: pouco mais de contraste (o ambiente um tico mais escuro, as luzes rendem mais) e a "temperatura" do lugar — restaurante, bar e
@@ -717,8 +744,11 @@ class ShopCtx {
             c.data[k + 1] = Math.max(0, Math.min(255, (c.data[k + 1] * (mul - v) + add1) * G[1]));
             c.data[k + 2] = Math.max(0, Math.min(255, (c.data[k + 2] * (mul - v) + add2) * G[2]));
         }
+        return this._done(c);
+    }
+    _done(canvas) {
         return {
-            canvas: c, in: this.IN, W: this.W, D: this.D, obs: this.obs, door: this.door, clerk: this.clerk, patrons: this.patrons,
+            canvas, in: this.IN, W: this.W, D: this.D, obs: this.obs, door: this.door, clerk: this.clerk, patrons: this.patrons,
             spawn: this._spawn(), uses: this.uses, life: { seats: this.seats, tables: this.tables, counters: this.counters, style: this.style },
         };
     }

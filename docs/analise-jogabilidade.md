@@ -212,6 +212,46 @@ entrada, rodapé, e luz com mais contraste e "temperatura" (quente em restaurant
 passagem: cada objeto testa folga e que a sala inteira continua alcançável a pé da porta. (O mesmo teste corrigiu o cofre das
 pizzarias, que ficava num canto da cozinha sem acesso.)
 
+## Interiores em alta definição (`src/art/InteriorHD*.js`, `src/art/ShopPieces.js`)
+
+Os interiores eram pixel art a 20 px/u ampliada na tela. Agora são repintados em alta definição, no estilo de uma ilustração: luz
+quente, sombras macias e materiais com textura.
+
+- **Como funciona.** Os layouts continuam no motor de pixel art (`ShopStyles`, `HomeStyles`, `BankStyles`, `JewelryStyles`). É ele
+  que decide móveis, sólidos, usos e enfeites, então nada muda no jogo. Enquanto pinta, o `ShopCtx` grava cada chamada:
+  - as peças de cena (piso, casca da sala, balcão, mesa, cadeira…) viram operações com os seus parâmetros;
+  - os traços soltos viram traços.
+
+  No `finish`, a gravação é repintada num canvas Q vezes maior, na mesma ordem e no mesmo lugar. A textura sai desse canvas.
+- **Resolução** (`InteriorHD.q`): Q = 2, 3, 4 ou 5 px de textura por px da arte, conforme o nível de gráfico (Low, Medium, High, HD).
+  Ou seja, de 40 a 100 px por metro. O maior lado fica abaixo de 2048 (Low), 3072 (Medium/High) ou 4096 (HD), e do que a placa aceita.
+- **Peças** (`InteriorHDArt.js` e `InteriorHDPieces.js`):
+  - pisos: lajota com rejunte, bisel, lascas e manchas; xadrez encerado; tábuas com veio e nós; mármore com veios suaves; cimento
+    queimado com rachaduras;
+  - paredes: tijolo à vista, madeira, azulejo, papel de parede com lambri, bambu, painel perfurado, concreto, reboco;
+  - móveis com degradê, contorno e sombra macia para sudeste;
+  - itens de balcão: caixa registradora, bandeja, bolo, massa de pizza, espremedor…;
+  - geladeiras de porta de vidro com as bebidas, máquinas de salgadinho e caixas eletrônicos;
+  - prateleiras com produtos por tipo de loja: pão na padaria, remédio na farmácia, tênis na boutique.
+- **Peças próprias de cada loja** (`ShopPieces.js`). O que os layouts desenhavam à mão virou peça com nome, a mesma pixel art e um
+  pintor HD:
+  - cozinha da lanchonete, forno a lenha e lenha da pizzaria;
+  - araras, manequins e sacolas da boutique; aparelhos da academia;
+  - prateleira de bebidas, sinuca e jukebox do bar; caixotes de fruta;
+  - adega do italiano; tatame, balcão de sushi e lanternas do japonês;
+  - painel e vitrines de armas; grafite e mesa da boca;
+  - piano da mansão; letreiros, cofre, elevador, laser e porta do cofre do banco.
+- **Parede do fundo alta.** A parede sobe para o espaço vazio acima dela, como no corte de uma casa de bonecas. Quadros, janelas,
+  relógios, letreiros, espelhos, prateleiras de bebida e câmeras sobem junto e são pintados antes dos móveis, que os cobrem. As
+  laterais viram vigas na altura toda.
+- **Luz** (`HDPainter.post`): ambiente um pouco escuro com as poças das lâmpadas por multiplicação, brilho colorido somado (o fogo do
+  forno esparrama mais), a "temperatura" do lugar, vinheta e um toque de saturação e contraste.
+- **Esconderijo** (`InteriorHDHome.js`): o barraco tem pintor próprio, com contrapiso rachado, zinco e bloco sem reboco, colchão nos
+  paletes, armário de porta empenada, fogareiro, geladeira amassada, balde da goteira, varal e lâmpada pelada.
+- **Custo.** A repintura leva de 20 a 170 ms por sala, além do layout de sempre, e só acontece ao entrar. Cada sala é pintada uma vez,
+  e as quatro mais recentes ficam guardadas. Os ladrilhos de ruído são três, compartilhados.
+- **Volta à pixel art:** `Config.art.interiorHD = false` ou `?pixel` na URL.
+
 ## Personagens (`tools/asset_baker/generator/*` no build, `src/art/NpcArt.js` no jogo)
 
 Braços soltos ao lado do corpo (sem o ar de "gorila"), cabeça um pouco maior (rosto e cabelo mais legíveis de cima), silhueta
