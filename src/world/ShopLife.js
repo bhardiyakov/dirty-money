@@ -21,6 +21,10 @@
 // Walking: a grid of 0.25 u over the room (the room's solids grown by the body radius), A* with 8 neighbours (no corner cutting) and
 // the path pulled straight where the grid has a clear line. People avoid each other and the player (wait, then step around); the
 // player bumps into them (their bodies are added to Interiors.obstacles every frame). Seats are reserved, one person each.
+// The EXIT stays clear: the queue holds at most 3 (QUEUE_SLOTS) and no queue slot, waiting spot or arrival point is within
+// DOOR_CLEAR of the door; in the doorway people pass through each other (and through the player after a moment) and their bodies
+// don't block the player; with the queue full, newcomers wait somewhere free in the room (wanderSpot) and try again; whoever waits
+// for an order gets a pickup spot of their own; anyone blocked behind another customer for a while slips past (blockedT/ghost).
 //
 // The robbery (crime/Robbery.js) takes over: robberyCast() hands it the attendant and the customers inside, and ShopLife stops
 // driving them until the session ends (then everyone runs out). A heist inside makes everyone kneel.
@@ -35,7 +39,8 @@ const ShopLife = {
     TURN_SPEED: 9,
     MAX_AGENTS: 12,
     QUEUE_SPACING: 0.85,
-    QUEUE_SLOTS: 6,
+    QUEUE_SLOTS: 3,                 // no máximo 3 na fila (o do caixa e mais 2): fila comprida chegava até a porta e trancava a saída
+    DOOR_CLEAR: 2.3,                // ninguém PARA a menos disto da porta (fila, espera, quem chega): a saída fica sempre livre
     FADE_TIME: 0.45,
     STUCK_REPATH: 1.6,
     STUCK_GIVE_UP: 7,
@@ -322,7 +327,7 @@ const ShopLife = {
                     let next = null;
                     for (const [dx, dz] of [[0, -1], [Math.sign(dc - qx) * 0.7, -0.7], [Math.sign(dc - qx), 0], [-Math.sign(dc - qx) * 0.7, -0.7]]) {
                         const len = Math.hypot(dx, dz) || 1, x = qx + dx / len * this.QUEUE_SPACING, zz = qz + dz / len * this.QUEUE_SPACING;
-                        if (zz > 1.1 && this.isWalkable(x, zz, nav)) { next = { x, z: zz }; break; }
+                        if (zz > 1.1 && Math.hypot(x - dc, zz - 0.45) > this.DOOR_CLEAR && this.isWalkable(x, zz, nav)) { next = { x, z: zz }; break; }
                     }
                     if (!next) break;
                     points.queue.push(next);
@@ -415,6 +420,7 @@ const ShopLife = {
     // Fresh reservations for this visit (the points are cached per room; who is using them is not).
     resetReservations() {
         for (const list of ['seats', 'browse', 'barStand', 'loiter', 'atms', 'pool']) for (const p of this.points[list]) p.taken = null;
+        for (const p of this.pickupSpots()) p.taken = null;
     },
 
     // ======================================================================================== demand
@@ -763,7 +769,7 @@ const ShopLife = {
                 }
             }
             if (!started) {                                            // nothing to show: just arriving, already inside
-                const spawnAt = this.nearestWalkable(P.door.x + (this.random() - 0.5) * 2, 2.2 + this.random() * 2, 1.5) || P.door;
+                const spawnAt = this.wanderSpot(agent) || this.nearestWalkable(P.door.x + (this.random() - 0.5) * 2, this.DOOR_CLEAR + 0.4 + this.random() * 2, 1.5) || P.door;
                 this.place(agent, spawnAt.x, spawnAt.z, 0);
                 this.nextStep(agent);
             }
@@ -771,6 +777,7 @@ const ShopLife = {
     },
 
     nextStep(agent) {
+        agent.wanderTo = null;
         agent.step = agent.plan.shift() || { kind: 'leave' };
         agent.timer = 0;
         this.runStep(agent);
@@ -818,7 +825,13 @@ const ShopLife = {
             }
             case 'queue': {
                 if (!P.service) return this.nextStep(agent);
-                if (this.queue.length >= P.queue.length + 1) { if (agent.plan.length && agent.plan[0].kind !== 'leave') agent.plan.shift(); return this.nextStep(agent); }
+                if (this.queue.length >= P.queue.length + 1) {
+                    // fila cheia: espera num canto livre do salão (longe da porta e da fila) e tenta de novo; na terceira, desiste
+                    agent.queueTries = (agent.queueTries || 0) + 1;
+                    if (agent.queueTries <= 2) { agent.plan.unshift({ kind: 'wander', time: [5, 10] }, step); return this.nextStep(agent); }
+                    if (agent.plan.length && agent.plan[0].kind !== 'leave') agent.plan.shift();
+                    return this.nextStep(agent);
+                }
                 this.queue.push(agent);
                 agent.inQueue = true; agent.atRegister = false; agent.served = false;
                 agent.serveTime = range(step.serve);
@@ -826,11 +839,13 @@ const ShopLife = {
                 this.moveInQueue(agent);
                 return;
             }
-            case 'pickup': {
-                const spot = P.pickup;
-                agent.state = 'going';
-                this.walkTo(agent, spot.x + (this.random() - 0.5) * 0.4, spot.z + (this.random() - 0.5) * 0.3, () => {
+            case 'pickup': {                                              // cada um no seu lugar ao lado do balcão (antes todos no mesmo ponto: os
+                const spot = this.freeSpot(this.pickupSpots(), agent);    // que chegavam depois ficavam travados atrás de quem esperava)
+                if (!spot) { if (!agent.pickupWait) { agent.pickupWait = true; agent.plan.unshift({ kind: 'wander', time: [4, 8] }, step); } return this.nextStep(agent); }
+                spot.taken = agent; agent.spot = spot; agent.state = 'going';
+                this.walkTo(agent, spot.x, spot.z, () => {
                     agent.state = 'waiting'; agent.targetHeading = spot.heading; agent.timer = range(step.time);
+                    agent.onTimer = null;
                     this.playAnim(agent, this.random() < 0.6 ? 'phone' : 'idle');
                 });
                 return;
@@ -840,6 +855,13 @@ const ShopLife = {
                 if (!seat) return this.nextStep(agent);
                 seat.taken = agent; agent.seat = seat; agent.state = 'going';
                 this.walkTo(agent, seat.approach.x, seat.approach.z, () => this.sitDown(agent, seat, step, 0));
+                return;
+            }
+            case 'wander': {                                              // um canto livre do salão, olhando o celular ou em volta
+                const spot = this.wanderSpot(agent);
+                if (!spot) return this.nextStep(agent);
+                agent.state = 'going'; agent.wanderTo = spot;
+                this.walkTo(agent, spot.x, spot.z, () => this.occupySpot(agent, { heading: this.random() * Math.PI * 2 }, this.random() < 0.6 ? 'phone' : 'idle', step.time));
                 return;
             }
             case 'leave':
@@ -903,6 +925,38 @@ const ShopLife = {
         return list[Math.floor(this.random() * list.length)];
     },
 
+    // Onde esperar o pedido (lanchonete): o ponto ao lado do caixa e até mais 2 ao lado dele, a 0,8 m — cada um com uma pessoa.
+    pickupSpots() {
+        const P = this.points;
+        if (P._pickups) return P._pickups;
+        const out = [], base = P.pickup;
+        if (base) {
+            out.push(base);
+            for (const [ox, oz] of [[0.8, 0], [-0.8, 0], [0, -0.8], [0.8, -0.8], [-0.8, -0.8]]) {
+                if (out.length >= 3) break;
+                const p = this.nearestWalkable(base.x + ox, base.z + oz, 0.3);
+                if (!p || out.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 0.7) || Math.hypot(p.x - P.door.x, p.z - P.door.z) < this.DOOR_CLEAR
+                    || (P.service && Math.hypot(p.x - P.service.x, p.z - P.service.z) < 0.9) || P.queue.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 0.8)) continue;
+                out.push({ x: p.x, z: p.z, heading: base.heading });
+            }
+        }
+        return (P._pickups = out);
+    },
+
+    // Um ponto livre do salão para esperar em pé: alcançável, longe da porta (DOOR_CLEAR + 0,7), da fila e do caixa, e de quem já
+    // está (ou vai) parado por ali. null = salão cheio.
+    wanderSpot(agent = null) {
+        const P = this.points, data = this.data, D = P.door, keep = [P.service, P.pickup, ...P.queue].filter(Boolean);
+        const busy = this.agents.filter((a) => a !== agent && a.role === 'customer').map((a) => a.wanderTo || a);
+        for (let k = 0; k < 40; k++) {
+            const p = this.nearestWalkable(1 + this.random() * (data.W - 2), this.DOOR_CLEAR + 0.7 + this.random() * Math.max(0.5, data.D - this.DOOR_CLEAR - 1.7), 0.6);
+            if (!p || Math.hypot(p.x - D.x, p.z - D.z) < this.DOOR_CLEAR + 0.7) continue;
+            if (keep.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.1) || busy.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.0)) continue;
+            return p;
+        }
+        return null;
+    },
+
     freeSpot(list, agent = null) {
         const free = list.filter((s) => !s.taken || s.taken === agent);
         return free.length ? free[Math.floor(this.random() * free.length)] : null;
@@ -946,10 +1000,17 @@ const ShopLife = {
         this.playAnim(agent, agent.gait || 'walk', 1);
     },
 
-    // Someone (another person or the player) in the way, within `reach` ahead?
+    // Na porta (até DOOR_CLEAR dela)? Ali ninguém espera ninguém: quem entra e quem sai passam um pelo outro (antes, dois de frente
+    // na porta se esperavam para sempre e quem saía não podia desviar — a saída trancava com 4, 5 pessoas paradas).
+    inDoorway(a) { const D = this.points.door; return Math.hypot(a.x - D.x, a.z - D.z) < this.DOOR_CLEAR; },
+
+    // Someone (another person or the player) in the way, within `reach` ahead? Na porta, os outros clientes não contam (passam um
+    // pelo outro) e o jogador só segura um instante; em qualquer lugar, travado muito tempo atrás de alguém que também anda (dois de
+    // frente, cada um esperando o outro), passa (agent.ghost).
     blockerAhead(agent, dirX, dirZ, reach = 0.62) {
-        const p = this.game.player.position, o = Interiors.STAGE, others = [{ x: p.x - o.x, z: p.z - o.z, player: true }];
-        for (const other of this.agents) if (other !== agent && other.actor && other.state !== 'seated' && !other.outside) others.push(other);
+        const p = this.game.player.position, o = Interiors.STAGE, door = this.inDoorway(agent), others = [];
+        if (!(door && agent.stuck > 1.0) && !(agent.ghost > 0)) others.push({ x: p.x - o.x, z: p.z - o.z, player: true });
+        if (!door && !(agent.ghost > 0)) for (const other of this.agents) if (other !== agent && other.actor && other.state !== 'seated' && !other.outside) others.push(other);
         for (const other of others) {
             const dx = other.x - agent.x, dz = other.z - agent.z, d = Math.hypot(dx, dz);
             if (d > reach || d < 1e-3) continue;
@@ -975,6 +1036,8 @@ const ShopLife = {
         const blocker = this.blockerAhead(agent, dirX, dirZ);
         if (blocker) {
             agent.stuck += dt;
+            agent.blockedT = (agent.blockedT || 0) + dt;                            // (este não zera no desvio: o desvio recomeçava o stuck e
+                                                                                    // dois travados ficavam desviando um do outro para sempre)
             this.playAnim(agent, 'idle');
             const last = agent.path[agent.path.length - 1], toEnd = Math.hypot(last.x - agent.x, last.z - agent.z);
             // someone stands on (or right before) the spot: close enough, stop here (a queue squeezes, the player is in the way)
@@ -984,20 +1047,25 @@ const ShopLife = {
                 if (done) done();
                 return;
             }
+            if (agent.blockedT > 2.5 && !blocker.player) agent.ghost = 1.2;          // travado atrás de outro cliente faz tempo: passa por ele
             if (agent.stuck > this.STUCK_REPATH && !agent.free) {                   // walk around them (people or the player)
                 const blockedCells = new Set(), b = this.cellOf(this.nav, blocker.x, blocker.z);
                 for (let ox = -1; ox <= 1; ox++) for (let oz = -1; oz <= 1; oz++) blockedCells.add((b.iz + oz) * this.nav.nx + (b.ix + ox));
                 const around = this.findPath(agent.x, agent.z, last.x, last.z, blockedCells);
                 if (around) { agent.path = around; agent.pathIndex = 0; agent.stuck = this.STUCK_REPATH * 0.5; }
             }
-            if (agent.stuck > this.STUCK_GIVE_UP) {                                 // (last resort: give up this errand, never deadlock)
+            if (agent.blockedT > this.STUCK_GIVE_UP) {                              // (last resort: give up this errand, never deadlock)
+                agent.blockedT = 0;
+                if (agent.free || agent.state === 'leaving') { agent.ghost = 1.5; agent.stuck = 0; return; }      // (saindo: passa — recomeçar o mesmo caminho travava de novo)
                 agent.stuck = 0; agent.path = null; agent.free = false;
-                if (agent.role === 'customer' && agent.state !== 'leaving') this.abandon(agent);
+                if (agent.role === 'customer') this.abandon(agent);
                 else { const done = agent.onArrive; agent.onArrive = null; if (done) done(); }
             }
             return;
         }
         agent.stuck = Math.max(0, agent.stuck - dt);
+        agent.blockedT = Math.max(0, (agent.blockedT || 0) - dt * 0.5);
+        if (agent.ghost > 0) agent.ghost -= dt;
         this.playAnim(agent, agent.gait || 'walk', 1);
         const step = Math.min(distance, (agent.gait === 'run' ? this.RUN_SPEED : this.WALK_SPEED) * dt);
         agent.x += dirX * step; agent.z += dirZ * step;
@@ -1072,7 +1140,7 @@ const ShopLife = {
             if (closing) agent.timer -= dt * 3;
             if (agent.timer <= 0) {
                 const done = agent.onTimer; agent.onTimer = null;
-                if (agent.state === 'waiting') this.nextStep(agent);
+                if (agent.state === 'waiting') { if (agent.spot) { agent.spot.taken = null; agent.spot = null; } this.nextStep(agent); }
                 else if (done) done();
                 else this.nextStep(agent);
             }
@@ -1108,7 +1176,7 @@ const ShopLife = {
     updateObstacles() {
         const o = Interiors.STAGE, r = 0.26, bodies = [];
         for (const agent of this.agents) {
-            if (!agent.actor || agent.state === 'seated' || agent.outside || agent.fade < 0.5 || agent.z < 0.6) continue;
+            if (!agent.actor || agent.state === 'seated' || agent.outside || agent.fade < 0.5 || agent.z < 0.6 || this.inDoorway(agent)) continue;      // (na porta ninguém tranca o jogador)
             bodies.push({ x0: o.x + agent.x - r, z0: o.z + agent.z - r, x1: o.x + agent.x + r, z1: o.z + agent.z + r, h: 1.7, person: true });
         }
         Interiors.obstacles = this.baseObstacles.concat(bodies);

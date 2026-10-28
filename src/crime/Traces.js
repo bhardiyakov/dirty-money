@@ -12,7 +12,7 @@
 const Traces = {
     desc: null,           // { top, legs, head, until (absolute game hour), where }
     search: null,         // { x, z, r, t }
-    pend: [],             // ligações pendentes: { t, x, z, r, why }
+    pend: [],             // ligações pendentes: { t, x, z, r (alerta), T, R (busca), why }
     lastMask: 'balaclava',
     stats: { scenes: 0, clean: 0 },
     game: null,
@@ -47,7 +47,8 @@ const Traces = {
     },
 
     // Testemunhas que vão ligar daqui a `delay` s (o assalto acabou e você saiu): a polícia por perto vai até a loja e abre a busca.
-    call(x, z, delay, why = 'testemunha ligou') { this.pend.push({ t: delay, x, z, r: 240, why }); },
+    // o = { r: raio do alerta, T: s de busca, R: raio da busca } (o porte da loja decide: crime/Robbery.js HEAT).
+    call(x, z, delay, why = 'testemunha ligou', o = {}) { this.pend.push({ t: delay, x, z, r: o.r || 240, T: o.T || 150, R: o.R || 150, why }); },
     startSearch(x, z, T = 150, r = 150) { this.search = { x, z, r, t: T }; },
 
     // ---------------------------------------------------------------- máscara (tecla K)
@@ -70,7 +71,7 @@ const Traces = {
             if (c.t > 0) continue;
             this.pend.splice(i, 1);
             if (game.policeManager) game.policeManager.alertNear({ x: c.x, z: c.z }, c.r);
-            this.startSearch(c.x, c.z);
+            this.startSearch(c.x, c.z, c.T, c.R);
             game._flash(`📞 ${c.why}: viaturas vasculhando o bairro (círculo amarelo no radar)`);
         }
         if (this.search) { this.search.t -= dt; if (this.search.t <= 0) { this.search = null; game._flash('A busca no bairro acabou'); } }

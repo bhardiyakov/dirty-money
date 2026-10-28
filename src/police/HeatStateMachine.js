@@ -42,6 +42,8 @@ const CRIME_SEVERITY = Object.freeze({
     evidence_tampering: 2,
     possession: 2,
     cybercrime: 2,
+    petty_robbery: 2,                // assalto a comércio pequeno (padaria, conveniência): 1★ mesmo com a polícia na porta
+    robbery: 3,                      // comércio médio (bar, pizzaria, roupas, academia)
     burglary: 3,
     carjacking: 3,
     mugging: 3,

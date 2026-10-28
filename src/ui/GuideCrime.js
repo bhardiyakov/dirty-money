@@ -23,7 +23,8 @@ Object.assign(GuideUI.PAGES, {
         <li><b>Gravador (DVR)</b>: arrancar o HD apaga as câmeras.</li></ul>
         <h3>A polícia</h3><ul>
         <li>Enquanto ninguém chama, não há cronômetro (mas um pedestre pode ver pela vitrine). Chamaram: <b>contagem regressiva</b> — mais curta em loja grande, no centro e na ilha; mais longa de noite e com a skill <b>Sangue-frio</b>.</li>
-        <li>Zerou com você lá dentro: <b>CERCO</b>. Lábia (trégua), sair com um refém de <b>escudo</b> (a polícia segura o fogo uns segundos), sair atirando (3★) ou se render.</li>
+        <li>Zerou com você lá dentro: <b>CERCO</b>. Lábia (trégua), sair com um refém de <b>escudo</b> (a polícia segura o fogo uns segundos), sair atirando ou se render.</li>
+        <li><b>A resposta tem o tamanho da loja.</b> Padaria, conveniência, farmácia: uma viatura que demora, <b>1★</b> se ela te pegar na porta (não atiram se você não atirar), crime leve na ficha e busca curta; saindo atirando, 2★. Bar, pizzaria, roupas, academia: 2★ na porta, 3★ atirando. Restaurante de luxo, loja de armas e joalheria: polícia rápida, 2★ na porta, 3★ atirando e área de busca grande — vá com estrutura (Sangue-frio, máscara, carro de fuga, golpe com equipe).</li>
         <li>A loja assaltada fica fechada até o dia seguinte (perícia).</li></ul>`,
 
     traces: () => `<h2>Rastros e fuga</h2>

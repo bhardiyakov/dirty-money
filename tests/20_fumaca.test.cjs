@@ -21,15 +21,18 @@ module.exports = {
             return true;
         });
         if (c.ok(!!car, 'achou um carro 3D')) {
-            await gameWait(page, 0.6, 30000);                    // (folga de tempo real: no fim da bateria o Chromium anda devagar)
-            const ex = await page.evaluate(() => {
+            await gameWait(page, 0.3, 30000);
+            // Quadro a quadro (requestAnimationFrame) até aparecer a baforada recém-saída (até 0,15 s) perto da boca do cano. Olhar num
+            // instante qualquer não serve: na marcha lenta sai uma a cada 0,19–0,31 s e, com o Chromium lento no fim da bateria, um
+            // quadro passa de 0,1 s — a mais nova podia já ter mais de 0,3 s e o teste falhava sem nada errado.
+            const ex = await page.waitForFunction(() => {
                 const b = game.activeCar, G = b.visual.lampGeom, f = b.fwdToRef(new BABYLON.Vector3()), rx = f.z, rz = -f.x;
                 const X = b.position.x + f.x * G.ez + rx * G.ex, Z = b.position.z + f.z * G.ez + rz * G.ex;
-                // a baforada nova (até 0,3 s) mais perto da boca do cano — a mais nova de todas pode ser de outro carro por perto
+                // a baforada nova mais perto da boca do cano — a mais nova de todas pode ser de outro carro por perto
                 const near = (q) => Math.hypot(q.x - X, q.z - Z);
-                const young = game.carLights.puffs.p.filter((q) => q.on && q.age < 0.3).sort((a, q) => near(a) - near(q))[0];
-                return young ? { d: near(young), y: young.y, ey: G.ey, age: young.age, n: game.carLights.puffs.live } : null;
-            });
+                const young = game.carLights.puffs.p.filter((q) => q.on && q.age < 0.15).sort((a, q) => near(a) - near(q))[0];
+                return young && near(young) < 1.5 ? { d: near(young), y: young.y, ey: G.ey, age: young.age, n: game.carLights.puffs.live } : null;
+            }, null, { polling: 'raf', timeout: 30000 }).then((h) => h.jsonValue()).catch(() => null);
             c.ok(!!ex, 'o carro do jogador (pego estacionado, motor ligado) solta fumaça do escapamento');
             if (ex) c.ok(ex.d < 0.6 && Math.abs(ex.y - ex.ey) < 0.3, `a fumaça sai da boca do cano (${ex.d.toFixed(2)} m dela, altura ${ex.y.toFixed(2)}/${ex.ey.toFixed(2)} m)`);
             c.ok(await page.evaluate(() => game.carLights.puffs.mesh.material.getClassName() === 'ShaderMaterial' && !!BABYLON.Effect.ShadersStore.smokePuffFragmentShader), 'fumaça desenhada pelo shader macio (billboard)');

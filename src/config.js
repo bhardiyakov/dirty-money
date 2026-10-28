@@ -93,11 +93,11 @@ const Config = {
 		yawLerp: 3.5,          // rapidez do giro da câmera quando ela gira (maior = mais rápido; menor = mais suave)
 		// GIRO 360° pelo jogador (CompassCamera.turn, Game._look): analógico direito (rad/s com ele no fim; a resposta é quadrática —
 		// pouco inclinado gira devagar), mouse arrastando com o botão direito (rad por pixel); no celular, dois dedos torcidos (o ângulo
-		// torcido, 1:1 — TouchControls). Dirigindo, a olhada em volta volta para trás do veículo depois de lookHold s sem mexer
-		// (rapidez lookReturn).
+		// torcido, 1:1 — TouchControls). Dirigindo, o giro do jogador toma a câmera (o automático para) e ela só volta para trás do
+		// veículo depois de lookHold s sem mexer (rapidez lookReturn).
 		lookPad: 2.8,
 		lookMouse: 0.006,
-		lookHold: 1.2,
+		lookHold: 2.0,
 		lookReturn: 2.2,
 		leadLerp: 2.5,         // rapidez com que o adianto entra (ao entrar no carro) e sai (ao descer)
 		// BALANÇO ao dirigir (CompassCamera._bounce): a câmera presa ao veículo por uma mola. lag = deslocamento (u) por m/s² de
@@ -370,8 +370,9 @@ const Config = {
 		hpMul: 2.2,            // Resistência de TODOS os veículos × a do catálogo (spec.hp): lataria mais dura (batidas e tiros).
 		turnRate: 2.0,         // Guinada máx. (rad/s) em velocidade plena.
 		turnSpeedRef: 6,       // Velocidade (m/s) para direção com autoridade total.
-		bikeLat: 8.5,          // MOTO/bicicleta do jogador: aceleração lateral máxima na curva (m/s²; ~0,9 g — a moto deitada ~41°). Vehicle._applyMotion
-		bikeLeanIn: 7,         // ...rapidez com que a curva entra e sai (1/s): o tempo de deitar e levantar a moto
+		bikeLat: 20,           // MOTO/bicicleta do jogador: aceleração lateral máxima na curva (m/s²; ~2 g, arcade — os carros seguram 27 antes de derrapar).
+		                       // Era 0,9 g (o real): a 65 km/h a moto pedia 48 m de raio e não fazia esquina nenhuma. Vehicle._applyMotion
+		bikeLeanIn: 12,        // ...rapidez com que a curva entra e sai (1/s): o tempo de deitar e levantar a moto (viradas bruscas)
 		grip: 10,              // Aderência lateral: maior = mata a derrapagem mais rápido.
 		// PESO e DERRAPAGEM do carro que o jogador dirige (Vehicle._applyMotion; motos, bicicletas e barcos ficam de fora):
 		understeer: 0.3,       // quanto a guinada cai na velocidade understeerRef (m/s) ou acima: carro rápido vira menos

@@ -576,7 +576,7 @@ class Vehicle {
         if (this.controlled && this.cond) { gripK *= this._ccGrip || 1; pull += this._ccPull || 0; }      // pneu careca / suspensão desalinhada (CarCare)
         let yaw = (steer * this.spec.turn * (this.controlled ? Vehicle.playerTurn : 1) + pull + wob) * speedFactor * (fwd < 0 ? -1 : 1);
         // Moto/bicicleta do jogador: a curva é a que a INCLINAÇÃO aguenta — a aceleração lateral (velocidade × giro) não passa de
-        // Config.vehicle.bikeLat (~0,9 g: a moto deitada ~42°) — e o giro entra e sai com um pouco de atraso (o tempo de deitar e
+        // Config.vehicle.bikeLat (~2 g, arcade: 50 km/h faz uma esquina de 11 m) — e o giro entra e sai com um pouco de atraso (o tempo de deitar e
         // levantar a moto). Antes o giro era o do guidão em qualquer velocidade: a 100 km/h, uma curva de 8 g.
         if (this.controlled && this.isBike) {
             const V = Config.vehicle, af = Math.abs(fwd), cap = V.bikeLat / Math.max(af, 1);

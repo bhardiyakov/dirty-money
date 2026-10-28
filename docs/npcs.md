@@ -163,8 +163,9 @@ As folhas antigas `rider`/`courier` viram tipos 2,5D sozinhas (`NpcArt.attach`);
 
 **Física da moto do jogador** (`Bikes.MODELS`, `Vehicle.accelOf`, `Config.vehicle.bikeLat`/`bikeLeanIn`): arrancada pelo 0–100 do
 modelo (`t100`, como nos carros — antes era `power/mass`: a moto de rua ia de 0 a 100 em ~1,7 s e a esportiva em ~1 s) e freio de no
-máximo `brakeA` (~1 g; antes passava de 3 g). Na curva, a aceleração lateral (velocidade × giro) não passa de `bikeLat` (8,5 m/s², ~0,9 g)
-e o giro entra e sai com `bikeLeanIn` (o tempo de deitar a moto) — antes o giro era o do guidão em qualquer velocidade (a 100 km/h, ~8 g).
+máximo `brakeA` (~1 g; antes passava de 3 g). Na curva, a aceleração lateral (velocidade × giro) não passa de `bikeLat` (20 m/s², ~2 g,
+arcade) e o giro entra e sai com `bikeLeanIn` (o tempo de deitar a moto) — antes o giro era o do guidão em qualquer velocidade (a 100 km/h,
+~8 g). Com 0,9 g (o valor real) a moto ficou dura demais: a 65 km/h pedia 48 m de raio e não fazia esquina; com 2 g, 19 m (50 km/h: 11 m).
 
 | | 0–100 km/h | máxima | freio |
 |---|---|---|---|

@@ -82,6 +82,19 @@ Joystick (pouco inclinado = andar; inclinado = trote, o passo padrão) + **câme
 - **Medo** (atendente, segurança e reféns) sobe com você perto e de frente com a arma, com o grito (**G**) e com o tiro de aviso (ataque). Medo baixo = alarme silencioso, refém levantando e correndo para a porta (chama a polícia e descreve você), balconista/segurança armado sacando a arma.
 - **Fazer a limpa** nos pontos marcados no chão: caixa (o atendente esvazia), cofre e gravador das câmeras (todo interior de loja ganhou um escritório nos fundos — `ShopCtx._backOffice`), prateleiras (mercadoria para o receptador), carteiras dos reféns, vitrines. Abraçadeiras amarram reféns; a furadeira corta o tempo do cofre.
 - **Polícia**: só depois do chamado começa a contagem (porte, policiamento do distrito, noite, Sangue-frio). Zerou lá dentro: **cerco** (Lábia, escudo humano, sair atirando, render-se). A loja fica fechada até o dia seguinte.
+- **A resposta tem o tamanho da loja** (`Robbery.HEAT`). Antes, qualquer assalto era `armed_robbery` (gravidade 4): com a polícia na porta davam 2★, e com 2★ ela já atira (`Config.police.shootFromStars`). Saindo atirando, eram 3★ e 30 s de tiro livre. Uma padaria custava o mesmo que um restaurante de luxo. Agora:
+
+  | Porte | Crime na ficha | Viatura chega em | Polícia na porta | Saindo atirando | Alerta / busca |
+  |---|---|---|---|---|---|
+  | 1 — padaria, conveniência, lanchonete, farmácia, saladas | `petty_robbery` (2) | 110 s | 1★ (não atira se você não atirar) | 2★, sem tiro livre extra | 160 m / 100 s × 110 m |
+  | 2 — bar, pizzaria, boutique, academia | `robbery` (3) | 80 s | 2★ | 3★, 15 s de tiro livre | 220 m / 150 s × 140 m |
+  | 3 — restaurantes finos, loja de armas | `armed_robbery` (4) | 55 s | 2★ | 3★, 30 s de tiro livre | 260 m / 180 s × 170 m |
+  | 4 — joalheria | `armed_robbery` (4) | 40 s | 2★ | 3★, 30 s de tiro livre | 300 m / 200 s × 190 m |
+
+  - O tempo da viatura ainda se divide pelo policiamento do distrito e cresce de noite e com Sangue-frio. As testemunhas da padaria demoram 1,6× mais para ligar (as do porte 2, 1,2×).
+  - No cerco de uma loja pequena há uma tentativa a mais de negociar.
+  - Na ficha, quatro padarias somam a gravidade de duas lojas grandes. O mandado sai em 8.
+  - `tests/23_assalto` faz o assalto inteiro e sai com a polícia chegando. Na padaria: 1★, a polícia segura o fogo, gravidade 2 na ficha e busca de 110 m; saindo atirando, 2★ sem tiro livre. No restaurante de luxo: 2★ com a polícia atirando; saindo atirando, 3★ e 30 s de tiro livre. Com a arma na mão à vista dela, a polícia atira em qualquer porte (`PoliceManager.notifyGunDrawn`).
 
 ### Flagrante, ficha e condicional (`src/police/HeatStateMachine.js`, `CrimeExposure.js`, `CrimeRecord.js`)
 

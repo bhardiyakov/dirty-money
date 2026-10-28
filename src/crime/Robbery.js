@@ -16,6 +16,9 @@
 //   POLÍCIA    ninguém chamou: cronômetro parado (mas um pedestre pode ver pela vitrine). Chamaram: contagem regressiva (porte da loja,
 //              policiamento do distrito, noite, skill Sangue-frio). Zerou com você dentro = CERCO: negociar (Lábia), sair com refém de
 //              ESCUDO, sair atirando ou se render.
+//              A RESPOSTA É DO TAMANHO DA LOJA (HEAT): padaria e conveniência são caso de uma viatura — demora, 1 estrela na porta (não
+//              atiram se você não atirar), crime leve na ficha, busca curta. Restaurante de luxo, loja de armas e joalheria trazem
+//              polícia rápida, 2 estrelas na porta e 3 saindo atirando: aí precisa de estrutura (hacker, Sangue-frio, rota de fuga).
 //   SAIR       antes da polícia: as testemunhas ligam depois (quanto mais medo, mais demoram) e abre a ÁREA DE BUSCA. Com a polícia a
 //              caminho: estrelas na porta. Who saw it (flagrant, record): police/HeatStateMachine.js; outfit description: crime/Traces.js.
 // ============================================================================
@@ -26,7 +29,15 @@ const Robbery = {
     RANK_FOR: [0, 0, 1, 2, 2],                                    // porte → patente mínima de Assaltante
     REG: [null, [450, 1300], [1100, 2900], [2600, 6200], [3500, 8000]],
     SAFE: [null, [900, 2600], [2200, 6000], [5500, 14000], [16000, 38000]],
-    POLICE: [null, 75, 65, 55, 40],                               // s até a viatura chegar depois do chamado
+    // Resposta da polícia por porte: crime na ficha (gravidade em police/HeatStateMachine.js), estrelas com a polícia na porta
+    // (trégua/escudo/chegou junto) e saindo atirando, s até a viatura chegar depois do chamado, raio do alerta, área de busca [s, raio],
+    // s de tiro livre depois de sair atirando e quanto as testemunhas demoram a ligar (×).
+    HEAT: [null,
+        { crime: 'petty_robbery', door: 1, fight: 2, police: 110, call: 160, search: [100, 110], free: 0, wit: 1.6 },
+        { crime: 'robbery', door: 2, fight: 3, police: 80, call: 220, search: [150, 140], free: 15, wit: 1.2 },
+        { crime: 'armed_robbery', door: 2, fight: 3, police: 55, call: 260, search: [180, 170], free: 30, wit: 1 },
+        { crime: 'armed_robbery', door: 2, fight: 3, police: 40, call: 300, search: [200, 190], free: 30, wit: 1 },
+    ],
     STOCK: {                                                     // [o quê, R$ por prateleira, kg]
         mart: ['cigarros e bebidas', 260, 3], bakery: ['frios e bebidas', 140, 3], burger: ['bebidas e congelados', 120, 3], pharmacy: ['remédios controlados', 520, 1],
         fit: ['suplementos', 220, 2], bar: ['uísque e destilados', 420, 4], pizza: ['vinhos e bebidas', 240, 3], clothes: ['roupas de grife', 650, 3], gym: ['suplementos e equipamentos', 380, 4],
@@ -118,7 +129,7 @@ const Robbery = {
         const R = this.robber(game), sangue = R ? R.skill('sanguefrio') : 0;
         const d = game.empire ? game.empire.districtAt(s.shop.x, s.shop.z) : 'comercio', D = (Empire.DISTRICTS[d] || {}).police || 1;
         const night = game.dayNight.night ? 1.15 : 1, hack = s.heist ? 1 + 0.25 * (s.heist.hacker || 0) : 1;
-        const T = this.POLICE[s.tier] / D * (1 + 0.07 * sangue) * night * hack * mul;
+        const T = this.HEAT[s.tier].police / D * (1 + 0.07 * sangue) * night * hack * mul;
         if (!s.police) { s.police = { t: T, T }; s.alarmWhy = why; game._flash(`🚨 ${why}! Polícia a caminho: ${Math.round(T)}s — faça a limpa e suma`); AudioFX.blip(220, 0.4, 0.25); }
         else if (T < s.police.t) { s.police.t = T; game._flash(`🚨 ${why}! A polícia acelerou: ${Math.round(T)}s`); }
     },
@@ -410,7 +421,8 @@ const Robbery = {
     // ---------------------------------------------------------------- cerco
     _startSiege(game) {
         const s = this.session;
-        s.siege = { turns: 2, grace: 0, breach: 0, msg: 'A polícia cercou a loja. "Solta os reféns e sai com as mãos na cabeça!"' };
+        const small = s.tier <= 1;          // comércio pequeno: uma viatura na porta, mais paciência para conversar
+        s.siege = { turns: small ? 3 : 2, grace: 0, breach: 0, msg: small ? 'Uma viatura parou na porta. "Sai com as mãos na cabeça, não complica!"' : 'A polícia cercou a loja. "Solta os reféns e sai com as mãos na cabeça!"' };
         if (s.act) { s.act = null; if (game.player.action) game.player.action.timer = 0; }
         AudioFX.blip(150, 0.7, 0.3);
         this._drawSiege(game);
@@ -448,7 +460,7 @@ const Robbery = {
         const n = this._hostagesDown(), B = Panel.btn;
         this._sp.show('🚔 CERCADO', S.msg, S.breach > 0 ? `<div style="font:700 26px var(--font-d);color:#ff3a3a;text-align:center">INVASÃO EM ${Math.ceil(S.breach)}s</div>`
             : `<div class="dm-note" style="text-align:center">Tentativas: ${S.turns} · reféns sob controle: ${n} · ${brl(s.loot.cash + s.loot.goods + s.loot.jv)} com você</div>
-               <div class="dm-btns" style="flex-direction:column">${B('talk', '🗣 LÁBIA — pedir tempo ao negociador')}${B('shield', '🛡 SAIR COM UM REFÉM DE ESCUDO (precisa de arma e refém)', { on: n > 0 && this.gunInHand(game) })}${B('fight', '🔫 SAIR ATIRANDO (3 estrelas)')}${B('surrender', '🙌 RENDER-SE')}</div>`);
+               <div class="dm-btns" style="flex-direction:column">${B('talk', '🗣 LÁBIA — pedir tempo ao negociador')}${B('shield', '🛡 SAIR COM UM REFÉM DE ESCUDO (precisa de arma e refém)', { on: n > 0 && this.gunInHand(game) })}${B('fight', `🔫 SAIR ATIRANDO (${(this.HEAT[s.tier] || this.HEAT[3]).fight} estrelas)`)}${B('surrender', '🙌 RENDER-SE')}</div>`);
     },
     _hideSiege() { if (this._sp && this._sp.open) { this._sp.open = false; this._sp.root.style.display = 'none'; } },
 
@@ -487,28 +499,29 @@ const Robbery = {
         // rastros e testemunhas
         const recording = !s.dvr && !s.camsLooped;
         const tr = Traces.scene(game, { x: pos.x, z: pos.z, name: shop.name, witnesses: awake, cams: recording });
-        game.heat.commit('armed_robbery', this._exposure(how, awake, recording, s.police));
+        const H = this.HEAT[s.tier] || this.HEAT[3];
+        game.heat.commit(H.crime, this._exposure(how, awake, recording, s.police));
         if (tr.length) game._delayed.push({ t: 1.2, fn: () => game._flash(`🧾 Rastros deixados: ${tr.join(', ')}`) });
         // polícia na saída
         if (how === 'quiet') {
             const fearAvg = awake ? [s.clerk, ...s.hostages].filter((h) => h && h.st !== 'gone').reduce((a, h) => a + h.fear, 0) / Math.max(1, awake) : 100;
-            const delay = s.heist && s.heist.approach === 'stealth' ? 60 : 6 + fearAvg / 9;
-            Traces.call(pos.x, pos.z, delay, s.heist ? 'Acordaram na joalheria e ligaram 190' : 'As testemunhas ligaram 190');
+            const delay = s.heist && s.heist.approach === 'stealth' ? 60 : (6 + fearAvg / 9) * H.wit;
+            Traces.call(pos.x, pos.z, delay, s.heist ? 'Acordaram na joalheria e ligaram 190' : 'As testemunhas ligaram 190', { r: H.call, T: H.search[0], R: H.search[1] });
             game._flash(`🤫 Saiu sem ninguém chamar a polícia: as testemunhas vão ligar em ~${Math.round(delay)} s — some da área!`);
         } else if (how === 'called') {
             const left = s.police.t;
-            if (pm) pm.alertNear(pos, 260);
-            Traces.startSearch(pos.x, pos.z, 180, 170);
-            if (left < 14) { game.wanted.ensureLevel(2); game._flash('🚔 A polícia chegou na hora que você saiu!'); }
+            if (pm) pm.alertNear(pos, H.call);
+            Traces.startSearch(pos.x, pos.z, H.search[0], H.search[1]);
+            if (left < 14) { game.wanted.ensureLevel(H.door); game._flash(H.door > 1 ? '🚔 A polícia chegou na hora que você saiu!' : '🚔 A viatura chegou na hora que você saiu — guarde a arma (1) e corra: sem arma na mão, ela não atira'); }
             else game._flash(`🚔 Viaturas chegando em ${Math.round(left)} s — some antes que te vejam!`);
         } else if (how === 'truce') {
-            game.wanted.ensureLevel(2); if (pm) pm.alertNear(pos, 300);
+            game.wanted.ensureLevel(H.door); if (pm) pm.alertNear(pos, H.call + 40);
         } else if (how === 'shield') {
-            game.wanted.ensureLevel(2); if (pm) pm.alertNear(pos, 300);
+            game.wanted.ensureLevel(H.door); if (pm) pm.alertNear(pos, H.call + 40);
             const keep = Config.police.shootFromStars; Config.police.shootFromStars = 99; if (pm) pm.weaponsFreeUntil = 0;
             game._delayed.push({ t: 9, fn: () => { Config.police.shootFromStars = keep; } });
         } else if (how === 'fight') {
-            game.wanted.ensureLevel(3); if (pm) { pm.alertNear(pos, 320); pm.weaponsFreeUntil = pm.time + 30; }
+            game.wanted.ensureLevel(H.fight); if (pm) { pm.alertNear(pos, H.call + 60); if (H.free) pm.weaponsFreeUntil = Math.max(pm.weaponsFreeUntil, pm.time + H.free); }
             game._flash('🔫 Saiu atirando: a polícia está na porta!');
         }
         if (s.heist) { Heists.onExit(game, s, how); return; }
