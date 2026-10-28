@@ -94,7 +94,7 @@ Joystick (pouco inclinado = andar; inclinado = trote, o passo padrão) + **câme
   - O tempo da viatura ainda se divide pelo policiamento do distrito e cresce de noite e com Sangue-frio. As testemunhas da padaria demoram 1,6× mais para ligar (as do porte 2, 1,2×).
   - No cerco de uma loja pequena há uma tentativa a mais de negociar.
   - Na ficha, quatro padarias somam a gravidade de duas lojas grandes. O mandado sai em 8.
-  - Medido (`tests/23_assalto`, polícia chegando na hora da saída, jogador parado a 25 m): na padaria, 1★ e nenhum tiro. No restaurante de luxo, 2★ e a polícia atira.
+  - `tests/23_assalto` faz o assalto inteiro e sai com a polícia chegando. Na padaria: 1★, a polícia segura o fogo, gravidade 2 na ficha e busca de 110 m; saindo atirando, 2★ sem tiro livre. No restaurante de luxo: 2★ com a polícia atirando; saindo atirando, 3★ e 30 s de tiro livre. Com a arma na mão à vista dela, a polícia atira em qualquer porte (`PoliceManager.notifyGunDrawn`).
 
 ### Flagrante, ficha e condicional (`src/police/HeatStateMachine.js`, `CrimeExposure.js`, `CrimeRecord.js`)
 
