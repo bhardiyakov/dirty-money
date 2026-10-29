@@ -10,6 +10,10 @@
 //   • sem hostilidade eles só patrulham armados. Com alarme dos olheiros (FavelaWatch) e invasão policial, os grupos marcham
 //     em direção à polícia; policial e traficante se enfrentam quando se veem.
 // Reaproveita a interface do PoliceManager (weaponsFree/combat/events/mind) que o PoliceOfficer usa.
+//
+// FACÇÕES: cada território de Standing.territories que tem favela (t.plan) tem os seus grupos — o C.V na Favela do Morro e o C.P.C no
+// Morro do Mirante (rivais: quando um bonde de uma cruza com o da outra, trocam tiro; ver Combat: tiro de traficante só não acerta
+// a própria facção). A hostilidade é por facção: no C.P.C quem é do C.V é sempre estranho (menos na festa da madrugada: NightLife).
 // ============================================================================
 
 class GangManager {
@@ -20,7 +24,7 @@ class GangManager {
         this.time = 0;
         this._nextId = 5000;
         this._streamT = 0;
-        this.provoked = 0;            // segundos de provocação restantes (atacou um traficante): todos ficam hostis
+        this.provoked = {};           // facção → segundos de provocação restantes (atacou um traficante): a facção toda fica hostil
         this.maxActive = 36;          // teto de traficantes de verdade ao mesmo tempo
         this.sight = 30;              // alcance de visão
         this.safeRadius = 38;         // em volta da safe house não há ronda
@@ -35,45 +39,52 @@ class GangManager {
         onOfficerHit: (o, source) => { if (source === 'player') this._provoke(o); },
         onOfficerKilled: (o, source) => {
             if (source === 'player' || (source !== 'police' && source !== 'gang')) this.game.pickups.dropLoot(o.position, 'gang');      // (tiroteio polícia × tráfico ou entre traficantes não gera loot)
-            if (source === 'player') { Standing.add('traffic', -2); Standing.add('community', 1); Standing.addHeat(4, 'tiroteio na favela'); this._provoke(o); }
+            if (source === 'player' && o.faction && o.faction !== 'cv') { Standing.add('traffic', 1.5); this._provoke(o); }      // (matou rival do C.V: o tráfico do Morro aplaude)
+            else if (source === 'player') { Standing.add('traffic', -2); Standing.add('community', 1); Standing.addHeat(4, 'tiroteio na favela'); this._provoke(o); }
         },
     }); }
 
     _mind(u) { return u.mind || (u.mind = { sees: false, x: 0, z: 0, vx: 0, vz: 0, t: -1e9 }); }
 
     _provoke(by) {
-        this.provoked = 60;
+        const f = by.faction || 'cv';
+        this.provoked[f] = 60;
         const p = this.game.player.position;
-        for (const u of this.members) if (u.alive && u.distanceTo(by.position) < 45) { const m = this._mind(u); m.x = p.x; m.z = p.z; m.t = this.time; }
+        for (const u of this.members) if (u.alive && (u.faction || 'cv') === f && u.distanceTo(by.position) < 45) { const m = this._mind(u); m.x = p.x; m.z = p.z; m.t = this.time; }
     }
 
     // ---------------------------------------------------------------- grupos
     get total() { return this.groups ? this.groups.reduce((s, g) => s + g.alive, 0) : 0; }
     get deepTotal() { return this.groups ? this.groups.filter((g) => g.deep).reduce((s, g) => s + g.alive, 0) : 0; }
 
-    // Ponto do morro (beco ou rua) perto de (x, z), a até maxD u: o nó mais perto do grafo da favela.
-    _spot(x, z, maxD) {
-        if (FavelaPlan.built) { const n = FavelaPlan.nodeNear(x, z, true); return n && hypot(n.x - x, n.z - z) <= maxD ? n : null; }      // (no beco: parados na rua trancariam o trânsito)
+    // Ponto do morro (beco ou rua) perto de (x, z), a até maxD u: o nó mais perto do grafo da favela `F`.
+    _spot(x, z, maxD, F = FavelaPlan) {
+        if (F.built) { const n = F.nodeNear(x, z, true); return n && hypot(n.x - x, n.z - z) <= maxD ? n : null; }      // (no beco: parados na rua trancariam o trânsito)
         const q = RoadPlan.nearestRoadPoint(x, z, maxD); return q && q.edge.cls === 'fav' ? q : null;
     }
 
     _buildGroups() {
-        const b = Standing._bounds(), rng = Pixel.rng(9001), W = b.x1 - b.x0, home = SafeHouse.spawnWorld();
         this.groups = [];
-        const make = (dmin, dmax, size) => {
-            for (let t = 0; t < 80; t++) {
-                const x = b.x1 - (dmin + rng() * (dmax - dmin)) * W, z = b.z0 + 20 + rng() * (b.z1 - b.z0 - 40);
-                const r = this._spot(x, z, 40);
-                if (!r || !Standing.inFavela(r.x, r.z) || Standing.depth(r.x, r.z) < dmin - 0.03) continue;
-                if (home && hypot(r.x - home.x, r.z - home.z) < this.safeRadius) continue;
-                if (this.groups.some((g) => hypot(g.x - r.x, g.z - r.z) < 18)) continue;
-                this.groups.push({ x: r.x, z: r.z, size, alive: size, minDepth: dmin, deep: dmin >= 0.5, wp: { x: r.x, z: r.z }, wpT: 0, members: [], active: false, regrow: 60 });
-                return;
-            }
-        };
-        for (let i = 0; i < 15; i++) make(0.5, 1.0, i % 3 === 2 ? 3 : 4);      // a parte de cima: 15 grupos = 55 traficantes
-        for (let i = 0; i < 4; i++) make(0.25, 0.5, 3);                          // meio do morro
-        for (let i = 0; i < 3; i++) make(0.14, 0.25, 3);                         // perto da entrada
+        for (const T of Standing.territories) {
+            const F = T.plan && T.plan();
+            if (!F || !F.built) continue;
+            const b = T.rect(), rng = Pixel.rng(T.id === 'cv' ? 9001 : 9001 + T.id.length * 977), W = b.x1 - b.x0, home = T.id === 'cv' ? SafeHouse.spawnWorld() : null;
+            const make = (dmin, dmax, size) => {
+                for (let t = 0; t < 80; t++) {
+                    const x = b.x1 - (dmin + rng() * (dmax - dmin)) * W, z = b.z0 + 20 + rng() * (b.z1 - b.z0 - 40);
+                    const r = this._spot(x, z, 40, F);
+                    if (!r || !T.inside(r.x, r.z) || Standing.depthIn(T, r.x, r.z) < dmin - 0.03) continue;
+                    if (home && hypot(r.x - home.x, r.z - home.z) < this.safeRadius) continue;
+                    if (this.groups.some((g) => hypot(g.x - r.x, g.z - r.z) < 18)) continue;
+                    this.groups.push({ t: T, F, x: r.x, z: r.z, size, alive: size, minDepth: dmin, deep: dmin >= 0.5, wp: { x: r.x, z: r.z }, wpT: 0, members: [], active: false, regrow: 60 });
+                    return;
+                }
+            };
+            const G = T.gangs || [15, 4, 3];
+            for (let i = 0; i < G[0]; i++) make(0.5, 1.0, i % 3 === 2 ? 3 : 4);      // a parte de cima (C.V: 15 grupos = 55 traficantes)
+            for (let i = 0; i < G[1]; i++) make(0.25, 0.5, 3);                          // meio do morro
+            for (let i = 0; i < G[2]; i++) make(0.14, 0.25, 3);                         // perto da entrada
+        }
     }
 
     // Tipo de arma pela profundidade (com sorteio para misturar).
@@ -85,11 +96,11 @@ class GangManager {
     }
 
     _spawnGroup(g) {
-        const nav = this.nav, d = Standing.depth(g.x, g.z);
+        const nav = this.nav, d = Standing.depthIn(g.t, g.x, g.z);
         for (let i = 0; i < g.alive; i++) {
             const a = i / g.size * Math.PI * 2, p = nav.closestPoint(new BABYLON.Vector3(g.x + Math.cos(a) * 2, 0, g.z + Math.sin(a) * 2));
             const o = new PoliceOfficer(this.game.scene, nav, p, this._nextId++, this.game.sprites, this, true, this._kind(d));
-            o.drawn = true; o.group = g; o.slot = i;
+            o.drawn = true; o.group = g; o.slot = i; o.faction = g.t.id;
             g.members.push(o); this.members.push(o);
         }
         g.active = true; g.wpT = 0;
@@ -105,9 +116,10 @@ class GangManager {
 
     // Destino de ronda do grupo (uma viela a 25–45 u do líder); com alarme/operação, rumo à polícia mais próxima.
     _pickWp(g, leader) {
-        const b = Standing._bounds(), op = this.game.op, home = SafeHouse.spawnWorld();
+        const op = g.t.id === 'cv' ? this.game.op : null, home = g.t.id === 'cv' ? SafeHouse.spawnWorld() : null;
         let ax = null, az = null;
-        if (op && op.active && Standing.alarm > 0) {
+        if (g.rival) { ax = g.rival.x; az = g.rival.z; }                                  // bonde rival à vista: vai para cima dele
+        else if (op && op.active && Standing.alarm > 0) {
             let bd = 150;
             for (const c of op.cops) { const d = hypot(c.position.x - leader.position.x, c.position.z - leader.position.z); if (d < bd) { bd = d; ax = c.position.x; az = c.position.z; } }
         }
@@ -115,9 +127,9 @@ class GangManager {
             let a = Math.random() * Math.PI * 2, r = 25 + Math.random() * 20;
             if (ax !== null && t < 6) { a = Math.atan2(az - leader.position.z, ax - leader.position.x) + (Math.random() - 0.5) * 0.8; }
             const x = leader.position.x + Math.cos(a) * r, z = leader.position.z + Math.sin(a) * r;
-            const p = this._spot(x, z, 25);
-            if (!p || !Standing.inFavela(p.x, p.z)) continue;
-            if (Standing.depth(p.x, p.z) < g.minDepth - 0.08 && ax === null) continue;       // cada grupo patrulha a sua faixa
+            const p = this._spot(x, z, 25, g.F);
+            if (!p || !g.t.inside(p.x, p.z)) continue;
+            if (Standing.depthIn(g.t, p.x, p.z) < g.minDepth - 0.08 && ax === null) continue;       // cada grupo patrulha a sua faixa
             if (home && hypot(p.x - home.x, p.z - home.z) < this.safeRadius) continue;
             g.wp = { x: p.x, z: p.z }; return;
         }
@@ -143,11 +155,16 @@ class GangManager {
 
     update(dt, pos, vel, hidden) {
         this.time += dt;
-        if (this.provoked > 0) this.provoked -= dt;
+        for (const f in this.provoked) if (this.provoked[f] > 0) this.provoked[f] -= dt;
         const g = this.game, pl = g.player;
         if (!this.groups) this._buildGroups();
-        this.angry = Standing.hostile(Standing.territoryAt(pos.x, pos.z));
-        const hostile = (this.angry || this.provoked > 0) && pl.alive && !hidden;
+        // hostilidade por facção (a do território onde o jogador está decide o "angry" de quem está nele; as outras, pela própria regra)
+        const here = Standing.territoryAt(pos.x, pos.z), H = this._hostile || (this._hostile = {}), A = this._angry || (this._angry = {});
+        for (const T of Standing.territories) {
+            A[T.id] = Standing.hostile(T) && !(typeof NightLife !== 'undefined' && NightLife.tolerated(T, pos.x, pos.z));      // (festa da madrugada: visitante passa)
+            H[T.id] = (A[T.id] || this.provoked[T.id] > 0) && pl.alive && !hidden;
+        }
+        this.angry = here ? A[here.id] : Standing.hostile(null);
 
         // 1) Streaming dos grupos (2×/s) e recomposição dos que perderam gente.
         this._streamT -= dt;
@@ -181,8 +198,8 @@ class GangManager {
                 continue;
             }
             if (u.rag) { u.update(dt); continue; }
-            const m = this._mind(u), p = u.position, dist = hypot(p.x - pos.x, p.z - pos.z);
-            m.sees = hostile && dist < this.sight * (this.angry ? 1.25 : 1) * (typeof Cover !== 'undefined' ? Cover.sightMul(this.game, this.angry) : 1) && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z)
+            const m = this._mind(u), p = u.position, dist = hypot(p.x - pos.x, p.z - pos.z), f = u.faction || 'cv', angry = A[f], hostile = H[f];
+            m.sees = hostile && dist < this.sight * (angry ? 1.25 : 1) * (typeof Cover !== 'undefined' ? Cover.sightMul(this.game, angry) : 1) && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z)
                 && !(typeof Cover !== 'undefined' && Cover.hiddenFrom(this.game, p.x, p.z));          // (agachado: furtivo; atrás de cobertura: não te vê)
             if (m.sees) {
                 this._note(m, pos, vel);
@@ -192,11 +209,26 @@ class GangManager {
             this._tp.set(m.x, 0, m.z); this._tv.set(m.sees ? m.vx : 0, 0, m.sees ? m.vz : 0);
             // operação policial: enfrenta o policial mais próximo à vista (independe de o jogador ser hostil ou neutro)
             let cop = null;
-            if (cops.length) { let bd = 30; for (const c of cops) { const d = hypot(c.position.x - p.x, c.position.z - p.z); if (d < bd && MapGeo.hasLineOfSight(p.x, p.z, c.position.x, c.position.z)) { bd = d; cop = c; } } }
+            if (cops.length && f === 'cv') { let bd = 30; for (const c of cops) { const d = hypot(c.position.x - p.x, c.position.z - p.z); if (d < bd && MapGeo.hasLineOfSight(p.x, p.z, c.position.x, c.position.z)) { bd = d; cop = c; } } }
+            if (!cop) cop = this._rivalNear(u);                                         // traficante da outra facção à vista: guerra
             if (cop) { m.sees = true; m.t = this.time; u.setTarget(cop.position, this._tv.set(0, 0, 0)); u.setAlert(true); }
             else { u.setTarget(this._tp, this._tv); u.setAlert(hostile && (m.sees || fresh)); }
             u.update(dt);
         }
+    }
+
+    // O traficante rival mais perto à vista (a até 30 u), ou null. Marca o grupo para marchar até ele.
+    _rivalNear(u) {
+        const p = u.position, f = u.faction || 'cv';
+        let best = null, bd = 30;
+        for (const o of this.members) {
+            if (!o.alive || o.rag || (o.faction || 'cv') === f) continue;
+            const d = hypot(o.position.x - p.x, o.position.z - p.z);
+            if (d < bd && MapGeo.hasLineOfSight(p.x, p.z, o.position.x, o.position.z)) { bd = d; best = o; }
+        }
+        if (best && u.group) u.group.rival = { x: best.position.x, z: best.position.z };
+        else if (u.group && u.group.rival && Math.random() < 0.01) u.group.rival = null;
+        return best;
     }
 
     _note(m, pos, vel) { m.x = pos.x; m.z = pos.z; m.vx = vel ? vel.x : 0; m.vz = vel ? vel.z : 0; m.t = this.time; }

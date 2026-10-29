@@ -466,7 +466,7 @@ class Combat {
             const sx = b.x - b.px, sz = b.z - b.pz, sl2 = sx * sx + sz * sz || 1e-6;
             for (const t of T) {
                 if (t.ref === b.ref || (b.only && t.ref !== b.only) || (t.kind === 'roof' && !b.only)) continue;      // (no telhado: só o tiro mirado nele)
-                if (b.owner === 'gang' && t.kind === 'gang') continue;
+                if (b.owner === 'gang' && t.kind === 'gang' && (b.ref && b.ref.faction || 'cv') === (t.ref.faction || 'cv')) continue;      // (facção rival: C.V × C.P.C trocam tiro)
                 if (b.owner === 'police' && (t.kind === 'officer' || t.kind === 'heli' || (t.kind === 'car' && t.ref.role))) continue;   // sem fogo amigo
                 if (b.owner === 'player' && t.kind === 'player') continue;
                 const p = t.ref.position;

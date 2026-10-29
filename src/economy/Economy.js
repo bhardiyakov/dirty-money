@@ -131,10 +131,13 @@ const Economy = {
         residential: { mul: 0.95, label: 'Bairro residencial' },
         industrial: { mul: 0.9, label: 'Zona industrial' },
         city: { mul: 1.0, label: 'Cidade' },
+        roca: { mul: 0.75, label: 'Roça' },
+        serra: { mul: 1.65, label: 'Alto da Serra' },
     },
     zoneOf(shop) {
         if (shop.district === 'favela') return this.ZONE.favela;
         if (shop.district === 'island') return this.ZONE.island;
+        if (shop.district === 'roca' || shop.district === 'serra') return this.ZONE[shop.district];
         return this.ZONE[shop.biome] || this.ZONE.city;
     },
 
@@ -310,7 +313,7 @@ const Economy = {
         const o = this.fenceOffer(shop, game);
         if (!o) return { ok: false, msg: 'Não tem nada que eu queira' };
         game.inventory.jewels = 0; game.inventory.jewelValue = 0; game.inventory.cash += o.value;
-        if (shop.district === 'favela') Standing.add('traffic', 3);
+        if (shop.district === 'favela' && (shop.faction || 'cv') === 'cv') Standing.add('traffic', 3);
         return { ok: true, msg: `Vendeu ${o.count} joias por ${brl(o.value)} (sem perguntas)` };
     },
 };

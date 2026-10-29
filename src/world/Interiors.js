@@ -32,7 +32,7 @@ const Interiors = {
 			const p = s.side === 'S' ? { x: m, z: l.z0 - o, face: Math.PI } : s.side === 'N' ? { x: m, z: l.z1 + o, face: 0 } : s.side === 'W' ? { x: l.x0 - o, z: m, face: -Math.PI / 2 } : { x: l.x1 + o, z: m, face: Math.PI / 2 };
 			const ed = s.side === 'S' ? { ex: m, ez: l.z0 } : s.side === 'N' ? { ex: m, ez: l.z1 } : s.side === 'W' ? { ex: l.x0, ez: m } : { ex: l.x1, ez: m };      // ponto da fachada (o vão da porta)
 			const id = `${b.id}|${l.x0.toFixed(1)}|${s.side}|${s.a.toFixed(1)}`;
-			const shop = Object.assign({ id, kind: S.id, style, name: Economy.nameOf(style, id), district: b.district, biome: b.biome, variant: Math.floor(Pixel.hash(Economy._h(id), 11, 5) * 5) % 5 }, p, ed);
+			const shop = Object.assign({ id, kind: S.id, style, name: Economy.nameOf(style, id), district: b.district, faction: b.faction, biome: b.biome, variant: Math.floor(Pixel.hash(Economy._h(id), 11, 5) * 5) % 5 }, p, ed);
 			doors.push(shop);
 			const k = key(Math.floor(p.x / C), Math.floor(p.z / C));
 			(grid.get(k) || grid.set(k, []).get(k)).push(shop);

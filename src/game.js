@@ -164,6 +164,7 @@ class Game {
 		this.gps = null;                             // destino marcado no mapa: { x, z, label } (só um marcador, sem rota)
 		this.showPrompts = true;
 		this.birds = new Birds(this);                 // aves: pombos, gaivotas, rolinhas, bem-te-vis (fogem de gente, carros e tiros)
+		this.livestock = new Livestock(this);         // bichos da roça: vaca, cavalo, porco, galinha, cabra (nos cercados da Vila da Roça)
 		this.gameEngine.world.game = this;            // StreetProps (postes) usa os efeitos do jogo
 		this.puddles = new Puddles(this);             // poças nas ruas: enchem com chuva forte e somem aos poucos
 		this.chopper = null;                          // helicóptero que o jogador pilota (modo 'heli')
@@ -763,6 +764,7 @@ class Game {
 		// --- Itens no chão (coleta só a pé) e painel do inventário ---
 		this._updateGps(dt);
 		if (this.birds) this.birds.update(dt);
+		if (this.livestock) this.livestock.update(dt);
 		if (this.puddles) this.puddles.update(dt);
 		if (this.vehicleManager && this.gameEngine.world.street) {
 			this.gameEngine.world.street.update(dt, this.carDamage.allCars(), this);       // (lista reaproveitada; barcos são ignorados lá)
@@ -866,6 +868,7 @@ class Game {
 			if (this.watch) this.watch.update(dt, gs.pos);
 			if (this.barricades) this.barricades.update(dt, this.op, Standing.nearFavela(gs.pos.x, gs.pos.z, 20));
 			Baile.update(dt, this);
+			NightLife.update(dt, this);                                  // a festa do Morro do Mirante (C.P.C), toda noite
 			Pelada.update(dt, this);                                     // o futebol dos meninos na quadra da favela (de dia)
 			Perf.lap('favela (gangues/moto/missões)');
 			StreetLife.update(this, dt);                                  // a rua viva: movimento por hora, acontecimentos, conversas
@@ -1241,10 +1244,10 @@ class Game {
 			if ((Weapons[p.weapon] && Weapons[p.weapon].silenced) || (this.careers && this.careers.silenced(p.weapon))) {      // silenciador (a pistola com ele, ou o do Armeiro): só quem está muito perto e vê percebe
 				this.npcManager.alertViolence(pos, 8);
 				this.heat.commit('gunfire');
-			} else if (Baile.covers(pos.x, pos.z)) {                                // o baile abafa o tiro: só quem está a < 14 u (e a vista) percebe
+			} else if (Baile.covers(pos.x, pos.z) || NightLife.covers(pos.x, pos.z)) {      // o baile abafa o tiro: só quem está a < 14 u (e a vista) percebe
 				this.npcManager.alertViolence(pos, 14);
 				this.heat.commit('gunfire');
-				Baile.onShot(pos);
+				Baile.onShot(pos); NightLife.onShot(pos);
 			} else {
 				this.npcManager.alertShot(pos);
 				this.heat.commit('gunfire');
@@ -1318,7 +1321,8 @@ class Game {
 			const h = pm.heli;
 			if (h && h.alive) blips.push({ pos: h.position, color: '#ffffff', ring: this.wanted.level > 0 ? (Config.heli.sight + Math.max(0, this.wanted.level - 3) * 6) * this.weather.sightMul : 0 });
 if (this.barricades) for (const b of this.barricades.list) blips.push({ pos: { x: b.x, z: b.z }, color: '#ff8a2a' });      // barricadas em chamas
-if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performance.now() / 300) % 2 ? '#ff3ad0' : '#35e0ff' });      // baile funk (pisca)        if (MotoStands.built) for (const s of MotoStands.stands) blips.push({ pos: { x: s.x, z: s.z }, color: '#ffd23a' });      // pontos de mototáxi
+if (Baile.on && Baile.c) blips.push({ pos: Baile.c, color: Math.floor(performance.now() / 300) % 2 ? '#ff3ad0' : '#35e0ff' });      // baile funk (pisca)
+if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floor(performance.now() / 300) % 2 ? '#f2c230' : '#ff3ad0' });      // festa do Mirante        if (MotoStands.built) for (const s of MotoStands.stands) blips.push({ pos: { x: s.x, z: s.z }, color: '#ffd23a' });      // pontos de mototáxi
 		if (MotoStands.built) for (const s of MotoStands.stands) blips.push({ pos: { x: s.x, z: s.z }, color: '#ffd23a' });      // pontos de mototáxi
 		}
 		// Itens no chão: azul = arma, verde = munição, vermelho = kit, amarelo = dinheiro.

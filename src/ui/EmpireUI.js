@@ -103,7 +103,7 @@ class EmpireUI {
         const prev = el.scrollTop, g = this.g, e = g.empire, B = e.biz, I = e.influence, D = e.dominion;
         const bar = (v, col) => `<div class="cr-bar"><i><s style="width:${Math.max(0, Math.min(100, v))}%;background:${col}"></s></i></div>`;
         const row = (k, v) => `<div class="cr-row"><span>${k}</span><b>${v}</b></div>`;
-        const dists = Object.entries(Empire.DISTRICTS).filter(([d]) => d !== 'periferia' && d !== 'favela');
+        const dists = Object.entries(Empire.DISTRICTS).filter(([d]) => !Empire.OUTSKIRTS.includes(d));
         const opt = (sel, none) => (none ? `<option value="">${none}</option>` : '') + dists.map(([d, X]) => `<option value="${d}" ${sel === d ? 'selected' : ''}>${X.name}</option>`).join('');
         const here = e.here, S = e.seasonDef;
         const def = dists.some(([d]) => d === here) ? here : '';

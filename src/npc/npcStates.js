@@ -51,7 +51,7 @@ class WanderState {
         let dest = null;
         for (let i = 0; i < 8; i++) {
             dest = this.npc.nav.randomPoint(this.npc.position, Config.npc.wanderRadius);
-            if (!CityGrid.inCrosswalk(dest.x, dest.z, 1.0) && !(FavelaPlan.built && FavelaPlan.cellAt(dest.x, dest.z) === FavelaPlan.ROAD)) break;      // (nem na rua do morro: parado ali trancaria os carros)
+            if (!CityGrid.inCrosswalk(dest.x, dest.z, 1.0) && !Favelas.onRoad(dest.x, dest.z)) break;      // (nem na rua do morro: parado ali trancaria os carros)
         }
         this.npc.gotoTarget(dest);
         this.timer = Config.npc.wanderTime;

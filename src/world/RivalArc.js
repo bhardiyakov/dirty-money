@@ -99,7 +99,7 @@ const RivalArc = {
         if (typeof Interiors === 'undefined' || !g.empire || !g.nav || !g.nav.map) return null;
         Interiors.index();
         const P = g.player.position, E = g.empire, M = g.nav.map, used = new Set(this.bocas.filter((b) => !b.razed).map((b) => b.d));
-        const doors = Interiors._doors.filter((d) => { const k = E.districtAt(d.x, d.z); return k !== 'favela' && k !== 'ilha' && !used.has(k) && hypot(d.x - P.x, d.z - P.z) > 200; });
+        const doors = Interiors._doors.filter((d) => { const k = E.districtAt(d.x, d.z); return !Empire.OUTSKIRTS.includes(k) && k !== 'ilha' && !used.has(k) && hypot(d.x - P.x, d.z - P.z) > 200; });
         for (let t = 0; t < 40 && doors.length; t++) {
             const d = doors[Math.floor(Math.random() * doors.length)], q = this._sidewalk(M, d);
             if (!q || !M.walk(q.x, q.z) || this.bocas.some((b) => hypot(b.x - q.x, b.z - q.z) < 160)) continue;

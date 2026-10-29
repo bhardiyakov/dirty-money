@@ -28,6 +28,10 @@ const MapRenderer = {
         if (facade.startsWith('brick')) return '#a0614c';
         if (facade.startsWith('house')) return '#d8c9a0';
         if (facade.startsWith('metal')) return '#8b97a3';
+        if (facade.startsWith('vid')) return { vid0: '#e98ab0', vid1: '#f2cf4a', vid2: '#4cc3c0', vid3: '#f08a3c', vid4: '#a98ad8', vid5: '#7fc46a' }[facade] || '#e98ab0';
+        if (facade.startsWith('caipira') || facade.startsWith('taipa')) return '#e8dcc0';
+        if (facade.startsWith('chalet')) return '#c9a27a';
+        if (facade.startsWith('stone')) return '#a49a8a';
         return '#b0ada4';
     },
 
@@ -88,8 +92,8 @@ const MapRenderer = {
         ctx.drawImage(WL.canvas, (cx - WD.minX) * wp - W / 2 / k * wp, (WD.maxZ - cz) * wp - H / 2 / k * wp, W / k * wp, H / k * wp, 0, 0, W, H);
 
         // 1b) Favela (FavelaPlan): chão de terra, becos cimentados, quadra e campinho (as ruas passam por cima).
-        if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built && vis(FavelaPlan.R.x0 - 8, FavelaPlan.R.z0 - 8, FavelaPlan.R.x1 + 8, FavelaPlan.R.z1 + 8)) {
-            const F = FavelaPlan;
+        for (const F of (typeof Favelas !== 'undefined' ? Favelas.built : [])) {
+            if (!vis(F.R.x0 - 8, F.R.z0 - 8, F.R.x1 + 8, F.R.z1 + 8)) continue;
             for (const b of F.groundBoxes) if (vis(b[0], b[1], b[2], b[3])) rect(b[0], b[1], b[2], b[3], C.earth);
             ctx.strokeStyle = C.sidewalk; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
             for (const a of F.alleys) {

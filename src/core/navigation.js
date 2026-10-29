@@ -220,7 +220,7 @@ class Navigation {
 			const k = z * w + x;
 			if (g[k] && (!g[k - 1] || !g[k + 1] || !g[k - w] || !g[k + w])) e[k] = 2;
 		}
-		if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built) FavelaPlan.navCost(e, this);      // favela: a pé, pelos becos (a rua custa mais)
+		if (typeof Favelas !== 'undefined') for (const f of Favelas.built) f.navCost(e, this);      // favela: a pé, pelos becos (a rua custa mais)
 		this.grid = this.map.grid = e;
 		this.ready = true;
 		let n = 0; for (let k = 0; k < e.length; k++) if (e[k]) n++;

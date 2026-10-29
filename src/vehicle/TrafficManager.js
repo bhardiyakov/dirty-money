@@ -47,6 +47,9 @@ class TrafficManager {
         const n = RoadPlan.nearestRoadPoint(p.x, p.z, 30), cls = n ? n.edge.cls : 'city', r = Math.random();
         const W = (table) => { let t = Math.random() * table.reduce((s, e) => s + e[1], 0); for (const [k, w] of table) { t -= w; if (t <= 0) return k; } return table[0][0]; };
         const civil = [0, 1, 3, 4, 5, 7, 8, 9], old = [13, 14, 15, 16, 17, 18];
+        const lux = () => ({ model: W([['sports', 34], ['super', 14], ['suv', 34], ['sedan', 18]]), paint: civil[Math.floor(Math.random() * civil.length)], old: false });
+        if (cls === 'fav' && typeof NightLife !== 'undefined' && NightLife.on && NightLife.near(p.x, p.z, 30) && r < 0.6) return lux();      // a festa do Mirante: carrão de playboy
+        if (typeof Bairros !== 'undefined' && Bairros.zoneAt(p.x, p.z) === 'serra' && r < 0.75) return lux();                             // Alto da Serra: carro de rico
         if (cls === 'fav') return { model: W([['old', 34], ['hatch', 22], ['sedan', 12], ['pickup', 16], ['van', 11], ['suv', 3], ['taxi', 5]]), paint: r < 0.85 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.85 };
         if (cls === 'dirt' || cls === 'trail') return { model: W([['pickup', 36], ['old', 24], ['hatch', 12], ['van', 12], ['sedan', 7], ['suv', 9]]), paint: r < 0.6 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.6 };
         if (cls === 'hwy') return { model: W([['pickup', 24], ['suv', 20], ['sedan', 19], ['van', 14], ['hatch', 10], ['old', 6], ['sports', 6], ['taxi', 4]]), paint: r < 0.2 ? old[Math.floor(Math.random() * old.length)] : civil[Math.floor(Math.random() * civil.length)], old: r < 0.2 };
@@ -171,7 +174,7 @@ class TrafficManager {
         const fav = e.cls === 'fav', fwd = Math.random() < 0.5, off = fav ? e.w / 2 + 0.8 : e.w / 2 - 0.1, t = 17 + Math.random() * (e.len - 34), p = P.at(e, t);
         if (P.inTunnel(e, t)) return null;                                             // (no túnel o meio-fio é a parede)
         const d = { dx: fwd ? p.tx : -p.tx, dz: fwd ? p.tz : -p.tz }, x = p.x + d.dz * off, z = p.z - d.dx * off;           // no meio-fio à direita de quem anda (rua do morro: fora da pista estreita)
-        if (fav && !FavelaPlan.roomForCar(x, z, d.dx, d.dz)) return null;
+        if (fav && !Favelas.roomForCar(x, z, d.dx, d.dz)) return null;
         if (near) { const r = hypot(x - near.x, z - near.z); if (r < near.rMin || r > near.rMax) return null; }
         if (CityGrid.intersectionNear(x, z, 17)) return null;
         return { point: { x, z }, d };

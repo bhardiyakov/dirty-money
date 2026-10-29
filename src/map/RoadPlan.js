@@ -25,6 +25,7 @@ const RoadPlan = {
         hwy:    { w: 12, kind: 'rural',  surface: 'asphalt', label: 'Rodovia' },
         dirt:   { w: 8,  kind: 'rural',  surface: 'dirt',    label: 'Estrada de terra' },
         trail:  { w: 5,  kind: 'rural',  surface: 'earth',   label: 'Caminho' },
+        serra:  { w: 8,  kind: 'rural',  surface: 'asphalt', label: 'Estrada' },        // (Alto da Serra: asfalto estreito e sinuoso)
         bridge: { w: 12, kind: 'bridge', surface: 'asphalt', label: 'Ponte' },
         via:    { w: 12, kind: 'urban',  surface: 'asphalt', label: 'Elevado' },
     },

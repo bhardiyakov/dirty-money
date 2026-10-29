@@ -323,7 +323,7 @@ class PoliceOfficer {
         if (this.group) { this.manager.groupDest(this); return; }                  // traficante: ronda em grupo (GangManager)
         if (this.op && this.manager.game.op && this.manager.game.op.active) { this.manager.game.op.advance(this); return; }      // operação: avança favela adentro
         if (!this.spec.owner && Standing.policeBanned(this.position.x, this.position.z)) {      // polícia dentro da favela: volta para a entrada
-            const e = Standing.clampToEntrance(-1e9, this.position.z);
+            const e = Standing.clampToEntrance(-1e9, this.position.z, this.position.x);
             this.dest = this.nav.closestPoint(new BABYLON.Vector3(e.x + 15, 0, e.z));
             this.nav.crowd.agentGoto(this.index, this.dest);
             this._wanderTimer = 6;
