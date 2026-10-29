@@ -849,14 +849,14 @@ class Player {
 
     // ---------------------------------------------------------------- andar de cima / de baixo
     // O mundo é plano (2D): "estar em cima" do viaduto ou "embaixo" de uma ponte é só um estado, que decide a altura do desenho,
-    // com o que se bate e se o furo (RevealPlugin) se abre — ele só abre quando há algo ACIMA do personagem.
+    // com o que se bate e se o teto em cima dele some (RoofCut) — só quando há algo ACIMA do personagem.
     //   onDeck       no tabuleiro do viaduto: entra pelo pé da rampa andando ao longo da via e fica até sair pela outra ponta.
     //                (com `roof` = um heliponto de Rooftops: na escada externa ou no telhado do prédio — sai descendo pelo pé da escada)
     //   underBridge  sob uma ponte cidade ↔ ilha: chegou à área do tabuleiro sem ser pela pista (nadando, no raso ou pela margem) e fica
     //                até sair dela.
     get baseY() { return this.underBridge ? 0.1 : 0.5 + (this.deckH || 0); }
 
-    // Altura do furo: a CABEÇA (a pé, a mureta ao lado não abre furo); sob a ponte, abaixo do tabuleiro.
+    // Altura que decide se ele está EMBAIXO de uma estrutura (RoofCut): a CABEÇA; sob a ponte, abaixo do tabuleiro.
     get revealY() { return this.underBridge ? 0.1 : this.baseY + 1.2; }
 
     _updateLevel() {

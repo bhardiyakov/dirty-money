@@ -211,7 +211,11 @@ class TerrainBuilder {
         yield; mk(ground, 'ground', this.ground, { vertexColors: true });
         yield;
         const hi = mk(vegHi, 'vhi', wb.props.hiMaterial, { vertexColors: true });
-        if (hi) { hi.renderingGroupId = 1; hi.alphaIndex = -1; }                  // copas por cima de tudo que anda no chao (ver WorldBuilder._flush)
+        if (hi) {                                                                 // copas por cima de tudo que anda no chao (ver WorldBuilder._flush)
+            hi.renderingGroupId = 1; hi.alphaIndex = -1;
+            const mk = XRaySilhouette.addMask(hi, wb.props.maskMaterial);         // (quem passa embaixo: a silhueta dourada)
+            if (mk) chunk.meshes.push(mk);
+        }
         yield; mk(vegLo, 'vlo', wb.props.loMaterial, { vertexColors: true });
         this._addColliders(chunk);
 

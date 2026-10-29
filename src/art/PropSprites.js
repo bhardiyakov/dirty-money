@@ -3,9 +3,9 @@
 // (mesmo SpriteBaker e visual do personagem): carvalho, pinheiro, palmeira,
 // arbusto e guarda-sol. Todos num único atlas pequeno + paleta própria.
 //
-// Copas altas (árvores) ficam ACIMA dos personagens (y=3,2) e usam o shader com
-// fade pontilhado em volta do jogador: dá para andar embaixo de uma árvore sem
-// ela esconder o personagem. Arbustos/guarda-sóis ficam baixos (y=0,9).
+// Copas altas (árvores) ficam ACIMA dos personagens (y=3,2), inteiras: quem passa
+// embaixo aparece como a silhueta dourada (XRaySilhouette, pela máscara das copas —
+// maskMaterial). Arbustos/guarda-sóis ficam baixos (y=0,9).
 // ============================================================================
 
 const PropSprites = {
@@ -472,9 +472,7 @@ const PropSprites = {
             uniform vec2 palSize;
             uniform vec3 tint;
             uniform float shadowAlpha;
-            uniform vec2 focus;
-            uniform float fadeR;
-            uniform float useFade;
+            uniform float cut;              // alfa mínimo desenhado (a máscara das copas: só o miolo, sem a sombra)
             uniform float time;
             uniform float mode;
             uniform float cps;
@@ -499,7 +497,6 @@ const PropSprites = {
             void main(void) {
                 vec2 uv = vUV;
                 if (vSway > 0.01) uv += vec2(0.0, floor(mod(time * cps * 4.0 + vPh * 4.0, 4.0)) * animStep);
-                float k = useFade > 0.5 ? clamp(length(vWorld.xz - focus) / fadeR, 0.0, 1.0) : 1.0;
                 if (sharp > 0.5) {
                     // Gráfico suave: bilinear feito à mão sobre a cor JÁ pintada (o atlas tem códigos de paleta, não cores), com o miolo
                     // de cada pixel da arte nítido (sharp) — só a borda entre dois pixels é suavizada: sem serrilhado e sem borrar.
@@ -507,22 +504,23 @@ const PropSprites = {
                     vec2 p = uv * sz - 0.5, i = floor(p), f = clamp((p - i - 0.5) * sharp + 0.5, 0.0, 1.0);
                     vec4 c = mix(mix(px(raw((i + 0.5) / sz)), px(raw((i + vec2(1.5, 0.5)) / sz)), f.x),
                                  mix(px(raw((i + vec2(0.5, 1.5)) / sz)), px(raw((i + 1.5) / sz)), f.x), f.y);
-                    if (c.a < 0.02) discard;
-                    gl_FragColor = vec4(c.rgb / c.a, c.a * smoothstep(0.2, 1.0, k));
+                    if (c.a < max(0.02, cut)) discard;
+                    gl_FragColor = vec4(c.rgb / c.a, c.a);
                     return;
                 }
                 vec4 c = px(raw(uv));
-                if (c.a <= 0.0) discard;
+                if (c.a <= 0.0 || c.a < cut) discard;
                 if (c.a < 0.999) { gl_FragColor = vec4(0.0, 0.0, 0.05, shadowAlpha); return; }
-                gl_FragColor = vec4(c.rgb, smoothstep(0.2, 1.0, k));
+                gl_FragColor = vec4(c.rgb, 1.0);
             }`;
     },
 
-    swayMaterial(scene, name, atlas, anims, palette, fade) {
+    // mask = a MÁSCARA das copas (XRaySilhouette.addMask): só o miolo opaco, sem cor — marca no stencil onde a copa cobre o jogador.
+    swayMaterial(scene, name, atlas, anims, palette, mask = false) {
         this.registerSway();
         const m = new BABYLON.ShaderMaterial(name, scene, { vertex: 'propSway', fragment: 'propSway' }, {
             attributes: ['position', 'uv', 'color'],
-            uniforms: ['worldViewProjection', 'world', 'palSize', 'tint', 'shadowAlpha', 'focus', 'fadeR', 'useFade', 'time', 'mode', 'cps', 'animStep', 'sharp', 'atlasSize', 'animSize'],
+            uniforms: ['worldViewProjection', 'world', 'palSize', 'tint', 'shadowAlpha', 'cut', 'time', 'mode', 'cps', 'animStep', 'sharp', 'atlasSize', 'animSize'],
             samplers: ['atlas', 'anim0', 'anim1', 'anim2', 'palette'],
             needAlphaBlending: true,
         });
@@ -532,9 +530,8 @@ const PropSprites = {
         m.setVector2('palSize', new BABYLON.Vector2(palette.width, palette.height));
         m.setColor3('tint', SpriteMaterial.sharedTint());
         m.setFloat('shadowAlpha', 0.36);
-        m.setVector2('focus', new BABYLON.Vector2(0, 0));
-        m.setFloat('fadeR', 3.4);
-        m.setFloat('useFade', fade ? 1 : 0);
+        m.setFloat('cut', mask ? 0.6 : 0);
+        m.disableColorWrite = mask;
         m.setFloat('time', 0);
         m.setFloat('mode', 0);
         m.setFloat('cps', this.MODES[0].cps);
@@ -610,12 +607,12 @@ const PropSprites = {
         const palette = { texture: ptex, width: PW, height: PH };
 
         const bound = [anims[0], anims[0], anims[0]];      // modo sem atlas próprio usa o do vento leve
-        const focusV = new BABYLON.Vector2(0, 0);
         let job = null, calm = 0;
         const api = {
             frame: F, W, H, atlas, anims,
-            hiMaterial: PropSprites.swayMaterial(scene, 'propsHi', atlas, bound, palette, true),
-            loMaterial: PropSprites.swayMaterial(scene, 'propsLo', atlas, bound, palette, false),
+            hiMaterial: PropSprites.swayMaterial(scene, 'propsHi', atlas, bound, palette),
+            loMaterial: PropSprites.swayMaterial(scene, 'propsLo', atlas, bound, palette),
+            maskMaterial: PropSprites.swayMaterial(scene, 'propsMask', atlas, bound, palette, true),
             // Retângulo UV de um frame estático (norte = linha de cima da imagem).
             rect: (i) => {
                 const u0 = ((i % cols) * F) / W, v0 = (Math.floor(i / cols) * F) / H;
@@ -650,19 +647,19 @@ const PropSprites = {
                 }
                 let use = mode;
                 while (use > 0 && !anims[use]) use--;
-                for (const m of [api.hiMaterial, api.loMaterial]) { m.setFloat('time', t); m.setFloat('mode', use); m.setFloat('cps', PropSprites.MODES[use].cps); }
+                for (const m of api.materials()) { m.setFloat('time', t); m.setFloat('mode', use); m.setFloat('cps', PropSprites.MODES[use].cps); }
             },
             _bind: () => {
                 for (let k = 1; k < 3; k++) {
                     const tx = anims[k] || anims[0];
                     if (bound[k] === tx) continue;
                     bound[k] = tx;
-                    for (const m of [api.hiMaterial, api.loMaterial]) m.setTexture('anim' + k, tx);
+                    for (const m of api.materials()) m.setTexture('anim' + k, tx);
                 }
             },
-            setFocus: (x, z, r) => { focusV.set(x, z); api.hiMaterial.setVector2('focus', focusV); if (r > 0) api.hiMaterial.setFloat('fadeR', r); },
+            materials: () => [api.hiMaterial, api.loMaterial, api.maskMaterial],
             // Gráfico suave (Smooth.zoom): px da tela por px da arte; 0 = pixels duros.
-            setSharp: (s) => { if (s === api._sharp) return; api._sharp = s; for (const m of [api.hiMaterial, api.loMaterial]) m.setFloat('sharp', s); },
+            setSharp: (s) => { if (s === api._sharp) return; api._sharp = s; for (const m of api.materials()) m.setFloat('sharp', s); },
         };
         console.log(`[PROPS] ${this.FRAMES.length} frames + ${sw.length}×${this.ANIM_FRAMES} de vento leve em ${(performance.now() - t0).toFixed(0)} ms (atlas animado ${AW}×${AH})`);
         return api;
@@ -707,12 +704,13 @@ const PropSprites = {
         const gl2 = scene.getEngine().webGLVersion >= 2;
         const swayTex = new BABYLON.RawTexture(sway, SW, SH, gl2 ? BABYLON.Constants.TEXTUREFORMAT_R : BABYLON.Constants.TEXTUREFORMAT_LUMINANCE, scene, false, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE, BABYLON.Constants.TEXTURETYPE_UNSIGNED_BYTE);
         swayTex.wrapU = swayTex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-        const focusV = new BABYLON.Vector2(0, 0), wind = { amp: this.MODES[0].amp, lean: 0, flutter: this.MODES[0].flutter, cps: this.MODES[0].cps, ph: 0, t: null };
-        const mat = (name, fade) => this.hdMaterial(scene, name, atlas, swayTex, fade, cols, rows, W, H);
+        const wind = { amp: this.MODES[0].amp, lean: 0, flutter: this.MODES[0].flutter, cps: this.MODES[0].cps, ph: 0, t: null };
+        const mat = (name, mask) => this.hdMaterial(scene, name, atlas, swayTex, mask, cols, rows, W, H);
         const api = {
             frame: F, W, H, atlas, anims: [], hd: true,
-            hiMaterial: mat('propsHi', true),
+            hiMaterial: mat('propsHi', false),
             loMaterial: mat('propsLo', false),
+            maskMaterial: mat('propsMask', true),
             rect: (i) => { const u0 = ((i % cols) * FP) / W, v0 = (Math.floor(i / cols) * FP) / H; return [u0, v0, u0 + FP / W, v0 + FP / H]; },
             animRect: () => null,
             pick: (kind, rnd) => {
@@ -726,17 +724,17 @@ const PropSprites = {
                 const M = PropSprites.MODES[Math.max(0, Math.min(2, mode))], k = 1 - Math.exp(-Math.max(0, dt) * 0.7);
                 wind.amp += (M.amp - wind.amp) * k; wind.lean += (M.lean - wind.lean) * k; wind.flutter += (M.flutter - wind.flutter) * k; wind.cps += (M.cps - wind.cps) * k;
                 wind.ph = (wind.ph + Math.max(0, Math.min(0.2, dt)) * wind.cps * Math.PI * 2) % (Math.PI * 2000);
-                for (const m of [api.hiMaterial, api.loMaterial]) { m.setFloat('wphase', wind.ph); m.setFloat('amp', wind.amp); m.setFloat('lean', wind.lean); m.setFloat('flutter', wind.flutter); }
+                for (const m of api.materials()) { m.setFloat('wphase', wind.ph); m.setFloat('amp', wind.amp); m.setFloat('lean', wind.lean); m.setFloat('flutter', wind.flutter); }
             },
             _bind: () => {},
-            setFocus: (x, z, r) => { focusV.set(x, z); api.hiMaterial.setVector2('focus', focusV); if (r > 0) api.hiMaterial.setFloat('fadeR', r); },
+            materials: () => [api.hiMaterial, api.loMaterial, api.maskMaterial],
             setSharp: () => {},
         };
         console.log(`[PROPS] ${n} quadros em alta definição (${ppu} px/u, atlas ${W}×${H}) em ${(performance.now() - t0).toFixed(0)} ms`);
         return api;
     },
 
-    hdMaterial(scene, name, atlas, swayTex, fade, cols, rows, W, H) {
+    hdMaterial(scene, name, atlas, swayTex, mask, cols, rows, W, H) {
         this.registerSway();
         if (!BABYLON.Effect.ShadersStore.propHDFragmentShader) {
             BABYLON.Effect.ShadersStore.propHDFragmentShader = `
@@ -750,9 +748,7 @@ const PropSprites = {
                 uniform sampler2D atlas;
                 uniform sampler2D swayMap;
                 uniform vec3 tint;
-                uniform vec2 focus;
-                uniform float fadeR;
-                uniform float useFade;
+                uniform float cut;
                 uniform float wphase;
                 uniform float amp;
                 uniform float lean;
@@ -774,23 +770,21 @@ const PropSprites = {
                         uv = clamp(uv - d * h, lo, hi);
                     }
                     vec4 c = texture2D(atlas, uv);
-                    if (useFade > 0.5) c *= smoothstep(0.2, 1.0, clamp(length(vWorld.xz - focus) / fadeR, 0.0, 1.0));
-                    if (c.a < 0.004) discard;
+                    if (c.a < cut) discard;
                     gl_FragColor = vec4(c.rgb * tint * vShade, c.a);
                 }`;
         }
         const m = new BABYLON.ShaderMaterial(name, scene, { vertex: 'propSway', fragment: 'propHD' }, {
             attributes: ['position', 'uv', 'color'],
-            uniforms: ['worldViewProjection', 'world', 'tint', 'focus', 'fadeR', 'useFade', 'wphase', 'amp', 'lean', 'flutter', 'cells', 'kuv', 'texel'],
+            uniforms: ['worldViewProjection', 'world', 'tint', 'cut', 'wphase', 'amp', 'lean', 'flutter', 'cells', 'kuv', 'texel'],
             samplers: ['atlas', 'swayMap'],
             needAlphaBlending: true,
         });
         m.setTexture('atlas', atlas);
         m.setTexture('swayMap', swayTex);
         m.setColor3('tint', SpriteMaterial.sharedTint());
-        m.setVector2('focus', new BABYLON.Vector2(0, 0));
-        m.setFloat('fadeR', 3.4);
-        m.setFloat('useFade', fade ? 1 : 0);
+        m.setFloat('cut', mask ? 0.5 : 0.004);
+        m.disableColorWrite = !!mask;
         m.setFloat('wphase', 0); m.setFloat('amp', this.MODES[0].amp); m.setFloat('lean', 0); m.setFloat('flutter', this.MODES[0].flutter);
         const span = this.FRAME / Config.art.ppu;                                               // u de mundo que um quadro cobre
         m.setVector2('cells', new BABYLON.Vector2(cols, rows));

@@ -717,11 +717,11 @@ class Game {
 		if (this.sprites.npc) this.sprites.npc.setZoom(this.gameEngine.renderHeight / (2 * this.camera.view));      // personagens 2,5D: nítidos de perto, suaves de longe
 		Smooth.zoom(this, this.gameEngine.renderHeight / (2 * this.camera.view));       // árvores e mobiliário de rua: bordas suaves no gráfico suave
 
-		// --- Círculo de visibilidade: o alvo (a pé ou o veículo dele) nunca some debaixo de viaduto, ponte, túnel, cobertura ou copa ---
+		// --- Tirar o teto: o trecho de viaduto, o vão da ponte, o túnel ou a cobertura em cima do alvo (a pé ou o veículo dele) some ---
 		const rv = this.mode === 'car' && this.activeCar ? this.activeCar : null, rp = rv ? rv.position : this.player.position;
-		// (o furo só se abre no que está ACIMA do alvo: a pé, a altura vem do personagem — cabeça no chão ou no viaduto, abaixo do
-		// tabuleiro quando nada sob a ponte; de veículo, a altura do sprite dele — barco sob a ponte fica rebaixado)
-		this.gameEngine.world.setReveal(rp.x, rp.z, rv ? (Math.max(rv.halfLen, rv.halfW) + 1.6) * 3 : 9.0, rv && rv.visual ? (rv.visual.mesh ? rv.visual.mesh.position.y : rv.visual.y) : this.player.revealY);
+		// (só o que está ACIMA do alvo: a pé, a altura vem do personagem — cabeça no chão ou no viaduto, abaixo do tabuleiro quando nada
+		// sob a ponte; de veículo, a altura do sprite dele — barco sob a ponte fica rebaixado. Copas não somem: silhueta dourada, XRaySilhouette)
+		RoofCut.update(dt, rp.x, rp.z, rv && rv.visual ? (rv.visual.mesh ? rv.visual.mesh.position.y : rv.visual.y) : this.player.revealY);
 
 		// --- Mundo (água animada, sombra seguindo o foco) ---
 		if (this.mode !== 'player') HouseView.update(dt, this);          // (de carro/helicóptero: a porta e a seta continuam)

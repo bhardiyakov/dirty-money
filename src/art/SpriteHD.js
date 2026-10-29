@@ -326,7 +326,9 @@ const SpriteHD = {
         sc.sbox = [x0, y0, x1, y1];
         for (let pass = 0; pass < 2; pass++) {
             for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { let s = 0, n = 0; for (let i = -R; i <= R; i++) { const X = x + i; if (X >= 0 && X < N) { s += sh[y * N + X]; n++; } } tmp[y * N + x] = s / n; }
-            for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { let s = 0, n = 0; for (let j = -R; j <= R; j++) { const Y = y + j; if (Y >= 0 && Y < N) { s += tmp[Y * N + x]; n++; } } sh[y * N + x] = Math.min(1, s / n * (pass ? 1.15 : 1.6)); }
+            // (fora da caixa a sombra é zero: o tmp ali ainda é a oclusão, 1 = livre — lido, virava uma faixa reta de sombra em cima e
+            // embaixo de cada sprite)
+            for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { let s = 0, n = 0; for (let j = -R; j <= R; j++) { const Y = y + j; if (Y >= 0 && Y < N) { if (Y >= y0 && Y <= y1) s += tmp[Y * N + x]; n++; } } sh[y * N + x] = Math.min(1, s / n * (pass ? 1.15 : 1.6)); }
         }
     },
 

@@ -294,7 +294,7 @@ degradês, contorno fino e sombra macia, com luz do noroeste.
 As janelas não acendiam: a luz era o `emissiveTexture` da fachada, com o nível mudando à noite, e os materiais do mundo são
 congelados depois da carga (`Game._freezeStaticMaterials`). Com o material congelado, o Babylon não reenviava o nível.
 
-- Agora a luz é um plugin de material, como o `RevealPlugin`: o uniform vai a cada desenho, então funciona com o material congelado.
+- Agora a luz é um plugin de material, como o `RoofCut`: o uniform vai a cada desenho, então funciona com o material congelado.
 - O ladrilho de luz de cada fachada tem todas as janelas acesas. Cada uma tem o que se vê da sala: abajur, cortina com pregas,
   persiana, voal, o vulto de uma planta ou do sofá; nos escritórios, luminárias, persiana meio baixada, divisórias e monitores. A luz
   vaza um pouco na parede em volta.
@@ -352,6 +352,42 @@ Carro, moto e bicicleta deixam a marca das rodas por onde passam fora do asfalto
 - `tests/27_sprites_hd` confere os sprites HD (borda macia, vento pelo shader, tufos, pássaros, bichos), os pisos novos sem emenda,
   o chão do rastro (grama e areia sim; asfalto e água não), um carro de verdade deixando rastro na areia e o quadro mudando onde ele
   passou.
+
+## O personagem nunca some: silhueta dourada e o teto que sai
+
+Antes, o que ficava em cima do personagem se esburacava em volta dele: as copas das árvores ficavam transparentes e viaduto, ponte,
+túnel e cobertura de posto ganhavam um furo pontilhado. Agora nada fica transparente.
+
+- **Copas inteiras + silhueta dourada** (`render/XRaySilhouette.js`): embaixo de uma árvore (ou atrás de um prédio, de um muro, de
+  um carro) o personagem aparece como a silhueta dourada de sempre. As copas não gravam profundidade, então ganharam uma MÁSCARA
+  (`PropSprites` `maskMaterial`: só o miolo opaco, sem cor, das copas perto dele) que marca o stencil; a silhueta é desenhada duas
+  vezes por último na camada: atrás do que grava profundidade (GREATER, marca 2 no stencil) e onde a máscara das copas marcou 1.
+- **Tirar o teto** (`render/RoofCut.js`): o trecho de estrutura em cima dele SOME inteiro, como o telhado de uma loja quando se entra
+  nela, e volta quando ele sai (esmaece em ~0,2 s e volta em ~0,35 s):
+  - viaduto: o trecho de 12 u em cima de quem passa por baixo (ativado a até 9 u) — pista, viga, muretas e cabeçote; o pilar fica;
+  - ponte: o vão de 12 u em cima de quem nada ou navega por baixo (o poste em cima dele vai junto); embaixo, a água;
+  - túnel: o maciço inteiro, com as paredes cortadas a 1 m — vê-se a pista lá dentro;
+  - cobertura de posto: a laje (os pilares ficam).
+  Quem está EM CIMA (no tabuleiro do viaduto ou da ponte) não corta nada. Vale também para o veículo do jogador.
+- A pista desenhada por baixo do tabuleiro das pontes (duplicada, rente à água) saiu: com o vão cortado, aparece a água.
+
+## Divisas em degradê (`src/render/GroundBlend.js`)
+
+Os pisos não terminam mais numa linha reta. Ao longo de cada divisa vai uma faixa com a textura de um dos lados, opaca na divisa e
+sumindo para fora, com a borda recortada por ruído (2 escalas, no espaço do mundo) e uma franja mais escura cor de terra:
+- areia da praia espalhada sobre o asfalto da orla (1,4 m); grama do parque e da mata sobre o pé do meio-fio (0,6 m);
+- grama dos quintais e das praças das pegadas sobre a calçada; por dentro dos gramados, manchas de terra batida na beirada;
+- nas estradas do interior (terra, trilha e asfalto), o acostamento de terra entrando no mato dos dois lados;
+- as divisas de bioma do mundo grande já eram em degradê entortado por ruído (`TerrainSplat`).
+São malhas de faixas por pedaço do mundo, com o material do próprio piso (luz, sombra, noite e neblina iguais) e um plugin que troca
+o alfa pelo degradê com ruído.
+
+Também saiu um risco reto em cima e embaixo de cada árvore, guarda-sol e pedra HD: o borrão da sombra no assador (`SpriteHD`) lia,
+fora da caixa da sombra, o rascunho da oclusão (que vale 1) e virava uma faixa de sombra.
+
+`tests/28_teto_divisas` confere: sem furo nem fade nos materiais, máscara das copas, a silhueta dourada debaixo de uma copa, o trecho
+do viaduto que some (e não para quem está no tabuleiro ou longe), a cobertura do posto e o vão da ponte, as faixas das divisas no
+quadro e a sombra do assador sem vazar.
 
 ## Personagens (`tools/asset_baker/generator/*` no build, `src/art/NpcArt.js` no jogo)
 

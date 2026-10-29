@@ -1,7 +1,7 @@
 // ============================================================================
 // WindowLights — as JANELAS ACESAS à noite (fachadas dos prédios e casas, vitrines e letreiros das lojas).
 //
-// Plugin de material do Babylon (StandardMaterial), como o RevealPlugin: o uniform é reenviado a cada desenho, então funciona com os
+// Plugin de material do Babylon (StandardMaterial), como o RoofCut: o uniform é reenviado a cada desenho, então funciona com os
 // materiais do mundo CONGELADOS (Game._freezeStaticMaterials). Antes a luz era o emissiveTexture do material com o `level` mudando
 // à noite — e com o material congelado o Babylon não reenviava o nível: as janelas nunca acendiam.
 //
