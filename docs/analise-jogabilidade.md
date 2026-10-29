@@ -257,6 +257,57 @@ quente, sombras macias e materiais com textura.
   - `tests/24_interiores` repinta todas as salas e confere que sólidos, usos, entrada e assentos saem iguais com e sem o HD.
 - **Volta à pixel art:** `Config.art.interiorHD = false` ou `?pixel` na URL.
 
+## Cidade em alta definição (`src/art/CityHD*.js`)
+
+As texturas da cidade (antes pixel art a 20 px/u do `TileFactory`) são repintadas no mesmo estilo dos interiores: material de verdade,
+degradês, contorno fino e sombra macia, com luz do noroeste.
+
+- **Mesmo desenho.** Cada ladrilho tem o tamanho do de antes no mundo e as mesmas coisas no mesmo lugar: rua de 8 × 10 u com as
+  linhas de bordo e o tracejado amarelo, faixa de pedestres de 10 × 3 u, calçada de placas de 1 u, telhados de 8 u, fachadas de 6 u
+  (2 baias × 2 andares). O `WorldBuilder` não muda as UVs dos pisos e telhados. Os pintores desenham nas coordenadas da arte, num
+  canvas Q vezes maior.
+- **Resolução** (`CityHD.Q`): Q = 2 no Low e no Medium, 3 no High e 4 no HD (40, 60 e 80 px por metro). Memória de vídeo das
+  texturas da cidade: cerca de 44 MB (Q = 2), 99 MB (Q = 3) e 176 MB (Q = 4); na pixel art eram 11 MB.
+- **Sem emenda.** O ruído é periódico no ladrilho (`CityHD.vn`/`fbm`), o que cruza a borda é desenhado também do outro lado
+  (`CityTile.wrap`), e as juntas que caem na divisa (concreto, chapa) ficam inteiras dos dois lados.
+- **Pisos** (`CityHD.js`): asfalto com brita, mosqueado, trincas seladas com piche e remendos; rua com trilhas de pneu, fio de óleo,
+  sarjeta, tinta gasta e tachões; faixa de pedestres gasta onde os pneus passam; calçada de placas com junta e quina, chiclete e
+  trincas; grama com folhas, trevos e florzinhas; areia com ondulações; concreto com marca de régua e juntas; praça de granito;
+  terra da favela com remendo de cimento e cacos de tijolo; terra batida, pedra com estratos e musgo.
+- **Telhados** (`CityHDRoofs.js`): manta e laje com emendas, poças secas, ralo, ar-condicionado com ventilador e cano de cobre e
+  respiros; telha colonial em fiadas com sombra e cumeeira; chapa com junta em pé e claraboia; zinco ondulado com ferrugem
+  escorrendo, pregos, pneus e pedras; lona com rugas e cordas; laje crua com ferro de espera, varal e parabólica; laje pintada do
+  Mirante com vasos, ombrelones, cadeiras de plástico e varal de lâmpadas; telhado verde. As casas de máquinas no alto dos prédios
+  (antes caixas cinza lisas) ganham tampa de chapa com grelha e laterais de veneziana com portinhola.
+- **Fachadas e lojas** (`CityHDFacades.js`): tijolo com argamassa, reboco com umidade e escorridos, enxaimel, pedra, galpão de chapa,
+  concreto com furos de tirante e pele de vidro; janelas com vidro refletindo o céu, caixilho, peitoril, verga, venezianas e
+  floreiras. As vitrines das lojas têm letreiro com o nome escrito, ícone, prateleiras com produtos e porta de vidro.
+- **O barraco do protagonista por fora** (`CityHD.house`, usado pelo `HouseView`): tijolo com o reboco caído, zinco com ferrugem,
+  tábua pintada descascando, porta turquesa, janela com cortina e o telhado de zinco com pneus, pedras, ripas, remendo e caixa-d'água.
+- **Custo.** Pintado uma vez, na carga: 0,7 s com Q = 2 e 1,3 s com Q = 3 num ambiente sem placa de vídeo (a pixel art levava
+  0,35 s). Os canvases são liberados assim que a textura vai para a placa.
+- **Fica em pixel art:** o mar animado (`TileFactory.water` + `WaterPlugin`) e o chão do mundo grande (`TerrainSplat`).
+- **Volta à pixel art:** `Config.art.cityHD = false` ou `?pixel` na URL.
+
+### Janelas acesas à noite (`src/render/WindowLights.js`)
+
+As janelas não acendiam: a luz era o `emissiveTexture` da fachada, com o nível mudando à noite, e os materiais do mundo são
+congelados depois da carga (`Game._freezeStaticMaterials`). Com o material congelado, o Babylon não reenviava o nível.
+
+- Agora a luz é um plugin de material, como o `RevealPlugin`: o uniform vai a cada desenho, então funciona com o material congelado.
+- O ladrilho de luz de cada fachada tem todas as janelas acesas. Cada uma tem o que se vê da sala: abajur, cortina com pregas,
+  persiana, voal, o vulto de uma planta ou do sofá; nos escritórios, luminárias, persiana meio baixada, divisórias e monitores. A luz
+  vaza um pouco na parede em volta.
+- **Uma a uma.** Cada janela ocupa sozinha uma célula da grade do estilo (`CityHD.GRID`). O shader sorteia a célula: acesa ou não,
+  luz quente, neutra ou fria, e algumas com a TV ligada (azul, piscando). Cada prédio e cada lado têm um deslocamento inteiro nas UVs
+  da parede: o desenho é o mesmo, mas nenhum prédio repete o sorteio do vizinho.
+- **Pela hora** (`WindowLights.HOME`, `OFFICE`): as casas acendem ao escurecer (cerca de 70% às 19h30) e vão apagando madrugada
+  adentro (12% às 4h); alguns acordam cedo. Escritórios e galpões ficam acesos no fim do expediente e esvaziam à noite. Com chuva
+  forte de dia, as janelas também acendem.
+- Letreiros e vitrines das lojas acendem inteiros.
+- `tests/26_cidade_hd` confere a resolução, ladrilhos sem emenda, cada janela dentro da sua célula, a fração pela hora, o quadro
+  mais claro com as janelas acesas na favela à noite e a volta à pixel art.
+
 ## Personagens (`tools/asset_baker/generator/*` no build, `src/art/NpcArt.js` no jogo)
 
 Braços soltos ao lado do corpo (sem o ar de "gorila"), cabeça um pouco maior (rosto e cabelo mais legíveis de cima), silhueta

@@ -98,7 +98,7 @@ class WorldBuilder {
         M.dirt = this._mat('dirt', T.dirt);
         M.rock = this._mat('rock', T.rock);
         M.shop = this._mat('shop', T.shops.diffuse);
-        M.shop.emissiveTexture = T.shops.emissive; M.shop.emissiveTexture.level = 0;      // acende à noite (setNight)
+        WindowLights.apply(M.shop, T.shops.emissive, [0, 0], 'shop');      // letreiro e vitrine acendem à noite (render/WindowLights.js)
         M.earth = this._mat('earth', T.earth);
         M.plaza = this._mat('plaza', T.plaza);
         M.curb = this._mat('curb', null, { color: '#a4a9b0' });
@@ -125,12 +125,12 @@ class WorldBuilder {
 
         M.roofs = {};
         for (const k of Object.keys(T.roofs)) M.roofs[k] = this._mat('roof_' + k, T.roofs[k]);
+        if (T.machine) { M.machtop = this._mat('machtop', T.machine.top); M.machside = this._mat('machside', T.machine.side); }      // casas de máquinas (HD)
 
         M.facades = {};
         for (const k of Object.keys(T.facades)) {
-            const m = this._mat('facade_' + k, T.facades[k].diffuse);
-            m.emissiveTexture = T.facades[k].emissive;
-            m.emissiveTexture.level = 0;                 // acende à noite (setNight).
+            const F = T.facades[k], m = this._mat('facade_' + k, F.diffuse);
+            WindowLights.apply(m, F.emissive, F.grid, F.occ);      // janelas acesas à noite, uma a uma, pela hora (render/WindowLights.js)
             M.facades[k] = m;
         }
     }
@@ -691,9 +691,11 @@ class WorldBuilder {
                 const so = rng() * 6, ro = rng();     // desloca padrões p/ quebrar repetição.
                 const trim = this._batch('trim', x0, z0);
 
-                // Paredes: u = distância/6 (2 baias), v = (H - y)/6 (2 andares).
+                // Paredes: u = distância/6 (2 baias), v = (H - y)/6 (2 andares). Mais um deslocamento INTEIRO por prédio e por lado (o
+                // desenho é o mesmo, o ladrilho repete): a célula de cada janela na UV vira o sorteio da luz dela à noite (WindowLights).
+                const ku = Math.floor(Pixel.hash(Math.round(x0 * 4), Math.round(z0 * 4), 911) * 509), kv = Math.floor(Pixel.hash(Math.round(z0 * 4), Math.round(x0 * 4), 913) * 251);
                 this._batch('walls_' + lot.facade, x0, z0).walls(x0, z0, x1, z1, 0, H,
-                    (s, y) => [(s + so) / 6, (H - y) / 6]);
+                    (s, y, f) => [(s + so) / 6 + ku + WorldBuilder.FACE_U[f], (H - y) / 6 + kv]);
 
                 // Telhado: tile de 8u.
                 this._batch('roof_' + lot.roof, x0, z0).top(x0, z0, x1, z1, H,
@@ -725,7 +727,10 @@ class WorldBuilder {
                     const bw = 1.6 + rng() * 2.2, bd = 1.6 + rng() * 2.2, bh = 0.9 + rng() * 1.2;
                     const bx = x0 + 1.5 + rng() * Math.max(0.1, w - 3 - bw);
                     const bz = z0 + 1.5 + rng() * Math.max(0.1, d - 3 - bd);
-                    trim.solid(bx, bz, bx + bw, bz + bd, H, H + bh, hvac);
+                    if (!this.T.machine) { trim.solid(bx, bz, bx + bw, bz + bd, H, H + bh, hvac); continue; }
+                    // HD: tampa de chapa (a textura inteira esticada na tampa) e laterais de veneziana (2 u por painel, altura toda)
+                    this._batch('machtop', x0, z0).top(bx, bz, bx + bw, bz + bd, H + bh, (x, z) => [(x - bx) / bw, (bz + bd - z) / bd]);
+                    this._batch('machside', x0, z0).walls(bx, bz, bx + bw, bz + bd, H, H + bh, (s, y) => [s / 2 + k * 0.37, (H + bh - y) / bh]);
                 }
 
                 this._collider(`bld_${blk.i}_${blk.j}_${lot.x0.toFixed(0)}`, x0, z0, x1, z1, H);
@@ -1430,6 +1435,7 @@ class WorldBuilder {
             if (key === 'curb') return M.curb;
             if (key === 'trim') return M.solid;
             if (key === 'hide_top') return M.hide;
+            if (key === 'machtop' || key === 'machside') return M[key];
             if (key.startsWith('open_') || key.startsWith('yard_')) return M[key.slice(key.indexOf('_') + 1)];
             if (key.startsWith('walls_')) return M.facades[key.slice(6)];
             if (key.startsWith('roof_')) return M.roofs[key.slice(5)];
@@ -1457,7 +1463,7 @@ class WorldBuilder {
             if (key0.startsWith('x') || key0.startsWith('open_x')) { mesh.renderingGroupId = 1; mesh.alphaIndex = -5; }
 
             if (isTrim && this.shadow) { this.shadow.addShadowCaster(mesh); continue; }       // acabamentos (pedaços pequenos) projetam a própria sombra
-            const caster = key.startsWith('walls_') || key.startsWith('roof_') || key === 'hide_top';
+            const caster = key.startsWith('walls_') || key.startsWith('roof_') || key === 'hide_top' || key === 'machside' || key === 'machtop';
             if (!caster || !this.shadow) continue;
             const pk = at < 0 ? '' : full.slice(at);
             let px = proxies.get(pk);
@@ -1519,10 +1525,8 @@ class WorldBuilder {
         }
     }
 
-    // 0 = dia, 1 = noite: liga as janelas (mapa emissivo) e os postes de rua.
+    // 0 = dia, 1 = noite: liga os postes de rua. (As janelas e as lojas acendem pelo render/WindowLights.js, a cada quadro.)
     setNight(f) {
-        for (const k of Object.keys(this.mats.facades)) this.mats.facades[k].emissiveTexture.level = f;
-        this.mats.shop.emissiveTexture.level = f;
         const on = Math.max(0, (f - 0.25) / 0.6);              // postes acendem no começo da noite
         const q = Math.round(Math.min(1, on) * 30) / 30;
         if (q === this._lampLevel) return;
@@ -1534,4 +1538,5 @@ class WorldBuilder {
     }
 }
 memoStatics(WorldBuilder, 'GLYPHS');
+WorldBuilder.FACE_U = { n: 0, s: 127, e: 263, w: 389 };          // deslocamento inteiro da UV de cada lado do prédio (ver _buildings)
 WorldBuilder.DENSE = new Set(['trim', 'xtrim', 'btrim', 'curb', 'xcurb', 'bcurb']);
