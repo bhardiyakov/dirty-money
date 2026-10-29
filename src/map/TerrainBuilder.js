@@ -221,8 +221,9 @@ class TerrainBuilder {
 
     // Vegetação e rochas da célula: tabelas por bioma [tipo, probabilidade, escala mín, escala máx].
     static get VEG() {
-        const B = WorldMap.B;
-        return {
+        const B = WorldMap.B, T = typeof SpriteHD !== 'undefined' && SpriteHD.on;      // (tufos de grama: só com os sprites em alta definição)
+        const tufts = (p) => T ? [['tuft', p, 0.8, 1.3], ['tuft', p * 0.8, 0.7, 1.2], ['tuft', p * 0.6, 0.8, 1.3]] : [];
+        const V = {
             [B.FOREST]: [['pine', 0.7, 0.95, 1.3], ['oak', 0.55, 0.95, 1.3], ['bush', 0.45, 0.8, 1.2], ['fern', 0.3, 0.8, 1.3], ['araucaria', 0.08, 1.0, 1.35]],
             [B.GRASS]: [['oak', 0.1, 0.9, 1.25], ['bush', 0.14, 0.8, 1.1], ['flowers', 0.05, 0.8, 1.2], ['ipe', 0.02, 0.95, 1.3]],
             [B.FARM]: [['oak', 0.012, 1.0, 1.3]],
@@ -233,6 +234,9 @@ class TerrainBuilder {
             [B.FAVELA]: [['banana', 0.05, 0.9, 1.2], ['bush', 0.1, 0.8, 1.1], ['dry', 0.08, 0.8, 1.1], ['jungle', 0.05, 0.9, 1.2], ['flowers', 0.02, 0.8, 1.1]],
             [B.RESORT]: [['palm', 0.09, 0.9, 1.3], ['bush', 0.09, 0.8, 1.1], ['flowers', 0.06, 0.8, 1.2], ['juca', 0.03, 0.9, 1.2]],
         };
+        // (no fim de cada tabela: os sorteios das plantas que já existiam continuam os mesmos)
+        for (const [b, p] of [[B.GRASS, 0.75], [B.FOREST, 0.35], [B.SCRUB, 0.5], [B.FARM, 0.2]]) if (V[b]) V[b] = V[b].concat(tufts(p));
+        return V;
     }
 
     // MATA ATLÂNTICA: dossel fechado de árvores altas (jequitibá), palmitos, araucárias, ipês floridos, bananeiras e samambaias no sub-bosque.

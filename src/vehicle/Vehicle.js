@@ -703,7 +703,7 @@ class Vehicle {
 
     // Movimento da carroceria e do chão: a aceleração no referencial do carro (da velocidade medida, quadro a quadro) move a suspensão
     // e as rodas da frente do sprite (CarActor.animate); derrapagem, freada brusca e arrancada cantando pneu deixam marcas no chão
-    // (SkidMarks) e soltam fumaça de borracha.
+    // (SkidMarks) e soltam fumaça de borracha; na grama e na areia toda roda deixa rastro (TireTracks).
     _bodyMotion(dt, f) {
         if (dt <= 0 || !this.visual) return;
         const v = this.velocity, fl = Math.sqrt(f.x * f.x + f.z * f.z) || 1, fx = f.x / fl, fz = f.z / fl;
@@ -726,8 +726,10 @@ class Vehicle {
         if (slip > 0 && sp > 3) k = Math.min(1, slip / 4);
         if (this.braking && sp > 7 && aF * Math.sign(fwd) < -7.5) k = Math.max(k, Math.min(1, (-aF * Math.sign(fwd) - 7.5) / 6 + 0.35));     // freada brusca
         if (this.controlled && this.accelerating && fwd > 0.5 && fwd < 11 && aF > 6.5 && !this.spec.bike) k = Math.max(k, Math.min(0.8, (aF - 6.5) / 5 + 0.3));   // arrancada
+        // Na grama e na areia o pneu deixa o rastro (TireTracks: sulco, grama amassada, poeira) — e não a marca preta de borracha.
+        const soft = typeof TireTracks !== 'undefined' && TireTracks.vehicle(this, fx, fz, k);
         const P = this.position, near = SkidMarks.focus && Math.abs(P.x - SkidMarks.focus.x) < 80 && Math.abs(P.z - SkidMarks.focus.z) < 80;
-        if (k <= 0 || !near || !MapGeo.isLand(P.x, P.z)) { if (this._skidding) { SkidMarks.lift(this); this._skidding = false; } return; }
+        if (k <= 0 || soft || !near || !MapGeo.isLand(P.x, P.z)) { if (this._skidding) { SkidMarks.lift(this); this._skidding = false; } return; }
         this._skidding = true;
         const rx = fz, rz = -fx, y = (this.elev || 0) + 0.2;
         const m = this.visual.tire, tz = m ? m.z : this.halfLen * 0.6, tx = m ? m.x : this.halfW * 0.75;

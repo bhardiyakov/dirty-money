@@ -286,7 +286,7 @@ degradês, contorno fino e sombra macia, com luz do noroeste.
   tábua pintada descascando, porta turquesa, janela com cortina e o telhado de zinco com pneus, pedras, ripas, remendo e caixa-d'água.
 - **Custo.** Pintado uma vez, na carga: 0,7 s com Q = 2 e 1,3 s com Q = 3 num ambiente sem placa de vídeo (a pixel art levava
   0,35 s). Os canvases são liberados assim que a textura vai para a placa.
-- **Fica em pixel art:** o mar animado (`TileFactory.water` + `WaterPlugin`) e o chão do mundo grande (`TerrainSplat`).
+- **Fica em pixel art:** o mar animado (`TileFactory.water` + `WaterPlugin`). O chão do mundo grande também é HD (ver abaixo).
 - **Volta à pixel art:** `Config.art.cityHD = false` ou `?pixel` na URL.
 
 ### Janelas acesas à noite (`src/render/WindowLights.js`)
@@ -307,6 +307,51 @@ congelados depois da carga (`Game._freezeStaticMaterials`). Com o material conge
 - Letreiros e vitrines das lojas acendem inteiros.
 - `tests/26_cidade_hd` confere a resolução, ladrilhos sem emenda, cada janela dentro da sua célula, a fração pela hora, o quadro
   mais claro com as janelas acesas na favela à noite e a volta à pixel art.
+
+## Sprites do mapa em alta definição (`src/art/SpriteHD.js`)
+
+Árvores, arbustos, palmeiras, guarda-sóis, pedras, tufos de grama, pássaros e os bichos da roça continuam os mesmos modelos do
+`SpriteBaker` (esferas, elipsoides, cápsulas e caixas), mas o assado é outro.
+
+- **Resolução** (`SpriteHD.Q`): 1,5 px de textura por px da arte no Low, 2 no Medium e no High, 3 no HD.
+- **Cor de verdade** (RGBA pré-multiplicado, sem a paleta de 5 tons): luz contínua do noroeste, sombra que esfria e luz que
+  esquenta, como a rampa da pixel art, sem os degraus.
+- **Detalhe por material**, calculado no ponto 3D atingido: folhas (cada folha com a sua inclinação e o vão escuro entre elas),
+  agulhas, casca, pedra (relevo, fendas, musgo e líquen), tecido, penas, pelo, palha, plástico e metal.
+- **Oclusão de ambiente** (o miolo da copa, a base das pedras), contorno fino na silhueta, borda suavizada e **sombra projetada
+  macia** no chão, no sentido da luz do mundo.
+- **Vento sem quadros de animação** (`PropSprites.createHD`): cada quadro leva um mapa de altura; o shader das plantas entorta a
+  copa pelo vento vezes a altura (o pé fica parado). Intensidades suavizadas: amplitude, inclinação, tremor das folhas e ritmo.
+- **Tufos de grama** (`PropSprites` linhas 25 e 26): moitas de 34 a 46 folhas, verdes ou secas, espalhadas nos quarteirões de grama
+  (`CityGrid._fillProps`) e nos biomas do mundo grande (campo, mata, cerrado e roça — `TerrainBuilder`).
+- **Pássaros** (`Birds._atlasHD`): penas com sombra macia em blob. **Bichos da roça** (`Livestock._hdInit`): três variantes de
+  pelagem por espécie, assados aos poucos durante o jogo (~4 ms por quadro), porque só existem na Vila da Roça.
+- **Chão em relevo** (`CityHD`): a grama ganhou relevo (domos e folhas com sombra e brilho), a pedra profundidade (estratos, fendas
+  e oclusão), e o chão do mundo grande (`TerrainSplat`) passa a ser HD: mata (serrapilheira), cerrado, brejo e três roças, com um
+  atlas de perto e outro com a metade da resolução para longe (troca pela distância, em WebGL2).
+- **Custo** (sem placa de vídeo): props ~1 s, pássaros ~0,4 s na carga; bichos ~1 s espalhado no jogo.
+- **Volta à pixel art:** `Config.art.spriteHD = false` ou `?pixel` na URL.
+
+### Rastro de pneu na grama e na areia (`src/world/TireTracks.js`)
+
+Carro, moto e bicicleta deixam a marca das rodas por onde passam fora do asfalto (as rodas de trás; a moto e a bicicleta, uma).
+
+- **Areia:** o sulco afundado com o desenho da banda (blocos em V do carro, cravos da moto, pontinhos da bicicleta) e a areia
+  empurrada para os lados num montinho mais claro. O relevo é calculado no shader e iluminado pelo sol do mundo: a parede do sulco
+  do lado do sol fica na sombra, a do outro lado clareia.
+- **Grama:** a faixa amassada (folhas deitadas, mais clara e amarelada) com terra arrancada pelos blocos da banda. Na chuva, e no
+  brejo, vira lama escura.
+- **Derrapando ou arrancando forte** no chão mole o rastro alarga e levanta poeira (areia ou terra) — e não fica a marca preta de
+  borracha do asfalto (`SkidMarks`).
+- **Some aos poucos:** grama ~45 s (a grama levanta), areia ~70 s (o montinho assenta).
+- **Onde:** quarteirões abertos de grama e praia (parque, mata, praia) e os biomas de campo, mata, cerrado, roça, areia e brejo do
+  mundo grande; nunca em asfalto, calçada, estrada de terra, ponte ou água (`TireTracks.surface`, com cache por 0,5 m).
+- **Um desenho só:** anel de 2400 trechos numa malha; os trechos de cada roda são emendados (sem fresta nem sobreposição nas
+  curvas). A cor é **modulada** (2 × origem × destino): o rastro escurece e clareia o chão que já está lá, então combina com
+  qualquer grama ou areia, de dia, de noite e na chuva.
+- `tests/27_sprites_hd` confere os sprites HD (borda macia, vento pelo shader, tufos, pássaros, bichos), os pisos novos sem emenda,
+  o chão do rastro (grama e areia sim; asfalto e água não), um carro de verdade deixando rastro na areia e o quadro mudando onde ele
+  passou.
 
 ## Personagens (`tools/asset_baker/generator/*` no build, `src/art/NpcArt.js` no jogo)
 

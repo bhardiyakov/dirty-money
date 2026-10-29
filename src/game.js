@@ -238,6 +238,7 @@ class Game {
 			SkidMarks.init(this.scene); SkidMarks.game = this;                  // marcas de pneu no chão (derrapagem, freada, arrancada)
 			Blood.init(this.scene);                                              // sangue no chão (respingo de tiro, rastro de quem sangra)
 			Footprints.init(this.scene);                                         // pegadas na areia (jogador e pedestres; somem aos poucos)
+			TireTracks.init(this.scene);                                         // rastro de pneu na grama e na areia (carro, moto, bicicleta)
 			Throwables.init(this);                                               // granada e molotov: mira tracejada, voo, explosão, fogo no chão
 			Rockets.init(this);                                                  // foguetes do RPG e do lança-foguetes (e a trava dele)
 			SparkFx.init(this.scene);                                            // faíscas em riscos e lascas (pneu furado a tiro)
@@ -818,6 +819,7 @@ class Game {
 			// Faróis, lanternas, setas, giroflex e fumaça de todos os carros próximos.
 			this.carLights.update(dt, this.dayNight.night, this.camera.target, this.carDamage.allCars());      // (lista reaproveitada: sem arrays novos por quadro)
 			SkidMarks.focus = this.camera.target; SkidMarks.update(dt);
+			TireTracks.focus = this.camera.target; TireTracks.update(dt);
 			Blood.update(dt, null, this);
 			Footprints.update(dt, this);
 			SparkFx.update(dt);

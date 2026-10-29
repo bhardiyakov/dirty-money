@@ -47,6 +47,18 @@ const CityHD = {
         return s / n;
     },
 
+    // Células de Worley periódicas: (u, v) = fração do ladrilho, n × m células → distância à semente mais próxima (em células).
+    worley(u, v, n, m, seed) {
+        const x = u * n, y = v * m, cx = Math.floor(x), cy = Math.floor(y);
+        let d1 = 9;
+        for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+            const gx = cx + i, gy = cy + j, wx = ((gx % n) + n) % n, wy = ((gy % m) + m) % m;
+            const dx = gx + Pixel.hash(wx, wy, seed) - x, dy = gy + Pixel.hash(wx, wy, seed + 1) - y, d = dx * dx + dy * dy;
+            if (d < d1) d1 = d;
+        }
+        return Math.sqrt(d1);
+    },
+
     // ---------------------------------------------------------------- ladrilhos de apoio (cache por tamanho)
     _tiles: {},
     // Grão por pixel do quadro HD, em cinza 128 ± ruído (aplicado com 'overlay' não muda a média). `speck`: pontos claros e escuros
@@ -201,6 +213,20 @@ class CityTile {
     clouds(amt, cell = 20, seed = this.seed + 3, comp = 'soft-light', oct = 2) {
         const cx = Math.max(1, Math.round(this.w / cell)), cy = Math.max(1, Math.round(this.h / cell));
         this.field(0.5, (u, v) => CityHD.fbm(u, v, cx, cy, seed, oct), comp, amt);
+    }
+    // RELEVO: um campo de altura periódico (fn(u, v) → 0..1) iluminado pelo noroeste e aplicado por cima ('overlay'): o lado virado
+    // para a luz clareia, o de trás escurece, e os vãos (altura baixa) ganham a sombra de oclusão. res = px por px da arte.
+    relief(fn, amt = 0.6, res = 1, ao = 0.35, bump = 6, alpha = 1) {
+        const rw = Math.max(2, Math.round(this.w * res)), rh = Math.max(2, Math.round(this.h * res)), H = new Float32Array(rw * rh);
+        for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) H[y * rw + x] = fn((x + 0.5) / rw, (y + 0.5) / rh);
+        const lm = Math.hypot(0.5, 0.6, 0.62), L0 = -0.5 / lm, L1 = -0.6 / lm, L2 = 0.62 / lm;
+        this.field(res, (u, v) => {
+            const x = Math.min(rw - 1, Math.floor(u * rw)), y = Math.min(rh - 1, Math.floor(v * rh));
+            const hx = H[y * rw + (x + 1) % rw] - H[y * rw + (x - 1 + rw) % rw], hy = H[((y + 1) % rh) * rw + x] - H[((y - 1 + rh) % rh) * rw + x];
+            const nx = -hx * bump * res, ny = -hy * bump * res, nm = Math.sqrt(nx * nx + ny * ny + 1);
+            const l = (nx * L0 + ny * L1 + L2) / nm;
+            return Math.max(0, Math.min(1, 0.5 + (l - L2) * amt * 1.6 - (1 - H[y * rw + x]) * ao * 0.5 + ao * 0.18));
+        }, 'overlay', alpha);
     }
     // Grão por pixel do quadro HD (o ladrilho tem o tamanho exato do canvas: repete sem emenda).
     grain(amt = 0.3, seed = 1, speck = 0, comp = 'overlay') {
@@ -388,28 +414,39 @@ Object.assign(CityTile.prototype, {
     // ---------------------------------------------------------------- grama: base em manchas + folhas, trevos e florzinhas
     p_grass(seed) {
         this.base(['#3f7a2f', '#4c8a37', '#57973f', '#62a347', '#6dae50'], 18, seed, 3);
-        this.clouds(0.5, 9, seed + 1, 'soft-light', 2);
+        this.clouds(0.45, 9, seed + 1, 'soft-light', 2);
+        // relevo: touceiras (cúpulas de ~0,4 u) sobre ondulação suave do terreno e o fiapo das folhas; os vãos entre as touceiras afundam
+        const cw = Math.round(this.w / 9), ch = Math.round(this.h / 9);
+        this.relief((u, v) => {
+            const c = Math.max(0, 1 - CityHD.worley(u, v, cw, ch, seed + 5) / 0.75);
+            return 0.38 * c * c * (3 - 2 * c) + 0.42 * CityHD.fbm(u, v, 3, 3, seed + 7, 2) + 0.2 * Pixel.hash(Math.floor(u * this.w * 2), Math.floor(v * this.h * 0.7), seed);
+        }, 0.42, Math.min(3, this.Q), 0.28, 3, 0.8);
         const g = this.g, r = this.rng;
-        // folhas: traços curtos em vários verdes (agrupados por cor: um traço só por balde)
+        // folhas: traços curtos em vários verdes (agrupados por cor), cada um com a sombra do lado de baixo e o fio de luz por cima
         const cols = ['#2f5f24', '#3b7029', '#4f8c36', '#6aa64a', '#86bd5c', '#a5d06e'];
         const buckets = cols.map(() => []);
-        const N = Math.round(this.w * this.h * 0.32);
+        const N = Math.round(this.w * this.h * 0.36);
         for (let i = 0; i < N; i++) {
-            const x = r() * this.w, y = r() * this.h, L = 1.2 + r() * 2.2, a = -Math.PI / 2 + (r() - 0.5) * 1.6, ci = Math.min(cols.length - 1, Math.floor(Math.pow(r(), 0.8) * cols.length));
+            const x = r() * this.w, y = r() * this.h, L = 1.2 + r() * 2.4, a = -Math.PI / 2 + (r() - 0.5) * 1.6, ci = Math.min(cols.length - 1, Math.floor(Math.pow(r(), 0.8) * cols.length));
             buckets[ci].push([x, y, x + Math.cos(a) * L, y + Math.sin(a) * L]);
         }
-        buckets.forEach((B, ci) => {
+        const blades = (B, dx, dy, col, lw, al) => {
             this.wrap(-4, -4, this.w + 4, this.h + 4, () => {
-                g.beginPath(); for (const [x0, y0, x1, y1] of B) { g.moveTo(x0, y0); g.quadraticCurveTo((x0 + x1) / 2 + 0.3, (y0 + y1) / 2, x1, y1); }
-                g.strokeStyle = cols[ci]; g.lineWidth = ci < 2 ? 0.42 : 0.32; g.globalAlpha = ci < 2 ? 0.55 : 0.8; g.stroke(); g.globalAlpha = 1;
+                g.beginPath(); for (const [x0, y0, x1, y1] of B) { g.moveTo(x0 + dx, y0 + dy); g.quadraticCurveTo((x0 + x1) / 2 + 0.3 + dx, (y0 + y1) / 2 + dy, x1 + dx, y1 + dy); }
+                g.strokeStyle = col; g.lineWidth = lw; g.globalAlpha = al; g.stroke(); g.globalAlpha = 1;
             });
+        };
+        buckets.forEach((B, ci) => {
+            blades(B, 0.28, 0.32, '#1c3a14', ci < 2 ? 0.5 : 0.4, 0.28);                                   // sombra da folha no chão
+            blades(B, 0, 0, cols[ci], ci < 2 ? 0.42 : 0.32, ci < 2 ? 0.55 : 0.85);
+            if (ci >= 3) blades(B, -0.1, -0.12, '#d8f0a8', 0.12, 0.35);                                    // fio de luz (noroeste)
         });
-        // trevos e florzinhas (poucos)
-        for (let k = 0; k < 6; k++) { const x = r() * this.w, y = r() * this.h; this.wrapAt(x, y, 3, () => { for (let p = 0; p < 3; p++) { const a = p * 2.1 + r(); this.circ(x + Math.cos(a) * 0.7, y + Math.sin(a) * 0.7, 0.62, '#4f9a3c'); } this.circ(x, y, 0.25, '#7fc05a'); }); }
+        // trevos e florzinhas (poucos), com sombrinha
+        for (let k = 0; k < 6; k++) { const x = r() * this.w, y = r() * this.h; this.wrapAt(x, y, 3, () => { this.ell(x + 0.35, y + 0.4, 1.4, 1.1, 'rgba(20,40,10,0.3)'); for (let p = 0; p < 3; p++) { const a = p * 2.1 + r(); this.circ(x + Math.cos(a) * 0.7, y + Math.sin(a) * 0.7, 0.62, '#4f9a3c'); this.circ(x + Math.cos(a) * 0.7 - 0.15, y + Math.sin(a) * 0.7 - 0.15, 0.3, 'rgba(160,220,120,0.5)'); } this.circ(x, y, 0.25, '#7fc05a'); }); }
         const fl = ['#f4e35c', '#f7f7fa', '#f08aa8', '#c9a0f0'];
         for (let k = 0; k < 7; k++) {
             const x = r() * this.w, y = r() * this.h, c = fl[k % fl.length];
-            this.wrapAt(x, y, 2, () => { for (let p = 0; p < 5; p++) { const a = p * 1.2566; this.circ(x + Math.cos(a) * 0.45, y + Math.sin(a) * 0.45, 0.32, c); } this.circ(x, y, 0.22, '#e8a020'); });
+            this.wrapAt(x, y, 2, () => { this.circ(x + 0.3, y + 0.35, 0.9, 'rgba(20,40,10,0.3)'); for (let p = 0; p < 5; p++) { const a = p * 1.2566; this.circ(x + Math.cos(a) * 0.45, y + Math.sin(a) * 0.45, 0.32, c); } this.circ(x, y, 0.22, '#e8a020'); });
         }
         this.grain(0.25, seed + 2, 0, 'soft-light');
     },
@@ -513,21 +550,100 @@ Object.assign(CityTile.prototype, {
     },
 
     // ---------------------------------------------------------------- pedra (morro, encosta, viaduto de pedra)
-    p_rock(seed) {
-        this.base(['#5f5d5a', '#6f6d69', '#7c7a75', '#86837d', '#908d86'], 22, seed, 4);
-        this.clouds(0.55, 9, seed + 1, 'soft-light', 3);
-        this.grain(0.45, seed, 0.015);
+    // ---------------------------------------------------------------- chão do mundo grande (render/TerrainSplat.js)
+    // Mata: grama escura e úmida com relevo, folhas secas caídas (marrons, laranja) e gravetos.
+    p_forest(seed) {
+        this.base(['#2a5523', '#2f6127', '#356a2c', '#3d7232', '#47803a'], 18, seed, 3);
+        this.clouds(0.5, 9, seed + 1, 'soft-light', 2);
+        const cw = Math.round(this.w / 10), ch = Math.round(this.h / 10);
+        this.relief((u, v) => { const c = Math.max(0, 1 - CityHD.worley(u, v, cw, ch, seed + 5) / 0.8); return 0.45 * c * c * (3 - 2 * c) + 0.55 * CityHD.fbm(u, v, 4, 4, seed + 7, 3); }, 0.4, Math.min(3, this.Q), 0.35, 2.2, 0.8);
         const g = this.g, r = this.rng;
-        for (let k = 0; k < 8; k++) {                                            // estratos: fendas horizontais com a quina clara em cima
-            const y0 = r() * 80, x0 = r() * 80, len = 20 + r() * 45, pts = [];
-            for (let s = 0; s <= len; s += 3) pts.push([x0 + s, y0 + Math.sin(s * 0.18 + k) * 1.2 + (r() - 0.5) * 0.6]);
-            this.wrap(x0 - 2, y0 - 4, x0 + len + 2, y0 + 4, () => {
-                g.save(); g.translate(0, -0.6); this.curve(pts); g.strokeStyle = 'rgba(200,196,186,0.35)'; g.lineWidth = 0.5; g.stroke(); g.restore();
-                this.curve(pts); g.strokeStyle = 'rgba(40,38,34,0.7)'; g.lineWidth = 0.6; g.stroke();
+        for (let k = 0; k < Math.round(this.w * this.h * 0.1); k++) { const x = r() * this.w, y = r() * this.h, a = r() * Math.PI; this.wrapAt(x, y, 3, () => this.line(x, y, x + Math.cos(a) * 1.6, y + Math.sin(a) * 1.6 - 0.6, ['#244a1f', '#2f6127', '#4f8a40'][k % 3], 0.35)); }
+        const leaf = [[138, 106, 58], [168, 128, 63], [109, 82, 48], [190, 120, 50]];
+        for (let k = 0; k < 70; k++) {
+            const x = r() * this.w, y = r() * this.h, a = r() * Math.PI, c = leaf[k % 4];
+            this.wrapAt(x, y, 2, () => { this.ell(x + 0.3, y + 0.35, 0.95, 0.45, 'rgba(10,20,6,0.3)', g, a); this.ell(x, y, 0.9, 0.42, HDK.css(HDK.t(c, 0.85 + r() * 0.3)), g, a); this.line(x - Math.cos(a) * 0.7, y - Math.sin(a) * 0.7, x + Math.cos(a) * 0.7, y + Math.sin(a) * 0.7, 'rgba(60,40,20,0.5)', 0.12); });
+        }
+        for (let k = 0; k < 5; k++) { const x = r() * this.w, y = r() * this.h, a = r() * Math.PI, L = 3 + r() * 4; this.wrapAt(x, y, L, () => { this.line(x + 0.3, y + 0.4, x + Math.cos(a) * L + 0.3, y + Math.sin(a) * L + 0.4, 'rgba(10,15,5,0.35)', 0.6); this.line(x, y, x + Math.cos(a) * L, y + Math.sin(a) * L, '#5a4028', 0.45); }); }
+        this.grain(0.3, seed + 2, 0.01, 'soft-light');
+    },
+    // Cerrado (mato seco): capim amarelado em tufos com relevo, terra aparecendo e gravetos.
+    p_scrub(seed) {
+        this.base(['#8e8546', '#9a904d', '#a39a55', '#b0a65e', '#bab067'], 18, seed, 3);
+        this.clouds(0.45, 9, seed + 1, 'soft-light', 2);
+        const g = this.g, r = this.rng;
+        for (let k = 0; k < 10; k++) this.stain(r() * this.w, r() * this.h, 3 + r() * 5, 2 + r() * 4, [138, 109, 74], 0.4);       // terra
+        const cw = Math.round(this.w / 8), ch = Math.round(this.h / 8);
+        this.relief((u, v) => { const c = Math.max(0, 1 - CityHD.worley(u, v, cw, ch, seed + 5) / 0.75); return 0.45 * c * c * (3 - 2 * c) + 0.55 * CityHD.fbm(u, v, 3, 3, seed + 7, 2); }, 0.4, Math.min(3, this.Q), 0.3, 2.2, 0.8);
+        const cols = ['#6e6a35', '#8a8040', '#c8bb6a', '#d8cf86', '#e8dea0'], B = cols.map(() => []);
+        for (let k = 0; k < Math.round(this.w * this.h * 0.22); k++) { const x = r() * this.w, y = r() * this.h, a = -Math.PI / 2 + (r() - 0.5) * 1.8, L = 1.4 + r() * 2.4; B[Math.floor(r() * cols.length)].push([x, y, x + Math.cos(a) * L, y + Math.sin(a) * L]); }
+        B.forEach((L, ci) => this.wrap(-4, -4, this.w + 4, this.h + 4, () => {
+            g.beginPath(); for (const [x0, y0, x1, y1] of L) { g.moveTo(x0 + 0.3, y0 + 0.35); g.lineTo(x1 + 0.3, y1 + 0.35); } g.strokeStyle = 'rgba(60,50,20,0.25)'; g.lineWidth = 0.4; g.stroke();
+            g.beginPath(); for (const [x0, y0, x1, y1] of L) { g.moveTo(x0, y0); g.lineTo(x1, y1); } g.strokeStyle = cols[ci]; g.lineWidth = 0.3; g.stroke();
+        }));
+        for (let k = 0; k < 14; k++) this.pebble(r() * this.w, r() * this.h, 0.35 + r() * 0.5, ['#8a6d4a', '#a89070', '#6e5a40'][k % 3], r() * 3);
+        this.grain(0.3, seed + 2, 0.01, 'soft-light');
+    },
+    // Brejo: lama verde-escura com poças d'água (brilho do céu e borda úmida), algas e talos de junco cortados.
+    p_swamp(seed) {
+        this.base(['#2f4630', '#364e33', '#3f5a3a', '#4a6640', '#566f46'], 16, seed, 3);
+        this.clouds(0.5, 8, seed + 1, 'soft-light', 2);
+        this.relief((u, v) => CityHD.fbm(u, v, 4, 4, seed + 7, 3), 0.4, Math.min(3, this.Q), 0.4, 3, 0.8);
+        const g = this.g, r = this.rng;
+        for (let k = 0; k < 6; k++) {                                                           // poças
+            const cx = r() * this.w, cy = r() * this.h, rx = 3 + r() * 6, ry = 2 + r() * 4, pts = [];
+            for (let a = 0; a < 14; a++) { const t = a / 14 * Math.PI * 2, f = 0.75 + r() * 0.35; pts.push([cx + Math.cos(t) * rx * f, cy + Math.sin(t) * ry * f]); }
+            pts.push(pts[0], pts[1]);
+            this.wrapAt(cx, cy, rx * 1.3, () => {
+                g.save(); g.translate(0, -0.4); this.curve(pts); g.fillStyle = 'rgba(30,40,20,0.5)'; g.fill(); g.restore();
+                this.curve(pts); g.fillStyle = this.lin(cx - rx, cy - ry, cx + rx, cy + ry, [[0, [96, 128, 140]], [0.5, [44, 74, 90]], [1, [30, 52, 64]]]); g.fill();
+                g.save(); this.curve(pts); g.clip(); this.line(cx - rx * 0.6, cy - ry * 0.3, cx + rx * 0.2, cy - ry * 0.6, 'rgba(220,240,255,0.45)', 0.5); g.restore();
             });
         }
-        for (let k = 0; k < 5; k++) this.crack(r() * 80, r() * 80, 6, r() * 6.3, 'rgba(36,34,30,0.6)', 0.35);
+        for (let k = 0; k < 60; k++) { const x = r() * this.w, y = r() * this.h; this.wrapAt(x, y, 1, () => this.circ(x, y, 0.3 + r() * 0.35, ['#8aa457', '#a8c060', '#6a8a40'][k % 3])); }
+        for (let k = 0; k < 18; k++) { const x = r() * this.w, y = r() * this.h; this.wrapAt(x, y, 2, () => { this.circ(x + 0.3, y + 0.35, 0.45, 'rgba(10,20,10,0.4)'); this.circ(x, y, 0.4, '#7c9440'); this.circ(x - 0.1, y - 0.1, 0.18, '#b6c070'); }); }
+        this.grain(0.3, seed + 2, 0.01, 'soft-light');
+    },
+    // Plantação: fileiras a cada 0,4 u. kind 0 = terra arada (sulco e camalhão com relevo) com brotos; 1 = lavoura verde madura; 2 = trigo.
+    p_farm(seed, kind) {
+        const P = [['#6e5032', '#7a5a3a', '#8a6845', '#94724a'], ['#3f6a2a', '#4a7a30', '#528c36', '#5c9a3c'], ['#a8892e', '#bd9c40', '#c9a94a', '#d6b756']][kind];
+        this.base(P, 20, seed, 3);
+        this.clouds(0.35, 10, seed + 1, 'soft-light', 2);
+        const rows = Math.round(this.h / 8);
+        this.relief((u, v) => { const t = (v * rows) % 1, ridge = 0.5 + 0.5 * Math.cos((t - 0.5) * Math.PI * 2); return 0.6 * ridge + 0.4 * CityHD.fbm(u, v, 6, 6, seed + 3, 2); }, kind ? 0.22 : 0.32, Math.min(3, this.Q), kind ? 0.12 : 0.2, 2, 0.75);
+        const g = this.g, r = this.rng;
+        if (kind === 0) {
+            for (let y = 4; y < this.h; y += 8) for (let x = 2 + r() * 3; x < this.w; x += 5 + r() * 3) this.wrapAt(x, y, 2, () => { for (let l = 0; l < 3; l++) { const a = -Math.PI / 2 + (l - 1) * 0.7; this.line(x, y, x + Math.cos(a) * 1.1, y + Math.sin(a) * 1.1, '#6fae48', 0.35); } });
+            for (let k = 0; k < 24; k++) this.pebble(r() * this.w, r() * this.h, 0.3 + r() * 0.4, '#a58660', r() * 3);
+        } else {
+            const leafC = kind === 1 ? ['#3a6a28', '#5ca040', '#7cc050', '#9ad068'] : ['#8e7430', '#c9a94a', '#e2c868', '#f2dc8a'];
+            for (let y = 4; y < this.h; y += 8) for (let x = r() * 2; x < this.w; x += 1.6 + r() * 1.2) {
+                const c = leafC[Math.floor(r() * leafC.length)], L = 2 + r() * 2;
+                this.wrapAt(x, y, 4, () => {
+                    for (let l = 0; l < 3; l++) { const a = -Math.PI / 2 + (r() - 0.5) * 1.4; this.line(x + 0.3, y + 0.4, x + Math.cos(a) * L + 0.3, y + Math.sin(a) * L + 0.4, 'rgba(30,30,10,0.25)', 0.45); this.line(x, y, x + Math.cos(a) * L, y + Math.sin(a) * L, c, 0.38); }
+                    if (kind === 2 && r() < 0.6) this.ell(x, y - L, 0.35, 0.8, '#f0d878', g, (r() - 0.5) * 0.6);
+                });
+            }
+        }
+        this.grain(0.3, seed + 2, 0.01, 'soft-light');
+    },
+
+    p_rock(seed) {
+        this.base(['#5f5d5a', '#6f6d69', '#7c7a75', '#86837d', '#908d86'], 22, seed, 4);
+        this.clouds(0.4, 9, seed + 1, 'soft-light', 3);
+        // relevo FORTE: blocos de pedra (Worley) com bossas, estratos e fendas fundas — o lado do noroeste claro, o de trás e as fendas
+        // escuros; a sombra de oclusão enche as juntas
+        const cw = Math.round(this.w / 26), ch = Math.round(this.h / 18);
+        this.relief((u, v) => {
+            const blk = Math.min(1, CityHD.worley(u, v, cw, ch, seed + 9) / 0.7), f = CityHD.fbm(u, v, 5, 5, seed + 3, 4);
+            const crack = 1 - Math.abs(2 * CityHD.fbm(u, v, 3, 3, seed + 11, 3) - 1);
+            return Math.max(0, 0.5 * (1 - blk * blk) + 0.5 * f - 0.3 * Math.pow(crack, 12));
+        }, 0.5, Math.min(3, this.Q), 0.55, 3.2, 0.85);
+        this.grain(0.45, seed, 0.015);
+        const g = this.g, r = this.rng;
+        for (let k = 0; k < 5; k++) this.crack(r() * 80, r() * 80, 6, r() * 6.3, 'rgba(26,24,22,0.7)', 0.4);
         for (let k = 0; k < 12; k++) this.pebble(r() * 80, r() * 80, 0.4 + r() * 0.8, ['#9a968c', '#7a766e', '#aaa79f'][k % 3], r() * 3);
-        for (let k = 0; k < 3; k++) this.stain(r() * 80, r() * 80, 4 + r() * 5, 3 + r() * 4, [70, 90, 50], 0.14);       // musgo
+        for (let k = 0; k < 4; k++) this.stain(r() * 80, r() * 80, 4 + r() * 5, 3 + r() * 4, [70, 98, 46], 0.2);       // musgo
+        void g;
     },
 });

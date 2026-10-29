@@ -1377,7 +1377,7 @@ class WorldBuilder {
                     hideAt(x0, z0).top(x0, z0, x1, z1, p.h + 0.01, (x, z) => [u0 + ((x - x0) / (x1 - x0)) * (u1 - u0), v0 + ((z1 - z) / (z1 - z0)) * (v1 - v0)]);
                     continue;
                 }
-                if (p.type === 'tree' || p.type === 'prop') {
+                if (p.type === 'tree' || p.type === 'prop' || p.type === 'tuft') {
                     const fr = this.props.pick(p.kind, rng());
                     const high = PropSprites.HEIGHT[p.kind] > 2;
                     this._spriteQuad(this._batch(high ? 'veg_hi' : 'veg_lo', p.x, p.z), fr.index, fr.row, p.x, p.z, base * p.s, PropSprites.HEIGHT[p.kind], PropSprites.SWAY[p.kind] || 0);

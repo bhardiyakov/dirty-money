@@ -1485,6 +1485,18 @@ const CityGrid = {
                 break;
             }
         }
+        // Tufos de grama nos gramados (parque, mata, quintais), só com os sprites em alta definição (art/SpriteHD.js): o relevo do
+        // gramado. Sorteio próprio do quarteirão, para não mexer em nada do que já foi sorteado acima.
+        if (typeof SpriteHD !== 'undefined' && SpriteHD.on && (this.BIOMES[block.biome] || {}).ground === 'grass') {
+            const r2 = Pixel.rng(String(block.id).split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 977));
+            const R = block.open ? [x0 + 1.4, z0 + 1.4, x1 - 1.4, z1 - 1.4] : [fx0, fz0, fx1, fz1], n = Math.round((R[2] - R[0]) * (R[3] - R[1]) / 20);
+            for (let t = 0, k = 0; t < n * 3 && k < n; t++) {
+                const x = R[0] + r2() * (R[2] - R[0]), z = R[1] + r2() * (R[3] - R[1]), s = 0.75 + r2() * 0.6;
+                if (!free(x, z, block.open ? 0 : 0.6)) continue;
+                props.push({ type: 'tuft', kind: 'tuft', x, z, s, seed: 0 });
+                k++;
+            }
+        }
     },
 
     // ------------------------------------------------------------------ quintais

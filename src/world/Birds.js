@@ -57,9 +57,44 @@ class Birds {
         this.scene = game.scene;
         const F = Birds.FR, D = Birds.DIRS, PER = Birds.PER, SPS = Birds.SPECIES;
         const rows = SPS.length * PER + 1, W = D * F, H = rows * F;
-        const data = new Uint8Array(W * H * 4);
         const poses = ['idle', 'peck', 'fly0', 'fly1', 'fly2', 'fly3'];
         const t0 = performance.now();
+        this._W = W; this._H = H; this._rows = rows;
+        const material = typeof SpriteHD !== 'undefined' && SpriteHD.on ? this._atlasHD(poses) : this._atlasPixel(poses);
+        this._mesh(game, material);
+        console.log(`[AVES] ${SPS.length} espécies, ${SPS.length * PER * D} sprites${material.hd ? ' em alta definição' : ''} em ${(performance.now() - t0).toFixed(0)} ms, ${[...this.grid.values()].reduce((s, a) => s + a.length, 0)} poleiros`);
+    }
+
+    // Atlas em alta definição (art/SpriteHD.js): penas, bico com brilho, sombra macia; o blob de sombra do voo é um degradê.
+    _atlasHD(poses) {
+        const F = Birds.FR, D = Birds.DIRS, PER = Birds.PER, SPS = Birds.SPECIES, q = SpriteHD.Q, FP = Math.round(F * q), rows = this._rows, W = D * FP, H = rows * FP;
+        const data = new Uint8Array(W * H * 4), S = Birds.SLOT, tex = { [S.body]: 'feather', [S.wing]: 'feather', [S.tip]: 'feather', [S.head]: 'feather', [S.beak]: 'plastic', [S.belly]: 'feather' };
+        SPS.forEach((sp, si) => {
+            const colors = {}; for (const k of Object.keys(S)) colors[S[k]] = sp.pal[k];
+            poses.forEach((pose, pi) => {
+                const prims = Birds.model(sp, pose), fly = pose.startsWith('fly');
+                for (let d = 0; d < D; d++) {
+                    const res = SpriteHD.bake(prims, { size: F, q, heading: (d * Math.PI * 2) / D, shadow: !fly, shadowLen: 0.25, colors, tex, seed: si + 1 });
+                    const cy = (si * PER + pi) * FP, cx = d * FP;
+                    for (let y = 0; y < FP; y++) data.set(res.rgba.subarray(y * FP * 4, (y + 1) * FP * 4), ((cy + y) * W + cx) * 4);
+                }
+            });
+        });
+        const sy = (rows - 1) * FP;                                                                     // blob de sombra (pré-multiplicado)
+        for (let y = 0; y < FP; y++) for (let x = 0; x < FP; x++) {
+            const dx = (x - FP / 2 + 0.5) / (9 * q), dy = (y - FP / 2 + 0.5) / (5.5 * q), d = dx * dx + dy * dy;
+            if (d >= 1.3) continue;
+            const a = 0.36 * (1 - Math.min(1, Math.max(0, (d - 0.55) / 0.75))), o = ((sy + y) * W + x) * 4;
+            data[o] = 0; data[o + 1] = 0; data[o + 2] = 0.05 * 255 * a; data[o + 3] = a * 255;
+        }
+        const m = SpriteHD.material(this.scene, 'birds', SpriteHD.texture(this.scene, data, W, H, { name: 'birdsHD' }));
+        m.hd = true;
+        return m;
+    }
+
+    _atlasPixel(poses) {
+        const F = Birds.FR, D = Birds.DIRS, PER = Birds.PER, SPS = Birds.SPECIES, rows = this._rows, W = this._W, H = this._H;
+        const data = new Uint8Array(W * H * 4);
         SPS.forEach((sp, si) => {
             poses.forEach((pose, pi) => {
                 const prims = Birds.model(sp, pose), fly = pose.startsWith('fly');
@@ -78,7 +113,6 @@ class Birds {
         }
         const atlas = BABYLON.RawTexture.CreateRGBATexture(data, W, H, this.scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
         atlas.wrapU = atlas.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-        this._W = W; this._H = H; this._rows = rows;
 
         const PW = 8 * 5, pdata = new Uint8Array(PW * SPS.length * 4);
         SPS.forEach((sp, ri) => {
@@ -92,8 +126,10 @@ class Birds {
         });
         const ptex = BABYLON.RawTexture.CreateRGBATexture(pdata, PW, SPS.length, this.scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
         ptex.wrapU = ptex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-        const material = SpriteMaterial.create(this.scene, 'birds', atlas, { texture: ptex, width: PW, height: SPS.length });
+        return SpriteMaterial.create(this.scene, 'birds', atlas, { texture: ptex, width: PW, height: SPS.length });
+    }
 
+    _mesh(game, material) {
         // Duas malhas dinâmicas (2 quads por ave: corpo + sombra): BAIXA = aves no chão e sombras (desenha com o resto do mundo, ABAIXO das copas);
         // ALTA = aves voando ou pousadas em poste (grupo de render 1, depois das copas das árvores, que não escrevem profundidade).
         this.cap = 56;
@@ -127,7 +163,6 @@ class Birds {
         this.birds = [];
         this._spawnT = 0; this._thinkT = 0;
         this.enabled = true;
-        console.log(`[AVES] ${SPS.length} espécies, ${SPS.length * PER * D} sprites em ${(performance.now() - t0).toFixed(0)} ms, ${[...this.grid.values()].reduce((s, a) => s + a.length, 0)} poleiros`);
     }
 
     // ------------------------------------------------------------- consultas
