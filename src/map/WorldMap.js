@@ -48,6 +48,8 @@ const WorldMap = {
         { x: -300, z: 800, r: 150, h: 30 },
         { x: -640, z: 800, r: 130, h: 26 },
     ],
+    // Encostas LISAS dentro de uma serra (sem terraços nem paredões): onde há morro ocupado (o Morro do Mirante, na ponta da Serra do Sul).
+    SMOOTH: [{ x: -252, z: -1024, r: 170 }],
     // Faixa de terra da CIDADE (ao longo do canal, de ponta a ponta): caixa arredondada, costa leste só levemente ondulada.
     STRIP: { cx: -57, cz: 42, hx: 256, hz: 1115, r: 16 },
     LAKES: [
@@ -156,7 +158,8 @@ const WorldMap = {
         if (mt > 0.18 && h > 6) {
             const step = 6.5, q = h / step, f = Math.floor(q), r = q - f;
             const hT = (f + this._ss(0.62, 0.96, r)) * step;
-            const k = this._ss(0.18, 0.55, mt) * this._ss(0.35, 0.7, F(x / 48, z / 48, 2, 25));
+            let k = this._ss(0.18, 0.55, mt) * this._ss(0.35, 0.7, F(x / 48, z / 48, 2, 25));
+            for (let s = 0; s < this.SMOOTH.length; s++) { const o = this.SMOOTH[s]; k *= this._ss(o.r * 0.6, o.r, hypot(x - o.x, z - o.z)); }
             h = h + (hT - h) * k;
         }
         return h;
@@ -290,6 +293,7 @@ const WorldMap = {
             else if (x > 300) b = R.RESORT;
             else if (hh > 36 || (hh > 20 && slope > 0.26) || (flags[k] & 1)) b = R.ROCK;
             else if (this._inFavela(x, z, hh)) b = R.FAVELA;
+            else if (typeof Bairros !== 'undefined' && Bairros.zoneAt(x, z) === 'roca') b = this._fbm(x / 70, z / 70, 2, 46) > 0.52 ? R.FARM : R.GRASS;      // (a roça: pasto e lavoura, sem brejo)
             else if (this._inSwamp(x, z, hh)) b = R.SWAMP;
             else if (this._inFarm(x, z, hh)) b = R.FARM;
             else {
@@ -314,8 +318,8 @@ const WorldMap = {
 
     _inFavela(x, z, hh) {
         if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built) {                  // chão de terra em volta da mancha (não um círculo)
-            const R = FavelaPlan.R;
-            return x > R.x0 - 4 && x < R.x1 + 4 && z > R.z0 - 4 && z < R.z1 + 4 && hh > 1.5 && FavelaPlan.occ(x, z) > -14;
+            for (const F of Favelas.built) { const R = F.R; if (x > R.x0 - 4 && x < R.x1 + 4 && z > R.z0 - 4 && z < R.z1 + 4 && hh > 1.5 && F.occ(x, z) > -14) return true; }
+            return false;
         }
         for (const d of this.DOMES.slice(0, 2)) {
             const u = hypot(x - d.x, z - d.z) / d.r;
@@ -368,7 +372,9 @@ const WorldMap = {
             { name: 'PÂNTANO', x: -820, z: -430, size: 0.8 },
             { name: 'FAZENDAS', x: -560, z: 150, size: 0.85 },
             { name: 'CANAL', x: 315, z: 0, size: 0.6 },
+            { name: 'MORRO DO MIRANTE', x: -250, z: -1050, size: 0.8 },
         ];
+        if (typeof Bairros !== 'undefined') for (const Z of Bairros.ZONES) this.regions.push({ name: Z.label, x: Z.lx, z: Z.lz, size: 0.8 });
     },
 
     // ---------------------------------------------------------------- contornos

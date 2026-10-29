@@ -4,6 +4,8 @@
 // longe. Mecânica: o som alto MASCARA os tiros — um disparo dentro do raio do baile (`covers`) não é ouvido pela polícia nem por
 // quem está longe (só quem está a < 14 u escuta), o que permite assassinatos furtivos. Quem dança entra em pânico se tiver tiro por
 // perto. Aparece no mapa (POI "Baile funk") e como blip rosa no minimapa. Para teste: `Baile.force = true`.
+// O objeto é também o molde da festa do Morro do Mirante (NightLife, em npc/NightLife.js): os ganchos plan/near/bounds/inside e os
+// textos (title, poiName, announce) mudam de uma festa para a outra.
 // ============================================================================
 
 const Baile = {
@@ -12,6 +14,13 @@ const Baile = {
     day0: 4,                              // 0=dom… : sexta (5) e sábado (6) com Economy.day%7 começando em 4 → 4,5 = "noites de baile"
     _built: false, _dancers: [], _meshes: [], _mats: {}, _poi: null, _partyList: [], _base: 0,
     _beat: 0, _step: 0, STEP: 60 / 130 / 4,
+    title: 'BAILE DO MORRO', poiName: 'Baile funk (21h–5h)', hours: [21, 5],
+    announce: '🔊 Hoje tem BAILE FUNK na favela! (até 5h) — o som alto mascara tiros',
+    plan() { return typeof FavelaPlan !== 'undefined' ? FavelaPlan : null; },
+    near(x, z, m) { return Standing.nearFavela(x, z, m); },
+    bounds() { return Standing._bounds(); },
+    inside(x, z) { return Standing.inFavela(x, z); },
+    crowdStyle() { return Math.random() < 0.7 ? 'poor' : 'casual'; },
 
     // ---------------------------------------------------------------- agenda
     scheduled(game) {
@@ -22,13 +31,13 @@ const Baile = {
 
     site() {
         if (this.c) return this.c;
-        const q = FavelaPlan.built && FavelaPlan.squares.find((s) => s.kind === 'quadra');
+        const F = this.plan(), q = F && F.built && F.squares.find((s) => s.kind === 'quadra');
         if (q) return (this.c = { x: (q.x0 + q.x1) / 2, z: (q.z0 + q.z1) / 2 - 1 });      // a quadra (o palco fica na metade norte)
-        const b = Standing._bounds(), W = b.x1 - b.x0, tx = b.x1 - 0.47 * W, tz = (b.z0 + b.z1) / 2, home = SafeHouse.spawnWorld();
+        const b = this.bounds(), W = b.x1 - b.x0, tx = b.x1 - 0.47 * W, tz = (b.z0 + b.z1) / 2, home = SafeHouse.spawnWorld();
         let best = null, bd = 1e9;
         for (const n of RoadPlan.nodes) {
-            if (!Standing.inFavela(n.x, n.z)) continue;
-            const dp = Standing.depth(n.x, n.z);
+            if (!this.inside(n.x, n.z)) continue;
+            const dp = Math.max(0, Math.min(1, (b.x1 - n.x) / W));
             if (dp < 0.3 || dp > 0.65) continue;
             if (home && hypot(n.x - home.x, n.z - home.z) < 50) continue;
             const d = hypot(n.x - tx, n.z - tz);
@@ -85,7 +94,7 @@ const Baile = {
         const tex = new BABYLON.DynamicTexture('baileBanner', { width: 1024, height: 128 }, g.scene, false), ctx = tex.getContext();
         ctx.fillStyle = '#12121a'; ctx.fillRect(0, 0, 1024, 128);
         const grd = ctx.createLinearGradient(0, 0, 1024, 0); grd.addColorStop(0, '#ff3ad0'); grd.addColorStop(0.5, '#ffe14a'); grd.addColorStop(1, '#35e0ff');
-        ctx.fillStyle = grd; ctx.font = 'bold 84px Impact, "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('BAILE DO MORRO', 512, 68);
+        ctx.fillStyle = grd; ctx.font = 'bold 84px Impact, "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.title, 512, 68);
         ctx.fillStyle = '#35e0ff'; ctx.fillRect(0, 0, 1024, 6); ctx.fillStyle = '#ff3ad0'; ctx.fillRect(0, 122, 1024, 6);
         tex.update();
         const bm = BABYLON.MeshBuilder.CreateGround('baileBanner', { width: 12, height: 1.5 }, g.scene), bmat = new BABYLON.StandardMaterial('baileBannerMat', g.scene);
@@ -133,22 +142,22 @@ const Baile = {
         const want = this.on && this._in && dist < 280;
         if (!want) { if (this._partyList.length) this._partyClear(M); this._base = 0; return; }
         if (!this._base) {                                                          // quantos pedestres "normais" há agora na favela e arredores
-            const n = M.npcs.filter((q) => !q.party && q.alive && Standing.nearFavela(q.position.x, q.position.z, 60)).length;
+            const n = M.npcs.filter((q) => !q.party && q.alive && this.near(q.position.x, q.position.z, 60)).length;
             this._base = Math.max(36, n);
         }
         const target = Math.min(150, 4 * this._base);              // (teto por desempenho: ~150 extras)
         this._partyT = (this._partyT || 0) - 1;
         if (this._partyT > 0 || this._partyList.length >= target) return;
         this._partyT = 8;                                                           // ~4 por segundo
-        const c = this.c, b = Standing._bounds();
+        const c = this.c, b = this.bounds();
         for (let i = 0; i < 4 && this._partyList.length < target; i++) {
             let x, z;
             if (Math.random() < 0.7) { const a = Math.random() * 6.283, r = 6 + Math.random() * 90; x = c.x + Math.cos(a) * r; z = c.z + Math.sin(a) * r; }
             else { x = b.x0 - 30 + Math.random() * (b.x1 - b.x0 + 60); z = b.z0 - 30 + Math.random() * (b.z1 - b.z0 + 60); }      // resto da favela e arredores
             const p = g.nav.closestPoint(new BABYLON.Vector3(x, 0, z), 14);
-            if (!g.nav.walk(p.x, p.z) || !Standing.nearFavela(p.x, p.z, 40)) continue;
+            if (!g.nav.walk(p.x, p.z) || !this.near(p.x, p.z, 40)) continue;
             const npc = new NPC(g.scene, g.nav, p, 9000 + (this._partyId = (this._partyId || 0) + 1), g.sprites, g.npcCtx, null);
-            npc.setStyle(Math.random() < 0.7 ? 'poor' : 'casual');
+            npc.setStyle(this.crowdStyle());
             npc.party = true;
             M.npcs.push(npc); this._partyList.push(npc);
         }
@@ -174,21 +183,21 @@ const Baile = {
     update(dt, game) {
         if (!CityGrid || !Standing.inFavela) return;
         const g = game, was = this.on;
-        const h = g.dayNight.hour, night = h >= 21 || h < 5;                         // baile só rola de noite (21h–5h), mesmo no modo de teste
+        const h = g.dayNight.hour, night = h >= this.hours[0] || h < this.hours[1];  // baile só rola de noite (21h–5h), mesmo no modo de teste
         this.on = night && (this.force || this.scheduled(g));
         if (!this.c) this.site();
         if (this.on !== was) {
             if (this.on) {
-                this._poi = CityGrid.addPoi({ type: 'baile', name: 'Baile funk (21h–5h)', x: this.c.x, z: this.c.z });
+                this._poi = CityGrid.addPoi({ type: 'baile', name: this.poiName, x: this.c.x, z: this.c.z });
                 const p = g.player.position;
-                if (Standing.nearFavela(p.x, p.z, 450)) g._flash('🔊 Hoje tem BAILE FUNK na favela! (até 5h) — o som alto mascara tiros');
+                if (this.near(p.x, p.z, 450)) g._flash(this.announce);
             } else {
                 const i = CityGrid.pois.indexOf(this._poi); if (i >= 0) CityGrid.pois.splice(i, 1);
                 this._poi = null;
             }
         }
         const p = g._playerState().pos, dist = hypot(p.x - this.c.x, p.z - this.c.z);
-        this._in = Standing.nearFavela(p.x, p.z, 20);                       // luzes, som e multidão só com o jogador na favela
+        this._in = this.near(p.x, p.z, 20);                                 // luzes, som e multidão só com o jogador na favela
         this._party(g, dist);
         const want = this.on && this._in && dist < 130 && !Interiors.active;
         if (want && !this._built) this._build(g);

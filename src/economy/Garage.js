@@ -40,7 +40,7 @@ const Garage = {
             if (t < 9 || t > e.len - 9) continue;
             const p = RoadPlan.at(e, t), d = { dx: fwd ? p.tx : -p.tx, dz: fwd ? p.tz : -p.tz }, sx = p.x + d.dz * off, sz = p.z - d.dx * off;
             if (CityGrid.intersectionNear(sx, sz, 12) || RoadPlan.inTunnel(e, t)) continue;
-            if (fav && !FavelaPlan.roomForCar(sx, sz, d.dx, d.dz)) continue;
+            if (fav && !Favelas.roomForCar(sx, sz, d.dx, d.dz)) continue;
             out.push({ x: sx, z: sz, h: Math.atan2(d.dx, d.dz) });
         }
         return out;

@@ -30,7 +30,7 @@ class GuideUI {
     // Índice: [id, título] ou [null, cabeçalho de grupo].
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'], ['bags', 'Bolsas, peso e fôlego'],
-            ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
+            ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['bairros', 'Mirante, Roça e Serra'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
             ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], ['truco', 'Truco no bar'], [null, 'ASSALTOS, NEGÓCIOS E CARROS'], ['robbery', 'Assalto a lojas'], ['traces', 'Rastros e fuga'], ['heists', 'Joalherias e golpes'], ['business', 'Negócios próprios'], ['mechanic', 'Mecânica e porta-malas'], ['racing', 'Corridas (rachas e autódromo)'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas']);
@@ -170,6 +170,17 @@ GuideUI.PAGES = {
         <li><b>Missões do morro</b>: entrega (prazo), cobrança (com arma na mão) e defesa do morro (durante operação policial). Patentes: <b>Aviãozinho</b> → <b>Soldado</b> (3 missões, tráfico 50+) → <b>Gerente de Frente</b> (8 missões, tráfico 65+), que paga mais.</li>
         <li><b>Comunidade</b>: ajude moradores (<kbd>E</kbd> desarmado, com comida/água/kit). Assaltar e brigar na favela derruba a moral.</li>
         <li><b>Operação policial</b>: é a única hora em que a polícia entra fundo na favela. <b>Baile funk</b> (21h–5h) abafa tiros. Olheiros e fogueteiros dão o alarme.</li></ul>`,
+
+    bairros: () => `<h2>Morro do Mirante, Vila da Roça e Alto da Serra</h2>
+        <h3>Morro do Mirante — ${Standing.territories[1].name} (${Standing.territories[1].sigla})</h3>
+        <p>A favela da facção <b>rival</b>, ao sul da cidade, entre a Serra do Sul e o mar: casas de alvenaria coloridas, de 2 a 6 andares, empilhadas na encosta, e lajes que viram bar. Entra pela <b>Av. da Orla do Mirante</b>, pela <b>Estrada do Mirante</b> (as duas saem da ponta sul da cidade) ou pela Rodovia do Sul.</p>
+        <ul><li>Para quem é do C.V é <b>território inimigo</b>: o tráfico de lá atira à vista. A polícia também não sobe.</li>
+        <li><b>Guerra</b>: bonde do C.V e bonde do C.P.C que se cruzam trocam tiro. Derrubar um traficante do C.P.C <b>sobe a sua moral com o tráfico</b> do Morro.</li>
+        <li><b>A noite do Mirante</b> (22h–5h, toda noite): festa na quadra do alto, com DJ, playboy da cidade, turista e carrão na porta. <b>Na festa</b> (perto do palco), o C.P.C deixa o visitante em paz — se você não estiver procurado nem tiver provocado a facção. Saiu da festa, voltou a ser inimigo. O som abafa tiros, como no baile.</li></ul>
+        <h3>Vila da Roça</h3>
+        <p>A oeste, entre a Serra do Meio e a Rodovia dos Lagos, em volta do lago: gente simples e vida devagar. Na <b>Estrada da Roça</b> fica a vilinha (largo da capela, <b>venda</b> e <b>boteco</b>, campinho de várzea). Pelo campo, <b>sítios</b> com casinha caiada, varanda, galinheiro, chiqueiro, curral, horta e poço, milharais com espantalho e pastos com <b>vaca, cavalo, porco, cabra e galinha</b> (os bichos se espantam se você chegar correndo). Tudo é mais barato e a polícia quase não aparece.</p>
+        <h3>Alto da Serra</h3>
+        <p>O planalto a noroeste, entre a Serra do Norte e a do Oeste, de frente para o mar: o bairro dos ricos, frio e calmo. Estradas estreitas e sinuosas cheias de araucárias, a <b>Vila do Alto</b> (largo de pedra com chafariz e chalés: fondue, chocolate, boutique, café e bar), <b>mansões muradas</b> com piscina e chalés na mata. Tudo custa caro e passa muito carrão na estrada.</p>`,
 
     shops: () => `<h2>Lojas, armas e itens</h2>
         <ul><li>Entre nas lojas <b>andando pela porta</b> (só no horário e sem procurado). <kbd>E</kbd> perto do atendente abre o cardápio.</li>

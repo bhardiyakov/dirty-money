@@ -21,6 +21,7 @@ const RuralRoads = {
         hwy:   { slope: 0.9, high: 0.006, wander: 0.7, wl: 260, t1: 4.5, t2: 26, prox: 3.0, water: 12, amp: 16, wave: 340 },
         dirt:  { slope: 1.4, high: 0.012, wander: 1.5, wl: 130, t1: 1.4, t2: 7, prox: 2.2, water: 10, amp: 20, wave: 170 },
         trail: { slope: 1.6, high: 0.0, wander: 2.2, wl: 60, t1: 0.45, t2: 2.2, prox: 1.4, water: 7, amp: 10, wave: 75 },
+        serra: { slope: 1.2, high: 0.004, wander: 1.6, wl: 110, t1: 0.9, t2: 5, prox: 2.2, water: 10, amp: 14, wave: 120 },
     },
 
     // A rede. Pontas na cidade (x = -294) e na favela ficam onde sempre estiveram (as ruas de lá esperam essas ligações).
@@ -46,6 +47,12 @@ const RuralRoads = {
         { id: 'D10', cls: 'dirt', name: 'Estrada da Lagoa Funda', pts: [{ on: 'R7', near: [-475, -640] }, [-560, -790], { on: 'R3', near: [-790, -850] }] },
         { id: 'D11', cls: 'dirt', name: 'Estrada do Lago Norte', pts: [[-1020, 640], [-1100, 760], [-1040, 850], { on: 'R1', near: [-1000, 915] }] },
         { id: 'D12', cls: 'dirt', name: 'Estrada da Serra Norte', pts: [{ on: 'R1', near: [-560, 890] }, [-520, 1000], [-430, 1060], [-336, 1080], [-294, 1080]] },
+        // ---- Vila da Roça (bairros/Bairros.js): a estrada da vila, ao norte do lago, da Rodovia do Oeste à Estrada do Engenho
+        { id: 'D13', cls: 'dirt', name: 'Estrada da Roça', pts: [{ on: 'R2', near: [-1208, 4] }, [-1120, 14], [-1040, -6], [-960, 4], { on: 'D2', near: [-893, 2] }] },
+        // ---- Alto da Serra (bairro rico): asfalto estreito e sinuoso pelo planalto entre a Serra do Norte e a do Oeste
+        { id: 'S1', cls: 'serra', name: 'Estrada do Alto da Serra', pts: [{ on: 'R2', near: [-1190, 850] }, [-1262, 862], [-1335, 826], [-1392, 762], [-1398, 690], [-1348, 648], [-1276, 660], { on: 'R2', near: [-1196, 642] }] },
+        { id: 'S2', cls: 'serra', name: 'Alameda das Hortênsias', pts: [{ on: 'S1', near: [-1300, 846] }, [-1306, 776], [-1290, 712], { on: 'S1', near: [-1300, 652] }] },
+        { id: 'S3', cls: 'serra', name: 'Estrada do Mirante da Serra', pts: [{ on: 'R1', near: [-1150, 898] }, [-1090, 930], [-1010, 944], [-940, 934], { on: 'R1', near: [-890, 902] }] },
         // ---- caminhos (trilhas de terra estreitas e sinuosas; todas ligam duas vias — nada de beco sem saída)
         { id: 'T1', cls: 'trail', name: 'Trilha do Morro do Norte', pts: [{ on: 'R6', near: [-779, 700] }, [-700, 760], [-630, 800], [-600, 845], { on: 'R1', near: [-600, 885] }] },
         { id: 'T2', cls: 'trail', name: 'Trilha da Serra do Meio', pts: [{ on: 'R4', near: [-920, 188] }, [-970, 290], [-1070, 300], { on: 'D5', near: [-1028, 330] }] },

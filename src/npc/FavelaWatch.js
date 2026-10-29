@@ -23,7 +23,7 @@ class FavelaWatch {
         // fogueteiros: uma laje por faixa de profundidade (14 faixas)
         const slices = Array.from({ length: 14 }, () => []);
         for (const blk of CityGrid.blocks) {
-            if (blk.district !== 'favela') continue;
+            if (blk.district !== 'favela' || (blk.faction && blk.faction !== 'cv')) continue;      // (só o morro do C.V)
             for (const l of blk.lots) {
                 if ((l.x1 - l.x0) * (l.z1 - l.z0) < 28 || (l.height || 0) < 6) continue;
                 const x = (l.x0 + l.x1) / 2, z = (l.z0 + l.z1) / 2;

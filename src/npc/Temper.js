@@ -12,7 +12,7 @@
 // ============================================================================
 
 const Temper = {
-    PERIPHERY: ['favela', 'periferia', 'industrial'],      // distritos (Empire.districtAt) da periferia
+    PERIPHERY: ['favela', 'mirante', 'periferia', 'industrial', 'roca'],      // distritos (Empire.districtAt) da periferia
     OLD: /vovo|senhor|repartido/,
     // golpe/arma que acertou → tipo de agressão (NPC._hitKind): mão livre, arma branca (faca, taco, cassetete) ou arma de fogo
     ATTACK: { punch: 'hand', punchL: 'hand', kick: 'hand', stab: 'blade', swing: 'blade', baton: 'blade', gun: 'gun' },

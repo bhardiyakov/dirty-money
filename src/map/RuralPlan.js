@@ -13,6 +13,7 @@ const RuralPlan = {
         G.extraBlocks = [blk];
         this.blk = blk; this.rng = rng;
         const t0 = performance.now();
+        if (typeof Bairros !== 'undefined') Bairros.build(this);                       // os bairros do interior (Vila da Roça, Alto da Serra) antes do resto
         this._farms(); this._roadside(); this._cabins(); this._trailers(); this._huts(); this._gas(); this._towers(); this._alleys();
         // Estatística (debug).
         this.stats = { lots: blk.lots.length, props: blk.props.length, fences: blk.fences.length, towers: blk.towers.length, ms: +(performance.now() - t0).toFixed(0) };
@@ -29,6 +30,7 @@ const RuralPlan = {
             if (k < 0 || !WorldMap.land[k] || (WorldMap.flags[k] & 1) || WorldMap.waterDist(x, z) < 5) return false;
             const b = WorldMap.biome[k];
             if (b === B.CITY || b === B.SEA || b === B.FAVELA || (ok && !ok.includes(b))) return false;
+            if (!this.inZone && typeof Bairros !== 'undefined' && Bairros.zoneAt(x, z)) return false;      // (os bairros são montados à mão: Bairros.js)
             const n = RoadPlan.nearestRoadPoint(x, z, 70);
             if (n && n.d < n.edge.w / 2 + roadMargin) return false;
         }
@@ -212,7 +214,7 @@ const RuralPlan = {
     _alleys() {
         const B = WorldMap.B, rng = this.rng;
         for (const e of RoadPlan.edges) {
-            if (e.cls !== 'hwy' && e.cls !== 'dirt') continue;
+            if (e.cls !== 'hwy' && e.cls !== 'dirt' && e.cls !== 'serra') continue;
             const step = e.cls === 'hwy' ? 18 : 13, off = e.w / 2 + 3.2;
             for (let s = 22; s < e.len - 22; s += step) {
                 for (const side of [-1, 1]) {
@@ -222,7 +224,8 @@ const RuralPlan = {
                     const b = WorldMap.biomeAt(x, z);
                     if (b === B.SEA || b === B.CITY || b === B.ROCK || b === B.SWAMP || WorldMap.waterDist(x, z) < 4) continue;
                     if (RoadPlan.onBridge(x, z) || CityGrid.blockedAt(x, z, 1.2)) continue;
-                    this.tree(b === B.FOREST ? 'pine' : (b === B.SCRUB || b === B.SAND ? 'dry' : 'oak'), x, z, 0.9 + rng() * 0.3);
+                    const zone = typeof Bairros !== 'undefined' ? Bairros.zoneAt(x, z) : null;          // (Alto da Serra: alameda de araucárias e ciprestes)
+                    this.tree(zone === 'serra' ? (rng() < 0.65 ? 'araucaria' : 'cypress') : (b === B.FOREST ? 'pine' : (b === B.SCRUB || b === B.SAND ? 'dry' : 'oak')), x, z, 0.9 + rng() * 0.3);
                 }
             }
         }

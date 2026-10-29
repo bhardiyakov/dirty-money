@@ -51,6 +51,7 @@ const CityGrid = {
             { label: 'Traçando as ruas e estradas…', run: () => { this._t0 = performance.now(); this._reset(); this._makePlan(); } },
             { label: 'Erguendo os quarteirões…', run: () => this._buildBlocks(false) },
             { label: 'Subindo o morro da favela…', run: () => { if (this._favela) FavelaPlan.build(this); } },
+            { label: 'Empilhando as casas do Mirante…', run: () => { if (this._favela) FavelaSul.build(this); } },
             { label: 'Ligando os cruzamentos…', run: () => this._buildRest(this._t0) },
             { label: 'Esculpindo o relevo…', run: () => WorldMap.buildTerrain() },
             { label: 'Plantando a orla e as matas…', run: () => this.finish() },
@@ -212,6 +213,8 @@ const CityGrid = {
             this._favela = true;
             // ---- INTERIOR: rodovias, estradas de terra e caminhos sinuosos pelo relevo (RuralRoads).
             RuralRoads.plan(P);
+            // ---- MORRO DO MIRANTE (C.P.C): as ruas dele encostam na Rodovia do Sul, então entram depois das estradas do interior.
+            FavelaSul.roads(P);
         }
         P.build();
     },
@@ -593,7 +596,7 @@ const CityGrid = {
             if (!block.open) this._fillYard(block, Pixel.rng(Math.floor(this._rand(block.i + 91, block.j + 37) * 1e9)));
             this.blocks.push(block);
         }
-        if (favela && this._favela) FavelaPlan.build(this);                         // FAVELA: becos, barracos e a safe house (quarteirões 'organic'; nos passos, à parte)
+        if (favela && this._favela) for (const f of Favelas.list) f.build(this);                         // FAVELA: becos, barracos e a safe house (quarteirões 'organic'; nos passos, à parte)
     },
 
     // ============================================================ postos de gasolina
@@ -1950,7 +1953,7 @@ const CityGrid = {
         }
         this.cornerCarves = [];                                                           // cantos arredondados: o que sobra fora do arco não é calçada
         for (const b of this.blocks) if (b.r > 0.5) { const [x0, z0, x1, z1] = b.slab; for (const [kx, kz, sx, sz] of [[x0, z0, 1, 1], [x1, z0, -1, 1], [x1, z1, -1, -1], [x0, z1, 1, -1]]) this.cornerCarves.push({ kx, kz, sx, sz, r: b.r }); }
-        for (const r of (typeof FavelaPlan !== 'undefined' && FavelaPlan.built ? FavelaPlan.walkRects : [])) W.push(r.slice(0, 4));       // (os barracos saem como sólidos)
+        for (const f of (typeof Favelas !== 'undefined' ? Favelas.built : [])) for (const r of f.walkRects) W.push(r.slice(0, 4));       // (os barracos saem como sólidos)
         for (const p of this.perimeter) { W.push([p.x0, p.z0, p.x1, p.z1]); this.urbanRects.push([p.x0, p.z0, p.x1, p.z1]); }
         for (const st of this.perimeterStrips || []) WP.push(st.poly);
         // pista das vias livres urbanas: fora da malha a pé (o lado sem quarteirão ficava com o terreno por baixo, andável) — as faixas de
@@ -2008,7 +2011,7 @@ const CityGrid = {
         const [x0, z0, x1, z1] = blk.slab;
         const r = Math.random;
         if (blk.organic) {                                                                  // favela: um ponto de beco do ladrilho
-            const p = FavelaPlan.randomAlleyPoint(r, (x, z) => x >= x0 && x < x1 && z >= z0 && z < z1) || FavelaPlan.randomAlleyPoint(r);
+            const F = Favelas.byId(blk.faction) || FavelaPlan, p = F.randomAlleyPoint(r, (x, z) => x >= x0 && x < x1 && z >= z0 && z < z1) || F.randomAlleyPoint(r);
             if (p) return new BABYLON.Vector3(p.x, 0, p.z);
         }
         if (blk.poly) {                                                                     // em polígono: a calçada (ou o miolo, se aberto)

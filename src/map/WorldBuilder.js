@@ -48,6 +48,7 @@ class WorldBuilder {
         this._buildings();
         this._shops();
         this._rural();
+        this._pieces();
         this._marina();
         this._signalPoles();
         this._streetLamps();
@@ -699,9 +700,9 @@ class WorldBuilder {
                     (x, z) => [x / 8 + ro, -z / 8 + ro]);
 
                 // Platibanda (parapeito de 0,5u). Na favela: só nas lajes de concreto (e mais baixa); zinco e lona não têm.
-                const fav = blk.district === 'favela';
+                const fav = blk.district === 'favela', pitched = (TileFactory.roofStyles[lot.roof] || {}).kind === 'tile' && (blk.virtual || blk.district === 'roca' || blk.district === 'serra');      // (casa de telha no campo e nos bairros: sem platibanda nem máquinas)
                 const t = fav ? 0.3 : 0.45, ph = fav ? 0.35 : 0.5;
-                if (!fav || lot.roof.startsWith('slab')) {
+                if ((!fav && !pitched) || lot.roof.startsWith('slab') || lot.roof.startsWith('laje')) {
                     const pc = fav ? [0.58, 0.55, 0.5] : hexTrim, L = lot.helipad && lot.helipad.land;
                     const seg = (a0, b0, a1, b1) => {                                   // (heliponto: vão no patamar da escada)
                         if (!L || a1 <= L[0] || a0 >= L[2] || b1 <= L[1] || b0 >= L[3]) { trim.solid(a0, b0, a1, b1, H, H + ph, pc); return; }
@@ -719,7 +720,7 @@ class WorldBuilder {
 
                 // Caixas no telhado (casa de máquinas / ar-condicionado): só nos prédios de verdade.
                 const w = x1 - x0, d = z1 - z0;
-                const n = fav || lot.marina || lot.helipad ? 0 : (w * d > 200 ? 2 : 1);      // (marina: letreiro; heliponto: H no meio)
+                const n = fav || pitched || blk.virtual || lot.marina || lot.helipad ? 0 : (w * d > 200 ? 2 : 1);      // (marina: letreiro; heliponto: H no meio)
                 for (let k = 0; k < n; k++) {
                     const bw = 1.6 + rng() * 2.2, bd = 1.6 + rng() * 2.2, bh = 0.9 + rng() * 1.2;
                     const bx = x0 + 1.5 + rng() * Math.max(0.1, w - 3 - bw);
@@ -791,6 +792,96 @@ class WorldBuilder {
                 }
             }
         }
+    }
+
+    // Peças soltas dos bairros (map/Bairros.js: `pieces` dos quarteirões): piscina, deck, varanda, horta/milharal, poço, cruz, traves
+    // do campinho, postes, bancos, mesas, chafariz, cocho, espantalho, espreguiçadeira, pilares de portão.
+    _pieces() {
+        const C = (h) => { const c = Pixel.hex(h); return [c[0] / 255, c[1] / 255, c[2] / 255]; };
+        const wood = [0.46, 0.32, 0.2], woodD = [0.32, 0.22, 0.14], white = [0.94, 0.94, 0.92], stone = [0.7, 0.68, 0.63], iron = [0.16, 0.17, 0.19], lampC = [1, 0.92, 0.7];
+        const rng = Pixel.rng(9393);
+        for (const blk of CityGrid.blocks.concat(CityGrid.extraBlocks || [])) for (const p of blk.pieces || []) {
+            const t = this._batch('trim', p.x0 !== undefined ? p.x0 : p.x, p.z0 !== undefined ? p.z0 : p.z), x = p.x, z = p.z;
+            switch (p.kind) {
+                case 'pool': {                                                       // borda de pedra clara e água azul-turquesa
+                    t.solid(p.x0 - 0.5, p.z0 - 0.5, p.x1 + 0.5, p.z1 + 0.5, 0, 0.16, [0.88, 0.86, 0.8]);
+                    t.solid(p.x0, p.z0, p.x1, p.z1, 0.16, 0.18, [0.2, 0.62, 0.82]);
+                    for (let k = 0; k < 3; k++) { const wx = p.x0 + 0.6 + rng() * (p.x1 - p.x0 - 1.2), wz = p.z0 + 0.6 + rng() * (p.z1 - p.z0 - 1.2); t.solid(wx - 0.5, wz - 0.06, wx + 0.5, wz + 0.06, 0.18, 0.19, [0.55, 0.85, 0.95]); }
+                    break;
+                }
+                case 'deck': {
+                    const c = p.color ? C(p.color) : wood, alongX = (p.x1 - p.x0) >= (p.z1 - p.z0);
+                    t.solid(p.x0, p.z0, p.x1, p.z1, 0, 0.12, c);
+                    if (alongX) for (let s = p.z0 + 0.5; s < p.z1; s += 0.7) t.solid(p.x0, s, p.x1, s + 0.05, 0.12, 0.125, woodD);
+                    else for (let s = p.x0 + 0.5; s < p.x1; s += 0.7) t.solid(s, p.z0, s + 0.05, p.z1, 0.12, 0.125, woodD);
+                    break;
+                }
+                case 'porch': {                                                      // varanda: esteios e telhadinho
+                    const c = p.color ? C(p.color) : wood;
+                    for (const [px, pz] of [[p.x0 + 0.2, p.z0 + 0.2], [p.x1 - 0.2, p.z0 + 0.2], [(p.x0 + p.x1) / 2, p.z0 + 0.2]]) t.solid(px - 0.13, pz - 0.13, px + 0.13, pz + 0.13, 0, p.h, woodD);
+                    t.solid(p.x0 - 0.2, p.z0 - 0.2, p.x1 + 0.2, p.z1, p.h, p.h + 0.18, c);
+                    t.solid(p.x0, p.z0, p.x1, p.z1, 0, 0.1, [0.62, 0.5, 0.4]);
+                    break;
+                }
+                case 'crops': {                                                      // canteiros: terra escura e fileiras (milho alto ou horta baixa)
+                    t.solid(p.x0, p.z0, p.x1, p.z1, 0, 0.05, [0.36, 0.25, 0.16]);
+                    const corn = p.crop === 'corn', alongX = p.rows === 'x', gap = corn ? 1.4 : 1.1, a0 = alongX ? p.z0 : p.x0, a1 = alongX ? p.z1 : p.x1;
+                    for (let s = a0 + 0.6, r = 0; s < a1 - 0.3; s += gap, r++) {
+                        const step = corn ? 0.9 : 0.7, b0 = alongX ? p.x0 : p.z0, b1 = alongX ? p.x1 : p.z1;
+                        for (let u = b0 + 0.5; u < b1 - 0.3; u += step) {
+                            const h = corn ? 1.5 + rng() * 0.4 : 0.25 + rng() * 0.25, w = corn ? 0.2 : 0.28, g = corn ? [0.38 + rng() * 0.1, 0.6 + rng() * 0.1, 0.22] : [0.25 + rng() * 0.15, 0.55 + rng() * 0.2, 0.2 + rng() * 0.1];
+                            const [qx, qz] = alongX ? [u, s] : [s, u];
+                            t.solid(qx - w, qz - w, qx + w, qz + w, 0.05, h, g);
+                            if (corn && rng() < 0.35) t.solid(qx - 0.08, qz - 0.08, qx + 0.08, qz + 0.08, h, h + 0.15, [0.92, 0.8, 0.3]);       // pendão
+                            else if (!corn && rng() < 0.15) t.solid(qx - 0.12, qz - 0.12, qx + 0.12, qz + 0.12, h, h + 0.08, [0.85, 0.3, 0.2]);   // tomate
+                        }
+                    }
+                    break;
+                }
+                case 'well': {                                                       // poço de pedra com telhadinho e sarilho
+                    t.solid(x - 0.8, z - 0.8, x + 0.8, z + 0.8, 0, 0.9, stone); t.solid(x - 0.55, z - 0.55, x + 0.55, z + 0.55, 0.9, 0.92, [0.12, 0.18, 0.22]);
+                    for (const dx of [-0.75, 0.75]) t.solid(x + dx - 0.08, z - 0.08, x + dx + 0.08, z + 0.08, 0.9, 2.2, woodD);
+                    t.solid(x - 0.9, z - 0.7, x + 0.9, z + 0.7, 2.2, 2.32, [0.62, 0.32, 0.22]); t.solid(x - 0.7, z - 0.05, x + 0.7, z + 0.05, 1.6, 1.7, wood);
+                    break;
+                }
+                case 'cross': {                                                      // cruz da capela, no alto da fachada
+                    const y = p.y, d = p.face === 'S' ? -0.25 : 0.25;
+                    t.solid(x - 0.12, z + d - 0.1, x + 0.12, z + d + 0.1, y, y + 1.8, white); t.solid(x - 0.6, z + d - 0.1, x + 0.6, z + d + 0.1, y + 1.05, y + 1.3, white);
+                    break;
+                }
+                case 'field': {                                                      // campinho de várzea: terra, linhas de cal e traves de madeira
+                    t.solid(p.x0, p.z0, p.x1, p.z1, 0, 0.03, [0.6, 0.48, 0.32]);
+                    const L = (a, b, c, d) => t.solid(a, b, c, d, 0.03, 0.04, [0.93, 0.92, 0.88]), m = 1, mz = (p.z0 + p.z1) / 2, mx = (p.x0 + p.x1) / 2;
+                    L(p.x0 + m, p.z0 + m, p.x1 - m, p.z0 + m + 0.12); L(p.x0 + m, p.z1 - m - 0.12, p.x1 - m, p.z1 - m); L(p.x0 + m, p.z0 + m, p.x0 + m + 0.12, p.z1 - m); L(p.x1 - m - 0.12, p.z0 + m, p.x1 - m, p.z1 - m); L(mx - 0.06, p.z0 + m, mx + 0.06, p.z1 - m);
+                    for (const gx of [p.x0 + m, p.x1 - m]) { t.solid(gx - 0.1, mz - 2.5, gx + 0.1, mz - 2.3, 0, 2.2, woodD); t.solid(gx - 0.1, mz + 2.3, gx + 0.1, mz + 2.5, 0, 2.2, woodD); t.solid(gx - 0.1, mz - 2.5, gx + 0.1, mz + 2.5, 2.05, 2.25, woodD); }
+                    break;
+                }
+                case 'lamp': {                                                       // poste: de madeira (roça) ou de ferro com lanterna (serra)
+                    if (p.style === 'iron') { t.solid(x - 0.1, z - 0.1, x + 0.1, z + 0.1, 0, 3.2, iron); t.solid(x - 0.28, z - 0.28, x + 0.28, z + 0.28, 3.2, 3.75, lampC); t.solid(x - 0.34, z - 0.34, x + 0.34, z + 0.34, 3.75, 3.9, iron); }
+                    else { t.solid(x - 0.12, z - 0.12, x + 0.12, z + 0.12, 0, 4.2, woodD); t.solid(x - 0.08, z - 0.6, x + 0.08, z + 0.1, 4.0, 4.12, woodD); t.solid(x - 0.16, z - 0.7, x + 0.16, z - 0.4, 3.75, 3.95, lampC); }
+                    (this.bairroLamps || (this.bairroLamps = [])).push({ x, z, y: p.style === 'iron' ? 3.5 : 3.85 });
+                    break;
+                }
+                case 'bench': { const ax = p.alongX; ax ? t.solid(x - 1, z - 0.25, x + 1, z + 0.25, 0.4, 0.5, wood) : t.solid(x - 0.25, z - 1, x + 0.25, z + 1, 0.4, 0.5, wood); for (const s of [-0.8, 0.8]) ax ? t.solid(x + s - 0.06, z - 0.2, x + s + 0.06, z + 0.2, 0, 0.4, iron) : t.solid(x - 0.2, z + s - 0.06, x + 0.2, z + s + 0.06, 0, 0.4, iron); break; }
+                case 'table': { t.solid(x - 0.06, z - 0.06, x + 0.06, z + 0.06, 0, 0.75, iron); t.solid(x - 0.5, z - 0.5, x + 0.5, z + 0.5, 0.75, 0.8, [0.85, 0.2, 0.18]); for (const [dx, dz] of [[-0.8, 0], [0.8, 0]]) t.solid(x + dx - 0.22, z + dz - 0.22, x + dx + 0.22, z + dz + 0.22, 0, 0.45, [0.92, 0.9, 0.86]); break; }
+                case 'fountain': { t.solid(x - 2.2, z - 2.2, x + 2.2, z + 2.2, 0, 0.6, stone); t.solid(x - 1.8, z - 1.8, x + 1.8, z + 1.8, 0.6, 0.62, [0.3, 0.6, 0.78]); t.solid(x - 0.35, z - 0.35, x + 0.35, z + 0.35, 0.6, 1.8, stone); t.solid(x - 0.8, z - 0.8, x + 0.8, z + 0.8, 1.8, 1.95, stone); t.solid(x - 0.6, z - 0.6, x + 0.6, z + 0.6, 1.95, 1.97, [0.4, 0.7, 0.88]); break; }
+                case 'trough': { t.solid(x - 1.2, z - 0.4, x + 1.2, z + 0.4, 0, 0.55, woodD); t.solid(x - 1.05, z - 0.28, x + 1.05, z + 0.28, 0.5, 0.52, [0.3, 0.45, 0.4]); break; }
+                case 'scarecrow': { t.solid(x - 0.07, z - 0.07, x + 0.07, z + 0.07, 0, 2.0, woodD); t.solid(x - 0.9, z - 0.06, x + 0.9, z + 0.06, 1.45, 1.55, woodD); t.solid(x - 0.4, z - 0.2, x + 0.4, z + 0.2, 1.0, 1.65, [0.75, 0.3, 0.25]); t.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, 1.65, 2.0, [0.9, 0.8, 0.5]); t.solid(x - 0.42, z - 0.42, x + 0.42, z + 0.42, 2.0, 2.08, [0.85, 0.72, 0.35]); break; }
+                case 'lounger': { const ax = p.alongX; ax ? t.solid(x - 0.9, z - 0.35, x + 0.9, z + 0.35, 0.12, 0.4, white) : t.solid(x - 0.35, z - 0.9, x + 0.35, z + 0.9, 0.12, 0.4, white); break; }
+                case 'pillar': { t.solid(x - 0.45, z - 0.45, x + 0.45, z + 0.45, 0, 2.1, [0.6, 0.58, 0.54]); t.solid(x - 0.55, z - 0.55, x + 0.55, z + 0.55, 2.1, 2.25, [0.84, 0.82, 0.78]); t.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, 2.25, 2.7, lampC); this._collider('pilar_' + x.toFixed(1) + '_' + z.toFixed(1), x - 0.45, z - 0.45, x + 0.45, z + 0.45, 2.1); (this.bairroLamps || (this.bairroLamps = [])).push({ x, z, y: 2.5 }); break; }
+            }
+        }
+        // luz dos postes e das luminárias dos portões (acende à noite com os postes de rua: setNight)
+        const L = this.bairroLamps || [];
+        if (!L.length) return;
+        this.bairroGlow = new GlowGrid(this.scene, 'bairroGlow', L.flatMap((l) => [[l.x, l.z], [l.x, l.z]])).under();
+        for (const l of L) {
+            const a = this.bairroGlow.alloc(l.x, l.z), b = this.bairroGlow.alloc(l.x, l.z);
+            this.bairroGlow.place(a, l.x, l.y + 0.2, l.z, 1.8); this.bairroGlow.color(a, 1.0, 0.86, 0.55, 0.9);
+            this.bairroGlow.place(b, l.x, WorldBuilder.POOL_Y, l.z, 9); this.bairroGlow.color(b, 1.0, 0.78, 0.42, 0.4);
+        }
+        this.bairroGlow.seal();
+        this.bairroGlow.setLevel(0);
     }
 
     // A MARINA (src/map/Marina.js): cais de madeira, píeres com cabeços e estacas, paredões de concreto nas pontas e "MARINA" no telhado da sede.
@@ -984,8 +1075,11 @@ class WorldBuilder {
     // FAVELA (FavelaPlan): o chão de terra que o terreno não desenha (células de 4 u, tingidas pelo relevo), os becos cimentados
     // (por baixo das ruas), a quadra do baile e o campinho, e os FRADES (postes de concreto) nas bocas onde um carro caberia.
     _favela() {
-        if (typeof FavelaPlan === 'undefined' || !FavelaPlan.built) return;
-        const F = FavelaPlan, up = [0, 1, 0], uv4 = (x, z) => [x / 4, -z / 4];
+        if (typeof Favelas === 'undefined') return;
+        for (const F of Favelas.built) this._favelaGround(F);
+    }
+    _favelaGround(F) {
+        const up = [0, 1, 0], uv4 = (x, z) => [x / 4, -z / 4];
         const cs = (x, z) => { const s = WorldMap.shadeAt(x, z); return [s, s, s]; };
         const c = Config.world.cell;
         for (const b of F.groundBoxes) for (let x = b[0]; x < b[2] - 0.01; x += c) {
@@ -1029,7 +1123,7 @@ class WorldBuilder {
             t.solid(b.x - r - 0.01, b.z - r - 0.01, b.x + r + 0.01, b.z + r + 0.01, 0.5, 0.62, [0.9, 0.74, 0.12]);
             t.solid(b.x - r - 0.01, b.z - r - 0.01, b.x + r + 0.01, b.z + r + 0.01, 0.62, 0.72, [0.14, 0.14, 0.14]);
             t.solid(b.x - r, b.z - r, b.x + r, b.z + r, 0.72, 0.9, [0.72, 0.7, 0.66]);
-            this._collider('frade_' + i, b.x - r, b.z - r, b.x + r, b.z + r, 0.9);
+            this._collider('frade_' + F.id + '_' + i, b.x - r, b.z - r, b.x + r, b.z + r, 0.9);
         });
     }
 
@@ -1052,13 +1146,13 @@ class WorldBuilder {
             let sd = rng() < 0.5 ? 1 : -1;
             for (let s = 6 + rng() * 6; s < L - 4; s += 15 + rng() * 9) {
                 const [px, pz, alongZ] = side(s, sd * hw);
-                if (!FavelaPlan.built || FavelaPlan.walkable(px, pz)) poles.push({ x: px, z: pz, arm: alongZ ? 'x' : 'z', dir: alongZ ? Math.sign(P.tz * sd) || 1 : -Math.sign(P.tx * sd) || 1 });
+                if (Favelas.walkable(px, pz)) poles.push({ x: px, z: pz, arm: alongZ ? 'x' : 'z', dir: alongZ ? Math.sign(P.tz * sd) || 1 : -Math.sign(P.tx * sd) || 1 });
                 sd = -sd;
             }
             for (let s = 3 + rng() * 5; s < L - 2; s += 7 + rng() * 9) {
                 if (rng() < 0.5) continue;
                 const [dx, dz] = side(s, (rng() < 0.5 ? 1 : -1) * (hw + 0.5 + rng() * 0.8));
-                if (!FavelaPlan.built || FavelaPlan.walkable(dx, dz)) dirt(dx, dz);
+                if (Favelas.walkable(dx, dz)) dirt(dx, dz);
             }
         }
         // Postes dentro dos quarteirões da favela (vielas): dados vindos de CityGrid (props type 'pole').
@@ -1252,8 +1346,12 @@ class WorldBuilder {
             for (const f of blk.fences || []) {
                 const trim = trimAt(f.x0, f.z0);
                 if (f.kind === 'wall') {
-                    trim.solid(f.x0, f.z0, f.x1, f.z1, 0.18, f.h - 0.12, wallC);
-                    trim.solid(f.x0 - 0.04, f.z0 - 0.04, f.x1 + 0.04, f.z1 + 0.04, f.h - 0.12, f.h, capC);
+                    trim.solid(f.x0, f.z0, f.x1, f.z1, 0.18, f.h - 0.12, f.color || wallC);
+                    trim.solid(f.x0 - 0.04, f.z0 - 0.04, f.x1 + 0.04, f.z1 + 0.04, f.h - 0.12, f.h, f.cap || capC);
+                } else if (f.kind === 'wood') {                                    // cerca de roça: mourões de madeira e duas réguas
+                    const alongX = (f.x1 - f.x0) >= (f.z1 - f.z0), len = alongX ? f.x1 - f.x0 : f.z1 - f.z0, my = (f.z0 + f.z1) / 2, mx = (f.x0 + f.x1) / 2, t = 0.06;
+                    for (const y of [f.h * 0.45, f.h * 0.85]) alongX ? trim.solid(f.x0, my - t, f.x1, my + t, y - 0.07, y + 0.07, [0.5, 0.36, 0.22]) : trim.solid(mx - t, f.z0, mx + t, f.z1, y - 0.07, y + 0.07, [0.5, 0.36, 0.22]);
+                    for (let s = 0; s <= len + 0.01; s += 2.2) { const px = alongX ? f.x0 + Math.min(s, len) : mx, pz = alongX ? my : f.z0 + Math.min(s, len); trim.solid(px - 0.12, pz - 0.12, px + 0.12, pz + 0.12, 0, f.h + 0.1, [0.38, 0.27, 0.16]); }
                 } else {
                     trim.solid(f.x0, f.z0, f.x1, f.z1, 0.18, f.h, fenceC);
                     const alongX = (f.x1 - f.x0) >= (f.z1 - f.z0), len = alongX ? f.x1 - f.x0 : f.z1 - f.z0;
@@ -1432,6 +1530,7 @@ class WorldBuilder {
         // Postes e poças coloridas das lojas: só a intensidade global muda (um uniform; os postes quebrados já estão apagados no buffer).
         this.lampGlow.setLevel(q);
         this.shopGlow.setLevel(q);
+        if (this.bairroGlow) this.bairroGlow.setLevel(q);
     }
 }
 memoStatics(WorldBuilder, 'GLYPHS');

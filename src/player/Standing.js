@@ -19,7 +19,7 @@ const Standing = {
         if (this._b) return this._b;
         if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built) return (this._b = Object.assign({}, FavelaPlan.bounds));      // (caixa da mancha)
         let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
-        for (const b of CityGrid.blocks) if (b.district === 'favela') { x0 = Math.min(x0, b.slab[0]); z0 = Math.min(z0, b.slab[1]); x1 = Math.max(x1, b.slab[2]); z1 = Math.max(z1, b.slab[3]); }
+        for (const b of CityGrid.blocks) if (b.district === 'favela' && (b.faction || 'cv') === 'cv') { x0 = Math.min(x0, b.slab[0]); z0 = Math.min(z0, b.slab[1]); x1 = Math.max(x1, b.slab[2]); z1 = Math.max(z1, b.slab[3]); }
         return (this._b = x0 < Infinity ? { x0: x0 - 8, z0: z0 - 8, x1: x1 + 8, z1: z1 + 8 } : { x0: 0, z0: 0, x1: -1, z1: -1 });      // (+8 u: as vielas de contorno fazem parte)
     },
     inFavela(x, z) {
@@ -39,22 +39,44 @@ const Standing = {
         const b = this._bounds();
         return Math.max(0, Math.min(1, (b.x1 - x) / (b.x1 - b.x0)));
     },
-    // Dentro da favela, além da entrada: sem polícia (só em operação, no futuro).
-    policeBanned(x, z) { return !this.policeOp && this.inFavela(x, z) && this.depth(x, z) >= this.entranceDepth; },
-    // Alvo de perseguição da polícia limitado à entrada (eles não passam dali).
-    clampToEntrance(x, z) {
-        const b = this._bounds(), xe = b.x1 - (b.x1 - b.x0) * (this.entranceDepth * 0.5);
+    // Profundidade em qualquer território (as favelas têm a entrada a leste, do lado da cidade).
+    depthIn(t, x, z) {
+        if (!t || !t.inside(x, z)) return 0;
+        const b = t.rect();
+        return Math.max(0, Math.min(1, (b.x1 - x) / (b.x1 - b.x0)));
+    },
+    // Dentro de uma favela, além da entrada: sem polícia (no Morro, só em operação).
+    policeBanned(x, z) {
+        if (this.inFavela(x, z)) return !this.policeOp && this.depth(x, z) >= this.entranceDepth;
+        const t = this.territoryAt(x, z);
+        return !!t && this.depthIn(t, x, z) >= this.entranceDepth;
+    },
+    // Alvo de perseguição da polícia limitado à entrada (eles não passam dali). `rx`: x de referência para achar a favela (padrão: x).
+    clampToEntrance(x, z, rx = x) {
+        const t = this.territoryAt(rx, z) || this.territories[0], b = t.rect(), xe = b.x1 - (b.x1 - b.x0) * (this.entranceDepth * 0.5);
         return { x: Math.max(x, xe), z };
     },
     // ---- facções por território. `resident`: o jogador mora lá (neutro). Em território de fora (futuro: N.C.P) ele é um estranho
     // e os traficantes são sempre hostis. Em território de morador, só viram hostis se a moral cair (hostile()).
     // rect(): caixa | poly(): contorno (laço [[x, z], ...]) para o mapa | inside(x, z): dentro da mancha
-    territories: [{ id: 'cv', sigla: 'C.V', name: 'COMANDO VERDE', color: '#2ecc5a', rect: () => Standing._bounds(),
-        poly: () => (typeof FavelaPlan !== 'undefined' && FavelaPlan.outline) || null, inside: (x, z) => Standing.inFavela(x, z) }],
+    // plan(): a favela (FavelaPlan) | gangs: grupos [fundo, meio, entrada] | rival: a facção inimiga
+    territories: [
+        { id: 'cv', sigla: 'C.V', name: 'COMANDO VERDE', color: '#2ecc5a', rect: () => Standing._bounds(), rival: 'cpc',
+            plan: () => (typeof FavelaPlan !== 'undefined' ? FavelaPlan : null),
+            poly: () => (typeof FavelaPlan !== 'undefined' && FavelaPlan.outline) || null, inside: (x, z) => Standing.inFavela(x, z) },
+        // C.P.C — Comando Primeiro da Capital, no Morro do Mirante (sul da cidade, de frente para o mar). Rival do C.V.
+        { id: 'cpc', sigla: 'C.P.C', name: 'COMANDO PRIMEIRO DA CAPITAL', color: '#f2c230', rival: 'cv', gangs: [9, 3, 3],
+            rect: () => (typeof FavelaSul !== 'undefined' && FavelaSul.built ? FavelaSul.bounds : { x0: 0, z0: 0, x1: -1, z1: -1 }),
+            plan: () => (typeof FavelaSul !== 'undefined' ? FavelaSul : null),
+            poly: () => (typeof FavelaSul !== 'undefined' && FavelaSul.outline) || null,
+            inside: (x, z) => { if (typeof FavelaSul === 'undefined' || !FavelaSul.built) return false; const b = FavelaSul.bounds; return x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1 && FavelaSul.inTerritory(x, z); } },
+    ],
     territoryAt(x, z) {
         for (const t of this.territories) if (t.inside(x, z)) return t;
         return null;
     },
+    // Em qualquer favela (de qualquer facção)?
+    inAnyFavela(x, z) { return !!this.territoryAt(x, z); },
     lowTraffic: 30, lowCommunity: 20,   // abaixo disso (um OU outro) o morador deixa de ser neutro
     // Quem é "morador" vem da SAFE HOUSE atual: `homeId` = id do território onde ela fica ('cv' = a casa inicial na favela; null =
     // casa no asfalto/outra região). Mudou de casa (subiu de vida, saiu da favela, foi morar em outra) → vira estranho para a
@@ -94,7 +116,7 @@ const Standing = {
 
     // Compra numa loja da favela: movimenta o comércio local (e a boca, para o tráfico).
     shopped(shop, spent) {
-        if (shop.district !== 'favela') return;
+        if (shop.district !== 'favela' || (shop.faction && shop.faction !== 'cv')) return;      // (comércio do C.P.C não conta para o Morro)
         this.add('community', Math.min(3, spent / 40));
         if (shop.style === 'drugs') this.add('traffic', Math.min(4, spent / 60));
     },

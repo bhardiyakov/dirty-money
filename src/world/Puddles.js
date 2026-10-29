@@ -21,7 +21,7 @@ class Puddles {
     _buildSites() {
         const rng = Pixel.rng(9090), sites = [], grid = new Map(), CELL = 64;
         for (const e of RoadPlan.edges) {
-            if (e.cls !== 'city' && e.cls !== 'isl' && e.cls !== 'ave' && e.cls !== 'hwy') continue;     // asfalto de chão (sem ponte/viaduto/terra)
+            if (e.cls !== 'city' && e.cls !== 'isl' && e.cls !== 'ave' && e.cls !== 'hwy' && e.cls !== 'serra') continue;     // asfalto de chão (sem ponte/viaduto/terra)
             const hw = e.w / 2, L = e.len;
             for (let s = 10 + rng() * 8; s < L - 10; s += 9 + rng() * 12) {
                 const gutter = rng() < 0.7, side = rng() < 0.5 ? 1 : -1;

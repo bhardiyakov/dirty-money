@@ -71,7 +71,7 @@ class EmpireBusiness {
     buyFront(type) {
         const F = EmpireBusiness.FRONTS[type], d = this.e.here, inv = this.g.inventory;
         if (!F) return null;
-        if (d === 'favela' || d === 'periferia') return 'Fachadas de luxo só nos distritos da cidade — vá até o distrito onde quer abrir';
+        if (Empire.OUTSKIRTS.includes(d)) return 'Fachadas de luxo só nos distritos da cidade — vá até o distrito onde quer abrir';
         if (inv.cash < F.price) return `Faltam ${brl(F.price - inv.cash)} de dinheiro sujo`;
         inv.cash -= F.price;
         const f = { type, d };
@@ -260,7 +260,7 @@ class EmpireDominion {
             forca: [`Destruir ${big ? 3 : 2} galpões da família rival no distrito`, inf.razed[d] || 0, big ? 3 : 2],
         };
     }
-    get districts() { return Object.keys(Empire.DISTRICTS).filter((d) => d !== 'periferia'); }
+    get districts() { return Object.keys(Empire.DISTRICTS).filter((d) => d === 'favela' || !Empire.OUTSKIRTS.includes(d)); }
     done(d, c) { return !!(this.state[d] && this.state[d][c]); }
     dominated(d) { return ['lavagem', 'influencia', 'forca'].every((c) => this.done(d, c)); }
     get count() { return this.districts.filter((d) => this.dominated(d)).length; }

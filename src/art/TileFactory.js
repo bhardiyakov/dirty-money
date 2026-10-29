@@ -31,6 +31,22 @@ const TileFactory = {
         // Prédios especiais: hospital (vidro azul-claro, moldura branca) e delegacia (tijolo azul-marinho).
         hospital: { kind: 'office', glassA: '#6fb0c8', glassB: '#d6eef5', frame: '#e6eaec', span: '#cdd5da' },
         station:  { kind: 'brick', brick: ['#46598a', '#4e639a', '#40527f', '#566ca3'], mortar: '#27304d', trim: '#e8ebf4' },
+        // Morro do Mirante (C.P.C): reboco pintado de cor viva (rosa, amarelo, turquesa, laranja, lilás) e tijolo cru.
+        vid0:     { kind: 'house', wall: '#e98ab0', trim: '#fff2f6', shutter: '#3a6fb0' },
+        vid1:     { kind: 'house', wall: '#f2cf4a', trim: '#fffbe8', shutter: '#2f8a5a' },
+        vid2:     { kind: 'house', wall: '#4cc3c0', trim: '#effcfb', shutter: '#d9573a' },
+        vid3:     { kind: 'house', wall: '#f08a3c', trim: '#fff1e2', shutter: '#3a4f8a' },
+        vid4:     { kind: 'house', wall: '#a98ad8', trim: '#f6f0ff', shutter: '#e8c22c' },
+        vid5:     { kind: 'house', wall: '#7fc46a', trim: '#f2fbee', shutter: '#b0453a' },
+        // Roça: casa caipira caiada (janela azul ou verde), pau a pique cor de barro.
+        caipira0: { kind: 'house', wall: '#efe9dc', trim: '#fbf8f0', shutter: '#2f5fa8' },
+        caipira1: { kind: 'house', wall: '#f1e4c2', trim: '#fbf6e6', shutter: '#3f7a3a' },
+        taipa0:   { kind: 'house', wall: '#c99466', trim: '#e8d2b4', shutter: '#6a4026' },
+        // Serra rica: chalé enxaimel (reboco claro e vigas escuras) e casarão de pedra.
+        chalet0:  { kind: 'timber', wall: '#f1ebdd', beam: '#4a3020', glass: '#2f3f52' },
+        chalet1:  { kind: 'timber', wall: '#e9dcc0', beam: '#5a2f22', glass: '#2b3a4d' },
+        stone0:   { kind: 'stone', stone: ['#9a9286', '#a8a094', '#8c8478', '#b4ab9c'], mortar: '#5e5850', trim: '#f2efe6', glass: '#30465c' },
+        stone1:   { kind: 'stone', stone: ['#b4a48a', '#c2b296', '#a6967c', '#cdbea2'], mortar: '#6e624f', trim: '#fbf8f0', glass: '#2c4258' },
     },
 
     // Estilos de telhado. Tile de 160×160 px = 8u × 8u.
@@ -57,6 +73,15 @@ const TileFactory = {
         // Telhados limpos (sem ar-condicionado) dos prédios especiais, onde vão os letreiros: hospital claro, delegacia azul.
         hosp:    { kind: 'concrete', clean: true, base: ['#dfe3e6', '#e5e8ea', '#eceff1', '#f2f4f5'] },
         police:  { kind: 'concrete', clean: true, base: ['#2f3f66', '#34456f', '#3a4c78', '#405382'] },
+        // Laje do Mirante: piso pintado (terracota, verde-quadra, azul), caixa-d'água, vasos e, nas de festa, mesas e ombrelone.
+        lajeV0:  { kind: 'laje', base: ['#b0583c', '#bc6244', '#a65036', '#c46a4a'], party: false },
+        lajeV1:  { kind: 'laje', base: ['#3f8a5a', '#469462', '#38804f', '#4e9c6a'], party: true },
+        lajeV2:  { kind: 'laje', base: ['#3f6fa8', '#4777b0', '#38679e', '#4f80b8'], party: false },
+        lajeV3:  { kind: 'laje', base: ['#a9a59c', '#b2aea5', '#9f9b92', '#bbb7ae'], party: true },
+        // Serra: ardósia (chalé) e telha de madeira escura; Roça: telha de barro velha (capim e musgo).
+        slate0:  { kind: 'tile', colors: ['#47505a', '#4f5964', '#3f4750', '#58626e'] },
+        cedar0:  { kind: 'tile', colors: ['#6a4630', '#744e36', '#5e3e2a', '#7e563c'] },
+        clay0:   { kind: 'tile', colors: ['#a0583c', '#8e4e36', '#b06648', '#7e5a3a'] },
     },
 
     // Constrói todas as texturas (chame uma vez por cena).
@@ -487,6 +512,25 @@ const TileFactory = {
             this._tank(p, 34 + Math.floor(r() * 20), 30, '#3f78b5');
             p.disc(120, 40, 3, Pixel.hex('#c9ccd0')); p.set(120, 40, Pixel.hex('#ffffff'));                         // antena parabólica
             p.hline(112, 40, 16, Pixel.hex('#7a7f85'));
+        } else if (st.kind === 'laje') {
+            // Laje pintada do Mirante: piso colorido com juntas, mureta, caixa-d'água azul, vasos de planta e (festa) mesas e ombrelones.
+            p.noiseFill(st.base.map(Pixel.hex), seed, 10, 0.45);
+            const seam = Pixel.mix(Pixel.hex(st.base[0]), [0, 0, 0], 0.18);
+            for (let i = 0; i < 160; i += 32) { p.vline(i, 0, 160, seam); p.hline(0, i, 160, seam); }
+            this._tank(p, 18 + Math.floor(r() * 16), 18 + Math.floor(r() * 16), '#3f78b5');
+            for (let k = 0; k < 5; k++) { const cx = 8 + r() * 144, cy = 120 + r() * 32; p.disc(cx, cy, 5, Pixel.hex('#8a4a2a')); p.disc(cx, cy, 4, Pixel.hex(['#3f8a3a', '#2f7a34', '#5aa04a'][k % 3])); }      // vasos
+            if (st.party) {
+                const tc = ['#e8e3d4', '#e8452a', '#f2c230', '#2f86d0'];
+                for (let k = 0; k < 4; k++) {
+                    const cx = 70 + (k % 2) * 46, cy = 50 + Math.floor(k / 2) * 46;
+                    p.disc(cx, cy, 16, Pixel.hex(tc[k])); for (let a = 0; a < 8; a++) { const t = a * Math.PI / 4; p.set(cx + Math.cos(t) * 15, cy + Math.sin(t) * 15, Pixel.mix(Pixel.hex(tc[k]), [0, 0, 0], 0.3)); }
+                    p.disc(cx, cy, 2, Pixel.hex('#3a3a3e'));
+                }
+                for (let k = 0; k < 10; k++) { const cx = 60 + r() * 90, cy = 30 + r() * 100; p.rect(cx, cy, 4, 4, Pixel.hex('#f2f2f2')); }      // cadeiras de plástico
+                for (let x = 0; x < 160; x += 6) p.set(x, 8 + Math.round(Math.sin(x / 12) * 2), Pixel.hex(['#ffd25a', '#ff7a5a', '#7ad0ff'][x % 3]));   // varal de lâmpadas
+            } else {
+                for (let k = 0; k < 6; k++) { const cl = ['#e8e3d4', '#d9453a', '#2f86d0', '#e8c22c', '#2fa36a', '#9a6bd0']; p.hline(80, 70, 66, Pixel.hex('#3a3a3e')); p.rect(82 + k * 10, 71, 7, 9, Pixel.hex(cl[k])); }
+            }
         } else if (st.kind === 'garden') {
             p.noiseFill(st.base.map(Pixel.hex), seed, 8, 0.5);
             // Canteiros e caminho de pedra.
@@ -591,6 +635,8 @@ const TileFactory = {
             else if (st.kind === 'brick') this._facadeBrick(d, e, st, ox, oy, r, warm2, seed);
             else if (st.kind === 'house') this._facadeHouse(d, e, st, ox, oy, r, warm2, seed);
             else if (st.kind === 'metal') this._facadeMetal(d, e, st, ox, oy, r, warm, seed);
+            else if (st.kind === 'timber') this._facadeTimber(d, e, st, ox, oy, r, warm2, seed);
+            else if (st.kind === 'stone') this._facadeStone(d, e, st, ox, oy, r, warm2, seed);
             else this._facadeConcrete(d, e, st, ox, oy, r, warm, seed);
         }
         return { diffuse: d, emissive: e };
@@ -678,6 +724,53 @@ const TileFactory = {
             for (let i = 0; i < w + 2; i += 2) d.set(x - 1 + i, y + h, Pixel.pick(['#e8456a', '#f2d34a', '#f08aa8'].map(Pixel.hex), Pixel.hash(i, wx, seed)));
             if (r() < 0.4) e.rect(x, y, w, h, warm);
         }
+    },
+
+    // Enxaimel (chalé da serra): reboco claro, vigas escuras em quadro com uma diagonal por baia e janela com venezianas de madeira.
+    _facadeTimber(d, e, st, ox, oy, r, warm, seed) {
+        const wall = Pixel.hex(st.wall), beam = Pixel.hex(st.beam), glass = Pixel.hex(st.glass), hi = Pixel.mix(beam, [255, 230, 200], 0.18);
+        for (let y = 0; y < 60; y++) for (let x = 0; x < 60; x++) {
+            const g = Pixel.hash(ox + x, oy + y, seed);
+            d.set(ox + x, oy + y, g < 0.1 ? Pixel.mix(wall, [255, 255, 255], 0.1) : (g > 0.92 ? Pixel.mix(wall, [80, 60, 40], 0.08) : wall));
+        }
+        const bar = (x, y, w, h) => { d.rect(x, y, w, h, beam); if (w > h) d.hline(x, y, w, hi); else d.vline(x, y, h, hi); };
+        bar(ox, oy, 60, 4); bar(ox, oy + 55, 60, 5); bar(ox + 28, oy, 4, 60); bar(ox, oy, 3, 60); bar(ox + 57, oy, 3, 60);
+        for (let t = 0; t < 52; t++) { const y = oy + 4 + t; for (const [a, dir] of [[3, 1], [32, -1]]) { const x = ox + a + Math.round((dir > 0 ? t : 51 - t) * 24 / 52); d.rect(x, y, 3, 1, beam); } }
+        for (const wx of [8, 37]) {                                                            // janela com venezianas de madeira e floreira
+            const x = ox + wx, y = oy + 18, w = 15, h = 18;
+            d.rect(x - 1, y - 1, w + 2, h + 2, beam);
+            for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) d.set(x + i, y + j, Pixel.mix(glass, Pixel.hex('#7aa0c2'), (i + j) / (w + h)));
+            d.vline(x + 7, y, h, beam); d.hline(x, y + 8, w, beam);
+            d.rect(x - 5, y - 1, 4, h + 2, Pixel.mix(beam, [255, 255, 255], 0.12)); d.rect(x + w + 1, y - 1, 4, h + 2, Pixel.mix(beam, [255, 255, 255], 0.12));
+            d.rect(x - 2, y + h + 1, w + 4, 3, Pixel.hex('#5a3a22'));
+            for (let i = 0; i < w + 2; i += 2) d.set(x - 1 + i, y + h, Pixel.pick(['#d9455a', '#f2d34a', '#e86aa0', '#8a5ad0'].map(Pixel.hex), Pixel.hash(i, wx, seed)));   // hortênsias e gerânios
+            if (r() < 0.5) e.rect(x, y, w, h, warm);
+        }
+    },
+
+    // Casarão de pedra: alvenaria irregular, janelões com moldura clara e cornija no alto.
+    _facadeStone(d, e, st, ox, oy, r, warm, seed) {
+        const cols = st.stone.map(Pixel.hex), mortar = Pixel.hex(st.mortar), trim = Pixel.hex(st.trim), glass = Pixel.hex(st.glass);
+        for (let y = 0; y < 60; y++) {
+            const row = Math.floor(y / 6), off = Math.floor(Pixel.hash(row, oy, seed) * 9);
+            for (let x = 0; x < 60; x++) {
+                const bx = Math.floor((x + off) / (9 + (row % 3)));
+                const c = (y % 6 === 5 || (x + off) % (9 + (row % 3)) === 0) ? mortar : Pixel.pick(cols, Pixel.hash(bx + ox, row + oy, seed));
+                d.set(ox + x, oy + y, y % 6 === 0 ? Pixel.mix(c, [255, 255, 255], 0.12) : c);
+            }
+        }
+        d.rect(ox, oy, 60, 4, trim); d.hline(ox, oy + 4, 60, Pixel.mix(trim, [0, 0, 0], 0.35));           // cornija
+        const x = ox + 10, y = oy + 12, w = 40, h = 30;
+        d.rect(x - 2, y - 2, w + 4, h + 4, trim);
+        for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+            let c = Pixel.mix(glass, Pixel.hex('#8fb6d4'), (i + j * 0.6) / (w + h * 0.6));
+            if (((i - j + 60) % 22) < 2) c = Pixel.mix(c, [255, 255, 255], 0.3);
+            d.set(x + i, y + j, c);
+        }
+        for (const vx of [13, 26]) d.vline(x + vx, y, h, trim);
+        d.hline(x, y + 10, w, trim);
+        d.rect(x - 4, y + h + 2, w + 8, 3, trim);
+        if (r() < 0.55) e.rect(x, y, w, h, warm);
     },
 
     // Galpão de chapa ondulada com janela-fita no alto e manchas de ferrugem.

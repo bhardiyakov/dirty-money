@@ -99,13 +99,13 @@ class ShopUI {
                 mk('GERENCIAR (aba NEGÓCIOS)', () => { this.close(); g.menu.open('business'); return null; });
             }
         }
-        if (shop.style === 'drugs' && shop.district === 'favela' && g.missions) {                      // serviços do tráfico: missões (ver player/Missions.js)
+        if (shop.style === 'drugs' && shop.district === 'favela' && (shop.faction || 'cv') === 'cv' && g.missions) {                      // serviços do tráfico: missões (ver player/Missions.js)
             const M = g.missions, b = document.createElement('button'); b.className = 'btn';
             b.textContent = M.cur ? 'ABANDONAR SERVIÇO' : `PEDIR SERVIÇO (${Missions.rankName})`;
             b.addEventListener('click', () => { const r = M.cur ? M.abandon() : M.offer(); this.msg(r.msg, r.ok); AudioFX.blip(r.ok ? 700 : 200, 0.1, 0.15); this.render(); });
             this.$foot.appendChild(b);
         }
-        if (shop.style === 'drugs' && shop.district === 'favela') {                                    // "taxa do morro": pagar em dia sobe a moral com o tráfico (≥70 eles te toleram)
+        if (shop.style === 'drugs' && shop.district === 'favela' && (shop.faction || 'cv') === 'cv') {                                  // "taxa do morro": pagar em dia sobe a moral com o tráfico (≥70 eles te toleram)
             const fee = 250, b = document.createElement('button'); b.className = 'btn'; b.textContent = `PAGAR TAXA DO MORRO: ${brl(fee)}`;
             b.addEventListener('click', () => {
                 if (inv.cash < fee) { this.msg('Dinheiro insuficiente', false); AudioFX.blip(200, 0.12, 0.14); return; }

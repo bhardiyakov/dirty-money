@@ -17,7 +17,7 @@ const News = {
     load(s) { this.items = (s && s.items) || []; this.pending = (s && s.pending) || []; },
 
     _d(e) { return e.district && typeof Empire !== 'undefined' && Empire.DISTRICTS[e.district] ? Empire.DISTRICTS[e.district].name : 'na cidade'; },
-    AT: { favela: 'na Favela do Morro', centro: 'no Distrito Financeiro', comercio: 'no Comércio', residencial: 'nos bairros residenciais', orla: 'na Orla', industrial: 'no Porto', ilha: 'na Ilha Praiana', periferia: 'na Periferia' },
+    AT: { favela: 'na Favela do Morro', centro: 'no Distrito Financeiro', comercio: 'no Comércio', residencial: 'nos bairros residenciais', orla: 'na Orla', industrial: 'no Porto', ilha: 'na Ilha Praiana', periferia: 'na Periferia', mirante: 'no Morro do Mirante', roca: 'na Vila da Roça', serra: 'no Alto da Serra' },
     _no(e) { return (e && this.AT[e.district]) || 'na cidade'; },
     _pick(a) { return a[Math.floor(Math.random() * a.length)]; },
     _now() { return { day: typeof Economy !== 'undefined' ? Economy.day : 0, hour: window.game && window.game.dayNight ? window.game.dayNight.hour : 12 }; },

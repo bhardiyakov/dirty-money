@@ -19,8 +19,13 @@ class Empire {
             industrial: { name: 'Porto e indústria', rich: 0.85, police: 0.85 },
             ilha: { name: 'Ilha Praiana', rich: 1.6, police: 1.3 },
             periferia: { name: 'Periferia', rich: 0.7, police: 0.8 },
+            mirante: { name: 'Morro do Mirante', rich: 0.9, police: 0.7 },        // favela do C.P.C (ver FavelaSul)
+            roca: { name: 'Vila da Roça', rich: 0.55, police: 0.55 },             // (map/Bairros.js)
+            serra: { name: 'Alto da Serra', rich: 1.9, police: 1.15 },
         };
     }
+    // Distritos fora da gestão da cidade (sem fachada de luxo, extorsão nem domínio): as favelas, a periferia e os bairros do interior.
+    static get OUTSKIRTS() { return ['favela', 'mirante', 'periferia', 'roca', 'serra']; }
     static get BIOME_DISTRICT() { return { downtown: 'centro', commercial: 'comercio', residential: 'residencial', park: 'residencial', forest: 'periferia', beach: 'orla', industrial: 'industrial', port: 'industrial', resort: 'ilha', favela: 'favela' }; }
 
     // Estações: [id, nome, dias, descrição, efeitos]
@@ -57,7 +62,10 @@ class Empire {
         const hit = this._dcache.get(k);
         if (hit) return hit;
         let d = 'periferia';
+        const zn = typeof Bairros !== 'undefined' ? Bairros.zoneAt(x, z) : null, T = Standing.territoryAt(x, z);
         if (Standing.inFavela(x, z)) d = 'favela';
+        else if (T && T.id === 'cpc') d = 'mirante';
+        else if (zn) d = zn;
         else {
             for (const [ox, oz] of [[0, 0], [12, 0], [-12, 0], [0, 12], [0, -12], [24, 24], [-24, -24], [24, -24], [-24, 24], [36, 0], [-36, 0], [0, 36], [0, -36]]) {
                 const b = CityGrid._blockAtPoint(x + ox, z + oz);

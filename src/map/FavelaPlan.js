@@ -13,9 +13,21 @@
 // Dados: alleys [{ pts, w }], squares [{ kind, x0, z0, x1, z1 }], bollards [{ x, z }], graph { nodes: [{ x, z, links, road }] }
 //        (becos + ruas: as motos andam por ele). Consultas: walkable(x, z), alleyPoint(x, z), randomAlleyPoint(), route(...).
 // Determinístico (rng fixo): o mesmo morro a cada carga.
+//
+// O objeto é o MOLDE de todas as favelas: FavelaPlan é a do C.V (a do começo do jogo, com a safe house); as outras saem de
+// FavelaPlan.spawn({...}) com caixa, ruas, formato, sementes e visual próprios (ver o MORRO DO MIRANTE, do C.P.C, no fim do arquivo).
+// `Favelas` junta todas: Favelas.list, Favelas.at(x, z) (qual favela tem esse ponto) e consultas que valem para qualquer uma.
 // ============================================================================
 
 const FavelaPlan = {
+    id: 'cv', name: 'Favela do Morro',
+    SEED: { shape: 4711, build: 31337 },                // sementes do contorno e da construção
+    TILE_I: 800,                                       // i/j dos quarteirões-ladrilho (800 + índice): não pode colidir entre favelas
+    // Largos: quadra do baile (na beira da rua) e campinho (no miolo, só a pé ou de moto); [tipo, x, z, largura, fundo, na rua?]
+    SQUARES: [['quadra', -500, 470, 30, 18, true], ['campinho', -470, 610, 34, 22, false]],
+    // Visual dos barracos: fachadas, telhados e chance de 1/2/3/(4+) andares (acumulada)
+    LOOK: { facades: ['brick0', 'brick1', 'brick2', 'brick0', 'brick1', 'house0', 'house1', 'house2', 'house3', 'concrete0'],
+        roofs: ['zinc0', 'zinc1', 'zinc0', 'tarp0', 'tarp1', 'tarp2', 'slab0', 'slab1', 'slab0', 'tile1', 'tile0'], floors: [0.4, 0.75, 0.95], maxFloors: 4 },
     R: { x0: -665, z0: 265, x1: -331, z1: 743 },        // caixa da grade de ocupação; a favela é a mancha dentro dela (occ, território)
     TILE: 48,
     FREE: 0, ROAD: 1, ALLEY: 2, BLD: 3, GAP: 4, OPEN: 5, RES: 6, OUT: 7,
@@ -53,7 +65,7 @@ const FavelaPlan = {
     SHAPE: { cx: -492, cz: 500, ax: 112, az: 168 },
     _shape() {
         if (this._sh) return this._sh;
-        const rng = Pixel.rng(4711), S = this.SHAPE, harm = [];
+        const rng = Pixel.rng(this.SEED.shape), S = this.SHAPE, harm = [];
         for (let k = 2; k <= 7; k++) harm.push({ k, a: (0.3 / (k - 0.8)) * (0.6 + rng() * 0.6), ph: rng() * Math.PI * 2 });
         const roads = this.MAIN.map((r) => this._smooth(r.pts, 6)), roadD = (x, z) => {
             let bd = Infinity;
@@ -70,7 +82,7 @@ const FavelaPlan = {
         for (let n = 0; n < 5; n++) { const t = n * Math.PI * 2 / 5 + rng() * 1.0, f = 0.95 + rng() * 0.25; lobes.push([S.cx + Math.cos(t) * S.ax * f, S.cz + Math.sin(t) * S.az * f, 30 + rng() * 32]); }
         for (let n = 0, tries = 0; n < 4 && tries < 200; tries++) {
             const t = rng() * Math.PI * 2, f = 1.05 + rng() * 0.3, x = S.cx + Math.cos(t) * S.ax * f, z = S.cz + Math.sin(t) * S.az * f, r = 34 + rng() * 34;
-            if (roadD(x, z) < r + 12 || hypot(x - this.SAFE.x, z - this.SAFE.z) < r + 40 || notches.some((q) => hypot(q[0] - x, q[1] - z) < q[2] + r)) continue;
+            if (roadD(x, z) < r + 12 || (this.SAFE && hypot(x - this.SAFE.x, z - this.SAFE.z) < r + 40) || notches.some((q) => hypot(q[0] - x, q[1] - z) < q[2] + r)) continue;
             notches.push([x, z, r, 0.6 + rng() * 0.8]); n++;
         }
         return (this._sh = { harm, lobes, notches, roads, roadD });
@@ -161,7 +173,7 @@ const FavelaPlan = {
 
     // ================================================================= construção
     build(grid) {
-        const t0 = performance.now(), R = this.R, rng = Pixel.rng(31337);
+        const t0 = performance.now(), R = this.R, rng = Pixel.rng(this.SEED.build);
         const W = this.W = R.x1 - R.x0, H = this.H = R.z1 - R.z0, C = this.cells = new Uint8Array(W * H);
         this.alleys = []; this.squares = []; this.bollards = []; this.lots = []; this.props = [];
 
@@ -169,23 +181,25 @@ const FavelaPlan = {
         //    barranco), sobrando grupinhos de barracos soltos na beira
         for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
             const x = R.x0 + i + 0.5, z = R.z0 + j + 0.5, o = this.occ(x, z);
-            if (o <= 0 || (o < 16 && this._noise(x / 7 + 3, z / 7 - 5) > 0.42 + o / 26) || !WorldMap.buildable(x, z, 6)) C[j * W + i] = this.OUT;
+            if (o <= 0 || (o < 16 && this._noise(x / 7 + 3, z / 7 - 5) > 0.42 + o / 26) || !WorldMap.buildable(x, z, 6) || (this.blocked && this.blocked(x, z))) C[j * W + i] = this.OUT;
         }
         // 2) as ruas (as 3 da favela e as estradas que entram nela) e os cruzamentos
         const inR = (x0, z0, x1, z1, m) => x1 > R.x0 - m && x0 < R.x1 + m && z1 > R.z0 - m && z0 < R.z1 + m;
         this.roadEdges = RoadPlan.edges.filter((e) => { const xs = e.pts.map((p) => p[0]), zs = e.pts.map((p) => p[1]); return inR(Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs), 10); });
         for (const e of this.roadEdges) this._stamp(e.pts, e.w / 2 + this.ROAD_M, this.ROAD, true);      // (beirada de terra: nas curvas o carro corta por dentro)
         for (const n of RoadPlan.nodes) if (inR(n.x, n.z, n.x, n.z, 0)) this._disk(n.x, n.z, Math.max(...n.arms.map((a) => a.hw)) + 2.5, this.ROAD, true);
-        // 3) a safe house (mesmo lugar) e o quintal dela até a Estrada do Morro (carro para na porta)
-        const S = this.SAFE, SW = SafeHouse.W, SD = SafeHouse.D, dx = S.x + (SafeHouse.door.x0 + SafeHouse.door.x1) / 2;
-        let zy = S.z - 4;
-        for (let z = S.z - 0.5; z > S.z - 22; z -= 0.5) if (this.cellAt(dx, z) === this.ROAD) { zy = z + 0.5; break; }
-        this._rect(S.x - 2.5, zy, S.x + SW + 2.5, S.z + SD + 2.5, this.RES, true);
-        this.yard = { x0: S.x - 2.5, z0: zy, x1: S.x + SW + 2.5, z1: S.z };
-        this._rect(S.x, S.z, S.x + SW, S.z + SD, this.BLD, true);
-        // 4) quadra do baile (na beira da Estrada do Morro) e campinho de terra (no miolo, só a pé ou de moto)
-        this._square('quadra', -500, 470, 30, 18, true);
-        this._square('campinho', -470, 610, 34, 22, false);
+        // 3) a safe house (mesmo lugar) e o quintal dela até a Estrada do Morro (carro para na porta) — só na favela que tem uma
+        const S = this.SAFE, SW = SafeHouse.W, SD = SafeHouse.D;
+        if (S) {
+            const dx = S.x + (SafeHouse.door.x0 + SafeHouse.door.x1) / 2;
+            let zy = S.z - 4;
+            for (let z = S.z - 0.5; z > S.z - 22; z -= 0.5) if (this.cellAt(dx, z) === this.ROAD) { zy = z + 0.5; break; }
+            this._rect(S.x - 2.5, zy, S.x + SW + 2.5, S.z + SD + 2.5, this.RES, true);
+            this.yard = { x0: S.x - 2.5, z0: zy, x1: S.x + SW + 2.5, z1: S.z };
+            this._rect(S.x, S.z, S.x + SW, S.z + SD, this.BLD, true);
+        }
+        // 4) largos: quadra do baile (na beira da rua) e campinho de terra (no miolo, só a pé ou de moto)
+        for (const q of this.SQUARES) this._square(...q);
         // 5) becos
         this._alleysFromVoronoi(rng);
         for (const a of this.alleys) this._stamp(a.pts, Math.max(a.w / 2, 0.72), this.ALLEY, false);      // (≥ 0,72: diagonal continua passável)
@@ -201,7 +215,7 @@ const FavelaPlan = {
             let b = tiles.get(k);
             if (!b) {
                 const x0 = R.x0 + ti * T, z0 = R.z0 + tj * T, x1 = Math.min(R.x1, x0 + T), z1 = Math.min(R.z1, z0 + T);
-                b = { id: 'favela:' + k, district: 'favela', i: 800 + ti, j: 800 + tj, biome: 'favela', open: false, ground: 'earth', organic: true,
+                b = { id: (this.id === 'cv' ? 'favela:' : 'favela-' + this.id + ':') + k, district: 'favela', faction: this.id, i: this.TILE_I + ti, j: this.TILE_I + tj, biome: 'favela', open: false, ground: 'earth', organic: true,
                     slab: [x0, z0, x1, z1], foot: [x0, z0, x1, z1], sw: 0, r: 0, lots: [], props: [], fences: [] };
                 tiles.set(k, b);
             }
@@ -209,8 +223,8 @@ const FavelaPlan = {
         };
         for (let tj = 0; tj * T < H; tj++) for (let ti = 0; ti * T < W; ti++) tileOf(R.x0 + ti * T + 1, R.z0 + tj * T + 1);
         for (const l of this.lots) tileOf((l.x0 + l.x1) / 2, (l.z0 + l.z1) / 2).lots.push(l);
-        SafeHouse.plan(tileOf(S.x + SW / 2, S.z + SD / 2), grid, S);
-        for (const p of this.props) if (!SafeHouse.crowds(p)) tileOf(p.x, p.z).props.push(p);
+        if (S) SafeHouse.plan(tileOf(S.x + SW / 2, S.z + SD / 2), grid, S);
+        for (const p of this.props) if (!S || !SafeHouse.crowds(p)) tileOf(p.x, p.z).props.push(p);
         for (const b of [...tiles.values()].sort((a, c) => a.j - c.j || a.i - c.i)) grid.blocks.push(b);
 
         // 10) chão e andável: as células de 4 u do terreno com alguma coisa da favela (o terreno não desenha nem anda nelas)
@@ -220,7 +234,7 @@ const FavelaPlan = {
         this._territory();
         this.built = true;
         this.buildMs = performance.now() - t0;
-        console.log(`[FAVELA] ${this.lots.length} barracos (${this.lots.filter((l) => l.shops.length).length} com loja), ${this.alleys.length} becos, ${this.bollards.length} frades, ${this.graph.nodes.length} nós em ${this.buildMs.toFixed(0)} ms`);
+        console.log(`[FAVELA ${this.id.toUpperCase()}] ${this.lots.length} barracos (${this.lots.filter((l) => l.shops.length).length} com loja), ${this.alleys.length} becos, ${this.bollards.length} frades, ${this.graph.nodes.length} nós em ${this.buildMs.toFixed(0)} ms`);
     },
 
     // ------------------------------------------------------------------ grade
@@ -383,8 +397,7 @@ const FavelaPlan = {
         const sizes = [3, 4, 4, 5, 5, 5, 6, 6, 7, 8], front = [7, 7, 8, 8, 6];
         const ext = (i, j, di, dj) => { let n = 0; while (n < 8 && i >= 0 && j >= 0 && i < W && j < H && C[j * W + i] === this.FREE) { n++; i += di; j += dj; } return n; };
         const wall = (i, j) => i < 0 || j < 0 || i >= W || j >= H || C[j * W + i] === this.BLD;
-        const facades = ['brick0', 'brick1', 'brick2', 'brick0', 'brick1', 'house0', 'house1', 'house2', 'house3', 'concrete0'];
-        const roofs = ['zinc0', 'zinc1', 'zinc0', 'tarp0', 'tarp1', 'tarp2', 'slab0', 'slab1', 'slab0', 'tile1', 'tile0'];
+        const facades = this.LOOK.facades, roofs = this.LOOK.roofs, FL = this.LOOK.floors;
         const free = (i0, j0, w, d) => {
             if (i0 < 0 || j0 < 0 || i0 + w > W || j0 + d > H) return false;
             for (let j = j0; j < j0 + d; j++) for (let i = i0; i < i0 + w; i++) if (C[j * W + i] !== this.FREE) return false;
@@ -406,7 +419,7 @@ const FavelaPlan = {
                 else { const ii = side === 3 ? i0 + w : i0 - 1; if (ii >= 0 && ii < W) for (let j = j0; j < j0 + d; j++) if (C[j * W + ii] === this.FREE) C[j * W + ii] = this.GAP; }
             }
             const sh = () => s0 + rng() * (s1 - s0), f = rng();
-            const floors = f < 0.4 ? 1 : (f < 0.75 ? 2 : (f < 0.95 ? 3 : 4));
+            const floors = f < FL[0] ? 1 : (f < FL[1] ? 2 : (f < FL[2] ? 3 : 4 + Math.floor(rng() * (this.LOOK.maxFloors - 3))));
             this.lots.push({ x0: R.x0 + i0 + sh(), z0: R.z0 + j0 + sh(), x1: R.x0 + i0 + w - sh(), z1: R.z0 + j0 + d - sh(), floors, height: floors * Config.city.floorH,
                 facade: facades[Math.floor(rng() * facades.length)], roof: roofs[Math.floor(rng() * roofs.length)], cell: [i0, j0, w, d], shops: [] });
         };
@@ -608,15 +621,16 @@ const FavelaPlan = {
         // bananeiras e mato nos quintais; esconderijos (latão, caixote) encostados numa parede, sem fechar passagem
         const HK = { crate_big: [1.6, 1.6, 1.6], crate: [1.2, 1.2, 1.2], barrel: [1.0, 1.0, 1.1] }, hk = ['barrel', 'crate', 'barrel', 'crate_big'];
         let nh = 0, nt = 0;
-        for (let t = 0; t < 9000 && (nh < 110 || nt < 220); t++) {
+        const area = W * H / (334 * 478), NH = Math.round(110 * area), NT = Math.round(220 * area);      // (proporcional ao tamanho do morro)
+        for (let t = 0; t < 9000 && (nh < NH || nt < NT); t++) {
             const x = R.x0 + rng() * W, z = R.z0 + rng() * H;
             if (this.cellAt(x, z) !== this.GAP) continue;
             const at = (dx, dz) => this.cellAt(x + dx, z + dz);
             if (rng() < 0.6) {
-                if (nt < 220 && [at(1.6, 0), at(-1.6, 0), at(0, 1.6), at(0, -1.6), at(1.2, 1.2), at(-1.2, -1.2)].every((c) => c === this.GAP)) { this.props.push({ type: 'tree', kind: rng() < 0.55 ? 'banana' : 'bush', x, z, s: 0.7 + rng() * 0.3, seed: Math.floor(rng() * 1000) }); nt++; }
+                if (nt < NT && [at(1.6, 0), at(-1.6, 0), at(0, 1.6), at(0, -1.6), at(1.2, 1.2), at(-1.2, -1.2)].every((c) => c === this.GAP)) { this.props.push({ type: 'tree', kind: rng() < 0.55 ? 'banana' : 'bush', x, z, s: 0.7 + rng() * 0.3, seed: Math.floor(rng() * 1000) }); nt++; }
                 continue;
             }
-            if (nh >= 110) continue;
+            if (nh >= NH) continue;
             const kind = hk[Math.floor(rng() * hk.length)], [w, d, h] = HK[kind];
             if ([at(w * 0.5 + 0.4, 0), at(-w * 0.5 - 0.4, 0), at(0, d * 0.5 + 0.4), at(0, -d * 0.5 - 0.4)].filter((c) => c === this.BLD).length !== 1) continue;
             if ([at(0, 0), at(w / 2, d / 2), at(-w / 2, -d / 2), at(w / 2, -d / 2), at(-w / 2, d / 2), at(w + 0.6, 0), at(-w - 0.6, 0), at(0, d + 0.6), at(0, -d - 0.6)].filter((c) => c === this.GAP).length < 7) continue;
@@ -705,7 +719,7 @@ const FavelaPlan = {
     _offRoad(n) { return n.off !== undefined ? n.off : (n.off = !n.road && this.cellAt(n.x, n.z) !== this.ROAD); },
     // Cabe um carro estacionado em (x, z), de frente para (hx, hz)? (nenhum barraco nem frade embaixo)
     roomForCar(x, z, hx, hz) {
-        if (!this.built || !Standing.inFavela(x, z)) return true;
+        if (!this.built || !this.inTerritory(x, z)) return true;
         for (const a of [-2.3, 0, 2.3]) for (const l of [-1.05, 0, 1.05]) { const c = this.cellAt(x + hx * a - hz * l, z + hz * a + hx * l); if (c === this.BLD || c === this.ALLEY) return false; }
         return !this.bollards.some((b) => Math.abs(b.x - x) < 3 && Math.abs(b.z - z) < 3);
     },
@@ -756,4 +770,83 @@ const FavelaPlan = {
         for (let n = B; n; n = from.get(n)) out.push([n.x, n.z]);
         return out.reverse();
     },
+};
+
+// Uma favela nova com o mesmo molde: `cfg` troca caixa, ruas, formato, sementes, largos e visual. Os caches do molde (contorno,
+// grade de ocupação, entradas) e os dados construídos ficam próprios de cada uma.
+FavelaPlan.spawn = function (cfg) {
+    return Object.assign(Object.create(FavelaPlan), {
+        built: false, alleys: [], squares: [], bollards: [], lots: [], props: [], graph: null, groundBoxes: [], walkRects: [],
+        _sh: null, _occG: null, _ent: null, terr: null, dist: null, bounds: null, outline: null, cells: null, yard: null, SAFE: null,
+    }, cfg);
+};
+
+// ============================================================================
+// MORRO DO MIRANTE — a favela do C.P.C (Comando Primeiro da Capital), rival do C.V. Lembra o Vidigal: casas de alvenaria coloridas,
+// de 2 a 5 andares, empilhadas na encosta verde entre a Serra do Sul e o mar, logo ao sul da cidade; lajes pintadas viram bar à noite
+// (ombrelones, mesas, varal de lâmpadas). A Av. da Orla dá a volta por baixo (da ponta sul da cidade à Rodovia do Sul), a Estrada do
+// Mirante sobe da cidade até o alto e a Rua da Laje corta o meio. Território HOSTIL para quem é do C.V; à noite, a quadra do baile
+// recebe playboy da cidade (NightLife).
+// ============================================================================
+const FavelaSul = FavelaPlan.spawn({
+    id: 'cpc', name: 'Morro do Mirante',
+    R: { x0: -372, z0: -1124, x1: -120, z1: -926 },
+    SHAPE: { cx: -252, cz: -1024, ax: 102, az: 74 },
+    SEED: { shape: 9157, build: 27183 },
+    TILE_I: 860,
+    SQUARES: [['quadra', -292, -1024, 28, 18, true], ['campinho', -214, -1046, 26, 16, false]],
+    LOOK: { facades: ['vid0', 'vid1', 'vid2', 'vid3', 'vid4', 'vid5', 'vid0', 'vid1', 'vid2', 'vid3', 'brick2', 'brick0', 'concrete1', 'house0'],
+        roofs: ['lajeV0', 'lajeV1', 'lajeV2', 'lajeV3', 'slab0', 'slab1', 'lajeV0', 'slab0', 'zinc0', 'tile0'], floors: [0.12, 0.38, 0.72], maxFloors: 6 },
+    // Pontos de controle (a ponta na cidade e a da rodovia são ajustadas em roads(): ver _join)
+    MAIN: [
+        { name: 'Av. da Orla do Mirante', pts: [[-124, -969], [-138, -996], [-160, -1036], [-196, -1074], [-240, -1096], [-290, -1102], [-328, -1086], [-346, -1052], [-350, -1010], [-344, -972], [-336, -930]] },
+        { name: 'Estrada do Mirante', pts: [[-206, -921], [-210, -946], [-230, -970], [-258, -988], [-284, -1006], [-300, -1036], [-318, -1068], [-331, -1086]] },
+        { name: 'Rua da Laje', pts: [[-240, -1096], [-236, -1068], [-246, -1040], [-262, -1016], [-276, -1000]] },
+    ],
+    // Fora da mancha: o asfalto da cidade e a encosta íngreme (paredão da serra a oeste).
+    blocked(x, z) {
+        if (typeof CityGrid !== 'undefined' && CityGrid.cityO && CityGrid.inCity(x, z)) return true;
+        const e = 3, gx = WorldMap._rawHeight(x + e, z) - WorldMap._rawHeight(x - e, z), gz = WorldMap._rawHeight(x, z + e) - WorldMap._rawHeight(x, z - e);
+        return hypot(gx, gz) / (2 * e) > 0.85;
+    },
+    // Chamado depois das estradas do interior (a ponta oeste encosta na Rodovia do Sul). As pontas na cidade encostam na Av. do Contorno;
+    // as que caem em outra rua do morro, na via já traçada (entroncamento em T).
+    roads(P) {
+        const done = [];
+        const onLine = (L, x, z) => { let best = null, bd = Infinity; for (let i = 0; i + 1 < L.length; i++) { const a = L[i], b = L[i + 1], sx = b[0] - a[0], sz = b[1] - a[1], l2 = sx * sx + sz * sz || 1, t = Math.max(0, Math.min(1, ((x - a[0]) * sx + (z - a[1]) * sz) / l2)), q = [a[0] + sx * t, a[1] + sz * t], d = hypot(q[0] - x, q[1] - z); if (d < bd) { bd = d; best = q; } } return { q: best, d: bd }; };
+        const join = (p) => {
+            let best = null;
+            for (const L of done) { const o = onLine(L, p[0], p[1]); if (o.d < 12 && (!best || o.d < best.d)) best = o; }
+            if (!best && CityGrid.cityPath) { const o = onLine(CityGrid.cityPath, p[0], p[1]); if (o.d < 30) best = o; }
+            if (!best && RuralRoads.routes.R3) { const o = onLine(RuralRoads.routes.R3, p[0], p[1]); if (o.d < 30) best = o; }
+            return best ? best.q : p;
+        };
+        for (const r of this.MAIN) {
+            const pts = r.pts.map((p) => p.slice()), a = join(pts[0]), b = join(pts[pts.length - 1]);
+            pts[0] = a; pts[pts.length - 1] = b;
+            const S = this._smooth(pts, 4);
+            S[0] = a.slice(); S[S.length - 1] = b.slice();
+            P.addPath(S, 'fav', { name: r.name, anchor: true });
+            done.push(S);
+        }
+    },
+});
+
+// Todas as favelas (a do C.V primeiro) e as consultas que não sabem de qual favela é o ponto.
+const Favelas = {
+    list: [FavelaPlan, FavelaSul],
+    get built() { return this.list.filter((f) => f.built); },
+    byId(id) { return this.list.find((f) => f.id === id) || null; },
+    // A favela cuja caixa (com folga m) contém (x, z) — a de território primeiro.
+    at(x, z, m = 0) {
+        for (const f of this.list) if (f.built && f.inTerritory(x, z)) return f;
+        if (m > 0) for (const f of this.list) { const R = f.R; if (x > R.x0 - m && x < R.x1 + m && z > R.z0 - m && z < R.z1 + m) return f; }
+        return null;
+    },
+    inAny(x, z) { return !!this.at(x, z); },
+    cellAt(x, z) { for (const f of this.list) { const c = f.built ? f.cellAt(x, z) : -1; if (c >= 0) return c; } return -1; },
+    onRoad(x, z) { return this.cellAt(x, z) === FavelaPlan.ROAD; },
+    walkable(x, z) { for (const f of this.list) if (f.built && f.cellAt(x, z) >= 0) return f.walkable(x, z); return true; },
+    roomForCar(x, z, hx, hz) { const f = this.at(x, z); return f ? f.roomForCar(x, z, hx, hz) : true; },
+    nodeNear(x, z, alley = false) { const f = this.at(x, z, 60) || FavelaPlan; return f.built ? f.nodeNear(x, z, alley) : null; },
 };
