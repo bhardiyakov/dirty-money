@@ -66,6 +66,11 @@ const RuralRoads = {
         { id: 'T10', cls: 'trail', name: 'Caminho da Margem', pts: [{ on: 'R5', near: [-700, -255] }, [-760, -300], [-880, -300], { on: 'R5', near: [-920, -252] }] },
         // ---- o Corcovado (o Cristo no alto: Landmarks) e o estádio
         { id: 'T11', cls: 'serra', name: 'Estrada do Corcovado', pts: [{ on: 'D5', near: [-1024, 600] }, [-992, 630], [-968, 655], [-925, 662], [-900, 700], [-898, 750], [-905, 790], { on: 'T3', near: [-893, 805] }] },      // (do pé do morro: o portão das escadarias, o elevador e a estação do trem)
+        // ---- a LAGOA (map/Lagoa.js): a Av. Epitácio Pessoa dá a volta nela (via 'LG', traçada antes de todas) e estas ruas a ligam
+        { id: 'LG1', cls: 'serra', name: 'Av. Borges de Medeiros', pts: [{ on: 'LG', near: [-505, -600] }, { on: 'R7', near: [-562, -600] }] },
+        { id: 'LG2', cls: 'serra', name: 'Rua Jardim Botânico', pts: [{ on: 'LG', near: [-405, -385] }, { on: 'R5', near: [-405, -250] }] },
+        { id: 'LG3', cls: 'serra', name: 'Rua Fonte da Saudade', pts: [{ on: 'LG', near: [-305, -520] }, [-294, -520]] },
+        { id: 'LG4', cls: 'serra', name: 'Rua Mário Ribeiro', pts: [{ on: 'LG', near: [-370, -738] }, [-294, -790]] },
         { id: 'S4', cls: 'serra', name: 'Av. do Estádio', pts: [{ on: 'D3', near: [-456, -26] }, [-458, 18], [-358, 18], { on: 'D3', near: [-356, -28] }] },      // (passa ao sul do estacionamento do Maracanã e volta: sem ponta solta)
     ],
 
@@ -87,6 +92,14 @@ const RuralRoads = {
             if (isCity(out[out.length - 1])) out.splice(out.length - 1, 1, ...CityGrid.cityLink(out[out.length - 1][1]).reverse());
             return out;
         };
+        if (typeof Lagoa !== 'undefined') {                                     // a avenida em volta da Lagoa: laço exato (não sai do A*)
+            const ring = Lagoa.ringPath();
+            this.routes.LG = ring;
+            const h = Math.floor(ring.length / 2);                               // (em duas metades: um laço sozinho começa e acaba no mesmo nó)
+            P.addPath(ring.slice(0, h + 1), 'ave', { name: 'Av. Epitácio Pessoa', lagoa: true });
+            P.addPath(ring.slice(h), 'ave', { name: 'Av. Epitácio Pessoa', lagoa: true });
+            this._stampProx(ring);
+        }
         for (const r of this.NET) {
             const S = this.STYLE[r.cls], W = [], fixed = [];
             link(r.pts).forEach((w, i, pts) => {
@@ -137,6 +150,7 @@ const RuralRoads = {
     _pass(x, z, S) {
         if (x < this.X0 || x >= this.X1 || z < this.Z0 || z >= this.Z1) return 0;
         if (!WorldMap.isLand(x, z) || WorldMap.waterDist(x, z) < S.water) return 0;
+        if (typeof Lagoa !== 'undefined' && Lagoa.zone(x, z, 10)) return 2;   // (a Lagoa: as estradas contornam o bairro; só as ruas dela entram)
         if (x > -306) return 2;
         const F = typeof FavelaPlan !== 'undefined' ? FavelaPlan.R : null;
         if (F && x > F.x0 - 8 && x < F.x1 + 8 && z > F.z0 - 8 && z < F.z1 + 8) return 2;

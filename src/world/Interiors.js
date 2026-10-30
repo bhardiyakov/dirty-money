@@ -213,7 +213,7 @@ const Interiors = {
 	},
 
 	// ------------------------------------------------------------------ imóveis (casas compradas): mesma sala-palco, sem atendente
-	HOME_STYLE: { 'Barraco': 'home_simple', 'Casa popular': 'home_simple', 'Kitnet / apto simples': 'home_simple', 'Apartamento': 'home_apto', 'Apartamento alto padrão': 'home_apto', 'Cobertura frente-mar': 'home_cobertura', 'Mansão / cobertura de luxo': 'home_mansion' },
+	HOME_STYLE: { 'Barraco': 'home_simple', 'Casa popular': 'home_simple', 'Kitnet / apto simples': 'home_simple', 'Apartamento': 'home_apto', 'Apartamento alto padrão': 'home_apto', 'Cobertura frente-mar': 'home_cobertura', 'Mansão / cobertura de luxo': 'home_mansion', 'Cobertura de frente para a Lagoa': 'home_mansion', 'Apartamento de luxo na Lagoa': 'home_cobertura' },
 	enterHome(game, prop) {
 		if (this.active || this.busy) return false;
 		if (game.wanted.level > 0) { game._flash('A polícia está na sua cola — não dá para entrar'); return true; }

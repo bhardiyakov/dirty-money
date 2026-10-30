@@ -393,7 +393,7 @@ quadro e a sombra do assador sem vazar.
 
 O mundo segue a estrutura do mapa de referência, com os nomes do jogo mantidos (Centro, Ilha Praiana, Favela do Morro, Morro do
 Mirante, Vila da Roça, Alto da Serra, Serras, Fazendas, Pântano, Canal):
-- **Lagoa** a oeste do Centro, entre a Rodovia da Lagoa e o viaduto, com margem de parque; a **Rodovia da Lagoa** (R7) desce a oeste
+- **Lagoa** a oeste do Centro, entre a Rodovia da Lagoa e o viaduto (ver *A Lagoa*, abaixo); a **Rodovia da Lagoa** (R7) desce a oeste
   dela até a Rodovia do Sul e sobe até a Rodovia Central passando pelo estádio — com as outras rodovias, fecha o anel laranja do mapa;
 - **Via Expressa**: a diagonal que corta o norte do Centro da ponte norte até o Contorno (`CityGrid._expressway`, marcada `express`);
 - **Maracanã** a oeste do Centro: o complexo inteiro, entrável (ver *O complexo do Maracanã*, abaixo);
@@ -408,7 +408,7 @@ Mirante, Vila da Roça, Alto da Serra, Serras, Fazendas, Pântano, Canal):
   calçadão é movimentado (`NPCManager._density` via `Landmarks.crowd`);
 - **píeres** de madeira com barcos atracados no canal (anda-se neles como em terra: `MapGeo.onDock`) — os barcos são de **verdade**
   (`BoatManager.spawn`: lancha e barco em cada píer, roubáveis e navegáveis, como os da marina) — e **pontes estaiadas** (pilones
-  e leques de estais) nas pontes norte e do meio; a **Lagoa** tem lanchas e jet skis ancorados para passear;
+  e leques de estais) nas pontes norte e do meio;
 - o autódromo foi para o campo a oeste (o lugar antigo virou a Lagoa).
 Marcos novos têm ícone no mapa (🏟️ ✝️ 🚡) e nome (MARACANÃ, LAGOA, CORCOVADO, PÃO DE AÇÚCAR). O ponto de tipo `village` (Vila da Roça,
 Alto da Serra) ganhou ícone: antes derrubava o mapa da pausa quando aparecia na tela.
@@ -487,6 +487,39 @@ do trânsito; longe, esvazia; de madrugada, poucos), a torcida, a densidade, o s
 porta, a Av. do Estádio, o autódromo no lugar, o gramado, o nome no mapa, o horário, a passarela (sobe, atravessa sem fresta e desce no
 chão), a cobertura e o gramado no mapa e, por dentro: entrar, os jogadores, a bola e a torcida, a catraca fechada, o ingresso que
 libera, a lanchonete, assistir ao jogo, a bola e os jogadores andando, o gol, a saída e o portão fechado de madrugada.
+
+### A Lagoa (`src/map/Lagoa.js`)
+
+Como a Rodrigo de Freitas (a foto de referência): o espelho d'água de beira LISA — o ATERRO, uma mureta de pedra clara, sem praia e
+sem recorte (a forma é uma curva em volta do centro, `Lagoa.R(a)`, e o WorldMap cava a água por ela) — e em volta, de dentro para fora:
+- a ORLA (2 quarteirões de parque, grama): palmeiras na beira d'água, a PISTA de caminhada (bege) e a CICLOVIA (vermelha, tracejada,
+  bordas brancas), árvores, bancos e postes; 6 QUIOSQUES com guarda-sóis e o quiosqueiro (`Stands`: água de coco, açaí, chope,
+  sanduíche, suco, água) e 4 CARRINHOS de ambulante na pista (mate, biscoito de polvilho, picolé, milho); 4 DEQUES de madeira entrando na
+  água (anda-se neles: `MapGeo.onDock`);
+- a **Av. Epitácio Pessoa** dando a volta inteira (via livre fechada, em duas metades, traçada antes das estradas do interior, que
+  contornam o bairro) e as ligações: Av. Borges de Medeiros (Rodovia da Lagoa), Rua Jardim Botânico (Rodovia dos Lagos), Rua Fonte da
+  Saudade e Rua Mário Ribeiro (a cidade);
+- os PRÉDIOS DE LUXO: ~30 quarteirões de verdade do CityGrid (calçada, jardim com palmeiras, a torre de 8 a 13 andares encostada na
+  calçada de frente para a Lagoa), em duas fileiras onde cabe — fachada residencial nova (`lux0`–`lux3`, tipo `resid`: janelas altas
+  entre pilares brancos, varanda com guarda-corpo de vidro e corrimão de inox, laje branca avançando, floreiras) e PISCINA NA
+  COBERTURA na maioria; um quarteirão é o parque das QUADRAS (futsal, basquete, parquinho) e outro o CLUBE (sede e piscina);
+- o metro quadrado MAIS CARO da cidade (`RealEstate.locate`: região "Lagoa", índice 1 — no topo, acima da orla e da ilha): 6 imóveis
+  à venda (coberturas de frente para a Lagoa e apartamentos de luxo; listagem própria, os códigos dos imóveis de antes não mudam).
+Gente: a pista é TRILHA DE CORRIDA (`CityGrid.jogPaths`: os corredores do NPCManager correm nela), 8 CICLISTAS de verdade (bicicleta
+do trânsito com ciclista, `TrafficCar`, numa rota em laço pela ciclovia, nos dois sentidos — derrubou ou pegou a bicicleta, vira
+veículo comum) aparecem com a câmera perto; a orla tem o movimento mais alto (`Landmarks.crowd`), de roupa esportiva, executivo e
+turista.
+A ÁGUA DOCE é outra mecânica: `Waves.open` = 0 (sem ondulação, sem ressaca: barcos e quem nada ficam parados); no shader da orla
+(`WaterPlugin`) o campo ganhou dois canais — lago (água fechada) e aterro (a Lagoa) — e no lago não há arrebentação, espuma, raso
+turquesa nem areia molhada: a água é verde-azulada, parada, com reflexos leves (lago natural: a beira barrenta); no mapa pintado a
+água doce tem a sua cor (`MapPaint.LAKE`), sem espuma. Barco a motor não entra: nos deques ficam os PEDALINHOS de cisne e os CAIAQUES
+(`BoatSheet`: sem motor, devagar, não pegam fogo; `EngineAudio`: sem ronco). No mapa: a orla, a pista, a ciclovia, os deques, os
+quiosques, as quadras e as piscinas das coberturas, com os pontos 🦢 Lagoa, ⚽ quadras e 🏊 clube.
+
+`tests/32_lagoa` confere a beira lisa (água dentro, terra fora, sem praia), a avenida e as ligações, os prédios (quarteirões de
+verdade, fachada de luxo, sólidos, piscinas), quadras e clube, o m² mais caro, deques, trilha, pontos e barracas, a água parada (e o mar
+com onda), pedalinhos e caiaques sem motor, o quiosque vendendo, os ciclistas na ciclovia (nos dois sentidos, andando, somem de longe) e
+o movimento na orla.
 
 ### Mapa e GPS pintados em alta definição (`src/map/MapPaint.js`, `src/map/MapRenderer.js`)
 

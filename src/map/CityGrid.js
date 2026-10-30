@@ -1147,6 +1147,9 @@ const CityGrid = {
                       { min: 8, max: 13, gap: 4, fl: [3, 5], n: 6, fac: ['house0', 'house1', 'house3', 'concrete1'], roof: ['tile0', 'conc1', 'garden0'] }],
         industrial:  [{ min: 12, max: 40, gap: 4, fl: [3, 4], n: 3, fac: ['metal0', 'metal1', 'concrete0'], roof: ['metal0', 'metal1', 'tar0'] }],
         port:        [{ min: 12, max: 40, gap: 5, fl: [3, 4], n: 2, fac: ['metal0', 'metal1', 'concrete0'], roof: ['metal0', 'metal1', 'tar0'] }],
+        // a Lagoa (map/Lagoa.js): torres residenciais de luxo, afastadas, com jardim em volta
+        lagoa:       [{ min: 11, max: 20, gap: 5, fl: [8, 13], n: 3, fac: ['lux0', 'lux1', 'lux2', 'lux3'], roof: ['conc1', 'conc0'] },
+                      { min: 12, max: 24, gap: 6, fl: [9, 14], n: 2, fac: ['lux0', 'lux1', 'lux2', 'lux3'], roof: ['conc1', 'conc0'] }],
     },
     _packLots(block, rng) {
         const F = block.footPoly, specs = this.LOTS[block.biome];

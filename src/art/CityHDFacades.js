@@ -12,7 +12,7 @@
 
 Object.assign(CityHD, {
     // Grade de janelas por tipo de fachada: [colunas, andares] no ladrilho. Cada janela fica dentro de UMA célula.
-    GRID: { office: [4, 2], brick: [4, 2], house: [4, 2], timber: [4, 2], stone: [2, 2], metal: [2, 2], concrete: [2, 2] },
+    GRID: { office: [4, 2], brick: [4, 2], house: [4, 2], timber: [4, 2], stone: [2, 2], metal: [2, 2], concrete: [2, 2], resid: [2, 2] },
     // Quem mora atrás: 'office' (escritório e galpão: acende cedo, apaga depois do expediente) ou 'home' (casa: noite adentro).
     OCC: { office: 'office', metal: 'office' },
 
@@ -338,6 +338,35 @@ Object.assign(CityTile.prototype, {
             this._sill(ox + 1, oy + 36.4, 58, HDK.t(wall, 1.05));
             this._drip(ox + 4, oy + 39, 52, 10);
             g.fillStyle = this.lin(0, oy + 57, 0, oy + 60, [[0, HDK.t(wall, 0.85)], [1, HDK.t(wall, 0.55)]]); g.fillRect(ox, oy + 57.5, 60, 2.5);
+        }
+    },
+
+    // Residencial de luxo (a Lagoa): em cada andar, o JANELÃO do piso ao teto (vidro escuro, caixilho fino), a VARANDA com guarda-corpo
+    // de vidro e corrimão de inox, a LAJE branca avançando (com a sombra embaixo) e, às vezes, uma floreira.
+    _fac_resid(st) {
+        const g = this.g, wall = HDK.C(st.wall), slab = HDK.C(st.slab), rail = HDK.C(st.rail), seed = this.seed;
+        this.base([HDK.t(wall, 0.97), wall, HDK.t(wall, 1.03)], 30, seed, 3);
+        this.grain(0.25, seed, 0.008);
+        for (let cy = 0; cy < 2; cy++) for (let cx = 0; cx < 2; cx++) {
+            const ox = cx * 60, oy = cy * 60, r = this.rng();
+            // duas janelas altas por baia (parede clara entre elas), recuadas: a sombra da laje no alto do vidro
+            for (const wx of [ox + 6, ox + 33]) {
+                this.fillRR(wx - 0.8, oy + 11.2, 22.6, 30.6, 0.3, HDK.css(HDK.t(wall, 0.7)));
+                this._glass(wx, oy + 12, 21, 29, st.glass, '#c4dcea', { step: 18, curtain: r < 0.5 ? '#f2ecdc' : null });
+                this._room(wx, oy + 12, 21, 29, 'home');
+                g.fillStyle = this.lin(0, oy + 12, 0, oy + 17, [[0, [0, 0, 0], 0.28], [1, [0, 0, 0], 0]]); g.fillRect(wx, oy + 12, 21, 5);
+                this.line(wx + 10.5, oy + 12, wx + 10.5, oy + 41, 'rgba(70,78,86,0.8)', 0.9);
+            }
+            // o guarda-corpo de vidro da varanda (claro) e o corrimão de inox
+            g.fillStyle = HDK.css(rail, 0.35); g.fillRect(ox, oy + 33, 60, 10);
+            g.fillStyle = 'rgba(255,255,255,0.22)'; for (let x = ox + 4; x < ox + 60; x += 14) g.fillRect(x, oy + 33.5, 2, 9);
+            this.line(ox, oy + 32.7, ox + 60, oy + 32.7, 'rgba(236,240,243,0.95)', 1.1);
+            for (const vx of [ox + 0.8, ox + 30, ox + 59.2]) this.line(vx, oy + 32.7, vx, oy + 43, 'rgba(170,178,186,0.9)', 0.7);
+            if (r > 0.6) { const fx = ox + 6 + this.rng() * 40; this.fillRR(fx, oy + 38, 9, 5, 1, '#5d8a4a'); this.circ(fx + 2.5, oy + 37.5, 2.6, '#6fa055'); this.circ(fx + 6.5, oy + 37.2, 2.8, '#7cb060'); }
+            // a laje branca avançando e a sombra suave que ela joga
+            g.fillStyle = this.lin(0, oy + 43, 0, oy + 50, [[0, HDK.t(slab, 1.05)], [1, HDK.t(slab, 0.9)]]); g.fillRect(ox, oy + 43, 60, 7);
+            this.line(ox, oy + 43.2, ox + 60, oy + 43.2, 'rgba(255,255,255,0.7)', 0.7);
+            g.fillStyle = this.lin(0, oy + 50, 0, oy + 56, [[0, [0, 0, 0], 0.18], [1, [0, 0, 0], 0]]); g.fillRect(ox, oy + 50, 60, 6);
         }
     },
 

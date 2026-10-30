@@ -257,13 +257,7 @@ class BoatManager {
             this._make(kind, s.x, s.z, Math.random() * Math.PI * 2, pick(kind), 'parked');
             this.stats.anchored++;
         }
-        for (const kind of ['lancha', 'jetski', 'jetski', 'lancha']) {                 // a LAGOA (lago fechado do parque): dá para pegar um e passear
-            const sp = this._waterSpot(-490, -320, -770, -420, 14, placed);
-            if (!sp) continue;
-            placed.push(sp);
-            this._make(kind, sp.x, sp.z, Math.random() * Math.PI * 2, pick(kind), 'parked');
-            this.stats.lagoa++;
-        }
+        if (typeof Lagoa !== 'undefined') for (const b of Lagoa.boatSpots()) { this._make(b.kind, b.x, b.z, b.h, pick(b.kind), 'parked'); this.stats.lagoa++; }      // a LAGOA: pedalinhos e caiaques nos deques (barco a motor não entra)
         for (const kind of ['jetski', 'jetski', 'lancha', 'lancha', 'barco', 'jetski']) {
             const s = this._waterSpot(240, 370, -900, 1000, 30, placed);
             if (!s) continue;

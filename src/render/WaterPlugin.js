@@ -84,14 +84,26 @@ const Water = {
             }
             return D;
         };
-        const DS = dist(1), DL = dist(0), data = new Uint8Array(N), R = this.RANGE, F = new Float32Array(N);
+        const DS = dist(1), DL = dist(0), data = new Uint8Array(N * 4), R = this.RANGE, F = new Float32Array(N);
         for (let k = 0; k < N; k++) F[k] = isSea[k] ? (DS[k] - 0.5) * c : -(DL[k] - 0.5) * c;          // do centro do texel até a borda (a linha d'água)
+        // ÁGUA DOCE: o lago (água fechada, WorldMap.isSea = 0) e a terra que dá para ele (o lago mais perto que o mar) — sem arrebentação,
+        // espuma nem areia molhada; e o ATERRO (a Lagoa: a beira é a mureta, map/Lagoa.js). Desfocados para a transição não ter degrau.
+        const LK = new Float32Array(N), AT = new Float32Array(N), ocean = M.isSea, dSea = M._dSea, dLake = M._dLake;
+        for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+            const k = j * nx + i, kc = (j / S | 0) * M.nx + (i / S | 0);
+            LK[k] = isSea[k] ? (ocean && ocean[kc] ? 0 : 1) : (dLake && dSea && dLake[kc] < dSea[kc] ? 1 : 0);
+            if (typeof Lagoa !== 'undefined') { const x = W.minX + (i + 0.5) * c, z = W.minZ + (j + 0.5) * c; AT[k] = Lagoa.zone(x, z, 2) ? 1 : 0; }
+        }
+        this._blur(LK, nx, nz, 2, 2); this._blur(AT, nx, nz, 2, 2);
         // A costa do mapa é uma ESCADA de células de 4 u: perto da beira as curvas do campo seguiam os degraus (a espuma na areia e a
         // linha d'água faziam quinas). Desfoque do campo (caixa de 3 texels, 3 passadas ≈ gaussiana de 2,8 u): numa costa reta nada
         // muda (a distância é linear); nos degraus a quina vira curva.
         this._blur(F, nx, nz, 1, 3);
-        for (let k = 0; k < N; k++) data[k] = Math.round((Math.max(-R, Math.min(R, F[k])) / R * 0.5 + 0.5) * 255);
-        const tex = BABYLON.RawTexture.CreateLuminanceTexture(data, nx, nz, scene, false, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE);
+        for (let k = 0; k < N; k++) {
+            data[k * 4] = Math.round((Math.max(-R, Math.min(R, F[k])) / R * 0.5 + 0.5) * 255);
+            data[k * 4 + 1] = Math.round(Math.max(0, Math.min(1, LK[k])) * 255); data[k * 4 + 2] = Math.round(Math.max(0, Math.min(1, AT[k])) * 255); data[k * 4 + 3] = 255;
+        }
+        const tex = BABYLON.RawTexture.CreateRGBATexture(data, nx, nz, scene, false, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE);
         tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
         this._fieldK = [W.minX, W.minZ, 1 / (nx * c), 1 / (nz * c)];
         return (this.field = tex);
@@ -164,6 +176,24 @@ const Water = {
                 return mix(col, vec3(0.92, 0.97, 0.98), cap * on * 0.9);
             }
             float shoreDist(vec2 q) { return (texture2D(shoreField, (q - vec2(${K[0]}, ${K[1]})) * vec2(${K[2]}, ${K[3]})).r - 0.5) * 2.0 * ${R}; }
+            // água doce (lago) e aterro (a Lagoa), 0..1
+            vec2 shoreLake(vec2 q) { return texture2D(shoreField, (q - vec2(${K[0]}, ${K[1]})) * vec2(${K[2]}, ${K[3]})).gb; }
+            // A água do LAGO: verde-azulada, parada (sem ondulação nem espuma), mais clara e esverdeada no raso. No lago natural a beira
+            // é de lama (barrenta), na Lagoa a beira é a mureta do aterro (a água chega funda até ela). Uns reflexos de sol bem leves.
+            vec3 lakeColor(vec3 base, vec2 q, float sb, float at) {
+                vec4 clk = texture2D(shoreClock, vec2(0.1, 0.5));
+                vec3 deep = vec3(0.15, 0.35, 0.37), mid = vec3(0.22, 0.46, 0.45), near = vec3(0.32, 0.56, 0.48);
+                float t = smoothstep(0.5, 10.0, sb);
+                vec3 col = mix(mix(near, mid, smoothstep(0.0, 0.4, t)), deep, smoothstep(0.35, 1.0, t));
+                col = mix(near * 0.9, col, max(at, smoothstep(0.0, 3.0, sb)));
+                float pat = dot(base, vec3(0.299, 0.587, 0.114)) / 0.36;                          // (a textura de pixel da água: o desenho fica, a cor é outra)
+                col *= mix(1.0, clamp(pat, 0.82, 1.18), 0.55);
+                col = mix(col, vec3(0.42, 0.46, 0.32), (1.0 - at) * (1.0 - smoothstep(0.0, 1.6, sb)) * 0.45);      // (lago natural: a beira barrenta)
+                float ph = (clk.r + clk.b * 255.0) * 0.8;
+                float gl = wNoise(q * 0.9 + vec2(ph * 0.6, ph * 0.25)) * wNoise(q * 2.3 - vec2(ph * 0.3, -ph * 0.5));
+                col += vec3(0.85, 0.9, 0.85) * smoothstep(0.42, 0.62, gl) * 0.09;
+                return col;
+            }
             // Ondulação suave da praia: a beira — e com ela todas as linhas da orla (espuma na areia, lâmina d'água, linha de onda, raso) —
             // entra e sai devagar ao longo da praia (ondas de ~8 e ~12 u, até ~0,45 u). O deslocamento é o do ponto da BEIRA mais perto
             // (q − n·s, n = para onde o mar fica), então tudo que está na mesma perpendicular à beira anda junto: as linhas continuam
@@ -270,10 +300,12 @@ const Water = {
                         {
                             vec2 q = wSmooth > 0.5 ? vPositionW.xz : (floor(vPositionW.xz * 20.0) + 0.5) / 20.0;     // grade de pixels do mundo (pixel art)
                             float s = shoreDist(q), sb = shoreDist(vPositionW.xz);
+                            vec2 lk = shoreLake(vPositionW.xz);
                             #ifdef SHORE_SEA
-                            float sw = smoothstep(0.8, 7.0, sb);                                  // (na beira a ondulação vira a orla)
+                            vec3 water0 = baseColor.rgb;
+                            float sw = smoothstep(0.8, 7.0, sb) * (1.0 - lk.x);                    // (na beira a ondulação vira a orla, e o lago é parado)
                             if (sw > 0.0) baseColor.rgb = swellColor(baseColor.rgb, q, sw);
-                            if (s < ${R} - 0.5) {
+                            if (s < ${R} - 0.5 && lk.x < 0.999) {
                                 float wob = shoreWobble(q, s);
                                 vec3 gr = vec3(0.80, 0.70, 0.49);
                                 #ifdef SHORE_GROUND
@@ -281,8 +313,16 @@ const Water = {
                                 #endif
                                 baseColor.rgb = shoreColor(baseColor.rgb, gr, q, s + wob, sb + wob);
                             }
+                            if (lk.x > 0.001) baseColor.rgb = mix(baseColor.rgb, lakeColor(water0, q, sb, lk.y), lk.x);
                             #else
-                            if (s > -5.0 && vPositionW.y < 0.4) { float wob = shoreWobble(q, s); if (s + wob > -4.5) baseColor.rgb = shoreColor(vec3(0.17, 0.41, 0.54), baseColor.rgb, q, s + wob, sb + wob); }
+                            vec3 ground0 = baseColor.rgb;
+                            if (s > -5.0 && vPositionW.y < 0.4 && lk.x < 0.999) { float wob = shoreWobble(q, s); if (s + wob > -4.5) baseColor.rgb = shoreColor(vec3(0.17, 0.41, 0.54), baseColor.rgb, q, s + wob, sb + wob); }
+                            if (lk.x > 0.001 && s > -4.0 && vPositionW.y < 0.4) {                 // a beira do lago: terra molhada e, depois da linha d'água, a água doce
+                                float wet = 1.0 - smoothstep(0.0, 2.2, -sb);
+                                vec3 g = ground0 * (1.0 - 0.22 * wet * (1.0 - lk.y));
+                                g = mix(g, lakeColor(vec3(0.17, 0.41, 0.54), q, max(sb, 0.0), lk.y), smoothstep(-0.15, 0.35, sb));
+                                baseColor.rgb = mix(baseColor.rgb, g, lk.x);
+                            }
                             #endif
                         }
                         #endif`,

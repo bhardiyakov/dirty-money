@@ -149,3 +149,38 @@ def coffee():
 def plate():
     return [Part(cap(10, 10, 10, 92, 3.4), 'steel', sh=1.5), Part(U(cap(90, 10, 90, 92, 3.4), ellipse(90, 26, 5, 16)), 'steel', sh=1.5),
             Part(circle(50, 52, 34), 'white', sh=5), Part(circle(50, 52, 22), 'white', sh=3), Layer(stroke(polyline((6, 10), (6, 30), (14, 30), (14, 10)), 2.4), '#9aa3ad')]
+@icon('🥥')
+def coconut():
+    # o coco verde aberto, com o canudo (a água de coco da praia)
+    return [Part(ellipse(50, 60, 38, 34), 'green', sh=5, lines=[svg('M24 38 Q30 62 26 86'), svg('M76 38 Q70 62 74 86')], lw=1.8),
+            Part(ellipse(50, 34, 20, 9), 'white', sh=2), Part(ellipse(50, 34, 12, 5), 'glass', sh=1, hl=False),
+            Part(stroke(polyline((52, 34), (60, 8), (74, 4)), 5), 'red', shade=False)]
+@icon('🧉')
+def mate():
+    # o copo de mate gelado com limão e o canudo
+    cup = svg('M22 30 L78 30 L70 96 L30 96 Z')
+    return [Part(stroke(polyline((56, 34), (64, 6)), 5), 'white', shade=False), Part(cup, 'glass', sh=3), Part(svg('M26 50 L74 50 L70 92 L30 92 Z'), 'orange', sh=3),
+            Part(circle(72, 30, 13), 'leaf', sh=2, lines=[polyline((72, 19), (72, 41)), polyline((61, 30), (83, 30))], lw=1.6, lc='#e9f7c8')]
+@icon('🥨')
+def pretzel():
+    # o biscoito de polvilho em argola (o "Globo"), dourado
+    ring = U(stroke(ellipse(50, 50, 36, 30), 13))
+    return [Part(ring, 'gold', sh=4), *[Layer(ellipse(x, y, 2.2, 1.4, 25), '#fff3c4') for x, y in ((22, 40), (36, 22), (62, 22), (80, 42), (74, 70), (50, 80), (26, 66))]]
+@icon('🌭')
+def hotdog():
+    # o pão, a salsicha e a mostarda em zigue-zague
+    return [Part(rrect(8, 44, 84, 34, 17), 'wood', sh=4), Part(rrect(4, 40, 92, 18, 9), 'red', sh=3),
+            Part(stroke(polyline((16, 46), (26, 52), (36, 46), (46, 52), (56, 46), (66, 52), (76, 46), (86, 52)), 4), 'yellow', shade=False, hl=False),
+            Part(rrect(12, 30, 76, 16, 8), 'gold', sh=2)]
+@icon('🍹')
+def tropical():
+    # o copo de suco com a fatia de laranja e o canudinho
+    glass = svg('M18 22 L82 22 L74 94 L26 94 Z')
+    return [Part(stroke(polyline((50, 26), (60, 4)), 4), 'pink', shade=False), Part(glass, 'glass', sh=3), Part(svg('M22 42 L78 42 L72 90 L28 90 Z'), 'orange', sh=3),
+            Part(svg('M58 22 A16 16 0 0 1 90 22 Z'), 'yellow', sh=2, lines=[polyline((74, 22), (74, 9)), polyline((74, 22), (84, 12)), polyline((74, 22), (64, 12))], lw=1.4, lc='#fff3a8')]
+@icon('🧀')
+def cheese():
+    # a fatia de queijo com os furos
+    wedge = svg('M8 78 L92 78 L92 46 L20 26 Z')
+    return [Part(wedge, 'yellow', sh=4), Part(svg('M8 78 L92 78 L92 88 L8 88 Z'), 'gold', sh=2),
+            *[Layer(ellipse(x, y, r, r * 0.8), '#c8961a') for x, y, r in ((40, 52, 6), (66, 60, 5), (78, 50, 3.5), (30, 68, 4), (56, 70, 3))]]

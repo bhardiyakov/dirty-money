@@ -42,14 +42,15 @@ const Waves = {
 	// Fase de cada ondulação (0..1) agora: o shader a recebe pela textura do relógio (WaterPlugin).
 	phase(i) { const c = this._init()[i], p = c.w * this.t / (Math.PI * 2); return p - Math.floor(p); },      // (o shader soma a fase inicial c.ph)
 
-	// Fator de mar em (x, z): 0 em terra; lago quase parado; no mar a ondulação cresce da beira (onde vira a orla) ao fundo.
+	// Fator de mar em (x, z): 0 em terra; lago (água doce, fechada: a Lagoa) PARADO — sem ondulação, sem ressaca; no mar a ondulação
+	// cresce da beira (onde vira a orla) ao fundo.
 	open(x, z, depth) {
 		const W = WorldMap, i = W.index(x, z);
 		if (i < 0) return 1;
 		if (!(depth > 0)) return 0;
 		const sea = W.isSea ? W.isSea[i] === 1 : true;
 		const s = Math.min(1, Math.max(0, (depth - 2) / 12)), e = s * s * (3 - 2 * s);
-		return sea ? e : e * 0.15;
+		return sea ? e : 0;
 	},
 
 	// Ondulação de mar aberto em (x, z), sem o fator de beira: out = { h (m), gx, gz (inclinação), vx, vz (água da superfície, m/s) }.

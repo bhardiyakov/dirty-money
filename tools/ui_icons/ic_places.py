@@ -103,6 +103,14 @@ def redeemer():
     robe = poly((44.5, 28), (55.5, 28), (60, 66), (40, 66))
     return [Part(hill, 'leaf', sh=4), Part(rrect(40, 64, 20, 12, 2), 'grey', sh=2), Part(U(robe, rrect(6, 25, 88, 9, 4.5)), 'white', sh=3),
             Part(circle(50, 17, 7.5), 'white', sh=2)]
+@icon('🦢')
+def swan():
+    # o pedalinho de cisne da Lagoa: o cisne branco (corpo, asa, pescoço em S, bico laranja) na água verde-azulada
+    water = svg('M2 80 Q26 72 50 80 Q74 88 98 80 L98 98 L2 98 Z')
+    neck = stroke(svg('M30 70 Q20 56 28 44 Q36 32 30 22'), 9)
+    return [Part(water, 'teal', sh=3, hl=False), Part(U(ellipse(54, 70, 34, 14), neck, circle(31, 20, 8)), 'white', sh=4),
+            Part(ellipse(58, 63, 20, 8, -8), 'white', sh=2, lines=[polyline((44, 64), (72, 60)), polyline((48, 68), (74, 64))], lw=1.6),
+            Part(poly((37, 18), (48, 22), (37, 25)), 'orange', sh=1), Part(circle(29, 18, 1.8), 'black', shade=False, hl=False)]
 @icon('🚡')
 def tramway():
     # o bondinho: o cabo, o carrinho e a cabine vermelha pendurada

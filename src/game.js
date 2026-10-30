@@ -889,6 +889,7 @@ class Game {
 			Heists.build(this); Mechanic.build(this); Business.syncMap(this, dt);           // joalherias, oficinas, seus negócios no mapa
 			Dealers.build(this); Dealers.update(dt); Tuning.build(this); Tuning.update(dt); Garage.update(dt); PersonalBike.update(dt); this.carUI.update(dt);      // concessionárias (vitrine) e garagens (seus carros)
 			if (typeof Maracana !== 'undefined') Maracana.update(dt, this);                // o estacionamento do Maracanã: carros de verdade nas vagas
+			if (typeof Lagoa !== 'undefined') Lagoa.update(dt, this);                      // os ciclistas da ciclovia da Lagoa
 		}
 
 		Perf.lap('favela (gangues/moto/missões)');

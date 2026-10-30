@@ -265,6 +265,7 @@ class TerrainBuilder {
         if (!table || (WorldMap.flags[gj * WorldMap.nx + gi] & 1)) return;
         if (typeof Speedway !== 'undefined' && Speedway.covers(cx, cz, 4)) return;                          // (o autódromo: sem mato na pista)
         if (typeof Landmarks !== 'undefined' && Landmarks.covers(cx, cz, 4)) return;                        // (os marcos)
+        if (typeof Lagoa !== 'undefined' && Lagoa.covers(cx, cz, 4)) return;                                  // (a Lagoa: orla e prédios)
         const c = this.W.cell, wb = this.wb;
         for (let t = 0; t < table.length; t++) {
             const [kind, p, s0, s1] = table[t];

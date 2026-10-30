@@ -62,11 +62,9 @@ const WorldMap = {
     LAKES: [
         { x: -820, z: -420, rx: 150, rz: 105 },
         { x: -1010, z: -140, rx: 85, rz: 65 },
-        { x: -640, z: -660, rx: 120, rz: 78 },
+        { x: -680, z: -660, rx: 108, rz: 78 },
         { x: -430, z: 960, rx: 70, rz: 55 },
-        // a LAGOA: entre a Rodovia da Lagoa e o viaduto, com margem de parque (sem brejo) — um bojo ao sul e um braço mais estreito ao norte
-        { x: -404, z: -590, rx: 92, rz: 190, park: true, name: 'Lagoa' },
-        { x: -414, z: -400, rx: 66, rz: 96, park: true },
+        // (a LAGOA, a oeste do Centro, tem forma própria — a beira lisa do aterro: map/Lagoa.js)
     ],
     BAYS: [
         { x: -700, z: -1190, rx: 230, rz: 200, name: 'Baía Verde' },
@@ -120,6 +118,7 @@ const WorldMap = {
             if (q > 1.4) continue;
             if (1 - q + (F(x / 60, z / 60, 16) - 0.5) * 0.55 > 0) { land = false; break; }
         }
+        if (land && typeof Lagoa !== 'undefined' && Lagoa.water(x, z, 2.5)) land = false;      // a Lagoa (a água passa um pouco da mureta: a orla cobre)
         if (!land) {                                       // ilha praiana e ilhotas
             const I = this.ISLAND, d = this._segDist(x, z, I.ax, I.az, I.bx, I.bz);
             if (d < I.r + 45 && (d < I.r - 51 || d < I.r + (F(x / 120, z / 120, 17) - 0.5) * 90 - 6)) land = true;
@@ -286,6 +285,7 @@ const WorldMap = {
             v *= Math.min(this._ss(10, 140, dUrb[k] * c), this._ss(6, 45, dRoad[k] * c));
             if (x > 300 && hypot(x - this.PAO.x, z - this.PAO.z) > this.PAO.r + 40) v = Math.min(v, 1.5) * 0.5;      // ilha: quase plana (o Pão de Açúcar, não)
             v *= this._ss(0, 28, dWater[k] * c);                                      // e desce até o nível do mar na costa
+            if (typeof Lagoa !== 'undefined' && Lagoa.zone(x, z, Lagoa.OUT2 + 8)) v = 0;              // (a Lagoa: aterro plano — orla, avenida e prédios)
             h[k] = Math.max(0, v);
         }
 
@@ -308,7 +308,8 @@ const WorldMap = {
             else if (typeof Maracana !== 'undefined' && x > Maracana.AREA[0] && x < Maracana.AREA[2] && z > Maracana.AREA[1] && z < Maracana.AREA[3] && hh < 20) b = R.GRASS;     // (o complexo do Maracanã: gramados)
             else if (dSea[k] * c < 13 || (dSea[k] * c < 40 && x > 184 && x < 300 && Math.abs(z - this.STRIP.cz) < this.STRIP.hz + 60)) b = R.SAND;      // (orla da cidade: praia larga nas baías)
             else if (x > BE.x0 && x < BE.x1 && z < BE.z1 && hh < 8) b = R.SAND;                               // (a praia do sul)
-            else if (dLake[k] * c < 11 && hh < 6) b = this._inLagoa(x, z, 40) ? R.GRASS : R.SWAMP;              // (a Lagoa: margem de parque)
+            else if (typeof Lagoa !== 'undefined' && Lagoa.zone(x, z, Lagoa.OUT2 + 4)) b = R.GRASS;           // (a Lagoa: orla de grama, sem brejo nem praia)
+            else if (dLake[k] * c < 11 && hh < 6) b = R.SWAMP;
             else if (x > 300 && !pao) b = R.RESORT;
             else if (hh > 36 || (hh > 20 && slope > 0.26) || (flags[k] & 1)) b = R.ROCK;
             else if (this._inFavela(x, z, hh)) b = R.FAVELA;
@@ -334,9 +335,6 @@ const WorldMap = {
         this.buildMs = performance.now() - t0;
         console.log(`[MAPA] ${nx}×${nz} células em ${(performance.now() - t0).toFixed(0)} ms | paredões: ${this.cliffRects.length} retângulos`);
     },
-
-    // (x, z) na Lagoa ou a `m` u dela?
-    _inLagoa(x, z, m = 0) { return this.LAKES.some((L) => L.park && Math.abs(x - L.x) < L.rx + m && Math.abs(z - L.z) < L.rz + m); },
 
     _inFavela(x, z, hh) {
         if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built) {                  // chão de terra em volta da mancha (não um círculo)

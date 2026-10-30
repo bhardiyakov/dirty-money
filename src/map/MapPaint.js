@@ -33,6 +33,7 @@ const MapPaint = {
     FARM: [[160, 122, 82], [126, 164, 76], [208, 180, 102]],         // arado, verde, trigo
     // Mar: [profundidade (u), r, g, b]
     SEA: [[0, 104, 206, 206], [5, 66, 172, 196], [18, 40, 128, 176], [48, 28, 90, 148], [120, 20, 62, 120]],
+    LAKE: [[0, 98, 150, 128], [3, 74, 134, 124], [10, 54, 114, 116], [30, 42, 98, 108], [80, 36, 88, 100]],      // água doce (verde-azulada, parada)
 
     // ------------------------------------------------------------------ desenho
     drawTerrain(ctx, W, H, cx, cz, k, o = {}) {
@@ -159,15 +160,15 @@ const MapPaint = {
     },
 
     // O degradê do mar por profundidade, de 0,25 em 0,25 u (SEA).
-    _seaLut() {
-        if (this._sl) return this._sl;
-        const S = this.SEA, n = Math.ceil(S[S.length - 1][0] * 4), out = new Float32Array((n + 1) * 3);
+    _seaLut(lake = false) {
+        if (lake ? this._ll : this._sl) return lake ? this._ll : this._sl;
+        const S = lake ? this.LAKE : this.SEA, n = Math.ceil(S[S.length - 1][0] * 4), out = new Float32Array((n + 1) * 3);
         for (let q = 0; q <= n; q++) {
             const dd = q / 4; let a = 0; while (a < S.length - 2 && dd > S[a + 1][0]) a++;
             const A = S[a], B = S[a + 1], t = Math.max(0, Math.min(1, (dd - A[0]) / (B[0] - A[0])));
             for (let c = 0; c < 3; c++) out[q * 3 + c] = A[c + 1] + (B[c + 1] - A[c + 1]) * t;
         }
-        return (this._sl = out);
+        return lake ? (this._ll = out) : (this._sl = out);
     },
 
     // Ruído suave ladrilhável 256×256 (grade a cada 8 texels), 0..1.
@@ -220,7 +221,7 @@ const MapPaint = {
         const C = this._prep(), M = WorldMap, B = M.B, WD = Config.world, c = WD.cell, nx = M.nx, nz = M.nz;
         const land = C.land, soft = C.soft, dep = C.dep, col = C.col, shade = C.shade, bio = M.biome, d32 = new Uint32Array(img.data.buffer);      // (1 escrita por pixel: ABGR)
         const NZ = this._noise(), CD = this._crowns(true), CS = this._crowns(false), FARM = this.FARM;
-        const hd = ppu >= 2, mid = ppu >= 1, inv = 1 / ppu, SL = this._seaLut(), SN = SL.length / 3 - 1;
+        const hd = ppu >= 2, mid = ppu >= 1, inv = 1 / ppu, SL = this._seaLut(), SN = SL.length / 3 - 1, OC = M.isSea;
         let fpi = 1e9, fpj = 1e9, fF = FARM[0];                                    // (talhão do pixel anterior: o hash só quando muda)
         const N2 = (u, v) => {                                                    // ruído bilinear em texels (período 256)
             const iu = Math.floor(u), iv = Math.floor(v), fu = u - iu, fv = v - iv, a = iu & 255, b = (iv & 255) << 8, a1 = (a + 1) & 255, b1 = ((iv + 1) & 255) << 8;
@@ -317,6 +318,13 @@ const MapPaint = {
                     // ---- água
                     const dd = dep[k00] * w00 + dep[k10] * w10 + dep[k01] * w01 + dep[k11] * w11 + (nM - 0.5) * 3;
                     const q = Math.max(0, Math.min(SN, Math.round(dd * 4))) * 3;
+                    if (OC && !OC[k00] && !OC[k11]) {                                            // ---- LAGO (água doce): verde-azulada, parada, sem espuma
+                        const LL = this._seaLut(true), qq = Math.max(0, Math.min(LL.length / 3 - 1, Math.round(dd * 4))) * 3;
+                        r = LL[qq]; g = LL[qq + 1]; b = LL[qq + 2];
+                        if (hd) { const wv = 1 + (nF - 0.5) * 0.03; r *= wv; g *= wv; b *= wv; }
+                        d32[py * w + px] = 0xff000000 | ((b > 255 ? 255 : b < 0 ? 0 : b) << 16) | ((g > 255 ? 255 : g < 0 ? 0 : g) << 8) | (r > 255 ? 255 : r < 0 ? 0 : r);
+                        continue;
+                    }
                     r = SL[q]; g = SL[q + 1]; b = SL[q + 2];
                     if (hd) { const wv = 1 + (N2(x * 0.45 + 60, z * 1.3) - 0.5) * 0.09 + (nF - 0.5) * 0.03; r *= wv; g *= wv; b *= wv; }      // ondulação
                     let foam = edge > 0.38 ? (edge - 0.38) / 0.12 * 0.8 : 0;                     // espuma na beira

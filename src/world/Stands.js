@@ -1,6 +1,7 @@
 // ============================================================================
 // Stands — BARRACAS FIXAS onde se compra na rua, com o cardápio e os efeitos do carrinho do ambulante (StreetLife): os QUIOSQUES do
-// calçadão (Landmarks), o CAFÉ do terraço do Corcovado e a BARRACA DE CHURRASQUINHO da esplanada do Maracanã. Comer mata a fome (Physique.eat), as
+// calçadão (Landmarks), o CAFÉ do terraço do Corcovado, a BARRACA DE CHURRASQUINHO da esplanada do Maracanã e os quiosques e ambulantes da
+// orla da Lagoa (Lagoa). Comer mata a fome (Physique.eat), as
 // bebidas matam a sede (Needs.drink), tudo cura um pouco; o dinheiro sai da carteira.
 //   add({ id, name, emo, x, z, r, h, hours, items })   registra (quem monta o lugar); h: a altura do piso (Walkways), 0 no chão
 //   near(game)                                          a barraca aberta ao alcance do jogador a pé
@@ -17,6 +18,10 @@ const Stands = {
             ['milho', '🌽 Milho cozido', 8, 280, 6], ['acai', '🍧 Açaí na tigela', 16, 420, 12], ['agua', '💧 Água mineral', 4, 0, 5, true]],
         estadio: [['espetinho', '🍢 Churrasquinho', 10, 420, 8], ['cachorro', '🌭 Cachorro-quente', 12, 450, 9], ['pipoca', '🍿 Pipoca', 6, 220, 3],
             ['refri', '🥤 Refrigerante', 6, 140, 3, true], ['agua', '💧 Água mineral', 4, 0, 5, true]],
+        lagoa: [['coco', '🥥 Água de coco', 8, 0, 8, true], ['acai', '🍧 Açaí na tigela', 18, 420, 12], ['chope', '🍺 Chope', 12, 150, 2, true],
+            ['sanduba', '🥪 Sanduíche natural', 16, 380, 10], ['suco', '🍹 Suco de laranja', 10, 110, 6, true], ['agua', '💧 Água mineral', 5, 0, 5, true]],
+        ambulante: [['mate', '🧉 Mate com limão', 6, 60, 4, true], ['globo', '🥨 Biscoito de polvilho', 5, 180, 3], ['picole', '🍦 Picolé', 5, 120, 3],
+            ['milho', '🌽 Milho cozido', 8, 280, 6], ['agua', '💧 Água mineral', 4, 0, 5, true]],
         cafe: [['cafe', '☕ Cafezinho', 5, 20, 4, true], ['paoq', '🧀 Pão de queijo', 7, 260, 6], ['sanduba', '🥪 Sanduíche natural', 14, 380, 10],
             ['suco', '🍹 Suco de laranja', 9, 110, 6, true], ['sorvete', '🍦 Sorvete', 8, 200, 4], ['agua', '💧 Água mineral', 5, 0, 5, true]],
     },

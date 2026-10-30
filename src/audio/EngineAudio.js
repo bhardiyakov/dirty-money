@@ -65,7 +65,7 @@ const EngineAudio = {
     bus: null,
 
     profileOf(car) {
-        if (!car || !car.spec || car.spec.bike === 'bike' || car.spec.id === 'bicycle') return null;
+        if (!car || !car.spec || car.spec.bike === 'bike' || car.spec.id === 'bicycle' || car.spec.pedal) return null;      // (pedalinho e caiaque: sem motor)
         const k = this.MODEL[car.spec.id] || (car.spec.boat ? 'outboard' : car.spec.bike ? 'moto1' : 'sedan4'), P = Object.assign({ key: k }, this.PROFILES[k]);
         if (car.mods && car.mods.turbo && !P.electric) { P.turbo = Math.max(P.turbo || 0, 0.9); P.pops = Math.max(P.pops || 0, 0.35); }     // turbo da tunagem: assobio, blow-off e estalos
         return P;

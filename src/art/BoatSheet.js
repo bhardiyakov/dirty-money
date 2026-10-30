@@ -21,12 +21,17 @@ class BoatSheet {
                 bodyH: 0.55, frame: 160, grip: 2.1, turnRef: 4.0, maxReverse: 4, brakeDrag: 2.2, fire: true, noCabin: true, noExhaust: true, boat: true, open: true, lamps: { x: 0.75, zF: 3.0, zR: -3.1 } },
             barco: { name: 'Barco', model: 'Caiçara 30', len: 9.0, wid: 3.2, mass: 3400, power: 13000, maxSpeed: 10, turn: 0.85, cruise: 0.6, weight: 1, hp: 220, blast: 1.2,
                 bodyH: 0.6, frame: 208, grip: 1.7, turnRef: 4.5, maxReverse: 2.5, brakeDrag: 1.4, fire: true, noCabin: true, noExhaust: true, boat: true, open: false, lamps: { x: 1.1, zF: 4.2, zR: -4.3 } },
+            // só na Lagoa (map/Lagoa.js): sem motor (pedal: sem som de motor, não pega fogo), devagar
+            pedalinho: { name: 'Pedalinho', model: 'Cisne da Lagoa', len: 3.4, wid: 1.9, mass: 240, power: 1100, maxSpeed: 3.4, turn: 1.4, cruise: 0.6, weight: 1, hp: 50, blast: 0.3,
+                bodyH: 0.6, frame: 96, grip: 2.6, turnRef: 2.6, maxReverse: 1.5, brakeDrag: 2.6, fire: false, noCabin: true, noExhaust: true, boat: true, open: true, pedal: true, lamps: { x: 0.0, zF: 1.5, zR: -1.5 } },
+            caiaque: { name: 'Caiaque', model: 'Remada Lagoa', len: 3.6, wid: 0.8, mass: 40, power: 520, maxSpeed: 4.0, turn: 2.0, cruise: 0.6, weight: 1, hp: 25, blast: 0.2,
+                bodyH: 0.3, frame: 96, grip: 3.0, turnRef: 2.8, maxReverse: 1.5, brakeDrag: 2.8, fire: false, noCabin: true, noExhaust: true, boat: true, open: true, pedal: true, lamps: { x: 0.0, zF: 1.7, zR: -1.7 } },
         };
     }
 
     // Pinturas (linhas de CarSheet.PAINTS) que cada modelo usa no casco: [casco, faixa/cabine]. Índices de PAINTS: 0 vermelho, 1 azul, 3 verde,
     // 4 branco, 5 preto, 6 viatura (azul-marinho + branco), 7 laranja, 8 prata, 9 bordo.
-    static get PAINT_ROWS() { return { jetski: [0, 1, 7, 3, 9, 5, 2], lancha: [4, 6, 0, 1, 8, 7], barco: [4, 1, 3, 9, 6, 7] }; }
+    static get PAINT_ROWS() { return { jetski: [0, 1, 7, 3, 9, 5, 2], lancha: [4, 6, 0, 1, 8, 7], barco: [4, 1, 3, 9, 6, 7], pedalinho: [4], caiaque: [7, 0, 3, 1] }; }
 
     // Modelo `id` visto de cima, olhando para +Z (proa). rider: com piloto desenhado (jetski e lancha).
     static model(id, rider = false) {
@@ -80,6 +85,24 @@ class BoatSheet {
             for (const sx of [-1, 1]) P.push(B.capsule(S.chrome, [sx * 1.1, 1.5, -3.3], [sx * 1.3, 2.4, -4.2], 0.04));   // varas
             for (const sx of [-1, 1]) P.push(B.capsule(S.chrome, [sx * 1.25, 1.5, 1.0], [sx * 0.7, 1.55, 3.6], 0.035));  // guarda-corpo
             P.push(B.sphere(S.head, [0, 1.35, 4.3], 0.1)); P.push(B.sphere(S.tail, [0, 1.45, -4.2], 0.09));
+        } else if (id === 'pedalinho') {                                                                    // o CISNE da Lagoa
+            P.push(B.ellipsoid(S.paint, [0, 0.45, -0.1], [0.95, 0.45, 1.55]));                                  // corpo
+            for (const sx of [-1, 1]) P.push(B.ellipsoid(S.paint, [sx * 0.86, 0.78, -0.25], [0.16, 0.34, 0.95]));   // asas
+            P.push(B.capsule(S.paint, [0, 0.8, 1.15], [0, 1.75, 1.45], 0.17));                                   // pescoço
+            P.push(B.sphere(S.paint, [0, 1.84, 1.58], 0.21));                                                    // cabeça
+            P.push(B.box(S.tail, [0, 1.8, 1.86], [0.08, 0.06, 0.16], 0, 0.03));                                  // bico
+            P.push(B.box(S.dark, [0, 0.98, -0.35], [0.66, 0.1, 0.42], 0, 0.06));                                 // banco
+            for (const sx of [-1, 1]) for (const sz of [-0.85, 0.35]) P.push(B.capsule(S.chrome, [sx * 0.62, 1.0, sz], [sx * 0.62, 1.7, sz], 0.035));   // varetas
+            P.push(B.box(S.paint2, [0, 1.74, -0.25], [0.78, 0.05, 0.75], 0, 0.04));                              // toldo
+            if (rider) { P.push(B.capsule(S.tail, [0, 1.05, -0.35], [0, 1.3, -0.15], 0.2)); P.push(B.sphere(S.sign, [0, 1.55, -0.1], 0.16)); }
+        } else if (id === 'caiaque') {
+            P.push(B.ellipsoid(S.paint, [0, 0.22, 0], [0.36, 0.2, 1.8]));                                       // casco
+            P.push(B.ellipsoid(S.dark, [0, 0.38, -0.15], [0.22, 0.05, 0.45]));                                   // o cockpit
+            P.push(B.ellipsoid(S.paint2, [0, 0.36, 0.95], [0.18, 0.04, 0.5]));                                   // faixa da proa
+            if (rider) {
+                P.push(B.capsule(S.tail, [0, 0.45, -0.15], [0, 0.85, -0.05], 0.18)); P.push(B.sphere(S.sign, [0, 1.08, -0.02], 0.15));
+                P.push(B.box(S.chrome, [0, 0.8, 0.12], [1.15, 0.03, 0.05], 0.3, 0.02));                         // o remo
+            }
         }
         return P;
     }
@@ -87,8 +110,8 @@ class BoatSheet {
     // Onde fica a origem do piloto (m: z = frente, x = direita): no jet ski, no banco com as mãos no guidão; na lancha, no timão (direita).
     // Piloto 2,5D (NpcArt): a origem é o banco (jet ski: atrás do guidão; lancha: o banco do timão) — ver NpcGenAnims.RIDE.
     static get SEATS() {
-        if (typeof NpcArt !== 'undefined' && NpcArt.available()) return { jetski: { z: -0.357, x: 0 }, lancha: { z: -0.21, x: 0.41 }, barco: { z: 0, x: 0 } };
-        return { jetski: { z: -0.5, x: 0 }, lancha: { z: -0.35, x: 0.41 }, barco: { z: 0, x: 0 } };
+        if (typeof NpcArt !== 'undefined' && NpcArt.available()) return { jetski: { z: -0.357, x: 0 }, lancha: { z: -0.21, x: 0.41 }, barco: { z: 0, x: 0 }, pedalinho: { z: -0.3, x: 0 }, caiaque: { z: -0.1, x: 0 } };
+        return { jetski: { z: -0.5, x: 0 }, lancha: { z: -0.35, x: 0.41 }, barco: { z: 0, x: 0 }, pedalinho: { z: -0.3, x: 0 }, caiaque: { z: -0.1, x: 0 } };
     }
 
     constructor(scene, modelId, palette, rider = false) {

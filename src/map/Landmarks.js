@@ -35,6 +35,7 @@ const Landmarks = {
         this._cristo();
         this._beach();
         this._pylons();
+        if (typeof Lagoa !== 'undefined') Lagoa.build();                          // a Lagoa: orla, avenida, prédios de luxo (Lagoa.js)
         console.log(`[MARCOS] estádio ${this.stadium ? 'ok' : 'SEM LUGAR'}, Cristo, calçadão (${this.beach ? this.beach.strips.length : 0} trechos, ${this.kiosks.length} quiosques), ${this.piers.length} píeres, ${this.pylons.length} pilones`);
     },
 
@@ -189,6 +190,7 @@ const Landmarks = {
             for (const t of this.towers) if (vis(t.x - 2, t.z - 2, t.x + 2, t.z + 2)) { rect(t.x - 1.2, t.z - 1.2, t.x + 1.2, t.z + 1.2, '#d8402f'); rect(t.x - 0.5, t.z - 0.5, t.x + 0.5, t.z + 0.5, '#f4f4f4'); }
         }
         if (this.stadium) Maracana.drawMap(ctx, X, Y, k, vis);                      // o complexo do Maracanã
+        if (typeof Lagoa !== 'undefined') Lagoa.drawMap(ctx, X, Y, k, vis);           // a orla da Lagoa
         if (this.cristo) Corcovado.drawMap(ctx, X, Y, k, vis);                     // o Corcovado (escadarias, terraço, elevador, trem, mirante)
         // o BONDINHO do Pão de Açúcar: o cabo, as estações e as cabines
         const Bd = this.BONDE;
@@ -240,6 +242,7 @@ const Landmarks = {
         const t0 = performance.now();
         if (this.stadium) Maracana.meshes(wb);
         if (this.cristo) Corcovado.meshes(wb);
+        if (typeof Lagoa !== 'undefined') Lagoa.meshes(wb);
         this._meshPao(wb);
         if (this.beach) this._meshBeach(wb);
         this._meshPiers(wb);
@@ -376,6 +379,7 @@ const Landmarks = {
     // Maracanã (cheios com o estádio aberto), a praça do portão do Corcovado, o calçadão.
     crowd(x, z) {
         if (!this.built) return null;
+        if (typeof Lagoa !== 'undefined') { const l = Lagoa.crowd(x, z); if (l !== null) return l; }
         if (this.stadium) { const m = Maracana.crowd(x, z); if (m !== null) return m; }
         if (this.cristo) { const g = Corcovado.W(-8, -71); if (Math.abs(x - g[0]) < 24 && Math.abs(z - g[1]) < 16) return 0.85; }
         if (this.beach && this._nearBeachStrip(x, z, 1)) return 1;
@@ -384,6 +388,7 @@ const Landmarks = {
     // Quem anda por ali (NPCManager._style): a torcida de camisa na esplanada do Maracanã, turistas no portão do Corcovado; null: o normal.
     crowdStyle(x, z, r) {
         if (!this.built) return null;
+        if (typeof Lagoa !== 'undefined') { const l = Lagoa.crowdStyle(x, z, r); if (l) return l; }
         if (this.stadium && Maracana.crowd(x, z) === 1) return r < 0.6 ? 'sport' : 'casual';
         if (this.cristo) { const g = Corcovado.W(-8, -71); if (Math.abs(x - g[0]) < 24 && Math.abs(z - g[1]) < 16) return r < 0.6 ? 'tourist' : 'casual'; }
         return null;
