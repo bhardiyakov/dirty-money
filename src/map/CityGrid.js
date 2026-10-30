@@ -90,10 +90,10 @@ const CityGrid = {
     finish() {
         this._fillCoast();
         if (typeof Landmarks !== "undefined") Landmarks.build();         // marcos: Maracanã, Cristo, Pão de Açúcar, calçadão, pontes estaiadas
+        if (typeof Speedway !== "undefined") Speedway.build();           // autódromo (oval) no campo a oeste: corridas de estádio (StreetRacing) — antes do campo
         if (typeof RuralPlan !== "undefined") RuralPlan.build();         // campo: fazendas, cabanas, postos, torres, alamedas
         if (typeof Marina !== "undefined") Marina.build();               // marina na orla leste: píeres, vagas e clube náutico
         if (typeof Landmarks !== "undefined") Landmarks.buildPiers();    // píeres com barcos no canal (longe da marina)
-        if (typeof Speedway !== "undefined") Speedway.build();           // autódromo (oval) no campo a oeste: corridas de estádio (StreetRacing)
         this._purgeVegetation();
         this._roundIslands();
         this._collectWalk();

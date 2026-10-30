@@ -22,7 +22,7 @@ module.exports = {
                 paoSolid: CityGrid.obstaclesAround(P.x, P.z, 10).some((o) => o.x0 < P.x && o.x1 > P.x && o.z0 < P.z && o.z1 > P.z),
                 onPier: !!pier && MapGeo.onDock((pier.x0 + pier.x1) / 2, (pier.z0 + pier.z1) / 2),
                 hwyLagoa: roads(/Rodovia da Lagoa/).length, express: RoadPlan.edges.filter((e) => e.express).length,
-                estadio: roads(/Av\. do Estádio/).length, trilha: roads(/Trilha do Corcovado/).length,
+                estadio: roads(/Av\. do Estádio/).length, trilha: roads(/Estrada do Corcovado/).length,
                 speedway: !!Speedway.site,
                 labels: WorldMap.regions.map((r) => r.name).filter((n) => /MARACANÃ|LAGOA|PÃO DE AÇÚCAR|CORCOVADO|CENTRO|FAVELA DO MORRO|ILHA PRAIANA/.test(n)).length,
                 meshes: ['stadiumPitch', 'paoDeAcucar', 'calcadao', 'bondinho0'].filter((n) => game.scene.getMeshByName(n)).length,
@@ -38,7 +38,7 @@ module.exports = {
         c.ok(s.corcovado && s.beach, 'Corcovado alto e a areia da praia do sul');
         c.ok(s.onPier, 'anda-se no píer como em terra');
         c.ok(s.hwyLagoa > 2 && s.express > 5, `Rodovia da Lagoa (${s.hwyLagoa} trechos) e Via Expressa (${s.express})`);
-        c.ok(s.estadio >= 1 && s.trilha >= 1, 'acesso ao estádio e trilha do Corcovado (em laço: sem beco)');
+        c.ok(s.estadio >= 1 && s.trilha >= 1, 'acesso ao estádio e Estrada do Corcovado (em laço: sem beco)');
         c.ok(s.speedway, 'o autódromo achou lugar');
         c.eq(s.labels, 7, 'nomes dos lugares no mapa (antigos e novos)');
         c.eq(s.meshes, 4, 'malhas dos marcos (gramado, penedo, calçadão, bondinho)');

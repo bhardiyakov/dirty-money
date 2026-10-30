@@ -410,6 +410,29 @@ Mirante, Vila da Roça, Alto da Serra, Serras, Fazendas, Pântano, Canal):
 Marcos novos têm ícone no mapa (🏟️ ✝️ 🚡) e nome (MARACANÃ, LAGOA, CORCOVADO, PÃO DE AÇÚCAR). O ponto de tipo `village` (Vila da Roça,
 Alto da Serra) ganhou ícone: antes derrubava o mapa da pausa quando aparecia na tela.
 
+### O Corcovado em 3D (`src/map/Corcovado.js`, `src/map/Walkways.js`)
+
+O Cristo fica no alto de um MORRO de verdade (malha própria, mata fechada nas encostas — copas e palmeiras na altura do terreno — e
+pedra aparecendo), num MIRANTE redondo a 18 m, com balaustrada e postes; a estátua é uma malha própria em pedra-sabão (a túnica com
+as dobras, os ombros, os braços abertos com as mangas caídas, a cabeça) sobre o pedestal escuro com a porta da capela. Do chão ao topo:
+- as ESCADARIAS de concreto em zigue-zague, com muros de arrimo, muretas, guarda-corpo e postes, saindo do PORTÃO (praça de pedra,
+  pilares com a placa CRISTO REDENTOR, guarita e a placa ACESSO DE PEDESTRES), na Estrada do Corcovado;
+- a PASSARELA DE MADEIRA sobre pilares, do pé do morro até o TERRAÇO DO CAFÉ (quiosque verde-água, mesinhas com guarda-sol), e a
+  escada do terraço até o mirante;
+- o ELEVADOR panorâmico (torre de vidro, cabine que sobe e desce) do chão até a ponte do terraço — **E** sobe e desce;
+- o TREM DO CORCOVADO: trilhos de cremalheira sobre o aterro, da estação do pé (com a placa) à do alto, ao lado do mirante — **E** sobe e
+  desce; sem passageiro, os dois carros vão e voltam sozinhos.
+Anda-se por tudo a pé: escadas, rampas, patamares, o terraço e o mirante são uma rede de **Walkways** — o mesmo estado "lá em cima"
+do viaduto e do heliponto (`Player.onDeck`/`deckH`): entra-se andando pelo pé de um lance, as bordas seguram (corrimão), e descendo
+sai-se no chão pelo pé. Os lances avançam 0,6 u além das pontas, sem fresta nas junções. Lá em cima a câmera mira o personagem na
+altura dele e abre aos poucos (até 2,25× no mirante: o Cristo inteiro cabe no quadro). O morro é sólido para quem está no chão.
+No mapa: o mirante com a cruz, as escadarias, a passarela, o terraço e o café, o elevador, os trilhos com o trem e as estações.
+O autódromo passou a ser montado antes do campo (as casas de beira de estrada da estrada nova tomavam o lugar dele).
+
+`tests/30_corcovado` confere o morro e as malhas, cada caminho passo a passo (sem fresta, a altura subindo até o mirante), a entrada
+pelo pé (de lado não), a saída descendo, a câmera, o morro sólido, o elevador e o trem nos dois sentidos, o trem sozinho, o Cristo no
+quadro de quem está no mirante e o complexo no mapa.
+
 ### Mapa e GPS pintados em alta definição (`src/map/MapPaint.js`, `src/map/MapRenderer.js`)
 
 O terreno do mapa é pintado como um mapa ilustrado: mar com degradê de profundidade (turquesa no raso → azul-marinho), espuma na beira

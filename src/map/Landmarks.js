@@ -1,7 +1,8 @@
 // ============================================================================
 // Landmarks — os MARCOS do mapa (estrutura do mapa de referência), com os nomes do jogo mantidos:
 //   • MARACANÃ: o estádio a oeste do Centro (anel de concreto, cobertura branca, arquibancada colorida, o gramado com as linhas);
-//   • CRISTO no alto do CORCOVADO (a serra no lugar do antigo lago do norte), num mirante de pedra;
+//   • CRISTO no alto do CORCOVADO (a serra no lugar do antigo lago do norte): o complexo inteiro — morro, escadarias, elevador, trem —
+//     fica em Corcovado.js;
 //   • PÃO DE AÇÚCAR: o penedo na ponta leste da praia do sul, com o BONDINHO subindo da areia;
 //   • a PRAIA DO SUL: o CALÇADÃO de ondas pretas e brancas ao longo da Av. do Contorno, quiosques, postos de salva-vidas, coqueiros e
 //     guarda-sóis na areia;
@@ -17,7 +18,6 @@
 const Landmarks = {
     STADIUM: { name: 'Maracanã', x: -404, z: 112, rx: 74, rz: 60, h: 12 },
     SITES: [[-404, 112], [-410, 120], [-450, 112]],
-    CRISTO: { x: -978, z: 740 },
     BONDE: { a: [214, -1012, 5], b: [338, -1066, 36] },
     PIERS_CITY: [392, -214, -812],
     PIERS_ISLAND: [452, -318],
@@ -64,10 +64,8 @@ const Landmarks = {
     },
 
     _cristo() {
-        const C = this.CRISTO;
-        this.cristo = C;
-        CityGrid.addObstacles([{ x0: C.x - 3, z0: C.z - 3, x1: C.x + 3, z1: C.z + 3, h: 26 }]);
-        CityGrid.addPoi({ type: 'cristo', name: 'Cristo Redentor', x: C.x, z: C.z - 9 });
+        Corcovado.build();                                                       // o Corcovado: morro, mirante, escadarias, elevador, trem
+        this.cristo = Corcovado.C;
         const B = this.BONDE, P = WorldMap.PAO;
         CityGrid.addPoi({ type: 'bondinho', name: 'Bondinho do Pão de Açúcar', x: B.a[0] - 6, z: B.a[1] + 4 });
         // o penedo: sólido no pé (a pedra sobe acima da pista: ninguém atravessa)
@@ -180,8 +178,7 @@ const Landmarks = {
     covers(x, z, m = 0) {
         const S = this.stadium;
         if (S) { const u = (x - S.x) / (S.rx + 14 + m), v = (z - S.z) / (S.rz + 14 + m); if (u * u + v * v < 1) return true; }
-        const C = this.cristo;
-        if (C && hypot(x - C.x, z - C.z) < 16 + m) return true;
+        if (this.cristo && Corcovado.covers(x, z, m)) return true;
         const P = WorldMap.PAO;
         if (hypot(x - P.x, z - P.z) < 50 + m) return true;
         for (const k of this.kiosks) if (Math.abs(x - k.x) < 4 + m && Math.abs(z - k.z) < 4 + m) return true;
@@ -237,13 +234,7 @@ const Landmarks = {
                 for (const sg of [-1, 1]) { const x0 = S.x + sg * (hx - m), w = hx * 0.3; ctx.strokeRect(Math.min(X(x0), X(x0 - sg * w)), Y(S.z + hz * 0.5), w * k, hz * k); }
             }
         }
-        // o CRISTO no mirante: a praça redonda, o pedestal e a estátua de braços abertos (vista de cima: uma cruz)
-        const Cr = this.cristo;
-        if (Cr && vis(Cr.x - 16, Cr.z - 16, Cr.x + 16, Cr.z + 16)) {
-            ell(Cr.x, Cr.z, 14, 14, '#d6d0c4', '#9c968a', Math.max(1, 0.4 * k));
-            const statue = (c) => { rect(Cr.x - 3.3, Cr.z - 3.3, Cr.x + 3.3, Cr.z + 3.3, c === '#0a0e14' ? c : '#bdb7aa'); rect(Cr.x - 10.2, Cr.z - 0.8, Cr.x + 10.2, Cr.z + 0.8, c === '#0a0e14' ? c : '#f6f3ec'); rect(Cr.x - 1.75, Cr.z - 1.2, Cr.x + 1.75, Cr.z + 1.2, c === '#0a0e14' ? c : '#efebe2'); };
-            shadow(statue); statue('#fff');
-        }
+        if (this.cristo) Corcovado.drawMap(ctx, X, Y, k, vis);                     // o Corcovado (escadarias, terraço, elevador, trem, mirante)
         // o BONDINHO do Pão de Açúcar: o cabo, as estações e as cabines
         const Bd = this.BONDE;
         if (vis(Math.min(Bd.a[0], Bd.b[0]) - 8, Math.min(Bd.a[1], Bd.b[1]) - 8, Math.max(Bd.a[0], Bd.b[0]) + 8, Math.max(Bd.a[1], Bd.b[1]) + 8)) {
@@ -303,7 +294,7 @@ const Landmarks = {
         this._wb = wb;
         const t0 = performance.now();
         if (this.stadium) this._meshStadium(wb);
-        if (this.cristo) this._meshCristo(wb);
+        if (this.cristo) Corcovado.meshes(wb);
         this._meshPao(wb);
         if (this.beach) this._meshBeach(wb);
         this._meshPiers(wb);
@@ -412,33 +403,6 @@ const Landmarks = {
         return t;
     },
 
-    _meshCristo(wb) {
-        const C = this.cristo, bt = wb._batch('trim', C.x, C.z), c = this._c.bind(this), z3 = [[0, 0], [0, 0], [0, 0]];
-        const stone = c('#cfcac0'), soap = c('#e7e3d8'), soapD = c('#cdc8bb');
-        this._ring(wb._batch('open_plaza', C.x, C.z), C.x, C.z, 14, 14, 0, 1, 0.22, 0.22, 32, () => c('#b8b2a6'), true, 5);   // o mirante
-        this._wall(bt, C.x, C.z, 14, 14, 1, 0, 1.0, 32, (i) => (i % 8 === 2 || i % 8 === 3 ? null : stone));
-        bt.solid(C.x - 2.9, C.z - 2.9, C.x + 2.9, C.z + 2.9, 0.2, 7.6, stone);                                                 // pedestal
-        bt.solid(C.x - 3.3, C.z - 3.3, C.x + 3.3, C.z + 3.3, 7.4, 8.0, c('#bdb7aa'));
-        // túnica: tronco de pirâmide (mais larga embaixo), de 8 a 22 u
-        const fr = (y0, y1, a0, b0, a1, b1, col) => {
-            const V = (y, a, b) => [[C.x - a, y, C.z - b], [C.x + a, y, C.z - b], [C.x + a, y, C.z + b], [C.x - a, y, C.z + b]];
-            const L = V(y0, a0, b0), U = V(y1, a1, b1), nrm = [[0, 0, -1], [1, 0, 0], [0, 0, 1], [-1, 0, 0]];
-            for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; bt.tri(L[i], L[j], U[j], nrm[i], z3, col); bt.tri(L[i], U[j], U[i], nrm[i], z3, col); }
-            bt.tri(U[0], U[1], U[2], [0, 1, 0], z3, col); bt.tri(U[0], U[2], U[3], [0, 1, 0], z3, col);
-        };
-        fr(8.0, 21.0, 1.75, 1.15, 1.35, 0.95, soap);
-        fr(21.0, 22.6, 1.35, 0.95, 1.55, 1.0, soapD);
-        // braços abertos (de leste a oeste: de frente para a câmera, que olha do sul)
-        bt.solid(C.x - 9.6, C.z - 0.75, C.x + 9.6, C.z + 0.75, 21.6, 23.1, soap);
-        bt.solid(C.x - 10.2, C.z - 0.6, C.x - 9.4, C.z + 0.6, 21.3, 22.9, soapD);
-        bt.solid(C.x + 9.4, C.z - 0.6, C.x + 10.2, C.z + 0.6, 21.3, 22.9, soapD);
-        bt.solid(C.x - 0.45, C.z - 0.45, C.x + 0.45, C.z + 0.45, 23.1, 23.7, soapD);                                          // pescoço
-        bt.solid(C.x - 0.8, C.z - 0.85, C.x + 0.8, C.z + 0.85, 23.7, 25.5, soap);                                             // cabeça
-        // a trilha chega pelo oeste: degraus de pedra
-        for (let k = 0; k < 4; k++) bt.solid(C.x - 18 - k * 2.2, C.z - 2.2, C.x - 15.8 - k * 2.2, C.z + 2.2, 0.15, 0.22 - k * 0.01, stone);
-        wb._collider('cristo', C.x - 3, C.z - 3, C.x + 3, C.z + 3, 26);
-    },
-
     // O PÃO DE AÇÚCAR: um penedo arredondado (malha própria, normais suaves), pedra cinza com veios e a mata no pé; o BONDINHO sobe da
     // estação da praia até o topo (dois cabos, duas cabines indo e vindo).
     _meshPao(wb) {
@@ -500,6 +464,7 @@ const Landmarks = {
         this.update(0);
     },
     update(dt) {
+        if (this.cristo) Corcovado.update(dt);                                  // (o elevador, o trem e as viagens)
         if (!this._cabins) return;
         for (const C of this._cabins) {
             C.t += C.dir * dt / 70;                                                             // ~70 s de uma estação à outra

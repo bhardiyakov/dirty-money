@@ -65,7 +65,7 @@ const RuralRoads = {
         { id: 'T9', cls: 'trail', name: 'Trilha do Mirante', pts: [{ on: 'R1', near: [-720, 895] }, [-730, 1000], [-650, 1090], [-560, 1085], { on: 'D12', near: [-515, 1010] }] },
         { id: 'T10', cls: 'trail', name: 'Caminho da Margem', pts: [{ on: 'R5', near: [-700, -255] }, [-760, -300], [-880, -300], { on: 'R5', near: [-920, -252] }] },
         // ---- o Corcovado (o Cristo no alto: Landmarks) e o estádio
-        { id: 'T11', cls: 'trail', name: 'Trilha do Corcovado', pts: [{ on: 'D11', near: [-1080, 730] }, [-1030, 722], [-998, 734], [-994, 754], [-1030, 790], { on: 'D11', near: [-1075, 800] }] },      // (em laço: passa no mirante do Cristo)
+        { id: 'T11', cls: 'serra', name: 'Estrada do Corcovado', pts: [{ on: 'D5', near: [-1024, 600] }, [-992, 630], [-968, 655], [-925, 662], [-900, 700], [-898, 750], [-905, 790], { on: 'T3', near: [-893, 805] }] },      // (do pé do morro: o portão das escadarias, o elevador e a estação do trem)
         { id: 'S4', cls: 'serra', name: 'Av. do Estádio', pts: [{ on: 'D3', near: [-446, -26] }, [-446, 26], [-362, 26], { on: 'D3', near: [-362, -28] }] },      // (o retorno em frente ao Maracanã: sem ponta solta)
     ],
 

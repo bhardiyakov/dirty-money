@@ -304,6 +304,7 @@ const WorldMap = {
             let b;
             const pao = hypot(x - this.PAO.x, z - this.PAO.z) < this.PAO.r + 30, BE = this.BEACH;
             if (pao && hh > 6) b = hh > 30 || slope > 0.5 ? R.ROCK : R.FOREST;                                 // (o Pão de Açúcar: mata no pé, pedra no alto)
+            else if (typeof Corcovado !== 'undefined' && hypot(x - Corcovado.C.x, z - Corcovado.C.z) < Corcovado.R + 14) b = R.FOREST;     // (o morro do Cristo: mata fechada)
             else if (dSea[k] * c < 13 || (dSea[k] * c < 40 && x > 184 && x < 300 && Math.abs(z - this.STRIP.cz) < this.STRIP.hz + 60)) b = R.SAND;      // (orla da cidade: praia larga nas baías)
             else if (x > BE.x0 && x < BE.x1 && z < BE.z1 && hh < 8) b = R.SAND;                               // (a praia do sul)
             else if (dLake[k] * c < 11 && hh < 6) b = this._inLagoa(x, z, 40) ? R.GRASS : R.SWAMP;              // (a Lagoa: margem de parque)
@@ -395,7 +396,7 @@ const WorldMap = {
             { name: 'MORRO DO MIRANTE', x: -250, z: -1050, size: 0.8 },
             { name: 'LAGOA', x: -404, z: -560, size: 0.8 },
             { name: 'PÃO DE AÇÚCAR', x: 338, z: -1150, size: 0.75 },
-            { name: 'CORCOVADO', x: -975, z: 680, size: 0.7 },
+            { name: 'CORCOVADO', x: -978, z: 815, size: 0.7 },
         ];
         if (typeof Bairros !== 'undefined') for (const Z of Bairros.ZONES) this.regions.push({ name: Z.label, x: Z.lx, z: Z.lz, size: 0.8 });
     },
