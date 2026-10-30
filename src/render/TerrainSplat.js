@@ -58,8 +58,10 @@ const TerrainSplat = {
         const mapTex = BABYLON.RawTexture.CreateRGBATexture(map, nx, nz, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
         mapTex.wrapU = mapTex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 
-        const m = new BABYLON.StandardMaterial('terrain', scene);
-        m.diffuseTexture = atlasTex;                         // (só liga o caminho "com textura" do shader; a cor vem do plugin)
+        // (visual moderno: PBR fosco com o relevo no mapa de normais — PBRWorld; a textura só liga o caminho "com textura" do shader:
+        // a cor vem do plugin)
+        const m = PBRWorld.on ? PBRWorld.material(scene, 'terrain', atlasTex) : new BABYLON.StandardMaterial('terrain', scene);
+        m.diffuseTexture = atlasTex;
         m.specularColor = BABYLON.Color3.Black();
         m.transparencyMode = BABYLON.Material.MATERIAL_OPAQUE;      // (a textura RGBA "tem alfa": sem isto o chão iria para a passada transparente)
         this._plugin(m, mapTex, atlasTex, { minX: W.minX, minZ: W.minZ, cell: W.cell, nx, nz, contour: W.contour, tile: T, atlas2: atlas2Tex, lod: !!atlas2Tex && scene.getEngine().webGLVersion >= 2 });
@@ -139,20 +141,36 @@ const TerrainSplat = {
             bindForSubMesh(ub) { ub.setTexture('splatMap', mapTex); ub.setTexture('splatAtlas', atlasTex); ub.setTexture('splatAtlas2', A2); ub.updateFloat('tSmooth', P.atlas2 || (typeof Smooth !== 'undefined' && Smooth.on) ? 1 : 0); }
             getCustomCode(shaderType) {
                 if (shaderType !== 'fragment') return null;
-                return {
+                const pbr = PBRWorld.isPBR(this._material);
+                // PBR: o relevo vira o mapa de normais (a encosta virada para o sol clareia, a de trás escurece, com a hora do dia) e o
+                // sombreado fixo nos vértices fica só um toque
+                return PBRWorld.adapt(this._material, {
                     CUSTOM_FRAGMENT_DEFINITIONS: `
                         #ifdef TSPLAT
                         ${GLSL}
+                        float tHeight(vec2 p) {
+                            vec2 g = (p - vec2(${f(P.minX)}, ${f(P.minZ)})) / ${f(P.cell)} - 0.5, j0 = floor(g), s = g - j0;
+                            return mix(mix(tH(tCell(j0)), tH(tCell(j0 + vec2(1.0, 0.0))), s.x), mix(tH(tCell(j0 + vec2(0.0, 1.0))), tH(tCell(j0 + vec2(1.0, 1.0))), s.x), s.y);
+                        }
                         #endif`,
+                    CUSTOM_FRAGMENT_BEFORE_LIGHTS: pbr ? `
+                        #ifdef TSPLAT
+                        {
+                            vec2 tp = vPositionW.xz;
+                            vec2 tg = vec2(tHeight(tp + vec2(2.5, 0.0)) - tHeight(tp - vec2(2.5, 0.0)), tHeight(tp + vec2(0.0, 2.5)) - tHeight(tp - vec2(0.0, 2.5))) / 5.0;
+                            tg *= ${f(0.85 * (Config.world.heightScale || 1))} / max(1.0, length(tg) * 1.6);         // (paredão: inclina até ~30°, sem virar breu)
+                            normalW = normalize(normalW + vec3(-tg.x, 0.0, -tg.y));
+                        }
+                        #endif` : '',
                     CUSTOM_FRAGMENT_UPDATE_DIFFUSE: `
                         #ifdef TSPLAT
                         ${P.lod ? `tLod = clamp(log2(max(length(dFdx(vPositionW.xz)), length(dFdy(vPositionW.xz))) * ${f(TL / 4)}) - 0.2, 0.0, 1.0);` : 'tLod = 0.0;'}
                         baseColor.rgb = terrainColor(tSmooth > 0.5 ? vPositionW.xz : (floor(vPositionW.xz * 20.0) + 0.5) / 20.0);     // (pixel art: na grade do mundo)
                         #ifdef VERTEXCOLOR
-                        baseColor.rgb *= vColor.rgb;                                                   // (relevo: brilho por canto)
+                        baseColor.rgb *= ${pbr ? 'mix(vec3(1.0), vColor.rgb, 0.35)' : 'vColor.rgb'};                                                   // (relevo: brilho por canto)
                         #endif
                         #endif`,
-                };
+                });
             }
         }
         new TerrainSplatPlugin(material);

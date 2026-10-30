@@ -217,6 +217,7 @@ class TerrainBuilder {
             if (mk) chunk.meshes.push(mk);
         }
         yield; mk(vegLo, 'vlo', wb.props.loMaterial, { vertexColors: true });
+        if (vegHi.trees || vegLo.trees) { yield; for (const m of Trees3D.build(this.scene, [vegHi, vegLo], `terr_${ci}_${cj}`, wb.shadow)) chunk.meshes.push(m); }      // árvores 3D (visual moderno)
         this._addColliders(chunk);
 
         this.stats.built++;

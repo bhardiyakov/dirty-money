@@ -67,6 +67,7 @@ class GameEngine {
 		this.scene.autoClearDepthAndStencil = true;
 
 		this._createLights();
+		if (typeof Atmosphere !== 'undefined') Atmosphere.setupScene(this);      // visual moderno: luz ambiente, névoa, processamento de imagem
 
 		this.world = new WorldBuilder(this.scene, this.shadowGenerator);
 		const w = this.world.build();
@@ -104,15 +105,32 @@ class GameEngine {
 		this.sun.shadowMaxZ = SUN_DIST + 70;
 		this.sun.position = this.sunDir.scale(-SUN_DIST);
 
-		// PCF (borda nítida, barato, sem blur): combina com o visual pixel art e evita a
-		// perda de precisão do ESM em janelas de profundidade grandes.
-		// useRedTextureType (5º argumento): o PCF lê a sombra da textura de PROFUNDIDADE; o alvo de cor nem é amostrado, então basta
-		// 1 canal em vez de RGBA half-float (2048²: 32 → 8 MB de memória de vídeo).
-		this.shadowGenerator = new BABYLON.ShadowGenerator(Config.perf.shadowSize || 2048, this.sun, false, undefined, true);
-		this.shadowGenerator.usePercentageCloserFiltering = true;
-		this.shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_LOW;
-		this.shadowGenerator.bias = 0.0008;
-		this.shadowGenerator.normalBias = 0.02;
+		// Visual moderno (Config.render.shadows = 'esm'): SOMBRA MACIA — blur exponential shadow map: a profundidade vai para um alvo
+		// float de 1 canal, borrado por um kernel gaussiano; a borda da sombra fica difusa como a de um sol de verdade, e as árvores 3D,
+		// os prédios e os postes projetam sombras suaves umas nas outras. O sol também ganha especular (o brilho na água e no asfalto
+		// dos materiais PBR; os StandardMaterial seguem sem especular).
+		// PCF (o de antes; preset Medium e o visual clássico): borda nítida, barato, sem blur.
+		// useRedTextureType (5º argumento): 1 canal em vez de RGBA half-float (2048²: 32 → 8 MB de memória de vídeo).
+		this.esm = Config.render.modern && Config.render.shadows === 'esm';
+		this.shadowGenerator = new BABYLON.ShadowGenerator(Config.perf.shadowSize || 2048, this.sun, this.esm, undefined, true);
+		if (this.esm) {
+			const sg = this.shadowGenerator;
+			sg.useBlurExponentialShadowMap = true;
+			sg.useKernelBlur = true;
+			sg.blurKernel = (Config.perf.shadowSize || 2048) >= 4096 ? 16 : 10;
+			sg.blurScale = 2;
+			sg.depthScale = 140;                       // (a janela da sombra tem ~230 u de profundidade: escala alta = contato firme, sem vazar luz)
+			sg.bias = 0.00025;
+			sg.normalBias = 0.01;
+			sg.frustumEdgeFalloff = 0.15;             // (a borda da janela some suave, sem linha)
+			this.sun.specular = new BABYLON.Color3(1, 0.95, 0.85);
+		} else {
+			this.shadowGenerator.usePercentageCloserFiltering = true;
+			this.shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_LOW;
+			this.shadowGenerator.bias = 0.0008;
+			this.shadowGenerator.normalBias = 0.02;
+			if (Config.render.modern) this.sun.specular = new BABYLON.Color3(1, 0.95, 0.85);
+		}
 		this.shadowGenerator.setDarkness(0.4);
 		// Versão da lista de projetores: o filtro abaixo refaz o cache dos estáticos quando alguém entra/sai (um pedaço de postes
 		// refeito porque um poste quebrou, por exemplo).
@@ -127,8 +145,8 @@ class GameEngine {
 	_setupShadowMap() {
 		const sm = this.shadowGenerator.getShadowMap(), eng = this.engine;
 		// Profundidade em 16 bits em vez de float32 (2048²: 16 → 8 MB). A janela da sombra tem 160 u: 16 bits dão ~0,003 u de precisão,
-		// bem abaixo do bias (≈0,13 u) — mesma sombra, sem acne.
-		if (eng.webGLVersion > 1 && eng._features.supportDepthStencilTexture) {
+		// bem abaixo do bias (≈0,13 u) — mesma sombra, sem acne. (Só o PCF lê a textura de profundidade; o ESM lê o alvo de cor.)
+		if (!this.esm && eng.webGLVersion > 1 && eng._features.supportDepthStencilTexture) {
 			sm.createDepthStencilTexture(eng.useReverseDepthBuffer ? BABYLON.Constants.GREATER : BABYLON.Constants.LESS, true, false, 1, BABYLON.Constants.TEXTUREFORMAT_DEPTH16);
 		}
 		// O mapa de sombra NÃO descarta por conta própria: sem isto ele desenhava, todo quadro, todos os projetores do mundo (carros

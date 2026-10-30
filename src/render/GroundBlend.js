@@ -39,7 +39,7 @@ const GroundBlend = {
             getCustomCode(shaderType) {
                 if (shaderType !== 'fragment') return null;
                 // (sem ponto e vírgula em comentário GLSL: o Babylon corta a linha ali)
-                return {
+                return PBRWorld.adapt(this._material, {
                     CUSTOM_FRAGMENT_DEFINITIONS: `
                         #ifdef GBLEND
                         float gbH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -60,7 +60,7 @@ const GroundBlend = {
                             color.a = ga;
                         }
                         #endif`,
-                };
+                });
             }
         };
     },

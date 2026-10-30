@@ -116,6 +116,19 @@ const Config = {
 
 	// Luz do sol (direção em que a luz VIAJA). Luz vem do noroeste, sombras caem p/ sudeste,
 	// coerente com o sombreamento baked dos sprites (luz no canto superior esquerdo).
+	// VISUAL MODERNO (render/Atmosphere.js, render/PBRWorld.js, render/Trees3D.js): o preset de gráficos (core/Graphics.js) liga o que o
+	// aparelho aguenta; `?look=classic` volta ao visual antigo (materiais simples, sem pós-processamento), `?look=modern` força o novo.
+	//   pbr        o chão, as ruas, os telhados, as fachadas e a água em PBRMaterial (rugosidade, mapa de normais, reflexo do céu na água)
+	//   trees3d    árvores, palmeiras e arbustos em malhas 3D (thin instances) no lugar dos desenhos deitados no chão
+	//   shadows    'esm' = sombra macia (blur exponential shadow map) | 'pcf' = borda nítida (a de antes)
+	//   ssao       oclusão de ambiente em espaço de tela (os cantos dos prédios, das árvores e do meio-fio escurecem)
+	//   bloom/glow brilho das luzes (postes, faróis, janelas) · tone mapping ACES, exposição, contraste e gradação de cor no pós
+	//   haze       névoa de distância (EXP2) com a cor do céu: quanto mais longe da câmera, mais o mundo some no azul
+	render: {
+		modern: true, pbr: true, trees3d: true, shadows: 'esm', ssao: true, bloom: true, glow: true, fxaa: true,
+		exposure: 1.6, contrast: 1.1, saturation: -6, haze: 0.0075, ambient: 0.16, aoStrength: 0.62, aoRadius: 2.4,
+	},
+
 	light: {
 		sunDir: [0.6, -1.8, -0.45],
 	},

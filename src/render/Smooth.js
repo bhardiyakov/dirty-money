@@ -25,6 +25,7 @@ const Smooth = {
 		this.on = on;
 		if (ge && ge.resize) { ge.resize(); if (game.camera) { game.camera.fitPixelScale(ge.viewHeight); game.camera.onResize(); } }
 		if (game.camera) this._antialias(game.camera.camera, ge.engine, on);
+		if (game.camera && typeof Atmosphere !== 'undefined') Atmosphere.init(game);      // visual moderno: pós-processamento, glow e SSAO (depois do MSAA)
 		this._textures(game.scene, on);
 		if (ge && ge.shadowGenerator) ge.shadowGenerator.filteringQuality = on ? BABYLON.ShadowGenerator.QUALITY_MEDIUM : BABYLON.ShadowGenerator.QUALITY_LOW;
 		this._thaw(game.scene);

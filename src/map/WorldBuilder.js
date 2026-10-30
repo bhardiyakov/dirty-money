@@ -70,7 +70,9 @@ class WorldBuilder {
     }
 
     // ---------------------------------------------------------------- materiais
+    // Visual moderno (Config.render.pbr): PBRMaterial com rugosidade, mapa de normais e variação de tom por superfície (render/PBRWorld.js).
     _mat(name, tex, opts = {}) {
+        if (PBRWorld.on) return PBRWorld.material(this.scene, name, tex, opts);
         const m = new BABYLON.StandardMaterial(name, this.scene);
         if (tex) m.diffuseTexture = tex;
         m.specularColor = BABYLON.Color3.Black();
@@ -1118,7 +1120,9 @@ class WorldBuilder {
     // Quad de sprite achatado (visto de cima) com o frame `idx` do atlas de props.
     // Plantas que balançam usam os atlas animados (UV do quadro 0; o shader soma o deslocamento do quadro) e levam uma fase própria no alfa da cor.
     _spriteQuad(batch, idx, row, x, z, size, y) {
-        const sway = PropSprites.SWAY[PropSprites.FRAMES[idx].kind] || 0;
+        const kind = PropSprites.FRAMES[idx].kind;
+        if (Trees3D.wants(kind)) { Trees3D.add(batch, kind, x, y - PropSprites.HEIGHT[kind], z, size / (PropSprites.FRAME / Config.art.ppu)); return; }      // (visual moderno: a árvore em 3D)
+        const sway = PropSprites.SWAY[kind] || 0;
         const [u0, v0, u1, v1] = (sway && this.props.animRect(idx)) || this.props.rect(idx);
         const h = size / 2, s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453, phase = s - Math.floor(s);
         batch.quad([x - h, y, z + h], [x + h, y, z + h], [x - h, y, z - h], [x + h, y, z - h], [0, 1, 0],
@@ -1564,6 +1568,7 @@ class WorldBuilder {
         const proxies = new Map();
         for (const full of Object.keys(this.batches)) {
             const batch = this.batches[full];
+            if (batch.trees) for (const m of Trees3D.build(this.scene, [batch], 'world_' + full, this.shadow)) this.meshes.push(m);      // árvores 3D (render/Trees3D.js)
             if (batch.empty) continue;
             const at = full.indexOf('@'), key0 = at < 0 ? full : full.slice(0, at);       // 'walls_brick0@1,-2' -> 'walls_brick0'
             const shaded = key0.endsWith('$'), key = shaded ? key0.slice(0, -1) : key0;      // 'sidewalk$' = chão tingido pelo relevo (vertex colors)
