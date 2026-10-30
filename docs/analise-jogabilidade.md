@@ -396,8 +396,7 @@ Mirante, Vila da Roça, Alto da Serra, Serras, Fazendas, Pântano, Canal):
 - **Lagoa** a oeste do Centro, entre a Rodovia da Lagoa e o viaduto, com margem de parque; a **Rodovia da Lagoa** (R7) desce a oeste
   dela até a Rodovia do Sul e sobe até a Rodovia Central passando pelo estádio — com as outras rodovias, fecha o anel laranja do mapa;
 - **Via Expressa**: a diagonal que corta o norte do Centro da ponte norte até o Contorno (`CityGrid._expressway`, marcada `express`);
-- **Maracanã** a oeste do Centro: anel de concreto com pilares, cobertura branca, arquibancada colorida por setores, o gramado com as
-  linhas (textura própria), esplanada e o retorno da Av. do Estádio; sólido para carros e pedestres;
+- **Maracanã** a oeste do Centro: o complexo inteiro, entrável (ver *O complexo do Maracanã*, abaixo);
 - **Cristo Redentor** no alto do **Corcovado** (a serra no lugar do antigo lago do norte), num mirante de pedra; a Trilha do Corcovado
   passa por ele (em laço: a poda de becos do `RoadPlan` apagava as pontas soltas);
 - **Pão de Açúcar** na ponta leste da praia do sul: penedo com malha própria (pedra HD com veios e a mata no pé) e o **bondinho**
@@ -432,6 +431,34 @@ O autódromo passou a ser montado antes do campo (as casas de beira de estrada d
 `tests/30_corcovado` confere o morro e as malhas, cada caminho passo a passo (sem fresta, a altura subindo até o mirante), a entrada
 pelo pé (de lado não), a saída descendo, a câmera, o morro sólido, o elevador e o trem nos dois sentidos, o trem sozinho, o Cristo no
 quadro de quem está no mirante e o complexo no mapa.
+
+### O complexo do Maracanã (`src/map/Maracana.js`, porta em `src/world/Interiors.js`)
+
+Por fora, como a foto de referência: o ESTÁDIO (anel de concreto com os pilares em V, as lajes dos andares, o vidro escuro recuado, a
+COBERTURA branca com as nervuras e a faixa de placas solares, a arquibancada em degraus com os setores azuis, amarelos e brancos, os
+placares, a pista azul e o gramado com as linhas), as duas RAMPAS HELICOIDAIS, a ESPLANADA de pedra em volta com palmeiras e bancos, o
+PORTÃO 18 ao sul (marquise e placa), o ESTACIONAMENTO (vagas pintadas, carros, ônibus de torcida e a placa ESTÁDIO DO MARACANÃ na
+entrada da Av. do Estádio), a ESTAÇÃO DE TREM a leste (plataforma coberta, dois trilhos, trens parados) com a PASSARELA elevada que
+sobe da plataforma, atravessa os trilhos e desce na esplanada — anda-se nela (rede de **Walkways**, como as escadarias do Corcovado) —,
+o MARACANÃZINHO (a cúpula branca com as nervuras) e o PARQUE AQUÁTICO (piscina com raias e arquibancada). Gramado em volta
+(`WorldMap`), o nome MARACANÃ e o ponto 🏟️ no mapa; o anel, o miolo, as rampas, a cúpula e a piscina são sólidos, com o vão de 4 u do
+portão sul aberto até a soleira.
+
+Por dentro, com a lógica das lojas (`Interiors`: porta na grade, a sala no palco, horário de funcionamento 9h–24h, polícia na cola
+barra a entrada): entra-se andando pelo portão sul. A sala é pintada em HD — o SAGUÃO com a BILHETERIA à esquerda e a LANCHONETE à
+direita, os bancos, o muro das CATRACAS, o vomitório, a ARQUIBANCADA com a torcida (setores coloridos, corredores), as placas do
+alambrado e o CAMPO lá em cima:
+- **ingresso** na bilheteria (**E**, R$ 40): sem ele as catracas ficam fechadas (bloqueiam a passagem); com ele, liberam;
+- a **lanchonete** é um atendente com cardápio (`Economy.STYLES.stadium`: cachorro-quente, pipoca, refrigerante, cerveja, água);
+- da arquibancada, **E** assiste ao jogo (passa 1h30, o placar no fim);
+- o **jogo rola** de verdade: 8 jogadores (camisas do Fla e do Flu) correm atrás da bola, que quica no campo; gol na rede do norte sobe
+  o placar e a torcida comemora em balões.
+Saindo pela porta do saguão, volta-se ao portão sul (o jogo some com a sala).
+
+`tests/31_maracana` confere o complexo montado, o anel sólido com o vão do portão (andando, chega-se à soleira), o Maracanãzinho, a
+porta, a Av. do Estádio, o autódromo no lugar, o gramado, o nome no mapa, o horário, a passarela (sobe, atravessa sem fresta e desce no
+chão), a cobertura e o gramado no mapa e, por dentro: entrar, os jogadores, a bola e a torcida, a catraca fechada, o ingresso que
+libera, a lanchonete, assistir ao jogo, a bola e os jogadores andando, o gol, a saída e o portão fechado de madrugada.
 
 ### Mapa e GPS pintados em alta definição (`src/map/MapPaint.js`, `src/map/MapRenderer.js`)
 

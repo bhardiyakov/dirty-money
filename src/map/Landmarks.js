@@ -1,6 +1,7 @@
 // ============================================================================
 // Landmarks — os MARCOS do mapa (estrutura do mapa de referência), com os nomes do jogo mantidos:
-//   • MARACANÃ: o estádio a oeste do Centro (anel de concreto, cobertura branca, arquibancada colorida, o gramado com as linhas);
+//   • MARACANÃ: o complexo a oeste do Centro — estádio, esplanada, estacionamento, estação, Maracanãzinho, parque aquático, e o
+//     interior entrável — fica em Maracana.js;
 //   • CRISTO no alto do CORCOVADO (a serra no lugar do antigo lago do norte): o complexo inteiro — morro, escadarias, elevador, trem —
 //     fica em Corcovado.js;
 //   • PÃO DE AÇÚCAR: o penedo na ponta leste da praia do sul, com o BONDINHO subindo da areia;
@@ -16,8 +17,6 @@
 // ============================================================================
 
 const Landmarks = {
-    STADIUM: { name: 'Maracanã', x: -404, z: 112, rx: 74, rz: 60, h: 12 },
-    SITES: [[-404, 112], [-410, 120], [-450, 112]],
     BONDE: { a: [214, -1012, 5], b: [338, -1066, 36] },
     PIERS_CITY: [392, -214, -812],
     PIERS_ISLAND: [452, -318],
@@ -37,30 +36,8 @@ const Landmarks = {
     },
 
     _stadium() {
-        const S = this.STADIUM, B = WorldMap.B;
-        const ok = (cx, cz) => {
-            for (let a = 0; a < Math.PI * 2; a += Math.PI / 18) for (const k of [0, 0.6, 1.18]) {
-                const x = cx + Math.cos(a) * S.rx * k, z = cz + Math.sin(a) * S.rz * k, b = WorldMap.biomeAt(x, z);
-                if (!WorldMap.isLand(x, z) || b === B.CITY || b === B.FAVELA || b === B.ROCK || RoadPlan.onPavement(x, z, 3)) return false;
-            }
-            return true;
-        };
-        const site = this.SITES.find(([x, z]) => ok(x, z));
-        if (!site) { console.warn('[MARCOS] o estádio não coube em nenhum lugar'); return; }
-        S.x = site[0]; S.z = site[1];
-        this.stadium = S;
-        WorldMap.regions.push({ name: S.name.toUpperCase(), x: S.x, z: S.z + S.rz + 22, size: 0.7 });      // (o nome no mapa, acima do anel)
-        // sólido: o anel externo, em caixas ao longo da elipse (ninguém entra: o gramado é para ver de cima)
-        const n = 36, solids = [];
-        for (let i = 0; i < n; i++) {
-            const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
-            const p = [S.x + Math.cos(a0) * S.rx, S.z + Math.sin(a0) * S.rz], q = [S.x + Math.cos(a1) * S.rx, S.z + Math.sin(a1) * S.rz];
-            solids.push({ x0: Math.min(p[0], q[0]) - 1.6, z0: Math.min(p[1], q[1]) - 1.6, x1: Math.max(p[0], q[0]) + 1.6, z1: Math.max(p[1], q[1]) + 1.6, h: S.h });
-        }
-        solids.push({ x0: S.x - S.rx * 0.7, z0: S.z - S.rz * 0.7, x1: S.x + S.rx * 0.7, z1: S.z + S.rz * 0.7, h: S.h });
-        S.solids = solids;
-        CityGrid.addObstacles(solids);
-        CityGrid.addPoi({ type: 'estadio', name: S.name, x: S.x, z: S.z - S.rz - 6 });
+        Maracana.build();                                                        // o complexo do Maracanã (Maracana.js)
+        this.stadium = Maracana.S;
     },
 
     _cristo() {
@@ -176,8 +153,7 @@ const Landmarks = {
     },
 
     covers(x, z, m = 0) {
-        const S = this.stadium;
-        if (S) { const u = (x - S.x) / (S.rx + 14 + m), v = (z - S.z) / (S.rz + 14 + m); if (u * u + v * v < 1) return true; }
+        if (this.stadium && Maracana.covers(x, z, m)) return true;
         if (this.cristo && Corcovado.covers(x, z, m)) return true;
         const P = WorldMap.PAO;
         if (hypot(x - P.x, z - P.z) < 50 + m) return true;
@@ -188,11 +164,6 @@ const Landmarks = {
     // ---------------------------------------------------------------- mapa (MapRenderer.drawView)
     // Os marcos vistos de cima, no mapa da pausa e no GPS: X/Y do mundo para o canvas, k px por u, vis(x0, z0, x1, z1) na tela?
     drawMap(ctx, X, Y, k, vis) {
-        const ell = (x, z, rx, rz, fill, stroke, lw) => {
-            ctx.beginPath(); ctx.ellipse(X(x), Y(z), Math.max(0.5, rx * k), Math.max(0.5, rz * k), 0, 0, Math.PI * 2);
-            if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-            if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
-        };
         const rect = (x0, z0, x1, z1, c) => { ctx.fillStyle = c; ctx.fillRect(X(x0), Y(z1), (x1 - x0) * k, (z1 - z0) * k); };
         const shadow = (fn) => { ctx.save(); ctx.globalAlpha = 0.3; ctx.translate(1.6 * k, 1.6 * k); fn('#0a0e14'); ctx.restore(); };
         // o calçadão (ondas pretas e brancas) e, na areia, quiosques e postos de salva-vidas
@@ -209,31 +180,7 @@ const Landmarks = {
             for (const q of this.kiosks) if (vis(q.x - 3, q.z - 3, q.x + 3, q.z + 3)) { shadow((c) => rect(q.x - 1.9, q.z - 1.9, q.x + 1.9, q.z + 1.9, c)); rect(q.x - 1.9, q.z - 1.9, q.x + 1.9, q.z + 1.9, q.c); rect(q.x - 0.9, q.z - 0.9, q.x + 0.9, q.z + 0.9, '#f4efe2'); }
             for (const t of this.towers) if (vis(t.x - 2, t.z - 2, t.x + 2, t.z + 2)) { rect(t.x - 1.2, t.z - 1.2, t.x + 1.2, t.z + 1.2, '#d8402f'); rect(t.x - 0.5, t.z - 0.5, t.x + 0.5, t.z + 0.5, '#f4f4f4'); }
         }
-        // o MARACANÃ: esplanada, a cobertura branca, a arquibancada colorida por setores e o gramado com as linhas
-        const S = this.stadium;
-        if (S && vis(S.x - S.rx * 1.3, S.z - S.rz * 1.3, S.x + S.rx * 1.3, S.z + S.rz * 1.3)) {
-            ell(S.x, S.z, S.rx * 1.22, S.rz * 1.22, '#cdc8bc');
-            shadow((c) => ell(S.x, S.z, S.rx * 1.04, S.rz * 1.04, c));
-            ell(S.x, S.z, S.rx * 1.04, S.rz * 1.04, '#f3f4f6', '#8d939b', Math.max(1, 0.5 * k));
-            const sect = ['#2f5fb3', '#f2f2ee', '#e8c33a', '#2f5fb3', '#c73a2f', '#f2f2ee'], cx = X(S.x), cy = Y(S.z);
-            for (let i = 0; i < 12; i++) {                                          // (o ângulo do mundo, com o z para cima: a tela inverte)
-                ctx.beginPath(); ctx.moveTo(cx, cy);
-                ctx.ellipse(cx, cy, S.rx * 0.74 * k, S.rz * 0.74 * k, 0, -((i + 1) / 12) * Math.PI * 2, -(i / 12) * Math.PI * 2);
-                ctx.closePath(); ctx.fillStyle = sect[i % sect.length]; ctx.fill();
-            }
-            ell(S.x, S.z, S.rx * 0.56, S.rz * 0.56, '#3f8a3a');
-            const hx = S.rx * 0.43, hz = S.rz * 0.4;
-            if (k >= 0.8) for (let i = 0; i < 12; i++) rect(S.x - hx + (i * 2 * hx) / 12, S.z - hz, S.x - hx + ((i + 1) * 2 * hx) / 12, S.z + hz, i % 2 ? '#3f9a3c' : '#4aab45');
-            else rect(S.x - hx, S.z - hz, S.x + hx, S.z + hz, '#46a341');
-            if (k >= 1.2) {
-                ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = Math.max(1, 0.25 * k);
-                const m = hx * 0.06;
-                ctx.strokeRect(X(S.x - hx + m), Y(S.z + hz - m), (2 * hx - 2 * m) * k, (2 * hz - 2 * m) * k);
-                ctx.beginPath(); ctx.moveTo(X(S.x), Y(S.z + hz - m)); ctx.lineTo(X(S.x), Y(S.z - hz + m)); ctx.stroke();
-                ctx.beginPath(); ctx.arc(X(S.x), Y(S.z), hz * 0.22 * k, 0, Math.PI * 2); ctx.stroke();
-                for (const sg of [-1, 1]) { const x0 = S.x + sg * (hx - m), w = hx * 0.3; ctx.strokeRect(Math.min(X(x0), X(x0 - sg * w)), Y(S.z + hz * 0.5), w * k, hz * k); }
-            }
-        }
+        if (this.stadium) Maracana.drawMap(ctx, X, Y, k, vis);                      // o complexo do Maracanã
         if (this.cristo) Corcovado.drawMap(ctx, X, Y, k, vis);                     // o Corcovado (escadarias, terraço, elevador, trem, mirante)
         // o BONDINHO do Pão de Açúcar: o cabo, as estações e as cabines
         const Bd = this.BONDE;
@@ -293,7 +240,7 @@ const Landmarks = {
         if (!this.built) return;
         this._wb = wb;
         const t0 = performance.now();
-        if (this.stadium) this._meshStadium(wb);
+        if (this.stadium) Maracana.meshes(wb);
         if (this.cristo) Corcovado.meshes(wb);
         this._meshPao(wb);
         if (this.beach) this._meshBeach(wb);
@@ -342,43 +289,6 @@ const Landmarks = {
         }
     },
 
-    _meshStadium(wb) {
-        const S = this.stadium, bt = wb._batch('trim', S.x, S.z), N = 72, c = this._c.bind(this);
-        const conc = c('#d9d8d2'), rib = c('#b9b8b0'), dark = c('#3a3d44'), roof = c('#f4f5f7'), plaza = c('#bcbab2');
-        this._ring(wb._batch('open_plaza', S.x, S.z), S.x, S.z, S.rx, S.rz, 1.0, 1.22, 0.2, 0.2, N, () => plaza, true, 6);      // esplanada
-        this._wall(bt, S.x, S.z, S.rx, S.rz, 1.0, 0.2, S.h - 1.0, N, (i) => (i % 3 === 0 ? rib : conc));              // fachada (pilares)
-        for (let i = 0; i < 36; i++) {                                                                              // pilares salientes
-            const a = (i / 36) * Math.PI * 2, x = S.x + Math.cos(a) * S.rx * 1.015, z = S.z + Math.sin(a) * S.rz * 1.015;
-            this._beam(bt, [x, 0.2, z], [x, S.h - 0.8, z], 1.1, rib);
-        }
-        this._wall(bt, S.x, S.z, S.rx, S.rz, 0.995, S.h - 1.0, S.h - 0.1, N, () => dark);                             // a fresta sob a cobertura
-        this._ring(bt, S.x, S.z, S.rx, S.rz, 1.04, 0.74, S.h, S.h + 0.6, N, () => roof);                               // COBERTURA branca
-        this._wall(bt, S.x, S.z, S.rx, S.rz, 1.04, S.h - 0.2, S.h, N, () => roof);
-        this._wall(bt, S.x, S.z, S.rx, S.rz, 0.74, S.h - 0.5, S.h + 0.6, N, () => c('#c9cbd0'), -1);
-        // arquibancada (vista pela abertura da cobertura): setores coloridos, degraus em faixas
-        const sect = ['#2f5fb3', '#f2f2ee', '#e8c33a', '#2f5fb3', '#c73a2f', '#f2f2ee'];
-        for (let r = 0; r < 6; r++) {
-            const k0 = 0.74 - r * 0.03, k1 = k0 - 0.03, y0 = S.h - 1.2 - r * 1.6, y1 = y0 - 1.6;
-            this._ring(bt, S.x, S.z, S.rx, S.rz, k0, k1, y0, y1, N, (i) => c(sect[Math.floor(i / (N / 12)) % sect.length], r % 2 ? 0.86 : 1));
-        }
-        this._wall(bt, S.x, S.z, S.rx, S.rz, 0.56, 0.4, 1.3, N, () => dark, -1);                                       // muro do fosso
-        this._ring(bt, S.x, S.z, S.rx, S.rz, 0.56, 0.0, 0.42, 0.42, N, () => c('#3f8a3a'));                            // o entorno do gramado
-        // refletores na borda de dentro da cobertura
-        for (let i = 0; i < 16; i++) {
-            const a = (i / 16) * Math.PI * 2, x = S.x + Math.cos(a) * S.rx * 0.76, z = S.z + Math.sin(a) * S.rz * 0.76;
-            this._beam(bt, [x, S.h + 0.6, z], [x, S.h + 1.3, z], 1.2, c('#5a5f68'));
-        }
-        // o GRAMADO: textura própria (listras de corte e as linhas)
-        const hx = S.rx * 0.43, hz = S.rz * 0.4, tex = this._pitchTex(wb.scene), mesh = BABYLON.MeshBuilder.CreateGround('stadiumPitch', { width: hx * 2, height: hz * 2 }, wb.scene);
-        mesh.position.set(S.x, 0.47, S.z);
-        const m = new BABYLON.StandardMaterial('stadiumPitch', wb.scene);
-        m.diffuseTexture = tex; m.specularColor = BABYLON.Color3.Black();
-        mesh.material = m; mesh.isPickable = false; mesh.receiveShadows = true; mesh.freezeWorldMatrix();
-        wb.meshes.push(mesh);
-        wb.mats.stadiumPitch = m;
-        // colisão dos carros: as caixas do anel
-        S.solids.forEach((o, i) => wb._collider('stadium_' + i, o.x0, o.z0, o.x1, o.z1, S.h));
-    },
     _pitchTex(scene) {
         const W = 640, H = 480, t = new BABYLON.DynamicTexture('stadiumPitchTex', { width: W, height: H }, scene, true);
         const g = t.getContext();

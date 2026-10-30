@@ -66,7 +66,7 @@ const RuralRoads = {
         { id: 'T10', cls: 'trail', name: 'Caminho da Margem', pts: [{ on: 'R5', near: [-700, -255] }, [-760, -300], [-880, -300], { on: 'R5', near: [-920, -252] }] },
         // ---- o Corcovado (o Cristo no alto: Landmarks) e o estádio
         { id: 'T11', cls: 'serra', name: 'Estrada do Corcovado', pts: [{ on: 'D5', near: [-1024, 600] }, [-992, 630], [-968, 655], [-925, 662], [-900, 700], [-898, 750], [-905, 790], { on: 'T3', near: [-893, 805] }] },      // (do pé do morro: o portão das escadarias, o elevador e a estação do trem)
-        { id: 'S4', cls: 'serra', name: 'Av. do Estádio', pts: [{ on: 'D3', near: [-446, -26] }, [-446, 26], [-362, 26], { on: 'D3', near: [-362, -28] }] },      // (o retorno em frente ao Maracanã: sem ponta solta)
+        { id: 'S4', cls: 'serra', name: 'Av. do Estádio', pts: [{ on: 'D3', near: [-456, -26] }, [-458, 18], [-358, 18], { on: 'D3', near: [-356, -28] }] },      // (passa ao sul do estacionamento do Maracanã e volta: sem ponta solta)
     ],
 
     routes: {},             // id → [[x, z], ...] (o traçado final)

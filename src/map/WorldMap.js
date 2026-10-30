@@ -305,6 +305,7 @@ const WorldMap = {
             const pao = hypot(x - this.PAO.x, z - this.PAO.z) < this.PAO.r + 30, BE = this.BEACH;
             if (pao && hh > 6) b = hh > 30 || slope > 0.5 ? R.ROCK : R.FOREST;                                 // (o Pão de Açúcar: mata no pé, pedra no alto)
             else if (typeof Corcovado !== 'undefined' && hypot(x - Corcovado.C.x, z - Corcovado.C.z) < Corcovado.R + 14) b = R.FOREST;     // (o morro do Cristo: mata fechada)
+            else if (typeof Maracana !== 'undefined' && x > Maracana.AREA[0] && x < Maracana.AREA[2] && z > Maracana.AREA[1] && z < Maracana.AREA[3] && hh < 20) b = R.GRASS;     // (o complexo do Maracanã: gramados)
             else if (dSea[k] * c < 13 || (dSea[k] * c < 40 && x > 184 && x < 300 && Math.abs(z - this.STRIP.cz) < this.STRIP.hz + 60)) b = R.SAND;      // (orla da cidade: praia larga nas baías)
             else if (x > BE.x0 && x < BE.x1 && z < BE.z1 && hh < 8) b = R.SAND;                               // (a praia do sul)
             else if (dLake[k] * c < 11 && hh < 6) b = this._inLagoa(x, z, 40) ? R.GRASS : R.SWAMP;              // (a Lagoa: margem de parque)

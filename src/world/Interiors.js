@@ -40,6 +40,9 @@ const Interiors = {
 		// The safe house: one more door (on the grid only — `_doors` lists the shops, which the careers send the player to).
 		const home = this.safeHouseDoor();
 		if (home) { const k = key(Math.floor(home.x / C), Math.floor(home.z / C)); (grid.get(k) || grid.set(k, []).get(k)).push(home); }
+		// The Maracanã: the south gate is a door too (map/Maracana.js paints the room).
+		const st = typeof Maracana !== 'undefined' && Maracana.door();
+		if (st) { const k = key(Math.floor(st.x / C), Math.floor(st.z / C)); (grid.get(k) || grid.set(k, []).get(k)).push(st); }
 		this._key = key; this._C = C;
 		console.log(`[LOJAS] ${doors.length} portas indexadas`);
 	},
@@ -128,6 +131,7 @@ const Interiors = {
 			if (typeof Robbery !== 'undefined' && !game.shopUI.open) { const rp = Robbery.prompt(game); if (rp !== null) return rp; }
 			const a = this.active, o = this.STAGE;
 			if (game.shopUI.open || game.stashUI.open || game.propertyUI.open || game.sleeping) return '';
+			if (a.shop.stadium) { const sp = Maracana.prompt(game); if (sp) return sp; }       // bilheteria, catracas, assistir ao jogo
 			if (HomeDecor.active) return '';                                       // (decorando: a barra de móveis tem as instruções)
 			if (a.shop.home || a.shop.safehouse) { const hu = this.homeUse(game); if (hu) return this._owned(a.shop) ? (hu.prompt || this.HOME_PROMPT[hu.kind] || '') : (hu.kind === 'desk' ? '<b>E</b> ver a proposta de compra<small>você está só visitando o imóvel</small>' : '<b>VISITA</b><small>só dá para usar depois de comprar o imóvel</small>'); }
 			const door = a.data.door, dc = o.x + (door.x0 + door.x1) / 2, nearExit = hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.3;
@@ -172,6 +176,7 @@ const Interiors = {
 				if (Robbery.interact(game)) return true;                             // anunciar o assalto (arma na mão, no balcão)
 			}
 			const shop = this.active.shop;
+			if (shop.stadium && Maracana.interact(game)) return true;                // o ingresso, assistir ao jogo
 			if (shop.home || shop.safehouse) {
 				const hu = this.homeUse(game);
 				if (hu && hu.kind !== 'desk' && !this._owned(shop)) { game._flash('Você está só visitando — compre o imóvel para usar isto'); return true; }
@@ -372,7 +377,7 @@ const Interiors = {
 			if (o && (!this.active || this.active.room !== o)) { const m = o.mesh.material; o.mesh.dispose(); if (m) { if (m.diffuseTexture) m.diffuseTexture.dispose(); m.dispose(); } delete this._rooms[old]; }
 		}
 		touch();
-		const data = shop.safehouse ? HouseView.stageRoom() : ShopStyles.get(shop.style, shop.variant, shop.reform || 0, !!shop.empty), IN = data.in, o = this.STAGE;
+		const data = shop.safehouse ? HouseView.stageRoom() : shop.stadium ? Maracana.room() : ShopStyles.get(shop.style, shop.variant, shop.reform || 0, !!shop.empty), IN = data.in, o = this.STAGE;
 		const tex = data.canvas.toTexture(game.scene, { wrap: false, mips: false });
 		data.canvas = null; delete ShopStyles._cache[key];                             // os pixels já estão na GPU
 		tex.hasAlpha = true;
@@ -442,7 +447,8 @@ const Interiors = {
 		try { life = ShopLife.enter(game, shop, data); } catch (e) { console.error('[LOJAS] clientela:', e); this._dropLife(); }
 		this._useActors(game, life ? data.patrons.filter((e) => e.type) : (data.clerk ? [data.clerk] : []).concat(data.patrons), shop);
 		const ar = this._exitArrow(game.scene); ar.setEnabled(true); ar.visibility = 0; this._tickArrow(game, 0);
-		this.zoom = shop.safehouse ? 0.36 : 0.5;                       // (o barraco é um cômodo só: a câmera chega mais perto)
+		if (shop.stadium) Maracana.onEnter(game, data);                         // catracas, o jogo rolando
+		this.zoom = shop.safehouse ? 0.36 : shop.stadium ? 0.9 : 0.5;  // (o barraco é um cômodo só: a câmera chega mais perto; o estádio é grande)
 		game.camera.setZoomMul(this.zoom);
 		game.camera.snapTo(this.focus(pl.position, game.camera, game.gameEngine.engine.getAspectRatio(game.camera.camera)));
 		game.scene.physicsEnabled = false;
@@ -503,6 +509,7 @@ const Interiors = {
 		game.shopUI.close();
 		this._unloadCity(game, false);
 		if (a.shop.bank) Banks.onLeave(game);
+		if (a.shop.stadium) Maracana.onLeave(game);
 		if (typeof Robbery !== 'undefined') Robbery.onLeave(game);              // assalto: estrelas, testemunhas e rastros (já na calçada)
 	},
 
@@ -549,6 +556,7 @@ const Interiors = {
 			}
 		}
 		if (a.shop.bank) Banks.update(dt, game);
+		if (a.shop.stadium) Maracana.tick(dt, game);                                  // a bola, os jogadores, o placar
 		if (typeof Robbery !== 'undefined') Robbery.update(dt, game);
 		if (typeof Heists !== 'undefined') { Heists.interiorTick(dt); Heists.scoutTick(dt, game); }
 		this._tickArrow(game, dt);
