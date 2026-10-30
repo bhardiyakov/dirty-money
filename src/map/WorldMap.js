@@ -47,7 +47,14 @@ const WorldMap = {
         { x: -470, z: 500, r: 250, h: 46, name: 'Morro da Favela' },
         { x: -300, z: 800, r: 150, h: 30 },
         { x: -640, z: 800, r: 130, h: 26 },
+        { x: -975, z: 735, r: 185, h: 62, name: 'Corcovado' },                  // (o Cristo no topo: Landmarks)
+        { x: 338, z: -1066, r: 66, h: 44, name: 'Pão de Açúcar' },             // (na ponta da praia do sul)
+        { x: 262, z: -1046, r: 40, h: 12 },                                     // (o morrinho do pé)
     ],
+    // O PÃO DE AÇÚCAR: um penedo na ponta leste da praia do sul, ligado a ela por um istmo de areia.
+    PAO: { x: 338, z: -1066, r: 74, neck: [[205, -1040], [300, -1060]], nr: 34 },
+    // A PRAIA DO SUL (x de-a): areia larga entre a Av. do Contorno e o mar, do Morro do Mirante ao Pão de Açúcar.
+    BEACH: { x0: -112, x1: 300, z1: -900 },
     // Encostas LISAS dentro de uma serra (sem terraços nem paredões): onde há morro ocupado (o Morro do Mirante, na ponta da Serra do Sul).
     SMOOTH: [{ x: -252, z: -1024, r: 170 }],
     // Faixa de terra da CIDADE (ao longo do canal, de ponta a ponta): caixa arredondada, costa leste só levemente ondulada.
@@ -56,8 +63,10 @@ const WorldMap = {
         { x: -820, z: -420, rx: 150, rz: 105 },
         { x: -1010, z: -140, rx: 85, rz: 65 },
         { x: -640, z: -660, rx: 120, rz: 78 },
-        { x: -960, z: 720, rx: 100, rz: 80 },
         { x: -430, z: 960, rx: 70, rz: 55 },
+        // a LAGOA: entre a Rodovia da Lagoa e o viaduto, com margem de parque (sem brejo) — um bojo ao sul e um braço mais estreito ao norte
+        { x: -404, z: -590, rx: 92, rz: 190, park: true, name: 'Lagoa' },
+        { x: -414, z: -400, rx: 66, rz: 96, park: true },
     ],
     BAYS: [
         { x: -700, z: -1190, rx: 230, rz: 200, name: 'Baía Verde' },
@@ -114,6 +123,11 @@ const WorldMap = {
         if (!land) {                                       // ilha praiana e ilhotas
             const I = this.ISLAND, d = this._segDist(x, z, I.ax, I.az, I.bx, I.bz);
             if (d < I.r + 45 && (d < I.r - 51 || d < I.r + (F(x / 120, z / 120, 17) - 0.5) * 90 - 6)) land = true;
+            const Pq = this.PAO;
+            if (!land) {
+                const dp = hypot(x - Pq.x, z - Pq.z), dn = this._segDist(x, z, Pq.neck[0][0], Pq.neck[0][1], Pq.neck[1][0], Pq.neck[1][1]);
+                if (dp < Pq.r + (F(x / 46, z / 46, 71) - 0.5) * 22 || dn < Pq.nr + (F(x / 40, z / 40, 72) - 0.5) * 14) land = true;
+            }
             if (!land) for (const k of this.ISLETS) {
                 const d2 = hypot(x - k.x, z - k.z);
                 if (d2 < k.r + 12 && d2 < k.r + (F(x / 40, z / 40, 18) - 0.5) * 24) { land = true; break; }
@@ -270,7 +284,7 @@ const WorldMap = {
             const x = X(i), z = Z(j);
             let v = this._rawHeight(x, z);
             v *= Math.min(this._ss(10, 140, dUrb[k] * c), this._ss(6, 45, dRoad[k] * c));
-            if (x > 300) v = Math.min(v, 1.5) * 0.5;                                  // ilha: quase plana
+            if (x > 300 && hypot(x - this.PAO.x, z - this.PAO.z) > this.PAO.r + 40) v = Math.min(v, 1.5) * 0.5;      // ilha: quase plana (o Pão de Açúcar, não)
             v *= this._ss(0, 28, dWater[k] * c);                                      // e desce até o nível do mar na costa
             h[k] = Math.max(0, v);
         }
@@ -288,9 +302,12 @@ const WorldMap = {
             if (urban[k]) { biome[k] = R.CITY; continue; }
             if (slope > cliffS && hh > 5) flags[k] |= 1;
             let b;
-            if (dSea[k] * c < 13 || (dSea[k] * c < 40 && x > 184 && x < 300 && Math.abs(z - this.STRIP.cz) < this.STRIP.hz + 60)) b = R.SAND;      // (orla da cidade: praia larga nas baías)
-            else if (dLake[k] * c < 11 && hh < 6) b = R.SWAMP;
-            else if (x > 300) b = R.RESORT;
+            const pao = hypot(x - this.PAO.x, z - this.PAO.z) < this.PAO.r + 30, BE = this.BEACH;
+            if (pao && hh > 6) b = hh > 30 || slope > 0.5 ? R.ROCK : R.FOREST;                                 // (o Pão de Açúcar: mata no pé, pedra no alto)
+            else if (dSea[k] * c < 13 || (dSea[k] * c < 40 && x > 184 && x < 300 && Math.abs(z - this.STRIP.cz) < this.STRIP.hz + 60)) b = R.SAND;      // (orla da cidade: praia larga nas baías)
+            else if (x > BE.x0 && x < BE.x1 && z < BE.z1 && hh < 8) b = R.SAND;                               // (a praia do sul)
+            else if (dLake[k] * c < 11 && hh < 6) b = this._inLagoa(x, z, 40) ? R.GRASS : R.SWAMP;              // (a Lagoa: margem de parque)
+            else if (x > 300 && !pao) b = R.RESORT;
             else if (hh > 36 || (hh > 20 && slope > 0.26) || (flags[k] & 1)) b = R.ROCK;
             else if (this._inFavela(x, z, hh)) b = R.FAVELA;
             else if (typeof Bairros !== 'undefined' && Bairros.zoneAt(x, z) === 'roca') b = this._fbm(x / 70, z / 70, 2, 46) > 0.52 ? R.FARM : R.GRASS;      // (a roça: pasto e lavoura, sem brejo)
@@ -315,6 +332,9 @@ const WorldMap = {
         this.buildMs = performance.now() - t0;
         console.log(`[MAPA] ${nx}×${nz} células em ${(performance.now() - t0).toFixed(0)} ms | paredões: ${this.cliffRects.length} retângulos`);
     },
+
+    // (x, z) na Lagoa ou a `m` u dela?
+    _inLagoa(x, z, m = 0) { return this.LAKES.some((L) => L.park && Math.abs(x - L.x) < L.rx + m && Math.abs(z - L.z) < L.rz + m); },
 
     _inFavela(x, z, hh) {
         if (typeof FavelaPlan !== 'undefined' && FavelaPlan.built) {                  // chão de terra em volta da mancha (não um círculo)
@@ -373,6 +393,9 @@ const WorldMap = {
             { name: 'FAZENDAS', x: -560, z: 150, size: 0.85 },
             { name: 'CANAL', x: 315, z: 0, size: 0.6 },
             { name: 'MORRO DO MIRANTE', x: -250, z: -1050, size: 0.8 },
+            { name: 'LAGOA', x: -404, z: -560, size: 0.8 },
+            { name: 'PÃO DE AÇÚCAR', x: 338, z: -1150, size: 0.75 },
+            { name: 'CORCOVADO', x: -975, z: 680, size: 0.7 },
         ];
         if (typeof Bairros !== 'undefined') for (const Z of Bairros.ZONES) this.regions.push({ name: Z.label, x: Z.lx, z: Z.lz, size: 0.8 });
     },

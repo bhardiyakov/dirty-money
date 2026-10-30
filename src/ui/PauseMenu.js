@@ -47,6 +47,10 @@ class PauseMenu {
 			boatshop: { label: 'Loja náutica (jet skis, lanchas, barcos)', icon: 'boat' },
 			tuning: { label: 'Loja de tunagem (motor, turbo, pintura, neon, aerofólio)', icon: 'tune' },
 			speedway: { label: 'Autódromo (corridas no oval, dinheiro limpo)', icon: 'stadium' },
+			estadio: { label: 'Estádio do Maracanã', icon: 'arena' },
+			cristo: { label: 'Cristo Redentor (mirante do Corcovado)', icon: 'cristo' },
+			bondinho: { label: 'Bondinho do Pão de Açúcar', icon: 'cablecar' },
+			village: { label: 'Vila (largo)', icon: 'vila' },
 			racemeet: { label: 'Ponto de racha (corridas de rua)', icon: 'race' },
 			helipad: { label: 'Heliponto (escada externa até o telhado)', icon: 'heli' },
 			fachada: { label: 'Suas fachadas (lavagem)', icon: 'cash_bag', mine: true },      // pontos e negócios comprados para lavar dinheiro (Laundry.syncMap)

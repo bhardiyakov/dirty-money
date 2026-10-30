@@ -153,7 +153,7 @@ Referências: Need for Speed Underground 2 (rachas, reputação no meio, carros 
 (takedowns, capotamento e explosão em batida forte).
 
 - **Onde**: pontos de racha na rua em frente a até 5 postos espalhados (anel aceso; 🏁 no mapa) e o **Autódromo Arena Sul**
-  (🏎️), um oval de ~500 m (2 retas de 130 m, curvas de raio 38 m, pista de 15 m) com muros com colisão, arquibancada coberta com
+  (🏎️, no campo a oeste, entre o Alto da Serra e o Corcovado), um oval de ~500 m (2 retas de 130 m, curvas de raio 38 m, pista de 15 m) com muros com colisão, arquibancada coberta com
   torcida, placar, torres de luz acesas à noite e o logo no gramado. Chegue de carro e aperte **E**: as provas do dia (mudam a cada
   6 h do jogo e com o seu nível).
 - **Modalidades**: *racha 1×1* (reta de até 402 m achada no grafo das ruas, pela perna mais reta de cada cruzamento),
@@ -388,6 +388,43 @@ fora da caixa da sombra, o rascunho da oclusão (que vale 1) e virava uma faixa 
 `tests/28_teto_divisas` confere: sem furo nem fade nos materiais, máscara das copas, a silhueta dourada debaixo de uma copa, o trecho
 do viaduto que some (e não para quem está no tabuleiro ou longe), a cobertura do posto e o vão da ponte, as faixas das divisas no
 quadro e a sombra do assador sem vazar.
+
+## Mapa reestruturado e os marcos (`src/map/Landmarks.js`, `WorldMap`, `RuralRoads`, `CityGrid`)
+
+O mundo segue a estrutura do mapa de referência, com os nomes do jogo mantidos (Centro, Ilha Praiana, Favela do Morro, Morro do
+Mirante, Vila da Roça, Alto da Serra, Serras, Fazendas, Pântano, Canal):
+- **Lagoa** a oeste do Centro, entre a Rodovia da Lagoa e o viaduto, com margem de parque; a **Rodovia da Lagoa** (R7) desce a oeste
+  dela até a Rodovia do Sul e sobe até a Rodovia Central passando pelo estádio — com as outras rodovias, fecha o anel laranja do mapa;
+- **Via Expressa**: a diagonal que corta o norte do Centro da ponte norte até o Contorno (`CityGrid._expressway`, marcada `express`);
+- **Maracanã** a oeste do Centro: anel de concreto com pilares, cobertura branca, arquibancada colorida por setores, o gramado com as
+  linhas (textura própria), esplanada e o retorno da Av. do Estádio; sólido para carros e pedestres;
+- **Cristo Redentor** no alto do **Corcovado** (a serra no lugar do antigo lago do norte), num mirante de pedra; a Trilha do Corcovado
+  passa por ele (em laço: a poda de becos do `RoadPlan` apagava as pontas soltas);
+- **Pão de Açúcar** na ponta leste da praia do sul: penedo com malha própria (pedra HD com veios e a mata no pé) e o **bondinho**
+  saindo da estação na areia, dois cabos e duas cabines que vão e voltam;
+- **praia do sul**: a cidade recua (o Contorno vira a avenida da praia) e ganha o **calçadão** de ondas pretas e brancas, quiosques,
+  postos de salva-vidas, coqueiros e guarda-sóis;
+- **píeres** de madeira com barcos atracados no canal (anda-se neles como em terra: `MapGeo.onDock`) e **pontes estaiadas** (pilones
+  e leques de estais) nas pontes norte e do meio;
+- o autódromo foi para o campo a oeste (o lugar antigo virou a Lagoa).
+Marcos novos têm ícone no mapa (🏟️ ✝️ 🚡) e nome (MARACANÃ, LAGOA, CORCOVADO, PÃO DE AÇÚCAR). O ponto de tipo `village` (Vila da Roça,
+Alto da Serra) ganhou ícone: antes derrubava o mapa da pausa quando aparecia na tela.
+
+### Mapa e GPS pintados em alta definição (`src/map/MapPaint.js`, `src/map/MapRenderer.js`)
+
+O terreno do mapa é pintado como um mapa ilustrado: mar com degradê de profundidade (turquesa no raso → azul-marinho), espuma na beira
+e a linha da arrebentação; costa e divisas de bioma curvas (campo de terra suavizado e cores interpoladas, contorno entortado por
+ruído — sem a escada das células de 4 u); relevo sombreado com luz do noroeste e o oco dos vales; copas na mata e árvores soltas no
+gramado; os talhões das fazendas (os mesmos do 3D) com as fileiras; ondinhas na areia, poças no pântano, fendas na pedra.
+Níveis de detalhe: um rascunho do mundo inteiro (0,25 px/u, no começo) e ladrilhos de 512 px a 0,5–8 px/u pintados quando aparecem
+(até ~14 ms por quadro no mapa da pausa e ~6 ms no GPS; o que falta sai do rascunho ampliado) e guardados (60 últimos).
+Por cima, vetorial: ruas com meio-fio — rodovias e Via Expressa em **laranja** com a faixa amarela, ruas e avenidas em asfalto com o
+tracejado —, prédios com a cor do próprio telhado (os de 8+ andares em vidro azulado), sombra para o sudeste e quina iluminada, as
+árvores dos parques e os marcos desenhados (estádio, Cristo, bondinho, calçadão, píeres, barcos, estais).
+
+`tests/29_mapa_marcos` confere os marcos, os pontos e os nomes no mapa, a Lagoa, o penedo sólido, o píer, as vias novas, o autódromo,
+as malhas, o bondinho andando e as cores do mapa pintado (mar fundo e raso, mata, rodovia laranja), o mapa da pausa no mundo inteiro
+e o GPS.
 
 ## Personagens (`tools/asset_baker/generator/*` no build, `src/art/NpcArt.js` no jogo)
 

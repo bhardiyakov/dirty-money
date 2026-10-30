@@ -1,6 +1,6 @@
 // ============================================================================
 // Minimap — canto inferior esquerdo.
-// Desenha a janela do mundo ao redor do jogador (north-up) com o MapRenderer (terreno raster + ruas/prédios vetoriais),
+// Desenha a janela do mundo ao redor do jogador (north-up) com o MapRenderer (terreno pintado em HD + ruas/prédios vetoriais),
 // mais blip do jogador, unidades (carros/polícia), o marcador de destino e o círculo de perseguição.
 // Lojas e lugares em que dá para entrar (Minimap.places) aparecem com ícone pequeno quando estão à vista: dá para se localizar
 // pelo radar ("estou do lado da farmácia"). No celular, tocar no radar abre o mapa expandido (TouchControls → PauseMenu.openMap).
@@ -85,8 +85,9 @@ class Minimap {
             this._bx = center.x; this._bz = center.z; this._baseKey = opKey;
             const bc = this.baseCtx;
             bc.save(); bc.setLineDash([]);
-            MapRenderer.drawView(bc, B, B, this._bx, this._bz, k);
+            MapRenderer.drawView(bc, B, B, this._bx, this._bz, k, { budget: 6, dpr: this.dpr });
             bc.restore();
+            if (MapRenderer.pending) this._baseKey = null;                  // (terreno HD ainda sendo pintado: refaz no próximo quadro)
         }
         ctx.imageSmoothingEnabled = !!yaw;                                  // (girado: suaviza, senão os pixels serrilham)
         ctx.save();

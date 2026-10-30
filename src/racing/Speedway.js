@@ -1,5 +1,5 @@
 // ============================================================================
-// Speedway — o AUTÓDROMO (oval de corrida fechada, estilo NASCAR) no campo ao sul da cidade: o palco das corridas de estádio do
+// Speedway — o AUTÓDROMO (oval de corrida fechada, estilo NASCAR) no campo a oeste (entre o Alto da Serra e o Corcovado): o palco das corridas de estádio do
 // StreetRacing. Um oval de duas retas e duas curvas de 180°, asfalto com as faixas brancas e a linha de chegada quadriculada, muro
 // externo de concreto com as faixas dos patrocinadores, muro interno (o do gramado), arquibancada coberta com a torcida ao longo da
 // reta principal, torres de iluminação (acesas à noite) e o nome do autódromo pintado no gramado.
@@ -18,7 +18,7 @@
 
 const Speedway = {
     NAME: 'Autódromo Arena Sul',
-    SITES: [{ x: -360, z: -600 }, { x: -920, z: 490 }],
+    SITES: [{ x: -920, z: 470 }, { x: -920, z: 490 }],          // (no campo a oeste, entre o Alto da Serra e o Corcovado)
     S: 130,                // comprimento de cada reta (m)
     R: 38,                 // raio da curva no eixo da pista (m)
     W: 15,                 // largura da pista (m)

@@ -89,9 +89,11 @@ const CityGrid = {
     // Depois do relevo (WorldMap.buildTerrain): orla e o que é andável a pé.
     finish() {
         this._fillCoast();
+        if (typeof Landmarks !== "undefined") Landmarks.build();         // marcos: Maracanã, Cristo, Pão de Açúcar, calçadão, pontes estaiadas
         if (typeof RuralPlan !== "undefined") RuralPlan.build();         // campo: fazendas, cabanas, postos, torres, alamedas
         if (typeof Marina !== "undefined") Marina.build();               // marina na orla leste: píeres, vagas e clube náutico
-        if (typeof Speedway !== "undefined") Speedway.build();           // autódromo (oval) no campo ao sul: corridas de estádio (StreetRacing)
+        if (typeof Landmarks !== "undefined") Landmarks.buildPiers();    // píeres com barcos no canal (longe da marina)
+        if (typeof Speedway !== "undefined") Speedway.build();           // autódromo (oval) no campo a oeste: corridas de estádio (StreetRacing)
         this._purgeVegetation();
         this._roundIslands();
         this._collectWalk();
@@ -122,6 +124,7 @@ const CityGrid = {
             const m = (CROWN[p.kind] || 1.5) * (p.s || 1);
             if (RoadPlan.onPavement(p.x, p.z, m)) return false;
             if (typeof Speedway !== 'undefined' && Speedway.covers(p.x, p.z, m)) return false;          // (o autódromo: pista e arquibancada)
+            if (typeof Landmarks !== 'undefined' && p.kind !== 'umbrella' && Landmarks.covers(p.x, p.z, m)) return false;      // (os marcos)
             if (blk && !blk.virtual && blk.r > 0.5 && !this._inRoundRect(blk.slab, blk.r, p.x, p.z, m)) return false;      // canto arredondado: o que sobra é asfalto
             return true;
         };
@@ -198,6 +201,9 @@ const CityGrid = {
             P.addPath([[-168, -168], [168, 168]], 'ave', { name: 'Av. Diagonal Norte' });
             P.addPath([[-168, 168], [168, -168]], 'ave', { name: 'Av. Diagonal Sul' });
             P.mark(0, 0, { round: { R: 20, r: 9, plaza: true } });
+            // ---- VIA EXPRESSA: da cabeceira da ponte norte, em diagonal pelo norte da cidade, até a Av. do Contorno (dali segue pela Rodovia
+            // Central para o oeste): o eixo das rodovias que liga a ilha ao interior.
+            this._expressway(P, cx[cx.length - 1], 714);
             // ---- AVENIDA BEIRA-MAR: ROTATÓRIAS nas cabeceiras das 3 pontes e RETORNOS no canteiro central, no meio dos quarteirões
             // longos (≥ 60 u, longe das rotatórias).
             const bx = cx[cx.length - 1], bz = [714, 0, -630];
@@ -233,7 +239,11 @@ const CityGrid = {
         const band = V ? 1 - ss(50, 110, Math.min(Math.abs(z - V[0]), Math.abs(z - V[1]))) : 0;
         const w = 10 + 150 * ss(0.3, 0.64, F(z / 270, 3.3, 501)) * (1 - band) + 18 * (F(z / 64, 9.1, 502, 2) - 0.5);
         const n = 30 + 210 * ss(0.36, 0.72, F(x / 230, 5.5, 503)) + 16 * (F(x / 60, 1.9, 504, 2) - 0.5);
-        const s = 30 + 190 * ss(0.36, 0.72, F(x / 230, 8.5, 505)) + 16 * (F(x / 60, 4.4, 506, 2) - 0.5);
+        let s = 30 + 190 * ss(0.36, 0.72, F(x / 230, 8.5, 505)) + 16 * (F(x / 60, 4.4, 506, 2) - 0.5);
+        // a PRAIA DO SUL (WorldMap.BEACH): do Morro do Mirante para leste a cidade termina numa orla reta-ondulada — a Av. do Contorno vira a
+        // avenida da praia, e entre ela e o mar fica a areia larga
+        const bk = ss(-150, -100, x);
+        if (bk > 0) s += (Math.max(s, 118 + 14 * (F(x / 120, 2.7, 507) - 0.5)) - s) * bk;
         return Math.min(this._smin(this._smin(x - (B.x0 + w), (B.z1 - n) - z, 70), z - (B.z0 + s), 70), B.east - x);
     },
     _chaikinLoop(L) {
@@ -258,6 +268,13 @@ const CityGrid = {
         this.cityLoop = P.concat([[B.east + 40, b[1]], [B.east + 40, a[1]]]);
         this.cityO = this._outlineObj(P, this.cityLoop);
     },
+    // VIA EXPRESSA: reta a 45° (sudoeste) da cabeceira da ponte (bx, bz) até a Av. do Contorno — termina exatamente nela (entroncamento).
+    _expressway(P, bx, bz) {
+        const d = [-Math.SQRT1_2, -Math.SQRT1_2], far = [bx + d[0] * 1200, bz + d[1] * 1200], X = this.cityO && this._oX(this.cityO, [bx, bz], far);
+        if (!X) return;
+        P.addPath([[bx, bz], X], 'ave', { name: 'Via Expressa', express: true });
+    },
+
     // Contorno para recortar ruas: a avenida (path, polilinha) e o laço que diz o que é dentro (loop), com uma grade dos segmentos da
     // avenida (distância rápida).
     _outlineObj(path, loop) {
