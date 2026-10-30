@@ -18,7 +18,7 @@
 // ============================================================================
 
 const Landmarks = {
-    BONDE: { a: [214, -1012, 5], b: [338, -1066, 36] },
+    BONDE: { a: [214, -1012, 5], b: [338, -1066, 46] },                       // (a estação do alto é uma torre sobre o cume: o cabo passa por cima da pedra)
     BONDE_FARE: 30,                                                              // a passagem do bondinho (ida e volta)
     BONDE_T: [22, 6, 22],                                                        // o passeio: subida, lá em cima, descida (s)
     PIERS_CITY: [392, -214, -812],
@@ -89,8 +89,8 @@ const Landmarks = {
                     since = 0;
                     const k = { x: p[0] + n[0] * 7, z: p[1] + n[1] * 7, a: Math.atan2(n[0], n[1]), c: ['#2e8b57', '#d9482b', '#1f6fb5', '#e8a33a'][this.kiosks.length % 4] };
                     this.kiosks.push(k);
-                    if (typeof Stands !== 'undefined') Stands.add({ id: 'kiosk' + this.kiosks.length, name: 'Quiosque da praia', emo: '🥥', x: k.x, z: k.z, r: 3.8, hours: [8, 23], items: Stands.MENUS.kiosk, sub: 'Coco gelado, mate e biscoito — é praia!',      // (vende de verdade; o quiosqueiro na frente)
-                        vendor: { x: k.x - n[0] * 2.5, z: k.z - n[1] * 2.5, h: Math.atan2(-n[0], -n[1]), type: 'civil_ambulante' } });
+                    if (typeof Stands !== 'undefined') Stands.add({ id: 'kiosk' + this.kiosks.length, name: 'Quiosque da praia', emo: '🥥', x: k.x, z: k.z, r: 3.8, hours: [8, 23], items: Stands.MENUS.kiosk, sub: 'Coco gelado, mate e biscoito — é praia!',      // (vende de verdade, com o quiosqueiro)
+                        vendor: { x: k.x + n[1] * 2.6, z: k.z - n[0] * 2.6, h: Math.atan2(-n[0], -n[1]), type: 'civil_ambulante' } });      // (ao lado do balcão)
                     CityGrid.addObstacles([{ x0: k.x - 1.8, z0: k.z - 1.8, x1: k.x + 1.8, z1: k.z + 1.8, h: 2.6 }]);
                     for (let t = 0; t < 4; t++) props.push({ type: 'prop', kind: 'umbrella', x: k.x + (t % 2 ? 4 : -4) + (rng() - 0.5), z: k.z + n[1] * (t < 2 ? 4 : 8) + (rng() - 0.5), s: 0.75, seed: Math.floor(rng() * 1000) });
                 } else if (sinceT >= 150) {
@@ -348,7 +348,7 @@ const Landmarks = {
         const B = this.BONDE, bt = wb._batch('trim', B.a[0], B.a[1]), c = this._c.bind(this);
         bt.solid(B.a[0] - 5, B.a[1] - 3.5, B.a[0] + 5, B.a[1] + 3.5, 0.2, 5.2, c('#e9e4d6'));
         bt.solid(B.a[0] - 5.4, B.a[1] - 3.9, B.a[0] + 5.4, B.a[1] + 3.9, 5.2, 5.8, c('#9a3b2c'));
-        bt.solid(B.b[0] - 4, B.b[1] - 3, B.b[0] + 4, B.b[1] + 3, B.b[2] - 4, B.b[2] + 0.6, c('#e9e4d6'));
+        bt.solid(B.b[0] - 4, B.b[1] - 3, B.b[0] + 4, B.b[1] + 3, 30, B.b[2] + 0.6, c('#e9e4d6'));
         bt.solid(B.b[0] - 4.4, B.b[1] - 3.4, B.b[0] + 4.4, B.b[1] + 3.4, B.b[2] + 0.6, B.b[2] + 1.1, c('#9a3b2c'));
         const dx = B.b[0] - B.a[0], dz = B.b[1] - B.a[1], L = Math.hypot(dx, dz), px = -dz / L, pz = dx / L;
         this._cable = [];
