@@ -126,7 +126,7 @@ const Config = {
 	//   haze       névoa de distância (EXP2) com a cor do céu: quanto mais longe da câmera, mais o mundo some no azul
 	render: {
 		modern: true, pbr: true, trees3d: true, shadows: 'esm', ssao: true, bloom: true, glow: true, fxaa: true,
-		exposure: 1.6, contrast: 1.1, saturation: -6, haze: 0.0075, ambient: 0.16, aoStrength: 0.62, aoRadius: 2.4,
+		exposure: 1.6, contrast: 1.1, saturation: 6, haze: 0.0045, ambient: 0.16, aoStrength: 0.62, aoRadius: 2.4,
 	},
 
 	light: {

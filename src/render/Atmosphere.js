@@ -65,9 +65,9 @@ const Atmosphere = {
         ip.contrast = R.contrast;
         ip.colorCurvesEnabled = true;
         const cc = new BABYLON.ColorCurves();
-        cc.globalSaturation = R.saturation;                     // (tira o verde "estourado")
+        cc.globalSaturation = R.saturation;                     // (o ACES já tira o verde "estourado": aqui só devolve um pouco de cor)
         cc.highlightsHue = 38; cc.highlightsDensity = 18; cc.highlightsSaturation = 22;      // realces levemente quentes (o sol)
-        cc.shadowsHue = 215; cc.shadowsDensity = 22; cc.shadowsSaturation = 18;             // sombras levemente frias (o céu)
+        cc.shadowsHue = 215; cc.shadowsDensity = 12; cc.shadowsSaturation = 10;             // sombras levemente frias (o céu)
         ip.colorCurves = cc;
         ip.vignetteEnabled = false;
         ip.ditheringEnabled = true; ip.ditheringIntensity = 1 / 255;

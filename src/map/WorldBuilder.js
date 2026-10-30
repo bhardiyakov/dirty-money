@@ -1599,7 +1599,9 @@ class WorldBuilder {
             for (let i = 0; i < batch.idx.length; i++) px.idx.push(batch.idx[i] + base);
         }
         if (this.shadow) {
-            if (!this._ghost) { this._ghost = new BABYLON.StandardMaterial('shadowGhost', this.scene); this._ghost.disableColorWrite = true; this._ghost.disableDepthWrite = true; }
+            // (sombra macia — ESM, visual moderno: o mapa de sombras é o ALVO DE COR, então o fantasma precisa escrever cor; ele fica fora da
+            // câmera de qualquer jeito, pelo layerMask)
+            if (!this._ghost) { this._ghost = new BABYLON.StandardMaterial('shadowGhost', this.scene); this._ghost.disableColorWrite = !(Config.render.modern && Config.render.shadows === 'esm'); this._ghost.disableDepthWrite = true; }
             for (const [pk, px] of proxies) {
                 const m = new BABYLON.Mesh('shadow' + pk, this.scene), vd = new BABYLON.VertexData();
                 vd.positions = new Float32Array(px.pos); vd.indices = px.pos.length / 3 > 65535 ? new Uint32Array(px.idx) : new Uint16Array(px.idx);      // (tipados: metade da memória)
