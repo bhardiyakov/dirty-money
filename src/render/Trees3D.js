@@ -49,7 +49,7 @@ const Trees3D = {
             const src = this._model(scene, model), n = g.length / 5;
             const mesh = src.clone(`${name}_${model}`, null, true);
             mesh.setEnabled(true);
-            const mats = new Float32Array(n * 16), cols = new Float32Array(n * 4), tone = this.TONE[model] || this.TONE.def;
+            const mats = new Float32Array(n * 16);
             for (let k = 0; k < n; k++) {
                 const x = g[k * 5], y0 = g[k * 5 + 1], z = g[k * 5 + 2], s = g[k * 5 + 3], h = g[k * 5 + 4];
                 const h2 = this._hash(z * 3.3 + 1.7, x * 5.9), h3 = this._hash(x * 1.9 - 4.1, z * 2.3 + 8.2);
@@ -59,11 +59,8 @@ const Trees3D = {
                 tr.set(x, y0, z);
                 M.ComposeToRef(sc, q, tr, mtx);
                 mtx.copyToArray(mats, k * 16);
-                const v = tone[0] + (tone[1] - tone[0]) * h2;                           // tom próprio: mais claro/escuro, mais amarelo/azulado
-                cols[k * 4] = v * (1 + (h3 - 0.5) * tone[2]); cols[k * 4 + 1] = v; cols[k * 4 + 2] = v * (1 - (h3 - 0.5) * tone[2] * 1.4); cols[k * 4 + 3] = 1;
             }
             mesh.thinInstanceSetBuffer('matrix', mats, 16, true);
-            mesh.thinInstanceSetBuffer('color', cols, 4, true);
             mesh.thinInstanceRefreshBoundingInfo(false);
             mesh.alwaysSelectAsActiveMesh = false;
             mesh.receiveShadows = true;
@@ -74,8 +71,6 @@ const Trees3D = {
         }
         return out;
     },
-    // [tom mín, tom máx, quanto o matiz varia]
-    TONE: { def: [0.82, 1.12, 0.22], ipe: [0.9, 1.08, 0.1], ipeY: [0.9, 1.08, 0.1], palm: [0.85, 1.1, 0.18], bush: [0.78, 1.12, 0.3] },
     _hash(x, z) { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); },
 
     // ------------------------------------------------------------------ o material (PBR fosco + vento)
@@ -83,7 +78,7 @@ const Trees3D = {
         if (this._mat) return this._mat;
         const m = PBRWorld.on ? PBRWorld.material(scene, 'trees3d', null) : new BABYLON.PBRMaterial('trees3d', scene);
         m.metallic = 0; m.roughness = 0.88; m.specularIntensity = 0.35;
-        m.backFaceCulling = false; m.twoSidedLighting = true;          // (as palmas e as folhas são finas: os dois lados)
+        m.backFaceCulling = false;                 // (as palmas e as folhas são finas: os dois lados, com a normal de cima — iluminadas pelo sol)
         if (!this._wind) this._wind = this._windClass();
         new this._wind(m);
         return (this._mat = m);
@@ -93,18 +88,27 @@ const Trees3D = {
             constructor(m) { super(m, 'TreeWind', 120, { TREEWIND: false }); this._enable(true); }
             getClassName() { return 'TreeWindPlugin'; }
             prepareDefines(d) { d.TREEWIND = true; }
-            getUniforms() { return { ubo: [{ name: 'trW', size: 4, type: 'vec4' }], vertex: 'uniform vec4 trW;', fragment: 'uniform vec4 trW;' }; }
+            getUniforms() { return { ubo: [{ name: 'trW', size: 4, type: 'vec4' }], vertex: 'uniform vec4 trW;\nvarying vec2 trTone;', fragment: 'uniform vec4 trW;\nvarying vec2 trTone;' }; }
             bindForSubMesh(ub) {
                 const t = (performance.now() / 1000) % 1000, w = typeof Weather !== 'undefined' && Weather.cur ? Weather.cur.k : 0;
                 ub.updateFloat4('trW', t, 0.05 + 0.13 * w, 0.8, 0.6);
             }
             getCustomCode(shaderType) {
-                if (shaderType !== 'vertex') return null;
                 // (sem ponto e vírgula em comentário GLSL: o Babylon corta a linha ali)
+                // O TOM de cada planta (mais clara/escura, mais amarela/azulada) sai do lugar dela (a translação da instância): sem buffer de
+                // cor por instância
+                if (shaderType === 'fragment') return {
+                    CUSTOM_FRAGMENT_BEFORE_LIGHTS: `
+                        #ifdef TREEWIND
+                        surfaceAlbedo *= mix(0.8, 1.14, trTone.x) * vec3(1.0 + (trTone.y - 0.5) * 0.24, 1.0, 1.0 - (trTone.y - 0.5) * 0.34);
+                        #endif`,
+                };
                 return {
                     CUSTOM_VERTEX_UPDATE_WORLDPOS: `
                         #ifdef TREEWIND
                         {
+                            vec2 o = finalWorld[3].xz;
+                            trTone = fract(sin(vec2(dot(o, vec2(12.9898, 78.233)), dot(o, vec2(39.346, 11.135)))) * 43758.5453);
                             float hy = max(positionUpdated.y - 0.8, 0.0);
                             float ph = trW.x * 1.3 + dot(worldPos.xz, vec2(0.11, 0.17));
                             float sw = (sin(ph) * 0.6 + sin(ph * 2.3 + 1.7) * 0.25 + sin(trW.x * 0.37 + worldPos.x * 0.02) * 0.4) * trW.y;

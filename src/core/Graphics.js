@@ -8,6 +8,8 @@
 //   medium   the screen's density (up to 1.5×) MSAA 4×        1024          8 directions, 256 MB, 4× SSAA      the light profile 30
 //   high     the screen's density (up to 2×) MSAA 4×          2048          16 directions, 640 MB, 16× SSAA    full               30 (60 in the PC app)
 //   hd       the screen's density (up to 3×) MSAA 8×          4096          16 directions, 1 GB, 16× SSAA      full               60
+// Modern look (Config.render: render/Atmosphere.js, PBRWorld.js, Trees3D.js): off at low (the classic look); medium = PBR materials, 3D
+// trees, bloom and tone mapping with the sharp PCF shadows; high and HD add the soft ESM shadows, SSAO and the glow layer.
 // (MSAA = the scene's geometry edges, render/Smooth.js — 8× only while the frame is ≤ 4 Mpx; SSAA = up to that many samples per pixel
 // inside the characters' own shader, NpcArt: MSAA cannot smooth the inside of a sprite.)
 //
