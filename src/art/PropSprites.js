@@ -3,9 +3,9 @@
 // (mesmo SpriteBaker e visual do personagem): carvalho, pinheiro, palmeira,
 // arbusto e guarda-sol. Todos num único atlas pequeno + paleta própria.
 //
-// Copas altas (árvores) ficam ACIMA dos personagens (y=3,2) e usam o shader com
-// fade pontilhado em volta do jogador: dá para andar embaixo de uma árvore sem
-// ela esconder o personagem. Arbustos/guarda-sóis ficam baixos (y=0,9).
+// Copas altas (árvores) ficam ACIMA dos personagens (y=3,2), inteiras: quem passa
+// embaixo aparece como a silhueta dourada (XRaySilhouette, pela máscara das copas —
+// maskMaterial). Arbustos/guarda-sóis ficam baixos (y=0,9).
 // ============================================================================
 
 const PropSprites = {
@@ -41,6 +41,8 @@ const PropSprites = {
         { leaf: '#22262b', trunk: '#d4dade', accent: '#2f6fb5', a: '#9a7448', b: '#d9d2b0', pole: '#4a8a4a' },   // 22 lixo e sujeira
         { leaf: '#4f9a3a', trunk: '#6b4a2a', accent: '#9a6fd8', a: '#d9453a', b: '#f4f1e8', pole: '#8a8a90' },   // 23 jacarandá
         { leaf: '#4f9a3a', trunk: '#6b4a2a', accent: '#e8452a', a: '#d9453a', b: '#f4f1e8', pole: '#8a8a90' },   // 24 flamboyant
+        { leaf: '#5d9a3e', trunk: '#4a7a30', accent: '#c8c070', a: '#d9453a', b: '#f4f1e8', pole: '#8a8a90' },   // 25 tufo de grama
+        { leaf: '#8aa64a', trunk: '#6a8a38', accent: '#d8cc80', a: '#d9453a', b: '#f4f1e8', pole: '#8a8a90' },   // 26 tufo de grama seca
     ],
 
     // Lista de frames do atlas: { kind, row, seed }.
@@ -70,12 +72,14 @@ const PropSprites = {
         { kind: 'trash', row: 22, seed: 1 }, { kind: 'trash', row: 22, seed: 2 }, { kind: 'trash', row: 22, seed: 3 }, { kind: 'trash', row: 22, seed: 4 },
         { kind: 'debris', row: 22, seed: 1 }, { kind: 'debris', row: 22, seed: 2 }, { kind: 'debris', row: 22, seed: 3 },
         { kind: 'stain', row: 22, seed: 1 }, { kind: 'stain', row: 22, seed: 2 },
+        // Tufos de grama (só com os sprites em alta definição: art/SpriteHD.js) — relevo no gramado.
+        { kind: 'tuft', row: 25, seed: 1 }, { kind: 'tuft', row: 25, seed: 2 }, { kind: 'tuft', row: 26, seed: 3 }, { kind: 'tuft', row: 25, seed: 4 },
     ],
 
     // Altura de desenho (y do quad) por tipo.
     // REGRA: toda vegetação (e o guarda-sol) fica ACIMA de pedestres (y 0,5), carros (y 1,5+) e personagens pulando; só rochas, fardos e sujeira ficam no chão.
     HEIGHT: { oak: 3.2, pine: 3.2, palm: 3.4, bush: 2.2, umbrella: 2.2, boulder: 0.9, reed: 2.2, dry: 2.2, cypress: 3.2, silo: 4.5, hay: 0.9, orchard: 2.6,
-        jungle: 3.4, araucaria: 3.4, ipe: 3.2, juca: 3.4, banana: 2.4, fern: 2.2, flowers: 2.2, trash: 0.6, debris: 0.6, stain: 0.3 },
+        jungle: 3.4, araucaria: 3.4, ipe: 3.2, juca: 3.4, banana: 2.4, fern: 2.2, flowers: 2.2, trash: 0.6, debris: 0.6, stain: 0.3, tuft: 0.34 },
 
     // Tipos assados com a câmera inclinada dos personagens 2,5D (graus de elevação, SpriteBaker.bake `elev`): o pé fica no centro
     // do quadro e o resto sobe para o norte, no mesmo ângulo dos NPCs. Os demais seguem vistos de cima.
@@ -83,10 +87,10 @@ const PropSprites = {
 
     // Raio da copa/volume (u, na escala 1) de cada tipo: quão longe da pista a planta precisa ficar (RoadPlan.onPavement).
     CROWN: { oak: 2.3, pine: 2.0, palm: 2.3, bush: 1.1, cypress: 1.5, orchard: 1.8, reed: 0.9, dry: 0.9, boulder: 0.8, hay: 0.8, silo: 1.6,
-        jungle: 2.6, araucaria: 2.3, ipe: 2.3, juca: 2.2, banana: 1.8, fern: 1.0, flowers: 0.8 },
+        jungle: 2.6, araucaria: 2.3, ipe: 2.3, juca: 2.2, banana: 1.8, fern: 1.0, flowers: 0.8, tuft: 0.5 },
 
     // Quanto cada tipo balança ao vento (0 = rígido). Troncos grossos balançam pouco; juncos, samambaias e folhas grandes, muito.
-    SWAY: { oak: 0.6, pine: 0.5, palm: 1.0, bush: 0.7, cypress: 0.6, orchard: 0.6, reed: 1.5, dry: 0.9, jungle: 0.55, araucaria: 0.45, ipe: 0.65, juca: 1.1, banana: 1.2, fern: 1.3, flowers: 1.0 },
+    SWAY: { oak: 0.6, pine: 0.5, palm: 1.0, bush: 0.7, cypress: 0.6, orchard: 0.6, reed: 1.5, dry: 0.9, jungle: 0.55, araucaria: 0.45, ipe: 0.65, juca: 1.1, banana: 1.2, fern: 1.3, flowers: 1.0, tuft: 1.4 },
 
     // ------------------------------------------------------------------ modelos
     model(kind, seed) {
@@ -258,6 +262,16 @@ const PropSprites = {
             P.push(B.ellipsoid(S.leaf, [0, 0.02, 0], [0.9 + r() * 0.3, 0.02, 0.6 + r() * 0.3], r() * 3, { flat: true }));
             P.push(B.ellipsoid(S.leaf, [0.5, 0.02, 0.2], [0.45, 0.02, 0.35], r() * 3, { flat: true }));
             for (let k = 0; k < 4; k++) P.push(B.box(S.b, [(r() - 0.5) * 1.6, 0.04, (r() - 0.5) * 1.1], [0.1, 0.02, 0.08], r() * 3, 0.01, { flat: true }));
+        } else if (kind === 'tuft') {
+            // Tufo de grama: folhas finas saindo do pé e arqueando para fora (umas em pé, outras deitadas), uma ou outra espiga.
+            const n = 34 + Math.floor(r() * 12);
+            for (let k = 0; k < n; k++) {
+                const a = r() * TAU, lean = 0.22 + r() * 0.55, h = 0.22 + r() * 0.36, d = r() * 0.16;
+                const bx = Math.cos(a) * d, bz = Math.sin(a) * d, mx = bx + Math.cos(a) * lean * 0.5, mz = bz + Math.sin(a) * lean * 0.5;
+                P.push(B.capsule(k % 3 ? S.leaf : S.trunk, [bx, 0.0, bz], [mx, h, mz], 0.022));
+                P.push(B.capsule(k % 3 ? S.leaf : S.trunk, [mx, h, mz], [bx + Math.cos(a) * lean, h * 0.55, bz + Math.sin(a) * lean], 0.016));
+            }
+            for (let k = 0; k < 3; k++) { if (r() < 0.5) continue; const a = r() * TAU; P.push(B.capsule(S.accent, [0, 0.05, 0], [Math.cos(a) * 0.12, 0.55, Math.sin(a) * 0.12], 0.018)); P.push(B.ellipsoid(S.accent, [Math.cos(a) * 0.14, 0.6, Math.sin(a) * 0.14], [0.03, 0.03, 0.07], a)); }
         } else if (kind === 'bush') {
             P.push(B.sphere(S.leaf, [0, 0.7, 0], 0.8));
             const n = 3 + Math.floor(r() * 3), off = r() * TAU;
@@ -277,6 +291,114 @@ const PropSprites = {
         }
         return P;
     },
+    // ------------------------------------------------------------------ alta definição (art/SpriteHD.js)
+    // Material de cada slot por tipo (o detalhe da superfície no assado HD).
+    hdTex(kind) {
+        const T = { leaf: 'leaf', trunk: 'bark', accent: 'petal', a: 'fabric', b: 'fabric', pole: 'metal' };
+        if (kind === 'pine' || kind === 'araucaria' || kind === 'cypress') T.leaf = 'needle';
+        else if (kind === 'boulder') { T.leaf = 'rock'; T.accent = 'rock'; T.trunk = 'rock'; }
+        else if (kind === 'silo') { T.leaf = 'metal'; T.accent = 'metal'; T.trunk = 'metal'; }
+        else if (kind === 'hay') { T.leaf = 'hay'; T.accent = 'hay'; }
+        else if (kind === 'dry' || kind === 'reed') { T.leaf = 'hay'; T.accent = 'hay'; }
+        else if (kind === 'tuft') { T.leaf = 'grass'; T.trunk = 'grass'; T.accent = 'hay'; }
+        else if (kind === 'trash') { T.leaf = 'plastic'; T.trunk = 'plastic'; T.accent = 'plastic'; T.a = 'paper'; T.b = 'paper'; T.pole = 'plastic'; }
+        else if (kind === 'debris') { T.a = 'paper'; T.b = 'paper'; T.pole = 'plastic'; }
+        else if (kind === 'stain') { T.leaf = 'flat'; T.b = 'paper'; }
+        else if (kind === 'umbrella') { T.accent = 'plastic'; T.leaf = 'plastic'; T.trunk = 'fabric'; }
+        const out = {};
+        for (const k of Object.keys(T)) out[this.SLOT[k]] = T[k];
+        return out;
+    },
+    // Modelo para o assado HD: o mesmo do pixel art, com mais peças onde a resolução pede (folíolos da palmeira, galhos finos do
+    // pinheiro, lascas angulosas da pedra, franja do guarda-sol, toalha listrada, cadeira de praia e isopor).
+    modelHD(kind, seed) {
+        const B = SpriteBaker, S = this.SLOT, r = Pixel.rng(seed * 7919 + kind.length * 131 + 17), TAU = Math.PI * 2;
+        if (kind === 'palm' || kind === 'juca') {
+            const P = [], palm = kind === 'palm', n = palm ? 9 : 8, off = r() * TAU;
+            P.push(B.sphere(S.trunk, [0, palm ? 4.5 : 4.4, 0], palm ? 0.4 : 0.24));
+            if (palm) for (let k = 0; k < 5; k++) { const a = k / 5 * TAU; P.push(B.sphere(S.accent, [Math.cos(a) * 0.32, 4.25, Math.sin(a) * 0.32], 0.13)); }      // cocos
+            for (let k = 0; k < n; k++) {
+                const a = off + (k / n) * TAU + (r() - 0.5) * 0.3, ca = Math.cos(a), sa = Math.sin(a), L = (palm ? 1.85 : 1.8) + r() * 0.25;   // (cabe no quadro de 6 u com os folíolos)
+                const at = (t) => [ca * L * t, (palm ? 4.5 : 4.5) + 0.5 * Math.sin(t * Math.PI * 0.8) - 1.3 * t * t, sa * L * t];       // a ráquis arqueia e cai
+                let prev = at(0);
+                for (let s = 1; s <= 6; s++) { const p = at(s / 6); P.push(B.capsule(S.leaf, prev, p, palm ? 0.06 : 0.045)); prev = p; }
+                for (let t = 0.14; t < 0.98; t += palm ? 0.075 : 0.085) {                                                    // folíolos dos dois lados
+                    const p = at(t), len = (palm ? 0.55 : 0.45) * (1 - 0.55 * t) * (0.85 + r() * 0.3), dn = 0.12 + 0.18 * t;
+                    for (const sd of [-1, 1]) P.push(B.capsule(S.leaf, p, [p[0] - sa * sd * len + ca * 0.12, p[1] - dn, p[2] + ca * sd * len + sa * 0.12], palm ? 0.04 : 0.032));
+                }
+            }
+            return P;
+        }
+        if (kind === 'banana') {
+            // folhas largas e compridas (lâmina achatada caindo para fora, com a nervura clara no meio), rasgadas aqui e ali
+            const P = [B.sphere(S.trunk, [0, 0.9, 0], 0.22)], n = 8, off = r() * TAU;
+            for (let k = 0; k < n; k++) {
+                const a = off + (k / n) * TAU + (r() - 0.5) * 0.3, ca = Math.cos(a), sa = Math.sin(a), L = 1.7 + r() * 0.4;
+                for (let s = 0; s < 4; s++) {
+                    const t = (s + 0.5) / 4, x = ca * L * t, z = sa * L * t, y = 1.5 + 0.35 * Math.sin(t * 2.4) - 0.9 * t * t;
+                    P.push(B.ellipsoid(S.leaf, [x, y, z], [0.36 * (1 - 0.35 * t) * (r() < 0.2 ? 0.7 : 1), 0.05, L / 7], -a + Math.PI / 2));
+                }
+                P.push(B.capsule(S.accent, [0, 1.45, 0], [ca * L * 0.95, 1.5 - 0.6, sa * L * 0.95], 0.035));
+            }
+            P.push(B.sphere(S.accent, [0.25, 0.9, 0.1], 0.16));
+            return P;
+        }
+        if (kind === 'fern') {
+            const P = [], n = 11, off = r() * TAU;
+            for (let k = 0; k < n; k++) {
+                const a = off + (k / n) * TAU + (r() - 0.5) * 0.3, ca = Math.cos(a), sa = Math.sin(a), L = 0.95 + r() * 0.4;
+                const at = (t) => [ca * L * t, 0.3 + 0.6 * Math.sin(t * Math.PI * 0.9), sa * L * t];
+                let prev = at(0);
+                for (let s = 1; s <= 5; s++) { const p = at(s / 5); P.push(B.capsule(S.leaf, prev, p, 0.03)); prev = p; }
+                for (let t = 0.12; t < 0.98; t += 0.09) {
+                    const p = at(t), len = 0.26 * (1 - 0.7 * Math.abs(t - 0.35));
+                    for (const sd of [-1, 1]) P.push(B.capsule(S.leaf, p, [p[0] - sa * sd * len, p[1] - 0.05, p[2] + ca * sd * len], 0.028));
+                }
+            }
+            return P;
+        }
+        if (kind === 'pine') {
+            const P = [B.sphere(S.leaf, [0, 3.95, 0], 0.42)], off = r() * TAU;
+            for (let t = 0; t < 4; t++) {                                                                               // camadas de galhos, de cima para baixo
+                const y0 = 3.9 - t * 0.48, R = 0.7 + t * 0.42, n = 9 + t * 2;
+                for (let k = 0; k < n; k++) {
+                    const a = off + (k / n) * TAU + t * 0.37 + (r() - 0.5) * 0.2, ca = Math.cos(a), sa = Math.sin(a), Rr = R * (0.85 + r() * 0.3);
+                    const tip = [ca * Rr, y0 - 0.55, sa * Rr];
+                    P.push(B.capsule(S.leaf, [ca * 0.1, y0, sa * 0.1], tip, 0.2 - t * 0.02));
+                    for (const sd of [-1, 1]) P.push(B.capsule(S.leaf, [ca * Rr * 0.6, y0 - 0.32, sa * Rr * 0.6], [ca * Rr * 0.8 - sa * sd * 0.35, y0 - 0.5, sa * Rr * 0.8 + ca * sd * 0.35], 0.12));
+                }
+            }
+            return P;
+        }
+        if (kind === 'boulder') {
+            const P = this.model(kind, seed), n = 2 + Math.floor(r() * 3);
+            for (let k = 0; k < n; k++) {                                                                                // lascas angulosas (faces planas)
+                const a = r() * TAU, d = 0.35 + r() * 0.9;
+                P.push(B.box(S.leaf, [Math.cos(a) * d, 0.15 + r() * 0.35, Math.sin(a) * d], [0.25 + r() * 0.3, 0.2 + r() * 0.25, 0.2 + r() * 0.25], r() * TAU, 0.07));
+            }
+            for (let k = 0; k < 5; k++) { const a = r() * TAU, d = 1.2 + r() * 0.5; P.push(B.ellipsoid(S.accent, [Math.cos(a) * d, 0.06, Math.sin(a) * d], [0.1 + r() * 0.08, 0.08, 0.08 + r() * 0.06], r() * 3)); }   // cascalho
+            return P;
+        }
+        if (kind === 'umbrella') {
+            const P = this.model(kind, seed).slice(0, 4);                                                              // cúpula, mastro, ponteira e base
+            for (let k = 0; k < 24; k++) {                                                                              // franja: babado na borda, nas cores dos gomos
+                const a = k / 24 * TAU, ca = Math.cos(a), sa = Math.sin(a);
+                P.push(B.sphere(Math.floor(k / 3) % 2 ? S.b : S.a, [ca * 1.52, 1.93, sa * 1.52], 0.09));
+            }
+            const tx = 1.9, tz = -1.1;                                                                                   // toalha listrada
+            for (let k = 0; k < 5; k++) P.push(B.box(k % 2 ? S.b : S.a, [tx - 0.44 + k * 0.22, 0.04, tz], [0.11, 0.035, 0.9], 0.3, 0.015, { flat: true }));
+            P.push(B.box(S.a, [-1.6, 0.2, -0.9], [0.32, 0.03, 0.7], -0.25, 0.02));                                       // cadeira de praia (lona)
+            P.push(B.box(S.a, [-1.69, 0.5, -0.32], [0.32, 0.25, 0.03], -0.25, 0.02));
+            for (const sd of [-1, 1]) P.push(B.capsule(S.pole, [-1.6 + sd * 0.33, 0.0, -1.5], [-1.6 + sd * 0.33, 0.22, -0.4], 0.025));
+            P.push(B.box(S.b, [0.9, 0.22, 1.5], [0.32, 0.22, 0.22], 0.4, 0.05));                                           // isopor
+            P.push(B.box(S.a, [0.9, 0.46, 1.5], [0.34, 0.04, 0.24], 0.4, 0.03));
+            return P;
+        }
+        return this.model(kind, seed);
+    },
+    // Cores de uma linha da paleta por número de slot (para o assado HD).
+    hdColors(row) { const out = {}, R = this.ROWS[row]; for (const k of Object.keys(this.SLOT)) out[this.SLOT[k]] = R[k]; return out; },
+
     // ------------------------------------------------------------------ vento
     // Cada planta que balança tem 3 MODOS de sprites, assados com o modelo realmente entortado (nada de distorcer pixels):
     //   0 LEVE   vento normal (tempo bom)          1 FORTE   ventania (garoa/chuva forte)          2 INTENSO  tempestade (> 100 km/h)
@@ -350,9 +472,7 @@ const PropSprites = {
             uniform vec2 palSize;
             uniform vec3 tint;
             uniform float shadowAlpha;
-            uniform vec2 focus;
-            uniform float fadeR;
-            uniform float useFade;
+            uniform float cut;              // alfa mínimo desenhado (a máscara das copas: só o miolo, sem a sombra)
             uniform float time;
             uniform float mode;
             uniform float cps;
@@ -377,7 +497,6 @@ const PropSprites = {
             void main(void) {
                 vec2 uv = vUV;
                 if (vSway > 0.01) uv += vec2(0.0, floor(mod(time * cps * 4.0 + vPh * 4.0, 4.0)) * animStep);
-                float k = useFade > 0.5 ? clamp(length(vWorld.xz - focus) / fadeR, 0.0, 1.0) : 1.0;
                 if (sharp > 0.5) {
                     // Gráfico suave: bilinear feito à mão sobre a cor JÁ pintada (o atlas tem códigos de paleta, não cores), com o miolo
                     // de cada pixel da arte nítido (sharp) — só a borda entre dois pixels é suavizada: sem serrilhado e sem borrar.
@@ -385,22 +504,23 @@ const PropSprites = {
                     vec2 p = uv * sz - 0.5, i = floor(p), f = clamp((p - i - 0.5) * sharp + 0.5, 0.0, 1.0);
                     vec4 c = mix(mix(px(raw((i + 0.5) / sz)), px(raw((i + vec2(1.5, 0.5)) / sz)), f.x),
                                  mix(px(raw((i + vec2(0.5, 1.5)) / sz)), px(raw((i + 1.5) / sz)), f.x), f.y);
-                    if (c.a < 0.02) discard;
-                    gl_FragColor = vec4(c.rgb / c.a, c.a * smoothstep(0.2, 1.0, k));
+                    if (c.a < max(0.02, cut)) discard;
+                    gl_FragColor = vec4(c.rgb / c.a, c.a);
                     return;
                 }
                 vec4 c = px(raw(uv));
-                if (c.a <= 0.0) discard;
+                if (c.a <= 0.0 || c.a < cut) discard;
                 if (c.a < 0.999) { gl_FragColor = vec4(0.0, 0.0, 0.05, shadowAlpha); return; }
-                gl_FragColor = vec4(c.rgb, smoothstep(0.2, 1.0, k));
+                gl_FragColor = vec4(c.rgb, 1.0);
             }`;
     },
 
-    swayMaterial(scene, name, atlas, anims, palette, fade) {
+    // mask = a MÁSCARA das copas (XRaySilhouette.addMask): só o miolo opaco, sem cor — marca no stencil onde a copa cobre o jogador.
+    swayMaterial(scene, name, atlas, anims, palette, mask = false) {
         this.registerSway();
         const m = new BABYLON.ShaderMaterial(name, scene, { vertex: 'propSway', fragment: 'propSway' }, {
             attributes: ['position', 'uv', 'color'],
-            uniforms: ['worldViewProjection', 'world', 'palSize', 'tint', 'shadowAlpha', 'focus', 'fadeR', 'useFade', 'time', 'mode', 'cps', 'animStep', 'sharp', 'atlasSize', 'animSize'],
+            uniforms: ['worldViewProjection', 'world', 'palSize', 'tint', 'shadowAlpha', 'cut', 'time', 'mode', 'cps', 'animStep', 'sharp', 'atlasSize', 'animSize'],
             samplers: ['atlas', 'anim0', 'anim1', 'anim2', 'palette'],
             needAlphaBlending: true,
         });
@@ -410,9 +530,8 @@ const PropSprites = {
         m.setVector2('palSize', new BABYLON.Vector2(palette.width, palette.height));
         m.setColor3('tint', SpriteMaterial.sharedTint());
         m.setFloat('shadowAlpha', 0.36);
-        m.setVector2('focus', new BABYLON.Vector2(0, 0));
-        m.setFloat('fadeR', 3.4);
-        m.setFloat('useFade', fade ? 1 : 0);
+        m.setFloat('cut', mask ? 0.6 : 0);
+        m.disableColorWrite = mask;
         m.setFloat('time', 0);
         m.setFloat('mode', 0);
         m.setFloat('cps', this.MODES[0].cps);
@@ -436,6 +555,7 @@ const PropSprites = {
     // Atlas ESTÁTICO (todos os frames, parados) + 3 atlas ANIMADOS (um por modo de vento) só com as plantas que balançam: cada um com
     // ANIM_FRAMES cópias da grade. Devolve { materials, rect(i), animRect(i), pick(kind, rnd), setWind(t, modo), setFocus }.
     create(scene) {
+        if (typeof SpriteHD !== 'undefined' && SpriteHD.on) return this.createHD(scene);
         const t0 = performance.now();
         const F = this.FRAME, cols = this.COLS, rows = Math.ceil(this.FRAMES.length / cols);
         const W = cols * F, H = rows * F;
@@ -487,12 +607,12 @@ const PropSprites = {
         const palette = { texture: ptex, width: PW, height: PH };
 
         const bound = [anims[0], anims[0], anims[0]];      // modo sem atlas próprio usa o do vento leve
-        const focusV = new BABYLON.Vector2(0, 0);
         let job = null, calm = 0;
         const api = {
             frame: F, W, H, atlas, anims,
-            hiMaterial: PropSprites.swayMaterial(scene, 'propsHi', atlas, bound, palette, true),
-            loMaterial: PropSprites.swayMaterial(scene, 'propsLo', atlas, bound, palette, false),
+            hiMaterial: PropSprites.swayMaterial(scene, 'propsHi', atlas, bound, palette),
+            loMaterial: PropSprites.swayMaterial(scene, 'propsLo', atlas, bound, palette),
+            maskMaterial: PropSprites.swayMaterial(scene, 'propsMask', atlas, bound, palette, true),
             // Retângulo UV de um frame estático (norte = linha de cima da imagem).
             rect: (i) => {
                 const u0 = ((i % cols) * F) / W, v0 = (Math.floor(i / cols) * F) / H;
@@ -527,21 +647,151 @@ const PropSprites = {
                 }
                 let use = mode;
                 while (use > 0 && !anims[use]) use--;
-                for (const m of [api.hiMaterial, api.loMaterial]) { m.setFloat('time', t); m.setFloat('mode', use); m.setFloat('cps', PropSprites.MODES[use].cps); }
+                for (const m of api.materials()) { m.setFloat('time', t); m.setFloat('mode', use); m.setFloat('cps', PropSprites.MODES[use].cps); }
             },
             _bind: () => {
                 for (let k = 1; k < 3; k++) {
                     const tx = anims[k] || anims[0];
                     if (bound[k] === tx) continue;
                     bound[k] = tx;
-                    for (const m of [api.hiMaterial, api.loMaterial]) m.setTexture('anim' + k, tx);
+                    for (const m of api.materials()) m.setTexture('anim' + k, tx);
                 }
             },
-            setFocus: (x, z, r) => { focusV.set(x, z); api.hiMaterial.setVector2('focus', focusV); if (r > 0) api.hiMaterial.setFloat('fadeR', r); },
+            materials: () => [api.hiMaterial, api.loMaterial, api.maskMaterial],
             // Gráfico suave (Smooth.zoom): px da tela por px da arte; 0 = pixels duros.
-            setSharp: (s) => { if (s === api._sharp) return; api._sharp = s; for (const m of [api.hiMaterial, api.loMaterial]) m.setFloat('sharp', s); },
+            setSharp: (s) => { if (s === api._sharp) return; api._sharp = s; for (const m of api.materials()) m.setFloat('sharp', s); },
         };
         console.log(`[PROPS] ${this.FRAMES.length} frames + ${sw.length}×${this.ANIM_FRAMES} de vento leve em ${(performance.now() - t0).toFixed(0)} ms (atlas animado ${AW}×${AH})`);
         return api;
+    },
+
+    // ------------------------------------------------------------------- atlas em alta definição (art/SpriteHD.js)
+    // Um atlas RGBA só (todos os quadros, parados, com mipmaps) + o mapa do VENTO (altura dilatada, meia resolução). O balanço é
+    // feito no shader: cada ponto da planta é amostrado de volta pelo deslocamento do vento × a altura dele (o pé fica, a copa vai),
+    // com o tremor das folhas por cima — os três modos (leve, forte, tempestade) são só intensidades, com transição suave, e nada é
+    // pré-assado. Mesma interface do create() de pixel art.
+    createHD(scene) {
+        const t0 = performance.now(), q = SpriteHD.Q, F = this.FRAME, FP = Math.round(F * q), cols = 8, n = this.FRAMES.length, rows = Math.ceil(n / cols);
+        const W = cols * FP, H = rows * FP, data = new Uint8Array(W * H * 4), HP = FP >> 1, SW = cols * HP, SH = rows * HP, sway = new Uint8Array(SW * SH), ppu = Config.art.ppu * q;
+        SpriteHD.lastMs = 0;
+        // tipos assados com a câmera inclinada (caros: um raio por pixel): a geometria é feita uma vez e pintada nas cores de cada quadro
+        const tilted = {};
+        for (const kind of Object.keys(this.TILT)) {
+            const idx = []; this.FRAMES.forEach((fr, i) => { if (fr.kind === kind) idx.push(i); });
+            if (!idx.length) continue;
+            const f0 = this.FRAMES[idx[0]], res = SpriteHD.bake(this.modelHD(kind, f0.seed), { size: F, q, shadowLen: 0.5, elev: this.TILT[kind], colors: idx.map((i) => this.hdColors(this.FRAMES[i].row)), tex: this.hdTex(kind), seed: f0.seed });
+            idx.forEach((i, k) => { tilted[i] = { N: res.N, rgba: res.rgba[k], hgt: res.hgt }; });
+        }
+        this.FRAMES.forEach((fr, i) => {
+            const res = tilted[i] || SpriteHD.bake(this.modelHD(fr.kind, fr.seed), { size: F, q, shadowLen: 0.5, colors: this.hdColors(fr.row), tex: this.hdTex(fr.kind), seed: fr.seed + i * 0.37 });
+            const cx = (i % cols) * FP, cy = Math.floor(i / cols) * FP, img = res.rgba, mg = Math.round(FP * 0.07);
+            for (let y = 0; y < FP; y++) for (let x = 0; x < FP; x++) {                            // (esmaece na borda do quadro: sombra comprida não corta reta)
+                const e = Math.min(x, y, FP - 1 - x, FP - 1 - y), o = (y * FP + x) * 4;
+                if (e < mg) { const f = e / mg; img[o] *= f; img[o + 1] *= f; img[o + 2] *= f; img[o + 3] *= f; }
+            }
+            for (let y = 0; y < FP; y++) data.set(img.subarray(y * FP * 4, (y + 1) * FP * 4), ((cy + y) * W + cx) * 4);
+            const k = this.SWAY[fr.kind];
+            if (!k) return;
+            const h2 = new Uint8Array(HP * HP);                                                   // altura em meia resolução (máximo de 2×2)
+            for (let y = 0; y < HP; y++) for (let x = 0; x < HP; x++) {
+                const o = 2 * y * FP + 2 * x;
+                h2[y * HP + x] = Math.max(res.hgt[o], res.hgt[o + 1], res.hgt[o + FP], res.hgt[o + FP + 1]);
+            }
+            const m = SpriteHD.swayMap(h2, HP, Math.ceil(0.95 * k * ppu / 2), Math.ceil(0.45 * k * ppu / 2));
+            for (let y = 0; y < HP; y++) sway.set(m.subarray(y * HP, (y + 1) * HP), (cy / 2 + y) * SW + cx / 2);
+        });
+        const atlas = SpriteHD.texture(scene, data, W, H, { name: 'propsHD' });
+        const gl2 = scene.getEngine().webGLVersion >= 2;
+        const swayTex = new BABYLON.RawTexture(sway, SW, SH, gl2 ? BABYLON.Constants.TEXTUREFORMAT_R : BABYLON.Constants.TEXTUREFORMAT_LUMINANCE, scene, false, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE, BABYLON.Constants.TEXTURETYPE_UNSIGNED_BYTE);
+        swayTex.wrapU = swayTex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+        const wind = { amp: this.MODES[0].amp, lean: 0, flutter: this.MODES[0].flutter, cps: this.MODES[0].cps, ph: 0, t: null };
+        const mat = (name, mask) => this.hdMaterial(scene, name, atlas, swayTex, mask, cols, rows, W, H);
+        const api = {
+            frame: F, W, H, atlas, anims: [], hd: true,
+            hiMaterial: mat('propsHi', false),
+            loMaterial: mat('propsLo', false),
+            maskMaterial: mat('propsMask', true),
+            rect: (i) => { const u0 = ((i % cols) * FP) / W, v0 = (Math.floor(i / cols) * FP) / H; return [u0, v0, u0 + FP / W, v0 + FP / H]; },
+            animRect: () => null,
+            pick: (kind, rnd) => {
+                const idx = [];
+                this.FRAMES.forEach((fr, i) => { if (fr.kind === kind) idx.push(i); });
+                const i = idx[Math.min(idx.length - 1, Math.floor(rnd * idx.length))];
+                return { index: i, row: this.FRAMES[i].row, kind };
+            },
+            // vento: a intensidade do modo pedido chega devagar (rajada que aumenta, tempestade que passa) e a fase anda pelo tempo
+            setWind: (t, mode, dt = 1 / 30) => {
+                const M = PropSprites.MODES[Math.max(0, Math.min(2, mode))], k = 1 - Math.exp(-Math.max(0, dt) * 0.7);
+                wind.amp += (M.amp - wind.amp) * k; wind.lean += (M.lean - wind.lean) * k; wind.flutter += (M.flutter - wind.flutter) * k; wind.cps += (M.cps - wind.cps) * k;
+                wind.ph = (wind.ph + Math.max(0, Math.min(0.2, dt)) * wind.cps * Math.PI * 2) % (Math.PI * 2000);
+                for (const m of api.materials()) { m.setFloat('wphase', wind.ph); m.setFloat('amp', wind.amp); m.setFloat('lean', wind.lean); m.setFloat('flutter', wind.flutter); }
+            },
+            _bind: () => {},
+            materials: () => [api.hiMaterial, api.loMaterial, api.maskMaterial],
+            setSharp: () => {},
+        };
+        console.log(`[PROPS] ${n} quadros em alta definição (${ppu} px/u, atlas ${W}×${H}) em ${(performance.now() - t0).toFixed(0)} ms`);
+        return api;
+    },
+
+    hdMaterial(scene, name, atlas, swayTex, mask, cols, rows, W, H) {
+        this.registerSway();
+        if (!BABYLON.Effect.ShadersStore.propHDFragmentShader) {
+            BABYLON.Effect.ShadersStore.propHDFragmentShader = `
+                precision highp float;
+                varying vec2 vUV;
+                varying float vVariant;
+                varying float vShade;
+                varying float vSway;
+                varying float vPh;
+                varying vec3 vWorld;
+                uniform sampler2D atlas;
+                uniform sampler2D swayMap;
+                uniform vec3 tint;
+                uniform float cut;
+                uniform float wphase;
+                uniform float amp;
+                uniform float lean;
+                uniform float flutter;
+                uniform vec2 cells;
+                uniform vec2 kuv;
+                uniform vec2 texel;
+                void main(void) {
+                    vec2 uv = vUV;
+                    if (vSway > 0.01) {
+                        vec2 cell = floor(vUV * cells), lo = cell / cells + texel, hi = (cell + 1.0) / cells - texel, loc = vUV * cells - cell;
+                        float ph = wphase + vPh * 6.2832;
+                        vec2 w = vec2(amp * sin(ph + loc.x * 0.8) + lean, 0.45 * amp * cos(ph + 0.7 + loc.y * 0.6)) * vSway;
+                        float fl = flutter * amp * vSway;
+                        vec2 jit = fl * vec2(0.5 * sin(ph * 2.0 + loc.x * 9.0 + loc.y * 5.0), 0.25 * cos(ph * 2.3 + loc.y * 11.0 - loc.x * 4.0));
+                        vec2 d = (w + jit) * vec2(kuv.x, -kuv.y);
+                        float h = pow(texture2D(swayMap, uv).r, 1.25);
+                        h = pow(texture2D(swayMap, uv - d * h).r, 1.25);
+                        uv = clamp(uv - d * h, lo, hi);
+                    }
+                    vec4 c = texture2D(atlas, uv);
+                    if (c.a < cut) discard;
+                    gl_FragColor = vec4(c.rgb * tint * vShade, c.a);
+                }`;
+        }
+        const m = new BABYLON.ShaderMaterial(name, scene, { vertex: 'propSway', fragment: 'propHD' }, {
+            attributes: ['position', 'uv', 'color'],
+            uniforms: ['worldViewProjection', 'world', 'tint', 'cut', 'wphase', 'amp', 'lean', 'flutter', 'cells', 'kuv', 'texel'],
+            samplers: ['atlas', 'swayMap'],
+            needAlphaBlending: true,
+        });
+        m.setTexture('atlas', atlas);
+        m.setTexture('swayMap', swayTex);
+        m.setColor3('tint', SpriteMaterial.sharedTint());
+        m.setFloat('cut', mask ? 0.5 : 0.004);
+        m.disableColorWrite = !!mask;
+        m.setFloat('wphase', 0); m.setFloat('amp', this.MODES[0].amp); m.setFloat('lean', 0); m.setFloat('flutter', this.MODES[0].flutter);
+        const span = this.FRAME / Config.art.ppu;                                               // u de mundo que um quadro cobre
+        m.setVector2('cells', new BABYLON.Vector2(cols, rows));
+        m.setVector2('kuv', new BABYLON.Vector2(1 / (cols * span), 1 / (rows * span)));
+        m.setVector2('texel', new BABYLON.Vector2(0.5 / W, 0.5 / H));
+        m.alphaMode = BABYLON.Engine.ALPHA_PREMULTIPLIED;
+        m.backFaceCulling = false;
+        return m;
     },
 };

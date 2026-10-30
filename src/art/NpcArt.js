@@ -321,7 +321,7 @@ const NpcArt = {
 		for (const A of Object.values(this.atlases)) if (A.live) this.dropAtlas(A.id);      // (a look being drawn: only on the old scene's GPU — Wardrobe starts it again)
 		for (const A of Object.values(this.atlases)) for (const P of A.pages) {
 			if (P.up) { P.up = null; P.st = 'ready'; }                     // (envio pela metade na cena antiga: recomeça nesta — os pixels ainda estão em P.px)
-			if (P.tex || P.mat) { P.tex = null; P.mat = P.sil = null; if (A.file && P.st === 'ready' && !P.px) P.st = 'idle'; }
+			if (P.tex || P.mat) { P.tex = null; P.mat = P.sil = P.silO = null; if (A.file && P.st === 'ready' && !P.px) P.st = 'idle'; }
 		}
 		this._live.clear(); this._res = 0; this._upQ = []; this._zombies = [];
 		const eng = scene.getEngine();                                      // envio das páginas em faixas: o orçamento é reposto a cada quadro (_upFrame)
@@ -662,12 +662,14 @@ const NpcArt = {
 	// already wrote depth (GREATER), without writing depth itself. Refreshed on every call: only the player's current page uses it.
 	SILHOUETTE: new BABYLON.Vector4(1.0, 0.86, 0.38, 0.62),
 	NO_SILHOUETTE: new BABYLON.Vector4(0, 0, 0, 0),
-	silhouetteOf(P) {
-		let m = P.sil;
+	// over = true: the twin painted over the canopies (no depth test: the stencil of the canopy mask says where).
+	silhouetteOf(P, over = false) {
+		const key = over ? 'silO' : 'sil';
+		let m = P[key];
 		if (!m) {
-			m = P.sil = this._newMaterial(P, 'npcXray_');
+			m = P[key] = this._newMaterial(P, over ? 'npcXrayO_' : 'npcXray_');
 			m.setVector4('silhouette', this.SILHOUETTE);
-			m.depthFunction = BABYLON.Constants.GREATER;
+			m.depthFunction = over ? BABYLON.Constants.ALWAYS : BABYLON.Constants.GREATER;
 			m.disableDepthWrite = true;
 		}
 		this._refresh(m, P);
@@ -899,7 +901,8 @@ const NpcArt = {
 		if (P.tex) { P.tex.dispose(); this._res -= P.w * P.h * 2; this._live.delete(P); }
 		if (P.mat) P.mat.dispose();
 		if (P.sil) P.sil.dispose();
-		P.tex = P.mat = P.sil = null;
+		if (P.silO) P.silO.dispose();
+		P.tex = P.mat = P.sil = P.silO = null;
 	},
 	// (tick) Atlas descartados que alguém ainda desenhava: quem já não espera uma página nova (ou esperou 10 s) larga o último quadro
 	// (_lostPage: some até desenhar de novo); sem ninguém, as texturas saem da GPU.

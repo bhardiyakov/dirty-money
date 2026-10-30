@@ -34,7 +34,7 @@ class MeshBatch {
         this.idx.push(base + 3, base + 1, base, base + 2, base + 3, base);
     }
 
-    // Triângulo orientado: a face visível aponta para `n` (troca b/c se preciso). uvs: [[u,v] x3]. color: [r,g,b] ou uma por vértice.
+    // Triângulo orientado: a face visível aponta para `n` (troca b/c se preciso). uvs: [[u,v] x3]. color: [r,g,b(,a)] ou uma por vértice.
     tri(a, b, c, n, uvs, color = [1, 1, 1]) {
         const cx = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]);
         const cy = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
@@ -47,7 +47,7 @@ class MeshBatch {
         for (let k = 0; k < 3; k++) {
             const ck = per ? color[k] : color;
             this.nor.push(n[0], n[1], n[2]);
-            this.col.push(ck[0], ck[1], ck[2], 1);
+            this.col.push(ck[0], ck[1], ck[2], ck.length > 3 ? ck[3] : 1);
             this.uv.push(uvs[k][0], uvs[k][1]);
         }
         this.idx.push(base, base + 1, base + 2);

@@ -112,7 +112,10 @@ module.exports = {
             return { h: Math.atan2(s.d.dx, s.d.dz) };
         });
         if (c.ok(!!rode, 'achou uma moto')) {
-            await gameWait(page, 2.5);                                       // (a câmera vai para trás dela)
+            // Esperas por TEMPO DE JOGO com teto folgado: com a máquina ocupada (o Chromium por software chega a ~0,1× do relógio), o
+            // teto padrão do gameWait (6 s reais por s de jogo) estourava antes — a câmera ainda estava no meio da volta.
+            const wait = (s) => gameWait(page, s, s * 25000);
+            await wait(2.5);                                                 // (a câmera vai para trás dela)
             const m0 = await cam();
             c.ok(Math.abs(wrap(m0.yaw - rode.h)) < 0.15, `na moto, a câmera vai para trás dela (${(wrap(m0.yaw - rode.h) * 57.3).toFixed(0)}°)`);
             await drag('right', 200);
@@ -122,25 +125,26 @@ module.exports = {
             // segurando o botão parado: a olhada fica onde está (só volta depois de soltar)
             await page.mouse.move(640, 300); await page.mouse.down({ button: 'right' });
             for (let i = 1; i <= 8; i++) await page.mouse.move(640 + (120 * i) / 8, 300);
-            await gameWait(page, 0.3);                                        // (o último passo do arrasto entra no quadro seguinte)
+            await wait(0.3);                                                  // (o último passo do arrasto entra no quadro seguinte)
             const h0 = await cam();
             // o veículo "vira" 70° no meio da olhada: a câmera é do jogador agora — fica parada no mundo, sem somar o giro automático
             await page.evaluate(() => { const C = game.camera; C._carYaw = CompassCamera.wrap(C._carYaw + 1.2); });
-            await gameWait(page, 1.5);
+            await wait(1.5);
             const hv = await cam();
             await page.evaluate(() => { const C = game.camera; C._carYaw = CompassCamera.wrap(C._carYaw - 1.2); });
-            await gameWait(page, 1.5);
+            await wait(1.5);
             const h1 = await cam();
             await page.mouse.up({ button: 'right' });
             c.ok(Math.abs(wrap(hv.yaw - h0.yaw)) < 0.02, `girada pelo jogador, a câmera não soma o giro do veículo virando (${(wrap(hv.yaw - h0.yaw) * 57.3).toFixed(0)}° com a moto virando 70°)`);
             c.ok(Math.abs(wrap(h1.yaw - h0.yaw)) < 0.02 && Math.abs(h1.look) > 1, `segurando o giro parado, ela não volta sozinha (${(wrap(h1.yaw - h0.yaw) * 57.3).toFixed(0)}°)`);
-            await gameWait(page, 5);                                          // (soltou: espera lookHold e volta suave — a olhada era maior)
+            const tw = await wait(5);                                         // (soltou: espera lookHold e volta suave — a olhada era maior)
             const m2 = await cam();
-            c.ok(Math.abs(wrap(m2.yaw - rode.h)) < 0.2, `sem mexer, a câmera volta para trás da moto (${(wrap(m2.yaw - rode.h) * 57.3).toFixed(0)}°)`);
+            const st = await page.evaluate(() => { const C = game.camera, b = game.activeCar, f = b.fwdToRef(new BABYLON.Vector3()); return { h: +Math.atan2(f.x, f.z).toFixed(3), manual: C.manual, idle: +C._lookIdle.toFixed(2) }; });
+            c.ok(tw >= 4.9 && Math.abs(wrap(m2.yaw - rode.h)) < 0.2, `sem mexer, a câmera volta para trás da moto (${(wrap(m2.yaw - rode.h) * 57.3).toFixed(0)}° depois de ${tw.toFixed(1)} s de jogo; ${JSON.stringify(st)})`);
             await drag('right', -150);
             const m3 = await cam();
             await page.evaluate(() => { game._leaveVehicle(); });
-            await gameWait(page, 1);
+            await wait(1);
             const m4 = await cam();
             c.ok(Math.abs(wrap(m4.yaw - m3.yaw)) < 0.15 && Math.abs(wrap(m4.user - m3.yaw)) < 0.15, `desceu: a pé, a câmera fica de onde estava (${(m3.yaw * 57.3).toFixed(0)}° → ${(m4.yaw * 57.3).toFixed(0)}°)`);
         }

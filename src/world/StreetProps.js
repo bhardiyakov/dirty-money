@@ -54,7 +54,8 @@ class StreetProps {
             if (it.alive) { this._lampGeo(b, it); n++; }
         }
         if (!n) return;
-        c.mesh = b.build('lamps_' + key, this.scene, this.w.mats.solid, { vertexColors: true, receiveShadows: false, alwaysActive: false });
+        // (material das peças da ponte: com o vão cortado — RoofCut —, o poste em cima dele some junto, em vez de ficar de pé na água)
+        c.mesh = b.build('lamps_' + key, this.scene, this.w.mats.bsolid, { vertexColors: true, receiveShadows: false, alwaysActive: false });
         if (c.mesh && this.w.shadow && k === 'l') this.w.shadow.addShadowCaster(c.mesh);
     }
 

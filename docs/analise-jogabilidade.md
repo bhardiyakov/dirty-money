@@ -257,6 +257,138 @@ quente, sombras macias e materiais com textura.
   - `tests/24_interiores` repinta todas as salas e confere que sólidos, usos, entrada e assentos saem iguais com e sem o HD.
 - **Volta à pixel art:** `Config.art.interiorHD = false` ou `?pixel` na URL.
 
+## Cidade em alta definição (`src/art/CityHD*.js`)
+
+As texturas da cidade (antes pixel art a 20 px/u do `TileFactory`) são repintadas no mesmo estilo dos interiores: material de verdade,
+degradês, contorno fino e sombra macia, com luz do noroeste.
+
+- **Mesmo desenho.** Cada ladrilho tem o tamanho do de antes no mundo e as mesmas coisas no mesmo lugar: rua de 8 × 10 u com as
+  linhas de bordo e o tracejado amarelo, faixa de pedestres de 10 × 3 u, calçada de placas de 1 u, telhados de 8 u, fachadas de 6 u
+  (2 baias × 2 andares). O `WorldBuilder` não muda as UVs dos pisos e telhados. Os pintores desenham nas coordenadas da arte, num
+  canvas Q vezes maior.
+- **Resolução** (`CityHD.Q`): Q = 2 no Low e no Medium, 3 no High e 4 no HD (40, 60 e 80 px por metro). Memória de vídeo das
+  texturas da cidade: cerca de 44 MB (Q = 2), 99 MB (Q = 3) e 176 MB (Q = 4); na pixel art eram 11 MB.
+- **Sem emenda.** O ruído é periódico no ladrilho (`CityHD.vn`/`fbm`), o que cruza a borda é desenhado também do outro lado
+  (`CityTile.wrap`), e as juntas que caem na divisa (concreto, chapa) ficam inteiras dos dois lados.
+- **Pisos** (`CityHD.js`): asfalto com brita, mosqueado, trincas seladas com piche e remendos; rua com trilhas de pneu, fio de óleo,
+  sarjeta, tinta gasta e tachões; faixa de pedestres gasta onde os pneus passam; calçada de placas com junta e quina, chiclete e
+  trincas; grama com folhas, trevos e florzinhas; areia com ondulações; concreto com marca de régua e juntas; praça de granito;
+  terra da favela com remendo de cimento e cacos de tijolo; terra batida, pedra com estratos e musgo.
+- **Telhados** (`CityHDRoofs.js`): manta e laje com emendas, poças secas, ralo, ar-condicionado com ventilador e cano de cobre e
+  respiros; telha colonial em fiadas com sombra e cumeeira; chapa com junta em pé e claraboia; zinco ondulado com ferrugem
+  escorrendo, pregos, pneus e pedras; lona com rugas e cordas; laje crua com ferro de espera, varal e parabólica; laje pintada do
+  Mirante com vasos, ombrelones, cadeiras de plástico e varal de lâmpadas; telhado verde. As casas de máquinas no alto dos prédios
+  (antes caixas cinza lisas) ganham tampa de chapa com grelha e laterais de veneziana com portinhola.
+- **Fachadas e lojas** (`CityHDFacades.js`): tijolo com argamassa, reboco com umidade e escorridos, enxaimel, pedra, galpão de chapa,
+  concreto com furos de tirante e pele de vidro; janelas com vidro refletindo o céu, caixilho, peitoril, verga, venezianas e
+  floreiras. As vitrines das lojas têm letreiro com o nome escrito, ícone, prateleiras com produtos e porta de vidro.
+- **O barraco do protagonista por fora** (`CityHD.house`, usado pelo `HouseView`): tijolo com o reboco caído, zinco com ferrugem,
+  tábua pintada descascando, porta turquesa, janela com cortina e o telhado de zinco com pneus, pedras, ripas, remendo e caixa-d'água.
+- **Custo.** Pintado uma vez, na carga: 0,7 s com Q = 2 e 1,3 s com Q = 3 num ambiente sem placa de vídeo (a pixel art levava
+  0,35 s). Os canvases são liberados assim que a textura vai para a placa.
+- **Fica em pixel art:** o mar animado (`TileFactory.water` + `WaterPlugin`). O chão do mundo grande também é HD (ver abaixo).
+- **Volta à pixel art:** `Config.art.cityHD = false` ou `?pixel` na URL.
+
+### Janelas acesas à noite (`src/render/WindowLights.js`)
+
+As janelas não acendiam: a luz era o `emissiveTexture` da fachada, com o nível mudando à noite, e os materiais do mundo são
+congelados depois da carga (`Game._freezeStaticMaterials`). Com o material congelado, o Babylon não reenviava o nível.
+
+- Agora a luz é um plugin de material, como o `RoofCut`: o uniform vai a cada desenho, então funciona com o material congelado.
+- O ladrilho de luz de cada fachada tem todas as janelas acesas. Cada uma tem o que se vê da sala: abajur, cortina com pregas,
+  persiana, voal, o vulto de uma planta ou do sofá; nos escritórios, luminárias, persiana meio baixada, divisórias e monitores. A luz
+  vaza um pouco na parede em volta.
+- **Uma a uma.** Cada janela ocupa sozinha uma célula da grade do estilo (`CityHD.GRID`). O shader sorteia a célula: acesa ou não,
+  luz quente, neutra ou fria, e algumas com a TV ligada (azul, piscando). Cada prédio e cada lado têm um deslocamento inteiro nas UVs
+  da parede: o desenho é o mesmo, mas nenhum prédio repete o sorteio do vizinho.
+- **Pela hora** (`WindowLights.HOME`, `OFFICE`): as casas acendem ao escurecer (cerca de 70% às 19h30) e vão apagando madrugada
+  adentro (12% às 4h); alguns acordam cedo. Escritórios e galpões ficam acesos no fim do expediente e esvaziam à noite. Com chuva
+  forte de dia, as janelas também acendem.
+- Letreiros e vitrines das lojas acendem inteiros.
+- `tests/26_cidade_hd` confere a resolução, ladrilhos sem emenda, cada janela dentro da sua célula, a fração pela hora, o quadro
+  mais claro com as janelas acesas na favela à noite e a volta à pixel art.
+
+## Sprites do mapa em alta definição (`src/art/SpriteHD.js`)
+
+Árvores, arbustos, palmeiras, guarda-sóis, pedras, tufos de grama, pássaros e os bichos da roça continuam os mesmos modelos do
+`SpriteBaker` (esferas, elipsoides, cápsulas e caixas), mas o assado é outro.
+
+- **Resolução** (`SpriteHD.Q`): 1,5 px de textura por px da arte no Low, 2 no Medium e no High, 3 no HD.
+- **Cor de verdade** (RGBA pré-multiplicado, sem a paleta de 5 tons): luz contínua do noroeste, sombra que esfria e luz que
+  esquenta, como a rampa da pixel art, sem os degraus.
+- **Detalhe por material**, calculado no ponto 3D atingido: folhas (cada folha com a sua inclinação e o vão escuro entre elas),
+  agulhas, casca, pedra (relevo, fendas, musgo e líquen), tecido, penas, pelo, palha, plástico e metal.
+- **Oclusão de ambiente** (o miolo da copa, a base das pedras), contorno fino na silhueta, borda suavizada e **sombra projetada
+  macia** no chão, no sentido da luz do mundo.
+- **Vento sem quadros de animação** (`PropSprites.createHD`): cada quadro leva um mapa de altura; o shader das plantas entorta a
+  copa pelo vento vezes a altura (o pé fica parado). Intensidades suavizadas: amplitude, inclinação, tremor das folhas e ritmo.
+- **Tufos de grama** (`PropSprites` linhas 25 e 26): moitas de 34 a 46 folhas, verdes ou secas, espalhadas nos quarteirões de grama
+  (`CityGrid._fillProps`) e nos biomas do mundo grande (campo, mata, cerrado e roça — `TerrainBuilder`).
+- **Pássaros** (`Birds._atlasHD`): penas com sombra macia em blob. **Bichos da roça** (`Livestock._hdInit`): três variantes de
+  pelagem por espécie, assados aos poucos durante o jogo (~4 ms por quadro), porque só existem na Vila da Roça.
+- **Chão em relevo** (`CityHD`): a grama ganhou relevo (domos e folhas com sombra e brilho), a pedra profundidade (estratos, fendas
+  e oclusão), e o chão do mundo grande (`TerrainSplat`) passa a ser HD: mata (serrapilheira), cerrado, brejo e três roças, com um
+  atlas de perto e outro com a metade da resolução para longe (troca pela distância, em WebGL2).
+- **Custo** (sem placa de vídeo): props ~1 s, pássaros ~0,4 s na carga; bichos ~1 s espalhado no jogo.
+- **Volta à pixel art:** `Config.art.spriteHD = false` ou `?pixel` na URL.
+
+### Rastro de pneu na grama e na areia (`src/world/TireTracks.js`)
+
+Carro, moto e bicicleta deixam a marca das rodas por onde passam fora do asfalto (as rodas de trás; a moto e a bicicleta, uma).
+
+- **Areia:** o sulco afundado com o desenho da banda (blocos em V do carro, cravos da moto, pontinhos da bicicleta) e a areia
+  empurrada para os lados num montinho mais claro. O relevo é calculado no shader e iluminado pelo sol do mundo: a parede do sulco
+  do lado do sol fica na sombra, a do outro lado clareia.
+- **Grama:** a faixa amassada (folhas deitadas, mais clara e amarelada) com terra arrancada pelos blocos da banda. Na chuva, e no
+  brejo, vira lama escura.
+- **Derrapando ou arrancando forte** no chão mole o rastro alarga e levanta poeira (areia ou terra) — e não fica a marca preta de
+  borracha do asfalto (`SkidMarks`).
+- **Some aos poucos:** grama ~45 s (a grama levanta), areia ~70 s (o montinho assenta).
+- **Onde:** quarteirões abertos de grama e praia (parque, mata, praia) e os biomas de campo, mata, cerrado, roça, areia e brejo do
+  mundo grande; nunca em asfalto, calçada, estrada de terra, ponte ou água (`TireTracks.surface`, com cache por 0,5 m).
+- **Um desenho só:** anel de 2400 trechos numa malha; os trechos de cada roda são emendados (sem fresta nem sobreposição nas
+  curvas). A cor é **modulada** (2 × origem × destino): o rastro escurece e clareia o chão que já está lá, então combina com
+  qualquer grama ou areia, de dia, de noite e na chuva.
+- `tests/27_sprites_hd` confere os sprites HD (borda macia, vento pelo shader, tufos, pássaros, bichos), os pisos novos sem emenda,
+  o chão do rastro (grama e areia sim; asfalto e água não), um carro de verdade deixando rastro na areia e o quadro mudando onde ele
+  passou.
+
+## O personagem nunca some: silhueta dourada e o teto que sai
+
+Antes, o que ficava em cima do personagem se esburacava em volta dele: as copas das árvores ficavam transparentes e viaduto, ponte,
+túnel e cobertura de posto ganhavam um furo pontilhado. Agora nada fica transparente.
+
+- **Copas inteiras + silhueta dourada** (`render/XRaySilhouette.js`): embaixo de uma árvore (ou atrás de um prédio, de um muro, de
+  um carro) o personagem aparece como a silhueta dourada de sempre. As copas não gravam profundidade, então ganharam uma MÁSCARA
+  (`PropSprites` `maskMaterial`: só o miolo opaco, sem cor, das copas perto dele) que marca o stencil; a silhueta é desenhada duas
+  vezes por último na camada: atrás do que grava profundidade (GREATER, marca 2 no stencil) e onde a máscara das copas marcou 1.
+- **Tirar o teto** (`render/RoofCut.js`): o trecho de estrutura em cima dele SOME inteiro, como o telhado de uma loja quando se entra
+  nela, e volta quando ele sai (esmaece em ~0,2 s e volta em ~0,35 s):
+  - viaduto: o trecho de 12 u em cima de quem passa por baixo (ativado a até 9 u) — pista, viga, muretas e cabeçote; o pilar fica;
+  - ponte: o vão de 12 u em cima de quem nada ou navega por baixo (o poste em cima dele vai junto); embaixo, a água;
+  - túnel: o maciço inteiro, com as paredes cortadas a 1 m — vê-se a pista lá dentro;
+  - cobertura de posto: a laje (os pilares ficam).
+  Quem está EM CIMA (no tabuleiro do viaduto ou da ponte) não corta nada. Vale também para o veículo do jogador.
+- A pista desenhada por baixo do tabuleiro das pontes (duplicada, rente à água) saiu: com o vão cortado, aparece a água.
+
+## Divisas em degradê (`src/render/GroundBlend.js`)
+
+Os pisos não terminam mais numa linha reta. Ao longo de cada divisa vai uma faixa com a textura de um dos lados, opaca na divisa e
+sumindo para fora, com a borda recortada por ruído (2 escalas, no espaço do mundo) e uma franja mais escura cor de terra:
+- areia da praia espalhada sobre o asfalto da orla (1,4 m); grama do parque e da mata sobre o pé do meio-fio (0,6 m);
+- grama dos quintais e das praças das pegadas sobre a calçada; por dentro dos gramados, manchas de terra batida na beirada;
+- nas estradas do interior (terra, trilha e asfalto), o acostamento de terra entrando no mato dos dois lados;
+- as divisas de bioma do mundo grande já eram em degradê entortado por ruído (`TerrainSplat`).
+São malhas de faixas por pedaço do mundo, com o material do próprio piso (luz, sombra, noite e neblina iguais) e um plugin que troca
+o alfa pelo degradê com ruído.
+
+Também saiu um risco reto em cima e embaixo de cada árvore, guarda-sol e pedra HD: o borrão da sombra no assador (`SpriteHD`) lia,
+fora da caixa da sombra, o rascunho da oclusão (que vale 1) e virava uma faixa de sombra.
+
+`tests/28_teto_divisas` confere: sem furo nem fade nos materiais, máscara das copas, a silhueta dourada debaixo de uma copa, o trecho
+do viaduto que some (e não para quem está no tabuleiro ou longe), a cobertura do posto e o vão da ponte, as faixas das divisas no
+quadro e a sombra do assador sem vazar.
+
 ## Personagens (`tools/asset_baker/generator/*` no build, `src/art/NpcArt.js` no jogo)
 
 Braços soltos ao lado do corpo (sem o ar de "gorila"), cabeça um pouco maior (rosto e cabelo mais legíveis de cima), silhueta

@@ -30,6 +30,7 @@ class WorldBuilder {
 
     build() {
         const t0 = performance.now();
+        RoofCut.reset();                      // (as peças que somem com o jogador embaixo: registradas pelos construtores abaixo)
         this.T = TileFactory.create(this.scene);
         this.props = PropSprites.create(this.scene);
         this._createMaterials();
@@ -43,6 +44,7 @@ class WorldBuilder {
         this._tunnels();
         this._viaducts();
         this._blocks();
+        this._groundBlend();
         this._favela();
         Rooftops.build();                     // helipontos no telhado (antes dos prédios: marca lot.helipad)
         this._buildings();
@@ -98,7 +100,7 @@ class WorldBuilder {
         M.dirt = this._mat('dirt', T.dirt);
         M.rock = this._mat('rock', T.rock);
         M.shop = this._mat('shop', T.shops.diffuse);
-        M.shop.emissiveTexture = T.shops.emissive; M.shop.emissiveTexture.level = 0;      // acende à noite (setNight)
+        WindowLights.apply(M.shop, T.shops.emissive, [0, 0], 'shop');      // letreiro e vitrine acendem à noite (render/WindowLights.js)
         M.earth = this._mat('earth', T.earth);
         M.plaza = this._mat('plaza', T.plaza);
         M.curb = this._mat('curb', null, { color: '#a4a9b0' });
@@ -106,31 +108,37 @@ class WorldBuilder {
         M.solid.diffuseColor = BABYLON.Color3.White();
         M.hide = HideSprites.create(this.scene);       // topo dos esconderijos (caçamba, caixotes, latão)
 
-        // Estruturas que podem ficar ACIMA do jogador/veículo (viaduto, ponte sobre a água, túnel, cobertura de posto): mesmos
-        // materiais, mas com o círculo de visibilidade (RevealPlugin). Chaves de batch 'x…'.
-        M.xroad = Reveal.apply(this._mat('xroad', T.road));
-        M.xsidewalk = Reveal.apply(this._mat('xsidewalk', T.sidewalk));
-        M.xcurb = Reveal.apply(this._mat('xcurb', null, { color: '#a4a9b0' }));
-        M.xrock = Reveal.apply(this._mat('xrock', T.rock));
-        M.xsolid = Reveal.apply(this._mat('xsolid', null));
+        // Estruturas que podem ficar ACIMA do jogador/veículo (viaduto, túnel, cobertura de posto): mesmos materiais, mas com o corte
+        // do teto (render/RoofCut.js: o trecho em cima dele some inteiro). Chaves de batch 'x…'.
+        M.xroad = RoofCut.apply(this._mat('xroad', T.road));
+        M.xsidewalk = RoofCut.apply(this._mat('xsidewalk', T.sidewalk));
+        M.xcurb = RoofCut.apply(this._mat('xcurb', null, { color: '#a4a9b0' }));
+        M.xrock = RoofCut.apply(this._mat('xrock', T.rock));
+        M.xsolid = RoofCut.apply(this._mat('xsolid', null));
         M.xsolid.diffuseColor = BABYLON.Color3.White();
-        for (const k of ['xroad', 'xsidewalk', 'xcurb', 'xrock', 'xsolid']) { M[k].alpha = 0.999; M[k].forceDepthWrite = true; }      // (liga a mistura: o furo é um degradê de alfa)
-        // PONTES (cidade ↔ ilha): mesmas texturas das ruas, no chão (camada 0, por baixo de quem anda nelas), mas com o furo: quem
-        // NADA ou NAVEGA por baixo do tabuleiro aparece através dele. Quem anda em cima está acima do tabuleiro e não abre furo.
-        M.broad = Reveal.apply(this._mat('broad', T.road));
-        M.bsidewalk = Reveal.apply(this._mat('bsidewalk', T.sidewalk));
-        M.bcurb = Reveal.apply(this._mat('bcurb', null, { color: '#a4a9b0' }));
-        M.bsolid = Reveal.apply(this._mat('bsolid', null));
+        for (const k of ['xroad', 'xsidewalk', 'xcurb', 'xrock', 'xsolid']) { M[k].alpha = 0.999; M[k].forceDepthWrite = true; }      // (na fila dos transparentes, para a ordem da camada 1: ver _flush)
+        // PONTES (cidade ↔ ilha): mesmas texturas das ruas, no chão (camada 0, por baixo de quem anda nelas), mas com o corte: quem
+        // NADA ou NAVEGA por baixo do tabuleiro vê aquele vão sumir. Quem anda em cima está acima do tabuleiro e não corta nada.
+        M.broad = RoofCut.apply(this._mat('broad', T.road));
+        M.bsidewalk = RoofCut.apply(this._mat('bsidewalk', T.sidewalk));
+        M.bcurb = RoofCut.apply(this._mat('bcurb', null, { color: '#a4a9b0' }));
+        M.bsolid = RoofCut.apply(this._mat('bsolid', null));
         M.bsolid.diffuseColor = BABYLON.Color3.White();
+
+        // Divisas em degradê (render/GroundBlend.js): o piso de um lado espalhando por cima do outro, com a borda recortada por ruído.
+        M.blend_grass = GroundBlend.apply(this._mat('blend_grass', T.grass), { freq: 0.9, amp: 1.0, soft: 0.1, soil: [0.78, 0.66, 0.5, 0.6] });
+        M.blend_sand = GroundBlend.apply(this._mat('blend_sand', T.sand), { freq: 0.55, amp: 0.9, soft: 0.16, soil: [0.9, 0.85, 0.76, 0.4] });
+        M.blend_dirt = GroundBlend.apply(this._mat('blend_dirt', T.dirt), { freq: 0.7, amp: 1.1, soft: 0.12, soil: [0.86, 0.78, 0.68, 0.3] });
+        M.blend_earth = GroundBlend.apply(this._mat('blend_earth', T.earth), { freq: 0.8, amp: 1.0, soft: 0.12, soil: [0.86, 0.78, 0.68, 0.3] });
 
         M.roofs = {};
         for (const k of Object.keys(T.roofs)) M.roofs[k] = this._mat('roof_' + k, T.roofs[k]);
+        if (T.machine) { M.machtop = this._mat('machtop', T.machine.top); M.machside = this._mat('machside', T.machine.side); }      // casas de máquinas (HD)
 
         M.facades = {};
         for (const k of Object.keys(T.facades)) {
-            const m = this._mat('facade_' + k, T.facades[k].diffuse);
-            m.emissiveTexture = T.facades[k].emissive;
-            m.emissiveTexture.level = 0;                 // acende à noite (setNight).
+            const F = T.facades[k], m = this._mat('facade_' + k, F.diffuse);
+            WindowLights.apply(m, F.emissive, F.grid, F.occ);      // janelas acesas à noite, uma a uma, pela hora (render/WindowLights.js)
             M.facades[k] = m;
         }
     }
@@ -185,6 +193,7 @@ class WorldBuilder {
 
         for (const e of RoadPlan.edges) {
             const S = RoadPlan.CLASS[e.cls].surface, key = KEY[S], hw = e.w / 2;
+            if (e.cls === 'bridge' && !e.free && !e.v) continue;                        // (o tabuleiro é das pontes: _bridges — embaixo dele, a água)
             if (e.free) {                                                               // via livre: faixa ao longo da polilinha (u ao longo, v na largura)
                 if (SH[key]) this._shadedRibbon(e, e.cutA, e.len - e.cutB, hw, y, key, SH[key]);
                 else this._ribbon(e, e.cutA, e.len - e.cutB, -hw, hw, y, key, S === 'asphalt' ? (s, l, x, z) => [s / 8, (hw - l) / e.w] : (s, l, x, z) => [x / 4, z / 4]);
@@ -321,6 +330,93 @@ class WorldBuilder {
         }
     }
 
+    // ------------------------------------------------------------------ divisas em degradê
+    // Faixas de transição (render/GroundBlend.js) ao longo das divisas dos pisos: o de um lado espalha por cima do outro, opaco na divisa e
+    // sumindo para fora, com a borda recortada por ruído. Areia da praia sobre o asfalto da orla, grama do parque sobre o pé do meio-fio e
+    // a do quintal sobre a calçada; por dentro dos gramados, a beirada gasta de terra batida; nas estradas do interior, o acostamento de
+    // terra entrando no mato.
+    _groundBlend() {
+        const h = Config.city.curbHeight, up = [0, 1, 0];
+        const uvC = (x, z) => [x / 4, -z / 4], uvR = (x, z) => [x / 4, z / 4];
+        // Faixa ao longo da linha P ([x, z]; closed = polígono): da linha (alfa 1) até w para o lado `side` (+1 = à esquerda de quem anda
+        // de P[i] para P[i+1]), na altura y. Normais dos vértices em esquadria: as faixas de dois lados se encontram nas quinas.
+        // skip(x, z): pula o trecho cuja ponta cai ali (água, outra via). shade(x, z): tom do relevo (o mesmo do piso de baixo).
+        // g0: o degradê na própria linha (< 1: nem ali é cheio — só manchas, onde o ruído ajuda).
+        const strip = (key, P, closed, side, w, y, uv, skip = null, shade = null, g0 = 1) => {
+            const n = P.length, E = closed ? n : n - 1;
+            if (E < 1) return;
+            const en = [];
+            for (let i = 0; i < E; i++) { const a = P[i], b = P[(i + 1) % n], dx = b[0] - a[0], dz = b[1] - a[1], l = hypot(dx, dz) || 1; en.push([-dz / l * side, dx / l * side]); }
+            const vn = P.map((p, i) => {
+                const A = closed ? en[(i - 1 + E) % E] : en[Math.max(0, i - 1)], B = closed ? en[i % E] : en[Math.min(E - 1, i)];
+                let x = A[0] + B[0], z = A[1] + B[1]; const l = hypot(x, z);
+                if (l < 1e-4) return B;
+                x /= l; z /= l;
+                const k = 1 / Math.max(0.5, x * B[0] + z * B[1]);                          // esquadria (até 2×)
+                return [x * k, z * k];
+            });
+            const col = (p, g) => { const t = shade ? shade(p[0], p[2]) : 1; return [t, t, t, g]; }, U = (p) => uv(p[0], p[2]);
+            for (let i = 0; i < E; i++) {
+                const j = (i + 1) % n, a = P[i], b = P[j], na = vn[i], nb = vn[j];
+                const A = [a[0], y, a[1]], B = [b[0], y, b[1]], A2 = [a[0] + na[0] * w, y, a[1] + na[1] * w], B2 = [b[0] + nb[0] * w, y, b[1] + nb[1] * w];
+                if (skip && skip((A2[0] + B2[0]) / 2, (A2[2] + B2[2]) / 2)) continue;
+                const bt = this._batch(key, a[0], a[1]);
+                bt.tri(A, B, B2, up, [U(A), U(B), U(B2)], [col(A, g0), col(B, g0), col(B2, 0)]);
+                bt.tri(A, B2, A2, up, [U(A), U(B2), U(A2)], [col(A, g0), col(B2, 0), col(A2, 0)]);
+            }
+        };
+        const area = (P) => { let a = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; a += p[0] * q[1] - q[0] * p[1]; } return a / 2; };
+        const rect = (x0, z0, x1, z1) => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
+        const wet = (x, z) => MapGeo.waterDepth(x, z) > 0;
+
+        // QUARTEIRÕES: o piso aberto (parque, mata, praia) espalha sobre a rua, no pé do meio-fio; o quintal e a praça da pegada, sobre a
+        // calçada. Grama: por dentro, a beirada gasta de terra.
+        const SP = { grass: ['blend_grass', 0.6], sand: ['blend_sand', 1.4], earth: ['blend_earth', 0.6] };
+        for (const blk of CityGrid.blocks) {
+            const g = SP[blk.ground];
+            if (!g || blk.organic) continue;
+            let P, y0, yOut;
+            if (blk.open) {
+                const [x0, z0, x1, z1] = blk.slab;
+                if (blk.poly) P = blk.poly.map((p) => [p[0], p[1]]);
+                else if ((blk.r || 0) > 0.5) { P = []; for (const c of this._roundCorners(x0, z0, x1, z1, blk.r)) for (const p of c.pts) P.push([p[0], p[1]]); }
+                else P = rect(x0, z0, x1, z1);
+                y0 = h; yOut = 0.032;
+            } else if (blk.poly && blk.footPoly) { P = blk.footPoly.map((p) => [p[0], p[1]]); y0 = h; yOut = h + 0.012; }
+            else if (blk.foot) { P = rect(...blk.foot); y0 = 0.1; yOut = h + 0.012; }
+            else continue;
+            if (P.length < 3) continue;
+            const out = area(P) > 0 ? -1 : 1;                                               // (lado de fora do polígono)
+            strip(g[0], P, true, out, g[1], yOut, uvC, wet);
+            if (blk.ground === 'grass') strip('blend_dirt', P, true, -out, 1.2, y0 + 0.012, uvC, null, null, 0.62);
+        }
+
+        // ESTRADAS DO INTERIOR: o acostamento (terra batida; na trilha, a terra dela) entra no mato dos dois lados.
+        const SH = { dirt: ['blend_dirt', 1.2, false], earth: ['blend_earth', 0.9, true], asphalt: ['blend_dirt', 1.0, false] };
+        const shade = (x, z) => WorldMap.shadeAt(x, z);
+        const city = (x, z) => wet(x, z) || RoadPlan.onPavement(x, z) || WorldMap.biomeAt(x, z) === WorldMap.B.CITY || !!CityGrid._blockAtPoint(x, z);
+        const tmp = {};
+        for (const e of RoadPlan.edges) {
+            const C = RoadPlan.CLASS[e.cls];
+            if (!C || C.kind !== 'rural' || e.layer) continue;
+            const S = SH[C.surface];
+            if (!S) continue;
+            const hw = e.w / 2, s0 = e.cutA, s1 = e.len - e.cutB;
+            if (s1 <= s0 + 1) continue;
+            const n = Math.max(1, Math.ceil((s1 - s0) / 3)), Lf = [], Rt = [];
+            for (let k = 0; k <= n; k++) {
+                const s = s0 + (s1 - s0) * k / n;
+                let x, z, tx, tz;
+                if (e.pts) { RoadPlan.at(e, s, tmp); x = tmp.x; z = tmp.z; tx = tmp.tx; tz = tmp.tz; }
+                else if (e.v) { x = e.a.x; z = e.a.z + s; tx = 0; tz = 1; }
+                else { x = e.a.x + s; z = e.a.z; tx = 1; tz = 0; }
+                Lf.push([x - tz * hw, z + tx * hw]); Rt.push([x + tz * hw, z - tx * hw]);
+            }
+            strip(S[0], Lf, false, 1, S[1], 0.03, uvR, city, S[2] ? shade : null);
+            strip(S[0], Rt, false, -1, S[1], 0.03, uvR, city, S[2] ? shade : null);
+        }
+    }
+
     // Anel de calçada em volta das rotatórias, nos cantos da orla (CityGrid.roundAprons): topo entre os dois arcos e meio-fio em volta.
     _roundAprons() {
         const h = Config.city.curbHeight, up = [0, 1, 0], uv = (p) => [p[0] / 4, -p[1] / 4], z3 = [[0, 0], [0, 0], [0, 0]];
@@ -406,6 +502,8 @@ class WorldBuilder {
             const hw = t.w / 2, m = 6.5, v = t.v, cx = v ? t.x0 : (t.x0 + t.x1) / 2, cz = v ? (t.z0 + t.z1) / 2 : t.z0;      // centro da via
             const bx0 = v ? cx - hw - m : t.x0, bx1 = v ? cx + hw + m : t.x1, bz0 = v ? t.z0 : cz - hw - m, bz1 = v ? t.z1 : cz + hw + m;
             const tr = this._batch('xtrim', bx0, bz0), tp = this._batch('open_xrock', bx0, bz0);
+            // dentro dele, o maciço some (as paredes ficam com 1 m): vê-se a pista, como uma loja sem o telhado
+            RoofCut.add([bx0 - 0.1, bz0 - 0.1, bx1 + 0.1, bz1 + 0.1], [bx0, bz0, bx1, bz1], 1.0, 4.6);
             // dois "ombros" de pedra (laterais da pista) e a laje do teto
             if (v) { tr.solid(bx0, bz0, cx - hw, bz1, 0.1, H, rock); tr.solid(cx + hw, bz0, bx1, bz1, 0.1, H, rock); }
             else { tr.solid(bx0, bz0, bx1, cz - hw, 0.1, H, rock); tr.solid(bx0, cz + hw, bx1, bz1, 0.1, H, rock); }
@@ -431,6 +529,8 @@ class WorldBuilder {
         const hw = t.w / 2, m = 6.5, P = t.pts, n = P.length, x0 = t.x0, z0 = t.z0;
         const tr = this._batch('xtrim', x0, z0), tp = this._batch('open_xrock', x0, z0), up = [0, 1, 0], uv = (p) => [p[0] / 4, -p[2] / 4];
         const obs = [], y = H + 0.42, W2 = hw + m;
+        const xs = P.map((p) => p[0]), zs = P.map((p) => p[1]);
+        RoofCut.add([Math.min(...xs) - W2 - 0.2, Math.min(...zs) - W2 - 0.2, Math.max(...xs) + W2 + 0.2, Math.max(...zs) + W2 + 0.2], { pts: P, r: hw + 0.6 }, 1.0, 4.6);
         const NRM = P.map((p, i) => { const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], l = hypot(b[0] - a[0], b[1] - a[1]) || 1; return [-(b[1] - a[1]) / l, (b[0] - a[0]) / l]; });      // normal média no vértice (sem fresta nas curvas)
         for (let i = 0; i + 1 < n; i++) {
             const p = P[i], q = P[i + 1];
@@ -481,6 +581,13 @@ class WorldBuilder {
             const hw = e.w / 2, SW = 1.2, xk = e.a.x, H = e.elev, R = e.ramp, L = e.len;
             const yAt = (z) => { const s = z - e.a.z; return Math.max(0, Math.min(H, s / R * H, (L - s) / R * H)); };
             const z0 = e.a.z + e.a.hwEW, z1 = e.b.z - e.b.hwEW, step = 4;
+            // Quem passa por baixo vê sumir o trecho do tabuleiro em cima dele (trechos de 12 u, ativados a até 9 u): pista, viga,
+            // muretas e cabeçote do pilar; o pilar fica. Nas rampas, baixas demais para passar por baixo, nada some.
+            const xw = Math.max(hw + SW, 5) + 0.2;
+            for (let zs = z0; zs < z1 - 0.01; zs += 12) {
+                const ze = Math.min(z1, zs + 12), yc = Math.min(yAt(zs), yAt(ze)) + 0.2 - 1.6;
+                if (yc > 2.2) RoofCut.add([xk - xw, zs, xk + xw, ze], [xk - xw - 1, zs - 9, xk + xw + 1, ze + 9], yc, yc);
+            }
             for (let z = z0; z < z1 - 0.01; z += step) {
                 const zb = Math.min(z1, z + step), ya = yAt(z) + 0.2, yb = yAt(zb) + 0.2;
                 const bt = this._batch('xroad', xk, z);
@@ -516,7 +623,7 @@ class WorldBuilder {
     // Materiais próprios ('b…': mesmas texturas das ruas) na camada 0, como o chão — não os 'x…' das estruturas que ficam ACIMA de
     // quem passa (viaduto, coberturas), que desenham por cima dos sprites: na ponte, carros, pedestres e o jogador sumiam. Tudo que
     // anda nela está acima de 0,22 e aparece. Quem passa POR BAIXO (barco rebaixado a y 0,1 em Boat.update; jogador nadando,
-    // Player.underBridge) fica atrás do tabuleiro pela profundidade, e o furo (RevealPlugin nos 'b…') o mostra.
+    // Player.underBridge) fica atrás do tabuleiro pela profundidade, e o vão em cima dele some (RoofCut nos 'b…').
     // Mureta: obstáculo pulável (cai na água) que quem está na água atravessa por baixo; na física, camada 8 (barco não bate).
     _bridges() {
         const h = 0.22;
@@ -527,6 +634,12 @@ class WorldBuilder {
             const x0 = e.a.x + (e.v ? 0 : e.a.hwNS), x1 = e.b.x - (e.v ? 0 : e.b.hwNS), z0 = e.a.z + (e.v ? e.a.hwEW : 0), z1 = e.b.z - (e.v ? e.b.hwEW : 0);
             if (e.v) continue;                                                            // (as pontes do plano são todas L-O)
             const zm = e.a.z, MAXP = 96, n = Math.max(1, Math.ceil((x1 - x0) / MAXP));
+            // Quem nada ou navega por baixo vê sumir o vão em cima dele (trechos de 12 u, ativados a até 9 u).
+            const zw = hw + SW + 0.6;
+            for (let xs = x0; xs < x1 - 0.01; xs += 12) {
+                const xe = Math.min(x1, xs + 12);
+                RoofCut.add([xs, zm - zw, xe, zm + zw], [xs - 9, zm - zw - 0.5, xe + 9, zm + zw + 0.5], h - 0.06, h - 0.06);
+            }
             for (let k = 0; k < n; k++) {
                 const a = x0 + (x1 - x0) * k / n, b = x0 + (x1 - x0) * (k + 1) / n;
                 this._batch('broad', a, zm).top(a, zm - hw, b, zm + hw, h, (x, z) => [x / 8, ((zm + hw) - z) / e.w]);                   // pista
@@ -691,9 +804,11 @@ class WorldBuilder {
                 const so = rng() * 6, ro = rng();     // desloca padrões p/ quebrar repetição.
                 const trim = this._batch('trim', x0, z0);
 
-                // Paredes: u = distância/6 (2 baias), v = (H - y)/6 (2 andares).
+                // Paredes: u = distância/6 (2 baias), v = (H - y)/6 (2 andares). Mais um deslocamento INTEIRO por prédio e por lado (o
+                // desenho é o mesmo, o ladrilho repete): a célula de cada janela na UV vira o sorteio da luz dela à noite (WindowLights).
+                const ku = Math.floor(Pixel.hash(Math.round(x0 * 4), Math.round(z0 * 4), 911) * 509), kv = Math.floor(Pixel.hash(Math.round(z0 * 4), Math.round(x0 * 4), 913) * 251);
                 this._batch('walls_' + lot.facade, x0, z0).walls(x0, z0, x1, z1, 0, H,
-                    (s, y) => [(s + so) / 6, (H - y) / 6]);
+                    (s, y, f) => [(s + so) / 6 + ku + WorldBuilder.FACE_U[f], (H - y) / 6 + kv]);
 
                 // Telhado: tile de 8u.
                 this._batch('roof_' + lot.roof, x0, z0).top(x0, z0, x1, z1, H,
@@ -725,7 +840,10 @@ class WorldBuilder {
                     const bw = 1.6 + rng() * 2.2, bd = 1.6 + rng() * 2.2, bh = 0.9 + rng() * 1.2;
                     const bx = x0 + 1.5 + rng() * Math.max(0.1, w - 3 - bw);
                     const bz = z0 + 1.5 + rng() * Math.max(0.1, d - 3 - bd);
-                    trim.solid(bx, bz, bx + bw, bz + bd, H, H + bh, hvac);
+                    if (!this.T.machine) { trim.solid(bx, bz, bx + bw, bz + bd, H, H + bh, hvac); continue; }
+                    // HD: tampa de chapa (a textura inteira esticada na tampa) e laterais de veneziana (2 u por painel, altura toda)
+                    this._batch('machtop', x0, z0).top(bx, bz, bx + bw, bz + bd, H + bh, (x, z) => [(x - bx) / bw, (bz + bd - z) / bd]);
+                    this._batch('machside', x0, z0).walls(bx, bz, bx + bw, bz + bd, H, H + bh, (s, y) => [s / 2 + k * 0.37, (H + bh - y) / bh]);
                 }
 
                 this._collider(`bld_${blk.i}_${blk.j}_${lot.x0.toFixed(0)}`, x0, z0, x1, z1, H);
@@ -764,6 +882,7 @@ class WorldBuilder {
         for (const blk of CityGrid.blocks.concat(CityGrid.extraBlocks || [])) {
             for (const c of blk.canopies || []) {
                 const t = this._batch('xtrim', c.x0, c.z0);
+                RoofCut.add([c.x0 - 0.05, c.z0 - 0.05, c.x1 + 0.05, c.z1 + 0.05], [c.x0, c.z0, c.x1, c.z1], c.h - 0.05, c.h);      // a laje some; os pilares ficam
                 for (const [px, pz] of [[c.x0 + 0.6, c.z0 + 0.6], [c.x1 - 0.6, c.z0 + 0.6], [c.x0 + 0.6, c.z1 - 0.6], [c.x1 - 0.6, c.z1 - 0.6]]) t.solid(px - 0.3, pz - 0.3, px + 0.3, pz + 0.3, 0, c.h, white);
                 t.solid(c.x0, c.z0, c.x1, c.z1, c.h, c.h + 0.5, c.color);
                 t.solid(c.x0, c.z0, c.x1, c.z0 + 0.7, c.h + 0.5, c.h + 0.56, white); t.solid(c.x0, c.z1 - 0.7, c.x1, c.z1, c.h + 0.5, c.h + 0.56, white);        // frisos brancos (a cor do posto aparece no resto)
@@ -1372,7 +1491,7 @@ class WorldBuilder {
                     hideAt(x0, z0).top(x0, z0, x1, z1, p.h + 0.01, (x, z) => [u0 + ((x - x0) / (x1 - x0)) * (u1 - u0), v0 + ((z1 - z) / (z1 - z0)) * (v1 - v0)]);
                     continue;
                 }
-                if (p.type === 'tree' || p.type === 'prop') {
+                if (p.type === 'tree' || p.type === 'prop' || p.type === 'tuft') {
                     const fr = this.props.pick(p.kind, rng());
                     const high = PropSprites.HEIGHT[p.kind] > 2;
                     this._spriteQuad(this._batch(high ? 'veg_hi' : 'veg_lo', p.x, p.z), fr.index, fr.row, p.x, p.z, base * p.s, PropSprites.HEIGHT[p.kind], PropSprites.SWAY[p.kind] || 0);
@@ -1430,7 +1549,9 @@ class WorldBuilder {
             if (key === 'curb') return M.curb;
             if (key === 'trim') return M.solid;
             if (key === 'hide_top') return M.hide;
+            if (key === 'machtop' || key === 'machside') return M[key];
             if (key.startsWith('open_') || key.startsWith('yard_')) return M[key.slice(key.indexOf('_') + 1)];
+            if (key.startsWith('blend_')) return M[key];
             if (key.startsWith('walls_')) return M.facades[key.slice(6)];
             if (key.startsWith('roof_')) return M.roofs[key.slice(5)];
             throw new Error('batch sem material: ' + key);
@@ -1446,18 +1567,23 @@ class WorldBuilder {
             const at = full.indexOf('@'), key0 = at < 0 ? full : full.slice(0, at);       // 'walls_brick0@1,-2' -> 'walls_brick0'
             const shaded = key0.endsWith('$'), key = shaded ? key0.slice(0, -1) : key0;      // 'sidewalk$' = chão tingido pelo relevo (vertex colors)
             const isTrim = key === 'trim' || key === 'xtrim' || key === 'btrim';
-            const isVeg = key.startsWith('veg_');
-            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded, receiveShadows: !isVeg, alwaysActive: at < 0 });
+            const isVeg = key.startsWith('veg_'), isBlend = key.startsWith('blend_');
+            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend, receiveShadows: !isVeg, alwaysActive: at < 0 });
             this.meshes.push(mesh);
-            if (key === 'veg_hi') { mesh.renderingGroupId = 1; mesh.alphaIndex = -1; }      // copas: desenham DEPOIS de pedestres, carros e sprites do chao (que nao escrevem profundidade), sempre por cima
-            // Estruturas ACIMA de quem passa (viaduto, coberturas), com furo macio: camada 1, por cima de pedestres e do jogador (camada 0).
+            if (isBlend) mesh.hasVertexAlpha = true;                                         // (o alfa por vértice é o degradê da faixa: GroundBlend)
+            if (key === 'veg_hi') {                                                          // copas: desenham DEPOIS de pedestres, carros e sprites do chao (que nao escrevem profundidade), sempre por cima
+                mesh.renderingGroupId = 1; mesh.alphaIndex = -1;
+                const mk = XRaySilhouette.addMask(mesh, this.props.maskMaterial);           // (quem passa embaixo: a silhueta dourada)
+                if (mk) this.meshes.push(mk);
+            }
+            // Estruturas ACIMA de quem passa (viaduto, coberturas): camada 1, por cima de pedestres e do jogador.
             // Desenham ANTES dos carros (lote de carros: alphaIndex -3) e gravam profundidade: carro EM CIMA do viaduto passa no teste e
-            // aparece; carro EMBAIXO fica escondido pelo tabuleiro (antes o tabuleiro vinha depois e cobria até quem estava em cima). No
-            // centro do furo o RevealPlugin descarta o pixel (sem profundidade), então quem está embaixo, perto do jogador, continua à vista.
+            // aparece; carro EMBAIXO fica escondido pelo tabuleiro (antes o tabuleiro vinha depois e cobria até quem estava em cima). O
+            // trecho em cima do jogador some inteiro (RoofCut: sem profundidade), então quem está embaixo, perto dele, continua à vista.
             if (key0.startsWith('x') || key0.startsWith('open_x')) { mesh.renderingGroupId = 1; mesh.alphaIndex = -5; }
 
             if (isTrim && this.shadow) { this.shadow.addShadowCaster(mesh); continue; }       // acabamentos (pedaços pequenos) projetam a própria sombra
-            const caster = key.startsWith('walls_') || key.startsWith('roof_') || key === 'hide_top';
+            const caster = key.startsWith('walls_') || key.startsWith('roof_') || key === 'hide_top' || key === 'machside' || key === 'machtop';
             if (!caster || !this.shadow) continue;
             const pk = at < 0 ? '' : full.slice(at);
             let px = proxies.get(pk);
@@ -1483,19 +1609,11 @@ class WorldBuilder {
 
     // ------------------------------------------------------------------ runtime
     // Anima a água (troca de frame + deriva lenta) e acende/apaga as janelas.
-    // Alvo da câmera (jogador ou veículo) a proteger: raio do círculo de visibilidade e altura do sprite dele.
-    // Vale para as copas (fade) e para tudo que está acima do alvo (viaduto, ponte, túnel, cobertura): ver RevealPlugin.
-    setReveal(x, z, r, y) {
-        Reveal.set(x, z, r, y);
-        this._revealR = r;
-    }
-
     update(dt, focus) {
         if (this.bridgeShadows) this.bridgeShadows.update();
         this._windTime = (this._windTime || 0) + dt;
         this.props.setWind(this._windTime, this.windMode(), dt);
         this._favFlicker(dt);
-        if (focus) this.props.setFocus(focus.x, focus.z, this._revealR);   // fade das copas sobre o jogador.
         if (focus && this.terrain && !Interiors.active) this.terrain.update(dt, focus);
         this._waterTime += dt;
         Water.tick(this._waterTime);                     // relógio da orla (onda subindo na areia, espuma): textura de 1 px, ver WaterPlugin
@@ -1519,10 +1637,8 @@ class WorldBuilder {
         }
     }
 
-    // 0 = dia, 1 = noite: liga as janelas (mapa emissivo) e os postes de rua.
+    // 0 = dia, 1 = noite: liga os postes de rua. (As janelas e as lojas acendem pelo render/WindowLights.js, a cada quadro.)
     setNight(f) {
-        for (const k of Object.keys(this.mats.facades)) this.mats.facades[k].emissiveTexture.level = f;
-        this.mats.shop.emissiveTexture.level = f;
         const on = Math.max(0, (f - 0.25) / 0.6);              // postes acendem no começo da noite
         const q = Math.round(Math.min(1, on) * 30) / 30;
         if (q === this._lampLevel) return;
@@ -1534,4 +1650,5 @@ class WorldBuilder {
     }
 }
 memoStatics(WorldBuilder, 'GLYPHS');
+WorldBuilder.FACE_U = { n: 0, s: 127, e: 263, w: 389 };          // deslocamento inteiro da UV de cada lado do prédio (ver _buildings)
 WorldBuilder.DENSE = new Set(['trim', 'xtrim', 'btrim', 'curb', 'xcurb', 'bcurb']);

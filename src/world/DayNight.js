@@ -1,7 +1,7 @@
 // ============================================================================
 // DayNight — ciclo dia/noite. Interpola "pontos do dia" e aplica em:
 //   luzes (sol/lua e céu) e direção do sol (muda o comprimento das sombras) |
-//   cor ambiente dos SPRITES (tint compartilhado) | janelas acesas e postes de rua |
+//   cor ambiente dos SPRITES (tint compartilhado) | janelas acesas (render/WindowLights.js) e postes de rua |
 //   faróis dos carros (via `night`, lido pelo CarLights).
 // `night` vai de 0 (dia) a 1 (noite fechada).
 // ============================================================================
@@ -118,7 +118,8 @@ class DayNight {
 		ge.scene.clearColor.set(P.clear[0], P.clear[1], P.clear[2], 1);
 		ge.scene.fogColor.set(P.clear[0] * DayNight.EDGE_DIM, P.clear[1] * DayNight.EDGE_DIM, P.clear[2] * DayNight.EDGE_DIM);      // (the 2.5D edge cut: a darker background)
 
-		// Janelas e postes só quando a noite mudou de verdade (evita reenviar buffers à toa).
+		WindowLights.update(P.n, this.hour);                // janelas acesas: escuridão e a fração acesa pela hora (uniform, todo quadro)
+		// Postes só quando a noite mudou de verdade (evita reenviar buffers à toa).
 		if (Math.abs(P.n - this._lastNight) > 0.015) {
 			this._lastNight = P.n;
 			ge.world.setNight(P.n);

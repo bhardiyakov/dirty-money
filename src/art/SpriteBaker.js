@@ -253,11 +253,12 @@ const SpriteBaker = {
     // Tela: x = leste; "cima" U = (0, cos e, sin e) (alto e norte sobem); o raio entra por D = (0, −sin e, cos e) (desce para o norte).
     // Preenche depth (−t: maior = mais perto da câmera), mat e lvl como o caminho top-down; devolve o ponto 3D de cada pixel (sombra).
     // Opções extras das primitivas aqui: `cut` (corta abaixo de y = cut: cúpulas) e `panels` + `mat2` (gomos alternados, guarda-chuva).
-    _march(prims, N, ppu, heading, elev, depth, mat, lvl) {
+    // `aux` (opcional, art/SpriteHD.js): { nrm: normal de cada pixel (3 floats), pid: índice da primitiva atingida }.
+    _march(prims, N, ppu, heading, elev, depth, mat, lvl, aux = null) {
         const e = elev * Math.PI / 180, se = Math.sin(e), ce = Math.cos(e), half = N / 2, L = this.LIGHT;
         const hs = Math.sin(heading), hc = Math.cos(heading), rotP = (p) => [p[0] * hc + p[2] * hs, p[1], -p[0] * hs + p[2] * hc];
-        const P = prims.map((p) => {
-            const q = { t: p.t, mat: p.mat, flat: p.flat, cut: p.cut, panels: p.panels, mat2: p.mat2 };
+        const P = prims.map((p, idx) => {
+            const q = { t: p.t, mat: p.mat, flat: p.flat, cut: p.cut, panels: p.panels, mat2: p.mat2, idx };
             if (p.t === 'c') { q.a = rotP(p.a); q.b = rotP(p.b); q.r = p.r; }
             else {
                 q.c = rotP(p.c); const rot = (p.rot || 0) + heading; q.s = Math.sin(rot); q.k = Math.cos(rot);
@@ -325,6 +326,7 @@ const SpriteBaker = {
                         }
                         depth[i] = -t; mat[i] = m; lvl[i] = best.flat ? 0.55 : Math.max(0, l);
                         hit[i * 3] = x; hit[i * 3 + 1] = y; hit[i * 3 + 2] = z;
+                        if (aux) { aux.nrm[i * 3] = nx / nm; aux.nrm[i * 3 + 1] = ny / nm; aux.nrm[i * 3 + 2] = nz / nm; aux.pid[i] = best.idx; }
                         break;
                     }
                     t += Math.max(d * 0.9, 0.002);

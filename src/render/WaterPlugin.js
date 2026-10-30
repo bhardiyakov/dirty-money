@@ -248,11 +248,11 @@ const Water = {
             // uma cor lisa de areia
             _ground() { return this._mode === 'sea' && typeof TerrainSplat !== 'undefined' && !!TerrainSplat.glsl; }
             prepareDefines(defines) { defines.SHORE_SEA = this._mode === 'sea'; defines.SHORE_LAND = this._mode === 'land'; defines.SHORE_GROUND = this._ground(); }
-            getSamplers(samplers) { samplers.push('shoreField', 'shoreClock'); if (this._ground()) samplers.push('splatMap', 'splatAtlas'); }
+            getSamplers(samplers) { samplers.push('shoreField', 'shoreClock'); if (this._ground()) samplers.push('splatMap', 'splatAtlas', 'splatAtlas2'); }
             getUniforms() { return { ubo: [{ name: 'wSmooth', size: 1, type: 'float' }], fragment: 'uniform float wSmooth;' }; }
             bindForSubMesh(ub) {
                 ub.setTexture('shoreField', Water.field); ub.setTexture('shoreClock', Water.clock); ub.updateFloat('wSmooth', typeof Smooth !== 'undefined' && Smooth.on ? 1 : 0);
-                if (this._ground()) { ub.setTexture('splatMap', TerrainSplat.tex.map); ub.setTexture('splatAtlas', TerrainSplat.tex.atlas); }
+                if (this._ground()) { ub.setTexture('splatMap', TerrainSplat.tex.map); ub.setTexture('splatAtlas', TerrainSplat.tex.atlas); ub.setTexture('splatAtlas2', TerrainSplat.tex.atlas2 || TerrainSplat.tex.atlas); }
             }
             getCustomCode(shaderType) {
                 if (shaderType !== 'fragment') return null;

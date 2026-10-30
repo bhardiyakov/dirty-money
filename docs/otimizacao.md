@@ -155,6 +155,10 @@ está ACIMA do alvo; a pé a referência é a cabeça (a mureta ao lado não abr
 Testado: nado de um lado ao outro sob a ponte; furo aberto embaixo e fechado em cima; pulo da ponte para a água; V recusado
 nadando sob a mureta; subida a pé pela rampa (0 → 6,2 u), presa entre as muretas e visível; barco atravessando por baixo.
 
+**Depois:** o furo pontilhado deu lugar ao corte do teto (`render/RoofCut.js`): o trecho do viaduto, o vão da ponte, o túnel ou a
+cobertura em cima do alvo some inteiro e volta quando ele sai; as copas ficam inteiras e quem está embaixo aparece como a silhueta
+dourada (`XRaySilhouette`). Ver analise-jogabilidade.md.
+
 ### Travamento no respawn: GPS (corrigido)
 
 Sintoma: depois de morrer/ser preso, o navegador congelava ("a página não está respondendo") e às vezes caía. Achado com a

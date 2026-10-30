@@ -84,45 +84,55 @@ const TileFactory = {
         clay0:   { kind: 'tile', colors: ['#a0583c', '#8e4e36', '#b06648', '#7e5a3a'] },
     },
 
-    // Constrói todas as texturas (chame uma vez por cena).
+    // Constrói todas as texturas (chame uma vez por cena). Com a cidade em alta definição (art/CityHD.js) os pisos, telhados,
+    // fachadas e lojas saem repintados em HD, no mesmo desenho; o mar e o terreno do mundo grande continuam daqui.
     create(scene) {
-        const T = {};
+        const T = {}, hd = typeof CityHD !== 'undefined' && CityHD.on ? CityHD : null;
         const tex = (p, o) => p.toTexture(scene, o);
+        const t0 = performance.now();
+        if (hd) hd.lastMs = 0;
+        const floor = (name, seed, o) => hd ? hd.make(scene, name, seed) : tex(this[name](seed), o);
 
-        T.asphalt = tex(this.asphalt(11));
-        T.road = tex(this.road(21), { aniso: 4 });
-        T.zebra = tex(this.zebra(31), { aniso: 4 });
-        T.sidewalk = tex(this.sidewalk(41));
-        T.grass = tex(this.grass(51));
-        T.sand = tex(this.sand(61));
-        T.concrete = tex(this.concrete(71));
-        T.plaza = tex(this.plaza(81));
+        T.asphalt = floor('asphalt', 11);
+        T.road = floor('road', 21, { aniso: 4 });
+        T.zebra = floor('zebra', 31, { aniso: 4 });
+        T.sidewalk = floor('sidewalk', 41);
+        T.grass = floor('grass', 51);
+        T.sand = floor('sand', 61);
+        T.concrete = floor('concrete', 71);
+        T.plaza = floor('plaza', 81);
         // Terreno do mundo grande.
-        T.dirt = tex(this.dirt(101));
-        T.rock = tex(this.rock(111));
+        T.dirt = floor('dirt', 101);
+        T.rock = floor('rock', 111);
         T.swamp = tex(this.swamp(121));
         T.farm0 = tex(this.farm(131, 0)); T.farm1 = tex(this.farm(141, 1)); T.farm2 = tex(this.farm(151, 2));
         T.scrub = tex(this.scrub(161));
         T.forest = tex(this.forest(171));
-        T.earth = tex(this.earth(181));
+        T.earth = floor('earth', 181);
         // Água: UMA textura; os 4 quadros da animação ficam na RAM (80×80) e WorldBuilder.update reescreve os pixels da textura (ver lá).
         T.waterFrames = [0, 1, 2, 3].map((f) => this.water(f).data);
         T.water = [tex(this.water(0))];
 
         T.roofs = {};
         for (const key of Object.keys(this.roofStyles)) {
-            T.roofs[key] = tex(this.roof(key));
+            T.roofs[key] = hd ? hd.make(scene, 'roof', key) : tex(this.roof(key));
         }
 
-        { const a = this.shopAtlas(); T.shops = { diffuse: tex(a.d, { aniso: 8, wrap: false }), emissive: tex(a.e, { aniso: 8, wrap: false }), cols: a.COLS, rows: a.ROWS }; }
+        if (hd) T.shops = hd.shopAtlas(scene);
+        else { const a = this.shopAtlas(); T.shops = { diffuse: tex(a.d, { aniso: 8, wrap: false }), emissive: tex(a.e, { aniso: 8, wrap: false }), cols: a.COLS, rows: a.ROWS }; }
+        // Fachadas: { diffuse, emissive (as janelas acesas), grid (janelas no ladrilho, ver render/WindowLights.js), occ (casa/escritório) }.
         T.facades = {};
         for (const key of Object.keys(this.facadeStyles)) {
+            if (hd) { T.facades[key] = hd.facade(scene, key); continue; }
             const f = this.facade(key);
             T.facades[key] = {
                 diffuse: tex(f.diffuse, { aniso: 8 }),
                 emissive: tex(f.emissive, { aniso: 8 }),
+                grid: [0, 0], occ: 'home',                   // (pixel art: as janelas acesas já vêm sorteadas no desenho)
             };
         }
+        T.machine = hd ? hd.machine(scene) : null;          // casas de máquinas no telhado (sem o HD: caixas de cor lisa)
+        if (hd) { hd.release(); console.log(`[CIDADE] texturas em alta definição (${hd.Q * Config.art.ppu} px/u) em ${Math.round(hd.lastMs)} ms (total ${Math.round(performance.now() - t0)} ms)`); }
         return T;
     },
 

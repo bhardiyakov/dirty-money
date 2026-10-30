@@ -11,6 +11,8 @@
 //   • curvas de nível: linhas onde a altura interpolada cruza múltiplos de Config.world.contour (curvas, não degraus);
 //   • tudo na grade de pixels do mundo (20 px/u): continua pixel art — com o gráfico suave (Smooth), sem a grade e com a textura
 //     filtrada (bilinear feito à mão dentro do ladrilho do atlas, que repete).
+//   • com a cidade em alta definição (art/CityHD.js): os ladrilhos são os pintados em HD (Q × 80 px, com relevo) e há um segundo
+//     atlas em meia resolução; o shader mistura os dois pelo tamanho do texel na tela (sem cintilar de longe — o atlas não tem mipmaps).
 // ============================================================================
 
 const TerrainSplat = {
@@ -21,10 +23,14 @@ const TerrainSplat = {
 
     // idOf(i, j) → índice em IDS ou NONE. Devolve o material.
     create(scene, idOf) {
-        const M = WorldMap, W = Config.world, nx = M.nx, nz = M.nz, T = this.TILE;
-        // atlas com as mesmas texturas (e sementes) do TileFactory.create
-        const F = TileFactory, src = { sand: F.sand(61), grass: F.grass(51), forest: F.forest(171), scrub: F.scrub(161), rock: F.rock(111),
-            swamp: F.swamp(121), earth: F.earth(181), farm0: F.farm(131, 0), farm1: F.farm(141, 1), farm2: F.farm(151, 2) };
+        const M = WorldMap, W = Config.world, nx = M.nx, nz = M.nz, hd = typeof CityHD !== 'undefined' && CityHD.on, T = hd ? this.TILE * CityHD.Q : this.TILE;
+        // atlas com as mesmas texturas (e sementes) do TileFactory.create — ou as pintadas em alta definição
+        const F = TileFactory, H = (n, ...a) => { const t = CityHD.paint(n, ...a); const d = t.g.getImageData(0, 0, T, T).data; t.cv.width = t.cv.height = 0; return { data: d }; };
+        const src = hd ? { sand: H('sand', 61), grass: H('grass', 51), forest: H('forest', 171), scrub: H('scrub', 161), rock: H('rock', 111),
+            swamp: H('swamp', 121), earth: H('earth', 181), farm0: H('farm', 131, 0), farm1: H('farm', 141, 1), farm2: H('farm', 151, 2) }
+            : { sand: F.sand(61), grass: F.grass(51), forest: F.forest(171), scrub: F.scrub(161), rock: F.rock(111),
+                swamp: F.swamp(121), earth: F.earth(181), farm0: F.farm(131, 0), farm1: F.farm(141, 1), farm2: F.farm(151, 2) };
+        if (hd) CityHD.release();
         const AW = T * this.COLS, AH = T * this.ROWS, atlas = new Uint8Array(AW * AH * 4);
         this.IDS.forEach((key, n) => {
             const d = src[key].data, ox = (n % this.COLS) * T, oy = Math.floor(n / this.COLS) * T;
@@ -32,6 +38,17 @@ const TerrainSplat = {
         });
         const atlasTex = BABYLON.RawTexture.CreateRGBATexture(atlas, AW, AH, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
         atlasTex.wrapU = atlasTex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+        // HD: o mesmo atlas em meia resolução (média de 2×2), para longe
+        let atlas2Tex = null;
+        if (hd) {
+            const BW = AW >> 1, BH = AH >> 1, a2 = new Uint8Array(BW * BH * 4);
+            for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) {
+                const o = (y * BW + x) * 4, i = (2 * y * AW + 2 * x) * 4, j = i + AW * 4;
+                for (let c = 0; c < 4; c++) a2[o + c] = (atlas[i + c] + atlas[i + 4 + c] + atlas[j + c] + atlas[j + 4 + c] + 2) >> 2;
+            }
+            atlas2Tex = BABYLON.RawTexture.CreateRGBATexture(a2, BW, BH, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
+            atlas2Tex.wrapU = atlas2Tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+        }
 
         const map = new Uint8Array(nx * nz * 4);
         for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
@@ -45,15 +62,17 @@ const TerrainSplat = {
         m.diffuseTexture = atlasTex;                         // (só liga o caminho "com textura" do shader; a cor vem do plugin)
         m.specularColor = BABYLON.Color3.Black();
         m.transparencyMode = BABYLON.Material.MATERIAL_OPAQUE;      // (a textura RGBA "tem alfa": sem isto o chão iria para a passada transparente)
-        this._plugin(m, mapTex, atlasTex, { minX: W.minX, minZ: W.minZ, cell: W.cell, nx, nz, contour: W.contour });
+        this._plugin(m, mapTex, atlasTex, { minX: W.minX, minZ: W.minZ, cell: W.cell, nx, nz, contour: W.contour, tile: T, atlas2: atlas2Tex, lod: !!atlas2Tex && scene.getEngine().webGLVersion >= 2 });
         return m;
     },
 
     _plugin(material, mapTex, atlasTex, P) {
-        const f = (v) => Number(v).toFixed(6), S = this;
+        const f = (v) => Number(v).toFixed(6), S = this, TL = P.tile || S.TILE, A2 = P.atlas2 || atlasTex;
         const GLSL = `
             uniform sampler2D splatMap;
             uniform sampler2D splatAtlas;
+            uniform sampler2D splatAtlas2;
+            float tLod = 0.0;
             float tHash(vec2 p) { return fract(sin(dot(p, vec2(269.5, 183.3))) * 43758.5453); }
             float tNoise(vec2 p) {
                 vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -62,13 +81,18 @@ const TerrainSplat = {
             vec4 tCell(vec2 c) { return texture2D(splatMap, (clamp(c, vec2(0.0), vec2(${f(P.nx - 1)}, ${f(P.nz - 1)})) + 0.5) / vec2(${f(P.nx)}, ${f(P.nz)})); }
             float tId(vec4 c) { return floor(c.r * 255.0 + 0.5); }
             float tH(vec4 c) { return (floor(c.g * 255.0 + 0.5) * 256.0 + floor(c.b * 255.0 + 0.5)) / ${f(S.HK)}; }
-            vec3 tPx(vec2 o, vec2 t) { return texture2D(splatAtlas, (o + mod(t, ${f(S.TILE)}) + 0.5) / vec2(${f(S.TILE * S.COLS)}, ${f(S.TILE * S.ROWS)})).rgb; }
+            vec3 tPx(vec2 o, vec2 t) { return texture2D(splatAtlas, (o + mod(t, ${f(TL)}) + 0.5) / vec2(${f(TL * S.COLS)}, ${f(TL * S.ROWS)})).rgb; }
+            vec3 tPx2(vec2 o, vec2 t) { return texture2D(splatAtlas2, (o + mod(t, ${f(TL / 2)}) + 0.5) / vec2(${f(TL / 2 * S.COLS)}, ${f(TL / 2 * S.ROWS)})).rgb; }
             vec3 tTex(float id, vec2 p) {
-                vec2 o = vec2(mod(id, ${f(S.COLS)}), floor(id / ${f(S.COLS)})) * ${f(S.TILE)};
-                vec2 q = fract(p / 4.0) * ${f(S.TILE)};
+                vec2 o = vec2(mod(id, ${f(S.COLS)}), floor(id / ${f(S.COLS)})) * ${f(TL)};
+                vec2 q = fract(p / 4.0) * ${f(TL)};
                 if (tSmooth > 0.5) {                                                                // gráfico suave: bilinear DENTRO do ladrilho (repete)
                     vec2 i = floor(q - 0.5), w = q - 0.5 - i;
-                    return mix(mix(tPx(o, i), tPx(o, i + vec2(1.0, 0.0)), w.x), mix(tPx(o, i + vec2(0.0, 1.0)), tPx(o, i + vec2(1.0, 1.0)), w.x), w.y);
+                    vec3 c0 = mix(mix(tPx(o, i), tPx(o, i + vec2(1.0, 0.0)), w.x), mix(tPx(o, i + vec2(0.0, 1.0)), tPx(o, i + vec2(1.0, 1.0)), w.x), w.y);
+                    if (tLod <= 0.01) return c0;
+                    vec2 o2 = o * 0.5, q2 = q * 0.5, i2 = floor(q2 - 0.5), w2 = q2 - 0.5 - i2;                 // longe: o atlas de meia resolução
+                    vec3 c1 = mix(mix(tPx2(o2, i2), tPx2(o2, i2 + vec2(1.0, 0.0)), w2.x), mix(tPx2(o2, i2 + vec2(0.0, 1.0)), tPx2(o2, i2 + vec2(1.0, 1.0)), w2.x), w2.y);
+                    return mix(c0, c1, tLod);
                 }
                 return tPx(o, floor(q));
             }
@@ -110,9 +134,9 @@ const TerrainSplat = {
             constructor(mat) { super(mat, 'TerrainSplat', 200, { TSPLAT: false }); this._enable(true); }
             getClassName() { return 'TerrainSplatPlugin'; }
             prepareDefines(defines) { defines.TSPLAT = true; }
-            getSamplers(samplers) { samplers.push('splatMap', 'splatAtlas'); }
+            getSamplers(samplers) { samplers.push('splatMap', 'splatAtlas', 'splatAtlas2'); }
             getUniforms() { return { ubo: [{ name: 'tSmooth', size: 1, type: 'float' }], fragment: 'uniform float tSmooth;' }; }
-            bindForSubMesh(ub) { ub.setTexture('splatMap', mapTex); ub.setTexture('splatAtlas', atlasTex); ub.updateFloat('tSmooth', typeof Smooth !== 'undefined' && Smooth.on ? 1 : 0); }
+            bindForSubMesh(ub) { ub.setTexture('splatMap', mapTex); ub.setTexture('splatAtlas', atlasTex); ub.setTexture('splatAtlas2', A2); ub.updateFloat('tSmooth', P.atlas2 || (typeof Smooth !== 'undefined' && Smooth.on) ? 1 : 0); }
             getCustomCode(shaderType) {
                 if (shaderType !== 'fragment') return null;
                 return {
@@ -122,6 +146,7 @@ const TerrainSplat = {
                         #endif`,
                     CUSTOM_FRAGMENT_UPDATE_DIFFUSE: `
                         #ifdef TSPLAT
+                        ${P.lod ? `tLod = clamp(log2(max(length(dFdx(vPositionW.xz)), length(dFdy(vPositionW.xz))) * ${f(TL / 4)}) - 0.2, 0.0, 1.0);` : 'tLod = 0.0;'}
                         baseColor.rgb = terrainColor(tSmooth > 0.5 ? vPositionW.xz : (floor(vPositionW.xz * 20.0) + 0.5) / 20.0);     // (pixel art: na grade do mundo)
                         #ifdef VERTEXCOLOR
                         baseColor.rgb *= vColor.rgb;                                                   // (relevo: brilho por canto)
@@ -131,6 +156,6 @@ const TerrainSplat = {
             }
         }
         new TerrainSplatPlugin(material);
-        S.glsl = GLSL; S.tex = { map: mapTex, atlas: atlasTex };       // (o mar usa o mesmo chão onde a beira suavizada entra nas células de mar: WaterPlugin)
+        S.glsl = GLSL; S.tex = { map: mapTex, atlas: atlasTex, atlas2: A2 };       // (o mar usa o mesmo chão onde a beira suavizada entra nas células de mar: WaterPlugin)
     },
 };

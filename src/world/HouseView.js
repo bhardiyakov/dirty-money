@@ -21,7 +21,8 @@ const HouseView = {
 		const scene = world.scene, ox = S.ox, oz = S.oz, W = S.W, D = S.D, T = S.T, H = S.H;
 		this.world = world; this.scene = scene;
 		const A = HouseArt;
-		const tex = (pc, wrap = true) => pc.toTexture(scene, { wrap, mips: wrap, aniso: 1 });
+		// (com a cidade em alta definição, as texturas de fora também saem em HD: art/CityHDFacades.js)
+		const tex = (name, wrap = true) => typeof CityHD !== 'undefined' && CityHD.on ? CityHD.house(scene, name, wrap) : A[name]().toTexture(scene, { wrap, mips: wrap, aniso: 1 });
 		const std = (name, texture, opts = {}) => {
 			const m = new BABYLON.StandardMaterial(name, scene);
 			if (texture) m.diffuseTexture = texture;
@@ -30,14 +31,14 @@ const HouseView = {
 			return m;
 		};
 		const mats = {
-			brick: std('hsBrick', tex(A.brick())),
-			zinc: std('hsZinc', tex(A.zinc())),
-			plank: std('hsPlank', tex(A.plank())),
+			brick: std('hsBrick', tex('brick')),
+			zinc: std('hsZinc', tex('zinc')),
+			plank: std('hsPlank', tex('plank')),
 			cap: std('hsCap', null),
-			roofTop: std('hsRoofTop', tex(A.roof(), false)),
+			roofTop: std('hsRoofTop', tex('roof', false)),
 			roofSlab: std('hsRoofSlab', null),
-			glass: std('hsGlass', tex(A.window(), false)),
-			door: std('hsDoor', tex(A.door(), false)),
+			glass: std('hsGlass', tex('window', false)),
+			door: std('hsDoor', tex('door', false)),
 		};
 		mats.cap.diffuseColor = BABYLON.Color3.White(); mats.roofSlab.diffuseColor = BABYLON.Color3.White();
 		this.mats = mats;
