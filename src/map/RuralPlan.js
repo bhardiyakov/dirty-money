@@ -31,6 +31,9 @@ const RuralPlan = {
             const b = WorldMap.biome[k];
             if (b === B.CITY || b === B.SEA || b === B.FAVELA || (ok && !ok.includes(b))) return false;
             if (!this.inZone && typeof Bairros !== 'undefined' && Bairros.zoneAt(x, z)) return false;      // (os bairros são montados à mão: Bairros.js)
+            if (typeof Landmarks !== 'undefined' && Landmarks.covers(x, z, 6)) return false;                 // (os marcos: estádio, Cristo, Pão de Açúcar)
+            if (typeof Lagoa !== 'undefined' && Lagoa.covers(x, z, 6)) return false;                        // (a Lagoa)
+            if (typeof Speedway !== 'undefined' && Speedway.covers(x, z, 6)) return false;                  // (o autódromo)
             const n = RoadPlan.nearestRoadPoint(x, z, 70);
             if (n && n.d < n.edge.w / 2 + roadMargin) return false;
         }

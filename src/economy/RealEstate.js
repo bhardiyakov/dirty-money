@@ -4,7 +4,8 @@
 //   • a FAVELA e o seu entorno são muito mais baratos; o centro fica no meio.
 // índice de localização `idx` (0..1) = proximidade da orla (WorldMap.seaDist) + bônus da ilha, reduzido perto da favela;
 // R$/m² = 140 · (1 + 85 · idx^1,6) · 0,4 · mercado(dia)  →  favela ≈ R$ 100/m², centro ≈ R$ 1.300/m², orla ≈ R$ 2.700/m²,
-// ilha ≈ R$ 4.800/m². O padrão (barraco → mansão) e a metragem saem do índice e do tamanho do terreno.
+// ilha ≈ R$ 4.800/m². O padrão (barraco → mansão) e a metragem saem do índice e do tamanho do terreno. A LAGOA (map/Lagoa.js) é o metro
+// quadrado mais caro da cidade, no mesmo topo da ilha: coberturas e apartamentos de luxo de frente para a água (listagem própria).
 // Comprar: dinheiro LIMPO (Laundry) — só imóveis na própria favela aceitam sujo. Um imóvel comprado serve de casa extra: dormir
 // (salva), baú, cofre, geladeira; "morar aqui" muda a safe house (e a residência: Standing.setHome → morar fora da favela
 // te torna ESTRANHO para o C.V). Interface: ui/PropertyUI.js. Marcadores brilhantes na porta e POIs no mapa.
@@ -31,6 +32,7 @@ const RealEstate = {
     locate(x, z, block = null) {
         const sea = WorldMap.seaDist(x, z), shore = Math.max(0, Math.min(1, 1 - sea / 450));
         const district = block ? block.district : null, biome = block ? block.biome : null;
+        if (district === 'lagoa') return { idx: 1, shore: 1, region: 'Lagoa', dFav: Standing.favelaDist(x, z) };      // (o topo do mercado)
         let idx = Math.pow(shore, 1.1) * 0.75 + (district === 'island' ? 0.25 : 0) + (biome === 'downtown' ? 0.05 : 0);
         // favela e entorno: o mercado despenca (até ~260 u de distância dela)
         const dFav = Standing.favelaDist(x, z);
@@ -70,6 +72,7 @@ const RealEstate = {
         this.built = true; this.game = game;
         const rng = Pixel.rng(60606), rng0 = Pixel.rng(60607), home = SafeHouse.spawnWorld();
         const buckets = this.TIERS.map(() => []);
+        const lagoa = [];
         for (const b of CityGrid.blocks) {
             if (b.open || b.virtual) continue;
             for (const l of b.lots) {
@@ -87,6 +90,7 @@ const RealEstate = {
                     door = { x: d.x, z: d.z };
                 }
                 if (home && hypot(door.x - home.x, door.z - home.z) < 20) continue;
+                if (b.district === 'lagoa') { if (l.lagoa) lagoa.push({ b, l, door, loc: this.locate(cx, cz, b), area }); continue; }      // (a Lagoa: listagem própria, abaixo)
                 const loc = this.locate(cx, cz, b), tier = this.tierOf(loc.idx);
                 buckets[this.TIERS.indexOf(tier)].push({ b, l, door, loc, tier, area });
             }
@@ -104,6 +108,16 @@ const RealEstate = {
                 this.list.push(p); this.byId[id] = p;
                 CityGrid.addPoi({ type: 'imovel', name: `${t.type} · ${size} m² · ${this.owned[id] ? 'SEU' : brl(this.price(p))}`, x: p.x, z: p.z, prop: id });
             }
+        });
+        // a LAGOA: 6 imóveis de luxo de frente para a água (rng próprio: não mexe nos códigos dos de antes)
+        const rl = Pixel.rng(60608), chosen = [];
+        while (chosen.length < 6 && lagoa.length) { const c = lagoa.splice(Math.floor(rl() * lagoa.length), 1)[0]; if (chosen.every((o) => hypot(o.door.x - c.door.x, o.door.z - c.door.z) > 30)) chosen.push(c); }
+        chosen.forEach((c, i) => {
+            const pent = i % 2 === 0, k = Math.max(0, Math.min(1, (c.area - 150) / 350)), size = Math.round(pent ? 260 + 180 * k : 150 + 110 * k);
+            const id = 'imv' + this.list.length, type = pent ? 'Cobertura de frente para a Lagoa' : 'Apartamento de luxo na Lagoa';
+            const p = { id, x: c.door.x, z: c.door.z, type, stars: 5, size, idx: c.loc.idx, region: c.loc.region, shore: c.loc.shore, block: c.b.id, facade: c.l.facade, lagoa: true };
+            this.list.push(p); this.byId[id] = p;
+            CityGrid.addPoi({ type: 'imovel', name: `${type} · ${size} m² · ${this.owned[id] ? 'SEU' : brl(this.price(p))}`, x: p.x, z: p.z, prop: id });
         });
         // marcadores brilhantes na porta (só os próximos aparecem)
         this.glow = new GlowBatch(game.scene, this.list.length + 4, 'imoveisGlow', 'glow');

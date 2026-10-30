@@ -260,7 +260,7 @@ const RoadPlan = {
     _freeEdge(A, B, pts, cls, opts = {}) {
         const cum = [0];
         for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
-        const e = { a: A, b: B, free: true, pts, cum, cls, w: this.CLASS[cls].w, len: cum[cum.length - 1], layer: 0, name: opts.name || null };
+        const e = { a: A, b: B, free: true, pts, cum, cls, w: this.CLASS[cls].w, len: cum[cum.length - 1], layer: 0, name: opts.name || null, express: !!opts.express };
         (A.free || (A.free = [])).push(e); (B.free || (B.free = [])).push(e);
         return e;
     },

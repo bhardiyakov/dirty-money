@@ -24,6 +24,11 @@ const TileFactory = {
         metal1:   { kind: 'metal', a: '#b9a98e', b: '#a8987d', hi: '#d0c3aa' },
         concrete0: { kind: 'concrete', wall: '#a9a69d', glass: '#33414f' },
         concrete1: { kind: 'concrete', wall: '#c4bfb2', glass: '#2d3b4a' },
+        // Prédios residenciais de luxo (a Lagoa): laje branca de cada andar avançando, varanda com guarda-corpo de vidro, janelão do piso ao teto.
+        lux0:     { kind: 'resid', wall: '#f2efe8', glass: '#3a5a72', rail: '#b9dbe8', slab: '#fbfaf6' },
+        lux1:     { kind: 'resid', wall: '#e7dcc8', glass: '#2f4a5e', rail: '#a8d0e0', slab: '#f3ece0' },
+        lux2:     { kind: 'resid', wall: '#d9dcdf', glass: '#354b5c', rail: '#bfe0ea', slab: '#eef0f1' },
+        lux3:     { kind: 'resid', wall: '#c9b8a0', glass: '#2b3d4c', rail: '#b0d6e4', slab: '#e2d6c4' },
         // Rural: celeiro vermelho, tábuas de madeira (cabanas) e madeira cinza envelhecida.
         barn0:    { kind: 'metal', a: '#9a3a2c', b: '#8a3226', hi: '#b8503e' },
         wood0:    { kind: 'metal', a: '#8a6238', b: '#7a5430', hi: '#a67a48' },

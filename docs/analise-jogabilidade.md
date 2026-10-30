@@ -153,7 +153,7 @@ Referências: Need for Speed Underground 2 (rachas, reputação no meio, carros 
 (takedowns, capotamento e explosão em batida forte).
 
 - **Onde**: pontos de racha na rua em frente a até 5 postos espalhados (anel aceso; 🏁 no mapa) e o **Autódromo Arena Sul**
-  (🏎️), um oval de ~500 m (2 retas de 130 m, curvas de raio 38 m, pista de 15 m) com muros com colisão, arquibancada coberta com
+  (🏎️, no campo a oeste, entre o Alto da Serra e o Corcovado), um oval de ~500 m (2 retas de 130 m, curvas de raio 38 m, pista de 15 m) com muros com colisão, arquibancada coberta com
   torcida, placar, torres de luz acesas à noite e o logo no gramado. Chegue de carro e aperte **E**: as provas do dia (mudam a cada
   6 h do jogo e com o seu nível).
 - **Modalidades**: *racha 1×1* (reta de até 402 m achada no grafo das ruas, pela perna mais reta de cada cruzamento),
@@ -388,6 +388,156 @@ fora da caixa da sombra, o rascunho da oclusão (que vale 1) e virava uma faixa 
 `tests/28_teto_divisas` confere: sem furo nem fade nos materiais, máscara das copas, a silhueta dourada debaixo de uma copa, o trecho
 do viaduto que some (e não para quem está no tabuleiro ou longe), a cobertura do posto e o vão da ponte, as faixas das divisas no
 quadro e a sombra do assador sem vazar.
+
+## Mapa reestruturado e os marcos (`src/map/Landmarks.js`, `WorldMap`, `RuralRoads`, `CityGrid`)
+
+O mundo segue a estrutura do mapa de referência, com os nomes do jogo mantidos (Centro, Ilha Praiana, Favela do Morro, Morro do
+Mirante, Vila da Roça, Alto da Serra, Serras, Fazendas, Pântano, Canal):
+- **Lagoa** a oeste do Centro, entre a Rodovia da Lagoa e o viaduto (ver *A Lagoa*, abaixo); a **Rodovia da Lagoa** (R7) desce a oeste
+  dela até a Rodovia do Sul e sobe até a Rodovia Central passando pelo estádio — com as outras rodovias, fecha o anel laranja do mapa;
+- **Via Expressa**: a diagonal que corta o norte do Centro da ponte norte até o Contorno (`CityGrid._expressway`, marcada `express`);
+- **Maracanã** a oeste do Centro: o complexo inteiro, entrável (ver *O complexo do Maracanã*, abaixo);
+- **Cristo Redentor** no alto do **Corcovado** (a serra no lugar do antigo lago do norte), num mirante de pedra; a Trilha do Corcovado
+  passa por ele (em laço: a poda de becos do `RoadPlan` apagava as pontas soltas);
+- **Pão de Açúcar** na ponta leste da praia do sul: penedo com malha própria (pedra HD com veios e a mata no pé) e o **bondinho**
+  saindo da estação na areia, dois cabos e duas cabines que vão e voltam — **E** na estação da praia faz o passeio (R$ 30): a cabine
+  sobe até o alto (a câmera abre com a altura), para lá em cima e volta; as duas cabines se cruzam no meio;
+- **praia do sul**: a cidade recua (o Contorno vira a avenida da praia) e ganha o **calçadão** de ondas pretas e brancas, quiosques,
+  postos de salva-vidas, coqueiros e guarda-sóis; os **quiosques vendem** de verdade (`src/world/Stands.js`: água de coco, mate,
+  biscoito de polvilho, milho, açaí — matam a fome e a sede e curam, como o carrinho do ambulante), com o quiosqueiro na frente, e o
+  calçadão é movimentado (`NPCManager._density` via `Landmarks.crowd`);
+- **píeres** de madeira com barcos atracados no canal (anda-se neles como em terra: `MapGeo.onDock`) — os barcos são de **verdade**
+  (`BoatManager.spawn`: lancha e barco em cada píer, roubáveis e navegáveis, como os da marina) — e **pontes estaiadas** (pilones
+  e leques de estais) nas pontes norte e do meio;
+- o autódromo foi para o campo a oeste (o lugar antigo virou a Lagoa).
+Marcos novos têm ícone no mapa (🏟️ ✝️ 🚡) e nome (MARACANÃ, LAGOA, CORCOVADO, PÃO DE AÇÚCAR). O ponto de tipo `village` (Vila da Roça,
+Alto da Serra) ganhou ícone: antes derrubava o mapa da pausa quando aparecia na tela.
+
+### O Corcovado em 3D (`src/map/Corcovado.js`, `src/map/Walkways.js`)
+
+O Cristo fica no alto de um MORRO de verdade (malha própria, mata fechada nas encostas — copas e palmeiras na altura do terreno — e
+pedra aparecendo), num MIRANTE redondo a 18 m, com balaustrada e postes; a estátua é uma malha própria em pedra-sabão (a túnica com
+as dobras, os ombros, os braços abertos com as mangas caídas, a cabeça) sobre o pedestal escuro com a porta da capela. Do chão ao topo:
+- as ESCADARIAS de concreto em zigue-zague, com muros de arrimo, muretas, guarda-corpo e postes, saindo do PORTÃO (praça de pedra,
+  pilares com a placa CRISTO REDENTOR, guarita e a placa ACESSO DE PEDESTRES), na Estrada do Corcovado;
+- a PASSARELA DE MADEIRA sobre pilares, do pé do morro até o TERRAÇO DO CAFÉ (quiosque verde-água, mesinhas com guarda-sol), e a
+  escada do terraço até o mirante;
+- o ELEVADOR panorâmico (torre de vidro, cabine que sobe e desce) do chão até a ponte do terraço — **E** sobe e desce;
+- o TREM DO CORCOVADO: trilhos de cremalheira sobre o aterro, da estação do pé (com a placa) à do alto, ao lado do mirante — **E** sobe e
+  desce; sem passageiro, os dois carros vão e voltam sozinhos.
+Anda-se por tudo a pé: escadas, rampas, patamares, o terraço e o mirante são uma rede de **Walkways** — o mesmo estado "lá em cima"
+do viaduto e do heliponto (`Player.onDeck`/`deckH`): entra-se andando pelo pé de um lance, as bordas seguram (corrimão), e descendo
+sai-se no chão pelo pé. Os lances avançam 0,6 u além das pontas, sem fresta nas junções. Lá em cima a câmera mira o personagem na
+altura dele e abre aos poucos (até 2,25× no mirante: o Cristo inteiro cabe no quadro). O morro é sólido para quem está no chão.
+No mapa: o mirante com a cruz, as escadarias, a passarela, o terraço e o café, o elevador, os trilhos com o trem e as estações.
+Ligado ao resto do jogo: o trem cobra a passagem na subida (R$ 20; a descida é de graça; o elevador é público); o **café do terraço**
+vende de verdade (`Stands`: cafezinho, pão de queijo, sanduíche, suco — só para quem está no terraço, das 8h às 19h, com o atendente);
+de dia há **turistas** no mirante olhando o Cristo e a vista (falam com quem chega: `Bubbles`); à noite o **Cristo é iluminado**
+(branco-azulado, pelo `dayNight.night`); a praça do portão tem movimento de turistas (`NPCManager._density` / `_style`).
+O autódromo passou a ser montado antes do campo (as casas de beira de estrada da estrada nova tomavam o lugar dele).
+
+`tests/30_corcovado` confere o morro e as malhas, cada caminho passo a passo (sem fresta, a altura subindo até o mirante), a entrada
+pelo pé (de lado não), a saída descendo, a câmera, o morro sólido, o elevador e o trem nos dois sentidos, o trem sozinho, o Cristo no
+quadro de quem está no mirante e o complexo no mapa; e a passagem do trem, o café do terraço, os turistas, o Cristo iluminado à
+noite e o movimento no portão.
+
+### O complexo do Maracanã (`src/map/Maracana.js`, porta em `src/world/Interiors.js`)
+
+Por fora, como a foto de referência: o ESTÁDIO (anel de concreto com os pilares em V, as lajes dos andares, o vidro escuro recuado, a
+COBERTURA branca com as nervuras e a faixa de placas solares, a arquibancada em degraus com os setores azuis, amarelos e brancos, os
+placares, a pista azul e o gramado com as linhas), as duas RAMPAS HELICOIDAIS, a ESPLANADA de pedra em volta com palmeiras e bancos, o
+PORTÃO 18 ao sul (marquise e placa), o ESTACIONAMENTO (vagas pintadas, carros, ônibus de torcida e a placa ESTÁDIO DO MARACANÃ na
+entrada da Av. do Estádio), a ESTAÇÃO DE TREM a leste (plataforma coberta, dois trilhos, trens parados) com a PASSARELA elevada que
+sobe da plataforma, atravessa os trilhos e desce na esplanada — anda-se nela (rede de **Walkways**, como as escadarias do Corcovado) —,
+o MARACANÃZINHO (a cúpula branca com as nervuras) e o PARQUE AQUÁTICO (piscina com raias e arquibancada). Gramado em volta
+(`WorldMap`), o nome MARACANÃ e o ponto 🏟️ no mapa; o anel, o miolo, as rampas, a cúpula e a piscina são sólidos, com o vão de 4 u do
+portão sul aberto até a soleira.
+
+Por dentro, com a lógica das lojas (`Interiors`: porta na grade, a sala no palco, horário de funcionamento 9h–24h, polícia na cola
+barra a entrada): entra-se andando pelo portão sul. A sala é pintada em HD — o SAGUÃO com a BILHETERIA à esquerda e a LANCHONETE à
+direita, os bancos, o muro das CATRACAS, o vomitório, a ARQUIBANCADA com a torcida (setores coloridos, corredores), as placas do
+alambrado e o CAMPO lá em cima:
+- **ingresso** na bilheteria (**E**, R$ 40): sem ele as catracas ficam fechadas (bloqueiam a passagem); com ele, liberam;
+- a **lanchonete** é um atendente com cardápio (`Economy.STYLES.stadium`: cachorro-quente, pipoca, refrigerante, cerveja, água);
+- da arquibancada, **E** assiste ao jogo (passa 1h30, o placar no fim);
+- o **jogo rola** de verdade: 8 jogadores (camisas do Fla e do Flu) correm atrás da bola, que quica no campo; gol na rede do norte sobe
+  o placar e a torcida comemora em balões.
+Saindo pela porta do saguão, volta-se ao portão sul (o jogo some com a sala).
+
+Ligado ao resto do jogo:
+- o **ESTACIONAMENTO** tem carros de **verdade** do trânsito (`Maracana.update`, a cada meio segundo pelo `Game`): 3 fileiras de vagas
+  de 3 × 7 u e a baia das vans de torcida ao norte; quando a câmera chega a 150 u, os carros estacionam (`Garage.spawnCar`, depois
+  trancados como os do meio-fio e `keep` para o trânsito não reciclá-los) — o modelo e a cor são sorteados como no trânsito; a lotação
+  segue a hora (de madrugada uns 8; de dia ~36%; no jogo da noite, 16h–23h, ~62%, até 40 carros). Tudo do carro vale: mixa, chave de
+  fenda, vidro, alarme, polícia, desmanche, seguro. O que o jogador tira da vaga vira um carro comum do trânsito (largado, é reciclado);
+  a 230 u, os que ficaram na vaga somem. Custo medido: ~2 ms de CPU por quadro com 40 carros;
+- a **TORCIDA**: com o estádio aberto, até 14 pedestres (28 no jogo da noite) chegam à esplanada e ao estacionamento (NPCs de verdade:
+  dá para furtar, brigar, eles fogem do tiro), de camisa; o resto do movimento sobe pela densidade da esplanada; o burburinho da
+  torcida (`Ambience`) cresce perto do estádio aberto e lá dentro; no dia de jogo o `StreetLife` traz mais gente;
+- os **REFLETORES**: à noite, com o estádio aberto, a faixa de luz sob a cobertura acende e o gramado fica iluminado;
+- a **BARRACA DE CHURRASQUINHO** na esplanada, perto do portão (`Stands`: churrasquinho, cachorro-quente, pipoca, refrigerante, água),
+  com o carrinho e o churrasqueiro;
+- o **ASSALTO** (`Robbery`): o estádio é um comércio médio (`TIER.stadium = 2`) — de arma na mão na lanchonete, o atendente e a torcida
+  do saguão viram reféns; o cofre da bilheteria, o rack das câmeras e o estoque da lanchonete (bebidas e salgados) estão pintados na
+  sala; a carreira de Assaltante pode sortear o estádio como alvo;
+- o jogo e o ingresso entram na conversa da rua (`News.smallTalk`), como o trem do Corcovado e o bondinho.
+
+`tests/31_maracana` confere também o estacionamento (carros de verdade, trancados, na vaga, ao alcance do roubo; o roubado vira carro
+do trânsito; longe, esvazia; de madrugada, poucos), a torcida, a densidade, o som, os refletores, a barraca e o assalto; e o complexo montado, o anel sólido com o vão do portão (andando, chega-se à soleira), o Maracanãzinho, a
+porta, a Av. do Estádio, o autódromo no lugar, o gramado, o nome no mapa, o horário, a passarela (sobe, atravessa sem fresta e desce no
+chão), a cobertura e o gramado no mapa e, por dentro: entrar, os jogadores, a bola e a torcida, a catraca fechada, o ingresso que
+libera, a lanchonete, assistir ao jogo, a bola e os jogadores andando, o gol, a saída e o portão fechado de madrugada.
+
+### A Lagoa (`src/map/Lagoa.js`)
+
+Como a Rodrigo de Freitas (a foto de referência): o espelho d'água de beira LISA — o ATERRO, uma mureta de pedra clara, sem praia e
+sem recorte (a forma é uma curva em volta do centro, `Lagoa.R(a)`, e o WorldMap cava a água por ela) — e em volta, de dentro para fora:
+- a ORLA (2 quarteirões de parque, grama): palmeiras na beira d'água, a PISTA de caminhada (bege) e a CICLOVIA (vermelha, tracejada,
+  bordas brancas), árvores, bancos e postes; 6 QUIOSQUES com guarda-sóis e o quiosqueiro (`Stands`: água de coco, açaí, chope,
+  sanduíche, suco, água) e 4 CARRINHOS de ambulante na pista (mate, biscoito de polvilho, picolé, milho); 4 DEQUES de madeira entrando na
+  água (anda-se neles: `MapGeo.onDock`);
+- a **Av. Epitácio Pessoa** dando a volta inteira (via livre fechada, em duas metades, traçada antes das estradas do interior, que
+  contornam o bairro) e as ligações: Av. Borges de Medeiros (Rodovia da Lagoa), Rua Jardim Botânico (Rodovia dos Lagos), Rua Fonte da
+  Saudade e Rua Mário Ribeiro (a cidade);
+- os PRÉDIOS DE LUXO: ~30 quarteirões de verdade do CityGrid (calçada, jardim com palmeiras, a torre de 8 a 13 andares encostada na
+  calçada de frente para a Lagoa), em duas fileiras onde cabe — fachada residencial nova (`lux0`–`lux3`, tipo `resid`: janelas altas
+  entre pilares brancos, varanda com guarda-corpo de vidro e corrimão de inox, laje branca avançando, floreiras) e PISCINA NA
+  COBERTURA na maioria; um quarteirão é o parque das QUADRAS (futsal, basquete, parquinho) e outro o CLUBE (sede e piscina);
+- o metro quadrado MAIS CARO da cidade (`RealEstate.locate`: região "Lagoa", índice 1 — no topo, acima da orla e da ilha): 6 imóveis
+  à venda (coberturas de frente para a Lagoa e apartamentos de luxo; listagem própria, os códigos dos imóveis de antes não mudam).
+Gente: a pista é TRILHA DE CORRIDA (`CityGrid.jogPaths`: os corredores do NPCManager correm nela), 8 CICLISTAS de verdade (bicicleta
+do trânsito com ciclista, `TrafficCar`, numa rota em laço pela ciclovia, nos dois sentidos — derrubou ou pegou a bicicleta, vira
+veículo comum) aparecem com a câmera perto; a orla tem o movimento mais alto (`Landmarks.crowd`), de roupa esportiva, executivo e
+turista.
+A ÁGUA DOCE é outra mecânica: `Waves.open` = 0 (sem ondulação, sem ressaca: barcos e quem nada ficam parados); no shader da orla
+(`WaterPlugin`) o campo ganhou dois canais — lago (água fechada) e aterro (a Lagoa) — e no lago não há arrebentação, espuma, raso
+turquesa nem areia molhada: a água é verde-azulada, parada, com reflexos leves (lago natural: a beira barrenta); no mapa pintado a
+água doce tem a sua cor (`MapPaint.LAKE`), sem espuma. Barco a motor não entra: nos deques ficam os PEDALINHOS de cisne e os CAIAQUES
+(`BoatSheet`: sem motor, devagar, não pegam fogo; `EngineAudio`: sem ronco). No mapa: a orla, a pista, a ciclovia, os deques, os
+quiosques, as quadras e as piscinas das coberturas, com os pontos 🦢 Lagoa, ⚽ quadras e 🏊 clube.
+
+`tests/32_lagoa` confere a beira lisa (água dentro, terra fora, sem praia), a avenida e as ligações, os prédios (quarteirões de
+verdade, fachada de luxo, sólidos, piscinas), quadras e clube, o m² mais caro, deques, trilha, pontos e barracas, a água parada (e o mar
+com onda), pedalinhos e caiaques sem motor, o quiosque vendendo, os ciclistas na ciclovia (nos dois sentidos, andando, somem de longe) e
+o movimento na orla.
+
+### Mapa e GPS pintados em alta definição (`src/map/MapPaint.js`, `src/map/MapRenderer.js`)
+
+O terreno do mapa é pintado como um mapa ilustrado: mar com degradê de profundidade (turquesa no raso → azul-marinho), espuma na beira
+e a linha da arrebentação; costa e divisas de bioma curvas (campo de terra suavizado e cores interpoladas, contorno entortado por
+ruído — sem a escada das células de 4 u); relevo sombreado com luz do noroeste e o oco dos vales; copas na mata e árvores soltas no
+gramado; os talhões das fazendas (os mesmos do 3D) com as fileiras; ondinhas na areia, poças no pântano, fendas na pedra.
+Níveis de detalhe: um rascunho do mundo inteiro (0,25 px/u, no começo) e ladrilhos de 512 px a 0,5–8 px/u pintados quando aparecem
+(no mapa da pausa, até ~14 ms por quadro; no GPS, 4 ms por quadro em segundo plano, e a camada dele só é refeita quando um ladrilho
+fica pronto — refazê-la a cada quadro derrubava o FPS; o que falta sai do rascunho ampliado) e guardados (60 últimos).
+Por cima, vetorial: ruas com meio-fio — rodovias e Via Expressa em **laranja** com a faixa amarela, ruas e avenidas em asfalto com o
+tracejado —, prédios com a cor do próprio telhado (os de 8+ andares em vidro azulado), sombra para o sudeste e quina iluminada, as
+árvores dos parques e os marcos desenhados (estádio, Cristo, bondinho, calçadão, píeres, barcos, estais).
+
+`tests/29_mapa_marcos` confere os marcos, os pontos e os nomes no mapa, a Lagoa, o penedo sólido, o píer, as vias novas, o autódromo,
+as malhas, o bondinho andando e as cores do mapa pintado (mar fundo e raso, mata, rodovia laranja), o mapa da pausa no mundo inteiro
+e o GPS; e as ligações com o jogo: barcos de verdade nos píeres e na Lagoa, os quiosques vendendo, o calçadão movimentado, o passeio
+de bondinho (pago, sobe e volta) e os marcos na conversa da rua.
 
 ## Personagens (`tools/asset_baker/generator/*` no build, `src/art/NpcArt.js` no jogo)
 

@@ -26,6 +26,8 @@ const Economy = {
         bacon:    { name: 'X-Bacon Duplo', icon: 'food', base: 20, kind: 'meal', heal: 45, desc: 'Dois hambúrgueres e bacon' },
         fries:    { name: 'Batata frita', icon: 'food', base: 8, kind: 'meal', heal: 14, desc: 'Porção média' },
         soda:     { name: 'Refrigerante', icon: 'water', base: 6, kind: 'meal', heal: 8, desc: 'Lata gelada' },
+        hotdog:   { name: 'Cachorro-quente', icon: 'food', base: 12, kind: 'meal', heal: 24, desc: 'Salsicha, purê e batata palha' },
+        popcorn:  { name: 'Pipoca', icon: 'food', base: 8, kind: 'meal', heal: 10, desc: 'Saco grande, salgada' },
         shake:    { name: 'Milkshake', icon: 'water', base: 12, kind: 'meal', heal: 16, desc: 'Chocolate' },
         slice:    { name: 'Fatia de pizza', icon: 'food', base: 9, kind: 'meal', heal: 22, desc: 'Calabresa' },
         pizza:    { name: 'Pizza inteira', icon: 'food', base: 42, kind: 'meal', heal: 85, desc: '8 fatias de queijo e tomate' },
@@ -98,6 +100,7 @@ const Economy = {
     // hours: [abre, fecha] (fecha > 24 = passa da meia-noite) | tier: multiplicador do estilo | stock: [id, peso, qtdMax?]
     STYLES: {
         burger:   { label: 'Lanchonete', tier: 1.0, hours: [8, 26], stock: [['burger'], ['bacon'], ['fries'], ['soda'], ['shake'], ['lunch'], ['bottle']] },
+        stadium:  { label: 'Estádio', tier: 1.2, hours: [9, 24], stock: [['hotdog'], ['popcorn'], ['soda'], ['beer'], ['bottle']] },        // (o Maracanã: map/Maracana.js)
         mart:     { label: 'Conveniência', tier: 1.0, hours: [0, 24], night: 1.2, stock: [['bottle'], ['soda'], ['snack'], ['lunch'], ['coffee'], ['cake'], ['patch'], ['bag_cross'], ['bag_pack']] },
         pharmacy: { label: 'Farmácia', tier: 1.1, hours: [7, 23], night: 1.2, stock: [['medkit'], ['patch'], ['bottle'], ['juice']] },
         bar:      { label: 'Bar', tier: 1.0, hours: [11, 28], happy: [17, 19], stock: [['beer'], ['shot'], ['snack'], ['fries'], ['soda']] },

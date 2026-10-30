@@ -23,6 +23,8 @@ class NPCManager {
     // parte corre na trilha da orla, parte toma sol, parte nada (só se há mar por perto); o resto perambula. A densidade
     // varia pelo lugar: cidade e favela cheias, ilha menos, estrada e campo quase vazios.
     _density(x, z) {
+        const L = typeof Landmarks !== 'undefined' ? Landmarks.crowd(x, z) : null;                  // (marcos: a esplanada do Maracanã, o calçadão, o portão do Corcovado)
+        if (L !== null) return L;
         const zn = typeof Bairros !== 'undefined' ? Bairros.zoneAt(x, z) : null;
         if (zn) return CityGrid._blockAtPoint(x, z) ? 0.9 : 0.4;                                  // (Vila da Roça e Alto da Serra: a vila cheia, o resto com gente)
         const b = CityGrid._blockAtPoint(x, z);
@@ -61,6 +63,8 @@ class NPCManager {
         if (role === 'jog') return 'sport';
         const b = CityGrid._blockAtPoint(pos.x, pos.z), r = Math.random(), zn = typeof Bairros !== 'undefined' ? Bairros.zoneAt(pos.x, pos.z) : null;
         if (zn === 'roca') return r < 0.75 ? 'poor' : 'casual';                                    // gente simples da roça
+        const lm = typeof Landmarks !== 'undefined' ? Landmarks.crowdStyle(pos.x, pos.z, r) : null;      // torcida no Maracanã, turistas no Corcovado
+        if (lm) return lm;
         if (zn === 'serra') return r < 0.35 ? 'biz' : (r < 0.6 ? 'tourist' : 'casual');           // rico de casaco e turista de inverno
         if (b && b.faction === 'cpc' && typeof NightLife !== 'undefined' && NightLife.on) return NightLife.crowdStyle();      // (a noite do Mirante)
         if (!b) return r < 0.3 ? 'poor' : 'casual';                                              // campo e estrada

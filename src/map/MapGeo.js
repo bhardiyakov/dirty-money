@@ -26,6 +26,8 @@ const MapGeo = {
 
     // Sobre um píer da marina (cais e dedos)? Para andar a pé como em terra firme.
     onDock(x, z) {
+        if (typeof Landmarks !== 'undefined' && Landmarks.piers.length && Landmarks.onPier(x, z)) return true;      // (os píeres do canal)
+        if (typeof Lagoa !== 'undefined' && Lagoa.onDeck(x, z)) return true;                                          // (os deques da Lagoa)
         const M = typeof Marina !== 'undefined' ? Marina : null;
         if (!M || !M.docks) return false;
         const b = M.box;

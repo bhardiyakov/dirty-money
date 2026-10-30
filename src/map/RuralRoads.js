@@ -31,20 +31,20 @@ const RuralRoads = {
         { id: 'R2', cls: 'hwy', name: 'Rodovia do Oeste', pts: [[-1190, 900], [-1185, 560], [-1210, -60], [-1150, -700]] },
         { id: 'R3', cls: 'hwy', name: 'Rodovia do Sul', pts: [[-1150, -700], [-760, -860], [-336, -930], [-294, -930]] },
         { id: 'R4', cls: 'hwy', name: 'Rodovia Central', pts: [[-294, 186], [-336, 186], [-700, 205], { on: 'R2', near: [-1205, 186] }] },
-        { id: 'R5', cls: 'hwy', name: 'Rodovia dos Lagos', pts: [[-294, -246], [-336, -246], [-760, -265], { on: 'R2', near: [-1200, -246] }] },
+        { id: 'R5', cls: 'hwy', name: 'Rodovia dos Lagos', pts: [[-294, -246], [-336, -246], [-546, -252], [-760, -265], { on: 'R2', near: [-1200, -246] }] },
         { id: 'R6', cls: 'hwy', name: 'Rodovia do Meio', pts: [{ on: 'R5', near: [-780, -250] }, [-790, 0], [-770, 420], { on: 'R1', near: [-785, 900] }] },
-        { id: 'R7', cls: 'hwy', name: 'Rodovia da Lagoa', pts: [{ on: 'R3', near: [-480, -895] }, [-470, -600], { on: 'R5', near: [-480, -250] }] },
+        // (a oeste da LAGOA, e segue para o norte até a Rodovia Central, passando pelo estádio)
+        { id: 'R7', cls: 'hwy', name: 'Rodovia da Lagoa', pts: [{ on: 'R3', near: [-548, -895] }, [-552, -600], [-546, -252], [-532, 40], { on: 'R4', near: [-528, 196] }] },
         // ---- estradas de terra
         { id: 'D1', cls: 'dirt', name: 'Estrada da Favela', pts: [{ on: 'R5', near: [-600, -245] }, [-610, 0], [-600, 342]] },
         { id: 'D2', cls: 'dirt', name: 'Estrada do Engenho', pts: [{ on: 'R5', near: [-900, -250] }, [-890, 0], { on: 'R4', near: [-900, 186] }] },
         { id: 'D3', cls: 'dirt', name: 'Estrada das Fazendas', pts: [[-294, -30], [-336, -30], [-600, -20], { on: 'D2', near: [-895, -30] }] },
-        { id: 'D4', cls: 'dirt', name: 'Estrada do Brejo', pts: [[-294, -420], [-336, -420], { on: 'R7', near: [-475, -420] }] },
         { id: 'D5', cls: 'dirt', name: 'Estrada da Serra do Meio', pts: [{ on: 'R4', near: [-975, 190] }, [-1030, 420], [-1020, 640]] },
         { id: 'D6', cls: 'dirt', name: 'Estrada do Sítio', pts: [{ on: 'R2', near: [-1190, 400] }, { on: 'D5', near: [-1030, 400] }] },
         { id: 'D7', cls: 'dirt', name: 'Estrada do Valão', pts: [{ on: 'R6', near: [-780, 342] }, [-660, 342]] },
         { id: 'D8', cls: 'dirt', name: 'Estrada do Morro', pts: [{ on: 'R6', near: [-780, 558] }, [-660, 558]] },
-        { id: 'D9', cls: 'dirt', name: 'Estrada do Lago Grande', pts: [{ on: 'R7', near: [-480, -480] }, [-620, -420], [-720, -555], [-900, -560], [-1000, -440], { on: 'R5', near: [-1010, -250] }] },
-        { id: 'D10', cls: 'dirt', name: 'Estrada da Lagoa Funda', pts: [{ on: 'R7', near: [-475, -640] }, [-560, -790], { on: 'R3', near: [-790, -850] }] },
+        { id: 'D9', cls: 'dirt', name: 'Estrada do Lago Grande', pts: [{ on: 'R7', near: [-552, -480] }, [-640, -430], [-720, -555], [-900, -560], [-1000, -440], { on: 'R5', near: [-1010, -250] }] },
+        { id: 'D10', cls: 'dirt', name: 'Estrada da Lagoa Funda', pts: [{ on: 'R7', near: [-552, -680] }, [-600, -790], { on: 'R3', near: [-790, -850] }] },
         { id: 'D11', cls: 'dirt', name: 'Estrada do Lago Norte', pts: [[-1020, 640], [-1100, 760], [-1040, 850], { on: 'R1', near: [-1000, 915] }] },
         { id: 'D12', cls: 'dirt', name: 'Estrada da Serra Norte', pts: [{ on: 'R1', near: [-560, 890] }, [-520, 1000], [-430, 1060], [-336, 1080], [-294, 1080]] },
         // ---- Vila da Roça (bairros/Bairros.js): a estrada da vila, ao norte do lago, da Rodovia do Oeste à Estrada do Engenho
@@ -59,11 +59,19 @@ const RuralRoads = {
         { id: 'T3', cls: 'trail', name: 'Trilha do Lago Norte', pts: [{ on: 'D11', near: [-1075, 800] }, [-930, 830], [-850, 780], [-860, 660], { on: 'R6', near: [-779, 620] }] },
         { id: 'T4', cls: 'trail', name: 'Caminho da Serra do Sul', pts: [{ on: 'R3', near: [-560, -895] }, [-650, -970], [-800, -990], { on: 'R3', near: [-880, -800] }] },
         { id: 'T5', cls: 'trail', name: 'Trilha dos Lagos', pts: [{ on: 'R5', near: [-1080, -250] }, [-1120, -150], [-1060, -60], { on: 'D2', near: [-893, -80] }] },
-        { id: 'T6', cls: 'trail', name: 'Caminho da Praia', pts: [{ on: 'R7', near: [-478, -790] }, [-420, -1010], { on: 'R3', near: [-390, -925] }] },
+        { id: 'T6', cls: 'trail', name: 'Caminho da Praia', pts: [{ on: 'R7', near: [-552, -820] }, [-470, -1010], { on: 'R3', near: [-420, -925] }] },
         { id: 'T7', cls: 'trail', name: 'Trilha do Morro Leste', pts: [{ on: 'R1', near: [-470, 880] }, [-400, 790], [-336, 760], [-294, 760]] },
         { id: 'T8', cls: 'trail', name: 'Trilha da Serra do Oeste', pts: [{ on: 'R2', near: [-1195, 700] }, [-1280, 620], [-1290, 480], { on: 'R2', near: [-1192, 430] }] },
         { id: 'T9', cls: 'trail', name: 'Trilha do Mirante', pts: [{ on: 'R1', near: [-720, 895] }, [-730, 1000], [-650, 1090], [-560, 1085], { on: 'D12', near: [-515, 1010] }] },
         { id: 'T10', cls: 'trail', name: 'Caminho da Margem', pts: [{ on: 'R5', near: [-700, -255] }, [-760, -300], [-880, -300], { on: 'R5', near: [-920, -252] }] },
+        // ---- o Corcovado (o Cristo no alto: Landmarks) e o estádio
+        { id: 'T11', cls: 'serra', name: 'Estrada do Corcovado', pts: [{ on: 'D5', near: [-1024, 600] }, [-992, 630], [-968, 655], [-925, 662], [-900, 700], [-898, 750], [-905, 790], { on: 'T3', near: [-893, 805] }] },      // (do pé do morro: o portão das escadarias, o elevador e a estação do trem)
+        // ---- a LAGOA (map/Lagoa.js): a Av. Epitácio Pessoa dá a volta nela (via 'LG', traçada antes de todas) e estas ruas a ligam
+        { id: 'LG1', cls: 'serra', name: 'Av. Borges de Medeiros', pts: [{ on: 'LG', near: [-505, -600] }, { on: 'R7', near: [-562, -600] }] },
+        { id: 'LG2', cls: 'serra', name: 'Rua Jardim Botânico', pts: [{ on: 'LG', near: [-405, -385] }, { on: 'R5', near: [-405, -250] }] },
+        { id: 'LG3', cls: 'serra', name: 'Rua Fonte da Saudade', pts: [{ on: 'LG', near: [-305, -520] }, [-294, -520]] },
+        { id: 'LG4', cls: 'serra', name: 'Rua Mário Ribeiro', pts: [{ on: 'LG', near: [-370, -738] }, [-294, -790]] },
+        { id: 'S4', cls: 'serra', name: 'Av. do Estádio', pts: [{ on: 'D3', near: [-456, -26] }, [-458, 18], [-358, 18], { on: 'D3', near: [-356, -28] }] },      // (passa ao sul do estacionamento do Maracanã e volta: sem ponta solta)
     ],
 
     routes: {},             // id → [[x, z], ...] (o traçado final)
@@ -84,6 +92,14 @@ const RuralRoads = {
             if (isCity(out[out.length - 1])) out.splice(out.length - 1, 1, ...CityGrid.cityLink(out[out.length - 1][1]).reverse());
             return out;
         };
+        if (typeof Lagoa !== 'undefined') {                                     // a avenida em volta da Lagoa: laço exato (não sai do A*)
+            const ring = Lagoa.ringPath();
+            this.routes.LG = ring;
+            const h = Math.floor(ring.length / 2);                               // (em duas metades: um laço sozinho começa e acaba no mesmo nó)
+            P.addPath(ring.slice(0, h + 1), 'ave', { name: 'Av. Epitácio Pessoa', lagoa: true });
+            P.addPath(ring.slice(h), 'ave', { name: 'Av. Epitácio Pessoa', lagoa: true });
+            this._stampProx(ring);
+        }
         for (const r of this.NET) {
             const S = this.STYLE[r.cls], W = [], fixed = [];
             link(r.pts).forEach((w, i, pts) => {
@@ -134,6 +150,7 @@ const RuralRoads = {
     _pass(x, z, S) {
         if (x < this.X0 || x >= this.X1 || z < this.Z0 || z >= this.Z1) return 0;
         if (!WorldMap.isLand(x, z) || WorldMap.waterDist(x, z) < S.water) return 0;
+        if (typeof Lagoa !== 'undefined' && Lagoa.zone(x, z, 10)) return 2;   // (a Lagoa: as estradas contornam o bairro; só as ruas dela entram)
         if (x > -306) return 2;
         const F = typeof FavelaPlan !== 'undefined' ? FavelaPlan.R : null;
         if (F && x > F.x0 - 8 && x < F.x1 + 8 && z > F.z0 - 8 && z < F.z1 + 8) return 2;

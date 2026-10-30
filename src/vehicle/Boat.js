@@ -211,7 +211,7 @@ class BoatManager {
         this.boats = vehicleManager.boats = [];
         this._nextId = 700;
         this._wakeT = 0;
-        this.stats = { marina: 0, anchored: 0, cruising: 0 };
+        this.stats = { marina: 0, pier: 0, lagoa: 0, anchored: 0, cruising: 0 };
     }
 
     _make(kind, x, z, heading, paint, mode) {
@@ -246,6 +246,7 @@ class BoatManager {
         if (typeof Marina !== 'undefined' && Marina.slips) {
             for (const s of Marina.slips) for (const b of s.boats) { this._make(b.kind, b.x, b.z, b.heading, b.paint, 'parked'); this.stats.marina++; }
         }
+        if (typeof Landmarks !== 'undefined') for (const b of Landmarks.boats) { this._make(b.kind, b.x, b.z, b.h, pick(b.kind), 'parked'); this.stats.pier++; }      // os píeres do canal
         const anchored = [['lancha', 235, 375, -900, 1000], ['barco', 235, 375, -900, 1000], ['lancha', 235, 375, -900, 1000], ['jetski', 235, 375, -900, 1000], ['barco', 235, 375, -900, 1000],
             ['lancha', 235, 375, -900, 1000], ['jetski', 235, 375, -900, 1000], ['lancha', 235, 375, -900, 1000], ['barco', 840, 960, -700, 700], ['lancha', 840, 960, -700, 700],
             ['barco', 840, 960, -700, 700], ['jetski', 840, 960, -700, 700], ['lancha', 235, 375, -900, 1000], ['barco', 235, 375, -900, 1000]];
@@ -256,6 +257,7 @@ class BoatManager {
             this._make(kind, s.x, s.z, Math.random() * Math.PI * 2, pick(kind), 'parked');
             this.stats.anchored++;
         }
+        if (typeof Lagoa !== 'undefined') for (const b of Lagoa.boatSpots()) { this._make(b.kind, b.x, b.z, b.h, pick(b.kind), 'parked'); this.stats.lagoa++; }      // a LAGOA: pedalinhos e caiaques nos deques (barco a motor não entra)
         for (const kind of ['jetski', 'jetski', 'lancha', 'lancha', 'barco', 'jetski']) {
             const s = this._waterSpot(240, 370, -900, 1000, 30, placed);
             if (!s) continue;
@@ -263,7 +265,7 @@ class BoatManager {
             this._make(kind, s.x, s.z, Math.random() * Math.PI * 2, pick(kind), 'drive');
             this.stats.cruising++;
         }
-        console.log(`[BARCOS] ${this.boats.length} barcos: ${this.stats.marina} na marina, ${this.stats.anchored} ancorados, ${this.stats.cruising} navegando`);
+        console.log(`[BARCOS] ${this.boats.length} barcos: ${this.stats.marina} na marina, ${this.stats.pier} nos píeres, ${this.stats.lagoa} na Lagoa, ${this.stats.anchored} ancorados, ${this.stats.cruising} navegando`);
     }
 
     // Carcaça explodida cumpriu o papel: some (o barco "afunda") e um novo ancora/navega em outro ponto, longe da câmera.

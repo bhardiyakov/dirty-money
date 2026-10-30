@@ -50,6 +50,7 @@ class WorldBuilder {
         this._buildings();
         this._shops();
         this._rural();
+        if (typeof Landmarks !== 'undefined') Landmarks.meshes(this);     // marcos: Maracanã, Cristo, Pão de Açúcar, calçadão, estais, píeres
         this._pieces();
         this._marina();
         this._signalPoles();
@@ -1611,6 +1612,7 @@ class WorldBuilder {
     // Anima a água (troca de frame + deriva lenta) e acende/apaga as janelas.
     update(dt, focus) {
         if (this.bridgeShadows) this.bridgeShadows.update();
+        if (typeof Landmarks !== 'undefined') Landmarks.update(dt);       // (o bondinho)
         this._windTime = (this._windTime || 0) + dt;
         this.props.setWind(this._windTime, this.windMode(), dt);
         this._favFlicker(dt);

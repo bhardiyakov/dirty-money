@@ -89,3 +89,31 @@ def worldmap():
 @icon('🌐')
 def globe():
     return [Part(circle(50, 50, 44), 'blue', sh=7, lines=[ellipse(50, 50, 20, 44), polyline((6, 50), (94, 50)), curve((12, 28), (50, 34), (88, 28)), curve((12, 72), (50, 66), (88, 72)), polyline((50, 6), (50, 94))], lw=2.4, lc='#bfe0ff')]
+@icon('🏟')
+def stadium():
+    # o Maracanã em 3/4: a parede do anel, a cobertura branca, a arquibancada azul e o gramado com a linha do meio
+    wall = U(rrect(4, 52, 92, 26, 4), ellipse(50, 78, 46, 17))
+    return [Part(wall, 'grey', sh=4, lines=[polyline((20, 60), (20, 88)), polyline((36, 62), (36, 93)), polyline((50, 62), (50, 95)), polyline((64, 62), (64, 93)), polyline((80, 60), (80, 88))], lw=2.2),
+            Part(ellipse(50, 52, 46, 30), 'white', sh=5), Part(ellipse(50, 51, 35, 20), 'blue', sh=3),
+            Part(ellipse(50, 51, 23, 12), 'leaf', sh=2, lines=[polyline((50, 40), (50, 62)), circle(50, 51, 4.5)], lw=1.8, lc='#eaffdf')]
+@icon('✝')
+def redeemer():
+    # o Cristo de braços abertos no alto do morro
+    hill = svg('M2 98 Q22 70 40 74 Q50 66 60 74 Q80 66 98 98 Z')
+    robe = poly((44.5, 28), (55.5, 28), (60, 66), (40, 66))
+    return [Part(hill, 'leaf', sh=4), Part(rrect(40, 64, 20, 12, 2), 'grey', sh=2), Part(U(robe, rrect(6, 25, 88, 9, 4.5)), 'white', sh=3),
+            Part(circle(50, 17, 7.5), 'white', sh=2)]
+@icon('🦢')
+def swan():
+    # o pedalinho de cisne da Lagoa: o cisne branco (corpo, asa, pescoço em S, bico laranja) na água verde-azulada
+    water = svg('M2 80 Q26 72 50 80 Q74 88 98 80 L98 98 L2 98 Z')
+    neck = stroke(svg('M30 70 Q20 56 28 44 Q36 32 30 22'), 9)
+    return [Part(water, 'teal', sh=3, hl=False), Part(U(ellipse(54, 70, 34, 14), neck, circle(31, 20, 8)), 'white', sh=4),
+            Part(ellipse(58, 63, 20, 8, -8), 'white', sh=2, lines=[polyline((44, 64), (72, 60)), polyline((48, 68), (74, 64))], lw=1.6),
+            Part(poly((37, 18), (48, 22), (37, 25)), 'orange', sh=1), Part(circle(29, 18, 1.8), 'black', shade=False, hl=False)]
+@icon('🚡')
+def tramway():
+    # o bondinho: o cabo, o carrinho e a cabine vermelha pendurada
+    return [Part(stroke(polyline((2, 14), (98, 42)), 3.4), 'iron', shade=False, hl=False), Part(rrect(47.5, 30, 5, 14, 1), 'iron', shade=False, hl=False),
+            Part(rrect(38, 22, 24, 9, 3), 'grey', sh=1.5), Part(rrect(24, 42, 52, 42, 8), 'red', sh=5),
+            Part(U(rrect(31, 50, 16, 15, 2.5), rrect(53, 50, 16, 15, 2.5)), 'glass', sh=2), Part(rrect(24, 76, 52, 8, 3), 'iron', sh=1.5)]

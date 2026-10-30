@@ -121,6 +121,13 @@ const News = {
         if (W && W.raining) a.push('Que chuva, hein? Molhei até a alma.', 'Com essa chuva a avenida alaga de novo.');
         if (h >= 18 || h < 4) a.push('Hoje é dia de cerveja gelada!', 'Mais uma rodada aí, chefe!', 'Amanhã eu acordo cedo… mais uma só.');
         if (h < 10) a.push('Um pingado e um pão na chapa, por favor.', 'Bom dia! Que preguiça…');
+        if (typeof Maracana !== 'undefined' && Maracana.built) {                                         // os marcos da cidade entram na conversa
+            const M = Maracana, sc = M.score || [0, 0];
+            a.push(h >= 14 && h < 23 ? `Hoje tem ${M.TEAMS[0]}-${M.TEAMS[1]} no Maracanã! O ingresso é ${brl(M.TICKET)}.` : 'Domingo eu vou no Maracanã, nem que seja de geral.');
+            if (sc[0] + sc[1] > 0) a.push(`Viu o jogo? ${M.TEAMS[0]} ${sc[0]} × ${sc[1]} ${M.TEAMS[1]}!`);
+        }
+        if (typeof Corcovado !== 'undefined' && Corcovado.built) a.push('Já subiu o Corcovado de trem? A vista lá de cima é outra coisa.', 'Meu primo vende água de coco no calçadão, passa lá.');
+        if (typeof Landmarks !== 'undefined' && Landmarks._cabins) a.push('Leva a namorada no bondinho do Pão de Açúcar, no fim da tarde. Imperdível.');
         return this._pick(a);
     },
 
