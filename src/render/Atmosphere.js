@@ -54,7 +54,7 @@ const Atmosphere = {
         p.samples = 1;                                           // (o MSAA da geometria é o 1º pós-processamento: Smooth.pp)
         p.fxaaEnabled = R.fxaa !== false;
         p.bloomEnabled = !!R.bloom;
-        if (p.bloomEnabled) { p.bloomThreshold = 0.8; p.bloomWeight = 0.22; p.bloomKernel = 48; p.bloomScale = 0.5; }
+        if (p.bloomEnabled) { p.bloomThreshold = 0.8; p.bloomWeight = 0.18; p.bloomKernel = 48; p.bloomScale = 0.5; }
         p.sharpenEnabled = true;
         p.sharpen.edgeAmount = 0.18; p.sharpen.colorAmount = 1;
         p.imageProcessingEnabled = true;
@@ -120,7 +120,7 @@ const Atmosphere = {
         S.night = n;
         if (this.glow) {
             const g = Math.max(0, Math.min(1, (n - 0.2) / 0.5));
-            this.glow.intensity = 0.85 * g;
+            this.glow.intensity = 0.6 * g;
             this.glow.isEnabled = g > 0.01;
         }
     },
