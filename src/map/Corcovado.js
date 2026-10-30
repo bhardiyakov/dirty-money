@@ -18,6 +18,7 @@
 const Corcovado = {
     C: { x: -978, z: 740 },
     H: 18,                       // o mirante
+    K: 1,                        // escala da estátua (a túnica e a cabeça somam ~19 u sobre o pedestal de 5 u; os braços, ±12 u)
     R: 56, RP: 16,               // raio do pé do morro e do platô
     STAIRS: [[-8, -64, 0], [-8, -52, 4.2], [-26, -52, 5.4], [-26, -41, 9.2], [-6, -41, 10.4], [-6, -31, 13.6], [-18, -31, 14.4], [-18, -21, 18], [-8, -12, 18]],
     TERRACE: { rect: [10, -40, 26, -30], h: 11 },
@@ -105,14 +106,19 @@ const Corcovado = {
         return (this._pil = out.filter((p) => p[2] > 2.6));
     },
 
+    // A área do complexo: o morro (até logo depois do pé), a praça do portão e, fora do morro, só o que é construído (passarela,
+    // elevador, trilhos e estações) — em volta, a mata do terreno chega até o pé do morro.
     covers(x, z, m = 0) {
         if (!this.built) return false;
         const p = this.local(x, z), r = Math.hypot(p.x, p.z);
-        if (r < this._rim(Math.atan2(p.z, p.x)) + 6 + m) return true;
-        const P = this.PLAZA;
-        if (p.x > P[0] - m - 2 && p.x < P[2] + m + 2 && p.z > P[1] - m - 2 && p.z < P[3] + m + 2) return true;
-        if (p.x > 26 - m && p.x < 70 + m && p.z > -72 - m && p.z < 8 + m) return true;              // passarela, elevador e a estação do trem
-        return false;
+        if (r < this._rim(Math.atan2(p.z, p.x)) + 1.5 + m) return true;
+        const inR = (R, e) => p.x > R[0] - e && p.x < R[2] + e && p.z > R[1] - e && p.z < R[3] + e;
+        if (inR(this.PLAZA, 2 + m) || inR(this.STATION_LO, 3 + m) || inR(this.STATION_HI, 3 + m)) return true;
+        if (Math.abs(p.x - this.LIFT.x) < this.LIFT.s + 3 + m && Math.abs(p.z - this.LIFT.z) < this.LIFT.s + 3 + m) return true;
+        const near = (a, b, e) => { const dx = b[0] - a[0], dz = b[1] - a[1], t = Math.max(0, Math.min(1, ((p.x - a[0]) * dx + (p.z - a[1]) * dz) / (dx * dx + dz * dz))); return Math.hypot(a[0] + dx * t - p.x, a[1] + dz * t - p.z) < e; };
+        for (let i = 0; i + 1 < this.WOOD.length; i++) if (near(this.WOOD[i], this.WOOD[i + 1], 3 + m)) return true;
+        if (near(this.LIFT.bridge[0], this.LIFT.bridge[1], 3 + m)) return true;
+        return near([this.RAIL.x0, this.RAIL.z], [this.RAIL.x1, this.RAIL.z], 3.5 + m);
     },
 
     // ---------------------------------------------------------------- elevador e trem
@@ -298,7 +304,7 @@ const Corcovado = {
     // O CRISTO: pedestal escuro (com a porta da capela) e a estátua em pedra-sabão, de braços abertos para o leste e o oeste.
     _meshStatue(wb) {
         const C = this.C, H = this.H, c = this._c.bind(this), bt = this._bt(0, 0);
-        const y0 = H + 0.5, yP = y0 + 5, K = 0.85;                                       // (K: escala da estátua sobre o pedestal)
+        const y0 = H + 0.5, yP = y0 + 5, K = this.K;                                     // (K: escala da estátua sobre o pedestal)
         this._box(bt, -2.8, -2.8, 2.8, 2.8, y0, yP - 0.5, c('#4a4a4e'));
         this._box(bt, -3.15, -3.15, 3.15, 3.15, yP - 0.5, yP, c('#5c5c61'));
         this._box(bt, -3.1, -3.1, 3.1, 3.1, y0, y0 + 0.45, c('#5c5c61'));
@@ -360,7 +366,7 @@ const Corcovado = {
         mesh.material = m; mesh.useVertexColors = true; mesh.isPickable = false; mesh.receiveShadows = true; mesh.freezeWorldMatrix();
         if (wb.shadow) wb.shadow.addShadowCaster(mesh);
         wb.meshes.push(mesh); wb.mats.cristoRedentor = m;
-        wb._collider('cristo', C.x - 3.2, C.z - 3.2, C.x + 3.2, C.z + 3.2, yP + 17);
+        wb._collider('cristo', C.x - 3.2, C.z - 3.2, C.x + 3.2, C.z + 3.2, yP + 19 * K);
     },
 
     // As ESCADARIAS de concreto (base, degraus, muretas, guarda-corpo, postes) e a PASSARELA DE MADEIRA (tábuas, pilares, corrimão).
@@ -591,8 +597,9 @@ const Corcovado = {
         const c0 = P(0, 0);
         ctx.fillStyle = '#7d786f'; ctx.beginPath(); ctx.arc(c0[0], c0[1], 15.6 * k, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#e4ddcf'; ctx.beginPath(); ctx.arc(c0[0], c0[1], 15 * k, 0, Math.PI * 2); ctx.fill();
-        ctx.save(); ctx.globalAlpha = 0.3; ctx.translate(2.2 * k, 2.2 * k); rect(-10.3, -0.7, 10.3, 0.7, '#000'); rect(-1.8, -1.25, 1.8, 1.25, '#000'); ctx.restore();
-        rect(-3.15, -3.15, 3.15, 3.15, '#55555a'); rect(-10.3, -0.65, 10.3, 0.65, '#f3efe6'); rect(-1.8, -1.25, 1.8, 1.25, '#f3efe6');
+        const A = 12.1 * this.K, T2 = 2 * this.K, T1 = 1.45 * this.K;
+        ctx.save(); ctx.globalAlpha = 0.3; ctx.translate(2.2 * k, 2.2 * k); rect(-A, -0.75, A, 0.75, '#000'); rect(-T2, -T1, T2, T1, '#000'); ctx.restore();
+        rect(-3.15, -3.15, 3.15, 3.15, '#55555a'); rect(-A, -0.7, A, 0.7, '#f3efe6'); rect(-T2, -T1, T2, T1, '#f3efe6');
         ctx.fillStyle = '#f3efe6'; ctx.beginPath(); ctx.arc(c0[0], c0[1], Math.max(1, 0.9 * k), 0, Math.PI * 2); ctx.fill();
         // o portão
         rect(-12.6, -65, -3.4, -63, '#77726b'); rect(-17.3, -67.9, -12.7, -64.1, '#77726b');
