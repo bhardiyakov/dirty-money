@@ -4,8 +4,8 @@
 // Cada espécie é uma malha low-poly feita aqui (tronco cônico + copa de "bolhas" de icosfera entortadas por ruído, cones empilhados nos
 // pinheiros, a umbela da araucária, palmas caídas nas palmeiras e folhas largas na bananeira), com cor por vértice (a copa mais clara
 // em cima e escura embaixo: oclusão falsa) e normais "de folhagem" (saindo do centro da copa: luz macia, sem facetas).
-// Todas as plantas de uma espécie num pedaço do mapa viram UMA malha com THIN INSTANCES (1 draw por espécie e pedaço, também no mapa de
-// sombras e na profundidade do SSAO): cada uma com escala, giro e TOM próprios (matriz e cor por instância) — nenhuma é igual à vizinha.
+// As plantas de uma espécie numa célula de 64 u viram UMA malha com THIN INSTANCES (1 draw por espécie e célula, também no mapa de
+// sombras e na profundidade do SSAO): cada uma com escala, giro e TOM próprios (a matriz da instância; o tom sai do lugar dela, no shader).
 // O material é PBR fosco (PBRWorld: a mesma luz ambiente, a variação e a cor por vértice em gama) com o BALANÇO DO VENTO no vertex
 // shader (mais no alto da copa). As árvores projetam e recebem a sombra do sol (macia, ESM) e escrevem profundidade: a silhueta do
 // jogador atrás delas é a mesma dos prédios (XRaySilhouette).
@@ -21,6 +21,10 @@ const Trees3D = {
     KIND: { oak: 'oak', jungle: 'jungle', juca: 'juca', ipe: 'ipe', orchard: 'orchard', pine: 'pine', cypress: 'cypress', araucaria: 'araucaria',
         palm: 'palm', banana: 'banana', bush: 'bush' },
     wants(kind) { return this.on && !!this.KIND[kind]; },
+    // As instâncias são agrupadas em células de CELL u (uma malha por modelo e célula): o descarte por frustum e a janela da sombra
+    // deixam de fora o que está longe da tela (num pedaço de 128 u de mata são ~1.500 plantas; na tela cabem algumas centenas).
+    CELL: 64,
+    castShadows: true,
 
     // Uma planta: (x, z) no chão a y0, escala s (a do sprite).
     add(batch, kind, x, y0, z, s) {
@@ -37,18 +41,23 @@ const Trees3D = {
                 const kind = T[i], x = T[i + 1], y0 = T[i + 2], z = T[i + 3], s = T[i + 4];
                 const h = this._hash(x * 13.1, z * 7.7);
                 const model = kind === 'ipe' ? (h < 0.5 ? 'ipe' : 'ipeY') : this.KIND[kind];
-                let g = groups.get(model);
-                if (!g) groups.set(model, g = []);
+                const key = model + '@' + Math.floor(x / this.CELL) + ',' + Math.floor(z / this.CELL);
+                let g = groups.get(key);
+                if (!g) groups.set(key, g = []);
                 g.push(x, y0, z, s, h);
             }
             b.trees = null;
         }
         const M = BABYLON.Matrix, Q = BABYLON.Quaternion, V = BABYLON.Vector3;
         const sc = new V(), tr = new V(), q = new Q(), mtx = new M();
-        for (const [model, g] of groups) {
-            const src = this._model(scene, model), n = g.length / 5;
-            const mesh = src.clone(`${name}_${model}`, null, true);
-            mesh.setEnabled(true);
+        for (const [key, g] of groups) {
+            // Geometria PRÓPRIA por malha (não clones dividindo uma): o Babylon guarda o VAO na geometria por shader, gravado com o buffer de
+            // instâncias de quem desenhou primeiro — clones que dividem a geometria desenhavam todos as árvores do primeiro (longe da tela).
+            const model = key.slice(0, key.indexOf('@')), n = g.length / 5;
+            const mesh = new BABYLON.Mesh(`${name}_${model}${key.slice(key.indexOf('@'))}`, scene);
+            this._model(scene, model).applyToMesh(mesh);
+            mesh.material = this.material(scene);
+            mesh.useVertexColors = true;
             const mats = new Float32Array(n * 16);
             for (let k = 0; k < n; k++) {
                 const x = g[k * 5], y0 = g[k * 5 + 1], z = g[k * 5 + 2], s = g[k * 5 + 3], h = g[k * 5 + 4];
@@ -60,13 +69,13 @@ const Trees3D = {
                 M.ComposeToRef(sc, q, tr, mtx);
                 mtx.copyToArray(mats, k * 16);
             }
-            mesh.thinInstanceSetBuffer('matrix', mats, 16, true);
+            mesh.thinInstanceSetBuffer('matrix', mats, 16, false);          // (staticBuffer = false, como no resto do jogo: com true as instâncias não eram desenhadas)
             mesh.thinInstanceRefreshBoundingInfo(false);
             mesh.alwaysSelectAsActiveMesh = false;
             mesh.receiveShadows = true;
             mesh.isPickable = false;
             mesh.freezeWorldMatrix();
-            if (shadow) shadow.addShadowCaster(mesh);
+            if (shadow && this.castShadows) shadow.addShadowCaster(mesh);
             out.push(mesh);
         }
         return out;
@@ -88,7 +97,7 @@ const Trees3D = {
             constructor(m) { super(m, 'TreeWind', 120, { TREEWIND: false }); this._enable(true); }
             getClassName() { return 'TreeWindPlugin'; }
             prepareDefines(d) { d.TREEWIND = true; }
-            getUniforms() { return { ubo: [{ name: 'trW', size: 4, type: 'vec4' }], vertex: 'uniform vec4 trW;\nvarying vec2 trTone;', fragment: 'uniform vec4 trW;\nvarying vec2 trTone;' }; }
+            getUniforms() { return { ubo: [{ name: 'trW', size: 4, type: 'vec4' }], vertex: 'uniform vec4 trW;', fragment: 'uniform vec4 trW;' }; }
             bindForSubMesh(ub) {
                 const t = (performance.now() / 1000) % 1000, w = typeof Weather !== 'undefined' && Weather.cur ? Weather.cur.k : 0;
                 ub.updateFloat4('trW', t, 0.05 + 0.13 * w, 0.8, 0.6);
@@ -98,12 +107,20 @@ const Trees3D = {
                 // O TOM de cada planta (mais clara/escura, mais amarela/azulada) sai do lugar dela (a translação da instância): sem buffer de
                 // cor por instância
                 if (shaderType === 'fragment') return {
+                    CUSTOM_FRAGMENT_DEFINITIONS: `
+                        #ifdef TREEWIND
+                        varying vec2 trTone;
+                        #endif`,
                     CUSTOM_FRAGMENT_BEFORE_LIGHTS: `
                         #ifdef TREEWIND
                         surfaceAlbedo *= mix(0.8, 1.14, trTone.x) * vec3(1.0 + (trTone.y - 0.5) * 0.24, 1.0, 1.0 - (trTone.y - 0.5) * 0.34);
                         #endif`,
                 };
                 return {
+                    CUSTOM_VERTEX_DEFINITIONS: `
+                        #ifdef TREEWIND
+                        varying vec2 trTone;
+                        #endif`,
                     CUSTOM_VERTEX_UPDATE_WORLDPOS: `
                         #ifdef TREEWIND
                         {
@@ -120,18 +137,18 @@ const Trees3D = {
         };
     },
 
-    // ------------------------------------------------------------------ os modelos (uma malha-fonte por modelo, escondida)
+    // ------------------------------------------------------------------ os modelos (os vértices de cada um, prontos para cada malha)
     _model(scene, model) {
         const C = this._models || (this._models = {});
-        if (C[model] && !C[model].isDisposed()) return C[model];
+        if (C[model]) return C[model];
         const g = { p: [], n: [], c: [], i: [] }, R = this._rng(model.length * 977 + model.charCodeAt(0) * 31);
         const B = this.PARTS, trunk = [0.36, 0.27, 0.19], dark = [0.27, 0.21, 0.15];
         switch (model) {
             case 'oak': case 'juca': case 'orchard': case 'jungle': case 'ipe': case 'ipeY': {
                 const P = {
-                    oak: { h: 5.4, r: 2.2, c: [0.27, 0.45, 0.17], n: 4 }, juca: { h: 6.2, r: 2.0, c: [0.3, 0.5, 0.22], n: 4 },
-                    orchard: { h: 3.6, r: 1.6, c: [0.32, 0.5, 0.2], n: 3 }, jungle: { h: 7.4, r: 2.6, c: [0.18, 0.4, 0.16], n: 5 },
-                    ipe: { h: 5.8, r: 2.1, c: [0.86, 0.42, 0.66], n: 4 }, ipeY: { h: 5.8, r: 2.1, c: [0.96, 0.78, 0.22], n: 4 },
+                    oak: { h: 4.8, r: 1.9, c: [0.33, 0.53, 0.2], n: 4 }, juca: { h: 5.4, r: 1.75, c: [0.36, 0.58, 0.26], n: 4 },
+                    orchard: { h: 3.2, r: 1.4, c: [0.38, 0.58, 0.23], n: 3 }, jungle: { h: 6.2, r: 2.2, c: [0.24, 0.48, 0.2], n: 5 },
+                    ipe: { h: 5.0, r: 1.8, c: [0.9, 0.46, 0.7], n: 4 }, ipeY: { h: 5.0, r: 1.8, c: [0.98, 0.8, 0.26], n: 4 },
                 }[model];
                 const crownY = P.h - P.r * 0.85;
                 B.cyl(g, [0, 0, 0], [0.15, crownY, -0.1], 0.24 * P.r / 2, 0.12 * P.r / 2, 6, trunk, dark);
@@ -177,15 +194,10 @@ const Trees3D = {
                 break;
             }
         }
-        const mesh = new BABYLON.Mesh('tree3d_' + model, scene), vd = new BABYLON.VertexData();
+        const vd = new BABYLON.VertexData();
         vd.positions = new Float32Array(g.p); vd.normals = new Float32Array(g.n); vd.colors = new Float32Array(g.c);
         vd.indices = g.p.length / 3 > 65535 ? new Uint32Array(g.i) : new Uint16Array(g.i);
-        vd.applyToMesh(mesh);
-        mesh.material = this.material(scene);
-        mesh.useVertexColors = true;
-        mesh.isPickable = false;
-        mesh.setEnabled(false);
-        return (C[model] = mesh);
+        return (C[model] = vd);
     },
     _rng(seed) { let s = seed >>> 0 || 1; return () => { s = Math.imul(s ^ (s >>> 15), 2246822519) ^ Math.imul(s ^ (s >>> 13), 3266489917); s >>>= 0; return (s & 0xffffff) / 0x1000000; }; },
 };

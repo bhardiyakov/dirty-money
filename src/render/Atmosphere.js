@@ -153,7 +153,10 @@ class OrthoSSAO {
         this.fxBlur = new BABYLON.EffectWrapper(Object.assign({}, common, { name: 'dmSSAOBlur', fragmentShader: OrthoSSAO.BLUR, uniformNames: ['dir', 'zTol'], samplerNames: ['depthSampler', 'aoSampler'] }));
         this.rtA = this.rtB = null;
         this._size(true);
-        dm.onAfterUnbindObservable.add(() => this._compute());
+        // Só recalcula quando a profundidade foi desenhada de fato neste quadro (uma malha nova ainda compilando o shader faz o Babylon
+        // pular a passada): senão fica o AO do quadro anterior.
+        dm.onAfterRenderObservable.add(() => { this._fresh = true; });
+        dm.onAfterUnbindObservable.add(() => { if (this._fresh) this._compute(); this._fresh = false; });
         eng.onResizeObservable.add(() => this._size());
     }
 
@@ -222,7 +225,9 @@ void main(void) {
     vec3 pr = vpos(vUV + vec2(t.x, 0.0)), pl = vpos(vUV - vec2(t.x, 0.0)), pu = vpos(vUV + vec2(0.0, t.y)), pd = vpos(vUV - vec2(0.0, t.y));
     vec3 dx = abs(pr.z - P.z) < abs(P.z - pl.z) ? pr - P : P - pl;
     vec3 dy = abs(pu.z - P.z) < abs(P.z - pd.z) ? pu - P : P - pd;
-    vec3 N = normalize(cross(dx, dy));
+    vec3 cr = cross(dx, dy);
+    if (dot(cr, cr) < 1e-14) { gl_FragColor = vec4(1.0); return; }
+    vec3 N = normalize(cr);
     if (N.z > 0.0) N = -N;
     float R = proj.w, R2 = R * R;
     vec2 ruv = proj.z > 0.5 ? R / proj.xy * 0.5 : R / (proj.xy * P.z) * 0.5;
@@ -236,7 +241,8 @@ void main(void) {
         float vv = dot(v, v), vn = dot(v, N), f = max(R2 - vv, 0.0);
         occ += f * f * f * max((vn - prm.y) / (0.01 + vv), 0.0);
     }
-    float ao = max(0.0, 1.0 - occ * prm.x / (R2 * R2 * R2) * (5.0 / 12.0));
+    float ao = clamp(1.0 - occ * prm.x / (R2 * R2 * R2) * (5.0 / 12.0), 0.0, 1.0);
+    if (!(ao >= 0.0)) ao = 1.0;
     gl_FragColor = vec4(vec3(ao), 1.0);
 }`;
 OrthoSSAO.BLUR = `
@@ -265,6 +271,7 @@ uniform float strength;
 void main(void) {
     vec4 c = texture2D(textureSampler, vUV);
     float ao = texture2D(aoSampler, vUV).r;
+    if (!(ao >= 0.0 && ao <= 1.0)) ao = 1.0;
     c.rgb *= mix(1.0, ao, strength);
     gl_FragColor = c;
 }`;
