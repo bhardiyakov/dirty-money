@@ -22,6 +22,7 @@ const Corcovado = {
     R: 56, RP: 16,               // raio do pé do morro e do platô
     STAIRS: [[-8, -64, 0], [-8, -52, 4.2], [-26, -52, 5.4], [-26, -41, 9.2], [-6, -41, 10.4], [-6, -31, 13.6], [-18, -31, 14.4], [-18, -21, 18], [-8, -12, 18]],
     TERRACE: { rect: [10, -40, 26, -30], h: 11 },
+    FARE: 20,                                                                       // a passagem do trem (subida)
     UPPER: [[14, -30, 11], [14, -22, 14.4], [7, -12, 18]],                     // do terraço ao mirante
     WOOD: [[48, -68, 0], [36, -55, 5], [32, -50, 5.6], [24, -39.5, 11]],       // a passarela de madeira
     LIFT: { x: 41, z: -42, s: 2.2, h: 11, door: [41, -45.8], stop: [37.6, -41.1], bridge: [[38.4, -40.95], [25.2, -37.2]] },
@@ -67,6 +68,10 @@ const Corcovado = {
         parts.push({ rect: [s0[0], s0[1], s1[0], s1[1]], h: this.RAIL.h });
         this.net = Walkways.add({ name: 'Corcovado', parts });
         this._solids();
+        const cafe = this.W(21.3, -36.6);                                           // o café do terraço vende de verdade (Stands)
+        const atd = this.W(17.2, -36.6);
+        if (typeof Stands !== 'undefined') Stands.add({ id: 'cafe_corcovado', name: 'Café do Corcovado', emo: '☕', x: cafe[0], z: cafe[1], r: 4.8, h: this.TERRACE.h, hours: [8, 19], items: Stands.MENUS.cafe, sub: 'Cafezinho com a melhor vista do Rio',
+            vendor: { x: atd[0], z: atd[1], h: -Math.PI / 2, type: 'civil_trabalhador' } });
         const g = this.W(-8, -71);
         CityGrid.addPoi({ type: 'cristo', name: 'Cristo Redentor — portão do Corcovado (escadarias, elevador e trem)', x: g[0], z: g[1] });
         this.train = { u: 0, dir: 1, wait: 6, max: this.RAIL.x0 - this.RAIL.x1 - 11.5 };          // (u: a frente do carro de baixo; no alto, os dois carros na estação)
@@ -123,7 +128,7 @@ const Corcovado = {
 
     // ---------------------------------------------------------------- elevador e trem
     _spot(g) {
-        if (!this.built || g.mode !== 'player' || this.ride) return null;
+        if (!this.built || g.mode !== 'player' || this.ride || g.player.frozen) return null;
         const pl = g.player, p = this.local(pl.position.x, pl.position.z), onNet = pl.walk === this.net, ground = !pl.onDeck && !pl.underBridge;
         const L = this.LIFT, S0 = this.STATION_LO, S1 = this.STATION_HI;
         if (ground && Math.hypot(p.x - L.door[0], p.z - L.door[1]) < 2.4)
@@ -131,7 +136,7 @@ const Corcovado = {
         if (onNet && Math.abs(pl.deckH - L.h) < 0.6 && Math.hypot(p.x - L.stop[0], p.z - L.stop[1]) < 2.6)
             return { kind: 'lift', dir: -1, html: '<b>E</b> descer de elevador' };
         if (ground && p.x > S0[0] - 1 && p.x < S0[2] + 1 && p.z > S0[1] - 1.5 && p.z < S0[3] + 1)
-            return { kind: 'train', dir: 1, html: '<b>E</b> Trem do Corcovado<small>sobe a encosta até o mirante do Cristo</small>' };
+            return { kind: 'train', dir: 1, html: `<b>E</b> Trem do Corcovado — ${brl(this.FARE)}<small>sobe a encosta até o mirante do Cristo (a descida é por conta da casa)</small>` };
         if (onNet && Math.abs(pl.deckH - this.RAIL.h) < 0.6 && p.x > S1[0] && p.x < S1[2] && p.z > S1[1] && p.z < S1[3])
             return { kind: 'train', dir: -1, html: '<b>E</b> descer de trem<small>até a estação do pé do morro</small>' };
         return null;
@@ -143,6 +148,10 @@ const Corcovado = {
         const s = this._spot(g);
         if (!s) return false;
         const pl = g.player;
+        if (s.kind === 'train' && s.dir > 0) {                                     // a passagem do trem (na subida)
+            if (g.inventory.cash < this.FARE) { if (g._flash) g._flash(`Trem do Corcovado: ${brl(this.FARE)} — dinheiro insuficiente`); return true; }
+            g.inventory.cash -= this.FARE;
+        }
         pl.cancelSequence(); pl.action = null; pl.velocity.setAll(0);
         pl.setVisible(false); pl.frozen = true; pl.invulnerable = true;
         pl.walk = this.net; pl.onDeck = true; pl.roof = null; pl._walkSt = { x: pl.position.x, z: pl.position.z, h: pl.deckH || 0 };
@@ -152,11 +161,42 @@ const Corcovado = {
         if (g._flash) g._flash(s.kind === 'lift' ? (s.dir > 0 ? 'Subindo de elevador…' : 'Descendo de elevador…') : (s.dir > 0 ? 'Trem do Corcovado: subindo a encosta…' : 'Trem do Corcovado: descendo…'));
         return true;
     },
+    // TURISTAS no mirante (de dia, com a câmera por perto): olhando o Cristo ou a vista; quem passa perto ouve (Bubbles).
+    _tourists(dt, g) {
+        const f = g.camera.target, h = g.dayNight.hour, want = hypot(f.x - this.C.x, f.z - this.C.z) < 140 && h >= 8 && h < 19 && !Interiors.active;
+        if (want && !this._tour) {
+            const [va, vb] = CharacterRig.VARIANT_GROUPS.casual, S = g.sprites.sheets;
+            this._tour = [];
+            for (let i = 0; i < 8; i++) {
+                const a = 0.5 + i * 0.75 + Math.random() * 0.3, r = 7.5 + Math.random() * 5, x = this.C.x + Math.cos(a) * r, z = this.C.z + Math.sin(a) * r;
+                const act = new SpriteActor(g.scene, Math.random() < 0.5 ? S.civA : S.civB, va + Math.floor(Math.random() * (vb - va + 1)), 'cristoTourist');
+                act.play('idle', 'none'); act.setPosition(x, z); act.mesh.position.y = this.H + 0.5;
+                act.setHeading(i % 3 ? Math.atan2(x - this.C.x, z - this.C.z) : Math.atan2(this.C.x - x, this.C.z - z));      // (a vista, ou o Cristo)
+                this._tour.push(act);
+            }
+            this._chatT = 3;
+        } else if (!want && this._tour) { for (const a of this._tour) a.dispose(); this._tour = null; }
+        if (!this._tour) return;
+        for (const a of this._tour) { a.update(dt, 1); a.mesh.position.y = this.H + 0.5; }
+        const pl = g.player;
+        if ((this._chatT -= dt) <= 0 && pl.walk === this.net && (pl.deckH || 0) > this.H - 1 && typeof Bubbles !== 'undefined') {
+            this._chatT = 6 + Math.random() * 5;
+            const a = this._tour.find((q) => hypot(q.mesh.position.x - pl.position.x, q.mesh.position.z - pl.position.z) < 9);
+            if (a) Bubbles.say(a, ['Que vista!', 'Tira uma foto minha com o Cristo?', 'Olha o Pão de Açúcar lá embaixo!', 'Dá pra ver o Maracanã daqui!', 'Wow… amazing!', 'Valeu a subida!'][Math.floor(Math.random() * 6)], { ms: 2600 });
+        }
+    },
     // Posição (mundo) e altura do assoalho do trem com a frente em u (distância do pé, ao longo dos trilhos).
     _trainAt(u) { const R = this.RAIL, x = R.x0 - u; return { x: this.C.x + x, z: this.C.z + R.z, y: R.h * u / (R.x0 - R.x1) }; },
 
     update(dt) {
         if (!this.built) return;
+        this._nightT = (this._nightT || 0) - dt;
+        if (this._nightT <= 0 && this._wb && this._wb.mats.cristoRedentor && typeof game !== 'undefined' && game && game.dayNight) {      // à noite o Cristo é iluminado (branco-azulado)
+            this._nightT = 0.5;
+            const n = game.dayNight.night;
+            this._wb.mats.cristoRedentor.emissiveColor.set(0.22 + 0.5 * n, 0.22 + 0.52 * n, 0.21 + 0.6 * n);
+        }
+        if (typeof game !== 'undefined' && game && game.sprites && game.camera) this._tourists(dt, game);
         const T = this.train, R = this.ride;
         if (R) {
             const g = R.g, pl = g.player;

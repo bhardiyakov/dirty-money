@@ -4,6 +4,7 @@
 //   • o elevador (do chão ao terraço) e o trem (da estação do pé à do alto), com o E, nos dois sentidos;
 //   • a câmera abre lá em cima; o morro é sólido para quem está no chão; o autódromo ainda acha lugar; no mapa, o complexo.
 const { boot } = require('./lib.cjs');
+const C_FARE = 20;
 
 module.exports = {
     name: 'corcovado',
@@ -97,7 +98,9 @@ module.exports = {
             out.liftDownPrompt = /descer/.test(C.prompt(g)); C.interact(g); go(); out.liftBottom = at();
             w = C.W(62, 2.4); pl.teleport(new BABYLON.Vector3(w[0], 0, w[1]));
             out.trainPrompt = /Trem/.test(C.prompt(g));
-            C.interact(g); for (let i = 0; i < 30; i++) C.update(0.25); out.trainMid = at(); go(); out.trainTop = at();
+            g.inventory.cash = 5; C.interact(g); out.trainBroke = !C.ride;              // (sem a passagem, não sobe)
+            g.inventory.cash = 100;
+            C.interact(g); out.fare = 100 - g.inventory.cash; for (let i = 0; i < 30; i++) C.update(0.25); out.trainMid = at(); go(); out.trainTop = at();
             C.interact(g); go(); out.trainBottom = at();
             // sem passageiro, o trem vai e volta sozinho
             const u0 = C.train.u; for (let i = 0; i < 80; i++) C.update(0.25); out.shuttle = Math.abs(C.train.u - u0);
@@ -106,6 +109,7 @@ module.exports = {
         c.ok(ride.liftPrompt && ride.liftRiding, 'E no elevador: começa a subir (o jogador fica na cabine)');
         c.ok(ride.liftTop.walk && ride.liftTop.h === 11 && !ride.liftTop.frozen && ride.cab > 11, `elevador chega ao terraço (${JSON.stringify(ride.liftTop)})`);
         c.ok(ride.liftDownPrompt && !ride.liftBottom.walk && ride.liftBottom.h === 0, `e desce até o chão (${JSON.stringify(ride.liftBottom)})`);
+        c.ok(ride.trainBroke && ride.fare === C_FARE, `o trem cobra a passagem na subida (R$ ${ride.fare})`);
         c.ok(ride.trainPrompt && ride.trainMid.h > 2 && ride.trainMid.h < 14, `trem subindo a encosta (${JSON.stringify(ride.trainMid)})`);
         c.ok(ride.trainTop.walk && ride.trainTop.h === 16, `trem chega à estação do alto (${JSON.stringify(ride.trainTop)})`);
         c.ok(!ride.trainBottom.walk && ride.trainBottom.h === 0, `e desce de volta ao pé (${JSON.stringify(ride.trainBottom)})`);
@@ -127,6 +131,31 @@ module.exports = {
         });
         c.ok(px.active, 'o Cristo está no quadro de quem está no mirante');
         c.ok(px.map[0] > 180 && px.map[1] > 170, `no mapa, o piso claro do mirante (${px.map})`);
+        // ligado ao jogo: o café do terraço vende (só lá em cima), turistas no mirante de dia, o Cristo iluminado à noite, turistas no portão
+        const life = await page.evaluate(() => {
+            const g = game, pl = g.player, C = Corcovado, out = {}, cafe = Stands.list.find((s) => s.id === 'cafe_corcovado');
+            g.dayNight.hour = 12; g.dayNight.apply();
+            pl.walk = null; pl.onDeck = false; pl.deckH = 0; pl.teleport(new BABYLON.Vector3(cafe.x - 3, 0, cafe.z - 2));
+            out.ground = Stands.prompt(g);
+            pl.enterWalk(C.net, cafe.x - 3, cafe.z - 2, 11); pl.position.x = cafe.x - 3; pl.position.z = cafe.z - 2;
+            out.terrace = /Café do Corcovado/.test(Stands.prompt(g));
+            g.inventory.cash = 50; Stands.interact(g); out.bought = Stands.buy(g, 'cafe') && g.inventory.cash === 45;
+            if (Stands._p && Stands._p.open && Stands._p.close) Stands._p.close();
+            const top = C.W(4, -12); pl.teleport(new BABYLON.Vector3(top[0], 0, top[1])); pl.enterWalk(C.net, top[0], top[1], 18); g.camera.snapTo(pl.position);
+            for (let i = 0; i < 3; i++) C.update(0.5);
+            out.tourists = C._tour ? C._tour.filter((a) => a.mesh.isEnabled() && Math.abs(a.mesh.position.y - C.H - 0.5) < 0.01).length : 0;
+            const em = () => C._wb.mats.cristoRedentor.emissiveColor.r;
+            const day = em(); g.dayNight.hour = 22; g.dayNight.apply(); for (let i = 0; i < 3; i++) C.update(0.5);
+            out.lit = [day, em()]; out.touristsNight = C._tour ? C._tour.length : 0;
+            g.dayNight.hour = 12; g.dayNight.apply();
+            const gate = C.W(-8, -71); out.crowd = g.npcManager._density(gate[0], gate[1]); out.style = g.npcManager._style({ x: gate[0], z: gate[1] }, null);
+            pl.walk = null; pl.onDeck = false; pl.deckH = 0;
+            return out;
+        });
+        c.ok(!life.ground && life.terrace && life.bought, 'o café do terraço vende (só para quem está no terraço)');
+        c.eq(life.tourists, 8, 'turistas no mirante do Cristo, de dia');
+        c.ok(life.lit[1] > life.lit[0] + 0.3 && life.touristsNight === 0, `à noite o Cristo é iluminado (${life.lit.map((v) => v.toFixed(2))}) e os turistas vão embora`);
+        c.ok(life.crowd > 0.5 && /tourist|casual/.test(life.style), `movimento de turistas no portão (${life.crowd}, ${life.style})`);
         c.noErrors(errors, 'Corcovado');
         await close();
     },

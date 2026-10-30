@@ -90,7 +90,7 @@ const Ambience = {
         if (W.inside) {
             const st = W.shop.style, n = typeof ShopLife !== 'undefined' && ShopLife.active ? ShopLife.agents.length : 3;
             traffic = 0.012;
-            crowd = ['bar', 'burger', 'pizza', 'italian', 'japanese', 'bakery', 'fit'].includes(st) ? 0.012 + Math.min(0.05, n * 0.0045) : 0.006 + n * 0.0015;
+            crowd = st === 'stadium' ? 0.11 : ['bar', 'burger', 'pizza', 'italian', 'japanese', 'bakery', 'fit'].includes(st) ? 0.012 + Math.min(0.05, n * 0.0045) : 0.006 + n * 0.0015;      // (o Maracanã: a torcida)
             hum = ['mart', 'pharmacy', 'bank_branch', 'bank_hq', 'guns', 'clothes', 'jewelry'].includes(st) ? 0.006 : 0;
             radio = st === 'bar' ? 0.09 : ['burger', 'bakery', 'pizza'].includes(st) ? 0.045 : 0;
             music = st === 'gym' ? 0.08 : 0;
@@ -100,6 +100,7 @@ const Ambience = {
             const city = W.biome && ['downtown', 'commercial', 'port', 'plaza', 'residential', 'industrial'].includes(W.biome);
             traffic = (city ? 0.07 : W.district === 'favela' ? 0.03 : 0.035) * Math.min(1.4, dens) * (night ? 0.6 : 1);
             crowd = (W.biome === 'commercial' || W.biome === 'downtown' || W.biome === 'plaza') && !night ? 0.025 * dens : W.district === 'favela' && !night ? 0.018 : 0;
+            if (typeof Landmarks !== 'undefined') crowd = Math.max(crowd, Landmarks.crowdSound(g.player.position.x, g.player.position.z, h));      // a torcida em volta do Maracanã aberto
             waves = 0.11 * W.beach * (0.75 + 0.25 * Math.sin(this.t * 0.9));
             funk = W.district === 'favela' && (h >= 21 || h < 4) && !(typeof Baile !== 'undefined' && Baile.on) ? 0.12 : 0;
             if (night && !mini) this._crickets(W);

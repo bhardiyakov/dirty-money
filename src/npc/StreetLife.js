@@ -50,7 +50,8 @@ const StreetLife = {
         this._exT = (this._exT || 0) - dt; if (this._exT > 0) return; this._exT = 1.2;
         const M = game.npcManager, P = game.player.position, h = game.dayNight.hour, W = typeof Weather !== 'undefined' && Weather.cur;
         const b = CityGrid._blockAtPoint(P.x, P.z), beachHot = b && (b.biome === 'beach' || b.biome === 'resort') && h >= 10.5 && h < 16 && !(W && W.k > 0.1);
-        const want = Math.round((Math.round(Math.max(0, d - 1) * 55) + (beachHot ? 30 : 0)) * (typeof Life !== 'undefined' ? Life.mul() : 1));          // (sol quente: a praia lota)
+        const match = typeof Maracana !== 'undefined' && Maracana.matchDay(P.x, P.z, h);                                                                    // (dia de jogo: a torcida chegando no Maracanã)
+        const want = Math.round((Math.round(Math.max(0, d - 1) * 55) + (beachHot ? 30 : 0) + (match ? 14 : 0)) * (typeof Life !== 'undefined' ? Life.mul() : 1));          // (sol quente: a praia lota)
         this.extras = this.extras.filter((n) => n.alive);
         for (const n of this.extras.slice()) {
             if (this.extras.length > want || hypot(n.position.x - P.x, n.position.z - P.z) > 230) { M.removeNpc(n); this.extras.splice(this.extras.indexOf(n), 1); if (this.extras.length <= want) break; }

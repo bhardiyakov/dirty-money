@@ -4,21 +4,24 @@
 //   • o ESTÁDIO: a fachada de pilares inclinados em V com os andares do anel e o vidro escuro entre eles; a COBERTURA branca com as
 //     nervuras, a faixa de placas solares e o anel interno; a ARQUIBANCADA azul, amarela e branca com os corredores; o gramado
 //     listrado com a pista azul em volta; os placares; as duas RAMPAS HELICOIDAIS de concreto na frente;
-//   • a ESPLANADA de pedra em volta (palmeiras, postes, bancos), o ESTACIONAMENTO ao sul (vagas pintadas, carros e ônibus) com a placa
-//     ESTÁDIO DO MARACANÃ na entrada, a ESTAÇÃO DE TREM a leste (plataforma coberta, trilhos, trens) e a PASSARELA elevada sobre os trilhos
+//   • a ESPLANADA de pedra em volta (palmeiras, postes, bancos), o ESTACIONAMENTO ao sul (vagas pintadas e a baia das vans) com a placa
+//     ESTÁDIO DO MARACANÃ na entrada — os carros dele são carros de VERDADE do trânsito (trancados, roubáveis: update), a ESTAÇÃO DE TREM a leste (plataforma coberta, trilhos, trens) e a PASSARELA elevada sobre os trilhos
 //     até a esplanada (anda-se nela: Walkways), o MARACANÃZINHO (a cúpula branca) e o PARQUE AQUÁTICO (piscina com arquibancada).
 // Por dentro (Interiors, como as lojas): a porta é o portão sul; a sala é pintada em HD — o SAGUÃO com a BILHETERIA (ingresso: as
 // catracas liberam) e a LANCHONETE (cardápio do estádio), as CATRACAS, a ARQUIBANCADA com a torcida, o alambrado com as placas e o
 // GRAMADO com os jogadores e a bola de verdade (um jogo rolando, com gol e placar). Na arquibancada: E assiste ao jogo.
 //   build()  (Landmarks._stadium)  lugar, sólidos, porta, passarela, POI     meshes(wb)  o exterior     drawMap(...)  no mapa
 //   door()   a porta (Interiors.index)     room()  a sala (Interiors._room)    onEnter / onLeave / tick / prompt / interact  lá dentro
+//   update(dt, game)  (Game, a cada quadro) o estacionamento: carros de verdade nas vagas quando a câmera chega perto, conforme a hora
 // ============================================================================
 
 const Maracana = {
     S: { name: 'Maracanã', x: -408, z: 118, rx: 56, rz: 46, h: 13.2 },
     AREA: [-512, -2, -298, 188],                         // o terreno do complexo (grama, piso, nada de fazenda)
-    PARK: [-452, 27, -364, 56],                          // estacionamento
-    ROWS: [3, 9, 17.5],                                  // as fileiras de vagas (z a partir do sul do estacionamento); os ônibus ao norte
+    PARK: [-452, 24, -364, 56],                          // estacionamento
+    ROWS: [4, 15.5, 22.5],                               // as fileiras de vagas de 7 u (z a partir do sul do estacionamento), com os corredores; as vans ao norte
+    SLOT: 3,                                             // largura da vaga
+    LOT_CAP: 40,                                         // carros de verdade no estacionamento, no máximo
     STATION: { x0: -314, x1: -305, z0: 86, z1: 142, tracks: [-321.5, -329] },
     DOME: { x: -482, z: 166, r: 17 },                    // Maracanãzinho
     POOL: [-508, 74, -476, 104],                         // parque aquático (a piscina e a arquibancada a oeste)
@@ -61,6 +64,10 @@ const Maracana = {
         for (let x = -334; x > -340; x -= 4.5) O.push({ x0: x - 0.4, z0: 129.6, x1: x + 0.4, z1: 132.4, h: B.h });
         CityGrid.addObstacles(O);
         this.solids = O;
+        this.slots = this._slots();
+        // a barraca de churrasquinho na esplanada, perto do portão (Stands: vende de verdade, com o carrinho e o churrasqueiro)
+        if (typeof Stands !== 'undefined') Stands.add({ id: 'churrasquinho_maracana', name: 'Churrasquinho do Maracanã', emo: '🍢', x: -396, z: 63.6, r: 2.8, hours: [9, 24], items: Stands.MENUS.estadio, sub: 'Antes do jogo, um espetinho!',
+            cart: true, vendor: { x: -396, z: 64.5, h: Math.PI, type: 'civil_ambulante' } });
         this._walk();
         CityGrid.addPoi({ type: 'estadio', name: 'Estádio do Maracanã (entrada pelo portão sul)', x: g[0], z: g[1] - 5 });
     },
@@ -85,6 +92,122 @@ const Maracana = {
         const g = this.E(1, -Math.PI / 2);
         return (this._door = { id: 'maracana', kind: 'stadium', style: 'stadium', stadium: true, name: 'Estádio do Maracanã', district: 'city', biome: 'commercial', variant: 0,
             x: g[0], z: g[1] - 1.25, face: Math.PI, ex: g[0], ez: g[1] });
+    },
+
+    // ---------------------------------------------------------------- gente, som e luz (NPCManager, StreetLife, Ambience)
+    _hour() { return typeof game !== 'undefined' && game && game.dayNight ? game.dayNight.hour : 12; },
+    // Movimento de pedestres (Landmarks.crowd): a esplanada e o estacionamento cheios com o estádio aberto; o gramado em volta, pouco.
+    crowd(x, z) {
+        const A = this.AREA, P = this.PARK;
+        if (!this.built || x < A[0] || x > A[2] || z < A[1] || z > A[3]) return null;
+        const open = Economy.isOpen('stadium', this._hour());
+        if (this.inEllipse(x, z, 1.32) || (x > P[0] && x < P[2] && z > P[1] && z < P[3] + 10)) return open ? 1 : 0.12;
+        return open ? 0.3 : 0.06;
+    },
+    // Dia de jogo (StreetLife._extras: a torcida chegando): o estádio aberto no fim da tarde/noite, com o jogador por perto.
+    matchDay(x, z, h) { return this.built && Economy.isOpen('stadium', h) && h >= 15 && h < 23 && hypot(x - this.S.x, z - this.S.z) < 170; },
+    crowdSound(x, z, h) {
+        if (!this.built || !Economy.isOpen('stadium', h)) return 0;
+        const d = hypot(x - this.S.x, z - this.S.z);
+        return d < 130 ? 0.065 * (1 - d / 130) * (h >= 16 && h < 23 ? 1.5 : 1) : 0;
+    },
+    // À noite, com o estádio aberto, os refletores acendem (o anel sob a cobertura e o gramado iluminado).
+    _lights(game) {
+        const n = game.dayNight ? game.dayNight.night : 0, on = Economy.isOpen('stadium', game.dayNight.hour) ? n : 0;
+        if (this._lightK !== undefined && Math.abs(on - this._lightK) < 0.02) return;
+        this._lightK = on;
+        if (this._ringMat) this._ringMat.emissiveColor.set(0.25 + 0.75 * on, 0.25 + 0.73 * on, 0.25 + 0.62 * on);
+        const pm = this._wb && this._wb.mats.stadiumPitch;
+        if (pm) pm.emissiveColor.set(0.5 * on, 0.55 * on, 0.45 * on);
+    },
+
+    // ---------------------------------------------------------------- o estacionamento (carros de verdade)
+    // As vagas: 3 fileiras (a do sul de frente para o corredor, as duas do meio de costas uma para a outra) e a baia das vans ao norte.
+    _slots() {
+        const P = this.PARK, out = [];
+        this.ROWS.forEach((d, r) => {
+            const z = P[1] + d;
+            for (let x = P[0] + 2; x + this.SLOT <= P[2] - 2 + 0.01; x += this.SLOT) out.push({ x: x + this.SLOT / 2, z, h: r === 1 ? Math.PI : 0, row: r });
+        });
+        for (let i = 0; i < 4; i++) out.push({ x: P[0] + 16 + i * 14, z: P[3] - 1.7, h: Math.PI / 2, van: true });
+        return out;
+    },
+    // Quanto do estacionamento está ocupado na hora h (0..1): de madrugada, um ou outro; de dia, meio cheio; no jogo da noite, lotado.
+    occupancy(h) {
+        if (!Economy.isOpen('stadium', h)) return 0.1;
+        return h >= 16 && h < 23 ? 0.62 : 0.36;
+    },
+    // Que carro estaciona aqui (torcida de todo bairro: populares, sedãs, SUVs, picapes, uns velhos, um ou outro esportivo).
+    _carFor(g, van) {
+        const W = (t) => { let r = Math.random() * t.reduce((a, e) => a + e[1], 0); for (const [k, w] of t) if ((r -= w) <= 0) return k; return t[0][0]; };
+        const cls = van ? 'van' : W([['hatch', 26], ['sedan', 22], ['suv', 16], ['pickup', 9], ['old', 12], ['sports', 6], ['taxi', 4], ['super', 1]]);
+        const model = g.carLib.variantOf(cls), old = cls === 'old', oldP = [13, 14, 15, 16, 17, 18];
+        return { model, old, paint: cls === 'taxi' ? 2 : old ? oldP[Math.floor(Math.random() * oldP.length)] : g.carLib.randomPaint(model) };
+    },
+    // Por quadro (Game): a câmera chegou perto (150 u) → os carros estacionam nas vagas (conforme a hora); longe (230 u) → somem os que
+    // ficaram na vaga. São carros do trânsito (vehicleManager): trancados — mixa, chave de fenda, vidro quebrado, alarme, polícia, desmanche,
+    // tudo vale. O que o jogador tirou da vaga deixa de ser do estacionamento: vira um carro comum do trânsito (largado, é reciclado).
+    update(dt, game) {
+        if (!this.built || !this.slots || !game.vehicleManager || !game.carLib || !game.traffic) return;
+        this._lotT = (this._lotT || 0) - dt;
+        if (this._lotT > 0) return;
+        this._lotT = 0.5;
+        this._lights(game);
+        const f = game.camera.target, P = this.PARK, r = hypot((P[0] + P[2]) / 2 - f.x, (P[1] + P[3]) / 2 - f.z), V = game.vehicleManager.vehicles;
+        // quem saiu da vaga (ou virou carcaça e foi trocado) não é mais do estacionamento
+        for (const q of this.slots) {
+            const c = q.car;
+            if (!c) continue;
+            if (c._gone || !V.includes(c)) { q.car = null; continue; }
+            if (c.controlled || hypot(c.position.x - q.x, c.position.z - q.z) > 4) { c.keep = false; c.lot = null; q.car = null; }
+        }
+        if (r < 150 && !this.lotOn) this._fillLot(game);
+        else if (r > 230 && this.lotOn) this._emptyLot(game);
+        // a TORCIDA: pedestres de verdade (NPCManager: dá para assaltar, brigar, fugir...) na esplanada e no estacionamento, com o
+        // estádio aberto — chegam aos poucos (4 a cada meio segundo) quando a câmera se aproxima e vão embora quando ela se afasta
+        const rs = hypot(this.S.x - f.x, this.S.z - f.z), want = rs < 170 && !Interiors.active && game.npcManager && game.nav ? this.fansFor(game.dayNight.hour) : 0;
+        this._fans = (this._fans || []).filter((n) => n.alive);
+        if (this._fans.length < want) this._addFans(game, Math.min(4, want - this._fans.length));
+        else if (rs > 240 && this._fans.length) { for (const n of this._fans) game.npcManager.removeNpc(n); this._fans = []; }
+    },
+    // Quantos torcedores (0 com o estádio fechado; o jogo da noite enche).
+    fansFor(h) { return !Economy.isOpen('stadium', h) ? 0 : h >= 16 && h < 23 ? 28 : 14; },
+    _addFans(game, n) {
+        const P = this.PARK, nav = game.nav;
+        for (let i = 0, t = 0; i < n && t < n * 8; t++) {
+            const q = Math.random() < 0.75 ? this.E(1.12 + Math.random() * 0.2, Math.random() * Math.PI * 2) : [P[0] + Math.random() * (P[2] - P[0]), P[1] + Math.random() * (P[3] - P[1])];
+            const p = nav.closestPoint(new BABYLON.Vector3(q[0], 0, q[1]), 6);
+            if (!nav.walk(p.x, p.z) || hypot(p.x - q[0], p.z - q[1]) > 4) continue;
+            const npc = new NPC(game.scene, nav, p, 15000 + (this._fanId = (this._fanId || 0) + 1), game.sprites, game.npcCtx, null);
+            npc.setStyle(Math.random() < 0.65 ? 'sport' : 'casual'); npc.party = true;
+            game.npcManager.npcs.push(npc); this._fans.push(npc); i++;
+        }
+    },
+    _fillLot(game) {
+        this.lotOn = true;
+        const free = this.slots.filter((q) => !q.car), cars = free.filter((q) => !q.van), vans = free.filter((q) => q.van), occ = this.occupancy(game.dayNight.hour);
+        let n = Math.min(this.LOT_CAP, Math.round(occ * cars.length)) - this.slots.filter((q) => q.car && !q.van).length;
+        for (let i = cars.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cars[i], cars[j]] = [cars[j], cars[i]]; }
+        const put = (q) => {
+            const m = this._carFor(game, q.van), h = q.h + (q.van ? 0 : (Math.random() < 0.5 ? 0 : Math.PI));     // (uns de ré na vaga)
+            const car = Garage.spawnCar(game, m.model, m.paint, q.x + (Math.random() - 0.5) * 0.3, q.z + (Math.random() - 0.5) * 0.4, h + (Math.random() - 0.5) * 0.06);
+            if (!car) return;
+            car.locked = true; car.keep = true; car.lot = this;                // trancado como o do meio-fio (Garage.spawnCar o deixa aberto)
+            if (m.old) { car.hp = Math.round(car.hp * 0.7); car.old = true; }
+            q.car = car;
+        };
+        for (const q of cars) { if (n-- <= 0) break; put(q); }
+        for (const q of vans) if (Math.random() < 0.3 + occ) put(q);
+    },
+    _emptyLot(game) {
+        this.lotOn = false;
+        for (const q of this.slots) {
+            const c = q.car;
+            if (!c) continue;
+            q.car = null;
+            if (c.controlled || c.hold) { c.keep = false; c.lot = null; continue; }
+            Garage.despawn(game, c);
+        }
     },
 
     // ---------------------------------------------------------------- geometria (por fora)
@@ -172,6 +295,21 @@ const Maracana = {
             this._beam(bt(a), [p[0], S.h + 0.12, p[1]], [q[0], S.h + 0.98, q[1]], 0.16, c('#d4d8de'));
         }
         Wl(mid, S.x, S.z, S.rx, S.rz, 0.67, S.h + 0.1, S.h + 1.1, N, () => c('#5b626b'), -1);
+        // os REFLETORES: a faixa de luz no topo do anel interno (malha própria: acende à noite com o estádio aberto — _lights)
+        {
+            const pos = [], idx = [], nor = [], y = S.h + 1.14, M = 96;
+            for (let i = 0; i <= M; i++) {
+                const a = (i / M) * Math.PI * 2, p = this.E(0.655, a), q = this.E(0.69, a);
+                pos.push(p[0], y, p[1], q[0], y, q[1]); nor.push(0, 1, 0, 0, 1, 0);
+                if (i < M) { const b = i * 2; idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3); }
+            }
+            const ring = new BABYLON.Mesh('stadiumLights', wb.scene), vd = new BABYLON.VertexData();
+            vd.positions = pos; vd.indices = idx; vd.normals = nor; vd.applyToMesh(ring);
+            const rm = this._ringMat = new BABYLON.StandardMaterial('stadiumLights', wb.scene);
+            rm.diffuseColor = new BABYLON.Color3(0.3, 0.31, 0.33); rm.specularColor = BABYLON.Color3.Black(); rm.emissiveColor = new BABYLON.Color3(0.25, 0.25, 0.25); rm.backFaceCulling = false;
+            ring.material = rm; ring.isPickable = false; ring.freezeWorldMatrix();
+            wb.meshes.push(ring);
+        }
         // a ARQUIBANCADA: degraus em anéis, setores azuis, amarelos e brancos, com os corredores (vistos pela abertura)
         const sect = ['#2a5ea8', '#f0c63a', '#2a5ea8', '#f2f2ee', '#2a5ea8', '#f0c63a', '#2f6fb8', '#e8b830'];
         const tiers = 10;
@@ -263,24 +401,12 @@ const Maracana = {
     _meshParking(wb) {
         const P = this.PARK, c = this._c.bind(this), ab = wb._batch('asphalt', (P[0] + P[2]) / 2, (P[1] + P[3]) / 2);
         ab.top(P[0], P[1], P[2], P[3], 0.06, (x, z) => [x / 6, -z / 6], [1, 1, 1]);
-        const bt = wb._batch('trim', (P[0] + P[2]) / 2, (P[1] + P[3]) / 2), rng = Pixel.rng(1950);
-        const cols = ['#d8dce2', '#2b2f36', '#a8b0b8', '#7a1f1a', '#1f3f6a', '#e8e6e0', '#3d5a3a', '#c9a227'];
-        for (const zr of this.ROWS.map((d) => P[1] + d)) {
-            for (let x = P[0] + 2; x < P[2] - 2; x += 2.8) {
-                bt.solid(x - 0.06, zr - 2.6, x + 0.06, zr + 2.6, 0.06, 0.075, c('#f2f2f0'));
-                if (rng() < 0.72) {                                                          // um carro na vaga
-                    const cx = x + 1.4, col = c(cols[Math.floor(rng() * cols.length)]), L = 4.2, Wd = 1.8;
-                    bt.solid(cx - Wd / 2, zr - L / 2, cx + Wd / 2, zr + L / 2, 0.25, 1.05, col);
-                    bt.solid(cx - Wd / 2 + 0.15, zr - L / 2 + 1.0, cx + Wd / 2 - 0.15, zr + L / 2 - 0.9, 1.05, 1.55, col.map((v) => v * 0.82));
-                    bt.solid(cx - Wd / 2 + 0.2, zr - L / 2 + 0.95, cx + Wd / 2 - 0.2, zr - L / 2 + 1.05, 1.0, 1.5, c('#22303e'));
-                }
-            }
-        }
-        for (let i = 0; i < 4; i++) {                                                         // ônibus na baia (ao norte do estacionamento)
-            const x = P[0] + 14 + i * 14, z = P[3] - 3, col = c(['#e8e6de', '#2f6fb3', '#e8b830', '#e8e6de'][i]);
-            bt.solid(x - 5, z - 1.3, x + 5, z + 1.3, 0.3, 3.2, col);
-            bt.solid(x - 4.9, z - 1.35, x + 4.9, z + 1.35, 1.6, 2.4, c('#25313d'));
-            bt.solid(x - 5.05, z - 1.32, x + 5.05, z + 1.32, 3.2, 3.35, c('#d9dadc'));
+        const bt = wb._batch('trim', (P[0] + P[2]) / 2, (P[1] + P[3]) / 2), line = c('#f2f2f0'), yel = c('#e8c23a');
+        // as vagas pintadas (os carros são de verdade: update) e a baia das vans, em amarelo
+        for (const zr of this.ROWS.map((d) => P[1] + d)) for (let x = P[0] + 2; x <= P[2] - 2 + 0.01; x += this.SLOT) bt.solid(x - 0.06, zr - 3.4, x + 0.06, zr + 3.4, 0.06, 0.075, line);
+        for (const v of this.slots.filter((q) => q.van)) {
+            for (const s of [-1, 1]) bt.solid(v.x + s * 4.6 - 0.07, v.z - 1.7, v.x + s * 4.6 + 0.07, v.z + 1.7, 0.06, 0.075, yel);
+            bt.solid(v.x - 4.6, v.z - 1.77, v.x + 4.6, v.z - 1.63, 0.06, 0.075, yel);
         }
         // a placa ESTÁDIO DO MARACANÃ (azul, na entrada do estacionamento)
         bt.solid(-362.4, 24.1, -361.6, 24.9, 0, 2.8, c('#3b3f46')); bt.solid(-352.4, 24.1, -351.6, 24.9, 0, 2.8, c('#3b3f46'));
@@ -335,7 +461,7 @@ const Maracana = {
     _meshPalms(wb) {
         const base = PropSprites.FRAME / Config.art.ppu, spots = [], rng = Pixel.rng(1963);
         for (let i = 0; i < 28; i++) { const a = (i / 28) * Math.PI * 2 + 0.06; if (Math.abs(Math.sin(a) + 1) >= 0.02) spots.push([...this.E(1.27, a), 'palm']); }
-        for (let x = -450; x < -364; x += 7) spots.push([x, 23, 'palm'], [x + 3.5, 60.5, 'palm']);
+        for (let x = -450; x < -364; x += 7) spots.push([x + 3.5, 60.5, 'palm']);                    // (ao sul, o estacionamento encosta na avenida)
         for (let z = 92; z < 142; z += 7) spots.push([-302, z, 'palm']);
         for (let i = 0; i < 70; i++) {                                                  // arvoredo nos gramados em volta
             const x = this.AREA[0] + 4 + rng() * (this.AREA[2] - this.AREA[0] - 8), z = this.AREA[1] + 4 + rng() * (this.AREA[3] - this.AREA[1] - 8);
@@ -370,8 +496,8 @@ const Maracana = {
         rect(-452, 56, -364, 66, '#d3cdc0'); rect(-356, 120, -312, 142, '#d3cdc0'); rect(-470, 150, -456, 170, '#d3cdc0'); rect(-476, 104, -466, 112, '#d3cdc0');
         // estacionamento (vagas e carros de perto)
         const P = this.PARK; rect(P[0], P[1], P[2], P[3], '#4c5056');
-        if (k >= 1.2) for (const zr of this.ROWS.map((d) => P[1] + d)) for (let x = P[0] + 2; x < P[2] - 2; x += 2.8) rect(x - 0.06, zr - 2.6, x + 0.06, zr + 2.6, '#e8e8e4');
-        for (let i = 0; i < 4; i++) rect(P[0] + 9 + i * 14, P[3] - 4.3, P[0] + 19 + i * 14, P[3] - 1.7, ['#e8e6de', '#2f6fb3', '#e8b830', '#e8e6de'][i]);
+        if (k >= 1.2) for (const zr of this.ROWS.map((d) => P[1] + d)) for (let x = P[0] + 2; x <= P[2] - 2 + 0.01; x += this.SLOT) rect(x - 0.06, zr - 3.4, x + 0.06, zr + 3.4, '#e8e8e4');
+        if (k >= 1.2) for (const v of this.slots.filter((q) => q.van)) rect(v.x - 4.6, v.z - 1.7, v.x + 4.6, v.z - 1.6, '#e8c23a');
         // estação, trilhos, trens e a passarela
         const T = this.STATION;
         for (const x of T.tracks) rect(x - 1.3, A[1], x + 1.3, A[3], '#8c7a66');
@@ -413,6 +539,7 @@ const Maracana = {
         add(-0.6, -0.6, 0.6, D, 3); add(W - 0.6, -0.6, W + 0.6, D, 3);                  // paredes laterais
         add(-0.6, -0.6, door.x0, 0.6, 3); add(door.x1, -0.6, W + 0.6, 0.6, 3);          // a frente, com o vão da porta
         add(2, 5.4, 12.2, 9.4, 2.4); add(47.8, 5.4, 58, 9.4, 2.4);                       // bilheteria e lanchonete
+        add(0.7, 5.6, 1.9, 7.2, 1.2); add(56, 4.6, 58, 5.4, 1);                         // o cofre e o estoque (Robbery)
         add(0.6, 9.4, 18, 10.4, 3); add(42, 9.4, W - 0.6, 10.4, 3);                      // o muro das catracas
         add(0.6, 26, W - 0.6, 28.2, 1.4);                                                // o alambrado (ninguém invade o campo)
         const gates = [];                                                                // as catracas (liberam com o ingresso)
@@ -425,7 +552,9 @@ const Maracana = {
             canvas: { toTexture: (scene) => { const t = new BABYLON.DynamicTexture('stadiumRoom', cv, scene, false); t.update(false); t.wrapU = t.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE; return t; } },
             in: IN, W, D, obs, gates, door, spawn: { x: W / 2, z: 2.2 },
             clerk: { x: 52.9, z: 7.9, face: Math.PI, variant: 4 }, patrons,
-            uses: [{ kind: 'ticket', x0: 2, z0: 3.4, x1: 12.2, z1: 5.4 }, { kind: 'watch', x0: 1, z0: 13, x1: W - 1, z1: 26 }],
+            uses: [{ kind: 'ticket', x0: 2, z0: 3.4, x1: 12.2, z1: 5.4 }, { kind: 'watch', x0: 1, z0: 13, x1: W - 1, z1: 26 },
+                // no assalto (Robbery, como numa loja): o cofre da bilheteria, o HD das câmeras e o estoque da lanchonete
+                { kind: 'safe', x0: 0.7, z0: 5.6, x1: 1.9, z1: 7.2 }, { kind: 'dvr', x0: 12.3, z0: 6.2, x1: 13.1, z1: 7 }, { kind: 'stock', x0: 56, z0: 4.6, x1: 58, z1: 5.4 }],
             seats: [], tables: [], counters: [],
         };
     },
@@ -511,6 +640,10 @@ const Maracana = {
             g.fillStyle = fg; g.font = `900 ${h * 0.62 * PPU}px Arial, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, X(x), Y(z));
         };
         sign(7.1, 9.75, 7, 0.7, '#1f4f9a', '#fff', 'BILHETERIA'); sign(52.9, 9.75, 7, 0.7, '#c0392b', '#fff', 'LANCHONETE');
+        // o cofre da bilheteria (no corredor de serviço), o rack das câmeras e o estoque da lanchonete (Robbery)
+        R(0.7, 5.6, 1.9, 7.2, '#3a3f46'); R(0.85, 5.75, 1.75, 7.05, '#59606a'); g.fillStyle = '#c9cfd6'; g.beginPath(); g.arc(X(1.3), Y(6.4), 0.22 * PPU, 0, Math.PI * 2); g.fill();
+        R(12.3, 6.2, 13.1, 7, '#22262b'); for (let i = 0; i < 3; i++) R(12.4, 6.3 + i * 0.24, 13.0, 6.42 + i * 0.24, i === 1 ? '#3ad06a' : '#4a5059');
+        for (let i = 0; i < 4; i++) R(56 + (i % 2) * 1, 4.62 + Math.floor(i / 2) * 0.4, 56.9 + (i % 2) * 1, 4.98 + Math.floor(i / 2) * 0.4, ['#b8862e', '#8a5a2b', '#c9a227', '#7a4a22'][i]);
         sign(30, 0.9, 10, 0.6, '#f0c63a', '#123f7a', 'ESTÁDIO DO MARACANÃ');
         // bancos e lixeiras no saguão
         for (const x of [17, 25, 35, 43]) { R(x - 1.4, 1.6, x + 1.4, 2.2, '#7a5a3a'); R(x - 1.4, 2.1, x + 1.4, 2.25, '#5e4429'); }

@@ -8,16 +8,19 @@
 //   • a PRAIA DO SUL: o CALÇADÃO de ondas pretas e brancas ao longo da Av. do Contorno, quiosques, postos de salva-vidas, coqueiros e
 //     guarda-sóis na areia;
 //   • as PONTES ESTAIADAS: pilones e estais nas pontes norte e do meio;
-//   • PÍERES com barcos atracados no canal (anda-se neles como em terra: MapGeo.onDock).
+//   • PÍERES com barcos atracados no canal (anda-se neles como em terra: MapGeo.onDock) — barcos de verdade, roubáveis (BoatManager).
 //   build()         (CityGrid.finish, antes do campo) lugares, sólidos, POIs e os props da praia
 //   covers(x, z, m) o ponto é terreno de um marco? (nada de mato, fazenda ou casinha em cima)
 //   onPier(x, z)    em cima de um píer
 //   meshes(wb)      (WorldBuilder) a geometria
-//   update(dt)      o bondinho indo e vindo
+//   update(dt)      o bondinho indo e vindo (e o passeio: E na estação da praia, paga a passagem, sobe e volta na cabine)
+//   prompt(g) / interact(g) / zoomFor(pl)   o passeio de bondinho (Game)
 // ============================================================================
 
 const Landmarks = {
     BONDE: { a: [214, -1012, 5], b: [338, -1066, 36] },
+    BONDE_FARE: 30,                                                              // a passagem do bondinho (ida e volta)
+    BONDE_T: [22, 6, 22],                                                        // o passeio: subida, lá em cima, descida (s)
     PIERS_CITY: [392, -214, -812],
     PIERS_ISLAND: [452, -318],
 
@@ -86,6 +89,8 @@ const Landmarks = {
                     since = 0;
                     const k = { x: p[0] + n[0] * 7, z: p[1] + n[1] * 7, a: Math.atan2(n[0], n[1]), c: ['#2e8b57', '#d9482b', '#1f6fb5', '#e8a33a'][this.kiosks.length % 4] };
                     this.kiosks.push(k);
+                    if (typeof Stands !== 'undefined') Stands.add({ id: 'kiosk' + this.kiosks.length, name: 'Quiosque da praia', emo: '🥥', x: k.x, z: k.z, r: 3.8, hours: [8, 23], items: Stands.MENUS.kiosk, sub: 'Coco gelado, mate e biscoito — é praia!',      // (vende de verdade; o quiosqueiro na frente)
+                        vendor: { x: k.x - n[0] * 2.5, z: k.z - n[1] * 2.5, h: Math.atan2(-n[0], -n[1]), type: 'civil_ambulante' } });
                     CityGrid.addObstacles([{ x0: k.x - 1.8, z0: k.z - 1.8, x1: k.x + 1.8, z1: k.z + 1.8, h: 2.6 }]);
                     for (let t = 0; t < 4; t++) props.push({ type: 'prop', kind: 'umbrella', x: k.x + (t % 2 ? 4 : -4) + (rng() - 0.5), z: k.z + n[1] * (t < 2 ? 4 : 8) + (rng() - 0.5), s: 0.75, seed: Math.floor(rng() * 1000) });
                 } else if (sinceT >= 150) {
@@ -105,6 +110,8 @@ const Landmarks = {
     },
     _nearBeachStrip(x, z, m) {
         if (!this.beach) return false;
+        const bb = this.beach.box || (this.beach.box = this.beach.strips.reduce((b, st) => { for (const p of st.inner.concat(st.outer)) { b[0] = Math.min(b[0], p[0]); b[1] = Math.min(b[1], p[1]); b[2] = Math.max(b[2], p[0]); b[3] = Math.max(b[3], p[1]); } return b; }, [1e9, 1e9, -1e9, -1e9]));
+        if (x < bb[0] - m - 9 || x > bb[2] + m + 9 || z < bb[1] - m - 9 || z > bb[3] + m + 9) return false;
         for (const st of this.beach.strips) for (let i = 0; i < st.outer.length; i += 2) { const p = st.outer[i]; if (Math.abs(p[0] - x) < m + 9 && Math.abs(p[1] - z) < m + 9) return true; }
         return false;
     },
@@ -124,7 +131,8 @@ const Landmarks = {
             const P = { x0: xa, x1: xb, z0: z - w, z1: z + w, dir, head: [Math.min(xs + dir * (L - 6), xs + dir * L), z - 7, Math.max(xs + dir * (L - 6), xs + dir * L), z + 7] };
             this.piers.push(P);
             const tip = xs + dir * (L - 14);
-            this.boats.push({ x: tip, z: z + 5.6, a: 0, len: 9, c: '#f2f4f6' }, { x: tip - dir * 12, z: z - 5.4, a: 0, len: 7, c: '#d9e6f2' });
+            const h = dir > 0 ? Math.PI / 2 : -Math.PI / 2;                                // (a proa para o canal)
+            this.boats.push({ kind: 'barco', x: tip, z: z + 5.6, h }, { kind: 'lancha', x: tip - dir * 12, z: z - 5.2, h });      // barcos de verdade (BoatManager.spawn)
         };
         for (const z of this.PIERS_CITY) add(z, 1, 150, 340);
         for (const z of this.PIERS_ISLAND) add(z, -1, 470, 300);
@@ -196,16 +204,6 @@ const Landmarks = {
             shadow((c) => { rect(P.x0, P.z0, P.x1, P.z1, c); rect(P.head[0], P.head[1], P.head[2], P.head[3], c); });
             rect(P.x0, P.z0, P.x1, P.z1, '#9b7550'); rect(P.head[0], P.head[1], P.head[2], P.head[3], '#a47c55');
             if (k >= 2) { ctx.fillStyle = 'rgba(60,40,24,0.45)'; for (let x = P.x0; x < P.x1; x += 1.2) ctx.fillRect(X(x), Y(P.z1), Math.max(1, 0.12 * k), (P.z1 - P.z0) * k); }
-        }
-        for (const b of this.boats) {
-            if (!vis(b.x - b.len, b.z - 4, b.x + b.len, b.z + 4)) continue;
-            const L = b.len / 2, Wd = b.len * 0.18, hull = (c, o) => {
-                ctx.beginPath(); ctx.moveTo(X(b.x - L), Y(b.z - Wd)); ctx.lineTo(X(b.x + L * 0.45), Y(b.z - Wd)); ctx.quadraticCurveTo(X(b.x + L * 1.05), Y(b.z), X(b.x + L * 0.45), Y(b.z + Wd));
-                ctx.lineTo(X(b.x - L), Y(b.z + Wd)); ctx.closePath(); ctx.fillStyle = c; ctx.fill(); if (o) { ctx.strokeStyle = o; ctx.lineWidth = Math.max(1, 0.2 * k); ctx.stroke(); }
-            };
-            ctx.save(); ctx.globalAlpha = 0.28; ctx.translate(1.2 * k, 1.2 * k); hull('#06121c'); ctx.restore();
-            hull(b.c, '#55606c');
-            if (k >= 1) rect(b.x - L * 0.5, b.z - Wd * 0.55, b.x + L * 0.1, b.z + Wd * 0.55, '#8fb3cf');
         }
         // PONTES ESTAIADAS: os pilones (fora do tabuleiro) e o leque de estais
         for (const p of this.pylons) {
@@ -373,9 +371,72 @@ const Landmarks = {
         this._cabins = cabins;
         this.update(0);
     },
+    // ---------------------------------------------------------------- gente e som (NPCManager, Ambience)
+    // Movimento de pedestres no lugar (0..1, como NPCManager._density) ou null fora dos marcos: a esplanada e o estacionamento do
+    // Maracanã (cheios com o estádio aberto), a praça do portão do Corcovado, o calçadão.
+    crowd(x, z) {
+        if (!this.built) return null;
+        if (this.stadium) { const m = Maracana.crowd(x, z); if (m !== null) return m; }
+        if (this.cristo) { const g = Corcovado.W(-8, -71); if (Math.abs(x - g[0]) < 24 && Math.abs(z - g[1]) < 16) return 0.85; }
+        if (this.beach && this._nearBeachStrip(x, z, 1)) return 1;
+        return null;
+    },
+    // Quem anda por ali (NPCManager._style): a torcida de camisa na esplanada do Maracanã, turistas no portão do Corcovado; null: o normal.
+    crowdStyle(x, z, r) {
+        if (!this.built) return null;
+        if (this.stadium && Maracana.crowd(x, z) === 1) return r < 0.6 ? 'sport' : 'casual';
+        if (this.cristo) { const g = Corcovado.W(-8, -71); if (Math.abs(x - g[0]) < 24 && Math.abs(z - g[1]) < 16) return r < 0.6 ? 'tourist' : 'casual'; }
+        return null;
+    },
+    // O burburinho da torcida em volta do Maracanã aberto (mais alto no jogo da noite).
+    crowdSound(x, z, h) { return this.stadium ? Maracana.crowdSound(x, z, h) : 0; },
+
+    // ---------------------------------------------------------------- o passeio de bondinho
+    _bondeSpot(g) {
+        if (!this._cabins || this.ride || g.mode !== 'player') return false;
+        const pl = g.player, B = this.BONDE;
+        return !pl.onDeck && !pl.underBridge && !pl.busy && !pl.frozen && hypot(pl.position.x - B.a[0], pl.position.z - B.a[1]) < 7.5;
+    },
+    prompt(g) { return this._bondeSpot(g) ? `<b>E</b> Bondinho do Pão de Açúcar — ${brl(this.BONDE_FARE)}<small>passeio até o alto do penedo e volta</small>` : ''; },
+    interact(g) {
+        if (!this._bondeSpot(g)) return false;
+        const pl = g.player, inv = g.inventory;
+        if (inv.cash < this.BONDE_FARE) { g._flash(`Bondinho: ${brl(this.BONDE_FARE)} — dinheiro insuficiente`); return true; }
+        inv.cash -= this.BONDE_FARE;
+        pl.cancelSequence(); pl.action = null; pl.velocity.setAll(0);
+        pl.setVisible(false); pl.frozen = true; pl.invulnerable = true;
+        this._net = this._net || { name: 'Bondinho', parts: [] };                  // (lá em cima a câmera mira a cabine: Game, pl.walk/deckH)
+        pl.walk = this._net; pl.onDeck = true; pl.roof = null;
+        this.ride = { g, t: 0, back: { x: pl.position.x, z: pl.position.z }, top: false };
+        g._flash(`🚡 Bondinho do Pão de Açúcar (−${brl(this.BONDE_FARE)}): subindo…`);
+        return true;
+    },
+    // Multiplicador do zoom automático no passeio: abre com a altura da cabine.
+    zoomFor(pl) { return this.ride && pl.walk === this._net ? 1 + 1.25 * Math.min(1, (pl.deckH || 0) / 30) : 1; },
+    _rideStep(dt) {
+        const R = this.ride, g = R.g, pl = g.player, [tu, tw, td] = this.BONDE_T, C = this._cabins;
+        R.t += dt;
+        const e = (k) => k * k * (3 - 2 * k), t = R.t;
+        const k = t < tu ? e(t / tu) : t < tu + tw ? 1 : 1 - e(Math.min(1, (t - tu - tw) / td));
+        C[0].t = k; C[0].dir = 0; C[1].t = 1 - k; C[1].dir = 0;                      // (as duas cabines se cruzam no meio, como o de verdade)
+        if (!R.top && t >= tu) { R.top = true; g._flash('🚡 Alto do Pão de Açúcar — a baía inteira lá embaixo'); }
+        if (!pl.alive || t >= tu + tw + td) {
+            pl.frozen = false; pl.invulnerable = false; pl.setVisible(true);
+            pl.position.x = R.back.x; pl.position.z = R.back.z;
+            pl.walk = null; pl.onDeck = false; pl.deckH = 0; pl.actor.mesh.position.y = pl.baseY;
+            C[0].dir = 1; C[1].dir = -1;
+            this.ride = null;
+            g._flash('De volta à estação da praia');
+            return;
+        }
+        const q = C[0].mesh.position;
+        pl.position.x = q.x; pl.position.z = q.z; pl.deckH = Math.max(0, q.y - 0.5); pl._walkSt = { x: q.x, z: q.z, h: pl.deckH };
+    },
+
     update(dt) {
         if (this.cristo) Corcovado.update(dt);                                  // (o elevador, o trem e as viagens)
         if (!this._cabins) return;
+        if (this.ride) this._rideStep(dt);
         for (const C of this._cabins) {
             C.t += C.dir * dt / 70;                                                             // ~70 s de uma estação à outra
             if (C.t > 1) { C.t = 1; C.dir = -1; } else if (C.t < 0) { C.t = 0; C.dir = 1; }
@@ -453,16 +514,6 @@ const Landmarks = {
             const h = p.head; bt.solid(h[0], h[1], h[2], h[3], 0.25, 0.5, wood);
             for (let x = p.x0 + 1; x < p.x1; x += 4) for (const z of [p.z0 + 0.2, p.z1 - 0.2]) bt.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, -1.5, 0.75, post);
             for (const z of [h[1] + 0.3, h[3] - 0.3]) bt.solid(h[0], z - 0.12, h[2], z + 0.12, 0.5, 1.4, woodD);
-        }
-        for (const b of this.boats) {
-            const bt = wb._batch('trim', b.x, b.z), L = b.len / 2, W = b.len * 0.17, hull = c(b.c), z3 = [[0, 0], [0, 0], [0, 0]];
-            bt.solid(b.x - L + 1.4, b.z - W, b.x + L - 1.6, b.z + W, -0.2, 0.9, hull);
-            bt.tri([b.x + L - 1.6, 0.9, b.z - W], [b.x + L + 0.6, 0.9, b.z], [b.x + L - 1.6, 0.9, b.z + W], [0, 1, 0], z3, hull);      // proa
-            bt.tri([b.x + L - 1.6, -0.2, b.z - W], [b.x + L + 0.6, 0.9, b.z], [b.x + L - 1.6, 0.9, b.z - W], [0.4, 0, -0.9], z3, c(b.c, 0.85));
-            bt.tri([b.x + L - 1.6, -0.2, b.z + W], [b.x + L - 1.6, 0.9, b.z + W], [b.x + L + 0.6, 0.9, b.z], [0.4, 0, 0.9], z3, c(b.c, 0.85));
-            bt.solid(b.x - L + 1.4, b.z - W, b.x - L + 1.9, b.z + W, -0.2, 0.9, c('#2a5fa8'));
-            bt.solid(b.x - L * 0.35, b.z - W * 0.7, b.x + L * 0.25, b.z + W * 0.7, 0.9, 2.1, c('#f7f7f7'));
-            bt.solid(b.x - L * 0.3, b.z - W * 0.72, b.x + L * 0.22, b.z + W * 0.72, 1.45, 1.8, c('#36576e'));
         }
     },
 

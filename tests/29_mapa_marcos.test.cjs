@@ -47,6 +47,38 @@ module.exports = {
         const bonde = await page.evaluate(() => { const m = Landmarks._cabins[0].mesh, a = m.position.clone(); Landmarks.update(5); return BABYLON.Vector3.Distance(a, m.position); });
         c.ok(bonde > 0.3, `o bondinho sobe e desce (${bonde.toFixed(2)} u em 5 s)`);
 
+        // ligados ao jogo: barcos de verdade nos píeres e na Lagoa, os quiosques vendem, o passeio de bondinho (pago), o calçadão cheio
+        const live = await page.evaluate(() => {
+            const g = game, L = Landmarks, pl = g.player, out = {};
+            out.pierBoats = g.boats.stats.pier; out.lagoaBoats = g.boats.stats.lagoa;
+            out.boatAtPier = L.boats.every((b) => g.vehicleManager.boats.some((q) => Math.hypot(q.position.x - b.x, q.position.z - b.z) < 2));
+            out.lagoaWater = g.vehicleManager.boats.filter((q) => Math.hypot((q.position.x + 404) / 92, (q.position.z + 590) / 190) < 1.3 && !WorldMap.isLand(q.position.x, q.position.z)).length;
+            const kiosks = Stands.list.filter((s) => s.id.startsWith('kiosk'));
+            out.kioskStands = kiosks.length === L.kiosks.length;
+            g.dayNight.hour = 12; g.dayNight.apply();
+            const k = kiosks[0]; pl.teleport(new BABYLON.Vector3(k.x, 0, k.z - 2.6));
+            out.kioskPrompt = /Quiosque/.test(Stands.prompt(g));
+            g.inventory.cash = 100; pl.hp = Math.max(1, pl.maxHp - 30); const hp0 = pl.hp;
+            Stands.interact(g); out.bought = Stands.buy(g, 'coco'); out.paid = 100 - g.inventory.cash; out.healed = pl.hp > hp0;
+            if (Stands._p && Stands._p.open && Stands._p.close) Stands._p.close();
+            out.crowd = g.npcManager._density(k.x, k.z + 3);
+            // o bondinho: E na estação da praia, paga, sobe até o alto e volta à estação
+            const B = L.BONDE; pl.teleport(new BABYLON.Vector3(B.a[0] - 4, 0, B.a[1] + 5));
+            out.bondePrompt = /Bondinho/.test(L.prompt(g));
+            g.inventory.cash = 100; L.interact(g); out.bondePaid = 100 - g.inventory.cash; out.riding = !!L.ride && pl.frozen;
+            let top = 0, n = 0; while (L.ride && n < 400) { L.update(0.25); top = Math.max(top, pl.deckH || 0); n++; }
+            out.bondeTop = top; out.bondeBack = !L.ride && !pl.frozen && !pl.walk && !pl.onDeck && Math.hypot(pl.position.x - B.a[0], pl.position.z - B.a[1]) < 9;
+            out.talk = Array.from({ length: 60 }, () => News.smallTalk()).some((t) => /Maracanã|Corcovado|bondinho/.test(t));
+            return out;
+        });
+        c.ok(live.pierBoats === s.boats && live.boatAtPier, `barcos de verdade atracados nos píeres (${live.pierBoats}): roubáveis, navegáveis`);
+        c.ok(live.lagoaBoats >= 2 && live.lagoaWater >= 2, `barcos na Lagoa (${live.lagoaBoats})`);
+        c.ok(live.kioskStands && live.kioskPrompt && live.bought && live.paid === 7 && live.healed, `os quiosques do calçadão vendem (água de coco: R$ ${live.paid}, cura)`);
+        c.eq(live.crowd, 1, 'o calçadão é movimentado (pedestres)');
+        c.ok(live.bondePrompt && live.bondePaid === 30 && live.riding, `passeio de bondinho: E na estação, R$ ${live.bondePaid}`);
+        c.ok(live.bondeTop > 25 && live.bondeBack, `a cabine sobe até o alto (${live.bondeTop.toFixed(1)} u) e volta à estação da praia`);
+        c.ok(live.talk, 'os marcos entram na conversa da rua (News)');
+
         // mapa pintado: cores do mar (fundo e raso), da mata, a rodovia laranja; ladrilhos HD; o mapa da pausa no mundo inteiro
         const m = await page.evaluate(() => {
             const px = (cx, cz, k) => {

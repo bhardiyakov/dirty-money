@@ -712,8 +712,8 @@ class Game {
 		// --- Zoom ---
 		// Automático: a pé aproxima; no veículo (carro, moto, barco, helicóptero) afasta conforme a velocidade.
 		const zSpeed = this.mode === 'car' && this.activeCar ? this.activeCar.speed : (this.mode === 'heli' && this.chopper ? this.chopper.speed : null);
-		// (subindo o Corcovado a pé a câmera abre aos poucos: lá de cima, o Cristo inteiro cabe no quadro)
-		const hill = this.mode === 'player' && typeof Corcovado !== 'undefined' ? Corcovado.zoomFor(this.player) : 1;
+		// (subindo o Corcovado a pé — ou no bondinho — a câmera abre aos poucos: lá de cima, o Cristo inteiro cabe no quadro)
+		const hill = this.mode === 'player' && typeof Corcovado !== 'undefined' ? Corcovado.zoomFor(this.player) * Landmarks.zoomFor(this.player) : 1;
 		this.camera.setAutoZoom(this.camera.zoomMul < 0.999 ? 1 : CompassCamera.autoZoomGoal(zSpeed) * hill, dt);
 		const zoom = this.input.consumeZoom();
 		if (zoom.keys) this.camera.zoom(zoom.keys * Config.camera.zoomSpeed * dt);
@@ -878,6 +878,7 @@ class Game {
 			Pelada.update(dt, this);                                     // o futebol dos meninos na quadra da favela (de dia)
 			Perf.lap('favela (gangues/moto/missões)');
 			StreetLife.update(this, dt);                                  // a rua viva: movimento por hora, acontecimentos, conversas
+			Stands.update(this, dt);                                      // quiosques, café e barracas: o vendedor aparece de perto
 			Perf.lap('rua viva');
 			if (this.motoTaxis) this.motoTaxis.update(dt, gs.pos);
 			MotoStands.update(dt, this, gs.pos); this.motoUI.update(dt);
@@ -887,6 +888,7 @@ class Game {
 			Laundry.syncMap(this, dt);                                                       // fachadas compradas → mapa e radar
 			Heists.build(this); Mechanic.build(this); Business.syncMap(this, dt);           // joalherias, oficinas, seus negócios no mapa
 			Dealers.build(this); Dealers.update(dt); Tuning.build(this); Tuning.update(dt); Garage.update(dt); PersonalBike.update(dt); this.carUI.update(dt);      // concessionárias (vitrine) e garagens (seus carros)
+			if (typeof Maracana !== 'undefined') Maracana.update(dt, this);                // o estacionamento do Maracanã: carros de verdade nas vagas
 		}
 
 		Perf.lap('favela (gangues/moto/missões)');
@@ -1773,7 +1775,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 			const chop = this._chopperNear();
 			const spot = !car && !chop && this._nearHideSpot();
 			const fence = !car && !spot && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.6);
-			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || (typeof Corcovado !== 'undefined' && Corcovado.prompt(this)) || StreetLife.prompt(this) || Witnesses.prompt(this) || Calendar.prompt(this) || Personas.prompt(this) || RivalArc.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
+			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || (typeof Corcovado !== 'undefined' && Corcovado.prompt(this)) || (typeof Landmarks !== 'undefined' && Landmarks.prompt(this)) || Stands.prompt(this) || StreetLife.prompt(this) || Witnesses.prompt(this) || Calendar.prompt(this) || Personas.prompt(this) || RivalArc.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
 			if (shopP) html = shopP;
 			else if (spot) html = `<b>E</b> esconder-se ${spot.kind === 'dumpster' ? 'na caçamba' : (spot.kind === 'barrel' ? 'no latão' : 'no caixote')}<small>se a polícia não te viu entrar, você some do radar</small>`;
 			else if (fence && fence.bridgeRail && (this.player.underBridge || this.player.depth > 0)) html = '';      // (nadando sob a ponte: não dá para subir)
@@ -2219,6 +2221,8 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		if (this.holdup) { this._cancelHoldup('Você baixou a arma — a vítima fugiu'); return; }
 		if (this.player.busy) return;
 		if (typeof Corcovado !== 'undefined' && Corcovado.interact(this)) return;      // elevador e trem do Corcovado
+		if (typeof Landmarks !== 'undefined' && Landmarks.interact(this)) return;      // o passeio de bondinho do Pão de Açúcar
+		if (Stands.interact(this)) return;                               // quiosques do calçadão, café do Corcovado
 		if (StreetLife.interact(this)) return;                           // separar a briga, devolver a bolsa, comprar no carrinho
 		if (Witnesses.interact(this)) return;                            // intimidar ou subornar a testemunha
 		if (Calendar.interact(this)) return;                             // a barraca da festa junina

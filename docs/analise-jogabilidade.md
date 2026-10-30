@@ -400,11 +400,15 @@ Mirante, Vila da Roça, Alto da Serra, Serras, Fazendas, Pântano, Canal):
 - **Cristo Redentor** no alto do **Corcovado** (a serra no lugar do antigo lago do norte), num mirante de pedra; a Trilha do Corcovado
   passa por ele (em laço: a poda de becos do `RoadPlan` apagava as pontas soltas);
 - **Pão de Açúcar** na ponta leste da praia do sul: penedo com malha própria (pedra HD com veios e a mata no pé) e o **bondinho**
-  saindo da estação na areia, dois cabos e duas cabines que vão e voltam;
+  saindo da estação na areia, dois cabos e duas cabines que vão e voltam — **E** na estação da praia faz o passeio (R$ 30): a cabine
+  sobe até o alto (a câmera abre com a altura), para lá em cima e volta; as duas cabines se cruzam no meio;
 - **praia do sul**: a cidade recua (o Contorno vira a avenida da praia) e ganha o **calçadão** de ondas pretas e brancas, quiosques,
-  postos de salva-vidas, coqueiros e guarda-sóis;
-- **píeres** de madeira com barcos atracados no canal (anda-se neles como em terra: `MapGeo.onDock`) e **pontes estaiadas** (pilones
-  e leques de estais) nas pontes norte e do meio;
+  postos de salva-vidas, coqueiros e guarda-sóis; os **quiosques vendem** de verdade (`src/world/Stands.js`: água de coco, mate,
+  biscoito de polvilho, milho, açaí — matam a fome e a sede e curam, como o carrinho do ambulante), com o quiosqueiro na frente, e o
+  calçadão é movimentado (`NPCManager._density` via `Landmarks.crowd`);
+- **píeres** de madeira com barcos atracados no canal (anda-se neles como em terra: `MapGeo.onDock`) — os barcos são de **verdade**
+  (`BoatManager.spawn`: lancha e barco em cada píer, roubáveis e navegáveis, como os da marina) — e **pontes estaiadas** (pilones
+  e leques de estais) nas pontes norte e do meio; a **Lagoa** tem lanchas e jet skis ancorados para passear;
 - o autódromo foi para o campo a oeste (o lugar antigo virou a Lagoa).
 Marcos novos têm ícone no mapa (🏟️ ✝️ 🚡) e nome (MARACANÃ, LAGOA, CORCOVADO, PÃO DE AÇÚCAR). O ponto de tipo `village` (Vila da Roça,
 Alto da Serra) ganhou ícone: antes derrubava o mapa da pausa quando aparecia na tela.
@@ -426,11 +430,16 @@ do viaduto e do heliponto (`Player.onDeck`/`deckH`): entra-se andando pelo pé d
 sai-se no chão pelo pé. Os lances avançam 0,6 u além das pontas, sem fresta nas junções. Lá em cima a câmera mira o personagem na
 altura dele e abre aos poucos (até 2,25× no mirante: o Cristo inteiro cabe no quadro). O morro é sólido para quem está no chão.
 No mapa: o mirante com a cruz, as escadarias, a passarela, o terraço e o café, o elevador, os trilhos com o trem e as estações.
+Ligado ao resto do jogo: o trem cobra a passagem na subida (R$ 20; a descida é de graça; o elevador é público); o **café do terraço**
+vende de verdade (`Stands`: cafezinho, pão de queijo, sanduíche, suco — só para quem está no terraço, das 8h às 19h, com o atendente);
+de dia há **turistas** no mirante olhando o Cristo e a vista (falam com quem chega: `Bubbles`); à noite o **Cristo é iluminado**
+(branco-azulado, pelo `dayNight.night`); a praça do portão tem movimento de turistas (`NPCManager._density` / `_style`).
 O autódromo passou a ser montado antes do campo (as casas de beira de estrada da estrada nova tomavam o lugar dele).
 
 `tests/30_corcovado` confere o morro e as malhas, cada caminho passo a passo (sem fresta, a altura subindo até o mirante), a entrada
 pelo pé (de lado não), a saída descendo, a câmera, o morro sólido, o elevador e o trem nos dois sentidos, o trem sozinho, o Cristo no
-quadro de quem está no mirante e o complexo no mapa.
+quadro de quem está no mirante e o complexo no mapa; e a passagem do trem, o café do terraço, os turistas, o Cristo iluminado à
+noite e o movimento no portão.
 
 ### O complexo do Maracanã (`src/map/Maracana.js`, porta em `src/world/Interiors.js`)
 
@@ -455,7 +464,26 @@ alambrado e o CAMPO lá em cima:
   o placar e a torcida comemora em balões.
 Saindo pela porta do saguão, volta-se ao portão sul (o jogo some com a sala).
 
-`tests/31_maracana` confere o complexo montado, o anel sólido com o vão do portão (andando, chega-se à soleira), o Maracanãzinho, a
+Ligado ao resto do jogo:
+- o **ESTACIONAMENTO** tem carros de **verdade** do trânsito (`Maracana.update`, a cada meio segundo pelo `Game`): 3 fileiras de vagas
+  de 3 × 7 u e a baia das vans de torcida ao norte; quando a câmera chega a 150 u, os carros estacionam (`Garage.spawnCar`, depois
+  trancados como os do meio-fio e `keep` para o trânsito não reciclá-los) — o modelo e a cor são sorteados como no trânsito; a lotação
+  segue a hora (de madrugada uns 8; de dia ~36%; no jogo da noite, 16h–23h, ~62%, até 40 carros). Tudo do carro vale: mixa, chave de
+  fenda, vidro, alarme, polícia, desmanche, seguro. O que o jogador tira da vaga vira um carro comum do trânsito (largado, é reciclado);
+  a 230 u, os que ficaram na vaga somem. Custo medido: ~2 ms de CPU por quadro com 40 carros;
+- a **TORCIDA**: com o estádio aberto, até 14 pedestres (28 no jogo da noite) chegam à esplanada e ao estacionamento (NPCs de verdade:
+  dá para furtar, brigar, eles fogem do tiro), de camisa; o resto do movimento sobe pela densidade da esplanada; o burburinho da
+  torcida (`Ambience`) cresce perto do estádio aberto e lá dentro; no dia de jogo o `StreetLife` traz mais gente;
+- os **REFLETORES**: à noite, com o estádio aberto, a faixa de luz sob a cobertura acende e o gramado fica iluminado;
+- a **BARRACA DE CHURRASQUINHO** na esplanada, perto do portão (`Stands`: churrasquinho, cachorro-quente, pipoca, refrigerante, água),
+  com o carrinho e o churrasqueiro;
+- o **ASSALTO** (`Robbery`): o estádio é um comércio médio (`TIER.stadium = 2`) — de arma na mão na lanchonete, o atendente e a torcida
+  do saguão viram reféns; o cofre da bilheteria, o rack das câmeras e o estoque da lanchonete (bebidas e salgados) estão pintados na
+  sala; a carreira de Assaltante pode sortear o estádio como alvo;
+- o jogo e o ingresso entram na conversa da rua (`News.smallTalk`), como o trem do Corcovado e o bondinho.
+
+`tests/31_maracana` confere também o estacionamento (carros de verdade, trancados, na vaga, ao alcance do roubo; o roubado vira carro
+do trânsito; longe, esvazia; de madrugada, poucos), a torcida, a densidade, o som, os refletores, a barraca e o assalto; e o complexo montado, o anel sólido com o vão do portão (andando, chega-se à soleira), o Maracanãzinho, a
 porta, a Av. do Estádio, o autódromo no lugar, o gramado, o nome no mapa, o horário, a passarela (sobe, atravessa sem fresta e desce no
 chão), a cobertura e o gramado no mapa e, por dentro: entrar, os jogadores, a bola e a torcida, a catraca fechada, o ingresso que
 libera, a lanchonete, assistir ao jogo, a bola e os jogadores andando, o gol, a saída e o portão fechado de madrugada.
@@ -475,7 +503,8 @@ tracejado —, prédios com a cor do próprio telhado (os de 8+ andares em vidro
 
 `tests/29_mapa_marcos` confere os marcos, os pontos e os nomes no mapa, a Lagoa, o penedo sólido, o píer, as vias novas, o autódromo,
 as malhas, o bondinho andando e as cores do mapa pintado (mar fundo e raso, mata, rodovia laranja), o mapa da pausa no mundo inteiro
-e o GPS.
+e o GPS; e as ligações com o jogo: barcos de verdade nos píeres e na Lagoa, os quiosques vendendo, o calçadão movimentado, o passeio
+de bondinho (pago, sobe e volta) e os marcos na conversa da rua.
 
 ## Personagens (`tools/asset_baker/generator/*` no build, `src/art/NpcArt.js` no jogo)
 

@@ -24,7 +24,7 @@
 // ============================================================================
 
 const Robbery = {
-    TIER: { mart: 1, bakery: 1, burger: 1, pharmacy: 1, fit: 1, bar: 2, pizza: 2, clothes: 2, gym: 2, italian: 3, japanese: 3, guns: 3, jewelry: 4 },
+    TIER: { mart: 1, bakery: 1, burger: 1, pharmacy: 1, fit: 1, bar: 2, pizza: 2, clothes: 2, gym: 2, stadium: 2, italian: 3, japanese: 3, guns: 3, jewelry: 4 },      // (stadium: a lanchonete e a bilheteria do Maracanã)
     TIER_NAME: ['', 'comércio pequeno', 'comércio médio', 'comércio de luxo', 'joalheria'],
     RANK_FOR: [0, 0, 1, 2, 2],                                    // porte → patente mínima de Assaltante
     REG: [null, [450, 1300], [1100, 2900], [2600, 6200], [3500, 8000]],
@@ -40,7 +40,7 @@ const Robbery = {
     ],
     STOCK: {                                                     // [o quê, R$ por prateleira, kg]
         mart: ['cigarros e bebidas', 260, 3], bakery: ['frios e bebidas', 140, 3], burger: ['bebidas e congelados', 120, 3], pharmacy: ['remédios controlados', 520, 1],
-        fit: ['suplementos', 220, 2], bar: ['uísque e destilados', 420, 4], pizza: ['vinhos e bebidas', 240, 3], clothes: ['roupas de grife', 650, 3], gym: ['suplementos e equipamentos', 380, 4],
+        fit: ['suplementos', 220, 2], bar: ['uísque e destilados', 420, 4], pizza: ['vinhos e bebidas', 240, 3], clothes: ['roupas de grife', 650, 3], gym: ['suplementos e equipamentos', 380, 4], stadium: ['bebidas e salgados', 200, 3],
         italian: ['vinhos importados', 900, 4], japanese: ['saquês e bebidas importadas', 760, 4], guns: ['munição e acessórios', 1100, 5], jewelry: ['relógios', 2400, 1],
     },
     robbedDay: {},                // id da loja → dia do último assalto (fica fechada para perícia até o dia seguinte)

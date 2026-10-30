@@ -108,6 +108,65 @@ module.exports = {
         c.eq(r.goal, 1, 'gol na rede: o placar sobe');
         c.ok(r.back && r.cleared, 'saindo, volta ao portão e o jogo some');
         c.ok(r.night, 'de madrugada o portão está fechado');
+
+        // ligado ao jogo: o estacionamento com carros de verdade, a torcida, os refletores, a barraca, o som e o assalto
+        const live = await page.evaluate(() => {
+            const g = game, M = Maracana, pl = g.player, out = {}, lot = () => M.slots.filter((q) => q.car);
+            g.dayNight.hour = 18; g.dayNight.apply();
+            pl.teleport(new BABYLON.Vector3(-408, 0, 18)); g.camera.snapTo(pl.position);
+            M._lotT = 0; M.update(0.6, g);
+            const cars = lot();
+            out.cars = cars.filter((q) => !q.van).length; out.vans = cars.filter((q) => q.van).length;
+            out.real = cars.every((q) => g.vehicleManager.vehicles.includes(q.car) && q.car instanceof TrafficCar && q.car.mode === 'parked');
+            out.locked = cars.every((q) => q.car.locked && q.car.keep);
+            out.inSlot = cars.every((q) => Math.hypot(q.car.position.x - q.x, q.car.position.z - q.z) < 0.6);
+            out.spaced = cars.every((a) => cars.every((b) => a === b || Math.abs(a.x - b.x) > 2.5 || Math.abs(a.z - b.z) > 6.5));      // (vaga de 3 × 7 u)
+            out.nearest = g.vehicleManager.nearest(new BABYLON.Vector3(cars[0].x, 0, cars[0].z - 1), 3) === cars[0].car;      // (o jogador acha para roubar)
+            // roubado: deixa de ser do estacionamento e vira carro comum do trânsito
+            const q = cars.find((x) => !x.van), stolen = q.car; stolen.controlled = true; M._lotT = 0; M.update(0.6, g);
+            out.released = !stolen.keep && !q.car; stolen.controlled = false;
+            // a torcida (pedestres do NPCManager) e a densidade da esplanada
+            for (let i = 0; i < 12; i++) { M._lotT = 0; M.update(0.6, g); }
+            out.fans = (M._fans || []).filter((n) => n.alive && g.npcManager.npcs.includes(n)).length; out.fansWant = M.fansFor(18);
+            out.dens = [g.npcManager._density(-408, 64), g.npcManager._density(-480, 30)];
+            out.sound = [Landmarks.crowdSound(-408, 66, 18), Landmarks.crowdSound(-408, 66, 4)];
+            // os refletores: acesos à noite (estádio aberto), apagados de dia
+            g.dayNight.hour = 21; g.dayNight.apply(); M._lightK = undefined; M._lotT = 0; M.update(0.6, g); const night = M._ringMat.emissiveColor.r;
+            g.dayNight.hour = 12; g.dayNight.apply(); M._lotT = 0; M.update(0.6, g); out.lights = [night, M._ringMat.emissiveColor.r];
+            // a barraca de churrasquinho na esplanada
+            g.dayNight.hour = 17; g.dayNight.apply();
+            const st = Stands.list.find((x) => x.id === 'churrasquinho_maracana'); pl.teleport(new BABYLON.Vector3(st.x, 0, st.z - 1.6)); g.camera.snapTo(pl.position);
+            Stands._t = 0; Stands.update(g, 0.6);
+            out.stand = /Churrasquinho/.test(Stands.prompt(g)) && !!st._on && !!st._on.actor && st._on.meshes.length > 0;
+            // longe: os carros que ficaram na vaga somem; o roubado continua no mundo; a torcida vai embora
+            pl.teleport(new BABYLON.Vector3(0, 0, 0)); g.camera.snapTo(pl.position); M._lotT = 0; M.update(0.6, g);
+            out.away = lot().length; out.stolenStays = g.vehicleManager.vehicles.includes(stolen); out.fansAway = M._fans.length;
+            // de madrugada, poucos carros
+            g.dayNight.hour = 3; g.dayNight.apply(); pl.teleport(new BABYLON.Vector3(-408, 0, 18)); g.camera.snapTo(pl.position); M._lotT = 0; M.update(0.6, g);
+            out.lateCars = lot().filter((x) => !x.van).length;
+            pl.teleport(new BABYLON.Vector3(0, 0, 0)); g.camera.snapTo(pl.position); M._lotT = 0; M.update(0.6, g);
+            // o assalto (Robbery): o estádio é um comércio médio, com o cofre, as câmeras e o estoque
+            out.tier = Robbery.tierOf(M.door());
+            const uses = M.room().uses.map((u) => u.kind);
+            out.robUses = ['safe', 'dvr', 'stock'].every((k) => uses.includes(k));
+            g.dayNight.hour = 16; g.dayNight.apply(); g.wanted.level = 0; Robbery.robbedDay = {};
+            const d = M.door(), o = Interiors.STAGE; pl.teleport(new BABYLON.Vector3(d.x, 0, d.z)); Interiors._doEnter(g, d);
+            pl.weapon = 'pistol'; pl.position.x = o.x + 52.9; pl.position.z = o.z + 4.6;
+            out.robbery = Robbery.start(g) && !!Robbery.session && !!Robbery.session.clerk && Robbery.session.hostages.length > 5;
+            Robbery.session = null; pl.weapon = 'none'; Interiors._doLeave(g);
+            return out;
+        });
+        c.ok(live.cars >= 30 && live.vans >= 2 && live.real, `estacionamento com carros de verdade do trânsito (${live.cars} carros, ${live.vans} vans) no jogo da noite`);
+        c.ok(live.locked && live.inSlot && live.spaced && live.nearest, 'trancados como os do meio-fio, cada um na sua vaga, ao alcance do roubo');
+        c.ok(live.released, 'o carro roubado deixa a vaga e vira carro comum do trânsito');
+        c.ok(live.away === 0 && live.stolenStays && live.fansAway === 0, 'longe, o estacionamento esvazia (o roubado continua no mundo) e a torcida vai embora');
+        c.ok(live.lateCars > 0 && live.lateCars < 15, `de madrugada, poucos carros (${live.lateCars})`);
+        c.ok(live.fans >= 20 && live.fans <= live.fansWant, `a torcida chega à esplanada (${live.fans} pedestres do jogo)`);
+        c.ok(live.dens[0] === 1 && live.dens[1] < 0.5, `esplanada movimentada, gramado calmo (${live.dens})`);
+        c.ok(live.sound[0] > 0.03 && live.sound[1] === 0, 'o burburinho da torcida com o estádio aberto');
+        c.ok(live.lights[0] > 0.9 && live.lights[1] < 0.3, `refletores acesos à noite, apagados de dia (${live.lights.map((v) => v.toFixed(2))})`);
+        c.ok(live.stand, 'a barraca de churrasquinho na esplanada (com o carrinho e o churrasqueiro)');
+        c.ok(live.tier === 2 && live.robUses && live.robbery, 'dá para assaltar a lanchonete do estádio (Robbery: comércio médio, cofre, câmeras, estoque)');
         c.noErrors(errors, 'Maracanã');
         await close();
     },
