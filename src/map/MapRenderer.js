@@ -70,7 +70,8 @@ const MapRenderer = {
     drawWorld() { return { canvas: MapPaint.world(), ppu: MapPaint.WORLD_PPU }; },
 
     // Desenha a janela do mundo centrada em (cx, cz) num canvas W×H com `scale` px/u.
-    // opts: { labels: nomes de ruas e regiões, budget: ms por quadro para pintar ladrilhos novos, dpr: px do aparelho por px }.
+    // opts: { labels: nomes de ruas e regiões, budget: ms por quadro para pintar ladrilhos novos (ou defer: só anota, MapPaint.work),
+    //        dpr: px do aparelho por px }.
     drawView(ctx, W, H, cx, cz, scale, opts = {}) {
         const C = this.colors, k = scale;
         const X = (x) => W / 2 + (x - cx) * k, Y = (z) => H / 2 - (z - cz) * k;
@@ -82,7 +83,7 @@ const MapRenderer = {
         const poly = (P, color) => { ctx.fillStyle = color; path(P); ctx.closePath(); ctx.fill(); };
 
         // 1) Terreno pintado (ladrilhos HD; o que ainda não está pronto sai do mundo inteiro, ampliado).
-        this.pending = MapPaint.drawTerrain(ctx, W, H, cx, cz, k, { budget: opts.budget, res: k * (opts.dpr || 1) });
+        this.pending = MapPaint.drawTerrain(ctx, W, H, cx, cz, k, { budget: opts.budget, res: k * (opts.dpr || 1), defer: opts.defer });
         ctx.imageSmoothingEnabled = false;
 
         // 2) Favela (FavelaPlan): chão de terra, becos cimentados, quadra e campinho (as ruas passam por cima).

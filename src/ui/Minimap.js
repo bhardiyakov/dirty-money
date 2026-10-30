@@ -81,13 +81,13 @@ class Minimap {
 
         const B = this.baseSize, slack = B / 2 - S * Math.SQRT1_2 - 4;          // folga (px) até a borda da camada (cantos do radar girado)
         const opKey = typeof Standing !== 'undefined' && Standing.policeOp ? 1 : 0;
-        if (this._baseKey === null || this._baseKey !== opKey || Math.abs(center.x - this._bx) * k > slack || Math.abs(center.z - this._bz) * k > slack) {
+        const fresh = MapPaint.work(4);                                     // terreno HD pintado aos poucos: um ladrilho novo pronto → refaz a camada
+        if (fresh || this._baseKey === null || this._baseKey !== opKey || Math.abs(center.x - this._bx) * k > slack || Math.abs(center.z - this._bz) * k > slack) {
             this._bx = center.x; this._bz = center.z; this._baseKey = opKey;
             const bc = this.baseCtx;
             bc.save(); bc.setLineDash([]);
-            MapRenderer.drawView(bc, B, B, this._bx, this._bz, k, { budget: 6, dpr: this.dpr });
+            MapRenderer.drawView(bc, B, B, this._bx, this._bz, k, { defer: true, dpr: this.dpr });
             bc.restore();
-            if (MapRenderer.pending) this._baseKey = null;                  // (terreno HD ainda sendo pintado: refaz no próximo quadro)
         }
         ctx.imageSmoothingEnabled = !!yaw;                                  // (girado: suaviza, senão os pixels serrilham)
         ctx.save();

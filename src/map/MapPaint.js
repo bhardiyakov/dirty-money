@@ -11,8 +11,10 @@
 // Níveis de detalhe: o mundo inteiro a 0,25 px/u (pintado uma vez, no começo: é o "rascunho") e LADRILHOS de 512 px a 0,5, 1, 2, 4
 // e 8 px/u, pintados quando aparecem na tela (no máximo `budget` ms por desenho: o que falta sai do rascunho, ampliado, até ficar
 // pronto) e guardados (os MAX_TILES usados por último).
-//   drawTerrain(ctx, W, H, cx, cz, k, { budget, res }) → true se ainda falta ladrilho (redesenhar no próximo quadro); `res` = px reais
-//   por u (com o devicePixelRatio), para escolher o nível.
+//   drawTerrain(ctx, W, H, cx, cz, k, { budget, res, defer }) → true se ainda falta ladrilho; `res` = px reais por u (com o
+//   devicePixelRatio), para escolher o nível. O mapa da pausa (redesenhado a cada quadro) pinta ali mesmo, até `budget` ms; o GPS
+//   passa `defer`: só anota o que falta e a pintura segue aos poucos em work(ms), a cada quadro — a camada dele é refeita só quando um
+//   ladrilho fica pronto (refazer a camada inteira a cada quadro custa caro).
 // ============================================================================
 
 const MapPaint = {
@@ -21,6 +23,7 @@ const MapPaint = {
     WORLD_PPU: 0.25,
     MAX_TILES: 60,
     _tiles: new Map(),
+    _want: [],                // ladrilhos que o último desenho adiado (GPS) pediu: [lvl, i, j], o mais perto do centro primeiro
 
     // Cores de base por bioma (WorldMap.B); a fazenda tem a cor de cada talhão (FARM).
     BASE: {
@@ -52,15 +55,31 @@ const MapPaint = {
         const i0 = Math.max(0, Math.floor((vx0 - WD.minX) / T)), i1 = Math.min(nt - 1, Math.floor((vx1 - WD.minX) / T));
         const j0 = Math.max(0, Math.floor((WD.maxZ - vz1) / T)), j1 = Math.min(mt - 1, Math.floor((WD.maxZ - vz0) / T));
         let pending = false;
+        const want = [];
         for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
             const x0 = WD.minX + i * T, zt = WD.maxZ - j * T;
             const dx = Math.floor(X(x0)), dy = Math.floor(Y(zt)), dw = Math.floor(X(x0 + T)) - dx, dh = Math.floor(Y(zt - T)) - dy;
             let tile = this._tiles.get(lvl + ':' + i + ',' + j);
-            if ((!tile || tile.img) && performance.now() - t0 < budget) tile = this._tile(lvl, i, j, t0 + budget);
-            if (tile && !tile.img) { tile.used = performance.now(); ctx.drawImage(tile.canvas, dx, dy, dw + 1, dh + 1); }
-            else { pending = true; fromWorld(x0, zt, T, T, dx, dy, dw + 1, dh + 1); }
+            if ((!tile || tile.img) && !o.defer && performance.now() - t0 < budget) tile = this._tile(lvl, i, j, t0 + budget);
+            if (tile && !tile.img) { tile.used = performance.now(); ctx.drawImage(tile.canvas, dx, dy, dw + 1, dh + 1); continue; }
+            pending = true;
+            fromWorld(x0, zt, T, T, dx, dy, dw + 1, dh + 1);
+            if (o.defer) want.push([lvl, i, j, (x0 + T / 2 - cx) ** 2 + (zt - T / 2 - cz) ** 2]);
         }
+        if (o.defer) this._want = want.sort((a, b) => a[3] - b[3]);
         return pending;
+    },
+
+    // Pinta, por até `ms`, os ladrilhos que o último desenho adiado pediu. true = algum ficou pronto (hora de refazer a camada).
+    work(ms) {
+        if (!this._want.length) return false;
+        const until = performance.now() + ms;
+        let done = false;
+        while (this._want.length && performance.now() < until) {
+            const [l, i, j] = this._want[0];
+            if (!this._tile(l, i, j, until).img) { this._want.shift(); done = true; }
+        }
+        return done;
     },
 
     // O mundo inteiro (o rascunho, WORLD_PPU px/u).

@@ -417,7 +417,8 @@ e a linha da arrebentação; costa e divisas de bioma curvas (campo de terra sua
 ruído — sem a escada das células de 4 u); relevo sombreado com luz do noroeste e o oco dos vales; copas na mata e árvores soltas no
 gramado; os talhões das fazendas (os mesmos do 3D) com as fileiras; ondinhas na areia, poças no pântano, fendas na pedra.
 Níveis de detalhe: um rascunho do mundo inteiro (0,25 px/u, no começo) e ladrilhos de 512 px a 0,5–8 px/u pintados quando aparecem
-(até ~14 ms por quadro no mapa da pausa e ~6 ms no GPS; o que falta sai do rascunho ampliado) e guardados (60 últimos).
+(no mapa da pausa, até ~14 ms por quadro; no GPS, 4 ms por quadro em segundo plano, e a camada dele só é refeita quando um ladrilho
+fica pronto — refazê-la a cada quadro derrubava o FPS; o que falta sai do rascunho ampliado) e guardados (60 últimos).
 Por cima, vetorial: ruas com meio-fio — rodovias e Via Expressa em **laranja** com a faixa amarela, ruas e avenidas em asfalto com o
 tracejado —, prédios com a cor do próprio telhado (os de 8+ andares em vidro azulado), sombra para o sudeste e quina iluminada, as
 árvores dos parques e os marcos desenhados (estádio, Cristo, bondinho, calçadão, píeres, barcos, estais).
