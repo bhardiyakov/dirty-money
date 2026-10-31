@@ -33,7 +33,7 @@ const Atmosphere = {
         if (!this.on) return;
         const sc = this.scene = ge.scene;
         this.ge = ge;
-        this.hazeDensity = R.haze;
+        this.hazeDensity = Diorama.on ? Diorama.GAME.haze : R.haze;
         sc.ambientColor = new BABYLON.Color3(0.1, 0.11, 0.13);
         sc.fogMode = BABYLON.Scene.FOGMODE_EXP2;
         sc.fogDensity = 0;
@@ -59,16 +59,19 @@ const Atmosphere = {
         p.sharpen.edgeAmount = 0.18; p.sharpen.colorAmount = 1;
         p.imageProcessingEnabled = true;
         const ip = p.imageProcessing;
-        ip.toneMappingEnabled = true;
-        ip.toneMappingType = BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
-        ip.exposure = R.exposure;
-        ip.contrast = R.contrast;
-        ip.colorCurvesEnabled = true;
-        const cc = new BABYLON.ColorCurves();
-        cc.globalSaturation = R.saturation;                     // (o ACES já tira o verde "estourado": aqui só devolve um pouco de cor)
-        cc.highlightsHue = 38; cc.highlightsDensity = 18; cc.highlightsSaturation = 22;      // realces levemente quentes (o sol)
-        cc.shadowsHue = 215; cc.shadowsDensity = 12; cc.shadowsSaturation = 10;             // sombras levemente frias (o céu)
-        ip.colorCurves = cc;
+        if (Diorama.on) Diorama.imageProcessing(ip, Diorama.GAME);         // maquete: ACES de contraste firme, cores vivas de brinquedo
+        else {
+            ip.toneMappingEnabled = true;
+            ip.toneMappingType = BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
+            ip.exposure = R.exposure;
+            ip.contrast = R.contrast;
+            ip.colorCurvesEnabled = true;
+            const cc = new BABYLON.ColorCurves();
+            cc.globalSaturation = R.saturation;                 // (o ACES já tira o verde "estourado": aqui só devolve um pouco de cor)
+            cc.highlightsHue = 38; cc.highlightsDensity = 18; cc.highlightsSaturation = 22;      // realces levemente quentes (o sol)
+            cc.shadowsHue = 215; cc.shadowsDensity = 12; cc.shadowsSaturation = 10;             // sombras levemente frias (o céu)
+            ip.colorCurves = cc;
+        }
         ip.vignetteEnabled = false;
         ip.ditheringEnabled = true; ip.ditheringIntensity = 1 / 255;
         // a cena chega em gama (ver o cabeçalho): o pós converte para linear antes do ACES
@@ -83,7 +86,7 @@ const Atmosphere = {
             sc.onNewMeshAddedObservable.add((m) => this._maybeGlow(m));
         }
         if (this.ao) this.ao.attach(cam);
-        console.log(`[VISUAL] moderno: PBR ${R.pbr ? 'sim' : 'não'}, árvores 3D ${R.trees3d ? 'sim' : 'não'}, sombra ${game.gameEngine.esm ? 'ESM macia' : 'PCF'}, SSAO ${this.ao ? 'sim' : 'não'}, glow ${this.glow ? 'sim' : 'não'}`);
+        console.log(`[VISUAL] ${Diorama.on ? 'maquete (Diorama)' : 'moderno real'}: PBR ${R.pbr ? 'sim' : 'não'}, árvores 3D ${R.trees3d ? 'sim' : 'não'}, sombra ${game.gameEngine.esm ? 'ESM macia' : 'PCF'}, SSAO ${this.ao ? 'sim' : 'não'}, glow ${this.glow ? 'sim' : 'não'}`);
     },
 
     // As luzes (GlowBatch 'glow': postes, faróis, lanternas, giroflex) entram no glow layer com o próprio material (o halo é borrado dele).
@@ -97,7 +100,10 @@ const Atmosphere = {
 
     // ------------------------------------------------------------------ hora do dia
     // As cores da hora (DayNight._params + o tempo) no visual moderno: o sol amarelado, o céu azul com o rebote do chão esverdeado.
+    // Quanto do sol sobra na sombra (DayNight): 0,4 no visual real; na maquete quase só o céu.
+    get shadowBase() { return Diorama.on ? Diorama.GAME.shadowBase : 0.4; },
     grade(P) {
+        if (Diorama.on) { Diorama.grade(P); return; }
         const n = P.n, day = 1 - n;
         P.sunC = [P.sunC[0], P.sunC[1] * (1 - 0.04 * day), P.sunC[2] * (1 - 0.12 * day)];
         P.sunI *= 1 + 0.12 * day;
@@ -133,7 +139,7 @@ class OrthoSSAO {
     constructor(scene, cam) {
         this.scene = scene; this.cam = cam;
         const eng = this.eng = scene.getEngine(), R = Config.render;
-        this.strength = R.aoStrength; this.radius = R.aoRadius;
+        this.strength = Diorama.on ? Diorama.GAME.aoStrength : R.aoStrength; this.radius = Diorama.on ? Diorama.GAME.aoRadius : R.aoRadius;      // (maquete: AO forte nas junções)
         this.depth = scene.enableDepthRenderer(cam, false, true, BABYLON.Texture.NEAREST_SAMPLINGMODE, true);      // (z da câmera, float 32)
         const dm = this.depthMap = this.depth.getDepthMap();
         // Fora da profundidade: sprites e efeitos (ShaderMaterial) e o que é transparente — só a geometria opaca do mundo faz sombra de contato.

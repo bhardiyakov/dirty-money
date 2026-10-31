@@ -60,7 +60,9 @@ const TerrainSplat = {
 
         // (visual moderno: PBR fosco com o relevo no mapa de normais — PBRWorld; a textura só liga o caminho "com textura" do shader:
         // a cor vem do plugin)
-        const m = PBRWorld.on ? PBRWorld.material(scene, 'terrain', atlasTex) : new BABYLON.StandardMaterial('terrain', scene);
+        // (maquete — Diorama: cor sólida por tipo de chão, sem o desenho dos ladrilhos nem as curvas de nível; as divisas continuam)
+        const m = Diorama.on ? Diorama.surface(scene, 'terrain', atlasTex, { solid: false })
+            : PBRWorld.on ? PBRWorld.material(scene, 'terrain', atlasTex) : new BABYLON.StandardMaterial('terrain', scene);
         m.diffuseTexture = atlasTex;
         m.specularColor = BABYLON.Color3.Black();
         m.transparencyMode = BABYLON.Material.MATERIAL_OPAQUE;      // (a textura RGBA "tem alfa": sem isto o chão iria para a passada transparente)
@@ -69,8 +71,9 @@ const TerrainSplat = {
     },
 
     _plugin(material, mapTex, atlasTex, P) {
-        const f = (v) => Number(v).toFixed(6), S = this, TL = P.tile || S.TILE, A2 = P.atlas2 || atlasTex;
+        const f = (v) => Number(v).toFixed(6), S = this, TL = P.tile || S.TILE, A2 = P.atlas2 || atlasTex, dio = Diorama.on;
         const GLSL = `
+            ${dio ? Diorama.terrainPalette(S.IDS) : ''}
             uniform sampler2D splatMap;
             uniform sampler2D splatAtlas;
             uniform sampler2D splatAtlas2;
@@ -86,6 +89,7 @@ const TerrainSplat = {
             vec3 tPx(vec2 o, vec2 t) { return texture2D(splatAtlas, (o + mod(t, ${f(TL)}) + 0.5) / vec2(${f(TL * S.COLS)}, ${f(TL * S.ROWS)})).rgb; }
             vec3 tPx2(vec2 o, vec2 t) { return texture2D(splatAtlas2, (o + mod(t, ${f(TL / 2)}) + 0.5) / vec2(${f(TL / 2 * S.COLS)}, ${f(TL / 2 * S.ROWS)})).rgb; }
             vec3 tTex(float id, vec2 p) {
+                ${dio ? 'return tPal(id);' : ''}
                 vec2 o = vec2(mod(id, ${f(S.COLS)}), floor(id / ${f(S.COLS)})) * ${f(TL)};
                 vec2 q = fract(p / 4.0) * ${f(TL)};
                 if (tSmooth > 0.5) {                                                                // gráfico suave: bilinear DENTRO do ladrilho (repete)
@@ -123,7 +127,7 @@ const TerrainSplat = {
                 // paredão: a encosta íngreme escurece (sombra), seguindo a curva da altura, não a borda da célula
                 float cliff = 1.0 - mix(mix(h00.a, h10.a, s.x), mix(h01.a, h11.a, s.x), s.y);         // marca de paredão, interpolada
                 if (cliff > 0.0) col *= 1.0 - 0.45 * smoothstep(0.3, 0.7, cliff) * smoothstep(0.6, 0.95, length(gr) + (tNoise(p * 1.7) - 0.5) * 0.15);
-                if ((max(max(ha, hb), max(hc, hd)) > 8.0 || own == 4.0 || own == 6.0) && length(gr) > 0.04) {      // (platô plano: sem linha)
+                if (${dio ? 'false && ' : ''}(max(max(ha, hb), max(hc, hd)) > 8.0 || own == 4.0 || own == 6.0) && length(gr) > 0.04) {      // (platô plano: sem linha)
                     float lv = hh / ${f(P.contour)}, m = floor(lv + 0.5);
                     float dist = abs(lv - m) * ${f(P.contour)} / max(length(gr), 0.02);
                     bool major = mod(m, 4.0) < 0.5;

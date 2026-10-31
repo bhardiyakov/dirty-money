@@ -368,7 +368,7 @@ class CompassCamera {
 // across (view units; it starts at Config.camera.fogStart/fogEnd of that), toward the fog colour × EDGE_K — after an aerial-perspective
 // haze: exp2 of the view depth beyond the rooftops (Config.camera.distance − 40), density vFogInfos.w, toward the fog colour itself
 // (the sky). Under the 2.5D camera, depth grows toward the top of the screen and from the rooftops down to the street.
-CompassCamera.EDGE_K = 0.38;
+CompassCamera.EDGE_K = Config.render.modern && Config.render.style === 'diorama' ? 0.82 : 0.38;      // (maquete: a borda some no céu claro)
 CompassCamera.EDGE_FOG = `#ifdef FOG
 #define FOGMODE_NONE 0.
 #define FOGMODE_EXP 1.

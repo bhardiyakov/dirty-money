@@ -60,11 +60,16 @@ const PBRWorld = {
         }
         if (opts.color) m.albedoColor = BABYLON.Color3.FromHexString(opts.color).toLinearSpace();
         if (pr.n) m.bumpTexture = this.normalMap(scene, pr.n, pr.lvl, pr.uv);
-        // apelidos do StandardMaterial (quem lê/escreve a cor e a textura do material do mundo continua funcionando)
+        this.alias(m);
+        this.detail(m, pr);
+        return m;
+    },
+
+    // Apelidos do StandardMaterial num PBRMaterial do mundo (quem lê/escreve a cor e a textura dele continua funcionando).
+    alias(m) {
         Object.defineProperty(m, 'diffuseTexture', { get() { return this.albedoTexture; }, set(t) { this.albedoTexture = t; } });
         Object.defineProperty(m, 'diffuseColor', { get() { return this.albedoColor; }, set(c) { this.albedoColor = c; } });
         Object.defineProperty(m, 'specularColor', { get() { return BABYLON.Color3.Black(); }, set() {} });
-        this.detail(m, pr);
         return m;
     },
 

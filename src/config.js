@@ -124,8 +124,11 @@ const Config = {
 	//   ssao       oclusão de ambiente em espaço de tela (os cantos dos prédios, das árvores e do meio-fio escurecem)
 	//   bloom/glow brilho das luzes (postes, faróis, janelas) · tone mapping ACES, exposição, contraste e gradação de cor no pós
 	//   haze       névoa de distância (EXP2) com a cor do céu: quanto mais longe da câmera, mais o mundo some no azul
+	//   style      'diorama' = MAQUETE / city builder (render/Diorama.js: cor sólida da paleta, sem textura ruidosa, céu claro, sombra PCF
+	//              limpa, AO forte; ficam os detalhes que são informação — faixas, letreiros, janelas, espuma, divisas) | 'real' = o PBR com
+	//              mapas de normais e texturas (render/PBRWorld.js). `?look=diorama` / `?look=modern` (real) / `?look=classic`.
 	render: {
-		modern: true, pbr: true, trees3d: true, shadows: 'esm', ssao: true, bloom: true, glow: true, fxaa: true,
+		modern: true, style: 'diorama', pbr: true, trees3d: true, shadows: 'esm', ssao: true, bloom: true, glow: true, fxaa: true,
 		exposure: 1.6, contrast: 1.1, saturation: 6, haze: 0.0045, ambient: 0.16, aoStrength: 0.62, aoRadius: 2.4,
 	},
 

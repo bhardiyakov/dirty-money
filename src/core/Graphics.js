@@ -8,8 +8,9 @@
 //   medium   the screen's density (up to 1.5×) MSAA 4×        1024          8 directions, 256 MB, 4× SSAA      the light profile 30
 //   high     the screen's density (up to 2×) MSAA 4×          2048          16 directions, 640 MB, 16× SSAA    full               30 (60 in the PC app)
 //   hd       the screen's density (up to 3×) MSAA 8×          4096          16 directions, 1 GB, 16× SSAA      full               60
-// Modern look (Config.render: render/Atmosphere.js, PBRWorld.js, Trees3D.js): off at low (the classic look); medium = PBR materials, 3D
-// trees, bloom and tone mapping with the sharp PCF shadows; high and HD add the soft ESM shadows, SSAO and the glow layer.
+// Modern look (Config.render: render/Atmosphere.js, Diorama.js, PBRWorld.js, Trees3D.js): off at low (the classic look); medium = PBR
+// materials, 3D trees and tone mapping; high and HD add SSAO and the glow layer. The default style is the DIORAMA (solid-colour city
+// builder look, clean PCF shadows); `?look=modern` is the realistic one (normal maps, textures, soft ESM shadows).
 // (MSAA = the scene's geometry edges, render/Smooth.js — 8× only while the frame is ≤ 4 Mpx; SSAA = up to that many samples per pixel
 // inside the characters' own shader, NpcArt: MSAA cannot smooth the inside of a sprite.)
 //
@@ -98,10 +99,11 @@ const Graphics = {
 	},
 	// The modern look (Config.render): what the preset turns on; `?look=classic` / `?look=modern` override it (testing, weak drivers).
 	_look(l) {
-		const R = Config.render, q = typeof location !== 'undefined' ? location.search : '', m = /[?&]look=(classic|modern)\b/.exec(q);
+		const R = Config.render, q = typeof location !== 'undefined' ? location.search : '', m = /[?&]look=(classic|modern|diorama)\b/.exec(q);
 		Object.assign(R, l);
-		if (m) R.modern = m[1] === 'modern';
+		if (m) { R.modern = m[1] !== 'classic'; if (R.modern) R.style = m[1] === 'modern' ? 'real' : 'diorama'; }
 		if (!R.modern) { R.pbr = false; R.trees3d = false; R.shadows = 'pcf'; R.ssao = false; R.bloom = false; R.glow = false; }
+		else if (R.style === 'diorama') { R.pbr = true; R.shadows = 'pcf'; R.bloom = false; }      // (maquete: sombra PCF de borda limpa; o brilho só à noite, pelo glow)
 	},
 	// People and traffic in the living world: the light profile at medium, half of it at low.
 	_crowd(k) {

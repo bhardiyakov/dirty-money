@@ -19,6 +19,14 @@ const Pixel = {
     },
 
     // Hash inteiro 2D -> [0,1). Sem estado: base do ruído tileável.
+    // Cor média (gama, 0..1) dos pixels opacos de uma imagem RGBA — amostrando no máximo ~4.000 deles.
+    average(d) {
+        const n = d.length >> 2, step = Math.max(1, Math.floor(n / 4096));
+        let r = 0, g = 0, b = 0, w = 0;
+        for (let i = 0; i < n; i += step) { const o = i << 2, a = d[o + 3] / 255; r += d[o] * a; g += d[o + 1] * a; b += d[o + 2] * a; w += a; }
+        return w ? [r / w / 255, g / w / 255, b / w / 255] : [0.5, 0.5, 0.5];
+    },
+
     hash(x, y, seed = 0) {
         let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(seed | 0, 1442695041);
         h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -175,6 +183,7 @@ class PixelCanvas {
         tex.wrapV = mode;
         tex.anisotropicFilteringLevel = smooth ? Math.max(4, aniso) : aniso;
         if (tile) { tex._dmTile = true; tex._dmAniso = aniso; }
+        tex._dmAvg = Pixel.average(this.data);           // (a cor sólida da superfície no visual de maquete: render/Diorama.js)
         return tex;
     }
 }

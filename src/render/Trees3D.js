@@ -85,7 +85,8 @@ const Trees3D = {
     // ------------------------------------------------------------------ o material (PBR fosco + vento)
     material(scene) {
         if (this._mat) return this._mat;
-        const m = PBRWorld.on ? PBRWorld.material(scene, 'trees3d', null) : new BABYLON.PBRMaterial('trees3d', scene);
+        const m = Diorama.on ? Diorama.surface(scene, 'trees3d', null, { solid: false })
+            : PBRWorld.on ? PBRWorld.material(scene, 'trees3d', null) : new BABYLON.PBRMaterial('trees3d', scene);
         m.metallic = 0; m.roughness = 0.88; m.specularIntensity = 0.35;
         m.backFaceCulling = false;                 // (as palmas e as folhas são finas: os dois lados, com a normal de cima — iluminadas pelo sol)
         if (!this._wind) this._wind = this._windClass();
@@ -194,10 +195,37 @@ const Trees3D = {
                 break;
             }
         }
+        if (Diorama.on) return (C[model] = this._toy(g, model));
         const vd = new BABYLON.VertexData();
         vd.positions = new Float32Array(g.p); vd.normals = new Float32Array(g.n); vd.colors = new Float32Array(g.c);
         vd.indices = g.p.length / 3 > 65535 ? new Uint32Array(g.i) : new Uint16Array(g.i);
         return (C[model] = vd);
+    },
+    // Maquete (Diorama): LOW-POLY de verdade — cada triângulo com a normal da própria face (facetas à mostra) e UMA cor da paleta:
+    // a folhagem do modelo (Diorama.TREES) ou o tronco, com um toque mais claro nas faces viradas para cima.
+    _toy(g, model) {
+        const leaf = Diorama.treeColor(model) || Diorama.treeColor('oak'), trunk = Diorama.treeColor('trunk'), R = this._rng(model.length * 131 + 7);
+        const n = g.i.length, P = new Float32Array(n * 3), N = new Float32Array(n * 3), C = new Float32Array(n * 4), I = new Uint32Array(n);
+        for (let t = 0; t < n; t += 3) {
+            const v = [g.i[t], g.i[t + 1], g.i[t + 2]], p = v.map((k) => [g.p[k * 3], g.p[k * 3 + 1], g.p[k * 3 + 2]]);
+            const ux = p[1][0] - p[0][0], uy = p[1][1] - p[0][1], uz = p[1][2] - p[0][2], wx = p[2][0] - p[0][0], wy = p[2][1] - p[0][1], wz = p[2][2] - p[0][2];
+            let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+            const sn = g.n[v[0] * 3] + g.n[v[1] * 3] + g.n[v[2] * 3], sy = g.n[v[0] * 3 + 1] + g.n[v[1] * 3 + 1] + g.n[v[2] * 3 + 1], sz = g.n[v[0] * 3 + 2] + g.n[v[1] * 3 + 2] + g.n[v[2] * 3 + 2];
+            if (nx * sn + ny * sy + nz * sz < 0) { nx = -nx; ny = -ny; nz = -nz; }        // (para fora, como a normal original)
+            const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+            let r = 0, gg = 0, b = 0;
+            for (const k of v) { r += g.c[k * 4]; gg += g.c[k * 4 + 1]; b += g.c[k * 4 + 2]; }
+            const isTrunk = r > gg && gg > b && r / 3 < 0.6 && b / 3 < 0.32;           // (marrom do tronco e dos cocos; o ipê rosa/amarelo não)
+            const base = isTrunk ? trunk : leaf, k = (0.9 + 0.14 * Math.max(0, ny)) * (0.96 + 0.08 * R());
+            for (let j = 0; j < 3; j++) {
+                const o = t + j;
+                P.set(p[j], o * 3); N[o * 3] = nx; N[o * 3 + 1] = ny; N[o * 3 + 2] = nz;
+                C[o * 4] = base[0] * k; C[o * 4 + 1] = base[1] * k; C[o * 4 + 2] = base[2] * k; C[o * 4 + 3] = 1; I[o] = o;
+            }
+        }
+        const vd = new BABYLON.VertexData();
+        vd.positions = P; vd.normals = N; vd.colors = C; vd.indices = n > 65535 ? I : new Uint16Array(I);
+        return vd;
     },
     _rng(seed) { let s = seed >>> 0 || 1; return () => { s = Math.imul(s ^ (s >>> 15), 2246822519) ^ Math.imul(s ^ (s >>> 13), 3266489917); s >>>= 0; return (s & 0xffffff) / 0x1000000; }; },
 };

@@ -6,10 +6,38 @@ O mundo aberto ganhou uma camada de renderização "moderna" por cima da arte ex
 | Preset | O que liga |
 | --- | --- |
 | Low | nada (visual clássico: StandardMaterial, sombra PCF, sem pós) |
-| Medium | PBR, árvores 3D, bloom, tone mapping; sombra PCF nítida |
-| High / HD | tudo: sombra macia ESM, SSAO, glow layer |
+| Medium | PBR, árvores 3D, tone mapping; sombra PCF |
+| High / HD | tudo: SSAO e glow layer (sombra ESM só no estilo real) |
 
-Para testar: `?look=classic` força o visual antigo, `?look=modern` força o novo (mesmo no Low).
+Há dois estilos modernos (`Config.render.style`):
+
+- **`diorama` (padrão): maquete / city builder.** O mapa é construído pela fábrica de materiais do `src/render/Diorama.js`.
+- **`real`:** PBR com mapas de normais e as texturas pintadas (`src/render/PBRWorld.js`) e sombra macia ESM.
+
+Para testar: `?look=diorama`, `?look=modern` (o real) ou `?look=classic` (o visual antigo, mesmo no Low).
+
+## Maquete: como o mapa é construído
+
+O `Diorama` é a camada de visual do mapa. A câmera do jogo continua a `CompassCamera` (ortográfica, presa ao personagem). Por
+isso o AO do jogo é o `OrthoSSAO`: o `SSAO2` do Babylon só funciona em perspectiva, e fica com a cena autônoma (`diorama.html`).
+
+- **`Diorama.surface(scene, name, tex, opts)`** é o material de toda superfície do mapa. Quem chama: `WorldBuilder._mat`
+  (ruas, calçadas, gramados, telhados, fachadas, água), o terreno (`TerrainSplat`), as árvores 3D, o morro do Corcovado, o Pão de
+  Açúcar, o gramado do Maracanã e a casa do protagonista. É um PBR fosco (metallic 0; rugosidade 0,88, telhados 0,7, água 0,1),
+  sem mapa de normais nem variação ruidosa.
+- **Cor sólida:** vem de `Diorama.SURFACE` (ruas, calçadas, grama, areia, terra, água) ou, para telhados e fachadas, da **cor média
+  da própria textura** avivada. Essa média é calculada quando a textura é pintada (`tex._dmAvg`, em `Pixel.toTexture` e
+  `CityTile.toTexture`). Assim cada telhado continua laranja, azul ou de zinco, só que liso. A textura fica ligada só pelas UVs.
+- **Detalhes que ficam** (são informação, não ruído): faixas de pedestre, lojas, o gramado do Maracanã, vidro e porta da casa
+  (`Diorama.KEEP`); as janelas das fachadas, que viram vidro escuro de dia e acendem à noite; a espuma da orla e as divisas dos
+  biomas.
+- **Terreno:** `Diorama.TERRAIN` tem uma cor por bioma. As curvas de nível saem e as divisas em degradê ficam.
+- **Árvores:** cores de `Diorama.TREES`, com cada triângulo na sua própria normal (low-poly facetado).
+- **Luz:** as luzes da cena seguem o `DayNight`, calibradas para os sprites. Os materiais da maquete multiplicam a luz direta por
+  `Diorama.GAME.direct` (`directIntensity`), com o mesmo balanço céu/sol da cena autônoma. `Diorama.grade` deixa de dia o céu
+  azul-claro, o rebote do chão esverdeado e o sol quente. Na sombra sobra quase só o céu (`GAME.shadowBase`).
+- **Sombra:** PCF de qualidade alta. **Pós:** `Diorama.imageProcessing` (ACES, contraste 1,18, saturação). A borda da tela some
+  no céu claro (`CompassCamera.EDGE_K`).
 
 ## Onde está cada coisa
 

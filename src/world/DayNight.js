@@ -113,7 +113,8 @@ class DayNight {
 		// Chuva: sombras mais fracas. Ao anoitecer elas desvanecem (darkness -> 1 = invisivel) ANTES de congelar o mapa; senao o mapa
 		// congelado ficava pintado no chao como uma 'marca d'agua' de sombras velhas (e nao acompanhava mais sol nem camera).
 		const fade = this.forceNoShadows ? 0 : Math.max(0, Math.min(1, (shadowI - 0.25) / 0.17));
-		const dark = Math.round((1 - (1 - (0.4 + 0.4 * (Weather.cur ? Weather.cur.k : 0))) * fade) * 100) / 100;
+		const base = atm ? Atmosphere.shadowBase : 0.4;      // (maquete: na sombra sobra quase só o céu)
+		const dark = Math.round((1 - (1 - (base + 0.4 * (Weather.cur ? Weather.cur.k : 0))) * fade) * 100) / 100;
 		if (this._shadowDark !== dark) { this._shadowDark = dark; ge.shadowGenerator.setDarkness(dark); }
 
 		SpriteMaterial.sharedTint().copyFromFloats(...P.tint);

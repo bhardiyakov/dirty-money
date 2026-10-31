@@ -71,7 +71,10 @@ class WorldBuilder {
 
     // ---------------------------------------------------------------- materiais
     // Visual moderno (Config.render.pbr): PBRMaterial com rugosidade, mapa de normais e variação de tom por superfície (render/PBRWorld.js).
+    // Maquete (Config.render.style = 'diorama', o padrão): a fábrica de superfícies do render/Diorama.js — cor sólida da paleta (ou a média
+    // avivada da textura), fosco, sem mapa de normais.
     _mat(name, tex, opts = {}) {
+        if (Diorama.on) return Diorama.surface(this.scene, name, tex, opts);
         if (PBRWorld.on) return PBRWorld.material(this.scene, name, tex, opts);
         const m = new BABYLON.StandardMaterial(name, this.scene);
         if (tex) m.diffuseTexture = tex;
@@ -140,7 +143,7 @@ class WorldBuilder {
 
         M.facades = {};
         for (const k of Object.keys(T.facades)) {
-            const F = T.facades[k], m = this._mat('facade_' + k, F.diffuse);
+            const F = T.facades[k], m = this._mat('facade_' + k, F.diffuse, { windows: F.emissive });      // (maquete: as janelas viram vidro na cor lisa)
             WindowLights.apply(m, F.emissive, F.grid, F.occ);      // janelas acesas à noite, uma a uma, pela hora (render/WindowLights.js)
             M.facades[k] = m;
         }
