@@ -67,7 +67,7 @@ const WindowLights = {
             getCustomCode(shaderType) {
                 if (shaderType !== 'fragment') return null;
                 // (sem ponto e vírgula em comentário GLSL: o Babylon corta a linha ali)
-                return PBRWorld.adapt(this._material, {
+                return {
                     CUSTOM_FRAGMENT_DEFINITIONS: `
                         #ifdef WINLIGHTS
                         uniform sampler2D winSampler;
@@ -85,13 +85,10 @@ const WindowLights = {
                                 if (h2 > 0.93 && winG.z < 0.5) tint = vec3(0.42, 0.62, 1.25) * (0.72 + 0.28 * sin(winP.z * 7.0 + h1 * 60.0) * sin(winP.z * 2.3 + h2 * 90.0));
                                 wl *= tint * (0.72 + 0.45 * fract(h1 * 13.7));
                             }
-                            #ifdef PBR
-                            wl = toLinearSpace(wl);
-                            #endif
                             color.rgb += wl * winP.x * winG.w;
                         }
                         #endif`,
-                });
+                };
             }
         };
     },

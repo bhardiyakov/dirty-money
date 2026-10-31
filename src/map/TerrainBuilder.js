@@ -149,25 +149,6 @@ class TerrainBuilder {
         return Math.max(0.5, Math.min(1.2, 1 + (lam - L[1]) * 1.5));
     }
 
-    // Visual moderno: os PAREDÕES ganham relevo físico — os cantos de célula cercados só por células de paredão sobem até ~3,4 u (rocha
-    // irregular, por ruído). Só sobe o miolo dos paredões, onde ninguém anda: os colisores (Havok, caixas de 4 u de altura nas mesmas
-    // células: _addColliders) continuam batendo com a rocha, e o chão em volta (onde se anda, dirige e nasce mato) fica no nível de sempre.
-    // Devolve as alturas dos (n+1)² cantos do pedaço, ou null (nada a subir / visual clássico).
-    _lift(gi0, gj0, n) {
-        if (!(Config.render.modern && Config.render.pbr)) return null;
-        const M = WorldMap, W = this.W, c = W.cell, nx = M.nx, nz = M.nz;
-        const cliff = (i, j) => i >= 0 && j >= 0 && i < nx && j < nz && (M.flags[j * nx + i] & 1) === 1;
-        let out = null;
-        for (let b = 0; b <= n; b++) for (let a = 0; a <= n; a++) {
-            const i = gi0 + a, j = gj0 + b;
-            if (!(cliff(i - 1, j - 1) && cliff(i, j - 1) && cliff(i - 1, j) && cliff(i, j))) continue;
-            const x = W.minX + i * c, z = W.minZ + j * c;
-            const deep = (cliff(i - 2, j) && cliff(i + 1, j) && cliff(i, j - 2) && cliff(i, j + 1)) ? 1 : 0.55;      // (mais alto longe da borda)
-            (out || (out = new Float32Array((n + 1) * (n + 1))))[b * (n + 1) + a] = (1.2 + 2.2 * M._fbm(x / 9, z / 9, 2, 57)) * deep;
-        }
-        return out;
-    }
-
     // Tipo de chão da célula (índice em TerrainSplat.IDS; mar e cidade ficam de fora da mistura).
     _idFor(b, i, j) {
         const B = WorldMap.B, I = (k) => TerrainSplat.IDS.indexOf(k);
@@ -201,7 +182,6 @@ class TerrainBuilder {
         const sh = new Float32Array((n + 1) * (n + 1));
         for (let b = 0; b <= n; b++) for (let a = 0; a <= n; a++) sh[b * (n + 1) + a] = this._shade(gi0 + a, gj0 + b);
         const S = (a, b) => sh[b * (n + 1) + a];
-        const lift = this._lift(gi0, gj0, n);
 
         for (let b = 0; b < n; b++) {
             if (b > 0) yield;                                              // (fatia: uma linha de células por passo)
@@ -219,13 +199,7 @@ class TerrainBuilder {
                 const col = (s) => [s * 1, s * 1, s * 1];
                 // Um quadrado por célula, todos no material do chão: a textura, as divisas em degradê, as curvas de nível e a sombra
                 // dos paredões são pintadas no shader (TerrainSplat), em curvas — nada de degraus nas bordas das células.
-                const L = lift && (lift[(b + 1) * (n + 1) + a] + lift[(b + 1) * (n + 1) + a + 1] + lift[b * (n + 1) + a] + lift[b * (n + 1) + a + 1] > 0);
-                if (L) {                                                           // paredão em relevo de verdade (visual moderno: _lift)
-                    const hNW = lift[(b + 1) * (n + 1) + a], hNE = lift[(b + 1) * (n + 1) + a + 1], hSW = lift[b * (n + 1) + a], hSE = lift[b * (n + 1) + a + 1];
-                    const gx = ((hNE + hSE) - (hNW + hSW)) / (2 * c), gz = ((hNW + hNE) - (hSW + hSE)) / (2 * c), il = 1 / hypot(gx, 1, gz);
-                    ground.quad([x0, y + hNW, z1], [x1, y + hNE, z1], [x0, y + hSW, z0], [x1, y + hSE, z0], [-gx * il, il, -gz * il],
-                        [uvT(x0, z1), uvT(x1, z1), uvT(x0, z0), uvT(x1, z0)], [col(cNW), col(cNE), col(cSW), col(cSE)]);
-                } else ground.top(x0, z0, x1, z1, y, uvT, [col(cNW), col(cNE), col(cSW), col(cSE)]);
+                ground.top(x0, z0, x1, z1, y, uvT, [col(cNW), col(cNE), col(cSW), col(cSE)]);
 
                 const hc = M.h[k];
                 this._plant(vegHi, vegLo, bio, gi, gj, x0 + c / 2, z0 + c / 2, hc, base);
@@ -243,7 +217,6 @@ class TerrainBuilder {
             if (mk) chunk.meshes.push(mk);
         }
         yield; mk(vegLo, 'vlo', wb.props.loMaterial, { vertexColors: true });
-        if (vegHi.trees || vegLo.trees) { yield; for (const m of Trees3D.build(this.scene, [vegHi, vegLo], `terr_${ci}_${cj}`, wb.shadow)) chunk.meshes.push(m); }      // árvores 3D (visual moderno)
         this._addColliders(chunk);
 
         this.stats.built++;

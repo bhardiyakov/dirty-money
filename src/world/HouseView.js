@@ -24,7 +24,6 @@ const HouseView = {
 		// (com a cidade em alta definição, as texturas de fora também saem em HD: art/CityHDFacades.js)
 		const tex = (name, wrap = true) => typeof CityHD !== 'undefined' && CityHD.on ? CityHD.house(scene, name, wrap) : A[name]().toTexture(scene, { wrap, mips: wrap, aniso: 1 });
 		const std = (name, texture, opts = {}) => {
-			if (typeof Diorama !== 'undefined' && Diorama.on) return Diorama.surface(scene, name, texture, opts);      // (maquete: tijolo, zinco e tábua lisos; vidro e porta com a arte)
 			const m = new BABYLON.StandardMaterial(name, scene);
 			if (texture) m.diffuseTexture = texture;
 			m.specularColor = BABYLON.Color3.Black();

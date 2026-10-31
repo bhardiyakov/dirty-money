@@ -70,12 +70,7 @@ class WorldBuilder {
     }
 
     // ---------------------------------------------------------------- materiais
-    // Visual moderno (Config.render.pbr): PBRMaterial com rugosidade, mapa de normais e variação de tom por superfície (render/PBRWorld.js).
-    // Maquete (Config.render.style = 'diorama', o padrão): a fábrica de superfícies do render/Diorama.js — cor sólida da paleta (ou a média
-    // avivada da textura), fosco, sem mapa de normais.
     _mat(name, tex, opts = {}) {
-        if (Diorama.on) return Diorama.surface(this.scene, name, tex, opts);
-        if (PBRWorld.on) return PBRWorld.material(this.scene, name, tex, opts);
         const m = new BABYLON.StandardMaterial(name, this.scene);
         if (tex) m.diffuseTexture = tex;
         m.specularColor = BABYLON.Color3.Black();
@@ -143,7 +138,7 @@ class WorldBuilder {
 
         M.facades = {};
         for (const k of Object.keys(T.facades)) {
-            const F = T.facades[k], m = this._mat('facade_' + k, F.diffuse, { windows: F.emissive });      // (maquete: as janelas viram vidro na cor lisa)
+            const F = T.facades[k], m = this._mat('facade_' + k, F.diffuse);
             WindowLights.apply(m, F.emissive, F.grid, F.occ);      // janelas acesas à noite, uma a uma, pela hora (render/WindowLights.js)
             M.facades[k] = m;
         }
@@ -1123,9 +1118,7 @@ class WorldBuilder {
     // Quad de sprite achatado (visto de cima) com o frame `idx` do atlas de props.
     // Plantas que balançam usam os atlas animados (UV do quadro 0; o shader soma o deslocamento do quadro) e levam uma fase própria no alfa da cor.
     _spriteQuad(batch, idx, row, x, z, size, y) {
-        const kind = PropSprites.FRAMES[idx].kind;
-        if (Trees3D.wants(kind)) { Trees3D.add(batch, kind, x, y - PropSprites.HEIGHT[kind], z, size / (PropSprites.FRAME / Config.art.ppu)); return; }      // (visual moderno: a árvore em 3D)
-        const sway = PropSprites.SWAY[kind] || 0;
+        const sway = PropSprites.SWAY[PropSprites.FRAMES[idx].kind] || 0;
         const [u0, v0, u1, v1] = (sway && this.props.animRect(idx)) || this.props.rect(idx);
         const h = size / 2, s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453, phase = s - Math.floor(s);
         batch.quad([x - h, y, z + h], [x + h, y, z + h], [x - h, y, z - h], [x + h, y, z - h], [0, 1, 0],
@@ -1571,7 +1564,6 @@ class WorldBuilder {
         const proxies = new Map();
         for (const full of Object.keys(this.batches)) {
             const batch = this.batches[full];
-            if (batch.trees) for (const m of Trees3D.build(this.scene, [batch], 'world_' + full, this.shadow)) this.meshes.push(m);      // árvores 3D (render/Trees3D.js)
             if (batch.empty) continue;
             const at = full.indexOf('@'), key0 = at < 0 ? full : full.slice(0, at);       // 'walls_brick0@1,-2' -> 'walls_brick0'
             const shaded = key0.endsWith('$'), key = shaded ? key0.slice(0, -1) : key0;      // 'sidewalk$' = chão tingido pelo relevo (vertex colors)
@@ -1602,9 +1594,7 @@ class WorldBuilder {
             for (let i = 0; i < batch.idx.length; i++) px.idx.push(batch.idx[i] + base);
         }
         if (this.shadow) {
-            // (sombra macia — ESM, visual moderno: o mapa de sombras é o ALVO DE COR, então o fantasma precisa escrever cor; ele fica fora da
-            // câmera de qualquer jeito, pelo layerMask)
-            if (!this._ghost) { this._ghost = new BABYLON.StandardMaterial('shadowGhost', this.scene); this._ghost.disableColorWrite = !(Config.render.modern && Config.render.shadows === 'esm'); this._ghost.disableDepthWrite = true; }
+            if (!this._ghost) { this._ghost = new BABYLON.StandardMaterial('shadowGhost', this.scene); this._ghost.disableColorWrite = true; this._ghost.disableDepthWrite = true; }
             for (const [pk, px] of proxies) {
                 const m = new BABYLON.Mesh('shadow' + pk, this.scene), vd = new BABYLON.VertexData();
                 vd.positions = new Float32Array(px.pos); vd.indices = px.pos.length / 3 > 65535 ? new Uint32Array(px.idx) : new Uint16Array(px.idx);      // (tipados: metade da memória)
