@@ -87,6 +87,8 @@ class DayNight {
 		const P = this._params(this.hour);
 		const ge = this.ge;
 		const shadowI = this._weather(P);
+		const atm = typeof Atmosphere !== 'undefined' && Atmosphere.on;
+		if (atm) Atmosphere.grade(P);                       // visual moderno: sol amarelado, céu azulado, rebote do chão (render/Atmosphere.js)
 		this.night = P.n;
 		this.sunI = P.sunI;
 
@@ -111,12 +113,14 @@ class DayNight {
 		// Chuva: sombras mais fracas. Ao anoitecer elas desvanecem (darkness -> 1 = invisivel) ANTES de congelar o mapa; senao o mapa
 		// congelado ficava pintado no chao como uma 'marca d'agua' de sombras velhas (e nao acompanhava mais sol nem camera).
 		const fade = this.forceNoShadows ? 0 : Math.max(0, Math.min(1, (shadowI - 0.25) / 0.17));
-		const dark = Math.round((1 - (1 - (0.4 + 0.4 * (Weather.cur ? Weather.cur.k : 0))) * fade) * 100) / 100;
+		const base = atm ? Atmosphere.shadowBase : 0.4;      // (maquete: na sombra sobra quase só o céu)
+		const dark = Math.round((1 - (1 - (base + 0.4 * (Weather.cur ? Weather.cur.k : 0))) * fade) * 100) / 100;
 		if (this._shadowDark !== dark) { this._shadowDark = dark; ge.shadowGenerator.setDarkness(dark); }
 
 		SpriteMaterial.sharedTint().copyFromFloats(...P.tint);
 		ge.scene.clearColor.set(P.clear[0], P.clear[1], P.clear[2], 1);
-		ge.scene.fogColor.set(P.clear[0] * DayNight.EDGE_DIM, P.clear[1] * DayNight.EDGE_DIM, P.clear[2] * DayNight.EDGE_DIM);      // (the 2.5D edge cut: a darker background)
+		if (atm) Atmosphere.dayNight(P, ge);                // névoa da cor do céu, luz ambiente, reflexo do céu na água, glow das luzes
+		else ge.scene.fogColor.set(P.clear[0] * DayNight.EDGE_DIM, P.clear[1] * DayNight.EDGE_DIM, P.clear[2] * DayNight.EDGE_DIM);      // (the 2.5D edge cut: a darker background)
 
 		WindowLights.update(P.n, this.hour);                // janelas acesas: escuridão e a fração acesa pela hora (uniform, todo quadro)
 		// Postes só quando a noite mudou de verdade (evita reenviar buffers à toa).

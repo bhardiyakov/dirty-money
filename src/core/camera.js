@@ -119,10 +119,18 @@ class CompassCamera {
 	// installed below), in view units — fogStart/fogEnd are fractions of the half-height `view`, and the density slot (unused by linear
 	// fog) carries the aspect ratio. With the 2.5D camera enabled the fog mode stays on even while an interior holds the top-down camera
 	// (view = 0: the cut moves out of reach), because frozen materials keep the fog define they were compiled with.
+	// MODERN LOOK (Atmosphere.on): EXP2 mode = the same cut plus the distance haze (see EDGE_FOG below); it works under the top-down
+	// camera too (the cut out of reach, haze off), so the fog stays on there as well.
 	static get NO_FOG() { return 1e7; }
 	_applyFog(view, aspect) {
-		const sc = this.scene, C = Config.camera, mode = C.tilted ? BABYLON.Scene.FOGMODE_LINEAR : BABYLON.Scene.FOGMODE_NONE;
+		const sc = this.scene, C = Config.camera, atm = typeof Atmosphere !== 'undefined' && Atmosphere.on;
+		const mode = atm ? BABYLON.Scene.FOGMODE_EXP2 : C.tilted ? BABYLON.Scene.FOGMODE_LINEAR : BABYLON.Scene.FOGMODE_NONE;
 		if (sc.fogMode !== mode) sc.fogMode = mode;
+		if (atm) {
+			if (!view) { sc.fogStart = sc.fogEnd = CompassCamera.NO_FOG; sc.fogDensity = 0; return; }
+			sc.fogStart = view * C.fogEnd; sc.fogEnd = view * C.fogEnd * aspect; sc.fogDensity = Atmosphere.hazeDensity;
+			return;
+		}
 		if (!C.tilted) return;
 		if (!view) { sc.fogStart = CompassCamera.NO_FOG; sc.fogEnd = CompassCamera.NO_FOG + 1; return; }
 		sc.fogStart = view * C.fogStart; sc.fogEnd = view * C.fogEnd; sc.fogDensity = aspect;
@@ -356,6 +364,11 @@ class CompassCamera {
 // Babylon's fog measures the distance from the eye, which under a tilted orthographic camera fogs mostly the top of the screen. This
 // version (same include, same uniforms) makes LINEAR fog measure the distance toward the nearest screen edge instead: in an orthographic
 // view, view-space x and y are screen positions, and vFogInfos.w (the density, unused by linear fog) holds the aspect ratio.
+// EXP2 fog is the MODERN LOOK's atmosphere (render/Atmosphere.js): the same edge cut — vFogInfos.y/.z = how far the cut reaches up and
+// across (view units; it starts at Config.camera.fogStart/fogEnd of that), toward the fog colour × EDGE_K — after an aerial-perspective
+// haze: exp2 of the view depth beyond the rooftops (Config.camera.distance − 40), density vFogInfos.w, toward the fog colour itself
+// (the sky). Under the 2.5D camera, depth grows toward the top of the screen and from the rooftops down to the street.
+CompassCamera.EDGE_K = Config.render.modern && Config.render.style === 'diorama' ? 0.82 : 0.38;      // (maquete: a borda some no céu claro)
 CompassCamera.EDGE_FOG = `#ifdef FOG
 #define FOGMODE_NONE 0.
 #define FOGMODE_EXP 1.
@@ -377,11 +390,38 @@ float CalcFogFactor()
 		fogCoeff = (fogEnd - edge) / (fogEnd - fogStart);
 	}
 	else if (FOGMODE_EXP == vFogInfos.x) fogCoeff = 1.0 / pow(E, length(vFogDistance) * fogDensity);
-	else if (FOGMODE_EXP2 == vFogInfos.x) fogCoeff = 1.0 / pow(E, length(vFogDistance) * length(vFogDistance) * fogDensity * fogDensity);
+	else if (FOGMODE_EXP2 == vFogInfos.x)
+	{
+		float edge = max(abs(vFogDistance.x) / max(vFogInfos.z, 0.01), abs(vFogDistance.y) / max(vFogInfos.y, 0.01));
+		fogCoeff = (1.0 - edge) / ${(1 - Config.camera.fogStart / Config.camera.fogEnd).toFixed(4)};
+	}
 	return clamp(fogCoeff, 0.0, 1.0);
+}
+float CalcHazeFactor()
+{
+	float d = max(vFogDistance.z - ${(Config.camera.distance - 40).toFixed(1)}, 0.0) * vFogInfos.w;
+	return clamp(1.0 / pow(E, d * d), 0.0, 1.0);
 }
 #endif
 `;
+// (no lowercase "c-o-l-o-r" in the names below but the variable itself: the PBR shader includes this with color → finalColor)
+CompassCamera.FOG_MIX = `#ifdef FOG
+float fog = CalcFogFactor();
+#ifdef PBR
+fog = toLinearSpace(fog);
+#endif
+if (vFogInfos.x == FOGMODE_EXP2) {
+	float haze = CalcHazeFactor();
+#ifdef PBR
+	haze = toLinearSpace(haze);
+	color.rgb = mix(vFogColor * ${Math.pow(CompassCamera.EDGE_K, 2.2).toFixed(4)}, mix(vFogColor, color.rgb, haze), fog);
+#else
+	color.rgb = mix(vFogColor * ${CompassCamera.EDGE_K.toFixed(4)}, mix(vFogColor, color.rgb, haze), fog);
+#endif
+} else color.rgb = mix(vFogColor, color.rgb, fog);
+#endif
+`;
+BABYLON.Effect.IncludesShadersStore.fogFragment = CompassCamera.FOG_MIX;
 BABYLON.Effect.IncludesShadersStore.fogFragmentDeclaration = CompassCamera.EDGE_FOG;
 
 CompassCamera.yaw = 0;      // giro atual da bússola (rad): lido pelos sprites 2,5D, pela ordem de desenho e pelo minimapa

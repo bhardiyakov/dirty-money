@@ -305,8 +305,7 @@ const Corcovado = {
         BABYLON.VertexData.ComputeNormals(pos, idx, nor);
         vd.positions = pos; vd.indices = idx; vd.normals = nor; vd.colors = col; vd.uvs = uv;
         vd.applyToMesh(mesh);
-        const m = new BABYLON.StandardMaterial('corcovadoHill', wb.scene);
-        m.diffuseTexture = wb.mats.grass.diffuseTexture; m.specularColor = BABYLON.Color3.Black();
+        const m = wb._mat('corcovadoHill', wb.mats.grass.diffuseTexture);      // (maquete: verde liso, a mata e a pedra pelas cores dos vértices)
         mesh.material = m; mesh.useVertexColors = true; mesh.isPickable = false; mesh.receiveShadows = true; mesh.freezeWorldMatrix();
         if (wb.shadow) wb.shadow.addShadowCaster(mesh);
         wb.meshes.push(mesh); wb.mats.corcovadoHill = m;
@@ -401,8 +400,9 @@ const Corcovado = {
         BABYLON.VertexData.ComputeNormals(pos, idx, nor);
         vd.positions = pos; vd.indices = idx; vd.normals = nor; vd.colors = col;
         vd.applyToMesh(mesh);
-        const m = new BABYLON.StandardMaterial('cristoRedentor', wb.scene);
-        m.specularColor = new BABYLON.Color3(0.08, 0.08, 0.08); m.emissiveColor = new BABYLON.Color3(0.22, 0.22, 0.21); m.backFaceCulling = false;      // (a pedra-sabão clara: não some na sombra)
+        const m = Diorama.on ? Diorama.surface(wb.scene, 'cristoRedentor', null) : new BABYLON.StandardMaterial('cristoRedentor', wb.scene);
+        if (!Diorama.on) { m.specularColor = new BABYLON.Color3(0.08, 0.08, 0.08); m.emissiveColor = new BABYLON.Color3(0.22, 0.22, 0.21); }      // (a pedra-sabão clara: não some na sombra)
+        m.backFaceCulling = false;
         mesh.material = m; mesh.useVertexColors = true; mesh.isPickable = false; mesh.receiveShadows = true; mesh.freezeWorldMatrix();
         if (wb.shadow) wb.shadow.addShadowCaster(mesh);
         wb.meshes.push(mesh); wb.mats.cristoRedentor = m;

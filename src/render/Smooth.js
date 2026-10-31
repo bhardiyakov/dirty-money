@@ -25,8 +25,10 @@ const Smooth = {
 		this.on = on;
 		if (ge && ge.resize) { ge.resize(); if (game.camera) { game.camera.fitPixelScale(ge.viewHeight); game.camera.onResize(); } }
 		if (game.camera) this._antialias(game.camera.camera, ge.engine, on);
+		if (game.camera && typeof Atmosphere !== 'undefined') Atmosphere.init(game);      // visual moderno: pós-processamento, glow e SSAO (depois do MSAA)
 		this._textures(game.scene, on);
-		if (ge && ge.shadowGenerator) ge.shadowGenerator.filteringQuality = on ? BABYLON.ShadowGenerator.QUALITY_MEDIUM : BABYLON.ShadowGenerator.QUALITY_LOW;
+		const hq = typeof Diorama !== 'undefined' && Diorama.on;      // (maquete: PCF de qualidade alta — borda limpa e macia)
+		if (ge && ge.shadowGenerator) ge.shadowGenerator.filteringQuality = on ? (hq ? BABYLON.ShadowGenerator.QUALITY_HIGH : BABYLON.ShadowGenerator.QUALITY_MEDIUM) : BABYLON.ShadowGenerator.QUALITY_LOW;
 		this._thaw(game.scene);
 		console.log(`[GRÁFICO] suave ${on ? 'ligado' : 'desligado'}${on ? ` (${this.pp ? this.pp.name : '-'}, ${ge.engine.getRenderWidth()}×${ge.engine.getRenderHeight()})` : ''}`);
 	},
