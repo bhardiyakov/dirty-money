@@ -286,7 +286,7 @@ const Water = {
             }
             getCustomCode(shaderType) {
                 if (shaderType !== 'fragment') return null;
-                return PBRWorld.adapt(this._material, {
+                return {
                     CUSTOM_FRAGMENT_DEFINITIONS: `
                         #if defined(SHORE_SEA) || defined(SHORE_LAND)
                         ${GLSL}
@@ -326,7 +326,7 @@ const Water = {
                             #endif
                         }
                         #endif`,
-                });
+                };
             }
         };
     },

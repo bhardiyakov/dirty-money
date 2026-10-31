@@ -128,7 +128,6 @@ class CityTile {
     toTexture(scene, name, { wrap = true, aniso = CityHD.aniso } = {}) {
         const tex = new BABYLON.DynamicTexture('hd_' + name, this.cv, scene, true, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
         tex.update(false);
-        tex._dmAvg = Pixel.average(this.g.getImageData(0, 0, this.cv.width, this.cv.height).data);      // (cor sólida da maquete: Diorama)
         const mode = wrap ? BABYLON.Texture.WRAP_ADDRESSMODE : BABYLON.Texture.CLAMP_ADDRESSMODE;
         tex.wrapU = tex.wrapV = mode;
         tex.anisotropicFilteringLevel = aniso;

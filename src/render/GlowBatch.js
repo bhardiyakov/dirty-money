@@ -177,7 +177,6 @@ class GlowBatch {
         this._level = 1;
 
         this.mesh = new BABYLON.Mesh(name, scene);
-        this.mesh._dmGlowKind = kind;                    // (visual moderno: as luzes 'glow' ganham o halo do glow layer — Atmosphere)
         this._geometry(capacity);
 
         const m = new BABYLON.ShaderMaterial(name + 'Mat', scene, { vertex: kind, fragment: kind }, {

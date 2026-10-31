@@ -88,7 +88,7 @@ const RoofCut = {
                 // (sem ponto e vírgula em comentário GLSL: o Babylon corta a linha ali)
                 // Enquanto some ou volta, a peça se desfaz em pontilhado (Bayer 4×4) — cada pixel ou é desenhado inteiro (cobre e grava a
                 // profundidade) ou é descartado. Sumida, nada dela é desenhado.
-                return PBRWorld.adapt(this._material, {
+                return {
                     CUSTOM_FRAGMENT_DEFINITIONS: `
                         #ifdef ROOFCUT
                         float rcIn(vec3 p, vec4 r, float y, float k) { return (p.x > r.x && p.x < r.z && p.z > r.y && p.z < r.w && p.y > y) ? 1.0 - k : 0.0; }
@@ -103,7 +103,7 @@ const RoofCut = {
                         if (rcH > 0.0 && rcH > rcBayer(floor(gl_FragCoord.xy))) discard;
                         color.a = 1.0;
                         #endif`,
-                });
+                };
             }
         };
     },

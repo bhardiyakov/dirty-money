@@ -340,7 +340,9 @@ const Landmarks = {
         BABYLON.VertexData.ComputeNormals(pos, idx, nor);
         vd.positions = pos; vd.indices = idx; vd.normals = nor; vd.colors = col; vd.uvs = uvs;
         vd.applyToMesh(mesh);
-        const m = wb._mat('paoDeAcucar', wb.mats.rock.diffuseTexture);                     // (a mesma pedra do terreno; maquete: pedra lisa)
+        const m = new BABYLON.StandardMaterial('paoDeAcucar', scene);
+        m.diffuseTexture = wb.mats.rock.diffuseTexture;                                     // (a mesma pedra HD do terreno)
+        m.specularColor = new BABYLON.Color3(0.06, 0.06, 0.06);
         mesh.material = m; mesh.useVertexColors = true; mesh.isPickable = false; mesh.receiveShadows = true; mesh.freezeWorldMatrix();
         if (wb.shadow) wb.shadow.addShadowCaster(mesh);
         wb.meshes.push(mesh); wb.mats.paoDeAcucar = m;
