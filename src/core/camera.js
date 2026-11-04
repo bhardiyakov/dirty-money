@@ -34,14 +34,15 @@
 // fica para trás, freando passa à frente, nas curvas é jogada para fora e inclina um pouco junto, e quando a força some passa do ponto
 // e assenta. Em velocidade o asfalto ainda dá trancos (o zoom pulsa de leve) e trepida. Batida forte = solavanco (somado ao tremor).
 //
-// 2.5D MODE (Config.camera.tilted, `?cam=25d`): the same camera turned ORTHOGRAPHIC and tilted Config.camera.tilt degrees above the
+// 2.5D MODE (Config.camera.tilted, the default; `?cam=top` = top-down everywhere): the same camera turned ORTHOGRAPHIC and tilted Config.camera.tilt degrees above the
 // horizon, looking north from the south — the angle the character atlases were rendered at, so a standing sprite shows its art 1:1.
 // `view` is then the half-height of the view plane; `focus` is the ground point at the centre of the screen (the camera itself sits
 // `distance` back along its ray) and groundHalf() the visible ground for culling. Buildings south of the player can now hide him (the
 // X-ray silhouette shows him). Interiors and the safe house hold the top-down camera (setFlat): their art is painted for it.
 //
-// PERSPECTIVE (Config.camera.persp, `?cam=persp`, strength `&fov=N`): the 2.5D camera with a perspective projection instead of the
-// orthographic one — everything above holds (sprites standing, the same angle, turn, lead, zoom and bounce). The field of view is
+// PERSPECTIVE (Config.camera.persp — the default; `?cam=ortho` = the orthographic one; strength `&fov=N`, 30° by default): the 2.5D
+// camera with a perspective projection instead of the orthographic one — everything above holds (sprites standing, the same angle,
+// turn, lead, zoom and bounce). The field of view is
 // fixed and the camera sits `dist` back along its ray, chosen so that the plane through `focus` shows exactly `view` (the size of
 // the player on screen does not change); zoomed in, it never comes closer than perspMinDist (above the rooftops), the field of view
 // narrows instead. The edge cut, the visible ground (groundHalf) and the depth bias of the standing sprites follow the projection.

@@ -58,19 +58,19 @@ const Config = {
 		// ponto de fuga fica EM CIMA do alvo, os telhados se projetam para fora e nunca
 		// o escondem.
 		height: 150,           // altura da câmera (u). Maior = perspectiva mais sutil.
-		// 2.5D camera (the default; `?cam=top` = the old top-down camera everywhere): orthographic, tilted `tilt` degrees above the horizon — the angle the
+		// 2.5D camera (the default; `?cam=top` = the old top-down camera everywhere): tilted `tilt` degrees above the horizon — the angle the
 		// character atlases were rendered at (tools/asset_baker) — looking north from the south. Interiors and the safe house keep the
 		// top-down camera above (their art is painted for it). `distance` = how far back along the view ray it sits (depth range only).
 		tilted: !(typeof location !== 'undefined' && /[?&]cam=top\b/.test(location.search)),
 		tilt: 56,
 		distance: 150,
-		// PERSPECTIVE (`?cam=persp`; `&fov=N` picks the strength in degrees): the same tilted camera — angle, turn, lead, zoom, bounce —
-		// with a real perspective projection (CompassCamera._applyFov). At the ground point in the centre of the screen it frames exactly
+		// PERSPECTIVE (the default; `?cam=ortho` = the orthographic 2.5D camera of before; `&fov=N` picks the strength in degrees): the
+		// same tilted camera — angle, turn, lead, zoom, bounce — with a real perspective projection (CompassCamera._applyFov). At the ground point in the centre of the screen it frames exactly
 		// the same `view` as the orthographic one (the player keeps his size on screen); what is nearer the camera grows, what is farther
 		// shrinks. perspFov = vertical field of view (deg): bigger = stronger. The camera never comes closer than perspMinDist along its
 		// ray (its height stays above the tallest building): zoomed in, the field of view narrows instead.
-		persp: typeof location !== 'undefined' && /[?&]cam=persp\b/.test(location.search),
-		perspFov: (typeof location !== 'undefined' && +(location.search.match(/[?&]fov=(\d+(?:\.\d+)?)/) || [])[1]) || 20,
+		persp: !(typeof location !== 'undefined' && /[?&]cam=ortho\b/.test(location.search)),
+		perspFov: (typeof location !== 'undefined' && +(location.search.match(/[?&]fov=(\d+(?:\.\d+)?)/) || [])[1]) || 30,      // (escolhida: a "forte")
 		perspMinDist: 60,
 		tallest: 42,           // tallest building (m): its top shows up to tallest·cot(tilt) beyond the bottom edge — culling margin
 		// 2.5D edge cut (scene fog, CompassCamera._applyFog): the world fades into the background colour from `fogStart` to `fogEnd` of
