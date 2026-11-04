@@ -39,6 +39,12 @@
 // `view` is then the half-height of the view plane; `focus` is the ground point at the centre of the screen (the camera itself sits
 // `distance` back along its ray) and groundHalf() the visible ground for culling. Buildings south of the player can now hide him (the
 // X-ray silhouette shows him). Interiors and the safe house hold the top-down camera (setFlat): their art is painted for it.
+//
+// PERSPECTIVE (Config.camera.persp, `?cam=persp`, strength `&fov=N`): the 2.5D camera with a perspective projection instead of the
+// orthographic one — everything above holds (sprites standing, the same angle, turn, lead, zoom and bounce). The field of view is
+// fixed and the camera sits `dist` back along its ray, chosen so that the plane through `focus` shows exactly `view` (the size of
+// the player on screen does not change); zoomed in, it never comes closer than perspMinDist (above the rooftops), the field of view
+// narrows instead. The edge cut, the visible ground (groundHalf) and the depth bias of the standing sprites follow the projection.
 // ============================================================================
 
 class CompassCamera {
@@ -75,6 +81,10 @@ class CompassCamera {
 
 	// 2.5D (tilted orthographic) right now? Config.camera.tilted, except where setFlat holds the top-down camera.
 	get tilted() { return !!Config.camera.tilted && !this.flat; }
+	// 2.5D with the perspective projection (Config.camera.persp) right now?
+	get persp() { return this.tilted && !!Config.camera.persp; }
+	// How far back along its ray the 2.5D camera sits (m): fixed for the orthographic one; the perspective one, _applyFov.
+	get dist() { return this.persp ? this._dist || Config.camera.distance : Config.camera.distance; }
 	setFlat(on) {
 		if (on === this.flat) return;
 		this.flat = on;
@@ -89,7 +99,7 @@ class CompassCamera {
 		this._tilted = tilted;
 		CompassCamera.tilted = tilted;
 		if (tilted) {
-			cam.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+			cam.mode = Config.camera.persp ? BABYLON.Camera.PERSPECTIVE_CAMERA : BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
 			cam.upVector = new BABYLON.Vector3(0, 1, 0);
 			cam.minZ = 1;
 			cam.maxZ = Config.camera.distance + 250;
@@ -111,6 +121,17 @@ class CompassCamera {
 		const cam = this.camera;
 		if (!this.tilted) { cam.fov = 2 * Math.atan(this.view / Config.camera.height); this._applyFog(0, 1); return; }
 		const v = this.view, a = this.engine.getAspectRatio(cam);
+		if (this.persp) {
+			const C = Config.camera, e = C.tilt * Math.PI / 180, D = Math.max(C.perspMinDist, v / Math.tan(C.perspFov * Math.PI / 360));
+			this._dist = D;
+			cam.fov = 2 * Math.atan(v / D);
+			const h = D * Math.sin(e);                                                  // (height of the camera: nothing comes nearer than the rooftops)
+			cam.minZ = Math.max(1, (h - C.tallest - 6) * 0.8);
+			cam.maxZ = D + 250;
+			this._applyFog(v, a);
+			this._pose(this.focus.x, this.focus.z);
+			return;
+		}
 		cam.orthoTop = v; cam.orthoBottom = -v; cam.orthoRight = v * a; cam.orthoLeft = -v * a;
 		this._applyFog(v, a);
 	}
@@ -125,6 +146,11 @@ class CompassCamera {
 		if (sc.fogMode !== mode) sc.fogMode = mode;
 		if (!C.tilted) return;
 		if (!view) { sc.fogStart = CompassCamera.NO_FOG; sc.fogEnd = CompassCamera.NO_FOG + 1; return; }
+		if (this.persp) {                                                               // (perspective: screen position = view-space x, y ÷ depth;
+			const t = Math.tan(this.camera.fov / 2);                                    //  a negative density tells EDGE_FOG to divide)
+			sc.fogStart = t * C.fogStart; sc.fogEnd = t * C.fogEnd; sc.fogDensity = -aspect;
+			return;
+		}
 		sc.fogStart = view * C.fogStart; sc.fogEnd = view * C.fogEnd; sc.fogDensity = aspect;
 	}
 
@@ -133,16 +159,23 @@ class CompassCamera {
 		const cam = this.camera;
 		this.focus.x = x; this.focus.z = z;
 		if (!this.tilted) { cam.position.x = x; cam.position.z = z; return; }
-		const e = Config.camera.tilt * Math.PI / 180, D = Config.camera.distance, yaw = this.yaw;
+		const e = Config.camera.tilt * Math.PI / 180, D = this.dist, yaw = this.yaw;
 		cam.rotation.set(e, yaw, this.roll);
 		cam.position.set(x - D * Math.cos(e) * Math.sin(yaw), D * Math.sin(e), z - D * Math.cos(e) * Math.cos(yaw));
 	}
 
 	// Half extents of the visible ground (across and along the screen), for culling, spawning and the shadow window. 2.5D: the ground
 	// is foreshortened by sin(tilt), and building tops beyond the bottom edge still show (tallest·cot(tilt)). view/aspect default to now.
+	// Perspective: the ground seen is a trapezoid, wider and longer toward the top of the screen — the half extents of the box around
+	// `focus` that holds it (the far side, which is the larger one), plus the same margin for the building tops.
 	groundHalf(view = this.view, aspect = this.engine.getAspectRatio(this.camera)) {
 		if (!this.tilted) return { x: view * aspect, z: view };
 		const e = Config.camera.tilt * Math.PI / 180;
+		if (this.persp) {
+			const C = Config.camera, D = Math.max(C.perspMinDist, view / Math.tan(C.perspFov * Math.PI / 360)), a = Math.atan(view / D);
+			const h = D * Math.sin(e), lo = Math.max(0.15, e - a), far = h / Math.tan(lo) - h / Math.tan(e), near = h / Math.tan(e) - h / Math.tan(e + a);
+			return { x: h / Math.sin(lo) * Math.cos(a) * Math.tan(a) * aspect, z: Math.max(far, near) + C.tallest / Math.tan(e) };
+		}
 		return { x: view * aspect, z: view / Math.sin(e) + Config.camera.tallest / Math.tan(e) };
 	}
 
@@ -355,7 +388,8 @@ class CompassCamera {
 
 // Babylon's fog measures the distance from the eye, which under a tilted orthographic camera fogs mostly the top of the screen. This
 // version (same include, same uniforms) makes LINEAR fog measure the distance toward the nearest screen edge instead: in an orthographic
-// view, view-space x and y are screen positions, and vFogInfos.w (the density, unused by linear fog) holds the aspect ratio.
+// view, view-space x and y are screen positions, and vFogInfos.w (the density, unused by linear fog) holds the aspect ratio. With the
+// perspective camera the density is −aspect: x and y are divided by the depth (view-space z) first.
 CompassCamera.EDGE_FOG = `#ifdef FOG
 #define FOGMODE_NONE 0.
 #define FOGMODE_EXP 1.
@@ -373,7 +407,8 @@ float CalcFogFactor()
 	float fogDensity = vFogInfos.w;
 	if (FOGMODE_LINEAR == vFogInfos.x)
 	{
-		float edge = max(abs(vFogDistance.x) / max(fogDensity, 0.01), abs(vFogDistance.y));
+		float edge = max(abs(vFogDistance.x) / max(abs(fogDensity), 0.01), abs(vFogDistance.y));
+		if (fogDensity < 0.0) edge /= max(vFogDistance.z, 0.01);
 		fogCoeff = (fogEnd - edge) / (fogEnd - fogStart);
 	}
 	else if (FOGMODE_EXP == vFogInfos.x) fogCoeff = 1.0 / pow(E, length(vFogDistance) * fogDensity);
