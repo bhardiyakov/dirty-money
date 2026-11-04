@@ -5,6 +5,7 @@
 //   node tests/bench.cjs --out base.json          ...e salva o resultado
 //   node tests/bench.cjs --compare base.json      ...e mostra a diferença, cena a cena, contra um resultado salvo
 //   BENCH_PRESETS=low,high,hd                     escolhe os presets (padrão: low,high)
+//   BENCH_QUERY='cam=persp&fov=20'                  mais parâmetros na URL (ex.: comparar a câmera em perspectiva)
 // Não é teste de passa/falha. Aqui a renderização é POR SOFTWARE (sem placa de vídeo): os números servem para comparar uma etapa
 // com a anterior nesta mesma máquina, não para dizer quanto o jogo roda num computador de verdade — para isso, `?bench` no navegador.
 // ============================================================================
@@ -17,7 +18,7 @@ const { serve, boot } = require('./lib.cjs');
     const { srv, url } = await serve();
     const ctx = { url }, out = {};
     for (const p of presets) {
-        const { page, close } = await boot(ctx, { query: `gfx=${p}&full` });
+        const { page, close } = await boot(ctx, { query: `gfx=${p}&full${process.env.BENCH_QUERY ? '&' + process.env.BENCH_QUERY : ''}` });
         page.setDefaultTimeout(0);
         // (por software cada quadro leva muito mais: mede por número de quadros, não por segundos)
         out[p] = await page.evaluate(() => Bench.run(game, { warmS: 1, warmFrames: 6, measureS: 2, measureFrames: 16 }));

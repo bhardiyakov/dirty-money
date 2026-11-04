@@ -740,11 +740,18 @@ const NpcArt = {
 
 	// Standing sprites (2.5D camera, SpriteActor.standing): the feet drop from the top-down layer height (0.5) back to the ground, and
 	// the depth is pulled STAND_BIAS metres toward the camera. Uniform `stand` of every page material; follows the camera mode.
+	// (In NDC: linear with the orthographic camera; with the perspective one, the slope of the depth curve at the distance of the
+	// centre of the screen — d(ndc)/dz = 2·near·far / ((far − near)·z²) — so the bias is STAND_BIAS metres there too.)
 	LAYER_Y: 0.5, STAND_BIAS: 1.0,
 	_stand: new BABYLON.Vector2(0, 0),
 	_standSync() {
 		const on = typeof SpriteActor !== 'undefined' && SpriteActor.standing(), cam = this._scene && this._scene.activeCamera;
-		const bias = on && cam ? 2 * this.STAND_BIAS / Math.max(1, cam.maxZ - cam.minZ) : 0;
+		let bias = 0;
+		if (on && cam) {
+			const n = cam.minZ, f = cam.maxZ, G = typeof CompassCamera !== 'undefined' && CompassCamera.current;
+			if (cam.mode === BABYLON.Camera.PERSPECTIVE_CAMERA && G) { const z = G.dist; bias = this.STAND_BIAS * 2 * n * f / Math.max(1, (f - n) * z * z); }
+			else bias = 2 * this.STAND_BIAS / Math.max(1, f - n);
+		}
 		if (this._stand.y === bias && (this._stand.x > 0) === on) return;
 		this._stand.set(on ? this.LAYER_Y : 0, bias);
 		for (const A of Object.values(this.atlases)) for (const P of A.pages) if (P.mat) P.mat.setVector2('stand', this._stand);
