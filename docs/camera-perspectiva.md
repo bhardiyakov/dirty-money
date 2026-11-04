@@ -1,21 +1,22 @@
 # Câmera em perspectiva (etapa 1 do upgrade visual)
 
-A câmera 2,5D do jogo é ortográfica: tudo fica do mesmo tamanho, perto ou longe. A etapa 1 acrescenta uma versão em
+A câmera 2,5D do jogo era ortográfica: tudo ficava do mesmo tamanho, perto ou longe. A etapa 1 trocou por uma versão em
 **perspectiva** com o mesmo comportamento de hoje: mesmo ângulo (56°), giro de 360°, câmera atrás do veículo, adianto, zoom
 automático e balanço ao dirigir. Só muda a projeção: o que está perto da câmera fica um pouco maior, e os prédios ganham
 profundidade e mostram as laterais.
 
-## Como experimentar
+## Intensidade escolhida: forte (30°), o padrão
+
+A perspectiva é a câmera padrão do jogo, com campo de visão de 30° (a "forte", escolhida pelas capturas lado a lado).
 
 | URL | O quê |
 | --- | --- |
-| `?cam=persp` | Perspectiva com a intensidade padrão (20°) |
-| `?cam=persp&fov=12` | Sutil |
-| `?cam=persp&fov=20` | Média |
-| `?cam=persp&fov=30` | Forte |
-| (sem nada) | A câmera ortográfica de sempre, que continua sendo o padrão |
+| (sem nada) | Perspectiva forte (30°) |
+| `?fov=12` / `?fov=20` | Sutil / média, para comparar |
+| `?cam=ortho` | A câmera ortográfica de antes |
+| `?cam=top` | A câmera de cima, antiga, em todo lugar |
 
-Também vale no benchmark: `?bench&gfx=low&cam=persp&fov=20`, ou `BENCH_QUERY='cam=persp&fov=20' node tests/bench.cjs`.
+No benchmark: `?bench&gfx=low&cam=ortho` ou `BENCH_QUERY='cam=ortho' node tests/bench.cjs` mede a ortográfica para comparar.
 
 ## Como funciona (`core/camera.js`)
 

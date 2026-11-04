@@ -5,7 +5,7 @@
 //   node tests/bench.cjs --out base.json          ...e salva o resultado
 //   node tests/bench.cjs --compare base.json      ...e mostra a diferença, cena a cena, contra um resultado salvo
 //   BENCH_PRESETS=low,high,hd                     escolhe os presets (padrão: low,high)
-//   BENCH_QUERY='cam=persp&fov=20'                  mais parâmetros na URL (ex.: comparar a câmera em perspectiva)
+//   BENCH_QUERY='cam=ortho'                         mais parâmetros na URL (ex.: comparar com a câmera ortográfica)
 // Não é teste de passa/falha. Aqui a renderização é POR SOFTWARE (sem placa de vídeo): os números servem para comparar uma etapa
 // com a anterior nesta mesma máquina, não para dizer quanto o jogo roda num computador de verdade — para isso, `?bench` no navegador.
 // ============================================================================

@@ -1,4 +1,4 @@
-// Câmera em PERSPECTIVA (etapa 1 do upgrade visual, `?cam=persp`; CompassCamera): a mesma câmera 2,5D — ângulo, giro, adianto, zoom —
+// Câmera em PERSPECTIVA (etapa 1 do upgrade visual, o padrão; `?cam=ortho` = a ortográfica de antes; CompassCamera): a mesma câmera 2,5D — ângulo, giro, adianto, zoom —
 // com projeção em perspectiva. No centro da tela ela enquadra o mesmo `view` da ortográfica (o jogador não muda de tamanho), nunca
 // chega mais perto que perspMinDist, o chão visto (groundHalf) cobre a tela, a mira acha o chão sob o mouse, os interiores continuam
 // com a câmera de cima e a volta é de novo em perspectiva.
@@ -7,7 +7,7 @@ const { boot, gameWait, leave } = require('./lib.cjs');
 module.exports = {
     name: 'perspectiva',
     async run(ctx, c) {
-        const { page, errors, close } = await boot(ctx, { query: 'cam=persp&fov=20', outside: false });
+        const { page, errors, close } = await boot(ctx, { outside: false });
         const inside = await page.evaluate(() => ({ flat: game.camera.flat, mode: game.camera.camera.mode, persp: game.camera.persp }));
         c.ok(inside.flat && !inside.persp, 'nos interiores, a câmera de cima de sempre');
         await leave(page);
@@ -53,5 +53,11 @@ module.exports = {
         c.ok(Math.hypot(aim.dx, aim.dy) < 1.5, `o chão sob o mouse volta ao mesmo pixel (${aim.dx.toFixed(2)}, ${aim.dy.toFixed(2)})`);
         c.noErrors(errors, 'perspectiva');
         await close();
+        // `?cam=ortho`: a câmera ortográfica de antes continua disponível
+        const o = await boot(ctx, { query: 'cam=ortho' });
+        const om = await o.page.evaluate(() => ({ mode: game.camera.camera.mode, persp: game.camera.persp, tilted: game.camera.tilted }));
+        c.ok(om.tilted && !om.persp && om.mode === 1, '?cam=ortho: a câmera 2,5D ortográfica de antes');
+        c.noErrors(o.errors, 'ortográfica');
+        await o.close();
     },
 };
