@@ -80,7 +80,7 @@ const NpcArt = {
 		if (this.ready) return this.ready;
 		const t0 = performance.now();
 		const hero = this.HERO.map((id) => this.atlases[id]).filter(Boolean);
-		for (const par of [0, 1]) for (const A of hero) for (const P of A.pages) if (P.par === par) this._want(P);
+		for (const par of [0, 1]) for (const A of hero) for (const P of A.pages) if (P.par === par && !this.HERO_LATER.includes(P.g)) this._want(P);      // (natação e academia: só quando chegam perto — _heroNeeds)
 		const M = this.atlases.protagonista, hot = M ? M.pages.filter((P) => P.g === 'hot' && this._dirOk(P)) : [];
 		this.ready = Promise.all(hot.map((P) => this._wait(P))).then(() => {
 			this._upNow();                                                  // (ainda na tela de carregamento: o protagonista já sobe inteiro para a GPU)
@@ -104,6 +104,13 @@ const NpcArt = {
 		return A;
 	},
 	_dirOk(P) { return !(P.par && this.lite); },
+	// MEIA RESOLUÇÃO (preset Low, Config.art.npcHalf): as páginas decodificadas a partir de agora sobem com ⌈w/2⌉ × ⌈h/2⌉ (um quarto
+	// da memória de vídeo — AtlasDecoder.halve). Os quadros seguem em px da página inteira (fr, clipes): o shader divide por hs na leitura.
+	// hs é de cada página (a que já estava na GPU fica como subiu até sair e voltar).
+	get half() { return !!(typeof Config !== 'undefined' && Config.art && Config.art.npcHalf); },
+	_tw(P) { return Math.ceil(P.w / (P.hs || 1)); },
+	_th(P) { return Math.ceil(P.h / (P.hs || 1)); },
+	_bytes(P) { return this._tw(P) * this._th(P) * 2; },
 	_pri(P) { return (P.g === 'hot' ? 1 : 3) + (P.par ? 1 : 0); },
 
 	// Pede a página P. pri: 0 = um ator NA TELA precisa dela agora; sem pri, a do grupo (hot par 1, ímpar 2; outros 3/4). true = já na GPU.
@@ -130,10 +137,10 @@ const NpcArt = {
 		P.st = 'decoding'; this._decoding++;
 		const t0 = performance.now();
 		try {
-			const img = P.blob ? await this._fromBlob(P) : await AtlasDecoder.rg(this.BASE + P.file, P.ov ? this.BASE + P.ov : null);      // (damage page: base + the level's layer)
+			const img = P.blob ? await this._fromBlob(P) : await AtlasDecoder.rg(this.BASE + P.file, P.ov ? this.BASE + P.ov : null, this.half);      // (damage page: base + the level's layer)
 			if (img.w !== P.w || img.h !== P.h) throw new Error(`página ${P.i}: ${img.w}×${img.h}, esperado ${P.w}×${P.h}`);
 			this.stats.decoded++; this.stats.decodeMs += performance.now() - t0;
-			if (!P.dead) { P.px = img.data; P.st = 'ready'; P.fails = 0; if (this._scene) this._upload(P, P.pri); }
+			if (!P.dead) { P.px = img.data; P.hs = img.hs || 1; P.st = 'ready'; P.fails = 0; if (this._scene) this._upload(P, P.pri); }
 		} catch (e) { this._fail(P, e); }
 		this._decoding--;
 		this._wake(P);
@@ -141,8 +148,9 @@ const NpcArt = {
 	},
 	// Page of a wardrobe look (LookStore): a PNG decoded in the Worker like the baked pages, or raw RG bytes (just read, no pixel work).
 	async _fromBlob(P) {
-		if (P.blob.type !== LookStore.RAW_TYPE) return AtlasDecoder.rg(P.blob);
-		return { w: P.w, h: P.h, data: new Uint8Array(await P.blob.arrayBuffer()) };
+		if (P.blob.type !== LookStore.RAW_TYPE) return AtlasDecoder.rg(P.blob, null, this.half);
+		const data = new Uint8Array(await P.blob.arrayBuffer());
+		return this.half ? AtlasDecoder.halve(data, P.w, P.h) : { w: P.w, h: P.h, data };
 	},
 	_fail(P, e) {
 		P.st = 'failed'; P.fails = (P.fails || 0) + 1;
@@ -187,19 +195,19 @@ const NpcArt = {
 			while (L.length && this._upLeft > 0 && performance.now() - t0 < this._upMsLeft) {
 				let k = 0;
 				for (let i = 1; i < L.length; i++) if (L[i].pri < L[k].pri || (L[i].pri === L[k].pri && L[i].seq < L[k].seq)) k = i;
-				const P = L[k], U = P.up, row = P.w * 2;
+				const P = L[k], U = P.up, tw = this._tw(P), th = this._th(P), row = tw * 2;
 				if (!U.tex) {                                               // (a textura nasce vazia, no formato e amostragem de sempre — e já conta na memória)
-					U.tex = new BABYLON.RawTexture(null, P.w, P.h, F, this._scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE, UB);
+					U.tex = new BABYLON.RawTexture(null, tw, th, F, this._scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE, UB);
 					U.tex.wrapU = U.tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-					this._res += P.w * P.h * 2;
+					this._res += this._bytes(P);
 				}
-				const n = Math.min(P.h - U.y, Math.max(16, Math.floor(Math.min(this._upLeft, this.UP_STRIP) / row)));
+				const n = Math.min(th - U.y, Math.max(16, Math.floor(Math.min(this._upLeft, this.UP_STRIP) / row)));
 				eng._bindTextureDirectly(gl.TEXTURE_2D, U.tex.getInternalTexture(), true);
 				eng._unpackFlipY(false);
 				gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);                     // (linhas de 2 B/px: alinhadas a 2 em qualquer largura)
-				gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, U.y, P.w, n, fmt, type, P.px.subarray(U.y * row, (U.y + n) * row));
+				gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, U.y, tw, n, fmt, type, P.px.subarray(U.y * row, (U.y + n) * row));
 				U.y += n; this._upLeft -= n * row; this.stats.upMB += n * row / 1048576;
-				if (U.y >= P.h) { L.splice(k, 1); done.push(P); }
+				if (U.y >= th) { L.splice(k, 1); done.push(P); }
 			}
 		} finally {
 			eng._bindTextureDirectly(gl.TEXTURE_2D, null);
@@ -224,7 +232,7 @@ const NpcArt = {
 		P.up = null;
 		const i = this._upQ.indexOf(P);
 		if (i >= 0) this._upQ.splice(i, 1);
-		if (U.tex) { U.tex.dispose(); this._res -= P.w * P.h * 2; }
+		if (U.tex) { U.tex.dispose(); this._res -= this._bytes(P); }
 	},
 	// Começo de cada quadro do motor: repõe o orçamento e envia. (Quem pede no meio do quadro usa o que sobrou: _upload.)
 	// (Quadros lentos — aparelho fraco a 10–20 quadros/s —: o orçamento cresce com a duração MÉDIA do quadro, até 3×, para a vazão não
@@ -271,7 +279,7 @@ const NpcArt = {
 		if (!P.tex) return;
 		P.tex.dispose(); P.tex = null; P.st = 'idle'; P.pri = 9;                    // (volta a ser pedida com a prioridade de quem pedir)
 		if (P.mat) P.mat.setTexture('atlas', this._emptyTex());
-		this._res -= P.w * P.h * 2; this._live.delete(P); this.stats.evicted++;
+		this._res -= this._bytes(P); this._live.delete(P); this.stats.evicted++;
 	},
 	_emptyTex() {
 		if (this._empty) return this._empty;
@@ -294,10 +302,43 @@ const NpcArt = {
 			let u = A.born; for (const P of A.pages) if (P.used > u) u = P.used;
 			if (now - u >= 30) { this.dropAtlas(A.id); this.stats.dropped++; }
 		}
+		const need = this._heroNeeds(pin);
 		const B = this.budget();
 		if (this._res <= B) return;
-		const L = [...this._live].filter((P) => P.A.file && !P.dead && !pin.includes(P.A.id) && now - P.used >= 15).sort((a, b) => a.used - b.used);
+		const L = [...this._live].filter((P) => P.A.file && !P.dead && !this._heroHolds(P, pin, need) && now - P.used >= 15).sort((a, b) => a.used - b.used);
 		for (const P of L) { if (this._res <= B) break; this._evict(P); }
+	},
+	// PROTAGONISTA: dos atlas dele (_pins), só ficam presos na GPU os GRUPOS de página que ele usa agora — o dia a dia, as ações, o carro
+	// e qualquer outro grupo sempre; os de HERO_LATER só quando servem: a natação perto da água (ou nadou há menos de 60 s), a academia
+	// dentro dela; e o atlas das armas novas só se ele tem alguma delas. O resto sai como o de qualquer tipo (sem uso há 15 s, se passou
+	// do orçamento) e volta ANTES de fazer falta: a cada tique as páginas dos grupos necessários que não estão na GPU são pedidas. (Sem isto o protagonista prendia ~137 MB no preset Low,
+	// cujo orçamento é 160 MB: natação, academia e armas que ele nem tinha.)
+	HERO_LATER: ['water', 'gym'],
+	ARMS_ATLAS: /(_armas|^hero:\d+:w)(#d\d+)?$/,           // o atlas das armas novas: o pronto, o de um visual do guarda-roupa e o dano deles
+	_heroNeeds(pin) {
+		const g = typeof game !== 'undefined' ? game : null, pl = g && g.player, need = new Set();
+		if (!pl || !pl.position) { for (const k of this.HERO_LATER) need.add(k); return { groups: need, arms: true }; }
+		const now = this.now, p = pl.position;
+		if (pl.swimming || (pl.depth || 0) > 0 || this._nearWater(p.x, p.z)) this._waterT = now;
+		if (now - (this._waterT === undefined ? -1e9 : this._waterT) < 60) need.add('water');
+		if ((typeof Gym !== 'undefined' && Gym.active) || (typeof Interiors !== 'undefined' && Interiors.active && Interiors.active.shop && Interiors.active.shop.style === 'gym')) need.add('gym');
+		const arms = typeof PlayerLook === 'undefined' || !PlayerLook.game || PlayerLook.ownsArms();      // (tem revólver, AK, silenciador, RPG, lança-granadas ou minigun)
+		const out = { groups: need, arms };
+		for (const id of pin) {                                             // (o que vai fazer falta e saiu: já pede de volta)
+			const A = this.atlases[id];
+			if (A) for (const P of A.pages) if (!P.tex && this._dirOk(P) && this._heroHolds(P, pin, out)) this._want(P);
+		}
+		return out;
+	},
+	_heroHolds(P, pin, need) { return pin.includes(P.A.id) && (!this.HERO_LATER.includes(P.g) || need.groups.has(P.g)) && (need.arms || !this.ARMS_ATLAS.test(P.A.id)); },
+	// Água a menos de ~20 u (o mar, o canal e a Lagoa): amostra o centro e 8 pontos em volta.
+	_nearWater(x, z) {
+		if (typeof WorldMap === 'undefined') return true;
+		for (let k = 0; k <= 8; k++) {
+			const a = k * Math.PI / 4, r = k ? 20 : 0, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+			if (WorldMap.waterDepth(px, pz) > 0.3 || (typeof Lagoa !== 'undefined' && Lagoa.built && Lagoa.water(px, pz, 1))) return true;
+		}
+		return false;
 	},
 	// Os atlas que o jogador usa AGORA (presos na GPU — _lru; na fila de envio, na frente — _upload).
 	_pins() { const h = this._lib && this._lib.sheets.hero; return h ? h.pinned || h.atlasList() : this.HERO; },
@@ -305,7 +346,7 @@ const NpcArt = {
 	mem() {
 		let pages = 0, live = 0, cpu = 0; const by = {};
 		for (const A of Object.values(this.atlases)) for (const P of A.pages) { pages++; if (P.tex) { live++; by[A.id] = (by[A.id] || 0) + 1; } if (P.px) cpu += P.px.byteLength; }
-		let upMB = 0; for (const P of this._upQ) upMB += (P.h - P.up.y) * P.w * 2 / 1048576;
+		let upMB = 0; for (const P of this._upQ) upMB += (this._th(P) - P.up.y) * this._tw(P) * 2 / 1048576;
 		return Object.assign({ pages, live, texMB: Math.round(this._res / 1048576), budgetMB: Math.round(this.budget() / 1048576), cpuMB: Math.round(cpu / 1048576), queued: this._q.length + this._decoding + this._upQ.length,
 			uploading: this._upQ.length, upLeftMB: Math.round(upMB), zombies: this._zombies.length, byAtlas: by }, this.stats);
 	},
@@ -492,7 +533,8 @@ const NpcArt = {
 			varying vec2 vC;
 			uniform sampler2D atlas;
 			uniform sampler2D palette;
-			uniform vec2 atlasSize;
+			uniform vec2 atlasSize;      // tamanho da TEXTURA em px (os quadros seguem em px da página inteira)
+			uniform float hs;            // 1, ou 2 na página em meia resolução (_tw): o texel t da página é o (t / hs) da textura
 			uniform float palRows;
 			uniform vec3 tint;
 			uniform float sharp;
@@ -512,7 +554,7 @@ const NpcArt = {
 			float hb(float n) { return fract(sin(n) * 43758.5453); }
 			vec4 tap(vec2 t, vec4 R) {
 				if (t.x < R.x || t.y < R.y || t.x >= R.z || t.y >= R.w) return vec4(0.0);
-				vec4 s = texture2D(atlas, (t + 0.5) / atlasSize);
+				vec4 s = texture2D(atlas, (floor(t / hs) + 0.5) / atlasSize);
 				float code = floor(s.r * 255.0 + 0.5), b1 = floor((la > 0.5 ? s.a : s.g) * 255.0 + 0.5);
 				float mat = floor(code / 8.0), tone = code - mat * 8.0, row = (floor(vC.x + 0.5) + 0.5) / palRows;
 				vec3 c; float a, a8;
@@ -543,9 +585,10 @@ const NpcArt = {
 				return vec4(c * a, a);
 			}
 			// bilinear do quadro cujo retângulo no atlas é R (px), no ponto p (px); sharp > 1: o miolo do texel fica duro
+			// (meia resolução: a mistura vai na grade da textura — texels de hs px —, para o boneco sair liso e não em degraus)
 			vec4 bilin(vec2 px, vec4 R) {
-				vec2 p = px - 0.5, i = floor(p), f = clamp((p - i - 0.5) * sharp + 0.5, 0.0, 1.0);
-				return mix(mix(tap(i, R), tap(i + vec2(1.0, 0.0), R), f.x), mix(tap(i + vec2(0.0, 1.0), R), tap(i + vec2(1.0, 1.0), R), f.x), f.y);
+				vec2 p = px / hs - 0.5, i = floor(p), f = clamp((p - i - 0.5) * sharp + 0.5, 0.0, 1.0);
+				return mix(mix(tap(i * hs, R), tap((i + vec2(1.0, 0.0)) * hs, R), f.x), mix(tap((i + vec2(0.0, 1.0)) * hs, R), tap((i + vec2(1.0, 1.0)) * hs, R), f.x), f.y);
 			}
 			// o mesmo, de longe sem o antisserrilhado: a média de n×n texels sobre a pegada do pixel
 			vec4 sampleFrame(vec2 px, vec4 R) {
@@ -631,7 +674,7 @@ const NpcArt = {
 	_newMaterial(P, prefix) {
 		const A = P.A, m = new BABYLON.ShaderMaterial(prefix + A.id + '_' + P.i, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
 			attributes: ['position', 'color', 'fr', 'fr2'],
-			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'palRows', 'tint', 'sharp', 'mini', 'aa', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette'],
+			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'hs', 'palRows', 'tint', 'sharp', 'mini', 'aa', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette'],
 			samplers: ['atlas', 'palette'],
 			defines: this.aa > 1 ? ['#define AA'] : [],
 			needAlphaBlending: true,
@@ -641,7 +684,6 @@ const NpcArt = {
 		m.setFloat('ppu', this.ppuOf(A));
 		m.setFloat('fmt', A.data.v || 1);
 		m.setFloat('lift', 4.0);
-		m.setVector2('atlasSize', new BABYLON.Vector2(P.w, P.h));
 		m.setFloat('palRows', this.ROWS);
 		m.setColor3('tint', SpriteMaterial.sharedTint());
 		m.setFloat('la', this._gl2 ? 0 : 1);
@@ -653,6 +695,8 @@ const NpcArt = {
 	// What changes while the page lives: its texture (on the GPU or not), the zoom sharpness, the water clock, standing.
 	_refresh(m, P) {
 		m.setTexture('atlas', P.tex || this._emptyTex());
+		m.setVector2('atlasSize', P.asz ? P.asz.set(this._tw(P), this._th(P)) : (P.asz = new BABYLON.Vector2(this._tw(P), this._th(P))));
+		m.setFloat('hs', P.hs || 1);
 		m.setFloat('sharp', this._sharpOf(P.A));
 		m.setFloat('mini', this._miniOf(P.A));
 		m.setFloat('wt', this._wt || 0);
@@ -898,7 +942,7 @@ const NpcArt = {
 		for (const s of Object.values(this.sheets)) if (s.uses(id)) s.clips = {};      // (nada de clipe guardado apontando para ele)
 	},
 	_free(P) {
-		if (P.tex) { P.tex.dispose(); this._res -= P.w * P.h * 2; this._live.delete(P); }
+		if (P.tex) { P.tex.dispose(); this._res -= this._bytes(P); this._live.delete(P); }
 		if (P.mat) P.mat.dispose();
 		if (P.sil) P.sil.dispose();
 		if (P.silO) P.silO.dispose();

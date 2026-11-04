@@ -317,7 +317,8 @@ class DevMode {
             `  cabe ~${C.growth.toFixed(1)}× o conteúdo atual`,
             `Quadro (trabalho): ${Perf.frameAvg.toFixed(1)} ms de ${Perf.budgetMs.toFixed(1)} · p95 ${Perf.p95.toFixed(1)} ms · pior (3 s) ${Perf.peak.toFixed(1)} ms`,
             `Último engasgo (> ${Perf.hitchMs} ms): ${Perf.hitch ? `${Perf.hitch.ms.toFixed(0)} ms há ${((performance.now() - Perf.hitch.at) / 1000).toFixed(0)} s — mais caro: ${Perf.hitch.sec} (${Perf.hitch.secMs.toFixed(0)} ms)` : 'nenhum'}`,
-            `Heap: ${Math.round(Perf.heapMB)} MB / orçamento ${Math.round(C.memBudget)} MB · tendência ${Perf.heapSlope >= 0 ? '+' : ''}${Perf.heapSlope.toFixed(1)} MB/min${Perf.heapSlope > 4 ? '  ⚠ SUBINDO' : ''}`,
+            Perf.heapCoarse !== false ? `Heap: ≈${Math.round(Perf.heapMB)} MB (o Chrome arredonda este valor: o exato sai com --enable-precise-memory-info ou nas Ferramentas › Memória)`
+                : `Heap: ${Math.round(Perf.heapMB)} MB / orçamento ${Math.round(C.memBudget)} MB · tendência ${Perf.heapSlope >= 0 ? '+' : ''}${Perf.heapSlope.toFixed(1)} MB/min${Perf.heapSlope > 4 ? '  ⚠ SUBINDO' : ''}`,
             `Render: ${rc ? rc.stats.candidates + ' candidatas (' + rc.stats.static + ' estáticas na grade, ' + rc.stats.dynamic + ' dinâmicas)' : '-'}`,
             `Zonas: ativa ${Z[0]} · perto ${Z[1]} · dormindo ${Z[2]}`,
             `Varredura 3 s: ${g._sweepInfo || '-'}`,
@@ -388,7 +389,7 @@ class DevMode {
         const H = Perf.hitch, recent = H && performance.now() - H.at < 15000;           // engasgo nos últimos 15 s: mostra quanto e onde
         const gc = H && H.gcMB > 8;                                                     // heap caiu muito: foi coleta de lixo
         $('dcB').textContent = recent ? (gc ? `engasgo ${(H.ms / 1000).toFixed(1)} s · coleta de lixo (−${Math.round(H.gcMB)} MB)` : `engasgo ${(H.ms / 1000).toFixed(1)} s · ${H.sec || '?'} (${Math.round(H.secMs)} ms)`)
-            : `${Math.round(Perf.heapMB)} MB ${Perf.heapSlope > 4 ? '↑' + Perf.heapSlope.toFixed(0) + '/min' : ''} · ${C.limit}`;
+            : `${Perf.heapCoarse !== false ? '≈' : ''}${Math.round(Perf.heapMB)} MB ${Perf.heapSlope > 4 ? '↑' + Perf.heapSlope.toFixed(0) + '/min' : ''} · ${C.limit}`;
         if (H && H !== this._hitchLogged) { this._hitchLogged = H; console.warn(`[PERF] engasgo de ${H.ms.toFixed(0)} ms — mais caro: ${H.sec} (${H.secMs.toFixed(0)} ms)${H.gcMB > 8 ? ` · coleta de lixo liberou ${Math.round(H.gcMB)} MB` : ''}`); }
     }
 

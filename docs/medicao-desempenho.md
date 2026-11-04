@@ -77,8 +77,44 @@ Memória de vídeo estimada: texturas 880 MB, sendo 636 MB dos atlas de personag
   - despejo mais agressivo das páginas sem uso.
   
   Isso não depende do upgrade visual e pode ser feito antes dele.
-- **O heap de JavaScript oscilou entre ~500 MB e ~1 GB** de uma rodada para outra do benchmark no Chromium dos testes. Precisa ser
-  conferido numa máquina real antes de virar conclusão.
+- **O heap de JavaScript não oscila de verdade.** Os ~500 MB a ~1 GB vistos aqui (e os ~950 MB na Iris Xe) são o
+  `performance.memory` do Chrome, que sem a opção `--enable-precise-memory-info` devolve um valor **arredondado e quase parado**.
+  O heap real, lido pelo protocolo de depuração, fica em ~113 MB e não cresce (sem vazamento). Agora o jogo detecta o valor
+  arredondado (`Perf.heapCoarse`): o painel e o benchmark mostram "≈" e o aviso, e a barra de capacidade do modo dev deixa de usar
+  esse número.
+
+## Primeira otimização: memória dos atlas dos personagens
+
+O benchmark na máquina mínima (Iris Xe, Low) mostrou folga grande de tempo (GPU de 2,5 a 9 ms, CPU ~4 ms) e um único ponto
+apertado: os atlas dos personagens 2,5D acima do orçamento do Low. Duas mudanças:
+
+1. **O protagonista prende só o que usa agora** (`NpcArt._heroNeeds`). Antes, todas as páginas dele ficavam presas na placa o tempo
+   todo. Agora:
+   - andar, ações e carro (`hot`, `act`, `car`) continuam sempre presos;
+   - natação (`water`) só perto da água ou nadando, e fica mais 60 s depois de sair;
+   - academia (`gym`) só dentro da academia;
+   - o atlas de armas pesadas (revólver, AK-47, pistola com silenciador, RPG, lança-granadas, minigun) só se ele tiver alguma.
+   
+   O que deixou de ser preso entra no despejo normal e volta antes de ser preciso: perto da água, a página de natação já é pedida.
+2. **Meia resolução no Low** (`Config.art.npcHalf`, só no preset Low). Cada bloco de 2×2 da página vira um texel. Os bytes são
+   códigos de paleta e não podem ser misturados, então fica um dos quatro pixels inteiro: o mais opaco. Assim, partes finas
+   (mão, cano da arma) não somem. O shader continua usando as coordenadas da página inteira e a mistura bilinear vai na grade da
+   textura reduzida, para o boneco não sair em degraus. Um quarto da memória por página.
+
+Medium, High e HD não mudam de visual. No Low, na distância normal de jogo a diferença quase não aparece. No zoom máximo, o
+rosto perde detalhe: olhos e sobrancelhas ficam com menos pixels.
+
+**Resultado** (benchmark no Chromium dos testes, mesmas cenas; desenhos e triângulos iguais):
+
+| Preset | Atlas dos personagens | Texturas no total |
+| --- | --- | --- |
+| Low, antes | 281 a 355 MB | 416 a 483 MB |
+| Low, depois | **82 a 94 MB** | **214 a 227 MB** |
+| High, antes | 525 a 647 MB | 761 a 894 MB |
+| High, depois | 456 a 642 MB | 682 a 884 MB |
+
+No Low, os atlas cabem com folga no orçamento de 160 MB: o protagonista ocupa ~29 MB, contra ~137 MB antes. No High, a
+meia resolução não vale; os atlas continuam no orçamento dele (640 MB), só com natação, academia e armas sem uso fora da placa.
 
 ## Como medir na sua máquina
 

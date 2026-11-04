@@ -22,7 +22,7 @@ const Graphics = {
 	CHOICES: ['auto', 'low', 'medium', 'high', 'hd'],
 	LABEL: { auto: 'Automático', low: 'Low', medium: 'Medium', high: 'High', hd: 'HD' },
 	PRESETS: {
-		low: { renderScale: 0.75, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcAA: 1, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30 },
+		low: { renderScale: 0.75, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30 },
 		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, shadows: true, shadowSize: 1024, npcDirs: 8, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30 },
 		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, shadows: true, shadowSize: 2048, npcDirs: 16, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 30 },
 		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, shadows: true, shadowSize: 4096, npcDirs: 16, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60 },
@@ -85,7 +85,7 @@ const Graphics = {
 		const fps60 = desktopApp || (typeof location !== 'undefined' && location.search.includes('fps60'));      // (PC app, or `?fps60` to test)
 		P.fpsCap = p.fps > 30 || (fps60 && this.level === 'high') ? 60 : 30;
 		P.lite = this.level === 'low' || this.level === 'medium';
-		A.smooth = p.smooth; A.msaa = p.msaa || 0; A.npcDirs = p.npcDirs; A.npcAA = p.npcAA || 1; A.vramMB = p.vramMB; A.uploadMB = p.uploadMB;
+		A.smooth = p.smooth; A.msaa = p.msaa || 0; A.npcDirs = p.npcDirs; A.npcAA = p.npcAA || 1; A.vramMB = p.vramMB; A.uploadMB = p.uploadMB; A.npcHalf = !!p.npcHalf;
 		this._crowd(p.crowd);
 		if (P.lite && typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // (no frosted-glass panels: ver Theme)
 	},

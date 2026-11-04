@@ -104,7 +104,7 @@ const RenderStats = {
         if (!r) return null;
         return Object.assign(r, {
             fps: Math.round(this.g.gameEngine.engine.getFps()), intervalMs: Perf.interval, cpuMs: Perf.frameAvg, p95Ms: Perf.p95,
-            heapMB: Perf.heapMB, cap: Config.perf.fpsCap,
+            heapMB: Perf.heapMB, heapCoarse: Perf.heapCoarse !== false, cap: Config.perf.fpsCap,
         });
     },
 
@@ -126,7 +126,7 @@ const RenderStats = {
                 `CPU ${f(s.cpuMs)} ms (p95 ${f(s.p95Ms)}) · render ${f(s.sceneMs)} ms · GPU ${f(s.gpuMs)} ms`,
                 `desenhos ${s.drawCalls} (sombra ${s.shadowDraws}, ${f(s.shadowMs)} ms) · fora da tela ${f(s.rttMs)} ms`,
                 `malhas ${s.activeMeshes}/${s.meshes} · ${(s.tris / 1000).toFixed(0)} mil triângulos`,
-                `texturas ${f(s.texMB, 0)} MB (personagens ${f(s.npcMB, 0)}) · geometria ${f(s.geoMB, 0)} MB · heap ${f(s.heapMB, 0)} MB`,
+                `texturas ${f(s.texMB, 0)} MB (personagens ${f(s.npcMB, 0)}) · geometria ${f(s.geoMB, 0)} MB · heap ${s.heapCoarse ? '≈' : ''}${f(s.heapMB, 0)} MB`,
                 `${s.preset} · ${s.res} (×${s.dpr}) · MSAA ${s.msaa || 'não'} · sombra ${s.shadowSize || 'não'}`,
             ].join('\n');
         }, 250);

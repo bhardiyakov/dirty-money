@@ -46,6 +46,7 @@ const Config = {
 		npcPpu: 26,            // personagens 2,5D (NpcArt): px do atlas por metro — adultos na mesma escala dos veículos. = NpcGenBuild.PPU (pilotos × motos)
 		npcAA: 4,              // antisserrilhado dos personagens 2,5D: amostras por lado do pixel no shader (4 = até 16 por pixel; 1 = desligado). Ver NpcArt
 		npcDirs: 16,           // direções desenhadas dos personagens 2,5D. Perfil leve: 8 (só as páginas pares dos atlas; os visuais do guarda-roupa saem com 8)
+		npcHalf: false,        // páginas dos atlas 2,5D em MEIA resolução na GPU (um quarto da memória; NpcArt.half). Preset Low: true
 		vramMB: 640,           // orçamento das páginas dos atlas 2,5D na GPU (MB): passou, as sem uso há 15 s saem (NpcArt._lru). Perfil leve: 256
 		uploadMB: 3,           // envio das páginas 2,5D à GPU: MB por quadro, em faixas (NpcArt._upStep — sem travar quando um tipo novo aparece). Perfil leve: 1
 		internalHeight: (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ? 440 : 560,   // altura interna alvo (px) quando pixelate = true (celular: menor, mais leve).

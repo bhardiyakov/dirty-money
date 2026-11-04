@@ -18,9 +18,15 @@ const AtlasDecoder = {
 	MAX_STRIKES: 3,
 	_workers: null, _jobs: new Map(), _seq: 0, _off: false, _strikes: 0, _mainKernel: null,
 
-	// src / ov: page and damage layer — a URL (relative to the page) or a Blob; ov may be null.
-	rg(src, ov = null) {
-		return this._run({ kind: 'rg', src: this._abs(src), ov: this._abs(ov) });
+	// src / ov: page and damage layer — a URL (relative to the page) or a Blob; ov may be null. half = the page at HALF resolution
+	// (Low preset, NpcArt.half): data is ⌈w/2⌉ × ⌈h/2⌉ and the result carries hs = 2 (w and h stay the full size of the page).
+	rg(src, ov = null, half = false) {
+		return this._run({ kind: 'rg', src: this._abs(src), ov: this._abs(ov), half: !!half });
+	},
+	// The same halving on the main thread (a wardrobe look stored as raw RG bytes): { w, h, data, hs: 2 }.
+	halve(data, w, h) {
+		const K = this._mainKernel || (this._mainKernel = this._kernel(typeof PNG !== 'undefined' ? PNG : null));
+		return { w, h, data: K.halve(data, w, h), hs: 2 };
 	},
 	// RGBA pixels of a PNG (base64 text or bytes): { w, h, data }.
 	png(data) {
@@ -40,7 +46,7 @@ const AtlasDecoder = {
 	},
 	_runMain(task) {
 		const K = this._mainKernel || (this._mainKernel = this._kernel(typeof PNG !== 'undefined' ? PNG : null));
-		return task.kind === 'png' ? K.png(task.data) : K.rg(task.src, task.ov);
+		return task.kind === 'png' ? K.png(task.data) : K.rg(task.src, task.ov, task.half);
 	},
 
 	_pool() {
@@ -75,7 +81,7 @@ const AtlasDecoder = {
 		const J = this._jobs.get(m.job);
 		if (!J) return;
 		this._jobs.delete(m.job); worker._load--;
-		if (!m.error) { this._strikes = 0; J.resolve({ w: m.w, h: m.h, data: m.data }); return; }
+		if (!m.error) { this._strikes = 0; J.resolve({ w: m.w, h: m.h, data: m.data, hs: m.hs || 1 }); return; }
 		if (m.http) { J.reject(new Error(m.error)); return; }              // (missing file: retrying here would not help)
 		this._runMain(J.task).then((img) => { if (!m.crashed) this._strike(m.error); J.resolve(img); }, J.reject);
 	},
@@ -89,10 +95,10 @@ const AtlasDecoder = {
 	// Worker glue (sent as text): one job per message, the result transferred back.
 	_serve: function (kernel) {
 		self.onmessage = async (e) => {
-			const { job, kind, src, ov, data } = e.data;
+			const { job, kind, src, ov, data, half } = e.data;
 			try {
-				const r = kind === 'png' ? await kernel.png(data) : await kernel.rg(src, ov);
-				self.postMessage({ job, w: r.w, h: r.h, data: r.data }, [r.data.buffer]);
+				const r = kind === 'png' ? await kernel.png(data) : await kernel.rg(src, ov, half);
+				self.postMessage({ job, w: r.w, h: r.h, data: r.data, hs: r.hs || 1 }, [r.data.buffer]);
 			} catch (err) { self.postMessage({ job, error: String((err && err.message) || err), http: !!(err && err.http) }); }
 		};
 	},
@@ -132,9 +138,31 @@ const AtlasDecoder = {
 			for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
 			return u;
 		};
+		// HALF resolution: each 2×2 block of the page becomes one texel. The bytes are palette codes, not colours, so they cannot be
+		// averaged: one of the four pixels is kept whole, the most opaque (a material, code ≥ 8, counts as opaque; otherwise the second
+		// byte is the alpha), the first one on a tie. Empty pixels never win over a drawn one, so thin parts (a hand, a gun barrel) survive.
+		// The frames are packed with a 1 px gap (NpcGenBuild), so a block never mixes two frames.
+		const halve = (src, w, h) => {
+			const W = (w + 1) >> 1, H = (h + 1) >> 1, out = new Uint8Array(W * H * 2);
+			for (let y = 0; y < H; y++) {
+				const y0 = y * 2, y1 = Math.min(y0 + 1, h - 1);
+				for (let x = 0; x < W; x++) {
+					const x0 = x * 2, x1 = Math.min(x0 + 1, w - 1);
+					let best = -1, bs = -1;
+					for (let k = 0; k < 4; k++) {
+						const i = ((k < 2 ? y0 : y1) * w + (k & 1 ? x1 : x0)) * 2, sc = src[i] >= 8 ? 256 : src[i + 1];
+						if (sc > bs) { bs = sc; best = i; }
+					}
+					const o = (y * W + x) * 2;
+					out[o] = src[best]; out[o + 1] = src[best + 1];
+				}
+			}
+			return out;
+		};
 		const inflate = async (z) => new Uint8Array(await new Response(new Blob([z]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer());
 		return {
-			async rg(src, ov) {
+			halve,
+			async rg(src, ov, half) {
 				const a = await pixels(src), n = a.w * a.h, out = new Uint8Array(n * 2);
 				let px = a.px;
 				for (let i = 0, j = 0; i < n; i++, j += 4) { out[i * 2] = px[j]; out[i * 2 + 1] = px[j + 1]; }
@@ -144,7 +172,7 @@ const AtlasDecoder = {
 					px = b.px;
 					for (let i = 0, j = 0; i < n; i++, j += 4) { const r = px[j], g = px[j + 1]; if (r | g) { out[i * 2] = r; out[i * 2 + 1] = g; } }
 				}
-				return { w: a.w, h: a.h, data: out };
+				return half ? { w: a.w, h: a.h, data: halve(out, a.w, a.h), hs: 2 } : { w: a.w, h: a.h, data: out, hs: 1 };
 			},
 			async png(data) {
 				if (!PNG) throw new Error('no PNG reader');

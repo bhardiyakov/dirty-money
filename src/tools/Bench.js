@@ -85,6 +85,7 @@ const Bench = {
             drawCalls: Math.round(avg('drawCalls') || 0), shadowDraws: Math.round(avg('shadowDraws') || 0), shadowMs: r(avg('shadowMs')),
             tris: Math.round(avg('tris') || 0), activeMeshes: Math.round(avg('activeMeshes') || 0),
             texMB: r(avg('texMB'), 0), npcMB: r(avg('npcMB'), 0), geoMB: r(avg('geoMB'), 0), heapMB: r(avg('heapMB'), 0),
+            heapCoarse: samples.some((s) => s.heapCoarse),
         };
     },
 
@@ -100,7 +101,7 @@ const Bench = {
             `preset ${R.preset} · ${R.res} (×${R.dpr}) · MSAA ${R.msaa || 'não'} · sombra ${R.shadowSize || 'não'} · ${R.uncapped ? 'sem teto de FPS' : 'com teto'}`,
             `placa: ${R.gpu}${R.gpuTimer ? '' : ' (sem tempo de GPU neste navegador)'}`,
             line(head), ...rows.map(line),
-            `memória de vídeo (estimada): texturas ${f(last.texMB, 0)} MB (atlas dos personagens ${f(last.npcMB, 0)} MB) · geometria ${f(last.geoMB, 0)} MB · heap JS ${f(last.heapMB, 0)} MB`,
+            `memória de vídeo (estimada): texturas ${f(last.texMB, 0)} MB (atlas dos personagens ${f(last.npcMB, 0)} MB) · geometria ${f(last.geoMB, 0)} MB · heap JS ${last.heapCoarse ? `≈${f(last.heapMB, 0)} MB (arredondado pelo Chrome: não use)` : `${f(last.heapMB, 0)} MB`}`,
         ].join('\n');
     },
 
