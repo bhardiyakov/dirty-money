@@ -8,9 +8,12 @@
 //              folga real mesmo com o teto de 30 FPS escondendo o quanto o aparelho aguentaria.
 //       PICO = mesma conta com o p95 dos quadros dos últimos ~3 s (engasgos frequentes contam, não só a média; um GC isolado não).
 //       MEM  = 1 − (heap JS usado ÷ orçamento). Orçamento = min(1 GB, 60% do limite do heap do navegador). Sem performance.memory
-//              (Firefox/Safari) a folga de memória fica de fora.
+//              (Firefox/Safari) a folga de memória fica de fora — e também quando o Chrome ARREDONDA o valor (heapCoarse, abaixo).
 //       RITMO = o intervalo REAL entre quadros (inclui a GPU): acima de ~36 ms o aparelho já não segura 30 FPS e a barra cai a 0.
 //     Também acompanha a TENDÊNCIA do heap (MB/min, regressão linear numa janela de ~2 min): subindo sem parar = vazamento.
+//   heapCoarse: o Chrome normal (sem --enable-precise-memory-info) devolve performance.memory ARREDONDADO a milhões de bytes e quase
+//     parado — medido: 949 MB "usados" com o heap real do V8 em 113 MB. Nesse caso o heap só aparece como aproximado: fica fora da
+//     folga de memória, da tendência e da detecção de coleta de lixo nos engasgos (tudo isso daria números falsos).
 // ============================================================================
 
 const Perf = {
@@ -21,6 +24,7 @@ const Perf = {
     _peaks: [], peak: 0, p95: 0,   // pior quadro da janela e o p95
     _heap: [],                 // [t (s), MB] amostrados a cada 3 s
     heapMB: 0, heapSlope: 0, heapLimitMB: 0,
+    heapCoarse: null,          // true = o navegador arredonda performance.memory (Chrome normal): o heap é só aproximado
     budgetMs: 1000 / 30 * 0.8,
     hitchMs: 250,              // acima disso o quadro é um ENGASGO: entra limitado na média (ver frameEnd)
     hitch: null,               // último engasgo: { ms, sec (sistema que mais gastou), secMs, at }
@@ -29,7 +33,7 @@ const Perf = {
         const n = performance.now();
         if (this._f0) { const iv = n - this._f0; if (iv < 500) this.interval = this.interval ? this.interval * 0.94 + iv * 0.06 : iv; }
         this._t = this._f0 = n;
-        const m = performance.memory; this._h0 = m ? m.usedJSHeapSize : 0;      // (engasgo + heap caindo = coleta de lixo, ver frameEnd)
+        const m = this.heapCoarse === false && performance.memory; this._h0 = m ? m.usedJSHeapSize : 0;      // (engasgo + heap caindo = coleta de lixo, ver frameEnd)
         HangProbe.frameStart();
     },
     interval: 0,               // intervalo REAL entre quadros (ms): inclui a GPU e o navegador
@@ -68,6 +72,8 @@ const Perf = {
         if (!m) return;
         const t = performance.now() / 1000, mb = m.usedJSHeapSize / 1048576;
         this.heapMB = mb; this.heapLimitMB = m.jsHeapSizeLimit / 1048576;
+        this.heapCoarse = m.usedJSHeapSize % 1e6 === 0 && m.totalJSHeapSize % 1e6 === 0;      // (valores redondos = arredondado pelo Chrome)
+        if (this.heapCoarse) { this._heap.length = 0; this.heapSlope = 0; return; }
         this._heap.push([t, mb]); if (this._heap.length > 40) this._heap.shift();       // 40 × 3 s = 2 min
         const H = this._heap, n = H.length;
         if (n < 8) { this.heapSlope = 0; return; }
@@ -80,7 +86,7 @@ const Perf = {
     capacity() {
         const cpu = 1 - this.frameAvg / this.budgetMs;
         const peak = 1 - (this.p95 || 0) / (1000 / 30);                              // engasgos frequentes (p95: um GC isolado não zera a barra)
-        const memBudget = this.heapLimitMB ? Math.min(1024, this.heapLimitMB * 0.6) : 0;
+        const memBudget = this.heapLimitMB && this.heapCoarse === false ? Math.min(1024, this.heapLimitMB * 0.6) : 0;
         const mem = memBudget ? 1 - this.heapMB / memBudget : 1;
         // RITMO: se o intervalo real passa de ~36 ms, o aparelho já não segura 30 FPS (GPU ou navegador no limite, mesmo com a CPU folgada).
         const pace = 1 - Math.max(0, this.interval - 1000 / 30 * 1.08) / (1000 / 30);
