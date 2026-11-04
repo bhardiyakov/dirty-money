@@ -302,6 +302,7 @@ class DevMode {
     // =============================================================== INFO
     _tab6(H, B, T, g) {
         H('ESTATÍSTICAS (ao vivo)');
+        RenderStats.enable(g);                     // (o lado da GPU: só mede a partir de quando a aba abre)
         const pre = document.createElement('pre'); pre.id = 'devInfo'; this.body.appendChild(pre); this._info();
     }
 
@@ -324,6 +325,7 @@ class DevMode {
             ...Perf.top(14).map(([k, v]) => `  ${v.toFixed(2).padStart(6)}  ${k}`),
             '',
             `FPS: ${Math.round(e.getFps())} (teto ${Config.perf.fpsCap})`, `Draw calls por quadro: ${this.drawCalls === undefined ? "-" : this.drawCalls}`, `Malhas: ${sc.meshes.length} (ativas ${sc.getActiveMeshes().length})`,
+            ...this._renderInfo(),
             `Corpos de física: ${pe ? pe._physicsBodies.length : '-'}`, `Memória JS: ${m ? Math.round(m.usedJSHeapSize / 1048576) + ' MB' : '-'}`,
             `Posição: ${p.x.toFixed(0)}, ${p.z.toFixed(0)}`, `Hora: ${g.dayNight.label}  Clima: ${g.weather.label}${g.weather.rainyDay ? ' (dia chuvoso)' : ''}`,
             `Procurado: ${g.wanted.level}★  Dinheiro: ${brl(g.inventory.cash)}`,
@@ -331,6 +333,19 @@ class DevMode {
             `Pedestres: ${g.npcManager ? g.npcManager.count : 0}  Colisores: ${g.colliderStream ? g.colliderStream.active.length : 0}`,
             g.activeCar ? `Veículo: ${g.activeCar.spec.name}  vel ${g.activeCar.speed.toFixed(1)} m/s  gasolina ${Math.round(g.activeCar.fuel)}/${g.activeCar.tank}  vida ${Math.round(g.activeCar.hp)}` : 'A pé',
         ].join('\n');
+    }
+
+    // O lado da placa de vídeo (core/RenderStats.js).
+    _renderInfo() {
+        const s = RenderStats.sample(), f = (v, n = 1) => (v == null ? '—' : v.toFixed(n));
+        if (!s) return [];
+        return [
+            '— render (GPU) —',
+            `  GPU ${f(s.gpuMs)} ms${s.gpuMs == null ? ' (sem a extensão de tempo neste navegador)' : ''} · render da cena ${f(s.sceneMs)} ms (fora da tela ${f(s.rttMs)}, escolha das malhas ${f(s.activeMs, 2)})`,
+            `  sombra: ${s.shadowDraws} desenhos, ${f(s.shadowMs)} ms · ${(s.tris / 1000).toFixed(0)} mil triângulos na tela`,
+            `  memória de vídeo (estimada): texturas ${f(s.texMB, 0)} MB (atlas dos personagens ${f(s.npcMB, 0)}) · geometria ${f(s.geoMB, 0)} MB`,
+            `  ${s.res} (×${s.dpr}) · MSAA ${s.msaa || 'não'} · mapa de sombras ${s.shadowSize || 'desligado'} · preset ${s.preset}`,
+        ];
     }
 
     // Teste de carga: mais pedestres/carros em volta do jogador (somem com a reciclagem normal se você se afastar).
