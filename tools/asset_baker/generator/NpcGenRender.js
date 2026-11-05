@@ -320,8 +320,9 @@ function NpcGenRender(G) {
             const W = this.W, code = out.code, alpha = out.alpha, light = out.light = new Uint8Array(W * this.H), L = this.cam.L, k = this.k;
             const UP = [0, this.cam.cos, -this.cam.sin], HV = nrm([L[0], L[1], L[2] - 1]), RIM = nrm([0.62, 0.42, 0.66]);
             const rad = max(2, Math.round(4 * k)), thr = 5.2 * k, nwin = (2 * rad + 1) * (2 * rad + 1) - 1, kk = k / 0.5;
-            const toon = !!G.TOON, TOON = G.TOON;
-            const idx = (y, x) => (((y % ch) + ch) % ch) * cw + (((x % cw) + cw) % cw);
+            const toon = !!G.TOON, TOON = G.TOON, REAL = !toon && G.REAL;
+            const RL = REAL ? mv3(this.cam.R, nrm(REAL.L)) : null, RH = REAL ? nrm([RL[0], RL[1], RL[2] - 1]) : null;
+            const idx =(y, x) => (((y % ch) + ch) % ch) * cw + (((x % cw) + cw) % cw);
             const LT = new Uint8Array(np_), LN = new Uint8Array(np_);
             for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
                 const i = y * cw + x;
@@ -361,13 +362,23 @@ function NpcGenRender(G) {
                 let lv = (0.07 + 0.17 * hemi + 0.8 * dif) * ao * crease + rim + 0.06 * TN[i];
                 const S = SHINE[m];
                 let sp = S ? max(0, nx * HV[0] + ny * HV[1] + nz * HV[2]) ** S[0] * S[1] * ao * crease : 0;
+                if (REAL) {
+                    // REALISTA: a luz do mapa — sol de onde ele vem no jogo (RL), céu por cima (hemi), oclusão e vincos mais fundos, quase sem
+                    // a luz de recorte; o brilho só onde o material brilha, mais fraco
+                    const dr = nx * RL[0] + ny * RL[1] + nz * RL[2];
+                    let ds = min(max((dr + REAL.wrap) / (1 + REAL.wrap), 0), 1); ds = ds * ds * (3 - 2 * ds);
+                    const occ2 = ao * ao;
+                    lv = (REAL.amb + REAL.sky * hemi + REAL.sun * ds) * occ2 * crease + rim * REAL.rim + REAL.tex * TN[i];
+                    sp = S ? max(0, nx * RH[0] + ny * RH[1] + nz * RH[2]) ** S[0] * S[1] * REAL.spec * occ2 * crease : 0;
+                }
                 if (toon) {
                     const s = (0.25 + 0.75 * dif) * ao * crease + rim * 0.6;
                     const st = (e) => { const t = min(max((s - e) / TOON.soft + 0.5, 0), 1); return t * t * (3 - 2 * t); };
                     lv = 0.25 + 0.25 * st(TOON.dark) + 0.25 * st(TOON.lit) + TOON.tex * TN[i];
                     sp = sp > TOON.spec && toonShine[m] ? 0.4 : 0;
                 }
-                if (m === M.eye) { lv = 0.08; sp = sp > 0.15 ? 0.9 : 0; }                // pupila escura com um brilho
+                if (REAL && (m === M.eye || m === M.eyew)) { lv = m === M.eye ? 0.06 : 0.3 + 0.15 * dif; sp = 0; }       // (olho sem o branco de desenho animado)
+                else if (m === M.eye) { lv = 0.08; sp = sp > 0.15 ? 0.9 : 0; }                // pupila escura com um brilho
                 else if (m === M.eyew) lv = 0.6 + 0.25 * dif;
                 else if (m === M.brow) { lv = 0.1; sp = 0; }
                 else if (m === M.mouth) { lv = 0.32 * crease; sp = 0; }
