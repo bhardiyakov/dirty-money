@@ -537,6 +537,7 @@ const NpcArt = {
 			uniform float hs;            // 1, ou 2 na página em meia resolução (_tw): o texel t da página é o (t / hs) da textura
 			uniform float palRows;
 			uniform vec3 tint;
+			uniform vec3 shadeC;         // cor na sombra de um prédio (vC.y = 0,66), a 1 ao sol (Lighting.shadeColor: a cor da sombra de verdade)
 			uniform float sharp;
 			uniform float mini;
 			uniform float aa;
@@ -581,7 +582,7 @@ const NpcArt = {
 					if (tone > 0.5) c = mix(c, vec3(0.1804, 0.4078, 0.5569), 0.45 + 0.45 * clamp((200.0 - a8) / 150.0, 0.0, 1.0));     // debaixo d'água
 					a = a8 / 255.0 * (1.0 - cov * 0.25);
 				}
-				if (code > 0.5) c *= tint * vC.y;
+				if (code > 0.5) c *= tint * mix(vec3(1.0), shadeC, clamp((1.0 - vC.y) / 0.34, 0.0, 1.0));
 				return vec4(c * a, a);
 			}
 			// bilinear do quadro cujo retângulo no atlas é R (px), no ponto p (px); sharp > 1: o miolo do texel fica duro
@@ -674,7 +675,7 @@ const NpcArt = {
 	_newMaterial(P, prefix) {
 		const A = P.A, m = new BABYLON.ShaderMaterial(prefix + A.id + '_' + P.i, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
 			attributes: ['position', 'color', 'fr', 'fr2'],
-			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'hs', 'palRows', 'tint', 'sharp', 'mini', 'aa', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette'],
+			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'hs', 'palRows', 'tint', 'shadeC', 'sharp', 'mini', 'aa', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette'],
 			samplers: ['atlas', 'palette'],
 			defines: this.aa > 1 ? ['#define AA'] : [],
 			needAlphaBlending: true,
@@ -686,6 +687,7 @@ const NpcArt = {
 		m.setFloat('lift', 4.0);
 		m.setFloat('palRows', this.ROWS);
 		m.setColor3('tint', SpriteMaterial.sharedTint());
+		m.setColor3('shadeC', this._shadeC);
 		m.setFloat('la', this._gl2 ? 0 : 1);
 		m.setVector4('silhouette', this.NO_SILHOUETTE);                   // (always bound: the X-ray twin shares this shader program)
 		m.alphaMode = BABYLON.Engine.ALPHA_PREMULTIPLIED;
@@ -743,6 +745,11 @@ const NpcArt = {
 	// (In NDC: linear with the orthographic camera; with the perspective one, the slope of the depth curve at the distance of the
 	// centre of the screen — d(ndc)/dz = 2·near·far / ((far − near)·z²) — so the bias is STAND_BIAS metres there too.)
 	LAYER_Y: 0.5, STAND_BIAS: 1.0,
+	// Cor de quem está na sombra de um prédio (SpriteActor._updateShade põe vC.y = 0,66): o cinza 0,66 de sempre ou, com a luz do
+	// céu (Lighting.shadeColor), a cor da sombra de verdade. Um Color3 compartilhado por todos os materiais (setColor3 guarda a
+	// referência, como o `tint`): mudá-lo aqui vale para todos.
+	_shadeC: new BABYLON.Color3(0.66, 0.66, 0.66),
+	setShadeColor(c) { this._shadeC.set(c ? c[0] : 0.66, c ? c[1] : 0.66, c ? c[2] : 0.66); },
 	_stand: new BABYLON.Vector2(0, 0),
 	_standSync() {
 		const on = typeof SpriteActor !== 'undefined' && SpriteActor.standing(), cam = this._scene && this._scene.activeCamera;

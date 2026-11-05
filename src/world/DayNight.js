@@ -87,6 +87,7 @@ class DayNight {
 		const P = this._params(this.hour);
 		const ge = this.ge;
 		const shadowI = this._weather(P);
+		if (typeof Lighting !== 'undefined') Lighting.sky(P);          // luz física: céu azulado, chão quente, sol quente, sombra mais funda
 		this.night = P.n;
 		this.sunI = P.sunI;
 
@@ -111,8 +112,10 @@ class DayNight {
 		// Chuva: sombras mais fracas. Ao anoitecer elas desvanecem (darkness -> 1 = invisivel) ANTES de congelar o mapa; senao o mapa
 		// congelado ficava pintado no chao como uma 'marca d'agua' de sombras velhas (e nao acompanhava mais sol nem camera).
 		const fade = this.forceNoShadows ? 0 : Math.max(0, Math.min(1, (shadowI - 0.25) / 0.17));
-		const dark = Math.round((1 - (1 - (0.4 + 0.4 * (Weather.cur ? Weather.cur.k : 0))) * fade) * 100) / 100;
+		const base = P.shadowBase != null ? P.shadowBase : 0.4;
+		const dark = Math.round((1 - (1 - (base + (1 - base) * (2 / 3) * (Weather.cur ? Weather.cur.k : 0))) * fade) * 100) / 100;
 		if (this._shadowDark !== dark) { this._shadowDark = dark; ge.shadowGenerator.setDarkness(dark); }
+		if (typeof Lighting !== 'undefined' && typeof NpcArt !== 'undefined') NpcArt.setShadeColor(Lighting.shadeColor(P, dark));
 
 		SpriteMaterial.sharedTint().copyFromFloats(...P.tint);
 		ge.scene.clearColor.set(P.clear[0], P.clear[1], P.clear[2], 1);

@@ -107,6 +107,7 @@ class Game {
 		this.camera = new CompassCamera(this.scene, this.gameEngine.engine, this.player.position);
 		this.camera.fitPixelScale(this.gameEngine.viewHeight);
 		Smooth.apply(this);                                  // gráfico suave (alta definição): antisserrilhado, densidade do monitor, texturas filtradas
+		Lighting.init(this);                                 // luz física (etapa 2): a gradação de cor no fim da cadeia (a luz do céu é do DayNight)
 		this.minimap = new Minimap('minimap');
 
 		// IA (preenchida de forma assíncrona em _initAI).
