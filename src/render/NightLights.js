@@ -1,5 +1,6 @@
 // ============================================================================
-// NightLights — LUZ DE VERDADE À NOITE (etapa 6 do upgrade visual; `?noite=luz`, Config.light.night). Postes, vitrines, as lâmpadas
+// NightLights — LUZ DE VERDADE À NOITE (etapa 6 do upgrade visual; padrão em todos os presets, Config.light.night; `?noite=0` volta às
+// poças pintadas de antes). Postes, vitrines, as lâmpadas
 // da favela e os faróis e lanternas dos carros iluminam o que está perto deles — o chão, as paredes, os carros, as árvores e os
 // personagens —, sem limite de lâmpadas.
 //

@@ -1449,7 +1449,7 @@ class WorldBuilder {
         this.shopGlow.seal();
         this.shopGlow.setLevel(0);
         this.shopList = list;
-        if (NightLights.on) for (const b of this.shopGlow.batches) b.mesh.isVisible = false;      // (as poças das lojas viram luz de verdade)
+        if (NightLights.on) for (const b of this.shopGlow.batches) b.mesh.layerMask = 0;      // (as poças das lojas viram luz de verdade: nenhuma câmera as desenha)
     }
 
     // Helipontos NO TELHADO (Rooftops): laje de concreto com anel e H amarelos sobre o telhado, e a escada externa de metal (lance de
