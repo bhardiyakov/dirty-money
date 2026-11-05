@@ -145,8 +145,9 @@ const Config = {
 		// LUZ DE VERDADE À NOITE (render/NightLights.js, etapa 6; em todos os presets — `?noite=0` volta às poças pintadas): postes,
 		// vitrines, a favela e os faróis iluminam o chão, as paredes, os carros, as árvores e os personagens. nightGain = força da luz.
 		night: true,
-		// REFLEXO DA ÁGUA (render/WaterPlugin.js, etapa 7; `?agua=reflexo` / `?agua=0`): o céu e o sol no mar e na Lagoa; à noite, as luzes.
-		waterReflect: false,
+		// REFLEXO DA ÁGUA (render/WaterPlugin.js, etapa 7; em todos os presets — `?agua=0` desliga): o céu e o sol no mar e na Lagoa,
+		// os prédios, árvores e carros espelhados (Water.mirror) e, à noite, as luzes.
+		waterReflect: true,
 		nightGain: 1.0,
 	},
 

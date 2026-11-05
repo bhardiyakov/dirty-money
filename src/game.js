@@ -109,6 +109,7 @@ class Game {
 		Smooth.apply(this);                                  // gráfico suave (alta definição): antisserrilhado, densidade do monitor, texturas filtradas
 		Lighting.init(this);                                 // luz física (etapa 2): a gradação de cor no fim da cadeia (a luz do céu é do DayNight)
 		NightLights.init(this);                              // luz de verdade à noite (etapa 6): o campo de luz dos postes, lojas e faróis
+		Water.initMirror(this);                              // reflexo na água (etapa 7): prédios, árvores e carros espelhados
 		this.minimap = new Minimap('minimap');
 
 		// IA (preenchida de forma assíncrona em _initAI).
@@ -729,6 +730,7 @@ class Game {
 		if (this.sprites.npc) this.sprites.npc.setZoom(this.gameEngine.renderHeight / (2 * this.camera.view));      // personagens 2,5D: nítidos de perto, suaves de longe
 		Smooth.zoom(this, this.gameEngine.renderHeight / (2 * this.camera.view));       // árvores e mobiliário de rua: bordas suaves no gráfico suave
 		NightLights.update(this);                                                       // (à noite: as luzes perto da câmera no campo de luz)
+		Water.updateMirror(dt);                                                         // (o espelho da água só com água na tela)
 
 		// --- Tirar o teto: o trecho de viaduto, o vão da ponte, o túnel ou a cobertura em cima do alvo (a pé ou o veículo dele) some ---
 		const rv = this.mode === 'car' && this.activeCar ? this.activeCar : null, rp = rv ? rv.position : this.player.position;

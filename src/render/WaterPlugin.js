@@ -33,6 +33,50 @@ const Water = {
     },
     sun: [0, 1, 0, 0],
     sky: [0.5, 0.65, 0.8],
+
+    // ESPELHO (com o reflexo ligado): prédios, telhados e acabamentos, árvores 3D e carros 3D refletidos na água (MirrorTexture no
+    // plano y = 0, o do mar e da Lagoa), com Fresnel. Os personagens 2,5D ficam de fora (são desenhos de um ângulo só). Resolução e
+    // ritmo pelo preset (Low: 256 px, a cada 2 quadros); só é redesenhado com água na tela (update, conferido a cada ~0,5 s).
+    mirror: null,
+    initMirror(game) {
+        if (!this.reflect || !game.gameEngine.world) return;
+        const sc = game.scene, lvl = typeof Graphics !== 'undefined' ? Graphics.level : 'high';
+        const size = { low: 256, medium: 384, high: 512, hd: 768 }[lvl] || 512;
+        const mt = this.mirror = new BABYLON.MirrorTexture('waterMirror', size, sc, true);
+        mt.mirrorPlane = new BABYLON.Plane(0, -1, 0, 0);
+        mt.level = 0.6;
+        this._rate = lvl === 'low' ? 2 : 1;
+        mt.refreshRate = this._rate;
+        mt.renderList = [];                                                  // (montada em updateMirror: só o que está perto da câmera)
+        mt.clearColor = new BABYLON.Color4(0, 0, 0, 0);                      // (alfa 0 onde não há nada: só o que foi desenhado reflete)
+        sc.customRenderTargets.push(mt);                                     // (lido pelo próprio shader da água: só na água aberta, distorcido)
+        this._g = game; this._chk = 0; this._seen = true;
+    },
+    _noMirror(scene) { return this._nm || (this._nm = new BABYLON.RawTexture(new Uint8Array(4), 1, 1, BABYLON.Constants.TEXTUREFORMAT_RGBA, scene, false)); },
+    // Tem água perto da câmera? (9 pontos do chão visto; a Lagoa também) — senão o espelho para.
+    updateMirror(dt) {
+        const mt = this.mirror, g = this._g;
+        if (!mt || !g) return;
+        if ((this._chk -= dt) > 0) return;
+        this._chk = 0.5;
+        const C = g.camera, f = C.focus, gh = C.groundHalf();
+        let seen = false;
+        for (let i = -1; i <= 1 && !seen; i++) for (let j = -1; j <= 1 && !seen; j++) {
+            const x = f.x + i * gh.x, z = f.z + j * gh.z;
+            if (WorldMap.waterDepth(x, z) > 0.2 || (typeof Lagoa !== 'undefined' && Lagoa.built && Lagoa.water(x, z, 1))) seen = true;
+        }
+        if (seen !== this._seen) { this._seen = seen; mt.refreshRate = seen ? this._rate : 0; }
+        if (!seen) return;
+        // a lista do espelho: prédios, acabamentos, árvores 3D e carros 3D cuja caixa toca o chão visto (+ a altura do prédio mais alto,
+        // que reflete mais longe) — o mapa inteiro eram ~1.500 malhas a cada quadro
+        const R = Math.hypot(gh.x, gh.z) + 30, L = mt.renderList, isWorld = /^(facade_|roof_|mach|trees3d|car3d)/;
+        L.length = 0;
+        for (const m of g.scene.meshes) {
+            if (!m.material || !m.isEnabled() || !(isWorld.test(m.material.name) || m.name.startsWith('world_trim'))) continue;
+            const b = m.getBoundingInfo().boundingSphere, c = b.centerWorld;
+            if (Math.abs(c.x - f.x) < R + b.radiusWorld && Math.abs(c.z - f.z) < R + b.radiusWorld) L.push(m);
+        }
+    },
     field: null,
     clock: null,
     _fieldK: null,                       // [minX, minZ, 1/largura, 1/altura]: u → coordenada da textura do campo
@@ -286,12 +330,15 @@ const Water = {
             // uma cor lisa de areia
             _ground() { return this._mode === 'sea' && typeof TerrainSplat !== 'undefined' && !!TerrainSplat.glsl; }
             prepareDefines(defines) { defines.SHORE_SEA = this._mode === 'sea'; defines.SHORE_LAND = this._mode === 'land'; defines.SHORE_GROUND = this._ground(); }
-            getSamplers(samplers) { samplers.push('shoreField', 'shoreClock'); if (this._ground()) samplers.push('splatMap', 'splatAtlas', 'splatAtlas2'); }
-            getUniforms() { return { ubo: [{ name: 'wSmooth', size: 1, type: 'float' }, { name: 'wSun', size: 4, type: 'vec4' }, { name: 'wSky', size: 4, type: 'vec4' }], fragment: 'uniform float wSmooth;\nuniform vec4 wSun;\nuniform vec4 wSky;' }; }
+            getSamplers(samplers) { samplers.push('shoreField', 'shoreClock', 'wMirror'); if (this._ground()) samplers.push('splatMap', 'splatAtlas', 'splatAtlas2'); }
+            getUniforms() { return { ubo: [{ name: 'wSmooth', size: 1, type: 'float' }, { name: 'wSun', size: 4, type: 'vec4' }, { name: 'wSky', size: 4, type: 'vec4' }, { name: 'wScr', size: 4, type: 'vec4' }], fragment: 'uniform float wSmooth;\nuniform vec4 wSun;\nuniform vec4 wSky;\nuniform vec4 wScr;' }; }
             bindForSubMesh(ub) {
                 ub.setTexture('shoreField', Water.field); ub.setTexture('shoreClock', Water.clock); ub.updateFloat('wSmooth', typeof Smooth !== 'undefined' && Smooth.on ? 1 : 0);
                 const S = Water.sun, K = Water.sky;
                 ub.updateFloat4('wSun', S[0], S[1], S[2], Water.reflect ? S[3] : 0); ub.updateFloat4('wSky', K[0], K[1], K[2], Water.reflect ? 1 : 0);
+                const eng = this._material.getScene().getEngine(), mt = Water.mirror;
+                ub.updateFloat4('wScr', 1 / eng.getRenderWidth(), 1 / eng.getRenderHeight(), mt && Water._seen ? 1 : 0, 0);
+                ub.setTexture('wMirror', mt || Water._noMirror(this._material.getScene()));
                 if (this._ground()) { ub.setTexture('splatMap', TerrainSplat.tex.map); ub.setTexture('splatAtlas', TerrainSplat.tex.atlas); ub.setTexture('splatAtlas2', TerrainSplat.tex.atlas2 || TerrainSplat.tex.atlas); }
             }
             getCustomCode(shaderType) {
@@ -303,6 +350,7 @@ const Water = {
                         #endif
                         #ifdef SHORE_SEA
                         float wWater = 0.0;
+                        uniform sampler2D wMirror;
                         #endif
                         #ifdef SHORE_GROUND
                         #define tSmooth wSmooth
@@ -359,6 +407,10 @@ const Water = {
                             vec3 wV = normalize(vEyePosition.xyz - vPositionW);
                             float wF = 0.05 + 0.45 * pow(1.0 - clamp(dot(wN, wV), 0.0, 1.0), 3.0);
                             color.rgb = mix(color.rgb, wSky.rgb, wF * wWater);
+                            if (wScr.z > 0.0) {                                                    // o espelho: prédios, árvores e carros (alfa = onde há algo)
+                                vec4 wM = texture2D(wMirror, gl_FragCoord.xy * wScr.xy + wN.xz * 0.035);
+                                color.rgb = mix(color.rgb, wM.rgb * 0.85, wM.a * (0.22 + wF) * wWater);
+                            }
                             vec3 wH = normalize(wSun.xyz + wV);
                             float wS = pow(max(dot(wN, wH), 0.0), 900.0) * 2.2 + pow(max(dot(wN, wH), 0.0), 60.0) * 0.06;
                             color.rgb += vec3(1.0, 0.95, 0.85) * wS * wSun.w * wWater;
