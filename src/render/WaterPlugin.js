@@ -25,6 +25,14 @@
 // ============================================================================
 
 const Water = {
+    // REFLEXO (etapa 7, `?agua=reflexo`, Config.light.waterReflect): sol (direção PARA o sol, força) e céu (cor) — DayNight.apply
+    get reflect() {
+        const m = typeof location !== 'undefined' && location.search.match(/[?&]agua=([^&]*)/);
+        if (m) return m[1] !== '0';
+        return !!(typeof Config !== 'undefined' && Config.light && Config.light.waterReflect);
+    },
+    sun: [0, 1, 0, 0],
+    sky: [0.5, 0.65, 0.8],
     field: null,
     clock: null,
     _fieldK: null,                       // [minX, minZ, 1/largura, 1/altura]: u → coordenada da textura do campo
@@ -279,9 +287,11 @@ const Water = {
             _ground() { return this._mode === 'sea' && typeof TerrainSplat !== 'undefined' && !!TerrainSplat.glsl; }
             prepareDefines(defines) { defines.SHORE_SEA = this._mode === 'sea'; defines.SHORE_LAND = this._mode === 'land'; defines.SHORE_GROUND = this._ground(); }
             getSamplers(samplers) { samplers.push('shoreField', 'shoreClock'); if (this._ground()) samplers.push('splatMap', 'splatAtlas', 'splatAtlas2'); }
-            getUniforms() { return { ubo: [{ name: 'wSmooth', size: 1, type: 'float' }], fragment: 'uniform float wSmooth;' }; }
+            getUniforms() { return { ubo: [{ name: 'wSmooth', size: 1, type: 'float' }, { name: 'wSun', size: 4, type: 'vec4' }, { name: 'wSky', size: 4, type: 'vec4' }], fragment: 'uniform float wSmooth;\nuniform vec4 wSun;\nuniform vec4 wSky;' }; }
             bindForSubMesh(ub) {
                 ub.setTexture('shoreField', Water.field); ub.setTexture('shoreClock', Water.clock); ub.updateFloat('wSmooth', typeof Smooth !== 'undefined' && Smooth.on ? 1 : 0);
+                const S = Water.sun, K = Water.sky;
+                ub.updateFloat4('wSun', S[0], S[1], S[2], Water.reflect ? S[3] : 0); ub.updateFloat4('wSky', K[0], K[1], K[2], Water.reflect ? 1 : 0);
                 if (this._ground()) { ub.setTexture('splatMap', TerrainSplat.tex.map); ub.setTexture('splatAtlas', TerrainSplat.tex.atlas); ub.setTexture('splatAtlas2', TerrainSplat.tex.atlas2 || TerrainSplat.tex.atlas); }
             }
             getCustomCode(shaderType) {
@@ -290,6 +300,9 @@ const Water = {
                     CUSTOM_FRAGMENT_DEFINITIONS: `
                         #if defined(SHORE_SEA) || defined(SHORE_LAND)
                         ${GLSL}
+                        #endif
+                        #ifdef SHORE_SEA
+                        float wWater = 0.0;
                         #endif
                         #ifdef SHORE_GROUND
                         #define tSmooth wSmooth
@@ -314,6 +327,7 @@ const Water = {
                                 baseColor.rgb = shoreColor(baseColor.rgb, gr, q, s + wob, sb + wob);
                             }
                             if (lk.x > 0.001) baseColor.rgb = mix(baseColor.rgb, lakeColor(water0, q, sb, lk.y), lk.x);
+                            wWater = smoothstep(0.2, 2.5, sb);                                     // (água aberta: o reflexo — na espuma e na areia, não)
                             #else
                             vec3 ground0 = baseColor.rgb;
                             if (s > -5.0 && vPositionW.y < 0.4 && lk.x < 0.999) { float wob = shoreWobble(q, s); if (s + wob > -4.5) baseColor.rgb = shoreColor(vec3(0.17, 0.41, 0.54), baseColor.rgb, q, s + wob, sb + wob); }
@@ -324,6 +338,30 @@ const Water = {
                                 baseColor.rgb = mix(baseColor.rgb, g, lk.x);
                             }
                             #endif
+                        }
+                        #endif`,
+                    // REFLEXO (etapa 7, Water.reflect): o céu da hora (Fresnel: mais de lado, mais céu) e o brilho do sol nas ondulações —
+                    // a normal vem da ondulação do mar aberto (swell) e de uma ondulação fina que anda com o vento (ruído animado); o sol
+                    // vira cintilas que piscam nas cristas. Some na beira (espuma, lâmina d'água) e de noite (o reflexo das luzes é do
+                    // NightLights).
+                    CUSTOM_FRAGMENT_BEFORE_FOG: `
+                        #ifdef SHORE_SEA
+                        if (wSky.w > 0.0 && wWater > 0.0) {
+                            vec4 wClk = texture2D(shoreClock, vec2(0.1, 0.5));
+                            float wT = (wClk.r + wClk.b * 255.0) * 7.4;
+                            vec2 wq = vPositionW.xz;
+                            vec3 wsw = swell(wq);
+                            vec2 wa = wq * 1.9 + vec2(wT * 0.42, wT * 0.27), wb = wq * 4.3 - vec2(wT * 0.31, -wT * 0.55);
+                            float e = 0.08;
+                            vec2 wr = vec2(wNoise(wa + vec2(e, 0.0)) - wNoise(wa - vec2(e, 0.0)), wNoise(wa + vec2(0.0, e)) - wNoise(wa - vec2(0.0, e))) * 0.9
+                                    + vec2(wNoise(wb + vec2(e, 0.0)) - wNoise(wb - vec2(e, 0.0)), wNoise(wb + vec2(0.0, e)) - wNoise(wb - vec2(0.0, e))) * 0.5;
+                            vec3 wN = normalize(vec3(-wsw.y * 0.12 - wr.x * 0.7, 1.0, -wsw.z * 0.12 - wr.y * 0.7));
+                            vec3 wV = normalize(vEyePosition.xyz - vPositionW);
+                            float wF = 0.05 + 0.45 * pow(1.0 - clamp(dot(wN, wV), 0.0, 1.0), 3.0);
+                            color.rgb = mix(color.rgb, wSky.rgb, wF * wWater);
+                            vec3 wH = normalize(wSun.xyz + wV);
+                            float wS = pow(max(dot(wN, wH), 0.0), 900.0) * 2.2 + pow(max(dot(wN, wH), 0.0), 60.0) * 0.06;
+                            color.rgb += vec3(1.0, 0.95, 0.85) * wS * wSun.w * wWater;
                         }
                         #endif`,
                 };

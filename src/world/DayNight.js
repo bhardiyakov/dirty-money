@@ -103,6 +103,11 @@ class DayNight {
 		ge.sun.intensity = P.sunI;
 		ge.sun.diffuse.copyFromFloats(...P.sunC);
 		MapGeo.setSun(dir, P.sunI);
+		if (typeof Water !== 'undefined') {                    // reflexo da água: o sol (direção PARA ele) e o céu da hora
+			Water.sun[0] = -dir.x; Water.sun[1] = -dir.y; Water.sun[2] = -dir.z; Water.sun[3] = Math.max(0, (P.sunI - 0.25) / 0.45);
+			const hz = [0.62, 0.74, 0.86], k = 1 - Math.min(1, P.n);
+			for (let i = 0; i < 3; i++) Water.sky[i] = P.clear[i] * 0.6 + (hz[i] * P.hemiC[i] * 0.85) * k + P.clear[i] * (1 - k) * 0.4;
+		}
 		CarArt.setSun(dir, P.sunI, P.sunC);                 // relevo dos carros: iluminados pelo mesmo sol
 
 		// Sem sol (noite) a passada de sombra é custo à toa: congela o mapa de sombras.

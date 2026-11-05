@@ -28,6 +28,7 @@ const NightLights = {
 	},
 	tex: null,
 	P: null,
+	get waterOn() { return typeof Water !== 'undefined' && Water.reflect; },
 	_empty: null,
 
 	// O plugin dos StandardMaterial (chamado no carregamento do script: vale para todos os materiais criados depois).
@@ -38,9 +39,9 @@ const NightLights = {
 		this.W = new BABYLON.Vector4(0, 1, 0, 0);          // chão molhado: direção da câmera no chão (x, z), quanto está molhado, -
 		const NL = this;
 		class NightLightPlugin extends BABYLON.MaterialPluginBase {
-			constructor(m) { super(m, 'NightLight', 270, { NIGHTLF: false }); this._enable(true); }
+			constructor(m) { super(m, 'NightLight', 270, { NIGHTLF: false, NIGHTSEA: false }); this._sea = m.name === 'water'; this._enable(true); }
 			getClassName() { return 'NightLightPlugin'; }
-			prepareDefines(d) { d.NIGHTLF = true; }
+			prepareDefines(d) { d.NIGHTLF = true; d.NIGHTSEA = this._sea && NL.waterOn; }
 			getSamplers(s) { s.push('lfTex'); }
 			getUniforms() { return { ubo: [{ name: 'lfP', size: 4, type: 'vec4' }, { name: 'lfW', size: 4, type: 'vec4' }], fragment: 'uniform vec4 lfP;\nuniform vec4 lfW;' }; }
 			bindForSubMesh(ub) {
@@ -67,13 +68,18 @@ const NightLights = {
 								color.rgb += baseColor.rgb * lfL * lfP.w * lfH;
 								// CHÃO MOLHADO (chuva): o reflexo das luzes num rastro que vem na direção da câmera — o campo de luz lido em
 								// pontos ATRÁS do pixel (para longe da câmera), só no que é chão (normal para cima, baixo)
-								if (lfW.z > 0.0 && normalW.y > 0.85 && vPositionW.y < 1.0) {
+								#ifdef NIGHTSEA
+								float lfWet = 1.6;                                              // (a água: sempre molhada, o reflexo mais forte)
+								#else
+								float lfWet = lfW.z;
+								#endif
+								if (lfWet > 0.0 && normalW.y > 0.85 && vPositionW.y < 1.0) {
 									vec3 lfR = vec3(0.0);
 									for (int i = 1; i <= 5; i++) {
 										vec2 q = (vPositionW.xz + lfW.xy * float(i) * 1.6 - lfP.xy) * lfP.z + 0.5;
 										lfR += texture2D(lfTex, q).rgb * (1.0 - float(i) * 0.14);
 									}
-									color.rgb += lfR * 0.22 * lfW.z * lfP.w;
+									color.rgb += lfR * 0.22 * lfWet * lfP.w;
 								}
 							}
 						}
