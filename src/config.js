@@ -51,6 +51,10 @@ const Config = {
 		groundPhotos: true,
 		groundMixed: true,
 		groundBump: true,
+		// PRÉDIOS com volume (art/Facades3D.js, etapa 4): janelas recuadas (relevo + paralaxe nas fachadas) e telhados 3D (cornija,
+		// caixas-d'água, condensadoras, antenas). `?predios=0` volta aos de antes; `?predios=relevo` / `recuo` / `,telhado` para comparar.
+		facades3d: 'recuo',
+		roofs3d: true,
 		npcHalf: false,        // páginas dos atlas 2,5D em MEIA resolução na GPU (um quarto da memória; NpcArt.half). Preset Low: true
 		vramMB: 640,           // orçamento das páginas dos atlas 2,5D na GPU (MB): passou, as sem uso há 15 s saem (NpcArt._lru). Perfil leve: 256
 		uploadMB: 3,           // envio das páginas 2,5D à GPU: MB por quadro, em faixas (NpcArt._upStep — sem travar quando um tipo novo aparece). Perfil leve: 1

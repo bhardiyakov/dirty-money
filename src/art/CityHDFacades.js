@@ -21,7 +21,8 @@ Object.assign(CityHD, {
         const t0 = performance.now(), st = TileFactory.facadeStyles[key], seed = CityHD.seedOf('facade', [key]);
         const d = new CityTile(120, 120, this.Q, seed), e = new CityTile(120, 120, this.Q, seed);
         d.p_facade(key, e);
-        const out = { diffuse: d.toTexture(scene, 'facade_' + key), emissive: e.toTexture(scene, 'win_' + key), grid: this.GRID[st.kind] || [2, 2], occ: this.OCC[st.kind] || 'home' };
+        const relief = Facades3D.on ? Facades3D.relief(scene, key, d.winRects, this.Q) : null;      // (etapa 4: as janelas em relevo)
+        const out = { diffuse: d.toTexture(scene, 'facade_' + key), emissive: e.toTexture(scene, 'win_' + key), grid: this.GRID[st.kind] || [2, 2], occ: this.OCC[st.kind] || 'home', relief };
         this.lastMs += performance.now() - t0;
         return out;
     },
@@ -43,6 +44,7 @@ Object.assign(CityTile.prototype, {
         this.E = e; e.g.fillStyle = '#000'; e.g.fillRect(0, 0, 120, 120);
         this.rng = Pixel.rng(this.seed);
         this.win = 0;
+        this.winRects = { glass: [], sill: [] };                                   // (onde ficam vidros e peitoris: o relevo — Facades3D)
         const G = CityHD.GRID[st.kind] || [2, 2]; this.cellW = 120 / G[0]; this.cellH = 120 / G[1];
         const f = this['_fac_' + st.kind] || this._fac_concrete;
         f.call(this, st);
@@ -52,6 +54,7 @@ Object.assign(CityTile.prototype, {
     // ---------------------------------------------------------------- vidro (de dia) e a sala acesa (à noite)
     // Vidro refletindo o céu: degradê, reflexo diagonal e a sombra da verga no alto. `A`/`B` = cores do vidro.
     _glass(x, y, w, h, A, B, o = {}) {
+        if (this.winRects) this.winRects.glass.push([x, y, w, h]);
         const g = this.g, a = HDK.C(A), b = HDK.C(B);
         g.fillStyle = this.lin(x, y, x + w * 0.4, y + h, [[0, HDK.mix(b, [255, 255, 255], 0.15)], [0.45, HDK.mix(a, b, 0.45)], [1, HDK.t(a, 0.7)]]); g.fillRect(x, y, w, h);
         // o fundo da sala aparecendo (mais escuro embaixo) e, às vezes, a cortina atrás do vidro
@@ -123,6 +126,7 @@ Object.assign(CityTile.prototype, {
     _frameE(lines, lw = 0.9) { const g = this.E.g; g.beginPath(); for (const [x0, y0, x1, y1] of lines) { g.moveTo(x0, y0); g.lineTo(x1, y1); } g.strokeStyle = 'rgba(8,6,4,0.95)'; g.lineWidth = lw; g.stroke(); },
     // Peitoril de pedra com sombra embaixo.
     _sill(x, y, w, col) {
+        if (this.winRects) this.winRects.sill.push([x, y, w, 2.6]);
         const c = HDK.C(col);
         this.soft(x + 0.6, y + 1.6, w, 2.4, 0.45, 1.6, 0.6);
         this.fillRR(x, y, w, 2.6, 0.6, this.lin(0, y, 0, y + 2.6, [[0, HDK.t(c, 1.08)], [0.4, c], [1, HDK.t(c, 0.72)]]));
