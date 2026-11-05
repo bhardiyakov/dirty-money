@@ -552,6 +552,8 @@ const NpcArt = {
 			uniform vec4 clipA;          // recorte da carroceria (entrando no carro): centro (x, z) e frente (fx, fz)
 			uniform vec4 clipB;          // meio comprimento, meia largura, altura máxima na imagem (m) e o modo em w (ver main)
 			uniform vec4 silhouette;     // X-ray pass: tint (rgb) and strength (a), 0 = the normal drawing
+			uniform sampler2D lfTex;     // campo de luz da noite (NightLights): centro x, z, 1 / tamanho e força em lfP
+			uniform vec4 lfP;
 			float hb(float n) { return fract(sin(n) * 43758.5453); }
 			vec4 tap(vec2 t, vec4 R) {
 				if (t.x < R.x || t.y < R.y || t.x >= R.z || t.y >= R.w) return vec4(0.0);
@@ -659,6 +661,12 @@ const NpcArt = {
 				// X-ray pass (XRaySilhouette): a flat tinted silhouette instead of the drawing (premultiplied).
 				// (only above the feet line: below it is the ground contact - shadow, a foot stepping forward - which the ground itself covers)
 				if (silhouette.a > 0.0) { if (vW.y < 0.05) discard; gl_FragColor = vec4(silhouette.rgb, 1.0) * (silhouette.a * smoothstep(0.2, 0.6, c.a)); return; }
+				// luz da noite (NightLights): a do campo de luz no ponto do chão sob o pixel, × a cor do desenho (o personagem sob o poste, no
+				// farol de um carro, na frente de uma vitrine)
+				if (lfP.w > 0.0) {
+					vec2 lfUV = (vG - lfP.xy) * lfP.z + 0.5;
+					if (lfUV.x > 0.0 && lfUV.x < 1.0 && lfUV.y > 0.0 && lfUV.y < 1.0) c.rgb += c.rgb * texture2D(lfTex, lfUV).rgb * lfP.w * 0.85;
+				}
 				gl_FragColor = c;
 			}`;
 	},
@@ -675,8 +683,8 @@ const NpcArt = {
 	_newMaterial(P, prefix) {
 		const A = P.A, m = new BABYLON.ShaderMaterial(prefix + A.id + '_' + P.i, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
 			attributes: ['position', 'color', 'fr', 'fr2'],
-			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'hs', 'palRows', 'tint', 'shadeC', 'sharp', 'mini', 'aa', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette'],
-			samplers: ['atlas', 'palette'],
+			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'hs', 'palRows', 'tint', 'shadeC', 'sharp', 'mini', 'aa', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette', 'lfP'],
+			samplers: ['atlas', 'palette', 'lfTex'],
 			defines: this.aa > 1 ? ['#define AA'] : [],
 			needAlphaBlending: true,
 		});
@@ -697,6 +705,8 @@ const NpcArt = {
 	// What changes while the page lives: its texture (on the GPU or not), the zoom sharpness, the water clock, standing.
 	_refresh(m, P) {
 		m.setTexture('atlas', P.tex || this._emptyTex());
+		m.setTexture('lfTex', (typeof NightLights !== 'undefined' && NightLights.tex) || this._emptyTex());
+		m.setVector4('lfP', (typeof NightLights !== 'undefined' && NightLights.P) || this._noLF || (this._noLF = new BABYLON.Vector4(0, 0, 0, 0)));
 		m.setVector2('atlasSize', P.asz ? P.asz.set(this._tw(P), this._th(P)) : (P.asz = new BABYLON.Vector2(this._tw(P), this._th(P))));
 		m.setFloat('hs', P.hs || 1);
 		m.setFloat('sharp', this._sharpOf(P.A));

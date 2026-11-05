@@ -1198,6 +1198,7 @@ class WorldBuilder {
         }
 
         this.perches = lamps.map((l) => ({ x: l.hx, z: l.hz, y: 5.75 }));          // poleiros das aves (Birds)
+        this.streetLamps = lamps;                                                     // (as fontes do campo de luz da noite: NightLights)
 
         // Brilhos: cabeçote (alto) + poça no chão, por poste.
         // Cores fixas (acesas); quem acende/apaga é a intensidade global do lote (setNight → setLevel). Poste quebrado = quad apagado.
@@ -1207,7 +1208,7 @@ class WorldBuilder {
             this.lampGlow.place(a, l.hx, 5.75, l.hz, 2.6);
             this.lampGlow.place(b, l.hx, WorldBuilder.POOL_Y, l.hz, 14);
             this.lampGlow.color(a, 1.0, 0.86, 0.55, 0.9);
-            this.lampGlow.color(b, 1.0, 0.78, 0.42, 0.45);
+            if (NightLights.on) this.lampGlow.off(b); else this.lampGlow.color(b, 1.0, 0.78, 0.42, 0.45);      // (luz de verdade: sem a poça pintada)
             l.glow = [a, b];
             return [a, b];
         });
@@ -1430,7 +1431,8 @@ class WorldBuilder {
             }
             const a = f * q, pool = WorldBuilder.POOL_STEADY[l.type] * q;
             if (a > 0.01) g.color(l.a, 0.95, 0.88, 0.5, 0.75 * a); else g.off(l.a);
-            if (pool > 0.01) g.color(l.b, 0.9, 0.8, 0.4, 0.3 * pool); else g.off(l.b);
+            l.cur = a;                                                                  // (a força da lâmpada agora: o campo de luz da noite)
+            if (pool > 0.01 && !NightLights.on) g.color(l.b, 0.9, 0.8, 0.4, 0.3 * pool); else g.off(l.b);
         }
         g.flush();
     }
@@ -1446,6 +1448,8 @@ class WorldBuilder {
         this._shopIds = list.map((s) => { const i = this.shopGlow.alloc(s.x, s.z); this.shopGlow.place(i, s.x, 0.26, s.z, 9); this.shopGlow.color(i, s.c[0], s.c[1], s.c[2], 0.42); s.id = i; return s; });
         this.shopGlow.seal();
         this.shopGlow.setLevel(0);
+        this.shopList = list;
+        if (NightLights.on) for (const b of this.shopGlow.batches) b.mesh.layerMask = 0;      // (as poças das lojas viram luz de verdade: nenhuma câmera as desenha)
     }
 
     // Helipontos NO TELHADO (Rooftops): laje de concreto com anel e H amarelos sobre o telhado, e a escada externa de metal (lance de

@@ -59,6 +59,8 @@ class CarLights {
         const blink = Math.floor(this.time * 2.6) % 2 === 0;
         const sirenPhase = Math.floor(this.time * 5) % 2 === 0;
         const range2 = this.range * this.range;
+        const LS = this.lightSrc || (this.lightSrc = []), NL = typeof NightLights !== 'undefined' && NightLights.on;
+        LS.length = 0;                                                     // (faróis e lanternas acesos: as fontes do campo de luz da noite)
         // Lamps face the camera or not: the camera looks along its ground forward (CompassCamera.yaw), so a lamp pointing back at it
         // (dot of the lamp's direction with the way toward the camera) shows; turned sideways it fades; pointing away it is behind
         // the body — hidden, instead of its glow showing through the car.
@@ -114,11 +116,13 @@ class CarLights {
                 } else c.off(s.cone[k]);
             }
             // Poça de luz no chão à frente do carro (como a dos postes): grande, macia e quente.
-            if (hI > 0.02) { g.place(s.beam, p.x + fx * (L.zF - 0.8), 0.23, p.z + fz * (L.zF - 0.8), 21); g.color(s.beam, 1.0, 0.82, 0.5, 0.34 * hI); } else g.off(s.beam);   // poça morna e grande em volta do carro
+            if (hI > 0.02 && NL) LS.push({ kind: 'head', x: p.x + fx * (L.zF + 6.5), z: p.z + fz * (L.zF + 6.5), fx, fz, k: hI });
+            if (hI > 0.02 && !NL) { g.place(s.beam, p.x + fx * (L.zF - 0.8), 0.23, p.z + fz * (L.zF - 0.8), 21); g.color(s.beam, 1.0, 0.82, 0.5, 0.34 * hI); } else g.off(s.beam);   // poça morna e grande em volta do carro
 
             // ---- Lanternas: vermelho fraco com os faróis ligados; forte e maior ao frear.
             const braking = car.braking && (alive || car.controlled) && !pedal;
             const tI = pedal ? (night > 0.3 ? 0.22 : 0) : braking ? 1.0 : (hI > 0.02 ? 0.5 * hI : (alive || car.controlled ? 0.18 : 0));
+            if (NL && night > 0.3 && tI > 0.1) LS.push({ kind: 'tail', x: p.x + fx * (L.zR - 1.2), z: p.z + fz * (L.zR - 1.2), k: tI });
             for (let k = 0; k < 2; k++) {
                 const sx = k === 0 ? -L.x : L.x;
                 g.place(s.tl[k], p.x + fx * (L.zR - out) + rx * sx, hy, p.z + fz * (L.zR - out) + rz * sx, (braking ? 2.0 : 1.2) * gk);
