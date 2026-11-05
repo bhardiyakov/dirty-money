@@ -55,7 +55,7 @@ const Config = {
 		// caixas-d'água, condensadoras, antenas). `?predios=0` volta aos de antes; `?predios=relevo` / `recuo` / `,telhado` para comparar.
 		facades3d: 'recuo',
 		roofs3d: true,
-		trees3d: false,        // árvores, palmeiras e arbustos em 3D (render/Trees3D.js, etapa 5; `?arvores=3d` para comparar)
+		trees3d: true,         // árvores e palmeiras em 3D em todos os presets (render/Trees3D.js, etapa 5); `?arvores=0` = as desenhadas de antes
 		npcHalf: false,        // páginas dos atlas 2,5D em MEIA resolução na GPU (um quarto da memória; NpcArt.half). Preset Low: true
 		vramMB: 640,           // orçamento das páginas dos atlas 2,5D na GPU (MB): passou, as sem uso há 15 s saem (NpcArt._lru). Perfil leve: 256
 		uploadMB: 3,           // envio das páginas 2,5D à GPU: MB por quadro, em faixas (NpcArt._upStep — sem travar quando um tipo novo aparece). Perfil leve: 1

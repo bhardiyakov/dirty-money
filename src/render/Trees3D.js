@@ -117,6 +117,40 @@ const Trees3D = {
                     CUSTOM_FRAGMENT_DEFINITIONS: `
                         #ifdef TREEWIND
                         varying vec2 trTone;
+                        float tfH(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+                        float tfN(vec3 p) {
+                            vec3 i = floor(p), f = fract(p);
+                            f = f * f * (3.0 - 2.0 * f);
+                            return mix(mix(mix(tfH(i), tfH(i + vec3(1.0, 0.0, 0.0)), f.x), mix(tfH(i + vec3(0.0, 1.0, 0.0)), tfH(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+                                       mix(mix(tfH(i + vec3(0.0, 0.0, 1.0)), tfH(i + vec3(1.0, 0.0, 1.0)), f.x), mix(tfH(i + vec3(0.0, 1.0, 1.0)), tfH(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);
+                        }
+                        #endif`,
+                    // FOLHAGEM (o alfa da cor do vértice: 0 = madeira, 0,5..0,74 = folha, 0,76..1 = flor — PARTS._push): tufos claros e vãos
+                    // escuros de um ruído 3D no espaço do mundo (3 escalas), o sombreado da copa decodificado do alfa, as manchas de flor
+                    // sobre o verde (ipês) e, no WebGL 2, as normais entortadas pelo mesmo ruído (gradiente de superfície): a luz do sol
+                    // pega os tufos — a copa deixa de ser uma bolha lisa.
+                    CUSTOM_FRAGMENT_BEFORE_LIGHTS: `
+                        #if defined(TREEWIND) && defined(VERTEXCOLOR)
+                        if (vColor.a > 0.25) {
+                            float trFl = vColor.a > 0.755 ? 1.0 : 0.0;
+                            float trSh = 0.4 + 0.9 * clamp((vColor.a - mix(0.5, 0.76, trFl)) / 0.24, 0.0, 1.0);
+                            vec3 trP = vPositionW;
+                            float trN = tfN(trP * 1.25) * 0.6 + tfN(trP * 2.9 + 7.1) * 0.28 + tfN(trP * 6.1 + 3.3) * 0.12;
+                            if (trFl > 0.5) {
+                                float trM = smoothstep(0.42, 0.6, tfN(trP * 0.9 + 11.0) * 0.65 + trN * 0.35);
+                                vec3 trTn = baseColor.rgb / max(vColor.rgb, vec3(0.001));
+                                baseColor.rgb = mix(vec3(0.27, 0.45, 0.19) * trTn, baseColor.rgb, trM);
+                            }
+                            baseColor.rgb *= trSh * (0.74 + 0.48 * trN);
+                            #ifdef WEBGL2
+                            {
+                                vec3 trDx = dFdx(vPositionW), trDy = dFdy(vPositionW), trR1 = cross(trDy, normalW), trR2 = cross(normalW, trDx);
+                                float trDet = dot(trDx, trR1);
+                                vec3 trG = sign(trDet) * (dFdx(trN) * trR1 + dFdy(trN) * trR2);
+                                normalW = normalize(abs(trDet) * normalW - 0.8 * trG);
+                            }
+                            #endif
+                        }
                         #endif`,
                     CUSTOM_FRAGMENT_UPDATE_DIFFUSE: `
                         #ifdef TREEWIND
@@ -145,8 +179,10 @@ const Trees3D = {
     },
 
     // ------------------------------------------------------------------ os modelos (os vértices de cada um, prontos para cada malha)
+    // Detalhe das copas: 2 = bolhas de icosfera com 2 subdivisões (copas redondas); 1 (preset Low) = a principal com 2, as outras com 1.
+    get lod() { return typeof Graphics !== 'undefined' && Graphics.level === 'low' ? 1 : 2; },
     _model(scene, model) {
-        const C = this._models || (this._models = {});
+        const C = this._models || (this._models = {}), hi = this.lod >= 2;
         if (C[model]) return C[model];
         const g = { p: [], n: [], c: [], i: [] }, R = this._rng(model.length * 977 + model.charCodeAt(0) * 31);
         const B = this.PARTS, trunk = [0.36, 0.27, 0.19], dark = [0.27, 0.21, 0.15];
@@ -155,7 +191,7 @@ const Trees3D = {
                 const P = {
                     oak: { h: 4.8, r: 1.9, c: [0.33, 0.53, 0.2], n: 4 }, juca: { h: 5.4, r: 1.75, c: [0.36, 0.58, 0.26], n: 4 },
                     orchard: { h: 3.2, r: 1.4, c: [0.38, 0.58, 0.23], n: 3 }, jungle: { h: 6.2, r: 2.2, c: [0.24, 0.48, 0.2], n: 5 },
-                    ipe: { h: 5.0, r: 1.8, c: [0.9, 0.46, 0.7], n: 4 }, ipeY: { h: 5.0, r: 1.8, c: [0.98, 0.8, 0.26], n: 4 },
+                    ipe: { h: 5.0, r: 1.8, c: [0.94, 0.5, 0.74], n: 4, fl: true }, ipeY: { h: 5.0, r: 1.8, c: [1.0, 0.84, 0.28], n: 4, fl: true },
                 }[model];
                 const crownY = P.h - P.r * 0.85;
                 B.cyl(g, [0, 0, 0], [0.15, crownY, -0.1], 0.24 * P.r / 2, 0.12 * P.r / 2, 6, trunk, dark);
@@ -163,7 +199,7 @@ const Trees3D = {
                 for (let k = 0; k < P.n; k++) {
                     const a = k / P.n * Math.PI * 2 + R() * 0.8, d = k === 0 ? 0 : P.r * (0.35 + 0.25 * R());
                     const rr = P.r * (k === 0 ? 0.82 : 0.55 + 0.2 * R());
-                    B.blob(g, [Math.cos(a) * d, crownY + (k === 0 ? 0.3 : (R() - 0.3) * P.r * 0.5), Math.sin(a) * d], [rr, rr * 0.82, rr], P.c, R, 0.18, k === 0 ? 2 : 1);
+                    B.blob(g, [Math.cos(a) * d, crownY + (k === 0 ? 0.3 : (R() - 0.3) * P.r * 0.5), Math.sin(a) * d], [rr, rr * 0.82, rr], P.c, R, 0.18, k === 0 || hi ? 2 : 1, P.fl ? 'flower' : 'leaf');
                 }
                 break;
             }
@@ -185,14 +221,14 @@ const Trees3D = {
                 B.cyl(g, [0, 0, 0], [0, 7.2, 0], 0.26, 0.14, 6, [0.4, 0.3, 0.22], dark);
                 for (let k = 0; k < 3; k++) {                                               // a umbela: discos achatados no alto
                     const y = 5.4 + k * 0.85, r = 2.7 - k * 0.7;
-                    B.blob(g, [0, y, 0], [r, 0.42, r], [0.2, 0.36, 0.18], R, 0.2, k === 0 ? 2 : 1);
+                    B.blob(g, [0, y, 0], [r, 0.42, r], [0.2, 0.36, 0.18], R, 0.2, k === 0 || hi ? 2 : 1);
                 }
                 break;
             }
             case 'palm': {
                 const top = B.trunkCurve(g, 6.8, 0.22, 0.15, 0.9, [0.52, 0.42, 0.3], [0.36, 0.28, 0.2]);
                 for (let k = 0; k < 8; k++) B.frond(g, top, k / 8 * Math.PI * 2 + R() * 0.3, 3.2 + R() * 0.6, 0.62, 0.4 + R() * 0.3, [0.3, 0.5, 0.2], [0.2, 0.36, 0.14]);
-                B.blob(g, top, [0.42, 0.36, 0.42], [0.34, 0.3, 0.16], R, 0.1);              // os cocos
+                B.blob(g, top, [0.42, 0.36, 0.42], [0.34, 0.3, 0.16], R, 0.1, 1, 'wood');   // os cocos
                 break;
             }
             case 'banana': {
@@ -218,20 +254,27 @@ Trees3D.PARTS = {
         const vd = BABYLON.CreateIcoSphereVertexData({ radius: 1, subdivisions: sub, flat: false });
         return (this._ico[sub] = { p: Array.from(vd.positions), i: Array.from(vd.indices) });
     },
-    _push(g, x, y, z, nx, ny, nz, c) {
+    // a = o ALFA da cor do vértice, que diz ao shader o que é (Trees3D._windClass): 0 = madeira (a cor já sombreada); folha e flor =
+    // a cor da espécie SEM sombra e o sombreado (a oclusão falsa) codificado no alfa — leaf(sh) / flower(sh).
+    _push(g, x, y, z, nx, ny, nz, c, a = 0) {
         g.p.push(x, y, z);
         const l = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz || 1);
         g.n.push(nx * l, ny * l, nz * l);
-        g.c.push(c[0], c[1], c[2], 1);
+        g.c.push(c[0], c[1], c[2], a);
     },
-    // Bolha de folhagem: icosfera com raios (rx, ry, rz) entortada por ruído; mais clara em cima, escura embaixo.
-    blob(g, c, r, col, R, jit, sub = 1) {
+    leaf(sh) { return 0.5 + 0.24 * Math.max(0, Math.min(1, (sh - 0.4) / 0.9)); },
+    flower(sh) { return 0.76 + 0.24 * Math.max(0, Math.min(1, (sh - 0.4) / 0.9)); },
+    // Bolha de folhagem: icosfera com raios (rx, ry, rz) entortada por ruído; mais clara em cima, escura embaixo. mode: 'leaf' (folhagem,
+    // o shader põe os tufos), 'flower' (a cor da flor, em manchas sobre o verde) ou 'wood' (cor lisa: os cocos).
+    blob(g, c, r, col, R, jit, sub = 1, mode = 'leaf') {
         const I = this.ico(sub), base = g.p.length / 3, ph = R() * 10;
         for (let k = 0; k < I.p.length; k += 3) {
             const x = I.p[k], y = I.p[k + 1], z = I.p[k + 2];
             const w = 1 + (Math.sin(x * 3.1 + ph) * Math.sin(y * 2.7 + ph * 1.3) * Math.sin(z * 3.3 - ph) + (R() - 0.5) * 0.25) * jit;      // (ruído suave: a copa ondulada, não facetada)
             const sh = 0.62 + 0.45 * (y * 0.5 + 0.5) + (R() - 0.5) * 0.05;
-            this._push(g, c[0] + x * r[0] * w, c[1] + y * r[1] * w, c[2] + z * r[2] * w, x + 0, y + 0.35, z, [col[0] * sh, col[1] * sh, col[2] * sh]);
+            const px = c[0] + x * r[0] * w, py = c[1] + y * r[1] * w, pz = c[2] + z * r[2] * w;
+            if (mode === 'wood') this._push(g, px, py, pz, x, y + 0.35, z, [col[0] * sh, col[1] * sh, col[2] * sh]);
+            else this._push(g, px, py, pz, x, y + 0.35, z, col, mode === 'flower' ? this.flower(sh) : this.leaf(sh));
         }
         for (const i of I.i) g.i.push(base + i);
     },
@@ -258,10 +301,10 @@ Trees3D.PARTS = {
         for (let k = 0; k < n; k++) {
             const an = k / n * Math.PI * 2, rr = r * (0.85 + 0.3 * R()), dy = (R() - 0.5) * 0.25;
             const sh = 0.7 + (R() - 0.5) * 0.15;
-            this._push(g, c[0] + Math.cos(an) * rr, c[1] + dy, c[2] + Math.sin(an) * rr, Math.cos(an), 0.55, Math.sin(an), [col[0] * sh, col[1] * sh, col[2] * sh]);
+            this._push(g, c[0] + Math.cos(an) * rr, c[1] + dy, c[2] + Math.sin(an) * rr, Math.cos(an), 0.55, Math.sin(an), col, this.leaf(sh));
         }
-        this._push(g, c[0], c[1] + h, c[2], 0, 1, 0, [col[0] * 1.25, col[1] * 1.25, col[2] * 1.2]);
-        this._push(g, c[0], c[1] + 0.25, c[2], 0, -1, 0, [col[0] * 0.5, col[1] * 0.5, col[2] * 0.5]);
+        this._push(g, c[0], c[1] + h, c[2], 0, 1, 0, col, this.leaf(1.25));
+        this._push(g, c[0], c[1] + 0.25, c[2], 0, -1, 0, col, this.leaf(0.5));
         for (let k = 0; k < n; k++) { const k1 = (k + 1) % n; g.i.push(base + k, base + n, base + k1, base + k1, base + n + 1, base + k); }
     },
     // Tronco curvo (palmeira, bananeira): devolve o topo.
@@ -284,8 +327,8 @@ Trees3D.PARTS = {
             const ww = w * Math.sin(Math.PI * Math.min(1, t * 1.15 + 0.08)) * (1 - t * 0.35);
             const c = [col[0] + (colTip[0] - col[0]) * t, col[1] + (colTip[1] - col[1]) * t, col[2] + (colTip[2] - col[2]) * t];
             const ny = 1, nx = dx * (droop * 2 * t - 0.35), nz = dz * (droop * 2 * t - 0.35);
-            this._push(g, x + px * ww, y - ww * 0.25, z + pz * ww, nx + px * 0.4, ny, nz + pz * 0.4, c);
-            this._push(g, x - px * ww, y - ww * 0.25, z - pz * ww, nx - px * 0.4, ny, nz - pz * 0.4, c);
+            this._push(g, x + px * ww, y - ww * 0.25, z + pz * ww, nx + px * 0.4, ny, nz + pz * 0.4, c, this.leaf(1));
+            this._push(g, x - px * ww, y - ww * 0.25, z - pz * ww, nx - px * 0.4, ny, nz - pz * 0.4, c, this.leaf(1));
         }
         for (let s = 0; s < seg; s++) { const o = base + s * 2; g.i.push(o, o + 2, o + 1, o + 1, o + 2, o + 3); }
     },
