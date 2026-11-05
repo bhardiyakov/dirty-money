@@ -85,6 +85,18 @@ class MeshBatch {
         this.walls(x0, z0, x1, z1, y0, y1, uv0, color);
     }
 
+    // Cilindro em pé (caixa-d'água, tambor): `seg` faces laterais com a normal de cada uma e a tampa em leque. UVs triviais.
+    cyl(cx, cz, r, y0, y1, color, seg = 8) {
+        const uv = [[0, 0], [0, 0], [0, 0], [0, 0]], uv3 = [[0, 0], [0, 0], [0, 0]], P = [];
+        for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2; P.push([cx + Math.cos(a) * r, cz + Math.sin(a) * r, a]); }
+        for (let i = 0; i < seg; i++) {
+            const [ax, az] = P[i], [bx, bz] = P[i + 1], m = (P[i][2] + P[i + 1][2]) / 2, n = [Math.cos(m), 0, Math.sin(m)];
+            // (de fora: A = P[i], B = P[i + 1] — a ordem do quad que a face de fora mostra)
+            this.quad([ax, y1, az], [bx, y1, bz], [ax, y0, az], [bx, y0, bz], n, uv, color);
+            this.tri([cx, y1, cz], [ax, y1, az], [bx, y1, bz], [0, 1, 0], uv3, color);
+        }
+    }
+
     // Cria a malha no Babylon (já em coordenadas de mundo; transform congelado).
     // alwaysActive: false para malhas por pedaço (o frustum descarta as que estão fora da tela).
     build(name, scene, material, { vertexColors = false, receiveShadows = true, alwaysActive = true } = {}) {

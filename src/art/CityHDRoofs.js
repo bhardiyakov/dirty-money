@@ -83,6 +83,7 @@ Object.assign(CityTile.prototype, {
     },
     // Caixa-d'água de fibra vista de cima (tampa com nervuras, brilho e sombra).
     _tank(x, y, color, R = 13) {
+        if (Facades3D.roofs) return;                                             // (telhados 3D: a caixa-d'água é de verdade — WorldBuilder)
         const c = HDK.C(color), g = this.g;
         this.softEll(x + 3, y + 3.4, R + 0.5, R, 0.55, 4);
         this.circ(x, y, R, this.rad(x - R * 0.3, y - R * 0.3, 0, R * 1.3, [[0, HDK.t(c, 1.25)], [0.7, c], [1, HDK.t(c, 0.6)]]));

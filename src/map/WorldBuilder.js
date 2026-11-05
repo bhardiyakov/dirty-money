@@ -141,6 +141,7 @@ class WorldBuilder {
         for (const k of Object.keys(T.facades)) {
             const F = T.facades[k], m = this._mat('facade_' + k, F.diffuse);
             WindowLights.apply(m, F.emissive, F.grid, F.occ);      // janelas acesas à noite, uma a uma, pela hora (render/WindowLights.js)
+            Facades3D.apply(m, F.relief);                          // janelas em relevo / recuadas (etapa 4: art/Facades3D.js)
             M.facades[k] = m;
         }
     }
@@ -832,6 +833,8 @@ class WorldBuilder {
                     seg(x1 - t, z0 + t, x1, z1 - t);
                 }
 
+                if (Facades3D.roofs) this._roof3d(lot, blk, H, fav, pitched, trim, rng);      // (etapa 4: cornija e equipamentos em 3D)
+
                 // Hospital / delegacia: letreiro e emblema pintados no telhado (sem caixas de ar-condicionado).
                 if (lot.landmark) { this._landmarkRoof(lot); this._collider(`bld_${blk.i}_${blk.j}_${lot.x0.toFixed(0)}`, x0, z0, x1, z1, H); continue; }
 
@@ -850,6 +853,41 @@ class WorldBuilder {
 
                 this._collider(`bld_${blk.i}_${blk.j}_${lot.x0.toFixed(0)}`, x0, z0, x1, z1, H);
             }
+        }
+    }
+
+    // TELHADOS COM VOLUME (etapa 4, Facades3D.roofs): o que a câmera alta vê de um prédio é sobretudo o telhado — as peças em 3D
+    // projetam sombra nele. Prédio da cidade (laje): cornija saltada logo abaixo da platibanda, caixa-d'água de fibra num suporte, 1 a 4
+    // condensadoras de ar-condicionado e, às vezes, uma antena. Barraco: a caixa-d'água azul (ou cinza) em cima da laje ou da telha,
+    // em ~60% deles (a pintada na textura sai: CityHDRoofs._tank).
+    _roof3d(lot, blk, H, fav, pitched, trim, rng) {
+        const { x0, z0, x1, z1 } = lot, w = x1 - x0, d = z1 - z0;
+        if (lot.landmark || lot.helipad || lot.marina || blk.virtual) return;
+        const pick = (lo, hi) => lo + rng() * Math.max(0, hi - lo);
+        if (fav) {
+            if (w < 2.2 || d < 2.2 || rng() > 0.6) return;
+            const r = 0.55 + rng() * 0.25, cx = pick(x0 + r + 0.35, x1 - r - 0.35), cz = pick(z0 + r + 0.35, z1 - r - 0.35), blue = rng() < 0.65;
+            trim.cyl(cx, cz, r, H, H + 0.75 + rng() * 0.25, blue ? [0.25, 0.47, 0.71] : [0.79, 0.8, 0.82]);
+            trim.cyl(cx, cz, r * 0.92, H + 0.7, H + 1.05, blue ? [0.3, 0.55, 0.8] : [0.86, 0.87, 0.89]);       // (tampa)
+            return;
+        }
+        if (pitched) return;
+        const cor = [0.66, 0.64, 0.6], o = 0.32;
+        trim.solid(x0 - o, z0 - o, x1 + o, z1 + o, H - 0.62, H - 0.3, cor);                     // cornija
+        if (w < 6 || d < 6) return;
+        // caixa-d'água num suporte de concreto
+        const tx = pick(x0 + 2, x1 - 2), tz = pick(z0 + 2, z1 - 2);
+        trim.solid(tx - 1.1, tz - 1.1, tx + 1.1, tz + 1.1, H, H + 0.6, [0.55, 0.55, 0.56]);
+        trim.cyl(tx, tz, 0.95, H + 0.6, H + 2.0, [0.84, 0.85, 0.87], 10);
+        trim.cyl(tx, tz, 0.85, H + 2.0, H + 2.2, [0.74, 0.76, 0.8], 10);
+        // condensadoras de ar-condicionado em fila
+        const n = 1 + Math.floor(rng() * 4), ax = pick(x0 + 1.2, x1 - 1.2 - n * 1.1), az = pick(z0 + 1.2, z1 - 2);
+        for (let k = 0; k < n; k++) trim.solid(ax + k * 1.1, az, ax + k * 1.1 + 0.9, az + 0.6, H, H + 0.7, [0.78, 0.79, 0.8]);
+        // antena (mastro e a parabólica)
+        if (rng() < 0.4) {
+            const mx = pick(x0 + 1, x1 - 1), mz = pick(z0 + 1, z1 - 1);
+            trim.solid(mx - 0.05, mz - 0.05, mx + 0.05, mz + 0.05, H, H + 3.2, [0.3, 0.31, 0.33]);
+            trim.cyl(mx + 0.35, mz, 0.4, H + 1.6, H + 1.7, [0.85, 0.85, 0.86], 8);
         }
     }
 
