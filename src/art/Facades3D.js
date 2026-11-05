@@ -7,7 +7,8 @@
 //   • `?predios=relevo`: só as normais — a verga, as laterais do vão e o peitoril pegam o sol e a sombra;
 //   • `?predios=recuo`: as normais e a PARALAXE (oclusão de paralaxe do StandardMaterial): o vidro aparece de fato recuado na
 //     parede, com a câmera em perspectiva olhando de lado — o vão tem fundo.
-// `?predios=0` (ou nada, por enquanto): as fachadas de sempre.
+// PADRÃO (escolhido pelas capturas, em todos os presets): `recuo` + `telhado` (Config.art.facades3d, roofs3d). `?predios=0`: os prédios
+// de antes.
 // ============================================================================
 
 const Facades3D = {
