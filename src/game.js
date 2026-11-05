@@ -107,7 +107,7 @@ class Game {
 		this.camera = new CompassCamera(this.scene, this.gameEngine.engine, this.player.position);
 		this.camera.fitPixelScale(this.gameEngine.viewHeight);
 		Smooth.apply(this);                                  // gráfico suave (alta definição): antisserrilhado, densidade do monitor, texturas filtradas
-		Lighting.init(this);                                 // luz física (etapa 2): luz do céu, tone mapping, oclusão de ambiente — o que estiver ligado
+		Lighting.init(this);                                 // luz física (etapa 2): a gradação de cor no fim da cadeia (a luz do céu é do DayNight)
 		this.minimap = new Minimap('minimap');
 
 		// IA (preenchida de forma assíncrona em _initAI).
@@ -727,7 +727,6 @@ class Game {
 		if (zoom.wheel) this.camera.zoom(zoom.wheel * Config.camera.wheelStep);
 		if (this.sprites.npc) this.sprites.npc.setZoom(this.gameEngine.renderHeight / (2 * this.camera.view));      // personagens 2,5D: nítidos de perto, suaves de longe
 		Smooth.zoom(this, this.gameEngine.renderHeight / (2 * this.camera.view));       // árvores e mobiliário de rua: bordas suaves no gráfico suave
-		Lighting.update();                                                              // (a oclusão acompanha o alcance da câmera)
 
 		// --- Tirar o teto: o trecho de viaduto, o vão da ponte, o túnel ou a cobertura em cima do alvo (a pé ou o veículo dele) some ---
 		const rv = this.mode === 'car' && this.activeCar ? this.activeCar : null, rp = rv ? rv.position : this.player.position;

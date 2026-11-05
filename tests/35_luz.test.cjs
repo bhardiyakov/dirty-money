@@ -1,5 +1,5 @@
 // LUZ FÍSICA (etapa 2 do upgrade visual; render/Lighting.js): luz do céu (sombra fria, sol quente, personagens na sombra com a cor
-// dela), gradação discreta e oclusão de ambiente — cada uma com a sua chave. `?luz=ceu,cor,ao` liga as três; `?luz=0` nenhuma.
+// dela) e gradação discreta — ligadas por padrão. `?luz=0` desliga as duas (a luz de antes).
 const { boot, gameWait } = require('./lib.cjs');
 
 module.exports = {
@@ -11,13 +11,13 @@ module.exports = {
             shade: NpcArt._shadeC.asArray(), dark: game.gameEngine.shadowGenerator.getDarkness(),
             hemi: game.scene.getLightByName('hemi').diffuse.asArray(), sun: game.gameEngine.sun.diffuse.asArray(),
         });
-        // tudo ligado
-        const on = await boot(ctx, { query: 'gfx=high&luz=ceu,cor,ao' });
+        // o padrão: as duas ligadas
+        const on = await boot(ctx, { query: 'gfx=high' });
         await on.page.evaluate(() => { game.weather.set('clear', true, true); game.weather.override = 1e9; Config.time.cycleSeconds = 1e12; if (game.autoQuality) game.autoQuality.off = true; game.dayNight.forceNoShadows = false; });
         await on.page.evaluate(at(13));
         await gameWait(on.page, 0.5);
         const d = await on.page.evaluate(look);
-        c.ok(d.pp.includes('ssaoCombine') && d.pp[d.pp.length - 1] === 'luzCor', `oclusão e, por último, a gradação (${d.pp.join(' → ')})`);
+        c.ok(d.pp[d.pp.length - 1] === 'luzCor' && !d.pp.some((n) => /ssao/i.test(n)), `a gradação por último, sem oclusão (${d.pp.join(' → ')})`);
         c.ok(d.hemi[2] > d.hemi[0] && d.sun[0] > d.sun[2], `de dia, céu azulado e sol quente (céu ${d.hemi.map((v) => v.toFixed(2))}, sol ${d.sun.map((v) => v.toFixed(2))})`);
         c.ok(d.dark < 0.4, `sombra mais funda (${d.dark})`);
         c.ok(d.shade[2] > d.shade[0] && d.shade[0] < 0.66, `personagens na sombra com a cor fria dela (${d.shade.map((v) => v.toFixed(2))})`);

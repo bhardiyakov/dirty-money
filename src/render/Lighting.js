@@ -1,17 +1,14 @@
 // ============================================================================
-// Lighting — LUZ FÍSICA (etapa 2 do upgrade visual). Três camadas, cada uma com a sua chave (Config.light; para comparar,
-// `?luz=ceu,cor,ao` liga só essas e `?luz=0` desliga todas):
+// Lighting — LUZ FÍSICA (etapa 2 do upgrade visual). Duas camadas, ligadas por padrão em todos os presets (Config.light; para
+// comparar, `?luz=ceu` ou `?luz=cor` liga só essa e `?luz=0` desliga as duas):
 //   • ceu — LUZ DO CÉU: de dia, a luz que vem de cima (HemisphericLight) é azulada como o céu, e a que volta do chão é quente; o sol
 //     fica mais quente e a sombra um pouco mais funda. A sombra deixa de ser só "mais escura" e vira fria, como é de verdade (o que
 //     está na sombra é iluminado só pelo céu). Os personagens 2,5D na sombra de um prédio ganham a MESMA cor dessa sombra (NpcArt,
 //     uniform shadeC: a razão entre a luz na sombra e a luz ao sol, cor a cor), não mais um cinza fixo. Custo zero.
-//   • cor — GRADAÇÃO DISCRETA: um pós-processamento no fim da cadeia (depois do antisserrilhado e da oclusão) com um pouco de
+//   • cor — GRADAÇÃO DISCRETA: um pós-processamento no fim da cadeia (depois do antisserrilhado) com um pouco de
 //     contraste e de saturação. Vale para tudo na tela, inclusive os sprites. SEM curva de tone mapping: a arte é pintada (cores já
 //     prontas, sem luz acima de 1), e o ACES desbotava as copas das árvores e escurecia o asfalto. Custo: uma passada de tela cheia.
-//   • ao — OCLUSÃO DE AMBIENTE (SSAO2 do Babylon, possível com a câmera em perspectiva): escurece onde as superfícies se encontram —
-//     pé das paredes, debaixo dos carros, beirais, vãos entre os barracos. Em meia resolução, com o desfoque que respeita as bordas.
-//     Custo: uma passada a mais da geometria (o buffer de profundidade e normais) e três de tela cheia em meia resolução.
-// Os sprites (personagens, árvores, mobiliário) são transparentes: não entram no buffer da oclusão (não ganham "halo").
+// (A oclusão de ambiente — SSAO2 — foi testada nesta etapa e ficou de fora: o resultado não agradou e custava ~50% mais desenhos.)
 // ============================================================================
 
 const Lighting = {
@@ -21,30 +18,22 @@ const Lighting = {
 		const m = location.search.match(/[?&]luz=([^&]*)/);
 		if (!m) return null;
 		const L = decodeURIComponent(m[1]).split(/[,+ ]/);
-		return { ceu: L.includes('ceu'), cor: L.includes('cor'), ao: L.includes('ao') };
+		return { ceu: L.includes('ceu'), cor: L.includes('cor') };
 	},
-	get flags() { return this._flags || (this._flags = this._url() || { ceu: !!Config.light.sky, cor: !!Config.light.grade, ao: !!Config.light.ao }); },
+	get flags() { return this._flags || (this._flags = this._url() || { ceu: !!Config.light.sky, cor: !!Config.light.grade }); },
 
 	grade: null,              // pós-processamento da gradação (GRADE_FS)
-	ao: null,                 // SSAO2RenderingPipeline
 
-	// Depois da câmera e do antisserrilhado (Game): cria o que estiver ligado, na ordem certa (a oclusão antes do tom).
+	// Depois da câmera e do antisserrilhado (Game): cria a gradação, se ligada — o último pós-processamento da câmera.
 	init(game) {
-		this.g = game;
-		const F = this.flags, cam = game.camera.camera, sc = game.scene, eng = game.gameEngine.engine;
-		if (F.ao && game.camera.persp && BABYLON.SSAO2RenderingPipeline.IsSupported) {
-			const p = this.ao = new BABYLON.SSAO2RenderingPipeline('luzAO', sc, { ssaoRatio: 0.5, blurRatio: 0.5 }, [cam], true);
-			const A = Config.light.aoParams;
-			p.radius = A.radius; p.totalStrength = A.strength; p.base = A.base; p.samples = A.samples; p.maxZ = cam.maxZ; p.minZAspect = 0.2;
-			p.expensiveBlur = true;
-		}
+		const F = this.flags, cam = game.camera.camera, eng = game.gameEngine.engine;
 		if (F.cor) {
 			const T = Config.light.gradeParams;
 			BABYLON.Effect.ShadersStore.luzCorFragmentShader = Lighting.GRADE_FS;
 			const t = this.grade = new BABYLON.PostProcess('luzCor', 'luzCor', ['contrast', 'saturation'], null, 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
 			t.onApply = (e) => { e.setFloat('contrast', T.contrast); e.setFloat('saturation', T.saturation); };
 		}
-		if (F.ceu || F.cor || F.ao) console.log(`[LUZ] ${['ceu', 'cor', 'ao'].filter((k) => F[k] && (k !== 'ao' || this.ao)).join(' + ') || '—'}`);
+		console.log(`[LUZ] ${['ceu', 'cor'].filter((k) => F[k]).join(' + ') || 'desligada'}`);
 	},
 
 	// Gradação: contraste em torno do cinza médio e saturação, na própria imagem (sRGB). Com 1 e 1, a imagem sai idêntica. (O
@@ -61,9 +50,6 @@ const Lighting = {
 			float l = dot(r, vec3(0.2126, 0.7152, 0.0722));
 			gl_FragColor = vec4(clamp(mix(vec3(l), r, saturation), 0.0, 1.0), c.a);
 		}`,
-
-	// A oclusão acompanha o alcance da câmera (o zoom muda a distância dela).
-	update() { if (this.ao && this.g) this.ao.maxZ = this.g.camera.camera.maxZ; },
 
 	// LUZ DO CÉU (DayNight.apply, com os parâmetros da hora já com o tempo): com o sol alto (peso `day`), céu azulado em cima, chão
 	// quente embaixo, sol mais quente e sombra mais funda. O peso segue a ALTURA do sol: some no fim da tarde (a luz dourada fica como

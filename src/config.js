@@ -127,13 +127,11 @@ const Config = {
 	// coerente com o sombreamento baked dos sprites (luz no canto superior esquerdo).
 	light: {
 		sunDir: [0.6, -1.8, -0.45],
-		// LUZ FÍSICA (render/Lighting.js; `?luz=ceu,cor,ao` para comparar, `?luz=0` desliga tudo). Ligadas por preset em Graphics.
-		sky: false,            // luz do céu: sombra fria, sol quente, personagens na sombra com a cor dela
-		grade: false,          // gradação discreta: contraste e saturação (pós-processamento no fim da cadeia)
-		ao: false,             // oclusão de ambiente (SSAO2), só com a câmera em perspectiva
+		// LUZ FÍSICA (render/Lighting.js; `?luz=ceu` ou `?luz=cor` para comparar, `?luz=0` desliga as duas). Em todos os presets.
+		sky: true,             // luz do céu: sombra fria, sol quente, personagens na sombra com a cor dela
+		grade: true,           // gradação discreta: contraste e saturação (pós-processamento no fim da cadeia)
 		skyParams: { sky: [0.74, 0.86, 1.08], bounce: [0.62, 0.55, 0.48], sun: [1.08, 0.94, 0.78], hemiGain: 0.08, sunGain: 0.12, deeper: 0.12, lowSun: 0.6, fullSun: 0.9 },
 		gradeParams: { contrast: 1.08, saturation: 1.15 },
-		aoParams: { radius: 3.5, strength: 1.6, base: 0.05, samples: 16 },
 	},
 
 	player: {
