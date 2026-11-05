@@ -96,7 +96,10 @@ const CityHD = {
     // ---------------------------------------------------------------- texturas
     // Pinta um ladrilho (pintor `p_<nome>` de CityTile) e devolve a textura.
     make(scene, name, ...args) {
-        const t0 = performance.now(), t = this.paint(name, ...args), tex = t.toTexture(scene, name);
+        const t0 = performance.now(), t = this.paint(name, ...args);
+        if (GroundPhotos.mixed) GroundPhotos.detail(t, name);                  // (misto: o grão da foto CC0 sobre o pintado)
+        const tex = t.toTexture(scene, name);
+        if (GroundPhotos.relief) { const s = this.SIZE[name] || [80, 80]; tex._dmBump = GroundPhotos.bump(scene, name, s[0], s[1], this.Q); }      // (relevo da foto CC0)
         this.lastMs += performance.now() - t0;
         return tex;
     },
@@ -303,7 +306,8 @@ class CityTile {
 // ============================================================================
 Object.assign(CityTile.prototype, {
     // ---------------------------------------------------------------- asfalto
-    _asphalt(seed, worn = 0.5) {
+    _asphalt(seed, worn = 0.5, kind = 'asphalt') {
+        if (GroundPhotos.draw(this, kind)) return;                             // (foto CC0: o material é dela — etapa 3)
         this.base(['#2d3036', '#31343a', '#35383f', '#393c43', '#3e4148'], 30, seed, 3);
         this.clouds(0.22, 5, seed + 1, 'soft-light', 2);                       // mosqueado do agregado
         this.grain(0.6, seed, 0.022);                                           // brita: pontos claros e escuros no quadro HD
@@ -336,7 +340,7 @@ Object.assign(CityTile.prototype, {
 
     // Rua: 160 px ao longo (8 u) × 200 px de largura (10 u); pista de 5 u em cada sentido. Faixas no mesmo lugar da pixel art.
     p_road(seed) {
-        this._asphalt(seed, 0.3);
+        this._asphalt(seed, 0.3, 'road');
         const g = this.g, W = this.w;
         // trilhas de pneu: duas faixas lisas e um pouco mais escuras por pista, e o fio de óleo no meio da pista
         for (const cy of [50, 150]) {
@@ -367,7 +371,7 @@ Object.assign(CityTile.prototype, {
 
     // Faixa de pedestres: 200 px atravessando a rua (10 u) × 60 px (3 u). Barras de 0,5 u a cada 1 u, gastas nas trilhas dos pneus.
     p_zebra(seed) {
-        this._asphalt(seed, 0.35);
+        this._asphalt(seed, 0.35, 'road');
         const g = this.g;
         this.layer(() => {
             for (let x = 10; x < 190; x += 20) this.fillRR(x + 0.3, 3, 9.4, 54, 0.6, 'rgba(236,238,240,0.96)');
@@ -390,6 +394,7 @@ Object.assign(CityTile.prototype, {
 
     // ---------------------------------------------------------------- calçada: placas de concreto de 1 u com junta e quina
     p_sidewalk(seed) {
+        if (GroundPhotos.draw(this, 'sidewalk')) return;
         const g = this.g, s = 20, tones = ['#bcc0c5', '#b5b9bf', '#c2c6cb', '#b0b4ba'].map(HDK.C);
         for (let ty = 0; ty < 4; ty++) for (let tx = 0; tx < 4; tx++) {
             const x = tx * s, y = ty * s, c = Pixel.pick(tones, Pixel.hash(tx, ty, seed));
@@ -413,6 +418,7 @@ Object.assign(CityTile.prototype, {
 
     // ---------------------------------------------------------------- grama: base em manchas + folhas, trevos e florzinhas
     p_grass(seed) {
+        if (GroundPhotos.draw(this, 'grass')) return;
         this.base(['#3f7a2f', '#4c8a37', '#57973f', '#62a347', '#6dae50'], 18, seed, 3);
         this.clouds(0.45, 9, seed + 1, 'soft-light', 2);
         // relevo: touceiras (cúpulas de ~0,4 u) sobre ondulação suave do terreno e o fiapo das folhas; os vãos entre as touceiras afundam
@@ -453,6 +459,7 @@ Object.assign(CityTile.prototype, {
 
     // ---------------------------------------------------------------- areia: grão fino, ondulações do vento, conchinhas
     p_sand(seed) {
+        if (GroundPhotos.draw(this, 'sand')) return;
         this.base(['#d6c387', '#dccb91', '#e3d39c', '#e9dba8', '#efe3b6'], 20, seed, 3);
         this.clouds(0.35, 8, seed + 1, 'soft-light', 2);
         this.grain(0.5, seed, 0.012);
@@ -471,6 +478,7 @@ Object.assign(CityTile.prototype, {
 
     // ---------------------------------------------------------------- concreto (pátio, estacionamento, quadra)
     p_concrete(seed) {
+        if (GroundPhotos.draw(this, 'concrete')) return;
         this.base(['#7c8084', '#83878b', '#8a8e92', '#919599', '#989ca0'], 22, seed, 3);
         this.clouds(0.5, 10, seed + 1, 'soft-light', 3);
         this.grain(0.45, seed, 0.012);
@@ -506,6 +514,7 @@ Object.assign(CityTile.prototype, {
 
     // ---------------------------------------------------------------- terra (favela): chão batido, remendos de cimento, caco de tijolo
     p_earth(seed) {
+        if (GroundPhotos.draw(this, 'earth')) return;
         this.base(['#7d6850', '#8c765b', '#9a8468', '#a48e72', '#ae987c'], 18, seed, 3);
         this.clouds(0.5, 8, seed + 1, 'soft-light', 2);
         this.grain(0.5, seed, 0.02);
@@ -530,6 +539,7 @@ Object.assign(CityTile.prototype, {
 
     // ---------------------------------------------------------------- terra batida de estrada / trilha: pedrinhas e marcas
     p_dirt(seed) {
+        if (GroundPhotos.draw(this, 'dirt')) return;
         this.base(['#6f5436', '#7d5f3d', '#8a6a45', '#94724a', '#a07c52'], 18, seed, 3);
         this.clouds(0.5, 8, seed + 1, 'soft-light', 2);
         this.grain(0.5, seed, 0.02);
@@ -629,6 +639,7 @@ Object.assign(CityTile.prototype, {
     },
 
     p_rock(seed) {
+        if (GroundPhotos.draw(this, 'rock')) return;
         this.base(['#5f5d5a', '#6f6d69', '#7c7a75', '#86837d', '#908d86'], 22, seed, 4);
         this.clouds(0.4, 9, seed + 1, 'soft-light', 3);
         // relevo FORTE: blocos de pedra (Worley) com bossas, estratos e fendas fundas — o lado do noroeste claro, o de trás e as fendas

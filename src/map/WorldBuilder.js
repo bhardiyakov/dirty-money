@@ -73,6 +73,7 @@ class WorldBuilder {
     _mat(name, tex, opts = {}) {
         const m = new BABYLON.StandardMaterial(name, this.scene);
         if (tex) m.diffuseTexture = tex;
+        if (tex && tex._dmBump) m.bumpTexture = tex._dmBump;            // relevo do chão de foto (GroundPhotos, etapa 3)
         m.specularColor = BABYLON.Color3.Black();
         if (opts.alphaTest) {
             tex.hasAlpha = true;

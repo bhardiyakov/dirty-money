@@ -182,7 +182,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 			const ess = new Set();
 			for (const [sheet, list] of Object.entries(CharacterSheet.ESSENTIAL)) for (const [n, w] of list) ess.add(CharacterSheet.fileKey(sheet, n, w || 'none'));
 			const icons = Promise.all([WeaponArt.load(), Emoji.ready]);
-			await Promise.all([SpriteIO.init((k) => k.startsWith('pal/') || ess.has(k)), Promise.race([icons, new Promise((r) => setTimeout(r, 8000))])]);
+			const ground = Promise.race([GroundPhotos.load(), new Promise((r) => setTimeout(r, 8000))]);      // (chão com fotos CC0: antes de o mundo ser pintado)
+			await Promise.all([SpriteIO.init((k) => k.startsWith('pal/') || ess.has(k)), Promise.race([icons, new Promise((r) => setTimeout(r, 8000))]), ground]);
 		});
 		// Personagens 2,5D: npc-data.json e os manifestos dos atlas prontos (assets/baked — já pedidos desde a carga do NpcArt.js);
 		// sem eles (file://, rede fora) o jogo segue com os bonecos antigos.
