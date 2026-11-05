@@ -51,6 +51,7 @@ module.exports = {
             out.waves = [Waves.open(L.C.x, L.C.z, 8), Waves.open(300, 300, 20)];
             out.boats = game.vehicleManager.boats.filter((b) => L.water(b.position.x, b.position.z)).map((b) => b.spec.id).sort().join(',');
             out.quiet = EngineAudio.profileOf(game.vehicleManager.boats.find((b) => b.spec.id === 'pedalinho')) === null;
+            out.boats3d = ['pedalinho', 'caiaque'].every((k) => { const b = game.vehicleManager.boats.find((q) => q.spec.id === k); return CarArt3D.has(k) && b && b.visual && b.visual.body && b.visual.body.kind === 'boat'; });      // (em 3D: o cisne e o caiaque do gerador)
             out.speedway = !!Speedway.site;
             return out;
         });
@@ -66,6 +67,7 @@ module.exports = {
         c.ok(s.stands[0] >= 5 && s.stands[1] >= 3, `quiosques (${s.stands[0]}) e ambulantes (${s.stands[1]}) na orla`);
         c.ok(s.waves[0] === 0 && s.waves[1] > 0.5, 'a Lagoa não tem onda (o mar tem)');
         c.ok(/caiaque/.test(s.boats) && /pedalinho/.test(s.boats) && !/lancha|jetski|barco/.test(s.boats) && s.quiet, `pedalinhos e caiaques, sem motor (${s.boats})`);
+        c.ok(s.boats3d, 'o pedalinho de cisne e o caiaque em 3D');
         c.ok(s.speedway, 'o autódromo continua achando lugar');
 
         // gente: quiosque que vende, ciclistas de verdade na ciclovia, corredores na pista

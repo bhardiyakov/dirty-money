@@ -55,6 +55,13 @@ const Melee = {
 const BODY_R = 0.32;          // raio do corpo de quem apanha (m)
 
 class Combat {
+    // A luta nova (Config.melee): avanço, trava, impacto e derrubada só quando faz sentido. `?luta=0` = a de antes.
+    static get v2() {
+        if (Combat._v2 !== undefined) return Combat._v2;
+        const m = typeof location !== 'undefined' && location.search.match(/[?&]luta=([^&]*)/);
+        return (Combat._v2 = m ? m[1] !== '0' : !!(Config.melee && Config.melee.v2));
+    }
+
     constructor(scene, game) {
         this.game = game;
         this.MAXB = 72;                 // (a minigun põe ~20 balas por segundo no ar)
@@ -201,16 +208,18 @@ class Combat {
     }
 
     // Alvo para a mira assistida do golpe: o mais perto dentro de `range` e ±55° à frente (e à vista). null se ninguém.
-    meleeAim(x, z, heading, kind, source = 'player') {
+    // extra: m a mais de alcance (o AVANÇO da luta nova: o cone abre para ±70°).
+    meleeAim(x, z, heading, kind, source = 'player', extra = 0) {
         const M = Melee[kind];
         if (!M) return null;
         let best = null, bs = Infinity;
+        const cone = extra > 0 ? 1.22 : 0.96;
         for (const t of this._meleeTargets(source, this._mt || (this._mt = []))) {
             const dx = t.position.x - x, dz = t.position.z - z, d = hypot(dx, dz);
-            if (d > M.range || d < 0.05) continue;
+            if (d > M.range + extra || d < 0.05) continue;
             let da = Math.atan2(dx, dz) - heading;
             da = Math.atan2(Math.sin(da), Math.cos(da));
-            if (Math.abs(da) > 0.96) continue;
+            if (Math.abs(da) > cone) continue;
             if (!MapGeo.hasLineOfSight(x, z, t.position.x, t.position.z)) continue;
             const s = d + Math.abs(da) * 1.2;
             if (s < bs) { bs = s; best = t; }
@@ -294,7 +303,11 @@ class Combat {
         const l = hypot(dx, dz) || 1; dx /= l; dz /= l;
         const dmg = M.dmg * s.dmgMul;
         const fall = M.fall >= Config.ragdoll.minPower ? { dx, dz, power: M.fall * (0.9 + Math.random() * 0.2) } : null;
-        if (t === g.player) t.meleeHit(dmg, dx, dz, M);
+        if (t === g.player) {
+            // (luta nova: o chute de um pedestre não derruba o jogador à toa — só com a vida baixa; taco e cassetete, como sempre)
+            const C = Config.melee, keep = !Combat.v2 || !M.fall || M.dmg >= 20 || s.kind === 'baton' || t.hp - dmg < t.maxHp * C.npcKnockHp;
+            t.meleeHit(dmg, dx, dz, keep ? M : (this._soft || (this._soft = {}))[s.kind] || (this._soft[s.kind] = Object.assign({}, M, { fall: 0, push: M.push * 1.5 })));
+        }
         else {
             t.takeDamage(dmg, { x: P.x, z: P.z }, s.source, fall, s.kind);          // (o golpe: quem revida, revida com quê — Temper)
             if (t.alive && !t.rag) this.shove(t, dx * M.push, dz * M.push);
@@ -311,6 +324,7 @@ class Combat {
             }
         }
         this.spark(cx, 1.15, cz, [1, 0.45, 0.35]);
+        if (Combat.v2 && s.source === 'player') for (let k = 0; k < 3; k++) this.spark(cx + (Math.random() - 0.5) * 0.3, 1.0 + Math.random() * 0.35, cz + (Math.random() - 0.5) * 0.3, [1, 0.85, 0.6]);      // (o estalo do impacto)
         AudioFX.thud(t.position.x, t.position.z);
         if ((s.source === 'player' || t === g.player) && g.camera) g.camera.shake(M.shake);
         if (s.onHit) s.onHit(t, s);

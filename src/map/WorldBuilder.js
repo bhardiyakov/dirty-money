@@ -675,14 +675,9 @@ class WorldBuilder {
 
     // Postes de semáforo nos 4 cantos de cada cruzamento (as luzes são brilhos do TrafficSignals).
     _signalPoles() {
-        const pole = [0.2, 0.21, 0.24], head = [0.12, 0.13, 0.15], box = [0.16, 0.17, 0.2];
         for (const inter of CityGrid.intersections) {
             const trim = this._batch('trim', inter.x, inter.z);
-            for (const p of inter.poles) {
-                trim.solid(p.x - 0.15, p.z - 0.15, p.x + 0.15, p.z + 0.15, 0, 5.0, pole);                                      // poste
-                trim.solid(p.x - p.sx * 0.3 - 0.6, p.z - p.sz * 0.3 - 0.6, p.x - p.sx * 0.3 + 0.6, p.z - p.sz * 0.3 + 0.6, 5.0, 5.3, head);   // cabeçote
-                trim.solid(p.x - p.sx * 0.25 - 0.3, p.z - p.sz * 0.25 - 0.3, p.x - p.sx * 0.25 + 0.3, p.z - p.sz * 0.25 + 0.3, 2.3, 2.95, box); // caixa do pedestre
-            }
+            for (const p of inter.poles) StreetFurniture.signal(trim, p, inter.gen);       // (poste, braço projetado, caixas: art/StreetFurniture)
         }
     }
 
@@ -1171,9 +1166,20 @@ class WorldBuilder {
     _streetLamps() {
         const pole = [0.22, 0.23, 0.26], head = [0.9, 0.86, 0.7];
         const lamps = [];           // { hx, hz } posição do cabeçote
+        // Onde o poste NÃO pode ficar: no asfalto (uma diagonal ou rotatória que cruza a calçada da rua), colado num semáforo ou
+        // noutro poste. O poste anda pela calçada (até 5 u para cada lado) até achar lugar; sem lugar, a rua fica sem esse poste.
+        const G = new Map(), gk = (x, z) => Math.floor(x / 8) * 65536 + Math.floor(z / 8);
+        const put = (x, z) => { const k = gk(x, z); (G.get(k) || G.set(k, []).get(k)).push([x, z]); };
+        const crowded = (x, z, r) => { for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const L = G.get(gk(x + i * 8, z + j * 8)); if (L) for (const q of L) if (Math.abs(q[0] - x) < r && Math.abs(q[1] - z) < r) return true; } return false; };
+        for (const n of CityGrid.intersections) for (const p of n.poles || []) put(p.x, p.z);
         const add = (px, pz, tx, tz) => {                       // (px,pz) = pé do poste; (tx,tz) = direção p/ a rua
-            const hx = px + tx * 1.8, hz = pz + tz * 1.8;
-            lamps.push({ x: px, z: pz, hx, hz, alive: true });      // a geometria (poste, braço e cabeçote) é montada por StreetProps: postes quebram
+            for (const d of [0, 2.5, -2.5, 5, -5]) {
+                const x = px - tz * d, z = pz + tx * d;             // (ao longo da calçada: perpendicular à direção da rua)
+                if (RoadPlan.onAsphalt(x, z, 0.4) || crowded(x, z, 3)) continue;
+                put(x, z);
+                lamps.push({ x, z, hx: x + tx * 1.8, hz: z + tz * 1.8, alive: true });      // a geometria (poste, braço e cabeçote) é montada por StreetProps: postes quebram
+                return;
+            }
         };
 
         // Em cada trecho urbano: 2 lâmpadas por lado, alternadas (14 e 26 u de um lado; 20 e 32 u do outro) a partir do cruzamento
@@ -1205,7 +1211,7 @@ class WorldBuilder {
         this.lampGlow = new GlowGrid(this.scene, 'lampGlow', lamps.flatMap((l) => [[l.hx, l.hz], [l.hx, l.hz]])).under();
         this._lampIds = lamps.map((l) => {
             const a = this.lampGlow.alloc(l.hx, l.hz), b = this.lampGlow.alloc(l.hx, l.hz);
-            this.lampGlow.place(a, l.hx, 5.75, l.hz, 2.6);
+            this.lampGlow.place(a, l.hx + (l.hx - l.x) * 0.07, StreetFurniture.LAMP_Y - 0.12, l.hz + (l.hz - l.z) * 0.07, 2.4);      // (no difusor da luminária)
             this.lampGlow.place(b, l.hx, WorldBuilder.POOL_Y, l.hz, 14);
             this.lampGlow.color(a, 1.0, 0.86, 0.55, 0.9);
             if (NightLights.on) this.lampGlow.off(b); else this.lampGlow.color(b, 1.0, 0.78, 0.42, 0.45);      // (luz de verdade: sem a poça pintada)

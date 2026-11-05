@@ -331,3 +331,123 @@ export const barco = (() => {
     },
   };
 })();
+
+// ---------------------------------------------------------------------------
+// PEDALINHO de cisne da Lagoa: banheira larga e rasa (o corpo do cisne), as asas levantadas dos lados, o pescoço em S com a cabeça
+// e o bico laranja na proa, o banco de dois lugares com o console dos pedais na frente. Sem toldo (visto de cima, ele esconderia o cisne).
+export const pedalinho = (() => {
+  const L = 3.4, W = 1.9;
+  const H = hullBody({
+    L, W,
+    beam: [[0, 0.72], [0.12, 0.9], [0.35, 1.0], [0.6, 0.98], [0.8, 0.82], [0.92, 0.55], [0.98, 0.25], [1, 0]],
+    keel: [[0, -0.18], [0.5, -0.2], [0.85, -0.12], [0.97, 0.1], [1, 0.3]],
+    chineY: [[0, -0.05], [0.6, -0.05], [0.9, 0.05], [1, 0.3]],
+    chineK: [[0, 0.9], [0.6, 0.9], [0.9, 0.75], [1, 0.6]],
+    sheer: [[0, 0.62], [0.3, 0.55], [0.7, 0.55], [1, 0.62]],
+    camber: 0.03, rg: 0.08, sideH: [0, 0.1, 0.2, 0.3, 0.4, 0.5], flare: 0.7,
+    regions: [],
+  });
+  const fr = deckFrac(H, W);
+  const X = (u) => -L / 2 + u * L;
+  H.regions.push(
+    { m: 'casco', seg: ['keel', 'bot'] },
+    { m: 'pintura', seg: ['side', 'gun'] },
+    // a cuba dos passageiros (piso cinza) e a borda branca em volta
+    { m: 'antiderrapante', seg: 'deck', x: [X(0.14), X(0.72)], f: (c) => fr(c) < 0.8, d: 0.14, w: 'pintura' },
+    { m: 'pintura', seg: 'deck' },
+  );
+  H.xBreaks = [X(0.14), X(0.72)];
+  return {
+    slug: 'pedalinho', L, W, tipo: 'barco',
+    colors: { pintura: '#f4f4f1', casco2: '#2f7fd0', antiderrapante: '#9fa4a8' },
+    body: { ...H, W, L },
+    details(ctx) {
+      const { mb } = ctx;
+      const yf = deckY(ctx, X(0.4), 0.0001), yg = H._sheer(0.4);
+      ctx.spec.seat = [X(0.33), yf + 0.42, 0];
+      // asas: dois gomos achatados, levantados para trás, colados no costado
+      for (const s of [1, -1]) {
+        mb.add('pintura', ellipsoid(1.05, 0.3, 0.2, 22, 10), m4chain(m4t(X(0.34), yg + 0.16, s * (W / 2 - 0.1)), m4rz(-0.2), m4rx(s * 0.18)));
+        mb.add('pintura', ellipsoid(0.7, 0.2, 0.15, 18, 8), m4chain(m4t(X(0.17), yg + 0.42, s * (W / 2 - 0.16)), m4rz(-0.45), m4rx(s * 0.22)));
+      }
+      // cauda (penas da popa)
+      mb.add('pintura', ellipsoid(0.32, 0.2, 0.42, 16, 8), m4chain(m4t(X(0.02), yg + 0.16, 0), m4rz(-0.5)));
+      // pescoço em S e a cabeça
+      const neck = [], sc = [];
+      for (let k = 0; k <= 14; k++) {
+        const t = k / 14;
+        neck.push([X(0.84) + 0.34 * Math.sin(t * PI * 0.95) - 0.1 * t, yg + 0.05 + t * 1.5, 0]);
+        sc.push(1.6 - 0.75 * t);
+      }
+      mb.add('pintura', sweep(neck, circle2(0.13, 12), { scales: sc, smoothDeg: 90, up: [0, 0, 1] }));
+      mb.add('pintura', ellipsoid(0.3, 0.42, 0.42, 16, 8), m4t(X(0.88), yg + 0.12, 0));        // peito (base do pescoço)
+      const hp = neck[neck.length - 1];
+      mb.add('pintura', ellipsoid(0.28, 0.19, 0.18, 16, 8), m4t(hp[0] + 0.1, hp[1] + 0.06, 0));
+      mb.add('boia', ellipsoid(0.2, 0.065, 0.08, 12, 6), m4chain(m4t(hp[0] + 0.38, hp[1] + 0.0, 0), m4rz(-0.25)));      // bico laranja
+      mb.add('preto', ellipsoid(0.07, 0.045, 0.05, 10, 6), m4t(hp[0] + 0.24, hp[1] + 0.01, 0));
+      for (const s of [1, -1]) mb.add('preto', ellipsoid(0.035, 0.035, 0.025, 8, 6), m4t(hp[0] + 0.18, hp[1] + 0.11, s * 0.155));    // olhos
+      // banco de dois lugares (encosto inclinado) e os pedais
+      mb.add('casco2', roundedBox(0.5, 0.12, 1.2, 0.05, 2), m4t(X(0.3), yf + 0.36, 0));
+      mb.add('casco2', roundedBox(0.1, 0.5, 1.2, 0.05, 2), m4chain(m4t(X(0.21), yf + 0.62, 0), m4rz(0.2)));
+      mb.add('plastico_cinza', roundedBox(0.4, 0.3, 1.1, 0.04, 1), m4t(X(0.3), yf + 0.15, 0));
+      mb.add('casco2', roundedBox(0.34, 0.3, 1.0, 0.08, 2), m4t(X(0.62), yf + 0.15, 0));                 // o console dos pedais (caixa da roda)
+    },
+  };
+})();
+
+// ---------------------------------------------------------------------------
+// CAIAQUE de passeio: casco fino com as duas pontas finas, o cockpit com a borda (brazola) e o banco, as tampas das escotilhas, os
+// elásticos na proa e na popa e o remo de duas pás atravessado no convés.
+export const caiaque = (() => {
+  const L = 3.6, W = 0.8;
+  const H = hullBody({
+    L, W,
+    beam: [[0, 0.0], [0.04, 0.3], [0.16, 0.72], [0.38, 0.97], [0.52, 1.0], [0.7, 0.9], [0.86, 0.58], [0.96, 0.22], [1, 0]],
+    keel: [[0, 0.12], [0.06, -0.06], [0.3, -0.14], [0.6, -0.14], [0.92, -0.04], [1, 0.16]],
+    chineY: [[0, 0.12], [0.08, 0.0], [0.5, -0.02], [0.9, 0.02], [1, 0.16]],
+    chineK: [[0, 0.7], [0.5, 0.85], [1, 0.7]],
+    sheer: [[0, 0.3], [0.2, 0.24], [0.5, 0.24], [0.8, 0.26], [1, 0.34]],
+    camber: 0.07, rg: 0.025, sideH: [0, 0.06, 0.12, 0.18, 0.24], flare: 0.9,
+    regions: [],
+    bottomMat: 'casco', transomMat: 'pintura',
+  });
+  const fr = deckFrac(H, W);
+  const X = (u) => -L / 2 + u * L;
+  H.regions.push(
+    { m: 'pintura', seg: ['keel', 'bot'] },
+    { m: 'pintura', seg: ['side', 'gun'] },
+    { m: 'plastico', seg: 'deck', x: [X(0.4), X(0.62)], f: (c) => fr(c) < 0.72, d: 0.16, w: 'pintura' },
+    { m: 'pintura', seg: 'deck' },
+  );
+  H.xBreaks = [X(0.4), X(0.62)];
+  return {
+    slug: 'caiaque', L, W, tipo: 'barco',
+    colors: { pintura: '#e8731c', pintura2: '#f2d64b' },
+    body: { ...H, W, L },
+    details(ctx) {
+      const { mb } = ctx;
+      const yf = deckY(ctx, X(0.5), 0.0001), yd = H._sheer(0.5) + 0.07;
+      ctx.spec.seat = [X(0.47), yf + 0.12, 0];
+      // brazola (a borda do cockpit)
+      const rim = [];
+      for (let k = 0; k < 28; k++) { const a = (k / 28) * PI * 2; rim.push([X(0.51) + Math.cos(a) * 0.42, yd + 0.02, Math.sin(a) * 0.27]); }
+      mb.add('preto', sweep(rim, circle2(0.025, 6), { closedPath: true, up: [0, 1, 0], smoothDeg: 90 }));
+      mb.add('plastico_cinza', roundedBox(0.4, 0.06, 0.4, 0.03, 2), m4t(X(0.46), yf + 0.03, 0));
+      mb.add('plastico_cinza', roundedBox(0.06, 0.24, 0.38, 0.03, 2), m4chain(m4t(X(0.4), yf + 0.15, 0), m4rz(0.25)));
+      // tampas das escotilhas
+      for (const u of [0.2, 0.78]) mb.add('preto', cylinder(0.13, 0.03, 16, { bevel: 0.01 }), m4t(X(u), H._sheer(u) + 0.065, 0));
+      // elásticos em X na proa e na popa
+      for (const [u0, u1] of [[0.82, 0.92], [0.08, 0.16]]) for (const s of [1, -1]) {
+        const h0 = H._sheer(u0) + 0.06, h1 = H._sheer(u1) + 0.06;
+        mb.add('preto', tube([[X(u0), h0, s * 0.18 * H._hw(u0) / 0.4], [X(u1), h1, -s * 0.18 * H._hw(u1) / 0.4]], 0.008, 4));
+      }
+      // faixa da proa e alças das pontas
+      mb.add('pintura2', roundedBox(0.7, 0.012, 0.08, 0.005, 1), m4t(X(0.9), H._sheer(0.9) + 0.06, 0));
+      for (const u of [0.015, 0.985]) mb.add('preto', tube([[X(u), H._sheer(u) - 0.02, -0.04], [X(u) + (u < 0.5 ? -0.05 : 0.05), H._sheer(u) + 0.04, 0], [X(u), H._sheer(u) - 0.02, 0.04]], 0.01, 5));
+      // o remo: cabo atravessado atrás do cockpit, pás nas pontas
+      const yr = H._sheer(0.33) + 0.1;
+      mb.add('aluminio', tube([[X(0.33), yr, -0.95], [X(0.33), yr, 0.95]], 0.016, 8));
+      for (const s of [1, -1]) mb.add('pintura2', ellipsoid(0.1, 0.012, 0.22, 14, 4), m4t(X(0.33), yr, s * 1.1));
+    },
+  };
+})();

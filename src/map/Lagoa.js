@@ -243,7 +243,10 @@ const Lagoa = {
     boatSpots() {
         if (!this.decks.length) return [];
         const out = [], E = this.decks[0], Nn = this.decks[1];
-        for (let k = 0; k < 3; k++) for (const s of [-1, 1]) out.push({ kind: 'pedalinho', x: E.r[0] + 7 + k * 3.4, z: (E.r[1] + E.r[3]) / 2 + s * 3.4, h: -Math.PI / 2 });
+        // (lado a lado, com a proa — o pescoço do cisne — virada para o deque, como num atracadouro de verdade: em fila, um atrás do
+        // outro, os cascos 3D se encostavam)
+        const K = Config.vehicle.scale, PM = BoatSheet.MODELS.pedalinho, hl = PM.len * K / 2, step = PM.wid * K + 0.5, hw = (E.r[3] - E.r[1]) / 2;
+        for (let k = 0; k < 3; k++) for (const s of [-1, 1]) out.push({ kind: 'pedalinho', x: E.r[0] + 8.5 + k * step, z: (E.r[1] + E.r[3]) / 2 + s * (hw + 0.35 + hl), h: s > 0 ? Math.PI : 0 });
         for (let k = 0; k < 2; k++) out.push({ kind: 'caiaque', x: (Nn.r[0] + Nn.r[2]) / 2 + 3.2, z: Nn.r[1] + 3 + k * 4, h: Math.PI });
         out.push({ kind: 'caiaque', x: (Nn.r[0] + Nn.r[2]) / 2 - 3.2, z: Nn.r[1] + 5, h: Math.PI });
         return out;

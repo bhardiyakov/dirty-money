@@ -34,13 +34,7 @@ class StreetProps {
 
     // ------------------------------------------------------------------- malhas
     _lampGeo(b, l) {
-        const pole = [0.22, 0.23, 0.26], head = [0.9, 0.86, 0.7];
-        const px = l.x, pz = l.z, hx = l.hx, hz = l.hz;
-        b.solid(px - 0.13, pz - 0.13, px + 0.13, pz + 0.13, 0, 5.7, pole);
-        if (Math.abs(hx - px) > 0.05 && Math.abs(hz - pz) > 0.05) {                  // braço na diagonal (via livre): em gomos, não uma laje
-            for (let k = 0; k < 6; k++) { const t = (k + 0.5) / 6, x = px + (hx - px) * t, z = pz + (hz - pz) * t; b.solid(x - 0.1, z - 0.1, x + 0.1, z + 0.1, 5.55, 5.7, pole); }
-        } else b.solid(Math.min(px, hx) - 0.07, Math.min(pz, hz) - 0.07, Math.max(px, hx) + 0.07, Math.max(pz, hz) + 0.07, 5.55, 5.7, pole);
-        b.solid(hx - 0.32, hz - 0.22, hx + 0.32, hz + 0.22, 5.38, 5.6, head);
+        StreetFurniture.lamp(b, l.x, l.z, l.hx, l.hz);
     }
 
     _rebuild(k, key) {
@@ -82,15 +76,12 @@ class StreetProps {
         const dl = hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;
         const node = new BABYLON.TransformNode('pole_fall', this.scene);
         node.position.set(l.x, 0, l.z);
-        const mat = this.w.fallMaterial || (this.w.fallMaterial = (() => { const m = new BABYLON.StandardMaterial('poleFall', this.scene); m.diffuseColor = new BABYLON.Color3(0.22, 0.23, 0.26); m.specularColor = BABYLON.Color3.Black(); return m; })());
-        const headMat = this.w.fallHeadMaterial || (this.w.fallHeadMaterial = (() => { const m = new BABYLON.StandardMaterial('poleFallHead', this.scene); m.diffuseColor = new BABYLON.Color3(0.9, 0.86, 0.7); m.emissiveColor = new BABYLON.Color3(0.2, 0.18, 0.12); m.specularColor = BABYLON.Color3.Black(); return m; })());
-        const mk = (name, w, h, d, x, y, z, m) => { const b = BABYLON.MeshBuilder.CreateBox(name, { width: w, height: h, depth: d }, this.scene); b.parent = node; b.position.set(x, y, z); b.material = m; b.isPickable = false; return b; };
-        const rx = l.hx - l.x, rz = l.hz - l.z;
-        const parts = [
-            mk('pole', 0.26, 5.7, 0.26, 0, 2.85, 0, mat),
-            mk('arm', Math.abs(rx) + 0.14, 0.15, Math.abs(rz) + 0.14, rx / 2, 5.62, rz / 2, mat),
-            mk('head', 0.64, 0.22, 0.44, rx, 5.49, rz, headMat),
-        ];
+        // (o mesmo desenho do poste em pé — StreetFurniture.lamp —, em coordenadas locais, filho do nó do pé)
+        const fb = new MeshBatch();
+        StreetFurniture.lamp(fb, 0, 0, l.hx - l.x, l.hz - l.z);
+        const pm = fb.build('pole_fall_mesh', this.scene, this.w.mats.bsolid, { vertexColors: true, receiveShadows: false, alwaysActive: true });
+        pm.unfreezeWorldMatrix(); pm.parent = node;
+        const parts = [pm];
         if (this.w.shadow) for (const p of parts) this.w.shadow.addShadowCaster(p);
         this.falling.push({ node, parts, t: 0, ux, uz, ang: 0, w: 0.4, done: false, x: l.x, z: l.z });
     }

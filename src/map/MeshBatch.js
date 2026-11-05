@@ -97,6 +97,35 @@ class MeshBatch {
         }
     }
 
+    // Tubo (tronco de cone) de `a` a `b` ([x, y, z]), raio r0 → r1, `seg` faces (sem tampas): poste, braço curvo, haste.
+    tube(a, b, r0, r1, color, seg = 6) {
+        const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], L = Math.hypot(dx, dy, dz) || 1, d = [dx / L, dy / L, dz / L];
+        const h = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+        let u = [d[1] * h[2] - d[2] * h[1], d[2] * h[0] - d[0] * h[2], d[0] * h[1] - d[1] * h[0]];
+        const ul = Math.hypot(u[0], u[1], u[2]); u = [u[0] / ul, u[1] / ul, u[2] / ul];
+        const v = [d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]], uv3 = [[0, 0], [0, 0], [0, 0]];
+        const ring = (c, r, t) => [c[0] + (u[0] * Math.cos(t) + v[0] * Math.sin(t)) * r, c[1] + (u[1] * Math.cos(t) + v[1] * Math.sin(t)) * r, c[2] + (u[2] * Math.cos(t) + v[2] * Math.sin(t)) * r];
+        for (let i = 0; i < seg; i++) {
+            const t0 = i / seg * Math.PI * 2, t1 = (i + 1) / seg * Math.PI * 2, tm = (t0 + t1) / 2;
+            const n = [u[0] * Math.cos(tm) + v[0] * Math.sin(tm), u[1] * Math.cos(tm) + v[1] * Math.sin(tm), u[2] * Math.cos(tm) + v[2] * Math.sin(tm)];
+            const A = ring(a, r0, t0), B = ring(a, r0, t1), C = ring(b, r1, t1), D = ring(b, r1, t0);
+            this.tri(A, B, C, n, uv3, color); this.tri(A, C, D, n, uv3, color);
+        }
+    }
+
+    // Caixa girada no chão: centro (cx, cz), eixo (ux, uz) unitário, meio-comprimento hl e meia-largura hw na base (y0) e
+    // hl1/hw1 no topo (y1) — o topo menor faz o chanfro (cabeçote de luminária, caixa de semáforo). bottom: desenha a face de baixo.
+    obox(cx, cz, ux, uz, hl, hw, y0, y1, color, hl1 = hl, hw1 = hw, bottom = false) {
+        const px = -uz, pz = ux, uv3 = [[0, 0], [0, 0], [0, 0]];
+        const P = (l, w, y) => [cx + ux * l + px * w, y, cz + uz * l + pz * w];
+        const b = [P(-hl, -hw, y0), P(hl, -hw, y0), P(hl, hw, y0), P(-hl, hw, y0)], t = [P(-hl1, -hw1, y1), P(hl1, -hw1, y1), P(hl1, hw1, y1), P(-hl1, hw1, y1)];
+        const face = (q, n) => { this.tri(q[0], q[1], q[2], n, uv3, color); this.tri(q[0], q[2], q[3], n, uv3, color); };
+        face(t, [0, 1, 0]);
+        if (bottom) face(b, [0, -1, 0]);
+        const N = [[-px, 0, -pz], [ux, 0, uz], [px, 0, pz], [-ux, 0, -uz]];      // lados: -w, +l, +w, -l
+        face([b[0], b[1], t[1], t[0]], N[0]); face([b[1], b[2], t[2], t[1]], N[1]); face([b[2], b[3], t[3], t[2]], N[2]); face([b[3], b[0], t[0], t[3]], N[3]);
+    }
+
     // Cria a malha no Babylon (já em coordenadas de mundo; transform congelado).
     // alwaysActive: false para malhas por pedaço (o frustum descarta as que estão fora da tela).
     build(name, scene, material, { vertexColors = false, receiveShadows = true, alwaysActive = true } = {}) {
