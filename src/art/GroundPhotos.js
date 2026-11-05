@@ -1,13 +1,14 @@
 // ============================================================================
 // GroundPhotos — o CHÃO com texturas de foto CC0 (etapa 3 do upgrade visual; Poly Haven e ambientCG, domínio público: assets/textures/ground,
-// créditos em assets/textures/ground/CREDITS.md). Ligado com `?chao=foto` (Config.art.groundPhotos); `?chao=foto,relevo` (Config.art.groundBump)
-// junta o RELEVO: o mapa de normais da mesma foto, no mesmo ladrilho, como bumpTexture do material — o grão do asfalto, as juntas da
+// créditos em assets/textures/ground/CREDITS.md). PADRÃO (escolhido pelas capturas): o MISTO com o RELEVO (Config.art.groundPhotos,
+// groundMixed, groundBump). `?chao=0` = o chão só pintado de antes; `?chao=foto` = a foto no lugar do pintado (ficou de fora).
+// O RELEVO: o mapa de normais da mesma foto, no mesmo ladrilho, como bumpTexture do material — o grão do asfalto, as juntas da
 // calçada e as folhas da grama pegam o sol e a sombra de verdade.
 //
-// Os ladrilhos do chão continuam os do CityHD (mesmo tamanho no mundo, mesmas UVs): só a BASE pintada por código dá lugar à foto,
-// repetida no período dela (`period`, em px da arte, 20 px/u — divisor do ladrilho nos eixos em que ele repete, para não ter
-// emenda). O que é desenho e não material continua por cima, nítido: as faixas da rua e da faixa de pedestres, os tachões, a sarjeta,
-// as trilhas de pneu. Cada foto é recolorida para a cor média do piso de antes (_recolor): o jogo mantém as cores dele.
+// Os ladrilhos do chão continuam os do CityHD (mesmo tamanho no mundo, mesmas UVs). A foto repete no período dela (`period`, em px
+// da arte, 20 px/u — divisor do ladrilho nos eixos em que ele repete, para não ter emenda). No misto, o ladrilho é o pintado e a
+// foto entra só como grão (detail). Em `?chao=foto`, a BASE pintada dá lugar à foto recolorida para a cor média do piso de antes
+// (_recolor), e o que é desenho continua por cima: faixas, tachões, sarjeta, trilhas de pneu.
 // As fotos são carregadas na carga (main.js, junto da arte), ANTES de o mundo ser montado: o CityHD pinta os ladrilhos na hora.
 // ============================================================================
 
