@@ -13,7 +13,10 @@
 // Onde entram: WorldBuilder._spriteQuad (as plantas da cidade, dos parques, do Corcovado, do Maracanã e do mundo grande —
 // TerrainBuilder._plant) desvia as espécies daqui para batch.trees; quem monta a malha do batch chama build(). Capim, samambaia,
 // flores, juncos, mato seco, pedras e guarda-sóis continuam nos sprites.
-//   wants(kind)   add(batch, kind, x, y0, z, s)   build(scene, batches, name, shadow) → malhas
+//   wants(kind)   add(batch, kind, x, y0, z, s)   build(scene, batches, name, shadow, { lod }) → malhas
+// DETALHE (lod): 2 = todas as bolhas da copa com 2 subdivisões (as árvores da cidade, preset Medium para cima); 1 = só a principal
+// (cidade no Low); 0 = todas com 1 (o mapa grande — mata, encostas, campo: milhares de árvores). `casts` = false: não entram no mapa
+// de sombras (o mapa grande: numa mata fechada o chão debaixo das copas quase não aparece, e a sombra dobrava os desenhos).
 // (Base: a versão do visual moderno revertido no #81/#82, agora sem o PBR nem a maquete.)
 // ============================================================================
 
@@ -38,7 +41,7 @@ const Trees3D = {
     },
 
     // As malhas (uma por modelo) das plantas guardadas nos batches. shadow: o gerador de sombras (elas projetam).
-    build(scene, batches, name, shadow) {
+    build(scene, batches, name, shadow, { lod = this.lod, casts = true } = {}) {
         const groups = new Map(), out = [];
         for (const b of batches) {
             const T = b && b.trees;
@@ -61,7 +64,7 @@ const Trees3D = {
             // instâncias de quem desenhou primeiro — clones que dividem a geometria desenhavam todos as árvores do primeiro (longe da tela).
             const model = key.slice(0, key.indexOf('@')), n = g.length / 5;
             const mesh = new BABYLON.Mesh(`${name}_${model}${key.slice(key.indexOf('@'))}`, scene);
-            this._model(scene, model).applyToMesh(mesh);
+            this._model(scene, model, lod).applyToMesh(mesh);
             mesh.material = this.material(scene);
             mesh.useVertexColors = true;
             const mats = new Float32Array(n * 16);
@@ -81,7 +84,7 @@ const Trees3D = {
             mesh.receiveShadows = true;
             mesh.isPickable = false;
             mesh.freezeWorldMatrix();
-            if (shadow && this.castShadows) shadow.addShadowCaster(mesh);
+            if (shadow && this.castShadows && casts) shadow.addShadowCaster(mesh);
             out.push(mesh);
         }
         return out;
@@ -181,9 +184,9 @@ const Trees3D = {
     // ------------------------------------------------------------------ os modelos (os vértices de cada um, prontos para cada malha)
     // Detalhe das copas: 2 = bolhas de icosfera com 2 subdivisões (copas redondas); 1 (preset Low) = a principal com 2, as outras com 1.
     get lod() { return typeof Graphics !== 'undefined' && Graphics.level === 'low' ? 1 : 2; },
-    _model(scene, model) {
-        const C = this._models || (this._models = {}), hi = this.lod >= 2;
-        if (C[model]) return C[model];
+    _model(scene, model, lod = this.lod) {
+        const C = this._models || (this._models = {}), key = model + '|' + lod, sMain = lod >= 1 ? 2 : 1, sAll = lod >= 2 ? 2 : 1;
+        if (C[key]) return C[key];
         const g = { p: [], n: [], c: [], i: [] }, R = this._rng(model.length * 977 + model.charCodeAt(0) * 31);
         const B = this.PARTS, trunk = [0.36, 0.27, 0.19], dark = [0.27, 0.21, 0.15];
         switch (model) {
@@ -199,7 +202,7 @@ const Trees3D = {
                 for (let k = 0; k < P.n; k++) {
                     const a = k / P.n * Math.PI * 2 + R() * 0.8, d = k === 0 ? 0 : P.r * (0.35 + 0.25 * R());
                     const rr = P.r * (k === 0 ? 0.82 : 0.55 + 0.2 * R());
-                    B.blob(g, [Math.cos(a) * d, crownY + (k === 0 ? 0.3 : (R() - 0.3) * P.r * 0.5), Math.sin(a) * d], [rr, rr * 0.82, rr], P.c, R, 0.18, k === 0 || hi ? 2 : 1, P.fl ? 'flower' : 'leaf');
+                    B.blob(g, [Math.cos(a) * d, crownY + (k === 0 ? 0.3 : (R() - 0.3) * P.r * 0.5), Math.sin(a) * d], [rr, rr * 0.82, rr], P.c, R, 0.18, k === 0 ? sMain : sAll, P.fl ? 'flower' : 'leaf');
                 }
                 break;
             }
@@ -213,7 +216,7 @@ const Trees3D = {
             case 'pine': case 'cypress': {
                 const cy = model === 'cypress';
                 B.cyl(g, [0, 0, 0], [0, cy ? 1.2 : 1.6, 0], 0.22, 0.18, 6, trunk, dark);
-                if (cy) B.blob(g, [0, 3.6, 0], [0.95, 2.8, 0.95], [0.2, 0.36, 0.2], R, 0.12, 2);
+                if (cy) B.blob(g, [0, 3.6, 0], [0.95, 2.8, 0.95], [0.2, 0.36, 0.2], R, 0.12, sMain);
                 else for (let k = 0; k < 4; k++) B.cone(g, [0, 1.3 + k * 1.35, 0], 2.0 - k * 0.42, 2.2 - k * 0.2, 8, [0.17, 0.34, 0.2], R);
                 break;
             }
@@ -221,7 +224,7 @@ const Trees3D = {
                 B.cyl(g, [0, 0, 0], [0, 7.2, 0], 0.26, 0.14, 6, [0.4, 0.3, 0.22], dark);
                 for (let k = 0; k < 3; k++) {                                               // a umbela: discos achatados no alto
                     const y = 5.4 + k * 0.85, r = 2.7 - k * 0.7;
-                    B.blob(g, [0, y, 0], [r, 0.42, r], [0.2, 0.36, 0.18], R, 0.2, k === 0 || hi ? 2 : 1);
+                    B.blob(g, [0, y, 0], [r, 0.42, r], [0.2, 0.36, 0.18], R, 0.2, k === 0 ? sMain : sAll);
                 }
                 break;
             }
@@ -240,7 +243,7 @@ const Trees3D = {
         const vd = new BABYLON.VertexData();
         vd.positions = new Float32Array(g.p); vd.normals = new Float32Array(g.n); vd.colors = new Float32Array(g.c);
         vd.indices = g.p.length / 3 > 65535 ? new Uint32Array(g.i) : new Uint16Array(g.i);
-        return (C[model] = vd);
+        return (C[key] = vd);
     },
     _rng(seed) { let s = seed >>> 0 || 1; return () => { s = Math.imul(s ^ (s >>> 15), 2246822519) ^ Math.imul(s ^ (s >>> 13), 3266489917); s >>>= 0; return (s & 0xffffff) / 0x1000000; }; },
 };
