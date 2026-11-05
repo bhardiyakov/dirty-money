@@ -704,6 +704,7 @@ class Game {
 			// trote padrão; sprint pelo impulso (exausto: não corre); andar com o analógico pouco inclinado ou dentro da safe house
 			const walk = this.input.moveTilt < Config.player.walkTilt || (typeof HouseView !== 'undefined' && HouseView.inside && this._walkIndoors());
 			this.player.update(move, this.empire && this.empire.tired ? 0 : this.input.sprint, dt, walk);
+			if (this.player._lunge) this._lungeTick(dt);
 			this._bumpPeople();                                  // esbarra em quem está no caminho (não atravessa as pessoas)
 			if (!frozenUI) Interiors.autoEnter(this);            // lojas: atravessar o vão da porta = entrar
 			HouseView.update(dt, this);                          // safe house: porta, luzes, seta (entrar = a porta de Interiors)
@@ -1284,19 +1285,47 @@ class Game {
 		// (Combat.strike: punho/pé/taco estendido). Quem leva cambaleia e é empurrado; chute e taco derrubam. Quem vê, foge.
 		const sk = kind === 'swing' ? 'swing' : kind, M = Melee[sk];
 		if (!M) return;
-		const tgt = this.combat.meleeAim(pos.x, pos.z, heading, sk);
+		const v2 = Combat.v2, C = Config.melee, now = performance.now() / 1000;
+		let tgt = this.combat.meleeAim(pos.x, pos.z, heading, sk, 'player', v2 ? C.lunge : 0);
+		// luta nova: TRAVA — quem levou o último golpe segue sendo o alvo (mesmo meio de lado), e o AVANÇO leva até ele no preparo
+		const L = this._meleeLock;
+		if (v2 && L && now < L.until && L.t.alive && !L.t.rag && hypot(L.t.position.x - pos.x, L.t.position.z - pos.z) < C.lockRange) tgt = L.t;
 		if (tgt) p.root.rotation.y = Math.atan2(tgt.position.x - pos.x, tgt.position.z - pos.z);
+		if (v2 && tgt) {
+			const d = hypot(tgt.position.x - pos.x, tgt.position.z - pos.z), ideal = M.reach * 0.7 + 0.15;
+			p._lunge = d > ideal + 0.08 ? { t: tgt, ideal, left: d - ideal, v: (d - ideal) / Math.max(0.1, M.t0 + 0.04) } : null;
+		}
+		const finisher = kind === 'kick' || kind === 'swing';
 		const knife = weaponKey === 'knife';                                   // faca: soco com lâmina
 		this.combat.strike({ position: p.position, heading: () => p.root.rotation.y, ok: () => p.alive && !p.rag && !!p.action && p.action.name === kind }, sk, {
 			source: 'player', ref: p,
 			dmgMul: (1 + (SkillTree.m.melee || 0) + Outfit.m.melee) * (knife ? Weapons.knife.dmg / M.dmg : 1) * Physique.meleeMul(this.player),      // (força do físico: magro bate fraco, forte bate forte)
 			onHit: (t) => {
 				if (t.halfLen) { this.npcManager.alertViolence(p.position, 10); return; }      // (carro: vandalismo, só assusta)
+				if (v2) {                                                                      // luta nova: trava no alvo e o impacto
+					this._meleeLock = { t, until: performance.now() / 1000 + C.lockTime };
+					const k = finisher || !t.alive ? C.stopFinisher : C.stop;
+					if (!this._slowUntil || this.timeScale >= 1) this.slowMo(0.08, k);
+					if (finisher || !t.alive) this.camera.shake(0.35);
+				}
 				this.npcManager.alertViolence(p.position, this._witnessR(), [t]);
 				this.heat.commit('assault');
 				this._flash(`Agrediu #${t.id}!`);
 			},
 		});
+	}
+
+	// AVANÇO do golpe (luta nova, Config.melee): no preparo do soco/chute/taco o jogador desliza até o alvo (que pode estar andando),
+	// parando onde o golpe alcança; não atravessa parede. Acaba com o golpe, se o alvo cair ou se apanhar no meio.
+	_lungeTick(dt) {
+		const p = this.player, L = p._lunge;
+		if (!p.action || p.rag || !L.t.alive || L.t.rag || L.left <= 0) { p._lunge = null; return; }
+		const P = p.root.position, T = L.t.position, dx = T.x - P.x, dz = T.z - P.z, d = hypot(dx, dz) || 1;
+		const step = Math.min(L.left, L.v * dt, Math.max(0, d - L.ideal));
+		if (step <= 0.001) { p._lunge = null; return; }
+		P.x += dx / d * step; P.z += dz / d * step; L.left -= step;
+		MapGeo.resolveCircle(P, 0.35);
+		p.root.rotation.y = Math.atan2(dx, dz);
 	}
 
 	_weaponName(kind) {

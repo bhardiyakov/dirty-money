@@ -41,6 +41,8 @@ export const INFO = [
   ['jetski', 'Jet ski (Aqua Rider 300)', 'Barcos', 3.0, 1.11],
   ['lancha', 'Lancha (Marlin 21 Sport)', 'Barcos', 6.4, 2.3],
   ['barco', 'Barco de pesca (Caiçara 30)', 'Barcos', 9.0, 3.2],
+  ['pedalinho', 'Pedalinho de cisne (Cisne da Lagoa)', 'Barcos', 3.4, 1.9],
+  ['caiaque', 'Caiaque de passeio (Remada Lagoa)', 'Barcos', 3.6, 0.8],
   ['moto', 'Moto de rua (estilo CG 160)', 'Motos', 2.0, 0.78],
   ['moto_entrega', 'Moto de entrega com baú (estilo CG Cargo)', 'Motos', 2.0, 0.78],
   ['moto_scooter', 'Scooter (estilo PCX)', 'Motos', 1.95, 0.74],

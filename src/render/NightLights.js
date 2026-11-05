@@ -28,6 +28,13 @@ const NightLights = {
 	},
 	tex: null,
 	P: null,
+	// A luz dos postes no chão: meio-comprimento ao longo da rua, meia-largura através dela, quanto entra na pista e a força.
+	// `?ruas=antes` = a de antes (disco de 7,5 u), `?ruas=a` | `?ruas=b` = os níveis para comparar; padrão: Config.light.street.
+	STREET: { antes: { along: 7.5, across: 7.5, in: 0, k: 0.8 }, a: { along: 12, across: 9, in: 1.2, k: 1.0 }, b: { along: 15, across: 11, in: 1.6, k: 1.3 } },
+	get street() {
+		const m = typeof location !== 'undefined' && location.search.match(/[?&]ruas=([^&]*)/), k = m ? m[1] : (Config.light && Config.light.street) || 'antes';
+		return this.STREET[k] || this.STREET.antes;
+	},
 	get waterOn() { return typeof Water !== 'undefined' && Water.reflect; },
 	_empty: null,
 
@@ -189,11 +196,16 @@ const NightLights = {
 		const yaw = CompassCamera.yaw || 0, wet = typeof Weather !== 'undefined' && Weather.cur ? Weather.cur.k : 0;
 		this.W.set(Math.sin(yaw), Math.cos(yaw), Math.min(1, wet * 1.2), 0);      // (o rastro do reflexo: para o norte da tela, longe da câmera)
 		this._q = 0;
+		const St = this._st || (this._st = this.street);
 		const { G, C: cell } = this._grid, i0 = Math.floor((f.x - H) / cell), i1 = Math.floor((f.x + H) / cell), j0 = Math.floor((f.z - H) / cell), j1 = Math.floor((f.z + H) / cell);
 		for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
 			const L = G.get(i + ',' + j);
 			if (L) for (const o of L) {
-				if (o.t === 0) { if (o.l.alive !== false) this._quad(o.l.hx, o.l.hz, 1, 0, 7.5, 7.5, 1.0, 0.78, 0.48, 0.8); }
+				if (o.t === 0) {
+					// poste: a luz cai num oval ao longo da rua (a luminária fica sobre a beira da pista), um pouco para dentro dela
+					const l = o.l;
+					if (l.alive !== false) { const dx = l.hx - l.x, dz = l.hz - l.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d; this._quad(l.hx + ux * St.in, l.hz + uz * St.in, -uz, ux, St.along, St.across, 1.0, 0.8, 0.52, St.k); }
+				}
 				else if (o.t === 1) { const c = o.s.c; this._quad(o.s.x, o.s.z, 1, 0, 5, 5, 0.45 + c[0] * 0.55, 0.45 + c[1] * 0.55, 0.45 + c[2] * 0.55, 0.6); }
 				else { const l = o.l; this._quad(l.x, l.z, 1, 0, 7.5, 7.5, 1.0, 0.72, 0.38, (l.cur != null ? l.cur : 0.6) * 1.1); }
 			}

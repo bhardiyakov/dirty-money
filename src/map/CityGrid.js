@@ -818,10 +818,13 @@ const CityGrid = {
                 inter.crosswalks.push(cw);
                 this.crosswalks.push(cw);
             }
-            // Postes nos 4 cantos (sobre a calçada, junto ao meio-fio).
+            // Postes nos 4 cantos (sobre a calçada, junto ao meio-fio). Canto que cai no asfalto de outra via (uma diagonal que passa
+            // rente ao cruzamento): o poste recua pela calçada; se nem assim, fica sem (os outros cantos mostram o sinal).
             for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-                const px = x + sx * (hwNS + 0.55), pz = z + sz * (hwEW + 0.55);
-                inter.poles.push({ x: px, z: pz, sx, sz });
+                let px = x + sx * (hwNS + 0.55), pz = z + sz * (hwEW + 0.55), ok = !RoadPlan.onAsphalt(px, pz, 0.3);
+                for (const k of [1.2, 2.4]) { if (ok) break; px = x + sx * (hwNS + 0.55 + k); pz = z + sz * (hwEW + 0.55 + k); ok = !RoadPlan.onAsphalt(px, pz, 0.3); }
+                if (!ok) continue;
+                inter.poles.push({ x: px, z: pz, sx, sz, hwNS, hwEW });
                 this.obstacles.push({ x0: px - 0.18, z0: pz - 0.18, x1: px + 0.18, z1: pz + 0.18, h: 5.2 });
             }
         }
@@ -866,8 +869,15 @@ const CityGrid = {
             const lx = -a.dz, lz = a.dx, cw = Object.assign(this._armCrosswalk(inter, a, a.cut, a.cut + zl), { phase: a.phase });
             inter.crosswalks.push(cw);
             this.crosswalks.push(cw);
-            const px = inter.x + a.dx * (a.cut - 0.4) + lx * (a.hw + 0.55), pz = inter.z + a.dz * (a.cut - 0.4) + lz * (a.hw + 0.55);
-            inter.poles.push({ x: px, z: pz, fx: a.dx, fz: a.dz, phase: a.phase, cw, sx: Math.sign(px - inter.x) || 1, sz: Math.sign(pz - inter.z) || 1 });
+            // poste na calçada ao lado do começo da faixa (antes ficava 0,4 u dentro do cruzamento — no asfalto da via de lado); se ali
+            // ainda é asfalto (canto agudo entre pernas), depois da faixa; se nem assim, sem poste nesta perna
+            let px = 0, pz = 0, ok = false;
+            for (const s of [a.cut + 0.6, a.cut + zl + 0.8]) {
+                px = inter.x + a.dx * s + lx * (a.hw + 0.55); pz = inter.z + a.dz * s + lz * (a.hw + 0.55);
+                if ((ok = !RoadPlan.onAsphalt(px, pz, 0.3))) break;
+            }
+            if (!ok) continue;
+            inter.poles.push({ x: px, z: pz, fx: a.dx, fz: a.dz, hw: a.hw, phase: a.phase, cw, sx: Math.sign(px - inter.x) || 1, sz: Math.sign(pz - inter.z) || 1 });
             this.obstacles.push({ x0: px - 0.18, z0: pz - 0.18, x1: px + 0.18, z1: pz + 0.18, h: 5.2 });
         }
     },

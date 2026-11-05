@@ -149,6 +149,8 @@ const Config = {
 		// os prédios, árvores e carros espelhados (Water.mirror) e, à noite, as luzes.
 		waterReflect: true,
 		nightGain: 1.0,
+		// A luz dos postes no chão (NightLights.STREET): 'antes' (disco de 7,5 u) | 'a' (oval mais largo) | 'b' (o padrão: oval ao longo da rua, mais largo e forte).
+		street: 'b',
 	},
 
 	player: {
@@ -319,6 +321,14 @@ const Config = {
 		giveUp: 18,            // o outro sumiu (o carro do jogador foi embora): desiste a esta distância (m)
 		life: 60,              // s no máximo: depois todo mundo volta para o seu veículo
 	},
+
+	// LUTA corpo a corpo (combat/Combat.js, Game._onAttack). `?luta=0` volta à de antes.
+	//   AVANÇO: o golpe leva o jogador até o alvo (até `lunge` m além do alcance, num cone de ±70° à frente), no tempo do preparo.
+	//   TRAVA: quem levou o último golpe continua sendo o alvo por `lockTime` s (até `lockRange` m), mesmo meio de lado.
+	//   IMPACTO: o golpe que entra congela o jogo um instante (`stop` s; o chute que fecha o combo, `stopFinisher`).
+	//   DERRUBADA: o chute de um pedestre só derruba o jogador com a vida abaixo de `npcKnockHp` (fração) — antes, qualquer chute
+	//   derrubava (e eles chutam 1 em cada 4 golpes); o taco e o cassetete da polícia continuam derrubando.
+	melee: { v2: true, lunge: 1.8, lockTime: 1.6, lockRange: 4.5, stop: 0.07, stopFinisher: 0.16, npcKnockHp: 0.35 },
 
 	// TÁTICO do jogador a pé (player.js e combat/Cover.js): AGACHAR (Q · L3 no controle) = furtivo; agachado encostado num prédio,
 	// muro, caçamba, contêiner ou carro parado = EM COBERTURA; ROLAR (V longe de grade/muro · RB) = esquiva de balas.

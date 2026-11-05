@@ -602,6 +602,33 @@ const RoadPlan = {
         return false;
     },
 
+    // (x, z) está sobre o ASFALTO (pista de um trecho ou o miolo de um cruzamento/rotatória), com folga `m`? Diferente de onPavement,
+    // as calçadas da ponte e o chão sob o viaduto não contam: é a pergunta de quem põe um poste ("isto fica no meio da rua?").
+    onAsphalt(x, z, m = 0) {
+        if (!inWorld(x, z)) return false;
+        const S = this.CELL, key = this._key;
+        const i0 = Math.floor((x - m) / S), i1 = Math.floor((x + m) / S), j0 = Math.floor((z - m) / S), j1 = Math.floor((z + m) / S);
+        for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+            const c = this._eg.get(key(i, j)); if (!c) continue;
+            for (const e of c) {
+                const hw = e.w / 2 + m;
+                if (e.free) { if (this._projPts(e.pts, e.cum, x, z).d <= hw) return true; continue; }
+                if (e.v) { if (Math.abs(x - e.a.x) <= hw && z >= e.a.z && z <= e.b.z) return true; }
+                else if (Math.abs(z - e.a.z) <= hw && x >= e.a.x && x <= e.b.x) return true;
+            }
+        }
+        const R = 46 + m, n0 = Math.floor((x - R) / S), n1 = Math.floor((x + R) / S), q0 = Math.floor((z - R) / S), q1 = Math.floor((z + R) / S);
+        for (let i = n0; i <= n1; i++) for (let j = q0; j <= q1; j++) {
+            const c = this._ng.get(key(i, j)); if (!c) continue;
+            for (const n of c) {
+                if (n.round) { if (hypot(x - n.round.cx, z - n.round.cz) <= n.round.R + m) return true; continue; }
+                if (n.poly) { if (Math.abs(x - n.x) <= n.hwNS + n.hwEW + m && Math.abs(z - n.z) <= n.hwNS + n.hwEW + m && (this.inPoly(n.poly, x, z) || (m > 0 && this.polyDist(n.poly, x, z) <= m))) return true; continue; }
+                if (Math.abs(x - n.x) <= n.hwNS + m && Math.abs(z - n.z) <= n.hwEW + m) return true;
+            }
+        }
+        return false;
+    },
+
     // Pontos de via a até `r` u de (x, z): o ponto mais próximo de cada trecho em volta — [{ x, z, d, edge }].
     nearbyRoadPoints(x, z, r = 90) {
         if (!inWorld(x, z)) return [];

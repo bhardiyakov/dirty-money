@@ -118,7 +118,7 @@ class BoatSheet {
         this.scene = scene;
         this.modelId = modelId;
         this.spec = Object.assign({ id: modelId }, CarArt.scaledSpec(BoatSheet.MODELS[modelId]));      // (medidas em Config.vehicle.scale)
-        if (typeof CarArt !== 'undefined' && CarArt.available() && CarArt.model(modelId)) {        // desenho vetorial do atlas dos carros: nada a assar
+        if (typeof CarArt !== 'undefined' && ((CarArt.available() && CarArt.model(modelId)) || (typeof CarArt3D !== 'undefined' && CarArt3D.has(modelId)))) {        // desenho vetorial do atlas dos carros ou o modelo 3D (pedalinho, caiaque: só no VEH3D): nada a assar
             this.art = 'rider'; this.vehModel = modelId; this.seat = CarArt.scaledSeat(BoatSheet.SEATS[modelId]);
             this.dirs = 32; this.frame = this.spec.frame; this.rider = rider; this.name = modelId; this.palette = palette; this.lib = null; this.ready = true;
             return;
