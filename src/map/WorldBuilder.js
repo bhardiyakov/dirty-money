@@ -61,6 +61,7 @@ class WorldBuilder {
         this._helipads();
         this._props();
         StreetDetail.build(this);             // asfalto gasto, pintura do chão, placas, lombadas, pontos de ônibus, defensas, fiação (world/StreetDetail.js)
+        Plantations.build(this);              // eucaliptais de beira de rodovia (world/Plantations.js)
         FavelaDetail.build(this);             // gatonet, ar-condicionado, ferros de laje, varais, fiação embolada, pedras com mato, lixo (world/FavelaDetail.js)
         this._flush();
         HouseView.build(this);                // a safe house do protagonista (paredes, telhado, porta e o corte do interior)
@@ -1620,8 +1621,30 @@ class WorldBuilder {
             }
         }
 
-        for (const props of CityGrid.blocks.concat(CityGrid.extraBlocks || []).map((b) => b.props).concat([CityGrid.coastProps])) {
+        // CANTEIRO: árvore ou arbusto que cai em calçada, praça ou pátio de piso ganha o canteirinho (meio-fio de concreto e a terra); no
+        // asfalto, nada nasce. Em gramado, terra e areia, a planta fica direto no chão.
+        const groundOf = (blk, x, z) => {
+            if (RoadPlan.onAsphalt(x, z, 0.4)) return 'road';
+            if (!blk || blk.virtual || blk.biome === 'favela' || blk.district === 'favela') return 'soil';
+            const paved = blk.ground === 'plaza' || blk.ground === 'concrete';
+            if (blk.open) return paved ? 'paved' : 'soil';
+            const F = blk.footPoly, inFoot = F ? RoadPlan.inPoly(F, x, z) : (blk.foot && x > blk.foot[0] && x < blk.foot[2] && z > blk.foot[1] && z < blk.foot[3]);
+            return !inFoot || paved ? 'paved' : 'soil';
+        };
+        this._canteiro = (x, z, r) => {
+            const t = trimAt(x, z), w = 0.12, curb = [0.66, 0.66, 0.64], soil = [0.27, 0.19, 0.12];
+            t.solid(x - r, z - r, x + r, z - r + w, 0, 0.16, curb); t.solid(x - r, z + r - w, x + r, z + r, 0, 0.16, curb);
+            t.solid(x - r, z - r + w, x - r + w, z + r - w, 0, 0.16, curb); t.solid(x + r - w, z - r + w, x + r, z + r - w, 0, 0.16, curb);
+            t.solid(x - r + w, z - r + w, x + r - w, z + r - w, 0, 0.11, soil);
+        };
+        const plants = { oak: 1.0, ipe: 1.0, jungle: 1.0, juca: 0.9, orchard: 0.8, palm: 0.75, banana: 0.75, cypress: 0.7, pine: 0.9, araucaria: 0.9, bush: 0.75, flowers: 0.6, fern: 0.6 };
+        for (const [blk, props] of CityGrid.blocks.concat(CityGrid.extraBlocks || []).map((b) => [b, b.props]).concat([[null, CityGrid.coastProps]])) {
             for (const p of props) {
+                if ((p.type === 'tree' || p.type === 'prop') && plants[p.kind]) {
+                    const gnd = groundOf(blk, p.x, p.z);
+                    if (gnd === 'road') continue;
+                    if (gnd === 'paved') this._canteiro(p.x, p.z, plants[p.kind]);
+                }
                 if (p.type === 'hide') {
                     const x0 = p.x - p.w / 2, x1 = p.x + p.w / 2, z0 = p.z - p.d / 2, z1 = p.z + p.d / 2;
                     trimAt(x0, z0).walls(x0, z0, x1, z1, 0.18, p.h, () => [0, 0], SIDE[p.kind]);

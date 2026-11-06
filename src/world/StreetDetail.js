@@ -60,6 +60,7 @@ const StreetDetail = {
 		this._rails(W, st);
 		this._powerLines(W, rng, st);
 		this._bins(W, rng, st);
+		this._streetTrees(W, rng, st);
 		MeshBatch.anchor = null;
 		console.log(`[RUAS] detalhe: ${st.decals} marcas no chão, ${st.signs} placas, ${st.names} esquinas com nome, ${st.bumps} lombadas, ${st.stops} pontos de ônibus, ${st.rails} defensas, ${st.poles} postes com fiação, ${st.bins} lixeiras (${(performance.now() - t0).toFixed(0)} ms)`);
 	},
@@ -388,6 +389,25 @@ const StreetDetail = {
 			const d = reach[0] + rng() * (reach[1] - reach[0]), sd = (rng() - 0.5) * 9;
 			const tx = x + lx * d + lz * sd, tz = z + lz * d - lx * sd, th = (typeof Relief !== 'undefined' && Relief.on ? Relief.at(tx, tz) : 0) + 3.2 + rng() * 2.5;
 			RoadArt.wire(b, [x, y0 + 0.6 + rng(), z], [tx, th, tz], 0.6 + rng() * 0.8, C[k % C.length], 0.016, 7);
+		}
+	},
+
+	// ------------------------------------------------------------------ árvores de rua (no canteirinho da calçada)
+	_streetTrees(W, rng, st) {
+		if (typeof Trees3D === 'undefined' || !Trees3D.on) return;
+		const P = {}; st.trees = 0;
+		for (const e of RoadPlan.edges) {
+			if (!this._urban(e) || e.layer || e.len < 40) continue;
+			for (const side of [1, -1]) for (let s = e.cutA + 9 + rng() * 6; s < e.len - e.cutB - 7; s += 13 + rng() * 6) {
+				if (rng() < 0.4) continue;
+				RoadPlan.at(e, s, P);
+				const lx = P.tz * side, lz = -P.tx * side, d = e.w / 2 + 1.5, x = P.x + lx * d, z = P.z + lz * d;
+				if (!this.free(x, z, 1.4) || CityGrid.inCrosswalk(x, z, 3)) continue;
+				this._put(x, z, 1.6);
+				W._canteiro(x, z, 0.75);
+				Trees3D.add(W._batch('veg_hi', x, z), rng() < 0.8 ? 'oak' : 'ipe', x, 0, z, 0.72 + rng() * 0.22);
+				st.trees++;
+			}
 		}
 	},
 
