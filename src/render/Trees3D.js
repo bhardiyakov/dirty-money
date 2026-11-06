@@ -41,8 +41,8 @@ const Trees3D = {
     variant(kind, x, z, h) {
         const urban = typeof CityGrid !== 'undefined' && CityGrid.inCity && CityGrid.inCity(x, z);
         switch (kind) {
-            case 'ipe': return h < 0.45 ? 'ipe' : h < 0.85 ? 'ipeY' : 'jacaranda';
-            case 'oak': return !urban ? (h < 0.6 ? 'oak' : 'mango') : h < 0.3 ? 'mango' : h < 0.5 ? 'oak' : h < 0.66 ? 'flamboyant' : h < 0.82 ? 'jacaranda' : 'quaresmeira';
+            case 'ipe': return h < 0.4 ? 'ipe' : h < 0.85 ? 'ipeY' : 'jacaranda';
+            case 'oak': return !urban ? (h < 0.6 ? 'oak' : 'mango') : h < 0.38 ? 'mango' : h < 0.78 ? 'oak' : h < 0.86 ? 'flamboyant' : h < 0.93 ? 'jacaranda' : 'quaresmeira';
             case 'palm': return urban && h < 0.55 ? 'imperial' : 'palm';
             case 'bush': return h < 0.5 ? 'bush' : h < 0.75 ? 'bushR' : 'bushY';
             default: return this.KIND[kind];
@@ -159,7 +159,7 @@ const Trees3D = {
                             vec3 trP = vPositionW;
                             float trN = tfN(trP * 1.25) * 0.6 + tfN(trP * 2.9 + 7.1) * 0.28 + tfN(trP * 6.1 + 3.3) * 0.12;
                             if (trFl > 0.5) {
-                                float trM = smoothstep(0.42, 0.6, tfN(trP * 0.9 + 11.0) * 0.65 + trN * 0.35);
+                                float trM = smoothstep(0.3, 0.5, tfN(trP * 1.6 + 11.0) * 0.55 + trN * 0.45);      // (a copa quase toda em flor, com vãos de folha)
                                 vec3 trTn = baseColor.rgb / max(vColor.rgb, vec3(0.001));
                                 baseColor.rgb = mix(vec3(0.27, 0.45, 0.19) * trTn, baseColor.rgb, trM);
                             }
@@ -251,12 +251,12 @@ const Trees3D = {
             case 'flamboyant': {                                                           // flamboyant: galhos abertos e a copa em guarda-chuva vermelha
                 B.cyl(g, [0, 0, 0], [0, 2.2, 0], 0.3, 0.22, 7, trunk, dark);
                 for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + 0.4; B.cyl(g, [0, 2.0, 0], [Math.cos(a) * 2.4, 3.6, Math.sin(a) * 2.4], 0.14, 0.06, 5, trunk, dark); }
-                B.blob(g, [0, 4.0, 0], [3.6, 1.1, 3.6], [0.96, 0.3, 0.08], R, 0.2, sMain, 'flower');
-                for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + R(); B.blob(g, [Math.cos(a) * 2.6, 3.7 + R() * 0.5, Math.sin(a) * 2.6], [1.6, 0.8, 1.6], [0.98, 0.36, 0.1], R, 0.22, sAll, 'flower'); }
+                B.blob(g, [0, 4.0, 0], [3.6, 1.1, 3.6], [0.86, 0.3, 0.12], R, 0.2, sMain, 'flower');
+                for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + R(); B.blob(g, [Math.cos(a) * 2.6, 3.7 + R() * 0.5, Math.sin(a) * 2.6], [1.6, 0.8, 1.6], [0.88, 0.36, 0.14], R, 0.22, sAll, 'flower'); }
                 break;
             }
             case 'jacaranda': case 'quaresmeira': {                                        // jacarandá (azul-violeta, alto) e quaresmeira (roxa, baixa)
-                const J = model === 'jacaranda', H = J ? 5.6 : 3.4, rr = J ? 2.1 : 1.6, col = J ? [0.42, 0.42, 0.92] : [0.62, 0.32, 0.86];
+                const J = model === 'jacaranda', H = J ? 5.6 : 3.4, rr = J ? 2.1 : 1.6, col = J ? [0.5, 0.46, 0.8] : [0.6, 0.36, 0.76];
                 B.cyl(g, [0, 0, 0], [0.2, H - rr, 0.1], J ? 0.22 : 0.14, 0.1, 6, trunk, dark);
                 if (!J) for (let k = 0; k < 3; k++) { const a = k * 2.1; B.cyl(g, [0, 0.3, 0], [Math.cos(a) * 0.9, H - rr, Math.sin(a) * 0.9], 0.08, 0.05, 4, trunk, dark); }
                 B.blob(g, [0.2, H - 0.2, 0.1], [rr, rr * 0.8, rr], col, R, 0.22, sMain, 'flower');

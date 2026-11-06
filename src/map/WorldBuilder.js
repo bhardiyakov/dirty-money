@@ -1633,9 +1633,11 @@ class WorldBuilder {
         };
         this._canteiro = (x, z, r) => {
             const t = trimAt(x, z), w = 0.12, curb = [0.66, 0.66, 0.64], soil = [0.27, 0.19, 0.12];
-            t.solid(x - r, z - r, x + r, z - r + w, 0, 0.16, curb); t.solid(x - r, z + r - w, x + r, z + r, 0, 0.16, curb);
-            t.solid(x - r, z - r + w, x - r + w, z + r - w, 0, 0.16, curb); t.solid(x + r - w, z - r + w, x + r, z + r - w, 0, 0.16, curb);
-            t.solid(x - r + w, z - r + w, x + r - w, z + r - w, 0, 0.11, soil);
+            // (acima do piso da calçada, que é elevada: Config.city.curbHeight)
+            const y1 = Config.city.curbHeight + 0.14, ys = Config.city.curbHeight + 0.05;
+            t.solid(x - r, z - r, x + r, z - r + w, 0, y1, curb); t.solid(x - r, z + r - w, x + r, z + r, 0, y1, curb);
+            t.solid(x - r, z - r + w, x - r + w, z + r - w, 0, y1, curb); t.solid(x + r - w, z - r + w, x + r, z + r - w, 0, y1, curb);
+            t.solid(x - r + w, z - r + w, x + r - w, z + r - w, 0, ys, soil);
         };
         const plants = { oak: 1.0, ipe: 1.0, jungle: 1.0, juca: 0.9, orchard: 0.8, palm: 0.75, banana: 0.75, cypress: 0.7, pine: 0.9, araucaria: 0.9, bush: 0.75, flowers: 0.6, fern: 0.6 };
         for (const [blk, props] of CityGrid.blocks.concat(CityGrid.extraBlocks || []).map((b) => [b, b.props]).concat([[null, CityGrid.coastProps]])) {

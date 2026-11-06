@@ -395,7 +395,7 @@ const StreetDetail = {
 	// ------------------------------------------------------------------ árvores de rua (no canteirinho da calçada)
 	_streetTrees(W, rng, st) {
 		if (typeof Trees3D === 'undefined' || !Trees3D.on) return;
-		const P = {}; st.trees = 0;
+		const P = {}; st.trees = 0; this.treeSpots = [];
 		for (const e of RoadPlan.edges) {
 			if (!this._urban(e) || e.layer || e.len < 40) continue;
 			for (const side of [1, -1]) for (let s = e.cutA + 9 + rng() * 6; s < e.len - e.cutB - 7; s += 13 + rng() * 6) {
@@ -405,6 +405,7 @@ const StreetDetail = {
 				if (!this.free(x, z, 1.4) || CityGrid.inCrosswalk(x, z, 3)) continue;
 				this._put(x, z, 1.6);
 				W._canteiro(x, z, 0.75);
+				(this.treeSpots || (this.treeSpots = [])).push([x, z]);
 				Trees3D.add(W._batch('veg_hi', x, z), rng() < 0.8 ? 'oak' : 'ipe', x, 0, z, 0.72 + rng() * 0.22);
 				st.trees++;
 			}
