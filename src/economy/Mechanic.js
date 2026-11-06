@@ -56,7 +56,7 @@ const Mechanic = {
             if (game.policeManager && game.policeManager.playerSeen) return `<b>E</b> pintura express<small>⚠ A polícia está te vendo — despiste antes de fechar a porta</small>`;
             return `<b>E</b> pintura express e placa trocada — ${brl(this.hotPrice(game))}<small>${s.name} · porta fechada, sem perguntas: a polícia perde o carro de vista</small>`;
         }
-        if (this.nearPump(s, car.position.x, car.position.z) && car.tank > 0 && car.fuel < car.tank - 0.5) return '';      // (nas bombas, o E abastece)
+        if (this.nearPump(s, car.position.x, car.position.z) && car.tank > 0 && (car.electric || car.fuel < car.tank - 0.5)) return '';      // (nas bombas, o E abastece — elétrico: o aviso do eletroposto)      // (nas bombas, o E abastece)
         const c = CarCare.cond(car), w = CarCare.worst(c);
         return `<b>E</b> ${s.kind === 'posto' ? 'borracharia e troca de óleo' : s.kind === 'morro' ? 'mecânico do morro (aceita sujo)' : 'oficina: diagnóstico e orçamento'}<small>${s.name} · ${w < 0.4 || car.hpFrac < 0.5 ? '⚠ o carro precisa de conserto' : w < 0.7 ? 'umas peças gastas' : 'carro em ordem'}</small>`;
     },
@@ -223,7 +223,7 @@ const Mechanic = {
         }).join('') + '</div>';
         if (c.leak > 0.0003) h += '<p class="dm-note" style="color:#fda4af">🛢️ Está vazando óleo — só a oficina resolve (dá para ir completando o óleo).</p>';
         const uses = [];
-        if (Items.has(inv, 'galao') && car.tank > 0) uses.push(B('huse', `⛽ Pôr o galão (5 L) — ${Math.round(car.fuel)}/${car.tank} L`, { arg: 'galao' }));
+        if (Items.has(inv, 'galao') && car.tank > 0 && !car.electric) uses.push(B('huse', `⛽ Pôr o galão (5 L) — ${Math.round(car.fuel)}/${car.tank} L`, { arg: 'galao' }));
         if (Items.has(inv, 'booster')) uses.push(B('huse', '🔌 Ligar o auxiliar de partida', { arg: 'booster' }));
         if (uses.length) h += `<div class="dm-btns">${uses.join('')}</div>`;
         const tools = ['macaco', 'ferramentas'].map((t) => `${Items.DEFS[t].emo} ${Items.label(t)}: ${Items.has(inv, t) ? '✔' : '✖'}`).join(' · ');

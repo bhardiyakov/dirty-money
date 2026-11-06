@@ -146,6 +146,10 @@ const Config = {
 
 	// Relógio do jogo: 24h do jogo duram `cycleSeconds` reais. Começa no fim da tarde para
 	// a noite chegar logo (faróis, postes e janelas acesas).
+	// NECESSIDADES (player/Needs.js): fome e cansaço DESLIGADOS — sem barras, sem avisos, sem fôlego/mira piores. Comer ainda cura e
+	// mexe no corpo (Physique: comer demais engorda), mas a saciedade não cai abaixo de 60 sozinha. `?necessidades=1` liga de volta.
+	needs: { on: typeof location !== 'undefined' && /[?&]necessidades=1\b/.test(location.search) },
+
 	time: {
 		cycleSeconds: 720,
 		start: 16.8,
@@ -426,6 +430,10 @@ const Config = {
 		maxSpeed: 26,          // Velocidade máx. à frente (m/s).
 		maxReverse: 9,         // Velocidade máx. de ré (m/s).
 		bikeReverse: 1.4,      // moto e bicicleta "de ré": o piloto anda para trás com os pés no chão (m/s)
+		// Bicicleta do jogador no morro (Vehicle.drive): g = fração da gravidade ao longo da encosta (rolamento e ar descontados); roll =
+		// desaceleração solta no plano (m/s², só o rolamento: ela embala); na subida a máxima cai a 1/(1 + upK × inclinação), no mínimo minUp;
+		// na descida pode passar da máxima até downTop ×.
+		bikeGrade: { g: 0.75, roll: 0.35, upK: 2.2, minUp: 0.35, downTop: 1.6 },
 		hpMul: 2.2,            // Resistência de TODOS os veículos × a do catálogo (spec.hp): lataria mais dura (batidas e tiros).
 		turnRate: 2.0,         // Guinada máx. (rad/s) em velocidade plena.
 		turnSpeedRef: 6,       // Velocidade (m/s) para direção com autoridade total.
@@ -472,8 +480,14 @@ const Config = {
 	respawn: { hoursMin: 12, hoursMax: 14 },
 
 	// Gasolina (só veículos terrestres): burn = litros/s com o acelerador a fundo e o carro em velocidade máxima (0,1 do valor em marcha
-	// lenta); price = $ por litro; fillRate = litros/s ao abastecer (segurar E num posto); warn = fração do tanque que dispara o aviso.
-	fuel: { burn: 0.2, price: 1.6, fillRate: 7, warn: 0.2 },
+	// lenta — ~11 min a fundo num tanque de 45 L); price = $ por litro; fillRate = litros/s ao abastecer (segurar E num posto); warn = fração
+	// do tanque que dispara o aviso. RESERVA: abaixo de `reserve` L o motor não morre — perde força (o acelerador vai a `limp`) e dá para
+	// chegar devagar a um posto; o último `reserve` L não acaba nunca. Carro encontrado na rua tem de start×tanque a cheio.
+	fuel: { burn: 0.07, price: 1.6, fillRate: 7, warn: 0.2, reserve: 1.5, limp: 0.4, start: 0.55 },
+	// CARROS ELÉTRICOS (Vehicle.electric: os modelos em `models`): sem gasolina — a BATERIA (0..100%) gasta como o tanque (`burn` %/s a
+	// fundo) e recarrega PARADO num ELETROPOSTO (WorldBuilder._chargers: até `max` pela cidade, a cada `spacing` u; no mapa/radar 🔌):
+	// `rate` %/s, `price` $ por %. Bomba de gasolina e galão não servem. Na reserva (abaixo de `reserve` %) também perde força, sem parar.
+	charge: { models: ['mini_eletrico'], burn: 0.12, rate: 6, price: 0.9, reserve: 3, max: 16, spacing: 240, radius: 7 },
 
 	// Clima (src/world/Weather.js): estados clear | drizzle (chuva fraca) | rain (chuva forte) | storm (tempestade com raios e trovões).
 	// Chuva NÃO é diária: cada dia do jogo sorteia se chove (rainDayChance); dia seco = céu limpo. Dia chuvoso tem 1–2 episódios

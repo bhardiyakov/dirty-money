@@ -248,7 +248,7 @@ const CarCare = {
     use(game, car, id) {
         const inv = game.inventory;
         if (id === 'galao') {
-            if (!(car.tank > 0)) return 'Esse não usa gasolina';
+            if (!(car.tank > 0) || car.electric) return car.electric ? 'Carro elétrico: recarregue num eletroposto 🔌' : 'Esse não usa gasolina';
             if (car.fuel >= car.tank - 0.5) return 'O tanque já está cheio';
             if (!Items.take(inv, 'galao', 1)) return 'Sem galão';
             car.fuel = Math.min(car.tank, car.fuel + 5);
@@ -314,7 +314,7 @@ const CarCare = {
         if (fuel < 0.15) W.push(['⛽', fuel < 0.05 ? '' : 'y', 'gasolina']);
         const gauge = (ic, f, col, lab) => `<div class="g"><span>${ic}</span><i><s style="width:${Math.round(Math.max(0, Math.min(1, f)) * 100)}%;background:${col}"></s></i><b style="width:40px;text-align:right">${lab}</b></div>`;
         const html = `<div class="sp"><b>${kmh}</b><small>km/h · ${car.spec.model}${car._ccOff ? ' · <span style="color:#fda4af">MOTOR DESLIGADO</span>' : ''}</small></div>
-            ${car.tank > 0 ? gauge('⛽', fuel, fuel < 0.15 ? '#f43f5e' : 'linear-gradient(90deg,#f59e0b,#fbbf24)', Math.round(car.fuel) + ' L') : ''}
+            ${car.tank > 0 ? (car.electric ? gauge('🔋', fuel, fuel < 0.15 ? '#f43f5e' : 'linear-gradient(90deg,#10b981,#4ade80)', Math.round(car.fuel) + '%') : gauge('⛽', fuel, fuel < 0.15 ? '#f43f5e' : 'linear-gradient(90deg,#f59e0b,#fbbf24)', Math.round(car.fuel) + ' L')) : ''}
             ${this.isMoto(car) ? '' : gauge('🌡️', temp, c.temp > 1 ? '#f43f5e' : c.temp > 0.85 ? '#fb923c' : 'linear-gradient(90deg,#3b82f6,#22d3ee)', c.temp > 1 ? 'QUENTE' : Math.round(70 + c.temp * 40) + '°')}
             <div class="wl">${W.length ? W.map((w) => `<em class="${w[1]}" title="${w[2]}">${w[0]}</em>`).join('') : '<span class="ok">sem luzes no painel</span>'}</div>`;
         if (html !== this._h) { this._h = html; el.innerHTML = html; }

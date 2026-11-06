@@ -66,7 +66,7 @@ const Bikes = {
             lamps: { x: 0.0, zF: 1.15, zR: -1.2 },
         },
         bicycle: {
-            name: 'Bicicleta', model: 'Urbana BMX', len: 2.6, wid: 0.7, mass: 90, power: 380, maxSpeed: 8, t100: 18, brakeA: 5, turn: 2.3, cruise: 0.45, weight: 1, hp: 18,
+            name: 'Bicicleta', model: 'Urbana BMX', len: 2.6, wid: 0.7, mass: 90, power: 420, maxSpeed: 12, t100: 12, brakeA: 5, turn: 2.3, cruise: 0.45, weight: 1, hp: 18,
             bike: 'bike', bodyH: 0.5, noCabin: true, fire: false, noExhaust: true, open: true,
             lamps: { x: 0.0, zF: 0.8, zR: -0.85 },
         },

@@ -35,9 +35,12 @@ class Vehicle {
         // (CarDamage cuida dos efeitos) e vira carcaça carbonizada.
         // Combustível (só veículos TERRESTRES a motor; bicicleta e barco não têm tanque). `tank` = litros do tanque (0 = não usa),
         // `fuel` = litros agora. Só gasta quem o jogador dirige (o trânsito e a polícia nunca ficam sem gasolina); o carro roubado
-        // vem com o tanque entre 30% e 100%. Reabastece nos postos (Game._fuelUpdate).
-        this.tank = this.spec.boat || this.spec.bike === 'bike' ? 0 : (Vehicle.TANK[this.spec.id] || this.spec.tank || 45);
-        this.fuel = this.tank * (0.3 + Math.random() * 0.7);
+        // vem com o tanque entre Config.fuel.start e 100%. Reabastece nos postos (Game._fuelUpdate). ELÉTRICO (Config.charge.models): o
+        // "tanque" é a BATERIA em % (tank = 100), que recarrega nos eletropostos (Game._chargeUpdate) — nunca na bomba.
+        this.electric = !!(Config.charge && Config.charge.models.includes(this.spec.id));
+        this.tank = this.spec.boat || this.spec.bike === 'bike' ? 0 : this.electric ? 100 : (Vehicle.TANK[this.spec.id] || this.spec.tank || 45);
+        const st = Config.fuel.start || 0.3;
+        this.fuel = this.tank * (st + Math.random() * (1 - st));
         this.maxHp = Math.round((this.spec.hp || 100) * (Config.vehicle.hpMul || 1));      // (lataria: catálogo × Config.vehicle.hpMul)
         this.hp = this.maxHp;
         this.dent = 0;               // fase de amassado desejada (0..3)
@@ -448,9 +451,17 @@ class Vehicle {
         if (this.hotwire > 0) { this.hotwire -= dt; throttle = 0; }      // ligação direta (carro trancado roubado): motor ainda não pegou
         if (this.controlled && typeof CarCare !== 'undefined' && CarCare.usable(this)) throttle = CarCare.tick(this, throttle, dt);      // motor falhando, superaquecido, bateria, freio, pneus (vehicle/CarCare.js)
         const cc = this.controlled && this.cond;
-        if (this.tank > 0 && this.controlled) {             // gasolina: marcha lenta + acelerador (mais com o carro rápido); tanque vazio = motor sem força
+        if (this.tank > 0 && this.controlled) {             // gasolina/bateria: marcha lenta + acelerador (mais com o carro rápido)
+            // RESERVA (Config.fuel/charge.reserve): abaixo dela o motor perde força (acelerador até `limp`) mas não morre, e o último
+            // pedaço nunca acaba — dá para chegar devagar a um posto ou eletroposto. Tanque zerado (vitrine da concessionária) = sem força.
+            const F = Config.fuel, E = this.electric ? Config.charge : null, res = E ? E.reserve : F.reserve;
             if (this.fuel <= 0) { this.fuel = 0; throttle = 0; }
-            else this.fuel = Math.max(0, this.fuel - (this.spec.bike ? 0.5 : 1) * Config.fuel.burn * (1 - (SkillTree.m.fuel || 0)) * (0.1 + Math.abs(throttle) * (0.45 + 0.55 * Math.min(1, this.speed / this.spec.maxSpeed))) * dt);
+            else {
+                const rate = E ? E.burn : (this.spec.bike ? 0.5 : 1) * F.burn;
+                const use = rate * (1 - (SkillTree.m.fuel || 0)) * (0.1 + Math.abs(throttle) * (0.45 + 0.55 * Math.min(1, this.speed / this.spec.maxSpeed))) * dt;
+                this.fuel = Math.max(Math.min(this.fuel, res * 0.35), this.fuel - use);
+                if (this.fuel < res) throttle = Math.max(-F.limp, Math.min(F.limp, throttle));
+            }
         }
         this.throttle = throttle;                           // (o que chegou ao motor: o som do motor lê — EngineAudio)
         const forward = this._flatAxes();
@@ -477,20 +488,26 @@ class Vehicle {
         // InputManager.sprintTick, posto pelo Game, que também gasta o fôlego) — até a máxima e com mais arrancada. Passou do ritmo
         // da pedalada (soltou o sprint embalado), só rola.
         const pedal = this.controlled && this.spec.bike === 'bike' ? Math.max(0, Math.min(1, this.pedal || 0)) : null;
-        const topP = pedal === null ? top : top * (0.8 + 0.2 * pedal);
+        // BICICLETA NO MORRO (Config.vehicle.bikeGrade): a inclinação do chão na direção dela (MapGeo.slopeAlong, m/m) puxa pela gravidade —
+        // na descida ela embala SOZINHA (sem pedalar) e passa da máxima; na subida perde velocidade e a pedalada rende menos.
+        const BG = Config.vehicle.bikeGrade, gr = pedal !== null && BG && typeof MapGeo !== 'undefined' ? Math.max(-0.7, Math.min(0.7, MapGeo.slopeAlong(this.position.x, this.position.z, forward.x, forward.z))) : 0;
+        let topP = pedal === null ? top : top * (0.8 + 0.2 * pedal);
+        if (gr > 0) topP *= Math.max(BG.minUp, 1 / (1 + BG.upK * gr));
         if (pedal !== null && throttle > 0 && fwd >= topP) throttle = 0;
         const accel = Vehicle.accelOf(this.spec, fwd, topP, throttle, this.braking) * (pedal === null || this.braking ? 1 : 0.85 + 0.9 * pedal) * (this.nosOn && !this.braking ? Vehicle.NOS_ACC : 1);
         this.accelerating = throttle > 0 && fwd >= -0.5 && fwd < this.spec.maxSpeed * 0.7;
         if (throttle !== 0) {
-            fwd += throttle * accel * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1) * (cc ? (this.braking ? this._ccBrake || 1 : this._ccPow || 1) : 1)       // freio na chuva rende menos · freio gasto / motor fraco
+            fwd += throttle * accel * (gr > 0 && throttle > 0 ? 1 / (1 + 2 * gr) : 1) * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1) * (cc ? (this.braking ? this._ccBrake || 1 : this._ccPow || 1) : 1)       // freio na chuva rende menos · freio gasto / motor fraco
                 * (this.braking ? this.tuneBrake || 1 : 1);                                                                                                // freios da tunagem (Tuning)
         } else {
-            // Freio-motor / resistência ao rolamento: desacelera suave até parar.
-            const drop = (this.spec.brakeDrag || Config.vehicle.brakeDrag * (Weather.cur ? Weather.cur.brakeMul : 1)) * dt;
+            // Freio-motor / resistência ao rolamento: desacelera suave até parar. (Bicicleta: só o rolamento — ela embala.)
+            const drop = (pedal !== null && BG ? BG.roll : this.spec.brakeDrag || Config.vehicle.brakeDrag * (Weather.cur ? Weather.cur.brakeMul : 1)) * dt;
             fwd = Math.abs(fwd) <= drop ? 0 : fwd - Math.sign(fwd) * drop;
         }
+        // (gravidade ao longo da encosta; subindo PEDALANDO ela não puxa para trás — a máxima menor já é a subida devagar)
+        if (gr < 0 || (gr > 0 && !(throttle > 0))) fwd -= 9.81 * gr / Math.sqrt(1 + gr * gr) * BG.g * dt;
         // (moto e bicicleta não têm ré: o piloto empurra com os pés — devagar, no passo)
-        fwd = BABYLON.Scalar.Clamp(fwd, -(this.spec.maxReverse || (this.spec.bike ? Config.vehicle.bikeReverse : Config.vehicle.maxReverse)), top);
+        fwd = BABYLON.Scalar.Clamp(fwd, -(this.spec.maxReverse || (this.spec.bike ? Config.vehicle.bikeReverse : Config.vehicle.maxReverse)), gr < 0 ? top * BG.downTop : top);
         this._applyMotion(fwd, lat, steer, dt, vel, forward, right);
     }
 
