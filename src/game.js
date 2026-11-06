@@ -713,7 +713,7 @@ class Game {
 			// (no alto das escadarias do Corcovado: a câmera mira o personagem lá em cima — o ponto do chão que aparece no mesmo lugar da tela)
 			const pl = this.player, up = pl.walk ? pl.deckH / Math.tan(this.camera.tiltDeg * Math.PI / 180) : 0;
 			// (a câmera vai para as costas de quem anda — não mirando: aí o corpo segue a mira, não o caminho)
-			this.camera.follow(up ? (this._camUp || (this._camUp = new BABYLON.Vector3())).set(pl.position.x, 0, pl.position.z + up) : pl.position, dt, null, this.aim && this.aim.active ? null : pl);
+			this.camera.follow(up ? (this._camUp || (this._camUp = new BABYLON.Vector3())).set(pl.position.x, 0, pl.position.z + up) : pl.position, dt, null, this.aim && this.aim.active ? null : pl, true);
 		}
 
 		AudioFX.screech(this.mode === 'car' && this.activeCar ? this.activeCar.slide || 0 : 0);      // pneu cantando na derrapagem (Vehicle.slide)

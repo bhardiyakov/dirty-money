@@ -1,5 +1,6 @@
 // CÂMERA EM 3ª PESSOA (core/camera.js, Config.camera.chase / footFollow): dirigindo, a câmera desce para trás do veículo (mais baixa e
-// perto, numa inclinação em que os personagens 2,5D ainda ficam bem, com a névoa de distância) e volta à alta ao descer; `?persegue=0` = a câmera alta de antes. A pé, andando numa direção
+// perto, numa inclinação em que os personagens 2,5D ainda ficam bem, com a névoa de distância); A PÉ, a mesma perspectiva, mais perto (`?ape=alto` = a alta
+// a pé); `?persegue=0` = a câmera alta de antes em tudo. A pé, andando numa direção
 // ela gira sozinha para as costas do personagem — sem mudar para onde ele anda (a base do andar fica travada enquanto a tecla é a mesma).
 // Os carros perto da câmera ganham a sombra de contato (CarArt3D._ct).
 const { boot, gameWait } = require('./lib.cjs');
@@ -39,11 +40,12 @@ module.exports = {
         c.ok(d.y < 16 && d.v > 0.55 && d.v < 0.95, `mais baixa e perto: a ${d.y.toFixed(1)} m do chão, o carro na metade de baixo da tela (v ${d.v && d.v.toFixed(2)})`);
         c.ok(d.fog < -500, 'névoa de distância (do olho) na perseguição');
         c.ok(d.ct >= 1, `sombra de contato debaixo dos carros perto (${d.ct})`);
-        // desce do carro: a câmera volta para a alta
+        // desce do carro: a pé, a MESMA perspectiva (Config.camera.chase.foot) — atrás do personagem, na mesma inclinação, mais perto
         await page.evaluate(() => { const b = game.activeCar; b.setControlled(false); game.activeCar = null; game.mode = 'player'; game.player.setVisible(true); game.player.teleport(new BABYLON.Vector3(b.position.x + 3, 0, b.position.z)); });
         await gameWait(page, 4, 120000);
-        const f = await cam();
-        c.ok(f.chase === 0 && Math.abs(f.tilt - 56) < 0.5 && f.fog > -500, `a pé, a câmera volta à alta (perseguição ${f.chase.toFixed(2)}, ${f.tilt.toFixed(1)}°)`);
+        const f = await cam(), fp = await page.evaluate(() => { const C = game.camera, uv = C.screenUV(game.player.position.x, game.player.position.z, 1); return { v: uv.v, d: C.dist }; });
+        c.ok(f.chase === 1 && Math.abs(f.tilt - f.want) < 0.5 && f.fog < -500, `a pé, a mesma perspectiva dos veículos (perseguição ${f.chase.toFixed(2)}, ${f.tilt.toFixed(1)}°)`);
+        c.ok(f.y < 16 && fp.v > 0.5 && fp.v < 0.95 && fp.d < d.y / Math.sin(d.tilt * Math.PI / 180) + 1, `a pé, atrás e perto: a ${f.y.toFixed(1)} m do chão, o personagem na metade de baixo da tela (v ${fp.v.toFixed(2)})`);
 
         // a pé: segurar "direita" (D) — ele anda para a direita da tela e a câmera vai para as costas dele, sem ele mudar de rumo
         const s0 = await page.evaluate((L) => {
@@ -70,6 +72,11 @@ module.exports = {
         await gameWait(page, 2, 60000);
         const o = await cam();
         c.ok(o.chase === 0 && Math.abs(o.tilt - 56) < 0.5, `?persegue=0: a câmera alta de antes também dirigindo (${o.tilt.toFixed(1)}°)`);
+        // e a pé também (a perseguição desligada inteira)
+        await page.evaluate(() => { const b = game.activeCar; b.setControlled(false); game.activeCar = null; game.mode = 'player'; game.player.setVisible(true); });
+        await gameWait(page, 2, 60000);
+        const oa = await cam();
+        c.ok(oa.chase === 0, `?persegue=0: a pé, a câmera alta (perseguição ${oa.chase.toFixed(2)})`);
         c.noErrors(errors, 'camera3p ?persegue=0');
         await close();
     },

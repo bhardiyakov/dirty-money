@@ -137,7 +137,8 @@ class CompassCamera {
 			const k = this.chase;
 			if (k > 0) {                                                                // (perseguição: baixa e perto, atrás do veículo — ver o topo)
 				const H = C.chase, ec = this.chaseTilt * Math.PI / 180, s = this._chS, bk = this._chBike;
-				const back = H.back + H.speedBack * s + (bk ? H.bikeBack : 0) + Math.max(0, (this._chLen || 0) - 5.6) * 0.8;
+				const back = this._chFoot ? (H.footBack + H.footRunBack * s) * Math.max(H.footZoomMin, Math.min(H.footZoomMax, this.zoomMul || 1))
+					: H.back + H.speedBack * s + (bk ? H.bikeBack : 0) + Math.max(0, (this._chLen || 0) - 5.6) * 0.8;
 				const hgt = Math.max(back * Math.tan(Math.min(1.45, ec + H.drop * Math.PI / 180)), (this._chRoof || 0) + 1.5) * this.bounceMul;
 				const Dc = hgt / Math.sin(ec), fc = (H.fov + H.speedFov * s) * Math.PI / 180;
 				// até onde se vê o chão (m à frente do centro da tela): o raio do alto da tela, limitado pela névoa — a área que entra no recorte
@@ -263,12 +264,19 @@ class CompassCamera {
 	}
 
 	// Acompanha o alvo (suavização independente de framerate; alta = colada). `vehicle`: dirigindo — modo bússola (ver o topo).
-	follow(targetPos, dt, vehicle = null, walker = null) {
+	follow(targetPos, dt, vehicle = null, walker = null, onFoot = false) {
 		const C = Config.camera, wrap = CompassCamera.wrap;
 		let goalYaw = 0, goalLead = 0;
-		// Perseguição: dirigindo (carro, moto, barco), com a câmera em perspectiva, ela desce para trás do veículo; a pé (ou num
-		// interior) volta para a alta. A velocidade (suavizada) recua a câmera e abre o campo de visão.
-		const H = C.chase, chGoal = vehicle && C.carCompass && H.on && this.persp ? 1 : 0;
+		// Perseguição: dirigindo (carro, moto, barco) e A PÉ (H.foot), com a câmera em perspectiva, ela desce para trás de quem anda ou
+		// dirige; num interior volta para a alta. A velocidade (suavizada) recua a câmera e abre o campo de visão.
+		const H = C.chase, foot = !vehicle && onFoot && H.foot && !this.flat;
+		const chGoal = (vehicle || foot) && C.carCompass && H.on && this.persp ? 1 : 0;
+		if (foot) {
+			const wv = walker && walker.velocity, ws = wv ? Math.hypot(wv.x, wv.z) : 0;
+			this._chS += (Math.min(1, ws / H.footRef) - this._chS) * (1 - Math.exp(-1.5 * dt));
+			if (!this._chFoot) this._chS = 0;
+			this._chFoot = true; this._chBike = false; this._chRoof = H.footRoof; this._chLen = 0;
+		} else if (vehicle) this._chFoot = false;
 		if (vehicle) {
 			const sp = Math.min(1, Math.max(0, vehicle.speed || 0) / C.speedRef);
 			this._chS += (sp - this._chS) * (1 - Math.exp(-1.5 * dt));
@@ -276,7 +284,7 @@ class CompassCamera {
 			const G = vehicle.visual && vehicle.visual.lampGeom;                     // (van, ônibus, caminhão: a câmera sobe e recua junto)
 			this._chRoof = G && G.roof ? G.roof : 1.9; this._chLen = vehicle.visual && vehicle.visual.hl ? vehicle.visual.hl * 2 : 5.5;
 		}
-		if (this.chase !== chGoal || (this.chase > 0 && vehicle)) {
+		if (this.chase !== chGoal || (this.chase > 0 && (vehicle || foot))) {
 			const was = this.chase >= 0.5;
 			this.chase += (chGoal - this.chase) * (1 - Math.exp(-H.lerp * dt));
 			if (Math.abs(chGoal - this.chase) < 0.004) this.chase = chGoal;
@@ -314,11 +322,12 @@ class CompassCamera {
 			// mais rápido quanto mais rápido ele anda, e nunca logo depois de o jogador girar a câmera com a mão (lookHold).
 			this._lookIdle = this.lookHeld ? 0 : this._lookIdle + dt;
 			const wv = walker && walker.velocity, ws = wv ? Math.hypot(wv.x, wv.z) : 0;
-			if (C.footFollow > 0 && !this.flat && ws > 1.2 && this._lookIdle > C.lookHold) {
+			const ff = C.footFollow > 0 ? C.footFollow + (C.footFollowChase - C.footFollow) * this.chase : 0, fd = C.footDelay + (C.footDelayChase - C.footDelay) * this.chase;
+			if (ff > 0 && !this.flat && ws > 1.2 && this._lookIdle > C.lookHold) {
 				const off = wrap(Math.atan2(wv.x, wv.z) - this.userYaw);
 				if (Math.abs(off) > 0.12) this._footHold += dt;                         // (começa longe; depois de começar, vai até alinhar)
 				else if (Math.abs(off) < 0.02) this._footHold = 0;
-				if (this._footHold > C.footDelay) this.userYaw = wrap(this.userYaw + off * (1 - Math.exp(-C.footFollow * Math.min(1, ws / C.footYawSpeed) * dt)));
+				if (this._footHold > fd) this.userYaw = wrap(this.userYaw + off * (1 - Math.exp(-ff * Math.min(1, ws / C.footYawSpeed) * dt)));
 			} else this._footHold = 0;
 			goalYaw = this.flat ? 0 : this.userYaw;
 		}
@@ -334,7 +343,7 @@ class CompassCamera {
 		// Adianto (fração da meia-altura): para a frente do VEÍCULO, e some conforme o jogador olha em volta — o giro é em torno do
 		// veículo. (Ia para o "cima" da tela: girando a câmera dirigindo, o carro descrevia um arco de ~8 m pela tela e ia parar na borda.)
 		const la = vehicle && this._carVeh ? this._carYaw : this.yaw, lk = vehicle && this._carVeh ? Math.max(0, Math.cos(this.lookYaw)) : 1;
-		const sy = Math.sin(la), cy = Math.cos(la), L = (this.lead * this.view * (1 - this.chase) + (vehicle ? this._chLead * this.chase : 0)) * lk;
+		const sy = Math.sin(la), cy = Math.cos(la), L = (this.lead * this.view * (1 - this.chase) + (vehicle || foot ? this._chLead * this.chase : 0)) * lk;
 		if (!this.tilted) this.camera.upVector.set(Math.sin(this.yaw + this.roll), 0, Math.cos(this.yaw + this.roll));
 		const t = 1 - Math.exp(-C.followLerp * dt);
 		this.target.x += (targetPos.x + sy * L - this.target.x) * t;
@@ -424,8 +433,9 @@ class CompassCamera {
 	// o chão até a névoa inteira deixaria as sombras borradas. Devolve { focus, ground } para GameEngine.update.
 	shadowWindow(vehicle) {
 		const g = this.groundHalf(), k = this.chase;
-		if (!(k > 0) || !vehicle) return { focus: this.target, ground: g };
-		const H = Config.camera.chase, f = vehicle.fwdToRef(this._sf || (this._sf = new BABYLON.Vector3())), p = vehicle.position;
+		if (!(k > 0)) return { focus: this.target, ground: g };
+		const H = Config.camera.chase, f = this._sf || (this._sf = new BABYLON.Vector3()), p = vehicle ? vehicle.position : this.target;
+		if (vehicle) vehicle.fwdToRef(f); else f.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));      // (a pé: à frente da câmera)
 		const o = this._sw || (this._sw = { focus: new BABYLON.Vector3(), ground: { x: 0, z: 0 } }), a = H.shadowAhead * k;
 		o.focus.set(p.x + f.x * a + (this.target.x - p.x) * (1 - k), this.lift || 0, p.z + f.z * a + (this.target.z - p.z) * (1 - k));
 		o.ground.x = g.x + (H.shadowHalf - g.x) * k; o.ground.z = g.z + (H.shadowHalf - g.z) * k;
