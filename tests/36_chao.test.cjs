@@ -12,7 +12,7 @@ module.exports = {
         };
         const a = await boot(ctx);
         const d = await a.page.evaluate(look);
-        c.ok(d.on && d.mixed && d.relief, 'padrão: pintado + grão das fotos + relevo');
+        c.ok(d.on && !d.mixed && d.relief, 'padrão: chão realista — a foto como base + relevo (`?chao=misto` = o pintado com o grão)');
         c.ok(d.photos >= 9 && d.nors >= 9, `fotos CC0 carregadas (${d.photos} cores, ${d.nors} relevos)`);
         c.ok(d.bump.length === d.total && d.ready.length === d.total, `relevo nos materiais do chão (${d.bump.join(', ')})`);
         c.noErrors(a.errors, 'chão com fotos');

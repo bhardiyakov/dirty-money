@@ -68,7 +68,7 @@ const Zones = {
 		this.hz = g.z + this.margin;
 		this.hx = g.x + this.margin;
 		if (cam.yaw) this.hx = this.hz = Math.hypot(g.x, g.z) + this.margin;      // câmera girada (bússola): o quadrado que cobre a tela em qualquer ângulo
-		const gm = cam.groundHalf(Config.camera.maxView, Math.max(1, asp)), hd = Math.hypot(gm.x, gm.z);      // meia-diagonal da tela no zoom máximo
+		const gm = cam.groundHalf(Config.camera.maxView, Math.max(1, asp), 0), hd = Math.hypot(gm.x, gm.z);      // meia-diagonal da tela no zoom máximo (da câmera alta: a bolha não encolhe na de perseguição — a pé, o alcance dela é curto)
 		this.sr = hd + 6; this.ar = 2 * hd;
 		if (cam.chase > 0) { const F = Config.camera.chase.far; this.sr = Math.max(this.sr, F + 6); this.ar = Math.max(this.ar, F + 70); }      // (perseguição: o trânsito nasce além da névoa)
 		this.frame++;
