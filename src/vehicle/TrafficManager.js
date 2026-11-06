@@ -214,6 +214,8 @@ class TrafficManager {
         }
         if (game.npcManager) for (const npc of game.npcManager.npcs) if (npc.alive) ped(npc);
         if (game.mode !== 'car') ped(game.player);
+        // obras na pista (RoadWorks): a faixa fechada é um "carro parado" comprido — a IA reduz, buzina e passa pela faixa ao lado
+        if (typeof RoadWorks !== 'undefined') for (const w of RoadWorks.list) if (w.obs) { const o = this._push(n, 'car', w.obs.x, w.obs.z, 0, 0, w, w.obs.half, w.obs.hw); out[n++] = o; G.insert(o, o.x, o.z); }
         out.length = n;
     }
 

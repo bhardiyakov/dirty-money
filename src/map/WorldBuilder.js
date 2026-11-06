@@ -60,8 +60,10 @@ class WorldBuilder {
         this._shopGlow();
         this._helipads();
         this._props();
+        StreetDetail.build(this);             // asfalto gasto, pintura do chão, placas, lombadas, pontos de ônibus, defensas, fiação (world/StreetDetail.js)
         this._flush();
         HouseView.build(this);                // a safe house do protagonista (paredes, telhado, porta e o corte do interior)
+        this.street.addSigns(StreetDetail.signs);
         this.street.build();
         // Terreno do mundo grande: pedaços construídos ao redor do foco (já os do ponto de partida, sem pop-in).
         this.terrain = new TerrainBuilder(this);
@@ -107,6 +109,8 @@ class WorldBuilder {
         M.earth = this._mat('earth', T.earth);
         M.plaza = this._mat('plaza', T.plaza);
         M.curb = this._mat('curb', null, { color: '#a4a9b0' });
+        M.decal = RoadArt.decals(this.scene);          // marcas no asfalto: rachaduras, buracos, tinta gasta (StreetDetail)
+        M.signs = RoadArt.signs(this.scene);           // faces das placas de trânsito e de nome de rua
         M.solid = this._mat('solid', null);            // peças de cor sólida (vertex colors).
         M.solid.diffuseColor = BABYLON.Color3.White();
         M.hide = HideSprites.create(this.scene);       // topo dos esconderijos (caçamba, caixotes, latão)
@@ -1675,6 +1679,8 @@ class WorldBuilder {
             if (key === 'curb') return M.curb;
             if (key === 'trim') return M.solid;
             if (key === 'hide_top') return M.hide;
+            if (key === 'decal') return M.decal;
+            if (key === 'signs') return M.signs;
             if (key === 'machtop' || key === 'machside') return M[key];
             if (key.startsWith('open_') || key.startsWith('yard_')) return M[key.slice(key.indexOf('_') + 1)];
             if (key.startsWith('blend_')) return M[key];

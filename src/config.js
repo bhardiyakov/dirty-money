@@ -510,6 +510,9 @@ const Config = {
 	// CARROS ELÉTRICOS (Vehicle.electric: os modelos em `models`): sem gasolina — a BATERIA (0..100%) gasta como o tanque (`burn` %/s a
 	// fundo) e recarrega PARADO num ELETROPOSTO (WorldBuilder._chargers: até `max` pela cidade, a cada `spacing` u; no mapa/radar 🔌):
 	// `rate` %/s, `price` $ por %. Bomba de gasolina e galão não servem. Na reserva (abaixo de `reserve` %) também perde força, sem parar.
+	// OBRAS NA PISTA (world/RoadWorks.js): até `max` ao mesmo tempo, uma nova a cada ~`every` s, entre `near` e `far` u do jogador (fora da
+	// tela), durando `life` s. `?obras=0` desliga.
+	roadworks: { on: !/obras=0/.test(typeof location !== 'undefined' ? location.search : ''), max: 3, every: 55, near: 110, far: 280, life: [220, 480] },
 	charge: { models: ['mini_eletrico'], burn: 0.12, rate: 6, price: 0.9, reserve: 3, max: 16, spacing: 240, radius: 7 },
 
 	// Clima (src/world/Weather.js): estados clear | drizzle (chuva fraca) | rain (chuva forte) | storm (tempestade com raios e trovões).

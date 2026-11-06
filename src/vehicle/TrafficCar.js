@@ -140,6 +140,12 @@ class TrafficCar extends Vehicle {
         let vt = this.cruise * (this.ignoreSignals ? 1 : (this._clsMul || 1) * (Weather.cur ? Weather.cur.trafficMul : 1));       // chuva: motoristas mais cautelosos (viatura em perseguição ignora)
         let reason = '';
         let signal = 0;
+        // QUEBRA-MOLAS à frente (StreetDetail): reduz para passar devagar (viatura em perseguição não liga)
+        if (!this.ignoreSignals && typeof StreetDetail !== 'undefined' && StreetDetail.bumps.length) {
+            const fb = this._fb || (this._fb = new BABYLON.Vector3()); this.fwdToRef(fb);
+            const db = StreetDetail.bumpAhead(p.x, p.z, fb.x, fb.z, 24);
+            if (db >= 0) { const lim = 3.2 + Math.max(0, db - this.halfLen - 1) * 0.6; if (lim < vt) { vt = lim; reason = 'lombada'; } }
+        }
 
         let jn = null;                                                  // próximo cruzamento ainda não deixado para trás
         this._inRound = false;
