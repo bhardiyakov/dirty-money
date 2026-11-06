@@ -21,7 +21,7 @@ const RoadPlan = {
         city:   { w: 10, kind: 'urban',  surface: 'asphalt', label: 'Rua' },
         isl:    { w: 10, kind: 'urban',  surface: 'asphalt', label: 'Rua' },
         ave:    { w: 16, kind: 'urban',  surface: 'asphalt', label: 'Avenida', median: 3 },
-        fav:    { w: 7,  kind: 'favela', surface: 'concrete', label: 'Rua' },      // (cimentada: nada de asfalto no morro)
+        fav:    { w: 7,  kind: 'favela', surface: 'earth', label: 'Rua' },         // (de terra batida: nada de asfalto no morro)
         hwy:    { w: 12, kind: 'rural',  surface: 'asphalt', label: 'Rodovia' },
         dirt:   { w: 8,  kind: 'rural',  surface: 'dirt',    label: 'Estrada de terra' },
         trail:  { w: 5,  kind: 'rural',  surface: 'earth',   label: 'Caminho' },

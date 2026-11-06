@@ -228,7 +228,9 @@ class TerrainBuilder {
     // Vegetação e rochas da célula: tabelas por bioma [tipo, probabilidade, escala mín, escala máx].
     static get VEG() {
         const B = WorldMap.B, T = typeof SpriteHD !== 'undefined' && SpriteHD.on;      // (tufos de grama: só com os sprites em alta definição)
-        const tufts = (p) => T ? [['tuft', p, 0.8, 1.3], ['tuft', p * 0.8, 0.7, 1.2], ['tuft', p * 0.6, 0.8, 1.3]] : [];
+        // (com o chão de FOTO a grama já está no chão: os tufos desenhados ficam raros — só um ou outro capim mais alto)
+        const real = typeof GroundPhotos !== 'undefined' && GroundPhotos.on && !GroundPhotos.mixed, q = real ? 0.12 : 1;
+        const tufts = (p) => T ? [['tuft', p * q, 0.8, 1.3], ['tuft', p * 0.8 * q, 0.7, 1.2], ['tuft', p * 0.6 * q, 0.8, 1.3]] : [];
         const V = {
             [B.FOREST]: [['pine', 0.7, 0.95, 1.3], ['oak', 0.55, 0.95, 1.3], ['bush', 0.45, 0.8, 1.2], ['fern', 0.3, 0.8, 1.3], ['araucaria', 0.08, 1.0, 1.35]],
             [B.GRASS]: [['oak', 0.1, 0.9, 1.25], ['bush', 0.14, 0.8, 1.1], ['flowers', 0.05, 0.8, 1.2], ['ipe', 0.02, 0.95, 1.3]],
@@ -242,6 +244,14 @@ class TerrainBuilder {
         };
         // (no fim de cada tabela: os sorteios das plantas que já existiam continuam os mesmos)
         for (const [b, p] of [[B.GRASS, 0.75], [B.FOREST, 0.35], [B.SCRUB, 0.5], [B.FARM, 0.2]]) if (V[b]) V[b] = V[b].concat(tufts(p));
+        // espécies só em 3D (Trees3D): cacto no cerrado e nas pedras, bambuzal no brejo e na beira da mata, costela-de-adão no sub-bosque,
+        // espada-de-são-jorge e folhagem na favela
+        if (typeof Trees3D !== 'undefined' && Trees3D.on) {
+            const add = (b, rows) => { if (V[b]) V[b] = V[b].concat(rows); };
+            add(B.SCRUB, [['cactus', 0.03, 0.7, 1.2]]); add(B.ROCK, [['cactus', 0.02, 0.7, 1.1]]);
+            add(B.SWAMP, [['bamboo', 0.05, 0.8, 1.2]]); add(B.FOREST, [['monstera', 0.07, 0.8, 1.3], ['bamboo', 0.012, 0.8, 1.2]]); add(B.GRASS, [['bamboo', 0.004, 0.8, 1.2]]);
+            add(B.FAVELA, [['sansevieria', 0.06, 0.8, 1.3], ['monstera', 0.03, 0.8, 1.2]]);
+        }
         return V;
     }
 
@@ -268,6 +278,7 @@ class TerrainBuilder {
         if (typeof Speedway !== 'undefined' && Speedway.covers(cx, cz, 4)) return;                          // (o autódromo: sem mato na pista)
         if (typeof Landmarks !== 'undefined' && Landmarks.covers(cx, cz, 4)) return;                        // (os marcos)
         if (typeof Lagoa !== 'undefined' && Lagoa.covers(cx, cz, 4)) return;                                  // (a Lagoa: orla e prédios)
+        if (typeof Plantations !== 'undefined' && Plantations.covers(cx, cz, 2)) return;                      // (o eucaliptal: só eucalipto)
         const c = this.W.cell, wb = this.wb;
         for (let t = 0; t < table.length; t++) {
             const [kind, p, s0, s1] = table[t];
@@ -278,6 +289,7 @@ class TerrainBuilder {
             const x = cx + (Pixel.hash(gi, gj, 310 + t) - 0.5) * c * 0.95, z = cz + (Pixel.hash(gi, gj, 320 + t) - 0.5) * c * 0.95;
             const s = s0 + (s1 - s0) * Pixel.hash(gi, gj, 330 + t);
             if (RoadPlan.onPavement(x, z, (PropSprites.CROWN[kind] || 1.5) * s)) continue;           // nada de mato na pista (rodovia, estrada, ponte, viaduto)
+            if (!PropSprites.HEIGHT[kind]) { Trees3D.add(PropSprites.HEIGHT[kind] === undefined && (Trees3D.TALL[kind] || 2) > 2 ? hi : lo, kind, x, 0, z, s); continue; }      // (espécie só 3D: sem desenho no atlas)
             const fr = wb.props.pick(kind, Pixel.hash(gi, gj, 340 + t));
             const high = PropSprites.HEIGHT[kind] > 2;
             wb._spriteQuad(high ? hi : lo, fr.index, fr.row, x, z, base * s, PropSprites.HEIGHT[kind], PropSprites.SWAY[kind] || 0);

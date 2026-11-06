@@ -1,10 +1,12 @@
 // ============================================================================
-// StreetProps — mobiliário urbano com FÍSICA: postes de rua.
+// StreetProps — mobiliário urbano com FÍSICA: postes de rua e PLACAS de trânsito.
 //
 //   • POSTES: cada poste é dado (não geometria fixa). Os do mesmo pedaço de 256 u viram UMA malha; quando um quebra, o pedaço é
 //     remontado sem ele. Carro a mais de ~25 km/h que acerta o poste o QUEBRA: ele tomba (animação) na direção da batida, solta
 //     faíscas, e a LUZ APAGA (brilho do cabeçote e poça de luz). O carro leva dano e perde velocidade. O poste caído fica no chão.
-// WorldBuilder cria isto em _streetLamps; Game chama update(dt, carros) todo frame.
+//   • PLACAS (StreetDetail.signs — PARE, velocidade, lombada, curva...): poste fino; qualquer batida a partir de ~15 km/h derruba (tomba
+//     como o poste, sem faíscas), com dano e freada pequenos. Malhas por pedaço: o poste (cor por vértice) e as faces (atlas do RoadArt).
+// WorldBuilder cria isto em _streetLamps (e addSigns); Game chama update(dt, carros) todo frame.
 // ============================================================================
 
 class StreetProps {
@@ -12,7 +14,8 @@ class StreetProps {
         this.w = world;
         this.scene = world.scene;
         this.lamps = lamps;                       // { x, z, hx, hz, alive, key, glow:[a,b] }
-        this.chunks = { l: new Map() };
+        this.chunks = { l: new Map(), s: new Map() };
+        this.signs = [];
         this.grid = new Map();                    // célula de 16 u -> [{ k: 'l', i }]
         this.falling = [];                        // postes tombando / caídos
         this.fallen = [];
@@ -20,6 +23,12 @@ class StreetProps {
         this._index = 0;
         lamps.forEach((l, i) => { l.key = StreetProps.keyOf(l.x, l.z); this._add('l', i, l.x, l.z, l.key); });
     }
+
+    addSigns(list) {
+        const base = this.signs.length;
+        list.forEach((s, i) => { s.key = StreetProps.keyOf(s.x, s.z); this.signs.push(s); this._add('s', base + i, s.x, s.z, s.key); });
+    }
+    _list(k) { return k === 's' ? this.signs : this.lamps; }
 
     static keyOf(x, z) { const C = Config.world.detailChunk; return Math.floor(x / C) + ',' + Math.floor(z / C); }    // (pedaço pequeno: postes são densos em vértices; quebrar um refaz só o pedaço dele)
 
@@ -40,15 +49,24 @@ class StreetProps {
     _rebuild(k, key) {
         const c = this.chunks[k].get(key);
         if (!c) return;
-        if (c.mesh) { if (this.w.shadow && k === 'l') this.w.shadow.removeShadowCaster(c.mesh); c.mesh.dispose(); c.mesh = null; }
-        const b = new MeshBatch(), list = this.lamps;
+        if (c.mesh) { if (this.w.shadow) this.w.shadow.removeShadowCaster(c.mesh); c.mesh.dispose(); c.mesh = null; }
+        if (c.face) { c.face.dispose(); c.face = null; }
+        const b = new MeshBatch(), f = k === 's' ? new MeshBatch() : null, list = this._list(k);
         let n = 0;
         for (const i of c.ids) {
             const it = list[i];
-            if (it.alive) { MeshBatch.anchor = typeof Relief !== 'undefined' && Relief.on ? { h: Relief.at(it.x, it.z) } : null; this._lampGeo(b, it); n++; }      // (relevo: o poste em pé na altura do pé dele)
+            if (!it.alive) continue;
+            MeshBatch.anchor = typeof Relief !== 'undefined' && Relief.on ? { h: Relief.at(it.x, it.z) } : null;      // (relevo: o poste em pé na altura do pé dele)
+            if (k === 's') RoadArt.sign(b, f, it.x, it.z, it.fx, it.fz, it.kind); else this._lampGeo(b, it);
+            n++;
         }
         MeshBatch.anchor = null;
         if (!n) return;
+        if (f) {
+            c.mesh = b.build('signs_' + key, this.scene, this.w.mats.bsolid, { vertexColors: true, receiveShadows: false, alwaysActive: false, relief: true });
+            c.face = f.build('signf_' + key, this.scene, this.w.mats.signs, { receiveShadows: false, alwaysActive: false, relief: true });
+            return;
+        }
         // (material das peças da ponte: com o vão cortado — RoofCut —, o poste em cima dele some junto, em vez de ficar de pé na água)
         c.mesh = b.build('lamps_' + key, this.scene, this.w.mats.bsolid, { vertexColors: true, receiveShadows: false, alwaysActive: false, relief: true });
         if (c.mesh && this.w.shadow && k === 'l') this.w.shadow.addShadowCaster(c.mesh);
@@ -56,7 +74,8 @@ class StreetProps {
 
     build() {
         for (const key of this.chunks.l.keys()) this._rebuild('l', key);
-        console.log(`[RUA] ${this.lamps.length} postes com fisica`);
+        for (const key of this.chunks.s.keys()) this._rebuild('s', key);
+        console.log(`[RUA] ${this.lamps.length} postes e ${this.signs.length} placas com fisica`);
     }
 
     // ----------------------------------------------------------------- quebrar
@@ -87,6 +106,24 @@ class StreetProps {
         this.falling.push({ node, parts, t: 0, ux, uz, ang: 0, w: 0.4, done: false, x: l.x, z: l.z });
     }
 
+    // Placa derrubada: tomba como o poste (pivô no pé), sem faíscas nem luz.
+    breakSign(i, dx, dz) {
+        const s = this.signs[i];
+        if (!s || !s.alive) return;
+        s.alive = false;
+        this._rebuild('s', s.key);
+        if (this.w.game) AudioFX.hit(s.x, s.z);
+        const dl = hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;
+        const node = new BABYLON.TransformNode('sign_fall', this.scene);
+        node.position.set(s.x, typeof Relief !== 'undefined' && Relief.on ? Relief.at(s.x, s.z) : 0, s.z);
+        const fb = new MeshBatch(), ff = new MeshBatch();
+        RoadArt.sign(fb, ff, 0, 0, s.fx, s.fz, s.kind);
+        const pm = fb.build('sign_fall_mesh', this.scene, this.w.mats.bsolid, { vertexColors: true, receiveShadows: false, alwaysActive: true });
+        const fm = ff.build('sign_fall_face', this.scene, this.w.mats.signs, { receiveShadows: false, alwaysActive: true });
+        for (const m of [pm, fm]) { m.unfreezeWorldMatrix(); m.parent = node; }
+        this.falling.push({ node, parts: [pm, fm], t: 0, ux, uz, ang: 0, w: 1.2, done: false, x: s.x, z: s.z, light: true });
+    }
+
     // ------------------------------------------------------------------ quadro
     // cars: veículos terrestres com { position, halfLen, halfW, speed, body, phys }.
     update(dt, cars, game) {
@@ -105,14 +142,20 @@ class StreetProps {
                     const g = this.grid.get((gx + 4096) * 8192 + (gz + 4096));
                     if (!g) continue;
                     for (const e of g) {
-                        const it = this.lamps[e.i];
+                        const sign = e.k === 's', it = sign ? this.signs[e.i] : this.lamps[e.i];
                         if (!it.alive) continue;
                         const dx = it.x - p.x, dz = it.z - p.z;
                         const lz = dx * fx + dz * fz, lx = dx * rx + dz * rz;
-                        const rad = 0.18;
+                        const rad = sign ? 0.1 : 0.18;
                         if (Math.abs(lz) > car.halfLen + rad || Math.abs(lx) > car.halfW + rad) continue;
                         const v = car.phys ? car.phys.getLinearVelocity() : null, vl = v ? hypot(v.x, v.z) : 0;
                         const vx = v && vl > 0.1 ? v.x : fx * sp, vz = v && vl > 0.1 ? v.z : fz * sp;
+                        if (sign) {                                        // placa: poste fino, cai com qualquer batida
+                            this.breakSign(e.i, vx, vz);
+                            car.takeDamage && car.takeDamage(Math.min(6, 1 + sp * 0.25), car.controlled ? 'player' : 'env');
+                            if (v) car.phys.setLinearVelocity(new BABYLON.Vector3(v.x * 0.93, v.y, v.z * 0.93));
+                            continue;
+                        }
                         if (sp < 7) continue;                              // devagar: o poste aguenta (o carro só raspa)
                         this.breakLamp(e.i, vx, vz);
                         car.takeDamage && car.takeDamage(Math.min(30, 6 + sp * 1.1), car.controlled ? 'player' : 'env');
@@ -131,7 +174,8 @@ class StreetProps {
             if (f.ang >= Math.PI / 2 - 0.04) {
                 if (!f.bounced) {                                               // batida no chão: quica um pouco
                     f.bounced = true; f.ang = Math.PI / 2 - 0.04; f.w = -f.w * 0.28;
-                    if (game) { AudioFX.crash(f.x + f.ux * 3, f.z + f.uz * 3, 0.6); for (let k = 0; k < 4; k++) game.combat.spark(f.x + f.ux * (2 + Math.random() * 3), 0.3, f.z + f.uz * (2 + Math.random() * 3), [1, 0.8, 0.4]); }
+                    if (game && f.light) AudioFX.hit(f.x, f.z);
+                    else if (game) { AudioFX.crash(f.x + f.ux * 3, f.z + f.uz * 3, 0.6); for (let k = 0; k < 4; k++) game.combat.spark(f.x + f.ux * (2 + Math.random() * 3), 0.3, f.z + f.uz * (2 + Math.random() * 3), [1, 0.8, 0.4]); }
                 } else { f.ang = Math.PI / 2 - 0.04; f.done = true; this.fallen.push(f); if (this.fallen.length > 80) this._dropFallen(); }
             }
             // eixo = perpendicular à direção da queda: o topo vai para (ux, uz)

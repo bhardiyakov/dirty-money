@@ -12,7 +12,7 @@
 
 Object.assign(CityHD, {
     // Grade de janelas por tipo de fachada: [colunas, andares] no ladrilho. Cada janela fica dentro de UMA célula.
-    GRID: { office: [4, 2], brick: [4, 2], house: [4, 2], timber: [4, 2], stone: [2, 2], metal: [2, 2], concrete: [2, 2], resid: [2, 2] },
+    GRID: { office: [4, 2], brick: [4, 2], house: [4, 2], timber: [4, 2], stone: [2, 2], metal: [2, 2], concrete: [2, 2], resid: [2, 2], fav: [2, 2] },
     // Quem mora atrás: 'office' (escritório e galpão: acende cedo, apaga depois do expediente) ou 'home' (casa: noite adentro).
     OCC: { office: 'office', metal: 'office' },
 
@@ -197,6 +197,98 @@ Object.assign(CityTile.prototype, {
         }
         // linha do andar (cinta de concreto)
         for (const fy of [57, 117]) { g.fillStyle = this.lin(0, fy, 0, fy + 3, [[0, HDK.t(trim, 0.9)], [1, HDK.t(trim, 0.6)]]); g.fillRect(0, fy, 120, 3); this.line(0, fy + 0.3, 120, fy + 0.3, 'rgba(255,255,255,0.35)', 0.4); }
+    },
+
+    // ---------------------------------------------------------------- BARRACO DA FAVELA (referência: a folha da favela)
+    // Tijolo baiano laranja aparente (junta grossa, argamassa escorrida), pilares e vigas de concreto cru e, por cima, o REBOCO pintado
+    // (st.plaster) cobrindo parte da parede (st.cover; st.half: só a metade de baixo de cada andar) — a borda descascada e buracos
+    // mostrando o tijolo. Janelas pequenas, cada uma de um jeito: grade de ferro, vitrô basculante, janela de madeira fechada ou o vão
+    // tapado com tábua. Umidade, ferrugem escorrendo, o relógio de luz e, às vezes, pichação.
+    _fac_fav(st) {
+        const g = this.g, seed = this.seed, cols = (st.brick || ['#e0773a', '#ea8645', '#d06a30', '#f29552']).map(HDK.C), mortar = HDK.C(st.mortar || '#a8927a');
+        const bricks = () => {
+            g.fillStyle = HDK.css(mortar); g.fillRect(0, 0, 120, 120);
+            for (let row = 0; row < 24; row++) {
+                const off = (row % 2) * 5, y = row * 5;
+                for (let k = -1; k < 13; k++) {
+                    const x = k * 10 - off, base = HDK.t(Pixel.pick(cols, Pixel.hash(k + (row % 2) * 40, row, seed)), 0.88 + Pixel.hash(k, row, seed + 3) * 0.22);
+                    this.wrap(x, y, x + 10, y + 5, () => this.fillRR(x + 0.55, y + 0.6, 8.9, 3.85, 0.35, this.lin(0, y, 0, y + 4.5, [[0, HDK.mix(base, [255, 222, 186], 0.15)], [0.4, base], [1, HDK.t(base, 0.78)]])));
+                }
+            }
+            for (let k = 0; k < 34; k++) {                                         // argamassa escorrida das juntas
+                const x = this.r(0, 120), y = Math.floor(this.r(0, 24)) * 5 + 4.3, w = this.r(1.5, 4.5), h = this.r(0.8, 2.4);
+                this.wrap(x - 1, y, x + w + 1, y + h, () => this.fillRR(x, y, w, h, 0.6, HDK.css(HDK.t(mortar, 1.05), 0.92)));
+            }
+        };
+        bricks();
+        this.grain(0.36, seed, 0.03);
+        this.clouds(0.22, 16, seed + 1, 'soft-light', 2);
+        // pilares (x = 0 e 60) e vigas (no pé de cada andar) de concreto cru
+        const conc = HDK.C('#a6a198');
+        if (!st.rural) for (const px of [0, 60]) this.wrap(px - 2.4, 0, px + 2.4, 120, () => { g.fillStyle = this.lin(px - 2.4, 0, px + 2.4, 0, [[0, HDK.t(conc, 0.8)], [0.5, conc], [1, HDK.t(conc, 0.86)]]); g.fillRect(px - 2.4, 0, 4.8, 120); });
+        if (!st.rural) for (const fy of [56, 116]) { g.fillStyle = this.lin(0, fy, 0, fy + 4, [[0, HDK.t(conc, 1.04)], [1, HDK.t(conc, 0.72)]]); g.fillRect(0, fy, 120, 4); }
+        // reboco pintado: uma máscara de ruído periódico (o ladrilho repete sem emenda); a borda é a espessura (sombra) e os buracos
+        if (st.plaster) {
+            const P = HDK.C(st.plaster), cover = st.cover == null ? 0.75 : st.cover, cut = 1 - cover;
+            const mask = (u, v) => {
+                let n = (CityHD.fbm(u, v, 5, 5, seed + 21, 3) - 0.2) / 0.6;
+                if (st.half) { const fv = (v * 2) % 1; n = n * 0.45 + fv * 0.75 - 0.1; }
+                return n;
+            };
+            this.field(0.5, (u, v) => { const n = mask(u, v), a = Math.max(0, Math.min(1, (n - cut + 0.035) * 30)); return [70, 58, 48, a * 0.85]; });          // a borda grossa
+            this.field(0.5, (u, v) => {
+                const n = mask(u, v), a = Math.max(0, Math.min(1, (n - cut) * 30)), t = 0.9 + CityHD.fbm(u, v, 9, 9, seed + 33, 2) * 0.2;
+                return [Math.min(255, P[0] * t), Math.min(255, P[1] * t), Math.min(255, P[2] * t), a];
+            });
+            this.grain(0.3, seed + 5, 0.01);
+            // descascado: pele de reboco solta (manchas claras) e lascas
+            for (let k = 0; k < 7; k++) this.stain(this.r(0, 120), this.r(0, 120), this.r(2, 6), this.r(1.5, 4), HDK.mix(P, [255, 255, 255], 0.35), 0.18);
+        }
+        // umidade no pé de cada andar e ferrugem/sujeira escorrendo
+        for (const fy of [56, 116]) { g.fillStyle = this.lin(0, fy - 12, 0, fy, [[0, [50, 40, 30], 0], [1, [50, 40, 30], 0.28]]); g.fillRect(0, fy - 12, 120, 12); }
+        for (let k = 0; k < 5; k++) this.stain(this.r(0, 120), this.r(0, 120), this.r(3, 8), this.r(4, 10), [60, 48, 38], 0.14);
+        // janelas: uma por baia e andar, cada uma de um tipo
+        const frame = HDK.C(st.frame || '#5a5a5e');
+        for (let cy = 0; cy < 2; cy++) for (let cx = 0; cx < 2; cx++) {
+            const kind = st.rural ? [2, 2, 0, 2][Math.floor(Pixel.hash(cx + 3, cy + 7, seed) * 4)] : Math.floor(Pixel.hash(cx + 3, cy + 7, seed) * 4), w = kind === 2 ? 15 : 13, h = kind === 2 ? 17 : 14;
+            const x = cx * 60 + 30 - w / 2 + Math.round((Pixel.hash(cx, cy, seed + 11) - 0.5) * 16), y = cy * 60 + 18;
+            this.soft(x - 1.5, y - 1, w + 3, h + 3, 0.4, 1.4, 0.4);
+            if (kind === 3) {                                                       // vão tapado com tábua (sem vidro)
+                g.fillStyle = '#1a1714'; g.fillRect(x, y, w, h);
+                for (let j = 0; j < 3; j++) { const yy = y + 1 + j * 4.6; this.fillRR(x - 1, yy, w + 2, 3.6, 0.3, this.lin(0, yy, 0, yy + 3.6, [[0, [150, 112, 72]], [1, [96, 70, 44]]])); }
+                continue;
+            }
+            this.fillRR(x - 1.3, y - 1.3, w + 2.6, h + 2.6, 0.3, HDK.css(kind === 2 && !st.rural ? [118, 82, 50] : frame));
+            this._glass(x, y, w, h, '#22303e', '#56718a', { step: 12 });
+            this._room(x, y, w, h, 'home');
+            if (kind === 0) {                                                       // grade de ferro
+                for (let gx = x + 2; gx < x + w; gx += 2.6) this.line(gx, y, gx, y + h, 'rgba(32,32,34,0.95)', 0.7);
+                this.line(x, y + h / 2, x + w, y + h / 2, 'rgba(32,32,34,0.95)', 0.7);
+            } else if (kind === 1) {                                                // vitrô basculante: quadradinhos
+                for (let gx = x; gx <= x + w; gx += w / 3) this.line(gx, y, gx, y + h, HDK.css(frame), 0.8);
+                for (let gy = y; gy <= y + h; gy += h / 4) this.line(x, gy, x + w, gy, HDK.css(frame), 0.8);
+            } else {                                                                // janela de madeira: duas folhas, uma fechada
+                const sh = st.rural ? frame : [146, 102, 60];
+                this.fillRR(x + w / 2, y, w / 2, h, 0.2, this.lin(x + w / 2, 0, x + w, 0, [[0, sh], [1, HDK.t(sh, 0.75)]]));
+                for (let gy = y + 2; gy < y + h; gy += 2.2) this.line(x + w / 2 + 0.6, gy, x + w - 0.6, gy, 'rgba(60,40,24,0.7)', 0.4);
+            }
+            this._sill(x - 2, y + h + 1, w + 4, HDK.C('#a29c92'));
+            this._drip(x - 1, y + h + 3, w + 2, 9);
+        }
+        // relógio de luz (caixa cinza com visor) e o fio subindo — o "gato" chega aqui
+        if (Pixel.hash(1, 2, seed) < 0.7) {
+            const x = 8 + Pixel.hash(3, 4, seed) * 40, y = 96;
+            this.soft(x, y, 7, 9, 0.35, 1, 0.5); this.fillRR(x, y, 7, 9, 0.6, '#9aa0a4'); this.fillRR(x + 1.2, y + 1.5, 4.6, 3, 0.3, '#2c3a40');
+            this.line(x + 3.5, y, x + 3.5 + this.r(-6, 6), 60, 'rgba(18,18,20,0.9)', 0.6);
+        }
+        // pichação
+        if (!st.rural && (st.tag || Pixel.hash(5, 6, seed) < 0.45)) {
+            const col = Pixel.pick(['rgba(20,20,26,0.85)', 'rgba(30,60,150,0.85)', 'rgba(150,30,40,0.8)'], Pixel.hash(7, 8, seed)), x0 = this.r(4, 70), y0 = this.r(70, 100);
+            g.save(); g.strokeStyle = col; g.lineWidth = 1.1; g.lineCap = 'round'; g.beginPath();
+            let x = x0, y = y0;
+            for (let k = 0; k < 9; k++) { const nx = x + this.r(2, 5), ny = y0 + this.r(-6, 6); g.moveTo(x, y); g.quadraticCurveTo((x + nx) / 2 + this.r(-3, 3), (y + ny) / 2 + this.r(-5, 5), nx, ny); x = nx; y = ny; }
+            g.stroke(); g.restore();
+        }
     },
 
     // ---------------------------------------------------------------- casa de reboco pintado com venezianas e floreira

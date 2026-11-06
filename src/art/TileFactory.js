@@ -36,6 +36,17 @@ const TileFactory = {
         // Prédios especiais: hospital (vidro azul-claro, moldura branca) e delegacia (tijolo azul-marinho).
         hospital: { kind: 'office', glassA: '#6fb0c8', glassB: '#d6eef5', frame: '#e6eaec', span: '#cdd5da' },
         station:  { kind: 'brick', brick: ['#46598a', '#4e639a', '#40527f', '#566ca3'], mortar: '#27304d', trim: '#e8ebf4' },
+        // FAVELA (C.V): tijolo baiano aparente e reboco pintado descascando (CityHD._fac_fav; sem o HD: concreto liso na cor do reboco).
+        fav0:     { kind: 'fav', plaster: null, wall: '#c8642e', glass: '#22303e' },
+        fav1:     { kind: 'fav', plaster: '#3f8fd2', cover: 0.78, wall: '#3f8fd2', glass: '#22303e' },
+        fav2:     { kind: 'fav', plaster: '#5fb35a', cover: 0.8, half: true, wall: '#5fb35a', glass: '#22303e' },
+        fav3:     { kind: 'fav', plaster: '#e57aa4', cover: 0.82, wall: '#e57aa4', glass: '#22303e', frame: '#e8e2d8' },
+        fav4:     { kind: 'fav', plaster: '#57c2b2', cover: 0.55, wall: '#57c2b2', glass: '#22303e' },
+        fav5:     { kind: 'fav', plaster: '#e2d3ae', cover: 0.85, wall: '#e2d3ae', glass: '#22303e' },
+        fav6:     { kind: 'fav', plaster: null, brick: ['#c8622e', '#d46f36', '#bb5828', '#dd7c40'], mortar: '#94806c', wall: '#b0552a', glass: '#22303e', tag: true },
+        fav7:     { kind: 'fav', plaster: '#b1aca2', cover: 0.7, wall: '#b1aca2', glass: '#22303e' },
+        fav8:     { kind: 'fav', plaster: '#e88a3c', cover: 0.75, half: true, wall: '#e88a3c', glass: '#22303e' },
+        fav9:     { kind: 'fav', plaster: '#9cc0da', cover: 0.62, wall: '#9cc0da', glass: '#22303e', tag: true },
         // Morro do Mirante (C.P.C): reboco pintado de cor viva (rosa, amarelo, turquesa, laranja, lilás) e tijolo cru.
         vid0:     { kind: 'house', wall: '#e98ab0', trim: '#fff2f6', shutter: '#3a6fb0' },
         vid1:     { kind: 'house', wall: '#f2cf4a', trim: '#fffbe8', shutter: '#2f8a5a' },
@@ -44,8 +55,9 @@ const TileFactory = {
         vid4:     { kind: 'house', wall: '#a98ad8', trim: '#f6f0ff', shutter: '#e8c22c' },
         vid5:     { kind: 'house', wall: '#7fc46a', trim: '#f2fbee', shutter: '#b0453a' },
         // Roça: casa caipira caiada (janela azul ou verde), pau a pique cor de barro.
-        caipira0: { kind: 'house', wall: '#efe9dc', trim: '#fbf8f0', shutter: '#2f5fa8' },
-        caipira1: { kind: 'house', wall: '#f1e4c2', trim: '#fbf6e6', shutter: '#3f7a3a' },
+        // (casa humilde da referência: reboco caiado gasto, o tijolo aparecendo nos cantos e no pé; janelas de madeira pintada)
+        caipira0: { kind: 'fav', rural: true, plaster: '#efe9dc', cover: 0.84, frame: '#2f5fa8', wall: '#efe9dc', trim: '#fbf8f0', shutter: '#2f5fa8', glass: '#22303e' },
+        caipira1: { kind: 'fav', rural: true, plaster: '#f1e1b8', cover: 0.8, frame: '#3f7a3a', wall: '#f1e4c2', trim: '#fbf6e6', shutter: '#3f7a3a', glass: '#22303e' },
         taipa0:   { kind: 'house', wall: '#c99466', trim: '#e8d2b4', shutter: '#6a4026' },
         // Serra rica: chalé enxaimel (reboco claro e vigas escuras) e casarão de pedra.
         chalet0:  { kind: 'timber', wall: '#f1ebdd', beam: '#4a3020', glass: '#2f3f52' },
@@ -258,8 +270,8 @@ const TileFactory = {
     // Terra batida de trilha/estrada de chão: pedrinhas claras e escuras.
     dirt(seed) {
         const p = new PixelCanvas(80, 80);
-        p.noiseFill(['#8a6a45', '#94724a', '#7d5f3d', '#a07c52', '#6f5436'].map(Pixel.hex), seed, 9, 0.5);
-        const r = Pixel.rng(seed * 3 + 1), light = Pixel.hex('#b99a70'), dark = Pixel.hex('#54402a');
+        p.noiseFill(['#a0502c', '#ae5c34', '#8e4426', '#bc6a3e', '#7c3a20'].map(Pixel.hex), seed, 9, 0.5);      // (terra vermelha)
+        const r = Pixel.rng(seed * 3 + 1), light = Pixel.hex('#d09070'), dark = Pixel.hex('#5e2a16');
         for (let i = 0; i < 70; i++) { const x = r() * 80, y = r() * 80; p.set(x, y, light); p.set(x + 1, y, light); }
         for (let i = 0; i < 60; i++) { const x = r() * 80, y = r() * 80; p.set(x, y, dark); p.set(x, y + 1, dark); }
         for (let k = 0; k < 4; k++) {                                   // marcas de pneu/pegadas: linhas curtas mais escuras
@@ -299,9 +311,9 @@ const TileFactory = {
     // Plantação: fileiras de cultivo. kind 0 = terra arada com brotos, 1 = lavoura verde madura, 2 = trigo dourado.
     farm(seed, kind) {
         const p = new PixelCanvas(80, 80);
-        const pals = [['#7a5a3a', '#8a6845', '#6e5032', '#94724a'], ['#5c9a3c', '#66a542', '#528c36', '#70ae4c'], ['#c9a94a', '#d6b756', '#bd9c40', '#dfc366']];
+        const pals = [['#9c5030', '#aa5c38', '#8a4426', '#b4663e'], ['#5c9a3c', '#66a542', '#528c36', '#70ae4c'], ['#c9a94a', '#d6b756', '#bd9c40', '#dfc366']];
         p.noiseFill(pals[kind].map(Pixel.hex), seed, 7, 0.35);
-        const r = Pixel.rng(seed * 11 + kind), dark = Pixel.hex(['#4f3a24', '#3a6a28', '#8e7430'][kind]), light = Pixel.hex(['#a58660', '#9acb68', '#efd985'][kind]);
+        const r = Pixel.rng(seed * 11 + kind), dark = Pixel.hex(['#5e2a16', '#3a6a28', '#8e7430'][kind]), light = Pixel.hex(['#c07850', '#9acb68', '#efd985'][kind]);
         for (let y = 0; y < 80; y += 8) {                               // sulcos a cada 0,4u
             for (let x = 0; x < 80; x++) { p.set(x, y, dark); p.set(x, y + 1, dark); if (kind && r() < 0.5) p.set(x, y + 3, light); }
             if (kind === 0) for (let x = 2; x < 80; x += 6) { p.set(x, y + 4, Pixel.hex('#6fae48')); p.set(x, y + 3, Pixel.hex('#6fae48')); }

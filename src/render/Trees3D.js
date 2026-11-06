@@ -27,8 +27,27 @@ const Trees3D = {
         return !!(typeof Config !== 'undefined' && Config.art && Config.art.trees3d);
     },
     // espécie do sprite → modelo (altura em u na escala 1)
+    // (a remasterização da vegetação — referência: a folha de árvores e arbustos brasileiros: TODA a vegetação viva é 3D — árvores, palmeiras,
+    // arbustos, samambaias, capins e flores; as espécies novas — mangueira, flamboyant, jacarandá, quaresmeira, palmeira imperial,
+    // eucalipto, espada-de-são-jorge, cacto, bambu e costela-de-adão — saem do sorteio por lugar (variant) ou são postas direto)
     KIND: { oak: 'oak', jungle: 'jungle', juca: 'juca', ipe: 'ipe', orchard: 'orchard', pine: 'pine', cypress: 'cypress', araucaria: 'araucaria',
-        palm: 'palm', banana: 'banana' },      // (arbustos: ficam os desenhados — muitos, baixos e melhores assim)
+        palm: 'palm', banana: 'banana', bush: 'bush', fern: 'fern', flowers: 'roadside', reed: 'reed', dry: 'dry', tuft: 'tuft',
+        mango: 'mango', flamboyant: 'flamboyant', jacaranda: 'jacaranda', quaresmeira: 'quaresmeira', imperial: 'imperial', eucalyptus: 'eucalyptus',
+        sansevieria: 'sansevieria', cactus: 'cactus', bamboo: 'bamboo', monstera: 'monstera' },
+    // altura do modelo na escala 1 (u): quem põe o canteiro e o desvio do vento usam
+    TALL: { eucalyptus: 30, imperial: 14 },
+    // A espécie de cada planta: algumas viram variações pelo lugar (sorteio estável por posição). Na cidade e nos bairros, o "carvalho"
+    // vira a árvore de rua brasileira (mangueira, flamboyant, jacarandá, quaresmeira); a palmeira, a imperial ou o coqueiro.
+    variant(kind, x, z, h) {
+        const urban = typeof CityGrid !== 'undefined' && CityGrid.inCity && CityGrid.inCity(x, z);
+        switch (kind) {
+            case 'ipe': return h < 0.4 ? 'ipe' : h < 0.85 ? 'ipeY' : 'jacaranda';
+            case 'oak': return !urban ? (h < 0.6 ? 'oak' : 'mango') : h < 0.38 ? 'mango' : h < 0.78 ? 'oak' : h < 0.86 ? 'flamboyant' : h < 0.93 ? 'jacaranda' : 'quaresmeira';
+            case 'palm': return urban && h < 0.55 ? 'imperial' : 'palm';
+            case 'bush': return h < 0.5 ? 'bush' : h < 0.75 ? 'bushR' : 'bushY';
+            default: return this.KIND[kind];
+        }
+    },
     wants(kind) { return this.on && !!this.KIND[kind]; },
     // As instâncias são agrupadas em células de CELL u (uma malha por modelo e célula): o descarte por frustum e a janela da sombra
     // deixam de fora o que está longe da tela (num pedaço de 128 u de mata são ~1.500 plantas; na tela cabem algumas centenas).
@@ -49,7 +68,7 @@ const Trees3D = {
             for (let i = 0; i < T.length; i += 5) {
                 const kind = T[i], x = T[i + 1], y0 = T[i + 2] + (typeof Relief !== 'undefined' ? Relief.at(T[i + 1], T[i + 3]) : 0), z = T[i + 3], s = T[i + 4];      // (relevo: no chão do morro)
                 const h = this._hash(x * 13.1, z * 7.7);
-                const model = kind === 'ipe' ? (h < 0.5 ? 'ipe' : 'ipeY') : this.KIND[kind];
+                const model = this.variant(kind, x, z, h);
                 const key = model + '@' + Math.floor(x / this.CELL) + ',' + Math.floor(z / this.CELL);
                 let g = groups.get(key);
                 if (!g) groups.set(key, g = []);
@@ -140,7 +159,7 @@ const Trees3D = {
                             vec3 trP = vPositionW;
                             float trN = tfN(trP * 1.25) * 0.6 + tfN(trP * 2.9 + 7.1) * 0.28 + tfN(trP * 6.1 + 3.3) * 0.12;
                             if (trFl > 0.5) {
-                                float trM = smoothstep(0.42, 0.6, tfN(trP * 0.9 + 11.0) * 0.65 + trN * 0.35);
+                                float trM = smoothstep(0.3, 0.5, tfN(trP * 1.6 + 11.0) * 0.55 + trN * 0.45);      // (a copa quase toda em flor, com vãos de folha)
                                 vec3 trTn = baseColor.rgb / max(vColor.rgb, vec3(0.001));
                                 baseColor.rgb = mix(vec3(0.27, 0.45, 0.19) * trTn, baseColor.rgb, trM);
                             }
@@ -170,7 +189,7 @@ const Trees3D = {
                         {
                             vec2 o = finalWorld[3].xz;
                             trTone = fract(sin(vec2(dot(o, vec2(12.9898, 78.233)), dot(o, vec2(39.346, 11.135)))) * 43758.5453);
-                            float hy = max(positionUpdated.y - 0.8, 0.0);
+                            float hy = min(max(positionUpdated.y - 0.8, 0.0), 7.0);
                             float ph = trW.x * 1.3 + dot(worldPos.xz, vec2(0.11, 0.17));
                             float sw = (sin(ph) * 0.6 + sin(ph * 2.3 + 1.7) * 0.25 + sin(trW.x * 0.37 + worldPos.x * 0.02) * 0.4) * trW.y;
                             worldPos.xz += vec2(trW.z, trW.w) * sw * hy * hy * 0.06;
@@ -204,12 +223,105 @@ const Trees3D = {
                     const rr = P.r * (k === 0 ? 0.82 : 0.55 + 0.2 * R());
                     B.blob(g, [Math.cos(a) * d, crownY + (k === 0 ? 0.3 : (R() - 0.3) * P.r * 0.5), Math.sin(a) * d], [rr, rr * 0.82, rr], P.c, R, 0.18, k === 0 ? sMain : sAll, P.fl ? 'flower' : 'leaf');
                 }
+                if (P.fl) B.blob(g, [0, 0.02, 0], [P.r * 1.3, 0.015, P.r * 1.3], P.c, R, 0.08, 1, 'flower');      // o tapete de flores caídas
+                if (model === 'orchard') for (let k = 0; k < 9; k++) { const a = R() * Math.PI * 2, y = crownY - 0.3 + R() * 1.2, r = P.r * 0.85; B.cyl(g, [Math.cos(a) * r, y, Math.sin(a) * r], [Math.cos(a) * r, y - 0.14, Math.sin(a) * r], 0.08, 0.07, 4, [0.98, 0.6, 0.1], [0.9, 0.5, 0.1]); }
                 break;
             }
-            case 'bush': {
-                for (let k = 0; k < 2; k++) {
-                    const a = k * 2.1 + R(), d = k === 0 ? 0 : 0.45;
-                    B.blob(g, [Math.cos(a) * d, 0.55, Math.sin(a) * d], [0.85 - k * 0.12, 0.62 - k * 0.08, 0.85 - k * 0.12], [0.26, 0.44, 0.18], R, 0.22);
+            case 'bush': case 'bushR': case 'bushY': {                                    // arbustos variados (verde, flor vermelha, flor amarela)
+                const fl = model === 'bushR' ? [0.86, 0.14, 0.12] : model === 'bushY' ? [0.98, 0.82, 0.18] : null;
+                for (let k = 0; k < 3; k++) {
+                    const a = k * 2.1 + R(), d = k === 0 ? 0 : 0.42;
+                    B.blob(g, [Math.cos(a) * d, 0.55 - k * 0.08, Math.sin(a) * d], [0.82 - k * 0.14, 0.6 - k * 0.08, 0.82 - k * 0.14], fl || [0.26, 0.46, 0.18], R, 0.24, k === 0 ? sMain : 1, fl ? 'flower' : 'leaf');
+                }
+                for (let k = 0; k < 4; k++) B.cyl(g, [0, 0, 0], [Math.cos(k * 1.7) * 0.3, 0.45, Math.sin(k * 1.7) * 0.3], 0.04, 0.025, 4, trunk, dark);
+                break;
+            }
+            case 'mango': {                                                                // mangueira: tronco grosso, copa densa e escura, mangas
+                B.cyl(g, [0, 0, 0], [0.1, 2.4, 0], 0.36, 0.26, 7, trunk, dark);
+                for (const [bx, bz] of [[1.1, 0.4], [-0.9, 0.7], [0.2, -1.1]]) B.cyl(g, [0.05, 2.0, 0], [bx, 3.6, bz], 0.16, 0.08, 5, trunk, dark);
+                const cc = [0.17, 0.36, 0.13];
+                B.blob(g, [0, 4.6, 0], [2.7, 2.1, 2.7], cc, R, 0.2, sMain);
+                for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2 + R(); B.blob(g, [Math.cos(a) * 1.6, 3.9 + R() * 1.4, Math.sin(a) * 1.6], [1.5, 1.2, 1.5], cc, R, 0.2, sAll); }
+                for (let k = 0; k < 12; k++) {                                              // as mangas (laranja e vermelho) penduradas na borda da copa
+                    const a = R() * Math.PI * 2, y = 3.0 + R() * 2.6, r = 2.4 + R() * 0.5;
+                    B.cyl(g, [Math.cos(a) * r, y, Math.sin(a) * r], [Math.cos(a) * r, y - 0.2, Math.sin(a) * r], 0.1, 0.08, 4, R() < 0.5 ? [0.95, 0.55, 0.12] : [0.9, 0.3, 0.12], [0.85, 0.5, 0.1]);
+                }
+                break;
+            }
+            case 'flamboyant': {                                                           // flamboyant: galhos abertos e a copa em guarda-chuva vermelha
+                B.cyl(g, [0, 0, 0], [0, 2.2, 0], 0.3, 0.22, 7, trunk, dark);
+                for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + 0.4; B.cyl(g, [0, 2.0, 0], [Math.cos(a) * 2.4, 3.6, Math.sin(a) * 2.4], 0.14, 0.06, 5, trunk, dark); }
+                B.blob(g, [0, 4.0, 0], [3.6, 1.1, 3.6], [0.86, 0.3, 0.12], R, 0.2, sMain, 'flower');
+                for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + R(); B.blob(g, [Math.cos(a) * 2.6, 3.7 + R() * 0.5, Math.sin(a) * 2.6], [1.6, 0.8, 1.6], [0.88, 0.36, 0.14], R, 0.22, sAll, 'flower'); }
+                break;
+            }
+            case 'jacaranda': case 'quaresmeira': {                                        // jacarandá (azul-violeta, alto) e quaresmeira (roxa, baixa)
+                const J = model === 'jacaranda', H = J ? 5.6 : 3.4, rr = J ? 2.1 : 1.6, col = J ? [0.5, 0.46, 0.8] : [0.6, 0.36, 0.76];
+                B.cyl(g, [0, 0, 0], [0.2, H - rr, 0.1], J ? 0.22 : 0.14, 0.1, 6, trunk, dark);
+                if (!J) for (let k = 0; k < 3; k++) { const a = k * 2.1; B.cyl(g, [0, 0.3, 0], [Math.cos(a) * 0.9, H - rr, Math.sin(a) * 0.9], 0.08, 0.05, 4, trunk, dark); }
+                B.blob(g, [0.2, H - 0.2, 0.1], [rr, rr * 0.8, rr], col, R, 0.22, sMain, 'flower');
+                for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + R(); B.blob(g, [Math.cos(a) * rr * 0.75, H - rr * 0.5 + R() * 0.6, Math.sin(a) * rr * 0.75], [rr * 0.65, rr * 0.55, rr * 0.65], col, R, 0.22, sAll, 'flower'); }
+                if (J) B.blob(g, [0, 0.02, 0], [2.4, 0.015, 2.4], col, R, 0.05, 1, 'flower');      // flores caídas no chão
+                break;
+            }
+            case 'imperial': {                                                             // palmeira imperial: tronco reto e liso, palmito verde, palmas
+                B.cyl(g, [0, 0, 0], [0, 1.0, 0], 0.48, 0.36, 8, [0.72, 0.71, 0.67], [0.6, 0.58, 0.54]);
+                B.cyl(g, [0, 1.0, 0], [0, 11.6, 0], 0.36, 0.28, 8, [0.8, 0.79, 0.75], [0.72, 0.71, 0.67]);
+                B.cyl(g, [0, 11.6, 0], [0, 13.4, 0], 0.3, 0.24, 8, [0.36, 0.5, 0.24], [0.42, 0.56, 0.28]);
+                for (let k = 0; k < 12; k++) B.frond(g, [0, 13.4, 0], k / 12 * Math.PI * 2 + R() * 0.25, 3.6 + R() * 0.6, 0.55 + R() * 0.2, 0.42, [0.28, 0.48, 0.2], [0.2, 0.36, 0.14]);
+                break;
+            }
+            case 'eucalyptus': {                                                           // eucalipto de plantação: tronco branco altíssimo, copa estreita no alto
+                const H = 30;
+                for (let s = 0; s < 6; s++) B.cyl(g, [0, s * H * 0.14, 0], [0.04 * Math.sin(s), (s + 1) * H * 0.14, 0.03 * Math.cos(s)], 0.34 - s * 0.035, 0.34 - (s + 1) * 0.035, 6, s % 2 ? [0.86, 0.84, 0.78] : [0.74, 0.68, 0.58], [0.8, 0.77, 0.7]);
+                const cc = [0.36, 0.47, 0.37];
+                for (let k = 0; k < 6; k++) {
+                    const y = H * 0.62 + k * H * 0.065, a = k * 2.4 + R(), d = 0.3 + R() * 0.6;
+                    B.cyl(g, [0, y - 0.8, 0], [Math.cos(a) * d * 1.6, y, Math.sin(a) * d * 1.6], 0.06, 0.03, 4, [0.78, 0.74, 0.66], [0.7, 0.66, 0.58]);
+                    B.blob(g, [Math.cos(a) * d * 1.7, y + 0.4, Math.sin(a) * d * 1.7], [1.25 - k * 0.08, 1.9, 1.25 - k * 0.08], cc, R, 0.25, k < 2 ? sMain : 1);
+                }
+                B.blob(g, [0, H + 0.6, 0], [0.9, 1.6, 0.9], cc, R, 0.25, 1);
+                break;
+            }
+            case 'fern': {                                                                 // samambaia: frondes em roseta, arqueadas
+                for (let k = 0; k < 14; k++) B.frond(g, [0, 0.12, 0], k / 14 * Math.PI * 2 + R() * 0.3, 1.0 + R() * 0.35, 0.95, 0.2, [0.22, 0.5, 0.18], [0.3, 0.6, 0.22]);
+                break;
+            }
+            case 'roadside': {                                                             // vegetação de beira de estrada: capim com flores miúdas
+                B.blades(g, 16, 0.55, 0.7, 0.05, [0.32, 0.5, 0.2], [0.5, 0.62, 0.28], R);
+                const F = [[0.98, 0.98, 0.95], [0.98, 0.85, 0.2], [0.95, 0.5, 0.7], [0.65, 0.45, 0.9], [0.98, 0.55, 0.15]];
+                for (let k = 0; k < 9; k++) { const a = R() * Math.PI * 2, r = R() * 0.5, y = 0.35 + R() * 0.35; B.cyl(g, [Math.cos(a) * r, 0, Math.sin(a) * r], [Math.cos(a) * r, y, Math.sin(a) * r], 0.012, 0.012, 3, [0.3, 0.45, 0.2], [0.3, 0.45, 0.2]); B.cyl(g, [Math.cos(a) * r, y, Math.sin(a) * r], [Math.cos(a) * r, y + 0.06, Math.sin(a) * r], 0.06, 0.05, 5, F[k % F.length], F[k % F.length]); }
+                break;
+            }
+            case 'reed': B.blades(g, 22, 0.6, 1.5, 0.06, [0.4, 0.5, 0.22], [0.66, 0.68, 0.36], R); break;          // capim alto (e junco)
+            case 'dry': B.blades(g, 16, 0.5, 0.95, 0.05, [0.56, 0.52, 0.28], [0.8, 0.72, 0.42], R); break;          // capim seco
+            case 'tuft': B.blades(g, 9, 0.25, 0.45, 0.04, [0.3, 0.5, 0.18], [0.46, 0.62, 0.26], R); break;           // tufo de grama
+            case 'sansevieria': {                                                          // espada-de-são-jorge: lâminas eretas com a borda amarela
+                for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + R(), r = 0.12 + R() * 0.1; B.blade(g, [Math.cos(a) * r, 0, Math.sin(a) * r], a, 0.85 + R() * 0.4, 0.09, 0.08, [0.16, 0.36, 0.16], [0.62, 0.62, 0.22]); }
+                break;
+            }
+            case 'cactus': {                                                               // mandacaru: coluna e dois braços
+                const cc = [0.3, 0.5, 0.26], cd = [0.22, 0.4, 0.2];
+                B.cyl(g, [0, 0, 0], [0, 2.8, 0], 0.22, 0.2, 8, cc, cd); B.blob(g, [0, 2.8, 0], [0.2, 0.12, 0.2], cc, R, 0.02, 1, 'wood');
+                for (const [sx, y0, h] of [[1, 0.9, 1.3], [-1, 1.4, 1.0]]) {
+                    B.cyl(g, [0, y0, 0], [sx * 0.6, y0 + 0.1, 0], 0.15, 0.15, 6, cc, cd);
+                    B.cyl(g, [sx * 0.6, y0 + 0.05, 0], [sx * 0.6, y0 + h, 0], 0.15, 0.14, 6, cc, cd); B.blob(g, [sx * 0.6, y0 + h, 0], [0.14, 0.09, 0.14], cc, R, 0.02, 1, 'wood');
+                }
+                break;
+            }
+            case 'bamboo': {                                                               // bambuzal: touceira de colmos finos, arqueados, com folhas no alto
+                for (let k = 0; k < 14; k++) {
+                    const a = R() * Math.PI * 2, r = R() * 0.7, h = 6 + R() * 3, lean = 0.6 + R() * 1.2, bx = Math.cos(a) * r, bz = Math.sin(a) * r;
+                    B.cyl(g, [bx, 0, bz], [bx + Math.cos(a) * lean, h, bz + Math.sin(a) * lean], 0.05, 0.035, 4, [0.5, 0.6, 0.24], [0.42, 0.52, 0.2]);
+                    B.blob(g, [bx + Math.cos(a) * lean * 1.05, h - 0.6, bz + Math.sin(a) * lean * 1.05], [0.7, 1.1, 0.7], [0.32, 0.52, 0.2], R, 0.3, 1);
+                }
+                break;
+            }
+            case 'monstera': {                                                             // folhagens tropicais (costela-de-adão): folhas largas em hastes
+                for (let k = 0; k < 8; k++) {
+                    const a = k / 8 * Math.PI * 2 + R() * 0.4, l = 0.5 + R() * 0.3, top = [Math.cos(a) * 0.25, 0.5 + R() * 0.35, Math.sin(a) * 0.25];
+                    B.cyl(g, [0, 0, 0], top, 0.02, 0.015, 3, [0.3, 0.45, 0.2], [0.3, 0.45, 0.2]);
+                    B.frond(g, top, a, l + 0.3, 0.5, 0.42, [0.14, 0.42, 0.16], [0.2, 0.5, 0.2]);
                 }
                 break;
             }
@@ -220,23 +332,29 @@ const Trees3D = {
                 else for (let k = 0; k < 4; k++) B.cone(g, [0, 1.3 + k * 1.35, 0], 2.0 - k * 0.42, 2.2 - k * 0.2, 8, [0.17, 0.34, 0.2], R);
                 break;
             }
-            case 'araucaria': {
-                B.cyl(g, [0, 0, 0], [0, 7.2, 0], 0.26, 0.14, 6, [0.4, 0.3, 0.22], dark);
-                for (let k = 0; k < 3; k++) {                                               // a umbela: discos achatados no alto
-                    const y = 5.4 + k * 0.85, r = 2.7 - k * 0.7;
-                    B.blob(g, [0, y, 0], [r, 0.42, r], [0.2, 0.36, 0.18], R, 0.2, k === 0 ? sMain : sAll);
+            case 'araucaria': {                                                            // pinheiro-do-paraná: o candelabro — galhos em taça com tufos nas pontas
+                B.cyl(g, [0, 0, 0], [0, 8.4, 0], 0.3, 0.14, 6, [0.42, 0.32, 0.24], dark);
+                const cc = [0.17, 0.33, 0.16];
+                for (let t = 0; t < 2; t++) for (let k = 0; k < 7; k++) {
+                    const a = k / 7 * Math.PI * 2 + t * 0.45, y0 = 6.2 + t * 1.2, r = 2.8 - t * 0.9, tip = [Math.cos(a) * r, y0 + 1.0 - t * 0.2, Math.sin(a) * r];
+                    B.cyl(g, [0, y0, 0], [Math.cos(a) * r * 0.6, y0 - 0.1, Math.sin(a) * r * 0.6], 0.08, 0.06, 4, [0.4, 0.3, 0.22], dark);
+                    B.cyl(g, [Math.cos(a) * r * 0.6, y0 - 0.1, Math.sin(a) * r * 0.6], tip, 0.06, 0.04, 4, [0.4, 0.3, 0.22], dark);
+                    B.blob(g, tip, [0.8, 0.32, 0.8], cc, R, 0.22, t === 0 && k < 2 ? sMain : 1);
                 }
+                B.blob(g, [0, 8.6, 0], [0.9, 0.4, 0.9], cc, R, 0.2, 1);
                 break;
             }
             case 'palm': {
                 const top = B.trunkCurve(g, 6.8, 0.22, 0.15, 0.9, [0.52, 0.42, 0.3], [0.36, 0.28, 0.2]);
-                for (let k = 0; k < 8; k++) B.frond(g, top, k / 8 * Math.PI * 2 + R() * 0.3, 3.2 + R() * 0.6, 0.62, 0.4 + R() * 0.3, [0.3, 0.5, 0.2], [0.2, 0.36, 0.14]);
-                B.blob(g, top, [0.42, 0.36, 0.42], [0.34, 0.3, 0.16], R, 0.1, 1, 'wood');   // os cocos
+                for (let k = 0; k < 11; k++) B.frond(g, top, k / 11 * Math.PI * 2 + R() * 0.3, 3.2 + R() * 0.7, 0.62 + R() * 0.2, 0.42 + R() * 0.25, [0.3, 0.52, 0.2], [0.24, 0.4, 0.14]);
+                for (let k = 0; k < 5; k++) { const a = k * 1.3; B.blob(g, [top[0] + Math.cos(a) * 0.28, top[1] - 0.35, top[2] + Math.sin(a) * 0.28], [0.2, 0.22, 0.2], [0.42, 0.36, 0.16], R, 0.05, 1, 'wood'); }      // os cocos
                 break;
             }
             case 'banana': {
                 const top = B.trunkCurve(g, 1.9, 0.2, 0.16, 0.15, [0.46, 0.5, 0.28], [0.34, 0.38, 0.2]);
-                for (let k = 0; k < 7; k++) B.frond(g, top, k / 7 * Math.PI * 2 + R() * 0.5, 1.9 + R() * 0.4, 0.9, 0.35 + R() * 0.25, [0.36, 0.56, 0.22], [0.26, 0.42, 0.16]);
+                for (let k = 0; k < 8; k++) B.frond(g, top, k / 8 * Math.PI * 2 + R() * 0.5, 2.0 + R() * 0.5, 0.7 + R() * 0.3, 0.6 + R() * 0.2, [0.36, 0.6, 0.22], [0.3, 0.5, 0.18]);
+                B.cyl(g, [top[0] + 0.25, top[1] - 0.1, top[2]], [top[0] + 0.45, top[1] - 0.9, top[2] + 0.1], 0.16, 0.12, 6, [0.48, 0.62, 0.24], [0.4, 0.54, 0.2]);      // o cacho
+                B.blob(g, [top[0] + 0.5, top[1] - 1.15, top[2] + 0.12], [0.12, 0.22, 0.12], [0.5, 0.18, 0.32], R, 0.05, 1, 'wood');                                   // o coração (a flor)
                 break;
             }
         }
@@ -297,6 +415,21 @@ Trees3D.PARTS = {
             }
         }
         for (let k = 0; k < n; k++) { const k1 = (k + 1) % n; g.i.push(base + k, base + n + k, base + k1, base + k1, base + n + k, base + n + k1); }
+    },
+    // Lâmina (capim, espada-de-são-jorge): sai de p na direção a, sobe `h`, largura w afinando, curvando `bend` para fora.
+    blade(g, p, a, h, w, bend, col, colTip) {
+        const seg = 3, dx = Math.cos(a), dz = Math.sin(a), px = -dz, pz = dx, base = g.p.length / 3;
+        for (let s = 0; s <= seg; s++) {
+            const t = s / seg, ww = w * (1 - t * 0.85), c = [col[0] + (colTip[0] - col[0]) * t, col[1] + (colTip[1] - col[1]) * t, col[2] + (colTip[2] - col[2]) * t];
+            const x = p[0] + dx * bend * h * t * t, y = p[1] + h * t, z = p[2] + dz * bend * h * t * t;
+            this._push(g, x + px * ww, y, z + pz * ww, dx, 0.6, dz, c, this.leaf(0.6 + t * 0.6));
+            this._push(g, x - px * ww, y, z - pz * ww, dx, 0.6, dz, c, this.leaf(0.6 + t * 0.6));
+        }
+        for (let s = 0; s < seg; s++) { const o = base + s * 2; g.i.push(o, o + 2, o + 1, o + 1, o + 2, o + 3); }
+    },
+    // Moita de n lâminas num raio r, alturas até h.
+    blades(g, n, r, h, w, col, colTip, R) {
+        for (let k = 0; k < n; k++) { const a = R() * Math.PI * 2, d = Math.sqrt(R()) * r; this.blade(g, [Math.cos(a) * d * 0.5, 0, Math.sin(a) * d * 0.5], a, h * (0.55 + 0.45 * R()), w, 0.25 + R() * 0.35, col, colTip); }
     },
     // Cone de galhos (pinheiro): base de raio r em c, altura h.
     cone(g, c, r, h, n, col, R) {

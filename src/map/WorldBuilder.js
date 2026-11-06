@@ -60,8 +60,12 @@ class WorldBuilder {
         this._shopGlow();
         this._helipads();
         this._props();
+        StreetDetail.build(this);             // asfalto gasto, pintura do chão, placas, lombadas, pontos de ônibus, defensas, fiação (world/StreetDetail.js)
+        Plantations.build(this);              // eucaliptais de beira de rodovia (world/Plantations.js)
+        FavelaDetail.build(this);             // gatonet, ar-condicionado, ferros de laje, varais, fiação embolada, pedras com mato, lixo (world/FavelaDetail.js)
         this._flush();
         HouseView.build(this);                // a safe house do protagonista (paredes, telhado, porta e o corte do interior)
+        this.street.addSigns(StreetDetail.signs);
         this.street.build();
         // Terreno do mundo grande: pedaços construídos ao redor do foco (já os do ponto de partida, sem pop-in).
         this.terrain = new TerrainBuilder(this);
@@ -107,6 +111,8 @@ class WorldBuilder {
         M.earth = this._mat('earth', T.earth);
         M.plaza = this._mat('plaza', T.plaza);
         M.curb = this._mat('curb', null, { color: '#a4a9b0' });
+        M.decal = RoadArt.decals(this.scene);          // marcas no asfalto: rachaduras, buracos, tinta gasta (StreetDetail)
+        M.signs = RoadArt.signs(this.scene);           // faces das placas de trânsito e de nome de rua
         M.solid = this._mat('solid', null);            // peças de cor sólida (vertex colors).
         M.solid.diffuseColor = BABYLON.Color3.White();
         M.hide = HideSprites.create(this.scene);       // topo dos esconderijos (caçamba, caixotes, latão)
@@ -1012,7 +1018,8 @@ class WorldBuilder {
                     t.solid(p.x0, p.z0, p.x1, p.z1, 0, 0.1, [0.62, 0.5, 0.4]);
                     break;
                 }
-                case 'crops': {                                                      // canteiros: terra escura e fileiras (milho alto ou horta baixa)
+                case 'crops': {                                                      // canteiros de terra vermelha com as plantas em 3D (art/RuralArt.js)
+                    if (RuralArt.piece(this, t, p, rng)) break;
                     t.solid(p.x0, p.z0, p.x1, p.z1, 0, 0.05, [0.36, 0.25, 0.16]);
                     const corn = p.crop === 'corn', alongX = p.rows === 'x', gap = corn ? 1.4 : 1.1, a0 = alongX ? p.z0 : p.x0, a1 = alongX ? p.z1 : p.x1;
                     for (let s = a0 + 0.6, r = 0; s < a1 - 0.3; s += gap, r++) {
@@ -1057,6 +1064,11 @@ class WorldBuilder {
                 case 'trough': { t.solid(x - 1.2, z - 0.4, x + 1.2, z + 0.4, 0, 0.55, woodD); t.solid(x - 1.05, z - 0.28, x + 1.05, z + 0.28, 0.5, 0.52, [0.3, 0.45, 0.4]); break; }
                 case 'scarecrow': { t.solid(x - 0.07, z - 0.07, x + 0.07, z + 0.07, 0, 2.0, woodD); t.solid(x - 0.9, z - 0.06, x + 0.9, z + 0.06, 1.45, 1.55, woodD); t.solid(x - 0.4, z - 0.2, x + 0.4, z + 0.2, 1.0, 1.65, [0.75, 0.3, 0.25]); t.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, 1.65, 2.0, [0.9, 0.8, 0.5]); t.solid(x - 0.42, z - 0.42, x + 0.42, z + 0.42, 2.0, 2.08, [0.85, 0.72, 0.35]); break; }
                 case 'lounger': { const ax = p.alongX; ax ? t.solid(x - 0.9, z - 0.35, x + 0.9, z + 0.35, 0.12, 0.4, white) : t.solid(x - 0.35, z - 0.9, x + 0.35, z + 0.9, 0.12, 0.4, white); break; }
+                case 'tractor': case 'cart': case 'wheelbarrow': case 'harvest': case 'firewood': case 'oven': case 'hives': case 'shed': {      // roça (art/RuralArt.js)
+                    RuralArt.piece(this, t, p, rng);
+                    if (p.solid) this._collider(`roca_${p.kind}_${Math.round(x || p.x0)}_${Math.round(z || p.z0)}`, p.solid[0], p.solid[1], p.solid[2], p.solid[3], p.solid[4]);
+                    break;
+                }
                 case 'pillar': { t.solid(x - 0.45, z - 0.45, x + 0.45, z + 0.45, 0, 2.1, [0.6, 0.58, 0.54]); t.solid(x - 0.55, z - 0.55, x + 0.55, z + 0.55, 2.1, 2.25, [0.84, 0.82, 0.78]); t.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, 2.25, 2.7, lampC); this._collider('pilar_' + x.toFixed(1) + '_' + z.toFixed(1), x - 0.45, z - 0.45, x + 0.45, z + 0.45, 2.1); (this.bairroLamps || (this.bairroLamps = [])).push({ x, z, y: 2.5 }); break; }
             }
         }
@@ -1332,7 +1344,7 @@ class WorldBuilder {
             const P = a.pts, hw = Math.max(a.w / 2, 0.72), y = 0.016;
             for (let k = 0; k + 1 < P.length; k++) {
                 const p = P[k], q = P[k + 1], L = hypot(q[0] - p[0], q[1] - p[1]) || 1, nx = -(q[1] - p[1]) / L * hw, nz = (q[0] - p[0]) / L * hw;
-                const bt = this._batch('sidewalk$', p[0], p[1]), col = cs((p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+                const bt = this._batch('open_earth$', p[0], p[1]), col = cs((p[0] + q[0]) / 2, (p[1] + q[1]) / 2);      // (beco de terra batida: a referência da favela)
                 const A = [p[0] + nx, y, p[1] + nz], B = [p[0] - nx, y, p[1] - nz], C2 = [q[0] - nx, y, q[1] - nz], D = [q[0] + nx, y, q[1] + nz];
                 bt.tri(A, B, C2, up, [uv4(A[0], A[2]), uv4(B[0], B[2]), uv4(C2[0], C2[2])], col);
                 bt.tri(A, C2, D, up, [uv4(A[0], A[2]), uv4(C2[0], C2[2]), uv4(D[0], D[2])], col);
@@ -1418,6 +1430,7 @@ class WorldBuilder {
         };
 
         this._favLamps = [];
+        this._favPoleList = poles;                                     // (FavelaDetail: os fios do gato para as casas)
         this.perches = this.perches || [];
         for (const p of poles) {
             this.perches.push({ x: p.x, z: p.z, y: 6.1 });
@@ -1608,8 +1621,32 @@ class WorldBuilder {
             }
         }
 
-        for (const props of CityGrid.blocks.concat(CityGrid.extraBlocks || []).map((b) => b.props).concat([CityGrid.coastProps])) {
+        // CANTEIRO: árvore ou arbusto que cai em calçada, praça ou pátio de piso ganha o canteirinho (meio-fio de concreto e a terra); no
+        // asfalto, nada nasce. Em gramado, terra e areia, a planta fica direto no chão.
+        const groundOf = (blk, x, z) => {
+            if (RoadPlan.onAsphalt(x, z, 0.4)) return 'road';
+            if (!blk || blk.virtual || blk.biome === 'favela' || blk.district === 'favela') return 'soil';
+            const paved = blk.ground === 'plaza' || blk.ground === 'concrete';
+            if (blk.open) return paved ? 'paved' : 'soil';
+            const F = blk.footPoly, inFoot = F ? RoadPlan.inPoly(F, x, z) : (blk.foot && x > blk.foot[0] && x < blk.foot[2] && z > blk.foot[1] && z < blk.foot[3]);
+            return !inFoot || paved ? 'paved' : 'soil';
+        };
+        this._canteiro = (x, z, r) => {
+            const t = trimAt(x, z), w = 0.12, curb = [0.66, 0.66, 0.64], soil = [0.27, 0.19, 0.12];
+            // (acima do piso da calçada, que é elevada: Config.city.curbHeight)
+            const y1 = Config.city.curbHeight + 0.14, ys = Config.city.curbHeight + 0.05;
+            t.solid(x - r, z - r, x + r, z - r + w, 0, y1, curb); t.solid(x - r, z + r - w, x + r, z + r, 0, y1, curb);
+            t.solid(x - r, z - r + w, x - r + w, z + r - w, 0, y1, curb); t.solid(x + r - w, z - r + w, x + r, z + r - w, 0, y1, curb);
+            t.solid(x - r + w, z - r + w, x + r - w, z + r - w, 0, ys, soil);
+        };
+        const plants = { oak: 1.0, ipe: 1.0, jungle: 1.0, juca: 0.9, orchard: 0.8, palm: 0.75, banana: 0.75, cypress: 0.7, pine: 0.9, araucaria: 0.9, bush: 0.75, flowers: 0.6, fern: 0.6 };
+        for (const [blk, props] of CityGrid.blocks.concat(CityGrid.extraBlocks || []).map((b) => [b, b.props]).concat([[null, CityGrid.coastProps]])) {
             for (const p of props) {
+                if ((p.type === 'tree' || p.type === 'prop') && plants[p.kind]) {
+                    const gnd = groundOf(blk, p.x, p.z);
+                    if (gnd === 'road') continue;
+                    if (gnd === 'paved') this._canteiro(p.x, p.z, plants[p.kind]);
+                }
                 if (p.type === 'hide') {
                     const x0 = p.x - p.w / 2, x1 = p.x + p.w / 2, z0 = p.z - p.d / 2, z1 = p.z + p.d / 2;
                     trimAt(x0, z0).walls(x0, z0, x1, z1, 0.18, p.h, () => [0, 0], SIDE[p.kind]);
@@ -1675,6 +1712,8 @@ class WorldBuilder {
             if (key === 'curb') return M.curb;
             if (key === 'trim') return M.solid;
             if (key === 'hide_top') return M.hide;
+            if (key === 'decal') return M.decal;
+            if (key === 'signs') return M.signs;
             if (key === 'machtop' || key === 'machside') return M[key];
             if (key.startsWith('open_') || key.startsWith('yard_')) return M[key.slice(key.indexOf('_') + 1)];
             if (key.startsWith('blend_')) return M[key];

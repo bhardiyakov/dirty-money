@@ -789,6 +789,8 @@ class Game {
 		if (this.puddles) this.puddles.update(dt);
 		if (this.vehicleManager && this.gameEngine.world.street) {
 			this.gameEngine.world.street.update(dt, this.carDamage.allCars(), this);       // (lista reaproveitada; barcos são ignorados lá)
+			if (typeof StreetDetail !== 'undefined') StreetDetail.update(dt, this.carDamage.allCars(), this);      // tranco do quebra-molas e dos buracos
+			if (typeof RoadWorks !== 'undefined') RoadWorks.update(dt, this);                                      // obras na pista
 		}
 		{   // água em volta do jogador (marolas, esteira, respingos e sons presos à animação — WaterFx.track); NPCs: NPC.update
 			const pl = this.player, inW = this.mode === 'player' && pl.alive;

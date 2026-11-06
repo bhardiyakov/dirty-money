@@ -26,7 +26,7 @@ const FavelaPlan = {
     // Largos: quadra do baile (na beira da rua) e campinho (no miolo, só a pé ou de moto); [tipo, x, z, largura, fundo, na rua?]
     SQUARES: [['quadra', -500, 470, 30, 18, true], ['campinho', -470, 610, 34, 22, false]],
     // Visual dos barracos: fachadas, telhados e chance de 1/2/3/(4+) andares (acumulada)
-    LOOK: { facades: ['brick0', 'brick1', 'brick2', 'brick0', 'brick1', 'house0', 'house1', 'house2', 'house3', 'concrete0'],
+    LOOK: { facades: ['fav0', 'fav0', 'fav6', 'fav0', 'fav1', 'fav2', 'fav3', 'fav4', 'fav5', 'fav7', 'fav7', 'fav8', 'fav9', 'fav6'],
         roofs: ['zinc0', 'zinc1', 'zinc0', 'tarp0', 'tarp1', 'tarp2', 'slab0', 'slab1', 'slab0', 'tile1', 'tile0'], floors: [0.4, 0.75, 0.95], maxFloors: 4 },
     R: { x0: -665, z0: 265, x1: -331, z1: 743 },        // caixa da grade de ocupação; a favela é a mancha dentro dela (occ, território)
     TILE: 48,
