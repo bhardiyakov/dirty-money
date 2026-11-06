@@ -137,11 +137,16 @@ const Config = {
 			tilt: (typeof location !== 'undefined' && +(location.search.match(/[?&]persegue=(\d+(?:\.\d+)?)/) || [])[1]) || 45,
 			back: 8.5, drop: 11, fov: 50, speedBack: 3, speedFov: 6, bikeBack: -1.5, bikeTilt: 0, yawBoost: 0.9, minZ: 1.4,
 			near: 55, far: 125, lerp: 1.8, shadowAhead: 18, shadowHalf: 40,
+			// A PÉ, a mesma câmera (a mesma inclinação e o mesmo campo de visão dos veículos), mais perto: footBack m atrás do personagem
+			// (corrida: + footRunBack até footRef m/s), o zoom do jogador aproxima ou afasta (×). `?ape=alto` = a câmera alta de antes a pé.
+			foot: !(typeof location !== 'undefined' && /[?&]ape=alto\b/.test(location.search)), footBack: 7.8, footRunBack: 1.8, footRef: 7, footRoof: 1.8,
+			footZoomMin: 0.6, footZoomMax: 2.2,
 		},
 		// A PÉ: a câmera gira sozinha para as COSTAS do personagem quando ele anda numa direção por um tempo (virou a rua) — devagar e só
 		// andando (parado ou dando passos curtos ela não mexe). O jogador ainda gira a mão (e aí ela espera lookHold s para voltar a seguir).
 		// footFollow: rapidez (1/s) a pé, até footYawSpeed m/s; footDelay = s andando na direção nova antes de começar a virar.
 		footFollow: 1.1, footYawSpeed: 3, footDelay: 0.8,
+		footFollowChase: 1.9, footDelayChase: 0.45,      // (na câmera de perseguição a pé: mais rápido para as costas, como atrás do carro)
 	},
 
 	// Relógio do jogo: 24h do jogo duram `cycleSeconds` reais. Começa no fim da tarde para

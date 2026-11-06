@@ -7,7 +7,7 @@ const { boot, gameWait, leave } = require('./lib.cjs');
 module.exports = {
     name: 'perspectiva',
     async run(ctx, c) {
-        const { page, errors, close } = await boot(ctx, { outside: false });
+        const { page, errors, close } = await boot(ctx, { outside: false, query: 'ape=alto' });      // (a câmera alta: a pé, a padrão agora é a de perseguição)
         const inside = await page.evaluate(() => ({ flat: game.camera.flat, mode: game.camera.camera.mode, persp: game.camera.persp }));
         c.ok(inside.flat && !inside.persp, 'nos interiores, a câmera de cima de sempre');
         await leave(page);
@@ -54,7 +54,7 @@ module.exports = {
         c.noErrors(errors, 'perspectiva');
         await close();
         // `?cam=ortho`: a câmera ortográfica de antes continua disponível
-        const o = await boot(ctx, { query: 'cam=ortho' });
+        const o = await boot(ctx, { query: 'cam=ortho&ape=alto' });
         const om = await o.page.evaluate(() => ({ mode: game.camera.camera.mode, persp: game.camera.persp, tilted: game.camera.tilted }));
         c.ok(om.tilted && !om.persp && om.mode === 1, '?cam=ortho: a câmera 2,5D ortográfica de antes');
         c.noErrors(o.errors, 'ortográfica');

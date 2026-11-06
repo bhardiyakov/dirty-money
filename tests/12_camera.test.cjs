@@ -7,7 +7,7 @@ const { boot, gameWait, leave } = require('./lib.cjs');
 module.exports = {
     name: 'camera',
     async run(ctx, c) {
-        const { page, errors, close } = await boot(ctx, { outside: false });
+        const { page, errors, close } = await boot(ctx, { outside: false, query: 'ape=alto' });      // (a câmera alta a pé; a de perseguição a pé: 43_camera3p)
         // lat: distância (m) do centro da tela ao eixo do veículo dirigido — olhando em volta, ele não sai do meio
         const cam = () => page.evaluate(() => {
             const C = game.camera, v = game.mode === 'car' && game.activeCar, f = v && v.fwdToRef(new BABYLON.Vector3());
@@ -165,7 +165,7 @@ module.exports = {
 
         // 8) celular: um dedo não gira (o polegar escorregando de um botão virava o mundo); dois dedos: pinça = zoom, torcer = gira; o botão
         // de bússola ao lado do radar volta o norte para cima
-        const M = await boot(ctx, { touch: true, width: 844, height: 390 });
+        const M = await boot(ctx, { touch: true, width: 844, height: 390, query: 'ape=alto' });
         const tp2 = M.page;
         // (os gestos: o giro automático para as costas de quem anda — Config.camera.footFollow — fica de fora, o joystick anda um pouco)
         await tp2.evaluate(() => { Tutorial.skip(); game.player.invulnerable = true; Config.camera.footFollow = 0; });
