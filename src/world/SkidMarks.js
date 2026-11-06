@@ -75,6 +75,7 @@ const SkidMarks = {
 
     // Um trecho de A até B, largura W, força k.
     _seg(ax, az, bx, bz, y, k) {
+        y += (typeof Relief !== 'undefined' ? Relief.at((ax + bx) / 2, (az + bz) / 2) : 0);      // (relevo)
         const dx = bx - ax, dz = bz - az, l = Math.sqrt(dx * dx + dz * dz) || 1, nx = -dz / l * this.W * 0.5, nz = dx / l * this.W * 0.5;
         const i = this.next, p = this.pos, c = this.col, o = i * 12, q = i * 16, t = this.time;
         p[o] = ax + nx; p[o + 1] = y; p[o + 2] = az + nz;

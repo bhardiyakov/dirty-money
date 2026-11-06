@@ -33,6 +33,9 @@ const Corcovado = {
     built: false, net: null, ride: null,
 
     W(x, z) { return [this.C.x + x, this.C.z + z]; },
+    // RELEVO DE VERDADE (Config.relief.corcovado): o complexo inteiro fica no PLATÔ do maciço (WorldMap.buildTerrain), `base` m acima do
+    // mar — as alturas daqui (morro, mirante, escadas, trem, elevador, deckH de quem anda nelas) seguem locais, em cima do platô.
+    get base() { return typeof Relief !== 'undefined' && Relief.on ? Config.relief.corcovado : 0; },
     local(x, z) { return { x: x - this.C.x, z: z - this.C.z }; },
     // Raio do pé do morro na direção a (contorno orgânico).
     _rim(a) { return this.R * (1 + 0.045 * Math.sin(a * 3 + 1.3) + 0.03 * Math.sin(a * 5 + 0.4)); },
@@ -232,17 +235,17 @@ const Corcovado = {
                 else if (T.u <= 0) { T.u = 0; T.dir = 1; T.wait = 10; }
             }
         }
-        if (this._cab) this._cab.position.y = this.lift.y + 1.42;
+        if (this._cab) this._cab.position.y = this.lift.y + 1.42 + this.base;
         if (this._train) {
             const pitch = Math.atan2(this.RAIL.h, this.RAIL.x0 - this.RAIL.x1);
-            this._train.forEach((car, i) => { const q = this._trainAt(T.u + 3 + i * 5.6); car.position.set(q.x, q.y + 0.45, q.z); car.rotation.z = -pitch; });
+            this._train.forEach((car, i) => { const q = this._trainAt(T.u + 3 + i * 5.6); car.position.set(q.x, q.y + 0.45 + this.base, q.z); car.rotation.z = -pitch; });
         }
     },
 
     // ---------------------------------------------------------------- geometria
     meshes(wb) {
         if (!this.built) return;
-        const t0 = performance.now();
+        const t0 = performance.now(), n0 = wb.scene.meshes.length;
         this._wb = wb;
         this._meshHill(wb);
         this._meshPlatform(wb);
@@ -254,6 +257,15 @@ const Corcovado = {
         this._meshGate(wb);
         this._meshTrees(wb);
         for (const [x0, z0, x1, z1] of this._rows) { const a = this.W(x0, z0), b = this.W(x1, z1); wb._collider('corcovado', a[0], a[1], b[0], b[1], 20); }
+        // (relevo: as malhas próprias do complexo — o morro, o Cristo, o vidro do elevador, as placas… — sobem até o platô; o que vai nos
+        // lotes do mundo, o MeshBatch já sobe pelo chão do platô)
+        const B = this.base;
+        if (B) for (const m of wb.scene.meshes.slice(n0)) {
+            if (m.parent || /^world_/.test(m.name)) continue;
+            const fr = m.isWorldMatrixFrozen; if (fr) m.unfreezeWorldMatrix();
+            m.position.y += B;
+            if (fr) m.freezeWorldMatrix();
+        }
         console.log(`[CORCOVADO] geometria em ${(performance.now() - t0).toFixed(0)} ms`);
     },
     _c(c, k = 1) { return Landmarks._c(c, k); },

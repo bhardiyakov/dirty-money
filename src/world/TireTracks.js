@@ -239,7 +239,7 @@ const TireTracks = {
         const c = this.surface(x, z), l = Math.sqrt(d2), ax = dx / l, az = dz / l;
         const W = hw * (1 + 0.7 * Math.min(1, slip)) * this.WR, nx = az * W, nz = -ax * W;      // derrapando, o rastro alarga
         if (!c) { s.on = false; return false; }
-        const y = c & 4 ? Config.city.curbHeight + 0.025 : 0.035;
+        const y = (c & 4 ? Config.city.curbHeight + 0.025 : 0.035) + (typeof Relief !== 'undefined' ? Relief.at(x, z) : 0);      // (relevo)
         if (!s.on || s.c !== c) {                                        // começo do rastro (ou troca de chão): só marca a borda inicial
             s.on = true; s.c = c; s.y = y;
             s.lx = x + nx; s.lz = z + nz; s.rx = x - nx; s.rz = z - nz;

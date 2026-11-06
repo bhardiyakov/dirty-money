@@ -55,6 +55,9 @@ class SpriteActor {
 		this.shade = 1;                // 1 = ao sol, ~0,66 = na sombra de um prédio.
 		this._shadeTimer = Math.random() * 0.3;
 		this.mesh.position.y = 0.5;
+		// RELEVO (map/Relief.js): o quad fica num nó que sobe a altura do chão onde ele está (setPosition) — quem mexe na altura do
+		// desenho (pulo, arremesso, toldo) continua mexendo em mesh.position.y, relativo ao chão.
+		if (typeof Relief !== 'undefined' && Relief.on) { this.lift = new BABYLON.TransformNode(name + '_chao', scene); this.mesh.parent = this.lift; this.mesh._cullOwn = true; }      // (_cullOwn: o recorte da tela usa a posição do quad, não a do pai)
 		this.mesh.isPickable = false;
 		this.mesh.isVisible = false;   // só aparece quando recebe a 1ª posição (senão nasce na origem (0,0) e "pisca" lá por um quadro)
 		// Culling por frustum (antes ficava sempre ativo: TODO pedestre e carro do mundo era desenhado, mesmo fora da tela). O quad tem
@@ -71,7 +74,8 @@ class SpriteActor {
 	// 2.5D camera (CompassCamera.tilted): 2.5D characters STAND UP — a vertical quad turned to the camera (BILLBOARDMODE_Y), stretched by
 	// 1/cos(tilt) so the art, rendered at that same angle, shows 1:1 on screen. The top-down camera keeps them lying on the ground.
 	static standing() { return typeof CompassCamera !== 'undefined' && !!CompassCamera.tilted; }
-	static get STAND_SCALE() { return 1 / Math.cos(((typeof Config !== 'undefined' && Config.camera.tilt) || 56) * Math.PI / 180); }
+	// (a inclinação de AGORA: na perseguição a câmera desce e o boneco em pé estica menos — senão ficaria comprido)
+	static get STAND_SCALE() { return 1 / Math.cos(((typeof CompassCamera !== 'undefined' && CompassCamera.tiltDeg) || (typeof Config !== 'undefined' && Config.camera.tilt) || 56) * Math.PI / 180); }
 
 	// O sprite gira no ângulo exato (clipe vetorial)? (CarLights e quem mais precisar da frente desenhada.)
 	get rotates() { return !!(this.clip && this.clip.vector); }
@@ -344,6 +348,7 @@ class SpriteActor {
 	setPosition(x, z) {
 		this.mesh.position.x = x;
 		this.mesh.position.z = z;
+		if (this.lift && (x !== this._lx || z !== this._lz)) { this._lx = x; this._lz = z; this.lift.position.y = Relief.at(x, z); }
 		if (!this._placed) { this._placed = true; this._vis(); }
 	}
 	// Aparece quando já tem posição e — 2,5D — algo desenhado (a página do clipe chegou).
@@ -409,6 +414,7 @@ class SpriteActor {
 		this._updateShade(dt);
 		if (c.npc) this._updateCover();
 		if (c.npc && this._stand !== SpriteActor.standing()) this._setStanding(SpriteActor.standing());      // (entered/left an interior)
+		if (this._stand && this.mesh.scaling.y !== SpriteActor.STAND_SCALE) this.mesh.scaling.y = SpriteActor.STAND_SCALE;      // (a câmera desceu/subiu)
 		if (c.npc && this._yaw !== SpriteActor.viewYaw()) {                // câmera bússola girou: o quad acompanha e a direção desenhada é refeita
 			this._yaw = SpriteActor.viewYaw();
 			if (!this._stand) this.mesh.rotation.y = this._yaw;            // (standing, the billboard already faces the camera)
@@ -580,6 +586,6 @@ class SpriteActor {
 
 	setVisible(v) { this.mesh.setEnabled(v); }
 
-	dispose() { this.mesh.dispose(); SpriteActor.live.delete(this); if (typeof NpcArt !== 'undefined') NpcArt._waiters.delete(this); }
+	dispose() { this.mesh.dispose(); if (this.lift) this.lift.dispose(); SpriteActor.live.delete(this); if (typeof NpcArt !== 'undefined') NpcArt._waiters.delete(this); }
 }
 SpriteActor.live = new Set();

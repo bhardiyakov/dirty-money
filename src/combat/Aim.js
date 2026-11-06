@@ -219,7 +219,7 @@ class Aim {
 	_screen(x, y, z) {
 		const sc = this.g.scene, eng = sc.getEngine(), cam = sc.activeCamera, cv = eng.getRenderingCanvas();
 		const w = eng.getRenderWidth(), h = eng.getRenderHeight(), r = cv.getBoundingClientRect();
-		const v = BABYLON.Vector3.Project(this._v.set(x, y, z), this._I, sc.getTransformMatrix(), cam.viewport.toGlobal(w, h));
+		const v = BABYLON.Vector3.Project(this._v.set(x, y + (typeof Relief !== 'undefined' ? Relief.at(x, z) : 0), z), this._I, sc.getTransformMatrix(), cam.viewport.toGlobal(w, h));
 		return { x: r.left + v.x * r.width / w, y: r.top + v.y * r.height / h };
 	}
 

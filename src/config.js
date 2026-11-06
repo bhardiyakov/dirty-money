@@ -124,10 +124,39 @@ const Config = {
 		// roll = inclinação (rad) por rad/s de giro, até rollMax; bump = força dos trancos do asfalto (pulso no zoom, mola hStiff/hDamp);
 		// rumble = trepidação (u) a partir de rumbleRef m/s.
 		bounce: { lag: 0.07, maxAcc: 22, accLerp: 10, stiff: 26, damp: 3.6, roll: 0.012, rollMax: 0.03, bump: 0.18, hStiff: 60, hDamp: 6, rumble: 0.05, rumbleRef: 30 },
+		// PERSEGUIÇÃO (3ª pessoa dirigindo carro e moto — CompassCamera: chase): a câmera desce para trás do veículo e gira com ele, mas fica
+		// INCLINADA tilt graus acima do horizonte — entre a alta (56°, o ângulo em que os personagens 2,5D foram desenhados; padrão 45°) e a de jogo de
+		// corrida: abaixo de ~35° pedestres e piloto, desenhados vistos de cima, ficam estranhos na rua. back = quanto atrás do veículo (m) e
+		// drop = quantos graus abaixo do centro da tela o veículo fica (a altura sai daí: back × tan(tilt + drop)); fov = campo de visão
+		// vertical (graus); em velocidade (até speedRef) ela recua speedBack m e abre speedFov graus; na moto/bicicleta, bikeBack m mais perto.
+		// Veículo comprido recua junto. O que chega a menos de minZ m dela é cortado (um poste rente à câmera não tampa a tela). near/far = a
+		// névoa de distância (m da câmera; o alcance por preset em Graphics). yawBoost = quanto mais rápido ela gira atrás dele (×);
+		// lerp = rapidez da passagem a pé ↔ veículo. `?persegue=0` = a câmera alta de antes também dirigindo; `?persegue=N` (graus) = outra inclinação.
+		chase: {
+			on: !(typeof location !== 'undefined' && /[?&]persegue=0\b/.test(location.search)),
+			tilt: (typeof location !== 'undefined' && +(location.search.match(/[?&]persegue=(\d+(?:\.\d+)?)/) || [])[1]) || 45,
+			back: 8.5, drop: 11, fov: 50, speedBack: 3, speedFov: 6, bikeBack: -1.5, bikeTilt: 0, yawBoost: 0.9, minZ: 1.4,
+			near: 55, far: 125, lerp: 1.8, shadowAhead: 18, shadowHalf: 40,
+		},
+		// A PÉ: a câmera gira sozinha para as COSTAS do personagem quando ele anda numa direção por um tempo (virou a rua) — devagar e só
+		// andando (parado ou dando passos curtos ela não mexe). O jogador ainda gira a mão (e aí ela espera lookHold s para voltar a seguir).
+		// footFollow: rapidez (1/s) a pé, até footYawSpeed m/s; footDelay = s andando na direção nova antes de começar a virar.
+		footFollow: 1.1, footYawSpeed: 3, footDelay: 0.8,
 	},
 
 	// Relógio do jogo: 24h do jogo duram `cycleSeconds` reais. Começa no fim da tarde para
 	// a noite chegar logo (faróis, postes e janelas acesas).
+	// RELEVO DE VERDADE (map/Relief.js): os morros e as favelas em 3D na tela (a física e a navegação seguem no plano). scale = exagero
+	// das alturas do WorldMap; tess = lado máximo (m) do piso subdividido para seguir a encosta; fit = onde a casa nivela entre o chão mais baixo
+	// e o mais alto embaixo dela (0,7: encaixada do lado de cima, sobre pilares do lado de baixo). corcovado = altura (m) do platô do Cristo
+	// (WorldMap.buildTerrain: o maciço; o complexo sobe junto — Corcovado.base); pao / urca = altura do Pão de Açúcar e do Morro da Urca.
+	// `?relevo=0` volta ao chão plano de antes.
+	relief: { on: !(typeof location !== 'undefined' && /[?&]relevo=0\b/.test(location.search)), scale: 1.0, tess: 4.2, fit: 0.7, corcovado: 300, pao: 110, urca: 38 },
+
+	// NECESSIDADES (player/Needs.js): fome e cansaço DESLIGADOS — sem barras, sem avisos, sem fôlego/mira piores. Comer ainda cura e
+	// mexe no corpo (Physique: comer demais engorda), mas a saciedade não cai abaixo de 60 sozinha. `?necessidades=1` liga de volta.
+	needs: { on: typeof location !== 'undefined' && /[?&]necessidades=1\b/.test(location.search) },
+
 	time: {
 		cycleSeconds: 720,
 		start: 16.8,
@@ -329,6 +358,19 @@ const Config = {
 	//   DERRUBADA: o chute de um pedestre só derruba o jogador com a vida abaixo de `npcKnockHp` (fração) — antes, qualquer chute
 	//   derrubava (e eles chutam 1 em cada 4 golpes); o taco e o cassetete da polícia continuam derrubando.
 	melee: { v2: true, lunge: 1.8, lockTime: 1.6, lockRange: 4.5, stop: 0.07, stopFinisher: 0.16, npcKnockHp: 0.35 },
+	// POSTURA E INTERRUPÇÃO (combat/Posture.js, FightState): quem briga tem uma barra oculta de EQUILÍBRIO (max: civil / durão — assaltante,
+	// armado). Cada golpe gasta `cost[golpe]` (bala: gun); acertar durante a ANTECIPAÇÃO do golpe dele (wind-up) é CONTRA-ATAQUE: × counter e
+	// o golpe dele é cancelado. Sem levar golpe por regenDelay s, volta regen/s. Zerou: golpe leve → ATORDOADO (stun s, o próximo golpe
+	// pesado derruba, todo golpe dá × stunDmg); golpe pesado (chute, taco, cassetete) → ARREMESSADO com força knock (m/s).
+	// windup = [mín, máx] s que o NPC "segura" o golpe antes de soltar (a janela para reagir); tokens = quantos atacam ao mesmo tempo.
+	// Arremessado contra parede ou carro acima de splat m/s: dano splatDmg + splatK × (velocidade − splat) e fica caído mais splatRest s.
+	// Ao levantar: iframes s sem levar golpe (nada de apanhar no chão sem fim). Caído: bala só pega de até proneShot m.
+	posture: {
+		max: { civil: 32, tough: 48 }, regenDelay: 1.3, regen: 16, counter: 1.7, stun: 1.4, stunDmg: 1.3, knock: 7.5,
+		cost: { punch: 9, punchL: 7, kick: 17, swing: 30, stab: 14, baton: 15, gun: 10 },
+		windup: [0.26, 0.4], tokens: 2, splat: 5, splatDmg: 8, splatK: 3, splatRest: 1.2, iframes: 0.8, proneShot: 4,
+		flank: 1.5, circle: 2.6, moraleR: 15,
+	},
 
 	// TÁTICO do jogador a pé (player.js e combat/Cover.js): AGACHAR (Q · L3 no controle) = furtivo; agachado encostado num prédio,
 	// muro, caçamba, contêiner ou carro parado = EM COBERTURA; ROLAR (V longe de grade/muro · RB) = esquiva de balas.
@@ -408,6 +450,13 @@ const Config = {
 		maxSpeed: 26,          // Velocidade máx. à frente (m/s).
 		maxReverse: 9,         // Velocidade máx. de ré (m/s).
 		bikeReverse: 1.4,      // moto e bicicleta "de ré": o piloto anda para trás com os pés no chão (m/s)
+		// Bicicleta do jogador no morro (Vehicle.drive): g = fração da gravidade ao longo da encosta (rolamento e ar descontados); roll =
+		// desaceleração solta no plano (m/s², só o rolamento: ela embala); na subida a máxima cai a 1/(1 + upK × inclinação), no mínimo minUp;
+		// na descida pode passar da máxima até downTop ×.
+		bikeGrade: { g: 0.75, roll: 0.35, upK: 2.2, minUp: 0.35, downTop: 1.6 },
+		// Carro e moto do jogador no relevo de verdade (Relief): gravidade (fração) ao longo da encosta, a máxima na subida ÷ (1 + upK × inclinação)
+		// e, na descida, até downTop × a máxima.
+		carGrade: { g: 0.45, upK: 0.7, downTop: 1.15 },
 		hpMul: 2.2,            // Resistência de TODOS os veículos × a do catálogo (spec.hp): lataria mais dura (batidas e tiros).
 		turnRate: 2.0,         // Guinada máx. (rad/s) em velocidade plena.
 		turnSpeedRef: 6,       // Velocidade (m/s) para direção com autoridade total.
@@ -454,8 +503,14 @@ const Config = {
 	respawn: { hoursMin: 12, hoursMax: 14 },
 
 	// Gasolina (só veículos terrestres): burn = litros/s com o acelerador a fundo e o carro em velocidade máxima (0,1 do valor em marcha
-	// lenta); price = $ por litro; fillRate = litros/s ao abastecer (segurar E num posto); warn = fração do tanque que dispara o aviso.
-	fuel: { burn: 0.2, price: 1.6, fillRate: 7, warn: 0.2 },
+	// lenta — ~11 min a fundo num tanque de 45 L); price = $ por litro; fillRate = litros/s ao abastecer (segurar E num posto); warn = fração
+	// do tanque que dispara o aviso. RESERVA: abaixo de `reserve` L o motor não morre — perde força (o acelerador vai a `limp`) e dá para
+	// chegar devagar a um posto; o último `reserve` L não acaba nunca. Carro encontrado na rua tem de start×tanque a cheio.
+	fuel: { burn: 0.07, price: 1.6, fillRate: 7, warn: 0.2, reserve: 1.5, limp: 0.4, start: 0.55 },
+	// CARROS ELÉTRICOS (Vehicle.electric: os modelos em `models`): sem gasolina — a BATERIA (0..100%) gasta como o tanque (`burn` %/s a
+	// fundo) e recarrega PARADO num ELETROPOSTO (WorldBuilder._chargers: até `max` pela cidade, a cada `spacing` u; no mapa/radar 🔌):
+	// `rate` %/s, `price` $ por %. Bomba de gasolina e galão não servem. Na reserva (abaixo de `reserve` %) também perde força, sem parar.
+	charge: { models: ['mini_eletrico'], burn: 0.12, rate: 6, price: 0.9, reserve: 3, max: 16, spacing: 240, radius: 7 },
 
 	// Clima (src/world/Weather.js): estados clear | drizzle (chuva fraca) | rain (chuva forte) | storm (tempestade com raios e trovões).
 	// Chuva NÃO é diária: cada dia do jogo sorteia se chove (rainDayChance); dia seco = céu limpo. Dia chuvoso tem 1–2 episódios

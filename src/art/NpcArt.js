@@ -476,6 +476,8 @@ const NpcArt = {
 			uniform float ppu;
 			uniform float lift;
 			uniform vec2 stand;          // standing quad (2.5D camera): x = drop of the feet to the ground, y = depth bias (NDC)
+			uniform vec3 eye;            // (névoa de distância da câmera de perseguição: a distância do olho)
+			varying float vFd;
 			varying vec2 vPx;
 			varying vec4 vFr;
 			varying vec2 vC;
@@ -496,7 +498,8 @@ const NpcArt = {
 				vW = vec3(position.x, h, color.a);                          // x e "altura" na imagem (m), linha d'água (m, 0 = seco)
 				vec4 wp = world * vec4(position, 1.0);
 				wp.y -= stand.x;
-				vG = wp.xz;                                                 // (ponto do chão onde este pixel do desenho cai: recorte do carro)
+				vG = wp.xz;
+				vFd = length(wp.xyz - eye);                                                 // (ponto do chão onde este pixel do desenho cai: recorte do carro)
 				gl_Position = viewProjection * wp;
 				// Standing: the quad already has its true height. The art BELOW the feet (the front foot of a stride toward the camera, a
 				// swimmer lying on the water, the shadow) would sit under the ground or the water in front and get cut, so it tests the
@@ -554,6 +557,9 @@ const NpcArt = {
 			uniform vec4 silhouette;     // X-ray pass: tint (rgb) and strength (a), 0 = the normal drawing
 			uniform sampler2D lfTex;     // campo de luz da noite (NightLights): centro x, z, 1 / tamanho e força em lfP
 			uniform vec4 lfP;
+			uniform vec4 fogP;           // névoa de distância (câmera de perseguição): início, fim (m do olho), ligada
+			uniform vec3 fogC;
+			varying float vFd;
 			float hb(float n) { return fract(sin(n) * 43758.5453); }
 			vec4 tap(vec2 t, vec4 R) {
 				if (t.x < R.x || t.y < R.y || t.x >= R.z || t.y >= R.w) return vec4(0.0);
@@ -667,6 +673,7 @@ const NpcArt = {
 					vec2 lfUV = (vG - lfP.xy) * lfP.z + 0.5;
 					if (lfUV.x > 0.0 && lfUV.x < 1.0 && lfUV.y > 0.0 && lfUV.y < 1.0) c.rgb += c.rgb * texture2D(lfTex, lfUV).rgb * lfP.w * 0.85;
 				}
+				if (fogP.z > 0.5) c.rgb = mix(c.rgb, fogC * c.a, clamp((vFd - fogP.x) / (fogP.y - fogP.x), 0.0, 1.0));      // (pré-multiplicado)
 				gl_FragColor = c;
 			}`;
 	},
@@ -683,7 +690,7 @@ const NpcArt = {
 	_newMaterial(P, prefix) {
 		const A = P.A, m = new BABYLON.ShaderMaterial(prefix + A.id + '_' + P.i, this._scene, { vertex: 'npcArt', fragment: 'npcArt' }, {
 			attributes: ['position', 'color', 'fr', 'fr2'],
-			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'hs', 'palRows', 'tint', 'shadeC', 'sharp', 'mini', 'aa', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette', 'lfP'],
+			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'hs', 'palRows', 'tint', 'shadeC', 'sharp', 'mini', 'aa', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette', 'lfP', 'eye', 'fogP', 'fogC'],
 			samplers: ['atlas', 'palette', 'lfTex'],
 			defines: this.aa > 1 ? ['#define AA'] : [],
 			needAlphaBlending: true,
@@ -707,6 +714,7 @@ const NpcArt = {
 		m.setTexture('atlas', P.tex || this._emptyTex());
 		m.setTexture('lfTex', (typeof NightLights !== 'undefined' && NightLights.tex) || this._emptyTex());
 		m.setVector4('lfP', (typeof NightLights !== 'undefined' && NightLights.P) || this._noLF || (this._noLF = new BABYLON.Vector4(0, 0, 0, 0)));
+		m.setVector3('eye', this._eye); m.setVector4('fogP', this._fogP); m.setColor3('fogC', this._scene.fogColor);      // (referências: tick muda os valores)
 		m.setVector2('atlasSize', P.asz ? P.asz.set(this._tw(P), this._th(P)) : (P.asz = new BABYLON.Vector2(this._tw(P), this._th(P))));
 		m.setFloat('hs', P.hs || 1);
 		m.setFloat('sharp', this._sharpOf(P.A));
@@ -761,6 +769,16 @@ const NpcArt = {
 	_shadeC: new BABYLON.Color3(0.66, 0.66, 0.66),
 	setShadeColor(c) { this._shadeC.set(c ? c[0] : 0.66, c ? c[1] : 0.66, c ? c[2] : 0.66); },
 	_stand: new BABYLON.Vector2(0, 0),
+	_eye: new BABYLON.Vector3(0, 0, 0),
+	_fogP: new BABYLON.Vector4(0, 1, 0, 0),
+	// Névoa de distância (só na câmera de perseguição, CompassCamera.chase): as do Babylon, lidas da cena a cada quadro.
+	_fogSync() {
+		const sc = this._scene, cam = sc && sc.activeCamera;
+		if (!cam) return;
+		const on = typeof CompassCamera !== 'undefined' && CompassCamera.chase >= 0.5;
+		this._fogP.set(sc.fogStart, sc.fogEnd, on ? 1 : 0, 0);
+		if (on) this._eye.copyFrom(cam.globalPosition || cam.position);
+	},
 	_standSync() {
 		const on = typeof SpriteActor !== 'undefined' && SpriteActor.standing(), cam = this._scene && this._scene.activeCamera;
 		let bias = 0;
@@ -778,6 +796,7 @@ const NpcArt = {
 	tick(t) {
 		this.now = t;
 		this._standSync();
+		this._fogSync();
 		this._wt = t % 1000;
 		for (const P of this._live) P.mat.setFloat('wt', this._wt);
 		if (this._zombies.length) this._reap();

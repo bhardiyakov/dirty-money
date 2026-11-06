@@ -302,6 +302,22 @@ function NpcGenCore(G) {
     // em NpcGenRender._smooth. G.LINES = false e G.TOON = null = o visual "3D" sem contorno (antes de outubro/2026).
     G.LINES = true;
     G.TOON = { dark: 0.42, lit: 0.78, soft: 0.06, tex: 0.08, spec: 0.2, outline: 1.75, face: 1.4 };
+    // REALISTA (G.REAL, com G.TOON = null e G.LINES = false): o boneco iluminado como o mapa 3D — a luz vem de onde o sol do jogo vem
+    // (Config.light.sunDir = [0,6, −1,8, −0,45]: noroeste e alto; aqui x = leste, y = norte, z = cima), céu por cima, oclusão mais funda,
+    // quase sem a luz de recorte, brilho fraco, olhos sem o branco de desenho e a cabeça menor (ADULT.head 0,64). Em NpcGenRender._smooth.
+    G.REAL = null;
+    G.STYLES = {
+        cartum: () => ({ LINES: true, TOON: G.TOON || { dark: 0.42, lit: 0.78, soft: 0.06, tex: 0.08, spec: 0.2, outline: 1.75, face: 1.4 }, REAL: null }),
+        real: () => ({ LINES: false, TOON: null, REAL: { L: [-0.31, 0.23, 0.92], amb: 0.12, sky: 0.22, sun: 0.7, wrap: 0.25, rim: 0.12, spec: 0.6, tex: 0.04 }, head: 0.64 }),
+    };
+    // Troca o estilo do desenho (antes de criar os renderizadores: a cabeça muda a malha assada).
+    G.setStyle = (name) => {
+        const s = G.STYLES[name] && G.STYLES[name]();
+        if (!s) throw new Error('estilo desconhecido: ' + name);
+        G.LINES = s.LINES; G.TOON = s.TOON; G.REAL = s.REAL;
+        if (s.head && G.ADULT) G.ADULT.head = s.head;
+        G.STYLE = name;
+    };
 
     Object.assign(G, {
         deg, V, nrm, I3, Rx, Ry, Rz, mm3, mv3, tmv3, col3, fromCols, M4, mm4, pt4, lookRot, arange, rint,

@@ -255,6 +255,7 @@ class NPC {
 	// kind: o golpe (Melee: punch, kick, stab, swing…) ou 'gun' — decide se ele revida e com quê (Temper, HurtState).
 	takeDamage(amount, from, source, impact, kind = null) {
 		if (!this.alive) return;
+		if (kind === 'gun' && typeof Posture !== 'undefined') this._postHit = Posture.hit(this, 'gun');      // (bala também gasta o equilíbrio)
 		this.hp -= amount;
 		this._hitBy = source;                                   // (quem bateu e com quê: quem revida, revida o jogador — ver HurtState)
 		this._hitKind = kind;
@@ -267,6 +268,7 @@ class NPC {
 	// fica no chão com o sprite de morto (e só então solta o dinheiro / conta como crime).
 	ragdoll(from, impact, lethal) {
 		if (this.rag) return;
+		this._downed();
 		this._clearActivity();
 		this.waiting = null; this.crossing = null;
 		if (this.index >= 0) { this.nav.crowd.removeAgent(this.index); this.index = -1; }
@@ -274,8 +276,30 @@ class NPC {
 		this.fsm.setState({ name: lethal ? 'DEAD' : 'RAG', update() {} });
 		this.rag = new Ragdoll(
 			{ actor: this.actor, pos: this.transform.position, onEnd: (dead) => this._ragEnd(dead) },
-			{ dx: impact.dx, dz: impact.dz, power: impact.power, lethal, onLand: (p) => { if (p > 4) AudioFX.thud(this.position.x, this.position.z); } });
+			{ dx: impact.dx, dz: impact.dz, power: impact.power, lethal, onLand: (p) => { if (p > 4) AudioFX.thud(this.position.x, this.position.z); }, onWall: (sp) => this._wallSplat(sp, impact) });
 		this.heading = this.rag.heading;
+	}
+
+	// Caiu (arremessado ou morto) no meio de uma briga: os parceiros dele reavaliam a moral (FightState.allyDown).
+	_downed() {
+		const S = this.fsm && this.fsm.current;
+		if (S && S.name === 'FIGHT' && typeof FightState !== 'undefined') FightState.allyDown(this, S.foe);
+	}
+
+	// PRENSADO contra uma parede ou um carro (Ragdoll._move, Config.posture): dano extra pela velocidade, o estalo (faíscas, poeira, som,
+	// tremor) e — se a vida acabar — termina caído morto (o crime é de quem arremessou).
+	_wallSplat(sp, impact) {
+		const S = Config.posture, g = this.ctx.game, p = this.position, dmg = S.splatDmg + S.splatK * (sp - S.splat);
+		this.hp -= dmg;
+		if (this.hp <= 0 && this.rag) { this.rag.lethal = true; this.alive = false; this._killSource = (impact && impact.by) || this._hitBy || 'player'; }
+		if (g && g.combat) for (let k = 0; k < 6; k++) g.combat.spark(p.x + (Math.random() - 0.5) * 0.6, 0.6 + Math.random() * 0.9, p.z + (Math.random() - 0.5) * 0.6, k % 2 ? [0.85, 0.8, 0.7] : [1, 0.55, 0.4]);
+		AudioFX.thud(p.x, p.z);
+		if (g && g.camera && g.player && hypot(g.player.position.x - p.x, g.player.position.z - p.z) < 20) {
+			g.camera.shake(0.45, impact ? impact.dx : 0, impact ? impact.dz : 0);
+			if (typeof g.slowMo === 'function' && (impact && impact.by) === 'player') g.slowMo(0.08, 0.1);
+		}
+		if (typeof Bubbles !== 'undefined') Bubbles.say(this, '💥', { ms: 1100, key: 'post' });
+		if (typeof Blood !== 'undefined') Blood.beat(this, dmg);
 	}
 
 	_ragEnd(dead) {
@@ -288,6 +312,7 @@ class NPC {
 			if (this.ctx.events) this.ctx.events.onKill(this, this._killSource, 'npc');
 			return;
 		}
+		this._ifr = Config.posture.iframes;                              // (levantou: um instante sem levar golpe — nada de apanhar no chão sem fim)
 		if (this._rage && this._rage.getUp()) return;                  // briga de trânsito: levanta ali mesmo, na pista (RoadRage)
 		// Levantou: volta ao NavMesh onde caiu e sai correndo.
 		const pos = this.nav.closestPoint(this.transform.position);
@@ -301,6 +326,7 @@ class NPC {
 	// Cai no chão (sprite 'dead' com poça de sangue); o agente sai do crowd para ninguém tropeçar no corpo.
 	// Com `impact`, antes disso ele é arremessado (o evento de morte só dispara ao pousar).
 	die(from, source, impact) {
+		this._downed();
 		this.alive = false;
 		this._rage = null;                                      // (morreu na briga de trânsito: o corpo não é mais dela — RoadRage)
 		this._clearActivity();
@@ -517,7 +543,7 @@ class NPC {
 	// NpcArt.STAND_BIAS toward the camera) instead of cutting through him.
 	static get UMB_AHEAD() { return 1.5; }
 	_umbrellaStanding(s) {
-		const p = this.transform.position, m = this._umbUp, e = Config.camera.tilt * Math.PI / 180, yaw = CompassCamera.yaw || 0, d = NPC.UMB_AHEAD;
+		const p = this.transform.position, m = this._umbUp, e = (CompassCamera.tiltDeg || Config.camera.tilt) * Math.PI / 180, yaw = CompassCamera.yaw || 0, d = NPC.UMB_AHEAD;
 		const feet = this.actor.mesh.position.y - NpcArt.LAYER_Y;
 		m.position.set(p.x - d * Math.cos(e) * Math.sin(yaw), feet + d * Math.sin(e), p.z - d * Math.cos(e) * Math.cos(yaw));
 		m.scaling.set(s, s * SpriteActor.STAND_SCALE, 1);
@@ -525,6 +551,7 @@ class NPC {
 
 	// ----- Loop -----
 	update(dt) {
+		if (this._ifr > 0) this._ifr -= dt;
 		this._umbrellaTick(dt);
 		if (this.rag) { this.rag.update(dt); return; }      // arremessado: o Ragdoll comanda o sprite e a posição
 		if (!this.alive) {                         // corpo no chão: só espera sumir e reaparecer

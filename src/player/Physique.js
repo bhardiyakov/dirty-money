@@ -76,6 +76,7 @@ const Physique = {
         // destreino: sem academia há 2 dias, o músculo acima do normal some devagar (~0,7/dia)
         const g = this.g, now = g ? this._now(g) : 0;
         if (this.muscle > 25 && now - this.lastTrain > 48) this.muscle = Math.max(25, this.muscle - 0.03 * h);
+        if (typeof Needs !== 'undefined' && !Needs.on) this.fed = Math.max(this.fed, 60);      // (fome desligada: nunca faminto — Config.needs)
         this.fat = this._c(this.fat, 0, 100); this.muscle = this._c(this.muscle, 5, 100);
         this._check();
     },

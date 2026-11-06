@@ -693,8 +693,9 @@ class Game {
 		} else if (this.mode === 'heli' && this.chopper) {
 			// Helicóptero: o controle é lido em _updateChoppers (que também prende o jogador invisível à posição dele e segue a câmera).
 		} else {
-			// Movimento relativo à câmera (a pé).
-			const { forward, right } = this.camera.getGroundBasis();
+			// Movimento relativo à câmera (a pé) — com a base travada enquanto ele segura a mesma direção (a câmera virando sozinha para as
+			// costas dele não muda para onde ele anda: CompassCamera.moveBasis).
+			const { forward, right } = this.camera.moveBasis(axis);
 			const move = right.scale(axis.x).add(forward.scale(axis.z));
 			if (move.lengthSquared() > 1e-4) move.normalize();
 			else move.setAll(0);
@@ -710,11 +711,13 @@ class Game {
 			HouseView.update(dt, this);                          // safe house: porta, luzes, seta (entrar = a porta de Interiors)
 			this.camera.setFlat(false);
 			// (no alto das escadarias do Corcovado: a câmera mira o personagem lá em cima — o ponto do chão que aparece no mesmo lugar da tela)
-			const pl = this.player, up = pl.walk ? pl.deckH / Math.tan(Config.camera.tilt * Math.PI / 180) : 0;
-			this.camera.follow(up ? (this._camUp || (this._camUp = new BABYLON.Vector3())).set(pl.position.x, 0, pl.position.z + up) : pl.position, dt);
+			const pl = this.player, up = pl.walk ? pl.deckH / Math.tan(this.camera.tiltDeg * Math.PI / 180) : 0;
+			// (a câmera vai para as costas de quem anda — não mirando: aí o corpo segue a mira, não o caminho)
+			this.camera.follow(up ? (this._camUp || (this._camUp = new BABYLON.Vector3())).set(pl.position.x, 0, pl.position.z + up) : pl.position, dt, null, this.aim && this.aim.active ? null : pl);
 		}
 
 		AudioFX.screech(this.mode === 'car' && this.activeCar ? this.activeCar.slide || 0 : 0);      // pneu cantando na derrapagem (Vehicle.slide)
+		this._hdDrive();
 		Perf.lap('jogador');
 		this._updateHeliFall(dt);
 		this._updateChoppers(dt);
@@ -742,7 +745,8 @@ class Game {
 		// --- Mundo (água animada, sombra seguindo o foco) ---
 		if (this.mode !== 'player') HouseView.update(dt, this);          // (de carro/helicóptero: a porta e a seta continuam)
 		Perf.lap('outros');
-		this.gameEngine.update(dt, this.camera.target, this.camera.groundHalf());
+		const sw = this.camera.shadowWindow(this.mode === 'car' ? this.activeCar : null);      // (perseguição: a sombra à frente do veículo)
+		this.gameEngine.update(dt, this.camera.target, sw.ground, sw.focus);
 		Perf.lap('mundo (água/sombra)');
 
 		// --- Hijack (entrar/sair do carro) ---
@@ -1317,6 +1321,19 @@ class Game {
 
 	// AVANÇO do golpe (luta nova, Config.melee): no preparo do soco/chute/taco o jogador desliza até o alvo (que pode estar andando),
 	// parando onde o golpe alcança; não atravessa parede. Acaba com o golpe, se o alvo cair ou se apanhar no meio.
+	// Perseguição: o carro que o jogador DIRIGE em alta definição (CarArt3D.loadHD — o mesmo modelo da garagem da tunagem: todos os
+	// lados, bordas redondas). Com a câmera baixa e perto, atrás dele, é o objeto maior da tela. Desceu (ou trocou de carro): o de antes
+	// volta ao modelo do jogo. O arquivo (~350 KB) só é baixado na 1ª vez que se entra num carro daquele modelo.
+	_hdDrive() {
+		const car = this.mode === 'car' && Config.camera.chase.on && Config.art.hdCar ? this.activeCar : null, v = car && car.visual;
+		const cur = this._hdVis;
+		if (cur && cur !== v) { if (cur._ldId) { cur.modelId = cur._ldId; cur._ldId = null; } this._hdVis = null; }
+		if (!v || v === this._hdVis || v.kind !== 'car' || typeof CarArt3D === 'undefined' || !v.modelId || /@hd$/.test(v.modelId)) return;
+		this._hdVis = v;
+		const id = v.modelId;
+		CarArt3D.loadHD(id).then((k) => { if (k && this._hdVis === v && v.modelId === id) { v._ldId = id; v.modelId = k; } });
+	}
+
 	_lungeTick(dt) {
 		const p = this.player, L = p._lunge;
 		if (!p.action || p.rag || !L.t.alive || L.t.rag || L.left <= 0) { p._lunge = null; return; }
@@ -1875,16 +1892,47 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		return null;
 	}
 
+	// Eletroposto perto (CityGrid.chargers, raio Config.charge.radius do carregador)?
+	_chargerAt(p) {
+		const R = Config.charge.radius;
+		for (const c of CityGrid.chargers || []) if (Math.abs(c.x - p.x) < R && Math.abs(c.z - p.z) < R && hypot(c.x - p.x, c.z - p.z) < R) return c;
+		return null;
+	}
+
+	// Carro ELÉTRICO (Vehicle.electric): parado na vaga de um eletroposto, E (segurar) recarrega a bateria cobrando por %. Na bomba de
+	// gasolina, só o aviso de que ali não serve.
+	_chargeUpdate(car, dt) {
+		const E = Config.charge, frac = car.fuel / car.tank, c = this._chargerAt(car.position);
+		if (!c) { const st = this._stationAt(car.position); if (st) this._fuelPrompt = `<b>${st.name}</b><small>carro elétrico: recarregue num eletroposto 🔌 (no mapa)</small>`; return; }
+		if (car.speed > 1.5) { this._fuelPrompt = `<b>🔌 ${c.name}</b><small>pare na vaga verde para recarregar</small>`; return; }
+		if (frac > 0.999) { this._fuelPrompt = `<b>🔌 ${c.name}</b><small>bateria cheia</small>`; return; }
+		const inv = this.inventory;
+		if (this.input.keys['e']) {
+			const pct = Math.min(car.tank - car.fuel, E.rate * dt, (inv.cash + 0.99) / E.price);
+			if (pct <= 0) { this._fuelPrompt = '<b>Sem dinheiro</b><small>você não tem como pagar a recarga</small>'; return; }
+			car.fuel += pct;
+			this._fuelDebt = (this._fuelDebt || 0) + pct * E.price;
+			const whole = Math.floor(this._fuelDebt);
+			if (whole > 0) { inv.cash = Math.max(0, inv.cash - whole); this._fuelDebt -= whole; }
+			this._fuelTick = (this._fuelTick || 0) - dt;
+			if (this._fuelTick <= 0) { this._fuelTick = 0.3; AudioFX.blip(500 + frac * 700, 0.04, 0.06); }
+			if (car.fuel >= car.tank - 0.01) this._flash(`🔋 Bateria cheia — ${c.name}`);
+		}
+		const n = 10, on = Math.round(frac * n);
+		this._fuelPrompt = `<b>E</b> (segure) recarregar — R$ ${E.price.toFixed(2).replace('.', ',')}/%<small>${'▮'.repeat(on)}${'▯'.repeat(n - on)} 🔋 ${Math.round(car.fuel)}% · ${brl(inv.cash)}</small>`;
+	}
+
 	// Dirigindo um veículo a motor: avisos de tanque baixo/vazio e, parado perto de uma bomba, E (segurar) abastece cobrando o litro.
 	_fuelUpdate(dt) {
 		const car = this.activeCar, F = Config.fuel;
 		this._fuelPrompt = '';
 		if (!car || car.tank <= 0) return;
-		const frac = car.fuel / car.tank;
-		if (frac < F.warn && !car._fuelWarned) { car._fuelWarned = true; this._flash(`⛽ Pouca gasolina (${Math.round(frac * 100)}%) — procure um posto no mapa`); }
+		const frac = car.fuel / car.tank, el = car.electric, res = el ? Config.charge.reserve : F.reserve;
+		if (frac < F.warn && !car._fuelWarned) { car._fuelWarned = true; this._flash(el ? `🔋 Bateria baixa (${Math.round(frac * 100)}%) — procure um eletroposto 🔌 no mapa` : `⛽ Pouca gasolina (${Math.round(frac * 100)}%) — procure um posto no mapa`); }
 		else if (frac > F.warn + 0.1) car._fuelWarned = false;
-		if (car.fuel <= 0 && !car._fuelEmpty) { car._fuelEmpty = true; this._flash('⛽ SEM GASOLINA! O motor morreu — empurre até um posto ou roube outro carro'); }
-		else if (car.fuel > 0) car._fuelEmpty = false;
+		if (car.fuel > 0 && car.fuel < res && !car._fuelEmpty) { car._fuelEmpty = true; this._flash(el ? '🔋 Bateria na reserva: o motor perdeu força — vá devagar até um eletroposto 🔌' : '⛽ Na reserva: o motor perdeu força — dá para chegar devagar a um posto'); }
+		else if (car.fuel >= res + 1) car._fuelEmpty = false;
+		if (el) { this._chargeUpdate(car, dt); return; }
 
 		const st = this._stationAt(car.position);
 		if (!st) return;
@@ -3003,7 +3051,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 				// Estado do carro: barra de vida (e aviso quando fumaça/fogo).
 				const car = this.activeCar, blocks = Math.max(0, Math.min(8, Math.round(car.hpFrac * 8)));
 				const tag = car.burning > 0 ? ' 🔥' : (car.hpFrac < Config.crash.smokeBelow ? ' ♨' : '');
-				const fb = car.tank > 0 ? Math.max(0, Math.min(5, Math.round(car.fuel / car.tank * 5))) : -1, fuelTxt = fb < 0 ? '' : ` ⛽${'█'.repeat(fb)}${'░'.repeat(5 - fb)}`;
+				const fb = car.tank > 0 ? Math.max(0, Math.min(5, Math.round(car.fuel / car.tank * 5))) : -1, fuelTxt = fb < 0 ? '' : ` ${car.electric ? '🔋' : '⛽'}${'█'.repeat(fb)}${'░'.repeat(5 - fb)}`;
 				this.hud.mode.textContent = `${car.spec.name.toUpperCase()} ${'█'.repeat(blocks)}${'░'.repeat(8 - blocks)}${tag}${fuelTxt}`;
 				this.hud.mode.style.color = car.hpFrac < 0.3 ? '#ff5a4d' : '#00ff00';
 			} else {

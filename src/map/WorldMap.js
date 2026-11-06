@@ -247,6 +247,7 @@ const WorldMap = {
     // ETAPA 2 (depois do CityGrid): relevo (achatado onde há cidade/estrada), paredões, biomas.
     buildTerrain() {
         const W = Config.world, c = W.cell, nx = this.nx, nz = this.nz, N = nx * nz;
+        if (Config.relief && Config.relief.on) { const u = this.DOMES.find((d) => d.x === 262 && d.z === -1046); if (u) u.h = Config.relief.urca; }      // (relevo de verdade: o Morro da Urca alto)
         const land = this.land, h = this.h, biome = this.biome, flags = this.flags;
         const dWater = this._dWater, dSea = this._dSea, dLake = this._dLake, chamfer = this._chamfer;
         const X = (i) => W.minX + (i + 0.5) * c, Z = (j) => W.minZ + (j + 0.5) * c;
@@ -289,6 +290,28 @@ const WorldMap = {
             h[k] = Math.max(0, v);
         }
 
+        // RELEVO DE VERDADE (Config.relief): o MACIÇO DO CORCOVADO — platô plano a `corcovado` m em volta do complexo do Cristo (raio Rp) e a
+        // encosta descendo até Rb (inclinação ≤ ~1, sem virar paredão); desvia dos quarteirões planos (autódromo, vila, posto: ficam em
+        // patamar, com a pedra atrás) e desce até o nível do mar na costa. As estradas sobem junto (o relevo as desloca).
+        const RC = Config.relief;
+        if (RC && RC.on && typeof Corcovado !== 'undefined') {
+            const C = Corcovado.C, P = RC.corcovado, Rp = 95, Rb = Rp + 420;
+            this.MASSIF = { x: C.x, z: C.z, r: Rb, top: P };
+            // (o AUTÓDROMO — Speedway.SITES — fica no pé, num patamar plano: a montanha sobe atrás dele)
+            const keep = [];
+            if (typeof Speedway !== 'undefined') for (const q of Speedway.SITES) { const o = Speedway.outerR, hu = Speedway.S / 2 + o + 6; keep.push([q.x - o - 6, q.z - hu, q.x + o + 18, q.z + hu]); }
+            const kd = (x, z) => { let m = Infinity; for (const b of keep) m = Math.min(m, Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - z, 0, z - b[3]))); return m; };
+            for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+                const k = j * nx + i;
+                if (!land[k]) continue;
+                const x = X(i), z = Z(j), d = hypot(x - C.x, z - C.z);
+                if (d >= Rb) continue;
+                const u = Math.min(1, (Rb - d) / (Rb - Rp)), f = 0.7 * u + 0.3 * u * u * (3 - 2 * u);
+                let m = P * f * (d <= Rp ? 1 : 0.95 + 0.1 * this._fbm(x / 120, z / 120, 3, 91));
+                if (d > Rp) m *= this._ss(18, 90, dUrb[k] * c) * this._ss(0, 40, dWater[k] * c) * (keep.length ? this._ss(12, 85, kd(x, z)) : 1);
+                if (m > h[k]) h[k] = m;
+            }
+        }
         this._prof.heights = performance.now() - t0;
         // Inclinação -> paredões; biomas.
         const R = this.B, cliffS = W.cliffSlope;
@@ -311,6 +334,8 @@ const WorldMap = {
             else if (typeof Lagoa !== 'undefined' && Lagoa.zone(x, z, Lagoa.OUT2 + 4)) b = R.GRASS;           // (a Lagoa: orla de grama, sem brejo nem praia)
             else if (dLake[k] * c < 11 && hh < 6) b = R.SWAMP;
             else if (x > 300 && !pao) b = R.RESORT;
+            else if (this.MASSIF && hypot(x - this.MASSIF.x, z - this.MASSIF.z) < this.MASSIF.r && hh > 12)      // (o maciço do Corcovado: Mata Atlântica,
+                b = (flags[k] & 1) || slope > 0.95 || (hh > this.MASSIF.top * 0.82 && this._fbm(x / 40, z / 40, 2, 92) > 0.55) ? R.ROCK : R.FOREST;      //  pedra nos paredões e no alto)
             else if (hh > 36 || (hh > 20 && slope > 0.26) || (flags[k] & 1)) b = R.ROCK;
             else if (this._inFavela(x, z, hh)) b = R.FAVELA;
             else if (typeof Bairros !== 'undefined' && Bairros.zoneAt(x, z) === 'roca') b = this._fbm(x / 70, z / 70, 2, 46) > 0.52 ? R.FARM : R.GRASS;      // (a roça: pasto e lavoura, sem brejo)
@@ -476,7 +501,7 @@ const WorldMap = {
     },
 
     // Brilho do relevo em (x, z) para tingir o chão urbano que segue o morro (favela): >1 = voltado ao sol, <1 = sombra.
-    shadeAt(x, z, gain = 2.4) {
+    shadeAt(x, z, gain = typeof Relief !== 'undefined' && Relief.on ? 1.1 : 2.4) {
         const e = 6, hx = this.heightAt(x + e, z) - this.heightAt(x - e, z), hz = this.heightAt(x, z + e) - this.heightAt(x, z - e);
         const gx = hx / (2 * e), gz = hz / (2 * e), d = Config.light.sunDir, l = hypot(d[0], d[1], d[2]);
         const il = 1 / hypot(gx, 1, gz), lam = (-gx * (-d[0] / l) + (-d[1] / l) - gz * (-d[2] / l)) * il;

@@ -55,6 +55,7 @@ class WorldBuilder {
         this._marina();
         this._signalPoles();
         this._streetLamps();
+        this._chargers();
         this._favelaPoles();
         this._shopGlow();
         this._helipads();
@@ -799,6 +800,8 @@ class WorldBuilder {
             for (const lot of blk.lots) {
                 if (lot.safehouse) continue;           // a safe house tem construção própria (world/HouseView.js)
                 const { x0, z0, x1, z1, height: H } = lot;
+                MeshBatch.anchor = WorldBuilder.lotAnchor(lot);       // (relevo: o prédio fica NIVELADO no morro, rígido — MeshBatch)
+                this._footing(x0, z0, x1, z1, MeshBatch.anchor, this._batch('trim', x0, z0));      // (e, do lado de baixo, sobre pilares)
                 const so = rng() * 6, ro = rng();     // desloca padrões p/ quebrar repetição.
                 const trim = this._batch('trim', x0, z0);
 
@@ -849,6 +852,7 @@ class WorldBuilder {
                 this._collider(`bld_${blk.i}_${blk.j}_${lot.x0.toFixed(0)}`, x0, z0, x1, z1, H);
             }
         }
+        MeshBatch.anchor = null;
     }
 
     // TELHADOS COM VOLUME (etapa 4, Facades3D.roofs): o que a câmera alta vê de um prédio é sobretudo o telhado — as peças em 3D
@@ -891,6 +895,7 @@ class WorldBuilder {
         const SH = TileFactory.SHOPS, T = this.T.shops, eps = 0.03, y0 = 0.2, y1 = 3.0, AW = CityGrid.AWNING;
         const awn = [[1, 1, 1], [0.92, 0.9, 0.84]];
         for (const blk of CityGrid.blocks) for (const l of blk.lots) {
+            MeshBatch.anchor = l.shops && l.shops.length ? WorldBuilder.lotAnchor(l) : null;
             for (const s of l.shops || []) {
                 const S = SH[s.kind], u0 = (s.kind % T.cols) / T.cols, v0 = Math.floor(s.kind / T.cols) / T.rows, u1 = u0 + 1 / T.cols, v1 = v0 + 1 / T.rows;
                 const uv = [[u0, v0], [u1, v0], [u0, v1], [u1, v1]], a = s.a, b = s.a + 6;
@@ -908,6 +913,36 @@ class WorldBuilder {
                 }
             }
         }
+        MeshBatch.anchor = null;
+    }
+
+    // RELEVO (Relief): a altura em que uma construção fica NIVELADA no morro — rígida, com as proporções de sempre. Fica a `fit` (Config.relief)
+    // do caminho entre o ponto mais baixo e o mais alto do chão embaixo dela: do lado de cima ela entra um pouco no morro (encaixada), do
+    // lado de baixo fica sobre PILARES (_footing). { h, lo, hi } ou null (relevo desligado / chão plano).
+    static lotAnchor(l) { return WorldBuilder.rectAnchor(l.x0, l.z0, l.x1, l.z1); }
+    static rectAnchor(x0, z0, x1, z1) {
+        if (typeof Relief === 'undefined' || !Relief.on) return null;
+        let lo = Infinity, hi = -Infinity;
+        for (let i = 0; i <= 2; i++) for (let j = 0; j <= 2; j++) { const h = Relief.at(x0 + (x1 - x0) * i / 2, z0 + (z1 - z0) * j / 2); if (h < lo) lo = h; if (h > hi) hi = h; }
+        if (hi < 0.02) return null;
+        return { h: lo + (hi - lo) * Config.relief.fit, lo, hi };
+    }
+
+    // O PÉ de uma construção nivelada no morro (rectAnchor): onde o chão fica abaixo da laje, PILARES de concreto (nos cantos e a cada
+    // ~3 u na borda) do chão até ela e uma VIGA de borda logo abaixo — a casa de encosta da favela, sem esticar parede nenhuma.
+    _footing(x0, z0, x1, z1, A, b) {
+        if (!A || A.h - A.lo < 0.2) return;
+        const keep = MeshBatch.anchor, conc = [0.6, 0.58, 0.54], beam = [0.55, 0.53, 0.5], r = 0.17, I = 0.18;
+        MeshBatch.anchor = null;                                                  // (pilar: o pé segue o chão, o topo vai até a laje)
+        const col = (x, z) => { const g = Relief.at(x, z); if (A.h - g > 0.12) b.solid(x - r, z - r, x + r, z + r, -0.05, A.h - g, conc); };
+        const along = (ax, az, bx, bz) => { const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(L / 3.2)); for (let k = 0; k <= n; k++) col(ax + (bx - ax) * k / n, az + (bz - az) * k / n); };
+        const X0 = x0 + I, X1 = x1 - I, Z0 = z0 + I, Z1 = z1 - I;
+        along(X0, Z0, X1, Z0); along(X0, Z1, X1, Z1); along(X0, Z0, X0, Z1); along(X1, Z0, X1, Z1);
+        MeshBatch.anchor = A;                                                     // (viga: rígida, junto da casa)
+        const t = 0.22, y0 = -0.35, y1 = 0.02;
+        b.solid(x0, z0, x1, z0 + t, y0, y1, beam); b.solid(x0, z1 - t, x1, z1, y0, y1, beam);
+        b.solid(x0, z0 + t, x0 + t, z1 - t, y0, y1, beam); b.solid(x1 - t, z0 + t, x1, z1 - t, y0, y1, beam);
+        MeshBatch.anchor = keep;
     }
 
     // Peças soltas do campo (RuralPlan): coberturas e bombas de posto, placas, torres (água, rádio, eólicas) e docas do pântano.
@@ -1221,6 +1256,45 @@ class WorldBuilder {
         this.lampGlow.seal();
         this.lampGlow.setLevel(0);
         this.street = new StreetProps(this, lamps);
+    }
+
+    // ELETROPOSTOS (carros elétricos: Vehicle.electric — Game._chargeUpdate): carregadores na calçada, ao lado de um poste de rua, espalhados
+    // pela cidade (um a cada ~240 u, até Config.charge.max). Coluna branca com faixa e tela verdes, o cabo enrolado e uma luz verde que fica
+    // acesa dia e noite; no mapa e no radar, o ponto 'charge'. CityGrid.chargers = [{ x, z, rx, rz, name }] (rx, rz: do carregador para a rua).
+    _chargers() {
+        const C = Config.charge, lamps = (this.streetLamps || []).filter((l) => CityGrid.inCity(l.x, l.z)), out = [];
+        const h = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
+        lamps.sort((a, b) => h(a.x, a.z) - h(b.x, b.z));
+        for (const l of lamps) {
+            if (out.length >= C.max) break;
+            if (out.some((q) => Math.hypot(q.x - l.x, q.z - l.z) < C.spacing)) continue;
+            const L = Math.hypot(l.hx - l.x, l.hz - l.z) || 1, rx = (l.hx - l.x) / L, rz = (l.hz - l.z) / L;      // (do poste para a rua)
+            const x = l.x - rz * 1.7, z = l.z + rx * 1.7;                                                          // (1,7 u ao lado do poste, na calçada)
+            if (RoadPlan.onAsphalt(x, z, 0.3)) continue;
+            out.push({ x, z, rx, rz, name: 'Eletroposto ' + ['Volt', 'Faísca', 'Raio', 'Watt', 'Ampère', 'Tesla', 'Dínamo', 'Corrente', 'Pulso', 'Ohm', 'Plug', 'Bateria'][out.length % 12] });
+        }
+        CityGrid.chargers = out;
+        if (!out.length) return;
+        const white = [0.9, 0.92, 0.93], green = [0.16, 0.78, 0.42], dark = [0.08, 0.09, 0.1], cable = [0.05, 0.05, 0.06];
+        this.chargeGlow = new GlowGrid(this.scene, 'chargeGlow', out.flatMap((c) => [[c.x, c.z], [c.x, c.z]])).under();
+        for (const c of out) {
+            CityGrid.addPoi({ type: 'charge', name: c.name, x: c.x, z: c.z });
+            const b = this._batch('trim', c.x, c.z), ux = -c.rz, uz = c.rx;                                       // (u: ao longo da calçada)
+            b.obox(c.x, c.z, ux, uz, 0.42, 0.34, 0.18, 0.3, [0.55, 0.57, 0.6]);                                   // base de concreto
+            b.obox(c.x, c.z, ux, uz, 0.3, 0.22, 0.3, 1.7, white, 0.27, 0.2);                                      // coluna
+            b.obox(c.x, c.z, ux, uz, 0.31, 0.23, 1.25, 1.42, green);                                              // faixa verde
+            b.obox(c.x, c.z, ux, uz, 0.33, 0.25, 1.7, 1.78, green, 0.3, 0.22);                                    // tampa
+            b.obox(c.x + c.rx * 0.22, c.z + c.rz * 0.22, ux, uz, 0.16, 0.03, 0.95, 1.18, dark);                   // tela (virada para a rua)
+            b.obox(c.x - ux * 0.33, c.z - uz * 0.33, c.rx, c.rz, 0.08, 0.07, 0.55, 1.05, cable);                  // cabo enrolado no lado
+            b.obox(c.x - ux * 0.33 + c.rx * 0.12, c.z - uz * 0.33 + c.rz * 0.12, ux, uz, 0.06, 0.06, 0.5, 0.62, cable);    // conector
+            const g1 = this.chargeGlow.alloc(c.x, c.z), g2 = this.chargeGlow.alloc(c.x, c.z);
+            this.chargeGlow.place(g1, c.x + c.rx * 0.26, 1.07, c.z + c.rz * 0.26, 0.5);                           // a tela acesa
+            this.chargeGlow.color(g1, 0.3, 1.0, 0.55, 0.9);
+            this.chargeGlow.place(g2, c.x + c.rx * 1.6, WorldBuilder.POOL_Y, c.z + c.rz * 1.6, 5.5);              // a vaga, pintada de verde no chão
+            this.chargeGlow.color(g2, 0.2, 0.9, 0.45, 0.32);
+        }
+        this.chargeGlow.seal();
+        this.chargeGlow.setLevel(1);
     }
 
     // Vento atual (0..~1,3) que balança a vegetação: brisa leve por padrão; sobe com a chuva e dispara na tempestade (rajadas).
@@ -1621,7 +1695,7 @@ class WorldBuilder {
             const shaded = key0.endsWith('$'), key = shaded ? key0.slice(0, -1) : key0;      // 'sidewalk$' = chão tingido pelo relevo (vertex colors)
             const isTrim = key === 'trim' || key === 'xtrim' || key === 'btrim';
             const isVeg = key.startsWith('veg_'), isBlend = key.startsWith('blend_');
-            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend, receiveShadows: !isVeg, alwaysActive: at < 0 });
+            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend, receiveShadows: !isVeg, alwaysActive: at < 0, relief: true });
             this.meshes.push(mesh);
             if (isBlend) mesh.hasVertexAlpha = true;                                         // (o alfa por vértice é o degradê da faixa: GroundBlend)
             if (key === 'veg_hi') {                                                          // copas: desenham DEPOIS de pedestres, carros e sprites do chao (que nao escrevem profundidade), sempre por cima

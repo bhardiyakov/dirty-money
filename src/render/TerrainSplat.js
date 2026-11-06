@@ -62,7 +62,7 @@ const TerrainSplat = {
         m.diffuseTexture = atlasTex;                         // (só liga o caminho "com textura" do shader; a cor vem do plugin)
         m.specularColor = BABYLON.Color3.Black();
         m.transparencyMode = BABYLON.Material.MATERIAL_OPAQUE;      // (a textura RGBA "tem alfa": sem isto o chão iria para a passada transparente)
-        this._plugin(m, mapTex, atlasTex, { minX: W.minX, minZ: W.minZ, cell: W.cell, nx, nz, contour: W.contour, tile: T, atlas2: atlas2Tex, lod: !!atlas2Tex && scene.getEngine().webGLVersion >= 2 });
+        this._plugin(m, mapTex, atlasTex, { minX: W.minX, minZ: W.minZ, cell: W.cell, nx, nz, contour: typeof Relief !== 'undefined' && Relief.on ? 0 : W.contour, tile: T, atlas2: atlas2Tex, lod: !!atlas2Tex && scene.getEngine().webGLVersion >= 2 });
         return m;
     },
 
@@ -121,13 +121,13 @@ const TerrainSplat = {
                 // paredão: a encosta íngreme escurece (sombra), seguindo a curva da altura, não a borda da célula
                 float cliff = 1.0 - mix(mix(h00.a, h10.a, s.x), mix(h01.a, h11.a, s.x), s.y);         // marca de paredão, interpolada
                 if (cliff > 0.0) col *= 1.0 - 0.45 * smoothstep(0.3, 0.7, cliff) * smoothstep(0.6, 0.95, length(gr) + (tNoise(p * 1.7) - 0.5) * 0.15);
-                if ((max(max(ha, hb), max(hc, hd)) > 8.0 || own == 4.0 || own == 6.0) && length(gr) > 0.04) {      // (platô plano: sem linha)
+                ${P.contour > 0 ? `if ((max(max(ha, hb), max(hc, hd)) > 8.0 || own == 4.0 || own == 6.0) && length(gr) > 0.04) {      // (platô plano: sem linha)
                     float lv = hh / ${f(P.contour)}, m = floor(lv + 0.5);
                     float dist = abs(lv - m) * ${f(P.contour)} / max(length(gr), 0.02);
                     bool major = mod(m, 4.0) < 0.5;
                     float th = major ? 0.17 : 0.10, dk = major ? 0.36 : 0.52;
                     if (dist < th && m > 0.5) col = vec3(0.32 * dk + 0.1, 0.27 * dk + 0.08, 0.2 * dk + 0.05);
-                }
+                }` : '// (relevo de verdade: sem as curvas de nível — o morro já tem altura na tela)'}
                 return col;
             }`;
         class TerrainSplatPlugin extends BABYLON.MaterialPluginBase {

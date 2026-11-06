@@ -8,12 +8,15 @@
 
 const Needs = {
     energy: 85,
+    // Desligadas por padrão (Config.needs.on): energia sempre cheia, nenhum efeito, nenhum aviso.
+    get on() { return !!(typeof Config !== 'undefined' && Config.needs && Config.needs.on); },
 
     serialize() { return { energy: Math.round(this.energy * 10) / 10 }; },
     load(s) { this.energy = s && typeof s.energy === 'number' ? s.energy : 85; },
 
     _fed() { return typeof Physique !== 'undefined' ? Physique.fed : 70; },
     update(g, dt) {
+        if (!this.on) { this.energy = 100; return; }
         if (g.sleeping || !g.player || !g.player.alive) return;
         const dh = dt / ((typeof Config !== 'undefined' && Config.time && Config.time.cycleSeconds) || 720) * 24, pl = g.player;
         const busy = pl.winded || (pl.stamina != null && pl.staminaMax && pl.stamina < pl.staminaMax * 0.6);
@@ -29,10 +32,10 @@ const Needs = {
     _pick(a) { return a[Math.floor(Math.random() * a.length)]; },
 
     // efeitos
-    staminaMaxMul() { const e = this.energy; return (e < 20 ? 0.8 + e / 100 : 1) * (this._fed() < 15 ? 0.92 : 1); },
-    regenMul() { return (this._fed() < 15 ? 0.7 : 1) * (this.energy < 20 ? 0.8 : 1); },
-    spreadMul() { return this.energy < 20 ? 1.15 + (20 - this.energy) / 100 : 1; },
-    blink(time) { return this.energy < 8 ? Math.max(0, Math.sin(time * 0.7) - 0.85) * 3.5 : 0; },      // (0..~0.5: a vista escurece)
+    staminaMaxMul() { if (!this.on) return 1; const e = this.energy; return (e < 20 ? 0.8 + e / 100 : 1) * (this._fed() < 15 ? 0.92 : 1); },
+    regenMul() { if (!this.on) return 1; return (this._fed() < 15 ? 0.7 : 1) * (this.energy < 20 ? 0.8 : 1); },
+    spreadMul() { if (!this.on) return 1; return this.energy < 20 ? 1.15 + (20 - this.energy) / 100 : 1; },
+    blink(time) { if (!this.on) return 0; return this.energy < 8 ? Math.max(0, Math.sin(time * 0.7) - 0.85) * 3.5 : 0; },      // (0..~0.5: a vista escurece)
 
     // comer / beber / dormir
     onEat(id, kcal) {

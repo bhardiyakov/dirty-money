@@ -18,6 +18,17 @@ class MeshBatch {
 
     get empty() { return this.idx.length === 0; }
 
+    // RELEVO (map/Relief.js): enquanto MeshBatch.anchor = { h } estiver posto, o que os construtores empilham é uma CONSTRUÇÃO — no build,
+    // ela sobe `h` INTEIRA, rígida (nenhuma parede estica: a casa tem as proporções de sempre; o pé dela é resolvido por quem a constrói —
+    // pilares e viga de borda, WorldBuilder._footing). Sem âncora, cada vértice sobe a altura do chão embaixo dele.
+    static anchor = null;
+    _anc(n) {
+        const A = MeshBatch.anchor;
+        if (!A && !this.anc) return;
+        if (!this.anc) this.anc = new Array(this.pos.length / 3 - n).fill(NaN);
+        for (let k = 0; k < n; k++) this.anc.push(A ? A.h : NaN);
+    }
+
     // a,b,c,d: [x,y,z] | n: normal | uvs: [[u,v] x4] | color: [r,g,b] opcional (vertex color).
     // color: [r,g,b] para os 4 cantos, ou [[r,g,b] x4] (um por canto A,B,C,D) para degradês (sombreado do relevo).
     quad(a, b, c, d, n, uvs, color = [1, 1, 1]) {
@@ -25,6 +36,7 @@ class MeshBatch {
         const per = Array.isArray(color[0]);
         // (sem `for (const p of [a, b, c, d])`: o array e o iterador eram lixo a cada quad — milhares por pedaço de terreno)
         this.pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2], d[0], d[1], d[2]);
+        this._anc(4);
         for (let k = 0; k < 4; k++) {
             this.nor.push(n[0], n[1], n[2]);
             const c4 = per ? color[k] : color;
@@ -44,6 +56,7 @@ class MeshBatch {
         if (facing < 0) { [b, c] = [c, b]; uvs = [uvs[0], uvs[2], uvs[1]]; if (per) color = [color[0], color[2], color[1]]; }
         const base = this.pos.length / 3;
         this.pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+        this._anc(3);
         for (let k = 0; k < 3; k++) {
             const ck = per ? color[k] : color;
             this.nor.push(n[0], n[1], n[2]);
@@ -128,8 +141,46 @@ class MeshBatch {
 
     // Cria a malha no Babylon (já em coordenadas de mundo; transform congelado).
     // alwaysActive: false para malhas por pedaço (o frustum descarta as que estão fora da tela).
-    build(name, scene, material, { vertexColors = false, receiveShadows = true, alwaysActive = true } = {}) {
+    // Subdivide os triângulos de CHÃO (deitados, sem âncora) maiores que `max` m onde o relevo varia: o piso passa a seguir a encosta.
+    _tessellate(max) {
+        const P = this.pos, N = this.nor, U = this.uv, C = this.col, A = this.anc, I = this.idx, out = [], R = Relief;
+        const mid = (a, b) => {
+            const v = P.length / 3;
+            for (let k = 0; k < 3; k++) { P.push((P[a * 3 + k] + P[b * 3 + k]) / 2); N.push(N[a * 3 + k]); }
+            U.push((U[a * 2] + U[b * 2]) / 2, (U[a * 2 + 1] + U[b * 2 + 1]) / 2);
+            for (let k = 0; k < 4; k++) C.push((C[a * 4 + k] + C[b * 4 + k]) / 2);
+            if (A) A.push(NaN);
+            return v;
+        };
+        const stack = [];
+        for (let t = 0; t < I.length; t += 3) stack.push(I[t], I[t + 1], I[t + 2], 0);
+        while (stack.length) {
+            const d = stack.pop(), c = stack.pop(), b = stack.pop(), a = stack.pop();
+            const ax = P[a * 3], ay = P[a * 3 + 1], az = P[a * 3 + 2], bx = P[b * 3], by = P[b * 3 + 1], bz = P[b * 3 + 2], cx = P[c * 3], cy = P[c * 3 + 1], cz = P[c * 3 + 2];
+            const flat = Math.abs(ay - by) < 0.3 && Math.abs(ay - cy) < 0.3 && N[a * 3 + 1] > 0.85 && !(A && (A[a] === A[a] || A[b] === A[b] || A[c] === A[c]));
+            const e = Math.max(Math.hypot(bx - ax, bz - az), Math.hypot(cx - bx, cz - bz), Math.hypot(ax - cx, az - cz));
+            if (!flat || e <= max || d > 6) { out.push(a, b, c); continue; }
+            const ha = R.at(ax, az), hb = R.at(bx, bz), hc = R.at(cx, cz), hm = R.at((ax + bx + cx) / 3, (az + bz + cz) / 3);
+            if (Math.max(ha, hb, hc, hm) - Math.min(ha, hb, hc, hm) < 0.05) { out.push(a, b, c); continue; }
+            const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
+            stack.push(a, ab, ca, d + 1, ab, b, bc, d + 1, ca, bc, c, d + 1, ab, bc, ca, d + 1);
+        }
+        this.idx = out;
+    }
+    // Sobe cada vértice a altura do chão (ou, numa construção ancorada, toda ela por igual — ver anchor).
+    _relief() {
+        const R = Relief, P = this.pos, A = this.anc;
+        this._tessellate(Config.relief.tess);
+        for (let v = 0, n = P.length / 3; v < n; v++) {
+            const h = A && A[v] === A[v] ? A[v] : R.at(P[v * 3], P[v * 3 + 2]);
+            P[v * 3 + 1] += h;
+        }
+    }
+
+    build(name, scene, material, { vertexColors = false, receiveShadows = true, alwaysActive = true, relief = false } = {}) {
         if (this.empty) return null;
+        if (relief && typeof Relief !== 'undefined' && Relief.on) this._relief();
+        this.anc = null;
         const mesh = new BABYLON.Mesh(name, scene);
         const vd = new BABYLON.VertexData();
         // Arrays tipados (Float32/Uint16|32): metade da memória dos arrays comuns de doubles, e a malha guarda ESTA cópia (o batch

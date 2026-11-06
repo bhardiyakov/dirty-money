@@ -47,7 +47,7 @@ const Trees3D = {
             const T = b && b.trees;
             if (!T) continue;
             for (let i = 0; i < T.length; i += 5) {
-                const kind = T[i], x = T[i + 1], y0 = T[i + 2], z = T[i + 3], s = T[i + 4];
+                const kind = T[i], x = T[i + 1], y0 = T[i + 2] + (typeof Relief !== 'undefined' ? Relief.at(T[i + 1], T[i + 3]) : 0), z = T[i + 3], s = T[i + 4];      // (relevo: no chão do morro)
                 const h = this._hash(x * 13.1, z * 7.7);
                 const model = kind === 'ipe' ? (h < 0.5 ? 'ipe' : 'ipeY') : this.KIND[kind];
                 const key = model + '@' + Math.floor(x / this.CELL) + ',' + Math.floor(z / this.CELL);

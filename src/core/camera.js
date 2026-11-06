@@ -65,6 +65,11 @@ class CompassCamera {
 		this.bounceMul = 1;        // pulso do zoom pelos trancos do asfalto (balanço ao dirigir)
 		this.roll = 0;             // inclinação (rad) somada ao giro nas curvas (balanço ao dirigir)
 		this._bs = { x: 0, z: 0, vx: 0, vz: 0, ax: 0, az: 0, pvx: 0, pvz: 0, ph: 0, h: 0, vh: 0, r: 0, vr: 0, yr: 0, bumpT: 0, t: 0, veh: null };
+		this.chase = 0;            // perseguição (0 = a câmera alta de sempre, 1 = atrás do veículo, baixa e perto): ver o topo
+		this._chS = 0;             // velocidade do veículo na perseguição (0..1 de speedRef, suavizada)
+		this._chBike = false;      // moto/bicicleta: a câmera mais perto e mais baixa
+		this._chLead = 0;          // perseguição: quanto à frente do veículo fica o centro da tela (m)
+		this._footHold = 0;        // a pé: s andando numa direção longe da câmera (footDelay antes de começar a virar)
 		CompassCamera.yaw = 0;
 
 		const c = Config.camera;
@@ -86,6 +91,10 @@ class CompassCamera {
 	get persp() { return this.tilted && !!Config.camera.persp; }
 	// How far back along its ray the 2.5D camera sits (m): fixed for the orthographic one; the perspective one, _applyFov.
 	get dist() { return this.persp ? this._dist || Config.camera.distance : Config.camera.distance; }
+	// Inclinação de agora (graus acima do horizonte): a de sempre (Config.camera.tilt) ou, dirigindo, descendo até a da perseguição.
+	get tiltDeg() { const C = Config.camera; return C.tilt + (this.chaseTilt - C.tilt) * this.chase; }
+	// Inclinação da perseguição: a do carro; na moto/bicicleta um pouco mais alta (o piloto é um desenho 2,5D, feito para ser visto de cima).
+	get chaseTilt() { const H = Config.camera.chase; return H.tilt + (this._chBike ? H.bikeTilt : 0); }
 	setFlat(on) {
 		if (on === this.flat) return;
 		this.flat = on;
@@ -123,12 +132,24 @@ class CompassCamera {
 		if (!this.tilted) { cam.fov = 2 * Math.atan(this.view / Config.camera.height); this._applyFog(0, 1); return; }
 		const v = this.view, a = this.engine.getAspectRatio(cam);
 		if (this.persp) {
-			const C = Config.camera, e = C.tilt * Math.PI / 180, D = Math.max(C.perspMinDist, v / Math.tan(C.perspFov * Math.PI / 360));
+			const C = Config.camera, e = this.tiltDeg * Math.PI / 180;
+			let D = Math.max(C.perspMinDist, v / Math.tan(C.perspFov * Math.PI / 360)), fov = 2 * Math.atan(v / D);
+			const k = this.chase;
+			if (k > 0) {                                                                // (perseguição: baixa e perto, atrás do veículo — ver o topo)
+				const H = C.chase, ec = this.chaseTilt * Math.PI / 180, s = this._chS, bk = this._chBike;
+				const back = H.back + H.speedBack * s + (bk ? H.bikeBack : 0) + Math.max(0, (this._chLen || 0) - 5.6) * 0.8;
+				const hgt = Math.max(back * Math.tan(Math.min(1.45, ec + H.drop * Math.PI / 180)), (this._chRoof || 0) + 1.5) * this.bounceMul;
+				const Dc = hgt / Math.sin(ec), fc = (H.fov + H.speedFov * s) * Math.PI / 180;
+				// até onde se vê o chão (m à frente do centro da tela): o raio do alto da tela, limitado pela névoa — a área que entra no recorte
+				this._chReach = Math.min(H.far, hgt / Math.tan(Math.max(0.03, ec - fc / 2)) - hgt / Math.tan(ec)) + 10;
+				this._chLead = hgt / Math.tan(ec) - back;
+				D += (Dc - D) * k; fov += (fc - fov) * k;
+			}
 			this._dist = D;
-			cam.fov = 2 * Math.atan(v / D);
+			cam.fov = fov;
 			const h = D * Math.sin(e);                                                  // (height of the camera: nothing comes nearer than the rooftops)
-			cam.minZ = Math.max(1, (h - C.tallest - 6) * 0.8);
-			cam.maxZ = D + 250;
+			cam.minZ = k > 0 ? Math.max(C.chase.minZ, Math.max(1, (h - C.tallest - 6) * 0.8) * (1 - k)) : Math.max(1, (h - C.tallest - 6) * 0.8);
+			cam.maxZ = D + 250 + C.chase.far * k;
 			this._applyFog(v, a);
 			this._pose(this.focus.x, this.focus.z);
 			return;
@@ -147,6 +168,10 @@ class CompassCamera {
 		if (sc.fogMode !== mode) sc.fogMode = mode;
 		if (!C.tilted) return;
 		if (!view) { sc.fogStart = CompassCamera.NO_FOG; sc.fogEnd = CompassCamera.NO_FOG + 1; return; }
+		if (this.persp && this.chase >= 0.5) {                                          // (perseguição: névoa de DISTÂNCIA, da cor do céu — EDGE_FOG,
+			sc.fogStart = C.chase.near; sc.fogEnd = C.chase.far; sc.fogDensity = -1000;  //  densidade −1000 = medir a distância do olho)
+			return;
+		}
 		if (this.persp) {                                                               // (perspective: screen position = view-space x, y ÷ depth;
 			const t = Math.tan(this.camera.fov / 2);                                    //  a negative density tells EDGE_FOG to divide)
 			sc.fogStart = t * C.fogStart; sc.fogEnd = t * C.fogEnd; sc.fogDensity = -aspect;
@@ -160,18 +185,24 @@ class CompassCamera {
 		const cam = this.camera;
 		this.focus.x = x; this.focus.z = z;
 		if (!this.tilted) { cam.position.x = x; cam.position.z = z; return; }
-		const e = Config.camera.tilt * Math.PI / 180, D = this.dist, yaw = this.yaw;
+		const e = this.tiltDeg * Math.PI / 180, D = this.dist, yaw = this.yaw;
+		CompassCamera.tiltDeg = this.tiltDeg; CompassCamera.chase = this.chase;
 		cam.rotation.set(e, yaw, this.roll);
-		cam.position.set(x - D * Math.cos(e) * Math.sin(yaw), D * Math.sin(e), z - D * Math.cos(e) * Math.cos(yaw));
+		// (relevo: o "chão" do centro da tela está na altura do morro onde o alvo está — this.lift, suavizado em follow)
+		cam.position.set(x - D * Math.cos(e) * Math.sin(yaw), D * Math.sin(e) + (this.lift || 0), z - D * Math.cos(e) * Math.cos(yaw));
 	}
 
 	// Half extents of the visible ground (across and along the screen), for culling, spawning and the shadow window. 2.5D: the ground
 	// is foreshortened by sin(tilt), and building tops beyond the bottom edge still show (tallest·cot(tilt)). view/aspect default to now.
 	// Perspective: the ground seen is a trapezoid, wider and longer toward the top of the screen — the half extents of the box around
 	// `focus` that holds it (the far side, which is the larger one), plus the same margin for the building tops.
-	groundHalf(view = this.view, aspect = this.engine.getAspectRatio(this.camera)) {
+	groundHalf(view = this.view, aspect = this.engine.getAspectRatio(this.camera), chase = this.chase) {
 		if (!this.tilted) return { x: view * aspect, z: view };
 		const e = Config.camera.tilt * Math.PI / 180;
+		if (this.persp && chase > 0) {                                              // (perseguição: o chão até a névoa, à frente e dos lados)
+			const g = this.groundHalf(view, aspect, 0), F = Math.min(Config.camera.chase.far - 12, this._chReach || 1e9);
+			return { x: g.x + (F - g.x) * chase, z: g.z + (F - g.z) * chase };
+		}
 		if (this.persp) {
 			const C = Config.camera, D = Math.max(C.perspMinDist, view / Math.tan(C.perspFov * Math.PI / 360)), a = Math.atan(view / D);
 			const h = D * Math.sin(e), lo = Math.max(0.15, e - a), far = h / Math.tan(lo) - h / Math.tan(e), near = h / Math.tan(e) - h / Math.tan(e + a);
@@ -216,8 +247,9 @@ class CompassCamera {
 		if (this._carVeh) {                                                         // dirigindo: o giro do jogador toma a câmera de onde ela está
 			if (!this.manual) { this.manual = true; this.manYaw = this.yaw; }
 			this.manYaw = wrap(this.manYaw + d); this._lookIdle = 0;
-		} else this.userYaw = wrap(this.userYaw + d);
+		} else { this.userYaw = wrap(this.userYaw + d); this._lookIdle = 0; }
 		this.yaw = wrap(this.yaw + d);
+		this._latch = null;                                                         // (a base do andar volta a ser a da tela)
 	}
 
 	// Dirigindo com a câmera tomada pelo jogador: quanto ela está girada em relação à direção atrás do veículo (rad; 0 = automática).
@@ -231,9 +263,26 @@ class CompassCamera {
 	}
 
 	// Acompanha o alvo (suavização independente de framerate; alta = colada). `vehicle`: dirigindo — modo bússola (ver o topo).
-	follow(targetPos, dt, vehicle = null) {
+	follow(targetPos, dt, vehicle = null, walker = null) {
 		const C = Config.camera, wrap = CompassCamera.wrap;
 		let goalYaw = 0, goalLead = 0;
+		// Perseguição: dirigindo (carro, moto, barco), com a câmera em perspectiva, ela desce para trás do veículo; a pé (ou num
+		// interior) volta para a alta. A velocidade (suavizada) recua a câmera e abre o campo de visão.
+		const H = C.chase, chGoal = vehicle && C.carCompass && H.on && this.persp ? 1 : 0;
+		if (vehicle) {
+			const sp = Math.min(1, Math.max(0, vehicle.speed || 0) / C.speedRef);
+			this._chS += (sp - this._chS) * (1 - Math.exp(-1.5 * dt));
+			this._chBike = !!vehicle.isBike;
+			const G = vehicle.visual && vehicle.visual.lampGeom;                     // (van, ônibus, caminhão: a câmera sobe e recua junto)
+			this._chRoof = G && G.roof ? G.roof : 1.9; this._chLen = vehicle.visual && vehicle.visual.hl ? vehicle.visual.hl * 2 : 5.5;
+		}
+		if (this.chase !== chGoal || (this.chase > 0 && vehicle)) {
+			const was = this.chase >= 0.5;
+			this.chase += (chGoal - this.chase) * (1 - Math.exp(-H.lerp * dt));
+			if (Math.abs(chGoal - this.chase) < 0.004) this.chase = chGoal;
+			this._applyFov();
+			if (was !== this.chase >= 0.5) this._applyFog(this.view, this.engine.getAspectRatio(this.camera));
+		}
 		if (vehicle && C.carCompass) {
 			const f = vehicle.fwdToRef(this._f || (this._f = new BABYLON.Vector3()));
 			const h = f.x * f.x + f.z * f.z > 1e-4 ? Math.atan2(f.x, f.z) : null;
@@ -242,7 +291,7 @@ class CompassCamera {
 			// dela mais que carTurnTrigger (virou uma esquina, fez o retorno). Ao entrar no carro, parte da direção dele.
 			if (this._carVeh !== vehicle) { this._carVeh = vehicle; this._carYaw = h != null ? h : this.yaw; this.manual = false; this._lookIdle = 0; }
 			else if (h != null && C.carSmooth) {
-				const k = C.carYawLerp * Math.min(1, (vehicle.speed || 0) / C.carYawSpeed);
+				const k = C.carYawLerp * (1 + C.chase.yawBoost * this.chase) * Math.min(1, (vehicle.speed || 0) / C.carYawSpeed);
 				this._carYaw = wrap(this._carYaw + wrap(h - this._carYaw) * (1 - Math.exp(-k * dt)));
 			} else if (h != null) {
 				const off = wrap(h - this._carYaw);
@@ -261,6 +310,16 @@ class CompassCamera {
 		} else {
 			if (this._carVeh) { this.userYaw = wrap(this.yaw); this.manual = false; }       // desceu: a pé, a câmera fica de onde estava
 			this._carVeh = null;
+			// A pé: anda numa direção (virou a rua) → a câmera vai aos poucos para as COSTAS dele. Só depois de footDelay s andando assim,
+			// mais rápido quanto mais rápido ele anda, e nunca logo depois de o jogador girar a câmera com a mão (lookHold).
+			this._lookIdle = this.lookHeld ? 0 : this._lookIdle + dt;
+			const wv = walker && walker.velocity, ws = wv ? Math.hypot(wv.x, wv.z) : 0;
+			if (C.footFollow > 0 && !this.flat && ws > 1.2 && this._lookIdle > C.lookHold) {
+				const off = wrap(Math.atan2(wv.x, wv.z) - this.userYaw);
+				if (Math.abs(off) > 0.12) this._footHold += dt;                         // (começa longe; depois de começar, vai até alinhar)
+				else if (Math.abs(off) < 0.02) this._footHold = 0;
+				if (this._footHold > C.footDelay) this.userYaw = wrap(this.userYaw + off * (1 - Math.exp(-C.footFollow * Math.min(1, ws / C.footYawSpeed) * dt)));
+			} else this._footHold = 0;
 			goalYaw = this.flat ? 0 : this.userYaw;
 		}
 		const d = wrap(goalYaw - this.yaw);
@@ -275,17 +334,32 @@ class CompassCamera {
 		// Adianto (fração da meia-altura): para a frente do VEÍCULO, e some conforme o jogador olha em volta — o giro é em torno do
 		// veículo. (Ia para o "cima" da tela: girando a câmera dirigindo, o carro descrevia um arco de ~8 m pela tela e ia parar na borda.)
 		const la = vehicle && this._carVeh ? this._carYaw : this.yaw, lk = vehicle && this._carVeh ? Math.max(0, Math.cos(this.lookYaw)) : 1;
-		const sy = Math.sin(la), cy = Math.cos(la), L = this.lead * this.view * lk;
+		const sy = Math.sin(la), cy = Math.cos(la), L = (this.lead * this.view * (1 - this.chase) + (vehicle ? this._chLead * this.chase : 0)) * lk;
 		if (!this.tilted) this.camera.upVector.set(Math.sin(this.yaw + this.roll), 0, Math.cos(this.yaw + this.roll));
 		const t = 1 - Math.exp(-C.followLerp * dt);
 		this.target.x += (targetPos.x + sy * L - this.target.x) * t;
 		this.target.z += (targetPos.z + cy * L - this.target.z) * t;
+		// RELEVO (Relief): a câmera sobe e desce com o chão sob o alvo (suave: não treme pelos degraus do mapa de alturas); o alvo leva a
+		// altura junto (a janela da sombra do sol segue: GameEngine.update)
+		if (typeof Relief !== 'undefined' && Relief.on && !this.flat) {
+			const goal = Relief.at(targetPos.x, targetPos.z);
+			this.lift = this.lift == null || Math.abs(goal - this.lift) > 25 ? goal : this.lift + (goal - this.lift) * (1 - Math.exp(-5 * dt));      // (salto grande — teleporte: vai direto)
+		} else this.lift = 0;
+		this.target.y = this.lift;
 		// Tremor (batidas e explosões): desloca só a câmera, não o foco, e some rápido.
 		let sx = 0, sz = 0;
 		if (this._shake > 0.01) {
 			sx = (Math.random() - 0.5) * this._shake; sz = (Math.random() - 0.5) * this._shake;
 			this._shake *= Math.exp(-7 * dt);
 		} else this._shake = 0;
+		// tranco direcional (shake com direção): mola amortecida de volta ao centro
+		if (this._kvx || this._kvz || this._kx || this._kz) {
+			const h = Math.min(dt, 1 / 30);
+			this._kvx = (this._kvx || 0) + (-90 * (this._kx || 0) - 11 * this._kvx) * h; this._kx = (this._kx || 0) + this._kvx * h;
+			this._kvz = (this._kvz || 0) + (-90 * (this._kz || 0) - 11 * this._kvz) * h; this._kz = (this._kz || 0) + this._kvz * h;
+			if (Math.abs(this._kx) + Math.abs(this._kz) + Math.abs(this._kvx) + Math.abs(this._kvz) < 1e-3) this._kx = this._kz = this._kvx = this._kvz = 0;
+			sx += this._kx || 0; sz += this._kz || 0;
+		}
 		this._pose(this.target.x + sx + bo.x, this.target.z + sz + bo.z);
 	}
 
@@ -338,7 +412,7 @@ class CompassCamera {
 	// orthographic projection itself.
 	screenUV(x, z, aspect) {
 		if (this.tilted) {
-			const cam = this.camera, p = BABYLON.Vector3.Project(this._uvP || (this._uvP = new BABYLON.Vector3()).set(x, 0, z), BABYLON.Matrix.IdentityReadOnly, cam.getTransformationMatrix(), this._uvV || (this._uvV = new BABYLON.Viewport(0, 0, 1, 1)));
+			const cam = this.camera, p = BABYLON.Vector3.Project(this._uvP || (this._uvP = new BABYLON.Vector3()).set(x, typeof Relief !== 'undefined' && !this.flat ? Relief.at(x, z) : 0, z), BABYLON.Matrix.IdentityReadOnly, cam.getTransformationMatrix(), this._uvV || (this._uvV = new BABYLON.Viewport(0, 0, 1, 1)));
 			return { u: p.x, v: p.y };
 		}
 		const dx = x - this.target.x, dz = z - this.target.z, s = Math.sin(this.yaw + this.roll), c = Math.cos(this.yaw + this.roll);
@@ -346,15 +420,33 @@ class CompassCamera {
 		return { u: 0.5 + u / (2 * V * aspect), v: 0.5 - v / (2 * V) };
 	}
 
+	// Janela do mapa de sombras: em volta do centro da tela (o chão visível); na perseguição, um quadrado menor à frente do veículo —
+	// o chão até a névoa inteira deixaria as sombras borradas. Devolve { focus, ground } para GameEngine.update.
+	shadowWindow(vehicle) {
+		const g = this.groundHalf(), k = this.chase;
+		if (!(k > 0) || !vehicle) return { focus: this.target, ground: g };
+		const H = Config.camera.chase, f = vehicle.fwdToRef(this._sf || (this._sf = new BABYLON.Vector3())), p = vehicle.position;
+		const o = this._sw || (this._sw = { focus: new BABYLON.Vector3(), ground: { x: 0, z: 0 } }), a = H.shadowAhead * k;
+		o.focus.set(p.x + f.x * a + (this.target.x - p.x) * (1 - k), this.lift || 0, p.z + f.z * a + (this.target.z - p.z) * (1 - k));
+		o.ground.x = g.x + (H.shadowHalf - g.x) * k; o.ground.z = g.z + (H.shadowHalf - g.z) * k;
+		return o;
+	}
+
 	// Balança a câmera (unidades de mundo; ~0,3 = batida, ~1,2 = explosão perto). Soma com o tremor atual.
-	shake(mag) {
-		this._shake = Math.min(1.6, (this._shake || 0) + mag);
+	// (dx, dz): a direção do impacto no chão — além do tremor aleatório, a câmera dá um TRANCO nessa direção e volta ao centro por uma
+	// mola amortecida (o golpe "empurra" a tela para onde a força foi).
+	shake(mag, dx = 0, dz = 0) {
+		this._shake = Math.min(1.6, (this._shake || 0) + mag * (dx || dz ? 0.6 : 1));
+		const l = Math.hypot(dx, dz);
+		if (l > 1e-3) { const k = Math.min(0.9, mag * 0.9) / l; this._kvx = (this._kvx || 0) + dx * k * 9; this._kvz = (this._kvz || 0) + dz * k * 9; }
 	}
 
 	// Teleporta o foco (spawn, prisão): sem deslizar pelo mapa.
 	snapTo(pos) {
 		this.target.x = pos.x;
 		this.target.z = pos.z;
+		this.lift = typeof Relief !== 'undefined' && Relief.on && !this.flat ? Relief.at(pos.x, pos.z) : 0;
+		this.target.y = this.lift;
 		this._pose(pos.x, pos.z);
 	}
 
@@ -373,9 +465,21 @@ class CompassCamera {
 		this._applyFov();
 	}
 
+	// Base do ANDAR a pé (Game): a da tela, mas TRAVADA enquanto o jogador segura a mesma direção — a câmera girando sozinha para as
+	// costas dele (footFollow) não muda para onde ele anda (senão segurar "direita" o faria andar em círculo). Soltou ou mudou a direção
+	// (mais de ~20°), a base volta a ser a da tela de agora.
+	moveBasis(axis) {
+		const len = Math.hypot(axis.x, axis.z);
+		if (len < 0.2) { this._latch = null; return this.getGroundBasis(); }
+		const a = Math.atan2(axis.x, axis.z), L = this._latch;
+		if (!L || Math.abs(CompassCamera.wrap(a - L.a)) > 0.35) this._latch = { a, yaw: this.yaw };
+		else L.a = a;
+		return this.getGroundBasis(this._latch.yaw);
+	}
+
 	// Base de movimento alinhada à TELA: "cima" = norte girado pelo yaw (o giro do jogador ou o do veículo).
-	getGroundBasis() {
-		const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
+	getGroundBasis(yaw = this.yaw) {
+		const s = Math.sin(yaw), c = Math.cos(yaw);
 		return {
 			forward: new BABYLON.Vector3(s, 0, c),
 			right: new BABYLON.Vector3(c, 0, -s),
@@ -408,8 +512,12 @@ float CalcFogFactor()
 	float fogDensity = vFogInfos.w;
 	if (FOGMODE_LINEAR == vFogInfos.x)
 	{
-		float edge = max(abs(vFogDistance.x) / max(abs(fogDensity), 0.01), abs(vFogDistance.y));
-		if (fogDensity < 0.0) edge /= max(vFogDistance.z, 0.01);
+		float edge;
+		if (fogDensity < -500.0) edge = length(vFogDistance);                     // (perseguição: a distância do olho, em m)
+		else {
+			edge = max(abs(vFogDistance.x) / max(abs(fogDensity), 0.01), abs(vFogDistance.y));
+			if (fogDensity < 0.0) edge /= max(vFogDistance.z, 0.01);
+		}
 		fogCoeff = (fogEnd - edge) / (fogEnd - fogStart);
 	}
 	else if (FOGMODE_EXP == vFogInfos.x) fogCoeff = 1.0 / pow(E, length(vFogDistance) * fogDensity);
@@ -420,6 +528,8 @@ float CalcFogFactor()
 `;
 BABYLON.Effect.IncludesShadersStore.fogFragmentDeclaration = CompassCamera.EDGE_FOG;
 
+CompassCamera.tiltDeg = 56;      // inclinação de agora (graus): os personagens em pé esticam 1/cos dela (SpriteActor.STAND_SCALE)
+CompassCamera.chase = 0;         // perseguição (0..1): a névoa e o céu da cor do horizonte (DayNight)
 CompassCamera.yaw = 0;      // giro atual da bússola (rad): lido pelos sprites 2,5D, pela ordem de desenho e pelo minimapa
 CompassCamera.tilted = false;      // the game camera is in 2.5D (tilted orthographic) mode right now: sprites stand up (SpriteActor)
 CompassCamera.current = null;      // the game camera (culling and batching outside the game loop read its focus and ground extent)

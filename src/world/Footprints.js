@@ -125,6 +125,7 @@ const Footprints = {
 
     // Uma pegada em (x, z) virada para (fx, fz). side: -1 esquerdo, 1 direito. k: força (correndo afunda mais).
     print(x, z, y, fx, fz, side, k) {
+        y += (typeof Relief !== 'undefined' ? Relief.at(x, z) : 0);      // (relevo)
         if (!this.mesh) return;
         const d = Math.hypot(fx, fz) || 1, ux = fx / d, uz = fz / d, W = this.W, L = this.L;
         const ax = ux * L, az = uz * L, px = uz * W, pz = -ux * W;                // (px, pz) = para a direita de quem anda

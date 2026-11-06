@@ -256,6 +256,7 @@ class GlowBatch {
 
     // Quad achatado de lado `size`, centrado em (x, y, z).
     place(i, x, y, z, size) {
+        if (typeof Relief !== 'undefined' && Relief.on) y += Relief.at(x, z);      // (relevo: o brilho fica na altura do chão dali)
         const h = size / 2, p = this.pos, o = i * 12;
         p[o] = x - h; p[o + 1] = y; p[o + 2] = z + h;
         p[o + 3] = x + h; p[o + 4] = y; p[o + 5] = z + h;
@@ -337,6 +338,7 @@ class GlowGrid {
     place(h, x, y, z, size) {
         const b = this.batches[this._b[h]], B = b._box, r = size / 2;
         b.place(this._i[h], x, y, z, size);
+        if (typeof Relief !== 'undefined' && Relief.on) y += Relief.at(x, z);      // (a caixa do recorte na altura de verdade)
         if (x - r < B[0]) B[0] = x - r; if (y < B[1]) B[1] = y; if (z - r < B[2]) B[2] = z - r;
         if (x + r > B[3]) B[3] = x + r; if (y > B[4]) B[4] = y; if (z + r > B[5]) B[5] = z + r;
         this._dirty.add(b);

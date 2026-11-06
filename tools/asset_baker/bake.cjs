@@ -65,7 +65,9 @@ for (const h of HAND_KINDS) EXTRAS['protagonista_mao_' + h] = { base: 'protagoni
 
 function loadGen() {
 	for (const f of GEN) vm.runInThisContext(fs.readFileSync(path.join(GEN_DIR, f), 'utf8'), { filename: path.join(GEN_DIR, f) });
-	return vm.runInThisContext('(() => { const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G); return G; })()');
+	const G = vm.runInThisContext('(() => { const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G); return G; })()');
+	if (process.env.NPC_ESTILO) G.setStyle(process.env.NPC_ESTILO);          // (protótipo: NPC_ESTILO=real; os Workers herdam o ambiente)
+	return G;
 }
 // Hash do gerador (código + malha): vai no npc-data.json e no Worker do guarda-roupa — os visuais guardados no aparelho são de uma
 // versão do gerador; mudou o desenho, eles são refeitos (PlayerLook.ck) sem precisar subir número de versão à mão.

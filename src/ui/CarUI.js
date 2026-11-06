@@ -147,7 +147,7 @@ class CarUI {
         const big = document.createElement('div'); big.className = 'big'; big.append(this._thumb(r.model, r.paint));
         const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = Garage.label(r);
         const kv = (k, v) => Object.assign(document.createElement('div'), { className: 'kv', innerHTML: `<span>${k}</span><b>${v}</b>` });
-        const out = [big, nm, kv('ONDE ESTÁ', Garage.where(r)), kv('ORIGEM', r.bought ? `comprado (${brl(r.paid)})` : 'roubado — sem seguro'), kv('LATARIA', `${Math.round(r.hp * 100)}%`), kv('GASOLINA', `${Math.round((r.fuel || 0) * 100)}%`)];
+        const out = [big, nm, kv('ONDE ESTÁ', Garage.where(r)), kv('ORIGEM', r.bought ? `comprado (${brl(r.paid)})` : 'roubado — sem seguro'), kv('LATARIA', `${Math.round(r.hp * 100)}%`), kv(Config.charge && Config.charge.models.includes(r.model) ? 'BATERIA' : 'GASOLINA', `${Math.round((r.fuel || 0) * 100)}%`)];
         const M = r.mods || {}, mods = Object.keys(M).filter((k) => M[k]);
         const nm2 = { engine: 'motor (desmanche)', armor: 'blindagem', hidden: 'fundo falso', turbo: 'turbo', tEng: `motor estágio ${M.tEng}`, tBrk: `freios ${M.tBrk}`, tSus: `suspensão ${M.tSus}`, wing: 'aerofólio', kit: ['', 'kit de rua', 'kit de corrida', 'wide body'][M.kit] || 'bodykit', neon: `neon ${Tuning.NEON_NAMES[M.neon] || ''}` };
         if (mods.length) out.push(kv('PEÇAS', mods.map((k) => nm2[k] || k).join(', ')));

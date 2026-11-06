@@ -238,10 +238,37 @@ class FightState {
         this.stagger = 0;          // levou um golpe: cambaleia (onHurt)
         this.aimT = 0; this.ammo = 6; this.reload = 0;      // revólver: mirando, balas no tambor, recarregando
         this._dt = 0;
+        // Luta (Config.posture, combat/Posture.js): ANTECIPAÇÃO (windup: segura o golpe, a janela para reagir — acertá-lo aí cancela),
+        // ATORDOADO (stun: equilíbrio zerado), papel no grupo (role: 'engage' de frente | 'flank' pelos lados/costas) e o lado do flanco.
+        this.windup = 0; this.pending = null; this.stun = 0;
+        this.role = 'engage'; this._roleT = 0; this.side = npc.id % 2 ? 1 : -1; this._orbit = 0;
+        this.cover = null;         // revólver: o ponto de cobertura para recarregar
+    }
+
+    // Quem está brigando agora (para o grupo: papéis, a vez de atacar e a moral).
+    static live = new Set();
+    // Quantos atacam `foe` agora (segurando ou soltando o golpe) — no máximo Config.posture.tokens ao mesmo tempo.
+    static attackers(foe) { let n = 0; for (const S of FightState.live) if (S.foe === foe && S.npc.fsm.current === S && (S.windup > 0 || S.attackT > 0)) n++; return n; }
+    // MORAL: alguém do lado dele caiu (morreu ou foi arremessado) brigando com `foe` perto: os outros reavaliam — com a vida pela metade
+    // ou depois de ver 2 caírem, fogem (ou, contra arma de fogo, se rendem); senão, xingam e seguem.
+    static allyDown(npc, foe) {
+        const R = Config.posture.moraleR, p = npc.position;
+        for (const S of [...FightState.live]) {
+            if (S.npc === npc || S.foe !== foe || !S.npc.alive || S.npc.fsm.current !== S) continue;
+            const q = S.npc.position;
+            if (Math.abs(q.x - p.x) > R || Math.abs(q.z - p.z) > R) continue;
+            S.downs = (S.downs || 0) + 1;
+            const weak = S.npc.hp < S.npc.maxHp * 0.5 || S.downs >= 2, r = Math.random();
+            if (weak && r < 0.75) {
+                const g = S.npc.ctx.game, gun = typeof Temper !== 'undefined' && Temper.threat(foe, g) === 'gun';
+                if (gun && r < 0.3) S._yield(); else S._quit(true);
+            } else if (typeof Bubbles !== 'undefined' && Math.random() < 0.5) Bubbles.say(S.npc, ['Ô, derrubou o cara!', 'Agora é comigo!', 'Segura ele!'][Math.floor(Math.random() * 3)], { tone: 'angry', ms: 1800 });
+        }
     }
 
     enter() {
         const npc = this.npc;
+        FightState.live.add(this);
         this.timer = this.weapon === 'pistol' ? 14 + Math.random() * 8 : 9 + Math.random() * 6;
         npc.waiting = null; npc.crossing = null;
         npc.fleeAge = 0;
@@ -252,11 +279,19 @@ class FightState {
         const npc = this.npc, g = npc.ctx.game, foe = this.foe, p = npc.position;
         this._dt = dt;
         this.timer -= dt; this.cd -= dt; this.repath -= dt;
+        if (typeof Posture !== 'undefined') Posture.tick(npc, dt);
         if (this.attackT > 0 && (this.attackT -= dt) <= 0) { this.clip = null; this.clipW = null; }
+        if (this.stun > 0) { this.stun -= dt; this._stop(); return; }                 // atordoado: cambaleia, não reage
         if (this.stagger > 0) { this.stagger -= dt; this._stop(); return; }
         const dx = foe.position.x - p.x, dz = foe.position.z - p.z, d = hypot(dx, dz);
+        if (this.windup > 0) {                                                      // segurando o golpe (a janela para reagir)
+            npc.heading = Math.atan2(dx, dz); this._stop();
+            if ((this.windup -= dt) <= 0) this._release(g);
+            return;
+        }
         const lost = npc.hp < npc.maxHp * 0.3;
         const away = foe === g.player ? g.mode !== 'player' || !!g.hiding : !!(foe.fsm && /^(FLEE|DEAD|RAG)$/.test(foe.fsm.name) && !foe.rag);
+        if (lost && !away && foe.alive && Temper.threat(foe, g) === 'gun' && Math.random() < 0.4) { this._yield(); return; }      // (apanhou demais e o outro está armado: se rende)
         if (!foe.alive || away || this.timer <= 0 || d > (this.weapon === 'pistol' ? 34 : 14) || lost) { this._quit(lost); return; }
         // A arma na mão do outro: encara, saca a dele (escalada) ou foge.
         const t = Temper.threat(foe, g);
@@ -308,30 +343,69 @@ class FightState {
     }
 
     // Corpo a corpo: avança e, ao alcance, golpeia.
+    // Em GRUPO (Config.posture): o mais perto do adversário é o ENGAGER (vem de frente); os outros FLANQUEIAM — contornam até os lados/as
+    // costas dele (flank m) — e, sem a vez de atacar (tokens), rondam a circle m em vez de amontoar.
+    _role() {
+        if ((this._roleT -= this._dt) > 0) return this.role;
+        this._roleT = 0.4;
+        const f = this.foe.position;
+        let best = null, bd = Infinity;
+        for (const S of FightState.live) {
+            if (S.foe !== this.foe || !S.npc.alive || S.npc.fsm.current !== S || S.weapon === 'pistol') { if (S.npc.fsm.current !== S) FightState.live.delete(S); continue; }
+            const q = S.npc.position, dd = (q.x - f.x) ** 2 + (q.z - f.z) ** 2;
+            if (dd < bd) { bd = dd; best = S; }
+        }
+        return (this.role = !best || best === this ? 'engage' : 'flank');
+    }
     _melee(g, d) {
-        const foe = this.foe, reach = this.weapon === 'bat' ? 1.85 : this.weapon === 'knife' ? 1.5 : 1.45;
-        if (this.attackT > 0 || d < 0.95) this._stop();                           // golpeando ou colado: para
-        else this._go(foe.position.x, foe.position.z, Config.npc.fleeSpeed * 0.8);    // avança
-        if (d < reach && this.cd <= 0 && this.attackT <= 0) this._attack(g);
+        const foe = this.foe, P = Config.posture, reach = this.weapon === 'bat' ? 1.85 : this.weapon === 'knife' ? 1.5 : 1.45, f = foe.position, p = this.npc.position;
+        const turn = FightState.attackers(foe) < P.tokens || this.attackT > 0;             // (a vez de atacar)
+        if (this.attackT > 0 || (d < 0.95 && turn)) this._stop();                          // golpeando ou colado: para
+        else if (!turn && d < P.circle + 1) {                                              // sem a vez: ronda o adversário
+            this._orbit += this._dt * 0.7 * this.side;
+            const a = Math.atan2(p.x - f.x, p.z - f.z) + 0.5 * this.side;
+            this._go(f.x + Math.sin(a) * P.circle, f.z + Math.cos(a) * P.circle, Config.npc.fleeSpeed * 0.45);
+        } else if (this._role() === 'flank' && d > reach * 0.8) {                         // flanco: dá a volta até o lado/as costas dele
+            const fh = foe === g.player && g.player.root ? g.player.root.rotation.y : Math.atan2(p.x - f.x, p.z - f.z) + Math.PI;
+            const a = fh + Math.PI + this.side * 1.1, tx = f.x + Math.sin(a) * P.flank, tz = f.z + Math.cos(a) * P.flank;
+            this._go(hypot(tx - p.x, tz - p.z) > 0.6 ? tx : f.x, hypot(tx - p.x, tz - p.z) > 0.6 ? tz : f.z, Config.npc.fleeSpeed * 0.85);
+        }
+        else this._go(f.x, f.z, Config.npc.fleeSpeed * 0.8);                              // avança
+        if (d < reach && this.cd <= 0 && this.attackT <= 0 && turn) this._attack(g);
     }
 
+    // ANTECIPAÇÃO: o golpe começa SEGURADO (o braço/a perna/o taco puxado para trás, parado — FightState.anim rate 0) por windup s com um
+    // brilho na mão: é a janela do jogador para esquivar ou acertá-lo antes (contra-ataque: cancela o golpe — onHurt). Depois solta (_release).
+    static HOLD = 0.12;            // (fração do clipe em que ele fica parado: o recuo do golpe)
     _attack(g) {
-        const npc = this.npc, w = this.weapon, cw = w === 'knife' || w === 'bat' ? w : 'none';
+        const npc = this.npc, w = this.weapon, cw = w === 'knife' || w === 'bat' ? w : 'none', W = Config.posture.windup;
         const kind = cw !== 'none' ? Temper.BLOW[cw] : Math.random() < 0.25 ? 'kick' : (this._jab = !this._jab) ? 'punchL' : 'punch';
         if (!npc.actor.play(kind, cw, { restart: true })) return;
-        this.clip = kind; this.clipW = cw;
-        this.attackT = this._dur({ punch: 0.43, punchL: 0.36, kick: 0.58, stab: 0.45, swing: 0.6 }[kind]);      // (o golpe dura o clipe)
+        npc.actor.setPhase(FightState.HOLD);
+        this.clip = kind; this.clipW = cw; this.pending = { kind, cw };
+        this.windup = (W[0] + Math.random() * (W[1] - W[0])) * (kind === 'kick' || kind === 'swing' ? 1.25 : 1);      // (golpe pesado: antecipação maior)
+        const h = npc.heading, p = npc.position;
+        g.combat.spark(p.x + Math.sin(h + 0.6 * this.side) * 0.35, 1.45, p.z + Math.cos(h + 0.6 * this.side) * 0.35, [1, 0.95, 0.75], Math.min(0.35, this.windup));      // (o brilho do aviso)
+    }
+    _release(g) {
+        const npc = this.npc, P = this.pending;
+        this.windup = 0; this.pending = null;
+        if (!P || this.clip !== P.kind) return;
+        const kind = P.kind, cw = P.cw, dur = this._dur({ punch: 0.43, punchL: 0.36, kick: 0.58, stab: 0.45, swing: 0.6 }[kind]);
+        this.attackT = dur * (1 - FightState.HOLD);                                         // (o golpe dura o resto do clipe)
         this.cd = this.attackT + 0.35 + Math.random() * 0.6;
         g.combat.strike({ position: npc.position, heading: () => npc.heading, ok: () => npc.alive && !npc.rag && npc.fsm.current === this && this.clip === kind },
-            kind, { source: 'npc', ref: npc, foe: this.foe, dmgMul: cw === 'none' ? 0.75 : 0.6 });
+            kind, { source: 'npc', ref: npc, foe: this.foe, dmgMul: cw === 'none' ? 0.75 : 0.6, t: dur * FightState.HOLD });
     }
 
     // Revólver: chega até ter a linha de tiro (e no máximo 14 m), mira e atira; 6 balas no tambor e recarrega.
     _gunfight(g, d) {
         const npc = this.npc, foe = this.foe, p = npc.position, dt = this._dt;
         if (this.attackT > 0) { this._stop(); return; }                           // sacando / atirando
-        if (this.reload > 0) {
-            this._stop(); this.clip = null;
+        if (this.reload > 0) {                                                    // recarregando: atrás de uma cobertura, se houver uma perto
+            this.clip = null;
+            if (this.cover && hypot(this.cover.x - p.x, this.cover.z - p.z) > 0.5) this._go(this.cover.x, this.cover.z, Config.npc.fleeSpeed);
+            else this._stop();
             if ((this.reload -= dt) <= 0) { this.ammo = 6; this.aimT = 0; }
             return;
         }
@@ -351,6 +425,22 @@ class FightState {
         this.aimT += dt; this.clip = 'aim'; this.clipW = 'pistol';
         if (this.aimT > 0.45 && this.cd <= 0) this._shoot(g);
     }
+    // COBERTURA para recarregar: um ponto até ~8 m em que um muro, caçamba, carro… fica entre ele e o adversário (Cover.find/hides).
+    _findCover() {
+        if (typeof Cover === 'undefined') return null;
+        const p = this.npc.position, f = this.foe.position;
+        let best = null, bd = Infinity;
+        for (let k = 0; k < 10; k++) {
+            const a = (k / 10) * Math.PI * 2, r = k % 2 ? 4 : 7, x = p.x + Math.sin(a) * r, z = p.z + Math.cos(a) * r;
+            if (!MapGeo.isLand(x, z)) continue;
+            const c = Cover.find(x, z, 1.6);
+            if (!c || !Cover.hides(c, f.x, f.z, x, z) || !MapGeo.hasLineOfSight(p.x, p.z, x, z)) continue;
+            const d = (x - p.x) ** 2 + (z - p.z) ** 2;
+            if (d < bd) { bd = d; best = { x, z }; }
+        }
+        return best;
+    }
+
     // Um pedestre (que não ele nem o alvo) na linha de tiro?
     _inLine(g) {
         const p = this.npc.position, f = this.foe.position, sx = f.x - p.x, sz = f.z - p.z, L2 = sx * sx + sz * sz || 1;
@@ -371,14 +461,25 @@ class FightState {
         this.attackT = Math.min(0.4, this._dur(0.3));
         this.cd = this.attackT + 0.5 + Math.random() * 0.7; this.aimT = 0.25;
         g.combat.fire({ x: p.x, z: p.z, angle: g.combat.leadAngle(p.x, p.z, this.foe, Weapons.revolver.speed), owner: 'npc', ref: npc, spreadMul: 2.4, dmgMul: 0.7 }, 'revolver');
-        if (--this.ammo <= 0) this.reload = 1.8;
+        if (--this.ammo <= 0) { this.cover = this._findCover(); this.reload = this.cover ? 2.6 : 1.8; }
         if (g.npcManager) g.npcManager.alertShot(p);                              // quem ouve, foge
     }
 
     // Levou um golpe/tiro brigando (NPC.hurt): cambaleia e continua — e quem bateu foi o jogador, se ele topa, a briga passa a ser com ele.
+    // POSTURA (Posture, npc._postHit — posto pelo golpe em Combat._land; bala: NPC.takeDamage): acertado SEGURANDO o golpe = interrompido
+    // (cancela, cambaleia 0,35 s); equilíbrio zerado por golpe leve = ATORDOADO (Config.posture.stun); no meio do golpe (já soltou) ele não
+    // para — só um tranco curto (sem trocar dano parado: quem bate primeiro e bem vence).
     onHurt() {
-        const npc = this.npc, g = npc.ctx.game;
-        this.stagger = 0.4; this.clip = null; this.clipW = null; this.attackT = 0;
+        const npc = this.npc, g = npc.ctx.game, PH = npc._postHit;
+        npc._postHit = null;
+        if (this.windup > 0) {                                                            // interrompido: cambaleia e demora a tentar de novo
+            this.windup = 0; this.pending = null; this.clip = null; this.clipW = null; this.attackT = 0; this.stagger = 0.35;
+            this.cd = Math.max(this.cd, 0.9); this.interrupts = (this.interrupts || 0) + 1;
+        }
+        else if (PH && PH.broken && !PH.heavy) {
+            this.stun = Config.posture.stun; this.stagger = 0; this.clip = null; this.clipW = null; this.attackT = 0;
+        } else if (this.attackT > 0) this.stagger = 0;                                   // (no meio do golpe: segue)
+        else { this.stagger = 0.15; this.clip = null; this.clipW = null; }
         if (npc._hitBy === 'player' && this.foe !== g.player) {
             const R = FightState.wants(npc);
             if (R) { this.foe = g.player; if (R.weapon !== 'none' && this.weapon === 'none') this._draw(R.weapon); }
@@ -394,11 +495,32 @@ class FightState {
     // O que o desenho toca agora (NPC.update): cambaleando, o golpe/o tiro, correndo ou em guarda — com a arma na mão.
     anim(speed) {
         const w = this.weapon;
+        if (this.stun > 0) return { clip: 'hurt', w: 'none', rate: 0.5 };                // atordoado: cambaleando devagar
+        if (this.windup > 0 && this.clip) return { clip: this.clip, w: this.clipW || w, rate: 0 };      // segurando o golpe
         if (this.stagger > 0) return { clip: 'hurt', w: 'none', rate: 1 };
         if (this.clip) return { clip: this.clip, w: this.clipW || w, rate: 1 };
         if (speed > 0.5) return { clip: 'run', w, rate: Math.max(0.5, speed / Config.anim.run) };
         return { clip: 'idle', w, rate: 1 };
     }
 
-    exit() { this.clip = null; }
+    exit() { this.clip = null; this.windup = 0; this.pending = null; FightState.live.delete(this); }
+
+    // Rendição (moral baixa contra arma de fogo): mãos ao alto — e, passado o susto, foge.
+    _yield() {
+        const npc = this.npc;
+        this.clip = null; this.windup = 0;
+        if (typeof Bubbles !== 'undefined') Bubbles.say(npc, ['Tá bom, tá bom! Perdi!', 'Calma! Não atira!', 'Deixa eu ir, por favor!'][Math.floor(Math.random() * 3)], { tone: 'scared', ms: 2400 });
+        npc.threat.set(this.foe.position.x, 0, this.foe.position.z);
+        npc.fsm.setState(new YieldState(npc, this.foe));
+    }
+}
+
+// --- RENDIDO na briga (moral baixa contra arma de fogo): mãos ao alto/ajoelhado; quando o jogador se afasta ou passa o susto, foge.
+class YieldState extends SurrenderState {
+    constructor(npc, foe) { super(npc); this.foe = foe; }
+    update(dt) {
+        super.update(dt);
+        const f = this.foe, p = this.npc.position, d = f ? hypot(f.position.x - p.x, f.position.z - p.z) : 99;
+        if (this.t > 9 || d > 16) this.npc.panic(f ? f.position : this.npc.threat, true);
+    }
 }

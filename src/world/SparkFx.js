@@ -138,6 +138,7 @@ class ParticleStreaks {
     }
 
     _quad(i, cx, cy, cz, dx, dz, L, W, r, g, b, a) {
+        cy += (typeof Relief !== 'undefined' ? Relief.at(cx, cz) : 0);      // (relevo: faíscas, cápsulas e rastros na altura do chão dali)
         const P = this.pos, C = this.col, o = i * 12, c = i * 16;
         const hx = dx * L * 0.5, hz = dz * L * 0.5, nx = -dz * W * 0.5, nz = dx * W * 0.5;
         // cantos: 0 trás-esq, 1 frente-esq, 2 trás-dir, 3 frente-dir (uv: x ao longo, y através)

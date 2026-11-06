@@ -146,6 +146,7 @@ class TerrainBuilder {
         const gx = ((b + d) - (a + cc)) / (2 * c) * K, gz = ((cc + d) - (a + b)) / (2 * c) * K;
         const il = 1 / hypot(gx, 1, gz), L = this.L;
         const lam = (-gx * L[0] + L[1] - gz * L[2]) * il;
+        if (typeof Relief !== 'undefined' && Relief.on) return Math.max(0.72, Math.min(1.12, 1 + (lam - L[1]) * 0.7));      // (relevo de verdade: a encosta já tem altura — o sombreado pintado fica suave)
         return Math.max(0.5, Math.min(1.2, 1 + (lam - L[1]) * 1.5));
     }
 
@@ -207,7 +208,7 @@ class TerrainBuilder {
         }
 
         // Monta as malhas (uma por passo).
-        const mk = (bt, name, mat, o) => { const m = bt.build(`terr_${ci}_${cj}_${name}`, this.scene, mat, Object.assign({ receiveShadows: false, alwaysActive: false }, o)); if (m) chunk.meshes.push(m); return m; };
+        const mk = (bt, name, mat, o) => { const m = bt.build(`terr_${ci}_${cj}_${name}`, this.scene, mat, Object.assign({ receiveShadows: false, alwaysActive: false, relief: true }, o)); if (m) chunk.meshes.push(m); return m; };
         yield; mk(ground, 'ground', this.ground, { vertexColors: true });
         yield;
         const hi = mk(vegHi, 'vhi', wb.props.hiMaterial, { vertexColors: true });

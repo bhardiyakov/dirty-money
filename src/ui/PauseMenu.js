@@ -41,6 +41,7 @@ class PauseMenu {
 			station: { label: 'Delegacia', icon: 'station' },
 			marina: { label: 'Marina', icon: 'boat' },
 			gas: { label: 'Posto de Gasolina', icon: 'fuel' },
+			charge: { label: 'Eletroposto (recarga de carro elétrico)', icon: 'charge' },
 			chop: { label: 'Desmanche (carros roubados)', icon: 'chop' },
 			dealer: { label: 'Concessionária (carros à venda)', icon: 'dealer' },
 			motodealer: { label: 'Concessionária de motos', icon: 'moto' },

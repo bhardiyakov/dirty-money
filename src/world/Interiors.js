@@ -563,7 +563,9 @@ const Interiors = {
 		const o = this.STAGE, p = game.player.position, d = a.data.door;
 		const ax = game.input.getMoveAxis();
 		if (Math.abs(ax.x) + Math.abs(ax.z) < 0.1 && a.t > 0.3) a.released = true;                    // a saída só vale depois de soltar as teclas uma vez
-		if (a.released && p.z > o.z + 3.4) a.armed = true;
+		// (armada depois de se afastar ~1 u da soleira — não de entrar 3,4 u no cômodo: no esconderijo a cama fica a 2,5 u da porta e
+		// quem acordava e ia direto para a porta não saía; tinha de ir ao fundo e voltar)
+		if (a.released && p.z > o.z + 1.5) a.armed = true;
 		if (!this.busy && a.armed && a.t > 0.6 && p.z < o.z + 0.55 && p.x > o.x + d.x0 && p.x < o.x + d.x1) this.leave(game);
 	},
 

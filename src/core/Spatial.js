@@ -70,6 +70,7 @@ const Zones = {
 		if (cam.yaw) this.hx = this.hz = Math.hypot(g.x, g.z) + this.margin;      // câmera girada (bússola): o quadrado que cobre a tela em qualquer ângulo
 		const gm = cam.groundHalf(Config.camera.maxView, Math.max(1, asp)), hd = Math.hypot(gm.x, gm.z);      // meia-diagonal da tela no zoom máximo
 		this.sr = hd + 6; this.ar = 2 * hd;
+		if (cam.chase > 0) { const F = Config.camera.chase.far; this.sr = Math.max(this.sr, F + 6); this.ar = Math.max(this.ar, F + 70); }      // (perseguição: o trânsito nasce além da névoa)
 		this.frame++;
 		this.count = this._cnt.slice(); this._cnt[0] = this._cnt[1] = this._cnt[2] = 0;
 	},
@@ -180,7 +181,7 @@ class RenderCuller {
 			// ficavam "na origem" e nunca eram desenhados — o chão sumia e aparecia o mar por baixo das árvores.
 			let q;
 			if (m.isWorldMatrixFrozen && !m.parent) q = m._cullC || (m._cullC = m.getBoundingInfo().boundingBox.centerWorld.clone());
-			else { let root = m; while (root.parent) root = root.parent; q = root.position; }
+			else { let root = m; if (!m._cullOwn) while (root.parent) root = root.parent; q = root.position; }      // (_cullOwn: o pai só a sobe pelo relevo — SpriteActor)
 			if (Math.abs(q.x - X0) <= hx + r + pad && Math.abs(q.z - Z0) <= hz + r + pad) out.push(m);
 		}
 		this.cand.length = out.length;

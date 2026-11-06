@@ -314,8 +314,8 @@ class Hud {
 		// ---- fome e energia (Needs): só aparecem quando caem de 70
 		if (typeof Needs !== 'undefined') {
 			const fd = Math.round(typeof Physique !== 'undefined' ? Physique.fed : 70), en = Math.round(Needs.energy);
-			this._set('fd', fd, (v) => { this.$('hFood').style.width = v + '%'; this.$('hFoodT').textContent = v < 15 ? 'faminto' : v; this.$('hFood').classList.toggle('low', v < 15); this.$('hFoodRow').style.display = v < 70 ? '' : 'none'; });
-			this._set('en', en, (v) => { this.$('hEn').style.width = v + '%'; this.$('hEnT').textContent = v < 8 ? 'exausto' : v < 20 ? 'cansado' : v; this.$('hEn').classList.toggle('low', v < 20); this.$('hEnRow').style.display = v < 70 ? '' : 'none'; });
+			this._set('fd', fd, (v) => { this.$('hFood').style.width = v + '%'; this.$('hFoodT').textContent = v < 15 ? 'faminto' : v; this.$('hFood').classList.toggle('low', v < 15); this.$('hFoodRow').style.display = Needs.on && v < 70 ? '' : 'none'; });
+			this._set('en', en, (v) => { this.$('hEn').style.width = v + '%'; this.$('hEnT').textContent = v < 8 ? 'exausto' : v < 20 ? 'cansado' : v; this.$('hEn').classList.toggle('low', v < 20); this.$('hEnRow').style.display = Needs.on && v < 70 ? '' : 'none'; });
 			const dim = document.getElementById('needsDim') || (() => { const d = document.createElement('div'); d.id = 'needsDim'; document.body.appendChild(d); return d; })();
 			dim.style.opacity = String(Needs.blink(performance.now() / 1000));
 		}

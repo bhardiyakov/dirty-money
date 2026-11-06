@@ -20,6 +20,10 @@ const HouseView = {
 		if (!S.placed) return;
 		const scene = world.scene, ox = S.ox, oz = S.oz, W = S.W, D = S.D, T = S.T, H = S.H;
 		this.world = world; this.scene = scene;
+		// RELEVO (Relief): a casa inteira NIVELADA no morro, rígida (WorldBuilder.rectAnchor) — encaixada do lado de cima, sobre pilares
+		// do lado de baixo (WorldBuilder._footing, no lote do degrau)
+		const HA = WorldBuilder.rectAnchor(ox, oz, ox + W, oz + D), LH = this.lift = HA ? HA.h : 0;
+		MeshBatch.anchor = HA;
 		const A = HouseArt;
 		// (com a cidade em alta definição, as texturas de fora também saem em HD: art/CityHDFacades.js)
 		const tex = (name, wrap = true) => typeof CityHD !== 'undefined' && CityHD.on ? CityHD.house(scene, name, wrap) : A[name]().toTexture(scene, { wrap, mips: wrap, aniso: 1 });
@@ -99,7 +103,7 @@ const HouseView = {
 		  for (const px of [x0 + 0.05, x0 + n * w - 0.17]) B.cap.solid(ox + px, oz - 1.0, ox + px + 0.12, oz - 0.88, 0, 2.5, WOOD); }
 
 		const build = (key, mat, opts = {}) => {
-			const mesh = B[key].build('hs_' + key, scene, mat, Object.assign({ receiveShadows: true, alwaysActive: true }, opts));
+			const mesh = B[key].build('hs_' + key, scene, mat, Object.assign({ receiveShadows: true, alwaysActive: true, relief: true }, opts));
 			if (mesh) mesh.freezeWorldMatrix();
 			return mesh;
 		};
@@ -113,14 +117,14 @@ const HouseView = {
 		const RB = new MeshBatch(), SL = new MeshBatch();
 		SL.solid(rx0, rz0, rx1, rz1, ry - 0.3, ry, [0.4, 0.37, 0.33]);
 		RB.top(rx0, rz0, rx1, rz1, ry + 0.012, (x, z) => [(x - rx0) / (rx1 - rx0), (rz1 - z) / (rz1 - rz0)]);
-		const slab = SL.build('hs_roofSlab', scene, mats.roofSlab, { vertexColors: true, receiveShadows: true });
-		const top = RB.build('hs_roofTop', scene, mats.roofTop, { receiveShadows: true });
+		const slab = SL.build('hs_roofSlab', scene, mats.roofSlab, { vertexColors: true, receiveShadows: true, relief: true });
+		const top = RB.build('hs_roofTop', scene, mats.roofTop, { receiveShadows: true, relief: true });
 		for (const m of [slab, top]) if (m) m.freezeWorldMatrix();
 		mats.roofTop.diffuseTexture.wrapU = mats.roofTop.diffuseTexture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 
 		// --- porta (folha que gira na dobradiça) ---
 		const pivot = new BABYLON.TransformNode('hsDoorPivot', scene);
-		pivot.position.set(ox + d.x0, 0, oz + T * 0.5);
+		pivot.position.set(ox + d.x0, LH, oz + T * 0.5);
 		const leaf = BABYLON.MeshBuilder.CreateBox('hsDoorLeaf', { width: d.x1 - d.x0, height: d.h, depth: 0.12 }, scene);
 		leaf.parent = pivot; leaf.position.set((d.x1 - d.x0) / 2, d.h / 2, 0);
 		leaf.material = mats.door; leaf.isPickable = false; leaf.receiveShadows = true;
@@ -130,13 +134,15 @@ const HouseView = {
 		// --- degrau da entrada (permanente) ---
 		const ST = new MeshBatch();
 		ST.solid(ox + d.x0 - 0.5, oz - 1.1, ox + d.x1 + 0.5, oz - 0.02, 0, 0.14, [0.52, 0.5, 0.46]);
-		const stoop = ST.build('hs_stoop', scene, world.mats.solid, { vertexColors: true, receiveShadows: true });
+		world._footing(ox, oz, ox + W, oz + D, HA, ST);
+		const stoop = ST.build('hs_stoop', scene, world.mats.solid, { vertexColors: true, receiveShadows: true, relief: true });
+		MeshBatch.anchor = null;
 		if (stoop) stoop.freezeWorldMatrix();
 
 		// --- sombra: uma caixa-fantasma (volume da casa) projeta a sombra da casa ---
 		if (world.shadow && world._ghost) {
 			const g = BABYLON.MeshBuilder.CreateBox('hs_shadow', { width: W + 1, height: S.ROOF_Y, depth: D + 1 }, scene);
-			g.position.set(ox + W / 2, S.ROOF_Y / 2, oz + D / 2);
+			g.position.set(ox + W / 2, S.ROOF_Y / 2 + LH, oz + D / 2);
 			g.material = world._ghost; g.isPickable = false; g.receiveShadows = false; g.layerMask = 0x10000000; g.freezeWorldMatrix();
 			world.shadow.addShadowCaster(g);
 		}
@@ -169,7 +175,7 @@ const HouseView = {
 		arrow.material = am; arrow.isPickable = false; arrow.renderingGroupId = 1; arrow.alwaysSelectAsActiveMesh = true;
 		this.arrow = arrow; this.arrowMat = am;
 		this.arrowBase = { x: dc.x, z: dc.z - 3.3 };
-		arrow.position.set(this.arrowBase.x, 5.4, this.arrowBase.z);
+		arrow.position.set(this.arrowBase.x, 5.4 + LH, this.arrowBase.z);
 
 		this.time = 0;
 		this.ready = true;
