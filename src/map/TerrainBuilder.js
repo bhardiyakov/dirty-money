@@ -146,6 +146,7 @@ class TerrainBuilder {
         const gx = ((b + d) - (a + cc)) / (2 * c) * K, gz = ((cc + d) - (a + b)) / (2 * c) * K;
         const il = 1 / hypot(gx, 1, gz), L = this.L;
         const lam = (-gx * L[0] + L[1] - gz * L[2]) * il;
+        if (typeof Relief !== 'undefined' && Relief.on) return Math.max(0.72, Math.min(1.12, 1 + (lam - L[1]) * 0.7));      // (relevo de verdade: a encosta já tem altura — o sombreado pintado fica suave)
         return Math.max(0.5, Math.min(1.2, 1 + (lam - L[1]) * 1.5));
     }
 

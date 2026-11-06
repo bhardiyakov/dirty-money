@@ -317,7 +317,10 @@ const Landmarks = {
     // O PÃO DE AÇÚCAR: um penedo arredondado (malha própria, normais suaves), pedra cinza com veios e a mata no pé; o BONDINHO sobe da
     // estação da praia até o topo (dois cabos, duas cabines indo e vindo).
     _meshPao(wb) {
-        const P = WorldMap.PAO, scene = wb.scene, R = 18, A = 48, rx = 58, rz = 46, H = 36, pos = [], col = [], idx = [], uvs = [];
+        // (relevo de verdade: o penedo com Config.relief.pao m; a estação do alto do bondinho sobe junto)
+        const RL = typeof Relief !== 'undefined' && Relief.on;
+        if (RL) this.BONDE.b[2] = Config.relief.pao + 10;
+        const P = WorldMap.PAO, scene = wb.scene, R = 18, A = 48, rx = 58, rz = 46, H = RL ? Config.relief.pao : 36, pos = [], col = [], idx = [], uvs = [];
         for (let i = 0; i <= R; i++) {
             const r = (i / R) * 1.12;
             for (let j = 0; j < A; j++) {
@@ -351,6 +354,7 @@ const Landmarks = {
         const B = this.BONDE, bt = wb._batch('trim', B.a[0], B.a[1]), c = this._c.bind(this);
         bt.solid(B.a[0] - 5, B.a[1] - 3.5, B.a[0] + 5, B.a[1] + 3.5, 0.2, 5.2, c('#e9e4d6'));
         bt.solid(B.a[0] - 5.4, B.a[1] - 3.9, B.a[0] + 5.4, B.a[1] + 3.9, 5.2, 5.8, c('#9a3b2c'));
+        MeshBatch.anchor = RL ? { h: 0 } : null;                                           // (a estação do alto e os cabos: alturas absolutas)
         bt.solid(B.b[0] - 4, B.b[1] - 3, B.b[0] + 4, B.b[1] + 3, 30, B.b[2] + 0.6, c('#e9e4d6'));
         bt.solid(B.b[0] - 4.4, B.b[1] - 3.4, B.b[0] + 4.4, B.b[1] + 3.4, B.b[2] + 0.6, B.b[2] + 1.1, c('#9a3b2c'));
         const dx = B.b[0] - B.a[0], dz = B.b[1] - B.a[1], L = Math.hypot(dx, dz), px = -dz / L, pz = dx / L;
@@ -360,6 +364,7 @@ const Landmarks = {
             this._beam(bt, a, b, 0.14, c('#3b3f46'));
             this._cable.push([a, b]);
         }
+        MeshBatch.anchor = null;
         const cabins = [];
         for (let k = 0; k < 2; k++) {
             const box = BABYLON.MeshBuilder.CreateBox('bondinho' + k, { width: 2.4, height: 2.2, depth: 2.4 }, scene), bm = new BABYLON.StandardMaterial('bondinho' + k, scene);
@@ -435,7 +440,8 @@ const Landmarks = {
             return;
         }
         const q = C[0].mesh.position;
-        pl.position.x = q.x; pl.position.z = q.z; pl.deckH = Math.max(0, q.y - 0.5); pl._walkSt = { x: q.x, z: q.z, h: pl.deckH };
+        const rl = typeof Relief !== 'undefined' ? Relief.at(q.x, q.z) : 0;                 // (relevo: a cabine é absoluta; o personagem já sobe o chão dali)
+        pl.position.x = q.x; pl.position.z = q.z; pl.deckH = Math.max(0, q.y - 0.5 - rl); pl._walkSt = { x: q.x, z: q.z, h: pl.deckH };
     },
 
     update(dt) {
