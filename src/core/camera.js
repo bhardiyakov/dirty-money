@@ -344,6 +344,14 @@ class CompassCamera {
 			sx = (Math.random() - 0.5) * this._shake; sz = (Math.random() - 0.5) * this._shake;
 			this._shake *= Math.exp(-7 * dt);
 		} else this._shake = 0;
+		// tranco direcional (shake com direção): mola amortecida de volta ao centro
+		if (this._kvx || this._kvz || this._kx || this._kz) {
+			const h = Math.min(dt, 1 / 30);
+			this._kvx = (this._kvx || 0) + (-90 * (this._kx || 0) - 11 * this._kvx) * h; this._kx = (this._kx || 0) + this._kvx * h;
+			this._kvz = (this._kvz || 0) + (-90 * (this._kz || 0) - 11 * this._kvz) * h; this._kz = (this._kz || 0) + this._kvz * h;
+			if (Math.abs(this._kx) + Math.abs(this._kz) + Math.abs(this._kvx) + Math.abs(this._kvz) < 1e-3) this._kx = this._kz = this._kvx = this._kvz = 0;
+			sx += this._kx || 0; sz += this._kz || 0;
+		}
 		this._pose(this.target.x + sx + bo.x, this.target.z + sz + bo.z);
 	}
 
@@ -417,8 +425,12 @@ class CompassCamera {
 	}
 
 	// Balança a câmera (unidades de mundo; ~0,3 = batida, ~1,2 = explosão perto). Soma com o tremor atual.
-	shake(mag) {
-		this._shake = Math.min(1.6, (this._shake || 0) + mag);
+	// (dx, dz): a direção do impacto no chão — além do tremor aleatório, a câmera dá um TRANCO nessa direção e volta ao centro por uma
+	// mola amortecida (o golpe "empurra" a tela para onde a força foi).
+	shake(mag, dx = 0, dz = 0) {
+		this._shake = Math.min(1.6, (this._shake || 0) + mag * (dx || dz ? 0.6 : 1));
+		const l = Math.hypot(dx, dz);
+		if (l > 1e-3) { const k = Math.min(0.9, mag * 0.9) / l; this._kvx = (this._kvx || 0) + dx * k * 9; this._kvz = (this._kvz || 0) + dz * k * 9; }
 	}
 
 	// Teleporta o foco (spawn, prisão): sem deslizar pelo mapa.

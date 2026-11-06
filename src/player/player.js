@@ -105,6 +105,7 @@ class Player {
     _ragEnd(dead) {
         this.root.rotation.y = this.rag.heading;
         this.rag = null;
+        this._ifr = Config.posture.iframes;                                     // (levantou: um instante sem levar golpe)
         this.actor.mesh.position.y = this.baseY;
         this.actor.play(dead ? 'dead' : 'idle', 'none', { restart: true });
         if (dead) this.actor.setPhase(1);                                       // (já deitado: só a pose final, sem refazer a queda)
@@ -524,6 +525,7 @@ class Player {
     // sprint: o IMPULSO do sprint (0–1, InputManager.sprintTick: cada toque soma, segurar mantém um mínimo; true = 1). Sem ele, TROTA
     // (Config.player.jogSpeed, sem gastar fôlego); walk = só anda (interiores fora de assalto/missão/fuga, analógico pouco inclinado).
     update(moveDir, sprint, dt, walk = false) {
+        if (this._ifr > 0) this._ifr -= dt;
         let drive = typeof sprint === 'number' ? Math.max(0, Math.min(1, sprint)) : sprint ? 1 : 0, sprinting = drive > 0.02;
         // Arremessado: sem controle; o Ragdoll comanda posição, giro e sprite.
         if (this.rag) {

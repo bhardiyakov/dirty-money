@@ -351,6 +351,19 @@ const Config = {
 	//   DERRUBADA: o chute de um pedestre só derruba o jogador com a vida abaixo de `npcKnockHp` (fração) — antes, qualquer chute
 	//   derrubava (e eles chutam 1 em cada 4 golpes); o taco e o cassetete da polícia continuam derrubando.
 	melee: { v2: true, lunge: 1.8, lockTime: 1.6, lockRange: 4.5, stop: 0.07, stopFinisher: 0.16, npcKnockHp: 0.35 },
+	// POSTURA E INTERRUPÇÃO (combat/Posture.js, FightState): quem briga tem uma barra oculta de EQUILÍBRIO (max: civil / durão — assaltante,
+	// armado). Cada golpe gasta `cost[golpe]` (bala: gun); acertar durante a ANTECIPAÇÃO do golpe dele (wind-up) é CONTRA-ATAQUE: × counter e
+	// o golpe dele é cancelado. Sem levar golpe por regenDelay s, volta regen/s. Zerou: golpe leve → ATORDOADO (stun s, o próximo golpe
+	// pesado derruba, todo golpe dá × stunDmg); golpe pesado (chute, taco, cassetete) → ARREMESSADO com força knock (m/s).
+	// windup = [mín, máx] s que o NPC "segura" o golpe antes de soltar (a janela para reagir); tokens = quantos atacam ao mesmo tempo.
+	// Arremessado contra parede ou carro acima de splat m/s: dano splatDmg + splatK × (velocidade − splat) e fica caído mais splatRest s.
+	// Ao levantar: iframes s sem levar golpe (nada de apanhar no chão sem fim). Caído: bala só pega de até proneShot m.
+	posture: {
+		max: { civil: 32, tough: 48 }, regenDelay: 1.3, regen: 16, counter: 1.7, stun: 1.4, stunDmg: 1.3, knock: 7.5,
+		cost: { punch: 9, punchL: 7, kick: 17, swing: 30, stab: 14, baton: 15, gun: 10 },
+		windup: [0.26, 0.4], tokens: 2, splat: 5, splatDmg: 8, splatK: 3, splatRest: 1.2, iframes: 0.8, proneShot: 4,
+		flank: 1.5, circle: 2.6, moraleR: 15,
+	},
 
 	// TÁTICO do jogador a pé (player.js e combat/Cover.js): AGACHAR (Q · L3 no controle) = furtivo; agachado encostado num prédio,
 	// muro, caçamba, contêiner ou carro parado = EM COBERTURA; ROLAR (V longe de grade/muro · RB) = esquiva de balas.

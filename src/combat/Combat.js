@@ -64,6 +64,7 @@ class Combat {
 
     constructor(scene, game) {
         this.game = game;
+        if (typeof Ragdoll !== 'undefined') Ragdoll.carAt = (x, z, r) => this._carAt(x, z, r);      // (o corpo arremessado bate nos carros)
         this.MAXB = 72;                 // (a minigun põe ~20 balas por segundo no ar)
         this.MAXS = 96;
         // Rastro de cada bala = 3 quads (cabeça, meio, cauda); faíscas = 1 quad cada.
@@ -194,10 +195,10 @@ class Combat {
     // no jogador (a pé e de pé).
     _meleeTargets(source, out = []) {
         out.length = 0;
-        const g = this.game, pl = g.player, ok = (t) => t.alive && !t.rag && (!t.actor || t.actor.visible !== false) && (!pl || Vehicle.sameLevel(t, pl));
+        const g = this.game, pl = g.player, ok = (t) => t.alive && !t.rag && !(t._ifr > 0) && (!t.actor || t.actor.visible !== false) && (!pl || Vehicle.sameLevel(t, pl));
         if (source !== 'player') {
             const p = g.player;
-            if (p && p.alive && g.mode === 'player' && !p.rag && !p.invulnerable && !g.hiding && !p.dodging) out.push(p);
+            if (p && p.alive && g.mode === 'player' && !p.rag && !(p._ifr > 0) && !p.invulnerable && !g.hiding && !p.dodging) out.push(p);
             return out;
         }
         if (g.npcManager) for (const n of g.npcManager.npcs) if (ok(n)) out.push(n);
@@ -234,7 +235,7 @@ class Combat {
     strike(who, kind, opts = {}) {
         const M = Melee[kind];
         if (!M) return null;
-        const s = { who, kind, M, t: 0, hit: new Set(), source: opts.source || 'player', dmgMul: opts.dmgMul || 1, onHit: opts.onHit || null, ref: opts.ref || who, foe: opts.foe || null, carHit: false };
+        const s = { who, kind, M, t: opts.t || 0, hit: new Set(), source: opts.source || 'player', dmgMul: opts.dmgMul || 1, onHit: opts.onHit || null, ref: opts.ref || who, foe: opts.foe || null, carHit: false };
         (this.strikes || (this.strikes = [])).push(s);
         return s;
     }
@@ -301,8 +302,16 @@ class Combat {
         const M = s.M, P = s.who.position, g = this.game;
         let dx = t.position.x - P.x, dz = t.position.z - P.z;
         const l = hypot(dx, dz) || 1; dx /= l; dz /= l;
-        const dmg = M.dmg * s.dmgMul;
-        const fall = M.fall >= Config.ragdoll.minPower ? { dx, dz, power: M.fall * (0.9 + Math.random() * 0.2) } : null;
+        let dmg = M.dmg * s.dmgMul;
+        let fall = M.fall >= Config.ragdoll.minPower ? { dx, dz, power: M.fall * (0.9 + Math.random() * 0.2) } : null;
+        // POSTURA (Posture, só em quem está brigando): golpe no atordoado dói mais e, pesado, o derruba; equilíbrio zerado por golpe pesado
+        // = ARREMESSADO (pode ir prensar numa parede); por golpe leve = atordoado (FightState.onHurt lê t._postHit)
+        const PH = t !== g.player && typeof Posture !== 'undefined' ? Posture.hit(t, s.kind) : null, PC = Config.posture;
+        if (PH) {
+            if (PH.stunned) dmg *= PC.stunDmg;
+            if (PH.heavy && (PH.broken || PH.stunned)) fall = { dx, dz, power: PC.knock * (0.9 + Math.random() * 0.25), by: s.source };
+            t._postHit = PH;
+        }
         if (t === g.player) {
             // (luta nova: o chute de um pedestre não derruba o jogador à toa — só com a vida baixa; taco e cassetete, como sempre)
             const C = Config.melee, keep = !Combat.v2 || !M.fall || M.dmg >= 20 || s.kind === 'baton' || t.hp - dmg < t.maxHp * C.npcKnockHp;
@@ -326,7 +335,8 @@ class Combat {
         this.spark(cx, 1.15, cz, [1, 0.45, 0.35]);
         if (Combat.v2 && s.source === 'player') for (let k = 0; k < 3; k++) this.spark(cx + (Math.random() - 0.5) * 0.3, 1.0 + Math.random() * 0.35, cz + (Math.random() - 0.5) * 0.3, [1, 0.85, 0.6]);      // (o estalo do impacto)
         AudioFX.thud(t.position.x, t.position.z);
-        if ((s.source === 'player' || t === g.player) && g.camera) g.camera.shake(M.shake);
+        if ((s.source === 'player' || t === g.player) && g.camera) g.camera.shake(M.shake * (PH && (PH.broken || PH.counter) ? 1.6 : 1), dx, dz);      // (tremor na direção do golpe)
+        if (PH && (PH.counter || PH.broken) && typeof Bubbles !== 'undefined') Bubbles.say(t, PH.counter ? '⚡' : PH.heavy ? '💥' : '💫', { ms: 900, key: 'post' });
         if (s.onHit) s.onHit(t, s);
     }
 
@@ -441,7 +451,9 @@ class Combat {
         const g = this.game, T = this._targets;
         let n = 0;
         const add = (ref, kind, r) => { const o = T[n] || (T[n] = {}); o.ref = ref; o.kind = kind; o.r = r; n++; };
-        if (g.npcManager) for (const npc of g.npcManager.npcs) if (npc.alive) add(npc, 'npc', 0.55);
+        // (caído no chão — deslizando ou parado: Posture.prone — a bala passa por cima, a não ser de perto do jogador: Config.posture.proneShot)
+        const pp = g.player.position, pr = Config.posture.proneShot;
+        if (g.npcManager) for (const npc of g.npcManager.npcs) if (npc.alive && (!Posture.prone(npc) || Math.abs(npc.position.x - pp.x) + Math.abs(npc.position.z - pp.z) < pr)) add(npc, 'npc', 0.55);
         if (g.policeManager) {
             for (const o of g.policeManager.officers) if (o.alive) add(o, 'officer', 0.55);
             for (const c of g.policeManager.cars) add(c, 'car', 1.5);

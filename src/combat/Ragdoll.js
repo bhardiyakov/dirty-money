@@ -23,6 +23,7 @@ class Ragdoll {
         this.kind = opts.kind || 'hit';
         this.lethal = !!opts.lethal;
         this.onLand = opts.onLand || null;
+        this.onWall = opts.onWall || null;          // PRENSADO: (velocidade) — bateu numa parede ou num carro voando/deslizando rápido (Config.posture.splat)
         const l = hypot(opts.dx, opts.dz) || 1;
         this.dx = opts.dx / l; this.dz = opts.dz / l;
         const p = this.power = Math.max(1, opts.power);
@@ -69,13 +70,24 @@ class Ragdoll {
         a.mesh.position.y = 0.5 + Math.max(0, this.h);
     }
 
-    // Move com colisão simples: só terra e prédios (carros não empurram o corpo).
+    // Move com colisão simples: terra, prédios e muros — e os CARROS (Ragdoll.carAt: o corpo para na lataria). Batendo rápido (acima de
+    // Config.posture.splat m/s): PRENSADO — para ali, cai junto da parede/do carro e fica caído mais tempo (onWall: o dano e o estalo).
     _move(dt) {
-        const p = this.av.pos;
+        const p = this.av.pos, sp = hypot(this.vx, this.vz);
         const nx = p.x + this.vx * dt, nz = p.z + this.vz * dt;
-        if (MapGeo.isLand(nx, nz)) { p.x = nx; p.z = nz; }
+        let wall = false;
+        if (Ragdoll.carAt && sp > 1 && Ragdoll.carAt(nx, nz, 0.3)) { wall = true; this.vx *= -0.15; this.vz *= -0.15; }
+        else if (MapGeo.isLand(nx, nz)) { p.x = nx; p.z = nz; }
         else { this.vx *= -0.2; this.vz *= -0.2; }
-        if (MapGeo.resolveCircle(p, 0.45)) { this.vx *= 0.35; this.vz *= 0.35; }     // bateu num prédio: perde velocidade
+        if (MapGeo.resolveCircle(p, 0.45)) { wall = true; this.vx *= 0.35; this.vz *= 0.35; }     // bateu num prédio: perde velocidade
+        const S = typeof Config !== 'undefined' && Config.posture;
+        if (wall && S && sp > S.splat && !this.splatted && !this.lethal && this.kind !== 'bail') {
+            this.splatted = true;
+            this.vx = this.vz = 0; this.spin = 0;
+            this.rest += S.splatRest;
+            if (this.phase === 'air') { this.bounces = 0; this.h = Math.min(this.h, 0.2); this.vy = Math.min(this.vy, 0); }
+            if (this.onWall) this.onWall(sp);
+        }
     }
 
     update(dt) {
