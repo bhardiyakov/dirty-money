@@ -55,6 +55,9 @@ class SpriteActor {
 		this.shade = 1;                // 1 = ao sol, ~0,66 = na sombra de um prédio.
 		this._shadeTimer = Math.random() * 0.3;
 		this.mesh.position.y = 0.5;
+		// RELEVO (map/Relief.js): o quad fica num nó que sobe a altura do chão onde ele está (setPosition) — quem mexe na altura do
+		// desenho (pulo, arremesso, toldo) continua mexendo em mesh.position.y, relativo ao chão.
+		if (typeof Relief !== 'undefined' && Relief.on) { this.lift = new BABYLON.TransformNode(name + '_chao', scene); this.mesh.parent = this.lift; this.mesh._cullOwn = true; }      // (_cullOwn: o recorte da tela usa a posição do quad, não a do pai)
 		this.mesh.isPickable = false;
 		this.mesh.isVisible = false;   // só aparece quando recebe a 1ª posição (senão nasce na origem (0,0) e "pisca" lá por um quadro)
 		// Culling por frustum (antes ficava sempre ativo: TODO pedestre e carro do mundo era desenhado, mesmo fora da tela). O quad tem
@@ -345,6 +348,7 @@ class SpriteActor {
 	setPosition(x, z) {
 		this.mesh.position.x = x;
 		this.mesh.position.z = z;
+		if (this.lift && (x !== this._lx || z !== this._lz)) { this._lx = x; this._lz = z; this.lift.position.y = Relief.at(x, z); }
 		if (!this._placed) { this._placed = true; this._vis(); }
 	}
 	// Aparece quando já tem posição e — 2,5D — algo desenhado (a página do clipe chegou).
@@ -582,6 +586,6 @@ class SpriteActor {
 
 	setVisible(v) { this.mesh.setEnabled(v); }
 
-	dispose() { this.mesh.dispose(); SpriteActor.live.delete(this); if (typeof NpcArt !== 'undefined') NpcArt._waiters.delete(this); }
+	dispose() { this.mesh.dispose(); if (this.lift) this.lift.dispose(); SpriteActor.live.delete(this); if (typeof NpcArt !== 'undefined') NpcArt._waiters.delete(this); }
 }
 SpriteActor.live = new Set();

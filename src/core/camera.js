@@ -188,7 +188,8 @@ class CompassCamera {
 		const e = this.tiltDeg * Math.PI / 180, D = this.dist, yaw = this.yaw;
 		CompassCamera.tiltDeg = this.tiltDeg; CompassCamera.chase = this.chase;
 		cam.rotation.set(e, yaw, this.roll);
-		cam.position.set(x - D * Math.cos(e) * Math.sin(yaw), D * Math.sin(e), z - D * Math.cos(e) * Math.cos(yaw));
+		// (relevo: o "chão" do centro da tela está na altura do morro onde o alvo está — this.lift, suavizado em follow)
+		cam.position.set(x - D * Math.cos(e) * Math.sin(yaw), D * Math.sin(e) + (this.lift || 0), z - D * Math.cos(e) * Math.cos(yaw));
 	}
 
 	// Half extents of the visible ground (across and along the screen), for culling, spawning and the shadow window. 2.5D: the ground
@@ -338,6 +339,13 @@ class CompassCamera {
 		const t = 1 - Math.exp(-C.followLerp * dt);
 		this.target.x += (targetPos.x + sy * L - this.target.x) * t;
 		this.target.z += (targetPos.z + cy * L - this.target.z) * t;
+		// RELEVO (Relief): a câmera sobe e desce com o chão sob o alvo (suave: não treme pelos degraus do mapa de alturas); o alvo leva a
+		// altura junto (a janela da sombra do sol segue: GameEngine.update)
+		if (typeof Relief !== 'undefined' && Relief.on && !this.flat) {
+			const goal = Relief.at(targetPos.x, targetPos.z);
+			this.lift = this.lift == null ? goal : this.lift + (goal - this.lift) * (1 - Math.exp(-5 * dt));
+		} else this.lift = 0;
+		this.target.y = this.lift;
 		// Tremor (batidas e explosões): desloca só a câmera, não o foco, e some rápido.
 		let sx = 0, sz = 0;
 		if (this._shake > 0.01) {
@@ -419,7 +427,7 @@ class CompassCamera {
 		if (!(k > 0) || !vehicle) return { focus: this.target, ground: g };
 		const H = Config.camera.chase, f = vehicle.fwdToRef(this._sf || (this._sf = new BABYLON.Vector3())), p = vehicle.position;
 		const o = this._sw || (this._sw = { focus: new BABYLON.Vector3(), ground: { x: 0, z: 0 } }), a = H.shadowAhead * k;
-		o.focus.set(p.x + f.x * a + (this.target.x - p.x) * (1 - k), 0, p.z + f.z * a + (this.target.z - p.z) * (1 - k));
+		o.focus.set(p.x + f.x * a + (this.target.x - p.x) * (1 - k), this.lift || 0, p.z + f.z * a + (this.target.z - p.z) * (1 - k));
 		o.ground.x = g.x + (H.shadowHalf - g.x) * k; o.ground.z = g.z + (H.shadowHalf - g.z) * k;
 		return o;
 	}
@@ -437,6 +445,8 @@ class CompassCamera {
 	snapTo(pos) {
 		this.target.x = pos.x;
 		this.target.z = pos.z;
+		this.lift = typeof Relief !== 'undefined' && Relief.on && !this.flat ? Relief.at(pos.x, pos.z) : 0;
+		this.target.y = this.lift;
 		this._pose(pos.x, pos.z);
 	}
 

@@ -129,10 +129,10 @@ class Puddles {
         }
         list.sort((a, b) => a[0] - b[0]);
         this.active = list.slice(0, this.cap).map((e) => e[1]);
-        const P = this.pos, y = 0.045;
+        const P = this.pos, y0 = 0.045;
         P.fill(0);
         this.active.forEach((p, i) => {
-            const o = i * 12, hx = p.sx / 2, hz = p.sz / 2;
+            const o = i * 12, hx = p.sx / 2, hz = p.sz / 2, y = y0 + (typeof Relief !== 'undefined' ? Relief.at(p.x, p.z) : 0);      // (relevo)
             P[o] = p.x - hx; P[o + 1] = y; P[o + 2] = p.z + hz;
             P[o + 3] = p.x + hx; P[o + 4] = y; P[o + 5] = p.z + hz;
             P[o + 6] = p.x - hx; P[o + 7] = y; P[o + 8] = p.z - hz;

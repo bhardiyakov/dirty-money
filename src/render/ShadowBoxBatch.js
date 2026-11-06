@@ -37,7 +37,7 @@ class ShadowBoxBatch {
             const k = s[r];
             d[o + r * 4] = w[r * 4] * k; d[o + r * 4 + 1] = w[r * 4 + 1] * k; d[o + r * 4 + 2] = w[r * 4 + 2] * k; d[o + r * 4 + 3] = w[r * 4 + 3];
         }
-        d[o + 12] = w[12]; d[o + 13] = w[13]; d[o + 14] = w[14]; d[o + 15] = w[15];
+        d[o + 12] = w[12]; d[o + 13] = w[13] + (typeof Relief !== 'undefined' ? Relief.at(w[12], w[14]) : 0); d[o + 14] = w[14]; d[o + 15] = w[15];      // (relevo: o carro desenhado está na altura do chão)
         b.count++;
     }
 

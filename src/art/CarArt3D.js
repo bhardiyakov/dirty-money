@@ -751,7 +751,7 @@ const CarArt3D = {
 		M[o] = c * sx; M[o + 1] = 0; M[o + 2] = -s * sx; M[o + 3] = 0;
 		M[o + 4] = 0; M[o + 5] = 1; M[o + 6] = 0; M[o + 7] = 0;
 		M[o + 8] = s * sz; M[o + 9] = 0; M[o + 10] = c * sz; M[o + 11] = 0;
-		M[o + 12] = a.x; M[o + 13] = a.y - 1.5 + 0.045; M[o + 14] = a.z; M[o + 15] = 1;
+		M[o + 12] = a.x; M[o + 13] = a.y - 1.5 + 0.045 + (typeof Relief !== 'undefined' ? Relief.at(a.x, a.z) : 0); M[o + 14] = a.z; M[o + 15] = 1;
 		C.n = n + 1;
 		return n + 1;
 	},
@@ -935,6 +935,7 @@ class Car3DActor {
 		if (this.kind !== 'car') return this._writeOther(m, i);
 		const s = Math.sin(this.heading), c = Math.cos(this.heading), k = this.k, M = m.mat, o = i * 16;
 		if (this.tRoll || this.tPitch || this.tLift) this._writeTumble(M, o, m.dims);
+		else if (typeof Relief !== 'undefined' && Relief.on && !this.studio) this._writeSlope(M, o, s, c, k);
 		else {
 			M[o] = c * k; M[o + 1] = 0; M[o + 2] = -s * k; M[o + 3] = 0;
 			M[o + 4] = 0; M[o + 5] = k; M[o + 6] = 0; M[o + 7] = 0;
@@ -946,6 +947,22 @@ class Car3DActor {
 		A[o + 4] = (this.heave - this.lower) / k; A[o + 5] = this.yaw; A[o + 6] = this.variant; A[o + 7] = this.dent;    // ib
 		A[o + 8] = this.shade; A[o + 9] = L.head; A[o + 10] = L.tail; A[o + 11] = L.bits + this.flatBits + this.glassBits;              // ic
 		A[o + 12] = d[0]; A[o + 13] = d[1]; A[o + 14] = d[2]; A[o + 15] = d[3];                                       // dm
+	}
+
+	// RELEVO (map/Relief.js): o carro na altura do chão e DEITADO na encosta — a frente sobe/desce pela inclinação ao longo dele (pelo
+	// entre-eixos) e a lateral pela inclinação de lado. Base ortonormal: direita, cima, frente (linhas da matriz, × k).
+	_writeSlope(M, o, s, c, k) {
+		const x = this.x, z = this.z, R = Relief, hl = Math.max(1, this.hl * 0.8), hw = Math.max(0.6, this.hw * 0.9);
+		const gf = (R.at(x + s * hl, z + c * hl) - R.at(x - s * hl, z - c * hl)) / (2 * hl), gr = (R.at(x + c * hw, z - s * hw) - R.at(x - c * hw, z + s * hw)) / (2 * hw);
+		let fx = s, fy = gf, fz = c, l = Math.hypot(fx, fy, fz); fx /= l; fy /= l; fz /= l;               // frente
+		let rx = c, ry = gr, rz = -s;                                                                      // direita (antes de ortogonalizar)
+		let ux = fy * rz - fz * ry, uy = fz * rx - fx * rz, uz = fx * ry - fy * rx;                         // cima = frente × direita
+		l = Math.hypot(ux, uy, uz) || 1; ux /= l; uy /= l; uz /= l;
+		rx = uy * fz - uz * fy; ry = uz * fx - ux * fz; rz = ux * fy - uy * fx;                             // direita = cima × frente
+		M[o] = rx * k; M[o + 1] = ry * k; M[o + 2] = rz * k; M[o + 3] = 0;
+		M[o + 4] = ux * k; M[o + 5] = uy * k; M[o + 6] = uz * k; M[o + 7] = 0;
+		M[o + 8] = fx * k; M[o + 9] = fy * k; M[o + 10] = fz * k; M[o + 11] = 0;
+		M[o + 12] = x; M[o + 13] = this.y - 1.5 + R.at(x, z); M[o + 14] = z; M[o + 15] = 1;
 	}
 
 	// Carro capotando: Rx(tPitch) → Rz(tRoll) → Ry(rumo), em volta do ponto no meio da altura do modelo (dims[1] = altura, sem a escala),
@@ -960,7 +977,7 @@ class Car3DActor {
 		};
 		img(1, 0, 0, o); img(0, 1, 0, o + 4); img(0, 0, 1, o + 8);
 		const hc = (d ? d[1] : 1.4) * 0.5;                                    // (pivô: meia altura, no espaço do modelo)
-		M[o + 12] = this.x - M[o + 4] * hc; M[o + 13] = this.y - 1.5 + this.tLift + hc * k - M[o + 5] * hc; M[o + 14] = this.z - M[o + 6] * hc; M[o + 15] = 1;
+		M[o + 12] = this.x - M[o + 4] * hc; M[o + 13] = this.y - 1.5 + this.tLift + hc * k - M[o + 5] * hc + (typeof Relief !== 'undefined' ? Relief.at(this.x, this.z) : 0); M[o + 14] = this.z - M[o + 6] * hc; M[o + 15] = 1;
 	}
 
 	// Moto, barco, helicóptero: o veículo INTEIRO gira (rumo, deitar, empinar) em volta da origem do modelo — o chão sob o centro
@@ -975,7 +992,7 @@ class Car3DActor {
 			M[out] = (x2 * ch + z1 * sh) * k; M[out + 1] = y2 * k; M[out + 2] = (-x2 * sh + z1 * ch) * k; M[out + 3] = 0;
 		};
 		img(1, 0, 0, o); img(0, 1, 0, o + 4); img(0, 0, 1, o + 8);
-		M[o + 12] = this.x; M[o + 13] = this.y - (this.kind === 'boat' ? 0.8 : 1.5) + (this.fallen ? 0.06 : 0); M[o + 14] = this.z; M[o + 15] = 1;
+		M[o + 12] = this.x; M[o + 13] = this.y - (this.kind === 'boat' ? 0.8 : 1.5) + (this.fallen ? 0.06 : 0) + (this.kind === 'moto' && typeof Relief !== 'undefined' ? Relief.at(this.x, this.z) : 0); M[o + 14] = this.z; M[o + 15] = 1;
 		const A = m.inst, L = this.lamps, d = m.dims, air = this.kind === 'heli';
 		A[o] = air ? this.rotorA : this.spin; A[o + 1] = air ? this.rotorB : this.steer; A[o + 2] = 0; A[o + 3] = 0;    // ia
 		A[o + 4] = 0; A[o + 5] = 0; A[o + 6] = this.variant; A[o + 7] = this.dent;                                       // ib

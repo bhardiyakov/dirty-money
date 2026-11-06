@@ -130,6 +130,7 @@ const Blood = {
     // Uma mancha em (x, z): meia-largura w, meio-comprimento l ao longo de (dx, dz), força k (0..1). grow > 0: é uma POÇA (anel
     // à parte, dura POOL_LIFE) que leva `grow` s para se espalhar.
     splat(x, z, y, w, l, dx, dz, k, grow = 0) {
+        y += (typeof Relief !== 'undefined' ? Relief.at(x, z) : 0);      // (relevo: no chão do morro)
         if (!this.mesh || MapGeo.waterDepth(x, z) > 0) return;              // (na água o sangue se dilui)
         w *= this.SIZE; l *= this.SIZE;
         const d = Math.hypot(dx, dz) || 1, fx = dx / d * l, fz = dz / d * l, px = -dz / d * w, pz = dx / d * w;

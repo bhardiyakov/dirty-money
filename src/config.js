@@ -146,6 +146,10 @@ const Config = {
 
 	// Relógio do jogo: 24h do jogo duram `cycleSeconds` reais. Começa no fim da tarde para
 	// a noite chegar logo (faróis, postes e janelas acesas).
+	// RELEVO DE VERDADE (map/Relief.js): os morros e as favelas em 3D na tela (a física e a navegação seguem no plano). scale = exagero
+	// das alturas do WorldMap; `?relevo=0` volta ao chão plano de antes (relevo só no sombreado).
+	relief: { on: !(typeof location !== 'undefined' && /[?&]relevo=0\b/.test(location.search)), scale: 1.0, tess: 4.2, rigidY: 0.3 },
+
 	// NECESSIDADES (player/Needs.js): fome e cansaço DESLIGADOS — sem barras, sem avisos, sem fôlego/mira piores. Comer ainda cura e
 	// mexe no corpo (Physique: comer demais engorda), mas a saciedade não cai abaixo de 60 sozinha. `?necessidades=1` liga de volta.
 	needs: { on: typeof location !== 'undefined' && /[?&]necessidades=1\b/.test(location.search) },
@@ -447,6 +451,9 @@ const Config = {
 		// desaceleração solta no plano (m/s², só o rolamento: ela embala); na subida a máxima cai a 1/(1 + upK × inclinação), no mínimo minUp;
 		// na descida pode passar da máxima até downTop ×.
 		bikeGrade: { g: 0.75, roll: 0.35, upK: 2.2, minUp: 0.35, downTop: 1.6 },
+		// Carro e moto do jogador no relevo de verdade (Relief): gravidade (fração) ao longo da encosta, a máxima na subida ÷ (1 + upK × inclinação)
+		// e, na descida, até downTop × a máxima.
+		carGrade: { g: 0.45, upK: 0.7, downTop: 1.15 },
 		hpMul: 2.2,            // Resistência de TODOS os veículos × a do catálogo (spec.hp): lataria mais dura (batidas e tiros).
 		turnRate: 2.0,         // Guinada máx. (rad/s) em velocidade plena.
 		turnSpeedRef: 6,       // Velocidade (m/s) para direção com autoridade total.

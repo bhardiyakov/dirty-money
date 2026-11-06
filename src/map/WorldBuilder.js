@@ -800,6 +800,7 @@ class WorldBuilder {
             for (const lot of blk.lots) {
                 if (lot.safehouse) continue;           // a safe house tem construção própria (world/HouseView.js)
                 const { x0, z0, x1, z1, height: H } = lot;
+                MeshBatch.anchor = WorldBuilder.lotAnchor(lot);       // (relevo: o prédio fica NIVELADO na altura do meio do lote — MeshBatch)
                 const so = rng() * 6, ro = rng();     // desloca padrões p/ quebrar repetição.
                 const trim = this._batch('trim', x0, z0);
 
@@ -850,6 +851,7 @@ class WorldBuilder {
                 this._collider(`bld_${blk.i}_${blk.j}_${lot.x0.toFixed(0)}`, x0, z0, x1, z1, H);
             }
         }
+        MeshBatch.anchor = null;
     }
 
     // TELHADOS COM VOLUME (etapa 4, Facades3D.roofs): o que a câmera alta vê de um prédio é sobretudo o telhado — as peças em 3D
@@ -892,6 +894,7 @@ class WorldBuilder {
         const SH = TileFactory.SHOPS, T = this.T.shops, eps = 0.03, y0 = 0.2, y1 = 3.0, AW = CityGrid.AWNING;
         const awn = [[1, 1, 1], [0.92, 0.9, 0.84]];
         for (const blk of CityGrid.blocks) for (const l of blk.lots) {
+            MeshBatch.anchor = l.shops && l.shops.length ? WorldBuilder.lotAnchor(l) : null;
             for (const s of l.shops || []) {
                 const S = SH[s.kind], u0 = (s.kind % T.cols) / T.cols, v0 = Math.floor(s.kind / T.cols) / T.rows, u1 = u0 + 1 / T.cols, v1 = v0 + 1 / T.rows;
                 const uv = [[u0, v0], [u1, v0], [u0, v1], [u1, v1]], a = s.a, b = s.a + 6;
@@ -909,7 +912,11 @@ class WorldBuilder {
                 }
             }
         }
+        MeshBatch.anchor = null;
     }
+
+    // Relevo (Relief): a altura em que um lote fica nivelado — a do meio dele (a base de cada parede desce até o chão embaixo).
+    static lotAnchor(l) { return typeof Relief !== 'undefined' && Relief.on ? { h: Relief.at((l.x0 + l.x1) / 2, (l.z0 + l.z1) / 2) } : null; }
 
     // Peças soltas do campo (RuralPlan): coberturas e bombas de posto, placas, torres (água, rádio, eólicas) e docas do pântano.
     _rural() {
@@ -1661,7 +1668,7 @@ class WorldBuilder {
             const shaded = key0.endsWith('$'), key = shaded ? key0.slice(0, -1) : key0;      // 'sidewalk$' = chão tingido pelo relevo (vertex colors)
             const isTrim = key === 'trim' || key === 'xtrim' || key === 'btrim';
             const isVeg = key.startsWith('veg_'), isBlend = key.startsWith('blend_');
-            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend, receiveShadows: !isVeg, alwaysActive: at < 0 });
+            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend, receiveShadows: !isVeg, alwaysActive: at < 0, relief: true });
             this.meshes.push(mesh);
             if (isBlend) mesh.hasVertexAlpha = true;                                         // (o alfa por vértice é o degradê da faixa: GroundBlend)
             if (key === 'veg_hi') {                                                          // copas: desenham DEPOIS de pedestres, carros e sprites do chao (que nao escrevem profundidade), sempre por cima

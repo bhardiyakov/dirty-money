@@ -181,7 +181,7 @@ class RenderCuller {
 			// ficavam "na origem" e nunca eram desenhados — o chão sumia e aparecia o mar por baixo das árvores.
 			let q;
 			if (m.isWorldMatrixFrozen && !m.parent) q = m._cullC || (m._cullC = m.getBoundingInfo().boundingBox.centerWorld.clone());
-			else { let root = m; while (root.parent) root = root.parent; q = root.position; }
+			else { let root = m; if (!m._cullOwn) while (root.parent) root = root.parent; q = root.position; }      // (_cullOwn: o pai só a sobe pelo relevo — SpriteActor)
 			if (Math.abs(q.x - X0) <= hx + r + pad && Math.abs(q.z - Z0) <= hz + r + pad) out.push(m);
 		}
 		this.cand.length = out.length;

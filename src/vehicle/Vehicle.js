@@ -493,6 +493,10 @@ class Vehicle {
         const BG = Config.vehicle.bikeGrade, gr = pedal !== null && BG && typeof MapGeo !== 'undefined' ? Math.max(-0.7, Math.min(0.7, MapGeo.slopeAlong(this.position.x, this.position.z, forward.x, forward.z))) : 0;
         let topP = pedal === null ? top : top * (0.8 + 0.2 * pedal);
         if (gr > 0) topP *= Math.max(BG.minUp, 1 / (1 + BG.upK * gr));
+        // CARRO E MOTO no morro (relevo de verdade — map/Relief.js, Config.vehicle.carGrade): subindo, a máxima cai um pouco; a gravidade puxa
+        // ao longo da encosta (o motor vence na subida; solto na descida, embala)
+        const CG = Config.vehicle.carGrade, cgr = pedal === null && CG && this.controlled && !this.spec.boat && typeof Relief !== 'undefined' && Relief.on ? Math.max(-0.8, Math.min(0.8, Relief.slope(this.position.x, this.position.z, forward.x, forward.z))) : 0;
+        if (cgr > 0) topP *= 1 / (1 + CG.upK * cgr);
         if (pedal !== null && throttle > 0 && fwd >= topP) throttle = 0;
         const accel = Vehicle.accelOf(this.spec, fwd, topP, throttle, this.braking) * (pedal === null || this.braking ? 1 : 0.85 + 0.9 * pedal) * (this.nosOn && !this.braking ? Vehicle.NOS_ACC : 1);
         this.accelerating = throttle > 0 && fwd >= -0.5 && fwd < this.spec.maxSpeed * 0.7;
@@ -506,8 +510,9 @@ class Vehicle {
         }
         // (gravidade ao longo da encosta; subindo PEDALANDO ela não puxa para trás — a máxima menor já é a subida devagar)
         if (gr < 0 || (gr > 0 && !(throttle > 0))) fwd -= 9.81 * gr / Math.sqrt(1 + gr * gr) * BG.g * dt;
+        if (cgr && !(cgr > 0 && throttle > 0)) fwd -= 9.81 * cgr / Math.sqrt(1 + cgr * cgr) * CG.g * dt;
         // (moto e bicicleta não têm ré: o piloto empurra com os pés — devagar, no passo)
-        fwd = BABYLON.Scalar.Clamp(fwd, -(this.spec.maxReverse || (this.spec.bike ? Config.vehicle.bikeReverse : Config.vehicle.maxReverse)), gr < 0 ? top * BG.downTop : top);
+        fwd = BABYLON.Scalar.Clamp(fwd, -(this.spec.maxReverse || (this.spec.bike ? Config.vehicle.bikeReverse : Config.vehicle.maxReverse)), gr < 0 ? top * BG.downTop : cgr < 0 ? top * CG.downTop : top);
         this._applyMotion(fwd, lat, steer, dt, vel, forward, right);
     }
 

@@ -45,11 +45,12 @@ class StreetProps {
         let n = 0;
         for (const i of c.ids) {
             const it = list[i];
-            if (it.alive) { this._lampGeo(b, it); n++; }
+            if (it.alive) { MeshBatch.anchor = typeof Relief !== 'undefined' && Relief.on ? { h: Relief.at(it.x, it.z) } : null; this._lampGeo(b, it); n++; }      // (relevo: o poste em pé na altura do pé dele)
         }
+        MeshBatch.anchor = null;
         if (!n) return;
         // (material das peças da ponte: com o vão cortado — RoofCut —, o poste em cima dele some junto, em vez de ficar de pé na água)
-        c.mesh = b.build('lamps_' + key, this.scene, this.w.mats.bsolid, { vertexColors: true, receiveShadows: false, alwaysActive: false });
+        c.mesh = b.build('lamps_' + key, this.scene, this.w.mats.bsolid, { vertexColors: true, receiveShadows: false, alwaysActive: false, relief: true });
         if (c.mesh && this.w.shadow && k === 'l') this.w.shadow.addShadowCaster(c.mesh);
     }
 

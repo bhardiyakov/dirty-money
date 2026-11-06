@@ -207,7 +207,7 @@ class TerrainBuilder {
         }
 
         // Monta as malhas (uma por passo).
-        const mk = (bt, name, mat, o) => { const m = bt.build(`terr_${ci}_${cj}_${name}`, this.scene, mat, Object.assign({ receiveShadows: false, alwaysActive: false }, o)); if (m) chunk.meshes.push(m); return m; };
+        const mk = (bt, name, mat, o) => { const m = bt.build(`terr_${ci}_${cj}_${name}`, this.scene, mat, Object.assign({ receiveShadows: false, alwaysActive: false, relief: true }, o)); if (m) chunk.meshes.push(m); return m; };
         yield; mk(ground, 'ground', this.ground, { vertexColors: true });
         yield;
         const hi = mk(vegHi, 'vhi', wb.props.hiMaterial, { vertexColors: true });

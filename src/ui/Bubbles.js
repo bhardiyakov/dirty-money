@@ -94,7 +94,8 @@ const Bubbles = {
             const U = typeof CompassCamera !== 'undefined' ? CompassCamera.NORTH_PER_METRE : 0, yaw = U && typeof CompassCamera !== 'undefined' ? CompassCamera.yaw || 0 : 0;
             const up = U ? (b.y * U + this.LIFT) : 0;
             const stand = !U && typeof SpriteActor !== 'undefined' ? SpriteActor.STAND_SCALE : 1;      // (2,5D: o personagem em pé é esticado 1/cos da inclinação)
-            const v = BABYLON.Vector3.Project(this._v.set(p.x + Math.sin(yaw) * up, U ? b.y : b.y * stand + this.LIFT_Y, p.z + Math.cos(yaw) * up), this._I, M, vp);
+            const rl = typeof Relief !== 'undefined' ? Relief.at(p.x, p.z) : 0;      // (relevo: a cabeça na altura do chão dali)
+            const v = BABYLON.Vector3.Project(this._v.set(p.x + Math.sin(yaw) * up, (U ? b.y : b.y * stand + this.LIFT_Y) + rl, p.z + Math.cos(yaw) * up), this._I, M, vp);
             if (v.z < 0 || v.z > 1) { b.el.style.opacity = '0'; continue; }
             const x = r.left + v.x * r.width / w, yy = r.top + v.y * r.height / h - this.TAIL;
             b.el.style.transform = `translate(${x.toFixed(1)}px, ${yy.toFixed(1)}px) translate(-50%, -100%)`;

@@ -77,7 +77,7 @@ class Pickups {
     add(type, pos, { respawn = false, amount = 0, ttl = 0 } = {}) {
         const T = Pickups.TYPES[type];
         const mesh = ItemSprites.quad(this.scene, T.sprite || type, 2.1);
-        mesh.position.set(pos.x, 0.55, pos.z);
+        mesh.position.set(pos.x, 0.55 + (typeof Relief !== 'undefined' ? Relief.at(pos.x, pos.z) : 0), pos.z);
         const item = { type, mesh, x: pos.x, z: pos.z, respawn, amount, ttl, active: true, respawnAt: 0, glow: this._freeGlow.pop(), phase: Math.random() * 6.28 };
         this.items.push(item);
         return item;
@@ -203,7 +203,7 @@ class Pickups {
                 if (it.respawn && this.time >= it.respawnAt) {
                     const p = CityGrid.randomWalkablePoint();
                     it.x = p.x; it.z = p.z; it.active = true;
-                    it.mesh.setEnabled(true); it.mesh.position.set(p.x, 0.55, p.z);
+                    it.mesh.setEnabled(true); it.mesh.position.set(p.x, 0.55 + (typeof Relief !== 'undefined' ? Relief.at(p.x, p.z) : 0), p.z);
                 }
                 continue;
             }
