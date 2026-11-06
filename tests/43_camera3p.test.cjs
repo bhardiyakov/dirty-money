@@ -1,0 +1,76 @@
+// CÂMERA EM 3ª PESSOA (core/camera.js, Config.camera.chase / footFollow): dirigindo, a câmera desce para trás do veículo (baixa, perto,
+// com o horizonte e a névoa de distância) e volta à alta ao descer; `?persegue=0` = a câmera alta de antes. A pé, andando numa direção
+// ela gira sozinha para as costas do personagem — sem mudar para onde ele anda (a base do andar fica travada enquanto a tecla é a mesma).
+// Os carros perto da câmera ganham a sombra de contato (CarArt3D._ct).
+const { boot, gameWait } = require('./lib.cjs');
+
+module.exports = {
+    name: 'camera3p',
+    async run(ctx, c) {
+        const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+        // num trecho de rua: o jogador ali e um carro parado na faixa, virado para o rumo dela
+        const place = () => {
+            Tutorial.skip(); game.gps = null; game.player.invulnerable = true; Config.time.cycleSeconds = 1e12; game.dayNight.hour = 14; game.dayNight.apply();
+            const P = game.player.position, R0 = Math.random; let sd = 4242;
+            Math.random = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+            let s = null; for (let k = 0; k < 40 && !s; k++) s = RoadNet.randomLanePoint(20, { x: P.x, z: P.z, rMin: 0, rMax: 200 });
+            Math.random = R0;
+            game.player.teleport(new BABYLON.Vector3(s.point.x, 0, s.point.z)); game.camera.snapTo(game.player.position);
+            return { x: s.point.x, z: s.point.z, h: Math.atan2(s.d.dx, s.d.dz) };
+        };
+        const drive = (L) => {
+            const b = game.vehicleManager.vehicles.find((v) => !v.isBike && !v.controlled && v.visual && v.visual.lampGeom);
+            b.teleport(L.x, L.z, L.h); b.mode = 'parked'; b.route = null;
+            game.player.setVisible(false); b.setControlled(true); game.activeCar = b; game.mode = 'car'; game.camera.snapTo(b.position);
+            return true;
+        };
+        const cam = () => page.evaluate(() => {
+            const C = game.camera, cam = C.camera, v = game.mode === 'car' && game.activeCar;
+            const uv = v ? C.screenUV(v.position.x, v.position.z, 1) : null;
+            return { chase: C.chase, tilt: C.tiltDeg, y: cam.position.y, v: uv ? uv.v : null, fog: game.gameEngine.scene.fogDensity, ct: CarArt3D._ct ? CarArt3D._ct.n : 0 };
+        });
+
+        let { page, errors, close } = await boot(ctx);
+        const L = await page.evaluate(place);
+        await page.evaluate(drive, L);
+        await gameWait(page, 3, 90000);
+        const d = await cam();
+        c.ok(d.chase === 1 && Math.abs(d.tilt - 13) < 0.5, `dirigindo, a câmera desce para trás do carro (perseguição ${d.chase.toFixed(2)}, inclinação ${d.tilt.toFixed(1)}°)`);
+        c.ok(d.y < 6 && d.v > 0.55 && d.v < 0.95, `baixa e perto: a ${d.y.toFixed(1)} m do chão, o carro na metade de baixo da tela (v ${d.v && d.v.toFixed(2)})`);
+        c.ok(d.fog < -500, 'névoa de distância (do olho) na perseguição');
+        c.ok(d.ct >= 1, `sombra de contato debaixo dos carros perto (${d.ct})`);
+        // desce do carro: a câmera volta para a alta
+        await page.evaluate(() => { const b = game.activeCar; b.setControlled(false); game.activeCar = null; game.mode = 'player'; game.player.setVisible(true); game.player.teleport(new BABYLON.Vector3(b.position.x + 3, 0, b.position.z)); });
+        await gameWait(page, 4, 120000);
+        const f = await cam();
+        c.ok(f.chase === 0 && Math.abs(f.tilt - 56) < 0.5 && f.fog > -500, `a pé, a câmera volta à alta (perseguição ${f.chase.toFixed(2)}, ${f.tilt.toFixed(1)}°)`);
+
+        // a pé: segurar "direita" (D) — ele anda para a direita da tela e a câmera vai para as costas dele, sem ele mudar de rumo
+        const s0 = await page.evaluate((L) => {
+            game.player.teleport(new BABYLON.Vector3(L.x, 0, L.z)); game.camera.snapTo(game.player.position);
+            game.camera.turn(wrapA(L.h - Math.PI / 2 - game.camera.userYaw)); game.camera._lookIdle = 9;
+            function wrapA(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
+            return { yaw: game.camera.yaw };
+        }, L);
+        await page.keyboard.down('d');
+        await gameWait(page, 0.6, 30000);
+        const w0 = await page.evaluate(() => Math.atan2(game.player.velocity.x, game.player.velocity.z));
+        await gameWait(page, 3, 120000);
+        const w1 = await page.evaluate(() => ({ h: Math.atan2(game.player.velocity.x, game.player.velocity.z), yaw: game.camera.yaw, sp: game.player.speed }));
+        await page.keyboard.up('d');
+        c.ok(Math.abs(wrap(w1.h - w0)) < 0.15, `segurando a mesma tecla, o rumo não muda com a câmera girando (${(wrap(w1.h - w0) * 57.3).toFixed(0)}°)`);
+        c.ok(Math.abs(wrap(w1.yaw - w1.h)) < 0.2 && Math.abs(wrap(s0.yaw - w1.h)) > 1, `a câmera foi para as costas dele (de ${(wrap(s0.yaw - w1.h) * 57.3).toFixed(0)}° para ${(wrap(w1.yaw - w1.h) * 57.3).toFixed(0)}°)`);
+        c.noErrors(errors, 'camera3p');
+        await close();
+
+        // ?persegue=0: dirigindo, a câmera alta de antes
+        ({ page, errors, close } = await boot(ctx, { query: 'persegue=0' }));
+        const L2 = await page.evaluate(place);
+        await page.evaluate(drive, L2);
+        await gameWait(page, 2, 60000);
+        const o = await cam();
+        c.ok(o.chase === 0 && Math.abs(o.tilt - 56) < 0.5, `?persegue=0: a câmera alta de antes também dirigindo (${o.tilt.toFixed(1)}°)`);
+        c.noErrors(errors, 'camera3p ?persegue=0');
+        await close();
+    },
+};

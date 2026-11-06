@@ -693,8 +693,9 @@ class Game {
 		} else if (this.mode === 'heli' && this.chopper) {
 			// Helicóptero: o controle é lido em _updateChoppers (que também prende o jogador invisível à posição dele e segue a câmera).
 		} else {
-			// Movimento relativo à câmera (a pé).
-			const { forward, right } = this.camera.getGroundBasis();
+			// Movimento relativo à câmera (a pé) — com a base travada enquanto ele segura a mesma direção (a câmera virando sozinha para as
+			// costas dele não muda para onde ele anda: CompassCamera.moveBasis).
+			const { forward, right } = this.camera.moveBasis(axis);
 			const move = right.scale(axis.x).add(forward.scale(axis.z));
 			if (move.lengthSquared() > 1e-4) move.normalize();
 			else move.setAll(0);
@@ -710,11 +711,13 @@ class Game {
 			HouseView.update(dt, this);                          // safe house: porta, luzes, seta (entrar = a porta de Interiors)
 			this.camera.setFlat(false);
 			// (no alto das escadarias do Corcovado: a câmera mira o personagem lá em cima — o ponto do chão que aparece no mesmo lugar da tela)
-			const pl = this.player, up = pl.walk ? pl.deckH / Math.tan(Config.camera.tilt * Math.PI / 180) : 0;
-			this.camera.follow(up ? (this._camUp || (this._camUp = new BABYLON.Vector3())).set(pl.position.x, 0, pl.position.z + up) : pl.position, dt);
+			const pl = this.player, up = pl.walk ? pl.deckH / Math.tan(this.camera.tiltDeg * Math.PI / 180) : 0;
+			// (a câmera vai para as costas de quem anda — não mirando: aí o corpo segue a mira, não o caminho)
+			this.camera.follow(up ? (this._camUp || (this._camUp = new BABYLON.Vector3())).set(pl.position.x, 0, pl.position.z + up) : pl.position, dt, null, this.aim && this.aim.active ? null : pl);
 		}
 
 		AudioFX.screech(this.mode === 'car' && this.activeCar ? this.activeCar.slide || 0 : 0);      // pneu cantando na derrapagem (Vehicle.slide)
+		this._hdDrive();
 		Perf.lap('jogador');
 		this._updateHeliFall(dt);
 		this._updateChoppers(dt);
@@ -742,7 +745,8 @@ class Game {
 		// --- Mundo (água animada, sombra seguindo o foco) ---
 		if (this.mode !== 'player') HouseView.update(dt, this);          // (de carro/helicóptero: a porta e a seta continuam)
 		Perf.lap('outros');
-		this.gameEngine.update(dt, this.camera.target, this.camera.groundHalf());
+		const sw = this.camera.shadowWindow(this.mode === 'car' ? this.activeCar : null);      // (perseguição: a sombra à frente do veículo)
+		this.gameEngine.update(dt, this.camera.target, sw.ground, sw.focus);
 		Perf.lap('mundo (água/sombra)');
 
 		// --- Hijack (entrar/sair do carro) ---
@@ -1317,6 +1321,19 @@ class Game {
 
 	// AVANÇO do golpe (luta nova, Config.melee): no preparo do soco/chute/taco o jogador desliza até o alvo (que pode estar andando),
 	// parando onde o golpe alcança; não atravessa parede. Acaba com o golpe, se o alvo cair ou se apanhar no meio.
+	// Perseguição: o carro que o jogador DIRIGE em alta definição (CarArt3D.loadHD — o mesmo modelo da garagem da tunagem: todos os
+	// lados, bordas redondas). Com a câmera baixa e perto, atrás dele, é o objeto maior da tela. Desceu (ou trocou de carro): o de antes
+	// volta ao modelo do jogo. O arquivo (~350 KB) só é baixado na 1ª vez que se entra num carro daquele modelo.
+	_hdDrive() {
+		const car = this.mode === 'car' && Config.camera.chase.on && Config.art.hdCar ? this.activeCar : null, v = car && car.visual;
+		const cur = this._hdVis;
+		if (cur && cur !== v) { if (cur._ldId) { cur.modelId = cur._ldId; cur._ldId = null; } this._hdVis = null; }
+		if (!v || v === this._hdVis || v.kind !== 'car' || typeof CarArt3D === 'undefined' || !v.modelId || /@hd$/.test(v.modelId)) return;
+		this._hdVis = v;
+		const id = v.modelId;
+		CarArt3D.loadHD(id).then((k) => { if (k && this._hdVis === v && v.modelId === id) { v._ldId = id; v.modelId = k; } });
+	}
+
 	_lungeTick(dt) {
 		const p = this.player, L = p._lunge;
 		if (!p.action || p.rag || !L.t.alive || L.t.rag || L.left <= 0) { p._lunge = null; return; }

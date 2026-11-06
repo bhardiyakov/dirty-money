@@ -90,7 +90,7 @@ function merge(list, matIndex, origin = [0, 0, 0]) {
 // da carroceria), em qualquer rumo do carro. Rasteriza a malha (só as faces viradas para a câmera, com profundidade) de várias
 // direções dentro desse cone e fica só com os triângulos que aparecem em alguma — o fundo do chassi, o interior e as peças
 // escondidas sob a carroceria saem. Triângulo menor que um pixel conta como visível se estiver na superfície da frente.
-const VIEW_CONE = [[0, 1], [13, 8], [24, 12], [31, 12]];      // [ângulo da vertical (°), quantas direções em volta]
+const VIEW_CONE = [[0, 1], [13, 8], [24, 12], [31, 12], [45, 16], [60, 20], [72, 24], [82, 24]];      // [ângulo da vertical (°), quantas direções em volta] — até 8° acima do horizonte: a câmera de perseguição (baixa, atrás) vê a traseira e as laterais
 function visibleFromAbove(mesh, res = 0.012) {
   const { P, N, Ix } = mesh, nt = Ix.length / 3, vis = new Uint8Array(nt);
   const fn = new Float32Array(nt * 3);

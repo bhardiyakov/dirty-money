@@ -173,11 +173,11 @@ class GameEngine {
 
 	// Chamado todo frame: anima o mundo e centra o frustum da sombra no foco. ground = half extents of the visible ground
 	// (CompassCamera.groundHalf): the shadow window covers it.
-	update(dt, focus, ground) {
+	update(dt, focus, ground, shadowFocus = focus) {
 		if (this.world) this.world.update(dt, focus);
 		if (this.sun && focus) {
-			this._shadowFocus = focus;
-			this.sun.position.copyFrom(focus).subtractInPlace(this.sunDir.scale(SUN_DIST));
+			this._shadowFocus = shadowFocus;
+			this.sun.position.copyFrom(shadowFocus).subtractInPlace(this.sunDir.scale(SUN_DIST));
 			this.sun.shadowFrustumSize = Math.max(60, Math.max(ground.x, ground.z) * 2 * 1.25);
 		}
 	}

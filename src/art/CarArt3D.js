@@ -468,6 +468,8 @@ const CarArt3D = {
 			varying float vBase;
 			uniform sampler2D paints;
 			uniform float paintRows;
+			uniform vec4 fogP;        // névoa de distância (câmera de perseguição): início, fim (m do olho), ligada
+			uniform vec3 fogC;
 			uniform vec3 eye;
 			uniform vec3 sunL;        // direção PARA o sol (mundo)
 			uniform vec3 sunC;        // cor do sol × intensidade relativa (0 = sem sol)
@@ -608,6 +610,7 @@ const CarArt3D = {
 				else if (is(kind, 12.0)) { on = vLt.x; ec = vCR.rgb * 1.4 + 0.1; }
 				if (dent > 2.5 && (is(kind, 6.0) || is(kind, 7.0))) on *= step(0.5, h2(floor(L.xz * 4.0)));    // lâmpada quebrada
 				col = mix(col, ec, clamp(on, 0.0, 1.0) * (1.0 - fx.r));
+				if (fogP.z > 0.5) col = mix(col, fogC, clamp((length(vWS.xyz - eye) - fogP.x) / (fogP.y - fogP.x), 0.0, 1.0));      // (perseguição: a névoa de distância)
 				gl_FragColor = vec4(col, 1.0);
 			}`;
 	},
@@ -615,7 +618,7 @@ const CarArt3D = {
 	_material() {
 		const m = new BABYLON.ShaderMaterial('car3d', this._scene, { vertex: 'car3d', fragment: 'car3d' }, {
 			attributes: ['position', 'normal', 'color', 'pbr', 'wc', 'ia', 'ib', 'ic', 'dm'],
-			uniforms: ['world', 'viewProjection', 'squash', 'paintRows', 'eye', 'sunL', 'sunC', 'tint'],
+			uniforms: ['world', 'viewProjection', 'squash', 'paintRows', 'eye', 'sunL', 'sunC', 'tint', 'fogP', 'fogC'],
 			samplers: ['paints'],
 		});
 		m.setTexture('paints', this._paints);
@@ -625,6 +628,8 @@ const CarArt3D = {
 		m.setVector3('sunL', new BABYLON.Vector3(0, 1, 0));
 		m.setColor3('sunC', new BABYLON.Color3(1, 1, 1));
 		m.setColor3('tint', new BABYLON.Color3(1, 1, 1));
+		m.setVector4('fogP', new BABYLON.Vector4(0, 1, 0, 0));
+		m.setColor3('fogC', new BABYLON.Color3(0, 0, 0));
 		m.backFaceCulling = true;
 		m.checkReadyOnlyOnce = true;               // (sem refazer a lista de defines a cada malha a cada quadro)
 		return m;
@@ -643,7 +648,10 @@ const CarArt3D = {
 		if (G && G.camera === cam && G.tilted) { const g = G.groundHalf(); cx = G.focus.x; cz = G.focus.z; reach = Math.hypot(g.x, g.z) * 1.2 + 10; }      // (2.5D: around the ground at the screen centre)
 		else reach = Math.tan((cam.fov || 0.8) / 2) * Math.max(10, cp.y) * Math.max(1, aspect) * 1.5 + 10;
 		const r2 = reach * reach;
-		const S = this.studio;
+		const S = this.studio, chase = !S && typeof CompassCamera !== 'undefined' && CompassCamera.chase >= 0.5;
+		const ct = !S && this.contactOn ? this._contactMesh() : null;
+		let nc = 0;
+		if (ct) ct.n = 0;
 		for (const a of this.live) {
 			if (!a.visible || !a._placed || (S && !a.studio)) continue;               // (estúdio da tunagem: só o carro da plataforma)
 			const dx = a.x - cx, dz = a.z - cz;
@@ -651,6 +659,7 @@ const CarArt3D = {
 			const m = M[a.modelId] || this._model(a.modelId);
 			if (m.n >= m.cap) this._grow(m, m.cap * 2);
 			a._write(m, m.n++);
+			if (ct && (a.kind === 'car' || a.kind === 'moto') && !a.fallen && a.tLift < 0.3) nc = this._contactWrite(ct, nc, a);
 			if ((a.wing || a.kit) && a.kind === 'car') {                       // peças da tunagem: outras malhas, com os mesmos atributos do carro
 				if (a.wing) { const w = M[a.modelId + '#w' + a.wing] || this._wing(a.modelId, a.wing); if (w.n >= w.cap) this._grow(w, w.cap * 2); a._write(w, w.n++); }
 				if (a.kit) { const w = M[a.modelId + '#k' + a.kit] || this._kit(a.modelId, a.kit); if (w.n >= w.cap) this._grow(w, w.cap * 2); a._write(w, w.n++); }
@@ -662,8 +671,12 @@ const CarArt3D = {
 		if (s) { u.l.set(s.x, s.y, s.z); u.c.set(s.r, s.g, s.b); } else { u.l.set(-d[0] / dl, -d[1] / dl, -d[2] / dl); u.c.set(1, 1, 1); }
 		if (S) { u.l.copyFrom(S.l); u.c.copyFrom(S.c); }                       // estúdio: a luz dos refletores, não a do sol
 		u.e.copyFrom(cp);
+		// Perseguição (câmera baixa atrás do veículo): profundidade de verdade (a "achatada" é para a câmera alta) e a névoa da cena.
+		const fp = this._fp || (this._fp = new BABYLON.Vector4(0, 1, 0, 0));
+		fp.set(sc.fogStart, sc.fogEnd, chase ? 1 : 0, 0);
 		for (const mt of [this.material, this.materialAir]) {
-			mt.setVector3('eye', u.e); mt.setVector3('sunL', u.l); mt.setColor3('sunC', u.c); mt.setFloat('squash', mt === this.material && !S ? this.squash : 0);
+			mt.setVector3('eye', u.e); mt.setVector3('sunL', u.l); mt.setColor3('sunC', u.c); mt.setFloat('squash', mt === this.material && !S && !chase ? this.squash : 0);
+			mt.setVector4('fogP', fp); mt.setColor3('fogC', sc.fogColor);
 			if (S) mt.setColor3('tint', S.tint); else if (tint) mt.setColor3('tint', tint);
 		}
 		for (const id in M) {
@@ -674,6 +687,73 @@ const CarArt3D = {
 			mesh.thinInstanceBufferUpdated('matrix');
 			m.buf.updateDirectly(m.inst, 0, m.n);
 		}
+	},
+
+	// SOMBRA DE CONTATO: debaixo de cada carro e moto perto da câmera, um retângulo de cantos redondos escuro e macio no chão (a luz do
+	// céu que não chega debaixo do veículo). A sombra do sol (ShadowBoxBatch) só aparece de um lado e some à noite e na sombra dos
+	// prédios; esta fica sempre — com a câmera baixa e perto (perseguição), é o que "assenta" o carro no asfalto. Um desenho só (thin
+	// instances), sem textura (o degradê é feito no shader), sem gravar profundidade.
+	contactOn: !(typeof location !== 'undefined' && /[?&]contato=0\b/.test(location.search)),
+	_contactMesh() {
+		if (this._ct) return this._ct;
+		const sc = this._scene;
+		BABYLON.Effect.ShadersStore.carContactVertexShader = `
+			precision highp float;
+			attribute vec3 position;
+			#include<instancesDeclaration>
+			uniform mat4 viewProjection;
+			varying vec2 vQ;
+			void main(void) {
+				#include<instancesVertex>
+				vQ = position.xz * 2.0;
+				gl_Position = viewProjection * finalWorld * vec4(position, 1.0);
+			}`;
+		BABYLON.Effect.ShadersStore.carContactFragmentShader = `
+			precision highp float;
+			varying vec2 vQ;
+			uniform float strength;
+			void main(void) {
+				// retângulo de cantos redondos (o miolo: metade da largura, 64% do comprimento) com a borda sumindo até a beira do quad
+				vec2 q = max(abs(vQ) - vec2(0.5, 0.64), 0.0) / vec2(0.5, 0.36);
+				float a = 1.0 - smoothstep(0.0, 1.0, length(q));
+				gl_FragColor = vec4(0.0, 0.0, 0.0, a * sqrt(a) * strength);
+			}`;
+		const mt = new BABYLON.ShaderMaterial('carContact', sc, { vertex: 'carContact', fragment: 'carContact' }, { attributes: ['position'], uniforms: ['world', 'viewProjection', 'strength'], needAlphaBlending: true });
+		mt.setFloat('strength', 0.58);
+		mt.disableDepthWrite = true;
+		mt.zOffset = -4;                           // (rente ao asfalto: o deslocamento de profundidade ganha da rua sem levantar o quad)
+		mt.backFaceCulling = false;
+		mt.checkReadyOnlyOnce = true;
+		const mesh = new BABYLON.Mesh('carContact', sc), vd = new BABYLON.VertexData();
+		vd.positions = [-0.5, 0, -0.5, 0.5, 0, -0.5, 0.5, 0, 0.5, -0.5, 0, 0.5]; vd.indices = [0, 2, 1, 0, 3, 2];
+		vd.applyToMesh(mesh);
+		mesh.material = mt; mesh.renderingGroupId = 1; mesh.alphaIndex = -1000;
+		mesh.alwaysSelectAsActiveMesh = true; mesh.isPickable = false; mesh.doNotSyncBoundingInfo = true;
+		const cap = 64, mat = new Float32Array(cap * 16);
+		mesh.thinInstanceSetBuffer('matrix', mat, 16, false);
+		mesh.thinInstanceCount = 0;
+		this._ct = { mesh, mat, cap };
+		this._scene.onBeforeRenderObservable.add(() => {
+			const C = this._ct;
+			if (C._n !== C.n) { C._n = C.n; }
+			C.mesh.isVisible = C.n > 0;
+			if (C.n) { C.mesh.thinInstanceCount = C.n; C.mesh.thinInstanceBufferUpdated('matrix'); }
+		});
+		return this._ct;
+	},
+	_contactWrite(C, n, a) {
+		if (n >= C.cap) {
+			const cap = C.cap * 2, mat = new Float32Array(cap * 16); mat.set(C.mat);
+			C.mat = mat; C.cap = cap; C.mesh.thinInstanceSetBuffer('matrix', mat, 16, false);
+		}
+		const moto = a.kind === 'moto', sx = moto ? Math.max(1.1, a.hw * 2.8) : a.hw * 2 * 1.5, sz = a.hl * 2 * (moto ? 1.2 : 1.24);
+		const s = Math.sin(a.heading), c = Math.cos(a.heading), M = C.mat, o = n * 16;
+		M[o] = c * sx; M[o + 1] = 0; M[o + 2] = -s * sx; M[o + 3] = 0;
+		M[o + 4] = 0; M[o + 5] = 1; M[o + 6] = 0; M[o + 7] = 0;
+		M[o + 8] = s * sz; M[o + 9] = 0; M[o + 10] = c * sz; M[o + 11] = 0;
+		M[o + 12] = a.x; M[o + 13] = a.y - 1.5 + 0.045; M[o + 14] = a.z; M[o + 15] = 1;
+		C.n = n + 1;
+		return n + 1;
 	},
 
 	// Quantos carros 3D estão na tela agora e em quantas chamadas de desenho (DevMode / medições).

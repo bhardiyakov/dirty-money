@@ -71,7 +71,8 @@ class SpriteActor {
 	// 2.5D camera (CompassCamera.tilted): 2.5D characters STAND UP — a vertical quad turned to the camera (BILLBOARDMODE_Y), stretched by
 	// 1/cos(tilt) so the art, rendered at that same angle, shows 1:1 on screen. The top-down camera keeps them lying on the ground.
 	static standing() { return typeof CompassCamera !== 'undefined' && !!CompassCamera.tilted; }
-	static get STAND_SCALE() { return 1 / Math.cos(((typeof Config !== 'undefined' && Config.camera.tilt) || 56) * Math.PI / 180); }
+	// (a inclinação de AGORA: na perseguição a câmera desce e o boneco em pé estica menos — senão ficaria comprido)
+	static get STAND_SCALE() { return 1 / Math.cos(((typeof CompassCamera !== 'undefined' && CompassCamera.tiltDeg) || (typeof Config !== 'undefined' && Config.camera.tilt) || 56) * Math.PI / 180); }
 
 	// O sprite gira no ângulo exato (clipe vetorial)? (CarLights e quem mais precisar da frente desenhada.)
 	get rotates() { return !!(this.clip && this.clip.vector); }
@@ -409,6 +410,7 @@ class SpriteActor {
 		this._updateShade(dt);
 		if (c.npc) this._updateCover();
 		if (c.npc && this._stand !== SpriteActor.standing()) this._setStanding(SpriteActor.standing());      // (entered/left an interior)
+		if (this._stand && this.mesh.scaling.y !== SpriteActor.STAND_SCALE) this.mesh.scaling.y = SpriteActor.STAND_SCALE;      // (a câmera desceu/subiu)
 		if (c.npc && this._yaw !== SpriteActor.viewYaw()) {                // câmera bússola girou: o quad acompanha e a direção desenhada é refeita
 			this._yaw = SpriteActor.viewYaw();
 			if (!this._stand) this.mesh.rotation.y = this._yaw;            // (standing, the billboard already faces the camera)

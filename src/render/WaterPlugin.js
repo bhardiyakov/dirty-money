@@ -59,7 +59,8 @@ const Water = {
         if (!mt || !g) return;
         if ((this._chk -= dt) > 0) return;
         this._chk = 0.5;
-        const C = g.camera, f = C.focus, gh = C.groundHalf();
+        // (perseguição: o chão visto vai até a névoa — o espelho só vale para a água PERTO, à frente do veículo; a do horizonte some na névoa)
+        const C = g.camera, f = C.focus, gh = C.chase >= 0.5 ? { x: 34, z: 34 } : C.groundHalf();
         let seen = false;
         for (let i = -1; i <= 1 && !seen; i++) for (let j = -1; j <= 1 && !seen; j++) {
             const x = f.x + i * gh.x, z = f.z + j * gh.z;

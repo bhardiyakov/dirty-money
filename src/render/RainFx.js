@@ -39,7 +39,7 @@ class RainFx {
         const cam = camera.camera, f = camera.focus, eng = this.scene.getEngine();
         cam.getDirectionToRef(BABYLON.Axis.Z, this._fwd);
         const view = camera.view, upp = 2 * view / Math.max(1, eng.getRenderHeight());      // metres per screen pixel (orthographic)
-        const g = camera.groundHalf(), tilt = Config.camera.tilt * Math.PI / 180;
+        const g = camera.groundHalf(), tilt = (camera.tiltDeg || Config.camera.tilt) * Math.PI / 180;
         const reach = RainFx.FALL / Math.tan(tilt);                                          // drops high up show further down the screen
         this._center.set(f.x - this._fwd.x * reach * 0.5, 0, f.z - this._fwd.z * reach * 0.5);
         const yaw = camera.yaw, wind = (Weather.cur ? Weather.cur.wind : 0.2) * RainFx.SPEED * 1.1;

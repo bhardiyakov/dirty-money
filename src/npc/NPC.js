@@ -517,7 +517,7 @@ class NPC {
 	// NpcArt.STAND_BIAS toward the camera) instead of cutting through him.
 	static get UMB_AHEAD() { return 1.5; }
 	_umbrellaStanding(s) {
-		const p = this.transform.position, m = this._umbUp, e = Config.camera.tilt * Math.PI / 180, yaw = CompassCamera.yaw || 0, d = NPC.UMB_AHEAD;
+		const p = this.transform.position, m = this._umbUp, e = (CompassCamera.tiltDeg || Config.camera.tilt) * Math.PI / 180, yaw = CompassCamera.yaw || 0, d = NPC.UMB_AHEAD;
 		const feet = this.actor.mesh.position.y - NpcArt.LAYER_Y;
 		m.position.set(p.x - d * Math.cos(e) * Math.sin(yaw), feet + d * Math.sin(e), p.z - d * Math.cos(e) * Math.cos(yaw));
 		m.scaling.set(s, s * SpriteActor.STAND_SCALE, 1);

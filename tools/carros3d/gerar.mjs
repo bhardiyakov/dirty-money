@@ -3,14 +3,14 @@
 //   veiculos → assets/cars/veiculos3d.js (VEH3D: motos, helicópteros e barcos)
 //   hd       → assets/cars/hd/<modelo>.js (CAR3D_HD): cada carro em ALTA definição (detalhe 2, sem simplificar, todos os lados), um
 //              arquivo por modelo — só a garagem da tunagem carrega, e só o do carro que entrou (CarArt3D.loadHD)
-// Sem argumentos: carros e veiculos. Mesmas opções da página (tools/carros3d/index.html): detalhe 0,3, simplificação de 4 mm, só o que se vê de cima.
+// Sem argumentos: carros e veiculos. Detalhe 0,7 (a página, tools/carros3d/index.html, abre em 0,3), simplificação de 4 mm, sem o que só se vê de baixo (até 8° acima do horizonte: a câmera de perseguição).
 import { buildAll, buildVehicles, toScript, WHEELED } from './build.js';
 import { writeFileSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const opts = { detail: 0.3, maxErr: 0.004, topOnly: true };
+const opts = { detail: 0.7, maxErr: 0.004, topOnly: true };      // (0,7: a câmera de perseguição vê os carros de perto e de lado — mais segmentos nas curvas)
 const want = process.argv.slice(2);
 if (want.includes('hd')) {
   const hd = { detail: 2, maxErr: 0, topOnly: false }, dir = path.join(ROOT, 'assets/cars/hd');
