@@ -228,7 +228,9 @@ class TerrainBuilder {
     // Vegetação e rochas da célula: tabelas por bioma [tipo, probabilidade, escala mín, escala máx].
     static get VEG() {
         const B = WorldMap.B, T = typeof SpriteHD !== 'undefined' && SpriteHD.on;      // (tufos de grama: só com os sprites em alta definição)
-        const tufts = (p) => T ? [['tuft', p, 0.8, 1.3], ['tuft', p * 0.8, 0.7, 1.2], ['tuft', p * 0.6, 0.8, 1.3]] : [];
+        // (com o chão de FOTO a grama já está no chão: os tufos desenhados ficam raros — só um ou outro capim mais alto)
+        const real = typeof GroundPhotos !== 'undefined' && GroundPhotos.on && !GroundPhotos.mixed, q = real ? 0.12 : 1;
+        const tufts = (p) => T ? [['tuft', p * q, 0.8, 1.3], ['tuft', p * 0.8 * q, 0.7, 1.2], ['tuft', p * 0.6 * q, 0.8, 1.3]] : [];
         const V = {
             [B.FOREST]: [['pine', 0.7, 0.95, 1.3], ['oak', 0.55, 0.95, 1.3], ['bush', 0.45, 0.8, 1.2], ['fern', 0.3, 0.8, 1.3], ['araucaria', 0.08, 1.0, 1.35]],
             [B.GRASS]: [['oak', 0.1, 0.9, 1.25], ['bush', 0.14, 0.8, 1.1], ['flowers', 0.05, 0.8, 1.2], ['ipe', 0.02, 0.95, 1.3]],

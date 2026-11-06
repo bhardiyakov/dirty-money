@@ -49,7 +49,7 @@ const Config = {
 		// CHÃO com as fotos CC0 (art/GroundPhotos.js, etapa 3): o pintado de sempre + o grão das fotos + o relevo delas. `?chao=0` volta
 		// ao chão só pintado; `?chao=foto`, `?chao=misto` e `,relevo` para comparar.
 		groundPhotos: true,
-		groundMixed: true,
+		groundMixed: false,      // (chão realista: a foto é a base — `?chao=misto` volta ao pintado com o grão da foto)
 		groundBump: true,
 		// PRÉDIOS com volume (art/Facades3D.js, etapa 4): janelas recuadas (relevo + paralaxe nas fachadas) e telhados 3D (cornija,
 		// caixas-d'água, condensadoras, antenas). `?predios=0` volta aos de antes; `?predios=relevo` / `recuo` / `,telhado` para comparar.

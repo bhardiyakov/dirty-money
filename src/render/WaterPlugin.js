@@ -331,7 +331,7 @@ const Water = {
             // uma cor lisa de areia
             _ground() { return this._mode === 'sea' && typeof TerrainSplat !== 'undefined' && !!TerrainSplat.glsl; }
             prepareDefines(defines) { defines.SHORE_SEA = this._mode === 'sea'; defines.SHORE_LAND = this._mode === 'land'; defines.SHORE_GROUND = this._ground(); }
-            getSamplers(samplers) { samplers.push('shoreField', 'shoreClock', 'wMirror'); if (this._ground()) samplers.push('splatMap', 'splatAtlas', 'splatAtlas2'); }
+            getSamplers(samplers) { samplers.push('shoreField', 'shoreClock', 'wMirror'); if (this._ground()) { samplers.push('splatMap', 'splatAtlas', 'splatAtlas2'); if (TerrainSplat.tex.arr) samplers.push('splatArr'); } }
             getUniforms() { return { ubo: [{ name: 'wSmooth', size: 1, type: 'float' }, { name: 'wSun', size: 4, type: 'vec4' }, { name: 'wSky', size: 4, type: 'vec4' }, { name: 'wScr', size: 4, type: 'vec4' }], fragment: 'uniform float wSmooth;\nuniform vec4 wSun;\nuniform vec4 wSky;\nuniform vec4 wScr;' }; }
             bindForSubMesh(ub) {
                 ub.setTexture('shoreField', Water.field); ub.setTexture('shoreClock', Water.clock); ub.updateFloat('wSmooth', typeof Smooth !== 'undefined' && Smooth.on ? 1 : 0);
@@ -340,7 +340,7 @@ const Water = {
                 const eng = this._material.getScene().getEngine(), mt = Water.mirror;
                 ub.updateFloat4('wScr', 1 / eng.getRenderWidth(), 1 / eng.getRenderHeight(), mt && Water._seen ? 1 : 0, 0);
                 ub.setTexture('wMirror', mt || Water._noMirror(this._material.getScene()));
-                if (this._ground()) { ub.setTexture('splatMap', TerrainSplat.tex.map); ub.setTexture('splatAtlas', TerrainSplat.tex.atlas); ub.setTexture('splatAtlas2', TerrainSplat.tex.atlas2 || TerrainSplat.tex.atlas); }
+                if (this._ground()) { ub.setTexture('splatMap', TerrainSplat.tex.map); ub.setTexture('splatAtlas', TerrainSplat.tex.atlas); ub.setTexture('splatAtlas2', TerrainSplat.tex.atlas2 || TerrainSplat.tex.atlas); if (TerrainSplat.tex.arr) ub.setTexture('splatArr', TerrainSplat.tex.arr); }
             }
             getCustomCode(shaderType) {
                 if (shaderType !== 'fragment') return null;

@@ -21,12 +21,30 @@ const TerrainSplat = {
     TILE: 80, COLS: 4, ROWS: 3,
     HK: 32,                                  // altura × HK em 16 bits (até ~2000 u)
 
+    // CHÃO REALISTA (GroundPhotos.TERRAIN, WebGL2): as camadas de FOTO de cada tipo num texture array com mipmaps — cada uma no seu
+    // período em metros, com uma segunda amostra girada e em outra escala misturada por ruído (sem a repetição de ladrilho), manchas
+    // grandes mais claras e mais escuras e, na grama, as falhas de terra; o relevo da foto já vem assado na cor (GroundPhotos.layer).
+    _photoLayers(scene) {
+        const G = typeof GroundPhotos !== 'undefined' ? GroundPhotos : null;
+        if (!G || !G.on || G.mixed || scene.getEngine().webGLVersion < 2 || !BABYLON.RawTexture2DArray) return null;
+        const keys = this.IDS.concat(['patch']), S = 512, layers = [];
+        for (const k of keys) { const d = G.layer(k, S); if (!d) return null; layers.push(d); }
+        const data = new Uint8Array(S * S * 4 * layers.length);
+        layers.forEach((d, i) => data.set(d, i * S * S * 4));
+        const tex = new BABYLON.RawTexture2DArray(data, S, S, layers.length, BABYLON.Constants.TEXTUREFORMAT_RGBA, scene, true, false, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
+        tex.wrapU = tex.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE; tex.anisotropicFilteringLevel = 8;
+        return { tex, periods: keys.map((k) => G.TERRAIN[k].m), patch: keys.length - 1 };
+    },
+
     // idOf(i, j) → índice em IDS ou NONE. Devolve o material.
     create(scene, idOf) {
-        const M = WorldMap, W = Config.world, nx = M.nx, nz = M.nz, hd = typeof CityHD !== 'undefined' && CityHD.on, T = hd ? this.TILE * CityHD.Q : this.TILE;
+        const photo = this._photoLayers(scene);
+        if (photo) console.log(`[CHÃO] terreno de foto: ${photo.periods.length} camadas`);
+        const M = WorldMap, W = Config.world, nx = M.nx, nz = M.nz, hd = !photo && typeof CityHD !== 'undefined' && CityHD.on, T = photo ? 4 : hd ? this.TILE * CityHD.Q : this.TILE;
         // atlas com as mesmas texturas (e sementes) do TileFactory.create — ou as pintadas em alta definição
         const F = TileFactory, H = (n, ...a) => { const t = CityHD.paint(n, ...a); const d = t.g.getImageData(0, 0, T, T).data; t.cv.width = t.cv.height = 0; return { data: d }; };
-        const src = hd ? { sand: H('sand', 61), grass: H('grass', 51), forest: H('forest', 171), scrub: H('scrub', 161), rock: H('rock', 111),
+        const blank = { data: new Uint8Array(T * T * 4) };
+        const src = photo ? Object.fromEntries(this.IDS.map((k) => [k, blank])) : hd ? { sand: H('sand', 61), grass: H('grass', 51), forest: H('forest', 171), scrub: H('scrub', 161), rock: H('rock', 111),
             swamp: H('swamp', 121), earth: H('earth', 181), farm0: H('farm', 131, 0), farm1: H('farm', 141, 1), farm2: H('farm', 151, 2) }
             : { sand: F.sand(61), grass: F.grass(51), forest: F.forest(171), scrub: F.scrub(161), rock: F.rock(111),
                 swamp: F.swamp(121), earth: F.earth(181), farm0: F.farm(131, 0), farm1: F.farm(141, 1), farm2: F.farm(151, 2) };
@@ -62,7 +80,7 @@ const TerrainSplat = {
         m.diffuseTexture = atlasTex;                         // (só liga o caminho "com textura" do shader; a cor vem do plugin)
         m.specularColor = BABYLON.Color3.Black();
         m.transparencyMode = BABYLON.Material.MATERIAL_OPAQUE;      // (a textura RGBA "tem alfa": sem isto o chão iria para a passada transparente)
-        this._plugin(m, mapTex, atlasTex, { minX: W.minX, minZ: W.minZ, cell: W.cell, nx, nz, contour: typeof Relief !== 'undefined' && Relief.on ? 0 : W.contour, tile: T, atlas2: atlas2Tex, lod: !!atlas2Tex && scene.getEngine().webGLVersion >= 2 });
+        this._plugin(m, mapTex, atlasTex, { minX: W.minX, minZ: W.minZ, cell: W.cell, nx, nz, contour: typeof Relief !== 'undefined' && Relief.on ? 0 : W.contour, tile: T, atlas2: atlas2Tex, lod: !!atlas2Tex && scene.getEngine().webGLVersion >= 2, photo });
         return m;
     },
 
@@ -83,6 +101,22 @@ const TerrainSplat = {
             float tH(vec4 c) { return (floor(c.g * 255.0 + 0.5) * 256.0 + floor(c.b * 255.0 + 0.5)) / ${f(S.HK)}; }
             vec3 tPx(vec2 o, vec2 t) { return texture2D(splatAtlas, (o + mod(t, ${f(TL)}) + 0.5) / vec2(${f(TL * S.COLS)}, ${f(TL * S.ROWS)})).rgb; }
             vec3 tPx2(vec2 o, vec2 t) { return texture2D(splatAtlas2, (o + mod(t, ${f(TL / 2)}) + 0.5) / vec2(${f(TL / 2 * S.COLS)}, ${f(TL / 2 * S.ROWS)})).rgb; }
+            ${P.photo ? `
+            uniform highp sampler2DArray splatArr;
+            float tPer(float id) { ${P.photo.periods.map((m, i) => `if (id < ${f(i + 0.5)}) return ${f(m)};`).join(' ')} return 3.0; }
+            vec3 tArr(float id, vec2 uv) { return texture(splatArr, vec3(uv, id)).rgb; }
+            vec3 tTex(float id, vec2 p) {
+                float per = tPer(id);
+                vec2 uv = p / per, uv2 = mat2(0.8, -0.6, 0.6, 0.8) * p / (per * 1.37) + vec2(0.37, 0.61);
+                float m = smoothstep(0.32, 0.68, tNoise(p * 0.07 + id * 7.13));
+                vec3 c = mix(tArr(id, uv), tArr(id, uv2), m);
+                if (id > 0.5 && id < 1.5) {                                                          // grama: falhas de terra e capim mais seco em manchas
+                    float n = tNoise(p * 0.045 + 3.1) * 0.65 + tNoise(p * 0.21 + 9.7) * 0.35;
+                    c = mix(c, tArr(${f(P.photo.patch)}, p / ${f(P.photo.periods[P.photo.patch])}), smoothstep(0.6, 0.82, n) * 0.9);
+                    c *= mix(vec3(1.0), vec3(1.08, 1.04, 0.78), smoothstep(0.55, 0.85, tNoise(p * 0.018 + 1.7)) * 0.6);
+                }
+                return c * (0.86 + 0.26 * tNoise(p * 0.025 + id * 3.3));                              // manchas grandes (luz e umidade)
+            }` : `
             vec3 tTex(float id, vec2 p) {
                 vec2 o = vec2(mod(id, ${f(S.COLS)}), floor(id / ${f(S.COLS)})) * ${f(TL)};
                 vec2 q = fract(p / 4.0) * ${f(TL)};
@@ -95,7 +129,7 @@ const TerrainSplat = {
                     return mix(c0, c1, tLod);
                 }
                 return tPx(o, floor(q));
-            }
+            }`}
             float tW(float w, float id) { return id > 250.0 ? 0.0 : w * w * w; }               // peso apertado, mar e cidade fora (sem ponto e vírgula em comentário GLSL: o Babylon corta a linha ali)
             vec3 terrainColor(vec2 p) {
                 vec2 org = vec2(${f(P.minX)}, ${f(P.minZ)});
@@ -134,9 +168,9 @@ const TerrainSplat = {
             constructor(mat) { super(mat, 'TerrainSplat', 200, { TSPLAT: false }); this._enable(true); }
             getClassName() { return 'TerrainSplatPlugin'; }
             prepareDefines(defines) { defines.TSPLAT = true; }
-            getSamplers(samplers) { samplers.push('splatMap', 'splatAtlas', 'splatAtlas2'); }
+            getSamplers(samplers) { samplers.push('splatMap', 'splatAtlas', 'splatAtlas2'); if (P.photo) samplers.push('splatArr'); }
             getUniforms() { return { ubo: [{ name: 'tSmooth', size: 1, type: 'float' }], fragment: 'uniform float tSmooth;' }; }
-            bindForSubMesh(ub) { ub.setTexture('splatMap', mapTex); ub.setTexture('splatAtlas', atlasTex); ub.setTexture('splatAtlas2', A2); ub.updateFloat('tSmooth', P.atlas2 || (typeof Smooth !== 'undefined' && Smooth.on) ? 1 : 0); }
+            bindForSubMesh(ub) { ub.setTexture('splatMap', mapTex); ub.setTexture('splatAtlas', atlasTex); ub.setTexture('splatAtlas2', A2); if (P.photo) ub.setTexture('splatArr', P.photo.tex); ub.updateFloat('tSmooth', P.atlas2 || (typeof Smooth !== 'undefined' && Smooth.on) ? 1 : 0); }
             getCustomCode(shaderType) {
                 if (shaderType !== 'fragment') return null;
                 return {
@@ -147,7 +181,7 @@ const TerrainSplat = {
                     CUSTOM_FRAGMENT_UPDATE_DIFFUSE: `
                         #ifdef TSPLAT
                         ${P.lod ? `tLod = clamp(log2(max(length(dFdx(vPositionW.xz)), length(dFdy(vPositionW.xz))) * ${f(TL / 4)}) - 0.2, 0.0, 1.0);` : 'tLod = 0.0;'}
-                        baseColor.rgb = terrainColor(tSmooth > 0.5 ? vPositionW.xz : (floor(vPositionW.xz * 20.0) + 0.5) / 20.0);     // (pixel art: na grade do mundo)
+                        baseColor.rgb = terrainColor(${P.photo ? 'vPositionW.xz' : 'tSmooth > 0.5 ? vPositionW.xz : (floor(vPositionW.xz * 20.0) + 0.5) / 20.0'});     // (pixel art: na grade do mundo)
                         #ifdef VERTEXCOLOR
                         baseColor.rgb *= vColor.rgb;                                                   // (relevo: brilho por canto)
                         #endif
@@ -156,6 +190,6 @@ const TerrainSplat = {
             }
         }
         new TerrainSplatPlugin(material);
-        S.glsl = GLSL; S.tex = { map: mapTex, atlas: atlasTex, atlas2: A2 };       // (o mar usa o mesmo chão onde a beira suavizada entra nas células de mar: WaterPlugin)
+        S.glsl = GLSL; S.tex = { map: mapTex, atlas: atlasTex, atlas2: A2, arr: P.photo ? P.photo.tex : null };       // (o mar usa o mesmo chão onde a beira suavizada entra nas células de mar: WaterPlugin)
     },
 };
