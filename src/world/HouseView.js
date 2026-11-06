@@ -20,9 +20,10 @@ const HouseView = {
 		if (!S.placed) return;
 		const scene = world.scene, ox = S.ox, oz = S.oz, W = S.W, D = S.D, T = S.T, H = S.H;
 		this.world = world; this.scene = scene;
-		// RELEVO (Relief): a casa inteira nivelada na altura do chão no meio dela (as paredes descem até o chão do morro — MeshBatch.anchor)
-		const LH = this.lift = typeof Relief !== 'undefined' && Relief.on ? Relief.at(ox + W / 2, oz + D / 2) : 0;
-		MeshBatch.anchor = LH ? { h: LH } : null;
+		// RELEVO (Relief): a casa inteira NIVELADA no morro, rígida (WorldBuilder.rectAnchor) — encaixada do lado de cima, sobre pilares
+		// do lado de baixo (WorldBuilder._footing, no lote do degrau)
+		const HA = WorldBuilder.rectAnchor(ox, oz, ox + W, oz + D), LH = this.lift = HA ? HA.h : 0;
+		MeshBatch.anchor = HA;
 		const A = HouseArt;
 		// (com a cidade em alta definição, as texturas de fora também saem em HD: art/CityHDFacades.js)
 		const tex = (name, wrap = true) => typeof CityHD !== 'undefined' && CityHD.on ? CityHD.house(scene, name, wrap) : A[name]().toTexture(scene, { wrap, mips: wrap, aniso: 1 });
@@ -133,6 +134,7 @@ const HouseView = {
 		// --- degrau da entrada (permanente) ---
 		const ST = new MeshBatch();
 		ST.solid(ox + d.x0 - 0.5, oz - 1.1, ox + d.x1 + 0.5, oz - 0.02, 0, 0.14, [0.52, 0.5, 0.46]);
+		world._footing(ox, oz, ox + W, oz + D, HA, ST);
 		const stoop = ST.build('hs_stoop', scene, world.mats.solid, { vertexColors: true, receiveShadows: true, relief: true });
 		MeshBatch.anchor = null;
 		if (stoop) stoop.freezeWorldMatrix();

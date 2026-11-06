@@ -800,7 +800,8 @@ class WorldBuilder {
             for (const lot of blk.lots) {
                 if (lot.safehouse) continue;           // a safe house tem construção própria (world/HouseView.js)
                 const { x0, z0, x1, z1, height: H } = lot;
-                MeshBatch.anchor = WorldBuilder.lotAnchor(lot);       // (relevo: o prédio fica NIVELADO na altura do meio do lote — MeshBatch)
+                MeshBatch.anchor = WorldBuilder.lotAnchor(lot);       // (relevo: o prédio fica NIVELADO no morro, rígido — MeshBatch)
+                this._footing(x0, z0, x1, z1, MeshBatch.anchor, this._batch('trim', x0, z0));      // (e, do lado de baixo, sobre pilares)
                 const so = rng() * 6, ro = rng();     // desloca padrões p/ quebrar repetição.
                 const trim = this._batch('trim', x0, z0);
 
@@ -915,8 +916,34 @@ class WorldBuilder {
         MeshBatch.anchor = null;
     }
 
-    // Relevo (Relief): a altura em que um lote fica nivelado — a do meio dele (a base de cada parede desce até o chão embaixo).
-    static lotAnchor(l) { return typeof Relief !== 'undefined' && Relief.on ? { h: Relief.at((l.x0 + l.x1) / 2, (l.z0 + l.z1) / 2) } : null; }
+    // RELEVO (Relief): a altura em que uma construção fica NIVELADA no morro — rígida, com as proporções de sempre. Fica a `fit` (Config.relief)
+    // do caminho entre o ponto mais baixo e o mais alto do chão embaixo dela: do lado de cima ela entra um pouco no morro (encaixada), do
+    // lado de baixo fica sobre PILARES (_footing). { h, lo, hi } ou null (relevo desligado / chão plano).
+    static lotAnchor(l) { return WorldBuilder.rectAnchor(l.x0, l.z0, l.x1, l.z1); }
+    static rectAnchor(x0, z0, x1, z1) {
+        if (typeof Relief === 'undefined' || !Relief.on) return null;
+        let lo = Infinity, hi = -Infinity;
+        for (let i = 0; i <= 2; i++) for (let j = 0; j <= 2; j++) { const h = Relief.at(x0 + (x1 - x0) * i / 2, z0 + (z1 - z0) * j / 2); if (h < lo) lo = h; if (h > hi) hi = h; }
+        if (hi < 0.02) return null;
+        return { h: lo + (hi - lo) * Config.relief.fit, lo, hi };
+    }
+
+    // O PÉ de uma construção nivelada no morro (rectAnchor): onde o chão fica abaixo da laje, PILARES de concreto (nos cantos e a cada
+    // ~3 u na borda) do chão até ela e uma VIGA de borda logo abaixo — a casa de encosta da favela, sem esticar parede nenhuma.
+    _footing(x0, z0, x1, z1, A, b) {
+        if (!A || A.h - A.lo < 0.2) return;
+        const keep = MeshBatch.anchor, conc = [0.6, 0.58, 0.54], beam = [0.55, 0.53, 0.5], r = 0.17, I = 0.18;
+        MeshBatch.anchor = null;                                                  // (pilar: o pé segue o chão, o topo vai até a laje)
+        const col = (x, z) => { const g = Relief.at(x, z); if (A.h - g > 0.12) b.solid(x - r, z - r, x + r, z + r, -0.05, A.h - g, conc); };
+        const along = (ax, az, bx, bz) => { const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(L / 3.2)); for (let k = 0; k <= n; k++) col(ax + (bx - ax) * k / n, az + (bz - az) * k / n); };
+        const X0 = x0 + I, X1 = x1 - I, Z0 = z0 + I, Z1 = z1 - I;
+        along(X0, Z0, X1, Z0); along(X0, Z1, X1, Z1); along(X0, Z0, X0, Z1); along(X1, Z0, X1, Z1);
+        MeshBatch.anchor = A;                                                     // (viga: rígida, junto da casa)
+        const t = 0.22, y0 = -0.35, y1 = 0.02;
+        b.solid(x0, z0, x1, z0 + t, y0, y1, beam); b.solid(x0, z1 - t, x1, z1, y0, y1, beam);
+        b.solid(x0, z0 + t, x0 + t, z1 - t, y0, y1, beam); b.solid(x1 - t, z0 + t, x1, z1 - t, y0, y1, beam);
+        MeshBatch.anchor = keep;
+    }
 
     // Peças soltas do campo (RuralPlan): coberturas e bombas de posto, placas, torres (água, rádio, eólicas) e docas do pântano.
     _rural() {

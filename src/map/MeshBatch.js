@@ -19,8 +19,8 @@ class MeshBatch {
     get empty() { return this.idx.length === 0; }
 
     // RELEVO (map/Relief.js): enquanto MeshBatch.anchor = { h } estiver posto, o que os construtores empilham é uma CONSTRUÇÃO — no build,
-    // a parte acima de Config.relief.rigidY sobe `h` por igual (nivelada) e a base acompanha o chão. Sem âncora, cada vértice sobe a altura
-    // do chão embaixo dele.
+    // ela sobe `h` INTEIRA, rígida (nenhuma parede estica: a casa tem as proporções de sempre; o pé dela é resolvido por quem a constrói —
+    // pilares e viga de borda, WorldBuilder._footing). Sem âncora, cada vértice sobe a altura do chão embaixo dele.
     static anchor = null;
     _anc(n) {
         const A = MeshBatch.anchor;
@@ -167,13 +167,13 @@ class MeshBatch {
         }
         this.idx = out;
     }
-    // Sobe cada vértice a altura do chão (ou, numa construção ancorada, a parte de cima por igual — ver anchor).
+    // Sobe cada vértice a altura do chão (ou, numa construção ancorada, toda ela por igual — ver anchor).
     _relief() {
-        const R = Relief, P = this.pos, A = this.anc, rig = Config.relief.rigidY;
+        const R = Relief, P = this.pos, A = this.anc;
         this._tessellate(Config.relief.tess);
         for (let v = 0, n = P.length / 3; v < n; v++) {
-            const y = P[v * 3 + 1], h = A && A[v] === A[v] && y > rig ? A[v] : R.at(P[v * 3], P[v * 3 + 2]);
-            P[v * 3 + 1] = y + h;
+            const h = A && A[v] === A[v] ? A[v] : R.at(P[v * 3], P[v * 3 + 2]);
+            P[v * 3 + 1] += h;
         }
     }
 

@@ -147,8 +147,9 @@ const Config = {
 	// Relógio do jogo: 24h do jogo duram `cycleSeconds` reais. Começa no fim da tarde para
 	// a noite chegar logo (faróis, postes e janelas acesas).
 	// RELEVO DE VERDADE (map/Relief.js): os morros e as favelas em 3D na tela (a física e a navegação seguem no plano). scale = exagero
-	// das alturas do WorldMap; `?relevo=0` volta ao chão plano de antes (relevo só no sombreado).
-	relief: { on: !(typeof location !== 'undefined' && /[?&]relevo=0\b/.test(location.search)), scale: 1.0, tess: 4.2, rigidY: 0.3 },
+	// das alturas do WorldMap; tess = lado máximo (m) do piso subdividido para seguir a encosta; fit = onde a casa nivela entre o chão mais baixo
+	// e o mais alto embaixo dela (0,7: encaixada do lado de cima, sobre pilares do lado de baixo). `?relevo=0` volta ao chão plano de antes.
+	relief: { on: !(typeof location !== 'undefined' && /[?&]relevo=0\b/.test(location.search)), scale: 1.0, tess: 4.2, fit: 0.7 },
 
 	// NECESSIDADES (player/Needs.js): fome e cansaço DESLIGADOS — sem barras, sem avisos, sem fôlego/mira piores. Comer ainda cura e
 	// mexe no corpo (Physique: comer demais engorda), mas a saciedade não cai abaixo de 60 sozinha. `?necessidades=1` liga de volta.
