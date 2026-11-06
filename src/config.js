@@ -125,7 +125,7 @@ const Config = {
 		// rumble = trepidação (u) a partir de rumbleRef m/s.
 		bounce: { lag: 0.07, maxAcc: 22, accLerp: 10, stiff: 26, damp: 3.6, roll: 0.012, rollMax: 0.03, bump: 0.18, hStiff: 60, hDamp: 6, rumble: 0.05, rumbleRef: 30 },
 		// PERSEGUIÇÃO (3ª pessoa dirigindo carro e moto — CompassCamera: chase): a câmera desce para trás do veículo e gira com ele, mas fica
-		// INCLINADA tilt graus acima do horizonte — entre a alta (56°, o ângulo em que os personagens 2,5D foram desenhados) e a de jogo de
+		// INCLINADA tilt graus acima do horizonte — entre a alta (56°, o ângulo em que os personagens 2,5D foram desenhados; padrão 45°) e a de jogo de
 		// corrida: abaixo de ~35° pedestres e piloto, desenhados vistos de cima, ficam estranhos na rua. back = quanto atrás do veículo (m) e
 		// drop = quantos graus abaixo do centro da tela o veículo fica (a altura sai daí: back × tan(tilt + drop)); fov = campo de visão
 		// vertical (graus); em velocidade (até speedRef) ela recua speedBack m e abre speedFov graus; na moto/bicicleta, bikeBack m mais perto.
@@ -134,7 +134,7 @@ const Config = {
 		// lerp = rapidez da passagem a pé ↔ veículo. `?persegue=0` = a câmera alta de antes também dirigindo; `?persegue=N` (graus) = outra inclinação.
 		chase: {
 			on: !(typeof location !== 'undefined' && /[?&]persegue=0\b/.test(location.search)),
-			tilt: (typeof location !== 'undefined' && +(location.search.match(/[?&]persegue=(\d+(?:\.\d+)?)/) || [])[1]) || 40,
+			tilt: (typeof location !== 'undefined' && +(location.search.match(/[?&]persegue=(\d+(?:\.\d+)?)/) || [])[1]) || 45,
 			back: 8.5, drop: 11, fov: 50, speedBack: 3, speedFov: 6, bikeBack: -1.5, bikeTilt: 0, yawBoost: 0.9, minZ: 1.4,
 			near: 55, far: 125, lerp: 1.8, shadowAhead: 18, shadowHalf: 40,
 		},
