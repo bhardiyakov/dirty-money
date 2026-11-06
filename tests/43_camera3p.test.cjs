@@ -27,7 +27,7 @@ module.exports = {
         const cam = () => page.evaluate(() => {
             const C = game.camera, cam = C.camera, v = game.mode === 'car' && game.activeCar;
             const uv = v ? C.screenUV(v.position.x, v.position.z, 1) : null;
-            return { chase: C.chase, tilt: C.tiltDeg, want: Config.camera.chase.tilt, y: cam.position.y, v: uv ? uv.v : null, fog: game.gameEngine.scene.fogDensity, ct: CarArt3D._ct ? CarArt3D._ct.n : 0 };
+            return { chase: C.chase, tilt: C.tiltDeg, want: Config.camera.chase.tilt, y: cam.position.y - (C.lift || 0), v: uv ? uv.v : null, fog: game.gameEngine.scene.fogDensity, ct: CarArt3D._ct ? CarArt3D._ct.n : 0 };
         });
 
         let { page, errors, close } = await boot(ctx);

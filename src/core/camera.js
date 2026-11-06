@@ -412,7 +412,7 @@ class CompassCamera {
 	// orthographic projection itself.
 	screenUV(x, z, aspect) {
 		if (this.tilted) {
-			const cam = this.camera, p = BABYLON.Vector3.Project(this._uvP || (this._uvP = new BABYLON.Vector3()).set(x, 0, z), BABYLON.Matrix.IdentityReadOnly, cam.getTransformationMatrix(), this._uvV || (this._uvV = new BABYLON.Viewport(0, 0, 1, 1)));
+			const cam = this.camera, p = BABYLON.Vector3.Project(this._uvP || (this._uvP = new BABYLON.Vector3()).set(x, typeof Relief !== 'undefined' && !this.flat ? Relief.at(x, z) : 0, z), BABYLON.Matrix.IdentityReadOnly, cam.getTransformationMatrix(), this._uvV || (this._uvV = new BABYLON.Viewport(0, 0, 1, 1)));
 			return { u: p.x, v: p.y };
 		}
 		const dx = x - this.target.x, dz = z - this.target.z, s = Math.sin(this.yaw + this.roll), c = Math.cos(this.yaw + this.roll);

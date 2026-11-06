@@ -17,20 +17,20 @@ module.exports = {
             const proj = (x, y, z) => BABYLON.Vector3.Project(new BABYLON.Vector3(x, y, z), BABYLON.Matrix.IdentityReadOnly, cam.getTransformationMatrix(), new BABYLON.Viewport(0, 0, W, H));
             // 1 m na tela no foco, na direção que a câmera vê como "cima" (giro yaw): metade da altura da tela = view
             const f = C.focus, s = Math.sin(C.yaw), k = Math.cos(C.yaw);
-            const a = proj(f.x, 0, f.z), b = proj(f.x + k, 0, f.z - s);
+            const a = proj(f.x, C.lift || 0, f.z), b = proj(f.x + k, C.lift || 0, f.z - s);          // (relevo: o foco fica na altura do chão — C.lift)
             const pxPerM = Math.hypot(b.x - a.x, b.y - a.y);
             // os 4 cantos da tela no chão: dentro do retângulo de groundHalf em volta do foco
             const g = C.groundHalf(), out = [];
             const cv = eng.getRenderingCanvas(), cw = cv.clientWidth, ch = cv.clientHeight;       // (o raio do Babylon recebe px da página)
             for (const [u, v] of [[0, 0], [cw, 0], [0, ch], [cw, ch]]) {
-                const ray = game.scene.createPickingRay(u, v, BABYLON.Matrix.Identity(), cam), t = -ray.origin.y / ray.direction.y;
+                const ray = game.scene.createPickingRay(u, v, BABYLON.Matrix.Identity(), cam), t = ((C.lift || 0) - ray.origin.y) / ray.direction.y;
                 const x = ray.origin.x + ray.direction.x * t - f.x, z = ray.origin.z + ray.direction.z * t - f.z;
                 const lx = x * k - z * s, lz = x * s + z * k;          // (no referencial da câmera girada)
                 out.push(Math.abs(lx) <= g.x + 0.5 && Math.abs(lz) <= g.z + 0.5);
             }
             // zoom bem perto: a câmera não desce abaixo de perspMinDist (o campo de visão fecha)
             const v0 = C.viewHalf; C.viewHalf = Config.camera.minView; C._applyFov(); const dNear = C.dist, fovNear = cam.fov; C.viewHalf = v0; C._applyFov();
-            const hCam = cam.position.y;
+            const hCam = cam.position.y - (C.lift || 0);
             return { mode: cam.mode, persp: C.persp, center: [a.x / W, a.y / H], pxPerM, want: H / (2 * C.view), corners: out, dNear, min: Config.camera.perspMinDist, fovNear: fovNear * 57.3, fov: cam.fov * 57.3, hCam, tallest: Config.camera.tallest, fogD: game.scene.fogDensity, asp, stand: NpcArt._stand.y };
         });
         c.ok(r.persp && r.mode === 0, 'lá fora, a câmera 2,5D em perspectiva');

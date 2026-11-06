@@ -336,7 +336,7 @@ class Combat {
         if (Combat.v2 && s.source === 'player') for (let k = 0; k < 3; k++) this.spark(cx + (Math.random() - 0.5) * 0.3, 1.0 + Math.random() * 0.35, cz + (Math.random() - 0.5) * 0.3, [1, 0.85, 0.6]);      // (o estalo do impacto)
         AudioFX.thud(t.position.x, t.position.z);
         if ((s.source === 'player' || t === g.player) && g.camera) g.camera.shake(M.shake * (PH && (PH.broken || PH.counter) ? 1.6 : 1), dx, dz);      // (tremor na direção do golpe)
-        if (PH && (PH.counter || PH.broken) && typeof Bubbles !== 'undefined') Bubbles.say(t, PH.counter ? '⚡' : PH.heavy ? '💥' : '💫', { ms: 900, key: 'post' });
+        if (PH && (PH.counter || PH.broken) && typeof Bubbles !== 'undefined') Bubbles.say(t, PH.counter ? '⚡' : PH.heavy ? '💥' : '😵', { ms: 900, key: 'post' });
         if (s.onHit) s.onHit(t, s);
     }
 

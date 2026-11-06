@@ -1,6 +1,6 @@
 // ============================================================================
 // Posture — o EQUILÍBRIO de quem briga (Config.posture). Golpe não tira só vida: gasta a barra oculta de equilíbrio do NPC. Zerou:
-//   • golpe LEVE (soco, faca, bala) → ATORDOADO por `stun` s (cambaleia, 💫): não ataca, apanha mais (× stunDmg) e o próximo golpe pesado
+//   • golpe LEVE (soco, faca, bala) → ATORDOADO por `stun` s (cambaleia, 😵): não ataca, apanha mais (× stunDmg) e o próximo golpe pesado
 //     o derruba;
 //   • golpe PESADO (chute, taco, cassetete) → ARREMESSADO (Ragdoll com força `knock`): voa, desliza e, se bater numa parede ou num carro
 //     forte o bastante, fica PRENSADO (Ragdoll._move → NPC._wallSplat).
