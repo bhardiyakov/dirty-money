@@ -124,17 +124,19 @@ const Config = {
 		// roll = inclinação (rad) por rad/s de giro, até rollMax; bump = força dos trancos do asfalto (pulso no zoom, mola hStiff/hDamp);
 		// rumble = trepidação (u) a partir de rumbleRef m/s.
 		bounce: { lag: 0.07, maxAcc: 22, accLerp: 10, stiff: 26, damp: 3.6, roll: 0.012, rollMax: 0.03, bump: 0.18, hStiff: 60, hDamp: 6, rumble: 0.05, rumbleRef: 30 },
-		// PERSEGUIÇÃO (3ª pessoa dirigindo carro e moto, estilo jogo de corrida — CompassCamera: chase): a câmera desce para trás do veículo,
-		// baixa e perto, com o horizonte na tela e uma névoa de distância da cor do céu. tilt = inclinação (graus acima do horizonte),
-		// height = altura dela (m), back = quanto atrás do veículo (m), fov = campo de visão vertical (graus); em velocidade (até speedRef)
-		// ela recua speedBack m e abre speedFov graus. A altura passa POR BAIXO dos semáforos e das luminárias (cabeças a 4,7–5,8 m) e o que
-		// chega a menos de minZ m dela é cortado (um poste que passa rente à câmera não tampa a tela); na moto/bicicleta ela fica bikeBack m mais perto, bikeHeight m mais baixa e bikeTilt graus mais
-		// inclinada (o piloto é um desenho 2,5D, feito para ser visto de cima); yawBoost = quanto mais rápido ela gira atrás dele (×). near/far = a névoa (m da câmera). lerp = rapidez da passagem a pé ↔ veículo.
-		// `?persegue=0` = a câmera alta de antes também dirigindo.
+		// PERSEGUIÇÃO (3ª pessoa dirigindo carro e moto — CompassCamera: chase): a câmera desce para trás do veículo e gira com ele, mas fica
+		// INCLINADA tilt graus acima do horizonte — entre a alta (56°, o ângulo em que os personagens 2,5D foram desenhados) e a de jogo de
+		// corrida: abaixo de ~35° pedestres e piloto, desenhados vistos de cima, ficam estranhos na rua. back = quanto atrás do veículo (m) e
+		// drop = quantos graus abaixo do centro da tela o veículo fica (a altura sai daí: back × tan(tilt + drop)); fov = campo de visão
+		// vertical (graus); em velocidade (até speedRef) ela recua speedBack m e abre speedFov graus; na moto/bicicleta, bikeBack m mais perto.
+		// Veículo comprido recua junto. O que chega a menos de minZ m dela é cortado (um poste rente à câmera não tampa a tela). near/far = a
+		// névoa de distância (m da câmera; o alcance por preset em Graphics). yawBoost = quanto mais rápido ela gira atrás dele (×);
+		// lerp = rapidez da passagem a pé ↔ veículo. `?persegue=0` = a câmera alta de antes também dirigindo; `?persegue=N` (graus) = outra inclinação.
 		chase: {
 			on: !(typeof location !== 'undefined' && /[?&]persegue=0\b/.test(location.search)),
-			tilt: 13, height: 3.5, back: 9.2, fov: 56, speedBack: 3, speedFov: 9, bikeBack: -2, bikeHeight: -0.3, bikeTilt: 7, yawBoost: 0.9, minZ: 1.4,
-			near: 55, far: 125, lerp: 1.8, shadowAhead: 26, shadowHalf: 46,
+			tilt: (typeof location !== 'undefined' && +(location.search.match(/[?&]persegue=(\d+(?:\.\d+)?)/) || [])[1]) || 40,
+			back: 8.5, drop: 11, fov: 50, speedBack: 3, speedFov: 6, bikeBack: -1.5, bikeTilt: 0, yawBoost: 0.9, minZ: 1.4,
+			near: 55, far: 125, lerp: 1.8, shadowAhead: 18, shadowHalf: 40,
 		},
 		// A PÉ: a câmera gira sozinha para as COSTAS do personagem quando ele anda numa direção por um tempo (virou a rua) — devagar e só
 		// andando (parado ou dando passos curtos ela não mexe). O jogador ainda gira a mão (e aí ela espera lookHold s para voltar a seguir).

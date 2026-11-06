@@ -1,5 +1,5 @@
-// CÂMERA EM 3ª PESSOA (core/camera.js, Config.camera.chase / footFollow): dirigindo, a câmera desce para trás do veículo (baixa, perto,
-// com o horizonte e a névoa de distância) e volta à alta ao descer; `?persegue=0` = a câmera alta de antes. A pé, andando numa direção
+// CÂMERA EM 3ª PESSOA (core/camera.js, Config.camera.chase / footFollow): dirigindo, a câmera desce para trás do veículo (mais baixa e
+// perto, numa inclinação em que os personagens 2,5D ainda ficam bem, com a névoa de distância) e volta à alta ao descer; `?persegue=0` = a câmera alta de antes. A pé, andando numa direção
 // ela gira sozinha para as costas do personagem — sem mudar para onde ele anda (a base do andar fica travada enquanto a tecla é a mesma).
 // Os carros perto da câmera ganham a sombra de contato (CarArt3D._ct).
 const { boot, gameWait } = require('./lib.cjs');
@@ -27,7 +27,7 @@ module.exports = {
         const cam = () => page.evaluate(() => {
             const C = game.camera, cam = C.camera, v = game.mode === 'car' && game.activeCar;
             const uv = v ? C.screenUV(v.position.x, v.position.z, 1) : null;
-            return { chase: C.chase, tilt: C.tiltDeg, y: cam.position.y, v: uv ? uv.v : null, fog: game.gameEngine.scene.fogDensity, ct: CarArt3D._ct ? CarArt3D._ct.n : 0 };
+            return { chase: C.chase, tilt: C.tiltDeg, want: Config.camera.chase.tilt, y: cam.position.y, v: uv ? uv.v : null, fog: game.gameEngine.scene.fogDensity, ct: CarArt3D._ct ? CarArt3D._ct.n : 0 };
         });
 
         let { page, errors, close } = await boot(ctx);
@@ -35,8 +35,8 @@ module.exports = {
         await page.evaluate(drive, L);
         await gameWait(page, 3, 90000);
         const d = await cam();
-        c.ok(d.chase > 0.97 && Math.abs(d.tilt - 13) < 1.5, `dirigindo, a câmera desce para trás do carro (perseguição ${d.chase.toFixed(2)}, inclinação ${d.tilt.toFixed(1)}°)`);
-        c.ok(d.y < 6 && d.v > 0.55 && d.v < 0.95, `baixa e perto: a ${d.y.toFixed(1)} m do chão, o carro na metade de baixo da tela (v ${d.v && d.v.toFixed(2)})`);
+        c.ok(d.chase > 0.97 && Math.abs(d.tilt - d.want) < 1.5, `dirigindo, a câmera desce para trás do carro (perseguição ${d.chase.toFixed(2)}, inclinação ${d.tilt.toFixed(1)}° — a dela: ${d.want}°)`);
+        c.ok(d.y < 16 && d.v > 0.55 && d.v < 0.95, `mais baixa e perto: a ${d.y.toFixed(1)} m do chão, o carro na metade de baixo da tela (v ${d.v && d.v.toFixed(2)})`);
         c.ok(d.fog < -500, 'névoa de distância (do olho) na perseguição');
         c.ok(d.ct >= 1, `sombra de contato debaixo dos carros perto (${d.ct})`);
         // desce do carro: a câmera volta para a alta

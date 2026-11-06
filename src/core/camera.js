@@ -137,9 +137,11 @@ class CompassCamera {
 			const k = this.chase;
 			if (k > 0) {                                                                // (perseguição: baixa e perto, atrás do veículo — ver o topo)
 				const H = C.chase, ec = this.chaseTilt * Math.PI / 180, s = this._chS, bk = this._chBike;
-				const hgt = Math.max(H.height + (bk ? H.bikeHeight : 0), (this._chRoof || 0) + 1.5) * this.bounceMul;
 				const back = H.back + H.speedBack * s + (bk ? H.bikeBack : 0) + Math.max(0, (this._chLen || 0) - 5.6) * 0.8;
+				const hgt = Math.max(back * Math.tan(Math.min(1.45, ec + H.drop * Math.PI / 180)), (this._chRoof || 0) + 1.5) * this.bounceMul;
 				const Dc = hgt / Math.sin(ec), fc = (H.fov + H.speedFov * s) * Math.PI / 180;
+				// até onde se vê o chão (m à frente do centro da tela): o raio do alto da tela, limitado pela névoa — a área que entra no recorte
+				this._chReach = Math.min(H.far, hgt / Math.tan(Math.max(0.03, ec - fc / 2)) - hgt / Math.tan(ec)) + 10;
 				this._chLead = hgt / Math.tan(ec) - back;
 				D += (Dc - D) * k; fov += (fc - fov) * k;
 			}
@@ -197,7 +199,7 @@ class CompassCamera {
 		if (!this.tilted) return { x: view * aspect, z: view };
 		const e = Config.camera.tilt * Math.PI / 180;
 		if (this.persp && chase > 0) {                                              // (perseguição: o chão até a névoa, à frente e dos lados)
-			const g = this.groundHalf(view, aspect, 0), F = Config.camera.chase.far - 12;
+			const g = this.groundHalf(view, aspect, 0), F = Math.min(Config.camera.chase.far - 12, this._chReach || 1e9);
 			return { x: g.x + (F - g.x) * chase, z: g.z + (F - g.z) * chase };
 		}
 		if (this.persp) {
