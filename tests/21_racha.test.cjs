@@ -103,6 +103,7 @@ module.exports = {
             const P = game.player.position, cars = game.vehicleManager.vehicles.filter((v) => !v.controlled && !v.isBike && !v.spec.boat && !v.destroyed && !v.R).slice(0, 2);
             if (cars.length < 2) return null;
             const [a, b] = cars, C = Config.crash;
+            for (const v of cars) if (v._asleep) v.wake();
             for (const [i, car] of [a, b].entries()) { car.teleport(P.x + 30 + i * 12, P.z + 30, 0); car.mode = 'parked'; car.route = null; }
             game._onCarImpact(a, C.rollAlways + 1, 10, C.rollAlways + 1, 0);
             game._onCarImpact(b, C.explodeDv + 2, 10, C.explodeDv + 2, 0);
@@ -114,7 +115,12 @@ module.exports = {
         const tb = await page.evaluate(() => {
             const P = game.player.position, cars = game.vehicleManager.vehicles.filter((v) => !v.controlled && !v.isBike && !v.spec.boat && !v.destroyed && !v.tumble && !v.R && v.mode !== 'abandoned').slice(2, 4);
             if (cars.length < 2) return null;
-            const [vic, att] = cars, x = P.x - 40, z = P.z + 40;
+            // (um lugar sem nenhum outro carro a 14 m: depois da prova, os rivais liberados ficam pela pista)
+            const empty = (x, z) => game.vehicleManager.vehicles.every((v) => cars.includes(v) || Math.hypot(v.position.x - x, v.position.z - z) > 14);
+            let x = P.x - 40, z = P.z + 40;
+            for (const [dx, dz] of [[-40, 40], [40, 40], [-40, -40], [40, -40], [0, 60], [60, 0], [-60, 0], [0, -60]]) if (empty(P.x + dx, P.z + dz)) { x = P.x + dx; z = P.z + dz; break; }
+            const [vic, att] = cars;
+            for (const v of cars) if (v._asleep) v.wake();                 // (fora da bolha acordada, o carro dormindo não entra na conta da batida)
             vic.teleport(x, z, 0); vic.mode = 'parked'; vic.route = null;
             att.teleport(x - vic.halfW - att.halfLen - 0.3, z, Math.PI / 2);
             att._cmd = new BABYLON.Vector3(25, 0, 0); vic._burnT = att._burnT = 0;

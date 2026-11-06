@@ -299,7 +299,7 @@ const WorldMap = {
             this.MASSIF = { x: C.x, z: C.z, r: Rb, top: P };
             // (o AUTÓDROMO — Speedway.SITES — fica no pé, num patamar plano: a montanha sobe atrás dele)
             const keep = [];
-            if (typeof Speedway !== 'undefined') for (const q of Speedway.SITES) { const o = Speedway.outerR, hu = Speedway.S / 2 + o + 6; keep.push([q.x - o - 6, q.z - hu, q.x + o + 18, q.z + hu]); }
+            if (typeof Speedway !== 'undefined') for (const q of Speedway.SITES) keep.push(Speedway.footprint(q));
             const kd = (x, z) => { let m = Infinity; for (const b of keep) m = Math.min(m, Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - z, 0, z - b[3]))); return m; };
             for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
                 const k = j * nx + i;
