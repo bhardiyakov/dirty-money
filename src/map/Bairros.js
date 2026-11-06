@@ -178,6 +178,14 @@ const Bairros = {
             this.pens.push({ x0: x0 + 1, z0: z0 + 1, x1: x0 + 59, z1: z0 + 43, sp: rng() < 0.75 ? 'vaca' : 'cavalo', n: 6 + Math.floor(rng() * 4), big: true });
             return true;
         });
+        // ---- ANIMAIS SOLTOS: vaca, cabra e cavalo pastando no campo aberto, sem cerca (a área não encosta na estrada)
+        this._scan('roca', 10, 8, (x, z) => {
+            const w = 26 + Math.floor(rng() * 12), d = 20 + Math.floor(rng() * 10), x0 = Math.round(x - w / 2), z0 = Math.round(z - d / 2);
+            if (!this._free(x0, z0, x0 + w, z0 + d, [B.GRASS, B.SCRUB, B.FARM], 4)) return false;
+            const sp = this._pick(['vaca', 'vaca', 'cabra', 'cavalo', 'cabra']);
+            this.pens.push({ x0, z0, x1: x0 + w, z1: z0 + d, sp, n: sp === 'cabra' ? 3 + Math.floor(rng() * 3) : 2 + Math.floor(rng() * 2), loose: true });
+            return true;
+        });
     },
 
     _rocaVillage(x0, z0, x1, z1, side) {
@@ -253,6 +261,21 @@ const Bairros = {
         for (let k = 0; k < 3; k++) this.R.tree('banana', flip ? x0 + 2 + k * 2.5 : x1 - 2 - k * 2.5, z1 - 2 - (k % 2) * 2, 0.8 + rng() * 0.2);
         this.R.tree(rng() < 0.5 ? 'oak' : 'ipe', flip ? hx1 + 3 : hx0 - 3, z1 - 3, 1.2);
         this.R.prop('hay', (hx0 + hx1) / 2 + (flip ? -8 : 8), hz0 - 4, 0.6);                    // lenha
+        // a lida da roça (art/RuralArt.js): trator ou carroça na lateral, a colheita ensacada na frente da varanda, lenha, forno de barro,
+        // colmeias e o curral coberto com o cocho no pasto
+        const side = flip ? x0 + 2.2 : x1 - 2.2, sol = (cx, cz, hx, hz, h) => { this._solid(cx - hx, cz - hz, cx + hx, cz + hz, h); return [cx - hx, cz - hz, cx + hx, cz + hz, h]; };
+        if (rng() < 0.55) this._piece({ kind: 'tractor', x: side, z: z0 + 25.5, fx: 0, fz: rng() < 0.5 ? 1 : -1, color: this._pick([[0.72, 0.14, 0.1], [0.2, 0.42, 0.22], [0.8, 0.5, 0.12], [0.25, 0.35, 0.6]]), solid: sol(side, z0 + 25.5, 1.0, 1.7, 2.0) });
+        else this._piece({ kind: 'cart', x: side, z: z0 + 25.5, fx: 0, fz: 1, load: rng() < 0.6, solid: sol(side, z0 + 25.5, 1.0, 1.4, 1.3) });
+        const [hv] = X(14.2, 15);
+        this._piece({ kind: 'harvest', x: hv, z: z0 + 16.4, n: 3 + Math.floor(rng() * 5) });
+        if (rng() < 0.6) this._piece({ kind: 'wheelbarrow', x: flip ? x1 - 17 : x0 + 17, z: z0 + 16.2, fx: flip ? -1 : 1, fz: 0 });
+        const [fw] = X(1.4, 2);
+        this._piece({ kind: 'firewood', x: fw, z: z1 - 7.5, fx: 0, fz: 1 });
+        if (rng() < 0.7) { const [ov] = X(1.6, 2); this._piece({ kind: 'oven', x: ov, z: z1 - 2.2, fx: flip ? -1 : 1, fz: 0, solid: sol(ov, z1 - 2.2, 0.9, 0.9, 1.5) }); }
+        if (rng() < 0.45) { const [hx] = X(36.2, 37); this._piece({ kind: 'hives', x: flip ? hx - 1.8 : hx - 0.2, z: z1 - 1.6, n: 2 + Math.floor(rng() * 2) }); }
+        const [sx0, sx1] = X(2.2, 8.2);
+        this._piece({ kind: 'shed', x0: sx0, z0: z0 + 2.2, x1: sx1, z1: z0 + 6.2, h: 2.4 });
+        this._solid(sx0 + 0.4, z0 + 3.9, sx1 - 0.4, z0 + 4.5, 0.5);
     },
 
     // ================================================================= ALTO DA SERRA

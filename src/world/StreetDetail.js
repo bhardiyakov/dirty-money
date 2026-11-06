@@ -362,12 +362,14 @@ const StreetDetail = {
 				CityGrid.addObstacles([{ x0: p.x - 0.18, z0: p.z - 0.18, x1: p.x + 0.18, z1: p.z + 0.18, h: 8 }]);
 				const hp = (x, z) => typeof Relief !== 'undefined' && Relief.on ? Relief.at(x, z) : 0;
 				p.h = hp(p.x, p.z);
+				MeshBatch.anchor = { h: 0 };                                        // (fios e gato: alturas absolutas, já com o relevo)
 				if (prev) {                                                         // vão: 3 fios da média e 2 da baixa, com barriga
 					const wb = W._batch('trim', (p.x + prev.x) / 2, (p.z + prev.z) / 2);
 					for (const s of [-0.85, 0, 0.85]) RoadArt.wire(wb, [prev.x + prev.lx * s, prev.h + H - 0.45, prev.z + prev.lz * s], [p.x + p.lx * s, p.h + H - 0.45, p.z + p.lz * s], 0.45);
 					for (const s of [-0.45, 0.45]) RoadArt.wire(wb, [prev.x + prev.lx * s, prev.h + H - 1.45, prev.z + prev.lz * s], [p.x + p.lx * s, p.h + H - 1.45, p.z + p.lz * s], 0.6, [0.05, 0.05, 0.06], 0.025);
 				}
 				if (gato) this.tangle(b, p.x, p.z, p.h, H, p.lx, p.lz, rng);
+				MeshBatch.anchor = null;
 				this.poles.push(p); st.poles++;
 				prev = p;
 			}
@@ -381,7 +383,7 @@ const StreetDetail = {
 			const a = rng() * 6.28, r = 0.4 + rng() * 1.1, y = y0 + rng() * 1.6;
 			RoadArt.wire(b, [x, y + 0.3, z], [x + Math.cos(a) * r, y - 0.2 - rng() * 0.5, z + Math.sin(a) * r], 0.25 + rng() * 0.4, C[k % C.length], 0.018, 4);
 		}
-		for (let k = 0; k < 4; k++) { const y = y0 + 0.2 + k * 0.25; b.obox(x, z, 1, 0, 0.2, 0.2, y, y + 0.08, C[k % C.length]); }      // fita e emendas no poste
+		for (let k = 0; k < 4; k++) { const y = y0 + 0.2 + k * 0.25; b.obox(x, z, 1, 0, 0.2, 0.2, y, y + 0.08, C[k % C.length]); }      // fita e emendas no poste (alturas absolutas: âncora 0)
 		for (let k = 0; k < 2 + Math.floor(rng() * 3); k++) {                   // ligações para as casas
 			const d = reach[0] + rng() * (reach[1] - reach[0]), sd = (rng() - 0.5) * 9;
 			const tx = x + lx * d + lz * sd, tz = z + lz * d - lx * sd, th = (typeof Relief !== 'undefined' && Relief.on ? Relief.at(tx, tz) : 0) + 3.2 + rng() * 2.5;

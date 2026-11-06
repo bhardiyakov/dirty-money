@@ -25,7 +25,7 @@ const GroundPhotos = {
 		sand: { id: 'coast_sand_01', period: 80, c: '#e3d39c', k: 0.9 },
 		concrete: { id: 'concrete_floor_02', period: 40, c: '#8a8e92', k: 0.7 },
 		earth: { id: 'brown_mud_dry', period: 40, c: '#9a8468', k: 0.9 },
-		dirt: { id: 'dirt', period: 40, c: '#8a6a45', k: 1.0 },
+		dirt: { id: 'dirt', period: 40, c: '#a2502c', k: 1.0 },          // (terra vermelha)
 		rock: { id: 'aerial_rocks_02', period: 80, c: '#7c7a75', k: 1.0 },
 	},
 	imgs: {},

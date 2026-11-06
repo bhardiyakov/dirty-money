@@ -11,7 +11,7 @@
 const MapRenderer = {
     colors: {
         asphalt: '#50545b',
-        dirt: '#b8966a',
+        dirt: '#b8663e',
         earth: '#a68a68',
         bridge: '#5b5f66',
         sidewalk: '#b9bcc0',
@@ -27,7 +27,7 @@ const MapRenderer = {
     ROAD: {
         city: ['#50545b', '#2c2f35'], isl: ['#50545b', '#2c2f35'], ave: ['#5c6068', '#2c2f35'], via: ['#666a72', '#2a2d33'],
         hwy: ['#f0a032', '#9a4f14'], express: ['#f0a032', '#9a4f14'], serra: ['#6a6d73', '#3a3c40'],
-        fav: ['#b9b3a7', '#6d685f'], dirt: ['#bf9c6e', '#7d6244'], trail: ['#c9ab80', null], bridge: ['#5b5f66', '#d3d6da'],
+        fav: ['#a89478', '#6d5a46'], dirt: ['#c4703f', '#7d3e22'], trail: ['#c9ab80', null], bridge: ['#5b5f66', '#d3d6da'],
     },
     // O que falta pintar do terreno (ladrilhos): quem chama redesenha no próximo quadro.
     pending: false,

@@ -61,6 +61,7 @@ class WorldBuilder {
         this._helipads();
         this._props();
         StreetDetail.build(this);             // asfalto gasto, pintura do chão, placas, lombadas, pontos de ônibus, defensas, fiação (world/StreetDetail.js)
+        FavelaDetail.build(this);             // gatonet, ar-condicionado, ferros de laje, varais, fiação embolada, pedras com mato, lixo (world/FavelaDetail.js)
         this._flush();
         HouseView.build(this);                // a safe house do protagonista (paredes, telhado, porta e o corte do interior)
         this.street.addSigns(StreetDetail.signs);
@@ -1016,7 +1017,8 @@ class WorldBuilder {
                     t.solid(p.x0, p.z0, p.x1, p.z1, 0, 0.1, [0.62, 0.5, 0.4]);
                     break;
                 }
-                case 'crops': {                                                      // canteiros: terra escura e fileiras (milho alto ou horta baixa)
+                case 'crops': {                                                      // canteiros de terra vermelha com as plantas em 3D (art/RuralArt.js)
+                    if (RuralArt.piece(this, t, p, rng)) break;
                     t.solid(p.x0, p.z0, p.x1, p.z1, 0, 0.05, [0.36, 0.25, 0.16]);
                     const corn = p.crop === 'corn', alongX = p.rows === 'x', gap = corn ? 1.4 : 1.1, a0 = alongX ? p.z0 : p.x0, a1 = alongX ? p.z1 : p.x1;
                     for (let s = a0 + 0.6, r = 0; s < a1 - 0.3; s += gap, r++) {
@@ -1061,6 +1063,11 @@ class WorldBuilder {
                 case 'trough': { t.solid(x - 1.2, z - 0.4, x + 1.2, z + 0.4, 0, 0.55, woodD); t.solid(x - 1.05, z - 0.28, x + 1.05, z + 0.28, 0.5, 0.52, [0.3, 0.45, 0.4]); break; }
                 case 'scarecrow': { t.solid(x - 0.07, z - 0.07, x + 0.07, z + 0.07, 0, 2.0, woodD); t.solid(x - 0.9, z - 0.06, x + 0.9, z + 0.06, 1.45, 1.55, woodD); t.solid(x - 0.4, z - 0.2, x + 0.4, z + 0.2, 1.0, 1.65, [0.75, 0.3, 0.25]); t.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, 1.65, 2.0, [0.9, 0.8, 0.5]); t.solid(x - 0.42, z - 0.42, x + 0.42, z + 0.42, 2.0, 2.08, [0.85, 0.72, 0.35]); break; }
                 case 'lounger': { const ax = p.alongX; ax ? t.solid(x - 0.9, z - 0.35, x + 0.9, z + 0.35, 0.12, 0.4, white) : t.solid(x - 0.35, z - 0.9, x + 0.35, z + 0.9, 0.12, 0.4, white); break; }
+                case 'tractor': case 'cart': case 'wheelbarrow': case 'harvest': case 'firewood': case 'oven': case 'hives': case 'shed': {      // roça (art/RuralArt.js)
+                    RuralArt.piece(this, t, p, rng);
+                    if (p.solid) this._collider(`roca_${p.kind}_${Math.round(x || p.x0)}_${Math.round(z || p.z0)}`, p.solid[0], p.solid[1], p.solid[2], p.solid[3], p.solid[4]);
+                    break;
+                }
                 case 'pillar': { t.solid(x - 0.45, z - 0.45, x + 0.45, z + 0.45, 0, 2.1, [0.6, 0.58, 0.54]); t.solid(x - 0.55, z - 0.55, x + 0.55, z + 0.55, 2.1, 2.25, [0.84, 0.82, 0.78]); t.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, 2.25, 2.7, lampC); this._collider('pilar_' + x.toFixed(1) + '_' + z.toFixed(1), x - 0.45, z - 0.45, x + 0.45, z + 0.45, 2.1); (this.bairroLamps || (this.bairroLamps = [])).push({ x, z, y: 2.5 }); break; }
             }
         }
@@ -1336,7 +1343,7 @@ class WorldBuilder {
             const P = a.pts, hw = Math.max(a.w / 2, 0.72), y = 0.016;
             for (let k = 0; k + 1 < P.length; k++) {
                 const p = P[k], q = P[k + 1], L = hypot(q[0] - p[0], q[1] - p[1]) || 1, nx = -(q[1] - p[1]) / L * hw, nz = (q[0] - p[0]) / L * hw;
-                const bt = this._batch('sidewalk$', p[0], p[1]), col = cs((p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+                const bt = this._batch('open_earth$', p[0], p[1]), col = cs((p[0] + q[0]) / 2, (p[1] + q[1]) / 2);      // (beco de terra batida: a referência da favela)
                 const A = [p[0] + nx, y, p[1] + nz], B = [p[0] - nx, y, p[1] - nz], C2 = [q[0] - nx, y, q[1] - nz], D = [q[0] + nx, y, q[1] + nz];
                 bt.tri(A, B, C2, up, [uv4(A[0], A[2]), uv4(B[0], B[2]), uv4(C2[0], C2[2])], col);
                 bt.tri(A, C2, D, up, [uv4(A[0], A[2]), uv4(C2[0], C2[2]), uv4(D[0], D[2])], col);
@@ -1422,6 +1429,7 @@ class WorldBuilder {
         };
 
         this._favLamps = [];
+        this._favPoleList = poles;                                     // (FavelaDetail: os fios do gato para as casas)
         this.perches = this.perches || [];
         for (const p of poles) {
             this.perches.push({ x: p.x, z: p.z, y: 6.1 });

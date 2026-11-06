@@ -540,7 +540,7 @@ Object.assign(CityTile.prototype, {
     // ---------------------------------------------------------------- terra batida de estrada / trilha: pedrinhas e marcas
     p_dirt(seed) {
         if (GroundPhotos.draw(this, 'dirt')) return;
-        this.base(['#6f5436', '#7d5f3d', '#8a6a45', '#94724a', '#a07c52'], 18, seed, 3);
+        this.base(['#7c3a20', '#8e4426', '#a0502c', '#ae5c34', '#bc6a3e'], 18, seed, 3);      // TERRA VERMELHA (a roça da referência)
         this.clouds(0.5, 8, seed + 1, 'soft-light', 2);
         this.grain(0.5, seed, 0.02);
         const g = this.g, r = this.rng;
@@ -548,11 +548,11 @@ Object.assign(CityTile.prototype, {
             const x = r() * 80, y = r() * 80, len = 14 + r() * 16, a = (r() - 0.5) * 0.4;
             this.wrap(x - 4, y - 6, x + len + 4, y + 6, () => {
                 g.save(); g.translate(x, y); g.rotate(a);
-                for (const o of [-2.6, 2.6]) { g.fillStyle = this.lin(0, o - 0.9, 0, o + 0.9, [[0, [60, 42, 26], 0], [0.5, [60, 42, 26], 0.32], [1, [60, 42, 26], 0]]); g.fillRect(0, o - 0.9, len, 1.8); }
+                for (const o of [-2.6, 2.6]) { g.fillStyle = this.lin(0, o - 0.9, 0, o + 0.9, [[0, [70, 30, 16], 0], [0.5, [70, 30, 16], 0.32], [1, [70, 30, 16], 0]]); g.fillRect(0, o - 0.9, len, 1.8); }
                 g.restore();
             });
         }
-        for (let k = 0; k < 34; k++) this.pebble(r() * 80, r() * 80, 0.3 + r() * 0.65, ['#b99a70', '#5a4430', '#9a8a78', '#c9b89c'][k % 4], r() * 3);
+        for (let k = 0; k < 34; k++) this.pebble(r() * 80, r() * 80, 0.3 + r() * 0.65, ['#c98a62', '#5e2c18', '#9a8a78', '#d4a27c'][k % 4], r() * 3);
         for (let k = 0; k < 5; k++) {                                            // tufos de capim na beira
             const x = r() * 80, y = r() * 80;
             this.wrapAt(x, y, 3, () => { for (let i = 0; i < 7; i++) { const a = -Math.PI / 2 + (i - 3) * 0.32; this.line(x, y, x + Math.cos(a) * (1.4 + r()), y + Math.sin(a) * (1.4 + r()), i % 2 ? '#6f8a3a' : '#8aa04a', 0.32); } });
@@ -616,7 +616,7 @@ Object.assign(CityTile.prototype, {
     },
     // Plantação: fileiras a cada 0,4 u. kind 0 = terra arada (sulco e camalhão com relevo) com brotos; 1 = lavoura verde madura; 2 = trigo.
     p_farm(seed, kind) {
-        const P = [['#6e5032', '#7a5a3a', '#8a6845', '#94724a'], ['#3f6a2a', '#4a7a30', '#528c36', '#5c9a3c'], ['#a8892e', '#bd9c40', '#c9a94a', '#d6b756']][kind];
+        const P = [['#7a3a20', '#8a4426', '#9c5030', '#aa5c38'], ['#3f6a2a', '#4a7a30', '#528c36', '#5c9a3c'], ['#a8892e', '#bd9c40', '#c9a94a', '#d6b756']][kind];
         this.base(P, 20, seed, 3);
         this.clouds(0.35, 10, seed + 1, 'soft-light', 2);
         const rows = Math.round(this.h / 8);
@@ -624,7 +624,7 @@ Object.assign(CityTile.prototype, {
         const g = this.g, r = this.rng;
         if (kind === 0) {
             for (let y = 4; y < this.h; y += 8) for (let x = 2 + r() * 3; x < this.w; x += 5 + r() * 3) this.wrapAt(x, y, 2, () => { for (let l = 0; l < 3; l++) { const a = -Math.PI / 2 + (l - 1) * 0.7; this.line(x, y, x + Math.cos(a) * 1.1, y + Math.sin(a) * 1.1, '#6fae48', 0.35); } });
-            for (let k = 0; k < 24; k++) this.pebble(r() * this.w, r() * this.h, 0.3 + r() * 0.4, '#a58660', r() * 3);
+            for (let k = 0; k < 24; k++) this.pebble(r() * this.w, r() * this.h, 0.3 + r() * 0.4, '#c07850', r() * 3);
         } else {
             const leafC = kind === 1 ? ['#3a6a28', '#5ca040', '#7cc050', '#9ad068'] : ['#8e7430', '#c9a94a', '#e2c868', '#f2dc8a'];
             for (let y = 4; y < this.h; y += 8) for (let x = r() * 2; x < this.w; x += 1.6 + r() * 1.2) {
