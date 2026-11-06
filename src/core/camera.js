@@ -343,7 +343,7 @@ class CompassCamera {
 		// altura junto (a janela da sombra do sol segue: GameEngine.update)
 		if (typeof Relief !== 'undefined' && Relief.on && !this.flat) {
 			const goal = Relief.at(targetPos.x, targetPos.z);
-			this.lift = this.lift == null ? goal : this.lift + (goal - this.lift) * (1 - Math.exp(-5 * dt));
+			this.lift = this.lift == null || Math.abs(goal - this.lift) > 25 ? goal : this.lift + (goal - this.lift) * (1 - Math.exp(-5 * dt));      // (salto grande — teleporte: vai direto)
 		} else this.lift = 0;
 		this.target.y = this.lift;
 		// Tremor (batidas e explosões): desloca só a câmera, não o foco, e some rápido.

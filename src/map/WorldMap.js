@@ -296,6 +296,11 @@ const WorldMap = {
         const RC = Config.relief;
         if (RC && RC.on && typeof Corcovado !== 'undefined') {
             const C = Corcovado.C, P = RC.corcovado, Rp = 95, Rb = Rp + 420;
+            this.MASSIF = { x: C.x, z: C.z, r: Rb, top: P };
+            // (o AUTÓDROMO — Speedway.SITES — fica no pé, num patamar plano: a montanha sobe atrás dele)
+            const keep = [];
+            if (typeof Speedway !== 'undefined') for (const q of Speedway.SITES) { const o = Speedway.outerR, hu = Speedway.S / 2 + o + 6; keep.push([q.x - o - 6, q.z - hu, q.x + o + 18, q.z + hu]); }
+            const kd = (x, z) => { let m = Infinity; for (const b of keep) m = Math.min(m, Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - z, 0, z - b[3]))); return m; };
             for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
                 const k = j * nx + i;
                 if (!land[k]) continue;
@@ -303,7 +308,7 @@ const WorldMap = {
                 if (d >= Rb) continue;
                 const u = Math.min(1, (Rb - d) / (Rb - Rp)), f = 0.7 * u + 0.3 * u * u * (3 - 2 * u);
                 let m = P * f * (d <= Rp ? 1 : 0.95 + 0.1 * this._fbm(x / 120, z / 120, 3, 91));
-                if (d > Rp) m *= this._ss(18, 90, dUrb[k] * c) * this._ss(0, 40, dWater[k] * c);
+                if (d > Rp) m *= this._ss(18, 90, dUrb[k] * c) * this._ss(0, 40, dWater[k] * c) * (keep.length ? this._ss(12, 85, kd(x, z)) : 1);
                 if (m > h[k]) h[k] = m;
             }
         }
@@ -329,6 +334,8 @@ const WorldMap = {
             else if (typeof Lagoa !== 'undefined' && Lagoa.zone(x, z, Lagoa.OUT2 + 4)) b = R.GRASS;           // (a Lagoa: orla de grama, sem brejo nem praia)
             else if (dLake[k] * c < 11 && hh < 6) b = R.SWAMP;
             else if (x > 300 && !pao) b = R.RESORT;
+            else if (this.MASSIF && hypot(x - this.MASSIF.x, z - this.MASSIF.z) < this.MASSIF.r && hh > 12)      // (o maciço do Corcovado: Mata Atlântica,
+                b = (flags[k] & 1) || slope > 0.95 || (hh > this.MASSIF.top * 0.82 && this._fbm(x / 40, z / 40, 2, 92) > 0.55) ? R.ROCK : R.FOREST;      //  pedra nos paredões e no alto)
             else if (hh > 36 || (hh > 20 && slope > 0.26) || (flags[k] & 1)) b = R.ROCK;
             else if (this._inFavela(x, z, hh)) b = R.FAVELA;
             else if (typeof Bairros !== 'undefined' && Bairros.zoneAt(x, z) === 'roca') b = this._fbm(x / 70, z / 70, 2, 46) > 0.52 ? R.FARM : R.GRASS;      // (a roça: pasto e lavoura, sem brejo)
