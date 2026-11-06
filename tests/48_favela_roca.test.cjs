@@ -16,7 +16,7 @@ module.exports = {
             const sc = game.gameEngine.scene;
             return {
                 st: FavelaDetail.stats, lots: lots.length, fav: lots.filter((l) => /^fav\d/.test(l.facade)).length,
-                favSurf: RoadPlan.CLASS.fav.surface, dirtTex: GroundPhotos.SET.dirt.c, pieces,
+                favSurf: RoadPlan.CLASS.fav.surface, dirtTex: GroundPhotos.SET.dirt.id, pieces,
                 loose: Bairros.pens.filter((p) => p.loose).length, favFacade: !!(game.gameEngine.world.mats.facades.fav1),
                 caipira: TileFactory.facadeStyles.caipira0.kind,
             };
@@ -31,7 +31,7 @@ module.exports = {
         const P = r.pieces;
         c.ok((P.tractor || 0) + (P.cart || 0) >= 5 && P.harvest >= 5 && P.firewood >= 5 && P.shed >= 5, `roça: ${P.tractor || 0} tratores, ${P.cart || 0} carroças, ${P.harvest} colheitas, ${P.firewood} lenhas, ${P.oven || 0} fornos, ${P.hives || 0} colmeias, ${P.shed} currais`);
         c.ok(P.crops >= 8, `${P.crops} plantações (milho, couve, tomate, alface, mandioca) em leiras de terra vermelha`);
-        c.ok(/^#a/i.test(r.dirtTex) && r.caipira === 'fav', `terra vermelha nas estradas (${r.dirtTex}) e casa humilde de reboco gasto`);
+        c.ok(/red/.test(r.dirtTex) && r.caipira === 'fav', `terra vermelha nas estradas (${r.dirtTex}) e casa humilde de reboco gasto`);
         c.ok(r.loose >= 3, `${r.loose} grupos de bichos soltos no campo aberto`);
         // o trator tem corpo físico: o jogador a pé não atravessa
         const t = await page.evaluate(() => {

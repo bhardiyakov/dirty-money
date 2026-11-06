@@ -27,6 +27,7 @@ module.exports = {
             const bm = (game.birds.mesh && game.birds.mesh.material) || game.birds.material;
             out.birds = !!(bm && bm.hd);
             out.atlas2 = TerrainSplat.tex.atlas2 && TerrainSplat.tex.atlas2.getSize().width;
+            out.arr = TerrainSplat.tex.arr ? TerrainSplat.tex.arr.getSize().width : 0;      // (chão realista: as fotos num texture array com mipmaps)
             out.atlas = TerrainSplat.tex.atlas && TerrainSplat.tex.atlas.getSize().width;
             // pisos novos do mundo grande: repetem sem emenda
             const seam = (t) => {
@@ -94,7 +95,7 @@ module.exports = {
         c.ok(r.soft > 0.05, `bordas macias nos sprites HD (${(r.soft * 100).toFixed(0)}% de pixels semitransparentes por opaco)`);
         c.ok(r.tufts > 50, `tufos de grama nos quarteirões de grama (${r.tufts})`);
         c.ok(r.birds, 'pássaros em HD');
-        c.ok(r.atlas2 > 0 && r.atlas2 * 2 === r.atlas, `chão do mundo em HD: atlas de perto ${r.atlas} px e de longe ${r.atlas2} px`);
+        c.ok(r.arr >= 256 || (r.atlas2 > 0 && r.atlas2 * 2 === r.atlas), `chão do mundo em HD: ${r.arr ? `fotos de ${r.arr} px com mipmaps` : `atlas de perto ${r.atlas} px e de longe ${r.atlas2} px`}`);
         c.ok(!r.seams.length, `pisos do mundo sem emenda (${r.seams.join(' | ')})`);
         c.eq(r.surf.road, 0, 'asfalto: sem rastro');
         c.eq(r.surf.sea, 0, 'água: sem rastro');
