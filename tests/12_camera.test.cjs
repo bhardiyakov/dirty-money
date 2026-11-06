@@ -167,7 +167,8 @@ module.exports = {
         // de bússola ao lado do radar volta o norte para cima
         const M = await boot(ctx, { touch: true, width: 844, height: 390 });
         const tp2 = M.page;
-        await tp2.evaluate(() => { Tutorial.skip(); game.player.invulnerable = true; });
+        // (os gestos: o giro automático para as costas de quem anda — Config.camera.footFollow — fica de fora, o joystick anda um pouco)
+        await tp2.evaluate(() => { Tutorial.skip(); game.player.invulnerable = true; Config.camera.footFollow = 0; });
         // (os créditos de abertura — #studio — ainda podem estar por cima, pegando o toque, logo depois de carregar)
         await tp2.waitForFunction(() => { const s = document.getElementById('studio'); return !s || s.classList.contains('out') || getComputedStyle(s).display === 'none'; }, null, { timeout: 30000 }).catch(() => {});
         const cdp = await tp2.context().newCDPSession(tp2);

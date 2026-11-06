@@ -139,7 +139,7 @@ const Config = {
 		// A PÉ: a câmera gira sozinha para as COSTAS do personagem quando ele anda numa direção por um tempo (virou a rua) — devagar e só
 		// andando (parado ou dando passos curtos ela não mexe). O jogador ainda gira a mão (e aí ela espera lookHold s para voltar a seguir).
 		// footFollow: rapidez (1/s) a pé, até footYawSpeed m/s; footDelay = s andando na direção nova antes de começar a virar.
-		footFollow: 1.1, footYawSpeed: 3, footDelay: 0.35,
+		footFollow: 1.1, footYawSpeed: 3, footDelay: 0.8,
 	},
 
 	// Relógio do jogo: 24h do jogo duram `cycleSeconds` reais. Começa no fim da tarde para

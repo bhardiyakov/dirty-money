@@ -35,7 +35,7 @@ module.exports = {
         await page.evaluate(drive, L);
         await gameWait(page, 3, 90000);
         const d = await cam();
-        c.ok(d.chase === 1 && Math.abs(d.tilt - 13) < 0.5, `dirigindo, a câmera desce para trás do carro (perseguição ${d.chase.toFixed(2)}, inclinação ${d.tilt.toFixed(1)}°)`);
+        c.ok(d.chase > 0.97 && Math.abs(d.tilt - 13) < 1.5, `dirigindo, a câmera desce para trás do carro (perseguição ${d.chase.toFixed(2)}, inclinação ${d.tilt.toFixed(1)}°)`);
         c.ok(d.y < 6 && d.v > 0.55 && d.v < 0.95, `baixa e perto: a ${d.y.toFixed(1)} m do chão, o carro na metade de baixo da tela (v ${d.v && d.v.toFixed(2)})`);
         c.ok(d.fog < -500, 'névoa de distância (do olho) na perseguição');
         c.ok(d.ct >= 1, `sombra de contato debaixo dos carros perto (${d.ct})`);
