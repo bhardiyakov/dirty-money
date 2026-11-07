@@ -52,8 +52,10 @@ module.exports = {
             const p = game.player.position, f = game.camera.getGroundBasis().forward;
             return { x0: p.x, z0: p.z, f: { x: f.x, z: f.z }, yaw: game.camera.yaw };
         });
-        await gameWait(page, 0.3);
-        await page.keyboard.down('w'); await gameWait(page, 0.8); await page.keyboard.up('w');
+        // (prazos reais folgados: no Chromium por software esta cena roda a ~2 quadros/s — o prazo padrão, 6 s reais por segundo de
+        // jogo, acabava antes dos 0,8 s de jogo e ele mal saía do lugar)
+        await gameWait(page, 0.3, 60000);
+        await page.keyboard.down('w'); await gameWait(page, 0.8, 120000); await page.keyboard.up('w');
         const mv1 = await page.evaluate(() => ({ x: game.player.position.x, z: game.player.position.z }));
         const dx = mv1.x - mv.x0, dz = mv1.z - mv.z0, dl = Math.hypot(dx, dz) || 1, dot = (dx * mv.f.x + dz * mv.f.z) / dl;
         c.ok(dl > 1 && dot > 0.85, `W anda para cima da TELA girada a ${(mv.yaw * 57.3).toFixed(0)}° (${dl.toFixed(1)} m, alinhado ${dot.toFixed(2)})`);

@@ -34,9 +34,13 @@ const Trees3D = {
         palm: 'palm', banana: 'banana', bush: 'bush', fern: 'fern', flowers: 'roadside', reed: 'reed', dry: 'dry', tuft: 'tuft',
         mango: 'mango', flamboyant: 'flamboyant', jacaranda: 'jacaranda', quaresmeira: 'quaresmeira', imperial: 'imperial', eucalyptus: 'eucalyptus',
         sansevieria: 'sansevieria', cactus: 'cactus', bamboo: 'bamboo', monstera: 'monstera',
-        capim: 'capim', boulder: 'rock', rock: 'rock', pebbles: 'pebbles' },
+        capim: 'capim', boulder: 'rock', rock: 'rock', pebbles: 'pebbles',
+        // objetos do cenário que eram desenhos chapados (PropSprites): guarda-sol, monte de lixo, entulho, fardo de feno, silo
+        umbrella: 'parasol', trash: 'trashpile', debris: 'rubble', hay: 'haybale', silo: 'silo' },
+    // RÍGIDOS: não balançam com o vento (o alfa da cor = 0,2 — o shader pula o vento e pinta a cor lisa)
+    RIGID: new Set(['parasol', 'trashpile', 'rubble', 'haybale', 'silo']),
     // altura do modelo na escala 1 (u): quem põe o canteiro e o desvio do vento usam
-    TALL: { eucalyptus: 30, imperial: 14 },
+    TALL: { eucalyptus: 30, imperial: 14, silo: 9 },
     // A espécie de cada planta: algumas viram variações pelo lugar (sorteio estável por posição). Na cidade e nos bairros, o "carvalho"
     // vira a árvore de rua brasileira (mangueira, flamboyant, jacarandá, quaresmeira); a palmeira, a imperial ou o coqueiro.
     variant(kind, x, z, h) {
@@ -222,6 +226,9 @@ const Trees3D = {
                             vec2 o = finalWorld[3].xz;
                             trTone = fract(sin(vec2(dot(o, vec2(12.9898, 78.233)), dot(o, vec2(39.346, 11.135)))) * 43758.5453);
                             float hy = min(max(positionUpdated.y - 0.8, 0.0), 7.0);
+                            #ifdef VERTEXCOLOR
+                            if (abs(color.a - 0.2) < 0.04) hy = 0.0;                     // (objeto rígido: guarda-sol, silo, entulho — sem vento)
+                            #endif
                             float ph = trW.x * 1.3 + dot(worldPos.xz, vec2(0.11, 0.17));
                             float sw = (sin(ph) * 0.6 + sin(ph * 2.3 + 1.7) * 0.25 + sin(trW.x * 0.37 + worldPos.x * 0.02) * 0.4) * trW.y;
                             worldPos.xz += vec2(trW.z, trW.w) * sw * hy * hy * 0.06;
@@ -338,6 +345,54 @@ const Trees3D = {
                 if (R() < 0.8) B.rock(g, [0.9, 0.0, 0.5], [0.45, 0.3, 0.4], R, 0.9);
                 break;
             }
+            case 'parasol': {                                                              // guarda-sol de praia: mastro, copa em gomos listrados, a franja
+                const C = [[0.92, 0.18, 0.15], [0.12, 0.42, 0.78], [0.98, 0.78, 0.12], [0.1, 0.6, 0.32], [0.95, 0.45, 0.1]][Math.floor(R() * 5)], W = [0.96, 0.95, 0.9];
+                B.cyl(g, [0, 0, 0], [0, 2.9, 0], 0.05, 0.04, 6, [0.85, 0.85, 0.82], [0.7, 0.7, 0.68]);
+                const n = 10, top = [0, 2.95, 0], rr = 1.75, rim = 2.3;
+                for (let k = 0; k < n; k++) {                                              // gomos: o meio do gomo um pouco mais baixo (a lona cede)
+                    const a0 = k / n * Math.PI * 2, a1 = (k + 1) / n * Math.PI * 2, am = (a0 + a1) / 2, col = k % 2 ? C : W;
+                    const P0 = [Math.cos(a0) * rr, rim, Math.sin(a0) * rr], P1 = [Math.cos(a1) * rr, rim, Math.sin(a1) * rr], PM = [Math.cos(am) * rr * 0.62, rim + 0.32, Math.sin(am) * rr * 0.62];
+                    for (const [a, b, c] of [[top, P0, PM], [top, PM, P1], [PM, P0, P1]]) {
+                        const base = g.p.length / 3, nx = 0, ny = 1, nz = 0;
+                        for (const p of [a, b, c]) B._push(g, p[0], p[1], p[2], p[0] * 0.3 + nx, ny, p[2] * 0.3 + nz, col.map((v) => v * (p === top ? 1.05 : 0.92)));
+                        g.i.push(base, base + 1, base + 2);
+                    }
+                    const F0 = [P0[0], rim - 0.16, P0[2]], F1 = [P1[0], rim - 0.16, P1[2]], base = g.p.length / 3;      // franja
+                    for (const p of [P0, P1, F1, F0]) B._push(g, p[0], p[1], p[2], Math.cos(am), 0, Math.sin(am), col.map((v) => v * 0.85));
+                    g.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
+                }
+                break;
+            }
+            case 'trashpile': {                                                            // monte de lixo: sacos pretos, caixas e garrafa
+                const bag = [[0.07, 0.07, 0.08], [0.12, 0.13, 0.14], [0.2, 0.28, 0.45], [0.85, 0.85, 0.82]];
+                for (let k = 0; k < 6; k++) { const a = R() * 6.28, r = R() * 0.5, s = 0.28 + R() * 0.16; B.blob(g, [Math.cos(a) * r, s * 0.8 + (k > 3 ? 0.25 : 0), Math.sin(a) * r], [s, s * 0.85, s * 1.1], bag[Math.floor(R() * bag.length)], R, 0.18, 1, 'wood'); }
+                for (let k = 0; k < 2; k++) { const a = R() * 6.28, r = 0.4 + R() * 0.3; B.cyl(g, [Math.cos(a) * r, 0, Math.sin(a) * r], [Math.cos(a) * r, 0.3, Math.sin(a) * r], 0.2, 0.2, 4, [0.62, 0.48, 0.3], [0.5, 0.38, 0.24]); }
+                B.cyl(g, [0.55, 0.05, -0.2], [0.75, 0.08, -0.35], 0.05, 0.03, 6, [0.2, 0.55, 0.3], [0.2, 0.55, 0.3]);
+                break;
+            }
+            case 'rubble': {                                                               // entulho: cacos de tijolo, blocos, tábuas, areia
+                B.blob(g, [0, 0.05, 0], [0.75, 0.16, 0.65], [0.62, 0.56, 0.48], R, 0.25, 1, 'wood');
+                for (let k = 0; k < 9; k++) {                                              // cacos: tijolo (vermelho) e bloco (cinza)
+                    const a = R() * 6.28, r = R() * 0.6, y = 0.12 + R() * 0.12, brick = R() < 0.5, c0 = g.c.length;
+                    B.rock(g, [Math.cos(a) * r, y, Math.sin(a) * r], [0.12 + R() * 0.08, 0.07, 0.1], R, 1);
+                    const col = brick ? [0.72, 0.36, 0.22] : [0.62, 0.61, 0.58];
+                    for (let q = c0; q < g.c.length; q += 4) { const v = 0.8 + 0.25 * R(); g.c[q] = col[0] * v; g.c[q + 1] = col[1] * v; g.c[q + 2] = col[2] * v; }
+                }
+                for (let k = 0; k < 2; k++) { const a = R() * 6.28; B.cyl(g, [Math.cos(a) * 0.6, 0.18, Math.sin(a) * 0.6], [-Math.cos(a) * 0.5, 0.3, -Math.sin(a) * 0.5], 0.05, 0.05, 4, [0.5, 0.38, 0.24], [0.42, 0.32, 0.2]); }
+                break;
+            }
+            case 'haybale': {                                                              // fardo de feno (rolo deitado)
+                B.cyl(g, [-0.62, 0.62, 0], [0.62, 0.62, 0], 0.62, 0.62, 12, [0.86, 0.72, 0.38], [0.78, 0.64, 0.32]);      // (o giro vem da instância)
+                for (const s of [-1, 1]) B.blob(g, [s * 0.63, 0.62, 0], [0.05, 0.6, 0.6], [0.8, 0.66, 0.34], R, 0.05, 1, 'wood');
+                break;
+            }
+            case 'silo': {                                                                 // silo: cilindro de chapa, o teto cônico e a escada
+                B.cyl(g, [0, 0, 0], [0, 7.2, 0], 1.6, 1.6, 14, [0.78, 0.8, 0.82], [0.62, 0.64, 0.66]);
+                B.cyl(g, [0, 7.2, 0], [0, 8.6, 0], 1.65, 0.12, 14, [0.7, 0.72, 0.74], [0.7, 0.72, 0.74]);
+                for (let k = 1; k < 7; k++) B.cyl(g, [0, k * 1.05, 0], [0, k * 1.05 + 0.06, 0], 1.63, 1.63, 14, [0.55, 0.57, 0.6], [0.55, 0.57, 0.6]);      // os anéis da chapa
+                B.cyl(g, [1.68, 0, 0.25], [1.68, 7.4, 0.25], 0.03, 0.03, 4, [0.3, 0.3, 0.32], [0.3, 0.3, 0.32]); B.cyl(g, [1.68, 0, -0.25], [1.68, 7.4, -0.25], 0.03, 0.03, 4, [0.3, 0.3, 0.32], [0.3, 0.3, 0.32]);
+                break;
+            }
             case 'pebbles': for (let k = 0; k < 9; k++) { const a = R() * Math.PI * 2, r = 0.2 + R() * 0.75, s = 0.08 + R() * 0.16; B.rock(g, [Math.cos(a) * r, 0, Math.sin(a) * r], [s, s * 0.7, s * 0.9], R, 0.6); } break;      // cascalho
             case 'sansevieria': {                                                          // espada-de-são-jorge: lâminas eretas com a borda amarela
                 for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + R(), r = 0.12 + R() * 0.1; B.blade(g, [Math.cos(a) * r, 0, Math.sin(a) * r], a, 0.85 + R() * 0.4, 0.09, 0.08, [0.16, 0.36, 0.16], [0.62, 0.62, 0.22]); }
@@ -401,6 +456,7 @@ const Trees3D = {
                 break;
             }
         }
+        if (this.RIGID.has(model)) for (let k = 3; k < g.c.length; k += 4) g.c[k] = 0.2;      // (rígido: sem vento)
         const vd = new BABYLON.VertexData();
         vd.positions = new Float32Array(g.p); vd.normals = new Float32Array(g.n); vd.colors = new Float32Array(g.c);
         vd.indices = g.p.length / 3 > 65535 ? new Uint32Array(g.i) : new Uint16Array(g.i);

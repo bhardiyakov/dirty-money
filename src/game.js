@@ -853,7 +853,7 @@ class Game {
 		}
 
 		// --- Semáforos ---
-		this.signals.update(dt);
+		this.signals.update(dt, this.camera.target);
 		Perf.lap('luzes/semáforos');
 
 		// --- IA (pedestres) ---
