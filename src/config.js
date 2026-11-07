@@ -55,6 +55,7 @@ const Config = {
 		// caixas-d'água, condensadoras, antenas). `?predios=0` volta aos de antes; `?predios=relevo` / `recuo` / `,telhado` para comparar.
 		facades3d: 'recuo',
 		roofs3d: true,
+		animals3d: true,       // bichos em 3D com animação (art/Animals3D.js — a folha de referência); `?bichos=2d` = os sprites de antes
 		trees3d: true,         // árvores e palmeiras em 3D em todos os presets (render/Trees3D.js, etapa 5); `?arvores=0` = as desenhadas de antes
 		npcHalf: false,        // páginas dos atlas 2,5D em MEIA resolução na GPU (um quarto da memória; NpcArt.half). Preset Low: true
 		vramMB: 640,           // orçamento das páginas dos atlas 2,5D na GPU (MB): passou, as sem uso há 15 s saem (NpcArt._lru). Perfil leve: 256
