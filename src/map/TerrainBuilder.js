@@ -21,6 +21,7 @@ class TerrainBuilder {
 
         // Um material só para o chão (src/render/TerrainSplat.js): divisas de bioma em degradê e curvas de nível arredondadas.
         // Water.land: a água da orla sobe por cima do chão.
+        this._roadSoil();
         this.ground = Water.land(TerrainSplat.create(this.scene, (i, j) => this._idFor(WorldMap.biome[j * WorldMap.nx + i], i, j)));
         this.cn = Math.round(this.W.chunk / this.W.cell);                // células por lado do pedaço
         this.ncx = Math.ceil(WorldMap.nx / this.cn); this.ncz = Math.ceil(WorldMap.nz / this.cn);
@@ -151,8 +152,34 @@ class TerrainBuilder {
     }
 
     // Tipo de chão da célula (índice em TerrainSplat.IDS; mar e cidade ficam de fora da mistura).
+    // BEIRA DAS RUAS DE TERRA (estrada de chão, caminho, rua da favela — o asfalto fica de fora): as células do terreno a até ~3 m da
+    // pista viram TERRA BATIDA no mapa do chão; a mistura larga do TerrainSplat faz dela um degradê de alguns metros — a terra da rua
+    // rareando sobre o mato, a areia ou a rocha, sem a borda seca do polígono da pista. (Rasteriza a pista: passos de 2 m.)
+    _roadSoil() {
+        const M = WorldMap, W = this.W, nx = M.nx, nz = M.nz, c = W.cell, soil = this._soil = new Uint8Array(nx * nz), P = {};
+        if (typeof RoadPlan === 'undefined' || !RoadPlan.edges) return;
+        for (const e of RoadPlan.edges) {
+            const C = RoadPlan.CLASS[e.cls];
+            if (!C || C.surface === 'asphalt' || e.layer) continue;
+            const R = e.w / 2 + 3, r = Math.ceil(R / c);
+            for (let s = 0; s <= e.len; s += 2) {
+                if (e.pts) RoadPlan.at(e, Math.min(s, e.len), P);
+                else if (e.v) { P.x = e.a.x; P.z = e.a.z + Math.min(s, e.len); }
+                else { P.x = e.a.x + Math.min(s, e.len); P.z = e.a.z; }
+                const ci = Math.floor((P.x - W.minX) / c), cj = Math.floor((P.z - W.minZ) / c);
+                for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+                    const i = ci + di, j = cj + dj;
+                    if (i < 0 || j < 0 || i >= nx || j >= nz) continue;
+                    const x = W.minX + (i + 0.5) * c, z = W.minZ + (j + 0.5) * c;
+                    if (hypot(x - P.x, z - P.z) <= R) soil[j * nx + i] = 1;
+                }
+            }
+        }
+    }
+
     _idFor(b, i, j) {
         const B = WorldMap.B, I = (k) => TerrainSplat.IDS.indexOf(k);
+        if (this._soil && this._soil[j * WorldMap.nx + i] && b !== B.SEA && b !== B.CITY && b !== B.SWAMP && !(WorldMap.flags[j * WorldMap.nx + i] & 1)) return I('earth');
         switch (b) {
             case B.SEA: case B.CITY: return TerrainSplat.NONE;
             case B.SAND: return I('sand');

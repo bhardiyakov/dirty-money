@@ -135,10 +135,12 @@ class WorldBuilder {
         M.bsolid.diffuseColor = BABYLON.Color3.White();
 
         // Divisas em degradê (render/GroundBlend.js): o piso de um lado espalhando por cima do outro, com a borda recortada por ruído.
-        M.blend_grass = GroundBlend.apply(this._mat('blend_grass', T.grass), { freq: 0.9, amp: 1.0, soft: 0.1, soil: [0.78, 0.66, 0.5, 0.6] });
-        M.blend_sand = GroundBlend.apply(this._mat('blend_sand', T.sand), { freq: 0.55, amp: 0.9, soft: 0.16, soil: [0.9, 0.85, 0.76, 0.4] });
-        M.blend_dirt = GroundBlend.apply(this._mat('blend_dirt', T.dirt), { freq: 0.7, amp: 1.1, soft: 0.12, soil: [0.86, 0.78, 0.68, 0.3] });
-        M.blend_earth = GroundBlend.apply(this._mat('blend_earth', T.earth), { freq: 0.8, amp: 1.0, soft: 0.12, soil: [0.86, 0.78, 0.68, 0.3] });
+        // (soft = a largura do DEGRADÊ: na terra, na areia e na terra vermelha ele é largo — o chão de um tipo vai rareando sobre o
+        // outro, em manchas — e não uma linha recortada)
+        M.blend_grass = GroundBlend.apply(this._mat('blend_grass', T.grass), { freq: 0.9, amp: 1.0, soft: 0.2, soil: [0.78, 0.66, 0.5, 0.6] });
+        M.blend_sand = GroundBlend.apply(this._mat('blend_sand', T.sand), { freq: 0.55, amp: 0.9, soft: 0.32, soil: [0.9, 0.85, 0.76, 0.4] });
+        M.blend_dirt = GroundBlend.apply(this._mat('blend_dirt', T.dirt), { freq: 0.7, amp: 1.0, soft: 0.34, soil: [0.86, 0.78, 0.68, 0.3] });
+        M.blend_earth = GroundBlend.apply(this._mat('blend_earth', T.earth), { freq: 0.8, amp: 1.0, soft: 0.34, soil: [0.86, 0.78, 0.68, 0.3] });
 
         M.roofs = {};
         for (const k of Object.keys(T.roofs)) M.roofs[k] = this._mat('roof_' + k, T.roofs[k]);
@@ -401,14 +403,17 @@ class WorldBuilder {
             if (blk.ground === 'grass') strip('blend_earth', P, true, -out, 1.2, y0 + 0.012, uvC, null, null, 0.62);      // (a borda pisada do gramado: terra marrom — a vermelha é só das estradas da roça)
         }
 
-        // ESTRADAS DO INTERIOR: o acostamento (terra batida; na trilha, a terra dela) entra no mato dos dois lados.
-        const SH = { dirt: ['blend_dirt', 1.2, false], earth: ['blend_earth', 0.9, true], asphalt: ['blend_earth', 1.0, false] };      // (acostamento do asfalto: terra marrom)
+        // ESTRADAS DO INTERIOR E RUAS DE TERRA DA FAVELA: o acostamento (terra batida; na trilha, a terra dela) entra no mato dos dois
+        // lados num degradê largo (a terra rareando sobre a grama). (O asfalto fica com a faixa estreita de sempre.)
+        const SH = { dirt: ['blend_dirt', 2.6, false], earth: ['blend_earth', 2.2, true], asphalt: ['blend_earth', 1.0, false] };      // (acostamento do asfalto: terra marrom)
         const shade = (x, z) => WorldMap.shadeAt(x, z);
         const city = (x, z) => wet(x, z) || RoadPlan.onPavement(x, z) || WorldMap.biomeAt(x, z) === WorldMap.B.CITY || !!CityGrid._blockAtPoint(x, z);
+        // (rua da favela: os quarteirões 'organic' cobrem o morro todo — ali a terra espalha mesmo; só a cidade de verdade corta)
+        const cityF = (x, z) => { if (wet(x, z) || RoadPlan.onPavement(x, z) || WorldMap.biomeAt(x, z) === WorldMap.B.CITY) return true; const b = CityGrid._blockAtPoint(x, z); return !!b && !b.organic; };
         const tmp = {};
         for (const e of RoadPlan.edges) {
             const C = RoadPlan.CLASS[e.cls];
-            if (!C || C.kind !== 'rural' || e.layer) continue;
+            if (!C || (C.kind !== 'rural' && C.kind !== 'favela') || e.layer) continue;
             const S = SH[C.surface];
             if (!S) continue;
             const hw = e.w / 2, s0 = e.cutA, s1 = e.len - e.cutB;
@@ -422,8 +427,9 @@ class WorldBuilder {
                 else { x = e.a.x + s; z = e.a.z; tx = 1; tz = 0; }
                 Lf.push([x - tz * hw, z + tx * hw]); Rt.push([x + tz * hw, z - tx * hw]);
             }
-            strip(S[0], Lf, false, 1, S[1], 0.03, uvR, city, S[2] ? shade : null);
-            strip(S[0], Rt, false, -1, S[1], 0.03, uvR, city, S[2] ? shade : null);
+            const sk = C.kind === 'favela' ? cityF : city;
+            strip(S[0], Lf, false, 1, S[1], 0.03, uvR, sk, S[2] ? shade : null);
+            strip(S[0], Rt, false, -1, S[1], 0.03, uvR, sk, S[2] ? shade : null);
         }
     }
 
@@ -1745,7 +1751,7 @@ class WorldBuilder {
             const shaded = key0.endsWith('$'), key = shaded ? key0.slice(0, -1) : key0;      // 'sidewalk$' = chão tingido pelo relevo (vertex colors)
             const isTrim = key === 'trim' || key === 'xtrim' || key === 'btrim';
             const isVeg = key.startsWith('veg_'), isBlend = key.startsWith('blend_');
-            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend, receiveShadows: !isVeg, alwaysActive: at < 0, relief: true });
+            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend, receiveShadows: !isVeg, alwaysActive: at < 0, relief: true, clamp: isBlend && typeof TerrainBuilder !== 'undefined' ? TerrainBuilder.roadCut : null });      // (degradê: rente ao terreno cortado junto da pista)
             this.meshes.push(mesh);
             if (isBlend) mesh.hasVertexAlpha = true;                                         // (o alfa por vértice é o degradê da faixa: GroundBlend)
             if (key === 'veg_hi') {                                                          // copas: desenham DEPOIS de pedestres, carros e sprites do chao (que nao escrevem profundidade), sempre por cima
