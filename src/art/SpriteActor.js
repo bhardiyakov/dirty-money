@@ -20,6 +20,7 @@
 class SpriteActor {
 	constructor(scene, sheet, variant, name) {
 		this.scene = scene;
+		SpriteActor._scene = scene;
 		this._seedName = name;
 		this.npcRow = 0;           // linha da paleta dos personagens 2,5D (NpcArt); `variant` = a da paleta antiga
 		this.variant = variant;
@@ -71,6 +72,15 @@ class SpriteActor {
 
 	// Giro da câmera bússola (CompassCamera.yaw): o personagem 2,5D fica "de pé" para cima da TELA, não do norte.
 	static viewYaw() { return typeof CompassCamera !== 'undefined' ? CompassCamera.yaw || 0 : 0; }
+	// DE PÉ (câmera inclinada): o rumo de quem olha — da CÂMERA até o personagem (não o rumo da câmera). Cada personagem vira o
+	// cartaz para a câmera e mostra o desenho do ângulo de onde é visto: passando de carro por alguém, vê-se a frente, o lado e as
+	// costas dele (paralaxe de verdade) — antes todos ficavam paralelos à tela, com o mesmo lado virado, e pareciam de papel.
+	static viewYawAt(x, z) {
+		const sc = SpriteActor._scene, cam = sc && sc.activeCamera;
+		if (!cam) return SpriteActor.viewYaw();
+		const p = cam.globalPosition || cam.position, dx = x - p.x, dz = z - p.z;
+		return dx * dx + dz * dz < 0.25 ? SpriteActor.viewYaw() : Math.atan2(dx, dz);
+	}
 	// 2.5D camera (CompassCamera.tilted): 2.5D characters STAND UP — a vertical quad turned to the camera (BILLBOARDMODE_Y), stretched by
 	// 1/cos(tilt) so the art, rendered at that same angle, shows 1:1 on screen. The top-down camera keeps them lying on the ground.
 	static standing() { return typeof CompassCamera !== 'undefined' && !!CompassCamera.tilted; }
@@ -303,8 +313,8 @@ class SpriteActor {
 			this._setBounds(Math.max(this._half, H));
 			this._rotate();
 		} else if (this.clip && this.clip.npc) {                           // 2,5D: quad fixo (a caixa vem no play), 8 direções desenhadas
-			this._yaw = SpriteActor.viewYaw();
-			this._setStanding(SpriteActor.standing());                     // (de pé "para cima da tela": gira junto com a câmera bússola)
+			this._yaw = SpriteActor.standing() ? SpriteActor.viewYawAt(this.mesh.position.x, this.mesh.position.z) : SpriteActor.viewYaw();
+			this._setStanding(SpriteActor.standing());                     // (deitado: gira junto com a câmera bússola; de pé: virado para a câmera)
 			// (b, a guardavam a sombra do vetorial; no 2,5D b = toldo, a = água) — nos 4 vértices: sobrando um valor velho em
 			// algum deles, o shader interpola "água no corpo" e o desenho aparece afundado mesmo em terra
 			this._cover = -1;
@@ -415,10 +425,14 @@ class SpriteActor {
 		if (c.npc) this._updateCover();
 		if (c.npc && this._stand !== SpriteActor.standing()) this._setStanding(SpriteActor.standing());      // (entered/left an interior)
 		if (this._stand && this.mesh.scaling.y !== SpriteActor.STAND_SCALE) this.mesh.scaling.y = SpriteActor.STAND_SCALE;      // (a câmera desceu/subiu)
-		if (c.npc && this._yaw !== SpriteActor.viewYaw()) {                // câmera bússola girou: o quad acompanha e a direção desenhada é refeita
-			this._yaw = SpriteActor.viewYaw();
-			if (!this._stand) this.mesh.rotation.y = this._yaw;            // (standing, the billboard already faces the camera)
-			if (this.heading != null) this.setHeading(this.heading);      // (com a histerese: o balanço da câmera não faz o desenho piscar)
+		if (c.npc) {                                                       // câmera girou (ou andou, de pé): o quad acompanha e a direção desenhada é refeita
+			const vy = this._stand ? SpriteActor.viewYawAt(this.mesh.position.x, this.mesh.position.z) : SpriteActor.viewYaw();
+			let dv = vy - (this._yaw || 0); dv -= Math.round(dv / (Math.PI * 2)) * Math.PI * 2;
+			if (Math.abs(dv) > 0.003) {
+				this._yaw = vy;
+				this.mesh.rotation.y = vy;                                 // (deitado: com a bússola; de pé: de frente para a câmera)
+				if (this.heading != null) this.setHeading(this.heading);  // (com a histerese: o balanço da câmera não faz o desenho piscar)
+			}
 		}
 		// água no corpo e inclinação valem só no quadro em que foram informadas (antes deste update): sem aviso, zeram
 		if (!this._wlFresh) this._wl = 0;
@@ -542,9 +556,10 @@ class SpriteActor {
 		if (this._stand === on) return;
 		this._stand = on;
 		const m = this.mesh;
-		m.billboardMode = on ? BABYLON.AbstractMesh.BILLBOARDMODE_Y : BABYLON.AbstractMesh.BILLBOARDMODE_NONE;
+		m.billboardMode = BABYLON.AbstractMesh.BILLBOARDMODE_NONE;          // (de pé: virado para a POSIÇÃO da câmera em update — viewYawAt)
 		m.scaling.y = on ? SpriteActor.STAND_SCALE : 1;
-		m.rotation.y = on ? 0 : this._yaw || 0;
+		if (on) this._yaw = SpriteActor.viewYawAt(m.position.x, m.position.z);
+		m.rotation.y = this._yaw || 0;
 		this._npcBox = null;                                               // (the quad is rebuilt in the other plane on the next draw)
 		if (this.clip && this.clip.npc) this._applyUV();
 	}

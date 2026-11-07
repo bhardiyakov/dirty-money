@@ -61,6 +61,18 @@ class PauseMenu {
 		};
 	}
 
+	// Importância de cada tipo no mapa (desenho e quem fica quando dois ícones se encostam): 6 = os seus lugares, 5 = marcos,
+	// 3–4 = serviços, 2 = o resto, 0 = os tipos de monte (só com zoom — MASS_ZOOM).
+	static get POI_PRIO() {
+		return {
+			home: 6, negocio: 6, fachada: 6, persona: 5, hospital: 5, station: 5, speedway: 5, estadio: 5, cristo: 5, bondinho: 5, lagoa: 5, marina: 5, village: 4,
+			gunshop: 4, chop: 4, paynspray: 4, dealer: 4, motodealer: 3, boatshop: 3, tuning: 3, racemeet: 4, helipad: 3, baile: 4, boca_rival: 4, mototaxi: 3,
+			joalheria: 3, academia: 3, boutique: 3, gas: 3, charge: 2, quadra: 2, clube: 2,
+			imovel: 0, conveniencia: 0, lanchonete: 0,
+		};
+	}
+	static get MASS_ZOOM() { return 2.8; }
+
 	constructor(game) {
 		this.g = game;
 		this.isOpen = false;
@@ -791,14 +803,25 @@ class PauseMenu {
 			}
 		}
 
-		// Lugares (hospital, delegacia, lojas…).
+		// Lugares (hospital, delegacia, lojas…), SEM AMONTOAR: por ordem de importância (os seus lugares e os marcos primeiro); um
+		// ícone que cairia em cima de outro já desenhado fica de fora (aparece ao aproximar); os tipos de MONTE (lanchonete,
+		// conveniência, imóvel à venda) só com o mapa mais perto — ou o tipo escolhido na legenda, sempre.
+		const placed = [], w = 17 * ik, focus = this.sel && this.sel.type;
+		const vis = [];
 		for (const p of this.pois()) {
 			const [x, y] = this._w2s(p.x, p.z);
 			if (!on(x, y)) continue;
-			const T = PauseMenu.POI_TYPES[p.type], src = this.icon(T.icon);
-			const w = 17 * ik, hh = w;
-			ctx.drawImage(src, x - w / 2, y - hh / 2, w, hh);
-			if (this.sel === p) { ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, w / 2 + 4, 0, Math.PI * 2); ctx.stroke(); }
+			const pr = PauseMenu.POI_PRIO[p.type] ?? 2, mass = pr <= 0;
+			if (mass && p.type !== focus && m.scale < PauseMenu.MASS_ZOOM) continue;
+			vis.push({ p, x, y, pr: p.type === focus ? 9 : pr });
+		}
+		vis.sort((a, b) => b.pr - a.pr);
+		for (const v of vis) {
+			const near = placed.some((q) => Math.abs(q.x - v.x) < w * 0.78 && Math.abs(q.y - v.y) < w * 0.78);
+			if (near && v.pr < 5 && this.sel !== v.p) continue;
+			placed.push(v);
+			ctx.drawImage(this.icon(PauseMenu.POI_TYPES[v.p.type].icon), v.x - w / 2, v.y - w / 2, w, w);
+			if (this.sel === v.p) { ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(v.x, v.y, w / 2 + 4, 0, Math.PI * 2); ctx.stroke(); }
 		}
 
 		// Barricadas em chamas (laranja) durante a operação.
@@ -1125,4 +1148,4 @@ class PauseMenu {
 		if (Math.abs(ry) > 0.25) FocusNav.scroll(root, ry * 900 * dt);
 	}
 }
-memoStatics(PauseMenu, 'TABS', 'POI_TYPES', 'KEYS_HTML', 'SET_KEYS');
+memoStatics(PauseMenu, 'TABS', 'POI_TYPES', 'POI_PRIO', 'KEYS_HTML', 'SET_KEYS');

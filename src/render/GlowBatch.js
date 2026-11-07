@@ -344,6 +344,17 @@ class GlowGrid {
         this._dirty.add(b);
     }
 
+    // Quad de 4 cantos livres (alturas ABSOLUTAS — sem somar o relevo): as lentes do semáforo, em pé e viradas para a pista.
+    quad(h, ...q) {
+        const b = this.batches[this._b[h]], B = b._box;
+        b.quad(this._i[h], ...q);
+        for (let k = 0; k < 12; k += 3) {
+            if (q[k] < B[0]) B[0] = q[k]; if (q[k + 1] < B[1]) B[1] = q[k + 1]; if (q[k + 2] < B[2]) B[2] = q[k + 2];
+            if (q[k] > B[3]) B[3] = q[k]; if (q[k + 1] > B[4]) B[4] = q[k + 1]; if (q[k + 2] > B[5]) B[5] = q[k + 2];
+        }
+        this._dirty.add(b);
+    }
+
     color(h, r, g, b, a = 1) { const B = this.batches[this._b[h]]; B.color(this._i[h], r, g, b, a); this._dirty.add(B); }
     off(h) { this.color(h, 0, 0, 0, 0); }
 

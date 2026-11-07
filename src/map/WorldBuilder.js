@@ -96,9 +96,16 @@ class WorldBuilder {
         // (abaixo: areia, grama e os do terreno) recebe a água que sobe e desce por cima dele — degradê translúcido, sem a reta das células.
         Water.init(this.scene);
         M.water = Water.sea(this._mat('water', T.water[0]));
+        // O PLANO D'ÁGUA (y = 0, o mundo inteiro) um pouco para TRÁS na profundidade: o asfalto e o chão da cidade ficam a 2 cm dele —
+        // com a profundidade de 16 bits de muitos celulares, a água "brigava" com a rua e o asfalto inteiro piscava verde-água.
+        // O deslocamento é de poucos degraus de profundidade: o chão de verdade abaixo da água (fundo da Lagoa, praia) segue escondido.
+        M.water.zOffset = 1; M.water.zOffsetUnits = 6;
         M.road = this._mat('road', T.road);
         M.asphalt = this._mat('asphalt', T.asphalt);
         M.zebra = this._mat('zebra', T.zebra);
+        // (pintura no chão a 1–2 cm do asfalto: DESLOCAMENTO DE PROFUNDIDADE, não altura — com a câmera inclinada e a profundidade de
+        //  16 bits de muitos celulares, 1 cm não separa as superfícies e a faixa "brigava" com o asfalto, piscando)
+        M.zebra.zOffset = -1; M.zebra.zOffsetUnits = -2;
         M.sidewalk = this._mat('sidewalk', T.sidewalk);
         M.grass = this._mat('grass', T.grass);
         M.sand = Water.land(this._mat('sand', T.sand));
@@ -141,6 +148,7 @@ class WorldBuilder {
         M.blend_sand = GroundBlend.apply(this._mat('blend_sand', T.sand), { freq: 0.55, amp: 0.9, soft: 0.32, soil: [0.9, 0.85, 0.76, 0.4] });
         M.blend_dirt = GroundBlend.apply(this._mat('blend_dirt', T.dirt), { freq: 0.7, amp: 1.0, soft: 0.34, soil: [0.86, 0.78, 0.68, 0.3] });
         M.blend_earth = GroundBlend.apply(this._mat('blend_earth', T.earth), { freq: 0.8, amp: 1.0, soft: 0.34, soil: [0.86, 0.78, 0.68, 0.3] });
+        for (const k of ['blend_grass', 'blend_sand', 'blend_dirt', 'blend_earth']) { M[k].zOffset = -1; M[k].zOffsetUnits = -1; }      // (idem: rente ao chão de baixo)
 
         M.roofs = {};
         for (const k of Object.keys(T.roofs)) M.roofs[k] = this._mat('roof_' + k, T.roofs[k]);

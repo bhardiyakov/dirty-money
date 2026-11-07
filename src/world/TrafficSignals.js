@@ -38,8 +38,8 @@ class TrafficSignals {
             if (inter.gen) {
                 this._slots.push(inter.poles.map((p) => {
                     const [v, pd] = fix(p, SF.heads(p, true)), s = { lens: this.glow.alloc(p.x, p.z), ped: this.glow.alloc(p.x, p.z), phase: p.phase, cw: p.cw, hv: v, c: null };
-                    this.glow.place(s.lens, v.x, SF.LENS_Y.red + v.dy, v.z, 0.62);
-                    this.glow.place(s.ped, pd.x + pd.fx * 0.11, 2.5 + pd.dy, pd.z + pd.fz * 0.11, 0.42);
+                    this._face(s.lens, v, SF.LENS_Y.red, TrafficSignals.LENS);
+                    this._face(s.ped, { x: pd.x + pd.fx * 0.11, z: pd.z + pd.fz * 0.11, fx: pd.fx, fz: pd.fz, dy: pd.dy }, 2.5, TrafficSignals.PED);
                     return s;
                 }));
                 continue;
@@ -52,11 +52,11 @@ class TrafficSignals {
                     hNS: at('NS'), hEW: at('EW'), cNS: null, cEW: null,
                 };
                 // Lentes na frente da caixa pendurada no braço (a altura muda com a cor: _lens); pedestre nas caixinhas do poste.
-                this.glow.place(s.lensNS, s.hNS.x, SF.LENS_Y.red + s.hNS.dy, s.hNS.z, 0.62);
-                this.glow.place(s.lensEW, s.hEW.x, SF.LENS_Y.red + s.hEW.dy, s.hEW.z, 0.62);
+                this._face(s.lensNS, s.hNS, SF.LENS_Y.red, TrafficSignals.LENS);
+                this._face(s.lensEW, s.hEW, SF.LENS_Y.red, TrafficSignals.LENS);
                 const pn = at('pNS'), pe = at('pEW');
-                this.glow.place(s.pedNS, pn.x + pn.fx * 0.11, 2.5 + pn.dy, pn.z + pn.fz * 0.11, 0.42);
-                this.glow.place(s.pedEW, pe.x + pe.fx * 0.11, 2.25 + pe.dy, pe.z + pe.fz * 0.11, 0.42);
+                this._face(s.pedNS, { x: pn.x + pn.fx * 0.11, z: pn.z + pn.fz * 0.11, fx: pn.fx, fz: pn.fz, dy: pn.dy }, 2.5, TrafficSignals.PED);
+                this._face(s.pedEW, { x: pe.x + pe.fx * 0.11, z: pe.z + pe.fz * 0.11, fx: pe.fx, fz: pe.fz, dy: pe.dy }, 2.25, TrafficSignals.PED);
                 return s;
             });
             this._slots.push(poles);
@@ -120,8 +120,18 @@ class TrafficSignals {
     // A lente acesa: cor e altura (vermelho em cima, amarelo no meio, verde embaixo — só reposiciona quando a cor muda).
     _lens(s, key, slot, h, color) {
         const c = TrafficSignals._lensColor(color);
-        if (s[key] !== color) { s[key] = color; this.glow.place(slot, h.x, (StreetFurniture.LENS_Y[color] || StreetFurniture.LENS_Y.red) + (h.dy || 0), h.z, 0.62); }
+        if (s[key] !== color) { s[key] = color; this._face(slot, h, StreetFurniture.LENS_Y[color] || StreetFurniture.LENS_Y.red, TrafficSignals.LENS); }
         this.glow.color(slot, c[0], c[1], c[2], 0.95);
+    }
+    // O brilho da lente EM PÉ, virado para quem chega (h.fx, h.fz) e inclinado ~35° para cima (a câmera vê de cima e de trás), um
+    // pouco À FRENTE da face da caixa. (Antes: um quadrado deitado no meio da face — metade dentro da caixa, metade fora: com a
+    // câmera inclinada, a face e o brilho disputavam a profundidade e a luz piscava.)
+    _face(slot, h, y, size) {
+        const fx = h.fx || 0, fz = h.fz || 0, t = 0.6, ct = Math.cos(t), st = Math.sin(t), s = size / 2;
+        const cx = h.x + fx * 0.05, cz = h.z + fz * 0.05;
+        const cy = y + (h.dy || 0) + (typeof Relief !== 'undefined' && Relief.on ? Relief.at(h.x, h.z) : 0);
+        const rx = fz * s, rz = -fx * s, vx = -fx * st * s, vy = ct * s, vz = -fz * st * s;
+        this.glow.quad(slot, cx - rx - vx, cy - vy, cz - rz - vz, cx + rx - vx, cy - vy, cz + rz - vz, cx - rx + vx, cy + vy, cz - rz + vz, cx + rx + vx, cy + vy, cz + rz + vz);
     }
 
     _refreshVisuals() {
@@ -156,5 +166,6 @@ class TrafficSignals {
         g.flush();
     }
 }
+TrafficSignals.LENS = 0.6; TrafficSignals.PED = 0.36;      // (tamanho do brilho: lente do carro e lâmpada do pedestre)
 TrafficSignals.C_GREEN = [0.1, 1.0, 0.35]; TrafficSignals.C_YELLOW = [1.0, 0.82, 0.1]; TrafficSignals.C_RED = [1.0, 0.14, 0.1];
 TrafficSignals.C_WALK = [0.3, 1.0, 0.55]; TrafficSignals.C_FLASH = [1.0, 0.75, 0.15]; TrafficSignals.C_OFF = [0, 0, 0]; TrafficSignals.C_WAIT = [1.0, 0.15, 0.1];
