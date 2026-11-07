@@ -1790,6 +1790,13 @@ const CityGrid = {
                     if (e.v) { if (nd === e.a) r[1] = Math.max(r[1], R.cz + t); else r[3] = Math.min(r[3], R.cz - t); }
                     else if (nd === e.a) r[0] = Math.max(r[0], R.cx + t); else r[2] = Math.min(r[2], R.cx - t);
                 }
+                // a calçada vai de um nó ao outro: nas pontas ela atravessava o asfalto da via que cruza (no cruzamento de avenidas, uma
+                // laje de calçada por cima das faixas) — recua cada ponta até sair do asfalto (pela linha do meio da calçada)
+                {
+                    const cm = e.v ? (r[0] + r[2]) / 2 : (r[1] + r[3]) / 2, A = e.v ? 1 : 0, B = e.v ? 3 : 2, at = (t) => (e.v ? RoadPlan.onAsphalt(cm, t, 0) : RoadPlan.onAsphalt(t, cm, 0));
+                    while (r[B] - r[A] > 1 && at(r[A] + 0.25)) r[A] += 0.5;
+                    while (r[B] - r[A] > 1 && at(r[B] - 0.25)) r[B] -= 0.5;
+                }
                 if (r[2] - r[0] < 1 || r[3] - r[1] < 1) continue;
                 this.perimeter.push({ x0: r[0], z0: r[1], x1: r[2], z1: r[3], edge: e, nx, nz });
             }

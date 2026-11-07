@@ -108,7 +108,9 @@ const StreetDetail = {
 				if (rng() > wear * 0.42) continue;
 				const r = rng(), side = rng() < 0.5 ? -1 : 1, lane = med + (hw - med) / 2;
 				let lat = side * (med + 0.7 + rng() * (hw - med - 1.4)), name, sw, sl, ang = 0;
-				if (r < 0.42) { name = 'crack' + Math.floor(rng() * 6); sw = sl = 1.2 + rng() * 0.8; ang = rng() * 6.28; }
+				const nearX = s < e.cutA + 14 || s > e.len - e.cutB - 14;                // (perto do cruzamento: faixa, retenção e setas — sem desgaste em cima)
+				if (nearX && r < 0.74) continue;
+				if (r < 0.3) { name = 'crack' + Math.floor(rng() * 6); sw = sl = 1.2 + rng() * 0.8; ang = rng() * 6.28; }
 				else if (r < 0.55) { name = 'pot' + Math.floor(rng() * 3); sw = sl = 0.55 + rng() * 0.35; ang = rng() * 6.28; lat = side * (lane + (rng() - 0.5) * 1.6); }
 				else if (r < 0.74) { name = 'patch' + Math.floor(rng() * 3); sw = 0.9 + rng() * 0.6; sl = 1.2 + rng() * 1.2; }
 				else if (r < 0.9) { name = 'oil' + Math.floor(rng() * 2); sw = 0.6 + rng() * 0.3; sl = 0.8 + rng() * 0.5; lat = side * (lane + (rng() - 0.5) * 0.5); }
@@ -250,6 +252,7 @@ const StreetDetail = {
 				if (!fav) { const lx = P.tz, lz = -P.tx; if (!this._poor(P.x + lx * (e.w / 2 + 6), P.z + lz * (e.w / 2 + 6)) || rng() > 0.45) break; }
 				else if (rng() > 0.55) continue;
 				if (CityGrid.inCrosswalk(P.x, P.z, 3) || RoadPlan.nodeNear && RoadPlan.nodeNear(P.x, P.z, 14)) continue;
+				if (this.busStops.some((b) => Math.hypot(b.x - P.x, b.z - P.z) < 26)) continue;      // (nada de lombada em cima do ponto de ônibus)
 				const hw = e.w / 2 - 0.05, o = { x: P.x, z: P.z, tx: P.tx, tz: P.tz, hw, kind: 'bump' };
 				this.bumps.push(o); this._ins(o); st.bumps++;
 				this._anchor(P.x, P.z); RoadArt.bump(W._batch('trim', P.x, P.z), P.x, P.z, P.tx, P.tz, hw); MeshBatch.anchor = null;
@@ -275,6 +278,7 @@ const StreetDetail = {
 				RoadPlan.at(e, s, P);
 				const tx = P.tx * dir, tz = P.tz * dir, rx = tz, rz = -tx, hw = e.w / 2, lat = hw + 1.55;
 				const x = P.x + rx * lat, z = P.z + rz * lat;
+				if (this.bumps.some((o) => Math.hypot(o.x - P.x, o.z - P.z) < 26)) continue;      // (o "ÔNIBUS" do chão em cima de uma lombada)
 				// o abrigo inteiro na calçada livre (4,2 × 1,5 u)
 				let free = true;
 				for (const [l, d] of [[0, 0], [-2.1, -0.7], [2.1, -0.7], [-2.1, 0.7], [2.1, 0.7], [2.7, 0.6]]) if (!this.free(x + tx * l + rx * d, z + tz * l + rz * d, 0.35)) { free = false; break; }
@@ -404,9 +408,10 @@ const StreetDetail = {
 				const lx = P.tz * side, lz = -P.tx * side, d = e.w / 2 + 1.5, x = P.x + lx * d, z = P.z + lz * d;
 				if (!this.free(x, z, 1.4) || CityGrid.inCrosswalk(x, z, 3)) continue;
 				this._put(x, z, 1.6);
-				W._canteiro(x, z, 0.75);
+				const blk = CityGrid._blockAtPoint(x, z);
+				if (!(blk && blk.open && blk.ground === 'grass')) W._canteiro(x, z, 0.75);      // (no gramado do parque, a árvore nasce na grama: sem canteiro)
 				(this.treeSpots || (this.treeSpots = [])).push([x, z]);
-				Trees3D.add(W._batch('veg_hi', x, z), rng() < 0.8 ? 'oak' : 'ipe', x, 0, z, 0.72 + rng() * 0.22);
+				Trees3D.add(W._batch('veg_hi', x, z), rng() < 0.8 ? 'oak' : 'ipe', x, 0, z, 0.58 + rng() * 0.16);      // (árvore de calçada: menor que a de parque)
 				st.trees++;
 			}
 		}

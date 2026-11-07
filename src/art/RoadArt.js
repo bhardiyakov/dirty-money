@@ -83,12 +83,14 @@ const RoadArt = {
 		// --- rachaduras (linha 0, colunas 0–5)
 		for (let k = 0; k < 6; k++) {
 			const rng = Pixel.rng(101 + k * 7), ox = k * C;
-			ctx.strokeStyle = 'rgba(34,34,36,1)';
-			const n = 1 + (k % 2);
-			for (let j = 0; j < n; j++) this._crackPath(ctx, ox + 20 + rng() * 30, 30 + rng() * 70, (rng() - 0.5) * 1.2, 60 + rng() * 50, 2.0, rng, 0);
-			if (k >= 4) {                                                       // couro de jacaré: malha de rachaduras finas
-				ctx.lineWidth = 1.8;
-				for (let j = 0; j < 14; j++) { const cx = ox + 20 + rng() * 88, cy = 20 + rng() * 88; this._crackPath(ctx, cx, cy, rng() * 6.28, 18 + rng() * 22, 1.8, rng, 2); }
+			// (trinca selada com piche: faixa escura LARGA e macia, um pouco mais escura que o asfalto — não o risco preto fino, que na tela
+			// lia como rabisco)
+			const n = 1 + (k % 2), paths = [];
+			for (let j = 0; j < n; j++) paths.push([ox + 22 + rng() * 26, 34 + rng() * 60, (rng() - 0.5) * 1.0, 50 + rng() * 40, 900 + k * 13 + j]);
+			for (const [w, col] of [[7, 'rgba(46,46,49,1)'], [3.2, 'rgba(36,36,39,1)']]) { ctx.strokeStyle = col; for (const p of paths) { const r2 = Pixel.rng(p[4]); this._crackPath(ctx, p[0], p[1], p[2], p[3], w, () => 0.5 + (r2() - 0.5) * 0.6, 2); } }
+			if (k >= 4) {                                                       // couro de jacaré: malha de trincas finas, discreta
+				ctx.strokeStyle = 'rgba(44,44,47,1)';
+				for (let j = 0; j < 7; j++) { const cx = ox + 30 + rng() * 68, cy = 30 + rng() * 68; this._crackPath(ctx, cx, cy, rng() * 6.28, 14 + rng() * 14, 2.2, rng, 2); }
 			}
 			this._rect(D, 'crack' + k, k, 0);
 		}

@@ -22,6 +22,7 @@ class MeshBatch {
     // ela sobe `h` INTEIRA, rígida (nenhuma parede estica: a casa tem as proporções de sempre; o pé dela é resolvido por quem a constrói —
     // pilares e viga de borda, WorldBuilder._footing). Sem âncora, cada vértice sobe a altura do chão embaixo dele.
     static anchor = null;
+    static _BARY = [[0.5, 0.5], [0, 0.5], [0.5, 0], [1 / 3, 1 / 3], [2 / 3, 1 / 6], [1 / 6, 2 / 3], [1 / 6, 1 / 6], [0.25, 0.75], [0.75, 0], [0, 0.25]];
     _anc(n) {
         const A = MeshBatch.anchor;
         if (!A && !this.anc) return;
@@ -142,44 +143,98 @@ class MeshBatch {
     // Cria a malha no Babylon (já em coordenadas de mundo; transform congelado).
     // alwaysActive: false para malhas por pedaço (o frustum descarta as que estão fora da tela).
     // Subdivide os triângulos de CHÃO (deitados, sem âncora) maiores que `max` m onde o relevo varia: o piso passa a seguir a encosta.
+    // A decisão é POR ARESTA (só dos dois vértices dela): a aresta maior que `max` em que o relevo foge da reta (amostras a 1/4, 1/2 e 3/4)
+    // é partida ao meio — e o vizinho que divide a mesma aresta decide igual: sem "T" (o vértice novo de um lado e a aresta reta do
+    // outro abriam frestas no chão, por onde aparecia o mar). Relevo que foge só no MIOLO (arestas retas): leque no centro, que não
+    // mexe nas arestas. Antes eram 4 amostras por triângulo e a divisão em 4 — triângulo grande liso por cima de estrada cortada no
+    // morro, e frestas entre os vizinhos.
     _tessellate(max) {
         const P = this.pos, N = this.nor, U = this.uv, C = this.col, A = this.anc, I = this.idx, out = [], R = Relief;
+        const mids = new Map();
         const mid = (a, b) => {
-            const v = P.length / 3;
+            const key = a < b ? a * 4194304 + b : b * 4194304 + a;
+            let v = mids.get(key);
+            if (v !== undefined) return v;
+            v = P.length / 3;
             for (let k = 0; k < 3; k++) { P.push((P[a * 3 + k] + P[b * 3 + k]) / 2); N.push(N[a * 3 + k]); }
             U.push((U[a * 2] + U[b * 2]) / 2, (U[a * 2 + 1] + U[b * 2 + 1]) / 2);
             for (let k = 0; k < 4; k++) C.push((C[a * 4 + k] + C[b * 4 + k]) / 2);
             if (A) A.push(NaN);
+            mids.set(key, v);
             return v;
+        };
+        const cen = (a, b, c) => {
+            const v = P.length / 3;
+            for (let k = 0; k < 3; k++) { P.push((P[a * 3 + k] + P[b * 3 + k] + P[c * 3 + k]) / 3); N.push(N[a * 3 + k]); }
+            U.push((U[a * 2] + U[b * 2] + U[c * 2]) / 3, (U[a * 2 + 1] + U[b * 2 + 1] + U[c * 2 + 1]) / 3);
+            for (let k = 0; k < 4; k++) C.push((C[a * 4 + k] + C[b * 4 + k] + C[c * 4 + k]) / 3);
+            if (A) A.push(NaN);
+            return v;
+        };
+        // a aresta (a, b) precisa ser partida? (só depende dela: comprimento e o relevo ao longo)
+        const ecache = new Map();
+        const split = (a, b) => {
+            const key = a < b ? a * 4194304 + b : b * 4194304 + a;
+            let r = ecache.get(key);
+            if (r !== undefined) return r;
+            const ax = P[a * 3], az = P[a * 3 + 2], bx = P[b * 3], bz = P[b * 3 + 2];
+            r = false;
+            if (Math.hypot(bx - ax, bz - az) > max) {
+                const ha = R.at(ax, az), hb = R.at(bx, bz);
+                for (const t of [0.25, 0.5, 0.75]) if (Math.abs(R.at(ax + (bx - ax) * t, az + (bz - az) * t) - (ha + (hb - ha) * t)) > 0.05) { r = true; break; }
+            }
+            ecache.set(key, r);
+            return r;
         };
         const stack = [];
         for (let t = 0; t < I.length; t += 3) stack.push(I[t], I[t + 1], I[t + 2], 0);
         while (stack.length) {
             const d = stack.pop(), c = stack.pop(), b = stack.pop(), a = stack.pop();
-            const ax = P[a * 3], ay = P[a * 3 + 1], az = P[a * 3 + 2], bx = P[b * 3], by = P[b * 3 + 1], bz = P[b * 3 + 2], cx = P[c * 3], cy = P[c * 3 + 1], cz = P[c * 3 + 2];
+            const ay = P[a * 3 + 1], by = P[b * 3 + 1], cy = P[c * 3 + 1];
             const flat = Math.abs(ay - by) < 0.3 && Math.abs(ay - cy) < 0.3 && N[a * 3 + 1] > 0.85 && !(A && (A[a] === A[a] || A[b] === A[b] || A[c] === A[c]));
+            if (!flat || d > 10) { out.push(a, b, c); continue; }
+            const sab = split(a, b), sbc = split(b, c), sca = split(c, a), n = sab + sbc + sca;
+            if (n === 3) { const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a); stack.push(a, ab, ca, d + 1, ab, b, bc, d + 1, ca, bc, c, d + 1, ab, bc, ca, d + 1); continue; }
+            if (n === 2) {                                                    // duas arestas: o canto entre elas fica num triângulo; o resto, dois
+                const [p, q, r] = !sab ? [c, a, b] : !sbc ? [a, b, c] : [b, c, a];      // (q-r: a aresta que NÃO parte; p: o vértice oposto)
+                const m1 = mid(r, p), m2 = mid(p, q);
+                stack.push(p, m2, m1, d + 1, m2, q, r, d + 1, m2, r, m1, d + 1);
+                continue;
+            }
+            if (n === 1) {                                                    // uma aresta: dois triângulos a partir do meio dela
+                const [p, q, r] = sab ? [a, b, c] : sbc ? [b, c, a] : [c, a, b];       // (p-q parte; r: o oposto)
+                const m = mid(p, q);
+                stack.push(p, m, r, d + 1, m, q, r, d + 1);
+                continue;
+            }
+            // nenhuma aresta parte: relevo fugindo no miolo de um triângulo grande → leque no centro
+            const ax = P[a * 3], az = P[a * 3 + 2], bx = P[b * 3], bz = P[b * 3 + 2], cx = P[c * 3], cz = P[c * 3 + 2];
             const e = Math.max(Math.hypot(bx - ax, bz - az), Math.hypot(cx - bx, cz - bz), Math.hypot(ax - cx, az - cz));
-            if (!flat || e <= max || d > 6) { out.push(a, b, c); continue; }
-            const ha = R.at(ax, az), hb = R.at(bx, bz), hc = R.at(cx, cz), hm = R.at((ax + bx + cx) / 3, (az + bz + cz) / 3);
-            if (Math.max(ha, hb, hc, hm) - Math.min(ha, hb, hc, hm) < 0.05) { out.push(a, b, c); continue; }
-            const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
-            stack.push(a, ab, ca, d + 1, ab, b, bc, d + 1, ca, bc, c, d + 1, ab, bc, ca, d + 1);
+            if (e > max * 1.5) {
+                const ha = R.at(ax, az), hb = R.at(bx, bz), hc = R.at(cx, cz);
+                let dev = 0;
+                for (const [wa, wb] of MeshBatch._BARY) { const wc = 1 - wa - wb; dev = Math.max(dev, Math.abs(R.at(ax * wa + bx * wb + cx * wc, az * wa + bz * wb + cz * wc) - (ha * wa + hb * wb + hc * wc))); }
+                if (dev > 0.05) { const g = cen(a, b, c); stack.push(a, b, g, d + 1, b, c, g, d + 1, c, a, g, d + 1); continue; }
+            }
+            out.push(a, b, c);
         }
         this.idx = out;
     }
     // Sobe cada vértice a altura do chão (ou, numa construção ancorada, toda ela por igual — ver anchor).
-    _relief() {
+    // clamp(x, z, h) → h: ajusta a altura de cada vértice (o terreno, rente às pistas: TerrainBuilder.roadCut)
+    _relief(clamp = null) {
         const R = Relief, P = this.pos, A = this.anc;
         this._tessellate(Config.relief.tess);
         for (let v = 0, n = P.length / 3; v < n; v++) {
-            const h = A && A[v] === A[v] ? A[v] : R.at(P[v * 3], P[v * 3 + 2]);
+            let h = A && A[v] === A[v] ? A[v] : R.at(P[v * 3], P[v * 3 + 2]);
+            if (clamp) h = clamp(P[v * 3], P[v * 3 + 2], h);
             P[v * 3 + 1] += h;
         }
     }
 
-    build(name, scene, material, { vertexColors = false, receiveShadows = true, alwaysActive = true, relief = false } = {}) {
+    build(name, scene, material, { vertexColors = false, receiveShadows = true, alwaysActive = true, relief = false, clamp = null } = {}) {
         if (this.empty) return null;
-        if (relief && typeof Relief !== 'undefined' && Relief.on) this._relief();
+        if (relief && typeof Relief !== 'undefined' && Relief.on) this._relief(clamp);
         this.anc = null;
         const mesh = new BABYLON.Mesh(name, scene);
         const vd = new BABYLON.VertexData();

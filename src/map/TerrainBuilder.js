@@ -209,7 +209,7 @@ class TerrainBuilder {
 
         // Monta as malhas (uma por passo).
         const mk = (bt, name, mat, o) => { const m = bt.build(`terr_${ci}_${cj}_${name}`, this.scene, mat, Object.assign({ receiveShadows: false, alwaysActive: false, relief: true }, o)); if (m) chunk.meshes.push(m); return m; };
-        yield; mk(ground, 'ground', this.ground, { vertexColors: true });
+        yield; mk(ground, 'ground', this.ground, { vertexColors: true, clamp: TerrainBuilder.roadCut });
         yield;
         const hi = mk(vegHi, 'vhi', wb.props.hiMaterial, { vertexColors: true });
         if (hi) {                                                                 // copas por cima de tudo que anda no chao (ver WorldBuilder._flush)
@@ -223,6 +223,20 @@ class TerrainBuilder {
 
         this.stats.built++;
         return chunk;
+    }
+
+    // CORTE DA ESTRADA (relevo): o chão do terreno não passa por cima da pista. Os triângulos do terreno (4 u) ligam a pista aplainada aos
+    // cantos altos da encosta e cobriam o asfalto em dentes; perto da pista o chão fica no máximo na altura da beira dela (um acostamento
+    // de uma célula) e sobe dali em rampa (talude de 0,8 m/m) — como um corte de estrada de verdade. 0,4 m abaixo: a pista, linear entre
+    // os vértices dela, cede até ~0,2 m no alto de um morro.
+    static roadCut(x, z, h) {
+        const n = RoadPlan.nearestRoadPoint(x, z, 12);
+        if (!n || (n.edge && n.edge.layer)) return h;
+        const hw = n.edge.w / 2, d = n.d - hw;
+        if (d > 11) return h;
+        // (a pista inclina de lado com o morro: a referência é a BEIRA dela do lado do vértice, não o eixo)
+        const k = n.d > 1e-3 ? Math.min(n.d, hw) / n.d : 0, ex = n.x + (x - n.x) * k, ez = n.z + (z - n.z) * k;
+        return Math.min(h, Relief.at(ex, ez) - 0.4 + Math.max(0, d - 4.3) * 0.8);
     }
 
     // Vegetação e rochas da célula: tabelas por bioma [tipo, probabilidade, escala mín, escala máx].
