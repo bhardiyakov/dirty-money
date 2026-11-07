@@ -4,19 +4,29 @@
 // fica parado, pasta (cabeça baixa), anda devagar para outro canto e se espanta quando o jogador (ou um carro) chega perto — a galinha
 // sai correndo e batendo asa, a vaca só se afasta. Só existem perto da câmera (os cercados longe não custam nada). Uma malha só.
 // Atlas: colunas = 8 direções, linhas = espécie × 4 quadros (parado, pastando, passo 1, passo 2); cor por variante (paleta).
+//
+// EM 3D (padrão — art/Animals3D.js; `?bichos=2d` volta aos sprites): os modelos da folha de referência (boi, vaca, cavalo, porco,
+// cabra, OVELHA, CACHORRO e galo/galinha) com animação de verdade — o passo (fase pela distância andada), a corrida na fuga, o pescoço
+// descendo para pastar (a galinha bica), DEITAR para ruminar ou cochilar (o cachorro deita na sombra) e o rabo abanando. Os bichos
+// desviam das casas e cercas (CityGrid.blockedAt); o pequeno atropelado pelo carro do jogador MORRE (fica deitado de lado). Os
+// cachorros moram nos sítios e nas casinhas da vila e, na favela, os VIRA-LATAS andam pelas ruas de terra (cercado = a rua).
 // ============================================================================
 
 class Livestock {
     static get SPECIES() {
-        // S: escala | v: passo (u/s) | fear: raio de susto | run: multiplicador na fuga
+        // v: passo (u/s) | fear: raio de susto | run: multiplicador na fuga | cyc: metros por ciclo do passo (3D) | rest: chance de deitar
+        // | small: morre atropelado | sprite: a espécie no atlas 2D (null = não existe em 2D)
         return {
-            vaca:    { row: 0, v: 0.55, fear: 4.5, run: 2.6 },
-            cavalo:  { row: 1, v: 0.8,  fear: 6.0, run: 4.2 },
-            porco:   { row: 2, v: 0.6,  fear: 3.5, run: 3.0 },
-            galinha: { row: 3, v: 0.7,  fear: 3.2, run: 4.6 },
-            cabra:   { row: 4, v: 0.7,  fear: 4.0, run: 3.4 },
+            vaca:     { row: 0, v: 0.55, fear: 4.5, run: 2.6, cyc: 1.5, rest: 0.12, sprite: 'vaca' },
+            cavalo:   { row: 1, v: 0.8,  fear: 6.0, run: 4.2, cyc: 1.9, rest: 0.04, sprite: 'cavalo' },
+            porco:    { row: 2, v: 0.6,  fear: 3.5, run: 3.0, cyc: 0.75, rest: 0.18, small: true, sprite: 'porco' },
+            galinha:  { row: 3, v: 0.7,  fear: 3.2, run: 4.6, cyc: 0.32, rest: 0.03, small: true, sprite: 'galinha' },
+            cabra:    { row: 4, v: 0.7,  fear: 4.0, run: 3.4, cyc: 0.95, rest: 0.08, small: true, sprite: 'cabra' },
+            ovelha:   { row: 4, v: 0.6,  fear: 4.0, run: 3.2, cyc: 0.9, rest: 0.1, small: true, sprite: 'cabra' },
+            cachorro: { row: 4, v: 0.9,  fear: 2.6, run: 4.4, cyc: 0.85, rest: 0.3, small: true, sprite: null },
         };
     }
+    static get SPRITE_SP() { return ['vaca', 'cavalo', 'porco', 'galinha', 'cabra']; }
     static get VARIANTS() {
         return [
             { sp: 'vaca', pal: { body: '#f2efe8', spot: '#2a2622', dark: '#2a2622', light: '#e8b4a8', accent: '#d8d0c0', eye: '#141414' } },      // malhada
@@ -101,13 +111,15 @@ class Livestock {
     constructor(game) {
         this.g = game;
         this.scene = game.scene;
-        const F = Livestock.FR, D = Livestock.DIRS, PER = Livestock.PER, SP = Livestock.SPECIES, names = Object.keys(SP), VAR = Livestock.VARIANTS;
+        const F = Livestock.FR, D = Livestock.DIRS, PER = Livestock.PER, names = Livestock.SPRITE_SP;
         const rows = names.length * PER, W = D * F, H = rows * F, poses = ['idle', 'graze', 'walk0', 'walk1'];
         const t0 = performance.now();
-        if (typeof SpriteHD !== 'undefined' && SpriteHD.on) this._hdInit(poses);
+        this.mode3d = typeof Animals3D !== 'undefined' && Animals3D.on;
+        if (this.mode3d) Animals3D.init(this.scene, game.gameEngine && game.gameEngine.world && game.gameEngine.world.shadow);
+        else if (typeof SpriteHD !== 'undefined' && SpriteHD.on) this._hdInit(poses);
         else this._atlasPixel(poses, rows, W, H);
         this._mesh();
-        console.log(`[BICHOS] ${names.length} espécies, ${names.length * PER * D} sprites ${this._hdJob ? 'em alta definição (assados aos poucos durante o jogo)' : ''} em ${(performance.now() - t0).toFixed(0)} ms, ${this.pens.length} cercados`);
+        console.log(`[BICHOS] ${this.mode3d ? 'em 3D (art/Animals3D.js)' : `${names.length} espécies, ${names.length * PER * D} sprites ${this._hdJob ? 'em alta definição (assados aos poucos durante o jogo)' : ''}`} em ${(performance.now() - t0).toFixed(0)} ms, ${this.pens.length} cercados`);
     }
 
     // Atlas em ALTA DEFINIÇÃO (art/SpriteHD.js): pelo, penas, sombra macia; cada variante de cor pintada à parte (a geometria de cada
@@ -119,7 +131,7 @@ class Livestock {
         const q = Math.min(SpriteHD.Q, 1.25), FP = Math.round(F * q), W = VC * D * FP, H = groups * PER * FP;
         this._W = VC * D * F; this._H = groups * PER * F; this._VC = VC;
         const list = [];
-        for (const sp of Object.keys(Livestock.SPECIES)) poses.forEach((pose, pi) => { for (let d = 0; d < D; d++) list.push({ sp, pose, pi, d }); });
+        for (const sp of Livestock.SPRITE_SP) poses.forEach((pose, pi) => { for (let d = 0; d < D; d++) list.push({ sp, pose, pi, d }); });
         this._hdJob = { list, n: 0, q, FP, W, H, data: new Uint8Array(W * H * 4) };
     }
     _hdStep(budgetMs) {
@@ -143,7 +155,7 @@ class Livestock {
     }
 
     _atlasPixel(poses, rows, W, H) {
-        const F = Livestock.FR, D = Livestock.DIRS, PER = Livestock.PER, SP = Livestock.SPECIES, names = Object.keys(SP), VAR = Livestock.VARIANTS, data = new Uint8Array(W * H * 4);
+        const F = Livestock.FR, D = Livestock.DIRS, PER = Livestock.PER, SP = Livestock.SPECIES, names = Livestock.SPRITE_SP, VAR = Livestock.VARIANTS, data = new Uint8Array(W * H * 4);
         names.forEach((sp) => poses.forEach((pose, pi) => {
             const prims = Livestock.model(sp, pose);
             for (let d = 0; d < D; d++) {
@@ -170,6 +182,12 @@ class Livestock {
     _mesh() {
         const VAR = Livestock.VARIANTS;
         this.cap = 90;
+        if (this.mode3d) {                                                                // 3D: as malhas são das espécies (Animals3D)
+            this.byVar = {};
+            for (const sp of Object.keys(Livestock.SPECIES)) this.byVar[sp] = Animals3D.VAR[sp].map((_, i) => i);
+            this._pens();
+            return;
+        }
         const n = this.cap, pos = new Float32Array(n * 12), uv = new Float32Array(n * 8), col = new Float32Array(n * 16), idx = new Uint32Array(n * 6);
         for (let i = 0; i < n; i++) { const b = i * 4; idx.set([b + 3, b + 1, b, b + 2, b + 3, b], i * 6); }
         const mesh = this.mesh = new BABYLON.Mesh('livestock', this.scene), vd = new BABYLON.VertexData();
@@ -178,10 +196,26 @@ class Livestock {
         mesh.material = this.material || null; mesh.isPickable = false; mesh.alwaysSelectAsActiveMesh = true; mesh.doNotSyncBoundingInfo = true;
         mesh.isVisible = !!this.material;                                                // (HD: aparece quando o atlas fica pronto)
         this.buf = { pos, uv, col };
-        // variantes por espécie
+        // variantes por espécie (2D: a ovelha usa as cabras claras; o cachorro não existe)
         this.byVar = {};
         VAR.forEach((v, i) => (this.byVar[v.sp] || (this.byVar[v.sp] = [])).push(i));
-        this.pens = (typeof Bairros !== 'undefined' ? Bairros.pens : []).map((p, i) => Object.assign({ id: i, live: null }, p));
+        this.byVar.ovelha = this.byVar.cabra.filter((i) => VAR[i].pal.body === '#e8e2d6');
+        this._pens();
+    }
+    _pens() {
+        const SP = Livestock.SPECIES;
+        this.pens = (typeof Bairros !== 'undefined' ? Bairros.pens : []).filter((p) => this.mode3d || (SP[p.sp] && SP[p.sp].sprite)).map((p, i) => Object.assign({ id: i, live: null }, p));
+        // VIRA-LATAS da favela (3D): um ou dois por trecho de rua de terra, andando de um lado para o outro dela
+        if (this.mode3d && typeof RoadPlan !== 'undefined') {
+            let k = 0;
+            for (const e of RoadPlan.edges) {
+                if (e.cls !== 'fav' || e.layer || e.len < 14 || !e.pts || Pixel.hash(k++, 7, 913) > 0.32) continue;
+                let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+                for (const [x, z] of e.pts) { x0 = Math.min(x0, x); z0 = Math.min(z0, z); x1 = Math.max(x1, x); z1 = Math.max(z1, z); }
+                const m = e.w / 2 + 0.5;
+                this.pens.push({ id: this.pens.length, live: null, sp: 'cachorro', n: Pixel.hash(k, 3, 917) < 0.35 ? 2 : 1, street: e, x0: x0 - m, z0: z0 - m, x1: x1 + m, z1: z1 + m });
+            }
+        }
         this.animals = [];
         this._t = 0;
         this.enabled = true;
@@ -194,10 +228,23 @@ class Livestock {
         for (let k = 0; k < pen.n && this.animals.length < this.cap; k++) {
             const a = { pen, sp: pen.sp, S: Livestock.SPECIES[pen.sp], vr: rng() < 0.7 ? v : vars[Math.floor(rng() * vars.length)],
                 x: pen.x0 + 0.8 + rng() * (pen.x1 - pen.x0 - 1.6), z: pen.z0 + 0.8 + rng() * (pen.z1 - pen.z0 - 1.6), h: rng() * Math.PI * 2,
-                state: rng() < 0.6 ? 'graze' : 'idle', t: 1 + rng() * 6, tx: 0, tz: 0, step: rng() * 4, flee: 0 };
+                state: rng() < 0.6 ? 'graze' : 'idle', t: 1 + rng() * 6, tx: 0, tz: 0, step: rng() * 4, flee: 0,
+                ph: rng() * 6.28, mv: 0, run: 0, gz: 0, rs: 0, dead: false, seed: rng() };
+            if (pen.street) {                                                             // vira-lata: um ponto da rua, de um lado dela
+                a.s = rng() * pen.street.len; a.side = (rng() < 0.5 ? -1 : 1) * (pen.street.w / 2 - 0.6 - rng() * 1.2); a.dir = rng() < 0.5 ? -1 : 1;
+                this._streetPos(a);
+            } else if (this.mode3d && CityGrid.blockedAt(a.x, a.z, 0.5)) {                // (nasceu dentro de uma casa: procura um canto livre)
+                for (let t = 0; t < 8 && CityGrid.blockedAt(a.x, a.z, 0.5); t++) { a.x = pen.x0 + 0.8 + rng() * (pen.x1 - pen.x0 - 1.6); a.z = pen.z0 + 0.8 + rng() * (pen.z1 - pen.z0 - 1.6); }
+            }
+            if (rng() < a.S.rest) { a.state = 'rest'; a.rs = 1; a.t = 4 + rng() * 15; }
             this.animals.push(a); list.push(a);
         }
         pen.live = list;
+    }
+    _streetPos(a) {
+        const e = a.pen.street, P = RoadPlan.at(e, Math.max(0, Math.min(e.len, a.s)), this._sp || (this._sp = {}));
+        a.x = P.x - P.tz * a.side; a.z = P.z + P.tx * a.side;
+        return P;
     }
     _despawnPen(pen) {
         this.animals = this.animals.filter((a) => a.pen !== pen);
@@ -218,19 +265,31 @@ class Livestock {
                 else if (p.live && d > 180) this._despawnPen(p);
             }
         }
-        if (!this.animals.length) { if (this._drawn) { this.buf.pos.fill(0); this._flush(); this._drawn = false; } return; }
+        if (!this.animals.length) {
+            if (this._drawn) { if (this.mode3d) Animals3D.clear(); else { this.buf.pos.fill(0); this._flush(); } this._drawn = false; }
+            return;
+        }
         const P = g.player && g.player.position, car = g.mode === 'car' && g.activeCar, threat = car ? car.position : P;
         const tr = car ? 9 : (g.player && g.player.speed > 3 ? 1.6 : 1);
+        this._carV = car ? Math.abs(car.speed || 0) : 0;
         for (const a of this.animals) this._step(a, dt, threat, tr);
-        this._render();
+        if (this.mode3d) { Animals3D.draw(this.animals); this._drawn = true; }
+        else this._render();
     }
 
     _step(a, dt, th, tr) {
         const pen = a.pen, S = a.S, m = 0.5;
-        // susto: o jogador (ou carro) perto — sai na direção oposta, dentro do cercado
+        if (a.dead) { a.mv = a.run = a.gz = a.rs = 0; a.moving = false; return; }
+        // susto: o jogador (ou carro) perto — sai na direção oposta, dentro do cercado (e levanta, se estava deitado)
         if (th) {
             const dx = a.x - th.x, dz = a.z - th.z, d = hypot(dx, dz);
-            if (d < S.fear * tr) { a.flee = 1.2 + Math.random() * 0.8; a.h = Math.atan2(dx, dz) + (Math.random() - 0.5) * 0.8; a.state = 'walk'; }
+            // ATROPELADO: o bicho pequeno na frente do carro do jogador em velocidade fica no chão (3D)
+            if (this.mode3d && S.small && tr > 2 && this._carV > 5 && d < 1.5) { a.dead = true; a.state = 'dead'; a.moving = false; return; }
+            if (d < S.fear * tr) {
+                if (a.state === 'rest' && a.flee <= 0) a.t = 0;
+                a.flee = 1.2 + Math.random() * 0.8; a.h = Math.atan2(dx, dz) + (Math.random() - 0.5) * 0.8; a.state = 'walk';
+                if (pen.street) a.dir = Math.sign(Math.cos(a.h - this._streetDir(a))) || a.dir;      // (foge pela rua, no sentido que se afasta)
+            }
         }
         let v = 0;
         if (a.flee > 0) { a.flee -= dt; v = S.v * S.run; }
@@ -238,24 +297,49 @@ class Livestock {
             a.t -= dt;
             if (a.t <= 0) {
                 const r = Math.random();
-                if (r < 0.45) { a.state = 'graze'; a.t = 2 + Math.random() * 6; }
+                if (r < S.rest && this.mode3d) { a.state = 'rest'; a.t = 8 + Math.random() * 18; }
+                else if (r < 0.45) { a.state = 'graze'; a.t = 2 + Math.random() * 6; }
                 else if (r < 0.7) { a.state = 'idle'; a.t = 1 + Math.random() * 3; a.h += (Math.random() - 0.5) * 1.2; }
-                else { a.state = 'walk'; a.t = 1.5 + Math.random() * 3.5; a.tx = pen.x0 + m + Math.random() * (pen.x1 - pen.x0 - 2 * m); a.tz = pen.z0 + m + Math.random() * (pen.z1 - pen.z0 - 2 * m); }
+                else {
+                    a.state = 'walk'; a.t = 1.5 + Math.random() * 3.5;
+                    if (pen.street) { a.dir = Math.random() < 0.5 ? -1 : 1; a.goal = a.s + a.dir * (4 + Math.random() * 14); }
+                    else { a.tx = pen.x0 + m + Math.random() * (pen.x1 - pen.x0 - 2 * m); a.tz = pen.z0 + m + Math.random() * (pen.z1 - pen.z0 - 2 * m); }
+                }
             }
             if (a.state === 'walk') {
-                const dx = a.tx - a.x, dz = a.tz - a.z;
-                if (hypot(dx, dz) < 0.4) { a.state = 'graze'; a.t = 2 + Math.random() * 4; }
-                else { let da = Math.atan2(dx, dz) - a.h; da = Math.atan2(Math.sin(da), Math.cos(da)); a.h += Math.max(-2 * dt, Math.min(2 * dt, da)); v = S.v; }
+                if (pen.street) { if ((a.goal - a.s) * a.dir <= 0) { a.state = 'graze'; a.t = 1 + Math.random() * 3; } else v = S.v; }
+                else {
+                    const dx = a.tx - a.x, dz = a.tz - a.z;
+                    if (hypot(dx, dz) < 0.4) { a.state = 'graze'; a.t = 2 + Math.random() * 4; }
+                    else { let da = Math.atan2(dx, dz) - a.h; da = Math.atan2(Math.sin(da), Math.cos(da)); a.h += Math.max(-2 * dt, Math.min(2 * dt, da)); v = S.v; }
+                }
             }
         }
-        if (v > 0) {
+        if (v > 0 && pen.street) {                                                        // vira-lata: anda ao longo da rua
+            const e = pen.street;
+            a.s += a.dir * v * dt;
+            if (a.s < 0.5 || a.s > e.len - 0.5) { a.s = Math.max(0.5, Math.min(e.len - 0.5, a.s)); a.dir = -a.dir; if (a.flee <= 0) a.t = 0; }
+            const P = this._streetPos(a), th2 = Math.atan2(P.tx * a.dir, P.tz * a.dir);
+            let da = th2 - a.h; da = Math.atan2(Math.sin(da), Math.cos(da)); a.h += Math.max(-6 * dt, Math.min(6 * dt, da));
+            a.step += dt * (3 + v * 2);
+        } else if (v > 0) {
             const nx = a.x + Math.sin(a.h) * v * dt, nz = a.z + Math.cos(a.h) * v * dt;
             const cx = Math.max(pen.x0 + m, Math.min(pen.x1 - m, nx)), cz = Math.max(pen.z0 + m, Math.min(pen.z1 - m, nz));
-            if (cx !== nx || cz !== nz) { a.h += Math.PI * (0.5 + Math.random() * 0.5); if (a.flee <= 0) a.t = 0; }      // encostou na cerca: vira
-            a.x = cx; a.z = cz; a.step += dt * (3 + v * 2);
+            const wall = this.mode3d && CityGrid.blockedAt(cx, cz, a.sp === 'galinha' ? 0.2 : 0.45) && !CityGrid.blockedAt(a.x, a.z, a.sp === 'galinha' ? 0.2 : 0.45);
+            if (cx !== nx || cz !== nz || wall) { a.h += Math.PI * (0.5 + Math.random() * 0.5); if (a.flee <= 0) a.t = 0; }      // encostou na cerca (ou na casa): vira
+            if (!wall) { a.x = cx; a.z = cz; }
+            a.step += dt * (3 + v * 2);
         }
         a.moving = v > 0;
+        // POSE (3D): a fase do passo anda com a distância (passada mais longa correndo); andar, correr, pastar e deitar entram aos poucos
+        if (this.mode3d) {
+            const run = a.flee > 0 ? 1 : 0, k = (x, to, r) => x + (to - x) * Math.min(1, dt * r);
+            a.run = k(a.run, run, 4); a.mv = k(a.mv, v > 0 ? 1 : 0, 6);
+            a.gz = k(a.gz, a.state === 'graze' && v === 0 ? 1 : 0, 2.5); a.rs = k(a.rs, a.state === 'rest' && v === 0 ? 1 : 0, 1.6);
+            a.ph = (a.ph + dt * v / (S.cyc * (1 + 0.7 * a.run)) * Math.PI * 2) % (Math.PI * 200);
+        }
     }
+    _streetDir(a) { const P = RoadPlan.at(a.pen.street, a.s, this._sp || (this._sp = {})); return Math.atan2(P.tx, P.tz); }
 
     _render() {
         const { pos, uv, col } = this.buf, F = Livestock.FR, D = Livestock.DIRS, PER = Livestock.PER, W = this._W, H = this._H, half = F / Config.art.ppu / 2;

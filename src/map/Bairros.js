@@ -22,7 +22,7 @@ const Bairros = {
             poly: [[-1458, 908], [-1300, 916], [-1200, 914], [-1100, 950], [-950, 966], [-876, 952], [-876, 902], [-1186, 892], [-1190, 780], [-1202, 618], [-1300, 596], [-1446, 588]] },
     ],
     reserved: [],                 // áreas já ocupadas por um sítio/mansão/vila/roça (nada mais entra nelas)
-    pens: [],                     // cercados com bicho: { x0, z0, x1, z1, sp: 'vaca'|'cavalo'|'porco'|'galinha'|'cabra', n }
+    pens: [],                     // cercados com bicho: { x0, z0, x1, z1, sp: 'vaca'|'cavalo'|'porco'|'galinha'|'cabra'|'ovelha'|'cachorro', n }
     villages: [],                 // { id, zone, name, x, z } (largos das vilas)
 
     _inPoly(P, x, z) {
@@ -182,8 +182,8 @@ const Bairros = {
         this._scan('roca', 10, 8, (x, z) => {
             const w = 26 + Math.floor(rng() * 12), d = 20 + Math.floor(rng() * 10), x0 = Math.round(x - w / 2), z0 = Math.round(z - d / 2);
             if (!this._free(x0, z0, x0 + w, z0 + d, [B.GRASS, B.SCRUB, B.FARM], 4)) return false;
-            const sp = this._pick(['vaca', 'vaca', 'cabra', 'cavalo', 'cabra']);
-            this.pens.push({ x0, z0, x1: x0 + w, z1: z0 + d, sp, n: sp === 'cabra' ? 3 + Math.floor(rng() * 3) : 2 + Math.floor(rng() * 2), loose: true });
+            const sp = this._pick(['vaca', 'ovelha', 'cabra', 'cavalo', 'ovelha']);
+            this.pens.push({ x0, z0, x1: x0 + w, z1: z0 + d, sp, n: sp === 'cabra' || sp === 'ovelha' ? 3 + Math.floor(rng() * 3) : 2 + Math.floor(rng() * 2), loose: true });
             return true;
         });
     },
@@ -218,6 +218,7 @@ const Bairros = {
             this._lot(hx, hz0, hx + w, hz0 + d, 1, this._pick(['caipira0', 'caipira1', 'taipa0', 'caipira0']), this._pick(['clay0', 'tile0', 'clay0']));
             this.R.tree(rng() < 0.5 ? 'banana' : 'bush', hx - 2, hz0 + d / 2, 0.9);
             this.pens.push({ x0: hx - 5, z0: hz0 - 5, x1: hx + w + 5, z1: hz0 + d + 5, sp: 'galinha', n: 3 + Math.floor(rng() * 3) });
+            if (Pixel.hash(hx, hz0, 451) < 0.5) this.pens.push({ x0: hx - 5, z0: hz0 - 5, x1: hx + w + 5, z1: hz0 + d + 5, sp: 'cachorro', n: 1 });      // (o cachorro da casa)
             n++;
         }
         for (const fz of [side > 0 ? back + 6 : back - 6 - 22]) {
@@ -240,6 +241,7 @@ const Bairros = {
         const [gx0, gx1] = X(17, 20.5);
         this._lot(gx0, z1 - 9, gx1, z1 - 6, 1, 'wood0', 'zinc0');
         this.pens.push({ x0: Math.min(hx0, gx0) - 3, z0: hz0 - 9, x1: Math.max(hx1, gx1) + 3, z1: z1 - 2, sp: 'galinha', n: 4 + Math.floor(rng() * 4) });
+        this.pens.push({ x0: Math.min(hx0, gx0) - 3, z0: hz0 - 9, x1: Math.max(hx1, gx1) + 3, z1: z1 - 2, sp: 'cachorro', n: Pixel.hash(x0, z0, 457) < 0.3 ? 2 : 1 });      // o cachorro do sítio (no terreiro, com as galinhas)
         // chiqueiro
         const [px0, px1] = X(26, 34);
         this._box(px0, z1 - 11, px1, z1 - 4, undefined, 'S', { h: 1.0, kind: 'wood' });
@@ -249,8 +251,8 @@ const Bairros = {
         const pz1 = z0 + 15;
         this._box(x0 + 1, z0 + 1, x1 - 1, pz1, x0 + 17, 'N', { h: 1.4, kind: 'wood' });
         this._piece({ kind: 'trough', x: flip ? x0 + 6 : x1 - 6, z: z0 + 4 });
-        const sp = this._pick(['vaca', 'vaca', 'cavalo', 'cabra', 'vaca', 'cavalo']);
-        this.pens.push({ x0: x0 + 1.6, z0: z0 + 1.6, x1: x1 - 1.6, z1: pz1 - 0.6, sp, n: sp === 'cabra' ? 4 + Math.floor(rng() * 3) : 2 + Math.floor(rng() * 3) });
+        const sp = this._pick(['vaca', 'ovelha', 'cavalo', 'cabra', 'vaca', 'ovelha']);
+        this.pens.push({ x0: x0 + 1.6, z0: z0 + 1.6, x1: x1 - 1.6, z1: pz1 - 0.6, sp, n: sp === 'cabra' || sp === 'ovelha' ? 4 + Math.floor(rng() * 3) : 2 + Math.floor(rng() * 3) });
         // horta, poço, pomar, bananeiras e varal
         const [vx0, vx1] = X(23, 36);
         this._piece({ kind: 'crops', crop: 'veg', x0: vx0, z0: z0 + 17, x1: vx1, z1: z0 + 22.5, rows: 'x' });

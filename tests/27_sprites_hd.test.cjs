@@ -151,18 +151,19 @@ module.exports = {
             if (game.activeCar) { game.activeCar.setControlled(false); game.activeCar = null; game.mode = 'player'; game.player.setVisible(true); }
             game.player.teleport(new BABYLON.Vector3((p.x0 + p.x1) / 2, 0, (p.z0 + p.z1) / 2 - 6));
             game.camera.snapTo(game.player.position);
-            return { hd: !!L._hdJob || !!(L.material && L.material.getClassName() === 'ShaderMaterial') };
+            return { hd: L.mode3d || !!L._hdJob || !!(L.material && L.material.getClassName() === 'ShaderMaterial'), d3: !!L.mode3d };
         });
         if (pen) {
-            c.ok(pen.hd, 'bichos da roça em HD');
+            c.ok(pen.hd, `bichos da roça em ${pen.d3 ? '3D' : 'HD'}`);
             await gameWait(page, 4, 240000);
             const lv = await page.evaluate(async () => {
                 const L = game.livestock, t0 = Date.now();
                 while (L._hdJob && Date.now() - t0 < 180000) await new Promise((res) => setTimeout(res, 500));
                 await new Promise((res) => setTimeout(res, 1500));
-                return { job: !!L._hdJob, animals: L.animals.length, mat: !!L.mesh.material, drawn: L._drawn };
+                const meshes = L.mode3d ? [...Animals3D._meshes.values()].filter((E) => E.n > 0).length : 0;
+                return { job: !!L._hdJob, animals: L.animals.length, mat: L.mode3d ? meshes > 0 : !!L.mesh.material, drawn: L._drawn };
             });
-            c.ok(!lv.job && lv.mat, 'bichos da roça assados em HD durante o jogo');
+            c.ok(!lv.job && lv.mat, 'bichos da roça prontos (3D: malhas das espécies; 2D: assados em HD durante o jogo)');
             c.ok(lv.animals > 0 && lv.drawn, `bichos no cercado desenhados (${lv.animals})`);
         } else c.note('sem cercados de bichos neste mapa');
         c.noErrors(errors, 'sprites HD');
