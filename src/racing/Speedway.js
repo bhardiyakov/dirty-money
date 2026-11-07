@@ -99,6 +99,24 @@ const Speedway = {
         return !CityGrid.obstaclesAround(cx, cz, Math.hypot(b.x1 - b.x0, b.z1 - b.z0) / 2).some((o) => o.x1 > b.x0 && o.x0 < b.x1 && o.z1 > b.z0 && o.z0 < b.z1 && !(cut(o.x0, o.z0) && cut(o.x1, o.z1)));
     },
     covers(x, z, m = 0) { const b = this.site && this.site.box; return !!b && x > b.x0 - m && x < b.x1 + m && z > b.z0 - m && z < b.z1 + m; },
+    // A PÉ (Navigation, a grade de quem anda): a pista, as áreas de escape e a pit lane ficam bloqueadas — pedestre nenhum anda no
+    // asfalto do circuito (o jogador pode, pela física; só os NPCs é que não vão parar ali). fill(x0, z0, x1, z1): bloqueia o retângulo.
+    navBlock(fill) {
+        if (!this.site) return;
+        const W = this.W / 2 + this.WALL + 0.6;
+        for (let s = 0; s < this.L; s += 0.8) {
+            const l0 = -(W + this.runAt(s, -1)), l1 = W + this.runAt(s, 1);
+            for (let lat = l0; lat <= l1; lat += 0.8) { const p = this.at(s, lat); fill(p.x - 0.6, p.z - 0.6, p.x + 0.6, p.z + 0.6); }
+        }
+    },
+    // As fileiras das duas arquibancadas (para a torcida: racing/StandCrowd.js) — as mesmas medidas de _stands/_covered.
+    standRows() {
+        const v0 = this.POLY[0][0];
+        return [
+            { u0: -60, u1: 50, vFront: v0 - this.W / 2 - 3.8, dir: -1, N: 10, step: 1.3, rise: 0.62, y0: 0.9, anchor: this.local(-5, v0 - this.W / 2 - 3.8 - 6) },
+            { u0: -78, u1: -18, vFront: -30, dir: 1, N: 8, step: 1.3, rise: 0.6, y0: 0.8, anchor: this.local(-48, -30 + 6) },
+        ];
+    },
     local(u, v) { return { x: this.site.cx + v, z: this.site.cz + u }; },
 
     // ---------------------------------------------------------------- consultas

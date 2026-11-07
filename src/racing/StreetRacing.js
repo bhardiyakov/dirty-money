@@ -434,6 +434,7 @@ const StreetRacing = {
         if (!this.built) return;
         Speedway.init(game);
         Speedway.update(game);
+        if (typeof StandCrowd !== 'undefined') StandCrowd.update(game, dt);      // a torcida das arquibancadas (só nas corridas do autódromo)
         this._markers(game, dt);
         const C = this.cur;
         if (!C) return;

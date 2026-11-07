@@ -209,6 +209,7 @@ class Navigation {
 		const m = 0.35;
 		for (const o of CityGrid.obstacles) if (!o.cliff && !o.thin) this._fill(o.x0 - m, o.z0 - m, o.x1 + m, o.z1 + m, 0);      // (paredão: a pé sobe — mais devagar; frade: passa entre eles)
 		for (const o of CityGrid.navBlocks) this._fill(o.x0, o.z0, o.x1, o.z1, 0);          // interior da safe house
+		if (typeof Speedway !== 'undefined') Speedway.navBlock((x0, z0, x1, z1) => this._fill(x0, z0, x1, z1, 0));      // a pista do autódromo: sem pedestre
 		// 3b) tree trunks and street-lamp poles: the cell under each (the sidewalk keeps room around them)
 		const cell = (x, z) => this._fill(x - 0.5, z - 0.5, x + 0.5, z + 0.5, 0);
 		for (const props of CityGrid.blocks.concat(CityGrid.extraBlocks || []).map((b) => b.props).concat([CityGrid.coastProps || []]))
