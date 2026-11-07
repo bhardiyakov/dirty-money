@@ -32,29 +32,31 @@ class TrafficSignals {
         this._slots = [];      // por cruzamento: [{ lensNS, lensEW, pedNS, pedEW } x4 postes] | nó com diagonal: [{ lens, ped, phase, cw }]
         // (as posições das lentes saem do desenho do poste — StreetFurniture.heads: a caixa no fim do braço projetado e as de pedestre)
         const SF = StreetFurniture;
+        // (relevo: o poste é RÍGIDO, na altura do pé dele — WorldBuilder._signalPoles; o brilho soma a altura do chão sob a lente: dy corrige)
+        const R = typeof Relief !== 'undefined' && Relief.on, fix = (p, list) => { for (const h of list) h.dy = R ? Relief.at(p.x, p.z) - Relief.at(h.x + (h.fx || 0) * 0.11, h.z + (h.fz || 0) * 0.11) : 0; return list; };
         for (const inter of inters) {
             if (inter.gen) {
                 this._slots.push(inter.poles.map((p) => {
-                    const [v, pd] = SF.heads(p, true), s = { lens: this.glow.alloc(p.x, p.z), ped: this.glow.alloc(p.x, p.z), phase: p.phase, cw: p.cw, hv: v, c: null };
-                    this.glow.place(s.lens, v.x, SF.LENS_Y.red, v.z, 0.62);
-                    this.glow.place(s.ped, pd.x + pd.fx * 0.11, 2.5, pd.z + pd.fz * 0.11, 0.42);
+                    const [v, pd] = fix(p, SF.heads(p, true)), s = { lens: this.glow.alloc(p.x, p.z), ped: this.glow.alloc(p.x, p.z), phase: p.phase, cw: p.cw, hv: v, c: null };
+                    this.glow.place(s.lens, v.x, SF.LENS_Y.red + v.dy, v.z, 0.62);
+                    this.glow.place(s.ped, pd.x + pd.fx * 0.11, 2.5 + pd.dy, pd.z + pd.fz * 0.11, 0.42);
                     return s;
                 }));
                 continue;
             }
             const poles = inter.poles.map((p) => {
-                const H = SF.heads(p, false), at = (k) => H.find((h) => h.key === k);
+                const H = fix(p, SF.heads(p, false)), at = (k) => H.find((h) => h.key === k);
                 const s = {
                     lensNS: this.glow.alloc(p.x, p.z), lensEW: this.glow.alloc(p.x, p.z),
                     pedNS: this.glow.alloc(p.x, p.z), pedEW: this.glow.alloc(p.x, p.z),
                     hNS: at('NS'), hEW: at('EW'), cNS: null, cEW: null,
                 };
                 // Lentes na frente da caixa pendurada no braço (a altura muda com a cor: _lens); pedestre nas caixinhas do poste.
-                this.glow.place(s.lensNS, s.hNS.x, SF.LENS_Y.red, s.hNS.z, 0.62);
-                this.glow.place(s.lensEW, s.hEW.x, SF.LENS_Y.red, s.hEW.z, 0.62);
+                this.glow.place(s.lensNS, s.hNS.x, SF.LENS_Y.red + s.hNS.dy, s.hNS.z, 0.62);
+                this.glow.place(s.lensEW, s.hEW.x, SF.LENS_Y.red + s.hEW.dy, s.hEW.z, 0.62);
                 const pn = at('pNS'), pe = at('pEW');
-                this.glow.place(s.pedNS, pn.x + pn.fx * 0.11, 2.5, pn.z + pn.fz * 0.11, 0.42);
-                this.glow.place(s.pedEW, pe.x + pe.fx * 0.11, 2.25, pe.z + pe.fz * 0.11, 0.42);
+                this.glow.place(s.pedNS, pn.x + pn.fx * 0.11, 2.5 + pn.dy, pn.z + pn.fz * 0.11, 0.42);
+                this.glow.place(s.pedEW, pe.x + pe.fx * 0.11, 2.25 + pe.dy, pe.z + pe.fz * 0.11, 0.42);
                 return s;
             });
             this._slots.push(poles);
@@ -118,7 +120,7 @@ class TrafficSignals {
     // A lente acesa: cor e altura (vermelho em cima, amarelo no meio, verde embaixo — só reposiciona quando a cor muda).
     _lens(s, key, slot, h, color) {
         const c = TrafficSignals._lensColor(color);
-        if (s[key] !== color) { s[key] = color; this.glow.place(slot, h.x, StreetFurniture.LENS_Y[color] || StreetFurniture.LENS_Y.red, h.z, 0.62); }
+        if (s[key] !== color) { s[key] = color; this.glow.place(slot, h.x, (StreetFurniture.LENS_Y[color] || StreetFurniture.LENS_Y.red) + (h.dy || 0), h.z, 0.62); }
         this.glow.color(slot, c[0], c[1], c[2], 0.95);
     }
 

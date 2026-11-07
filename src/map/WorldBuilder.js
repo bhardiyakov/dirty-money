@@ -398,11 +398,11 @@ class WorldBuilder {
             if (P.length < 3) continue;
             const out = area(P) > 0 ? -1 : 1;                                               // (lado de fora do polígono)
             strip(g[0], P, true, out, g[1], yOut, uvC, wet);
-            if (blk.ground === 'grass') strip('blend_dirt', P, true, -out, 1.2, y0 + 0.012, uvC, null, null, 0.62);
+            if (blk.ground === 'grass') strip('blend_earth', P, true, -out, 1.2, y0 + 0.012, uvC, null, null, 0.62);      // (a borda pisada do gramado: terra marrom — a vermelha é só das estradas da roça)
         }
 
         // ESTRADAS DO INTERIOR: o acostamento (terra batida; na trilha, a terra dela) entra no mato dos dois lados.
-        const SH = { dirt: ['blend_dirt', 1.2, false], earth: ['blend_earth', 0.9, true], asphalt: ['blend_dirt', 1.0, false] };
+        const SH = { dirt: ['blend_dirt', 1.2, false], earth: ['blend_earth', 0.9, true], asphalt: ['blend_earth', 1.0, false] };      // (acostamento do asfalto: terra marrom)
         const shade = (x, z) => WorldMap.shadeAt(x, z);
         const city = (x, z) => wet(x, z) || RoadPlan.onPavement(x, z) || WorldMap.biomeAt(x, z) === WorldMap.B.CITY || !!CityGrid._blockAtPoint(x, z);
         const tmp = {};
@@ -506,6 +506,9 @@ class WorldBuilder {
 
     // Túneis (CityGrid._planTunnels): maciço de pedra sobre a pista, com portais de concreto nas duas bocas.
     _tunnels() {
+        // (RELEVO de verdade: a serra tem altura na tela e a estrada sobe e desce por ela — o maciço do túnel, feito para o mapa plano,
+        // ficava flutuando 7 m acima da pista como uma laje de pedra por cima do morro e cobria o asfalto: sem túnel)
+        if (typeof Relief !== 'undefined' && Relief.on) return;
         const rock = [0.42, 0.4, 0.37], rockD = [0.3, 0.28, 0.26], conc = [0.62, 0.61, 0.58], dark = [0.05, 0.05, 0.07], H = 7;
         for (const t of RoadPlan.tunnels || []) {
             if (t.free) { this._tunnelFree(t, H, rock, rockD, conc, dark); continue; }
@@ -684,7 +687,13 @@ class WorldBuilder {
     _signalPoles() {
         for (const inter of CityGrid.intersections) {
             const trim = this._batch('trim', inter.x, inter.z);
-            for (const p of inter.poles) StreetFurniture.signal(trim, p, inter.gen);       // (poste, braço projetado, caixas: art/StreetFurniture)
+            for (const p of inter.poles) {                                                // (poste, braço projetado, caixas: art/StreetFurniture)
+                // relevo: o poste inteiro RÍGIDO na altura do pé (o braço de ~5 m entortava acompanhando a ladeira e a caixa da lente saía
+                // torta e solta das luzes — TrafficSignals corrige a altura dos brilhos pela mesma conta)
+                MeshBatch.anchor = typeof Relief !== 'undefined' && Relief.on ? { h: Relief.at(p.x, p.z) } : null;
+                StreetFurniture.signal(trim, p, inter.gen);
+            }
+            MeshBatch.anchor = null;
         }
     }
 
@@ -1258,7 +1267,9 @@ class WorldBuilder {
         this.lampGlow = new GlowGrid(this.scene, 'lampGlow', lamps.flatMap((l) => [[l.hx, l.hz], [l.hx, l.hz]])).under();
         this._lampIds = lamps.map((l) => {
             const a = this.lampGlow.alloc(l.hx, l.hz), b = this.lampGlow.alloc(l.hx, l.hz);
-            this.lampGlow.place(a, l.hx + (l.hx - l.x) * 0.07, StreetFurniture.LAMP_Y - 0.12, l.hz + (l.hz - l.z) * 0.07, 2.4);      // (no difusor da luminária)
+            // (relevo: o poste é rígido na altura do PÉ — StreetProps; o brilho soma o chão sob a luminária: corrige pela diferença)
+            const ax = l.hx + (l.hx - l.x) * 0.07, az = l.hz + (l.hz - l.z) * 0.07, dy = typeof Relief !== 'undefined' && Relief.on ? Relief.at(l.x, l.z) - Relief.at(ax, az) : 0;
+            this.lampGlow.place(a, ax, StreetFurniture.LAMP_Y - 0.12 + dy, az, 2.4);      // (no difusor da luminária)
             this.lampGlow.place(b, l.hx, WorldBuilder.POOL_Y, l.hz, 14);
             this.lampGlow.color(a, 1.0, 0.86, 0.55, 0.9);
             if (NightLights.on) this.lampGlow.off(b); else this.lampGlow.color(b, 1.0, 0.78, 0.42, 0.45);      // (luz de verdade: sem a poça pintada)

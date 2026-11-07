@@ -62,6 +62,12 @@ module.exports = {
         await page.keyboard.up('d');
         c.ok(Math.abs(wrap(w1.h - w0)) < 0.15, `segurando a mesma tecla, o rumo não muda com a câmera girando (${(wrap(w1.h - w0) * 57.3).toFixed(0)}°)`);
         c.ok(Math.abs(wrap(w1.yaw - w1.h)) < 0.2 && Math.abs(wrap(s0.yaw - w1.h)) > 1, `a câmera foi para as costas dele (de ${(wrap(s0.yaw - w1.h) * 57.3).toFixed(0)}° para ${(wrap(w1.yaw - w1.h) * 57.3).toFixed(0)}°)`);
+        // entrando numa loja vindo da câmera de perseguição a pé: a câmera de cima e os personagens SEM a névoa de distância (eles ficavam
+        // todos da cor do céu — a névoa ficava ligada nos personagens, cujo relógio só anda lá fora)
+        await page.evaluate(() => { Interiors.index(); const dd = Interiors._doors.find((s) => s.style === 'conv') || Interiors._doors[0]; game.player.teleport(new BABYLON.Vector3(dd.x, 0, dd.z)); Interiors.enter(game, dd); });
+        await gameWait(page, 1.5, 60000);
+        const inn = await page.evaluate(() => ({ flat: game.camera.flat, chase: game.camera.chase, fog: NpcArt._fogP.z }));
+        c.ok(inn.flat && inn.chase === 0 && inn.fog === 0, `dentro da loja: câmera de cima, sem perseguição nem névoa nos personagens (${JSON.stringify(inn)})`);
         c.noErrors(errors, 'camera3p');
         await close();
 

@@ -126,10 +126,13 @@ const Trees3D = {
             constructor(m) { super(m, 'TreeWind', 120, { TREEWIND: false }); this._enable(true); }
             getClassName() { return 'TreeWindPlugin'; }
             prepareDefines(d) { d.TREEWIND = true; }
-            getUniforms() { return { ubo: [{ name: 'trW', size: 4, type: 'vec4' }], vertex: 'uniform vec4 trW;', fragment: 'uniform vec4 trW;' }; }
+            getUniforms() { return { ubo: [{ name: 'trW', size: 4, type: 'vec4' }, { name: 'trP', size: 4, type: 'vec4' }], vertex: 'uniform vec4 trW;', fragment: 'uniform vec4 trW;\nuniform vec4 trP;' }; }
             bindForSubMesh(ub) {
                 const t = (performance.now() / 1000) % 1000, w = typeof Weather !== 'undefined' && Weather.cur ? Weather.cur.k : 0;
                 ub.updateFloat4('trW', t, 0.05 + 0.13 * w, 0.8, 0.6);
+                // o ALVO da câmera (o personagem ou o veículo): a copa entre a câmera e ele vira pontilhado (w = 1: ligado na perseguição)
+                const C = typeof CompassCamera !== 'undefined' && CompassCamera.current, T = C && C.target;
+                if (T && C.chase > 0.3) ub.updateFloat4('trP', T.x, (C.lift || 0) + 1.0, T.z, 1); else ub.updateFloat4('trP', 0, 0, 0, 0);
             }
             getCustomCode(shaderType) {
                 // (sem ponto e vírgula em comentário GLSL: o Babylon corta a linha ali)
@@ -152,6 +155,22 @@ const Trees3D = {
                     // sobre o verde (ipês) e, no WebGL 2, as normais entortadas pelo mesmo ruído (gradiente de superfície): a luz do sol
                     // pega os tufos — a copa deixa de ser uma bolha lisa.
                     CUSTOM_FRAGMENT_BEFORE_LIGHTS: `
+                        #ifdef TREEWIND
+                        if (trP.w > 0.5) {
+                            // NA FRENTE do personagem (perseguição, a pé ou dirigindo): a copa perto do segmento câmera → alvo (num cilindro de
+                            // ~2,6 m, antes dele) e a colada na câmera somem num pontilhado ordenado (4 × 4) — o personagem aparece de verdade,
+                            // não só a silhueta, e a copa em volta continua lá
+                            vec3 trE = vEyePosition.xyz, trS = trP.xyz - trE;
+                            float trL = length(trS), trT = clamp(dot(vPositionW - trE, trS) / (trL * trL), 0.0, 1.0);
+                            float trR = length(vPositionW - (trE + trS * trT)), trCd = length(vPositionW - trE);
+                            float trK = max(trT < 0.94 ? 1.0 - smoothstep(1.6, 2.8, trR) : 0.0, 1.0 - smoothstep(5.0, 9.0, trCd));
+                            if (trK > 0.0) {
+                                vec2 trG = mod(floor(gl_FragCoord.xy), 4.0);
+                                float trB = mod(trG.x * 8.0 + trG.y * 4.0 + mod(trG.y, 2.0) * 2.0 + mod(trG.x + trG.y, 2.0), 16.0) / 16.0;
+                                if (trB < trK * 0.88) discard;
+                            }
+                        }
+                        #endif
                         #if defined(TREEWIND) && defined(VERTEXCOLOR)
                         if (vColor.a > 0.25) {
                             float trFl = vColor.a > 0.755 ? 1.0 : 0.0;

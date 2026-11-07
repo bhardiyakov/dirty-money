@@ -98,6 +98,12 @@ class CompassCamera {
 	setFlat(on) {
 		if (on === this.flat) return;
 		this.flat = on;
+		// interior (câmera de cima): sem perseguição NA HORA — a névoa de distância dela, lida pelos personagens (NpcArt) e pelo céu
+		// (DayNight) em CompassCamera.chase, apagava todo mundo na cor do céu (a câmera de cima fica a 150 m: tudo além do fim da névoa)
+		if (on) {
+			this.chase = 0; CompassCamera.chase = 0;
+			if (typeof NpcArt !== 'undefined' && NpcArt._fogSync) NpcArt._fogSync();      // (o relógio dos personagens só anda lá fora: desliga a névoa deles já)
+		}
 		this._applyMode();
 	}
 
@@ -185,6 +191,7 @@ class CompassCamera {
 	_pose(x, z) {
 		const cam = this.camera;
 		this.focus.x = x; this.focus.z = z;
+		CompassCamera.chase = this.chase;
 		if (!this.tilted) { cam.position.x = x; cam.position.z = z; return; }
 		const e = this.tiltDeg * Math.PI / 180, D = this.dist, yaw = this.yaw;
 		CompassCamera.tiltDeg = this.tiltDeg; CompassCamera.chase = this.chase;
