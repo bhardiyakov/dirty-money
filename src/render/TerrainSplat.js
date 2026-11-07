@@ -130,11 +130,15 @@ const TerrainSplat = {
                 }
                 return tPx(o, floor(q));
             }`}
-            float tW(float w, float id) { return id > 250.0 ? 0.0 : w * w * w; }               // peso apertado, mar e cidade fora (sem ponto e vírgula em comentário GLSL: o Babylon corta a linha ali)
+            float tHAt(vec2 p) {                                                                  // altura (bilinear) no ponto p do mundo
+                vec2 g = (p - vec2(${f(P.minX)}, ${f(P.minZ)})) / ${f(P.cell)} - 0.5, j = floor(g), s = g - j;
+                return mix(mix(tH(tCell(j)), tH(tCell(j + vec2(1.0, 0.0))), s.x), mix(tH(tCell(j + vec2(0.0, 1.0))), tH(tCell(j + vec2(1.0, 1.0))), s.x), s.y);
+            }
+            float tW(float w, float id) { return id > 250.0 ? 0.0 : ${P.photo ? 'pow(w, 1.25)' : 'w * w * w'}; }               // foto: peso largo (DEGRADÊ de uma célula inteira entre terra, areia, rocha e grama), mar e cidade fora (sem ponto e vírgula em comentário GLSL: o Babylon corta a linha ali)
             vec3 terrainColor(vec2 p) {
                 vec2 org = vec2(${f(P.minX)}, ${f(P.minZ)});
                 // divisas: ponto entortado por ruído (2 escalas) → curvas orgânicas, sem quinas de célula
-                vec2 warp = (vec2(tNoise(p * 0.21), tNoise(p * 0.21 + 37.7)) - 0.5) * 3.0 + (vec2(tNoise(p * 0.9 + 11.0), tNoise(p * 0.9 + 5.3)) - 0.5) * 0.9;
+                vec2 warp = (vec2(tNoise(p * 0.21), tNoise(p * 0.21 + 37.7)) - 0.5) * 3.0 + (vec2(tNoise(p * 0.9 + 11.0), tNoise(p * 0.9 + 5.3)) - 0.5) * 0.9${P.photo ? ' + (vec2(tNoise(p * 0.06 + 2.2), tNoise(p * 0.06 + 19.1)) - 0.5) * 5.0' : ''};      // (foto: e uma ondulação larga — a divisa serpenteia)
                 vec2 f = (p + warp - org) / ${f(P.cell)} - 0.5, i0 = floor(f), t = f - i0;
                 vec4 c00 = tCell(i0), c10 = tCell(i0 + vec2(1.0, 0.0)), c01 = tCell(i0 + vec2(0.0, 1.0)), c11 = tCell(i0 + vec2(1.0, 1.0));
                 float a = tId(c00), b = tId(c10), c = tId(c01), d = tId(c11);
@@ -155,6 +159,23 @@ const TerrainSplat = {
                 // paredão: a encosta íngreme escurece (sombra), seguindo a curva da altura, não a borda da célula
                 float cliff = 1.0 - mix(mix(h00.a, h10.a, s.x), mix(h01.a, h11.a, s.x), s.y);         // marca de paredão, interpolada
                 if (cliff > 0.0) col *= 1.0 - 0.45 * smoothstep(0.3, 0.7, cliff) * smoothstep(0.6, 0.95, length(gr) + (tNoise(p * 1.7) - 0.5) * 0.15);
+                ${P.photo ? `{
+                    // ENCOSTA NATURAL: onde o morro fica íngreme o solo cede — rocha exposta em placas (ruído) e SULCOS DE EROSÃO
+                    // descendo a encosta (ruído esticado no sentido do declive), com terra lavada e cascalho no fundo dos sulcos
+                    // (a inclinação por diferença central da altura interpolada, ±2 m: contínua — a do quadradinho do terreno muda de
+                    // golpe na divisa da célula e a rocha nascia numa linha reta)
+                    vec2 gs = vec2(tHAt(p + vec2(2.0, 0.0)) - tHAt(p - vec2(2.0, 0.0)), tHAt(p + vec2(0.0, 2.0)) - tHAt(p - vec2(0.0, 2.0))) / 4.0;
+                    float sl = length(gs);
+                    if (sl > 0.18 && own != 0.0 && own != 5.0 && own < 250.0) {
+                        vec2 dn = gs / sl, ac = vec2(-dn.y, dn.x);
+                        float gully = tNoise(vec2(dot(p, ac) * 0.55, dot(p, dn) * 0.06)) * 0.7 + tNoise(vec2(dot(p, ac) * 1.6, dot(p, dn) * 0.15) + 5.0) * 0.3;
+                        float rk = smoothstep(0.32, 0.75, sl + (tNoise(p * 0.19 + 4.4) - 0.5) * 0.35 + (gully - 0.5) * 0.3);
+                        col = mix(col, tTex(4.0, p) * vec3(0.95, 0.92, 0.88), rk * (own == 6.0 ? 0.3 : 0.85));      // (terra batida — beira de rua de terra, favela: pouca rocha à mostra, o chão pisado)
+                        float gw = smoothstep(0.62, 0.8, gully) * smoothstep(0.18, 0.4, sl);
+                        col = mix(col, tTex(6.0, p) * 0.78, gw * 0.55);
+                        col *= 1.0 - 0.18 * smoothstep(0.55, 0.75, gully) * smoothstep(0.18, 0.5, sl);
+                    }
+                }` : ''}
                 ${P.contour > 0 ? `if ((max(max(ha, hb), max(hc, hd)) > 8.0 || own == 4.0 || own == 6.0) && length(gr) > 0.04) {      // (platô plano: sem linha)
                     float lv = hh / ${f(P.contour)}, m = floor(lv + 0.5);
                     float dist = abs(lv - m) * ${f(P.contour)} / max(length(gr), 0.02);

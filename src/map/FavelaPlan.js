@@ -606,7 +606,7 @@ const FavelaPlan = {
                 for (let s = 1.5 + rng() * 4; s < L - 1; s += 4 + rng() * 7) {
                     if (rng() < 0.45) continue;
                     const o = (rng() < 0.5 ? -1 : 1) * Math.min(0.5, a.w * 0.3), x = p[0] + (q[0] - p[0]) * s / L + nx * o, z = p[1] + (q[1] - p[1]) * s / L + nz * o;
-                    if (cellOk(x, z, [this.ALLEY, this.GAP])) this.props.push({ type: 'prop', kind: ['trash', 'trash', 'debris', 'stain'][Math.floor(rng() * 4)], x, z, s: 0.5 + rng() * 0.3, seed: Math.floor(rng() * 1000) });
+                    if (cellOk(x, z, [this.ALLEY, this.GAP])) this.props.push({ type: 'prop', kind: ['trash', 'trash', 'debris', 'trash'][Math.floor(rng() * 4)], x, z, s: 0.5 + rng() * 0.3, seed: Math.floor(rng() * 1000) });
                 }
                 if (L > 6 && rng() < 0.6) {
                     const s = L * (0.3 + rng() * 0.4), bx = p[0] + (q[0] - p[0]) * s / L, bz = p[1] + (q[1] - p[1]) * s / L;

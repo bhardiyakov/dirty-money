@@ -160,8 +160,26 @@ const FavelaDetail = {
 
 	// ------------------------------------------------------------------ chão: pedras com mato, lixo e entulho
 	_ground(W, F, rng, st) {
-		const tufts = (x, z, n) => { for (let k = 0; k < n; k++) { const fx = x + (rng() - 0.5) * 1.2, fz = z + (rng() - 0.5) * 1.2; if (!F.walkable || F.walkable(fx, fz)) { this._sprite(W, 'tuft', fx, fz, 0.55 + rng() * 0.45, rng); st.tufts++; } } };
+		// (3D — Trees3D: o mato que brota entre as pedras é tufo, capim-colonião ou samambaia; as pedras, cascalho e pedra de granito)
+		const T3 = typeof Trees3D !== 'undefined' && Trees3D.on;
+		const tufts = (x, z, n) => {
+			for (let k = 0; k < n; k++) {
+				const fx = x + (rng() - 0.5) * 1.2, fz = z + (rng() - 0.5) * 1.2;
+				if (F.walkable && !F.walkable(fx, fz)) continue;
+				const r = rng();
+				if (T3 && r < 0.22) Trees3D.add(W._batch('veg_lo', fx, fz), 'capim', fx, 0, fz, 0.5 + rng() * 0.35);
+				else if (T3 && r < 0.3) Trees3D.add(W._batch('veg_lo', fx, fz), 'fern', fx, 0, fz, 0.5 + rng() * 0.3);
+				else this._sprite(W, 'tuft', fx, fz, 0.55 + rng() * 0.45, rng);
+				st.tufts++;
+			}
+		};
 		const stones = (x, z, n) => {
+			if (T3) {
+				const b = W._batch('veg_lo', x, z);
+				Trees3D.add(b, 'pebbles', x, 0, z, 0.55 + rng() * 0.35);
+				if (rng() < 0.4) Trees3D.add(b, 'rock', x + (rng() - 0.5) * 1.2, 0, z + (rng() - 0.5) * 1.2, 0.22 + rng() * 0.2);
+				st.stones += n; return;
+			}
 			const b = W._batch('trim', x, z);
 			for (let k = 0; k < n; k++) {
 				const sx = x + (rng() - 0.5) * 1.4, sz = z + (rng() - 0.5) * 1.4, r = 0.1 + rng() * 0.2, a = rng() * 6.28, g = 0.48 + rng() * 0.18;
@@ -201,7 +219,7 @@ const FavelaDetail = {
 					else if (r < 0.62) tufts(x, z, 1 + Math.floor(rng() * 2));
 					else if (r < 0.7) bags(x, z, 2 + Math.floor(rng() * 4));
 					else if (r < 0.74) debris(x, z);
-					else if (r < 0.84) this._sprite(W, ['trash', 'trash', 'debris', 'stain'][Math.floor(rng() * 4)], x, z, 0.5 + rng() * 0.3, rng);
+					else if (r < 0.84) this._sprite(W, ['trash', 'trash', 'debris', 'trash'][Math.floor(rng() * 4)], x, z, 0.5 + rng() * 0.3, rng);
 				}
 			}
 		}

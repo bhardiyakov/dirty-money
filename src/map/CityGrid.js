@@ -1485,7 +1485,6 @@ const CityGrid = {
                 const area = Math.max(1, (fx1 - fx0) * (fz1 - fz0)), k = area / 1000;
                 scatter('prop', 'trash', Math.round(10 * k + 3), [fx0, fz0, fx1, fz1], 2.2, 0.3);
                 scatter('prop', 'debris', Math.round(5 * k + 2), [fx0, fz0, fx1, fz1], 2.8, 0.3);
-                scatter('prop', 'stain', Math.round(5 * k + 2), [fx0, fz0, fx1, fz1], 2.4, 0.2);
                 scatter('tree', 'banana', Math.round(2 * k + 1), [fx0, fz0, fx1, fz1], 3, 0.5);
                 scatter('tree', 'bush', Math.round(2 * k + 1), [fx0, fz0, fx1, fz1], 3, 0.5);
                 scatter('pole', 'gato', Math.round(3 * k + 1), [fx0, fz0, fx1, fz1], 16, 0.4);
