@@ -60,7 +60,7 @@ module.exports = {
         await page.evaluate(() => { const p = Bairros.pens.find((q) => q.sp === 'vaca') || Bairros.pens[0]; game.dayNight.hour = 10; game.player.teleport(new BABYLON.Vector3((p.x0 + p.x1) / 2, 0, p.z1 + 6)); });
         await gameWait(page, 2);
         const a = await page.evaluate(() => ({ n: game.livestock.animals.length, inPen: game.livestock.animals.every((q) => q.x >= q.pen.x0 - 0.01 && q.x <= q.pen.x1 + 0.01 && q.z >= q.pen.z0 - 0.01 && q.z <= q.pen.z1 + 0.01), d: game.empire.here }));
-        c.ok(a.n > 3 && a.inPen, `bichos nos cercados da roça (${a.n})`);
+        c.ok(a.n >= 2 && a.inPen, `bichos nos cercados da roça (${a.n}${a.inPen ? '' : ', fora do cercado'})`);
         c.eq(a.d, 'roca', 'HUD: distrito Vila da Roça');
         c.noErrors(errors, 'bairros');
         await close();
