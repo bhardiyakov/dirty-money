@@ -17,7 +17,7 @@ class NPC {
 	constructor(scene, nav, startPos, id, sprites, ctx, role = null) {
 		this.role = role;
 		this.umbrella = false;      // guarda-chuva aberto (chuva)
-		this._umb = null; this._umbUp = null; this._umbS = 0;
+		this._umb = null; this._umbS = 0;
 		this.free = null;           // fora do crowd (deitado na areia ou nadando): movido à mão
 		this.towel = null;
 		this.freeAnim = null;
@@ -492,61 +492,62 @@ class NPC {
 	}
 
 	// ------------------------------------------------------------ umbrella
-	// Baked at build time (tools/asset_baker/props/umbrella.cjs) at the SAME angle as the 2.5D characters (SpriteBaker at 56° elevation):
-	// the eight-panel canopy sits above the head, shifted north like the rest of the drawing. One cell (N px, ppu px per metre) per canopy
-	// colour, centred in a `pitch`-wide slot of a power-of-two sheet; the eight materials share its texture. The quad goes high (above
-	// the head, which tests depth "standing up") but is moved and shrunk to land on screen exactly over the feet (no perspective-camera
-	// parallax). Opens/closes in ~0.35 s.
-	static get UMB() { return { N: 176, pitch: 256, ppu: 36, y: 5.6, colors: 8, url: './assets/baked/props/umbrella.webp' }; }
-	static umbrellaMaterial(scene, i) {
-		const cache = scene._umbMats || (scene._umbMats = []), { N, pitch, colors, url } = NPC.UMB, c = i % colors, W = pitch * colors, margin = (pitch - N) / 2;
+	// GUARDA-CHUVA 3D (era um desenho assado num ângulo só, em pé ao lado do pedestre): a copa de 8 gomos em duas cores, as varetas
+	// marcadas, a ponteira, o cabo e a alça em J — uma malha por cor (8) e uma INSTÂNCIA por pedestre, aberta acima da cabeça (o
+	// personagem 2,5D mede ~2,3 m na tela), inclinada para a frente quando ele anda. Abre e fecha em ~0,35 s (a copa encolhe).
+	static get UMB() { return { colors: 8, y: 2.45 }; }
+	static umbrellaSource(scene, i) {
+		const cache = scene._umbSrc || (scene._umbSrc = []), c = i % NPC.UMB.colors;
 		if (cache[c]) return cache[c];
-		const tex = new BABYLON.Texture(url, scene, true, true, BABYLON.Texture.NEAREST_SAMPLINGMODE, () => {
-			if (tex.getSize().width !== W) console.warn(`[NPC] ${url}: ${tex.getSize().width} px wide, expected ${W} (NPC.UMB vs the baker)`);
-		});
-		tex.hasAlpha = true;
-		tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-		tex.uScale = N / W; tex.uOffset = (c * pitch + margin) / W;
-		tex.vScale = N / pitch; tex.vOffset = margin / pitch;
-		const m = new BABYLON.StandardMaterial('umb' + c, scene);
-		m.diffuseTexture = tex; m.emissiveTexture = tex; m.disableLighting = true; m.useAlphaFromDiffuseTexture = true;
-		m.transparencyMode = BABYLON.Material.MATERIAL_ALPHATEST; m.alphaCutOff = 0.4; m.backFaceCulling = false;
+		const C = [[0.08, 0.08, 0.1], [0.75, 0.1, 0.12], [0.1, 0.3, 0.7], [0.95, 0.75, 0.12], [0.12, 0.5, 0.25], [0.55, 0.15, 0.55], [0.92, 0.92, 0.9], [0.95, 0.4, 0.55]][c];
+		const C2 = c === 0 ? [0.2, 0.2, 0.22] : c === 6 ? [0.2, 0.35, 0.75] : C.map((v) => Math.min(1, v * 0.62 + 0.38));
+		const p = [], n = [], col = [], idx = [], push = (x, y, z, nx, ny, nz, cc) => { p.push(x, y, z); const l = Math.hypot(nx, ny, nz) || 1; n.push(nx / l, ny / l, nz / l); col.push(cc[0], cc[1], cc[2], 1); return p.length / 3 - 1; };
+		const R = 0.62, H = 0.26, N = 8;
+		for (let k = 0; k < N; k++) {                                       // gomos: do topo à borda, a borda entre as varetas cedendo
+			const a0 = k / N * Math.PI * 2, a1 = (k + 1) / N * Math.PI * 2, am = (a0 + a1) / 2, cc = k % 2 ? C : C2;
+			const t = [0, H, 0], e0 = [Math.cos(a0) * R, -0.02, Math.sin(a0) * R], e1 = [Math.cos(a1) * R, -0.02, Math.sin(a1) * R], m = [Math.cos(am) * R * 0.86, 0.03, Math.sin(am) * R * 0.86];
+			for (const [a, b, q] of [[t, e0, m], [t, m, e1]]) {
+				const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = q[0] - a[0], vy = q[1] - a[1], vz = q[2] - a[2];
+				let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
+				idx.push(push(...a, nx, ny, nz, cc), push(...b, nx, ny, nz, cc), push(...q, nx, ny, nz, cc));
+			}
+			const r0 = push(Math.cos(a0) * R * 1.0, -0.02, Math.sin(a0) * R, 0, 1, 0, [0.15, 0.15, 0.16]), r1 = push(Math.cos(a0) * R * 1.04, -0.05, Math.sin(a0) * R * 1.04, 0, 1, 0, [0.15, 0.15, 0.16]), r2 = push(Math.cos(a0) * R * 0.97, -0.03, Math.sin(a0) * R * 0.97 + 0.01, 0, 1, 0, [0.15, 0.15, 0.16]);
+			idx.push(r0, r1, r2);                                              // pontinha da vareta
+		}
+		const tube = (x0, y0, z0, x1, y1, z1, r, cc) => {                   // cabo e alça (6 lados)
+			const b = p.length / 3, S = 6, dx = x1 - x0, dy = y1 - y0, dz = z1 - z0, L = Math.hypot(dx, dy, dz) || 1, ax = [dx / L, dy / L, dz / L], ref = Math.abs(ax[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+			const u = [ax[1] * ref[2] - ax[2] * ref[1], ax[2] * ref[0] - ax[0] * ref[2], ax[0] * ref[1] - ax[1] * ref[0]], ul = Math.hypot(...u); u[0] /= ul; u[1] /= ul; u[2] /= ul;
+			const w = [ax[1] * u[2] - ax[2] * u[1], ax[2] * u[0] - ax[0] * u[2], ax[0] * u[1] - ax[1] * u[0]];
+			for (const [X, Y, Z] of [[x0, y0, z0], [x1, y1, z1]]) for (let k = 0; k < S; k++) { const a = k / S * Math.PI * 2, nx = u[0] * Math.cos(a) + w[0] * Math.sin(a), ny = u[1] * Math.cos(a) + w[1] * Math.sin(a), nz = u[2] * Math.cos(a) + w[2] * Math.sin(a); push(X + nx * r, Y + ny * r, Z + nz * r, nx, ny, nz, cc); }
+			for (let k = 0; k < S; k++) { const k1 = (k + 1) % S; idx.push(b + k, b + S + k, b + k1, b + k1, b + S + k, b + S + k1); }
+		};
+		tube(0, H + 0.08, 0, 0, -0.95, 0, 0.012, [0.25, 0.25, 0.27]);       // ponteira e haste
+		tube(0, -0.95, 0, 0, -1.08, 0.0, 0.022, [0.15, 0.1, 0.07]);        // cabo
+		tube(0, -1.08, 0, 0.0, -1.15, 0.07, 0.02, [0.15, 0.1, 0.07]);      // alça em J
+		tube(0, -1.15, 0.07, 0, -1.09, 0.12, 0.02, [0.15, 0.1, 0.07]);
+		const m = new BABYLON.Mesh('umb3d_' + c, scene), vd = new BABYLON.VertexData();
+		vd.positions = p; vd.normals = n; vd.colors = col; vd.indices = idx; vd.applyToMesh(m);
+		const mat = scene._umbMat || (scene._umbMat = (() => { const q = new BABYLON.StandardMaterial('umb3d', scene); q.specularColor = new BABYLON.Color3(0.12, 0.12, 0.12); q.backFaceCulling = false; return q; })());
+		m.material = mat; m.useVertexColors = true; m.isPickable = false; m.setEnabled(false);
 		return (cache[c] = m);
 	}
 
 	_umbrellaTick(dt) {
-		const want = this.umbrella && this.alive && !this.rag && !this.free, stand = SpriteActor.standing();
-		if (want && !this._umb) {
-			const W = NPC.UMB.N / NPC.UMB.ppu, mat = NPC.umbrellaMaterial(this.scene, this.id);
-			const flat = BABYLON.MeshBuilder.CreateGround('umb' + this.id, { width: W, height: W }, this.scene);
-			const up = BABYLON.MeshBuilder.CreatePlane('umbUp' + this.id, { size: W }, this.scene);      // (2.5D camera: standing, like the NPC)
-			up.billboardMode = BABYLON.AbstractMesh.BILLBOARDMODE_Y;
-			for (const m of [flat, up]) { m.material = mat; m.isPickable = false; m.setEnabled(false); }
-			this._umb = flat; this._umbUp = up; this._umbS = 0;
-		}
+		const want = this.umbrella && this.alive && !this.rag && !this.free;
+		if (want && !this._umb) { this._umb = NPC.umbrellaSource(this.scene, this.id).createInstance('umb' + this.id); this._umb.isPickable = false; this._umbS = 0; }
 		if (!this._umb) return;
 		this._umbS += ((want ? 1 : 0) - this._umbS) * Math.min(1, dt * 9);
 		const s = this._umbS, show = s >= 0.04 || want;
-		this._umb.setEnabled(show && !stand);
-		this._umbUp.setEnabled(show && stand);
+		this._umb.setEnabled(show);
 		if (!show) return;
-		if (stand) { this._umbrellaStanding(s); return; }
-		// Debaixo de um toldo, fica abaixo dele junto com o pedestre (MapGeo.coverAt); senão, acima da cabeça.
-		const p = this.transform.position, cov = MapGeo.coverAt(p.x, p.z), y = cov > 0 ? cov - 0.1 : NPC.UMB.y;
-		const cam = this.scene.activeCamera, H = cam ? cam.position.y : 0, k = H > y + 1 ? (H - y) / H : 1;     // tira a paralaxe
-		const cx = cam ? cam.position.x : p.x, cz = cam ? cam.position.z : p.z;
-		this._umb.position.set(cx + (p.x - cx) * k, y, cz + (p.z - cz) * k);
-		this._umb.scaling.set(s * k, 1, s * k);
-	}
-	// 2.5D camera: the umbrella art (baked at the camera's angle, the feet at the cell centre) stands at the NPC's feet like the NPC, and is
-	// moved UMB_AHEAD metres toward the camera — no change on screen in an orthographic view, but drawn over the NPC (who is pulled
-	// NpcArt.STAND_BIAS toward the camera) instead of cutting through him.
-	static get UMB_AHEAD() { return 1.5; }
-	_umbrellaStanding(s) {
-		const p = this.transform.position, m = this._umbUp, e = (CompassCamera.tiltDeg || Config.camera.tilt) * Math.PI / 180, yaw = CompassCamera.yaw || 0, d = NPC.UMB_AHEAD;
-		const feet = this.actor.mesh.position.y - NpcArt.LAYER_Y;
-		m.position.set(p.x - d * Math.cos(e) * Math.sin(yaw), feet + d * Math.sin(e), p.z - d * Math.cos(e) * Math.cos(yaw));
-		m.scaling.set(s, s * SpriteActor.STAND_SCALE, 1);
+		// acima da cabeça (debaixo de um toldo, abaixo dele: MapGeo.coverAt), na altura do chão dali; inclina para onde ele anda
+		const p = this.transform.position, g = typeof Relief !== 'undefined' ? Relief.at(p.x, p.z) : 0, cov = MapGeo.coverAt(p.x, p.z);
+		const y = g + (cov > 0 ? Math.min(NPC.UMB.y, cov - 0.15) : NPC.UMB.y);
+		const lp = this._umbP || (this._umbP = { x: p.x, z: p.z }), sp = dt > 0 ? Math.hypot(p.x - lp.x, p.z - lp.z) / dt : 0, h = this.heading || 0;
+		lp.x = p.x; lp.z = p.z;
+		this._umb.position.set(p.x, y, p.z);
+		this._umb.rotation.set(Math.min(0.22, sp * 0.08), h, 0);
+		this._umb.scaling.set(0.15 + 0.85 * s, 1, 0.15 + 0.85 * s);
 	}
 
 	// ----- Loop -----

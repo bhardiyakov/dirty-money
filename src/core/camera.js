@@ -328,11 +328,13 @@ class CompassCamera {
 			// A pé: anda numa direção (virou a rua) → a câmera vai aos poucos para as COSTAS dele. Só depois de footDelay s andando assim,
 			// mais rápido quanto mais rápido ele anda, e nunca logo depois de o jogador girar a câmera com a mão (lookHold).
 			this._lookIdle = this.lookHeld ? 0 : this._lookIdle + dt;
-			const wv = walker && walker.velocity, ws = wv ? Math.hypot(wv.x, wv.z) : 0;
+			const wv = walker && walker.velocity, ws = wv ? Math.hypot(wv.x, wv.z) : 0, tp = this.chase > 0.5;
 			const ff = C.footFollow > 0 ? C.footFollow + (C.footFollowChase - C.footFollow) * this.chase : 0, fd = C.footDelay + (C.footDelayChase - C.footDelay) * this.chase;
-			if (ff > 0 && !this.flat && ws > 1.2 && this._lookIdle > C.lookHold) {
-				const off = wrap(Math.atan2(wv.x, wv.z) - this.userYaw);
-				if (Math.abs(off) > 0.12) this._footHold += dt;                         // (começa longe; depois de começar, vai até alinhar)
+			// (3ª pessoa: segue o RUMO do corpo — para onde ele está virado —, já a partir de um passo; a câmera alta segue a velocidade)
+			const rf = tp && walker && walker.root ? walker.root.rotation.y : null, dir = rf != null && ws > 0.4 ? rf : (ws > 0.01 ? Math.atan2(wv.x, wv.z) : null);
+			if (ff > 0 && !this.flat && dir != null && ws > (tp ? 0.4 : 1.2) && this._lookIdle > (tp ? C.lookHold * 0.6 : C.lookHold)) {
+				const off = wrap(dir - this.userYaw);
+				if (Math.abs(off) > (tp ? 0.02 : 0.12)) this._footHold += dt;          // (começa longe; depois de começar, vai até alinhar)
 				else if (Math.abs(off) < 0.02) this._footHold = 0;
 				if (this._footHold > fd) this.userYaw = wrap(this.userYaw + off * (1 - Math.exp(-ff * Math.min(1, ws / C.footYawSpeed) * dt)));
 			} else this._footHold = 0;

@@ -1,8 +1,8 @@
 // ============================================================================
 // Pickups — itens no chão que o jogador coleta andando por cima (espalhados pelo mapa ou dropados por quem morre).
-// Cada item é um ÍCONE em pixel art (ItemSprites) deitado no chão, balançando de leve, com um brilho borrado e
-// pulsante na cor do tipo — o mesmo brilho suave das luzes (GlowBatch). Os espalhados reaparecem em outro lugar
-// depois de coletados; os drops somem sozinhos.
+// Cada item é um MODELO 3D (art/Items3D.js: a arma, o maço de notas, a maleta, o kit médico…) GIRANDO e flutuando acima do chão,
+// como no GTA, com um brilho borrado e pulsante na cor do tipo — o mesmo brilho suave das luzes (GlowBatch). (Antes: o ícone em
+// pixel art deitado no chão — ItemSprites.) Os espalhados reaparecem em outro lugar depois de coletados; os drops somem sozinhos.
 //   consumíveis: kit médico, água, alimento, loot box | armas: pistola, revólver, SMG, fuzil, AK-47, escopeta, faca,
 //   taco + munição | dinheiro e jóias (viram $) | utilitários: celulares, galão, mochila, módulo de hackeio, chave.
 // ============================================================================
@@ -76,9 +76,13 @@ class Pickups {
     // respawn: true = reaparece depois de coletado | ttl: segundos até sumir (drops).
     add(type, pos, { respawn = false, amount = 0, ttl = 0 } = {}) {
         const T = Pickups.TYPES[type];
-        const mesh = ItemSprites.quad(this.scene, T.sprite || type, 2.1);
-        mesh.position.set(pos.x, 0.55 + (typeof Relief !== 'undefined' ? Relief.at(pos.x, pos.z) : 0), pos.z);
-        const item = { type, mesh, x: pos.x, z: pos.z, respawn, amount, ttl, active: true, respawnAt: 0, glow: this._freeGlow.pop(), phase: Math.random() * 6.28 };
+        const mesh = Items3D.instance(this.scene, T.sprite === 'cash_small' ? 'cash' : type);
+        // escala: o item cresce até ~0,75 m no maior lado (um maço de notas de 26 cm seria um ponto na tela; o fuzil fica no tamanho real)
+        const src = mesh.sourceMesh, ext = src.getBoundingInfo().boundingBox.extendSize, big = 2 * Math.max(ext.x, ext.y, ext.z);
+        const sc = Math.max(1, Math.min(2.6, 0.75 / Math.max(0.05, big)));
+        mesh.scaling.setAll(sc);
+        mesh.position.set(pos.x, 0.25 + (typeof Relief !== 'undefined' ? Relief.at(pos.x, pos.z) : 0), pos.z);
+        const item = { type, mesh, sc, x: pos.x, z: pos.z, respawn, amount, ttl, active: true, respawnAt: 0, glow: this._freeGlow.pop(), phase: Math.random() * 6.28 };
         this.items.push(item);
         return item;
     }
@@ -203,7 +207,7 @@ class Pickups {
                 if (it.respawn && this.time >= it.respawnAt) {
                     const p = CityGrid.randomWalkablePoint();
                     it.x = p.x; it.z = p.z; it.active = true;
-                    it.mesh.setEnabled(true); it.mesh.position.set(p.x, 0.55 + (typeof Relief !== 'undefined' ? Relief.at(p.x, p.z) : 0), p.z);
+                    it.mesh.setEnabled(true); it.mesh.position.set(p.x, 0.25 + (typeof Relief !== 'undefined' ? Relief.at(p.x, p.z) : 0), p.z);
                 }
                 continue;
             }
@@ -221,11 +225,10 @@ class Pickups {
             }
             if (it._far) { it._far = false; it.mesh.setEnabled(true); }
 
-            // Visual: o ícone balança e "respira"; o brilho borrado pulsa entre a cor do tipo e o branco.
+            // Visual: o item GIRA e flutua (sobe e desce de leve); o brilho borrado pulsa entre a cor do tipo e o branco.
             const s =0.5 + 0.5 * Math.sin(this.time * 3.2 + it.phase);
-            it.mesh.rotation.y = Math.sin(this.time * 1.3 + it.phase) * 0.14;
-            const k = 1 + 0.05 * s;
-            it.mesh.scaling.set(k, 1, k);
+            it.mesh.rotation.y = this.time * 1.6 + it.phase;
+            it.mesh.position.y = 0.25 + 0.09 * s + (typeof Relief !== 'undefined' ? Relief.at(it.x, it.z) : 0);
             const blink = it.ttl > 0 && it.ttl < 8 && Math.floor(this.time * 6) % 2 === 0;
             it.mesh.setEnabled(!blink);
             const c = T.color, w = s * 0.18;

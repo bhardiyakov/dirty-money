@@ -102,11 +102,13 @@ class TrafficSignals {
         return { state: 'wait', left: v.left };
     }
 
-    update(dt) {
+    // focus: o ponto que a câmera olha (o jogador/veículo) — as luzes de todos os cruzamentos à vista são atualizadas
+    update(dt, focus = null) {
         this.time += dt;
+        if (focus) this._focus = focus;
         this._visTimer -= dt;
         if (this._visTimer <= 0) {
-            this._visTimer = 0.2;
+            this._visTimer = 0.1;
             this._refreshVisuals(false);
         }
     }
@@ -140,7 +142,10 @@ class TrafficSignals {
         const inters = this._visible || (this._visible = CityGrid.intersections.filter((n) => n.visible));
         for (let k = 0; k < inters.length; k++) {
             const inter = inters[k];
-            if (!Zones.near(inter.x, inter.z, 40)) continue;           // só os cruzamentos na tela (+ margem): o resto ninguém vê
+            // os cruzamentos À VISTA: a câmera em 3ª pessoa vê ~125 m à frente — a bolha das Zones (40 m) deixava os de longe com a cor
+            // VELHA (o semáforo verde com os carros parados, e a cor pulando quando o jogador chegava perto)
+            const F = this._focus;
+            if (F ? Math.abs(inter.x - F.x) > 175 || Math.abs(inter.z - F.z) > 175 : !Zones.near(inter.x, inter.z, 40)) continue;
             if (inter.gen) {
                 for (const s of this._slots[k]) {
                     this._lens(s, 'c', s.lens, s.hv, this.vehicle(inter, s.phase).color);
