@@ -35,24 +35,55 @@ class EmpireUI {
         document.head.appendChild(st);
     }
 
-    // ---------------------------------------------------------------- HUD (distrito e estação)
+    // ---------------------------------------------------------------- HUD: CHEGADA num bairro ou região
+    // (o nome do distrito e a estação saíram do canto da tela — HUD limpo.) Chegou num bairro (Empire: distrito) ou perto de um lugar
+    // com nome no mapa (Lagoa, Corcovado, Maracanã, Pão de Açúcar, Pântano…): o NOME GRANDE no centro da tela por ~3 s, com o dono
+    // da área (facção) ou a estação embaixo. Só depois de ~1,2 s no lugar novo (a divisa não fica piscando) e não repete o mesmo
+    // lugar dentro de 1 minuto.
     static hud(g) {
-        const e = g.empire, root = document.getElementById('hud2');
-        if (!e || !root) return;
-        EmpireUI._css();
-        let p = EmpireUI._panel;
-        if (!p) {
-            p = EmpireUI._panel = document.createElement('div');
-            p.className = 'px emp-panel';
-            p.innerHTML = '<div class="d" id="empD"></div>';
-            root.appendChild(p);
-        }
+        const e = g.empire;
+        if (!e || !g._bootDone || Interiors.active || (g.menu && g.menu.isOpen)) return;
         EmpireUI._t = (EmpireUI._t || 0) + 1;
         if (EmpireUI._t % 6) return;                                     // ~5× por segundo basta
-        const d = e.here, key = d + '|' + e.seasonId + '|' + e.seasonLeft;
-        if (key === EmpireUI._key) return;
-        EmpireUI._key = key;
-        document.getElementById('empD').innerHTML = `<span>${e.dName(d)}</span><span>${e.seasonDef.name} · ${e.seasonLeft}d</span>`;
+        const P = g._playerState().pos, now = performance.now() / 1000;
+        let name = null, sub = null;
+        for (const r of (typeof WorldMap !== 'undefined' && WorldMap.regions) || []) {
+            if (!EmpireUI.SPOTS.has(r.name)) continue;
+            if (Math.hypot(P.x - r.x, P.z - r.z) < 120 * (r.size || 1)) { name = r.name; break; }
+        }
+        const d = e.here;
+        if (!name) name = e.dName(d);
+        const T = typeof Standing !== 'undefined' && Standing.territoryAt ? Standing.territoryAt(P.x, P.z) : null;
+        sub = T ? `Área do ${T.name} (${T.sigla})` : `${e.seasonDef.name} · ${e.seasonLeft} ${e.seasonLeft === 1 ? 'dia' : 'dias'}`;
+        if (name !== EmpireUI._cand) { EmpireUI._cand = name; EmpireUI._candT = now; return; }
+        if (name === EmpireUI._shown || now - EmpireUI._candT < 1.2) return;
+        EmpireUI._shown = name;
+        const seen = EmpireUI._seen || (EmpireUI._seen = {});
+        if (seen[name] && now - seen[name] < 60) return;
+        seen[name] = now;
+        EmpireUI.arrive(name, sub);
+    }
+    static get SPOTS() { return new Set(['LAGOA', 'CORCOVADO', 'MARACANÃ', 'PÃO DE AÇÚCAR', 'PÂNTANO', 'CANAL', 'SERRA DO NORTE', 'SERRA DO SUL', 'SERRA DO MEIO', 'FAZENDAS']); }
+    // O aviso de chegada (também usado por quem quiser anunciar um lugar).
+    static arrive(name, sub) {
+        let el = document.getElementById('arrive');
+        if (!el) {
+            const st = document.createElement('style');
+            st.textContent = `#arrive { position: fixed; left: 50%; top: 22%; transform: translate(-50%, -6px); z-index: 12; pointer-events: none; text-align: center; opacity: 0;
+                    transition: opacity .6s ease, transform .6s ease; font-family: var(--font); }
+                #arrive.show { opacity: 1; transform: translate(-50%, 0); }
+                #arrive b { display: block; font: 900 clamp(28px, 4.6vw, 54px)/1.05 var(--font-d); letter-spacing: 0.06em; text-transform: uppercase; color: #fff;
+                    text-shadow: 0 3px 0 rgba(0,0,0,0.55), 0 0 22px rgba(0,0,0,0.6); }
+                #arrive i { display: block; width: 46%; height: 2px; margin: 8px auto 6px; background: linear-gradient(90deg, transparent, var(--gold, #fbbf24), transparent); }
+                #arrive small { font: 700 clamp(12px, 1.4vw, 16px) var(--font); letter-spacing: 0.16em; text-transform: uppercase; color: #e5e7eb; text-shadow: 0 2px 6px rgba(0,0,0,0.8); }
+                body.mobile #arrive { top: 26%; }`;
+            document.head.appendChild(st);
+            el = document.createElement('div'); el.id = 'arrive'; document.body.appendChild(el);
+        }
+        el.innerHTML = `<b>${name}</b><i></i><small>${sub || ''}</small>`;
+        el.classList.add('show');
+        clearTimeout(EmpireUI._arT);
+        EmpireUI._arT = setTimeout(() => el.classList.remove('show'), 3200);
     }
 
     // ---------------------------------------------------------------- aba

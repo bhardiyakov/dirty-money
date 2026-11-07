@@ -65,7 +65,7 @@ class TouchControls {
             #touchUI.on { display: block; }
             #touchUI * { touch-action: none; -webkit-user-select: none; user-select: none; }
             /* zona do joystick: metade esquerda (abaixo do minimapa) */
-            #tcZone { position: absolute; left: 0; top: 124px; bottom: 0; width: 48%; pointer-events: auto; }
+            #tcZone { position: absolute; left: 0; top: 164px; bottom: 0; width: 48%; pointer-events: auto; }
             #tcStick { position: absolute; width: calc(var(--u) * 2.3); height: calc(var(--u) * 2.3); margin: calc(var(--u) * -1.15) 0 0 calc(var(--u) * -1.15); pointer-events: none;
                 border-radius: 50%; background: radial-gradient(circle, rgba(14,17,26,0.22) 0 58%, rgba(255,255,255,0.10) 59% 100%); border: 1.5px solid rgba(255,255,255,0.22);
                 opacity: 0.35; transition: opacity .15s ease, border-radius .15s ease, height .15s ease, margin .15s ease; }
@@ -156,12 +156,19 @@ class TouchControls {
             body.mobile #hud2 .px-status { font-size: 10px; letter-spacing: 0.02em; white-space: nowrap; }
             body.mobile #hMission { transform: scale(0.7); transform-origin: top left; left: 124px; top: 8px; }
             body.mobile #toast, body.mobile #prompt, body.mobile #goalBox .gl { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-            body.mobile #minimap { width: 108px !important; height: 108px !important; left: 8px !important; top: 8px !important; bottom: auto !important; border-width: 3px; }
+            body.mobile #minimap { width: 108px !important; height: 108px !important; left: 8px !important; top: 48px !important; bottom: auto !important; border-width: 3px; }
+            /* HUD limpo: vida, colete (vestido) e fôlego em barras finas ACIMA do minimapa (que desce um pouco) */
+            body.mobile #vitals { left: 8px; top: max(4px, env(safe-area-inset-top)); bottom: auto; width: 108px; gap: 3px; }
+            body.mobile #vitals .vb { padding: 1px 6px; gap: 4px; -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(10,12,18,0.72); }
+            body.mobile #vitals .vb .emo { font-size: 9px; width: 11px; }
+            body.mobile #vitals .vb i { height: 6px; }
+            body.mobile #cashPop { font-size: 15px; top: 54px; right: 12px; } body.mobile #cashPop small { font-size: 11px; }
+            body.mobile #hud2 .h-main { display: none !important; }      /* (a arma do celular fica no botão dela) */
             body.mobile #toast { font-size: 12px; top: 60px; max-width: 54vw; padding: 6px 12px; }
             body.mobile #prompt { font-size: 12px; padding: 6px 10px; bottom: auto; top: 8px; max-width: 44vw; white-space: normal; }
             body.mobile #prompt b { min-width: 20px; height: 20px; font-size: 11px; margin-right: 5px; }
             body.mobile #prompt small { font-size: 10px; }
-            body.mobile #vehPop { transform: scale(0.55); transform-origin: top left; right: auto; left: 8px; bottom: auto; top: 124px; }
+            body.mobile #vehPop { transform: scale(0.55); transform-origin: top left; right: auto; left: 8px; bottom: auto; top: 164px; }
             body.mobile #vehPop.show { transform: scale(0.55); }
             body.mobile #inventory { width: 62vw !important; max-height: 80vh; overflow: auto; }
             @media (max-width: 900px), (max-height: 520px) {
