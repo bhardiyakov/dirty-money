@@ -33,7 +33,8 @@ const Trees3D = {
     KIND: { oak: 'oak', jungle: 'jungle', juca: 'juca', ipe: 'ipe', orchard: 'orchard', pine: 'pine', cypress: 'cypress', araucaria: 'araucaria',
         palm: 'palm', banana: 'banana', bush: 'bush', fern: 'fern', flowers: 'roadside', reed: 'reed', dry: 'dry', tuft: 'tuft',
         mango: 'mango', flamboyant: 'flamboyant', jacaranda: 'jacaranda', quaresmeira: 'quaresmeira', imperial: 'imperial', eucalyptus: 'eucalyptus',
-        sansevieria: 'sansevieria', cactus: 'cactus', bamboo: 'bamboo', monstera: 'monstera' },
+        sansevieria: 'sansevieria', cactus: 'cactus', bamboo: 'bamboo', monstera: 'monstera',
+        capim: 'capim', boulder: 'rock', rock: 'rock', pebbles: 'pebbles' },
     // altura do modelo na escala 1 (u): quem põe o canteiro e o desvio do vento usam
     TALL: { eucalyptus: 30, imperial: 14 },
     // A espécie de cada planta: algumas viram variações pelo lugar (sorteio estável por posição). Na cidade e nos bairros, o "carvalho"
@@ -44,6 +45,10 @@ const Trees3D = {
             case 'ipe': return h < 0.4 ? 'ipe' : h < 0.85 ? 'ipeY' : 'jacaranda';
             case 'oak': return !urban ? (h < 0.6 ? 'oak' : 'mango') : h < 0.38 ? 'mango' : h < 0.78 ? 'oak' : h < 0.86 ? 'flamboyant' : h < 0.93 ? 'jacaranda' : 'quaresmeira';
             case 'palm': return urban && h < 0.55 ? 'imperial' : 'palm';
+            // PINHEIRO e CIPRESTE são exóticos: só no Alto da Serra (a araucária, o nativo) e nas praças da cidade; no mato, as nativas
+            case 'pine': return typeof Bairros !== 'undefined' && Bairros.zoneAt(x, z) === 'serra' ? (h < 0.6 ? 'araucaria' : 'pine') : h < 0.4 ? 'jungle' : h < 0.7 ? 'juca' : h < 0.85 ? 'mango' : 'oak';
+            case 'cypress': return urban || (typeof Bairros !== 'undefined' && Bairros.zoneAt(x, z) === 'serra') ? 'cypress' : 'juca';
+            case 'rock': case 'boulder': return h < 0.5 ? 'rock' : 'rockB';
             case 'bush': return h < 0.5 ? 'bush' : h < 0.75 ? 'bushR' : 'bushY';
             default: return this.KIND[kind];
         }
@@ -173,10 +178,18 @@ const Trees3D = {
                         #endif
                         #if defined(TREEWIND) && defined(VERTEXCOLOR)
                         if (vColor.a > 0.25) {
+                            // BORDA DA COPA RECORTADA: onde a superfície da bolha fica de lado para a câmera (a silhueta), o ruído das folhas
+                            // abre buracos — a copa tem contorno de folhagem, não de bolha lisa
+                            {
+                                vec3 trV = normalize(vEyePosition.xyz - vPositionW);
+                                float trRim = 1.0 - abs(dot(normalize(normalW), trV));
+                                float trLf = tfN(vPositionW * 4.2 + 2.7) * 0.62 + tfN(vPositionW * 8.5) * 0.38;
+                                if (trRim > 0.3 && trLf < (trRim - 0.3) * 1.75) discard;
+                            }
                             float trFl = vColor.a > 0.755 ? 1.0 : 0.0;
                             float trSh = 0.4 + 0.9 * clamp((vColor.a - mix(0.5, 0.76, trFl)) / 0.24, 0.0, 1.0);
                             vec3 trP = vPositionW;
-                            float trN = tfN(trP * 1.25) * 0.6 + tfN(trP * 2.9 + 7.1) * 0.28 + tfN(trP * 6.1 + 3.3) * 0.12;
+                            float trN = tfN(trP * 1.25) * 0.54 + tfN(trP * 2.9 + 7.1) * 0.26 + tfN(trP * 6.1 + 3.3) * 0.12 + tfN(trP * 9.5) * 0.08;      // (a última: o grão das folhas)
                             if (trFl > 0.5) {
                                 float trM = smoothstep(0.3, 0.5, tfN(trP * 1.6 + 11.0) * 0.55 + trN * 0.45);      // (a copa quase toda em flor, com vãos de folha)
                                 vec3 trTn = baseColor.rgb / max(vColor.rgb, vec3(0.001));
@@ -237,11 +250,10 @@ const Trees3D = {
                 const crownY = P.h - P.r * 0.85;
                 B.cyl(g, [0, 0, 0], [0.15, crownY, -0.1], 0.24 * P.r / 2, 0.12 * P.r / 2, 6, trunk, dark);
                 B.cyl(g, [0.1, crownY * 0.6, -0.05], [P.r * 0.45, crownY + 0.4, 0.3], 0.1, 0.06, 5, trunk, dark);
-                for (let k = 0; k < P.n; k++) {
-                    const a = k / P.n * Math.PI * 2 + R() * 0.8, d = k === 0 ? 0 : P.r * (0.35 + 0.25 * R());
-                    const rr = P.r * (k === 0 ? 0.82 : 0.55 + 0.2 * R());
-                    B.blob(g, [Math.cos(a) * d, crownY + (k === 0 ? 0.3 : (R() - 0.3) * P.r * 0.5), Math.sin(a) * d], [rr, rr * 0.82, rr], P.c, R, 0.18, k === 0 ? sMain : sAll, P.fl ? 'flower' : 'leaf');
-                }
+                // COPA VOLUMOSA: o miolo e uma porção de cachos menores espalhados na casca (folhagem densa em camadas, contorno
+                // irregular — não uma bolha só)
+                B.blob(g, [0, crownY + 0.3, 0], [P.r * 0.8, P.r * 0.66, P.r * 0.8], P.c, R, 0.18, sMain, P.fl ? 'flower' : 'leaf');
+                B.clumps(g, [0, crownY + 0.3, 0], [P.r * 0.78, P.r * 0.62, P.r * 0.78], P.n + 4, P.r * 0.46, P.c, R, sAll, P.fl ? 'flower' : 'leaf');
                 if (P.fl) B.blob(g, [0, 0.02, 0], [P.r * 1.3, 0.015, P.r * 1.3], P.c, R, 0.08, 1, 'flower');      // o tapete de flores caídas
                 if (model === 'orchard') for (let k = 0; k < 9; k++) { const a = R() * Math.PI * 2, y = crownY - 0.3 + R() * 1.2, r = P.r * 0.85; B.cyl(g, [Math.cos(a) * r, y, Math.sin(a) * r], [Math.cos(a) * r, y - 0.14, Math.sin(a) * r], 0.08, 0.07, 4, [0.98, 0.6, 0.1], [0.9, 0.5, 0.1]); }
                 break;
@@ -259,8 +271,8 @@ const Trees3D = {
                 B.cyl(g, [0, 0, 0], [0.1, 2.4, 0], 0.36, 0.26, 7, trunk, dark);
                 for (const [bx, bz] of [[1.1, 0.4], [-0.9, 0.7], [0.2, -1.1]]) B.cyl(g, [0.05, 2.0, 0], [bx, 3.6, bz], 0.16, 0.08, 5, trunk, dark);
                 const cc = [0.17, 0.36, 0.13];
-                B.blob(g, [0, 4.6, 0], [2.7, 2.1, 2.7], cc, R, 0.2, sMain);
-                for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2 + R(); B.blob(g, [Math.cos(a) * 1.6, 3.9 + R() * 1.4, Math.sin(a) * 1.6], [1.5, 1.2, 1.5], cc, R, 0.2, sAll); }
+                B.blob(g, [0, 4.6, 0], [2.5, 1.9, 2.5], cc, R, 0.2, sMain);
+                B.clumps(g, [0, 4.4, 0], [2.4, 1.8, 2.4], 13, 1.05, cc, R, sAll);
                 for (let k = 0; k < 12; k++) {                                              // as mangas (laranja e vermelho) penduradas na borda da copa
                     const a = R() * Math.PI * 2, y = 3.0 + R() * 2.6, r = 2.4 + R() * 0.5;
                     B.cyl(g, [Math.cos(a) * r, y, Math.sin(a) * r], [Math.cos(a) * r, y - 0.2, Math.sin(a) * r], 0.1, 0.08, 4, R() < 0.5 ? [0.95, 0.55, 0.12] : [0.9, 0.3, 0.12], [0.85, 0.5, 0.1]);
@@ -314,7 +326,19 @@ const Trees3D = {
             }
             case 'reed': B.blades(g, 22, 0.6, 1.5, 0.06, [0.4, 0.5, 0.22], [0.66, 0.68, 0.36], R); break;          // capim alto (e junco)
             case 'dry': B.blades(g, 16, 0.5, 0.95, 0.05, [0.56, 0.52, 0.28], [0.8, 0.72, 0.42], R); break;          // capim seco
-            case 'tuft': B.blades(g, 9, 0.25, 0.45, 0.04, [0.3, 0.5, 0.18], [0.46, 0.62, 0.26], R); break;           // tufo de grama
+            case 'tuft': B.blades(g, 16, 0.4, 0.5, 0.04, [0.28, 0.46, 0.16], [0.5, 0.64, 0.28], R); break;          // tufo de grama
+            case 'capim': {                                                                // capim-colonião: touceira alta, folhas largas arqueadas, pontas secas
+                B.blades(g, 26, 0.55, 1.7, 0.07, [0.3, 0.46, 0.17], [0.7, 0.68, 0.36], R);
+                for (let k = 0; k < 7; k++) { const a = R() * Math.PI * 2, r = R() * 0.3, h = 1.5 + R() * 0.6, p = [Math.cos(a) * r, 0, Math.sin(a) * r]; B.blade(g, p, a, h, 0.012, 0.25, [0.5, 0.5, 0.3], [0.82, 0.74, 0.5]); }      // as hastes com a panícula
+                break;
+            }
+            case 'rock': case 'rockB': {                                                   // pedra: bloco de granito meio enterrado, com musgo em cima
+                const sq = model === 'rock' ? [1.0, 0.55, 0.8] : [0.8, 0.75, 1.0];
+                B.rock(g, [0, 0.12, 0], sq, R, 1.0);
+                if (R() < 0.8) B.rock(g, [0.9, 0.0, 0.5], [0.45, 0.3, 0.4], R, 0.9);
+                break;
+            }
+            case 'pebbles': for (let k = 0; k < 9; k++) { const a = R() * Math.PI * 2, r = 0.2 + R() * 0.75, s = 0.08 + R() * 0.16; B.rock(g, [Math.cos(a) * r, 0, Math.sin(a) * r], [s, s * 0.7, s * 0.9], R, 0.6); } break;      // cascalho
             case 'sansevieria': {                                                          // espada-de-são-jorge: lâminas eretas com a borda amarela
                 for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + R(), r = 0.12 + R() * 0.1; B.blade(g, [Math.cos(a) * r, 0, Math.sin(a) * r], a, 0.85 + R() * 0.4, 0.09, 0.08, [0.16, 0.36, 0.16], [0.62, 0.62, 0.22]); }
                 break;
@@ -418,6 +442,15 @@ Trees3D.PARTS = {
         }
         for (const i of I.i) g.i.push(base + i);
     },
+    // CACHOS de folhagem na casca de um elipsoide (centro c, raios r): `n` bolhas de raio ~`s` espalhadas por igual (espiral de
+    // Fibonacci, mais em cima que embaixo) — a copa ganha volume e contorno recortado
+    clumps(g, c, r, n, s, col, R, sub = 1, mode = 'leaf') {
+        for (let k = 0; k < n; k++) {
+            const y = 1 - (k + 0.5) / n * 1.55, rad = Math.sqrt(Math.max(0, 1 - y * y)), a = k * 2.39996 + R() * 0.6;
+            const q = s * (0.75 + 0.5 * R()) * (y < -0.2 ? 0.8 : 1);
+            this.blob(g, [c[0] + Math.cos(a) * rad * r[0], c[1] + y * r[1], c[2] + Math.sin(a) * rad * r[2]], [q, q * 0.85, q], col, R, 0.22, sub, mode);
+        }
+    },
     // Tronco cônico de a até b (raios ra → rb), `n` lados.
     cyl(g, a, b, ra, rb, n, col, colLow) {
         const base = g.p.length / 3, dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], L = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
@@ -434,6 +467,20 @@ Trees3D.PARTS = {
             }
         }
         for (let k = 0; k < n; k++) { const k1 = (k + 1) % n; g.i.push(base + k, base + n + k, base + k1, base + k1, base + n + k, base + n + k1); }
+    },
+    // PEDRA (cor sólida — alfa 0, sem o shader da folhagem): icosfera entortada por ruído, achatada `sq`, granito cinza-quente com o
+    // topo esverdeado (musgo) e a base mais escura (terra encostada); `k` = claridade.
+    rock(g, c, sq, R, k = 1) {
+        const I = this.ico(2), base = g.p.length / 3, ph = R() * 10, tint = [0.5 + R() * 0.08, 0.48 + R() * 0.06, 0.44 + R() * 0.05];
+        for (let i = 0; i < I.p.length; i += 3) {
+            const x = I.p[i], y = I.p[i + 1], z = I.p[i + 2];
+            const w = 1 + 0.22 * Math.sin(x * 4.1 + ph) * Math.sin(y * 3.3 + ph * 0.7) * Math.sin(z * 3.7 - ph) + (R() - 0.5) * 0.12 + (y > 0.55 ? -0.18 * (y - 0.55) : 0);      // (topo aplainado)
+            const px = c[0] + x * sq[0] * w, py = c[1] + y * sq[1] * w, pz = c[2] + z * sq[2] * w;
+            const moss = Math.max(0, y - 0.35) * 1.2 * (0.5 + R() * 0.5), sh = (0.62 + 0.4 * (y * 0.5 + 0.5)) * k, low = y < -0.2 ? 0.75 : 1;
+            const col = [(tint[0] * (1 - moss) + 0.3 * moss) * sh * low, (tint[1] * (1 - moss) + 0.42 * moss) * sh * low, (tint[2] * (1 - moss) + 0.2 * moss) * sh * low];
+            this._push(g, px, py, pz, x * sq[1] * sq[2], y * sq[0] * sq[2] + 0.15, z * sq[0] * sq[1], col);
+        }
+        for (const i of I.i) g.i.push(base + i);
     },
     // Lâmina (capim, espada-de-são-jorge): sai de p na direção a, sobe `h`, largura w afinando, curvando `bend` para fora.
     blade(g, p, a, h, w, bend, col, colTip) {

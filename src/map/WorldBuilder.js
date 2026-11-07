@@ -1397,7 +1397,7 @@ class WorldBuilder {
     _favelaPoles() {
         const rng = Pixel.rng(4242);
         const poles = [];                                              // { x, z, arm: 'x'|'z' }
-        const trashKinds = ['trash', 'trash', 'trash', 'debris', 'stain'];
+        const trashKinds = ['trash', 'trash', 'trash', 'debris'];      // (sem a 'mancha': o disco escuro no chão de terra parecia um buraco)
         const dirt = (x, z, s = 0.8 + rng() * 0.5) => {                // sujeira num ponto (sprite baixo, sem balanço)
             const kind = trashKinds[Math.floor(rng() * trashKinds.length)], fr = this.props.pick(kind, rng());
             this._spriteQuad(this._batch('veg_lo', x, z), fr.index, fr.row, x, z, (PropSprites.FRAME / Config.art.ppu) * s, PropSprites.HEIGHT[kind], 0);

@@ -155,6 +155,20 @@ const TerrainSplat = {
                 // paredão: a encosta íngreme escurece (sombra), seguindo a curva da altura, não a borda da célula
                 float cliff = 1.0 - mix(mix(h00.a, h10.a, s.x), mix(h01.a, h11.a, s.x), s.y);         // marca de paredão, interpolada
                 if (cliff > 0.0) col *= 1.0 - 0.45 * smoothstep(0.3, 0.7, cliff) * smoothstep(0.6, 0.95, length(gr) + (tNoise(p * 1.7) - 0.5) * 0.15);
+                ${P.photo ? `{
+                    // ENCOSTA NATURAL: onde o morro fica íngreme o solo cede — rocha exposta em placas (ruído) e SULCOS DE EROSÃO
+                    // descendo a encosta (ruído esticado no sentido do declive), com terra lavada e cascalho no fundo dos sulcos
+                    float sl = length(gr);
+                    if (sl > 0.18 && own != 0.0 && own != 5.0 && own < 250.0) {
+                        vec2 dn = gr / sl, ac = vec2(-dn.y, dn.x);
+                        float gully = tNoise(vec2(dot(p, ac) * 0.55, dot(p, dn) * 0.06)) * 0.7 + tNoise(vec2(dot(p, ac) * 1.6, dot(p, dn) * 0.15) + 5.0) * 0.3;
+                        float rk = smoothstep(0.32, 0.75, sl + (tNoise(p * 0.19 + 4.4) - 0.5) * 0.35 + (gully - 0.5) * 0.3);
+                        col = mix(col, tTex(4.0, p) * vec3(0.95, 0.92, 0.88), rk * 0.85);
+                        float gw = smoothstep(0.62, 0.8, gully) * smoothstep(0.18, 0.4, sl);
+                        col = mix(col, tTex(6.0, p) * 0.78, gw * 0.55);
+                        col *= 1.0 - 0.18 * smoothstep(0.55, 0.75, gully) * smoothstep(0.18, 0.5, sl);
+                    }
+                }` : ''}
                 ${P.contour > 0 ? `if ((max(max(ha, hb), max(hc, hd)) > 8.0 || own == 4.0 || own == 6.0) && length(gr) > 0.04) {      // (platô plano: sem linha)
                     float lv = hh / ${f(P.contour)}, m = floor(lv + 0.5);
                     float dist = abs(lv - m) * ${f(P.contour)} / max(length(gr), 0.02);

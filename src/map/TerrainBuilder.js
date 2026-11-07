@@ -235,15 +235,19 @@ class TerrainBuilder {
         const hw = n.edge.w / 2, d = n.d - hw;
         if (d > 11) return h;
         // (a pista inclina de lado com o morro: a referência é a BEIRA dela do lado do vértice, não o eixo)
-        const k = n.d > 1e-3 ? Math.min(n.d, hw) / n.d : 0, ex = n.x + (x - n.x) * k, ez = n.z + (z - n.z) * k;
-        return Math.min(h, Relief.at(ex, ez) - 0.4 + Math.max(0, d - 4.3) * 0.8);
+        const k = n.d > 1e-3 ? Math.min(n.d, hw) / n.d : 0, ex = n.x + (x - n.x) * k, ez = n.z + (z - n.z) * k, r = Relief.at(ex, ez);
+        // (só CORTA o que sobe acima da pista: o chão plano ou mais baixo fica onde está — rebaixado, ele afundava sob o nível do mar
+        // e o plano d'água aparecia por cima da grama ao lado das ruas planas; o corte também nunca desce abaixo da lâmina d'água)
+        if (h <= r + 0.05) return h;
+        return Math.max(Math.min(h, r - 0.4 + Math.max(0, d - 4.3) * 0.8), Math.min(h, 0.04));
     }
 
     // Vegetação e rochas da célula: tabelas por bioma [tipo, probabilidade, escala mín, escala máx].
     static get VEG() {
         const B = WorldMap.B, T = typeof SpriteHD !== 'undefined' && SpriteHD.on;      // (tufos de grama: só com os sprites em alta definição)
         // (com o chão de FOTO a grama já está no chão: os tufos desenhados ficam raros — só um ou outro capim mais alto)
-        const real = typeof GroundPhotos !== 'undefined' && GroundPhotos.on && !GroundPhotos.mixed, q = real ? 0.12 : 1;
+        // (3D — Trees3D: os tufos são touceiras de lâminas, o mato rasteiro que preenche o chão)
+        const real = typeof GroundPhotos !== 'undefined' && GroundPhotos.on && !GroundPhotos.mixed, q = real && !(typeof Trees3D !== 'undefined' && Trees3D.on) ? 0.12 : 0.5;
         const tufts = (p) => T ? [['tuft', p * q, 0.8, 1.3], ['tuft', p * 0.8 * q, 0.7, 1.2], ['tuft', p * 0.6 * q, 0.8, 1.3]] : [];
         const V = {
             [B.FOREST]: [['pine', 0.7, 0.95, 1.3], ['oak', 0.55, 0.95, 1.3], ['bush', 0.45, 0.8, 1.2], ['fern', 0.3, 0.8, 1.3], ['araucaria', 0.08, 1.0, 1.35]],
@@ -264,7 +268,10 @@ class TerrainBuilder {
             const add = (b, rows) => { if (V[b]) V[b] = V[b].concat(rows); };
             add(B.SCRUB, [['cactus', 0.03, 0.7, 1.2]]); add(B.ROCK, [['cactus', 0.02, 0.7, 1.1]]);
             add(B.SWAMP, [['bamboo', 0.05, 0.8, 1.2]]); add(B.FOREST, [['monstera', 0.07, 0.8, 1.3], ['bamboo', 0.012, 0.8, 1.2]]); add(B.GRASS, [['bamboo', 0.004, 0.8, 1.2]]);
-            add(B.FAVELA, [['sansevieria', 0.06, 0.8, 1.3], ['monstera', 0.03, 0.8, 1.2]]);
+            add(B.FAVELA, [['sansevieria', 0.06, 0.8, 1.3], ['monstera', 0.03, 0.8, 1.2], ['capim', 0.14, 0.7, 1.1], ['fern', 0.08, 0.7, 1.1]]);
+            // CAPIM-COLONIÃO (camada média, entre o tufo e o arbusto): pasto sujo, cerrado, beira de mata e de brejo
+            add(B.GRASS, [['capim', 0.16, 0.7, 1.15]]); add(B.SCRUB, [['capim', 0.32, 0.7, 1.2]]); add(B.FARM, [['capim', 0.03, 0.7, 1.0]]);
+            add(B.FOREST, [['capim', 0.06, 0.7, 1.1]]); add(B.SWAMP, [['capim', 0.12, 0.8, 1.2]]); add(B.ROCK, [['capim', 0.14, 0.6, 1.0]]);
         }
         return V;
     }
@@ -288,9 +295,35 @@ class TerrainBuilder {
             if (bio === B.FOREST) { if (a > 0.36) table = TerrainBuilder._atl || (TerrainBuilder._atl = TerrainBuilder.ATL); }
             else if (a > (bio === B.ROCK ? 0.55 : 0.6) && h < 34) table = TerrainBuilder._atlE || (TerrainBuilder._atlE = TerrainBuilder.ATL_EDGE);
         }
-        if (!table || (WorldMap.flags[gj * WorldMap.nx + gi] & 1)) return;
         if (typeof Speedway !== 'undefined' && Speedway.covers(cx, cz, 4)) return;                          // (o autódromo: sem mato na pista)
+        // ROCHA EXPOSTA nas encostas (relevo de verdade): quanto mais íngreme, mais blocos de pedra meio enterrados e cascalho rolado
+        // — o barranco deixa de ser uma rampa lisa com textura (também nos paredões, onde não nasce mais nada)
+        if (typeof Trees3D !== 'undefined' && Trees3D.on && typeof Relief !== 'undefined' && Relief.on && bio !== B.SAND && bio !== B.SWAMP) {
+            const e = 2.5, R = (x, z) => Relief.at(x, z), gx = (R(cx + e, cz) - R(cx - e, cz)) / (2 * e), gz = (R(cx, cz + e) - R(cx, cz - e)) / (2 * e);
+            const slope = Math.hypot(gx, gz), cl = WorldMap.flags[gj * WorldMap.nx + gi] & 1, c2 = this.W.cell;
+            const pr = cl ? 0.32 : Math.min(0.32, Math.max(0, slope - 0.32) * 0.9);
+            for (const [kind, p, s0, s1, sd] of [['rock', pr, 0.6, 1.5, 900], ['rock', pr * 0.6, 0.35, 0.8, 910], ['pebbles', Math.min(0.6, pr * 1.4), 0.8, 1.3, 920]]) {
+                if (p <= 0 || Pixel.hash(gi, gj, sd) >= p) continue;
+                const x = cx + (Pixel.hash(gi, gj, sd + 1) - 0.5) * c2 * 0.9, z = cz + (Pixel.hash(gi, gj, sd + 2) - 0.5) * c2 * 0.9;
+                if (RoadPlan.onPavement(x, z, 1.6)) continue;
+                Trees3D.add(lo, kind, x, 0, z, s0 + (s1 - s0) * Pixel.hash(gi, gj, sd + 3));
+            }
+        }
+        if (WorldMap.flags[gj * WorldMap.nx + gi] & 1) return;
         if (typeof Landmarks !== 'undefined' && Landmarks.covers(cx, cz, 4)) return;                        // (os marcos)
+        // BEIRA DA ESTRADA (transição de solo): na faixa de 1–3 m fora da pista, o mato invade — tufos, capim e cascalho rolado do
+        // acostamento; a borda da estrada deixa de ser uma linha seca entre o asfalto e a grama
+        if (typeof Trees3D !== 'undefined' && Trees3D.on && bio !== B.SAND && bio !== B.SWAMP && RoadPlan.onPavement(cx, cz, 5)) {
+            const c3 = this.W.cell;
+            for (let t = 0; t < 4; t++) {
+                const x = cx + (Pixel.hash(gi, gj, 500 + t) - 0.5) * c3, z = cz + (Pixel.hash(gi, gj, 510 + t) - 0.5) * c3;
+                if (!RoadPlan.onPavement(x, z, 3.2) || RoadPlan.onPavement(x, z, 0.9)) continue;
+                const r = Pixel.hash(gi, gj, 520 + t), s = 0.6 + 0.5 * Pixel.hash(gi, gj, 530 + t);
+                const kind = r < 0.42 ? 'tuft' : r < 0.6 ? (bio === B.FARM || bio === B.SCRUB || bio === B.GRASS ? 'capim' : 'fern') : r < 0.85 ? 'pebbles' : null;
+                if (kind) Trees3D.add(lo, kind, x, 0, z, kind === 'capim' ? s * 0.75 : s);
+            }
+        }
+        if (!table) return;
         if (typeof Lagoa !== 'undefined' && Lagoa.covers(cx, cz, 4)) return;                                  // (a Lagoa: orla e prédios)
         if (typeof Plantations !== 'undefined' && Plantations.covers(cx, cz, 2)) return;                      // (o eucaliptal: só eucalipto)
         const c = this.W.cell, wb = this.wb;
