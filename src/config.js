@@ -175,7 +175,8 @@ const Config = {
 		sky: true,             // luz do céu: sombra fria, sol quente, personagens na sombra com a cor dela
 		grade: true,           // gradação discreta: contraste e saturação (pós-processamento no fim da cadeia)
 		skyParams: { sky: [0.74, 0.86, 1.08], bounce: [0.62, 0.55, 0.48], sun: [1.08, 0.94, 0.78], hemiGain: 0.08, sunGain: 0.12, deeper: 0.12, lowSun: 0.6, fullSun: 0.9 },
-		gradeParams: { contrast: 1.08, saturation: 1.15 },
+		// (cores menos vivas e um leve desfoque — o visual de filme, não o de jogo antigo; `?suave=0` tira o desfoque e o brilho)
+		gradeParams: { contrast: 1.03, saturation: 0.86, soften: 0.22, tilt: 2.2, bloom: 0.55, lift: 0.025, roll: 0.3, warm: 0.02, vignette: 0.18 },
 		// LUZ DE VERDADE À NOITE (render/NightLights.js, etapa 6; em todos os presets — `?noite=0` volta às poças pintadas): postes,
 		// vitrines, a favela e os faróis iluminam o chão, as paredes, os carros, as árvores e os personagens. nightGain = força da luz.
 		night: true,
