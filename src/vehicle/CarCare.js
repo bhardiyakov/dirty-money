@@ -10,7 +10,8 @@
 //   PNEUS        gastam com a quilometragem e a derrapagem: careca = menos aderência (pior na chuva) e pode furar; furado (tiro) = escorrega.
 //   SUSPENSÃO    batida de lado desalinha: o carro PUXA para um lado e balança.
 //   LATARIA      a vida de sempre (Vehicle.hp): funilaria.
-// Painel (#dash) dirigindo: velocidade, gasolina, temperatura e as LUZES DE AVISO. A pé, perto do carro: E abre o CAPÔ (diagnóstico e
+// Painel (#dash) dirigindo: HUD LIMPO — só os AVISOS, quando há (cartões piscando: combustível baixo com a barra, problema no motor,
+// esquentando, óleo, bateria, freio, pneu, suspensão, lataria; no PC embaixo à direita, no celular embaixo no centro); carro bom = nada. A pé, perto do carro: E abre o CAPÔ (diagnóstico e
 // troca de peças pelo próprio jogador — economy/Mechanic.js vende as peças) ou o PORTA-MALAS (guardar itens, como o baú: ui/StashUI.js).
 // Carro seu (garagem) guarda peças e porta-malas no save; carro de rua só enquanto existir. Preso perto do carro: a polícia revista o
 // porta-malas (o FUNDO FALSO do desmanche esconde tudo).
@@ -285,38 +286,45 @@ const CarCare = {
         if (!el) {
             const st = document.createElement('style');
             st.textContent = `
-                #dash { position: fixed; right: 16px; bottom: 16px; z-index: 11; width: 250px; padding: 10px 14px 12px; pointer-events: none; display: none; font-family: var(--font); color: var(--tx);
-                    background: var(--glass); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--shadow-s); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
-                #dash .sp { display: flex; align-items: baseline; justify-content: space-between; } #dash .sp b { font: 800 30px var(--font-d); font-variant-numeric: tabular-nums; } #dash .sp small { color: var(--tx-3); font-size: 11px; }
-                #dash .g { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--tx-2); margin-top: 5px; } #dash .g span { width: 18px; font-family: var(--emoji); font-size: 13px; text-align: center; }
-                #dash .g i { flex: 1; height: 7px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; } #dash .g i s { display: block; height: 100%; border-radius: 99px; }
-                #dash .wl { display: flex; gap: 5px; margin-top: 7px; flex-wrap: wrap; min-height: 22px; } #dash .wl em { font-style: normal; font-family: var(--emoji); font-size: 15px; padding: 2px 5px; border-radius: 7px; background: rgba(244,63,94,0.18); border: 1px solid rgba(244,63,94,0.55); }
-                #dash .wl em.y { background: rgba(251,191,36,0.15); border-color: rgba(251,191,36,0.5); } #dash .wl .ok { font-size: 11px; color: var(--tx-3); align-self: center; }
-                body.mobile #dash { right: 8px; bottom: auto; top: 112px; width: 168px; padding: 6px 10px; } body.mobile #dash .sp b { font-size: 20px; } body.mobile #dash .sp small { font-size: 10px; } body.mobile #dash .wl em { font-size: 12px; padding: 1px 4px; }
+                #dash { position: fixed; right: 16px; bottom: 16px; z-index: 11; width: 300px; pointer-events: none; display: none; font-family: var(--font); color: var(--tx);
+                    flex-direction: column; gap: 8px; }
+                #dash .cw { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--r); background: var(--glass); border: 1px solid var(--line-2);
+                    box-shadow: var(--shadow-s); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); animation: cwBlink 1.1s ease-in-out infinite; }
+                #dash .cw .ic { font-family: var(--emoji); font-size: 26px; width: 34px; text-align: center; flex: none; filter: drop-shadow(0 0 6px rgba(249,115,22,0.6)); }
+                #dash .cw .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+                #dash .cw b { font: 800 15px var(--font-d); letter-spacing: 0.04em; text-transform: uppercase; color: #fff; }
+                #dash .cw small { font: 600 12px var(--font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--tx-2); }
+                #dash .cw i { display: block; height: 7px; border-radius: 99px; background: rgba(255,255,255,0.1); overflow: hidden; } #dash .cw i s { display: block; height: 100%; border-radius: 99px; background: #f97316; }
+                #dash .cw.r { border-color: rgba(244,63,94,0.75); } #dash .cw.r .ic { filter: drop-shadow(0 0 8px rgba(244,63,94,0.85)); } #dash .cw.r i s { background: #f43f5e; }
+                #dash .cw.y { border-color: rgba(251,146,60,0.65); }
+                @keyframes cwBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.42; } }
+                body.mobile #dash { right: auto; left: 50%; bottom: 52px; transform: translateX(-50%); width: min(60vw, 280px); gap: 5px; }
+                body.mobile #dash .cw { padding: 5px 10px; gap: 8px; } body.mobile #dash .cw .ic { font-size: 17px; width: 22px; } body.mobile #dash .cw b { font-size: 12px; } body.mobile #dash .cw small { font-size: 10px; }
                 #vehPop.dashup { bottom: 150px; }`;
             document.head.appendChild(st);
             el = this._el = document.createElement('div'); el.id = 'dash'; document.body.appendChild(el);
         }
-        el.style.display = show ? 'block' : 'none';
-        const vp = document.getElementById('vehPop'); if (vp) vp.classList.toggle('dashup', show);
-        if (!show) return;
+        if (!show) { if (el.style.display !== 'none') el.style.display = 'none'; const vp0 = document.getElementById('vehPop'); if (vp0) vp0.classList.remove('dashup'); return; }
         this._ht = (this._ht || 0) - dt; if (this._ht > 0) return; this._ht = 0.2;
-        const c = this.cond(car), kmh = Math.round(Math.abs(car.forwardSpeed || car.speed || 0) * 3.6), fuel = car.tank > 0 ? car.fuel / car.tank : 1, temp = Math.min(1.25, c.temp) / 1.25;
+        const c = this.cond(car), fuel = car.tank > 0 ? car.fuel / car.tank : 1;
+        // [ícone, título, detalhe, gravidade (r vermelho | y laranja), barra 0..1 ou null] — o mais grave primeiro, no máximo 3
         const W = [];
-        if (c.temp > 0.85) W.push(['🌡️', c.temp > 1 ? '' : 'y', 'temperatura']);
-        if (c.oil < 0.25) W.push(['🛢️', '', 'óleo']);
-        if (c.engine < 0.5 || car._ccWhy === 'fundido') W.push(['⚙️', c.engine < 0.2 ? '' : 'y', 'motor']);
-        if (c.battery < 0.35) W.push(['🔋', c.battery < 0.15 ? '' : 'y', 'bateria']);
-        if (c.brakes < 0.3) W.push(['🛑', '', 'freio']);
-        if ((car.flatCount || 0) > 0 || c.tread.some((t) => t < 0.15)) W.push(['🛞', car.flatCount ? '' : 'y', 'pneu']);
-        if (c.susp < 0.45) W.push(['🔩', 'y', 'suspensão']);
-        if (car.hpFrac < 0.35) W.push(['🚗', '', 'lataria']);
-        if (fuel < 0.15) W.push(['⛽', fuel < 0.05 ? '' : 'y', 'gasolina']);
-        const gauge = (ic, f, col, lab) => `<div class="g"><span>${ic}</span><i><s style="width:${Math.round(Math.max(0, Math.min(1, f)) * 100)}%;background:${col}"></s></i><b style="width:40px;text-align:right">${lab}</b></div>`;
-        const html = `<div class="sp"><b>${kmh}</b><small>km/h · ${car.spec.model}${car._ccOff ? ' · <span style="color:#fda4af">MOTOR DESLIGADO</span>' : ''}</small></div>
-            ${car.tank > 0 ? (car.electric ? gauge('🔋', fuel, fuel < 0.15 ? '#f43f5e' : 'linear-gradient(90deg,#10b981,#4ade80)', Math.round(car.fuel) + '%') : gauge('⛽', fuel, fuel < 0.15 ? '#f43f5e' : 'linear-gradient(90deg,#f59e0b,#fbbf24)', Math.round(car.fuel) + ' L')) : ''}
-            ${this.isMoto(car) ? '' : gauge('🌡️', temp, c.temp > 1 ? '#f43f5e' : c.temp > 0.85 ? '#fb923c' : 'linear-gradient(90deg,#3b82f6,#22d3ee)', c.temp > 1 ? 'QUENTE' : Math.round(70 + c.temp * 40) + '°')}
-            <div class="wl">${W.length ? W.map((w) => `<em class="${w[1]}" title="${w[2]}">${w[0]}</em>`).join('') : '<span class="ok">sem luzes no painel</span>'}</div>`;
+        if (car._ccOff) W.push(['🔑', 'Motor desligado', car._ccWhy === 'fundido' ? 'motor fundido — não pega' : 'acelere para dar a partida', 'r', null, 9]);
+        if (car.tank > 0 && fuel < 0.15) W.push([car.electric ? '🔋' : '⛽', car.electric ? 'Bateria baixa' : fuel < 0.02 ? 'Sem combustível' : 'Baixo combustível', fuel < 0.05 ? (car.electric ? 'procure um eletroposto' : 'procure um posto') : '', fuel < 0.05 ? 'r' : 'y', fuel, 8]);
+        if (c.engine < 0.5 || car._ccWhy === 'fundido') W.push(['🛠️', 'Problema no motor', car._ccWhy === 'fundido' || c.engine <= 0 ? 'motor fundido' : c.engine < 0.2 ? 'o motor está morrendo' : 'falha do motor', c.engine < 0.2 ? 'r' : 'y', null, 7]);
+        if (c.temp > 0.85 && !this.isMoto(car)) W.push(['🌡️', c.temp > 1 ? 'Superaquecido' : 'Motor esquentando', c.temp > 1 ? 'pare e deixe esfriar' : 'radiador', c.temp > 1 ? 'r' : 'y', null, 6]);
+        if (c.oil < 0.25) W.push(['🛢️', 'Óleo baixo', 'troque o óleo', 'r', null, 5]);
+        if ((car.flatCount || 0) > 0) W.push(['🛞', 'Pneu furado', 'o carro escorrega', 'r', null, 5]);
+        else if (c.tread.some((t) => t < 0.15)) W.push(['🛞', 'Pneu careca', 'menos aderência', 'y', null, 3]);
+        if (c.battery < 0.35 && !car.electric) W.push(['🔋', 'Bateria fraca', 'a partida pode falhar', c.battery < 0.15 ? 'r' : 'y', null, 4]);
+        if (c.brakes < 0.3) W.push(['🛑', 'Freio gasto', 'para mais longe', 'r', null, 4]);
+        if (car.hpFrac < 0.35) W.push(['🚗', 'Lataria danificada', 'leve à oficina', car.hpFrac < 0.15 ? 'r' : 'y', null, 3]);
+        if (c.susp < 0.45) W.push(['🔩', 'Suspensão desalinhada', 'o carro puxa para um lado', 'y', null, 2]);
+        W.sort((a, b) => b[5] - a[5]);
+        const L = W.slice(0, document.body.classList.contains('mobile') ? 2 : 3);      // (celular: os 2 mais graves)
+        el.style.display = L.length ? 'flex' : 'none';
+        const vp = document.getElementById('vehPop'); if (vp) vp.classList.toggle('dashup', L.length > 0);
+        const html = L.map((w) => `<div class="cw ${w[3]}"><span class="ic">${w[0]}</span><div class="tx"><b>${w[1]}</b>${w[2] ? `<small>${w[2]}</small>` : ''}${w[4] != null ? `<i><s style="width:${Math.max(3, Math.round(w[4] * 100 / 0.15))}%"></s></i>` : ''}</div></div>`).join('');
         if (html !== this._h) { this._h = html; el.innerHTML = html; }
     },
 };

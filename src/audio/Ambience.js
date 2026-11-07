@@ -101,6 +101,7 @@ const Ambience = {
             traffic = (city ? 0.07 : W.district === 'favela' ? 0.03 : 0.035) * Math.min(1.4, dens) * (night ? 0.6 : 1);
             crowd = (W.biome === 'commercial' || W.biome === 'downtown' || W.biome === 'plaza') && !night ? 0.025 * dens : W.district === 'favela' && !night ? 0.018 : 0;
             if (typeof Landmarks !== 'undefined') crowd = Math.max(crowd, Landmarks.crowdSound(g.player.position.x, g.player.position.z, h));      // a torcida em volta do Maracanã aberto
+            if (typeof StandCrowd !== 'undefined') { const P = g.activeCar ? g.activeCar.position : g.player.position; crowd = Math.max(crowd, StandCrowd.sound(P.x, P.z)); }      // a arquibancada do autódromo na corrida
             waves = 0.11 * W.beach * (0.75 + 0.25 * Math.sin(this.t * 0.9));
             funk = W.district === 'favela' && (h >= 21 || h < 4) && !(typeof Baile !== 'undefined' && Baile.on) ? 0.12 : 0;
             if (night && !mini) this._crickets(W);

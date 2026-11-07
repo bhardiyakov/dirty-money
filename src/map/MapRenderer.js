@@ -27,7 +27,7 @@ const MapRenderer = {
     ROAD: {
         city: ['#50545b', '#2c2f35'], isl: ['#50545b', '#2c2f35'], ave: ['#5c6068', '#2c2f35'], via: ['#666a72', '#2a2d33'],
         hwy: ['#f0a032', '#9a4f14'], express: ['#f0a032', '#9a4f14'], serra: ['#6a6d73', '#3a3c40'],
-        fav: ['#a89478', '#6d5a46'], dirt: ['#c4703f', '#7d3e22'], trail: ['#c9ab80', null], bridge: ['#5b5f66', '#d3d6da'],
+        fav: ['#b9976c', '#5a4430'], dirt: ['#c4703f', '#7d3e22'], trail: ['#c9ab80', '#8a6e4c'], bridge: ['#5b5f66', '#d3d6da'],
     },
     // O que falta pintar do terreno (ladrilhos): quem chama redesenha no próximo quadro.
     pending: false,
@@ -90,13 +90,23 @@ const MapRenderer = {
         for (const F of (typeof Favelas !== 'undefined' ? Favelas.built : [])) {
             if (!vis(F.R.x0 - 8, F.R.z0 - 8, F.R.x1 + 8, F.R.z1 + 8)) continue;
             for (const b of F.groundBoxes) if (vis(b[0], b[1], b[2], b[3])) rect(b[0], b[1], b[2], b[3], C.earth);
-            ctx.strokeStyle = '#bcb6aa'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#c7ab84'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';      // (becos de terra batida, como no jogo)
             for (const a of F.alleys) {
                 const p0 = a.pts[0], p1 = a.pts[a.pts.length - 1];
                 if (!vis(Math.min(p0[0], p1[0]) - 4, Math.min(p0[1], p1[1]) - 4, Math.max(p0[0], p1[0]) + 4, Math.max(p0[1], p1[1]) + 4)) continue;
                 ctx.lineWidth = Math.max(1, Math.max(a.w, 1.44) * k); path(a.pts); ctx.stroke();
             }
             for (const q of F.squares) rect(q.x0, q.z0, q.x1, q.z1, q.kind === 'quadra' ? '#4f8fbf' : '#7fae4f');
+        }
+
+        // 2b) VÉU dos territórios de facção: por BAIXO das ruas e dos barracos (só o chão fica tingido — a rua de terra continua cor de
+        //     terra, não "rua de grama"); a borda tracejada e o nome vão por cima de tudo (8).
+        if (typeof Standing !== 'undefined') for (const t of Standing.territories) {
+            const b = t.rect(), L = t.poly && t.poly();
+            if (b.x1 < b.x0 || !vis(b.x0, b.z0, b.x1, b.z1)) continue;
+            ctx.beginPath();
+            if (L && L.length > 2) { L.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])))); ctx.closePath(); } else ctx.rect(X(b.x0), Y(b.z1), (b.x1 - b.x0) * k, (b.z1 - b.z0) * k);
+            ctx.fillStyle = (Standing.policeOp ? '#ff4a3d' : t.color) + '24'; ctx.fill();
         }
 
         // 3) Chão da cidade: calçadas de borda, quarteirões (parques, praças, o pátio de cada quarteirão).
@@ -129,7 +139,9 @@ const MapRenderer = {
             const hw = e.w / 2, x0 = Math.min(e.a.x, e.b.x), x1 = Math.max(e.a.x, e.b.x), z0 = Math.min(e.a.z, e.b.z), z1 = Math.max(e.a.z, e.b.z);
             return e.v ? [x0 - hw, z0 - e.a.hwEW, x1 + hw, z1 + e.b.hwEW] : [x0 - e.a.hwNS, z0 - hw, x1 + e.b.hwNS, z1 + hw];
         };
-        const nodeStyle = (n) => { let best = null; for (const a of n.arms) if (!best || a.e.w > best.w || (a.e.cls === 'hwy' && best.cls !== 'hwy')) best = a.e; return best ? this.roadStyle(best) : this.ROAD.city; };
+        // (o cruzamento tem a cor da rua comum que passa por ele; a Via Expressa é redesenhada por cima, contínua — sem a escadinha
+        //  laranja de cada cruzamento em esquadro)
+        const nodeStyle = (n) => { let best = null; for (const a of n.arms) if (!a.e.express && (!best || a.e.w > best.w || (a.e.cls === 'hwy' && best.cls !== 'hwy'))) best = a.e; return best ? this.roadStyle(best) : this.ROAD.express; };
         const turnArc = (n) => {
             const sv = n.nbr[0] ? 1 : -1, sh = n.nbr[2] ? 1 : -1, R = n.turnR, cx0 = n.x + sh * R, cz0 = n.z + sv * R, a0 = Math.atan2(0, -sh), a1 = Math.atan2(-sv, 0);
             let dd = a1 - a0; while (dd > Math.PI) dd -= 2 * Math.PI; while (dd < -Math.PI) dd += 2 * Math.PI;
@@ -173,6 +185,17 @@ const MapRenderer = {
                     turnArc(n); ctx.stroke(); continue;
                 }
                 if (pass) rect(n.x - n.hwNS, n.z - n.hwEW, n.x + n.hwNS, n.z + n.hwEW, col);
+            }
+        }
+        // A VIA EXPRESSA por cima dos cruzamentos (borda e pista), uma faixa contínua.
+        for (const pass of [0, 1]) {
+            if (pass === 0 && !cw) continue;
+            const st = this.ROAD.express;
+            ctx.strokeStyle = st[pass ? 0 : 1]; ctx.lineCap = 'round'; ctx.lineJoin = 'round';      // (pontas redondas: sem a costura entre os trechos)
+            for (const e of edges) {
+                if (!e.express || !e.free) continue;
+                ctx.lineWidth = Math.max(1, (e.w + (pass ? 0 : 2 * cw)) * k);
+                path(e.pts); ctx.stroke();
             }
         }
         // Faixas (só com zoom): a linha amarela contínua das rodovias e o tracejado branco das ruas.
@@ -266,7 +289,6 @@ const MapRenderer = {
             const tc = Standing.policeOp ? '#ff4a3d' : t.color;
             ctx.beginPath();                                                // contorno do território (a mancha da favela); sem ele, a caixa
             if (L && L.length > 2) { L.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])))); ctx.closePath(); } else ctx.rect(x, y, w, h);
-            ctx.fillStyle = tc + '2e'; ctx.fill();
             ctx.strokeStyle = tc; ctx.lineWidth = Math.max(1.5, Math.min(4, 1.2 * k + 1)); ctx.setLineDash([Math.max(5, 8 * k), Math.max(4, 5 * k)]); ctx.lineJoin = 'round';
             ctx.stroke();
             if (opts.labels) {

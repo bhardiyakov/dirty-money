@@ -200,7 +200,7 @@ const RoadArt = {
 		}
 		this.decalTex = this._tex(scene, cv, 'roadDecals');
 		this._dMat = this._mat(scene, 'roadDecals', this.decalTex);
-		this._dMat.zOffset = -2;                               // (por cima do asfalto, sem brigar pela profundidade)
+		this._dMat.zOffset = -2; this._dMat.zOffsetUnits = -4;      // (por cima do asfalto e da faixa de pedestre, sem brigar pela profundidade)
 		return this._dMat;
 	},
 

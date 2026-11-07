@@ -55,7 +55,9 @@ class Goals {
     _ensureEl() {
         if (this._el) return this._el;
         const st = document.createElement('style');
-        st.textContent = `#goalBox { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 9; pointer-events: none; display: flex; gap: 8px; font-family: var(--font); }
+        // (HUD LIMPO: o painel só aparece uns segundos quando uma meta anda — `show`; o resto do tempo, as metas ficam no menu)
+        st.textContent = `#goalBox { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 9; pointer-events: none; display: flex; gap: 8px; font-family: var(--font);
+                opacity: 0; transition: opacity .5s ease; } #goalBox.show { opacity: 1; }
             #goalBox .gl { min-width: 150px; padding: 8px 12px 9px; background: var(--glass); border: 1px solid var(--line); border-radius: var(--r-2); color: var(--tx); font-size: 12px; font-weight: 600; line-height: 1.3;
                 -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
             #goalBox .gl b { display: block; font-size: 10px; font-weight: 700; color: var(--tx-3); letter-spacing: 0.1em; text-transform: uppercase; }
@@ -108,9 +110,12 @@ class Goals {
     _render() {
         const list = this.pending().slice(0, 3);
         const html = list.map((p) => `<div class="gl"><b>${p.name}</b>${p.label} ${this._fmt(p.key, Math.min(p.cur, p.target))}/${this._fmt(p.key, p.target)}<i style="--p:${Math.round(100 * Math.min(1, p.cur / p.target))}%"></i></div>`).join('');
-        if (html === this._txt) return;
+        if (html === this._txt) { if (this._showT > 0 && (this._showT -= 0.5) <= 0) this._el.classList.remove('show'); return; }
+        const first = this._txt == null;
         this._txt = html;
-        this._ensureEl().innerHTML = html;
+        const el = this._ensureEl();
+        el.innerHTML = html;
+        if (!first) { el.classList.add('show'); this._showT = 6; }      // (uma meta andou: o painel aparece por 6 s)
     }
 
     setVisible(v) { if (this._el) this._el.style.display = v ? '' : 'none'; }

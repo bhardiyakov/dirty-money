@@ -1,7 +1,9 @@
 // ============================================================================
-// Hud — a interface do jogo, em HD e cartões de vidro (tema em ui/Theme.js; ícones no estilo emoji).
-//   canto superior direito:  ARMA (ícone da arma em uso, ou uma mão se não há nenhuma + munição) |
-//                            NÍVEL DE PROCURADO (5 estrelas + status) | VIDA e COLETE (só se estiver usando) | $ e hora
+// Hud — a interface do jogo, em HD e cartões de vidro (tema em ui/Theme.js; ícones no estilo emoji). HUD LIMPO:
+//   acima do minimapa:       VIDA e FÔLEGO (e o COLETE, só vestido) — #vitals, barras finas
+//   canto superior direito:  NÍVEL DE PROCURADO (só procurado) · a ARMA na mão com a munição (só armado) · o DINHEIRO por uns
+//                            segundos quando muda (+R$ / −R$) — o resto (hora, bairro, metas, painel do carro) saiu da tela
+//   no centro:               a CHEGADA num bairro ou região (nome grande, some sozinho) — EmpireUI.hud
 //   canto inferior esquerdo: o mapa (minimapa, canvas #minimap, com moldura de pixel)
 //   canto inferior direito:  ao entrar num veículo, por 3 s, o MODELO dele (nome + imagem em pixel art)
 //   topo, no centro:         mensagens curtas (Pegou: AK-47, Roubando o carro…) — `toast`
@@ -122,7 +124,28 @@ class Hud {
 			#opVignette { position: fixed; inset: 0; z-index: 9; pointer-events: none; display: none;
 				background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(190,15,30,0.5) 100%); animation: opPulse 1.1s ease-in-out infinite; }
 			body.op-on #opVignette { display: block; }
-			#hud { display: none; }`;
+			#hud { display: none; }
+
+			/* HUD LIMPO: o cartão do jogador só mostra a ARMA quando há uma na mão; vida/colete/fôlego vão para cima do minimapa */
+			#hud2 { width: auto; align-items: flex-end; }
+			#hud2 .h-main .h-vit, #hud2 .stats-panel, #hud2 .emp-panel { display: none !important; }
+			#hud2 .h-main { padding: 6px; } #hud2 .h-main.unarmed { display: none; }
+			#hud2 .wanted-panel { min-width: 200px; }
+			#vitals { position: fixed; left: 16px; bottom: calc(26px + var(--mm, 200px)); width: var(--mm, 200px); display: flex; flex-direction: column; gap: 6px; z-index: 10; pointer-events: none; font-family: var(--font); }
+			#vitals .vb { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 99px; background: var(--glass); border: 1px solid var(--line-2);
+				box-shadow: var(--shadow-s); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+			#vitals .vb .emo { font-size: 15px; width: 18px; text-align: center; flex: none; }
+			#vitals .vb i { flex: 1; height: 9px; border-radius: 99px; background: rgba(255,255,255,0.1); overflow: hidden; position: relative; }
+			#vitals .vb i s { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; transition: width .25s ease; }
+			#vitals .hp s { background: linear-gradient(90deg, #f43f5e, #fb7185); } #vitals .hp.low s { background: linear-gradient(90deg, #f97316, #f43f5e); animation: hpBlink .7s ease-in-out infinite; }
+			#vitals .ar s { background: linear-gradient(90deg, #3b82f6, #22d3ee); }
+			#vitals .st s { background: linear-gradient(90deg, #22d3ee, #34d399); } #vitals .st.low s { background: linear-gradient(90deg, #f59e0b, #facc15); }
+			#vitals .ar.off { display: none; }
+			#cashPop { position: fixed; top: 16px; right: 16px; z-index: 10; pointer-events: none; font: 800 22px var(--font-d); font-variant-numeric: tabular-nums; color: #86efac;
+				text-shadow: 0 2px 6px rgba(0,0,0,0.75); text-align: right; opacity: 0; transition: opacity .35s ease, transform .35s ease; transform: translateY(-6px); }
+			#cashPop.show { opacity: 1; transform: none; }
+			#cashPop small { display: block; font: 700 14px var(--font-d); } #cashPop small.neg { color: #fb7185; } #cashPop small.pos { color: #bbf7d0; }
+			body.wanted-on #cashPop { top: 150px; }`;
 		document.head.appendChild(css);
 
 		const E = (k, cls = '') => `<span class="emo ${cls}">${Emoji.char(k)}</span>`;
@@ -150,6 +173,15 @@ class Hud {
 		this.missionPanel.id = 'hMission';
 		this.missionPanel.style.display = 'none';
 		root.append(this.vitalPanel, this.moneyPanel, this.wantedPanel);
+		// VIDA, COLETE (só vestido) e FÔLEGO acima do minimapa
+		this.vitals = mk('', `<div class="vb hp">${E('heart')}<i><s id="vHp"></s></i></div><div class="vb ar off">${E('shield')}<i><s id="vAr"></s></i></div><div class="vb st">${E('wind')}<i><s id="vSt"></s></i></div>`);
+		this.vitals.id = 'vitals';
+		this.vitals.style.setProperty('--mm', ((Config.minimap && Config.minimap.size) || 200) + 'px');
+		document.body.appendChild(this.vitals);
+		// o DINHEIRO aparece uns segundos quando muda
+		this.cashPop = mk('', '<span id="cpV"></span><small id="cpD"></small>');
+		this.cashPop.id = 'cashPop';
+		document.body.appendChild(this.cashPop);
 		document.body.appendChild(this.missionPanel);
 		const vg = document.createElement('div'); vg.id = 'opVignette'; document.body.appendChild(vg);
 		document.body.appendChild(root);
@@ -255,14 +287,14 @@ class Hud {
 		// ---- arma
 		const wk = pl.weapon === 'none' ? 'fists' : pl.weapon, W = Weapons[wk];
 		const none = pl.weapon === 'none' || wk === 'fists';
-		this._set('wIcon', none ? 'none' : wk, (k) => { this.wIcon.replaceChildren(this._weaponIcon(k)); });
+		this._set('wIcon', none ? 'none' : wk, (k) => { this.wIcon.replaceChildren(this._weaponIcon(k)); this.vitalPanel.classList.toggle('unarmed', k === 'none'); });
 		this._set('wName', none ? 'Desarmado' : W.name, (v) => { const e = this.$('hWName'); e.textContent = v; e.classList.toggle('on', !none); });
 		const ammo = !none && inv.isGun(wk) ? `${inv.mag(wk)}/${inv.reserve(wk)}${g.reloading > 0 ? ' ↻' : ''}` : !none && inv.isThrow(wk) ? inv.ammoText(wk) : '';
 		this._set('wAmmo', ammo, (v) => { this.$('hWAmmo').textContent = v; });
 
 		// ---- procurado
 		const lvl = g.wanted.level;
-		this._set('wShow', lvl > 0 || g.wanted.lose > 0.3 || !!g.hiding, (v) => { this.wantedPanel.style.display = v ? '' : 'none'; });      // painel de procurado só quando há procurado
+		this._set('wShow', lvl > 0 || g.wanted.lose > 0.3 || !!g.hiding, (v) => { this.wantedPanel.style.display = v ? '' : 'none'; document.body.classList.toggle('wanted-on', v); });      // painel de procurado só quando há procurado
 		const hot = lvl >= 4;
 		this._set('stars', lvl + (hot ? 'h' : ''), () => {
 			this.stars.forEach((c, i) => { c.className = 'emo' + (i < lvl ? (hot ? ' hot' : '') : ' off'); });
@@ -302,15 +334,15 @@ class Hud {
 		});
 		// ---- vida e colete
 		const hp =Math.max(0, Math.min(1, pl.hp / pl.maxHp)), hpPct = Math.round(hp * 100);
-		this._set('hp', hpPct, (v) => { this.$('hHp').style.width = v + '%'; this.$('hHpT').textContent = v; this.$('hHp').classList.toggle('low', v < 30); });
+		this._set('hp', hpPct, (v) => { this.$('hHp').style.width = v + '%'; this.$('hHpT').textContent = v; this.$('hHp').classList.toggle('low', v < 30); this.$('vHp').style.width = v + '%'; this.vitals.children[0].classList.toggle('low', v < 30); });
 		const hasVest = pl.armorMax > 0 && pl.armor > 0;
 		const ap = hasVest ? Math.round((pl.armor / pl.armorMax) * 100) : 0;
-		this._set('ar', ap, (v) => { this.$('hAr').style.width = v + '%'; this.$('hArT').textContent = v; });
+		this._set('ar', ap, (v) => { this.$('hAr').style.width = v + '%'; this.$('hArT').textContent = v; this.$('vAr').style.width = v + '%'; this.vitals.children[1].classList.toggle('off', !v); });
 		this._set('arl', hasVest ? pl.armorMax : 0, (v) => { this.$('hArL').textContent = v ? 'nível ' + (v >= 100 ? 2 : 1) : ''; this.$('hArmorRow').classList.toggle('off', !v); });      // (off: o HUD enxuto do celular esconde)
 
 		// ---- fôlego (estamina) e peso carregado
 		const stMax = pl.staminaMax || 100, sp = Math.round(Math.max(0, Math.min(1, (pl.stamina == null ? stMax : pl.stamina) / stMax)) * 100);
-		this._set('st', sp + (pl.winded ? 'w' : ''), () => { this.$('hSt').style.width = sp + '%'; this.$('hStT').textContent = pl.winded ? 'sem fôlego' : sp; this.$('hSt').classList.toggle('low', !!pl.winded || sp < 25); this.$('hStRow').classList.toggle('off', sp >= 100 && !pl.winded); });
+		this._set('st', sp + (pl.winded ? 'w' : ''), () => { this.$('hSt').style.width = sp + '%'; this.$('hStT').textContent = pl.winded ? 'sem fôlego' : sp; this.$('hSt').classList.toggle('low', !!pl.winded || sp < 25); this.$('hStRow').classList.toggle('off', sp >= 100 && !pl.winded); this.$('vSt').style.width = sp + '%'; this.vitals.children[2].classList.toggle('low', !!pl.winded || sp < 25); });
 		// ---- fome e energia (Needs): só aparecem quando caem de 70
 		if (typeof Needs !== 'undefined') {
 			const fd = Math.round(typeof Physique !== 'undefined' ? Physique.fed : 70), en = Math.round(Needs.energy);
@@ -330,7 +362,18 @@ class Hud {
 		});
 
 		// ---- dinheiro, hora e kits
-		this._set('cash', inv.cash + '/' + inv.clean, () => { this.$('hCash').textContent = brl(inv.cash); this.$('hClean').textContent = inv.clean > 0 ? 'limpo ' + brl(inv.clean) : ''; });
+		this._set('cash', inv.cash + '/' + inv.clean, () => {
+			this.$('hCash').textContent = brl(inv.cash); this.$('hClean').textContent = inv.clean > 0 ? 'limpo ' + brl(inv.clean) : '';
+			// o dinheiro na tela por 4 s quando muda (o total e a diferença) — não na primeira leitura
+			const tot = inv.cash + inv.clean, prev = this._cashTot;
+			this._cashTot = tot;
+			if (prev == null || prev === tot) return;
+			const d = tot - prev, el = this.$('cpD');
+			this.$('cpV').textContent = brl(inv.cash) + (inv.clean > 0 ? ` · limpo ${brl(inv.clean)}` : '');
+			el.textContent = (d > 0 ? '+' : '−') + brl(Math.abs(d)); el.className = d > 0 ? 'pos' : 'neg';
+			this.cashPop.classList.add('show'); this._cashT = 4;
+		});
+		if (this._cashT > 0) { this._cashT -= dt; if (this._cashT <= 0) this.cashPop.classList.remove('show'); }
 		this._set('clock', g.dayNight.label, (v) => { this.$('hClock').textContent = v; });
 		this._set('kit', Standing.missionsDone, (v) => { this.$('hKit').textContent = '+' + v; });                 // troféu: missões do tráfico cumpridas
 		this._set('kit2', inv.medkits, (v) => { this.$('hKit2').innerHTML = v ? `<span class="emo" style="font-size:12px">${Emoji.char('medkit')}</span>${v}` : ''; });                 // kits médicos no título do JOGADOR
