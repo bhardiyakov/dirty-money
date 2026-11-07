@@ -38,12 +38,13 @@ module.exports = {
         c.ok(t.off0, 'fora de corrida a torcida em lote não existe');
         c.ok(t.on && t.count > 800 && t.inst === t.count, `na corrida: ${t.count} torcedores na arquibancada (lote de instâncias)`);
         c.ok(t.snd > 0.05, `o som da torcida perto do autódromo (${t.snd.toFixed(3)})`);
-        // desenha sem erro (o shader compila) e desliga depois da corrida
-        await page.evaluate(() => { StreetRacing.cur = { ev: { type: 'oval' }, phase: 'race', car: null, rivals: [] }; });
+        // desenha sem erro (o shader compila) e desliga depois da corrida (sem uma corrida de verdade rodando: o update da torcida
+        // fica parado enquanto o jogo desenha uns quadros com ela ligada)
+        await page.evaluate(() => { window.__up = StandCrowd.update; StandCrowd.update = () => {}; StandCrowd.on = true; StandCrowd._mesh.setEnabled(true); StandCrowd._flag.setEnabled(true); });
         await gameWait(page, 2, 60000);
         const ok = await page.evaluate(() => {
             const ready = StandCrowd._mat.isReady(StandCrowd._mesh, true);
-            StreetRacing.cur = null; StandCrowd._end = 0;
+            StandCrowd.update = window.__up; StreetRacing.cur = null; StandCrowd._end = 0;
             StandCrowd.update(game, 0.1);
             return { ready, off: !StandCrowd.on };
         });
