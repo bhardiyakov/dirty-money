@@ -114,6 +114,10 @@ class Missions {
         const rank = Missions.rank;
         g._flash(`✔ ${m.title} cumprida: +${brl(m.reward)}${extra}`);
         if (rank > this._lastRank) g._flash(`★ Promovido a ${Missions.rankName}!`);
+        if (typeof Juice !== 'undefined') {
+            Juice.banner('mission', m.title, `+${brl(m.reward)} · moral com o tráfico subiu`);
+            if (rank > this._lastRank) Juice.banner('rank', Missions.rankName, 'Nova patente no morro: os serviços pagam mais');
+        }
         this._lastRank = rank;
         AudioFX.blip(900, 0.2, 0.2);
         this._clear(); this.cool = 45;

@@ -15,7 +15,7 @@ class PauseMenu {
 	static get TABS() {
 		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['save', '💾 Salvar'], ['settings', '⚙️ Ajustes']];
 	}
-	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'life', 'hints', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
+	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
 		return '<b>WASD</b> mover (trote) · <b>SHIFT</b> sprint (tocar repetido = mais rápido) · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> arrastando: gira a câmera 360° (com arma de fogo ele mira — o cursor aponta — e o <b>BOTÃO DO MEIO</b> arrastando gira) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
@@ -83,7 +83,7 @@ class PauseMenu {
 		this.setRow = 0;                 // linha das configurações
 		this._icons = {};
 		this._legendIdx = {};
-		this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false, life: 'auto', hints: true }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
+		this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false, life: 'auto', hints: true, screenFx: true }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
 		delete this.settings.hd; delete this.settings.smooth; delete this.settings.aimAssist;          // (escolhas antigas: o jogo é sempre em alta definição com o gráfico suave e a mira manual)
 		this.settings.cars3d = typeof CarArt3D !== 'undefined' && CarArt3D.available();      // (já resolvido em config.js: escolha salva; ?cars2d)
 		this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
@@ -376,11 +376,14 @@ class PauseMenu {
 			'PROCURADO': g.wanted.level ? `${'★'.repeat(g.wanted.level)} a polícia está atrás de você` : 'Limpo',
 			'📰 JORNAL · ÚLTIMAS MANCHETES': typeof News !== 'undefined' && News.items.length ? News.items[News.items.length - 1].text : '',
 			'💰 LIVRO-CAIXA · DE ONDE VEM O DINHEIRO': (() => { const L = Ledger.summary(3); return L.rows.length ? `${L.perHour >= 0 ? '+' : ''}${brl(L.perHour)} por hora de jogo` : 'sem movimento ainda'; })(),
+			'🔥 DESAFIOS DO DIA': typeof Daily !== 'undefined' ? Daily.statusSum(g) : '',
+			'📊 SUA HISTÓRIA': typeof Daily !== 'undefined' ? Daily.storySum() : '',
 		};
 		const fac = `${res ? (hos ? 'morador · hostil' : 'morador · neutro') : 'estranho'} · tráfico ${Math.round(Standing.traffic)} · comunidade ${Math.round(Standing.community)}`;
 		const panel = (title, body) => { const s = S[title] || (title.startsWith('FACÇÃO') ? fac : ''); return `<div class="px"${s ? ` data-sum="${String(s).replace(/"/g, '&quot;')}"` : ''}><div class="px-title">${title}</div><div class="body">${body}</div></div>`; };
 		el.innerHTML =
-			panel('PERSONAGEM', bar('VIDA', pl.hp / pl.maxHp * 100, 'linear-gradient(90deg,#ff3a8a,#4a7cff)', `${Math.round(pl.hp)}/${pl.maxHp}`) + bar('COLETE', armor, 'linear-gradient(90deg,#2a7cff,#35c8ff)', `${armor}%`)
+			(typeof Daily !== 'undefined' ? panel('🔥 DESAFIOS DO DIA', Daily.statusHtml(g, bar, row)) : '')
+			+ panel('PERSONAGEM', bar('VIDA', pl.hp / pl.maxHp * 100, 'linear-gradient(90deg,#ff3a8a,#4a7cff)', `${Math.round(pl.hp)}/${pl.maxHp}`) + bar('COLETE', armor, 'linear-gradient(90deg,#2a7cff,#35c8ff)', `${armor}%`)
 				+ bar('FÔLEGO', (pl.stamina == null ? 1 : pl.stamina / (pl.staminaMax || 100)) * 100, 'linear-gradient(90deg,#10b981,#a3e635)', `condicionamento ${Bags.fitLevel(pl.fit)}/20`) + row('Carga', Bags.label(g))
 				+ bar('PONTARIA', Aim.quality() * 100, 'linear-gradient(90deg,#ff9a3a,#ffd23a)', `${Math.round(Aim.quality() * 100)}% — sobe com Mão firme e Olho de águia`)
 				+ row('Arma na mão', pl.weapon === 'none' ? 'Punhos' : Weapons[pl.weapon].name) + row('Kits médicos', inv.medkits) + row('Hora', g.dayNight.label))
@@ -397,7 +400,8 @@ class PauseMenu {
 			+ panel('DINHEIRO E NEGÓCIOS', row('Dinheiro sujo', brl(inv.cash)) + row('Dinheiro limpo', brl(inv.clean)) + row('Fachadas', Laundry.count) + row('Contabilidade', `nv ${Laundry.level} · perda ${Math.round(Laundry.lossRate * 100)}%`)
 				+ bar('RECEITA / PF', Laundry.taxHeat, '#9a7aff', Math.round(Laundry.taxHeat) + '%'))
 			+ panel('CASA E IMÓVEIS', row('Safe house', home ? `${home.type} (${home.region})` : 'Casa na favela') + row('Imóveis seus', owned.length) + row('Valor de mercado', brl(worth)) + (home ? row('Reforma', RealEstate.reformLevel(home) ? RealEstate.REFORMS[RealEstate.reformLevel(home)].name : 'original') : ''))
-			+ panel('PROCURADO', row('Nível', `${g.wanted.level}★`) + row('Situação', g.wanted.level > 0 ? 'A polícia está atrás de você' : 'Limpo'));
+			+ panel('PROCURADO', row('Nível', `${g.wanted.level}★`) + row('Situação', g.wanted.level > 0 ? 'A polícia está atrás de você' : 'Limpo'))
+			+ (typeof Daily !== 'undefined' ? panel('📊 SUA HISTÓRIA', Daily.storyHtml(g, row)) : '');
 	}
 
 	_newsHtml(row) {
@@ -1047,6 +1051,7 @@ class PauseMenu {
 			tiltSteer: ['📱 ' + T('settings.tilt') + ' ' + sub(T('settings.tilt.hint')), tog(s.tiltSteer)],
 			cars3d: ['🚘 ' + T('settings.cars3d') + ' ' + sub(T('settings.cars3d.hint')), tog(s.cars3d)],
 			life: ['🏙️ Vida da cidade ' + sub('pedestres no rush, acontecimentos de rua, jogos no bar e movimento das lojas — baixe se o celular engasgar'), `<div class="pm-toggle is-on">${Life.label(s.life || 'auto')}</div>`],
+			screenFx: ['🎬 Efeitos de tela ' + sub('borrão de velocidade, impacto, tela sem cor com a vida baixa, luzes da polícia nas bordas e o batimento'), tog(s.screenFx !== false)],
 			hints: ['💡 Dicas de primeira vez ' + sub('religar mostra todas as dicas de novo'), tog(s.hints !== false)],
 			dev: ['🛠️ ' + T('settings.dev'), tog(s.dev)],
 		};

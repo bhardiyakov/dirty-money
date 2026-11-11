@@ -100,6 +100,7 @@ class SkillTree {
         const L0 = this.level;
         this.xp += n; this._lv = 0;
         const L = this.level;
+        if (typeof Juice !== 'undefined') Juice.xp(this, n, L0);         // a pílula de XP e, em nível novo, a faixa (ui/Juice.js)
         if (L > L0) {
             this.g._flash(`⬆ NÍVEL ${L}! +${L - L0} ponto(s) de habilidade — aba CARREIRAS › HABILIDADES (O)${this.notorietyName(L) !== this.notorietyName(L0) ? ` · Notoriedade: ${this.notorietyName(L).toUpperCase()}` : ''}`);
             AudioFX.blip(1200, 0.3, 0.24);

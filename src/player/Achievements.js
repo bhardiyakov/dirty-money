@@ -91,12 +91,14 @@ class Achievements {
         if (all && !this.done.platinum) {
             this.done.platinum = Date.now();
             this.g._flash('🏆🏆🏆 PLATINA! Você completou TODAS as conquistas — o crime da cidade tem um nome: o seu');
+            if (typeof Juice !== 'undefined') Juice.banner('achievement', 'Platina', 'Todas as conquistas — o crime da cidade tem um nome: o seu');
             AudioFX.blip(1400, 0.6, 0.3);
         }
     }
 
     _unlock(name) {
         this.g._flash(`🏅 CONQUISTA: ${name}`);
+        if (typeof Juice !== 'undefined') Juice.banner('achievement', name, '+150 XP · veja todas em CARREIRAS › CONQUISTAS');
         AudioFX.blip(1250, 0.2, 0.22);
         if (this.g.skills) this.g.skills.addXp(150);
     }

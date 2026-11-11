@@ -456,6 +456,7 @@ class CompassCamera {
 	// mola amortecida (o golpe "empurra" a tela para onde a força foi).
 	shake(mag, dx = 0, dz = 0) {
 		this._shake = Math.min(1.6, (this._shake || 0) + mag * (dx || dz ? 0.6 : 1));
+		if (mag >= 0.3 && typeof ScreenFx !== 'undefined') ScreenFx.punch(Math.min(1, mag * 0.75));      // pancada forte: as cores se separam (render/ScreenFx.js)
 		const l = Math.hypot(dx, dz);
 		if (l > 1e-3) { const k = Math.min(0.9, mag * 0.9) / l; this._kvx = (this._kvx || 0) + dx * k * 9; this._kvz = (this._kvz || 0) + dz * k * 9; }
 	}
