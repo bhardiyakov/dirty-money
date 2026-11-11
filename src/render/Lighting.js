@@ -10,6 +10,8 @@
 //     contraste e de saturação. Vale para tudo na tela, inclusive os sprites. SEM curva de tone mapping: a arte é pintada (cores já
 //     prontas, sem luz acima de 1), e o ACES desbotava as copas das árvores e escurecia o asfalto. Custo: uma passada de tela cheia.
 // (A oclusão de ambiente — SSAO2 — foi testada nesta etapa e ficou de fora: o resultado não agradou e custava ~50% mais desenhos.)
+// A mesma passada leva os EFEITOS DE TELA do que o jogador sente (render/ScreenFx.js, uniform `fx`): borrão de velocidade nas bordas,
+// separação de cores no impacto e a tela sem cor com a vida baixa. Com `fx` em zero, a imagem é a de sempre (nenhuma amostra a mais).
 // ============================================================================
 
 const Lighting = {
@@ -32,12 +34,13 @@ const Lighting = {
 			const T = Config.light.gradeParams;
 			BABYLON.Effect.ShadersStore.luzCorFragmentShader = Lighting.GRADE_FS;
 			const soft = !(typeof location !== 'undefined' && /[?&]suave=0\b/.test(location.search));      // (`?suave=0`: sem o desfoque, para comparar)
-			const t = this.grade = new BABYLON.PostProcess('luzCor', 'luzCor', ['contrast', 'saturation', 'texel', 'soften', 'tilt', 'bloom', 'lift', 'roll', 'warm', 'vig'], null, 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
+			const t = this.grade = new BABYLON.PostProcess('luzCor', 'luzCor', ['contrast', 'saturation', 'texel', 'soften', 'tilt', 'bloom', 'lift', 'roll', 'warm', 'vig', 'fx'], null, 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
 			t.onApply = (e) => {
 				e.setFloat('contrast', T.contrast); e.setFloat('saturation', T.saturation);
 				e.setFloat2('texel', 1 / Math.max(1, t.width), 1 / Math.max(1, t.height));
 				e.setFloat('soften', soft ? T.soften : 0); e.setFloat('tilt', soft ? T.tilt : 0); e.setFloat('bloom', soft ? T.bloom : 0);
 				e.setFloat('lift', T.lift); e.setFloat('roll', T.roll); e.setFloat('warm', T.warm); e.setFloat('vig', T.vignette);
+				if (typeof ScreenFx !== 'undefined') ScreenFx.apply(e); else e.setFloat4('fx', 0, 0, 0, 0);      // velocidade, impacto, vida baixa (render/ScreenFx.js)
 			};
 		}
 		console.log(`[LUZ] ${['ceu', 'cor'].filter((k) => F[k]).join(' + ') || 'desligada'}`);
@@ -56,9 +59,12 @@ const Lighting = {
 		uniform sampler2D textureSampler;
 		uniform float contrast, saturation, soften, tilt, bloom, lift, roll, warm, vig;
 		uniform vec2 texel;
+		uniform vec4 fx;
 		void main(void) {
 			vec4 c0 = texture2D(textureSampler, vUV);
 			vec3 c = c0.rgb;
+			vec2 q = vUV - 0.5;
+			float rr = dot(q, q);
 			float top = smoothstep(0.45, 1.0, vUV.y), r = 0.9 + tilt * top * top;
 			if (soften + bloom + tilt > 0.0) {
 				vec3 s = vec3(0.0), b = vec3(0.0);
@@ -71,6 +77,17 @@ const Lighting = {
 				c = mix(c, s, clamp(soften + top * top * 0.85 * step(0.001, tilt), 0.0, 1.0));
 				c += b / 8.0 * bloom;
 			}
+			if (fx.x > 0.003) {                                                         // VELOCIDADE: as bordas esticam para fora (o centro, nítido)
+				float edge = smoothstep(0.03, 0.4, rr), k = fx.x * edge * 0.05;
+				vec3 a = c;
+				for (int i = 1; i <= 5; i++) a += texture2D(textureSampler, vUV - q * k * float(i) * 0.2).rgb;
+				c = mix(c, a / 6.0, clamp(fx.x * 1.1, 0.0, 0.85) * edge);
+			}
+			if (fx.y > 0.003) {                                                         // IMPACTO: as cores se separam nas bordas por um instante
+				vec2 o = q * fx.y * 0.035;
+				c.r = mix(c.r, texture2D(textureSampler, vUV + o).r, 0.85);
+				c.b = mix(c.b, texture2D(textureSampler, vUV - o).b, 0.85);
+			}
 			c = (c - 0.5) * contrast + 0.5;
 			float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
 			c = mix(vec3(l), c, saturation);
@@ -78,8 +95,14 @@ const Lighting = {
 			vec3 hi = max(c - 0.55, 0.0);
 			c -= hi * hi / 0.9 * roll;                                                  // o alto em curva (ombro suave: o branco vira ~0,93)
 			c *= vec3(1.0 + warm, 1.0 + warm * 0.35, 1.0 - warm * 0.6);
-			vec2 q = vUV - 0.5;
-			c *= 1.0 - vig * smoothstep(0.25, 0.75, dot(q, q) * 2.0);
+			c *= 1.0 - vig * smoothstep(0.25, 0.75, rr * 2.0);
+			if (fx.z > 0.003) {                                                         // VIDA BAIXA: a cor some e as bordas escurecem pulsando
+				float pulse = 0.62 + 0.38 * sin(fx.w * 6.6);
+				c = mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))) * vec3(1.05, 0.93, 0.9), fx.z * 0.62);
+				float rim = smoothstep(0.1, 0.62, rr * 2.0);
+				c *= 1.0 - fx.z * pulse * 0.5 * rim;
+				c.r += fx.z * pulse * 0.09 * rim;
+			}
 			gl_FragColor = vec4(clamp(c, 0.0, 1.0), c0.a);
 		}`,
 

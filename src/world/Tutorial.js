@@ -57,6 +57,7 @@ const Tutorial = {
             this.done = true;
             g.inventory.medkits = (g.inventory.medkits || 0) + 1;
             g._flash('✅ PRIMEIROS PASSOS concluídos! +1 kit médico — o resto da cidade é com você (as metas voltam embaixo)');
+            if (typeof Juice !== 'undefined') Juice.banner('goal', 'Primeiros passos', '+1 kit médico · a cidade é sua: metas embaixo, desafios do dia à esquerda');
             this._card(false);
             return;
         }

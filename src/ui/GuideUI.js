@@ -31,7 +31,7 @@ class GuideUI {
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'], ['bags', 'Bolsas, peso e fôlego'],
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['bairros', 'Mirante, Roça e Serra'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
-            ['home', 'Casa, imóveis e save'], ['goals', 'Metas de carreira'], [null, 'IMPÉRIO'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], ['truco', 'Truco no bar'], [null, 'ASSALTOS, NEGÓCIOS E CARROS'], ['robbery', 'Assalto a lojas'], ['traces', 'Rastros e fuga'], ['heists', 'Joalherias e golpes'], ['business', 'Negócios próprios'], ['mechanic', 'Mecânica e porta-malas'], ['racing', 'Corridas (rachas e autódromo)'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
+            ['home', 'Casa, imóveis e save'], ['goals', 'Metas e desafios do dia'], [null, 'IMPÉRIO'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], ['truco', 'Truco no bar'], [null, 'ASSALTOS, NEGÓCIOS E CARROS'], ['robbery', 'Assalto a lojas'], ['traces', 'Rastros e fuga'], ['heists', 'Joalherias e golpes'], ['business', 'Negócios próprios'], ['mechanic', 'Mecânica e porta-malas'], ['racing', 'Corridas (rachas e autódromo)'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas']);
         return out;
@@ -210,7 +210,15 @@ GuideUI.PAGES = {
         <li><b>Save</b>: 3 espaços. Salve no menu (<kbd>ESC</kbd> → 💾 Salvar, sem procurado) ou dormindo (no espaço do jogo atual) — não há save automático. "Carregar jogo" no menu inicial escolhe o espaço.</li></ul>`,
 
     goals: () => `<h2>Metas de carreira</h2>
-        <p>O painel embaixo da tela mostra a próxima meta de cada trilha — <b>Patrimônio</b>, <b>Carreiras</b>, <b>Morro</b>, <b>Lavagem</b>, <b>Imóveis</b> e <b>Fuga</b> — com barra de progresso. Cada meta batida paga na hora (dinheiro e, nas maiores, kits médicos) e libera a próxima.</p>`,
+        <p>O painel embaixo da tela mostra a próxima meta de cada trilha — <b>Patrimônio</b>, <b>Carreiras</b>, <b>Morro</b>, <b>Lavagem</b>, <b>Imóveis</b> e <b>Fuga</b> — com barra de progresso. Cada meta batida paga na hora (dinheiro e, nas maiores, kits médicos) e libera a próxima.</p>
+        <h3>Desafios do dia</h3>
+        <p>Todo dia (o do calendário, não o do jogo) saem <b>3 desafios</b> curtos — furtar, dirigir, despistar a polícia, cumprir um serviço… Só saem os que você consegue fazer hoje, e os alvos e prêmios sobem com o seu nível.</p>
+        <ul><li>Cada desafio paga na hora: dinheiro sujo e XP. Os <b>três no mesmo dia</b> pagam o <b>bônus do dia</b> (dinheiro, 1 kit médico e XP).</li>
+        <li><b>Sequência</b>: jogar em dias seguidos soma +10% nos prêmios por dia (até +100%) e paga um bônus de chegada. Pulou um dia, volta ao dia 1.</li>
+        <li>O cartão aparece à esquerda quando um desafio anda; a lista inteira fica em <b>STATUS › Desafios do dia</b>, e os números da sua carreira em <b>STATUS › Sua história</b>.</li></ul>
+        <h3>Direção arriscada</h3>
+        <p>Acima de 70 km/h, passar <b>raspando</b> por um veículo em movimento (menos de 1 m entre as laterais, sem encostar) dá XP e soma uma sequência por 5 s. Bater zera. Em corrida, cada raspada devolve 8% do nitro.</p>
+        <div class="gd-tip">Nível novo, missão cumprida, fuga, conquista e meta aparecem numa <b>faixa</b> no meio da tela; o dinheiro que entra ou sai sobe de cima do personagem. Borrão de velocidade, impacto, tela sem cor com a vida baixa e as luzes da polícia nas bordas desligam em <b>Ajustes › Efeitos de tela</b>.</div>`,
 
     empire: () => `<h2>Soldados, galpões e lavagem</h2>
         <p>Na aba <b>IMPÉRIO</b> o trabalho manual vira gestão:</p>

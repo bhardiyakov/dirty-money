@@ -28,6 +28,55 @@ Leitura do código (sistemas, números e fluxos), não de testes com jogadores. 
 - **Metas de Carreira** (`src/player/Goals.js`): 5 trilhas (Patrimônio, Morro, Lavagem, Imóveis, Fuga) com degraus crescentes, painel de progresso discreto na base da tela e recompensa em dinheiro/kit médico ao bater cada meta, com aviso e som. Salvo no save; saves antigos recebem as metas já cumpridas sem chuva de prêmios.
 - **Autosave** a cada 2 min (só sem procurado/preso/morto/dormindo/missão com prazo).
 
+## Retorno, retenção e imersão (`src/ui/Juice.js`, `src/render/ScreenFx.js`, `src/player/Daily.js`, `src/vehicle/NearMiss.js`)
+
+Rodada dedicada aos itens 4 e 6 da lista acima ("recompensa sem suco" e "sem metas diárias") e à imersão. Nada aqui muda regra de
+jogo já testada: são camadas por cima, lidas do estado que os sistemas já mantêm.
+
+- **Faixas** (`Juice.banner`). Os momentos grandes deixam de ser uma linha de texto que a mensagem seguinte apagava: nível novo, missão
+  do morro, trabalho de carreira, promoção, fuga de 2★ ou mais, conquista, meta e desafio do dia aparecem no meio da tela, um por vez
+  e em fila, com fanfarra sintetizada (Web Audio, sem arquivos). Nas maiores há papel picado. O aviso de texto continua, para o
+  histórico e para os testes que o leem.
+- **Números flutuantes** (`Juice.float`). `+R$` e `−R$` sobem de cima do personagem ou do veículo. A carteira é lida 5 vezes por
+  segundo, então quem paga não precisa de gancho. Com janela aberta o número não aparece, porque o painel já mostra a compra.
+- **Pílula de XP** (`Juice.xp`, chamada por `SkillTree.addXp`). Aparece por uns segundos com o nível, a barra até o próximo e o que
+  acabou de entrar. Antes o XP era invisível até a hora do nível.
+- **Efeitos de tela** (`ScreenFx`, no uniform `fx` da gradação `Lighting.GRADE_FS`). Com tudo em zero a imagem é a de antes, sem
+  nenhuma amostra a mais, e a gradação continua sendo o último pós-processamento (`tests/35_luz`).
+  - velocidade: acima de ~70 km/h as bordas esticam para fora (borrão radial de 5 amostras; o centro fica nítido), mais com o nitro;
+  - impacto: batida, explosão ou dano levado separam as cores nas bordas por um instante. Entra pelo tremor da câmera
+    (`CompassCamera.shake` a partir de 0,3), então todo sistema que já treme a tela ganhou o efeito;
+  - vida baixa: abaixo de 35% a tela perde a cor e as bordas escurecem pulsando, com o batimento do coração no som.
+- **Luzes da polícia.** Procurado e à vista dela, as bordas da tela alternam vermelho e azul a ~1 Hz, mais fortes com mais estrelas.
+  Somem quando você quebra a linha de visão: é a leitura imediata de "ainda estão me vendo".
+- **Ajustes › Efeitos de tela** desliga o borrão, o impacto, a tela sem cor, as luzes e o batimento. As luzes param com
+  `prefers-reduced-motion`.
+- **Desafios do dia** (`Daily`). Três por dia de calendário, sorteados pela data entre os que o jogador consegue fazer (sem arma não
+  sai assalto; sem fachada não sai lavagem). Alvos e prêmios têm três faixas de nível (até 4, até 14, 15+).
+  - cada um paga dinheiro sujo e XP na hora; os três pagam o bônus do dia (dinheiro, 1 kit médico, XP);
+  - **sequência**: dias seguidos somam +10% nos prêmios (até +100%) e pagam um bônus de chegada; pulou um dia, volta ao 1;
+  - o progresso é lido de `WorldMemory`, `Standing`, `Goals`, carreiras, corridas e de um hodômetro próprio. "Dinheiro ganho" só
+    conta com as janelas fechadas, para guardar e sacar do baú ou do banco não valer;
+  - o cartão aparece à esquerda na chegada, a cada quarto de progresso e ao fechar (nunca nos Primeiros Passos). A lista fica em
+    Menu › Status, e o botão "Carregar jogo" do menu principal anuncia o dia ("2/3 desafios de hoje", "desafios novos").
+- **Sua história** (Menu › Status). Os números da carreira, item 6 dos próximos passos: tempo de jogo, dinheiro ganho, km de veículo
+  e a pé, velocidade máxima, furtos, assaltos, carros tomados, raspadas, fugas, prisões, mortes, corridas e conquistas.
+- **Direção arriscada** (`NearMiss`). Acima de ~70 km/h, passar a menos de 0,9 m de um veículo em movimento sem encostar dá XP
+  (2 por ponto da sequência, até ×5) e mantém a sequência por 5 s. A raspada só é paga 0,25 s depois, se não houve batida. Bater
+  zera. Em corrida, cada uma devolve 8% do nitro. Carro estacionado não conta.
+- **Custo.** Tudo é DOM por cima do canvas, mais 2 a 7 amostras de textura na passada que já existia, e só enquanto o efeito está
+  ativo. O `NearMiss` só olha os veículos a menos de 8 m, e só com o jogador dirigindo rápido.
+- `tests/51_suco_desafios` confere os efeitos zerados em repouso, a faixa de nível, a pílula de XP, o número flutuante, os desafios
+  (prêmio, bônus pago uma vez, Status, save, dia seguinte, dia pulado), a vida baixa, o impacto, o ajuste desligado e as raspadas.
+
+- **Save.** O autosave descrito acima não existe mais: saiu quando os saves passaram a ter 3 espaços, e hoje o jogo só salva no menu
+  e dormindo (`PauseMenu`, `Game._updateSleep`). A dica da tela de carregamento ainda prometia o save automático a cada 2 minutos e
+  foi corrigida. Para não perder uma hora de jogo: depois de 8 min sem salvar, num momento calmo, sai um lembrete (`Juice.NAG`), e o
+  navegador pergunta antes de fechar a aba com mais de 2 min sem salvar (o aplicativo de PC fecha direto). A regra de save não mudou.
+
+Ficou de fora, de propósito: a **penalidade progressiva de prisão** para quem está começando (item 5). O confisco na primeira
+prisão é conferido por `tests/15_flagrante`, e mudar isso pede decisão de balanceamento e rodar a suíte inteira.
+
 ## Carreiras do crime (`src/careers/`)
 
 Base genérica (`CareerCore.js`): cada carreira tem patentes por XP, 2 skills (0–5, 1 ponto a cada 250 XP), trabalhos (um por vez, nunca junto com a missão do morro) e um painel de gestão. Tela: aba **CARREIRAS** do menu (tecla **O**; no celular, botão CRIME). Tudo entra no save e na trilha "Carreiras" das metas.
@@ -587,11 +636,11 @@ Interface moderna em HD, separada do mundo em pixel art: tokens de cor/raio/somb
 | # | Ideia | Custo | Efeito no retorno do jogador |
 |---|---|---|---|
 | 1 | Tutorial guiado de 3 min (1º assalto → 1º negócio → 1ª fuga) e seta de objetivo no GPS | médio | Reduz abandono nos primeiros 5 min |
-| 2 | "Juice" de ganho: `+R$` flutuante, shake leve, som de caixa, tela de promoção de patente | baixo | Torna cada ganho gratificante |
+| 2 | ~~"Juice" de ganho: `+R$` flutuante, shake leve, som de caixa, tela de promoção de patente~~ **feito** (`Juice`) | baixo | Torna cada ganho gratificante |
 | 3 | Mais tipos de missão fora da favela (roubo de carro sob encomenda, fuga com passageiro, entrega de risco pela cidade) | médio | Quebra a repetição |
-| 4 | Missão/evento diário ("hoje o chefe quer X") com recompensa dobrada no 1º cumprimento do dia | baixo | Motivo para voltar |
+| 4 | ~~Missão/evento diário ("hoje o chefe quer X") com recompensa dobrada no 1º cumprimento do dia~~ **feito** (`Daily`: 3 desafios por dia + sequência) | baixo | Motivo para voltar |
 | 5 | Seguro da prisão/morte nas primeiras horas (perde só parte do dinheiro) | baixo | Evita o "perdi tudo" |
-| 6 | Estatísticas de carreira na tela de pausa (total roubado, fugas, tempo de jogo) | baixo | Sensação de investimento |
+| 6 | ~~Estatísticas de carreira na tela de pausa (total roubado, fugas, tempo de jogo)~~ **feito** (Status › Sua história) | baixo | Sensação de investimento |
 | 7 | Rivalidade entre facções com mapa de território disputável (o jogador muda de dono) | alto | Meta de endgame |
 
 ## Nota sobre balanceamento (a validar com testes de jogo)

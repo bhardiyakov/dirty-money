@@ -15,7 +15,7 @@ class MainMenu {
 		const hasSave = this.save !== null;
 		this.btnLoad.disabled = !hasSave;
 		this.btnLoad.classList.toggle('mm-disabled', !hasSave);
-		if (hasSave) { this.btnLoad.title = I18n.t('menu.lastSave', { label: SaveGame.label(this.save) }); this.btnLoad.innerHTML = `${I18n.t('menu.load')}<small>${SaveGame.label(this.save)}</small>`; }
+		if (hasSave) { this.btnLoad.title = I18n.t('menu.lastSave', { label: SaveGame.label(this.save) }); this.btnLoad.innerHTML = `${I18n.t('menu.load')}<small>${SaveGame.label(this.save)}</small>${typeof Daily !== 'undefined' ? `<small style="color:#fb923c;font-weight:600">${Daily.teaser(this.save)}</small>` : ''}`; }
 
 		// Novo jogo: no 1º espaço livre; com os 3 ocupados, escolhe qual o jogo novo vai usar. Carregar: escolhe o espaço.
 		this.btnNew.addEventListener('click', () => {

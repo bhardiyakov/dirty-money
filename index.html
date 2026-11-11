@@ -435,10 +435,12 @@
 				'Lave o dinheiro sujo nas fachadas antes de comprar imóveis fora da favela.',
 				'Fugir é sumir de vista: entre num beco, troque de carro ou se esconda numa caçamba.',
 				'Cada carreira tem patentes, habilidades e trabalhos próprios — veja a aba Carreiras.',
-				'O jogo salva sozinho a cada 2 minutos em momento calmo, e sempre que você dorme.',
+				'O jogo NÃO salva sozinho: salve no menu (ESC › Salvar, sem a polícia no rastro) ou dormindo na sua cama.',
 				'Dinheiro marcado de banco pesa na mochila: guarde no cofre do galpão.',
 				'Delegados com 10 ❤ deixam o distrito bem mais tranquilo para você.',
 				'Energia zerada ou acordado depois das 2h = desmaio. Durma em casa.',
+				'Todo dia saem 3 desafios novos: cumpra os três e leve o bônus. Jogar em dias seguidos aumenta os prêmios.',
+				'Passar raspando pelo trânsito acima de 70 km/h dá XP — em corrida, devolve nitro. Bater zera a sequência.',
 			];
 			let tipI = Math.floor(Math.random() * TIPS.length), tipT = 0;
 			const tipEl = document.getElementById('ml-tip');
@@ -690,6 +692,7 @@
 	<script src="./src/core/engine.js"></script>
 	<script src="./src/core/camera.js"></script>
 	<script src="./src/render/Smooth.js"></script>
+	<script src="./src/render/ScreenFx.js"></script>
 	<script src="./src/render/Lighting.js"></script>
 	<script src="./src/render/NightLights.js"></script>
 	<script src="./src/render/Trees3D.js"></script>
@@ -745,6 +748,8 @@
 	<script src="./src/player/Needs.js"></script>
 	<script src="./src/ui/Phone.js"></script>
 	<script src="./src/ui/Polish.js"></script>
+	<script src="./src/ui/Juice.js"></script>
+	<script src="./src/player/Daily.js"></script>
 	<script src="./src/world/RivalArc.js"></script>
 	<script src="./src/crime/Witnesses.js"></script>
 	<script src="./src/world/Calendar.js"></script>
@@ -810,6 +815,7 @@
 	<script src="./src/vehicle/CarCare.js"></script>
 	<script src="./src/economy/Mechanic.js"></script>
 	<script src="./src/vehicle/Collisions.js"></script>
+	<script src="./src/vehicle/NearMiss.js"></script>
 	<script src="./src/combat/Combat.js"></script>
 	<script src="./src/combat/Posture.js"></script>
 	<script src="./src/combat/Cover.js"></script>

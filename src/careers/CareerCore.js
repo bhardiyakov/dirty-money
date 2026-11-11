@@ -38,7 +38,7 @@ class Career {
         const r0 = this.rank, p0 = this.points, m0 = this.mastery;
         this.xp += n;
         if (this.g.skills) this.g.skills.addXp(n);                      // todo XP de carreira também sobe o NÍVEL DO PERSONAGEM
-        if (this.rank > r0) { this.g._flash(`★ ${this.name}: promovido a ${this.rankName.toUpperCase()}! Novos trabalhos liberados (O)`); AudioFX.blip(980, 0.3, 0.24); }
+        if (this.rank > r0) { this.g._flash(`★ ${this.name}: promovido a ${this.rankName.toUpperCase()}! Novos trabalhos liberados (O)`); AudioFX.blip(980, 0.3, 0.24); if (typeof Juice !== 'undefined') Juice.banner('rank', this.rankName, `${this.name} · novos trabalhos liberados (tecla O)`); }
         else if (this.mastery > m0) { this.g._flash(`✦ ${this.name}: MAESTRIA ${this.mastery} (+${this.mastery * 3}% de pagamento nesta carreira)`); AudioFX.blip(1100, 0.25, 0.22); }
         else if (this.points > p0) this.g._flash(`${this.name}: +1 ponto de habilidade — gaste na aba CARREIRAS (O)`);
         if (this.g.achievements) this.g.achievements.check();
@@ -201,6 +201,7 @@ class Careers {
             if (job.defId) this.jobTypes[job.defId] = (this.jobTypes[job.defId] || 0) + 1;
             this.cool = 8;
             g._flash(`✔ ${job.c.name}: ${msg || job.title + ' concluído'}${money > 0 ? ` +${brl(money)}` : ''} · +${Math.round(xp)} XP`);
+            if (typeof Juice !== 'undefined') Juice.banner('job', job.title || job.c.name, `${job.c.name}${money > 0 ? ` · +${brl(money)}` : ''} · +${Math.round(xp)} XP`);
             AudioFX.blip(900, 0.2, 0.2);
         } else {
             this.cool = 20;

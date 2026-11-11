@@ -637,7 +637,7 @@ class Game {
 		Perf.lap('outros');
 		Needs.update(this, dt);                                                  // fome e cansaço (leves)
 		Phone.update(this, dt);                                                  // o celular: mensagens, compromissos, entregas
-		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); Calendar.update(this, dt); Personas.update(this, dt); Tutorial.update(this, dt); MobileUI.start();                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
+		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); Calendar.update(this, dt); Personas.update(this, dt); Tutorial.update(this, dt); MobileUI.start(); Juice.update(this, dt); ScreenFx.update(this, dt); Daily.update(this, dt);                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
 		Perf.lap('mundo vivo (celular/festas/personagens)');
 		// Assa sprites pendentes (personagens; os carros vêm prontos do atlas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
 		// de folga) menos o trabalho medido do quadro, entre 1 e 8 ms. Antes eram 9 ms fixos — num celular que já gasta 25 ms por quadro,
@@ -830,7 +830,7 @@ class Game {
 		if (this.boats) this.boats.update(dt, this);
 		if (this.colliderStream) this.colliderStream.update(dt, this.camera.target.x, this.camera.target.z);
 		Perf.lap('barcos/colisores');
-		if (this.vehicleManager) { this.carDamage.update(dt); Throwables.update(dt); Rockets.update(dt); this.collisions.update(dt); this.doors.update(dt); this._updateAlarms(dt); }
+		if (this.vehicleManager) { this.carDamage.update(dt); Throwables.update(dt); Rockets.update(dt); this.collisions.update(dt); this.doors.update(dt); this._updateAlarms(dt); NearMiss.update(this, dt); }
 		Perf.lap('veículos (dano/colisão)');
 		if (this.vehicleManager) EngineAudio.update(this, dt);                 // ronco dos motores (o seu e o do trânsito perto)
 		Footsteps.update(this, dt);                                            // passos (presos à animação de andar/correr)
@@ -2850,6 +2850,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		const p = car.position;
 		AudioFX.crash(p.x, p.z, Math.min(1, dv / 16));
 		if (car === ac) this.input.rumble(Math.min(1, dv / 12), 0.6, 120 + dv * 12);
+		if (car === ac || src === 'player') NearMiss.onImpact();           // bateu: a sequência de raspadas zera (vehicle/NearMiss.js)
 		this.combat.spark(p.x, 1.0, p.z, [1, 0.85, 0.45]);
 		const f = this.camera.target;
 		if (hypot(p.x - f.x, p.z - f.z) < 45) this.camera.shake(Math.min(0.7, dv * 0.045));
@@ -2956,6 +2957,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		if (this.empire && n > prev) this.empire.spend(0, 10 * (n - prev));
 		const fled = n === 0 && (why === 'escape' || why === 'paint');                     // (pintura express na oficina também é fuga)
 		if (this.skills && fled) this.skills.addXp(25 * prev * prev);
+		if (fled && prev >= 2) Juice.banner('escape', `${'★'.repeat(prev)} despistada${prev > 1 ? 's' : ''}`, `A polícia perdeu o seu rastro · +${25 * prev * prev} XP`);
 		if (fled && prev >= 2 && typeof WorldMemory !== 'undefined') { const p = this.player.position; WorldMemory.log('escape', { district: this.empire ? this.empire.districtAt(p.x, p.z) : null, stars: prev }); }
 		if (this.achievements && fled && prev >= 5) this.achievements.bump('escape5');      // fugir de muitas estrelas vale muito
 		if (n > prev && msg[n]) this._flash(msg[n]);
