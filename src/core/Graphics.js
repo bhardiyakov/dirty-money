@@ -30,14 +30,15 @@ const Graphics = {
 		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, shadows: true, shadowSize: 4096, npcDirs: 16, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true },
 	},
 	// GPUs that cannot carry the high preset (WEBGL_debug_renderer_info): software rasterisers and old mobile/integrated chips.
-	WEAK_GPU: /swiftshader|llvmpipe|software|mali-[2-4]\d\d|mali-t|adreno \(tm\) [2-5]\d\d|powervr sgx|powervr rogue g[e6]|intel.*hd graphics [2-5]\d{2,3}\b|gma/i,
+	// ("Microsoft Basic Render Driver" / WARP: o Windows sem driver de vídeo ou com a aceleração do navegador desligada — desenha na CPU)
+	WEAK_GPU: /swiftshader|llvmpipe|software|basic render|\bwarp\b|mali-[2-4]\d\d|mali-t|adreno \(tm\) [2-5]\d\d|powervr sgx|powervr rogue g[e6]|intel.*hd graphics [2-5]\d{2,3}\b|gma/i,
 	// Integrated graphics that draw the game but not at the high preset (shared memory, a fraction of a card's fill rate): Intel HD / UHD /
 	// Iris (the old HD 2000–5000 are WEAK above) and the AMD APUs (Radeon Graphics, Vega, R5/R7). Automatic starts them at medium; the
 	// AutoQuality steps down from there if needed. (Intel Arc and Apple's chips are not in the list: they carry the high preset.)
 	MID_GPU: /intel\(r\) (u?hd|iris)|iris\(r\)|iris (xe|plus|pro)|radeon\(tm\) (vega|graphics|r[3-7] graphics)|radeon (vega|graphics)\b|vega \d+ graphics/i,
 	// Software rasterisers (the test browser, a PC with no driver): no quality step makes them playable, so the AutoQuality's GPU steps
 	// stay out of the way there (and the automated tests keep one, predictable configuration).
-	SOFT_GPU: /swiftshader|llvmpipe|software|basic render/i,
+	SOFT_GPU: /swiftshader|llvmpipe|software|basic render|\bwarp\b/i,
 	choice: 'auto',
 	level: 'high',
 
@@ -47,6 +48,10 @@ const Graphics = {
 		this.choice = this._saved();
 		const forced = /[?&]gfx=(low|medium|high|hd)\b/.exec(q);
 		this.level = forced ? forced[1] : q.includes('lite') ? 'medium' : q.includes('full') ? 'high' : this.choice === 'auto' ? this.detect() : this.choice;
+		// Desenho na CPU (SOFT_GPU) num navegador de gente (não o dos testes): o Low mesmo se outro foi escolhido à mão — High ali dá ~1 FPS.
+		// O aviso (softwareNotice) explica como ligar a placa de vídeo. `?gfx=` ainda força.
+		this.softCapped = !forced && this.level !== 'low' && this.realSoftware;
+		if (this.softCapped) this.level = 'low';
 		this.apply(this.PRESETS[this.level]);
 		console.log(`[GRÁFICOS] ${this.LABEL[this.level]}${this.choice === 'auto' && !forced ? ' (automático)' : ''}`);
 	},
@@ -73,6 +78,36 @@ const Graphics = {
 	},
 	// Is the picture drawn by the CPU? (see SOFT_GPU)
 	get software() { return this.SOFT_GPU.test(this.gpu().renderer); },
+	// ...on a player's browser, not the automated tests' one (Playwright sets navigator.webdriver).
+	get realSoftware() { return this.software && !(typeof navigator !== 'undefined' && navigator.webdriver); },
+
+	// Aviso na tela quando o navegador desenha na CPU: o jogo não tem como ficar fluido assim (nenhum preset resolve) — o jogador precisa
+	// ligar a aceleração de hardware / o driver de vídeo. Uma vez por sessão; "Não mostrar de novo" guarda em dm_softGpuHide (fora de
+	// dm_settings: o menu de pausa regrava aquele objeto inteiro).
+	softwareNotice() {
+		if (!this.realSoftware || typeof document === 'undefined') return;
+		if (Store.get('softGpuHide')) return;
+		const t = (k, v) => (typeof I18n !== 'undefined' ? I18n.t(k, v) : k), esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+		const el = document.createElement('div');
+		el.id = 'soft-gpu-notice';
+		el.setAttribute('role', 'alert');
+		el.style.cssText = 'position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:100000;max-width:min(560px,calc(100vw - 32px));box-sizing:border-box;'
+			+ 'background:#1d1a17;color:#f3ece2;border:1px solid #e0a43a;border-radius:10px;padding:14px 16px;font:14px/1.45 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.5)';
+		const steps = ['gpu.soft.step1', 'gpu.soft.step2', 'gpu.soft.step3', 'gpu.soft.step4'].map((k) => `<li>${esc(t(k))}</li>`).join('');
+		el.innerHTML = `<b style="color:#e0a43a">${esc(t('gpu.soft.title'))}</b><div style="margin:6px 0">${esc(t('gpu.soft.body', { gpu: this.gpu().renderer }))}</div>`
+			+ `<ol style="margin:6px 0 10px 18px;padding:0">${steps}</ol>`
+			+ `<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button data-k="hide">${esc(t('gpu.soft.hide'))}</button><button data-k="ok">${esc(t('gpu.soft.ok'))}</button></div>`;
+		for (const b of el.querySelectorAll('button')) {
+			b.style.cssText = 'font:inherit;padding:6px 12px;border-radius:6px;cursor:pointer;border:1px solid #e0a43a;' + (b.dataset.k === 'ok' ? 'background:#e0a43a;color:#1d1a17' : 'background:transparent;color:#f3ece2');
+			b.addEventListener('click', (e) => {
+				e.stopPropagation();
+				if (b.dataset.k === 'hide') Store.set('softGpuHide', '1');
+				el.remove();
+			});
+		}
+		document.body.appendChild(el);
+		console.warn(`[GRÁFICOS] desenho por software (${this.gpu().renderer})${this.softCapped ? ' — limitado ao Low' : ''}`);
+	},
 	// What a throwaway WebGL context tells about the GPU (renderer name, WebGL 2, largest texture).
 	gpu() {
 		if (this._gpu) return this._gpu;                                // (asked once: the answer does not change)

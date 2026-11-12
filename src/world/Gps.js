@@ -26,8 +26,10 @@ const Gps = {
             const pts = [{ x: a.x, z: a.z }, { x: sa.x, z: sa.z }, { x: sb.x, z: sb.z }, { x: b.x, z: b.z }];
             return { pts, len: pts.reduce((s, p, i) => s + (i ? hypot(p.x - pts[i - 1].x, p.z - pts[i - 1].z) : 0), 0) };
         }
-        for (const n of [sa.edge.a, sa.edge.b]) { dist[n.id] = D(n, sa); push(dist[n.id], n.id); }
-        const goalA = sb.edge.a.id, goalB = sb.edge.b.id, dA = D(sb.edge.a, sb), dB = D(sb.edge.b, sb);
+        // (mão única — RioTraffic: do ponto de partida só se vai no sentido da rua; e no trecho do destino só se chega por ele)
+        const RT = typeof RioTraffic !== 'undefined' ? RioTraffic : null, ok = (e, from) => !RT || !e.oneway || RT.canLeave(e, from);
+        for (const n of [sa.edge.a, sa.edge.b]) { if (!ok(sa.edge, n === sa.edge.a ? sa.edge.b : sa.edge.a)) continue; dist[n.id] = D(n, sa); push(dist[n.id], n.id); }
+        const goalA = ok(sb.edge, sb.edge.a) ? sb.edge.a.id : -1, goalB = ok(sb.edge, sb.edge.b) ? sb.edge.b.id : -1, dA = D(sb.edge.a, sb), dB = D(sb.edge.b, sb);
         let best = Infinity, bestNode = -1, pops = 0;
         while (heap.length && pops++ < MAX_POPS) {
             const [d, u] = pop();
@@ -38,6 +40,7 @@ const Gps = {
             if (u === goalB && d + dB < best) { best = d + dB; bestNode = u; }
             const n = P.nodes[u];
             for (const a of n.arms) {                                  // (pernas em qualquer ângulo; trecho curvo: o comprimento dele)
+                if (a.e.oneway && typeof RioTraffic !== 'undefined' && !RioTraffic.canLeave(a.e, n)) continue;      // (mão única: o GPS não manda pela contramão)
                 const m = a.to;
                 if (done[m.id]) continue;
                 const nd = d + (a.e.free ? a.e.len : D(n, m));

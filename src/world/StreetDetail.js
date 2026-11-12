@@ -53,6 +53,7 @@ const StreetDetail = {
 
 		this._wear(W, rng, st);
 		this._junctions(W, rng, st);
+		this._oneway(W, st);
 		this._names(W, st);
 		this._speedSigns(W, rng, st);
 		this._bumpsBuild(W, rng, st);
@@ -129,21 +130,29 @@ const StreetDetail = {
 		for (const n of CityGrid.intersections) {
 			if (n.round || !n.arms || n.arms.length < 2) continue;
 			if (n.visible) {                                                    // cidade: semáforo — linha de retenção e setas
+				const RT = typeof RioTraffic !== 'undefined' ? RioTraffic : null;
 				for (const a of n.arms) {
 					const e = a.e; if (!this._asphalt(e) || !this._urban(e) || e.len < a.cut + 22) continue;
+					if (RT && e.oneway && !RT.canLeave(e, a.to)) continue;          // mão única SAINDO daqui: ninguém chega por esta perna
 					const tx = -a.dx, tz = -a.dz, rx = tz, rz = -tx;               // quem chega anda em t; a direita dele é r
-					const hw = e.w / 2, med = (RoadPlan.CLASS[e.cls].median || 0) / 2, s0 = a.cut + 3.7, mid = (med + hw) / 2;
-					const cx = n.x + a.dx * s0 + rx * mid, cz = n.z + a.dz * s0 + rz * mid;
-					this.decal('paint', cx, cz, tx, tz, (hw - med - 0.4) / 2, 0.2);
-					// seta: para onde dá para ir desta perna
+					const hw = e.w / 2, med = (RoadPlan.CLASS[e.cls].median || 0) / 2, s0 = a.cut + 3.7, one = !!e.oneway;
+					// mão única: a retenção atravessa a rua inteira e há seta nas DUAS faixas; mão dupla: só a metade de quem chega
+					const lanes = one ? [-hw / 2, hw / 2] : [(med + hw) / 2], half = one ? hw - 0.4 : (hw - med - 0.4) / 2, mid0 = one ? 0 : (med + hw) / 2;
+					this.decal('paint', n.x + a.dx * s0 + rx * mid0, n.z + a.dz * s0 + rz * mid0, tx, tz, half, 0.2);
+					// seta: para onde dá para ir desta perna (só as manobras permitidas: contramão e esquerda da avenida ficam de fora)
 					let S = false, Rt = false, Lt = false;
 					for (const b of n.arms) {
 						if (b === a) continue;
-						const cr = tx * b.dz - tz * b.dx, dt = tx * b.dx + tz * b.dz;
-						if (dt > 0.7) S = true; else if (cr < -0.3) Rt = true; else if (cr > 0.3) Lt = true;
+						const cr = tx * b.dz - tz * b.dx, dt = tx * b.dx + tz * b.dz, turn = dt > 0.7 ? 'straight' : cr < -0.3 ? 'right' : cr > 0.3 ? 'left' : null;
+						if (!turn || (RT && !RT.allowed(n, a, b, turn))) continue;
+						if (turn === 'straight') S = true; else if (turn === 'right') Rt = true; else Lt = true;
 					}
-					const k = S && Rt && rng() < 0.6 ? 'SR' : S && Lt && rng() < 0.4 ? 'SL' : S ? 'S' : Rt ? 'R' : Lt ? 'L' : null;
-					if (k && e.len > a.cut + 30) { const s1 = s0 + 8; this.decal('arrow' + k, n.x + a.dx * s1 + rx * mid, n.z + a.dz * s1 + rz * mid, tx, tz, 0.7, 2.6); }
+					lanes.forEach((mid, li) => {
+						// mão única: a faixa da direita leva reto/direita, a da esquerda reto/esquerda
+						const k = one ? (li === 1 ? (S && Rt ? 'SR' : S ? 'S' : Rt ? 'R' : Lt ? 'L' : null) : (S && Lt ? 'SL' : S ? 'S' : Lt ? 'L' : Rt ? 'R' : null))
+							: S && Rt && rng() < 0.6 ? 'SR' : S && Lt && rng() < 0.4 ? 'SL' : S ? 'S' : Rt ? 'R' : Lt ? 'L' : null;
+						if (k && e.len > a.cut + 30) { const s1 = s0 + 8; this.decal('arrow' + k, n.x + a.dx * s1 + rx * mid, n.z + a.dz * s1 + rz * mid, tx, tz, 0.7, 2.6); }
+					});
 				}
 				continue;
 			}
@@ -160,6 +169,45 @@ const StreetDetail = {
 					const s1 = a.cut + 4.5; this.decal('pare', n.x + a.dx * s1 + rx * hw / 2, n.z + a.dz * s1 + rz * hw / 2, tx, tz, hw / 2 - 0.4, 1.3);
 				}
 				this.addSign(n.x + a.dx * (a.cut + 2.5) + rx * (hw + 0.9), n.z + a.dz * (a.cut + 2.5) + rz * (hw + 0.9), a.dx, a.dz, 'pare');
+			}
+		}
+	},
+
+	// ------------------------------------------------------------------ mão única (RioTraffic)
+	// O tracejado do meio vira BRANCO (faixas do mesmo sentido), uma seta em cada faixa logo no começo da quadra, e a placa de SENTIDO
+	// PROIBIDO na boca da rua por onde não se entra (de frente para quem está no cruzamento).
+	_oneway(W, st) {
+		if (typeof RioTraffic === 'undefined') return;
+		const P = {}, D = 4;                                                   // (o tracejado do asfalto: 4 u de traço a cada 8 u)
+		for (const e of RoadPlan.edges) {
+			if (!e.oneway || !this._asphalt(e)) continue;
+			const s0 = e.cutA || 0, s1 = e.len - (e.cutB || 0), base = e.free ? 0 : (e.v ? e.a.z : e.a.x);      // u da textura = (base + s)/8
+			if (s1 - s0 < 2) continue;
+			for (let k = Math.floor((base + s0) / 8); k * 8 < base + s1; k++) {
+				const a = Math.max(s0, k * 8 - base + 0.03), b = Math.min(s1, k * 8 - base + D - 0.03);
+				if (b - a < 0.25) continue;
+				RoadPlan.at(e, (a + b) / 2, P);
+				const lx = -P.tz, lz = P.tx, off = 0.025;                       // (o traço fica 0,025 u à esquerda do eixo)
+				this.decal('laneW', P.x + lx * off, P.z + lz * off, P.tx, P.tz, 0.11, (b - a) / 2 + 0.03, 0.034);
+			}
+			// setas: uma em cada faixa, ~10 u depois de entrar na quadra (no sentido da mão)
+			const fwd = e.oneway > 0, len = s1 - s0;
+			if (len > 34) {
+				const s = fwd ? s0 + 10 : s1 - 10;
+				RoadPlan.at(e, s, P);
+				const tx = fwd ? P.tx : -P.tx, tz = fwd ? P.tz : -P.tz, rx = tz, rz = -tx, hw = e.w / 2;
+				for (const l of [-hw / 2, hw / 2]) this.decal('arrowS', P.x + rx * l, P.z + rz * l, tx, tz, 0.7, 2.6);
+			}
+		}
+		// placa de sentido proibido: em cada cruzamento urbano, nas pernas de mão única que só CHEGAM
+		for (const n of CityGrid.intersections) {
+			if (!n.visible || !n.arms) continue;
+			for (const a of n.arms) {
+				const e = a.e;
+				if (!e.oneway || RioTraffic.canLeave(e, n) || e.len < a.cut + 8) continue;
+				const hw = e.w / 2, rx = a.dz, rz = -a.dx;                     // direita de quem entraria (andando em a)
+				this.addSign(n.x + a.dx * (a.cut + 1.5) + rx * (hw + 0.9), n.z + a.dz * (a.cut + 1.5) + rz * (hw + 0.9), -a.dx, -a.dz, 'contramao');
+				st.noEntry = (st.noEntry || 0) + 1;
 			}
 		}
 	},

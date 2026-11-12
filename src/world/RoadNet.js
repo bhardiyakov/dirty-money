@@ -150,7 +150,9 @@ const RoadNet = {
     // reta/direita/esquerda pelo ângulo, e o peso da manobra é dividido entre as pernas dela. Rotatória: também dá a volta; retorno:
     // reto ou "U". (Não há beco: o RoadPlan poda as pontas soltas.) Caminho (trilha estreita do interior): o trânsito não entra —
     // é do jogador, das motos e de quem anda a pé (só se não houver outra saída).
-    options(inter, inA) {
+    // rules (padrão): as regras de circulação (RioTraffic: mão única, sem esquerda da avenida para a rua) — a viatura em perseguição
+    // passa sem elas (contramão liberada). Se nenhuma saída legal estiver aberta (rua fechada por bloqueio), vale qualquer uma.
+    options(inter, inA, rules = true) {
         const W = inter.uturn ? RoadNet.W_UTURN : (inter.round ? RoadNet.W_ROUND : RoadNet.W_CROSS), count = {};
         let cand = [];
         for (const a of inter.arms) {
@@ -158,6 +160,7 @@ const RoadNet = {
             if (!W[turn] || this.isClosed(inter, a)) continue;
             cand.push({ turn, a });
         }
+        if (rules && typeof RioTraffic !== 'undefined') { const legal = cand.filter((c) => RioTraffic.allowed(inter, inA, c.a, c.turn)); if (legal.length) cand = legal; }
         if (cand.some((c) => c.a.e.cls !== 'trail')) cand = cand.filter((c) => c.a.e.cls !== 'trail');
         for (const c of cand) count[c.turn] = (count[c.turn] || 0) + 1;
         return cand.map((c) => ({ turn: c.turn, w: W[c.turn] / count[c.turn], plan: this.plan(inter, inA, c.a, c.turn) }));
@@ -213,7 +216,7 @@ const RoadNet = {
             if (!e || e.cls === 'trail') continue;                                 // (caminho: sem trânsito)
             const ma = Math.max(margin, (e.cutA || 0) + 8, e.a.round ? e.a.hwNS + 10 : 0), mb = Math.max(margin, (e.cutB || 0) + 8, e.b.round ? e.b.hwNS + 10 : 0);
             if (e.len < ma + mb + 2) continue;
-            const fwd = Math.random() < 0.5, p = P.at(e, ma + Math.random() * (e.len - ma - mb)), lane = e.w / 4;
+            const fwd = e.oneway ? e.oneway > 0 : Math.random() < 0.5, p = P.at(e, ma + Math.random() * (e.len - ma - mb)), lane = e.w / 4;      // (mão única: no sentido dela)
             const tx = fwd ? p.tx : -p.tx, tz = fwd ? p.tz : -p.tz, x = p.x + tz * lane, z = p.z - tx * lane;
             if (near) { const r = hypot(x - near.x, z - near.z); if (r < near.rMin || r > near.rMax) continue; }
             return { point: { x, z }, d: { dx: tx, dz: tz }, e, fwd };
@@ -240,6 +243,8 @@ class Route {
         this.end = { x, z, d, e: lp && lp.e ? lp.e : null, fwd: lp && lp.e ? lp.fwd : true };
         this.seg = 0;                   // segmento em que o carro está (pts[seg] -> pts[seg+1])
         this.goal = null;               // { x, z }: se definido, cada cruzamento escolhe a manobra que mais se aproxima dele
+        this.trips = false;             // trânsito civil: vai para destinos (RioTraffic.trip) em vez de sortear a manobra
+        this.trip = null;               // os próximos trechos da viagem
     }
 
     get length() { return this.cum[this.cum.length - 1]; }
@@ -257,10 +262,20 @@ class Route {
         if (!e) { const l = RoadNet.locate(x, z, d.dx, d.dz); if (!l) return false; e = l.e; fwd = l.fwd; }
         const inter = fwd ? e.b : e.a, inA = inter.arms && inter.arms.find((a) => a.e === e);
         if (!inA) return false;
-        const opts = RoadNet.options(inter, inA);
+        const opts = RoadNet.options(inter, inA, !this.goal);
         if (!opts.length) return false;
         let pick = opts[0];
-        if (this.goal) {
+        // VIAGEM (RioTraffic): o carro civil vai para um destino — segue a lista de trechos da rota; acabou ou saiu dela, outra viagem.
+        if (this.trips && !this.goal) {
+            if (this.trip && this.trip.length && this.trip[0] === e) this.trip.shift();          // (a rota começava no trecho atual)
+            if ((!this.trip || !this.trip.length) && !(this._noTrip > 0)) { this.trip = RioTraffic.trip(e, fwd, x, z); if (!this.trip) this._noTrip = 4; }      // (sem rota: sorteia algumas esquinas antes de tentar de novo)
+            else if (this._noTrip > 0) this._noTrip--;
+            const o = this.trip && this.trip.length ? opts.find((q) => q.plan.arm.e === this.trip[0]) : null;
+            if (o) { this.trip.shift(); pick = o; }
+            else this.trip = null;
+        }
+        if (this.trips && !this.goal && this.trip) { /* escolhido pela viagem */ }
+        else if (this.goal) {
             // Perseguição: guloso — a manobra cuja saída fica mais perto do alvo (reta ganha um pequeno bônus
             // para não ziguezaguear). Numa grade isso contorna quarteirões até chegar ao jogador.
             let best = Infinity;

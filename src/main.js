@@ -170,6 +170,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 	try {
 		await I18n.load();                                                           // os textos no idioma escolhido, antes do menu
 		I18n.apply(document);
+		Graphics.softwareNotice();                                                   // (navegador desenhando na CPU: como ligar a placa de vídeo)
 		if (window.DEFER_WORLD) {                                                    // o mapa: ~25 → 52% da barra
 			const L = CityGrid.steps(), MS = [300, 450, 450, 600, 200, 350, 300];
 			for (let i = 0; i < L.length; i++) await step(L[i].label, 0.26 + 0.26 * (i + 1) / L.length, MS[i] || 300, L[i].run);

@@ -183,6 +183,9 @@ const RoadArt = {
 		// --- tinta lisa gasta (linha 5, colunas 4–5): branca (linha de retenção) e amarela; a vala de obra (coluna 6) e terra (7)
 		ctx.fillStyle = W; ctx.fillRect(4 * C, 5 * C, C, C); this._wear(ctx, 4 * C, 5 * C, C, C, 0.22, 611); this._rect(D, 'paint', 4, 5);
 		ctx.fillStyle = Y; ctx.fillRect(5 * C, 5 * C, C, C); this._wear(ctx, 5 * C, 5 * C, C, C, 0.22, 612); this._rect(D, 'paintY', 5, 5);
+		// tracejado BRANCO quase sem desgaste (célula 5,3): pinta por cima do amarelo do meio nas ruas de MÃO ÚNICA (RioTraffic) — no
+		// Brasil a linha que separa faixas do mesmo sentido é branca; a amarela separa sentidos opostos
+		ctx.fillStyle = W; ctx.fillRect(5 * C, 3 * C, C, C); this._wear(ctx, 5 * C, 3 * C, C, C, 0.04, 613); this._rect(D, 'laneW', 5, 3);
 		{
 			const ox = 6 * C, oy = 5 * C, rng = Pixel.rng(701);
 			this._blob(ctx, ox + 64, oy + 64, 58, 0.12, 702, 24); ctx.fillStyle = 'rgb(92,68,46)'; ctx.fill();
@@ -211,6 +214,7 @@ const RoadArt = {
 		lombada: { c: [7, 0], shape: 'diamond', s: 0.75 }, pedestre: { c: [0, 1], shape: 'diamond', s: 0.75 }, curvaD: { c: [1, 1], shape: 'diamond', s: 0.75 },
 		curvaE: { c: [2, 1], shape: 'diamond', s: 0.75 }, onibus: { c: [3, 1], shape: 'rect', s: 0.6 }, obras: { c: [4, 1], shape: 'diamond', s: 0.8 },
 		devagar: { c: [5, 1], shape: 'rect', s: 0.75 },
+		contramao: { c: [2, 2], shape: 'circle', s: 0.62 },      // R-3 SENTIDO PROIBIDO: na saída de uma rua de mão única (RioTraffic)
 	},
 	BACK: { oct: [6, 1], circle: [7, 1], diamond: [0, 2], rect: [1, 2] },
 	PLATE_Y: 384,
@@ -265,6 +269,7 @@ const RoadArt = {
 			ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x + 18, y + 2); ctx.lineTo(x + 26, y + 26); ctx.stroke();
 			ctx.beginPath(); ctx.moveTo(x + 16, y + 30); ctx.quadraticCurveTo(x + 30, y + 14, x + 40, y + 30); ctx.closePath(); ctx.fill();
 		});
+		draw('contramao', (x, y) => { ctx.beginPath(); ctx.arc(x, y, 62, 0, 7); ctx.fillStyle = WH; ctx.fill(); ctx.beginPath(); ctx.arc(x, y, 57, 0, 7); ctx.fillStyle = R; ctx.fill(); ctx.fillStyle = WH; ctx.fillRect(x - 40, y - 10, 80, 20); });
 		draw('devagar', (x, y) => { shapePath('rect', x, y, 60); ctx.fillStyle = K; ctx.fill(); shapePath('rect', x, y, 55); ctx.fillStyle = OR; ctx.fill(); label('DEVAGAR', x, y - 12, 20, K, 84); label('OBRAS', x, y + 16, 24, K, 84); });
 		// versos (cinza galvanizado, o mesmo formato)
 		for (const [shape, c] of Object.entries(this.BACK)) {

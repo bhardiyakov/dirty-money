@@ -267,7 +267,7 @@ class TrafficManager {
         for (let tries = 0; tries < 40; tries++) {
             const cand = mode === 'drive' ? RoadNet.randomLanePoint(14, near) : this._randomCurbSlot(near);
             if (!cand || !this._clear(cand.point.x, cand.point.z, 9)) continue;
-            if (Math.random() > this._density(cand.point.x, cand.point.z)) continue;
+            if (Math.random() > this._density(cand.point.x, cand.point.z) * (typeof RioTraffic !== 'undefined' ? RioTraffic.densityMul() : 1)) continue;      // (madrugada: rua vazia)
             car.teleport(cand.point.x, cand.point.z, Math.atan2(cand.d.dx, cand.d.dz));
             car.stuck = 0; car.blocked = 0;
             if (car.clearDeadDriver) car.clearDeadDriver();                     // (outro carro, outro motorista: sem corpo nem buzina presa)
