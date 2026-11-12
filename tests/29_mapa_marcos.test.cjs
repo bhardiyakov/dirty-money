@@ -1,4 +1,4 @@
-// O mapa reestruturado (como a referência) com os nomes do jogo: a LAGOA a oeste do Centro, o MARACUTAIA, o CRISTO no Corcovado, o PÃO DE
+// O mapa reestruturado (como a referência) com os nomes do jogo: a LAGOA a oeste do Centro, o COLOSSO, o CRISTO no Corcovado, o PÃO DE
 // AÇÚCAR com o bondinho na ponta da praia do sul (calçadão, quiosques), píeres com barcos no canal, pontes estaiadas, a Rodovia da
 // Lagoa e a Via Expressa (laranja no mapa). E o mapa/GPS pintados em HD (MapPaint): mar com degradê, relevo, ladrilhos por zoom.
 const { boot } = require('./lib.cjs');
@@ -22,23 +22,23 @@ module.exports = {
                 paoSolid: CityGrid.obstaclesAround(P.x, P.z, 10).some((o) => o.x0 < P.x && o.x1 > P.x && o.z0 < P.z && o.z1 > P.z),
                 onPier: !!pier && MapGeo.onDock((pier.x0 + pier.x1) / 2, (pier.z0 + pier.z1) / 2),
                 hwyLagoa: roads(/Rodovia da Lagoa/).length, express: RoadPlan.edges.filter((e) => e.express).length,
-                estadio: roads(/Av\. do Estádio/).length, trilha: roads(/Estrada do Corcundão/).length,
+                estadio: roads(/Av\. do Estádio/).length, trilha: roads(/Estrada do Morro do Vigia/).length,
                 speedway: !!Speedway.site,
-                labels: WorldMap.regions.map((r) => r.name).filter((n) => /MARACUTAIA|LAGOA|PÃO DE MEL|CORCUNDÃO|CENTRO|FAVELA DO MORRO|ILHA DO DESGOVERNADOR/.test(n)).length,
+                labels: WorldMap.regions.map((r) => r.name).filter((n) => /COLOSSO|LAGOA|PEDRA DO FAROL|MORRO DO VIGIA|CENTRO|FAVELA DO MORRO|ILHA DO ALMIRANTE/.test(n)).length,
                 meshes: ['stadiumPitch', 'paoDeAcucar', 'calcadao', 'bondinho0'].filter((n) => game.scene.getMeshByName(n)).length,
             };
         });
-        c.ok(s.stadium && s.cristo, 'Maracutaia e Cristo Acolhedor no lugar');
+        c.ok(s.stadium && s.cristo, 'Colosso e Cristo Protetor no lugar');
         c.ok(s.strips >= 2 && s.kiosks >= 3, `calçadão na praia do sul (${s.strips} trechos, ${s.kiosks} quiosques)`);
         c.ok(s.piers >= 3 && s.boats >= 6 && s.pylons === 4, `píeres (${s.piers}) com barcos (${s.boats}) e 2 pontes estaiadas (${s.pylons} pilones)`);
         c.eq(s.pois, 3, 'pontos no mapa: estádio, Cristo, bondinho');
         c.eq(s.missing.join(','), '', 'todo tipo de ponto do mapa tem ícone (a vila da roça não derruba mais o mapa da pausa)');
         c.eq(s.lagoa, 'água', 'a Lagoa a oeste do Centro');
-        c.ok(s.pao && s.paoSolid, 'Pão de Mel: penedo de pedra, alto e sólido');
+        c.ok(s.pao && s.paoSolid, 'Pedra do Farol: penedo de pedra, alto e sólido');
         c.ok(s.corcovado && s.beach, 'Corcovado alto e a areia da praia do sul');
         c.ok(s.onPier, 'anda-se no píer como em terra');
         c.ok(s.hwyLagoa > 2 && s.express > 5, `Rodovia da Lagoa (${s.hwyLagoa} trechos) e Via Expressa (${s.express})`);
-        c.ok(s.estadio >= 1 && s.trilha >= 1, 'acesso ao estádio e Estrada do Corcundão (em laço: sem beco)');
+        c.ok(s.estadio >= 1 && s.trilha >= 1, 'acesso ao estádio e Estrada do Morro do Vigia (em laço: sem beco)');
         c.ok(s.speedway, 'o autódromo achou lugar');
         c.eq(s.labels, 7, 'nomes dos lugares no mapa (antigos e novos)');
         c.eq(s.meshes, 4, 'malhas dos marcos (gramado, penedo, calçadão, bondinho)');
@@ -68,7 +68,7 @@ module.exports = {
             g.inventory.cash = 100; L.interact(g); out.bondePaid = 100 - g.inventory.cash; out.riding = !!L.ride && pl.frozen;
             let top = 0, n = 0; while (L.ride && n < 400) { L.update(0.25); top = Math.max(top, pl.deckH || 0); n++; }
             out.bondeTop = top; out.bondeBack = !L.ride && !pl.frozen && !pl.walk && !pl.onDeck && Math.hypot(pl.position.x - B.a[0], pl.position.z - B.a[1]) < 9;
-            out.talk = Array.from({ length: 60 }, () => News.smallTalk()).some((t) => /Maracutaia|Corcovado|bondinho/.test(t));
+            out.talk = Array.from({ length: 60 }, () => News.smallTalk()).some((t) => /Colosso|Corcovado|bondinho/.test(t));
             return out;
         });
         c.ok(live.pierBoats === s.boats && live.boatAtPier, `barcos de verdade atracados nos píeres (${live.pierBoats}): roubáveis, navegáveis`);

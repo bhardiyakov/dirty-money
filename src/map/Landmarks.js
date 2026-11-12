@@ -1,10 +1,10 @@
 // ============================================================================
 // Landmarks — os MARCOS do mapa (estrutura do mapa de referência), com os nomes do jogo mantidos:
-//   • MARACUTAIA: o complexo a oeste do Centro — estádio, esplanada, estacionamento, estação, Maracutainha, parque aquático, e o
+//   • COLOSSO: o complexo a oeste do Centro — estádio, esplanada, estacionamento, estação, Ginásio Colosso, parque aquático, e o
 //     interior entrável — fica em Maracana.js;
-//   • CRISTO no alto do CORCUNDÃO (a serra no lugar do antigo lago do norte): o complexo inteiro — morro, escadarias, elevador, trem —
+//   • CRISTO no alto do MORRO DO VIGIA (a serra no lugar do antigo lago do norte): o complexo inteiro — morro, escadarias, elevador, trem —
 //     fica em Corcovado.js;
-//   • PÃO DE MEL: o penedo na ponta leste da praia do sul, com o BONDINHO subindo da areia;
+//   • PEDRA DO FAROL: o penedo na ponta leste da praia do sul, com o BONDINHO subindo da areia;
 //   • a PRAIA DO SUL: o CALÇADÃO de ondas pretas e brancas ao longo da Av. do Contorno, quiosques, postos de salva-vidas, coqueiros e
 //     guarda-sóis na areia;
 //   • as PONTES ESTAIADAS: pilones e estais nas pontes norte e do meio;
@@ -40,7 +40,7 @@ const Landmarks = {
     },
 
     _stadium() {
-        Maracana.build();                                                        // o complexo do Maracutaia (Maracana.js)
+        Maracana.build();                                                        // o complexo do Colosso (Maracana.js)
         this.stadium = Maracana.S;
     },
 
@@ -48,7 +48,7 @@ const Landmarks = {
         Corcovado.build();                                                       // o Corcovado: morro, mirante, escadarias, elevador, trem
         this.cristo = Corcovado.C;
         const B = this.BONDE, P = WorldMap.PAO;
-        CityGrid.addPoi({ type: 'bondinho', name: 'Bondinho do Pão de Mel', x: B.a[0] - 6, z: B.a[1] + 4 });
+        CityGrid.addPoi({ type: 'bondinho', name: 'Bondinho da Pedra do Farol', x: B.a[0] - 6, z: B.a[1] + 4 });
         // o penedo: sólido no pé (a pedra sobe acima da pista: ninguém atravessa)
         CityGrid.addObstacles([{ x0: P.x - 50, z0: P.z - 33, x1: P.x + 50, z1: P.z + 33, h: 30 }, { x0: P.x - 33, z0: P.z - 42, x1: P.x + 33, z1: P.z + 42, h: 30 }]);
     },
@@ -57,7 +57,7 @@ const Landmarks = {
     _beach() {
         const BE = WorldMap.BEACH, W = 9, strips = [], Q = {}, rng = Pixel.rng(4242);
         for (const e of RoadPlan.edges) {
-            const copa = e.name === 'Av. Atlântida';                                // (a orla em diagonal: Botafumo → Capacabana)
+            const copa = e.name === 'Av. Marítima';                                // (a orla em diagonal: Enseada → Costa Azul)
             if (!e.free || !(typeof ZonaSul !== 'undefined' ? ZonaSul.BEACH_AVES.has(e.name) : e.name === 'Av. do Contorno')) continue;
             const hw = e.w / 2, SW = 4, s0 = 0, s1 = e.len;                       // (do lado da areia não entra rua: o calçadão segue pelos cruzamentos)
             let run = null;
@@ -103,7 +103,7 @@ const Landmarks = {
                 }
             }
         }
-        // guarda-sóis em grupos na areia (entre o calçadão e a água) — na praia do sul e, com Capacabana, na areia da ilha
+        // guarda-sóis em grupos na areia (entre o calçadão e a água) — na praia do sul e, com Costa Azul, na areia da ilha
         const copaN = typeof ZonaSul !== 'undefined' && ZonaSul.coast ? 90 : 0, CF = copaN ? ZonaSul.coast.F : null;
         for (let tries = 0, n = 0; tries < 1800 && n < 70 + copaN; tries++) {
             const inCopa = copaN && tries % 2 === 1, Cp = inCopa ? CF.at(CF.L * (0.12 + rng() * 0.55)) : null, dd = 24 + rng() * 50;      // (na areia, para o lado do mar)
@@ -193,10 +193,10 @@ const Landmarks = {
             for (const q of this.kiosks) if (vis(q.x - 3, q.z - 3, q.x + 3, q.z + 3)) { shadow((c) => rect(q.x - 1.9, q.z - 1.9, q.x + 1.9, q.z + 1.9, c)); rect(q.x - 1.9, q.z - 1.9, q.x + 1.9, q.z + 1.9, q.c); rect(q.x - 0.9, q.z - 0.9, q.x + 0.9, q.z + 0.9, '#f4efe2'); }
             for (const t of this.towers) if (vis(t.x - 2, t.z - 2, t.x + 2, t.z + 2)) { rect(t.x - 1.2, t.z - 1.2, t.x + 1.2, t.z + 1.2, '#d8402f'); rect(t.x - 0.5, t.z - 0.5, t.x + 0.5, t.z + 0.5, '#f4f4f4'); }
         }
-        if (this.stadium) Maracana.drawMap(ctx, X, Y, k, vis);                      // o complexo do Maracutaia
+        if (this.stadium) Maracana.drawMap(ctx, X, Y, k, vis);                      // o complexo do Colosso
         if (typeof Lagoa !== 'undefined') Lagoa.drawMap(ctx, X, Y, k, vis);           // a orla da Lagoa
         if (this.cristo) Corcovado.drawMap(ctx, X, Y, k, vis);                     // o Corcovado (escadarias, terraço, elevador, trem, mirante)
-        // o BONDINHO do Pão de Mel: o cabo, as estações e as cabines
+        // o BONDINHO da Pedra do Farol: o cabo, as estações e as cabines
         const Bd = this.BONDE;
         if (vis(Math.min(Bd.a[0], Bd.b[0]) - 8, Math.min(Bd.a[1], Bd.b[1]) - 8, Math.max(Bd.a[0], Bd.b[0]) + 8, Math.max(Bd.a[1], Bd.b[1]) + 8)) {
             ctx.save(); ctx.strokeStyle = '#2b2f36'; ctx.lineWidth = Math.max(1, 0.4 * k); ctx.setLineDash([Math.max(2, 2 * k), Math.max(2, 1.4 * k)]);
@@ -318,7 +318,7 @@ const Landmarks = {
         return t;
     },
 
-    // O PÃO DE MEL: um penedo arredondado (malha própria, normais suaves), pedra cinza com veios e a mata no pé; o BONDINHO sobe da
+    // O PEDRA DO FAROL: um penedo arredondado (malha própria, normais suaves), pedra cinza com veios e a mata no pé; o BONDINHO sobe da
     // estação da praia até o topo (dois cabos, duas cabines indo e vindo).
     _meshPao(wb) {
         // (relevo de verdade: o penedo com Config.relief.pao m; a estação do alto do bondinho sobe junto)
@@ -385,7 +385,7 @@ const Landmarks = {
     },
     // ---------------------------------------------------------------- gente e som (NPCManager, Ambience)
     // Movimento de pedestres no lugar (0..1, como NPCManager._density) ou null fora dos marcos: a esplanada e o estacionamento do
-    // Maracutaia (cheios com o estádio aberto), a praça do portão do Corcundão, o calçadão.
+    // Colosso (cheios com o estádio aberto), a praça do portão do Morro do Vigia, o calçadão.
     crowd(x, z) {
         if (!this.built) return null;
         if (typeof Lagoa !== 'undefined') { const l = Lagoa.crowd(x, z); if (l !== null) return l; }
@@ -394,7 +394,7 @@ const Landmarks = {
         if (this.beach && this._nearBeachStrip(x, z, 1)) return 1;
         return null;
     },
-    // Quem anda por ali (NPCManager._style): a torcida de camisa na esplanada do Maracutaia, turistas no portão do Corcundão; null: o normal.
+    // Quem anda por ali (NPCManager._style): a torcida de camisa na esplanada do Colosso, turistas no portão do Morro do Vigia; null: o normal.
     crowdStyle(x, z, r) {
         if (!this.built) return null;
         if (typeof Lagoa !== 'undefined') { const l = Lagoa.crowdStyle(x, z, r); if (l) return l; }
@@ -402,7 +402,7 @@ const Landmarks = {
         if (this.cristo) { const g = Corcovado.W(-8, -71); if (Math.abs(x - g[0]) < 24 && Math.abs(z - g[1]) < 16) return r < 0.6 ? 'tourist' : 'casual'; }
         return null;
     },
-    // O burburinho da torcida em volta do Maracutaia aberto (mais alto no jogo da noite).
+    // O burburinho da torcida em volta do Colosso aberto (mais alto no jogo da noite).
     crowdSound(x, z, h) { return this.stadium ? Maracana.crowdSound(x, z, h) : 0; },
 
     // ---------------------------------------------------------------- o passeio de bondinho
@@ -411,7 +411,7 @@ const Landmarks = {
         const pl = g.player, B = this.BONDE;
         return !pl.onDeck && !pl.underBridge && !pl.busy && !pl.frozen && hypot(pl.position.x - B.a[0], pl.position.z - B.a[1]) < 7.5;
     },
-    prompt(g) { return this._bondeSpot(g) ? `<b>E</b> Bondinho do Pão de Mel — ${brl(this.BONDE_FARE)}<small>passeio até o alto do penedo e volta</small>` : ''; },
+    prompt(g) { return this._bondeSpot(g) ? `<b>E</b> Bondinho da Pedra do Farol — ${brl(this.BONDE_FARE)}<small>passeio até o alto do penedo e volta</small>` : ''; },
     interact(g) {
         if (!this._bondeSpot(g)) return false;
         const pl = g.player, inv = g.inventory;
@@ -422,7 +422,7 @@ const Landmarks = {
         this._net = this._net || { name: 'Bondinho', parts: [] };                  // (lá em cima a câmera mira a cabine: Game, pl.walk/deckH)
         pl.walk = this._net; pl.onDeck = true; pl.roof = null;
         this.ride = { g, t: 0, back: { x: pl.position.x, z: pl.position.z }, top: false };
-        g._flash(`🚡 Bondinho do Pão de Mel (−${brl(this.BONDE_FARE)}): subindo…`);
+        g._flash(`🚡 Bondinho da Pedra do Farol (−${brl(this.BONDE_FARE)}): subindo…`);
         return true;
     },
     // Multiplicador do zoom automático no passeio: abre com a altura da cabine.
@@ -433,7 +433,7 @@ const Landmarks = {
         const e = (k) => k * k * (3 - 2 * k), t = R.t;
         const k = t < tu ? e(t / tu) : t < tu + tw ? 1 : 1 - e(Math.min(1, (t - tu - tw) / td));
         C[0].t = k; C[0].dir = 0; C[1].t = 1 - k; C[1].dir = 0;                      // (as duas cabines se cruzam no meio, como o de verdade)
-        if (!R.top && t >= tu) { R.top = true; g._flash('🚡 Alto do Pão de Mel — a baía inteira lá embaixo'); }
+        if (!R.top && t >= tu) { R.top = true; g._flash('🚡 Alto da Pedra do Farol — a baía inteira lá embaixo'); }
         if (!pl.alive || t >= tu + tw + td) {
             pl.frozen = false; pl.invulnerable = false; pl.setVisible(true);
             pl.position.x = R.back.x; pl.position.z = R.back.z;
@@ -499,7 +499,7 @@ const Landmarks = {
             bt.solid(t.x - 1.4, t.z - 1.4, t.x + 1.4, t.z + 1.4, 4.2, 4.5, c('#f7f7f7'));
         }
     },
-    // O calçadão de Capacabana: ondas largas de pedra portuguesa preta sobre a branca (ladrilho de 6 × 9 u, repete ao longo).
+    // O calçadão de Costa Azul: ondas largas de pedra portuguesa preta sobre a branca (ladrilho de 6 × 9 u, repete ao longo).
     _calcadaoTex(scene) {
         const W = 512, H = 768, t = new BABYLON.DynamicTexture('calcadaoTex', { width: W, height: H }, scene, true);
         const g = t.getContext();

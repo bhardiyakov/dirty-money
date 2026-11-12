@@ -1,5 +1,5 @@
 // ============================================================================
-// Speedway — o AUTÓDROMO (referência: a folha de arquibancadas, pista e boxes): um circuito misto no campo a oeste (no pé do Corcundão),
+// Speedway — o AUTÓDROMO (referência: a folha de arquibancadas, pista e boxes): um circuito misto no campo a oeste (no pé do Morro do Vigia),
 // palco das corridas de estádio do StreetRacing. O traçado é um polígono de controle com as curvas arredondadas (POLY: [v, u, raio]):
 // reta dos boxes (leste, subindo), o S do miolo, o grampo e a reta oposta; sentido anti-horário visto de cima (como o oval antigo).
 //   • PISTA: asfalto com borracha nas tangências e marcas de freada, faixas brancas, ZEBRAS verde-amarelas (internas e de saída) nas

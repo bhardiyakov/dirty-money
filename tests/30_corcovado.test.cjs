@@ -1,4 +1,4 @@
-// O CORCUNDÃO: o morro em 3D com o Cristo no mirante e os caminhos do chão até o topo, andando de verdade (Walkways):
+// O MORRO DO VIGIA: o morro em 3D com o Cristo no mirante e os caminhos do chão até o topo, andando de verdade (Walkways):
 //   • as escadarias do portão ao mirante, a passarela de madeira até o terraço do café, a escada do terraço e a da estação do alto —
 //     sem fresta em nenhum ponto, com a altura subindo; entra-se pelo pé de um lance e, descendo, sai-se no chão pelo pé;
 //   • o elevador (do chão ao terraço) e o trem (da estação do pé à do alto), com o E, nos dois sentidos;
@@ -68,7 +68,7 @@ module.exports = {
             const mid = C.W(10, -22);
             out.solid = CityGrid.obstaclesAround(mid[0], mid[1], 2).some((o) => o.x0 < mid[0] && o.x1 > mid[0] && o.z0 < mid[1] && o.z1 > mid[1]);
             out.speedway = !!Speedway.site;
-            out.road = RoadPlan.edges.filter((e) => e.name === 'Estrada do Corcundão').length;
+            out.road = RoadPlan.edges.filter((e) => e.name === 'Estrada do Morro do Vigia').length;
             out.forest = WorldMap.biomeAt(C.C.x + 30, C.C.z + 30) === WorldMap.B.FOREST;
             out.poi = CityGrid.pois.some((p) => p.type === 'cristo');
             return out;
@@ -84,7 +84,7 @@ module.exports = {
         c.ok(!!r.exit && r.exit.h === 0 && !r.exit.deck && r.exit.z < -63, `descendo, sai no chão pelo pé (${JSON.stringify(r.exit)})`);
         c.ok(r.zoom > 2, `a câmera abre no mirante (${r.zoom.toFixed(2)}×)`);
         c.ok(r.solid, 'o morro é sólido para quem está no chão');
-        c.ok(r.speedway && r.road >= 1 && r.forest && r.poi, 'autódromo no lugar, Estrada do Corcundão, mata em volta, ponto no mapa');
+        c.ok(r.speedway && r.road >= 1 && r.forest && r.poi, 'autódromo no lugar, Estrada do Morro do Vigia, mata em volta, ponto no mapa');
 
         // elevador e trem: E no pé leva ao alto; E lá em cima traz de volta
         const ride = await page.evaluate(() => {
@@ -138,7 +138,7 @@ module.exports = {
             pl.walk = null; pl.onDeck = false; pl.deckH = 0; pl.teleport(new BABYLON.Vector3(cafe.x - 3, 0, cafe.z - 2));
             out.ground = Stands.prompt(g);
             pl.enterWalk(C.net, cafe.x - 3, cafe.z - 2, 11); pl.position.x = cafe.x - 3; pl.position.z = cafe.z - 2;
-            out.terrace = /Café do Corcundão/.test(Stands.prompt(g));
+            out.terrace = /Café do Morro do Vigia/.test(Stands.prompt(g));
             g.inventory.cash = 50; Stands.interact(g); out.bought = Stands.buy(g, 'cafe') && g.inventory.cash === 45;
             if (Stands._p && Stands._p.open && Stands._p.close) Stands._p.close();
             const top = C.W(4, -12); pl.teleport(new BABYLON.Vector3(top[0], 0, top[1])); pl.enterWalk(C.net, top[0], top[1], 18); g.camera.snapTo(pl.position);
@@ -156,7 +156,7 @@ module.exports = {
         c.eq(life.tourists, 8, 'turistas no mirante do Cristo, de dia');
         c.ok(life.lit[1] > life.lit[0] + 0.3 && life.touristsNight === 0, `à noite o Cristo é iluminado (${life.lit.map((v) => v.toFixed(2))}) e os turistas vão embora`);
         c.ok(life.crowd > 0.5 && /tourist|casual/.test(life.style), `movimento de turistas no portão (${life.crowd}, ${life.style})`);
-        c.noErrors(errors, 'Corcundão');
+        c.noErrors(errors, 'Morro do Vigia');
         await close();
     },
 };

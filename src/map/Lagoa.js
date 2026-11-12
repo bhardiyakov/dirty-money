@@ -1,5 +1,5 @@
 // ============================================================================
-// Lagoa — a LAGOA a oeste do Centro, como a Rodrigo de Fritas: espelho d'água DOCE, parado, com a borda de ATERRO (mureta de pedra,
+// Lagoa — a LAGOA a oeste do Centro, como a da Prata: espelho d'água DOCE, parado, com a borda de ATERRO (mureta de pedra,
 // sem praia), e em volta, de dentro para fora:
 //   • a ORLA (parque): a pista de caminhada (bege) e a CICLOVIA (vermelha) colada nela, palmeiras na beira d'água, árvores, bancos e
 //     postes, QUIOSQUES com guarda-sóis (Stands: vendem de verdade), carrinhos de AMBULANTE, DEQUES de madeira entrando na água (anda-se

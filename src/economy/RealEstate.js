@@ -42,7 +42,7 @@ const RealEstate = {
         let region;
         if (dFav <= 0) region = this.FAVELA_PPM_NAME;
         else if (dFav < 160) region = 'Entorno da favela';
-        else if (district === 'island') region = 'Ilha do Desgovernador';
+        else if (district === 'island') region = 'Ilha do Almirante';
         else if (shore > 0.62) region = 'Orla';
         else region = { downtown: 'Centro', commercial: 'Área comercial', residential: 'Bairro residencial', industrial: 'Zona industrial', port: 'Região do porto' }[biome] || 'Cidade';
         return { idx, shore, region, dFav };
