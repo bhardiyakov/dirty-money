@@ -17,7 +17,7 @@ class Empire {
             residencial: { name: 'Bairros residenciais', rich: 0.95, police: 0.95 },
             orla: { name: 'Orla', rich: 1.2, police: 1.1 },
             industrial: { name: 'Porto e indústria', rich: 0.85, police: 0.85 },
-            ilha: { name: 'Ilha Praiana', rich: 1.6, police: 1.3 },
+            ilha: { name: 'Ilha do Governador', rich: 1.6, police: 1.3 },
             periferia: { name: 'Periferia', rich: 0.7, police: 0.8 },
             mirante: { name: 'Morro do Mirante', rich: 0.9, police: 0.7 },        // favela do C.P.C (ver FavelaSul)
             roca: { name: 'Vila da Roça', rich: 0.55, police: 0.55 },             // (map/Bairros.js)

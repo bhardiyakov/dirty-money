@@ -57,7 +57,7 @@ const Landmarks = {
     _beach() {
         const BE = WorldMap.BEACH, W = 9, strips = [], Q = {}, rng = Pixel.rng(4242);
         for (const e of RoadPlan.edges) {
-            const copa = e.name === 'Av. Atlântica';                                // (Copacabana: a orla da ilha, de frente para o leste)
+            const copa = e.name === 'Av. Atlântica';                                // (a orla em diagonal: Botafogo → Copacabana)
             if (!e.free || !(typeof ZonaSul !== 'undefined' ? ZonaSul.BEACH_AVES.has(e.name) : e.name === 'Av. do Contorno')) continue;
             const hw = e.w / 2, SW = 4, s0 = 0, s1 = e.len;                       // (do lado da areia não entra rua: o calçadão segue pelos cruzamentos)
             let run = null;
@@ -66,9 +66,9 @@ const Landmarks = {
                 RoadPlan.at(e, s, Q);
                 // lado de fora: o que não é cidade
                 let nx = -Q.tz, nz = Q.tx;
-                if (copa ? nx < 0 : CityGrid.inCity(Q.x + nx * (hw + 3), Q.z + nz * (hw + 3))) { nx = -nx; nz = -nz; }
+                if (CityGrid.inCity(Q.x + nx * (hw + 3), Q.z + nz * (hw + 3))) { nx = -nx; nz = -nz; }
                 const ix = Q.x + nx * (hw + SW), iz = Q.z + nz * (hw + SW), ox = ix + nx * W, oz = iz + nz * W;
-                const inBeach = copa ? nx > 0.35 && ZonaSul.copaSand(ox, oz) && WorldMap.isLand(ox + nx * 20, oz + nz * 20)
+                const inBeach = copa ? ZonaSul.coastSand(ox, oz) && WorldMap.isLand(ox, oz)
                     : ix > BE.x0 && ix < BE.x1 && iz < BE.z1 + 30 && nz < -0.35 && WorldMap.isLand(ox, oz);
                 if (inBeach) {
                     if (!run) run = { inner: [], outer: [], n: [], s: [] };
@@ -104,10 +104,10 @@ const Landmarks = {
             }
         }
         // guarda-sóis em grupos na areia (entre o calçadão e a água) — na praia do sul e, com Copacabana, na areia da ilha
-        const copaN = typeof ZonaSul !== 'undefined' && ZonaSul.copa ? 90 : 0;
+        const copaN = typeof ZonaSul !== 'undefined' && ZonaSul.coast ? 90 : 0, CF = copaN ? ZonaSul.coast.F : null;
         for (let tries = 0, n = 0; tries < 1800 && n < 70 + copaN; tries++) {
-            const inCopa = copaN && tries % 2 === 1, zc = -800 + rng() * 1700;
-            const x = inCopa ? ZonaSul.copa.XE.at(zc) + 24 + rng() * 70 : BE.x0 + 20 + rng() * (BE.x1 - BE.x0 - 70), z = inCopa ? zc : BE.z1 - 40 - rng() * 170;
+            const inCopa = copaN && tries % 2 === 1, Cp = inCopa ? CF.at(CF.L * (0.12 + rng() * 0.55)) : null, dd = 24 + rng() * 50;      // (na areia, para o lado do mar)
+            const x = inCopa ? Cp.x - Cp.nx * dd : BE.x0 + 20 + rng() * (BE.x1 - BE.x0 - 70), z = inCopa ? Cp.z - Cp.nz * dd : BE.z1 - 40 - rng() * 170;
             if (!WorldMap.isLand(x, z) || WorldMap.biomeAt(x, z) !== WorldMap.B.SAND || WorldMap.waterDist(x, z) < 8 || this._nearBeachStrip(x, z, 14) || CityGrid.inCity(x, z)) continue;
             props.push({ type: 'prop', kind: 'umbrella', x, z, s: 0.75 + rng() * 0.2, seed: Math.floor(rng() * 1000) });
             n++;

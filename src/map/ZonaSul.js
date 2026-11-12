@@ -1,23 +1,23 @@
 // ============================================================================
-// ZonaSul — o traçado dos bairros de praia no jeito da Zona Sul do Rio (não planejado, crescido ao longo da orla):
-//   • COPACABANA, na ilha: a AV. ATLÂNTICA numa curva lisa a ~100 u do mar (areia larga, calçadão de ondas, quiosques), as ruas
-//     PARALELAS à praia acompanhando a curva (N. S. de Copacabana, Barata Ribeiro, Tonelero, Pompeu Loureiro) e as TRANSVERSAIS do mar
-//     para o morro, em espaçamentos desiguais, um pouco tortas, umas que morrem numa paralela, paralelas interrompidas; três
-//     transversais largas (mão dupla) ligam as pontes à praia.
-//   • IPANEMA / LEBLON, no sul da cidade: a orla (Av. Vieira Souto / Delfim Moreira — o trecho da Av. do Contorno na praia), as
-//     paralelas (Prudente de Morais, Visconde de Pirajá — a principal, de mão dupla —, Barão da Torre) e as transversais do mar para a
-//     Lagoa, desencontradas da grade de cima; a ponta oeste (o Leblon) acaba no MORRO DO MIRANTE, como o Leblon no Vidigal.
+// ZonaSul — o traçado orgânico da cidade e da ilha, seguindo o esquema do Rio (Zona Sul e Centro): ruas que cresceram sem plano.
+//   • NORTE da cidade (z > 210 — Santa Teresa e arredores): ruas N-S onduladas e travessas curtas DESENCONTRADAS entre elas (cada faixa
+//     entre duas ruas tem as suas), cortadas por algumas avenidas leste-oeste que vão da Beira-Mar até a Av. do Contorno.
+//   • CENTRO (−210..210): a grade antiga com as diagonais e a praça — fica como era (CityGrid).
+//   • SUL da cidade (Botafogo, Copacabana, Ipanema): a costa vira uma ORLA EM DIAGONAL, da Beira-Mar (z ≈ −210) até a praia do sul; a
+//     Av. Atlântica corre por ela com o calçadão e a areia larga até o mar. As ruas acompanham a curva da praia, com travessas
+//     desencontradas; a oeste de x = −168 fica a faixa reta do viaduto (Leblon).
+//   • ILHA DO GOVERNADOR: a Av. Litorânea em volta, uma avenida central de norte a sul (Estrada do Galeão) e um labirinto de ruas
+//     onduladas e travessas desencontradas; as três pontes descem em avenidas que cruzam até a central.
 //
-// Malha CURVILÍNEA: (u, v) → mundo = ponto da ESPINHA (a curva da praia) a u ao longo dela + v para dentro (a normal) + um tremido
-// suave do mundo. Paralela = v constante com uma ondulação própria; transversal = u = u0 + inclinação·v + curva·v². Os cruzamentos são
-// resolvidos em (u, v) e entram como VÉRTICE nas duas linhas (o mesmo ponto: o RoadPlan liga as duas ali). As linhas são recortadas
-// pelo contorno do bairro (CityGrid._clipLine). Cada uma leva `line` (sentido da mão única: RioTraffic) e o nome.
-// Determinístico (Pixel.rng).
+// Malha CURVILÍNEA: (u, v) → mundo = ponto da ESPINHA a u ao longo dela + v na normal + um tremido suave do mundo (que some perto das
+// bordas retas, para as pontas caírem exatas nelas). Rua longa = v constante com ondulação própria; travessa = u = u0 + incl.·v + curva·v².
+// Cruzamentos resolvidos em (u, v), vértice comum às duas ruas (o RoadPlan liga ali). Recorte pelo contorno (CityGrid._clipLine).
+// Cada rua leva `line` (RioTraffic: as longas em binário de mão única; as travessas, mão dupla). Determinístico.
 // ============================================================================
 
 const ZonaSul = {
-	copa: null,          // { frame, xe: (z) => x da Atlântica } — areia, biomas, calçadão
-	ipa: null,           // { frame, zA }
+	coast: null,          // { F, side } a orla em diagonal do sul da cidade
+	isle: null,           // { F } a espinha da ilha
 
 	// ------------------------------------------------------------------ espinha e malha
 	_smooth(A, r, n = 2) {
@@ -25,7 +25,7 @@ const ZonaSul = {
 		for (let k = 0; k < n; k++) a = a.map((_, i) => { let s = 0, c = 0; for (let j = Math.max(0, i - r); j <= Math.min(a.length - 1, i + r); j++) { s += a[j]; c++; } return s / c; });
 		return a;
 	},
-	// Espinha: polilinha [[x, z]...] reamostrada a cada 4 u; side = +1 → "para dentro" é a esquerda de quem anda nela.
+	// Espinha: polilinha [[x, z]...] reamostrada a cada 4 u; side = +1 → v positivo à esquerda de quem anda nela.
 	frame(pts, side = 1) {
 		const P = RuralRoads._resample(pts, 4), cum = [0];
 		for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
@@ -36,42 +36,59 @@ const ZonaSul = {
 			const a = P[i], b = P[i + 1], l = (cum[i + 1] - cum[i]) || 1, t = (u - cum[i]) / l, tx = (b[0] - a[0]) / l, tz = (b[1] - a[1]) / l;
 			return { x: a[0] + (b[0] - a[0]) * t, z: a[1] + (b[1] - a[1]) * t, tx, tz, nx: -tz * side, nz: tx * side };
 		};
-		return { P, cum, L, at };
-	},
-	// (u, v) → [x, z], com o tremido do mundo (o mesmo para todas as linhas: os cruzamentos continuam no lugar)
-	_map(F, u, v, warp, seed) {
-		const p = F.at(u), x = p.x + p.nx * v, z = p.z + p.nz * v;
-		if (!warp) return [x, z];
-		const n = (a, b, s) => WorldMap._fbm(a, b, 2, s) * 2 - 1;
-		return [x + warp * n(x / 160, z / 160, seed), z + warp * n(x / 160 + 7.3, z / 160 + 2.9, seed + 1)];
+		// (x, z) → { u, v } (projeção na espinha; v com o sinal do lado)
+		const uv = (x, z) => {
+			let bd = Infinity, bu = 0, bv = 0;
+			for (let i = 0; i + 1 < P.length; i++) {
+				const a = P[i], b = P[i + 1], sx = b[0] - a[0], sz = b[1] - a[1], l2 = sx * sx + sz * sz || 1, t = Math.max(0, Math.min(1, ((x - a[0]) * sx + (z - a[1]) * sz) / l2));
+				const qx = a[0] + sx * t, qz = a[1] + sz * t, d = hypot(x - qx, z - qz);
+				if (d < bd) { bd = d; bu = cum[i] + t * Math.sqrt(l2); const l = Math.sqrt(l2); bv = ((x - qx) * (-sz / l) + (z - qz) * (sx / l)) * side; }
+			}
+			return { u: bu, v: bv };
+		};
+		return { P, cum, L, at, uv, side };
 	},
 
-	// Gera as linhas. spec: { F, warp, seed, O, district, pv (paralelas são linhas N-S?), par: [...], tr: [...], rng }
-	//   paralela: { v, amp, wl, ph, name, cls, dir, gap (chance de um trecho faltar), endX (termina exatamente em x = endX) }
-	//   transversal: { u0, tilt, bend, from, to, name, cls, dir } — from/to: número (v), { p: i } (no cruzamento com a paralela i),
-	//   { z: Z } (até a reta z = Z), { pt: [x, z] } (até o ponto exato, sem recorte)
+	// Gera as ruas. S: { F, warp, seed, fade(u, v, x, z) → 0..1, bound(x, z) (> 0 = fora), O (contorno), district, pv, par, tr, rng }
+	//   par: { v, amp, wl, ph, name, cls, dir, gap }        (rua longa: v constante)
+	//   tr:  { u0, tilt, bend, from, to, name, cls, dir }  from/to: número (v) | { p: i } (na rua longa i) | { bound: 1 } (até a borda S.bound)
+	//        | { pt: [x, z] } (só `to`: vai reto até o ponto exato, sem recorte) ; fromCross / toCross: a ponta é um cruzamento (borda reta)
 	grid(P, S) {
-		const { F, par, tr } = S, M = (u, v) => this._map(F, u, v, S.warp, S.seed);
+		const { F, par, tr } = S;
+		const M = (u, v) => {
+			const p = F.at(u), x = p.x + p.nx * v, z = p.z + p.nz * v;
+			if (!S.warp) return [x, z];
+			const k = S.warp * (S.fade ? S.fade(u, v, x, z) : 1);
+			if (k <= 0) return [x, z];
+			const n = (a, b, s) => WorldMap._fbm(a, b, 2, s) * 2 - 1;
+			return [x + k * n(x / 150, z / 150, S.seed), z + k * n(x / 150 + 7.3, z / 150 + 2.9, S.seed + 1)];
+		};
 		const uT = (T, v) => T.u0 + T.tilt * v + T.bend * v * v / 1e4;
 		const vP = (p, u) => p.v + p.amp * Math.sin(u / p.wl + p.ph);
-		// cruzamentos (u, v) de cada transversal com cada paralela
-		const X = tr.map((T) => par.map((p) => { let v = p.v; for (let it = 0; it < 12; it++) v = vP(p, uT(T, v)); return { u: uT(T, v), v }; }));
-		const vOf = (T, k, w, fallback) => {
-			if (typeof w === 'number') return w;
-			if (w && w.p !== undefined) return X[k][w.p].v;
-			if (w && w.z !== undefined) { let a = 0, b = 420; for (let it = 0; it < 40; it++) { const m = (a + b) / 2; if ((M(uT(T, m), m)[1] - w.z) * (M(uT(T, a), a)[1] - w.z) <= 0) b = m; else a = m; } return (a + b) / 2; }
-			return fallback;
-		};
+		const X = tr.map((T) => par.map((p) => { let v = p.v; for (let it = 0; it < 14; it++) v = vP(p, uT(T, v)); return { u: uT(T, v), v }; }));
+		const bisect = (f, a, b) => { let fa = f(a); for (let it = 0; it < 44; it++) { const m = (a + b) / 2, fm = f(m); if ((fm > 0) === (fa > 0)) { a = m; fa = fm; } else b = m; } return (a + b) / 2; };
+		// as pontas de cada travessa
 		for (let k = 0; k < tr.length; k++) {
-			const T = tr[k]; T.vA = vOf(T, k, T.from, -30); T.vB = T.to && T.to.pt ? null : vOf(T, k, T.to, 460);
-			if (T.vB === null) { let v = T.vA; while (v < 460) { const q = M(uT(T, v), v); if (hypot(q[0] - T.to.pt[0], q[1] - T.to.pt[1]) < 22) break; v += 2; } T.vEnd = v; }      // (até perto do ponto; o último trecho vai reto nele)
+			const T = tr[k], end = (w, dflt) => {
+				if (typeof w === 'number') return w;
+				if (w && w.p !== undefined) return X[k][w.p].v;
+				return dflt;
+			};
+			T.vA = end(T.from, -30);
+			if (T.to && T.to.pt) { let v = T.vA, s = Math.sign(T.toDir || 1); while (Math.abs(v) < 600) { const q = M(uT(T, v), v); if (hypot(q[0] - T.to.pt[0], q[1] - T.to.pt[1]) < 20) break; v += 2 * s; } T.vB = v; }
+			else if (T.to && T.to.bound) {
+				const s = T.toDir || 1, f = (v) => { const q = M(uT(T, v), v); return S.bound(q[0], q[1]); };
+				let v = T.vA; while (f(v) <= 0 && Math.abs(v) < 600) v += 3 * s;
+				T.vB = Math.abs(v) < 600 ? bisect(f, v - 3 * s, v) : v;
+			} else T.vB = end(T.to, 460);
+			T.lo = Math.min(T.vA, T.vB); T.hi = Math.max(T.vA, T.vB);
 		}
-		// paralelas: trechos entre transversais que chegam nelas (algumas faltam: rua interrompida)
-		const exists = par.map(() => new Set());                                   // k das transversais em que a paralela tem cruzamento
 		let nLines = 0;
+		const exists = par.map(() => new Set());
+		// ruas longas
 		par.forEach((p, i) => {
 			const ks = [];
-			for (let k = 0; k < tr.length; k++) { const T = tr[k], v = X[k][i].v; if (v >= T.vA - 1e-6 && (T.vB === null ? v < T.vEnd : v <= T.vB + 1e-6)) ks.push(k); }
+			for (let k = 0; k < tr.length; k++) { const v = X[k][i].v; if (v >= tr[k].lo - 1e-6 && v <= tr[k].hi + 1e-6) ks.push(k); }
 			ks.sort((a, b) => X[a][i].u - X[b][i].u);
 			if (ks.length < 2) return;
 			const pieces = [];
@@ -81,217 +98,266 @@ const ZonaSul = {
 				cur.push(ks[j + 1]);
 			}
 			pieces.push(cur);
+			const fB = (u) => { const q = M(u, vP(p, u)); return S.bound(q[0], q[1]); };
 			pieces.forEach((pc, pi) => {
 				if (pc.length < 2 && !(pi === 0 || pi === pieces.length - 1)) return;
-				const us = new Set(), crossU = new Set(pc.map((k) => X[k][i].u));
+				const crossU = new Set(pc.map((k) => X[k][i].u)), extra = new Set();
 				let ua = X[pc[0]][i].u, ub = X[pc[pc.length - 1]][i].u;
-				if (pi === 0) ua = (p.u0 !== undefined ? p.u0 : -60);                      // (as pontas vão até o contorno: o recorte decide)
-				if (pi === pieces.length - 1) ub = (p.u1 !== undefined ? p.u1 : F.L + 60);
-				let endU = null;
-				if (p.endX !== undefined && pi === pieces.length - 1) {                 // termina exatamente na reta x = endX (a Beira-Mar)
-					let a = X[pc[pc.length - 1]][i].u, b = ub;
-					if ((M(a, vP(p, a))[0] - p.endX) * (M(b, vP(p, b))[0] - p.endX) <= 0) { for (let it = 0; it < 40; it++) { const m = (a + b) / 2; if ((M(m, vP(p, m))[0] - p.endX) * (M(a, vP(p, a))[0] - p.endX) <= 0) b = m; else a = m; } endU = (a + b) / 2; ub = endU; }
-				}
+				// pontas soltas: até a borda reta (cruzamento exato nela) ou até o contorno (o recorte decide)
+				const reach = (u0, dir, lim) => {
+					if (S.bound && fB(u0) <= 0) { let u = u0; while (fB(u) <= 0 && (dir > 0 ? u < lim : u > lim)) u += 3 * dir; if (fB(u) > 0) { const b = bisect(fB, u - 3 * dir, u); extra.add(b); return b; } return lim; }
+					return lim;
+				};
+				if (pi === 0) ua = p.u0 !== undefined ? p.u0 : reach(ua, -1, -80);
+				if (pi === pieces.length - 1) ub = p.u1 !== undefined ? p.u1 : reach(ub, 1, F.L + 80);
+				if (p.u0 !== undefined && pi === 0 && p.u0cross) extra.add(p.u0);
+				const us = new Set([ua, ub]);
 				for (let u = Math.ceil(ua / 6) * 6; u < ub; u += 6) us.add(u);
-				us.add(ua); us.add(ub); for (const u of crossU) if (u >= ua && u <= ub) us.add(u);
+				for (const u of crossU) if (u >= ua && u <= ub) us.add(u);
 				const list = [...us].sort((a, b) => a - b), L = [], cross = new Set();
-				list.forEach((u, j) => { L.push(M(u, vP(p, u))); if (crossU.has(u) || u === endU) cross.add(j); });
+				list.forEach((u, j) => { L.push(M(u, vP(p, u))); if (crossU.has(u) || extra.has(u)) cross.add(j); });
 				for (const k of pc) exists[i].add(k);
 				const line = { v: !!S.pv, at: p.v, d: S.district, dir: p.dir };
 				for (const q of CityGrid._clipLine(L, cross, S.O)) { P.addPath(q, p.cls, { name: p.name, line }); nLines++; }
 			});
 		});
-		// transversais
+		// travessas
 		tr.forEach((T, k) => {
-			const vs = new Set(), crossV = new Set();
-			const vEnd = T.vB === null ? T.vEnd : T.vB;
-			for (let v = Math.ceil(T.vA / 6) * 6; v < vEnd; v += 6) vs.add(v);
-			vs.add(T.vA); vs.add(vEnd);
-			par.forEach((p, i) => { const v = X[k][i].v; if (v >= T.vA - 1e-6 && v <= vEnd + 1e-6 && exists[i].has(k)) { vs.add(v); crossV.add(v); } });
-			if (typeof T.to === 'object' && T.to && T.to.z !== undefined) crossV.add(vEnd);
-			if (typeof T.from === 'object' && T.from && T.from.p !== undefined) crossV.add(T.vA);
-			const list = [...vs].sort((a, b) => a - b), L = [], cross = new Set();
+			const vs = new Set([T.vA, T.vB]), crossV = new Set();
+			for (let v = Math.ceil(T.lo / 6) * 6; v < T.hi; v += 6) vs.add(v);
+			par.forEach((p, i) => { const v = X[k][i].v; if (v >= T.lo - 1e-6 && v <= T.hi + 1e-6 && exists[i].has(k)) { vs.add(v); crossV.add(v); } });
+			if ((T.from && T.from.p !== undefined) || T.fromCross) crossV.add(T.vA);
+			if ((T.to && (T.to.p !== undefined || T.to.bound)) || T.toCross) crossV.add(T.vB);
+			let list = [...vs].sort((a, b) => a - b);
+			if (T.vB < T.vA) list = list.reverse();                                     // (anda de from para to)
+			const L = [], cross = new Set();
 			list.forEach((v, j) => { L.push(M(uT(T, v), v)); if (crossV.has(v)) cross.add(j); });
-			const line = { v: !S.pv, at: T.conn !== undefined ? T.conn : T.u0, d: S.district, dir: T.dir };      // (emenda da grade de cima: a mão dela)
+			const line = { v: !S.pv, at: T.conn !== undefined ? T.conn : T.u0, d: S.district, dir: T.dir };
 			if (T.to && T.to.pt) { L.push(T.to.pt.slice()); P.addPath(L, T.cls, { name: T.name, line }); nLines++; return; }
 			for (const q of CityGrid._clipLine(L, cross, S.O)) { P.addPath(q, T.cls, { name: T.name, line }); nLines++; }
 		});
 		return nLines;
 	},
-	// Espaçamentos irregulares de transversais em [a, b] (u), longe dos `keep` (as das pontes); inclinações que nunca deixam duas se cruzarem.
-	_spacing(rng, a, b, steps, keep, vMax) {
-		const out = [];
-		let u = a;
-		while (u < b) {
-			u += steps[Math.floor(rng() * steps.length)];
-			if (u >= b) break;
-			if (keep.some((q) => Math.abs(q - u) < 26)) continue;
-			out.push(u);
-		}
-		return out.sort((p, q) => p - q);
-	},
-	_tilts(list, rng, vMax, maxTilt, minGap) {
-		// list: [{u0, fixed?}] ordenadas; escolhe tilt/bend para que vizinhas fiquem ≥ minGap em todo v ∈ [−40, vMax]
-		const f = (T, v) => T.u0 + T.tilt * v + T.bend * v * v / 1e4;
-		for (let i = 0; i < list.length; i++) {
-			const T = list[i];
-			if (T.fixed) { T.tilt = T.tilt || 0; T.bend = T.bend || 0; continue; }
-			for (let tries = 0; tries < 12; tries++) {
-				T.tilt = (rng() * 2 - 1) * maxTilt * (1 - tries / 12); T.bend = (rng() * 2 - 1) * 0.35 * (1 - tries / 12);
-				const prev = list[i - 1], next = list[i + 1];
-				let ok = true;
-				for (let v = -40; v <= vMax && ok; v += 20) {
-					if (prev && f(T, v) - f(prev, v) < minGap) ok = false;
-					if (next && next.fixed && f(next, v) - f(T, v) < minGap) ok = false;
+
+	// Travessas DESENCONTRADAS: para cada faixa entre duas ruas longas (bands: [{ from, to }] — índices de `par`, ou números), posições
+	// sorteadas ao longo de u; umas atravessam 2–3 faixas seguidas. `fixed` = travessas já postas (as avenidas). Cada rua longa guarda os
+	// cruzamentos dela (onde a travessa a toca, com a inclinação): uma nova nunca cai a menos de minJog de outro cruzamento na mesma rua
+	// (esquina colada = trecho curto demais) — ou bem desencontrada, ou não entra.
+	bands(rng, bands, ua, ub, steps, fixed, opt = {}) {
+		const vs = opt.vs, vOf = (w) => (typeof w === 'number' ? w : (w && w.p !== undefined ? vs[w.p] : null));
+		const uAt = (T, v) => T.u0 + T.tilt * v + T.bend * v * v / 1e4;
+		const onPar = vs.map(() => []);                                             // u dos cruzamentos de cada rua longa
+		const touch = (T) => { const a = vOf(T.from), b = vOf(T.to), lo = Math.min(a === null ? -1e9 : a, b === null ? 1e9 : b), hi = Math.max(a === null ? -1e9 : a, b === null ? 1e9 : b); const r = []; vs.forEach((v, i) => { if (v >= lo - 1e-6 && v <= hi + 1e-6) r.push(i); }); return r; };
+		const ok = (T, gap) => touch(T).every((i) => onPar[i].every((q) => Math.abs(q - uAt(T, vs[i])) >= gap));
+		const put = (T) => { for (const i of touch(T)) onPar[i].push(uAt(T, vs[i])); };
+		for (const T of fixed) { if (T.tilt === undefined) { T.tilt = 0; T.bend = 0; } if (T.from !== undefined) put(T); }
+		const out = [], minGap = opt.minGap || 22, minJog = opt.minJog || 14;
+		for (let b = 0; b < bands.length; b++) {
+			let u = ua + rng() * steps[0];
+			while (u < ub) {
+				u += steps[Math.floor(rng() * steps.length)];
+				if (u >= ub) break;
+				const T = { u0: u, tilt: (rng() * 2 - 1) * (opt.tilt || 0.06), bend: (rng() * 2 - 1) * (opt.bend || 0.15), from: bands[b].from, to: bands[b].to, fromCross: bands[b].fromCross, toCross: bands[b].toCross, toDir: bands[b].dir };
+				if (fixed.some((q) => Math.abs(q.u0 - u) < minGap) || !ok(T, minJog)) continue;
+				// mesma faixa: espaçamento mínimo dos dois lados
+				const same = out.filter((q) => q._b0 <= b && q._b1 >= b);
+				if (same.some((q) => Math.abs(uAt(q, vOf(bands[b].from) || 0) - uAt(T, vOf(bands[b].from) || 0)) < minGap || Math.abs(uAt(q, vOf(bands[b].to) || 0) - uAt(T, vOf(bands[b].to) || 0)) < minGap)) continue;
+				// atravessa mais faixas?
+				let e = b;
+				while (e + 1 < bands.length && rng() < (opt.through || 0.3)) {
+					const T2 = Object.assign({}, T, { to: bands[e + 1].to, toCross: bands[e + 1].toCross });
+					if (!ok(T2, minJog)) break;
+					T.to = T2.to; T.toCross = T2.toCross; e++;
 				}
-				if (ok) break;
-				T.tilt = 0; T.bend = 0;
+				T._b0 = b; T._b1 = e;
+				put(T); out.push(T);
+			}
+		}
+		return out;
+	},
+	// Ponta de uma linha na borda reta: anda de t0 em passos dt até bound(x, z) > 0 e refina. pt(t) → [x, z].
+	_edgeHit(pt, bound, t0, dt, lim = 900) {
+		let t = t0, q = pt(t);
+		if (bound(q[0], q[1]) > 0) return null;
+		for (let k = 0; k < lim / Math.abs(dt); k++) { const t2 = t + dt, q2 = pt(t2); if (bound(q2[0], q2[1]) > 0) { let a = t, b = t2; for (let it = 0; it < 40; it++) { const m = (a + b) / 2, qm = pt(m); if (bound(qm[0], qm[1]) > 0) b = m; else a = m; } return { t: a, p: pt(a) }; } t = t2; }
+		return null;
+	},
+	// Ajusta o v de cada rua longa para a ponta dela na borda reta cair EXATAMENTE numa rua da grade vizinha (≤ 12 u: vira a mesma rua,
+	// cruzamento inteiro) — nunca colada ao lado. key(p) → a coordenada da ponta que conta (x na borda z = const, z na borda x = const).
+	_snapEnds(F, par, ends) {
+		for (const p of par) {
+			const vP = (v, u) => v + p.amp * Math.sin(u / p.wl + p.ph);
+			for (const E of ends) {
+				const at = (v) => { const h = this._edgeHit((u) => { const a = F.at(u), vv = vP(v, u); return [a.x + a.nx * vv, a.z + a.nz * vv]; }, E.bound, E.u0(v), E.du); return h ? E.key(h.p) : null; };
+				const k0 = at(p.v); if (k0 === null) continue;
+				const c = E.lines.find((q) => Math.abs(q - k0) < 12);
+				if (c === undefined) continue;
+				let a = p.v - 16, b = p.v + 16, ka = at(a), kb = at(b);
+				if (ka === null || kb === null || (ka - c) * (kb - c) > 0) continue;
+				for (let it = 0; it < 40; it++) { const m = (a + b) / 2, km = at(m); if (km === null) break; if ((km - c) * (ka - c) <= 0) b = m; else { a = m; ka = km; } }
+				p.v = (a + b) / 2;
 			}
 		}
 	},
+	_par(rng, vs, base) { return vs.map((v, i) => Object.assign({ v, amp: (base.amp || 4) + rng() * (base.ampR || 6), wl: 50 + rng() * 70, ph: rng() * 6.28, cls: base.cls, dir: i % 2 ? -1 : 1, gap: base.gap || 0 }, typeof base.each === 'function' ? base.each(i, v) : null)); },
+	_names(list, rng) { const a = list.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } let k = 0; return () => a[k++ % a.length]; },
 
-	// ================================================================== COPACABANA (ilha)
-	COPA_BEACH: 100,                 // da água à Atlântica (u)
-	COPA_PAR: [
-		{ v: 50, name: 'Av. N. S. de Copacabana', dir: -1 },
-		{ v: 100, name: 'R. Barata Ribeiro', dir: 1, gap: 0.08 },
-		{ v: 150, name: 'R. Tonelero', dir: -1, gap: 0.22 },
-		{ v: 198, name: 'R. Pompeu Loureiro', dir: 1, gap: 0.3 },
-	],
-	COPA_TR: ['Av. Princesa Isabel', 'R. Gustavo Sampaio', 'R. Duvivier', 'R. Ronald de Carvalho', 'Av. Prado Júnior', 'R. Belfort Roxo', 'R. Fernando Mendes',
-		'R. Barão de Ipanema', 'R. Hilário de Gouveia', 'R. Siqueira Campos', 'R. Figueiredo de Magalhães', 'R. Santa Clara', 'R. Constante Ramos', 'R. Dias da Rocha',
-		'R. Xavier da Silveira', 'R. Bolívar', 'R. Domingos Ferreira', 'R. Souza Lima', 'R. Miguel Lemos', 'R. Barão de Ipanema 2', 'R. Joaquim Nabuco', 'R. Francisco Sá',
-		'R. Sá Ferreira', 'R. Júlio de Castilhos', 'R. Rainha Elizabeth', 'R. Conselheiro Lafaiete', 'R. Raul Pompéia', 'R. Francisco Otaviano', 'R. Aires de Saldanha',
-		'R. Leopoldo Miguez', 'R. Pompeu Loureiro 2', 'R. Anita Garibaldi', 'R. Inhangá', 'R. Rodolfo Dantas', 'R. República do Peru', 'R. Paula Freitas'],
-	COPA_AVES: ['Av. Princesa Isabel', 'R. Figueiredo de Magalhães', 'R. Francisco Sá'],     // (as das pontes, de norte a sul — nomes)
+	// ================================================================== NORTE da cidade
+	N_LONG: ['R. Almirante Alexandrino', 'R. Joaquim Murtinho', 'R. Paschoal Carlos Magno', 'R. Monte Alegre', 'R. Hermenegildo de Barros', 'R. Áurea',
+		'R. do Riachuelo', 'R. Evaristo da Veiga', 'R. Taylor', 'R. do Lavradio', 'R. dos Inválidos', 'R. Mem de Sá'],
+	N_SHORT: ['Ladeira do Castro', 'R. Dias de Barros', 'R. Murtinho Nobre', 'R. Cândido Mendes', 'Ladeira de Santa Teresa', 'R. Francisco Muratori',
+		'R. Gonçalves Fontes', 'Travessa do Mosqueira', 'R. Leopoldo Fróes', 'R. Felício dos Santos', 'R. Silvio Romero', 'Ladeira do Meireles', 'R. Oriente',
+		'R. Santa Cristina', 'R. Bento Lisboa', 'R. do Catete', 'R. Pedro Américo', 'R. Benjamin Constant', 'R. Hermenegildo', 'R. Cassiano'],
+	N_AVES: [['Av. Presidente Vargas', 302], ['Av. Mem de Sá', 463], ['Av. Rio Branco', 635], ['Av. Rodrigues Alves', 790]],
+	cityNorth(P, CG, Z0 = 210) {
+		const rng = Pixel.rng(15650301), XB = 168;
+		const F = this.frame([[XB, Z0], [XB, 1400]], 1);                              // espinha: a Beira-Mar; para dentro = oeste
+		const fade = (u, v) => Math.max(0, Math.min(1, u / 36, v / 30));
+		const vs = []; for (let v = 40 + rng() * 10; v < 470; v += 38 + rng() * 22) vs.push(v);
+		const longName = this._names(this.N_LONG, rng), shortName = this._names(this.N_SHORT, rng);
+		const par = this._par(rng, vs, { cls: 'city', amp: 3, ampR: 8, gap: 0.12, each: () => ({ name: longName(), u0: 0, u0cross: true }) });
+		// (a ponta na rua z = 210: ou na mesma coluna da grade do centro — a rua continua —, ou longe dela)
+		const cx = CG.districts.city.xs;
+		for (const p of par) { const x0 = XB - (p.v + p.amp * Math.sin(p.ph)), c = cx.find((q) => Math.abs(q - x0) < 12 && q < XB - 20); if (c !== undefined) p.v += x0 - c; }
+		// avenidas leste-oeste, da Beira-Mar até o Contorno (longe da cabeceira da ponte norte e da via expressa)
+		const aves = this.N_AVES.map(([name, z]) => ({ u0: z - Z0, tilt: 0, bend: 0, from: 0, fromCross: true, to: 520, name, cls: 'ave', dir: 0, fixed: true }));
+		const bands = [{ from: 0, to: { p: 0 }, fromCross: true }];
+		for (let i = 0; i + 1 < par.length; i++) bands.push({ from: { p: i }, to: { p: i + 1 } });
+		bands.push({ from: { p: par.length - 1 }, to: 560 });
+		const keep = aves.concat([{ u0: 714 - Z0 }]);
+		const tr = this.bands(rng, bands, 18, F.L - 20, [30, 36, 42, 50, 60, 72], keep, { through: 0.32, tilt: 0.07, bend: 0.2, vs: par.map((p) => p.v) }).filter((t) => !(Math.abs(t.u0 - (714 - Z0)) < 34 && t.from === 0));
+		for (const t of tr) { t.name = shortName(); t.cls = 'city'; t.dir = 0; }
+		tr.push(...aves);
+		const n = this.grid(P, { F, warp: 9, seed: 701, fade, O: CG.cityO, district: 'city', pv: true, par, tr, rng });
+		console.log(`[ZONA SUL] norte da cidade: ${n} ruas`);
+	},
 
-	// x da Atlântica na altura z (curva lisa a COPA_BEACH u da água, pelo leste)
-	_copaXe(z0, z1) {
+	// ================================================================== SUL da cidade: a orla em diagonal
+	// A costa (Botafogo → Copacabana → Ipanema → Leblon), do esquema: da Beira-Mar descendo em curva até a praia do sul.
+	COAST: [[205, -100], [181, -213], [170, -385], [127, -535], [73, -685], [-2, -814], [-120, -921], [-271, -936], [-420, -940]],
+	_coastFrame() {
+		if (this.coast) return this.coast;
+		let pts = this.COAST.map((p) => p.slice());
+		for (let k = 0; k < 3; k++) pts = CG_chaikin(pts);
+		const F = this.frame(pts, -1);                                                // anda para o sul: para dentro (oeste/norte) é a direita
+		return (this.coast = { F });
+	},
+	// Distância à orla com sinal (+ para dentro da cidade, − para o mar), só no sul (fora: grande).
+	coastDist(x, z) {
+		if (z > -120 || x > 320 || x < -440) return 999;
+		const q = this._coastFrame().F.uv(x, z);
+		return q.v;
+	},
+	// Areia larga entre a Av. Atlântica e o mar
+	coastSand(x, z) { return z < -150 && z > -950 && x > -140 && x < 300 && this.coastDist(x, z) < -9; },
+	S_LONG: ['R. Barata Ribeiro', 'Av. N. S. de Copacabana', 'R. Tonelero', 'R. Pompeu Loureiro', 'R. Voluntários da Pátria', 'R. São Clemente',
+		'R. Visconde de Pirajá', 'R. Prudente de Morais', 'R. Barão da Torre', 'R. Humaitá'],
+	S_SHORT: ['R. Siqueira Campos', 'R. Figueiredo de Magalhães', 'R. Santa Clara', 'R. Constante Ramos', 'R. Xavier da Silveira', 'R. Bolívar',
+		'R. Souza Lima', 'R. Miguel Lemos', 'R. Joaquim Nabuco', 'R. Francisco Sá', 'R. Sá Ferreira', 'R. Rainha Elizabeth', 'R. Farme de Amoedo',
+		'R. Vinícius de Moraes', 'R. Garcia d\'Ávila', 'R. Maria Quitéria', 'R. Joana Angélica', 'R. Teixeira de Melo', 'R. Belfort Roxo', 'R. Duvivier',
+		'R. Ronald de Carvalho', 'R. Hilário de Gouveia', 'R. Dias da Rocha', 'R. Paula Freitas', 'R. Fernando Mendes', 'R. Real Grandeza', 'R. General Polidoro'],
+	citySouth(P, CG, XW = -168, ZN = -210) {
+		const rng = Pixel.rng(19611004), { F } = this._coastFrame();
+		const bound = (x, z) => Math.max(z - ZN, XW - x);                               // fora: ao norte da reta z = −210 ou a oeste de x = −168
+		const fade = (u, v, x, z) => Math.max(0, Math.min(1, v / 28, -bound(x, z) / 28));
+		const longName = this._names(this.S_LONG, rng), shortName = this._names(this.S_SHORT, rng);
+		const vs = []; for (let v = 42 + rng() * 8; v < 330; v += 40 + rng() * 18) vs.push(v);
+		const par = this._par(rng, vs, { cls: 'city', amp: 3, ampR: 6, gap: 0.1, each: () => ({ name: longName() }) });
+		// pontas nas bordas retas: na rua z = −210 (as colunas do centro chegam nela) e na rua x = −168 (as ruas da faixa do viaduto)
+		const cx = CG.districts.city.xs.filter((x) => x > XW && x < 168), czW = CG.districts.city.zs.filter((z) => z < ZN);
+		const bZ = (x, z) => z - ZN, bX = (x, z) => XW - x;
+		this._snapEnds(F, par, [
+			{ bound: bZ, u0: () => F.L * 0.25, du: -3, key: (q) => q[0], lines: cx.concat([XW]) },
+			{ bound: bX, u0: () => F.L * 0.5, du: 3, key: (q) => q[1], lines: czW },
+		]);
+		const bands = [{ from: -30, to: { p: 0 } }];
+		for (let i = 0; i + 1 < par.length; i++) bands.push({ from: { p: i }, to: { p: i + 1 } });
+		bands.push({ from: { p: par.length - 1 }, to: { bound: 1 } });
+		// do mar até a borda (as que atravessam tudo): umas poucas transversais compridas
+		// (só no trecho da orla a leste da faixa do viaduto: além de x = −168 a costa é o Leblon, em grade)
+		let uMax = F.L; for (let u = 0; u < F.L; u += 4) { const p = F.at(u); if (p.x < XW + 14) { uMax = u; break; } }
+		let uMin = 0; for (let u = 0; u < F.L; u += 4) { const p = F.at(u); if (p.z < ZN - 14) { uMin = u; break; } }
+		const longT = [];
+		for (let u = uMin + 50 + rng() * 40; u < uMax - 40; u += 150 + rng() * 90) longT.push({ u0: u, tilt: 0, bend: 0, from: -30, to: { bound: 1 }, fixed: true });
+		// (a travessa nasce dentro da área; e a ponta dela na borda reta não cai colada num cruzamento da grade)
+		const nodesZ = cx.concat([XW]), nodesX = czW;
+		// pontas já na borda: os cruzamentos da grade e as pontas das ruas longas (a travessa fica a ≥ 20 u de todas — a rua chega oblíqua)
+		const bEnds = nodesZ.map((x) => [x, ZN]).concat(nodesX.map((z) => [XW, z]));
+		for (const p of par) for (const E of [{ b: (x, z) => z - ZN, u: F.L * 0.25, d: -3 }, { b: (x, z) => XW - x, u: F.L * 0.5, d: 3 }]) {
+			const h = this._edgeHit((u) => { const a = F.at(u), vv = p.v + p.amp * Math.sin(u / p.wl + p.ph); return [a.x + a.nx * vv, a.z + a.nz * vv]; }, E.b, E.u, E.d);
+			if (h) bEnds.push(h.p);
+		}
+		const inside = (T) => {
+			const p = F.at(T.u0); if (!(bound(p.x, p.z) < -6 && bound(p.x + p.nx * 40, p.z + p.nz * 40) < 0)) return false;
+			if (!T.to || !T.to.bound) return true;
+			const h = this._edgeHit((v) => { const u = T.u0 + T.tilt * v + T.bend * v * v / 1e4, a = F.at(u); return [a.x + a.nx * v, a.z + a.nz * v]; }, bound, 0, 3, 700);
+			if (!h) return true;
+			const [x, z] = h.p;
+			if (bEnds.some((q) => hypot(q[0] - x, q[1] - z) < 20)) return false;
+			bEnds.push([x, z]);
+			return true;
+		};
+		const tr = this.bands(rng, bands, uMin + 16, uMax - 16, [30, 36, 42, 48, 56, 66], longT, { through: 0.35, tilt: 0.06, bend: 0.15, vs: par.map((p) => p.v) }).filter(inside);
+		tr.push(...longT.filter(inside));
+		for (const t of tr) { t.name = shortName(); t.cls = 'city'; t.dir = 0; }
+		const n = this.grid(P, { F, warp: 8, seed: 733, fade, bound, O: CG.cityO, district: 'city', pv: false, par, tr, rng });
+		console.log(`[ZONA SUL] Botafogo/Copacabana/Ipanema: ${n} ruas`);
+	},
+	inSouth(x, z) { return z < -210 && x > -168 && this.coastDist(x, z) > -4; },
+
+	// ================================================================== ILHA DO GOVERNADOR
+	I_LONG: ['Estrada do Galeão', 'R. Cambaúba', 'R. Formosa do Zumbi', 'R. Haroldo Lobo', 'R. Ipiru', 'R. Jacinto Ribeiro', 'R. Magno Martins', 'R. Uçá', 'R. Orestes Barbosa'],
+	I_SHORT: ['R. Capitão Barbosa', 'R. Cardeal Câmara', 'R. Maldonado', 'R. Aracaju', 'R. Colina', 'R. Ilha das Flores', 'R. Itaoca', 'R. Guarabu', 'R. Freguesia',
+		'R. Engenho Velho', 'R. Pracinhas', 'R. Bananal', 'R. Cocotá', 'R. Tauá', 'R. Ribeira', 'R. Zumbi', 'R. Moneró', 'R. Jardim Guanabara', 'R. Portuguesa', 'R. Pitangueiras'],
+	ISLE_AVES: ['Av. Paranapuã', 'Estrada do Cacuia', 'Av. Maestro Paulo e Silva'],
+	governador(P, CG, O, bridges) {
+		const rng = Pixel.rng(19520120);
+		// espinha: o meio da ilha, de sul a norte; v positivo para o oeste (as pontes)
 		const zs = [], xs = [];
-		for (let z = z0; z <= z1; z += 12) {
-			let x = 600; while (x < 960 && WorldMap.isLand(x, z)) x += 4;
-			zs.push(z); xs.push(x - this.COPA_BEACH);
+		for (let z = -880; z <= 960; z += 12) {
+			let a = null, b = null;
+			for (let x = 340; x < 900; x += 4) if (CG._oIn(O, x, z)) { if (a === null) a = x; b = x; }
+			if (a !== null) { zs.push(z); xs.push((a + b) / 2); }
 		}
-		const sm = this._smooth(xs, 9, 3);
-		return { zs, xs: sm, at(z) { const t = (z - z0) / 12, i = Math.max(0, Math.min(sm.length - 2, Math.floor(t))), f = Math.max(0, Math.min(1, t - i)); return sm[i] + (sm[i + 1] - sm[i]) * f; } };
-	},
-	// Campo do contorno da ilha (CityGrid._islandPlan): além do de sempre, a Atlântica pelo leste.
-	copaField(fOrig) {
-		const XE = this._xe || (this._xe = this._copaXe(-1000, 1100));
-		return (x, z) => Math.min(fOrig(x, z), XE.at(z) - x);
-	},
-	copacabana(P, CG, O, bridges) {
-		const XE = this._xe || (this._xe = this._copaXe(-1000, 1100)), rng = Pixel.rng(20240611);
-		// espinha: a Atlântica de sul a norte; para dentro = oeste (à esquerda de quem anda para o norte)
-		const sp = []; for (let z = -900; z <= 1000; z += 12) sp.push([XE.at(z), z]);
-		const F = this.frame(sp, 1);
-		this.copa = { F, XE };
+		const sx = this._smooth(xs, 8, 3);
+		const F = this.frame(zs.map((z, i) => [sx[i], z]), 1);
+		this.isle = { F };
 		const uAt = (z) => { let best = 0, bd = Infinity; for (let i = 0; i < F.P.length; i++) { const d = Math.abs(F.P[i][1] - z); if (d < bd) { bd = d; best = F.cum[i]; } } return best; };
-		// transversais: as 3 das pontes (fixas, retas até a cabeceira) e as outras em passos desiguais
-		const fixed = Object.keys(bridges).map(Number).sort((a, b) => b - a).map((z, i) => ({ u0: uAt(z), fixed: true, tilt: 0, bend: 0, name: this.COPA_AVES[i] || 'Av. da Ponte', cls: 'ave', dir: 0, from: -12, to: { pt: [bridges[z], z] } }));
-		const us = this._spacing(rng, 30, F.L - 30, [28, 32, 36, 40, 46, 52, 60, 70], fixed.map((t) => t.u0), 300);
-		const tr = us.map((u0) => ({ u0 })).concat(fixed).sort((a, b) => a.u0 - b.u0);
-		this._tilts(tr, rng, 300, 0.1, 18);
-		let ni = 0, dir = 1;
-		const names = this.COPA_TR.filter((n) => !this.COPA_AVES.includes(n));
-		for (const T of tr.slice().reverse()) {                                           // (nomes de norte — o Leme — para sul)
-			if (T.fixed) continue;
-			T.name = names[ni++ % names.length]; T.cls = 'isl'; T.dir = (dir = -dir);
-			const r = rng();
-			T.from = -30;
-			// umas morrem numa paralela (T), outras vão de uma paralela à outra (travessa), a maioria atravessa até o morro
-			T.to = r < 0.18 ? { p: 1 } : r < 0.3 ? { p: 2 } : 460;
-			if (r > 0.92) { T.from = { p: 0 }; T.to = { p: 2 }; T.name = 'Travessa ' + T.name.replace(/^(R\.|Av\.) /, ''); }
-		}
-		const par = this.COPA_PAR.map((p, i) => Object.assign({ amp: 2 + rng() * 4, wl: 70 + rng() * 60, ph: rng() * 6.28, cls: 'isl' }, p));
-		const n = this.grid(P, { F, warp: 5, seed: 551, O, district: 'island', pv: true, par, tr, rng });
-		console.log(`[ZONA SUL] Copacabana: ${n} ruas (${tr.length} transversais, ${par.length} paralelas)`);
+		const vs = [-140, -96, -50, 0, 46, 92, 138].map((v) => v + (v ? (rng() - 0.5) * 10 : 0));
+		const longName = this._names(this.I_LONG.slice(1), rng), shortName = this._names(this.I_SHORT, rng);
+		const ic = vs.indexOf(0);
+		const par = this._par(rng, vs, { cls: 'isl', amp: 4, ampR: 8, gap: 0.15, each: (i, v) => (v === 0 ? { name: this.I_LONG[0], cls: 'ave', dir: 0, gap: 0, amp: 3, ampR: 0 } : { name: longName() }) });
+		// as pontes: da cabeceira (na Litorânea, a oeste) até a avenida central
+		const br = Object.keys(bridges).map(Number).sort((a, b) => b - a).map((z, i) => ({ u0: uAt(z), tilt: 0, bend: 0, from: { p: ic }, to: { pt: [bridges[z], z] }, toDir: 1, fixed: true, name: this.ISLE_AVES[i] || 'Av. da Ponte', cls: 'ave', dir: 0 }));
+		const bands = [{ from: { p: 0 }, to: -460, dir: -1 }];
+		for (let i = 0; i + 1 < par.length; i++) bands.push({ from: { p: i }, to: { p: i + 1 } });
+		bands.push({ from: { p: par.length - 1 }, to: 460 });
+		const tr = this.bands(rng, bands, 10, F.L - 10, [26, 30, 36, 42, 50, 58], br, { through: 0.28, tilt: 0.07, bend: 0.2, minGap: 20, vs: par.map((p) => p.v) });
+		for (const t of tr) { t.name = shortName(); t.cls = 'isl'; t.dir = 0; }
+		tr.push(...br);
+		const n = this.grid(P, { F, warp: 10, seed: 761, fade: (u, v, x, z) => Math.min(1, Math.abs(v) / 20 + 0.0), O, district: 'island', pv: true, par, tr, rng });
+		console.log(`[ZONA SUL] Ilha do Governador: ${n} ruas`);
 	},
-	// Distância (u) da Atlântica para dentro, na altura z (biomas da ilha); null fora.
-	copaDepth(x, z) { return this.copa ? this.copa.XE.at(z) - x : null; },
-	// Areia larga entre a Atlântica e o mar (WorldMap: bioma)
-	copaSand(x, z) { return !!this.copa && x > 300 && z > -900 && z < 1000 && x > this.copa.XE.at(z) + 9; },
+	isleDepth(x, z) { return this.isle ? Math.abs(this.isle.F.uv(x, z).v) : null; },
 
-	// ================================================================== IPANEMA / LEBLON (sul da cidade)
-	IPA_PAR: [
-		{ v: 46, name: 'R. Prudente de Morais', dir: 1, cls: 'city', gap: 0.1 },
-		{ v: 96, name: 'R. Visconde de Pirajá', dir: 0, cls: 'ave' },
-		{ v: 146, name: 'R. Barão da Torre', dir: -1, cls: 'city', gap: 0.2 },
-	],
-	IPA_TR: ['Av. Bartolomeu Mitre', 'R. Rainha Guilhermina', 'R. Aristides Espínola', 'R. José Linhares', 'R. Almirante Guilhem', 'Av. Afrânio de Melo Franco',
-		'R. Venâncio Flores', 'R. Garcia d\'Ávila', 'R. Aníbal de Mendonça', 'R. Maria Quitéria', 'R. Joana Angélica', 'R. Vinícius de Moraes', 'R. Farme de Amoedo',
-		'R. Teixeira de Melo', 'R. Gomes Carneiro', 'R. Francisco Otaviano', 'R. Jangadeiros'],
-	// cx: as linhas N-S da grade de cima (as transversais que terminam perto delas emendam reto); zA: a reta onde a grade de cima começa
-	ipanema(P, CG, zA, cx, xv) {
-		const rng = Pixel.rng(19650301), cp = CG.cityPath;
-		// espinha: a orla (o trecho sul da Av. do Contorno), alisada, de oeste para leste; para dentro = norte (esquerda)
-		// (a orla de Ipanema é quase reta: a espinha é a RETA que melhor passa pela praia — a curva do Contorno no Leblon não entorta as ruas)
-		let nP = 0, sx = 0, sz = 0, sxx = 0, sxz = 0;
-		for (let x = -130; x <= 160; x += 10) {
-			let z = null;
-			for (let i = 0; i + 1 < cp.length; i++) { const a = cp[i], b = cp[i + 1]; if ((a[0] - x) * (b[0] - x) > 0 || a[1] > -800 || b[1] > -800) continue; const zz = a[1] + (b[1] - a[1]) * ((x - a[0]) / ((b[0] - a[0]) || 1)); if (z === null || zz < z) z = zz; }
-			if (z === null) continue;
-			nP++; sx += x; sz += z; sxx += x * x; sxz += x * z;
-		}
-		const k = nP > 2 ? (nP * sxz - sx * sz) / (nP * sxx - sx * sx) : 0, z0 = nP ? (sz - k * sx) / nP : -930;
-		const F = this.frame([[-340, z0 - 340 * k], [240, z0 + 240 * k]], 1);
-		this.ipa = { F, zA };
-		// transversais: do mar até a reta zA (emendam na grade de cima); passos desiguais
-		const us = this._spacing(rng, 46, F.L - 132, [28, 32, 36, 40, 46, 52, 58], [], 220);
-		const tr = us.map((u0) => ({ u0 }));
-		this._tilts(tr, rng, 220, 0.08, 20);
-		let dir = 1;
-		tr.forEach((T, i) => {
-			T.name = this.IPA_TR[i % this.IPA_TR.length]; T.cls = 'city'; T.dir = (dir = -dir); T.from = -30;
-			const r = rng();
-			T.to = r < 0.15 ? { p: 1 } : { p: 2 };                                       // (do mar até a Barão da Torre — ou só até a Pirajá)
-		});
-		// A GRADE DE CIMA desce até a Barão da Torre (as linhas N-S dela, retas, emendam ali): as duas malhas se encontram nessa rua com
-		// esquinas desencontradas. Transversal de Ipanema que chega a menos de 14 u de uma delas segue reto até ela (vira a mesma rua).
-		const p0 = F.at(0), conn = [];
-		for (const c of cx) {
-			if (c > 110 || Math.abs(c - xv) < 18) continue;
-			conn.push({ u0: (c - p0.x) / p0.tx, tilt: -p0.nx / p0.tx, bend: 0, fixed: true, conn: c, from: { p: 2 }, to: { z: zA }, name: CG._gridName(true, c), cls: 'city' });
-		}
-		const M = (u, v) => this._map(F, u, v, 0, 0), vP2 = this.IPA_PAR[2].v;
-		for (const T of tr) {
-			if (!T.to || T.to.p !== 2) continue;
-			const end = M(T.u0 + T.tilt * vP2 + T.bend * vP2 * vP2 / 1e4, vP2)[0];
-			const C = conn.find((q) => Math.abs(q.conn - end) < 14);
-			if (!C) continue;
-			const c = C.conn, t = { x: p0.tx, z: p0.tz }, nn = { x: p0.nx, z: p0.nz };     // (espinha reta: (u, v) → mundo é afim)
-			const rx = c - p0.x, rz = zA - p0.z, det = t.x * nn.z - t.z * nn.x, U = (rx * nn.z - rz * nn.x) / det, V = (t.x * rz - t.z * rx) / det;
-			const tilt = (U - T.u0) / V, i = tr.indexOf(T), f = (Q, v) => Q.u0 + Q.tilt * v + Q.bend * v * v / 1e4, old = [T.tilt, T.bend];
-			T.tilt = tilt; T.bend = 0;
-			let ok = Math.abs(tilt) < 0.2;
-			for (let v = -40; v <= V && ok; v += 10) { if (tr[i - 1] && f(T, v) - f(tr[i - 1], v) < 16) ok = false; if (tr[i + 1] && f(tr[i + 1], v) - f(T, v) < 16) ok = false; }
-			if (!ok) { [T.tilt, T.bend] = old; conn.splice(conn.indexOf(C), 1); continue; }        // (não dá para emendar: a linha de cima para na reta)
-			T.to = { z: zA }; T.conn = c; T.dir = undefined; T.name = C.name; conn.splice(conn.indexOf(C), 1);      // (a mesma rua: o nome e a mão da de cima)
-		}
-		tr.push(...conn);
-		tr.sort((a, b) => a.u0 - b.u0);
-		const par = this.IPA_PAR.map((p) => Object.assign({ amp: 1.5 + rng() * 3, wl: 60 + rng() * 50, ph: rng() * 6.28, endX: 168 }, p));
-		const n = this.grid(P, { F, warp: 0, seed: 0, O: CG.cityO, district: 'city', pv: false, par, tr, rng });
-		console.log(`[ZONA SUL] Ipanema/Leblon: ${n} ruas (${tr.length} transversais)`);
-	},
-	inIpanema(x, z) { return !!this.ipa && z < this.ipa.zA && x < 126 && x > -300; },
-	ipaDepth(x, z) {
-		if (!this.ipa) return null;
-		const F = this.ipa.F; let best = 0, bd = Infinity;
-		for (let i = 0; i < F.P.length; i += 2) { const d = Math.abs(F.P[i][0] - x); if (d < bd) { bd = d; best = F.P[i][1]; } }
-		return z - best;
-	},
-
-	// Depois do RoadPlan.build: os nomes das orlas (o trecho da Av. Litorânea na praia de Copacabana; o da Av. do Contorno na de Ipanema
-	// e no Leblon).
+	// Depois do RoadPlan.build: a orla em diagonal ganha os nomes (Atlântica, Vieira Souto, Delfim Moreira).
 	names() {
+		if (!this.coast) return;
+		const F = this.coast.F;
 		for (const e of RoadPlan.edges) {
-			if (!e.free || !e.name) continue;
+			if (!e.free || e.name !== 'Av. do Contorno') continue;
 			const m = RoadPlan.at(e, e.len / 2);
-			if (e.name === 'Av. Litorânea' && this.copa && m.x > this.copa.XE.at(m.z) - 14) e.name = 'Av. Atlântica';
-			else if (e.name === 'Av. do Contorno' && m.z < -860 && m.x > -140 && m.x < 170) e.name = m.x < -40 ? 'Av. Delfim Moreira' : 'Av. Vieira Souto';
+			if (m.z > -120 || Math.abs(this.coastDist(m.x, m.z)) > 22) continue;
+			const u = F.uv(m.x, m.z).u / F.L;
+			e.name = u < 0.62 ? 'Av. Atlântica' : m.x > -200 ? 'Av. Vieira Souto' : 'Av. Delfim Moreira';
 		}
 	},
-	// as avenidas da orla com calçadão (Landmarks)
 	BEACH_AVES: new Set(['Av. do Contorno', 'Av. Vieira Souto', 'Av. Delfim Moreira', 'Av. Atlântica']),
 };
+
+function CG_chaikin(P) {
+	const out = [P[0]];
+	for (let i = 0; i + 1 < P.length; i++) { const a = P[i], b = P[i + 1]; out.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]); }
+	out.push(P[P.length - 1]);
+	return out;
+}
