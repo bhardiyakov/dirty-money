@@ -147,9 +147,14 @@ const Config = {
 		// andando (parado ou dando passos curtos ela não mexe). O jogador ainda gira a mão (e aí ela espera lookHold s para voltar a seguir).
 		// footFollow: rapidez (1/s) a pé, até footYawSpeed m/s; footDelay = s andando na direção nova antes de começar a virar.
 		footFollow: 1.1, footYawSpeed: 3, footDelay: 0.8,
+		// MOVIMENTO ABSOLUTO (worldMove): o analógico / WASD anda nos eixos FIXOS do mapa — cima = norte, esquerda = oeste, direita =
+		// leste, baixo = sul — seja qual for o giro da câmera (ela continua indo para as costas do personagem, mas não muda mais para onde
+		// ele anda). false = o controle relativo à câmera de antes (cima = para onde a câmera olha). Vale também para o rolamento, para a mira
+		// pelo analógico direito / pelo botão de tiro arrastado no celular e para a direção de arremesso.
+		worldMove: true,
 		// TERCEIRA PESSOA (a câmera de perseguição a pé, o padrão): como no GTA SA — a câmera vai SEMPRE para as costas do personagem
-		// enquanto ele anda, sem esperar (virou para a direita: ela gira junto e fica atrás dele); o controle é relativo à câmera, então
-		// "para a frente" é sempre a frente dele. Parado, ela fica onde está (o jogador ainda gira à mão).
+		// enquanto ele anda, sem esperar (virou para a direita: ela gira junto e fica atrás dele). O controle segue worldMove (acima): os
+		// eixos do mapa por padrão — a câmera só acompanha, não decide para onde ele anda. Parado, ela fica onde está (o jogador ainda gira à mão).
 		footFollowChase: 3.4, footDelayChase: 0,
 	},
 

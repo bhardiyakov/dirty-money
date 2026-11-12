@@ -693,8 +693,8 @@ class Game {
 		} else if (this.mode === 'heli' && this.chopper) {
 			// Helicóptero: o controle é lido em _updateChoppers (que também prende o jogador invisível à posição dele e segue a câmera).
 		} else {
-			// Movimento relativo à câmera (a pé) — com a base travada enquanto ele segura a mesma direção (a câmera virando sozinha para as
-			// costas dele não muda para onde ele anda: CompassCamera.moveBasis).
+			// Movimento a pé: nos eixos fixos do mapa (Config.camera.worldMove — cima = norte, seja qual for o giro da câmera); senão
+			// relativo à câmera, com a base travada enquanto ele segura a mesma direção (CompassCamera.moveBasis).
 			const { forward, right } = this.camera.moveBasis(axis);
 			const move = right.scale(axis.x).add(forward.scale(axis.z));
 			if (move.lengthSquared() > 1e-4) move.normalize();
@@ -2417,7 +2417,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 	_tryRoll() {
 		const pl = this.player;
 		if (this.mode !== 'player' || pl.busy || pl.swimming || this.hiding || this.holdup || this.arrest || this.death || this.lockpick.active || this.sleeping) return;
-		const ax = this.input.getMoveAxis(), { forward, right } = this.camera.getGroundBasis();
+		const ax = this.input.getMoveAxis(), { forward, right } = this.camera.inputBasis();
 		let dx = right.x * ax.x + forward.x * ax.z, dz = right.z * ax.x + forward.z * ax.z;
 		if (dx * dx + dz * dz < 0.04) { const h = pl.root.rotation.y; dx = Math.sin(h); dz = Math.cos(h); }
 		if (pl.startRoll(dx, dz)) AudioFX.roll(pl.position.x, pl.position.z);

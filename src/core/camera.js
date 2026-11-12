@@ -489,6 +489,7 @@ class CompassCamera {
 	// costas dele (footFollow) não muda para onde ele anda (senão segurar "direita" o faria andar em círculo). Soltou ou mudou a direção
 	// (mais de ~20°), a base volta a ser a da tela de agora.
 	moveBasis(axis) {
+		if (Config.camera.worldMove) { this._latch = null; return this.getGroundBasis(0); }      // movimento absoluto: eixos do mapa
 		const len = Math.hypot(axis.x, axis.z);
 		if (len < 0.2) { this._latch = null; return this.getGroundBasis(); }
 		const a = Math.atan2(axis.x, axis.z), L = this._latch;
@@ -496,6 +497,12 @@ class CompassCamera {
 		else L.a = a;
 		return this.getGroundBasis(this._latch.yaw);
 	}
+
+	// Base do direcional sem trava (rolamento, arremesso): a do mapa com Config.camera.worldMove, senão a da tela.
+	inputBasis() { return this.getGroundBasis(CompassCamera.moveYaw()); }
+
+	// Giro a somar à direção do direcional para levá-la ao mundo: 0 com o movimento absoluto (worldMove), senão o da câmera.
+	static moveYaw() { return Config.camera.worldMove ? 0 : CompassCamera.yaw || 0; }
 
 	// Base de movimento alinhada à TELA: "cima" = norte girado pelo yaw (o giro do jogador ou o do veículo).
 	getGroundBasis(yaw = this.yaw) {
