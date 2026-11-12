@@ -172,7 +172,8 @@ class WorldBuilder {
     // telhados, chão: muitos materiais, poucos vértices) ficam em pedaços grandes — pedaço menor nelas só multiplicaria draw calls.
     _batch(key, x = null, z = null) {
         if (x !== null) {
-            const dense = WorldBuilder.DENSE.has(key), C = dense ? Config.world.detailChunk : Config.world.meshChunk, o = dense ? 0 : Config.world.meshChunkOffset;
+            const dense = WorldBuilder.DENSE.has(key), W = Config.world;
+            const C = dense ? (WorldBuilder.TRIM.has(key) && W.trimChunk) || W.detailChunk : W.meshChunk, o = dense ? 0 : W.meshChunkOffset;
             key += '@' + Math.floor((x + o) / C) + ',' + Math.floor((z + o) / C);
         }
         return this.batches[key] || (this.batches[key] = new MeshBatch());
@@ -1844,3 +1845,4 @@ class WorldBuilder {
 memoStatics(WorldBuilder, 'GLYPHS');
 WorldBuilder.FACE_U = { n: 0, s: 127, e: 263, w: 389 };          // deslocamento inteiro da UV de cada lado do prédio (ver _buildings)
 WorldBuilder.DENSE = new Set(['trim', 'xtrim', 'btrim', 'curb', 'xcurb', 'bcurb']);
+WorldBuilder.TRIM = new Set(['trim', 'xtrim', 'btrim']);         // (os acabamentos: pedaços ainda menores — Config.world.trimChunk)

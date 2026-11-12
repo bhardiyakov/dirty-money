@@ -77,6 +77,97 @@ Visual: comparação pixel a pixel antes/depois (dia, entardecer, noite, favela,
   abre **offline**. Arquivos do jogo: rede primeiro (edições aparecem no recarregar). Não atua em `file://`.
 - Checagem O(n²) de sobreposição ao gerar quintais (0,4 s na carga) → pré-filtro por quarteirão.
 
+## Desempenho no PC depois do upgrade visual (novembro/2026)
+
+Relato: ~10 FPS num PC. O benchmark de rota fixa (`node tests/bench.cjs`, preset High) mostrou que o quadro tinha crescido muito
+desde a base da etapa 0 (`medicao-desempenho.md`), e que o `AutoQuality` não tinha como reagir.
+
+**O que foi medido antes de mexer**
+
+| | Base da etapa 0 | Antes desta rodada |
+|---|---|---|
+| Triângulos por quadro (High) | 74 a 258 mil | 312 mil a **2,17 milhões** |
+| Desenhos por quadro | 105 a 145 | 157 a 297 |
+| Desenhos no mapa de sombras | 11 a 27 | 49 a 87 |
+| Geometria na placa | 124 MB | 724 MB |
+
+- A **CPU está folgada**: jogo ~15 ms por quadro neste ambiente lento, dos quais ~7 ms são o envio do render. O gargalo é a placa.
+- **Vegetação 3D: 11,1 milhões de triângulos no mundo.** Um punhado de cascalho tinha 720 triângulos (9 pedras × 80); na mata, só
+  o cascalho somava 609 mil triângulos por quadro. Tufos, capins e cascalho da cidade ainda entravam no mapa de sombras.
+- **Acabamentos (`world_trim`): 5,8 milhões de vértices** em pedaços de 128 u. A câmera em 3ª pessoa mostra uma janela de uns
+  40 × 60 u, mas a favela desenhava 5 pedaços inteiros (661 mil vértices), e o mapa de sombras outros tantos.
+- O **mapa de sombras redesenha tudo o que projeta**: no centro eram 334 mil dos 633 mil triângulos do quadro.
+- O **`AutoQuality` só mexia nas sombras** e desistia. Quem continuava lento sem sombras ficava lento para sempre.
+- O automático punha **vídeo integrado no High** (Intel UHD / Iris Xe e as APUs da AMD não estavam na lista de placas fracas).
+- O PR anterior (#103: faixas, desafios, efeitos de tela) **não mudou o quadro**: mesmos desenhos e triângulos antes e depois, e os
+  módulos novos somam ~0,1 ms de CPU. O shader dos efeitos de tela, porém, podia custar no Windows (ver abaixo) e foi corrigido.
+
+**O que mudou**
+
+- **Vegetação rasteira** (`Trees3D.COVER`: tufos, capins, samambaias, cascalho, entulho, lixo):
+  - pedra pequena (até meio metro) com 20 triângulos em vez de 80: o cascalho foi de 720 para 180 por punhado;
+  - fora do mapa de sombras. A sombra de um tufo de 40 cm não se lê, e cada malha era desenhada de novo nele;
+  - pode sumir inteira (`Trees3D.setCover`), como degrau do `AutoQuality`. Árvores, arbustos e pedras ficam.
+- **Acabamentos em pedaços de 64 u** (`Config.world.trimChunk`): entram só os que tocam a tela e a janela da sombra. São ~4× mais
+  malhas no mundo, mas menos desenhos por quadro na favela e na mata (191 contra 227), porque os pedaços vazios não entram.
+- **`AutoQuality` com degraus de verdade** (`core/AutoQuality.js`), do que menos se nota ao que mais se nota:
+  1. mapa de sombras a 512;
+  2. resolução a 85%;
+  3. sem MSAA e sem a paralaxe das fachadas (o relevo fica; saem as ~15 amostras por pixel de parede);
+  4. sem sombras;
+  5. resolução a 70%;
+  6. sem vegetação rasteira, espelho da água a cada 3 quadros;
+  7. resolução a 58%.
+
+  - Um segundo só conta como lento se a maioria dos quadros dele foi lenta: um engasgo isolado numa máquina boa não custa qualidade.
+  - Abaixo da metade do ritmo ele desce em 2 s em vez de 4.
+  - O degrau alcançado fica guardado por preset e placa, e a sessão seguinte começa um degrau acima dele: não repete o primeiro
+    minuto a 10 FPS e ainda pode se recuperar. Escolher um preset à mão em Ajustes › Gráficos apaga o degrau guardado.
+  - Os degraus de resolução, MSAA e vegetação só valem com placa de vídeo de verdade. Num rasterizador por software (o navegador
+    dos testes) ele faz só os dois de sombra, como antes.
+- **Preset automático**: vídeo integrado (`Graphics.MID_GPU`: Intel HD/UHD/Iris, AMD Radeon Graphics/Vega) começa no Medium.
+  Intel Arc e os chips da Apple continuam no High.
+- **Teto de pixels por preset** (`maxPx`: 1,5 / 2,4 / 4,2 Mpx; HD sem teto). Num monitor 4K o High desenhava 8,3 Mpx com MSAA 4×;
+  agora desenha o equivalente a 1440p e o navegador amplia. Em 1080p e 1440p nada muda.
+- **Efeitos de tela sem custo em repouso** (`Lighting.fx`). O shader da gradação tinha os efeitos dentro de `if`. No Windows, o
+  compilador HLSL tira as leituras de textura de dentro dos `if` e passa a fazê-las sempre: 7 leituras de tela a mais por pixel com
+  tudo em zero. Agora são duas variantes do shader, e a com efeitos só entra enquanto algum está ativo.
+- O cartão dos desafios do dia fica `visibility: hidden` fora da tela: vidro fosco com opacidade 0 ainda é desenhado pelo navegador.
+
+**Resultado** (mesmo benchmark, High, 1280×720; triângulos e desenhos valem para qualquer máquina)
+
+| Cena | Triângulos antes | Depois | | Desenhos antes | Depois |
+|---|---|---|---|---|---|
+| Favela (início) | 2.056 mil | **979 mil** | −52% | 227 | 191 |
+| Centro | 713 mil | **577 mil** | −19% | 237 | 236 |
+| Lagoa | 1.180 mil | **948 mil** | −20% | 297 | 303 |
+| Mata atlântica | 2.173 mil | **1.134 mil** | −48% | 248 | 227 |
+| Centro à noite com chuva | 312 mil | **270 mil** | −14% | 157 | 158 |
+
+**Tempo de quadro neste ambiente** (sem placa de vídeo: o rasterizador por software é limitado por preenchimento de pixels, como
+um vídeo integrado fraco; os valores absolutos não valem para um PC, as proporções sim):
+
+- Só os cortes de geometria, antes e depois em sequência na mesma máquina (mediana de 28 quadros por cena): favela 1.622 e
+  1.343 ms antes, 1.235 ms depois; centro 1.521 e 1.570 antes, 1.643 depois; mata 1.749 e 1.722 antes, 1.752 depois. Ou seja,
+  de 0 a −20%, dentro do ruído fora da favela. **Cortar triângulos sozinho não resolve um PC limitado por preenchimento.**
+- Um recurso desligado por vez (centro): MSAA, paralaxe das fachadas, gradação e a qualidade do PCF mudam menos que o ruído (±5%).
+- Os degraus do `AutoQuality`, do preset High ao último (mediana de 22 quadros): centro **1.644 → 373 ms (4,4×)**, favela
+  **1.158 → 450 ms (2,6×)**, com 135 a 145 desenhos e 190 a 415 mil triângulos no fim. O que mais rende é a resolução: 85% tira
+  ~23% do tempo, 70% outros ~30%. Por isso ela vem cedo na lista.
+
+**O que não foi medido.** Não há placa de vídeo neste ambiente: o ganho em FPS num PC real não foi medido aqui. Para medir, abra
+o jogo com `?bench&gfx=high` (ou `medium`) antes e depois e compare a coluna de FPS sem teto.
+
+**O que ainda pesa** (próximos cortes, por ordem de ganho):
+- o mapa de sombras ainda redesenha os acabamentos e as árvores inteiras (no centro, metade dos triângulos);
+- postes de luz: ~5.800 no mundo, 386 vértices cada (108 MB); semáforos: ~1 milhão de vértices;
+- plantações da roça nos acabamentos (1,4 milhão de vértices de folhas);
+- cada célula de vegetação tem a sua cópia da geometria do modelo (~150 MB), por causa do VAO dividido entre malhas;
+- memória de vídeo estimada: 959 MB de texturas (638 MB de atlas de personagens) e 712 MB de geometria.
+
+`tests/52_desempenho` confere os pedaços de 64 u, as rasteiras fora da sombra, o cascalho leve, o vídeo integrado, o teto de
+pixels, as duas variantes do shader e o `AutoQuality` descendo até o fim, guardando o degrau e retomando um acima.
+
 ## Carros e personagens
 
 Os carros saíram do desenho procedural: atlas vetorial pronto (36 modelos), girado e repintado no shader, todos num

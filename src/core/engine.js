@@ -197,7 +197,12 @@ class GameEngine {
 			level = err(lo) <= err(hi) ? lo : hi;
 		} else {                                                   // (graphics preset: the screen's density with the smooth look, × the render scale)
 			const density = A.smooth !== false ? Math.max(1, Math.min(window.devicePixelRatio || 1, Config.perf.dprCap || 1)) : 1;
-			level = 1 / (density * (Config.perf.renderScale || 1));
+			let k = density * (Config.perf.renderScale || 1);
+			// TETO DE PIXELS do preset (Graphics: maxPx): num monitor 4K o High desenhava 8,3 milhões de pixels com MSAA 4× — o dobro de um
+			// 1440p, que é onde o teto fica. Acima dele a tela é desenhada menor e ampliada pelo navegador. (HD: sem teto.)
+			const w = this.canvas.clientWidth || window.innerWidth, maxPx = Config.perf.maxPixels || 0;
+			if (maxPx && w * h * k * k > maxPx) k = Math.sqrt(maxPx / (w * h));
+			level = 1 / (k * (Config.perf.autoScale || 1));              // (autoScale: os degraus de resolução do AutoQuality)
 		}
 		this.engine.setHardwareScalingLevel(level);
 		this.canvas.style.imageRendering = A.pixelate ? 'pixelated' : 'auto';

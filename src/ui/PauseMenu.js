@@ -1022,7 +1022,7 @@ class PauseMenu {
 	_setAdjust(d) {
 		const s = this.settings;
 		if (this.setRow === 0) s.volume = Math.max(0, Math.min(1, Math.round((s.volume + d * 0.1) * 10) / 10));
-		else if (PauseMenu.SET_KEYS[this.setRow] === 'graphics') this._cycle('graphics', Graphics.CHOICES, 'auto', d, (c) => I18n.t('settings.graphics.flash', { choice: Graphics.label(c) }));
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'graphics') { this._cycle('graphics', Graphics.CHOICES, 'auto', d, (c) => I18n.t('settings.graphics.flash', { choice: Graphics.label(c) })); Store.remove('autoQuality'); }      // (escolha à mão: o degrau guardado do AutoQuality recomeça do alto)
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'language') this._cycle('language', I18n.LANGS, I18n.lang, d, (c) => I18n.t('settings.language.flash', { choice: I18n.label(c) }));
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'life') { const C = Life.LEVELS, i = Math.max(0, C.indexOf(s.life || 'auto')); s.life = d < 0 ? C[(i + C.length - 1) % C.length] : C[(i + 1) % C.length]; if (this.g._flash) this.g._flash(`🏙️ Vida da cidade: ${Life.label(s.life)}`); }
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'hints') { s.hints = d === 0 ? s.hints === false : d > 0; if (s.hints && d === 0) Hints.reset(); }

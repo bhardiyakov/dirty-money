@@ -53,7 +53,7 @@ class MainMenu {
 		vol.addEventListener('input', () => { s.volume = vol.value / 100; commit(); });
 		for (const t of toggles) t.addEventListener('click', () => { s[t.dataset.key] = !s[t.dataset.key]; commit(); });
 		// Graphics preset: applied on page load, and nothing has started yet here — the menu reloads right away with the new one.
-		gfx.addEventListener('click', () => { s.graphics = Graphics.next(s.graphics || 'auto'); commit(); location.reload(); });
+		gfx.addEventListener('click', () => { s.graphics = Graphics.next(s.graphics || 'auto'); Store.remove('autoQuality'); commit(); location.reload(); });
 		lang.addEventListener('click', () => { s.language = I18n.next(I18n.lang); commit(); location.reload(); });      // (same: texts are read once, at start)
 		const open = (v) => { panel.classList.toggle('open', v); if (v) render(); (v ? document.getElementById('btn-settings-back') : document.getElementById('btn-settings')).focus(); };
 		window.addEventListener('dm-settings', render);                                  // (o giroscópio pode desligar sozinho: PauseMenu)

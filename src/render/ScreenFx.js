@@ -1,6 +1,7 @@
 // ============================================================================
 // ScreenFx — EFEITOS DE TELA ligados ao que o jogador está sentindo. São quatro números que a gradação (Lighting.GRADE_FS, o último
-// pós-processamento) recebe a cada quadro no uniform `fx`; com todos em zero a imagem é EXATAMENTE a de antes (nenhuma amostra a mais).
+// pós-processamento) recebe a cada quadro no uniform `fx`; com todos em zero roda a variante SEM efeitos do shader (Lighting.fx): a
+// imagem e o custo são exatamente os de antes.
 //   • speed  VELOCIDADE: de carro ou moto acima de ~70 km/h as bordas da tela esticam para fora (borrão radial; o centro fica nítido).
 //            Com o nitro, mais. Soma com o campo de visão que já abre na perseguição (CompassCamera).
 //   • hit    IMPACTO: batida, explosão, soco ou tiro levado — por um instante as cores se separam nas bordas (aberração cromática).
@@ -39,7 +40,9 @@ const ScreenFx = {
         if (this.speed < 0.003 && !sp) this.speed = 0;
         if (this.hurt < 0.003 && !hurt) this.hurt = 0;
         this.t = (this.t + dt) % 1000;
+        if (typeof Lighting !== 'undefined') Lighting.fx(this.active);          // (a variante do shader com os efeitos só enquanto há algum)
     },
+    get active() { return this.speed > 0 || this.hit > 0 || this.hurt > 0; },
 
     // Chamado no onApply da gradação.
     apply(effect) { effect.setFloat4('fx', this.speed, this.hit, this.hurt, this.t); },

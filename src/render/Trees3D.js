@@ -57,6 +57,16 @@ const Trees3D = {
             default: return this.KIND[kind];
         }
     },
+    // RASTEIRAS: tufos, capins, samambaias, cascalho, entulho e lixo. NÃO projetam sombra: a de um tufo de 40 cm não se lê no mapa de
+    // sombras, e cada malha delas era desenhada de novo nele (na favela, ~300 mil triângulos por quadro só nisso). No degrau de
+    // economia do AutoQuality somem inteiras (setCover) — as árvores, arbustos e pedras ficam.
+    COVER: new Set(['tuft', 'pebbles', 'roadside', 'dry', 'reed', 'fern', 'capim', 'rubble', 'trashpile', 'sansevieria', 'monstera']),
+    coverOn: true, _cover: [],
+    setCover(on) {
+        this.coverOn = !!on;
+        this._cover = this._cover.filter((m) => !m.isDisposed());
+        for (const m of this._cover) m.isVisible = this.coverOn;                 // (isVisible, não setEnabled: as lojas ligam e desligam as malhas da cidade)
+    },
     wants(kind) { return this.on && !!this.KIND[kind]; },
     // As instâncias são agrupadas em células de CELL u (uma malha por modelo e célula): o descarte por frustum e a janela da sombra
     // deixam de fora o que está longe da tela (num pedaço de 128 u de mata são ~1.500 plantas; na tela cabem algumas centenas).
@@ -112,7 +122,9 @@ const Trees3D = {
             mesh.receiveShadows = true;
             mesh.isPickable = false;
             mesh.freezeWorldMatrix();
-            if (shadow && this.castShadows && casts) shadow.addShadowCaster(mesh);
+            const cover = this.COVER.has(model);
+            if (cover) { if (this._cover.length > 400) this._cover = this._cover.filter((m) => !m.isDisposed()); this._cover.push(mesh); if (!this.coverOn) mesh.isVisible = false; }
+            if (shadow && this.castShadows && casts && !cover) shadow.addShadowCaster(mesh);
             out.push(mesh);
         }
         return out;
@@ -526,8 +538,10 @@ Trees3D.PARTS = {
     },
     // PEDRA (cor sólida — alfa 0, sem o shader da folhagem): icosfera entortada por ruído, achatada `sq`, granito cinza-quente com o
     // topo esverdeado (musgo) e a base mais escura (terra encostada); `k` = claridade.
+    // (pedra PEQUENA — cascalho, caco de tijolo, a pedra menor ao lado do bloco: 20 triângulos em vez de 80; com até meio metro a
+    // diferença não se vê, e o cascalho sozinho somava 600 mil triângulos por quadro na mata)
     rock(g, c, sq, R, k = 1) {
-        const I = this.ico(2), base = g.p.length / 3, ph = R() * 10, tint = [0.5 + R() * 0.08, 0.48 + R() * 0.06, 0.44 + R() * 0.05];
+        const I = this.ico(Math.max(sq[0], sq[1], sq[2]) <= 0.5 ? 1 : 2), base = g.p.length / 3, ph = R() * 10, tint = [0.5 + R() * 0.08, 0.48 + R() * 0.06, 0.44 + R() * 0.05];
         for (let i = 0; i < I.p.length; i += 3) {
             const x = I.p[i], y = I.p[i + 1], z = I.p[i + 2];
             const w = 1 + 0.22 * Math.sin(x * 4.1 + ph) * Math.sin(y * 3.3 + ph * 0.7) * Math.sin(z * 3.7 - ph) + (R() - 0.5) * 0.12 + (y > 0.55 ? -0.18 * (y - 0.55) : 0);      // (topo aplainado)
