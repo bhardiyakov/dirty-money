@@ -40,6 +40,7 @@ class TrafficCar extends Vehicle {
     // ------------------------------------------------------------------ modos
     startRoute(x, z, d, lp = null) {
         this.route = new Route(x, z, d, lp);
+        this.route.trips = typeof RioTraffic !== 'undefined' && RioTraffic.on;       // vai para algum lugar (as avenidas, o pico)
         this.route.ensure(2);
     }
 

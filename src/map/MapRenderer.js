@@ -219,6 +219,21 @@ const MapRenderer = {
                 ctx.stroke();
             }
             ctx.setLineDash([]);
+            // Mão única (RioTraffic): setinhas no sentido da rua, uma a cada ~36 u (com mais zoom, mais juntas)
+            ctx.fillStyle = C.laneLine; ctx.beginPath();
+            const gap = k >= 3 ? 24 : 36, ah = Math.max(2.2, Math.min(9, 1.6 * k)), Pt = {};
+            for (const e of edges) {
+                if (!e.oneway) continue;
+                const s0 = (e.cutA || 0) + 6, s1 = e.len - (e.cutB || 0) - 6, sg = e.oneway;
+                if (s1 < s0) continue;
+                const nA = Math.max(2, Math.floor((s1 - s0) / gap) + 1);          // (ao menos duas, perto das pontas: o meio da quadra é do nome da rua)
+                for (let i = 0; i < nA; i++) {
+                    RoadPlan.at(e, s0 + (s1 - s0) * i / (nA - 1), Pt);
+                    const tx = Pt.tx * sg, tz = Pt.tz * sg, x = X(Pt.x), y = Y(Pt.z), dx = tx, dy = -tz;          // (y da tela cresce para o sul)
+                    ctx.moveTo(x + dx * ah, y + dy * ah); ctx.lineTo(x - dx * ah * 0.6 - dy * ah * 0.7, y - dy * ah * 0.6 + dx * ah * 0.7); ctx.lineTo(x - dx * ah * 0.6 + dy * ah * 0.7, y - dy * ah * 0.6 - dx * ah * 0.7); ctx.closePath();
+                }
+            }
+            ctx.fill();
         }
 
         // 5) Prédios: a sombra de todos (para o sudeste, mais comprida nos altos) e depois os telhados, com a quina iluminada (noroeste)

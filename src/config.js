@@ -455,6 +455,7 @@ const Config = {
 		abandonDist: 48,       // Carro abandonado some do meio da pista quando você se afasta tanto.
 		// Mundo grande: o trânsito só existe PERTO do jogador. Quem passa de `recycleDist` reaparece numa rua entre spawnMin e spawnMax.
 		spawnMin: 90, spawnMax: 170, recycleDist: 205, relocPerSec: 3,
+		rio: true,             // regras do Rio (world/RioTraffic.js): binários de mão única, sem esquerda da avenida, viagens com destino, pico
 	},
 
 	// Semáforos dos cruzamentos (ciclo: eixo N-S, depois eixo L-O).

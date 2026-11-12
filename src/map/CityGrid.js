@@ -223,6 +223,7 @@ const CityGrid = {
             FavelaSul.roads(P);
         }
         P.build();
+        if (typeof RioTraffic !== 'undefined') RioTraffic.assign(D);      // a mão de cada rua (binários de mão única), as conversões proibidas
     },
 
     // ============================================================ contorno e ruas da cidade
@@ -407,8 +408,8 @@ const CityGrid = {
             return { L: Lp, cross };
         };
         let n = 0;
-        for (const x of ix) { const { L: Lp, cross } = line(true, x, iz[0] - 40, iz[iz.length - 1] + 40, iz); for (const q of this._clipLine(Lp, cross, O)) { P.addPath(q, x === mid ? 'ave' : 'isl', { name: x === mid ? 'Av. Central da Ilha' : this._gridName(true, x, true) }); n++; } }
-        for (const z of iz) { const { L: Lp, cross } = line(false, z, ix[0] - 40, ix[ix.length - 1] + 40, ix); for (const q of this._clipLine(Lp, cross, O)) { P.addPath(q, 'isl', { name: this._gridName(false, z, true) }); n++; } }
+        for (const x of ix) { const { L: Lp, cross } = line(true, x, iz[0] - 40, iz[iz.length - 1] + 40, iz); for (const q of this._clipLine(Lp, cross, O)) { P.addPath(q, x === mid ? 'ave' : 'isl', { name: x === mid ? 'Av. Central da Ilha' : this._gridName(true, x, true), line: { v: true, at: x, d: 'island' } }); n++; } }
+        for (const z of iz) { const { L: Lp, cross } = line(false, z, ix[0] - 40, ix[ix.length - 1] + 40, ix); for (const q of this._clipLine(Lp, cross, O)) { P.addPath(q, 'isl', { name: this._gridName(false, z, true), line: { v: false, at: z, d: 'island' } }); n++; } }
         console.log(`[ILHA] Av. Litorânea com ${R.length} pontos; ${n} ruas curvas`);
     },
 
@@ -435,7 +436,7 @@ const CityGrid = {
         const add = (vert, c, pieces, curved) => {
             for (const q of pieces) {
                 if (!curved) { if (vert) P.addV(c, q[0][1], q[q.length - 1][1], cls(true, c)); else P.addH(c, q[0][0], q[q.length - 1][0], cls(false, c)); }
-                else P.addPath(q, cls(vert, c), { name: this._gridName(vert, c) });
+                else P.addPath(q, cls(vert, c), { name: this._gridName(vert, c), line: { v: vert, at: c, d: 'city' } });
             }
         };
         let nCurve = 0;

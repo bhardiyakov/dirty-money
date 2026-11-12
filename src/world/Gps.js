@@ -38,6 +38,7 @@ const Gps = {
             if (u === goalB && d + dB < best) { best = d + dB; bestNode = u; }
             const n = P.nodes[u];
             for (const a of n.arms) {                                  // (pernas em qualquer ângulo; trecho curvo: o comprimento dele)
+                if (a.e.oneway && typeof RioTraffic !== 'undefined' && !RioTraffic.canLeave(a.e, n)) continue;      // (mão única: o GPS não manda pela contramão)
                 const m = a.to;
                 if (done[m.id]) continue;
                 const nd = d + (a.e.free ? a.e.len : D(n, m));
