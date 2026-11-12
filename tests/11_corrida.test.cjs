@@ -21,7 +21,7 @@ module.exports = {
             game.input.getMoveAxis = () => {
                 const d = window.__dir; if (!d) return { x: 0, z: 0 };
                 if (game.mode === 'car') return { x: 0, z: window.__tilt };
-                const { forward, right } = game.camera.getGroundBasis();
+                const { forward, right } = game.camera.inputBasis();
                 return { x: (d.x * right.x + d.z * right.z) * window.__tilt, z: (d.x * forward.x + d.z * forward.z) * window.__tilt };
             };
         });
@@ -67,7 +67,7 @@ module.exports = {
         // 1) na safe house: só anda, mesmo com o sprint apertado (e sem gastar fôlego)
         const V = await page.evaluate(() => {
             const O = Outfit.m, k = (1 + (O.walk || 0)) * Physique.speedMul();
-            return { inside: !!Interiors.active, walk: Config.player.maxSpeed * k, jog: Config.player.jogSpeed * k, fwd: (() => { const { forward } = game.camera.getGroundBasis(); return { x: forward.x, z: forward.z }; })() };
+            return { inside: !!Interiors.active, walk: Config.player.maxSpeed * k, jog: Config.player.jogSpeed * k, fwd: (() => { const { forward } = game.camera.inputBasis(); return { x: forward.x, z: forward.z }; })() };
         });
         c.ok(V.inside, 'começa dentro da safe house');
         await page.evaluate((f) => { window.__dir = f; }, V.fwd);

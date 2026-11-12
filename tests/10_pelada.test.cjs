@@ -30,7 +30,7 @@ module.exports = {
             game.input.getMoveAxis = () => {
                 const t = window.__to; if (!t) return { x: 0, z: 0 };
                 const p = game.player.position, dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz); if (d < 0.25) return { x: 0, z: 0 };
-                const { forward, right } = game.camera.getGroundBasis();
+                const { forward, right } = game.camera.inputBasis();
                 return { x: (dx * right.x + dz * right.z) / d, z: (dx * forward.x + dz * forward.z) / d };
             };
             return true;
