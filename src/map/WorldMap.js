@@ -331,6 +331,7 @@ const WorldMap = {
             else if (typeof Maracana !== 'undefined' && x > Maracana.AREA[0] && x < Maracana.AREA[2] && z > Maracana.AREA[1] && z < Maracana.AREA[3] && hh < 20) b = R.GRASS;     // (o complexo do Maracanã: gramados)
             else if (dSea[k] * c < 13 || (dSea[k] * c < 40 && x > 184 && x < 300 && Math.abs(z - this.STRIP.cz) < this.STRIP.hz + 60)) b = R.SAND;      // (orla da cidade: praia larga nas baías)
             else if (x > BE.x0 && x < BE.x1 && z < BE.z1 && hh < 8) b = R.SAND;                               // (a praia do sul)
+            else if (typeof ZonaSul !== 'undefined' && ZonaSul.copaSand(x, z) && hh < 8) b = R.SAND;           // (Copacabana: areia larga até a Atlântica)
             else if (typeof Lagoa !== 'undefined' && Lagoa.zone(x, z, Lagoa.OUT2 + 4)) b = R.GRASS;           // (a Lagoa: orla de grama, sem brejo nem praia)
             else if (dLake[k] * c < 11 && hh < 6) b = R.SWAMP;
             else if (x > 300 && !pao) b = R.RESORT;

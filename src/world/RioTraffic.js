@@ -43,6 +43,11 @@ const RioTraffic = {
 		for (const e of P.edges) {
 			if (!this.ONEWAY_CLS.has(e.cls) || e.layer) continue;
 			let v, at, d;
+			if (e.line && e.line.dir) {                                          // sentido dado pelo traçado (ZonaSul: a mão de cada rua)
+				const al = e.line.v ? e.b.z - e.a.z : e.b.x - e.a.x;
+				if (Math.abs(al) >= 1) { e.oneway = e.line.dir * Math.sign(al); n1++; }
+				continue;
+			}
 			if (e.line) { v = e.line.v; at = e.line.at; d = e.line.d; }
 			else if (!e.free) { v = e.v; at = e.v ? e.a.x : e.a.z; d = e.cls === 'isl' ? 'island' : 'city'; }
 			else continue;
@@ -60,7 +65,13 @@ const RioTraffic = {
 			const bad = this._isolated(base);
 			rounds.push(bad.size);
 			if (!bad.size) break;
-			for (const e of bad) { if (e.oneway) { e.oneway = 0; n1--; } e.a.leftOk = e.b.leftOk = true; }
+			// (a rua isolada e, se ela já era de mão dupla, as vizinhas: o beco pode ser uma mão única que só CHEGA na ponta dela)
+			for (const e of bad) {
+				const fix = (q) => { if (q.oneway) { q.oneway = 0; n1--; } };
+				const was = e.oneway;
+				fix(e); e.a.leftOk = e.b.leftOk = true;
+				if (it > 0 || !was) for (const n of [e.a, e.b]) for (const a of n.arms) fix(a.e);
+			}
 		}
 		const ow = P.edges.filter((e) => e.oneway), len = ow.reduce((s, e) => s + e.len, 0);
 		this.stats = { oneway: ow.length, onewayLen: Math.round(len), reverted: rounds.reduce((s, k) => s + k, 0), rounds, leftOk: P.nodes.filter((n) => n.leftOk).length, ms: +(performance.now() - t0).toFixed(1) };

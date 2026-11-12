@@ -182,7 +182,7 @@ const CityGrid = {
         if (!legacy) {
             // ---- VIADUTO: via elevada na coluna oeste da cidade (cruza as ruas por cima, sem cruzamento; rampas nas pontas).
             const nearest = (arr, v) => arr.reduce((b, q) => (Math.abs(q - v) < Math.abs(b - v) ? q : b), arr[0]);
-            const xv = (cx[0] + cx[1]) / 2, zA = nearest(cz, -840), zB = nearest(cz, -270);
+            const xv = (cx[0] + cx[1]) / 2, zA = nearest(cz, -732), zB = nearest(cz, -270);      // (abaixo de zA: Ipanema/Leblon — ZonaSul)
             D.viaduct = { x: xv, z0: zA, z1: zB };
             // ---- CONTORNO: a mancha urbana termina numa curva torta (oeste, norte e sul) e a Av. do Contorno corre por ela, da orla sul
             // à orla norte; as ruas da cidade são cortadas nela (_cityStreets). Os bairros do norte e do extremo sul têm ruas curvas.
@@ -223,6 +223,7 @@ const CityGrid = {
             FavelaSul.roads(P);
         }
         P.build();
+        if (typeof ZonaSul !== 'undefined') ZonaSul.names();                    // (Av. Atlântica, Vieira Souto, Delfim Moreira)
         if (typeof RioTraffic !== 'undefined') RioTraffic.assign(D);      // a mão de cada rua (binários de mão única), as conversões proibidas
     },
 
@@ -244,7 +245,7 @@ const CityGrid = {
         // a PRAIA DO SUL (WorldMap.BEACH): do Morro do Mirante para leste a cidade termina numa orla reta-ondulada — a Av. do Contorno vira a
         // avenida da praia, e entre ela e o mar fica a areia larga
         const bk = ss(-150, -100, x);
-        if (bk > 0) s += (Math.max(s, 118 + 14 * (F(x / 120, 2.7, 507) - 0.5)) - s) * bk;
+        if (bk > 0) s += ((118 + 10 * (F(x / 120, 2.7, 507) - 0.5)) - s) * bk;          // (orla de Ipanema: quase reta, sem os recuos do resto)
         return Math.min(this._smin(this._smin(x - (B.x0 + w), (B.z1 - n) - z, 70), z - (B.z0 + s), 70), B.east - x);
     },
     _chaikinLoop(L) {
@@ -381,7 +382,8 @@ const CityGrid = {
     // recortada pela avenida como as da cidade.
     _islandPlan(P, ix, iz) {
         const F = (a, b, sd, o = 3) => WorldMap._fbm(a, b, o, sd), F2 = (a, b, sd) => WorldMap._fbm(a, b, 2, sd) * 2 - 1;
-        const f = (x, z) => (x < 330 || !WorldMap.isLand(x, z) ? -30 : WorldMap.seaDist(x, z) - (30 + 34 * F(x / 150, z / 150, 521)));
+        const f0 = (x, z) => (x < 330 || !WorldMap.isLand(x, z) ? -30 : WorldMap.seaDist(x, z) - (30 + 34 * F(x / 150, z / 150, 521)));
+        const f = typeof ZonaSul !== 'undefined' ? ZonaSul.copaField(f0) : f0;          // (COPACABANA: a Atlântica em curva lisa, areia larga a leste)
         const X0 = 340, Z0 = -1060, st = 6;
         let L = WorldMap.contour(f, X0, Z0, Math.ceil((880 - X0) / st), Math.ceil((1160 - Z0) / st), st, 0)[0];
         L = WorldMap.simplifyLoop(L, 1.5);
@@ -398,6 +400,7 @@ const CityGrid = {
             this.bridgeEnds[z] = bx;
             P.addH(z, 168, bx, 'bridge');
         }
+        if (typeof ZonaSul !== 'undefined') { ZonaSul.copacabana(P, this, O, this.bridgeEnds); return; }      // (o traçado de Copacabana)
         const warp = (u, v) => [u + 30 * F2(u / 220, v / 220, 531), v + 26 * F2(u / 220 + 9.7, v / 220 + 3.3, 532)];
         const mid = ix.reduce((b, q) => (Math.abs(q - 612) < Math.abs(b - 612) ? q : b), ix[0]);
         const line = (vert, c, a, b, at) => {
@@ -444,14 +447,16 @@ const CityGrid = {
             if (straightX.has(x)) { const { L, cross } = line(true, x, B.z0 - 60, B.z1 + 60, cz); add(true, x, this._clipLine(L, cross), false); continue; }
             { const { L, cross } = line(true, x, zA, ZN, cz); add(true, x, this._clipLine(L, cross), false); }
             { const { L, cross } = line(true, x, ZN, B.z1 + 60, cz); const pc = this._clipLine(L, cross); add(true, x, pc, true); nCurve += pc.length; }
-            { const { L, cross } = line(true, x, B.z0 - 60, zA, cz); const pc = this._clipLine(L, cross); add(true, x, pc, true); nCurve += pc.length; }
+            if (typeof ZonaSul === 'undefined') { const { L, cross } = line(true, x, B.z0 - 60, zA, cz); const pc = this._clipLine(L, cross); add(true, x, pc, true); nCurve += pc.length; }      // (abaixo de zA: Ipanema)
         }
         for (const z of cz) {
+            if (z < zA && typeof ZonaSul !== 'undefined') continue;                    // (Ipanema/Leblon: as paralelas da orla)
             const curved = z > ZN || z < zA, { L, cross } = line(false, z, B.x0 - 60, B.x1, cx);
             cross.add(L.length - 1);                                                    // (acaba na Beira-Mar)
             const pc = this._clipLine(L, cross);
             add(false, z, pc, curved); if (curved) nCurve += pc.length;
         }
+        if (typeof ZonaSul !== 'undefined') ZonaSul.ipanema(P, this, zA, cx, this.districts.viaduct.x);
         console.log(`[CIDADE] contorno: ${this.cityPath.length} pontos; ${nCurve} ruas curvas`);
     },
 
@@ -539,6 +544,12 @@ const CityGrid = {
             return { biome: b, si: oi, sj: oj };
         }
         const gi = Math.round(x0) + 3000, gj = Math.round(z0) + 3000;
+        // IPANEMA / LEBLON: prédios de frente para o mar, o comércio da Visconde de Pirajá, residencial perto da Lagoa; praças
+        if (typeof ZonaSul !== 'undefined' && ZonaSul.inIpanema(cx, cz)) {
+            const r = this._rand(gi, gj), dv = ZonaSul.ipaDepth(cx, cz), big = (x1 - x0) * (z1 - z0) > 3000;
+            const b = r < (big ? 0.22 : 0.05) ? (r < 0.03 ? 'plaza' : 'park') : dv < 50 ? (r < 0.6 ? 'resort' : 'residential') : dv < 125 ? (r < 0.65 ? 'commercial' : 'downtown') : 'residential';
+            return { biome: b, si: gi, sj: gj };
+        }
         const east = Math.abs(x1 - 168) < 1e-6;                                                 // a coluna do mar (x 126..168) é praia/porto/mata
         const r = this._rand(gi, gj);
         let biome = east ? (r < 0.5 ? 'beach' : (r < 0.78 ? 'port' : 'forest')) : this._biomeCity(cx, cz, r);
@@ -546,8 +557,14 @@ const CityGrid = {
         return { biome, si: gi, sj: gj };
     },
     _pickIsland(i, j, x0, z0, x1, z1) {
-        const r = this._rand(i + 400, j + 400);
-        return { biome: this._biomeIsland((x0 + x1) / 2, (z0 + z1) / 2, r), si: i + 400, sj: j + 400 };
+        const r = this._rand(i + 400, j + 400), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+        // COPACABANA: hotéis de frente para a praia, comércio e prédios altos no miolo, residencial colado no morro; pracinhas
+        const dv = typeof ZonaSul !== 'undefined' ? ZonaSul.copaDepth(cx, cz) : null;
+        if (dv !== null && dv > -10) {
+            const big = (x1 - x0) * (z1 - z0) > 3400, b = r < (big ? 0.14 : 0.03) ? 'park' : dv < 58 ? (r < 0.3 ? 'resort' : 'downtown') : dv < 165 ? (r < 0.55 ? 'commercial' : 'downtown') : (r < 0.65 ? 'residential' : 'downtown');
+            return { biome: b, si: i + 400, sj: j + 400 };
+        }
+        return { biome: this._biomeIsland(cx, cz, r), si: i + 400, sj: j + 400 };
     },
     _cellKey(x0, z0, x1, z1) { return Math.round(x0 * 10) + ',' + Math.round(z0 * 10) + ',' + Math.round(x1 * 10) + ',' + Math.round(z1 * 10); },
 
@@ -1699,7 +1716,7 @@ const CityGrid = {
     // ----------------------------------------------------------------- nomes de rua
     // Nomes das ruas verticais (da cidade, de oeste a leste) e horizontais (de sul a norte, repetidas com numeração).
     STREETS_V: ['Av. Perimetral', 'Rua do Morro', 'Rua Boa Vista', 'Rua do Porto', 'Av. Liberdade', 'Rua Afonso Marinete', 'Av. Central', 'Rua Garoa', 'Av. dos Pescadores', 'Rua do Farol', 'Rua das Dunas', 'Av. Beira-Mar'],
-    STREETS_H: ['Av. Beira-Mar Sul', 'Rua da Orla', 'Rua Rondônia', 'Av. Atlântica', 'Rua das Palmeiras', 'Av. Liberty', 'Rua do Comércio', 'Rua Marquês', 'Av. Independência', 'Rua da Praia'],
+    STREETS_H: ['Av. Beira-Mar Sul', 'Rua da Orla', 'Rua Rondônia', 'Av. Oceânica', 'Rua das Palmeiras', 'Av. Liberty', 'Rua do Comércio', 'Rua Marquês', 'Av. Independência', 'Rua da Praia'],
 
     // Nome de uma via: `edge` do RoadPlan.
     streetName(edge) {
