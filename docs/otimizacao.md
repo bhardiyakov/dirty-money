@@ -112,16 +112,19 @@ desde a base da etapa 0 (`medicao-desempenho.md`), e que o `AutoQuality` não ti
   malhas no mundo, mas menos desenhos por quadro na favela e na mata (191 contra 227), porque os pedaços vazios não entram.
 - **`AutoQuality` com degraus de verdade** (`core/AutoQuality.js`), do que menos se nota ao que mais se nota:
   1. mapa de sombras a 512;
-  2. sem sombras;
+  2. resolução a 85%;
   3. sem MSAA e sem a paralaxe das fachadas (o relevo fica; saem as ~15 amostras por pixel de parede);
-  4. resolução a 85%;
-  5. sem vegetação rasteira, espelho da água a cada 3 quadros;
-  6. resolução a 70%;
+  4. sem sombras;
+  5. resolução a 70%;
+  6. sem vegetação rasteira, espelho da água a cada 3 quadros;
   7. resolução a 58%.
 
-  Abaixo da metade do ritmo ele desce em 2 s em vez de 4. O degrau alcançado fica guardado por preset e placa, e a sessão
-  seguinte começa um degrau acima dele: não repete o primeiro minuto a 10 FPS e ainda pode se recuperar. Os degraus 3 em diante só
-  valem com placa de vídeo de verdade. Num rasterizador por software (o navegador dos testes) ele para nas sombras, como antes.
+  - Um segundo só conta como lento se a maioria dos quadros dele foi lenta: um engasgo isolado numa máquina boa não custa qualidade.
+  - Abaixo da metade do ritmo ele desce em 2 s em vez de 4.
+  - O degrau alcançado fica guardado por preset e placa, e a sessão seguinte começa um degrau acima dele: não repete o primeiro
+    minuto a 10 FPS e ainda pode se recuperar. Escolher um preset à mão em Ajustes › Gráficos apaga o degrau guardado.
+  - Os degraus de resolução, MSAA e vegetação só valem com placa de vídeo de verdade. Num rasterizador por software (o navegador
+    dos testes) ele faz só os dois de sombra, como antes.
 - **Preset automático**: vídeo integrado (`Graphics.MID_GPU`: Intel HD/UHD/Iris, AMD Radeon Graphics/Vega) começa no Medium.
   Intel Arc e os chips da Apple continuam no High.
 - **Teto de pixels por preset** (`maxPx`: 1,5 / 2,4 / 4,2 Mpx; HD sem teto). Num monitor 4K o High desenhava 8,3 Mpx com MSAA 4×;
@@ -141,10 +144,16 @@ desde a base da etapa 0 (`medicao-desempenho.md`), e que o `AutoQuality` não ti
 | Mata atlântica | 2.173 mil | **1.134 mil** | −48% | 248 | 227 |
 | Centro à noite com chuva | 312 mil | **270 mil** | −14% | 157 | 158 |
 
-Com os degraus do `AutoQuality` aplicados, a favela vai a ~530 mil triângulos e 140 desenhos (sem sombras e sem rasteiras), antes de
-contar o ganho de preenchimento (MSAA, paralaxe e resolução).
+**Tempo de quadro neste ambiente** (sem placa de vídeo: o rasterizador por software é limitado por preenchimento de pixels, como
+um vídeo integrado fraco; os valores absolutos não valem para um PC, as proporções sim):
 
-__AB__
+- Só os cortes de geometria, antes e depois em sequência na mesma máquina (mediana de 28 quadros por cena): favela 1.622 e
+  1.343 ms antes, 1.235 ms depois; centro 1.521 e 1.570 antes, 1.643 depois; mata 1.749 e 1.722 antes, 1.752 depois. Ou seja,
+  de 0 a −20%, dentro do ruído fora da favela. **Cortar triângulos sozinho não resolve um PC limitado por preenchimento.**
+- Um recurso desligado por vez (centro): MSAA, paralaxe das fachadas, gradação e a qualidade do PCF mudam menos que o ruído (±5%).
+- Os degraus do `AutoQuality`, do preset High ao último (mediana de 22 quadros): centro **1.644 → 373 ms (4,4×)**, favela
+  **1.158 → 450 ms (2,6×)**, com 135 a 145 desenhos e 190 a 415 mil triângulos no fim. O que mais rende é a resolução: 85% tira
+  ~23% do tempo, 70% outros ~30%. Por isso ela vem cedo na lista.
 
 **O que não foi medido.** Não há placa de vídeo neste ambiente: o ganho em FPS num PC real não foi medido aqui. Para medir, abra
 o jogo com `?bench&gfx=high` (ou `medium`) antes e depois e compare a coluna de FPS sem teto.
