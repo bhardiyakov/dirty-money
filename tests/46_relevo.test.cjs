@@ -1,6 +1,6 @@
 // RELEVO DE VERDADE (map/Relief.js, Config.relief): o morro da favela em 3D — o chão (malhas do mundo e do terreno), as casas
 // niveladas, o personagem 2,5D, o carro 3D e a câmera ficam na altura do chão (a física segue no plano); o Corcovado com o Cristo acima
-// de 300 m e o Pão de Açúcar alto (etapa 2). `?relevo=0`: tudo plano.
+// de 300 m e a Pedra do Farol alto (etapa 2). `?relevo=0`: tudo plano.
 const { boot, gameWait } = require('./lib.cjs');
 
 module.exports = {
@@ -31,14 +31,14 @@ module.exports = {
         c.ok(L.ground !== null && Math.abs(L.ground - L.rel) < 1.5, `o chão desenhado está na altura do morro (${L.ground && L.ground.toFixed(1)} m, ${L.ground2})`);
         c.ok(Math.abs(L.sprite - L.rel - 0.5) < 1.2, `o personagem fica no chão do morro (${L.sprite.toFixed(1)} m)`);
         c.ok(Math.abs(L.cam - L.rel) < 1, `a câmera sobe junto (${L.cam.toFixed(1)} m)`);
-        // etapa 2: o Corcovado com o Cristo acima de 300 m e o Pão de Açúcar alto
+        // etapa 2: o Corcovado com o Cristo acima de 300 m e a Pedra do Farol alto
         const M = await page.evaluate(() => {
             const st = game.scene.getMeshByName('cristoRedentor'), pao = game.scene.getMeshByName('paoDeAcucar');
             const top = (m) => { m.computeWorldMatrix(true); m.refreshBoundingInfo(); return m.getBoundingInfo().boundingBox.maximumWorld.y; };
             return { cristo: st ? top(st) : 0, plato: Relief.at(Corcovado.C.x, Corcovado.C.z), pao: pao ? top(pao) : 0, bonde: Landmarks.BONDE.b[2] };
         });
-        c.ok(M.plato >= 295 && M.cristo >= 300, `o Cristo no alto do Corcovado: platô a ${M.plato.toFixed(0)} m, o Cristo a ${M.cristo.toFixed(0)} m`);
-        c.ok(M.pao >= 100 && M.bonde > M.pao, `o Pão de Açúcar com ${M.pao.toFixed(0)} m e a estação do bondinho no alto (${M.bonde} m)`);
+        c.ok(M.plato >= 295 && M.cristo >= 300, `o Cristo no alto do Morro do Vigia: platô a ${M.plato.toFixed(0)} m, o Cristo a ${M.cristo.toFixed(0)} m`);
+        c.ok(M.pao >= 100 && M.bonde > M.pao, `a Pedra do Farol com ${M.pao.toFixed(0)} m e a estação do bondinho no alto (${M.bonde} m)`);
         c.noErrors(errors, 'relevo');
         await close();
         ({ page, errors, close } = await boot(ctx, { query: 'relevo=0' }));

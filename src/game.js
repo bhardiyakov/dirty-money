@@ -710,7 +710,7 @@ class Game {
 			if (!frozenUI) Interiors.autoEnter(this);            // lojas: atravessar o vão da porta = entrar
 			HouseView.update(dt, this);                          // safe house: porta, luzes, seta (entrar = a porta de Interiors)
 			this.camera.setFlat(false);
-			// (no alto das escadarias do Corcovado: a câmera mira o personagem lá em cima — o ponto do chão que aparece no mesmo lugar da tela)
+			// (no alto das escadarias do Morro do Vigia: a câmera mira o personagem lá em cima — o ponto do chão que aparece no mesmo lugar da tela)
 			const pl = this.player, up = pl.walk ? pl.deckH / Math.tan(this.camera.tiltDeg * Math.PI / 180) : 0;
 			// (a câmera vai para as costas de quem anda — não mirando: aí o corpo segue a mira, não o caminho)
 			this.camera.follow(up ? (this._camUp || (this._camUp = new BABYLON.Vector3())).set(pl.position.x, 0, pl.position.z + up) : pl.position, dt, null, this.aim && this.aim.active ? null : pl, true);
@@ -906,7 +906,7 @@ class Game {
 			Laundry.syncMap(this, dt);                                                       // fachadas compradas → mapa e radar
 			Heists.build(this); Mechanic.build(this); Business.syncMap(this, dt);           // joalherias, oficinas, seus negócios no mapa
 			Dealers.build(this); Dealers.update(dt); Tuning.build(this); Tuning.update(dt); Garage.update(dt); PersonalBike.update(dt); this.carUI.update(dt);      // concessionárias (vitrine) e garagens (seus carros)
-			if (typeof Maracana !== 'undefined') Maracana.update(dt, this);                // o estacionamento do Maracanã: carros de verdade nas vagas
+			if (typeof Maracana !== 'undefined') Maracana.update(dt, this);                // o estacionamento do Colosso: carros de verdade nas vagas
 			if (typeof Lagoa !== 'undefined') Lagoa.update(dt, this);                      // os ciclistas da ciclovia da Lagoa
 		}
 
@@ -2311,9 +2311,9 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		if (this.hiding) { if (this.hiding.phase === 'hidden') this._leaveHiding(); return; }
 		if (this.holdup) { this._cancelHoldup('Você baixou a arma — a vítima fugiu'); return; }
 		if (this.player.busy) return;
-		if (typeof Corcovado !== 'undefined' && Corcovado.interact(this)) return;      // elevador e trem do Corcovado
-		if (typeof Landmarks !== 'undefined' && Landmarks.interact(this)) return;      // o passeio de bondinho do Pão de Açúcar
-		if (Stands.interact(this)) return;                               // quiosques do calçadão, café do Corcovado
+		if (typeof Corcovado !== 'undefined' && Corcovado.interact(this)) return;      // elevador e trem do Morro do Vigia
+		if (typeof Landmarks !== 'undefined' && Landmarks.interact(this)) return;      // o passeio de bondinho da Pedra do Farol
+		if (Stands.interact(this)) return;                               // quiosques do calçadão, café do Morro do Vigia
 		if (StreetLife.interact(this)) return;                           // separar a briga, devolver a bolsa, comprar no carrinho
 		if (Witnesses.interact(this)) return;                            // intimidar ou subornar a testemunha
 		if (Calendar.interact(this)) return;                             // a barraca da festa junina

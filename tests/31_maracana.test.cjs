@@ -1,4 +1,4 @@
-// O COMPLEXO DO MARACANÃ: por fora (estádio com o vão do portão sul, estacionamento, estação, passarela andável, Maracanãzinho,
+// O COMPLEXO DO COLOSSO: por fora (estádio com o vão do portão sul, estacionamento, estação, passarela andável, Ginásio Colosso,
 // parque aquático, no mapa) e por dentro, como as lojas (Interiors): a porta do portão sul, o saguão com a bilheteria (o ingresso
 // libera as catracas), a lanchonete (cardápio do estádio), a arquibancada (assistir ao jogo), o jogo rolando (jogadores, bola, gol,
 // placar) e a saída de volta ao portão.
@@ -23,7 +23,7 @@ module.exports = {
             out.road = RoadPlan.edges.filter((e) => e.name === 'Av. do Estádio').length;
             out.speedway = !!Speedway.site;
             out.grass = WorldMap.biomeAt(-470, 30) === WorldMap.B.GRASS;
-            out.label = WorldMap.regions.some((r) => r.name === 'MARACANÃ');
+            out.label = WorldMap.regions.some((r) => r.name === 'COLOSSO');
             out.closedAt3 = !Economy.isOpen('stadium', 3) && Economy.isOpen('stadium', 16);
             // a passarela da estação: da plataforma, sobe, atravessa os trilhos e desce na esplanada (sem fresta)
             const pl = game.player, B = M.BRIDGE.pts, path = [[B[0][0], B[0][1], 0], [B[1][0], B[1][1], M.BRIDGE.h], [B[2][0], B[2][1], M.BRIDGE.h], [B[3][0], B[3][1], 0], [B[3][0] + (B[3][0] - B[2][0]) * 0.3, B[3][1] + (B[3][1] - B[2][1]) * 0.3, 0]];
@@ -47,8 +47,8 @@ module.exports = {
             out.mapPitch = px(S.x + 2, S.z + 1);
             return out;
         });
-        c.ok(s.built && s.pitch, 'o complexo do Maracanã montado (estádio, gramado)');
-        c.ok(s.gateOpen && s.ringSolid && s.inside && s.dome, 'o anel é sólido, com o vão do portão sul; Maracanãzinho sólido');
+        c.ok(s.built && s.pitch, 'o complexo do Colosso montado (estádio, gramado)');
+        c.ok(s.gateOpen && s.ringSolid && s.inside && s.dome, 'o anel é sólido, com o vão do portão sul; Ginásio Colosso sólido');
         c.ok(s.door, 'o portão sul é uma porta (Interiors)');
         c.ok(s.road >= 1 && s.speedway && s.grass && s.label, 'Av. do Estádio, o autódromo no lugar, gramado em volta, nome no mapa');
         c.ok(s.closedAt3, 'o estádio abre de dia e fecha de madrugada');
@@ -167,7 +167,7 @@ module.exports = {
         c.ok(live.lights[0] > 0.9 && live.lights[1] < 0.3, `refletores acesos à noite, apagados de dia (${live.lights.map((v) => v.toFixed(2))})`);
         c.ok(live.stand, 'a barraca de churrasquinho na esplanada (com o carrinho e o churrasqueiro)');
         c.ok(live.tier === 2 && live.robUses && live.robbery, 'dá para assaltar a lanchonete do estádio (Robbery: comércio médio, cofre, câmeras, estoque)');
-        c.noErrors(errors, 'Maracanã');
+        c.noErrors(errors, 'Colosso');
         await close();
     },
 };

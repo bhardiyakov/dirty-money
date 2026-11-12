@@ -1,12 +1,12 @@
 // ============================================================================
-// Maracana — o COMPLEXO DO MARACANÃ, por fora e por dentro.
+// Maracana — o COMPLEXO DO COLOSSO, por fora e por dentro.
 // Por fora (estrutura da referência):
 //   • o ESTÁDIO: a fachada de pilares inclinados em V com os andares do anel e o vidro escuro entre eles; a COBERTURA branca com as
 //     nervuras, a faixa de placas solares e o anel interno; a ARQUIBANCADA azul, amarela e branca com os corredores; o gramado
 //     listrado com a pista azul em volta; os placares; as duas RAMPAS HELICOIDAIS de concreto na frente;
 //   • a ESPLANADA de pedra em volta (palmeiras, postes, bancos), o ESTACIONAMENTO ao sul (vagas pintadas e a baia das vans) com a placa
-//     ESTÁDIO DO MARACANÃ na entrada — os carros dele são carros de VERDADE do trânsito (trancados, roubáveis: update), a ESTAÇÃO DE TREM a leste (plataforma coberta, trilhos, trens) e a PASSARELA elevada sobre os trilhos
-//     até a esplanada (anda-se nela: Walkways), o MARACANÃZINHO (a cúpula branca) e o PARQUE AQUÁTICO (piscina com arquibancada).
+//     ESTÁDIO DO COLOSSO na entrada — os carros dele são carros de VERDADE do trânsito (trancados, roubáveis: update), a ESTAÇÃO DE TREM a leste (plataforma coberta, trilhos, trens) e a PASSARELA elevada sobre os trilhos
+//     até a esplanada (anda-se nela: Walkways), o GINÁSIO COLOSSO (a cúpula branca) e o PARQUE AQUÁTICO (piscina com arquibancada).
 // Por dentro (Interiors, como as lojas): a porta é o portão sul; a sala é pintada em HD — o SAGUÃO com a BILHETERIA (ingresso: as
 // catracas liberam) e a LANCHONETE (cardápio do estádio), as CATRACAS, a ARQUIBANCADA com a torcida, o alambrado com as placas e o
 // GRAMADO com os jogadores e a bola de verdade (um jogo rolando, com gol e placar). Na arquibancada: E assiste ao jogo.
@@ -16,14 +16,14 @@
 // ============================================================================
 
 const Maracana = {
-    S: { name: 'Maracanã', x: -408, z: 118, rx: 56, rz: 46, h: 13.2 },
+    S: { name: 'Colosso', x: -408, z: 118, rx: 56, rz: 46, h: 13.2 },
     AREA: [-512, -2, -298, 188],                         // o terreno do complexo (grama, piso, nada de fazenda)
     PARK: [-452, 24, -364, 56],                          // estacionamento
     ROWS: [4, 15.5, 22.5],                               // as fileiras de vagas de 7 u (z a partir do sul do estacionamento), com os corredores; as vans ao norte
     SLOT: 3,                                             // largura da vaga
     LOT_CAP: 40,                                         // carros de verdade no estacionamento, no máximo
     STATION: { x0: -314, x1: -305, z0: 86, z1: 142, tracks: [-321.5, -329] },
-    DOME: { x: -482, z: 166, r: 17 },                    // Maracanãzinho
+    DOME: { x: -482, z: 166, r: 17 },                    // Ginásio Colosso
     POOL: [-508, 74, -476, 104],                         // parque aquático (a piscina e a arquibancada a oeste)
     BRIDGE: { h: 5.4, w: 3, pts: [[-309.5, 118], [-309.5, 131], [-338, 131], [-351, 131]] },
     RAMPS: [Math.PI * 1.22, Math.PI * 1.78],             // as rampas helicoidais (ângulo na elipse): sudoeste e sudeste
@@ -37,7 +37,7 @@ const Maracana = {
         if (this.built) return;
         this.built = true;
         const S = this.S, O = [];
-        WorldMap.regions.push({ name: 'MARACANÃ', x: S.x, z: S.z + S.rz + 30, size: 0.75 });
+        WorldMap.regions.push({ name: 'COLOSSO', x: S.x, z: S.z + S.rz + 30, size: 0.75 });
         // o anel (caixas ao longo da elipse), com o vão do portão sul; o miolo inteiro
         const n = 48, gate = -Math.PI / 2, g = this.E(1, gate);
         for (let i = 0; i < n; i++) {
@@ -48,7 +48,7 @@ const Maracana = {
         }
         for (const [x0, x1] of [[S.x - S.rx * 0.88, g[0] - 1.6], [g[0] + 1.6, S.x + S.rx * 0.88]]) O.push({ x0, z0: g[1] + 0.6, x1, z1: g[1] + 4, h: S.h });     // (atrás do anel, ao lado do portão)
         O.push({ x0: S.x - S.rx * 0.9, z0: g[1] + 4, x1: S.x + S.rx * 0.9, z1: S.z + S.rz * 0.9, h: S.h });
-        // rampas, Maracanãzinho, parque aquático, a plataforma (pilares da cobertura), a placa
+        // rampas, Ginásio Colosso, parque aquático, a plataforma (pilares da cobertura), a placa
         for (const a of this.RAMPS) { const c = this.E(1.17, a); O.push({ x0: c[0] - 6.6, z0: c[1] - 6.6, x1: c[0] + 6.6, z1: c[1] + 6.6, h: 12 }); }
         const D = this.DOME; O.push({ x0: D.x - D.r * 0.92, z0: D.z - D.r * 0.92, x1: D.x + D.r * 0.92, z1: D.z + D.r * 0.92, h: 14 });
         const P = this.POOL; O.push({ x0: P[0], z0: P[1], x1: P[0] + 6, z1: P[3], h: 5 }, { x0: P[0] + 7, z0: P[1] + 4, x1: P[2] - 2, z1: P[3] - 4, h: 1.2 });
@@ -66,10 +66,10 @@ const Maracana = {
         this.solids = O;
         this.slots = this._slots();
         // a barraca de churrasquinho na esplanada, perto do portão (Stands: vende de verdade, com o carrinho e o churrasqueiro)
-        if (typeof Stands !== 'undefined') Stands.add({ id: 'churrasquinho_maracana', name: 'Churrasquinho do Maracanã', emo: '🍢', x: -396, z: 63.6, r: 2.8, hours: [9, 24], items: Stands.MENUS.estadio, sub: 'Antes do jogo, um espetinho!',
+        if (typeof Stands !== 'undefined') Stands.add({ id: 'churrasquinho_maracana', name: 'Churrasquinho do Colosso', emo: '🍢', x: -396, z: 63.6, r: 2.8, hours: [9, 24], items: Stands.MENUS.estadio, sub: 'Antes do jogo, um espetinho!',
             cart: true, vendor: { x: -396, z: 64.5, h: Math.PI, type: 'civil_ambulante' } });
         this._walk();
-        CityGrid.addPoi({ type: 'estadio', name: 'Estádio do Maracanã (entrada pelo portão sul)', x: g[0], z: g[1] - 5 });
+        CityGrid.addPoi({ type: 'estadio', name: 'Estádio do Colosso (entrada pelo portão sul)', x: g[0], z: g[1] - 5 });
     },
     // A passarela da estação: escada da plataforma (sobe para o norte), a travessia sobre os trilhos e a escada que desce na esplanada.
     _walk() {
@@ -78,7 +78,7 @@ const Maracana = {
         parts.push({ seg: true, a: [p1[0], p1[1], h], b: [p2[0], p2[1], h], w });
         parts.push({ seg: true, a: [p3[0], p3[1], 0], b: [p2[0], p2[1], h], w, entry: true });
         for (const c of [p1, p2]) parts.push({ rect: [c[0] - w / 2, c[1] - w / 2, c[0] + w / 2, c[1] + w / 2], h });
-        this.net = Walkways.add({ name: 'Passarela do Maracanã', parts });
+        this.net = Walkways.add({ name: 'Passarela do Colosso', parts });
     },
     covers(x, z, m = 0) {
         if (!this.built) return false;
@@ -90,7 +90,7 @@ const Maracana = {
         if (!this.built) return null;
         if (this._door) return this._door;
         const g = this.E(1, -Math.PI / 2);
-        return (this._door = { id: 'maracana', kind: 'stadium', style: 'stadium', stadium: true, name: 'Estádio do Maracanã', district: 'city', biome: 'commercial', variant: 0,
+        return (this._door = { id: 'maracana', kind: 'stadium', style: 'stadium', stadium: true, name: 'Estádio do Colosso', district: 'city', biome: 'commercial', variant: 0,
             x: g[0], z: g[1] - 1.25, face: Math.PI, ex: g[0], ez: g[1] });
     },
 
@@ -224,7 +224,7 @@ const Maracana = {
         this._meshStation(wb);
         this._meshPalms(wb);
         for (const o of this.solids) if (!o.stair && o.h > 3) wb._collider('maracana', o.x0, o.z0, o.x1, o.z1, o.h);
-        console.log(`[MARACANÃ] geometria em ${(performance.now() - t0).toFixed(0)} ms`);
+        console.log(`[COLOSSO] geometria em ${(performance.now() - t0).toFixed(0)} ms`);
     },
     _c(c, k = 1) { return Landmarks._c(c, k); },
     _beam(bt, a, b, t, col) { Landmarks._beam(bt, a, b, t, col); },
@@ -240,7 +240,7 @@ const Maracana = {
         face(A0, B0, b0, a0, [-nx, 0, -nz], col); face(A1, B1, b1, a1, [nx, 0, nz], col);
         face(A0, A1, a1, a0, [-ux, 0, -uz], col); face(B0, B1, b1, b0, [ux, 0, uz], col);
     },
-    // Placa de texto virada para o sul, em coordenadas do mundo (a mesma do Corcovado).
+    // Placa de texto virada para o sul, em coordenadas do mundo (a mesma do Morro do Vigia).
     _sign(wb, text, x, y, z, w, h, bg, fg) { return Corcovado._sign.call({ W: (a, b) => [a, b] }, wb, text, x, y, z, w, h, bg, fg); },
 
     // O chão do complexo: a esplanada de pedra em volta do estádio, as calçadas que ligam tudo, a grama fica do terreno.
@@ -251,7 +251,7 @@ const Maracana = {
         const strip = (x0, z0, x1, z1) => wb._batch('open_plaza', (x0 + x1) / 2, (z0 + z1) / 2).top(x0, z0, x1, z1, 0.05, uv, [1, 1, 1]);
         strip(-452, 56, -364, 66);                                                    // do estacionamento à esplanada
         strip(-356, 120, -312, 142);                                                  // da esplanada à estação (sob a passarela)
-        strip(-470, 150, -456, 170); strip(-476, 104, -466, 112);                     // ao Maracanãzinho e ao parque aquático
+        strip(-470, 150, -456, 170); strip(-476, 104, -466, 112);                     // ao Ginásio Colosso e ao parque aquático
         // canteiros (grama mais escura em volta das palmeiras) e bancos ao longo da esplanada
         const bt = wb._batch('trim', S.x, S.z);
         for (let i = 0; i < 28; i++) {
@@ -333,7 +333,7 @@ const Maracana = {
         const g = this.E(1, -Math.PI / 2), gb = wb._batch('trim', g[0], g[1]);
         gb.solid(g[0] - 3.4, g[1] - 2.2, g[0] + 3.4, g[1] + 0.4, 3.4, 3.8, c('#e9e9e6'));
         for (const s of [-1, 1]) gb.solid(g[0] + s * 3.2 - 0.25, g[1] - 2.1, g[0] + s * 3.2 + 0.25, g[1] - 1.6, 0, 3.4, c('#3b3f46'));
-        this._sign(wb, 'PORTÃO 18 — MARACANÃ', g[0], 3.85, g[1] - 2.25, 6.6, 0.9, '#123f7a', '#ffffff');
+        this._sign(wb, 'PORTÃO 18 — COLOSSO', g[0], 3.85, g[1] - 2.25, 6.6, 0.9, '#123f7a', '#ffffff');
     },
 
     // As RAMPAS HELICOIDAIS: núcleo de concreto e a rampa em espiral (2,5 voltas) com mureta, até o anel.
@@ -363,7 +363,7 @@ const Maracana = {
         void S;
     },
 
-    // O MARACANÃZINHO: a cúpula branca com as nervuras, o anel de base com os pilares.
+    // O GINÁSIO COLOSSO: a cúpula branca com as nervuras, o anel de base com os pilares.
     _meshDome(wb) {
         const D = this.DOME, c = this._c.bind(this), bt = wb._batch('trim', D.x, D.z);
         Landmarks._wall(bt, D.x, D.z, D.r, D.r, 1, 0, 4.2, 48, (i) => (i % 3 === 1 ? c('#3e4650') : c('#d6d3cb')));
@@ -397,7 +397,7 @@ const Maracana = {
         for (const z of [P[1] + 1, P[3] - 1]) this._beam(bt, [P[0] + 6.4, 0.3, z], [P[0] + 6.4, 5.2, z], 0.3, c('#8d949c'));
     },
 
-    // O ESTACIONAMENTO: asfalto, as vagas pintadas, os carros e os ônibus; a placa ESTÁDIO DO MARACANÃ na entrada.
+    // O ESTACIONAMENTO: asfalto, as vagas pintadas, os carros e os ônibus; a placa ESTÁDIO DO COLOSSO na entrada.
     _meshParking(wb) {
         const P = this.PARK, c = this._c.bind(this), ab = wb._batch('asphalt', (P[0] + P[2]) / 2, (P[1] + P[3]) / 2);
         ab.top(P[0], P[1], P[2], P[3], 0.06, (x, z) => [x / 6, -z / 6], [1, 1, 1]);
@@ -408,9 +408,9 @@ const Maracana = {
             for (const s of [-1, 1]) bt.solid(v.x + s * 4.6 - 0.07, v.z - 1.7, v.x + s * 4.6 + 0.07, v.z + 1.7, 0.06, 0.075, yel);
             bt.solid(v.x - 4.6, v.z - 1.77, v.x + 4.6, v.z - 1.63, 0.06, 0.075, yel);
         }
-        // a placa ESTÁDIO DO MARACANÃ (azul, na entrada do estacionamento)
+        // a placa ESTÁDIO DO COLOSSO (azul, na entrada do estacionamento)
         bt.solid(-362.4, 24.1, -361.6, 24.9, 0, 2.8, c('#3b3f46')); bt.solid(-352.4, 24.1, -351.6, 24.9, 0, 2.8, c('#3b3f46'));
-        this._sign(wb, 'ESTÁDIO DO MARACANÃ', -357, 1.7, 24.0, 11, 1.2, '#1f4f9a', '#ffffff');
+        this._sign(wb, 'ESTÁDIO DO COLOSSO', -357, 1.7, 24.0, 11, 1.2, '#1f4f9a', '#ffffff');
     },
 
     // A ESTAÇÃO: plataforma coberta, os dois trilhos com dormentes, um trem parado; a PASSARELA elevada (escadas, travessia).
@@ -505,7 +505,7 @@ const Maracana = {
         rect(T.x0 - 1.2, T.z0 + 0.5, T.x1 + 0.4, T.z1 - 0.5, '#e9ecef');
         const B = this.BRIDGE; ctx.strokeStyle = '#a9a59c'; ctx.lineWidth = Math.max(1, B.w * k); ctx.lineCap = 'butt'; ctx.beginPath();
         B.pts.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])))); ctx.stroke();
-        // o Maracanãzinho e o parque aquático
+        // o Ginásio Colosso e o parque aquático
         const D = this.DOME; ell(D.x, D.z, D.r, D.r, '#eef0f2');
         if (k >= 0.8) { ctx.strokeStyle = '#c3c8cf'; ctx.lineWidth = 1; for (let j = 0; j < 12; j++) { const a = (j / 12) * Math.PI * 2; ctx.beginPath(); ctx.moveTo(X(D.x), Y(D.z)); ctx.lineTo(X(D.x + Math.cos(a) * D.r), Y(D.z + Math.sin(a) * D.r)); ctx.stroke(); } }
         const Q = this.POOL; rect(Q[0], Q[1], Q[2], Q[3], '#d9d6cf'); rect(Q[0] + 8, Q[1] + 5, Q[2] - 3, Q[3] - 5, '#2f9fd6'); rect(Q[0], Q[1] + 1, Q[0] + 6, Q[3] - 1, '#3b6fb5');
@@ -580,7 +580,7 @@ const Maracana = {
         for (let x = W / 2 - 3.6; x <= W / 2 + 3.6; x += 0.35) g.fillRect(X(x), Y(D + 1), 1, 0.9 * PPU);
         g.fillStyle = '#f4f4f4'; g.fillRect(X(W / 2 - 3.7), Y(D + 0.2), 7.4 * PPU, 0.22 * PPU);
         // ---- o ALAMBRADO e as placas de publicidade (z 26 → 28.2)
-        const ads = [['#c8102e', 'GOL!'], ['#1f4f9a', 'RIO'], ['#f0c63a', 'MARACANÃ'], ['#2b8a4a', 'BRASIL'], ['#111', 'FUTEBOL'], ['#e8682a', 'TORCIDA'], ['#1f4f9a', 'CARIOCA']];
+        const ads = [['#c8102e', 'GOL!'], ['#1f4f9a', 'RIO'], ['#f0c63a', 'COLOSSO'], ['#2b8a4a', 'BRASIL'], ['#111', 'FUTEBOL'], ['#e8682a', 'TORCIDA'], ['#1f4f9a', 'CARIOCA']];
         for (let i = 0; i < 12; i++) {
             const x0 = 0.6 + i * (W - 1.2) / 12, x1 = x0 + (W - 1.2) / 12 - 0.15, [bg, tx] = ads[i % ads.length];
             R(x0, 26.9, x1, 28.0, bg);
@@ -644,7 +644,7 @@ const Maracana = {
         R(0.7, 5.6, 1.9, 7.2, '#3a3f46'); R(0.85, 5.75, 1.75, 7.05, '#59606a'); g.fillStyle = '#c9cfd6'; g.beginPath(); g.arc(X(1.3), Y(6.4), 0.22 * PPU, 0, Math.PI * 2); g.fill();
         R(12.3, 6.2, 13.1, 7, '#22262b'); for (let i = 0; i < 3; i++) R(12.4, 6.3 + i * 0.24, 13.0, 6.42 + i * 0.24, i === 1 ? '#3ad06a' : '#4a5059');
         for (let i = 0; i < 4; i++) R(56 + (i % 2) * 1, 4.62 + Math.floor(i / 2) * 0.4, 56.9 + (i % 2) * 1, 4.98 + Math.floor(i / 2) * 0.4, ['#b8862e', '#8a5a2b', '#c9a227', '#7a4a22'][i]);
-        sign(30, 0.9, 10, 0.6, '#f0c63a', '#123f7a', 'ESTÁDIO DO MARACANÃ');
+        sign(30, 0.9, 10, 0.6, '#f0c63a', '#123f7a', 'ESTÁDIO DO COLOSSO');
         // bancos e lixeiras no saguão
         for (const x of [17, 25, 35, 43]) { R(x - 1.4, 1.6, x + 1.4, 2.2, '#7a5a3a'); R(x - 1.4, 2.1, x + 1.4, 2.25, '#5e4429'); }
         // ---- as paredes (casca): as laterais e a frente com o vão da porta

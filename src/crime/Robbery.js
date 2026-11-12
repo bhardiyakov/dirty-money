@@ -24,7 +24,7 @@
 // ============================================================================
 
 const Robbery = {
-    TIER: { mart: 1, bakery: 1, burger: 1, pharmacy: 1, fit: 1, bar: 2, pizza: 2, clothes: 2, gym: 2, stadium: 2, italian: 3, japanese: 3, guns: 3, jewelry: 4 },      // (stadium: a lanchonete e a bilheteria do Maracanã)
+    TIER: { mart: 1, bakery: 1, burger: 1, pharmacy: 1, fit: 1, bar: 2, pizza: 2, clothes: 2, gym: 2, stadium: 2, italian: 3, japanese: 3, guns: 3, jewelry: 4 },      // (stadium: a lanchonete e a bilheteria do Colosso)
     TIER_NAME: ['', 'comércio pequeno', 'comércio médio', 'comércio de luxo', 'joalheria'],
     RANK_FOR: [0, 0, 1, 2, 2],                                    // porte → patente mínima de Assaltante
     REG: [null, [450, 1300], [1100, 2900], [2600, 6200], [3500, 8000]],

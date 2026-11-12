@@ -50,7 +50,7 @@ class WorldBuilder {
         this._buildings();
         this._shops();
         this._rural();
-        if (typeof Landmarks !== 'undefined') Landmarks.meshes(this);     // marcos: Maracanã, Cristo, Pão de Açúcar, calçadão, estais, píeres
+        if (typeof Landmarks !== 'undefined') Landmarks.meshes(this);     // marcos: Colosso, Cristo, Pedra do Farol, calçadão, estais, píeres
         this._pieces();
         this._marina();
         this._signalPoles();

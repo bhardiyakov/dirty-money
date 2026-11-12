@@ -37,7 +37,7 @@ class EmpireUI {
 
     // ---------------------------------------------------------------- HUD: CHEGADA num bairro ou região
     // (o nome do distrito e a estação saíram do canto da tela — HUD limpo.) Chegou num bairro (Empire: distrito) ou perto de um lugar
-    // com nome no mapa (Lagoa, Corcovado, Maracanã, Pão de Açúcar, Pântano…): o NOME GRANDE no centro da tela por ~3 s, com o dono
+    // com nome no mapa (Lagoa, Corcovado, Colosso, Pedra do Farol, Pântano…): o NOME GRANDE no centro da tela por ~3 s, com o dono
     // da área (facção) ou a estação embaixo. Só depois de ~1,2 s no lugar novo (a divisa não fica piscando) e não repete o mesmo
     // lugar dentro de 1 minuto.
     static hud(g) {
@@ -63,7 +63,7 @@ class EmpireUI {
         seen[name] = now;
         EmpireUI.arrive(name, sub);
     }
-    static get SPOTS() { return new Set(['LAGOA', 'CORCOVADO', 'MARACANÃ', 'PÃO DE AÇÚCAR', 'PÂNTANO', 'CANAL', 'SERRA DO NORTE', 'SERRA DO SUL', 'SERRA DO MEIO', 'FAZENDAS']); }
+    static get SPOTS() { return new Set(['LAGOA DA PRATA', 'MORRO DO VIGIA · CRISTO PROTETOR', 'COLOSSO', 'PEDRA DO FAROL', 'PÂNTANO', 'CANAL', 'SERRA DO NORTE', 'SERRA DO SUL', 'SERRA DO MEIO', 'FAZENDAS']); }
     // O aviso de chegada (também usado por quem quiser anunciar um lugar).
     static arrive(name, sub) {
         let el = document.getElementById('arrive');

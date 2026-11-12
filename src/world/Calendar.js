@@ -258,7 +258,7 @@ const Calendar = {
                 let n = 0; while (n < 18 && M.walk(s.x + dx * (n + 1) * 8, s.z + dz * (n + 1) * 8)) n++;
                 if (n < 10) continue;
                 const sc = g.scene, F = this.fest = { kind: 'bloco', x: s.x, z: s.z, sx: s.x, sz: s.z, dx, dz, len: n * 8, pos: 0, dir: 1, actors: [], meshes: [], dancers: [], beat: 0, step: 0, singT: 2 };
-                F.name = this._pick(['Bloco do Vira-Lata', 'Simpatia é Quase Amor', 'Cordão do Bola Preta', 'Bloco das Piranhas', 'Suvaco do Cristo', 'Bloco da Orla']);
+                F.name = this._pick(['Bloco do Vira-Lata', 'Bloco Amor de Verão', 'Cordão da Estrela', 'Bloco das Sereias', 'Bloco do Mirante', 'Bloco da Orla']);
                 const flag = BABYLON.MeshBuilder.CreatePlane('calFlag', { width: 1.6, height: 1.1 }, sc); flag.material = FlatMat.get(sc, this._pick(['#f59e0b', '#16a34a', '#db2777', '#2563eb']), true, true); flag.isPickable = false; F.meshes.push(flag); F.flag = flag;
                 for (let i = 0, nb = this._crowd(20, 8); i < nb; i++) { const a2 = StreetLife._actor(g, StreetLife._civ(), s.x, s.z, 0, 'walk'); F.actors.push(a2); F.dancers.push({ a: a2, ox: (Math.random() - 0.5) * 5, oz: -1.5 - Math.random() * 9, ph: Math.random() * 6.28 }); }
                 g._flash(`🎉 O ${F.name} está passando aqui perto!`);

@@ -1,13 +1,13 @@
 // ============================================================================
-// Corcovado — o CRISTO REDENTOR no alto do morro, e tudo que leva até ele, do chão ao topo:
+// Corcovado — o CRISTO PROTETOR no alto do morro, e tudo que leva até ele, do chão ao topo:
 //   • o MORRO em 3D (malha própria): mata fechada nas encostas (copas das árvores e palmeiras a cada altura) e pedra aparecendo;
 //   • o MIRANTE redondo a 18 m, com balaustrada, e o Cristo de braços abertos no pedestal escuro (malha própria, com as dobras da túnica);
-//   • as ESCADARIAS de concreto em zigue-zague, com muros de arrimo, guarda-corpo e postes, do PORTÃO (guarita, placa CRISTO REDENTOR,
+//   • as ESCADARIAS de concreto em zigue-zague, com muros de arrimo, guarda-corpo e postes, do PORTÃO (guarita, placa CRISTO PROTETOR,
 //     ACESSO DE PEDESTRES) até o mirante;
 //   • o TERRAÇO DO CAFÉ a meia encosta (o quiosque verde), a PASSARELA DE MADEIRA sobre pilares que sobe do pé do morro até ele e a escada
 //     dele até o mirante;
 //   • o ELEVADOR panorâmico (torre de vidro) do chão até o terraço, com a ponte até ele — E sobe/desce;
-//   • o TREM DO CORCOVADO: trilhos de cremalheira subindo a encosta leste da estação do pé até a do alto, ao lado do mirante — E sobe/desce
+//   • o TREM DO MORRO DO VIGIA: trilhos de cremalheira subindo a encosta leste da estação do pé até a do alto, ao lado do mirante — E sobe/desce
 //     (sem ninguém, ele vai e volta sozinho).
 // Anda-se por tudo isso a pé: as escadas, passarelas, o terraço e o mirante são uma rede de Walkways (entra-se pelo pé de um lance).
 // Coordenadas LOCAIS: x leste, z norte, a partir do Cristo (C); alturas em u.
@@ -69,14 +69,14 @@ const Corcovado = {
         parts.push({ seg: true, a: [B0[0], B0[1], L.h], b: [B1[0], B1[1], L.h], w: 2.4 });
         const S = this.STATION_HI, s0 = this.W(S[0], S[1]), s1 = this.W(S[2], S[3]);
         parts.push({ rect: [s0[0], s0[1], s1[0], s1[1]], h: this.RAIL.h });
-        this.net = Walkways.add({ name: 'Corcovado', parts });
+        this.net = Walkways.add({ name: 'Morro do Vigia', parts });
         this._solids();
         const cafe = this.W(21.3, -36.6);                                           // o café do terraço vende de verdade (Stands)
         const atd = this.W(17.2, -36.6);
-        if (typeof Stands !== 'undefined') Stands.add({ id: 'cafe_corcovado', name: 'Café do Corcovado', emo: '☕', x: cafe[0], z: cafe[1], r: 4.8, h: this.TERRACE.h, hours: [8, 19], items: Stands.MENUS.cafe, sub: 'Cafezinho com a melhor vista do Rio',
+        if (typeof Stands !== 'undefined') Stands.add({ id: 'cafe_corcovado', name: 'Café do Morro do Vigia', emo: '☕', x: cafe[0], z: cafe[1], r: 4.8, h: this.TERRACE.h, hours: [8, 19], items: Stands.MENUS.cafe, sub: 'Cafezinho com a melhor vista do Rio',
             vendor: { x: atd[0], z: atd[1], h: -Math.PI / 2, type: 'civil_trabalhador' } });
         const g = this.W(-8, -71);
-        CityGrid.addPoi({ type: 'cristo', name: 'Cristo Redentor — portão do Corcovado (escadarias, elevador e trem)', x: g[0], z: g[1] });
+        CityGrid.addPoi({ type: 'cristo', name: 'Cristo Protetor — portão do Morro do Vigia (escadarias, elevador e trem)', x: g[0], z: g[1] });
         this.train = { u: 0, dir: 1, wait: 6, max: this.RAIL.x0 - this.RAIL.x1 - 11.5 };          // (u: a frente do carro de baixo; no alto, os dois carros na estação)
         this.lift = { y: 0 };
     },
@@ -135,24 +135,24 @@ const Corcovado = {
         const pl = g.player, p = this.local(pl.position.x, pl.position.z), onNet = pl.walk === this.net, ground = !pl.onDeck && !pl.underBridge;
         const L = this.LIFT, S0 = this.STATION_LO, S1 = this.STATION_HI;
         if (ground && Math.hypot(p.x - L.door[0], p.z - L.door[1]) < 2.4)
-            return { kind: 'lift', dir: 1, html: '<b>E</b> Elevador panorâmico do Corcovado<small>sobe ao terraço do café, a meia encosta</small>' };
+            return { kind: 'lift', dir: 1, html: '<b>E</b> Elevador panorâmico do Morro do Vigia<small>sobe ao terraço do café, a meia encosta</small>' };
         if (onNet && Math.abs(pl.deckH - L.h) < 0.6 && Math.hypot(p.x - L.stop[0], p.z - L.stop[1]) < 2.6)
             return { kind: 'lift', dir: -1, html: '<b>E</b> descer de elevador' };
         if (ground && p.x > S0[0] - 1 && p.x < S0[2] + 1 && p.z > S0[1] - 1.5 && p.z < S0[3] + 1)
-            return { kind: 'train', dir: 1, html: `<b>E</b> Trem do Corcovado — ${brl(this.FARE)}<small>sobe a encosta até o mirante do Cristo (a descida é por conta da casa)</small>` };
+            return { kind: 'train', dir: 1, html: `<b>E</b> Trem do Morro do Vigia — ${brl(this.FARE)}<small>sobe a encosta até o mirante do Cristo (a descida é por conta da casa)</small>` };
         if (onNet && Math.abs(pl.deckH - this.RAIL.h) < 0.6 && p.x > S1[0] && p.x < S1[2] && p.z > S1[1] && p.z < S1[3])
             return { kind: 'train', dir: -1, html: '<b>E</b> descer de trem<small>até a estação do pé do morro</small>' };
         return null;
     },
     prompt(g) { const s = this._spot(g); return s ? s.html : ''; },
-    // Multiplicador do zoom automático: na rede do Corcovado (ou viajando no elevador/trem), abre com a altura — até 2,25× no mirante.
+    // Multiplicador do zoom automático: na rede do Morro do Vigia (ou viajando no elevador/trem), abre com a altura — até 2,25× no mirante.
     zoomFor(pl) { return this.built && pl.walk === this.net ? 1 + 1.25 * Math.min(1, Math.max(0, (pl.deckH || 0) - 4) / 14) : 1; },
     interact(g) {
         const s = this._spot(g);
         if (!s) return false;
         const pl = g.player;
         if (s.kind === 'train' && s.dir > 0) {                                     // a passagem do trem (na subida)
-            if (g.inventory.cash < this.FARE) { if (g._flash) g._flash(`Trem do Corcovado: ${brl(this.FARE)} — dinheiro insuficiente`); return true; }
+            if (g.inventory.cash < this.FARE) { if (g._flash) g._flash(`Trem do Morro do Vigia: ${brl(this.FARE)} — dinheiro insuficiente`); return true; }
             g.inventory.cash -= this.FARE;
         }
         pl.cancelSequence(); pl.action = null; pl.velocity.setAll(0);
@@ -161,7 +161,7 @@ const Corcovado = {
         this.ride = { g, kind: s.kind, dir: s.dir, t: 0, dur: s.kind === 'lift' ? 6 : 18 };
         if (s.kind === 'train') { this.train.u = s.dir > 0 ? 0 : this.train.max; this.train.wait = 0; }
         else this.lift.y = s.dir > 0 ? 0 : this.LIFT.h;
-        if (g._flash) g._flash(s.kind === 'lift' ? (s.dir > 0 ? 'Subindo de elevador…' : 'Descendo de elevador…') : (s.dir > 0 ? 'Trem do Corcovado: subindo a encosta…' : 'Trem do Corcovado: descendo…'));
+        if (g._flash) g._flash(s.kind === 'lift' ? (s.dir > 0 ? 'Subindo de elevador…' : 'Descendo de elevador…') : (s.dir > 0 ? 'Trem do Morro do Vigia: subindo a encosta…' : 'Trem do Morro do Vigia: descendo…'));
         return true;
     },
     // TURISTAS no mirante (de dia, com a câmera por perto): olhando o Cristo ou a vista; quem passa perto ouve (Bubbles).
@@ -185,7 +185,7 @@ const Corcovado = {
         if ((this._chatT -= dt) <= 0 && pl.walk === this.net && (pl.deckH || 0) > this.H - 1 && typeof Bubbles !== 'undefined') {
             this._chatT = 6 + Math.random() * 5;
             const a = this._tour.find((q) => hypot(q.mesh.position.x - pl.position.x, q.mesh.position.z - pl.position.z) < 9);
-            if (a) Bubbles.say(a, ['Que vista!', 'Tira uma foto minha com o Cristo?', 'Olha o Pão de Açúcar lá embaixo!', 'Dá pra ver o Maracanã daqui!', 'Wow… amazing!', 'Valeu a subida!'][Math.floor(Math.random() * 6)], { ms: 2600 });
+            if (a) Bubbles.say(a, ['Que vista!', 'Tira uma foto minha com o Cristo?', 'Olha a Pedra do Farol lá embaixo!', 'Dá pra ver o Colosso daqui!', 'Wow… amazing!', 'Valeu a subida!'][Math.floor(Math.random() * 6)], { ms: 2600 });
         }
     },
     // Posição (mundo) e altura do assoalho do trem com a frente em u (distância do pé, ao longo dos trilhos).
@@ -266,7 +266,7 @@ const Corcovado = {
             m.position.y += B;
             if (fr) m.freezeWorldMatrix();
         }
-        console.log(`[CORCOVADO] geometria em ${(performance.now() - t0).toFixed(0)} ms`);
+        console.log(`[MORRO DO VIGIA] geometria em ${(performance.now() - t0).toFixed(0)} ms`);
     },
     _c(c, k = 1) { return Landmarks._c(c, k); },
     _bt(lx, lz, key = 'trim') { const w = this.W(lx, lz); return this._wb._batch(key, w[0], w[1]); },
@@ -533,7 +533,7 @@ const Corcovado = {
         };
         shelter(this.STATION_LO, 0, '#9a3b2c');
         shelter(this.STATION_HI, R.h, '#9a3b2c');
-        this._sign(wb, 'TREM DO CORCOVADO', (this.STATION_LO[0] + this.STATION_LO[2]) / 2, 2.6, this.STATION_LO[1] - 0.05, 5.6, 0.8, '#7a1f17', '#ffe9a8');
+        this._sign(wb, 'TREM DO MORRO DO VIGIA', (this.STATION_LO[0] + this.STATION_LO[2]) / 2, 2.6, this.STATION_LO[1] - 0.05, 5.6, 0.8, '#7a1f17', '#ffe9a8');
         // os carros (amarelo-alaranjados, teto creme, janelas)
         this._train = [];
         for (let i = 0; i < 2; i++) {
@@ -553,7 +553,7 @@ const Corcovado = {
         }
     },
 
-    // O PORTÃO: a praça de pedra portuguesa, os pilares de pedra com a placa CRISTO REDENTOR, a guarita e a placa de pedestres.
+    // O PORTÃO: a praça de pedra portuguesa, os pilares de pedra com a placa CRISTO PROTETOR, a guarita e a placa de pedestres.
     _meshGate(wb) {
         const c = this._c.bind(this), P = this.PLAZA, bt = this._bt(-8, -66), a = this.W(P[0], P[1]), b = this.W(P[2], P[3]);
         const cal = wb._batch('open_plaza', a[0], a[1]);
@@ -561,7 +561,7 @@ const Corcovado = {
         const stone = c('#8f8a82'), stoneD = c('#77726b');
         this._box(bt, -12.2, -64.8, -10.6, -63.2, 0, 5.6, stone); this._box(bt, -5.4, -64.8, -3.8, -63.2, 0, 5.6, stone);
         this._box(bt, -12.6, -65.0, -3.4, -63.0, 5.0, 6.2, stoneD);
-        this._sign(wb, 'CRISTO REDENTOR', -8, 5.6, -65.08, 6.6, 0.95, '#1f4d3a', '#f4f1e8');
+        this._sign(wb, 'CRISTO PROTETOR', -8, 5.6, -65.08, 6.6, 0.95, '#1f4d3a', '#f4f1e8');
         // a guarita (bilheteria)
         this._box(bt, -17, -67.6, -13, -64.4, 0, 3.0, stone);
         this._box(bt, -17.3, -67.9, -12.7, -64.1, 3.0, 3.3, stoneD);

@@ -89,7 +89,7 @@ const CityGrid = {
     // Depois do relevo (WorldMap.buildTerrain): orla e o que é andável a pé.
     finish() {
         this._fillCoast();
-        if (typeof Landmarks !== "undefined") Landmarks.build();         // marcos: Maracanã, Cristo, Pão de Açúcar, calçadão, pontes estaiadas
+        if (typeof Landmarks !== "undefined") Landmarks.build();         // marcos: Colosso, Cristo, Pedra do Farol, calçadão, pontes estaiadas
         if (typeof Speedway !== "undefined") Speedway.build();           // autódromo (oval) no campo a oeste: corridas de estádio (StreetRacing) — antes do campo
         if (typeof RuralPlan !== "undefined") RuralPlan.build();         // campo: fazendas, cabanas, postos, torres, alamedas
         if (typeof Marina !== "undefined") Marina.build();               // marina na orla leste: píeres, vagas e clube náutico
@@ -182,7 +182,7 @@ const CityGrid = {
         if (!legacy) {
             // ---- VIADUTO: via elevada na coluna oeste da cidade (cruza as ruas por cima, sem cruzamento; rampas nas pontas).
             const nearest = (arr, v) => arr.reduce((b, q) => (Math.abs(q - v) < Math.abs(b - v) ? q : b), arr[0]);
-            const xv = (cx[0] + cx[1]) / 2, zA = nearest(cz, -732), zB = nearest(cz, -270);      // (abaixo de zA: Ipanema/Leblon — ZonaSul)
+            const xv = (cx[0] + cx[1]) / 2, zA = nearest(cz, -840), zB = nearest(cz, -270);
             D.viaduct = { x: xv, z0: zA, z1: zB };
             // ---- CONTORNO: a mancha urbana termina numa curva torta (oeste, norte e sul) e a Av. do Contorno corre por ela, da orla sul
             // à orla norte; as ruas da cidade são cortadas nela (_cityStreets). Os bairros do norte e do extremo sul têm ruas curvas.
@@ -207,11 +207,11 @@ const CityGrid = {
             // ---- AVENIDA BEIRA-MAR: ROTATÓRIAS nas cabeceiras das 3 pontes e RETORNOS no canteiro central, no meio dos quarteirões
             // longos (≥ 60 u, longe das rotatórias).
             const bx = cx[cx.length - 1], bz = [714, 0, -630];
-            for (const z of bz) P.mark(bx, z, { round: { R: 12, r: 4.5 } });
+            for (const z of bz) if (z > -210 || typeof ZonaSul === 'undefined') P.mark(bx, z, { round: { R: 12, r: 4.5 } });      // (a do sul cai na areia com a orla em diagonal)
             const along = [...new Set(cz.concat(bz))].sort((a, b) => a - b);
             for (let k = 0; k + 1 < along.length; k++) {
                 const a = along[k], b = along[k + 1], m = Math.round((a + b) / 2);
-                if (b - a >= 60 && bz.every((z) => Math.abs(z - m) >= 30)) P.mark(bx, m, { uturn: { gap: 14 } });
+                if (b - a >= 60 && bz.every((z) => Math.abs(z - m) >= 30) && !(typeof ZonaSul !== 'undefined' && (m > 210 || m < -210))) P.mark(bx, m, { uturn: { gap: 14 } });      // (no norte e no sul orgânicos, as travessas chegam onde querem)
             }
             // ---- FAVELA: só 3 ruas de carro, curvas, morro acima (da avenida oeste da cidade às estradas de terra); o resto são becos
             // (FavelaPlan.build, no _buildBlocks).
@@ -223,7 +223,7 @@ const CityGrid = {
             FavelaSul.roads(P);
         }
         P.build();
-        if (typeof ZonaSul !== 'undefined') ZonaSul.names();                    // (Av. Atlântica, Vieira Souto, Delfim Moreira)
+        if (typeof ZonaSul !== 'undefined') ZonaSul.names();                    // (Av. Marítima, Almirante Prado, Comendador Reis)
         if (typeof RioTraffic !== 'undefined') RioTraffic.assign(D);      // a mão de cada rua (binários de mão única), as conversões proibidas
     },
 
@@ -245,8 +245,9 @@ const CityGrid = {
         // a PRAIA DO SUL (WorldMap.BEACH): do Morro do Mirante para leste a cidade termina numa orla reta-ondulada — a Av. do Contorno vira a
         // avenida da praia, e entre ela e o mar fica a areia larga
         const bk = ss(-150, -100, x);
-        if (bk > 0) s += ((118 + 10 * (F(x / 120, 2.7, 507) - 0.5)) - s) * bk;          // (orla de Ipanema: quase reta, sem os recuos do resto)
-        return Math.min(this._smin(this._smin(x - (B.x0 + w), (B.z1 - n) - z, 70), z - (B.z0 + s), 70), B.east - x);
+        if (bk > 0) s += ((118 + 10 * (F(x / 120, 2.7, 507) - 0.5)) - s) * bk;          // (orla de Praia Bonita: quase reta, sem os recuos do resto)
+        const f = Math.min(this._smin(this._smin(x - (B.x0 + w), (B.z1 - n) - z, 70), z - (B.z0 + s), 70), B.east - x);
+        return typeof ZonaSul !== 'undefined' ? Math.min(f, ZonaSul.coastDist(x, z)) : f;      // (a orla em diagonal do sul: Enseada → Praia Bonita)
     },
     _chaikinLoop(L) {
         const out = [];
@@ -343,6 +344,14 @@ const CityGrid = {
         }
         return best;
     },
+    // Onde uma ponte na altura z sai da cidade: a Beira-Mar (x = 168) ou, no sul com a orla em diagonal (ZonaSul), a Av. Atlântica —
+    // o ponto mais a leste da Av. do Contorno nessa altura.
+    _cityEndAt(z) {
+        if (typeof ZonaSul === 'undefined' || z > -210 || !this.cityPath) return 168;
+        const P = this.cityPath; let bx = -Infinity;
+        for (let i = 0; i + 1 < P.length; i++) { const a = P[i], b = P[i + 1]; if ((a[1] < z) === (b[1] < z)) continue; const x = a[0] + (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]); if (x > bx) bx = x; }
+        return bx > -Infinity ? bx : 168;
+    },
     // Linha de rua L (polilinha; `cross` = índices dos vértices que são cruzamentos) recortada pela mancha urbana: pedaços [[x, z], ...].
     // Ponta que sai na Av. do Contorno: entroncamento em T se a linha chega nela de frente (a 24 u dela em ≤ 42 u de linha); chegando
     // rasante (correndo junto dela), a linha acaba no último cruzamento antes — nada de quarteirão-fiapo entre as duas. Ponta que não
@@ -383,7 +392,7 @@ const CityGrid = {
     _islandPlan(P, ix, iz) {
         const F = (a, b, sd, o = 3) => WorldMap._fbm(a, b, o, sd), F2 = (a, b, sd) => WorldMap._fbm(a, b, 2, sd) * 2 - 1;
         const f0 = (x, z) => (x < 330 || !WorldMap.isLand(x, z) ? -30 : WorldMap.seaDist(x, z) - (30 + 34 * F(x / 150, z / 150, 521)));
-        const f = typeof ZonaSul !== 'undefined' ? ZonaSul.copaField(f0) : f0;          // (COPACABANA: a Atlântica em curva lisa, areia larga a leste)
+        const f = f0;
         const X0 = 340, Z0 = -1060, st = 6;
         let L = WorldMap.contour(f, X0, Z0, Math.ceil((880 - X0) / st), Math.ceil((1160 - Z0) / st), st, 0)[0];
         L = WorldMap.simplifyLoop(L, 1.5);
@@ -398,9 +407,9 @@ const CityGrid = {
             let bx = Infinity;
             for (let i = 0; i + 1 < R.length; i++) { const a = R[i], b = R[i + 1]; if ((a[1] < z) === (b[1] < z)) continue; const x = a[0] + (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]); if (x > 300 && x < bx) bx = x; }
             this.bridgeEnds[z] = bx;
-            P.addH(z, 168, bx, 'bridge');
+            P.addH(z, this._cityEndAt(z), bx, 'bridge');
         }
-        if (typeof ZonaSul !== 'undefined') { ZonaSul.copacabana(P, this, O, this.bridgeEnds); return; }      // (o traçado de Copacabana)
+        if (typeof ZonaSul !== 'undefined') { ZonaSul.governador(P, this, O, this.bridgeEnds); return; }      // (o labirinto da Ilha do Almirante)
         const warp = (u, v) => [u + 30 * F2(u / 220, v / 220, 531), v + 26 * F2(u / 220 + 9.7, v / 220 + 3.3, 532)];
         const mid = ix.reduce((b, q) => (Math.abs(q - 612) < Math.abs(b - 612) ? q : b), ix[0]);
         const line = (vert, c, a, b, at) => {
@@ -443,20 +452,42 @@ const CityGrid = {
             }
         };
         let nCurve = 0;
+        if (typeof ZonaSul !== 'undefined') {
+            // ESQUEMA DO RIO (ZonaSul): o CENTRO (−210..210) fica em grade, com as diagonais e a praça; a faixa OESTE do sul (x ≤ −168,
+            // o viaduto) também; o NORTE e o resto do SUL (a orla em diagonal: Enseada, Costa Azul, Praia Bonita) são traçados orgânicos.
+            const ZS = -210, XW = -168, V = this.districts.viaduct;
+            // (no sul, as linhas retas vão como polilinhas: a ponta delas na orla/Contorno é resolvida pelo RoadPlan como a das ruas
+            // orgânicas; as que seguram as pontas do viaduto são âncoras — o pé dele não é podado como beco)
+            const asPath = (vert, c, pieces, anchor) => { for (const q of pieces) P.addPath(q, cls(vert, c), { name: this._gridName(vert, c), line: { v: vert, at: c, d: 'city' }, anchor }); };
+            for (const x of cx) {
+                const b = x === B.x1 ? B.z1 + 60 : ZN;
+                if (x <= XW || x === B.x1) { const { L, cross } = line(true, x, B.z0 - 60, ZS, cz); cross.add(L.length - 1); asPath(true, x, this._clipLine(L, cross), false); }
+                const { L, cross } = line(true, x, ZS, b, cz); add(true, x, this._clipLine(L, cross), false);
+            }
+            for (const z of cz) {
+                if (z > ZN) continue;
+                const { L, cross } = line(false, z, B.x0 - 60, z < ZS ? XW : B.x1, cx);
+                cross.add(L.length - 1);                                                // (acaba na Beira-Mar — ou, no sul, na rua x = −168)
+                if (z < ZS) asPath(false, z, this._clipLine(L, cross), z === V.z0 || z === V.z1);
+                else add(false, z, this._clipLine(L, cross), false);
+            }
+            ZonaSul.cityNorth(P, this, ZN);
+            ZonaSul.citySouth(P, this, XW, ZS);
+            console.log(`[CIDADE] contorno: ${this.cityPath.length} pontos; norte e sul orgânicos (ZonaSul)`);
+            return;
+        }
         for (const x of cx) {
             if (straightX.has(x)) { const { L, cross } = line(true, x, B.z0 - 60, B.z1 + 60, cz); add(true, x, this._clipLine(L, cross), false); continue; }
             { const { L, cross } = line(true, x, zA, ZN, cz); add(true, x, this._clipLine(L, cross), false); }
             { const { L, cross } = line(true, x, ZN, B.z1 + 60, cz); const pc = this._clipLine(L, cross); add(true, x, pc, true); nCurve += pc.length; }
-            if (typeof ZonaSul === 'undefined') { const { L, cross } = line(true, x, B.z0 - 60, zA, cz); const pc = this._clipLine(L, cross); add(true, x, pc, true); nCurve += pc.length; }      // (abaixo de zA: Ipanema)
+            { const { L, cross } = line(true, x, B.z0 - 60, zA, cz); const pc = this._clipLine(L, cross); add(true, x, pc, true); nCurve += pc.length; }
         }
         for (const z of cz) {
-            if (z < zA && typeof ZonaSul !== 'undefined') continue;                    // (Ipanema/Leblon: as paralelas da orla)
             const curved = z > ZN || z < zA, { L, cross } = line(false, z, B.x0 - 60, B.x1, cx);
             cross.add(L.length - 1);                                                    // (acaba na Beira-Mar)
             const pc = this._clipLine(L, cross);
             add(false, z, pc, curved); if (curved) nCurve += pc.length;
         }
-        if (typeof ZonaSul !== 'undefined') ZonaSul.ipanema(P, this, zA, cx, this.districts.viaduct.x);
         console.log(`[CIDADE] contorno: ${this.cityPath.length} pontos; ${nCurve} ruas curvas`);
     },
 
@@ -544,10 +575,10 @@ const CityGrid = {
             return { biome: b, si: oi, sj: oj };
         }
         const gi = Math.round(x0) + 3000, gj = Math.round(z0) + 3000;
-        // IPANEMA / LEBLON: prédios de frente para o mar, o comércio da Visconde de Pirajá, residencial perto da Lagoa; praças
-        if (typeof ZonaSul !== 'undefined' && ZonaSul.inIpanema(cx, cz)) {
-            const r = this._rand(gi, gj), dv = ZonaSul.ipaDepth(cx, cz), big = (x1 - x0) * (z1 - z0) > 3000;
-            const b = r < (big ? 0.22 : 0.05) ? (r < 0.03 ? 'plaza' : 'park') : dv < 50 ? (r < 0.6 ? 'resort' : 'residential') : dv < 125 ? (r < 0.65 ? 'commercial' : 'downtown') : 'residential';
+        // BOTAFOGO / COPACABANA / IPANEMA (a orla em diagonal): prédios altos e hotéis de frente para o mar, comércio e residencial atrás
+        if (typeof ZonaSul !== 'undefined' && ZonaSul.inSouth(cx, cz)) {
+            const r = this._rand(gi, gj), dv = ZonaSul.coastDist(cx, cz), big = (x1 - x0) * (z1 - z0) > 3000;
+            const b = r < (big ? 0.18 : 0.05) ? (r < 0.03 ? 'plaza' : 'park') : dv < 60 ? (r < 0.35 ? 'resort' : 'downtown') : dv < 170 ? (r < 0.6 ? 'commercial' : 'downtown') : (r < 0.7 ? 'residential' : 'commercial');
             return { biome: b, si: gi, sj: gj };
         }
         const east = Math.abs(x1 - 168) < 1e-6;                                                 // a coluna do mar (x 126..168) é praia/porto/mata
@@ -558,10 +589,10 @@ const CityGrid = {
     },
     _pickIsland(i, j, x0, z0, x1, z1) {
         const r = this._rand(i + 400, j + 400), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-        // COPACABANA: hotéis de frente para a praia, comércio e prédios altos no miolo, residencial colado no morro; pracinhas
-        const dv = typeof ZonaSul !== 'undefined' ? ZonaSul.copaDepth(cx, cz) : null;
-        if (dv !== null && dv > -10) {
-            const big = (x1 - x0) * (z1 - z0) > 3400, b = r < (big ? 0.14 : 0.03) ? 'park' : dv < 58 ? (r < 0.3 ? 'resort' : 'downtown') : dv < 165 ? (r < 0.55 ? 'commercial' : 'downtown') : (r < 0.65 ? 'residential' : 'downtown');
+        // ILHA DO ALMIRANTE: bairro residencial, comércio ao longo da avenida central, pracinhas
+        const dv = typeof ZonaSul !== 'undefined' ? ZonaSul.isleDepth(cx, cz) : null;
+        if (dv !== null) {
+            const big = (x1 - x0) * (z1 - z0) > 3400, b = r < (big ? 0.18 : 0.06) ? 'park' : dv < 40 ? (r < 0.6 ? 'commercial' : 'residential') : (r < 0.8 ? 'residential' : 'commercial');
             return { biome: b, si: i + 400, sj: j + 400 };
         }
         return { biome: this._biomeIsland(cx, cz, r), si: i + 400, sj: j + 400 };

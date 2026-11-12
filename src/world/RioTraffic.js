@@ -3,7 +3,7 @@
 //
 //   • HIERARQUIA: avenidas (canteiro central), a Beira-Mar, as diagonais, a via expressa, as pontes e as rodovias são de MÃO DUPLA e
 //     levam o grosso do fluxo; as ruas LOCAIS da grade (cidade e ilha) são de MÃO ÚNICA em BINÁRIOS — ruas paralelas vizinhas em
-//     sentidos opostos (como Barata Ribeiro × N. S. de Copacabana, ou as transversais da Tijuca). Favela e estradas: mão dupla.
+//     sentidos opostos (como Barata Ribeiro × N. S. de Costa Azul, ou as transversais da Tijuca). Favela e estradas: mão dupla.
 //   • SEM ESQUERDA SAINDO DA AVENIDA: quem vem pela avenida de canteiro não converte à esquerda para uma rua local — vira à direita e
 //     contorna a quadra (ou usa o retorno). Avenida × avenida continua liberada.
 //   • VIAGENS COM DESTINO: cada carro civil vai para algum lugar (rota de menor tempo: as avenidas rendem mais que as ruas), em vez de
