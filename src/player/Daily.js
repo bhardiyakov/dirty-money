@@ -164,8 +164,9 @@ const Daily = {
             st.textContent = `
                 #dailyBox { position: fixed; left: 16px; top: 104px; z-index: 10; width: 268px; pointer-events: none; padding: 10px 13px 11px; border-radius: 16px; background: var(--glass);
                     border: 1px solid rgba(251,146,60,0.45); border-left: 3px solid #fb923c; box-shadow: var(--shadow-s); color: var(--tx); font: 500 12px/1.35 var(--font);
-                    -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); opacity: 0; transform: translateX(-14px); transition: opacity .35s ease, transform .35s ease; }
-                #dailyBox.show { opacity: 1; transform: none; }
+                    -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); opacity: 0; transform: translateX(-14px); visibility: hidden;
+                    transition: opacity .35s ease, transform .35s ease, visibility 0s linear .35s; }
+                #dailyBox.show { opacity: 1; transform: none; visibility: visible; transition: opacity .35s ease, transform .35s ease; }
                 #dailyBox .h { display: flex; justify-content: space-between; align-items: baseline; font: 800 10px var(--font-d); letter-spacing: 0.12em; color: #fb923c; text-transform: uppercase; margin-bottom: 6px; }
                 #dailyBox .h span { color: var(--tx-2); letter-spacing: 0.04em; }
                 #dailyBox .r { display: flex; gap: 8px; align-items: center; margin-top: 6px; }

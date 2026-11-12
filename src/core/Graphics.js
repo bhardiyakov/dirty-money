@@ -12,7 +12,9 @@
 // inside the characters' own shader, NpcArt: MSAA cannot smooth the inside of a sprite.)
 //
 // Automatic: a weak GPU (software renderers, old Mali / Adreno / PowerVR / Intel HD), very little memory or very few cores = low; a phone
-// or tablet, ≤ 4 GB or ≤ 4 cores = medium; anything else = high (HD is only ever chosen by hand). The AutoQuality still steps the
+// or tablet, ≤ 4 GB, ≤ 4 cores or integrated graphics (Intel UHD / Iris, AMD Radeon Graphics / Vega) = medium; anything else = high (HD is
+// only ever chosen by hand). Each preset also has a pixel budget (maxPx: 1.5 / 2.4 / 4.2 Mpx, none at HD): past it — a 4K monitor — the
+// picture is drawn smaller and scaled up (GameEngine._applyScale). The AutoQuality still steps the
 // shadows down during play when the device cannot keep up. URL overrides for testing: `?gfx=low|medium|high|hd`; the old `?lite` =
 // medium and `?full` = high.
 // ============================================================================
@@ -22,13 +24,20 @@ const Graphics = {
 	CHOICES: ['auto', 'low', 'medium', 'high', 'hd'],
 	LABEL: { auto: 'Automático', low: 'Low', medium: 'Medium', high: 'High', hd: 'HD' },
 	PRESETS: {
-		low: { renderScale: 0.75, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80 },
-		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, shadows: true, shadowSize: 1024, npcDirs: 8, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95 },
-		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, shadows: true, shadowSize: 2048, npcDirs: 16, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 30, chaseFar: 110, hdCar: true },
+		low: { renderScale: 0.75, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6 },
+		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, shadows: true, shadowSize: 1024, npcDirs: 8, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 2.4e6 },
+		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, shadows: true, shadowSize: 2048, npcDirs: 16, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 30, chaseFar: 110, hdCar: true, maxPx: 4.2e6 },
 		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, shadows: true, shadowSize: 4096, npcDirs: 16, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true },
 	},
 	// GPUs that cannot carry the high preset (WEBGL_debug_renderer_info): software rasterisers and old mobile/integrated chips.
 	WEAK_GPU: /swiftshader|llvmpipe|software|mali-[2-4]\d\d|mali-t|adreno \(tm\) [2-5]\d\d|powervr sgx|powervr rogue g[e6]|intel.*hd graphics [2-5]\d{2,3}\b|gma/i,
+	// Integrated graphics that draw the game but not at the high preset (shared memory, a fraction of a card's fill rate): Intel HD / UHD /
+	// Iris (the old HD 2000–5000 are WEAK above) and the AMD APUs (Radeon Graphics, Vega, R5/R7). Automatic starts them at medium; the
+	// AutoQuality steps down from there if needed. (Intel Arc and Apple's chips are not in the list: they carry the high preset.)
+	MID_GPU: /intel\(r\) (u?hd|iris)|iris\(r\)|iris (xe|plus|pro)|radeon\(tm\) (vega|graphics|r[3-7] graphics)|radeon (vega|graphics)\b|vega \d+ graphics/i,
+	// Software rasterisers (the test browser, a PC with no driver): no quality step makes them playable, so the AutoQuality's GPU steps
+	// stay out of the way there (and the automated tests keep one, predictable configuration).
+	SOFT_GPU: /swiftshader|llvmpipe|software|basic render/i,
 	choice: 'auto',
 	level: 'high',
 
@@ -59,12 +68,15 @@ const Graphics = {
 		const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 		const gpu = this.gpu();
 		if (this.WEAK_GPU.test(gpu.renderer) || gpu.maxTexture < 4096 || mem <= 2 || cores <= 2) return 'low';
-		if (touch || !gpu.webgl2 || mem <= 4 || cores <= 4) return 'medium';
+		if (touch || !gpu.webgl2 || mem <= 4 || cores <= 4 || this.MID_GPU.test(gpu.renderer)) return 'medium';
 		return 'high';
 	},
+	// Is the picture drawn by the CPU? (see SOFT_GPU)
+	get software() { return this.SOFT_GPU.test(this.gpu().renderer); },
 	// What a throwaway WebGL context tells about the GPU (renderer name, WebGL 2, largest texture).
 	gpu() {
-		const out = { renderer: '', webgl2: false, maxTexture: 8192 };
+		if (this._gpu) return this._gpu;                                // (asked once: the answer does not change)
+		const out = this._gpu = { renderer: '', webgl2: false, maxTexture: 8192 };
 		try {
 			const c = document.createElement('canvas'), gl = c.getContext('webgl2') || c.getContext('webgl');
 			if (!gl) return Object.assign(out, { maxTexture: 0 });
@@ -81,7 +93,7 @@ const Graphics = {
 	// Writes a preset into Config (before the game reads it).
 	apply(p) {
 		const P = Config.perf, A = Config.art, desktopApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-		P.renderScale = p.renderScale; P.dprCap = p.dprCap || 1; P.shadows = p.shadows; P.shadowSize = p.shadowSize; P.colliderRadius = p.colliderRadius;
+		P.renderScale = p.renderScale; P.dprCap = p.dprCap || 1; P.maxPixels = p.maxPx || 0; P.autoScale = 1; P.shadows = p.shadows; P.shadowSize = p.shadowSize; P.colliderRadius = p.colliderRadius;
 		const fps60 = desktopApp || (typeof location !== 'undefined' && location.search.includes('fps60'));      // (PC app, or `?fps60` to test)
 		P.fpsCap = p.fps > 30 || (fps60 && this.level === 'high') ? 60 : 30;
 		P.lite = this.level === 'low' || this.level === 'medium';

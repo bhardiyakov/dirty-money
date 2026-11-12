@@ -259,7 +259,11 @@ const Config = {
 		buildBudgetMs: 5,      // tempo máx. por frame construindo pedaços.
 		meshChunk: 512,        // lado (u) dos pedaços de malha mesclada da cidade (1 malha por material e pedaço; o frustum descarta os de fora)
 		meshChunkOffset: 256,  // desloca essa grade: sem isto o centro da cidade (0,0) caía na quina de 4 pedaços e cada material lá era desenhado 4× (−40% de draw calls no centro)
-		detailChunk: 128,      // ...e das camadas densas em vértices (acabamentos, meio-fio, postes): ver WorldBuilder._batch
+		detailChunk: 128,      // ...e das camadas densas em vértices (meio-fio, postes): ver WorldBuilder._batch
+		// ...e dos ACABAMENTOS (platibandas, fios, pilares, caixas-d'água, semáforos: a camada mais densa do mapa — 5,8 milhões de vértices).
+		// Com 128 u, a favela desenhava 5 pedaços (660 mil vértices) para mostrar uma janela de ~40 × 60 u, e o mapa de sombras outros
+		// tantos. Com 64 u entram só os pedaços que tocam a tela: metade dos vértices, sem mais desenhos por quadro (os vazios não entram).
+		trimChunk: 64,
 		seed: 20261003,
 		legacyPlan: false,     // true = só a cidade antiga (8×10 quarteirões); false = o mundo todo (faixa urbana, ilha, pontes, favela, rodovias).
 

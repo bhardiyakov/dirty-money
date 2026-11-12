@@ -11,7 +11,8 @@
 //     prontas, sem luz acima de 1), e o ACES desbotava as copas das árvores e escurecia o asfalto. Custo: uma passada de tela cheia.
 // (A oclusão de ambiente — SSAO2 — foi testada nesta etapa e ficou de fora: o resultado não agradou e custava ~50% mais desenhos.)
 // A mesma passada leva os EFEITOS DE TELA do que o jogador sente (render/ScreenFx.js, uniform `fx`): borrão de velocidade nas bordas,
-// separação de cores no impacto e a tela sem cor com a vida baixa. Com `fx` em zero, a imagem é a de sempre (nenhuma amostra a mais).
+// separação de cores no impacto e a tela sem cor com a vida baixa. Eles ficam numa SEGUNDA variante do shader (`#define FX`), que só
+// entra enquanto algum efeito está ativo: em repouso roda o shader de sempre, sem nenhuma amostra a mais.
 // ============================================================================
 
 const Lighting = {
@@ -26,6 +27,17 @@ const Lighting = {
 	get flags() { return this._flags || (this._flags = this._url() || { ceu: !!Config.light.sky, cor: !!Config.light.grade }); },
 
 	grade: null,              // pós-processamento da gradação (GRADE_FS)
+	FX_DEFINE: '#define FX\n',
+	_fxOn: false, _fxEffect: null,
+
+	// Liga ou desliga a variante com os efeitos de tela (ScreenFx.update, todo quadro: só troca quando muda e o shader já compilou).
+	fx(on) {
+		const t = this.grade;
+		if (!t || on === this._fxOn) return;
+		if (on && !(this._fxEffect && this._fxEffect.isReady())) return;
+		this._fxOn = on;
+		t.updateEffect(on ? Lighting.FX_DEFINE : null);
+	},
 
 	// Depois da câmera e do antisserrilhado (Game): cria a gradação, se ligada — o último pós-processamento da câmera.
 	init(game) {
@@ -40,8 +52,15 @@ const Lighting = {
 				e.setFloat2('texel', 1 / Math.max(1, t.width), 1 / Math.max(1, t.height));
 				e.setFloat('soften', soft ? T.soften : 0); e.setFloat('tilt', soft ? T.tilt : 0); e.setFloat('bloom', soft ? T.bloom : 0);
 				e.setFloat('lift', T.lift); e.setFloat('roll', T.roll); e.setFloat('warm', T.warm); e.setFloat('vig', T.vignette);
-				if (typeof ScreenFx !== 'undefined') ScreenFx.apply(e); else e.setFloat4('fx', 0, 0, 0, 0);      // velocidade, impacto, vida baixa (render/ScreenFx.js)
+				if (this._fxOn && typeof ScreenFx !== 'undefined') ScreenFx.apply(e);      // velocidade, impacto, vida baixa (render/ScreenFx.js)
 			};
+			// DUAS variantes do shader: a de sempre e a com os efeitos de tela (#define FX). As duas são compiladas já na carga (a troca
+			// não pode esperar a compilação: a tela ficaria um quadro sem imagem) e a com efeitos só entra enquanto algum está ativo.
+			// Com um shader só, o compilador da placa (HLSL, no Windows) tira as amostras de textura de dentro dos `if` e passa a fazê-las
+			// SEMPRE: 7 leituras de tela a mais por pixel, com tudo em zero.
+			t.updateEffect(Lighting.FX_DEFINE); this._fxEffect = t.getEffect();
+			t.updateEffect(null);
+			this._fxOn = false;
 		}
 		console.log(`[LUZ] ${['ceu', 'cor'].filter((k) => F[k]).join(' + ') || 'desligada'}`);
 	},
@@ -59,7 +78,9 @@ const Lighting = {
 		uniform sampler2D textureSampler;
 		uniform float contrast, saturation, soften, tilt, bloom, lift, roll, warm, vig;
 		uniform vec2 texel;
+		#ifdef FX
 		uniform vec4 fx;
+		#endif
 		void main(void) {
 			vec4 c0 = texture2D(textureSampler, vUV);
 			vec3 c = c0.rgb;
@@ -77,6 +98,7 @@ const Lighting = {
 				c = mix(c, s, clamp(soften + top * top * 0.85 * step(0.001, tilt), 0.0, 1.0));
 				c += b / 8.0 * bloom;
 			}
+			#ifdef FX
 			if (fx.x > 0.003) {                                                         // VELOCIDADE: as bordas esticam para fora (o centro, nítido)
 				float edge = smoothstep(0.03, 0.4, rr), k = fx.x * edge * 0.05;
 				vec3 a = c;
@@ -88,6 +110,7 @@ const Lighting = {
 				c.r = mix(c.r, texture2D(textureSampler, vUV + o).r, 0.85);
 				c.b = mix(c.b, texture2D(textureSampler, vUV - o).b, 0.85);
 			}
+			#endif
 			c = (c - 0.5) * contrast + 0.5;
 			float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
 			c = mix(vec3(l), c, saturation);
@@ -96,6 +119,7 @@ const Lighting = {
 			c -= hi * hi / 0.9 * roll;                                                  // o alto em curva (ombro suave: o branco vira ~0,93)
 			c *= vec3(1.0 + warm, 1.0 + warm * 0.35, 1.0 - warm * 0.6);
 			c *= 1.0 - vig * smoothstep(0.25, 0.75, rr * 2.0);
+			#ifdef FX
 			if (fx.z > 0.003) {                                                         // VIDA BAIXA: a cor some e as bordas escurecem pulsando
 				float pulse = 0.62 + 0.38 * sin(fx.w * 6.6);
 				c = mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))) * vec3(1.05, 0.93, 0.9), fx.z * 0.62);
@@ -103,6 +127,7 @@ const Lighting = {
 				c *= 1.0 - fx.z * pulse * 0.5 * rim;
 				c.r += fx.z * pulse * 0.09 * rim;
 			}
+			#endif
 			gl_FragColor = vec4(clamp(c, 0.0, 1.0), c0.a);
 		}`,
 
