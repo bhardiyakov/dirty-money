@@ -163,7 +163,8 @@ module.exports = {
         await gameWait(page, 0.3);
         const after = await cam();
         c.ok(shop.flat && Math.abs(shop.yaw) < 1e-6, 'na loja, norte em cima');
-        c.ok(Math.abs(wrap(after.yaw - before.yaw)) < 0.05, `saiu da loja: a câmera volta para onde estava (${(before.yaw * 57.3).toFixed(0)}° → ${(after.yaw * 57.3).toFixed(0)}°)`);
+        // (compara com o giro do jogador — userYaw —, para onde a câmera ia: logo depois de descer da moto ela ainda está chegando ao norte)
+        c.ok(Math.abs(wrap(after.yaw - before.user)) < 0.05, `saiu da loja: a câmera volta para onde estava (${(before.user * 57.3).toFixed(0)}° → ${(after.yaw * 57.3).toFixed(0)}°)`);
         c.noErrors(errors, 'câmera');
         await close();
 
