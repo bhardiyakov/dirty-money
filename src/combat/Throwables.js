@@ -116,7 +116,7 @@ const Throwables = {
 		// teclado / toque: direção do movimento (ou do corpo) e a distância carregando com o tempo segurando
 		s.src = 'hold';
 		const ax = inp.getMoveAxis();
-		const dir = Math.abs(ax.x) + Math.abs(ax.z) > 0.3 ? Math.atan2(ax.x, ax.z) + (typeof CompassCamera !== 'undefined' ? CompassCamera.yaw || 0 : 0) : p.root.rotation.y;
+		const dir = Math.abs(ax.x) + Math.abs(ax.z) > 0.3 ? Math.atan2(ax.x, ax.z) + (typeof CompassCamera !== 'undefined' ? CompassCamera.moveYaw() : 0) : p.root.rotation.y;
 		if (s.phase === 'hold') s.charge = Math.min(1, (s.charge || 0) + dt / this.FORCE_T);
 		return { dir, dist: D.minR + (maxR - D.minR) * (s.charge || 0) };
 	},
