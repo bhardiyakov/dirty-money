@@ -45,11 +45,13 @@ module.exports = {
         const a3 = await cam();
         c.ok(Math.abs(wrap(a3.yaw - a2.yaw) + 100 * K.mouse) < 0.05, `botão do meio arrastando também gira (${(wrap(a3.yaw - a2.yaw) * 57.3).toFixed(0)}°)`);
 
-        // 3) andar segue a tela: W leva para a "frente" da câmera girada (numa rua, com a câmera girada para o rumo dela: nada no caminho)
+        // 3) andar segue o MAPA (Config.camera.worldMove): W leva para o norte, mesmo com a câmera girada (numa rua que corre de norte a sul o
+        // bastante: nada no caminho)
         const mv = await page.evaluate(() => {
-            const P = game.player.position, s = RoadNet.randomLanePoint(30, { x: P.x, z: P.z, rMin: 0, rMax: 150 });
-            if (s) { game.player.teleport(new BABYLON.Vector3(s.point.x, 0, s.point.z)); game.camera.snapTo(game.player.position); game.camera.turn(Math.atan2(s.d.dx, s.d.dz) - game.camera.userYaw); }
-            const p = game.player.position, f = game.camera.getGroundBasis().forward;
+            const P = game.player.position; let s = null;
+            for (let i = 0; i < 60 && !(s && Math.abs(s.d.dz) > 0.9); i++) s = RoadNet.randomLanePoint(30, { x: P.x, z: P.z, rMin: 0, rMax: 150 });
+            if (s) { game.player.teleport(new BABYLON.Vector3(s.point.x, 0, s.point.z)); game.camera.snapTo(game.player.position); game.camera.turn(Math.atan2(s.d.dx, s.d.dz) + 1.2 - game.camera.userYaw); }
+            const p = game.player.position, f = game.camera.inputBasis().forward;
             return { x0: p.x, z0: p.z, f: { x: f.x, z: f.z }, yaw: game.camera.yaw };
         });
         // (prazos reais folgados: no Chromium por software esta cena roda a ~2 quadros/s — o prazo padrão, 6 s reais por segundo de
@@ -58,7 +60,7 @@ module.exports = {
         await page.keyboard.down('w'); await gameWait(page, 0.8, 120000); await page.keyboard.up('w');
         const mv1 = await page.evaluate(() => ({ x: game.player.position.x, z: game.player.position.z }));
         const dx = mv1.x - mv.x0, dz = mv1.z - mv.z0, dl = Math.hypot(dx, dz) || 1, dot = (dx * mv.f.x + dz * mv.f.z) / dl;
-        c.ok(dl > 1 && dot > 0.85, `W anda para cima da TELA girada a ${(mv.yaw * 57.3).toFixed(0)}° (${dl.toFixed(1)} m, alinhado ${dot.toFixed(2)})`);
+        c.ok(dl > 1 && dot > 0.85, `W anda para o norte do mapa (rumo do direcional) com a câmera girada a ${(mv.yaw * 57.3).toFixed(0)}° (${dl.toFixed(1)} m, alinhado ${dot.toFixed(2)})`);
 
         // 4) com arma de fogo na mão o botão direito é a mira (não gira); o do meio gira
         await page.evaluate(() => { game.player.weapon = 'pistol'; });
@@ -148,7 +150,7 @@ module.exports = {
             await page.evaluate(() => { game._leaveVehicle(); });
             await wait(1);
             const m4 = await cam();
-            c.ok(Math.abs(wrap(m4.yaw - m3.yaw)) < 0.15 && Math.abs(wrap(m4.user - m3.yaw)) < 0.15, `desceu: a pé, a câmera fica de onde estava (${(m3.yaw * 57.3).toFixed(0)}° → ${(m4.yaw * 57.3).toFixed(0)}°)`);
+            c.ok(Math.abs(wrap(m4.user)) < 1e-6 && Math.abs(wrap(m4.yaw)) < Math.abs(wrap(m3.yaw)) + 0.05, `desceu: a pé, a câmera zera — volta para o norte (${(m3.yaw * 57.3).toFixed(0)}° → ${(m4.yaw * 57.3).toFixed(0)}°, indo para 0°)`);
         }
 
         // 7) entrar numa loja: norte em cima; sair: a direção de antes

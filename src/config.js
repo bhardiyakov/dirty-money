@@ -147,6 +147,13 @@ const Config = {
 		// andando (parado ou dando passos curtos ela não mexe). O jogador ainda gira a mão (e aí ela espera lookHold s para voltar a seguir).
 		// footFollow: rapidez (1/s) a pé, até footYawSpeed m/s; footDelay = s andando na direção nova antes de começar a virar.
 		footFollow: 1.1, footYawSpeed: 3, footDelay: 0.8,
+		// footAutoYaw: liga o giro automático acima (e o da 3ª pessoa, footFollowChase). DESLIGADO (como no GTA SA): a pé a câmera só
+		// ACOMPANHA a posição do personagem — andando de um lado para o outro ela não gira para as costas dele; quem gira é o jogador
+		// (mouse, dedo, analógico direito). Junto com worldMove, cima no analógico é sempre o mesmo lado do mapa e da tela.
+		footAutoYaw: false,
+		// footExitNorth: ao descer de um veículo, a câmera a pé ZERA (volta para o norte em cima, suave) em vez de ficar na direção em
+		// que o veículo estava — o giro do veículo não se soma ao andar a pé.
+		footExitNorth: true,
 		// MOVIMENTO ABSOLUTO (worldMove): o analógico / WASD anda nos eixos FIXOS do mapa — cima = norte, esquerda = oeste, direita =
 		// leste, baixo = sul — seja qual for o giro da câmera (ela continua indo para as costas do personagem, mas não muda mais para onde
 		// ele anda). false = o controle relativo à câmera de antes (cima = para onde a câmera olha). Vale também para o rolamento, para a mira
