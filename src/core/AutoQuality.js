@@ -9,12 +9,18 @@
 //   5) resolução a 70%
 //   6) sem a vegetação rasteira (tufos, capins, cascalho — Trees3D.COVER) e o espelho da água a cada 3 quadros
 //   7) resolução a 58%
-// Antes ele só tinha os dois degraus de sombra e desistia: quem ficava a 10 FPS sem sombras continuava a 10 FPS. Os outros cinco são
-// os de PLACA DE VÍDEO (preenchimento e vértices) e só valem com uma de verdade: num rasterizador por software (Graphics.software — o
-// navegador dos testes) nada disso deixa o jogo fluido; lá ele faz só os dois de sombra, como antes, e os testes continuam com uma
-// configuração só. `level` = a posição, nesta lista, do último degrau aplicado.
+//   8) resolução a 45% — só SEM placa de vídeo (abaixo)
+// Antes ele só tinha os dois degraus de sombra e desistia: quem ficava a 10 FPS sem sombras continuava a 10 FPS. `level` = a posição,
+// nesta lista, do último degrau aplicado.
+// SEM PLACA DE VÍDEO (Graphics.software: o navegador desenhando pelo processador — "Microsoft Basic Render Driver", SwiftShader): o
+// custo é só o número de pixels, então ele já COMEÇA nos 70% (os degraus até lá, em silêncio) e pode ir até 45%. Não fica fluido —
+// quem resolve é ligar a aceleração gráfica (o aviso do menu principal e a dica explicam) —, mas fica jogável.
+// NOS TESTES (navegador automatizado, navigator.webdriver) valem só os dois degraus de sombra, como sempre: os outros mexeriam na
+// resolução e no MSAA no meio de um teste, e a configuração tem de ser uma só.
 // Um segundo só conta como lento se a MAIORIA dos quadros dele foi lenta (um engasgo isolado numa máquina boa não custa qualidade).
-// Bem lento (menos da metade do ritmo) desce em 2 s em vez de 4. O degrau alcançado fica guardado (por preset e placa): a sessão
+// Bem lento (menos da metade do ritmo) desce em 2 s em vez de 4. Quadro de mais de meio segundo é aba em segundo plano e não conta — a
+// não ser que venham três seguidos: aí a máquina está se arrastando (a 1 FPS todo quadro passava do meio segundo, e ele nunca descia).
+// O degrau alcançado fica guardado (por preset e placa): a sessão
 // seguinte já começa UM degrau acima dele, em vez de passar o primeiro minuto de novo a 10 FPS — e ainda pode se recuperar aos poucos.
 // Escolher um preset à mão em Ajustes › Gráficos apaga o degrau guardado: a adaptação recomeça do alto.
 // O preset de gráficos (src/core/Graphics.js) não é trocado; no Low, que já vem sem sombras, os dois degraus de sombra são pulados.
@@ -22,7 +28,9 @@
 // ============================================================================
 
 class AutoQuality {
-	// [id, o aviso, só com placa de vídeo?]
+	// O jogo está sendo dirigido por automação (os testes)? Aí só valem os degraus de sombra.
+	static get automated() { return typeof navigator !== 'undefined' && navigator.webdriver === true; }
+	// [id, o aviso, é dos que mexem na imagem além das sombras? (fora dos testes)]
 	static get STEPS() {
 		return [
 			['shadow512', 'sombras reduzidas', false],
@@ -32,6 +40,7 @@ class AutoQuality {
 			['scale70', 'resolução a 70%', true],
 			['cover', 'sem vegetação rasteira', true],
 			['scale58', 'resolução a 58%', true],
+			['scale45', 'resolução a 45%', true],
 		];
 	}
 
@@ -41,10 +50,21 @@ class AutoQuality {
 		this.acc = 0; this.n = 0; this.nSlow = 0; this.bad = 0; this.cool = 6;        // 6 s de carência no início (carregamento e aquecimento de shaders)
 		this.slow = 1000 / Config.perf.fpsCap * 1.35;                  // média de ms por quadro acima disto = quadro "ruim"
 		this.off = location.search.includes('full');
-		this.gpuSteps = !(typeof Graphics !== 'undefined' && Graphics.software);
+		this.gpuSteps = !AutoQuality.automated;
+		this.soft = this.gpuSteps && typeof Graphics !== 'undefined' && Graphics.software;      // sem placa de vídeo (e fora dos testes)
+		this.long = 0;                                                 // quadros seguidos de mais de meio segundo
 		this.skip = new Set();                                         // degraus que não valem neste preset
 		if (Config.perf.shadows === false) { this.skip.add('shadow512').add('noShadow'); this._shadowsOff(); }      // (Low graphics preset: no sun shadows at all)
+		if (!this.soft) this.skip.add('scale45');
 		this._resume();
+		if (this.soft && !this.off) this._floor('scale70');
+	}
+
+	// Aplica, em silêncio, todos os degraus até `id` (sem placa de vídeo: de saída a 70% da resolução).
+	_floor(id) {
+		const to = AutoQuality.STEPS.findIndex((s) => s[0] === id) + 1;
+		for (let n = this._next(); n && n <= to; n = this._next()) { this.level = n; try { this._apply(n); } catch (e) { console.warn('[QUALIDADE]', e); break; } }
+		console.log(`[QUALIDADE] sem placa de vídeo (${Graphics.gpu().renderer.slice(0, 80)}): começa no degrau ${this.level}`);
 	}
 
 	// Quem é esta máquina para o degrau guardado: o preset e a placa (trocou um dos dois, começa do zero).
@@ -67,7 +87,10 @@ class AutoQuality {
 
 	// Chamado todo quadro com o dt REAL em segundos (antes do teto de 50 ms do jogo).
 	tick(dtReal, paused) {
-		if (this.off || paused || dtReal > 0.5) return;               // aba em segundo plano / menu: não conta
+		if (this.off || paused) return;                               // menu: não conta
+		// Um quadro de mais de meio segundo é a aba voltando do segundo plano: não conta. Três seguidos (de até 5 s) são a máquina se
+		// arrastando — contam, e cada um vale uma janela inteira.
+		if (dtReal > 0.5) { if (++this.long < 3 || dtReal > 5) return; } else this.long = 0;
 		if (typeof Interiors !== 'undefined' && Interiors.active) return;      // (dentro de loja o mundo não é desenhado: não mede nada)
 		if (this.cool > 0) { this.cool -= dtReal; return; }
 		const ms = dtReal * 1000;
@@ -116,6 +139,7 @@ class AutoQuality {
 		else if (id === 'scale85') this._scale(0.85);
 		else if (id === 'scale70') this._scale(0.7);
 		else if (id === 'scale58') this._scale(0.58);
+		else if (id === 'scale45') this._scale(0.45);
 	}
 
 	_down() {

@@ -3,8 +3,12 @@
 //   • vegetação rasteira (Trees3D.COVER) fora do mapa de sombras, cascalho com 180 triângulos (eram 720); as árvores continuam projetando;
 //   • vídeo integrado reconhecido (Graphics.MID_GPU → Medium no automático) e o teto de pixels do preset (maxPx);
 //   • os efeitos de tela numa variante própria do shader da gradação: em repouso roda a de sempre;
-//   • o AutoQuality desce ATÉ O FIM com uma placa de verdade (resolução, sem MSAA, sem paralaxe, sem sombras, sem rasteiras), guarda o
-//     degrau e a sessão seguinte começa um acima; num rasterizador por software (este teste, o CI) só valem os dois degraus de sombra.
+//   • o AutoQuality desce ATÉ O FIM (resolução, sem MSAA, sem paralaxe, sem sombras, sem rasteiras), guarda o degrau e a sessão
+//     seguinte começa um acima; nos testes (navegador automatizado) só valem os dois degraus de sombra;
+//   • SEM PLACA DE VÍDEO (o navegador desenhando pelo processador — "Microsoft Basic Render Driver", SwiftShader): o automático
+//     escolhe o Low, o AutoQuality já começa a 70% e vai até 45%, e há o passo a passo para ligar a placa;
+//   • a 1 FPS (todo quadro com mais de meio segundo) o AutoQuality desce — antes esses quadros eram ignorados; uma volta do segundo
+//     plano não conta.
 const { boot, gameWait } = require('./lib.cjs');
 
 module.exports = {
@@ -37,10 +41,13 @@ module.exports = {
             const ge = game.gameEngine, e = ge.engine, P = Config.perf, px = () => e.getRenderWidth() * e.getRenderHeight(), p0 = px(), keep = P.maxPixels;
             P.maxPixels = 300000; ge.resize(); const p1 = px();
             P.maxPixels = keep; ge.resize();
-            return { mid: mid.filter((s) => Graphics.MID_GPU.test(s)).length, card: card.filter((s) => Graphics.MID_GPU.test(s)).length, soft: Graphics.software, budget: keep,
+            const warp = 'ANGLE (Microsoft, Microsoft Basic Render Driver (0x0000008C) Direct3D11 vs_5_0 ps_5_0, D3D11)';
+            return { mid: mid.filter((s) => Graphics.MID_GPU.test(s)).length, card: card.filter((s) => Graphics.MID_GPU.test(s) || Graphics.WEAK_GPU.test(s) || Graphics.SOFT_GPU.test(s)).length, soft: Graphics.software, budget: keep,
+                warp: Graphics.WEAK_GPU.test(warp) && Graphics.SOFT_GPU.test(warp), help: Graphics.softwareHelp().length, hint: Hints.list.findIndex((h) => h.id === 'softgpu'),
                 budgets: ['low', 'medium', 'high', 'hd'].map((k) => Graphics.PRESETS[k].maxPx || 0), p0, p1, p2: px() };
         });
         c.ok(gfx.mid === 4 && gfx.card === 0, `vídeo integrado reconhecido (${gfx.mid}/4), placas dedicadas não (${gfx.card})`);
+        c.ok(gfx.warp && gfx.soft && gfx.help >= 3 && gfx.hint === 0, `sem placa de vídeo: o "Microsoft Basic Render Driver" é reconhecido (Low no automático), com ${gfx.help} passos para ligar a placa e a dica em primeiro`);
         c.ok(gfx.budget > 0 && gfx.budgets[0] < gfx.budgets[1] && gfx.budgets[1] < gfx.budgets[2] && gfx.budgets[3] === 0, `teto de pixels por preset (${gfx.budgets.map((b) => (b / 1e6).toFixed(1)).join(' / ')} Mpx)`);
         c.ok(gfx.p1 <= 300000 * 1.04 && gfx.p1 < gfx.p0 && gfx.p2 === gfx.p0, `acima do teto a tela é desenhada menor (${gfx.p0} → ${gfx.p1} px) e volta (${gfx.p2})`);
 
@@ -64,28 +71,39 @@ module.exports = {
             q.off = false; q.level = 0; q.gpuSteps = false; out.soft = [];
             for (let i = 0; i < 3; i++) { q._down(); out.soft.push(q.off ? 'fim' : S[q.level - 1][0]); }
             out.softStops = out.soft.join() === 'shadow512,noShadow,fim' && Config.perf.autoScale === 1 && (!Smooth.pp || Smooth.pp.samples > 1);
-            const realGpu = Graphics._gpu;
-            Graphics._gpu = Object.assign({}, realGpu, { renderer: 'ANGLE (NVIDIA, NVIDIA GeForce Teste Direct3D11 vs_5_0 ps_5_0, D3D11)' });
             const e = game.gameEngine.engine, lv0 = e.getHardwareScalingLevel(), F = Object.values(game.gameEngine.world.mats.facades);
             out.pom0 = F.filter((m) => m.useParallaxOcclusion).length; out.msaa0 = Smooth.pp ? Smooth.pp.samples : 0; out.cover0 = Trees3D._cover.filter((m) => m.isVisible).length;
-            q.off = false; q.gpuSteps = true; q.level = 0; out.seen = [];
-            for (let i = 0; i < S.length; i++) { q._down(); out.seen.push(q.level); }
+            q.off = false; q.gpuSteps = true; q.level = 0; out.seen = []; out.skip45 = q.skip.has('scale45');
+            for (let i = 0; i < 7; i++) { q._down(); out.seen.push(q.level); }
             out.msaa = Smooth.pp ? Smooth.pp.samples : 0; out.pom = F.filter((m) => m.useParallaxOcclusion).length;
             out.scale = Config.perf.autoScale; out.lv = e.getHardwareScalingLevel() / lv0;
             out.coverOn = Trees3D.coverOn; out.cover = Trees3D._cover.filter((m) => m.isVisible).length;
             out.noShadow = !!game.dayNight.forceNoShadows; out.mirror = Water._rate;
             out.saved = (Store.getJSON('autoQuality', null) || {}).level;
             q._down(); out.end = q.off;
-            const r = new AutoQuality(game); out.resume = r.level; out.resumeGpu = r.gpuSteps;
-            Graphics._gpu = realGpu; q.off = true;
+            const r = new AutoQuality(game); out.auto = AutoQuality.automated && !r.gpuSteps && !r.soft;
+            r.gpuSteps = true; r._resume(); out.resume = r.level;
+            // sem placa de vídeo: de saída a 70% e, se preciso, até 45%
+            const w = new AutoQuality(game); w.gpuSteps = true; w.soft = true; w.skip.delete('scale45'); w.level = 0; w._remember = () => {};
+            w._floor('scale70'); out.floor = S[w.level - 1][0]; out.floorScale = Config.perf.autoScale;
+            for (let i = 0; i < 4 && !w.off; i++) w._down();
+            out.softEnd = S[w.level - 1][0]; out.softScale = Config.perf.autoScale;
+            // quadros de 1 s seguidos: desce; um quadro longo isolado entre quadros bons: não
+            const mk = () => { const t = new AutoQuality(game); t.gpuSteps = true; t.off = false; t.cool = 0; t.n = 0; t._down = () => { t.n2 = (t.n2 || 0) + 1; }; return t; };
+            const crawl = mk(); for (let i = 0; i < 12; i++) crawl.tick(1.0, false);
+            const back = mk(); for (let i = 0; i < 90; i++) back.tick(0.033, false); back.tick(3, false); for (let i = 0; i < 90; i++) back.tick(0.033, false);
+            out.crawl = crawl.n2 || 0; out.back = back.n2 || 0;
+            q.off = true;
             return out;
         });
-        c.ok(aq.softNow && aq.softStops, `rasterizador por software (os testes): só os degraus de sombra, sem mexer na resolução nem no MSAA (${aq.soft.join(' → ')})`);
-        c.ok(aq.steps.length === 7 && aq.seen.join() === '1,2,3,4,5,6,7' && aq.end, `com placa de vídeo desce os ${aq.steps.length} degraus e para (${aq.seen.join(' → ')})`);
+        c.ok(aq.softNow && aq.softStops && aq.auto, `nos testes (navegador automatizado): só os degraus de sombra, sem mexer na resolução nem no MSAA (${aq.soft.join(' → ')})`);
+        c.ok(aq.steps.length === 8 && aq.skip45 && aq.seen.join() === '1,2,3,4,5,6,7' && aq.end, `com placa de vídeo desce 7 degraus e para (${aq.seen.join(' → ')}; os 45% ficam para quem não tem placa)`);
         c.ok(aq.noShadow && aq.msaa0 > 1 && aq.msaa === 1 && aq.pom0 > 0 && aq.pom === 0, `sem sombras, sem MSAA (${aq.msaa0}× → ${aq.msaa}×) e sem paralaxe nas fachadas (${aq.pom0} → ${aq.pom})`);
         c.ok(Math.abs(aq.scale - 0.58) < 1e-6 && Math.abs(aq.lv - 1 / 0.58) < 0.02, `resolução a ${Math.round(aq.scale * 100)}% (escala do motor ×${aq.lv.toFixed(2)})`);
         c.ok(!aq.coverOn && aq.cover0 > 0 && aq.cover === 0 && aq.mirror >= 3, `sem vegetação rasteira (${aq.cover0} → ${aq.cover} malhas à vista) e o espelho da água a cada ${aq.mirror} quadros`);
-        c.ok(aq.saved === 7 && aq.resumeGpu && aq.resume === 6, `o degrau fica guardado (${aq.saved}) e a sessão seguinte começa um acima (${aq.resume})`);
+        c.ok(aq.saved === 7 && aq.resume === 6, `o degrau fica guardado (${aq.saved}) e a sessão seguinte começa um acima (${aq.resume})`);
+        c.ok(aq.floor === 'scale70' && Math.abs(aq.floorScale - 0.7) < 1e-6 && aq.softEnd === 'scale45' && Math.abs(aq.softScale - 0.45) < 1e-6, `sem placa de vídeo: começa em ${aq.floor} (${Math.round(aq.floorScale * 100)}%) e vai até ${aq.softEnd} (${Math.round(aq.softScale * 100)}%)`);
+        c.ok(aq.crawl >= 1 && aq.back === 0, `a 1 FPS ele desce (${aq.crawl} degrau(s) em 12 quadros de 1 s); uma volta do segundo plano não conta (${aq.back})`);
 
         // 5) o jogo segue desenhando nessa configuração mínima, sem erro
         await gameWait(page, 2, 90000);

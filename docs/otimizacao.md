@@ -123,8 +123,8 @@ desde a base da etapa 0 (`medicao-desempenho.md`), e que o `AutoQuality` não ti
   - Abaixo da metade do ritmo ele desce em 2 s em vez de 4.
   - O degrau alcançado fica guardado por preset e placa, e a sessão seguinte começa um degrau acima dele: não repete o primeiro
     minuto a 10 FPS e ainda pode se recuperar. Escolher um preset à mão em Ajustes › Gráficos apaga o degrau guardado.
-  - Os degraus de resolução, MSAA e vegetação só valem com placa de vídeo de verdade. Num rasterizador por software (o navegador
-    dos testes) ele faz só os dois de sombra, como antes.
+  - Nos testes (navegador automatizado) ele faz só os dois degraus de sombra, como antes: os outros mexeriam na resolução e no
+    MSAA no meio de um teste.
 - **Preset automático**: vídeo integrado (`Graphics.MID_GPU`: Intel HD/UHD/Iris, AMD Radeon Graphics/Vega) começa no Medium.
   Intel Arc e os chips da Apple continuam no High.
 - **Teto de pixels por preset** (`maxPx`: 1,5 / 2,4 / 4,2 Mpx; HD sem teto). Num monitor 4K o High desenhava 8,3 Mpx com MSAA 4×;
@@ -165,8 +165,27 @@ o jogo com `?bench&gfx=high` (ou `medium`) antes e depois e compare a coluna de 
 - cada célula de vegetação tem a sua cópia da geometria do modelo (~150 MB), por causa do VAO dividido entre malhas;
 - memória de vídeo estimada: 959 MB de texturas (638 MB de atlas de personagens) e 712 MB de geometria.
 
+### Sem placa de vídeo: o navegador desenhando pelo processador
+
+O benchmark do PC do relato trouxe a causa: `placa: Microsoft Basic Render Driver`. É o rasterizador por software do Windows (WARP):
+o Chrome não estava usando a placa de vídeo, e o jogo era desenhado inteiro pelo processador (0,7 a 1,7 FPS no High, a 2,2 Mpx).
+Isso acontece com a aceleração gráfica desligada no navegador, com o driver de vídeo faltando (o Windows mostra "Adaptador de
+Vídeo Básico da Microsoft") ou por área de trabalho remota e máquina virtual. **Nenhum ajuste do jogo deixa isso fluido**: a solução
+é ligar a placa. O jogo passou a tratar o caso:
+
+- **Reconhece** (`Graphics.SOFT_GPU`, `WEAK_GPU`): o driver básico da Microsoft não estava em nenhuma lista e caía no High. Agora o
+  automático escolhe o Low.
+- **Avisa**: no menu principal, uma caixa diz que o navegador não está usando a placa e mostra o passo a passo
+  (`Graphics.softwareHelp`); dentro do jogo, é a primeira dica.
+- **Começa leve**: o `AutoQuality` já entra a 70% da resolução e pode ir até 45% (degrau só deste caso).
+- **Enxerga quem se arrasta**: quadro de mais de meio segundo era tratado como aba em segundo plano e ignorado. A 1 FPS todo quadro
+  passa disso, e ele nunca descia. Agora três seguidos contam; um isolado, não.
+- Os degraus de resolução e MSAA ficam fora só nos **testes** (navegador automatizado, `navigator.webdriver`), não mais em qualquer
+  rasterizador por software, que é justamente onde o jogador mais precisa deles.
+
 `tests/52_desempenho` confere os pedaços de 64 u, as rasteiras fora da sombra, o cascalho leve, o vídeo integrado, o teto de
-pixels, as duas variantes do shader e o `AutoQuality` descendo até o fim, guardando o degrau e retomando um acima.
+pixels, as duas variantes do shader, o `AutoQuality` descendo até o fim, guardando o degrau e retomando um acima, o caso sem placa
+de vídeo (reconhecido, a 70% de saída, até 45%) e os quadros de 1 s seguidos.
 
 ## Carros e personagens
 

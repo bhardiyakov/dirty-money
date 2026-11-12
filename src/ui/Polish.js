@@ -99,6 +99,7 @@ const Hints = {
 (() => {
     const inBar = (g) => Interiors.active && Interiors.active.shop.style === 'bar';
     const P = (g) => g.player.position;
+    Hints.add('softgpu', () => typeof Graphics !== 'undefined' && Graphics.software, 'O navegador está desenhando o jogo pelo <strong>processador</strong>, sem a placa de vídeo — por isso está lento. Ligue a <strong>aceleração gráfica</strong> nas configurações do navegador e confira em <kbd>chrome://gpu</kbd> se o WebGL aparece como "Hardware accelerated". O menu principal mostra o passo a passo.', '⚠️');
     Hints.add('phone', () => typeof Phone !== 'undefined' && Phone.unread > 0, 'Chegou mensagem no <strong>celular</strong>. Aperte <kbd>J</kbd> (ou toque no 📱) para ler e responder — seus contatos lembram do que você responde.', '📱');
     Hints.add('barTable', (g) => inBar(g), 'No bar tem a <strong>mesa de jogos</strong> (truco, dominó, porrinha) e a sinuca — chegue perto e aperte <kbd>E</kbd>. Sábado à noite tem torneio de truco.', '🃏');
     Hints.add('barMatch', (g) => inBar(g) && typeof BarGames !== 'undefined' && (BarGames.busy('pool') || BarGames.busy('truco')), 'Os fregueses estão jogando: chegue perto da mesa e aperte <kbd>E</kbd> para apostar num deles, só assistir ou desafiar quem ganhar.', '🎱');

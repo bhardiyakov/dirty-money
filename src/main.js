@@ -29,6 +29,7 @@ class MainMenu {
 		});
 		this.btnNew.focus();
 		this._initSettings();
+		if (typeof Graphics !== 'undefined' && Graphics.software) this._softwareNotice();
 		if (window.Intro) Intro.menuReady();                          // a abertura (script inline no index.html) mostra logo e botões
 	}
 
@@ -60,6 +61,27 @@ class MainMenu {
 		document.getElementById('btn-settings').addEventListener('click', () => open(true));
 		document.getElementById('btn-settings-back').addEventListener('click', () => open(false));
 		window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel.classList.contains('open')) open(false); });
+	}
+
+	// SEM PLACA DE VÍDEO: o navegador está desenhando o jogo pelo processador (aceleração gráfica desligada, driver de vídeo faltando,
+	// área de trabalho remota). Nenhum ajuste do jogo deixa isso fluido — o aviso diz o que é e como ligar a placa (Graphics.softwareHelp).
+	_softwareNotice() {
+		const r = Graphics.gpu().renderer, name = ((r.match(/Microsoft Basic Render Driver|SwiftShader|llvmpipe/i) || r.match(/ANGLE \([^,]+, ([^,(]+)/) || [r]).pop() || r).trim().slice(0, 60);
+		const st = document.createElement('style');
+		// (no canto, fora da coluna da logo e dos botões; some com o menu, quando o carregamento começa)
+		st.textContent = `#mm-soft { position: absolute; left: 24px; bottom: 24px; z-index: 3; width: min(400px, calc(50vw - 200px)); min-width: 200px; max-height: 70vh; overflow: auto;
+				padding: 12px 16px; border-radius: 14px; background: rgba(38,26,4,0.92); border: 1px solid rgba(251,191,36,0.6); color: #f2f4f8; font: 500 12.5px/1.5 Inter, system-ui, sans-serif;
+				text-align: left; box-shadow: 0 8px 24px rgba(0,0,0,0.45); }
+			#mm-soft b.t { display: block; color: #fbbf24; font-size: 14px; margin-bottom: 4px; } #mm-soft ol { margin: 6px 0 0; padding-left: 18px; } #mm-soft li { margin: 3px 0; } #mm-soft li b { color: #fde68a; }
+			#main-menu:not(.ui-ready) #mm-soft, #main-menu.loading #mm-soft { display: none; }`;
+		document.head.appendChild(st);
+		const box = document.createElement('div');
+		box.id = 'mm-soft';
+		box.innerHTML = `<b class="t">⚠️ O navegador não está usando a placa de vídeo</b>O jogo está sendo desenhado pelo processador (<i></i>) e vai ficar lento em qualquer nível de gráficos. Como resolver:`
+			+ `<ol>${Graphics.softwareHelp().map((t) => `<li>${t}</li>`).join('')}</ol>`;
+		box.querySelector('i').textContent = name;
+		this.root.appendChild(box);
+		console.warn(`[GRÁFICOS] sem placa de vídeo: ${r}`);
 	}
 
 	_readSave() { return SaveGame.read(); }

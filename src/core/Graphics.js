@@ -11,7 +11,8 @@
 // (MSAA = the scene's geometry edges, render/Smooth.js — 8× only while the frame is ≤ 4 Mpx; SSAA = up to that many samples per pixel
 // inside the characters' own shader, NpcArt: MSAA cannot smooth the inside of a sprite.)
 //
-// Automatic: a weak GPU (software renderers, old Mali / Adreno / PowerVR / Intel HD), very little memory or very few cores = low; a phone
+// Automatic: a weak GPU (software renderers — the browser drawing on the CPU, Windows' "Microsoft Basic Render Driver" included —,
+// old Mali / Adreno / PowerVR / Intel HD), very little memory or very few cores = low; a phone
 // or tablet, ≤ 4 GB, ≤ 4 cores or integrated graphics (Intel UHD / Iris, AMD Radeon Graphics / Vega) = medium; anything else = high (HD is
 // only ever chosen by hand). Each preset also has a pixel budget (maxPx: 1.5 / 2.4 / 4.2 Mpx, none at HD): past it — a 4K monitor — the
 // picture is drawn smaller and scaled up (GameEngine._applyScale). The AutoQuality still steps the
@@ -30,14 +31,16 @@ const Graphics = {
 		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, shadows: true, shadowSize: 4096, npcDirs: 16, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true },
 	},
 	// GPUs that cannot carry the high preset (WEBGL_debug_renderer_info): software rasterisers and old mobile/integrated chips.
-	WEAK_GPU: /swiftshader|llvmpipe|software|mali-[2-4]\d\d|mali-t|adreno \(tm\) [2-5]\d\d|powervr sgx|powervr rogue g[e6]|intel.*hd graphics [2-5]\d{2,3}\b|gma/i,
+	WEAK_GPU: /swiftshader|llvmpipe|software|basic render|microsoft basic|mali-[2-4]\d\d|mali-t|adreno \(tm\) [2-5]\d\d|powervr sgx|powervr rogue g[e6]|intel.*hd graphics [2-5]\d{2,3}\b|gma/i,
 	// Integrated graphics that draw the game but not at the high preset (shared memory, a fraction of a card's fill rate): Intel HD / UHD /
 	// Iris (the old HD 2000–5000 are WEAK above) and the AMD APUs (Radeon Graphics, Vega, R5/R7). Automatic starts them at medium; the
 	// AutoQuality steps down from there if needed. (Intel Arc and Apple's chips are not in the list: they carry the high preset.)
 	MID_GPU: /intel\(r\) (u?hd|iris)|iris\(r\)|iris (xe|plus|pro)|radeon\(tm\) (vega|graphics|r[3-7] graphics)|radeon (vega|graphics)\b|vega \d+ graphics/i,
-	// Software rasterisers (the test browser, a PC with no driver): no quality step makes them playable, so the AutoQuality's GPU steps
-	// stay out of the way there (and the automated tests keep one, predictable configuration).
-	SOFT_GPU: /swiftshader|llvmpipe|software|basic render/i,
+	// Software rasterisers: the browser is drawing the game on the CPU — hardware acceleration is off, the video driver is missing
+	// (Windows' "Microsoft Basic Render Driver" = WARP), or the game runs through a remote desktop / a virtual machine. Automatic picks
+	// low, the AutoQuality starts at 70% of the resolution, and the main menu and a hint tell the player how to turn the GPU on
+	// (softwareHelp) — nothing in the game makes a CPU-drawn picture fluid.
+	SOFT_GPU: /swiftshader|llvmpipe|software|basic render|microsoft basic/i,
 	choice: 'auto',
 	level: 'high',
 
@@ -73,6 +76,15 @@ const Graphics = {
 	},
 	// Is the picture drawn by the CPU? (see SOFT_GPU)
 	get software() { return this.SOFT_GPU.test(this.gpu().renderer); },
+	// What to tell the player then: the steps that turn the video card back on, in the order they usually solve it.
+	softwareHelp() {
+		return [
+			'No Chrome/Edge: Configurações › Sistema › ligue <b>"Usar aceleração gráfica quando disponível"</b> e reinicie o navegador.',
+			'Abra <b>chrome://gpu</b>: em "WebGL" tem de aparecer <b>Hardware accelerated</b>. Se aparecer "Software only", atualize o driver da placa de vídeo (NVIDIA, AMD ou Intel).',
+			'No Windows, Gerenciador de Dispositivos › Adaptadores de vídeo: se estiver "Adaptador de Vídeo Básico da Microsoft", o driver da placa não está instalado.',
+			'Por Área de Trabalho Remota ou em máquina virtual não há placa de vídeo: jogue direto no computador.',
+		];
+	},
 	// What a throwaway WebGL context tells about the GPU (renderer name, WebGL 2, largest texture).
 	gpu() {
 		if (this._gpu) return this._gpu;                                // (asked once: the answer does not change)
