@@ -1,20 +1,20 @@
-# Traçado do Rio — Centro, Zona Sul e Ilha do Governador
+# Traçado da cidade — Centro, "Zona Sul" e Ilha do Desgovernador
 
 Implementação: `src/map/ZonaSul.js`, chamado por `CityGrid._cityStreets` (norte e sul da cidade) e `CityGrid._islandPlan` (ilha).
-Areia da orla: `WorldMap` (bioma, `ZonaSul.coastSand`). Calçadão, quiosques, postos e guarda-sóis da Av. Atlântica: `Landmarks._beach`.
+Areia da orla: `WorldMap` (bioma, `ZonaSul.coastSand`). Calçadão, quiosques, postos e guarda-sóis da Av. Atlântida: `Landmarks._beach`.
 Nomes dos bairros no mapa: `WorldMap._regions`.
 
 ## O esquema seguido
 
-O mapa segue o esquema "Zona Sul e Centro do Rio de Janeiro" (o desenho de referência feito sobre o mapa do jogo):
+O mapa segue o esquema de referência (Zona Sul e Centro do Rio, desenhado sobre o mapa do jogo). O jogo é uma **sátira**: nenhum bairro, rua ou marco usa o nome real — todos são paródias.
 
 | Região | Como ficou |
 | --- | --- |
-| **Norte da cidade** (z > 210 — Santa Teresa) | Labirinto: ruas N-S onduladas e travessas curtas desencontradas entre elas, cortadas por 4 avenidas leste-oeste (Presidente Vargas, Mem de Sá, Rio Branco, Rodrigues Alves) e pela via expressa em diagonal. As ruas que chegam na rua z = 210 continuam as colunas do centro quando caem perto delas. |
+| **Norte da cidade** (z > 210 — Santa Treta e Calote) | Labirinto: ruas N-S onduladas e travessas curtas desencontradas entre elas, cortadas por 4 avenidas leste-oeste (Presidente Vagal, Mem de Lá, Rio Barrento, Rodrigo Alvarás) e pela via expressa em diagonal. As ruas que chegam na rua z = 210 continuam as colunas do centro quando caem perto delas. |
 | **Centro** (−210..210) | A grade antiga com as diagonais em X e a praça (como era). |
-| **Sul da cidade** (Botafogo, Copacabana, Ipanema) | A costa leste vira uma **orla em diagonal** da Beira-Mar até a praia do sul; a Av. do Contorno passa por ela (Av. Atlântica, Vieira Souto, Delfim Moreira) com areia larga até o mar, calçadão e quiosques. Ruas orgânicas acompanham a curva da praia, com travessas desencontradas. A ponte sul desce na Atlântica. |
-| **Faixa oeste do sul** (x ≤ −168 — Leblon, o viaduto) | Em grade, com o viaduto como era. |
-| **Ilha do Governador** | Av. Litorânea em volta, avenida central de norte a sul (Estrada do Galeão) e um labirinto de ruas onduladas com travessas desencontradas; as três pontes descem em avenidas que cruzam até a central. |
+| **Sul da cidade** (Botafumo, Capacabana, Ipagrana) | A costa leste vira uma **orla em diagonal** da Beira-Mar até a praia do sul; a Av. do Contorno passa por ela (Av. Atlântida, Vieira Sujo, Golfinho Moreira) com areia larga até o mar, calçadão e quiosques. Ruas orgânicas acompanham a curva da praia, com travessas desencontradas. A ponte sul desce na Atlântica. |
+| **Faixa oeste do sul** (x ≤ −168 — Leblão, o viaduto) | Em grade, com o viaduto como era. |
+| **Ilha do Desgovernador** | Av. Litorânea em volta, avenida central de norte a sul (Estrada do Galinhão) e um labirinto de ruas onduladas com travessas desencontradas; as três pontes descem em avenidas que cruzam até a central. |
 
 ## Como funciona
 
@@ -35,6 +35,17 @@ Tudo é determinístico (sementes fixas). Imóveis de saves antigos são remapea
 
 ## Fora do escopo (o esquema e o terreno do jogo divergem)
 
-O desenho de referência põe o Corcovado, o Pão de Açúcar e a Rocinha em outros lugares e acrescenta uma ponte para Niterói. Esses marcos
-são parte do relevo e das construções do jogo (morros, bondinho, favelas, Maracanã) e continuam onde estavam; mudar isso é uma
+O desenho de referência põe os morros (no jogo: Corcundão com o Cristo Acolhedor, Pão de Mel) e uma favela em outros lugares e acrescenta uma ponte para Niterói. Esses marcos
+são parte do relevo e das construções do jogo (morros, bondinho, favelas, o estádio Maracutaia) e continuam onde estavam; mudar isso é uma
 reconstrução do terreno à parte.
+
+## Nomes (sátira)
+
+| Referência | No jogo |
+| --- | --- |
+| Santa Teresa · Catete · Botafogo · Copacabana · Ipanema · Leblon | Santa Treta · Calote · Botafumo · Capacabana · Ipagrana · Leblão |
+| Ilha do Governador · Lagoa Rodrigo de Freitas | Ilha do Desgovernador · Lagoa Rodrigo de Fritas |
+| Maracanã · Pão de Açúcar · Corcovado · Cristo Redentor | Maracutaia · Pão de Mel · Corcundão · Cristo Acolhedor |
+| Av. Atlântica · Vieira Souto · Delfim Moreira | Av. Atlântida · Vieira Sujo · Golfinho Moreira |
+
+As ruas de cada bairro (`ZonaSul.N_*`, `S_*`, `I_*`) e as placas de esquina (`RoadArt.RUAS/AVES`) também são paródias.

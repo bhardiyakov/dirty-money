@@ -89,7 +89,7 @@ const CityGrid = {
     // Depois do relevo (WorldMap.buildTerrain): orla e o que é andável a pé.
     finish() {
         this._fillCoast();
-        if (typeof Landmarks !== "undefined") Landmarks.build();         // marcos: Maracanã, Cristo, Pão de Açúcar, calçadão, pontes estaiadas
+        if (typeof Landmarks !== "undefined") Landmarks.build();         // marcos: Maracutaia, Cristo, Pão de Mel, calçadão, pontes estaiadas
         if (typeof Speedway !== "undefined") Speedway.build();           // autódromo (oval) no campo a oeste: corridas de estádio (StreetRacing) — antes do campo
         if (typeof RuralPlan !== "undefined") RuralPlan.build();         // campo: fazendas, cabanas, postos, torres, alamedas
         if (typeof Marina !== "undefined") Marina.build();               // marina na orla leste: píeres, vagas e clube náutico
@@ -223,7 +223,7 @@ const CityGrid = {
             FavelaSul.roads(P);
         }
         P.build();
-        if (typeof ZonaSul !== 'undefined') ZonaSul.names();                    // (Av. Atlântica, Vieira Souto, Delfim Moreira)
+        if (typeof ZonaSul !== 'undefined') ZonaSul.names();                    // (Av. Atlântida, Vieira Sujo, Golfinho Moreira)
         if (typeof RioTraffic !== 'undefined') RioTraffic.assign(D);      // a mão de cada rua (binários de mão única), as conversões proibidas
     },
 
@@ -245,9 +245,9 @@ const CityGrid = {
         // a PRAIA DO SUL (WorldMap.BEACH): do Morro do Mirante para leste a cidade termina numa orla reta-ondulada — a Av. do Contorno vira a
         // avenida da praia, e entre ela e o mar fica a areia larga
         const bk = ss(-150, -100, x);
-        if (bk > 0) s += ((118 + 10 * (F(x / 120, 2.7, 507) - 0.5)) - s) * bk;          // (orla de Ipanema: quase reta, sem os recuos do resto)
+        if (bk > 0) s += ((118 + 10 * (F(x / 120, 2.7, 507) - 0.5)) - s) * bk;          // (orla de Ipagrana: quase reta, sem os recuos do resto)
         const f = Math.min(this._smin(this._smin(x - (B.x0 + w), (B.z1 - n) - z, 70), z - (B.z0 + s), 70), B.east - x);
-        return typeof ZonaSul !== 'undefined' ? Math.min(f, ZonaSul.coastDist(x, z)) : f;      // (a orla em diagonal do sul: Botafogo → Ipanema)
+        return typeof ZonaSul !== 'undefined' ? Math.min(f, ZonaSul.coastDist(x, z)) : f;      // (a orla em diagonal do sul: Botafumo → Ipagrana)
     },
     _chaikinLoop(L) {
         const out = [];
@@ -409,7 +409,7 @@ const CityGrid = {
             this.bridgeEnds[z] = bx;
             P.addH(z, this._cityEndAt(z), bx, 'bridge');
         }
-        if (typeof ZonaSul !== 'undefined') { ZonaSul.governador(P, this, O, this.bridgeEnds); return; }      // (o labirinto da Ilha do Governador)
+        if (typeof ZonaSul !== 'undefined') { ZonaSul.governador(P, this, O, this.bridgeEnds); return; }      // (o labirinto da Ilha do Desgovernador)
         const warp = (u, v) => [u + 30 * F2(u / 220, v / 220, 531), v + 26 * F2(u / 220 + 9.7, v / 220 + 3.3, 532)];
         const mid = ix.reduce((b, q) => (Math.abs(q - 612) < Math.abs(b - 612) ? q : b), ix[0]);
         const line = (vert, c, a, b, at) => {
@@ -454,7 +454,7 @@ const CityGrid = {
         let nCurve = 0;
         if (typeof ZonaSul !== 'undefined') {
             // ESQUEMA DO RIO (ZonaSul): o CENTRO (−210..210) fica em grade, com as diagonais e a praça; a faixa OESTE do sul (x ≤ −168,
-            // o viaduto) também; o NORTE e o resto do SUL (a orla em diagonal: Botafogo, Copacabana, Ipanema) são traçados orgânicos.
+            // o viaduto) também; o NORTE e o resto do SUL (a orla em diagonal: Botafumo, Capacabana, Ipagrana) são traçados orgânicos.
             const ZS = -210, XW = -168, V = this.districts.viaduct;
             // (no sul, as linhas retas vão como polilinhas: a ponta delas na orla/Contorno é resolvida pelo RoadPlan como a das ruas
             // orgânicas; as que seguram as pontas do viaduto são âncoras — o pé dele não é podado como beco)
@@ -589,7 +589,7 @@ const CityGrid = {
     },
     _pickIsland(i, j, x0, z0, x1, z1) {
         const r = this._rand(i + 400, j + 400), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-        // ILHA DO GOVERNADOR: bairro residencial, comércio ao longo da avenida central, pracinhas
+        // ILHA DO DESGOVERNADOR: bairro residencial, comércio ao longo da avenida central, pracinhas
         const dv = typeof ZonaSul !== 'undefined' ? ZonaSul.isleDepth(cx, cz) : null;
         if (dv !== null) {
             const big = (x1 - x0) * (z1 - z0) > 3400, b = r < (big ? 0.18 : 0.06) ? 'park' : dv < 40 ? (r < 0.6 ? 'commercial' : 'residential') : (r < 0.8 ? 'residential' : 'commercial');

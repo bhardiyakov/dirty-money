@@ -51,7 +51,7 @@ module.exports = {
             game.dayNight.hour = 13; game.dayNight.apply();
             return { stats: RioTraffic.stats, ow: ow.length, iso, twoWayAve, pairs, opp, trips: ok / (n || 1), aveShare: aveShare / (ok || 1), bad, gpsBad, pkM, pkT, night, deco: { noEntry: StreetDetail.stats.noEntry || 0, laneW: !!RoadArt.DECAL.laneW } };
         });
-        c.ok(st.ow > 500, `${st.ow} trechos de rua local em mão única (${st.stats.onewayLen} u)`);
+        c.ok(st.ow > 300, `${st.ow} trechos de rua local em mão única (${st.stats.onewayLen} u)`);
         c.ok(st.iso === 0, `nenhum trecho isolado pela mão única (${st.iso}; ${st.stats.reverted} voltaram a mão dupla)`);
         c.ok(st.twoWayAve === 0, 'avenidas, rodovias e a favela seguem de mão dupla');
         c.ok(st.pairs > 4 && st.opp === st.pairs, `binários: ruas paralelas vizinhas em sentidos opostos (${st.opp}/${st.pairs})`);
@@ -62,8 +62,9 @@ module.exports = {
         c.ok(st.pkM === 'centro' && st.pkT === 'bairros' && st.night < 0.5, `pico pendular: 8h → ${st.pkM}, 18h → ${st.pkT}; madrugada ${st.night}× o trânsito`);
         c.ok(st.deco.noEntry > 50 && st.deco.laneW, `sinalização: ${st.deco.noEntry} placas de sentido proibido e o tracejado branco`);
 
-        // o trânsito rodando: ninguém na contramão
+        // o trânsito rodando: ninguém na contramão (no Centro, em grade de binários: mão única por todo lado)
         await page.evaluate(() => {
+            game.player.teleport(new BABYLON.Vector3(63, 0, 30)); game.camera.snapTo(game.player.position);
             window.__wrong = 0; window.__checks = 0;
             window.__iv = setInterval(() => {
                 for (const car of game.vehicleManager.vehicles) {

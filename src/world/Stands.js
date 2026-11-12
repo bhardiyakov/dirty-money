@@ -1,6 +1,6 @@
 // ============================================================================
 // Stands — BARRACAS FIXAS onde se compra na rua, com o cardápio e os efeitos do carrinho do ambulante (StreetLife): os QUIOSQUES do
-// calçadão (Landmarks), o CAFÉ do terraço do Corcovado, a BARRACA DE CHURRASQUINHO da esplanada do Maracanã e os quiosques e ambulantes da
+// calçadão (Landmarks), o CAFÉ do terraço do Corcundão, a BARRACA DE CHURRASQUINHO da esplanada do Maracutaia e os quiosques e ambulantes da
 // orla da Lagoa (Lagoa). Comer mata a fome (Physique.eat), as
 // bebidas matam a sede (Needs.drink), tudo cura um pouco; o dinheiro sai da carteira.
 //   add({ id, name, emo, x, z, r, h, hours, items })   registra (quem monta o lugar); h: a altura do piso (Walkways), 0 no chão

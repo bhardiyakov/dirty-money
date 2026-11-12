@@ -3,7 +3,7 @@
 //   • camada de baixo: o TERRENO pintado em alta definição (MapPaint: mar com degradê de profundidade e espuma, relevo sombreado,
 //     copas da mata, talhões das fazendas) — em ladrilhos por nível de zoom, pintados quando aparecem;
 //   • por cima, VETORIAL e só do que está na tela: calçadas e quarteirões, ruas com meio-fio (rodovias e a Via Expressa em laranja),
-//     prédios com o telhado de cada um e a sombra para o sudeste, árvores dos parques, os marcos (Landmarks: Maracanã, Cristo,
+//     prédios com o telhado de cada um e a sombra para o sudeste, árvores dos parques, os marcos (Landmarks: Maracutaia, Cristo,
 //     bondinho, calçadão, píeres e barcos, pontes estaiadas), o autódromo, nomes de ruas e os territórios — drawView.
 // Mapeia o mundo para o canvas por (cx, cz, scale = px por unidade); +Z (norte) fica no topo.
 // ============================================================================

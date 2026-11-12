@@ -1,12 +1,12 @@
 // ============================================================================
-// ZonaSul — o traçado orgânico da cidade e da ilha, seguindo o esquema do Rio (Zona Sul e Centro): ruas que cresceram sem plano.
-//   • NORTE da cidade (z > 210 — Santa Teresa e arredores): ruas N-S onduladas e travessas curtas DESENCONTRADAS entre elas (cada faixa
+// ZonaSul — o traçado orgânico da cidade e da ilha, seguindo o esquema da Zona Sul e do Centro (sátira do Rio): ruas que cresceram sem plano.
+//   • NORTE da cidade (z > 210 — Santa Treta e arredores): ruas N-S onduladas e travessas curtas DESENCONTRADAS entre elas (cada faixa
 //     entre duas ruas tem as suas), cortadas por algumas avenidas leste-oeste que vão da Beira-Mar até a Av. do Contorno.
 //   • CENTRO (−210..210): a grade antiga com as diagonais e a praça — fica como era (CityGrid).
-//   • SUL da cidade (Botafogo, Copacabana, Ipanema): a costa vira uma ORLA EM DIAGONAL, da Beira-Mar (z ≈ −210) até a praia do sul; a
-//     Av. Atlântica corre por ela com o calçadão e a areia larga até o mar. As ruas acompanham a curva da praia, com travessas
-//     desencontradas; a oeste de x = −168 fica a faixa reta do viaduto (Leblon).
-//   • ILHA DO GOVERNADOR: a Av. Litorânea em volta, uma avenida central de norte a sul (Estrada do Galeão) e um labirinto de ruas
+//   • SUL da cidade (Botafumo, Capacabana, Ipagrana): a costa vira uma ORLA EM DIAGONAL, da Beira-Mar (z ≈ −210) até a praia do sul; a
+//     Av. Atlântida corre por ela com o calçadão e a areia larga até o mar. As ruas acompanham a curva da praia, com travessas
+//     desencontradas; a oeste de x = −168 fica a faixa reta do viaduto (Leblão).
+//   • ILHA DO DESGOVERNADOR: a Av. Litorânea em volta, uma avenida central de norte a sul (Estrada do Galinhão) e um labirinto de ruas
 //     onduladas e travessas desencontradas; as três pontes descem em avenidas que cruzam até a central.
 //
 // Malha CURVILÍNEA: (u, v) → mundo = ponto da ESPINHA a u ao longo dela + v na normal + um tremido suave do mundo (que some perto das
@@ -203,12 +203,9 @@ const ZonaSul = {
 	_names(list, rng) { const a = list.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } let k = 0; return () => a[k++ % a.length]; },
 
 	// ================================================================== NORTE da cidade
-	N_LONG: ['R. Almirante Alexandrino', 'R. Joaquim Murtinho', 'R. Paschoal Carlos Magno', 'R. Monte Alegre', 'R. Hermenegildo de Barros', 'R. Áurea',
-		'R. do Riachuelo', 'R. Evaristo da Veiga', 'R. Taylor', 'R. do Lavradio', 'R. dos Inválidos', 'R. Mem de Sá'],
-	N_SHORT: ['Ladeira do Castro', 'R. Dias de Barros', 'R. Murtinho Nobre', 'R. Cândido Mendes', 'Ladeira de Santa Teresa', 'R. Francisco Muratori',
-		'R. Gonçalves Fontes', 'Travessa do Mosqueira', 'R. Leopoldo Fróes', 'R. Felício dos Santos', 'R. Silvio Romero', 'Ladeira do Meireles', 'R. Oriente',
-		'R. Santa Cristina', 'R. Bento Lisboa', 'R. do Catete', 'R. Pedro Américo', 'R. Benjamin Constant', 'R. Hermenegildo', 'R. Cassiano'],
-	N_AVES: [['Av. Presidente Vargas', 302], ['Av. Mem de Sá', 463], ['Av. Rio Branco', 635], ['Av. Rodrigues Alves', 790]],
+	N_LONG: ['R. Almirante Atrasadinho', 'R. Joaquim Marmita', 'R. Pascoal Carlos Mago', 'R. Monte Alegria', 'R. Hermengarda de Barro', 'R. Áurea Fiado', 'R. do Riacho Seco', 'R. Evaristo da Vaga', 'R. Tailor Suíço', 'R. do Lava-Jato', 'R. dos Encostados', 'R. Nem de Cá'],
+	N_SHORT: ['Ladeira do Castigo', 'R. Dias de Barro', 'R. Murtinho Pobre', 'R. Cândido Mentes', 'Ladeira da Santa Treta', 'R. Francisco Muquirana', 'R. Gonçalves Fofoca', 'Travessa do Mosquito', 'R. Leopoldo Frouxo', 'R. Felício dos Tantos', 'R. Sílvio Romeu', 'Ladeira do Meio-Fio', 'R. Ocidente Fiado', 'R. Santa Cristaleira', 'R. Bento Lixoa', 'R. do Calote', 'R. Pedro Amnésico', 'R. Benjamin Inconstante', 'R. Hermenegildo Gil', 'R. Cassiano Cansado'],
+	N_AVES: [['Av. Presidente Vagal', 302], ['Av. Mem de Lá', 463], ['Av. Rio Barrento', 635], ['Av. Rodrigo Alvarás', 790]],
 	cityNorth(P, CG, Z0 = 210) {
 		const rng = Pixel.rng(15650301), XB = 168;
 		const F = this.frame([[XB, Z0], [XB, 1400]], 1);                              // espinha: a Beira-Mar; para dentro = oeste
@@ -233,7 +230,7 @@ const ZonaSul = {
 	},
 
 	// ================================================================== SUL da cidade: a orla em diagonal
-	// A costa (Botafogo → Copacabana → Ipanema → Leblon), do esquema: da Beira-Mar descendo em curva até a praia do sul.
+	// A costa (Botafumo → Capacabana → Ipagrana → Leblão), do esquema: da Beira-Mar descendo em curva até a praia do sul.
 	COAST: [[205, -100], [181, -213], [170, -385], [127, -535], [73, -685], [-2, -814], [-120, -921], [-271, -936], [-420, -940]],
 	_coastFrame() {
 		if (this.coast) return this.coast;
@@ -248,14 +245,10 @@ const ZonaSul = {
 		const q = this._coastFrame().F.uv(x, z);
 		return q.v;
 	},
-	// Areia larga entre a Av. Atlântica e o mar
+	// Areia larga entre a Av. Atlântida e o mar
 	coastSand(x, z) { return z < -150 && z > -950 && x > -140 && x < 300 && this.coastDist(x, z) < -9; },
-	S_LONG: ['R. Barata Ribeiro', 'Av. N. S. de Copacabana', 'R. Tonelero', 'R. Pompeu Loureiro', 'R. Voluntários da Pátria', 'R. São Clemente',
-		'R. Visconde de Pirajá', 'R. Prudente de Morais', 'R. Barão da Torre', 'R. Humaitá'],
-	S_SHORT: ['R. Siqueira Campos', 'R. Figueiredo de Magalhães', 'R. Santa Clara', 'R. Constante Ramos', 'R. Xavier da Silveira', 'R. Bolívar',
-		'R. Souza Lima', 'R. Miguel Lemos', 'R. Joaquim Nabuco', 'R. Francisco Sá', 'R. Sá Ferreira', 'R. Rainha Elizabeth', 'R. Farme de Amoedo',
-		'R. Vinícius de Moraes', 'R. Garcia d\'Ávila', 'R. Maria Quitéria', 'R. Joana Angélica', 'R. Teixeira de Melo', 'R. Belfort Roxo', 'R. Duvivier',
-		'R. Ronald de Carvalho', 'R. Hilário de Gouveia', 'R. Dias da Rocha', 'R. Paula Freitas', 'R. Fernando Mendes', 'R. Real Grandeza', 'R. General Polidoro'],
+	S_LONG: ['R. Barata Rabeira', 'Av. N. S. da Capacabana', 'R. Tonel Velho', 'R. Pompeu Lourinho', 'R. Voluntários da Preguiça', 'R. São Clementino', 'R. Visconde de Piranha', 'R. Prudente de Mortais', 'R. Barão da Torreira', 'R. Humaitá-Tá'],
+	S_SHORT: ['R. Siqueira Calmos', 'R. Figueiredo de Mangalhães', 'R. Santa Clareza', 'R. Constante Ramela', 'R. Xavier da Silvestre', 'R. Bolivarzinho', 'R. Souza Lixa', 'R. Miguel Lerdo', 'R. Joaquim Nabico', 'R. Francisco Sei-Lá', 'R. Sá Ferrenha', 'R. Rainha Elisabelha', 'R. Farme de Amoeba', 'R. Vinícius de Mais ou Menos', "R. Garcia d'Ávida", 'R. Maria Quitanda', 'R. Joana Angelical', 'R. Teixeira de Mel', 'R. Belfort Rouco', 'R. Duvideo', 'R. Ronaldo de Carvão', 'R. Hilário de Goiaba', 'R. Dias da Roça', 'R. Paula Feitas', 'R. Fernando Mentes', 'R. Real Pobreza', 'R. General Polidoro Fiado'],
 	citySouth(P, CG, XW = -168, ZN = -210) {
 		const rng = Pixel.rng(19611004), { F } = this._coastFrame();
 		const bound = (x, z) => Math.max(z - ZN, XW - x);                               // fora: ao norte da reta z = −210 ou a oeste de x = −168
@@ -274,7 +267,7 @@ const ZonaSul = {
 		for (let i = 0; i + 1 < par.length; i++) bands.push({ from: { p: i }, to: { p: i + 1 } });
 		bands.push({ from: { p: par.length - 1 }, to: { bound: 1 } });
 		// do mar até a borda (as que atravessam tudo): umas poucas transversais compridas
-		// (só no trecho da orla a leste da faixa do viaduto: além de x = −168 a costa é o Leblon, em grade)
+		// (só no trecho da orla a leste da faixa do viaduto: além de x = −168 a costa é o Leblão, em grade)
 		let uMax = F.L; for (let u = 0; u < F.L; u += 4) { const p = F.at(u); if (p.x < XW + 14) { uMax = u; break; } }
 		let uMin = 0; for (let u = 0; u < F.L; u += 4) { const p = F.at(u); if (p.z < ZN - 14) { uMin = u; break; } }
 		const longT = [];
@@ -301,15 +294,14 @@ const ZonaSul = {
 		tr.push(...longT.filter(inside));
 		for (const t of tr) { t.name = shortName(); t.cls = 'city'; t.dir = 0; }
 		const n = this.grid(P, { F, warp: 8, seed: 733, fade, bound, O: CG.cityO, district: 'city', pv: false, par, tr, rng });
-		console.log(`[ZONA SUL] Botafogo/Copacabana/Ipanema: ${n} ruas`);
+		console.log(`[ZONA SUL] Botafumo/Capacabana/Ipagrana: ${n} ruas`);
 	},
 	inSouth(x, z) { return z < -210 && x > -168 && this.coastDist(x, z) > -4; },
 
-	// ================================================================== ILHA DO GOVERNADOR
-	I_LONG: ['Estrada do Galeão', 'R. Cambaúba', 'R. Formosa do Zumbi', 'R. Haroldo Lobo', 'R. Ipiru', 'R. Jacinto Ribeiro', 'R. Magno Martins', 'R. Uçá', 'R. Orestes Barbosa'],
-	I_SHORT: ['R. Capitão Barbosa', 'R. Cardeal Câmara', 'R. Maldonado', 'R. Aracaju', 'R. Colina', 'R. Ilha das Flores', 'R. Itaoca', 'R. Guarabu', 'R. Freguesia',
-		'R. Engenho Velho', 'R. Pracinhas', 'R. Bananal', 'R. Cocotá', 'R. Tauá', 'R. Ribeira', 'R. Zumbi', 'R. Moneró', 'R. Jardim Guanabara', 'R. Portuguesa', 'R. Pitangueiras'],
-	ISLE_AVES: ['Av. Paranapuã', 'Estrada do Cacuia', 'Av. Maestro Paulo e Silva'],
+	// ================================================================== ILHA DO DESGOVERNADOR
+	I_LONG: ['Estrada do Galinhão', 'R. Cambalhota', 'R. Formosa do Zumbido', 'R. Haroldo Lobão', 'R. Ipiranguinha', 'R. Jacinto Ribeirão', 'R. Magno Martelo', 'R. Uçá-Uçá', 'R. Orestes Barbudo'],
+	I_SHORT: ['R. Capitão Barbudo', 'R. Cardeal Camarão', 'R. Malandrado', 'R. Aracajuba', 'R. Colina Torta', 'R. Ilha das Pulgas', 'R. Itaoquinha', 'R. Guarabu-Bu', 'R. Freguesia Fiada', 'R. Engenho Velhaco', 'R. Pracinha Sem Praça', 'R. Bananal', 'R. Cocotó', 'R. Tauá-Tauá', 'R. Ribeirinha', 'R. Zumbido', 'R. Monerô', 'R. Jardim Guanaburro', 'R. Portuguesinha', 'R. Pitangueiras'],
+	ISLE_AVES: ['Av. Paranapuxa', 'Estrada do Cacunda', 'Av. Maestro Paulo e Silvio'],
 	governador(P, CG, O, bridges) {
 		const rng = Pixel.rng(19520120);
 		// espinha: o meio da ilha, de sul a norte; v positivo para o oeste (as pontes)
@@ -336,11 +328,11 @@ const ZonaSul = {
 		for (const t of tr) { t.name = shortName(); t.cls = 'isl'; t.dir = 0; }
 		tr.push(...br);
 		const n = this.grid(P, { F, warp: 10, seed: 761, fade: (u, v, x, z) => Math.min(1, Math.abs(v) / 20 + 0.0), O, district: 'island', pv: true, par, tr, rng });
-		console.log(`[ZONA SUL] Ilha do Governador: ${n} ruas`);
+		console.log(`[ZONA SUL] Ilha do Desgovernador: ${n} ruas`);
 	},
 	isleDepth(x, z) { return this.isle ? Math.abs(this.isle.F.uv(x, z).v) : null; },
 
-	// Depois do RoadPlan.build: a orla em diagonal ganha os nomes (Atlântica, Vieira Souto, Delfim Moreira).
+	// Depois do RoadPlan.build: a orla em diagonal ganha os nomes (Atlântida, Vieira Sujo, Golfinho Moreira).
 	names() {
 		if (!this.coast) return;
 		const F = this.coast.F;
@@ -349,10 +341,10 @@ const ZonaSul = {
 			const m = RoadPlan.at(e, e.len / 2);
 			if (m.z > -120 || Math.abs(this.coastDist(m.x, m.z)) > 22) continue;
 			const u = F.uv(m.x, m.z).u / F.L;
-			e.name = u < 0.62 ? 'Av. Atlântica' : m.x > -200 ? 'Av. Vieira Souto' : 'Av. Delfim Moreira';
+			e.name = u < 0.62 ? 'Av. Atlântida' : m.x > -200 ? 'Av. Vieira Sujo' : 'Av. Golfinho Moreira';
 		}
 	},
-	BEACH_AVES: new Set(['Av. do Contorno', 'Av. Vieira Souto', 'Av. Delfim Moreira', 'Av. Atlântica']),
+	BEACH_AVES: new Set(['Av. do Contorno', 'Av. Vieira Sujo', 'Av. Golfinho Moreira', 'Av. Atlântida']),
 };
 
 function CG_chaikin(P) {

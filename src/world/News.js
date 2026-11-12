@@ -17,7 +17,7 @@ const News = {
     load(s) { this.items = (s && s.items) || []; this.pending = (s && s.pending) || []; },
 
     _d(e) { return e.district && typeof Empire !== 'undefined' && Empire.DISTRICTS[e.district] ? Empire.DISTRICTS[e.district].name : 'na cidade'; },
-    AT: { favela: 'na Favela do Morro', centro: 'no Distrito Financeiro', comercio: 'no Comércio', residencial: 'nos bairros residenciais', orla: 'na Orla', industrial: 'no Porto', ilha: 'na Ilha do Governador', periferia: 'na Periferia', mirante: 'no Morro do Mirante', roca: 'na Vila da Roça', serra: 'no Alto da Serra' },
+    AT: { favela: 'na Favela do Morro', centro: 'no Distrito Financeiro', comercio: 'no Comércio', residencial: 'nos bairros residenciais', orla: 'na Orla', industrial: 'no Porto', ilha: 'na Ilha do Desgovernador', periferia: 'na Periferia', mirante: 'no Morro do Mirante', roca: 'na Vila da Roça', serra: 'no Alto da Serra' },
     _no(e) { return (e && this.AT[e.district]) || 'na cidade'; },
     _pick(a) { return a[Math.floor(Math.random() * a.length)]; },
     _now() { return { day: typeof Economy !== 'undefined' ? Economy.day : 0, hour: window.game && window.game.dayNight ? window.game.dayNight.hour : 12 }; },
@@ -123,11 +123,11 @@ const News = {
         if (h < 10) a.push('Um pingado e um pão na chapa, por favor.', 'Bom dia! Que preguiça…');
         if (typeof Maracana !== 'undefined' && Maracana.built) {                                         // os marcos da cidade entram na conversa
             const M = Maracana, sc = M.score || [0, 0];
-            a.push(h >= 14 && h < 23 ? `Hoje tem ${M.TEAMS[0]}-${M.TEAMS[1]} no Maracanã! O ingresso é ${brl(M.TICKET)}.` : 'Domingo eu vou no Maracanã, nem que seja de geral.');
+            a.push(h >= 14 && h < 23 ? `Hoje tem ${M.TEAMS[0]}-${M.TEAMS[1]} no Maracutaia! O ingresso é ${brl(M.TICKET)}.` : 'Domingo eu vou no Maracutaia, nem que seja de geral.');
             if (sc[0] + sc[1] > 0) a.push(`Viu o jogo? ${M.TEAMS[0]} ${sc[0]} × ${sc[1]} ${M.TEAMS[1]}!`);
         }
         if (typeof Corcovado !== 'undefined' && Corcovado.built) a.push('Já subiu o Corcovado de trem? A vista lá de cima é outra coisa.', 'Meu primo vende água de coco no calçadão, passa lá.');
-        if (typeof Landmarks !== 'undefined' && Landmarks._cabins) a.push('Leva a namorada no bondinho do Pão de Açúcar, no fim da tarde. Imperdível.');
+        if (typeof Landmarks !== 'undefined' && Landmarks._cabins) a.push('Leva a namorada no bondinho do Pão de Mel, no fim da tarde. Imperdível.');
         return this._pick(a);
     },
 

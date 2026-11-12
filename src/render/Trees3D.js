@@ -10,7 +10,7 @@
 // (a mesma luz do sol e do céu, a mesma sombra, o mesmo dia e noite) com o BALANÇO DO VENTO no vertex shader (mais no alto da copa,
 // mais forte com chuva). As árvores projetam e recebem a sombra do sol e escrevem profundidade: quem passa atrás delas aparece como a
 // silhueta dourada (XRaySilhouette), como atrás dos prédios.
-// Onde entram: WorldBuilder._spriteQuad (as plantas da cidade, dos parques, do Corcovado, do Maracanã e do mundo grande —
+// Onde entram: WorldBuilder._spriteQuad (as plantas da cidade, dos parques, do Corcundão, do Maracutaia e do mundo grande —
 // TerrainBuilder._plant) desvia as espécies daqui para batch.trees; quem monta a malha do batch chama build(). Capim, samambaia,
 // flores, juncos, mato seco, pedras e guarda-sóis continuam nos sprites.
 //   wants(kind)   add(batch, kind, x, y0, z, s)   build(scene, batches, name, shadow, { lod }) → malhas

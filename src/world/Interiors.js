@@ -40,7 +40,7 @@ const Interiors = {
 		// The safe house: one more door (on the grid only — `_doors` lists the shops, which the careers send the player to).
 		const home = this.safeHouseDoor();
 		if (home) { const k = key(Math.floor(home.x / C), Math.floor(home.z / C)); (grid.get(k) || grid.set(k, []).get(k)).push(home); }
-		// The Maracanã: the south gate is a door too (map/Maracana.js paints the room).
+		// The Maracutaia: the south gate is a door too (map/Maracana.js paints the room).
 		const st = typeof Maracana !== 'undefined' && Maracana.door();
 		if (st) { const k = key(Math.floor(st.x / C), Math.floor(st.z / C)); (grid.get(k) || grid.set(k, []).get(k)).push(st); }
 		this._key = key; this._C = C;

@@ -4,7 +4,7 @@
 // Geografia (inspirada no mapa de referência; +Z = norte):
 //   • CENTRO: a cidade em grade (CityGrid) no meio.
 //   • CONTINENTE a oeste/norte/sul: fazendas e campos, florestas, pântano com lagos, serras com paredões e o morro da favela.
-//   • ILHA DO GOVERNADOR a leste, do outro lado de um canal (3 pontes entram na Fase 2).
+//   • ILHA DO DESGOVERNADOR a leste, do outro lado de um canal (3 pontes entram na Fase 2).
 // Tudo determinístico (Config.world.seed). O TerrainBuilder desenha isto em pedaços; MapGeo/MapRenderer consultam.
 // ============================================================================
 
@@ -47,13 +47,13 @@ const WorldMap = {
         { x: -470, z: 500, r: 250, h: 46, name: 'Morro da Favela' },
         { x: -300, z: 800, r: 150, h: 30 },
         { x: -640, z: 800, r: 130, h: 26 },
-        { x: -975, z: 735, r: 185, h: 62, name: 'Corcovado' },                  // (o Cristo no topo: Landmarks)
-        { x: 338, z: -1066, r: 66, h: 44, name: 'Pão de Açúcar' },             // (na ponta da praia do sul)
+        { x: -975, z: 735, r: 185, h: 62, name: 'Corcundão' },                  // (o Cristo no topo: Landmarks)
+        { x: 338, z: -1066, r: 66, h: 44, name: 'Pão de Mel' },             // (na ponta da praia do sul)
         { x: 262, z: -1046, r: 40, h: 12 },                                     // (o morrinho do pé)
     ],
-    // O PÃO DE AÇÚCAR: um penedo na ponta leste da praia do sul, ligado a ela por um istmo de areia.
+    // O PÃO DE MEL: um penedo na ponta leste da praia do sul, ligado a ela por um istmo de areia.
     PAO: { x: 338, z: -1066, r: 74, neck: [[205, -1040], [300, -1060]], nr: 34 },
-    // A PRAIA DO SUL (x de-a): areia larga entre a Av. do Contorno e o mar, do Morro do Mirante ao Pão de Açúcar.
+    // A PRAIA DO SUL (x de-a): areia larga entre a Av. do Contorno e o mar, do Morro do Mirante ao Pão de Mel.
     BEACH: { x0: -112, x1: 300, z1: -900 },
     // Encostas LISAS dentro de uma serra (sem terraços nem paredões): onde há morro ocupado (o Morro do Mirante, na ponta da Serra do Sul).
     SMOOTH: [{ x: -252, z: -1024, r: 170 }],
@@ -284,13 +284,13 @@ const WorldMap = {
             const x = X(i), z = Z(j);
             let v = this._rawHeight(x, z);
             v *= Math.min(this._ss(10, 140, dUrb[k] * c), this._ss(6, 45, dRoad[k] * c));
-            if (x > 300 && hypot(x - this.PAO.x, z - this.PAO.z) > this.PAO.r + 40) v = Math.min(v, 1.5) * 0.5;      // ilha: quase plana (o Pão de Açúcar, não)
+            if (x > 300 && hypot(x - this.PAO.x, z - this.PAO.z) > this.PAO.r + 40) v = Math.min(v, 1.5) * 0.5;      // ilha: quase plana (o Pão de Mel, não)
             v *= this._ss(0, 28, dWater[k] * c);                                      // e desce até o nível do mar na costa
             if (typeof Lagoa !== 'undefined' && Lagoa.zone(x, z, Lagoa.OUT2 + 8)) v = 0;              // (a Lagoa: aterro plano — orla, avenida e prédios)
             h[k] = Math.max(0, v);
         }
 
-        // RELEVO DE VERDADE (Config.relief): o MACIÇO DO CORCOVADO — platô plano a `corcovado` m em volta do complexo do Cristo (raio Rp) e a
+        // RELEVO DE VERDADE (Config.relief): o MACIÇO DO CORCUNDÃO — platô plano a `corcovado` m em volta do complexo do Cristo (raio Rp) e a
         // encosta descendo até Rb (inclinação ≤ ~1, sem virar paredão); desvia dos quarteirões planos (autódromo, vila, posto: ficam em
         // patamar, com a pedra atrás) e desce até o nível do mar na costa. As estradas sobem junto (o relevo as desloca).
         const RC = Config.relief;
@@ -326,16 +326,16 @@ const WorldMap = {
             if (slope > cliffS && hh > 5) flags[k] |= 1;
             let b;
             const pao = hypot(x - this.PAO.x, z - this.PAO.z) < this.PAO.r + 30, BE = this.BEACH;
-            if (pao && hh > 6) b = hh > 30 || slope > 0.5 ? R.ROCK : R.FOREST;                                 // (o Pão de Açúcar: mata no pé, pedra no alto)
+            if (pao && hh > 6) b = hh > 30 || slope > 0.5 ? R.ROCK : R.FOREST;                                 // (o Pão de Mel: mata no pé, pedra no alto)
             else if (typeof Corcovado !== 'undefined' && hypot(x - Corcovado.C.x, z - Corcovado.C.z) < Corcovado.R + 14) b = R.FOREST;     // (o morro do Cristo: mata fechada)
-            else if (typeof Maracana !== 'undefined' && x > Maracana.AREA[0] && x < Maracana.AREA[2] && z > Maracana.AREA[1] && z < Maracana.AREA[3] && hh < 20) b = R.GRASS;     // (o complexo do Maracanã: gramados)
+            else if (typeof Maracana !== 'undefined' && x > Maracana.AREA[0] && x < Maracana.AREA[2] && z > Maracana.AREA[1] && z < Maracana.AREA[3] && hh < 20) b = R.GRASS;     // (o complexo do Maracutaia: gramados)
             else if (dSea[k] * c < 13 || (dSea[k] * c < 40 && x > 184 && x < 300 && Math.abs(z - this.STRIP.cz) < this.STRIP.hz + 60)) b = R.SAND;      // (orla da cidade: praia larga nas baías)
             else if (x > BE.x0 && x < BE.x1 && z < BE.z1 && hh < 8) b = R.SAND;                               // (a praia do sul)
             else if (typeof ZonaSul !== 'undefined' && ZonaSul.coastSand(x, z) && hh < 8) b = R.SAND;          // (a orla em diagonal: areia larga até a Atlântica)
             else if (typeof Lagoa !== 'undefined' && Lagoa.zone(x, z, Lagoa.OUT2 + 4)) b = R.GRASS;           // (a Lagoa: orla de grama, sem brejo nem praia)
             else if (dLake[k] * c < 11 && hh < 6) b = R.SWAMP;
             else if (x > 300 && !pao) b = R.RESORT;
-            else if (this.MASSIF && hypot(x - this.MASSIF.x, z - this.MASSIF.z) < this.MASSIF.r && hh > 12)      // (o maciço do Corcovado: Mata Atlântica,
+            else if (this.MASSIF && hypot(x - this.MASSIF.x, z - this.MASSIF.z) < this.MASSIF.r && hh > 12)      // (o maciço do Corcundão: Mata Atlântica,
                 b = (flags[k] & 1) || slope > 0.95 || (hh > this.MASSIF.top * 0.82 && this._fbm(x / 40, z / 40, 2, 92) > 0.55) ? R.ROCK : R.FOREST;      //  pedra nos paredões e no alto)
             else if (hh > 36 || (hh > 20 && slope > 0.26) || (flags[k] & 1)) b = R.ROCK;
             else if (this._inFavela(x, z, hh)) b = R.FAVELA;
@@ -410,7 +410,7 @@ const WorldMap = {
     _regions() {
         this.regions = [
             { name: 'CENTRO', x: -60, z: 0, size: 1 },
-            { name: 'ILHA DO GOVERNADOR', x: 610, z: 60, size: 1 },
+            { name: 'ILHA DO DESGOVERNADOR', x: 610, z: 60, size: 1 },
             { name: 'FAVELA DO MORRO', x: -470, z: 500, size: 0.9 },
             { name: 'SERRA DO NORTE', x: -950, z: 1040, size: 0.85 },
             { name: 'SERRA DO SUL', x: -900, z: -890, size: 0.85 },
@@ -419,16 +419,16 @@ const WorldMap = {
             { name: 'FAZENDAS', x: -560, z: 150, size: 0.85 },
             { name: 'CANAL', x: 315, z: 0, size: 0.6 },
             { name: 'MORRO DO MIRANTE', x: -250, z: -1050, size: 0.8 },
-            { name: 'LAGOA RODRIGO DE FREITAS', x: -404, z: -560, size: 0.7 },
-            { name: 'PÃO DE AÇÚCAR', x: 338, z: -1150, size: 0.75 },
-            { name: 'CORCOVADO · CRISTO REDENTOR', x: -978, z: 815, size: 0.7 },
+            { name: 'LAGOA RODRIGO DE FRITAS', x: -404, z: -560, size: 0.7 },
+            { name: 'PÃO DE MEL', x: 338, z: -1150, size: 0.75 },
+            { name: 'CORCUNDÃO · CRISTO ACOLHEDOR', x: -978, z: 815, size: 0.7 },
             // (os bairros do esquema do Rio: ZonaSul)
-            { name: 'SANTA TERESA', x: 40, z: 420, size: 0.75 },
-            { name: 'CATETE', x: 60, z: 250, size: 0.7 },
-            { name: 'BOTAFOGO', x: 90, z: -330, size: 0.75 },
-            { name: 'COPACABANA', x: -20, z: -560, size: 0.9 },
-            { name: 'IPANEMA', x: -30, z: -790, size: 0.75 },
-            { name: 'LEBLON', x: -245, z: -880, size: 0.7 },
+            { name: 'SANTA TRETA', x: 40, z: 420, size: 0.75 },
+            { name: 'CALOTE', x: 60, z: 250, size: 0.7 },
+            { name: 'BOTAFUMO', x: 90, z: -330, size: 0.75 },
+            { name: 'CAPACABANA', x: -20, z: -560, size: 0.9 },
+            { name: 'IPAGRANA', x: -30, z: -790, size: 0.75 },
+            { name: 'LEBLÃO', x: -245, z: -880, size: 0.7 },
         ];
         if (typeof Bairros !== 'undefined') for (const Z of Bairros.ZONES) this.regions.push({ name: Z.label, x: Z.lx, z: Z.lz, size: 0.8 });
     },
