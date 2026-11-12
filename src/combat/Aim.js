@@ -88,13 +88,20 @@ class Aim {
 			const rs = inp.rstick;
 			if (Math.hypot(rs.x, rs.y) > 0.25) { this._last.x = rs.x; this._last.y = rs.y; this._sT = 0.3; } else this._sT -= dt;
 			if (this._sT > 0) return this._fromStick(this._last, 'stick');
-			return inp.aimHeld ? this._fromStick(this._facing(0.5), 'stick') : null;
+			return inp.aimHeld ? this._fromStick(this._facing(0.5), 'stick', true) : null;
 		}
 		if (this.g.touch && this.g.touch.shown) return null;
 		return inp.mouseX >= 0 ? { x: inp.mouseX, y: inp.mouseY, kind: 'mouse' } : null;
 	}
-	_fromStick(v, kind) {
-		const c = this._chest(), R = Aim.STICK_REACH * Math.min(window.innerWidth, window.innerHeight);
+	// `screen`: v já é um vetor da tela (_facing). Senão, com o movimento absoluto (Config.camera.worldMove), o analógico aponta nos
+	// eixos do MAPA como o andar (cima = norte, esquerda = oeste): a direção no mundo é projetada para a tela, mantendo o alcance.
+	_fromStick(v, kind, screen = false) {
+		const c = this._chest(), R = Aim.STICK_REACH * Math.min(window.innerWidth, window.innerHeight), m = Math.hypot(v.x, v.y);
+		if (!screen && m > 1e-3 && Config.camera.worldMove) {
+			const a = Aim.stickAngle(v), p = this.g.player.position, f = this._screen(p.x + Math.sin(a) * 5, this._chestY(), p.z + Math.cos(a) * 5);
+			const dx = f.x - c.x, dy = f.y - c.y, d = Math.hypot(dx, dy) || 1;
+			return { x: c.x + dx / d * m * R, y: c.y + dy / d * m * R, kind };
+		}
 		return { x: c.x + v.x * R, y: c.y + v.y * R, kind };
 	}
 	// The way the player faces, as a stick vector of length `k` on the screen.
@@ -103,8 +110,9 @@ class Aim {
 		const dx = f.x - c.x, dy = f.y - c.y, d = Math.hypot(dx, dy) || 1;
 		return { x: dx / d * k, y: dy / d * k };
 	}
-	// Right stick (x right +, y down +) → world direction (rad, 0 = north), with the compass camera's turn. (Throwables)
-	static stickAngle(rs) { return Math.atan2(rs.x, -rs.y) + (typeof CompassCamera !== 'undefined' ? CompassCamera.yaw || 0 : 0); }
+	// Right stick (x right +, y down +) → world direction (rad, 0 = north): the map's axes with Config.camera.worldMove, else turned
+	// by the compass camera. (Throwables, _fromStick)
+	static stickAngle(rs) { return Math.atan2(rs.x, -rs.y) + (typeof CompassCamera !== 'undefined' ? CompassCamera.moveYaw() : 0); }
 	_chestY() { return this.g.player.baseY - 0.5 + Aim.AIM_HEIGHT; }
 	_chest() { const p = this.g.player.position; return this._screen(p.x, this._chestY(), p.z); }
 
