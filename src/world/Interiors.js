@@ -374,10 +374,21 @@ const Interiors = {
 		// Cache das salas pintadas: só as 4 mais recentes (cada uma é uma textura grande); as outras são refeitas se você voltar.
 		while (lru.length >= 4) {
 			const old = lru.shift(), o = this._rooms[old];
-			if (o && (!this.active || this.active.room !== o)) { const m = o.mesh.material; o.mesh.dispose(); if (m) { if (m.diffuseTexture) m.diffuseTexture.dispose(); m.dispose(); } delete this._rooms[old]; }
+			if (o && (!this.active || this.active.room !== o)) { if (o.i3d) o.i3d.dispose(); else { const m = o.mesh.material; o.mesh.dispose(); if (m) { if (m.diffuseTexture) m.diffuseTexture.dispose(); m.dispose(); } } delete this._rooms[old]; }
 		}
 		touch();
 		const data = shop.safehouse ? HouseView.stageRoom() : shop.stadium ? Maracana.room() : ShopStyles.get(shop.style, shop.variant, shop.reform || 0, !!shop.empty), IN = data.in, o = this.STAGE;
+		// EM 3D (art/Interior3D.js): a sala montada em volume a partir da gravação das peças — a câmera de 3ª pessoa anda dentro dela
+		let i3d = null;
+		if (typeof Interior3D !== 'undefined' && Interior3D.on && !shop.stadium) {
+			try { i3d = shop.safehouse ? Interior3D.buildHome(game.scene, data, o) : Interior3D.build(game.scene, data, o); } catch (e) { console.error('[LOJAS] sala 3D:', e); i3d = null; }
+		}
+		if (i3d) {
+			if (data.canvas && data.canvas.canvas) data.canvas.canvas.width = 0;                 // (as texturas já estão na GPU)
+			data.canvas = null; delete ShopStyles._cache[key];
+			i3d.setEnabled(false);
+			return (this._rooms[key] = { data, mesh: i3d.root, i3d });
+		}
 		const tex = data.canvas.toTexture(game.scene, { wrap: false, mips: false });
 		data.canvas = null; delete ShopStyles._cache[key];                             // os pixels já estão na GPU
 		tex.hasAlpha = true;
@@ -434,13 +445,17 @@ const Interiors = {
 	// `quiet`: waking up inside (no name flash).
 	_doEnter(game, shop, quiet = false) {
 		const room = this._room(shop), data = room.data, o = this.STAGE, pl = game.player;
-		this._backdrop().setEnabled(true); room.mesh.setEnabled(true);
+		this._backdrop().setEnabled(true);
+		this._bd.position.y = room.i3d ? -0.03 : 0.06;                              // (sala 3D: o fundo escuro fica abaixo do piso dela)
+		if (room.i3d) room.i3d.setEnabled(true); else room.mesh.setEnabled(true);
 		const ret = { x: shop.x, z: shop.z, face: shop.face };
 		this.active = { shop, data, room, ret, t: 0 };
-		this.obstacles = data.obs.map((s) => ({ x0: o.x + s.x0, z0: o.z + s.z0, x1: o.x + s.x1, z1: o.z + s.z1, h: s.h }));
+		// (sala 3D: os sólidos pela BASE de verdade — sem a folga da vista oblíqua, que no volume deixaria um vão atrás de cada móvel)
+		this.obstacles = room.i3d ? room.i3d.obstacles.map((s) => Object.assign({}, s)) : data.obs.map((s) => ({ x0: o.x + s.x0, z0: o.z + s.z0, x1: o.x + s.x1, z1: o.z + s.z1, h: s.h }));
 		this.obstacles.push({ x0: o.x + data.door.x0 - 0.1, z0: o.z - 6, x1: o.x + data.door.x1 + 0.1, z1: o.z - 0.25, h: 3 });      // tampa o vão da porta por fora: sem cair no vazio (a saída é o gatilho antes dele)
 		pl.teleport(new BABYLON.Vector3(o.x + data.spawn.x, 0, o.z + data.spawn.z));
 		pl.root.rotation.y = 0; pl.velocity.setAll(0);
+		if (room.i3d && typeof FootCamera !== 'undefined') FootCamera.reset(0);         // (sala 3D: a câmera de 3ª pessoa começa atrás dele, olhando para dentro)
 		// Loja com clientela viva (ShopLife: atendente, clientes e garçom com rotina): os figurantes fixos saem (fica só quem tem
 		// tipo do gerador e papel próprio — o segurança da joalheria, os da academia).
 		let life = false;
@@ -448,7 +463,7 @@ const Interiors = {
 		this._useActors(game, life ? data.patrons.filter((e) => e.type) : (data.clerk ? [data.clerk] : []).concat(data.patrons), shop);
 		const ar = this._exitArrow(game.scene); ar.setEnabled(true); ar.visibility = 0; this._tickArrow(game, 0);
 		if (shop.stadium) Maracana.onEnter(game, data);                         // catracas, o jogo rolando
-		this.zoom = shop.safehouse ? 0.36 : shop.stadium ? 0.9 : 0.5;  // (o barraco é um cômodo só: a câmera chega mais perto; o estádio é grande)
+		this.zoom = room.i3d ? (shop.safehouse ? 0.34 : 0.42) : shop.safehouse ? 0.36 : shop.stadium ? 0.9 : 0.5;  // (o barraco é um cômodo só: a câmera chega mais perto; o estádio é grande)
 		game.camera.setZoomMul(this.zoom);
 		game.camera.snapTo(this.focus(pl.position, game.camera, game.gameEngine.engine.getAspectRatio(game.camera.camera)));
 		game.scene.physicsEnabled = false;
@@ -494,7 +509,8 @@ const Interiors = {
 		this._dropLife();
 		if (typeof Bubbles !== 'undefined') Bubbles.clear();
 		if (typeof News !== 'undefined') News.tvOff();
-		a.room.mesh.setEnabled(false); this._bd.setEnabled(false);
+		if (a.room.i3d) a.room.i3d.setEnabled(false); else a.room.mesh.setEnabled(false);
+		this._bd.setEnabled(false);
 		if (this._arrow) this._arrow.setEnabled(false);
 		for (const x of this._actors) x.setVisible(false);
 		for (const x of this._gymActors || []) x.setVisible(false);
@@ -528,7 +544,7 @@ const Interiors = {
 			for (const m of ShopLife.meshes()) stage.add(m);
 			if (this._arrow) stage.add(this._arrow);
 			for (const m of game.scene.meshes) {
-				if (!m.isEnabled(false) || stage.has(m)) continue;
+				if (!m.isEnabled(false) || stage.has(m) || m._char3d) continue;                  // (os bonecos 3D: art/Char3D.js cuida deles)
 				const bi = m.getBoundingInfo && m.getBoundingInfo(), cx = bi ? bi.boundingBox.centerWorld.x : m.position.x;
 				if (cx > lim && !m.alwaysSelectAsActiveMesh) continue;                // (o palco da loja e o que está nele)
 				if (m === game.player.root || (game.player.actor && m === game.player.actor.mesh)) continue;
@@ -560,6 +576,7 @@ const Interiors = {
 		if (typeof Robbery !== 'undefined') Robbery.update(dt, game);
 		if (typeof Heists !== 'undefined') { Heists.interiorTick(dt); Heists.scoutTick(dt, game); }
 		this._tickArrow(game, dt);
+		if (a.room.i3d) a.room.i3d.update(game.scene.activeCamera, dt);                 // (sala 3D: as paredes na frente da câmera ficam transparentes)
 		const o = this.STAGE, p = game.player.position, d = a.data.door;
 		const ax = game.input.getMoveAxis();
 		if (Math.abs(ax.x) + Math.abs(ax.z) < 0.1 && a.t > 0.3) a.released = true;                    // a saída só vale depois de soltar as teclas uma vez
@@ -588,9 +605,11 @@ const Interiors = {
 	// Estação de academia livre ao alcance (uso 'gym_*'), ou null.
 	gymUse(game) { for (const k of ['gym_squat', 'gym_bench', 'gym_curl']) { const u = this.useNear(game, k, 1.0); if (u) return u; } return null; },
 
-	// Enquadramento da câmera na sala (centro, com folga para a parede norte pintada).
+	// Sala 3D (art/Interior3D.js)? Lá dentro a câmera é a de 3ª pessoa, como na rua.
+	get is3d() { return !!(this.active && this.active.room && this.active.room.i3d); },
+	// Enquadramento da câmera na sala (centro, com folga para a parede norte pintada). Sala 3D: segue o jogador.
 	focus(pos, cam, aspect) {
-		const a = this.active, o = this.STAGE; if (!a) return pos;
+		const a = this.active, o = this.STAGE; if (!a || (a.room && a.room.i3d)) return pos;
 		const W = a.data.W, D = a.data.D, view = cam.viewHalf * (this.zoom || 0.5);
 		const hx = W / 2 + 0.8, hz = D / 2 + 1.1, cx = o.x + W / 2, cz = o.z + D / 2 + 1.1;
 		const halfW = view * Math.max(1, aspect), halfH = view, cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -605,7 +624,7 @@ const Interiors = {
 Interiors.debugEnter = function (style, v = 0) {
 	const p = game.player.position;
 	if (this.active) this._doLeave(game);
-	const shop = { id: 'dbg' + style + v, kind: style, style, name: Economy.nameOf(style, 'dbg' + style + v), district: 'city', biome: 'commercial', variant: v, x: p.x, z: p.z, face: 0 };
+	const shop = { id: 'dbg' + style + v, kind: style, style, name: Economy.STYLES[style] ? Economy.nameOf(style, 'dbg' + style + v) : style, district: 'city', biome: 'commercial', variant: v, x: p.x, z: p.z, face: 0 };
 	this._ret = null;
 	this._doEnter(game, shop);
 	return shop;

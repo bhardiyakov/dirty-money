@@ -986,7 +986,7 @@ class Game {
 		const indoors = this._walkIndoors();                                     // (lojas e casas: só anda — menos em assalto, golpe, missão, fuga)
 		this.player.update(move, indoors ? 0 : this.input.sprint, dt, indoors || this.input.moveTilt < Config.player.walkTilt);
 		this.camera.setAutoZoom(1, dt, true);                                            // (a loja já tem o enquadramento dela: sem zoom automático)
-		this.camera.setFlat(true);                                                       // (interiors are painted for the top-down camera)
+		this.camera.setFlat(!Interiors.is3d || decorating);                              // (salas pintadas: a câmera de cima; salas 3D: a de 3ª pessoa)
 		HomeDecor.update(dt, this);                                                      // modo decoração: WASD move a câmera, o mouse a peça
 		this.camera.follow(decorating ? HomeDecor.cameraFocus : Interiors.focus(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
 		Interiors.update(dt, this);

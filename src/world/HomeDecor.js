@@ -26,7 +26,7 @@
 
 const HomeDecor = {
     LEVEL: 0,
-    FLOOR_Y: 0.14,                                        // the painted floor of the stage room (Interiors._room)
+    get FLOOR_Y() { return typeof Interiors !== 'undefined' && Interiors.is3d ? 0.012 : 0.14; },      // the floor of the stage room: the 3D room (art/Interior3D.js) or the painted one (Interiors._room)
     WALL_THICKNESS: 0.7,
     DOOR_CLEARANCE: 2.4,
     USE_CLEARANCE: 0.9,
