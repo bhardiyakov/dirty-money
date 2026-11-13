@@ -25,11 +25,12 @@ module.exports = {
         };
         await page.evaluate(() => { Tutorial.skip(); game.gps = null; game.player.invulnerable = true; game.player.weapon = 'none'; });
 
-        // 1) dentro da safe house a câmera não gira (a arte é pintada para o norte)
-        const in0 = await cam();
+        // 1) dentro da safe house: na sala 3D (art/Interior3D.js) a câmera gira como na rua; na sala pintada, norte em cima
+        const in0 = await cam(), i3 = await page.evaluate(() => Interiors.is3d);
         await drag('right', 200);
         const in1 = await cam();
-        c.ok(in0.flat && Math.abs(in1.yaw) < 1e-6 && Math.abs(in1.user) < 1e-6, `nos interiores, norte em cima (giro ${in1.yaw.toFixed(3)})`);
+        if (i3) c.ok(!in0.flat && Math.abs(wrap(in1.yaw - in0.yaw) - 200 * K.mouse) < 0.08, `na sala 3D, a câmera gira (${(wrap(in1.yaw - in0.yaw) * 57.3).toFixed(0)}°)`);
+        else c.ok(in0.flat && Math.abs(in1.yaw) < 1e-6 && Math.abs(in1.user) < 1e-6, `nos interiores, norte em cima (giro ${in1.yaw.toFixed(3)})`);
         await leave(page);
         await gameWait(page, 0.5);
 

@@ -992,7 +992,9 @@ class Game {
 		this.camera.setFlat(!Interiors.is3d || decorating);
 		this.camera.footLift = 0;                              // (salas pintadas: a câmera de cima; salas 3D: a de 3ª pessoa)
 		HomeDecor.update(dt, this);                                                      // modo decoração: WASD move a câmera, o mouse a peça
-		this.camera.follow(decorating ? HomeDecor.cameraFocus : Interiors.focus(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
+		// (sala 3D: a câmera de 3ª pessoa atrás dele, como na rua; sala pintada e modo de decorar: a de cima)
+		if (Interiors.is3d && !decorating) this.camera.follow(this.player.position, dt, null, this.aim && this.aim.active ? null : this.player, true);
+		else this.camera.follow(decorating ? HomeDecor.cameraFocus : Interiors.focus(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
 		Interiors.update(dt, this);
 		if (!frozen && this.input.consumePress('e')) Interiors.interact(this);
 		if (!frozen && this.input.consumePress('b')) HomeDecor.toggle(this);
