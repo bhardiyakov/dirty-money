@@ -307,10 +307,11 @@ const WorldMap = {
                 const x = X(i), z = Z(j), d = hypot(x - C.x, z - C.z);
                 if (d >= Rb) continue;
                 const u = Math.min(1, (Rb - d) / (Rb - Rp)), f = 0.7 * u + 0.3 * u * u * (3 - 2 * u);
-                let m = P * f * (d <= Rp ? 1 : 0.95 + 0.1 * this._fbm(x / 120, z / 120, 3, 91));
+                let m = P * f * (1 + (this._fbm(x / 120, z / 120, 3, 91) - 0.5) * 0.1 * this._ss(Rp, Rp + 60, d));      // (o ruído entra aos poucos: sem degrau em volta do platô)
                 if (d > Rp) m *= this._ss(18, 90, dUrb[k] * c) * this._ss(0, 40, dWater[k] * c) * (keep.length ? this._ss(12, 85, kd(x, z)) : 1);
                 if (m > h[k]) h[k] = m;
             }
+            this._carveSerra(h, nx, nz, c, X, Z, P);
         }
         this._prof.heights = performance.now() - t0;
         // Inclinação -> paredões; biomas.
@@ -405,6 +406,43 @@ const WorldMap = {
         }
         this.cliffRects = out;
         CityGrid.addObstacles(out);
+    },
+
+    // A ESTRADA DA SERRA do Morro do Vigia (Corcovado.serraPath) ESCAVADA no maciço: o chão sob ela segue uma rampa contínua, do pé (a altura
+    // do chão ali) até o platô (P) onde ela entra nele; numa faixa de 8 u de cada lado do eixo o chão é o da rampa, e até 16 u ele volta ao
+    // relevo. Entre dois lances do zigue-zague fica o degrau do paredão (fora da pista). O PÉ DO BONDINHO (Corcovado.CABLE.a) ganha um
+    // patamar plano na altura do chão do pé.
+    _carveSerra(h, nx, nz, c, X, Z, P) {
+        const C = Corcovado, S = C.serraPath(), cum = [0];
+        for (let i = 1; i < S.length; i++) cum.push(cum[i - 1] + hypot(S[i][0] - S[i - 1][0], S[i][1] - S[i - 1][1]));
+        let sTop = cum[cum.length - 1];
+        for (let i = 0; i < S.length; i++) if (hypot(S[i][0] - C.C.x, S[i][1] - C.C.z) <= 92) { sTop = cum[i]; break; }
+        const W = Config.world, idx = (x, z) => Math.max(0, Math.min(nz - 1, Math.floor((z - W.minZ) / c))) * nx + Math.max(0, Math.min(nx - 1, Math.floor((x - W.minX) / c)));
+        const h0 = Math.min(h[idx(S[0][0], S[0][1])], h[idx(S[0][0], S[0][1] - 20)]), prof = (s) => h0 + (P - h0) * Math.min(1, s / sTop);      // (o pé: a altura do patamar ao lado — a estrada que chega não sobe degrau)
+        const CORE = 8, BLEND = 16;
+        let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+        for (const p of S) { x0 = Math.min(x0, p[0]); z0 = Math.min(z0, p[1]); x1 = Math.max(x1, p[0]); z1 = Math.max(z1, p[1]); }
+        const i0 = Math.max(0, Math.floor((x0 - BLEND - W.minX) / c)), i1 = Math.min(nx - 1, Math.floor((x1 + BLEND - W.minX) / c));
+        const j0 = Math.max(0, Math.floor((z0 - BLEND - W.minZ) / c)), j1 = Math.min(nz - 1, Math.floor((z1 + BLEND - W.minZ) / c));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+            const x = X(i), z = Z(j), k = j * nx + i;
+            let bd = Infinity, bs = 0;
+            for (let q = 0; q + 1 < S.length; q++) {
+                const a = S[q], b = S[q + 1], sx = b[0] - a[0], sz = b[1] - a[1], L2 = sx * sx + sz * sz || 1, t = Math.max(0, Math.min(1, ((x - a[0]) * sx + (z - a[1]) * sz) / L2));
+                const d = hypot(x - a[0] - sx * t, z - a[1] - sz * t);
+                if (d < bd) { bd = d; bs = cum[q] + t * Math.sqrt(L2); }
+            }
+            if (bd >= BLEND) continue;
+            const r = prof(bs), w = bd <= CORE ? 1 : 1 - this._ss(CORE, BLEND, bd);
+            h[k] = h[k] + (r - h[k]) * w;
+        }
+        // o patamar do pé do bondinho
+        const A = C.CABLE.a, hA = h[idx(A[0] + 14, A[1])];
+        for (let j = 0; j < nz; j++) {
+            const z = Z(j); if (Math.abs(z - A[1]) > 16) continue;
+            for (let i = 0; i < nx; i++) { const x = X(i); if (Math.abs(x - A[0]) > 16) continue; const d = Math.max(Math.abs(x - A[0]) - 8, Math.abs(z - A[1]) - 7, 0), w = 1 - this._ss(0, 8, d); h[j * nx + i] += (hA - h[j * nx + i]) * w; }
+        }
+        this._serraInfo = { h0, sTop: +sTop.toFixed(0), grade: +((P - h0) / sTop).toFixed(2) };
     },
 
     _regions() {

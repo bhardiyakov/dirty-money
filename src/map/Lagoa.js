@@ -73,7 +73,7 @@ const Lagoa = {
     },
     // Índice da beira mais perto da direção de (x, z).
     idxOf(x, z) { const a = Math.atan2(z - this.C.z, x - this.C.x); return Math.round(((a / (Math.PI * 2)) % 1 + 1) % 1 * this.N) % this.N; },
-    // O eixo da Av. Epitácio Pessoa: laço fechado (o primeiro ponto repetido no fim), a cada ~6 u.
+    // O eixo da Av. da Lagoa da Prata: laço fechado (o primeiro ponto repetido no fim), a cada ~6 u.
     ringPath() {
         const P = this.off(this.RING);
         return typeof RuralRoads !== 'undefined' ? RuralRoads._resample(P.concat([P[0]]), 6) : P.concat([P[0]]);

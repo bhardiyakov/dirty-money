@@ -39,13 +39,15 @@ const RuralRoads = {
         { id: 'D1', cls: 'dirt', name: 'Estrada da Favela', pts: [{ on: 'R5', near: [-600, -245] }, [-610, 0], [-600, 342]] },
         { id: 'D2', cls: 'dirt', name: 'Estrada do Engenho', pts: [{ on: 'R5', near: [-900, -250] }, [-890, 0], { on: 'R4', near: [-900, 186] }] },
         { id: 'D3', cls: 'dirt', name: 'Estrada das Fazendas', pts: [[-294, -30], [-336, -30], [-600, -20], { on: 'D2', near: [-895, -30] }] },
-        { id: 'D5', cls: 'dirt', name: 'Estrada da Serra do Meio', pts: [{ on: 'R4', near: [-975, 190] }, [-1030, 420], [-1020, 640]] },
+        // (rente à borda oeste do autódromo, onde o chão é o patamar plano dele — antes ela subia a encosta escavada e virava paredão; termina no
+        //  pé da ESTRADA DA SERRA, que sobe o morro em zigue-zague: Corcovado.serraPath)
+        { id: 'D5', cls: 'dirt', name: 'Estrada da Serra do Meio', pts: [{ on: 'R4', near: [-975, 190] }, [-1004, 330]] },      // (o resto: D5B, reto, abaixo)
         { id: 'D6', cls: 'dirt', name: 'Estrada do Sítio', pts: [{ on: 'R2', near: [-1190, 400] }, { on: 'D5', near: [-1030, 400] }] },
         { id: 'D7', cls: 'dirt', name: 'Estrada do Valão', pts: [{ on: 'R6', near: [-780, 342] }, [-660, 342]] },
         { id: 'D8', cls: 'dirt', name: 'Estrada do Morro', pts: [{ on: 'R6', near: [-780, 558] }, [-660, 558]] },
         { id: 'D9', cls: 'dirt', name: 'Estrada do Lago Grande', pts: [{ on: 'R7', near: [-552, -480] }, [-640, -430], [-720, -555], [-900, -560], [-1000, -440], { on: 'R5', near: [-1010, -250] }] },
         { id: 'D10', cls: 'dirt', name: 'Estrada da Lagoa Funda', pts: [{ on: 'R7', near: [-552, -680] }, [-600, -790], { on: 'R3', near: [-790, -850] }] },
-        { id: 'D11', cls: 'dirt', name: 'Estrada do Lago Norte', pts: [[-1020, 640], [-1100, 760], [-1040, 850], { on: 'R1', near: [-1000, 915] }] },
+        { id: 'D11', cls: 'dirt', name: 'Estrada do Lago Norte', pts: [[-1075, 790], [-1040, 850], { on: 'R1', near: [-1000, 915] }] },      // (do alto da serra; não desce mais o paredão)
         { id: 'D12', cls: 'dirt', name: 'Estrada da Serra Norte', pts: [{ on: 'R1', near: [-560, 890] }, [-520, 1000], [-430, 1060], [-336, 1080], [-294, 1080]] },
         // ---- Vila da Roça (bairros/Bairros.js): a estrada da vila, ao norte do lago, da Rodovia do Oeste à Estrada do Engenho
         { id: 'D13', cls: 'dirt', name: 'Estrada da Roça', pts: [{ on: 'R2', near: [-1208, 4] }, [-1120, 14], [-1040, -6], [-960, 4], { on: 'D2', near: [-893, 2] }] },
@@ -56,7 +58,7 @@ const RuralRoads = {
         // ---- caminhos (trilhas de terra estreitas e sinuosas; todas ligam duas vias — nada de beco sem saída)
         { id: 'T1', cls: 'trail', name: 'Trilha do Morro do Norte', pts: [{ on: 'R6', near: [-779, 700] }, [-700, 760], [-630, 800], [-600, 845], { on: 'R1', near: [-600, 885] }] },
         { id: 'T2', cls: 'trail', name: 'Trilha da Serra do Meio', pts: [{ on: 'R4', near: [-920, 188] }, [-970, 290], [-1070, 300], { on: 'D5', near: [-1028, 330] }] },
-        { id: 'T3', cls: 'trail', name: 'Trilha do Lago Norte', pts: [{ on: 'D11', near: [-1075, 800] }, [-930, 830], [-850, 780], [-860, 660], { on: 'R6', near: [-779, 620] }] },
+        { id: 'T3', cls: 'trail', name: 'Trilha do Lago Norte', pts: [{ on: 'D11', near: [-1075, 800] }, [-930, 830], [-850, 780], { on: 'R6', near: [-786, 770] }] },
         { id: 'T4', cls: 'trail', name: 'Caminho da Serra do Sul', pts: [{ on: 'R3', near: [-560, -895] }, [-650, -970], [-800, -990], { on: 'R3', near: [-880, -800] }] },
         { id: 'T5', cls: 'trail', name: 'Trilha dos Lagos', pts: [{ on: 'R5', near: [-1080, -250] }, [-1120, -150], [-1060, -60], { on: 'D2', near: [-893, -80] }] },
         { id: 'T6', cls: 'trail', name: 'Caminho da Praia', pts: [{ on: 'R7', near: [-552, -820] }, [-470, -1010], { on: 'R3', near: [-420, -925] }] },
@@ -65,12 +67,12 @@ const RuralRoads = {
         { id: 'T9', cls: 'trail', name: 'Trilha do Mirante', pts: [{ on: 'R1', near: [-720, 895] }, [-730, 1000], [-650, 1090], [-560, 1085], { on: 'D12', near: [-515, 1010] }] },
         { id: 'T10', cls: 'trail', name: 'Caminho da Margem', pts: [{ on: 'R5', near: [-700, -255] }, [-760, -300], [-880, -300], { on: 'R5', near: [-920, -252] }] },
         // ---- o Corcovado (o Cristo no alto: Landmarks) e o estádio
-        { id: 'T11', cls: 'serra', name: 'Estrada do Morro do Vigia', pts: [{ on: 'D5', near: [-1024, 600] }, [-992, 630], [-968, 655], [-925, 662], [-900, 700], [-898, 750], [-905, 790], { on: 'T3', near: [-893, 805] }] },      // (do pé do morro: o portão das escadarias, o elevador e a estação do trem)
-        // ---- a LAGOA (map/Lagoa.js): a Av. Epitácio Pessoa dá a volta nela (via 'LG', traçada antes de todas) e estas ruas a ligam
-        { id: 'LG1', cls: 'serra', name: 'Av. Borges de Medeiros', pts: [{ on: 'LG', near: [-505, -600] }, { on: 'R7', near: [-562, -600] }] },
-        { id: 'LG2', cls: 'serra', name: 'Rua Jardim Botânico', pts: [{ on: 'LG', near: [-405, -385] }, { on: 'R5', near: [-405, -250] }] },
-        { id: 'LG3', cls: 'serra', name: 'Rua Fonte da Saudade', pts: [{ on: 'LG', near: [-305, -520] }, [-294, -520]] },
-        { id: 'LG4', cls: 'serra', name: 'Rua Mário Ribeiro', pts: [{ on: 'LG', near: [-370, -738] }, [-294, -790]] },
+        { id: 'T11', cls: 'serra', name: 'Estrada do Morro do Vigia', pts: [{ on: 'SERRA', near: [-908, 682] }, [-900, 700], [-898, 750], [-905, 790], { on: 'T3', near: [-893, 805] }] },      // (do platô — a serra chega do pé do morro — para o norte, até a trilha do lago)
+        // ---- a LAGOA (map/Lagoa.js): a Av. da Lagoa da Prata dá a volta nela (via 'LG', traçada antes de todas) e estas ruas a ligam
+        { id: 'LG1', cls: 'serra', name: 'Av. Barão de Medeiros', pts: [{ on: 'LG', near: [-505, -600] }, { on: 'R7', near: [-562, -600] }] },
+        { id: 'LG2', cls: 'serra', name: 'Rua do Horto', pts: [{ on: 'LG', near: [-405, -385] }, { on: 'R5', near: [-405, -250] }] },
+        { id: 'LG3', cls: 'serra', name: 'Rua da Fonte', pts: [{ on: 'LG', near: [-305, -520] }, [-294, -520]] },
+        { id: 'LG4', cls: 'serra', name: 'Rua Mário Rangel', pts: [{ on: 'LG', near: [-370, -738] }, [-294, -790]] },
         { id: 'S4', cls: 'serra', name: 'Av. do Estádio', pts: [{ on: 'D3', near: [-456, -26] }, [-458, 18], [-358, 18], { on: 'D3', near: [-356, -28] }] },      // (passa ao sul do estacionamento do Colosso e volta: sem ponta solta)
     ],
 
@@ -96,9 +98,24 @@ const RuralRoads = {
             const ring = Lagoa.ringPath();
             this.routes.LG = ring;
             const h = Math.floor(ring.length / 2);                               // (em duas metades: um laço sozinho começa e acaba no mesmo nó)
-            P.addPath(ring.slice(0, h + 1), 'ave', { name: 'Av. Epitácio Pessoa', lagoa: true });
-            P.addPath(ring.slice(h), 'ave', { name: 'Av. Epitácio Pessoa', lagoa: true });
+            P.addPath(ring.slice(0, h + 1), 'ave', { name: 'Av. da Lagoa da Prata', lagoa: true });
+            P.addPath(ring.slice(h), 'ave', { name: 'Av. da Lagoa da Prata', lagoa: true });
             this._stampProx(ring);
+        }
+        // A ESTRADA DA SERRA do Morro do Vigia: traçado exato (as curvas fechadas não saem do A*), do pé — o fim da Estrada da Serra do
+        // Meio — até a praça do portão; o relevo é escavado ao longo dela (WorldMap.buildTerrain).
+        if (typeof Corcovado !== 'undefined' && Config.relief && Config.relief.on) {
+            const sp = Corcovado.serraPath();
+            this.routes.SERRA = sp;
+            P.addPath(sp, 'serra', { name: 'Estrada do Morro do Vigia' });
+            this._stampProx(sp);
+            // o fim da Estrada da Serra do Meio, RETO e rente à borda oeste do autódromo (o chão ali é o patamar plano dele): do fim do
+            // trecho traçado (D5) até o pé da serra
+            const tail = []; for (let z = 330; z < sp[0][1]; z += 12) tail.push([-1004, z]);
+            tail.push([-1004, sp[0][1] - 8], sp[0].slice());
+            this.routes.D5B = tail;
+            P.addPath(tail, 'dirt', { name: 'Estrada da Serra do Meio' });
+            this._stampProx(tail);
         }
         for (const r of this.NET) {
             const S = this.STYLE[r.cls], W = [], fixed = [];
