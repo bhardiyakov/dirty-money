@@ -246,7 +246,7 @@ Char3D.flashMesh = function (scene, parent, group) {
 		src.material = m; src.isPickable = false; src.setEnabled(false);
 	}
 	const f = src.clone('c3d_clarao', parent);
-	f.renderingGroupId = group; f.isPickable = false; f.setEnabled(false);
+	f.renderingGroupId = group; f.isPickable = false; f.setEnabled(false); f._char3d = true;
 	return f;
 };
 
@@ -286,7 +286,7 @@ class Char3DModel {
 		mesh.isUnIndexed = true; mesh._unIndexed = true;
 		mesh.subMeshes = [];
 		new BABYLON.SubMesh(0, 0, n, 0, n, mesh);
-		mesh.isPickable = false;
+		mesh.isPickable = false; mesh._char3d = true;
 		mesh.alwaysSelectAsActiveMesh = true;                 // (os pontos estão no espaço dos ossos: a caixa não vale)
 		mesh.setEnabled(false);
 		return mesh;
@@ -350,7 +350,7 @@ class Char3DActor {
 	_clone(src, name) {
 		const m = src.clone(name, this.root);
 		m.isUnIndexed = true; m._unIndexed = true;
-		m.isPickable = false; m.alwaysSelectAsActiveMesh = true;
+		m.isPickable = false; m.alwaysSelectAsActiveMesh = true; m._char3d = true;          // (_char3d: o Interiors não desliga ao entrar numa loja)
 		m.renderingGroupId = this.actor.mesh.renderingGroupId;
 		m.setEnabled(true);
 		return m;
@@ -447,7 +447,7 @@ class Char3DActor {
 			m.diffuseTexture = t; m.useAlphaFromDiffuseTexture = true; m.disableLighting = true; m.emissiveColor = BABYLON.Color3.White(); m.zOffset = -2;
 		}
 		const s = this.shadowMesh = BABYLON.MeshBuilder.CreateGround(this.name + '_sombra', { width: 0.9, height: 0.9 }, this.scene);
-		s.material = m; s.isPickable = false; s.parent = this.root; s.position.y = 0.04;
+		s.material = m; s.isPickable = false; s.parent = this.root; s.position.y = 0.04; s._char3d = true;
 	}
 
 	// ---------------------------------------------------------------- a cada quadro

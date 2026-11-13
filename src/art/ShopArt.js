@@ -39,7 +39,7 @@ class ShopCtx {
     // Paredes (`wall`) não estendem; `ShopCtx.EXTEND = false` volta ao colisor só da base (teste).
     solid(r, h, extra = {}) {
         const up = extra.wall || ShopCtx.EXTEND === false ? 0 : Math.min(0.7, h * this.K);
-        this.obs.push(Object.assign({ x0: r[0], z0: r[1], x1: r[2], z1: r[3] + up, h }, extra));
+        this.obs.push(Object.assign({ x0: r[0], z0: r[1], x1: r[2], z1: r[3] + up, h, bz1: r[3] }, extra));      // (bz1: a base de verdade — o interior 3D usa)
     }
     light(x, z, r, col, a) { this.lights.push({ x: this.X(x), y: this.Y(z), r: r * this.PPU, col, a }); }
 
@@ -749,6 +749,7 @@ class ShopCtx {
     _done(canvas) {
         return {
             canvas, in: this.IN, W: this.W, D: this.D, obs: this.obs, door: this.door, clerk: this.clerk, patrons: this.patrons,
+            S: this, rec: this._hd ? this._hd.ops : null,                       // (a gravação das peças: o interior 3D — art/Interior3D.js — monta a sala com ela)
             spawn: this._spawn(), uses: this.uses, life: { seats: this.seats, tables: this.tables, counters: this.counters, style: this.style },
         };
     }

@@ -77,7 +77,7 @@ const InteriorHD = {
 
     attach(S) {
         if (!this._styled) this._wrapStyles();
-        const rec = S._hd = { ops: [], prim: 0, raw: 0, cur: null }, c = S.c;
+        const rec = S._hd = { ops: [], prim: 0, raw: 0, cur: null, S }, c = S.c;
         c._hd = rec;
         for (const k of this.RAW) {
             const f = c[k];
@@ -97,7 +97,8 @@ const InteriorHD = {
         if (rec.prim > 0 || rec.raw > 0) return fn();
         const op = { k, a, prim: true, sub: HDPainter.prototype['p_' + k] ? null : [] };      // (os traços de dentro só servem a quem não tem pintor)
         rec.ops.push(op); rec.prim++; rec.cur = op;
-        try { return (op.r = fn()); } finally { rec.prim--; rec.cur = null; }
+        const S = rec.S; if (S) op.o0 = S.obs.length;                                         // (os sólidos que a peça registrou: o interior 3D)
+        try { return (op.r = fn()); } finally { rec.prim--; rec.cur = null; if (S) op.o1 = S.obs.length; }
     },
     _wrapStyles() {
         this._styled = true;
