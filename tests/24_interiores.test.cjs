@@ -53,8 +53,13 @@ module.exports = {
             return d.name;
         });
         await page.waitForFunction(() => Interiors.active && !Interiors.busy, null, { timeout: 60000 });
-        const tex = await page.evaluate(() => { const t = Interiors.active.room.mesh.material.diffuseTexture, s = t.getSize(); return { w: s.width, h: s.height, cls: t.getClassName() }; });
+        // sala 3D (art/Interior3D.js): a textura do piso é a da casca; senão, a do quadro pintado
+        const tex = await page.evaluate(() => {
+            const R = Interiors.active.room, i3 = R.i3d, t = i3 ? i3.walls.n.material.diffuseTexture : R.mesh.material.diffuseTexture, s = t.getSize();
+            return { w: s.width, h: s.height, cls: t.getClassName(), i3: !!i3, meshes: i3 ? i3.meshes.length : 0, lights: i3 ? i3.lights.length : 0, obs: Interiors.obstacles.length, flat: game.camera.flat };
+        });
         c.ok(tex.w > 800 && tex.h > 600, `${shop}: textura do piso em alta (${tex.w}×${tex.h}, ${tex.cls})`);
+        c.ok(tex.i3 && tex.meshes > 6 && tex.lights > 0 && tex.obs > 5 && !tex.flat, `${shop} em 3D: ${tex.meshes} malhas, ${tex.lights} luzes, ${tex.obs} sólidos, câmera de 3ª pessoa`);
         await page.evaluate(() => Interiors.leave(game));
         await page.waitForFunction(() => !Interiors.active && !Interiors.busy, null, { timeout: 60000 });
         c.noErrors(errors, 'interiores');
