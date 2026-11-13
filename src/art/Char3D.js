@@ -152,7 +152,10 @@ const Char3D = {
 	_gc() {
 		const now = performance.now(), inUse = new Set();
 		for (const C of this.npcs.values()) if (C.model) inUse.add(C.model);
-		for (const [k, M] of this._types) if (!inUse.has(M) && now - (M._used || 0) > 90000) { M.dispose(); this._types.delete(k); }
+		for (const [k, M] of this._types) if (!inUse.has(M) && now - (M._used || 0) > 90000) {
+			this._pool = this._pool.filter((C) => { if (C.model !== M) return true; C.dispose(); return false; });
+			M.dispose(); this._types.delete(k);
+		}
 	},
 
 	// ---------------------------------------------------------------- a cada quadro
@@ -253,7 +256,13 @@ const Char3D = {
 			return M;
 		};
 		// (já assa os tipos de quem está chegando perto mas ainda não cabe no limite: quando couber, o modelo está pronto)
-		for (const [, a] of cand) if (!keep.has(a) && !hero(a)) this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, 1);
+		let pre = 0;
+		for (const [, a] of cand) {
+			if (keep.has(a) || hero(a)) continue;
+			const key = typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|1';
+			if (this._types.has(key)) { this._types.get(key)._used = performance.now(); continue; }
+			if (pre++ < 2) this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, 1);      // (no máximo 2 tipos novos por vez: sem rajada de assar e subir para a GPU)
+		}
 		for (const a of keep) {
 			const C = this.npcs.get(a), M = modelOf(a);
 			if (C && M && C.model !== M) {
@@ -261,10 +270,23 @@ const Char3D = {
 				if (M.ready) C.setModel(M);
 				continue;
 			}
-			if (C && !M) { C.dispose(); this.npcs.delete(a); continue; }
-			if (!C && M) this.npcs.set(a, new Char3DActor(this._scene, a, M, hero(a) ? { name: 'jogador3d_piloto' } : { name: 'npc3d', pal: true }));
+			if (C && !M) { this._free(C); this.npcs.delete(a); continue; }
+			if (!C && M) {
+				// (um boneco guardado do mesmo modelo é reaproveitado: criar e destruir material e malha a cada 0,25 s, com NPCs entrando
+				// e saindo do raio, engasgava o jogo)
+				const i = hero(a) ? -1 : this._pool.findIndex((P) => P.model === M);
+				const P = i >= 0 ? this._pool.splice(i, 1)[0] : null;
+				if (P) P.rebind(a);
+				this.npcs.set(a, P || new Char3DActor(this._scene, a, M, hero(a) ? { name: 'jogador3d_piloto' } : { name: 'npc3d', pal: true }));
+			}
 		}
-		for (const [a, C] of this.npcs) if (!keep.has(a)) { C.dispose(); this.npcs.delete(a); }
+		for (const [a, C] of this.npcs) if (!keep.has(a)) { this._free(C); this.npcs.delete(a); }
+	},
+	// Um boneco que saiu do raio: guardado para reaproveitar (até 12), ou destruído.
+	_pool: [],
+	_free(C) {
+		if (C.pal && this._pool.length < 12 && C.model && C.model.ready) { C.release(); this._pool.push(C); }
+		else C.dispose();
 	},
 };
 
@@ -384,7 +406,7 @@ class Char3DActor {
 		this.body.material = this.bodyMat = this._mat(this.name + '_mat');
 		this.bodyMat.onBindObservable.add(() => this._bindCommon(this.bodyMat, this._B));
 		if (this.wantXray) this._xrayBuild();
-		if (this.C.shadow !== false) this._shadowBuild();
+		if (this.C.shadow !== false && (!this.pal || this.C.npcShadow)) this._shadowBuild();      // (sombra projetada: o jogador; os NPCs, só com npcShadow — a mancha macia basta, e corta metade dos pontos)
 		this._built = true;
 	}
 	_clone(src, name) {
@@ -595,13 +617,26 @@ class Char3DActor {
 		if (this.body) { this.body.dispose(); this.bodyMat.dispose(); this.body = null; }
 		this._built = false;
 	}
+	// Guardado na reserva (Char3D._free): escondido, o desenho 2,5D do ator de volta.
+	release() {
+		this._hide3d();
+		if (this.actor && !this.actor.mesh.isDisposed()) this._show2d(true);
+		if (this.actor && this.actor._c3 === this) this.actor._c3 = null;
+		this.actor = null; this._last = null; this._u = 0;
+	}
+	// Reaproveitado para outro ator do mesmo modelo.
+	rebind(actor) {
+		this.actor = actor; this._last = null; this._u = 0; this._expr = 0;
+		const g = actor.mesh.renderingGroupId;
+		for (const m of this.root.getChildMeshes()) m.renderingGroupId = g;
+	}
 	dispose() {
 		this._clear();
 		if (this._flash) this._flash.dispose();
 		this.shadowMesh.dispose();
 		this.root.dispose();
-		if (!this.actor.mesh.isDisposed()) this._show2d(true);
-		if (this.actor._c3 === this) this.actor._c3 = null;
+		if (this.actor && !this.actor.mesh.isDisposed()) this._show2d(true);
+		if (this.actor && this.actor._c3 === this) this.actor._c3 = null;
 	}
 }
 Char3DActor._FWD = new BABYLON.Vector3(0, 0, 1);
