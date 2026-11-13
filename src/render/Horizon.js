@@ -7,30 +7,39 @@
 //   • QUATRO FOTOS de 90° (norte, leste, sul, oeste), tiradas do lugar da câmera com uma câmera que só vê de R até `deep` m, mostram a
 //     paisagem distante (prédios, morros, o mar, o Cristo) num cubo logo atrás do corte — onde a foto é transparente, o céu de sempre;
 //   • a névoa vira uma BRUMA leve (fogNear..fogFar), a mesma nas duas partes: a emenda some.
-// As fotos são refeitas uma por quadro (sem engasgo) quando a câmera anda `move` m do lugar delas ou a cada `refresh` s (a luz do dia
-// muda). Só vale na perseguição em perspectiva, fora dos interiores. `?horizonte=0` (ou on: false) volta à névoa de antes.
+// As fotos são refeitas uma a cada `every` quadros quando a câmera anda `move` m do lugar delas ou a cada `refresh` s (a luz do dia
+// muda). Cada foto desenha SÓ o que se vê de longe — a cidade (prédios, ruas, árvores), o terreno e o morro do Cristo —, sem os
+// detalhes densos (meio-fio, acabamentos), postes, placas, luzes, carros e gente: com tudo, cada foto custava ~10 milhões de vértices
+// e travava o jogo. Só vale na perseguição em perspectiva, fora dos interiores. `?horizonte=0` (ou on: false) volta à névoa de antes;
+// o AutoQuality desliga primeiro o horizonte (off()).
+// O que entra na foto: a cidade (sem os pedaços densos), o terreno e o morro.
+const HORIZON_KEEP = /^(world_|terr|corcovado|water$)/i, HORIZON_DENSE = /^world_(x|b)?(trim|curb)@/;
 // ============================================================================
 
 const Horizon = {
 	get C() { return Config.camera.horizon || {}; },
-	get on() { const q = typeof location !== 'undefined' ? location.search : ''; return this.C.on !== false && !/[?&]horizonte=0\b/.test(q); },
+	get on() { const q = typeof location !== 'undefined' ? location.search : ''; return this.C.on !== false && !this._off && !/[?&]horizonte=0\b/.test(q); },
+	// Desliga de vez nesta sessão (AutoQuality: o primeiro degrau quando o jogo pesa) — volta a névoa de antes.
+	off() { this._off = true; if (this.root && this.active) this._set(false, this._camera); },
+	// px de cada foto pelo nível gráfico (Config.camera.horizon.size vale acima disso)
+	get size() { const lvl = typeof Graphics !== 'undefined' ? Graphics.level : 'high'; return this.C.size || ({ low: 256, medium: 256, high: 384, hd: 512 })[lvl] || 384; },
 	active: false,                // ligado agora (perseguição, fora de interior, fotos prontas)
 	LAYER: 0x10000000,            // (o cubo das fotos: a câmera do jogo vê; as câmeras das fotos, não)
 
 	init(scene) {
 		if (!this.on || this._scene) return;
 		this._scene = scene;
-		const C = this.C, size = C.size || 512, R = C.R || 150;
+		const C = this.C, size = this.size, R = C.R || 150;
 		// direções das 4 fotos: frente (o centro) e o "cima" da foto
 		const D = [[0, 0, 1], [1, 0, 0], [0, 0, -1], [-1, 0, 0]];
 		this.faces = D.map((f, i) => {
 			const cam = new BABYLON.FreeCamera('horizonte_cam' + i, new BABYLON.Vector3(0, 0, 0), scene);
-			cam.fov = Math.PI / 2; cam.minZ = R * 0.97; cam.maxZ = C.deep || 1600; cam.layerMask = 0x0FFFFFFF;
+			cam.fov = Math.PI / 2; cam.minZ = R * 0.97; cam.maxZ = C.deep || 1100; cam.layerMask = 0x0FFFFFFF;
 			cam.fovMode = BABYLON.Camera.FOVMODE_VERTICAL_FIXED;
 			const rtt = new BABYLON.RenderTargetTexture('horizonte_foto' + i, size, scene, false, true);
 			rtt.activeCamera = cam;
 			rtt.renderList = null;                                              // (tudo o que a câmera da foto vê…)
-			rtt.renderListPredicate = (m) => !m._horizon && !m._char3d && m.isEnabled() && m.isVisible;      // (…menos o próprio cubo e os bonecos)
+			rtt.renderListPredicate = (m) => HORIZON_KEEP.test(m.name) && !HORIZON_DENSE.test(m.name) && m.isEnabled() && m.isVisible;      // (…só o que se vê de longe)
 			rtt.clearColor = new BABYLON.Color4(0, 0, 0, 0);
 			rtt.refreshRate = BABYLON.RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
 			rtt.wrapU = rtt.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
@@ -69,6 +78,8 @@ const Horizon = {
 	// A cada quadro (Game): liga/desliga conforme a câmera, refaz as fotos quando precisa (uma por quadro) e põe o cubo no lugar delas.
 	tick(dt, camera) {
 		if (!this._scene) return;
+		this._camera = camera;
+		if (this._off) { if (this.active) this._set(false, camera); return; }
 		const sc = this._scene, cam = sc.activeCamera, want = !!(cam && camera && camera.persp && camera.chase >= 0.5 && !camera.flat && !(typeof Interiors !== 'undefined' && Interiors.active));
 		if (!want) { if (this.active) this._set(false, camera); return; }
 		const eye = cam.globalPosition || cam.position, C = this.C;
@@ -80,7 +91,9 @@ const Horizon = {
 			if (far) { this.center.copyFrom(eye); this._eyeC = null; }
 			else this._eyeC = this.center.clone();
 		}
-		if (this._pend && this._pend.length) {
+		this._gap = (this._gap || 0) - 1;
+		if (this._pend && this._pend.length && this._gap <= 0) {
+			this._gap = C.every || 3;                                              // (uma foto a cada `every` quadros: o custo se espalha)
 			const F = this.faces[this._pend.shift()], at = far || !this._eyeC ? this.center : this._eyeC;
 			F.cam.position.copyFrom(at);
 			F.cam.setTarget(new BABYLON.Vector3(at.x + F.f[0], at.y, at.z + F.f[2]));

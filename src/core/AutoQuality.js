@@ -25,6 +25,7 @@ class AutoQuality {
 	// [id, o aviso, só com placa de vídeo?]
 	static get STEPS() {
 		return [
+			['horizon', 'horizonte simples', true],
 			['npc3d', 'menos personagens em 3D', true],
 			['shadow512', 'sombras reduzidas', false],
 			['scale85', 'resolução a 85%', true],
@@ -103,7 +104,8 @@ class AutoQuality {
 	_apply(level) {
 		const g = this.g, ge = g.gameEngine, id = AutoQuality.STEPS[level - 1][0];
 		const N3 = Config.art && Config.art.char3d && Config.art.char3d.npc;
-		if (id === 'npc3d') { if (N3) N3.max = Math.floor((N3.max || 0) / 2); }                // (os bonecos de pontos: metade dos NPCs em 3D)
+		if (id === 'horizon') { if (typeof Horizon !== 'undefined') Horizon.off(); }       // (as fotos da paisagem: volta a névoa de antes)
+		else if (id === 'npc3d') { if (N3) N3.max = Math.floor((N3.max || 0) / 2); }                // (os bonecos de pontos: metade dos NPCs em 3D)
 		else if (id === 'npc3dOff') { if (N3) N3.max = 0; }                                      // (todos os NPCs no desenho 2,5D; o jogador segue 3D)
 		else if (id === 'shadow512') { if (ge.shadowGenerator) ge.setShadowSize(512); }
 		else if (id === 'noShadow') this._shadowsOff();

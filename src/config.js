@@ -138,9 +138,9 @@ const Config = {
 		// névoa de distância (m da câmera; o alcance por preset em Graphics). yawBoost = quanto mais rápido ela gira atrás dele (×);
 		// lerp = rapidez da passagem a pé ↔ veículo. `?persegue=0` = a câmera alta de antes também dirigindo; `?persegue=N` (graus) = outra inclinação.
 		// HORIZONTE (render/Horizon.js): na perseguição, a cidade de verdade até R m e, dali até `deep` m, 4 fotos da paisagem num cubo
-		// atrás do corte, refeitas quando a câmera anda `move` m ou a cada `refresh` s; a névoa vira bruma (fogNear..fogFar). size = px de
-		// cada foto. `?horizonte=0` = a névoa de antes.
-		horizon: { on: true, R: 150, deep: 1600, fogNear: 110, fogFar: 1300, move: 35, refresh: 20, size: 512 },
+		// atrás do corte, refeitas (uma a cada `every` quadros) quando a câmera anda `move` m ou a cada `refresh` s; a névoa vira bruma
+		// (fogNear..fogFar). size (opcional) = px de cada foto (senão, pelo nível gráfico). `?horizonte=0` = a névoa de antes.
+		horizon: { on: true, R: 150, deep: 1100, fogNear: 110, fogFar: 1300, move: 70, refresh: 60, every: 3 },
 		chase: {
 			on: !(typeof location !== 'undefined' && /[?&]persegue=0\b/.test(location.search)),
 			tilt: (typeof location !== 'undefined' && +(location.search.match(/[?&]persegue=(\d+(?:\.\d+)?)/) || [])[1]) || 45,
