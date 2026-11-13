@@ -115,6 +115,37 @@ module.exports = {
         c.ok(!ride.trainBottom.walk && ride.trainBottom.h === 0, `e desce de volta ao pé (${JSON.stringify(ride.trainBottom)})`);
         c.ok(ride.shuttle > 3, `sem passageiro, o trem vai e volta (${ride.shuttle.toFixed(1)} u)`);
 
+        // CHEGAR LÁ EM CIMA vindo do mundo: a Estrada da Serra (zigue-zague escavado no paredão) sem paredão nem rampa forte, a cidade alcança
+        // o platô por estradas transitáveis, e o BONDINHO do pé do morro sobe e desce
+        const up = await page.evaluate(() => {
+            const C = Corcovado, out = {};
+            const stat = (e) => { let maxS = 0, cl = 0; for (let s = 0; s + 4 <= e.len; s += 4) { const a = RoadPlan.at(e, s), b = RoadPlan.at(e, s + 4); maxS = Math.max(maxS, Math.abs(Relief.at(b.x, b.z) - Relief.at(a.x, a.z)) / 4); if (CityGrid.obstaclesAround(a.x, a.z, 1).some((o) => o.cliff && a.x > o.x0 && a.x < o.x1 && a.z > o.z0 && a.z < o.z1)) cl++; } return { maxS, cl }; };
+            const serra = RoadPlan.edges.filter((e) => e.name === 'Estrada do Morro do Vigia').map(stat);
+            out.serra = { n: serra.length, maxS: +Math.max(...serra.map((q) => q.maxS)).toFixed(2), cliffs: serra.reduce((a, q) => a + q.cl, 0) };
+            const P = C.serraPath(); out.foot = Math.round(Relief.at(P[0][0], P[0][1])); out.top = Math.round(Relief.at(...P[P.length - 1]));
+            const okE = new Map(); for (const e of RoadPlan.edges) { const q = stat(e); okE.set(e, q.cl === 0 && q.maxS <= 1.05); }
+            const start = RoadPlan.nodes.reduce((b, n) => (Math.hypot(n.x, n.z) < Math.hypot(b.x, b.z) ? n : b)), seen = new Set([start]), Q = [start];
+            while (Q.length) { const n = Q.shift(); for (const a of n.arms) if (okE.get(a.e) && !seen.has(a.to)) { seen.add(a.to); Q.push(a.to); } }
+            out.reach = RoadPlan.nodes.some((n) => seen.has(n) && Math.hypot(n.x - C.C.x, n.z - C.C.z) < 95);
+            // bondinho
+            const pl = game.player, g = game, A = C.CABLE.a, B = C.CABLE.b, go = () => { let n = 0; while (C.ride && n < 400) { C.update(0.25); n++; } };
+            pl.walk = null; pl.onDeck = false; pl.deckH = 0; pl.frozen = false; pl.setVisible(true);
+            pl.teleport(new BABYLON.Vector3(A[0] + 5, 0, A[1]));
+            out.cablePrompt = /Bondinho/.test(C.prompt(g));
+            g.inventory.cash = 100; C.interact(g); out.cableFare = 100 - g.inventory.cash; out.cableRiding = !!C.ride && pl.frozen;
+            for (let i = 0; i < 40; i++) C.update(0.25); out.cableMid = Math.round(pl.deckH || 0);
+            go(); out.cableTop = { d: +Math.hypot(pl.position.x - B[0], pl.position.z - B[1]).toFixed(1), h: Math.round(Relief.at(pl.position.x, pl.position.z)), walk: !!pl.walk, frozen: !!pl.frozen };
+            out.cableDownPrompt = /descer/.test(C.prompt(g)); C.interact(g); go();
+            out.cableBottom = { d: +Math.hypot(pl.position.x - A[0], pl.position.z - A[1]).toFixed(1), h: Math.round(Relief.at(pl.position.x, pl.position.z)) };
+            return out;
+        });
+        c.ok(up.serra.n >= 1 && up.serra.cliffs === 0 && up.serra.maxS < 0.75, `Estrada da Serra sem paredão (rampa máx. ${up.serra.maxS}; ${up.serra.cliffs} trechos de paredão)`);
+        c.ok(up.foot < 20 && up.top > 280, `a serra vai do pé (${up.foot} m) ao platô (${up.top} m)`);
+        c.ok(up.reach, 'da cidade ao platô do Cristo por estradas transitáveis (sem paredão, rampa ≤ 1,05)');
+        c.ok(up.cablePrompt && up.cableFare === 20 && up.cableRiding, `bondinho no pé do morro: E sobe (R$ ${up.cableFare})`);
+        c.ok(up.cableMid > 30 && up.cableTop.d < 10 && up.cableTop.h > 280 && !up.cableTop.walk && !up.cableTop.frozen, `bondinho chega ao platô (${up.cableMid} m no meio; ${JSON.stringify(up.cableTop)})`);
+        c.ok(up.cableDownPrompt && up.cableBottom.d < 10 && up.cableBottom.h < 20, `e desce de volta ao pé (${JSON.stringify(up.cableBottom)})`);
+
         // no quadro: o mirante com o Cristo; no mapa: o complexo
         const px = await page.evaluate(async () => {
             const pl = game.player, C = Corcovado, top = C.W(2, -12);

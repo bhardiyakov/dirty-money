@@ -1,4 +1,4 @@
-// A LAGOA (map/Lagoa.js): o espelho d'água doce de beira lisa (aterro), a orla com pista e ciclovia, a Av. Epitácio Pessoa em volta
+// A LAGOA (map/Lagoa.js): o espelho d'água doce de beira lisa (aterro), a orla com pista e ciclovia, a Av. da Lagoa da Prata em volta
 // ligada às estradas e à cidade, os prédios de luxo (o m² mais caro da cidade), quadras e clube, quiosques e ambulantes que vendem,
 // corredores e ciclistas de verdade, pedalinhos e caiaques nos deques — e a água sem onda, sem espuma e sem areia.
 const { boot, gameWait } = require('./lib.cjs');
@@ -25,9 +25,9 @@ module.exports = {
             out.lake = !WorldMap.isSea[WorldMap.index(L.C.x, L.C.z)];
             // a avenida em volta e as ligações
             const names = new Set(RoadPlan.edges.map((e) => e.name));
-            out.roads = ['Av. Epitácio Pessoa', 'Av. Borges de Medeiros', 'Rua Jardim Botânico', 'Rua Fonte da Saudade', 'Rua Mário Ribeiro'].filter((n) => names.has(n)).length;
+            out.roads = ['Av. da Lagoa da Prata', 'Av. Barão de Medeiros', 'Rua do Horto', 'Rua da Fonte', 'Rua Mário Rangel'].filter((n) => names.has(n)).length;
             let onRing = 0;
-            for (let i = 0; i < N; i += 12) { const p = L.at(i, L.RING), q = RoadPlan.nearestRoadPoint(p[0], p[1], 6); if (q && q.edge.name === 'Av. Epitácio Pessoa') onRing++; }
+            for (let i = 0; i < N; i += 12) { const p = L.at(i, L.RING), q = RoadPlan.nearestRoadPoint(p[0], p[1], 6); if (q && q.edge.name === 'Av. da Lagoa da Prata') onRing++; }
             out.ring = onRing / (N / 12);
             out.r7 = RoadPlan.edges.filter((e) => e.name === 'Rodovia da Lagoa').length;
             // os prédios: quarteirões de verdade (lotes com sólido, fachada de luxo), piscinas, quadras, clube
@@ -57,7 +57,7 @@ module.exports = {
         });
         c.ok(s.built && s.shore > 0.95 && s.smooth < 0.6, `a beira lisa do aterro: água dentro, terra fora (${(s.shore * 100).toFixed(0)}%, 2ª diferença máx. ${s.smooth.toFixed(3)} u)`);
         c.ok(s.noSand && s.lake, 'orla de grama, sem praia nem brejo; água de lago (doce)');
-        c.ok(s.roads === 5 && s.ring > 0.9 && s.r7 > 2, `Av. Epitácio Pessoa em volta (${(s.ring * 100).toFixed(0)}%) e as 4 ligações; a Rodovia da Lagoa contorna`);
+        c.ok(s.roads === 5 && s.ring > 0.9 && s.r7 > 2, `Av. da Lagoa da Prata em volta (${(s.ring * 100).toFixed(0)}%) e as 4 ligações; a Rodovia da Lagoa contorna`);
         c.ok(s.blocks >= 20 && s.towers >= 18 && s.lux && s.solid && s.inGrid, `prédios de luxo em quarteirões de verdade (${s.blocks} quarteirões, ${s.towers} torres)`);
         c.ok(s.pools >= 8, `piscinas nas coberturas (${s.pools})`);
         c.eq(s.courts, 'basket,futsal,play', 'quadras de futsal e de basquete e o parquinho');

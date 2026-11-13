@@ -9,6 +9,9 @@
 //   • o ELEVADOR panorâmico (torre de vidro) do chão até o terraço, com a ponte até ele — E sobe/desce;
 //   • o TREM DO MORRO DO VIGIA: trilhos de cremalheira subindo a encosta leste da estação do pé até a do alto, ao lado do mirante — E sobe/desce
 //     (sem ninguém, ele vai e volta sozinho).
+//   • CHEGAR AO PLATÔ (o complexo fica a Config.relief.corcovado m, com o paredão ao sul, sobre o autódromo): a ESTRADA DA SERRA sobe o
+//     paredão em zigue-zague, escavada no relevo (serraPath; WorldMap._carveSerra), do fim da Estrada da Serra do Meio até o platô — a pé
+//     ou de carro —, e o BONDINHO DO MORRO DO VIGIA (CABLE) leva do pé, ao lado dela, até o platô a oeste do morro do Cristo (E sobe/desce).
 // Anda-se por tudo isso a pé: as escadas, passarelas, o terraço e o mirante são uma rede de Walkways (entra-se pelo pé de um lance).
 // Coordenadas LOCAIS: x leste, z norte, a partir do Cristo (C); alturas em u.
 //   build()  (Landmarks._cristo)   rede, sólidos, POIs        meshes(wb)  geometria        update(dt)  elevador, trem, viagens
@@ -30,7 +33,33 @@ const Corcovado = {
     STATION_LO: [56, 0.4, 68, 4.4], STATION_HI: [17, 0.4, 28.5, 4.4],
     TOPSTAIR: [[18.5, 2.4, 16], [14.6, 2.4, 18]],
     PLAZA: [-24, -80, 8, -64.5],
+    // A ESTRADA DA SERRA (mundo): o platô fica a `base` m, e logo ao sul dele está o patamar do autódromo — o paredão entre os dois não se
+    // vence em linha reta. A estrada sobe em ZIGUE-ZAGUE por ele (4 lances leste-oeste, curvas fechadas de raio 10, ~0,55 de rampa),
+    // do pé (o fim da Estrada da Serra do Meio, rente à pista) até a praça do portão; o relevo é escavado ao longo dela (WorldMap).
+    SERRA_LEGS: { x0: -1002, xE: -815, xW: -900, z: [622, 642, 662, 682], r: 10, end: [-912, 682] },      // (o 1º lance a 24 u da área do autódromo: a escavação não chega nela; a curva oeste fica fora do platô)
+    // O BONDINHO DO MORRO DO VIGIA (mundo): do pé (ao lado da estrada) até o platô, a oeste do morro do Cristo. E sobe/desce.
+    CABLE: { a: [-1018, 590], b: [-1053, 710], fare: 20, dur: 24 },
     built: false, net: null, ride: null,
+
+    // A polilinha da estrada da serra, do pé até a praça (cache).
+    serraPath() {
+        if (this._serra) return this._serra;
+        const S = this.SERRA_LEGS, out = [[S.x0, S.z[0]]], arc = (cx, cz, side) => { for (let k = 1; k < 12; k++) { const a = -Math.PI / 2 + Math.PI * k / 12; out.push([cx + side * S.r * Math.cos(a), cz + S.r * Math.sin(a)]); } };
+        for (let i = 0; i < S.z.length; i++) {
+            const z = S.z[i], east = i % 2 === 0, xa = i === 0 ? S.x0 : (east ? S.xW : S.xE), xb = east ? S.xE : S.xW;
+            if (i === S.z.length - 1) break;
+            for (let x = xa + (east ? 12 : -12); east ? x < xb : x > xb; x += east ? 12 : -12) out.push([x, z]);
+            out.push([xb, z]);
+            arc(xb, z + S.r, east ? 1 : -1);                                         // a curva fechada até o lance de cima
+            out.push([xb, z + 2 * S.r]);
+        }
+        // o último lance: de leste para oeste, até entrar no platô (dali a Estrada do Morro do Vigia segue para o norte; o portão das
+        // escadarias fica a ~80 u a oeste, a pé pelo platô)
+        const zl = S.z[S.z.length - 1];
+        for (let x = S.xE - 12; x > S.end[0]; x -= 12) out.push([x, zl]);
+        out.push(S.end.slice());
+        return (this._serra = out);
+    },
 
     W(x, z) { return [this.C.x + x, this.C.z + z]; },
     // RELEVO DE VERDADE (Config.relief.corcovado): o complexo inteiro fica no PLATÔ do maciço (WorldMap.buildTerrain), `base` m acima do
@@ -77,7 +106,10 @@ const Corcovado = {
             vendor: { x: atd[0], z: atd[1], h: -Math.PI / 2, type: 'civil_trabalhador' } });
         const g = this.W(-8, -71);
         CityGrid.addPoi({ type: 'cristo', name: 'Cristo Protetor — portão do Morro do Vigia (escadarias, elevador e trem)', x: g[0], z: g[1] });
-        this.train = { u: 0, dir: 1, wait: 6, max: this.RAIL.x0 - this.RAIL.x1 - 11.5 };          // (u: a frente do carro de baixo; no alto, os dois carros na estação)
+        this.train = { u: 0, dir: 1, wait: 6, max: this.RAIL.x0 - this.RAIL.x1 - 11.5 };
+        const CA = this.CABLE;
+        CityGrid.addPoi({ type: 'bondinho', name: 'Bondinho do Morro do Vigia (sobe ao Cristo)', x: CA.a[0] + 6, z: CA.a[1] });
+        this.cab = { t: 0.15, dir: 1 };                                                // (as duas cabines do bondinho: uma em t, a outra em 1 − t)          // (u: a frente do carro de baixo; no alto, os dois carros na estação)
         this.lift = { y: 0 };
     },
 
@@ -122,6 +154,7 @@ const Corcovado = {
         if (r < this._rim(Math.atan2(p.z, p.x)) + 1.5 + m) return true;
         const inR = (R, e) => p.x > R[0] - e && p.x < R[2] + e && p.z > R[1] - e && p.z < R[3] + e;
         if (inR(this.PLAZA, 2 + m) || inR(this.STATION_LO, 3 + m) || inR(this.STATION_HI, 3 + m)) return true;
+        for (const q of [this.CABLE.a, this.CABLE.b]) if (Math.abs(x - q[0]) < 9 + m && Math.abs(z - q[1]) < 8 + m) return true;      // (as estações do bondinho)
         if (Math.abs(p.x - this.LIFT.x) < this.LIFT.s + 3 + m && Math.abs(p.z - this.LIFT.z) < this.LIFT.s + 3 + m) return true;
         const near = (a, b, e) => { const dx = b[0] - a[0], dz = b[1] - a[1], t = Math.max(0, Math.min(1, ((p.x - a[0]) * dx + (p.z - a[1]) * dz) / (dx * dx + dz * dz))); return Math.hypot(a[0] + dx * t - p.x, a[1] + dz * t - p.z) < e; };
         for (let i = 0; i + 1 < this.WOOD.length; i++) if (near(this.WOOD[i], this.WOOD[i + 1], 3 + m)) return true;
@@ -133,7 +166,11 @@ const Corcovado = {
     _spot(g) {
         if (!this.built || g.mode !== 'player' || this.ride || g.player.frozen) return null;
         const pl = g.player, p = this.local(pl.position.x, pl.position.z), onNet = pl.walk === this.net, ground = !pl.onDeck && !pl.underBridge;
-        const L = this.LIFT, S0 = this.STATION_LO, S1 = this.STATION_HI;
+        const L = this.LIFT, S0 = this.STATION_LO, S1 = this.STATION_HI, CA = this.CABLE, wp = pl.position;
+        if (ground && !pl.busy && hypot(wp.x - CA.a[0], wp.z - CA.a[1]) < 8)
+            return { kind: 'cable', dir: 1, html: `<b>E</b> Bondinho do Morro do Vigia — ${brl(CA.fare)}<small>sobe o paredão até o platô do Cristo</small>` };
+        if (ground && !pl.busy && hypot(wp.x - CA.b[0], wp.z - CA.b[1]) < 8)
+            return { kind: 'cable', dir: -1, html: '<b>E</b> descer de bondinho<small>até o pé do morro</small>' };
         if (ground && Math.hypot(p.x - L.door[0], p.z - L.door[1]) < 2.4)
             return { kind: 'lift', dir: 1, html: '<b>E</b> Elevador panorâmico do Morro do Vigia<small>sobe ao terraço do café, a meia encosta</small>' };
         if (onNet && Math.abs(pl.deckH - L.h) < 0.6 && Math.hypot(p.x - L.stop[0], p.z - L.stop[1]) < 2.6)
@@ -146,11 +183,21 @@ const Corcovado = {
     },
     prompt(g) { const s = this._spot(g); return s ? s.html : ''; },
     // Multiplicador do zoom automático: na rede do Morro do Vigia (ou viajando no elevador/trem), abre com a altura — até 2,25× no mirante.
-    zoomFor(pl) { return this.built && pl.walk === this.net ? 1 + 1.25 * Math.min(1, Math.max(0, (pl.deckH || 0) - 4) / 14) : 1; },
+    zoomFor(pl) { if (this.ride && this.ride.kind === 'cable') return this.cableZoom(pl); return this.built && pl.walk === this.net ? 1 + 1.25 * Math.min(1, Math.max(0, (pl.deckH || 0) - 4) / 14) : 1; },
     interact(g) {
         const s = this._spot(g);
         if (!s) return false;
         const pl = g.player;
+        if (s.kind === 'cable') {                                                  // o bondinho: paga na subida; desce de graça
+            if (s.dir > 0) { if (g.inventory.cash < this.CABLE.fare) { if (g._flash) g._flash(`Bondinho: ${brl(this.CABLE.fare)} — dinheiro insuficiente`); return true; } g.inventory.cash -= this.CABLE.fare; }
+            pl.cancelSequence(); pl.action = null; pl.velocity.setAll(0);
+            pl.setVisible(false); pl.frozen = true; pl.invulnerable = true;
+            this._cableNet = this._cableNet || { name: 'Bondinho do Morro do Vigia', parts: [] };      // (a câmera mira a cabine: pl.walk/deckH)
+            pl.walk = this._cableNet; pl.onDeck = true; pl.roof = null;
+            this.ride = { g, kind: 'cable', dir: s.dir, t: 0, dur: this.CABLE.dur };
+            if (g._flash) g._flash(s.dir > 0 ? `🚡 Bondinho do Morro do Vigia (−${brl(this.CABLE.fare)}): subindo…` : '🚡 Bondinho: descendo…');
+            return true;
+        }
         if (s.kind === 'train' && s.dir > 0) {                                     // a passagem do trem (na subida)
             if (g.inventory.cash < this.FARE) { if (g._flash) g._flash(`Trem do Morro do Vigia: ${brl(this.FARE)} — dinheiro insuficiente`); return true; }
             g.inventory.cash -= this.FARE;
@@ -201,7 +248,8 @@ const Corcovado = {
         }
         if (typeof game !== 'undefined' && game && game.sprites && game.camera) this._tourists(dt, game);
         const T = this.train, R = this.ride;
-        if (R) {
+        if (R && R.kind === 'cable') { this._cableRide(dt); }
+        else if (R) {
             const g = R.g, pl = g.player;
             R.t += dt;
             const k0 = Math.min(1, R.t / R.dur), k = k0 * k0 * (3 - 2 * k0);
@@ -235,12 +283,68 @@ const Corcovado = {
                 else if (T.u <= 0) { T.u = 0; T.dir = 1; T.wait = 10; }
             }
         }
+        if (this.cab && !(R && R.kind === 'cable')) { const c = this.cab; c.t += c.dir * dt / 60; if (c.t > 1) { c.t = 1; c.dir = -1; } else if (c.t < 0) { c.t = 0; c.dir = 1; } }
+        this._placeCabins();
         if (this._cab) this._cab.position.y = this.lift.y + 1.42 + this.base;
         if (this._train) {
             const pitch = Math.atan2(this.RAIL.h, this.RAIL.x0 - this.RAIL.x1);
             this._train.forEach((car, i) => { const q = this._trainAt(T.u + 3 + i * 5.6); car.position.set(q.x, q.y + 0.45 + this.base, q.z); car.rotation.z = -pitch; });
         }
     },
+
+    // O BONDINHO: os pontos de cada cabo (mundo, altura absoluta) e a viagem.
+    _cableEnds() {
+        if (this._ce) return this._ce;
+        const CA = this.CABLE, R = (x, z) => (typeof Relief !== 'undefined' ? Relief.at(x, z) : 0), ha = R(CA.a[0], CA.a[1]) + 9, hb = R(CA.b[0], CA.b[1]) + 9;
+        const dx = CA.b[0] - CA.a[0], dz = CA.b[1] - CA.a[1], L = Math.hypot(dx, dz), px = -dz / L, pz = dx / L;
+        return (this._ce = [-1.4, 1.4].map((s) => [[CA.a[0] + px * s, ha, CA.a[1] + pz * s], [CA.b[0] + px * s, hb, CA.b[1] + pz * s]]));
+    },
+    _cabinAt(k, t) { const [a, b] = this._cableEnds()[k], sag = Math.sin(t * Math.PI) * 3; return { x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t - 2 - sag, z: a[2] + (b[2] - a[2]) * t }; },
+    _placeCabins() {
+        if (!this._cabins || !this.cab) return;
+        const t = this.cab.t;
+        this._cabins.forEach((m, k) => { const q = this._cabinAt(k, k ? 1 - t : t); m.position.set(q.x, q.y, q.z); });
+    },
+    _cableRide(dt) {
+        const R = this.ride, g = R.g, pl = g.player, CA = this.CABLE;
+        R.t += dt;
+        const k0 = Math.min(1, R.t / R.dur), k = k0 * k0 * (3 - 2 * k0);
+        this.cab.t = R.dir > 0 ? k : 1 - k;
+        const q = this._cabinAt(0, this.cab.t), rl = typeof Relief !== 'undefined' ? Relief.at(q.x, q.z) : 0;
+        pl.position.x = q.x; pl.position.z = q.z; pl.deckH = Math.max(0, q.y - 0.5 - rl); pl._walkSt = { x: q.x, z: q.z, h: pl.deckH };
+        if (!pl.alive || k0 >= 1) {
+            const top = R.dir > 0, st = top ? CA.b : CA.a, off = top ? [7, -2] : [7, 2];      // (desce ao lado da estação, para o lado de quem chega)
+            pl.frozen = false; pl.invulnerable = false; pl.setVisible(true);
+            pl.position.x = st[0] + off[0]; pl.position.z = st[1] + off[1];
+            pl.walk = null; pl.onDeck = false; pl.deckH = 0; pl.actor.mesh.position.y = pl.baseY;
+            this.cab.dir = top ? -1 : 1;
+            if (g._flash) g._flash(top ? '🚡 Platô do Morro do Vigia — o portão das escadarias fica a leste' : '🚡 Pé do morro — a Estrada da Serra do Meio passa ao lado');
+            this.ride = null;
+        }
+    },
+    // Estações (caixa com telhado vermelho, no chão de cada ponta), os dois cabos e as duas cabines vermelhas.
+    _meshCable(wb) {
+        const scene = wb.scene, CA = this.CABLE, R = (x, z) => (typeof Relief !== 'undefined' ? Relief.at(x, z) : 0), mat = (n, c, e) => { const m = new BABYLON.StandardMaterial(n, scene); m.diffuseColor = BABYLON.Color3.FromHexString(c); m.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1); if (e) m.emissiveColor = BABYLON.Color3.FromHexString(e); return m; };
+        const wall = mat('vigiaCableWall', '#e9e4d6'), roof = mat('vigiaCableRoof', '#9a3b2c'), steel = mat('vigiaCableSteel', '#3b3f46'), red = mat('vigiaCabin', '#d1291f', '#140404'), glass = mat('vigiaCabinGlass', '#8cbfdb');
+        const box = (name, x, y, z, w, h, d, m) => { const b = BABYLON.MeshBuilder.CreateBox(name, { width: w, height: h, depth: d }, scene); b.position.set(x, y, z); b.material = m; b.isPickable = false; b.freezeWorldMatrix(); wb.meshes.push(b); if (wb.shadow) wb.shadow.addShadowCaster(b); return b; };
+        for (const [k, p] of [['a', CA.a], ['b', CA.b]]) {
+            const g = R(p[0], p[1]);
+            box('vigiaCableSt' + k, p[0], g + 4, p[1], 10, 8, 7, wall);
+            box('vigiaCableRf' + k, p[0], g + 8.4, p[1], 11, 0.8, 8, roof);
+        }
+        for (const [a, b] of this._cableEnds()) {
+            const t = BABYLON.MeshBuilder.CreateTube('vigiaCable', { path: [new BABYLON.Vector3(a[0], a[1], a[2]), new BABYLON.Vector3((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 3, (a[2] + b[2]) / 2), new BABYLON.Vector3(b[0], b[1], b[2])], radius: 0.09, tessellation: 5 }, scene);
+            t.material = steel; t.isPickable = false; t.freezeWorldMatrix(); wb.meshes.push(t);
+        }
+        this._cabins = [0, 1].map((k) => {
+            const c = BABYLON.MeshBuilder.CreateBox('vigiaCabin' + k, { width: 2.6, height: 2.3, depth: 2.6 }, scene); c.material = red; c.isPickable = false;
+            const w = BABYLON.MeshBuilder.CreateBox('vigiaCabinWin' + k, { width: 2.7, height: 0.7, depth: 2.7 }, scene); w.material = glass; w.parent = c; w.position.y = 0.35; w.isPickable = false;
+            wb.meshes.push(c, w); return c;
+        });
+        this._placeCabins();
+    },
+    // Zoom no bondinho: abre com a altura da cabine.
+    cableZoom(pl) { return this.ride && this.ride.kind === 'cable' && pl.walk === this._cableNet ? 1 + 1.25 * Math.min(1, (pl.deckH || 0) / 60) : 1; },
 
     // ---------------------------------------------------------------- geometria
     meshes(wb) {
@@ -256,6 +360,7 @@ const Corcovado = {
         this._meshRail(wb);
         this._meshGate(wb);
         this._meshTrees(wb);
+        this._meshCable(wb);
         for (const [x0, z0, x1, z1] of this._rows) { const a = this.W(x0, z0), b = this.W(x1, z1); wb._collider('corcovado', a[0], a[1], b[0], b[1], 20); }
         // (relevo: as malhas próprias do complexo — o morro, o Cristo, o vidro do elevador, as placas… — sobem até o platô; o que vai nos
         // lotes do mundo, o MeshBatch já sobe pelo chão do platô)
