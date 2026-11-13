@@ -112,6 +112,7 @@ class Game {
 		Lighting.init(this);                                 // luz física (etapa 2): a gradação de cor no fim da cadeia (a luz do céu é do DayNight)
 		NightLights.init(this);                              // luz de verdade à noite (etapa 6): o campo de luz dos postes, lojas e faróis
 		Water.initMirror(this);                              // reflexo na água (etapa 7): prédios, árvores e carros espelhados
+		this.crt = CrtFilter.attach(this.camera.camera, this.gameEngine, { renderScale: 0.75 });      // TV de tubo + resolução interna reduzida (render/CrtFilter.js) — por último na cadeia
 		this.minimap = new Minimap('minimap');
 
 		// IA (preenchida de forma assíncrona em _initAI).
