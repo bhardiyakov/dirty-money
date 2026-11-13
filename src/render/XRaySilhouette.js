@@ -37,12 +37,14 @@ class XRaySilhouette {
 
 	// Every frame, before rendering: on while the player's standing 2.5D drawing is on screen, with the X-ray twins of its page material.
 	update() {
-		const a = this.actor, P = a._pg, src = a.mesh;
-		const on = SpriteActor.standing() && !!(a.clip && a.clip.npc && P && P.tex) && src.isEnabled() && src.isVisible;
+		const a = this.actor, P = a._pg, src = a.mesh, c3 = a._c3 && a._c3.shown ? a._c3 : null;
+		const on = SpriteActor.standing() && (!!c3 || !!(a.clip && a.clip.npc && P && P.tex)) && src.isEnabled() && src.isVisible;
 		XRaySilhouette.updateMasks(src.position.x, src.position.z, on);
+		if (a._c3) a._c3.xray(on && !!c3);                                  // (o boneco 3D — art/Char3D.js — tem as cópias dele)
 		for (const [m, over] of [[this.mesh, false], [this.canopy, true]]) {
-			if (m.isEnabled() !== on) m.setEnabled(on);
-			if (!on) continue;
+			const on2 = on && !c3;
+			if (m.isEnabled() !== on2) m.setEnabled(on2);
+			if (!on2) continue;
 			m.material = NpcArt.silhouetteOf(P, over);
 			m.renderingGroupId = src.renderingGroupId;
 		}

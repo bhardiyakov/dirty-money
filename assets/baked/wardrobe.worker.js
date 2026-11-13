@@ -308,6 +308,22 @@ function NpcGenCore(G) {
     // em NpcGenRender._smooth. G.LINES = false e G.TOON = null = o visual "3D" sem contorno (antes de outubro/2026).
     G.LINES = true;
     G.TOON = { dark: 0.42, lit: 0.78, soft: 0.06, tex: 0.08, spec: 0.2, outline: 1.75, face: 1.4 };
+    // REALISTA (G.REAL, com G.TOON = null e G.LINES = false): o boneco iluminado como o mapa 3D — a luz vem de onde o sol do jogo vem
+    // (Config.light.sunDir = [0,6, −1,8, −0,45]: noroeste e alto; aqui x = leste, y = norte, z = cima), céu por cima, oclusão mais funda,
+    // quase sem a luz de recorte, brilho fraco, olhos sem o branco de desenho e a cabeça menor (ADULT.head 0,64). Em NpcGenRender._smooth.
+    G.REAL = null;
+    G.STYLES = {
+        cartum: () => ({ LINES: true, TOON: G.TOON || { dark: 0.42, lit: 0.78, soft: 0.06, tex: 0.08, spec: 0.2, outline: 1.75, face: 1.4 }, REAL: null }),
+        real: () => ({ LINES: false, TOON: null, REAL: { L: [-0.31, 0.23, 0.92], amb: 0.12, sky: 0.22, sun: 0.7, wrap: 0.25, rim: 0.12, spec: 0.6, tex: 0.04 }, head: 0.64 }),
+    };
+    // Troca o estilo do desenho (antes de criar os renderizadores: a cabeça muda a malha assada).
+    G.setStyle = (name) => {
+        const s = G.STYLES[name] && G.STYLES[name]();
+        if (!s) throw new Error('estilo desconhecido: ' + name);
+        G.LINES = s.LINES; G.TOON = s.TOON; G.REAL = s.REAL;
+        if (s.head && G.ADULT) G.ADULT.head = s.head;
+        G.STYLE = name;
+    };
 
     Object.assign(G, {
         deg, V, nrm, I3, Rx, Ry, Rz, mm3, mv3, tmv3, col3, fromCols, M4, mm4, pt4, lookRot, arange, rint,
@@ -1900,8 +1916,9 @@ function NpcGenRender(G) {
             const W = this.W, code = out.code, alpha = out.alpha, light = out.light = new Uint8Array(W * this.H), L = this.cam.L, k = this.k;
             const UP = [0, this.cam.cos, -this.cam.sin], HV = nrm([L[0], L[1], L[2] - 1]), RIM = nrm([0.62, 0.42, 0.66]);
             const rad = max(2, Math.round(4 * k)), thr = 5.2 * k, nwin = (2 * rad + 1) * (2 * rad + 1) - 1, kk = k / 0.5;
-            const toon = !!G.TOON, TOON = G.TOON;
-            const idx = (y, x) => (((y % ch) + ch) % ch) * cw + (((x % cw) + cw) % cw);
+            const toon = !!G.TOON, TOON = G.TOON, REAL = !toon && G.REAL;
+            const RL = REAL ? mv3(this.cam.R, nrm(REAL.L)) : null, RH = REAL ? nrm([RL[0], RL[1], RL[2] - 1]) : null;
+            const idx =(y, x) => (((y % ch) + ch) % ch) * cw + (((x % cw) + cw) % cw);
             const LT = new Uint8Array(np_), LN = new Uint8Array(np_);
             for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
                 const i = y * cw + x;
@@ -1941,13 +1958,23 @@ function NpcGenRender(G) {
                 let lv = (0.07 + 0.17 * hemi + 0.8 * dif) * ao * crease + rim + 0.06 * TN[i];
                 const S = SHINE[m];
                 let sp = S ? max(0, nx * HV[0] + ny * HV[1] + nz * HV[2]) ** S[0] * S[1] * ao * crease : 0;
+                if (REAL) {
+                    // REALISTA: a luz do mapa — sol de onde ele vem no jogo (RL), céu por cima (hemi), oclusão e vincos mais fundos, quase sem
+                    // a luz de recorte; o brilho só onde o material brilha, mais fraco
+                    const dr = nx * RL[0] + ny * RL[1] + nz * RL[2];
+                    let ds = min(max((dr + REAL.wrap) / (1 + REAL.wrap), 0), 1); ds = ds * ds * (3 - 2 * ds);
+                    const occ2 = ao * ao;
+                    lv = (REAL.amb + REAL.sky * hemi + REAL.sun * ds) * occ2 * crease + rim * REAL.rim + REAL.tex * TN[i];
+                    sp = S ? max(0, nx * RH[0] + ny * RH[1] + nz * RH[2]) ** S[0] * S[1] * REAL.spec * occ2 * crease : 0;
+                }
                 if (toon) {
                     const s = (0.25 + 0.75 * dif) * ao * crease + rim * 0.6;
                     const st = (e) => { const t = min(max((s - e) / TOON.soft + 0.5, 0), 1); return t * t * (3 - 2 * t); };
                     lv = 0.25 + 0.25 * st(TOON.dark) + 0.25 * st(TOON.lit) + TOON.tex * TN[i];
                     sp = sp > TOON.spec && toonShine[m] ? 0.4 : 0;
                 }
-                if (m === M.eye) { lv = 0.08; sp = sp > 0.15 ? 0.9 : 0; }                // pupila escura com um brilho
+                if (REAL && (m === M.eye || m === M.eyew)) { lv = m === M.eye ? 0.06 : 0.3 + 0.15 * dif; sp = 0; }       // (olho sem o branco de desenho animado)
+                else if (m === M.eye) { lv = 0.08; sp = sp > 0.15 ? 0.9 : 0; }                // pupila escura com um brilho
                 else if (m === M.eyew) lv = 0.6 + 0.25 * dif;
                 else if (m === M.brow) { lv = 0.1; sp = 0; }
                 else if (m === M.mouth) { lv = 0.32 * crease; sp = 0; }
@@ -6678,6 +6705,72 @@ function runPreview(m) {
 	self.postMessage({ job: m.job, frames, W: G.frameFor(k), H: G.frameFor(k), k }, frames.map((f) => f.buffer));
 }
 
+// ---------------------------------------------------------------- personagem 3D AO VIVO (src/art/Char3D.js)
+// Em vez de desenhar quadros, manda ao jogo os PONTOS assados do personagem (no espaço de cada osso, com o 2º osso da malha 3D e o
+// peso — skin linear de 2 ossos, como o skinPose do renderizador) e, por clipe, as matrizes dos ossos de cada pose: a GPU monta e
+// ilumina o boneco na câmera de verdade (src/art/Char3D.js). Unidades do gerador; o jogo converte (escala da ficha / NpcGenBuild.PPU·2).
+//   { type: 'char3d', job, spec, spacing }      → { job, char3d: { bones, n, p1, n1, p2, n2, sk, mt, ramps, scale } }
+//   { type: 'char3dClip', job, spec, spacing, key } → { job, clip3d: { key, fps, loop, n, B, sc, props, newProps } }
+const C3 = { BONES: ['root', 'pelvis', 'chest', 'head', 'uarm_R', 'farm_R', 'hand_R', 'thigh_R', 'shin_R', 'foot_R', 'uarm_L', 'farm_L', 'hand_L', 'thigh_L', 'shin_L', 'foot_L'], sent: new Set(), sig: '' };
+function c3Renderer(m) {
+	const sig = JSON.stringify(m.spec) + '|' + (m.spacing || 1);
+	if (sig !== C3.sig) { C3.sig = sig; C3.sent = new Set(); }
+	return G.rendererFor(m.spec, { k: 1, spacing: m.spacing || 1 });
+}
+function c3Body(m) {
+	const R = c3Renderer(m), BI = {}, parts = Object.values(R.baked.body);
+	C3.BONES.forEach((b, i) => { BI[b] = i; });
+	let n = 0;
+	for (const bk of parts) n += bk.n;
+	const p1 = new Float32Array(n * 3), n1 = new Float32Array(n * 3), p2 = new Float32Array(n * 3), n2 = new Float32Array(n * 3), sk = new Float32Array(n * 4), mt = new Float32Array(n * 2);
+	let o = 0;
+	for (const bk of parts) {
+		const b1 = BI[bk.bone] | 0;
+		p1.set(bk.pos.subarray(0, bk.n * 3), o * 3); n1.set(bk.nrm.subarray(0, bk.n * 3), o * 3);
+		if (bk.pos2) { p2.set(bk.pos2.subarray(0, bk.n * 3), o * 3); n2.set(bk.nrm2.subarray(0, bk.n * 3), o * 3); }
+		const B2 = bk.bones2 ? bk.bones2.map((b) => BI[b] | 0) : null;
+		for (let i = 0; i < bk.n; i++) {
+			const j = (o + i) * 4, w = bk.w2 ? bk.w2[i] : 0;
+			sk[j] = b1; sk[j + 1] = w > 0 && B2 ? B2[bk.b2[i]] : b1; sk[j + 2] = w > 0 ? w : 0;
+			mt[(o + i) * 2] = bk.mat[i]; mt[(o + i) * 2 + 1] = bk.tone[i];
+		}
+		o += bk.n;
+	}
+	return { bones: C3.BONES, n, p1, n1, p2, n2, sk, mt, ramps: c3Ramps(m.spec), scale: R.spec.scale || 1 };
+}
+function c3Ramps(spec) {
+	const R = G.rampsFor(spec), out = new Uint8Array(32 * 5 * 4);
+	for (const k of Object.keys(R)) {
+		const m = +k;
+		if (!(m >= 0 && m < 32) || !R[k]) continue;
+		R[k].forEach((h, t) => { const c = typeof h === 'string' ? G.hexrgb(h) : h, o = (m * 5 + t) * 4; out[o] = c[0]; out[o + 1] = c[1]; out[o + 2] = c[2]; out[o + 3] = 255; });
+	}
+	return out;
+}
+function c3Clip(m) {
+	const R = c3Renderer(m), [name, w0] = m.key.split(':'), cd = G.clipDef(name, w0, HERO, { hand: m.spec.hand || null });
+	const n = cd.poses.length, NB = C3.BONES.length, B = new Float32Array(n * NB * 12), sc = new Float32Array(n), props = [], newProps = {};
+	cd.poses.forEach((pose, f) => {
+		const P = pose.adult ? pose.adult() : pose, BB = P.B || pose.bones();
+		sc[f] = pose.scale || 1;
+		C3.BONES.forEach((b, i) => { const M = BB[b], o = (f * NB + i) * 12; if (!M) return; B.set(M.R, o); B.set(M.t, o + 9); });
+		const fp = [];
+		for (const [pn, Mp] of P.props || []) {
+			const bk = R.baked.props[pn];
+			if (!bk) continue;
+			const a = new Float32Array(12); a.set(Mp.R); a.set(Mp.t, 9); fp.push([pn, a]);
+			if (!C3.sent.has(pn)) {
+				C3.sent.add(pn);
+				const mt = new Float32Array(bk.n * 2);
+				for (let i = 0; i < bk.n; i++) { mt[i * 2] = bk.mat[i]; mt[i * 2 + 1] = bk.tone ? bk.tone[i] : 0; }
+				newProps[pn] = { n: bk.n, p: Float32Array.from(bk.pos.subarray(0, bk.n * 3)), nrm: Float32Array.from(bk.nrm.subarray(0, bk.n * 3)), mt };
+			}
+		}
+		props.push(fp);
+	});
+	return { key: m.key, fps: cd.fps, loop: !!cd.loop, n, B, sc, props, newProps };
+}
+
 let chain = Promise.resolve();
 async function run(m) {
 	if (drop.has(m.job)) { self.postMessage({ job: m.job, cancelled: true }); return; }
@@ -6686,6 +6779,8 @@ async function run(m) {
 		else if (m.type === 'preview') runPreview(m);
 		else if (m.type === 'clips') { await runClips(m); self.postMessage({ job: m.job, done: true }); }
 		else if (m.type === 'pack') self.postMessage({ job: m.job, packed: await runPack(m) });
+		else if (m.type === 'char3d') { const c = c3Body(m); self.postMessage({ job: m.job, char3d: c }, [c.p1.buffer, c.n1.buffer, c.p2.buffer, c.n2.buffer, c.sk.buffer, c.mt.buffer, c.ramps.buffer]); }
+		else if (m.type === 'char3dClip') { const c = c3Clip(m); self.postMessage({ job: m.job, clip3d: c }); }
 	} catch (err) {
 		if (err === STOP) self.postMessage({ job: m.job, cancelled: true });
 		else self.postMessage({ job: m.job, error: String((err && err.stack) || err) });
