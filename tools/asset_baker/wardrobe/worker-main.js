@@ -168,8 +168,8 @@ function runPreview(m) {
 // peso — skin linear de 2 ossos, como o skinPose do renderizador) e, por clipe, as matrizes dos ossos de cada pose: a GPU monta e
 // ilumina o boneco na câmera de verdade. Cada MODELO (mid) é uma ficha: a do jogador (spec, com as rampas de cor dela) ou a de um TIPO
 // de NPC (type: a forma é a mesma em todas as variantes — as cores vêm da paleta do jogo, por linha).
-//   { type: 'char3d', job, mid, spec | npc, spacing }   → { job, mid, char3d: { bones, n, p1, n1, p2, n2, sk, mt, ramps?, scale } }
-//   { type: 'char3dClip', job, mid, key }                → { job, mid, clip3d: { key, fps, loop, n, B, sc, props, newProps } }
+//   { type: 'char3d', job, mid, spec | npc (+ dmg), spacing } → { job, mid, char3d: { bones, n, p1, n1, p2, n2, sk, mt, fa, fb, faces, ramps?, scale } }
+//   { type: 'char3dClip', job, mid, key }                → { job, mid, clip3d: { key, fps, loop, n, B, sc, props, newProps, ex, fx } }
 //   { type: 'char3dDrop', mid }                          (o jogo largou o modelo)
 const C3 = { BONES: ['root', 'pelvis', 'chest', 'head', 'uarm_R', 'farm_R', 'hand_R', 'thigh_R', 'shin_R', 'foot_R', 'uarm_L', 'farm_L', 'hand_L', 'thigh_L', 'shin_L', 'foot_L'], models: new Map() };
 function c3Model(m) {
@@ -177,7 +177,8 @@ function c3Model(m) {
 	if (!M) {
 		if (!m.spec && !m.npc) throw new Error('modelo 3D desconhecido: ' + m.mid);
 		if (m.npc && !G.TYPES[m.npc]) throw new Error('tipo desconhecido: ' + m.npc);
-		M = { spec: m.spec || G.variantSpec(m.npc, 0), type: m.npc || HERO, own: !!m.spec, spacing: m.spacing || 1, sent: new Set() };
+		const spec = m.spec || Object.assign({}, G.variantSpec(m.npc, 0), m.dmg ? { dmg: m.dmg } : {});      // (dmg: o sangue assado, como os atlas de dano)
+		M = { spec, type: m.npc || HERO, own: !!m.spec, spacing: m.spacing || 1, sent: new Set() };
 		C3.models.set(m.mid, M);
 	}
 	return M;
@@ -203,7 +204,22 @@ function c3Body(m) {
 		}
 		o += bk.n;
 	}
-	return { bones: C3.BONES, n, p1, n1, p2, n2, sk, mt, ramps: M.own ? c3Ramps(M.spec) : null, scale: s.scale || 1 };
+	// EXPRESSÕES do rosto (G.FACES: angry, rage, scared, pain, closed — a pose escolhe, pose.expr): os mesmos pontos da cabeça com outro
+	// material/tom. Por ponto, um código por expressão (0 = igual; senão 1 + material × 16 + tom + 8): fa = as 4 primeiras, fb = a 5ª.
+	const fa = new Float32Array(n * 4), fb = new Float32Array(n), FX = G.FACES;
+	o = 0;
+	for (const bk of parts) {
+		if (bk.faces) FX.forEach((e, k) => {
+			const f = bk.faces[e];
+			if (!f) return;
+			for (let i = 0; i < bk.n; i++) {
+				const c = 1 + f.mat[i] * 16 + Math.max(-8, Math.min(7, f.tone[i])) + 8;
+				if (k < 4) fa[(o + i) * 4 + k] = c; else fb[o + i] = c;
+			}
+		});
+		o += bk.n;
+	}
+	return { bones: C3.BONES, n, p1, n1, p2, n2, sk, mt, fa, fb, faces: FX, ramps: M.own ? c3Ramps(M.spec) : null, scale: s.scale || 1 };
 }
 function c3Ramps(spec) {
 	const R = G.rampsFor(spec), out = new Uint8Array(32 * 5 * 4);
@@ -219,9 +235,15 @@ function c3Clip(m) {
 	c3Rig(M);
 	const cd = G.clipDef(name, w0, M.type, { hand: M.spec.hand || null }), PR = G.bakeProps(M.spacing * 0.8);
 	const n = cd.poses.length, NB = C3.BONES.length, B = new Float32Array(n * NB * 12), sc = new Float32Array(n), props = [], newProps = {};
+	const ex = new Int8Array(n), fx = [], FL = { flash: 1, casing: 2 };
 	cd.poses.forEach((pose, f) => {
 		const P = pose.adult ? pose.adult() : pose, BB = P.B || pose.bones();
 		sc[f] = pose.scale || 1;
+		ex[f] = pose.expr ? G.FACES.indexOf(pose.expr) + 1 : 0;
+		// efeitos da pose no espaço do corpo: [tipo, x, y, z, dx, dy, dz, tamanho] (clarão do tiro, cápsula)
+		const E = [];
+		for (const e of P.effects || []) if (FL[e.type] && e.pos) { const d = e.dir || [0, 1, 0]; E.push(FL[e.type], e.pos[0], e.pos[1], e.pos[2], d[0], d[1], d[2], e.size || 1); }
+		fx.push(E.length ? Float32Array.from(E) : null);
 		C3.BONES.forEach((b, i) => { const X = BB[b], o = (f * NB + i) * 12; if (!X) return; B.set(X.R, o); B.set(X.t, o + 9); });
 		const fp = [];
 		for (const [pn, Mp] of P.props || []) {
@@ -237,7 +259,7 @@ function c3Clip(m) {
 		}
 		props.push(fp);
 	});
-	return { key: m.key, fps: cd.fps, loop: !!cd.loop, n, B, sc, props, newProps };
+	return { key: m.key, fps: cd.fps, loop: !!cd.loop, n, B, sc, props, newProps, ex, fx };
 }
 
 let chain = Promise.resolve();
@@ -248,7 +270,7 @@ async function run(m) {
 		else if (m.type === 'preview') runPreview(m);
 		else if (m.type === 'clips') { await runClips(m); self.postMessage({ job: m.job, done: true }); }
 		else if (m.type === 'pack') self.postMessage({ job: m.job, packed: await runPack(m) });
-		else if (m.type === 'char3d') { const c = c3Body(m); self.postMessage({ job: m.job, mid: m.mid, char3d: c }, [c.p1.buffer, c.n1.buffer, c.p2.buffer, c.n2.buffer, c.sk.buffer, c.mt.buffer].concat(c.ramps ? [c.ramps.buffer] : [])); }
+		else if (m.type === 'char3d') { const c = c3Body(m); self.postMessage({ job: m.job, mid: m.mid, char3d: c }, [c.p1.buffer, c.n1.buffer, c.p2.buffer, c.n2.buffer, c.sk.buffer, c.mt.buffer, c.fa.buffer, c.fb.buffer].concat(c.ramps ? [c.ramps.buffer] : [])); }
 		else if (m.type === 'char3dClip') { const c = c3Clip(m); self.postMessage({ job: m.job, mid: m.mid, clip3d: c }); }
 		else if (m.type === 'char3dDrop') C3.models.delete(m.mid);
 	} catch (err) {

@@ -37,6 +37,9 @@ const Char3D = {
 			attribute vec3 n2;
 			attribute vec4 sk;           // osso 1, osso 2, peso do 2
 			attribute vec2 mt;           // material, tom
+			attribute vec4 fa;           // EXPRESSÕES do rosto (cabeça): código do ponto em angry, rage, scared, pain (0 = igual)
+			attribute float fb;          // … e em closed (código = 1 + material × 16 + tom + 8)
+			uniform float expr;          // expressão do quadro (0 = a da ficha, 1–5 = G.FACES)
 			uniform mat4 world;
 			uniform mat4 viewProjection;
 			uniform vec4 B[48];          // 16 ossos × 3 linhas (R | t)
@@ -45,11 +48,17 @@ const Char3D = {
 			uniform float splat;         // diâmetro do ponto (m)
 			uniform vec3 eye;
 			uniform vec3 sunL;           // para onde está o sol (mundo)
+			uniform float groundY;       // SOMBRA: altura do chão sob os pés
 			varying vec2 vMt;
 			varying float vLev;
 			vec3 xp(int b, vec3 p) { vec4 r0 = B[b * 3], r1 = B[b * 3 + 1], r2 = B[b * 3 + 2]; return vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w); }
 			vec3 xn(int b, vec3 n) { return vec3(dot(B[b * 3].xyz, n), dot(B[b * 3 + 1].xyz, n), dot(B[b * 3 + 2].xyz, n)); }
 			void main(void) {
+				vec2 mtv = mt;
+				if (expr > 0.5) {
+					float c = expr < 1.5 ? fa.x : expr < 2.5 ? fa.y : expr < 3.5 ? fa.z : expr < 4.5 ? fa.w : fb;
+					if (c > 0.5) { c -= 1.0; float m = floor(c / 16.0 + 0.001); mtv = vec2(m, c - m * 16.0 - 8.0); }
+				}
 				int b1 = int(sk.x + 0.5), b2 = int(sk.y + 0.5);
 				float w = sk.z;
 				vec3 p = xp(b1, position), n = xn(b1, normal);
@@ -57,6 +66,14 @@ const Char3D = {
 				vec4 wp = world * vec4(vec3(p.x, p.z, p.y) * unit, 1.0);
 				vec3 nw = normalize((world * vec4(n.x, n.z, n.y, 0.0)).xyz);
 				vec3 V = normalize(eye - wp.xyz);
+				#ifdef SHADOW
+				// SOMBRA projetada: cada ponto desce na direção do sol até o chão (a silhueta da pose, deitada no chão)
+				wp.xyz -= sunL * ((wp.y - groundY) / max(sunL.y, 0.2));
+				gl_Position = viewProjection * wp;
+				gl_PointSize = clamp(splat * pScale / max(gl_Position.w, 0.05), 1.0, 48.0);
+				vLev = 0.0; vMt = vec2(0.0);
+				return;
+				#endif
 				if (dot(nw, V) < -0.2) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }    // (de costas: atrás do resto)
 				#ifdef SIL
 				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }     // (os pés rente ao chão: o chão não esconde ninguém)
@@ -66,10 +83,10 @@ const Char3D = {
 				gl_PointSize = clamp(splat * pScale / max(gl_Position.w, 0.05), 1.0, 48.0);
 				// luz em faixas, como o desenho (NpcGenRender, sombreado de 5 tons): 1 + degraus da luz + o tom do ponto (textura)
 				float d = dot(nw, sunL);
-				float lev = 1.0 + smoothstep(-0.36, -0.24, d) + smoothstep(0.24, 0.36, d) + smoothstep(0.74, 0.86, d) + clamp(mt.y, -1.5, 1.0);      // (tom: no atlas, a média do pixel suavizava as dobras mais fundas)
+				float lev = 1.0 + smoothstep(-0.36, -0.24, d) + smoothstep(0.24, 0.36, d) + smoothstep(0.74, 0.86, d) + clamp(mtv.y, -1.5, 1.0);      // (tom: no atlas, a média do pixel suavizava as dobras mais fundas)
 				lev += 0.35 * clamp(dot(nw, V), 0.0, 1.0) - 0.15;                // (o que encara a câmera um pouco mais claro: volume)
 				vLev = clamp(lev, 0.0, 4.0);
-				vMt = mt;
+				vMt = mtv;
 			}`;
 		BABYLON.Effect.ShadersStore.char3dFragmentShader = `
 			precision highp float;
@@ -87,6 +104,9 @@ const Char3D = {
 				if (dot(q, q) > 0.25) discard;
 				#ifdef SIL
 				gl_FragColor = vec4(silhouette.rgb * silhouette.a, silhouette.a); return;
+				#endif
+				#ifdef SHADOW
+				gl_FragColor = vec4(0.0, 0.0, 0.0, silhouette.a); return;      // (silhouette.a = força da sombra)
 				#endif
 				#ifdef PAL
 				float m = floor(vMt.x + 0.5), i0 = floor(vLev), i1 = min(i0 + 1.0, 4.0), y = (row + 0.5) / palRows;
@@ -109,10 +129,21 @@ const Char3D = {
 		w.onerror = (e) => { if (e.preventDefault) e.preventDefault(); console.warn('Char3D: o gerador não abriu', e.message || e); for (const M of this._models.values()) if (M.kind === kind) M.failed = true; };
 		return w;
 	},
+	_shadowV: new BABYLON.Vector4(0, 0, 0, 0.42),
+	// Força do sol (0 de noite / em interiores, 1 de dia): pelo brilho da cor ambiente dos sprites (SpriteMaterial.sharedTint).
+	sunK() {
+		if (typeof Interiors !== 'undefined' && Interiors.active) return 0;
+		const t = typeof SpriteMaterial !== 'undefined' ? SpriteMaterial.sharedTint() : null;
+		if (!t) return 1;
+		const l = 0.3 * t.r + 0.59 * t.g + 0.11 * t.b;
+		return Math.max(0, Math.min(1, (l - 0.45) / 0.4));
+	},
 	// Modelo de um tipo de NPC (um por tipo: as variantes só mudam a cor).
-	typeModel(type) {
-		let M = this._types.get(type);
-		if (!M) { M = new Char3DModel(this._scene, { npc: type, spacing: (this.C.npc && this.C.npc.spacing) || 1.3, kind: 'npc' }); this._types.set(type, M); }
+	// dmg = nível de dano (o sangue assado, como os atlas de dano do NpcArt: um modelo por tipo e nível).
+	typeModel(type, dmg = 0) {
+		const key = type + '|' + dmg;
+		let M = this._types.get(key);
+		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: (this.C.npc && this.C.npc.spacing) || 1.3, kind: 'npc' }); this._types.set(key, M); }
 		return M;
 	},
 
@@ -133,7 +164,9 @@ const Char3D = {
 	},
 	// O visual do jogador (guarda-roupa, bolsa, aparência): mudou → um modelo novo (o antigo some quando o novo fica pronto).
 	_playerSpec(force) {
-		const P = this._game.player.char3d, spec = JSON.parse(JSON.stringify(PlayerLook.spec())), sig = JSON.stringify(spec);
+		const P = this._game.player.char3d, spec = JSON.parse(JSON.stringify(PlayerLook.spec())), dmg = PlayerLook.dmg ? PlayerLook.dmg() : 0;
+		if (dmg) spec.dmg = dmg;                 // (machucado: o sangue assado na roupa e no corpo, como os atlas de dano)
+		const sig = JSON.stringify(spec);
 		if (!force && sig === this._pSig) return;
 		this._pSig = sig;
 		const M = new Char3DModel(this._scene, { spec, spacing: this.C.spacing || 0.8, kind: 'player' });
@@ -146,6 +179,8 @@ const Char3D = {
 			V.eye.copyFrom(cam.globalPosition || cam.position);
 			V.pScale = (sc.getEngine().getRenderHeight() * cam.getProjectionMatrix().m[5]) / 2;
 		}
+		const L = this._game.gameEngine && this._game.gameEngine.sun;      // (o sol da cena: a hora do dia move a luz e a sombra)
+		if (L && L.direction) { this.sun.copyFrom(L.direction).scaleInPlace(-1); if (this.sun.y < 0.15) this.sun.y = 0.15; this.sun.normalize(); }
 		const pl = this._game.player;
 		if (pl.char3d) {
 			if ((this._chk = (this._chk || 0) - dt) <= 0) { this._chk = 1; this._playerSpec(false); }
@@ -175,28 +210,58 @@ const Char3D = {
 		for (const [, a] of cand) if (/^protagonista/.test(a.npcType)) keep.add(a); else if (k < max) { keep.add(a); k++; }
 		// (o jogador PILOTANDO — moto, bicicleta, jet ski: o piloto é outro ator, com a folha dele — usa o modelo do visual dele)
 		const PM = pl && pl.char3d && pl.char3d.model, hero = (a) => /^protagonista/.test(a.npcType);
-		for (const [a, C] of this.npcs) if (!keep.has(a) || (hero(a) && C.model !== PM)) { C.dispose(); this.npcs.delete(a); }
-		for (const a of keep) if (!this.npcs.has(a)) {
-			if (hero(a)) { if (PM && PM.ready) this.npcs.set(a, new Char3DActor(this._scene, a, PM, { name: 'jogador3d_piloto' })); continue; }
-			const type = String((a.sheet && a.sheet.baseId) || a.npcType).replace(/#d\d+$/, ''), M = this.typeModel(type);
-			if (M.failed) continue;
-			this.npcs.set(a, new Char3DActor(this._scene, a, M, { name: 'npc3d', pal: true }));
+		const modelOf = (a) => {
+			if (hero(a)) return PM && PM.ready ? PM : null;
+			const M = this.typeModel(String((a.sheet && a.sheet.baseId) || a.npcType).replace(/#d\d+$/, ''), (a.sheet && a.sheet.dmgLvl) | 0);
+			return M.failed ? null : M;
+		};
+		for (const a of keep) {
+			const C = this.npcs.get(a), M = modelOf(a);
+			if (C && M && C.model !== M) {
+				// machucou (outro nível de dano) ou o jogador trocou de roupa: o modelo novo entra quando estiver pronto (sem piscar)
+				if (M.ready) C.setModel(M);
+				continue;
+			}
+			if (C && !M) { C.dispose(); this.npcs.delete(a); continue; }
+			if (!C && M) this.npcs.set(a, new Char3DActor(this._scene, a, M, hero(a) ? { name: 'jogador3d_piloto' } : { name: 'npc3d', pal: true }));
 		}
+		for (const [a, C] of this.npcs) if (!keep.has(a)) { C.dispose(); this.npcs.delete(a); }
 	},
+};
+
+// O clarão do tiro: dois planos cruzados de 1 × 1 ao longo de +Z (da boca do cano para a frente), textura de chama, brilho aditivo.
+Char3D.flashMesh = function (scene, parent, group) {
+	let src = this._flashSrc;
+	if (!src || src.isDisposed()) {
+		const t = new BABYLON.DynamicTexture('c3d_clarao', { width: 64, height: 128 }, scene, false), g = t.getContext();
+		const r = g.createRadialGradient(32, 112, 2, 32, 80, 64);
+		r.addColorStop(0, 'rgba(255,252,228,1)'); r.addColorStop(0.25, 'rgba(255,214,72,0.95)'); r.addColorStop(0.6, 'rgba(255,128,32,0.6)'); r.addColorStop(1, 'rgba(255,90,10,0)');
+		g.fillStyle = r; g.beginPath(); g.ellipse(32, 72, 28, 56, 0, 0, Math.PI * 2); g.fill(); t.update(); t.hasAlpha = true;
+		const m = new BABYLON.StandardMaterial('c3d_claraoMat', scene);
+		m.emissiveTexture = t; m.opacityTexture = t; m.disableLighting = true; m.backFaceCulling = false; m.alphaMode = BABYLON.Engine.ALPHA_ADD; m.disableDepthWrite = true;
+		const a = BABYLON.MeshBuilder.CreatePlane('c3d_claraoA', { size: 1, sideOrientation: BABYLON.Mesh.DOUBLESIDE }, scene);
+		a.rotation.x = -Math.PI / 2; a.position.z = 0.5; a.bakeCurrentTransformIntoVertices();
+		const b = a.clone('c3d_claraoB'); b.rotation.z = Math.PI / 2; b.bakeCurrentTransformIntoVertices();
+		src = this._flashSrc = BABYLON.Mesh.MergeMeshes([a, b], true);
+		src.material = m; src.isPickable = false; src.setEnabled(false);
+	}
+	const f = src.clone('c3d_clarao', parent);
+	f.renderingGroupId = group; f.isPickable = false; f.setEnabled(false);
+	return f;
 };
 
 // ----------------------------------------------------------------------------
 // Uma ficha assada (pontos + clipes + objetos na mão), compartilhada por todos os atores que a usam.
 // ----------------------------------------------------------------------------
 class Char3DModel {
-	constructor(scene, { spec = null, npc = null, spacing = 1, kind = 'npc' }) {
+	constructor(scene, { spec = null, npc = null, dmg = 0, spacing = 1, kind = 'npc' }) {
 		this.scene = scene; this.spacing = spacing; this.kind = kind; this.mid = ++Char3D._mid;
 		this.clips = new Map();          // 'nome:arma' → clipe | 'wait' | 'fail'
 		this.props = new Map();          // nome do objeto → malha-modelo (escondida; os atores clonam)
 		this.ready = false; this.failed = false; this.onReady = null;
 		Char3D._models.set(this.mid, this);
 		this.w = Char3D.worker(kind);
-		this.w.postMessage({ type: 'char3d', job: 1, mid: this.mid, spec, npc, spacing });
+		this.w.postMessage({ type: 'char3d', job: 1, mid: this.mid, spec, npc, dmg, spacing });
 	}
 	_msg(m) {
 		if (m.error) {
@@ -213,10 +278,11 @@ class Char3DModel {
 		if (K === undefined && this.ready) { this.clips.set(key, 'wait'); this.w.postMessage({ type: 'char3dClip', job: 1, mid: this.mid, key }); }
 		return K;
 	}
-	_points(name, n, P1, N1, P2, N2, SK, MT) {
+	_points(name, n, P1, N1, P2, N2, SK, MT, FA, FB) {
 		const mesh = new BABYLON.Mesh(name, this.scene);
 		const E = this.scene.getEngine(), vb = (data, kind, size) => mesh.setVerticesBuffer(new BABYLON.VertexBuffer(E, data, kind, false, false, size));
 		vb(P1, 'position', 3); vb(N1, 'normal', 3); vb(P2 || P1, 'p2', 3); vb(N2 || N1, 'n2', 3); vb(SK, 'sk', 4); vb(MT, 'mt', 2);
+		vb(FA || new Float32Array(n * 4), 'fa', 4); vb(FB || new Float32Array(n), 'fb', 1);
 		mesh.isUnIndexed = true; mesh._unIndexed = true;
 		mesh.subMeshes = [];
 		new BABYLON.SubMesh(0, 0, n, 0, n, mesh);
@@ -232,7 +298,7 @@ class Char3DModel {
 			this.ramps.wrapU = this.ramps.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 		}
 		this.n = c.n;
-		this.body = this._points('c3d_corpo' + this.mid, c.n, c.p1, c.n1, c.p2, c.n2, c.sk, c.mt);
+		this.body = this._points('c3d_corpo' + this.mid, c.n, c.p1, c.n1, c.p2, c.n2, c.sk, c.mt, c.fa, c.fb);
 		this.ready = true;
 		if (this.onReady) this.onReady(this);
 	}
@@ -278,6 +344,7 @@ class Char3DActor {
 		this.body.material = this.bodyMat = this._mat(this.name + '_mat');
 		this.bodyMat.onBindObservable.add(() => this._bindCommon(this.bodyMat, this._B));
 		if (this.wantXray) this._xrayBuild();
+		if (this.C.shadow !== false) this._shadowBuild();
 		this._built = true;
 	}
 	_clone(src, name) {
@@ -288,18 +355,20 @@ class Char3DActor {
 		m.setEnabled(true);
 		return m;
 	}
+	// sil: 'xray' (silhueta dourada) | 'shadow' (sombra projetada) | false (o desenho)
 	_mat(name, sil = false) {
 		const pal = this.pal && !sil, defines = [];
-		if (sil) defines.push('#define SIL');
+		if (sil === 'shadow') defines.push('#define SHADOW');
+		else if (sil) defines.push('#define SIL');
 		if (pal) defines.push('#define PAL');
 		const m = new BABYLON.ShaderMaterial(name, this.scene, { vertex: 'char3d', fragment: 'char3d' }, {
-			attributes: ['position', 'normal', 'p2', 'n2', 'sk', 'mt'],
-			uniforms: ['world', 'viewProjection', 'B', 'unit', 'pScale', 'splat', 'eye', 'sunL', 'tint', 'shade', 'silhouette', 'palRows', 'row'],
+			attributes: ['position', 'normal', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
+			uniforms: ['world', 'viewProjection', 'B', 'unit', 'pScale', 'splat', 'eye', 'sunL', 'tint', 'shade', 'silhouette', 'palRows', 'row', 'expr', 'groundY'],
 			samplers: ['ramps', 'palette'],
 			defines,
-			needAlphaBlending: sil,
+			needAlphaBlending: !!sil,
 		});
-		m.setVector4('silhouette', sil && typeof NpcArt !== 'undefined' ? NpcArt.SILHOUETTE : new BABYLON.Vector4(0, 0, 0, 0));
+		m.setVector4('silhouette', sil === 'shadow' ? Char3D._shadowV : sil && typeof NpcArt !== 'undefined' ? NpcArt.SILHOUETTE : new BABYLON.Vector4(0, 0, 0, 0));
 		if (sil) { m.alphaMode = BABYLON.Engine.ALPHA_PREMULTIPLIED; m.disableDepthWrite = true; }
 		m.fillMode = BABYLON.Material.PointFillMode;
 		m.backFaceCulling = false;
@@ -318,7 +387,10 @@ class Char3DActor {
 		e.setFloat('pScale', Char3D._view.pScale);
 		e.setFloat('splat', M.spacing * M.unit * (this.C.splat || 2.1));
 		e.setFloat('shade', this.actor.shade || 1);
+		e.setFloat('expr', B === this._B ? this._expr || 0 : 0);
+		e.setFloat('groundY', this.root.position.y + 0.03);
 		if (this.pal) e.setFloat('row', this.actor.npcRow || 0);
+		if (m === (this._sh3 && this._sh3.material)) e.setVector4('silhouette', Char3D._shadowV.set(0, 0, 0, 0.42 * (this._sun || 0)));
 	}
 	// RAIO-X (render/XRaySilhouette.js): o jogador visto ATRÁS do que o esconde, em silhueta dourada — as mesmas duas cópias do 2,5D,
 	// agora do boneco 3D: 1) atrás do que grava profundidade (prédio, muro, carro: só onde já há algo mais perto — GREATER), marcando 2
@@ -331,13 +403,23 @@ class Char3DActor {
 		this._xr = [[false, L, C.NOTEQUAL, 2, C.REPLACE, C.GREATER], [true, L + 1, C.EQUAL, 1, C.KEEP, C.ALWAYS]].map(([over, ai, func, ref, pass, depth]) => {
 			const m = this._clone(this.model.body, this.name + (over ? '_xrayC' : '_xray'));
 			m.alphaIndex = ai;
-			const mat = m.material = this._mat(m.name + '_mat', true);
+			const mat = m.material = this._mat(m.name + '_mat', 'xray');
 			mat.depthFunction = depth;
 			mat.onBindObservable.add(() => this._bindCommon(mat, this._B));
 			XRaySilhouette.stencil(m, func, ref, pass);
 			m.setEnabled(false);
 			return m;
 		});
+	}
+	// SOMBRA PROJETADA: os mesmos pontos, achatados no chão na direção do sol, em preto translúcido. O stencil (4) deixa cada pixel do chão
+	// escurecer uma vez só — sem ele, os pontos sobrepostos fariam manchas mais escuras.
+	_shadowBuild() {
+		const C = BABYLON.Constants, m = this._clone(this.model.body, this.name + '_sombra3d');
+		const mat = m.material = this._mat(m.name + '_mat', 'shadow');
+		mat.zOffset = -4;
+		mat.onBindObservable.add(() => this._bindCommon(mat, this._B));
+		if (typeof XRaySilhouette !== 'undefined') XRaySilhouette.stencil(m, C.NOTEQUAL, 4, C.REPLACE);
+		this._sh3 = m;
 	}
 	// Ligado pelo XRaySilhouette.update a cada quadro (no lugar das cópias do desenho 2,5D).
 	xray(on) { if (this._xr) for (const m of this._xr) if (m.isEnabled() !== on) m.setEnabled(on); }
@@ -417,6 +499,9 @@ class Char3DActor {
 			}
 		}
 		this._sc = K.sc[f0] + (K.sc[f1] - K.sc[f0]) * t;
+		const fn = t < 0.5 ? f0 : f1;
+		this._expr = K.ex ? K.ex[fn] : 0;
+		this._fx(K.fx && K.fx[fn]);
 		// objetos na mão: os do quadro mais perto
 		const fp = K.props[t < 0.5 ? f0 : f1] || [], on = this._on || (this._on = new Set());
 		on.clear();
@@ -429,27 +514,51 @@ class Char3DActor {
 		}
 		for (const [name, P] of this.props) if (P && !on.has(name) && P.mesh.isEnabled()) P.mesh.setEnabled(false);
 	}
+	// EFEITOS do quadro (no espaço do corpo): o CLARÃO do tiro na boca do cano — dois planos cruzados ao longo do disparo, brilho aditivo.
+	_fx(E) {
+		let on = false;
+		if (E) for (let i = 0; i < E.length; i += 8) {
+			if (E[i] !== 1) continue;
+			const F = this._flash || (this._flash = Char3D.flashMesh(this.scene, this.root, this.actor.mesh.renderingGroupId)), u = this.model.unit * (this._sc || 1), sz = E[i + 7];
+			F.position.set(E[i + 1] * u, E[i + 3] * u, E[i + 2] * u);
+			const d = this._dir || (this._dir = new BABYLON.Vector3()), f = Char3DActor._FWD;
+			d.set(E[i + 4], E[i + 6], E[i + 5]).normalize();
+			BABYLON.Quaternion.FromUnitVectorsToRef(f, d, F.rotationQuaternion || (F.rotationQuaternion = new BABYLON.Quaternion()));
+			const L = 12 * sz * u, W = 7 * sz * u;
+			F.scaling.set(W, W, L);
+			on = true;
+			break;
+		}
+		if (this._flash && this._flash.isEnabled() !== on) this._flash.setEnabled(on);
+	}
 	// Onde o SpriteActor está: posição (com o relevo e o pulo: o quad mora a 0,5 acima do chão) e rumo.
 	_place(a) {
 		const m = a.mesh, r = this.root, ly = a.lift ? a.lift.position.y : 0;
 		r.position.set(m.position.x, ly + m.position.y - (typeof NpcArt !== 'undefined' ? NpcArt.LAYER_Y : 0.5), m.position.z);
 		r.rotation.y = a.heading || 0;
-		const sh = !(a._wl > 0.3) && !/^(ride_|sit|swim|dive)/.test(a.clip.name);      // (montado ou sentado: os pés não estão no chão)
-		if (this.shadowMesh.isEnabled() !== sh) this.shadowMesh.setEnabled(sh);
+		const sh = !(a._wl > 0.3) && !/^(ride_|sit|swim|dive|board)/.test(a.clip.name);      // (montado, sentado, nadando: os pés não estão no chão)
+		// sombra projetada ao SOL (na sombra de um prédio, em interiores e de noite ela some aos poucos); a mancha macia fica por baixo
+		const sun = this._sh3 && sh ? Char3D.sunK() * Math.max(0, Math.min(1, ((a.shade || 1) - 0.7) / 0.3)) : 0;
+		if (this._sh3) { const on = sun > 0.02; if (this._sh3.isEnabled() !== on) this._sh3.setEnabled(on); this._sun = sun; }
+		const blob = sh && sun < 0.6;
+		if (this.shadowMesh.isEnabled() !== blob) this.shadowMesh.setEnabled(blob);
 	}
 	// As malhas do ator (não as do modelo).
 	_clear() {
 		for (const P of this.props.values()) if (P) { P.mesh.dispose(); P.mat.dispose(); }
 		this.props.clear();
 		if (this._xr) { for (const m of this._xr) { m.material.dispose(); m.dispose(); } this._xr = null; }
+		if (this._sh3) { this._sh3.material.dispose(); this._sh3.dispose(); this._sh3 = null; }
 		if (this.body) { this.body.dispose(); this.bodyMat.dispose(); this.body = null; }
 		this._built = false;
 	}
 	dispose() {
 		this._clear();
+		if (this._flash) this._flash.dispose();
 		this.shadowMesh.dispose();
 		this.root.dispose();
 		if (!this.actor.mesh.isDisposed()) this._show2d(true);
 		if (this.actor._c3 === this) this.actor._c3 = null;
 	}
 }
+Char3DActor._FWD = new BABYLON.Vector3(0, 0, 1);

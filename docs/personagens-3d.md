@@ -48,7 +48,18 @@ de trás do próprio corpo virariam silhueta.
 2. **NPCs, polícia e gangues** (feito): pedestres, polícia, BOPE, exército, traficantes, pilotos de moto/bicicleta, frequentadores de
    academia e lojas — todo personagem 2,5D do gerador. Teste: `tests/54_personagens3d.test.cjs`.
 
-## Ainda não tem no 3D
+3. **Detalhes** (feito):
+   - **Expressões do rosto**: a pose escolhe (`pose.expr`: raiva, fúria, medo, dor, olhos fechados). O Worker manda, por ponto da cabeça,
+     o material/tom de cada expressão (atributos `fa`/`fb`) e, por quadro do clipe, qual vale (`ex`); o shader troca na hora.
+   - **Clarão do tiro**: os efeitos da pose (`fx` por quadro, no espaço do corpo). O clarão vira dois planos cruzados ao longo do disparo,
+     com brilho aditivo, na boca do cano.
+   - **Sangue do dano**: um modelo por nível de dano (`dmg`, como os atlas de dano). O jogador pelo `PlayerLook.dmg()`, os NPCs pelo
+     `sheet.dmgLvl`. O modelo novo entra quando fica pronto, sem piscar.
+   - **Sombra projetada**: os mesmos pontos, achatados no chão na direção do sol da cena (a hora do dia move a sombra), em preto
+     translúcido. Um stencil (4) deixa cada pixel escurecer uma vez só. Ela some na sombra de prédio, à noite e em interiores; a mancha
+     macia fica por baixo quando a sombra é fraca. `Config.art.char3d.shadow = false` volta só à mancha.
 
-Clarão do tiro e respingos (efeitos da pose), expressões do rosto (`faces`), sangue do dano (`dmg`) e sombra projetada (há uma mancha
-macia sob os pés).
+## Limitações
+
+A sombra projetada assume o chão plano na altura dos pés: em encosta, parte dela entra no terreno. Cápsulas, rastros de golpe e respingos
+d'água (os outros efeitos da pose) ainda não aparecem no 3D.
