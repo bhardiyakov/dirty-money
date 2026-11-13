@@ -210,7 +210,7 @@ const Char3D = {
 		const sig = JSON.stringify(spec);
 		if (!force && sig === this._pSig) return;
 		this._pSig = sig;
-		const M = new Char3DModel(this._scene, { spec, spacing: this.C.spacing || 0.8, kind: 'player' });
+		const M = new Char3DModel(this._scene, { spec, spacing: this.C.spacing || 1.0, kind: 'player' });
 		M.onReady = () => { const old = P.model; P.setModel(M); if (old && old !== M) old.dispose(); };
 		this._pNext = M;
 	},
