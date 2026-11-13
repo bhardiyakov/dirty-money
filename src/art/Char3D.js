@@ -56,11 +56,15 @@ const Char3D = {
 				vec3 nw = normalize((world * vec4(n.x, n.z, n.y, 0.0)).xyz);
 				vec3 V = normalize(eye - wp.xyz);
 				if (dot(nw, V) < -0.2) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }    // (de costas: atrás do resto)
+				#ifdef SIL
+				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }     // (os pés rente ao chão: o chão não esconde ninguém)
+				wp.xyz += V * 0.06;          // (raio-X: folga contra o empate de profundidade com o próprio corpo)
+				#endif
 				gl_Position = viewProjection * wp;
 				gl_PointSize = clamp(splat * pScale / max(gl_Position.w, 0.05), 1.0, 48.0);
 				// luz em faixas, como o desenho (NpcGenRender, sombreado de 5 tons): 1 + degraus da luz + o tom do ponto (textura)
 				float d = dot(nw, sunL);
-				float lev = 1.0 + smoothstep(-0.36, -0.24, d) + smoothstep(0.24, 0.36, d) + smoothstep(0.74, 0.86, d) + mt.y;
+				float lev = 1.0 + smoothstep(-0.36, -0.24, d) + smoothstep(0.24, 0.36, d) + smoothstep(0.74, 0.86, d) + clamp(mt.y, -1.5, 1.0);      // (tom: no atlas, a média do pixel suavizava as dobras mais fundas)
 				lev += 0.35 * clamp(dot(nw, V), 0.0, 1.0) - 0.15;                // (o que encara a câmera um pouco mais claro: volume)
 				vLev = clamp(lev, 0.0, 4.0);
 				vMt = mt;
@@ -179,7 +183,9 @@ class Char3DActor {
 	_xrayBuild() {
 		if (typeof XRaySilhouette === 'undefined') return;
 		const C = BABYLON.Constants, L = XRaySilhouette.DRAW_LAST;
-		this._xr = [[false, L, C.ALWAYS, 2, C.REPLACE, C.GREATER], [true, L + 1, C.EQUAL, 1, C.KEEP, C.ALWAYS]].map(([over, ai, func, ref, pass, depth]) => {
+		// (o corpo marca 2 no stencil onde ele mesmo aparece: os pontos de trás dele — que passariam no GREATER — não viram silhueta)
+		XRaySilhouette.stencil(this.body, C.ALWAYS, 2, C.REPLACE);
+		this._xr = [[false, L, C.NOTEQUAL, 2, C.REPLACE, C.GREATER], [true, L + 1, C.EQUAL, 1, C.KEEP, C.ALWAYS]].map(([over, ai, func, ref, pass, depth]) => {
 			const m = this.body.clone(this.name + (over ? '_xrayC' : '_xray'), this.root);
 			m.isUnIndexed = true; m._unIndexed = true;
 			m.isPickable = false; m.alwaysSelectAsActiveMesh = true; m.alphaIndex = ai; m.renderingGroupId = this.body.renderingGroupId;
