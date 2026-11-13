@@ -102,6 +102,8 @@ class Game {
 		this.player = new Player(this.scene, this.sprites, CityGrid.startPos());
 		if (typeof PlayerLook !== 'undefined') PlayerLook.attach(this);      // visual do jogador (roupa, bolsa, aparência) no personagem 2,5D
 		this.xray = new XRaySilhouette(this.scene, this.player.actor);      // 2.5D camera: the player's silhouette through what hides him
+		if (typeof Char3D !== 'undefined' && Char3D.on && Char3D.C.player !== false && typeof PlayerLook !== 'undefined')
+			this.player.char3d = new Char3DActor(this.scene, this.player.actor, () => PlayerLook.spec(), { spacing: Char3D.C.spacing || 0.8, name: 'jogador3d' });      // o jogador em 3D (art/Char3D.js)
 		const sp = SafeHouse.spawnWorld();
 		if (sp) this.player.root.rotation.y = sp.face;      // acorda dentro da safe house, de frente para a porta
 		this.camera = new CompassCamera(this.scene, this.gameEngine.engine, this.player.position);

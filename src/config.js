@@ -45,6 +45,9 @@ const Config = {
 		charScale: 0.8,        // escala do DESENHO dos personagens (atlas vetorial). Os carros são de tamanho real; isto aproxima a proporção.
 		npcPpu: 26,            // personagens 2,5D (NpcArt): px do atlas por metro — adultos na mesma escala dos veículos. = NpcGenBuild.PPU (pilotos × motos)
 		npcAA: 4,              // antisserrilhado dos personagens 2,5D: amostras por lado do pixel no shader (4 = até 16 por pixel; 1 = desligado). Ver NpcArt
+		// PERSONAGENS EM 3D (art/Char3D.js): o mesmo boneco do atlas, montado ao vivo na GPU com o esqueleto do gerador — visto de
+		// qualquer ângulo pela câmera. Fase 1: o jogador. splat = tamanho de cada ponto (× o espaçamento). `?boneco=2d` = o desenho 2,5D.
+		char3d: { on: true, player: true, spacing: 0.8, splat: 2.1, blend: true },
 		npcDirs: 16,           // direções desenhadas dos personagens 2,5D. Perfil leve: 8 (só as páginas pares dos atlas; os visuais do guarda-roupa saem com 8)
 		// CHÃO com as fotos CC0 (art/GroundPhotos.js, etapa 3): o pintado de sempre + o grão das fotos + o relevo delas. `?chao=0` volta
 		// ao chão só pintado; `?chao=foto`, `?chao=misto` e `,relevo` para comparar.
