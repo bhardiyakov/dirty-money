@@ -78,6 +78,9 @@ const Corcovado = {
         return Math.max(0, top * Math.pow(t, 1.25) + bump);
     },
 
+    // Altura do morro (acima do platô) num ponto do MUNDO (0 fora dele) — a câmera não entra nele; quem ficou no chão lá dentro é resgatado.
+    hmWorld(x, z) { if (!this.built) return 0; const p = this.local(x, z); return this.hm(p.x, p.z); },
+
     // ---------------------------------------------------------------- lugares e a rede de caminhos
     build() {
         if (this.built) return;

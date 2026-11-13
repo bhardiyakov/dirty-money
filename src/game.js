@@ -698,6 +698,7 @@ class Game {
 			// (uma batida forte pode arremessar o piloto de dentro do drive(): aí o foco é o jogador)
 			const drv = this.mode === 'car' && this.activeCar ? this.activeCar : null;
 			this.camera.setFlat(false);
+			this.camera.footLift = drv && drv._onDeck ? drv.elev || 0 : 0;                    // (no viaduto, a câmera sobe junto com o carro)
 			this.camera.follow((drv || this.player).position, dt, drv);       // dirigindo: câmera bússola (gira com o carro)
 		} else if (this.mode === 'heli' && this.chopper) {
 			// Helicóptero: o controle é lido em _updateChoppers (que também prende o jogador invisível à posição dele e segue a câmera).
@@ -720,9 +721,11 @@ class Game {
 			HouseView.update(dt, this);                          // safe house: porta, luzes, seta (entrar = a porta de Interiors)
 			this.camera.setFlat(false);
 			// (no alto das escadarias do Morro do Vigia: a câmera mira o personagem lá em cima — o ponto do chão que aparece no mesmo lugar da tela)
-			const pl = this.player, up = pl.walk ? pl.deckH / Math.tan(this.camera.tiltDeg * Math.PI / 180) : 0;
+			// (escadarias e mirante do Cristo, viaduto, telhado, bondinho: a câmera sobe junto com ele — CompassCamera.footLift)
+			const pl = this.player;
+			this.camera.footLift = pl.onDeck && !pl.underBridge ? pl.deckH || 0 : 0;
 			// (a câmera vai para as costas de quem anda — não mirando: aí o corpo segue a mira, não o caminho)
-			this.camera.follow(up ? (this._camUp || (this._camUp = new BABYLON.Vector3())).set(pl.position.x, 0, pl.position.z + up) : pl.position, dt, null, this.aim && this.aim.active ? null : pl, true);
+			this.camera.follow(pl.position, dt, null, this.aim && this.aim.active ? null : pl, true);
 		}
 
 		AudioFX.screech(this.mode === 'car' && this.activeCar ? this.activeCar.slide || 0 : 0);      // pneu cantando na derrapagem (Vehicle.slide)
@@ -986,7 +989,8 @@ class Game {
 		const indoors = this._walkIndoors();                                     // (lojas e casas: só anda — menos em assalto, golpe, missão, fuga)
 		this.player.update(move, indoors ? 0 : this.input.sprint, dt, indoors || this.input.moveTilt < Config.player.walkTilt);
 		this.camera.setAutoZoom(1, dt, true);                                            // (a loja já tem o enquadramento dela: sem zoom automático)
-		this.camera.setFlat(!Interiors.is3d || decorating);                              // (salas pintadas: a câmera de cima; salas 3D: a de 3ª pessoa)
+		this.camera.setFlat(!Interiors.is3d || decorating);
+		this.camera.footLift = 0;                              // (salas pintadas: a câmera de cima; salas 3D: a de 3ª pessoa)
 		HomeDecor.update(dt, this);                                                      // modo decoração: WASD move a câmera, o mouse a peça
 		this.camera.follow(decorating ? HomeDecor.cameraFocus : Interiors.focus(this.player.position, this.camera, this.gameEngine.engine.getAspectRatio(this.camera.camera)), dt);
 		Interiors.update(dt, this);

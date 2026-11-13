@@ -150,8 +150,9 @@ module.exports = {
             await page.evaluate(() => { game._leaveVehicle(); });
             await wait(1);
             const m4 = await cam();
-            const body = await page.evaluate(() => game.player.root.rotation.y);
-            c.ok(Math.abs(wrap(m4.user - body)) < 0.05, `desceu: a pé, a câmera começa atrás do personagem (câmera ${(m4.user * 57.3).toFixed(0)}°, corpo ${(body * 57.3).toFixed(0)}°)`);
+            // (como no GTA: ela continua olhando para onde a câmera do veículo olhava — antes girava para o rumo do corpo, que ao descer é o
+            // da porta, e a câmera ficava atravessada na rua)
+            c.ok(Math.abs(wrap(m4.user - m3.yaw)) < 0.08, `desceu: a pé, a câmera continua olhando para onde olhava (${(m3.yaw * 57.3).toFixed(0)}° → ${(m4.user * 57.3).toFixed(0)}°)`);
         }
 
         // 7) entrar numa loja: norte em cima; sair: a direção de antes
@@ -159,11 +160,11 @@ module.exports = {
         await page.evaluate(() => { Interiors.index(); const d = Interiors._doors.find((s) => s.style === 'bar') || Interiors._doors[0]; game.player.teleport(new BABYLON.Vector3(d.x, 0, d.z)); Interiors.enter(game, d); });
         await page.waitForFunction(() => Interiors.active && !Interiors.busy, null, { timeout: 60000 }).catch(() => {});
         await gameWait(page, 0.3);
-        const shop = await cam();
+        const shop = await cam(), i3d = await page.evaluate(() => Interiors.is3d);
         await leave(page);
         await gameWait(page, 0.3);
         const after = await cam();
-        c.ok(shop.flat && Math.abs(shop.yaw) < 1e-6, 'na loja, norte em cima');
+        c.ok(i3d ? !shop.flat : shop.flat && Math.abs(shop.yaw) < 1e-6, i3d ? 'na loja em 3D, a câmera de 3ª pessoa' : 'na loja, norte em cima');
         // (compara com o giro do jogador — userYaw —, para onde a câmera ia: logo depois de descer da moto ela ainda está chegando ao norte)
         c.ok(Math.abs(wrap(after.yaw - before.user)) < 0.05, `saiu da loja: a câmera volta para onde estava (${(before.user * 57.3).toFixed(0)}° → ${(after.yaw * 57.3).toFixed(0)}°)`);
         c.noErrors(errors, 'câmera');

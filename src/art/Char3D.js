@@ -140,11 +140,19 @@ const Char3D = {
 	},
 	// Modelo de um tipo de NPC (um por tipo: as variantes só mudam a cor).
 	// dmg = nível de dano (o sangue assado, como os atlas de dano do NpcArt: um modelo por tipo e nível).
-	typeModel(type, dmg = 0) {
-		const key = type + '|' + dmg;
+	// lod = 1: o modelo de LONGE (menos pontos, maiores — Config.art.char3d.npc.farSpacing): dá para ter muitos mais NPCs em 3D.
+	typeModel(type, dmg = 0, lod = 0) {
+		const key = type + '|' + dmg + '|' + lod, N = this.C.npc || {};
 		let M = this._types.get(key);
-		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: (this.C.npc && this.C.npc.spacing) || 1.3, kind: 'npc' }); this._types.set(key, M); }
+		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: lod ? N.farSpacing || 2.2 : N.spacing || 1.3, kind: 'npc' }); M._lod = lod; this._types.set(key, M); }
+		M._used = performance.now();
 		return M;
+	},
+	// Modelos de tipo sem ninguém usando há 90 s saem da memória (da GPU e do Worker); voltam se o tipo aparecer de novo.
+	_gc() {
+		const now = performance.now(), inUse = new Set();
+		for (const C of this.npcs.values()) if (C.model) inUse.add(C.model);
+		for (const [k, M] of this._types) if (!inUse.has(M) && now - (M._used || 0) > 90000) { M.dispose(); this._types.delete(k); }
 	},
 
 	// ---------------------------------------------------------------- a cada quadro
@@ -188,6 +196,7 @@ const Char3D = {
 		}
 		if (this.npcOn) {
 			if ((this._pick -= dt) <= 0) { this._pick = 0.25; this._choose(pl); }
+			if ((this._gcT = (this._gcT || 0) - dt) <= 0) { this._gcT = 10; this._gc(); }
 			for (const [a, R] of this.npcs) R.update();
 		} else if (this.npcs.size) this._choose(null);
 	},
@@ -210,11 +219,22 @@ const Char3D = {
 		for (const [, a] of cand) if (/^protagonista/.test(a.npcType)) keep.add(a); else if (k < max) { keep.add(a); k++; }
 		// (o jogador PILOTANDO — moto, bicicleta, jet ski: o piloto é outro ator, com a folha dele — usa o modelo do visual dele)
 		const PM = pl && pl.char3d && pl.char3d.model, hero = (a) => /^protagonista/.test(a.npcType);
+		// Perto (até nearDist m; quem já está perto, até 25% além) o modelo cheio; mais longe, o leve.
+		const near = N.nearDist || 17, d2 = new Map(cand.map(([d, a]) => [a, d]));
+		const typeOf = (a) => String((a.sheet && a.sheet.baseId) || a.npcType).replace(/#d\d+$/, ''), lodOf = (a) => {
+			const C = this.npcs.get(a), r = C && C.model && C.model._lod === 0 ? near * 1.25 : near;
+			return (d2.get(a) || 0) < r * r ? 0 : 1;
+		};
 		const modelOf = (a) => {
 			if (hero(a)) return PM && PM.ready ? PM : null;
-			const M = this.typeModel(String((a.sheet && a.sheet.baseId) || a.npcType).replace(/#d\d+$/, ''), (a.sheet && a.sheet.dmgLvl) | 0);
-			return M.failed ? null : M;
+			const lod = lodOf(a), M = this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, lod);
+			if (M.failed) return null;
+			// (o modelo da outra distância ainda assando: fica com o que tem — sem voltar ao 2,5D no meio)
+			if (!M.ready) { const C = this.npcs.get(a), O = C && C.model; if (O && O.ready && !O.failed && O._lod !== undefined) return O; }
+			return M;
 		};
+		// (já assa os tipos de quem está chegando perto mas ainda não cabe no limite: quando couber, o modelo está pronto)
+		for (const [, a] of cand) if (!keep.has(a) && !hero(a)) this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, 1);
 		for (const a of keep) {
 			const C = this.npcs.get(a), M = modelOf(a);
 			if (C && M && C.model !== M) {
@@ -300,6 +320,7 @@ class Char3DModel {
 		this.n = c.n;
 		this.body = this._points('c3d_corpo' + this.mid, c.n, c.p1, c.n1, c.p2, c.n2, c.sk, c.mt, c.fa, c.fb);
 		this.ready = true;
+		for (const k of ['idle:none', 'walk:none', 'run:none']) this.clip(k);          // (os clipes de sempre já vêm: ninguém espera em 2,5D)
 		if (this.onReady) this.onReady(this);
 	}
 	_prop(name, p) {
@@ -468,10 +489,13 @@ class Char3DActor {
 		if (!this._built || M.failed || !vis || !c.npc) { this._hide3d(); this._show2d(true); return; }
 		const key = c.name + ':' + (c.weapon || 'none');
 		let K = M.clip(key);
+		// (o gerador não tem esse clipe com essa arma: o mesmo sem arma; nem esse, parado — continua 3D em vez de voltar ao 2,5D)
+		if (K === 'fail' && c.weapon && c.weapon !== 'none') K = M.clip(c.name + ':none');
+		if (K === 'fail') K = M.clip('idle:none');
 		if (K === 'fail' || ((K === undefined || K === 'wait') && !this._last)) { this._hide3d(); this._show2d(true); return; }
 		if (K && K !== 'wait') this._last = K;
 		else K = this._last;                                       // (o clipe novo ainda chegando: segura a última pose)
-		this._pose(K, a, K.key === key);
+		this._pose(K, a, K.key === key || K.key.startsWith(c.name + ':'));
 		this._place(a);
 		if (!this.shown) { this.shown = true; this.root.setEnabled(true); }
 		this._show2d(false);

@@ -7,7 +7,10 @@
 //       (de lado, só um raspão). 8 m/s ≈ 38 de dano; 17 m/s ≈ 105 (mata o jogador, pedestre e policial comum).
 //     Vale para o jogador a pé (leva dano e é arremessado), pedestres e policiais (a pé).
 //   - Crime: atropelar com o carro do JOGADOR é crime dele (procurado, pedestres fogem, policial ferido sobe ★).
-// Pedestres e policiais são agentes do NavMesh (sem física): só levam o atropelamento, não bloqueiam o carro.
+//   - CORPO: pedestres, policiais e traficantes também não atravessam carros (parados ou andando devagar): são empurrados para fora
+//     do casco, como o jogador, e escorregam pela lataria.
+//   - IMPACTO: quem é atropelado tira velocidade do carro conforme as massas (carro perde pouco; moto e bicicleta, bastante).
+// Pedestres e policiais são agentes do NavMesh (sem física): o empurrão mexe na posição deles e o agente segue dali.
 // ============================================================================
 
 class Collisions {
@@ -43,11 +46,8 @@ class Collisions {
             const moving = sp > C.runOverSpeed;
             const hl = car.halfLen - 0.15, hw = car.halfW - 0.05;          // casco real do corpo (menos a folga)
             const reach = hl + 2.5, reach2 = reach * reach;
-            if (!moving) {                                                  // parado: só o jogador a pé (empurrão) — e só se estiver perto
-                if (!onFoot) continue;
-                const dx = pl.position.x - c.x, dz = pl.position.z - c.z;
-                if (dx * dx + dz * dz > reach2) continue;
-            }
+            // (parado longe da tela não precisa: ninguém vê o empurrão — perto, as pessoas não atravessam a lataria)
+            if (!moving && !Zones.near(c.x, c.z, 28)) continue;
             const d = this._dir;
             car.fwdToRef(d);                                           // (do quaternião: sem matriz de mundo)
             const dl = Math.sqrt(d.x * d.x + d.z * d.z) || 1, fx = d.x / dl, fz = d.z / dl;
@@ -57,13 +57,14 @@ class Collisions {
             const lv = Vehicle.levelOf(car);                                // (viaduto / ponte: só pega quem está no MESMO nível)
             ctx.lv = lv;
             if (onFoot && Math.abs(Vehicle.levelOf(pl) - lv) < 1.5) this._player(ctx, pl);
-            if (moving) {
-                // Quem pode ser atropelado fica numa grade (montada uma vez por quadro, só se algum carro anda): cada carro consulta só a
-                // vizinhança em vez de testar todos os pedestres, policiais e traficantes do mundo (antes ~7 mil testes por quadro).
-                if (!built) { built = true; this._fill(npcs, offs, gang); }
-                for (const e of this._grid.query(c.x, c.z, reach, this._q)) {
-                    if (e.alive && Math.abs(Vehicle.levelOf(e) - lv) < 1.5) this._victim(ctx, e, e._ck ? 0.45 : 0.4, Collisions.KINDS[e._ck]);
-                }
+            // Pedestres, policiais e traficantes perto do carro: andando rápido, atropela; senão (parado, manobrando, andando devagar), o
+            // casco é sólido e empurra. A grade é montada uma vez por quadro: cada carro consulta só a vizinhança.
+            if (!built) { built = true; this._fill(npcs, offs, gang); }
+            for (const e of this._grid.query(c.x, c.z, reach, this._q)) {
+                if (!e.alive || e.rag || Math.abs(Vehicle.levelOf(e) - lv) >= 1.5) continue;
+                const r = e._ck ? 0.45 : 0.4;
+                if (moving && this._victim(ctx, e, r, Collisions.KINDS[e._ck])) continue;
+                this._solid(ctx, e, r);
             }
         }
         ctx.car = null; ctx.c = null;
@@ -124,6 +125,7 @@ class Collisions {
                 if (R.power >= Config.ragdoll.minPower) pl.ragdoll({ dx: R.dx, dz: R.dz, power: R.power, kind: 'hit', lethal });
                 this._impactFx(pl.position, 0.3 + Math.min(0.5, R.power * 0.03));
                 ctx.car.takeDamage(1 + R.dmg * 0.02, 'env');
+                this._slow(ctx.car);
                 this._riderFalls(ctx, R);
             }
         }
@@ -137,15 +139,15 @@ class Collisions {
         pl._syncSprite();
     }
 
-    // Pedestre/policial atropelado por carro em movimento.
+    // Pedestre/policial atropelado por carro em movimento. true = foi atropelado agora.
     _victim(ctx, e, r, kind) {
         const now = this.g.policeManager ? this.g.policeManager.time : performance.now() / 1000;
-        if (e._runUntil && now < e._runUntil) return;
-        if (e.rag) return;                                   // já voando/caído: não toma outro atropelamento
+        if (e._runUntil && now < e._runUntil) return false;
+        if (e.rag) return false;                             // já voando/caído: não toma outro atropelamento
         const L = this._local(ctx, e, r);
-        if (!L) return;
+        if (!L) return false;
         const R = this._runOver(ctx, L);
-        if (R.dmg <= 0) return;
+        if (R.dmg <= 0) return false;
         e._runUntil = now + 0.7;
 
         const g = this.g;
@@ -157,6 +159,7 @@ class Collisions {
         if (typeof Blood !== 'undefined') Blood.beat(e, R.dmg, 1);                                             // atropelado: ralado e roxo (ESPANCADO) e SUJO
         this._impactFx(e.position, 0.2);
         car.takeDamage(1 + R.dmg * 0.02, 'env');
+        this._slow(car);
         this._riderFalls(ctx, R);
 
         if (byPlayer) {
@@ -164,6 +167,27 @@ class Collisions {
             if (kind === 'npc' && e.alive) { g.heat.commit('hit_and_run'); if (g.npcManager) g.npcManager.alertViolence(e.position, 18); }
             if (kind === 'npc' && !e.alive) { /* onKill já reportou e alertou */ }
         }
+        return true;
+    }
+
+    // Corpo de alguém (pedestre, policial, traficante) dentro do casco: empurrado para fora pelo lado de menor penetração (escorrega pela
+    // lataria em vez de atravessar o carro). Carro andando devagar empurra junto, na direção dele.
+    _solid(ctx, e, r) {
+        const L = this._local(ctx, e, r);
+        if (!L) return;
+        const penF = ctx.hl + r - Math.abs(L.lf), penR = ctx.hw + r - Math.abs(L.lr), p = e.position;
+        if (penF < penR) { const s = Math.sign(L.lf) || 1, m = (penF + 0.02) * s; p.x += ctx.fx * m; p.z += ctx.fz * m; }
+        else { const s = Math.sign(L.lr) || 1, m = (penR + 0.02) * s; p.x += ctx.rx * m; p.z += ctx.rz * m; }
+        MapGeo.resolveCircle(p, r, false, true);
+    }
+
+    // Quem foi atropelado tira velocidade do carro (troca de momento, ~75 kg contra a massa do veículo): carro quase não sente; moto
+    // e bicicleta sentem bastante.
+    _slow(car) {
+        if (!car.phys || !car.phys.getLinearVelocity) return;
+        const m = (car.spec && car.spec.mass) || 1200, k = Math.min(0.32, (75 * 1.4) / (m + 75));
+        const v = car.phys.getLinearVelocity();
+        car.phys.setLinearVelocity(new BABYLON.Vector3(v.x * (1 - k), v.y, v.z * (1 - k)));
     }
 
     // Moto/bicicleta do trânsito (entregador, mototaxista, ciclista) que pega alguém em cheio também vai ao chão: o piloto voa por cima
