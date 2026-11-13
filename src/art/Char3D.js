@@ -31,8 +31,12 @@ const Char3D = {
 		if (BABYLON.Effect.ShadersStore.char3dVertexShader) return;
 		BABYLON.Effect.ShadersStore.char3dVertexShader = `
 			precision highp float;
-			attribute vec3 position;     // ponto no espaço do osso 1 (unidades do gerador: x direita, y frente, z cima)
-			attribute vec3 normal;
+			// Cada PONTO é uma cópia (instancing) de um quadradinho de 2 triângulos virado para a câmera: position = o canto (−1..1); os
+			// dados do ponto vêm por cópia. (Antes eram GL_POINTS com gl_PointSize: no Windows o Chrome traduz o WebGL para o Direct3D,
+			// que não tem ponto com tamanho — a emulação apagava a cena inteira em algumas placas.)
+			attribute vec3 position;     // canto do quadradinho
+			attribute vec3 ip;           // ponto no espaço do osso 1 (unidades do gerador: x direita, y frente, z cima)
+			attribute vec3 in1;
 			attribute vec3 p2;           // o mesmo ponto no espaço do osso 2 (malha 3D)
 			attribute vec3 n2;
 			attribute vec4 sk;           // osso 1, osso 2, peso do 2
@@ -49,11 +53,20 @@ const Char3D = {
 			uniform vec3 eye;
 			uniform vec3 sunL;           // para onde está o sol (mundo)
 			uniform float groundY;       // SOMBRA: altura do chão sob os pés
+			uniform vec2 viewport;       // tamanho da tela de desenho (px)
+			varying vec2 vC;             // canto do quadradinho (o disco: |vC| ≤ 1)
 			varying vec2 vMt;
 			varying float vLev;
 			vec3 xp(int b, vec3 p) { vec4 r0 = B[b * 3], r1 = B[b * 3 + 1], r2 = B[b * 3 + 2]; return vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w); }
 			vec3 xn(int b, vec3 n) { return vec3(dot(B[b * 3].xyz, n), dot(B[b * 3 + 1].xyz, n), dot(B[b * 3 + 2].xyz, n)); }
+			// o centro do ponto na tela → o canto do quadradinho, com o diâmetro em px do tamanho do ponto no mundo
+			vec4 corner(vec4 c) {
+				float px = clamp(splat * pScale / max(c.w, 0.05), 1.0, 48.0);
+				c.xy += position.xy * (px / viewport) * c.w;
+				return c;
+			}
 			void main(void) {
+				vC = position.xy;
 				vec2 mtv = mt;
 				if (expr > 0.5) {
 					float c = expr < 1.5 ? fa.x : expr < 2.5 ? fa.y : expr < 3.5 ? fa.z : expr < 4.5 ? fa.w : fb;
@@ -61,7 +74,7 @@ const Char3D = {
 				}
 				int b1 = int(sk.x + 0.5), b2 = int(sk.y + 0.5);
 				float w = sk.z;
-				vec3 p = xp(b1, position), n = xn(b1, normal);
+				vec3 p = xp(b1, ip), n = xn(b1, in1);
 				if (w > 0.0) { p = mix(p, xp(b2, p2), w); n = mix(n, xn(b2, n2), w); }
 				vec4 wp = world * vec4(vec3(p.x, p.z, p.y) * unit, 1.0);
 				vec3 nw = normalize((world * vec4(n.x, n.z, n.y, 0.0)).xyz);
@@ -69,18 +82,16 @@ const Char3D = {
 				#ifdef SHADOW
 				// SOMBRA projetada: cada ponto desce na direção do sol até o chão (a silhueta da pose, deitada no chão)
 				wp.xyz -= sunL * ((wp.y - groundY) / max(sunL.y, 0.2));
-				gl_Position = viewProjection * wp;
-				gl_PointSize = clamp(splat * pScale / max(gl_Position.w, 0.05), 1.0, 48.0);
+				gl_Position = corner(viewProjection * wp);
 				vLev = 0.0; vMt = vec2(0.0);
 				return;
 				#endif
-				if (dot(nw, V) < -0.2) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }    // (de costas: atrás do resto)
+				if (dot(nw, V) < -0.2) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vLev = 0.0; vMt = vec2(0.0); return; }    // (de costas: atrás do resto)
 				#ifdef SIL
-				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }     // (os pés rente ao chão: o chão não esconde ninguém)
+				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vLev = 0.0; vMt = vec2(0.0); return; }     // (os pés rente ao chão: o chão não esconde ninguém)
 				wp.xyz += V * 0.06;          // (raio-X: folga contra o empate de profundidade com o próprio corpo)
 				#endif
-				gl_Position = viewProjection * wp;
-				gl_PointSize = clamp(splat * pScale / max(gl_Position.w, 0.05), 1.0, 48.0);
+				gl_Position = corner(viewProjection * wp);
 				// luz em faixas, como o desenho (NpcGenRender, sombreado de 5 tons): 1 + degraus da luz + o tom do ponto (textura)
 				float d = dot(nw, sunL);
 				float lev = 1.0 + smoothstep(-0.36, -0.24, d) + smoothstep(0.24, 0.36, d) + smoothstep(0.74, 0.86, d) + clamp(mtv.y, -1.5, 1.0);      // (tom: no atlas, a média do pixel suavizava as dobras mais fundas)
@@ -90,6 +101,7 @@ const Char3D = {
 			}`;
 		BABYLON.Effect.ShadersStore.char3dFragmentShader = `
 			precision highp float;
+			varying vec2 vC;
 			varying vec2 vMt;
 			varying float vLev;
 			uniform sampler2D ramps;     // 5 tons (x) × 32 materiais (y) — a ficha do jogador
@@ -100,8 +112,7 @@ const Char3D = {
 			uniform float shade;         // 1 ao sol, ~0,66 na sombra de um prédio
 			uniform vec4 silhouette;     // raio-X (XRaySilhouette): cor chapada e força
 			void main(void) {
-				vec2 q = gl_PointCoord - 0.5;
-				if (dot(q, q) > 0.25) discard;
+				if (dot(vC, vC) > 1.0) discard;
 				#ifdef SIL
 				gl_FragColor = vec4(silhouette.rgb * silhouette.a, silhouette.a); return;
 				#endif
@@ -199,7 +210,7 @@ const Char3D = {
 		const sig = JSON.stringify(spec);
 		if (!force && sig === this._pSig) return;
 		this._pSig = sig;
-		const M = new Char3DModel(this._scene, { spec, spacing: this.C.spacing || 0.8, kind: 'player' });
+		const M = new Char3DModel(this._scene, { spec, spacing: this.C.spacing || 1.0, kind: 'player' });
 		M.onReady = () => { const old = P.model; P.setModel(M); if (old && old !== M) old.dispose(); };
 		this._pNext = M;
 	},
@@ -207,7 +218,9 @@ const Char3D = {
 		const sc = this._scene, cam = sc.activeCamera, dt = sc.getEngine().getDeltaTime() / 1000, V = this._view;
 		if (cam) {
 			V.eye.copyFrom(cam.globalPosition || cam.position);
-			V.pScale = (sc.getEngine().getRenderHeight() * cam.getProjectionMatrix().m[5]) / 2;
+			const E = sc.getEngine();
+			V.w = E.getRenderWidth(); V.h = E.getRenderHeight();
+			V.pScale = (V.h * cam.getProjectionMatrix().m[5]) / 2;
 		}
 		const L = this._game.gameEngine && this._game.gameEngine.sun;      // (o sol da cena: a hora do dia move a luz e a sombra)
 		if (L && L.direction) { this.sun.copyFrom(L.direction).scaleInPlace(-1); if (this.sun.y < 0.15) this.sun.y = 0.15; this.sun.normalize(); }
@@ -341,12 +354,14 @@ class Char3DModel {
 	}
 	_points(name, n, P1, N1, P2, N2, SK, MT, FA, FB) {
 		const mesh = new BABYLON.Mesh(name, this.scene);
-		const E = this.scene.getEngine(), vb = (data, kind, size) => mesh.setVerticesBuffer(new BABYLON.VertexBuffer(E, data, kind, false, false, size));
-		vb(P1, 'position', 3); vb(N1, 'normal', 3); vb(P2 || P1, 'p2', 3); vb(N2 || N1, 'n2', 3); vb(SK, 'sk', 4); vb(MT, 'mt', 2);
+		// o quadradinho (4 cantos, 2 triângulos) desenhado n vezes: os dados de cada ponto por cópia (divisor 1)
+		const vd = new BABYLON.VertexData();
+		vd.positions = [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]; vd.indices = [0, 1, 2, 0, 2, 3];
+		vd.applyToMesh(mesh, false);
+		const E = this.scene.getEngine(), vb = (data, kind, size) => mesh.setVerticesBuffer(new BABYLON.VertexBuffer(E, data, kind, false, false, size, true, 0, size));
+		vb(P1, 'ip', 3); vb(N1, 'in1', 3); vb(P2 || P1, 'p2', 3); vb(N2 || N1, 'n2', 3); vb(SK, 'sk', 4); vb(MT, 'mt', 2);
 		vb(FA || new Float32Array(n * 4), 'fa', 4); vb(FB || new Float32Array(n), 'fb', 1);
-		mesh.isUnIndexed = true; mesh._unIndexed = true;
-		mesh.subMeshes = [];
-		new BABYLON.SubMesh(0, 0, n, 0, n, mesh);
+		mesh.forcedInstanceCount = n;
 		mesh.isPickable = false; mesh._char3d = true;
 		mesh.alwaysSelectAsActiveMesh = true;                 // (os pontos estão no espaço dos ossos: a caixa não vale)
 		mesh.setEnabled(false);
@@ -411,7 +426,7 @@ class Char3DActor {
 	}
 	_clone(src, name) {
 		const m = src.clone(name, this.root);
-		m.isUnIndexed = true; m._unIndexed = true;
+		m.forcedInstanceCount = src.forcedInstanceCount;                     // (o mesmo número de pontos: a geometria é compartilhada)
 		m.isPickable = false; m.alwaysSelectAsActiveMesh = true; m._char3d = true;          // (_char3d: o Interiors não desliga ao entrar numa loja)
 		m.renderingGroupId = this.actor.mesh.renderingGroupId;
 		m.setEnabled(true);
@@ -424,15 +439,14 @@ class Char3DActor {
 		else if (sil) defines.push('#define SIL');
 		if (pal) defines.push('#define PAL');
 		const m = new BABYLON.ShaderMaterial(name, this.scene, { vertex: 'char3d', fragment: 'char3d' }, {
-			attributes: ['position', 'normal', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
-			uniforms: ['world', 'viewProjection', 'B', 'unit', 'pScale', 'splat', 'eye', 'sunL', 'tint', 'shade', 'silhouette', 'palRows', 'row', 'expr', 'groundY'],
+			attributes: ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
+			uniforms: ['world', 'viewProjection', 'B', 'unit', 'pScale', 'splat', 'eye', 'sunL', 'tint', 'shade', 'silhouette', 'palRows', 'row', 'expr', 'groundY', 'viewport'],
 			samplers: ['ramps', 'palette'],
 			defines,
 			needAlphaBlending: !!sil,
 		});
 		m.setVector4('silhouette', sil === 'shadow' ? Char3D._shadowV : sil && typeof NpcArt !== 'undefined' ? NpcArt.SILHOUETTE : new BABYLON.Vector4(0, 0, 0, 0));
 		if (sil) { m.alphaMode = BABYLON.Engine.ALPHA_PREMULTIPLIED; m.disableDepthWrite = true; }
-		m.fillMode = BABYLON.Material.PointFillMode;
 		m.backFaceCulling = false;
 		if (pal) { m.setTexture('palette', NpcArt._pal.tex); m.setFloat('palRows', NpcArt.ROWS); }
 		else if (this.model.ramps) m.setTexture('ramps', this.model.ramps);
@@ -447,6 +461,7 @@ class Char3DActor {
 		e.setArray4('B', B);
 		e.setFloat('unit', M.unit * (this._sc || 1));
 		e.setFloat('pScale', Char3D._view.pScale);
+		e.setFloat2('viewport', Char3D._view.w || 1280, Char3D._view.h || 720);
 		e.setFloat('splat', M.spacing * M.unit * (this.C.splat || 2.1));
 		e.setFloat('shade', this.actor.shade || 1);
 		e.setFloat('expr', B === this._B ? this._expr || 0 : 0);

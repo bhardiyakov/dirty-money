@@ -103,6 +103,7 @@ class Game {
 		if (typeof PlayerLook !== 'undefined') PlayerLook.attach(this);      // visual do jogador (roupa, bolsa, aparência) no personagem 2,5D
 		this.xray = new XRaySilhouette(this.scene, this.player.actor);      // 2.5D camera: the player's silhouette through what hides him
 		if (typeof Char3D !== 'undefined') Char3D.init(this);           // personagens em 3D (art/Char3D.js): o jogador e os NPCs perto da câmera
+		if (typeof Horizon !== 'undefined') Horizon.init(this.scene);   // a ilusão do horizonte (render/Horizon.js)
 		const sp = SafeHouse.spawnWorld();
 		if (sp) this.player.root.rotation.y = sp.face;      // acorda dentro da safe house, de frente para a porta
 		this.camera = new CompassCamera(this.scene, this.gameEngine.engine, this.player.position);
@@ -111,6 +112,7 @@ class Game {
 		Lighting.init(this);                                 // luz física (etapa 2): a gradação de cor no fim da cadeia (a luz do céu é do DayNight)
 		NightLights.init(this);                              // luz de verdade à noite (etapa 6): o campo de luz dos postes, lojas e faróis
 		Water.initMirror(this);                              // reflexo na água (etapa 7): prédios, árvores e carros espelhados
+		this.crt = CrtFilter.attach(this.camera.camera, this.gameEngine, { renderScale: 0.75 });      // TV de tubo + resolução interna reduzida (render/CrtFilter.js) — por último na cadeia
 		this.minimap = new Minimap('minimap');
 
 		// IA (preenchida de forma assíncrona em _initAI).
@@ -759,6 +761,7 @@ class Game {
 		Perf.lap('outros');
 		const sw = this.camera.shadowWindow(this.mode === 'car' ? this.activeCar : null);      // (perseguição: a sombra à frente do veículo)
 		this.gameEngine.update(dt, this.camera.target, sw.ground, sw.focus);
+		if (typeof Horizon !== 'undefined') { try { Horizon.tick(dt, this.camera); } catch (e) { if (!this._hzErr) { this._hzErr = true; console.error('[HORIZONTE]', e); } } }
 		Perf.lap('mundo (água/sombra)');
 
 		// --- Hijack (entrar/sair do carro) ---
@@ -1000,6 +1003,7 @@ class Game {
 		if (!frozen && this.input.consumePress('e')) Interiors.interact(this);
 		if (!frozen && this.input.consumePress('b')) HomeDecor.toggle(this);
 		this.gameEngine.update(dt, this.camera.target, this.camera.groundHalf());
+		if (typeof Horizon !== 'undefined' && Horizon.active) Horizon.tick(dt, this.camera);      // (numa loja: desliga — a cidade lá fora não aparece)
 		this.player.tickHealth(dt);
 		this.weather.update(dt);
 		this.dayNight.update(dt);

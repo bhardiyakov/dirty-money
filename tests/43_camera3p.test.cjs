@@ -31,7 +31,7 @@ module.exports = {
             return { chase: C.chase, tilt: C.tiltDeg, want: Config.camera.chase.tilt, y: cam.position.y - (C.lift || 0), v: uv ? uv.v : null, fog: game.gameEngine.scene.fogDensity, ct: CarArt3D._ct ? CarArt3D._ct.n : 0 };
         });
 
-        let { page, errors, close } = await boot(ctx);
+        let { page, errors, close } = await boot(ctx, { query: process.env.Q || '' });
         const L = await page.evaluate(place);
         await page.evaluate(drive, L);
         await gameWait(page, 3, 90000);
@@ -57,9 +57,11 @@ module.exports = {
             return { yaw: game.camera.yaw };
         }, L);
         await page.keyboard.down('d');
-        await gameWait(page, 0.6, 30000);
+        // (tetos reais folgados: com os bonecos 3D o navegador de teste — desenho por software — chega a ~1 quadro/s; o que se mede são
+        // os segundos de JOGO)
+        await gameWait(page, 0.6, 90000);
         const w0 = await page.evaluate(() => Math.atan2(game.player.velocity.x, game.player.velocity.z));
-        await gameWait(page, 3, 120000);
+        await gameWait(page, 3, 420000);
         const w1 = await page.evaluate(() => ({ h: Math.atan2(game.player.velocity.x, game.player.velocity.z), yaw: game.camera.yaw, sp: game.player.speed }));
         await page.keyboard.up('d');
         c.ok(Math.abs(wrap(w1.h - w0)) < 0.15, `segurando a mesma tecla, o rumo não muda com a câmera girando (${(wrap(w1.h - w0) * 57.3).toFixed(0)}°)`);

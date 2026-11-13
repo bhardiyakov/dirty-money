@@ -48,7 +48,7 @@ const Config = {
 		// PERSONAGENS EM 3D (art/Char3D.js): o mesmo boneco do atlas, montado ao vivo na GPU com o esqueleto do gerador — visto de
 		// qualquer ângulo pela câmera. splat = tamanho de cada ponto (× o espaçamento). `?boneco=2d` = o desenho 2,5D. npc: os NPCs MAIS
 		// PERTO do jogador ficam 3D (até `max` — o nível gráfico decide: core/Graphics.js npc3d —, num raio de `radius` m); os outros seguem 2,5D.
-		char3d: { on: true, player: true, spacing: 0.8, splat: 2.1, blend: true, npc: { on: true, max: 14, radius: 45, spacing: 1.3, farSpacing: 2.2, nearDist: 17 }, npcShadow: false },
+		char3d: { on: true, player: true, spacing: 1.0, splat: 2.1, blend: true, npc: { on: true, max: 14, radius: 45, spacing: 1.3, farSpacing: 2.2, nearDist: 17 }, npcShadow: false },
 		npcDirs: 16,           // direções desenhadas dos personagens 2,5D. Perfil leve: 8 (só as páginas pares dos atlas; os visuais do guarda-roupa saem com 8)
 		// CHÃO com as fotos CC0 (art/GroundPhotos.js, etapa 3): o pintado de sempre + o grão das fotos + o relevo delas. `?chao=0` volta
 		// ao chão só pintado; `?chao=foto`, `?chao=misto` e `,relevo` para comparar.
@@ -137,6 +137,10 @@ const Config = {
 		// Veículo comprido recua junto. O que chega a menos de minZ m dela é cortado (um poste rente à câmera não tampa a tela). near/far = a
 		// névoa de distância (m da câmera; o alcance por preset em Graphics). yawBoost = quanto mais rápido ela gira atrás dele (×);
 		// lerp = rapidez da passagem a pé ↔ veículo. `?persegue=0` = a câmera alta de antes também dirigindo; `?persegue=N` (graus) = outra inclinação.
+		// HORIZONTE (render/Horizon.js): na perseguição, a cidade de verdade até R m e, dali até `deep` m, 4 fotos da paisagem num cubo
+		// atrás do corte, refeitas quando a câmera anda `move` m ou a cada `refresh` s; a névoa vira bruma (fogNear..fogFar). size = px de
+		// cada foto. `?horizonte=0` = a névoa de antes.
+		horizon: { on: true, R: 150, deep: 1600, fogNear: 110, fogFar: 1300, move: 35, refresh: 20, size: 512 },
 		chase: {
 			on: !(typeof location !== 'undefined' && /[?&]persegue=0\b/.test(location.search)),
 			tilt: (typeof location !== 'undefined' && +(location.search.match(/[?&]persegue=(\d+(?:\.\d+)?)/) || [])[1]) || 45,
