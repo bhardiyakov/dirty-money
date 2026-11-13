@@ -63,6 +63,26 @@ const Walkways = {
         return null;
     },
 
+    // O ponto do caminho mais perto de (x, z) — com a folga m para dentro das bordas — e a altura dele: { x, z, h, d } (null: rede vazia).
+    // (Quem ficou no chão dentro do morro — empurrado, caído, rolando — volta para a escada mais perto: Player._updateLevel.)
+    nearest(net, x, z, m = 0.45) {
+        let best = null;
+        const put = (px, pz, h) => { const d = Math.hypot(px - x, pz - z); if (!best || d < best.d) best = { x: px, z: pz, h, d }; };
+        for (const q of net.parts) {
+            if (q.seg) {
+                const rx = x - q.a[0], rz = z - q.a[1], u = Math.max(0, Math.min(q.L, rx * q.ux + rz * q.uz)), hw = Math.max(0, q.w / 2 - m), v = Math.max(-hw, Math.min(hw, -rx * q.uz + rz * q.ux));
+                put(q.a[0] + q.ux * u - q.uz * v, q.a[1] + q.uz * u + q.ux * v, q.a[2] + (q.b[2] - q.a[2]) * (u / q.L));
+            } else if (q.disc) {
+                const dx = x - q.x, dz = z - q.z, d = Math.hypot(dx, dz) || 1, r = Math.min(d, Math.max(0, q.r - m));
+                put(q.x + (dx / d) * r, q.z + (dz / d) * r, q.h);
+            } else {
+                const R = q.rect;
+                put(Math.max(R[0] + m, Math.min(R[2] - m, x)), Math.max(R[1] + m, Math.min(R[3] - m, z)), q.h);
+            }
+        }
+        return best;
+    },
+
     clamp(net, st, p, r) {
         const m = Math.min(r, 0.5);
         let h = this.at(net, p.x, p.z, st.h, m);

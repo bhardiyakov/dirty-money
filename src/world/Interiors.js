@@ -455,7 +455,12 @@ const Interiors = {
 		this.obstacles.push({ x0: o.x + data.door.x0 - 0.1, z0: o.z - 6, x1: o.x + data.door.x1 + 0.1, z1: o.z - 0.25, h: 3 });      // tampa o vão da porta por fora: sem cair no vazio (a saída é o gatilho antes dele)
 		pl.teleport(new BABYLON.Vector3(o.x + data.spawn.x, 0, o.z + data.spawn.z));
 		pl.root.rotation.y = 0; pl.velocity.setAll(0);
-		if (room.i3d && typeof FootCamera !== 'undefined') FootCamera.reset(0);         // (sala 3D: a câmera de 3ª pessoa começa atrás dele, olhando para dentro)
+		// (sala 3D: a câmera começa atrás dele, olhando para dentro — a direção de fora fica guardada e volta na saída)
+		if (room.i3d) {
+			if (!this._camOut) this._camOut = { user: game.camera.userYaw, foot: typeof FootCamera !== 'undefined' ? FootCamera.yaw : 0 };
+			if (typeof FootCamera !== 'undefined') FootCamera.reset(0);
+			game.camera.userYaw = 0;
+		}
 		// Loja com clientela viva (ShopLife: atendente, clientes e garçom com rotina): os figurantes fixos saem (fica só quem tem
 		// tipo do gerador e papel próprio — o segurança da joalheria, os da academia).
 		let life = false;
@@ -519,6 +524,11 @@ const Interiors = {
 		pl.teleport(new BABYLON.Vector3(a.ret.x, 0, a.ret.z));
 		pl.root.rotation.y = a.ret.face; pl.velocity.setAll(0);
 		game.camera.setZoomMul(1);
+		if (this._camOut) {                                                             // (sala 3D: a câmera volta para onde olhava lá fora)
+			const S = this._camOut; this._camOut = null;
+			if (typeof FootCamera !== 'undefined') FootCamera.yaw = S.foot;
+			game.camera.userYaw = S.user; game.camera.yaw = S.user;
+		}
 		game.camera.snapTo(pl.position);
 		game.scene.physicsEnabled = true;
 		const mm = document.getElementById('minimap'); if (mm) mm.style.opacity = '1';
@@ -576,7 +586,7 @@ const Interiors = {
 		if (typeof Robbery !== 'undefined') Robbery.update(dt, game);
 		if (typeof Heists !== 'undefined') { Heists.interiorTick(dt); Heists.scoutTick(dt, game); }
 		this._tickArrow(game, dt);
-		if (a.room.i3d) a.room.i3d.update(game.scene.activeCamera, dt);                 // (sala 3D: as paredes na frente da câmera ficam transparentes)
+		if (a.room.i3d) { try { a.room.i3d.update(game.scene.activeCamera, dt); } catch (e) { if (!this._i3e) { this._i3e = true; console.error('[LOJAS] sala 3D:', e); } } }      // (sala 3D: as paredes na frente da câmera ficam transparentes)
 		const o = this.STAGE, p = game.player.position, d = a.data.door;
 		const ax = game.input.getMoveAxis();
 		if (Math.abs(ax.x) + Math.abs(ax.z) < 0.1 && a.t > 0.3) a.released = true;                    // a saída só vale depois de soltar as teclas uma vez

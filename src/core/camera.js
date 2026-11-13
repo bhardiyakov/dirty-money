@@ -190,6 +190,12 @@ class CompassCamera {
 		sc.fogStart = view * C.fogStart; sc.fogEnd = view * C.fogEnd; sc.fogDensity = aspect;
 	}
 
+	// Altura do chão em (x, z): o relevo e, em cima do platô, o morro do Cristo (a câmera passa por cima dos dois).
+	_groundAt(x, z) {
+		let h = Relief.at(x, z);
+		if (typeof Corcovado !== 'undefined' && Corcovado.built) h += Corcovado.hmWorld(x, z);
+		return h;
+	}
 	// Places the camera so that ground point (x, z) is at the centre of the screen.
 	_pose(x, z) {
 		const cam = this.camera;
@@ -200,7 +206,15 @@ class CompassCamera {
 		CompassCamera.tiltDeg = this.tiltDeg; CompassCamera.chase = this.chase;
 		cam.rotation.set(e, yaw, this.roll);
 		// (relevo: o "chão" do centro da tela está na altura do morro onde o alvo está — this.lift, suavizado em follow)
-		cam.position.set(x - D * Math.cos(e) * Math.sin(yaw), D * Math.sin(e) + (this.lift || 0), z - D * Math.cos(e) * Math.cos(yaw));
+		const hd = D * Math.cos(e), cx = x - hd * Math.sin(yaw), cz = z - hd * Math.cos(yaw);
+		let cy = D * Math.sin(e) + (this.lift || 0);
+		// A câmera NÃO ENTRA no terreno nem no morro do Cristo: subindo uma encosta, o chão atrás dele fica mais alto que ela — ela sobe por
+		// cima e mira para baixo, no mesmo ponto (o personagem não some atrás do morro).
+		if (!this.flat && this.chase > 0.3 && typeof Relief !== 'undefined' && Relief.on) {
+			const g = this._groundAt(cx, cz) + 1.6;
+			if (g > cy) { cy = g; cam.rotation.x = Math.atan2(cy - (this.lift || 0), Math.max(0.5, hd)); }
+		}
+		cam.position.set(cx, cy, cz);
 	}
 
 	// Half extents of the visible ground (across and along the screen), for culling, spawning and the shadow window. 2.5D: the ground
@@ -329,7 +343,10 @@ class CompassCamera {
 		} else {
 			const F3 = typeof FootCamera !== 'undefined' && FootCamera.on;
 			if (this._carVeh) {                                                           // desceu do veículo
-				if (F3) { FootCamera.reset(walker && walker.root ? walker.root.rotation.y : this.yaw); this.userYaw = FootCamera.yaw; }      // (3ª pessoa: começa atrás do personagem)
+				// (3ª pessoa: continua olhando para onde a câmera do carro olhava — o rumo do personagem nessa hora é o da porta, ou ainda o
+				// zero do teleporte para fora do banco: girava 90° e a câmera ficava atravessada na rua —, e a altura do olhar passa suave da
+				// do carro para a de andar a pé)
+				if (F3) { FootCamera.reset(this.yaw, this.chaseTilt); this.userYaw = FootCamera.yaw; }
 				else this.userYaw = C.footExitNorth ? 0 : wrap(this.yaw);
 				this.manual = false; this._footHold = 0;
 			}
@@ -370,9 +387,11 @@ class CompassCamera {
 		// RELEVO (Relief): a câmera sobe e desce com o chão sob o alvo (suave: não treme pelos degraus do mapa de alturas); o alvo leva a
 		// altura junto (a janela da sombra do sol segue: GameEngine.update)
 		if (typeof Relief !== 'undefined' && Relief.on && !this.flat) {
-			const goal = Relief.at(targetPos.x, targetPos.z);
+			// (+ a altura de quem ele segue acima do chão: escada, passarela e mirante do Cristo, viaduto, telhado, bondinho — footLift, posto
+			// pelo Game a cada quadro: a câmera sobe junto e o mantém no mesmo lugar da tela)
+			const goal = Relief.at(targetPos.x, targetPos.z) + (this.footLift || 0);
 			this.lift = this.lift == null || Math.abs(goal - this.lift) > 25 ? goal : this.lift + (goal - this.lift) * (1 - Math.exp(-5 * dt));      // (salto grande — teleporte: vai direto)
-		} else this.lift = 0;
+		} else this.lift = this.flat ? 0 : this.footLift || 0;
 		this.target.y = this.lift;
 		// Tremor (batidas e explosões): desloca só a câmera, não o foco, e some rápido.
 		let sx = 0, sz = 0;

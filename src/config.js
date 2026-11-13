@@ -48,7 +48,7 @@ const Config = {
 		// PERSONAGENS EM 3D (art/Char3D.js): o mesmo boneco do atlas, montado ao vivo na GPU com o esqueleto do gerador — visto de
 		// qualquer ângulo pela câmera. splat = tamanho de cada ponto (× o espaçamento). `?boneco=2d` = o desenho 2,5D. npc: os NPCs MAIS
 		// PERTO do jogador ficam 3D (até `max` — o nível gráfico decide: core/Graphics.js npc3d —, num raio de `radius` m); os outros seguem 2,5D.
-		char3d: { on: true, player: true, spacing: 0.8, splat: 2.1, blend: true, npc: { on: true, max: 14, radius: 38, spacing: 1.3 } },
+		char3d: { on: true, player: true, spacing: 0.8, splat: 2.1, blend: true, npc: { on: true, max: 24, radius: 45, spacing: 1.3, farSpacing: 2.2, nearDist: 17 } },
 		npcDirs: 16,           // direções desenhadas dos personagens 2,5D. Perfil leve: 8 (só as páginas pares dos atlas; os visuais do guarda-roupa saem com 8)
 		// CHÃO com as fotos CC0 (art/GroundPhotos.js, etapa 3): o pintado de sempre + o grão das fotos + o relevo delas. `?chao=0` volta
 		// ao chão só pintado; `?chao=foto`, `?chao=misto` e `,relevo` para comparar.

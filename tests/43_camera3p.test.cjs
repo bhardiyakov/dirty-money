@@ -68,8 +68,10 @@ module.exports = {
         // todos da cor do céu — a névoa ficava ligada nos personagens, cujo relógio só anda lá fora)
         await page.evaluate(() => { Interiors.index(); const dd = Interiors._doors.find((s) => s.style === 'conv') || Interiors._doors[0]; game.player.teleport(new BABYLON.Vector3(dd.x, 0, dd.z)); Interiors.enter(game, dd); });
         await gameWait(page, 1.5, 60000);
-        const inn = await page.evaluate(() => ({ flat: game.camera.flat, chase: game.camera.chase, fog: NpcArt._fogP.z }));
-        c.ok(inn.flat && inn.chase === 0 && inn.fog === 0, `dentro da loja: câmera de cima, sem perseguição nem névoa nos personagens (${JSON.stringify(inn)})`);
+        const inn = await page.evaluate(() => ({ flat: game.camera.flat, chase: game.camera.chase, fog: NpcArt._fogP.z, i3d: Interiors.is3d }));
+        // (sala 3D — art/Interior3D.js: a câmera de 3ª pessoa também lá dentro; a sala pintada: a de cima, sem perseguição nem névoa)
+        if (inn.i3d) c.ok(!inn.flat && inn.chase > 0.5, `dentro da loja 3D: câmera de 3ª pessoa atrás dele (${JSON.stringify(inn)})`);
+        else c.ok(inn.flat && inn.chase === 0 && inn.fog === 0, `dentro da loja: câmera de cima, sem perseguição nem névoa nos personagens (${JSON.stringify(inn)})`);
         c.noErrors(errors, 'camera3p');
         await close();
 

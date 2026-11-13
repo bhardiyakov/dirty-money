@@ -872,6 +872,12 @@ class Player {
         if (!onB) this._fromBelow = MapGeo.waterDepth(p.x, p.z) > 0 || !RoadPlan.onPavement(p.x, p.z, 1.5);
 
         // Escadarias e passarelas (Walkways): entra pelo pé de um lance andando para ele; a altura vem do clamp (_clampToDeck).
+        // No chão DENTRO do morro do Cristo (fora da rede: empurrado, caído, rolando…) ele ficava preso no sólido do morro: volta para o
+        // ponto da escada mais perto, na altura dela.
+        if (!this.walk && !this.onDeck && !this.underBridge && !this.rag && typeof Corcovado !== 'undefined' && Corcovado.built && Corcovado.net && Corcovado.hmWorld(p.x, p.z) > 2.6) {
+            const q = Walkways.nearest(Corcovado.net, p.x, p.z);
+            if (q && q.d < 40) { p.x = q.x; p.z = q.z; this.velocity.setAll(0); this.enterWalk(Corcovado.net, q.x, q.z, q.h); }
+        }
         if (this.walk) this.deckH = this._walkSt.h;
         else if (!this.onDeck && !this.underBridge && this.speed > 0.3 && typeof Walkways !== 'undefined') {
             const w = Walkways.entry(p.x, p.z, this.velocity.x, this.velocity.z);

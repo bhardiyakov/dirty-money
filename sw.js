@@ -10,7 +10,7 @@
 // ============================================================================
 
 const LIB_CACHE = 'dm-lib-v1';
-const APP_CACHE = 'dm-app-v2';
+const APP_CACHE = 'dm-app-v3';                  // (v3: personagens e interiores em 3D — arquivos novos que não podem misturar com os guardados de antes)
 const LIB_HOSTS = ['cdn.jsdelivr.net', 'cdn.babylonjs.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', () => self.skipWaiting());
