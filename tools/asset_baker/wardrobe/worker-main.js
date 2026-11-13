@@ -163,20 +163,29 @@ function runPreview(m) {
 	self.postMessage({ job: m.job, frames, W: G.frameFor(k), H: G.frameFor(k), k }, frames.map((f) => f.buffer));
 }
 
-// ---------------------------------------------------------------- personagem 3D AO VIVO (src/art/Char3D.js)
+// ---------------------------------------------------------------- personagens 3D AO VIVO (src/art/Char3D.js)
 // Em vez de desenhar quadros, manda ao jogo os PONTOS assados do personagem (no espaço de cada osso, com o 2º osso da malha 3D e o
 // peso — skin linear de 2 ossos, como o skinPose do renderizador) e, por clipe, as matrizes dos ossos de cada pose: a GPU monta e
-// ilumina o boneco na câmera de verdade (src/art/Char3D.js). Unidades do gerador; o jogo converte (escala da ficha / NpcGenBuild.PPU·2).
-//   { type: 'char3d', job, spec, spacing }      → { job, char3d: { bones, n, p1, n1, p2, n2, sk, mt, ramps, scale } }
-//   { type: 'char3dClip', job, spec, spacing, key } → { job, clip3d: { key, fps, loop, n, B, sc, props, newProps } }
-const C3 = { BONES: ['root', 'pelvis', 'chest', 'head', 'uarm_R', 'farm_R', 'hand_R', 'thigh_R', 'shin_R', 'foot_R', 'uarm_L', 'farm_L', 'hand_L', 'thigh_L', 'shin_L', 'foot_L'], sent: new Set(), sig: '' };
-function c3Renderer(m) {
-	const sig = JSON.stringify(m.spec) + '|' + (m.spacing || 1);
-	if (sig !== C3.sig) { C3.sig = sig; C3.sent = new Set(); }
-	return G.rendererFor(m.spec, { k: 1, spacing: m.spacing || 1 });
+// ilumina o boneco na câmera de verdade. Cada MODELO (mid) é uma ficha: a do jogador (spec, com as rampas de cor dela) ou a de um TIPO
+// de NPC (type: a forma é a mesma em todas as variantes — as cores vêm da paleta do jogo, por linha).
+//   { type: 'char3d', job, mid, spec | npc, spacing }   → { job, mid, char3d: { bones, n, p1, n1, p2, n2, sk, mt, ramps?, scale } }
+//   { type: 'char3dClip', job, mid, key }                → { job, mid, clip3d: { key, fps, loop, n, B, sc, props, newProps } }
+//   { type: 'char3dDrop', mid }                          (o jogo largou o modelo)
+const C3 = { BONES: ['root', 'pelvis', 'chest', 'head', 'uarm_R', 'farm_R', 'hand_R', 'thigh_R', 'shin_R', 'foot_R', 'uarm_L', 'farm_L', 'hand_L', 'thigh_L', 'shin_L', 'foot_L'], models: new Map() };
+function c3Model(m) {
+	let M = C3.models.get(m.mid);
+	if (!M) {
+		if (!m.spec && !m.npc) throw new Error('modelo 3D desconhecido: ' + m.mid);
+		if (m.npc && !G.TYPES[m.npc]) throw new Error('tipo desconhecido: ' + m.npc);
+		M = { spec: m.spec || G.variantSpec(m.npc, 0), type: m.npc || HERO, own: !!m.spec, spacing: m.spacing || 1, sent: new Set() };
+		C3.models.set(m.mid, M);
+	}
+	return M;
 }
+// O esqueleto da ficha (proporções) para as poses — o que o rendererFor faz, sem assar o corpo de novo.
+function c3Rig(M) { const s = G.fullSpec(M.spec); G.setRig(G.rigFor(s)); G.CTX.rifle = s.rifle; G.CTX.scale = s.scale || 1; return s; }
 function c3Body(m) {
-	const R = c3Renderer(m), BI = {}, parts = Object.values(R.baked.body);
+	const M = c3Model(m), s = G.fullSpec(M.spec), baked = G.loadBaked(s, M.spacing), BI = {}, parts = Object.values(baked.body);
 	C3.BONES.forEach((b, i) => { BI[b] = i; });
 	let n = 0;
 	for (const bk of parts) n += bk.n;
@@ -194,7 +203,7 @@ function c3Body(m) {
 		}
 		o += bk.n;
 	}
-	return { bones: C3.BONES, n, p1, n1, p2, n2, sk, mt, ramps: c3Ramps(m.spec), scale: R.spec.scale || 1 };
+	return { bones: C3.BONES, n, p1, n1, p2, n2, sk, mt, ramps: M.own ? c3Ramps(M.spec) : null, scale: s.scale || 1 };
 }
 function c3Ramps(spec) {
 	const R = G.rampsFor(spec), out = new Uint8Array(32 * 5 * 4);
@@ -206,19 +215,21 @@ function c3Ramps(spec) {
 	return out;
 }
 function c3Clip(m) {
-	const R = c3Renderer(m), [name, w0] = m.key.split(':'), cd = G.clipDef(name, w0, HERO, { hand: m.spec.hand || null });
+	const M = c3Model(m), [name, w0] = m.key.split(':');
+	c3Rig(M);
+	const cd = G.clipDef(name, w0, M.type, { hand: M.spec.hand || null }), PR = G.bakeProps(M.spacing * 0.8);
 	const n = cd.poses.length, NB = C3.BONES.length, B = new Float32Array(n * NB * 12), sc = new Float32Array(n), props = [], newProps = {};
 	cd.poses.forEach((pose, f) => {
 		const P = pose.adult ? pose.adult() : pose, BB = P.B || pose.bones();
 		sc[f] = pose.scale || 1;
-		C3.BONES.forEach((b, i) => { const M = BB[b], o = (f * NB + i) * 12; if (!M) return; B.set(M.R, o); B.set(M.t, o + 9); });
+		C3.BONES.forEach((b, i) => { const X = BB[b], o = (f * NB + i) * 12; if (!X) return; B.set(X.R, o); B.set(X.t, o + 9); });
 		const fp = [];
 		for (const [pn, Mp] of P.props || []) {
-			const bk = R.baked.props[pn];
+			const bk = PR[pn];
 			if (!bk) continue;
 			const a = new Float32Array(12); a.set(Mp.R); a.set(Mp.t, 9); fp.push([pn, a]);
-			if (!C3.sent.has(pn)) {
-				C3.sent.add(pn);
+			if (!M.sent.has(pn)) {
+				M.sent.add(pn);
 				const mt = new Float32Array(bk.n * 2);
 				for (let i = 0; i < bk.n; i++) { mt[i * 2] = bk.mat[i]; mt[i * 2 + 1] = bk.tone ? bk.tone[i] : 0; }
 				newProps[pn] = { n: bk.n, p: Float32Array.from(bk.pos.subarray(0, bk.n * 3)), nrm: Float32Array.from(bk.nrm.subarray(0, bk.n * 3)), mt };
@@ -237,11 +248,12 @@ async function run(m) {
 		else if (m.type === 'preview') runPreview(m);
 		else if (m.type === 'clips') { await runClips(m); self.postMessage({ job: m.job, done: true }); }
 		else if (m.type === 'pack') self.postMessage({ job: m.job, packed: await runPack(m) });
-		else if (m.type === 'char3d') { const c = c3Body(m); self.postMessage({ job: m.job, char3d: c }, [c.p1.buffer, c.n1.buffer, c.p2.buffer, c.n2.buffer, c.sk.buffer, c.mt.buffer, c.ramps.buffer]); }
-		else if (m.type === 'char3dClip') { const c = c3Clip(m); self.postMessage({ job: m.job, clip3d: c }); }
+		else if (m.type === 'char3d') { const c = c3Body(m); self.postMessage({ job: m.job, mid: m.mid, char3d: c }, [c.p1.buffer, c.n1.buffer, c.p2.buffer, c.n2.buffer, c.sk.buffer, c.mt.buffer].concat(c.ramps ? [c.ramps.buffer] : [])); }
+		else if (m.type === 'char3dClip') { const c = c3Clip(m); self.postMessage({ job: m.job, mid: m.mid, clip3d: c }); }
+		else if (m.type === 'char3dDrop') C3.models.delete(m.mid);
 	} catch (err) {
 		if (err === STOP) self.postMessage({ job: m.job, cancelled: true });
-		else self.postMessage({ job: m.job, error: String((err && err.stack) || err) });
+		else self.postMessage({ job: m.job, mid: m.mid, key: m.key, error: String((err && err.stack) || err) });
 	}
 }
 self.onmessage = (e) => {
