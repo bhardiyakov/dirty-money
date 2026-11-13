@@ -159,7 +159,8 @@ class CompassCamera {
 			cam.fov = fov;
 			const h = D * Math.sin(e);                                                  // (height of the camera: nothing comes nearer than the rooftops)
 			cam.minZ = k > 0 ? Math.max(C.chase.minZ, Math.max(1, (h - C.tallest - 6) * 0.8) * (1 - k)) : Math.max(1, (h - C.tallest - 6) * 0.8);
-			cam.maxZ = D + 250 + C.chase.far * k;
+			// (HORIZONTE — render/Horizon.js: na perseguição, o desenho de verdade acaba em R m; dali em diante, as fotos da paisagem)
+			cam.maxZ = typeof Horizon !== 'undefined' && Horizon.active && k >= 0.5 ? (C.horizon.R || 150) + 12 : D + 250 + C.chase.far * k;
 			this._applyFog(v, a);
 			this._pose(this.focus.x, this.focus.z);
 			return;
@@ -179,7 +180,8 @@ class CompassCamera {
 		if (!C.tilted) return;
 		if (!view) { sc.fogStart = CompassCamera.NO_FOG; sc.fogEnd = CompassCamera.NO_FOG + 1; return; }
 		if (this.persp && this.chase >= 0.5) {                                          // (perseguição: névoa de DISTÂNCIA, da cor do céu — EDGE_FOG,
-			sc.fogStart = C.chase.near; sc.fogEnd = C.chase.far; sc.fogDensity = -1000;  //  densidade −1000 = medir a distância do olho)
+			const hz = typeof Horizon !== 'undefined' && Horizon.active;                //  densidade −1000 = medir a distância do olho; com o horizonte, uma bruma leve)
+			sc.fogStart = hz ? C.horizon.fogNear : C.chase.near; sc.fogEnd = hz ? C.horizon.fogFar : C.chase.far; sc.fogDensity = -1000;
 			return;
 		}
 		if (this.persp) {                                                               // (perspective: screen position = view-space x, y ÷ depth;
