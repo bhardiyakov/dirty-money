@@ -32,9 +32,33 @@ module.exports = {
         await page.evaluate(() => { const p = game.player; p.weapon = 'pistol'; p.actor.play('aim', 'pistol'); });
         await gameWait(page, 3, 120000);
         const gun = await page.evaluate(() => { const R = game.player.char3d; return { clip: [...R.model.clips.keys()], props: [...R.props.entries()].filter(([, P]) => P && P.mesh.isEnabled()).map(([k]) => k) }; });
-        await page.evaluate(() => { game.player.weapon = 'none'; });
         c.ok(gun.clip.length >= 2, `clipes chegando do gerador: ${gun.clip.join(', ')}`);
         c.note(`objetos na mão: ${gun.props.join(', ') || '—'}`);
+
+        // atirando: o clarão na boca do cano e a cara de raiva (expressão do quadro); a sombra projetada ao sol
+        await page.evaluate(() => { game.player.char3d.model.clip('shoot:pistol'); });          // (o jogo volta ao 'aim' a cada quadro: pede o clipe direto)
+        await gameWait(page, 2, 120000);
+        const fx = await page.evaluate(() => {
+            const R = game.player.char3d, K = R.model.clips.get('shoot:pistol');
+            return { ok: !!(K && K.fx), flash: !!(K && K.fx && K.fx.some((f) => f && f[0] === 1)), expr: !!(K && K.ex && Array.from(K.ex).some((e) => e > 0)), shadow: !!(R._sh3 && R._sh3.isEnabled()), sun: +Char3D.sunK().toFixed(2), shade: +(R.actor.shade || 0).toFixed(2) };
+        });
+        await page.evaluate(() => { game.player.weapon = 'none'; });
+        c.ok(fx.flash && fx.expr, `tiro: clarão no cano e expressão do rosto (${JSON.stringify(fx)})`);
+        // sombra projetada ao sol: num lugar sem sombra de prédio
+        const sun = await page.evaluate(() => {
+            for (let i = 0; i < 400; i++) { const l = RoadNet.randomLanePoint(14); if (!l) continue; const x = l.point.x, z = l.point.z; if (!MapGeo.inShadow(x, z) && MapGeo.isLand(x, z)) { game.player.teleport(new BABYLON.Vector3(x, 0, z)); game.camera.snapTo(game.player.position); return [Math.round(x), Math.round(z)]; } }
+            return null;
+        });
+        await gameWait(page, 2, 120000);
+        const sh = await page.evaluate(() => { const R = game.player.char3d; return { on: !!(R._sh3 && R._sh3.isEnabled()), sun: +Char3D.sunK().toFixed(2), shade: +(R.actor.shade || 0).toFixed(2) }; });
+        c.ok(sh.on, `sombra projetada do boneco ao sol (${JSON.stringify(sh)} em ${sun})`);
+
+        // machucado: o modelo novo com o sangue assado (como os atlas de dano)
+        await page.evaluate(() => { window.__dmg = PlayerLook.dmg; PlayerLook.dmg = () => 3; });       // (o jogo recalcula os ferimentos pela vida)
+        await gameWait(page, 6, 240000);
+        const hurt = await page.evaluate(() => ({ sig: Char3D._pSig.includes('"dmg":3'), shown: game.player.char3d.shown, same: game.player.char3d.model === Char3D._pNext }));
+        await page.evaluate(() => { PlayerLook.dmg = window.__dmg; });
+        c.ok(hurt.sig && hurt.shown && hurt.same, `machucado: modelo 3D com sangue (${JSON.stringify(hurt)})`);
 
         // pilotando: o piloto (outro ator) em 3D com o visual do jogador
         const ride = await page.evaluate(() => {
