@@ -158,7 +158,12 @@ const Config = {
 		// leste, baixo = sul — seja qual for o giro da câmera (ela continua indo para as costas do personagem, mas não muda mais para onde
 		// ele anda). false = o controle relativo à câmera de antes (cima = para onde a câmera olha). Vale também para o rolamento, para a mira
 		// pelo analógico direito / pelo botão de tiro arrastado no celular e para a direção de arremesso.
-		worldMove: true,
+		worldMove: false,      // (a câmera A PÉ é de terceira pessoa — foot3p: o analógico é relativo a ela, como no GTA SA e no Zelda)
+		// A PÉ: câmera de TERCEIRA PESSOA (core/FootCamera.js), independente da de dirigir. pitch: a altura do olhar (graus acima do
+		// horizonte; pitchMin..pitchMax pelo mouse/analógico ↕); seguir: depois de followDelay s sem mexer, andando, ela vai às costas do
+		// personagem (followRate 1/s até followSpeed m/s; parada abaixo de followMinSpeed; |rumo − câmera| > noFlip rad = vindo na direção
+		// dela: não dá meia-volta). lookPitchMouse: graus por px arrastado; lookPitchPad: graus/s com o analógico no fim.
+		foot3p: { on: true, pitch: 42, pitchMin: 26, pitchMax: 64, followDelay: 1.0, followRate: 1.1, followSpeed: 4, followMinSpeed: 0.8, noFlip: 2.5, lookPitchMouse: 0.25, lookPitchPad: 60 },
 		// TERCEIRA PESSOA (a câmera de perseguição a pé, o padrão): como no GTA SA — a câmera vai SEMPRE para as costas do personagem
 		// enquanto ele anda, sem esperar (virou para a direita: ela gira junto e fica atrás dele). O controle segue worldMove (acima): os
 		// eixos do mapa por padrão — a câmera só acompanha, não decide para onde ele anda. Parado, ela fica onde está (o jogador ainda gira à mão).

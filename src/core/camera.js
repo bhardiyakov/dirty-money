@@ -18,6 +18,9 @@
 // O giro atual fica em CompassCamera.yaw (rad, 0 = norte em cima, +X = leste): os personagens 2,5D (SpriteActor), a ordem de
 // desenho deles (NpcArt) e o minimapa acompanham.
 //
+// A PÉ, a câmera é de TERCEIRA PESSOA (core/FootCamera.js: órbita com giro e altura do olhar, seguir devagar às costas, movimento
+// relativo a ela) — independente do que vem abaixo para os veículos; este arquivo só a posiciona (follow lê FootCamera.yaw, tiltDeg o pitch).
+//
 // GIRO 360° PELO JOGADOR (turn; Game._look: analógico direito, botão direito do mouse arrastando, dois dedos torcidos no
 // celular): a pé, a câmera fica para onde ele a virou (userYaw — começa no norte; ao descer de um veículo, fica a direção de onde ela
 // estava). Dirigindo, o giro do jogador TOMA a câmera (manual: ela fica parada no mundo, em manYaw, como a pé — o giro automático do
@@ -94,7 +97,7 @@ class CompassCamera {
 	// Inclinação de agora (graus acima do horizonte): a de sempre (Config.camera.tilt) ou, dirigindo, descendo até a da perseguição.
 	get tiltDeg() { const C = Config.camera; return C.tilt + (this.chaseTilt - C.tilt) * this.chase; }
 	// Inclinação da perseguição: a do carro; na moto/bicicleta um pouco mais alta (o piloto é um desenho 2,5D, feito para ser visto de cima).
-	get chaseTilt() { const H = Config.camera.chase; return H.tilt + (this._chBike ? H.bikeTilt : 0); }
+	get chaseTilt() { const H = Config.camera.chase; if (this._chFoot && typeof FootCamera !== 'undefined' && FootCamera.on) return FootCamera.pitchDeg; return H.tilt + (this._chBike ? H.bikeTilt : 0); }      // (a pé: a altura do olhar da câmera de 3ª pessoa)
 	setFlat(on) {
 		if (on === this.flat) return;
 		this.flat = on;
@@ -255,7 +258,7 @@ class CompassCamera {
 		if (this._carVeh) {                                                         // dirigindo: o giro do jogador toma a câmera de onde ela está
 			if (!this.manual) { this.manual = true; this.manYaw = this.yaw; }
 			this.manYaw = wrap(this.manYaw + d); this._lookIdle = 0;
-		} else { this.userYaw = wrap(this.userYaw + d); this._lookIdle = 0; }
+		} else { this.userYaw = wrap(this.userYaw + d); this._lookIdle = 0; if (typeof FootCamera !== 'undefined' && FootCamera.on) FootCamera.yaw = this.userYaw, FootCamera.idle = 0; }
 		this.yaw = wrap(this.yaw + d);
 		this._latch = null;                                                         // (a base do andar volta a ser a da tela)
 	}
@@ -268,6 +271,7 @@ class CompassCamera {
 	resetNorth() {
 		if (this._carVeh) { this.manual = false; return; }
 		this.userYaw = 0;
+		if (typeof FootCamera !== 'undefined') FootCamera.yaw = 0;
 	}
 
 	// Acompanha o alvo (suavização independente de framerate; alta = colada). `vehicle`: dirigindo — modo bússola (ver o topo).
@@ -323,7 +327,12 @@ class CompassCamera {
 			goalYaw = this.manual ? this.manYaw : this._carYaw;
 			goalLead = C.carLead;
 		} else {
-			if (this._carVeh) { this.userYaw = C.footExitNorth ? 0 : wrap(this.yaw); this.manual = false; this._footHold = 0; }       // desceu: a pé, a câmera zera (norte em cima; ou fica de onde estava)
+			const F3 = typeof FootCamera !== 'undefined' && FootCamera.on;
+			if (this._carVeh) {                                                           // desceu do veículo
+				if (F3) { FootCamera.reset(walker && walker.root ? walker.root.rotation.y : this.yaw); this.userYaw = FootCamera.yaw; }      // (3ª pessoa: começa atrás do personagem)
+				else this.userYaw = C.footExitNorth ? 0 : wrap(this.yaw);
+				this.manual = false; this._footHold = 0;
+			}
 			this._carVeh = null;
 			// A pé: anda numa direção (virou a rua) → a câmera vai aos poucos para as COSTAS dele. Só depois de footDelay s andando assim,
 			// mais rápido quanto mais rápido ele anda, e nunca logo depois de o jogador girar a câmera com a mão (lookHold).
@@ -332,7 +341,8 @@ class CompassCamera {
 			const ff = C.footFollow > 0 ? C.footFollow + (C.footFollowChase - C.footFollow) * this.chase : 0, fd = C.footDelay + (C.footDelayChase - C.footDelay) * this.chase;
 			// (3ª pessoa: segue o RUMO do corpo — para onde ele está virado —, já a partir de um passo; a câmera alta segue a velocidade)
 			const rf = tp && walker && walker.root ? walker.root.rotation.y : null, dir = rf != null && ws > 0.4 ? rf : (ws > 0.01 ? Math.atan2(wv.x, wv.z) : null);
-			if (C.footAutoYaw && ff > 0 && !this.flat && dir != null && ws > (tp ? 0.4 : 1.2) && this._lookIdle > (tp ? C.lookHold * 0.6 : C.lookHold)) {
+			if (F3 && !this.flat) { FootCamera.update(dt, walker, this.lookHeld); this.userYaw = FootCamera.yaw; this._footHold = 0; }      // (a câmera de 3ª pessoa: ver FootCamera)
+			else if (C.footAutoYaw && ff > 0 && !this.flat && dir != null && ws > (tp ? 0.4 : 1.2) && this._lookIdle > (tp ? C.lookHold * 0.6 : C.lookHold)) {
 				const off = wrap(dir - this.userYaw);
 				if (Math.abs(off) > (tp ? 0.02 : 0.12)) this._footHold += dt;          // (começa longe; depois de começar, vai até alinhar)
 				else if (Math.abs(off) < 0.02) this._footHold = 0;

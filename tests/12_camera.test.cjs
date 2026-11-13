@@ -50,7 +50,7 @@ module.exports = {
         const mv = await page.evaluate(() => {
             const P = game.player.position; let s = null;
             for (let i = 0; i < 60 && !(s && Math.abs(s.d.dz) > 0.9); i++) s = RoadNet.randomLanePoint(30, { x: P.x, z: P.z, rMin: 0, rMax: 150 });
-            if (s) { game.player.teleport(new BABYLON.Vector3(s.point.x, 0, s.point.z)); game.camera.snapTo(game.player.position); game.camera.turn(Math.atan2(s.d.dx, s.d.dz) + 1.2 - game.camera.userYaw); }
+            if (s) { game.player.teleport(new BABYLON.Vector3(s.point.x, 0, s.point.z)); game.camera.snapTo(game.player.position); game.camera.turn(Math.atan2(s.d.dx, s.d.dz) - game.camera.userYaw); }
             const p = game.player.position, f = game.camera.inputBasis().forward;
             return { x0: p.x, z0: p.z, f: { x: f.x, z: f.z }, yaw: game.camera.yaw };
         });
@@ -60,7 +60,7 @@ module.exports = {
         await page.keyboard.down('w'); await gameWait(page, 0.8, 120000); await page.keyboard.up('w');
         const mv1 = await page.evaluate(() => ({ x: game.player.position.x, z: game.player.position.z }));
         const dx = mv1.x - mv.x0, dz = mv1.z - mv.z0, dl = Math.hypot(dx, dz) || 1, dot = (dx * mv.f.x + dz * mv.f.z) / dl;
-        c.ok(dl > 1 && dot > 0.85, `W anda para o norte do mapa (rumo do direcional) com a câmera girada a ${(mv.yaw * 57.3).toFixed(0)}° (${dl.toFixed(1)} m, alinhado ${dot.toFixed(2)})`);
+        c.ok(dl > 1 && dot > 0.85, `W anda para onde a câmera olha (3ª pessoa: relativo à câmera), girada a ${(mv.yaw * 57.3).toFixed(0)}° (${dl.toFixed(1)} m, alinhado ${dot.toFixed(2)})`);
 
         // 4) com arma de fogo na mão o botão direito é a mira (não gira); o do meio gira
         await page.evaluate(() => { game.player.weapon = 'pistol'; });
@@ -150,7 +150,8 @@ module.exports = {
             await page.evaluate(() => { game._leaveVehicle(); });
             await wait(1);
             const m4 = await cam();
-            c.ok(Math.abs(wrap(m4.user)) < 1e-6 && Math.abs(wrap(m4.yaw)) < Math.abs(wrap(m3.yaw)) + 0.05, `desceu: a pé, a câmera zera — volta para o norte (${(m3.yaw * 57.3).toFixed(0)}° → ${(m4.yaw * 57.3).toFixed(0)}°, indo para 0°)`);
+            const body = await page.evaluate(() => game.player.root.rotation.y);
+            c.ok(Math.abs(wrap(m4.user - body)) < 0.05, `desceu: a pé, a câmera começa atrás do personagem (câmera ${(m4.user * 57.3).toFixed(0)}°, corpo ${(body * 57.3).toFixed(0)}°)`);
         }
 
         // 7) entrar numa loja: norte em cima; sair: a direção de antes
@@ -173,7 +174,7 @@ module.exports = {
         const M = await boot(ctx, { touch: true, width: 844, height: 390, query: 'ape=alto' });
         const tp2 = M.page;
         // (os gestos: o giro automático para as costas de quem anda — Config.camera.footFollow — fica de fora, o joystick anda um pouco)
-        await tp2.evaluate(() => { Tutorial.skip(); game.player.invulnerable = true; Config.camera.footFollow = 0; });
+        await tp2.evaluate(() => { Tutorial.skip(); game.player.invulnerable = true; Config.camera.footFollow = 0; Config.camera.foot3p.followRate = 0; });
         // (os créditos de abertura — #studio — ainda podem estar por cima, pegando o toque, logo depois de carregar)
         await tp2.waitForFunction(() => { const s = document.getElementById('studio'); return !s || s.classList.contains('out') || getComputedStyle(s).display === 'none'; }, null, { timeout: 30000 }).catch(() => {});
         const cdp = await tp2.context().newCDPSession(tp2);
