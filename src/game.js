@@ -980,6 +980,7 @@ class Game {
 		AudioFX.setListener(this.player.position.x, this.player.position.z);           // (os sons de dentro da sala: tiro de aviso, alarme)
 		if (Traces._el && Traces._el.style.display !== 'none') Traces._el.style.display = 'none';      // (os avisos de rastro são da rua)
 		if (!frozen) this._interiorKeys(dt);
+		if (!frozen && Interiors.is3d && !decorating) this._look(dt);                   // (sala 3D: a câmera gira como na rua — mouse, analógico, dedos)
 		this.shopUI.update(dt); this.stashUI.update(dt); this.propertyUI.update(dt);
 		if (this.sleeping) this._updateSleep(dt);
 		const axis = frozen ? { x: 0, z: 0 } : this.input.getMoveAxis();
