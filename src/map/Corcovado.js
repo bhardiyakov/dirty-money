@@ -292,14 +292,29 @@ const Corcovado = {
         }
     },
 
-    // O BONDINHO: os pontos de cada cabo (mundo, altura absoluta) e a viagem.
+    // O BONDINHO: o perfil do cabo (o paredão sobe mais depressa que a reta entre as estações: o cabo passa por TORRES — o contorno
+    // de cima do chão + 14 m, do pé ao alto), os dois cabos (±1,4 m de lado) e a posição da cabine ao longo dele.
+    _cableLine() {
+        if (this._cl) return this._cl;
+        const CA = this.CABLE, R = (x, z) => (typeof Relief !== 'undefined' ? Relief.at(x, z) : 0);
+        const dx = CA.b[0] - CA.a[0], dz = CA.b[1] - CA.a[1], L = Math.hypot(dx, dz), n = Math.ceil(L / 3), pts = [];
+        for (let i = 0; i <= n; i++) { const t = i / n, x = CA.a[0] + dx * t, z = CA.a[1] + dz * t, end = i === 0 || i === n; pts.push([t * L, R(x, z) + (end ? 9 : 14)]); }
+        const hull = [];                                                         // (contorno superior: o cabo esticado por cima de tudo)
+        for (const p of pts) { while (hull.length >= 2) { const a = hull[hull.length - 2], b = hull[hull.length - 1]; if ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) >= 0) hull.pop(); else break; } hull.push(p); }
+        const cum = [0]; for (let i = 1; i < hull.length; i++) cum.push(cum[i - 1] + Math.hypot(hull[i][0] - hull[i - 1][0], hull[i][1] - hull[i - 1][1]));
+        return (this._cl = { hull, cum, L, dx: dx / L, dz: dz / L, px: -dz / L, pz: dx / L });
+    },
     _cableEnds() {
         if (this._ce) return this._ce;
-        const CA = this.CABLE, R = (x, z) => (typeof Relief !== 'undefined' ? Relief.at(x, z) : 0), ha = R(CA.a[0], CA.a[1]) + 9, hb = R(CA.b[0], CA.b[1]) + 9;
-        const dx = CA.b[0] - CA.a[0], dz = CA.b[1] - CA.a[1], L = Math.hypot(dx, dz), px = -dz / L, pz = dx / L;
-        return (this._ce = [-1.4, 1.4].map((s) => [[CA.a[0] + px * s, ha, CA.a[1] + pz * s], [CA.b[0] + px * s, hb, CA.b[1] + pz * s]]));
+        const C = this._cableLine(), A = this.CABLE.a;
+        return (this._ce = [-1.4, 1.4].map((s) => C.hull.map(([u, y]) => [A[0] + C.dx * u + C.px * s, y, A[1] + C.dz * u + C.pz * s])));
     },
-    _cabinAt(k, t) { const [a, b] = this._cableEnds()[k], sag = Math.sin(t * Math.PI) * 3; return { x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t - 2 - sag, z: a[2] + (b[2] - a[2]) * t }; },
+    _cabinAt(k, t) {
+        const C = this._cableLine(), A = this.CABLE.a, s = (k ? 1.4 : -1.4), want = t * C.cum[C.cum.length - 1];
+        let i = 0; while (i < C.cum.length - 2 && C.cum[i + 1] < want) i++;
+        const f = Math.min(1, (want - C.cum[i]) / ((C.cum[i + 1] - C.cum[i]) || 1)), u = C.hull[i][0] + (C.hull[i + 1][0] - C.hull[i][0]) * f, y = C.hull[i][1] + (C.hull[i + 1][1] - C.hull[i][1]) * f;
+        return { x: A[0] + C.dx * u + C.px * s, y: y - 2.2, z: A[1] + C.dz * u + C.pz * s };
+    },
     _placeCabins() {
         if (!this._cabins || !this.cab) return;
         const t = this.cab.t;
@@ -332,10 +347,18 @@ const Corcovado = {
             box('vigiaCableSt' + k, p[0], g + 4, p[1], 10, 8, 7, wall);
             box('vigiaCableRf' + k, p[0], g + 8.4, p[1], 11, 0.8, 8, roof);
         }
-        for (const [a, b] of this._cableEnds()) {
-            const t = BABYLON.MeshBuilder.CreateTube('vigiaCable', { path: [new BABYLON.Vector3(a[0], a[1], a[2]), new BABYLON.Vector3((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 3, (a[2] + b[2]) / 2), new BABYLON.Vector3(b[0], b[1], b[2])], radius: 0.09, tessellation: 5 }, scene);
+        for (const line of this._cableEnds()) {
+            const t = BABYLON.MeshBuilder.CreateTube('vigiaCable', { path: line.map((p) => new BABYLON.Vector3(p[0], p[1], p[2])), radius: 0.09, tessellation: 5 }, scene);
             t.material = steel; t.isPickable = false; t.freezeWorldMatrix(); wb.meshes.push(t);
         }
+        // as torres: onde o cabo dobra (os vértices do contorno, fora das estações), do chão até o cabo, com a travessa dos dois cabos
+        const CL = this._cableLine(), A = this.CABLE.a;
+        CL.hull.forEach(([u, y], i) => {
+            if (i === 0 || i === CL.hull.length - 1) return;
+            const x = A[0] + CL.dx * u, z = A[1] + CL.dz * u, g = R(x, z), hgt = y - g + 0.6;
+            box('vigiaTower' + i, x, g + hgt / 2, z, 0.9, hgt, 0.9, steel);
+            const tr = box('vigiaTowerX' + i, x, y + 0.3, z, 0.4, 0.4, 3.6, steel); tr.rotation.y = Math.atan2(CL.dx, CL.dz) + Math.PI / 2; tr.unfreezeWorldMatrix(); tr.computeWorldMatrix(true); tr.freezeWorldMatrix();
+        });
         this._cabins = [0, 1].map((k) => {
             const c = BABYLON.MeshBuilder.CreateBox('vigiaCabin' + k, { width: 2.6, height: 2.3, depth: 2.6 }, scene); c.material = red; c.isPickable = false;
             const w = BABYLON.MeshBuilder.CreateBox('vigiaCabinWin' + k, { width: 2.7, height: 0.7, depth: 2.7 }, scene); w.material = glass; w.parent = c; w.position.y = 0.35; w.isPickable = false;
