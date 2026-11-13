@@ -168,7 +168,26 @@ const Char3D = {
 			game.player.char3d = new Char3DActor(this._scene, game.player.actor, null, { name: 'jogador3d', xray: true });
 			this._playerSpec(true);
 		}
-		this._obs = this._scene.onBeforeRenderObservable.add(() => this.tick());
+		// (roda dentro do desenho de cada quadro: um erro aqui pararia a cena INTEIRA — a tela fica só com o céu. Erro: avisa no console
+		// e, repetindo, desliga o 3D — todo mundo volta ao 2,5D — em vez de travar o jogo)
+		this._errs = 0;
+		this._obs = this._scene.onBeforeRenderObservable.add(() => {
+			if (this.off) return;
+			try { this.tick(); this._errs = 0; } catch (e) {
+				console.error('[Char3D] erro no quadro:', e);
+				if (++this._errs >= 3) this.disable();
+			}
+		});
+	},
+	// Desliga o 3D (erro repetido): os bonecos somem e os desenhos 2,5D voltam.
+	disable() {
+		this.off = true;
+		const all = [...(this.npcs ? this.npcs.values() : [])];
+		if (this._game && this._game.player.char3d) all.push(this._game.player.char3d);
+		for (const C of all) { try { C.dispose(); } catch (e) { /* segue */ } }
+		if (this.npcs) this.npcs.clear();
+		if (this._game) this._game.player.char3d = null;
+		console.warn('[Char3D] personagens 3D desligados nesta sessão (voltaram ao 2,5D)');
 	},
 	// O visual do jogador (guarda-roupa, bolsa, aparência): mudou → um modelo novo (o antigo some quando o novo fica pronto).
 	_playerSpec(force) {
