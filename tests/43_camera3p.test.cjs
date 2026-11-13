@@ -31,7 +31,7 @@ module.exports = {
             return { chase: C.chase, tilt: C.tiltDeg, want: Config.camera.chase.tilt, y: cam.position.y - (C.lift || 0), v: uv ? uv.v : null, fog: game.gameEngine.scene.fogDensity, ct: CarArt3D._ct ? CarArt3D._ct.n : 0 };
         });
 
-        let { page, errors, close } = await boot(ctx);
+        let { page, errors, close } = await boot(ctx, { query: process.env.Q || '' });
         const L = await page.evaluate(place);
         await page.evaluate(drive, L);
         await gameWait(page, 3, 90000);
