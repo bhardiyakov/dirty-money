@@ -595,7 +595,14 @@ class Game {
 		if (inp.wheelOpen) return;
 		let d = this._lookD || 0;
 		if (inp.padConnected && !inp.stickAim && this.mode !== 'heli') { const x = inp.rstick.x; d += Math.sign(x) * x * x * C.lookPad * dt; }
-		this.camera.lookHeld = inp.lookHeld(this.mode === 'player' && inp.gunInHand);
+		// A PÉ (câmera de 3ª pessoa — FootCamera): a altura do olhar pelo arrasto vertical do mouse e pelo analógico direito ↕
+		const foot = this.mode === 'player' && typeof FootCamera !== 'undefined' && FootCamera.on && !this.camera.flat;
+		inp.pitchStick = foot;
+		const dy = this._lookDY || 0;
+		let dp = foot ? dy * C.foot3p.lookPitchMouse : 0;
+		if (foot && inp.padConnected && !inp.stickAim) { const y = inp.rstick.y; if (Math.abs(y) > Math.abs(inp.rstick.x) * 0.5) dp += Math.sign(y) * y * y * C.foot3p.lookPitchPad * dt; }
+		if (dp) FootCamera.tilt(dp);
+		this.camera.lookHeld = inp.lookHeld(this.mode === 'player' && inp.gunInHand) || (foot && inp.padConnected && Math.abs(inp.rstick.y) > 0.2 && !inp.stickAim);
 		if (d) this.camera.turn(d);
 	}
 
@@ -631,6 +638,7 @@ class Game {
 		this._pollInput();
 		this.input.sprintTick(dt);                                              // impulso do sprint (a pé, nadando, pedalando): InputManager
 		this._lookD = this.input.takeLook(this.mode === 'player' && this.input.gunInHand);      // giro da câmera arrastando (aplicado em _look)
+		this._lookDY = this.input.takeLookY(this.mode === 'player' && this.input.gunInHand);    // (e o arrasto vertical: a altura do olhar a pé)
 		Panel.tick(dt);
 		this.dev.update(dt);
 		Interiors.tickFade(dt);

@@ -93,15 +93,15 @@ class InputManager {
             this.usingPad = false;
             if (e.button === 0) { this.justPressed['mouse0'] = true; this.mouseDown = true; }
             const onGame = e.target && e.target.id === 'canvas';
-            if (e.button === 2 && onGame) { this.mouseAim = true; this._dragR = true; this._mx = e.clientX; }      // botão direito sobre o jogo: mirar / arrastar gira
-            if (e.button === 1 && onGame) { this._dragM = true; this._mx = e.clientX; }
+            if (e.button === 2 && onGame) { this.mouseAim = true; this._dragR = true; this._mx = e.clientX; this._my = e.clientY; }      // botão direito sobre o jogo: mirar / arrastar gira
+            if (e.button === 1 && onGame) { this._dragM = true; this._mx = e.clientX; this._my = e.clientY; }
         };
         window.addEventListener('pointerdown', down, true);
         window.addEventListener('mousedown', down);
         window.addEventListener('mousedown', (e) => { if (e.button === 1 && e.target && e.target.id === 'canvas') e.preventDefault(); });      // (botão do meio: sem a rolagem automática)
         const up = (e) => {
             if (e.type === 'pointerup' && e.pointerType !== 'mouse') return;
-            if ((e.button === 2 && this._dragR) || (e.button === 1 && this._dragM)) this._dragTo(e.clientX);      // (o arrasto vai até onde soltou)
+            if ((e.button === 2 && this._dragR) || (e.button === 1 && this._dragM)) this._dragTo(e.clientX, e.clientY);      // (o arrasto vai até onde soltou)
             if (e.button === 0) this.mouseDown = false;
             if (e.button === 2) { this.mouseAim = false; this._dragR = false; }
             if (e.button === 1) this._dragM = false;
@@ -114,7 +114,7 @@ class InputManager {
         const move = (e) => {
             if (e.type === 'pointermove' && e.pointerType !== 'mouse') return;
             if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
-            this._dragTo(e.clientX);
+            this._dragTo(e.clientX, e.clientY);
             this.mouseX = e.clientX; this.mouseY = e.clientY;
             if (Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0) > 2) { this.mouseMovedAt = performance.now(); this.usingPad = false; }
         };
@@ -192,7 +192,7 @@ class InputManager {
         this.padAim = foot && lt;                                                                    // LT a pé: mirar (ver Aim)
         this.rstick.x = dz(p.axes[2] || 0); this.rstick.y = dz(p.axes[3] || 0);
         // (mirando ou na roda de armas, o analógico direito aponta; girando a câmera — mais de lado que de pé — ele não dá zoom)
-        this.zoomAxis = this.padAim || this.stickAim || this.wheelOpen || Math.abs(this.rstick.y) <= Math.abs(this.rstick.x) ? 0 : this.rstick.y;
+        this.zoomAxis = this.padAim || this.stickAim || this.wheelOpen || this.pitchStick || Math.abs(this.rstick.y) <= Math.abs(this.rstick.x) ? 0 : this.rstick.y;      // (pitchStick: a pé, ↕ é a altura do olhar — FootCamera)
         this.yawAxis = this.rstick.x;
 
         // botões -> teclas (layout GTA / Watch Dogs: ver o cabeçalho)
@@ -271,10 +271,13 @@ class InputManager {
 
     // Arrasto do mouse (botão direito / do meio): soma o quanto andou desde o último ponto. Ancorado no ponto em que o botão desceu e
     // fechado no ponto em que subiu: o giro é exatamente o arrasto, mesmo que algum movimento do meio chegue fora de ordem.
-    _dragTo(x) {
+    _dragTo(x, y) {
         if ((this._dragR || this._dragM) && this._mx != null) { const dx = x - this._mx; if (this._dragR) this._lookR += dx; if (this._dragM) this._lookM += dx; }
-        this._mx = x;
+        if ((this._dragR || this._dragM) && this._my != null && y != null) { const dy = y - this._my; if (this._dragR) this._lookRY = (this._lookRY || 0) + dy; if (this._dragM) this._lookMY = (this._lookMY || 0) + dy; }
+        this._mx = x; if (y != null) this._my = y;
     }
+    // Arrasto vertical (px) desde a última chamada, e zera — a altura do olhar da câmera a pé (FootCamera). + = arrastou para baixo.
+    takeLookY(gun = false) { const d = (gun ? 0 : (this._lookRY || 0)) + (this._lookMY || 0); this._lookRY = this._lookMY = 0; return d; }
 
     touchTwist(rad) { this._twist += rad; }      // (TouchControls: os dois dedos torcidos, rad; + = para a direita, como turn)
 

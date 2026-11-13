@@ -47,10 +47,11 @@ module.exports = {
         c.ok(f.chase === 1 && Math.abs(f.tilt - f.want) < 0.5 && f.fog < -500, `a pé, a mesma perspectiva dos veículos (perseguição ${f.chase.toFixed(2)}, ${f.tilt.toFixed(1)}°)`);
         c.ok(f.y < 16 && fp.v > 0.5 && fp.v < 0.95 && fp.d < d.y / Math.sin(d.tilt * Math.PI / 180) + 1, `a pé, atrás e perto: a ${f.y.toFixed(1)} m do chão, o personagem na metade de baixo da tela (v ${fp.v.toFixed(2)})`);
 
-        // a pé: segurar "direita" (D) — ele anda para o leste e a câmera NÃO gira para as costas dele (Config.camera.footAutoYaw: só acompanha)
+        // a pé (3ª pessoa, FootCamera): segurar "direita" (D) — ele anda para a direita da tela e a câmera vai aos poucos para as costas dele,
+        // sem ele mudar de rumo (a base do andar fica travada enquanto ele segura a mesma direção)
         const s0 = await page.evaluate((L) => {
             game.player.teleport(new BABYLON.Vector3(L.x, 0, L.z)); game.camera.snapTo(game.player.position);
-            game.camera.turn(wrapA(L.h - Math.PI / 2 - game.camera.userYaw)); game.camera._lookIdle = 9;
+            game.camera.turn(wrapA(L.h - Math.PI / 2 - game.camera.userYaw)); game.camera._lookIdle = 9; FootCamera.idle = 9;
             function wrapA(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
             return { yaw: game.camera.yaw };
         }, L);
@@ -61,7 +62,7 @@ module.exports = {
         const w1 = await page.evaluate(() => ({ h: Math.atan2(game.player.velocity.x, game.player.velocity.z), yaw: game.camera.yaw, sp: game.player.speed }));
         await page.keyboard.up('d');
         c.ok(Math.abs(wrap(w1.h - w0)) < 0.15, `segurando a mesma tecla, o rumo não muda com a câmera girando (${(wrap(w1.h - w0) * 57.3).toFixed(0)}°)`);
-        c.ok(Math.abs(wrap(w1.yaw - s0.yaw)) < 0.02 && Math.abs(wrap(w1.h - Math.PI / 2)) < 0.2, `andando para o leste, a câmera fica onde estava (girou ${(wrap(w1.yaw - s0.yaw) * 57.3).toFixed(0)}°; rumo ${(w1.h * 57.3).toFixed(0)}°)`);
+        c.ok(Math.abs(wrap(w1.yaw - w1.h)) < 0.2 && Math.abs(wrap(s0.yaw - w1.h)) > 1, `a câmera foi para as costas dele (de ${(wrap(s0.yaw - w1.h) * 57.3).toFixed(0)}° para ${(wrap(w1.yaw - w1.h) * 57.3).toFixed(0)}°)`);
         // entrando numa loja vindo da câmera de perseguição a pé: a câmera de cima e os personagens SEM a névoa de distância (eles ficavam
         // todos da cor do céu — a névoa ficava ligada nos personagens, cujo relógio só anda lá fora)
         await page.evaluate(() => { Interiors.index(); const dd = Interiors._doors.find((s) => s.style === 'conv') || Interiors._doors[0]; game.player.teleport(new BABYLON.Vector3(dd.x, 0, dd.z)); Interiors.enter(game, dd); });
