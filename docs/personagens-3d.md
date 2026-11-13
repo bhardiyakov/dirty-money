@@ -16,6 +16,24 @@ O gerador dos personagens é o mesmo que desenha os atlas 2,5D. Em vez de fotogr
 A GPU monta o boneco a cada quadro: skin de 2 ossos, luz do sol em faixas (os 5 tons do desenho) e a cor pela rampa de cada material da
 ficha. Cada ponto vira um disquinho do tamanho certo na tela (`splat` × espaçamento). Quadros vizinhos do clipe são misturados (`blend`).
 
+**Modelos** (`Char3DModel`): um por ficha — o do jogador (as cores da roupa dele, rampas próprias; refeito quando o visual muda) e um por
+TIPO de NPC (todas as variantes de um tipo têm a mesma forma: a cor vem da paleta do `NpcArt`, pela linha `npcRow` do ator). Pontos,
+clipes e objetos na mão são compartilhados; cada ator clona a malha (mesma geometria) com o seu material (ossos, linha da paleta).
+Dois Workers: um do jogador (o visual dele nunca espera os NPCs) e um dos NPCs.
+
+**Quem fica 3D** (`Char3D.tick`, a cada 0,25 s): o jogador e os NPCs MAIS PERTO dele, até `Config.art.char3d.npc.max` num raio de
+`radius` m (folga de 15% para quem já está 3D: ninguém pisca na borda). O limite vem do nível gráfico (`Graphics.PRESETS.npc3d`):
+
+| Nível | NPCs 3D |
+| --- | --- |
+| Low (e placa de vídeo por software) | 0 — só o jogador |
+| Medium | 6 |
+| High | 14 |
+| HD | 20 |
+
+Os outros NPCs seguem 2,5D (de longe a diferença não aparece). O jogador **pilotando** (moto, bicicleta, jet ski) também: o piloto é outro
+ator, e usa o modelo do visual dele — mesmo no Low.
+
 O `SpriteActor` continua sendo a lógica do personagem — clipe, fase, rumo, posição, pulo, visibilidade. O ator 3D só o lê a cada quadro
 e esconde o desenho 2,5D (`layerMask` 0) enquanto o 3D está à mostra. Clipe que o gerador não tem (folha antiga) ou que ainda está
 chegando do Worker: o 2,5D aparece no lugar.
@@ -27,7 +45,8 @@ de trás do próprio corpo virariam silhueta.
 ## Fases
 
 1. **Jogador** (feito): `Config.art.char3d.player`.
-2. **NPCs, polícia e gangues**: o mesmo `Char3DActor`, com a ficha de cada tipo/variante (`NpcData`) e pontos compartilhados por visual.
+2. **NPCs, polícia e gangues** (feito): pedestres, polícia, BOPE, exército, traficantes, pilotos de moto/bicicleta, frequentadores de
+   academia e lojas — todo personagem 2,5D do gerador. Teste: `tests/54_personagens3d.test.cjs`.
 
 ## Ainda não tem no 3D
 
