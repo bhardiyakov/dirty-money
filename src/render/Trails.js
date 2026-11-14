@@ -18,27 +18,31 @@ const Trails = {
 		BABYLON.Effect.ShadersStore.trailsFragmentShader = `
 			precision highp float;
 			varying vec2 vUV;
-			uniform sampler2D textureSampler;
-			uniform float keep;          // quanto do quadro anterior fica (0..1)
+			uniform sampler2D textureSampler;     // o quadro de agora
+			uniform sampler2D histSampler;        // o quadro anterior já misturado (a saída da passada 'trailsHist')
+			uniform float keep;                   // quanto do quadro anterior fica (0..1)
 			void main(void) {
-				gl_FragColor = vec4(texture2D(textureSampler, vUV).rgb, 1.0 - keep);
+				vec3 now = texture2D(textureSampler, vUV).rgb;
+				gl_FragColor = vec4(mix(now, texture2D(histSampler, vUV).rgb, keep), 1.0);
 			}`;
 	},
 
 	// camera: a câmera do jogo; engine: o BABYLON.Engine.
+	// Duas passadas: 'trails' mistura o quadro de agora com o HISTÓRICO; 'trailsHist' copia o resultado — a textura dela é o histórico do
+	// quadro seguinte e a entrada do que vem depois (o CRT). (Contar com a textura não ser limpa entre quadros acumulava a cor do fundo.)
 	attach(camera, engine) {
 		if (!this.on) return null;
 		this._shader();
-		// (a cena desenha DIRETO na textura da 1ª passada da cadeia e a limpa: o rastro precisa de uma passada antes dele)
-		if (!camera._postProcesses || !camera._postProcesses.some((p) => p)) new BABYLON.PassPostProcess('trailsIn', 1.0, camera, BABYLON.Texture.BILINEAR_SAMPLINGMODE, engine);
-		const pp = new BABYLON.PostProcess('trails', 'trails', ['keep'], null, 1.0, camera, BABYLON.Texture.BILINEAR_SAMPLINGMODE, engine, false);
-		pp.autoClear = false;                                    // (o quadro anterior fica na textura…)
-		pp.alphaMode = BABYLON.Engine.ALPHA_COMBINE;             // (…e o novo entra por cima com alfa = 1 − keep)
+		const mix = new BABYLON.PostProcess('trails', 'trails', ['keep'], ['histSampler'], 1.0, camera, BABYLON.Texture.BILINEAR_SAMPLINGMODE, engine, false);
+		const hist = new BABYLON.PassPostProcess('trailsHist', 1.0, camera, BABYLON.Texture.BILINEAR_SAMPLINGMODE, engine, false);
 		const base = Math.max(0, Math.min(0.9, this.C.keep !== undefined ? this.C.keep : 0.45));
-		pp.onApply = (effect) => {
+		let frames = 0;
+		mix.onApply = (effect) => {
+			effect.setTextureFromPostProcessOutput('histSampler', hist);
 			const dt = Math.min(0.2, engine.getDeltaTime() / 1000);
-			effect.setFloat('keep', Math.pow(base, dt * 30));
+			effect.setFloat('keep', frames++ < 2 ? 0 : Math.pow(base, dt * 30));      // (os 2 primeiros quadros: o histórico ainda está vazio)
 		};
-		return pp;
+		mix.onSizeChangedObservable.add(() => { frames = 0; });                       // (janela mudou de tamanho: histórico novo, vazio)
+		return mix;
 	},
 };
