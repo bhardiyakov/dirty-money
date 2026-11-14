@@ -193,6 +193,12 @@ const Char3D = {
 			}
 		});
 	},
+	// Altura do chão acima do asfalto em (x, z): a calçada (Config.city.curbHeight) dentro de um quarteirão, fora da pista; 0 no resto.
+	surfaceAt(x, z) {
+		if (typeof CityGrid === 'undefined' || !CityGrid._blockAtPoint || typeof RoadPlan === 'undefined') return 0;
+		if (RoadPlan.onPavement(x, z) || !CityGrid._blockAtPoint(x, z)) return 0;
+		return (Config.city && Config.city.curbHeight) || 0.18;
+	},
 	// Desliga o 3D (erro repetido): os bonecos somem e os desenhos 2,5D voltam.
 	disable() {
 		this.off = true;
@@ -230,7 +236,10 @@ const Char3D = {
 			pl.char3d.update();
 		}
 		if (this.npcOn) {
-			if ((this._pick -= dt) <= 0) { this._pick = 0.25; this._choose(pl); }
+			// (o jogador montou — o piloto é outro ator: escolhe já no quadro seguinte, sem passar pelo desenho 2,5D)
+			const mounted = !pl.actor.mesh.isVisible || !pl.actor.mesh.isEnabled();
+			if (mounted !== this._mounted) { this._mounted = mounted; this._pick = 0; }
+			if ((this._pick -= dt) <= 0) { this._pick = 0.15; this._choose(pl); }
 			if ((this._gcT = (this._gcT || 0) - dt) <= 0) { this._gcT = 10; this._gc(); }
 			for (const [a, R] of this.npcs) R.update();
 		} else if (this.npcs.size) this._choose(null);
@@ -344,13 +353,31 @@ class Char3DModel {
 			return;
 		}
 		if (m.char3d) this._build(m.char3d);
-		else if (m.clip3d) { const c = m.clip3d; this.clips.set(c.key, c); for (const [k, p] of Object.entries(c.newProps || {})) this._prop(k, p); }
+		else if (m.clip3d) {
+			const c = m.clip3d; this.clips.set(c.key, c); for (const [k, p] of Object.entries(c.newProps || {})) this._prop(k, p);
+			if (c.key === 'idle:none' && this._data) this._groundFrom(c);
+		}
 	}
 	// Clipe pronto (ou undefined/'wait' enquanto chega, 'fail' se o gerador não tem).
 	clip(key) {
 		const K = this.clips.get(key);
 		if (K === undefined && this.ready) { this.clips.set(key, 'wait'); this.w.postMessage({ type: 'char3dClip', job: 1, mid: this.mid, key }); }
 		return K;
+	}
+	// O CHÃO do modelo: no gerador a sola do pé fica abaixo do zero (o desenho 2,5D ajusta o pé pela imagem; aqui o boneco ficava ~15 cm
+	// enterrado, e deitado — o corpo tem ~50 cm de espessura — quase metade dentro do chão). O ponto mais baixo da pose parada, com o
+	// skin de 2 ossos, vira o quanto o boneco sobe (lift, m).
+	_groundFrom(K) {
+		const d = this._data, B = K.B, NB = Char3D.BONES;
+		const Z = (b, x, y, z) => { const o = b * 12; return B[o + 6] * x + B[o + 7] * y + B[o + 8] * z + B[o + 11]; };
+		let mn = Infinity;
+		for (let i = 0; i < d.n; i += 3) {
+			const w = d.sk[i * 4 + 2], z1 = Z(d.sk[i * 4] | 0, d.p1[i * 3], d.p1[i * 3 + 1], d.p1[i * 3 + 2]);
+			const z = w > 0 ? z1 * (1 - w) + w * Z(d.sk[i * 4 + 1] | 0, d.p2[i * 3], d.p2[i * 3 + 1], d.p2[i * 3 + 2]) : z1;
+			if (z < mn) mn = z;
+		}
+		this.lift = Number.isFinite(mn) && mn < 0 ? -mn * this.unit : 0;
+		this._data = null; void NB;
 	}
 	_points(name, n, P1, N1, P2, N2, SK, MT, FA, FB) {
 		const mesh = new BABYLON.Mesh(name, this.scene);
@@ -376,7 +403,10 @@ class Char3DModel {
 		this.n = c.n;
 		this.body = this._points('c3d_corpo' + this.mid, c.n, c.p1, c.n1, c.p2, c.n2, c.sk, c.mt, c.fa, c.fb);
 		this.ready = true;
+		this._data = c;                                                                  // (os pontos, até medir o chão: _groundFrom)
 		for (const k of ['idle:none', 'walk:none', 'run:none']) this.clip(k);          // (os clipes de sempre já vêm: ninguém espera em 2,5D)
+		// (o jogador: os de montar também — subindo na moto ou na bike ele não passa pelo desenho 2,5D)
+		if (this.kind === 'player') for (const k of ['ride_moto:none', 'ride_bike:none', 'ride_scooter:none', 'ride_jetski:none']) this.clip(k);
 		if (this.onReady) this.onReady(this);
 	}
 	_prop(name, p) {
@@ -465,7 +495,7 @@ class Char3DActor {
 		e.setFloat('splat', M.spacing * M.unit * (this.C.splat || 2.1));
 		e.setFloat('shade', this.actor.shade || 1);
 		e.setFloat('expr', B === this._B ? this._expr || 0 : 0);
-		e.setFloat('groundY', this.root.position.y + 0.03);
+		e.setFloat('groundY', this.root.position.y - (M.lift || 0) + 0.03);      // (o chão: sem a subida do modelo)
 		if (this.pal) e.setFloat('row', this.actor.npcRow || 0);
 		if (m === (this._sh3 && this._sh3.material)) e.setVector4('silhouette', Char3D._shadowV.set(0, 0, 0, 0.42 * (this._sun || 0)));
 	}
@@ -548,6 +578,8 @@ class Char3DActor {
 		// (o gerador não tem esse clipe com essa arma: o mesmo sem arma; nem esse, parado — continua 3D em vez de voltar ao 2,5D)
 		if (K === 'fail' && c.weapon && c.weapon !== 'none') K = M.clip(c.name + ':none');
 		if (K === 'fail') K = M.clip('idle:none');
+		// (o clipe novo ainda chegando e nenhuma pose ainda: a parada, se já veio — em vez do desenho 2,5D)
+		if ((K === undefined || K === 'wait') && !this._last) { const I = M.clips.get('idle:none'); if (I && typeof I === 'object') this._last = I; }
 		if (K === 'fail' || ((K === undefined || K === 'wait') && !this._last)) { this._hide3d(); this._show2d(true); return; }
 		if (K && K !== 'wait') this._last = K;
 		else K = this._last;                                       // (o clipe novo ainda chegando: segura a última pose)
@@ -613,8 +645,17 @@ class Char3DActor {
 	}
 	// Onde o SpriteActor está: posição (com o relevo e o pulo: o quad mora a 0,5 acima do chão) e rumo.
 	_place(a) {
-		const m = a.mesh, r = this.root, ly = a.lift ? a.lift.position.y : 0;
-		r.position.set(m.position.x, ly + m.position.y - (typeof NpcArt !== 'undefined' ? NpcArt.LAYER_Y : 0.5), m.position.z);
+		const m = a.mesh, r = this.root, ly = a.lift ? a.lift.position.y : 0, up = m.position.y - (typeof NpcArt !== 'undefined' ? NpcArt.LAYER_Y : 0.5);
+		// CALÇADA: dentro de um quarteirão e fora da pista o chão está curbHeight acima do asfalto (calçadas, praças, lotes) — sobe e desce
+		// o meio-fio suave. (Só no chão: num viaduto, telhado, escada ou no ar a altura já vem do desenho.)
+		if (m.position.x !== this._sx || m.position.z !== this._sz) {
+			this._sx = m.position.x; this._sz = m.position.z;
+			this._surfT = up < 0.1 ? Char3D.surfaceAt(m.position.x, m.position.z) : 0;
+		}
+		const dt = Math.min(0.1, this.scene.getEngine().getDeltaTime() / 1000);
+		this._surf = this._surf === undefined ? this._surfT : this._surf + (this._surfT - this._surf) * Math.min(1, dt * 14);
+		r.position.set(m.position.x, ly + up + this._surf + (this.model.lift || 0), m.position.z);
+		this.shadowMesh.position.y = 0.04 - (this.model.lift || 0);                  // (a mancha no chão, não na altura da subida)
 		r.rotation.y = a.heading || 0;
 		const sh = !(a._wl > 0.3) && !/^(ride_|sit|swim|dive|board)/.test(a.clip.name);      // (montado, sentado, nadando: os pés não estão no chão)
 		// sombra projetada ao SOL (na sombra de um prédio, em interiores e de noite ela some aos poucos); a mancha macia fica por baixo
