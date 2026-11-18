@@ -131,6 +131,10 @@ class CarSheet {
             viatura:              S('Viatura', 'Patrulha Corona 2.0',    'police',  900, 10000, 26, 2.0, 1.0,  0, 100, 50),
             swat_van:             S('Blindado', 'Tático Blindado',       'swat',  1700, 11000, 21, 1.5, 0.82,  0, 150, 90),
             militar:              S('Jipe', 'Marruá AM2 Militar',        'army',  1300, 12500, 26, 1.8, 0.95,  0, 130, 80),
+            caveirao:             S('Blindado', 'Caveirão',              'armored', 7500, 30000, 22, 1.25, 0.8,  0, 600, 150),
+            // serviços da cidade (o trânsito comum nunca sorteia — weight 0): a ambulância do resgate e o ônibus das linhas (Buses)
+            ambulancia:           S('Ambulância', 'Resgate 192',         'ambulance', 2200, 13000, 27, 1.6, 0.9, 0, 160, 90),
+            onibus:               S('Ônibus', 'Urbano Articulável 17t',  'bus',  11000, 42000, 20, 0.95, 0.75, 0, 260, 300),
         };
         // Arrancada: 0–100 km/h (s) do carro real em que o modelo se inspira — a aceleração vem DAQUI (Vehicle.drive), proporcional à
         // potência de verdade: popular 1.0 ~16 s, sedã médio ~10 s, esportivo ~4,5 s, superesportivo ~3 s. Quem tem máxima abaixo de
@@ -143,9 +147,10 @@ class CarSheet {
             esportivo: 4.5, muscle: 4.8, super: 3.0, super2: 2.9,
             picape_pequena: 14, picape_media: 11, picape_grande: 9.5,
             van_furgao: 18, kombi: 22, minivan: 14,
-            taxi_sp: 10, taxi_rio: 10, viatura: 10, swat_van: 16, militar: 14,
+            taxi_sp: 10, taxi_rio: 10, viatura: 10, swat_van: 16, militar: 14, caveirao: 24, ambulancia: 16, onibus: 28,
         };
         for (const id of Object.keys(M)) M[id].t100 = T100[id] || 13;
+        M.caveirao.armored = M.swat_van.armored = true;                  // blindados: Vehicle.takeDamage (não pegam fogo nem explodem)
         // Medidas do desenho (atlas): comprimento e largura da carroceria, luzes, giroflex.
         for (const id of Object.keys(M)) {
             const a = CarArt.available() ? CarArt.model(id) : null;

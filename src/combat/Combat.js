@@ -372,6 +372,7 @@ class Combat {
     // (Config.crash.driverHp) e, zerada, morre ao volante: o carro para e a buzina dispara (TrafficCar.killDriver).
     _carShot(car, b) {
         if (!car.position || car.isBike || car.isBoat || car.wrecked || !CarDoors) return;
+        if (car.spec && car.spec.armored) return;                              // blindado: vidro à prova de bala, ninguém lá dentro se machuca
         const D = typeof DoorSheet !== 'undefined' && car.spec && DoorSheet.SPEC[car.spec.id];
         const A = CarDoors.axes(car), c = car.position, hl = car.halfLen || 2, hw = car.halfW || 1;
         // raio da bala (de um pouco antes de onde ela estava neste quadro) contra o retângulo do carro, no espaço dele (u frente, v direita)
@@ -421,7 +422,7 @@ class Combat {
     // atingido — chuva de faíscas na roda, estouro, e o carro passa a escorregar (Vehicle.puncture / _applyMotion).
     _tireShot(car, hx, hz) {
         const g = this.game;
-        if (!car || !car.puncture || !g.wanted || !(g.wanted.level > 0) || Math.random() >= Config.crash.tireChance) return;
+        if (!car || !car.puncture || (car.spec && car.spec.armored) || !g.wanted || !(g.wanted.level > 0) || Math.random() >= Config.crash.tireChance) return;
         const i = car.nearestWheel(hx, hz);
         if (!car.puncture(i)) return;
         const w = car.wheelWorld(i);

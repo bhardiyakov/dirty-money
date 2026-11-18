@@ -183,7 +183,9 @@ class PoliceManager {
             const have = this.cars.filter((c) => c.role === role).length;
             if (have < L[role] && this.time >= this._teamAt[role]) {
                 this._teamAt[role] = this.time + 6;
-                this.spawnCar(k, Object.assign({ avoid: pos, avoidR: this._avoidR() }, T[role]));
+                // (a tropa de elite chega de CAVEIRÃO — o blindado, com mais gente — quando é perto do morro, e às vezes no asfalto)
+                const heavy = role === 'swat' && (Standing.nearFavela(k.x, k.z) || Math.random() < 0.4);
+                this.spawnCar(k, Object.assign({ avoid: pos, avoidR: this._avoidR() }, T[role], heavy ? { model: 'caveirao', crew: 6 } : null));
             }
         }
     }
@@ -327,8 +329,8 @@ class PoliceManager {
     }
 
     // Viatura de bloqueio de rua: corpo ESTÁTICO (imóvel até para o seu carro), de lado, giroflex ligado.
-    makeBlockCar(x, z, heading) {
-        const car = new PoliceCar(this.scene, this.physics, { x, z }, this._nextCarId++, this.carLib.sheet('viatura'), this.traffic, heading,
+    makeBlockCar(x, z, heading, model = 'viatura') {
+        const car = new PoliceCar(this.scene, this.physics, { x, z }, this._nextCarId++, this.carLib.sheet(model), this.traffic, heading,
             { paint: 6, role: 'block', temp: true });
         car.manager = this;
         car.phys.setMotionType(BABYLON.PhysicsMotionType.STATIC);
@@ -395,7 +397,7 @@ class PoliceManager {
         }
         for (let i = this.cars.length - 1; i >= 0; i--) {
             const c = this.cars[i];
-            if (c.temp && (force || away(c))) this._removeCar(c);
+            if (c.temp && !c._opHold && (force || away(c))) this._removeCar(c);
         }
     }
 

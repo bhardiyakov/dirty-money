@@ -593,6 +593,8 @@ const Config = {
 		tireChance: 0.05,      // Bala que acerta um carro DURANTE UMA PERSEGUIÇÃO (procurado): chance de furar o pneu mais perto.
 		cooldown: 0.3,         // s entre danos de batida do mesmo carro.
 		bulletMul: 0.5,        // Fração do dano da bala que o carro leva (viaturas inclusive).
+		armorMul: 0.06,        // BLINDADOS (caveirão, tático — spec.armored): fração do dano que a chapa deixa passar…
+		armorFloor: 0.4,       // …e a vida nunca cai abaixo desta fração: não pegam fogo nem explodem (Vehicle.takeDamage).
 		driverHp: 100,         // Vida de quem dirige um carro de trânsito ou uma viatura: tiros pelo LADO DO MOTORISTA vão tirando (Combat._carShot).
 		glassDriver: 0.85,     // Fração do dano da bala em quem dirige quando ela entra pelo vidro (pela porta/lataria: doorDriver).
 		doorDriver: 0.45,

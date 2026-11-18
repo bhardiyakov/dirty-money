@@ -232,6 +232,13 @@ class Vehicle {
     takeDamage(amount, source = 'env') {
         if (this.wrecked || amount <= 0) return;
         if (source && source !== 'env') this.lastHitBy = source;
+        // BLINDADO (caveirão, tático): a chapa segura bala, batida, fogo e explosão — amassa um pouco, mas nunca pega fogo nem explode
+        if (this.spec.armored) {
+            this.hp = Math.max(this.maxHp * Config.crash.armorFloor, this.hp - amount * Config.crash.armorMul);
+            const fa = this.hp / this.maxHp;
+            this.dent = fa > 0.75 ? 0 : fa > 0.5 ? 1 : 2;
+            return;
+        }
         if (this.controlled) amount *= 1 - (SkillTree.m.carDmg || 0);      // habilidade Lataria
         if (this.cond && typeof CarCare !== 'undefined') CarCare.onDamage(this, amount, source);      // tiro no capô fura o radiador
         this.hp = Math.max(0, this.hp - amount);
@@ -263,7 +270,7 @@ class Vehicle {
     }
     // Fura o pneu i (false se já estava furado). O carro passa a escorregar (_applyMotion) e o aro solta faíscas no asfalto.
     puncture(i) {
-        if (this.isBike || this.isBoat || this.destroyed) return false;
+        if (this.isBike || this.isBoat || this.destroyed || this.spec.armored) return false;      // (blindado: pneu run-flat)
         const F = this.flat || (this.flat = [0, 0, 0, 0]);
         if (F[i]) return false;
         F[i] = 1;

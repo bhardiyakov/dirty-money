@@ -34,11 +34,22 @@ class PoliceOperation {
         const ent = FavelaPlan.built ? FavelaPlan.entranceNear(this.center.x, this.center.z) : null;      // (a borda da mancha é torta: entra por uma das ruas)
         if (ent) { this.center.x = ent.x; this.center.z = ent.z; }
         this.state = 'active'; this.t = 0; this.reason = reason; Standing.policeOp = true; Standing.heat = 0; Standing.heatWhy = ''; this._spawnSquad(8);
+        this._caveirao();
         return true;
+    }
+
+    // O CAVEIRÃO da operação: o blindado parado de través na rua da entrada, giroflex ligado (fica até a operação acabar).
+    _caveirao() {
+        const pm = this.game.policeManager, n = RoadPlan.nearestRoadPoint(this.center.x, this.center.z, 60);
+        if (!pm || !n || (this.cav && !this.cav.destroyed)) return;
+        const t = n.edge.free ? { x: n.tx, z: n.tz } : (n.edge.v ? { x: 0, z: 1 } : { x: 1, z: 0 });
+        this.cav = pm.makeBlockCar(n.x, n.z, Math.atan2(t.x, t.z) + Math.PI / 2 * 0.7, 'caveirao');
+        if (this.cav) this.cav._opHold = true;
     }
 
     stop(silent = false) {
         if (this.state === 'idle') return;
+        if (this.cav) { this.cav._opHold = false; this.cav = null; }          // (o blindado sai de cena fora da tela — PoliceManager._cleanup)
         this.state = 'idle'; this.t = 0; this.next = 500 + Math.random() * 300; this.cool = 90; Standing.heat = 0; Standing.heatWhy = '';
         Standing.policeOp = false;
         const pm = this.game.policeManager;
