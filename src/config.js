@@ -531,7 +531,7 @@ const Config = {
 	// ÔNIBUS (world/Buses.js): as linhas, os pontos e os horários. Os horários usam o relógio do jogo (24 h = Config.time.cycleSeconds).
 	bus: {
 		on: true,
-		fare: 4.7,             // passagem (R$)
+		fare: 5,             // passagem (R$)
 		first: 5, last: 23.5,  // primeira e última saída do terminal (hora do jogo)
 		speed: 6.5,            // velocidade média de horário (m/s, paradas inclusas): a previsão de cada ponto
 		cruise: 11,            // velocidade de cruzeiro do ônibus de verdade (m/s)
