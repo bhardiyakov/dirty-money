@@ -49,7 +49,7 @@ const Config = {
 		// qualquer ângulo pela câmera. splat = tamanho de cada ponto (× o espaçamento). `?boneco=2d` = o desenho 2,5D. npc: os NPCs MAIS
 		// PERTO do jogador ficam 3D (até `max` — o nível gráfico decide: core/Graphics.js npc3d —, num raio de `radius` m); os outros seguem 2,5D.
 		trails: { on: true, keep: 0.5, speedFrom: 25, speedTo: 40, horizonBand: 0.22, horizonPx: 2.5 },   // o BORRÃO do GTA SA (render/Trails.js): rastro só em velocidade alta (m/s), desfoque só no horizonte. `?blur=0` desliga.
-		char3d: { on: true, player: true, spacing: 1.0, splat: 2.1, blend: true, npc: { on: true, max: 999, radius: 400, spacing: 1.3, farSpacing: 2.2, veryFarSpacing: 3.4, nearDist: 17, midDist: 45 }, npcShadow: false },
+		char3d: { on: true, player: true, spacing: 1.0, splat: 2.1, blend: true, npc: { on: true, max: 999, radius: 400, spacing: 1.3, farSpacing: 2.2, veryFarThin: 0.4, nearDist: 17, midDist: 45 }, npcShadow: false },
 		npcDirs: 16,           // direções desenhadas dos personagens 2,5D. Perfil leve: 8 (só as páginas pares dos atlas; os visuais do guarda-roupa saem com 8)
 		// CHÃO com as fotos CC0 (art/GroundPhotos.js, etapa 3): o pintado de sempre + o grão das fotos + o relevo delas. `?chao=0` volta
 		// ao chão só pintado; `?chao=foto`, `?chao=misto` e `,relevo` para comparar.

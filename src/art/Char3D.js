@@ -151,12 +151,14 @@ const Char3D = {
 	},
 	// Modelo de um tipo de NPC (um por tipo: as variantes só mudam a cor).
 	// dmg = nível de dano (o sangue assado, como os atlas de dano do NpcArt: um modelo por tipo e nível).
-	// lod: 0 = perto (o modelo cheio), 1 = longe (menos pontos, maiores — farSpacing), 2 = bem longe (poucos e grandes — veryFarSpacing):
+	// lod: 0 = perto (o modelo cheio), 1 = longe (menos pontos, maiores — farSpacing), 2 = bem longe (o leve com só uma parte dos pontos, maiores — veryFarThin):
 	// TODOS os NPCs ficam 3D; de longe, a diferença de detalhe não aparece e o custo cai muito.
 	typeModel(type, dmg = 0, lod = 0) {
 		const key = type + '|' + dmg + '|' + lod, N = this.C.npc || {};
 		let M = this._types.get(key);
-		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: lod === 2 ? N.veryFarSpacing || 3.4 : lod ? N.farSpacing || 2.2 : N.spacing || 1.3, kind: 'npc' }); M._lod = lod; this._types.set(key, M); }
+		// (o bem leve é o leve com os pontos embaralhados e só uma parte deles desenhada, maiores: o gerador não monta o boneco com
+		// espaçamento acima de ~2,4 — a arma na mão fica sem ponto nenhum)
+		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: lod ? N.farSpacing || 2.2 : N.spacing || 1.3, thin: lod === 2 ? N.veryFarThin || 0.4 : 1, kind: 'npc' }); M._lod = lod; this._types.set(key, M); }
 		M._used = performance.now();
 		return M;
 	},
@@ -275,7 +277,7 @@ const Char3D = {
 		const modelOf = (a) => {
 			if (hero(a)) return PM && PM.ready ? PM : null;
 			const lod = lodOf(a), M = this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, lod);
-			if (M.failed) return null;
+			if (M.failed) { for (let l = 1; l >= 0; l--) { const X = this._types.get(typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|' + l); if (X && X.ready && !X.failed) return X; } return null; }
 			// (o modelo da outra distância ainda assando: fica com o que tem — sem voltar ao 2,5D no meio)
 			if (!M.ready) {
 				const C = this.npcs.get(a), O = C && C.model; if (O && O.ready && !O.failed && O._lod !== undefined) return O;
@@ -344,8 +346,9 @@ Char3D.flashMesh = function (scene, parent, group) {
 // Uma ficha assada (pontos + clipes + objetos na mão), compartilhada por todos os atores que a usam.
 // ----------------------------------------------------------------------------
 class Char3DModel {
-	constructor(scene, { spec = null, npc = null, dmg = 0, spacing = 1, kind = 'npc' }) {
+	constructor(scene, { spec = null, npc = null, dmg = 0, spacing = 1, thin = 1, kind = 'npc' }) {
 		this.scene = scene; this.spacing = spacing; this.kind = kind; this.mid = ++Char3D._mid;
+		this.thin = Math.max(0.1, Math.min(1, thin)); this.splatK = 1 / Math.sqrt(this.thin);      // (fração dos pontos desenhada; os pontos crescem para cobrir)
 		this.clips = new Map();          // 'nome:arma' → clipe | 'wait' | 'fail'
 		this.props = new Map();          // nome do objeto → malha-modelo (escondida; os atores clonam)
 		this.ready = false; this.failed = false; this.onReady = null;
@@ -408,13 +411,25 @@ class Char3DModel {
 			this.ramps.wrapU = this.ramps.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 		}
 		this.n = c.n;
+		if (this.thin < 1) this._shuffle(c);
 		this.body = this._points('c3d_corpo' + this.mid, c.n, c.p1, c.n1, c.p2, c.n2, c.sk, c.mt, c.fa, c.fb);
+		if (this.thin < 1) this.body.forcedInstanceCount = Math.max(1, Math.ceil(c.n * this.thin));
 		this.ready = true;
 		this._data = c;                                                                  // (os pontos, até medir o chão: _groundFrom)
 		for (const k of ['idle:none', 'walk:none', 'run:none']) this.clip(k);          // (os clipes de sempre já vêm: ninguém espera em 2,5D)
 		// (o jogador: os de montar também — subindo na moto ou na bike ele não passa pelo desenho 2,5D)
 		if (this.kind === 'player') for (const k of ['ride_moto:none', 'ride_bike:none', 'ride_scooter:none', 'ride_jetski:none']) this.clip(k);
 		if (this.onReady) this.onReady(this);
+	}
+	// Embaralha os pontos (a mesma troca em todos os atributos): qualquer começo da lista cobre o corpo inteiro, por igual.
+	_shuffle(c) {
+		const A = [[c.p1, 3], [c.n1, 3], [c.p2, 3], [c.n2, 3], [c.sk, 4], [c.mt, 2], [c.fa, 4], [c.fb, 1]].filter(([a]) => a && a.length);
+		let seed = 0x9e3779b9;
+		const rnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
+		for (let i = c.n - 1; i > 0; i--) {
+			const j = (rnd() * (i + 1)) | 0;
+			for (const [a, k] of A) for (let q = 0; q < k; q++) { const t = a[i * k + q]; a[i * k + q] = a[j * k + q]; a[j * k + q] = t; }
+		}
 	}
 	_prop(name, p) {
 		if (this.props.has(name)) return;
@@ -499,7 +514,7 @@ class Char3DActor {
 		e.setFloat('unit', M.unit * (this._sc || 1));
 		e.setFloat('pScale', Char3D._view.pScale);
 		e.setFloat2('viewport', Char3D._view.w || 1280, Char3D._view.h || 720);
-		e.setFloat('splat', M.spacing * M.unit * (this.C.splat || 2.1));
+		e.setFloat('splat', M.spacing * M.unit * (this.C.splat || 2.1) * (M.splatK || 1));
 		e.setFloat('shade', this.actor.shade || 1);
 		e.setFloat('expr', B === this._B ? this._expr || 0 : 0);
 		e.setFloat('groundY', this.root.position.y - (M.lift || 0) + 0.03);      // (o chão: sem a subida do modelo)
