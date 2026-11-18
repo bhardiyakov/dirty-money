@@ -227,7 +227,8 @@ const Buses = {
 			if (R && R.d === d) R.n += 20; else runs.push({ d, n: 20 });
 		}
 		const ds = [], streets = [];
-		for (const R of runs) { if (R.n < 150) continue; const d = g.empire.dName(R.d); if (ds[ds.length - 1] !== d) ds.push(d); }
+		// ("Periferia" — os quarteirões de mata no meio da cidade — só conta se a linha começa ou termina lá)
+		for (const R of runs) { if (R.n < 150 || (R.d === 'periferia' && L.from !== 'periferia' && L.to !== 'periferia')) continue; const d = g.empire.dName(R.d); if (ds[ds.length - 1] !== d) ds.push(d); }
 		if (!ds.length && runs.length) ds.push(g.empire.dName(runs[0].d));
 		for (const st of L.states) { const n = CityGrid.streetName(this._edge(st)); if (n && !streets.includes(n) && streets.length < 8) streets.push(n); }
 		L.route = ds; L.streets = streets;
