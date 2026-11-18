@@ -580,6 +580,7 @@ class PoliceManager {
         // Sirene só enquanto alguma viatura persegue (volume pela distância ao jogador).
         let near = Infinity;
         for (const c of this.cars) if (c.sirenOn) near = Math.min(near, c.distanceTo(pos));
+        if (typeof Rescue !== 'undefined' && Rescue.units.length) near = Math.min(near, Rescue.sirenNear(pos));      // (a ambulância também)
         AudioFX.siren(near < Infinity, near);
         AudioFX.heli(!!(this.heli && this.heli.alive), this.heli ? this.heli.distanceTo(pos) : 999);
     }

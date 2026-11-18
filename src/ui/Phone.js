@@ -19,6 +19,7 @@ const Phone = {
         baiano: { name: 'Baiano do Ferro-Velho', emo: '🧑‍🔧', role: 'Ferro-velho', about: 'Sempre tem um serviço. Nunca pergunta nada.' },
         brito: { name: 'Sargento Brito', emo: '👮', role: 'PM', about: 'Por um cafezinho, olha para o outro lado. Mas não confie.' },
         dentinho: { name: 'Dentinho', emo: '😁', role: 'Rival', about: 'O campeão do truco do bairro. Quer ser maior que você em tudo.' },
+        resgate: { name: 'Resgate 192', emo: '🚑', role: 'Emergência', about: 'Alguém caído, sangrando? Ligue: a ambulância vai até lá.' },
     },
     trust: {}, threads: {}, unread: 0, appts: [], jobs: [], rival: { w: 0, l: 0, friend: false }, interest: [], loans: [], seq: 0, nextT: 40,
     open: false,
@@ -248,6 +249,7 @@ const Phone = {
         } else if (id === 'neguinho') { this._gen_invite(g); }
         else if (id === 'baiano') { if (!this.jobs.length) this._gen_job(g); else this._msg('baiano', 'Termina a entrega que eu te dei primeiro, parceiro.', null, true); }
         else if (id === 'cida') { this._gen_tip(g, 'cida'); }
+        else if (id === 'resgate' && typeof Rescue !== 'undefined') { Rescue.phoneCall(g); }
         this._render();
     },
 
@@ -333,11 +335,11 @@ const Phone = {
         }
         if (this.tab === 'contacts') {
             const lvl = g && g.wanted ? g.wanted.level : 0;
-            const actOf = { brito: lvl ? `Pedir um cafezinho (−1 ★, ${brl(2500 * lvl)})` : 'Ligar', neguinho: 'Chamar pro truco', baiano: 'Pedir um serviço', cida: 'Perguntar as novidades' };
+            const actOf = { brito: lvl ? `Pedir um cafezinho (−1 ★, ${brl(2500 * lvl)})` : 'Ligar', neguinho: 'Chamar pro truco', baiano: 'Pedir um serviço', cida: 'Perguntar as novidades', resgate: '📞 Ligar 192 (ferido perto de você)' };
             B.innerHTML = Object.keys(C).filter((id) => this.threads[id] || id !== 'dentinho' || this.rival.l || this.rival.w).map((id) => {
                 const t = this.trust[id] || 0, col = t >= 30 ? '#22c55e' : t >= 0 ? '#eab308' : '#ef4444';
                 return `<div class="ct" data-thread="${id}" style="flex-wrap:wrap"><span class="av">${C[id].emo}</span><span style="flex:1;min-width:0"><b>${C[id].name}</b><small>${C[id].role} · ${C[id].about}</small>
-                    <div class="tr"><i style="width:${Math.round((t + 100) / 2)}%;background:${col}"></i></div>${id === 'dentinho' ? `<small>contra ele: ${this.rival.w} vitória(s) · ${this.rival.l} derrota(s)${this.rival.friend ? ' · agora te respeita' : ''}</small>` : ''}</span>
+                    ${id === 'resgate' ? '' : `<div class="tr"><i style="width:${Math.round((t + 100) / 2)}%;background:${col}"></i></div>`}${id === 'dentinho' ? `<small>contra ele: ${this.rival.w} vitória(s) · ${this.rival.l} derrota(s)${this.rival.friend ? ' · agora te respeita' : ''}</small>` : ''}</span>
                     ${actOf[id] ? `<div class="acts" style="width:100%"><button data-cact="${id}">${actOf[id]}</button></div>` : ''}</div>`;
             }).join('');
             return;

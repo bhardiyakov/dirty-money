@@ -148,6 +148,12 @@ class TrafficCar extends Vehicle {
             if (db >= 0) { const lim = 3.2 + Math.max(0, db - this.halfLen - 1) * 0.6; if (lim < vt) { vt = lim; reason = 'lombada'; } }
         }
 
+        // PONTO DE ÔNIBUS à frente (Bus.stopAhead): para na faixa, com a porta no ponto, e espera o embarque
+        if (this.stopAhead) {
+            const ds = this.stopAhead(dt);
+            if (ds !== null) { const lim = ds <= 0.3 ? 0 : Math.sqrt(2 * T.brake * 0.5 * (ds - 0.3)); if (lim < vt) { vt = lim; reason = 'ponto'; } }
+        }
+
         let jn = null;                                                  // próximo cruzamento ainda não deixado para trás
         this._inRound = false;
         for (let k = 0; k < R.junctions.length; k++) { const j = R.junctions[k]; if (R.cum[j.exitIdx] - u > -0.5) { jn = j; break; } }
@@ -278,7 +284,7 @@ class TrafficCar extends Vehicle {
         }
 
         // Preso há muito tempo sem motivo de semáforo: pede reposicionamento ao gerenciador.
-        this.stuck = (Math.abs(v) < 0.3 && this.root !== 'sinal' && this.root !== 'preferencial') ? this.stuck + dt : 0;
+        this.stuck = (Math.abs(v) < 0.3 && this.root !== 'sinal' && this.root !== 'preferencial' && this.root !== 'ponto') ? this.stuck + dt : 0;
 
         if (this.reverseT > 0) { this.reverseT -= dt; this.driveTo(-3, 0, dt, T.accel, T.brake); return; }
         this.driveTo(Math.max(0, vt), steer, dt, T.accel * (this.accelMul || 1), T.brake);

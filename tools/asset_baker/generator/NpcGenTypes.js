@@ -146,6 +146,8 @@ function NpcGenTypes(G) {
         loja_senhor: T('social', 8, ['shop', 'shop_biz'], SHOPPER),
         loja_atendente: T('staff', 10, ['shop_staff'], SHOP_STAFF),            // (a cor da camisa polo = a do uniforme da loja: ShopLife escolhe a variante pela loja)
         loja_atendente_f: T('staff', 10, ['shop_staff'], SHOP_STAFF),
+        // o SOCORRISTA da ambulância (src/world/Rescue.js): macacão vermelho, ajoelha para atender o ferido
+        socorrista: T('farda', 4, ['rescue'], [...BASE, 'kneel:none', 'opendoor:none', 'enter:none', 'scared:none']),
     };
 
     // O jogador no começo do jogo (a roupa de sempre do Outfit). Só os campos de FORMA importam para o atlas pronto; as cores vêm

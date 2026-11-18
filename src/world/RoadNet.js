@@ -268,7 +268,7 @@ class Route {
         // VIAGEM (RioTraffic): o carro civil vai para um destino — segue a lista de trechos da rota; acabou ou saiu dela, outra viagem.
         if (this.trips && !this.goal) {
             if (this.trip && this.trip.length && this.trip[0] === e) this.trip.shift();          // (a rota começava no trecho atual)
-            if ((!this.trip || !this.trip.length) && !(this._noTrip > 0)) { this.trip = RioTraffic.trip(e, fwd, x, z); if (!this.trip) this._noTrip = 4; }      // (sem rota: sorteia algumas esquinas antes de tentar de novo)
+            if ((!this.trip || !this.trip.length) && !(this._noTrip > 0)) { this.trip = this.tripFn ? this.tripFn(e, fwd, x, z) : RioTraffic.trip(e, fwd, x, z); if (!this.trip) this._noTrip = 4; }      // (tripFn: o ônibus segue a linha — Buses)      // (sem rota: sorteia algumas esquinas antes de tentar de novo)
             else if (this._noTrip > 0) this._noTrip--;
             const o = this.trip && this.trip.length ? opts.find((q) => q.plan.arm.e === this.trip[0]) : null;
             if (o) { this.trip.shift(); pick = o; }

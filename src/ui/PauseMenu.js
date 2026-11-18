@@ -57,6 +57,7 @@ class PauseMenu {
 			village: { label: 'Vila (largo)', icon: 'vila' },
 			racemeet: { label: 'Ponto de racha (corridas de rua)', icon: 'race' },
 			helipad: { label: 'Heliponto (escada externa até o telhado)', icon: 'heli' },
+			busstop: { label: 'Ponto de ônibus (horários e embarque)', icon: 'bus' },
 			fachada: { label: 'Suas fachadas (lavagem)', icon: 'cash_bag', mine: true },      // pontos e negócios comprados para lavar dinheiro (Laundry.syncMap)
 		};
 	}
@@ -68,7 +69,7 @@ class PauseMenu {
 			home: 6, negocio: 6, fachada: 6, persona: 5, hospital: 5, station: 5, speedway: 5, estadio: 5, cristo: 5, bondinho: 5, lagoa: 5, marina: 5, village: 4,
 			gunshop: 4, chop: 4, paynspray: 4, dealer: 4, motodealer: 3, boatshop: 3, tuning: 3, racemeet: 4, helipad: 3, baile: 4, boca_rival: 4, mototaxi: 3,
 			joalheria: 3, academia: 3, boutique: 3, gas: 3, charge: 2, quadra: 2, clube: 2,
-			imovel: 0, conveniencia: 0, lanchonete: 0,
+			imovel: 0, conveniencia: 0, lanchonete: 0, busstop: 0,
 		};
 	}
 	static get MASS_ZOOM() { return 2.8; }

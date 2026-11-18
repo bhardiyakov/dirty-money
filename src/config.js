@@ -528,6 +528,32 @@ const Config = {
 	//   heli      helicóptero (enxerga por cima dos prédios) | swat: vans da tropa de elite
 	//   army      jipes do exército | blocks: bloqueios de rua em volta de você
 	// Ragdoll (arremesso por atropelamento): impacto (m/s efetivos) mínimo para derrubar/arremessar.
+	// ÔNIBUS (world/Buses.js): as linhas, os pontos e os horários. Os horários usam o relógio do jogo (24 h = Config.time.cycleSeconds).
+	bus: {
+		on: true,
+		fare: 4.7,             // passagem (R$)
+		first: 5, last: 23.5,  // primeira e última saída do terminal (hora do jogo)
+		speed: 6.5,            // velocidade média de horário (m/s, paradas inclusas): a previsão de cada ponto
+		cruise: 11,            // velocidade de cruzeiro do ônibus de verdade (m/s)
+		dwell: 7,              // segundos parado no ponto (embarque)
+		stopEvery: 230,        // distância entre pontos (m de linha)
+		max: 8,                // ônibus de verdade ao mesmo tempo (os de perto da câmera)
+	},
+	// FERIDOS (NPC._survives / world/Rescue.js): quem perde toda a vida pode MORRER na hora ou cair DESACORDADO, sangrando. Sem socorro (a
+	// ambulância do resgate, que só vem se alguém LIGAR — uma testemunha ou você, no celular ou com E perto do ferido) ele morre.
+	injury: {
+		on: true,
+		down: { gun: 0.55, stab: 0.65, melee: 0.9, hit: 0.6, env: 0.4 },      // chance de só desmaiar, pelo golpe que zerou a vida (hit = atropelado/arremessado)
+		overkill: 40,          // passou disso abaixo de zero (explosão, rajada, tiro de fuzil à queima-roupa): morre na hora
+		bleedOut: [75, 130],   // segundos sangrando até morrer, sem socorro
+		stableMul: 0.08,       // estancado (kit médico do jogador ou o socorrista atendendo): o sangramento quase para
+		callDelay: [8, 22],    // quanto demora até uma testemunha ligar (se houver alguém por perto)
+		callChance: 0.65,      // a cada tentativa, a chance de quem está perto ligar mesmo
+		witnessR: 30,          // até onde alguém vê o ferido
+		ambulances: 2,         // ambulâncias atendendo ao mesmo tempo
+		ambSpeed: 15,          // cruzeiro da ambulância com a sirene (m/s)
+		treat: 9,              // segundos atendendo no chão antes de levar na maca
+	},
 	ragdoll: {
 		minPower: 3.5,
 	},
