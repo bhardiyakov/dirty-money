@@ -333,7 +333,7 @@ const Rescue = {
 	// Sirene das ambulâncias: a mais perto (o PoliceManager junta com a das viaturas).
 	sirenNear(pos) {
 		let near = Infinity;
-		for (const u of this.units) if (u.car.sirenOn) near = Math.min(near, u.car.distanceTo(pos));
+		for (const u of this.units) if (u.car.sirenOn) near = Math.min(near, hypot(u.car.position.x - pos.x, u.car.position.z - pos.z));
 		return near;
 	},
 };

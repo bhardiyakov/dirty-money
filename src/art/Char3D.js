@@ -130,7 +130,7 @@ const Char3D = {
 	},
 
 	// ---------------------------------------------------------------- Workers e modelos
-	_ws: {}, _models: new Map(), _types: new Map(), _mid: 0,
+	_ws: {}, _models: new Map(), _types: new Map(), _mid: 0, _fineOnly: new Set(),
 	// Um Worker para o jogador (o visual dele nunca espera os NPCs) e um para os NPCs.
 	worker(kind) {
 		let w = this._ws[kind];
@@ -158,7 +158,9 @@ const Char3D = {
 		let M = this._types.get(key);
 		// (o bem leve é o leve com os pontos embaralhados e só uma parte deles desenhada, maiores: o gerador não monta o boneco com
 		// espaçamento acima de ~2,4 — a arma na mão fica sem ponto nenhum)
-		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: lod ? N.farSpacing || 2.2 : N.spacing || 1.3, thin: lod === 2 ? N.veryFarThin || 0.4 : 1, kind: 'npc' }); M._lod = lod; this._types.set(key, M); }
+		// (tipos cujo boneco o gerador não monta no espaçamento de longe — chapéu ou cabelo fino demais: "parte vazia" — usam o de perto)
+		const far = lod && !this._fineOnly.has(type);
+		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: far ? N.farSpacing || 2.2 : N.spacing || 1.3, thin: lod === 2 ? N.veryFarThin || 0.4 : lod === 1 && !far ? 0.6 : 1, kind: 'npc' }); M._lod = lod; this._types.set(key, M); }
 		M._used = performance.now();
 		return M;
 	},
@@ -277,6 +279,11 @@ const Char3D = {
 		const modelOf = (a) => {
 			if (hero(a)) return PM && PM.ready ? PM : null;
 			const lod = lodOf(a), M = this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, lod);
+			if (M.failed && lod > 0 && !this._fineOnly.has(typeOf(a))) {      // (o de longe não montou: refaz este tipo com o espaçamento de perto)
+				const t = typeOf(a); this._fineOnly.add(t);
+				for (const [k, X] of this._types) if (k.startsWith(t + '|') && X._lod > 0 && X.failed) { X.dispose(); this._types.delete(k); }
+				return null;
+			}
 			if (M.failed) { for (let l = 1; l >= 0; l--) { const X = this._types.get(typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|' + l); if (X && X.ready && !X.failed) return X; } return null; }
 			// (o modelo da outra distância ainda assando: fica com o que tem — sem voltar ao 2,5D no meio)
 			if (!M.ready) {
