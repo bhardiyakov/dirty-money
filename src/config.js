@@ -536,7 +536,7 @@ const Config = {
 		speed: 6.5,            // velocidade média de horário (m/s, paradas inclusas): a previsão de cada ponto
 		cruise: 11,            // velocidade de cruzeiro do ônibus de verdade (m/s)
 		dwell: 7,              // segundos parado no ponto (embarque)
-		stopEvery: 230,        // distância entre pontos (m de linha)
+		stopEvery: 170,        // distância entre pontos (m de linha)
 		max: 8,                // ônibus de verdade ao mesmo tempo (os de perto da câmera)
 	},
 	// FERIDOS (NPC._survives / world/Rescue.js): quem perde toda a vida pode MORRER na hora ou cair DESACORDADO, sangrando. Sem socorro (a

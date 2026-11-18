@@ -65,14 +65,14 @@ class Bus extends TrafficCar {
 }
 
 const Buses = {
-	// [número, nome, de, para, pintura (CarSheet.PAINTS: corpo + faixa), headway (min do jogo)]
+	// [número, nome, de, passando por, até, pintura (CarSheet.PAINTS: corpo + faixa), headway (min do jogo)] — o laço é de → via → até → de
 	LINE_DEFS: [
-		['100', 'Centro ↔ Orla', 'centro', 'orla', 32, 30],
-		['214', 'Comércio ↔ Ilha do Almirante', 'comercio', 'ilha', 28, 40],
-		['326', 'Favela do Morro ↔ Distrito Financeiro', 'favela', 'centro', 37, 35],
-		['433', 'Porto ↔ Bairros residenciais', 'industrial', 'residencial', 31, 40],
-		['541', 'Morro do Mirante ↔ Orla', 'mirante', 'orla', 35, 45],
-		['650', 'Periferia ↔ Comércio', 'periferia', 'comercio', 24, 45],
+		['100', 'Centro ↔ Orla', 'centro', 'comercio', 'orla', 32, 30],
+		['214', 'Comércio ↔ Ilha do Almirante', 'comercio', 'orla', 'ilha', 28, 40],
+		['326', 'Favela do Morro ↔ Distrito Financeiro', 'favela', 'residencial', 'centro', 37, 35],
+		['433', 'Porto ↔ Bairros residenciais', 'industrial', 'centro', 'residencial', 31, 40],
+		['541', 'Morro do Mirante ↔ Orla', 'mirante', 'comercio', 'orla', 35, 45],
+		['650', 'Periferia ↔ Comércio', 'periferia', 'industrial', 'comercio', 24, 45],
 	],
 	BUS_CLS: new Set(['city', 'ave', 'isl', 'bridge', 'hwy', 'via']),
 	LINES: [], stops: [], buses: [], ride: null, built: false, _id: 0,
@@ -96,14 +96,16 @@ const Buses = {
 			for (const n of nodes) { const k = hypot(n.x - cx, n.z - cz) * (E.districtAt(n.x, n.z) === d ? 1 : 1.6); if (k < bd) { bd = k; best = n; } }
 			return best;
 		};
-		for (const [num, name, from, to, paint, headway] of this.LINE_DEFS) {
-			const A = terminal(from), B = terminal(to);
+		for (const [num, name, from, via, to, paint, headway] of this.LINE_DEFS) {
+			const A = terminal(from), V = terminal(via), B = terminal(to);
 			if (!A || !B || A === B) continue;
-			const ab = this._path(A, B), ba = ab && this._path(B, A);
-			if (!ab || !ba) { console.warn('[ÔNIBUS] linha ' + num + ' sem caminho'); continue; }
-			const L = { id: num, name, from, to, paint, headway, A, B, states: ab.concat(ba), stops: [] };
+			const legs = V && V !== A && V !== B ? [[A, V], [V, B], [B, A]] : [[A, B], [B, A]], states = [];
+			let bad = false;
+			for (const [p, q] of legs) { const s = this._path(p, q); if (!s) { bad = true; break; } states.push(...s); }
+			if (bad) { console.warn('[ÔNIBUS] linha ' + num + ' sem caminho'); continue; }
+			const ab = states;
+			const L = { id: num, name, from, to, paint, headway, A, B, states, stops: [] };
 			this._geom(L);
-			L.turnS = this._len(ab);
 			this.LINES.push(L);
 		}
 		for (const L of this.LINES) this._placeStops(L, g);
@@ -200,7 +202,7 @@ const Buses = {
 		let last = -1e9;
 		L.states.forEach((st, k) => {
 			const e = this._edge(st), s0 = L.cumS[k];
-			if (!ok.has(e.cls) || e.len < 46 || e.layer) return;
+			if (!ok.has(e.cls) || e.len < 30 || e.layer) return;
 			const mid = s0 + e.len / 2;
 			if (mid - last < C.stopEvery || L.len - mid + (L.stops.length ? L.stops[0].s : 0) < C.stopEvery * 0.5) return;
 			// já existe um ponto neste trecho e sentido (outra linha)? serve as duas
@@ -218,12 +220,15 @@ const Buses = {
 			last = mid;
 		});
 		// o percurso, para a placa: os bairros na ordem em que a linha passa (sem repetir em seguida) e as ruas principais
-		const ds = [], streets = [];
-		for (const p of L.pts) {
-			if (p.s % 40 > 8) continue;
-			const d = g.empire.dName(g.empire.districtAt(p.x, p.z));
-			if (ds[ds.length - 1] !== d) ds.push(d);
+		// (trechos curtos — uma esquina que encosta noutro distrito — não contam: só quem a linha atravessa por mais de 150 m)
+		const runs = [];
+		for (let s = 0; s < L.len; s += 20) {
+			const p = this.at(L, s), d = g.empire.districtAt(p.x, p.z), R = runs[runs.length - 1];
+			if (R && R.d === d) R.n += 20; else runs.push({ d, n: 20 });
 		}
+		const ds = [], streets = [];
+		for (const R of runs) { if (R.n < 150) continue; const d = g.empire.dName(R.d); if (ds[ds.length - 1] !== d) ds.push(d); }
+		if (!ds.length && runs.length) ds.push(g.empire.dName(runs[0].d));
 		for (const st of L.states) { const n = CityGrid.streetName(this._edge(st)); if (n && !streets.includes(n) && streets.length < 8) streets.push(n); }
 		L.route = ds; L.streets = streets;
 	},
