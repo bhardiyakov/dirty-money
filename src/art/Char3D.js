@@ -151,11 +151,12 @@ const Char3D = {
 	},
 	// Modelo de um tipo de NPC (um por tipo: as variantes só mudam a cor).
 	// dmg = nível de dano (o sangue assado, como os atlas de dano do NpcArt: um modelo por tipo e nível).
-	// lod = 1: o modelo de LONGE (menos pontos, maiores — Config.art.char3d.npc.farSpacing): dá para ter muitos mais NPCs em 3D.
+	// lod: 0 = perto (o modelo cheio), 1 = longe (menos pontos, maiores — farSpacing), 2 = bem longe (poucos e grandes — veryFarSpacing):
+	// TODOS os NPCs ficam 3D; de longe, a diferença de detalhe não aparece e o custo cai muito.
 	typeModel(type, dmg = 0, lod = 0) {
 		const key = type + '|' + dmg + '|' + lod, N = this.C.npc || {};
 		let M = this._types.get(key);
-		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: lod ? N.farSpacing || 2.2 : N.spacing || 1.3, kind: 'npc' }); M._lod = lod; this._types.set(key, M); }
+		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: lod === 2 ? N.veryFarSpacing || 3.4 : lod ? N.farSpacing || 2.2 : N.spacing || 1.3, kind: 'npc' }); M._lod = lod; this._types.set(key, M); }
 		M._used = performance.now();
 		return M;
 	},
@@ -244,8 +245,8 @@ const Char3D = {
 			for (const [a, R] of this.npcs) R.update();
 		} else if (this.npcs.size) this._choose(null);
 	},
-	// Os NPCs que ficam 3D: os mais perto da câmera (do jogador), até `max`, dentro de `radius` (folga de 15% para quem já está 3D: ninguém
-	// pisca na borda). Fica de fora: o próprio jogador, pilotos presos num veículo (o desenho deles é do veículo) e quem não é 2,5D.
+	// Os NPCs em 3D: TODOS os que estão à vista (até `max`, dentro de `radius` — limites de segurança bem largos); o detalhe cai com a
+	// distância (lodOf). Fica de fora: o próprio jogador, pilotos presos num veículo (o desenho deles é do veículo) e quem não é 2,5D.
 	_choose(pl) {
 		const N = this.C.npc || {}, max = pl ? (N.max | 0) : 0, R = N.radius || 38, cx = pl ? pl.position.x : 0, cz = pl ? pl.position.z : 0, cand = [];
 		if (pl) for (const a of SpriteActor.live) {
@@ -263,27 +264,33 @@ const Char3D = {
 		for (const [, a] of cand) if (/^protagonista/.test(a.npcType)) keep.add(a); else if (k < max) { keep.add(a); k++; }
 		// (o jogador PILOTANDO — moto, bicicleta, jet ski: o piloto é outro ator, com a folha dele — usa o modelo do visual dele)
 		const PM = pl && pl.char3d && pl.char3d.model, hero = (a) => /^protagonista/.test(a.npcType);
-		// Perto (até nearDist m; quem já está perto, até 25% além) o modelo cheio; mais longe, o leve.
-		const near = N.nearDist || 17, d2 = new Map(cand.map(([d, a]) => [a, d]));
+		// Perto (até nearDist m) o modelo cheio; até midDist, o leve; além, o bem leve. (Quem já está num nível fica nele até 25% além da
+		// borda: ninguém troca de modelo para lá e para cá.)
+		const near = N.nearDist || 17, mid = N.midDist || 45, d2 = new Map(cand.map(([d, a]) => [a, d]));
 		const typeOf = (a) => String((a.sheet && a.sheet.baseId) || a.npcType).replace(/#d\d+$/, ''), lodOf = (a) => {
-			const C = this.npcs.get(a), r = C && C.model && C.model._lod === 0 ? near * 1.25 : near;
-			return (d2.get(a) || 0) < r * r ? 0 : 1;
+			const C = this.npcs.get(a), L = C && C.model ? C.model._lod : -1, d = d2.get(a) || 0;
+			const rn = L === 0 ? near * 1.25 : near, rm = L !== undefined && L <= 1 && L >= 0 ? mid * 1.25 : mid;
+			return d < rn * rn ? 0 : d < rm * rm ? 1 : 2;
 		};
 		const modelOf = (a) => {
 			if (hero(a)) return PM && PM.ready ? PM : null;
 			const lod = lodOf(a), M = this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, lod);
 			if (M.failed) return null;
 			// (o modelo da outra distância ainda assando: fica com o que tem — sem voltar ao 2,5D no meio)
-			if (!M.ready) { const C = this.npcs.get(a), O = C && C.model; if (O && O.ready && !O.failed && O._lod !== undefined) return O; }
+			if (!M.ready) {
+				const C = this.npcs.get(a), O = C && C.model; if (O && O.ready && !O.failed && O._lod !== undefined) return O;
+				// (quem acabou de aparecer: qualquer nível pronto do mesmo tipo serve até o certo ficar pronto — ninguém espera em 2,5D)
+				for (let l = 2; l >= 0; l--) { const X = this._types.get(typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|' + l); if (X && X.ready && !X.failed) return X; }
+			}
 			return M;
 		};
-		// (já assa os tipos de quem está chegando perto mas ainda não cabe no limite: quando couber, o modelo está pronto)
+		// (o modelo bem leve de cada tipo à vista é assado primeiro — é rápido e serve de ponte para quem acaba de aparecer)
 		let pre = 0;
 		for (const [, a] of cand) {
-			if (keep.has(a) || hero(a)) continue;
-			const key = typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|1';
+			if (hero(a)) continue;
+			const key = typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|2';
 			if (this._types.has(key)) { this._types.get(key)._used = performance.now(); continue; }
-			if (pre++ < 2) this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, 1);      // (no máximo 2 tipos novos por vez: sem rajada de assar e subir para a GPU)
+			if (pre++ < 3) this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, 2);      // (no máximo 3 tipos novos por vez: sem rajada de assar e subir para a GPU)
 		}
 		for (const a of keep) {
 			const C = this.npcs.get(a), M = modelOf(a);
@@ -304,10 +311,10 @@ const Char3D = {
 		}
 		for (const [a, C] of this.npcs) if (!keep.has(a)) { this._free(C); this.npcs.delete(a); }
 	},
-	// Um boneco que saiu do raio: guardado para reaproveitar (até 12), ou destruído.
+	// Um boneco que saiu do raio: guardado para reaproveitar (até 40), ou destruído.
 	_pool: [],
 	_free(C) {
-		if (C.pal && this._pool.length < 12 && C.model && C.model.ready) { C.release(); this._pool.push(C); }
+		if (C.pal && this._pool.length < 40 && C.model && C.model.ready) { C.release(); this._pool.push(C); }
 		else C.dispose();
 	},
 };

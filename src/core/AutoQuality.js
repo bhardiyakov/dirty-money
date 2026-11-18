@@ -25,12 +25,12 @@ class AutoQuality {
 	// [id, o aviso, só com placa de vídeo?]
 	static get STEPS() {
 		return [
-			['npc3d', 'menos personagens em 3D', true],
+			['npc3d', 'personagens com menos detalhe', true],
 			['shadow512', 'sombras reduzidas', false],
 			['scale85', 'resolução a 85%', true],
 			['fill', 'sem antisserrilhado e fachadas simples', true],
 			['noShadow', 'sem sombras', false],
-			['npc3dOff', 'personagens em 2,5D', true],
+			['npc3dOff', 'personagens com pouco detalhe', true],
 			['scale70', 'resolução a 70%', true],
 			['cover', 'sem vegetação rasteira', true],
 			['scale58', 'resolução a 58%', true],
@@ -103,8 +103,8 @@ class AutoQuality {
 	_apply(level) {
 		const g = this.g, ge = g.gameEngine, id = AutoQuality.STEPS[level - 1][0];
 		const N3 = Config.art && Config.art.char3d && Config.art.char3d.npc;
-		if (id === 'npc3d') { if (N3) N3.max = Math.floor((N3.max || 0) / 2); }                // (os bonecos de pontos: metade dos NPCs em 3D)
-		else if (id === 'npc3dOff') { if (N3) N3.max = 0; }                                      // (todos os NPCs no desenho 2,5D; o jogador segue 3D)
+		if (id === 'npc3d') { if (N3) { N3.nearDist = Math.min(N3.nearDist || 17, 10); N3.midDist = 30; } }       // (os bonecos de pontos: os modelos detalhados só bem perto)
+		else if (id === 'npc3dOff') { if (N3) { N3.nearDist = 6; N3.midDist = 18; } }                               // (quase todos com o modelo bem leve — continuam 3D)
 		else if (id === 'shadow512') { if (ge.shadowGenerator) ge.setShadowSize(512); }
 		else if (id === 'noShadow') this._shadowsOff();
 		else if (id === 'fill') {
