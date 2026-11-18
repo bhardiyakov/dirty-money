@@ -137,7 +137,7 @@ const Char3D = {
 		if (w) return w;
 		w = this._ws[kind] = new Worker(Wardrobe.URL);
 		w.onmessage = (e) => { const m = e.data, M = this._models.get(m.mid); if (M) M._msg(m); };
-		w.onerror = (e) => { if (e.preventDefault) e.preventDefault(); console.warn('Char3D: o gerador não abriu', e.message || e); for (const M of this._models.values()) if (M.kind === kind) M.failed = true; };
+		w.onerror = (e) => { if (e.preventDefault) e.preventDefault(); console.warn('Char3D: o gerador não abriu', e.message || e); for (const M of this._models.values()) if (M.w === w) M.failed = true; };
 		return w;
 	},
 	_shadowV: new BABYLON.Vector4(0, 0, 0, 0.42),
@@ -353,7 +353,10 @@ class Char3DModel {
 		this.props = new Map();          // nome do objeto → malha-modelo (escondida; os atores clonam)
 		this.ready = false; this.failed = false; this.onReady = null;
 		Char3D._models.set(this.mid, this);
-		this.w = Char3D.worker(kind);
+		// (NPCs: 2 geradores em paralelo, cada tipo sempre no mesmo — o gerador guarda o que já montou daquele tipo)
+		let slot = '';
+		if (kind === 'npc' && npc) { let h = 0; for (let i = 0; i < npc.length; i++) h = (h * 31 + npc.charCodeAt(i)) | 0; slot = (h >>> 0) % 2 ? '_b' : ''; }
+		this.w = Char3D.worker(kind + slot);
 		this.w.postMessage({ type: 'char3d', job: 1, mid: this.mid, spec, npc, dmg, spacing });
 	}
 	_msg(m) {
