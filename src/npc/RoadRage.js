@@ -74,7 +74,7 @@ const RoadRage = {
         if (!v || v.isBoat || v.burning > 0 || v._rage) return null;
         if (v === game.activeCar && game.mode === 'car') return { who: 'player', veh: v };
         if (v._playerFell && this.now - v._playerFell < 2) return { who: 'player', veh: null };      // (o jogador acabou de voar dela: está a pé)
-        if (v.controlled || v.role || v.mode === undefined) return null;
+        if (v.controlled || v.role || v.keep || v.mode === undefined) return null;      // (keep: ônibus, ambulância, seus carros — ninguém desce para brigar)
         if (v.isBike) return v.riderVariant != null || thrown ? { who: 'npc', veh: v } : null;
         return v.mode === 'drive' && v.driver !== false && !v.driverDead ? { who: 'npc', veh: v } : null;
     },

@@ -11,6 +11,7 @@ import * as taxis from './veiculos/taxis.js';
 import * as barcos from './veiculos/barcos.js';
 import * as motos from './veiculos/motos.js';
 import * as helis from './veiculos/helis.js';
+import * as servicos from './veiculos/servicos.js';
 
 export const SPECS = {};
-for (const mod of [hatches, antigos, suvs, sedans, esportivos, picapes, vans, policia, taxis, barcos, motos, helis]) for (const [k, v] of Object.entries(mod)) if (v && typeof v === 'object' && v.slug) SPECS[v.slug] = v;
+for (const mod of [hatches, antigos, suvs, sedans, esportivos, picapes, vans, policia, taxis, servicos, barcos, motos, helis]) for (const [k, v] of Object.entries(mod)) if (v && typeof v === 'object' && v.slug) SPECS[v.slug] = v;

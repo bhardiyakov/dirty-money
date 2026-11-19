@@ -1,5 +1,5 @@
 // Metadados do catálogo (nomes e categorias como no catálogo 2D do jogo)
-export const CATEGORIAS = ['Hatches', 'Antigos', 'SUVs', 'Sedãs', 'Esportivos', 'Superesportivos', 'Picapes', 'Vans', 'Táxis', 'Polícia / Forças', 'Barcos', 'Motos', 'Helicópteros'];
+export const CATEGORIAS = ['Hatches', 'Antigos', 'SUVs', 'Sedãs', 'Esportivos', 'Superesportivos', 'Picapes', 'Vans', 'Táxis', 'Polícia / Forças', 'Serviços', 'Barcos', 'Motos', 'Helicópteros'];
 
 export const INFO = [
   ['hatch_moderno', 'Hatch moderno (estilo Onix)', 'Hatches', 4.1, 1.74],
@@ -38,6 +38,9 @@ export const INFO = [
   ['viatura', 'Viatura da polícia', 'Polícia / Forças', 4.6, 1.8],
   ['swat_van', 'Blindado tático (SWAT)', 'Polícia / Forças', 5.63, 2.06],
   ['militar', 'Jipe do exército (estilo Marruá)', 'Polícia / Forças', 4.29, 1.97],
+  ['caveirao', 'Caveirão (blindado da polícia)', 'Polícia / Forças', 6.4, 2.45],
+  ['ambulancia', 'Ambulância do resgate', 'Serviços', 5.63, 2.0],
+  ['onibus', 'Ônibus urbano', 'Serviços', 12.0, 2.5],
   ['jetski', 'Jet ski (Aqua Rider 300)', 'Barcos', 3.0, 1.11],
   ['lancha', 'Lancha (Marlin 21 Sport)', 'Barcos', 6.4, 2.3],
   ['barco', 'Barco de pesca (Caiçara 30)', 'Barcos', 9.0, 3.2],
@@ -52,6 +55,6 @@ export const INFO = [
   ['bicicleta', 'Bicicleta urbana (aro 26)', 'Motos', 1.75, 0.62],
   ['heli', 'Helicóptero (estilo Bell 206)', 'Helicópteros', 9.6, 2.2],
   ['heli_policia', 'Helicóptero da polícia (Águia)', 'Helicópteros', 9.6, 2.2],
-].map(([slug, nome, categoria, comprimento, largura]) => ({ slug, nome, categoria, comprimento, largura, pinturaFixa: ['viatura', 'swat_van', 'militar', 'taxi_sp', 'taxi_rio', 'heli_policia'].includes(slug), barco: categoria === 'Barcos', moto: categoria === 'Motos', heli: categoria === 'Helicópteros' }));
+].map(([slug, nome, categoria, comprimento, largura]) => ({ slug, nome, categoria, comprimento, largura, pinturaFixa: ['viatura', 'swat_van', 'militar', 'caveirao', 'ambulancia', 'taxi_sp', 'taxi_rio', 'heli_policia'].includes(slug), barco: categoria === 'Barcos', moto: categoria === 'Motos', heli: categoria === 'Helicópteros' }));
 
 export const INFO_BY_SLUG = Object.fromEntries(INFO.map((i) => [i.slug, i]));

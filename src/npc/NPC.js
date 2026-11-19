@@ -259,7 +259,7 @@ class NPC {
 		this.hp -= amount;
 		this._hitBy = source;                                   // (quem bateu e com quê: quem revida, revida o jogador — ver HurtState)
 		this._hitKind = kind;
-		if (this.hp <= 0) this.die(from, source, impact);
+		if (this.hp <= 0) this.die(from, source, impact, kind);
 		else if (impact && impact.power >= Config.ragdoll.minPower) this.ragdoll(from, impact, false);
 		else this.hurt(from);
 	}
@@ -309,6 +309,7 @@ class NPC {
 			this.deadTimer = 28;
 			this.actor.play('dead', 'none', { restart: true }); this.actor.setPhase(1);          // (já deitado: só a pose final; a poça vem do play)
 			this.actor.setHeading(this.heading);
+			if (this._downPending) { this._downPending = false; this._knockOut(this._killSource); return; }      // (sobreviveu à queda: desacordado, sangrando)
 			if (this.ctx.events) this.ctx.events.onKill(this, this._killSource, 'npc');
 			return;
 		}
@@ -325,14 +326,17 @@ class NPC {
 
 	// Cai no chão (sprite 'dead' com poça de sangue); o agente sai do crowd para ninguém tropeçar no corpo.
 	// Com `impact`, antes disso ele é arremessado (o evento de morte só dispara ao pousar).
-	die(from, source, impact) {
+	// kind: o golpe (Melee: stab, punch…) ou 'gun' — decide se ele MORRE ou só cai DESACORDADO, sangrando (_survives).
+	die(from, source, impact, kind = null) {
 		this._downed();
 		this.alive = false;
 		this._rage = null;                                      // (morreu na briga de trânsito: o corpo não é mais dela — RoadRage)
 		this._clearActivity();
 		this.waiting = null; this.crossing = null;
+		const down = this._survives(kind, impact);
 		if (impact && impact.power >= Config.ragdoll.minPower) {
 			this._killSource = source;
+			this._downPending = down;                           // (arremessado: decide ao pousar — _ragEnd)
 			this.ragdoll(from, impact, true);
 			return;
 		}
@@ -342,12 +346,64 @@ class NPC {
 		this.actor.play('dead');
 		this.heading = (from ? Math.atan2(this.position.x - from.x, this.position.z - from.z) : this.heading) + (Math.random() - 0.5) * 0.8;
 		this.actor.setHeading(this.heading);
+		if (down) { this._knockOut(source); return; }
 		if (this.ctx.events) this.ctx.events.onKill(this, source, 'npc');
+	}
+
+	// ----- FERIDO: desacordado, sangrando (Config.injury, world/Rescue.js)
+	// Zerou a vida: morre na hora ou só desmaia? Depende do golpe (tiro, facada, pancada, atropelamento, explosão) e do quanto passou
+	// do zero — explosão e rajada (muito abaixo de zero) matam.
+	_survives(kind, impact) {
+		const I = Config.injury;
+		if (!I || I.on === false || this.hp < -I.overkill || this.mugger) return false;
+		const k = kind === 'gun' ? 'gun' : kind === 'stab' ? 'stab' : kind ? 'melee' : impact ? 'hit' : 'env';
+		return Math.random() < (I.down[k] !== undefined ? I.down[k] : 0.5);
+	}
+	// Caiu desacordado: fica no chão SANGRANDO; sem socorro (a ambulância — Rescue) a vida se esvai e ele morre.
+	_knockOut(source) {
+		const I = Config.injury, [a, b] = I.bleedOut;
+		this.fsm.setState({ name: 'DOWN', update() {} });
+		this.deadTimer = 0;
+		this.downed = { t: a + Math.random() * (b - a), source, called: null, stable: false, poolT: 6, groanT: 4 + Math.random() * 6 };
+		this.downed.total = this.downed.t;
+		if (typeof Rescue !== 'undefined') Rescue.add(this);
+		if (this.ctx.events && this.ctx.events.onDown) this.ctx.events.onDown(this, source);
+	}
+	// Um quadro do ferido no chão: o sangue escorrendo e o tempo que resta (o socorrista estancou: quase para).
+	_downTick(dt) {
+		const D = this.downed;
+		D.t -= dt * (D.stable ? Config.injury.stableMul : 1);
+		this.actor.setPosition(this.transform.position.x, this.transform.position.z);
+		this.actor.update(dt);
+		if ((D.poolT -= dt) <= 0) { D.poolT = 14; if (typeof Blood !== 'undefined' && Blood.mesh) Blood._pool(this.actor); }      // (a poça se renova enquanto sangra)
+		if ((D.groanT -= dt) <= 0) {
+			D.groanT = 6 + Math.random() * 8;
+			if (typeof Bubbles !== 'undefined' && D.t > 8) Bubbles.say(this, D.stable ? '😮‍💨' : ['🩸', 'socorro…', 'ai…', '🩸'][Math.floor(Math.random() * 4)], { ms: 1600, key: 'down' + this.id });
+		}
+		if (D.t <= 0) this._bleedOut();
+	}
+	// Ninguém socorreu a tempo: morreu ali.
+	_bleedOut() {
+		const src = this.downed ? this.downed.source : 'env';
+		this.downed = null;
+		if (typeof Rescue !== 'undefined') Rescue.remove(this);
+		this.fsm.setState({ name: 'DEAD', update() {} });
+		this.deadTimer = 28;
+		if (this.ctx.events) this.ctx.events.onKill(this, src, 'npc', { bled: true });
+	}
+	// Socorrido: os socorristas o levam na ambulância (some daqui e volta à cidade como outra pessoa, depois).
+	rescued() {
+		if (!this.downed) return;
+		this.downed = null;
+		if (typeof Rescue !== 'undefined') Rescue.remove(this);
+		this.actor.setVisible(true);                            // (estava na maca)
+		this.respawn();
 	}
 
 	// Volta à vida como "outro" pedestre em outro lugar, longe do jogador.
 	respawn() {
 		this.mugger = false;                                    // (era o assaltante de um StreetCrime)
+		if (this.downed) { this.downed = null; if (typeof Rescue !== 'undefined') Rescue.remove(this); }
 		this.restoreLook();
 		let pos = null;
 		for (let i = 0; i < 12; i++) {
@@ -556,6 +612,7 @@ class NPC {
 		this._umbrellaTick(dt);
 		if (this.rag) { this.rag.update(dt); return; }      // arremessado: o Ragdoll comanda o sprite e a posição
 		if (!this.alive) {                         // corpo no chão: só espera sumir e reaparecer
+			if (this.downed) { this._downTick(dt); return; }      // (desacordado, sangrando: só morre se ninguém socorrer)
 			this.deadTimer -= dt;
 			this.actor.setPosition(this.transform.position.x, this.transform.position.z);
 			this.actor.update(dt);

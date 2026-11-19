@@ -30,7 +30,7 @@ class Collisions {
         if (!g.carDamage) return;
         const C = Config.crash;
         const pl = g.player;
-        const onFoot = g.mode !== 'car' && pl.alive;
+        const onFoot = g.mode !== 'car' && pl.alive && !pl.frozen;      // (frozen: dentro do ônibus, do bondinho, entrando no carro)
         const npcs = g.npcManager ? g.npcManager.npcs : [];
         const offs = g.policeManager ? g.policeManager.officers : [];
         const gang = g.gangs ? g.gangs.members : [];

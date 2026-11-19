@@ -930,6 +930,33 @@ const CarGen = (() => {
         cladding: 'big', bumpers: 'black', bumper_w: 10, grille: 0.5, grille_slots: 8, hood_lines: false,
         spare: 22, bullbar: 'dark', star: [252, 69, 14, '#e8e4d0'], door_len: 72, door_hinge: 204 });
 
+    // ---------------- SERVIÇOS: ambulância (pintura própria), caveirão (blindado da polícia) e o ônibus urbano (pintura da linha)
+    car({ id: 'ambulancia', nome: 'Ambulância do resgate', categoria: 'servico', novo: true, fixed: true,
+        L: 394, W: 140, color: '#f6f6f3', door_color: '#f6f6f3', fr: 30, fry: 30, rr: 8, rry: 8, sb: 1, fb: 2, rb: 0.5,
+        cf: 334, rf: 302, rr_x: 10, cr: 6, ci_f: 10, ci_r: 10, ri: 12, wb: 10, rwb: 1, roof_r: 8, roof_fb: 2, roof_rb: 0.5,
+        cargo: 272, lightbar: [292, 16, 64], panels: [{ x0: 20, x1: 270, color: '#f6f6f3', edge: '#c8141e' }],
+        wheels_x: [332, 70], wheel_r: 25, head: ['band', 11, 3, 32], tail: ['band', 5, 4, 30],
+        b_pillars: [], door_seams: [326, 272, 196], handles: [302, 248], c_pillar: 0,
+        bumpers: 'black', bumper_w: 6, grille: 0.48, hood_lines: false,
+        texts: [{ str: 'RESGATE 192', x: 140, size: 15, color: '#c8141e', sp: 1 }], door_len: 66, door_hinge: 326 });
+
+    car({ id: 'caveirao', nome: 'Caveirão (blindado da polícia)', categoria: 'forca', novo: true, fixed: true, pad: 20,
+        L: 448, W: 172, color: '#2e3236', door_color: '#2e3236', fr: 22, fry: 22, rr: 8, rry: 8, sb: 0.5, fb: 1, rb: 0.5,
+        cf: 372, rf: 346, rr_x: 12, cr: 6, ci_f: 14, ci_r: 14, ri: 16, wb: 6, rwb: 1, roof_r: 6, roof_fb: 1, roof_rb: 0.5,
+        cargo: 310, roof_ribs: true, roof_hatch: [170, 220], lightbar: [326, 16, 70],
+        wheels_x: [356, 92], wheel_r: 35, tire_out: 5, head: ['band', 9, 4, 34], tail: ['band', 5, 4, 34],
+        b_pillars: [], door_seams: [364, 310], handles: [340], c_pillar: 0, cladding: 'big',
+        bumpers: 'black', bumper_w: 12, grille: 0.5, grille_slots: 6, hood_lines: false, bullbar: 'dark',
+        texts: [{ str: 'BLINDADO', x: 100, size: 20, color: '#c8ced8', sp: 2 }], door_len: 70, door_hinge: 364 });
+
+    car({ id: 'onibus', nome: 'Ônibus urbano', categoria: 'servico', novo: true, pad: 16,
+        L: 840, W: 175, color: '#2f6fb3', color2: '#f4c430', roof: 'P2', fr: 16, fry: 16, rr: 10, rry: 10, sb: 1, fb: 1.5, rb: 1,
+        cf: 832, rf: 826, rr_x: 12, cr: 8, ci_f: 12, ci_r: 12, ri: 16, wb: 4, rwb: 1, roof_r: 8, roof_fb: 1, roof_rb: 1,
+        roof_ribs: true, wheels_x: [672, 252], wheel_r: 36, tire_out: 2, head: ['band', 10, 4, 44], tail: ['band', 6, 4, 44],
+        b_pillars: [], door_seams: [], handles: [], c_pillar: 0,
+        bumpers: 'black', bumper_w: 8, grille: 0.4, hood_lines: false,
+        texts: [{ str: 'URBANO', x: 420, size: 26, color: '#f4f6f8', sp: 3 }], door_len: 80, door_hinge: 760 });
+
     return { S, CARS, HMAX, carSVG, heightSVG, heightsOf, doorSVG, damageSVG, damageMarks, mix, light, dark, rgb, hex, rng, hashStr, rrect, poly, f };
 })();
 

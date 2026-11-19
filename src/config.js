@@ -48,8 +48,8 @@ const Config = {
 		// PERSONAGENS EM 3D (art/Char3D.js): o mesmo boneco do atlas, montado ao vivo na GPU com o esqueleto do gerador — visto de
 		// qualquer ângulo pela câmera. splat = tamanho de cada ponto (× o espaçamento). `?boneco=2d` = o desenho 2,5D. npc: os NPCs MAIS
 		// PERTO do jogador ficam 3D (até `max` — o nível gráfico decide: core/Graphics.js npc3d —, num raio de `radius` m); os outros seguem 2,5D.
-		trails: { on: true, keep: 0.45 },   // o BORRÃO do GTA SA (render/Trails.js): quanto do quadro anterior fica na tela (a 30 quadros/s). `?blur=0` desliga.
-		char3d: { on: true, player: true, spacing: 1.0, splat: 2.1, blend: true, npc: { on: true, max: 14, radius: 45, spacing: 1.3, farSpacing: 2.2, nearDist: 17 }, npcShadow: false },
+		trails: { on: true, keep: 0.5, speedFrom: 25, speedTo: 40, horizonBand: 0.22, horizonPx: 2.5 },   // o BORRÃO do GTA SA (render/Trails.js): rastro só em velocidade alta (m/s), desfoque só no horizonte. `?blur=0` desliga.
+		char3d: { on: true, player: true, spacing: 1.0, splat: 2.1, blend: true, npc: { on: true, max: 999, radius: 400, spacing: 1.3, farSpacing: 2.2, farThin: 0.75, veryFarThin: 0.22, nearDist: 17, midDist: 32 }, npcShadow: false },
 		npcDirs: 16,           // direções desenhadas dos personagens 2,5D. Perfil leve: 8 (só as páginas pares dos atlas; os visuais do guarda-roupa saem com 8)
 		// CHÃO com as fotos CC0 (art/GroundPhotos.js, etapa 3): o pintado de sempre + o grão das fotos + o relevo delas. `?chao=0` volta
 		// ao chão só pintado; `?chao=foto`, `?chao=misto` e `,relevo` para comparar.
@@ -528,6 +528,32 @@ const Config = {
 	//   heli      helicóptero (enxerga por cima dos prédios) | swat: vans da tropa de elite
 	//   army      jipes do exército | blocks: bloqueios de rua em volta de você
 	// Ragdoll (arremesso por atropelamento): impacto (m/s efetivos) mínimo para derrubar/arremessar.
+	// ÔNIBUS (world/Buses.js): as linhas, os pontos e os horários. Os horários usam o relógio do jogo (24 h = Config.time.cycleSeconds).
+	bus: {
+		on: true,
+		fare: 5,             // passagem (R$)
+		first: 5, last: 23.5,  // primeira e última saída do terminal (hora do jogo)
+		speed: 6.5,            // velocidade média de horário (m/s, paradas inclusas): a previsão de cada ponto
+		cruise: 11,            // velocidade de cruzeiro do ônibus de verdade (m/s)
+		dwell: 7,              // segundos parado no ponto (embarque)
+		stopEvery: 170,        // distância entre pontos (m de linha)
+		max: 8,                // ônibus de verdade ao mesmo tempo (os de perto da câmera)
+	},
+	// FERIDOS (NPC._survives / world/Rescue.js): quem perde toda a vida pode MORRER na hora ou cair DESACORDADO, sangrando. Sem socorro (a
+	// ambulância do resgate, que só vem se alguém LIGAR — uma testemunha ou você, no celular ou com E perto do ferido) ele morre.
+	injury: {
+		on: true,
+		down: { gun: 0.55, stab: 0.65, melee: 0.9, hit: 0.6, env: 0.4 },      // chance de só desmaiar, pelo golpe que zerou a vida (hit = atropelado/arremessado)
+		overkill: 40,          // passou disso abaixo de zero (explosão, rajada, tiro de fuzil à queima-roupa): morre na hora
+		bleedOut: [75, 130],   // segundos sangrando até morrer, sem socorro
+		stableMul: 0.08,       // estancado (kit médico do jogador ou o socorrista atendendo): o sangramento quase para
+		callDelay: [8, 22],    // quanto demora até uma testemunha ligar (se houver alguém por perto)
+		callChance: 0.65,      // a cada tentativa, a chance de quem está perto ligar mesmo
+		witnessR: 30,          // até onde alguém vê o ferido
+		ambulances: 2,         // ambulâncias atendendo ao mesmo tempo
+		ambSpeed: 15,          // cruzeiro da ambulância com a sirene (m/s)
+		treat: 9,              // segundos atendendo no chão antes de levar na maca
+	},
 	ragdoll: {
 		minPower: 3.5,
 	},
@@ -593,6 +619,8 @@ const Config = {
 		tireChance: 0.05,      // Bala que acerta um carro DURANTE UMA PERSEGUIÇÃO (procurado): chance de furar o pneu mais perto.
 		cooldown: 0.3,         // s entre danos de batida do mesmo carro.
 		bulletMul: 0.5,        // Fração do dano da bala que o carro leva (viaturas inclusive).
+		armorMul: 0.06,        // BLINDADOS (caveirão, tático — spec.armored): fração do dano que a chapa deixa passar…
+		armorFloor: 0.4,       // …e a vida nunca cai abaixo desta fração: não pegam fogo nem explodem (Vehicle.takeDamage).
 		driverHp: 100,         // Vida de quem dirige um carro de trânsito ou uma viatura: tiros pelo LADO DO MOTORISTA vão tirando (Combat._carShot).
 		glassDriver: 0.85,     // Fração do dano da bala em quem dirige quando ela entra pelo vidro (pela porta/lataria: doorDriver).
 		doorDriver: 0.45,

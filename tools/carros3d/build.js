@@ -27,7 +27,7 @@ export const KIND = { generic: 0, paint: 1, paint2: 2, glass: 3, metal: 4, tire:
 
 // Modelos que usam a PINTURA 2 da tabela do jogo (CarSheet.PAINTS[].paint2) — os mesmos marcados com p2 no atlas 2D: teto de outra
 // cor, faixas. Nos outros, o teto da mesma cor da pintura segue a pintura e o de outra cor fica fixo (teto preto dos SUVs).
-const P2 = new Set(['mini_eletrico', 'sedan_70', 'esportivo', 'muscle', 'kombi']);
+const P2 = new Set(['mini_eletrico', 'sedan_70', 'esportivo', 'muscle', 'kombi', 'onibus']);
 const METAL = new Set(['cromado', 'aluminio', 'espelho', 'farol_refletor', 'metal', 'metal_escuro', 'aro_aco', 'aro_escuro', 'aro_preto', 'freio']);
 
 function kindOf(slug, name, mats, fixed, paintKey = 'pintura') {

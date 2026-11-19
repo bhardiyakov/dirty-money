@@ -86,10 +86,29 @@ class Game {
 			playerPos: () => this._playerState().pos,
 			night: () => this.dayNight.night,
 			events: {
-				onKill: (npc, source) => {
-					// Quem morre solta dinheiro (de qualquer causa); matar é crime se foi o jogador.
+				// Caiu DESACORDADO (Config.injury): solta a carteira; se foi o jogador, é agressão grave (e o bairro vê). Se morrer sangrando,
+				// o onKill vem depois (bled), sem soltar dinheiro de novo.
+				onDown: (npc, source) => {
 					this.pickups.dropLoot(npc.position, 'civilian');
 					if (source !== 'player') return;
+					if (typeof WorldMemory !== 'undefined') WorldMemory.crime('fight', npc.position.x, npc.position.z);
+					this.heat.commit('assault');
+					if (!npc.mugger) Standing.harm(this, 3);
+					if (this.npcManager) this.npcManager.alertViolence(npc.position, 18);
+					this._flash(`Pedestre #${npc.id} caído, sangrando — sem socorro ele morre`);
+				},
+				onKill: (npc, source, kind, opts) => {
+					// Quem morre solta dinheiro (de qualquer causa); matar é crime se foi o jogador.
+					const bled = !!(opts && opts.bled);
+					if (!bled) this.pickups.dropLoot(npc.position, 'civilian');
+					if (source !== 'player') return;
+					if (bled) {
+						this.heat.commit('homicide');
+						if (typeof WorldMemory !== 'undefined') WorldMemory.crime('kill', npc.position.x, npc.position.z);
+						Standing.harm(this, 3);
+						if (hypot(npc.position.x - this.player.position.x, npc.position.z - this.player.position.z) < 120) this._flash(`Pedestre #${npc.id} morreu — ninguém socorreu a tempo`);
+						return;
+					}
 					if (typeof WorldMemory !== 'undefined') WorldMemory.crime(npc.mugger ? 'fight' : 'kill', npc.position.x, npc.position.z);
 					this.heat.commit(npc.mugger ? 'assault' : 'homicide');
 					if (!npc.mugger) Standing.harm(this, 6);                 // (o assaltante de rua: o bairro não chora — ver StreetCrime)
@@ -910,6 +929,8 @@ class Game {
 			Pelada.update(dt, this);                                     // o futebol dos meninos na quadra da favela (de dia)
 			Perf.lap('favela (gangues/moto/missões)');
 			StreetLife.update(this, dt);                                  // a rua viva: movimento por hora, acontecimentos, conversas
+			Rescue.update(this, dt);                                      // feridos sangrando, quem liga para o 192 e as ambulâncias
+			Buses.update(this, dt);                                       // as linhas de ônibus: pontos, horários, os ônibus perto da câmera e o embarque
 			Stands.update(this, dt);                                      // quiosques, café e barracas: o vendedor aparece de perto
 			Perf.lap('rua viva');
 			if (this.motoTaxis) this.motoTaxis.update(dt, gs.pos);
@@ -1817,6 +1838,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		const TS = Throwables.s;
 		const tAim = TS ? `${Math.round(TS.dist || 0)} m · força ${Math.round(TS.power * 100)}% · ${TS.src === 'mouse' ? 'mire com o mouse' : TS.src === 'stick' ? 'mire com o analógico direito (incline mais = mais longe)' : 'segure para ir mais longe'}` : '';
 		if (Gym.active) html = '';                                                  // (treinando: o painel do mini-game já explica tudo)
+		else if (Buses.ride) html = Buses.prompt(this);                             // (dentro do ônibus)
 		else if (TS && TS.phase !== 'throw') html = TS.kind === 'grenade'
 			? `<b>SOLTE</b> para jogar a granada<small>${tAim}${TS.armed ? ` · pavio ${Math.max(0, TS.fuse).toFixed(1)} s` : ' · puxando o pino…'}</small>`
 			: `<b>SOLTE</b> para jogar o molotov<small>${tAim}${TS.armed ? ' · pano aceso' : ' · acendendo…'}</small>`;
@@ -1853,7 +1875,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 			const chop = this._chopperNear();
 			const spot = !car && !chop && this._nearHideSpot();
 			const fence = !car && !spot && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.6);
-			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || (typeof Corcovado !== 'undefined' && Corcovado.prompt(this)) || (typeof Landmarks !== 'undefined' && Landmarks.prompt(this)) || Stands.prompt(this) || StreetLife.prompt(this) || Witnesses.prompt(this) || Calendar.prompt(this) || Personas.prompt(this) || RivalArc.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
+			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || (typeof Corcovado !== 'undefined' && Corcovado.prompt(this)) || (typeof Landmarks !== 'undefined' && Landmarks.prompt(this)) || Stands.prompt(this) || Rescue.prompt(this) || Buses.prompt(this) || StreetLife.prompt(this) || Witnesses.prompt(this) || Calendar.prompt(this) || Personas.prompt(this) || RivalArc.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
 			if (shopP) html = shopP;
 			else if (spot) html = `<b>E</b> esconder-se ${spot.kind === 'dumpster' ? 'na caçamba' : (spot.kind === 'barrel' ? 'no latão' : 'no caixote')}<small>se a polícia não te viu entrar, você some do radar</small>`;
 			else if (fence && fence.bridgeRail && (this.player.underBridge || this.player.depth > 0)) html = '';      // (nadando sob a ponte: não dá para subir)
@@ -2319,6 +2341,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 	// ---------------------------------------------------------------- esconderijos e pulos
 	// E: sair do esconderijo | entrar no esconderijo ao alcance (caçamba, caixote, latão) | senão, assaltar.
 	_interact() {
+		if (Buses.ride) { Buses.interact(this); return; }               // dentro do ônibus: descer antes / pular a viagem
 		if (this.careers && this.careers.interact()) return;
 		if (this.missions && this.missions.interact()) return;
 		if (!this.propertyUI.open && this.propertyUI.cool <= 0 && RealEstate.interact(this)) return;
@@ -2332,6 +2355,8 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		if (typeof Corcovado !== 'undefined' && Corcovado.interact(this)) return;      // elevador e trem do Morro do Vigia
 		if (typeof Landmarks !== 'undefined' && Landmarks.interact(this)) return;      // o passeio de bondinho da Pedra do Farol
 		if (Stands.interact(this)) return;                               // quiosques do calçadão, café do Morro do Vigia
+		if (Rescue.interact(this)) return;                               // ferido no chão: ligar para o 192 / estancar com o kit médico
+		if (Buses.interact(this)) return;                                // ponto de ônibus: horários, embarcar; dentro: descer / pular a viagem
 		if (StreetLife.interact(this)) return;                           // separar a briga, devolver a bolsa, comprar no carrinho
 		if (Witnesses.interact(this)) return;                            // intimidar ou subornar a testemunha
 		if (Calendar.interact(this)) return;                             // a barraca da festa junina
