@@ -342,7 +342,7 @@ const Interiors = {
 	// Todos os bonecos da sala já desenhados (a página deles na GPU)? Fora (ou na casa, sem figurantes): pronto.
 	_stageReady() {
 		if (!this.active) return true;
-		const drawn = (x) => !x.mesh.isEnabled() || !x.mesh.isVisible || !x.clip || !x.clip.npc || (x._pg && !x._npcWait);
+		const drawn = (x) => !x.mesh.isEnabled() || x._ghost || !x.mesh.isVisible || !x.clip || !x.clip.npc || (x._pg && !x._npcWait);      // (_ghost: desenhado em 3D — Char3D)
 		return this._actors.every(drawn) && (this._gymActors || []).every(drawn) && ShopLife.ready();
 	},
 	// Entrar/sair quebrou no meio: de volta à calçada, com a cidade de volta (melhor que a tela preta para sempre).

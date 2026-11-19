@@ -149,7 +149,7 @@ const ShopLife = {
     // Every person on stage already drawn (their page on the GPU)? Interiors holds the fade on black until then.
     ready() {
         if (!this.active) return true;
-        return this.agents.every((agent) => !agent.actor || !agent.actor.mesh.isEnabled() || (agent.actor._pg && !agent.actor._npcWait));
+        return this.agents.every((agent) => !agent.actor || !agent.actor.mesh.isEnabled() || agent.actor._ghost || (agent.actor._pg && !agent.actor._npcWait));      // (_ghost: em 3D)
     },
 
     // ======================================================================================== navigation grid
