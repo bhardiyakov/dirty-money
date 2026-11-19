@@ -3,5 +3,16 @@
 	"framework": null,
 	"installCommand": "",
 	"buildCommand": "node scripts/package-legacy.mjs",
-	"outputDirectory": "dist-game"
+	"outputDirectory": "dist-game",
+	"headers": [
+		{
+			"source": "/sw.js",
+			"headers": [
+				{
+					"key": "Cache-Control",
+					"value": "no-cache"
+				}
+			]
+		}
+	]
 }

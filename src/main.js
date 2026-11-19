@@ -202,10 +202,68 @@ window.addEventListener('DOMContentLoaded', async () => {
 	if (S) S.ready();                                                                // a tela do estúdio sai (no fim dos créditos ou já, se pulada)
 });
 
-// Cache offline (sw.js): a partir da 2ª visita o jogo e as bibliotecas (~7 MB) saem do aparelho, e funciona sem internet. Só por
-// http(s); registrado depois do 'load' para não disputar banda com a primeira carga.
+// JOGO INSTALADO (sw.js): na versão publicada (o pacote de scripts/package-legacy.mjs), a 1ª visita guarda o jogo no aparelho e daí em
+// diante ele abre do aparelho, também offline; versão nova baixa em segundo plano e entra ao reabrir (ou na hora, pelo aviso).
+// VERSÃO DE TESTE: em localhost (o servidor local, os testes) ou com ?dev no endereço, nada de cache — tudo vem do disco, e um service
+// worker que tenha ficado de antes é removido. (`?sw=1` liga o cache mesmo em localhost, para testar a versão instalada.)
+// Registrado depois do 'load' para não disputar banda com a primeira carga.
 window.addEventListener('load', () => {
 	// No app instalado (Tauri) tudo já vem no instalador: o cache offline não serve para nada lá.
 	if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol) || '__TAURI_INTERNALS__' in window) return;
-	navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('[SW] sem cache offline:', e));
+	const q = location.search, local = /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/.test(location.hostname) || location.hostname.endsWith('.local');
+	if ((local || /[?&]dev\b/.test(q)) && !/[?&]sw=1\b/.test(q)) {
+		navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
+		if (window.caches) caches.keys().then((ks) => ks.filter((k) => k.startsWith('dm-')).forEach((k) => caches.delete(k))).catch(() => {});
+		return;
+	}
+	OfflineGame.register();
 });
+
+const OfflineGame = {
+	async register() {
+		const sw = navigator.serviceWorker, first = !sw.controller;
+		let reg;
+		try { reg = await sw.register('./sw.js'); } catch (e) { console.warn('[SW] sem cache offline:', e); return; }
+		// progresso da 1ª instalação (o jogo sendo guardado no aparelho)
+		sw.addEventListener('message', (e) => {
+			const d = e.data;
+			if (!d || d.type !== 'dm-sw-progress' || !first) return;
+			const pct = Math.round(d.done / Math.max(1, d.total) * 100);
+			this._toast(pct < 100 ? `📥 Guardando o jogo no aparelho (para abrir rápido e jogar offline): ${pct}%` : '✅ Jogo guardado no aparelho: da próxima vez ele abre direto, mesmo sem internet', pct < 100 ? 0 : 6000);
+		});
+		const offer = (w) => { if (sw.controller) this._banner(w); };
+		if (reg.waiting) offer(reg.waiting);
+		reg.addEventListener('updatefound', () => {
+			const w = reg.installing;
+			if (w) w.addEventListener('statechange', () => { if (w.state === 'installed') offer(w); });
+		});
+		sw.addEventListener('controllerchange', () => { if (this._asked) location.reload(); });      // (só quando o jogador pediu: a 1ª instalação não recarrega)
+		setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);                            // (jogando por horas: confere de hora em hora)
+	},
+	// Versão nova pronta: entra quando o jogo for reaberto — ou agora, se o jogador quiser (recarrega a página: o que não foi salvo
+	// dormindo se perde, por isso não é automático).
+	_banner(w) {
+		if (document.getElementById('dmUpdate')) return;
+		const el = document.createElement('div');
+		el.id = 'dmUpdate';
+		el.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:300;display:flex;gap:10px;align-items:center;padding:10px 14px;border-radius:14px;background:rgba(10,14,22,.94);color:#e8eaf0;font:600 13px Inter,system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.1);max-width:92vw';
+		el.innerHTML = '<span>🆕 Nova versão do jogo baixada — entra quando você reabrir o jogo.</span><button id="dmUpNow" style="border:0;border-radius:10px;padding:7px 12px;background:#34d399;color:#04130c;font:700 13px Inter,sans-serif;cursor:pointer">Atualizar agora</button><button id="dmUpLater" style="border:0;border-radius:10px;padding:7px 10px;background:#334155;color:#e2e8f0;font:600 13px Inter,sans-serif;cursor:pointer">Depois</button>';
+		document.body.appendChild(el);
+		el.querySelector('#dmUpNow').onclick = () => {
+			if (!confirm('Atualizar agora recarrega o jogo: o progresso que não foi salvo (dormindo) se perde. Continuar?')) return;
+			this._asked = true; w.postMessage({ type: 'dm-sw-update' });
+		};
+		el.querySelector('#dmUpLater').onclick = () => el.remove();
+	},
+	_toast(text, ms) {
+		let el = document.getElementById('dmInstall');
+		if (!el) {
+			el = document.createElement('div'); el.id = 'dmInstall';
+			el.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:300;padding:8px 12px;border-radius:12px;background:rgba(10,14,22,.88);color:#cbd5e1;font:600 12px Inter,system-ui,sans-serif;pointer-events:none;max-width:70vw';
+			document.body.appendChild(el);
+		}
+		el.textContent = text;
+		clearTimeout(this._tt);
+		if (ms) this._tt = setTimeout(() => el.remove(), ms);
+	},
+};
