@@ -51,7 +51,9 @@ class StreetProps {
         if (!c) return;
         if (c.mesh) { if (this.w.shadow) this.w.shadow.removeShadowCaster(c.mesh); c.mesh.dispose(); c.mesh = null; }
         if (c.face) { c.face.dispose(); c.face = null; }
-        const b = new MeshBatch(), f = k === 's' ? new MeshBatch() : null, list = this._list(k);
+        const list = this._list(k);
+        if (k === 'l' && this._lampInst(c, key, list)) return;
+        const b = new MeshBatch(), f = k === 's' ? new MeshBatch() : null;
         let n = 0;
         for (const i of c.ids) {
             const it = list[i];
@@ -70,6 +72,33 @@ class StreetProps {
         // (material das peças da ponte: com o vão cortado — RoofCut —, o poste em cima dele some junto, em vez de ficar de pé na água)
         c.mesh = b.build('lamps_' + key, this.scene, this.w.mats.bsolid, { vertexColors: true, receiveShadows: false, alwaysActive: false, relief: true });
         if (c.mesh && this.w.shadow && k === 'l') this.w.shadow.addShadowCaster(c.mesh);
+    }
+
+    // Os POSTES do pedaço como INSTÂNCIAS de um poste-modelo (386 vértices montados uma vez; 64 bytes por poste): antes, cada poste
+    // ia inteiro para a placa — ~90 MB de geometria só de postes no mapa todo. Todos com o mesmo braço (o comprimento): senão, o lote
+    // de sempre. Poste quebrado (alive = false) sai da lista na reconstrução do pedaço.
+    _lampInst(c, key, list) {
+        const L = [];
+        for (const i of c.ids) { const it = list[i]; if (it.alive) L.push(it); }
+        if (!L.length) return true;
+        const arm = (it) => Math.hypot(it.hx - it.x, it.hz - it.z) || 1, a0 = arm(L[0]);
+        if (L.some((it) => Math.abs(arm(it) - a0) > 0.05)) return false;
+        const b = new MeshBatch();
+        this._lampGeo(b, { x: 0, z: 0, hx: a0, hz: 0 });
+        const mesh = b.build('lamps_' + key, this.scene, this.w.mats.bsolid, { vertexColors: true, receiveShadows: false, alwaysActive: false, relief: false, uvs: false });
+        if (!mesh) return true;
+        const M = new Float32Array(L.length * 16), rel = typeof Relief !== 'undefined' && Relief.on;
+        L.forEach((it, j) => {
+            const ux = (it.hx - it.x) / arm(it), uz = (it.hz - it.z) / arm(it), o = j * 16;      // (o braço do modelo aponta para +X)
+            M[o] = ux; M[o + 2] = uz; M[o + 5] = 1; M[o + 8] = -uz; M[o + 10] = ux;
+            M[o + 12] = it.x; M[o + 13] = rel ? Relief.at(it.x, it.z) : 0; M[o + 14] = it.z; M[o + 15] = 1;
+        });
+        mesh.thinInstanceSetBuffer('matrix', M, 16, true);
+        mesh.thinInstanceRefreshBoundingInfo(false);
+        mesh.unfreezeWorldMatrix(); mesh.freezeWorldMatrix();
+        c.mesh = mesh;
+        if (this.w.shadow) this.w.shadow.addShadowCaster(mesh);
+        return true;
     }
 
     build() {

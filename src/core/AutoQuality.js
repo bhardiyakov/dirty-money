@@ -1,7 +1,7 @@
 // ============================================================================
-// AutoQuality — qualidade adaptativa. Mede o tempo REAL entre quadros (o teto é Config.perf.fpsCap: 30 Hz ≈ 33 ms; 60 no app de PC) e, se o aparelho
+// AutoQuality — qualidade adaptativa. Mede o tempo REAL entre quadros (o teto é Config.perf.fpsCap: 60 Hz nos presets Médio, Alto e HD; 30 no Baixo) e, se o aparelho
 // não consegue manter o ritmo por alguns segundos, desce um degrau por vez (o que menos se nota primeiro; nunca sobe sozinho):
-//   0) teto 60 → 30 FPS (app de PC)
+//   0) teto 60 → 30 FPS
 //   1) mapa de sombras 2048/1024 → 512
 //   2) resolução a 85% — quase não se nota e é o que mais rende: o custo do quadro acompanha o número de pixels
 //   3) sem MSAA e sem a paralaxe das fachadas (o relevo das janelas fica; saem as ~15 amostras por pixel de parede)
@@ -125,7 +125,7 @@ class AutoQuality {
 
 	_down() {
 		const g = this.g, S = AutoQuality.STEPS;
-		// Degrau zero (só no app de PC, que começa a 60 FPS): volta ao teto de 30 sem perder nada da imagem.
+		// Degrau zero (quem começa a 60 FPS): volta ao teto de 30 sem perder nada da imagem.
 		if (Config.perf.fpsCap > 30) {
 			Config.perf.fpsCap = 30;
 			this.slow = 1000 / Config.perf.fpsCap * 1.35;

@@ -255,7 +255,7 @@ const Char3D = {
 		const N = this.C.npc || {}, max = pl ? (N.max | 0) : 0, R = N.radius || 38, cx = pl ? pl.position.x : 0, cz = pl ? pl.position.z : 0, cand = [];
 		if (pl) for (const a of SpriteActor.live) {
 			const m = a.mesh, t = a.npcType;
-			if (!t || a === pl.actor || !a.clip || !a.clip.npc || !a._placed || m.isDisposed() || !m.isEnabled() || !m.isVisible) continue;
+			if (!t || a === pl.actor || !a.clip || !a.clip.npc || !a._placed || m.isDisposed() || !m.isEnabled() || !(m.isVisible || a._npcWait)) continue;      // (_npcWait: invisível só porque a página 2,5D não chegou — o 3D não precisa dela)
 			if (m.parent && m.parent !== a.lift) continue;
 			if (!max && !/^protagonista/.test(t)) continue;
 			const dx = m.position.x - cx, dz = m.position.z - cz, d = dx * dx + dz * dz, r = this.npcs.has(a) ? R * 1.15 : R;
@@ -590,10 +590,13 @@ class Char3DActor {
 	}
 
 	// ---------------------------------------------------------------- a cada quadro
+	// O desenho 2,5D do ator: escondido enquanto o 3D está à mostra — e FANTASMA (SpriteActor._ghost): não pede nem desenha as páginas
+	// da folha 2,5D (decodificar e subir para a placa centenas de MB de sprites que ninguém vê). Voltou ao 2,5D: pede de novo.
 	_show2d(on) {
 		const a = this.actor, mask = on ? 0x0FFFFFFF : 0;
 		if (a.mesh.layerMask !== mask) a.mesh.layerMask = mask;
 		if (a._ov && a._ov.layerMask !== mask) a._ov.layerMask = mask;
+		if (!a._ghost === !on) { a._ghost = !on; if (on && a._applyUV) a._applyUV(); }
 	}
 	_hide3d() {
 		if (!this.shown) return;
@@ -603,7 +606,7 @@ class Char3DActor {
 	update() {
 		const a = this.actor, M = this.model;
 		if (M && M.ready && !this._built) this._buildMeshes();
-		const c = a.clip, vis = !a.mesh.isDisposed() && a.mesh.isEnabled() && a.mesh.isVisible && !!c;
+		const c = a.clip, vis = !a.mesh.isDisposed() && a.mesh.isEnabled() && (a.mesh.isVisible || a._npcWait) && !!c;
 		if (!this._built || M.failed || !vis || !c.npc) { this._hide3d(); this._show2d(true); return; }
 		const key = c.name + ':' + (c.weapon || 'none');
 		let K = M.clip(key);

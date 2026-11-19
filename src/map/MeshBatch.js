@@ -232,7 +232,9 @@ class MeshBatch {
         }
     }
 
-    build(name, scene, material, { vertexColors = false, receiveShadows = true, alwaysActive = true, relief = false, clamp = null } = {}) {
+    // uvs = false: sem coordenada de textura (os materiais de cor sólida — acabamentos, postes, plantas — não usam: 8 dos 48 bytes de cada
+    // vértice a menos na placa de vídeo).
+    build(name, scene, material, { vertexColors = false, receiveShadows = true, alwaysActive = true, relief = false, clamp = null, uvs = true } = {}) {
         if (this.empty) return null;
         if (relief && typeof Relief !== 'undefined' && Relief.on) this._relief(clamp);
         this.anc = null;
@@ -245,7 +247,7 @@ class MeshBatch {
         vd.positions = this.pos;
         vd.indices = this.idx;
         vd.normals = this.nor;
-        vd.uvs = this.uv;
+        if (uvs) vd.uvs = this.uv; else this.uv = null;
         if (vertexColors) { this.col = new Float32Array(this.col); vd.colors = this.col; } else this.col = null;
         vd.applyToMesh(mesh);
         mesh.material = material;

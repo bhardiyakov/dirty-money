@@ -52,6 +52,7 @@ class WorldBuilder {
         this._rural();
         if (typeof Landmarks !== 'undefined') Landmarks.meshes(this);     // marcos: Colosso, Cristo, Pedra do Farol, calçadão, estais, píeres
         this._pieces();
+        if (typeof RuralArt !== 'undefined') RuralArt.buildInstances(this);      // (as plantas da roça: instâncias — art/RuralArt.js)
         this._marina();
         this._signalPoles();
         this._streetLamps();
@@ -1760,7 +1761,7 @@ class WorldBuilder {
             const shaded = key0.endsWith('$'), key = shaded ? key0.slice(0, -1) : key0;      // 'sidewalk$' = chão tingido pelo relevo (vertex colors)
             const isTrim = key === 'trim' || key === 'xtrim' || key === 'btrim';
             const isVeg = key.startsWith('veg_'), isBlend = key.startsWith('blend_');
-            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend, receiveShadows: !isVeg, alwaysActive: at < 0, relief: true, clamp: isBlend && typeof TerrainBuilder !== 'undefined' ? TerrainBuilder.roadCut : null });      // (degradê: rente ao terreno cortado junto da pista)
+            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend, receiveShadows: !isVeg, alwaysActive: at < 0, relief: true, clamp: isBlend && typeof TerrainBuilder !== 'undefined' ? TerrainBuilder.roadCut : null, uvs: !isTrim });      // (degradê: rente ao terreno cortado junto da pista)
             this.meshes.push(mesh);
             if (isBlend) mesh.hasVertexAlpha = true;                                         // (o alfa por vértice é o degradê da faixa: GroundBlend)
             if (key === 'veg_hi') {                                                          // copas: desenham DEPOIS de pedestres, carros e sprites do chao (que nao escrevem profundidade), sempre por cima
