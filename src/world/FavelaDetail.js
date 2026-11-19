@@ -20,11 +20,14 @@ const FavelaDetail = {
 		for (const blk of CityGrid.blocks) if (blk.district === 'favela') for (const l of blk.lots) if (!l.safehouse && !l.landmark) lots.push(l);
 		this._lotGrid = new Map();
 		for (const l of lots) { const k = this._k((l.x0 + l.x1) / 2, (l.z0 + l.z1) / 2); (this._lotGrid.get(k) || this._lotGrid.set(k, []).get(k)).push(l); }
+		this.inst = new PropInstances();
 		this._roofs(W, lots, rng, st);
+		const nInst = this.inst.count, nMesh = this.inst.build(W, 'fav');
+		st.inst = `${nInst} antenas e ar-condicionados em ${nMesh} malhas instanciadas`;
 		this._wires(W, rng, st);
 		for (const F of Favelas.built) this._ground(W, F, rng, st);
 		MeshBatch.anchor = null;
-		console.log(`[FAVELA] detalhe: ${st.dishes} antenas, ${st.acs} ar-condicionados, ${st.rebar} lajes com ferro, ${st.lines} varais, ${st.drops} fios de gato para as casas, ${st.across} fios cruzando becos, ${st.stones} pedras, ${st.tufts} tufos de mato, ${st.bags} sacos de lixo, ${st.debris} montes de entulho (${(performance.now() - t0).toFixed(0)} ms)`);
+		console.log(`[FAVELA] detalhe: ${st.dishes} antenas, ${st.acs} ar-condicionados, ${st.rebar} lajes com ferro, ${st.lines} varais, ${st.drops} fios de gato para as casas, ${st.across} fios cruzando becos, ${st.stones} pedras, ${st.tufts} tufos de mato, ${st.bags} sacos de lixo, ${st.debris} montes de entulho; ${st.inst} (${(performance.now() - t0).toFixed(0)} ms)`);
 	},
 	_k(x, z) { return Math.floor(x / 16) * 65536 + Math.floor(z / 16); },
 	_lotsNear(x, z, r) {
@@ -41,26 +44,25 @@ const FavelaDetail = {
 		for (const l of lots) {
 			const { x0, z0, x1, z1 } = l, H = l.height, w = x1 - x0, d = z1 - z0, b = W._batch('trim', x0, z0);
 			if (w < 2 || d < 2) continue;
-			MeshBatch.anchor = WorldBuilder.lotAnchor(l);
+			const A = MeshBatch.anchor = WorldBuilder.lotAnchor(l);
 			const slab = l.roof.startsWith('slab') || l.roof.startsWith('laje');
-			// antena parabólica (gatonet): no telhado, num canto, virada para o céu do norte (o satélite)
+			const base = (x, z) => A ? A.h : typeof Relief !== 'undefined' && Relief.on ? Relief.at(x, z) : 0;      // (a altura que o lote daria à peça)
+			// antena parabólica (gatonet): no telhado, num canto, virada para o céu do norte (o satélite). INSTÂNCIA (this.inst): o
+			// modelo é montado uma vez e cada antena é só uma matriz — giro, tamanho e lugar
 			if (rng() < 0.38) {
 				const cx = rng() < 0.5 ? x0 + 0.6 : x1 - 0.6, cz = rng() < 0.5 ? z0 + 0.6 : z1 - 0.6, az = (rng() - 0.5) * 1.4;
-				this.dish(b, cx, H, cz, Math.sin(az), Math.cos(az), 0.42 + rng() * 0.18, rng() < 0.3 ? [0.32, 0.5, 0.78] : [0.86, 0.86, 0.84]);
+				const r = 0.42 + rng() * 0.18, blue = rng() < 0.3;
+				this.inst.add(blue ? 'dishB' : 'dishW', blue ? this._mkDishB : this._mkDishW, cx, base(cx, cz) + H, cz, az, r / 0.5);
 				st.dishes++;
 			} else if (rng() < 0.15) {                                                   // ou presa na parede, num suporte
 				const side = Math.floor(rng() * 4), p = this._wallPt(l, side, rng()), y = Math.min(H - 0.6, 2.2 + rng() * 2);
-				b.tube([p.x, y, p.z], [p.x + p.nx * 0.45, y + 0.15, p.z + p.nz * 0.45], 0.025, 0.025, [0.3, 0.3, 0.32], 4);
-				this.dish(b, p.x + p.nx * 0.5, y, p.z + p.nz * 0.5, p.nx * 0.5 + 0.2, p.nz * 0.5 + 0.8, 0.36, [0.86, 0.86, 0.84], true);
+				this.inst.add('dishWall', this._mkDishWall, p.x, base(p.x, p.z) + y, p.z, Math.atan2(p.nx, p.nz));
 				st.dishes++;
 			}
-			// ar-condicionado pendurado na parede (e o pinga-pinga)
+			// ar-condicionado pendurado na parede (e o pinga-pinga) — instância, como a antena
 			if (rng() < 0.22 && H > 2.8) {
 				const side = Math.floor(rng() * 4), p = this._wallPt(l, side, 0.2 + rng() * 0.6), y = 2.0 + Math.floor(rng() * Math.max(1, (H - 2.6) / 3)) * 3;
-				const cx = p.x + p.nx * 0.3, cz = p.z + p.nz * 0.3;
-				b.obox(cx, cz, -p.nz, p.nx, 0.42, 0.28, y, y + 0.55, [0.88, 0.88, 0.86]);
-				this.disc(b, [cx + p.nx * 0.29, y + 0.28, cz + p.nz * 0.29], [p.nx, 0, p.nz], 0.2, [0.25, 0.26, 0.28]);
-				b.tube([cx + p.nx * 0.1, y, cz + p.nz * 0.1], [cx + p.nx * 0.12, y - 0.6, cz + p.nz * 0.12], 0.012, 0.012, [0.9, 0.9, 0.9], 3);
+				this.inst.add('ac', this._mkAc, p.x, base(p.x, p.z) + y, p.z, Math.atan2(p.nx, p.nz));
 				st.acs++;
 			}
 			// laje: ferros de espera nos cantos (o andar que ainda vai subir) e varal com roupa
@@ -78,6 +80,18 @@ const FavelaDetail = {
 			}
 		}
 		MeshBatch.anchor = null;
+	},
+	// Os modelos das instâncias (na origem; +Z = para fora da parede, ou para onde a antena aponta).
+	_mkDishW(b) { FavelaDetail.dish(b, 0, 0, 0, 0, 1, 0.5, [0.86, 0.86, 0.84]); },
+	_mkDishB(b) { FavelaDetail.dish(b, 0, 0, 0, 0, 1, 0.5, [0.32, 0.5, 0.78]); },
+	_mkDishWall(b) {
+		b.tube([0, 0, 0], [0, 0.15, 0.45], 0.025, 0.025, [0.3, 0.3, 0.32], 4);
+		FavelaDetail.dish(b, 0, 0, 0.5, 0.2, 1, 0.36, [0.86, 0.86, 0.84], true);
+	},
+	_mkAc(b) {
+		b.obox(0, 0.3, -1, 0, 0.42, 0.28, 0, 0.55, [0.88, 0.88, 0.86]);
+		FavelaDetail.disc(b, [0, 0.28, 0.59], [0, 0, 1], 0.2, [0.25, 0.26, 0.28]);
+		b.tube([0, 0, 0.4], [0, -0.6, 0.42], 0.012, 0.012, [0.9, 0.9, 0.9], 3);
 	},
 	// ponto no pé da parede `side` (0 norte, 1 sul, 2 leste, 3 oeste) a uma fração t dela; (nx, nz) = normal para fora
 	_wallPt(l, side, t) {

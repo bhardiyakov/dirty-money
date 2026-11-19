@@ -31,6 +31,7 @@ class WorldBuilder {
     build() {
         const t0 = performance.now();
         RoofCut.reset();                      // (as peças que somem com o jogador embaixo: registradas pelos construtores abaixo)
+        if (typeof Wires !== 'undefined') Wires.begin();      // (a fiação vira fitas na tela — render/Wires.js; montada antes do _flush)
         this.T = TileFactory.create(this.scene);
         this.props = PropSprites.create(this.scene);
         this._createMaterials();
@@ -64,6 +65,7 @@ class WorldBuilder {
         StreetDetail.build(this);             // asfalto gasto, pintura do chão, placas, lombadas, pontos de ônibus, defensas, fiação (world/StreetDetail.js)
         Plantations.build(this);              // eucaliptais de beira de rodovia (world/Plantations.js)
         FavelaDetail.build(this);             // gatonet, ar-condicionado, ferros de laje, varais, fiação embolada, pedras com mato, lixo (world/FavelaDetail.js)
+        if (typeof Wires !== 'undefined') Wires.build(this);
         this._flush();
         HouseView.build(this);                // a safe house do protagonista (paredes, telhado, porta e o corte do interior)
         this.street.addSigns(StreetDetail.signs);
