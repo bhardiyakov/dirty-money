@@ -34,8 +34,42 @@ const RuralArt = {
 			else t.obox(s, (b0 + b1) / 2, 0, 1, (b1 - b0) / 2 - 0.2, 0.32, 0.04, 0.16, this.SOIL, (b1 - b0) / 2 - 0.25, 0.18);
 			for (let u = b0 + 0.45; u < b1 - 0.3; u += step * (0.85 + rng() * 0.3)) {
 				const [qx, qz] = alongX ? [u, s] : [s, u];
-				this['_' + crop](t, qx, 0.14, qz, rng);
+				// (a planta não entra no lote: vira uma INSTÂNCIA — buildInstances. Montada folha por folha, a roça tinha 1,6 milhão de
+				// vértices na placa de vídeo; instanciada, ~3 mil por variante e 64 bytes por pé)
+				(this._inst || (this._inst = [])).push({ crop, x: qx, z: qz, a: rng() * 6.283, v: Math.floor(rng() * 3) });
 			}
+		}
+	},
+	// As plantas instanciadas (WorldBuilder._pieces, depois de todas as peças): para cada planta × variante × pedaço do mapa, UMA malha
+	// pequena (o pé modelado uma vez) com as instâncias dela (posição no relevo e giro) — o recorte por pedaço continua valendo.
+	buildInstances(W) {
+		const L = this._inst;
+		this._inst = null;
+		if (!L || !L.length) return;
+		const C = Config.world.trimChunk || Config.world.detailChunk || 64, groups = new Map();
+		for (const q of L) {
+			const k = q.crop + '|' + q.v + '|' + Math.floor(q.x / C) + ',' + Math.floor(q.z / C);
+			let g = groups.get(k);
+			if (!g) groups.set(k, g = []);
+			g.push(q);
+		}
+		const rel = typeof Relief !== 'undefined' && Relief.on;
+		for (const [k, list] of groups) {
+			const [crop, v, cell] = k.split('|'), tb = new MeshBatch();
+			this['_' + crop](tb, 0, 0, 0, Pixel.rng(4001 + (+v) * 97 + crop.length * 13));
+			const mesh = tb.build('world_roca_' + crop + v + '@' + cell, W.scene, W.mats.solid, { vertexColors: true, relief: false, alwaysActive: false, receiveShadows: true, uvs: false });
+			if (!mesh) continue;
+			const M = new Float32Array(list.length * 16);
+			list.forEach((q, i) => {
+				const c = Math.cos(q.a), s = Math.sin(q.a), y = 0.14 + (rel ? Relief.at(q.x, q.z) : 0), o = i * 16;
+				M[o] = c; M[o + 2] = -s; M[o + 5] = 1; M[o + 8] = s; M[o + 10] = c;
+				M[o + 12] = q.x; M[o + 13] = y; M[o + 14] = q.z; M[o + 15] = 1;
+			});
+			mesh.thinInstanceSetBuffer('matrix', M, 16, true);
+			mesh.thinInstanceRefreshBoundingInfo(false);
+			mesh.unfreezeWorldMatrix(); mesh.freezeWorldMatrix();
+			W.meshes.push(mesh);
+			if (W.shadow) W.shadow.addShadowCaster(mesh);
 		}
 	},
 	_leaf(t, x, y, z, a, len, up, w, col) {                                     // folha: lâmina fina, inclinada para fora

@@ -25,8 +25,8 @@ const Graphics = {
 	LABEL: { auto: 'Automático', low: 'Low', medium: 'Medium', high: 'High', hd: 'HD' },
 	PRESETS: {
 		low: { renderScale: 0.75, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6 },
-		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 2.4e6 },
-		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 30, chaseFar: 110, hdCar: true, maxPx: 4.2e6 },
+		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 60, chaseFar: 95, maxPx: 2.4e6 },
+		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6 },
 		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true },
 	},
 	// GPUs that cannot carry the high preset (WEBGL_debug_renderer_info): software rasterisers and old mobile/integrated chips.
@@ -136,6 +136,9 @@ const Graphics = {
 		this._crowd(p.crowd);
 		// câmera de perseguição: até onde se vê dirigindo (a névoa de distância começa na metade) — o horizonte custa desenhos e triângulos
 		if (A.char3d && A.char3d.npc) A.char3d.npc.nearDist = p.npcNear || 17;      // (TODOS os NPCs em 3D — art/Char3D.js; o nível gráfico decide até onde vai o modelo cheio)
+		// (personagens em 3D: as folhas 2,5D só servem a quem ainda é desenhado nelas — pilotos de moto, o instante antes do modelo 3D
+		// chegar —, então o orçamento delas na placa cai para no máximo 128 MB; antes elas ocupavam ~630 MB no High sem ninguém ver)
+		if (A.char3d && A.char3d.on !== false && !/[?&]boneco=2d\b/.test(typeof location !== 'undefined' ? location.search : '')) A.vramMB = Math.min(A.vramMB, 128);
 		A.hdCar = !!p.hdCar;                                       // (o carro dirigido em alta definição: ~50 mil triângulos — Game._hdDrive)
 		if (p.chaseFar && Config.camera.chase) { Config.camera.chase.far = p.chaseFar; Config.camera.chase.near = Math.round(p.chaseFar * 0.45); }
 		if (P.lite && typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // (no frosted-glass panels: ver Theme)

@@ -3,7 +3,8 @@
 //   · no HORIZONTE: uma faixa logo abaixo da linha do horizonte (e o céu acima dela) fica levemente desfocada — o longe "some" macio;
 //   · em VELOCIDADE MUITO ALTA: o rastro ("trails"), cada quadro novo misturado por cima do anterior. Só aparece dirigindo/voando rápido
 //     (de speedFrom até speedTo m/s a força sobe de 0 até `keep`); andando ou devagar, a imagem fica nítida.
-// A linha do horizonte é a projeção de um ponto no infinito à frente da câmera (sem alocação por quadro). A força do rastro vale para
+// A linha do horizonte é a projeção de um ponto no infinito à frente da câmera (sem alocação por quadro). Com a gradação ligada
+// (render/Lighting.js), o desfoque do horizonte é feito NA passada dela e as duas passadas do rastro só entram na cadeia em velocidade. A força do rastro vale para
 // 30 quadros/s e é corrigida pelo tempo do quadro. Fica antes do CRT (render/CrtFilter.js) na cadeia.
 //   Config.art.trails = { on, keep, speedFrom, speedTo, horizonBand, horizonPx }      `?blur=0` desliga.
 // ============================================================================
@@ -79,16 +80,43 @@ const Trails = {
 		const hist = new BABYLON.PassPostProcess('trailsHist', 1.0, camera, BABYLON.Texture.BILINEAR_SAMPLINGMODE, engine, false);
 		const C = this.C, base = Math.max(0, Math.min(0.9, C.keep !== undefined ? C.keep : 0.5));
 		const s0 = C.speedFrom || 25, s1 = Math.max(s0 + 1, C.speedTo || 40), band = C.horizonBand || 0.22, px = C.horizonPx !== undefined ? C.horizonPx : 2.5;
-		let frames = 0, k = 0;
+		// A gradação (render/Lighting.js) já é uma passada de tela cheia: o desfoque do horizonte vai nela. O RASTRO (as duas passadas
+		// abaixo: misturar com o quadro anterior e guardar o resultado) só entra na cadeia enquanto o carro está rápido — parado, a pé ou
+		// devagar, são duas passadas de tela cheia a menos por quadro.
+		const merged = typeof Lighting !== 'undefined' && !!Lighting.grade;
+		let frames = 0, k = 0, attached = true, idle = 0;
+		const detach = () => {
+			camera.detachPostProcess(hist); camera.detachPostProcess(mix); attached = false;
+			const P = camera._postProcesses;                                                  // (o Babylon deixa null no lugar: tira, para não acumular)
+			for (let i = P.length - 1; i >= 0; i--) if (!P[i]) P.splice(i, 1);
+		};
+		const attach = () => {
+			const at = camera._postProcesses.indexOf(Lighting.grade);                       // (logo antes da gradação: depois do antisserrilhado, se houver)
+			if (at < 0) { camera.attachPostProcess(mix); camera.attachPostProcess(hist); }
+			else { camera.attachPostProcess(mix, at); camera.attachPostProcess(hist, at + 1); }
+			attached = true; frames = 0;
+		};
+		if (merged) detach();
+		scene.onBeforeRenderObservable.add(() => {
+			const dt = Math.min(0.2, engine.getDeltaTime() / 1000);
+			const t = Math.max(0, Math.min(1, (this._speed() - s0) / (s1 - s0))), want = t * t * (3 - 2 * t);
+			k += (want - k) * Math.min(1, dt * 4);
+			const hy = this._horizonY(scene);
+			if (merged) {
+				Lighting.horizon = hy === null ? null : (this._hz || (this._hz = [0, band, px]));
+				if (hy !== null) this._hz[0] = hy;
+				idle = k < 0.01 ? idle + dt : 0;
+				if (!attached && k >= 0.01) attach();
+				else if (attached && idle > 1) detach();
+			}
+			this._k = k; this._hy = hy;
+		});
 		mix.onApply = (effect) => {
 			effect.setTextureFromPostProcessOutput('histSampler', hist);
 			const dt = Math.min(0.2, engine.getDeltaTime() / 1000);
-			// (a força acompanha a velocidade suavemente: sem o rastro "ligar" de uma vez)
-			const t = Math.max(0, Math.min(1, (this._speed() - s0) / (s1 - s0))), want = t * t * (3 - 2 * t);
-			k += (want - k) * Math.min(1, dt * 4);
-			effect.setFloat('keep', frames++ < 2 || k < 0.01 ? 0 : Math.pow(base * k, dt * 30));      // (os 2 primeiros quadros: o histórico ainda está vazio)
-			const hy = this._horizonY(scene);
-			effect.setFloat3('horizon', hy === null ? 2 : hy, band, hy === null ? 0 : px);
+			effect.setFloat('keep', frames++ < 2 || this._k < 0.01 ? 0 : Math.pow(base * this._k, dt * 30));      // (os 2 primeiros quadros: o histórico ainda está vazio)
+			const hy = this._hy;
+			effect.setFloat3('horizon', hy === null || hy === undefined ? 2 : hy, band, hy === null || hy === undefined || merged ? 0 : px);
 			effect.setFloat2('texel', 1 / mix.width, 1 / mix.height);
 		};
 		mix.onSizeChangedObservable.add(() => { frames = 0; });                       // (janela mudou de tamanho: histórico novo, vazio)

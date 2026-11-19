@@ -27,6 +27,8 @@ const Lighting = {
 	get flags() { return this._flags || (this._flags = this._url() || { ceu: !!Config.light.sky, cor: !!Config.light.grade }); },
 
 	grade: null,              // pós-processamento da gradação (GRADE_FS)
+	horizon: null,            // [y do horizonte (UV), faixa (UV), raio (px)] — o desfoque do horizonte (render/Trails.js), ou null
+	crt: null,                // os parâmetros da TV de tubo (render/CrtFilter.js), ou null
 	FX_DEFINE: '#define FX\n',
 	_fxOn: false, _fxEffect: null,
 
@@ -46,8 +48,15 @@ const Lighting = {
 			const T = Config.light.gradeParams;
 			BABYLON.Effect.ShadersStore.luzCorFragmentShader = Lighting.GRADE_FS;
 			const soft = !(typeof location !== 'undefined' && /[?&]suave=0\b/.test(location.search));      // (`?suave=0`: sem o desfoque, para comparar)
-			const t = this.grade = new BABYLON.PostProcess('luzCor', 'luzCor', ['contrast', 'saturation', 'texel', 'soften', 'tilt', 'bloom', 'lift', 'roll', 'warm', 'vig', 'fx'], null, 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
+			const t = this.grade = new BABYLON.PostProcess('luzCor', 'luzCor', ['contrast', 'saturation', 'texel', 'soften', 'tilt', 'bloom', 'lift', 'roll', 'warm', 'vig', 'fx', 'horizon', 'crt', 'crtAb', 'screen'], null, 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
 			t.onApply = (e) => {
+				// (a mesma passada faz o desfoque do HORIZONTE — render/Trails.js — e a TV de tubo — render/CrtFilter.js —: antes eram
+				// três passadas de tela cheia a mais por quadro)
+				const H = this.horizon, C = this.crt;
+				e.setFloat3('horizon', H ? H[0] : 2, H ? H[1] : 0.2, H ? H[2] : 0);
+				if (C) { e.setFloat4('crt', C.curvature, C.scanlines, C.lineScale, C.vignette); e.setFloat('crtAb', C.aberration || 0); }
+				else { e.setFloat4('crt', -1, 0, 0, 0); e.setFloat('crtAb', 0); }
+				e.setFloat2('screen', t.width, t.height);
 				e.setFloat('contrast', T.contrast); e.setFloat('saturation', T.saturation);
 				e.setFloat2('texel', 1 / Math.max(1, t.width), 1 / Math.max(1, t.height));
 				e.setFloat('soften', soft ? T.soften : 0); e.setFloat('tilt', soft ? T.tilt : 0); e.setFloat('bloom', soft ? T.bloom : 0);
@@ -78,37 +87,54 @@ const Lighting = {
 		uniform sampler2D textureSampler;
 		uniform float contrast, saturation, soften, tilt, bloom, lift, roll, warm, vig;
 		uniform vec2 texel;
+		uniform vec3 horizon;          // y do horizonte (UV), faixa (UV), raio do desfoque (px) - render/Trails.js
+		uniform vec4 crt;              // TV de tubo (render/CrtFilter.js): curvatura (menor que 0 = desligada), scanlines, linhas por px, vinheta
+		uniform float crtAb;           // aberração cromática nos cantos
+		uniform vec2 screen;           // tamanho da saída (px)
 		#ifdef FX
 		uniform vec4 fx;
 		#endif
 		void main(void) {
-			vec4 c0 = texture2D(textureSampler, vUV);
+			vec2 uv = vUV;
+			if (crt.x >= 0.0) {                                                        // a TV de tubo: a imagem curva, preto fora do vidro
+				vec2 bc = vUV * 2.0 - 1.0;
+				bc *= 1.0 + crt.x * dot(bc, bc);
+				uv = bc * 0.5 + 0.5;
+				if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+			}
+			vec4 c0 = texture2D(textureSampler, uv);
 			vec3 c = c0.rgb;
-			vec2 q = vUV - 0.5;
+			vec2 q = uv - 0.5;
 			float rr = dot(q, q);
-			float top = smoothstep(0.45, 1.0, vUV.y), r = 0.9 + tilt * top * top;
-			if (soften + bloom + tilt > 0.0) {
+			float hz = horizon.z * smoothstep(horizon.x - horizon.y, horizon.x, uv.y);     // o horizonte: o longe "some" macio
+			float top = smoothstep(0.45, 1.0, uv.y), r = 0.9 + tilt * top * top + hz;
+			if (soften + bloom + tilt + hz > 0.0) {
 				vec3 s = vec3(0.0), b = vec3(0.0);
 				for (int k = 0; k < 8; k++) {
 					float a = float(k) * 0.785398 + 0.39;
-					vec3 t = texture2D(textureSampler, vUV + vec2(cos(a), sin(a)) * texel * r * (mod(float(k), 2.0) < 0.5 ? 1.0 : 0.55)).rgb;
+					vec3 t = texture2D(textureSampler, uv + vec2(cos(a), sin(a)) * texel * r * (mod(float(k), 2.0) < 0.5 ? 1.0 : 0.55)).rgb;
 					s += t; b += max(t - 0.62, 0.0);
 				}
 				s /= 8.0;
-				c = mix(c, s, clamp(soften + top * top * 0.85 * step(0.001, tilt), 0.0, 1.0));
+				c = mix(c, s, clamp(soften + top * top * 0.85 * step(0.001, tilt) + min(hz, 1.0) * 0.8, 0.0, 1.0));
 				c += b / 8.0 * bloom;
+			}
+			if (crtAb > 0.0 && crt.x >= 0.0) {                                         // (separação de cores nos cantos do tubo)
+				vec2 sh = q * crtAb * dot(q, q) * 4.0;
+				c.r = mix(c.r, texture2D(textureSampler, uv + sh).r, 0.8);
+				c.b = mix(c.b, texture2D(textureSampler, uv - sh).b, 0.8);
 			}
 			#ifdef FX
 			if (fx.x > 0.003) {                                                         // VELOCIDADE: as bordas esticam para fora (o centro, nítido)
 				float edge = smoothstep(0.03, 0.4, rr), k = fx.x * edge * 0.05;
 				vec3 a = c;
-				for (int i = 1; i <= 5; i++) a += texture2D(textureSampler, vUV - q * k * float(i) * 0.2).rgb;
+				for (int i = 1; i <= 5; i++) a += texture2D(textureSampler, uv - q * k * float(i) * 0.2).rgb;
 				c = mix(c, a / 6.0, clamp(fx.x * 1.1, 0.0, 0.85) * edge);
 			}
 			if (fx.y > 0.003) {                                                         // IMPACTO: as cores se separam nas bordas por um instante
 				vec2 o = q * fx.y * 0.035;
-				c.r = mix(c.r, texture2D(textureSampler, vUV + o).r, 0.85);
-				c.b = mix(c.b, texture2D(textureSampler, vUV - o).b, 0.85);
+				c.r = mix(c.r, texture2D(textureSampler, uv + o).r, 0.85);
+				c.b = mix(c.b, texture2D(textureSampler, uv - o).b, 0.85);
 			}
 			#endif
 			c = (c - 0.5) * contrast + 0.5;
@@ -128,6 +154,11 @@ const Lighting = {
 				c.r += fx.z * pulse * 0.09 * rim;
 			}
 			#endif
+			if (crt.x >= 0.0) {                                                        // scanlines presas às linhas da saída e a vinheta do tubo
+				float line = 0.5 + 0.5 * cos(uv.y * screen.y * crt.z * 6.2831853);
+				c *= 1.0 - crt.y * (1.0 - line);
+				c *= 1.0 - crt.w * smoothstep(0.35, 1.25, rr * 4.0);
+			}
 			gl_FragColor = vec4(clamp(c, 0.0, 1.0), c0.a);
 		}`,
 

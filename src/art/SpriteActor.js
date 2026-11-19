@@ -456,6 +456,7 @@ class SpriteActor {
 	// (atributo fr2: o retângulo dele + o peso), então a pose muda suave em vez do salto seco. Sem o gráfico suave, peso 0. Sempre na
 	// direção e na página do que está DESENHADO (esperando a página do clipe: peso 0). Inclinação (setLean): mistura linear contínua.
 	_blendNext(c) {
+		if (this._ghost) return;                                          // (desenhado em 3D: nada a misturar — nem buffer a reenviar)
 		const n = Math.min(c.frames, c.pk.n), R = this._fr2, P = this._pg;
 		let w = 0, f2 = this.frame;
 		if (this._drawClip === c && P && P.tex && typeof Smooth !== 'undefined' && Smooth.on && n > 1 && (c.loop || this.frame < n - 1)) {
@@ -486,7 +487,7 @@ class SpriteActor {
 		const c = this.clip;
 		if (!c) return;
 		if (c.vector) { this._setFr(this.mesh, c.pk, this.frame, this._fr); this._applyOverlay(); return; }
-		if (c.npc) { this._npcDraw(c); return; }
+		if (c.npc) { if (!this._ghost) this._npcDraw(c); else if (this._wait) { this._wait = null; NpcArt._waiters.delete(this); } return; }      // (_ghost: desenhado em 3D — Char3D)
 		const F = c.frame;
 		const u0 = (this.dir * F) / c.W, u1 = ((this.dir + 1) * F) / c.W;
 		const v0 = (this.frame * F) / c.H, v1 = ((this.frame + 1) * F) / c.H;

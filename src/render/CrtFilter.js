@@ -4,8 +4,9 @@
 //   • Resolution: the internal resolution is scaled by `renderScale` through the engine's own path (Config.perf.renderScale →
 //     GameEngine._applyScale → engine.setHardwareScalingLevel), so window resizes and AutoQuality keep the reduction instead of
 //     undoing it. The browser upscales the smaller canvas: real fill-rate savings on high-resolution PC monitors.
-//   • Post-process (one fullscreen pass, last in the camera chain): barrel distortion with black outside the tube, soft horizontal
-//     scanlines locked to the output rows (no flicker), edge vignette and a light chromatic aberration that grows toward the edges.
+//   • Post-process: barrel distortion with black outside the tube, soft horizontal scanlines locked to the output rows (no flicker),
+//     edge vignette and a light chromatic aberration that grows toward the edges. It runs INSIDE the colour-grade pass
+//     (render/Lighting.js — no extra fullscreen pass); only without the grade (`?luz=0`) it gets a pass of its own, last in the chain.
 //   • No per-frame allocations: uniforms are written in onApply from cached numbers.
 //
 //   const crt = CrtFilter.attach(game.camera.camera, game.gameEngine, { renderScale: 0.75 });
@@ -111,6 +112,12 @@ class CrtPass {
 
     _createPass() {
         const engine = this.gameEngine.engine, s = this.settings;
+        // The colour grade (render/Lighting.js) is already a fullscreen pass at the end of the chain: the tube look rides on it
+        // (one pass less per frame). Without the grade (`?luz=0`), the CRT keeps its own pass.
+        if (typeof Lighting !== 'undefined' && Lighting.grade) {
+            Lighting.crt = s;
+            return { dispose: () => { if (Lighting.crt === s) Lighting.crt = null; } };
+        }
         const pass = new BABYLON.PostProcess(
             'crt', 'crt',
             ['screenSize', 'curvature', 'scanlines', 'lineScale', 'vignette', 'aberration'],

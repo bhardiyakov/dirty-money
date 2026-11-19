@@ -318,6 +318,9 @@ const NpcArt = {
 	_heroNeeds(pin) {
 		const g = typeof game !== 'undefined' ? game : null, pl = g && g.player, need = new Set();
 		if (!pl || !pl.position) { for (const k of this.HERO_LATER) need.add(k); return { groups: need, arms: true }; }
+		// (o protagonista desenhado em 3D — Char3D, o ator 2,5D "fantasma": as folhas dele não ficam presas nem são pedidas de volta; se
+		// voltar ao 2,5D, o próprio ator pede o que precisa)
+		if (pl.actor && pl.actor._ghost) return { groups: need, arms: false, ghost: true };
 		const now = this.now, p = pl.position;
 		if (pl.swimming || (pl.depth || 0) > 0 || this._nearWater(p.x, p.z)) this._waterT = now;
 		if (now - (this._waterT === undefined ? -1e9 : this._waterT) < 60) need.add('water');
@@ -330,7 +333,7 @@ const NpcArt = {
 		}
 		return out;
 	},
-	_heroHolds(P, pin, need) { return pin.includes(P.A.id) && (!this.HERO_LATER.includes(P.g) || need.groups.has(P.g)) && (need.arms || !this.ARMS_ATLAS.test(P.A.id)); },
+	_heroHolds(P, pin, need) { return !need.ghost && pin.includes(P.A.id) && (!this.HERO_LATER.includes(P.g) || need.groups.has(P.g)) && (need.arms || !this.ARMS_ATLAS.test(P.A.id)); },
 	// Água a menos de ~20 u (o mar, o canal e a Lagoa): amostra o centro e 8 pontos em volta.
 	_nearWater(x, z) {
 		if (typeof WorldMap === 'undefined') return true;
