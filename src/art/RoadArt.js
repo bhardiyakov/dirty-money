@@ -405,6 +405,7 @@ const RoadArt = {
 		return H;
 	},
 	wire(b, p, q, sag, color = [0.07, 0.07, 0.08], r = 0.02, n = 6) {
+		if (typeof Wires !== 'undefined' && Wires.collecting) { Wires.add(p, q, sag, color, r, n); return; }      // (na montagem do mundo: fita contínua — render/Wires.js)
 		let prev = p;
 		for (let k = 1; k <= n; k++) {
 			const t = k / n, y = p[1] + (q[1] - p[1]) * t - sag * 4 * t * (1 - t);

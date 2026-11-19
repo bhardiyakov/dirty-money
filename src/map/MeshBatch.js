@@ -273,3 +273,52 @@ class MeshBatch {
         return mesh;
     }
 }
+
+// ============================================================================
+// PropInstances — peças REPETIDAS (antenas, ar-condicionados…) como INSTÂNCIAS: cada tipo é montado UMA vez num MeshBatch, na origem
+// (make(b)), e cada cópia é só uma matriz (64 bytes) — giro em Y, escala e posição. build() faz uma malha por tipo × pedaço do mapa
+// (Config.world.trimChunk: o recorte por câmera continua valendo), com o material de cor sólida e projetando sombra.
+//   const I = new PropInstances(); I.add('ac', (b) => …, x, y, z, giro, escala); …; I.build(W, 'favela');
+// ============================================================================
+class PropInstances {
+    constructor() { this.kinds = new Map(); }
+    add(key, make, x, y, z, yaw = 0, s = 1) {
+        let K = this.kinds.get(key);
+        if (!K) this.kinds.set(key, K = { make, list: [] });
+        K.list.push(x, y, z, yaw, s);
+    }
+    get count() { let n = 0; for (const K of this.kinds.values()) n += K.list.length / 5; return n; }
+    build(W, name, material = W.mats.solid) {
+        const C = Config.world.trimChunk || 64;
+        let meshes = 0;
+        for (const [key, K] of this.kinds) {
+            const L = K.list, cells = new Map();
+            for (let i = 0; i < L.length; i += 5) {
+                const c = Math.floor(L[i] / C) + ',' + Math.floor(L[i + 2] / C);
+                let g = cells.get(c);
+                if (!g) cells.set(c, g = []);
+                g.push(i);
+            }
+            for (const [c, ids] of cells) {
+                const tb = new MeshBatch();
+                K.make(tb);
+                const mesh = tb.build(`world_${name}_${key}@${c}`, W.scene, material, { vertexColors: true, relief: false, alwaysActive: false, receiveShadows: true, uvs: false });
+                if (!mesh) continue;
+                const M = new Float32Array(ids.length * 16);
+                ids.forEach((i, j) => {
+                    const cy = Math.cos(L[i + 3]) * L[i + 4], sy = Math.sin(L[i + 3]) * L[i + 4], o = j * 16;
+                    M[o] = cy; M[o + 2] = -sy; M[o + 5] = L[i + 4]; M[o + 8] = sy; M[o + 10] = cy;      // (+Z do modelo vira (sen giro, cos giro))
+                    M[o + 12] = L[i]; M[o + 13] = L[i + 1]; M[o + 14] = L[i + 2]; M[o + 15] = 1;
+                });
+                mesh.thinInstanceSetBuffer('matrix', M, 16, true);
+                mesh.thinInstanceRefreshBoundingInfo(false);
+                mesh.unfreezeWorldMatrix(); mesh.freezeWorldMatrix();
+                W.meshes.push(mesh);
+                if (W.shadow) W.shadow.addShadowCaster(mesh);
+                meshes++;
+            }
+        }
+        this.kinds.clear();
+        return meshes;
+    }
+}
