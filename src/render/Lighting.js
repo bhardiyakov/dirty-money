@@ -95,12 +95,16 @@ const Lighting = {
 		uniform vec4 fx;
 		#endif
 		void main(void) {
+			// (NENHUM desvio que varie de pixel para pixel em volta das leituras de textura - nem sair cedo: o Chrome no Windows
+			// traduz o shader para Direct3D, que recusa ler textura num laço dentro de um desvio assim, e a tela ficava só no azul do céu)
 			vec2 uv = vUV;
+			float inside = 1.0;
 			if (crt.x >= 0.0) {                                                        // a TV de tubo: a imagem curva, preto fora do vidro
 				vec2 bc = vUV * 2.0 - 1.0;
 				bc *= 1.0 + crt.x * dot(bc, bc);
 				uv = bc * 0.5 + 0.5;
-				if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+				inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+				uv = clamp(uv, 0.0, 1.0);
 			}
 			vec4 c0 = texture2D(textureSampler, uv);
 			vec3 c = c0.rgb;
@@ -108,7 +112,7 @@ const Lighting = {
 			float rr = dot(q, q);
 			float hz = horizon.z * smoothstep(horizon.x - horizon.y, horizon.x, uv.y);     // o horizonte: o longe "some" macio
 			float top = smoothstep(0.45, 1.0, uv.y), r = 0.9 + tilt * top * top + hz;
-			if (soften + bloom + tilt + hz > 0.0) {
+			if (soften + bloom + tilt + horizon.z > 0.0) {                             // (só uniformes: o mesmo caminho em todos os pixels)
 				vec3 s = vec3(0.0), b = vec3(0.0);
 				for (int k = 0; k < 8; k++) {
 					float a = float(k) * 0.785398 + 0.39;
@@ -159,8 +163,32 @@ const Lighting = {
 				c *= 1.0 - crt.y * (1.0 - line);
 				c *= 1.0 - crt.w * smoothstep(0.35, 1.25, rr * 4.0);
 			}
-			gl_FragColor = vec4(clamp(c, 0.0, 1.0), c0.a);
+			gl_FragColor = vec4(clamp(c, 0.0, 1.0) * inside, c0.a);
 		}`,
+
+	// GUARDA DO PÓS-PROCESSAMENTO: uma passada cujo shader não compila nesta placa (cada navegador traduz o GLSL do seu jeito — o
+	// Chrome no Windows, para Direct3D) sai da cadeia, em vez de deixar a tela só com a cor do céu: sem a imagem final, nada aparece.
+	// Confere nos primeiros 60 s (as variantes compilam na carga) e avisa no console qual saiu e por quê.
+	guard(game) {
+		const cam = game.camera.camera, scene = game.scene, t0 = performance.now();
+		const obs = scene.onBeforeRenderObservable.add(() => {
+			for (const pp of cam._postProcesses) {
+				const e = pp && pp.getEffect && pp.getEffect(), err = e && e.getCompilationError && e.getCompilationError();
+				if (!err) continue;
+				console.error(`[PÓS] a passada "${pp.name}" não compilou nesta placa — saiu da cadeia:`, err);
+				cam.detachPostProcess(pp);
+				if (pp === this.grade) {
+					this.grade = null; this.crt = null; this.horizon = null;
+					if (game.crt && game.crt.enabled) { game.crt.setEnabled(false); game.crt.setEnabled(true); }      // (a TV de tubo volta à passada própria)
+				} else if (game.crt && game.crt.postProcess === pp) game.crt.setEnabled(false);
+				const P = cam._postProcesses;
+				for (let i = P.length - 1; i >= 0; i--) if (!P[i]) P.splice(i, 1);
+				pp.dispose(cam);
+				break;
+			}
+			if (performance.now() - t0 > 60000) scene.onBeforeRenderObservable.remove(obs);
+		});
+	},
 
 	// LUZ DO CÉU (DayNight.apply, com os parâmetros da hora já com o tempo): com o sol alto (peso `day`), céu azulado em cima, chão
 	// quente embaixo, sol mais quente e sombra mais funda. O peso segue a ALTURA do sol: some no fim da tarde (a luz dourada fica como
