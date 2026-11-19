@@ -123,8 +123,22 @@ class MeshBatch {
             const t0 = i / seg * Math.PI * 2, t1 = (i + 1) / seg * Math.PI * 2, tm = (t0 + t1) / 2;
             const n = [u[0] * Math.cos(tm) + v[0] * Math.sin(tm), u[1] * Math.cos(tm) + v[1] * Math.sin(tm), u[2] * Math.cos(tm) + v[2] * Math.sin(tm)];
             const A = ring(a, r0, t0), B = ring(a, r0, t1), C = ring(b, r1, t1), D = ring(b, r1, t0);
-            this.tri(A, B, C, n, uv3, color); this.tri(A, C, D, n, uv3, color);
+            this._side(A, B, C, D, n, color);
         }
+    }
+
+    // Um lado do tubo: o quadrilátero A-B-C-D (dois triângulos A-B-C e A-C-D) com 4 vértices — a diagonal A-C compartilhada. Antes eram
+    // dois tri() soltos (6 vértices): o mesmo desenho com um terço a menos de vértices na placa. Virado para `n`, como o tri().
+    _side(A, B, C, D, n, color) {
+        const cx = (B[1] - A[1]) * (C[2] - A[2]) - (B[2] - A[2]) * (C[1] - A[1]);
+        const cy = (B[2] - A[2]) * (C[0] - A[0]) - (B[0] - A[0]) * (C[2] - A[2]);
+        const cz = (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]);
+        const keep = -(cx * n[0] + cy * n[1] + cz * n[2]) >= 0, base = this.pos.length / 3;
+        this.pos.push(A[0], A[1], A[2], B[0], B[1], B[2], C[0], C[1], C[2], D[0], D[1], D[2]);
+        this._anc(4);
+        for (let k = 0; k < 4; k++) { this.nor.push(n[0], n[1], n[2]); this.col.push(color[0], color[1], color[2], color.length > 3 ? color[3] : 1); this.uv.push(0, 0); }
+        if (keep) this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+        else this.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
     }
 
     // Caixa girada no chão: centro (cx, cz), eixo (ux, uz) unitário, meio-comprimento hl e meia-largura hw na base (y0) e

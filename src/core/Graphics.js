@@ -137,8 +137,8 @@ const Graphics = {
 		// câmera de perseguição: até onde se vê dirigindo (a névoa de distância começa na metade) — o horizonte custa desenhos e triângulos
 		if (A.char3d && A.char3d.npc) A.char3d.npc.nearDist = p.npcNear || 17;      // (TODOS os NPCs em 3D — art/Char3D.js; o nível gráfico decide até onde vai o modelo cheio)
 		// (personagens em 3D: as folhas 2,5D só servem a quem ainda é desenhado nelas — pilotos de moto, o instante antes do modelo 3D
-		// chegar —, então o orçamento delas na placa cai para no máximo 192 MB; antes elas ocupavam ~630 MB no High sem ninguém ver)
-		if (A.char3d && A.char3d.on !== false && !/[?&]boneco=2d\b/.test(typeof location !== 'undefined' ? location.search : '')) A.vramMB = Math.min(A.vramMB, 192);
+		// chegar —, então o orçamento delas na placa cai para no máximo 128 MB; antes elas ocupavam ~630 MB no High sem ninguém ver)
+		if (A.char3d && A.char3d.on !== false && !/[?&]boneco=2d\b/.test(typeof location !== 'undefined' ? location.search : '')) A.vramMB = Math.min(A.vramMB, 128);
 		A.hdCar = !!p.hdCar;                                       // (o carro dirigido em alta definição: ~50 mil triângulos — Game._hdDrive)
 		if (p.chaseFar && Config.camera.chase) { Config.camera.chase.far = p.chaseFar; Config.camera.chase.near = Math.round(p.chaseFar * 0.45); }
 		if (P.lite && typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // (no frosted-glass panels: ver Theme)
