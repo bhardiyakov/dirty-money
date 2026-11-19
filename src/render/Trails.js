@@ -85,7 +85,11 @@ const Trails = {
 		// devagar, são duas passadas de tela cheia a menos por quadro.
 		const merged = typeof Lighting !== 'undefined' && !!Lighting.grade;
 		let frames = 0, k = 0, attached = true, idle = 0;
-		const detach = () => { camera.detachPostProcess(hist); camera.detachPostProcess(mix); attached = false; };
+		const detach = () => {
+			camera.detachPostProcess(hist); camera.detachPostProcess(mix); attached = false;
+			const P = camera._postProcesses;                                                  // (o Babylon deixa null no lugar: tira, para não acumular)
+			for (let i = P.length - 1; i >= 0; i--) if (!P[i]) P.splice(i, 1);
+		};
 		const attach = () => {
 			const at = camera._postProcesses.indexOf(Lighting.grade);                       // (logo antes da gradação: depois do antisserrilhado, se houver)
 			if (at < 0) { camera.attachPostProcess(mix); camera.attachPostProcess(hist); }
