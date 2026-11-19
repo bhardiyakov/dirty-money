@@ -160,7 +160,7 @@ const Char3D = {
 		// espaçamento acima de ~2,4 — a arma na mão fica sem ponto nenhum)
 		// (tipos cujo boneco o gerador não monta no espaçamento de longe — chapéu ou cabelo fino demais: "parte vazia" — usam o de perto)
 		const far = lod && !this._fineOnly.has(type);
-		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: far ? N.farSpacing || 2.2 : N.spacing || 1.3, thin: lod === 2 ? N.veryFarThin || 0.4 : lod === 1 && !far ? 0.6 : 1, kind: 'npc' }); M._lod = lod; this._types.set(key, M); }
+		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: far ? N.farSpacing || 2.2 : N.spacing || 1.3, thin: lod === 2 ? N.veryFarThin || 0.22 : lod === 1 ? (far ? N.farThin || 0.75 : 0.5) : 1, kind: 'npc' }); M._lod = lod; this._types.set(key, M); }
 		M._used = performance.now();
 		return M;
 	},
