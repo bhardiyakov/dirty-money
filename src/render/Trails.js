@@ -29,7 +29,7 @@ const Trails = {
 			void main(void) {
 				vec3 now = texture2D(textureSampler, vUV).rgb;
 				float d = horizon.z * smoothstep(horizon.x - horizon.y, horizon.x, vUV.y);
-				if (d > 0.05) {
+				if (horizon.z > 0.0) {                                       // (desvio só por uniforme: o Direct3D do Chrome no Windows recusa o outro)
 					vec2 r = texel * d;
 					vec3 s = now * 2.0;
 					s += texture2D(textureSampler, vUV + r * vec2( 1.0,  0.0)).rgb;
@@ -40,7 +40,7 @@ const Trails = {
 					s += texture2D(textureSampler, vUV + r * vec2(-0.7,  0.7)).rgb;
 					s += texture2D(textureSampler, vUV + r * vec2( 0.7, -0.7)).rgb;
 					s += texture2D(textureSampler, vUV + r * vec2(-0.7, -0.7)).rgb;
-					now = s / 10.0;
+					now = mix(now, s / 10.0, step(0.05, d));
 				}
 				gl_FragColor = vec4(keep > 0.0 ? mix(now, texture2D(histSampler, vUV).rgb, keep) : now, 1.0);
 			}`;

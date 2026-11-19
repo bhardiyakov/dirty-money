@@ -132,6 +132,7 @@ class Game {
 		Water.initMirror(this);                              // reflexo na água (etapa 7): prédios, árvores e carros espelhados
 		this.trails = Trails.attach(this.camera.camera, this.gameEngine.engine);      // o borrão do GTA SA (render/Trails.js) — antes do CRT
 		this.crt = CrtFilter.attach(this.camera.camera, this.gameEngine, { renderScale: 0.75 });      // TV de tubo + resolução interna reduzida (render/CrtFilter.js) — por último na cadeia
+		Lighting.guard(this);                                // passada que não compila nesta placa sai da cadeia (em vez da tela só com o céu)
 		this.minimap = new Minimap('minimap');
 
 		// IA (preenchida de forma assíncrona em _initAI).
