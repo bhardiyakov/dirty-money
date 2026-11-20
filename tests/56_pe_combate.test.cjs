@@ -38,12 +38,21 @@ module.exports = {
         // --- um pedestre parado à frente, a pistola na mão (render parado: a câmera e a tela ficam fixas)
         const ok = await page.evaluate(() => {
             const p = game.player, P = p.position;
-            const n = game.npcManager.npcs.filter((m) => m.alive && !m.rag && !m.free && m.index >= 0 && m.state === 'WANDER')
-                .sort((a, b) => Math.hypot(a.position.x - P.x, a.position.z - P.z) - Math.hypot(b.position.x - P.x, b.position.z - P.z))[0];
+            const L = game.npcManager.npcs.filter((m) => m.alive && !m.rag && !m.free && m.index >= 0 && m.state === 'WANDER')
+                .sort((a, b) => Math.hypot(a.position.x - P.x, a.position.z - P.z) - Math.hypot(b.position.x - P.x, b.position.z - P.z));
+            // um pedestre com um lugar aberto a 7 m dele (à vista, em terra), de onde o jogador olha para ele
+            let n = null, at = null;
+            for (const m of L.slice(0, 12)) {
+                for (let k = 0; k < 8 && !at; k++) {
+                    const a = k * Math.PI / 4, x = m.position.x - Math.sin(a) * 7, z = m.position.z - Math.cos(a) * 7;
+                    if (MapGeo.isLand(x, z) && MapGeo.canWade(x, z) && MapGeo.hasLineOfSight(x, z, m.position.x, m.position.z)) at = { x, z, a };
+                }
+                if (at) { n = m; break; }
+            }
             if (!n) return null;
             n.setSpeed(0); n.fsm.setState({ name: 'IDLE', update() {} });
-            game.player.teleport(new BABYLON.Vector3(n.position.x - 7, 0, n.position.z));
-            p.root.rotation.y = Math.PI / 2;                                  // (de frente para ele: leste)
+            game.player.teleport(new BABYLON.Vector3(at.x, 0, at.z));
+            p.root.rotation.y = at.a;                                         // (de frente para ele)
             game.inventory.give && game.inventory.give('pistol', 60);
             if (!game.inventory.owned('pistol')) return 'sem pistola';
             game.equipWeapon('pistol'); p.action = null;
