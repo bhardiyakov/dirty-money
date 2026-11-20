@@ -66,6 +66,22 @@ async function gameWait(page, seconds, maxReal = seconds * 6000) {
     return page.evaluate(() => window.__gt);
 }
 
+// Avança a LÓGICA do jogo (game._update, passos de 1/20 s) sem esperar o desenho, até cond(arg) valer ou passar `maxGame` s de jogo.
+// O Chromium por software pode levar vários segundos para DESENHAR um quadro (todos os personagens 3D, a cidade inteira): esperar
+// pelo relógio da parede deixava o jogo andar ~1 s em 30. cond roda na página (sem fechamento: só `arg`). true = valeu.
+async function stepUntil(page, cond, arg = null, maxGame = 60) {
+    const src = cond.toString();
+    for (let t = 0; t < maxGame; t++) {
+        const ok = await page.evaluate(([src, arg]) => {
+            const f = new Function('arg', `return (${src})(arg);`);
+            for (let i = 0; i < 20; i++) { if (f(arg)) return true; game._update(0.05); }
+            return !!f(arg);
+        }, [src, arg]);
+        if (ok) return true;
+    }
+    return false;
+}
+
 class Check {
     constructor(name) { this.name = name; this.fails = []; this.notes = []; }
     ok(cond, msg) { if (!cond) this.fails.push(msg); return !!cond; }
@@ -74,4 +90,4 @@ class Check {
     noErrors(errors, where) { const E = errors.filter((e) => !/favicon|Failed to load resource|net::ERR/i.test(e)); this.ok(!E.length, `${where}: ${E.length} erro(s) de JavaScript — ${E.slice(0, 3).join(' || ')}`); errors.length = 0; }
 }
 
-module.exports = { ROOT, playwright, serve, boot, leave, gameWait, Check };
+module.exports = { ROOT, playwright, serve, boot, leave, gameWait, stepUntil, Check };

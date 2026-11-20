@@ -1,5 +1,5 @@
 // Primeiros passos: um jogo novo começa no passo 1 e cada passo conclui pelo jeito normal de jogar (conversar, celular, comer…).
-const { boot } = require('./lib.cjs');
+const { boot, stepUntil } = require('./lib.cjs');
 
 module.exports = {
     name: 'tutorial',
@@ -12,14 +12,14 @@ module.exports = {
         c.ok(/Rosa/.test(s0.gps || ''), `GPS marca a Dona Rosa (${s0.gps})`);
         const talk = async (id) => {
             await page.evaluate((id) => { const A = Personas._anchors(game)[id]; game.dayNight.hour = 3; game.player.teleport(new BABYLON.Vector3(A.x + 1.2, 0, A.z)); game.camera.snapTo(A); }, id);
-            await page.waitForFunction((id) => !!Personas.actors[id], id, { timeout: 30000 }).catch(() => {});
+            await stepUntil(page, (id) => !!Personas.actors[id], id, 30);
             return page.evaluate((id) => { const ok = Personas.interact(game); if (Personas._mp && Personas._mp.open) Personas._mp.close(); return ok; }, id);
         };
-        // O Tutorial confere o passo a cada 0,5 s de JOGO, e o Chromium por software pode levar segundos por quadro logo depois de um
-        // teleporte: espera pelo estado (não por tempo fixo). started(i): o passo i já começou (guardou a referência — ex.: a fome de
-        // antes de comer), antes de fazer a ação dele.
-        const stepAfter = async (n) => { await page.waitForFunction((n) => Tutorial.step >= n, n, { timeout: 30000 }).catch(() => {}); return page.evaluate(() => Tutorial.step); };
-        const started = (i) => page.waitForFunction((i) => !Tutorial.active() || (Tutorial.step === i && Tutorial.STEPS[i]._started), i, { timeout: 30000 }).catch(() => {});
+        // O Tutorial confere o passo a cada 0,5 s de JOGO, e o Chromium por software pode levar segundos para DESENHAR um quadro (ainda
+        // mais logo depois de um teleporte): a lógica do jogo avança direto (stepUntil) até o estado chegar. started(i): o passo i já
+        // começou (guardou a referência — ex.: a fome de antes de comer), antes de fazer a ação dele.
+        const stepAfter = async (n) => { await stepUntil(page, (n) => Tutorial.step >= n, n, 30); return page.evaluate(() => Tutorial.step); };
+        const started = (i) => stepUntil(page, (i) => !Tutorial.active() || (Tutorial.step === i && Tutorial.STEPS[i]._started), i, 30);
         c.ok(await talk('rosa'), 'Dona Rosa aparece (mesmo de madrugada) e dá para conversar');
         c.eq(await stepAfter(1), 1, 'passo 1 (Dona Rosa) concluído');
         c.ok(await talk('ze'), 'Seu Zé aparece e dá para conversar');
@@ -36,7 +36,7 @@ module.exports = {
         await started(5);
         const kits0 = await page.evaluate(() => game.inventory.medkits || 0);
         await page.evaluate(() => { const T = Phone.threads.dentinho || []; const m = T.slice().reverse().find((q) => q.actions && !q.done); if (m) Phone._act(m, 'rivalNo'); });
-        await page.waitForFunction(() => Tutorial.done, null, { timeout: 30000 }).catch(() => {});
+        await stepUntil(page, () => Tutorial.done, null, 30);
         const end = await page.evaluate(() => ({ done: Tutorial.done, kits: game.inventory.medkits || 0, save: JSON.stringify(SaveGame.snapshot(game).tutorial) }));
         c.ok(end.done, 'primeiros passos concluídos');
         c.eq(end.kits, kits0 + 1, 'recompensa final (kit médico)');
