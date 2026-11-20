@@ -4,9 +4,10 @@
 //     o derruba;
 //   • golpe PESADO (chute, taco, cassetete) → ARREMESSADO (Ragdoll com força `knock`): voa, desliza e, se bater numa parede ou num carro
 //     forte o bastante, fica PRENSADO (Ragdoll._move → NPC._wallSplat).
-// Acertar alguém durante a ANTECIPAÇÃO do golpe dele (FightState.windup) é CONTRA-ATAQUE: gasta × counter e cancela o golpe dele.
+// Acertar alguém durante a ANTECIPAÇÃO do golpe dele (FightState.windup) é CONTRA-ATAQUE: gasta × counter e cancela o golpe dele. O golpe
+// logo depois de uma ESQUIVA PERFEITA do jogador (counterHit — Game.onPerfectDodge) também vale contra-ataque.
 // Sem apanhar por regenDelay s, a barra volta regen/s (FightState.update chama tick).
-//   hit(t, kind)      → null (não briga) | { broken, heavy, counter } — já descontado
+//   hit(t, kind, counterHit) → null (não briga) | { broken, heavy, counter } — já descontado
 //   stunned(t)        atordoado agora?        prone(t)   caído no chão (deslizando ou parado)?
 // ============================================================================
 
@@ -18,10 +19,10 @@ const Posture = {
 	},
 	// (só quem está numa briga — FightState — tem a barra; o pedestre comum continua como antes)
 	_fight(t) { const S = t && t.fsm && t.fsm.current; return S && S.name === 'FIGHT' ? S : null; },
-	hit(t, kind) {
+	hit(t, kind, counterHit = false) {
 		const S = this._fight(t);
 		if (!S) return null;
-		const C = Config.posture, counter = S.windup > 0, heavy = !!this.HEAVY[kind];
+		const C = Config.posture, counter = S.windup > 0 || counterHit, heavy = !!this.HEAVY[kind];
 		if (t._poise == null) t._poise = this.maxOf(t);
 		const cost = (C.cost[kind] || C.cost.punch) * (counter ? C.counter : 1);
 		t._poise -= cost; t._poiseIdle = 0;

@@ -15,7 +15,7 @@ class PauseMenu {
 	static get TABS() {
 		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['save', '💾 Salvar'], ['settings', '⚙️ Ajustes']];
 	}
-	static get SET_KEYS() { return ['volume', 'sfx', 'radio', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'autosave', ...(typeof SafeMode !== 'undefined' && (SafeMode.active || SafeMode.state) ? ['safe'] : []), 'diag', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
+	static get SET_KEYS() { return ['volume', 'sfx', 'radio', 'minimap', 'prompts', 'camBounce', 'aimHelp', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'autosave', ...(typeof SafeMode !== 'undefined' && (SafeMode.active || SafeMode.state) ? ['safe'] : []), 'diag', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
 		return '<b>WASD</b> mover (trote) · <b>SHIFT</b> sprint (tocar repetido = mais rápido) · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> arrastando: gira a câmera 360° (com arma de fogo ele mira — o cursor aponta — e o <b>BOTÃO DO MEIO</b> arrastando gira) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo (no carro: <b>ESPAÇO</b> freio de mão · <b>R</b> rádio) · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
@@ -84,7 +84,7 @@ class PauseMenu {
 		this.setRow = 0;                 // linha das configurações
 		this._icons = {};
 		this._legendIdx = {};
-		this.settings = Object.assign({ volume: 0.7, sfx: true, radio: 0.5, minimap: true, prompts: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false, life: 'auto', hints: true, screenFx: true, autosave: true }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
+		this.settings = Object.assign({ volume: 0.7, sfx: true, radio: 0.5, minimap: true, prompts: true, camBounce: true, aimHelp: true, graphics: 'auto', tiltSteer: false, dev: false, life: 'auto', hints: true, screenFx: true, autosave: true }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
 		delete this.settings.hd; delete this.settings.smooth; delete this.settings.aimAssist;          // (escolhas antigas: o jogo é sempre em alta definição com o gráfico suave e a mira manual)
 		this.settings.cars3d = typeof CarArt3D !== 'undefined' && CarArt3D.available();      // (já resolvido em config.js: escolha salva; ?cars2d)
 		this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
@@ -1053,6 +1053,7 @@ class PauseMenu {
 			sfx: ['🎵 ' + T('settings.sfx'), tog(s.sfx)],
 			radio: ['📻 Rádio do carro ' + sub('volume das estações (R troca dentro do carro)'), `<div class="pm-toggle ${s.radio === 0 ? '' : 'is-on'}">${s.radio === 0 ? 'mudo' : Math.round((s.radio == null ? 0.5 : s.radio) * 100) + '%'}</div>`], minimap: ['🗺️ ' + T('settings.minimap'), tog(s.minimap)], prompts: ['💬 ' + T('settings.prompts'), tog(s.prompts)],
 			camBounce: ['🚗 ' + T('settings.camBounce') + ' ' + sub(T('settings.camBounce.hint')), tog(s.camBounce !== false)],
+			aimHelp: ['🎯 Ajuda de mira ' + sub('controle e celular: a mira puxa de leve para o alvo; LT parado trava no mais perto à frente (mouse: sempre manual)'), tog(s.aimHelp !== false)],
 			graphics: ['🖥️ ' + T('settings.graphics') + ' ' + sub(T('settings.graphics.hint', { level: Graphics.LABEL[Graphics.level] })), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
 			language: ['🌐 ' + T('settings.language') + ' ' + sub(T('settings.language.hint')), `<div class="pm-toggle is-on">${I18n.label(s.language || I18n.lang)}</div>`],
 			tiltSteer: ['📱 ' + T('settings.tilt') + ' ' + sub(T('settings.tilt.hint')), tog(s.tiltSteer)],

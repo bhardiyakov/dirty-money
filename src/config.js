@@ -239,9 +239,11 @@ const Config = {
 		// Heavy steps (on land, not aiming): the body turns toward the stick at a limited rate and only moves where it faces — no
 		// sideways drift; speed builds up and drops with the steps (constant acceleration / braking), less of it while still turning.
 		moveAccel: 9,          // m/s² building up speed (walk in ~0.3 s, full sprint in ~1.5 s)
+		startAccel: 22,        // m/s² from standing up to the trot (Config.player.jogSpeed): he sets off in ~0.25 s; above it, moveAccel (the sprint builds up)
 		stopDecel: 32,         // m/s² stopping: a couple of steps to plant the feet, not a slide (sprint ≈ 0.4 s, walk ≈ 0.1 s)
 		turnRateWalk: 9.5,     // rad/s turning at walking speed (and standing: a quick pivot)...
 		turnRateSprint: 3.4,   // ...and at full sprint (wide, committed turns)
+		turnRateStand: 18,     // rad/s standing still or nearly (below 1.2 m/s): a quick about-face (~0.17 s) before setting off
 		skidDot: -0.6,         // Skid: cos(facing → stick) at or below this = a sharp reversal (~127° or more)...
 		skidMinSpeed: 7,       // ...while running this fast (m/s).
 		skidFriction: 46,      // Braking (m/s²) along the old direction during the skid, before turning to the new one.
@@ -396,7 +398,20 @@ const Config = {
 	//   IMPACTO: o golpe que entra congela o jogo um instante (`stop` s; o chute que fecha o combo, `stopFinisher`).
 	//   DERRUBADA: o chute de um pedestre só derruba o jogador com a vida abaixo de `npcKnockHp` (fração) — antes, qualquer chute
 	//   derrubava (e eles chutam 1 em cada 4 golpes); o taco e o cassetete da polícia continuam derrubando.
-	melee: { v2: true, lunge: 1.8, lockTime: 1.6, lockRange: 4.5, stop: 0.07, stopFinisher: 0.16, npcKnockHp: 0.35 },
+	melee: { v2: true, lunge: 1.8, lockTime: 1.6, lockRange: 4.5, stop: 0.07, stopFinisher: 0.16, npcKnockHp: 0.35,
+		// ESQUIVA PERFEITA (Combat._strikeTest → Game.onPerfectDodge): rolar e o golpe de alguém passar por dentro do rolamento = um instante
+		// de câmera lenta (slow × por dur s) e, por window s, o próximo golpe do jogador é CONTRA-ATAQUE (× dmg de dano e o equilíbrio como
+		// contra-ataque — Posture).
+		perfectDodge: { slow: 0.25, dur: 0.35, window: 1.2, dmg: 1.5 } },
+	// MIRA com arma de fogo (combat/Aim.js). AJUDA DE MIRA (controle e celular; Ajustes › Ajuda de mira; o mouse é sempre manual): o
+	// retículo puxa `pull` do caminho até a pessoa mais perto dele (dentro de pullR m × px por metro, no mínimo pullMinPx px; mais forte
+	// quanto mais perto); com o LT segurado e o analógico parado, TRAVA no alvo mais perto à frente (±lockCone rad, até o alcance da arma).
+	// RETORNO: kick = o tranco da câmera a cada tiro (no sentido contrário ao tiro, por arma; o RPG já tem o dele); o controle vibra junto.
+	// O marcador de acerto (✕) aparece na mira a cada bala que pega em alguém — vermelho e maior quando derruba.
+	aim: {
+		pull: 0.55, pullR: 2.4, pullMinPx: 42, lockCone: 0.62,
+		kick: { pistol: 0.07, pistol_sil: 0.05, revolver: 0.12, smg: 0.035, rifle: 0.045, ak47: 0.05, shotgun: 0.2, minigun: 0.025 },
+	},
 	// POSTURA E INTERRUPÇÃO (combat/Posture.js, FightState): quem briga tem uma barra oculta de EQUILÍBRIO (max: civil / durão — assaltante,
 	// armado). Cada golpe gasta `cost[golpe]` (bala: gun); acertar durante a ANTECIPAÇÃO do golpe dele (wind-up) é CONTRA-ATAQUE: × counter e
 	// o golpe dele é cancelado. Sem levar golpe por regenDelay s, volta regen/s. Zerou: golpe leve → ATORDOADO (stun s, o próximo golpe
