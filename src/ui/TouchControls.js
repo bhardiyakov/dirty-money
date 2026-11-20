@@ -13,7 +13,7 @@
 //                                        aberta; encostar e arrastar até a fatia = equipa ao soltar — WeaponWheel)
 //                                        · ação do lugar (ENTRAR, ROUBAR, VASCULHAR…; sem nada por perto: BOLSA) · AGACHAR
 //                                        · 2ª ação do lugar (só aparece quando há)
-//                          Dirigindo:    ACELERAR · RÉ/FREIO · SAIR · ação do lugar (ABASTECER, DESMANCHAR…; só quando há) · BUZINA
+//                          Dirigindo:    ACELERAR · RÉ/FREIO · SAIR · ação do lugar (ABASTECER, DESMANCHAR…; só quando há) · BUZINA · FREIO DE MÃO
 //                          Helicóptero:  SUBIR · DESCER · SAIR · GIRAR
 //   SPRINT               o botão de correr (a tecla Shift): como no GTA San Andreas, TOCAR repetido corre cada vez mais rápido e
 //                        SEGURAR mantém um sprint médio (InputManager.sprintTick) — e gasta fôlego. Nadando, nada mais rápido (crawl);
@@ -51,7 +51,7 @@ class TouchControls {
     static get MORE() {
         return [
             ['RECARREGAR', 'r', 'foot'], ['KIT MÉDICO', 'm', 'foot'], ['FURTAR', 'c', 'foot'], ['MOCHILA', 'i', 'all'],
-            ['FAROL', 'l', 'car'], ['GIRAR ↺', 'q', 'heli', true],
+            ['FAROL', 'l', 'car'], ['RÁDIO', 'r', 'car'], ['GIRAR ↺', 'q', 'heli', true],
             ['ZOOM +', 'z', 'all', true], ['ZOOM −', 'x', 'all', true],
         ];
     }
@@ -449,7 +449,7 @@ class TouchControls {
             acts[0] ? ctx(acts[0], 'c-blue') : null,
             T('f', 'SAIR', '🚪', 'c-dark'),
             H('h', 'BUZINA', '📯', 'c-dark'),
-            null,
+            g.activeCar && !g.activeCar.isBike && !(g.activeCar.spec && g.activeCar.spec.boat) ? H(' ', 'FREIO DE MÃO', '🅿️', 'c-amber') : null,
         ];
         if (mode === 'heli') return [
             H(' ', 'SUBIR', '⬆️', 'c-green'),

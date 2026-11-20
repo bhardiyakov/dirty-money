@@ -15,9 +15,9 @@ class PauseMenu {
 	static get TABS() {
 		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['save', '💾 Salvar'], ['settings', '⚙️ Ajustes']];
 	}
-	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'autosave', ...(typeof SafeMode !== 'undefined' && (SafeMode.active || SafeMode.state) ? ['safe'] : []), 'diag', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
+	static get SET_KEYS() { return ['volume', 'sfx', 'radio', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'autosave', ...(typeof SafeMode !== 'undefined' && (SafeMode.active || SafeMode.state) ? ['safe'] : []), 'diag', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
-		return '<b>WASD</b> mover (trote) · <b>SHIFT</b> sprint (tocar repetido = mais rápido) · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> arrastando: gira a câmera 360° (com arma de fogo ele mira — o cursor aponta — e o <b>BOTÃO DO MEIO</b> arrastando gira) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
+		return '<b>WASD</b> mover (trote) · <b>SHIFT</b> sprint (tocar repetido = mais rápido) · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> arrastando: gira a câmera 360° (com arma de fogo ele mira — o cursor aponta — e o <b>BOTÃO DO MEIO</b> arrastando gira) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo (no carro: <b>ESPAÇO</b> freio de mão · <b>R</b> rádio) · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
 
 	// Legenda do mapa: tipos de lugar (a chave é o `type` dos POIs).
@@ -84,7 +84,7 @@ class PauseMenu {
 		this.setRow = 0;                 // linha das configurações
 		this._icons = {};
 		this._legendIdx = {};
-		this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false, life: 'auto', hints: true, screenFx: true, autosave: true }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
+		this.settings = Object.assign({ volume: 0.7, sfx: true, radio: 0.5, minimap: true, prompts: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false, life: 'auto', hints: true, screenFx: true, autosave: true }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
 		delete this.settings.hd; delete this.settings.smooth; delete this.settings.aimAssist;          // (escolhas antigas: o jogo é sempre em alta definição com o gráfico suave e a mira manual)
 		this.settings.cars3d = typeof CarArt3D !== 'undefined' && CarArt3D.available();      // (já resolvido em config.js: escolha salva; ?cars2d)
 		this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
@@ -106,6 +106,7 @@ class PauseMenu {
 		const s = this.settings;
 		AudioFX.setVolume(s.volume);
 		AudioFX.muted = !s.sfx;
+		if (typeof Radio !== 'undefined') Radio.setLevel(s.radio == null ? 0.5 : s.radio);
 		const mm = document.getElementById('minimap');
 		if (mm) mm.style.visibility = s.minimap ? '' : 'hidden';
 		this.g.showPrompts = s.prompts;
@@ -330,7 +331,7 @@ class PauseMenu {
 		const keys = this.root.querySelector('.pm-keys');
 		if (keys) keys.innerHTML = pad
 			? `<b style="background:none;padding:0">A pé:</b> ${g('ls')} mover (pouco inclinado anda, inclinado trota) · ${g('l3')} sprint (tocar repetido = mais rápido) · ${g('a')} pular grade · ${g('rs')} agachar / cobertura · ${g('rb')} rolar · ${g('x')} interagir/assaltar/esconder · ${g('y')} veículo · ${g('rt')} atacar (sem arma: combo soco + soco + chute) · ${g('b')} recarregar · ${g('lt')} mirar (${g('rstick')} aponta) · ${g('down')} arrombar (carro trancado) / furtar · ${g('lb')} roda de armas (segurar) · ${g('dpadlr')} armas · ${g('up')} kit médico<br>`
-			+ `<b style="background:none;padding:0">Carro:</b> ${g('rt')} acelerar · ${g('lt')} freio/ré · ${g('y')} sair · ${g('x')} abastecer/desmanchar · ${g('l3')} buzina (bicicleta: pedalar forte) · ${g('down')} faróis<br>`
+			+ `<b style="background:none;padding:0">Carro:</b> ${g('rt')} acelerar · ${g('lt')} freio/ré · ${g('rb')} freio de mão · ${g('dpadlr')} rádio · ${g('y')} sair · ${g('x')} abastecer/desmanchar · ${g('l3')} buzina (bicicleta: pedalar forte) · ${g('down')} faróis<br>`
 			+ `<b style="background:none;padding:0">Helicóptero:</b> ${g('rt')} sobe · ${g('lt')} desce · ${g('rstick')} gira · ${g('y')} descer/pular<br>`
 			+ `${g('back')} inventário · ${g('start')} menu · ${g('rstick')} câmera 360° (↔ gira, ↕ zoom; mirando com ${g('lt')} ou preparando a granada, aponta)`
 			: PauseMenu.KEYS_HTML;
@@ -1028,6 +1029,7 @@ class PauseMenu {
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'life') { const C = Life.LEVELS, i = Math.max(0, C.indexOf(s.life || 'auto')); s.life = d < 0 ? C[(i + C.length - 1) % C.length] : C[(i + 1) % C.length]; if (this.g._flash) this.g._flash(`🏙️ Vida da cidade: ${Life.label(s.life)}`); }
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'hints') { s.hints = d === 0 ? s.hints === false : d > 0; if (s.hints && d === 0) Hints.reset(); }
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'autosave') { s.autosave = d === 0 ? s.autosave === false : d > 0; if (this.g._flash) this.g._flash(s.autosave ? '💾 Salvamento automático ligado' : 'Salvamento automático desligado: salve dormindo ou na aba Salvar'); }
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'radio') { const L = [0, 0.25, 0.5, 0.75, 1], i = Math.max(0, L.indexOf(s.radio == null ? 0.5 : s.radio)); s.radio = d < 0 ? L[Math.max(0, i - 1)] : d > 0 ? L[Math.min(L.length - 1, i + 1)] : L[(i + 1) % L.length]; }
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'diag') { if (d === 0) Diag.open(this.g); return; }      // (ação, não ajuste)
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'safe') { if (d === 0) SafeMode.reset(this.g); this._renderSettings(); return; }
 		else if (d === 0 || true) { const k = PauseMenu.SET_KEYS[this.setRow]; if (this.setRow > 0) s[k] = d === 0 ? !s[k] : d > 0; }
@@ -1048,7 +1050,8 @@ class PauseMenu {
 		const sub = (t) => `<small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">${t}</small>`;
 		const R = {
 			volume: ['🔊 ' + T('settings.volume'), `<input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="pmVol"><span>${Math.round(s.volume * 100)}%</span>`],
-			sfx: ['🎵 ' + T('settings.sfx'), tog(s.sfx)], minimap: ['🗺️ ' + T('settings.minimap'), tog(s.minimap)], prompts: ['💬 ' + T('settings.prompts'), tog(s.prompts)],
+			sfx: ['🎵 ' + T('settings.sfx'), tog(s.sfx)],
+			radio: ['📻 Rádio do carro ' + sub('volume das estações (R troca dentro do carro)'), `<div class="pm-toggle ${s.radio === 0 ? '' : 'is-on'}">${s.radio === 0 ? 'mudo' : Math.round((s.radio == null ? 0.5 : s.radio) * 100) + '%'}</div>`], minimap: ['🗺️ ' + T('settings.minimap'), tog(s.minimap)], prompts: ['💬 ' + T('settings.prompts'), tog(s.prompts)],
 			camBounce: ['🚗 ' + T('settings.camBounce') + ' ' + sub(T('settings.camBounce.hint')), tog(s.camBounce !== false)],
 			graphics: ['🖥️ ' + T('settings.graphics') + ' ' + sub(T('settings.graphics.hint', { level: Graphics.LABEL[Graphics.level] })), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
 			language: ['🌐 ' + T('settings.language') + ' ' + sub(T('settings.language.hint')), `<div class="pm-toggle is-on">${I18n.label(s.language || I18n.lang)}</div>`],

@@ -177,12 +177,17 @@ const News = {
     },
 
     // ------------------------------------------------------------------ rádio do carro (boletim)
+    // (rádio desligado: sem boletim; na Rádio Cidade quem chama é o Radio, mais vezes — Radio._newsTick)
     radioUpdate(dt, g) {
-        const driving = g.mode === 'car' && g.activeCar && !g.activeCar.isBike && !g.activeCar.isBoat;
+        const driving = g.mode === 'car' && g.activeCar && !g.activeCar.isBike && !g.activeCar.isBoat && (typeof Radio === 'undefined' || (Radio.cur >= 0 && Radio.cur !== 3));
         if (!driving) { this._radioT = Math.min(this._radioT == null ? 20 : this._radioT, 20); return; }
         this._radioT = (this._radioT == null ? 25 : this._radioT) - dt;
         if (this._radioT > 0) return;
         this._radioT = 55 + Math.random() * 45;
+        this.bulletin(g);
+    },
+    // Um boletim agora: de preferência o que VOCÊ fez (ainda não noticiado no rádio), senão a cidade.
+    bulletin(g) {
         this.tick();
         const mine = this.items.filter((it) => it.mine && this._age(it) < 48 && !it.aired);
         let text;
@@ -200,7 +205,9 @@ const News = {
             document.head.appendChild(st);
             this.radioEl = document.createElement('div'); this.radioEl.id = 'newsRadio'; document.body.appendChild(this.radioEl);
         }
-        this.radioEl.innerHTML = `<b>📻 RÁDIO CIDADE 98,1 · PLANTÃO</b>${text.replace(/[<>&]/g, '')}`;
+        const st = typeof Radio !== 'undefined' && Radio.label;
+        this.radioEl.innerHTML = `<b>📻 ${st || 'RÁDIO CIDADE 98,1'} · PLANTÃO</b>${text.replace(/[<>&]/g, '')}`;
+        if (typeof Radio !== 'undefined') Radio.onBulletin(text);
         this.radioEl.classList.add('on');
         if (typeof AudioFX !== 'undefined') { AudioFX.blip(660, 0.08, 0.06); setTimeout(() => AudioFX.blip(880, 0.08, 0.06), 110); }
         clearTimeout(this._rt); this._rt = setTimeout(() => this.radioEl.classList.remove('on'), 8000);

@@ -322,10 +322,10 @@ class CompassCamera {
 			// carSmooth: a câmera vai atrás do carro, girando com ele aos poucos — mais rápido quanto mais rápido ele anda, parado ela
 			// fica (dar ré não vira a tela). Sem ele: guarda uma direção (_carYaw) e só gira em passos de 90° quando o carro se afasta
 			// dela mais que carTurnTrigger (virou uma esquina, fez o retorno). Ao entrar no carro, parte da direção dele.
-			if (this._carVeh !== vehicle) { this._carVeh = vehicle; this._carYaw = h != null ? h : this.yaw; this.manual = false; this._lookIdle = 0; }
+			if (this._carVeh !== vehicle) { this._carVeh = vehicle; this._carYaw = h != null ? h : this.yaw; this.manual = false; this._lookIdle = 0; this._hPrev = null; this._yrS = 0; }
 			else if (h != null && C.carSmooth) {
 				const k = C.carYawLerp * (1 + C.chase.yawBoost * this.chase) * Math.min(1, (vehicle.speed || 0) / C.carYawSpeed);
-				this._carYaw = wrap(this._carYaw + wrap(h - this._carYaw) * (1 - Math.exp(-k * dt)));
+				this._carYaw = wrap(this._carYaw + wrap(this._aimYaw(vehicle, h, dt) - this._carYaw) * (1 - Math.exp(-k * dt)));
 			} else if (h != null) {
 				const off = wrap(h - this._carYaw);
 				if (Math.abs(off) > C.carTurnTrigger) this._carYaw = wrap(this._carYaw + Math.round(off / (Math.PI / 2)) * (Math.PI / 2));
@@ -408,6 +408,25 @@ class CompassCamera {
 			sx += this._kx || 0; sz += this._kz || 0;
 		}
 		this._pose(this.target.x + sx + bo.x, this.target.z + sz + bo.z);
+	}
+
+	// Para onde a câmera de trás do CARRO quer olhar (carSmooth), a partir do rumo `h` do nariz:
+	//   • DERRAPANDO (freio de mão, drift, rodada), olha para onde o carro VAI — a direção da velocidade — e não para onde o nariz aponta
+	//     (antes ela rodava junto com o carro numa rodada e o jogador perdia a rua de vista). Chase.slipFollow = quanto vale a velocidade.
+	//   • NA CURVA (com aderência), se adianta: mira o rumo de daqui a chase.lookAhead s (pelo giro atual, suavizado) — vê-se a saída
+	//     da curva antes.
+	_aimYaw(vehicle, h, dt) {
+		const H = Config.camera.chase, wrap = CompassCamera.wrap;
+		if (vehicle.isBike || (vehicle.spec && vehicle.spec.boat)) { this._hPrev = null; this._yrS = 0; return h; }
+		const v = vehicle.velocity, sp = Math.hypot(v.x, v.z);
+		if (sp > 4 && H.slipFollow) {
+			const off = wrap(Math.atan2(v.x, v.z) - h);
+			if (Math.abs(off) < 1.7) h = wrap(h + off * H.slipFollow * Math.min(1, (sp - 4) / 6));      // (de ré não: a velocidade aponta para trás)
+		}
+		if (this._hPrev != null && dt > 0) this._yrS = (this._yrS || 0) + (wrap(h - this._hPrev) / dt - (this._yrS || 0)) * (1 - Math.exp(-4 * dt));
+		this._hPrev = h;
+		const ahead = (this._yrS || 0) * (H.lookAhead || 0) * Math.min(1, sp / 10) * (1 - Math.min(1, vehicle.slide || 0));      // (derrapando, vale a velocidade, não o giro)
+		return wrap(h + Math.max(-0.45, Math.min(0.45, ahead)));
 	}
 
 	// Balanço ao dirigir (ver o topo). Molas pouco amortecidas, independentes de FPS (passo limitado). Devolve o deslocamento da câmera

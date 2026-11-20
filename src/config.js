@@ -143,6 +143,9 @@ const Config = {
 			tilt: (typeof location !== 'undefined' && +(location.search.match(/[?&]persegue=(\d+(?:\.\d+)?)/) || [])[1]) || 45,
 			back: 8.5, drop: 11, fov: 50, speedBack: 3, speedFov: 6, bikeBack: -1.5, bikeTilt: 0, yawBoost: 0.9, minZ: 1.4,
 			near: 55, far: 125, lerp: 1.8, shadowAhead: 18, shadowHalf: 40,
+			// Carro (CompassCamera._aimYaw): derrapando, a câmera olha slipFollow para onde o carro VAI (a velocidade) em vez do nariz; na curva,
+			// se adianta para o rumo de daqui a lookAhead s.
+			slipFollow: 0.75, lookAhead: 0.22,
 			// A PÉ, a mesma câmera (a mesma inclinação e o mesmo campo de visão dos veículos), mais perto: footBack m atrás do personagem
 			// (corrida: + footRunBack até footRef m/s), o zoom do jogador aproxima ou afasta (×). `?ape=alto` = a câmera alta de antes a pé.
 			foot: !(typeof location !== 'undefined' && /[?&]ape=alto\b/.test(location.search)), footBack: 7.8, footRunBack: 1.8, footRef: 7, footRoof: 1.8,
@@ -511,6 +514,11 @@ const Config = {
 		slipGrip: 0.85,        // fração da aderência lateral perdida derrapando de vez
 		slipYaw: 0.45,         // derrapando, a traseira escapa: o carro gira até 45% além do que o volante pede
 		slipScrub: 0.15,       // perda de velocidade (1/s) arrastando de lado
+		// FREIO DE MÃO (Espaço / RB / botão no celular; só carro): hbDecel = freada da traseira travada (m/s²); o motor puxa com hbThrottle
+		// da força; acima de hbMinSpeed (m/s) a traseira solta até hbSlide (com o volante virado; reto, metade) e o carro gira hbYaw além.
+		hbDecel: 6.5, hbThrottle: 0.5, hbMinSpeed: 5, hbSlide: 0.95, hbYaw: 0.55,
+		// DRIFT: já derrapando mais que driftMin, acelerando e com o volante para dentro da curva, a derrapagem se mantém (× driftHold por passo).
+		driftMin: 0.25, driftHold: 0.985,
 		linearDamping: 0.1,    // Arrasto do chassi.
 		brakeDrag: 8,          // Freio-motor (m/s²) quando solta o acelerador.
 		waterDrag: 6,          // Atola o carro fora da terra (não atravessa água).
