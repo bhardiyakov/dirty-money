@@ -2,8 +2,9 @@
 // SafeMode — o MODO SEGURO: o jogo confere, nos primeiros segundos, se a imagem está chegando à tela. Cada navegador traduz os
 // shaders do seu jeito (o Chrome no Windows, para Direct3D), e um que falhe numa placa pode deixar a tela só com a cor do céu ou
 // preta — com o jogo rodando atrás. Aqui isso deixa de ser o fim da linha:
-//   • VIGIA: depois da carga, uma vez por segundo, lê 25 pontos do meio da tela. Todos da mesma cor — a do céu (a cor de limpeza)
-//     ou preto — por 4 checagens seguidas = a imagem não está chegando.
+//   • VIGIA: depois da carga, uma vez por segundo, lê 25 pontos do meio da tela. Todos da mesma cor e ela é a do céu (a cor de
+//     limpeza, clara) por 4 checagens seguidas = a imagem não está chegando. Tela toda escura NÃO conta: numa madrugada sem luz
+//     ela é legítima, e desligar coisas por engano (e lembrar disso) seria pior que não ajudar.
 //   • DEGRAUS: desliga um por vez e confere de novo — 1) os efeitos de tela (pós-processamento: gradação, TV de tubo, borrão,
 //     antisserrilhado), 2) os personagens 3D (volta o desenho 2,5D), 3) as sombras. Avisa o que desligou.
 //   • Lembra (por placa de vídeo): na próxima abertura já começa assim. Ajustes › "Modo seguro" desliga e tenta de novo.
@@ -88,7 +89,7 @@ const SafeMode = {
 		});
 	},
 
-	// A imagem na tela é uma cor só (a do céu ou preto)? 25 pontos do meio da tela, lidos logo depois do quadro desenhado.
+	// A imagem na tela é uma cor só, a do céu (clara)? 25 pontos do meio da tela, lidos logo depois do quadro desenhado.
 	_blank(scene, eng) {
 		const gl = eng._gl;
 		if (!gl) return null;
@@ -102,9 +103,8 @@ const SafeMode = {
 			}
 			if (mx[0] - mn[0] > 4 || mx[1] - mn[1] > 4 || mx[2] - mn[2] > 4) return false;           // tem desenho
 			const c = scene.clearColor, avg = sum.map((v) => v / 25);
-			const sky = Math.abs(avg[0] - c.r * 255) < 10 && Math.abs(avg[1] - c.g * 255) < 10 && Math.abs(avg[2] - c.b * 255) < 10;
-			const black = avg[0] < 8 && avg[1] < 8 && avg[2] < 8;
-			return sky || black;
+			if (Math.max(avg[0], avg[1], avg[2]) < 40) return null;                                    // escuro: noite/interior — não dá para afirmar
+			return Math.abs(avg[0] - c.r * 255) < 10 && Math.abs(avg[1] - c.g * 255) < 10 && Math.abs(avg[2] - c.b * 255) < 10;
 		} catch (e) { return null; }
 	},
 
