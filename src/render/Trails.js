@@ -98,6 +98,7 @@ const Trails = {
 		};
 		if (merged) detach();
 		scene.onBeforeRenderObservable.add(() => {
+			if (this.off) { if (attached && merged) detach(); return; }       // (modo seguro: core/SafeMode.js)
 			const dt = Math.min(0.2, engine.getDeltaTime() / 1000);
 			const t = Math.max(0, Math.min(1, (this._speed() - s0) / (s1 - s0))), want = t * t * (3 - 2 * t);
 			k += (want - k) * Math.min(1, dt * 4);

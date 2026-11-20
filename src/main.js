@@ -198,6 +198,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 		if (S) await window.game.preload((t, p, ms) => S.step(t, 0.7 + 0.3 * p, ms));          // (sem a tela do estúdio, a pré-carga roda no boot)
 	} catch (e) {
 		console.error('[ABERTURA] falha na carga:', e);
+		if (typeof Diag !== 'undefined') Diag.fatal(e);                         // (a tela de erro com o diagnóstico, em vez de uma tela parada)
 	}
 	if (S) S.ready();                                                                // a tela do estúdio sai (no fim dos créditos ou já, se pulada)
 });
@@ -250,7 +251,8 @@ const OfflineGame = {
 		el.innerHTML = '<span>🆕 Nova versão do jogo baixada — entra quando você reabrir o jogo.</span><button id="dmUpNow" style="border:0;border-radius:10px;padding:7px 12px;background:#34d399;color:#04130c;font:700 13px Inter,sans-serif;cursor:pointer">Atualizar agora</button><button id="dmUpLater" style="border:0;border-radius:10px;padding:7px 10px;background:#334155;color:#e2e8f0;font:600 13px Inter,sans-serif;cursor:pointer">Depois</button>';
 		document.body.appendChild(el);
 		el.querySelector('#dmUpNow').onclick = () => {
-			if (!confirm('Atualizar agora recarrega o jogo: o progresso que não foi salvo (dormindo) se perde. Continuar?')) return;
+			const saved = typeof AutoSave !== 'undefined' && window.game && AutoSave.now(window.game, 'update');      // (salva antes, se der)
+			if (!saved && !confirm('Agora não dá para salvar (perseguição, assalto, dirigindo…): atualizar recarrega o jogo e o progresso desde o último salvamento se perde. Continuar?')) return;
 			this._asked = true; w.postMessage({ type: 'dm-sw-update' });
 		};
 		el.querySelector('#dmUpLater').onclick = () => el.remove();

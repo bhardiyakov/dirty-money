@@ -15,7 +15,7 @@ class PauseMenu {
 	static get TABS() {
 		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['save', '💾 Salvar'], ['settings', '⚙️ Ajustes']];
 	}
-	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
+	static get SET_KEYS() { return ['volume', 'sfx', 'minimap', 'prompts', 'camBounce', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'autosave', ...(typeof SafeMode !== 'undefined' && (SafeMode.active || SafeMode.state) ? ['safe'] : []), 'diag', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
 		return '<b>WASD</b> mover (trote) · <b>SHIFT</b> sprint (tocar repetido = mais rápido) · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> arrastando: gira a câmera 360° (com arma de fogo ele mira — o cursor aponta — e o <b>BOTÃO DO MEIO</b> arrastando gira) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
@@ -84,7 +84,7 @@ class PauseMenu {
 		this.setRow = 0;                 // linha das configurações
 		this._icons = {};
 		this._legendIdx = {};
-		this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false, life: 'auto', hints: true, screenFx: true }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
+		this.settings = Object.assign({ volume: 0.7, sfx: true, minimap: true, prompts: true, camBounce: true, graphics: 'auto', tiltSteer: false, dev: false, life: 'auto', hints: true, screenFx: true, autosave: true }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
 		delete this.settings.hd; delete this.settings.smooth; delete this.settings.aimAssist;          // (escolhas antigas: o jogo é sempre em alta definição com o gráfico suave e a mira manual)
 		this.settings.cars3d = typeof CarArt3D !== 'undefined' && CarArt3D.available();      // (já resolvido em config.js: escolha salva; ?cars2d)
 		this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
@@ -1027,6 +1027,9 @@ class PauseMenu {
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'language') this._cycle('language', I18n.LANGS, I18n.lang, d, (c) => I18n.t('settings.language.flash', { choice: I18n.label(c) }));
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'life') { const C = Life.LEVELS, i = Math.max(0, C.indexOf(s.life || 'auto')); s.life = d < 0 ? C[(i + C.length - 1) % C.length] : C[(i + 1) % C.length]; if (this.g._flash) this.g._flash(`🏙️ Vida da cidade: ${Life.label(s.life)}`); }
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'hints') { s.hints = d === 0 ? s.hints === false : d > 0; if (s.hints && d === 0) Hints.reset(); }
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'autosave') { s.autosave = d === 0 ? s.autosave === false : d > 0; if (this.g._flash) this.g._flash(s.autosave ? '💾 Salvamento automático ligado' : 'Salvamento automático desligado: salve dormindo ou na aba Salvar'); }
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'diag') { if (d === 0) Diag.open(this.g); return; }      // (ação, não ajuste)
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'safe') { if (d === 0) SafeMode.reset(this.g); this._renderSettings(); return; }
 		else if (d === 0 || true) { const k = PauseMenu.SET_KEYS[this.setRow]; if (this.setRow > 0) s[k] = d === 0 ? !s[k] : d > 0; }
 		this._saveSettings(); this.applySettings();
 	}
@@ -1054,6 +1057,9 @@ class PauseMenu {
 			life: ['🏙️ Vida da cidade ' + sub('pedestres no rush, acontecimentos de rua, jogos no bar e movimento das lojas — baixe se o celular engasgar'), `<div class="pm-toggle is-on">${Life.label(s.life || 'auto')}</div>`],
 			screenFx: ['🎬 Efeitos de tela ' + sub('borrão de velocidade, impacto, tela sem cor com a vida baixa, luzes da polícia nas bordas e o batimento'), tog(s.screenFx !== false)],
 			hints: ['💡 Dicas de primeira vez ' + sub('religar mostra todas as dicas de novo'), tog(s.hints !== false)],
+			autosave: ['💾 Salvamento automático ' + sub('a cada 3 minutos (quando dá: a pé, sem polícia no rastro) e ao sair do jogo, no espaço em uso'), tog(s.autosave !== false)],
+			safe: ['🛟 Modo seguro ' + sub(typeof SafeMode !== 'undefined' && SafeMode.active ? SafeMode.describe() + ' — clique para desligar e tentar com tudo na próxima abertura' : 'será desligado na próxima abertura'), `<div class="pm-toggle ${typeof SafeMode !== 'undefined' && SafeMode.state ? 'is-on' : ''}">${typeof SafeMode !== 'undefined' && SafeMode.state ? 'ligado' : 'desligando'}</div>`],
+			diag: ['🩺 Diagnóstico ' + sub('copiar as informações da máquina e os últimos erros para mandar a quem cuida do jogo (Ctrl+Shift+D)'), '<div class="pm-toggle is-on">abrir</div>'],
 			dev: ['🛠️ ' + T('settings.dev'), tog(s.dev)],
 		};
 		const rows = PauseMenu.SET_KEYS.map((k) => R[k]);

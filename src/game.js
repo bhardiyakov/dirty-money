@@ -133,6 +133,7 @@ class Game {
 		this.trails = Trails.attach(this.camera.camera, this.gameEngine.engine);      // o borrão do GTA SA (render/Trails.js) — antes do CRT
 		this.crt = CrtFilter.attach(this.camera.camera, this.gameEngine, { renderScale: 0.75 });      // TV de tubo + resolução interna reduzida (render/CrtFilter.js) — por último na cadeia
 		Lighting.guard(this);                                // passada que não compila nesta placa sai da cadeia (em vez da tela só com o céu)
+		SafeMode.init(this);                                 // a imagem não chega à tela nesta placa: desliga efeitos/personagens 3D/sombras (core/SafeMode.js)
 		this.minimap = new Minimap('minimap');
 
 		// IA (preenchida de forma assíncrona em _initAI).
@@ -406,6 +407,7 @@ class Game {
 		this._loading(this._preFailed ? 'Falha ao carregar (veja o console) — iniciando assim mesmo' : 'Pronto!', 1);
 		if (this._preDone) await wait(450);                         // (a barra chega aos 100% antes da tela sair)
 		this._bootDone = true;
+		AutoSave.install(this);                              // salvamento automático (player/AutoSave.js): também quando a página some
 		HomeDecor.init(this);
 		try { await HomeDecor.startSession(this._pendingSave ? SaveGame.slot : null); } catch (e) { console.error('[DECOR] falha ao abrir os móveis do save:', e); }
 		if (this._pendingSave) {
@@ -657,6 +659,7 @@ class Game {
 
 	_update(dt) {
 		this._slowTick();
+		AutoSave.update(this, dt);                                              // salvamento automático, quando der (player/AutoSave.js)
 		this._dt = dt;
 		this._pollInput();
 		this.input.sprintTick(dt);                                              // impulso do sprint (a pé, nadando, pedalando): InputManager
