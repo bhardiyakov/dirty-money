@@ -626,6 +626,8 @@ class Game {
 		const dy = this._lookDY || 0;
 		let dp = foot ? dy * C.foot3p.lookPitchMouse : 0;
 		if (foot && inp.padConnected && !inp.stickAim) { const y = inp.rstick.y; if (Math.abs(y) > Math.abs(inp.rstick.x) * 0.5) dp += Math.sign(y) * y * y * C.foot3p.lookPitchPad * dt; }
+		const S = inp.lookSens || 1;                                                    // Ajustes: sensibilidade e inversão da câmera
+		dp *= S * (inp.lookInvY ? -1 : 1); d *= S * (inp.lookInvX ? -1 : 1);
 		if (dp) FootCamera.tilt(dp);
 		this.camera.lookHeld = inp.lookHeld(this.mode === 'player' && inp.gunInHand) || (foot && inp.padConnected && Math.abs(inp.rstick.y) > 0.2 && !inp.stickAim);
 		if (d) this.camera.turn(d);
@@ -1943,7 +1945,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		const pad = this.input.usingPad ? this.input.padType : '';          // jogando no controle: as teclas viram os botões dele (Xbox/PlayStation)
 		if (html === this._promptHtml && this.showPrompts === this._promptShown && pad === this._promptPad) return;
 		this._promptHtml = html; this._promptShown = this.showPrompts; this._promptPad = pad;     // (_promptHtml fica com as teclas: os botões de toque leem)
-		el.innerHTML = pad ? PadGlyphs.render(html, pad) : html;
+		el.innerHTML = pad ? PadGlyphs.render(html, pad) : typeof KeyBinds !== 'undefined' ? KeyBinds.render(html) : html;      // (teclas trocadas em Ajustes)
 		el.style.display = html && this.showPrompts ? 'block' : 'none';
 	}
 

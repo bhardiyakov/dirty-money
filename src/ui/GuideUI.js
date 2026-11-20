@@ -53,8 +53,8 @@ class GuideUI {
 
     page(id) {
         if (id.startsWith('career_')) return this.careerPage(id.slice(7));
-        const P = GuideUI.PAGES[id];
-        return P ? P() : GuideUI.PAGES.start();
+        const P = GuideUI.PAGES[id], html = P ? P() : GuideUI.PAGES.start();
+        return typeof KeyBinds !== 'undefined' ? KeyBinds.render(html) : html;      // (as teclas trocadas em Ajustes › Teclas)
     }
 
     careerPage(cid) {

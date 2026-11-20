@@ -63,19 +63,22 @@ class InputManager {
         window.addEventListener('keydown', (e) => {
             if (e.padNav) return;      // teclas geradas pelo controle navegando nas janelas (PadNav) são só para as janelas
             AudioFX.init();            // áudio só é liberado depois de um gesto do usuário.
-            const k = e.key.toLowerCase();
+            if (this.capture) { this.capture(e); return; }          // (Ajustes › Teclas esperando a tecla nova)
+            const raw = e.key.toLowerCase(), k = typeof KeyBinds !== 'undefined' ? KeyBinds.map(raw) : raw;      // (teclas trocadas pelo jogador)
             this.usingPad = false;
+            if (k === null) return;
             if (!this.keys[k]) this.justPressed[k] = true; // ignora auto-repeat do teclado.
             this.keys[k] = true;
             // Evita a página rolar com setas/espaço.
-            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'tab'].includes(k)) {      // (Tab: roda de armas, não troca o foco)
+            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'tab'].includes(k) || ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'tab'].includes(raw)) {      // (Tab: roda de armas, não troca o foco)
                 e.preventDefault();
             }
         });
 
         window.addEventListener('keyup', (e) => {
             if (e.padNav) return;
-            this.keys[e.key.toLowerCase()] = false;
+            const raw = e.key.toLowerCase(), k = typeof KeyBinds !== 'undefined' ? KeyBinds.map(raw) : raw;
+            if (k !== null) this.keys[k] = false;
         });
 
         window.addEventListener('wheel', (e) => {
@@ -225,7 +228,7 @@ class InputManager {
 
     // Vibração do controle (batida, dano): strong/weak 0..1, ms.
     rumble(strong = 0.6, weak = 0.4, ms = 180) {
-        if (!this.padConnected) return;
+        if (!this.padConnected || this.noRumble) return;            // (Ajustes › Vibração do controle)
         const p = this._pad(), a = p && (p.vibrationActuator || (p.hapticActuators && p.hapticActuators[0]));
         if (!a) return;
         try { if (a.playEffect) a.playEffect('dual-rumble', { duration: ms, strongMagnitude: strong, weakMagnitude: weak }); else if (a.pulse) a.pulse(strong, ms); } catch (e) { /* sem vibração */ }
