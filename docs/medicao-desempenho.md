@@ -121,15 +121,18 @@ meia resolução não vale; os atlas continuam no orçamento dele (640 MB), só 
 ## Fluidez: engasgos e abertura (item 3 do polimento)
 
 **Engasgos.** `tests/hitch.cjs` atravessou a cidade inteira (1 521 quadros, ~51 s de jogo a ~45 m/s, entrando em bairro novo o tempo todo):
-- **Lógica do jogo:** mediana abaixo de 1 ms por quadro, nenhum quadro acima de 80 ms quando roda sozinho e sem desenhar. O que
-  nasce no caminho (malhas de árvores, pássaros, faróis, sombras) é leve.
+- **Lógica do jogo:** mediana de 0,7 ms por quadro, p95 de 8 ms e p99 de 18 ms (CPU por software, sem desenhar). O relevo que
+  nasce no caminho (`TerrainBuilder`: 20 a 76 malhas a cada 20–50 m) já é montado em fatias com orçamento por quadro e custa de 8 a
+  26 ms nos quadros em que fecha um pedaço. Numa rodada sem nada desenhando ao mesmo tempo, nenhum quadro passou de 80 ms.
 - **Shaders:** nenhum compilado no caminho — a pré-carga (`scene.whenReadyAsync` na barra "Compilando os gráficos") já cobre tudo.
   Compilar shader no meio do jogo é o engasgo clássico numa placa de verdade, e ele não acontece.
 - **O único pico que se repete:** entrar numa loja monta o interior (~0,6 s aqui, CPU por software): acontece com a tela
   escurecida (a transição da porta), então não aparece como travada.
-- Cuidado ao ler: com o desenho ligado (`--render`) ou com outro Chromium rodando ao mesmo tempo, aparecem "engasgos" de
-  segundos na lógica que são só a espera da placa por software (`bufferSubData` aguardando o desenho anterior). Sem desenhar e
-  sozinho, eles somem.
+- Cuidado ao ler: aparecem às vezes picos isolados de vários segundos, cada rodada num lugar diferente (ou nenhum), sempre dentro
+  de uma chamada à placa de vídeo (`bufferSubData`, criação de malha) — o perfil da CPU mostra 35 dos 40 s de uma rodada parados
+  nessa espera. É a placa por software esperando o trabalho anterior acabar; ficam bem mais frequentes com o desenho ligado
+  (`--render`) ou com outro Chromium rodando ao mesmo tempo. Um pico que se repete no mesmo lugar em rodadas diferentes é que
+  merece investigação.
 
 **Abertura.** A versão publicada (`node scripts/package-legacy.mjs` → `dist-game/`) junta os ~300 scripts de `src/` em 5 arquivos
 (`game.N.js`), sem comentários nem recuos (`scripts/jsmin.mjs`: cada arquivo enxugado tem a mesma árvore sintática do original —
