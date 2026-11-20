@@ -30,6 +30,8 @@ class Vehicle {
         this.lastSteer = 0;                  // direção aplicada no último frame (inclinação da moto)
         this._yaw = 0;                       // guinada (rad/s) de fato aplicada: com o jogador ao volante ela tem inércia (ver _applyMotion)
         this.slide = 0;                      // derrapagem por excesso de velocidade na curva (0..1): o pneu canta (AudioFX.screech)
+        this.handbrake = false;              // FREIO DE MÃO (jogador: Espaço / RB / botão no celular — Game): trava a traseira (ver drive/_applyMotion)
+        this._hb = false;                    // ...valendo neste quadro (carro do jogador, não moto/bicicleta/barco)
 
         // Vida e estado de destruição: amassa em 3 fases; com pouca vida solta fumaça; a 0 pega fogo e explode
         // (CarDamage cuida dos efeitos) e vira carcaça carbonizada.
@@ -471,6 +473,7 @@ class Vehicle {
             }
         }
         this.throttle = throttle;                           // (o que chegou ao motor: o som do motor lê — EngineAudio)
+        const hb = this._hb = !!this.handbrake && this.controlled && !this.isBike && !this.spec.boat && !this.capsized;
         const forward = this._flatAxes();
         const right = this._rt;
 
@@ -508,12 +511,19 @@ class Vehicle {
         const accel = Vehicle.accelOf(this.spec, fwd, topP, throttle, this.braking) * (pedal === null || this.braking ? 1 : 0.85 + 0.9 * pedal) * (this.nosOn && !this.braking ? Vehicle.NOS_ACC : 1);
         this.accelerating = throttle > 0 && fwd >= -0.5 && fwd < this.spec.maxSpeed * 0.7;
         if (throttle !== 0) {
-            fwd += throttle * accel * (gr > 0 && throttle > 0 ? 1 / (1 + 2 * gr) : 1) * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1) * (cc ? (this.braking ? this._ccBrake || 1 : this._ccPow || 1) : 1)       // freio na chuva rende menos · freio gasto / motor fraco
+            fwd += throttle * (hb ? Config.vehicle.hbThrottle : 1) * accel * (gr > 0 && throttle > 0 ? 1 / (1 + 2 * gr) : 1) * dt * (this.braking && !this.spec.boat && Weather.cur ? Weather.cur.brakeMul : 1) * (cc ? (this.braking ? this._ccBrake || 1 : this._ccPow || 1) : 1)       // freio na chuva rende menos · freio gasto / motor fraco
                 * (this.braking ? this.tuneBrake || 1 : 1);                                                                                                // freios da tunagem (Tuning)
         } else {
             // Freio-motor / resistência ao rolamento: desacelera suave até parar. (Bicicleta: só o rolamento — ela embala.)
             const drop = (pedal !== null && BG ? BG.roll : this.spec.brakeDrag || Config.vehicle.brakeDrag * (Weather.cur ? Weather.cur.brakeMul : 1)) * dt;
             fwd = Math.abs(fwd) <= drop ? 0 : fwd - Math.sign(fwd) * drop;
+        }
+        // FREIO DE MÃO: as rodas de trás travam — o carro perde velocidade arrastando (o motor ainda puxa pela frente, com menos força) e a
+        // traseira perde a aderência (ver _applyMotion: com o volante virado, ela escapa — a curva de freio de mão / o "cavalo de pau").
+        if (hb) {
+            const d = Config.vehicle.hbDecel * (Weather.cur ? Weather.cur.brakeMul : 1) * dt;
+            fwd = Math.abs(fwd) <= d ? 0 : fwd - Math.sign(fwd) * d;
+            if (Math.abs(fwd) > 0.5) this.braking = true;                               // (luz de freio)
         }
         // (gravidade ao longo da encosta; subindo PEDALANDO ela não puxa para trás — a máxima menor já é a subida devagar)
         if (gr < 0 || (gr > 0 && !(throttle > 0))) fwd -= 9.81 * gr / Math.sqrt(1 + gr * gr) * BG.g * dt;
@@ -626,10 +636,16 @@ class Vehicle {
             this._yaw += (yaw - this._yaw) * (1 - Math.exp(-kI * dt));
             const limit = V.slipLimit * (Weather.cur ? Weather.cur.gripMul : 1) * Vehicle.playerGrip * (this.tuneGrip || 1);        // (suspensão da tunagem)
             const over = af > V.slipMinSpeed ? Math.max(0, Math.abs(fwd * this._yaw) - limit) / limit : 0;
-            const want = Math.min(1, over * V.slipGain);
+            let want = Math.min(1, over * V.slipGain);
+            // FREIO DE MÃO (andando): a traseira solta — mais com o volante virado. DRIFT: já de lado, acelerando e com o volante PARA DENTRO
+            // da curva, a derrapagem se sustenta (o jogador controla o ângulo no acelerador e no volante); aliviar o pé, endireitar o volante
+            // ou contra-esterçar devolvem a aderência.
+            const hb = this._hb && af > V.hbMinSpeed;
+            if (hb) want = Math.max(want, V.hbSlide * (0.5 + 0.5 * Math.min(1, Math.abs(steer) * 1.5)));
+            else if (this.slide > V.driftMin && (this.throttle || 0) > 0.4 && af > V.slipMinSpeed * 0.6 && steer * this._yaw > 0) want = Math.max(want, this.slide * V.driftHold);
             this.slide += (want - this.slide) * (1 - Math.exp(-(want > this.slide ? 7 : 2.2) * dt));
             if (this.slide < 1e-3) this.slide = 0;
-            yaw = this._yaw * (1 + V.slipYaw * this.slide);
+            yaw = this._yaw * (1 + V.slipYaw * this.slide + (hb ? V.hbYaw : 0));
             gripK *= 1 - V.slipGrip * this.slide;
             fwd *= Math.exp(-V.slipScrub * this.slide * dt);
         } else { this._yaw = yaw; this.slide = 0; }
@@ -755,6 +771,7 @@ class Vehicle {
         if (slip > 0 && sp > 3) k = Math.min(1, slip / 4);
         if (this.braking && sp > 7 && aF * Math.sign(fwd) < -7.5) k = Math.max(k, Math.min(1, (-aF * Math.sign(fwd) - 7.5) / 6 + 0.35));     // freada brusca
         if (this.controlled && this.accelerating && fwd > 0.5 && fwd < 11 && aF > 6.5 && !this.spec.bike) k = Math.max(k, Math.min(0.8, (aF - 6.5) / 5 + 0.3));   // arrancada
+        if (this._hb && sp > 4) k = Math.max(k, Math.min(0.75, 0.35 + sp / 40));                                              // freio de mão: traseira travada
         // Na grama e na areia o pneu deixa o rastro (TireTracks: sulco, grama amassada, poeira) — e não a marca preta de borracha.
         const soft = typeof TireTracks !== 'undefined' && TireTracks.vehicle(this, fx, fz, k);
         const P = this.position, near = SkidMarks.focus && Math.abs(P.x - SkidMarks.focus.x) < 80 && Math.abs(P.z - SkidMarks.focus.z) < 80;

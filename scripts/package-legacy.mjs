@@ -16,8 +16,9 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = join(ROOT, 'dist-game');
 const ENTRIES = ['index.html', 'manifest.webmanifest', 'sw.js', 'src', 'assets', 'vendor'];
-// Not in the first download (cached on demand, by fingerprint): the character pages (~400 MB) and the HD cars of the tuning garage.
-const ON_DEMAND = [/^assets\/baked\/npcs\//, /^assets\/cars\/hd\//, /^assets\/_npcprev\//];
+// Not in the first download (cached on demand, by fingerprint): the character pages (~400 MB), the HD cars of the tuning garage and the
+// car radio's music (~26 MB).
+const ON_DEMAND = [/^assets\/baked\/npcs\//, /^assets\/cars\/hd\//, /^assets\/_npcprev\//, /^assets\/music\//];
 
 await rm(OUTPUT, { recursive: true, force: true });
 await mkdir(OUTPUT, { recursive: true });

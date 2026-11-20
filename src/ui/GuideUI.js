@@ -22,6 +22,7 @@ class GuideUI {
             .gd-body p { margin: 6px 0; } .gd-body ul { margin: 4px 0 8px; padding-left: 20px; } .gd-body li { margin: 3px 0; }
             .gd-body b { color: var(--gold); } .gd-body kbd { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 4px; background: rgba(255,255,255,0.14); border: 1px solid #3f5a8a; color: #fff; font: inherit; font-size: 12px; text-align: center; }
             .gd-body table { border-collapse: collapse; width: 100%; margin: 6px 0; } .gd-body td, .gd-body th { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: left; vertical-align: top; font-size: 13px; } .gd-body th { color: var(--blue); }
+            .gd-body a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; } .gd-body small { color: var(--tx-3); }
             .gd-tip { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--acc); background: rgba(52,211,153,0.08); border-radius: 0 8px 8px 0; }
             @media (max-width: 900px) { #pmGuide { flex-direction: column; } .gd-index { width: auto; flex-direction: row; overflow-x: auto; } .gd-index div { white-space: nowrap; } .gd-index .gd-h { display: none; } }`;
         document.head.appendChild(st);
@@ -33,7 +34,7 @@ class GuideUI {
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['bairros', 'Mirante, Roça e Serra'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
             ['home', 'Casa, imóveis e save'], ['goals', 'Metas e desafios do dia'], [null, 'IMPÉRIO'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], ['truco', 'Truco no bar'], [null, 'ASSALTOS, NEGÓCIOS E CARROS'], ['robbery', 'Assalto a lojas'], ['traces', 'Rastros e fuga'], ['heists', 'Joalherias e golpes'], ['business', 'Negócios próprios'], ['mechanic', 'Mecânica e porta-malas'], ['racing', 'Corridas (rachas e autódromo)'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
-        out.push([null, 'MAIS'], ['tips', 'Dicas']);
+        out.push([null, 'MAIS'], ['tips', 'Dicas'], ['radio', 'Rádio e músicas (créditos)']);
         return out;
     }
 
@@ -95,7 +96,8 @@ GuideUI.PAGES = {
         <tr><td><kbd>C</kbd></td><td>furtar pedestre</td></tr><tr><td><kbd>V</kbd></td><td>pular grade/muro (longe deles: rolar)</td></tr>
         <tr><td><kbd>Q</kbd></td><td>agachar (furtivo) · perto de muro, carro ou parede: cobertura</td></tr>
         <tr><td><kbd>F</kbd></td><td>entrar/sair de veículo (carro estacionado: quebra o vidro, com alarme)</td></tr><tr><td><kbd>G</kbd></td><td>arrombar carro na manha (mini-game, sem alarme)</td></tr>
-        <tr><td><kbd>H</kbd> · <kbd>L</kbd></td><td>buzina · faróis</td></tr><tr><td><kbd>Z</kbd> <kbd>X</kbd> / roda</td><td>zoom</td></tr>
+        <tr><td><kbd>H</kbd> · <kbd>L</kbd></td><td>buzina · faróis</td></tr><tr><td><kbd>Espaço</kbd> (no carro)</td><td><b>freio de mão</b>: trava a traseira — com o volante virado ela escapa (curva fechada, cavalo de pau). Já derrapando, acelerar com o volante para dentro da curva mantém o drift; aliviar ou endireitar devolve a aderência</td></tr>
+        <tr><td><kbd>R</kbd> (no carro)</td><td><b>rádio</b>: troca a estação — Baile 150 FM (funk), Pagode da Laje, Neon 99 (eletrônica), Rádio Cidade (notícias) ou desligado. Cada carro guarda a sua; volume em Ajustes</td></tr><tr><td><kbd>Z</kbd> <kbd>X</kbd> / roda</td><td>zoom</td></tr>
         <tr><td>botão direito arrastando</td><td><b>câmera 360°</b>: gira em volta do personagem (com arma de fogo na mão o botão direito é a mira — arraste com o <b>botão do meio</b>). A pé ela fica para onde você virou; dirigindo, ela fica onde você deixou (o carro virando não mexe nela) e, uns segundos depois de soltar, volta sozinha para trás do carro</td></tr>
         <tr><td><kbd>I</kbd></td><td>inventário: equipamento (roupas, bolsa, arma) e mochila — <kbd>C</kbd> alterna</td></tr><tr><td><kbd>O</kbd></td><td>carreiras do crime</td></tr><tr><td><kbd>Esc</kbd> / <kbd>P</kbd></td><td>menu (mapa e marcador, status, guia)</td></tr></table>
         <h3>Controle (Xbox / PlayStation)</h3><p>Funciona direto, no padrão de GTA e Watch Dogs: <b>RT/R2</b> ataca, <b>L3</b> sprint (tocar repetido = mais rápido; pouco inclinado o analógico anda, inclinado trota), <b>A/✕</b> pula grade, <b>R3</b> agacha, <b>↓</b> arromba o carro trancado ou furta, <b>X/□</b> interage, <b>Y/△</b> entra/sai do veículo, <b>B/○</b> recarrega, <b>LT/L2</b> mira (no teclado: botão direito do mouse), <b>analógico direito</b> gira a <b>câmera 360°</b> (↕ zoom; mirando, ele aponta), <b>LB/L1</b> segurado abre a <b>roda de armas</b> (analógico direito escolhe, ←/→ troca dentro da categoria, soltar equipa; toque rápido = próxima arma); no carro <b>RT</b> acelera e <b>LT</b> freia. <b>Start/OPTIONS</b> pausa — a lista completa está em Ajustes. As dicas na tela mostram os botões do controle conectado.</p>
@@ -112,9 +114,9 @@ GuideUI.PAGES = {
         <li><b>Volante por giroscópio</b> (ligue em Ajustes): dirigindo, incline o celular para virar o carro. O <b>RÉ / FREIO</b> vai para o canto esquerdo (polegar esquerdo freia, o direito acelera) e o joystick, se tocado, ainda manda.</li>
         <li><b>Botões de ação</b> em volta do botão grande, no canto direito, que mudam com o que você está fazendo:<br>
         a pé — <b>ATACAR</b> (segure para rajada) · <b>ROLAR</b> (perto de grade/muro: PULAR) · <b>ARMA</b> (toque troca, segure recarrega) · ação do lugar (ENTRAR, ROUBAR, VASCULHAR…; sem nada por perto, BOLSA) · <b>AGACHAR</b> · e uma 2ª ação do lugar quando houver;<br>
-        dirigindo — <b>ACELERAR</b> · <b>RÉ / FREIO</b> · <b>SAIR</b> · <b>BUZINA</b> · ação do lugar (ABASTECER, DESMANCHAR…) quando houver;<br>
+        dirigindo — <b>ACELERAR</b> · <b>RÉ / FREIO</b> · <b>SAIR</b> · <b>BUZINA</b> · <b>FREIO DE MÃO</b> · ação do lugar (ABASTECER, DESMANCHAR…) quando houver;<br>
         helicóptero — <b>SUBIR</b> · <b>DESCER</b> · <b>SAIR</b> · <b>GIRAR</b>.</li>
-        <li><b>✚ KIT</b> aparece com vida baixa. Logo abaixo do HUD: <b>⋯</b> (recarregar, kit, furtar, mochila, farol, zoom), <b>CRIME</b> (carreiras) e <b>II</b> (mapa/pausa). <b>Pinça</b> = zoom.</li>
+        <li><b>✚ KIT</b> aparece com vida baixa. Logo abaixo do HUD: <b>⋯</b> (recarregar, kit, furtar, mochila, farol, rádio, zoom), <b>CRIME</b> (carreiras) e <b>II</b> (mapa/pausa). <b>Pinça</b> = zoom.</li>
         <li><b>HUD enxuto</b>: vida, colete (se vestido), fôlego (quando gasto), dinheiro, hora e estrelas. A arma e a munição aparecem no botão <b>ARMA</b>.</li>
         <li><b>Toque no minimapa</b>: abre o <b>mapa expandido</b>, de ponta a ponta. Um dedo arrasta, <b>pinça</b> dá zoom, um toque marca o destino; os botões do canto dão zoom, centram em você e abrem a legenda.</li></ul>
         <h3>Minimapa</h3><p>Além dos carros, da polícia e do destino, o minimapa mostra com ícone as <b>lojas e lugares em que dá para entrar</b> (lanchonete, farmácia, bar, padaria, mercado, boutique, academia, loja de armas, banco, hospital, delegacia, posto, concessionária…) — dá para saber onde você está só olhando para ele. No mapa grande, as portas que não estão na legenda aparecem quando você aproxima.</p>`,
@@ -315,6 +317,11 @@ GuideUI.PAGES = {
         <li><b>Gestão</b> nas patentes altas: negócios que rendem por dia — e riscos que também rodam por dia (Receita, arrego, rival, sequestro, rastreio).</li></ul>
         <div class="gd-tip">As carreiras se ajudam: o <b>fundo falso</b> do Desmanche esconde o dinheiro da rota do Bicho; a <b>escola de samba</b> do Bicho segura a Receita do Desmanche e das fachadas; o <b>silenciador</b> do Armeiro deixa qualquer trabalho mais discreto.</div>`,
 
+    radio: () => `<h2>Rádio e músicas</h2>
+        <p>Todo carro tem <b>rádio</b> (moto, bicicleta e barco não). <kbd>R</kbd> troca a estação — no controle <kbd>←</kbd>/<kbd>→</kbd>, no celular <b>⋯ › RÁDIO</b> — passando pelo desligado. Cada carro guarda a sua; o volume fica em Ajustes › Rádio do carro.</p>
+        <p>Como uma rádio de verdade, cada estação <b>segue tocando</b> enquanto você ouve outra: sintonizar entra no meio da faixa que estiver no ar. A <b>Rádio Cidade</b> dá as notícias da cidade (inclusive o que você aprontou) por cima de uma bossa.</p>
+        <div class="gd-tip">As músicas são de uso livre (<b>Creative Commons — Atribuição</b>): podem ser usadas no jogo desde que o autor seja creditado. No jogo elas foram convertidas para mono (64 kbps) e tiveram o volume igualado. O título de cada faixa abre a página original.</div>
+        ${typeof Radio !== 'undefined' ? Radio.creditsHtml() : ''}`,
     tips: () => `<h2>Dicas</h2><ul>
         <li>Faça trabalhos de noite quando eles pedem (invasão, comércio): de dia eles nem aparecem.</li>
         <li>Guarde a arma para trabalhos de discrição: arma na mão chama atenção na fita e no chupa-cabra.</li>

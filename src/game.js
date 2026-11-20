@@ -712,6 +712,9 @@ class Game {
 			// Direção crua (estilo veículo): W/S = acelerador, A/D = volante.
 			const car = this.activeCar;
 			if (car.spec && car.spec.bike === 'bike') this._pedal(car, dt);    // bicicleta: o sprint pedala forte (e gasta fôlego)
+			car.handbrake = !frozenUI && !!this.input.keys[' '];                // FREIO DE MÃO: Espaço · RB no controle · botão no celular (Vehicle.drive)
+			if (!frozenUI && (this.input.consumePress('r') || this.input.consumePress('radionext'))) Radio.step(this, 1);      // rádio: R · → no controle · ⋯ › RÁDIO
+			if (!frozenUI && this.input.consumePress('radioprev')) Radio.step(this, -1);                                        // ...← no controle
 			if (StreetRacing.control(this, car, axis, dt)) car.drive(0, 0, dt);      // corrida: parado no grid até o VAI! (e na largada queimada)
 			else car.drive(axis.z, axis.x, dt);
 			this._fuelUpdate(dt);
@@ -807,6 +810,7 @@ class Game {
 		Perf.lap('outros');
 		this.combat.update(dt);
 		this.fireworks.update(dt);
+		Radio.update(this, dt);                                                  // rádio do carro: a estação de cada carro (audio/Radio.js)
 		if (typeof News !== 'undefined') News.radioUpdate(dt, this);          // boletim no rádio do carro
 		for (let i = this._delayed.length - 1; i >= 0; i--) {
 			const d = this._delayed[i];
@@ -2900,7 +2904,12 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		if (car === ac || src === 'player') NearMiss.onImpact();           // bateu: a sequência de raspadas zera (vehicle/NearMiss.js)
 		this.combat.spark(p.x, 1.0, p.z, [1, 0.85, 0.45]);
 		const f = this.camera.target;
-		if (hypot(p.x - f.x, p.z - f.z) < 45) this.camera.shake(Math.min(0.7, dv * 0.045));
+		if (car === ac && this.mode === 'car') {
+			// o SEU carro: a câmera dá o tranco para onde o carro vinha (a inércia — a tela "bate" junto) e, pancada forte, o tempo para por
+			// um instante (o quadro do impacto); capotou/explodiu já vem com a câmera lenta própria (_burnout)
+			this.camera.shake(Math.min(0.8, dv * 0.05), -dvx, -dvz);
+			if (dv > 11 && this.timeScale >= 1 && !car.tumble) this.slowMo(0.3, 0.09);
+		} else if (hypot(p.x - f.x, p.z - f.z) < 45) this.camera.shake(Math.min(0.7, dv * 0.045));
 
 		if (car === ac && this.mode === 'car') {
 			// O motorista também sente a batida forte.

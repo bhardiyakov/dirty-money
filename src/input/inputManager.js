@@ -13,7 +13,7 @@
 //             CÂMERA 360°: analógico dir. ↔ gira (↕ zoom). Mirando (LT com arma de fogo) ou preparando a granada, ele aponta.
 //             Teclado/mouse: o cursor é a mira da arma de fogo e o botão direito a firma; sem arma de fogo na mão, botão direito
 //             ARRASTANDO gira a câmera (com ou sem arma: botão do meio arrastando). Celular: arrastar o dedo no lado direito da tela.
-//     Carro:  RT acelera · LT freia/ré · Y/△ sair · X/□ interagir (abastecer/desmanche) · L3 buzina · ↓ faróis
+//     Carro:  RT acelera · LT freia/ré · RB freio de mão · ←/→ rádio · Y/△ sair · X/□ interagir (abastecer/desmanche) · L3 buzina · ↓ faróis
 //             Bicicleta: L3 é o SPRINT (pedalar forte, como o sprint a pé: toque repetido = mais forte)
 //     Helicóptero: RT sobe · LT desce · analógico esq. mover · analógico dir. ↔ gira · Y/△ descer/pular
 //     Sempre: Back/SHARE inventário · Start/OPTIONS pausa (Game) · analógico dir. ↔ câmera 360° (no helicóptero: gira ele) e ↕ zoom
@@ -206,11 +206,13 @@ class InputManager {
         set('padsteal', foot && btn(13));                   // ↓: arrombar na manha (carro trancado encostado) ou furtar (Game)
         set('m', btn(12));                                  // ↑: kit médico
         set('l', car && btn(13));                           // ↓ no carro: faróis
+        set('radionext', car && btn(15));                   // → no carro: próxima estação do rádio (Radio)
+        set('radioprev', car && btn(14));                   // ← no carro: estação anterior
         set('h', car && !this.bikeMode && btn(10));         // L3 no carro/moto: buzina
         set('q', foot && btn(11));                          // R3 a pé: agachar / cobertura (nadando: mergulhar)
         set('roll', foot && btn(5));                        // RB a pé: rolar (esquiva)
         set('i', btn(8));                                   // Back/SHARE: inventário
-        set(' ', !car && rt);                               // RT: golpe/tiro (rajada segurando) · helicóptero: sobe
+        set(' ', (!car && rt) || (car && !this.bikeMode && btn(5)));      // RT: golpe/tiro (rajada segurando) · helicóptero: sobe · RB no carro: freio de mão
         set('shift', ((foot || this.bikeMode) && !lt && btn(10)) || (heli && lt) || (car && !this.bikeMode && btn(0)));      // L3: sprint (mirando, não corre) · helicóptero: LT desce · A no carro: nitro (corridas)
         set('padwheel', foot && btn(4));                    // LB: roda de armas (segurar) / próxima arma (toque) — WeaponWheel
         const edge = (i) => btn(i) && !this._padPrev[i];
