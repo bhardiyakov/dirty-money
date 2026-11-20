@@ -7,6 +7,9 @@
 //                 fires where the player faces.
 //   PHONE:        the fire button turns into a right stick: dragging it places the reticle the same way, and the gun fires by
 //                 itself while the reticle is over a target (a person, the helicopter, a car).
+// AJUDA DE MIRA (controle e celular — Ajustes › Ajuda de mira; Config.aim): o retículo puxa de leve para a pessoa mais perto dele e, com
+// o LT segurado e o analógico parado, TRAVA no alvo mais perto à frente (o mesmo enquanto valer). O mouse é sempre manual.
+// RETORNO DE ACERTO: cada bala que pega em alguém mostra o marcador (✕) na mira com um estalo; derrubou, ele fica vermelho e maior.
 // Targets are found on the SCREEN, where they are drawn — a helicopter high in the air, someone on a deck or a roof, a car — not on
 // the ground under the reticle; a shot at something high up flies over the buildings and only hits that target. With nothing under
 // the reticle, the shot goes to the ground point under it (at chest height).
@@ -72,7 +75,7 @@ class Aim {
 	_release() {
 		const p = this.g.player;
 		if (this.source || this.active) { p.aimHeading = null; p.aimFree = false; }
-		this.active = false; this.settle = 0; this.target = null; this.point = null; this.source = null; this.autoFire = false;
+		this.active = false; this.settle = 0; this.target = null; this.point = null; this.source = null; this.autoFire = false; this._lock = null;
 		this.ret.style.display = 'none';
 		this._cursor(false);
 	}
@@ -82,17 +85,64 @@ class Aim {
 	// ahead of the player (without LT the stick is the camera's). Mouse: the cursor.
 	_reticle(dt) {
 		const inp = this.g.input;
-		if (inp.touchAim) return this._fromStick(inp.touchAim, 'touch');
+		if (inp.touchAim) { this._lock = null; return this._assist(this._fromStick(inp.touchAim, 'touch')); }
 		if (inp.usingPad) {
-			if (!inp.aimHeld) { this._sT = 0; return null; }
+			if (!inp.aimHeld) { this._sT = 0; this._lock = null; return null; }
 			const rs = inp.rstick;
 			if (Math.hypot(rs.x, rs.y) > 0.25) { this._last.x = rs.x; this._last.y = rs.y; this._sT = 0.3; } else this._sT -= dt;
-			if (this._sT > 0) return this._fromStick(this._last, 'stick');
-			return inp.aimHeld ? this._fromStick(this._facing(0.5), 'stick', true) : null;
+			if (this._sT > 0) { this._lock = null; return this._assist(this._fromStick(this._last, 'stick')); }
+			return (this._help() && this._lockOn()) || this._fromStick(this._facing(0.5), 'stick', true);
 		}
+		this._lock = null;
 		if (this.g.touch && this.g.touch.shown) return null;
 		return inp.mouseX >= 0 ? { x: inp.mouseX, y: inp.mouseY, kind: 'mouse' } : null;
 	}
+	// ------------------------------------------------------------------ ajuda de mira (controle e celular)
+	_help() { const S = this.g.menu && this.g.menu.settings; return !S || S.aimHelp !== false; }
+	// Onde a pessoa/o helicóptero `c` aparece na tela (o peito; o helicóptero, o corpo) — o ponto que a mira busca.
+	_aimAt(c, kind, y) {
+		const S = typeof SpriteActor !== 'undefined' && SpriteActor.standing() ? SpriteActor.STAND_SCALE : 1;
+		return kind === 'person' ? this._screen(c.position.x, y + 1.0 * S, c.position.z) : this._screen(c.position.x, y, c.position.z);
+	}
+	// Ímã: o retículo `src` anda `pull` do caminho até a pessoa mais perto dele na tela (dentro do alcance da arma) — mais forte quanto
+	// mais perto. Carros não puxam.
+	_assist(src) {
+		if (!src || !this._help()) return src;
+		const A = Config.aim, p = this.g.player, P = p.position, W = Weapons[p.weapon], range = (W && W.range) || 40;
+		const R = Math.max(A.pullMinPx, A.pullR * this._pxPerM());
+		let best = null, bd = R;
+		this._forTargets((c, kind, y) => {
+			if (kind === 'car' || Math.hypot(c.position.x - P.x, c.position.z - P.z) > range) return;
+			const q = this._aimAt(c, kind, y), d = Math.hypot(q.x - src.x, q.y - src.y);
+			if (d < bd) { bd = d; best = q; }
+		});
+		if (!best) return src;
+		const u = 1 - bd / R, k = A.pull * u * u * (3 - 2 * u);
+		return { x: src.x + (best.x - src.x) * k, y: src.y + (best.y - src.y) * k, kind: src.kind };
+	}
+	// TRAVA (LT segurado, analógico parado): o alvo mais perto à frente (±lockCone, até o alcance da arma, à vista) — e o mesmo enquanto
+	// ele estiver vivo, à vista e ao alcance. null = ninguém (a mira fica à frente, como antes).
+	_lockOn() {
+		const p = this.g.player, P = p.position, W = Weapons[p.weapon], range = ((W && W.range) || 40) * 0.9, h = p.root.rotation.y, cone = Config.aim.lockCone;
+		let keep = null, best = null, bs = Infinity;
+		this._forTargets((c, kind, y) => {
+			if (kind === 'car') return;
+			const dx = c.position.x - P.x, dz = c.position.z - P.z, d = Math.hypot(dx, dz);
+			if (c === this._lock) { if (d < range * 1.15) keep = { c, kind, y }; return; }
+			if (d > range || d < 0.5) return;
+			const da = Math.abs(this._wrap(Math.atan2(dx, dz) - h));
+			if (da > cone) return;
+			const sc = d + da * 12;
+			if (sc < bs) { bs = sc; best = { c, kind, y }; }
+		});
+		const los = (L) => L && MapGeo.hasLineOfSight(P.x, P.z, L.c.position.x, L.c.position.z);
+		const L = los(keep) ? keep : los(best) ? best : null;
+		this._lock = L ? L.c : null;
+		if (!L) return null;
+		const q = this._aimAt(L.c, L.kind, L.y);
+		return { x: q.x, y: q.y, kind: 'stick' };
+	}
+
 	// `screen`: v já é um vetor da tela (_facing). Senão, com o movimento absoluto (Config.camera.worldMove), o analógico aponta nos
 	// eixos do MAPA como o andar (cima = norte, esquerda = oeste): a direção no mundo é projetada para a tela, mantendo o alcance.
 	_fromStick(v, kind, screen = false) {
@@ -244,6 +294,7 @@ class Aim {
 		const spread = W.spread * this.spreadMul() * (W.pellets > 1 ? 0.8 : 1);
 		const rad = Math.max(11, Math.min(90, dist * Math.tan(spread) * this._pxPerM()));
 		el.style.display = 'block';
+		this._retC = c; this._retT = performance.now();                       // (o marcador de acerto aparece aqui)
 		el.style.transform = `translate(${c.x - rad}px, ${c.y - rad}px)`;
 		el.style.width = el.style.height = rad * 2 + 'px';
 		el.className = (t ? 'lock' : '') + (this.settle >= 0.98 ? ' steady' : '');
@@ -258,11 +309,44 @@ class Aim {
 				border: 2px solid rgba(255,255,255,0.85); box-shadow: 0 0 0 1px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(0,0,0,0.4); transition: border-color .12s; }
 			#aimRet::after { content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px #000; }
 			#aimRet.lock { border-color: #ff4a4a; } #aimRet.lock::after { background: #ff4a4a; }
-			#aimRet.steady { border-width: 3px; } #aimRet.steady:not(.lock) { border-color: #4ade80; }`;
+			#aimRet.steady { border-width: 3px; } #aimRet.steady:not(.lock) { border-color: #4ade80; }
+			#hitMark { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 6; pointer-events: none; opacity: 0; }
+			#hitMark i { position: absolute; left: -5px; top: -1.5px; width: 10px; height: 3px; border-radius: 1px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.6); }
+			#hitMark i:nth-child(1) { transform: rotate(45deg) translateX(-10px); } #hitMark i:nth-child(2) { transform: rotate(135deg) translateX(-10px); }
+			#hitMark i:nth-child(3) { transform: rotate(225deg) translateX(-10px); } #hitMark i:nth-child(4) { transform: rotate(315deg) translateX(-10px); }
+			#hitMark.on { animation: hitMk .22s ease-out forwards; }
+			#hitMark.kill { animation: hitMkK .42s ease-out forwards; } #hitMark.kill i { background: #ff3b3b; width: 13px; left: -6.5px; }
+			@keyframes hitMk { 0% { opacity: 1; scale: 1.35; } 60% { opacity: 1; scale: 1; } 100% { opacity: 0; scale: 1; } }
+			@keyframes hitMkK { 0% { opacity: 1; scale: 1.6; } 70% { opacity: 1; scale: 1.1; } 100% { opacity: 0; scale: 1.1; } }`;
 		document.head.appendChild(css);
 		this.ret = document.createElement('div');
 		this.ret.id = 'aimRet';
 		document.body.appendChild(this.ret);
+		this.mark = document.createElement('div');
+		this.mark.id = 'hitMark';
+		this.mark.innerHTML = '<i></i><i></i><i></i><i></i>';
+		document.body.appendChild(this.mark);
+		this.hits = 0; this.kills = 0;                                      // (testes)
+	}
+
+	// ------------------------------------------------------------------ retorno de acerto (Combat: bala do jogador pegou em alguém)
+	// O marcador (✕) na mira — ou, sem mira na tela (tiro do quadril no controle), em cima de quem levou — e o estalo; derrubou: vermelho,
+	// maior, e o som mais grave. (A escopeta põe 8 bagos: um marcador por disparo, não por bago.)
+	onHit(t, kill, kind) {
+		const now = performance.now();
+		if (kill) this.kills++; else this.hits++;
+		if (!kill && now - (this._markT || 0) < 70) return;
+		this._markT = now;
+		let c = this.ret.style.display === 'block' && now - (this._retT || 0) < 250 ? this._retC : null;
+		if (!c && t && t.position) { try { c = this._aimAt(t, kind === 'heli' ? 'air' : 'person', kind === 'heli' ? (t.alt || 0) : 0); } catch (e) { c = null; } }
+		if (!c) return;
+		const el = this.mark;
+		el.style.transform = `translate(${c.x}px, ${c.y}px)`;
+		el.className = '';
+		void el.offsetWidth;                                                 // (recomeça a animação)
+		el.className = kill ? 'kill' : 'on';
+		if (kill) { AudioFX.blip(620, 0.07, 0.11); setTimeout(() => AudioFX.blip(420, 0.11, 0.11), 70); }
+		else AudioFX.blip(1900, 0.035, 0.06);
 	}
 
 	_wrap(a) { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; }

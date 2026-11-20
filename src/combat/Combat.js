@@ -235,7 +235,7 @@ class Combat {
     strike(who, kind, opts = {}) {
         const M = Melee[kind];
         if (!M) return null;
-        const s = { who, kind, M, t: opts.t || 0, hit: new Set(), source: opts.source || 'player', dmgMul: opts.dmgMul || 1, onHit: opts.onHit || null, ref: opts.ref || who, foe: opts.foe || null, carHit: false };
+        const s = { who, kind, M, t: opts.t || 0, hit: new Set(), source: opts.source || 'player', dmgMul: opts.dmgMul || 1, onHit: opts.onHit || null, ref: opts.ref || who, foe: opts.foe || null, carHit: false, counter: !!opts.counter };
         (this.strikes || (this.strikes = [])).push(s);
         return s;
     }
@@ -262,6 +262,12 @@ class Combat {
         const bx = P.x + Math.sin(a) * reach, bz = P.z + Math.cos(a) * reach;
         const sx = bx - ax, sz = bz - az, sl2 = sx * sx + sz * sz || 1e-6, R = M.w + BODY_R;
         let landed = false;
+        // ESQUIVA PERFEITA: o golpe de alguém passou por dentro do jogador ROLANDO (sem o rolamento, teria pegado) — Game.onPerfectDodge.
+        const pl = this.game.player;
+        if (s.source !== 'player' && !s.dodged && (!s.foe || s.foe === pl) && pl && pl.dodging && this.game.mode === 'player') {
+            const q = pl.position, k = Math.max(0, Math.min(1, ((q.x - ax) * sx + (q.z - az) * sz) / sl2));
+            if ((q.x - ax - sx * k) ** 2 + (q.z - az - sz * k) ** 2 <= R * R) { s.dodged = true; if (this.game.onPerfectDodge) this.game.onPerfectDodge(s); }
+        }
         for (const t of this._strikeTargets(s)) {
             if (t === s.ref || s.hit.has(t)) continue;
             if (!M.multi && s.hit.size) break;
@@ -306,7 +312,8 @@ class Combat {
         let fall = M.fall >= Config.ragdoll.minPower ? { dx, dz, power: M.fall * (0.9 + Math.random() * 0.2) } : null;
         // POSTURA (Posture, só em quem está brigando): golpe no atordoado dói mais e, pesado, o derruba; equilíbrio zerado por golpe pesado
         // = ARREMESSADO (pode ir prensar numa parede); por golpe leve = atordoado (FightState.onHurt lê t._postHit)
-        const PH = t !== g.player && typeof Posture !== 'undefined' ? Posture.hit(t, s.kind) : null, PC = Config.posture;
+        if (s.counter) dmg *= Config.melee.perfectDodge.dmg;                    // contra-ataque depois da esquiva perfeita
+        const PH = t !== g.player && typeof Posture !== 'undefined' ? Posture.hit(t, s.kind, s.counter) : null, PC = Config.posture;
         if (PH) {
             if (PH.stunned) dmg *= PC.stunDmg;
             if (PH.heavy && (PH.broken || PH.stunned)) fall = { dx, dz, power: PC.knock * (0.9 + Math.random() * 0.25), by: s.source };
@@ -523,6 +530,7 @@ class Combat {
                 else {
                     const wasAlive = hit.ref.alive !== false;
                     hit.ref.takeDamage(b.dmg, { x: b.px, z: b.pz }, b.owner, undefined, 'gun');
+                    if (b.owner === 'player' && wasAlive && this.game.aim) this.game.aim.onHit(hit.ref, hit.ref.alive === false, hit.kind);      // (o marcador na mira)
                     if (wasAlive && hit.kind !== 'heli' && typeof Blood !== 'undefined') {     // sangue: respingo atrás do alvo e ferida que sangra
                         const p = hit.ref.position;
                         Blood.hit(p.x, p.z, b.vx, b.vz, b.dmg, hit.ref);

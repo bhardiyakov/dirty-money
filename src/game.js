@@ -1314,6 +1314,11 @@ class Game {
 			const crit = Math.random() < (SkillTree.m.crit || 0);
 			this.combat.fire({ x: pos.x, z: pos.z, angle, owner: 'player', ref: p, over: !!high, only: high ? high.only : null, spreadMul: this.aim ? this.aim.spreadMul() : 1 - (SkillTree.m.spread || 0), dmgMul: (1 + (SkillTree.m.gunDmg || 0)) * (crit ? 2 : 1) }, p.weapon);
 			if (this.aim) this.aim.onShot(p.weapon);                          // coice: desfirma a mira um pouco
+			const kick = Config.aim.kick[p.weapon];                             // o tranco da câmera (contra o tiro) e a vibração do controle
+			if (kick) {
+				this.camera.shake(kick, -Math.sin(angle), -Math.cos(angle));
+				if (this.input.usingPad) { const W = Weapons[p.weapon]; this.input.rumble(Math.min(1, kick * 3.5), Math.min(1, kick * 2.5), W && W.auto ? 45 : 90); }
+			}
 			Temper.onPlayerShot(this, pos, angle);                              // quem ele mirou e anda armado revida (antes do alerta: o resto foge)
 			if ((Weapons[p.weapon] && Weapons[p.weapon].silenced) || (this.careers && this.careers.silenced(p.weapon))) {      // silenciador (a pistola com ele, ou o do Armeiro): só quem está muito perto e vê percebe
 				this.npcManager.alertViolence(pos, 8);
@@ -1350,11 +1355,13 @@ class Game {
 		}
 		const finisher = kind === 'kick' || kind === 'swing';
 		const knife = weaponKey === 'knife';                                   // faca: soco com lâmina
+		const counter = v2 && now < (this._counterUntil || 0);                 // logo depois da esquiva perfeita: contra-ataque (onPerfectDodge)
 		this.combat.strike({ position: p.position, heading: () => p.root.rotation.y, ok: () => p.alive && !p.rag && !!p.action && p.action.name === kind }, sk, {
-			source: 'player', ref: p,
+			source: 'player', ref: p, counter,
 			dmgMul: (1 + (SkillTree.m.melee || 0) + Outfit.m.melee) * (knife ? Weapons.knife.dmg / M.dmg : 1) * Physique.meleeMul(this.player),      // (força do físico: magro bate fraco, forte bate forte)
 			onHit: (t) => {
 				if (t.halfLen) { this.npcManager.alertViolence(p.position, 10); return; }      // (carro: vandalismo, só assusta)
+				if (counter) { this._counterUntil = 0; this.counters = (this.counters || 0) + 1; }      // (o contra-ataque é um golpe só)
 				if (v2) {                                                                      // luta nova: trava no alvo e o impacto
 					this._meleeLock = { t, until: performance.now() / 1000 + C.lockTime };
 					const k = finisher || !t.alive ? C.stopFinisher : C.stop;
@@ -1381,6 +1388,22 @@ class Game {
 		this._hdVis = v;
 		const id = v.modelId;
 		CarArt3D.loadHD(id).then((k) => { if (k && this._hdVis === v && v.modelId === id) { v._ldId = id; v.modelId = k; } });
+	}
+
+	// ESQUIVA PERFEITA (Combat._strikeTest): o golpe de alguém passou por dentro do rolamento do jogador. Um instante de câmera lenta, o
+	// "vush" e, por Config.melee.perfectDodge.window s, o próximo golpe do jogador é CONTRA-ATAQUE (mais dano e o equilíbrio do outro
+	// como contra-ataque — Combat._land / Posture).
+	onPerfectDodge(s) {
+		const C = Config.melee.perfectDodge, now = performance.now() / 1000;
+		if (now < (this._pdCool || 0)) return;
+		this._pdCool = now + 0.6;
+		this._counterUntil = now + C.window;
+		this.perfectDodges = (this.perfectDodges || 0) + 1;
+		if (!this._slowUntil || this.timeScale >= 1) this.slowMo(C.slow, C.dur);
+		const p = this.player.position;
+		AudioFX._burst(p.x, p.z, { vol: 0.25, dur: 0.22, f0: 2400, f1: 500, maxDist: 30, type: 'bandpass', q: 1.2 });
+		if (typeof Bubbles !== 'undefined') Bubbles.say(this.player, '💨 contra-ataque!', { ms: 900, tone: 'shout', key: 'dodge' });
+		this.input.rumble(0.3, 0.6, 120);
 	}
 
 	_lungeTick(dt) {

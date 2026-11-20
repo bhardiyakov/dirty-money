@@ -780,8 +780,9 @@ class Player {
         this.actor.update(dt, rate);
     }
 
-    // Land locomotion with heavy steps: the body turns toward the stick at a speed-limited rate (quick pivot standing, wide turns at a
-    // sprint) and the velocity always points where the body faces — no sideways drift. Speed builds up at moveAccel and drops at
+    // Land locomotion with heavy steps: the body turns toward the stick at a speed-limited rate (quick pivot standing — turnRateStand —,
+    // wide turns at a sprint) and the velocity always points where the body faces — no sideways drift. Speed builds up at startAccel up
+    // to the trot (a snappy start) and moveAccel above it (the sprint builds up), and drops at
     // stopDecel (a couple of planted steps, no slide); while still turning, less of it (cos of what is left to turn). Running and
     // reversing (cos of facing → stick ≤ skidDot): skid — hard braking along the facing without turning, then the pivot.
     // `free`: aiming, glued to cover or in an action — the old free approach (strafing, sliding along the cover).
@@ -803,13 +804,14 @@ class Player {
             const diff = this._wrapAngle(Math.atan2(moveDir.x, moveDir.z) - heading);
             if (maxSpeed > 0 && speed >= P.skidMinSpeed && Math.cos(diff) <= P.skidDot) { this.skidding = true; decel = P.skidFriction; }
             else {
-                const k = Math.max(0, Math.min(1, (speed - 3) / 7)), rate = P.turnRateWalk + (P.turnRateSprint - P.turnRateWalk) * k;
+                const k = Math.max(0, Math.min(1, (speed - 3) / 7)), rate = speed < 1.2 ? P.turnRateStand : P.turnRateWalk + (P.turnRateSprint - P.turnRateWalk) * k;
                 const turn = Math.max(-rate * dt, Math.min(rate * dt, diff));
                 heading += turn;
                 target = maxSpeed * Math.max(0, Math.cos(diff - turn)) ** 0.6 * Math.min(1, inputLen);
             }
         }
-        speed = target > speed ? Math.min(target, speed + P.moveAccel * dt) : Math.max(target, speed - decel * dt);
+        const acc = speed < P.jogSpeed ? P.startAccel : P.moveAccel;                  // (arranca rápido até o trote; o pique embala devagar)
+        speed = target > speed ? Math.min(target, speed + acc * dt) : Math.max(target, speed - decel * dt);
         this.root.rotation.y = heading;
         v.x = Math.sin(heading) * speed;
         v.z = Math.cos(heading) * speed;
