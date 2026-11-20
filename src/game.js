@@ -813,6 +813,7 @@ class Game {
 		this.combat.update(dt);
 		this.fireworks.update(dt);
 		Radio.update(this, dt);                                                  // rádio do carro: a estação de cada carro (audio/Radio.js)
+		StreetReact.update(this, dt);                                            // pedestres saem da frente do seu carro (npc/StreetReact.js)
 		if (typeof News !== 'undefined') News.radioUpdate(dt, this);          // boletim no rádio do carro
 		for (let i = this._delayed.length - 1; i >= 0; i--) {
 			const d = this._delayed[i];
@@ -893,6 +894,7 @@ class Game {
 		if (this.mode === 'car' && this.activeCar && this.input.consumePress('h')) {
 			const cp = this.activeCar.position;
 			AudioFX.honk(cp.x, cp.z, 1);
+			StreetReact.onHorn(this, this.activeCar);                      // quem está na frente sai do caminho; o carro parado buzina de volta
 		}
 
 		// --- Semáforos ---

@@ -237,6 +237,7 @@ class NPCManager {
         for (const npc of this.npcs) {
             if (npc.alive && BABYLON.Vector3.Distance(npc.position, p) < Config.npc.shotRadius) npc.panic(p);
         }
+        if (typeof StreetReact !== 'undefined' && window.game) StreetReact.onShot(window.game, pos);      // (e os motoristas que ouvem)
     }
 
     // Violência/assalto: só reage quem está perto E enxerga o local.
