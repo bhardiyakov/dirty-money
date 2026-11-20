@@ -22,6 +22,9 @@ class Hud {
 		this._build();
 	}
 
+	// Ajustes › Tamanho do HUD (0,8 a 1,3).
+	setScale(k) { this.scale = Math.max(0.6, Math.min(1.6, k || 1)); if (this._fit) this._fit(); }
+
 	// ------------------------------------------------------------------ montagem
 	_build() {
 		const css = document.createElement('style');
@@ -186,12 +189,18 @@ class Hud {
 		const vg = document.createElement('div'); vg.id = 'opVignette'; document.body.appendChild(vg);
 		document.body.appendChild(root);
 		// o HUD acompanha a largura da janela (celular tem a própria regra no TouchControls)
+		// Ajustes › Tamanho do HUD (this.scale) multiplica: o cartão da direita, as metas, a vida/fôlego e o minimapa.
 		const fit = () => {
-			if (document.body.classList.contains('mobile')) { root.style.transform = ''; return; }
-			const s = Math.max(0.78, Math.min(1.15, window.innerWidth / 1500));
+			const u = this.scale || 1, mm = document.getElementById('minimap');
+			if (document.body.classList.contains('mobile')) { root.style.transform = ''; this.vitals.style.transform = ''; if (mm) mm.style.transform = ''; return; }
+			const s = Math.max(0.78, Math.min(1.15, window.innerWidth / 1500)) * u;
 			root.style.transform = `scale(${s})`;
 			this.missionPanel.style.transform = `scale(${s})`; this.missionPanel.style.transformOrigin = 'top left';
+			const b = u === 1 ? '' : `scale(${u})`;
+			this.vitals.style.transform = b; this.vitals.style.transformOrigin = 'bottom left'; this.vitals.style.bottom = u === 1 ? '' : `calc(26px + var(--mm, 200px) * ${u})`;      // (em cima do minimapa, que também cresceu)
+			if (mm) { mm.style.transform = b; mm.style.transformOrigin = 'bottom left'; }
 		};
+		this._fit = fit;
 		fit(); window.addEventListener('resize', fit);
 
 		// Estrelas
@@ -371,6 +380,9 @@ class Hud {
 			const d = tot - prev, el = this.$('cpD');
 			this.$('cpV').textContent = brl(inv.cash) + (inv.clean > 0 ? ` · limpo ${brl(inv.clean)}` : '');
 			el.textContent = (d > 0 ? '+' : '−') + brl(Math.abs(d)); el.className = d > 0 ? 'pos' : 'neg';
+			// (PC: logo abaixo do cartão da direita — arma, procurado —, em vez de por trás dele; o celular tem o lugar dele)
+			const hb = document.getElementById('hud2'), r = hb && !document.body.classList.contains('mobile') ? hb.getBoundingClientRect() : null;
+			this.cashPop.style.top = r && r.height > 4 ? Math.round(r.bottom + 10) + 'px' : '';
 			this.cashPop.classList.add('show'); this._cashT = 4;
 		});
 		if (this._cashT > 0) { this._cashT -= dt; if (this._cashT <= 0) this.cashPop.classList.remove('show'); }

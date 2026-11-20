@@ -76,7 +76,7 @@ const MobileUI = {
             body.mobile #phoneBadge { right: auto; bottom: auto; padding: 0 12px; display: flex; align-items: center; border-radius: 99px; background: rgba(14,17,26,0.6); border: 1.5px solid rgba(255,255,255,0.2); font-size: 15px; }
             body.mobile #traceChips { font-size: 11px !important; gap: 3px !important; }
             body.mobile #traceChips > div { padding: 3px 9px !important; }
-            body.mobile #hintCard { left: 8px; top: 120px; max-width: min(260px, 40vw); padding: 8px 10px; gap: 8px; font-size: 11.5px; line-height: 1.4; border-radius: 14px; }
+            body.mobile #hintCard { left: auto; right: 8px; top: 100px; max-width: min(260px, 40vw); padding: 8px 10px; gap: 8px; font-size: 11.5px; line-height: 1.4; border-radius: 14px; }
             body.mobile #hintCard .hi { font-size: 18px; } body.mobile #hintCard .tt { font-size: 10px; }
             body.mobile #hintCard .bt { margin-top: 6px; } body.mobile #hintCard button { padding: 7px 10px; font-size: 11px; min-height: 32px; }
             body.mobile #newsTV { left: 50%; top: auto; bottom: 6px; transform: translateX(-50%); width: min(400px, 42vw); }

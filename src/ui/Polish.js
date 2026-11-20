@@ -66,7 +66,7 @@ const Hints = {
         this._build();
         this.seen.add(h.id); this._save();
         this.cur = h; this.t = 11;
-        this.el.innerHTML = `<div class="hi">${h.icon}</div><div class="tx"><div class="tt">Dica</div>${typeof h.text === 'function' ? h.text() : h.text}<div class="bt"><button data-h="ok">Entendi</button><button data-h="off" class="off">Desligar dicas</button></div></div>`;
+        this.el.innerHTML = `<div class="hi">${h.icon}</div><div class="tx"><div class="tt">Dica</div>${(typeof KeyBinds !== 'undefined' ? (t) => KeyBinds.render(t) : (t) => t)(typeof h.text === 'function' ? h.text() : h.text)}<div class="bt"><button data-h="ok">Entendi</button><button data-h="off" class="off">Desligar dicas</button></div></div>`;
         this.el.classList.add('show');
         if (typeof AudioFX !== 'undefined') AudioFX.blip(1046, 0.06, 0.06);
     },

@@ -164,8 +164,17 @@ class Minimap {
         // apontando a direção — o mesmo esquema da safe house logo abaixo. Sem rota: o caminho é por sua conta.
         if (gps) {
             const gx = sx(gps.x, gps.z), gy = sy(gps.x, gps.z),{ inside, px, py } = this._edgePoint(gx, gy, S, 12);
-            const r = 6;
+            const r = 7;
             ctx.save();
+            // a linha (tracejada, andando para o destino) do jogador até o marcador — ou até a borda, na direção dele
+            const L = Math.hypot(px - S / 2, py - S / 2);
+            if (L > r + 8) {
+                ctx.setLineDash([5, 4]); ctx.lineDashOffset = -((performance.now() / 60) % 9);
+                ctx.lineCap = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(7,9,13,0.55)';
+                ctx.beginPath(); ctx.moveTo(S / 2, S / 2); ctx.lineTo(px, py); ctx.stroke();
+                ctx.lineWidth = 2.2; ctx.strokeStyle = 'rgba(255,74,74,0.95)'; ctx.stroke();
+                ctx.setLineDash([]);
+            }
             if (!inside) {
                 ctx.translate(px, py); ctx.rotate(Math.atan2(gy - py, gx - px));
                 ctx.fillStyle = '#ff3b3b'; ctx.strokeStyle = '#07090d'; ctx.lineWidth = 2;

@@ -139,6 +139,8 @@ class TrafficCar extends Vehicle {
         this._clsT = (this._clsT || 0) - dt;
         if (this._clsT <= 0) { this._clsT = 0.6; const n = RoadPlan.nearestRoadPoint(p.x, p.z, 14); this._clsMul = (n && TrafficCar.CLS_SPEED[n.edge.cls]) || 1; this._roadW = n ? n.edge.w : 10; }
         let vt = this.cruise * (this.ignoreSignals ? 1 : (this._clsMul || 1) * (Weather.cur ? Weather.cur.trafficMul : 1));       // chuva: motoristas mais cautelosos (viatura em perseguição ignora)
+        const scared = this._scared > 0;                                // ouviu tiro (StreetReact.onShot): acelera e fura o sinal por uns segundos
+        if (scared) { this._scared -= dt; vt *= Config.react.scaredSpeed; }
         let reason = '';
         let signal = 0;
         // QUEBRA-MOLAS à frente (StreetDetail): reduz para passar devagar (viatura em perseguição não liga)
@@ -172,7 +174,7 @@ class TrafficCar extends Vehicle {
                 vt = Math.min(vt, T.turnSpeed * ts * (this.turnMul || 1) + Math.max(0, dEntry - 5) * 0.45);
             }
 
-            if (dStop > -0.4 && !this.ignoreSignals && !this.runsReds) {   // ainda não cruzou a linha de retenção (entregador apressado fura o sinal)
+            if (dStop > -0.4 && !this.ignoreSignals && !this.runsReds && !scared) {   // ainda não cruzou a linha de retenção (entregador apressado fura o sinal)
                 const sig = env.signals.vehicle(jn.inter, jn.phase);
                 const brakeDist = (v * v) / (2 * T.brake * 0.7);
                 let must = false;

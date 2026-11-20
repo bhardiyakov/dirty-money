@@ -66,6 +66,13 @@ class EmpireUI {
     static get SPOTS() { return new Set(['LAGOA DA PRATA', 'MORRO DO VIGIA · CRISTO PROTETOR', 'COLOSSO', 'PEDRA DO FAROL', 'PÂNTANO', 'CANAL', 'SERRA DO NORTE', 'SERRA DO SUL', 'SERRA DO MEIO', 'FAZENDAS']); }
     // O aviso de chegada (também usado por quem quiser anunciar um lugar).
     static arrive(name, sub) {
+        // UM aviso grande por vez no meio da tela: com a faixa do Juice (meta, nível, missão…) no ar, a chegada espera ela sair
+        if (typeof Juice !== 'undefined' && (Juice._cur || Juice._q.length)) {
+            EmpireUI._pending = [name, sub];
+            clearInterval(EmpireUI._pendT);
+            EmpireUI._pendT = setInterval(() => { if (Juice._cur || Juice._q.length) return; clearInterval(EmpireUI._pendT); const p = EmpireUI._pending; EmpireUI._pending = null; if (p) EmpireUI.arrive(p[0], p[1]); }, 300);
+            return;
+        }
         let el = document.getElementById('arrive');
         if (!el) {
             const st = document.createElement('style');
@@ -76,7 +83,7 @@ class EmpireUI {
                     text-shadow: 0 3px 0 rgba(0,0,0,0.55), 0 0 22px rgba(0,0,0,0.6); }
                 #arrive i { display: block; width: 46%; height: 2px; margin: 8px auto 6px; background: linear-gradient(90deg, transparent, var(--gold, #fbbf24), transparent); }
                 #arrive small { font: 700 clamp(12px, 1.4vw, 16px) var(--font); letter-spacing: 0.16em; text-transform: uppercase; color: #e5e7eb; text-shadow: 0 2px 6px rgba(0,0,0,0.8); }
-                body.mobile #arrive { top: 26%; }`;
+                body.mobile #arrive { top: 24%; } body.mobile #arrive b { font-size: 24px; } body.mobile #arrive small { font-size: 10px; letter-spacing: 0.12em; } body.mobile #arrive i { margin: 5px auto 4px; }`;
             document.head.appendChild(st);
             el = document.createElement('div'); el.id = 'arrive'; document.body.appendChild(el);
         }

@@ -8,8 +8,8 @@
 
 class Game {
 	// Interface modules live in the open world and inside an interior (ui/UiLoop.js).
-	static UI_WORLD = ['minimap', 'panel', 'prompt', 'hud'];
-	static UI_INTERIOR = ['panel', 'prompt', 'hud'];
+	static UI_WORLD = ['minimap', 'panel', 'prompt', 'hud', 'objective'];
+	static UI_INTERIOR = ['panel', 'prompt', 'hud', 'objective'];
 	// Teclas de troca de arma (1–9, 0, − e =). Uma tecla pode ter mais de uma arma: apertar de novo passa para a próxima que você tem
 	// (2: pistola ↔ pistola com silenciador; =: as pesadas — RPG, lança-foguetes, minigun). WEAPON_SLOTS: tecla → a 1ª arma dela.
 	static get WEAPON_KEYS() {
@@ -185,6 +185,7 @@ class Game {
 		this.uiLoop = new UiLoop();
 		this.uiLoop.add('minimap', 20, () => this._updateMinimap());
 		this.uiLoop.add('panel', 15, (elapsed) => this.ui.update(elapsed));
+		this.uiLoop.add('objective', 4, () => Objective.update(this, 1));    // "o que fazer agora" (ui/Objective.js)
 		this.uiLoop.add('prompt', 10, () => this._updatePrompt());
 		this.uiLoop.add('hud', 10, () => this._updateHud());
 		this.wheel = new WeaponWheel(this);          // roda de armas (Tab / LB / botão ARMA), como a do GTA V
@@ -626,6 +627,8 @@ class Game {
 		const dy = this._lookDY || 0;
 		let dp = foot ? dy * C.foot3p.lookPitchMouse : 0;
 		if (foot && inp.padConnected && !inp.stickAim) { const y = inp.rstick.y; if (Math.abs(y) > Math.abs(inp.rstick.x) * 0.5) dp += Math.sign(y) * y * y * C.foot3p.lookPitchPad * dt; }
+		const S = inp.lookSens || 1;                                                    // Ajustes: sensibilidade e inversão da câmera
+		dp *= S * (inp.lookInvY ? -1 : 1); d *= S * (inp.lookInvX ? -1 : 1);
 		if (dp) FootCamera.tilt(dp);
 		this.camera.lookHeld = inp.lookHeld(this.mode === 'player' && inp.gunInHand) || (foot && inp.padConnected && Math.abs(inp.rstick.y) > 0.2 && !inp.stickAim);
 		if (d) this.camera.turn(d);
@@ -811,6 +814,7 @@ class Game {
 		this.combat.update(dt);
 		this.fireworks.update(dt);
 		Radio.update(this, dt);                                                  // rádio do carro: a estação de cada carro (audio/Radio.js)
+		StreetReact.update(this, dt);                                            // pedestres saem da frente do seu carro (npc/StreetReact.js)
 		if (typeof News !== 'undefined') News.radioUpdate(dt, this);          // boletim no rádio do carro
 		for (let i = this._delayed.length - 1; i >= 0; i--) {
 			const d = this._delayed[i];
@@ -891,6 +895,7 @@ class Game {
 		if (this.mode === 'car' && this.activeCar && this.input.consumePress('h')) {
 			const cp = this.activeCar.position;
 			AudioFX.honk(cp.x, cp.z, 1);
+			StreetReact.onHorn(this, this.activeCar);                      // quem está na frente sai do caminho; o carro parado buzina de volta
 		}
 
 		// --- Semáforos ---
@@ -1943,7 +1948,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		const pad = this.input.usingPad ? this.input.padType : '';          // jogando no controle: as teclas viram os botões dele (Xbox/PlayStation)
 		if (html === this._promptHtml && this.showPrompts === this._promptShown && pad === this._promptPad) return;
 		this._promptHtml = html; this._promptShown = this.showPrompts; this._promptPad = pad;     // (_promptHtml fica com as teclas: os botões de toque leem)
-		el.innerHTML = pad ? PadGlyphs.render(html, pad) : html;
+		el.innerHTML = pad ? PadGlyphs.render(html, pad) : typeof KeyBinds !== 'undefined' ? KeyBinds.render(html) : html;      // (teclas trocadas em Ajustes)
 		el.style.display = html && this.showPrompts ? 'block' : 'none';
 	}
 

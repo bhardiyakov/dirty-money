@@ -99,7 +99,7 @@ class Goals {
             g.inventory.addCash(p.money);
             if (p.kits) g.inventory.medkits += p.kits;
             if (g.skills) g.skills.addXp(60);
-            g._flash(`🏆 META: ${p.label} ${this._fmt(p.key, p.target)} — +${brl(p.money)}${p.kits ? ` e ${p.kits} kit(s) médico(s)` : ''}`);
+            if (typeof Juice === 'undefined') g._flash(`🏆 META: ${p.label} ${this._fmt(p.key, p.target)} — +${brl(p.money)}${p.kits ? ` e ${p.kits} kit(s) médico(s)` : ''}`);
             if (typeof Juice !== 'undefined') Juice.banner('goal', `${p.label} ${this._fmt(p.key, p.target)}`, `+${brl(p.money)}${p.kits ? ` · +${p.kits} kit${p.kits > 1 ? 's' : ''} médico${p.kits > 1 ? 's' : ''}` : ''} · +60 XP`);
             AudioFX.blip(1100, 0.25, 0.22);
         }

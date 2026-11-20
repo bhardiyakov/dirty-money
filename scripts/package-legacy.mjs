@@ -8,10 +8,12 @@
 // and works offline; a new deploy changes the version, and only the files whose fingerprint changed are downloaded again.
 // Usage: node scripts/package-legacy.mjs
 
-import { cp, mkdir, rm, readFile, writeFile, readdir } from 'node:fs/promises';
+import { cp, mkdir, rm, readFile, writeFile, readdir, unlink } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { dirname, join, resolve, relative, sep } from 'node:path';
+import { dirname, join, resolve, relative, sep, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Script } from 'node:vm';
+import { strip } from './jsmin.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = join(ROOT, 'dist-game');
@@ -27,6 +29,47 @@ for (const entry of ENTRIES) {
 		recursive: true,
 		filter: (source) => !source.includes('Zone.Identifier'),
 	});
+}
+
+// ------------------------------------------------------------------ the code bundles
+// The repository's index.html loads ~300 classic scripts from src/ (no build step: it also opens by double click). The published copy
+// joins each run of consecutive src/ scripts into one file (game.N.js), in the same order, with comments and indentation stripped
+// (jsmin.mjs — each file is compiled after stripping; one that does not compile goes in as it was). Files are separated by a line
+// with ";" so one never runs into the next (automatic semicolon insertion). The bundled sources are removed from the published copy,
+// except those another script loads by name (Workers: importScripts, new Worker).
+{
+	const htmlPath = join(OUTPUT, 'index.html');
+	let html = await readFile(htmlPath, 'utf8');
+	const tag = /<script src="\.\/(src\/[^"]+\.js)"><\/script>/g, between = /^(\s|<!--[\s\S]*?-->)*$/;
+	const tags = [...html.matchAll(tag)].map((m) => ({ path: m[1], start: m.index, end: m.index + m[0].length }));
+	const groups = [];
+	for (const t of tags) {
+		const g = groups[groups.length - 1];
+		if (g && between.test(html.slice(g[g.length - 1].end, t.start))) g.push(t); else groups.push([t]);
+	}
+	// sources other scripts load by name (Workers): they stay in the published copy
+	const allJs = [];
+	async function* walkSrc(dir) { for (const d of await readdir(dir, { withFileTypes: true })) { const p = join(dir, d.name); if (d.isDirectory()) yield* walkSrc(p); else if (p.endsWith('.js')) yield p; } }
+	for await (const f of walkSrc(join(OUTPUT, 'src'))) allJs.push([f, await readFile(f, 'utf8')]);
+	const loadedByName = (path) => { const b = basename(path).replace(/[.$]/g, '\\$&'), re = new RegExp(`['"\`/]${b}['"\`]`); return allJs.some(([f, txt]) => !f.endsWith(path.split('/').join(sep)) && re.test(txt)); };
+	let raw = 0, packed = 0, kept = 0, fallback = 0;
+	for (let gi = groups.length - 1; gi >= 0; gi--) {                         // (from the end: the earlier offsets stay valid)
+		const g = groups[gi], parts = [];
+		for (const t of g) {
+			const src = await readFile(join(OUTPUT, t.path), 'utf8');
+			let out = strip(src);
+			try { new Script(out, { filename: t.path }); } catch (e) { out = src; fallback++; console.warn(`bundle: ${t.path} kept as it was (${e.message})`); }
+			raw += src.length; packed += out.length;
+			parts.push(`// ${t.path}\n${out}`);
+		}
+		const code = parts.join('\n;\n'), name = `game.${gi + 1}.js`;
+		new Script(code, { filename: name });                                // (the whole bundle must compile: duplicate declarations across files, etc.)
+		await writeFile(join(OUTPUT, name), code);
+		html = html.slice(0, g[0].start) + `<script src="./${name}"></script>` + html.slice(g[g.length - 1].end);
+		for (const t of g) { if (loadedByName(t.path)) kept++; else await unlink(join(OUTPUT, t.path)); }
+	}
+	await writeFile(htmlPath, html);
+	console.log(`bundles: ${tags.length} scripts → ${groups.length} files, ${(raw / 1048576).toFixed(1)} MB → ${(packed / 1048576).toFixed(1)} MB${fallback ? ` (${fallback} not stripped)` : ''}; ${kept} kept for Workers`);
 }
 
 // ------------------------------------------------------------------ the service worker manifest

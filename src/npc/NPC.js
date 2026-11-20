@@ -240,6 +240,34 @@ class NPC {
 		}
 	}
 
+	// SAI DA FRENTE (StreetReact): um pulo de lado de `dist` m na direção (dx, dz) em ~0,45 s — o carro do jogador vindo nele, a
+	// buzina — e depois foge de `from` (xingando, às vezes). Não pula quem está caído, brigando, rendido, nadando ou fora da navegação.
+	dodge(dx, dz, from, dist = 2.6, say = null) {
+		if (this.rag || !this.alive || this.free || this.index < 0 || this._dodge) return false;
+		const st = this.fsm.name;
+		if (st === 'FIGHT' || st === 'SURRENDER' || st === 'MUG' || st === 'SWIM' || this._rage) return false;
+		const l = Math.hypot(dx, dz) || 1;
+		this._dodge = { dx: dx / l, dz: dz / l, left: dist, v: dist / 0.45, from: { x: from.x, z: from.z }, say };
+		return true;
+	}
+	_dodgeTick(dt) {
+		const D = this._dodge, p = this.transform.position, step = Math.min(D.left, D.v * dt);
+		const to = this._dTo || (this._dTo = new BABYLON.Vector3());
+		to.set(p.x + D.dx * step, 0, p.z + D.dz * step);
+		D.left -= step;
+		const q = MapGeo.hasLineOfSight(p.x, p.z, to.x, to.z) ? this.nav.closestPoint(to) : null;
+		if (q && hypot(q.x - to.x, q.z - to.z) < 0.6) this.nav.crowd.agentTeleport(this.index, q); else D.left = 0;      // (parede, sem chão: para ali)
+		this.heading = this.transform.rotation.y = Math.atan2(D.dx, D.dz);
+		this.actor.play('scared');
+		this.actor.setPosition(p.x, p.z); this.actor.setHeading(this.heading);
+		this.actor.update(dt, 1.5);
+		if (D.left <= 1e-3) {
+			this._dodge = null;
+			this.panic(new BABYLON.Vector3(D.from.x, 0, D.from.z), true);
+			if (D.say && typeof Bubbles !== 'undefined') Bubbles.say(this, D.say, { tone: 'angry', ms: 2200 });
+		}
+	}
+
 	// Levou um golpe: cambaleia e, em seguida, foge do agressor (ou revida — ver HurtState e Temper). Brigando, só cambaleia e continua.
 	hurt(fromPos) {
 		if (this.rag) return;
@@ -267,6 +295,7 @@ class NPC {
 	// Arremessado (ragdoll): sai do crowd, voa/rola/desliza; ao levantar volta ao NavMesh e foge; se morreu,
 	// fica no chão com o sprite de morto (e só então solta o dinheiro / conta como crime).
 	ragdoll(from, impact, lethal) {
+		this._dodge = null;
 		if (this.rag) return;
 		this._downed();
 		this._clearActivity();
@@ -402,6 +431,7 @@ class NPC {
 
 	// Volta à vida como "outro" pedestre em outro lugar, longe do jogador.
 	respawn() {
+		this._dodge = null;
 		this.mugger = false;                                    // (era o assaltante de um StreetCrime)
 		if (this.downed) { this.downed = null; if (typeof Rescue !== 'undefined') Rescue.remove(this); }
 		this.restoreLook();
@@ -456,6 +486,7 @@ class NPC {
 
 	// Reaparece em `pos` (perto do jogador, fora da tela) com a vocação `role`: o pedestre "novo" que o mundo grande precisa.
 	relocate(pos, role, style = null) {
+		this._dodge = null;
 		if (this.rag || !this.alive) return false;
 		this.restoreLook();
 		this.fsm.setState(new IdleState(this));               // sai do estado atual direito (solta a toalha/vaga, volta ao crowd)
@@ -620,6 +651,7 @@ class NPC {
 			return;
 		}
 		this.fleeAge += dt;
+		if (this._dodge) { this._dodgeTick(dt); return; }      // pulando para fora da frente do carro (StreetReact)
 		this.fsm.update(dt);
 
 		// Deitado na areia ou nadando: sem crowd — o estado move o NPC; aqui só o sprite.

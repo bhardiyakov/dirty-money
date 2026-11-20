@@ -176,7 +176,7 @@ const Daily = {
                 #dailyBox .r i s { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #fb923c, #fbbf24); transition: width .4s ease; }
                 #dailyBox .r.ok { color: var(--tx-3); } #dailyBox .r.ok .c div { text-decoration: line-through; } #dailyBox .r.ok i s { background: #34d399; }
                 #dailyBox .r b { font: 700 11px var(--font-d); color: #86efac; flex: none; }
-                body.mobile #dailyBox { left: 8px; top: 86px; width: 210px; padding: 7px 9px 8px; font-size: 10.5px; border-radius: 12px; -webkit-backdrop-filter: none; backdrop-filter: none; }
+                body.mobile #dailyBox { left: 8px; top: 164px; width: 210px; padding: 7px 9px 8px; font-size: 10.5px; border-radius: 12px; -webkit-backdrop-filter: none; backdrop-filter: none; }
                 body.mobile #dailyBox .r { margin-top: 4px; } body.mobile #dailyBox .r b { display: none; }`;
             document.head.appendChild(st);
             this.el = document.createElement('div'); this.el.id = 'dailyBox';

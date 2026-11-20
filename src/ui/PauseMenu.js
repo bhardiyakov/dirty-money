@@ -15,7 +15,7 @@ class PauseMenu {
 	static get TABS() {
 		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['save', '💾 Salvar'], ['settings', '⚙️ Ajustes']];
 	}
-	static get SET_KEYS() { return ['volume', 'sfx', 'radio', 'minimap', 'prompts', 'camBounce', 'aimHelp', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'autosave', ...(typeof SafeMode !== 'undefined' && (SafeMode.active || SafeMode.state) ? ['safe'] : []), 'diag', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
+	static get SET_KEYS() { return ['volume', 'sfx', 'radio', 'minimap', 'prompts', 'camBounce', 'aimHelp', 'camSens', 'camInvX', 'camInvY', 'vibration', 'hudScale', 'keys', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer', 'touchSize'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'autosave', ...(typeof SafeMode !== 'undefined' && (SafeMode.active || SafeMode.state) ? ['safe'] : []), 'diag', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
 		return '<b>WASD</b> mover (trote) · <b>SHIFT</b> sprint (tocar repetido = mais rápido) · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> arrastando: gira a câmera 360° (com arma de fogo ele mira — o cursor aponta — e o <b>BOTÃO DO MEIO</b> arrastando gira) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo (no carro: <b>ESPAÇO</b> freio de mão · <b>R</b> rádio) · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
@@ -84,7 +84,7 @@ class PauseMenu {
 		this.setRow = 0;                 // linha das configurações
 		this._icons = {};
 		this._legendIdx = {};
-		this.settings = Object.assign({ volume: 0.7, sfx: true, radio: 0.5, minimap: true, prompts: true, camBounce: true, aimHelp: true, graphics: 'auto', tiltSteer: false, dev: false, life: 'auto', hints: true, screenFx: true, autosave: true }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
+		this.settings = Object.assign({ volume: 0.7, sfx: true, radio: 0.5, minimap: true, prompts: true, camBounce: true, aimHelp: true, camSens: 1, camInvX: false, camInvY: false, vibration: true, hudScale: 1, keys: {}, touchSize: 1, graphics: 'auto', tiltSteer: false, dev: false, life: 'auto', hints: true, screenFx: true, autosave: true }, this._loadSettings());       // tiltSteer: volante por giroscópio (celular)
 		delete this.settings.hd; delete this.settings.smooth; delete this.settings.aimAssist;          // (escolhas antigas: o jogo é sempre em alta definição com o gráfico suave e a mira manual)
 		this.settings.cars3d = typeof CarArt3D !== 'undefined' && CarArt3D.available();      // (já resolvido em config.js: escolha salva; ?cars2d)
 		this.map = { cx: 0, cz: 0, scale: 4.5, cur: { x: 300, y: 200 }, drag: null, init: false };
@@ -111,6 +111,12 @@ class PauseMenu {
 		if (mm) mm.style.visibility = s.minimap ? '' : 'hidden';
 		this.g.showPrompts = s.prompts;
 		CompassCamera.bounceOn = s.camBounce !== false;
+		const inp = this.g.input;
+		if (inp) { inp.lookSens = s.camSens || 1; inp.lookInvX = !!s.camInvX; inp.lookInvY = !!s.camInvY; inp.noRumble = s.vibration === false; }      // (câmera e vibração: Game._look, InputManager.rumble)
+		if (typeof KeyBinds !== 'undefined') KeyBinds.load(s.keys);                    // teclas trocadas (Ajustes › Teclas)
+		if (this.g.ui && this.g.ui.setScale) this.g.ui.setScale(s.hudScale || 1);    // (Hud)
+		const tu = document.getElementById('touchUI');                                // celular: tamanho dos botões na tela (TouchControls: tudo em --u)
+		if (tu) tu.style.setProperty('--u', `calc(clamp(44px, 11vmin, 76px) * ${s.touchSize || 1})`);
 		TiltSteer.setEnabled(!!s.tiltSteer && NativeMobile.touch);           // (ligar pede a permissão do sensor no iPhone: chamado dentro do toque)
 		if (this.g.dev) this.g.dev.setEnabled(s.dev);
 		if (typeof CarArt3D !== 'undefined' && !!s.cars3d !== CarArt3D.available()) this._applyCars3d(!!s.cars3d);
@@ -138,6 +144,13 @@ class PauseMenu {
 			.pm-tab { padding: 9px 20px; font: 600 14px var(--font); color: var(--tx-2); cursor: pointer; border-radius: var(--r-pill); transition: background .15s, color .15s; white-space: nowrap; }
 			.pm-tab:hover { color: var(--tx); background: rgba(255,255,255,0.06); }
 			.pm-tab.on { color: #0b0e14; background: var(--tx); box-shadow: 0 4px 14px rgba(0,0,0,0.35); }
+			.pm-tab .ti { margin-right: 6px; }
+			/* celular primeiro: as abas cabem numa linha — só o ícone (grande, fácil de tocar), e o nome só na aberta */
+			body.mobile .pm-tabs { flex-wrap: nowrap; max-width: calc(100vw - 70px); overflow-x: auto; scrollbar-width: none; }
+			body.mobile .pm-tab { min-width: 40px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px !important; }
+			body.mobile .pm-tab .ti { font-size: 17px; margin-right: 0; }
+			body.mobile .pm-tab:not(.on) .tl { display: none; }
+			body.mobile .pm-tab.on .ti { margin-right: 6px; }
 			.pm-tab.pm-new::after, #pmInvSeg > div.pm-new::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 7px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.8); vertical-align: 1px; }
 			.pm-main { flex: 1; min-height: 0; display: flex; }
 			.pm-page { display: none; flex: 1; min-height: 0; gap: 16px; }
@@ -285,7 +298,9 @@ class PauseMenu {
 		const tabs = root.querySelector('.pm-tabs');
 		for (const [id, label] of PauseMenu.TABS) {
 			const b = document.createElement('div');
-			b.className = 'pm-tab'; b.dataset.tab = id; b.textContent = label;
+			b.className = 'pm-tab'; b.dataset.tab = id; b.title = label.replace(/^\S+\s/, '');
+			const sp = label.indexOf(' ');                                       // (ícone e nome separados: no celular só o ícone, menos a aba aberta)
+			b.innerHTML = `<span class="ti">${label.slice(0, sp)}</span><span class="tl">${label.slice(sp + 1)}</span>`;
 			b.addEventListener('click', () => this.setTab(id));
 			tabs.appendChild(b);
 		}
@@ -334,7 +349,7 @@ class PauseMenu {
 			+ `<b style="background:none;padding:0">Carro:</b> ${g('rt')} acelerar · ${g('lt')} freio/ré · ${g('rb')} freio de mão · ${g('dpadlr')} rádio · ${g('y')} sair · ${g('x')} abastecer/desmanchar · ${g('l3')} buzina (bicicleta: pedalar forte) · ${g('down')} faróis<br>`
 			+ `<b style="background:none;padding:0">Helicóptero:</b> ${g('rt')} sobe · ${g('lt')} desce · ${g('rstick')} gira · ${g('y')} descer/pular<br>`
 			+ `${g('back')} inventário · ${g('start')} menu · ${g('rstick')} câmera 360° (↔ gira, ↕ zoom; mirando com ${g('lt')} ou preparando a granada, aponta)`
-			: PauseMenu.KEYS_HTML;
+			: (typeof KeyBinds !== 'undefined' ? KeyBinds.render(PauseMenu.KEYS_HTML) : PauseMenu.KEYS_HTML);
 	}
 
 	// ------------------------------------------------------------------ ícones (estilo emoji, HD)
@@ -471,6 +486,7 @@ class PauseMenu {
 	close() {
 		if (!this.isOpen) return;
 		this.isOpen = false;
+		this._capAction = null; this._keysView = false; if (this.g.input) this.g.input.capture = null;      // (Ajustes › Teclas: para de esperar tecla)
 		this.root.classList.remove('show', 'mapfull', 'legend-on');
 		this._ptrs.clear(); this._pinch = null;
 		this.g.scene.physicsEnabled = true;
@@ -547,8 +563,9 @@ class PauseMenu {
 
 	// ------------------------------------------------------------------ teclado
 	_onKey(e) {
-		if (!this.isOpen) return;
+		if (!this.isOpen || e._dmCaptured) return;                             // (a tecla foi para Ajustes › Teclas)
 		const k = e.key.toLowerCase();
+		if (this._keysView && this.tab === 'settings' && (k === 'escape' || k === 'backspace')) { e.preventDefault(); this._keysView = false; this._renderSettings(); return; }
 		if (['tab', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'backspace'].includes(k)) e.preventDefault();
 		if (k === 'escape' || k === 'p') { this.close(); return; }
 		const tabs = PauseMenu.TABS.map((t) => t[0]), i = tabs.indexOf(this.tab);
@@ -1030,6 +1047,10 @@ class PauseMenu {
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'hints') { s.hints = d === 0 ? s.hints === false : d > 0; if (s.hints && d === 0) Hints.reset(); }
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'autosave') { s.autosave = d === 0 ? s.autosave === false : d > 0; if (this.g._flash) this.g._flash(s.autosave ? '💾 Salvamento automático ligado' : 'Salvamento automático desligado: salve dormindo ou na aba Salvar'); }
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'radio') { const L = [0, 0.25, 0.5, 0.75, 1], i = Math.max(0, L.indexOf(s.radio == null ? 0.5 : s.radio)); s.radio = d < 0 ? L[Math.max(0, i - 1)] : d > 0 ? L[Math.min(L.length - 1, i + 1)] : L[(i + 1) % L.length]; }
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'camSens') s.camSens = this._step([0.5, 0.75, 1, 1.25, 1.5, 2], s.camSens || 1, d);
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'hudScale') s.hudScale = this._step([0.8, 0.9, 1, 1.15, 1.3], s.hudScale || 1, d);
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'touchSize') s.touchSize = this._step([0.85, 1, 1.15, 1.3], s.touchSize || 1, d);
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'keys') { if (d === 0) { this._keysView = true; this._renderSettings(); } return; }      // (abre a lista das teclas)
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'diag') { if (d === 0) Diag.open(this.g); return; }      // (ação, não ajuste)
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'safe') { if (d === 0) SafeMode.reset(this.g); this._renderSettings(); return; }
 		else if (d === 0 || true) { const k = PauseMenu.SET_KEYS[this.setRow]; if (this.setRow > 0) s[k] = d === 0 ? !s[k] : d > 0; }
@@ -1044,8 +1065,46 @@ class PauseMenu {
 		if (this.g._flash) this.g._flash(flash(s[key]));
 	}
 
+	// Próximo/anterior de uma lista de valores (← →; Enter/clique: o próximo, dando a volta).
+	_step(L, cur, d) { let i = L.indexOf(cur); if (i < 0) i = L.indexOf(1); return d < 0 ? L[Math.max(0, i - 1)] : d > 0 ? L[Math.min(L.length - 1, i + 1)] : L[(i + 1) % L.length]; }
+
+	// Ajustes › Teclas: cada ação com a tecla dela; clicar no botão espera a tecla nova (Esc cancela). Tecla de outra ação: as duas trocam.
+	_renderKeys(el) {
+		const esc = (t) => String(t).replace(/[<>&]/g, ''), cap = this._capAction;
+		let h = `<div class="pm-row" data-k="back"><span>⬅️ Voltar <small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">clique numa tecla e aperte a nova — se outra ação usava ela, as duas trocam. Números, Esc e setas são fixos.</small></span><span style="display:flex;gap:8px"><div class="pm-toggle is-on" data-k="reset">padrão</div></span></div>`;
+		let grp = '';
+		for (const [a, label, g] of KeyBinds.ACTIONS) {
+			if (g !== grp) { grp = g; h += `<div style="font:700 11px var(--font);letter-spacing:.12em;text-transform:uppercase;color:var(--tx-3);padding:10px 4px 2px">${g}</div>`; }
+			const k = KeyBinds.key(a), moved = k !== a;
+			h += `<div class="pm-row" data-k="${a === ' ' ? 'space' : a}"><span>${esc(label)}</span><span style="display:flex;gap:12px;align-items:center"><div class="pm-toggle ${cap === a ? '' : 'is-on'}" style="min-width:86px;text-align:center${moved ? ';box-shadow:0 0 0 2px var(--gold, #fbbf24)' : ''}">${cap === a ? 'aperte…' : esc(KeyBinds.label(k))}</div></span></div>`;
+		}
+		el.innerHTML = h;
+		el.querySelectorAll('[data-k]').forEach((row) => row.addEventListener('click', (e) => {
+			e.stopPropagation();
+			const id = row.dataset.k;
+			if (id === 'back') { this._keysView = false; this._capAction = null; this.g.input.capture = null; this._renderSettings(); return; }
+			if (id === 'reset') { KeyBinds.reset(); this.settings.keys = {}; this._saveSettings(); if (this.g._flash) this.g._flash('⌨️ Teclas de volta ao padrão'); this._renderSettings(); return; }
+			this._capture(id === 'space' ? ' ' : id);
+		}));
+	}
+	_capture(action) {
+		this._capAction = action;
+		this.g.input.capture = (e) => {
+			e.preventDefault(); e._dmCaptured = true;
+			const k = e.key.toLowerCase();
+			this.g.input.capture = null; this._capAction = null;
+			if (k !== 'escape') {
+				if (!KeyBinds.set(action, k)) { if (this.g._flash) this.g._flash(`A tecla ${KeyBinds.label(k)} é fixa (números, Esc, setas)`); }
+				else { this.settings.keys = KeyBinds.save(); this._saveSettings(); }
+			}
+			this._renderSettings();
+		};
+		this._renderSettings();
+	}
+
 	_renderSettings() {
 		const s = this.settings, el = this.$('pmSet');
+		if (this._keysView && el && typeof KeyBinds !== 'undefined') { this._renderKeys(el); return; }
 		const T = (k, v) => I18n.t(k, v), tog = (v) => `<div class="pm-toggle ${v ? 'is-on' : ''}">${T(v ? 'common.on' : 'common.off')}</div>`;
 		const sub = (t) => `<small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">${t}</small>`;
 		const R = {
@@ -1054,9 +1113,16 @@ class PauseMenu {
 			radio: ['📻 Rádio do carro ' + sub('volume das estações (R troca dentro do carro)'), `<div class="pm-toggle ${s.radio === 0 ? '' : 'is-on'}">${s.radio === 0 ? 'mudo' : Math.round((s.radio == null ? 0.5 : s.radio) * 100) + '%'}</div>`], minimap: ['🗺️ ' + T('settings.minimap'), tog(s.minimap)], prompts: ['💬 ' + T('settings.prompts'), tog(s.prompts)],
 			camBounce: ['🚗 ' + T('settings.camBounce') + ' ' + sub(T('settings.camBounce.hint')), tog(s.camBounce !== false)],
 			aimHelp: ['🎯 Ajuda de mira ' + sub('controle e celular: a mira puxa de leve para o alvo; LT parado trava no mais perto à frente (mouse: sempre manual)'), tog(s.aimHelp !== false)],
+			camSens: ['🖱️ Sensibilidade da câmera ' + sub('o giro pelo mouse arrastando, pelo analógico direito e pelos dois dedos no celular'), `<div class="pm-toggle is-on">${Math.round((s.camSens || 1) * 100)}%</div>`],
+			camInvX: ['↔️ Inverter o giro da câmera ' + sub('para a esquerda gira para a direita'), tog(!!s.camInvX)],
+			camInvY: ['↕️ Inverter o olhar para cima/baixo ' + sub('a pé: mouse arrastando e analógico direito'), tog(!!s.camInvY)],
+			vibration: ['📳 Vibração do controle ' + sub('tiros, batidas, golpes e dano'), tog(s.vibration !== false)],
+			hudScale: ['🔠 Tamanho do HUD ' + sub('vida, arma, dinheiro, procurado, mapa e metas'), `<div class="pm-toggle is-on">${Math.round((s.hudScale || 1) * 100)}%</div>`],
+			keys: ['⌨️ Teclas ' + sub(typeof KeyBinds !== 'undefined' && KeyBinds.changed() ? 'teclas trocadas — clique para ver ou voltar ao padrão' : 'trocar as teclas do teclado'), '<div class="pm-toggle is-on">trocar</div>'],
 			graphics: ['🖥️ ' + T('settings.graphics') + ' ' + sub(T('settings.graphics.hint', { level: Graphics.LABEL[Graphics.level] })), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
 			language: ['🌐 ' + T('settings.language') + ' ' + sub(T('settings.language.hint')), `<div class="pm-toggle is-on">${I18n.label(s.language || I18n.lang)}</div>`],
 			tiltSteer: ['📱 ' + T('settings.tilt') + ' ' + sub(T('settings.tilt.hint')), tog(s.tiltSteer)],
+			touchSize: ['👆 Tamanho dos botões na tela ' + sub('os botões do celular: maiores para dedos grandes, menores para ver mais do jogo'), `<div class="pm-toggle is-on">${Math.round((s.touchSize || 1) * 100)}%</div>`],
 			cars3d: ['🚘 ' + T('settings.cars3d') + ' ' + sub(T('settings.cars3d.hint')), tog(s.cars3d)],
 			life: ['🏙️ Vida da cidade ' + sub('pedestres no rush, acontecimentos de rua, jogos no bar e movimento das lojas — baixe se o celular engasgar'), `<div class="pm-toggle is-on">${Life.label(s.life || 'auto')}</div>`],
 			screenFx: ['🎬 Efeitos de tela ' + sub('borrão de velocidade, impacto, tela sem cor com a vida baixa, luzes da polícia nas bordas e o batimento'), tog(s.screenFx !== false)],

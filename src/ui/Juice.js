@@ -85,7 +85,9 @@ const Juice = {
             @keyframes jCopB { 0% { opacity: 0.15; } 50% { opacity: 1; } 100% { opacity: 1; } }
 
             body.mobile #jBanner { top: 15%; } body.mobile #jBanner .k { font-size: 10px; } body.mobile #jBanner .s { font-size: 12px; margin-top: 4px; }
+            body.mobile #jBanner .t { font-size: clamp(22px, 4.4vw, 34px); padding: 2px 20px 4px; }
             body.mobile #jFloat span { font-size: 17px; } body.mobile #jFloat .big { font-size: 22px; }
+            body.jban #jXp { visibility: hidden; }
             body.mobile #jXp { top: 92px; padding: 4px 10px; font-size: 10px; gap: 7px; } body.mobile #jXp i { width: 90px; height: 5px; }
             @media (prefers-reduced-motion: reduce) { #jCops.on .l, #jCops.on .r { animation: none; opacity: 0.5; } #jGlow.go { animation: none; } }`;
         document.head.appendChild(st);
@@ -243,10 +245,12 @@ const Juice = {
             else {
                 this._bt -= dt;
                 if (this._bt <= 0.42 && !this._cur.out) { this._cur.out = true; this.elBan.className = 'out'; }
-                if (this._bt <= 0) { this._cur = null; this.elBan.className = ''; }
+                if (this._bt <= 0) { this._cur = null; this.elBan.className = ''; document.body.classList.remove('jban'); }
             }
         } else if (this._q.length && !busy) {
             const b = this._cur = this._q.shift(), K = this.KINDS[b.kind] || this.KINDS.mission, el = this.elBan;
+            const ar = document.getElementById('arrive'); if (ar) ar.classList.remove('show');      // (um aviso grande por vez: a chegada no bairro sai)
+            document.body.classList.add('jban');                                            // (e a pílula de XP some: a faixa já diz o XP)
             el.style.setProperty('--jc', K[1]); this.elGlow.style.setProperty('--jc', K[1]);
             el.children[0].textContent = K[0]; el.children[1].textContent = b.title; el.children[2].textContent = b.sub;
             el.className = ''; void el.offsetWidth; el.className = 'in';                    // (reinicia a animação)

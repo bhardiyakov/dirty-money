@@ -13,6 +13,8 @@ benchmark antes e depois e mostra que não piorou.
 | Modo dev › INFO | As mesmas medidas de render, junto do custo de CPU por sistema |
 | `node tests/bench.cjs` | O benchmark nos presets Low e High, no Chromium dos testes. `--out arquivo.json` salva; `--compare arquivo.json` mostra a diferença cena a cena; `BENCH_PRESETS=low,high,hd` escolhe os presets |
 | `tests/33_medicao.test.cjs` | Garante que o painel e o benchmark funcionam e devolvem a configuração como estava |
+| `node tests/hitch.cjs` | Caça engasgos atravessando a cidade (favela → centro → Lagoa → mata, ~45 m/s): quadros de lógica lentos, com o sistema culpado, e shaders/texturas que nascem no caminho. `--render 6` desenha também |
+| `node tests/loadtime.cjs [pasta] [Mbit/s] [ms]` | Tempo de abertura numa rede limitada, servido com gzip: página carregada, menu na tela, pedidos e MB. `dist-game` mede a versão publicada |
 
 O painel `?perf` mostra:
 - FPS e intervalo real entre quadros;
@@ -115,6 +117,38 @@ rosto perde detalhe: olhos e sobrancelhas ficam com menos pixels.
 
 No Low, os atlas cabem com folga no orçamento de 160 MB: o protagonista ocupa ~29 MB, contra ~137 MB antes. No High, a
 meia resolução não vale; os atlas continuam no orçamento dele (640 MB), só com natação, academia e armas sem uso fora da placa.
+
+## Fluidez: engasgos e abertura (item 3 do polimento)
+
+**Engasgos.** `tests/hitch.cjs` atravessou a cidade inteira (1 521 quadros, ~51 s de jogo a ~45 m/s, entrando em bairro novo o tempo todo):
+- **Lógica do jogo:** mediana de 0,7 ms por quadro, p95 de 8 ms e p99 de 18 ms (CPU por software, sem desenhar). O relevo que
+  nasce no caminho (`TerrainBuilder`: 20 a 76 malhas a cada 20–50 m) já é montado em fatias com orçamento por quadro e custa de 8 a
+  26 ms nos quadros em que fecha um pedaço. Numa rodada sem nada desenhando ao mesmo tempo, nenhum quadro passou de 80 ms.
+- **Shaders:** nenhum compilado no caminho — a pré-carga (`scene.whenReadyAsync` na barra "Compilando os gráficos") já cobre tudo.
+  Compilar shader no meio do jogo é o engasgo clássico numa placa de verdade, e ele não acontece.
+- **O único pico que se repete:** entrar numa loja monta o interior (~0,6 s aqui, CPU por software): acontece com a tela
+  escurecida (a transição da porta), então não aparece como travada.
+- Cuidado ao ler: aparecem às vezes picos isolados de vários segundos, cada rodada num lugar diferente (ou nenhum), sempre dentro
+  de uma chamada à placa de vídeo (`bufferSubData`, criação de malha) — o perfil da CPU mostra 35 dos 40 s de uma rodada parados
+  nessa espera. É a placa por software esperando o trabalho anterior acabar; ficam bem mais frequentes com o desenho ligado
+  (`--render`) ou com outro Chromium rodando ao mesmo tempo. Um pico que se repete no mesmo lugar em rodadas diferentes é que
+  merece investigação.
+
+**Abertura.** A versão publicada (`node scripts/package-legacy.mjs` → `dist-game/`) junta os ~300 scripts de `src/` em 5 arquivos
+(`game.N.js`), sem comentários nem recuos (`scripts/jsmin.mjs`: cada arquivo enxugado tem a mesma árvore sintática do original —
+conferido com um parser — e é compilado antes de entrar; o que não compilar entra como estava). O repositório continua com os
+arquivos soltos (abre por duplo clique e nos testes).
+
+| A 10 Mbit/s, 60 ms (gzip) | Repositório | Publicada |
+| --- | --- | --- |
+| Pedidos até o menu | 396 (304 scripts) | 104 (12 scripts) |
+| Bytes pela rede | 17,1 MB | 16,2 MB |
+| Página carregada (scripts baixados e rodados) | 14,6 s | 12,7 s |
+| Menu na tela | 31,4 s | 28,8 s |
+
+O jogo instalado (service worker) baixa 82 arquivos na primeira visita, em vez de 370 (28,9 MB em vez de 30,8 MB). O que mais pesa
+agora são a biblioteca 3D (1,0 MB com gzip), a física (0,9 MB) e os desenhos embutidos em base64 dos carros 3D (1,9 MB), dos
+personagens (1,7 MB) e dos carros (1,3 MB).
 
 ## Como medir na sua máquina
 

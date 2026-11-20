@@ -403,6 +403,12 @@ const Config = {
 		// de câmera lenta (slow × por dur s) e, por window s, o próximo golpe do jogador é CONTRA-ATAQUE (× dmg de dano e o equilíbrio como
 		// contra-ataque — Posture).
 		perfectDodge: { slow: 0.25, dur: 0.35, window: 1.2, dmg: 1.5 } },
+	// A RUA REAGE (npc/StreetReact.js). Carro do jogador acima de minSpeed m/s vindo em alguém (até lookTime s à frente, numa faixa de
+	// meia-largura do carro + margin m): depois de reactT s (sorteado entre os dois), ele pula para fora; `freeze` travam de susto; sayChance
+	// xingam. BUZINA: sai da frente quem está até hornRange m à frente (meia-largura + hornMargin); até hornLook m, alguns reclamam;
+	// hornBack = chance do carro parado na frente buzinar de volta. TIRO: motoristas até shotRadius m ficam em pânico scaredTime s
+	// (aceleram × scaredSpeed e furam o sinal).
+	react: { minSpeed: 5, lookTime: 1.3, margin: 1.1, reactT: [0.15, 0.45], freeze: 0.1, sayChance: 0.45, hornRange: 22, hornMargin: 2.4, hornLook: 12, hornBack: 0.35, shotRadius: 38, scaredTime: [7, 12], scaredSpeed: 1.6 },
 	// MIRA com arma de fogo (combat/Aim.js). AJUDA DE MIRA (controle e celular; Ajustes › Ajuda de mira; o mouse é sempre manual): o
 	// retículo puxa `pull` do caminho até a pessoa mais perto dele (dentro de pullR m × px por metro, no mínimo pullMinPx px; mais forte
 	// quanto mais perto); com o LT segurado e o analógico parado, TRAVA no alvo mais perto à frente (±lockCone rad, até o alcance da arma).
