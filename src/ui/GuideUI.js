@@ -84,6 +84,7 @@ GuideUI.PAGES = {
         <div class="gd-tip">O painel embaixo da tela mostra as <b>metas</b>: cada uma paga um prêmio na hora. O jogo <b>não salva sozinho</b>: salve no menu (<kbd>ESC</kbd> → 💾 Salvar) ou dormindo.</div>`,
 
     controls: () => `<h2>Controles</h2>
+        <div class="gd-tip">Em <b>Ajustes</b>: <b>Teclas</b> troca qualquer tecla abaixo (as dicas passam a mostrar a sua), e dá para mudar a <b>sensibilidade</b> e <b>inverter</b> a câmera, desligar a <b>vibração</b> do controle e aumentar o <b>HUD</b> (e, no celular, os botões da tela).</div>
         <h3>Teclado e mouse</h3><table>
         <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>andar / dirigir</td></tr><tr><td><kbd>Shift</kbd></td><td><b>sprint</b> — o passo normal é um trote (sem gastar fôlego); o sprint gasta: <b>toque repetido</b> = cada vez mais rápido, <b>segurar</b> = sprint médio. Nadando, o mesmo vira o crawl; na bicicleta, pedala forte. Dentro de lojas e casas só se anda (menos em assalto, golpe, missão ou fugindo da polícia)</td></tr>
         <tr><td><kbd>Clique</kbd> / <kbd>Espaço</kbd></td><td>golpe ou tiro (sem arma: combo soco + soco + chute)</td></tr>
