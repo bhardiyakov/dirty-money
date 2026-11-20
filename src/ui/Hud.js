@@ -380,6 +380,9 @@ class Hud {
 			const d = tot - prev, el = this.$('cpD');
 			this.$('cpV').textContent = brl(inv.cash) + (inv.clean > 0 ? ` · limpo ${brl(inv.clean)}` : '');
 			el.textContent = (d > 0 ? '+' : '−') + brl(Math.abs(d)); el.className = d > 0 ? 'pos' : 'neg';
+			// (PC: logo abaixo do cartão da direita — arma, procurado —, em vez de por trás dele; o celular tem o lugar dele)
+			const hb = document.getElementById('hud2'), r = hb && !document.body.classList.contains('mobile') ? hb.getBoundingClientRect() : null;
+			this.cashPop.style.top = r && r.height > 4 ? Math.round(r.bottom + 10) + 'px' : '';
 			this.cashPop.classList.add('show'); this._cashT = 4;
 		});
 		if (this._cashT > 0) { this._cashT -= dt; if (this._cashT <= 0) this.cashPop.classList.remove('show'); }
