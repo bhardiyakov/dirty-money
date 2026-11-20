@@ -5,7 +5,7 @@
 // de cada um e a versão do conjunto):
 //   • PRIMEIRA VISITA: baixa o jogo de uma vez (código, bibliotecas, carros, texturas — `pre`, ~35 MB) e guarda no aparelho. Daí em
 //     diante o jogo abre direto do aparelho, sem esperar a rede, e funciona OFFLINE.
-//   • Os arquivos GRANDES (os personagens: centenas de MB) não entram nesse pacote: ficam guardados à medida que aparecem no jogo
+//   • Os arquivos GRANDES (os personagens: centenas de MB; as músicas do rádio) não entram nesse pacote: ficam guardados à medida que aparecem no jogo
 //     (cache por impressão digital — sobrevivem às atualizações se não mudaram).
 //   • VERSÃO NOVA: o navegador percebe que este arquivo mudou e baixa a versão nova EM SEGUNDO PLANO — só os arquivos que mudaram (os
 //     iguais são copiados da versão anterior). Tudo ou nada: se um arquivo falhar, fica a versão de antes, inteira (nunca metade nova e
@@ -105,13 +105,13 @@ self.addEventListener('fetch', (e) => {
     if (req.method !== 'GET') return;
     const url = new URL(req.url);
     if (url.origin === self.location.origin) {
-        if (!M) { e.respondWith(networkFirst(req)); return; }
+        if (!M) { if (!req.headers.has('range')) e.respondWith(networkFirst(req)); return; }      // (pedaço de arquivo — o <audio> do rádio: a rede)
         let path = url.href.startsWith(BASE) ? decodeURIComponent(url.pathname.slice(new URL(BASE).pathname.length)) : null;
         if (path === null || path === 'sw.js') return;
         if (path === '' || path.endsWith('/')) path += 'index.html';
         const h = M.files[path];
         if (h === undefined) return;                                     // (fora do pacote: a rede, como sempre)
-        e.respondWith(PRE.has(path) ? fromApp(path) : fromAssets(path, h));
+        e.respondWith(PRE.has(path) ? fromApp(path) : fromAssets(path, h).then((res) => ranged(req, res)));
     } else if (LIB_HOSTS.includes(url.hostname)) e.respondWith(cacheFirst(req));
 });
 
@@ -133,6 +133,18 @@ async function fromAssets(path, h) {
     const res = await fetch(BASE + path);
     if (res.ok) cache.put(key, res.clone());
     return res;
+}
+
+// O <audio> (rádio: assets/music) pede o arquivo aos PEDAÇOS (cabeçalho Range) e o Safari só toca com a resposta 206 — o arquivo é
+// guardado inteiro e o pedaço sai dele.
+async function ranged(req, res) {
+    const m = /bytes=(\d*)-(\d*)/.exec(req.headers.get('range') || '');
+    if (!m || res.status !== 200) return res;
+    const buf = await res.arrayBuffer(), n = buf.byteLength;
+    const a = m[1] === '' ? Math.max(0, n - Number(m[2])) : Number(m[1]), b = m[1] !== '' && m[2] !== '' ? Math.min(Number(m[2]), n - 1) : n - 1;
+    if (a >= n) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${n}` } });
+    return new Response(buf.slice(a, b + 1), { status: 206, headers: { 'Content-Type': res.headers.get('Content-Type') || 'audio/mpeg',
+        'Content-Range': `bytes ${a}-${b}/${n}`, 'Content-Length': String(b - a + 1), 'Accept-Ranges': 'bytes' } });
 }
 
 async function cacheFirst(req) {

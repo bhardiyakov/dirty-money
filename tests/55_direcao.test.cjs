@@ -1,7 +1,8 @@
 // Direção e rádio do carro: o FREIO DE MÃO (Espaço / RB / botão no celular) trava a traseira — com o volante virado o carro gira bem
 // mais e derrapa, reto ele só freia arrastando; já derrapando, acelerar com o volante para dentro da curva MANTÉM o drift e aliviar o pé
 // devolve a aderência. A câmera de trás do carro, derrapando, olha para onde o carro VAI (a velocidade), não para o nariz. O RÁDIO: cada
-// carro tem a sua estação, R troca (passando pelo desligado), as estações agendam notas e músicas, o boletim abaixa a música, moto não
+// carro tem a sua estação, R troca (passando pelo desligado), cada estação toca as faixas dela (assets/music) num relógio próprio —
+// sintonizar entra no meio da faixa no ar; no fim, vinheta e a próxima —, todas creditadas no Guia, o boletim abaixa a música, moto não
 // tem rádio. A física anda em passos fixos de 1/60 s (game._update + Havok), sem esperar o desenho (o Chromium por software é lento).
 const { boot } = require('./lib.cjs');
 
@@ -91,12 +92,13 @@ module.exports = {
         c.ok(r.release < 0.15, `aliviando o pé, a aderência volta (${r.release.toFixed(2)})`);
         c.ok(r.straight.turn < 0.25 && r.straight.sp < 12, `reto, o freio de mão só freia (giro ${r.straight.turn.toFixed(2)} rad, ${r.straight.sp.toFixed(1)} m/s depois de 1 s)`);
 
-        // --- rádio
+        // --- rádio: faixas de verdade (assets/music), cada estação no seu relógio
         const rd = await page.evaluate(() => {
             const out = {}, car = game.activeCar;
             game._update(1 / 60);
             out.has = Radio.car === car && car.radio !== undefined && Radio.cur === car.radio;
             car.radio = -1; Radio.car = null; game._update(1 / 60);                 // (reentra: desligado)
+            out.offPaused = !Radio.el || Radio.el.paused;
             Radio.step(game, 1);
             out.first = Radio.cur; out.label = Radio.label;
             out.card = (document.getElementById('radioCard') || {}).textContent || '';
@@ -104,21 +106,45 @@ module.exports = {
             const seen = new Set([Radio.cur]);
             for (let i = 0; i < 4; i++) { Radio.step(game, 1); seen.add(Radio.cur); }
             out.cycle = [...seen].sort();
+            Radio.clock = 0; for (const s of Radio.STATIONS) s.off = 0;               // (relógio no começo: a 1ª faixa, do início)
             Radio.step(game, 1);                                                       // de volta à primeira (Baile)
             out.back = Radio.cur;
-            out.n0 = Radio.notes; out.s0 = Radio.songs;
             return out;
         });
         c.ok(rd.has, 'entrar no carro liga o rádio na estação daquele carro');
+        c.ok(rd.offPaused, 'desligado, o rádio não toca');
         c.ok(rd.first === 0 && /BAILE 150/.test(rd.label || '') && /Baile 150/.test(rd.card), `R troca: do desligado para a Baile 150 FM, com o cartão (${rd.card.slice(0, 40)})`);
         c.ok(rd.carKeeps, 'o carro guarda a estação escolhida');
         c.eq(JSON.stringify(rd.cycle), JSON.stringify([-1, 0, 1, 2, 3]), 'as 4 estações e o desligado em sequência');
-        await page.waitForTimeout(6000);
-        const rd2 = await page.evaluate(() => ({ n: Radio.notes, s: Radio.songs, st: Radio.cur, out: Radio.out ? Radio.out.gain.value : null, ctx: AudioFX.ctx && AudioFX.ctx.state }));
-        c.ok(rd2.n - rd.n0 > 25 && rd2.s >= 1, `a estação toca: ${rd2.n - rd.n0} notas em 6 s, ${rd2.s} música(s) começada(s) (áudio: ${rd2.ctx})`);
-        const rd3 = await page.evaluate(() => {
+        const pl = await page.waitForFunction(() => Radio.el && !Radio.el.paused && Radio.el.currentTime > 1, null, { timeout: 60000 }).then(() => true, () => false);
+        const rd2 = await page.evaluate(() => ({ src: Radio.el.src, t: Radio.el.currentTime, now: Radio.now && Radio.now.tr.t, card: (document.getElementById('radioCard') || {}).textContent || '', ctx: AudioFX.ctx && AudioFX.ctx.state }));
+        c.ok(pl && /assets\/music\/baile-[a-z-]+\.mp3$/.test(rd2.src), `a Baile toca uma faixa dela de verdade (${rd2.src.split('/').pop()}, ${rd2.t.toFixed(1)} s; áudio ${rd2.ctx})`);
+        c.ok(!!rd2.now && rd2.card.includes(rd2.now), `o cartão mostra a faixa e o autor (${rd2.card.slice(0, 70)})`);
+        // fim da faixa: a vinheta e a próxima da lista
+        const rd3 = await page.evaluate(() => new Promise((res) => {
+            const k0 = Radio.now.k, st = Radio.now.st;
+            Radio.el.dispatchEvent(new Event('ended'));
+            const gap = Radio.now === null;
+            setTimeout(() => res({ gap, k0, k1: Radio.now && Radio.now.k, n: st.order.length, src: Radio.el.src }), 2600);
+        }));
+        c.ok(rd3.gap && rd3.k1 === (rd3.k0 + 1) % rd3.n, `acabou a faixa: vinheta e a próxima (${rd3.k0} → ${rd3.k1}, ${rd3.src.split('/').pop()})`);
+        // como uma rádio de verdade: sintonizar com o relógio andando entra no meio de uma faixa
+        const rd4 = await page.evaluate(() => {
+            const st = Radio.STATIONS[1]; Radio._list(st); st.off = 0;
+            Radio.clock = st.tracks[st.order[0]].d + Radio.GAP + 60;                // 1 min dentro da 2ª faixa da lista
+            Radio.step(game, 1);
+            return { cur: Radio.cur, src: Radio.el.src, want: st.tracks[st.order[1]].f };
+        });
+        c.ok(rd4.cur === 1 && rd4.src.includes(rd4.want + '.mp3#t=60'), `sintonizar entra no meio da faixa que está no ar (${rd4.src.split('/').pop()})`);
+        const rd5 = await page.evaluate(async () => {
             const out = {};
-            Radio.step(game, 1); Radio.step(game, 1); Radio.step(game, 1);            // Rádio Cidade
+            const files = Radio.STATIONS.flatMap((s) => s.tracks.map((t) => t.f));
+            const st = await Promise.all(files.map((f) => fetch(Radio.BASE + f + '.mp3', { method: 'HEAD' }).then((r) => r.status, () => 0)));
+            out.files = files.length; out.missing = files.filter((f, i) => st[i] !== 200);
+            const cred = GuideUI.PAGES.radio();
+            out.credited = files.length - Radio.STATIONS.flatMap((s) => s.tracks).filter((t) => cred.includes(t.t) && cred.includes(t.a)).length;
+            out.lic = Radio.STATIONS.flatMap((s) => s.tracks).every((t) => Radio.LICENSES[t.l] && /^https:\/\//.test(t.u));
+            Radio.step(game, 1); Radio.step(game, 1);                                  // Rádio Cidade
             out.cidade = Radio.cur === 3;
             News.bulletin(game);
             out.duck = Radio._duckT > 0;
@@ -128,12 +154,16 @@ module.exports = {
             out.row = PauseMenu.SET_KEYS.includes('radio');
             game.mode = 'player'; game.activeCar.setControlled(false); game.activeCar = null; game._update(1 / 60);
             out.off = Radio.cur === -1 && !Radio.car;
+            await new Promise((r) => setTimeout(r, 400));
+            out.paused = Radio.el.paused;
             return out;
         });
-        c.ok(rd3.cidade && rd3.duck && /RÁDIO CIDADE/.test(rd3.news), `boletim na Rádio Cidade: a música abaixa e o cartão diz a estação (${rd3.news})`);
-        c.ok(rd3.bike, 'moto/bicicleta não tem rádio');
-        c.ok(rd3.row, 'Ajustes › Rádio do carro');
-        c.ok(rd3.off, 'saindo do carro, o rádio desliga');
+        c.ok(rd5.missing.length === 0, `as ${rd5.files} músicas estão em assets/music${rd5.missing.length ? ' (faltam: ' + rd5.missing.join(', ') + ')' : ''}`);
+        c.ok(rd5.credited === 0 && rd5.lic, `todas creditadas no Guia › Rádio e músicas, com licença e fonte${rd5.credited ? ` (${rd5.credited} sem crédito)` : ''}`);
+        c.ok(rd5.cidade && rd5.duck && /RÁDIO CIDADE/.test(rd5.news), `boletim na Rádio Cidade: a música abaixa e o cartão diz a estação (${rd5.news})`);
+        c.ok(rd5.bike, 'moto/bicicleta não tem rádio');
+        c.ok(rd5.row, 'Ajustes › Rádio do carro');
+        c.ok(rd5.off && rd5.paused, 'saindo do carro, o rádio desliga');
         c.noErrors(errors, 'direcao');
         await close();
     },
