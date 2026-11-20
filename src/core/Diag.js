@@ -51,7 +51,7 @@ const Diag = {
 		const eng = safe(() => g.gameEngine.engine, null);
 		if (eng) {
 			const C = eng.getCaps(), gpu = safe(() => Graphics.gpu(), {});
-			put('placa de vídeo', `${gpu.renderer || '?'} (${gpu.vendor || '?'})`);
+			put('placa de vídeo', gpu.renderer || '? (o navegador não informa)');
 			put('WebGL', `${eng.webGLVersion} · textura máx ${C.maxTextureSize} · MSAA máx ${C.maxMSAASamples || 0} · compilação paralela ${C.parallelShaderCompile ? 'sim' : 'não'} · tempo de GPU ${C.timerQuery ? 'sim' : 'não'} · por software: ${safe(() => Graphics.software ? 'SIM' : 'não')}`);
 			put('resolução interna', `${eng.getRenderWidth()}×${eng.getRenderHeight()} · escala ${safe(() => Config.perf.renderScale)} · teto ${safe(() => Config.perf.fpsCap)} FPS · FPS agora ${safe(() => eng.getFps().toFixed(0))}`);
 		} else put('placa de vídeo', 'o motor não chegou a abrir');
