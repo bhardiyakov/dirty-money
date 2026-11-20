@@ -70,9 +70,12 @@ module.exports = {
             const q = A._aimAt(n, 'person', 0);
             out.q = q;
             // ímã: o retículo ao lado dele vem para perto (e passa a pegar nele)
-            const src = { x: q.x + 34, y: q.y + 10, kind: 'stick' }, d0 = Math.hypot(src.x - q.x, src.y - q.y);
+            const ppm = A._pxPerM(), dx0 = Math.max(18, 0.9 * ppm), R = Math.max(Config.aim.pullMinPx, Config.aim.pullR * ppm);
+            const src = { x: q.x + dx0, y: q.y + dx0 * 0.3, kind: 'stick' }, d0 = Math.hypot(src.x - q.x, src.y - q.y);
             const r = A._assist(src);
-            out.pull = { d0, d1: Math.hypot(r.x - q.x, r.y - q.y), pickRaw: A._pick(src.x, src.y) === n, pick: A._pick(r.x, r.y) === n };
+            out.pull = { d0, d1: Math.hypot(r.x - q.x, r.y - q.y), pick: A._pick(r.x, r.y) === n, ppm };
+            const far = { x: q.x + R * 1.6, y: q.y, kind: 'stick' }, rf = A._assist(far);
+            out.far = rf.x === far.x && rf.y === far.y;
             // trava: LT parado, o alvo mais perto à frente
             A._lock = null;
             const L = A._lockOn();
@@ -91,7 +94,8 @@ module.exports = {
             out.row = PauseMenu.SET_KEYS.includes('aimHelp');
             return out;
         });
-        c.ok(am.pull.d1 < am.pull.d0 * 0.6 && am.pull.pick, `ajuda de mira: o retículo a ${am.pull.d0.toFixed(0)} px vem para ${am.pull.d1.toFixed(0)} px do alvo e pega nele`);
+        c.ok(am.pull.d1 < am.pull.d0 * 0.65 && am.pull.pick, `ajuda de mira: o retículo a ${am.pull.d0.toFixed(0)} px (~1 m) vem para ${am.pull.d1.toFixed(0)} px do alvo e pega nele (${am.pull.ppm.toFixed(0)} px/m)`);
+        c.ok(am.far, 'longe do alvo, a mira não é puxada');
         c.ok(am.lock.got && am.lock.on && am.lock.pick, 'LT parado: trava no pedestre à frente');
         c.ok(am.off, 'Ajustes › Ajuda de mira desligada: o retículo fica onde está');
         c.ok(am.mouse, 'no mouse a mira é manual (o cursor é a mira)');

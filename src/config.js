@@ -409,7 +409,7 @@ const Config = {
 	// RETORNO: kick = o tranco da câmera a cada tiro (no sentido contrário ao tiro, por arma; o RPG já tem o dele); o controle vibra junto.
 	// O marcador de acerto (✕) aparece na mira a cada bala que pega em alguém — vermelho e maior quando derruba.
 	aim: {
-		pull: 0.55, pullR: 2.4, pullMinPx: 42, lockCone: 0.62,
+		pull: 0.6, pullR: 3, pullMinPx: 42, lockCone: 0.62,
 		kick: { pistol: 0.07, pistol_sil: 0.05, revolver: 0.12, smg: 0.035, rifle: 0.045, ak47: 0.05, shotgun: 0.2, minigun: 0.025 },
 	},
 	// POSTURA E INTERRUPÇÃO (combat/Posture.js, FightState): quem briga tem uma barra oculta de EQUILÍBRIO (max: civil / durão — assaltante,
