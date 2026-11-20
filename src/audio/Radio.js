@@ -254,7 +254,9 @@ const Radio = {
 				-webkit-backdrop-filter: var(--blur, blur(8px)); backdrop-filter: var(--blur, blur(8px)); box-shadow: 0 8px 24px rgba(0,0,0,.4); color: var(--tx, #e8eaf0); font: 500 12px var(--font, Inter, system-ui, sans-serif); max-width: min(420px, 86vw); }
 				#radioCard.on { opacity: 1; transform: translate(-50%, 0); }
 				#radioCard b { display: block; font: 800 16px var(--font-d, Inter, system-ui, sans-serif); letter-spacing: .04em; }
-				#radioCard i { font-style: normal; opacity: .75; }`;
+				#radioCard i { font-style: normal; opacity: .75; }
+				body.mobile #radioCard { top: auto; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 38px); padding: 5px 12px 6px; font-size: 11px; }
+				body.mobile #radioCard b { font-size: 13px; }`;
 			document.head.appendChild(st);
 			el = document.createElement('div'); el.id = 'radioCard'; document.body.appendChild(el);
 		}

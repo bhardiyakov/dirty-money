@@ -144,6 +144,13 @@ class PauseMenu {
 			.pm-tab { padding: 9px 20px; font: 600 14px var(--font); color: var(--tx-2); cursor: pointer; border-radius: var(--r-pill); transition: background .15s, color .15s; white-space: nowrap; }
 			.pm-tab:hover { color: var(--tx); background: rgba(255,255,255,0.06); }
 			.pm-tab.on { color: #0b0e14; background: var(--tx); box-shadow: 0 4px 14px rgba(0,0,0,0.35); }
+			.pm-tab .ti { margin-right: 6px; }
+			/* celular primeiro: as abas cabem numa linha — só o ícone (grande, fácil de tocar), e o nome só na aberta */
+			body.mobile .pm-tabs { flex-wrap: nowrap; max-width: calc(100vw - 70px); overflow-x: auto; scrollbar-width: none; }
+			body.mobile .pm-tab { min-width: 40px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px !important; }
+			body.mobile .pm-tab .ti { font-size: 17px; margin-right: 0; }
+			body.mobile .pm-tab:not(.on) .tl { display: none; }
+			body.mobile .pm-tab.on .ti { margin-right: 6px; }
 			.pm-tab.pm-new::after, #pmInvSeg > div.pm-new::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 7px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.8); vertical-align: 1px; }
 			.pm-main { flex: 1; min-height: 0; display: flex; }
 			.pm-page { display: none; flex: 1; min-height: 0; gap: 16px; }
@@ -291,7 +298,9 @@ class PauseMenu {
 		const tabs = root.querySelector('.pm-tabs');
 		for (const [id, label] of PauseMenu.TABS) {
 			const b = document.createElement('div');
-			b.className = 'pm-tab'; b.dataset.tab = id; b.textContent = label;
+			b.className = 'pm-tab'; b.dataset.tab = id; b.title = label.replace(/^\S+\s/, '');
+			const sp = label.indexOf(' ');                                       // (ícone e nome separados: no celular só o ícone, menos a aba aberta)
+			b.innerHTML = `<span class="ti">${label.slice(0, sp)}</span><span class="tl">${label.slice(sp + 1)}</span>`;
 			b.addEventListener('click', () => this.setTab(id));
 			tabs.appendChild(b);
 		}

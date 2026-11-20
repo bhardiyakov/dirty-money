@@ -164,7 +164,7 @@ class TouchControls {
             body.mobile #vitals .vb i { height: 6px; }
             body.mobile #cashPop { font-size: 15px; top: 54px; right: 12px; } body.mobile #cashPop small { font-size: 11px; }
             body.mobile #hud2 .h-main { display: none !important; }      /* (a arma do celular fica no botão dela) */
-            body.mobile #toast { font-size: 12px; top: 60px; max-width: 54vw; padding: 6px 12px; }
+            body.mobile #toast { font-size: 12px; top: auto; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 38px); max-width: 52vw; padding: 6px 12px; }      /* (celular: as mensagens curtas embaixo, acima do "o que fazer agora"; o alto da tela fica para os avisos grandes) */
             body.mobile #prompt { font-size: 12px; padding: 6px 10px; bottom: auto; top: 8px; max-width: 44vw; white-space: normal; }
             body.mobile #prompt b { min-width: 20px; height: 20px; font-size: 11px; margin-right: 5px; }
             body.mobile #prompt small { font-size: 10px; }

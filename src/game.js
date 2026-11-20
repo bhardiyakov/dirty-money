@@ -8,8 +8,8 @@
 
 class Game {
 	// Interface modules live in the open world and inside an interior (ui/UiLoop.js).
-	static UI_WORLD = ['minimap', 'panel', 'prompt', 'hud'];
-	static UI_INTERIOR = ['panel', 'prompt', 'hud'];
+	static UI_WORLD = ['minimap', 'panel', 'prompt', 'hud', 'objective'];
+	static UI_INTERIOR = ['panel', 'prompt', 'hud', 'objective'];
 	// Teclas de troca de arma (1–9, 0, − e =). Uma tecla pode ter mais de uma arma: apertar de novo passa para a próxima que você tem
 	// (2: pistola ↔ pistola com silenciador; =: as pesadas — RPG, lança-foguetes, minigun). WEAPON_SLOTS: tecla → a 1ª arma dela.
 	static get WEAPON_KEYS() {
@@ -185,6 +185,7 @@ class Game {
 		this.uiLoop = new UiLoop();
 		this.uiLoop.add('minimap', 20, () => this._updateMinimap());
 		this.uiLoop.add('panel', 15, (elapsed) => this.ui.update(elapsed));
+		this.uiLoop.add('objective', 4, () => Objective.update(this, 1));    // "o que fazer agora" (ui/Objective.js)
 		this.uiLoop.add('prompt', 10, () => this._updatePrompt());
 		this.uiLoop.add('hud', 10, () => this._updateHud());
 		this.wheel = new WeaponWheel(this);          // roda de armas (Tab / LB / botão ARMA), como a do GTA V
