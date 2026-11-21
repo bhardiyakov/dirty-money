@@ -159,14 +159,15 @@ const AudioFX = {
     },
 
     // Buzina de cada veículo (fixa por veículo): carro = uma de 4, os antigos a "fon-fon", furgão/caminhonete grande a de caminhão,
-    // moto uma de 2. { g: grupo, idx }.
+    // moto uma de 2, bicicleta a campainha. { g: grupo, idx }.
     OLD_HORN: /^(besouro|brasilia|kombi|sedan_70|perua_antiga|hatch_80)$/,
     BIG_HORN: /^(swat_van|militar|van_furgao|picape_grande)$/,
     hornOf(car) {
         if (!car) return { g: 'horn_car', idx: 0 };
         if (car._horn) return car._horn;
         const id = car.spec && car.spec.id || '', r = Math.floor(Math.random() * 1000);
-        const h = car.isBike || /moto/.test(id) ? { g: 'horn_moto', idx: r } : this.OLD_HORN.test(id) ? { g: 'horn_old', idx: 0 } : this.BIG_HORN.test(id) ? { g: 'horn_truck', idx: 0 }
+        const pedal = car.spec && (car.spec.bike === 'bike' || car.spec.pedal || id === 'bicycle');
+        const h = pedal ? { g: 'bell_bike', idx: r } : car.isBike || /moto/.test(id) ? { g: 'horn_moto', idx: r } : this.OLD_HORN.test(id) ? { g: 'horn_old', idx: 0 } : this.BIG_HORN.test(id) ? { g: 'horn_truck', idx: 0 }
             : /onibus|bus/.test(id) ? { g: 'horn_bus', idx: 0 } : { g: 'horn_car', idx: r };
         return (car._horn = h);
     },
@@ -564,6 +565,7 @@ const AudioFX = {
         if (vol < 0.01) return;
         const K = typeof kind === 'string' ? { g: kind, idx: null } : kind || { g: pitch < 0.8 ? 'horn_truck' : pitch > 1.3 ? 'horn_moto' : 'horn_car', idx: null };
         // (a gravação é a buzina daquele veículo: o "pitch" do motorista só mexe um pouquinho no tom)
+        if (K.g === 'bell_bike' && typeof SoundBank !== 'undefined' && SoundBank.play(K.g, x, z, { idx: K.idx, vol: 0.3, maxDist: 45, jitter: 0.02 })) return;      // (campainha: toca inteira)
         if (typeof SoundBank !== 'undefined' && SoundBank.play(K.g, x, z, { idx: K.idx, vol: K.g === 'horn_moto' ? 0.36 : 0.42, maxDist: 80, rate: 0.96 + Math.max(-0.06, Math.min(0.08, (pitch - 1) * 0.25)), jitter: 0.01, dur: Math.max(0.18, dur), fo: 0.05 })) { this.hornsReal = (this.hornsReal || 0) + 1; return; }
 
         const t0 = ctx.currentTime;

@@ -203,6 +203,7 @@ one(B('0260'), 'horn_moto_a', t=0.6, fo=0.05)                      # moto: bipe 
 one(B('3506'), 'horn_moto_b', t=0.9, fo=0.06)                      # moto: aguda
 one(B('2721'), 'horn_truck', t=1.0, fo=0.1)
 one(B('3594'), 'horn_bus', t=2.0)
+one(B('0275'), 'bell_bike_1', t=1.3, fo=0.3); one(B('1042'), 'bell_bike_2', t=1.6, fo=0.4)   # campainha da bicicleta
 loop(B('0258'), 'horn_stuck', ss=0.35, t=0.8, xf=0.03, db=-14, tune=True)      # buzina presa (motorista caído no volante)
 # ---------------------------------------------------------------- mar e água
 loop(B('1446'), 'sea_surf', ss=20, t=20, xf=1.5, db=-20, sr=24000)  # ondas quebrando na areia

@@ -45,7 +45,7 @@ module.exports = {
             tiros: ['gun_pistol', 'gun_smg', 'gun_rifle', 'gun_shotgun', 'gun_heavy', 'casing', 'gun_reload', 'gun_cock'],
             batida: ['crash', 'car_bump', 'glass', 'punch', 'explosion', 'explosion_far'],
             rua: ['tire_screech', 'tire_squeal', 'siren_wail', 'siren_yelp', 'crowd_street', 'crowd_market'],
-            buzinas: ['horn_car', 'horn_moto', 'horn_old', 'horn_truck', 'horn_bus', 'horn_stuck'],
+            buzinas: ['horn_car', 'horn_moto', 'horn_old', 'horn_truck', 'horn_bus', 'horn_stuck', 'bell_bike'],
             'mar e nado': ['sea_surf', 'sea_open', 'swim_stroke', 'splash_small', 'splash_big'],
             'gritos e celular': ['scream_f', 'scream_m', 'notify_msg', 'notify', 'notify_ok'],
             motor: ['eng_car', 'eng_beater', 'eng_v8', 'eng_truck', 'eng_moto', 'starter', 'gear', 'handbrake'],
@@ -119,7 +119,7 @@ module.exports = {
             const kinds = {}; for (const c of cars) { const h = A.hornOf(c); kinds[h.g + (h.g === 'horn_car' || h.g === 'horn_moto' ? '#' + (h.idx % n[h.g].length) : '')] = 1; }
             out.kinds = Object.keys(kinds).sort(); out.n = cars.length;
             out.stable = cars.slice(0, 20).every((c) => A.hornOf(c) === A.hornOf(c));
-            out.moto = A.hornOf({ isBike: true, spec: { id: 'moto' } }).g; out.old = A.hornOf({ spec: { id: 'besouro' } }).g; out.big = A.hornOf({ spec: { id: 'van_furgao' } }).g; out.car = A.hornOf({ spec: { id: 'sedan_medio' } }).g;
+            out.moto = A.hornOf({ isBike: true, spec: { id: 'moto' } }).g; out.old = A.hornOf({ spec: { id: 'besouro' } }).g; out.big = A.hornOf({ spec: { id: 'van_furgao' } }).g; out.car = A.hornOf({ spec: { id: 'sedan_medio' } }).g; out.bike = A.hornOf({ isBike: true, spec: { id: 'bicycle', bike: 'bike' } }).g;
             const carB = new Set([0, 1, 2, 3].map((i) => SoundBank.pick('horn_car', i).buf)), motoB = new Set([0, 1].map((i) => SoundBank.pick('horn_moto', i).buf));
             out.distinct = [carB.size, motoB.size];
             out.same = [0, 1, 2].every(() => SoundBank.pick('horn_car', 2).buf === SoundBank.bufs.horn_car[2]);
@@ -127,7 +127,7 @@ module.exports = {
             const P = SoundBank.played, m0 = P.notify_msg || 0; Phone._msg('cida', 'teste de som', null, false); out.phone = (P.notify_msg || 0) - m0;
             return out;
         });
-        c.ok(hz.moto === 'horn_moto' && hz.old === 'horn_old' && hz.big === 'horn_truck' && hz.car === 'horn_car', `buzina pelo veículo: moto ${hz.moto}, antigo ${hz.old}, furgão ${hz.big}, carro ${hz.car}`);
+        c.ok(hz.moto === 'horn_moto' && hz.old === 'horn_old' && hz.big === 'horn_truck' && hz.car === 'horn_car' && hz.bike === 'bell_bike', `buzina pelo veículo: moto ${hz.moto}, antigo ${hz.old}, furgão ${hz.big}, carro ${hz.car}, bicicleta ${hz.bike}`);
         c.ok(hz.stable && hz.distinct[0] >= 3 && hz.distinct[1] === 2 && hz.same, `cada veículo fica com a mesma buzina (variações distintas: ${hz.distinct[0]} de carro, ${hz.distinct[1]} de moto); na rua agora: ${hz.kinds.join(', ')} (${hz.n} veículos)`);
         c.ok(hz.stuck, 'buzina presa (motorista caído no volante) é a gravação em loop');
         c.ok(hz.phone === 1, `mensagem nova no celular toca o toque de mensagem gravado (${hz.phone})`);
