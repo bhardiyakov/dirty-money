@@ -1,5 +1,6 @@
 // ============================================================================
-// Ambience — o SOM DO LUGAR, sintetizado (Web Audio, sem arquivos), que muda com o lugar, a hora e o tempo. Roda num relógio
+// Ambience — o SOM DO LUGAR, que muda com o lugar, a hora e o tempo. O burburinho e a buzina ao longe são GRAVADOS (SoundBank:
+// crowd_street / crowd_market, horn_car); o resto é sintetizado (Web Audio), e o sintetizado cobre também enquanto as gravações carregam. Roda num relógio
 // próprio (~8×/s): continua com os mini-jogos abertos (o mundo para; o bar não fica mudo).
 //   Camadas contínuas (ganho suave para o alvo): trânsito (ronco grave, mais no rush), multidão (burburinho: na rua comercial de dia;
 //   dentro das lojas, cresce com a lotação), ondas (na orla), grilos (à noite, em bairro, parque, favela), zumbido de lâmpada
@@ -107,13 +108,27 @@ const Ambience = {
             if (night && !mini) this._crickets(W);
             this._ones(g, W, h, night, false);
         }
-        this._to(L.traffic.gain, traffic * duck); this._to(L.crowd.gain, crowd * duck); this._to(L.waves.gain, waves * duck, 0.3);
+        const real = this._realCrowd(crowd * duck, W);
+        this._to(L.traffic.gain, traffic * duck); this._to(L.crowd.gain, real ? 0 : crowd * duck); this._to(L.waves.gain, waves * duck, 0.3);
         this._to(L.roof.gain, roof * duck); this._to(L.hum.gain, hum * duck); this._to(this.radio, radio * duck, 0.4); this._to(this.music, music * duck, 0.4); this._to(this.funk, funk * duck, 1.2);
         // chuva: dentro, o som da rua some quase todo (o telhado é a camada `roof`)
         if (AudioFX._rain) { AudioFX._rain.lp.frequency.setTargetAtTime(W.inside ? 650 : 5200 + 2600 * rain, AudioFX.ctx.currentTime, 0.3); if (W.inside) AudioFX._rain.gain.gain.setTargetAtTime(rain * 0.04, AudioFX.ctx.currentTime, 0.3); }
         if (radio > 0) this._pagode(dt);
         if (music > 0) this._gymBeat(dt);
         if (funk > 0) this._funkBeat(dt);
+    },
+
+    // Burburinho gravado: a rua (vozes, passos, trânsito leve) e o mercado/salão (vozes mais perto); dentro e no comércio, mais o
+    // de mercado. Devolve se assumiu (o ruído sintetizado do burburinho fica mudo).
+    _realCrowd(v, W) {
+        if (typeof SoundBank === 'undefined') return false;
+        if (!this.RC) {
+            if (!SoundBank.has('crowd_street') || !SoundBank.has('crowd_market')) return false;
+            this.RC = { street: SoundBank.loop('crowd_street'), market: SoundBank.loop('crowd_market') };
+        }
+        const k = Math.min(0.55, v * 8.5), mk = W.inside || W.biome === 'commercial' || W.biome === 'plaza' ? 0.7 : 0.15;
+        this._to(this.RC.market.gain, k * mk, 0.8); this._to(this.RC.street.gain, k * (1 - mk), 0.8);
+        return true;
     },
 
     // ------------------------------------------------------------------ música
@@ -198,6 +213,7 @@ const Ambience = {
     _ping(f, t, vol) { const ctx = AudioFX.ctx, o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35); o.connect(g); g.connect(AudioFX.master); o.start(t); o.stop(t + 0.4); },
     _beep(f, t, vol) { const ctx = AudioFX.ctx, o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.setValueAtTime(0.0001, t + 0.08); o.connect(g); g.connect(AudioFX.master); o.start(t); o.stop(t + 0.1); },
     _honk(x, z) {
+        if (typeof SoundBank !== 'undefined' && SoundBank.play(Math.random() < 0.2 ? 'horn_bus' : 'horn_car', x, z, { vol: 0.2, maxDist: 90, dur: 0.2 + Math.random() * 0.4, fo: 0.05, rate: 0.9 + Math.random() * 0.25, dark: 1.4 })) return;
         const out = this._out(x, z, 90, 0.16); if (!out) return;
         const ctx = AudioFX.ctx, t = ctx.currentTime, d = 0.18 + Math.random() * 0.3, lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400; lp.connect(out);
         for (const f of [392, 494]) { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + 0.02); g.gain.setValueAtTime(0.5, t + d); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.05); o.connect(g); g.connect(lp); o.start(t); o.stop(t + d + 0.08); }

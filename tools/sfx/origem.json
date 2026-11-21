@@ -1,0 +1,732 @@
+{
+ "step_concrete_1": {
+  "file": "step_concrete_1.mp3",
+  "dur": 0.11,
+  "src": "bsb_0514.ogg",
+  "at": 1.122
+ },
+ "step_concrete_2": {
+  "file": "step_concrete_2.mp3",
+  "dur": 0.153,
+  "src": "bsb_0514.ogg",
+  "at": 0.422
+ },
+ "step_concrete_3": {
+  "file": "step_concrete_3.mp3",
+  "dur": 0.096,
+  "src": "bsb_0514.ogg",
+  "at": 7.543
+ },
+ "step_concrete_4": {
+  "file": "step_concrete_4.mp3",
+  "dur": 0.14,
+  "src": "bsb_0514.ogg",
+  "at": 8.257
+ },
+ "step_concrete_5": {
+  "file": "step_concrete_5.mp3",
+  "dur": 0.132,
+  "src": "bsb_0514.ogg",
+  "at": 2.524
+ },
+ "step_concrete_6": {
+  "file": "step_concrete_6.mp3",
+  "dur": 0.17,
+  "src": "bsb_0514.ogg",
+  "at": 8.999
+ },
+ "run_concrete_1": {
+  "file": "run_concrete_1.mp3",
+  "dur": 0.141,
+  "src": "bsb_1318.ogg",
+  "at": 57.075
+ },
+ "run_concrete_2": {
+  "file": "run_concrete_2.mp3",
+  "dur": 0.136,
+  "src": "bsb_1318.ogg",
+  "at": 45.123
+ },
+ "run_concrete_3": {
+  "file": "run_concrete_3.mp3",
+  "dur": 0.144,
+  "src": "bsb_1318.ogg",
+  "at": 48.088
+ },
+ "run_concrete_4": {
+  "file": "run_concrete_4.mp3",
+  "dur": 0.129,
+  "src": "bsb_1318.ogg",
+  "at": 46.275
+ },
+ "run_concrete_5": {
+  "file": "run_concrete_5.mp3",
+  "dur": 0.155,
+  "src": "bsb_1318.ogg",
+  "at": 33.781
+ },
+ "step_grass_1": {
+  "file": "step_grass_1.mp3",
+  "dur": 0.224,
+  "src": "bsb_1253.ogg",
+  "at": 12.518
+ },
+ "step_grass_2": {
+  "file": "step_grass_2.mp3",
+  "dur": 0.276,
+  "src": "bsb_1253.ogg",
+  "at": 12.768
+ },
+ "step_grass_3": {
+  "file": "step_grass_3.mp3",
+  "dur": 0.193,
+  "src": "bsb_1253.ogg",
+  "at": 5.044
+ },
+ "step_grass_4": {
+  "file": "step_grass_4.mp3",
+  "dur": 0.139,
+  "src": "bsb_1253.ogg",
+  "at": 12.08
+ },
+ "step_grass_5": {
+  "file": "step_grass_5.mp3",
+  "dur": 0.21,
+  "src": "bsb_1253.ogg",
+  "at": 10.887
+ },
+ "run_grass_1": {
+  "file": "run_grass_1.mp3",
+  "dur": 0.26,
+  "src": "bsb_1254.ogg",
+  "at": 0.087
+ },
+ "run_grass_2": {
+  "file": "run_grass_2.mp3",
+  "dur": 0.192,
+  "src": "bsb_1254.ogg",
+  "at": 2.344
+ },
+ "run_grass_3": {
+  "file": "run_grass_3.mp3",
+  "dur": 0.194,
+  "src": "bsb_1254.ogg",
+  "at": 1.672
+ },
+ "run_grass_4": {
+  "file": "run_grass_4.mp3",
+  "dur": 0.193,
+  "src": "bsb_1254.ogg",
+  "at": 15.599
+ },
+ "step_leaves_1": {
+  "file": "step_leaves_1.mp3",
+  "dur": 0.16,
+  "src": "bsb_0137.ogg",
+  "at": 1.936
+ },
+ "step_leaves_2": {
+  "file": "step_leaves_2.mp3",
+  "dur": 0.132,
+  "src": "bsb_0137.ogg",
+  "at": 28.576
+ },
+ "step_gravel_1": {
+  "file": "step_gravel_1.mp3",
+  "dur": 0.186,
+  "src": "bsb_0510.ogg",
+  "at": 9.405
+ },
+ "step_gravel_2": {
+  "file": "step_gravel_2.mp3",
+  "dur": 0.154,
+  "src": "bsb_0510.ogg",
+  "at": 1.219
+ },
+ "step_gravel_3": {
+  "file": "step_gravel_3.mp3",
+  "dur": 0.125,
+  "src": "bsb_0510.ogg",
+  "at": 5.154
+ },
+ "step_gravel_4": {
+  "file": "step_gravel_4.mp3",
+  "dur": 0.148,
+  "src": "bsb_0510.ogg",
+  "at": 4.028
+ },
+ "step_gravel_5": {
+  "file": "step_gravel_5.mp3",
+  "dur": 0.137,
+  "src": "bsb_0510.ogg",
+  "at": 2.131
+ },
+ "step_dirt_1": {
+  "file": "step_dirt_1.mp3",
+  "dur": 0.155,
+  "src": "bsb_3202.ogg",
+  "at": 26.622
+ },
+ "step_dirt_2": {
+  "file": "step_dirt_2.mp3",
+  "dur": 0.131,
+  "src": "bsb_3202.ogg",
+  "at": 37.274
+ },
+ "step_dirt_3": {
+  "file": "step_dirt_3.mp3",
+  "dur": 0.212,
+  "src": "bsb_3202.ogg",
+  "at": 34.873
+ },
+ "step_dirt_4": {
+  "file": "step_dirt_4.mp3",
+  "dur": 0.14,
+  "src": "bsb_3202.ogg",
+  "at": 49.878
+ },
+ "step_dirt_5": {
+  "file": "step_dirt_5.mp3",
+  "dur": 0.121,
+  "src": "bsb_3202.ogg",
+  "at": 15.79
+ },
+ "step_sand_1": {
+  "file": "step_sand_1.mp3",
+  "dur": 0.159,
+  "src": "bsb_0208.ogg",
+  "at": 20.69
+ },
+ "step_sand_2": {
+  "file": "step_sand_2.mp3",
+  "dur": 0.167,
+  "src": "bsb_0208.ogg",
+  "at": 6.203
+ },
+ "step_sand_3": {
+  "file": "step_sand_3.mp3",
+  "dur": 0.093,
+  "src": "bsb_0208.ogg",
+  "at": 16.644
+ },
+ "step_sand_4": {
+  "file": "step_sand_4.mp3",
+  "dur": 0.165,
+  "src": "bsb_0208.ogg",
+  "at": 4.362
+ },
+ "step_sand_5": {
+  "file": "step_sand_5.mp3",
+  "dur": 0.098,
+  "src": "bsb_0208.ogg",
+  "at": 19.819
+ },
+ "step_mud_1": {
+  "file": "step_mud_1.mp3",
+  "dur": 0.175,
+  "src": "bsb_0495.ogg",
+  "at": 1.574
+ },
+ "step_mud_2": {
+  "file": "step_mud_2.mp3",
+  "dur": 0.196,
+  "src": "bsb_0495.ogg",
+  "at": 9.275
+ },
+ "step_mud_3": {
+  "file": "step_mud_3.mp3",
+  "dur": 0.159,
+  "src": "bsb_0495.ogg",
+  "at": 4.093
+ },
+ "step_mud_4": {
+  "file": "step_mud_4.mp3",
+  "dur": 0.142,
+  "src": "bsb_0495.ogg",
+  "at": 0.114
+ },
+ "step_water_1": {
+  "file": "step_water_1.mp3",
+  "dur": 0.149,
+  "src": "bsb_0690.ogg",
+  "at": 18.035
+ },
+ "step_water_2": {
+  "file": "step_water_2.mp3",
+  "dur": 0.22,
+  "src": "bsb_0690.ogg",
+  "at": 35.795
+ },
+ "step_water_3": {
+  "file": "step_water_3.mp3",
+  "dur": 0.215,
+  "src": "bsb_0690.ogg",
+  "at": 3.538
+ },
+ "step_water_4": {
+  "file": "step_water_4.mp3",
+  "dur": 0.115,
+  "src": "bsb_0690.ogg",
+  "at": 36.627
+ },
+ "step_wood_1": {
+  "file": "step_wood_1.mp3",
+  "dur": 0.17,
+  "src": "bsb_0165.ogg",
+  "at": 2.958
+ },
+ "step_wood_2": {
+  "file": "step_wood_2.mp3",
+  "dur": 0.177,
+  "src": "bsb_0165.ogg",
+  "at": 0.5
+ },
+ "step_wood_3": {
+  "file": "step_wood_3.mp3",
+  "dur": 0.093,
+  "src": "bsb_0165.ogg",
+  "at": 5.566
+ },
+ "step_wood_4": {
+  "file": "step_wood_4.mp3",
+  "dur": 0.117,
+  "src": "bsb_0165.ogg",
+  "at": 4.207
+ },
+ "step_tile_1": {
+  "file": "step_tile_1.mp3",
+  "dur": 0.168,
+  "src": "bsb_0376.ogg",
+  "at": 22.103
+ },
+ "step_tile_2": {
+  "file": "step_tile_2.mp3",
+  "dur": 0.129,
+  "src": "bsb_0376.ogg",
+  "at": 24.778
+ },
+ "step_tile_3": {
+  "file": "step_tile_3.mp3",
+  "dur": 0.13,
+  "src": "bsb_0376.ogg",
+  "at": 1.731
+ },
+ "step_tile_4": {
+  "file": "step_tile_4.mp3",
+  "dur": 0.146,
+  "src": "bsb_0376.ogg",
+  "at": 32.419
+ },
+ "step_tile_5": {
+  "file": "step_tile_5.mp3",
+  "dur": 0.2,
+  "src": "bsb_0376.ogg",
+  "at": 4.158
+ },
+ "step_heels_1": {
+  "file": "step_heels_1.mp3",
+  "dur": 0.147,
+  "src": "bsb_0166.ogg",
+  "at": 4.085
+ },
+ "step_heels_2": {
+  "file": "step_heels_2.mp3",
+  "dur": 0.146,
+  "src": "bsb_0166.ogg",
+  "at": 2.838
+ },
+ "step_heels_3": {
+  "file": "step_heels_3.mp3",
+  "dur": 0.1,
+  "src": "bsb_0166.ogg",
+  "at": 3.461
+ },
+ "step_heels_4": {
+  "file": "step_heels_4.mp3",
+  "dur": 0.142,
+  "src": "bsb_0166.ogg",
+  "at": 1.58
+ },
+ "step_heels_5": {
+  "file": "step_heels_5.mp3",
+  "dur": 0.132,
+  "src": "bsb_0166.ogg",
+  "at": 0.417
+ },
+ "step_slipper_1": {
+  "file": "step_slipper_1.mp3",
+  "dur": 0.137,
+  "src": "bsb_0373.ogg",
+  "at": 3.688
+ },
+ "step_slipper_2": {
+  "file": "step_slipper_2.mp3",
+  "dur": 0.16,
+  "src": "bsb_0373.ogg",
+  "at": 8.058
+ },
+ "step_slipper_3": {
+  "file": "step_slipper_3.mp3",
+  "dur": 0.155,
+  "src": "bsb_0373.ogg",
+  "at": 4.431
+ },
+ "step_slipper_4": {
+  "file": "step_slipper_4.mp3",
+  "dur": 0.155,
+  "src": "bsb_0373.ogg",
+  "at": 0.115
+ },
+ "step_slipper_5": {
+  "file": "step_slipper_5.mp3",
+  "dur": 0.186,
+  "src": "bsb_0373.ogg",
+  "at": 3.128
+ },
+ "gun_pistol_1": {
+  "file": "gun_pistol_1.mp3",
+  "dur": 0.733,
+  "src": "bsb_0438.ogg",
+  "at": 0.056
+ },
+ "gun_smg": {
+  "file": "gun_smg.mp3",
+  "dur": 0.55,
+  "src": "bsb_0437.ogg",
+  "ss": null
+ },
+ "gun_heavy": {
+  "file": "gun_heavy.mp3",
+  "dur": 0.9,
+  "src": "bsb_0397.ogg",
+  "ss": null
+ },
+ "gun_rifle_1": {
+  "file": "gun_rifle_1.mp3",
+  "dur": 0.452,
+  "src": "bsb_2853.ogg",
+  "at": 0.006
+ },
+ "gun_rifle_b_1": {
+  "file": "gun_rifle_b_1.mp3",
+  "dur": 0.604,
+  "src": "bsb_2854.ogg",
+  "at": 0.016
+ },
+ "gun_shotgun_1": {
+  "file": "gun_shotgun_1.mp3",
+  "dur": 0.658,
+  "src": "bsb_0532.ogg",
+  "at": 4.91
+ },
+ "gun_shotgun_2": {
+  "file": "gun_shotgun_2.mp3",
+  "dur": 0.666,
+  "src": "bsb_0532.ogg",
+  "at": 3.538
+ },
+ "casing_1": {
+  "file": "casing_1.mp3",
+  "dur": 0.5,
+  "src": "bsb_1355.ogg",
+  "at": 0.066
+ },
+ "casing_2": {
+  "file": "casing_2.mp3",
+  "dur": 0.421,
+  "src": "bsb_1355.ogg",
+  "at": 0.218
+ },
+ "casing_b_1": {
+  "file": "casing_b_1.mp3",
+  "dur": 0.5,
+  "src": "bsb_1356.ogg",
+  "at": 0.046
+ },
+ "casing_b_2": {
+  "file": "casing_b_2.mp3",
+  "dur": 0.24,
+  "src": "bsb_1356.ogg",
+  "at": 0.33
+ },
+ "casing_c": {
+  "file": "casing_c.mp3",
+  "dur": 0.6,
+  "src": "bsb_1357.ogg",
+  "ss": null
+ },
+ "casing_d": {
+  "file": "casing_d.mp3",
+  "dur": 0.566,
+  "src": "bsb_1359.ogg",
+  "ss": null
+ },
+ "gun_reload": {
+  "file": "gun_reload.mp3",
+  "dur": 1.181,
+  "src": [
+   "bsb_1988.ogg",
+   "bsb_1989.ogg",
+   "bsb_1985.ogg"
+  ]
+ },
+ "gun_cock": {
+  "file": "gun_cock.mp3",
+  "dur": 0.212,
+  "src": "bsb_1984.ogg",
+  "ss": null
+ },
+ "explosion_1": {
+  "file": "explosion_1.mp3",
+  "dur": 2.498,
+  "src": [
+   "bsb_1807.ogg",
+   "bsb_1023.ogg"
+  ]
+ },
+ "explosion_2": {
+  "file": "explosion_2.mp3",
+  "dur": 2.911,
+  "src": [
+   "bsb_1808.ogg",
+   "bsb_1023.ogg",
+   "bsb_1806.ogg"
+  ]
+ },
+ "explosion_far": {
+  "file": "explosion_far.mp3",
+  "dur": 1.769,
+  "src": "bsb_1023.ogg",
+  "ss": null
+ },
+ "punch_a_1": {
+  "file": "punch_a_1.mp3",
+  "dur": 0.103,
+  "src": "bsb_0105.ogg",
+  "at": 0.777
+ },
+ "punch_b_1": {
+  "file": "punch_b_1.mp3",
+  "dur": 0.103,
+  "src": "bsb_0444.ogg",
+  "at": 0.203
+ },
+ "punch_c_1": {
+  "file": "punch_c_1.mp3",
+  "dur": 0.066,
+  "src": "bsb_0806.ogg",
+  "at": 2.167
+ },
+ "punch_d_1": {
+  "file": "punch_d_1.mp3",
+  "dur": 0.198,
+  "src": "bsb_2459.ogg",
+  "at": 0.096
+ },
+ "crash_1": {
+  "file": "crash_1.mp3",
+  "dur": 0.488,
+  "src": "oga_qubodup-crash.ogg",
+  "ss": null
+ },
+ "crash_2": {
+  "file": "crash_2.mp3",
+  "dur": 0.822,
+  "src": [
+   "oga_qubodup-crash.ogg",
+   "bsb_1773.ogg"
+  ]
+ },
+ "crash_3": {
+  "file": "crash_3.mp3",
+  "dur": 1.078,
+  "src": [
+   "oga_qubodup-crash.ogg",
+   "bsb_1776.ogg"
+  ]
+ },
+ "crash_4": {
+  "file": "crash_4.mp3",
+  "dur": 0.992,
+  "src": [
+   "oga_qubodup-crash.ogg",
+   "bsb_1778.ogg"
+  ]
+ },
+ "car_bump": {
+  "file": "car_bump.mp3",
+  "dur": 0.276,
+  "src": "bsb_0655.ogg",
+  "ss": null
+ },
+ "glass_1": {
+  "file": "glass_1.mp3",
+  "dur": 1.4,
+  "src": "bsb_0148.ogg",
+  "ss": null
+ },
+ "glass_2": {
+  "file": "glass_2.mp3",
+  "dur": 0.598,
+  "src": "bsb_0771.ogg",
+  "ss": null
+ },
+ "tire_screech": {
+  "file": "tire_screech.mp3",
+  "dur": 2.0,
+  "src": "bsb_2369.ogg",
+  "ss": 0.4,
+  "loop": true,
+  "ls": 0.3,
+  "le": 1.7
+ },
+ "tire_squeal_1": {
+  "file": "tire_squeal_1.mp3",
+  "dur": 1.4,
+  "src": "bsb_2368.ogg",
+  "at": 0.08
+ },
+ "tire_squeal_2": {
+  "file": "tire_squeal_2.mp3",
+  "dur": 1.217,
+  "src": "bsb_2368.ogg",
+  "at": 0.883
+ },
+ "siren_wail": {
+  "file": "siren_wail.mp3",
+  "dur": 5.65,
+  "src": "muted_sirens_preview.mp3",
+  "ss": 58.15,
+  "loop": true,
+  "ls": 0.3,
+  "le": 5.35
+ },
+ "siren_yelp": {
+  "file": "siren_yelp.mp3",
+  "dur": 3.6,
+  "src": "muted_sirens_preview.mp3",
+  "ss": 13.0,
+  "loop": true,
+  "ls": 0.3,
+  "le": 3.3
+ },
+ "horn_car": {
+  "file": "horn_car.mp3",
+  "dur": 1.463,
+  "src": "bsb_0258.ogg",
+  "ss": null
+ },
+ "horn_bus": {
+  "file": "horn_bus.mp3",
+  "dur": 1.091,
+  "src": "bsb_3594.ogg",
+  "ss": null
+ },
+ "crowd_street": {
+  "file": "crowd_street.mp3",
+  "dur": 16.6,
+  "src": "bsb_3515.ogg",
+  "ss": 5,
+  "loop": true,
+  "ls": 0.3,
+  "le": 16.3
+ },
+ "crowd_market": {
+  "file": "crowd_market.mp3",
+  "dur": 16.6,
+  "src": "bsb_2728.ogg",
+  "ss": 8,
+  "loop": true,
+  "ls": 0.3,
+  "le": 16.3
+ },
+ "eng_car": {
+  "file": "eng_car.mp3",
+  "dur": 4.6,
+  "src": "bsb_0187.ogg",
+  "ss": 21.2,
+  "loop": true,
+  "rpm": 800,
+  "ls": 0.3,
+  "le": 4.3
+ },
+ "eng_beater": {
+  "file": "eng_beater.mp3",
+  "dur": 3.2,
+  "src": "bsb_0675.ogg",
+  "ss": 1.6,
+  "loop": true,
+  "rpm": 800,
+  "ls": 0.3,
+  "le": 2.9
+ },
+ "eng_v8": {
+  "file": "eng_v8.mp3",
+  "dur": 4.6,
+  "src": "bsb_0534.ogg",
+  "ss": 14.2,
+  "loop": true,
+  "rpm": 700,
+  "ls": 0.3,
+  "le": 4.3
+ },
+ "eng_truck": {
+  "file": "eng_truck.mp3",
+  "dur": 3.6,
+  "src": "bsb_1145.ogg",
+  "ss": 4.0,
+  "loop": true,
+  "rpm": 650,
+  "ls": 0.3,
+  "le": 3.3
+ },
+ "eng_moto": {
+  "file": "eng_moto.mp3",
+  "dur": 3.6,
+  "src": "bsb_0884.ogg",
+  "ss": 15.0,
+  "loop": true,
+  "rpm": 1350,
+  "ls": 0.3,
+  "le": 3.3
+ },
+ "starter": {
+  "file": "starter.mp3",
+  "dur": 2.0,
+  "src": "bsb_0872.ogg",
+  "ss": 1.0,
+  "loop": true,
+  "ls": 0.3,
+  "le": 1.7
+ },
+ "gear_1": {
+  "file": "gear_1.mp3",
+  "dur": 0.401,
+  "src": "oga_some/gear01.wav",
+  "ss": null
+ },
+ "gear_2": {
+  "file": "gear_2.mp3",
+  "dur": 0.706,
+  "src": "oga_some/gear04.wav",
+  "ss": null
+ },
+ "gear_3": {
+  "file": "gear_3.mp3",
+  "dur": 0.469,
+  "src": "oga_some/gear07.wav",
+  "ss": null
+ },
+ "gear_4": {
+  "file": "gear_4.mp3",
+  "dur": 0.487,
+  "src": "oga_some/gear10.wav",
+  "ss": null
+ },
+ "handbrake": {
+  "file": "handbrake.mp3",
+  "dur": 0.556,
+  "src": "oga_some/handbrake.wav",
+  "ss": null
+ }
+}

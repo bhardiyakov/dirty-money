@@ -1,5 +1,6 @@
 // ============================================================================
-// Footsteps — passos do jogador, sintetizados (Web Audio) e presos à ANIMAÇÃO: o som sai na FASE do ciclo em que o pé bate no chão
+// Footsteps — passos do jogador: GRAVAÇÕES de passos de verdade em cada chão (SoundBank: step_*/run_*, salto, chinelo), com o
+// sintetizado (Web Audio) de reserva enquanto carregam — e presos à ANIMAÇÃO: o som sai na FASE do ciclo em que o pé bate no chão
 // (Footsteps.strikes: personagem 2,5D = calcanhar direito no início do ciclo e o esquerdo na metade, qualquer nº de quadros; boneco
 // antigo, CharacterRig.gait = 0,25 e 0,75), então cai junto com o desenho — andando, correndo, carregando peso, vadeando.
 //
@@ -88,12 +89,35 @@ const Footsteps = {
 		return (this._bus = g);
 	},
 
+	// Chão → gravação. Calçado: sapato social estala (salto) e chinelo bate a sola no chão duro; coturno pisa mais grave.
+	REAL: { concrete: 'step_concrete', tile: 'step_tile', wood: 'step_wood', grass: 'step_grass', leaves: 'step_leaves', sand: 'step_sand',
+		dirt: 'step_dirt', gravel: 'step_gravel', mud: 'step_mud', water: 'step_water' },
+	RUN: { concrete: 'run_concrete', grass: 'run_grass' },
+	_real(game, surf, shoe, run, quiet, heavy, t) {
+		if (typeof SoundBank === 'undefined') return false;
+		const hard = surf === 'concrete' || surf === 'tile' || surf === 'wood';
+		let g = (run && this.RUN[surf]) || this.REAL[surf], rate = 1, vol = (run ? 0.5 : 0.36) * (quiet ? 0.28 : 1) * (1 + 0.35 * heavy);
+		if (hard && shoe === 'dress') { g = 'step_heels'; rate = 0.82; vol *= 0.8; }             // (sola de couro: estalo mais grave que o do salto fino)
+		else if (hard && shoe === 'flip') g = 'step_slipper';
+		else if (shoe === 'boot') { rate = 0.86; vol *= 1.15; }
+		else if (shoe === 'sneaker' && hard) vol *= 0.85;                                          // tênis: abafado
+		rate *= 1 - 0.1 * heavy;
+		if (!SoundBank.has(g)) return false;
+		SoundBank.play(g, null, null, { vol, rate, jitter: 0.06, out: this._out(), delay: Math.max(0, t - AudioFX.ctx.currentTime) });
+		if (surf === 'leaves' && Math.random() < 0.5) SoundBank.play('step_grass', null, null, { vol: vol * 0.5, jitter: 0.08, out: this._out(), delay: 0.03 });
+		if (surf === 'water') { const p = game.player.position; AudioFX.waterWade(p.x, p.z, (game.player.depth || 0) / Config.water.wadeDepth, run, 0.45); }
+		const wet = Weather.cur ? Weather.cur.k : 0;                                            // chuva: respingo por cima no chão duro
+		if (wet > 0.2 && (surf === 'concrete' || surf === 'dirt')) this._hit(t + 0.01, { vol: 0.12 * wet * (run ? 1.4 : 1), dur: 0.11, f0: 2400, f1: 900, type: 'bandpass', q: 0.9, att: 0.004 });
+		return true;
+	},
+
 	step(game, run, quiet = false) {
 		if (!AudioFX._ok()) return;
 		const surf = this.surface(game), shoe = this.shoe(), t = AudioFX.ctx.currentTime + 0.005;
 		const heavy = Math.min(1, Math.max(0, ((game.player.loadRatio || 0) - 0.4) / 0.8));       // bolsa pesada: pisada mais grave
 		const V = (run ? 1.45 : 1) * (quiet ? 0.3 : 1) * (0.11 + 0.05 * heavy) * (0.85 + Math.random() * 0.3), D = run ? 0.85 : 1, toe = run ? 0.035 : 0.06;      // (agachado: pisada macia)
 		const low = 1 - 0.3 * heavy;
+		if (this._real(game, surf, shoe, run, quiet, heavy, t)) return;
 		const S = { sneaker: { thump: 0.8, click: 0.25, lp: 1500 }, dress: { thump: 0.6, click: 1.0, lp: 2600 }, boot: { thump: 1.25, click: 0.45, lp: 1100 }, flip: { thump: 0.5, click: 0.2, lp: 1300 } }[shoe];
 		const hard = surf === 'concrete' || surf === 'tile' || surf === 'wood';
 		switch (surf) {

@@ -1,5 +1,10 @@
 // ============================================================================
-// EngineAudio — ronco de motor sintetizado (Web Audio, sem arquivos), um TIMBRE por tipo de veículo.
+// EngineAudio — ronco de motor, um TIMBRE por tipo de veículo.
+//
+//   GRAVADO (SoundBank): carro comum, carro velho de escapamento furado, V8, caminhão a diesel e moto têm a marcha lenta de
+//   verdade em loop (REAL/PITCH); a rotação acelera a reprodução (1× na marcha lenta do perfil, ~2,6× no corte de giro), o filtro
+//   abre e o motor "encorpa" com o pé no acelerador; o arranque também é gravado. Troca de marcha e freio de mão: o "clec" do
+//   câmbio e a catraca gravados dentro de um carro. Barco e elétrico (e todos, enquanto as gravações carregam): o sintetizado abaixo.
 //
 //   Como soa um motor: cada explosão num cilindro é um "pulso" de pressão no escapamento (um estalo grave que ressoa no cano).
 //   Aqui o ciclo do motor (2 voltas do virabrequim num 4 tempos) é ASSADO num buffer: N pulsos por ciclo (N = cilindros), cada um
@@ -55,6 +60,18 @@ const EngineAudio = {
         esportivo: 'i6sport', muscle: 'v8muscle', super: 'v12super', super2: 'v10super',
         picape_pequena: 'small4', picape_media: 'diesel4', picape_grande: 'v8truck', van_furgao: 'diesel4', minivan: 'sedan4',
         swat_van: 'diesel4', militar: 'diesel4', moto: 'moto1', jetski: 'outboard', lancha: 'v8marine', barco: 'diesel6',
+    },
+    // perfil → família gravada (assets/sfx/eng_*) e o tom dela na marcha lenta (a gravação a 1× = marcha lenta do perfil)
+    REAL: {
+        small4: 'eng_car', sedan4: 'eng_car', suv4: 'eng_car', lux6: 'eng_car', turbo4: 'eng_car', i6sport: 'eng_car', v6: 'eng_car', v12super: 'eng_car', v10super: 'eng_car',
+        rough4: 'eng_beater', old4: 'eng_beater', boxer: 'eng_beater', i6old: 'eng_beater', v8muscle: 'eng_v8', v8truck: 'eng_v8', diesel4: 'eng_truck', moto1: 'eng_moto',
+    },
+    PITCH: { small4: 1.08, sedan4: 1, suv4: 0.95, lux6: 0.9, turbo4: 1.12, i6sport: 1.15, v6: 0.92, v12super: 1.3, v10super: 1.22, rough4: 1, old4: 0.92, boxer: 1.06, i6old: 0.85, v8muscle: 1, v8truck: 0.88, diesel4: 1, moto1: 1 },
+    _realOf(P) { const g = !P.electric && !P.boat && this.REAL[P.key]; return g && typeof SoundBank !== 'undefined' && SoundBank.has(g) ? g : null; },
+    // Velocidade de reprodução da gravação: abaixo da marcha lenta (arranque, desligando) proporcional; acima, até ~2,6× no corte.
+    _rate(v, rpm) {
+        const P = v.P, pm = this.PITCH[P.key] || 1;
+        return rpm < P.idle ? pm * Math.max(0.08, rpm / P.idle) : pm * (1 + 1.6 * Math.min(1.1, (rpm - P.idle) / (P.red - P.idle)));
     },
     AMBIENT: 3,               // carros do trânsito com som ao mesmo tempo
     AMBIENT_DIST: 55,         // até onde se ouve um carro do trânsito (m)
@@ -132,7 +149,7 @@ const EngineAudio = {
     },
 
     // Pronto para tocar? (os dois buffers do perfil já assados)
-    _ready(P) { return P.electric || (this._bufs[P.key + '@1000'] && this._bufs[P.key + '@4500']); },
+    _ready(P) { return P.electric || this._realOf(P) || (this._bufs[P.key + '@1000'] && this._bufs[P.key + '@4500']); },
     // Assa os buffers em segundo plano (os perfis pedidos agora vêm primeiro; o do carro do jogador fura a fila). A conta vai para um
     // Worker, que recebe a fila toda de uma vez e devolve um buffer por vez — a main thread só cria o AudioBuffer com as amostras
     // que voltam. Sem Worker: um buffer por quadro, aqui mesmo.
@@ -266,6 +283,7 @@ const EngineAudio = {
         v.sbp2 = mk(ctx.createBiquadFilter()); v.sbp2.type = 'bandpass'; v.sbp2.frequency.value = (P.starter || 180) * 5; v.sbp2.Q.value = 1.4;
         v.stg = mk(ctx.createGain()); v.stg.gain.value = 0;
         v.st.connect(v.sbp2); v.sbp2.connect(v.stg); v.stg.connect(v.out); v.st.start();
+        if (this.REAL[P.key] && typeof SoundBank !== 'undefined') { const L = SoundBank.loop('starter', v.out); if (L) { v.stR = L; v.nodes.push(L.src, L.gain); } }      // arranque gravado
         v.nz.start(0, Math.random());
         if (!this._attach(v, 1000)) this._want(P);
         return v;
@@ -275,7 +293,16 @@ const EngineAudio = {
     _attach(v, rpm) {
         const P = v.P;
         if (v.dead || !this._ready(P)) return false;
-        const ctx = AudioFX.ctx, mk = (n) => { v.nodes.push(n); return n; };
+        const ctx = AudioFX.ctx, mk = (n) => { v.nodes.push(n); return n; }, R = this._realOf(P), pk = R && SoundBank.pick(R);
+        if (pk) {                                                              // gravação: um loop só, a rotação muda a velocidade
+            const ls = pk.meta.ls || 0, le = Math.min(pk.meta.le || pk.buf.duration, pk.buf.duration);
+            v.lo = mk(ctx.createBufferSource()); v.lo.buffer = pk.buf; v.lo.loop = true; v.lo.loopStart = ls; v.lo.loopEnd = le;
+            v.real = R; v.hi = null;
+            v.lo.playbackRate.value = this._rate(v, rpm);
+            v.lo.connect(v.gLo); v.gHi.gain.value = 0;
+            v.lo.start(0, ls + Math.random() * (le - ls - 0.05));
+            return true;
+        }
         v.lo = mk(ctx.createBufferSource()); v.lo.buffer = this._bufs[P.key + '@1000']; v.lo.loop = true;
         v.hi = mk(ctx.createBufferSource()); v.hi.buffer = this._bufs[P.key + '@4500']; v.hi.loop = true;
         v.lo.playbackRate.value = rpm / 1000; v.hi.playbackRate.value = rpm / 4500;
@@ -326,8 +353,8 @@ const EngineAudio = {
             const rg = (g) => idle * 0.85 + (red - idle * 0.85) * v / (max * R[g - 1]);
             if (s.shiftT <= 0) {
                 const upAt = red * (0.58 + 0.34 * load);
-                if (s.gear < R.length && rg(s.gear) > upAt) { s.gear++; s.shiftT = P.cyl >= 10 ? 0.12 : 0.2; this._onShift(car, P, s, load); }
-                else if (s.gear > 1 && (rg(s.gear) < idle * 1.3 || (load > 0.85 && rg(s.gear - 1) < red * 0.74))) { s.gear--; s.shiftT = 0.16; }
+                if (s.gear < R.length && rg(s.gear) > upAt) { s.gear++; s.shiftT = P.cyl >= 10 ? 0.12 : 0.2; this._onShift(car, P, s, load, mine); }
+                else if (s.gear > 1 && (rg(s.gear) < idle * 1.3 || (load > 0.85 && rg(s.gear - 1) < red * 0.74))) { s.gear--; s.shiftT = 0.16; if (mine) this._gear(0.7); }
             }
             want = rg(s.gear);
             if (s.gear === 1) want = Math.max(want, idle + (red * 0.5 - idle) * load * Math.max(0, 1 - v / (max * R[0])));      // embreagem patinando na saída
@@ -352,7 +379,15 @@ const EngineAudio = {
         return { rpm: s.rpm, load: s.load, rf: Math.max(0, Math.min(1, (s.rpm - idle) / (red - idle))) };
     },
 
-    _onShift(car, P, s, load) {
+    // O "clec" da alavanca de câmbio (gravado dentro do carro) — só no carro do jogador, baixinho, por dentro.
+    gears: 0,
+    _gear(k = 1) {
+        if (typeof SoundBank === 'undefined' || !this.player) return;
+        if (SoundBank.play('gear', null, null, { vol: 0.2 * k, jitter: 0.06, out: this._bus() })) this.gears++;
+    },
+
+    _onShift(car, P, s, load, mine) {
+        if (mine) this._gear(1);
         if (load > 0.75 && P.pops) this._pops(car, P, 1);                    // estalo na troca com o pé embaixo
         if (P.turbo && s.boost > 0.6 && load > 0.6) this._blowoff(car, P, s.boost * 0.6);
     },
@@ -382,17 +417,26 @@ const EngineAudio = {
             return;
         }
         const rpm = Math.max(60, sim.rpm), x = Math.max(0, Math.min(1, (rpm - 1600) / 2000));
-        if (v.lo || this._attach(v, rpm)) { set(v.lo.playbackRate, rpm / 1000); set(v.hi.playbackRate, rpm / 4500); }
-        set(v.gLo.gain, Math.cos(x * 1.5708)); set(v.gHi.gain, Math.sin(x * 1.5708));
-        set(v.pre.gain, 0.55 + P.drive * 0.75 * sim.load);
-        set(v.lp.frequency, (P.lp[0] + (P.lp[1] - P.lp[0]) * sim.rf) * (0.5 + 0.5 * sim.load) * (extra.lpMul || 1));
+        if (v.lo && !v.real && this._realOf(P)) {                              // a gravação chegou com o sintetizado tocando: troca
+            for (const n of [v.lo, v.hi]) if (n) { try { n.stop(); } catch (e) { /* ok */ } }
+            v.lo = v.hi = null;
+        }
+        if (v.lo || this._attach(v, rpm)) {
+            if (v.real) set(v.lo.playbackRate, this._rate(v, rpm));
+            else { set(v.lo.playbackRate, rpm / 1000); set(v.hi.playbackRate, rpm / 4500); }
+        }
+        const real = !!v.real;
+        if (real) { set(v.gLo.gain, 1.6); set(v.gHi.gain, 0); } else { set(v.gLo.gain, Math.cos(x * 1.5708)); set(v.gHi.gain, Math.sin(x * 1.5708)); }
+        set(v.pre.gain, real ? 0.5 + 0.35 * P.drive * sim.load : 0.55 + P.drive * 0.75 * sim.load);
+        set(v.lp.frequency, real ? (1300 + 8500 * sim.rf) * (0.45 + 0.55 * sim.load) * (extra.lpMul || 1) : (P.lp[0] + (P.lp[1] - P.lp[0]) * sim.rf) * (0.5 + 0.5 * sim.load) * (extra.lpMul || 1));
         set(v.body.gain, (0.34 + 0.66 * sim.load) * (0.62 + 0.38 * sim.rf));
         set(v.nbp.frequency, 260 + rpm * 0.38);
-        set(v.ng.gain, P.noise * 0.22 * sim.load * (0.3 + sim.rf));
+        set(v.ng.gain, real ? 0 : P.noise * 0.22 * sim.load * (0.3 + sim.rf));
         const fire = rpm / 60 * P.cyl / (P.two ? 1 : 2);
-        if (v.sc) { set(v.sc.frequency, fire); set(v.sbp.frequency, fire * 2); set(v.sg.gain, P.scream * 0.2 * sim.load * sim.rf * sim.rf); }
+        if (v.sc) { set(v.sc.frequency, fire); set(v.sbp.frequency, fire * 2); set(v.sg.gain, P.scream * (real ? 0.08 : 0.2) * sim.load * sim.rf * sim.rf); }
         if (v.tw) { const b = extra.boost || 0; set(v.tw.frequency, 1700 + b * 5200); set(v.tg.gain, P.turbo * 0.022 * b * b); }
-        set(v.stg.gain, extra.starter || 0, 0.02);
+        if (v.stR) { set(v.stR.gain.gain, (extra.starter || 0) * 7, 0.02); set(v.stg.gain, 0, 0.02); }
+        else set(v.stg.gain, extra.starter || 0, 0.02);
         set(v.out.gain, gain * P.vol, extra.fast ? 0.012 : 0.05);
     },
 
@@ -434,6 +478,9 @@ const EngineAudio = {
         }
         const { voice } = this.player, s = car._eng;
         s.t += dt;
+        const hb = !!car.handbrake && !car.isBike;                              // puxou o freio de mão: a catraca (gravada)
+        if (hb && !this._hb && typeof SoundBank !== 'undefined') SoundBank.play('handbrake', null, null, { vol: 0.32, jitter: 0.05, out: this._bus() });
+        this._hb = hb;
         const fuelOut = car.tank > 0 && car.fuel <= 0, broken = car.engineDead || !!car._ccOff;      // (bateria, motor fundido, superaquecido: vehicle/CarCare.js)
         let starter = 0, gain = 0.42, fast = false;
         if (s.state === 'crank') {
@@ -476,7 +523,10 @@ const EngineAudio = {
 
     _shutdown(entry) {
         const v = entry.voice, s = entry.car._eng, P = v.P, t0 = AudioFX.ctx.currentTime;
-        if (!P.electric && v.lo) {
+        if (!P.electric && v.lo && v.real) {                                   // gravação: o giro cai até parar
+            const r0 = this._rate(v, Math.max(1, s.rpm));
+            v.lo.playbackRate.cancelScheduledValues(t0); v.lo.playbackRate.setValueAtTime(r0, t0); v.lo.playbackRate.linearRampToValueAtTime(r0 * 0.25, t0 + 0.55);
+        } else if (!P.electric && v.lo) {
             v.lo.playbackRate.cancelScheduledValues(t0); v.hi.playbackRate.cancelScheduledValues(t0);
             v.lo.playbackRate.setValueAtTime(Math.max(0.1, s.rpm / 1000), t0); v.lo.playbackRate.linearRampToValueAtTime(0.12, t0 + 0.55);
             v.hi.playbackRate.setValueAtTime(Math.max(0.05, s.rpm / 4500), t0); v.hi.playbackRate.linearRampToValueAtTime(0.03, t0 + 0.55);
