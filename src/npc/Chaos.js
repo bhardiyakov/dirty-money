@@ -39,7 +39,10 @@ class ChaosWatchState extends ChaosState {
         this.t += dt;
         const c = this.ring.center();
         if (!c || this.t > 50) { this._done(); return; }
-        if (this._arrived(1.2)) this.npc.setSpeed(0);
+        // chegou na roda (no lugar dele ou já na beirada — os outros empurram): para e assiste; a briga andou para longe: vai atrás
+        const p = this.npc.position, dc = Math.hypot(c.x - p.x, c.z - p.z), edge = this.slot === -1 ? 1.6 : this.ring.r + 1.3;
+        if (this.still) { if (dc > edge + 2.5) { this.still = false; this._reT = 0; } else this.npc.setSpeed(0); }
+        else if (this._arrived(1.2) || dc <= edge || this.t > 10) { this.still = true; this.npc.setSpeed(0); this.npc.gotoTarget(this.npc.position.clone()); }
         else if ((this._reT = (this._reT || 0) - dt) <= 0) { this._reT = 1.5; const s = this.ring.slotAt(this.slot); this._go(s.x, s.z, Config.npc.hurrySpeed); }      // (a briga anda: a roda acompanha)
         if ((this.sayT -= dt) <= 0) { this.sayT = 3 + Math.random() * 5; this._say(Chaos.LINES[this.ring.kind + '_' + this.mode] || Chaos.LINES[this.mode] || ['…'], 2000, this.mode === 'cheer' ? 'shout' : undefined); }
     }
