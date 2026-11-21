@@ -215,6 +215,13 @@ class CompassCamera {
 			if (g > cy) { cy = g; cam.rotation.x = Math.atan2(cy - (this.lift || 0), Math.max(0.5, hd)); }
 		}
 		cam.position.set(cx, cy, cz);
+		// O "para cima" da câmera, recalculado A CADA QUADRO pelo giro de agora. O Babylon (TargetCamera) só o refaz quando rotation.z — a
+		// inclinação das curvas (roll, balanço ao dirigir) — MUDA: descendo do carro com o roll voltando a 0, ele ficava preso no rumo e
+		// na altura do olhar daquele instante, e quando a câmera a pé girava para outro lado a imagem inteira ficava TORTA (só se
+		// endireitava dirigindo de novo, com o roll mexendo; no começo do jogo, sem roll nenhum ainda, ficava certa).
+		const M = this._upM || (this._upM = new BABYLON.Matrix());
+		BABYLON.Matrix.RotationYawPitchRollToRef(cam.rotation.y, cam.rotation.x, cam.rotation.z, M);
+		BABYLON.Vector3.TransformNormalToRef(BABYLON.Axis.Y, M, cam.upVector);
 	}
 
 	// Half extents of the visible ground (across and along the screen), for culling, spawning and the shadow window. 2.5D: the ground
@@ -288,6 +295,27 @@ class CompassCamera {
 		if (typeof FootCamera !== 'undefined') FootCamera.yaw = 0;
 	}
 
+	// FICOU A PÉ (desceu, pulou ou foi arremessado do carro, da moto, do barco; saiu do helicóptero): a câmera volta ao estado de quando o
+	// jogo abre — o mesmo "reset" que ela ganha ao entrar num veículo, ao contrário. Nada do veículo sobra: o rumo dele (a câmera vira, suave,
+	// para o norte em cima — Config.camera.footExitNorth — ou fica onde estava), a altura do olhar do carro (volta à padrão a pé NA HORA), o
+	// balanço e a inclinação das curvas, o adianto para a frente do carro, o zoom da velocidade, a distância/altura de trás do carro, o giro
+	// tomado pelo jogador e a base travada do andar. Antes só o rumo era trocado — e mal: a 3ª pessoa ficava na direção do carro.
+	resetFoot() {
+		const C = Config.camera, H = C.chase, wrap = CompassCamera.wrap;
+		const yaw0 = C.footExitNorth ? 0 : wrap(this.yaw);
+		this.userYaw = yaw0;
+		if (typeof FootCamera !== 'undefined') { FootCamera.reset(yaw0); FootCamera.pitch = null; FootCamera._ease = false; }
+		this._carVeh = null; this._carYaw = 0; this.manual = false; this.manYaw = 0; this._lookIdle = 0; this._footHold = 0; this._latch = null;
+		this._hPrev = null; this._yrS = 0;
+		this.lead = 0; this.roll = 0; this._shake = 0; this._kx = this._kz = this._kvx = this._kvz = 0;
+		const S = this._bs; S.x = S.z = S.vx = S.vz = S.r = S.vr = S.h = S.vh = S.ax = S.az = S.yr = 0; S.veh = null; this.bounceMul = 1;
+		this._chFoot = !!H.foot; this._chBike = false; this._chRoof = H.footRoof; this._chLen = 0; this._chS = 0;
+		this.autoMul = CompassCamera.autoZoomGoal(null);
+		this.resets = (this.resets || 0) + 1;
+		this._applyFov();
+		if (this.chase >= 0.5) this._applyFog(this.view, this.engine.getAspectRatio(this.camera));
+	}
+
 	// Acompanha o alvo (suavização independente de framerate; alta = colada). `vehicle`: dirigindo — modo bússola (ver o topo).
 	follow(targetPos, dt, vehicle = null, walker = null, onFoot = false) {
 		const C = Config.camera, wrap = CompassCamera.wrap;
@@ -342,15 +370,7 @@ class CompassCamera {
 			goalLead = C.carLead;
 		} else {
 			const F3 = typeof FootCamera !== 'undefined' && FootCamera.on;
-			if (this._carVeh) {                                                           // desceu do veículo
-				// (3ª pessoa: continua olhando para onde a câmera do carro olhava — o rumo do personagem nessa hora é o da porta, ou ainda o
-				// zero do teleporte para fora do banco: girava 90° e a câmera ficava atravessada na rua —, e a altura do olhar passa suave da
-				// do carro para a de andar a pé)
-				if (F3) { FootCamera.reset(this.yaw, this.chaseTilt); this.userYaw = FootCamera.yaw; }
-				else this.userYaw = C.footExitNorth ? 0 : wrap(this.yaw);
-				this.manual = false; this._footHold = 0;
-			}
-			this._carVeh = null;
+			if (this._carVeh) this.resetFoot();                                          // desceu do veículo: tudo volta ao "a pé" do começo (resetFoot)
 			// A pé: anda numa direção (virou a rua) → a câmera vai aos poucos para as COSTAS dele. Só depois de footDelay s andando assim,
 			// mais rápido quanto mais rápido ele anda, e nunca logo depois de o jogador girar a câmera com a mão (lookHold).
 			this._lookIdle = this.lookHeld ? 0 : this._lookIdle + dt;

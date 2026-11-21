@@ -102,6 +102,10 @@ const AudioFX = {
     // vol: 1 = o jogador (o ouvinte está nele); NPCs passam menos e somem com a distância (maxDist).
     // Braçada: a mão bate na água (tapa curto), o corpo d'água espirra, a puxada borbulha por baixo e as gotas caem de volta.
     waterStroke(x, z, vol = 1, maxDist = 32) {
+        if (typeof SoundBank !== 'undefined' && SoundBank.play('swim_stroke', x, z, { vol: 0.42 * vol, maxDist, jitter: 0.08 })) {      // (gravado: a mão entrando na água)
+            if (Math.random() < 0.4) SoundBank.play('splash_small', x, z, { vol: 0.16 * vol, maxDist, delay: 0.12 + Math.random() * 0.15, rate: 1.15, jitter: 0.1 });
+            return;
+        }
         const v = 0.3 * vol, s = 0.85 + Math.random() * 0.3;
         this._burst(x, z, { vol: v * 0.9, dur: 0.09, f0: 1700 * s, f1: 800, type: 'bandpass', q: 1.1, maxDist, att: 0.004 });
         this._burst(x, z, { vol: v * 0.8, dur: 0.22, f0: 1100 * s, f1: 260, maxDist, delay: 0.012, att: 0.01 });
@@ -110,6 +114,7 @@ const AudioFX = {
     },
     // Pernada: chacoalhar curto e abafado.
     waterKick(x, z, vol = 1, maxDist = 24) {
+        if (typeof SoundBank !== 'undefined' && SoundBank.play('splash_small', x, z, { vol: 0.12 * vol, maxDist, rate: 1.25, jitter: 0.1, dur: 0.35, fo: 0.15 })) return;
         this._burst(x, z, { vol: 0.08 * vol, dur: 0.1, f0: 900, f1: 260, maxDist, att: 0.008 });
         this._burst(x, z, { vol: 0.05 * vol, dur: 0.05, f0: 2400, f1: 1800, type: 'bandpass', q: 1.4, maxDist, delay: 0.02 });
     },
@@ -121,6 +126,50 @@ const AudioFX = {
         this._burst(x, z, { vol: v * 0.7, dur: 0.18, f0: 2100 * s, f1: 900, type: 'bandpass', q: 0.9, maxDist, delay: 0.01, att: 0.012 });
         this._burst(x, z, { vol: v * (0.35 + 0.4 * d), dur: 0.22, f0: 520, f1: 1500, type: 'bandpass', q: 3.5, maxDist, delay: 0.11 + 0.05 * d, att: 0.06 });   // perna saindo
         for (let i = 0; i < 2 + (run ? 2 : 0); i++) this._burst(x, z, { vol: v * (0.1 + Math.random() * 0.12), dur: 0.03, f0: 3000 + Math.random() * 2500, f1: 2600, type: 'bandpass', q: 6, maxDist, delay: 0.12 + Math.random() * 0.25 });
+    },
+
+    // Corpo caindo na água (pulo do píer, mergulho, alguém jogado do barco): o "tchibum" gravado.
+    splash(x, z, big = true) {
+        if (typeof SoundBank !== 'undefined' && SoundBank.play(big ? 'splash_big' : 'splash_small', x, z, { vol: big ? 0.6 : 0.35, maxDist: 60, jitter: 0.06 })) return;
+        this._burst(x, z, { vol: 0.5, dur: 0.35, f0: 1400, f1: 200, maxDist: 60, att: 0.01 });
+        this._burst(x, z, { vol: 0.25, dur: 0.6, f0: 2600, f1: 900, maxDist: 45, type: 'bandpass', q: 0.8, delay: 0.05, att: 0.05 });
+    },
+
+    // GRITO de quem entra em pânico (tiro, crime por perto): mulher ou homem conforme o pedestre (Temper), nem todo mundo grita, e
+    // os gritos se espaçam (uma multidão correndo não vira uma parede de berro). Só gravado (sem gravação: silêncio).
+    screams: 0,
+    screamChance: 0.45,
+    scream(npc, chance = this.screamChance) {
+        if (!this._ok() || typeof SoundBank === 'undefined' || !npc || !npc.position) return false;
+        const now = this.ctx.currentTime, p = npc.position;
+        if (now < (this._scrT || 0) || Math.random() > chance) return false;
+        if (hypot(p.x - this.listener.x, p.z - this.listener.z) > 60) return false;
+        let T = null; try { T = typeof Temper !== 'undefined' ? Temper.of(npc) : null; } catch (e) { T = null; }
+        const fem = T ? T.sex === 'f' : Math.random() < 0.5;
+        if (!SoundBank.play(fem ? 'scream_f' : 'scream_m', p.x, p.z, { vol: 0.5, maxDist: 60, rate: (T && T.old ? 0.9 : 1) * (0.95 + Math.random() * 0.12), jitter: 0.02, delay: Math.random() * 0.2 })) return false;
+        this._scrT = now + 0.35 + Math.random() * 0.6; this.screams++;
+        return true;
+    },
+
+    // NOTIFICAÇÃO do celular (gravada): 'msg' = mensagem chegando, 'ok' = deu certo (entrega, pagamento), 'ping' = aviso curto.
+    notify(kind = 'ping') {
+        const g = kind === 'msg' ? 'notify_msg' : kind === 'ok' ? 'notify_ok' : 'notify';
+        if (typeof SoundBank !== 'undefined' && SoundBank.play(g, null, null, { vol: kind === 'ok' ? 0.3 : 0.36, jitter: 0 })) return;
+        if (kind === 'msg') { this.blip(988, 0.06, 0.08); setTimeout(() => this.blip(1318, 0.08, 0.08), 90); } else this.blip(kind === 'ok' ? 880 : 1100, 0.12, 0.15);
+    },
+
+    // Buzina de cada veículo (fixa por veículo): carro = uma de 4, os antigos a "fon-fon", furgão/caminhonete grande a de caminhão,
+    // moto uma de 2, bicicleta a campainha. { g: grupo, idx }.
+    OLD_HORN: /^(besouro|brasilia|kombi|sedan_70|perua_antiga|hatch_80)$/,
+    BIG_HORN: /^(swat_van|militar|van_furgao|picape_grande)$/,
+    hornOf(car) {
+        if (!car) return { g: 'horn_car', idx: 0 };
+        if (car._horn) return car._horn;
+        const id = car.spec && car.spec.id || '', r = Math.floor(Math.random() * 1000);
+        const pedal = car.spec && (car.spec.bike === 'bike' || car.spec.pedal || id === 'bicycle');
+        const h = pedal ? { g: 'bell_bike', idx: r } : car.isBike || /moto/.test(id) ? { g: 'horn_moto', idx: r } : this.OLD_HORN.test(id) ? { g: 'horn_old', idx: 0 } : this.BIG_HORN.test(id) ? { g: 'horn_truck', idx: 0 }
+            : /onibus|bus/.test(id) ? { g: 'horn_bus', idx: 0 } : { g: 'horn_car', idx: r };
+        return (car._horn = h);
     },
 
     // Tiro gravado: [grupo, volume, tom, alcance, corte (s) das automáticas]. Silenciador e foguete seguem sintetizados.
@@ -473,6 +522,12 @@ const AudioFX = {
             const ctx = A.ctx;
             const d = hypot(x - A.listener.x, z - A.listener.z), vol = !ctx || ctx.state !== 'running' || A.muted || d > 85 ? 0 : Math.pow(1 - d / 85, 1.6) * 0.24;
             if (vol < 0.004) { if (h.on) h.off(); return; }
+            if (!h.on && typeof SoundBank !== 'undefined' && SoundBank.has('horn_stuck')) {     // gravada: a buzina de verdade, presa
+                let pan = null, out = A.sfxOut();
+                if (ctx.createStereoPanner) { pan = ctx.createStereoPanner(); pan.connect(out); out = pan; }
+                const L = SoundBank.loop('horn_stuck', out);
+                if (L) { L.src.playbackRate.value = 0.94 + (pitch - 0.85) * 0.3; h.on = { g: L.gain, pan, oscs: [L.src], real: true }; }
+            }
             if (!h.on) {
                 const g = ctx.createGain(), lp = ctx.createBiquadFilter(), oscs = [];
                 g.gain.value = 0.0001; lp.type = 'lowpass'; lp.frequency.value = 1700;
@@ -483,7 +538,7 @@ const AudioFX = {
                 h.on = { g, pan, oscs };
             }
             const t = ctx.currentTime;
-            h.on.g.gain.setTargetAtTime(vol, t, 0.06);
+            h.on.g.gain.setTargetAtTime(h.on.real ? vol * 1.5 : vol, t, 0.06);
             if (h.on.pan) h.on.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, (x - A.listener.x) / 45)), t, 0.06);
         };
         h.off = () => {
@@ -500,7 +555,7 @@ const AudioFX = {
 
     // Buzina de carro: duas ondas quadradas (acorde de terça menor, ~380/450 Hz) por um
     // lowpass, com ataque/queda rápidos. pitch varia por motorista; dur em segundos.
-    honk(x, z, pitch = 1, dur = 0.3) {
+    honk(x, z, pitch = 1, dur = 0.3, kind = null) {
         this.honkCount++;
         const ctx = this.ctx;
         if (!ctx || ctx.state !== 'running' || this.muted) return;
@@ -508,7 +563,10 @@ const AudioFX = {
         if (d > 80) return;
         const vol = Math.pow(1 - d / 80, 1.6) * 0.32;
         if (vol < 0.01) return;
-        if (typeof SoundBank !== 'undefined' && SoundBank.play(pitch < 0.8 ? 'horn_bus' : 'horn_car', x, z, { vol: 0.42, maxDist: 80, rate: pitch < 0.8 ? 1 : pitch, jitter: 0.02, dur: Math.max(0.18, dur), fo: 0.05 })) return;
+        const K = typeof kind === 'string' ? { g: kind, idx: null } : kind || { g: pitch < 0.8 ? 'horn_truck' : pitch > 1.3 ? 'horn_moto' : 'horn_car', idx: null };
+        // (a gravação é a buzina daquele veículo: o "pitch" do motorista só mexe um pouquinho no tom)
+        if (K.g === 'bell_bike' && typeof SoundBank !== 'undefined' && SoundBank.play(K.g, x, z, { idx: K.idx, vol: 0.3, maxDist: 45, jitter: 0.02 })) return;      // (campainha: toca inteira)
+        if (typeof SoundBank !== 'undefined' && SoundBank.play(K.g, x, z, { idx: K.idx, vol: K.g === 'horn_moto' ? 0.36 : 0.42, maxDist: 80, rate: 0.96 + Math.max(-0.06, Math.min(0.08, (pitch - 1) * 0.25)), jitter: 0.01, dur: Math.max(0.18, dur), fo: 0.05 })) { this.hornsReal = (this.hornsReal || 0) + 1; return; }
 
         const t0 = ctx.currentTime;
         const gain = ctx.createGain();

@@ -125,10 +125,16 @@ def mix(name, parts, db=-1.0, fo=0.08, dur=None, tf=0.02):
     if dur: out = out[:int(dur * SR)]
     write(name, norm_peak(fade(trim_tail(out, tf, pad=fo + 0.02), fo=fo), db), meta=dict(src=[p[0] for p in parts]))
 
-def loop(src, name, ss, t, xf=0.25, db=-18.0, sr=SR, meta=None, flat=False, hp=None):
-    x = load(src, ss=ss, t=t + xf, hp=hp)
+def loop(src, name, ss, t, xf=0.25, db=-18.0, sr=SR, meta=None, flat=False, hp=None, tune=False):
+    x = load(src, ss=ss, t=t + xf + (0.1 if tune else 0), hp=hp)
     if flat: x = flatten(x)
     f = int(xf * SR); n = min(int(t * SR), len(x) - f)
+    if tune:                                            # som com TOM (buzina): o comprimento que cai em fase com o começo (sem "batimento" na emenda)
+        ref = x[:f]; best = (-2, n)
+        for m in range(n - int(0.02 * SR), min(n + int(0.02 * SR), len(x) - f)):
+            seg = x[m:m + f]; c = np.dot(seg, ref) / (np.linalg.norm(seg) * np.linalg.norm(ref) + 1e-9)
+            if c > best[0]: best = (c, m)
+        n = best[1]
     body = x[:n].copy(); tailx = x[n:n + f]
     w = np.linspace(0, 1, f)
     body[:f] = body[:f] * w + tailx * (1 - w)         # o fim (que continua) entra por baixo do começo: emenda sem clique
@@ -187,7 +193,37 @@ loop(B('2369'), 'tire_screech', ss=0.4, t=1.4, xf=0.2, db=-16)
 shots(B('2368'), 'tire_squeal', 2, 1.4, thr=0.3, gap=0.8, pick='loud')
 loop('muted_sirens_preview.mp3', 'siren_wail', ss=58.15, t=5.05, xf=0.3, db=-16, flat=True, hp=300)
 loop('muted_sirens_preview.mp3', 'siren_yelp', ss=13.0, t=3.0, xf=0.15, db=-16, flat=True, hp=300)
-one(B('0258'), 'horn_car', t=1.5); one(B('3594'), 'horn_bus', t=2.0)
+# buzinas: 4 de carro (cada carro do trânsito fica com a sua), a "fon-fon" dos antigos, 2 de moto, caminhão e ônibus
+one(B('0258'), 'horn_car_a', t=1.5)                                 # padrão (≈ 520 Hz)
+one(B('0850'), 'horn_car_b', ss=4.3, t=2.5)                        # aguda, longa
+one(B('3438'), 'horn_car_c', ss=2.15, t=0.6, fo=0.08)             # grave (sedã/SUV)
+one(B('0969'), 'horn_car_d', ss=1.4, t=0.55, fo=0.06)             # curtinha de carro pequeno
+one(B('2542'), 'horn_old', t=1.3, fo=0.1)                          # "fon-fon" de buzina antiga
+one(B('0260'), 'horn_moto_a', t=0.6, fo=0.05)                      # moto: bipe curto
+one(B('3506'), 'horn_moto_b', t=0.9, fo=0.06)                      # moto: aguda
+one(B('2721'), 'horn_truck', t=1.0, fo=0.1)
+one(B('3594'), 'horn_bus', t=2.0)
+one(B('0275'), 'bell_bike_1', t=1.3, fo=0.3); one(B('1042'), 'bell_bike_2', t=1.6, fo=0.4)   # campainha da bicicleta
+loop(B('0258'), 'horn_stuck', ss=0.35, t=0.8, xf=0.03, db=-14, tune=True)      # buzina presa (motorista caído no volante)
+# ---------------------------------------------------------------- mar e água
+loop(B('1446'), 'sea_surf', ss=20, t=20, xf=1.5, db=-20, sr=24000)  # ondas quebrando na areia
+loop(B('0698'), 'sea_open', ss=30, t=18, xf=1.5, db=-20, sr=24000)  # mar aberto (no barco, nadando longe)
+shots(B('1513'), 'swim_stroke', 5, 0.55, thr=0.3, gap=0.6, pick='loud', hp=90, gt=0.08, shape=0.16)        # braçada (remada da mão na água)
+for k, i in enumerate(['1529', '1530', '1531', '1532', '1533', '1534']): one(B(i), f'splash_small_{k + 1}', maxd=0.8, fo=0.25)
+one(B('1519'), 'splash_big_1', maxd=1.6, fo=0.5); one(B('1521'), 'splash_big_2', maxd=1.8, fo=0.5)
+# ---------------------------------------------------------------- gritos (pânico: tiro, crime) — sem palavras
+one('oga2/female_scream_1.ogg', 'scream_f_1', fo=0.15)
+one('oga2/high_pitch_scream.mp3', 'scream_f_2', maxd=1.5, fo=0.35)
+one('oga2/screams_0.ogg', 'scream_f_3', ss=0, t=1.4, fo=0.15)
+one('oga2/screams_0.ogg', 'scream_f_4', ss=3.3, t=1.2, fo=0.15)
+one('oga2/yell/yelling sounds/3yell1.wav', 'scream_m_1', fo=0.2)
+one('oga2/yell/yelling sounds/3yell14.wav', 'scream_m_2', fo=0.15)
+one('oga2/yell/yelling sounds/1yell3.wav', 'scream_m_3', fo=0.12)
+one(B('2361'), 'scream_m_4', fo=0.08)
+# ---------------------------------------------------------------- notificações do celular
+one(B('1111'), 'notify_msg', maxd=1.3, fo=0.3)                      # mensagem chegando
+one(B('2063'), 'notify_a', fo=0.05); one(B('2059'), 'notify_b', fo=0.05)
+one(B('1398'), 'notify_ok', maxd=1.4, fo=0.4)                        # deu certo (entrega, pagamento)
 # ---------------------------------------------------------------- multidão (loops longos)
 loop(B('3515'), 'crowd_street', ss=5, t=16, xf=1.0, db=-20, sr=24000)
 loop(B('2728'), 'crowd_market', ss=8, t=16, xf=1.0, db=-20, sr=24000)

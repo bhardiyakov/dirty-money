@@ -236,6 +236,7 @@ class NPC {
 		this.fleeAge = 0;
 		if (this.fsm.name !== 'FLEE') {
 			this.fsm.setState(new FleeState(this));
+			if (typeof AudioFX !== 'undefined' && AudioFX.scream) AudioFX.scream(this);          // (nem todo mundo grita: AudioFX.scream sorteia e espaça)
 		} else {
 			this.fsm.current.enter(); // já fugindo: re-mira e renova o timer.
 		}

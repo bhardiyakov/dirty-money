@@ -47,7 +47,7 @@ const Phone = {
         if (!quiet) {
             this.unread++;
             const g = window.game; if (g && g._flash) g._flash(`📱 ${this.CONTACTS[who].emo} ${this.CONTACTS[who].name}: ${text.length > 60 ? text.slice(0, 58) + '…' : text}`);
-            if (typeof AudioFX !== 'undefined') { AudioFX.blip(988, 0.06, 0.08); setTimeout(() => AudioFX.blip(1318, 0.08, 0.08), 90); }
+            if (typeof AudioFX !== 'undefined') AudioFX.notify('msg');                      // (o toque de mensagem do celular, gravado)
         }
         this._badge();
         if (this.open) this._render();
@@ -69,7 +69,7 @@ const Phone = {
             if (day > J.until || (day === J.until && h > J.h)) { this.jobs.splice(this.jobs.indexOf(J), 1); this._t('baiano', -8); this._msg('baiano', 'Pô, cadê a encomenda? Deixa pra lá. Vou arrumar outro.'); continue; }
             if (hypot(J.x - P.x, J.z - P.z) < 5 && g.mode === 'player') {
                 this.jobs.splice(this.jobs.indexOf(J), 1); g.inventory.addCash(J.pay); this._t('baiano', 10);
-                g._flash(`📦 Entrega feita: +${brl(J.pay)}`); AudioFX.blip(880, 0.12, 0.15);
+                g._flash(`📦 Entrega feita: +${brl(J.pay)}`); AudioFX.notify('ok');
                 this._msg('baiano', this._pick(['Chegou certinho. Tá pago, parceiro.', 'Valeu! Pode contar comigo pra próxima.', 'Beleza. Dinheiro na mão, calcinha no chão… brincadeira. Valeu!']));
             }
         }

@@ -47,10 +47,12 @@ const SoundBank = {
 
     // O grupo tem alguma variação pronta?
     has(g) { const b = !this.off && this.bufs[g]; return !!(b && b.some((x) => x)); },
-    // { buf, meta } de uma variação (sorteada, sem repetir a última quando há mais de uma).
-    pick(g) {
+    // { buf, meta } de uma variação (sorteada, sem repetir a última quando há mais de uma). idx: uma variação fixa (a buzina de
+    // cada carro é sempre a mesma).
+    pick(g, idx = null) {
         const B = this.bufs[g];
         if (this.off || !B) return null;
+        if (idx != null && B.length) { const i = Math.abs(idx | 0) % B.length; if (B[i]) return { buf: B[i], meta: this.man[g][i] }; }
         const ok = []; for (let i = 0; i < B.length; i++) if (B[i]) ok.push(i);
         if (!ok.length) return null;
         let i = ok[Math.floor(Math.random() * ok.length)];
@@ -63,7 +65,7 @@ const SoundBank = {
     // out (nó de saída), dark (abafar mais com a distância) }. Devolve o BufferSource (ou null: sem amostra → quem chamou usa o sintetizado).
     play(g, x, z, o = {}) {
         if (!AudioFX._ok()) return null;
-        const v = this.pick(g);
+        const v = this.pick(g, o.idx);
         if (!v) return null;
         const ctx = AudioFX.ctx, vol = o.vol == null ? 0.5 : o.vol;
         let sp = { g: vol, pan: 0 }, d = 0;

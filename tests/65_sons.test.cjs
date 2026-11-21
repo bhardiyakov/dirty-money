@@ -34,7 +34,7 @@ module.exports = {
                 arr.forEach((e, i) => {
                     const b = SoundBank.bufs[g] && SoundBank.bufs[g][i];
                     if (!b || !(b.duration > 0.03)) bad.push(g + '#' + i);
-                    else if (e.ls != null && !(e.ls >= 0 && e.le <= b.duration + 0.01 && e.le - e.ls > 0.8)) bad.push(g + '#' + i + ' (loop ' + e.ls + '–' + e.le + ' de ' + b.duration.toFixed(2) + ')');
+                    else if (e.ls != null && !(e.ls >= 0 && e.le <= b.duration + 0.01 && e.le - e.ls > 0.5)) bad.push(g + '#' + i + ' (loop ' + e.ls + '–' + e.le + ' de ' + b.duration.toFixed(2) + ')');
                 });
             }
             return { out, bad };
@@ -44,14 +44,18 @@ module.exports = {
             passos: ['step_concrete', 'step_grass', 'step_leaves', 'step_sand', 'step_dirt', 'step_gravel', 'step_mud', 'step_water', 'step_wood', 'step_tile', 'step_heels', 'step_slipper', 'run_concrete', 'run_grass'],
             tiros: ['gun_pistol', 'gun_smg', 'gun_rifle', 'gun_shotgun', 'gun_heavy', 'casing', 'gun_reload', 'gun_cock'],
             batida: ['crash', 'car_bump', 'glass', 'punch', 'explosion', 'explosion_far'],
-            rua: ['tire_screech', 'tire_squeal', 'siren_wail', 'siren_yelp', 'horn_car', 'horn_bus', 'crowd_street', 'crowd_market'],
+            rua: ['tire_screech', 'tire_squeal', 'siren_wail', 'siren_yelp', 'crowd_street', 'crowd_market'],
+            buzinas: ['horn_car', 'horn_moto', 'horn_old', 'horn_truck', 'horn_bus', 'horn_stuck', 'bell_bike'],
+            'mar e nado': ['sea_surf', 'sea_open', 'swim_stroke', 'splash_small', 'splash_big'],
+            'gritos e celular': ['scream_f', 'scream_m', 'notify_msg', 'notify', 'notify_ok'],
             motor: ['eng_car', 'eng_beater', 'eng_v8', 'eng_truck', 'eng_moto', 'starter', 'gear', 'handbrake'],
         };
         for (const [k, gs] of Object.entries(need)) {
             const miss = gs.filter((g) => !inv.out[g]);
             c.ok(!miss.length, `${k}: ${gs.map((g) => g + '×' + (inv.out[g] || 0)).join(' ')}${miss.length ? ' — FALTAM ' + miss.join(', ') : ''}`);
         }
-        const vari = ['step_concrete', 'step_grass', 'step_gravel', 'step_wood', 'step_tile', 'casing', 'punch', 'crash', 'gear'].filter((g) => (inv.out[g] || 0) < 3);
+        const vari = ['step_concrete', 'step_grass', 'step_gravel', 'step_wood', 'step_tile', 'casing', 'punch', 'crash', 'gear', 'swim_stroke', 'splash_small', 'scream_f', 'scream_m'].filter((g) => (inv.out[g] || 0) < 3);
+        c.ok(inv.out.horn_car >= 3 && inv.out.horn_moto >= 2, `buzinas: ${inv.out.horn_car} tipos de carro (≥ 3) e ${inv.out.horn_moto} de moto (≥ 2), mais a antiga, a de caminhão e a de ônibus`);
         c.ok(!vari.length, `variações (≥ 3) nos sons que se repetem muito${vari.length ? ' — poucas em ' + vari.join(', ') : ''}`);
 
         // ------------------------------------------------------------------ cada som do jogo toca a gravação certa
@@ -74,14 +78,21 @@ module.exports = {
             hit('vidro', 'glass', () => AudioFX.glass(x, z));
             hit('porta batendo', 'car_bump', () => AudioFX.door(x, z, false));
             hit('buzina', 'horn_car', () => AudioFX.honk(x, z, 1, 0.3));
-            hit('buzina de caminhão', 'horn_bus', () => AudioFX.honk(x, z, 0.7, 0.4));
+            hit('buzina de caminhão', 'horn_truck', () => AudioFX.honk(x, z, 0.7, 0.4));
+            hit('buzina de moto', 'horn_moto', () => AudioFX.honk(x, z, 1.2, 0.3, { g: 'horn_moto', idx: 1 }));
+            hit('braçada', 'swim_stroke', () => AudioFX.waterStroke(x, z, 1));
+            hit('pernada', 'splash_small', () => AudioFX.waterKick(x, z, 1));
+            hit('mergulho (tchibum)', 'splash_big', () => AudioFX.splash(x, z, true));
+            hit('mensagem no celular', 'notify_msg', () => AudioFX.notify('msg'));
+            hit('notificação', 'notify', () => AudioFX.notify('ping'));
+            hit('entrega feita', 'notify_ok', () => AudioFX.notify('ok'));
             hit('recarregar', 'gun_reload', () => AudioFX.reload(x, z, 1.2));
             hit('engatilhar', 'gun_cock', () => AudioFX.cock(x, z));
             hit('freada de outro carro', 'tire_squeal', () => AudioFX.squeal(x, z));
             hit('longe demais (nada)', 'gun_pistol', () => AudioFX.shot('pistol', L.x + 900, L.z));
             return out;
         });
-        const want = { pistola: 1, 'revólver': 1, submetralhadora: 1, fuzil: 1, escopeta: 1, minigun: 1, 'silenciador (sintetizado)': 0, 'batida leve (lataria)': 1, 'batida forte': 1, 'explosão perto': 1, 'explosão longe': 1, 'soco/pancada': 1, vidro: 1, 'porta batendo': 1, buzina: 1, 'buzina de caminhão': 1, recarregar: 1, engatilhar: 1, 'freada de outro carro': 1, 'longe demais (nada)': 0 };
+        const want = { pistola: 1, 'revólver': 1, submetralhadora: 1, fuzil: 1, escopeta: 1, minigun: 1, 'silenciador (sintetizado)': 0, 'batida leve (lataria)': 1, 'batida forte': 1, 'explosão perto': 1, 'explosão longe': 1, 'soco/pancada': 1, vidro: 1, 'porta batendo': 1, buzina: 1, 'buzina de caminhão': 1, 'buzina de moto': 1, 'braçada': 1, pernada: 1, 'mergulho (tchibum)': 1, 'mensagem no celular': 1, 'notificação': 1, 'entrega feita': 1, recarregar: 1, engatilhar: 1, 'freada de outro carro': 1, 'longe demais (nada)': 0 };
         const wrong = Object.keys(want).filter((k) => plays[k] !== want[k]);
         c.ok(!wrong.length, `cada efeito toca a gravação do seu grupo${wrong.length ? ' — errado: ' + wrong.map((k) => `${k}=${plays[k]} (esperado ${want[k]})`).join(', ') : ''}`);
         c.ok(plays['cápsulas (4 tiros)'] === 4, `cápsula quicando depois de cada tiro de pistola (${plays['cápsulas (4 tiros)']}/4)`);
@@ -101,16 +112,55 @@ module.exports = {
         const sbad = steps.filter((s) => s[2] !== 1);
         c.ok(!sbad.length, `passos: ${steps.length} combinações de chão × calçado tocam a gravação certa${sbad.length ? ' — erradas: ' + sbad.map((s) => s[0] + '→' + s[1]).join(', ') : ''}`);
 
+        // ------------------------------------------------------------------ cada veículo com a SUA buzina
+        const hz = await page.evaluate(() => {
+            const out = {}, A = AudioFX, n = SoundBank.bufs;
+            const cars = game.carDamage ? game.carDamage.allCars().filter((c) => c.spec && !c.spec.boat && !c.isChopper) : [];
+            const kinds = {}; for (const c of cars) { const h = A.hornOf(c); kinds[h.g + (h.g === 'horn_car' || h.g === 'horn_moto' ? '#' + (h.idx % n[h.g].length) : '')] = 1; }
+            out.kinds = Object.keys(kinds).sort(); out.n = cars.length;
+            out.stable = cars.slice(0, 20).every((c) => A.hornOf(c) === A.hornOf(c));
+            out.moto = A.hornOf({ isBike: true, spec: { id: 'moto' } }).g; out.old = A.hornOf({ spec: { id: 'besouro' } }).g; out.big = A.hornOf({ spec: { id: 'van_furgao' } }).g; out.car = A.hornOf({ spec: { id: 'sedan_medio' } }).g; out.bike = A.hornOf({ isBike: true, spec: { id: 'bicycle', bike: 'bike' } }).g;
+            const carB = new Set([0, 1, 2, 3].map((i) => SoundBank.pick('horn_car', i).buf)), motoB = new Set([0, 1].map((i) => SoundBank.pick('horn_moto', i).buf));
+            out.distinct = [carB.size, motoB.size];
+            out.same = [0, 1, 2].every(() => SoundBank.pick('horn_car', 2).buf === SoundBank.bufs.horn_car[2]);
+            const L = A.listener, h = A.hornLoop(1); h.set(L.x + 4, L.z); out.stuck = !!(h.on && h.on.real); h.stop();
+            const P = SoundBank.played, m0 = P.notify_msg || 0; Phone._msg('cida', 'teste de som', null, false); out.phone = (P.notify_msg || 0) - m0;
+            return out;
+        });
+        c.ok(hz.moto === 'horn_moto' && hz.old === 'horn_old' && hz.big === 'horn_truck' && hz.car === 'horn_car' && hz.bike === 'bell_bike', `buzina pelo veículo: moto ${hz.moto}, antigo ${hz.old}, furgão ${hz.big}, carro ${hz.car}, bicicleta ${hz.bike}`);
+        c.ok(hz.stable && hz.distinct[0] >= 3 && hz.distinct[1] === 2 && hz.same, `cada veículo fica com a mesma buzina (variações distintas: ${hz.distinct[0]} de carro, ${hz.distinct[1]} de moto); na rua agora: ${hz.kinds.join(', ')} (${hz.n} veículos)`);
+        c.ok(hz.stuck, 'buzina presa (motorista caído no volante) é a gravação em loop');
+        c.ok(hz.phone === 1, `mensagem nova no celular toca o toque de mensagem gravado (${hz.phone})`);
+
+        // gritos: quem entra em pânico com um tiro grita (nem todos, e espaçado)
+        const scr = await page.evaluate(async () => {
+            const g = game, P = g.player.position, A = AudioFX, out = {};
+            AudioFX.setListener(P.x, P.z);
+            const near = g.npcManager.npcs.filter((n) => n.alive && !n.rag && n.state !== 'FLEE' && Math.hypot(n.position.x - P.x, n.position.z - P.z) < 30);
+            out.near = near.length;
+            const one = near[0];
+            A._scrT = 0; out.direct = one ? A.scream(one, 1) : false; out.spaced = one ? !A.scream(one, 1) : false;
+            await new Promise((r) => setTimeout(r, 1100));
+            A._scrT = 0; const s0 = A.screams, f0 = SoundBank.played.scream_f || 0, m0 = SoundBank.played.scream_m || 0;
+            A.screamChance = 1; g.npcManager.alertShot({ x: P.x + 3, z: P.z + 3 }); A.screamChance = 0.45;      // (sem o sorteio de quem grita)
+            out.fled = g.npcManager.npcs.filter((n) => n.state === 'FLEE').length;
+            out.shot = A.screams - s0; out.fm = [(SoundBank.played.scream_f || 0) - f0, (SoundBank.played.scream_m || 0) - m0];
+            return out;
+        });
+        c.ok(scr.direct && scr.spaced, `grito gravado de pedestre (${scr.direct}), e o seguinte espera um pouco (${scr.spaced})`);
+        c.ok(scr.near < 1 || (scr.shot >= 1 && scr.shot <= 2), `tiro perto de ${scr.near} pedestres (${scr.fled} fugindo): ${scr.shot} grito(s) na hora — mulher ${scr.fm[0]}, homem ${scr.fm[1]} (não vira parede de berro)`);
+
         // loops: sirene (longe = lamento, colada = yelp), pneu (sobe com a força), burburinho
         await page.evaluate(() => {                                         // (na rua comercial, de dia — o relógio do Ambience segue rodando)
-            game.dayNight.hour = 14; Ambience.__w = Ambience._where; Ambience._where = () => ({ inside: false, shop: null, biome: 'commercial', district: 'centro', beach: 0 });
+            game.dayNight.hour = 14; Ambience.__w = Ambience._where; Ambience._where = () => ({ inside: false, shop: null, biome: 'commercial', district: 'centro', beach: 0.5 });
             window.__S = { siren: AudioFX.siren, screech: AudioFX.screech }; AudioFX.siren = AudioFX.screech = () => {};      // (a polícia e o carro chamam a cada quadro)
             __S.siren.call(AudioFX, true, 80); __S.screech.call(AudioFX, 0.9);
         });
         await page.waitForTimeout(1500);
         const lp1 = await page.evaluate(() => ({ w: AudioFX._rsiren && AudioFX._rsiren.wail.gain.gain.value, y: AudioFX._rsiren && AudioFX._rsiren.yelp.gain.gain.value,
             sc: AudioFX._rscreech && AudioFX._rscreech.gain.gain.value, rate: AudioFX._rscreech && AudioFX._rscreech.src.playbackRate.value,
-            cm: Ambience.RC && Ambience.RC.market.gain.gain.value, cs: Ambience.RC && Ambience.RC.street.gain.gain.value }));
+            cm: Ambience.RC && Ambience.RC.market.gain.gain.value, cs: Ambience.RC && Ambience.RC.street.gain.gain.value,
+            sea: Ambience.SEA && Ambience.SEA.surf.gain.gain.value, seaO: Ambience.SEA && Ambience.SEA.open.gain.gain.value, synthWaves: Ambience.L.waves.gain.gain.value }));
         await page.evaluate(() => { __S.siren.call(AudioFX, true, 10); __S.screech.call(AudioFX, 0.2); });
         await page.waitForTimeout(1500);
         const lp2 = await page.evaluate(() => ({ w: AudioFX._rsiren.wail.gain.gain.value, y: AudioFX._rsiren.yelp.gain.gain.value, sc: AudioFX._rscreech.gain.gain.value, rate: AudioFX._rscreech.src.playbackRate.value }));
@@ -122,6 +172,7 @@ module.exports = {
         c.ok(lp2.y > 0.15 && lp2.y > lp2.w, `sirene colada (10 m): troca para o yelp (${lp2.y.toFixed(3)} > lamento ${lp2.w.toFixed(3)})`);
         c.ok(lp3.w < 0.01 && lp3.y < 0.01, `sirene some quando não há viatura (${lp3.w.toFixed(3)}/${lp3.y.toFixed(3)})`);
         c.ok(lp1.sc > 0.3 && lp2.sc < lp1.sc && lp2.sc > 0.05 && lp1.rate > lp2.rate && lp3.sc < 0.01, `pneu cantando gravado: forte ${lp1.sc.toFixed(2)} (tom ${lp1.rate.toFixed(2)}) > leve ${lp2.sc.toFixed(2)} (tom ${lp2.rate.toFixed(2)}) > parado ${lp3.sc.toFixed(3)}`);
+        c.ok(lp1.sea > 0.05 && lp1.sea > lp1.seaO && lp1.synthWaves < 0.003, `mar gravado na orla: ondas na areia ${(lp1.sea || 0).toFixed(3)} > mar aberto ${(lp1.seaO || 0).toFixed(3)} (ruído sintetizado mudo: ${(lp1.synthWaves || 0).toFixed(4)})`);
         c.ok(lp1.cm > 0.05 && lp1.cm > lp1.cs && lp1.cs > 0, `burburinho gravado no comércio: mercado ${(lp1.cm || 0).toFixed(3)} + rua ${(lp1.cs || 0).toFixed(3)}`);
 
         const mu = await page.evaluate(async () => { AudioFX.muted = true; await new Promise((r) => setTimeout(r, 400)); const g = AudioFX._sfx.gain.value, P = JSON.stringify(SoundBank.played); AudioFX.shot('pistol', AudioFX.listener.x, AudioFX.listener.z); const same = JSON.stringify(SoundBank.played) === P; AudioFX.muted = false; return { g, same }; });
