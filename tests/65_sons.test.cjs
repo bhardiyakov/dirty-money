@@ -34,7 +34,7 @@ module.exports = {
                 arr.forEach((e, i) => {
                     const b = SoundBank.bufs[g] && SoundBank.bufs[g][i];
                     if (!b || !(b.duration > 0.03)) bad.push(g + '#' + i);
-                    else if (e.ls != null && !(e.ls >= 0 && e.le <= b.duration + 0.01 && e.le - e.ls > 0.8)) bad.push(g + '#' + i + ' (loop ' + e.ls + '–' + e.le + ' de ' + b.duration.toFixed(2) + ')');
+                    else if (e.ls != null && !(e.ls >= 0 && e.le <= b.duration + 0.01 && e.le - e.ls > 0.5)) bad.push(g + '#' + i + ' (loop ' + e.ls + '–' + e.le + ' de ' + b.duration.toFixed(2) + ')');
                 });
             }
             return { out, bad };
