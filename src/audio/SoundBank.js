@@ -87,7 +87,7 @@ const SoundBank = {
         if (dur) { const fo = o.fo || 0.04; g0.gain.setValueAtTime(sp.g, t0 + Math.max(0, dur - fo)); g0.gain.linearRampToValueAtTime(0.0001, t0 + dur); }
         let out = g0;
         if (x != null && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = sp.pan; g0.connect(p); out = p; }
-        out.connect(o.out || AudioFX.master);
+        out.connect(o.out || AudioFX.sfxOut());
         src.start(t0, o.offset || 0);
         if (dur) src.stop(t0 + dur + 0.02);
         this.played[g] = (this.played[g] || 0) + 1;
@@ -105,7 +105,7 @@ const SoundBank = {
         const ls = v.meta.ls || 0, le = v.meta.le || v.buf.duration;
         src.loopStart = ls; src.loopEnd = Math.min(le, v.buf.duration);
         gain.gain.value = 0;
-        src.connect(gain); gain.connect(out || AudioFX.master);
+        src.connect(gain); gain.connect(out || AudioFX.sfxOut());
         src.start(0, ls + Math.random() * Math.max(0, le - ls - 0.05));
         this.played[g] = (this.played[g] || 0) + 1;
         return { src, gain, meta: v.meta };

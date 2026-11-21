@@ -11,7 +11,15 @@ const AudioFX = {
     master: null,
     listener: { x: 0, z: 0 },
     honkCount: 0,            // quantas buzinas tocaram (também serve p/ testes)
-    muted: false,
+    _muted: false,
+    // "Efeitos sonoros" desligado nas Configurações: além de não disparar nada novo, cala na hora o que já está em loop (sirene,
+    // pneu, burburinho gravados passam pelo canal _sfx).
+    get muted() { return this._muted; },
+    set muted(v) { this._muted = !!v; if (this._sfx) this._sfx.gain.setTargetAtTime(v ? 0 : 1, this.ctx.currentTime, 0.03); },
+    sfxOut() {
+        if (!this._sfx) { this._sfx = this.ctx.createGain(); this._sfx.gain.value = this._muted ? 0 : 1; this._sfx.connect(this.master); }
+        return this._sfx;
+    },
 
     // Chamar dentro de um evento do usuário (keydown/mousedown).
     init() {
@@ -263,7 +271,7 @@ const AudioFX = {
         if (typeof SoundBank === 'undefined') return false;
         if (!this._rsiren) {
             if (!active || !SoundBank.has('siren_wail') || !SoundBank.has('siren_yelp')) return false;
-            const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 9000; lp.connect(this.master);
+            const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 9000; lp.connect(this.sfxOut());
             this._rsiren = { wail: SoundBank.loop('siren_wail', lp), yelp: SoundBank.loop('siren_yelp', lp), lp };
             if (this._siren) this._siren.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
         }
