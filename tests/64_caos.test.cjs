@@ -43,6 +43,8 @@ module.exports = {
             const g = game, P = g.player.position, L = g.npcManager.npcs.filter((n) => Chaos._calm(n)).sort((a, b) => Math.hypot(a.position.x - P.x, a.position.z - P.z) - Math.hypot(b.position.x - P.x, b.position.z - P.z));
             const a = L[0], b = L[1];
             if (!a || !b) return null;
+            const q = new BABYLON.Vector3(a.position.x + 0.8, 0, a.position.z);                  // (trombaram: lado a lado)
+            b.transform.position.copyFrom(q); b.nav.crowd.agentTeleport(b.index, q);
             const keepR = Math.random, keepF = Chaos.fighter, seq = [0.9, 0.05, 0.5];
             Math.random = () => (seq.length ? seq.shift() : 0.5); Chaos.fighter = () => true;      // (não pediu desculpa; vai brigar)
             Chaos._bump(g, a, b);
