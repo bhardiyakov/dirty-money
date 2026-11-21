@@ -169,6 +169,18 @@ const AudioFX = {
         this._burst(x, z, { vol: 0.55, dur: 0.45, f0: 6500, f1: 320, maxDist: 170, type: 'bandpass', q: 0.7 });
     },
 
+    // Recarregar (pente sai, pente entra, ferrolho) e engatilhar ao sacar — gravados; dur = tempo da recarga (a gravação acompanha).
+    reload(x, z, dur = 1.2) {
+        if (typeof SoundBank !== 'undefined' && SoundBank.play('gun_reload', x, z, { vol: 0.42, maxDist: 25, rate: Math.max(0.8, Math.min(1.4, 1.15 / Math.max(0.5, dur))), jitter: 0.03 })) return;
+        this.blip(260, 0.2, 0.2);
+    },
+    cock(x, z) { if (typeof SoundBank !== 'undefined') SoundBank.play('gun_cock', x, z, { vol: 0.38, maxDist: 20, jitter: 0.05 }); },
+    // Freada brusca / rodada de outro carro: o pneu chiando (gravado; sem a gravação, um chiado sintetizado curto).
+    squeal(x, z, vol = 0.4) {
+        if (typeof SoundBank !== 'undefined' && SoundBank.play('tire_squeal', x, z, { vol, maxDist: 85, jitter: 0.06, dur: 0.9 + Math.random() * 0.4, fo: 0.3 })) return;
+        this._burst(x, z, { vol: vol * 0.3, dur: 0.6, f0: 2300, f1: 1800, maxDist: 70, type: 'bandpass', q: 6, att: 0.04 });
+    },
+
     roll(x, z) { this._burst(x, z, { vol: 0.16, dur: 0.32, f0: 700, f1: 160, maxDist: 26, q: 0.6, att: 0.04 }); },      // rolamento: roupa e corpo arrastando no chão
     hit(x, z) { this._burst(x, z, { vol: 0.22, dur: 0.07, f0: 5200, f1: 1200, maxDist: 45, type: 'bandpass', q: 1.5 }); },
     thud(x, z) { if (typeof SoundBank !== 'undefined' && SoundBank.play('punch', x, z, { vol: 0.5, maxDist: 40, rate: 0.9, jitter: 0.09 })) return; this._burst(x, z, { vol: 0.5, dur: 0.1, f0: 520, f1: 70, maxDist: 40 }); },

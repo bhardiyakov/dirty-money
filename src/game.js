@@ -1154,6 +1154,7 @@ class Game {
 			ok = p.equip(kind);
 		}
 		if (!ok) return false;
+		if (inv.isGun(kind)) AudioFX.cock(p.position.x, p.position.z);     // (sacou a arma: engatilha)
 		this._flash(`Arma: ${W.name}${inv.isGun(kind) || inv.isThrow(kind) ? ' ' + inv.ammoText(kind) : ''}`);
 		if (typeof PlayerLook !== 'undefined') PlayerLook.wantArms();      // (arma nova num visual gerado: o desenho dela)
 		return true;
@@ -1201,7 +1202,7 @@ class Game {
 		this.reloading = ((Weapons[key] && Weapons[key].reload) || 1.25) * (1 - (SkillTree.m.reload || 0));      // (as pesadas demoram mais)
 		this._reloadWeapon = key;
 		p.playAction('draw', { lock: 0.55, weapon: p.look });          // (visual: mexe na arma)
-		AudioFX.blip(260, 0.2, 0.2);
+		AudioFX.reload(p.position.x, p.position.z, this.reloading);      // (pente sai, pente entra, ferrolho — gravado)
 		this._flash('Recarregando…');
 	}
 
