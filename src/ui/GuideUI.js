@@ -31,7 +31,7 @@ class GuideUI {
     // Índice: [id, título] ou [null, cabeçalho de grupo].
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'], ['bags', 'Bolsas, peso e fôlego'],
-            ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['bairros', 'Mirante, Roça e Serra'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
+            ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['bairros', 'Mirante, Roça e Serra'], ['street', 'A rua: acontecimentos'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
             ['home', 'Casa, imóveis e save'], ['goals', 'Metas e desafios do dia'], [null, 'IMPÉRIO'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], ['truco', 'Truco no bar'], [null, 'ASSALTOS, NEGÓCIOS E CARROS'], ['robbery', 'Assalto a lojas'], ['traces', 'Rastros e fuga'], ['heists', 'Joalherias e golpes'], ['business', 'Negócios próprios'], ['mechanic', 'Mecânica e porta-malas'], ['racing', 'Corridas (rachas e autódromo)'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas'], ['radio', 'Rádio e músicas (créditos)']);
@@ -325,11 +325,22 @@ GuideUI.PAGES = {
         <p>Na aba CARREIRAS › <b>CONQUISTAS</b> ficam dezenas de objetivos de longo prazo, com barra de progresso: furtos, fugas de 5 estrelas, patentes e maestria 10 em cada carreira, 50 trabalhos por carreira, carros desmanchados, grandes assaltos, armas vendidas, golpes, desfiles, patrimônio de R$ 10 milhões, nível 100, árvore completa e Prestígio 10.</p>
         <p>Cada conquista dá XP de personagem. A <b>PLATINA</b> só vem quando <b>todas</b> estiverem completas — é para levar muito tempo.</p>`,
 
+    street: () => `<h2>A rua: acontecimentos</h2>
+        <p>Andando a pé, de vez em quando acontece alguma coisa perto de você (um acontecimento por vez):</p>
+        <ul><li><b>Briga</b>: dois pedestres saem no braço — <kbd>E</kbd> separa (o bairro lembra).</li>
+        <li><b>Pivete</b>: arrancou a bolsa de alguém — pegue ele e devolva (<kbd>E</kbd>, gorjeta) ou fique com ela.</li>
+        <li><b>Aviãozinho</b>: um desconhecido oferece um pacote (<kbd>E</kbd>) para entregar no ponto marcado, com <b>prazo</b> — paga em dinheiro sujo; com a polícia atrás, o cliente não aparece.</li>
+        <li><b>Turista</b>: pede uma foto — <kbd>E</kbd> tira (gorjeta) e, enquanto ele posa, <kbd>C</kbd> furta a carteira. De arma na mão, <kbd>E</kbd> assalta (crime pesado).</li>
+        <li><b>Carro enguiçado</b>: o motorista pede ajuda — <kbd>E</kbd> mexe no motor (a habilidade <b>Mecânica</b> do Desmanche ajuda a pegar); gorjeta se der certo.</li>
+        <li><b>Ambulante</b>, <b>roda de samba</b> (fim de semana à noite) e <b>pregação</b> (domingo de manhã) completam a rua.</li></ul>
+        <div class="gd-tip">Cada pedestre tem o seu jeito de andar (mexendo no celular, idoso devagar, gingando) e, parado, olha em volta, olha o relógio, se alonga — você também, se ficar parado um tempo.</div>`,
+
     careers: () => `<h2>Como as carreiras funcionam</h2>
         <p>Além do tráfico, você pode seguir <b>cinco carreiras</b> ao mesmo tempo. Cada uma tem:</p>
         <ul><li><b>Patentes</b> por XP — a patente libera trabalhos novos e a gestão. Depois da última patente vem a <b>maestria</b> (infinita, +3% de pagamento por nível).</li>
         <li><b>Duas habilidades</b> (0 a 5): 1 ponto a cada ${Careers.XP_PER_POINT} XP; elas mudam o jogo de verdade (tempo de ligação direta, aderência do carro, barulho dos passos, chance do golpe…).</li>
         <li><b>Trabalhos</b>: um por vez (e não junto com a missão do morro). O alvo aparece <b>marcado no mapa</b> (blip vermelho no minimapa) e com um <b>marcador brilhante</b> no chão; o andamento fica no painel do canto superior esquerdo. Falhar (prazo, prisão, morte, abandono) não dá XP e deixa os contatos quietos uns segundos.</li>
+        <li><b>Bônus do trabalho</b>: cada trabalho sorteia uma condição extra — <b>sem estrelas</b>, <b>sem matar ninguém</b>, <b>sem disparar</b> ou <b>sem ninguém te identificar</b>. Cumprida até o fim, paga <b>+35%</b> e dá +25% de XP (o painel mostra ★ enquanto vale, ✗ quando perdeu).</li>
         <li><b>Gestão</b> nas patentes altas: negócios que rendem por dia — e riscos que também rodam por dia (Receita, arrego, rival, sequestro, rastreio).</li></ul>
         <div class="gd-tip">As carreiras se ajudam: o <b>fundo falso</b> do Desmanche esconde o dinheiro da rota do Bicho; a <b>escola de samba</b> do Bicho segura a Receita do Desmanche e das fachadas; o <b>silenciador</b> do Armeiro deixa qualquer trabalho mais discreto.</div>`,
 

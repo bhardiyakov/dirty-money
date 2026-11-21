@@ -98,6 +98,7 @@ class CareerJob {
         if (this.tx !== null) parts.push(`${Math.round(hypot(p.x - this.tx, p.z - this.tz))} M`);
         const st = this.status();
         if (st) parts.push(st);
+        if (this.bonus) parts.push(`${this.bonus.ok ? '★' : '✗'} ${this.bonus.label}`);      // (o bônus sorteado: Careers.BONUS)
         return { title: `${this.c.name} · ${this.title}`, text: this.text, extra: parts.join(' · '), low: this.limit > 0 && this.t < 30 };
     }
 
@@ -110,6 +111,18 @@ class CareerJob {
 
 class Careers {
     static get XP_PER_POINT() { return 400; }
+    // BÔNUS DO TRABALHO (para o mesmo trabalho não ser sempre igual): ao começar, cada trabalho sorteia UMA condição extra; cumprida até
+    // o fim, paga +pay e dá +xp. snap: o contador no começo; test: ainda vale? (false = perdeu o bônus, avisa uma vez).
+    static get BONUS() {
+        return [
+            { id: 'limpo', label: 'sem estrelas', test: (g) => !(g.wanted.level > 0) },
+            { id: 'sangue', label: 'sem matar ninguém', snap: (g) => g.playerKills || 0, test: (g, b) => (g.playerKills || 0) === b.v0 },
+            { id: 'tiro', label: 'sem disparar', snap: (g) => (g.combat ? g.combat.shots.player : 0), test: (g, b) => (g.combat ? g.combat.shots.player : 0) === b.v0 },
+            { id: 'anonimo', label: 'sem ninguém te identificar', snap: (g) => (g.heat ? g.heat.record.lastCrimeAt : 0), test: (g, b) => (g.heat ? g.heat.record.lastCrimeAt : 0) === b.v0 },
+        ];
+    }
+    static get BONUS_PAY() { return { pay: 0.35, xp: 0.25 }; }
+    static get NO_BONUS() { return { hit: ['sangue', 'tiro'] }; }         // (queima de arquivo: é para matar)
     static masteryXpOf(k) { return Career.masteryXp(k); }
 
     constructor(game) {
@@ -164,8 +177,24 @@ class Careers {
         job.defId = def.id;
         if (!job.start()) { job.dispose(); this.unmark(); return { ok: false, msg: job.why || 'Sem trabalho agora' }; }
         this.job = job;
+        this._bonusFor(job, Careers.NO_BONUS[def.id]);
         AudioFX.blip(700, 0.15, 0.18);
-        return { ok: true, msg: `${c.name} · ${job.title}: ${job.text}` };
+        return { ok: true, msg: `${c.name} · ${job.title}: ${job.text}${job.bonus ? ` · ★ bônus: ${job.bonus.label} (+${Math.round(Careers.BONUS_PAY.pay * 100)}%)` : ''}` };
+    }
+
+    // Sorteia o bônus do trabalho (nunca o mesmo duas vezes seguidas; `skip`: os que não cabem nele).
+    _bonusFor(job, skip = null) {
+        const L = Careers.BONUS.filter((b) => b.id !== this._lastBonus && !(skip && skip.includes(b.id)));
+        const B = L[Math.floor(Math.random() * L.length)];
+        if (!B) return;
+        this._lastBonus = B.id;
+        job.bonus = { id: B.id, label: B.label, ok: true, v0: B.snap ? B.snap(this.g) : 0 };
+    }
+    _bonusTick(job) {
+        const b = job.bonus;
+        if (!b || !b.ok) return;
+        const B = Careers.BONUS.find((q) => q.id === b.id);
+        if (B && !B.test(this.g, b)) { b.ok = false; this.g._flash(`✗ Bônus perdido: ${b.label}`); }
     }
 
     // Missão de fora das carreiras (malha de influência do Império): ocupa o mesmo espaço de trabalho.
@@ -192,6 +221,8 @@ class Careers {
         this.unmark();
         if (g.gps && g.gps._career) g.gps = null;
         if (ok) {
+            if (job.bonus && job.bonus.ok) this._bonusTick(job);
+            if (job.bonus && job.bonus.ok) { money = (money || 0) * (1 + Careers.BONUS_PAY.pay); xp = xp * (1 + Careers.BONUS_PAY.xp); this.bonuses = (this.bonuses || 0) + 1; msg = `${msg || job.title + ' concluído'} · ★ bônus (${job.bonus.label})`; }
             money = this.payout(job.c, money);
             if (money > 0) g.inventory.addCash(Math.round(money));
             job.c.addXp(xp);
@@ -236,6 +267,7 @@ class Careers {
             else {
                 if (job.limit > 0) { job.t -= dt; if (job.t <= 0) { job.fail('estourou o prazo'); return; } }
                 job.update(dt, g._playerState().pos);
+                if (this.job === job) this._bonusTick(job);
             }
         }
         this._pulse(dt);

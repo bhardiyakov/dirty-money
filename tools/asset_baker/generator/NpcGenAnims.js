@@ -3126,6 +3126,82 @@ function NpcGenAnims(G) {
         }
         return out;
     }
+    // ANDARES COM PERSONALIDADE (pedestres — NPC._gait): mexendo no celular (cabeça baixa, as duas mãos no aparelho à frente do peito,
+    // passo um pouco mais lento), idoso (curvado, passada curta, braços quase parados) e gingado (ombros balançando, braços abertos).
+    function walkPhone(n = 12) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, p = base(), c = cos(TAU * t), dev = [0.5, 10.5, -1.5];
+            walkLegs(p, t);
+            walkUpper(p, t, false, 0, 4);
+            p.head_R = mm3(Rz(deg(3 * c)), Rx(deg(HEAD_TILT - 22)));
+            p.arm_ik('R', inReach(p, 'R', chestAt(p, V.add(dev, [1.6, 0, 0])), 0.95), [1.0, -0.3, -0.8]);
+            p.arm_ik('L', inReach(p, 'L', chestAt(p, V.add(dev, [-1.6, 0, 0])), 0.95), [-1.0, -0.3, -0.8]);
+            const B = p.bones(), cc = V.mul(V.add(p.fist_world(B, 'R'), p.fist_world(B, 'L')), 0.5);
+            p.props.push(['phone', M4(mm3(Rx(deg(-55)), I3()), V.add(cc, [0, 1.0, 1.4]))]);
+            out.push(p);
+        }
+        return out;
+    }
+    const WALK_OLD = Object.assign({}, WALK, { stride: WALK.stride * 0.68, lift: 0.9, width: 9.0 });
+    function walkOld(n = 12) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, p = base(), c = cos(TAU * t);
+            walkLegs(p, t, WALK_OLD);
+            walkUpper(p, t, true, 9, 12);
+            p.chest_R = mm3(Rz(deg(-4 * c)), Rx(deg(-14)));
+            out.push(p);
+        }
+        return out;
+    }
+    const WALK_SWAG = Object.assign({}, WALK, { width: 9.6 });
+    function walkSwag(n = 12) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, p = base(), c = cos(TAU * t), ca = cos(TAU * (t - 0.04));
+            walkLegs(p, t, WALK_SWAG);
+            p.pelvis_R = Rz(deg(8 * c));
+            p.chest_R = mm3(Rz(deg(-16 * c)), Rx(deg(1)));
+            p.head_R = mm3(Rz(deg(6 * c)), Rx(deg(HEAD_TILT + 4)));
+            p.arm_fk('R', { flex: -30 * ca + 2, abd: 20, elbow: 22 + 10 * (1 - ca) });
+            p.arm_fk('L', { flex: 30 * ca + 2, abd: 20, elbow: 22 + 10 * (1 + ca) });
+            out.push(p);
+        }
+        return out;
+    }
+    // GESTOS DE QUEM ESTÁ PARADO (o jogador depois de uns segundos sem mexer; pedestres esperando): olha em volta (cabeça e peito para
+    // um lado e para o outro), se alonga (braços para cima, o peito para trás) e olha o relógio (o pulso esquerdo sobe, a cabeça baixa).
+    // Começam e terminam no repouso (o idle segue sem salto).
+    function idleLook(n = 16) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, sw = sin(TAU * t), p = standBase(t, { yaw: 14 * sw, hy: 38 * sw, hp: 2 });
+            restArm(p, 'R', sw); restArm(p, 'L', -sw);
+            out.push(p);
+        }
+        return out;
+    }
+    function idleStretch(n = 16) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, u = ease(min(1, sin(PI * t) * 1.3)), p = standBase(t, { lean: -10 * u, hp: 12 * u });
+            p.arm_fk('R', { flex: 4 + 150 * u, abd: 12 + 18 * u, elbow: 14 + 10 * u });
+            p.arm_fk('L', { flex: 4 + 150 * u, abd: 12 + 18 * u, elbow: 14 + 10 * u });
+            out.push(p);
+        }
+        return out;
+    }
+    function idleWatch(n = 14) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, u = ease(min(1, sin(PI * t) * 1.6)), p = standBase(t, { hp: -16 * u, hy: -10 * u });
+            p.arm_fk('L', { flex: 4 + 48 * u, abd: 12 - 6 * u, elbow: 14 + 96 * u });
+            restArm(p, 'R', 0);
+            out.push(p);
+        }
+        return out;
+    }
     // Bebendo de pé (no balcão do bar): o copo na direita, à altura do peito; gole com a cabeça para trás; a esquerda no balcão.
     function drinkStand(n = 14) {
         const out = [];
@@ -3210,6 +3286,12 @@ function NpcGenAnims(G) {
         carjack: { fps: 9, loop: false, k: 6, n: 9, fn: (w, o, n) => carjack(n) },
         takedown: { fps: 12, loop: false, k: 8, n: 12, fn: (w, o, n) => takedown(n) },
         carry: { fps: 9, loop: true, k: 8, n: 12, fn: (w, o, n) => carryWalk(n) },
+        walk_phone: { fps: 9, loop: true, k: 8, n: 12, fn: (w, o, n) => walkPhone(n) },
+        walk_old: { fps: 8, loop: true, k: 8, n: 12, fn: (w, o, n) => walkOld(n) },
+        walk_swag: { fps: 10, loop: true, k: 8, n: 12, fn: (w, o, n) => walkSwag(n) },
+        idle_look: { fps: 6, loop: false, k: 8, n: 16, fn: (w, o, n) => idleLook(n) },
+        idle_stretch: { fps: 6, loop: false, k: 8, n: 16, fn: (w, o, n) => idleStretch(n) },
+        idle_watch: { fps: 6, loop: false, k: 8, n: 14, fn: (w, o, n) => idleWatch(n) },
         carry_idle: { fps: 6, loop: true, k: 4, n: 6, fn: (w, o, n) => carryIdle(n) },
         opendoor: { fps: 10, loop: false, k: 5, n: 8, fn: (w, o, n) => openDoor(n) },
         enter: { fps: 10, loop: false, k: 6, n: 9, fn: (w, o, n) => enterCar(n) },

@@ -8,6 +8,9 @@
 //       ambulante   vendedor com carrinho (água, milho, churros, picolé) — E compra (mata a fome, cura um pouco)
 //       samba       roda de samba/pagode no fim de semana à noite na praça — gente sambando, batucada de verdade (som 3D)
 //       pregação    domingo de manhã: o pastor na praça e os fiéis ouvindo
+//       aviãozinho  um desconhecido pede para levar um pacote até um ponto, com PRAZO (dinheiro sujo; com a polícia atrás, o cliente some)
+//       turista     pede uma foto (E: gorjeta — e, posando, ele se distrai: C furta a carteira); de arma na mão, E assalta (crime pesado)
+//       pane        motorista com o carro morto pede ajuda: E dá uma olhada no motor (a Mecânica do desmanche ajuda) — gorjeta se pegar
 //     (o futebol dos meninos virou a pelada da quadra da favela, todo dia: Pelada.js)
 //   • CONVERSAS: quem passa perto fala (balão): o que deu no jornal do bairro, conversa fiada e, às vezes, uma DICA de verdade
 //     ("o caixa da Farmácia X fica cheio depois das 18h" — vale: Robbery paga mais nesse horário). No bairro onde você é temido,
@@ -72,7 +75,9 @@ const StreetLife = {
         this.nextT = (55 + Math.random() * 60) / (typeof Life !== 'undefined' ? Math.max(0.45, Life.mul()) : 1);      // (vida da cidade baixa: menos acontecimentos)
         if (game.mode !== 'player' || game.holdup || game.arrest || game.death || (game.wanted && game.wanted.level > 0)) return;
         const h = game.dayNight.hour, wd = Economy.day % 7, rain = typeof Weather !== 'undefined' && Weather.cur ? Weather.cur.k : 0;
-        const opts = [['briga', 3], ['pivete', 3]];
+        const opts = [['briga', 3], ['pivete', 3], ['aviao', 3]];
+        if (h >= 9 && h < 18 && rain < 0.3) opts.push(['turista', 3]);
+        if (h >= 7 && h < 22) opts.push(['pane', 3]);
         if (h >= 8 && h < 20 && rain < 0.3) opts.push(['ambulante', 4]);
         if ((wd === 4 || wd === 5 || wd === 6) && h >= 18 && h < 24 && rain < 0.3) opts.push(['samba', 5]);
         if (wd === 6 && h >= 8 && h < 12) opts.push(['pregacao', 4]);
@@ -82,6 +87,8 @@ const StreetLife = {
     },
     _end(game) {
         const E = this.ev; this.ev = null; if (!E) return;
+        if (E.giver && E.giver.alive && E.giver.fsm && E.giver.fsm.name === 'STREET') { E.giver.toWander ? E.giver.toWander() : E.giver.panic(game.player.position); }
+        if (E.gps && game.gps === E.gps) game.gps = null;
         for (const a of E.actors || []) { try { a.dispose(); } catch (e) { /* ok */ } }
         for (const m of E.meshes || []) { try { m.dispose(); } catch (e) { /* ok */ } }
         if (E.npcs) for (const n of E.npcs) if (n.alive && n.party && game.npcManager) game.npcManager.removeNpc(n);
@@ -89,7 +96,7 @@ const StreetLife = {
     _evUpdate(game, dt) {
         const E = this.ev, P = game.player.position;
         E.t += dt;
-        const far = E.x != null && hypot(E.x - P.x, E.z - P.z) > 150;
+        const far = !E.follow && E.x != null && hypot(E.x - P.x, E.z - P.z) > 150;      // (follow: o evento vai junto com você — a entrega)
         if (E.t > E.life || far) { this._end(game); return; }
         const f = this['_upd_' + E.kind]; if (f) f.call(this, game, dt, E);
     },
@@ -234,6 +241,152 @@ const StreetLife = {
         }
     },
 
+    // --- aviãozinho: o pacote com prazo
+    _start_aviao(game) {
+        const P = game.player.position, L = game.npcManager.npcs.filter((n) => this._calm(n) && !n.thief && !n.witness && hypot(n.position.x - P.x, n.position.z - P.z) > 5 && hypot(n.position.x - P.x, n.position.z - P.z) < 22);
+        if (!L.length) return;
+        const n = L[Math.floor(Math.random() * L.length)];
+        n.fsm.setState({ name: 'STREET', update() {} }); n.setSpeed(0);
+        const pay = 250 + Math.round(Math.random() * 450);
+        this.ev = { kind: 'aviao', t: 0, life: 45, giver: n, x: n.position.x, z: n.position.z, pay, phase: 'offer', talkT: 0 };
+        Bubbles.say(n, this._pick(['Ô, parceiro! Leva um pacote pra mim? Pago bem.', 'Psiu! Tem um corre rápido aí, topa?', 'Chega aí… tô precisando de um aviãozinho.']), { tone: 'whisper', ms: 3600 });
+    },
+    _upd_aviao(game, dt, E) {
+        const P = game.player.position;
+        if (E.phase === 'offer') {
+            const n = E.giver;
+            if (!n.alive || n.rag) { this._end(game); return; }
+            n.heading = Math.atan2(P.x - n.position.x, P.z - n.position.z); n.transform.rotation.y = n.heading;
+            E.x = n.position.x; E.z = n.position.z;
+            if ((E.talkT -= dt) <= 0) { E.talkT = 12; if (E.t > 1) Bubbles.say(n, 'E aí, vai ou não vai?', { tone: 'whisper', ms: 2200 }); }
+            return;
+        }
+        E.x = P.x; E.z = P.z;                                                     // (o evento vai junto com você)
+        const left = E.until - E.t;
+        if (E.gps) E.gps.label = `📦 Entrega — ${Math.floor(Math.max(0, left) / 60)}:${String(Math.max(0, Math.ceil(left)) % 60).padStart(2, '0')}`;
+        if (left <= 0) {
+            game._flash('⏱ Estourou o prazo — o cliente sumiu (e o contato não vai gostar)');
+            this._end(game); return;
+        }
+        const D = E.dest, d = hypot(D.x - P.x, D.z - P.z);
+        if (!E.recv && d < 45) {
+            E.recv = this._actor(game, this._civ(), D.x, D.z, Math.atan2(P.x - D.x, P.z - D.z));
+            (E.actors || (E.actors = [])).push(E.recv);
+        }
+        if (E.recv) E.recv.setHeading(Math.atan2(P.x - D.x, P.z - D.z));
+        if (game.wanted.level > 0 && !E.warned) { E.warned = true; game._flash('📦 Com a polícia atrás, o cliente não aparece — despiste antes do prazo'); }
+    },
+    _accept_aviao(game, E) {
+        const D = this._spot(game, 160, 340);
+        if (!D) { Bubbles.say(E.giver, 'Deixa pra lá… hoje não.', { ms: 2000 }); this._end(game); return; }
+        const P = game.player.position, dist = hypot(D.x - P.x, D.z - P.z), limit = Math.round(dist / 4.2 + 35);
+        E.phase = 'go'; E.dest = D; E.until = E.t + limit; E.life = E.until + 5; E.follow = true;
+        game.setGps(D.x, D.z, '📦 Entrega'); E.gps = game.gps;
+        Bubbles.say(E.giver, this._pick(['Vai lá. Não me decepciona.', 'Entrega na mão dele, beleza?', 'Não abre, hein.']), { tone: 'whisper', ms: 2400 });
+        if (E.giver.toWander) E.giver.toWander();
+        game._flash(`📦 Pacote na mão: leve até o ponto marcado em ${Math.floor(limit / 60)}:${String(limit % 60).padStart(2, '0')} — paga ${brl(E.pay)}`);
+    },
+    _deliver_aviao(game, E) {
+        if (game.wanted.level > 0) {
+            if (E.recv) Bubbles.say(E.recv, 'Tá com a polícia na cola?! Some daqui!', { tone: 'angry', ms: 2400 });
+            game._flash('📦 O cliente não pega com a polícia atrás — despiste e volte antes do prazo');
+            return;
+        }
+        game.inventory.addCash(E.pay);
+        this.deliveries = (this.deliveries || 0) + 1;
+        if (E.recv) Bubbles.say(E.recv, this._pick(['Chegou certinho. Toma o teu.', 'Valeu, rapidinho hein.', 'Isso aí. Tamo junto.']), { tone: 'whisper', ms: 2400 });
+        game._flash(`📦 Entregue a tempo: +${brl(E.pay)} (sujo)`);
+        if (typeof WorldMemory !== 'undefined') WorldMemory.log('delivery', { value: E.pay });
+        E.life = E.t + 4; E.phase = 'done';
+        if (E.gps && game.gps === E.gps) game.gps = null;
+    },
+
+    // --- turista: pede uma foto
+    _start_turista(game) {
+        const P = game.player.position, s = this._spot(game, 8, 28, ['beach', 'resort', 'plaza', 'park', 'commercial', 'downtown']); if (!s) return;
+        const a = this._actor(game, 'civil_turista', s.x, s.z, Math.atan2(P.x - s.x, P.z - s.z));
+        this.ev = { kind: 'turista', t: 0, life: 80, x: s.x, z: s.z, actors: [a], a, phase: 'ask', cash: 150 + Math.round(Math.random() * 450), askT: 0 };
+    },
+    _upd_turista(game, dt, E) {
+        const P = game.player.position, a = E.a;
+        if (E.phase !== 'done') a.setHeading(Math.atan2(P.x - E.x, P.z - E.z));
+        if (E.phase === 'ask' && (E.askT -= dt) <= 0) { E.askT = 9; Bubbles.say(a, this._pick(['Excuse me! Photo? Foto, por favor?', 'Hello! Take a picture? 📸', 'Por favor… foto? Thank you!']), { ms: 3000 }); }
+        if (E.phase === 'photo') {
+            E.pt -= dt;
+            if (E.pt <= 0) {
+                const tip = 20 + Math.round(Math.random() * 60);
+                game.inventory.addCash(tip);
+                Bubbles.say(a, this._pick(['Obrigado! Thank you so much!', 'Beautiful! Obrigado, my friend!', 'Perfect! 👍']), { ms: 2400 });
+                game._flash(`📸 Tirou a foto do turista: +${brl(tip)} de gorjeta`);
+                if (typeof WorldMemory !== 'undefined') WorldMemory.good(E.x, E.z, 2, 'ajudou um turista');
+                this.photos = (this.photos || 0) + 1;
+                E.phase = 'done'; E.life = E.t + 6;
+            }
+        }
+    },
+    _rob_turista(game, E) {
+        const a = E.a;
+        a.play('handsup', 'none') || a.play('scared', 'none');
+        game.inventory.addCash(E.cash);
+        Bubbles.say(a, this._pick(['No! No! Take it! Pega!', 'Please! Toma, toma!']), { tone: 'shout', ms: 2400 });
+        if (typeof WorldMemory !== 'undefined') WorldMemory.crime('holdup', E.x, E.z);
+        if (game.heat) game.heat.commit('mugging');
+        game._flash(`🔫 Assaltou o turista: +${brl(E.cash)}`);
+        E.phase = 'done'; E.life = E.t + 6;
+    },
+    // C posando para a foto: a carteira dele (C — Game._tryPickpocket pergunta aqui antes)
+    steal(game) {
+        const E = this.ev;
+        if (!E || E.kind !== 'turista' || E.phase !== 'photo' || hypot(E.x - game.player.position.x, E.z - game.player.position.z) > 3) return false;
+        const ok = Math.random() < 0.85;
+        if (ok) {
+            const v = Math.round(E.cash * 0.6);
+            game.inventory.addCash(v);
+            game._flash(`👛 Furtou a carteira do turista enquanto ele posava: +${brl(v)}`);
+            this.steals = (this.steals || 0) + 1;
+        } else {
+            Bubbles.say(E.a, 'Hey! HEY! Ladrão! Thief!', { tone: 'shout', ms: 2400 });
+            game._flash('👛 Ele percebeu! Saia daí');
+            if (game.npcManager) game.npcManager.alertViolence(game.player.position, 10);
+        }
+        if (game.heat) game.heat.commit('theft');
+        E.phase = 'done'; E.life = E.t + 5;
+        return true;
+    },
+
+    // --- pane: o carro morreu, o motorista pede ajuda
+    _start_pane(game) {
+        const P = game.player.position, f = new BABYLON.Vector3();
+        const car = game.vehicleManager && game.vehicleManager.vehicles.find((c) => !c.isBike && !c.isBoat && !(c.spec && c.spec.boat) && !c.isChopper && !c.destroyed && !c.role && !c.controlled && c.mode === 'parked' && c.halfLen && hypot(c.position.x - P.x, c.position.z - P.z) > 10 && hypot(c.position.x - P.x, c.position.z - P.z) < 45);
+        if (!car) return;
+        car.fwdToRef(f);
+        const hx = car.position.x + f.x * (car.halfLen + 0.8), hz = car.position.z + f.z * (car.halfLen + 0.8);
+        const a = this._actor(game, this._civ(), hx + f.z * 0.9, hz - f.x * 0.9, Math.atan2(car.position.x - hx, car.position.z - hz));
+        this.ev = { kind: 'pane', t: 0, life: 140, x: hx, z: hz, actors: [a], a, car, phase: 'ask', tip: 60 + Math.round(Math.random() * 160), askT: 0 };
+    },
+    _upd_pane(game, dt, E) {
+        const P = game.player.position;
+        if (E.car.destroyed || E.car.controlled) { this._end(game); return; }
+        if (E.phase === 'ask' && (E.askT -= dt) <= 0) { E.askT = 10; Bubbles.say(E.a, this._pick(['Alguém entende de carro? Morreu do nada!', 'Ô, amigo! Me dá uma força aqui? Não pega!', 'Pô, logo hoje… alguém manja de motor?']), { ms: 3200 }); }
+        if (E.phase === 'fix') {
+            if (hypot(P.x - E.x, P.z - E.z) > 2.6) { E.phase = 'ask'; game._flash('🔧 Largou o conserto'); return; }
+            E.ft -= dt;
+            if (E.ft > 0) return;
+            const mec = game.careers && game.careers.by.chop ? game.careers.by.chop.skill('mecanica') : 0;
+            if (Math.random() < 0.55 + 0.08 * mec) {
+                game.inventory.addCash(E.tip);
+                Bubbles.say(E.a, this._pick(['PEGOU! Valeu demais, irmão!', 'Que isso, você é mecânico?! Toma aqui.', 'Salvou meu dia! Obrigado!']), { ms: 2600 });
+                game._flash(`🔧 O carro pegou! +${brl(E.tip)} de gorjeta`);
+                if (typeof WorldMemory !== 'undefined') WorldMemory.good(E.x, E.z, 4, 'consertou um carro na rua');
+                this.fixes = (this.fixes || 0) + 1;
+            } else {
+                Bubbles.say(E.a, 'Ih, não foi… vou chamar o guincho. Valeu a força.', { ms: 2600 });
+                game._flash('🔧 Não pegou — com Mecânica (desmanche) dá mais certo');
+            }
+            E.phase = 'done'; E.life = E.t + 5;
+        }
+    },
+
     // ------------------------------------------------------------------ E: separar a briga, devolver a bolsa, comprar no carrinho
     prompt(game) {
         const E = this.ev; if (!E || game.mode !== 'player') return '';
@@ -241,6 +394,15 @@ const StreetLife = {
         if (E.kind === 'briga' && hypot(E.a.position.x - P.x, E.a.position.z - P.z) < 4) return '<b>E</b> separar a briga<small>o bairro vai lembrar</small>';
         if (E.kind === 'pivete' && E.got && !E.done && hypot(E.v.position.x - P.x, E.v.position.z - P.z) < 3) return `<b>E</b> devolver a bolsa<small>${brl(E.value)} — ou fique com ela</small>`;
         if (E.kind === 'ambulante' && hypot(E.x - P.x, E.z - P.z) < 2.8) return '<b>E</b> comprar no carrinho<small>água de coco, milho, churros, picolé, espetinho</small>';
+        if (E.kind === 'aviao' && E.phase === 'offer' && hypot(E.giver.position.x - P.x, E.giver.position.z - P.z) < 3) return `<b>E</b> pegar o pacote — ${brl(E.pay)}<small>entrega com prazo; com a polícia atrás, o cliente some</small>`;
+        if (E.kind === 'aviao' && E.phase === 'go' && E.recv && hypot(E.dest.x - P.x, E.dest.z - P.z) < 3) return '<b>E</b> entregar o pacote';
+        if (E.kind === 'turista' && hypot(E.x - P.x, E.z - P.z) < 3) {
+            if (E.phase === 'ask') return game.inventory.isGun && game.inventory.isGun(game.player.weapon) ? '<b>E</b> assaltar o turista<small>ele anda com dinheiro — assalto é crime pesado</small>'
+                : '<b>E</b> tirar a foto dele<small>gorjeta — posando, ele se distrai (C furta a carteira)</small>';
+            if (E.phase === 'photo') return '<b>C</b> furtar a carteira<small>ele está distraído posando para a foto</small>';
+        }
+        if (E.kind === 'pane' && E.phase === 'ask' && hypot(E.x - P.x, E.z - P.z) < 2.6) return '<b>E</b> dar uma olhada no motor<small>gorjeta se pegar · Mecânica (desmanche) ajuda</small>';
+        if (E.kind === 'pane' && E.phase === 'fix' && hypot(E.x - P.x, E.z - P.z) < 2.6) return '🔧 mexendo no motor…';
         return '';
     },
     interact(game) {
@@ -261,6 +423,22 @@ const StreetLife = {
             if (typeof WorldMemory !== 'undefined') WorldMemory.good(P.x, P.z, 8, 'devolveu uma bolsa');
             game._flash(`🙏 Bolsa devolvida — a vítima te dá ${brl(tip)} de gorjeta`);
             this._end(game); return true;
+        }
+        if (E.kind === 'aviao') { if (E.phase === 'offer') this._accept_aviao(game, E); else if (E.phase === 'go') this._deliver_aviao(game, E); return true; }
+        if (E.kind === 'turista' && E.phase === 'ask') {
+            if (game.inventory.isGun && game.inventory.isGun(game.player.weapon)) { this._rob_turista(game, E); return true; }
+            E.phase = 'photo'; E.pt = 2.6;
+            const pl = game.player; pl.root.rotation.y = Math.atan2(E.x - P.x, E.z - P.z);
+            for (const c of ['phone', 'pay', 'idle']) if (pl.playAction(c, { lock: 0 })) { if (pl.action) pl.action.timer = 2.4; break; }
+            Bubbles.say(E.a, 'Cheese! 📸', { ms: 2200 });
+            return true;
+        }
+        if (E.kind === 'pane' && E.phase === 'ask') {
+            E.phase = 'fix'; E.ft = 3.2;
+            const pl = game.player; pl.root.rotation.y = Math.atan2(E.car.position.x - P.x, E.car.position.z - P.z);
+            for (const c of ['rummage', 'pick', 'work']) if (pl.playAction(c, { lock: 0 })) { if (pl.action) pl.action.timer = 3.0; break; }
+            Bubbles.say(E.a, 'Vê se você descobre o que é…', { ms: 2200 });
+            return true;
         }
         if (E.kind === 'ambulante') {
             if (!this._vp) this._vp = new Panel('streetVendor', { width: 440, onAct: (a, arg) => this._buy(game, arg) });

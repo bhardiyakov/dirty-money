@@ -77,6 +77,7 @@ class NPC {
 	setSpeed(speed) {
 		this._baseSpeed = speed;
 		speed *= this._slopeMul || 1;                                   // relevo: subindo, mais devagar (_slopeTick)
+		if (speed <= Config.npc.wanderSpeed * 1.05) speed *= this._gaitMul || 1;      // (o jeito de andar: idoso e quem mexe no celular, mais devagar)
 		if (Math.abs(this.params.maxSpeed - speed) < 0.01) return;
 		this.params.maxSpeed = speed;
 		if (this.index >= 0) this.nav.crowd.updateAgentParameters(this.index, this.params);
@@ -640,6 +641,43 @@ class NPC {
 		this._umb.scaling.set(0.15 + 0.85 * s, 1, 0.15 + 0.85 * s);
 	}
 
+	// ----- Jeito de andar e gestos de quem está parado -----
+	// Cada pedestre anda do seu jeito (fixo pela pessoa — Temper.of): idoso curvado e devagar; uns 14% mexendo no celular; parte dos homens
+	// gingando; o resto, o andar de sempre. GAIT_K: o ritmo do clipe para os pés plantados (passada × duração do ciclo, vs. o 'walk').
+	static get GAIT_K() { return { walk_old: 0.544, walk_phone: 0.9, walk_swag: 1 }; }
+	static get GAIT_SPEED() { return { walk_old: 0.72, walk_phone: 0.85, walk_swag: 1 }; }
+	static get FIDGETS() { return ['idle_look', 'idle_watch', 'idle_stretch']; }
+	_gait() {
+		const S = this.actor && this.actor.sheet;
+		if (!S || !S.isNpc || typeof Temper === 'undefined') return 'walk';
+		const T = Temper.of(this);
+		if (this._gaitKey === T.key) return this._gaitC;
+		const r = (T.r * 7919.37) % 1;                                          // (outro sorteio fixo da mesma pessoa)
+		const G = T.old ? 'walk_old' : r < 0.14 ? 'walk_phone' : T.sex === 'm' && r < 0.38 ? 'walk_swag' : 'walk';
+		this._gaitKey = T.key; this._gaitC = G; this._gaitMul = NPC.GAIT_SPEED[G] || 1;
+		if (this._baseSpeed) this.setSpeed(this._baseSpeed);
+		return G;
+	}
+	// Parado um tempo (esperando o sinal, conversando): de vez em quando um gesto — olha em volta, o relógio, se alonga. true = tocando.
+	_fidgetTick(dt) {
+		const S = this.actor && this.actor.sheet;
+		if (!S || !S.isNpc) return false;
+		this._stillT = (this._stillT || 0) + dt;
+		const F = this._fidget;
+		if (F) {
+			if (this.actor.clipName === F && !this.actor.done) return true;
+			this._fidget = null; this._stillT = 0;
+			return false;
+		}
+		if (this._fidgetAt == null) this._fidgetAt = 5 + Math.random() * 9;
+		if (this._stillT < this._fidgetAt) return false;
+		this._fidgetAt = 6 + Math.random() * 10;
+		const pick = NPC.FIDGETS[Math.floor(Math.random() * NPC.FIDGETS.length)];
+		if (this.actor.play(pick, 'none', { restart: true })) { this._fidget = pick; this.fidgets = (this.fidgets || 0) + 1; return true; }
+		this._stillT = 0;
+		return false;
+	}
+
 	// ----- Loop -----
 	update(dt) {
 		if (this._ifr > 0) this._ifr -= dt;
@@ -701,12 +739,17 @@ class NPC {
 			this.actor.play(moving && speed < 0.5 ? 'idle' : S.clip, S.weapon) || this.actor.play('idle', 'none');
 			if (moving) rate = Math.max(0.5, speed / (S.clip === 'run' ? Config.anim.run : Config.anim.walk));
 		}
-		else if (speed < 0.5) this.actor.play('idle');
+		else if (speed < 0.5) { if (!this._fidgetTick(dt)) this.actor.play('idle'); }
 		else if (st === 'SHELTER') { this.actor.play('run'); rate = Math.max(0.5, speed / Config.anim.run); }
 		else if (st === 'FLEE') { this.actor.play('scared'); rate = Math.max(0.5, speed / Config.anim.run); }
 		else if (st === 'JOG') { this.actor.play('run'); rate = Math.max(0.5, speed / Config.anim.run); }
 		else if (this.hp < this.maxHp * 0.4 && this.actor.play('limp')) rate = Math.max(0.5, speed / (Config.anim.walk * 0.72));      // ferido: manca (passada menor)
-		else { this.actor.play('walk'); rate = Math.max(0.5, speed / Config.anim.walk); }          // (ritmo pela velocidade: pés plantados — Config.anim)
+		else {
+			const G = this._gait();                                               // o jeito de andar dele (celular, idoso, gingado)
+			if (G !== 'walk' && this.actor.play(G)) rate = Math.max(0.5, speed / (Config.anim.walk * NPC.GAIT_K[G]));
+			else { this.actor.play('walk'); rate = Math.max(0.5, speed / Config.anim.walk); }          // (ritmo pela velocidade: pés plantados — Config.anim)
+		}
+		if (speed >= 0.5) { this._stillT = 0; this._fidget = null; }
 
 		this.actor.setPosition(this.transform.position.x, this.transform.position.z);
 		this.actor.setHeading(this.heading);

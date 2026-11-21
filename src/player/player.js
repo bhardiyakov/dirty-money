@@ -532,6 +532,7 @@ class Player {
     // sprint: o IMPULSO do sprint (0–1, InputManager.sprintTick: cada toque soma, segurar mantém um mínimo; true = 1). Sem ele, TROTA
     // (Config.player.jogSpeed, sem gastar fôlego); walk = só anda (interiores fora de assalto/missão/fuga, analógico pouco inclinado).
     update(moveDir, sprint, dt, walk = false) {
+        this._upd = (this._upd || 0) + 1;                                          // (quadro: os gestos de parado só contam quadros seguidos)
         if (this._ifr > 0) this._ifr -= dt;
         let drive = typeof sprint === 'number' ? Math.max(0, Math.min(1, sprint)) : sprint ? 1 : 0, sprinting = drive > 0.02;
         // Arremessado: sem controle; o Ragdoll comanda posição, giro e sprite.
@@ -758,9 +759,12 @@ class Player {
                     this._syncSprite(); this.actor.update(dt, rate); return;
                 }
             }
+            if (this.speed >= 0.3 && this._fidget) this._fidget = null;                    // (mexeu: o gesto de parado acaba)
             if (this.speed < 0.3) {
                 clip = (this.aimTimer > 0 && gun) ? 'aim' : 'idle';
                 this.state = 'idle';
+                // Parado um tempo de mãos livres: um gesto de vez em quando (olha em volta, o relógio, se alonga) — mexeu, acabou.
+                if (clip === 'idle' && w === 'none' && !this.carrying && !this.holdingUp && this._fidgetTick(dt)) { this._syncSprite(); this.actor.update(dt, 1); return; }
             } else if (gun && (aiming || this.aimTimer > 0) && !sprinting) {
                 // De frente para a mira: para a frente, para trás ou de lado (passo lateral), no ritmo da velocidade.
                 this.state = 'walk';
@@ -793,6 +797,27 @@ class Player {
         if (this.action && this.action.rate) rate = this.action.rate;            // (passo `fit` de uma sequência: o clipe acompanha o timer)
         this._syncSprite();
         this.actor.update(dt, rate);
+    }
+
+    // Gesto de quem está parado (Player.FIDGETS): depois de 7–12 s sem mexer, um deles; true = tocando agora. Qualquer outro clipe zera.
+    static get FIDGETS() { return ['idle_look', 'idle_watch', 'idle_stretch']; }
+    _fidgetTick(dt) {
+        this._stillT = (this._stillAt === this._upd - 1 ? this._stillT || 0 : 0) + dt;      // (contínuo: só conta quadros seguidos parado)
+        this._stillAt = this._upd;
+        if (this._fidget && this._stillT <= dt) this._fidget = null;                    // (mexeu no meio do gesto: acabou)
+        const F = this._fidget;
+        if (F) {
+            if (this.actor.clipName === F && !this.actor.done) return true;
+            this._fidget = null; this._stillT = 0;
+            return false;
+        }
+        if (this._fidgetAt == null) this._fidgetAt = 7 + Math.random() * 5;
+        if (this._stillT < this._fidgetAt) return false;
+        this._fidgetAt = 8 + Math.random() * 7;
+        const L = Player.FIDGETS.filter((k) => k !== this._lastFidget), pick = L[Math.floor(Math.random() * L.length)];
+        if (this.actor.play(pick, 'none', { restart: true })) { this._fidget = this._lastFidget = pick; this.fidgets = (this.fidgets || 0) + 1; return true; }
+        this._stillT = 0;
+        return false;
     }
 
     // Land locomotion with heavy steps: the body turns toward the stick at a speed-limited rate (quick pivot standing — turnRateStand —,

@@ -1165,6 +1165,9 @@ class NpcSheet {
 			leap: { as: 'scared', n: 9, fps: 14, loop: false }, limp: { as: 'walk', n: 12, fps: 9, loop: true },
 			takedown: { as: 'punch', n: 12, fps: 12, loop: false },
 			carry: { as: 'walk', n: 12, fps: 9, loop: true }, carry_idle: { as: 'idle', n: 6, fps: 6, loop: true },
+			walk_phone: { as: 'walk', n: 12, fps: 9, loop: true }, walk_old: { as: 'walk', n: 12, fps: 8, loop: true }, walk_swag: { as: 'walk', n: 12, fps: 10, loop: true },
+			phone: { as: 'idle', n: 10, fps: 3, loop: true }, rummage: { as: 'pick', n: 9, fps: 8, loop: true },
+			idle_look: { as: 'idle', n: 16, fps: 6, loop: false }, idle_stretch: { as: 'idle', n: 16, fps: 6, loop: false }, idle_watch: { as: 'idle', n: 14, fps: 6, loop: false },
 		});
 	}
 	_only3d(name, w) {

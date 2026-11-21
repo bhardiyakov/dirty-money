@@ -77,6 +77,7 @@ class Game {
 				// O policial solta munição, dinheiro e, às vezes, uma arma ou kit (tropa de elite e exército: fuzil e mais $).
 				if (source !== 'gang' && source !== 'police') this.pickups.dropLoot(o.position, o.kind || 'cop');      // (morto pelo tráfico: sem loot)
 				if (source === 'player' && typeof WorldMemory !== 'undefined') WorldMemory.crime('cop', o.position.x, o.position.z);
+				if (source === 'player') this.playerKills = (this.playerKills || 0) + 1;          // (bônus dos trabalhos: "sem matar ninguém")
 				if (source === 'player') { this.heat.commit('cop_killed'); this._flash('Policial morto! Eles não vão deixar barato!'); if (o.op) { Standing.add('traffic', 4); if (this.missions) this.missions.onCopKilled(); } if (Standing.nearFavela(o.position.x, o.position.z)) Standing.addHeat(30, 'policial morto'); }       // (na operação o tráfico gosta; perto da favela, a pressão sobe)
 			},
 		};
@@ -102,6 +103,7 @@ class Game {
 					const bled = !!(opts && opts.bled);
 					if (!bled) this.pickups.dropLoot(npc.position, 'civilian');
 					if (source !== 'player') return;
+					this.playerKills = (this.playerKills || 0) + 1;
 					if (bled) {
 						this.heat.commit('homicide');
 						if (typeof WorldMemory !== 'undefined') WorldMemory.crime('kill', npc.position.x, npc.position.z);
@@ -2609,6 +2611,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 	// mas é bem menos arriscado que um assalto (nenhum flagrante longo, sem polícia avisada).
 	_tryPickpocket() {
 		const pl = this.player, R = Config.robbery;
+		if (StreetLife.steal && StreetLife.steal(this)) return;          // (o turista distraído posando para a foto: npc/StreetLife.js)
 		if (pl.busy || this.holdup) return;
 		const target = this.npcManager.nearestTarget(pl.position, R.theftRange, (n) => !n.surrendered && !n.fleeing && n.state !== 'HURT', this.player);
 		if (!target) { this._flash('Ninguém por perto pra furtar…'); return; }
