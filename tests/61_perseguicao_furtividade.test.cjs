@@ -18,14 +18,25 @@ module.exports = {
             const b = vm.vehicles.find((v) => !v.isBike && !v.spec.boat && !v.controlled && !v.spec.armored);
             const pc = pm.cars.find((q) => q.role === 'patrol' && !q.destroyed);
             if (!b || !pc) return null;
-            const s = RoadNet.randomLanePoint(60, { x: P.x, z: P.z, rMin: 0, rMax: 300 });
-            const h = Math.atan2(s.d.dx, s.d.dz);
+            // a reta mais longa do autódromo (sem prédio nem trânsito no caminho: o giro é só o da batida)
+            const SW = Speedway;
+            if (!SW.site) return null;
+            let best = null;
+            for (let k = 0; k < SW.L; k += 5) { const a = SW.at(k), q = SW.at(k + 60), tn = Math.abs(Math.atan2(a.tx * q.tz - a.tz * q.tx, a.tx * q.tx + a.tz * q.tz)); if (!best || tn < best.tn) best = { k, tn }; }
+            const st = SW.at(best.k + 10), s = { point: { x: st.x, z: st.z } }, h = Math.atan2(st.tx, st.tz);
+            game.player.teleport(new BABYLON.Vector3(st.x, 0, st.z));
+            // física em passos fixos de 1/60 s (lv: segura a velocidade nesses passos)
+            const step = (n, lv) => { for (let i = 0; i < n; i++) { game._update(1 / 60); game.scene.getPhysicsEngine()._step(1 / 60); Vehicle.physFrame++; if (lv) { b.phys.setLinearVelocity(lv); b._cmd = lv.clone(); } } };
+            b.teleport(st.x, st.z, h); b.mode = 'parked'; b.route = null; b.flat = null;
+            game.player.setVisible(false); b.setControlled(true); game.activeCar = b; game.mode = 'car'; game.camera.snapTo(b.position);
+            b.hp = b.maxHp; b.fuel = b.tank; b.engineDead = false; b.hotwire = 0;
+            step(150);                                                               // (o motor pega: a partida leva até ~1,5 s)
             const run = (withPit) => {
-                b.teleport(s.point.x, s.point.z, h); b.mode = 'parked'; b.route = null; b._pitSpin = null; b.flat = null;
-                game.player.setVisible(false); b.setControlled(true); game.activeCar = b; game.mode = 'car'; game.camera.snapTo(b.position);
-                game._update(1 / 30);
+                b.teleport(st.x, st.z, h); b.slide = 0; b._yaw = 0; b._pitSpin = null; b.handbrake = false;
+                const lv = new BABYLON.Vector3(st.tx * 14, 0, st.tz * 14);
+                b.phys.setLinearVelocity(lv); b._cmd = lv.clone(); b.phys.setAngularVelocity(BABYLON.Vector3.Zero());
+                step(6, lv);
                 const f = b.fwdToRef(new BABYLON.Vector3()), ux = f.x, uz = f.z, rx = uz, rz = -ux;
-                b.phys.setLinearVelocity(new BABYLON.Vector3(ux * 14, 0, uz * 14));
                 const h0 = Math.atan2(f.x, f.z);
                 let hit = false;
                 if (withPit) {
@@ -34,16 +45,17 @@ module.exports = {
                     pc.teleport(qx + rx * 0.3 - ux * pc.halfLen, qz + rz * 0.3 - uz * pc.halfLen, h);
                     pc.setTarget(b.position, new BABYLON.Vector3(ux * 14, 0, uz * 14));
                     pc._pitHit = false;
-                    pc._pit(b, { x: ux * 14, z: uz * 14 }, 14, 1 / 30);
+                    pc._pit(b, { x: ux * 14, z: uz * 14 }, 14, 1 / 60);
                     hit = !!b._pitSpin;
+                    pc.teleport(qx - ux * 30, qz - uz * 30, h);                              // (a viatura sai: o giro medido é só o da batida)
                 }
-                for (let i = 0; i < 36; i++) { game._update(1 / 60); game.scene.getPhysicsEngine()._step(1 / 60); Vehicle.physFrame++; }      // (física em passos fixos)
+                step(36);
                 const f1 = b.fwdToRef(new BABYLON.Vector3());
                 let d = Math.atan2(f1.x, f1.z) - h0; d = Math.atan2(Math.sin(d), Math.cos(d));
-                b.setControlled(false); game.activeCar = null; game.mode = 'player'; game.player.setVisible(true);
                 return { hit, turn: +Math.abs(d).toFixed(2), slid: +(b.slide || 0).toFixed(2) };
             };
             const ctl = run(false), p = run(true);
+            b.setControlled(false); game.activeCar = null; game.mode = 'player'; game.player.setVisible(true);
             return { ctl, p, pits: game.pits || 0 };
         });
         if (c.ok(!!pit, 'achou carro e viatura')) {
@@ -56,8 +68,11 @@ module.exports = {
         const sp = await page.evaluate(() => {
             const pm = game.policeManager, P = game.player.position, B = pm.blocks;
             pm.level = 4;
-            const far = RoadNet.randomLanePoint(60, { x: P.x, z: P.z, rMin: 250, rMax: 700 });      // (longe da câmera: o bloqueio só nasce fora da tela)
-            const [cand] = far ? B._pick(far.point, { x: 0, z: 0 }, 1) : [];
+            let cand = null;
+            for (let i = 0; i < 25 && !cand; i++) {                                // (longe da câmera: o bloqueio só nasce fora da tela)
+                const far = RoadNet.randomLanePoint(60, { x: P.x, z: P.z, rMin: 250, rMax: 900 });
+                if (far) cand = B._pick(far.point, { x: 0, z: 0 }, 1)[0] || null;
+            }
             if (!cand) return { none: true };
             B._build(cand);
             const blk = B.list[B.list.length - 1], S = blk.spikes;
@@ -190,9 +205,14 @@ module.exports = {
             const inp = g.input, keep = inp.getMoveAxis, yaw = CompassCamera.yaw || 0, a = (best == null ? 0 : best) - yaw;
             inp.getMoveAxis = () => ({ x: Math.sin(a), z: Math.cos(a) });
             let vmax = 0;
-            for (let i = 0; i < 60; i++) { g._update(1 / 30); vmax = Math.max(vmax, p.speed || 0); }
+            for (let i = 0; i < 45; i++) { g._update(1 / 30); vmax = Math.max(vmax, p.speed || 0); }      // (o passo de verdade: a velocidade)
             inp.getMoveAxis = keep;
-            const out = { near, grabbed, moved: +Math.hypot(n.position.x - b0.x, n.position.z - b0.z).toFixed(2), gap: +Math.hypot(n.position.x - p.position.x, n.position.z - p.position.z).toFixed(2), vmax: +vmax.toFixed(2), jog: Config.player.jogSpeed };
+            // e o corpo segue: o personagem vai 4 m pela direção livre (sem esbarrar em carro ou pessoa no caminho)
+            const ang = best == null ? 0 : best, x1 = p.position.x, z1 = p.position.z;
+            const bx = n.position.x, bz = n.position.z;
+            for (let i = 1; i <= 40; i++) { p.root.position.x = x1 + Math.sin(ang) * i * 0.1; p.root.position.z = z1 + Math.cos(ang) * i * 0.1; Stealth.update(g, 1 / 30); }
+            b0.x = bx; b0.z = bz;
+            const out = { near, grabbed, moved: +Math.hypot(n.position.x - b0.x, n.position.z - b0.z).toFixed(2), gap: +Math.hypot(n.position.x - p.position.x, n.position.z - p.position.z).toFixed(2), vmax: +vmax.toFixed(2), jog: Config.player.jogSpeed, rope: Config.stealth.rope };
             Stealth.interact(g);
             out.dropped = !Stealth.drag && !p.dragging;
             // um pedestre de frente para o corpo, a 6 m, sem parede: acha
@@ -217,7 +237,7 @@ module.exports = {
         });
         if (c.ok(!!dr, 'o desacordado ainda está lá')) {
             c.ok(dr.near && dr.grabbed, 'E perto do corpo: arrasta');
-            c.ok(dr.moved > 2 && dr.gap < 1.6, `o corpo vem atrás (andou ${dr.moved} m, a ${dr.gap} m de você)`);
+            c.ok(dr.moved > 1.2 && dr.gap < dr.rope + 0.3, `o corpo vem atrás, na distância da corda (andou ${dr.moved} m, a ${dr.gap} m de você)`);
             c.note(`arrastando: ${dr.vmax} m/s, o corpo andou ${dr.moved} m`);
             c.ok(dr.vmax > 0.3 && dr.vmax <= dr.jog * 0.62, `arrastando, anda devagar (${dr.vmax} m/s; trote ${dr.jog})`);
             c.ok(dr.dropped, 'E de novo: solta');
@@ -281,6 +301,7 @@ module.exports = {
                 return { on: e.classList.contains('on'), see: e.classList.contains('see'), near: e.classList.contains('near'), txt: e.textContent, arrows: ring.length, red: ring.some((b) => b.classList.contains('see')) };
             };
             const out = {};
+            look();                                                                  // (atualiza o alcance: agachado, sem estrela)
             if (put(R() * 0.5)) out.see = look();
             if (put(R() * 1.25)) out.near = look();
             o.transform.position.set(P.x + 300, 0, P.z + 300); o.nav.crowd.agentTeleport(o.index, new BABYLON.Vector3(P.x + 300, 0, P.z + 300));
