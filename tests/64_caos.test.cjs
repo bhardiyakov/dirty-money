@@ -141,7 +141,8 @@ module.exports = {
             const dn = Chaos.start('dance');
             out.dance = dn && dn.fsm.name === 'DANCE';
             out.danceRing = Chaos.rings.some((r) => r.kind === 'dance');
-            const d = Chaos.start('drunk');
+            const P = g.player.position, free = g.npcManager.npcs.filter((n) => Chaos._calm(n)).sort((a, b) => Math.hypot(a.position.x - P.x, a.position.z - P.z) - Math.hypot(b.position.x - P.x, b.position.z - P.z));
+            const d = Chaos.start('drunk', free[0]);                                                   // (o bêbado não precisa de plateia)
             out.drunk = d && d.fsm.name === 'DRUNK' && d._drunk;
             window.__fig = { d, dn, f };
             return out;
