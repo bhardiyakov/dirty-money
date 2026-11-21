@@ -258,7 +258,7 @@ class NPC {
 		const q = MapGeo.hasLineOfSight(p.x, p.z, to.x, to.z) ? this.nav.closestPoint(to) : null;
 		if (q && hypot(q.x - to.x, q.z - to.z) < 0.6) this.nav.crowd.agentTeleport(this.index, q); else D.left = 0;      // (parede, sem chão: para ali)
 		this.heading = this.transform.rotation.y = Math.atan2(D.dx, D.dz);
-		this.actor.play('scared');
+		if (!D.clip) { D.clip = true; if (!this.actor.play('leap', 'none', { restart: true })) this.actor.play('scared'); }      // (o pulo de lado; sem ele, a corrida assustada)
 		this.actor.setPosition(p.x, p.z); this.actor.setHeading(this.heading);
 		this.actor.update(dt, 1.5);
 		if (D.left <= 1e-3) {
@@ -272,6 +272,8 @@ class NPC {
 	hurt(fromPos) {
 		if (this.rag) return;
 		this.threat.set(fromPos.x, 0, fromPos.z);
+		// a reação pelo lado de onde veio — decidida AGORA, com o rumo de antes do tranco (NpcSheet.hurtClip; o NPC.update toca)
+		this._hurtClip = typeof NpcSheet !== 'undefined' ? NpcSheet.hurtClip(this.heading, fromPos.x - this.position.x, fromPos.z - this.position.z) : 'hurt'; this._hurtNew = true;
 		if (this.fsm.current && this.fsm.current.onHurt) { this.fsm.current.onHurt(fromPos); return; }
 		this.waiting = null;
 		this.crossing = null;
@@ -682,7 +684,10 @@ class NPC {
 		this._slopeTick(dt, v, speed);
 		const st = this.fsm.name;
 		let rate = 1;
-		if (st === 'HURT') this.actor.play('hurt');
+		if (st === 'HURT') {                                                       // (pelo lado de onde veio o golpe/tiro — NpcSheet.hurtClip)
+			if (!this.actor.play(this._hurtClip || 'hurt', 'none', { restart: !!this._hurtNew })) this.actor.play('hurt');
+			this._hurtNew = false;
+		}
 		else if (st === 'FIGHT') {                                                // brigando: golpe/tiro (o estado reinicia o clipe) ou guarda/avanço, com a arma na mão
 			const A = this.fsm.current.anim(speed);
 			if (!this.actor.play(A.clip, A.w)) this.actor.play(A.clip, 'none');
@@ -698,6 +703,7 @@ class NPC {
 		else if (st === 'SHELTER') { this.actor.play('run'); rate = Math.max(0.5, speed / Config.anim.run); }
 		else if (st === 'FLEE') { this.actor.play('scared'); rate = Math.max(0.5, speed / Config.anim.run); }
 		else if (st === 'JOG') { this.actor.play('run'); rate = Math.max(0.5, speed / Config.anim.run); }
+		else if (this.hp < this.maxHp * 0.4 && this.actor.play('limp')) rate = Math.max(0.5, speed / (Config.anim.walk * 0.72));      // ferido: manca (passada menor)
 		else { this.actor.play('walk'); rate = Math.max(0.5, speed / Config.anim.walk); }          // (ritmo pela velocidade: pés plantados — Config.anim)
 
 		this.actor.setPosition(this.transform.position.x, this.transform.position.z);

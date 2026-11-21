@@ -56,8 +56,10 @@ class Player {
 
     // Dano de bala. Cambaleia (sem travar o jogador por muito tempo). quiet: sem a animação de cambalear
     // (atropelamento/queda têm a própria animação).
+    // `quiet` pode ser a POSIÇÃO de quem atirou ({ x, z } — Combat): aí ele cambaleia para o lado certo (frente, costas, lados — NpcSheet.hurtClip).
     takeDamage(amount, quiet = false) {
         if (this.hp <= 0 || this.invulnerable) return;       // (rendido: ninguém atira)
+        if (quiet && typeof quiet === 'object') { this._hitFrom = quiet; quiet = false; }
         amount *= 1 - (SkillTree.m.dmgTaken || 0) - Outfit.m.dmgTaken;      // habilidade Sangue frio | roupa (jaqueta de couro, coturno)
         if (this.armor > 0) {                                 // colete: absorve 75% do dano até acabar (Colete ajustado: mais)
             const a = Math.min(this.armor, amount * (0.75 + (SkillTree.m.vest || 0)));
@@ -68,7 +70,11 @@ class Player {
         if (this.hp <= 0 && SkillTree.instance && SkillTree.instance.trySecondWind()) this.hp = this.maxHp * 0.3;      // Corpo fechado
         this._sinceHit = 0;
         this.hitFlash = 0.35;                       // vinheta vermelha na tela
-        if (!this.busy && !quiet) this.playAction('hurt', { lock: 0.6 });
+        if (!this.busy && !quiet) {
+            const F = this._hitFrom, P = this.root.position, clip = F && typeof NpcSheet !== 'undefined' ? NpcSheet.hurtClip(this.root.rotation.y, F.x - P.x, F.z - P.z) : 'hurt';
+            if (!this.playAction(clip, { lock: 0.6 }) && clip !== 'hurt') this.playAction('hurt', { lock: 0.6 });
+        }
+        this._hitFrom = null;
     }
 
     // Levou um golpe corpo a corpo (soco, chute, cassetete — Combat.strike): dano, cambaleia e é empurrado; com força (chute,
@@ -78,6 +84,7 @@ class Player {
         const fall = M.fall >= Config.ragdoll.minPower;
         this.cancelSequence();
         if (this.action && !fall) this.action = null;                // (o golpe interrompe o que ele fazia)
+        const P0 = this.root.position; this._hitFrom = { x: P0.x - dx, z: P0.z - dz };      // (o golpe veio de lá: cambaleia para o lado certo)
         this.takeDamage(amount, fall);                               // (cambaleia: o clipe 'hurt')
         if (this.hp <= 0) return;
         if (fall) { this.ragdoll({ dx, dz, power: M.fall * 0.85 }); return; }
@@ -766,6 +773,8 @@ class Player {
                 clip = 'walk';
                 this.state = 'walk';
                 rate = Math.max(0.5, this.speed / (Config.anim.walk * Config.player.stride));
+                // muito ferido, andando sem nada nas mãos: MANCA (o clipe 'limp' — passada 0,72 da do andar)
+                if (w === 'none' && this.hp < this.maxHp * 0.3 && !this.holdingUp && !Bags.clipFor(this, 'walk', w) && this.actor.play('limp', 'none')) { this.state = 'limp'; this._syncSprite(); this.actor.update(dt, rate / 0.72); return; }
             }
             // Anunciando um assalto (arma apontada, a outra mão pedindo "passa tudo") — só existe no personagem 2,5D.
             if (this.holdingUp && clip !== 'walk' && clip !== 'run' && w !== 'none' && w !== 'bat' && this.actor.play('holdup', w)) { this._syncSprite(); this.actor.update(dt, rate); return; }
