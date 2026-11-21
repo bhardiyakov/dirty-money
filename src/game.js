@@ -815,6 +815,7 @@ class Game {
 		this.fireworks.update(dt);
 		Radio.update(this, dt);                                                  // rádio do carro: a estação de cada carro (audio/Radio.js)
 		StreetReact.update(this, dt);                                            // pedestres saem da frente do seu carro (npc/StreetReact.js)
+		Stealth.update(this, dt);                                                // derrubar por trás, arrastar corpo, corpo achado, "estão me vendo" (crime/Stealth.js)
 		if (typeof News !== 'undefined') News.radioUpdate(dt, this);          // boletim no rádio do carro
 		for (let i = this._delayed.length - 1; i >= 0; i--) {
 			const d = this._delayed[i];
@@ -1159,6 +1160,8 @@ class Game {
 		const p = this.player, inv = this.inventory, key = p.weapon === 'none' ? 'fists' : p.weapon;
 		const W = Weapons[key];
 		if (this.reloading > 0) return;
+		if (Stealth.drag) Stealth.drop(this, true);                       // (golpe/tiro: solta o corpo que arrastava)
+		if (!W.gun) { const tk = Stealth.target(this); if (tk) { Stealth.takedown(this, tk); return; } }      // agachado atrás de quem não te vê: o golpe vira o mata-leão
 
 		if (W.gun) {
 			if (this._fireCd > 0) return;
@@ -1933,6 +1936,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 				const cp = !car.isBoat && CarCare.prompt(this);                         // a pé na frente/atrás do carro: capô ou porta-malas
 				if (cp) html = cp + '<br>' + html;
 			}
+			if (!car && !shopP) { const sp = Stealth.prompt(this); if (sp) html = sp; }      // derrubar por trás / arrastar ou soltar o corpo
 			if (!html && this.player.crouched) html = this.player.coverLock      // agachado: o estado e como sair dele
 				? '<b>Q</b> sair da cobertura<small>colado — mova para os lados para deslizar; segure na ponta para contornar; afaste-se para soltar</small>'
 				: this.player.inCover
@@ -2388,6 +2392,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		if (this.hiding) { if (this.hiding.phase === 'hidden') this._leaveHiding(); return; }
 		if (this.holdup) { this._cancelHoldup('Você baixou a arma — a vítima fugiu'); return; }
 		if (this.player.busy) return;
+		if (Stealth.interact(this)) return;                              // agachado atrás de alguém: derrubar em silêncio; perto de um corpo: arrastar / soltar
 		if (typeof Corcovado !== 'undefined' && Corcovado.interact(this)) return;      // elevador e trem do Morro do Vigia
 		if (typeof Landmarks !== 'undefined' && Landmarks.interact(this)) return;      // o passeio de bondinho da Pedra do Farol
 		if (Stands.interact(this)) return;                               // quiosques do calçadão, café do Morro do Vigia

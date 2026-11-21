@@ -602,6 +602,7 @@ class Player {
         // Colado na cobertura: o direcional só desliza ao longo dela (ver _coverMove).
         if (this.coverLock && this.crouched && !this.coverSnap) { moveDir = this._coverMove(moveDir, dt); if (this.coverLock) sprinting = false; }
 
+        if (this.dragging) sprinting = false;                                      // arrastando um corpo (Stealth): não corre
         // Agachado: correr levanta; parado/andando, a cobertura ao lado é reconferida (andar ao longo do muro segue nela).
         if (this.crouched && sprinting && moveDir.lengthSquared() > 1e-4) this.setCrouch(false);
         if (this.crouched) {
@@ -645,7 +646,7 @@ class Player {
         const g = onGround && moveDir.lengthSquared() > 1e-4 ? MapGeo.slopeAlong(this.root.position.x, this.root.position.z, moveDir.x, moveDir.z) : 0;
         this.slope = (this.slope || 0) + (g - (this.slope || 0)) * Math.min(1, dt * 6);
         this.actor.setSlope(this.speed > 0.3 ? this.slope : 0);
-        const maxSpeed = (this.swimming ? swimV : (sprinting && depth <= 0) ? sprintV : baseV) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? (this.aimFree ? 0.85 : 0.6) : 1) * (this.crouched ? Config.tactics.sneakSpeed : 1) * MapGeo.slopeSpeed(this.slope) * (this.swimming ? 1 : this.heavyMul);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
+        const maxSpeed = (this.swimming ? swimV : (sprinting && depth <= 0) ? sprintV : baseV) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? (this.aimFree ? 0.85 : 0.6) : 1) * (this.crouched ? Config.tactics.sneakSpeed : 1) * (this.dragging ? Config.stealth.dragSpeed : 1) * MapGeo.slopeSpeed(this.slope) * (this.swimming ? 1 : this.heavyMul);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
 
         // Acelera/desacelera rumo à velocidade alvo (frame-independent): na água embala e desliza; em terra, inércia e derrapagem.
         if (depth > 0) {

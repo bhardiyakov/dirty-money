@@ -6,8 +6,9 @@
 // cobertura: viaduto, ponte, toldo de loja, cobertura de posto (PoliceManager.airCover). Orbita o
 // jogador com o holofote aceso no chão; sem te ver, varre a ÁREA DE BUSCA numa espiral que abre
 // (nunca vai direto até você sem pista). Um carro comum no talo abre distância dele na reta. A partir
-// de 4★, com armas liberadas, atira rajadas de metralhadora. Pode ser derrubado a tiros (cai girando,
-// explode e só vem outro depois de um tempo).
+// de 4★, com armas liberadas, atira rajadas de metralhadora; a 5★ leva um ATIRADOR DE ELITE (Config.heli.sniper): a mira laser
+// vermelha fica em você por um instante e vem um tiro certeiro — sair da vista dele (cobertura, túnel, viaduto) cancela a mira.
+// Pode ser derrubado a tiros (cai girando, explode e só vem outro depois de um tempo).
 //
 // Desenho: o helicóptero ilustrado (HeliArt / HeliVisual: corpo, rotor borrado, sombra com a silhueta) no grupo de renderização 2
 // (desenhado por cima de tudo, como algo que voa) e o holofote como quad do GlowBatch.
@@ -67,6 +68,7 @@ class Helicopter {
         this.alive = false;
         this.sees = false;
         this.crashT = 2.4;
+        this.aimT = 0; this._laser(null);
         if (source === 'player') { this.game.wanted.addStars(1, 'kill'); this.game._flash('Você derrubou o helicóptero da polícia!'); }
         this.manager.heliCooldown = Config.heli.cooldown;
     }
@@ -139,9 +141,12 @@ class Helicopter {
         if (da < -Math.PI) da += Math.PI * 2;
         this.heading += da * Math.min(1, dt * 3.5);
 
-        // Metralhadora: a partir de 4★, armas liberadas, vendo o jogador de perto, em rajadas.
+        // Metralhadora: a partir de 4★, armas liberadas, vendo o jogador de perto, em rajadas. A 5★: o atirador de elite.
         this.fireCd -= dt;
-        if (this.sees && m.level >= H.fireFrom && m.weaponsFree && dP < H.fireRange && this.fireCd <= 0) {
+        const snipe = H.sniper && m.level >= H.sniper.from;
+        if (!snipe && this.aimT) { this.aimT = 0; this._laser(null); }                // (caiu do 5★ no meio da mira)
+        if (snipe) this._snipe(dt, dP, pp, m, H.sniper);
+        else if (this.sees && m.level >= H.fireFrom && m.weaponsFree && dP < H.fireRange && this.fireCd <= 0) {
             const ang = Math.atan2(pp.x + m.playerVel.x * 0.25 - p.x, pp.z + m.playerVel.z * 0.25 - p.z);
             m.combat.fire({ x: p.x, z: p.z, angle: ang, owner: 'police', ref: this, fly: true, spreadMul: (1.7 + dP * 0.04) * m.moveSpread }, 'smg');
             if (this.burst <= 0) this.burst = 6;
@@ -150,6 +155,52 @@ class Helicopter {
         }
 
         this._place(dt);
+    }
+
+    // ATIRADOR DE ELITE: com você à vista e ao alcance, a mira laser trava em você por `aim` s (o bipe acelera) e sai o tiro; perdeu a
+    // vista no meio (cobertura, túnel, escondido, longe), a mira cai e ele recomeça depois.
+    _snipe(dt, dP, pp, m, S) {
+        const g = this.game, hide = !!(g.hiding && !g.hiding.seen);
+        if (!(this.sees && !hide && m.weaponsFree && dP < S.range)) {
+            if (this.aimT > 0) { this.aimT = 0; this.fireCd = Math.max(this.fireCd, 0.9); }
+            this._laser(null);
+            return;
+        }
+        if (this.fireCd > 0) { this._laser(null); return; }
+        if (!this.aimT) {
+            this.aimT = 1e-4;
+            if (!this._warned) { this._warned = true; g._flash('🎯 Atirador de elite no helicóptero! Saia da mira: cobertura, túnel ou viaduto'); }
+        }
+        const prev = this.aimT;
+        this.aimT += dt;
+        const u = this.aimT / S.aim, step = u > 0.7 ? 0.12 : u > 0.4 ? 0.25 : 0.45;           // (o bipe acelera perto do tiro)
+        if (Math.floor(prev / step) !== Math.floor(this.aimT / step)) AudioFX.blip(1500 + 400 * u, 0.06, 0.12);
+        this._laser(pp, u);
+        if (this.aimT < S.aim) return;
+        const p = this.position, ang = Math.atan2(pp.x + m.playerVel.x * 0.1 - p.x, pp.z + m.playerVel.z * 0.1 - p.z);
+        m.combat.fire({ x: p.x, z: p.z, angle: ang, owner: 'police', ref: this, fly: true, spreadMul: S.spread * m.moveSpread, dmgMul: S.dmgMul }, 'revolver');
+        this.snipes = (this.snipes || 0) + 1;
+        this.aimT = 0;
+        this.fireCd = S.gap[0] + Math.random() * S.gap[1];
+        this._laser(null);
+    }
+
+    // A linha da mira laser (do helicóptero até o peito do jogador), desenhada por cima de tudo; null apaga. u: 0..1 da mira (pisca mais forte).
+    _laser(pp, u = 0) {
+        if (!pp) { if (this.laser) this.laser.setEnabled(false); return; }
+        if (!this.laser) {
+            const L = this.laser = BABYLON.MeshBuilder.CreateBox('heliLaser', { width: 0.09, height: 0.09, depth: 1 }, this.scene);
+            const mt = new BABYLON.StandardMaterial('heliLaserMat', this.scene);
+            mt.emissiveColor = new BABYLON.Color3(1, 0.08, 0.06); mt.diffuseColor = BABYLON.Color3.Black(); mt.disableLighting = true;
+            L.material = mt; L.isPickable = false; L.renderingGroupId = 2;
+        }
+        const L = this.laser, p = this.position, a = this._la || (this._la = new BABYLON.Vector3()), b = this._lb || (this._lb = new BABYLON.Vector3());
+        a.set(p.x, this.alt - 0.6, p.z); b.set(pp.x, 1.1, pp.z);
+        L.setEnabled(true);
+        L.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+        L.scaling.z = BABYLON.Vector3.Distance(a, b);
+        L.lookAt(b);
+        L.material.alpha = 0.45 + 0.4 * u + (Math.sin(this.aimT * 40) > 0 ? 0.15 : 0);
     }
 
     // Leva corpo, rotor, sombra e holofote para a posição/altura atuais.
@@ -176,6 +227,7 @@ class Helicopter {
 
     dispose() {
         this.visual.dispose();
+        if (this.laser) { this.laser.material.dispose(); this.laser.dispose(); this.laser = null; }
         this.fx.light.off(this.fx.li); this.fx.light.flush();
     }
 }

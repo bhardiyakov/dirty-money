@@ -434,6 +434,7 @@ class NPC {
 	// Volta à vida como "outro" pedestre em outro lugar, longe do jogador.
 	respawn() {
 		this._dodge = null;
+		if (this.ko) { this.ko = null; Stealth.bodies.delete(this); }
 		this.mugger = false;                                    // (era o assaltante de um StreetCrime)
 		if (this.downed) { this.downed = null; if (typeof Rescue !== 'undefined') Rescue.remove(this); }
 		this.restoreLook();
@@ -645,6 +646,7 @@ class NPC {
 		this._umbrellaTick(dt);
 		if (this.rag) { this.rag.update(dt); return; }      // arremessado: o Ragdoll comanda o sprite e a posição
 		if (!this.alive) {                         // corpo no chão: só espera sumir e reaparecer
+			if (this.ko) { Stealth.koTick(this, dt); return; }      // (derrubado por trás: desacordado, sem sangue — crime/Stealth.js)
 			if (this.downed) { this._downTick(dt); return; }      // (desacordado, sangrando: só morre se ninguém socorrer)
 			this.deadTimer -= dt;
 			this.actor.setPosition(this.transform.position.x, this.transform.position.z);

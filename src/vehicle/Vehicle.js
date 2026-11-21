@@ -278,6 +278,12 @@ class Vehicle {
         F[i] = 1;
         return true;
     }
+    // Batida PIT: rodar o carro (dir +1 = sentido horário, visto de cima). power ~ rad/s de guinada no começo.
+    spinOut(dir, power = 3.6, dur = 0.95) {
+        if (this.isBike || this.isBoat || this.destroyed || this._pitSpin) return false;
+        this._pitSpin = { t: 0, dur, yaw: dir * power * Math.sqrt(1300 / Math.max(700, this.spec.mass || 1300)) };      // (utilitário pesado gira menos)
+        return true;
+    }
     get flatCount() { const F = this.flat; return F ? F[0] + F[1] + F[2] + F[3] : 0; }
     // O aro no asfalto: faíscas (e marca no chão) atrás de cada roda furada, mais com o carro rápido.
     _rimFx(dt) {
@@ -649,6 +655,17 @@ class Vehicle {
             gripK *= 1 - V.slipGrip * this.slide;
             fwd *= Math.exp(-V.slipScrub * this.slide * dt);
         } else { this._yaw = yaw; this.slide = 0; }
+        // BATIDA PIT (PoliceCar._pit): a viatura empurrou a traseira de lado — o carro gira e a traseira solta por um instante
+        // (contra-esterço e acelerador seguram; parado na hora, o carro roda até o fim).
+        const PT = this._pitSpin;
+        if (PT) {
+            const u = Math.min(1, PT.t / PT.dur), k = (1 - u) * (1 - u);
+            yaw += PT.yaw * k * Math.min(1, Math.abs(fwd) / 6 + 0.35);
+            gripK *= 0.18 + 0.82 * u;
+            if (this.controlled) this.slide = Math.max(this.slide, 0.9 * (1 - u));
+            PT.t += dt;
+            if (u >= 1) this._pitSpin = null;
+        }
 
         lat *= Math.exp(-(this.spec.grip || Config.vehicle.grip * (this.spec.boat || !Weather.cur ? 1 : Weather.cur.gripMul)) * gripK * (this.controlled && !this.spec.boat ? Vehicle.playerGrip : 1) * dt);       // (skill Direção: Vehicle.playerGrip)       // (pista molhada: carro derrapa mais)
         this.phys.setAngularVelocity(this._av.set(0, yaw, 0));

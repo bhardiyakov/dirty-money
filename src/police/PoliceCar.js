@@ -161,13 +161,15 @@ class PoliceCar extends TrafficCar {
         const predicted = this.targetPos.add(this.targetVel.scale(lead));
         this._goal = predicted;
 
-        // Na cola de um carro em fuga (vendo você): acompanha um pouco atrás e de lado, no ritmo do alvo, e só de tempos em
-        // tempos tenta a batida (PIT, ~1,3 s). Antes toda viatura mirava em cima do carro e o prensava contra a parede.
-        const tv = this.targetVel, ts = hypot(tv.x, tv.z);
+        // Na cola de um carro em fuga (vendo você): acompanha um pouco atrás e de lado, no ritmo do alvo, e de tempos em tempos tenta a
+        // BATIDA PIT (_pit): encosta o bico na lateral da sua traseira e empurra — o carro roda (Vehicle.spinOut). A 4★+, mais vezes.
+        const tv = this.targetVel, ts = hypot(tv.x, tv.z), PC = Config.police.pit, lv = m ? m.level || 0 : 0;
         if (pc && ts > 6 && dist < 18 && this.mind && this.mind.sees && this._reverseT <= 0) {
-            this._pitCd = (this._pitCd === undefined ? 3 + Math.random() * 3 : this._pitCd) - dt;
-            if (this._pitCd < -1.3) this._pitCd = 4 + Math.random() * 4;
-            if (this._pitCd > 0) { this._tail(tv, ts, dt); this._watchStuck(dt, dist); return; }
+            if (this._pitCd === undefined) this._pitCd = PC.first[0] + Math.random() * PC.first[1];
+            this._pitCd -= dt;
+            if (this._pitCd < -PC.window || this._pitHit) { this._pitCd = (PC.gap[0] + Math.random() * PC.gap[1]) * (lv >= 4 ? PC.highMul : 1); this._pitHit = false; }
+            if (this._pitCd > 0 || lv < PC.minLevel || this.role === 'army') { this._tail(tv, ts, dt); this._watchStuck(dt, dist); return; }
+            this._pit(pc, tv, ts, dt); this._watchStuck(dt, dist); return;
         }
 
         // Enroscou num prédio/poste: dá ré um instante e depois volta a seguir só as ruas.
@@ -202,6 +204,40 @@ class PoliceCar extends TrafficCar {
         const vt = Math.max(0, Math.min(this.spec.maxSpeed * 0.88, ts + ahead * 0.5));
         this.route = null; this.reason = '';
         this.driveTo(vt, Math.max(-1, Math.min(1, delta / (Math.PI / 4))), dt, 9, 13);
+    }
+
+    // BATIDA PIT: mira a quina traseira do carro do jogador pelo lado em que a viatura está, um pouco mais rápida que ele; encostou o
+    // bico ali (atrás do eixo de trás, de lado), empurra: o carro dele roda para o lado de cá (a traseira vai para o outro).
+    _pit(pc, tv, ts, dt) {
+        const p = this.position, T = this.targetPos, ux = tv.x / ts, uz = tv.z / ts, rx = uz, rz = -ux;
+        const lx = (p.x - T.x) * rx + (p.z - T.z) * rz, lz = (p.x - T.x) * ux + (p.z - T.z) * uz;    // viatura no referencial do carro dele
+        const sl = lx >= 0 ? 1 : -1, hl = pc.halfLen || 2.2, hw = pc.halfW || 0.9;
+        const qx = T.x - ux * hl * 0.75 + rx * sl * hw, qz = T.z - uz * hl * 0.75 + rz * sl * hw;          // a quina de trás, do lado de cá
+        const f = this.fwdToRef(this._tf || (this._tf = new BABYLON.Vector3()));
+        const bx = p.x + f.x * this.halfLen, bz = p.z + f.z * this.halfLen;                                // o bico da viatura
+        // aproxima por fora e um pouco atrás; já colada, mira a quina por dentro (empurra)
+        const close = hypot(bx - qx, bz - qz) < 3;
+        const ax = close ? qx - rx * sl * 0.8 : qx + rx * sl * 1.4 - ux * 1.2, az = close ? qz - rz * sl * 0.8 : qz + rz * sl * 1.4 - uz * 1.2;
+        let delta = Math.atan2(ax - p.x, az - p.z) - Math.atan2(f.x, f.z);
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        this.route = null; this.reason = 'pit';
+        this.driveTo(Math.min(this.spec.maxSpeed * 0.95, ts + (close ? 3.5 : 2 + Math.max(0, -lz - 2) * 0.6)), Math.max(-1, Math.min(1, delta / (Math.PI / 5))), dt, 11, 14);
+        // contato: o bico na quina de trás, de lado (não à frente dele) — roda o carro
+        if (!this._pitHit && hypot(bx - qx, bz - qz) < 1.5 && lz < hl * 0.2 && Math.abs(lx) < hw + 2.6) {
+            this._pitHit = true;
+            const C = Config.police.pit;
+            if (pc.spinOut && pc.spinOut(sl, C.power * (0.85 + Math.random() * 0.3))) {
+                const g = this.manager && this.manager.game;
+                AudioFX.thud(qx, qz);                                                    // (o pneu canta sozinho: Vehicle.slide)
+                if (g) {
+                    g.pits = (g.pits || 0) + 1;
+                    if (g.camera) g.camera.shake(0.45, -rx * sl, -rz * sl);
+                    if (g.input) g.input.rumble(0.9, 0.7, 320);
+                    if (g.activeCar === pc && g.mode === 'car') g._flash('💥 PIT! A viatura bateu na sua traseira — contra-esterce para segurar');
+                }
+            }
+        }
     }
 
     // Segue as ruas rumo ao alvo: a Route escolhe, a cada cruzamento, a manobra que mais o aproxima.

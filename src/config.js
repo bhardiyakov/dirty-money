@@ -434,11 +434,27 @@ const Config = {
 
 	// TÁTICO do jogador a pé (player.js e combat/Cover.js): AGACHAR (Q · L3 no controle) = furtivo; agachado encostado num prédio,
 	// muro, caçamba, contêiner ou carro parado = EM COBERTURA; ROLAR (V longe de grade/muro · RB) = esquiva de balas.
+	// FURTIVIDADE (crime/Stealth.js): derrubar por trás, arrastar corpo, corpo achado.
+	stealth: {
+		reach: 1.6,            // u: até esta distância das costas de alguém, agachado, dá para derrubar
+		behindCos: -0.25,      // você precisa estar atrás dele: cos do ângulo entre a frente dele e você abaixo disto (≈ ±105° das costas)
+		hold: 0.6,             // u: ele fica colado à sua frente no mata-leão
+		grabT: 0.55,           // s até ele apagar (cai deitado)
+		koTime: [45, 70],      // s desacordado
+		noiseR: 3.5,           // u: só quem está colado (e olhando) se assusta — o resto não ouve
+		grabR: 1.7,            // u: perto assim de um corpo, E arrasta
+		rope: 1.15,            // u: o corpo vem a esta distância atrás de você
+		dragSpeed: 0.5,        // arrastando, anda a esta fração do passo (e não corre)
+		sightNpc: 15,          // u: um pedestre olhando para o corpo o acha até aqui (sem parede no meio)
+		sightCop: 22,          // u: um policial, até aqui
+	},
+
 	tactics: {
 		sneakSpeed: 0.55,      // agachado anda a esta fração do passo normal (não corre: correr levanta)
 		stealthSight: 0.55,    // agachado, a polícia e a facção só te notam até esta fração do alcance de visão de sempre...
 		stealthSightWanted: 0.75,   // ...ou esta, já procurado (a polícia está atenta)
 		stealthWitness: 0.5,   // ...e as testemunhas de um crime (assalto, furto, briga), idem
+		stealthNear: 1.3,      // agachado, a polícia/facção só "sente" você de costas até esta distância (u; de pé: Config.wanted.nearSense)
 		theftBonus: 0.25,      // furto agachado: + esta chance de dar certo
 		coverReach: 1.3,       // distância (u) até a superfície da cobertura para estar "em cobertura"
 		coverSnap: 2.4,        // apertando Q até esta distância de uma cobertura, o personagem vai até ela
@@ -709,6 +725,9 @@ const Config = {
 		cooldown: 45,          // Segundos até vir outro depois de derrubado.
 		sortie: [0, 0, 0, 70, 95, 0],   // Autonomia por ★ (s no ar; 0 = sem limite): acabou, ele vai abastecer — a brecha para sumir.
 		refuel: 35,            // Segundos fora (abastecendo) até voltar.
+		// ATIRADOR DE ELITE (5★): no lugar da metralhadora, um tiro certeiro — antes, a MIRA LASER fica em você por `aim` s (dá tempo de
+		// sair dela: cobertura, túnel, viaduto, sair da vista). dmg: × o dano do revólver | gap: [mín., sorteio] s entre tiros.
+		sniper: { from: 5, aim: 1.7, range: 44, dmgMul: 1.25, spread: 0.12, gap: [2.6, 2.2] },
 	},
 
 	police: {
@@ -745,6 +764,13 @@ const Config = {
 		// 1★ (minor offense): the police run slower, must get closer to arrest and lose the player more easily behind walls; arrested
 		// at 1★ the player is released within a few hours. Bail and confiscation: HeatStateMachine (HEAT_TUNING).
 		oneStar: { bustRange: 4.5, closeNoEscape: 14, chaseMul: 0.8, hours: [3, 5] },
+		// Batida PIT (PoliceCar._pit): na cola do seu carro, a viatura encosta na sua traseira de lado e o carro roda (Vehicle.spinOut).
+		// first/gap: [mínimo, sorteio a mais] s até a 1ª tentativa e entre tentativas (× highMul a 4★+) | window: s de cada tentativa |
+		// power: guinada (rad/s) do giro | minLevel: ★ a partir das quais tentam.
+		pit: { first: [2.5, 2.5], gap: [4, 4], highMul: 0.65, window: 1.8, power: 3.8, minLevel: 2 },
+		// Tapete de pregos (Roadblocks): estendido no asfalto antes de cada bloqueio (4★+). Passou por cima: os pneus que pisaram furam
+		// (blindado não). ahead: u do bloqueio, do lado de fora | len: u de largura (atravessa a rua) | depth: u.
+		spikes: { ahead: 11, len: 11, depth: 0.95, minLevel: 4 },
 	},
 };
 

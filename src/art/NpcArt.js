@@ -1163,6 +1163,7 @@ class NpcSheet {
 		return NpcSheet._o3 || (NpcSheet._o3 = {
 			hurt_b: { as: 'hurt', n: 6, fps: 12, loop: false }, hurt_l: { as: 'hurt', n: 6, fps: 12, loop: false }, hurt_r: { as: 'hurt', n: 6, fps: 12, loop: false },
 			leap: { as: 'scared', n: 9, fps: 14, loop: false }, limp: { as: 'walk', n: 12, fps: 9, loop: true },
+			takedown: { as: 'punch', n: 12, fps: 12, loop: false },
 		});
 	}
 	_only3d(name, w) {
