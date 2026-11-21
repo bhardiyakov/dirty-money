@@ -23,7 +23,22 @@ module.exports = {
             if (best) g.player.teleport(new BABYLON.Vector3(best.position.x + 6, 0, best.position.z));
         });
 
+        // (fim da cena: todo mundo volta a andar e o jogador vai para outro grupo de gente — as figuras precisam de plateia)
+        const regroup = () => page.evaluate(() => {
+            const g = game;
+            for (const n of g.npcManager.npcs) if (n.alive && !n.rag && n.fsm && /^(FIGHT|WATCH|ARGUE|DANCE|DRUNK|FAINT|GRAB|FLEE)$/.test(n.fsm.name)) { n._ring = null; n.toWander(); }
+            Chaos.rings.length = 0;
+            const L = g.npcManager.npcs.filter((n) => Chaos._calm(n)), P = g.player.position;
+            let best = null, bc = -1;
+            for (const n of L.slice(0, 80)) { const k = L.filter((m) => Math.hypot(m.position.x - n.position.x, m.position.z - n.position.z) < 25).length; if (k > bc && Math.hypot(n.position.x - P.x, n.position.z - P.z) > 15) { bc = k; best = n; } }
+            if (best) g.player.teleport(new BABYLON.Vector3(best.position.x + 7, 0, best.position.z));
+            // (sem polícia por perto: ela desfaz a roda — isso tem o teste próprio)
+            const Q = g.player.position;
+            for (const o of g.policeManager.officers) if (o.alive && o.index >= 0 && Math.hypot(o.position.x - Q.x, o.position.z - Q.z) < 90) { const p = new BABYLON.Vector3(Q.x + 400, 0, Q.z + 400); o.transform.position.copyFrom(p); o.nav.crowd.agentTeleport(o.index, p); }
+            return bc;
+        });
         // ------------------------------------------------------------------ esbarrão → bate-boca → briga → roda
+        await regroup();
         const bump = await page.evaluate(() => {
             const g = game, P = g.player.position, L = g.npcManager.npcs.filter((n) => Chaos._calm(n)).sort((a, b) => Math.hypot(a.position.x - P.x, a.position.z - P.z) - Math.hypot(b.position.x - P.x, b.position.z - P.z));
             const a = L[0], b = L[1];
@@ -79,17 +94,6 @@ module.exports = {
             return { fled: W.filter((w) => w.fsm.name === 'FLEE').length, n: W.length };
         });
         if (cops) c.ok(cops.fled >= Math.ceil(cops.n / 2), `a polícia chegou: a roda se desfaz (${cops.fled}/${cops.n} correram)`);
-        // (fim da cena: todo mundo volta a andar e o jogador vai para outro grupo de gente — as figuras precisam de plateia)
-        const regroup = () => page.evaluate(() => {
-            const g = game;
-            for (const n of g.npcManager.npcs) if (n.alive && !n.rag && n.fsm && /^(FIGHT|WATCH|ARGUE|DANCE|DRUNK|FAINT|GRAB|FLEE)$/.test(n.fsm.name)) { n._ring = null; n.toWander(); }
-            Chaos.rings.length = 0;
-            const L = g.npcManager.npcs.filter((n) => Chaos._calm(n)), P = g.player.position;
-            let best = null, bc = -1;
-            for (const n of L.slice(0, 80)) { const k = L.filter((m) => Math.hypot(m.position.x - n.position.x, m.position.z - n.position.z) < 25).length; if (k > bc && Math.hypot(n.position.x - P.x, n.position.z - P.z) > 15) { bc = k; best = n; } }
-            if (best) g.player.teleport(new BABYLON.Vector3(best.position.x + 7, 0, best.position.z));
-            return bc;
-        });
         await regroup();
 
         // ------------------------------------------------------------------ dominó na correria
@@ -113,15 +117,15 @@ module.exports = {
         await regroup();
         const fig = await page.evaluate(() => {
             const g = game, out = {};
-            const d = Chaos.start('drunk');
-            out.drunk = d && d.fsm.name === 'DRUNK' && d._drunk;
-            const dn = Chaos.start('dance');
-            out.dance = dn && dn.fsm.name === 'DANCE';
-            out.danceRing = Chaos.rings.some((r) => r.kind === 'dance');
             const f = Chaos.start('faint');
             out.faint = f && f.fsm.name === 'FAINT';
             const FR = Chaos.rings.find((r) => r.kind === 'faint');
             out.helper = !!FR && [...FR.watchers].some((w) => w.fsm.current && w.fsm.current.mode === 'help');
+            const dn = Chaos.start('dance');
+            out.dance = dn && dn.fsm.name === 'DANCE';
+            out.danceRing = Chaos.rings.some((r) => r.kind === 'dance');
+            const d = Chaos.start('drunk');
+            out.drunk = d && d.fsm.name === 'DRUNK' && d._drunk;
             window.__fig = { d, dn, f };
             return out;
         });
