@@ -7,9 +7,16 @@
 //                  previous state               ARRESTED ──▶ PAROLE ──time served──▶ IDLE
 //
 //   CRIME_COMMITTED  transient. CrimeExposure decides who saw it (police / camera / witness). Nobody: back to the previous state,
-//                    no record. Otherwise it is a flagrant and the chase starts.
+//                    no record. Otherwise:
+//                    • LIGHT crime (severity < heavySeverity: a punch, a theft, a stolen parked car, a shot in the air): only the police
+//                      catching it LIVE counts — 1★, never filed (escaping ends it). A witness or a camera only: no star, no record; the
+//                      nearby police come to look at the spot.
+//                    • HEAVY crime, seen live: stars by severity and the record. Camera: the footage goes to the record now (unless
+//                      masked) and the police search the area — no star. Witness: the report travels with the witnesses
+//                      (crime/Witnesses.js): when one of them calls, the record gets it (unless masked) — silence them first (intimidate,
+//                      bribe) and there is no inquiry. Scripted scenes that pass their own exposure keep the old rule (1★ + record).
 //   WANTED           active chase. WantedSystem keeps the stars and the evasion timer (it only counts while no unit sees the player).
-//                    Seen live by the police: stars by severity. Camera or witness only: 1★ (someone called 190). On parole: PAROLE_STARS.
+//                    Seen live by the police: stars by severity. On parole: PAROLE_STARS.
 //   INVESTIGATION    the record holds active crimes. The police do not shoot on sight, but once the record carries a warrant an
 //                    officer who sees the unmasked face up close starts a 1★ arrest attempt.
 //   ARRESTED         transient. Bail, illicit items confiscated, WANTED and INVESTIGATION wiped, then PAROLE.
@@ -55,6 +62,8 @@ const CRIME_SEVERITY = Object.freeze({
     cop_assault: 4,
     cop_killed: 5,
     bank_robbery: 5,
+    armed_assault: 3,                // tiro ou facada em alguém (sem matar); quem cai sangrando
+    kidnapping: 4,                   // sequestro: alguém no porta-malas (crime/Stealth.js)
 });
 
 const HEAT_TUNING = Object.freeze({
@@ -63,6 +72,8 @@ const HEAT_TUNING = Object.freeze({
     paroleHours: 48,
     paroleStars: 3,
     warrantSeverity: 8,              // record severity that turns an investigation into a warrant
+    heavySeverity: 3,                // from this severity on a crime opens an INQUIRY (record); below it only a live flagrant counts
+    lightLookRadius: 32,             // light crime seen by a witness/camera: the police within this come to look (no star)
     recognizeRange: 16,
     expireHoursPerSeverity: 48,      // statute of limitations: severity 1 → 2 days … severity 5 → 10 days
     corruptHearts: 5,                // delegado hearts that buy the shelving of a district's investigations
@@ -177,6 +188,7 @@ class HeatStateMachine {
         crime.type = type;
         crime.severity = severity;
         crime.exposure = exposure === HeatStateMachine.EVALUATE ? this._exposureFor(type) : exposure;
+        crime.explicit = exposure !== HeatStateMachine.EVALUATE;      // (a scripted scene that already knows who saw it)
         this._previous = this.state;
         this._transition(HeatState.CRIME_COMMITTED);
     }
@@ -190,10 +202,10 @@ class HeatStateMachine {
     }
 
     // The police chief of the crime's district is on the payroll: crimes there that the police did not see live are shelved.
-    isCorruptZone() {
+    isCorruptZone(at = null) {
         const empire = this.game.empire;
         if (!empire || !empire.influence) return false;
-        const spot = this._crimeSpot();
+        const spot = at || this._crimeSpot();
         return empire.influence.hearts('del_' + empire.districtAt(spot.x, spot.z)) >= HEAT_TUNING.corruptHearts;
     }
 
@@ -336,11 +348,66 @@ class HeatStateMachine {
             return;
         }
         const live = CrimeExposure.isLive(crime.exposure);
+        const heavy = crime.severity >= HEAT_TUNING.heavySeverity;
+        if (!heavy) {
+            // LIGHT: only the police catching it live counts — 1★ for the chase, nothing on file (escaping ends it). On parole any
+            // exposed slip (a witness too) breaks it: straight to PAROLE_STARS.
+            if (!live && this._previous !== HeatState.PAROLE) { this._lightSeen(); this._transition(this._previous); return; }
+            this._pendingStars = this._previous === HeatState.PAROLE ? HEAT_TUNING.paroleStars : HeatStateMachine.starsFor(crime.severity);
+            this._escalate = this._previous === HeatState.WANTED;
+            this._transition(HeatState.WANTED);
+            return;
+        }
+        if (!live && !crime.explicit) {
+            // HEAVY seen only by a camera or a witness: an inquiry, not a chase.
+            this._report(crime);
+            this._transition(this._previous === HeatState.IDLE && this.record.isDirty ? HeatState.INVESTIGATION : this._previous);
+            return;
+        }
         if (live || !this.isCorruptZone()) this._file(crime);
         const stars = live ? HeatStateMachine.starsFor(crime.severity) : 1;
         this._pendingStars = this._previous === HeatState.PAROLE ? Math.max(HEAT_TUNING.paroleStars, stars) : stars;
         this._escalate = live && this._previous === HeatState.WANTED;
         this._transition(HeatState.WANTED);
+    }
+
+    // Light crime seen by a pedestrian or a camera: no star, no record — the police nearby only come to look at the spot.
+    _lightSeen() {
+        const spot = this._crimeSpot(), police = this.game.policeManager;
+        if (police && !(typeof Interiors !== 'undefined' && Interiors.active)) police.alertNear(spot, HEAT_TUNING.lightLookRadius);
+        const now = performance.now() / 1000;
+        if (now - (this._lightToastAt || -1e9) > 45) { this._lightToastAt = now; this.game._flash('👀 Viram — mas é delito leve: a polícia só age se te pegar no ato'); }
+        this.lightSeen = (this.lightSeen || 0) + 1;
+    }
+
+    // Heavy crime seen by a camera or a witness (no police there). Camera: the footage names the player (unless masked), the outfit
+    // becomes the description and the police search the area in a few seconds. Witness: the report goes with the witnesses (Witnesses) —
+    // the inquiry opens only when one of them calls.
+    _report(crime) {
+        const spot = this._crimeSpot(), masked = this.isMasked, rep = { type: crime.type, severity: crime.severity, masked, x: spot.x, z: spot.z };
+        if (crime.exposure & CrimeExposure.CAMERA) {
+            this.fileReport(rep);
+            if (typeof Traces !== 'undefined') {
+                if (!Traces.fullMask()) Traces.desc = Object.assign(Traces.sig(), { until: Traces.now() + 48, where: 'nas câmeras' });
+                Traces.call(spot.x, spot.z, 12, 'As câmeras gravaram o crime');
+            }
+            this.game._flash(masked ? '📹 As câmeras gravaram — mas de rosto coberto' : '📹 As câmeras gravaram você: inquérito aberto');
+        }
+        if (crime.exposure & CrimeExposure.WITNESS) {
+            if (typeof Witnesses !== 'undefined') Witnesses.report(this.game, rep);
+            else this.fileReport(rep);
+        }
+    }
+
+    // An inquiry gets a heavy crime: the record (unless the face was covered or the district's delegado shelves it). True if filed.
+    fileReport(rep) {
+        if (rep.filed) return false;
+        rep.filed = true;
+        if (rep.masked || this.isCorruptZone(rep)) return false;
+        this.record.register(rep.type, rep.severity, this.now());
+        if (this.state === HeatState.IDLE) this._transition(HeatState.INVESTIGATION);
+        this.reports = (this.reports || 0) + 1;
+        return true;
     }
 
     _file(crime) {

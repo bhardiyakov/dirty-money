@@ -92,7 +92,7 @@ class Game {
 					this.pickups.dropLoot(npc.position, 'civilian');
 					if (source !== 'player') return;
 					if (typeof WorldMemory !== 'undefined') WorldMemory.crime('fight', npc.position.x, npc.position.z);
-					this.heat.commit('assault');
+					this.heat.commit('armed_assault');                                // (caído sangrando: lesão grave — crime pesado, abre inquérito)
 					if (!npc.mugger) Standing.harm(this, 3);
 					if (this.npcManager) this.npcManager.alertViolence(npc.position, 18);
 					this._flash(`Pedestre #${npc.id} caído, sangrando — sem socorro ele morre`);
@@ -1377,7 +1377,7 @@ class Game {
 					if (finisher || !t.alive) this.camera.shake(0.35);
 				}
 				this.npcManager.alertViolence(p.position, this._witnessR(), [t]);
-				this.heat.commit('assault');
+				this.heat.commit(knife ? 'armed_assault' : 'assault');                         // (soco/chute/taco: delito leve; facada: pesado)
 				this._flash(`Agrediu #${t.id}!`);
 			},
 		});

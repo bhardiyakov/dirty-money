@@ -4,8 +4,14 @@
 //     livres, faca ou taco — dá um mata-leão: ele apaga em SILÊNCIO. Ninguém ouve; só quem estiver OLHANDO vê (CrimeExposure decide,
 //     como em qualquer agressão — policial derrubado à vista é agressão a policial). Fica desacordado, sem sangue, por koTime s; acorda
 //     assustado: o pedestre foge, o policial/traficante volta e a polícia vem ver o lugar.
-//   • ARRASTAR O CORPO: E perto de um desacordado ou morto — você o puxa (devagar, sem correr), E de novo solta. Um corpo à vista é
-//     ACHADO: o pedestre grita e liga (a polícia vem ao lugar), o policial vai até lá. Arrastando à vista de alguém = flagrante.
+//     Com a FACA na mão, o golpe por trás é LETAL (morte silenciosa: homicídio — de novo, só se alguém viu).
+//   • CARREGAR / ARRASTAR O CORPO: E perto de um desacordado ou morto. De pé, no OMBRO (mais rápido, mas à vista); agachado (Q),
+//     ARRASTANDO (devagar e baixo: a polícia e as testemunhas só notam de perto). E de novo solta — na água funda, o corpo AFUNDA
+//     (some: ninguém acha). Visto carregando: flagrante (homicídio, se morto; sequestro, se desacordado).
+//   • PORTA-MALAS: com o corpo, E atrás de um carro parado o põe no porta-malas (some da vista; vai junto com o carro); E de novo tira.
+//     Desacordado lá dentro ACORDA e bate na tampa: a polícia perto ouve (você junto do carro = sequestro em flagrante); abrir o
+//     porta-malas solta a vítima — ela foge e liga (testemunha: dá para intimidar ou subornar antes).
+//   • Corpo à vista é ACHADO: o pedestre grita e liga (a polícia vem ao lugar), o policial vai até lá — sem saber quem foi.
 //   • "ESTÃO ME VENDO": o olho em cima da cabeça do personagem (só o ícone fechado = ninguém te vê; amarelo = quase; vermelho = te vendo)
 //     e uma seta num anel em volta de você apontando cada um que te vê/quase — agachado, procurado ou arrastando um corpo.
 // Os desacordados ficam com alive = false (fora da visão da polícia, da mira e das testemunhas) e `ko` = { t, dur, phase, by }; o
@@ -13,8 +19,9 @@
 // ============================================================================
 
 const Stealth = {
-	drag: null,              // { b: corpo } enquanto arrasta
+	drag: null,              // { b: corpo, mode: 'carry' (no ombro, de pé) | 'drag' (arrastando, agachado), reported }
 	bodies: new Set(),       // corpos que podem ser achados (derrubados por você ou que você arrastou)
+	trunks: new Map(),       // carro → corpo no porta-malas
 	takedowns: 0, found: 0,
 	_t: 0, _seeT: 0, _dragSeenT: 0,
 
@@ -27,6 +34,7 @@ const Stealth = {
 	_inGame(g, b) {
 		return (g.npcManager && g.npcManager.npcs.includes(b)) || (g.policeManager && g.policeManager.officers.includes(b)) || (g.gangs && g.gangs.members.includes(b));
 	},
+	_shown(a) { return a.visible !== false && (!a.mesh || a.mesh.isEnabled()); },
 	_canAct(g) {
 		const p = g.player;
 		return g.mode === 'player' && p && p.alive && !p.rag && !p.swimming && !(p.depth > 0) && !g.hiding && !g.holdup && !(typeof Interiors !== 'undefined' && Interiors.active);
@@ -36,7 +44,7 @@ const Stealth = {
 	_valid(g, t, S) {
 		const p = g.player, P = p.position;
 		if (!t || !t.alive || t.rag || t.ko || t.free || t.index < 0 || t.surrendered || t.mugger || t._rage || t.arrest || t.shooting) return false;
-		if (!t.actor || t.actor.visible === false || !Vehicle.sameLevel(t, p)) return false;
+		if (!t.actor || !this._shown(t.actor) || !Vehicle.sameLevel(t, p)) return false;
 		const dx = P.x - t.position.x, dz = P.z - t.position.z, d = Math.hypot(dx, dz);
 		if (d > S.reach || d < 0.2) return false;
 		const h = t.heading || 0;
@@ -77,13 +85,16 @@ const Stealth = {
 		if (t.transform) t.transform.rotation.y = h;
 		t.actor.setHeading(h);
 		if (!t.actor.play('hurt_b', 'none', { restart: true })) t.actor.play('hurt', 'none', { restart: true });
+		const lethal = p.weapon === 'knife';                                                      // (faca na mão: morte silenciosa)
+		t.ko.lethal = lethal;
 		this.bodies.add(t);
 		this.takedowns++;
-		// silencioso: só quem está colado e olhando se assusta; o crime é de quem VIU (CrimeExposure)
+		// silencioso: só quem está colado e olhando se assusta; o crime é de quem VIU (CrimeExposure). Letal: o homicídio vem com a morte.
 		if (g.npcManager) g.npcManager.alertViolence(P, S.noiseR, [t]);
-		if (g.heat) g.heat.commit(kind === 'cop' ? 'cop_assault' : 'assault');
+		if (g.heat && !lethal) g.heat.commit(kind === 'cop' ? 'cop_assault' : 'assault');
 		if (g.input) g.input.rumble(0.35, 0.2, 160);
-		g._flash(g.wanted && g.wanted.level > 0 ? 'Derrubou em silêncio' : `Derrubou em silêncio — ${kind === 'cop' ? 'o policial' : kind === 'gang' ? 'o traficante' : 'ele'} vai ficar apagado um tempo`);
+		const who = kind === 'cop' ? 'o policial' : kind === 'gang' ? 'o traficante' : 'ele';
+		g._flash(lethal ? 'Faca por trás — morte silenciosa' : g.wanted && g.wanted.level > 0 ? 'Derrubou em silêncio' : `Derrubou em silêncio — ${who} vai ficar apagado um tempo`);
 		return true;
 	},
 
@@ -91,14 +102,57 @@ const Stealth = {
 	koTick(t, dt) {
 		const K = t.ko;
 		K.t += dt;
-		if (K.phase === 'grab' && K.t >= Config.stealth.grabT) { K.phase = 'out'; t.actor.play('lie', 'none', { restart: true }); }
+		if (K.phase === 'grab' && K.t >= Config.stealth.grabT) {
+			if (K.lethal) { this._kill(t); return; }
+			K.phase = 'out'; t.actor.play('lie', 'none', { restart: true });
+		}
 		else if (K.phase === 'out' && K.t >= K.dur) {
-			if (this.drag && this.drag.b === t) K.dur += 4;                  // (sendo arrastado: espera soltar)
+			if (t._inTrunk) { K.phase = 'bang'; K.bangT = 0; }                    // (acordou no porta-malas: bate na tampa)
+			else if (this.drag && this.drag.b === t) K.dur += 4;              // (sendo carregado: espera soltar)
 			else { K.phase = 'rise'; if (!t.actor.play('getup', 'none', { restart: true })) K.phase = 'up'; }
 		}
-		t.actor.setPosition(t.transform.position.x, t.transform.position.z);
+		if (K.phase === 'bang') { this._bangTick(t, dt); return; }
+		if (!(this.drag && this.drag.b === t)) t.actor.setPosition(t.transform.position.x, t.transform.position.z);
 		t.actor.update(dt);
 		if (K.phase === 'up' || (K.phase === 'rise' && t.actor.done)) this._wake(t);
+	},
+
+	// Faca por trás: ele morre ali (sangue, o corpo no chão). O homicídio é do jogador — só vira crime se alguém viu (onKill → heat).
+	_kill(t) {
+		const g = this.game, K = t.ko, P = t.position;
+		t.ko = null;
+		t.hp = 0;
+		t.fsm.setState({ name: 'DEAD', update() {} });
+		t.deadTimer = K.kind === 'npc' ? 28 : 40;
+		t.actor.play('dead', 'none', { restart: true });
+		if (typeof Blood !== 'undefined') { const h = t.heading || 0; Blood.hit(P.x, P.z, Math.sin(h), Math.cos(h), 30, t); Blood.wound(t, 30, false); }
+		if (K.kind === 'npc') { if (t.ctx && t.ctx.events && t.ctx.events.onKill) t.ctx.events.onKill(t, 'player', 'npc'); }
+		else if (t.manager && t.manager.events && t.manager.events.onOfficerKilled) t.manager.events.onOfficerKilled(t, 'player');
+		this.kills = (this.kills || 0) + 1;
+	},
+
+	// Acordado no porta-malas: bate na tampa. A polícia perto do carro ouve e vem; vendo você junto do carro = sequestro em flagrante.
+	_bangTick(t, dt) {
+		const K = t.ko, car = t._inTrunk, g = this.game;
+		if (!car || !g) return;
+		K.bangT -= dt;
+		if (K.bangT > 0) return;
+		K.bangT = Config.stealth.bangEvery;
+		const C = car.position, P = g.player.position, S = Config.stealth;
+		AudioFX.thud(C.x, C.z);
+		const dP = Math.hypot(P.x - C.x, P.z - C.z), mine = g.activeCar === car || dP < 8;
+		if (dP < 30 && (K.warnT = (K.warnT || 0) - S.bangEvery) <= 0) { K.warnT = 9; g._flash('🔊 Batidas no porta-malas: ele acordou!'); }
+		const pm = g.policeManager;
+		if (!pm) return;
+		let heard = false, sees = false;
+		for (const u of pm.units) {
+			if (Math.hypot(u.position.x - C.x, u.position.z - C.z) > S.bangHear) continue;
+			heard = true;
+			if (u.mind && u.mind.sees) sees = true;
+		}
+		if (!heard) return;
+		pm.alertNear(C, S.bangHear);
+		if (mine && sees && g.heat) g.heat.commit('kidnapping', CrimeExposure.POLICE);
 	},
 
 	// Acordou: o pedestre foge assustado; o policial/traficante volta à ronda — e a polícia vem ver o lugar (sem estrela: não viram quem foi).
@@ -136,7 +190,7 @@ const Stealth = {
 		const P = g.player.position, R = Config.stealth.grabR;
 		let best = null, bd = R;
 		const try_ = (b) => {
-			if (b.alive || b.rag || b.downed || b._carried || !b.actor || b.actor.visible === false || !b.transform) return;
+			if (b.alive || b.rag || b.downed || b._carried || b._inTrunk || !b.actor || !this._shown(b.actor) || !b.transform) return;
 			if (!b.ko && !(b.deadTimer > 0)) return;
 			if (b.ko && b.ko.phase !== 'out') return;
 			const d = Math.hypot(P.x - b.position.x, P.z - b.position.z);
@@ -148,18 +202,115 @@ const Stealth = {
 		return best;
 	},
 	grab(g, b) {
-		this.drag = { b, keepT: b.deadTimer };
+		this.drag = { b, mode: g.player.crouched ? 'drag' : 'carry', reported: false };
 		g.player.dragging = b;
+		g.player.carrying = this.drag.mode === 'carry';
 		this.bodies.add(b);
-		if (g.player.crouched) g.player.setCrouch(false);
-		g._flash('Arrastando o corpo — esconda onde ninguém veja (E solta)');
+		g._flash(g.player.crouched ? 'Arrastando o corpo (agachado: discreto) — Q levanta e põe no ombro · E solta' : 'Corpo no ombro — Q agacha e arrasta (mais discreto) · E solta');
 	},
 	drop(g, quiet = false) {
 		const D = this.drag;
 		if (!D) return;
 		this.drag = null;
-		if (g && g.player) g.player.dragging = null;
+		const b = D.b, p = g && g.player;
+		if (p) { p.dragging = null; p.carrying = false; }
+		if (b.actor && b.actor.mesh) b.actor.mesh.position.y = 0.5;
+		if (D.mode === 'carry' && p && b.transform) {                                     // (do ombro para o chão, ao lado)
+			const h = p.root.rotation.y, q = this._tmp || (this._tmp = new BABYLON.Vector3());
+			q.set(p.position.x + Math.sin(h) * 0.8, 0, p.position.z + Math.cos(h) * 0.8);
+			MapGeo.resolveCircle(q, 0.3);
+			b.transform.position.x = q.x; b.transform.position.z = q.z;
+			b.actor.setPosition(q.x, q.z);
+		}
+		// na água funda: afunda (some de vez — ninguém acha)
+		if (g && b.transform && this._deep(b.transform.position.x, b.transform.position.z)) { this._sink(g, b); return; }
 		if (!quiet && g) g._flash('Soltou o corpo');
+	},
+	_deep(x, z) { return typeof MapGeo !== 'undefined' && MapGeo.waterDepth && MapGeo.waterDepth(x, z) >= Config.stealth.sinkDepth; },
+	// Desova: o corpo afunda. Desacordado jogado na água morre afogado — homicídio (se alguém viu).
+	_sink(g, b) {
+		const K = b.ko, x = b.transform.position.x, z = b.transform.position.z;
+		if (K && g.heat) g.heat.commit(K.kind === 'cop' ? 'cop_killed' : 'homicide');
+		if (typeof AudioFX !== 'undefined' && AudioFX.splash) AudioFX.splash(x, z); else AudioFX.thud(x, z);
+		this.forget(b);
+		b.ko = null; b._found = false;
+		if (g.npcManager && g.npcManager.npcs.includes(b)) { b.alive = false; b.respawn(); }
+		else { b.alive = false; b.deadTimer = 0; if (b.temp) b.actor.setVisible(false); }      // (policial/traficante: volta como outro; reforço some)
+		this.sunk = (this.sunk || 0) + 1;
+		g._flash('🌊 O corpo afundou — ninguém vai achar');
+	},
+	// O corpo saiu do jogo (afundou, voltou como outra pessoa): esquece arrasto, porta-malas e "corpo para achar".
+	forget(b) {
+		if (this.drag && this.drag.b === b) { const g = this.game; this.drag = null; if (g && g.player) { g.player.dragging = null; g.player.carrying = false; } }
+		if (b._inTrunk) { this.trunks.delete(b._inTrunk); b._inTrunk = null; if (b.actor) b.actor.setVisible(true); }
+		if (b.actor && b.actor.mesh) b.actor.mesh.position.y = 0.5;
+		this.bodies.delete(b);
+	},
+
+	// ------------------------------------------------------------------ porta-malas
+	// Carro parado com a traseira a até trunkR de você (não moto, barco, viatura nem destruído).
+	trunkCar(g) {
+		if (!this._canAct(g) || g.player.busy) return null;
+		const P = g.player.position, R = Config.stealth.trunkR, f = this._f || (this._f = new BABYLON.Vector3());
+		let best = null, bd = R;
+		for (const c of g.vehicleManager ? g.vehicleManager.vehicles : []) {
+			if (!c || c.isBike || c.isBoat || c.spec.boat || c.isChopper || c.destroyed || c.wrecked || c.role || c.speed > 1 || !c.halfLen) continue;
+			if (Math.abs(c.position.x - P.x) > 8 || Math.abs(c.position.z - P.z) > 8) continue;
+			c.fwdToRef(f);
+			const rx = c.position.x - f.x * (c.halfLen + 0.35), rz = c.position.z - f.z * (c.halfLen + 0.35), d = Math.hypot(P.x - rx, P.z - rz);
+			if (d < bd && Vehicle.sameLevel(c, g.player)) { bd = d; best = c; }
+		}
+		return best;
+	},
+	// Põe o corpo que você carrega no porta-malas do carro.
+	stow(g, car) {
+		const D = this.drag, b = D.b;
+		this.drag = null; g.player.dragging = null; g.player.carrying = false;
+		b._inTrunk = car;
+		this.trunks.set(car, b);
+		this.bodies.delete(b);
+		if (!b.ko) b.deadTimer = 1e9;                                                        // (o morto fica lá até alguém tirar)
+		b.actor.mesh.position.y = 0.5;
+		b.actor.setVisible(false);
+		AudioFX.thud(car.position.x, car.position.z);
+		// pôr um corpo no porta-malas à vista de alguém é flagrante
+		if (CrimeExposure.evaluate(g) && g.heat) g.heat.commit(b.ko ? (b.ko.kind === 'cop' ? 'cop_assault' : 'kidnapping') : 'homicide');
+		this.stowed = (this.stowed || 0) + 1;
+		g._flash(b.ko ? '🚗 No porta-malas — ele vai acordar e bater na tampa; livre-se dele antes' : '🚗 Corpo no porta-malas — leve para longe (água funda: some de vez)');
+	},
+	// Tira o corpo do porta-malas: morto ou ainda apagado, vai para o seu ombro; acordado, pula fora, foge e liga.
+	unstow(g, car) {
+		const b = this.trunks.get(car);
+		if (!b) return false;
+		this.trunks.delete(car);
+		b._inTrunk = null;
+		const f = car.fwdToRef(this._f || (this._f = new BABYLON.Vector3())), x = car.position.x - f.x * (car.halfLen + 0.6), z = car.position.z - f.z * (car.halfLen + 0.6);
+		b.transform.position.x = x; b.transform.position.z = z;
+		b.actor.setPosition(x, z);
+		b.actor.setVisible(true);
+		const K = b.ko;
+		if (K && K.phase === 'bang') {
+			this._wake(b);
+			const rep = { type: 'kidnapping', severity: 4, masked: !!(g.heat && g.heat.isMasked), x, z };
+			if (K.kind !== 'npc') { if (g.heat) g.heat.commit('kidnapping', CrimeExposure.POLICE); }      // (era policial: ele mesmo te prende)
+			else if (typeof Witnesses !== 'undefined') Witnesses.witness(g, b, 'kidnap', rep);
+			g._flash('😱 Ele pulou do porta-malas e fugiu — vai ligar para a polícia!');
+			return true;
+		}
+		if (!K) b.deadTimer = 28;
+		this.grab(g, b);
+		return true;
+	},
+	_trunkTick(g) {
+		for (const [car, b] of this.trunks) {
+			const gone = car.destroyed || !(g.vehicleManager && g.vehicleManager.vehicles.includes(car)) || !this._inGame(g, b);
+			if (!gone) continue;
+			this.trunks.delete(car); b._inTrunk = null;
+			if (!this._inGame(g, b)) continue;
+			// o carro sumiu (rebocado, desmanchado) ou explodiu: o corpo some com ele
+			b.ko = null; b.actor.setVisible(true);
+			if (g.npcManager && g.npcManager.npcs.includes(b)) { b.alive = false; b.respawn(); } else { b.alive = false; b.deadTimer = 0; }
+		}
 	},
 
 	// O corpo vem atrás, como numa corda: passou de `rope` u do jogador, é puxado até lá (pelo chão andável), com a cabeça para você.
@@ -168,6 +319,20 @@ const Stealth = {
 		if (b.alive || b.rag || !b.transform || !(b.ko || b.deadTimer > 0) || g.mode !== 'player' || !p.alive || p.rag || p.swimming || !this._inGame(g, b)) { this.drop(g, true); return; }
 		if (!b.ko) b.deadTimer = Math.max(b.deadTimer, 20);                                     // (o morto não some na sua mão)
 		const S = Config.stealth, P = p.position, B = b.transform.position;
+		D.mode = p.crouched ? 'drag' : 'carry';                                                  // (Q troca: agachado arrasta, de pé carrega)
+		p.carrying = D.mode === 'carry';
+		this._seenTick(g, b, D, dt);
+		if (D.mode === 'carry') {
+			// no ombro: atravessado, na altura dos ombros, um pouco atrás do peito
+			const h = p.root.rotation.y;
+			B.x = P.x - Math.sin(h) * 0.12; B.z = P.z - Math.cos(h) * 0.12;
+			b.heading = h + Math.PI / 2;
+			b.actor.setHeading(b.heading);
+			b.actor.setPosition(B.x, B.z);
+			b.actor.mesh.position.y = 0.5 + S.carryH;
+			return;
+		}
+		b.actor.mesh.position.y = 0.5;
 		const dx = B.x - P.x, dz = B.z - P.z, d = Math.hypot(dx, dz) || 1;
 		if (d > S.rope) {
 			const nx = P.x + dx / d * S.rope, nz = P.z + dz / d * S.rope;
@@ -181,13 +346,20 @@ const Stealth = {
 		b.actor.setHeading(h);
 		b.actor.setPosition(B.x, B.z);
 		if (d > S.rope + 3) this.drop(g, true);                                                   // (enroscou: soltou)
-		// arrastando à vista de alguém: flagrante (a polícia te vendo; uma testemunha olhando)
+	},
+
+	// Carregando/arrastando à vista de alguém: flagrante — homicídio (morto) ou sequestro (desacordado). A polícia vendo: a cada 1,5 s
+	// (a perseguição sobe); uma testemunha: o relato uma vez só (ela liga — dá para calar antes).
+	_seenTick(g, b, D, dt) {
 		this._dragSeenT -= dt;
-		if (this._dragSeenT <= 0 && g.heat) {
-			this._dragSeenT = 1.5;
-			const ex = CrimeExposure.evaluate(g);
-			if (ex) g.heat.commit(b.ko && b.ko.kind === 'cop' || (!b.ko && typeof PoliceOfficer !== 'undefined' && b instanceof PoliceOfficer) ? 'cop_assault' : 'assault', ex);
-		}
+		if (this._dragSeenT > 0 || !g.heat) return;
+		this._dragSeenT = 1.5;
+		const ex = CrimeExposure.evaluate(g);
+		if (!ex) return;
+		const cop = typeof PoliceOfficer !== 'undefined' && b instanceof PoliceOfficer;
+		const type = b.ko ? (cop ? 'cop_assault' : 'kidnapping') : (cop ? 'cop_killed' : 'homicide');
+		if (CrimeExposure.isLive(ex)) g.heat.commit(type);
+		else if (!D.reported) { D.reported = true; g.heat.commit(type); }
 	},
 
 	// ------------------------------------------------------------------ corpo achado
@@ -233,20 +405,37 @@ const Stealth = {
 
 	// ------------------------------------------------------------------ E e a dica na tela
 	interact(g) {
-		if (this.drag) { this.drop(g); return true; }
+		if (this.drag) {
+			const car = this.trunkCar(g);
+			if (car && !this.trunks.has(car)) { this.stow(g, car); return true; }
+			this.drop(g); return true;
+		}
 		const t = this.target(g);
 		if (t) return this.takedown(g, t);
+		const car = this.trunkCar(g);
+		if (car && this.trunks.has(car)) return this.unstow(g, car);                     // (atrás do carro com alguém dentro: o porta-malas primeiro)
 		const b = this.bodyNear(g);
 		if (b) { this.grab(g, b); return true; }
 		return false;
 	},
 	prompt(g) {
-		if (this.drag) return '<b>E</b> soltar o corpo<small>arrastando — devagar, sem correr; à vista de alguém é flagrante</small>';
+		const D = this.drag;
+		if (D) {
+			const car = this.trunkCar(g);
+			if (car && !this.trunks.has(car)) return '<b>E</b> pôr o corpo no porta-malas<small>some da vista e vai junto com o carro</small>';
+			const deep = D.b.transform && this._deep(g.player.position.x + Math.sin(g.player.root.rotation.y) * 0.8, g.player.position.z + Math.cos(g.player.root.rotation.y) * 0.8);
+			if (deep) return '<b>E</b> jogar o corpo na água<small>afunda — ninguém vai achar</small>';
+			return D.mode === 'carry' ? '<b>E</b> soltar o corpo<small>no ombro: à vista de todos — Q agacha e arrasta (discreto)</small>'
+				: '<b>E</b> soltar o corpo<small>arrastando agachado: devagar e discreto — Q levanta e põe no ombro</small>';
+		}
 		if (!this._canAct(g)) return '';
 		const t = this.target(g);
-		if (t) return `<b>E</b> derrubar em silêncio<small>por trás, sem ele ver — só quem estiver olhando percebe</small>`;
+		if (t) return g.player.weapon === 'knife' ? '<b>E</b> faca por trás<small>morte silenciosa — só quem estiver olhando percebe</small>'
+			: '<b>E</b> derrubar em silêncio<small>mata-leão por trás, sem ele ver — só quem estiver olhando percebe</small>';
+		const car = this.trunkCar(g), tb = car && this.trunks.get(car);
+		if (tb) return tb.ko && tb.ko.phase === 'bang' ? '<b>E</b> abrir o porta-malas<small>ele acordou — vai fugir e ligar para a polícia</small>' : '<b>E</b> tirar o corpo do porta-malas';
 		const b = this.bodyNear(g);
-		if (b) return '<b>E</b> arrastar o corpo<small>esconda longe da vista: corpo achado chama a polícia</small>';
+		if (b) return `<b>E</b> ${g.player.crouched ? 'arrastar' : 'carregar'} o corpo<small>esconda longe da vista: corpo achado chama a polícia</small>`;
 		return '';
 	},
 
@@ -337,6 +526,7 @@ const Stealth = {
 	update(g, dt) {
 		this.game = g;
 		if (this.drag) this._dragTick(g, dt);
+		if (this.trunks.size) this._trunkTick(g);
 		this._t -= dt;
 		if (this._t <= 0) { this._t = 0.5; if (this.bodies.size) this._findTick(g); }
 		this._seeT -= dt;

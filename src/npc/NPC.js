@@ -434,7 +434,7 @@ class NPC {
 	// Volta à vida como "outro" pedestre em outro lugar, longe do jogador.
 	respawn() {
 		this._dodge = null;
-		if (this.ko) { this.ko = null; Stealth.bodies.delete(this); }
+		if (this.ko || this._inTrunk || Stealth.bodies.has(this)) { this.ko = null; Stealth.forget(this); }      // (voltou como outra pessoa: sai do porta-malas, do ombro)
 		this.mugger = false;                                    // (era o assaltante de um StreetCrime)
 		if (this.downed) { this.downed = null; if (typeof Rescue !== 'undefined') Rescue.remove(this); }
 		this.restoreLook();

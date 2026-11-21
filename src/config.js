@@ -443,8 +443,16 @@ const Config = {
 		koTime: [45, 70],      // s desacordado
 		noiseR: 3.5,           // u: só quem está colado (e olhando) se assusta — o resto não ouve
 		grabR: 1.7,            // u: perto assim de um corpo, E arrasta
-		rope: 1.15,            // u: o corpo vem a esta distância atrás de você
-		dragSpeed: 0.5,        // arrastando, anda a esta fração do passo (e não corre)
+		rope: 1.15,            // u: arrastando, o corpo vem a esta distância atrás de você
+		dragSpeed: 0.8,        // arrastando (agachado), anda a esta fração do passo agachado
+		carrySpeed: 0.68,      // no ombro (de pé), a esta fração do passo (e nenhum dos dois corre)
+		carryH: 1.2,           // u: altura do corpo no ombro
+		sinkDepth: 0.6,        // m de água: soltar o corpo aqui o afunda (some)
+		trunkR: 1.9,           // u: perto assim da traseira de um carro parado, E põe/tira o corpo do porta-malas
+		bangEvery: 3,          // s entre as batidas de quem acordou no porta-malas
+		bangHear: 14,          // u: a polícia a até isto do carro ouve as batidas
+		// MODO FURTIVO — o barulho dos passos: de costas, a polícia/facção te "sente" até esta distância (u) conforme o passo
+		noise: { still: 3, walk: 4.5, jog: 7.5 },      // correndo no talo: Config.wanted.nearSense; agachado: Config.tactics.stealthNear
 		sightNpc: 15,          // u: um pedestre olhando para o corpo o acha até aqui (sem parede no meio)
 		sightCop: 22,          // u: um policial, até aqui
 	},

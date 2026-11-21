@@ -419,7 +419,7 @@ class Combat {
         if (car.driverHp === undefined) car.driverHp = Config.crash.driverHp;
         car.driverHp -= b.dmg * k;
         this.spark(wx, 1.25, wz, [0.75, 0.05, 0.05]);
-        if (b.owner === 'player' && g.heat) g.heat.commit('assault');
+        if (b.owner === 'player' && g.heat) g.heat.commit('armed_assault');      // (tiro no motorista: lesão grave — crime pesado)
         if (car.driverHp > 0 || !car.killDriver()) return;
         if (g.npcManager) g.npcManager.alertViolence(car.position, 22);
     }

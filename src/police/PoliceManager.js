@@ -504,7 +504,12 @@ class PoliceManager {
         const units = this.units, fov = Config.wanted.fovCos;
         // (agachado, ninguém te "sente" de costas a não ser colado — dá para chegar por trás: Stealth)
         const pl = this.game.player, crouch = this.game.mode === 'player' && pl && pl.crouched;
-        const nearS = crouch ? Config.tactics.stealthNear * (L ? 2 : 1) : Config.wanted.nearSense;
+        // MODO FURTIVO: o barulho dos passos decide de quão longe te sentem de costas (parado e andando, pouco; correndo, de longe)
+        const N = Config.stealth.noise, sp = crouch || !pl ? 0 : pl.speed || 0, P0 = Config.player;
+        const nearS = this.game.mode !== 'player' ? Config.wanted.nearSense
+            : crouch ? Config.tactics.stealthNear * (L ? 2 : 1)
+            : sp < 0.3 ? N.still : sp < P0.maxSpeed * 1.15 ? N.walk : sp < P0.jogSpeed * 1.1 ? N.jog : Config.wanted.nearSense;
+        this.nearS = nearS;
         for (const u of units) {
             const m = this._mind(u), p = u.position, dx = pos.x - p.x, dz = pos.z - p.z, d = hypot(dx, dz);
             let sees = !hide && d < sightR, cone = null;

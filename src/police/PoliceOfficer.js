@@ -396,7 +396,7 @@ class PoliceOfficer {
 
     // Volta como um policial novo de patrulha, em outro lugar, longe do jogador.
     respawn() {
-        if (this.ko) { this.ko = null; Stealth.bodies.delete(this); }
+        if (this.ko || this._inTrunk || Stealth.bodies.has(this)) { this.ko = null; Stealth.forget(this); }      // (voltou como outra pessoa: sai do porta-malas, do ombro)
         if (this.actor.clearWounds) this.actor.clearWounds();               // (outro policial: sem os ferimentos do anterior)
         let pos = null;
         for (let i = 0; i < 12; i++) {

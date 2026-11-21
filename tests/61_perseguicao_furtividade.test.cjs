@@ -194,6 +194,7 @@ module.exports = {
             if (!n) return null;
             p.setCrouch(false); p.action = null;
             p.teleport(new BABYLON.Vector3(n.position.x + 1, 0, n.position.z));
+            p.setCrouch(true);                                                       // (agachado: arrasta pelo chão)
             const near = Stealth.bodyNear(g) === n;
             Stealth.interact(g);
             const grabbed = Stealth.drag && Stealth.drag.b === n;
@@ -236,10 +237,10 @@ module.exports = {
             return out;
         });
         if (c.ok(!!dr, 'o desacordado ainda está lá')) {
-            c.ok(dr.near && dr.grabbed, 'E perto do corpo: arrasta');
+            c.ok(dr.near && dr.grabbed, 'agachado, E perto do corpo: arrasta');
             c.ok(dr.moved > 1.2 && dr.gap < dr.rope + 0.3, `o corpo vem atrás, na distância da corda (andou ${dr.moved} m, a ${dr.gap} m de você)`);
             c.note(`arrastando: ${dr.vmax} m/s, o corpo andou ${dr.moved} m`);
-            c.ok(dr.vmax > 0.3 && dr.vmax <= dr.jog * 0.62, `arrastando, anda devagar (${dr.vmax} m/s; trote ${dr.jog})`);
+            c.ok(dr.vmax > 0.3 && dr.vmax <= dr.jog * 0.5, `arrastando agachado, anda devagar (${dr.vmax} m/s; trote ${dr.jog})`);
             c.ok(dr.dropped, 'E de novo: solta');
             c.ok(dr.found === true, 'um pedestre olhando acha o corpo (e liga para a polícia)');
             c.ok(dr.woke, 'passado o tempo, ele acorda e volta a andar');
