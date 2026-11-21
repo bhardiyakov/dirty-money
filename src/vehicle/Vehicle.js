@@ -282,6 +282,7 @@ class Vehicle {
     spinOut(dir, power = 3.6, dur = 0.95) {
         if (this.isBike || this.isBoat || this.destroyed || this._pitSpin) return false;
         this._pitSpin = { t: 0, dur, yaw: dir * power * Math.sqrt(1300 / Math.max(700, this.spec.mass || 1300)) };      // (utilitário pesado gira menos)
+        if (!this.controlled && typeof AudioFX !== 'undefined' && AudioFX.squeal) AudioFX.squeal(this.position.x, this.position.z, 0.5);      // (o do jogador: o chiado contínuo de Vehicle.slide)
         return true;
     }
     get flatCount() { const F = this.flat; return F ? F[0] + F[1] + F[2] + F[3] : 0; }

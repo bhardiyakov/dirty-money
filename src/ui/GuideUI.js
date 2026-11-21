@@ -34,7 +34,7 @@ class GuideUI {
             ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['bairros', 'Mirante, Roça e Serra'], ['street', 'A rua: acontecimentos'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
             ['home', 'Casa, imóveis e save'], ['goals', 'Metas e desafios do dia'], [null, 'IMPÉRIO'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], ['truco', 'Truco no bar'], [null, 'ASSALTOS, NEGÓCIOS E CARROS'], ['robbery', 'Assalto a lojas'], ['traces', 'Rastros e fuga'], ['heists', 'Joalherias e golpes'], ['business', 'Negócios próprios'], ['mechanic', 'Mecânica e porta-malas'], ['racing', 'Corridas (rachas e autódromo)'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
-        out.push([null, 'MAIS'], ['tips', 'Dicas'], ['radio', 'Rádio e músicas (créditos)']);
+        out.push([null, 'MAIS'], ['tips', 'Dicas'], ['radio', 'Rádio, músicas e sons (créditos)']);
         return out;
     }
 
@@ -349,11 +349,14 @@ GuideUI.PAGES = {
         <li><b>Gestão</b> nas patentes altas: negócios que rendem por dia — e riscos que também rodam por dia (Receita, arrego, rival, sequestro, rastreio).</li></ul>
         <div class="gd-tip">As carreiras se ajudam: o <b>fundo falso</b> do Desmanche esconde o dinheiro da rota do Bicho; a <b>escola de samba</b> do Bicho segura a Receita do Desmanche e das fachadas; o <b>silenciador</b> do Armeiro deixa qualquer trabalho mais discreto.</div>`,
 
-    radio: () => `<h2>Rádio e músicas</h2>
+    radio: () => `<h2>Rádio, músicas e sons</h2>
         <p>Todo carro tem <b>rádio</b> (moto, bicicleta e barco não). <kbd>R</kbd> troca a estação — no controle <kbd>←</kbd>/<kbd>→</kbd>, no celular <b>⋯ › RÁDIO</b> — passando pelo desligado. Cada carro guarda a sua; o volume fica em Ajustes › Rádio do carro.</p>
         <p>Como uma rádio de verdade, cada estação <b>segue tocando</b> enquanto você ouve outra: sintonizar entra no meio da faixa que estiver no ar. A <b>Rádio Cidade</b> dá as notícias da cidade (inclusive o que você aprontou) por cima de uma bossa.</p>
         <div class="gd-tip">As músicas são de uso livre (<b>Creative Commons — Atribuição</b>): podem ser usadas no jogo desde que o autor seja creditado. No jogo elas foram convertidas para mono (64 kbps) e tiveram o volume igualado. O título de cada faixa abre a página original.</div>
-        ${typeof Radio !== 'undefined' ? Radio.creditsHtml() : ''}`,
+        ${typeof Radio !== 'undefined' ? Radio.creditsHtml() : ''}
+        <h3>Efeitos sonoros</h3>
+        <p>Os sons do jogo são <b>gravações de verdade</b>: passos em cada chão (asfalto, grama, folhas, areia, terra, cascalho, lama, água, madeira, piso) e com cada calçado, tiros de cada arma com a cápsula quicando no chão, socos, batidas e vidro quebrando, o pneu cantando, a sirene (o lamento longe e o "yelp" quando a viatura cola), buzinas, o burburinho da rua e do mercado, a marcha lenta de carro, carro velho de escapamento furado, V8, caminhão e moto (o giro acelera a gravação), o motor de arranque, o "clec" do câmbio e a catraca do freio de mão.</p>
+        <div class="gd-tip">Todas as gravações são de <b>domínio público (CC0)</b>: Joseph SARDIN — <b>BigSoundBank.com</b>; <b>qubodup</b> e <b>Ziph</b> (OpenGameArt.org); <b>muted.io</b> (sirenes). No jogo elas foram recortadas, filtradas e niveladas; a lista completa está em <code>assets/sfx/CREDITOS.md</code>. Rotor de helicóptero, chuva, fogos e alarme continuam sintetizados.</div>`,
     tips: () => `<h2>Dicas</h2><ul>
         <li>Faça trabalhos de noite quando eles pedem (invasão, comércio): de dia eles nem aparecem.</li>
         <li>Guarde a arma para trabalhos de discrição: arma na mão chama atenção na fita e no chupa-cabra.</li>

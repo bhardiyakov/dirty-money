@@ -1,5 +1,6 @@
 // ============================================================================
-// AudioFX — efeitos sonoros sintetizados com Web Audio (sem arquivos).
+// AudioFX — efeitos sonoros: GRAVAÇÕES reais (SoundBank: tiro, batida, soco, vidro, pneu, sirene, buzina, explosão) e, por baixo,
+// os sintetizados com Web Audio — que tocam enquanto as gravações carregam e nos sons que não têm gravação (rotor, chuva, fogos…).
 // O navegador só libera áudio depois de um gesto do usuário: init() é chamado no
 // primeiro toque de tecla/clique. Tudo é espacial de forma simples: volume cai com a
 // distância ao "ouvinte" (o jogador) e o pan segue o lado em X.
@@ -10,7 +11,15 @@ const AudioFX = {
     master: null,
     listener: { x: 0, z: 0 },
     honkCount: 0,            // quantas buzinas tocaram (também serve p/ testes)
-    muted: false,
+    _muted: false,
+    // "Efeitos sonoros" desligado nas Configurações: além de não disparar nada novo, cala na hora o que já está em loop (sirene,
+    // pneu, burburinho gravados passam pelo canal _sfx).
+    get muted() { return this._muted; },
+    set muted(v) { this._muted = !!v; if (this._sfx) this._sfx.gain.setTargetAtTime(v ? 0 : 1, this.ctx.currentTime, 0.03); },
+    sfxOut() {
+        if (!this._sfx) { this._sfx = this.ctx.createGain(); this._sfx.gain.value = this._muted ? 0 : 1; this._sfx.connect(this.master); }
+        return this._sfx;
+    },
 
     // Chamar dentro de um evento do usuário (keydown/mousedown).
     init() {
@@ -21,7 +30,11 @@ const AudioFX = {
             this.ctx = new AC();
             this.master = this.ctx.createGain();
             this.master.gain.value = this.volume;
-            this.master.connect(this.ctx.destination);
+            // limitador no fim: tiroteio + batida + sirene juntos não estouram (as gravações têm bem mais corpo que o sintetizado)
+            const lim = this.ctx.createDynamicsCompressor();
+            lim.threshold.value = -9; lim.knee.value = 6; lim.ratio.value = 8; lim.attack.value = 0.003; lim.release.value = 0.22;
+            this.master.connect(lim); lim.connect(this.ctx.destination);
+            if (typeof SoundBank !== 'undefined') SoundBank.load();
             if (typeof Ambience !== 'undefined') Ambience.start();           // o som do lugar (trânsito, mar, rádio do bar…)
         } catch (e) { this.ctx = null; }
     },
@@ -110,8 +123,23 @@ const AudioFX = {
         for (let i = 0; i < 2 + (run ? 2 : 0); i++) this._burst(x, z, { vol: v * (0.1 + Math.random() * 0.12), dur: 0.03, f0: 3000 + Math.random() * 2500, f1: 2600, type: 'bandpass', q: 6, maxDist, delay: 0.12 + Math.random() * 0.25 });
     },
 
+    // Tiro gravado: [grupo, volume, tom, alcance, corte (s) das automáticas]. Silenciador e foguete seguem sintetizados.
+    SHOT: {
+        pistol: ['gun_pistol', 0.6, 1.16, 120], revolver: ['gun_pistol', 0.78, 0.95, 135], smg: ['gun_smg', 0.5, 1.06, 110, 0.24],
+        rifle: ['gun_rifle', 0.66, 1.0, 130], ak47: ['gun_rifle', 0.7, 0.9, 130], shotgun: ['gun_shotgun', 0.85, 1.0, 140],
+        minigun: ['gun_smg', 0.36, 1.25, 125, 0.09], heavy: ['gun_heavy', 0.85, 1.0, 160],
+    },
+    _realShot(kind, x, z) {
+        const R = typeof SoundBank !== 'undefined' && this.SHOT[kind];
+        if (!R || !SoundBank.play(R[0], x, z, { vol: R[1], rate: R[2], maxDist: R[3], dur: R[4], fo: R[4] ? R[4] * 0.6 : 0, jitter: 0.035, dark: 0.7 })) return false;
+        const auto = kind === 'smg' || kind === 'minigun';                   // cápsula quicando no chão (só de perto)
+        if (!auto || Math.random() < 0.3) SoundBank.play('casing', x, z, { vol: 0.14, maxDist: 16, delay: 0.3 + Math.random() * 0.3, rate: kind === 'shotgun' ? 0.72 : 1, jitter: 0.08 });
+        return true;
+    },
+
     // Tiro: cada arma tem seu "estalo" (pistola seco, SMG curto, escopeta grave e longo).
     shot(kind, x, z) {
+        if (this._realShot(kind, x, z)) return;
         if (kind === 'shotgun') this._burst(x, z, { vol: 0.75, dur: 0.34, f0: 2600, f1: 120, maxDist: 140 });
         else if (kind === 'smg') this._burst(x, z, { vol: 0.45, dur: 0.09, f0: 4200, f1: 500, maxDist: 110 });
         else if (kind === 'revolver') this._burst(x, z, { vol: 0.7, dur: 0.22, f0: 3000, f1: 180, maxDist: 135 });
@@ -128,23 +156,47 @@ const AudioFX = {
 
     // Batida de carro: pancada grave + chapa amassando (power 0..1).
     crash(x, z, power = 0.5) {
+        if (typeof SoundBank !== 'undefined') {
+            const light = power < 0.25;
+            if (SoundBank.play(light ? 'car_bump' : 'crash', x, z, { vol: light ? 0.3 + power : 0.38 + 0.62 * power, rate: light ? 0.85 : 1.12 - 0.25 * power, maxDist: 110, jitter: 0.06 })) {
+                if (power > 0.7 && Math.random() < 0.55) SoundBank.play('glass', x, z, { vol: 0.3 * power, maxDist: 70, delay: 0.04, jitter: 0.08 });
+                return;
+            }
+        }
         this._burst(x, z, { vol: 0.25 + 0.55 * power, dur: 0.14 + 0.2 * power, f0: 1500, f1: 140, maxDist: 110 });
         this._burst(x, z, { vol: 0.12 + 0.3 * power, dur: 0.22 + 0.3 * power, f0: 3400, f1: 700, maxDist: 90, type: 'bandpass', q: 1.2 });
     },
 
     // Explosão de carro: estouro longo e grave + estalo agudo na frente.
     explosion(x, z) {
+        if (typeof SoundBank !== 'undefined') {
+            const far = hypot(x - this.listener.x, z - this.listener.z) > 110;
+            if (SoundBank.play(far ? 'explosion_far' : 'explosion', x, z, { vol: 1, maxDist: far ? 420 : 260, jitter: 0.06, dark: 0.6 })) return;
+        }
         this._burst(x, z, { vol: 1.0, dur: 1.15, f0: 1800, f1: 45, maxDist: 260 });
         this._burst(x, z, { vol: 0.55, dur: 0.45, f0: 6500, f1: 320, maxDist: 170, type: 'bandpass', q: 0.7 });
     },
 
+    // Recarregar (pente sai, pente entra, ferrolho) e engatilhar ao sacar — gravados; dur = tempo da recarga (a gravação acompanha).
+    reload(x, z, dur = 1.2) {
+        if (typeof SoundBank !== 'undefined' && SoundBank.play('gun_reload', x, z, { vol: 0.42, maxDist: 25, rate: Math.max(0.8, Math.min(1.4, 1.15 / Math.max(0.5, dur))), jitter: 0.03 })) return;
+        this.blip(260, 0.2, 0.2);
+    },
+    cock(x, z) { if (typeof SoundBank !== 'undefined') SoundBank.play('gun_cock', x, z, { vol: 0.38, maxDist: 20, jitter: 0.05 }); },
+    // Freada brusca / rodada de outro carro: o pneu chiando (gravado; sem a gravação, um chiado sintetizado curto).
+    squeal(x, z, vol = 0.4) {
+        if (typeof SoundBank !== 'undefined' && SoundBank.play('tire_squeal', x, z, { vol, maxDist: 85, jitter: 0.06, dur: 0.9 + Math.random() * 0.4, fo: 0.3 })) return;
+        this._burst(x, z, { vol: vol * 0.3, dur: 0.6, f0: 2300, f1: 1800, maxDist: 70, type: 'bandpass', q: 6, att: 0.04 });
+    },
+
     roll(x, z) { this._burst(x, z, { vol: 0.16, dur: 0.32, f0: 700, f1: 160, maxDist: 26, q: 0.6, att: 0.04 }); },      // rolamento: roupa e corpo arrastando no chão
     hit(x, z) { this._burst(x, z, { vol: 0.22, dur: 0.07, f0: 5200, f1: 1200, maxDist: 45, type: 'bandpass', q: 1.5 }); },
-    thud(x, z) { this._burst(x, z, { vol: 0.5, dur: 0.1, f0: 520, f1: 70, maxDist: 40 }); },
+    thud(x, z) { if (typeof SoundBank !== 'undefined' && SoundBank.play('punch', x, z, { vol: 0.5, maxDist: 40, rate: 0.9, jitter: 0.09 })) return; this._burst(x, z, { vol: 0.5, dur: 0.1, f0: 520, f1: 70, maxDist: 40 }); },
     dryfire(x, z) { this._burst(x, z, { vol: 0.25, dur: 0.04, f0: 6000, f1: 3000, maxDist: 30, type: 'highpass', q: 2 }); },
 
     // Vidro quebrando: estalo agudo + chuva de cacos.
     glass(x, z) {
+        if (typeof SoundBank !== 'undefined' && SoundBank.play('glass', x, z, { vol: 0.55, maxDist: 75, jitter: 0.07 })) return;
         this._burst(x, z, { vol: 0.6, dur: 0.16, f0: 8000, f1: 3000, maxDist: 75, type: 'highpass', q: 1.2 });
         this._burst(x, z, { vol: 0.32, dur: 0.5, f0: 6200, f1: 2400, maxDist: 60, type: 'bandpass', q: 3 });
     },
@@ -152,7 +204,7 @@ const AudioFX = {
     // Porta do carro: abrindo (rangido leve) ou batendo ao fechar (pancada seca).
     door(x, z, open) {
         if (open) this._burst(x, z, { vol: 0.22, dur: 0.1, f0: 1500, f1: 350, maxDist: 35, type: 'bandpass', q: 1.4 });
-        else this._burst(x, z, { vol: 0.5, dur: 0.13, f0: 1100, f1: 90, maxDist: 55 });
+        else if (typeof SoundBank === 'undefined' || !SoundBank.play('car_bump', x, z, { vol: 0.42, maxDist: 55, jitter: 0.05 })) this._burst(x, z, { vol: 0.5, dur: 0.13, f0: 1100, f1: 90, maxDist: 55 });
     },
 
     // Alarme de carro: bipes alternando dois tons (chame a cada ~0,28 s alternando `hi`).
@@ -196,6 +248,7 @@ const AudioFX = {
     // Sirene contínua (uuuiu-uuuiu). Chame todo frame: active liga/desliga, near = distância da viatura mais próxima.
     siren(active, near) {
         if (!this._ok()) return;
+        if (this._realSiren(active, near)) return;
         if (!this._siren) {
             const ctx = this.ctx;
             const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
@@ -211,6 +264,22 @@ const AudioFX = {
         // Varredura de frequência (≈ 0,8 Hz entre 600 e 1100 Hz).
         const ph = (t * 0.8) % 1;
         o.frequency.setTargetAtTime(600 + 500 * (ph < 0.5 ? ph * 2 : 2 - ph * 2), t, 0.05);
+    },
+
+    // Sirene gravada: lamento longo (wail) rodando; perto (< 28 m) troca para o "yelp" rápido, como a viatura que chega colada.
+    _realSiren(active, near) {
+        if (typeof SoundBank === 'undefined') return false;
+        if (!this._rsiren) {
+            if (!active || !SoundBank.has('siren_wail') || !SoundBank.has('siren_yelp')) return false;
+            const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 9000; lp.connect(this.sfxOut());
+            this._rsiren = { wail: SoundBank.loop('siren_wail', lp), yelp: SoundBank.loop('siren_yelp', lp), lp };
+            if (this._siren) this._siren.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+        }
+        const S = this._rsiren, t = this.ctx.currentTime, k = active ? Math.pow(Math.max(0, 1 - near / 130), 1.5) : 0, close = near < 28;
+        S.wail.gain.gain.setTargetAtTime(k * (close ? 0.05 : 0.32), t, 0.25);
+        S.yelp.gain.gain.setTargetAtTime(k * (close ? 0.3 : 0), t, 0.25);
+        S.lp.frequency.setTargetAtTime(1800 + 9000 * k, t, 0.2);                 // longe: abafada
+        return true;
     },
 
     // Rotor do helicóptero: zumbido grave com "pá-pá-pá" (tremolo ~13 Hz). Chame todo frame: active liga/desliga,
@@ -262,6 +331,13 @@ const AudioFX = {
     // Ruído estreito em banda (o chiado da borracha) + um tom que oscila (o "uivo"), os dois subindo um pouco com a força.
     screech(level) {
         if (!this._ok()) return;
+        if (typeof SoundBank !== 'undefined' && (this._rscreech || (level >= 0.05 && SoundBank.has('tire_screech')))) {
+            if (!this._rscreech) { this._rscreech = SoundBank.loop('tire_screech'); if (this._screech) this._screech.gain.gain.value = 0; }
+            const S = this._rscreech, t = this.ctx.currentTime, l = Math.max(0, Math.min(1, level));
+            S.gain.gain.setTargetAtTime(l < 0.08 ? 0 : 0.1 + 0.42 * l, t, l < 0.08 ? 0.1 : 0.04);
+            S.src.playbackRate.setTargetAtTime(0.88 + 0.22 * l, t, 0.1);          // mais força: chiado mais agudo
+            return;
+        }
         if (!this._screech) {
             if (level < 0.05) return;                                          // (só monta a cadeia na 1ª derrapagem de verdade)
             const ctx = this.ctx, src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), gain = ctx.createGain();
@@ -432,6 +508,7 @@ const AudioFX = {
         if (d > 80) return;
         const vol = Math.pow(1 - d / 80, 1.6) * 0.32;
         if (vol < 0.01) return;
+        if (typeof SoundBank !== 'undefined' && SoundBank.play(pitch < 0.8 ? 'horn_bus' : 'horn_car', x, z, { vol: 0.42, maxDist: 80, rate: pitch < 0.8 ? 1 : pitch, jitter: 0.02, dur: Math.max(0.18, dur), fo: 0.05 })) return;
 
         const t0 = ctx.currentTime;
         const gain = ctx.createGain();
