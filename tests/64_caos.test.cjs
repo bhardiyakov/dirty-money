@@ -35,6 +35,8 @@ module.exports = {
             // (sem polícia por perto: ela desfaz a roda — isso tem o teste próprio)
             const Q = g.player.position;
             for (const o of g.policeManager.officers) if (o.alive && o.index >= 0 && Math.hypot(o.position.x - Q.x, o.position.z - Q.z) < 90) { const p = new BABYLON.Vector3(Q.x + 400, 0, Q.z + 400); o.transform.position.copyFrom(p); o.nav.crowd.agentTeleport(o.index, p); }
+            let k = 0;
+            for (const car of g.policeManager.cars) if (!car.destroyed && Math.hypot(car.position.x - Q.x, car.position.z - Q.z) < 90) { const s = RoadNet.randomLanePoint(30, { x: Q.x, z: Q.z, rMin: 300 + 20 * k++, rMax: 500 }); if (s) car.teleport(s.point.x, s.point.z, 0); }
             return bc;
         });
         // ------------------------------------------------------------------ esbarrão → bate-boca → briga → roda
@@ -68,18 +70,19 @@ module.exports = {
             window.__ring = R;
             // (a briga fica parada no lugar enquanto a roda chega: o teste olha a roda, não a luta)
             for (const m of R.members) if (m.fsm.current) { m.fsm.current.update = function () {}; m.setSpeed(0); }
-            const c0 = R.center(), W = [...R.watchers];
+            const c0 = R.center(), W = [...R.watchers].filter((w) => w.fsm.current instanceof ChaosWatchState);
             window.__d0 = W.map((w) => Math.hypot(w.position.x - c0.x, w.position.z - c0.z));
             // a pose de cada papel (parado) e quem chega na beirada para
             const POSE = { cheer: ['cheer'], film: ['phone'], worried: ['idle'], help: ['kneel'] };
             const poses = W.map((w) => { const S = w.fsm.current; return S.mode + ':' + S.pose(0).clip; });
             const posedOk = W.every((w) => (POSE[w.fsm.current.mode] || []).includes(w.fsm.current.pose(0).clip));
+            if (!W.length) return { n: 0, modes: [], poses: [], posedOk: false, stops: false };
             const w0 = W[0], S0 = w0.fsm.current, keepP = w0.transform.position.clone();
             w0.transform.position.set(c0.x + R.r * 0.9, 0, c0.z);
             S0.update(0.1);
             const stops = !!S0.still;
             w0.transform.position.copyFrom(keepP); S0.still = false;
-            return { n: R.watchers.size, modes: W.map((w) => w.fsm.current && w.fsm.current.mode), poses, posedOk, stops };
+            return { n: W.length, modes: W.map((w) => w.fsm.current && w.fsm.current.mode), poses, posedOk, stops };
         });
         if (!ring.none) await gameWait(page, 6, 200000);
         Object.assign(ring, await page.evaluate(() => {
