@@ -4,7 +4,7 @@
 // uma cauda curta de cometa (único modelo, a pedido: ver imagem de referência). O código ainda sabe fazer outros tipos
 // (willow, ring, spiral), mas launch() só usa a esfera verde/amarela.
 // Vista de cima, a esfera aparece como um disco que se abre (a altura só muda o paralaxe e o tamanho aparente).
-// Som (AudioFX.fireworkLaunch / fireworkBurst): espoleta e chiado subindo (às vezes assobio); o estouro chega com o atraso do som,
+// Som (AudioFX.fireworkLaunch / fireworkBurst): GRAVADO — o "tum" do morteiro lançando, o estouro e o crepitar das estrelas (longe, o eco); sem a gravação, espoleta e chiado subindo (às vezes assobio); o estouro chega com o atraso do som,
 // com estalo, "bum", eco e o crepitar das estrelas — mais baixo e abafado de longe.
 // Uso: game.fireworks.launch(x, z, y0, tipo?) → false se há disparos demais ao mesmo tempo. update(dt) todo quadro.
 // ============================================================================

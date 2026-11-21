@@ -48,6 +48,7 @@ module.exports = {
             buzinas: ['horn_car', 'horn_moto', 'horn_old', 'horn_truck', 'horn_bus', 'horn_stuck', 'bell_bike'],
             'mar e nado': ['sea_surf', 'sea_open', 'swim_stroke', 'splash_small', 'splash_big'],
             'gritos e celular': ['scream_f', 'scream_m', 'notify_msg', 'notify', 'notify_ok'],
+            fogos: ['fw_launch', 'fw_burst', 'fw_crackle', 'fw_far'],
             motor: ['eng_car', 'eng_beater', 'eng_v8', 'eng_truck', 'eng_moto', 'starter', 'gear', 'handbrake'],
         };
         for (const [k, gs] of Object.entries(need)) {
@@ -89,10 +90,13 @@ module.exports = {
             hit('recarregar', 'gun_reload', () => AudioFX.reload(x, z, 1.2));
             hit('engatilhar', 'gun_cock', () => AudioFX.cock(x, z));
             hit('freada de outro carro', 'tire_squeal', () => AudioFX.squeal(x, z));
+            hit('fogos: lançamento', 'fw_launch', () => AudioFX.fireworkLaunch(x, z, 0.9));
+            hit('fogos: estouro', 'fw_burst', () => AudioFX.fireworkBurst(x, z, 15));
+            hit('fogos: estouro longe', 'fw_far', () => AudioFX.fireworkBurst(L.x + 300, L.z, 40));
             hit('longe demais (nada)', 'gun_pistol', () => AudioFX.shot('pistol', L.x + 900, L.z));
             return out;
         });
-        const want = { pistola: 1, 'revólver': 1, submetralhadora: 1, fuzil: 1, escopeta: 1, minigun: 1, 'silenciador (sintetizado)': 0, 'batida leve (lataria)': 1, 'batida forte': 1, 'explosão perto': 1, 'explosão longe': 1, 'soco/pancada': 1, vidro: 1, 'porta batendo': 1, buzina: 1, 'buzina de caminhão': 1, 'buzina de moto': 1, 'braçada': 1, pernada: 1, 'mergulho (tchibum)': 1, 'mensagem no celular': 1, 'notificação': 1, 'entrega feita': 1, recarregar: 1, engatilhar: 1, 'freada de outro carro': 1, 'longe demais (nada)': 0 };
+        const want = { pistola: 1, 'revólver': 1, submetralhadora: 1, fuzil: 1, escopeta: 1, minigun: 1, 'silenciador (sintetizado)': 0, 'batida leve (lataria)': 1, 'batida forte': 1, 'explosão perto': 1, 'explosão longe': 1, 'soco/pancada': 1, vidro: 1, 'porta batendo': 1, buzina: 1, 'buzina de caminhão': 1, 'buzina de moto': 1, 'braçada': 1, pernada: 1, 'mergulho (tchibum)': 1, 'mensagem no celular': 1, 'notificação': 1, 'entrega feita': 1, recarregar: 1, 'fogos: lançamento': 1, 'fogos: estouro': 1, 'fogos: estouro longe': 1, engatilhar: 1, 'freada de outro carro': 1, 'longe demais (nada)': 0 };
         const wrong = Object.keys(want).filter((k) => plays[k] !== want[k]);
         c.ok(!wrong.length, `cada efeito toca a gravação do seu grupo${wrong.length ? ' — errado: ' + wrong.map((k) => `${k}=${plays[k]} (esperado ${want[k]})`).join(', ') : ''}`);
         c.ok(plays['cápsulas (4 tiros)'] === 4, `cápsula quicando depois de cada tiro de pistola (${plays['cápsulas (4 tiros)']}/4)`);

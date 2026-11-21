@@ -1,11 +1,11 @@
 # Efeitos sonoros — créditos
 
 Os sons GRAVADOS do jogo (passos em cada chão, tiros, cápsulas, recarregar, socos, batidas, vidro, pneu cantando, sirene, buzinas,
-burburinho, mar e ondas, braçadas e mergulho, gritos de pânico, notificações do celular, motores, câmbio
+burburinho, mar e ondas, braçadas e mergulho, gritos de pânico, notificações do celular, fogos de artifício, motores, câmbio
 e freio de mão — `src/audio/SoundBank.js`) vêm de gravações reais em **domínio público / CC0 1.0**: podem
 ser usadas, alteradas e distribuídas, inclusive comercialmente, sem exigir crédito. Mesmo assim, fica o crédito a quem gravou:
 
-> Sons adicionais: **Joseph SARDIN — BigSoundBank.com**; **qubodup**, **Ziph**, **Nocturnal_Vanguard**, **pauliuw**, **WuxiaScrub**,
+> Sons adicionais: **Joseph SARDIN — BigSoundBank.com**; **qubodup**, **Ziph**, **rubberduck**, **Nocturnal_Vanguard**, **pauliuw**, **WuxiaScrub**,
 > **HaelDB** (OpenGameArt.org); **muted.io**.
 
 **Alterações feitas no jogo** (`tools/sfx/build_sfx.py`, a partir dos originais listados em `tools/sfx/FONTES.md`): mono, 32 kHz
@@ -103,3 +103,6 @@ No jogo, os créditos ficam em **Guia › Rádio, músicas e sons**.
 | `scream_m` | Male Grunt/Yelling sounds (3yell1, 3yell14, 1yell3) | HaelDB | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | [opengameart.org/content/male-gruntyelling-sounds](https://opengameart.org/content/male-gruntyelling-sounds) |
 | `bell_bike` | Bell Bike #2 | Joseph SARDIN (BigSoundBank) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | [bigsoundbank.com/detail-0275](https://bigsoundbank.com/detail-0275.html) |
 | `bell_bike` | Bell bike #4 | Joseph SARDIN (BigSoundBank) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | [bigsoundbank.com/detail-1042](https://bigsoundbank.com/detail-1042.html) |
+| `fw_far` | Fireworks far Away | Joseph SARDIN (BigSoundBank) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | [bigsoundbank.com/detail-1050](https://bigsoundbank.com/detail-1050.html) |
+| `fw_burst`, `fw_crackle` | Fireworks #2 | Joseph SARDIN (BigSoundBank) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | [bigsoundbank.com/detail-2672](https://bigsoundbank.com/detail-2672.html) |
+| `fw_burst`, `fw_crackle`, `fw_launch` | 25 CC0 bang / firework SFX (bang_01, 03, 06, 09; fw_01, 02, 03, 04, 06; cannon_03, 05) | rubberduck | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | [opengameart.org/content/25-cc0-bang-firework-sfx](https://opengameart.org/content/25-cc0-bang-firework-sfx) |

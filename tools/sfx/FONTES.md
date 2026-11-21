@@ -11,7 +11,7 @@ variações que o jogo lê) e `tools/sfx/origem.json` (de onde saiu cada arquivo
 ## BigSoundBank (Joseph SARDIN) — CC0 1.0
 
 Arquivo `bsb_NNNN.ogg` = `https://bigsoundbank.com/UPLOAD/ogg/NNNN.ogg` (página: `https://bigsoundbank.com/detail-NNNN.html`).
-Números usados: 0275 1042 0260 0698 0850 0969 1111 1398 1446 1513 1519 1521 1529 1530 1531 1532 1533 1534 2059 2063 2361 2542 2721 3438 3506 0105 0137 0148 0165 0166 0187 0208 0258 0373 0376 0397 0437 0438 0444 0495 0510 0514 0532 0534 0655 0675 0690 0771
+Números usados: 1050 2672 0275 1042 0260 0698 0850 0969 1111 1398 1446 1513 1519 1521 1529 1530 1531 1532 1533 1534 2059 2063 2361 2542 2721 3438 3506 0105 0137 0148 0165 0166 0187 0208 0258 0373 0376 0397 0437 0438 0444 0495 0510 0514 0532 0534 0655 0675 0690 0771
 0806 0872 0884 1023 1145 1253 1254 1318 1355 1356 1357 1359 1773 1776 1778 1806 1807 1808 1984 1985 1988 1989 2368 2369 2459 2728
 2853 2854 3202 3515 3594.
 
@@ -26,6 +26,9 @@ Números usados: 0275 1042 0260 0698 0850 0969 1111 1398 1446 1513 1519 1521 152
   `high_pitch_scream.mp3` (https://opengameart.org/content/high-pitch-scream-sounds2, pauliuw), `screams_0.ogg`
   (https://opengameart.org/content/female-high-pitched-scream-sfx, WuxiaScrub) e `yell/yelling sounds/*.wav` (o zip
   `yelling sounds.zip` de https://opengameart.org/content/male-gruntyelling-sounds, HaelDB — CC0 ou OGA-BY, usado como CC0).
+
+- `oga3/bangs/` — fogos (CC0): o zip `25-CC0-bang-sfx.zip` de https://opengameart.org/content/25-cc0-bang-firework-sfx (rubberduck),
+  descompactado em `bangs/`.
 
 ## muted.io — CC0
 
