@@ -501,14 +501,28 @@ class PoliceManager {
         const heli = this.heli;
         const hide = !!(this.game.hiding && !this.game.hiding.seen);   // escondido sem ter sido visto entrando: ninguém te enxerga
         if (heli) { heli.update(dt); if (heli.sees && !hide) seen = true; }       // (ao cair, ele se remove sozinho)
-        const units = this.units, fov = Config.wanted.fovCos, nearS = Config.wanted.nearSense;
+        const units = this.units, fov = Config.wanted.fovCos;
+        // (agachado, ninguém te "sente" de costas a não ser colado — dá para chegar por trás: Stealth)
+        const pl = this.game.player, crouch = this.game.mode === 'player' && pl && pl.crouched;
+        // MODO FURTIVO: o barulho dos passos decide de quão longe te sentem de costas (parado e andando, pouco; correndo, de longe)
+        const N = Config.stealth.noise, sp = crouch || !pl ? 0 : pl.speed || 0, P0 = Config.player;
+        const nearS = this.game.mode !== 'player' ? Config.wanted.nearSense
+            : crouch ? Config.tactics.stealthNear * (L ? 2 : 1)
+            : sp < 0.3 ? N.still : sp < P0.maxSpeed * 1.15 ? N.walk : sp < P0.jogSpeed * 1.1 ? N.jog : Config.wanted.nearSense;
+        this.nearS = nearS;
         for (const u of units) {
             const m = this._mind(u), p = u.position, dx = pos.x - p.x, dz = pos.z - p.z, d = hypot(dx, dz);
-            let sees = !hide && d < sightR;
+            let sees = !hide && d < sightR, cone = null;
             // Cone de visão: fora do "sentir" de perto, só vê o que está à frente — a não ser que já esteja te acompanhando com os olhos.
-            if (sees && d > nearS && this.time - m.st > 1.5) { const f = this._face(u); sees = (f.x * dx + f.z * dz) / d > fov; }
+            if (sees && d > nearS && this.time - m.st > 1.5) { const f = this._face(u); sees = cone = (f.x * dx + f.z * dz) / d > fov; }
             m.sees = sees && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z)
                 && !(typeof Cover !== 'undefined' && Cover.hiddenFrom(this.game, p.x, p.z));          // agachado atrás de muro/carro: não te vê
+            // QUASE TE VENDO (o aviso do HUD, Stealth): você no cone dele, um pouco além do alcance, sem parede no meio
+            m.near = false;
+            if (!m.sees && !hide && d >= sightR * 0.6 && d < Math.max(sightR * 1.45, sightR + 8)) {
+                if (cone === null) { const f = this._face(u); cone = (f.x * dx + f.z * dz) / (d || 1) > fov; }
+                m.near = cone && MapGeo.hasLineOfSight(p.x, p.z, pos.x, pos.z) && !(typeof Cover !== 'undefined' && Cover.hiddenFrom(this.game, p.x, p.z));
+            }
             if (m.sees) {
                 seen = true;
                 m.st = this.time;
@@ -516,6 +530,7 @@ class PoliceManager {
             }
         }
         this.playerSeen = seen;
+        this.blocks.tick();                                     // tapete de pregos: o seu carro passou por cima?
 
         // 2) Rádio e despacho.
         if (!L) this.known = null;

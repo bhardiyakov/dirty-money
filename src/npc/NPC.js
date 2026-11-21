@@ -77,6 +77,7 @@ class NPC {
 	setSpeed(speed) {
 		this._baseSpeed = speed;
 		speed *= this._slopeMul || 1;                                   // relevo: subindo, mais devagar (_slopeTick)
+		if (speed <= Config.npc.wanderSpeed * 1.05) speed *= this._gaitMul || 1;      // (o jeito de andar: idoso e quem mexe no celular, mais devagar)
 		if (Math.abs(this.params.maxSpeed - speed) < 0.01) return;
 		this.params.maxSpeed = speed;
 		if (this.index >= 0) this.nav.crowd.updateAgentParameters(this.index, this.params);
@@ -258,7 +259,7 @@ class NPC {
 		const q = MapGeo.hasLineOfSight(p.x, p.z, to.x, to.z) ? this.nav.closestPoint(to) : null;
 		if (q && hypot(q.x - to.x, q.z - to.z) < 0.6) this.nav.crowd.agentTeleport(this.index, q); else D.left = 0;      // (parede, sem chão: para ali)
 		this.heading = this.transform.rotation.y = Math.atan2(D.dx, D.dz);
-		this.actor.play('scared');
+		if (!D.clip) { D.clip = true; if (!this.actor.play('leap', 'none', { restart: true })) this.actor.play('scared'); }      // (o pulo de lado; sem ele, a corrida assustada)
 		this.actor.setPosition(p.x, p.z); this.actor.setHeading(this.heading);
 		this.actor.update(dt, 1.5);
 		if (D.left <= 1e-3) {
@@ -272,6 +273,8 @@ class NPC {
 	hurt(fromPos) {
 		if (this.rag) return;
 		this.threat.set(fromPos.x, 0, fromPos.z);
+		// a reação pelo lado de onde veio — decidida AGORA, com o rumo de antes do tranco (NpcSheet.hurtClip; o NPC.update toca)
+		this._hurtClip = typeof NpcSheet !== 'undefined' ? NpcSheet.hurtClip(this.heading, fromPos.x - this.position.x, fromPos.z - this.position.z) : 'hurt'; this._hurtNew = true;
 		if (this.fsm.current && this.fsm.current.onHurt) { this.fsm.current.onHurt(fromPos); return; }
 		this.waiting = null;
 		this.crossing = null;
@@ -432,6 +435,7 @@ class NPC {
 	// Volta à vida como "outro" pedestre em outro lugar, longe do jogador.
 	respawn() {
 		this._dodge = null;
+		if (this.ko || this._inTrunk || Stealth.bodies.has(this)) { this.ko = null; Stealth.forget(this); }      // (voltou como outra pessoa: sai do porta-malas, do ombro)
 		this.mugger = false;                                    // (era o assaltante de um StreetCrime)
 		if (this.downed) { this.downed = null; if (typeof Rescue !== 'undefined') Rescue.remove(this); }
 		this.restoreLook();
@@ -637,12 +641,50 @@ class NPC {
 		this._umb.scaling.set(0.15 + 0.85 * s, 1, 0.15 + 0.85 * s);
 	}
 
+	// ----- Jeito de andar e gestos de quem está parado -----
+	// Cada pedestre anda do seu jeito (fixo pela pessoa — Temper.of): idoso curvado e devagar; uns 14% mexendo no celular; parte dos homens
+	// gingando; o resto, o andar de sempre. GAIT_K: o ritmo do clipe para os pés plantados (passada × duração do ciclo, vs. o 'walk').
+	static get GAIT_K() { return { walk_old: 0.544, walk_phone: 0.9, walk_swag: 1, walk_drunk: 0.96 }; }
+	static get GAIT_SPEED() { return { walk_old: 0.72, walk_phone: 0.85, walk_swag: 1 }; }
+	static get FIDGETS() { return ['idle_look', 'idle_watch', 'idle_stretch']; }
+	_gait() {
+		const S = this.actor && this.actor.sheet;
+		if (!S || !S.isNpc || typeof Temper === 'undefined') return 'walk';
+		const T = Temper.of(this);
+		if (this._gaitKey === T.key) return this._gaitC;
+		const r = (T.r * 7919.37) % 1;                                          // (outro sorteio fixo da mesma pessoa)
+		const G = T.old ? 'walk_old' : r < 0.14 ? 'walk_phone' : T.sex === 'm' && r < 0.38 ? 'walk_swag' : 'walk';
+		this._gaitKey = T.key; this._gaitC = G; this._gaitMul = NPC.GAIT_SPEED[G] || 1;
+		if (this._baseSpeed) this.setSpeed(this._baseSpeed);
+		return G;
+	}
+	// Parado um tempo (esperando o sinal, conversando): de vez em quando um gesto — olha em volta, o relógio, se alonga. true = tocando.
+	_fidgetTick(dt) {
+		const S = this.actor && this.actor.sheet;
+		if (!S || !S.isNpc) return false;
+		this._stillT = (this._stillT || 0) + dt;
+		const F = this._fidget;
+		if (F) {
+			if (this.actor.clipName === F && !this.actor.done) return true;
+			this._fidget = null; this._stillT = 0;
+			return false;
+		}
+		if (this._fidgetAt == null) this._fidgetAt = 5 + Math.random() * 9;
+		if (this._stillT < this._fidgetAt) return false;
+		this._fidgetAt = 6 + Math.random() * 10;
+		const pick = NPC.FIDGETS[Math.floor(Math.random() * NPC.FIDGETS.length)];
+		if (this.actor.play(pick, 'none', { restart: true })) { this._fidget = pick; this.fidgets = (this.fidgets || 0) + 1; return true; }
+		this._stillT = 0;
+		return false;
+	}
+
 	// ----- Loop -----
 	update(dt) {
 		if (this._ifr > 0) this._ifr -= dt;
 		this._umbrellaTick(dt);
 		if (this.rag) { this.rag.update(dt); return; }      // arremessado: o Ragdoll comanda o sprite e a posição
 		if (!this.alive) {                         // corpo no chão: só espera sumir e reaparecer
+			if (this.ko) { Stealth.koTick(this, dt); return; }      // (derrubado por trás: desacordado, sem sangue — crime/Stealth.js)
 			if (this.downed) { this._downTick(dt); return; }      // (desacordado, sangrando: só morre se ninguém socorrer)
 			this.deadTimer -= dt;
 			this.actor.setPosition(this.transform.position.x, this.transform.position.z);
@@ -670,7 +712,12 @@ class NPC {
 		// Vira o corpo para a direção do movimento real do agente e escolhe o clipe.
 		const v = this.nav.crowd.getAgentVelocity(this.index);
 		const sp2 = v ? v.x * v.x + v.z * v.z : 0;
+		const CS = this.fsm.current;
 		if (this.fsm.name === 'FIGHT') this.transform.rotation.y = this.heading;        // brigando: encara o adversário (FightState)
+		else if (CS && CS.faceTo && sp2 <= 0.3) {                                       // parado olhando algo (a roda, o desmaiado: npc/Chaos.js)
+			const T = CS.faceTo();
+			if (T) { const p0 = this.transform.position; this.transform.rotation.y = this._lerpAngle(this.transform.rotation.y, Math.atan2(T.x - p0.x, T.z - p0.z), 1 - Math.exp(-8 * dt)); this.heading = this.transform.rotation.y; }
+		}
 		else if (sp2 > 0.3) {
 			const targetY = Math.atan2(v.x, v.z);
 			const t = 1 - Math.exp(-12 * dt);
@@ -682,7 +729,10 @@ class NPC {
 		this._slopeTick(dt, v, speed);
 		const st = this.fsm.name;
 		let rate = 1;
-		if (st === 'HURT') this.actor.play('hurt');
+		if (st === 'HURT') {                                                       // (pelo lado de onde veio o golpe/tiro — NpcSheet.hurtClip)
+			if (!this.actor.play(this._hurtClip || 'hurt', 'none', { restart: !!this._hurtNew })) this.actor.play('hurt');
+			this._hurtNew = false;
+		}
 		else if (st === 'FIGHT') {                                                // brigando: golpe/tiro (o estado reinicia o clipe) ou guarda/avanço, com a arma na mão
 			const A = this.fsm.current.anim(speed);
 			if (!this.actor.play(A.clip, A.w)) this.actor.play(A.clip, 'none');
@@ -694,11 +744,22 @@ class NPC {
 			this.actor.play(moving && speed < 0.5 ? 'idle' : S.clip, S.weapon) || this.actor.play('idle', 'none');
 			if (moving) rate = Math.max(0.5, speed / (S.clip === 'run' ? Config.anim.run : Config.anim.walk));
 		}
-		else if (speed < 0.5) this.actor.play('idle');
+		else if (CS && CS.pose) {                                                // estados da rua viva (npc/Chaos.js): dançar, torcer, filmar, bêbado, desmaiado
+			const A = CS.pose(speed);
+			if (!this.actor.play(A.clip, A.w || 'none', A.restart ? { restart: true } : undefined)) this.actor.play(A.fb || (speed < 0.5 ? 'idle' : 'walk'), 'none');
+			rate = A.rate || 1;
+		}
+		else if (speed < 0.5) { if (!this._fidgetTick(dt)) this.actor.play('idle'); }
 		else if (st === 'SHELTER') { this.actor.play('run'); rate = Math.max(0.5, speed / Config.anim.run); }
 		else if (st === 'FLEE') { this.actor.play('scared'); rate = Math.max(0.5, speed / Config.anim.run); }
 		else if (st === 'JOG') { this.actor.play('run'); rate = Math.max(0.5, speed / Config.anim.run); }
-		else { this.actor.play('walk'); rate = Math.max(0.5, speed / Config.anim.walk); }          // (ritmo pela velocidade: pés plantados — Config.anim)
+		else if (this.hp < this.maxHp * 0.4 && this.actor.play('limp')) rate = Math.max(0.5, speed / (Config.anim.walk * 0.72));      // ferido: manca (passada menor)
+		else {
+			const G = this._gait();                                               // o jeito de andar dele (celular, idoso, gingado)
+			if (G !== 'walk' && this.actor.play(G)) rate = Math.max(0.5, speed / (Config.anim.walk * NPC.GAIT_K[G]));
+			else { this.actor.play('walk'); rate = Math.max(0.5, speed / Config.anim.walk); }          // (ritmo pela velocidade: pés plantados — Config.anim)
+		}
+		if (speed >= 0.5) { this._stillT = 0; this._fidget = null; }
 
 		this.actor.setPosition(this.transform.position.x, this.transform.position.z);
 		this.actor.setHeading(this.heading);

@@ -173,7 +173,7 @@ class SpriteActor {
 	static get CLIMB() { return { up: 0.15, steep: 0.6, upStride: 0.77, climbStride: 0.46 }; }      // (passadas × a do andar: o pé plantado dos clipes, medido)
 	// Clipes de passada (loop): trocar de um para outro (andar → correr, sacar a arma andando, subida…) mantém a FASE do ciclo — o pé
 	// que está no chão continua no chão, em vez de o passo recomeçar do zero.
-	static get GAIT() { return /^(walk|run|walk_up|climb|scared|sneak|strafe|wade|walk_hold|run_hold|walk_pull|walk_heavy|run_heavy)$/; }
+	static get GAIT() { return /^(walk|run|walk_up|climb|scared|sneak|strafe|wade|walk_hold|run_hold|walk_pull|walk_heavy|run_heavy|limp|carry|walk_phone|walk_old|walk_swag|walk_drunk)$/; }
 
 	// Troca de clipe. Retorna false se o clipe não existe para essa arma.
 	play(name, weapon = 'none', opts = {}) {

@@ -56,8 +56,10 @@ class Player {
 
     // Dano de bala. Cambaleia (sem travar o jogador por muito tempo). quiet: sem a animação de cambalear
     // (atropelamento/queda têm a própria animação).
+    // `quiet` pode ser a POSIÇÃO de quem atirou ({ x, z } — Combat): aí ele cambaleia para o lado certo (frente, costas, lados — NpcSheet.hurtClip).
     takeDamage(amount, quiet = false) {
         if (this.hp <= 0 || this.invulnerable) return;       // (rendido: ninguém atira)
+        if (quiet && typeof quiet === 'object') { this._hitFrom = quiet; quiet = false; }
         amount *= 1 - (SkillTree.m.dmgTaken || 0) - Outfit.m.dmgTaken;      // habilidade Sangue frio | roupa (jaqueta de couro, coturno)
         if (this.armor > 0) {                                 // colete: absorve 75% do dano até acabar (Colete ajustado: mais)
             const a = Math.min(this.armor, amount * (0.75 + (SkillTree.m.vest || 0)));
@@ -68,7 +70,11 @@ class Player {
         if (this.hp <= 0 && SkillTree.instance && SkillTree.instance.trySecondWind()) this.hp = this.maxHp * 0.3;      // Corpo fechado
         this._sinceHit = 0;
         this.hitFlash = 0.35;                       // vinheta vermelha na tela
-        if (!this.busy && !quiet) this.playAction('hurt', { lock: 0.6 });
+        if (!this.busy && !quiet) {
+            const F = this._hitFrom, P = this.root.position, clip = F && typeof NpcSheet !== 'undefined' ? NpcSheet.hurtClip(this.root.rotation.y, F.x - P.x, F.z - P.z) : 'hurt';
+            if (!this.playAction(clip, { lock: 0.6 }) && clip !== 'hurt') this.playAction('hurt', { lock: 0.6 });
+        }
+        this._hitFrom = null;
     }
 
     // Levou um golpe corpo a corpo (soco, chute, cassetete — Combat.strike): dano, cambaleia e é empurrado; com força (chute,
@@ -78,6 +84,7 @@ class Player {
         const fall = M.fall >= Config.ragdoll.minPower;
         this.cancelSequence();
         if (this.action && !fall) this.action = null;                // (o golpe interrompe o que ele fazia)
+        const P0 = this.root.position; this._hitFrom = { x: P0.x - dx, z: P0.z - dz };      // (o golpe veio de lá: cambaleia para o lado certo)
         this.takeDamage(amount, fall);                               // (cambaleia: o clipe 'hurt')
         if (this.hp <= 0) return;
         if (fall) { this.ragdoll({ dx, dz, power: M.fall * 0.85 }); return; }
@@ -525,6 +532,7 @@ class Player {
     // sprint: o IMPULSO do sprint (0–1, InputManager.sprintTick: cada toque soma, segurar mantém um mínimo; true = 1). Sem ele, TROTA
     // (Config.player.jogSpeed, sem gastar fôlego); walk = só anda (interiores fora de assalto/missão/fuga, analógico pouco inclinado).
     update(moveDir, sprint, dt, walk = false) {
+        this._upd = (this._upd || 0) + 1;                                          // (quadro: os gestos de parado só contam quadros seguidos)
         if (this._ifr > 0) this._ifr -= dt;
         let drive = typeof sprint === 'number' ? Math.max(0, Math.min(1, sprint)) : sprint ? 1 : 0, sprinting = drive > 0.02;
         // Arremessado: sem controle; o Ragdoll comanda posição, giro e sprite.
@@ -595,6 +603,7 @@ class Player {
         // Colado na cobertura: o direcional só desliza ao longo dela (ver _coverMove).
         if (this.coverLock && this.crouched && !this.coverSnap) { moveDir = this._coverMove(moveDir, dt); if (this.coverLock) sprinting = false; }
 
+        if (this.dragging) sprinting = false;                                      // arrastando um corpo (Stealth): não corre
         // Agachado: correr levanta; parado/andando, a cobertura ao lado é reconferida (andar ao longo do muro segue nela).
         if (this.crouched && sprinting && moveDir.lengthSquared() > 1e-4) this.setCrouch(false);
         if (this.crouched) {
@@ -638,7 +647,7 @@ class Player {
         const g = onGround && moveDir.lengthSquared() > 1e-4 ? MapGeo.slopeAlong(this.root.position.x, this.root.position.z, moveDir.x, moveDir.z) : 0;
         this.slope = (this.slope || 0) + (g - (this.slope || 0)) * Math.min(1, dt * 6);
         this.actor.setSlope(this.speed > 0.3 ? this.slope : 0);
-        const maxSpeed = (this.swimming ? swimV : (sprinting && depth <= 0) ? sprintV : baseV) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? (this.aimFree ? 0.85 : 0.6) : 1) * (this.crouched ? Config.tactics.sneakSpeed : 1) * MapGeo.slopeSpeed(this.slope) * (this.swimming ? 1 : this.heavyMul);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
+        const maxSpeed = (this.swimming ? swimV : (sprinting && depth <= 0) ? sprintV : baseV) * lock * wf * (depth > 0 ? 1 + (SkillTree.m.swim || 0) : 1) * (this.loadMul || 1) * (this.winded ? 0.88 : 1) * (aiming ? (this.aimFree ? 0.85 : 0.6) : 1) * (this.crouched ? Config.tactics.sneakSpeed : 1) * (this.dragging ? (this.crouched ? Config.stealth.dragSpeed : Config.stealth.carrySpeed) : 1) * MapGeo.slopeSpeed(this.slope) * (this.swimming ? 1 : this.heavyMul);      // Outfit: tênis/roupa (ver Outfit) | loadMul: peso carregado (Bags) | sem fôlego: arrasta o passo | mirando: devagar | relevo
 
         // Acelera/desacelera rumo à velocidade alvo (frame-independent): na água embala e desliza; em terra, inércia e derrapagem.
         if (depth > 0) {
@@ -750,9 +759,12 @@ class Player {
                     this._syncSprite(); this.actor.update(dt, rate); return;
                 }
             }
+            if (this.speed >= 0.3 && this._fidget) this._fidget = null;                    // (mexeu: o gesto de parado acaba)
             if (this.speed < 0.3) {
                 clip = (this.aimTimer > 0 && gun) ? 'aim' : 'idle';
                 this.state = 'idle';
+                // Parado um tempo de mãos livres: um gesto de vez em quando (olha em volta, o relógio, se alonga) — mexeu, acabou.
+                if (clip === 'idle' && w === 'none' && !this.carrying && !this.holdingUp && this._fidgetTick(dt)) { this._syncSprite(); this.actor.update(dt, 1); return; }
             } else if (gun && (aiming || this.aimTimer > 0) && !sprinting) {
                 // De frente para a mira: para a frente, para trás ou de lado (passo lateral), no ritmo da velocidade.
                 this.state = 'walk';
@@ -766,9 +778,16 @@ class Player {
                 clip = 'walk';
                 this.state = 'walk';
                 rate = Math.max(0.5, this.speed / (Config.anim.walk * Config.player.stride));
+                // muito ferido, andando sem nada nas mãos: MANCA (o clipe 'limp' — passada 0,72 da do andar)
+                if (w === 'none' && this.hp < this.maxHp * 0.3 && !this.holdingUp && !Bags.clipFor(this, 'walk', w) && this.actor.play('limp', 'none')) { this.state = 'limp'; this._syncSprite(); this.actor.update(dt, rate / 0.72); return; }
             }
             // Anunciando um assalto (arma apontada, a outra mão pedindo "passa tudo") — só existe no personagem 2,5D.
             if (this.holdingUp && clip !== 'walk' && clip !== 'run' && w !== 'none' && w !== 'bat' && this.actor.play('holdup', w)) { this._syncSprite(); this.actor.update(dt, rate); return; }
+            // Um corpo no ombro (Stealth): o andar com o peso; parado, segurando.
+            if (this.carrying && w === 'none' && (clip === 'walk' || clip === 'run' || clip === 'idle')) {
+                const still = clip === 'idle';
+                if (this.actor.play(still ? 'carry_idle' : 'carry', 'none')) { this._syncSprite(); this.actor.update(dt, still ? 1 : Math.max(0.5, this.speed / (Config.anim.walk * Config.player.stride))); return; }
+            }
             // Carregando peso (Bags): bolsa/maleta/mala na mão, mala puxada nas rodinhas, ou andar curvado de sobrecarga.
             const cw = Bags.clipFor(this, clip, w);
             if (cw && this.actor.play(cw[0], cw[1])) { this._syncSprite(); this.actor.update(dt, cw[0] === 'walk_heavy' ? rate / 0.55 : rate); return; }      // (walk_heavy: passada 0,55 × a do andar)
@@ -778,6 +797,27 @@ class Player {
         if (this.action && this.action.rate) rate = this.action.rate;            // (passo `fit` de uma sequência: o clipe acompanha o timer)
         this._syncSprite();
         this.actor.update(dt, rate);
+    }
+
+    // Gesto de quem está parado (Player.FIDGETS): depois de 7–12 s sem mexer, um deles; true = tocando agora. Qualquer outro clipe zera.
+    static get FIDGETS() { return ['idle_look', 'idle_watch', 'idle_stretch']; }
+    _fidgetTick(dt) {
+        this._stillT = (this._stillAt === this._upd - 1 ? this._stillT || 0 : 0) + dt;      // (contínuo: só conta quadros seguidos parado)
+        this._stillAt = this._upd;
+        if (this._fidget && this._stillT <= dt) this._fidget = null;                    // (mexeu no meio do gesto: acabou)
+        const F = this._fidget;
+        if (F) {
+            if (this.actor.clipName === F && !this.actor.done) return true;
+            this._fidget = null; this._stillT = 0;
+            return false;
+        }
+        if (this._fidgetAt == null) this._fidgetAt = 7 + Math.random() * 5;
+        if (this._stillT < this._fidgetAt) return false;
+        this._fidgetAt = 8 + Math.random() * 7;
+        const L = Player.FIDGETS.filter((k) => k !== this._lastFidget), pick = L[Math.floor(Math.random() * L.length)];
+        if (this.actor.play(pick, 'none', { restart: true })) { this._fidget = this._lastFidget = pick; this.fidgets = (this.fidgets || 0) + 1; return true; }
+        this._stillT = 0;
+        return false;
     }
 
     // Land locomotion with heavy steps: the body turns toward the stick at a speed-limited rate (quick pivot standing — turnRateStand —,

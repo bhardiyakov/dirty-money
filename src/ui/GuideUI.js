@@ -31,7 +31,7 @@ class GuideUI {
     // Índice: [id, título] ou [null, cabeçalho de grupo].
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'], ['bags', 'Bolsas, peso e fôlego'],
-            ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['bairros', 'Mirante, Roça e Serra'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
+            ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['bairros', 'Mirante, Roça e Serra'], ['street', 'A rua: acontecimentos'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
             ['home', 'Casa, imóveis e save'], ['goals', 'Metas e desafios do dia'], [null, 'IMPÉRIO'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], ['truco', 'Truco no bar'], [null, 'ASSALTOS, NEGÓCIOS E CARROS'], ['robbery', 'Assalto a lojas'], ['traces', 'Rastros e fuga'], ['heists', 'Joalherias e golpes'], ['business', 'Negócios próprios'], ['mechanic', 'Mecânica e porta-malas'], ['racing', 'Corridas (rachas e autódromo)'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas'], ['radio', 'Rádio e músicas (créditos)']);
@@ -132,15 +132,30 @@ GuideUI.PAGES = {
     police: () => `<h2>Polícia e procurado</h2>
         <p>Crime só vira estrela com a polícia <b>por perto</b>: um policial precisa <b>ver</b> na hora (bem perto, sem parede no meio) ou estar perto o bastante para <b>ouvir o tiro</b> — aí ele vai ao local e, se te achar, você vira procurado. Testemunhas de assalto ligam, mas só vem quem estiver na área. Armado, o minimapa mostra o <b>cone de visão</b> de cada policial (ele só vê o que está à frente dele). Quanto mais estrelas, maior o raio de visão e mais gente vem:</p>
         <table><tr><th>Nível</th><th>O que acontece</th></tr><tr><td>★</td><td>delito leve: só quem viu te procura (sem rádio nem viatura extra), corre menos, precisa chegar bem perto para prender e te perde rápido</td></tr><tr><td>★★</td><td>viaturas por rádio, atiram à vista</td></tr>
-        <tr><td>★★★</td><td>helicóptero e uma van da SWAT</td></tr><tr><td>★★★★</td><td>SWAT com metralhadora, mais viaturas, bloqueios e o helicóptero atira</td></tr><tr><td>★★★★★</td><td>exército e ruas fechadas</td></tr></table>
+        <tr><td>★★★</td><td>helicóptero e uma van da SWAT</td></tr><tr><td>★★★★</td><td>SWAT com metralhadora, mais viaturas, bloqueios com <b>tapete de pregos</b> e o helicóptero atira</td></tr><tr><td>★★★★★</td><td>exército, ruas fechadas e um <b>atirador de elite</b> no helicóptero</td></tr></table>
         <h3>Como fugir (como no GTA)</h3><ul>
         <li>Cada policial enxerga num <b>cone à frente</b> (o radar mostra os cones quando você é procurado; vermelho = te vendo agora) e precisa de linha de visada. De perto, percebe você mesmo de costas.</li>
         <li>Saiu da vista: as <b>estrelas piscam</b> e a polícia vai para a <b>área de busca</b> (o círculo azul tracejado, onde te viram por último) e espalha as viaturas por ela. A contagem da fuga anda enquanto ninguém te vê — <b>fora do círculo, quase o dobro do ritmo</b> (o HUD mostra "Fora da busca"). Ser visto de novo zera.</li>
         <li>Policial colado em você (mesmo atrás de parede) <b>pausa</b> a contagem.</li>
         <li><b>Helicóptero</b> (3★+): enxerga por cima dos prédios, mas <b>não te vê debaixo de viaduto, ponte, túnel, toldo de loja ou cobertura de posto</b>. Perdeu você, só te acha de novo se você cair no holofote. Um carro rápido na avenida abre distância dele, e ele tem autonomia: a 3★ e 4★ sai para <b>abastecer</b> depois de um tempo — a brecha para sumir. Também dá para <b>derrubá-lo</b>: a tiros (≈16 de pistola) ou com um foguete de <b>RPG</b> ou do <b>lança-foguetes</b> (um acerto) — vale +1★ e o próximo demora a vir.</li>
-        <li>Na cola de carro, as viaturas seguem atrás e só às vezes tentam a <b>batida (PIT)</b>; parado, elas freiam e descem os policiais — dá para empurrar uma viatura parada para sair do cerco.</li>
+        <li>Na cola de carro, as viaturas seguem atrás e de tempos em tempos tentam a <b>batida PIT</b>: encostam na lateral da sua traseira e o carro <b>roda</b> (contra-esterce e acelere para segurar; a 4★+ tentam mais vezes). Parado, elas freiam e descem os policiais — dá para empurrar uma viatura parada para sair do cerco.</li>
+        <li><b>Tapete de pregos</b> (4★+): antes de cada bloqueio, uma faixa de pregos atravessa a rua. Passou por cima, os pneus que pisaram <b>furam</b> e o carro escorrega (blindado não fura). Desvie pela outra rua.</li>
+        <li><b>Atirador de elite</b> (5★): no lugar da metralhadora, o helicóptero põe a <b>mira laser vermelha</b> em você por um instante (o bipe acelera) e dá um tiro certeiro. Saia da mira antes: cobertura, túnel, viaduto ou fora da vista dele.</li>
         <li><b>Pintura express</b>: sem ninguém te vendo, entre dirigindo numa oficina Pay n Pay (ou no mecânico do morro) e aperte <kbd>E</kbd> — cor nova, placa trocada e as estrelas somem (R$ 1.000 + R$ 750 por ★, aceita sujo).</li>
-        <li><b>Esconderijos</b> (<kbd>E</kbd> em caçamba, caixote, latão): se ninguém viu você entrar, some do radar.</li><li>Com procurado você não entra em lojas nem consegue aceitar trabalhos.</li></ul>`,
+        <li><b>Esconderijos</b> (<kbd>E</kbd> em caçamba, caixote, latão): se ninguém viu você entrar, some do radar.</li><li>Com procurado você não entra em lojas nem consegue aceitar trabalhos.</li></ul>
+        <h3>Crime leve × crime pesado (inquérito)</h3><ul>
+        <li><b>Leve</b> — soco, chute, taco, furto, carro estacionado levado, atropelar sem matar, tiro para o alto: só conta o <b>flagrante</b> (um policial vendo na hora) — 1★, e acabou a fuga, acabou: <b>não vai para a ficha</b>. Pedestre ou câmera vendo: a polícia de perto só vem olhar o lugar.</li>
+        <li><b>Pesado</b> — homicídio, facada ou tiro em alguém, quem cai sangrando, assalto, roubo de carro com motorista, sequestro, explosão, incêndio, policial agredido ou morto: no flagrante, estrelas pela gravidade e a ficha. Sem polícia por perto, vira <b>inquérito</b>:
+            <b>câmera</b> grava na hora (de rosto coberto, não te identifica); <b>testemunha</b> sai correndo para ligar (📞) — quando liga, seu nome vai para a ficha e sua roupa vira a descrição. <b>Intimide ou suborne</b> antes (<kbd>E</kbd>) e não há inquérito.</li>
+        <li>Ninguém viu = a polícia <b>não sabe quem foi</b>. Corpo achado: ela vem ao lugar e investiga, mas sem o seu nome.</li>
+        <li>Na ficha, os crimes caducam com o tempo; ficha pesada vira <b>mandado</b> (a polícia te reconhece de perto). O hacker apaga a ficha.</li></ul>
+        <h3>Furtividade</h3><ul>
+        <li><b>Modo furtivo</b>: agachado (<kbd>Q</kbd>), a polícia e as testemunhas só te notam bem de perto e ninguém te "sente" de costas a não ser colado. De pé, o <b>barulho dos passos</b> denuncia: parado ou andando, só bem perto; trotando, a uns 7 m; correndo no talo, a 11 m.</li>
+        <li><b>Derrubar por trás</b>: agachado, chegue por trás de quem não está te vendo (pedestre, policial, traficante) e aperte <kbd>E</kbd> (ou o golpe): um <b>mata-leão</b> e ele apaga em silêncio por quase um minuto. Com a <b>faca</b> na mão, é <b>morte silenciosa</b>. Ninguém ouve — só quem estiver olhando vê. Desacordado, ele não viu quem foi.</li>
+        <li><b>Corpo</b> (<kbd>E</kbd> perto de um desacordado ou morto): de pé você <b>carrega no ombro</b> (mais rápido, mas à vista); agachado, <b>arrasta</b> (devagar e discreto) — <kbd>Q</kbd> troca. Visto carregando: flagrante de homicídio (morto) ou sequestro (desacordado). Corpo <b>à vista</b> é achado e a polícia vem ao lugar.</li>
+        <li><b>Porta-malas</b>: com o corpo, <kbd>E</kbd> atrás de um carro parado. Ele some da vista e vai com o carro; <kbd>E</kbd> de novo tira. Desacordado lá dentro <b>acorda e bate na tampa</b> — policial perto ouve; abrir solta a vítima, que foge e liga.</li>
+        <li><b>Desova</b>: solte o corpo na <b>água funda</b> (rio, lagoa, mar) e ele afunda — ninguém acha. Desacordado na água é homicídio (se alguém viu).</li>
+        <li>O <b>olho</b> em cima da cabeça diz se estão te vendo (agachado, procurado ou com um corpo): 🫣 ninguém, 👀 <b>quase</b> (amarelo), 👁️ <b>te vendo</b> (vermelho). As setas em volta apontam quem é.</li></ul>`,
 
     bags: () => `<h2>Bolsas, peso e fôlego</h2>
         <p>A bolsa define <b>quantos espaços</b> a grade do inventário tem e <b>quanto peso</b> você carrega sem perder velocidade. Ela aparece no seu personagem.</p>
@@ -310,11 +325,27 @@ GuideUI.PAGES = {
         <p>Na aba CARREIRAS › <b>CONQUISTAS</b> ficam dezenas de objetivos de longo prazo, com barra de progresso: furtos, fugas de 5 estrelas, patentes e maestria 10 em cada carreira, 50 trabalhos por carreira, carros desmanchados, grandes assaltos, armas vendidas, golpes, desfiles, patrimônio de R$ 10 milhões, nível 100, árvore completa e Prestígio 10.</p>
         <p>Cada conquista dá XP de personagem. A <b>PLATINA</b> só vem quando <b>todas</b> estiverem completas — é para levar muito tempo.</p>`,
 
+    street: () => `<h2>A rua: acontecimentos</h2>
+        <p>Andando a pé, de vez em quando acontece alguma coisa perto de você (um acontecimento por vez):</p>
+        <ul><li><b>Briga</b>: dois pedestres saem no braço — <kbd>E</kbd> separa (o bairro lembra).</li>
+        <li><b>Pivete</b>: arrancou a bolsa de alguém — pegue ele e devolva (<kbd>E</kbd>, gorjeta) ou fique com ela.</li>
+        <li><b>Aviãozinho</b>: um desconhecido oferece um pacote (<kbd>E</kbd>) para entregar no ponto marcado, com <b>prazo</b> — paga em dinheiro sujo; com a polícia atrás, o cliente não aparece.</li>
+        <li><b>Turista</b>: pede uma foto — <kbd>E</kbd> tira (gorjeta) e, enquanto ele posa, <kbd>C</kbd> furta a carteira. De arma na mão, <kbd>E</kbd> assalta (crime pesado).</li>
+        <li><b>Carro enguiçado</b>: o motorista pede ajuda — <kbd>E</kbd> mexe no motor (a habilidade <b>Mecânica</b> do Desmanche ajuda a pegar); gorjeta se der certo.</li>
+        <li><b>Ambulante</b>, <b>roda de samba</b> (fim de semana à noite) e <b>pregação</b> (domingo de manhã) completam a rua.</li></ul>
+        <h3>A rua com vida própria</h3><ul>
+        <li><b>Esbarrão</b>: dois pedestres se trombam — pedem desculpa, batem boca ou, se um for de briga (ou estiver bêbado), saem no braço. Você correndo também tromba: o pedestre reclama e às vezes cai.</li>
+        <li><b>Roda</b>: toda briga junta gente em volta — uns gritam "porrada!", outros filmam com o celular, outros pedem para parar — e às vezes um da roda entra na briga. A polícia chegando desfaz a roda.</li>
+        <li><b>Correria</b>: no pânico, quem foge derruba quem está parado no caminho.</li>
+        <li><b>Figuras</b>: o <b>bêbado</b> (mais à noite: anda torto, puxa assunto, briga à toa, dorme na calçada); alguém que começa a <b>dançar</b> no meio da rua e puxa outros; quem <b>desmaia</b> (junta gente, um ajoelha para ajudar); e o <b>dinheiro voando</b> — as notas espalham e todo mundo corre para pegar (você também).</li></ul>
+        <div class="gd-tip">Cada pedestre tem o seu jeito de andar (mexendo no celular, idoso devagar, gingando) e, parado, olha em volta, olha o relógio, se alonga — você também, se ficar parado um tempo.</div>`,
+
     careers: () => `<h2>Como as carreiras funcionam</h2>
         <p>Além do tráfico, você pode seguir <b>cinco carreiras</b> ao mesmo tempo. Cada uma tem:</p>
         <ul><li><b>Patentes</b> por XP — a patente libera trabalhos novos e a gestão. Depois da última patente vem a <b>maestria</b> (infinita, +3% de pagamento por nível).</li>
         <li><b>Duas habilidades</b> (0 a 5): 1 ponto a cada ${Careers.XP_PER_POINT} XP; elas mudam o jogo de verdade (tempo de ligação direta, aderência do carro, barulho dos passos, chance do golpe…).</li>
         <li><b>Trabalhos</b>: um por vez (e não junto com a missão do morro). O alvo aparece <b>marcado no mapa</b> (blip vermelho no minimapa) e com um <b>marcador brilhante</b> no chão; o andamento fica no painel do canto superior esquerdo. Falhar (prazo, prisão, morte, abandono) não dá XP e deixa os contatos quietos uns segundos.</li>
+        <li><b>Bônus do trabalho</b>: cada trabalho sorteia uma condição extra — <b>sem estrelas</b>, <b>sem matar ninguém</b>, <b>sem disparar</b> ou <b>sem ninguém te identificar</b>. Cumprida até o fim, paga <b>+35%</b> e dá +25% de XP (o painel mostra ★ enquanto vale, ✗ quando perdeu).</li>
         <li><b>Gestão</b> nas patentes altas: negócios que rendem por dia — e riscos que também rodam por dia (Receita, arrego, rival, sequestro, rastreio).</li></ul>
         <div class="gd-tip">As carreiras se ajudam: o <b>fundo falso</b> do Desmanche esconde o dinheiro da rota do Bicho; a <b>escola de samba</b> do Bicho segura a Receita do Desmanche e das fachadas; o <b>silenciador</b> do Armeiro deixa qualquer trabalho mais discreto.</div>`,
 

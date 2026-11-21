@@ -6,6 +6,8 @@
 //                  record — was decided at the moment of the crime by police/HeatStateMachine.js.)
 //                  Alcance a testemunha antes: E com a arma na mão INTIMIDA (o bairro passa a ter medo; às vezes ela grita e liga na hora),
 //                  sem arma SUBORNA (o preço depende do crime). Testemunha que sai de perto (some da rua) também liga.
+//                  INQUÉRITO: num crime PESADO visto só por pedestres (HeatStateMachine._report), o relato vai com as testemunhas — quando
+//                  a primeira liga, o crime entra na ficha (de rosto coberto, não). Calou todas antes? Não há inquérito.
 //   • BATIDA       with a warrant on the record (HeatStateMachine), a Polícia Civil marca uma busca e apreensão na sua casa para o dia
 //                  seguinte de manhã. O Sargento Brito (se ainda confia em você) avisa na véspera — e, por um cafezinho, segura a batida.
 //                  Na batida levam do cofre e do baú: boa parte do dinheiro sujo, as joias e as armas. What they find is filed as
@@ -14,8 +16,14 @@
 
 const Witnesses = {
     list: [], raid: null, _id: 0,
-    COST: { kill: 1500, cop: 2500, holdup: 300, carjack: 450 },
-    LABEL: { kill: 'homicídio', cop: 'policial morto', holdup: 'assalto', carjack: 'roubo de carro' },
+    COST: { kill: 1500, cop: 2500, holdup: 300, carjack: 450, heavy: 800, kidnap: 1800 },
+    LABEL: { kill: 'homicídio', cop: 'policial morto', holdup: 'assalto', carjack: 'roubo de carro', heavy: 'crime', kidnap: 'sequestro' },
+    // crime da ficha (HeatStateMachine) → o tipo de testemunha
+    KIND_OF: { homicide: 'kill', cop_killed: 'cop', mugging: 'holdup', robbery: 'holdup', armed_robbery: 'holdup', carjacking: 'carjack', kidnapping: 'kidnap' },
+    CRIME: { homicide: 'homicídio', cop_killed: 'policial morto', mugging: 'assalto', robbery: 'assalto', armed_robbery: 'assalto à mão armada', carjacking: 'roubo de carro',
+        kidnapping: 'sequestro', armed_assault: 'lesão corporal grave', arson: 'incêndio', explosion: 'explosão', burglary: 'arrombamento', extortion: 'extorsão',
+        cop_assault: 'agressão a policial', bank_robbery: 'assalto a banco', petty_robbery: 'assalto a comércio' },
+    anon: [],               // relatos sem testemunha na rua para segurar (ela já se foi): ligam sozinhos daqui a pouco
 
     // ---------------------------------------------------------------- testemunhas
     onCrime(kind, x, z) {
@@ -33,7 +41,30 @@ const Witnesses = {
     },
     _pick(a) { return a[Math.floor(Math.random() * a.length)]; },
 
+    // Uma pessoa específica vira testemunha (a vítima do sequestro que pulou do porta-malas): foge com o celular e liga levando o relato.
+    witness(g, n, kind, rep) {
+        if (!n || !n.alive || n.witness) return;
+        const W = { id: ++this._id, npc: n, kind, x: rep.x, z: rep.z, t: 18 + Math.random() * 12, ping: 0, report: rep };
+        n.witness = W; this.list.push(W);
+        if (typeof Bubbles !== 'undefined') Bubbles.say(n, this._pick(['SOCORRO! Me sequestraram!', 'Alô, 190?! Me prenderam num porta-malas!']), { tone: 'shout', ms: 2400 });
+    },
+    // Um crime PESADO visto só por pedestres: as testemunhas da cena (as que WorldMemory.crime acabou de pôr para correr, ou novas)
+    // levam o relato. A primeira que ligar abre o inquérito; nenhuma ligou (intimidadas, subornadas) = sem inquérito.
+    report(g, rep) {
+        const near = () => this.list.filter((W) => !W.done && !W.report && Math.hypot(W.x - rep.x, W.z - rep.z) < 30);
+        let L = near();
+        if (!L.length) { this.onCrime(this.KIND_OF[rep.type] || 'heavy', rep.x, rep.z); L = near(); }
+        if (!L.length) { this.anon.push({ t: 25, rep }); return; }                     // (quem viu já sumiu da rua: liga de longe)
+        for (const W of L) W.report = rep;
+    },
+
     update(g, dt) {
+        for (let i = this.anon.length - 1; i >= 0; i--) {
+            const A = this.anon[i];
+            if ((A.t -= dt) > 0) continue;
+            this.anon.splice(i, 1);
+            this._file(g, A.rep, 'Alguém ligou para o 190');
+        }
         for (let i = this.list.length - 1; i >= 0; i--) {
             const W = this.list[i], n = W.npc;
             if (W.done) { this.list.splice(i, 1); continue; }
@@ -47,8 +78,16 @@ const Witnesses = {
         this._raidUpdate(g, dt);
     },
     _end(W) { W.done = true; if (W.npc) W.npc.witness = null; },
+    // O relato chega à polícia: o crime vai para a ficha (inquérito) — de rosto coberto, não.
+    _file(g, rep, why) {
+        if (!rep || rep.filed || !g || !g.heat) return;
+        const named = g.heat.fileReport(rep);
+        if (typeof Traces !== 'undefined' && !Traces.fullMask() && !rep.masked) Traces.desc = Object.assign(Traces.sig(), { until: Traces.now() + 48, where: 'na rua' });
+        g._flash(named ? `📋 ${why}: inquérito aberto (${this.CRIME[rep.type] || rep.type.replace('_', ' ')}) — seu nome está na ficha` : `📋 ${why}: mas ninguém viu seu rosto`);
+    },
     _call(g, W) {
         this._end(W);
+        if (W.report) this._file(g, W.report, 'Uma testemunha ligou');
         const full = typeof Traces !== 'undefined' && Traces.fullMask();
         if (typeof Traces !== 'undefined') {
             Traces.call(W.x, W.z, 0, `Uma testemunha ligou (${this.LABEL[W.kind]})`);
@@ -144,6 +183,6 @@ const Witnesses = {
         return `📞 ${n > 1 ? n + ' testemunhas vão' : '1 testemunha vai'} ligar (${t}s)`;
     },
     serialize() { return { raid: this.raid }; },
-    load(s) { for (const W of this.list) this._end(W); this.list = []; this.raid = (s && s.raid) || null; },
+    load(s) { for (const W of this.list) this._end(W); this.list = []; this.anon = []; this.raid = (s && s.raid) || null; },
 };
 Economy.onDay(() => Witnesses.onNewDay());

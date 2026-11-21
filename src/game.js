@@ -77,6 +77,7 @@ class Game {
 				// O policial solta munição, dinheiro e, às vezes, uma arma ou kit (tropa de elite e exército: fuzil e mais $).
 				if (source !== 'gang' && source !== 'police') this.pickups.dropLoot(o.position, o.kind || 'cop');      // (morto pelo tráfico: sem loot)
 				if (source === 'player' && typeof WorldMemory !== 'undefined') WorldMemory.crime('cop', o.position.x, o.position.z);
+				if (source === 'player') this.playerKills = (this.playerKills || 0) + 1;          // (bônus dos trabalhos: "sem matar ninguém")
 				if (source === 'player') { this.heat.commit('cop_killed'); this._flash('Policial morto! Eles não vão deixar barato!'); if (o.op) { Standing.add('traffic', 4); if (this.missions) this.missions.onCopKilled(); } if (Standing.nearFavela(o.position.x, o.position.z)) Standing.addHeat(30, 'policial morto'); }       // (na operação o tráfico gosta; perto da favela, a pressão sobe)
 			},
 		};
@@ -92,7 +93,7 @@ class Game {
 					this.pickups.dropLoot(npc.position, 'civilian');
 					if (source !== 'player') return;
 					if (typeof WorldMemory !== 'undefined') WorldMemory.crime('fight', npc.position.x, npc.position.z);
-					this.heat.commit('assault');
+					this.heat.commit('armed_assault');                                // (caído sangrando: lesão grave — crime pesado, abre inquérito)
 					if (!npc.mugger) Standing.harm(this, 3);
 					if (this.npcManager) this.npcManager.alertViolence(npc.position, 18);
 					this._flash(`Pedestre #${npc.id} caído, sangrando — sem socorro ele morre`);
@@ -102,6 +103,7 @@ class Game {
 					const bled = !!(opts && opts.bled);
 					if (!bled) this.pickups.dropLoot(npc.position, 'civilian');
 					if (source !== 'player') return;
+					this.playerKills = (this.playerKills || 0) + 1;
 					if (bled) {
 						this.heat.commit('homicide');
 						if (typeof WorldMemory !== 'undefined') WorldMemory.crime('kill', npc.position.x, npc.position.z);
@@ -290,6 +292,7 @@ class Game {
 		try {
 			await this.nav.init(this.gameEngine.world.street ? this.gameEngine.world.street.lamps : []);
 			this.npcManager = new NPCManager(this.scene, this.nav, this.sprites, this.npcCtx);
+			{ const ps = this._playerState().pos; this.nav.focus.x = ps.x; this.nav.focus.z = ps.z; }      // (nascem em volta de você, não da origem)
 			this.npcManager.spawn(Config.npc.count);
 			this.aiReady = true;
 			this._flash(`${this.npcManager.count} pedestres na rua`);
@@ -815,6 +818,7 @@ class Game {
 		this.fireworks.update(dt);
 		Radio.update(this, dt);                                                  // rádio do carro: a estação de cada carro (audio/Radio.js)
 		StreetReact.update(this, dt);                                            // pedestres saem da frente do seu carro (npc/StreetReact.js)
+		Stealth.update(this, dt);                                                // derrubar por trás, arrastar corpo, corpo achado, "estão me vendo" (crime/Stealth.js)
 		if (typeof News !== 'undefined') News.radioUpdate(dt, this);          // boletim no rádio do carro
 		for (let i = this._delayed.length - 1; i >= 0; i--) {
 			const d = this._delayed[i];
@@ -942,6 +946,7 @@ class Game {
 			Pelada.update(dt, this);                                     // o futebol dos meninos na quadra da favela (de dia)
 			Perf.lap('favela (gangues/moto/missões)');
 			StreetLife.update(this, dt);                                  // a rua viva: movimento por hora, acontecimentos, conversas
+			Chaos.update(this, dt);                                       // pedestres entre si: esbarrão, roda de briga, dominó, bêbado, dança, desmaio, dinheiro voando
 			Rescue.update(this, dt);                                      // feridos sangrando, quem liga para o 192 e as ambulâncias
 			Buses.update(this, dt);                                       // as linhas de ônibus: pontos, horários, os ônibus perto da câmera e o embarque
 			Stands.update(this, dt);                                      // quiosques, café e barracas: o vendedor aparece de perto
@@ -1159,6 +1164,8 @@ class Game {
 		const p = this.player, inv = this.inventory, key = p.weapon === 'none' ? 'fists' : p.weapon;
 		const W = Weapons[key];
 		if (this.reloading > 0) return;
+		if (Stealth.drag) Stealth.drop(this, true);                       // (golpe/tiro: solta o corpo que arrastava)
+		if (!W.gun) { const tk = Stealth.target(this); if (tk) { Stealth.takedown(this, tk); return; } }      // agachado atrás de quem não te vê: o golpe vira o mata-leão
 
 		if (W.gun) {
 			if (this._fireCd > 0) return;
@@ -1374,7 +1381,7 @@ class Game {
 					if (finisher || !t.alive) this.camera.shake(0.35);
 				}
 				this.npcManager.alertViolence(p.position, this._witnessR(), [t]);
-				this.heat.commit('assault');
+				this.heat.commit(knife ? 'armed_assault' : 'assault');                         // (soco/chute/taco: delito leve; facada: pesado)
 				this._flash(`Agrediu #${t.id}!`);
 			},
 		});
@@ -1933,6 +1940,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 				const cp = !car.isBoat && CarCare.prompt(this);                         // a pé na frente/atrás do carro: capô ou porta-malas
 				if (cp) html = cp + '<br>' + html;
 			}
+			if (!car && !shopP) { const sp = Stealth.prompt(this); if (sp) html = sp; }      // derrubar por trás / arrastar ou soltar o corpo
 			if (!html && this.player.crouched) html = this.player.coverLock      // agachado: o estado e como sair dele
 				? '<b>Q</b> sair da cobertura<small>colado — mova para os lados para deslizar; segure na ponta para contornar; afaste-se para soltar</small>'
 				: this.player.inCover
@@ -2388,6 +2396,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		if (this.hiding) { if (this.hiding.phase === 'hidden') this._leaveHiding(); return; }
 		if (this.holdup) { this._cancelHoldup('Você baixou a arma — a vítima fugiu'); return; }
 		if (this.player.busy) return;
+		if (Stealth.interact(this)) return;                              // agachado atrás de alguém: derrubar em silêncio; perto de um corpo: arrastar / soltar
 		if (typeof Corcovado !== 'undefined' && Corcovado.interact(this)) return;      // elevador e trem do Morro do Vigia
 		if (typeof Landmarks !== 'undefined' && Landmarks.interact(this)) return;      // o passeio de bondinho da Pedra do Farol
 		if (Stands.interact(this)) return;                               // quiosques do calçadão, café do Morro do Vigia
@@ -2604,6 +2613,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 	// mas é bem menos arriscado que um assalto (nenhum flagrante longo, sem polícia avisada).
 	_tryPickpocket() {
 		const pl = this.player, R = Config.robbery;
+		if (StreetLife.steal && StreetLife.steal(this)) return;          // (o turista distraído posando para a foto: npc/StreetLife.js)
 		if (pl.busy || this.holdup) return;
 		const target = this.npcManager.nearestTarget(pl.position, R.theftRange, (n) => !n.surrendered && !n.fleeing && n.state !== 'HURT', this.player);
 		if (!target) { this._flash('Ninguém por perto pra furtar…'); return; }

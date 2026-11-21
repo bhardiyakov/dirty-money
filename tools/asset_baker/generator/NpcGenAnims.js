@@ -1406,6 +1406,93 @@ function NpcGenAnims(G) {
             return p;
         });
     }
+    // REAÇÕES POR DIREÇÃO (o jogo escolhe pelo lado de onde veio o golpe/tiro — NPC.update, Player): o `hurt` acima é o golpe pela FRENTE
+    // (o corpo vai para trás). Por TRÁS: empurrado para a frente — quadril à frente, tronco e cabeça caindo para a frente, braços jogados
+    // para trás e para fora. Pelo LADO: o tronco dobra para longe do golpe (rolagem), o quadril escorrega para o outro lado, o braço do
+    // lado atingido sobe para se proteger. side = +1: o golpe veio da DIREITA dele (dobra para a esquerda); −1: da esquerda.
+    function hurtBack() {
+        // [pélvis y (frente +), z, pélvis Rx (− = para a frente), peito Rx, cabeça Rx, braços [flexão (− = para trás), abertura, cotovelo]]
+        const K = [[1.4, -0.8, -6, -14, -6, [-26, 30, 24]], [2.2, -1.6, -9, -22, -10, [-38, 40, 34]], [1.0, -0.9, -4, -9, -3, [-16, 24, 26]], [0.2, -0.2, 0, -1, 0, [2, 13, 16]]];
+        return K.map(([py, pz, pp, cp, hp, [af, aa, ae]]) => {
+            const p = base();
+            p.pelvis_t = [0, py, pz];
+            p.pelvis_R = Rx(deg(pp));
+            p.chest_R = Rx(deg(cp));
+            p.head_R = Rx(deg(HEAD_TILT + hp));
+            standLegs(p, 10.5, [0.4, 0.4], 10);
+            p.arm_fk('R', { flex: af, abd: aa, elbow: ae });
+            p.arm_fk('L', { flex: af * 0.9, abd: aa + 3, elbow: ae * 1.1 });
+            return p;
+        });
+    }
+    function hurtSide(side) {
+        // [pélvis x (para longe do golpe), z, rolagem do peito (graus, para longe), rolagem da cabeça, braço do lado atingido [flexão, abertura, cotovelo]]
+        const K = [[1.6, -0.7, 12, 8, [38, 34, 92]], [2.4, -1.4, 18, 13, [48, 40, 104]], [1.1, -0.8, 7, 5, [24, 26, 70]], [0.2, -0.2, 1, 0, [6, 14, 18]]];
+        const hit = side > 0 ? 'R' : 'L', far = side > 0 ? 'L' : 'R';
+        return K.map(([px, pz, cr, hr, [af, aa, ae]]) => {
+            const p = base();
+            p.pelvis_t = [-side * px, 0, pz];
+            p.pelvis_R = Ry(deg(side * cr * 0.35));
+            p.chest_R = Ry(deg(side * cr));
+            p.head_R = mm3(Ry(deg(side * hr)), Rx(deg(HEAD_TILT + 4)));
+            standLegs(p, 11.5, [0.4, 0.4], 10);
+            p.arm_fk(hit, { flex: af, abd: aa, elbow: ae });                          // (o braço do lado atingido sobe: protege)
+            p.arm_fk(far, { flex: 6, abd: 18 + aa * 0.4, elbow: 20 });                // (o outro abre: equilíbrio)
+            return p;
+        });
+    }
+    // PULO PARA FORA DO CAMINHO (StreetReact: o carro vindo; o jogo leva o corpo para o lado e vira o rosto para onde ele pula): agacha,
+    // impulsiona inclinado para a frente com os braços à frente do rosto, voa com as pernas recolhidas, cai agachado com as mãos indo ao
+    // chão e levanta. Parado no lugar (o deslocamento é do jogo).
+    function leap() {
+        const out = [];
+        let p = base();                                                               // 0: susto — agacha, braços sobem
+        p.pelvis_t = [0, -0.5, -5.0]; p.pelvis_R = Rx(deg(-8)); p.chest_R = Rx(deg(-10)); p.head_R = Rx(deg(HEAD_TILT + 4));
+        standLegs(p, 12.0, [0.4, 0.4], 10);
+        p.arm_fk('R', { flex: 40, abd: 22, elbow: 70 }); p.arm_fk('L', { flex: 40, abd: 22, elbow: 70 });
+        out.push(p);
+        p = base();                                                                   // 1: impulso — perna de trás estica, corpo à frente
+        p.pelvis_t = [0, 3.0, -2.0]; p.pelvis_R = Rx(deg(-24)); p.chest_R = Rx(deg(-16)); p.head_R = Rx(deg(HEAD_TILT + 10));
+        p.leg_fk('R', { flex: 58, abd: -4, knee: 70, foot: 10 }); p.leg_fk('L', { flex: -18, abd: -4, knee: 10, foot: -30 });
+        p.arm_fk('R', { flex: 96, abd: 18, elbow: 40 }); p.arm_fk('L', { flex: 92, abd: 18, elbow: 46 });
+        out.push(p);
+        p = base();                                                                   // 2: no ar — pernas recolhidas, braços protegendo o rosto
+        p.pelvis_t = [0, 5.0, 4.5]; p.pelvis_R = Rx(deg(-34)); p.chest_R = Rx(deg(-14)); p.head_R = Rx(deg(HEAD_TILT + 14));
+        p.leg_fk('R', { flex: 66, abd: -8, knee: 96, foot: -6 }); p.leg_fk('L', { flex: 30, abd: -8, knee: 104, foot: -10 });
+        p.arm_fk('R', { flex: 112, abd: 26, elbow: 92 }); p.arm_fk('L', { flex: 108, abd: 26, elbow: 96 });
+        out.push(p);
+        p = base();                                                                   // 3: cai agachado, mãos indo ao chão
+        p.pelvis_t = [0, 2.0, -15.0]; p.pelvis_R = Rx(deg(-28)); p.chest_R = Rx(deg(-24)); p.head_R = Rx(deg(HEAD_TILT + 16));
+        placeFoot(p, 'R', [10.5, 9.0, 0], -8); placeFoot(p, 'L', [-10.5, -4.0, 0], 8);
+        p.arm_fk('R', { flex: 62, abd: 22, elbow: 26 }); p.arm_fk('L', { flex: 58, abd: 22, elbow: 30 });
+        out.push(p);
+        p = base();                                                                   // 4: levantando
+        p.pelvis_t = [0, 0.6, -7.0]; p.pelvis_R = Rx(deg(-12)); p.chest_R = Rx(deg(-10)); p.head_R = Rx(deg(HEAD_TILT + 6));
+        placeFoot(p, 'R', [10.5, 4.0, 0], -8); placeFoot(p, 'L', [-10.5, -2.0, 0], 8);
+        p.arm_fk('R', { flex: 26, abd: 16, elbow: 36 }); p.arm_fk('L', { flex: 24, abd: 16, elbow: 38 });
+        out.push(p);
+        out.push(idle()[0]);
+        return out;
+    }
+    // MANCANDO (ferido: vida baixa ou sangrando — o jogo troca o `walk` por este): a perna DIREITA dói — passo curto e rápido nela, o
+    // corpo despenca para o lado dela e volta, a mão direita aperta a coxa, o tronco curvado e a cabeça baixa.
+    const LIMP = { stride: 6.8, stance: 0.64, lift: 0.9, width: 8.6, heel: 9, toeoff: -18 };
+    function limp(n = 8) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, p = base(), s = sin(TAU * t), c = cos(TAU * t);
+            walkLegs(p, t, LIMP);
+            const drop = max(0, -c);                                                  // (o apoio na perna machucada: o corpo cai para ela)
+            p.pelvis_t = V.add(p.pelvis_t, [1.4 * drop, 0, -1.6 * drop]);
+            p.pelvis_R = mm3(Rz(deg(4 * c)), Ry(deg(-7 * drop)));
+            p.chest_R = mm3(mm3(Rz(deg(-6 * c)), Ry(deg(5 * drop))), Rx(deg(-11)));
+            p.head_R = mm3(Ry(deg(-3 * drop)), Rx(deg(HEAD_TILT - 4)));
+            p.arm_fk('R', { flex: 18, abd: 8, elbow: 34 + 6 * s });                   // (a mão na coxa)
+            p.arm_fk('L', { flex: 16 * c + 6, abd: 20 + 6 * drop, elbow: 22 + 6 * (1 + c) });      // (o outro abre um pouco: equilíbrio)
+            out.push(p);
+        }
+        return out;
+    }
     // Deitado de costas (a cabeça para trás, −y): costas, nádegas, panturrilhas e a nuca NO CHÃO — a malha adulta é mais grossa que o
     // pacote: a pélvis fica a LIE_Z (o 10 de antes deixava o tronco ~10 u no ar, só os calcanhares no chão) —, joelhos um pouco erguidos,
     // pés caídos para fora. O quadril fica atrás da origem (LIE_Y): o tronco ~0,45 m atrás dos pés, onde o jogo põe a poça (Blood._pool), e ao
@@ -1935,6 +2022,41 @@ function NpcGenAnims(G) {
             L: [[0, REST], [0.15, [-10.0, 9.0, -9.0]], [0.27, [-6.0, 14.0, -2.0]], [0.39, [-6.0, 27.0, 4.0]], [0.47, [-5.0, 26.0, 5.0]], [0.62, [-2.0, 11.0, 4.0]], [0.8, [-12.0, 5.0, -6.0]], [1, REST]],
             wR: [[0, 0], [0.15, 1], [0.8, 1], [1, 0]], wL: [[0, 0], [0.15, 0.5], [0.27, 1], [0.8, 1], [1, 0]],
             fL: [[0, [-10.5, 0.4, 0]], [0.27, [-10.5, 0.4, 0]], [0.39, [-10.0, 5.5, 0]], [0.5, [-10.0, 5.5, 0]], [0.64, [-10.5, 0.4, 0]], [1, [-10.5, 0.4, 0]]],
+        });
+    }
+    // CARREGAR NO OMBRO (Stealth — o corpo atravessado nos ombros, "de bombeiro"): o braço direito por cima segurando as pernas dele, o
+    // esquerdo o braço dele na frente do peito; tronco curvado sob o peso, passada curta, o peito quase não balança. Parado: respira.
+    function carryArms(p, b = 0) {
+        p.arm_fk('R', { flex: 88 + 2 * b, abd: 32, elbow: 122 });
+        p.arm_fk('L', { flex: 42 + 2 * b, abd: 6, elbow: 96 });
+    }
+    function carryWalk(n = 12) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, p = base();
+            walkLegs(p, t);
+            walkUpper(p, t, false, 0, 9);                                              // (sem balançar os braços; inclinado à frente)
+            p.chest_R = mm3(Rz(deg(-3 * cos(TAU * t))), Rx(deg(-9)));
+            carryArms(p, sin(TAU * t));
+            out.push(p);
+        }
+        return out;
+    }
+    function carryIdle(n = 6) {
+        return idle(n).map((p, i) => { const b = sin(TAU * i / n); p.chest_R = Rx(deg(-8 - 1.2 * b)); carryArms(p, b); return p; });
+    }
+    // DERRUBAR POR TRÁS (Stealth — o mata-leão): estica os braços, envolve o pescoço de quem está à frente (a direita cruza para o outro
+    // lado, a esquerda trava o braço), puxa para trás inclinando o tronco, desce junto com ele (que apaga) e solta. Pés plantados.
+    function takedown(K = 12) {
+        return standAct(K, {
+            lean: [[0, 0], [0.12, 8], [0.28, 4], [0.5, -8], [0.66, 20], [0.84, 10], [1, 0]],
+            yaw: [[0, 0], [0.28, -3], [0.5, 4], [0.66, 0], [1, 0]],
+            py: [[0, 0], [0.12, 1.2], [0.28, 0.6], [0.5, -1.2], [0.66, 1.0], [0.84, 0.4], [1, 0]],
+            pz: [[0, 0], [0.28, -0.3], [0.5, -0.6], [0.66, -3.5], [0.84, -1.5], [1, 0]],
+            R: [[0, REST], [0.12, [6.0, 22.0, 4.0]], [0.28, [-3.0, 15.0, 6.0]], [0.5, [-3.0, 13.0, 6.0]], [0.66, [-2.0, 15.0, -4.0]], [0.84, [8.0, 14.0, -8.0]], [1, REST]],
+            L: [[0, REST], [0.12, [-6.0, 22.0, 4.0]], [0.28, [4.0, 13.0, 5.0]], [0.5, [4.0, 11.0, 5.0]], [0.66, [4.0, 13.0, -4.0]], [0.84, [-8.0, 14.0, -8.0]], [1, REST]],
+            wR: [[0, 0], [0.12, 0.6], [0.28, 1], [0.66, 1], [0.84, 0.5], [1, 0]], wL: [[0, 0], [0.12, 0.6], [0.28, 1], [0.66, 1], [0.84, 0.5], [1, 0]],
+            hy: [[0, 0], [0.5, 6], [1, 0]],
         });
     }
     // NOVO: entrar no carro (NPC; o jogador usa o sitin) — mãos no teto e no batente, põe o pé direito no carro, abaixa a cabeça curvando
@@ -3004,6 +3126,125 @@ function NpcGenAnims(G) {
         }
         return out;
     }
+    // ANDARES COM PERSONALIDADE (pedestres — NPC._gait): mexendo no celular (cabeça baixa, as duas mãos no aparelho à frente do peito,
+    // passo um pouco mais lento), idoso (curvado, passada curta, braços quase parados) e gingado (ombros balançando, braços abertos).
+    function walkPhone(n = 12) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, p = base(), c = cos(TAU * t), dev = [0.5, 10.5, -1.5];
+            walkLegs(p, t);
+            walkUpper(p, t, false, 0, 4);
+            p.head_R = mm3(Rz(deg(3 * c)), Rx(deg(HEAD_TILT - 22)));
+            p.arm_ik('R', inReach(p, 'R', chestAt(p, V.add(dev, [1.6, 0, 0])), 0.95), [1.0, -0.3, -0.8]);
+            p.arm_ik('L', inReach(p, 'L', chestAt(p, V.add(dev, [-1.6, 0, 0])), 0.95), [-1.0, -0.3, -0.8]);
+            const B = p.bones(), cc = V.mul(V.add(p.fist_world(B, 'R'), p.fist_world(B, 'L')), 0.5);
+            p.props.push(['phone', M4(mm3(Rx(deg(-55)), I3()), V.add(cc, [0, 1.0, 1.4]))]);
+            out.push(p);
+        }
+        return out;
+    }
+    const WALK_OLD = Object.assign({}, WALK, { stride: WALK.stride * 0.68, lift: 0.9, width: 9.0 });
+    function walkOld(n = 12) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, p = base(), c = cos(TAU * t);
+            walkLegs(p, t, WALK_OLD);
+            walkUpper(p, t, true, 9, 12);
+            p.chest_R = mm3(Rz(deg(-4 * c)), Rx(deg(-14)));
+            out.push(p);
+        }
+        return out;
+    }
+    const WALK_SWAG = Object.assign({}, WALK, { width: 9.6 });
+    function walkSwag(n = 12) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, p = base(), c = cos(TAU * t), ca = cos(TAU * (t - 0.04));
+            walkLegs(p, t, WALK_SWAG);
+            p.pelvis_R = Rz(deg(8 * c));
+            p.chest_R = mm3(Rz(deg(-16 * c)), Rx(deg(1)));
+            p.head_R = mm3(Rz(deg(6 * c)), Rx(deg(HEAD_TILT + 4)));
+            p.arm_fk('R', { flex: -30 * ca + 2, abd: 20, elbow: 22 + 10 * (1 - ca) });
+            p.arm_fk('L', { flex: 30 * ca + 2, abd: 20, elbow: 22 + 10 * (1 + ca) });
+            out.push(p);
+        }
+        return out;
+    }
+    // GESTOS DE QUEM ESTÁ PARADO (o jogador depois de uns segundos sem mexer; pedestres esperando): olha em volta (cabeça e peito para
+    // um lado e para o outro), se alonga (braços para cima, o peito para trás) e olha o relógio (o pulso esquerdo sobe, a cabeça baixa).
+    // Começam e terminam no repouso (o idle segue sem salto).
+    function idleLook(n = 16) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, sw = sin(TAU * t), p = standBase(t, { yaw: 14 * sw, hy: 38 * sw, hp: 2 });
+            restArm(p, 'R', sw); restArm(p, 'L', -sw);
+            out.push(p);
+        }
+        return out;
+    }
+    function idleStretch(n = 16) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, u = ease(min(1, sin(PI * t) * 1.3)), p = standBase(t, { lean: -10 * u, hp: 12 * u });
+            p.arm_fk('R', { flex: 4 + 150 * u, abd: 12 + 18 * u, elbow: 14 + 10 * u });
+            p.arm_fk('L', { flex: 4 + 150 * u, abd: 12 + 18 * u, elbow: 14 + 10 * u });
+            out.push(p);
+        }
+        return out;
+    }
+    function idleWatch(n = 14) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, u = ease(min(1, sin(PI * t) * 1.6)), p = standBase(t, { hp: -16 * u, hy: -10 * u });
+            p.arm_fk('L', { flex: 4 + 48 * u, abd: 12 - 6 * u, elbow: 14 + 96 * u });
+            restArm(p, 'R', 0);
+            out.push(p);
+        }
+        return out;
+    }
+    // A RUA COM VIDA PRÓPRIA (npc/Chaos.js): DANÇAR (o quadril no samba, os pés trocando no lugar, braços para cima balançando), TORCER
+    // na roda de briga (o punho sobe e desce, o corpo quica) e ANDAR BÊBADO (passos largos e tortos, o corpo balançando de um lado para o
+    // outro a cada dois passos, braços soltos).
+    function danceAnim(n = 16) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, s = sin(TAU * t), s2 = sin(2 * TAU * t), p = base();
+            p.pelvis_t = [1.6 * s, 0, -0.9 - 0.9 * cos(2 * TAU * t)];
+            p.pelvis_R = Rz(deg(10 * s));
+            p.chest_R = mm3(Rz(deg(-12 * s)), Rx(deg(2)));
+            p.head_R = mm3(Rz(deg(8 * s)), Rx(deg(HEAD_TILT + 4 * s2)));
+            standLegs(p, 11.0, [0.4 + 1.2 * Math.max(0, s), 0.4 + 1.2 * Math.max(0, -s)], 10);
+            p.arm_fk('R', { flex: 95 + 25 * s, abd: 35 + 10 * s2, elbow: 55 + 20 * s });
+            p.arm_fk('L', { flex: 95 - 25 * s, abd: 35 - 10 * s2, elbow: 55 - 20 * s });
+            out.push(p);
+        }
+        return out;
+    }
+    function cheerAnim(n = 8) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, u = 0.5 + 0.5 * sin(TAU * t), p = standBase(t, { hp: 8, lean: -3 });
+            p.pelvis_t = V.add(p.pelvis_t, [0, 0, -0.6 * u]);
+            p.arm_fk('R', { flex: 110 + 45 * u, abd: 25, elbow: 85 - 55 * u });
+            p.arm_fk('L', { flex: 40 + 20 * (1 - u), abd: 18, elbow: 95 });
+            out.push(p);
+        }
+        return out;
+    }
+    const WALK_DRUNK = Object.assign({}, WALK, { stride: WALK.stride * 0.8, width: 12.5, lift: 1.2 });
+    function walkDrunk(n = 16) {
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            const t = i / n, t2 = (2 * t) % 1, sw = sin(TAU * t), p = base();
+            walkLegs(p, t2, WALK_DRUNK);
+            walkUpper(p, t2, true, 30, 6);
+            p.pelvis_t = V.add(p.pelvis_t, [2.6 * sw, 0, 0]);
+            p.chest_R = mm3(Rz(deg(-14 * sw)), Rx(deg(-8)));
+            p.head_R = mm3(Rz(deg(10 * sin(TAU * t + 1))), Rx(deg(HEAD_TILT + 6 + 6 * sw)));
+            out.push(p);
+        }
+        return out;
+    }
     // Bebendo de pé (no balcão do bar): o copo na direita, à altura do peito; gole com a cabeça para trás; a esquerda no balcão.
     function drinkStand(n = 14) {
         const out = [];
@@ -3056,6 +3297,11 @@ function NpcGenAnims(G) {
         molotov_hold: { fps: 8, loop: true, k: 6, n: 8, fn: (w, o, n) => holdLoop(n, 'molotov') },
         molotov_throw: { fps: 16, loop: false, k: 7, n: 10, fn: seq(() => throwRelease('molotov')) },
         hurt: { fps: 12, loop: false, k: 4, n: 6, fn: seq(() => hurt()) },
+        hurt_b: { fps: 12, loop: false, k: 4, n: 6, fn: seq(() => hurtBack()) },           // golpe/tiro por TRÁS: empurrado para a frente
+        hurt_l: { fps: 12, loop: false, k: 4, n: 6, fn: seq(() => hurtSide(-1)) },          // pela ESQUERDA dele: dobra para a direita
+        hurt_r: { fps: 12, loop: false, k: 4, n: 6, fn: seq(() => hurtSide(1)) },           // pela DIREITA dele: dobra para a esquerda
+        leap: { fps: 14, loop: false, k: 6, n: 9, fn: seq(() => leap()) },                 // pulo para fora do caminho do carro (StreetReact)
+        limp: { fps: 9, loop: true, k: 8, n: 12, fn: (w, o, n) => limp(n) },              // mancando (ferido)
         dead: { fps: 12, loop: false, k: 8, n: 10, fn: seq(() => death(false)) },        // (a poça de sangue é a do jogo — Blood.deathPool —, não desenhada)
         surrender: { fps: 9, loop: false, k: 8, n: 10, fn: seq(() => surrenderKneel()) },
         kneel: { fps: 1, loop: true, k: 1, n: 1, fn: () => [kneelPose(1)] },
@@ -3081,6 +3327,18 @@ function NpcGenAnims(G) {
         getup: { fps: 10, loop: false, k: 7, n: 10, fn: seq(() => getUp()) },
         vault: { fps: 10, loop: false, k: 6, n: 9, fn: seq(() => vault()) },
         carjack: { fps: 9, loop: false, k: 6, n: 9, fn: (w, o, n) => carjack(n) },
+        takedown: { fps: 12, loop: false, k: 8, n: 12, fn: (w, o, n) => takedown(n) },
+        carry: { fps: 9, loop: true, k: 8, n: 12, fn: (w, o, n) => carryWalk(n) },
+        walk_phone: { fps: 9, loop: true, k: 8, n: 12, fn: (w, o, n) => walkPhone(n) },
+        walk_old: { fps: 8, loop: true, k: 8, n: 12, fn: (w, o, n) => walkOld(n) },
+        walk_swag: { fps: 10, loop: true, k: 8, n: 12, fn: (w, o, n) => walkSwag(n) },
+        dance: { fps: 10, loop: true, k: 8, n: 16, fn: (w, o, n) => danceAnim(n) },
+        cheer: { fps: 8, loop: true, k: 6, n: 8, fn: (w, o, n) => cheerAnim(n) },
+        walk_drunk: { fps: 8, loop: true, k: 8, n: 16, fn: (w, o, n) => walkDrunk(n) },
+        idle_look: { fps: 6, loop: false, k: 8, n: 16, fn: (w, o, n) => idleLook(n) },
+        idle_stretch: { fps: 6, loop: false, k: 8, n: 16, fn: (w, o, n) => idleStretch(n) },
+        idle_watch: { fps: 6, loop: false, k: 8, n: 14, fn: (w, o, n) => idleWatch(n) },
+        carry_idle: { fps: 6, loop: true, k: 4, n: 6, fn: (w, o, n) => carryIdle(n) },
         opendoor: { fps: 10, loop: false, k: 5, n: 8, fn: (w, o, n) => openDoor(n) },
         enter: { fps: 10, loop: false, k: 6, n: 9, fn: (w, o, n) => enterCar(n) },
         sitin: { fps: SIT_IN.fps, loop: false, k: SIT_IN.n, n: SIT_IN.n, fn: (w, o, n) => sitIn(w, n) },

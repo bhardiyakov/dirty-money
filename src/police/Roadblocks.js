@@ -8,6 +8,9 @@
 //
 // Os bloqueios formam um anel em volta de você (a ~70–125u) e acompanham sua fuga: os que ficam para
 // trás são desmontados e novos surgem à frente (sempre fora da tela, para não "aparecerem do nada").
+//
+// TAPETE DE PREGOS (Config.police.spikes): antes de cada bloqueio, do lado de fora, uma faixa de pregos atravessa a rua. Quem tenta
+// passar por ali (pela calçada ou de raspão) pisa nela: os pneus que encostaram furam (tick, todo quadro; blindado não fura).
 // ============================================================================
 
 class Roadblocks {
@@ -73,7 +76,67 @@ class Roadblocks {
             if (g) b.guards.push(g);
         }
         RoadNet.setClosed(inter, c.a, true);
+        const SP = Config.police.spikes;
+        if (SP && (m.level || 0) >= SP.minLevel) b.spikes = this._spikes(s.x + d.dx * SP.ahead, s.z + d.dz * SP.ahead, d, n, SP);
         this.list.push(b);
+    }
+
+    // A faixa de pregos: retângulo no chão, comprido na lateral da rua (n), fino no sentido dela (d).
+    _spikes(x, z, d, n, SP) {
+        const scene = this.m.scene, y = (typeof WorldMap !== 'undefined' ? WorldMap.heightAt(x, z) * (Config.world.heightScale || 1) : 0) + 0.05;
+        const mesh = BABYLON.MeshBuilder.CreateGround('spikes', { width: SP.depth, height: SP.len }, scene);
+        mesh.position.set(x, y, z);
+        mesh.rotation.y = Math.atan2(n.x, n.z);                       // (o comprimento do chão, o eixo Z local, ao longo de n)
+        mesh.material = Roadblocks._spikeMat(scene);
+        mesh.isPickable = false;
+        return { x, z, dx: d.dx, dz: d.dz, nx: n.x, nz: n.z, hl: SP.len / 2, hd: SP.depth / 2 + 0.2, mesh, hits: 0 };
+    }
+
+    // Material do tapete (uma vez por cena): a borracha escura com as pontas de metal em fileira.
+    static _spikeMat(scene) {
+        if (scene._spikeMat) return scene._spikeMat;
+        const tex = new BABYLON.DynamicTexture('spikesTex', { width: 32, height: 512 }, scene, true);
+        const c = tex.getContext();
+        c.fillStyle = '#1b1c1f'; c.fillRect(0, 0, 32, 512);
+        c.fillStyle = '#d4a017'; c.fillRect(0, 0, 3, 512); c.fillRect(29, 0, 3, 512);      // (as bordas amarelas: dá para ver de longe)
+        for (let yy = 4; yy < 512; yy += 16) {
+            for (const xx of [9, 23]) {
+                c.fillStyle = '#f1f4f9'; c.beginPath(); c.moveTo(xx - 5, yy + 12); c.lineTo(xx, yy); c.lineTo(xx + 5, yy + 12); c.closePath(); c.fill();
+                c.fillStyle = '#7d838f'; c.beginPath(); c.moveTo(xx, yy); c.lineTo(xx + 5, yy + 12); c.lineTo(xx, yy + 12); c.closePath(); c.fill();
+            }
+        }
+        tex.update();
+        const m = new BABYLON.StandardMaterial('spikesMat', scene);
+        m.diffuseTexture = tex; m.specularColor = new BABYLON.Color3(0.25, 0.25, 0.28); m.emissiveColor = new BABYLON.Color3(0.12, 0.12, 0.14);
+        scene._spikeMat = m;
+        return m;
+    }
+
+    // Todo quadro: o carro do jogador passou por cima de um tapete? Fura o pneu de cada roda que encostou nele.
+    tick() {
+        if (!this.list.length) return;
+        const g = this.m.game, car = g.mode === 'car' ? g.activeCar : null;
+        if (!car || !car.puncture || car.isBike || car.isBoat || Math.abs(car.speed) < 1.5) return;
+        for (const b of this.list) {
+            const S = b.spikes;
+            if (!S || Math.abs(car.position.x - S.x) > S.hl + 4 || Math.abs(car.position.z - S.z) > S.hl + 4) continue;
+            let n = 0;
+            for (let i = 0; i < 4; i++) {
+                const w = car.wheelWorld(i), ox = w.x - S.x, oz = w.z - S.z;
+                if (Math.abs(ox * S.dx + oz * S.dz) > S.hd || Math.abs(ox * S.nx + oz * S.nz) > S.hl) continue;
+                if (!car.puncture(i)) continue;
+                n++;
+                if (typeof SparkFx !== 'undefined') SparkFx.burst(g, w.x, w.z, car);
+            }
+            if (n) {
+                S.hits += n; g.spiked = (g.spiked || 0) + n;
+                AudioFX.thud(S.x, S.z);
+                if (g.camera) g.camera.shake(0.25);
+                if (g.input) g.input.rumble(0.8, 0.8, 260);
+                const k = car.flatCount;
+                g._flash(`💥 Tapete de pregos! ${k} pneu${k > 1 ? 's furados' : ' furado'} — o carro vai escorregar`);
+            }
+        }
     }
 
     // Desmonta um bloqueio: reabre a rua e remove viaturas e guardas.
@@ -82,6 +145,7 @@ class Roadblocks {
         const i0 = this.list.indexOf(b);
         if (i0 >= 0) this.list.splice(i0, 1);            // (primeiro sai da lista: _removeCar chama forgetCar)
         RoadNet.setClosed(b.inter, b.arm, false);
+        if (b.spikes) { b.spikes.mesh.dispose(); b.spikes = null; }
         for (const c of b.cars) m._removeCar(c);
         for (const g of b.guards) {
             const i = m.officers.indexOf(g);

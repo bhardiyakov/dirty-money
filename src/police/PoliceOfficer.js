@@ -396,6 +396,7 @@ class PoliceOfficer {
 
     // Volta como um policial novo de patrulha, em outro lugar, longe do jogador.
     respawn() {
+        if (this.ko || this._inTrunk || Stealth.bodies.has(this)) { this.ko = null; Stealth.forget(this); }      // (voltou como outra pessoa: sai do porta-malas, do ombro)
         if (this.actor.clearWounds) this.actor.clearWounds();               // (outro policial: sem os ferimentos do anterior)
         let pos = null;
         for (let i = 0; i < 12; i++) {
@@ -425,6 +426,7 @@ class PoliceOfficer {
     update(dt) {
         if (this.rag) { this.rag.update(dt); return; }      // arremessado: o Ragdoll comanda sprite e posição
         if (!this.alive) {
+            if (this.ko) { Stealth.koTick(this, dt); return; }      // (derrubado por trás: desacordado — crime/Stealth.js)
             this.deadTimer -= dt;
             this.actor.setPosition(this.transform.position.x, this.transform.position.z);
             this.actor.update(dt);

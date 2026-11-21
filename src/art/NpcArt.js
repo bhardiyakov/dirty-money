@@ -1150,10 +1150,41 @@ class NpcSheet {
 			if (def && !def.weapons) for (const id of L) if ((c = NpcArt.clip(id, this._key(name, 'none')))) break;
 		}
 		if (!c && w === 'knife') c = this.getClip(name, 'none');            // (faca sem o desenho dela neste atlas: o clipe de mãos livres)
+		if (!c && NpcSheet.ONLY3D[name]) c = this._only3d(name, w);
 		if (!c && this.legacy && CharacterRig.CLIPS[name]) c = this.legacy.getClip(name, w);      // (clipes novos, como 'holdup', só existem aqui)
 		if (!c && CharacterRig.CLIPS[name] && !CharacterRig.CLIPS[name].weapons) c = NpcArt.clip(this.atlasName, 'idle:none');
 		this.clips[key] = c || null;
 		return this.clips[key];
+	}
+	// CLIPES SÓ DO 3D: o gerador (tools/asset_baker/generator/NpcGenAnims.js) tem, os atlas 2,5D assados antes deles não. O clipe vira uma
+	// cópia do parecido (`as`) — o desenho 2,5D (de longe, no gráfico Baixo, ou enquanto o 3D chega) toca ele —, com o NOME e o TEMPO do
+	// novo (n quadros a fps): o boneco 3D (Char3DActor) pede o de verdade ao gerador pelo nome e acompanha a mesma fase.
+	static get ONLY3D() {
+		return NpcSheet._o3 || (NpcSheet._o3 = {
+			hurt_b: { as: 'hurt', n: 6, fps: 12, loop: false }, hurt_l: { as: 'hurt', n: 6, fps: 12, loop: false }, hurt_r: { as: 'hurt', n: 6, fps: 12, loop: false },
+			leap: { as: 'scared', n: 9, fps: 14, loop: false }, limp: { as: 'walk', n: 12, fps: 9, loop: true },
+			takedown: { as: 'punch', n: 12, fps: 12, loop: false },
+			carry: { as: 'walk', n: 12, fps: 9, loop: true }, carry_idle: { as: 'idle', n: 6, fps: 6, loop: true },
+			walk_phone: { as: 'walk', n: 12, fps: 9, loop: true }, walk_old: { as: 'walk', n: 12, fps: 8, loop: true }, walk_swag: { as: 'walk', n: 12, fps: 10, loop: true },
+			dance: { as: 'idle', n: 16, fps: 10, loop: true }, cheer: { as: 'handsup', n: 8, fps: 8, loop: true }, walk_drunk: { as: 'walk', n: 16, fps: 8, loop: true },
+			phone: { as: 'idle', n: 10, fps: 3, loop: true }, rummage: { as: 'pick', n: 9, fps: 8, loop: true },
+			idle_look: { as: 'idle', n: 16, fps: 6, loop: false }, idle_stretch: { as: 'idle', n: 16, fps: 6, loop: false }, idle_watch: { as: 'idle', n: 14, fps: 6, loop: false },
+		});
+	}
+	_only3d(name, w) {
+		const V = NpcSheet.ONLY3D[name], b = this.getClip(V.as, w) || this.getClip(V.as, 'none');
+		if (!b) return null;
+		const c = Object.assign(Object.create(Object.getPrototypeOf(b)), b);
+		c.name = name; c.loop = V.loop; c.fps = b.frames / (V.n / V.fps); c.only3d = V.as;
+		return c;
+	}
+	// Reação a um golpe/tiro pelo LADO de onde veio (dx, dz: de quem levou até quem acertou; heading: para onde ele olha): pela frente
+	// 'hurt', por trás 'hurt_b', pela direita 'hurt_r', pela esquerda 'hurt_l'.
+	static hurtClip(heading, dx, dz) {
+		if (!dx && !dz) return 'hurt';
+		let a = Math.atan2(dx, dz) - heading; a = Math.atan2(Math.sin(a), Math.cos(a));
+		const A = Math.abs(a);
+		return A < Math.PI / 4 ? 'hurt' : A > Math.PI * 0.75 ? 'hurt_b' : a > 0 ? 'hurt_r' : 'hurt_l';
 	}
 	// Troca o atlas / a lista de atlas (o jogador com outra roupa, machucado…): os clipes são procurados de novo.
 	setAtlas(id) { this.atlasName = id; this.clips = {}; }

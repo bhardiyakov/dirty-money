@@ -213,7 +213,7 @@ module.exports = {
         c.ok(!fsm.arrest.pistol && fsm.arrest.jewels === 0, 'armas e itens ilícitos confiscados');
         c.ok(fsm.parole.state === 'WANTED' && fsm.parole.stars >= 3, 'condicional: infração mínima com flagrante = WANTED alto na hora');
         c.eq(fsm.paroleEscape, 'PAROLE', 'fugiu durante a condicional: continua em PAROLE');
-        c.eq(fsm.paroleOver, 'INVESTIGATION', 'acabou a condicional: volta ao repouso (ficha com o furto)');
+        c.eq(fsm.paroleOver, 'IDLE', 'acabou a condicional: volta ao repouso (furto é delito leve: não fica na ficha)');
         c.eq(fsm.lawyerPaid, 3500, 'advogado cobra o contrato em dinheiro limpo');
         c.ok(fsm.lawyer.bail < fsm.lawyer.fullBail && fsm.lawyer.pistol && fsm.lawyer.kept, `advogado: fiança menor (${fsm.lawyer.bail} < ${fsm.lawyer.fullBail}) e fica com as armas`);
         c.ok(fsm.down.state === 'PAROLE' && fsm.down.report && fsm.down.stars === 0, 'morto durante a perseguição: ARRESTED → PAROLE');
