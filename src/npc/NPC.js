@@ -644,7 +644,7 @@ class NPC {
 	// ----- Jeito de andar e gestos de quem está parado -----
 	// Cada pedestre anda do seu jeito (fixo pela pessoa — Temper.of): idoso curvado e devagar; uns 14% mexendo no celular; parte dos homens
 	// gingando; o resto, o andar de sempre. GAIT_K: o ritmo do clipe para os pés plantados (passada × duração do ciclo, vs. o 'walk').
-	static get GAIT_K() { return { walk_old: 0.544, walk_phone: 0.9, walk_swag: 1 }; }
+	static get GAIT_K() { return { walk_old: 0.544, walk_phone: 0.9, walk_swag: 1, walk_drunk: 0.96 }; }
 	static get GAIT_SPEED() { return { walk_old: 0.72, walk_phone: 0.85, walk_swag: 1 }; }
 	static get FIDGETS() { return ['idle_look', 'idle_watch', 'idle_stretch']; }
 	_gait() {
@@ -712,7 +712,12 @@ class NPC {
 		// Vira o corpo para a direção do movimento real do agente e escolhe o clipe.
 		const v = this.nav.crowd.getAgentVelocity(this.index);
 		const sp2 = v ? v.x * v.x + v.z * v.z : 0;
+		const CS = this.fsm.current;
 		if (this.fsm.name === 'FIGHT') this.transform.rotation.y = this.heading;        // brigando: encara o adversário (FightState)
+		else if (CS && CS.faceTo && sp2 <= 0.3) {                                       // parado olhando algo (a roda, o desmaiado: npc/Chaos.js)
+			const T = CS.faceTo();
+			if (T) { const p0 = this.transform.position; this.transform.rotation.y = this._lerpAngle(this.transform.rotation.y, Math.atan2(T.x - p0.x, T.z - p0.z), 1 - Math.exp(-8 * dt)); this.heading = this.transform.rotation.y; }
+		}
 		else if (sp2 > 0.3) {
 			const targetY = Math.atan2(v.x, v.z);
 			const t = 1 - Math.exp(-12 * dt);
@@ -738,6 +743,11 @@ class NPC {
 			const S = this.fsm.current, moving = S.clip === 'walk' || S.clip === 'run';
 			this.actor.play(moving && speed < 0.5 ? 'idle' : S.clip, S.weapon) || this.actor.play('idle', 'none');
 			if (moving) rate = Math.max(0.5, speed / (S.clip === 'run' ? Config.anim.run : Config.anim.walk));
+		}
+		else if (CS && CS.pose) {                                                // estados da rua viva (npc/Chaos.js): dançar, torcer, filmar, bêbado, desmaiado
+			const A = CS.pose(speed);
+			if (!this.actor.play(A.clip, A.w || 'none', A.restart ? { restart: true } : undefined)) this.actor.play(A.fb || (speed < 0.5 ? 'idle' : 'walk'), 'none');
+			rate = A.rate || 1;
 		}
 		else if (speed < 0.5) { if (!this._fidgetTick(dt)) this.actor.play('idle'); }
 		else if (st === 'SHELTER') { this.actor.play('run'); rate = Math.max(0.5, speed / Config.anim.run); }

@@ -292,6 +292,7 @@ class Game {
 		try {
 			await this.nav.init(this.gameEngine.world.street ? this.gameEngine.world.street.lamps : []);
 			this.npcManager = new NPCManager(this.scene, this.nav, this.sprites, this.npcCtx);
+			{ const ps = this._playerState().pos; this.nav.focus.x = ps.x; this.nav.focus.z = ps.z; }      // (nascem em volta de você, não da origem)
 			this.npcManager.spawn(Config.npc.count);
 			this.aiReady = true;
 			this._flash(`${this.npcManager.count} pedestres na rua`);
@@ -945,6 +946,7 @@ class Game {
 			Pelada.update(dt, this);                                     // o futebol dos meninos na quadra da favela (de dia)
 			Perf.lap('favela (gangues/moto/missões)');
 			StreetLife.update(this, dt);                                  // a rua viva: movimento por hora, acontecimentos, conversas
+			Chaos.update(this, dt);                                       // pedestres entre si: esbarrão, roda de briga, dominó, bêbado, dança, desmaio, dinheiro voando
 			Rescue.update(this, dt);                                      // feridos sangrando, quem liga para o 192 e as ambulâncias
 			Buses.update(this, dt);                                       // as linhas de ônibus: pontos, horários, os ônibus perto da câmera e o embarque
 			Stands.update(this, dt);                                      // quiosques, café e barracas: o vendedor aparece de perto

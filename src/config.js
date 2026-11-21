@@ -330,7 +330,7 @@ const Config = {
 	},
 
 	npc: {
-		count: 72,             // Nº de pedestres (caminhando, correndo na orla, tomando sol e nadando).
+		count: 104,            // Nº de pedestres (caminhando, correndo na orla, tomando sol e nadando). O Médio leva 70%, o Baixo 50% (Graphics).
 		radius: 0.4,
 		height: 1.6,
 		accel: 40,             // maxAcceleration do agente.
@@ -361,7 +361,8 @@ const Config = {
 		shotRadius: 42,        // Raio em que ouve um tiro.
 		chaseRadiusCar: 16,    // Foge de viatura em perseguição até esta distância.
 		chaseRadiusOfficer: 11, // ...e de policial correndo atrás de você.
-		recycleDist: 250,      // Pedestre mais longe que isto do jogador reaparece perto dele (o mundo é grande).
+		recycleDist: 160,      // Pedestre mais longe que isto do jogador reaparece perto dele (o mundo é grande)...
+		placeMin: 55, placeMax: 130,     // ...num anel a placeMin–placeMax u (fora da tela a pé): a gente fica perto de você (eram 250 e 75–200)
 		wantedRadius: 9,       // Foge de VOCÊ (procurado) até esta distância.
 		herdRadius: 5.5,       // Pânico contagia vizinhos até esta distância.
 		herdChance: 0.6,
@@ -434,6 +435,21 @@ const Config = {
 
 	// TÁTICO do jogador a pé (player.js e combat/Cover.js): AGACHAR (Q · L3 no controle) = furtivo; agachado encostado num prédio,
 	// muro, caçamba, contêiner ou carro parado = EM COBERTURA; ROLAR (V longe de grade/muro · RB) = esquiva de balas.
+	// A RUA COM VIDA PRÓPRIA (npc/Chaos.js): os pedestres interagem entre si perto do jogador.
+	chaos: {
+		radius: 60,            // u do jogador: só aí acontece (longe ninguém vê)
+		bumpR: 1.0,            // u: dois andando assim de perto se trombam
+		bumpCd: 5,             // s entre um esbarrão que vira cena e o próximo
+		bump: { sorry: 0.55, argue: 0.33 },     // o resto: briga (só se um deles é de briga — Temper — ou está bêbado)
+		ring: { max: 7, from: 22, r: [3.0, 4.6], join: 0.12 },       // a roda em volta da briga: quantos, de quão longe vêm, raio, chance de um entrar
+		domino: { r: 0.95, chance: 0.35, cd: 1.2 },                    // na correria, quem foge derruba quem está parado no caminho
+		every: [22, 42],       // s entre as figuras (dança, bêbado, desmaio, dinheiro voando)
+		drunk: { max: 2, life: [70, 130], fight: 0.5, fall: 0.12 },
+		dance: { life: [12, 24], join: 0.4, maxJoin: 4, r: 13 },
+		faint: { life: [12, 22] },
+		cash: { notes: [5, 8], amount: [8, 40], grabbers: 6, r: 24 },
+	},
+
 	// FURTIVIDADE (crime/Stealth.js): derrubar por trás, arrastar corpo, corpo achado.
 	stealth: {
 		reach: 1.6,            // u: até esta distância das costas de alguém, agachado, dá para derrubar

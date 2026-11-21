@@ -82,7 +82,7 @@ class NPCManager {
 
     spawn(count = Config.npc.count) {
         for (let i = 0; i < count; i++) {
-            const { pos, role } = this._place(this._roleFor(i / count), 0, 190);
+            const { pos, role } = this._place(this._roleFor(i / count), 0, Config.npc.placeMax);
             const npc = new NPC(this.scene, this.nav, pos, i, this.sprites, this.ctx, role);
             npc.setStyle(this._style(pos, role));
             this.npcs.push(npc);
@@ -104,13 +104,13 @@ class NPCManager {
     _recycle(dt) {
         this._recT = (this._recT || 0) - dt;
         if (this._recT > 0) return;
-        this._recT = 0.4;
+        this._recT = 0.2;
         const f = this.nav.focus, far2 = Config.npc.recycleDist * Config.npc.recycleDist;
         for (const npc of this.npcs) {
             if (npc.party || npc._rage || !npc.alive || npc.rag || npc.state === 'HURT' || npc.surrendered || npc.state === 'FLEE') continue;
             const dx = npc.position.x - f.x, dz = npc.position.z - f.z;
             if (dx * dx + dz * dz < far2) continue;
-            const { pos, role } = this._place(this._roleFor(Math.random()), this.recycleMin || 75, 200);      // (de madrugada: reaparece longe — StreetLife)
+            const { pos, role } = this._place(this._roleFor(Math.random()), ...this._ring());      // (de madrugada: reaparece longe — StreetLife)
             npc.relocate(pos, role, this._style(pos, role));
             return;                                            // um por vez (sem engasgo)
         }
@@ -166,9 +166,12 @@ class NPCManager {
     // Devolve um pedestre emprestado: reaparece longe, fora da tela, como outra pessoa (o desenho de antes volta — NPC.restoreLook).
     release(npc) {
         if (!npc.alive || npc.rag) { npc._rage = null; return; }      // (o corpo / quem está voando segue o caminho normal)
-        const { pos, role } = this._place(this._roleFor(Math.random()), this.recycleMin || 75, 200);
+        const { pos, role } = this._place(this._roleFor(Math.random()), ...this._ring());
         npc.relocate(pos, role, this._style(pos, role));
     }
+    // Onde quem é reciclado reaparece: um anel em volta do jogador, FORA da tela a pé (placeMin) e não muito longe (placeMax) — a gente
+    // fica concentrada perto de você (antes: 75–200 u, a rua parecia vazia). De madrugada (StreetLife.recycleMin) o anel se afasta.
+    _ring() { const a = Math.max(Config.npc.placeMin, this.recycleMin || 0), b = Math.max(a + 45, Config.npc.placeMax); return [a, b]; }
 
     // ------------------------------------------------------------- chuva
     // Começou a chover: cada pedestre (escalonado em ~5 s; na garoa nem todos ligam) corre para o abrigo mais perto (toldo de loja,

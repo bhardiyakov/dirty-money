@@ -333,6 +333,11 @@ GuideUI.PAGES = {
         <li><b>Turista</b>: pede uma foto — <kbd>E</kbd> tira (gorjeta) e, enquanto ele posa, <kbd>C</kbd> furta a carteira. De arma na mão, <kbd>E</kbd> assalta (crime pesado).</li>
         <li><b>Carro enguiçado</b>: o motorista pede ajuda — <kbd>E</kbd> mexe no motor (a habilidade <b>Mecânica</b> do Desmanche ajuda a pegar); gorjeta se der certo.</li>
         <li><b>Ambulante</b>, <b>roda de samba</b> (fim de semana à noite) e <b>pregação</b> (domingo de manhã) completam a rua.</li></ul>
+        <h3>A rua com vida própria</h3><ul>
+        <li><b>Esbarrão</b>: dois pedestres se trombam — pedem desculpa, batem boca ou, se um for de briga (ou estiver bêbado), saem no braço. Você correndo também tromba: o pedestre reclama e às vezes cai.</li>
+        <li><b>Roda</b>: toda briga junta gente em volta — uns gritam "porrada!", outros filmam com o celular, outros pedem para parar — e às vezes um da roda entra na briga. A polícia chegando desfaz a roda.</li>
+        <li><b>Correria</b>: no pânico, quem foge derruba quem está parado no caminho.</li>
+        <li><b>Figuras</b>: o <b>bêbado</b> (mais à noite: anda torto, puxa assunto, briga à toa, dorme na calçada); alguém que começa a <b>dançar</b> no meio da rua e puxa outros; quem <b>desmaia</b> (junta gente, um ajoelha para ajudar); e o <b>dinheiro voando</b> — as notas espalham e todo mundo corre para pegar (você também).</li></ul>
         <div class="gd-tip">Cada pedestre tem o seu jeito de andar (mexendo no celular, idoso devagar, gingando) e, parado, olha em volta, olha o relógio, se alonga — você também, se ficar parado um tempo.</div>`,
 
     careers: () => `<h2>Como as carreiras funcionam</h2>

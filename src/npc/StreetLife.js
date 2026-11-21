@@ -42,7 +42,7 @@ const StreetLife = {
         this.g = game;
         if (!game.npcManager || !game.aiReady || Interiors.active) return;
         const h = game.dayNight.hour, rain = typeof Weather !== 'undefined' && Weather.cur ? Weather.cur.k : 0, d = this.density(h, rain);
-        game.npcManager.recycleMin = d < 0.8 ? 75 + (0.8 - d) * 180 : 75;   // (de madrugada: quem some, reaparece longe)
+        game.npcManager.recycleMin = d < 0.8 ? 55 + (0.8 - d) * 150 : 55;   // (de madrugada: quem some, reaparece longe — NPCManager._ring)
         this._extras(game, dt, d);
         this._events(game, dt);
         this._chatter(game, dt);
