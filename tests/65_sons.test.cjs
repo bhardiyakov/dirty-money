@@ -102,17 +102,22 @@ module.exports = {
         c.ok(!sbad.length, `passos: ${steps.length} combinações de chão × calçado tocam a gravação certa${sbad.length ? ' — erradas: ' + sbad.map((s) => s[0] + '→' + s[1]).join(', ') : ''}`);
 
         // loops: sirene (longe = lamento, colada = yelp), pneu (sobe com a força), burburinho
-        await page.evaluate(() => { AudioFX.siren(true, 80); AudioFX.screech(0.9); Ambience._realCrowd(0.03, { biome: 'commercial', inside: false }); });
+        await page.evaluate(() => {                                         // (na rua comercial, de dia — o relógio do Ambience segue rodando)
+            game.dayNight.hour = 14; Ambience.__w = Ambience._where; Ambience._where = () => ({ inside: false, shop: null, biome: 'commercial', district: 'centro', beach: 0 });
+            window.__S = { siren: AudioFX.siren, screech: AudioFX.screech }; AudioFX.siren = AudioFX.screech = () => {};      // (a polícia e o carro chamam a cada quadro)
+            __S.siren.call(AudioFX, true, 80); __S.screech.call(AudioFX, 0.9);
+        });
         await page.waitForTimeout(1500);
         const lp1 = await page.evaluate(() => ({ w: AudioFX._rsiren && AudioFX._rsiren.wail.gain.gain.value, y: AudioFX._rsiren && AudioFX._rsiren.yelp.gain.gain.value,
             sc: AudioFX._rscreech && AudioFX._rscreech.gain.gain.value, rate: AudioFX._rscreech && AudioFX._rscreech.src.playbackRate.value,
             cm: Ambience.RC && Ambience.RC.market.gain.gain.value, cs: Ambience.RC && Ambience.RC.street.gain.gain.value }));
-        await page.evaluate(() => { AudioFX.siren(true, 10); AudioFX.screech(0.2); AudioFX.siren(true, 10); });
+        await page.evaluate(() => { __S.siren.call(AudioFX, true, 10); __S.screech.call(AudioFX, 0.2); });
         await page.waitForTimeout(1500);
         const lp2 = await page.evaluate(() => ({ w: AudioFX._rsiren.wail.gain.gain.value, y: AudioFX._rsiren.yelp.gain.gain.value, sc: AudioFX._rscreech.gain.gain.value, rate: AudioFX._rscreech.src.playbackRate.value }));
-        await page.evaluate(() => { AudioFX.siren(false, Infinity); AudioFX.screech(0); });
+        await page.evaluate(() => { __S.siren.call(AudioFX, false, Infinity); __S.screech.call(AudioFX, 0); });
         await page.waitForTimeout(1500);
         const lp3 = await page.evaluate(() => ({ w: AudioFX._rsiren.wail.gain.gain.value, y: AudioFX._rsiren.yelp.gain.gain.value, sc: AudioFX._rscreech.gain.gain.value }));
+        await page.evaluate(() => { AudioFX.siren = __S.siren; AudioFX.screech = __S.screech; Ambience._where = Ambience.__w; });
         c.ok(lp1.w > 0.02 && lp1.y < 0.005, `sirene longe: lamento gravado (${(lp1.w || 0).toFixed(3)}), sem yelp (${(lp1.y || 0).toFixed(3)})`);
         c.ok(lp2.y > 0.15 && lp2.y > lp2.w, `sirene colada (10 m): troca para o yelp (${lp2.y.toFixed(3)} > lamento ${lp2.w.toFixed(3)})`);
         c.ok(lp3.w < 0.01 && lp3.y < 0.01, `sirene some quando não há viatura (${lp3.w.toFixed(3)}/${lp3.y.toFixed(3)})`);
@@ -133,16 +138,19 @@ module.exports = {
             if (!car) return null;
             const p = car.position;
             g.player.teleport(new BABYLON.Vector3(p.x + 2, 0, p.z)); g.player.setVisible(false);
+            car.mode = 'parked'; car.route = null;
             car.setControlled(true); g.activeCar = car; g.mode = 'car'; car.hp = car.maxHp; car.fuel = car.tank; car.engineDead = false; car.hotwire = 0;
+            if (car.cond) { car.cond.battery = 1; car.cond.engine = 1; car.cond.temp = 0; } car._ccOff = false;      // (bateria fraca sorteada: não pegaria)
             g.gameEngine.engine.stopRenderLoop();
             const st0 = SoundBank.played.starter || 0;
             for (let i = 0; i < 60 && !(car._eng && car._eng.state === 'run'); i++) { E.update(g, 0.05); await new Promise((r) => setTimeout(r, 20)); }
             const v = E.player && E.player.voice, P = v && v.P, out = { model: car.spec.id, prof: P && P.key, state: car._eng && car._eng.state, real: v && v.real, starter: !!(v && v.stR), starterPlayed: (SoundBank.played.starter || 0) - st0 };
             if (!v) return out;
-            for (let i = 0; i < 6; i++) { E.update(g, 0.05); await new Promise((r) => setTimeout(r, 30)); }
+            for (let i = 0; i < 40; i++) { E.update(g, 0.05); await new Promise((r) => setTimeout(r, 15)); }      // (passa a acelerada de quem acabou de ligar)
             out.rIdle = E._rate(v, P.idle); out.rMid = E._rate(v, (P.idle + P.red) / 2); out.rRed = E._rate(v, P.red); out.pm = E.PITCH[P.key];
             await new Promise((r) => setTimeout(r, 300));
             out.playRate = v.lo && v.lo.playbackRate.value; out.loopBuf = v.lo && v.lo.buffer && v.lo.buffer.duration;
+            out.rpm = car._eng.rpm; out.rNow = E._rate(v, car._eng.rpm);
             out.isReal = !!(v.lo && SoundBank.bufs[v.real] && SoundBank.bufs[v.real].includes(v.lo.buffer));
             // troca de marcha e freio de mão (só no carro do jogador)
             const g0 = E.gears, gp = SoundBank.played.gear || 0;
@@ -155,10 +163,10 @@ module.exports = {
         });
         if (!eng) c.ok(false, 'nenhum carro com motor gravado por perto para o teste');
         else {
-            c.ok(eng.state === 'run' && eng.isReal && eng.real === fam[eng.prof], `${eng.model} (${eng.prof}): motor ligado tocando a gravação ${eng.real} (loop de ${(eng.loopBuf || 0).toFixed(2)} s)`);
+            c.ok(eng.state === 'run' && eng.isReal && eng.real === fam[eng.prof], `${eng.model} (${eng.prof}): motor ligado (${eng.state}) tocando a gravação ${eng.real} (${eng.isReal ? 'buffer gravado' : 'NÃO é o buffer gravado'}, loop de ${(eng.loopBuf || 0).toFixed(2)} s)`);
             c.ok(eng.starter && eng.starterPlayed >= 1, `arranque gravado na partida (${eng.starterPlayed})`);
             c.ok(Math.abs(eng.rIdle - eng.pm) < 1e-6 && eng.rMid > eng.rIdle * 1.5 && eng.rRed > eng.rMid && eng.rRed < eng.pm * 3, `giro acelera a gravação: marcha lenta ${eng.rIdle.toFixed(2)}× → meio ${eng.rMid.toFixed(2)}× → corte ${eng.rRed.toFixed(2)}×`);
-            c.ok(Math.abs(eng.playRate - eng.rIdle) < 0.25, `parado em marcha lenta: reprodução ${(eng.playRate || 0).toFixed(2)}× (≈ ${eng.rIdle.toFixed(2)}×)`);
+            c.ok(Math.abs(eng.playRate - eng.rNow) < 0.12, `a reprodução segue o giro: ${Math.round(eng.rpm)} rpm → ${(eng.playRate || 0).toFixed(2)}× (esperado ${eng.rNow.toFixed(2)}×)`);
             c.ok(eng.gear[0] === 1 && eng.gear[1] === 1, `"clec" do câmbio só no carro do jogador (${eng.gear.join('/')})`);
             c.ok(eng.hb === 2, `catraca do freio de mão a cada puxada (${eng.hb}/2)`);
         }
