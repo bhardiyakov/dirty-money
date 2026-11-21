@@ -68,24 +68,36 @@ module.exports = {
             window.__ring = R;
             // (a briga fica parada no lugar enquanto a roda chega: o teste olha a roda, não a luta)
             for (const m of R.members) if (m.fsm.current) { m.fsm.current.update = function () {}; m.setSpeed(0); }
-            return { n: R.watchers.size, modes: [...R.watchers].map((w) => w.fsm.current && w.fsm.current.mode) };
+            const c0 = R.center(), W = [...R.watchers];
+            window.__d0 = W.map((w) => Math.hypot(w.position.x - c0.x, w.position.z - c0.z));
+            // a pose de cada papel (parado) e quem chega na beirada para
+            const POSE = { cheer: ['cheer'], film: ['phone'], worried: ['idle'], help: ['kneel'] };
+            const poses = W.map((w) => { const S = w.fsm.current; return S.mode + ':' + S.pose(0).clip; });
+            const posedOk = W.every((w) => (POSE[w.fsm.current.mode] || []).includes(w.fsm.current.pose(0).clip));
+            const w0 = W[0], S0 = w0.fsm.current, keepP = w0.transform.position.clone();
+            w0.transform.position.set(c0.x + R.r * 0.9, 0, c0.z);
+            S0.update(0.1);
+            const stops = !!S0.still;
+            w0.transform.position.copyFrom(keepP); S0.still = false;
+            return { n: R.watchers.size, modes: W.map((w) => w.fsm.current && w.fsm.current.mode), poses, posedOk, stops };
         });
-        if (!ring.none) await gameWait(page, 13, 300000);
+        if (!ring.none) await gameWait(page, 6, 200000);
         Object.assign(ring, await page.evaluate(() => {
             const R = window.__ring;
             if (!R) return {};
-            const W = [...R.watchers].filter((w) => w.fsm.current && w.fsm.current.ring === R), c = R.center();
-            const clips = W.map((w) => w.actor.clip && w.actor.clip.name);
-            const facing = c ? W.filter((w) => { const d = Math.atan2(c.x - w.position.x, c.z - w.position.z) - w.heading; return Math.cos(d) > 0.3; }).length : 0;
-            // quem já parou na roda: a pose do papel dele
-            const POSE = { cheer: ['cheer', 'handsup'], film: ['phone'], worried: ['idle', 'idle_look'], help: ['kneel'] };
-            const still = W.filter((w) => w.fsm.current.still), posed = still.filter((w) => (POSE[w.fsm.current.mode] || []).includes(w.actor.clip && w.actor.clip.name));
-            return { clips, facing, staying: W.length, still: still.length, posed: posed.length, stillModes: still.map((w) => w.fsm.current.mode + ':' + (w.actor.clip && w.actor.clip.name)) };
+            const W = [...R.watchers], c = R.center();
+            const stay = W.filter((w) => w.fsm.current && w.fsm.current.ring === R);
+            const d1 = W.map((w) => (c ? Math.hypot(w.position.x - c.x, w.position.z - c.z) : 0));
+            const closer = W.filter((w, i) => d1[i] < window.__d0[i] - 0.5 || d1[i] < R.r + 2).length;
+            const facing = c ? stay.filter((w) => { const d = Math.atan2(c.x - w.position.x, c.z - w.position.z) - w.heading; return Math.cos(d) > 0.3; }).length : 0;
+            return { closer, facing, staying: stay.length, fled: W.filter((w) => w.fsm.name === 'FLEE').length };
         }));
         if (c.ok(!ring.none && ring.n >= 2, `a briga juntou uma roda (${ring.n || 0} pessoas)`)) {
             c.ok(ring.modes.some((m) => m === 'cheer') || ring.modes.some((m) => m === 'film'), `uns torcem, outros filmam (${ring.modes.join(', ')})`);
-            c.ok(ring.still >= 1 && ring.posed === ring.still, `quem parou na roda faz a pose do seu papel (${(ring.stillModes || []).join(', ')})`);
-            c.ok(ring.facing >= Math.ceil(ring.staying / 2), `de frente para a briga (${ring.facing}/${ring.staying})`);
+            c.ok(ring.posedOk, `cada papel com a sua pose (${ring.poses.join(', ')})`);
+            c.ok(ring.stops, 'quem chega na beirada da roda para e assiste');
+            c.ok(ring.closer >= Math.ceil(ring.n / 2) || ring.fled >= Math.ceil(ring.n / 2), `a roda chega perto da briga (${ring.closer}/${ring.n}${ring.fled ? `; ${ring.fled} correram da polícia que apareceu` : ''})`);
+            if (ring.staying) c.ok(ring.facing >= Math.ceil(ring.staying / 2), `de frente para a briga (${ring.facing}/${ring.staying})`);
         }
         const cops = await page.evaluate(() => {
             const g = game, R = window.__ring, pm = g.policeManager;
