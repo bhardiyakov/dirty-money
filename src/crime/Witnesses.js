@@ -22,7 +22,7 @@ const Witnesses = {
     KIND_OF: { homicide: 'kill', cop_killed: 'cop', mugging: 'holdup', robbery: 'holdup', armed_robbery: 'holdup', carjacking: 'carjack', kidnapping: 'kidnap' },
     CRIME: { homicide: 'homicídio', cop_killed: 'policial morto', mugging: 'assalto', robbery: 'assalto', armed_robbery: 'assalto à mão armada', carjacking: 'roubo de carro',
         kidnapping: 'sequestro', armed_assault: 'lesão corporal grave', arson: 'incêndio', explosion: 'explosão', burglary: 'arrombamento', extortion: 'extorsão',
-        cop_assault: 'agressão a policial', bank_robbery: 'assalto a banco' },
+        cop_assault: 'agressão a policial', bank_robbery: 'assalto a banco', petty_robbery: 'assalto a comércio' },
     anon: [],               // relatos sem testemunha na rua para segurar (ela já se foi): ligam sozinhos daqui a pouco
 
     // ---------------------------------------------------------------- testemunhas

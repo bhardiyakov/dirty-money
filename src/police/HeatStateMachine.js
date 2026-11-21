@@ -73,6 +73,7 @@ const HEAT_TUNING = Object.freeze({
     paroleStars: 3,
     warrantSeverity: 8,              // record severity that turns an investigation into a warrant
     heavySeverity: 3,                // from this severity on a crime opens an INQUIRY (record); below it only a live flagrant counts
+    inquiryTypes: ['petty_robbery'], // light in stars, but still an inquiry: an armed robbery of a small shop (1★, on file)
     lightLookRadius: 32,             // light crime seen by a witness/camera: the police within this come to look (no star)
     recognizeRange: 16,
     expireHoursPerSeverity: 48,      // statute of limitations: severity 1 → 2 days … severity 5 → 10 days
@@ -348,7 +349,7 @@ class HeatStateMachine {
             return;
         }
         const live = CrimeExposure.isLive(crime.exposure);
-        const heavy = crime.severity >= HEAT_TUNING.heavySeverity;
+        const heavy = crime.severity >= HEAT_TUNING.heavySeverity || HEAT_TUNING.inquiryTypes.includes(crime.type);
         if (!heavy) {
             // LIGHT: only the police catching it live counts — 1★ for the chase, nothing on file (escaping ends it). On parole any
             // exposed slip (a witness too) breaks it: straight to PAROLE_STARS.
