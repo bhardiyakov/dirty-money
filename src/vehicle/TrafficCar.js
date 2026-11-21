@@ -378,9 +378,8 @@ class TrafficCar extends Vehicle {
     honk(why = 'bloqueio', info = {}) {
         this.honkCd = this.honks === 1 ? 1.8 : Config.traffic.honkCooldown;          // 1a buzinada: a 2a vem logo (sao no maximo duas)
         const p = this.position;
-        const big = this.spec && /^(swat_van|militar|van_furgao|picape_grande)$/.test(this.spec.id);      // (furgão e caminhonete grande: buzina grossa)
         if (why === 'freada' && AudioFX.squeal) AudioFX.squeal(p.x, p.z, 0.32);       // (freou forte: o pneu chia antes da buzina)
-        AudioFX.honk(p.x, p.z, big ? 0.7 : this.pitch);
+        AudioFX.honk(p.x, p.z, this.pitch, 0.3, AudioFX.hornOf(this));                 // (a buzina deste carro: AudioFX.hornOf)
         this.traffic.onHonk(this, why, info);
     }
 }

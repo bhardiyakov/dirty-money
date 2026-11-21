@@ -110,7 +110,7 @@ class MotoTaxis {
             if (av) {
                 vt *= av.brake;
                 // buzina no máximo duas vezes por travada (antes buzinava a cada 0,7 s enquanto ficasse preso)
-                if (av.brake < 0.9 && m.honkCd <= 0 && (m.honks || 0) < 2 && d < 60) { m.honks = (m.honks || 0) + 1; m.honkCd = 1.4; AudioFX.honk(m.x, m.z, m.pitch || (m.pitch = 1.15 + Math.random() * 0.3), av.brake < 0.4 ? 0.45 : 0.22); }
+                if (av.brake < 0.9 && m.honkCd <= 0 && (m.honks || 0) < 2 && d < 60) { m.honks = (m.honks || 0) + 1; m.honkCd = 1.4; AudioFX.honk(m.x, m.z, m.pitch || (m.pitch = 1.15 + Math.random() * 0.3), av.brake < 0.4 ? 0.45 : 0.22, AudioFX.hornOf(m.car || (m._hornCar || (m._hornCar = { isBike: true })))); }
             }
             // andando livre de novo: zera a conta de buzinadas; preso no beco: dá meia-volta; preso há muito e longe da vista: sai de cena
             if (m.v > 3) { m.freeT = (m.freeT || 0) + dt; if (m.freeT > 2) { m.honks = 0; m.blk = 0; } } else m.freeT = 0;
@@ -232,7 +232,7 @@ class MotoTaxis {
             setRider(v) {
                 m.down = false; ad.up = false; m.v = 0; m.honkCd = 0;
                 if (a.setRider) a.setRider(v, g.sprites.sheets.rider, 'ride_moto');
-                AudioFX.honk(x, z, m.pitch || 1.2, 0.35);                         // voltou xingando
+                AudioFX.honk(x, z, m.pitch || 1.2, 0.35, AudioFX.hornOf(m.car || (m._hornCar || (m._hornCar = { isBike: true }))));                         // voltou xingando
             },
         };
         g.casualties.push(new Casualty(g, { x, z }, {

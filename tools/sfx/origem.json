@@ -610,16 +610,235 @@
   "ls": 0.3,
   "le": 3.3
  },
- "horn_car": {
-  "file": "horn_car.mp3",
+ "horn_car_a": {
+  "file": "horn_car_a.mp3",
   "dur": 1.463,
   "src": "bsb_0258.ogg",
+  "ss": null
+ },
+ "horn_car_b": {
+  "file": "horn_car_b.mp3",
+  "dur": 2.449,
+  "src": "bsb_0850.ogg",
+  "ss": 4.3
+ },
+ "horn_car_c": {
+  "file": "horn_car_c.mp3",
+  "dur": 0.6,
+  "src": "bsb_3438.ogg",
+  "ss": 2.15
+ },
+ "horn_car_d": {
+  "file": "horn_car_d.mp3",
+  "dur": 0.508,
+  "src": "bsb_0969.ogg",
+  "ss": 1.4
+ },
+ "horn_old": {
+  "file": "horn_old.mp3",
+  "dur": 1.177,
+  "src": "bsb_2542.ogg",
+  "ss": null
+ },
+ "horn_moto_a": {
+  "file": "horn_moto_a.mp3",
+  "dur": 0.358,
+  "src": "bsb_0260.ogg",
+  "ss": null
+ },
+ "horn_moto_b": {
+  "file": "horn_moto_b.mp3",
+  "dur": 0.861,
+  "src": "bsb_3506.ogg",
+  "ss": null
+ },
+ "horn_truck": {
+  "file": "horn_truck.mp3",
+  "dur": 0.995,
+  "src": "bsb_2721.ogg",
   "ss": null
  },
  "horn_bus": {
   "file": "horn_bus.mp3",
   "dur": 1.091,
   "src": "bsb_3594.ogg",
+  "ss": null
+ },
+ "horn_stuck": {
+  "file": "horn_stuck.mp3",
+  "dur": 1.381,
+  "src": "bsb_0258.ogg",
+  "ss": 0.35,
+  "loop": true,
+  "ls": 0.3,
+  "le": 1.081
+ },
+ "sea_surf": {
+  "file": "sea_surf.mp3",
+  "dur": 20.6,
+  "src": "bsb_1446.ogg",
+  "ss": 20,
+  "loop": true,
+  "ls": 0.3,
+  "le": 20.3
+ },
+ "sea_open": {
+  "file": "sea_open.mp3",
+  "dur": 18.6,
+  "src": "bsb_0698.ogg",
+  "ss": 30,
+  "loop": true,
+  "ls": 0.3,
+  "le": 18.3
+ },
+ "swim_stroke_1": {
+  "file": "swim_stroke_1.mp3",
+  "dur": 0.434,
+  "src": "bsb_1513.ogg",
+  "at": 24.851
+ },
+ "swim_stroke_2": {
+  "file": "swim_stroke_2.mp3",
+  "dur": 0.47,
+  "src": "bsb_1513.ogg",
+  "at": 17.55
+ },
+ "swim_stroke_3": {
+  "file": "swim_stroke_3.mp3",
+  "dur": 0.463,
+  "src": "bsb_1513.ogg",
+  "at": 22.176
+ },
+ "swim_stroke_4": {
+  "file": "swim_stroke_4.mp3",
+  "dur": 0.42,
+  "src": "bsb_1513.ogg",
+  "at": 9.99
+ },
+ "swim_stroke_5": {
+  "file": "swim_stroke_5.mp3",
+  "dur": 0.55,
+  "src": "bsb_1513.ogg",
+  "at": 44.509
+ },
+ "splash_small_1": {
+  "file": "splash_small_1.mp3",
+  "dur": 0.8,
+  "src": "bsb_1529.ogg",
+  "ss": null
+ },
+ "splash_small_2": {
+  "file": "splash_small_2.mp3",
+  "dur": 0.8,
+  "src": "bsb_1530.ogg",
+  "ss": null
+ },
+ "splash_small_3": {
+  "file": "splash_small_3.mp3",
+  "dur": 0.8,
+  "src": "bsb_1531.ogg",
+  "ss": null
+ },
+ "splash_small_4": {
+  "file": "splash_small_4.mp3",
+  "dur": 0.8,
+  "src": "bsb_1532.ogg",
+  "ss": null
+ },
+ "splash_small_5": {
+  "file": "splash_small_5.mp3",
+  "dur": 0.8,
+  "src": "bsb_1533.ogg",
+  "ss": null
+ },
+ "splash_small_6": {
+  "file": "splash_small_6.mp3",
+  "dur": 0.8,
+  "src": "bsb_1534.ogg",
+  "ss": null
+ },
+ "splash_big_1": {
+  "file": "splash_big_1.mp3",
+  "dur": 1.6,
+  "src": "bsb_1519.ogg",
+  "ss": null
+ },
+ "splash_big_2": {
+  "file": "splash_big_2.mp3",
+  "dur": 1.8,
+  "src": "bsb_1521.ogg",
+  "ss": null
+ },
+ "scream_f_1": {
+  "file": "scream_f_1.mp3",
+  "dur": 0.838,
+  "src": "oga2/female_scream_1.ogg",
+  "ss": null
+ },
+ "scream_f_2": {
+  "file": "scream_f_2.mp3",
+  "dur": 1.5,
+  "src": "oga2/high_pitch_scream.mp3",
+  "ss": null
+ },
+ "scream_f_3": {
+  "file": "scream_f_3.mp3",
+  "dur": 1.327,
+  "src": "oga2/screams_0.ogg",
+  "ss": 0
+ },
+ "scream_f_4": {
+  "file": "scream_f_4.mp3",
+  "dur": 1.136,
+  "src": "oga2/screams_0.ogg",
+  "ss": 3.3
+ },
+ "scream_m_1": {
+  "file": "scream_m_1.mp3",
+  "dur": 1.695,
+  "src": "oga2/yell/yelling sounds/3yell1.wav",
+  "ss": null
+ },
+ "scream_m_2": {
+  "file": "scream_m_2.mp3",
+  "dur": 1.039,
+  "src": "oga2/yell/yelling sounds/3yell14.wav",
+  "ss": null
+ },
+ "scream_m_3": {
+  "file": "scream_m_3.mp3",
+  "dur": 0.868,
+  "src": "oga2/yell/yelling sounds/1yell3.wav",
+  "ss": null
+ },
+ "scream_m_4": {
+  "file": "scream_m_4.mp3",
+  "dur": 0.513,
+  "src": "bsb_2361.ogg",
+  "ss": null
+ },
+ "notify_msg": {
+  "file": "notify_msg.mp3",
+  "dur": 1.3,
+  "src": "bsb_1111.ogg",
+  "ss": null
+ },
+ "notify_a": {
+  "file": "notify_a.mp3",
+  "dur": 0.385,
+  "src": "bsb_2063.ogg",
+  "ss": null
+ },
+ "notify_b": {
+  "file": "notify_b.mp3",
+  "dur": 0.262,
+  "src": "bsb_2059.ogg",
+  "ss": null
+ },
+ "notify_ok": {
+  "file": "notify_ok.mp3",
+  "dur": 1.4,
+  "src": "bsb_1398.ogg",
   "ss": null
  },
  "crowd_street": {

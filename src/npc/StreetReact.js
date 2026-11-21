@@ -78,7 +78,7 @@ const StreetReact = {
 			if (along < 3 || along > 22 || Math.abs(lat) > 3) continue;
 			if (Math.random() >= R.hornBack) continue;
 			this.stats.hornBack++;
-			setTimeout(() => { if (c.destroyed) return; AudioFX.honk(c.position.x, c.position.z, 0.85 + Math.random() * 0.3, 0.45); if (typeof Bubbles !== 'undefined') Bubbles.say(c, this._pick(this.LINES.back), { tone: 'angry', ms: 2000, y: 1.6 }); }, 450);
+			setTimeout(() => { if (c.destroyed) return; AudioFX.honk(c.position.x, c.position.z, 0.85 + Math.random() * 0.3, 0.45, AudioFX.hornOf(c)); if (typeof Bubbles !== 'undefined') Bubbles.say(c, this._pick(this.LINES.back), { tone: 'angry', ms: 2000, y: 1.6 }); }, 450);
 			break;
 		}
 	},
@@ -91,7 +91,7 @@ const StreetReact = {
 			if (c.controlled || c.mode !== 'drive' || c.role || c.driver === false || c.driverDead || !c.aiUpdate) continue;
 			const d = Math.hypot(c.position.x - pos.x, c.position.z - pos.z);
 			if (d > R.shotRadius) continue;
-			if (!(c._scared > 0)) { this.stats.scared++; if (Math.random() < 0.35) setTimeout(() => { if (!c.destroyed) AudioFX.honk(c.position.x, c.position.z, 0.9 + Math.random() * 0.3, 0.6); }, 200 + Math.random() * 600); }
+			if (!(c._scared > 0)) { this.stats.scared++; if (Math.random() < 0.35) setTimeout(() => { if (!c.destroyed) AudioFX.honk(c.position.x, c.position.z, 0.9 + Math.random() * 0.3, 0.6, AudioFX.hornOf(c)); }, 200 + Math.random() * 600); }
 			c._scared = R.scaredTime[0] + Math.random() * (R.scaredTime[1] - R.scaredTime[0]);
 		}
 	},
