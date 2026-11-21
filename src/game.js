@@ -731,6 +731,7 @@ class Game {
 			else if (!frozenUI && !Panel.anyCool() && Mechanic.carPrompt(this) && this.input.consumePress('e')) Mechanic.carInteract(this);      // oficina / borracharia / mecânico do morro
 			// (uma batida forte pode arremessar o piloto de dentro do drive(): aí o foco é o jogador)
 			const drv = this.mode === 'car' && this.activeCar ? this.activeCar : null;
+			this._camVeh = true;                                                               // (descendo: a câmera a pé é zerada — CompassCamera.resetFoot)
 			this.camera.setFlat(false);
 			this.camera.footLift = drv && drv._onDeck ? drv.elev || 0 : 0;                    // (no viaduto, a câmera sobe junto com o carro)
 			this.camera.follow((drv || this.player).position, dt, drv);       // dirigindo: câmera bússola (gira com o carro)
@@ -757,6 +758,7 @@ class Game {
 			// (no alto das escadarias do Morro do Vigia: a câmera mira o personagem lá em cima — o ponto do chão que aparece no mesmo lugar da tela)
 			// (escadarias e mirante do Cristo, viaduto, telhado, bondinho: a câmera sobe junto com ele — CompassCamera.footLift)
 			const pl = this.player;
+			if (this._camVeh) { this._camVeh = false; this.camera.resetFoot(); }        // ficou a pé (carro, moto, barco, helicóptero): a câmera do começo do jogo
 			this.camera.footLift = pl.onDeck && !pl.underBridge ? pl.deckH || 0 : 0;
 			// (a câmera vai para as costas de quem anda — não mirando: aí o corpo segue a mira, não o caminho)
 			this.camera.follow(pl.position, dt, null, this.aim && this.aim.active ? null : pl, true);
@@ -1558,6 +1560,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 			pl.velocity.set(ch.vx, 0, ch.vz);
 			pl.root.rotation.y = ch.heading;
 			this.camera.setFlat(false);
+			this._camVeh = true;
 			this.camera.follow(ch.position, dt);
 		}
 	}
