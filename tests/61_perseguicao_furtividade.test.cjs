@@ -151,11 +151,11 @@ module.exports = {
             };
             n.fsm.setState({ name: 'TEST', update() {} });                  // (parado onde está, olhando para a frente)
             place(1.1, true);
-            const front = Stealth.target(g);
+            const front = Stealth.target(g) === n;                       // (de frente para ESTE pedestre — outro, colado em você, não conta)
             place(1.1, false);
             const okBehind = Stealth.target(g) === n;
             p.setCrouch(false);
-            const standing = Stealth.target(g);
+            const standing = Stealth.target(g) === n;
             p.setCrouch(true);
             const mt = pm.units.map((u) => (u.mind ? u.mind.t : -1e9));
             // (sem testemunha nem câmera nem polícia olhando — aqui só importa o barulho)

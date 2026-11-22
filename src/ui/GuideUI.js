@@ -31,7 +31,7 @@ class GuideUI {
     // Índice: [id, título] ou [null, cabeçalho de grupo].
     index() {
         const out = [[null, 'O BÁSICO'], ['start', 'Começo rápido'], ['controls', 'Controles'], ['money', 'Dinheiro sujo × limpo'], ['police', 'Polícia e procurado'], ['bags', 'Bolsas, peso e fôlego'],
-            ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['bairros', 'Mirante, Roça e Serra'], ['street', 'A rua: acontecimentos'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'],
+            ['fail', 'Prisão, morte e Tribunal'], [null, 'O MUNDO'], ['favela', 'Favela, facção e missões'], ['bairros', 'Mirante, Roça e Serra'], ['street', 'A rua: acontecimentos'], ['shops', 'Lojas, armas e itens'], ['vehicles', 'Veículos'], ['airport', 'Aeroporto, aviões e paraquedas'],
             ['home', 'Casa, imóveis e save'], ['goals', 'Metas e desafios do dia'], [null, 'IMPÉRIO'], ['empire', 'Soldados, galpões e lavagem'], ['influence', 'Malha de influência'], ['dominion', 'Domínio e estações'], ['banks', 'Bancos'], ['pool', 'Sinuca no bar'], ['truco', 'Truco no bar'], [null, 'ASSALTOS, NEGÓCIOS E CARROS'], ['robbery', 'Assalto a lojas'], ['burglary', 'Roubo furtivo e invasão de casas'], ['traces', 'Rastros e fuga'], ['heists', 'Joalherias e golpes'], ['business', 'Negócios próprios'], ['mechanic', 'Mecânica e porta-malas'], ['racing', 'Corridas (rachas e autódromo)'], [null, 'EVOLUÇÃO'], ['level', 'Nível e habilidades'], ['notoriety', 'Notoriedade (dificuldade)'], ['achievements', 'Conquistas e platina'], [null, 'CARREIRAS DO CRIME'], ['careers', 'Como as carreiras funcionam']];
         if (this.g.careers) for (const c of this.g.careers.list) out.push(['career_' + c.id, `${c.icon} ${c.name}`]);
         out.push([null, 'MAIS'], ['tips', 'Dicas'], ['radio', 'Rádio, músicas e sons (créditos)']);
@@ -217,8 +217,30 @@ GuideUI.PAGES = {
         <ul><li><kbd>F</kbd> entra/rouba (tira o motorista). Carro estacionado está <b>trancado</b>: <kbd>F</kbd> quebra o vidro (alarme) ou <kbd>G</kbd> arromba na manha (mini-game).</li>
         <li>Carro trancado roubado pede <b>ligação direta</b>: alguns segundos parado, exposto. A habilidade <b>Mecânica</b> (Desmanche) encurta.</li>
         <li>Batidas amassam; muito dano faz fumaça, fogo e explosão. Gasolina acaba: <b>segure <kbd>E</kbd></b> parado numa bomba de posto.</li>
-        <li>Barcos e jet skis na marina e na orla; <b>helicóptero</b> nos helipontos (Espaço sobe, Shift desce, Q/E gira, <kbd>F</kbd> no ar = pular). Mototáxi nos pontos de mototáxi (marcados no mapa).</li>
+        <li>Barcos e jet skis na marina e na orla; <b>helicóptero</b> nos helipontos (Espaço sobe, Shift desce, Q/E gira, <kbd>F</kbd> no ar = pular). Mototáxi nos pontos de mototáxi (marcados no mapa). <b>Aviões</b> no aeroporto (página própria).</li>
         <li>No <b>desmanche</b> (Desmanche): <kbd>E</kbd> dentro do carro desmancha por dinheiro; a <b>oficina</b> (<kbd>O</kbd>) faz funilaria, motor, blindagem e fundo falso.</li></ul>`,
+
+    airport: () => `<h2>Aeroporto, aviões e paraquedas</h2>
+        <p>O <b>Aeroporto das Fazendas</b> fica na planície a oeste do Colosso (✈️ no mapa), entre a Estrada do Engenho e a Rodovia da Lagoa: pista <b>09/27</b> de 410 m, taxiway, pátio com três aviões, terminal, hangar, torre de controle e biruta. À noite a pista acende. Entra-se pelo estacionamento (Estrada das Fazendas); o <b>portão de embarque</b> é à direita do terminal.</p>
+        <h3>O balcão (porta do terminal, <kbd>E</kbd>)</h3><ul>
+        <li><b>Salto de paraquedas</b> (aeroclube): o teco-teco te leva a 650 m — pouse no alvo laranja ao lado da pista: a menos de 5 m, R$ 500; 15 m, R$ 200; 40 m, R$ 60.</li>
+        <li><b>Paraquedas</b> (também na loja de armas). <b>Aluguel</b>: teco-teco, bimotor ou jatinho (compra grande no comércio legal: dinheiro limpo).</li>
+        <li>Decolar sem alugar é <b>roubo de avião</b>: a torre avisa e a polícia vem com 2 estrelas.</li></ul>
+        <h3>Os aviões</h3><table>
+        <tr><th>Modelo</th><th>Decola a</th><th>Máxima</th><th>Jeito</th></tr>
+        <tr><td><b>Teco-teco</b> (asa alta)</td><td>~80 km/h</td><td>~160 km/h</td><td>dócil, decola curto, estola cedo — o melhor para aprender</td></tr>
+        <tr><td><b>Bimotor</b></td><td>~100 km/h</td><td>~220 km/h</td><td>dois motores, sobe mais</td></tr>
+        <tr><td><b>Jatinho</b></td><td>~120 km/h</td><td>~300 km/h</td><td>o mais rápido; usa quase a pista toda</td></tr></table>
+        <h3>Pilotar</h3><ul>
+        <li><kbd>W</kbd>/<kbd>S</kbd> acelerador (sobe e desce aos poucos) · <kbd>A</kbd>/<kbd>D</kbd> inclina e faz a curva (no chão: taxia) · <kbd>Espaço</kbd> puxa o nariz · <kbd>Shift</kbd> empurra · <kbd>Q</kbd>/<kbd>E</kbd> leme.</li>
+        <li><b>Decolar</b>: acelere na pista e, passando da velocidade de decolagem, puxe (<kbd>Espaço</kbd>).</li>
+        <li><b>Estol</b>: devagar demais, a asa perde a sustentação — o nariz cai e ele afunda. Empurre o nariz e acelere.</li>
+        <li><b>Pousar</b>: alinhe com a pista, tire potência e desça com <kbd>Shift</kbd> leve; perto do chão o avião nivela sozinho (efeito solo) — toque devagar, sem inclinar. No chão, <kbd>S</kbd> com o motor em marcha lenta freia. Dá para pousar na grama e em estrada também.</li>
+        <li>Rápido demais no chão, de bico, inclinado ou batendo em prédio ou morro: <b>explode</b>. Na água ele afunda (você sai nadando). Perto da borda do mapa o avião faz a volta sozinho.</li></ul>
+        <h3>Paraquedas</h3><ul>
+        <li>Com o paraquedas na mochila, <kbd>F</kbd> no ar (avião ou helicóptero, acima de ~25 m) é <b>saltar</b>. Sem ele, é a queda (só a água salva).</li>
+        <li><b>Queda livre</b>: até ~180 km/h; <kbd>W</kbd> mergulha para a frente, <kbd>A</kbd>/<kbd>D</kbd> giram. Abaixo de 250 m o aviso pisca.</li>
+        <li><kbd>Espaço</kbd> <b>abre</b>. No velame: <kbd>A</kbd>/<kbd>D</kbd> curva, <kbd>W</kbd> acelera, <kbd>S</kbd> freia — <b>freie antes de tocar o chão</b> para o pouso macio. Cada salto gasta um paraquedas.</li></ul>`,
 
     home: () => `<h2>Casa, imóveis e save</h2>
         <ul><li>A safe house da favela é sua desde o começo: <b>cama</b> (dormir e salvar), <b>baú</b>, <b>cofre</b> e <b>geladeira</b>.</li>

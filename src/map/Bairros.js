@@ -33,6 +33,7 @@ const Bairros = {
     // 'roca' | 'serra' | null
     zoneAt(x, z) {
         if (x > -790 || x < -1460 || z < -270 || z > 970 || (z > 150 && z < 585)) return null;      // (fora das duas caixas: rápido)
+        if (typeof Airport !== 'undefined' && Airport.covers(x, z, 4)) return null;      // (o aeroporto)
         for (const Z of this.ZONES) if (this._inPoly(Z.poly, x, z)) return Z.id;
         return null;
     },

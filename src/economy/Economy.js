@@ -231,7 +231,7 @@ const Economy = {
         const S = this.STYLES[shop.style], r = Pixel.rng(this._h(shop.id) ^ (this.day * 7919)), items = [];
         for (const [id, chance = 1, max = Infinity] of S.stock) {
             if (S.guns && r() > Math.min(1, chance + (shop.district === 'favela' ? 0 : 0.2))) continue;     // favela: estoque sortido; cidade: quase tudo
-            if (!S.guns && !S.gym && r() < 0.12) continue;                                                     // restaurante sem um prato hoje
+            if (!S.guns && !S.gym && !S.fixed && r() < 0.12) continue;                                         // restaurante sem um prato hoje
             const qty = max === Infinity ? Infinity : 1 + Math.floor(r() * max);
             items.push({ id, qty });
         }
@@ -265,6 +265,7 @@ const Economy = {
         const needClean = shop.district !== 'favela' && price >= Laundry.CLEAN_MIN;          // compra grande no comércio legal: só dinheiro LIMPO
         if ((needClean ? inv.clean : inv.cash) < price) return { ok: false, msg: needClean ? (inv.cash >= price ? 'Compra grande: o comércio legal só aceita dinheiro LIMPO — lave o seu' : 'Dinheiro limpo insuficiente') : 'Dinheiro insuficiente' };
         if (it.kind === 'weapon' && inv.owned(it.weapon)) return { ok: false, msg: 'Você já tem essa arma' };
+        if (it.can) { const why = it.can(game); if (why) return { ok: false, msg: why }; }
 
         if (it.kind === 'ammo' && !it.weapons.some((w) => inv.owned(w))) return { ok: false, msg: 'Você não tem arma para essa munição' };
         if (it.kind === 'vest' && pl.armorMax >= it.max && pl.armor >= pl.armorMax - 0.5) return { ok: false, msg: 'Você já está com esse colete' };
@@ -285,6 +286,7 @@ const Economy = {
         let msg = `Comprou: ${it.name}${t}`;
         switch (it.kind) {
             case 'gympass': msg = `${it.name}${t} · treino liberado até ${Physique.addPass(it.days)}`; break;
+            case 'service': msg = (it.act && it.act(game)) || msg; break;          // (o balcão do aeroporto: aluguel de avião, salto de paraquedas)
             case 'meal': {                                                    // come à vontade, até sem fome: o excesso vira gordura (Physique)
                 pl.hp = Math.min(pl.maxHp, pl.hp + it.heal);
                 if (it.protein) Physique.protein = Math.min(2, (Physique.protein || 0) + it.protein);      // (whey: o próximo treino rende mais)

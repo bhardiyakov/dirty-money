@@ -19,7 +19,7 @@ module.exports = {
                 dCv: E.districtAt(SafeHouse.spawnWorld().x, SafeHouse.spawnWorld().z),
                 stats: Bairros.stats, villages: Bairros.villages.map((v) => v.id).join(','), pens: Bairros.pens.length,
                 species: [...new Set(Bairros.pens.map((p) => p.sp))].sort().join(','),
-                shopsRoca: shops('roca'), shopsSerra: shops('serra'), labels: WorldMap.regions.map((r) => r.name).filter((n) => /MIRANTE|ROÇA|ALTO DA SERRA/.test(n)).length,
+                shopsRoca: shops('roca'), shopsSerra: shops('serra'), labels: WorldMap.regions.map((r) => r.name).filter((n) => /^(MORRO DO MIRANTE|VILA DA ROÇA|ALTO DA SERRA)$/.test(n)).length,
                 cpcGroups: game.gangs.groups ? game.gangs.groups.filter((g) => g.t.id === 'cpc').length : -1,
             };
         });
