@@ -130,6 +130,8 @@ const Traces = {
         if (this.masked() && !Interiors.active) chips.push(chip(`${this.fullMask() ? '🥷' : '😷'} mascarado — K tira`, 'rgba(251,191,36,0.6)'));
         if (typeof Witnesses !== 'undefined' && Witnesses.pending()) chips.push(chip(Witnesses.hudChip(), 'rgba(251,191,36,0.8)'));
         if (this.search && game.wanted.level === 0) chips.push(chip(`🔎 busca no bairro ${Math.ceil(this.search.t)}s`, 'rgba(251,191,36,0.6)'));
+        const bc = typeof StoreBurglary !== 'undefined' && StoreBurglary.chip();
+        if (bc) chips.push(chip(bc, 'rgba(129,140,248,0.6)'));
         if (this.desc) chips.push(chip(this.matches() ? '👕 sua roupa está na descrição' : '👕 descrição (roupa trocada ✔)', this.matches() ? 'rgba(244,63,94,0.6)' : 'rgba(52,211,153,0.5)'));
         const status = game.heat && game.heat.statusChip();
         if (status) chips.push(chip(status.text, status.color));

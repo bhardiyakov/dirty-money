@@ -677,7 +677,7 @@ class Game {
 		Perf.lap('outros');
 		Needs.update(this, dt);                                                  // fome e cansaço (leves)
 		Phone.update(this, dt);                                                  // o celular: mensagens, compromissos, entregas
-		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); Calendar.update(this, dt); Personas.update(this, dt); Tutorial.update(this, dt); MobileUI.start(); Juice.update(this, dt); ScreenFx.update(this, dt); Daily.update(this, dt);                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
+		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); if (typeof StoreBurglary !== 'undefined') StoreBurglary.tick(dt, this); Calendar.update(this, dt); Personas.update(this, dt); Tutorial.update(this, dt); MobileUI.start(); Juice.update(this, dt); ScreenFx.update(this, dt); Daily.update(this, dt);                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
 		Perf.lap('mundo vivo (celular/festas/personagens)');
 		// Assa sprites pendentes (personagens; os carros vêm prontos do atlas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
 		// de folga) menos o trabalho medido do quadro, entre 1 e 8 ms. Antes eram 9 ms fixos — num celular que já gasta 25 ms por quadro,

@@ -22,6 +22,7 @@ const Items = {
         booster:     { name: 'Auxiliar de partida', emo: '🔌', w: 1, stack: 1, kg: 2, price: 320, cat: 'use', uses: 3, desc: 'Dá a partida com a bateria arriada (3 cargas) — use perto do carro' },
         galao:       { name: 'Galão de gasolina (5 L)', emo: '⛽', w: 1, stack: 2, kg: 4.2, price: 60, cat: 'use', desc: 'Põe 5 L no tanque de um carro parado — use perto dele' },
         furadeira:   { name: 'Furadeira de cofre', emo: '🪛', w: 2, stack: 1, kg: 6, price: 2600, cat: 'crime', desc: 'Abre cofre de loja em metade do tempo (sem o código do gerente)' },
+        gazua:       { name: 'Kit de gazuas', emo: '🗝️', w: 1, stack: 1, kg: 0.2, price: 450, cat: 'crime', desc: 'Fechadura de loja e de casa mais fácil no mini-game (arrombamento furtivo) — não se gasta' },
         abracadeira: { name: 'Abraçadeiras plásticas', emo: '➰', w: 1, stack: 6, kg: 0.1, price: 40, cat: 'crime', desc: 'Amarra um refém (ele não foge mais) — gasta 1 por refém' },
     },
 
@@ -56,5 +57,5 @@ if (typeof Emoji !== 'undefined') for (const [id, d] of Object.entries(Items.DEF
 if (typeof Economy !== 'undefined') {
     for (const [id, d] of Object.entries(Items.DEFS)) Economy.ITEMS['it_' + id] = { name: d.name, icon: Items.key(id), base: d.price, kind: 'item', item: id, desc: d.desc };
     Economy.STYLES.mart.stock.push(['it_oleo'], ['it_galao']);
-    Economy.STYLES.drugs.stock.push(['of_balaclava', 1, 4], ['of_bandana', 1, 6], ['of_luvas', 0.9, 3], ['it_abracadeira', 1, 12], ['it_furadeira', 0.7, 1]);
+    Economy.STYLES.drugs.stock.push(['of_balaclava', 1, 4], ['of_bandana', 1, 6], ['of_luvas', 0.9, 3], ['it_abracadeira', 1, 12], ['it_furadeira', 0.7, 1], ['it_gazua', 0.9, 2]);
 }

@@ -63,7 +63,7 @@ const SaveGame = {
 			inventory: { cash: inv.cash, clean: inv.clean, medkits: inv.medkits, hacks: inv.hacks, keys: inv.keys, food: inv.food, water: inv.water, jewels: inv.jewels, jewelValue: inv.jewelValue, bag: inv.bag, spareBags: inv.spareBags.slice(), weapons, gear: Object.assign({}, inv.gear || {}), booster: inv.boosterUses || 0 },
 			fitness: p.fit ? p.fit.xp : 0, strength: p.str ? p.str.xp : 0, physique: Physique.serialize(),
 			stash: g.stash.serialize(), day: Economy.day, standing: Standing.serialize(), laundry: Laundry.serialize(), realestate: RealEstate.serialize(), garage: Garage.serialize(), goals: g.goals ? g.goals.serialize() : null, careers: g.careers ? g.careers.serialize() : null, skills: g.skills ? g.skills.serialize() : null, achievements: g.achievements ? g.achievements.serialize() : null, empire: g.empire ? g.empire.serialize() : null, banks: Banks.serialize(), outfit: Outfit.serialize(),
-			traces: Traces.serialize(), heat: g.heat.serialize(), robbery: Robbery.serialize(), heists: Heists.serialize(), business: Business.serialize(),
+			traces: Traces.serialize(), heat: g.heat.serialize(), robbery: Robbery.serialize(), burglary: typeof StoreBurglary !== 'undefined' ? StoreBurglary.serialize() : null, heists: Heists.serialize(), business: Business.serialize(),
 			decor: HomeDecor.serialize(), worldMemory: WorldMemory.serialize(), news: News.serialize(), needs: Needs.serialize(), phone: Phone.serialize(), ledger: Ledger.serialize(), rivalArc: RivalArc.serialize(), witnesses: Witnesses.serialize(), calendar: Calendar.serialize(), personas: Personas.serialize(), tutorial: Tutorial.serialize(), racing: typeof StreetRacing !== 'undefined' ? StreetRacing.serialize() : null, daily: typeof Daily !== 'undefined' ? Daily.serialize() : null,
 		};
 	},
@@ -97,7 +97,7 @@ const SaveGame = {
 		p.str = { xp: s.strength || 0 };
 		Physique.load(s.physique || null);
 		g.stash.load(s.stash); Standing.load(s.standing); Laundry.load(s.laundry); RealEstate.load(s.realestate); Garage.load(s.garage || null); if (g.goals) g.goals.load(s.goals); if (g.careers) g.careers.load(s.careers); if (g.skills) g.skills.load(s.skills); if (g.achievements) g.achievements.load(s.achievements); if (g.empire) g.empire.load(s.empire); Banks.load(s.banks); Economy.day = s.day || 0; Economy.shops = {};
-		Traces.load(s.traces || null); Robbery.load(s.robbery || null); Heists.load(s.heists || null); Business.load(s.business || null);
+		Traces.load(s.traces || null); Robbery.load(s.robbery || null); if (typeof StoreBurglary !== 'undefined') StoreBurglary.load(s.burglary || null); Heists.load(s.heists || null); Business.load(s.business || null);
 		HomeDecor.load(s.decor || null);
 		WorldMemory.load(s.worldMemory || null); News.load(s.news || null); Needs.load(s.needs || null); Phone.load(s.phone || null); Ledger.load(s.ledger || null); RivalArc.load(s.rivalArc || null); Witnesses.load(s.witnesses || null); Calendar.load(s.calendar || null); Personas.load(s.personas || null); Tutorial.load(s.tutorial || { done: true }); Phone._ready = true; if (typeof StreetRacing !== 'undefined') StreetRacing.load(s.racing || null); if (typeof Daily !== 'undefined') Daily.load(s.daily || null);                              // o que o mundo lembra de você (saves antigos: ninguém te conhece)                                      // (os móveis em si vêm da grade: HomeDecor.startSession)
 		const pl = s.player || {};
