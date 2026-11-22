@@ -510,7 +510,25 @@ class NPC {
 		return true;
 	}
 
-	// ------------------------------------------------------------- semáforos
+	// ------------------------------------------------------------- semáforos e calçada
+	// O ponto (x, z) é lugar de PEDESTRE? Fora do asfalto (rua, avenida, estrada, a rua do morro) e fora da faixa — destino, lugar de
+	// aparecer e de ficar parado nunca são na pista (atravessar, só pela faixa, com o sinal: signalGate).
+	static offRoad(x, z) {
+		if (typeof RoadPlan !== 'undefined' && RoadPlan.onAsphalt && RoadPlan.onAsphalt(x, z, 0.4)) return false;
+		if (typeof CityGrid !== 'undefined' && CityGrid.inCrosswalk && CityGrid.inCrosswalk(x, z, 1.0)) return false;
+		if (typeof Favelas !== 'undefined' && Favelas.onRoad && Favelas.onRoad(x, z)) return false;
+		return true;
+	}
+	// Respeitar o sinal em qualquer estado que anda (perambular, correr na orla, ir ao ponto, ao banco): esperando a faixa abrir ou
+	// parado na boca dela → true (o estado não anda neste quadro). speed = a velocidade de quando a faixa abrir.
+	trafficWait(dt, speed = Config.npc.wanderSpeed) {
+		if (this.waiting) {
+			this.waitTime += dt;
+			if (this.ctx.signals.ped(this.waiting).state === 'walk' || this.waitTime > 25) { this.release(); this.setSpeed(speed); }
+			return true;
+		}
+		return this.signalGate();
+	}
 	// Chamado todo frame no estado WANDER. Retorna true se está retido esperando o sinal.
 	signalGate() {
 		const p = this.position;

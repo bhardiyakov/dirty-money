@@ -49,10 +49,11 @@ class WanderState {
     _pickNewTarget() {
         // Destino nunca dentro de uma faixa de pedestres (senão o NPC pararia no meio da rua).
         let dest = null;
-        for (let i = 0; i < 8; i++) {
+        for (let i = 0; i < 12; i++) {
             dest = this.npc.nav.randomPoint(this.npc.position, Config.npc.wanderRadius);
-            if (!CityGrid.inCrosswalk(dest.x, dest.z, 1.0) && !Favelas.onRoad(dest.x, dest.z)) break;      // (nem na rua do morro: parado ali trancaria os carros)
+            if (NPC.offRoad(dest.x, dest.z)) break;                         // (na calçada: nem na faixa, nem na pista, nem na rua do morro)
         }
+        if (typeof StreetIdle !== 'undefined' && StreetIdle.maybe(this.npc)) return;      // (às vezes: senta no banco, vai ao ponto, conversa)
         this.npc.gotoTarget(dest);
         this.timer = Config.npc.wanderTime;
     }

@@ -21,8 +21,9 @@ class JogState {
         this._next(true);
     }
 
-    update() {
+    update(dt) {
         const npc = this.npc;
+        if (npc.trafficWait(dt || 0.016, Config.npc.jogSpeed)) return;          // (correndo também espera o sinal na faixa)
         if (this.path && npc.distanceToTarget() < 2.6) this._next(false);
     }
 

@@ -52,7 +52,7 @@ class NPCManager {
         }
         for (let k = 0; k < 40; k++) {
             const p = nav.randomWalkable(rMin, rMax);
-            if (Math.random() < this._density(p.x, p.z)) return { pos: p, role: null };
+            if (NPC.offRoad(p.x, p.z) && Math.random() < this._density(p.x, p.z)) return { pos: p, role: null };      // (na calçada, nunca na pista)
         }
         return { pos: nav.randomWalkable(rMin, rMax), role: null };
     }
@@ -212,7 +212,7 @@ class NPCManager {
     // AO FUNDO, na faixa de cima da tela (pequena, longe), e vem andando para perto; ou logo FORA da beirada (dos lados), já andando para
     // dentro da cena. Devolve { p, to } (onde aparece e para onde vai) ou null.
     _entry(V) {
-        const f = this.nav.focus, snap = (q) => { if (!q) return null; const c = this.nav.closestPoint(new BABYLON.Vector3(q.x, 0, q.z), 5); return c && this.nav.walk(c.x, c.z) && hypot(c.x - f.x, c.z - f.z) > 7 ? c : null; };
+        const f = this.nav.focus, snap = (q) => { if (!q) return null; const c = this.nav.closestPoint(new BABYLON.Vector3(q.x, 0, q.z), 5); return c && this.nav.walk(c.x, c.z) && NPC.offRoad(c.x, c.z) && hypot(c.x - f.x, c.z - f.z) > 7 ? c : null; };
         const mid = this._screenGround(0.5, 0.6) || f;
         for (let k = 0; k < 16; k++) {                                                    // ao fundo: a faixa de cima da tela
             const c = snap(this._screenGround(0.06 + Math.random() * 0.88, 0.02 + Math.random() * 0.2));
