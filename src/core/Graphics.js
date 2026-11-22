@@ -23,8 +23,10 @@ const Graphics = {
 	LEVELS: ['low', 'medium', 'high', 'hd'],
 	CHOICES: ['auto', 'low', 'medium', 'high', 'hd'],
 	LABEL: { auto: 'Automático', low: 'Low', medium: 'Medium', high: 'High', hd: 'HD' },
+	// (Low: 0,56 = os 75% de antes × os 75% que a TV de tubo tirava por cima, quando ela vinha ligada por padrão — o aparelho fraco
+	// continua desenhando a mesma quantidade de pixels com a imagem limpa.)
 	PRESETS: {
-		low: { renderScale: 0.75, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6 },
+		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6 },
 		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 60, chaseFar: 95, maxPx: 1.8e6 },
 		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6 },
 		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true },

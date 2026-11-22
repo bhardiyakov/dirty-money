@@ -110,7 +110,8 @@ class CrtPass {
         this.enabled = on;
         if (on) {
             this.baseScale = Config.perf.renderScale || 1;
-            Config.perf.renderScale = this.baseScale * this.settings.renderScale;
+            // (no Low a resolução já vem reduzida: o tubo não desce abaixo dela)
+            Config.perf.renderScale = Math.max(this.baseScale * this.settings.renderScale, Math.min(this.baseScale, 0.56));
             this.postProcess = this._createPass();
         } else {
             Config.perf.renderScale = this.baseScale;
