@@ -719,7 +719,7 @@ class NPC {
 		if (this.free) {
 			const S = this.fsm.current, A = (S && S.anim ? S.anim(this._freeV || 0) : this.freeAnim) || { clip: 'idle', rate: 1 };
 			this.transform.rotation.y = this.heading;
-			if (!this.actor.play(A.clip, A.w || 'none')) this.actor.play(A.clip, 'none');
+			if (!this.actor.play(A.clip, A.w || 'none') && !this.actor.play(A.clip, 'none') && A.fb) this.actor.play(A.fb, 'none');      // (sem o clipe neste desenho: o de reserva)
 			const b = this._waveTick(dt), yaw = b ? CompassCamera.yaw || 0 : 0;
 			this.actor.setPosition(this.transform.position.x + Math.sin(yaw) * b, this.transform.position.z + Math.cos(yaw) * b);
 			this.actor.setHeading(this.heading);
