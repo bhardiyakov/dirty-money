@@ -6,7 +6,10 @@
 //     laranja espalhado pelo horizonte do lado dele (o pôr do sol) — o disco passa do limiar do brilho (render/Lighting.js, bloom);
 //   • NUVENS que andam com o vento (uma textura de ruído feita na carga, duas camadas), iluminadas pela cor do sol; com tempo
 //     fechado (Weather) o céu cobre e acinzenta;
-//   • de noite, LUA e ESTRELAS que piscam (somem atrás das nuvens), e as nuvens com o laranja da cidade por baixo.
+//   • de noite, LUA e ESTRELAS que piscam (somem atrás das nuvens), e as nuvens com o laranja da cidade por baixo;
+//   • ABAIXO do horizonte, o MAR que continua além da borda do mundo (lá de cima — avião, helicóptero, paraquedas — a borda reta
+//     do plano d'água sumia num cinza liso): cada raio desce até o nível do mar e ganha a névoa daquela distância (a mesma conta da
+//     névoa da cena), então o mar de verdade e o do céu se emendam.
 // Desenhado na fila de alpha-test (depois dos opacos, antes dos transparentes), sem gravar profundidade, no fundo do volume de
 // visão (z = w): só os pixels de céu de verdade são pintados — prédios, chão e carros na frente nem passam pelo shader.
 // Fora da perseguição (câmera de cima, interiores) fica desligado e o fundo volta à cor de sempre. `?ceu=0` desliga.
@@ -20,7 +23,7 @@ const SkyDome = {
 	_t: 0,
 	// cores da hora (DayNight.apply)
 	zen: [0.2, 0.42, 0.8], hor: [0.6, 0.75, 0.95], sunDir: [0, 1, 0], sunCol: [1, 1, 1], moonDir: [0, 1, 0],
-	cloudLit: [1, 1, 1], cloudDark: [0.6, 0.65, 0.7], night: 0, cover: 0.3, sunVis: 1,
+	cloudLit: [1, 1, 1], cloudDark: [0.6, 0.65, 0.7], sea: [0.14, 0.23, 0.28], seaSky: [0.5, 0.65, 0.8], night: 0, cover: 0.3, sunVis: 1,
 
 	get wanted() {
 		const q = typeof location !== 'undefined' ? location.search : '';
@@ -39,7 +42,7 @@ const SkyDome = {
 		m.receiveShadows = false;
 		const mat = this.mat = new BABYLON.ShaderMaterial('skyDome', scene, { vertex: 'skyDome', fragment: 'skyDome' }, {
 			attributes: ['position'],
-			uniforms: ['world', 'viewProjection', 'zen', 'hor', 'sunDir', 'sunCol', 'moonDir', 'cloudLit', 'cloudDark', 'sky'],
+			uniforms: ['world', 'viewProjection', 'zen', 'hor', 'sunDir', 'sunCol', 'moonDir', 'cloudLit', 'cloudDark', 'sky', 'seaC', 'seaSky', 'fogP'],
 			samplers: ['noise'],
 			needAlphaTesting: true,                     // (fila de alpha-test: depois dos opacos — o céu só onde nada foi desenhado)
 		});
@@ -66,8 +69,11 @@ const SkyDome = {
 		const r = Math.max(5, (cam.minZ || 1) * 4);           // (qualquer raio entre near e far: o shader joga a profundidade para o fundo)
 		m.scaling.set(r, r, r);
 		this._t = (performance.now() / 1000) % 100000;
-		const U = this._U;
-		if (U) this.mat.setVector4('sky', U.sky.set(this.night, this.cover, this._t, this.sunVis));
+		const U = this._U, sc = game.scene;
+		if (U) {
+			this.mat.setVector4('sky', U.sky.set(this.night, this.cover, this._t, this.sunVis));
+			this.mat.setVector3('fogP', U.fogP.set(sc.fogStart, sc.fogEnd, Math.max(0.5, cam.position.y)));      // (névoa do olho e a altura sobre o mar)
+		}
 	},
 
 	// Cores da hora (DayNight.apply). hor = a cor da névoa de distância (o horizonte se funde no longe da cidade).
@@ -78,7 +84,8 @@ const SkyDome = {
 	_push() {
 		const m = this.mat;
 		if (!m) return;
-		const U = this._U || (this._U = { zen: new BABYLON.Color3(), hor: new BABYLON.Color3(), sunCol: new BABYLON.Color3(), cloudLit: new BABYLON.Color3(), cloudDark: new BABYLON.Color3(), sunDir: new BABYLON.Vector3(), moonDir: new BABYLON.Vector3(), sky: new BABYLON.Vector4() });
+		const U = this._U || (this._U = { zen: new BABYLON.Color3(), hor: new BABYLON.Color3(), sunCol: new BABYLON.Color3(), cloudLit: new BABYLON.Color3(), cloudDark: new BABYLON.Color3(), sea: new BABYLON.Color3(), seaSky: new BABYLON.Color3(), sunDir: new BABYLON.Vector3(), moonDir: new BABYLON.Vector3(), sky: new BABYLON.Vector4(), fogP: new BABYLON.Vector3(100, 200, 2) });
+		m.setColor3('seaC', U.sea.set(this.sea[0], this.sea[1], this.sea[2])); m.setColor3('seaSky', U.seaSky.set(this.seaSky[0], this.seaSky[1], this.seaSky[2])); m.setVector3('fogP', U.fogP);
 		for (const k of ['zen', 'hor', 'sunCol', 'cloudLit', 'cloudDark']) { const a = this[k]; m.setColor3(k, U[k].set(a[0], a[1], a[2])); }
 		for (const k of ['sunDir', 'moonDir']) { const a = this[k]; m.setVector3(k, U[k].set(a[0], a[1], a[2])); }
 		m.setVector4('sky', U.sky.set(this.night, this.cover, this._t, this.sunVis));
@@ -106,9 +113,12 @@ const SkyDome = {
 		cloudLit = mix(cloudLit, [0.5, 0.53, 0.57].map((v) => v * (0.2 + 0.8 * k)), cl(weatherK));
 		cloudDark = mix(cloudDark, [0.3, 0.32, 0.35].map((v) => v * (0.2 + 0.8 * k)), cl(weatherK));
 		const sunVis = (1 - cl(weatherK * 1.4)) * cl((sinE + 0.04) / 0.08) * cl(k * 1.4);
+		// o mar ao longe: a cor da água (MapData: #4a7390) na luz da hora, com o céu refletido de lado (Fresnel alto lá longe)
+		const ws = typeof Water !== 'undefined' && Water.sky ? Water.sky : haze, lv = 0.25 + 0.75 * k;
+		const sea = [0.26, 0.47, 0.56].map((v, i) => v * P.tint[i] * lv * 0.55), seaSky = ws.slice(0, 3);      // (medido na foto: o mar de verdade perto da borda)
 		this.set({
 			zen, hor: haze.slice(0, 3), sunDir, sunCol: P.sunC.map((v) => v * 1.05), moonDir: [-0.42, 0.78, 0.46],
-			cloudLit, cloudDark, night: 1 - k, cover: 0.3 + 0.62 * cl(weatherK), sunVis,
+			cloudLit, cloudDark, sea, seaSky, night: 1 - k, cover: 0.3 + 0.62 * cl(weatherK), sunVis,
 		});
 	},
 
@@ -153,7 +163,8 @@ const SkyDome = {
 		S.skyDomeFragmentShader = `
 			precision highp float;
 			varying vec3 vDir;
-			uniform vec3 zen, hor, sunDir, sunCol, moonDir, cloudLit, cloudDark;
+			uniform vec3 zen, hor, sunDir, sunCol, moonDir, cloudLit, cloudDark, seaC, seaSky;
+			uniform vec3 fogP;             // névoa da cena (início, fim, em m do olho) e a altura do olho sobre o mar
 			uniform vec4 sky;              // x = noite (0..1), y = cobertura de nuvens, z = tempo (s), w = sol visível (0..1)
 			uniform sampler2D noise;
 			float h3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -169,8 +180,9 @@ const SkyDome = {
 				float n = texture2D(noise, uv + vec2(sky.z * 0.0016, sky.z * 0.0006)).r * 0.62
 					+ texture2D(noise, uv * 2.7 + vec2(-sky.z * 0.0024, sky.z * 0.001)).r * 0.38;
 				float edge = 1.0 - sky.y;
-				float cl = smoothstep(edge - 0.08, edge + 0.22, n) * smoothstep(0.0, 0.14, y);
+				float cl = smoothstep(edge - 0.08, edge + 0.22, n) * smoothstep(0.0, 0.06, y);
 				vec3 cc = mix(cloudDark, cloudLit, smoothstep(edge - 0.05, edge + 0.4, n)) + sunCol * pow(sd, 6.0) * 0.35 * sky.w;
+				cc = mix(cc, hor, pow(1.0 - up, 6.0) * 0.6);                        // (as do horizonte, longe: tingidas pelo ar)
 				c = mix(c, cc, cl * 0.9);
 				// o disco do sol (atrás das nuvens)
 				c += sunCol * smoothstep(0.99955, 0.99978, sd) * 1.8 * sky.w * (1.0 - cl);
@@ -181,7 +193,12 @@ const SkyDome = {
 				c += vec3(0.85, 0.9, 1.0) * star;
 				float md = max(dot(d, moonDir), 0.0);
 				c += vec3(0.86, 0.89, 0.96) * (smoothstep(0.99935, 0.9996, md) * 0.95 + pow(md, 180.0) * 0.1) * sky.x * (1.0 - cl * 0.85);
-				c = mix(c, hor, smoothstep(0.015, -0.06, y));                  // abaixo do horizonte: a névoa
+				// abaixo do horizonte: o mar até o horizonte, com a névoa da distância em que o raio chega ao nível do mar
+				// (e o céu refletido de lado, o Fresnel do mar de verdade — WaterPlugin: 0,05 + 0,45 (1 − cos)³)
+				float t = fogP.z / max(-y, 1e-4);
+				vec3 sea = mix(seaC, seaSky, 0.05 + 0.45 * pow(clamp(1.0 + y, 0.0, 1.0), 3.0));
+				vec3 below = mix(sea, hor, clamp((t - fogP.x) / max(fogP.y - fogP.x, 1.0), 0.0, 1.0));
+				c = mix(c, below, smoothstep(0.004, -0.004, y));
 				gl_FragColor = vec4(c, 1.0);
 			}`;
 	},
