@@ -25,9 +25,9 @@ const Graphics = {
 	LABEL: { auto: 'Automático', low: 'Low', medium: 'Medium', high: 'High', hd: 'HD' },
 	PRESETS: {
 		low: { renderScale: 0.75, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6 },
-		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 60, chaseFar: 95, maxPx: 2.4e6 },
-		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6 },
-		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true },
+		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 60, chaseFar: 95, maxPx: 1.8e6 },
+		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6 },
+		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true },
 	},
 	// GPUs that cannot carry the high preset (WEBGL_debug_renderer_info): software rasterisers and old mobile/integrated chips.
 	// ("Microsoft Basic Render Driver" / WARP: o Windows sem driver de vídeo ou com a aceleração do navegador desligada — desenha na CPU)
@@ -128,7 +128,7 @@ const Graphics = {
 	// Writes a preset into Config (before the game reads it).
 	apply(p) {
 		const P = Config.perf, A = Config.art, desktopApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-		P.renderScale = p.renderScale; P.dprCap = p.dprCap || 1; P.maxPixels = p.maxPx || 0; P.autoScale = 1; P.shadows = p.shadows; P.shadowSize = p.shadowSize; P.colliderRadius = p.colliderRadius;
+		P.renderScale = p.renderScale; P.bloom = !!p.bloom; P.dprCap = p.dprCap || 1; P.maxPixels = p.maxPx || 0; P.autoScale = 1; P.shadows = p.shadows; P.shadowSize = p.shadowSize; P.colliderRadius = p.colliderRadius;
 		const fps60 = desktopApp || (typeof location !== 'undefined' && location.search.includes('fps60'));      // (PC app, or `?fps60` to test)
 		P.fpsCap = p.fps > 30 || (fps60 && this.level === 'high') ? 60 : 30;
 		P.lite = this.level === 'low' || this.level === 'medium';

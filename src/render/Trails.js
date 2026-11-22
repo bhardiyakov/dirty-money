@@ -91,7 +91,7 @@ const Trails = {
 			for (let i = P.length - 1; i >= 0; i--) if (!P[i]) P.splice(i, 1);
 		};
 		const attach = () => {
-			const at = camera._postProcesses.indexOf(Lighting.grade);                       // (logo antes da gradação: depois do antisserrilhado, se houver)
+			const at = camera._postProcesses.indexOf(Lighting.head);                        // (logo antes da gradação e do brilho: depois do antisserrilhado, se houver)
 			if (at < 0) { camera.attachPostProcess(mix); camera.attachPostProcess(hist); }
 			else { camera.attachPostProcess(mix, at); camera.attachPostProcess(hist, at + 1); }
 			attached = true; frames = 0;

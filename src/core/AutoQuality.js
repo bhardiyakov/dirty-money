@@ -28,7 +28,7 @@ class AutoQuality {
 			['npc3d', 'personagens com menos detalhe', true],
 			['shadow512', 'sombras reduzidas', false],
 			['scale85', 'resolução a 85%', true],
-			['fill', 'sem antisserrilhado e fachadas simples', true],
+			['fill', 'sem antisserrilhado, brilho e fachadas simples', true],
 			['noShadow', 'sem sombras', false],
 			['npc3dOff', 'personagens com pouco detalhe', true],
 			['scale70', 'resolução a 70%', true],
@@ -109,6 +109,7 @@ class AutoQuality {
 		else if (id === 'noShadow') this._shadowsOff();
 		else if (id === 'fill') {
 			if (typeof Smooth !== 'undefined' && Smooth.pp && Smooth.pp.samples > 1) Smooth.pp.samples = 1;
+			if (typeof Lighting !== 'undefined' && Lighting.bloomFx) Lighting.setBloom(false);      // (o brilho de verdade: volta ao brilho barato da gradação)
 			const F = ge.world && ge.world.mats && ge.world.mats.facades;
 			let n = 0;
 			if (F) for (const m of Object.values(F)) if (m && m.useParallaxOcclusion) { m.useParallaxOcclusion = false; n++; }

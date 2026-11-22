@@ -124,16 +124,18 @@ class DayNight {
 		if (typeof Lighting !== 'undefined' && typeof NpcArt !== 'undefined') NpcArt.setShadeColor(Lighting.shadeColor(P, dark));
 
 		SpriteMaterial.sharedTint().copyFromFloats(...P.tint);
+		// Perseguição (câmera baixa atrás do veículo, com o horizonte na tela): o fundo é o CÉU da hora e a névoa de distância vai para
+		// a cor do horizonte (mais clara e mais cinza que o alto do céu) — de dia azul-claro, no fim da tarde quente, de noite escuro.
+		// O domo do céu (render/SkyDome.js) tem esse horizonte embaixo: o longe da cidade se funde nele.
+		const k = 1 - Math.min(1, P.n), hz = [0.62, 0.74, 0.86], sky = [0, 0, 0], haze = [0, 0, 0];
+		for (let i = 0; i < 3; i++) {
+			sky[i] = P.clear[i] * 0.55 + hz[i] * P.hemiC[i] * 0.8 * k + P.clear[i] * (1 - k) * 0.35;
+			haze[i] = Math.min(1, sky[i] * 0.8 + (P.sunC[i] * 0.5 + 0.3) * 0.25 * k + 0.02);
+		}
+		if (typeof SkyDome !== 'undefined' && SkyDome.mat) SkyDome.fromDay(P, haze, this.hour, Weather.cur ? Weather.cur.k : 0);
 		if (typeof CompassCamera !== 'undefined' && CompassCamera.chase >= 0.5) {
-			// Perseguição (câmera baixa atrás do veículo, com o horizonte na tela): o fundo é o CÉU da hora e a névoa de distância vai para
-			// a cor do horizonte (mais clara e mais cinza que o alto do céu) — de dia azul-claro, no fim da tarde quente, de noite escuro.
-			const k = 1 - Math.min(1, P.n), hz = [0.62, 0.74, 0.86], sky = [0, 0, 0], haze = [0, 0, 0];
-			for (let i = 0; i < 3; i++) {
-				sky[i] = P.clear[i] * 0.55 + hz[i] * P.hemiC[i] * 0.8 * k + P.clear[i] * (1 - k) * 0.35;
-				haze[i] = sky[i] * 0.8 + (P.sunC[i] * 0.5 + 0.3) * 0.25 * k + 0.02;
-			}
-			ge.scene.clearColor.set(sky[0], sky[1], sky[2], 1);
-			ge.scene.fogColor.set(Math.min(1, haze[0]), Math.min(1, haze[1]), Math.min(1, haze[2]));
+			ge.scene.clearColor.set(Math.min(1, sky[0]), Math.min(1, sky[1]), Math.min(1, sky[2]), 1);
+			ge.scene.fogColor.set(haze[0], haze[1], haze[2]);
 		} else {
 			ge.scene.clearColor.set(P.clear[0], P.clear[1], P.clear[2], 1);
 			ge.scene.fogColor.set(P.clear[0] * DayNight.EDGE_DIM, P.clear[1] * DayNight.EDGE_DIM, P.clear[2] * DayNight.EDGE_DIM);      // (the 2.5D edge cut: a darker background)

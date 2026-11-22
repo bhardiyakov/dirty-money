@@ -12,7 +12,8 @@
 //   const crt = CrtFilter.attach(game.camera.camera, game.gameEngine, { renderScale: 0.75 });
 //   crt.setEnabled(false);   // back to the plain image (and the original resolution)
 //   crt.dispose();
-// `?crt=0` in the URL disables it.
+// OFF by default (the clean picture): Settings › "Filtro de TV antiga" (settings.tvFilter) turns it on; `?crt=1` / `?crt=0` in the URL
+// force it either way.
 // ============================================================================
 
 const CrtFilter = {
@@ -27,6 +28,16 @@ const CrtFilter = {
 
     get disabledByUrl() {
         return typeof location !== 'undefined' && /[?&]crt=0\b/.test(location.search);
+    },
+    // The URL decides when it says so (`?crt=1` / `?crt=0`): then the setting does not touch it.
+    get forcedByUrl() {
+        return typeof location !== 'undefined' && /[?&]crt=[01]\b/.test(location.search);
+    },
+    // On at start? The URL, else the saved setting (off unless the player turned it on).
+    get wanted() {
+        if (this.forcedByUrl) return !this.disabledByUrl;
+        const s = typeof Store !== 'undefined' ? Store.getJSON('settings', null) : null;
+        return !!(s && s.tvFilter);
     },
 
     registerShader() {
@@ -78,7 +89,7 @@ const CrtFilter = {
     attach(camera, gameEngine, options = {}) {
         const settings = Object.assign({}, this.DEFAULTS, options);
         const filter = new CrtPass(camera, gameEngine, settings);
-        if (this.disabledByUrl) filter.setEnabled(false);
+        filter.setEnabled(this.wanted);
         return filter;
     },
 };
@@ -92,7 +103,6 @@ class CrtPass {
         this.enabled = false;
         this.baseScale = Config.perf.renderScale || 1;
         this.postProcess = null;
-        this.setEnabled(true);
     }
 
     setEnabled(on) {

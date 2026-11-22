@@ -131,6 +131,7 @@ class Game {
 		Smooth.apply(this);                                  // gráfico suave (alta definição): antisserrilhado, densidade do monitor, texturas filtradas
 		Lighting.init(this);                                 // luz física (etapa 2): a gradação de cor no fim da cadeia (a luz do céu é do DayNight)
 		NightLights.init(this);                              // luz de verdade à noite (etapa 6): o campo de luz dos postes, lojas e faróis
+		if (typeof SkyDome !== 'undefined') { SkyDome.init(this); this.dayNight.apply(); }      // o céu de verdade (degradê, sol, nuvens, lua, estrelas) na perseguição
 		Water.initMirror(this);                              // reflexo na água (etapa 7): prédios, árvores e carros espelhados
 		this.trails = Trails.attach(this.camera.camera, this.gameEngine.engine);      // o borrão do GTA SA (render/Trails.js) — antes do CRT
 		this.crt = CrtFilter.attach(this.camera.camera, this.gameEngine, { renderScale: 0.75 });      // TV de tubo + resolução interna reduzida (render/CrtFilter.js) — por último na cadeia
