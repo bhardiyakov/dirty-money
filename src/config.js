@@ -361,8 +361,8 @@ const Config = {
 		shotRadius: 42,        // Raio em que ouve um tiro.
 		chaseRadiusCar: 16,    // Foge de viatura em perseguição até esta distância.
 		chaseRadiusOfficer: 11, // ...e de policial correndo atrás de você.
-		recycleDist: 160,      // Pedestre mais longe que isto do jogador reaparece perto dele (o mundo é grande)...
-		placeMin: 55, placeMax: 130,     // ...num anel a placeMin–placeMax u (fora da tela a pé): a gente fica perto de você (eram 250 e 75–200)
+		recycleDist: 125,      // Pedestre mais longe que isto do jogador reaparece perto dele (o mundo é grande; eram 250, depois 160)...
+		placeMin: 20, placeMax: 110,     // ...num anel a placeMin–placeMax u, num lugar ESCONDIDO (fora da câmera ou ao fundo, na névoa): NPCManager._hidden
 		wantedRadius: 9,       // Foge de VOCÊ (procurado) até esta distância.
 		herdRadius: 5.5,       // Pânico contagia vizinhos até esta distância.
 		herdChance: 0.6,
@@ -510,6 +510,7 @@ const Config = {
 	// Trânsito: carros-IA em mão direita, uma faixa por sentido.
 	traffic: {
 		count: 26,             // Carros circulando.
+		rainExtra: 0.5,        // Chovendo forte: + esta fração da frota em carros a mais (quem andaria a pé vai de carro — TrafficManager._rainCars).
 		parked: 12,            // Carros estacionados no meio-fio (roubáveis, não bloqueiam a pista).
 		motos: 4,              // Motos circulando (com piloto) e estacionadas (vazias, roubáveis).
 		motosParked: 3,

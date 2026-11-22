@@ -1,7 +1,7 @@
 // A LAGOA (map/Lagoa.js): o espelho d'água doce de beira lisa (aterro), a orla com pista e ciclovia, a Av. da Lagoa da Prata em volta
 // ligada às estradas e à cidade, os prédios de luxo (o m² mais caro da cidade), quadras e clube, quiosques e ambulantes que vendem,
 // corredores e ciclistas de verdade, pedalinhos e caiaques nos deques — e a água sem onda, sem espuma e sem areia.
-const { boot, gameWait } = require('./lib.cjs');
+const { boot } = require('./lib.cjs');
 
 module.exports = {
     name: 'lagoa',
@@ -90,7 +90,14 @@ module.exports = {
             const t = L.at(N_ / 3, 5), j = CityGrid.jogNear(t[0], t[1], 300); out.jogHere = !!(j && j.path.lagoa);
             return out;
         });
-        await gameWait(page, 3);
+        // 3 s de jogo em passos fixos de 1/60 s (lógica + física), sem esperar o desenho: perto da Lagoa o Chromium por software leva
+        // segundos por quadro e, no relógio da parede, o jogo andava só ~0,2 s — os ciclistas "não andavam" porque o jogo mal andou.
+        let gt = 0;
+        for (let k = 0; k < 3; k++) gt += await page.evaluate(() => {
+            const gm = game, ph = gm.scene.getPhysicsEngine();
+            for (let i = 0; i < 60; i++) { gm._update(1 / 60); if (ph) ph._step(1 / 60); if (typeof Vehicle !== 'undefined') Vehicle.physFrame++; }
+            return 1;
+        });
         const m = await page.evaluate(() => {
             const L = Lagoa, moved = L.bikes.filter((b, i) => Math.hypot(b.position.x - __bk[i][0], b.position.z - __bk[i][1]) > 2).length;
             const lane = L.bikes.every((b) => { const d = L.sd(b.position.x, b.position.z); return d > L.CICLO[0] - 1 && d < L.CICLO[1] + 1; });
@@ -100,7 +107,7 @@ module.exports = {
         });
         c.ok(g.kiosk && g.bought, 'o quiosque da Lagoa vende (água de coco)');
         c.ok(g.bikes === Lagoa_BIKES && g.real && g.lane && g.dirs === 2, `ciclistas de verdade na ciclovia, nos dois sentidos (${g.bikes})`);
-        c.ok(m.moved >= 6 && m.lane, `e eles pedalam sem sair da ciclovia (${m.moved} andaram)`);
+        c.ok(m.moved >= 6 && m.lane, `e eles pedalam sem sair da ciclovia (${m.moved} andaram em ${(+gt).toFixed(2)} s de jogo)`);
         c.ok(m.away === 0, 'longe, os ciclistas somem');
         c.ok(g.dens === 1 && g.jogHere, `orla movimentada; a pista é a trilha de corrida mais perto (${g.dens}, ${g.jogHere})`);
         c.noErrors(errors, 'Lagoa');

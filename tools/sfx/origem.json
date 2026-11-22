@@ -853,6 +853,120 @@
   "src": "bsb_1398.ogg",
   "ss": null
  },
+ "fw_burst_1": {
+  "file": "fw_burst_1.mp3",
+  "dur": 0.943,
+  "src": "oga3/bangs/bang_01.ogg",
+  "ss": null
+ },
+ "fw_burst_2": {
+  "file": "fw_burst_2.mp3",
+  "dur": 0.919,
+  "src": "oga3/bangs/bang_03.ogg",
+  "ss": null
+ },
+ "fw_burst_3": {
+  "file": "fw_burst_3.mp3",
+  "dur": 0.976,
+  "src": "oga3/bangs/bang_06.ogg",
+  "ss": null
+ },
+ "fw_burst_4": {
+  "file": "fw_burst_4.mp3",
+  "dur": 0.974,
+  "src": "oga3/bangs/bang_09.ogg",
+  "ss": null
+ },
+ "fw_burst_5": {
+  "file": "fw_burst_5.mp3",
+  "dur": 0.962,
+  "src": "oga3/bangs/fw_01.ogg",
+  "ss": null
+ },
+ "fw_burst_6": {
+  "file": "fw_burst_6.mp3",
+  "dur": 1.295,
+  "src": "oga3/bangs/fw_03.ogg",
+  "ss": null
+ },
+ "fw_burst_7": {
+  "file": "fw_burst_7.mp3",
+  "dur": 1.089,
+  "src": "oga3/bangs/fw_06.ogg",
+  "ss": null
+ },
+ "fw_burst_8": {
+  "file": "fw_burst_8.mp3",
+  "dur": 1.737,
+  "src": "bsb_2672.ogg",
+  "ss": 1.15
+ },
+ "fw_launch_1": {
+  "file": "fw_launch_1.mp3",
+  "dur": 0.27,
+  "src": "oga3/bangs/fw_04.ogg",
+  "ss": null
+ },
+ "fw_launch_2": {
+  "file": "fw_launch_2.mp3",
+  "dur": 0.312,
+  "src": "oga3/bangs/cannon_05.ogg",
+  "ss": null
+ },
+ "fw_launch_3": {
+  "file": "fw_launch_3.mp3",
+  "dur": 0.29,
+  "src": "oga3/bangs/cannon_03.ogg",
+  "ss": null
+ },
+ "fw_crackle_1": {
+  "file": "fw_crackle_1.mp3",
+  "dur": 1.048,
+  "src": "oga3/bangs/fw_02.ogg",
+  "ss": null
+ },
+ "fw_crackle_2": {
+  "file": "fw_crackle_2.mp3",
+  "dur": 1.81,
+  "src": "bsb_2672.ogg",
+  "ss": 20.2
+ },
+ "fw_crackle_3": {
+  "file": "fw_crackle_3.mp3",
+  "dur": 1.8,
+  "src": "bsb_2672.ogg",
+  "ss": 25.0
+ },
+ "fw_far_1": {
+  "file": "fw_far_1.mp3",
+  "dur": 1.515,
+  "src": "bsb_1050.ogg",
+  "at": 73.112
+ },
+ "fw_far_2": {
+  "file": "fw_far_2.mp3",
+  "dur": 0.366,
+  "src": "bsb_1050.ogg",
+  "at": 7.227
+ },
+ "fw_far_3": {
+  "file": "fw_far_3.mp3",
+  "dur": 1.339,
+  "src": "bsb_1050.ogg",
+  "at": 71.192
+ },
+ "fw_far_4": {
+  "file": "fw_far_4.mp3",
+  "dur": 0.918,
+  "src": "bsb_1050.ogg",
+  "at": 65.89
+ },
+ "fw_far_5": {
+  "file": "fw_far_5.mp3",
+  "dur": 1.484,
+  "src": "bsb_1050.ogg",
+  "at": 68.911
+ },
  "crowd_street": {
   "file": "crowd_street.mp3",
   "dur": 16.6,
@@ -867,6 +981,15 @@
   "dur": 16.6,
   "src": "bsb_2728.ogg",
   "ss": 8,
+  "loop": true,
+  "ls": 0.3,
+  "le": 16.3
+ },
+ "crowd_party": {
+  "file": "crowd_party.mp3",
+  "dur": 16.6,
+  "src": "oga2/crowd_shouting_0.ogg",
+  "ss": 3,
   "loop": true,
   "ls": 0.3,
   "le": 16.3

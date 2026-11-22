@@ -22,19 +22,24 @@ const StreetLife = {
     nextT: 35, chatT: 6,
 
     // ------------------------------------------------------------------ rotina por hora
-    // Quanto de gente na rua (1 = o normal do NPCManager).
-    density(h, rain = 0) {
+    // Quanto de gente na rua (1 = o normal do NPCManager): o rush da manhã e da tarde, o almoço, a madrugada vazia; no FIM DE SEMANA
+    // não tem rush (ninguém indo trabalhar), mas a noite de sexta e de sábado enche; a chuva esvazia (quase metade some, o resto se abriga).
+    density(h, rain = 0, day = typeof Economy !== 'undefined' ? Economy.day : 0) {
         const T = [[0, 0.35], [5, 0.55], [7, 1.45], [9, 1.0], [12, 1.3], [14, 1.0], [17, 1.55], [19, 1.15], [22, 0.6], [24, 0.35]];
         let d = 1;
         for (let i = 0; i < T.length - 1; i++) if (h >= T[i][0] && h < T[i + 1][0]) { const k = (h - T[i][0]) / (T[i + 1][0] - T[i][0]); d = T[i][1] + (T[i + 1][1] - T[i][1]) * k; break; }
+        const wd = ((day % 7) + 7) % 7, weekend = wd === 5 || wd === 6;                                  // (Economy.day % 7: 0 = segunda … 5 = sábado, 6 = domingo)
+        if (weekend && ((h >= 6.5 && h < 9.5) || (h >= 16.5 && h < 19.5))) d = Math.min(d, 1.05);         // (sem rush)
+        if ((wd === 4 || wd === 5) && (h >= 20 || h < 3)) d *= 1.6;                                      // (sexta e sábado à noite: a rua cheia)
         return d * (1 - 0.45 * rain);
     },
+    weekend(day = typeof Economy !== 'undefined' ? Economy.day : 0) { const wd = ((day % 7) + 7) % 7; return wd === 5 || wd === 6; },
     // Mistura de papéis (NPCManager._roleFor): corrida de manhã cedo e fim de tarde; sol e banho de mar no meio do dia, sem chuva.
     mix() {
         const g = this.g; if (!g || !g.dayNight) return null;
         const h = g.dayNight.hour, rain = typeof Weather !== 'undefined' && Weather.cur ? Weather.cur.k : 0, M = Config.npc.mix;
         const jog = (h >= 5.5 && h < 8.5) || (h >= 16.5 && h < 19) ? M.jog * 1.8 : h >= 22 || h < 5 ? 0.02 : M.jog * 0.6;
-        const day = h >= 9 && h < 17 && rain < 0.2 ? 1 : 0, peak = h >= 11 && h < 15 ? 1.5 : 1;
+        const day = h >= 9 && h < 17 && rain < 0.2 ? 1 : 0, peak = (h >= 11 && h < 15 ? 1.5 : 1) * (this.weekend() ? 1.6 : 1);      // (fim de semana: praia)
         return { jog, sun: M.sun * day * peak, swim: M.swim * day * peak };
     },
 
@@ -52,15 +57,18 @@ const StreetLife = {
     _extras(game, dt, d) {
         this._exT = (this._exT || 0) - dt; if (this._exT > 0) return; this._exT = 1.2;
         const M = game.npcManager, P = game.player.position, h = game.dayNight.hour, W = typeof Weather !== 'undefined' && Weather.cur;
-        const b = CityGrid._blockAtPoint(P.x, P.z), beachHot = b && (b.biome === 'beach' || b.biome === 'resort') && h >= 10.5 && h < 16 && !(W && W.k > 0.1);
+        // PRAIA: com sol, enche — no fim de semana LOTA (das 9h às 17h30); dia de semana, menos e só no meio do dia. Chuva: ninguém.
+        const wk = this.weekend(), b = CityGrid._blockAtPoint(P.x, P.z), sunny = !(W && W.k > 0.1);
+        const beachHot = b && (b.biome === 'beach' || b.biome === 'resort') && sunny && (wk ? h >= 9 && h < 17.5 : h >= 10.5 && h < 16);
         const match = typeof Maracana !== 'undefined' && Maracana.matchDay(P.x, P.z, h);                                                                    // (dia de jogo: a torcida chegando no Colosso)
-        const want = Math.round((Math.round(Math.max(0, d - 1) * 55) + (beachHot ? 30 : 0) + (match ? 14 : 0)) * (typeof Life !== 'undefined' ? Life.mul() : 1));          // (sol quente: a praia lota)
+        const want = Math.round((Math.round(Math.max(0, d - 1) * 55) + (beachHot ? (wk ? 60 : 25) : 0) + (match ? 14 : 0)) * (typeof Life !== 'undefined' ? Life.mul() : 1));          // (sol: a praia enche; fim de semana, lota)
+        this.beach = beachHot ? (wk ? 'lotada' : 'cheia') : null; this.extrasWant = want;
         this.extras = this.extras.filter((n) => n.alive);
         for (const n of this.extras.slice()) {
-            if (this.extras.length > want || hypot(n.position.x - P.x, n.position.z - P.z) > 230) { M.removeNpc(n); this.extras.splice(this.extras.indexOf(n), 1); if (this.extras.length <= want) break; }
+            if (this.extras.length > want || hypot(n.position.x - P.x, n.position.z - P.z) > Config.npc.recycleDist + 25) { M.removeNpc(n); this.extras.splice(this.extras.indexOf(n), 1); if (this.extras.length <= want) break; }
         }
         for (let k = 0; k < 3 && this.extras.length < want; k++) {
-            const { pos, role } = M._place(M._roleFor(Math.random()), 60, 170);
+            const { pos, role } = M._hidden ? M._hidden(M._roleFor(beachHot ? Math.random() * 0.5 + 0.1 : Math.random()), 20, Config.npc.recycleDist - 10) : M._place(M._roleFor(Math.random()), 60, 170);      // (praia: mais gente tomando sol e nadando)
             const npc = new NPC(game.scene, game.nav, pos, 12000 + (this._exId = (this._exId || 0) + 1), game.sprites, game.npcCtx, role);
             npc.setStyle(M._style(pos, role)); npc.party = true;
             M.npcs.push(npc); this.extras.push(npc);

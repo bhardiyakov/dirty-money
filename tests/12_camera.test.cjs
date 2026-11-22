@@ -151,9 +151,9 @@ module.exports = {
             await page.evaluate(() => { game._leaveVehicle(); });
             await wait(1);
             const m4 = await cam();
-            // (como no GTA: ela continua olhando para onde a câmera do veículo olhava — antes girava para o rumo do corpo, que ao descer é o
-            // da porta, e a câmera ficava atravessada na rua)
-            c.ok(Math.abs(wrap(m4.user - m3.yaw)) < 0.08, `desceu: a pé, a câmera continua olhando para onde olhava (${(m3.yaw * 57.3).toFixed(0)}° → ${(m4.user * 57.3).toFixed(0)}°)`);
+            // (ficou a pé: a câmera é ZERADA como no começo do jogo — CompassCamera.resetFoot: norte em cima, suave; antes ela continuava no
+            // rumo do veículo e, com o "para cima" preso do balanço, a imagem ficava torta — teste 66_camera_ape)
+            c.ok(Math.abs(m4.user) < 1e-6 && Math.abs(wrap(m4.yaw)) < Math.abs(wrap(m3.yaw)) + 1e-3, `desceu: a pé, a câmera volta ao norte em cima, como no começo (${(m3.yaw * 57.3).toFixed(0)}° → ${(m4.yaw * 57.3).toFixed(0)}°, indo a ${(m4.user * 57.3).toFixed(0)}°)`);
         }
 
         // 7) entrar numa loja: norte em cima; sair: a direção de antes

@@ -44,10 +44,11 @@ module.exports = {
             passos: ['step_concrete', 'step_grass', 'step_leaves', 'step_sand', 'step_dirt', 'step_gravel', 'step_mud', 'step_water', 'step_wood', 'step_tile', 'step_heels', 'step_slipper', 'run_concrete', 'run_grass'],
             tiros: ['gun_pistol', 'gun_smg', 'gun_rifle', 'gun_shotgun', 'gun_heavy', 'casing', 'gun_reload', 'gun_cock'],
             batida: ['crash', 'car_bump', 'glass', 'punch', 'explosion', 'explosion_far'],
-            rua: ['tire_screech', 'tire_squeal', 'siren_wail', 'siren_yelp', 'crowd_street', 'crowd_market'],
+            rua: ['tire_screech', 'tire_squeal', 'siren_wail', 'siren_yelp', 'crowd_street', 'crowd_market', 'crowd_party'],
             buzinas: ['horn_car', 'horn_moto', 'horn_old', 'horn_truck', 'horn_bus', 'horn_stuck', 'bell_bike'],
             'mar e nado': ['sea_surf', 'sea_open', 'swim_stroke', 'splash_small', 'splash_big'],
             'gritos e celular': ['scream_f', 'scream_m', 'notify_msg', 'notify', 'notify_ok'],
+            fogos: ['fw_launch', 'fw_burst', 'fw_crackle', 'fw_far'],
             motor: ['eng_car', 'eng_beater', 'eng_v8', 'eng_truck', 'eng_moto', 'starter', 'gear', 'handbrake'],
         };
         for (const [k, gs] of Object.entries(need)) {
@@ -89,10 +90,13 @@ module.exports = {
             hit('recarregar', 'gun_reload', () => AudioFX.reload(x, z, 1.2));
             hit('engatilhar', 'gun_cock', () => AudioFX.cock(x, z));
             hit('freada de outro carro', 'tire_squeal', () => AudioFX.squeal(x, z));
+            hit('fogos: lançamento', 'fw_launch', () => AudioFX.fireworkLaunch(x, z, 0.9));
+            hit('fogos: estouro', 'fw_burst', () => AudioFX.fireworkBurst(x, z, 15));
+            hit('fogos: estouro longe', 'fw_far', () => AudioFX.fireworkBurst(L.x + 300, L.z, 40));
             hit('longe demais (nada)', 'gun_pistol', () => AudioFX.shot('pistol', L.x + 900, L.z));
             return out;
         });
-        const want = { pistola: 1, 'revólver': 1, submetralhadora: 1, fuzil: 1, escopeta: 1, minigun: 1, 'silenciador (sintetizado)': 0, 'batida leve (lataria)': 1, 'batida forte': 1, 'explosão perto': 1, 'explosão longe': 1, 'soco/pancada': 1, vidro: 1, 'porta batendo': 1, buzina: 1, 'buzina de caminhão': 1, 'buzina de moto': 1, 'braçada': 1, pernada: 1, 'mergulho (tchibum)': 1, 'mensagem no celular': 1, 'notificação': 1, 'entrega feita': 1, recarregar: 1, engatilhar: 1, 'freada de outro carro': 1, 'longe demais (nada)': 0 };
+        const want = { pistola: 1, 'revólver': 1, submetralhadora: 1, fuzil: 1, escopeta: 1, minigun: 1, 'silenciador (sintetizado)': 0, 'batida leve (lataria)': 1, 'batida forte': 1, 'explosão perto': 1, 'explosão longe': 1, 'soco/pancada': 1, vidro: 1, 'porta batendo': 1, buzina: 1, 'buzina de caminhão': 1, 'buzina de moto': 1, 'braçada': 1, pernada: 1, 'mergulho (tchibum)': 1, 'mensagem no celular': 1, 'notificação': 1, 'entrega feita': 1, recarregar: 1, 'fogos: lançamento': 1, 'fogos: estouro': 1, 'fogos: estouro longe': 1, engatilhar: 1, 'freada de outro carro': 1, 'longe demais (nada)': 0 };
         const wrong = Object.keys(want).filter((k) => plays[k] !== want[k]);
         c.ok(!wrong.length, `cada efeito toca a gravação do seu grupo${wrong.length ? ' — errado: ' + wrong.map((k) => `${k}=${plays[k]} (esperado ${want[k]})`).join(', ') : ''}`);
         c.ok(plays['cápsulas (4 tiros)'] === 4, `cápsula quicando depois de cada tiro de pistola (${plays['cápsulas (4 tiros)']}/4)`);
@@ -177,6 +181,32 @@ module.exports = {
 
         const mu = await page.evaluate(async () => { AudioFX.muted = true; await new Promise((r) => setTimeout(r, 400)); const g = AudioFX._sfx.gain.value, P = JSON.stringify(SoundBank.played); AudioFX.shot('pistol', AudioFX.listener.x, AudioFX.listener.z); const same = JSON.stringify(SoundBank.played) === P; AudioFX.muted = false; return { g, same }; });
         c.ok(mu.g < 0.01 && mu.same, `efeitos desligados nas Configurações: os loops gravados calam (canal ${mu.g.toFixed(3)}) e nada novo toca`);
+
+        // ------------------------------------------------------------------ burburinho pela LOTAÇÃO do lugar
+        const cw = await page.evaluate(async () => {
+            const A = Ambience, L = AudioFX.listener, M = game.npcManager, keep = M.npcs, out = {};
+            const street = { inside: false, shop: null, biome: 'residential', district: 'centro', beach: 0 };
+            const people = (k) => Array.from({ length: k }, (_, i) => ({ alive: true, rag: null, position: { x: L.x + Math.cos(i) * 6, z: L.z + Math.sin(i) * 6 } }));
+            const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+            A.__w2 = A._where; A._where = () => street; game.dayNight.hour = 14;
+            try {
+                M.npcs = []; await wait(1500); out.empty = Object.assign({}, A.crowdNow, A.crowdGain);
+                M.npcs = people(6); await wait(1500); out.few = Object.assign({}, A.crowdNow, A.crowdGain);
+                M.npcs = people(22); await wait(1500); out.full = Object.assign({}, A.crowdNow, A.crowdGain);
+                M.npcs = people(10); Calendar.__f = Calendar.fest; Calendar.fest = { kind: 'bloco', x: L.x + 10, z: L.z, actors: [] }; await wait(1500); out.party = Object.assign({}, A.crowdNow, A.crowdGain); Calendar.fest = Calendar.__f;
+                // dentro: o mesmo tanto de gente num salão pequeno soa mais que na rua
+                const S = ShopLife, sv = { active: S.active, agents: S.agents, cap: S.capacity };
+                S.active = true; S.agents = Array.from({ length: 10 }, () => ({ role: 'customer' })); S.capacity = () => 10;
+                A._where = () => ({ inside: true, shop: { style: 'bar' }, biome: null, district: null, beach: 0 });
+                await wait(1500); out.bar = Object.assign({}, A.crowdNow, A.crowdGain);
+                S.active = sv.active; S.agents = sv.agents; S.capacity = sv.cap;
+            } finally { M.npcs = keep; A._where = A.__w2; }
+            return out;
+        });
+        const f3 = (o) => `${o.n} pessoas → ${(o.k || 0).toFixed(2)}${o.party ? ' + festa ' + o.party.toFixed(2) : ''}`;
+        c.ok(cw.empty.k < 0.01 && cw.few.k > 0.03 && cw.full.k > cw.few.k * 2 && cw.full.party > 0, `burburinho pela lotação da rua: vazia ${f3(cw.empty)} · pouca gente ${f3(cw.few)} · cheia ${f3(cw.full)}`);
+        c.ok(cw.party.party >= 0.3 && cw.party.k > cw.few.k, `no bloco/festa a gritaria animada aparece (${f3(cw.party)})`);
+        c.ok(cw.bar.k > cw.few.k && cw.bar.k >= cw.full.k * 0.9, `salão fechado e cheio soa alto (${f3(cw.bar)}, contra a rua com ${cw.few.n})`);
 
         // ------------------------------------------------------------------ o motor gravado
         const fam = await page.evaluate(() => {

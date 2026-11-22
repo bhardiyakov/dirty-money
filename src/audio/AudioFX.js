@@ -463,6 +463,7 @@ const AudioFX = {
     // e some ao longe), faíscas crepitando no rastro e, às vezes, o assobio. dur = tempo de subida (s).
     fireworkLaunch(x, z, dur = 0.9) {
         if (!this._ok()) return;
+        if (typeof SoundBank !== 'undefined' && SoundBank.play('fw_launch', x, z, { vol: 0.42, maxDist: 220, jitter: 0.1, dark: 0.8 })) { this.fwReal = (this.fwReal || 0) + 1; return; }      // (gravado: o "tum" do morteiro)
         const sp = this._spatial(x, z, 220, 1);
         if (!sp) return;
         const ctx = this.ctx, t = ctx.currentTime + 0.01;
@@ -501,6 +502,14 @@ const AudioFX = {
         if (!this._ok()) return;
         const d = hypot(x - this.listener.x, z - this.listener.z, y), sp = this._spatial(x, z, 420, 1);
         if (!sp) return;
+        if (typeof SoundBank !== 'undefined' && SoundBank.has('fw_burst')) {                                   // gravado: estouro + crepitar das estrelas
+            const at = 0.01 + d / 343, far = d > 170;                                                         // (o som chega depois do clarão)
+            if (SoundBank.play(far ? 'fw_far' : 'fw_burst', x, z, { vol: far ? 0.75 : 0.95, maxDist: 420, delay: at, jitter: 0.08, dark: 0.7 })) {
+                if (!far || Math.random() < 0.4) SoundBank.play('fw_crackle', x, z, { vol: far ? 0.18 : 0.38, maxDist: 300, delay: at + 0.3 + Math.random() * 0.3, jitter: 0.1, dark: 0.9 });
+                this.fwReal = (this.fwReal || 0) + 1;
+                return;
+            }
+        }
         const far = Math.min(1, d / 300), t = this.ctx.currentTime + 0.01 + d / 343, dark = 1 - 0.6 * far;
         this._nz(t, sp, { vol: 0.85, dur: 0.035, f0: 9000 * dark, f1: 2500 * dark, type: 'lowpass', att: 0.0008 });         // estalo
         this._nz(t, sp, { vol: 1.0, dur: 1.4, f0: 1600 * dark, f1: 45, att: 0.003 });                                      // bum

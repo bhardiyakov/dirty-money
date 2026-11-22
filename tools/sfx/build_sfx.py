@@ -224,9 +224,19 @@ one(B('2361'), 'scream_m_4', fo=0.08)
 one(B('1111'), 'notify_msg', maxd=1.3, fo=0.3)                      # mensagem chegando
 one(B('2063'), 'notify_a', fo=0.05); one(B('2059'), 'notify_b', fo=0.05)
 one(B('1398'), 'notify_ok', maxd=1.4, fo=0.4)                        # deu certo (entrega, pagamento)
+# ---------------------------------------------------------------- fogos de artifício (gravados: rubberduck/OGA e BigSoundBank)
+F = lambda n: f'oga3/bangs/{n}.ogg'
+for k, n in enumerate(['bang_01', 'bang_03', 'bang_06', 'bang_09', 'fw_01', 'fw_03', 'fw_06']): one(F(n), f'fw_burst_{k + 1}', fo=0.25)
+one(B('2672'), 'fw_burst_8', ss=1.15, t=1.9, fo=0.5)                    # o estouro grande do show
+one(F('fw_04'), 'fw_launch_1', t=0.28, fo=0.08)                         # o "tum" do morteiro lançando a bomba
+one(F('cannon_05'), 'fw_launch_2', t=0.32, fo=0.1); one(F('cannon_03'), 'fw_launch_3', t=0.32, fo=0.1)
+one(F('fw_02'), 'fw_crackle_1', fo=0.2)                                  # o crepitar das estrelas caindo
+one(B('2672'), 'fw_crackle_2', ss=20.2, t=1.8, fo=0.45); one(B('2672'), 'fw_crackle_3', ss=25.0, t=1.8, fo=0.45)
+shots(B('1050'), 'fw_far', 5, 2.0, thr=0.3, gap=1.5, pick='loud', tail=0.005, cut=True)   # estouros ao longe (o eco nos morros)
 # ---------------------------------------------------------------- multidão (loops longos)
 loop(B('3515'), 'crowd_street', ss=5, t=16, xf=1.0, db=-20, sr=24000)
 loop(B('2728'), 'crowd_market', ss=8, t=16, xf=1.0, db=-20, sr=24000)
+loop('oga2/crowd_shouting_0.ogg', 'crowd_party', ss=3, t=16, xf=1.0, db=-20, sr=24000)    # festa, bloco, baile, aglomeração (vozes altas)
 # ---------------------------------------------------------------- motor (marcha lenta de verdade, uma por família; o jogo sobe o tom com o giro)
 # rpm = a marcha lenta da gravação (o jogo toca a 1× na marcha lenta do perfil e acelera a reprodução com o giro)
 loop(B('0187'), 'eng_car', ss=21.2, t=4.0, xf=0.3, db=-16, sr=24000, meta=dict(rpm=800), flat=True)       # 4 cilindros limpo
