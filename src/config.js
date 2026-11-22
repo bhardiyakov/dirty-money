@@ -349,7 +349,7 @@ const Config = {
 
 		panicRadius: 13,       // Raio de contágio do pânico numa tentativa de roubo.
 		robRange: 2.5,         // Alcance para roubar de fato o NPC mais próximo.
-		fleeTime: 5,           // Tempo mínimo fugindo antes de voltar a perambular.
+		fleeTime: 4,           // Tempo mínimo fugindo antes de voltar a perambular.
 
 		// Inteligência de pedestre.
 		hurrySpeed: 2.6,       // Velocidade ao terminar de atravessar com o sinal já fechando.
@@ -364,8 +364,8 @@ const Config = {
 		recycleDist: 125,      // Pedestre mais longe que isto do jogador reaparece perto dele (o mundo é grande; eram 250, depois 160)...
 		placeMin: 20, placeMax: 110,     // ...num anel a placeMin–placeMax u, num lugar ESCONDIDO (fora da câmera ou ao fundo, na névoa): NPCManager._hidden
 		wantedRadius: 9,       // Foge de VOCÊ (procurado) até esta distância.
-		herdRadius: 5.5,       // Pânico contagia vizinhos até esta distância.
-		herdChance: 0.6,
+		herdRadius: 4.5,       // Pânico contagia vizinhos até esta distância.
+		herdChance: 0.35,      // (a rua não sai toda correndo por causa de um susto)
 
 		// Quem REVIDA uma agressão (npc/Temper.js). Sorteio fixo por pessoa; a periferia (favela, periferia, porto) conta na hora.
 		temper: {
@@ -439,12 +439,12 @@ const Config = {
 	chaos: {
 		radius: 60,            // u do jogador: só aí acontece (longe ninguém vê)
 		bumpR: 1.0,            // u: dois andando assim de perto se trombam
-		bumpCd: 5,             // s entre um esbarrão que vira cena e o próximo
-		bump: { sorry: 0.55, argue: 0.33 },     // o resto: briga (só se um deles é de briga — Temper — ou está bêbado)
-		ring: { max: 7, from: 22, r: [3.0, 4.6], join: 0.12 },       // a roda em volta da briga: quantos, de quão longe vêm, raio, chance de um entrar
-		domino: { r: 0.95, chance: 0.35, cd: 1.2 },                    // na correria, quem foge derruba quem está parado no caminho
-		every: [22, 42],       // s entre as figuras (dança, bêbado, desmaio, dinheiro voando)
-		drunk: { max: 2, life: [70, 130], fight: 0.5, fall: 0.12 },
+		bumpCd: 16,            // s entre um esbarrão que vira cena e o próximo (a rua é calma: a cena é rara)
+		bump: { sorry: 0.8, argue: 0.17 },      // o resto: briga (só se um deles é de briga — Temper — ou está bêbado)
+		ring: { max: 6, from: 18, r: [3.0, 4.6], join: 0.05 },       // a roda em volta da briga: quantos, de quão longe vêm, raio, chance de um entrar
+		domino: { r: 0.95, chance: 0.15, cd: 2.5 },                    // na correria, quem foge derruba quem está parado no caminho
+		every: [70, 130],      // s entre as figuras (dança, bêbado, desmaio, dinheiro voando)
+		drunk: { max: 1, life: [70, 130], fight: 0.3, fall: 0.12 },
 		dance: { life: [12, 24], join: 0.4, maxJoin: 4, r: 13 },
 		faint: { life: [12, 22] },
 		cash: { notes: [5, 8], amount: [8, 40], grabbers: 6, r: 24 },

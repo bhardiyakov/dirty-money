@@ -80,10 +80,10 @@ const StreetLife = {
         if (this.ev) { this._evUpdate(game, dt); return; }
         this.nextT -= dt;
         if (this.nextT > 0) return;
-        this.nextT = (55 + Math.random() * 60) / (typeof Life !== 'undefined' ? Math.max(0.45, Life.mul()) : 1);      // (vida da cidade baixa: menos acontecimentos)
+        this.nextT = (110 + Math.random() * 100) / (typeof Life !== 'undefined' ? Math.max(0.45, Life.mul()) : 1);      // (vida da cidade baixa: menos acontecimentos; a rua é calma)
         if (game.mode !== 'player' || game.holdup || game.arrest || game.death || (game.wanted && game.wanted.level > 0)) return;
         const h = game.dayNight.hour, wd = Economy.day % 7, rain = typeof Weather !== 'undefined' && Weather.cur ? Weather.cur.k : 0;
-        const opts = [['briga', 3], ['pivete', 3], ['aviao', 3]];
+        const opts = [['briga', 1], ['pivete', 1.5], ['aviao', 3]];
         if (h >= 9 && h < 18 && rain < 0.3) opts.push(['turista', 3]);
         if (h >= 7 && h < 22) opts.push(['pane', 3]);
         if (h >= 8 && h < 20 && rain < 0.3) opts.push(['ambulante', 4]);

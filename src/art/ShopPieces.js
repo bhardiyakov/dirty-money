@@ -193,6 +193,7 @@ Object.assign(ShopCtx.prototype, {
         c.box(b.x, b.top + 4, b.w, 4, '#2a3030', '#4a5250', '#101414', '#000');
         for (let i = 4; i < b.w - 14; i += 16) { c.box(b.x + i, b.top - 6, 14, 12, '#4a6a3a', '#7a9a5a', '#2a4020', '#101a0c'); c.fr(b.x + i + 2, b.top - 3, 10, 2, '#d8d070'); c.box(b.x + i, b.top + 10, 14, 10, '#6a7a4a', '#9aaa6a', '#3a4a28', '#161e0c'); }
         this.solid(r, 1.3);
+        this._stock(r);                                                     // (arrombamento/assalto: munição — crime/StoreBurglary.js)
         return b;
     },
     showcase(r) {
@@ -200,6 +201,7 @@ Object.assign(ShopCtx.prototype, {
         c.fr(b.x + 2, b.top + 2, b.w - 4, b.h - 4, '#8ab0b4'); c.fr(b.x + 2, b.top + 2, b.w - 4, 2, '#d8f0f0');
         for (let i = 6; i < b.w - 22; i += 24) { c.ln(b.x + i, b.top + 9, b.x + i + 14, b.top + 9, '#16181a'); c.fr(b.x + i, b.top + 9, 3, 8, '#16181a'); c.ln(b.x + i + 2, b.top + 19, b.x + i + 18, b.top + 19, '#16181a'); c.fr(b.x + i + 2, b.top + 19, 3, 6, '#16181a'); }
         c.fr(b.x + 1, b.fy + 3, b.w - 2, b.hp - 5, '#8ab0b4'); c.fr(b.x + 1, b.fy + 3, b.w - 2, 2, '#d8f0f0');
+        this._stock(r);                                                     // (as armas da vitrine)
         return b;
     },
     ammoCrates(r) {

@@ -120,6 +120,7 @@ class StreetProps {
             for (let k = 0; k < 5; k++) game.combat.spark(l.x + (Math.random() - 0.5), 0.4 + Math.random() * 1.5, l.z + (Math.random() - 0.5), [0.8, 0.9, 1]);
             AudioFX.crash(l.x, l.z, 0.7);
             if (game.birds) { game.birds.scare(l.x, l.z, 16); game.birds.removePerch(l.hx, l.hz); }
+            if (typeof Power !== 'undefined' && Power.cutAt(l.x, l.z, 18, 'poste derrubado')) game._flash('⚡ O poste caiu e levou a luz do quarteirão: lojas sem alarme e sem câmera por algumas horas');
         }
         // Tomba na direção da batida (pivô no pé): um nó no pé do poste com o poste, o braço e o cabeçote como filhos.
         const dl = hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;

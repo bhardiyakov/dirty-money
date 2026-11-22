@@ -115,6 +115,7 @@ const Interiors = {
 	check(game, shop) {
 		if (shop.safehouse) return game.wanted.level > 0 ? { ok: false, msg: 'A polícia está na sua cola — não dá para entrar' } : { ok: true };
 		const hour = game.dayNight.hour;
+		if (!shop.bank && !shop.stadium && typeof Power !== 'undefined' && Power.forShop(shop)) return { ok: false, closed: true, msg: `FECHADO — sem energia no quarteirão (a luz volta às ~${Power.untilLabel(Power.blockOf(shop))})` };
 		if (!Economy.isOpen(shop.style, hour) && !(shop.bank && Banks.canBreakIn(shop.bank))) return { ok: false, closed: true, msg: `FECHADO — abre às ${Economy.opensAt(shop.style)}h${shop.bank && shop.bank.tier === 'hq' ? ' (ou corte a energia do quarteirão)' : ''}` };
 		if (game.wanted.level > 0) return { ok: false, msg: 'A polícia está na sua cola — não dá para entrar' };
 		if (typeof Robbery !== 'undefined' && Robbery.closedToday(shop)) return { ok: false, closed: true, msg: 'FECHADO — assaltada hoje: a perícia está lá dentro (reabre amanhã)' };
@@ -126,6 +127,7 @@ const Interiors = {
 	prompt(game) {
 		const p = game.player.position;
 		if (this.active) {
+			if (typeof StoreBurglary !== 'undefined' && StoreBurglary.session) { const sp = StoreBurglary.prompt(game); if (sp !== null) return sp; }
 			if (this.active.shop.bank) { const bp = Banks.prompt(game); if (bp) return bp; }
 			if (typeof Heists !== 'undefined') { const hp = Heists.scoutPrompt(game); if (hp !== null) return hp; }
 			if (typeof Robbery !== 'undefined' && !game.shopUI.open) { const rp = Robbery.prompt(game); if (rp !== null) return rp; }
@@ -150,9 +152,12 @@ const Interiors = {
 			if (HomeDecor.canOpen(game)) return HomeDecor.active ? '' : a.shop.empty && !HomeDecor.uses().length ? '<b>B</b> mobiliar a casa<small>imóvel sem móveis: compre cama, geladeira, cofre, baú e notebook</small>' : '<b>B</b> decorar a casa<small>compre, mova e posicione móveis</small>';
 			return '';
 		}
+		if (typeof StoreBurglary !== 'undefined') { const bx = StoreBurglary.outPrompt(game); if (bx) return bx; }
 		const shop = this.shopNear(p.x, p.z);
+		if (!shop && typeof HomeBurglary !== 'undefined') { const rp = HomeBurglary.outPrompt(game); if (rp) return rp; }      // porta de casa/apartamento
 		if (!shop || game.mode !== 'player') return '';
 		const c = this.check(game, shop), S = Economy.STYLES[shop.style];
+		if (!c.ok && c.closed && typeof StoreBurglary !== 'undefined' && StoreBurglary.tierOf(shop) && StoreBurglary.closedNow(game, shop)) return StoreBurglary.closedPrompt(game, shop, c);
 		if (shop.safehouse) return c.ok ? '<b>SEU ESCONDERIJO</b><small>a porta está aberta — é só entrar</small>' : `<b>ENTRADA BLOQUEADA</b><small>${c.msg}</small>`;
 		if (!c.ok) return `<b>${c.closed ? 'FECHADO' : 'ENTRADA BLOQUEADA'}</b><small>${shop.name} — ${c.msg.replace('FECHADO — ', '')}</small>`;
 		return `<b>${shop.name}</b><small>${S.label} · ${Economy.zoneOf(shop).label} — é só entrar pela porta</small>`;
@@ -164,6 +169,12 @@ const Interiors = {
 		const p = game.player.position;
 		if (this.active) {
 			if (game.shopUI.open || game.stashUI.open || game.propertyUI.open || game.sleeping) return true;
+			if (typeof StoreBurglary !== 'undefined' && StoreBurglary.session) {          // arrombamento: o E é do saque (ou da porta)
+				if (StoreBurglary.interact(game)) return true;
+				const d0 = this.active.data.door, dx = this.STAGE.x + (d0.x0 + d0.x1) / 2;
+				if (hypot(p.x - dx, p.z - (this.STAGE.z + 1.2)) < 2.3) this.leave(game);
+				return true;
+			}
 			if (this.active.shop.bank && Banks.interact(game)) return true;
 			if (typeof Heists !== 'undefined' && Heists.scouting(game) && Heists.scoutInteract(game)) return true;
 			if (typeof Robbery !== 'undefined') {
@@ -204,9 +215,11 @@ const Interiors = {
 			return false;
 		}
 		if (game.mode !== 'player' || game.player.busy) return false;
+		if (typeof StoreBurglary !== 'undefined' && StoreBurglary.outInteract(game)) return true;      // a caixa de força do quarteirão
 		const shop = this.shopNear(p.x, p.z);
-		if (!shop) return false;
+		if (!shop) return typeof HomeBurglary !== 'undefined' && HomeBurglary.outInteract(game);      // porta de casa/apartamento: arrombar
 		const c = this.check(game, shop);
+		if (!c.ok && c.closed && typeof StoreBurglary !== 'undefined' && StoreBurglary.tierOf(shop) && StoreBurglary.closedNow(game, shop)) return StoreBurglary.breakIn(game, shop);
 		if (!c.ok) { game._flash(c.msg); return true; }
 		this.enter(game, shop);
 		return true;
@@ -449,7 +462,8 @@ const Interiors = {
 		this._bd.position.y = room.i3d ? -0.03 : 0.06;                              // (sala 3D: o fundo escuro fica abaixo do piso dela)
 		if (room.i3d) room.i3d.setEnabled(true); else room.mesh.setEnabled(true);
 		const ret = { x: shop.x, z: shop.z, face: shop.face };
-		this.active = { shop, data, room, ret, t: 0 };
+		const burgle = this._burgle === shop; this._burgle = null;                  // (arrombamento: loja fechada, ninguém dentro — crime/StoreBurglary.js)
+		this.active = { shop, data, room, ret, t: 0, burgle };
 		// (sala 3D: os sólidos pela BASE de verdade — sem a folga da vista oblíqua, que no volume deixaria um vão atrás de cada móvel)
 		this.obstacles = room.i3d ? room.i3d.obstacles.map((s) => Object.assign({}, s)) : data.obs.map((s) => ({ x0: o.x + s.x0, z0: o.z + s.z0, x1: o.x + s.x1, z1: o.z + s.z1, h: s.h }));
 		this.obstacles.push({ x0: o.x + data.door.x0 - 0.1, z0: o.z - 6, x1: o.x + data.door.x1 + 0.1, z1: o.z - 0.25, h: 3 });      // tampa o vão da porta por fora: sem cair no vazio (a saída é o gatilho antes dele)
@@ -464,8 +478,8 @@ const Interiors = {
 		// Loja com clientela viva (ShopLife: atendente, clientes e garçom com rotina): os figurantes fixos saem (fica só quem tem
 		// tipo do gerador e papel próprio — o segurança da joalheria, os da academia).
 		let life = false;
-		try { life = ShopLife.enter(game, shop, data); } catch (e) { console.error('[LOJAS] clientela:', e); this._dropLife(); }
-		this._useActors(game, life ? data.patrons.filter((e) => e.type) : (data.clerk ? [data.clerk] : []).concat(data.patrons), shop);
+		if (!burgle) { try { life = ShopLife.enter(game, shop, data); } catch (e) { console.error('[LOJAS] clientela:', e); this._dropLife(); } }
+		this._useActors(game, burgle ? (shop.res && typeof HomeBurglary !== 'undefined' ? HomeBurglary.cast(shop, data) : []) : life ? data.patrons.filter((e) => e.type) : (data.clerk ? [data.clerk] : []).concat(data.patrons), shop);
 		const ar = this._exitArrow(game.scene); ar.setEnabled(true); ar.visibility = 0; this._tickArrow(game, 0);
 		if (shop.stadium) Maracana.onEnter(game, data);                         // catracas, o jogo rolando
 		this.zoom = room.i3d ? (shop.safehouse ? 0.34 : 0.42) : shop.safehouse ? 0.36 : shop.stadium ? 0.9 : 0.5;  // (o barraco é um cômodo só: a câmera chega mais perto; o estádio é grande)
@@ -476,6 +490,7 @@ const Interiors = {
 		if (!quiet) game._flash(`${shop.name}`);
 		this._unloadCity(game, true);
 		if (shop.bank) Banks.onEnter(game, shop);
+		if (burgle) { if (typeof Bubbles !== 'undefined') Bubbles.clear(); StoreBurglary.onEnter(game, shop); return; }
 		if (typeof Heists !== 'undefined') Heists.onEnter(game, shop);         // golpe em execução: a equipe entra junto
 		HomeDecor.onEnterInterior(game, shop);                                  // casa própria: os móveis colocados por você
 		if (typeof Bubbles !== 'undefined') Bubbles.clear();
@@ -537,6 +552,7 @@ const Interiors = {
 		if (a.shop.bank) Banks.onLeave(game);
 		if (a.shop.stadium) Maracana.onLeave(game);
 		if (typeof Robbery !== 'undefined') Robbery.onLeave(game);              // assalto: estrelas, testemunhas e rastros (já na calçada)
+		if (typeof StoreBurglary !== 'undefined') StoreBurglary.onLeave(game);  // arrombamento: quem viu a saída, as pistas, o caso da perícia
 	},
 
 	// Inside an interior the city is unloaded from the frame: every mesh of the map (buildings, terrain, props, people and cars) is
@@ -584,6 +600,7 @@ const Interiors = {
 		if (a.shop.bank) Banks.update(dt, game);
 		if (a.shop.stadium) Maracana.tick(dt, game);                                  // a bola, os jogadores, o placar
 		if (typeof Robbery !== 'undefined') Robbery.update(dt, game);
+		if (typeof StoreBurglary !== 'undefined' && StoreBurglary.session) { StoreBurglary.update(dt, game); if (!this.active) return; }
 		if (typeof Heists !== 'undefined') { Heists.interiorTick(dt); Heists.scoutTick(dt, game); }
 		this._tickArrow(game, dt);
 		if (a.room.i3d) { try { a.room.i3d.update(game.scene.activeCamera, dt); } catch (e) { if (!this._i3e) { this._i3e = true; console.error('[LOJAS] sala 3D:', e); } } }      // (sala 3D: as paredes na frente da câmera ficam transparentes)

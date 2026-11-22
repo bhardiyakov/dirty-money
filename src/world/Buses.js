@@ -343,6 +343,7 @@ const Buses = {
 
 	// O ônibus chegou ao ponto S (parado): o jogador esperando ali pode embarcar; quem está dentro e escolheu este ponto desce.
 	onArrive(b, S) {
+		if (typeof StreetIdle !== 'undefined') StreetIdle.onBus(b, S);           // (quem espera no ponto embarca)
 		const R = this.ride;
 		if (R && R.bus === b && (R.dest === S || R.getOff)) this._alight(window.game, S);
 	},

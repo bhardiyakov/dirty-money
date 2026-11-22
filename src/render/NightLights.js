@@ -204,9 +204,9 @@ const NightLights = {
 				if (o.t === 0) {
 					// poste: a luz cai num oval ao longo da rua (a luminária fica sobre a beira da pista), um pouco para dentro dela
 					const l = o.l;
-					if (l.alive !== false) { const dx = l.hx - l.x, dz = l.hz - l.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d; this._quad(l.hx + ux * St.in, l.hz + uz * St.in, -uz, ux, St.along, St.across, 1.0, 0.8, 0.52, St.k); }
+					if (l.alive !== false && !l.dark) { const dx = l.hx - l.x, dz = l.hz - l.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d; this._quad(l.hx + ux * St.in, l.hz + uz * St.in, -uz, ux, St.along, St.across, 1.0, 0.8, 0.52, St.k); }
 				}
-				else if (o.t === 1) { const c = o.s.c; this._quad(o.s.x, o.s.z, 1, 0, 5, 5, 0.45 + c[0] * 0.55, 0.45 + c[1] * 0.55, 0.45 + c[2] * 0.55, 0.6); }
+				else if (o.t === 1) { if (o.s.dark) continue; const c = o.s.c; this._quad(o.s.x, o.s.z, 1, 0, 5, 5, 0.45 + c[0] * 0.55, 0.45 + c[1] * 0.55, 0.45 + c[2] * 0.55, 0.6); }
 				else { const l = o.l; this._quad(l.x, l.z, 1, 0, 7.5, 7.5, 1.0, 0.72, 0.38, (l.cur != null ? l.cur : 0.6) * 1.1); }
 			}
 		}

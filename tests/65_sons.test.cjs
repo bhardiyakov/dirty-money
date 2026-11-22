@@ -177,7 +177,7 @@ module.exports = {
         c.ok(lp3.w < 0.01 && lp3.y < 0.01, `sirene some quando não há viatura (${lp3.w.toFixed(3)}/${lp3.y.toFixed(3)})`);
         c.ok(lp1.sc > 0.3 && lp2.sc < lp1.sc && lp2.sc > 0.05 && lp1.rate > lp2.rate && lp3.sc < 0.01, `pneu cantando gravado: forte ${lp1.sc.toFixed(2)} (tom ${lp1.rate.toFixed(2)}) > leve ${lp2.sc.toFixed(2)} (tom ${lp2.rate.toFixed(2)}) > parado ${lp3.sc.toFixed(3)}`);
         c.ok(lp1.sea > 0.05 && lp1.sea > lp1.seaO && lp1.synthWaves < 0.003, `mar gravado na orla: ondas na areia ${(lp1.sea || 0).toFixed(3)} > mar aberto ${(lp1.seaO || 0).toFixed(3)} (ruído sintetizado mudo: ${(lp1.synthWaves || 0).toFixed(4)})`);
-        c.ok(lp1.cm > 0.05 && lp1.cm > lp1.cs && lp1.cs > 0, `burburinho gravado no comércio: mercado ${(lp1.cm || 0).toFixed(3)} + rua ${(lp1.cs || 0).toFixed(3)}`);
+        // (o burburinho agora é pela lotação do lugar: teste próprio abaixo — _crowdNow)
 
         const mu = await page.evaluate(async () => { AudioFX.muted = true; await new Promise((r) => setTimeout(r, 400)); const g = AudioFX._sfx.gain.value, P = JSON.stringify(SoundBank.played); AudioFX.shot('pistol', AudioFX.listener.x, AudioFX.listener.z); const same = JSON.stringify(SoundBank.played) === P; AudioFX.muted = false; return { g, same }; });
         c.ok(mu.g < 0.01 && mu.same, `efeitos desligados nas Configurações: os loops gravados calam (canal ${mu.g.toFixed(3)}) e nada novo toca`);

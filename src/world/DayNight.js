@@ -87,6 +87,7 @@ class DayNight {
 		const P = this._params(this.hour);
 		const ge = this.ge;
 		const shadowI = this._weather(P);
+		if (typeof StoreBurglary !== 'undefined' && StoreBurglary.session) { const k = StoreBurglary.lightMul(); P.hemiI *= k; P.sunI *= k; }      // (loja arrombada: escura por dentro)
 		if (typeof Lighting !== 'undefined') Lighting.sky(P);          // luz física: céu azulado, chão quente, sol quente, sombra mais funda
 		this.night = P.n;
 		this.sunI = P.sunI;

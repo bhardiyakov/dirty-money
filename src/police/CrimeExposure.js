@@ -111,6 +111,7 @@ const CrimeExposure = {
         const shop = active.shop;
         if (shop.home || shop.safehouse) return this.NONE;
         if (typeof Robbery !== 'undefined' && Robbery.session) return this.NONE;
+        if (typeof StoreBurglary !== 'undefined' && StoreBurglary.session) return this.NONE;
         let exposure = this.NONE;
         if (Economy.isOpen(shop.style, game.dayNight.hour)) exposure |= this.WITNESS;
         if (this._interiorRecording(active)) exposure |= this.CAMERA;
@@ -125,6 +126,7 @@ const CrimeExposure = {
     },
 
     _powerCut(shop) {
+        if (shop && typeof Power !== 'undefined' && Power.forShop(shop)) return true;      // (quarteirão sem energia: crime/StoreBurglary.js)
         if (!shop.bank || typeof Banks === 'undefined') return false;
         const plan = Banks.plans[shop.bank.id];
         return !!plan && plan.power === Economy.day;

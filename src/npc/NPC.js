@@ -510,7 +510,25 @@ class NPC {
 		return true;
 	}
 
-	// ------------------------------------------------------------- semáforos
+	// ------------------------------------------------------------- semáforos e calçada
+	// O ponto (x, z) é lugar de PEDESTRE? Fora do asfalto (rua, avenida, estrada, a rua do morro) e fora da faixa — destino, lugar de
+	// aparecer e de ficar parado nunca são na pista (atravessar, só pela faixa, com o sinal: signalGate).
+	static offRoad(x, z) {
+		if (typeof RoadPlan !== 'undefined' && RoadPlan.onAsphalt && RoadPlan.onAsphalt(x, z, 1.2)) return false;      // (folga: quem chega perto do destino não para na pista)
+		if (typeof CityGrid !== 'undefined' && CityGrid.inCrosswalk && CityGrid.inCrosswalk(x, z, 1.0)) return false;
+		if (typeof Favelas !== 'undefined' && Favelas.onRoad && Favelas.onRoad(x, z)) return false;
+		return true;
+	}
+	// Respeitar o sinal em qualquer estado que anda (perambular, correr na orla, ir ao ponto, ao banco): esperando a faixa abrir ou
+	// parado na boca dela → true (o estado não anda neste quadro). speed = a velocidade de quando a faixa abrir.
+	trafficWait(dt, speed = Config.npc.wanderSpeed) {
+		if (this.waiting) {
+			this.waitTime += dt;
+			if (this.ctx.signals.ped(this.waiting).state === 'walk' || this.waitTime > 25) { this.release(); this.setSpeed(speed); }
+			return true;
+		}
+		return this.signalGate();
+	}
 	// Chamado todo frame no estado WANDER. Retorna true se está retido esperando o sinal.
 	signalGate() {
 		const p = this.position;
@@ -701,7 +719,7 @@ class NPC {
 		if (this.free) {
 			const S = this.fsm.current, A = (S && S.anim ? S.anim(this._freeV || 0) : this.freeAnim) || { clip: 'idle', rate: 1 };
 			this.transform.rotation.y = this.heading;
-			if (!this.actor.play(A.clip, A.w || 'none')) this.actor.play(A.clip, 'none');
+			if (!this.actor.play(A.clip, A.w || 'none') && !this.actor.play(A.clip, 'none') && A.fb) this.actor.play(A.fb, 'none');      // (sem o clipe neste desenho: o de reserva)
 			const b = this._waveTick(dt), yaw = b ? CompassCamera.yaw || 0 : 0;
 			this.actor.setPosition(this.transform.position.x + Math.sin(yaw) * b, this.transform.position.z + Math.cos(yaw) * b);
 			this.actor.setHeading(this.heading);

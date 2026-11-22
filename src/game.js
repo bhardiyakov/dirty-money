@@ -677,7 +677,7 @@ class Game {
 		Perf.lap('outros');
 		Needs.update(this, dt);                                                  // fome e cansaço (leves)
 		Phone.update(this, dt);                                                  // o celular: mensagens, compromissos, entregas
-		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); Calendar.update(this, dt); Personas.update(this, dt); Tutorial.update(this, dt); MobileUI.start(); Juice.update(this, dt); ScreenFx.update(this, dt); Daily.update(this, dt);                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
+		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); if (typeof StoreBurglary !== 'undefined') StoreBurglary.tick(dt, this); Calendar.update(this, dt); Personas.update(this, dt); Tutorial.update(this, dt); MobileUI.start(); Juice.update(this, dt); ScreenFx.update(this, dt); Daily.update(this, dt);                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
 		Perf.lap('mundo vivo (celular/festas/personagens)');
 		// Assa sprites pendentes (personagens; os carros vêm prontos do atlas) com o tempo que SOBRA no quadro: orçamento de 30 FPS (com 20%
 		// de folga) menos o trabalho medido do quadro, entre 1 e 8 ms. Antes eram 9 ms fixos — num celular que já gasta 25 ms por quadro,
@@ -949,6 +949,7 @@ class Game {
 			Perf.lap('favela (gangues/moto/missões)');
 			StreetLife.update(this, dt);                                  // a rua viva: movimento por hora, acontecimentos, conversas
 			Chaos.update(this, dt);                                       // pedestres entre si: esbarrão, roda de briga, dominó, bêbado, dança, desmaio, dinheiro voando
+			if (typeof StreetIdle !== 'undefined') StreetIdle.update(this, dt);      // mendigos no centro e na periferia (sentar, ponto e conversa: WanderState)
 			Rescue.update(this, dt);                                      // feridos sangrando, quem liga para o 192 e as ambulâncias
 			Buses.update(this, dt);                                       // as linhas de ônibus: pontos, horários, os ônibus perto da câmera e o embarque
 			Stands.update(this, dt);                                      // quiosques, café e barracas: o vendedor aparece de perto
@@ -1922,7 +1923,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 			const chop = this._chopperNear();
 			const spot = !car && !chop && this._nearHideSpot();
 			const fence = !car && !spot && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.6);
-			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || (typeof Corcovado !== 'undefined' && Corcovado.prompt(this)) || (typeof Landmarks !== 'undefined' && Landmarks.prompt(this)) || Stands.prompt(this) || Rescue.prompt(this) || Buses.prompt(this) || StreetLife.prompt(this) || Witnesses.prompt(this) || Calendar.prompt(this) || Personas.prompt(this) || RivalArc.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
+			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || (typeof Corcovado !== 'undefined' && Corcovado.prompt(this)) || (typeof Landmarks !== 'undefined' && Landmarks.prompt(this)) || Stands.prompt(this) || Rescue.prompt(this) || Buses.prompt(this) || StreetLife.prompt(this) || (typeof StreetIdle !== 'undefined' && StreetIdle.prompt(this)) || Witnesses.prompt(this) || Calendar.prompt(this) || Personas.prompt(this) || RivalArc.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
 			if (shopP) html = shopP;
 			else if (spot) html = `<b>E</b> esconder-se ${spot.kind === 'dumpster' ? 'na caçamba' : (spot.kind === 'barrel' ? 'no latão' : 'no caixote')}<small>se a polícia não te viu entrar, você some do radar</small>`;
 			else if (fence && fence.bridgeRail && (this.player.underBridge || this.player.depth > 0)) html = '';      // (nadando sob a ponte: não dá para subir)
@@ -2407,6 +2408,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		if (Rescue.interact(this)) return;                               // ferido no chão: ligar para o 192 / estancar com o kit médico
 		if (Buses.interact(this)) return;                                // ponto de ônibus: horários, embarcar; dentro: descer / pular a viagem
 		if (StreetLife.interact(this)) return;                           // separar a briga, devolver a bolsa, comprar no carrinho
+		if (typeof StreetIdle !== 'undefined' && StreetIdle.interact(this)) return;      // dar uma moeda ao mendigo
 		if (Witnesses.interact(this)) return;                            // intimidar ou subornar a testemunha
 		if (Calendar.interact(this)) return;                             // a barraca da festa junina
 		if (Personas.interact(this)) return;                             // conversar com Seu Zé, Tia Nena, o pastor, o Jorginho, Dona Rosa

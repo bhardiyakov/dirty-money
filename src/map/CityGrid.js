@@ -1472,6 +1472,15 @@ const CityGrid = {
             }
         };
 
+        // Bancos da praça e do parque (map → WorldBuilder._pieces desenha; npc/StreetIdle senta gente neles): nos meios das bordas de
+        // dentro, virados para o centro. Posições fixas (sem o sorteio do mapa: o resto da cidade não muda).
+        const benches = (rect) => {
+            const cx = (rect[0] + rect[2]) / 2, cz = (rect[1] + rect[3]) / 2, P = block.pieces || (block.pieces = []);
+            for (const [bx, bz, ax] of [[cx, rect[3] - 0.6, true], [cx, rect[1] + 0.6, true], [rect[0] + 0.6, cz, false], [rect[2] - 0.6, cz, false], [(rect[0] + cx) / 2, rect[3] - 0.6, true], [(cx + rect[2]) / 2, rect[1] + 0.6, true]]) {
+                if (!free(bx, bz, 0) || !spaced(bx, bz, 1.8)) continue;
+                P.push({ kind: 'bench', x: bx, z: bz, alongX: ax, fx: ax ? 0 : Math.sign(cx - bx), fz: ax ? Math.sign(cz - bz) : 0, seat: true });
+            }
+        };
         switch (block.biome) {
             case 'park': {
                 const inner = [x0 + 3, z0 + 3, x1 - 3, z1 - 3];
@@ -1481,6 +1490,7 @@ const CityGrid = {
                 scatter('tree', 'bush', 14, inner, 2.2, 0);
                 scatter('tree', 'flowers', 10, inner, 2.4, 0);
                 scatter('tree', 'fern', 6, inner, 2.0, 0);
+                benches(inner);
                 break;
             }
             case 'plaza': {                                                          // pracinha (quarteirão cortado por diagonal)
@@ -1489,6 +1499,7 @@ const CityGrid = {
                 scatter('tree', 'cypress', 3, inner, 3.5, 0);
                 scatter('tree', 'palm', 1, inner, 5.0, 0);
                 scatter('tree', 'flowers', 8, inner, 2.2, 0);
+                benches(inner);
                 break;
             }
             case 'forest': {
