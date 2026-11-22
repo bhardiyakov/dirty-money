@@ -117,7 +117,8 @@ class NPCManager {
         }
         const n = Math.min(far.length, far.length > 12 ? 8 : 1), R = this._ring();       // (teleporte: 8 por vez; no dia a dia, um por vez)
         for (let i = 0; i < n; i++) {
-            const { pos, role } = this._hidden(this._roleFor(Math.random()), R[0], R[1]);
+            const close = R[0] < 40 && Math.random() < 0.65;                                  // (2 em 3 bem perto: a gente se concentra em volta de você)
+            const { pos, role } = this._hidden(this._roleFor(Math.random()), R[0], close ? Math.min(R[1], 65) : R[1]);
             far[i].relocate(pos, role, this._style(pos, role));
             this.recycled = (this.recycled || 0) + 1;
         }
@@ -187,28 +188,39 @@ class NPCManager {
         spare.sort((a, b) => hypot(b.position.x - f.x, b.position.z - f.z) - hypot(a.position.x - f.x, a.position.z - f.z));
         this._aspect = g.gameEngine && g.gameEngine.engine ? g.gameEngine.engine.getAspectRatio(CompassCamera.current.camera) : 1.6;
         for (let i = 0, k = Math.min(4, want - vis, spare.length); i < k; i++) {
-            const p = this._entry(V);
-            if (!p) break;
-            spare[i].relocate(p, null, this._style(p, null));
+            const E = this._entry(V);
+            if (!E) break;
+            const n = spare[i];
+            n.relocate(E.p, null, this._style(E.p, null));
+            const to = this.nav.closestPoint(new BABYLON.Vector3(E.to.x, 0, E.to.z), 6);
+            if (to && n.gotoTarget) n.gotoTarget(to);                                         // (anda para dentro da cena)
             this.filled = (this.filled || 0) + 1;
-            if (this._inView(p.x, p.z, V)) this.filledIn = (this.filledIn || 0) + 1;
+            if (this._inView(E.p.x, E.p.z, V)) this.filledIn = (this.filledIn || 0) + 1;
         }
     }
-    // Entrada da cena: sorteia DENTRO do cone da câmera (o rumo dela ± 0,8 da metade do campo de visão), ao fundo — entre o começo da
-    // névoa e o fim da vista —, e encaixa no ponto caminhável mais perto. Não achou: logo fora da beirada da tela.
+    // Ponto do chão que aparece em (u, v) da tela (0..1; v = 0 no alto): o raio da câmera por ali até o chão do lugar.
+    _screenGround(u, v) {
+        const C = CompassCamera.current, cam = C && C.camera;
+        if (!cam) return null;
+        const I = BABYLON.Matrix.IdentityReadOnly, view = cam.getViewMatrix(), proj = cam.getProjectionMatrix();
+        const a = BABYLON.Vector3.Unproject(new BABYLON.Vector3(u, v, 0), 1, 1, I, view, proj), b = BABYLON.Vector3.Unproject(new BABYLON.Vector3(u, v, 1), 1, 1, I, view, proj);
+        const y0 = C.lift || 0, t = (y0 - a.y) / (b.y - a.y);
+        if (!(t > 0 && t < 1)) return null;
+        return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+    }
+    // Entrada da cena. A pé a câmera olha para baixo: o chão visível vai só até a borda de cima da tela (~25–40 m) — a pessoa aparece
+    // AO FUNDO, na faixa de cima da tela (pequena, longe), e vem andando para perto; ou logo FORA da beirada (dos lados), já andando para
+    // dentro da cena. Devolve { p, to } (onde aparece e para onde vai) ou null.
     _entry(V) {
-        const C = CompassCamera.current, f = this.nav.focus, yaw = C ? C.yaw : 0, half = C && C.camera ? Math.atan(Math.tan(C.camera.fov * 0.5) * (this._aspect || 1.6)) : 0.7;
-        for (const lo of [0.95, 0.75]) {
-            for (let k = 0; k < 24; k++) {
-                const a = yaw + (Math.random() * 2 - 1) * half * 0.8, r = V.fog * lo + Math.random() * Math.max(8, Math.min(V.far, 95) * 0.9 - V.fog * lo);
-                const q = this.nav.closestPoint(new BABYLON.Vector3(f.x + Math.sin(a) * r, 0, f.z + Math.cos(a) * r), 8);
-                if (!q || !this.nav.walk(q.x, q.z)) continue;
-                if (hypot(q.x - V.cam.x, q.z - V.cam.z) > V.fog * lo && this._inView(q.x, q.z, V)) return q;
-            }
+        const f = this.nav.focus, snap = (q) => { if (!q) return null; const c = this.nav.closestPoint(new BABYLON.Vector3(q.x, 0, q.z), 5); return c && this.nav.walk(c.x, c.z) && hypot(c.x - f.x, c.z - f.z) > 7 ? c : null; };
+        const mid = this._screenGround(0.5, 0.6) || f;
+        for (let k = 0; k < 16; k++) {                                                    // ao fundo: a faixa de cima da tela
+            const c = snap(this._screenGround(0.06 + Math.random() * 0.88, 0.02 + Math.random() * 0.2));
+            if (c && this._inView(c.x, c.z, V)) return { p: c, to: { x: mid.x + (Math.random() - 0.5) * 14, z: mid.z + (Math.random() - 0.5) * 14 } };
         }
-        for (let k = 0; k < 20; k++) {
-            const p = this.nav.randomWalkable(12, 45);
-            if (!this._inView(p.x, p.z, V)) return p;                                        // (logo fora da beirada: entra andando)
+        for (let k = 0; k < 16; k++) {                                                    // logo fora da beirada, dos lados
+            const side = Math.random() < 0.5 ? -0.1 : 1.1, c = snap(this._screenGround(side, 0.25 + Math.random() * 0.6));
+            if (c && !this._inView(c.x, c.z, V)) return { p: c, to: { x: mid.x + (Math.random() - 0.5) * 10, z: mid.z + (Math.random() - 0.5) * 10 } };
         }
         return null;
     }
