@@ -514,7 +514,7 @@ class NPC {
 	// O ponto (x, z) é lugar de PEDESTRE? Fora do asfalto (rua, avenida, estrada, a rua do morro) e fora da faixa — destino, lugar de
 	// aparecer e de ficar parado nunca são na pista (atravessar, só pela faixa, com o sinal: signalGate).
 	static offRoad(x, z) {
-		if (typeof RoadPlan !== 'undefined' && RoadPlan.onAsphalt && RoadPlan.onAsphalt(x, z, 0.4)) return false;
+		if (typeof RoadPlan !== 'undefined' && RoadPlan.onAsphalt && RoadPlan.onAsphalt(x, z, 1.2)) return false;      // (folga: quem chega perto do destino não para na pista)
 		if (typeof CityGrid !== 'undefined' && CityGrid.inCrosswalk && CityGrid.inCrosswalk(x, z, 1.0)) return false;
 		if (typeof Favelas !== 'undefined' && Favelas.onRoad && Favelas.onRoad(x, z)) return false;
 		return true;

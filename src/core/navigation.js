@@ -7,7 +7,8 @@
 //      calçadas, faixas de pedestres, praças/parques, orla) — a rua (asfalto) NÃO é andável, como antes;
 //   3) todo sólido (CityGrid.obstacles: prédios, cercas, postes, caçambas) é apagado, com folga de um agente. Paredões não: a pé
 //      sobe-se qualquer encosta (devagar, com a animação de escalar — SpriteActor.setSlope).
-// Valor 1 = andável, 2 = andável encostado numa parede (custa mais no A*), 0 = bloqueado. As consultas e o A* estão em nav/NavGrid.js.
+// Valor 1 = andável, 2 = andável encostado numa parede (custa mais no A*), 3 = pista de estrada fora da cidade (custa bem mais: o pedestre
+// atravessa, não passeia nela), 0 = bloqueado. As consultas e o A* estão em nav/NavGrid.js.
 //
 // The crowd (pedestrians, police on foot, gang members) runs in a Web Worker (nav/crowdWorker.js: the A* path queue and the
 // steering of nav/CrowdSim.js). `crowd` is the main thread's side of it, with the subset of the Recast Crowd API the game uses
@@ -222,6 +223,12 @@ class Navigation {
 			if (g[k] && (!g[k - 1] || !g[k + 1] || !g[k - w] || !g[k + w])) e[k] = 2;
 		}
 		if (typeof Favelas !== 'undefined') for (const f of Favelas.built) f.navCost(e, this);      // favela: a pé, pelos becos (a rua custa mais)
+		// 4b) a pista das estradas FORA da malha urbana (rodovia, estrada da serra, a avenida da Lagoa…): andável — não há calçada —,
+		// mas CUSTA mais, como a beira da parede: o pedestre atravessa a estrada, não passeia por ela (a trilha e a ponte ficam como estão)
+		if (typeof RoadPlan !== 'undefined' && CityGrid._offsetLine) for (const ed of RoadPlan.edges || []) {
+			if (!ed.free || CityGrid.URBAN_CLS.has(ed.cls) || ed.cls === 'trail' || ed.cls === 'bridge' || ed.layer || !ed.pts || ed.pts.length < 2) continue;
+			this._fillPoly(CityGrid._offsetLine(ed.pts, ed.w / 2).concat(CityGrid._offsetLine(ed.pts, -ed.w / 2).reverse()), 3, e);      // (3 = pista: custa 4× no A*)
+		}
 		this.grid = this.map.grid = e;
 		this.ready = true;
 		let n = 0; for (let k = 0; k < e.length; k++) if (e[k]) n++;
@@ -231,7 +238,7 @@ class Navigation {
 	}
 
 	// Preenche o polígono [[x, z], ...] com `val` (células cujo centro está dentro dele). Só na carga (antes de o crowd começar).
-	_fillPoly(P, val) {
+	_fillPoly(P, val, only = null) {
 		let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
 		for (const p of P) { x0 = Math.min(x0, p[0]); z0 = Math.min(z0, p[1]); x1 = Math.max(x1, p[0]); z1 = Math.max(z1, p[1]); }
 		const i0 = Math.max(0, Math.ceil(x0 - this.minX - 0.5)), i1 = Math.min(this.w - 1, Math.floor(x1 - this.minX - 0.5));
@@ -241,7 +248,11 @@ class Navigation {
 			const z = this.minZ + j + 0.5; xs.length = 0;
 			for (let a = 0, b = P.length - 1; a < P.length; b = a++) { const p = P[b], q = P[a]; if ((p[1] > z) !== (q[1] > z)) xs.push(p[0] + (q[0] - p[0]) * (z - p[1]) / (q[1] - p[1])); }
 			xs.sort((p, q) => p - q);
-			for (let t = 0; t + 1 < xs.length; t += 2) for (let i = Math.max(i0, Math.ceil(xs[t] - this.minX - 0.5)); i <= Math.min(i1, Math.floor(xs[t + 1] - this.minX - 0.5)); i++) this.grid[j * this.w + i] = val;
+			for (let t = 0; t + 1 < xs.length; t += 2) for (let i = Math.max(i0, Math.ceil(xs[t] - this.minX - 0.5)); i <= Math.min(i1, Math.floor(xs[t + 1] - this.minX - 0.5)); i++) {
+				const k = j * this.w + i;
+				if (only) { if (only[k]) only[k] = val; }                       // (só nas células já andáveis de `only`)
+				else this.grid[k] = val;
+			}
 		}
 	}
 

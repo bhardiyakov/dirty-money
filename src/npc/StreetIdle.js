@@ -38,7 +38,7 @@ const StreetIdle = {
             const c = Math.cos(st.h), s = Math.sin(st.h), W = (lx, lz) => ({ x: st.x + lx * c + lz * s, z: st.z - lx * s + lz * c });
             for (const lx of [-0.6, 0.6]) { const q = W(lx, -0.18); seat(q.x, q.z, st.h, 'stop', st); }
         }
-        return (this.seats = S);
+        return (this.seats = S.filter((q) => NPC.offRoad(q.x, q.z) || q.kind === 'stop'));      // (banco nunca na pista; o do ponto fica na calçada)
     },
     seatNear(x, z, r, kind = null) {
         let best = null, bd = r * r;
@@ -81,6 +81,7 @@ const StreetIdle = {
             if (mates.length) {
                 const G = [npc, ...mates.slice(0, Math.random() < 0.5 ? 1 : 2)], c = { x: 0, z: 0 };
                 for (const q of G) { c.x += q.position.x / G.length; c.z += q.position.z / G.length; }
+                if (!NPC.offRoad(c.x, c.z)) return false;                         // (rodinha nunca no meio da pista)
                 const life = 18 + Math.random() * 30;
                 G.forEach((q, i) => { q._idleAt = now; q.fsm.setState(new ChatState(q, G, c, i, life)); });
                 this.stats.chat++;

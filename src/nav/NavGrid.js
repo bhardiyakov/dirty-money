@@ -137,7 +137,7 @@ class NavGrid {
 				if (d >= 4 && (!grid[nj * w + ni + DX[d]] || !grid[(nj + DZ[d]) * w + ni])) continue;     // sem cortar quina
 				const m = idx(i, j);
 				if (ST[m] === gen && CL[m]) continue;
-				const ng = G[n] + (d < 4 ? 1 : 1.414) * (cell === 2 ? 1.8 : 1);
+				const ng = G[n] + (d < 4 ? 1 : 1.414) * (cell === 2 ? 1.8 : cell === 3 ? 4 : 1);      // (3: pista de estrada — atravessa, não passeia)
 				if (ST[m] !== gen) { ST[m] = gen; CL[m] = 0; G[m] = ng; PAR[m] = n; push(m, ng + hfun(i, j)); }
 				else if (ng < G[m]) { G[m] = ng; PAR[m] = n; push(m, ng + hfun(i, j)); }
 			}
