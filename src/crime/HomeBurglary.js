@@ -25,7 +25,7 @@ const Residences = {
 
     build() {
         if (this.list) return this.list;
-        const out = this.list = [], G = this._grid = new Map(), C = this.C;
+        const out = this.list = [], G = this._grid = new Map(), C = this.C, t0 = performance.now();
         if (typeof CityGrid === 'undefined' || !CityGrid.blocks) return out;
         Interiors.index();
         const props = (typeof RealEstate !== 'undefined' && RealEstate.list) || [];
@@ -59,7 +59,7 @@ const Residences = {
                 (G.get(k) || G.set(k, []).get(k)).push(r);
             });
         }
-        console.log(`[CASAS] ${out.length} residências que dá para arrombar`);
+        console.log(`[CASAS] ${out.length} residências que dá para arrombar (${(performance.now() - t0).toFixed(0)} ms)`);
         return out;
     },
     _style(stars, h, apt) {

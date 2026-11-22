@@ -75,10 +75,10 @@ const Power = {
     cutBlock(bid, why, prints = false) {
         if (!bid) return false;
         const now = Traces.now(), cur = this.out[bid], H = this.HOURS;
-        const until = now + H[0] + Math.random() * (H[1] - H[0]);
+        const until = now + H[0] + Math.random() * (H[1] - H[0]), was = !!cur;
         this.out[bid] = { until: Math.max(until, cur && cur.until > now ? cur.until : 0), why, prints: !!(prints || (cur && cur.prints && cur.until > now)) };
         this.stats.cuts++;
-        this._lights(bid, false);
+        if (!was) this._lights(bid, false);                                          // (já estava apagado: só estica o prazo)
         this._dirty = true;
         return true;
     },
