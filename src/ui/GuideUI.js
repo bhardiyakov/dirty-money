@@ -334,6 +334,7 @@ GuideUI.PAGES = {
         <li><b>Carro enguiçado</b>: o motorista pede ajuda — <kbd>E</kbd> mexe no motor (a habilidade <b>Mecânica</b> do Desmanche ajuda a pegar); gorjeta se der certo.</li>
         <li><b>Ambulante</b>, <b>roda de samba</b> (fim de semana à noite) e <b>pregação</b> (domingo de manhã) completam a rua.</li></ul>
         <h3>A rua com vida própria</h3><ul>
+        <li><b>Gente em volta de você</b>: os pedestres andam no seu raio — quem fica para trás reaparece perto, fora da tela ou chegando ao fundo — e de dia há sempre pelo menos uns <b>10 na tela</b>. O <b>horário</b> muda tudo: o rush (7–9h e 17–19h) e o almoço enchem, a madrugada esvazia; no <b>fim de semana</b> não tem rush, mas a noite de sexta e de sábado lota. Com <b>sol</b> a praia enche, e no fim de semana fica <b>lotada</b>. <b>Chuva</b>: a rua esvazia (quem fica se abriga) e o <b>trânsito engarrafa</b> — todo mundo foi de carro.</li>
         <li><b>Esbarrão</b>: dois pedestres se trombam — pedem desculpa, batem boca ou, se um for de briga (ou estiver bêbado), saem no braço. Você correndo também tromba: o pedestre reclama e às vezes cai.</li>
         <li><b>Roda</b>: toda briga junta gente em volta — uns gritam "porrada!", outros filmam com o celular, outros pedem para parar — e às vezes um da roda entra na briga. A polícia chegando desfaz a roda.</li>
         <li><b>Correria</b>: no pânico, quem foge derruba quem está parado no caminho.</li>
