@@ -100,20 +100,117 @@ class NPCManager {
         if (npc.actor) npc.actor.dispose();
         if (npc.transform) npc.transform.dispose();
     }
-    // Quem ficou para trás (> recycleDist do jogador) reaparece perto dele, fora da tela, com nova vocação.
+    // ------------------------------------------------------------- POPULAÇÃO EM VOLTA DO JOGADOR
+    // Todos os pedestres vivem no RAIO do jogador (recycleDist): quem fica para trás reaparece perto dele, num lugar ESCONDIDO — fora da
+    // câmera (atrás, dos lados) ou ao fundo, já dentro da névoa da distância (vem chegando) —, nunca surgindo no meio da tela. Depois de um
+    // teleporte (muita gente longe de uma vez) repovoa depressa. E NA VISÃO tem sempre gente (_fillView): pelo menos visTarget() pedestres.
+    _calm(npc) { return npc.alive && !npc.rag && !npc.party && !npc._rage && !npc.free && npc.state !== 'HURT' && !npc.surrendered && npc.state !== 'FLEE'; }
     _recycle(dt) {
         this._recT = (this._recT || 0) - dt;
         if (this._recT > 0) return;
         this._recT = 0.2;
-        const f = this.nav.focus, far2 = Config.npc.recycleDist * Config.npc.recycleDist;
+        const f = this.nav.focus, far2 = Config.npc.recycleDist * Config.npc.recycleDist, far = [];
         for (const npc of this.npcs) {
-            if (npc.party || npc._rage || !npc.alive || npc.rag || npc.state === 'HURT' || npc.surrendered || npc.state === 'FLEE') continue;
+            if (!this._calm(npc)) continue;
             const dx = npc.position.x - f.x, dz = npc.position.z - f.z;
-            if (dx * dx + dz * dz < far2) continue;
-            const { pos, role } = this._place(this._roleFor(Math.random()), ...this._ring());      // (de madrugada: reaparece longe — StreetLife)
-            npc.relocate(pos, role, this._style(pos, role));
-            return;                                            // um por vez (sem engasgo)
+            if (dx * dx + dz * dz >= far2) far.push(npc);
         }
+        const n = Math.min(far.length, far.length > 12 ? 8 : 1), R = this._ring();       // (teleporte: 8 por vez; no dia a dia, um por vez)
+        for (let i = 0; i < n; i++) {
+            const { pos, role } = this._hidden(this._roleFor(Math.random()), R[0], R[1]);
+            far[i].relocate(pos, role, this._style(pos, role));
+            this.recycled = (this.recycled || 0) + 1;
+        }
+    }
+
+    // A câmera de agora: a matriz vista×projeção, onde ela está e até onde se enxerga (o fim da névoa na câmera de 3ª pessoa).
+    _viewer() {
+        const C = typeof CompassCamera !== 'undefined' && CompassCamera.current, cam = C && C.camera;
+        if (!cam || C.flat) return null;
+        const t = performance.now();
+        if (this._vw && t - this._vw.t < 150) return this._vw;
+        const H = Config.camera.chase, chase = C.chase > 0.5;
+        return (this._vw = { t, M: cam.getViewMatrix().multiply(cam.getProjectionMatrix()), vp: new BABYLON.Viewport(0, 0, 1, 1), cam: cam.position.clone(),
+            far: chase ? H.far || 125 : 1e9, fog: chase ? H.near || 55 : 1e9 });
+    }
+    // O ponto do chão (a 1 m de altura, no relevo daquele lugar) aparece na tela? Projeta na tela: dentro do retângulo, na frente da
+    // câmera e antes do fim da névoa.
+    _inView(x, z, V = this._viewer()) {
+        if (!V) return false;
+        const p = this._vp || (this._vp = new BABYLON.Vector3()), o = this._vo || (this._vo = new BABYLON.Vector3());
+        p.set(x, (typeof Relief !== 'undefined' && Relief.on ? Relief.at(x, z) : 0) + 1, z);
+        if (BABYLON.Vector3.Distance(p, V.cam) > V.far) return false;
+        BABYLON.Vector3.ProjectToRef(p, BABYLON.Matrix.IdentityReadOnly, V.M, V.vp, o);
+        return o.z > 0 && o.z < 1 && o.x > -0.02 && o.x < 1.02 && o.y > -0.02 && o.y < 1.02;
+    }
+    // Lugar ESCONDIDO para alguém aparecer: fora da tela, ou ao fundo, já na névoa.
+    _hidden(role, rMin, rMax) {
+        const V = this._viewer();
+        let last = null;
+        for (let k = 0; k < 10; k++) {
+            const P = this._place(role, rMin, rMax);
+            last = P;
+            if (!V) return P;
+            const p = P.pos;
+            if (!this._inView(p.x, p.z, V) || hypot(p.x - V.cam.x, p.z - V.cam.z) > V.fog * 0.95) return P;
+        }
+        return last;
+    }
+    // Quantos pedestres pelo menos NA TELA: 10 de dia (×StreetLife.density: o rush e o almoço põem mais gente; madrugada e chuva, menos).
+    visTarget() {
+        const g = typeof window !== 'undefined' && window.game;
+        if (!g || !g.dayNight) return 10;
+        const h = g.dayNight.hour, W = typeof Weather !== 'undefined' && Weather.cur, rain = W ? W.k : 0;
+        const d = typeof StreetLife !== 'undefined' ? StreetLife.density(h, rain) : 1, life = typeof Life !== 'undefined' ? Life.mul() : 1;
+        let t = 10 * d * (0.6 + 0.4 * life);
+        if (h >= 6 && h < 22 && rain < 0.3) t = Math.max(10, t);                         // (de dia e sem chuva: nunca menos de 10)
+        return Math.max(2, Math.round(Math.min(t, this.npcs.length * 0.4)));
+    }
+    // Faltou gente na tela: traz quem está fora da vista (os mais longe primeiro) para a ENTRADA da cena — ao fundo, na névoa (vem
+    // chegando), ou logo fora da beirada da tela (entra andando). Até 4 por vez, a cada meio segundo.
+    _fillView(dt) {
+        this._fvT = (this._fvT || 0) - dt;
+        if (this._fvT > 0) return;
+        this._fvT = 0.5;
+        const g = typeof window !== 'undefined' && window.game, V = this._viewer();
+        if (!g || !V || (typeof Interiors !== 'undefined' && Interiors.active)) return;
+        const f = this.nav.focus, spare = [];
+        let vis = 0;
+        for (const npc of this.npcs) {
+            if (!npc.alive) continue;
+            if (this._inView(npc.position.x, npc.position.z, V)) { vis++; continue; }
+            if (this._calm(npc) && !npc.mugger && !npc.thief && /^(WANDER|IDLE|JOG)$/.test(npc.state)) spare.push(npc);
+        }
+        const want = this.visTarget();
+        this.visible = vis; this.visWant = want;
+        if (vis >= want || !spare.length) return;
+        spare.sort((a, b) => hypot(b.position.x - f.x, b.position.z - f.z) - hypot(a.position.x - f.x, a.position.z - f.z));
+        this._aspect = g.gameEngine && g.gameEngine.engine ? g.gameEngine.engine.getAspectRatio(CompassCamera.current.camera) : 1.6;
+        for (let i = 0, k = Math.min(4, want - vis, spare.length); i < k; i++) {
+            const p = this._entry(V);
+            if (!p) break;
+            spare[i].relocate(p, null, this._style(p, null));
+            this.filled = (this.filled || 0) + 1;
+            if (this._inView(p.x, p.z, V)) this.filledIn = (this.filledIn || 0) + 1;
+        }
+    }
+    // Entrada da cena: sorteia DENTRO do cone da câmera (o rumo dela ± 0,8 da metade do campo de visão), ao fundo — entre o começo da
+    // névoa e o fim da vista —, e encaixa no ponto caminhável mais perto. Não achou: logo fora da beirada da tela.
+    _entry(V) {
+        const C = CompassCamera.current, f = this.nav.focus, yaw = C ? C.yaw : 0, half = C && C.camera ? Math.atan(Math.tan(C.camera.fov * 0.5) * (this._aspect || 1.6)) : 0.7;
+        for (const lo of [0.95, 0.75]) {
+            for (let k = 0; k < 24; k++) {
+                const a = yaw + (Math.random() * 2 - 1) * half * 0.8, r = V.fog * lo + Math.random() * Math.max(8, Math.min(V.far, 95) * 0.9 - V.fog * lo);
+                const q = this.nav.closestPoint(new BABYLON.Vector3(f.x + Math.sin(a) * r, 0, f.z + Math.cos(a) * r), 8);
+                if (!q || !this.nav.walk(q.x, q.z)) continue;
+                if (hypot(q.x - V.cam.x, q.z - V.cam.z) > V.fog * lo && this._inView(q.x, q.z, V)) return q;
+            }
+        }
+        for (let k = 0; k < 20; k++) {
+            const p = this.nav.randomWalkable(12, 45);
+            if (!this._inView(p.x, p.z, V)) return p;                                        // (logo fora da beirada: entra andando)
+        }
+        return null;
     }
 
     // env = { playerPos, wanted (nível), chasers: [{ position, car: bool }] }
@@ -140,6 +237,7 @@ class NPCManager {
             if (npc._lodDt) { npc.update(npc._lodDt + dt); npc._lodDt = 0; } else npc.update(dt);
         }
         this._recycle(dt);
+        this._fillView(dt);
         if (env) this._perceive(dt, env);
     }
 
@@ -171,7 +269,10 @@ class NPCManager {
     }
     // Onde quem é reciclado reaparece: um anel em volta do jogador, FORA da tela a pé (placeMin) e não muito longe (placeMax) — a gente
     // fica concentrada perto de você (antes: 75–200 u, a rua parecia vazia). De madrugada (StreetLife.recycleMin) o anel se afasta.
-    _ring() { const a = Math.max(Config.npc.placeMin, this.recycleMin || 0), b = Math.max(a + 45, Config.npc.placeMax); return [a, b]; }
+    _ring() {
+        const R = Config.npc.recycleDist, a = Math.min(R - 25, Math.max(Config.npc.placeMin, this.recycleMin || 0));
+        return [a, Math.min(R - 5, Math.max(a + 20, Config.npc.placeMax))];
+    }
 
     // ------------------------------------------------------------- chuva
     // Começou a chover: cada pedestre (escalonado em ~5 s; na garoa nem todos ligam) corre para o abrigo mais perto (toldo de loja,

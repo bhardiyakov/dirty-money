@@ -260,6 +260,36 @@ class TrafficManager {
         }
         this._asleepN = asleepN;
         this._recycle(dt, pp);
+        this._rainCars(dt);
+    }
+
+    // CHUVA = TRÂNSITO PESADO: quem andaria a pé vai de carro — entram carros a mais (até rainExtra × a frota, conforme a força da chuva),
+    // um por segundo, nas vias fora da tela; e os motoristas andam mais devagar (Weather.trafficMul). A chuva passou: os extras saem
+    // aos poucos, sempre longe da tela (fora da bolha acordada ou dormindo).
+    _rainCars(dt) {
+        this._rcT = (this._rcT || 0) - dt;
+        if (this._rcT > 0) return;
+        this._rcT = 1;
+        const W = typeof Weather !== 'undefined' && Weather.cur, rain = W ? W.k : 0, base = TrafficManager.scaled(Config.traffic.count);
+        const want = rain > 0.2 ? Math.round(base * (Config.traffic.rainExtra || 0.5) * Math.min(1, rain / 0.7)) : 0;
+        const L = (this.rainList = (this.rainList || []).filter((c) => this.vm.vehicles.includes(c) && !c.destroyed));
+        this.rainWant = want;
+        if (L.length < want) {
+            const c = this._spawnCar('drive');
+            if (c) { c._rainExtra = true; L.push(c); }
+            return;
+        }
+        if (L.length > want) {
+            const pp = this.focus();
+            const c = L.find((q) => !q.controlled && !q.hold && !q.keep && (q._asleep || hypot(q.position.x - pp.x, q.position.z - pp.z) > Zones.sr + 15));
+            if (!c) return;
+            L.splice(L.indexOf(c), 1);
+            const i = this.vm.vehicles.indexOf(c);
+            if (i >= 0) this.vm.vehicles.splice(i, 1);
+            if (this.game && this.game.doors) this.game.doors.reset(c);
+            if (this.game) this.game.carLights.release(c);
+            c.dispose(this.shadow);
+        }
     }
 
     // Reposiciona o veículo numa via/vaga do anel em volta do foco (fora da tela). Devolve true se achou lugar.

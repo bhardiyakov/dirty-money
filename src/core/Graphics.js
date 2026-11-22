@@ -150,7 +150,7 @@ const Graphics = {
 		Config.npc.count = cut(Config.npc.count);
 		for (const key of ['count', 'parked', 'motos', 'motosParked', 'bicycles', 'bicyclesParked', 'couriers']) T[key] = cut(T[key]);
 		T.spawnMax = Math.round(T.spawnMax * (0.5 + k / 2)); T.recycleDist = Math.round(T.recycleDist * (0.85 + k * 0.15));
-		Config.npc.recycleDist = 150;
+		Config.npc.recycleDist = Math.round(Config.npc.recycleDist * (0.8 + 0.2 * k));      // (menos gente: um raio um pouco menor, a rua continua cheia)
 	},
 };
 
