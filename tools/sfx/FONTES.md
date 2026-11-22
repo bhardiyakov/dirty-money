@@ -27,6 +27,8 @@ Números usados: 1050 2672 0275 1042 0260 0698 0850 0969 1111 1398 1446 1513 151
   (https://opengameart.org/content/female-high-pitched-scream-sfx, WuxiaScrub) e `yell/yelling sounds/*.wav` (o zip
   `yelling sounds.zip` de https://opengameart.org/content/male-gruntyelling-sounds, HaelDB — CC0 ou OGA-BY, usado como CC0).
 
+- `oga2/crowd_shouting_0.ogg` — "Crowd Shouting/Speaking Ambience", StarNinjas (CC0): https://opengameart.org/sites/default/files/crowd_shouting_0.ogg
+  (página https://opengameart.org/content/crowd-shoutingspeaking-ambience) — a festa, o bloco, a aglomeração.
 - `oga3/bangs/` — fogos (CC0): o zip `25-CC0-bang-sfx.zip` de https://opengameart.org/content/25-cc0-bang-firework-sfx (rubberduck),
   descompactado em `bangs/`.
 

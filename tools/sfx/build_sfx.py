@@ -236,6 +236,7 @@ shots(B('1050'), 'fw_far', 5, 2.0, thr=0.3, gap=1.5, pick='loud', tail=0.005, cu
 # ---------------------------------------------------------------- multidão (loops longos)
 loop(B('3515'), 'crowd_street', ss=5, t=16, xf=1.0, db=-20, sr=24000)
 loop(B('2728'), 'crowd_market', ss=8, t=16, xf=1.0, db=-20, sr=24000)
+loop('oga2/crowd_shouting_0.ogg', 'crowd_party', ss=3, t=16, xf=1.0, db=-20, sr=24000)    # festa, bloco, baile, aglomeração (vozes altas)
 # ---------------------------------------------------------------- motor (marcha lenta de verdade, uma por família; o jogo sobe o tom com o giro)
 # rpm = a marcha lenta da gravação (o jogo toca a 1× na marcha lenta do perfil e acelera a reprodução com o giro)
 loop(B('0187'), 'eng_car', ss=21.2, t=4.0, xf=0.3, db=-16, sr=24000, meta=dict(rpm=800), flat=True)       # 4 cilindros limpo

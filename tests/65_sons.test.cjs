@@ -44,7 +44,7 @@ module.exports = {
             passos: ['step_concrete', 'step_grass', 'step_leaves', 'step_sand', 'step_dirt', 'step_gravel', 'step_mud', 'step_water', 'step_wood', 'step_tile', 'step_heels', 'step_slipper', 'run_concrete', 'run_grass'],
             tiros: ['gun_pistol', 'gun_smg', 'gun_rifle', 'gun_shotgun', 'gun_heavy', 'casing', 'gun_reload', 'gun_cock'],
             batida: ['crash', 'car_bump', 'glass', 'punch', 'explosion', 'explosion_far'],
-            rua: ['tire_screech', 'tire_squeal', 'siren_wail', 'siren_yelp', 'crowd_street', 'crowd_market'],
+            rua: ['tire_screech', 'tire_squeal', 'siren_wail', 'siren_yelp', 'crowd_street', 'crowd_market', 'crowd_party'],
             buzinas: ['horn_car', 'horn_moto', 'horn_old', 'horn_truck', 'horn_bus', 'horn_stuck', 'bell_bike'],
             'mar e nado': ['sea_surf', 'sea_open', 'swim_stroke', 'splash_small', 'splash_big'],
             'gritos e celular': ['scream_f', 'scream_m', 'notify_msg', 'notify', 'notify_ok'],
@@ -181,6 +181,32 @@ module.exports = {
 
         const mu = await page.evaluate(async () => { AudioFX.muted = true; await new Promise((r) => setTimeout(r, 400)); const g = AudioFX._sfx.gain.value, P = JSON.stringify(SoundBank.played); AudioFX.shot('pistol', AudioFX.listener.x, AudioFX.listener.z); const same = JSON.stringify(SoundBank.played) === P; AudioFX.muted = false; return { g, same }; });
         c.ok(mu.g < 0.01 && mu.same, `efeitos desligados nas Configurações: os loops gravados calam (canal ${mu.g.toFixed(3)}) e nada novo toca`);
+
+        // ------------------------------------------------------------------ burburinho pela LOTAÇÃO do lugar
+        const cw = await page.evaluate(async () => {
+            const A = Ambience, L = AudioFX.listener, M = game.npcManager, keep = M.npcs, out = {};
+            const street = { inside: false, shop: null, biome: 'residential', district: 'centro', beach: 0 };
+            const people = (k) => Array.from({ length: k }, (_, i) => ({ alive: true, rag: null, position: { x: L.x + Math.cos(i) * 6, z: L.z + Math.sin(i) * 6 } }));
+            const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+            A.__w2 = A._where; A._where = () => street; game.dayNight.hour = 14;
+            try {
+                M.npcs = []; await wait(1500); out.empty = Object.assign({}, A.crowdNow, A.crowdGain);
+                M.npcs = people(6); await wait(1500); out.few = Object.assign({}, A.crowdNow, A.crowdGain);
+                M.npcs = people(22); await wait(1500); out.full = Object.assign({}, A.crowdNow, A.crowdGain);
+                M.npcs = people(10); Calendar.__f = Calendar.fest; Calendar.fest = { kind: 'bloco', x: L.x + 10, z: L.z, actors: [] }; await wait(1500); out.party = Object.assign({}, A.crowdNow, A.crowdGain); Calendar.fest = Calendar.__f;
+                // dentro: o mesmo tanto de gente num salão pequeno soa mais que na rua
+                const S = ShopLife, sv = { active: S.active, agents: S.agents, cap: S.capacity };
+                S.active = true; S.agents = Array.from({ length: 10 }, () => ({ role: 'customer' })); S.capacity = () => 10;
+                A._where = () => ({ inside: true, shop: { style: 'bar' }, biome: null, district: null, beach: 0 });
+                await wait(1500); out.bar = Object.assign({}, A.crowdNow, A.crowdGain);
+                S.active = sv.active; S.agents = sv.agents; S.capacity = sv.cap;
+            } finally { M.npcs = keep; A._where = A.__w2; }
+            return out;
+        });
+        const f3 = (o) => `${o.n} pessoas → ${(o.k || 0).toFixed(2)}${o.party ? ' + festa ' + o.party.toFixed(2) : ''}`;
+        c.ok(cw.empty.k < 0.01 && cw.few.k > 0.03 && cw.full.k > cw.few.k * 2 && cw.full.party > 0, `burburinho pela lotação da rua: vazia ${f3(cw.empty)} · pouca gente ${f3(cw.few)} · cheia ${f3(cw.full)}`);
+        c.ok(cw.party.party >= 0.3 && cw.party.k > cw.few.k, `no bloco/festa a gritaria animada aparece (${f3(cw.party)})`);
+        c.ok(cw.bar.k > cw.few.k && cw.bar.k >= cw.full.k * 0.9, `salão fechado e cheio soa alto (${f3(cw.bar)}, contra a rua com ${cw.few.n})`);
 
         // ------------------------------------------------------------------ o motor gravado
         const fam = await page.evaluate(() => {

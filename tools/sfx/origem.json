@@ -985,6 +985,15 @@
   "ls": 0.3,
   "le": 16.3
  },
+ "crowd_party": {
+  "file": "crowd_party.mp3",
+  "dur": 16.6,
+  "src": "oga2/crowd_shouting_0.ogg",
+  "ss": 3,
+  "loop": true,
+  "ls": 0.3,
+  "le": 16.3
+ },
  "eng_car": {
   "file": "eng_car.mp3",
   "dur": 4.6,

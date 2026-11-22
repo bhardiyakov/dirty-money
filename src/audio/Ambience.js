@@ -88,10 +88,11 @@ const Ambience = {
         const mini = (typeof Pool !== 'undefined' && Pool.active) || (typeof Truco !== 'undefined' && Truco.active) || (typeof Porrinha !== 'undefined' && Porrinha.active) || (typeof Domino !== 'undefined' && Domino.active);
         const duck = mini ? 0.55 : 1;                                     // (no mini-jogo o bar fica de fundo)
         let traffic = 0, crowd = 0, waves = 0, roof = 0, hum = 0, radio = 0, music = 0, funk = 0;
+        const CW = this.crowdNow = this._crowdNow(g, W);
         if (W.inside) {
-            const st = W.shop.style, n = typeof ShopLife !== 'undefined' && ShopLife.active ? ShopLife.agents.length : 3;
+            const st = W.shop.style;
             traffic = 0.012;
-            crowd = st === 'stadium' ? 0.11 : ['bar', 'burger', 'pizza', 'italian', 'japanese', 'bakery', 'fit'].includes(st) ? 0.012 + Math.min(0.05, n * 0.0045) : 0.006 + n * 0.0015;      // (o Colosso: a torcida)
+            crowd = st === 'stadium' ? 0.11 : 0.075 * CW.k;                         // (lotação do salão: _crowdNow; o Colosso: a torcida)
             hum = ['mart', 'pharmacy', 'bank_branch', 'bank_hq', 'guns', 'clothes', 'jewelry'].includes(st) ? 0.006 : 0;
             radio = st === 'bar' ? 0.09 : ['burger', 'bakery', 'pizza'].includes(st) ? 0.045 : 0;
             music = st === 'gym' ? 0.08 : 0;
@@ -100,15 +101,16 @@ const Ambience = {
         } else {
             const city = W.biome && ['downtown', 'commercial', 'port', 'plaza', 'residential', 'industrial'].includes(W.biome);
             traffic = (city ? 0.07 : W.district === 'favela' ? 0.03 : 0.035) * Math.min(1.4, dens) * (night ? 0.6 : 1);
-            crowd = (W.biome === 'commercial' || W.biome === 'downtown' || W.biome === 'plaza') && !night ? 0.025 * dens : W.district === 'favela' && !night ? 0.018 : 0;
+            crowd = 0.065 * CW.k;                                                    // (quem está perto de verdade: _crowdNow — rua vazia, silêncio)
             if (typeof Landmarks !== 'undefined') crowd = Math.max(crowd, Landmarks.crowdSound(g.player.position.x, g.player.position.z, h));      // a torcida em volta do Colosso aberto
             if (typeof StandCrowd !== 'undefined') { const P = g.activeCar ? g.activeCar.position : g.player.position; crowd = Math.max(crowd, StandCrowd.sound(P.x, P.z)); }      // a arquibancada do autódromo na corrida
+            if (crowd > 0.065 * CW.k + 0.01) CW.party = Math.max(CW.party, Math.min(0.85, crowd * 8));          // (torcida: a gritaria por cima)
             waves = 0.11 * W.beach * (0.75 + 0.25 * Math.sin(this.t * 0.9));
             funk = W.district === 'favela' && (h >= 21 || h < 4) && !(typeof Baile !== 'undefined' && Baile.on) ? 0.12 : 0;
             if (night && !mini) this._crickets(W);
             this._ones(g, W, h, night, false);
         }
-        const real = this._realCrowd(crowd * duck, W), sea = this._realSea((W.inside ? 0 : 0.11 * (W.beach || 0)) * duck, W, g, rain);
+        const real = this._realCrowd(crowd * duck, W, CW.party * duck, CW.n), sea = this._realSea((W.inside ? 0 : 0.11 * (W.beach || 0)) * duck, W, g, rain);
         this._to(L.traffic.gain, traffic * duck); this._to(L.crowd.gain, real ? 0 : crowd * duck); this._to(L.waves.gain, sea ? 0 : waves * duck, 0.3);
         this._to(L.roof.gain, roof * duck); this._to(L.hum.gain, hum * duck); this._to(this.radio, radio * duck, 0.4); this._to(this.music, music * duck, 0.4); this._to(this.funk, funk * duck, 1.2);
         // chuva: dentro, o som da rua some quase todo (o telhado é a camada `roof`)
@@ -118,16 +120,50 @@ const Ambience = {
         if (funk > 0) this._funkBeat(dt);
     },
 
-    // Burburinho gravado: a rua (vozes, passos, trânsito leve) e o mercado/salão (vozes mais perto); dentro e no comércio, mais o
-    // de mercado. Devolve se assumiu (o ruído sintetizado do burburinho fica mudo).
-    _realCrowd(v, W) {
+    // LOTAÇÃO de agora em volta de quem ouve → o burburinho. { k: 0..1+ (quanta gente), party: 0..1 (festa), n: pessoas }:
+    //   rua: quem está a até 28 m (os de perto valem 1, os do anel de fora menos) — com 2 ou menos é silêncio, com ~22 é cheio;
+    //   dentro: a ocupação do salão (clientes ÷ capacidade, ShopLife) × 1,25 (fechado, as vozes batem nas paredes e somam);
+    //   festa: o baile funk no morro, o bloco de carnaval / a festa junina / o réveillon (Calendar.fest), a roda de samba (StreetLife),
+    //   a torcida do Colosso e da arquibancada — e qualquer aglomeração grande (mais de 18 pessoas em volta) também vira festa.
+    _crowdNow(g, W) {
+        const out = { k: 0, party: 0, n: 0 }, P = AudioFX.listener;
+        if (W.inside) {
+            const S = typeof ShopLife !== 'undefined' && ShopLife.active ? ShopLife : null;
+            const n = S ? S.agents.filter((a) => a.role === 'customer').length : 0, cap = S && S.capacity ? Math.max(4, S.capacity()) : 12;
+            out.n = n; out.k = Math.min(1.25, (n / cap) * 1.25);
+            if (W.shop && W.shop.style === 'stadium') { out.k = 1; out.party = 0.9; }
+            else if (n >= 8 && n / cap > 0.7) out.party = Math.min(0.5, (n / cap - 0.7) * 1.5);       // (bar lotado: vira festa)
+            return out;
+        }
+        let n = 0;
+        if (g.npcManager) for (const q of g.npcManager.npcs) {
+            if (!q.alive || q.rag) continue;
+            const d = hypot(q.position.x - P.x, q.position.z - P.z);
+            if (d < 28) n += d < 12 ? 1 : (28 - d) / 16;
+        }
+        const near = (x, z, r) => hypot(x - P.x, z - P.z) < r;
+        const F = typeof Calendar !== 'undefined' && Calendar.fest, E = typeof StreetLife !== 'undefined' && StreetLife.ev;
+        let party = 0;
+        if (F && near(F.x, F.z, 70)) { party = Math.max(party, 0.85); n += (F.actors ? F.actors.length : 10) * 0.6; }                      // (bloco, junina, réveillon)
+        if (E && E.kind === 'samba' && near(E.x, E.z, 45)) { party = Math.max(party, 0.65); n += (E.actors ? E.actors.length : 6) * 0.6; }    // (roda de samba)
+        if (typeof Baile !== 'undefined' && Baile.on && Baile.c && near(Baile.c.x, Baile.c.z, (Baile.radius || 60) + 30)) party = Math.max(party, 0.9);
+        if (n > 18) party = Math.max(party, Math.min(0.6, (n - 18) / 20));                                                                     // (aglomeração)
+        out.n = Math.round(n * 10) / 10; out.k = Math.max(0, Math.min(1, (n - 2) / 20)); out.party = party;
+        return out;
+    },
+
+    // Burburinho gravado: a rua (vozes, passos, trânsito leve), o mercado/salão (vozes mais perto) e a FESTA (vozes altas, gritaria
+    // boa: crowd_party). Dentro e na rua cheia, mais o de mercado; vazio, nada. Devolve se assumiu (o sintetizado fica mudo).
+    _realCrowd(v, W, party = 0, n = 0) {
         if (typeof SoundBank === 'undefined') return false;
         if (!this.RC) {
             if (!SoundBank.has('crowd_street') || !SoundBank.has('crowd_market')) return false;
-            this.RC = { street: SoundBank.loop('crowd_street'), market: SoundBank.loop('crowd_market') };
+            this.RC = { street: SoundBank.loop('crowd_street'), market: SoundBank.loop('crowd_market'), party: SoundBank.has('crowd_party') ? SoundBank.loop('crowd_party') : null };
         }
-        const k = Math.min(0.55, v * 8.5), mk = W.inside || W.biome === 'commercial' || W.biome === 'plaza' ? 0.7 : 0.15;
+        const k = Math.min(0.6, v * 8.5), mk = W.inside ? 0.8 : n > 10 ? 0.6 : 0.15;
         this._to(this.RC.market.gain, k * mk, 0.8); this._to(this.RC.street.gain, k * (1 - mk), 0.8);
+        if (this.RC.party) this._to(this.RC.party.gain, Math.min(0.5, party * 0.5), 1.2);
+        this.crowdGain = { k, party: Math.min(0.5, party * 0.5) };
         return true;
     },
 
