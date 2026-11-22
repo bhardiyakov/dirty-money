@@ -36,6 +36,7 @@ const Landmarks = {
         this._beach();
         this._pylons();
         if (typeof Lagoa !== 'undefined') Lagoa.build();                          // a Lagoa: orla, avenida, prédios de luxo (Lagoa.js)
+        if (typeof Airport !== 'undefined') Airport.build();                      // o Aeroporto das Fazendas (Airport.js)
         console.log(`[MARCOS] estádio ${this.stadium ? 'ok' : 'SEM LUGAR'}, Cristo, calçadão (${this.beach ? this.beach.strips.length : 0} trechos, ${this.kiosks.length} quiosques), ${this.piers.length} píeres, ${this.pylons.length} pilones`);
     },
 
@@ -167,6 +168,7 @@ const Landmarks = {
 
     covers(x, z, m = 0) {
         if (this.stadium && Maracana.covers(x, z, m)) return true;
+        if (typeof Airport !== 'undefined' && Airport.covers(x, z, m)) return true;
         if (this.cristo && Corcovado.covers(x, z, m)) return true;
         const P = WorldMap.PAO;
         if (hypot(x - P.x, z - P.z) < 50 + m) return true;
@@ -194,6 +196,7 @@ const Landmarks = {
             for (const t of this.towers) if (vis(t.x - 2, t.z - 2, t.x + 2, t.z + 2)) { rect(t.x - 1.2, t.z - 1.2, t.x + 1.2, t.z + 1.2, '#d8402f'); rect(t.x - 0.5, t.z - 0.5, t.x + 0.5, t.z + 0.5, '#f4f4f4'); }
         }
         if (this.stadium) Maracana.drawMap(ctx, X, Y, k, vis);                      // o complexo do Colosso
+        if (typeof Airport !== 'undefined') Airport.drawMap(ctx, X, Y, k, vis);       // o aeroporto
         if (typeof Lagoa !== 'undefined') Lagoa.drawMap(ctx, X, Y, k, vis);           // a orla da Lagoa
         if (this.cristo) Corcovado.drawMap(ctx, X, Y, k, vis);                     // o Corcovado (escadarias, terraço, elevador, trem, mirante)
         // o BONDINHO da Pedra do Farol: o cabo, as estações e as cabines
@@ -245,6 +248,7 @@ const Landmarks = {
         this._wb = wb;
         const t0 = performance.now();
         if (this.stadium) Maracana.meshes(wb);
+        if (typeof Airport !== 'undefined') Airport.meshes(wb);
         if (this.cristo) Corcovado.meshes(wb);
         if (typeof Lagoa !== 'undefined') Lagoa.meshes(wb);
         this._meshPao(wb);

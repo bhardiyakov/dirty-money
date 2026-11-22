@@ -97,7 +97,19 @@ class CompassCamera {
 	// Inclinação de agora (graus acima do horizonte): a de sempre (Config.camera.tilt) ou, dirigindo, descendo até a da perseguição.
 	get tiltDeg() { const C = Config.camera; return C.tilt + (this.chaseTilt - C.tilt) * this.chase; }
 	// Inclinação da perseguição: a do carro; na moto/bicicleta um pouco mais alta (o piloto é um desenho 2,5D, feito para ser visto de cima).
-	get chaseTilt() { const H = Config.camera.chase; if (this._chFoot && typeof FootCamera !== 'undefined' && FootCamera.on) return FootCamera.pitchDeg; return H.tilt + (this._chBike ? H.bikeTilt : 0); }      // (a pé: a altura do olhar da câmera de 3ª pessoa)
+	get chaseTilt() { const H = Config.camera.chase; if (this._chFoot && typeof FootCamera !== 'undefined' && FootCamera.on) return FootCamera.pitchDeg; return H.tilt + (this._chBike ? H.bikeTilt : 0) + ((this.airTilt || H.tilt) - H.tilt) * (this.airK || 0); }
+	// AVIÃO (Game: pilotando um vehicle/Plane): a câmera olha mais para a frente e a névoa se afasta com a altitude — lá de cima se vê a
+	// paisagem. k: 0..1 (entra e sai suave), alt: m acima do chão. Refaz o campo de visão e a névoa (barato: só números).
+	setAir(k, alt = 0) {
+		const kk = Math.max(0, Math.min(1, k)), a = Math.max(0, alt);
+		if (kk === (this.airK || 0) && Math.abs(a - (this.airAlt || 0)) < 0.5) return;
+		this.airK = kk; this.airAlt = a;
+		this.airTilt = 20 + Math.min(14, a / 14);
+		this._applyFov();
+	}
+	// Até onde se vê na perseguição (a névoa): no avião, bem mais longe (cresce com a altitude).
+	_chaseFar() { const H = Config.camera.chase, k = this.airK || 0; return H.far + k * (260 + (this.airAlt || 0) * 2.4); }
+	_chaseNear() { const H = Config.camera.chase, k = this.airK || 0; return H.near + k * (90 + (this.airAlt || 0) * 1.5); }      // (a pé: a altura do olhar da câmera de 3ª pessoa)
 	setFlat(on) {
 		if (on === this.flat) return;
 		this.flat = on;
@@ -151,7 +163,7 @@ class CompassCamera {
 				const hgt = Math.max(back * Math.tan(Math.min(1.45, ec + H.drop * Math.PI / 180)), (this._chRoof || 0) + 1.5) * this.bounceMul;
 				const Dc = hgt / Math.sin(ec), fc = (H.fov + H.speedFov * s) * Math.PI / 180;
 				// até onde se vê o chão (m à frente do centro da tela): o raio do alto da tela, limitado pela névoa — a área que entra no recorte
-				this._chReach = Math.min(H.far, hgt / Math.tan(Math.max(0.03, ec - fc / 2)) - hgt / Math.tan(ec)) + 10;
+				this._chReach = Math.min(this._chaseFar(), hgt / Math.tan(Math.max(0.03, ec - fc / 2)) - hgt / Math.tan(ec) + (this.airAlt || 0) * (this.airK || 0) * 2) + 10;
 				this._chLead = hgt / Math.tan(ec) - back;
 				D += (Dc - D) * k; fov += (fc - fov) * k;
 			}
@@ -159,7 +171,7 @@ class CompassCamera {
 			cam.fov = fov;
 			const h = D * Math.sin(e);                                                  // (height of the camera: nothing comes nearer than the rooftops)
 			cam.minZ = k > 0 ? Math.max(C.chase.minZ, Math.max(1, (h - C.tallest - 6) * 0.8) * (1 - k)) : Math.max(1, (h - C.tallest - 6) * 0.8);
-			cam.maxZ = D + 250 + C.chase.far * k;
+			cam.maxZ = D + 250 + this._chaseFar() * k + (this.airAlt || 0) * (this.airK || 0);
 			this._applyFog(v, a);
 			this._pose(this.focus.x, this.focus.z);
 			return;
@@ -179,7 +191,7 @@ class CompassCamera {
 		if (!C.tilted) return;
 		if (!view) { sc.fogStart = CompassCamera.NO_FOG; sc.fogEnd = CompassCamera.NO_FOG + 1; return; }
 		if (this.persp && this.chase >= 0.5) {                                          // (perseguição: névoa de DISTÂNCIA, da cor do céu — EDGE_FOG,
-			sc.fogStart = C.chase.near; sc.fogEnd = C.chase.far; sc.fogDensity = -1000;  //  densidade −1000 = medir a distância do olho)
+			sc.fogStart = this._chaseNear(); sc.fogEnd = this._chaseFar(); sc.fogDensity = -1000;  //  densidade −1000 = medir a distância do olho)
 			return;
 		}
 		if (this.persp) {                                                               // (perspective: screen position = view-space x, y ÷ depth;
@@ -232,7 +244,7 @@ class CompassCamera {
 		if (!this.tilted) return { x: view * aspect, z: view };
 		const e = Config.camera.tilt * Math.PI / 180;
 		if (this.persp && chase > 0) {                                              // (perseguição: o chão até a névoa, à frente e dos lados)
-			const g = this.groundHalf(view, aspect, 0), F = Math.min(Config.camera.chase.far - 12, this._chReach || 1e9);
+			const g = this.groundHalf(view, aspect, 0), F = Math.min(this._chaseFar() - 12, this._chReach || 1e9);
 			return { x: g.x + (F - g.x) * chase, z: g.z + (F - g.z) * chase };
 		}
 		if (this.persp) {

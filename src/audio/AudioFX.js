@@ -376,6 +376,68 @@ const AudioFX = {
         c.lfo.frequency.setTargetAtTime(2 + rpm * 11 + stress * 5, t, 0.2);
     },
 
+    // VENTO no ouvido (paraquedas: player/Parachute.js): 0..1, todo quadro durante o salto; 0 silencia.
+    wind(level) {
+        if (!this._ok()) return;
+        const ctx = this.ctx, t = ctx.currentTime;
+        if (!this._wind) {
+            const src = ctx.createBufferSource(); src.buffer = this._noise(); src.loop = true;
+            const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 600; bp.Q.value = 0.5;
+            const g = ctx.createGain(); g.gain.value = 0; src.connect(bp); bp.connect(g); g.connect(this.sfxOut ? this.sfxOut() : this.master); src.start();
+            this._wind = { g, bp };
+        }
+        this._wind.g.gain.setTargetAtTime(Math.max(0, level) * 0.32, t, 0.15);
+        this._wind.bp.frequency.setTargetAtTime(400 + level * 900, t, 0.2);
+    },
+
+    // MOTOR DE AVIÃO (vehicle/Plane.js), o mais perto que esteja ligado: kind 'prop' (monomotor), 'prop2' (bimotor) ou 'jet'; null silencia.
+    //   hélice: dente de serra grave com o "bater das pás" (modulação no ritmo da rotação) e o ronco filtrado;
+    //   turbina: o sopro (ruído em banda que abre com a potência) e o assobio agudo das pás do compressor.
+    // inside: no comando (mais presente). Todo quadro.
+    plane(kind, rpm, dist, thr = 0, inside = false) {
+        if (!this._ok()) return;
+        const ctx = this.ctx, t = ctx.currentTime, P = this._planeA || (this._planeA = {});
+        const mk = (k) => {
+            if (P[k]) return P[k];
+            const vol = ctx.createGain(); vol.gain.value = 0; vol.connect(this.sfxOut ? this.sfxOut() : this.master);
+            const N = { vol };
+            if (k === 'jet') {
+                const src = ctx.createBufferSource(); src.buffer = this._noise(); src.loop = true;
+                const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.6; bp.frequency.value = 500;
+                const ng = ctx.createGain(); ng.gain.value = 0.9;
+                src.connect(bp); bp.connect(ng); ng.connect(vol); src.start();
+                const wh = ctx.createOscillator(), wg = ctx.createGain(); wh.type = 'sine'; wh.frequency.value = 2000; wg.gain.value = 0.05; wh.connect(wg); wg.connect(vol); wh.start();
+                const rum = ctx.createOscillator(), rg = ctx.createGain(), rl = ctx.createBiquadFilter(); rum.type = 'sawtooth'; rum.frequency.value = 45; rl.type = 'lowpass'; rl.frequency.value = 160; rg.gain.value = 0.35;
+                rum.connect(rl); rl.connect(rg); rg.connect(vol); rum.start();
+                Object.assign(N, { bp, wh, wg, rum });
+            } else {
+                const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 1.4; lp.frequency.value = 500;
+                const am = ctx.createGain(); am.gain.value = 0.6; lp.connect(am); am.connect(vol);
+                const oscs = [];
+                for (let i = 0; i < (k === 'prop2' ? 2 : 1); i++) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 40; o.connect(lp); o.start(); oscs.push(o); }
+                const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.type = 'triangle'; lfo.frequency.value = 20; lg.gain.value = 0.4; lfo.connect(lg); lg.connect(am.gain); lfo.start();
+                const src = ctx.createBufferSource(); src.buffer = this._noise(); src.loop = true;
+                const nb = ctx.createBiquadFilter(), ng = ctx.createGain(); nb.type = 'lowpass'; nb.frequency.value = 700; ng.gain.value = 0.25; src.connect(nb); nb.connect(ng); ng.connect(am); src.start();
+                Object.assign(N, { lp, oscs, lfo, nb });
+            }
+            return (P[k] = N);
+        };
+        for (const k of Object.keys(P)) if (k !== kind) P[k].vol.gain.setTargetAtTime(0, t, 0.25);
+        if (!kind || rpm < 0.02) return;
+        const N = mk(kind), near = inside ? 1 : Math.pow(Math.max(0, 1 - dist / 380), 1.3);
+        N.vol.gain.setTargetAtTime(near * (inside ? 0.2 : 0.3) * Math.min(1, rpm * 1.3), t, 0.15);
+        if (kind === 'jet') {
+            N.bp.frequency.setTargetAtTime(380 + rpm * 1500 + thr * 600, t, 0.3);
+            N.wh.frequency.setTargetAtTime(1500 + rpm * 2600, t, 0.4); N.wg.gain.setTargetAtTime(0.02 + rpm * 0.05, t, 0.4);
+            N.rum.frequency.setTargetAtTime(35 + rpm * 40, t, 0.3);
+        } else {
+            const f = 22 + rpm * 52;
+            N.oscs.forEach((o, i) => o.frequency.setTargetAtTime(f * (i ? 1.013 : 1), t, 0.2));
+            N.lp.frequency.setTargetAtTime(260 + rpm * 1100, t, 0.2);
+            N.lfo.frequency.setTargetAtTime(f * 0.5, t, 0.2);
+        }
+    },
+
     // Pneu cantando (derrapagem do carro do jogador: Vehicle.slide). Chame todo frame com a intensidade (0..1); 0 silencia.
     // Ruído estreito em banda (o chiado da borracha) + um tom que oscila (o "uivo"), os dois subindo um pouco com a força.
     screech(level) {

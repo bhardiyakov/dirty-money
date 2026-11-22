@@ -32,13 +32,16 @@ const RuralRoads = {
         { id: 'R3', cls: 'hwy', name: 'Rodovia do Sul', pts: [[-1150, -700], [-760, -860], [-336, -930], [-294, -930]] },
         { id: 'R4', cls: 'hwy', name: 'Rodovia Central', pts: [[-294, 186], [-336, 186], [-700, 205], { on: 'R2', near: [-1205, 186] }] },
         { id: 'R5', cls: 'hwy', name: 'Rodovia dos Lagos', pts: [[-294, -246], [-336, -246], [-546, -252], [-760, -265], { on: 'R2', near: [-1200, -246] }] },
-        { id: 'R6', cls: 'hwy', name: 'Rodovia do Meio', pts: [{ on: 'R5', near: [-780, -250] }, [-790, 0], [-770, 420], { on: 'R1', near: [-785, 900] }] },
+        // (a Rodovia do Meio sai da Rodovia Central: o trecho sul, até a Estrada das Fazendas, é R6S — o AEROPORTO fica entre as duas)
+        { id: 'R6', cls: 'hwy', name: 'Rodovia do Meio', pts: [{ on: 'R4', near: [-778, 205] }, [-770, 420], { on: 'R1', near: [-785, 900] }] },
         // (a oeste da LAGOA, e segue para o norte até a Rodovia Central, passando pelo estádio)
         { id: 'R7', cls: 'hwy', name: 'Rodovia da Lagoa', pts: [{ on: 'R3', near: [-548, -895] }, [-552, -600], [-546, -252], [-532, 40], { on: 'R4', near: [-528, 196] }] },
         // ---- estradas de terra
-        { id: 'D1', cls: 'dirt', name: 'Estrada da Favela', pts: [{ on: 'R5', near: [-600, -245] }, [-610, 0], [-600, 342]] },
-        { id: 'D2', cls: 'dirt', name: 'Estrada do Engenho', pts: [{ on: 'R5', near: [-900, -250] }, [-890, 0], { on: 'R4', near: [-900, 186] }] },
-        { id: 'D3', cls: 'dirt', name: 'Estrada das Fazendas', pts: [[-294, -30], [-336, -30], [-600, -20], { on: 'D2', near: [-895, -30] }] },
+        { id: 'D1', cls: 'dirt', name: 'Estrada da Favela', pts: [{ on: 'R4', near: [-600, 192] }, [-600, 342]] },
+        { id: 'D2', cls: 'dirt', name: 'Estrada do Engenho', pts: [{ on: 'R5', near: [-900, -250] }, [-890, -22]] },
+        { id: 'D3', cls: 'dirt', name: 'Estrada das Fazendas', pts: [[-294, -30], [-336, -30], [-600, -20], { on: 'D2', near: [-893, -24] }] },
+        { id: 'R6S', cls: 'hwy', name: 'Rodovia do Meio', pts: [{ on: 'R5', near: [-780, -250] }, { on: 'D3', near: [-792, -48] }] },
+        { id: 'D1S', cls: 'dirt', name: 'Estrada da Favela', pts: [{ on: 'R5', near: [-600, -245] }, { on: 'D3', near: [-604, -36] }] },
         // (rente à borda oeste do autódromo, onde o chão é o patamar plano dele — antes ela subia a encosta escavada e virava paredão; termina no
         //  pé da ESTRADA DA SERRA, que sobe o morro em zigue-zague: Corcovado.serraPath)
         { id: 'D5', cls: 'dirt', name: 'Estrada da Serra do Meio', pts: [{ on: 'R4', near: [-975, 190] }, [-1004, 330]] },      // (o resto: D5B, reto, abaixo)
@@ -169,6 +172,7 @@ const RuralRoads = {
         if (!WorldMap.isLand(x, z) || WorldMap.waterDist(x, z) < S.water) return 0;
         if (typeof Lagoa !== 'undefined' && Lagoa.zone(x, z, 10)) return 2;   // (a Lagoa: as estradas contornam o bairro; só as ruas dela entram)
         if (x > -306) return 2;
+        if (typeof Airport !== 'undefined' && Airport.blocks(x, z, 8)) return 0;          // (o aeroporto: as estradas passam em volta)
         const F = typeof FavelaPlan !== 'undefined' ? FavelaPlan.R : null;
         if (F && x > F.x0 - 8 && x < F.x1 + 8 && z > F.z0 - 8 && z < F.z1 + 8) return 2;
         return 1;

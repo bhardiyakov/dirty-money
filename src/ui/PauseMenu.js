@@ -49,6 +49,7 @@ class PauseMenu {
 			tuning: { label: 'Loja de tunagem (motor, turbo, pintura, neon, aerofólio)', icon: 'tune' },
 			speedway: { label: 'Autódromo (corridas no oval, dinheiro limpo)', icon: 'stadium' },
 			estadio: { label: 'Estádio do Colosso', icon: 'arena' },
+			aeroporto: { label: 'Aeroporto (aviões, salto de paraquedas)', icon: 'plane' },
 			cristo: { label: 'Cristo Protetor (mirante do Morro do Vigia)', icon: 'cristo' },
 			bondinho: { label: 'Bondinho da Pedra do Farol', icon: 'cablecar' },
 			lagoa: { label: 'Lagoa (orla, ciclovia, quiosques e pedalinhos)', icon: 'lagoa' },
@@ -66,7 +67,7 @@ class PauseMenu {
 	// 3–4 = serviços, 2 = o resto, 0 = os tipos de monte (só com zoom — MASS_ZOOM).
 	static get POI_PRIO() {
 		return {
-			home: 6, negocio: 6, fachada: 6, persona: 5, hospital: 5, station: 5, speedway: 5, estadio: 5, cristo: 5, bondinho: 5, lagoa: 5, marina: 5, village: 4,
+			home: 6, negocio: 6, fachada: 6, persona: 5, hospital: 5, station: 5, speedway: 5, estadio: 5, aeroporto: 5, cristo: 5, bondinho: 5, lagoa: 5, marina: 5, village: 4,
 			gunshop: 4, chop: 4, paynspray: 4, dealer: 4, motodealer: 3, boatshop: 3, tuning: 3, racemeet: 4, helipad: 3, baile: 4, boca_rival: 4, mototaxi: 3,
 			joalheria: 3, academia: 3, boutique: 3, gas: 3, charge: 2, quadra: 2, clube: 2,
 			imovel: 0, conveniencia: 0, lanchonete: 0, busstop: 0,

@@ -746,7 +746,7 @@ class Game {
 			else move.setAll(0);
 
 			this.lockpick.update(dt);
-			if (!this.lockpick.active && !this.arrest && !this.death && !this.hiding && !frozenUI) this._playerActions(dt);      // (arrombando/rendido: sem ações)
+			if (!this.lockpick.active && !this.arrest && !this.death && !this.hiding && !frozenUI && !(typeof Parachute !== 'undefined' && Parachute.active)) this._playerActions(dt);      // (arrombando/rendido: sem ações)
 			// trote padrão; sprint pelo impulso (exausto: não corre); andar com o analógico pouco inclinado ou dentro da safe house
 			const walk = this.input.moveTilt < Config.player.walkTilt || (typeof HouseView !== 'undefined' && HouseView.inside && this._walkIndoors());
 			this.player.update(move, this.empire && this.empire.tired ? 0 : this.input.sprint, dt, walk);
@@ -759,7 +759,7 @@ class Game {
 			// (escadarias e mirante do Cristo, viaduto, telhado, bondinho: a câmera sobe junto com ele — CompassCamera.footLift)
 			const pl = this.player;
 			if (this._camVeh) { this._camVeh = false; this.camera.resetFoot(); }        // ficou a pé (carro, moto, barco, helicóptero): a câmera do começo do jogo
-			this.camera.footLift = pl.onDeck && !pl.underBridge ? pl.deckH || 0 : 0;
+			this.camera.footLift = typeof Parachute !== 'undefined' && Parachute.active ? Parachute.lift() : pl.onDeck && !pl.underBridge ? pl.deckH || 0 : 0;      // (saltando: a câmera desce junto)
 			// (a câmera vai para as costas de quem anda — não mirando: aí o corpo segue a mira, não o caminho)
 			this.camera.follow(pl.position, dt, null, this.aim && this.aim.active ? null : pl, true);
 		}
@@ -768,6 +768,7 @@ class Game {
 		this._hdDrive();
 		Perf.lap('jogador');
 		this._updateHeliFall(dt);
+		if (typeof Parachute !== 'undefined') Parachute.update(dt, this);         // o salto de paraquedas (queda livre, velame, pouso)
 		this._updateChoppers(dt);
 
 		// --- Zoom ---
@@ -775,7 +776,8 @@ class Game {
 		const zSpeed = this.mode === 'car' && this.activeCar ? this.activeCar.speed : (this.mode === 'heli' && this.chopper ? this.chopper.speed : null);
 		// (subindo o Corcovado a pé — ou no bondinho — a câmera abre aos poucos: lá de cima, o Cristo inteiro cabe no quadro)
 		const hill = this.mode === 'player' && typeof Corcovado !== 'undefined' ? Corcovado.zoomFor(this.player) * Landmarks.zoomFor(this.player) : 1;
-		this.camera.setAutoZoom(this.camera.zoomMul < 0.999 ? 1 : CompassCamera.autoZoomGoal(zSpeed) * hill, dt);
+		const air = this.mode === 'heli' && this.chopper && this.chopper.isPlane ? 1.25 + Math.min(1.1, Math.max(0, this.chopper.alt) / 140) : 1;      // (avião: a câmera abre com a altura)
+		this.camera.setAutoZoom(this.camera.zoomMul < 0.999 ? 1 : CompassCamera.autoZoomGoal(zSpeed) * hill * air, dt);
 		const zoom = this.input.consumeZoom();
 		if (zoom.keys) this.camera.zoom(zoom.keys * Config.camera.zoomSpeed * dt);
 		if (zoom.wheel) this.camera.zoom(zoom.wheel * Config.camera.wheelStep);
@@ -963,6 +965,7 @@ class Game {
 			Heists.build(this); Mechanic.build(this); Business.syncMap(this, dt);           // joalherias, oficinas, seus negócios no mapa
 			Dealers.build(this); Dealers.update(dt); Tuning.build(this); Tuning.update(dt); Garage.update(dt); PersonalBike.update(dt); this.carUI.update(dt);      // concessionárias (vitrine) e garagens (seus carros)
 			if (typeof Maracana !== 'undefined') Maracana.update(dt, this);                // o estacionamento do Colosso: carros de verdade nas vagas
+			if (typeof Airport !== 'undefined') Airport.update(dt, this);                  // as luzes da pista à noite, a biruta
 			if (typeof Lagoa !== 'undefined') Lagoa.update(dt, this);                      // os ciclistas da ciclovia da Lagoa
 		}
 
@@ -1497,18 +1500,20 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 	_spawnChoppers() {
 		const V = [4, 0, 4, 3, 7];
 		(CityGrid.helipads || []).forEach((p, i) => this.choppers.push(new Chopper(this, p.x, p.z, p.heading, V[i % V.length])));
+		if (typeof Airport !== 'undefined' && Airport.built && typeof Plane !== 'undefined') for (const s of Airport.SPOTS) this.choppers.push(new Plane(this, s));      // os aviões do pátio do aeroporto
 	}
 
 	// Helicóptero estacionado ao alcance de quem está a pé.
 	_chopperNear() {
 		if (this.mode !== 'player' || !this.player.alive) return null;
 		const pp = this.player.position;
-		let best = null, bd = 7.5;
+		let best = null, bd = Infinity;
 		for (const c of this.choppers) {
 			if (!c.alive || c.pilot || c.state === 'failing' || c.alt > c.floor + 0.6) continue;
+			if (c.isPlane && (!c.onGround || c.v > 2)) continue;
 			if (Math.abs(c.alt - (this.player.onDeck ? this.player.deckH || 0 : 0)) > 1.5) continue;      // (no telhado: só subindo a escada)
-			const d = c.distanceTo(pp);
-			if (d < bd) { bd = d; best = c; }
+			const d = c.distanceTo(pp), r = c.isPlane ? c.M.len * 0.55 + 2.5 : 7.5;                          // (avião: a porta fica ao lado da cabine)
+			if (d < r && d < bd) { bd = d; best = c; }
 		}
 		return best;
 	}
@@ -1527,6 +1532,10 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		this.mode = 'heli';
 		this.chopper = ch;
 		this.ui.showVehicle(ch);
+		if (ch.isPlane) {
+			this._flash(`${ch.M.name}! W acelera · ESPAÇO puxa (decola passando de ${Math.round(ch.M.vRot * 3.6)} km/h) · A/D inclina · S freia · F desce/salta${ch.rented ? '' : ' — avião NÃO alugado: decolar é roubo'}`);
+			return;
+		}
 		this._flash('Helicóptero! Espaço sobe · Shift desce · W/S frente e ré · A/D lados · Q/E gira · F desce/pula');
 	}
 
@@ -1540,10 +1549,20 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		};
 	}
 
+	// Comandos do avião (-1..1): W/S acelerador, A/D inclinar (no chão: taxiar), ESPAÇO puxa, SHIFT empurra, Q/E leme.
+	_planeInput() {
+		const inp = this.input, ax = inp.getMoveAxis(), k = inp.keys;
+		return {
+			thr: ax.z, roll: ax.x,
+			pitch: (k[' '] ? 1 : 0) - (k['shift'] ? 1 : 0),
+			yaw: Math.max(-1, Math.min(1, (k['e'] ? 1 : 0) - (k['q'] ? 1 : 0) + inp.yawAxis)),
+		};
+	}
+
 	_updateChoppers(dt) {
 		this._chT = (this._chT || 0) + dt;
 		const tg = this.camera.target, heli = this.mode === 'heli' && this.chopper;
-		let loud = null, ld = 1e9;
+		let loud = null, ld = 1e9, plane = null, pd = 1e9;
 		for (const c of this.choppers) {
 			const mine = heli && c === this.chopper;
 			if (!c.alive) {                                                    // destruído: um novo aparece no heliponto depois de um tempo
@@ -1551,10 +1570,12 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 				continue;
 			}
 			if (!mine && c.state === 'parked' && c.rpm < 0.01 && c.distanceTo(tg) > 150) continue;       // parado e longe: dorme
-			c.update(dt, mine ? this._chopperInput() : null);
+			c.update(dt, mine ? (c.isPlane ? this._planeInput() : this._chopperInput()) : null);
+			if (c.isPlane) { if (c.rpm > 0.02) { const d = c.distanceTo(tg) + (c.alt || 0) * 0.5; if (d < pd) { pd = d; plane = c; } } continue; }
 			if (c.rpm > 0.02) { const d = c.distanceTo(tg); if (d < ld) { ld = d; loud = c; } }
 		}
 		AudioFX.chopper(loud ? loud.rpm : 0, loud ? ld : 999, loud && loud.state === 'failing' ? 1 : 0);
+		if (AudioFX.plane) AudioFX.plane(plane ? plane.M.engine : null, plane ? plane.rpm : 0, plane ? pd : 999, plane ? plane.throttle : 0, plane && heli && plane === this.chopper);
 		if (this.mode === 'heli' && this.chopper) {
 			const ch = this.chopper, pl = this.player;
 			pl.root.position.x = ch.position.x; pl.root.position.z = ch.position.z;
@@ -1562,7 +1583,8 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 			pl.root.rotation.y = ch.heading;
 			this.camera.setFlat(false);
 			this._camVeh = true;
-			this.camera.follow(ch.position, dt);
+			if (ch.isPlane) { this.camera.footLift = Math.max(0, ch.alt); this.camera.setAir(Math.min(1, (this.camera.airK || 0) + dt * 1.5), ch.alt); this.camera.follow(ch.position, dt, ch); }      // (avião: a câmera de perseguição, na altura dele)
+			else this.camera.follow(ch.position, dt);
 		}
 	}
 
@@ -1570,6 +1592,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 	_leaveChopper() {
 		const ch = this.chopper, pl = this.player;
 		if (!ch) return;
+		if (ch.isPlane) { this._leavePlane(ch); return; }
 		if (ch.alt - ch.floor < 1.2 && ch.speed < 3 && ch.state !== 'failing') {
 			const rx = Math.cos(ch.heading), rz = -Math.sin(ch.heading), p = ch.position;
 			ch.release();
@@ -1587,6 +1610,12 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 			return;
 		}
 		const p = ch.position, h0 = ch.alt;
+		if (typeof Parachute !== 'undefined' && Parachute.has(this) && h0 - ch.floor > 25) {                    // com paraquedas: salta e abre
+			ch.release(); if (ch.state !== 'failing') ch.fail();
+			this._chopperRelease(true);
+			Parachute.jump(this, p.x, p.z, (typeof Relief !== 'undefined' ? Relief.at(p.x, p.z) : 0) + h0, ch.vx * 0.6, ch.vz * 0.6);
+			return;
+		}
 		this.heliFall = { x: p.x, z: p.z, h: h0, h0, vy: ch.vy, vx: ch.vx * 0.7, vz: ch.vz * 0.7, t: 0, heading: ch.heading };
 		ch.release();
 		if (ch.state !== 'failing') ch.fail();                              // sem piloto no ar, ele também cai (sem aviso)
@@ -1597,9 +1626,34 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		this._flash('Você se jogou do helicóptero!');
 	}
 
+	// F no avião: parado no chão = desce pela porta (à esquerda da cabine); no ar = SALTA (com paraquedas: Parachute; sem, a queda).
+	_leavePlane(ch) {
+		const pl = this.player, p = ch.position;
+		if (ch.onGround && ch.v < 3) {
+			const lx = -Math.cos(ch.heading), lz = Math.sin(ch.heading), off = ch.M.span * 0.18 + 1.6;
+			ch.release(); this._chopperRelease();
+			pl.teleport(new BABYLON.Vector3(p.x + lx * off, 0, p.z + lz * off));
+			this.camera.footLift = 0;
+			this._flash(`Você desceu do ${ch.M.name.toLowerCase()}`);
+			return;
+		}
+		if (ch.onGround) { this._flash('Pare o avião antes de descer (S freia com o motor em marcha lenta)'); return; }
+		const h0 = ch.alt, out = { x: p.x - Math.cos(ch.heading) * 2.5, z: p.z + Math.sin(ch.heading) * 2.5 };
+		ch.release();
+		this._chopperRelease(true);
+		this.camera.footLift = 0;
+		if (typeof Parachute !== 'undefined' && Parachute.has(this) && h0 > 25) { Parachute.jump(this, out.x, out.z, ch.y, ch.vx * 0.6, ch.vz * 0.6); return; }
+		this.heliFall = { x: out.x, z: out.z, h: h0, h0, vy: ch.vy, vx: ch.vx * 0.5, vz: ch.vz * 0.5, t: 0, heading: ch.heading };
+		pl.setVisible(true);
+		pl.actor.mesh.renderingGroupId = 2;
+		pl.actor.play('flail', 'none', { restart: true });
+		this._flash(h0 > 25 ? 'Você saltou do avião SEM paraquedas!' : 'Você saltou do avião baixo!');
+	}
+
 	// O jogador deixa o modo 'heli' (keepFrozen: continua sem controle — vai cair).
 	_chopperRelease(keepFrozen = false) {
 		const pl = this.player;
+		if (this.camera.setAir) this.camera.setAir(0);
 		this.mode = 'player';
 		this.chopper = null;
 		pl.invulnerable = false;
@@ -1896,10 +1950,19 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		} else if (this.holdup) {
 			const H = this.holdup, n = 10, on = Math.min(n, Math.floor(H.t / H.dur * n));
 			html = `<b>ASSALTO</b> ${'▮'.repeat(on)}${'▯'.repeat(n - on)} ${Math.max(0, Math.ceil(H.dur - H.t))}s<small>mantenha a arma e fique perto — <b>E</b> baixar a arma</small>`;
+		} else if (typeof Parachute !== 'undefined' && Parachute.active) {
+			html = Parachute.prompt();
+		} else if (this.mode === 'heli' && this.chopper && this.chopper.isPlane) {
+			const ch = this.chopper, kmh = Math.round(ch.v * 3.6), alt = Math.round(ch.alt), thr = Math.round(ch.throttle * 100), chute = typeof Parachute !== 'undefined' && Parachute.has(this);
+			const warn = ch.state === 'failing' ? '<b>PANE!</b> motor parado — plane e pouse, ou <b>F</b> salte · ' : ch.stall && !ch.onGround ? '<b>ESTOL!</b> empurre o nariz (SHIFT) e acelere · ' : '';
+			if (ch.onGround) html = ch.v < 3 ? `<b>F</b> descer do avião<small>${warn}<b>W</b> acelera (${thr}%) · <b>A/D</b> taxia · <b>ESPAÇO</b> decola passando de ${Math.round(ch.M.vRot * 3.6)} km/h</small>`
+				: `<b>${kmh} km/h</b> na pista<small>${warn}motor ${thr}% · <b>ESPAÇO</b> puxa o nariz a ${Math.round(ch.M.vRot * 3.6)} km/h · <b>S</b> em marcha lenta freia</small>`;
+			else html = `<b>F</b> SALTAR ${chute ? '(com paraquedas)' : '(SEM paraquedas — queda mortal; a água salva)'}<small>${warn}${kmh} km/h · ${alt} m · motor ${thr}% · <b>W/S</b> acelerador · <b>A/D</b> inclina · <b>ESPAÇO/SHIFT</b> nariz</small>`;
 		} else if (this.mode === 'heli' && this.chopper) {
 			const ch = this.chopper;
 			if (ch.state === 'failing') html = '<b>PANE!</b> <b>F</b> pule agora!<small>o helicóptero vai explodir ao tocar o chão</small>';
 			else if (ch.alt - ch.floor < 1.2) html = '<b>F</b> descer do helicóptero<small><b>ESPAÇO</b> sobe · <b>W/S</b> frente/ré · <b>A/D</b> lados · <b>Q/E</b> gira</small>';
+			else if (typeof Parachute !== 'undefined' && Parachute.has(this) && ch.alt - ch.floor > 25) html = `<b>F</b> SALTAR DE PARAQUEDAS<small><b>SHIFT</b> desce · <b>ESPAÇO</b> sobe · <b>W/S</b> <b>A/D</b> <b>Q/E</b> · altura ${Math.round(ch.alt)} m</small>`;
 			else html = `<b>F</b> SE JOGAR (${ch.alt > 5 ? 'queda mortal em terra' : 'queda baixa'}; a água salva)<small><b>SHIFT</b> desce · <b>ESPAÇO</b> sobe · <b>W/S</b> <b>A/D</b> <b>Q/E</b> · altura ${Math.round(ch.alt)} m</small>`;
 		} else if (this.mode === 'car' && this.activeCar && this.activeCar.hotwire > 0) {
 			const hw = this.activeCar;
@@ -1923,7 +1986,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 			const chop = this._chopperNear();
 			const spot = !car && !chop && this._nearHideSpot();
 			const fence = !car && !spot && CityGrid.nearestVault(this.player.position.x, this.player.position.z, 1.6);
-			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || (typeof Corcovado !== 'undefined' && Corcovado.prompt(this)) || (typeof Landmarks !== 'undefined' && Landmarks.prompt(this)) || Stands.prompt(this) || Rescue.prompt(this) || Buses.prompt(this) || StreetLife.prompt(this) || (typeof StreetIdle !== 'undefined' && StreetIdle.prompt(this)) || Witnesses.prompt(this) || Calendar.prompt(this) || Personas.prompt(this) || RivalArc.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
+			const shopP = (!car && !chop) ? (this.careers && this.careers.prompt()) || (this.missions && this.missions.prompt()) || (this.propertyUI.cool <= 0 && RealEstate.prompt(this)) || (this.carUI.cool <= 0 && (Dealers.prompt(this) || Garage.prompt(this))) || (this.motoUI.cool <= 0 && MotoStands.prompt(this)) || Mechanic.prompt(this) || (typeof Corcovado !== 'undefined' && Corcovado.prompt(this)) || (typeof Landmarks !== 'undefined' && Landmarks.prompt(this)) || (typeof Airport !== 'undefined' && Airport.prompt(this)) || Stands.prompt(this) || Rescue.prompt(this) || Buses.prompt(this) || StreetLife.prompt(this) || (typeof StreetIdle !== 'undefined' && StreetIdle.prompt(this)) || Witnesses.prompt(this) || Calendar.prompt(this) || Personas.prompt(this) || RivalArc.prompt(this) || Aid.prompt(this) || Interiors.prompt(this) : '';
 			if (shopP) html = shopP;
 			else if (spot) html = `<b>E</b> esconder-se ${spot.kind === 'dumpster' ? 'na caçamba' : (spot.kind === 'barrel' ? 'no latão' : 'no caixote')}<small>se a polícia não te viu entrar, você some do radar</small>`;
 			else if (fence && fence.bridgeRail && (this.player.underBridge || this.player.depth > 0)) html = '';      // (nadando sob a ponte: não dá para subir)
@@ -2404,6 +2467,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		if (Stealth.interact(this)) return;                              // agachado atrás de alguém: derrubar em silêncio; perto de um corpo: arrastar / soltar
 		if (typeof Corcovado !== 'undefined' && Corcovado.interact(this)) return;      // elevador e trem do Morro do Vigia
 		if (typeof Landmarks !== 'undefined' && Landmarks.interact(this)) return;      // o passeio de bondinho da Pedra do Farol
+		if (typeof Airport !== 'undefined' && Airport.interact(this)) return;      // o balcão do aeroporto: aluguel de avião, paraquedas, salto
 		if (Stands.interact(this)) return;                               // quiosques do calçadão, café do Morro do Vigia
 		if (Rescue.interact(this)) return;                               // ferido no chão: ligar para o 192 / estancar com o kit médico
 		if (Buses.interact(this)) return;                                // ponto de ônibus: horários, embarcar; dentro: descer / pular a viagem
