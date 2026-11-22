@@ -154,6 +154,7 @@ const Interiors = {
 		}
 		if (typeof StoreBurglary !== 'undefined') { const bx = StoreBurglary.outPrompt(game); if (bx) return bx; }
 		const shop = this.shopNear(p.x, p.z);
+		if (!shop && typeof HomeBurglary !== 'undefined') { const rp = HomeBurglary.outPrompt(game); if (rp) return rp; }      // porta de casa/apartamento
 		if (!shop || game.mode !== 'player') return '';
 		const c = this.check(game, shop), S = Economy.STYLES[shop.style];
 		if (!c.ok && c.closed && typeof StoreBurglary !== 'undefined' && StoreBurglary.tierOf(shop) && StoreBurglary.closedNow(game, shop)) return StoreBurglary.closedPrompt(game, shop, c);
@@ -216,7 +217,7 @@ const Interiors = {
 		if (game.mode !== 'player' || game.player.busy) return false;
 		if (typeof StoreBurglary !== 'undefined' && StoreBurglary.outInteract(game)) return true;      // a caixa de força do quarteirão
 		const shop = this.shopNear(p.x, p.z);
-		if (!shop) return false;
+		if (!shop) return typeof HomeBurglary !== 'undefined' && HomeBurglary.outInteract(game);      // porta de casa/apartamento: arrombar
 		const c = this.check(game, shop);
 		if (!c.ok && c.closed && typeof StoreBurglary !== 'undefined' && StoreBurglary.tierOf(shop) && StoreBurglary.closedNow(game, shop)) return StoreBurglary.breakIn(game, shop);
 		if (!c.ok) { game._flash(c.msg); return true; }
@@ -478,7 +479,7 @@ const Interiors = {
 		// tipo do gerador e papel próprio — o segurança da joalheria, os da academia).
 		let life = false;
 		if (!burgle) { try { life = ShopLife.enter(game, shop, data); } catch (e) { console.error('[LOJAS] clientela:', e); this._dropLife(); } }
-		this._useActors(game, burgle ? [] : life ? data.patrons.filter((e) => e.type) : (data.clerk ? [data.clerk] : []).concat(data.patrons), shop);
+		this._useActors(game, burgle ? (shop.res && typeof HomeBurglary !== 'undefined' ? HomeBurglary.cast(shop, data) : []) : life ? data.patrons.filter((e) => e.type) : (data.clerk ? [data.clerk] : []).concat(data.patrons), shop);
 		const ar = this._exitArrow(game.scene); ar.setEnabled(true); ar.visibility = 0; this._tickArrow(game, 0);
 		if (shop.stadium) Maracana.onEnter(game, data);                         // catracas, o jogo rolando
 		this.zoom = room.i3d ? (shop.safehouse ? 0.34 : 0.42) : shop.safehouse ? 0.36 : shop.stadium ? 0.9 : 0.5;  // (o barraco é um cômodo só: a câmera chega mais perto; o estádio é grande)

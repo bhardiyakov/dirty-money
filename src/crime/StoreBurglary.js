@@ -36,6 +36,7 @@ const Power = {
         Interiors.index();
         const by = new Map();
         for (const s of Interiors._doors || []) { const b = this.blockOf(s); if (b && !by.has(b) && s.ex != null) by.set(b, s); }
+        if (typeof Residences !== 'undefined') for (const r of Residences.build()) if (!by.has(r.block)) by.set(r.block, r);      // (quarteirão só de casas: a caixa ao lado da primeira porta)
         const all = Interiors._doors || [], out = [];
         for (const [bid, s] of by) {
             const fx = Math.sin(s.face), fz = Math.cos(s.face), lx = Math.cos(s.face), lz = -Math.sin(s.face);
@@ -88,7 +89,8 @@ const Power = {
             const s = b.slab; if (!s) continue;
             const dx = Math.max(s[0] - x, 0, x - s[2]), dz = Math.max(s[1] - z, 0, z - s[3]);
             if (dx * dx + dz * dz > r * r) continue;
-            if (!(b.lots || []).some((l) => (l.shops || []).length)) continue;      // (só quarteirão com comércio: é o que importa no jogo)
+            if (!this._bids) this._bids = new Set(this._build().map((q) => q.bid));
+            if (!this._bids.has(b.id)) continue;                                     // (só quarteirão com caixa de força: comércio ou casas)
             if (this.cutBlock(b.id, why)) n++;
         }
         if (n) this.stats.poles++;
@@ -156,7 +158,7 @@ const StoreBurglary = {
     GUNS: [['pistol', 0.3, 48], ['revolver', 0.2, 36], ['shotgun', 0.17, 24], ['pistol_sil', 0.13, 36], ['smg', 0.12, 90], ['rifle', 0.08, 30]],
     LABEL: { register: 'abrir a gaveta do caixa', safe: 'arrombar o cofre', dvr: 'arrancar o HD do gravador', stock: 'limpar a prateleira', case: 'quebrar a vitrine', alarm: 'desligar a central do alarme', wipe: 'limpar as digitais' },
 
-    tierOf(shop) { return shop && !shop.bank && !shop.home && !shop.safehouse && !shop.stadium ? (Robbery.TIER[shop.style] || 0) : 0; },
+    tierOf(shop) { if (shop && shop.res) return shop.tier || 1; return shop && !shop.bank && !shop.home && !shop.safehouse && !shop.stadium ? (Robbery.TIER[shop.style] || 0) : 0; },
     gloves() { return typeof Outfit !== 'undefined' && Outfit.worn && Outfit.worn.hands === 'luvas'; },
     burglar(game) { return game.careers && game.careers.by && game.careers.by.burglar; },
     skill(game, k) { const B = this.burglar(game); return B ? B.skill(k) : 0; },
@@ -168,7 +170,8 @@ const StoreBurglary = {
         if (game.wanted.level > 0) return 'a polícia está na sua cola';
         if (Robbery.closedToday(shop)) return 'a perícia está lá dentro';
         const d = this.hit[shop.id];
-        if (d != null && Economy.day - d < this.COOLDOWN_DAYS) return 'arrombada há pouco: trocaram a fechadura e puseram cadeado';
+        if (d != null && Economy.day - d < this.COOLDOWN_DAYS) return shop.res ? 'invadida há pouco: trocaram a fechadura e o vizinho está de olho' : 'arrombada há pouco: trocaram a fechadura e puseram cadeado';
+        if (shop.res && Residences.who(shop, game) === 'awake') return 'tem gente acordada em casa';
         if (typeof Heists !== 'undefined' && Heists.closed && Heists.closed(shop)) return 'reforçaram a segurança depois do golpe';
         return null;
     },
@@ -228,7 +231,7 @@ const StoreBurglary = {
         const why = this.why(game, shop);
         if (why) { game._flash(`Não dá para arrombar: ${why}`); return true; }
         const T = this.tierOf(shop), el = this.skill(game, 'eletronica');
-        const diff = (0.92 + 0.11 * T) * (Items.has(game.inventory, 'gazua') ? 0.72 : 1) * (1 - 0.06 * el);
+        const diff = (0.92 + 0.11 * T + (shop.res && shop.apt && shop.stars >= 3 ? 0.12 : 0)) * (Items.has(game.inventory, 'gazua') ? 0.72 : 1) * (1 - 0.06 * el);
         game.player.playAction('pick', { lock: 0 }); if (game.player.action) game.player.action.timer = 30;
         game.lockpick.start({ difficulty: diff, onEnd: (res) => {
             if (game.player.action && game.player.action.name === 'pick') game.player.action.timer = 0;
@@ -281,13 +284,22 @@ const StoreBurglary = {
         const hasDvr = uses.some((u) => u.kind === 'dvr');
         const el = this.skill(game, 'eletronica');
         const s = this.session = {
-            shop, tier: this.tierOf(shop), power: !P.pw, forced: P.forced, t: 0,
+            shop, res: !!shop.res, tier: this.tierOf(shop), power: !P.pw, forced: P.forced, t: 0,
             done: {}, act: null, noise: P.forced ? 45 : 8, heard: !!P.heard, loot: { cash: 0, goods: 0, jv: 0, kg: 0, guns: [] },
             prints: P.rep.gloves ? 0 : 1, touched: P.rep.gloves ? [] : ['a maçaneta da porta'], wiped: false,
             cams: !P.pw && hasDvr, dvr: false,
             alarm: !P.pw ? { t: (P.forced ? 0.5 : 9) + 2.5 * el, off: false, rang: false } : null,
             police: null, entryExp: P.rep.exp || 0, mask: P.rep.mask,
         };
+        if (shop.res) {
+            s.day = game.dayNight.hour >= 7 && game.dayNight.hour < 18;
+            HomeBurglary.onEnter(game, s);
+            this._dark(game, true); this._markers(game); this._hudOn(true);
+            const n = s.sleepers.length;
+            game._flash(`${s.day ? '🏠' : '🔦'} ${shop.name}: ${s.who === 'asleep' ? `💤 ${n > 1 ? n + ' moradores dormindo' : 'o morador está dormindo'} — agachado e devagar` : 'ninguém em casa'}${s.alarm ? ' · ⚠ ALARME ARMADO: a central fica ao lado da porta' : ''}${s.cams ? ' · 📹 câmera Wi-Fi gravando (na nuvem)' : ''}`);
+            if (s.alarm && s.forced) this._ring(game, 'A porta forçada disparou o alarme');
+            return;
+        }
         this._dark(game, true);
         this._markers(game);
         this._hudOn(true);
@@ -296,12 +308,14 @@ const StoreBurglary = {
     },
 
     // Luz: com energia, a luz de vigia (fraca); sem, breu — e a lanterna do celular na mão.
-    get dim() { const s = this.session; return !s ? 1 : s.power ? 0.42 : 0.16; },
+    get dim() { const s = this.session; return !s ? 1 : s.day ? 0.8 : s.power ? (s.res ? 0.26 : 0.42) : 0.16; },
     _dark(game, on) {
         const a = Interiors.active, R = a && a.room && a.room.i3d;
         if (on) {
             this._off = [];
             if (R) {
+                const k = this.session ? (this.session.day ? 0.85 : this.dim < 0.2 ? 0.13 : this.session.res ? 0.2 : 0.3) : 1;      // (a pintura da sala tem luz própria: escurece junto)
+                for (const m of R.mats || []) if (m.emissiveColor && !m.disableLighting) { if (!m._burgE) m._burgE = m.emissiveColor.clone(); m.emissiveColor.copyFrom(m._burgE).scaleInPlace(k); this._off.push({ mat: m }); }
                 for (const l of R.lights || []) l.setEnabled(false);
                 for (const m of R.meshes || []) if (m.material && /sala3d_(lampadas|feixeMat|brilho|luzMat)/.test(m.material.name) && m.isEnabled(false)) { m.setEnabled(false); this._off.push(m); }
             }
@@ -309,12 +323,12 @@ const StoreBurglary = {
                 const L = this._lamp = new BABYLON.SpotLight('burgFlash', new BABYLON.Vector3(0, 1.3, 0), new BABYLON.Vector3(0, -0.25, 1), Math.PI / 3.2, 6, game.scene);
                 L.diffuse = new BABYLON.Color3(1, 0.96, 0.86); L.specular = new BABYLON.Color3(0.2, 0.2, 0.2); L.range = 9;
             }
-            this._lamp.intensity = 1.6;
+            this._lamp.intensity = this.session && this.session.day ? 0.5 : 1.6;
             this._lamp.includedOnlyMeshes = R ? R.meshes.slice() : [];
             this._lamp.setEnabled(true);
             return;
         }
-        for (const m of this._off || []) m.setEnabled(true);
+        for (const m of this._off || []) { if (m.mat) { if (m.mat._burgE) m.mat.emissiveColor.copyFrom(m.mat._burgE); } else m.setEnabled(true); }
         this._off = [];
         if (this._lamp) this._lamp.setEnabled(false);
     },
@@ -323,19 +337,23 @@ const StoreBurglary = {
 
     _uses() {
         const a = Interiors.active, o = Interiors.STAGE, s = this.session; if (!a || !s) return [];
-        const out = (a.data.uses || []).filter((u) => ['safe', 'dvr', 'stock', 'case'].includes(u.kind)).map((u) => ({ kind: u.kind, key: u.kind + u.x0.toFixed(1) + u.z0.toFixed(1), x0: o.x + u.x0, z0: o.z + u.z0, x1: o.x + u.x1, z1: o.z + u.z1 }));
+        const kinds = s.res ? HomeBurglary.KINDS : ['safe', 'dvr', 'stock', 'case'];
+        const out = (a.data.uses || []).filter((u) => kinds.includes(u.kind)).map((u) => ({ kind: u.kind, key: u.kind + u.x0.toFixed(1) + u.z0.toFixed(1), x0: o.x + u.x0, z0: o.z + u.z0, x1: o.x + u.x1, z1: o.z + u.z1 }))
+            .filter((u) => !s.res || HomeBurglary.useOk(s, u));
         const cl = a.data.clerk;
-        if (cl) out.push({ kind: 'register', key: 'register', x0: o.x + cl.x - 0.8, z0: o.z + cl.z - 1.6, x1: o.x + cl.x + 0.8, z1: o.z + cl.z - 0.6 });
+        if (cl && !s.res) out.push({ kind: 'register', key: 'register', x0: o.x + cl.x - 0.8, z0: o.z + cl.z - 1.6, x1: o.x + cl.x + 0.8, z1: o.z + cl.z - 0.6 });
         if (s.alarm) { const d = a.data.door, ax = o.x + d.x1 + 1.0; out.push({ kind: 'alarm', key: 'alarm', x0: ax - 0.3, z0: o.z + 0.3, x1: ax + 0.3, z1: o.z + 0.9 }); }
         return out;
     },
     _nearUse(game, maxD = 1.7) {
         const p = game.player.position, s = this.session;
-        let best = null, bd = maxD;
-        for (const u of this._uses()) {
+        let best = null, bs = Infinity;
+        for (const u of this._uses()) {                                              // (ao alcance: vence o de centro mais perto — móveis vizinhos)
             if (s.done[u.key] || (u.kind === 'alarm' && (s.alarm.off || s.alarm.rang))) continue;
-            const cx = Math.max(u.x0, Math.min(p.x, u.x1)), cz = Math.max(u.z0, Math.min(p.z, u.z1)), d = hypot(p.x - cx, p.z - cz);
-            if (d < bd) { bd = d; best = u; }
+            const cx = Math.max(u.x0, Math.min(p.x, u.x1)), cz = Math.max(u.z0, Math.min(p.z, u.z1));
+            if (hypot(p.x - cx, p.z - cz) > maxD) continue;
+            const sc = hypot(p.x - (u.x0 + u.x1) / 2, p.z - (u.z0 + u.z1) / 2);
+            if (sc < bs) { bs = sc; best = u; }
         }
         return best;
     },
@@ -344,8 +362,10 @@ const StoreBurglary = {
         const d = a.data.door, dc = o.x + (d.x0 + d.x1) / 2;
         return hypot(p.x - dc, p.z - (o.z + 1.2)) < 2.4;
     },
+    _label(u) { const s = this.session; return s && s.res && HomeBurglary.ACT[u.kind] ? HomeBurglary.ACT[u.kind][0] : this.LABEL[u.kind]; },
     _hint(game, u) {
         const s = this.session;
+        if (s.res && HomeBurglary.ACT[u.kind]) return HomeBurglary.hint(game, s, u);
         if (u.kind === 'safe') return Items.has(game.inventory, 'furadeira') ? 'o apurado do dia · com a furadeira (barulho)' : 'o apurado do dia · demora (a furadeira corta pela metade) e faz barulho';
         if (u.kind === 'dvr') return s.cams ? 'apaga o que as câmeras gravaram' : 'sem energia: não gravou nada (leva o HD mesmo assim)';
         if (u.kind === 'stock') return s.shop.style === 'guns' ? 'armas e munição' : `${(Robbery.STOCK[s.shop.style] || ['mercadoria'])[0]} (pesado: receptador)`;
@@ -359,12 +379,12 @@ const StoreBurglary = {
         const s = this.session; if (!s || !Interiors.active) return null;
         if (s.act) return `<b>${s.act.label.toUpperCase()}</b> ${crBar(s.act.t / s.act.dur)}<small>${this._status()}</small>`;
         const u = this._nearUse(game);
-        if (u) return `<b>E</b> ${this.LABEL[u.kind]}<small>${this._hint(game, u)} · ${this._status()}</small>`;
+        if (u) { const h = this._hint(game, u); return `<b>E</b> ${this._label(u)}<small>${h ? h + ' · ' : ''}${this._status()}</small>`; }
         if (this._nearDoor(game)) {
             if (s.prints > 0 && !s.wiped) return `<b>E</b> limpar as digitais (${Math.round(this._wipeDur(game))} s)<small>${s.touched.slice(0, 3).join(', ')} · ou ande até a porta para sair</small>`;
             return `<b>SAIR</b> pela porta<small>${this._status()}</small>`;
         }
-        return `<b>ARROMBAMENTO</b><small>${this._status()} · ande, não corra</small>`;
+        return `<b>${s.res ? 'INVASÃO' : 'ARROMBAMENTO'}</b><small>${this._status()} · ${s.sleepers && s.sleepers.length && !s.woke ? 'agachado (C) perto de quem dorme' : 'ande, não corra'}</small>`;
     },
     _status() {
         const s = this.session; if (!s) return '';
@@ -381,10 +401,12 @@ const StoreBurglary = {
         const u = this._nearUse(game), fast = 1 - 0.06 * this.skill(game, 'furtividade');
         if (u) {
             const el = this.skill(game, 'eletronica');
-            let dur = { register: 3.5, safe: 20, dvr: 2.5, stock: 3, case: 1.4, alarm: 4 }[u.kind] * fast;
+            const H = s.res && HomeBurglary.ACT[u.kind];
+            let dur = (H ? H[1] : { register: 3.5, safe: 20, dvr: 2.5, stock: 3, case: 1.4, alarm: 4 }[u.kind]) * fast;
+            if (H && H[2]) this._noise(game, H[2]);
             if (u.kind === 'safe') dur *= (Items.has(game.inventory, 'furadeira') ? 0.5 : 1) * (1 - 0.06 * el);
             if (u.kind === 'alarm') dur *= 1 - 0.1 * el;
-            this._begin(game, { kind: u.kind, key: u.key, label: this.LABEL[u.kind], dur, u });
+            this._begin(game, { kind: u.kind, key: u.key, label: this._label(u), dur, u });
             if (u.kind === 'case') { AudioFX.glass && AudioFX.glass(pl.position.x, pl.position.z); this._noise(game, 38); if (s.alarm && !s.alarm.off && !s.alarm.rang) this._ring(game, 'O sensor da vitrine disparou o alarme'); }
             return true;
         }
@@ -411,6 +433,7 @@ const StoreBurglary = {
         if (A.kind === 'wipe') { s.wiped = true; this.stats.wiped++; game._flash(`🧽 Digitais limpas: ${s.touched.join(', ')}`); return; }
         if (A.kind === 'alarm') { s.alarm.off = true; s.done.alarm = 1; this._touch('a central do alarme'); game._flash('🔕 Central do alarme desligada: o sensor não dispara mais'); if (B) B.addXp(10); return; }
         s.done[A.key] = 1;
+        if (s.res) { HomeBurglary.finish(game, s, A); return; }
         if (A.kind === 'register') {
             const v = Math.round(range(Robbery.REG[s.tier]) * this.REG_FRAC / 10) * 10;
             inv.addCash(v); s.loot.cash += v; this._touch('a gaveta do caixa');
@@ -461,8 +484,8 @@ const StoreBurglary = {
 
     // O alarme tocou: a sirene da loja e a polícia a caminho.
     _ring(game, why) {
-        const s = this.session; if (!s || !s.alarm || s.alarm.rang) return;
-        s.alarm.rang = true; this.stats.alarms++;
+        const s = this.session; if (!s || (s.alarm && s.alarm.rang) || s.police) return;
+        if (s.alarm) { s.alarm.rang = true; this.stats.alarms++; }                       // (sem alarme: o morador que acordou liga 190)
         const H = Robbery.HEAT[s.tier] || Robbery.HEAT[2];
         s.police = { t: H.police * 0.9 };
         game._flash(`🚨 ${why}! A polícia chega em ~${Math.round(s.police.t)} s — pegue o que der e suma`);
@@ -494,6 +517,7 @@ const StoreBurglary = {
         if (step) this._noise(game, step * dt);
         const A = s.act;
         if (A && A.kind === 'safe') this._noise(game, (Items.has(game.inventory, 'furadeira') ? 7 : 4.5) * dt);
+        if (s.res) HomeBurglary.tick(dt, game, s);
         s.noise = Math.max(0, s.noise - 6 * dt);
         if (s.noise >= 80 && !s.heard && !(s.alarm && s.alarm.rang)) { if (!this._heard(game, s.shop, 'Barulho dentro da loja fechada')) s.noise = 60; }
         // ação em andamento (andou para longe: cancela)
@@ -536,12 +560,12 @@ const StoreBurglary = {
         // o caso: digitais, vídeo, alarme/vizinho (descoberto já) ou a loja abrindo
         const prints = (s.prints > 0 && !s.wiped) || !!(Power.out[Power.blockOf(shop)] && Power.out[Power.blockOf(shop)].prints);
         const cam = s.cams && !s.dvr;
-        const now = Traces.now(), hour = game.dayNight.hour, open = Economy.opensAt(shop.style);
-        const nowFound = !!(s.alarm && s.alarm.rang) || s.heard;
-        const at = nowFound ? now : now + ((open - hour + 24) % 24 || 24) + 0.25;
-        const C = { id: shop.id, name: shop.name, x: shop.x, z: shop.z, style: shop.style, at, found: false, prints, cam, masked: !!s.mask || Traces.fullMask(), forced: s.forced, loot: total, day: Economy.day };
+        const now = Traces.now(), hour = game.dayNight.hour, open = shop.res ? 0 : Economy.opensAt(shop.style);
+        const nowFound = !!(s.alarm && s.alarm.rang) || s.heard || !!s.woke;
+        const at = nowFound ? now : shop.res ? Residences.discoverAt(shop, s.who, now, hour) : now + ((open - hour + 24) % 24 || 24) + 0.25;
+        const C = { id: shop.id, name: shop.name, x: shop.x, z: shop.z, style: shop.style, res: !!shop.res, at, found: false, prints, cam, seen: !!s.seen, masked: !!s.mask || Traces.fullMask(), forced: s.forced, loot: total, day: Economy.day };
         this.cases.push(C);
-        Robbery.robbedDay[shop.id] = Math.floor(at / 24);
+        if (!shop.res) Robbery.robbedDay[shop.id] = Math.floor(at / 24);
         if (B && total > 0) {
             const xp = 60 * s.tier + total / 50 + (s.alarm && s.alarm.rang ? 0 : 40) + (prints || cam ? 0 : 50);
             B.addXp(xp);
@@ -552,8 +576,10 @@ const StoreBurglary = {
         if (cam) L.push('📹 câmeras gravaram');
         if (s.forced) L.push('marca de arrombamento');
         if (exp & CrimeExposure.WITNESS) L.push('👁 alguém te viu sair');
+        if (s.seen) L.push('👁 o morador viu seu rosto');
         game._delayed.push({ t: 1.4, fn: () => game._flash(L.length ? `🧾 Pistas deixadas: ${L.join(', ')}` : '🧤 Nenhuma pista: trabalho limpo') });
-        if (total > 0) game._delayed.push({ t: 3.0, fn: () => game._flash(`💼 Arrombamento na ${shop.name}: ${brl(total)}${s.loot.guns.length ? ` · ${s.loot.guns.length} arma(s)` : ''} — ${nowFound ? 'já descobriram' : `descobrem quando a loja abrir (${open}h)`}`) });
+        const when = nowFound ? 'já descobriram' : shop.res ? `descobrem ${s.who === 'asleep' ? 'quando acordarem' : 'quando voltarem para casa'} (~${Math.floor(at % 24)}h)` : `descobrem quando a loja abrir (${open}h)`;
+        if (total > 0) game._delayed.push({ t: 3.0, fn: () => game._flash(`💼 ${shop.res ? 'Invasão' : 'Arrombamento'} — ${shop.name}: ${brl(total)}${s.loot.guns.length ? ` · ${s.loot.guns.length} arma(s)` : ''} — ${when}`) });
     },
 
     // ---------------------------------------------------------------- a investigação (por quadro, dentro e fora)
@@ -566,7 +592,7 @@ const StoreBurglary = {
         const now = Traces.now();
         for (let i = this.cases.length - 1; i >= 0; i--) {
             const C = this.cases[i];
-            if (!C.found && now >= C.at) { C.found = true; C.lab = now + 2; game._flash(`🔎 Descobriram o arrombamento na ${C.name}: a perícia vai ao local`); continue; }
+            if (!C.found && now >= C.at) { C.found = true; C.lab = now + 2; game._flash(`🔎 Descobriram ${C.res ? 'a invasão' : 'o arrombamento'} — ${C.name}: a perícia vai ao local`); continue; }
             if (C.found && now >= C.lab) { this.cases.splice(i, 1); this._solve(game, C); }
         }
     },
@@ -580,10 +606,15 @@ const StoreBurglary = {
             if (!C.masked && typeof Traces !== 'undefined') Traces.desc = Object.assign(Traces.sig(), { until: Traces.now() + 48, where: C.name });
             L.push(named ? '📹 o vídeo mostra seu rosto' : '📹 o vídeo só mostra um mascarado');
         }
+        if (C.seen && !C.cam) {
+            const named = H ? H.fileReport(rep) : false;
+            if (!C.masked) Traces.desc = Object.assign(Traces.sig(), { until: Traces.now() + 48, where: C.name });
+            L.push(named ? '👁 o morador te descreveu e reconheceu no álbum' : '👁 o morador só viu um mascarado');
+        }
         if (!L.length) {
             this.stats.clean++;
             if (game.achievements && game.achievements.bump) game.achievements.bump('cleanJob');
-            game._flash(`📁 Arrombamento na ${C.name}: a perícia não achou pistas — caso arquivado`);
+            game._flash(`📁 ${C.res ? 'Invasão' : 'Arrombamento'} — ${C.name}: a perícia não achou pistas — caso arquivado`);
             return;
         }
         this.stats.filed++;
@@ -593,13 +624,14 @@ const StoreBurglary = {
     chip() {
         const C = this.cases.slice().sort((a, b) => a.at - b.at)[0]; if (!C) return null;
         const t = C.found ? C.lab : C.at, h = Math.floor(t % 24);
-        return C.found ? `🕵 perícia na ${C.name} até ${h}h` : `🔎 arrombamento na ${C.name}: descobrem às ${h}h`;
+        return C.found ? `🕵 perícia — ${C.name} até ${h}h` : `🔎 ${C.res ? 'invasão' : 'arrombamento'} — ${C.name}: descobrem às ${h}h`;
     },
 
     // ---------------------------------------------------------------- marcadores no chão e HUD
     _markers(game) {
         if (!this._glow) { this._glow = new GlowBatch(game.scene, 16, 'burgGlow', 'glow'); for (let i = 0; i < 16; i++) { this._glow.alloc(); this._glow.off(i); } }
-        const COL = { safe: [1, 0.75, 0.2], dvr: [0.3, 0.85, 1], stock: [0.4, 1, 0.5], case: [0.85, 0.5, 1], register: [1, 0.85, 0.3], alarm: [1, 0.3, 0.3] };
+        const COL = { safe: [1, 0.75, 0.2], dvr: [0.3, 0.85, 1], stock: [0.4, 1, 0.5], case: [0.85, 0.5, 1], register: [1, 0.85, 0.3], alarm: [1, 0.3, 0.3],
+            bed: [1, 0.85, 0.3], chest: [1, 0.85, 0.3], closet: [0.85, 0.5, 1], tv: [0.4, 1, 0.5], desk: [0.4, 1, 0.5], cabinet: [0.4, 1, 0.5], jewelbox: [0.85, 0.5, 1] };
         this.session.marks = this._uses().slice(0, 16).map((u) => ({ key: u.key, kind: u.kind, x: (u.x0 + u.x1) / 2, z: Math.max(u.z0 - 0.5, (u.z0 + u.z1) / 2 - 0.9), col: COL[u.kind] }));
         this._mt = 0;
     },
@@ -641,8 +673,11 @@ const StoreBurglary = {
         this._ht = 0.15;
         const l = s.loot, nz = s.noise, col = nz > 70 ? '#f43f5e' : nz > 40 ? '#fbbf24' : '#34d399';
         const al = !s.alarm ? '<b>⚡ sem energia</b>' : s.alarm.rang ? '<b class="hot">🚨 ALARME</b>' : s.alarm.off ? '<b>🔕 alarme desligado</b>' : `<b class="hot">⚠ ALARME EM ${Math.max(0, Math.ceil(s.alarm.t))}s</b>`;
-        const ev = [this.gloves() ? '🧤 de luvas' : `🖐 digitais: ${s.wiped ? 'limpas' : s.prints}`, !s.power ? '📹 câmeras sem energia' : s.dvr ? '📹 HD arrancado' : s.cams ? '📹 câmeras GRAVANDO' : '📹 sem câmera', s.police ? `🚔 polícia em ${Math.max(0, Math.ceil(s.police.t))}s` : s.heard ? '👂 ouviram — ligaram' : ''].filter(Boolean).join(' · ');
-        const html = `<div class="bt"><span>ARROMBAMENTO · ${s.shop.name}</span>${al}</div><div class="br"><span>Barulho</span><i><s style="width:${nz.toFixed(0)}%;background:${col}"></s></i></div><div class="br"><span>Na sacola</span><b style="color:#fde68a">${brl(l.cash + l.goods + l.jv)}</b></div><div class="ev">${ev}</div>`;
+        const cam = s.res ? (s.cams ? '📹 câmera Wi-Fi GRAVANDO' : s.shop.cams ? '📹 câmera sem energia' : '') : !s.power ? '📹 câmeras sem energia' : s.dvr ? '📹 HD arrancado' : s.cams ? '📹 câmeras GRAVANDO' : '📹 sem câmera';
+        const zz = s.res && s.sleepers && s.sleepers.length ? (s.woke ? '😱 o morador ACORDOU' : `💤 ${s.sleepers.length} dormindo`) : '';
+        const ev = [zz, this.gloves() ? '🧤 de luvas' : `🖐 digitais: ${s.wiped ? 'limpas' : s.prints}`, cam, s.police ? `🚔 polícia em ${Math.max(0, Math.ceil(s.police.t))}s` : s.heard ? '👂 ouviram — ligaram' : ''].filter(Boolean).join(' · ');
+        const al2 = s.res && !s.alarm ? (s.shop.alarm ? '<b>⚡ alarme sem energia</b>' : '<b>sem alarme</b>') : al;
+        const html = `<div class="bt"><span>${s.res ? 'INVASÃO' : 'ARROMBAMENTO'} · ${s.shop.name}</span>${s.res ? al2 : al}</div><div class="br"><span>Barulho</span><i><s style="width:${nz.toFixed(0)}%;background:${col}"></s></i></div><div class="br"><span>Na sacola</span><b style="color:#fde68a">${brl(l.cash + l.goods + l.jv)}</b></div><div class="ev">${ev}</div>`;
         if (html !== this._hh) { this._hh = html; el.innerHTML = html; }
     },
 

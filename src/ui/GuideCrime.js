@@ -27,6 +27,27 @@ Object.assign(GuideUI.PAGES, {
         <li><b>A resposta tem o tamanho da loja.</b> Padaria, conveniência, farmácia: uma viatura que demora, <b>1★</b> se ela te pegar na porta (não atiram se você não atirar), crime leve na ficha e busca curta; saindo atirando, 2★. Bar, pizzaria, roupas, academia: 2★ na porta, 3★ atirando. Restaurante de luxo, loja de armas e joalheria: polícia rápida, 2★ na porta, 3★ atirando e área de busca grande — vá com estrutura (Sangue-frio, máscara, carro de fuga, golpe com equipe).</li>
         <li>A loja assaltada fica fechada até o dia seguinte (perícia).</li></ul>`,
 
+    burglary: () => `<h2>Roubo furtivo e invasão de casas</h2>
+        <p>Sem arma, sem refém, sem atendente: entrar onde <b>não tem ninguém acordado</b>, levar o que der e sair sem deixar pista. Rende XP na carreira <b>LADRÃO</b>; a mercadoria vai para o receptador da favela.</p>
+        <h3>A energia do quarteirão</h3><ul>
+        <li>Todo quarteirão com loja ou casa tem uma <b>caixa de força</b> cinza na fachada (placa amarela). <b>E</b> sabota (uns 3 s, com faíscas): o quarteirão apaga por <b>4 a 7 horas</b> — postes e vitrines escuros, <b>alarmes e câmeras desligados</b> (as da fachada e as de dentro), e as lojas <b>fecham</b> ("sem energia"), até as abertas.</li>
+        <li>Derrubar um <b>poste</b> com o carro também apaga os quarteirões em volta.</li>
+        <li>Sabotar é delito leve: só conta se a polícia te pegar no ato. Sem luvas, você deixa digitais na caixa.</li></ul>
+        <h3>Loja fechada</h3><ul>
+        <li>Na porta de uma loja fechada (de madrugada, ou sem energia): <b>E arrombar a porta</b> — o mini-game da fechadura (o <b>kit de gazuas</b>, vendido na boca, e a skill <b>Eletrônica</b> facilitam). Errou demais: a porta vai no tranco — barulho e marca de arrombamento.</li>
+        <li>Lá dentro é <b>escuro</b> (a lanterna do celular acende sozinha). Pontos no chão: a <b>gaveta do caixa</b> (o troco da noite), o <b>cofre</b> (o apurado do dia dorme nele: o grande prêmio — furadeira corta o tempo, mas faz barulho), as <b>prateleiras</b> (mercadoria; na <b>loja de armas</b>, armas e munição sem registro), as <b>vitrines</b> da joalheria e o <b>gravador</b> das câmeras.</li>
+        <li><b>Com energia</b>: o sensor de presença dispara o alarme em uns segundos — corra até a <b>central do alarme</b> ao lado da porta e desligue (E). As câmeras gravam até você arrancar o HD.</li></ul>
+        <h3>Casas e apartamentos</h3><ul>
+        <li>Parado (ou agachado) na porta de uma casa ou prédio: <b>E arrombar</b>. O padrão do bairro decide o interior e o que tem: <b>casa de família</b>, <b>kitnet</b>, <b>casa da vovó</b>, apartamento, cobertura, mansão. Alarme a partir do apartamento médio; <b>câmera Wi-Fi</b> nas de alto padrão (grava na nuvem — só cortando a energia).</li>
+        <li><b>Quem está em casa</b>: de madrugada, todo mundo <b>dormindo</b> (dá para entrar — <b>agachado</b> perto da cama, ande devagar: barulho acorda, a pessoa grita, liga 190 e vê seu rosto); dia útil à tarde, a maioria <b>trabalhando</b> (a vovó quase nunca sai); fim de semana de sol, na praia; à noite, todos acordados (não dá).</li>
+        <li>O que levar: embaixo do <b>colchão</b>, as <b>gavetas</b> (dinheiro e joias), o <b>guarda-roupa</b> (relógio, bolsa de grife), a <b>TV</b> e o videogame (8 kg), o <b>notebook</b>, o <b>cofre</b> (às vezes com um revólver), a <b>prataria</b> da cristaleira e o <b>porta-joias</b>.</li></ul>
+        <h3>Pistas e a perícia</h3><ul>
+        <li><b>Digitais</b>: sem <b>luvas</b>, tudo o que você toca fica marcado — dá para <b>limpar</b> perto da porta antes de sair (E, uns 6 s).</li>
+        <li><b>Vídeo</b>: câmeras gravando (energia ligada e HD no lugar). De <b>balaclava</b>, só mostra um mascarado.</li>
+        <li><b>Testemunhas</b>: alguém na rua vendo você entrar ou sair; o morador que acordou. <b>Barulho</b> alto: alguém lá fora ouve e liga 190.</li>
+        <li>A polícia só investiga quando <b>descobrem</b>: na hora (alarme, vizinho, morador), quando a loja <b>abre</b>, quando o morador <b>acorda</b> (6h30) ou <b>volta</b> do trabalho (18h30). Duas horas depois chega a <b>perícia</b> (o chip no canto da tela avisa): digitais → seu nome na ficha (inquérito); vídeo ou morador → a ficha e a descrição da roupa. Sem nada: <b>caso arquivado</b>.</li>
+        <li>A mesma loja ou casa não dá para arrombar de novo por 3 dias (fechadura nova).</li></ul>`,
+
     traces: () => `<h2>Rastros e fuga</h2>
         <p>O que você deixa para trás num assalto vira prova (painel no canto direito, abaixo do HUD):</p><ul>
         <li><b>Descrição da roupa</b>: testemunhas e câmeras descrevem parte de cima, calça e cabeça. Por 2 dias, um policial que te veja de perto com 2 dessas 3 peças te reconhece. <b>Troque de roupa</b> longe da polícia (leve uma muda).</li>
