@@ -23,7 +23,7 @@ const Char3D = {
 	get C() { return (Config.art && Config.art.char3d) || {}; },
 	get on() {
 		const C = this.C, q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('boneco') : null;
-		return C.on !== false && q !== '2d' && typeof Worker === 'function' && typeof Wardrobe !== 'undefined';
+		return !this.off && C.on !== false && q !== '2d' && typeof Worker === 'function' && typeof Wardrobe !== 'undefined';      // (off: disable() — erro repetido ou modo seguro)
 	},
 	get npcOn() { const N = this.C.npc; return this.on && !!N && N.on !== false && typeof NpcArt !== 'undefined' && !!NpcArt._pal; },
 	BONES: 16,

@@ -490,3 +490,23 @@ Além disso:
 
 **O que não foi medido.** O FPS num notebook e num celular de verdade. Para medir aí: `?perf` (painel com FPS, ms de GPU e de CPU,
 desenhos) ou `?bench&gfx=medium` (a tabela de rota fixa).
+
+## Modo seguro que não fica preso (novembro/2026)
+
+**O caso.** Um notebook com Intel Iris Xe (Chrome no Windows, Direct3D 11) mandou o diagnóstico: preset Low escolhido à mão e
+"modo seguro: LIGADO — desligou: efeitos de tela". Sem os efeitos de tela não há gradação de cor, brilho nem antisserrilhado: o
+jogo fica bem mais feio do que precisa. O modo seguro guardava a decisão por placa de vídeo **para sempre**, sem data nem motivo.
+Não dava para saber se ela veio de uma versão antiga, cujos shaders podiam falhar nessa placa.
+
+**O que mudou** (`core/SafeMode.js`):
+- O estado guardado agora traz a revisão do desenho (`REV`), a data e o motivo. O diagnóstico mostra os três, por exemplo
+  "desde 23/11/2026 · revisão 2 · motivo: tela só com a cor do céu".
+- Quando o estado é de outra revisão, não tem data ou tem mais de 14 dias, o jogo tenta de novo com tudo ligado:
+  - a imagem chega em 8 checagens seguidas: o modo seguro é apagado;
+  - a imagem não chega: os degraus voltam um a um, como na primeira vez, e ficam guardados com a revisão nova;
+  - não dá para saber (8 checagens com a tela escura, à noite): volta ao que estava guardado e tenta de novo na próxima abertura.
+- As regras contam checagens, não segundos, porque num aparelho lento cada quadro demora.
+- `REV` sobe sempre que os shaders de tela mudam. Os estados guardados antes desta mudança não têm revisão e são tentados de novo.
+- `Char3D.on` agora considera o `disable()`. O 3D já parava de desenhar, mas o diagnóstico continuava dizendo "ligados".
+
+Teste: `74_modo_seguro`.
