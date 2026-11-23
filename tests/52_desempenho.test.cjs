@@ -25,7 +25,8 @@ module.exports = {
             return { trim: trim.length, chunk: Config.world.trimChunk, median: side[side.length >> 1] || 0, cover: cover.length, coverCast: cover.filter((m) => cast.has(m)).length,
                 treeCast: trees.filter((m) => cast.has(m)).length, trees: trees.length, peb: peb ? peb.getTotalIndices() / 3 : -1, listed: Trees3D._cover.length };
         });
-        c.ok(w.chunk === 64 && w.trim > 450 && w.median <= 80, `acabamentos em pedaços de ${w.chunk} u (${w.trim} malhas, lado mediano ${w.median.toFixed(0)} u)`);
+        // (Medium: pedaços de 128 u — menos malhas, menos CPU no render; High/HD: 64 u)
+        c.ok(w.chunk === 128 && w.trim > 150 && w.median <= 140, `acabamentos em pedaços de ${w.chunk} u (${w.trim} malhas, lado mediano ${w.median.toFixed(0)} u)`);
         c.ok(w.cover > 0 && w.coverCast === 0 && w.listed >= w.cover, `vegetação rasteira fora do mapa de sombras (${w.cover} malhas, ${w.coverCast} projetando)`);
         c.ok(w.trees > 0 && w.treeCast > w.trees * 0.5, `as árvores e arbustos da cidade continuam projetando sombra (${w.treeCast} de ${w.trees} malhas; as demais já não projetavam)`);
         c.ok(w.peb > 0 && w.peb <= 200, `cascalho leve (${w.peb} triângulos por punhado; eram 720)`);
