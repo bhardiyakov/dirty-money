@@ -72,7 +72,7 @@ const Trees3D = {
     wants(kind) { return this.on && !!this.KIND[kind]; },
     // As instâncias são agrupadas em células de CELL u (uma malha por modelo e célula): o descarte por frustum e a janela da sombra
     // deixam de fora o que está longe da tela (num pedaço de 128 u de mata são ~1.500 plantas; na tela cabem algumas centenas).
-    get CELL() { return typeof Config !== 'undefined' && Config.perf && Config.perf.phone ? 256 : 128; },      // (celular modesto: menos malhas — Graphics.PHONE)
+    get CELL() { const P = typeof Config !== 'undefined' && Config.perf; return P && P.vegCell ? P.vegCell : P && P.phone ? 256 : 128; },      // (celular modesto: menos malhas — Graphics.PHONE)
     castShadows: true,
 
     // Uma planta: (x, z) no chão a y0, escala s (a do sprite).
