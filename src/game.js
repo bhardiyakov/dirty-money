@@ -491,6 +491,7 @@ class Game {
 	_releaseStatic() {
 		const wb = this.gameEngine.world;
 		if (wb && wb.batches) { for (const k in wb.batches) { const b = wb.batches[k]; b.pos = b.nor = b.uv = b.col = b.idx = b.anc = null; } wb.batches = {}; }
+		if (/[?&]soltar=0\b/.test(location.search)) return;          // (`?soltar=0`: mantém a cópia — testes que lançam raios nas malhas)
 		const bytes = MeshBatch.releaseStatic(this.scene);
 		console.log(`[CARGA] ${(bytes / 1048576).toFixed(0)} MB de vértices do mundo soltos da RAM (já estão na placa)`);
 	}

@@ -360,3 +360,85 @@ Custo medido (GPU integrada/dedicada do PC de teste, janela de 652×698 px da p�
 quadro, CPU igual. Cresce com a área da tela. O `AutoQuality` ganhou um degrau: **2) sem o gráfico suave** (antes de
 reduzir o mapa de sombras), então em aparelho que não aguenta ele volta à imagem de antes sozinho. Trocar o ajuste no meio
 do jogo descongela por 2 s os materiais do mundo (os defines da sombra e o uniform do chão mudam) e congela de novo.
+
+## Celular de 4 GB (novembro/2026)
+
+Relato: o jogo só rodava bem num S25 Ultra; em celulares mais modestos não dava para jogar. Medido no navegador dos testes no
+perfil de um celular (tela de toque, 915×412, preset Medium — o que um aparelho de 4 GB recebia), com a GPU por software: aqui a
+"placa" é RAM do processo da GPU, como num celular, em que a placa de vídeo divide a memória com tudo.
+
+**O que foi medido antes de mexer**
+
+| | Medium (o que o celular recebia) |
+|---|---|
+| Memória do navegador (todos os processos) | **2,54 GB** (página ~930 MB, GPU ~1 GB) |
+| Pico da página durante a CARGA | **~2,0 GB** (3,2 GB no total) |
+| Heap JS | 477 MB · o jogo **caía** com o heap do V8 limitado a 480 MB (abre com 640) |
+| Texturas / geometria na placa | 339 MB (127 de atlas 2,5D) / **450 MB** (227 só de vegetação 3D) |
+| Desenhos / triângulos por quadro | 425 (+95 no mapa de sombras) / 845 mil |
+| Malhas na cena | 6.420 |
+
+- **Vegetação 3D: a mesma árvore copiada por célula.** Cada espécie em cada célula de 128 u tinha a sua cópia dos vértices (uma
+  geometria por malha por causa do VAO do Babylon) — 227 MB na placa e outra cópia na RAM.
+- **Toda a geometria ficava duas vezes na memória**: na placa e na cópia do Babylon em JavaScript (mais o lote do WorldBuilder
+  apontando para ela). No celular as duas estão na mesma RAM.
+- **Vértice do mundo com 40 bytes** (posição, normal e cor em float) onde 20 bastam.
+- **Pico da carga**: o mundo inteiro (~3,5 milhões de vértices em 1.111 lotes) ficava em arrays comuns do JavaScript (8 bytes por
+  número, folga de crescimento) até o fim da montagem: ~600 MB vivos de uma vez, mais o lixo que o coletor ainda não tinha levado.
+- **Personagens 3D sem limite** (`max: 999`, raio de 400 m): todo NPC na tela era um boneco de milhares de pontos.
+- O perfil de CPU mostrou que o JavaScript do jogo custa ~3–4 ms por quadro aqui (no celular, ~3–4× isso): o gargalo do celular
+  modesto é **memória e GPU**, não a lógica. Dos números do `Perf`, boa parte era espera pela GPU por software.
+
+**O que mudou para todos os presets**
+
+- `Trees3D._gpu/_share`: os vértices e índices de cada modelo vão à placa UMA vez; cada célula ganha a sua `Geometry` (o VAO fica
+  nela) apontando para os mesmos buffers (`setVerticesBuffer`/`setIndexBuffer`, com contagem de referências). Vegetação: 227 → ~2 MB.
+- `MeshBatch._compactTo`: o mundo estático (`world_…`) com normal em `BYTE` e cor em `UNSIGNED_BYTE` normalizados — o vértice cai de
+  40 para 20 bytes (acabamentos: 120 → 64 MB). Cor fora de 0..1 fica em float. `?compacto=0` volta ao float para comparar.
+- `MeshBatch.releaseStatic` (no fim da pré-carga, `Game._releaseStatic`): solta a cópia na RAM dos vértices e índices de malhas
+  paradas (matriz congelada, sem esqueleto, buffer não atualizável e não de instâncias) e os lotes do WorldBuilder: ~114 MB.
+  As posições dos modelos de vegetação ficam (`_dmKeep`): o terreno monta células novas durante o jogo.
+- `MeshBatch._spill`: a cada 2.048 vértices o lote despeja o que empilhou em pedaços Float32/Uint32 e recomeça; o `build` (e o
+  `Speedway._split`, que lê o lote inteiro) emendam um lote por vez (`_unspill`). Antes do `_flush`: 310 → 209 MB nos lotes, heap vivo
+  575 → 431 MB. As sombras-fantasma dos prédios são montadas já em arrays tipados.
+- `RenderStats` conta cada buffer da placa uma vez e em bytes reais (8 bits na normal/cor; buffer de instâncias pelo tamanho dele).
+
+**O perfil do celular modesto** (`Graphics.PHONE`, automático com tela de toque e `navigator.deviceMemory ≤ 4`; `?celular` força,
+`?celular=0` desliga; o S25 Ultra e afins, 8 GB, seguem no Medium normal; escolher High/HD à mão é respeitado):
+
+| Corte | Por quê |
+|---|---|
+| 30 FPS, tela até 1,25×, teto de 0,85 Mpx, MSAA 2× | metade do trabalho e da bateria; tela pequena |
+| sem sombras, brilho de verdade, espelho da água | cada um dobra desenhos ou passadas |
+| fachadas sem a paralaxe de oclusão, chão sem o mapa de normais, gradação sem o desfoque, sem o borrão (Trails) | custos por pixel em quase a tela inteira |
+| atlas 2,5D em meia resolução (`npcHalf`) com 64 MB; atlas de cenário na resolução do Low | memória de textura |
+| bonecos 3D só os 8 mais perto (raio 40 m) | cada um são milhares de pontos com esqueleto no vertex shader |
+| vegetação em células de 256 u, acabamentos em pedaços de 128 u, sem as rasteiras | menos malhas (heap) e desenhos |
+| menos gente (0,5), vida da cidade baixa, névoa a 75 m, interface (minimapa, painel, prompt) na metade do ritmo | CPU e desenhos |
+
+**Resultado** (mesmo ambiente, mesmo ponto do mapa; "antes" = Medium no celular; "depois" = perfil do celular)
+
+| | Antes | Depois |
+|---|---|---|
+| Memória do navegador | 2,54 GB | **~1,9 GB** (página ~770 MB, GPU ~840 MB) |
+| Pico da página na carga | ~2,0 GB | **~1,8 GB** |
+| Menor heap do V8 com que o jogo abre | > 480 MB (cai com 480) | **≤ 320 MB** |
+| Heap JS em jogo | 477 MB | **~297 MB** |
+| Texturas (atlas 2,5D) | 339 MB (127) | **~252 MB (64)** |
+| Geometria na placa | 450 MB | **~155 MB** |
+| Desenhos por quadro | 425 + 95 de sombra | **~160** |
+| Malhas na cena | 6.420 | **~4.090** |
+
+No Medium de PC (sem o perfil do celular), só as mudanças gerais: geometria 450 → ~180 MB, heap ~477 → ~360 MB, mesma imagem.
+
+**Como medir:** `?perf` mostra no canto a memória de vídeo estimada (texturas, personagens, geometria) e o heap. O teste de heap
+limitado (abrir o Chromium com `--js-flags=--max-old-space-size=N`) é o que mais se aproxima de "o celular aguenta abrir?".
+`tests/73_celular` confere o perfil, a memória e desenhos, o mundo compacto e sem a cópia na RAM, a vegetação dividindo os
+buffers e que o despejo do lote dá o mesmo resultado que empilhar tudo de uma vez.
+
+**O que não foi medido.** Não há celular aqui: o FPS num aparelho de verdade não foi medido. A conta de memória da GPU por
+software é maior que a de um driver de celular (cópias internas do SwiftShader), mas as proporções valem.
+
+**O que ainda pesa** (próximos cortes): o heap de ~300 MB é espalhado — ~4 mil malhas do Babylon (cada uma com matrizes, caixa
+e os defines do material: ~35 MB só em `PrepareDefinesForLight`), os 46 manifestos dos atlas 2,5D lidos inteiros na abertura
+(~12 MB), ~7 mil `TransformNode` de colisores (~14 MB, poderiam nascer só quando o `ColliderStreamer` os põe na física).
