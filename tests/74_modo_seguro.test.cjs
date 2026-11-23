@@ -59,11 +59,11 @@ module.exports = {
             return Date.now();
         });
         await page.waitForFunction(() => SafeMode.applied.has('pp'), null, { timeout: 600000 });
-        const b = await page.evaluate(() => { SafeMode._blank = window.__blank; return { s: Store.getJSON('safeMode'), retry: SafeMode.retry, detail: SafeMode.detail(), steps: [...SafeMode.applied], pp: game.camera.camera._postProcesses.filter(Boolean).length }; });
+        const b = await page.evaluate(() => { SafeMode._blank = window.__blank; return { REV: SafeMode.REV, s: Store.getJSON('safeMode'), retry: SafeMode.retry, detail: SafeMode.detail(), steps: [...SafeMode.applied], pp: game.camera.camera._postProcesses.filter(Boolean).length }; });
         const S = b.s || {};
         c.ok(b.steps.join() === 'pp' && b.pp === 0 && !b.retry, `a imagem não chegou: desligou os efeitos de tela de novo (${b.steps.join(', ')})`);
-        c.ok(S.rev === 2 && S.when >= t0 && S.steps && S.steps.join() === 'pp' && /céu/.test(S.why || ''), `guardado com revisão ${S.rev}, data e motivo («${S.why}»)`);
-        c.ok(/desde \d/.test(b.detail) && /revisão 2/.test(b.detail), `o diagnóstico conta desde quando e por quê («${b.detail}»)`);
+        c.ok(S.rev === b.REV && S.when >= t0 && S.steps && S.steps.join() === 'pp' && /céu/.test(S.why || ''), `guardado com revisão ${S.rev}, data e motivo («${S.why}»)`);
+        c.ok(/desde \d/.test(b.detail) && b.detail.includes('revisão ' + b.REV), `o diagnóstico conta desde quando e por quê («${b.detail}»)`);
         await idle();
 
         // 4) tentando de novo sem dar para saber (tela escura): volta ao que estava guardado, sem apagar

@@ -6,49 +6,68 @@
 // core/camera.js EDGE_FOG, na cor VERDE) e os plugins de material do jogo — é desenhado na frente de um fundo AZUL, e o pixel do meio
 // diz o que aconteceu:
 //   vermelho = ok · verde = a névoa engoliu tudo · azul = nada foi desenhado · outra cor = desenho errado.
-// Falhou: tenta as saídas conhecidas, uma de cada vez, e fica com a primeira que desenha —
-//   1) sem UNIFORM BUFFERS (engine.disableUniformBuffers: cada uniform solto, o caminho do WebGL 1);
-//   2) a névoa padrão do Babylon (distância do olho) no lugar da nossa — o corte das bordas da câmera de cima sai;
-//   3) as duas juntas.
+// O teste roda COMO O JOGO RODA: com a compilação paralela de shaders (KHR_parallel_shader_compile), se a placa tem. No mesmo notebook
+// o Firefox (sem ela) desenhava e o Chrome (com ela) não. Falhou: tenta as saídas conhecidas e fica com a primeira que desenha —
+//   1) SEM COMPILAÇÃO PARALELA (o Babylon compila na hora, como no Firefox);
+//   2) sem UNIFORM BUFFERS (engine.disableUniformBuffers: cada uniform solto, o caminho do WebGL 1), com e sem a paralela;
+//   3) a névoa padrão do Babylon (distância do olho) no lugar da nossa — o corte das bordas da câmera de cima sai.
 // Nada desenha: volta ao normal e deixa o resultado no diagnóstico (core/Diag.js) para quem cuida do jogo.
-// Custo: uma compilação de shader (síncrona) na carga. `?ubo=0` força o modo sem uniform buffers; `?desenho=simular` finge que o
-// primeiro desenho falhou (para testar as saídas).
+// Custo: uma compilação de shader na carga. `?paralelo=0` força sem compilação paralela, `?ubo=0` sem uniform buffers (e o modo seguro
+// pede o mesmo, para a placa, quando nada na cena resolveu); `?desenho=simular` finge que o primeiro desenho falhou.
 // ============================================================================
 
 const GpuCheck = {
-	result: null,              // { mode: 'ok' | 'semUBO' | 'névoaPadrão' | 'semUBO+névoaPadrão' | 'falhou' | 'pulado', tries: [[nome, cor]], ms }
+	result: null,              // { mode: 'ok' | nome da variante que desenhou | 'forçado' | 'falhou' | 'pulado', tries: [[nome, cor]], ms }
+	hadParallel: false,        // a placa oferece compilação paralela (KHR_parallel_shader_compile)
 	fogPlain: false,           // a névoa padrão do Babylon (a nossa falhou): a câmera de cima fica sem névoa (CompassCamera._applyFog)
 
 	get label() {
 		const r = this.result;
 		if (!r) return 'não rodou';
 		const T = r.tries.map(([n, c]) => `${n}: ${c}`).join(' · ');
-		return { ok: 'ok', pulado: 'pulado' }[r.mode] || (r.mode === 'falhou' ? `FALHOU (${T})` : `modo compatível «${r.mode}» (${T})`);
+		return { ok: 'ok', pulado: 'pulado' }[r.mode] || (r.mode === 'falhou' ? `FALHOU (${T})` : r.mode === 'forçado' ? `forçado: ${r.tries.map((t) => t[0]).join(', ')}` : `modo compatível «${r.mode}» (${T})`);
 	},
 
 	run(eng) {
 		const q = typeof location !== 'undefined' ? location.search : '', t0 = performance.now();
-		const tries = [];
-		if (/[?&]ubo=0\b/.test(q)) { eng.disableUniformBuffers = true; this.result = { mode: 'semUBO', tries: [['forçado por ?ubo=0', '-']], ms: 0 }; return this.result; }
-		// (o modo seguro não achou saída na cena do jogo e pediu, para esta placa, uma abertura sem uniform buffers)
-		try { const sm = Store.getJSON('safeMode'); if (sm && sm.ubo0 && sm.gpu === SafeMode._gpu()) { eng.disableUniformBuffers = true; this.result = { mode: 'semUBO', tries: [['pedido pelo modo seguro', '-']], ms: 0 }; return this.result; } } catch (e) { /* segue */ }
+		const caps = eng.getCaps(), par0 = caps.parallelShaderCompile, tries = [];
+		this.hadParallel = !!par0;
+		// pedidos: na URL, ou do modo seguro para esta placa (core/SafeMode.js: a imagem não chegou e nada na cena resolveu)
+		let sm = null;
+		try { const s = Store.getJSON('safeMode'); if (s && s.rev === SafeMode.REV && s.gpu === SafeMode._gpu()) sm = s; } catch (e) { /* segue */ }
+		const forced = [];
+		if (/[?&]paralelo=0\b/.test(q) || (sm && sm.noParallel)) { caps.parallelShaderCompile = undefined; forced.push('sem compilação paralela' + (sm && sm.noParallel ? ' (pedido pelo modo seguro)' : ' (?paralelo=0)')); }
+		if (/[?&]ubo=0\b/.test(q) || (sm && sm.ubo0)) { eng.disableUniformBuffers = true; forced.push('sem uniform buffers' + (sm && sm.ubo0 ? ' (pedido pelo modo seguro)' : ' (?ubo=0)')); }
+		if (forced.length) { this.result = { mode: 'forçado', tries: forced.map((f) => [f, '-']), ms: 0 }; return this.result; }
 		if (/[?&]desenho=0\b/.test(q) || !eng._gl) { this.result = { mode: 'pulado', tries, ms: 0 }; return this.result; }
 		const fake = /[?&]desenho=simular\b/.test(q);
 		const ubo0 = eng.disableUniformBuffers, S = BABYLON.Effect.IncludesShadersStore, fog0 = S.fogFragmentDeclaration;
-		const plainFog = typeof CompassCamera !== 'undefined' && CompassCamera.BJS_FOG;
-		const variants = [['normal', false, false], ['sem UBO', true, false]];
-		if (plainFog) variants.push(['névoa padrão', false, true], ['sem UBO + névoa padrão', true, true]);
-		let mode = 'falhou';
-		for (const [name, noUbo, fogStd] of variants) {
+		const plainFog = typeof CompassCamera !== 'undefined' && CompassCamera.BJS_FOG, P = !!par0;
+		// [nome, compilação paralela, sem uniform buffers, névoa padrão] — o normal é COMO O JOGO RODA (com a compilação paralela, se a
+		// placa tem): no notebook Iris Xe o Firefox (sem ela) desenhava e o Chrome (com ela) não, na mesma placa e no mesmo Direct3D 11
+		const V = [['normal', P, false, false]];
+		if (P) V.push(['sem compilação paralela', false, false, false]);
+		V.push(['sem UBO', P, true, false]);
+		if (P) V.push(['sem paralela e sem UBO', false, true, false]);
+		if (plainFog) V.push(['névoa padrão', P, false, true], ['sem paralela, sem UBO e névoa padrão', false, true, true]);
+		let pick = null;
+		for (const v of V) {
+			const [name, par, noUbo, fogStd] = v;
 			eng.disableUniformBuffers = noUbo || ubo0;
 			S.fogFragmentDeclaration = fogStd ? plainFog : fog0;
-			let c = this._draw(eng);
+			let c = this._draw(eng, par);
 			if (fake && name === 'normal') c = 'azul (simulado)';
 			tries.push([name, c]);
-			if (c === 'vermelho') { mode = name === 'normal' ? 'ok' : name === 'sem UBO' ? 'semUBO' : name === 'névoa padrão' ? 'névoaPadrão' : 'semUBO+névoaPadrão'; break; }
+			if (c === 'vermelho') { pick = v; break; }
 		}
-		if (mode === 'falhou') { eng.disableUniformBuffers = ubo0; S.fogFragmentDeclaration = fog0; }
-		else this.fogPlain = S.fogFragmentDeclaration !== fog0;
+		if (!pick) { eng.disableUniformBuffers = ubo0; S.fogFragmentDeclaration = fog0; caps.parallelShaderCompile = par0; }
+		else {
+			caps.parallelShaderCompile = pick[1] ? par0 : undefined;
+			eng.disableUniformBuffers = pick[2] || ubo0;
+			S.fogFragmentDeclaration = pick[3] ? plainFog : fog0;
+			this.fogPlain = !!pick[3];
+		}
+		const mode = !pick ? 'falhou' : pick[0] === 'normal' ? 'ok' : pick[0];
 		this.result = { mode, tries, ms: Math.round(performance.now() - t0) };
 		if (mode === 'falhou') console.error('[DESENHO] o material padrão não desenhou em nenhum modo: ' + this.label);
 		else if (mode !== 'ok') console.warn('[DESENHO] o material padrão não desenhava nesta placa — ' + this.label);
@@ -77,9 +96,9 @@ const GpuCheck = {
 
 	// Uma cena descartável: plano vermelho (material padrão, cor por vértice branca, luz, névoa de perseguição verde) a 3 m da câmera,
 	// fundo azul. A cor do pixel do meio, por nome.
-	_draw(eng) {
+	_draw(eng, parallel) {
 		const caps = eng.getCaps(), par = caps.parallelShaderCompile;
-		caps.parallelShaderCompile = undefined;                                  // (compila na hora: o teste é síncrono)
+		if (!parallel) caps.parallelShaderCompile = undefined;                   // (sem ela: compila na hora)
 		let sc = null, out = 'erro';
 		try {
 			sc = new BABYLON.Scene(eng);
@@ -98,7 +117,8 @@ const GpuCheck = {
 			m.material = mat;
 			sc.fogMode = BABYLON.Scene.FOGMODE_LINEAR; sc.fogColor = new BABYLON.Color3(0, 1, 0);
 			sc.fogStart = 36; sc.fogEnd = 80; sc.fogDensity = -1000;             // (a névoa de perseguição do jogo: distância do olho)
-			for (let i = 0; i < 4 && !mat.isReady(m); i++) sc.render();          // (1º: cria o efeito; os seguintes: compilado)
+			const tw = performance.now();                                         // (com a compilação paralela o shader fica pronto depois:
+			do sc.render(); while (!mat.isReady(m) && performance.now() - tw < 2500);  //  a placa compila enquanto o quadro vazio se repete)
 			sc.render();
 			const gl = eng._gl, px = new Uint8Array(4);
 			eng.restoreDefaultFramebuffer();
