@@ -30,6 +30,8 @@ const GpuCheck = {
 		const q = typeof location !== 'undefined' ? location.search : '', t0 = performance.now();
 		const tries = [];
 		if (/[?&]ubo=0\b/.test(q)) { eng.disableUniformBuffers = true; this.result = { mode: 'semUBO', tries: [['forçado por ?ubo=0', '-']], ms: 0 }; return this.result; }
+		// (o modo seguro não achou saída na cena do jogo e pediu, para esta placa, uma abertura sem uniform buffers)
+		try { const sm = Store.getJSON('safeMode'); if (sm && sm.ubo0 && sm.gpu === SafeMode._gpu()) { eng.disableUniformBuffers = true; this.result = { mode: 'semUBO', tries: [['pedido pelo modo seguro', '-']], ms: 0 }; return this.result; } } catch (e) { /* segue */ }
 		if (/[?&]desenho=0\b/.test(q) || !eng._gl) { this.result = { mode: 'pulado', tries, ms: 0 }; return this.result; }
 		const fake = /[?&]desenho=simular\b/.test(q);
 		const ubo0 = eng.disableUniformBuffers, S = BABYLON.Effect.IncludesShadersStore, fog0 = S.fogFragmentDeclaration;
@@ -51,6 +53,26 @@ const GpuCheck = {
 		if (mode === 'falhou') console.error('[DESENHO] o material padrão não desenhou em nenhum modo: ' + this.label);
 		else if (mode !== 'ok') console.warn('[DESENHO] o material padrão não desenhava nesta placa — ' + this.label);
 		return this.result;
+	},
+
+	// ERROS DE DESENHO num quadro da cena do jogo: depois de CADA desenho de malha, pergunta à placa (gl.getError) se ele foi recusado —
+	// e anota qual malha. (O Chrome escreve esses erros só no console dele, que o jogo não lê.) Para o diagnóstico.
+	frameErrors(scene) {
+		const eng = scene.getEngine(), gl = eng._gl;
+		if (!gl) return 'sem WebGL';
+		for (let i = 0; i < 20 && gl.getError(); i++);
+		const P = BABYLON.Mesh.prototype, orig = P._draw, errs = new Map();
+		let draws = 0;
+		P._draw = function (...a) {
+			const r = orig.apply(this, a); draws++;
+			const e = gl.getError();
+			if (e) { const k = '0x' + e.toString(16); if (!errs.has(k)) errs.set(k, []); const L = errs.get(k); if (L.length < 6) L.push(this.name); }
+			return r;
+		};
+		let other = 0;
+		try { scene.render(); other = gl.getError(); } catch (e) { return 'erro no quadro: ' + (e && e.message || e); } finally { P._draw = orig; }
+		if (!errs.size && !other) return `nenhum em ${draws} desenhos`;
+		return [...errs].map(([k, L]) => `GL ${k} em ${L.join(', ')}`).join(' · ') + (other ? ` · depois do quadro GL 0x${other.toString(16)}` : '') + ` (${draws} desenhos)`;
 	},
 
 	// Uma cena descartável: plano vermelho (material padrão, cor por vértice branca, luz, névoa de perseguição verde) a 3 m da câmera,

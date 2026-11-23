@@ -34,7 +34,7 @@ const SafeMode = {
 
 	_gpu() { try { const g = Graphics.gpu(); return (g.renderer || '?').slice(0, 160); } catch (e) { return '?'; } },
 	get active() { return this.applied.size > 0; },
-	_names(ids) { return this.STEPS.filter((s) => ids.includes(s[0])).map((s) => s[1]).join(', '); },
+	_names(ids) { return ids.map((id) => id.startsWith('x:') ? 'sem ' + ((typeof SceneProbe !== 'undefined' && SceneProbe.NAMES[id.slice(2)]) || id.slice(2)) : (this.STEPS.find((s) => s[0] === id) || [id, id])[1]).join(', '); },
 	describe() { return this.applied.size ? 'LIGADO — desligou: ' + this._names([...this.applied]) : 'desligado'; },
 	// Para o diagnóstico: o que está ligado, desde quando, em que revisão — ou que esta abertura está tentando de novo.
 	detail() {
@@ -65,7 +65,8 @@ const SafeMode = {
 		if (this.applied.has(id)) return;
 		this.applied.add(id);
 		try {
-			if (id === 'pp') {
+			if (id.startsWith('x:')) { if (typeof SceneProbe !== 'undefined') SceneProbe.apply(g, id.slice(2)); }      // (o que o teste da cena achou)
+			else if (id === 'pp') {
 				const cam = g.camera.camera;
 				if (typeof Trails !== 'undefined') Trails.off = true;
 				if (g.crt && g.crt.enabled) g.crt.setEnabled(false);
@@ -104,6 +105,7 @@ const SafeMode = {
 				if (this.applied.size) console.warn('[SEGURO] modo seguro desta placa: ' + this.detail());
 				if (this.retry) console.warn('[SEGURO] ' + this.detail());
 			}
+			if (this._probing) return;                                                        // (o teste da cena está mexendo na cena)
 			if (now - last < 1000) return;
 			last = now;
 			const retrying = this.retry && !this.applied.size;
@@ -113,6 +115,19 @@ const SafeMode = {
 			if (blank) { bad++; good = 0; } else { good++; bad = 0; }
 			if (bad >= 4) {
 				bad = 0;
+				// 1º: o TESTE DA CENA (core/SceneProbe.js) — uma suspeita por vez na cena de verdade; a que faz o mundo aparecer fica
+				if (!this._probed && typeof SceneProbe !== 'undefined') {
+					this._probed = true; this._probing = true;
+					if (g._flash) g._flash('🛟 A imagem não está chegando à tela — testando o que resolve nesta placa…');
+					SceneProbe.run(g, () => this._blank(scene, eng)).then((id) => {
+						this._probing = false; last = performance.now();
+						if (!id) return;
+						this.applied.add('x:' + id); this._remember();
+						console.warn('[SEGURO] o mundo voltou sem ' + SceneProbe.NAMES[id] + ': fica assim nesta placa');
+						if (g._flash) g._flash('🛟 Modo seguro: a imagem voltou sem ' + SceneProbe.NAMES[id]);
+					});
+					return;
+				}
 				const next = this.STEPS.find((s) => !this.applied.has(s[0]));
 				if (next) {
 					this._apply(g, next[0]);
@@ -164,7 +179,12 @@ const SafeMode = {
 	},
 
 	_giveUp(g) {
-		console.error('[SEGURO] mesmo com o modo seguro a imagem não aparece nesta placa');
+		console.error('[SEGURO] mesmo com o modo seguro a imagem não aparece nesta placa — teste da cena: ' + (typeof SceneProbe !== 'undefined' ? SceneProbe.label : '-'));
+		// último recurso: a próxima abertura desta placa vai sem uniform buffers (core/GpuCheck.js lê o pedido)
+		if (this.state && !this.state.ubo0 && typeof GpuCheck !== 'undefined' && GpuCheck.result && GpuCheck.result.mode === 'ok') {
+			this.state.ubo0 = true; Store.setJSON(this.KEY, this.state);
+			if (g._flash) g._flash('🛟 Reabra o jogo: na próxima abertura ele tenta o modo compatível desta placa');
+		}
 		if (typeof Diag !== 'undefined') Diag.open(g, '⚠️ A imagem do jogo não está aparecendo', 'O jogo está rodando, mas este navegador não está desenhando a imagem nesta placa de vídeo — mesmo com os efeitos, os personagens 3D e as sombras desligados. Tente: atualizar o navegador e o driver da placa de vídeo, ligar "Usar aceleração gráfica" nas configurações do navegador, ou abrir em outro navegador (Edge, Firefox). E mande este diagnóstico para quem cuida do jogo.');
 	},
 };

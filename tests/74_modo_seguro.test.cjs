@@ -83,6 +83,27 @@ module.exports = {
         }, r0);
         c.ok(d.r0 && d.steps.join() === 'char3d' && !d.c3d && d.kept && !d.retry, `sem veredito: voltou ao guardado (${d.steps.join(', ')}) e tenta de novo na próxima abertura`);
 
+        // 5) o TESTE DA CENA (core/SceneProbe.js): simulado, o mundo só "aparece" sem névoa — uma suspeita por vez, a que resolve fica
+        const e = await page.evaluate(async () => {
+            const s = game.scene, cam = s.activeCamera;
+            const id = await SceneProbe.run(game, () => !SceneProbe.noFog);
+            return { id, order: SceneProbe.results.map((r) => r.join('=')).join(' '), fog: !SceneProbe.noFog, cam: s.activeCamera === cam, rtt: s.renderTargetsEnabled, nl: !NightLights.off, label: SceneProbe.label };
+        });
+        c.ok(e.id === 'fog' && e.order === 'rtt=céu fog=IMAGEM' && !e.fog, `teste da cena: ${e.order} → fica sem névoa`);
+        c.ok(e.cam && e.rtt && e.nl, 'as suspeitas que não resolveram voltaram como estavam (texturas fora da tela, luz da noite)');
+        // ...e pela vigia: acha sozinho, lembra o degrau e o diagnóstico conta
+        const f = await page.evaluate(() => {
+            SceneProbe.kept = null; SceneProbe.noFog = false;
+            SafeMode.applied = new Set(); SafeMode._probed = false; Store.remove('safeMode');
+            window.__blank = SafeMode._blank; SafeMode._blank = () => !SceneProbe.noFog;
+            SafeMode.init(game);
+        });
+        await page.waitForFunction(() => SafeMode.applied.has('x:fog'), null, { timeout: 600000 });
+        await idle();
+        const h = await page.evaluate(() => { SafeMode._blank = window.__blank; const st = Store.getJSON('safeMode'); return { steps: st && st.steps, fog: !SceneProbe.noFog, d: Diag.report(game), desc: SafeMode.describe() }; });
+        c.ok(h.steps && h.steps.join() === 'x:fog' && !h.fog && /sem névoa/.test(h.desc), `a vigia rodou o teste da cena e guardou o que resolveu (${h.desc})`);
+        c.ok(/teste da cena: o mundo voltou sem névoa/.test(h.d) && /erros de desenho \(1 quadro\): nenhum em \d+ desenhos/.test(h.d), 'o diagnóstico conta o teste da cena e os erros de desenho por malha');
+
         c.noErrors(errors, 'modo seguro');
         await close();
     },
