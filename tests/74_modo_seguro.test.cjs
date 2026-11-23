@@ -1,0 +1,76 @@
+// MODO SEGURO QUE NÃO FICA PRESO (core/SafeMode.js): o que ficou guardado numa revisão anterior do desenho (ou há mais de 14 dias) é
+// tentado de novo com tudo ligado —
+//   • a imagem chega: o modo seguro é esquecido e os efeitos de tela continuam;
+//   • a imagem não chega: os degraus voltam um a um e ficam guardados com a revisão, a data e o motivo (mostrados no diagnóstico);
+//   • não dá para saber (tela escura): volta ao que estava guardado e tenta na próxima abertura.
+const { boot, gameWait } = require('./lib.cjs');
+
+module.exports = {
+    name: 'modo_seguro',
+    async run(ctx, c) {
+        const { page, errors, close } = await boot(ctx, { width: 800, height: 450, query: 'gfx=medium' });
+        page.setDefaultTimeout(0);
+        // (o Chromium por software daqui leva de 5 s a mais de 1 min num quadro: menos checagens e uma vigia mais longa que no jogo)
+        await page.evaluate(() => { Tutorial.skip(); game.player.invulnerable = true; Config.time.cycleSeconds = 1e12; game.dayNight.hour = 13; game.dayNight.apply(); if (game.autoQuality) game.autoQuality.off = true; SafeMode.GOOD_N = 2; SafeMode.WATCH_MS = 1e7; });
+        const idle = () => page.waitForFunction(() => !SafeMode._obs, null, { timeout: 600000 });
+        await gameWait(page, 1, 60000);
+        const pp = () => page.evaluate(() => game.camera.camera._postProcesses.filter(Boolean).length);
+        const pp0 = await pp();
+
+        // 1) o que ficou guardado numa versão antiga (sem revisão nem data): tenta de novo com tudo ligado
+        const a = await page.evaluate(() => {
+            SafeMode.applied = new Set();
+            Store.setJSON('safeMode', { gpu: SafeMode._gpu(), steps: ['pp'] });
+            SafeMode.init(game);
+            return { retry: !!SafeMode.retry, applied: SafeMode.applied.size, detail: SafeMode.detail(), watching: !!SafeMode._obs };
+        });
+        c.ok(a.retry && a.applied === 0 && a.watching && /tentando de novo/.test(a.detail), `modo seguro de uma versão antiga: tenta de novo com tudo ligado («${a.detail}»)`);
+        await idle();
+        const a2 = await page.evaluate(() => ({ stored: Store.get('safeMode'), applied: SafeMode.applied.size, retry: SafeMode.retry, d: SafeMode.describe() }));
+        const pp1 = await pp();
+        c.ok(a2.stored === null && a2.applied === 0 && !a2.retry && pp1 === pp0 && pp0 > 0, `a imagem chegou: modo seguro esquecido (${a2.d}) e os ${pp1} efeitos de tela continuam`);
+
+        // 2) a regra de "tentar de novo": outra revisão, sem data ou mais de 14 dias
+        const st = await page.evaluate(() => {
+            const R = SafeMode.REV, now = Date.now();
+            return { old: SafeMode._stale({ steps: ['pp'] }), rev: SafeMode._stale({ rev: R - 1, when: now }), aged: SafeMode._stale({ rev: R, when: now - 15 * 864e5 }), fresh: SafeMode._stale({ rev: R, when: now - 3 * 864e5 }) };
+        });
+        c.ok(st.old && st.rev && st.aged && !st.fresh, 'tenta de novo: sem revisão, revisão anterior ou guardado há 15 dias — guardado há 3 dias na revisão atual fica');
+
+        // 3) tentando de novo e a imagem NÃO chega: o degrau volta e fica guardado com a revisão, a data e o motivo
+        const t0 = await page.evaluate(() => {
+            SafeMode.applied = new Set();
+            Store.setJSON('safeMode', { gpu: SafeMode._gpu(), steps: ['pp'], rev: 1, when: Date.now() - 864e5 });
+            window.__blank = SafeMode._blank; SafeMode._blank = () => true;       // (simula a tela só com a cor do céu)
+            SafeMode.init(game);
+            return Date.now();
+        });
+        await page.waitForFunction(() => SafeMode.applied.has('pp'), null, { timeout: 600000 });
+        const b = await page.evaluate(() => { SafeMode._blank = window.__blank; return { s: Store.getJSON('safeMode'), retry: SafeMode.retry, detail: SafeMode.detail(), steps: [...SafeMode.applied], pp: game.camera.camera._postProcesses.filter(Boolean).length }; });
+        const S = b.s || {};
+        c.ok(b.steps.join() === 'pp' && b.pp === 0 && !b.retry, `a imagem não chegou: desligou os efeitos de tela de novo (${b.steps.join(', ')})`);
+        c.ok(S.rev === 2 && S.when >= t0 && S.steps && S.steps.join() === 'pp' && /céu/.test(S.why || ''), `guardado com revisão ${S.rev}, data e motivo («${S.why}»)`);
+        c.ok(/desde \d/.test(b.detail) && /revisão 2/.test(b.detail), `o diagnóstico conta desde quando e por quê («${b.detail}»)`);
+        await idle();
+
+        // 4) tentando de novo sem dar para saber (tela escura): volta ao que estava guardado, sem apagar
+        const r0 = await page.evaluate(() => {
+            SafeMode.applied = new Set();
+            Store.setJSON('safeMode', { gpu: SafeMode._gpu(), steps: ['char3d'], rev: 1, when: 1 });
+            window.__blank = SafeMode._blank; SafeMode._blank = () => null;
+            SafeMode.RETRY_UNKNOWN = 2;
+            SafeMode.init(game);
+            return !!SafeMode.retry && SafeMode.applied.size === 0;
+        });
+        await idle();
+        const d = await page.evaluate((r0) => {
+            SafeMode._blank = window.__blank; SafeMode.RETRY_UNKNOWN = 8;
+            const s = Store.getJSON('safeMode');
+            return { r0, steps: [...SafeMode.applied], c3d: Char3D.on, kept: !!s && s.when === 1 && s.steps.join() === 'char3d', retry: SafeMode.retry };
+        }, r0);
+        c.ok(d.r0 && d.steps.join() === 'char3d' && !d.c3d && d.kept && !d.retry, `sem veredito: voltou ao guardado (${d.steps.join(', ')}) e tenta de novo na próxima abertura`);
+
+        c.noErrors(errors, 'modo seguro');
+        await close();
+    },
+};

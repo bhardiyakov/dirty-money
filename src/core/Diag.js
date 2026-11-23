@@ -56,12 +56,12 @@ const Diag = {
 			put('resolução interna', `${eng.getRenderWidth()}×${eng.getRenderHeight()} · escala ${safe(() => Config.perf.renderScale)} · teto ${safe(() => Config.perf.fpsCap)} FPS · FPS agora ${safe(() => eng.getFps().toFixed(0))}`);
 		} else put('placa de vídeo', 'o motor não chegou a abrir');
 		put('preset', `${safe(() => Graphics.level)} (escolha: ${safe(() => g.menu.settings.graphics)}) · ajuste automático: degrau ${safe(() => g.autoQuality.level)}${safe(() => g.autoQuality.level ? ' — ' + AutoQuality.STEPS.slice(0, g.autoQuality.level).map((s) => s[0]).join(', ') : '', '')}`);
-		put('modo seguro', safe(() => SafeMode.describe(), 'desligado'));
+		put('modo seguro', safe(() => SafeMode.detail(), 'desligado'));
 		put('pós-processamento', safe(() => g.camera.camera._postProcesses.filter(Boolean).map((p) => p.name).join(' > ') || 'nenhum'));
 		put('personagens 3D', safe(() => `${Char3D.on ? 'ligados' : 'DESLIGADOS'} · ${Char3D.npcs.size} na tela`));
 		put('carros 3D', safe(() => Config.art.cars3d ? 'ligados' : 'desligados'));
 		put('memória (folhas 2,5D)', safe(() => `${NpcArt.mem().texMB} MB`));
-		put('trabalho por quadro', safe(() => `${Perf.frameAvg.toFixed(1)} ms (intervalo real ${Perf.interval.toFixed(1)} ms)`));
+		put('trabalho por quadro', safe(() => `${Perf.frameAvg.toFixed(1)} ms (intervalo real ${Perf.interval.toFixed(1)} ms)${g.menu && g.menu.isOpen ? ' — medido com o jogo PAUSADO: para o custo real, ?perf jogando' : ''}`));
 		put('jogo', safe(() => `${g._bootDone ? 'carregado' : 'CARREGANDO'} · modo ${g.mode} · ${typeof Interiors !== 'undefined' && Interiors.active ? 'dentro de ' + Interiors.active.shop.style : 'na rua'} · posição ${Math.round(g.player.position.x)}, ${Math.round(g.player.position.z)} · hora ${g.dayNight.label}`, 'não iniciado'));
 		put('salvo', safe(() => `espaço ${SaveGame.slot} · último salvamento automático ${AutoSave.lastAt ? Math.round((Date.now() - AutoSave.lastAt) / 1000) + ' s atrás' : 'ainda não'}`));
 		L.push('', `--- últimos erros e avisos (${this.log.length}) ---`);
