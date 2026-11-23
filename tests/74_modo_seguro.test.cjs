@@ -17,6 +17,19 @@ module.exports = {
         const pp = () => page.evaluate(() => game.camera.camera._postProcesses.filter(Boolean).length);
         const pp0 = await pp();
 
+        // 0) a vigia: com a cidade na tela não acusa; só o jogador no meio e o resto na cor do céu (o notebook Iris Xe) acusa
+        const v = await page.evaluate(() => {
+            const sc = game.scene, eng = game.gameEngine.engine;
+            sc.render(); const ok = SafeMode._blank(sc, eng);
+            const hid = sc.meshes.filter((m) => m.isVisible && !/^jogador3d|^player/.test(m.name));
+            for (const m of hid) m.isVisible = false;
+            const pp = game.camera.camera._postProcesses.filter(Boolean).length;
+            sc.render(); const bad = SafeMode._blank(sc, eng);
+            for (const m of hid) m.isVisible = true;
+            return { ok, bad, hid: hid.length, pp };
+        });
+        c.ok(v.ok === false && v.bad === true, `vigia: cidade na tela = imagem ok; só o jogador no meio e o céu em volta = imagem não chega (${v.hid} malhas escondidas)`);
+
         // 1) o que ficou guardado numa versão antiga (sem revisão nem data): tenta de novo com tudo ligado
         const a = await page.evaluate(() => {
             SafeMode.applied = new Set();

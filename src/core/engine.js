@@ -54,6 +54,8 @@ class GameEngine {
 		this._navTargets = [];
 
 		this._applyScale();
+		// Teste de desenho (antes de qualquer material do jogo): o material padrão aparece nesta placa? Senão, o modo compatível.
+		if (typeof GpuCheck !== 'undefined') GpuCheck.run(this.engine);
 	}
 
 	createScene() {

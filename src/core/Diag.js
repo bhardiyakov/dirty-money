@@ -56,6 +56,7 @@ const Diag = {
 			put('resolução interna', `${eng.getRenderWidth()}×${eng.getRenderHeight()} · escala ${safe(() => Config.perf.renderScale)} · teto ${safe(() => Config.perf.fpsCap)} FPS · FPS agora ${safe(() => eng.getFps().toFixed(0))}`);
 		} else put('placa de vídeo', 'o motor não chegou a abrir');
 		put('preset', `${safe(() => Graphics.level)} (escolha: ${safe(() => g.menu.settings.graphics)}) · ajuste automático: degrau ${safe(() => g.autoQuality.level)}${safe(() => g.autoQuality.level ? ' — ' + AutoQuality.STEPS.slice(0, g.autoQuality.level).map((s) => s[0]).join(', ') : '', '')}`);
+		put('teste de desenho', safe(() => GpuCheck.label + (GpuCheck.result ? ` (${GpuCheck.result.ms} ms)` : ''), 'não rodou'));
 		put('modo seguro', safe(() => SafeMode.detail(), 'desligado'));
 		put('pós-processamento', safe(() => g.camera.camera._postProcesses.filter(Boolean).map((p) => p.name).join(' > ') || 'nenhum'));
 		put('personagens 3D', safe(() => `${Char3D.on ? 'ligados' : 'DESLIGADOS'} · ${Char3D.npcs.size} na tela`));

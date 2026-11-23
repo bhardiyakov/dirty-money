@@ -510,3 +510,28 @@ Não dava para saber se ela veio de uma versão antiga, cujos shaders podiam fal
 - `Char3D.on` agora considera o `disable()`. O 3D já parava de desenhar, mas o diagnóstico continuava dizendo "ligados".
 
 Teste: `74_modo_seguro`.
+
+## Teste de desenho na abertura (novembro/2026)
+
+**O caso.** No mesmo notebook (Iris Xe, Chrome 157, Direct3D 11), em todos os presets, só apareciam o jogador e as partículas. A
+tela era toda da cor do céu, sem mundo, interiores, carros nem o fundo preto do esconderijo. Mesmo assim o painel `?perf` contava
+desenhos: 19 desenhos e 18 malhas ativas, que é o normal dentro do esconderijo. O Babylon só conta um desenho com o shader pronto,
+então os materiais padrão eram desenhados sem que nada aparecesse. O jogador e as partículas usam shaders próprios, com uniforms
+simples. Os materiais padrão recebem câmera, luz e malha por *uniform buffers*.
+
+**O que mudou:**
+- `core/GpuCheck.js` roda no `GameEngine`, antes de qualquer material do jogo. Numa cena descartável ele desenha um plano vermelho
+  de material padrão, com a luz, a névoa de perseguição verde e os plugins do jogo, sobre um fundo azul, e lê o pixel do meio.
+- Se o pixel não sai vermelho, ele tenta, nesta ordem, e fica com a primeira opção que desenha:
+  1. sem uniform buffers;
+  2. a névoa padrão do Babylon (a câmera de cima fica sem o corte das bordas);
+  3. as duas juntas.
+- O diagnóstico mostra o resultado na linha "teste de desenho".
+- `?ubo=0` força o modo sem uniform buffers. `?desenho=simular` finge que o primeiro desenho falhou.
+- A vigia do modo seguro agora lê uma grade fora do meio da tela, onde fica o jogador. Com efeitos de tela ligados, ela lê a cena
+  antes da gradação de cor.
+
+**O que não foi confirmado.** A causa exata naquela placa: aqui só há o Chromium por software. O teste vai mostrar no diagnóstico do
+notebook qual modo desenhou.
+
+Testes: `75_teste_desenho` (normal, falha simulada → sem uniform buffers com o esconderijo e a rua aparecendo) e `74_modo_seguro` (a vigia).

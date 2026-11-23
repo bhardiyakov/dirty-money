@@ -2,8 +2,8 @@
 // SafeMode — o MODO SEGURO: o jogo confere, nos primeiros segundos, se a imagem está chegando à tela. Cada navegador traduz os
 // shaders do seu jeito (o Chrome no Windows, para Direct3D), e um que falhe numa placa pode deixar a tela só com a cor do céu ou
 // preta — com o jogo rodando atrás. Aqui isso deixa de ser o fim da linha:
-//   • VIGIA: depois da carga, uma vez por segundo, lê 25 pontos do meio da tela. Todos da mesma cor e ela é a do céu (a cor de
-//     limpeza, clara) por 4 checagens seguidas = a imagem não está chegando. Tela toda escura NÃO conta: numa madrugada sem luz
+//   • VIGIA: depois da carga, uma vez por segundo, lê uma grade de pontos fora do miolo da tela (o jogador fica no meio). 90% deles
+//     na cor do céu (a cor de limpeza, clara) por 4 checagens seguidas = a imagem não está chegando. Tela toda escura NÃO conta: numa madrugada sem luz
 //     ela é legítima, e desligar coisas por engano (e lembrar disso) seria pior que não ajudar.
 //   • DEGRAUS: desliga um por vez e confere de novo — 1) os efeitos de tela (pós-processamento: gradação, TV de tubo, borrão,
 //     antisserrilhado), 2) os personagens 3D (volta o desenho 2,5D), 3) as sombras. Avisa o que desligou.
@@ -132,22 +132,34 @@ const SafeMode = {
 		});
 	},
 
-	// A imagem na tela é uma cor só, a do céu (clara)? 25 pontos do meio da tela, lidos logo depois do quadro desenhado.
+	// A imagem na tela é só a cor do céu (clara)? Uma leitura da tela inteira logo depois do quadro desenhado e uma grade de 9 × 9
+	// pontos FORA do miolo (o jogador fica no meio: no notebook em que o mundo não aparecia, só ele e as partículas apareciam, e a
+	// grade do meio via "desenho"). 90% dos pontos na cor de limpeza = a imagem não está chegando.
+	// Com efeitos de tela, a cena crua (antes da gradação, que muda a cor do céu) está na entrada do 1º efeito: é ela que se lê.
 	_blank(scene, eng) {
 		const gl = eng._gl;
 		if (!gl) return null;
 		try {
-			eng.restoreDefaultFramebuffer();
-			const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = this._px || (this._px = new Uint8Array(4));
-			let mn = [255, 255, 255], mx = [0, 0, 0], sum = [0, 0, 0];
-			for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) {
-				gl.readPixels(Math.floor(W * (0.2 + i * 0.15)), Math.floor(H * (0.2 + j * 0.15)), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-				for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], px[k]); mx[k] = Math.max(mx[k], px[k]); sum[k] += px[k]; }
+			const c = scene.clearColor, cc = [c.r * 255, c.g * 255, c.b * 255];
+			if (Math.max(cc[0], cc[1], cc[2]) < 40) return null;                                       // céu escuro: noite/interior — não dá para afirmar
+			const cam = scene.activeCamera, pp0 = cam && cam._postProcesses ? cam._postProcesses.find(Boolean) : null;
+			const rt = pp0 && pp0.inputTexture, fb = rt && rt._framebuffer;
+			let W, H;
+			if (fb) { W = rt.width; H = rt.height; eng._bindUnboundFramebuffer(fb); }      // (pelo Babylon: ele lembra qual está ligado)
+			else { eng.restoreDefaultFramebuffer(); W = gl.drawingBufferWidth; H = gl.drawingBufferHeight; }
+			const n = W * H * 4;
+			if (!this._buf || this._buf.length !== n) this._buf = new Uint8Array(n);
+			const d = this._buf;
+			gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, d);
+			if (fb) eng.restoreDefaultFramebuffer();
+			let pts = 0, sky = 0;
+			for (let j = 1; j < 10; j++) for (let i = 1; i < 10; i++) {
+				if (i >= 4 && i <= 6 && j >= 4 && j <= 6) continue;
+				const k = (Math.floor(H * j / 10) * W + Math.floor(W * i / 10)) * 4;
+				pts++;
+				if (Math.abs(d[k] - cc[0]) < 10 && Math.abs(d[k + 1] - cc[1]) < 10 && Math.abs(d[k + 2] - cc[2]) < 10) sky++;
 			}
-			if (mx[0] - mn[0] > 4 || mx[1] - mn[1] > 4 || mx[2] - mn[2] > 4) return false;           // tem desenho
-			const c = scene.clearColor, avg = sum.map((v) => v / 25);
-			if (Math.max(avg[0], avg[1], avg[2]) < 40) return null;                                    // escuro: noite/interior — não dá para afirmar
-			return Math.abs(avg[0] - c.r * 255) < 10 && Math.abs(avg[1] - c.g * 255) < 10 && Math.abs(avg[2] - c.b * 255) < 10;
+			return sky >= pts * 0.9;
 		} catch (e) { return null; }
 	},
 
