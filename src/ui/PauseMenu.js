@@ -15,7 +15,7 @@ class PauseMenu {
 	static get TABS() {
 		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['save', '💾 Salvar'], ['settings', '⚙️ Ajustes']];
 	}
-	static get SET_KEYS() { return ['volume', 'sfx', 'radio', 'minimap', 'prompts', 'camBounce', 'aimHelp', 'camSens', 'camInvX', 'camInvY', 'vibration', 'hudScale', 'keys', 'graphics', 'language', ...(NativeMobile.touch ? ['tiltSteer', 'touchSize'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'autosave', ...(typeof SafeMode !== 'undefined' && (SafeMode.active || SafeMode.state) ? ['safe'] : []), 'diag', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
+	static get SET_KEYS() { return ['volume', 'sfx', 'radio', 'minimap', 'prompts', 'camBounce', 'aimHelp', 'camSens', 'camInvX', 'camInvY', 'vibration', 'hudScale', 'keys', 'graphics', 'tvFilter', 'language', ...(NativeMobile.touch ? ['tiltSteer', 'touchSize'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'autosave', ...(typeof SafeMode !== 'undefined' && (SafeMode.active || SafeMode.state) ? ['safe'] : []), 'diag', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
 		return '<b>WASD</b> mover (trote) · <b>SHIFT</b> sprint (tocar repetido = mais rápido) · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> arrastando: gira a câmera 360° (com arma de fogo ele mira — o cursor aponta — e o <b>BOTÃO DO MEIO</b> arrastando gira) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo (no carro: <b>ESPAÇO</b> freio de mão · <b>R</b> rádio) · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
@@ -121,6 +121,7 @@ class PauseMenu {
 		TiltSteer.setEnabled(!!s.tiltSteer && NativeMobile.touch);           // (ligar pede a permissão do sensor no iPhone: chamado dentro do toque)
 		if (this.g.dev) this.g.dev.setEnabled(s.dev);
 		if (typeof CarArt3D !== 'undefined' && !!s.cars3d !== CarArt3D.available()) this._applyCars3d(!!s.cars3d);
+		if (this.g.crt && typeof CrtFilter !== 'undefined' && !CrtFilter.forcedByUrl) this.g.crt.setEnabled(!!s.tvFilter);      // (TV de tubo: desligada por padrão)
 	}
 
 	// Carros 3D liga/desliga na hora: cada carro do mundo troca de visual (sprite do atlas ↔ malha 3D) mantendo pintura, amassado e lugar.
@@ -1121,6 +1122,7 @@ class PauseMenu {
 			hudScale: ['🔠 Tamanho do HUD ' + sub('vida, arma, dinheiro, procurado, mapa e metas'), `<div class="pm-toggle is-on">${Math.round((s.hudScale || 1) * 100)}%</div>`],
 			keys: ['⌨️ Teclas ' + sub(typeof KeyBinds !== 'undefined' && KeyBinds.changed() ? 'teclas trocadas — clique para ver ou voltar ao padrão' : 'trocar as teclas do teclado'), '<div class="pm-toggle is-on">trocar</div>'],
 			graphics: ['🖥️ ' + T('settings.graphics') + ' ' + sub(T('settings.graphics.hint', { level: Graphics.LABEL[Graphics.level] })), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
+			tvFilter: ['📺 Filtro de TV antiga ' + sub('linhas e curvatura de tubo, com a resolução interna a 75% (mais leve para a placa de vídeo)'), tog(!!s.tvFilter)],
 			language: ['🌐 ' + T('settings.language') + ' ' + sub(T('settings.language.hint')), `<div class="pm-toggle is-on">${I18n.label(s.language || I18n.lang)}</div>`],
 			tiltSteer: ['📱 ' + T('settings.tilt') + ' ' + sub(T('settings.tilt.hint')), tog(s.tiltSteer)],
 			touchSize: ['👆 Tamanho dos botões na tela ' + sub('os botões do celular: maiores para dedos grandes, menores para ver mais do jogo'), `<div class="pm-toggle is-on">${Math.round((s.touchSize || 1) * 100)}%</div>`],

@@ -47,7 +47,7 @@ const SafeMode = {
 				if (g.crt && g.crt.enabled) g.crt.setEnabled(false);
 				for (const pp of cam._postProcesses.slice()) if (pp) { cam.detachPostProcess(pp); pp.dispose(cam); }
 				cam._postProcesses.length = 0;
-				if (typeof Lighting !== 'undefined') { Lighting.grade = null; Lighting.crt = null; Lighting.horizon = null; }
+				if (typeof Lighting !== 'undefined') { Lighting.grade = null; Lighting.crt = null; Lighting.horizon = null; Lighting.bloomFx = null; }
 				if (typeof Smooth !== 'undefined') Smooth.pp = null;
 			} else if (id === 'char3d') { if (typeof Char3D !== 'undefined' && Char3D.on) Char3D.disable(); }
 			else if (id === 'shadows') { if (g.autoQuality && g.autoQuality._shadowsOff) g.autoQuality._shadowsOff(); }

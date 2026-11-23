@@ -108,7 +108,7 @@ const NightLights = {
 		if (!this.on) return;
 		this.register();
 		this.g = game;
-		const sc = game.scene, S = Graphics.level === 'low' ? 256 : 512;
+		const sc = game.scene, S = Graphics.level === 'low' || Graphics.phoneOn ? 256 : 512;      // (celular modesto: o campo de luz em 256)
 		const rtt = this.tex = new BABYLON.RenderTargetTexture('nightLight', S, sc, false, true, BABYLON.Constants.TEXTURETYPE_HALF_FLOAT);
 		rtt.clearColor = new BABYLON.Color4(0, 0, 0, 1);
 		rtt.wrapU = rtt.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;

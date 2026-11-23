@@ -23,11 +23,13 @@ const Graphics = {
 	LEVELS: ['low', 'medium', 'high', 'hd'],
 	CHOICES: ['auto', 'low', 'medium', 'high', 'hd'],
 	LABEL: { auto: 'Automático', low: 'Low', medium: 'Medium', high: 'High', hd: 'HD' },
+	// (Low: 0,56 = os 75% de antes × os 75% que a TV de tubo tirava por cima, quando ela vinha ligada por padrão — o aparelho fraco
+	// continua desenhando a mesma quantidade de pixels com a imagem limpa.)
 	PRESETS: {
-		low: { renderScale: 0.75, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6 },
-		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 60, chaseFar: 95, maxPx: 2.4e6 },
-		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6 },
-		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true },
+		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6 },
+		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 60, chaseFar: 95, maxPx: 1.8e6 },
+		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6 },
+		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true },
 	},
 	// GPUs that cannot carry the high preset (WEBGL_debug_renderer_info): software rasterisers and old mobile/integrated chips.
 	// ("Microsoft Basic Render Driver" / WARP: o Windows sem driver de vídeo ou com a aceleração do navegador desligada — desenha na CPU)
@@ -52,8 +54,30 @@ const Graphics = {
 		// O aviso (softwareNotice) explica como ligar a placa de vídeo. `?gfx=` ainda força.
 		this.softCapped = !forced && this.level !== 'low' && this.realSoftware;
 		if (this.softCapped) this.level = 'low';
-		this.apply(this.PRESETS[this.level]);
-		console.log(`[GRÁFICOS] ${this.LABEL[this.level]}${this.choice === 'auto' && !forced ? ' (automático)' : ''}`);
+		// CELULAR MODESTO (até 4 GB): o Low e o Medium ganham os cortes de PHONE (a escolha à mão de High/HD é respeitada)
+		this.phoneOn = this.phone && (this.level === 'low' || this.level === 'medium');
+		this.apply(this.phoneOn ? Object.assign({}, this.PRESETS[this.level], this.PHONE[this.level]) : this.PRESETS[this.level]);
+		console.log(`[GRÁFICOS] ${this.LABEL[this.level]}${this.phoneOn ? ' · celular' : ''}${this.choice === 'auto' && !forced ? ' (automático)' : ''}`);
+	},
+	// CELULAR MODESTO: tela de toque com até 4 GB de RAM (navigator.deviceMemory: Chrome/Android; o Safari não informa). Num aparelho assim
+	// o navegador mata a aba bem antes de 1,5 GB e a placa de vídeo divide a memória com o resto: o Medium (2,2 GB no navegador dos
+	// testes) não cabia. `?celular` força, `?celular=0` desliga. O S25 Ultra e afins (8 GB) seguem no Medium normal.
+	get phone() {
+		const q = typeof location !== 'undefined' ? location.search : '';
+		if (/[?&]celular=0\b/.test(q)) return false;
+		if (/[?&]celular\b/.test(q)) return true;
+		const nav = typeof navigator !== 'undefined' ? navigator : {}, mem = nav.deviceMemory;
+		const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+		return touch && typeof mem === 'number' && mem <= 4;
+	},
+	phoneOn: false,
+	// O que muda no celular modesto, por cima do preset: 30 FPS (metade do trabalho e da bateria), tela a até 1,25× (a tela é pequena),
+	// sem sombras nem brilho de verdade (cada um dobra desenhos ou passadas), MSAA 2×, menos gente na rua, a névoa mais perto (menos
+	// cidade desenhada), atlas dos personagens 2,5D em meia resolução (um quarto da memória) e orçamento de 64 MB. Mais (Graphics.apply): personagens 3D só os mais perto, sem
+	// espelho na água, fachadas sem a paralaxe de ~15 leituras por pixel, árvores com menos detalhe, sem a vegetação rasteira.
+	PHONE: {
+		medium: { dprCap: 1.25, maxPx: 0.85e6, msaa: 2, bloom: false, shadows: false, npcDirs: 8, npcNear: 10, npcAA: 2, npcHalf: true, vramMB: 64, crowd: 0.5, fps: 30, chaseFar: 75 },
+		low: { vramMB: 48, chaseFar: 70, npcNear: 8 },
 	},
 	_saved() {
 		const g = (Store.getJSON('settings', null) || {}).graphics;
@@ -128,7 +152,7 @@ const Graphics = {
 	// Writes a preset into Config (before the game reads it).
 	apply(p) {
 		const P = Config.perf, A = Config.art, desktopApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-		P.renderScale = p.renderScale; P.dprCap = p.dprCap || 1; P.maxPixels = p.maxPx || 0; P.autoScale = 1; P.shadows = p.shadows; P.shadowSize = p.shadowSize; P.colliderRadius = p.colliderRadius;
+		P.renderScale = p.renderScale; P.bloom = !!p.bloom; P.dprCap = p.dprCap || 1; P.maxPixels = p.maxPx || 0; P.autoScale = 1; P.shadows = p.shadows; P.shadowSize = p.shadowSize; P.colliderRadius = p.colliderRadius;
 		const fps60 = desktopApp || (typeof location !== 'undefined' && location.search.includes('fps60'));      // (PC app, or `?fps60` to test)
 		P.fpsCap = p.fps > 30 || (fps60 && this.level === 'high') ? 60 : 30;
 		P.lite = this.level === 'low' || this.level === 'medium';
@@ -141,6 +165,23 @@ const Graphics = {
 		if (A.char3d && A.char3d.on !== false && !/[?&]boneco=2d\b/.test(typeof location !== 'undefined' ? location.search : '')) A.vramMB = Math.min(A.vramMB, 128);
 		A.hdCar = !!p.hdCar;                                       // (o carro dirigido em alta definição: ~50 mil triângulos — Game._hdDrive)
 		if (p.chaseFar && Config.camera.chase) { Config.camera.chase.far = p.chaseFar; Config.camera.chase.near = Math.round(p.chaseFar * 0.45); }
+		// celular modesto (PHONE): os cortes que não são números do preset
+		P.phone = !!this.phoneOn;
+		if (P.phone) {
+			const N = A.char3d && A.char3d.npc;
+			if (N) Object.assign(N, { max: 8, radius: 40, midDist: 22, farThin: 0.5, veryFarThin: 0.15 });      // (bonecos de pontos: só os 8 mais perto)
+			P.waterMirror = false;                                   // (o espelho redesenha prédios e árvores perto da água todo quadro)
+			P.noPom = true;                                          // (fachadas: a paralaxe de oclusão custa ~15 leituras de textura por pixel de parede)
+			P.cover = false;                                         // (vegetação rasteira: muitos desenhos pequenos)
+			// MENOS MALHAS: cada malha do Babylon custa ~10 KB de JavaScript (matrizes, caixa, defines do material); o mundo tinha ~6.100.
+			// Acabamentos em pedaços de 128 u (701 → ~200 malhas) e vegetação em células de 256 u (1.639 → ~500): um pouco mais de
+			// vértice fora da tela, bem menos malhas e desenhos — no celular a névoa já corta o longe.
+			if (Config.world) Config.world.trimChunk = 128;          // (a célula da vegetação lê P.phone: Trees3D.CELL)
+			// POR PIXEL (o chão é quase a tela inteira na câmera a 45°): sem o mapa de normais do chão, sem o desfoque da gradação (8
+			// leituras a mais por pixel — Lighting) e sem o borrão do horizonte/velocidade (Trails: até 2 passadas de tela cheia).
+			A.groundBump = false;
+			if (A.trails) A.trails.on = false;
+		}
 		if (P.lite && typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // (no frosted-glass panels: ver Theme)
 	},
 	// People and traffic in the living world: the light profile at medium, half of it at low.

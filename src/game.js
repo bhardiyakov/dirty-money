@@ -131,6 +131,7 @@ class Game {
 		Smooth.apply(this);                                  // gráfico suave (alta definição): antisserrilhado, densidade do monitor, texturas filtradas
 		Lighting.init(this);                                 // luz física (etapa 2): a gradação de cor no fim da cadeia (a luz do céu é do DayNight)
 		NightLights.init(this);                              // luz de verdade à noite (etapa 6): o campo de luz dos postes, lojas e faróis
+		if (typeof SkyDome !== 'undefined') { SkyDome.init(this); this.dayNight.apply(); }      // o céu de verdade (degradê, sol, nuvens, lua, estrelas) na perseguição
 		Water.initMirror(this);                              // reflexo na água (etapa 7): prédios, árvores e carros espelhados
 		this.trails = Trails.attach(this.camera.camera, this.gameEngine.engine);      // o borrão do GTA SA (render/Trails.js) — antes do CRT
 		this.crt = CrtFilter.attach(this.camera.camera, this.gameEngine, { renderScale: 0.75 });      // TV de tubo + resolução interna reduzida (render/CrtFilter.js) — por último na cadeia
@@ -185,11 +186,12 @@ class Game {
 		this.ui = new Hud(this);                     // interface em pixel art (arma, procurado, vida/colete, veículo, mensagens)
 		// Interface modules on their own clock, run after the scene is drawn (ui/UiLoop.js); the frame only says which ones are live.
 		this.uiLoop = new UiLoop();
-		this.uiLoop.add('minimap', 20, () => this._updateMinimap());
-		this.uiLoop.add('panel', 15, (elapsed) => this.ui.update(elapsed));
+		const uiK = Config.perf.phone ? 0.5 : 1;                                // (celular modesto: a interface na metade do ritmo — o minimapa a 10 Hz não se nota)
+		this.uiLoop.add('minimap', 20 * uiK, () => this._updateMinimap());
+		this.uiLoop.add('panel', 15 * uiK, (elapsed) => this.ui.update(elapsed));
 		this.uiLoop.add('objective', 4, () => Objective.update(this, 1));    // "o que fazer agora" (ui/Objective.js)
-		this.uiLoop.add('prompt', 10, () => this._updatePrompt());
-		this.uiLoop.add('hud', 10, () => this._updateHud());
+		this.uiLoop.add('prompt', 10 * uiK, () => this._updatePrompt());
+		this.uiLoop.add('hud', 10 * uiK, () => this._updateHud());
 		this.wheel = new WeaponWheel(this);          // roda de armas (Tab / LB / botão ARMA), como a do GTA V
 		this.gps = null;                             // destino marcado no mapa: { x, z, label } (só um marcador, sem rota)
 		this.showPrompts = true;
@@ -391,6 +393,7 @@ class Game {
 			await this.scene.whenReadyAsync();                       // todas as malhas ativas com shader compilado e texturas prontas
 			this.scene.render();                                     // aquece o pipeline (sombras, sprites, brilhos) fora da vista
 			this.scene.render();
+			this._releaseStatic();                                   // o mundo parado já está na placa: a cópia dos vértices na RAM sai
 			say('Pronto', 1, 300);
 		} catch (err) {
 			console.error('[BOOT] falha na pré-carga:', err);
@@ -483,6 +486,16 @@ class Game {
 
 	// Materiais do mundo que nunca mudam de estado de shader (defines): congela (não reavalia a cada quadro). A água entra também: a
 	// animação reescreve os pixels da MESMA textura (WorldBuilder.update), sem trocar textura nem offset.
+	// Depois da carga: solta a cópia na RAM dos vértices e índices do mundo estático (MeshBatch.releaseStatic) e os lotes do WorldBuilder
+	// que apontavam para eles. No celular a placa de vídeo usa a MESMA memória: cada vértice do mundo ocupava o dobro.
+	_releaseStatic() {
+		const wb = this.gameEngine.world;
+		if (wb && wb.batches) { for (const k in wb.batches) { const b = wb.batches[k]; b.pos = b.nor = b.uv = b.col = b.idx = b.anc = null; } wb.batches = {}; }
+		if (/[?&]soltar=0\b/.test(location.search)) return;          // (`?soltar=0`: mantém a cópia — testes que lançam raios nas malhas)
+		const bytes = MeshBatch.releaseStatic(this.scene);
+		console.log(`[CARGA] ${(bytes / 1048576).toFixed(0)} MB de vértices do mundo soltos da RAM (já estão na placa)`);
+	}
+
 	_freezeStaticMaterials() {
 		const world = this.gameEngine.world, list = [];
 		const walk = (o) => { for (const k of Object.keys(o)) { const m = o[k]; if (m instanceof BABYLON.Material) list.push(m); else if (m && typeof m === 'object' && !(m instanceof BABYLON.BaseTexture)) walk(m); } };

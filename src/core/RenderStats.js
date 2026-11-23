@@ -70,10 +70,22 @@ const RenderStats = {
             const layers = t.isCube ? 6 : Math.max(1, t.depth || 1);
             tex += w * h * ch * bytes * layers * (t.generateMipMaps ? 4 / 3 : 1) * Math.max(1, t.samples || 1);
         }
+        // (cada buffer da placa uma vez só: a vegetação divide os vértices e índices de um modelo entre as geometrias das células)
+        const seen = new Set();
         for (const g of this.g.scene.geometries) {
             const n = g.getTotalVertices();
-            for (const k of g.getVerticesDataKinds()) { const vb = g.getVertexBuffer(k); if (vb) geo += n * vb.getSize() * 4; }
-            const idx = g.getTotalIndices(); geo += idx * (n > 65535 ? 4 : 2);
+            for (const k of g.getVerticesDataKinds()) {
+                const vb = g.getVertexBuffer(k), B = vb && vb.getWrapperBuffer ? vb.getWrapperBuffer() : vb;
+                if (!vb || seen.has(B)) continue;
+                seen.add(B);
+                // (bytes de verdade: normal e cor do mundo vão em 8 bits; buffer de instâncias = o tamanho dele, não vértices × passo)
+                if (vb.getIsInstanced && vb.getIsInstanced()) geo += (B && B._data && B._data.byteLength) || (B && B._buffer && B._buffer.capacity) || 0;
+                else geo += n * (vb.byteStride || vb.getSize() * 4);
+            }
+            const ib = g.getIndexBuffer && g.getIndexBuffer();
+            if (ib && seen.has(ib)) continue;
+            if (ib) seen.add(ib);
+            geo += g.getTotalIndices() * (ib && ib.is32Bits ? 4 : n > 65535 ? 4 : 2);
         }
         return (this._mem = { texMB: tex / 1048576, geoMB: geo / 1048576 });
     },

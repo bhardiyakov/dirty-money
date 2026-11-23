@@ -474,6 +474,8 @@ const CarArt3D = {
 			uniform vec3 sunL;        // direção PARA o sol (mundo)
 			uniform vec3 sunC;        // cor do sol × intensidade relativa (0 = sem sol)
 			uniform vec3 tint;        // cor ambiente dos sprites (dia/noite)
+			uniform vec3 skyZ;        // o céu da hora (render/SkyDome.js): zênite...
+			uniform vec4 skyH;        // ...e horizonte, w = 1 com o domo (0 = o céu fixo de antes)
 
 			float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 			float n2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -491,9 +493,12 @@ const CarArt3D = {
 				return vec2(d1, d2);
 			}
 			// céu refletido: horizonte claro, zênite azul, chão escuro abaixo; o sol aparece como um brilho
+			// (com o domo do céu: as cores dele — o pôr do sol laranja e a noite azul-escura aparecem na lataria e nos vidros)
 			vec3 sky(vec3 r, float day) {
-				vec3 c = r.y > 0.0 ? mix(vec3(0.8, 0.86, 0.92), vec3(0.4, 0.54, 0.74), pow(r.y, 0.6)) : mix(vec3(0.5, 0.52, 0.55), vec3(0.2, 0.2, 0.21), min(1.0, -r.y * 3.0));
-				return c * (0.35 + 0.65 * day) + sunC * pow(max(dot(r, sunL), 0.0), 90.0) * 2.5;
+				vec3 hz = mix(vec3(0.8, 0.86, 0.92) * (0.35 + 0.65 * day), skyH.rgb, skyH.w);
+				vec3 zn = mix(vec3(0.4, 0.54, 0.74) * (0.35 + 0.65 * day), skyZ, skyH.w);
+				vec3 c = r.y > 0.0 ? mix(hz, zn, pow(r.y, 0.6)) : mix(hz * 0.62, hz * 0.24, min(1.0, -r.y * 3.0));
+				return c + sunC * pow(max(dot(r, sunL), 0.0), 90.0) * 2.5;
 			}
 
 			void main(void) {
@@ -618,7 +623,7 @@ const CarArt3D = {
 	_material() {
 		const m = new BABYLON.ShaderMaterial('car3d', this._scene, { vertex: 'car3d', fragment: 'car3d' }, {
 			attributes: ['position', 'normal', 'color', 'pbr', 'wc', 'ia', 'ib', 'ic', 'dm'],
-			uniforms: ['world', 'viewProjection', 'squash', 'paintRows', 'eye', 'sunL', 'sunC', 'tint', 'fogP', 'fogC'],
+			uniforms: ['world', 'viewProjection', 'squash', 'paintRows', 'eye', 'sunL', 'sunC', 'tint', 'fogP', 'fogC', 'skyZ', 'skyH'],
 			samplers: ['paints'],
 		});
 		m.setTexture('paints', this._paints);
@@ -630,6 +635,8 @@ const CarArt3D = {
 		m.setColor3('tint', new BABYLON.Color3(1, 1, 1));
 		m.setVector4('fogP', new BABYLON.Vector4(0, 1, 0, 0));
 		m.setColor3('fogC', new BABYLON.Color3(0, 0, 0));
+		m.setColor3('skyZ', new BABYLON.Color3(0.4, 0.54, 0.74));
+		m.setVector4('skyH', new BABYLON.Vector4(0.8, 0.86, 0.92, 0));
 		m.backFaceCulling = true;
 		m.checkReadyOnlyOnce = true;               // (sem refazer a lista de defines a cada malha a cada quadro)
 		return m;
@@ -674,7 +681,11 @@ const CarArt3D = {
 		// Perseguição (câmera baixa atrás do veículo): profundidade de verdade (a "achatada" é para a câmera alta) e a névoa da cena.
 		const fp = this._fp || (this._fp = new BABYLON.Vector4(0, 1, 0, 0));
 		fp.set(sc.fogStart, sc.fogEnd, chase ? 1 : 0, 0);
+		const D = !S && typeof SkyDome !== 'undefined' && SkyDome.mat ? SkyDome : null;       // (o céu da hora; no estúdio, o fixo)
+		if (!u.z) { u.z = new BABYLON.Color3(); u.h = new BABYLON.Vector4(); }
+		if (D) { u.z.set(D.zen[0], D.zen[1], D.zen[2]); u.h.set(D.hor[0], D.hor[1], D.hor[2], 1); } else u.h.w = 0;
 		for (const mt of [this.material, this.materialAir]) {
+			mt.setColor3('skyZ', u.z); mt.setVector4('skyH', u.h);
 			mt.setVector3('eye', u.e); mt.setVector3('sunL', u.l); mt.setColor3('sunC', u.c); mt.setFloat('squash', mt === this.material && !S && !chase ? this.squash : 0);
 			mt.setVector4('fogP', fp); mt.setColor3('fogC', sc.fogColor);
 			if (S) mt.setColor3('tint', S.tint); else if (tint) mt.setColor3('tint', tint);

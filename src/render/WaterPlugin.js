@@ -40,6 +40,7 @@ const Water = {
     mirror: null,
     initMirror(game) {
         if (!this.reflect || !game.gameEngine.world) return;
+        if (Config.perf.waterMirror === false) return;                       // (celular modesto: céu e sol na água, sem o espelho — Graphics.PHONE)
         const sc = game.scene, lvl = typeof Graphics !== 'undefined' ? Graphics.level : 'high';
         const size = { low: 256, medium: 384, high: 512, hd: 768 }[lvl] || 512;
         const mt = this.mirror = new BABYLON.MirrorTexture('waterMirror', size, sc, true);

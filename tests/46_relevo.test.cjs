@@ -22,7 +22,7 @@ module.exports = {
             const hit = sc.pickWithRay(ray, (q) => /^(world_|terr_)/.test(q.name) && q.isEnabled() && !/veg|trees|shadow/.test(q.name), false);
             return { rel: Relief.at(p.x, p.z), sprite: a.y, cam: game.camera.lift || 0, ground: hit && hit.hit ? hit.pickedPoint.y : null, ground2: hit && hit.pickedMesh && hit.pickedMesh.name };
         });
-        let { page, errors, close } = await boot(ctx);
+        let { page, errors, close } = await boot(ctx, { query: 'soltar=0' });      // (o raio nas malhas precisa das posições na RAM: Game._releaseStatic)
         page.setDefaultTimeout(0);
         const b = await probe(page);
         await gameWait(page, 2, 60000);
@@ -41,7 +41,7 @@ module.exports = {
         c.ok(M.pao >= 100 && M.bonde > M.pao, `a Pedra do Farol com ${M.pao.toFixed(0)} m e a estação do bondinho no alto (${M.bonde} m)`);
         c.noErrors(errors, 'relevo');
         await close();
-        ({ page, errors, close } = await boot(ctx, { query: 'relevo=0' }));
+        ({ page, errors, close } = await boot(ctx, { query: 'relevo=0&soltar=0' }));
         await probe(page);
         await gameWait(page, 1, 60000);
         const F = await look(page);

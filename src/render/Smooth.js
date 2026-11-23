@@ -7,7 +7,7 @@
 //     o antisserrilhado deles é o supersampling no próprio shader — NpcArt, Config.art.npcAA);
 //   • texturas do mundo (asfalto, calçada, faixas, telhados: Pixel.toTexture) com filtro trilinear e anisotrópico, e o chão do mundo
 //     grande (TerrainSplat) sem a grade de 5 cm: sem o grão "serrilhado" nem pixels de tamanhos desiguais com a câmera andando;
-//   • sombras com borda macia (PCF de qualidade média em vez da baixa).
+//   • sombras com borda macia (PCF de qualidade média em vez da baixa; alta no preset HD).
 // (Config.art.smooth = false ou pixelate = true, só para depurar, voltam ao de antes. O AutoQuality não mexe nele.)
 // ============================================================================
 
@@ -26,7 +26,7 @@ const Smooth = {
 		if (ge && ge.resize) { ge.resize(); if (game.camera) { game.camera.fitPixelScale(ge.viewHeight); game.camera.onResize(); } }
 		if (game.camera) this._antialias(game.camera.camera, ge.engine, on);
 		this._textures(game.scene, on);
-		if (ge && ge.shadowGenerator) ge.shadowGenerator.filteringQuality = on ? BABYLON.ShadowGenerator.QUALITY_MEDIUM : BABYLON.ShadowGenerator.QUALITY_LOW;
+		if (ge && ge.shadowGenerator) ge.shadowGenerator.filteringQuality = !on ? BABYLON.ShadowGenerator.QUALITY_LOW : (Config.art.msaa || 0) >= 8 ? BABYLON.ShadowGenerator.QUALITY_HIGH : BABYLON.ShadowGenerator.QUALITY_MEDIUM;      // (HD: a borda mais macia)
 		this._thaw(game.scene);
 		console.log(`[GRÁFICO] suave ${on ? 'ligado' : 'desligado'}${on ? ` (${this.pp ? this.pp.name : '-'}, ${ge.engine.getRenderWidth()}×${ge.engine.getRenderHeight()})` : ''}`);
 	},

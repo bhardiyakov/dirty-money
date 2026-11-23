@@ -10,6 +10,13 @@
 //     contraste e de saturação. Vale para tudo na tela, inclusive os sprites. SEM curva de tone mapping: a arte é pintada (cores já
 //     prontas, sem luz acima de 1), e o ACES desbotava as copas das árvores e escurecia o asfalto. Custo: uma passada de tela cheia.
 // (A oclusão de ambiente — SSAO2 — foi testada nesta etapa e ficou de fora: o resultado não agradou e custava ~50% mais desenhos.)
+// BRILHO DE VERDADE (bloom; Config.perf.bloom — presets Médio, Alto e HD; `?brilho=0` desliga): o que passa do limiar (postes,
+// vitrines, janelas e faróis à noite; o sol, o céu claro e o reflexo na água de dia) vaza em volta, largo e macio, como numa lente.
+// Três passadas pequenas logo antes da gradação: 'luzBrilhoEx' separa o que é claro (joelho suave) já em 1/4 da resolução (4 leituras
+// bilineares cobrem o bloco 4×4 — luz pequena não pisca), 'luzBrilhoH' e 'luzBrilhoV' desfocam (gaussiana de 9 pontos em 5 leituras).
+// A gradação passa a ler a cena da entrada de 'luzBrilhoEx' e o brilho da própria entrada, que fica em 1/4 (Lighting.setBloom muda a
+// escala dela): nenhuma escrita de tela cheia a mais. Limiar e força seguem a noite (DayNight.night): de dia só o muito claro, de
+// noite as luzes da cidade.
 // A mesma passada leva os EFEITOS DE TELA do que o jogador sente (render/ScreenFx.js, uniform `fx`): borrão de velocidade nas bordas,
 // separação de cores no impacto e a tela sem cor com a vida baixa. Eles ficam numa SEGUNDA variante do shader (`#define FX`), que só
 // entra enquanto algum efeito está ativo: em repouso roda o shader de sempre, sem nenhuma amostra a mais.
@@ -27,6 +34,10 @@ const Lighting = {
 	get flags() { return this._flags || (this._flags = this._url() || { ceu: !!Config.light.sky, cor: !!Config.light.grade }); },
 
 	grade: null,              // pós-processamento da gradação (GRADE_FS)
+	bloomFx: null,            // { ext, bh, bv } — as passadas do brilho de verdade, quando ligado (setBloom)
+	// A primeira passada do grupo da luz (o brilho, se ligado; senão a gradação): o rastro (Trails) entra logo antes dela.
+	get head() { return this.bloomFx ? this.bloomFx.ext : this.grade; },
+	BLOOM: { thrDay: 0.84, thrNight: 0.58, knee: 0.12, kDay: 0.42, kNight: 0.95, spread: 1.7 },
 	horizon: null,            // [y do horizonte (UV), faixa (UV), raio (px)] — o desfoque do horizonte (render/Trails.js), ou null
 	crt: null,                // os parâmetros da TV de tubo (render/CrtFilter.js), ou null
 	FX_DEFINE: '#define FX\n',
@@ -47,19 +58,21 @@ const Lighting = {
 		if (F.cor) {
 			const T = Config.light.gradeParams;
 			BABYLON.Effect.ShadersStore.luzCorFragmentShader = Lighting.GRADE_FS;
-			const soft = !(typeof location !== 'undefined' && /[?&]suave=0\b/.test(location.search));      // (`?suave=0`: sem o desfoque, para comparar)
-			const t = this.grade = new BABYLON.PostProcess('luzCor', 'luzCor', ['contrast', 'saturation', 'texel', 'soften', 'tilt', 'bloom', 'lift', 'roll', 'warm', 'vig', 'fx', 'horizon', 'crt', 'crtAb', 'screen'], null, 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
+			const soft = !(typeof location !== 'undefined' && /[?&]suave=0\b/.test(location.search)) && !Config.perf.phone;      // (`?suave=0`: sem o desfoque, para comparar; celular modesto: sem — Graphics.PHONE)
+			const t = this.grade = new BABYLON.PostProcess('luzCor', 'luzCor', ['contrast', 'saturation', 'texel', 'soften', 'tilt', 'bloom', 'lift', 'roll', 'warm', 'vig', 'fx', 'horizon', 'crt', 'crtAb', 'screen', 'bloomK'], ['bloomSampler'], 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
 			t.onApply = (e) => {
 				// (a mesma passada faz o desfoque do HORIZONTE — render/Trails.js — e a TV de tubo — render/CrtFilter.js —: antes eram
 				// três passadas de tela cheia a mais por quadro)
-				const H = this.horizon, C = this.crt;
+				const H = this.horizon, C = this.crt, B = this.bloomFx, src = B ? B.ext : t;      // (com o brilho: a cena é a entrada dele)
 				e.setFloat3('horizon', H ? H[0] : 2, H ? H[1] : 0.2, H ? H[2] : 0);
 				if (C) { e.setFloat4('crt', C.curvature, C.scanlines, C.lineScale, C.vignette); e.setFloat('crtAb', C.aberration || 0); }
 				else { e.setFloat4('crt', -1, 0, 0, 0); e.setFloat('crtAb', 0); }
-				e.setFloat2('screen', t.width, t.height);
+				e.setFloat2('screen', src.width, src.height);
 				e.setFloat('contrast', T.contrast); e.setFloat('saturation', T.saturation);
-				e.setFloat2('texel', 1 / Math.max(1, t.width), 1 / Math.max(1, t.height));
-				e.setFloat('soften', soft ? T.soften : 0); e.setFloat('tilt', soft ? T.tilt : 0); e.setFloat('bloom', soft ? T.bloom : 0);
+				e.setFloat2('texel', 1 / Math.max(1, src.width), 1 / Math.max(1, src.height));
+				e.setFloat('soften', soft ? T.soften : 0); e.setFloat('tilt', soft ? T.tilt : 0); e.setFloat('bloom', soft && !B ? T.bloom : 0);
+				if (B) { e.setTextureFromPostProcess('textureSampler', B.ext); e.setTextureFromPostProcess('bloomSampler', t); e.setFloat('bloomK', B.k); }
+				else { e.setTextureFromPostProcess('bloomSampler', t); e.setFloat('bloomK', 0); }
 				e.setFloat('lift', T.lift); e.setFloat('roll', T.roll); e.setFloat('warm', T.warm); e.setFloat('vig', T.vignette);
 				if (this._fxOn && typeof ScreenFx !== 'undefined') ScreenFx.apply(e);      // velocidade, impacto, vida baixa (render/ScreenFx.js)
 			};
@@ -70,9 +83,83 @@ const Lighting = {
 			t.updateEffect(Lighting.FX_DEFINE); this._fxEffect = t.getEffect();
 			t.updateEffect(null);
 			this._fxOn = false;
+			this._cam = cam; this._eng = eng;
+			if (Config.perf.bloom && !(typeof location !== 'undefined' && /[?&]brilho=0\b/.test(location.search))) this.setBloom(true);
 		}
-		console.log(`[LUZ] ${['ceu', 'cor'].filter((k) => F[k]).join(' + ') || 'desligada'}`);
+		console.log(`[LUZ] ${['ceu', 'cor'].filter((k) => F[k]).join(' + ') || 'desligada'}${this.bloomFx ? ' + brilho' : ''}`);
 	},
+
+	// Liga/desliga o BRILHO DE VERDADE (init, pelo preset; AutoQuality desliga no degrau 'fill'). Só com a gradação.
+	setBloom(on) {
+		const t = this.grade, cam = this._cam, eng = this._eng;
+		on = !!on;
+		if (!t || !cam || on === !!this.bloomFx) return;
+		const clean = () => { const P = cam._postProcesses; for (let i = P.length - 1; i >= 0; i--) if (!P[i]) P.splice(i, 1); };
+		if (!on) {
+			const B = this.bloomFx; this.bloomFx = null;
+			for (const pp of [B.ext, B.bh, B.bv]) { cam.detachPostProcess(pp); pp.dispose(cam); }
+			clean();
+			t._options = 1.0;                                                         // (a gradação volta a ler a cena na própria entrada)
+			return;
+		}
+		const S = BABYLON.Effect.ShadersStore;
+		S.luzBrilhoExFragmentShader = Lighting.BLOOM_EX_FS;
+		S.luzBrilhoBlurFragmentShader = Lighting.BLOOM_BLUR_FS;
+		const caps = eng.getCaps(), type = caps.textureHalfFloatRender ? BABYLON.Constants.TEXTURETYPE_HALF_FLOAT : BABYLON.Constants.TEXTURETYPE_UNSIGNED_INT;
+		const L = BABYLON.Texture.BILINEAR_SAMPLINGMODE, Bp = this.BLOOM;
+		const ext = new BABYLON.PostProcess('luzBrilhoEx', 'luzBrilhoEx', ['texel', 'thr'], null, 1.0, cam, L, eng, false, null, type);
+		const bh = new BABYLON.PostProcess('luzBrilhoH', 'luzBrilhoBlur', ['dir'], null, 0.25, cam, L, eng, false, null, type);
+		const bv = new BABYLON.PostProcess('luzBrilhoV', 'luzBrilhoBlur', ['dir'], null, 0.25, cam, L, eng, false, null, type);
+		const B = this.bloomFx = { ext, bh, bv, k: Bp.kDay, thr: Bp.thrDay };
+		const night = () => { const g = typeof window !== 'undefined' && window.game; return g && g.dayNight ? Math.max(0, Math.min(1, g.dayNight.night)) : 0; };
+		ext.onApply = (e) => {
+			const n = night();
+			B.thr = Bp.thrDay + (Bp.thrNight - Bp.thrDay) * n; B.k = Bp.kDay + (Bp.kNight - Bp.kDay) * n;
+			e.setFloat2('texel', 1 / Math.max(1, ext.width), 1 / Math.max(1, ext.height));
+			e.setFloat2('thr', B.thr, Bp.knee);
+		};
+		bh.onApply = (e) => e.setFloat2('dir', Bp.spread / Math.max(1, bh.width), 0);
+		bv.onApply = (e) => e.setFloat2('dir', 0, Bp.spread / Math.max(1, bv.height));
+		// na cadeia: logo antes da gradação (depois do antisserrilhado e do rastro)
+		for (const pp of [ext, bh, bv]) cam.detachPostProcess(pp);
+		clean();
+		const at = cam._postProcesses.indexOf(t);
+		cam.attachPostProcess(ext, at); cam.attachPostProcess(bh, at + 1); cam.attachPostProcess(bv, at + 2);
+		t._options = 0.25;                                                            // (a entrada da gradação = o brilho, em 1/4)
+	},
+
+	// Separa o que é claro (joelho suave), já reduzindo a 1/4: 4 leituras bilineares nos cantos de um pixel cobrem o bloco 4×4.
+	BLOOM_EX_FS: `
+		precision highp float;
+		varying vec2 vUV;
+		uniform sampler2D textureSampler;
+		uniform vec2 texel;            // 1 / tamanho da entrada (a cena)
+		uniform vec2 thr;              // limiar, joelho
+		vec3 bright(vec3 c) {
+			float b = max(c.r, max(c.g, c.b));
+			float q = clamp(b - thr.x + thr.y, 0.0, 2.0 * thr.y);
+			q = q * q / (4.0 * thr.y + 1e-4);
+			return c * (max(q, b - thr.x) / max(b, 1e-4)) / max(1.0 - thr.x, 0.05);
+		}
+		void main(void) {
+			vec3 s = bright(texture2D(textureSampler, vUV + texel * vec2(-1.0, -1.0)).rgb)
+				+ bright(texture2D(textureSampler, vUV + texel * vec2(1.0, -1.0)).rgb)
+				+ bright(texture2D(textureSampler, vUV + texel * vec2(-1.0, 1.0)).rgb)
+				+ bright(texture2D(textureSampler, vUV + texel * vec2(1.0, 1.0)).rgb);
+			gl_FragColor = vec4(s * 0.25, 1.0);
+		}`,
+	// Gaussiana de 9 pontos em 5 leituras bilineares ao longo de `dir`.
+	BLOOM_BLUR_FS: `
+		precision highp float;
+		varying vec2 vUV;
+		uniform sampler2D textureSampler;
+		uniform vec2 dir;
+		void main(void) {
+			vec3 c = texture2D(textureSampler, vUV).rgb * 0.227027;
+			c += (texture2D(textureSampler, vUV + dir * 1.384615).rgb + texture2D(textureSampler, vUV - dir * 1.384615).rgb) * 0.316216;
+			c += (texture2D(textureSampler, vUV + dir * 3.230769).rgb + texture2D(textureSampler, vUV - dir * 3.230769).rgb) * 0.070270;
+			gl_FragColor = vec4(c, 1.0);
+		}`,
 
 	// Gradação, na própria imagem (sRGB), numa passada só (8 amostras em volta + o centro). (O ImageProcessingPostProcess do Babylon
 	// converte a imagem entre linear e sRGB e não voltava à original: clareava ou escurecia.)
@@ -81,6 +168,8 @@ const Lighting = {
 	//   • BRILHO SUAVE (`bloom`): o que é claro vaza um pouco em volta (luz difusa do ar, não um halo)
 	//   • COR DE FILME: saturação abaixo de 1 (cores menos vivas), os pretos levantados (`lift`) e o alto em curva suave (`roll`: não
 	//     estoura), um toque quente (`warm`) e a vinheta discreta nas bordas (`vig`)
+	// (NUNCA ponto e vírgula no comentário de uma linha `uniform`: o processador de shaders do Babylon corta a linha nele e o shader
+	// não compila — a gradação saía da cadeia pela guarda.)
 	GRADE_FS: `
 		precision highp float;
 		varying vec2 vUV;
@@ -91,6 +180,8 @@ const Lighting = {
 		uniform vec4 crt;              // TV de tubo (render/CrtFilter.js): curvatura (menor que 0 = desligada), scanlines, linhas por px, vinheta
 		uniform float crtAb;           // aberração cromática nos cantos
 		uniform vec2 screen;           // tamanho da saída (px)
+		uniform sampler2D bloomSampler;  // o brilho de verdade em 1/4 da tela (Lighting.setBloom), ou a própria cena com força 0
+		uniform float bloomK;
 		#ifdef FX
 		uniform vec4 fx;
 		#endif
@@ -123,6 +214,7 @@ const Lighting = {
 				c = mix(c, s, clamp(soften + top * top * 0.85 * step(0.001, tilt) + min(hz, 1.0) * 0.8, 0.0, 1.0));
 				c += b / 8.0 * bloom;
 			}
+			c += texture2D(bloomSampler, uv).rgb * bloomK;                             // o brilho que vaza das luzes (antes da cor de filme)
 			if (crtAb > 0.0 && crt.x >= 0.0) {                                         // (separação de cores nos cantos do tubo)
 				vec2 sh = q * crtAb * dot(q, q) * 4.0;
 				c.r = mix(c.r, texture2D(textureSampler, uv + sh).r, 0.8);
@@ -178,6 +270,7 @@ const Lighting = {
 				console.error(`[PÓS] a passada "${pp.name}" não compilou nesta placa — saiu da cadeia:`, err);
 				cam.detachPostProcess(pp);
 				if (pp === this.grade) {
+					if (this.bloomFx) { const B = this.bloomFx; this.bloomFx = null; for (const q of [B.ext, B.bh, B.bv]) { cam.detachPostProcess(q); q.dispose(cam); } }
 					this.grade = null; this.crt = null; this.horizon = null;
 					if (game.crt && game.crt.enabled) { game.crt.setEnabled(false); game.crt.setEnabled(true); }      // (a TV de tubo volta à passada própria)
 				} else if (game.crt && game.crt.postProcess === pp) game.crt.setEnabled(false);

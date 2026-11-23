@@ -61,7 +61,9 @@ const Trees3D = {
     // sombras, e cada malha delas era desenhada de novo nele (na favela, ~300 mil triângulos por quadro só nisso). No degrau de
     // economia do AutoQuality somem inteiras (setCover) — as árvores, arbustos e pedras ficam.
     COVER: new Set(['tuft', 'pebbles', 'roadside', 'dry', 'reed', 'fern', 'capim', 'rubble', 'trashpile', 'sansevieria', 'monstera']),
-    coverOn: true, _cover: [],
+    get coverOn() { return this._coverOn !== undefined ? this._coverOn : !(typeof Config !== 'undefined' && Config.perf && Config.perf.cover === false); },      // (celular modesto: começa sem as rasteiras)
+    set coverOn(v) { this._coverOn = v; },
+    _cover: [],
     setCover(on) {
         this.coverOn = !!on;
         this._cover = this._cover.filter((m) => !m.isDisposed());
@@ -70,7 +72,7 @@ const Trees3D = {
     wants(kind) { return this.on && !!this.KIND[kind]; },
     // As instâncias são agrupadas em células de CELL u (uma malha por modelo e célula): o descarte por frustum e a janela da sombra
     // deixam de fora o que está longe da tela (num pedaço de 128 u de mata são ~1.500 plantas; na tela cabem algumas centenas).
-    CELL: 128,
+    get CELL() { return typeof Config !== 'undefined' && Config.perf && Config.perf.phone ? 256 : 128; },      // (celular modesto: menos malhas — Graphics.PHONE)
     castShadows: true,
 
     // Uma planta: (x, z) no chão a y0, escala s (a do sprite).
@@ -100,9 +102,11 @@ const Trees3D = {
         for (const [key, g] of groups) {
             // Geometria PRÓPRIA por malha (não clones dividindo uma): o Babylon guarda o VAO na geometria por shader, gravado com o buffer de
             // instâncias de quem desenhou primeiro — clones que dividem a geometria desenhavam todos as árvores do primeiro (longe da tela).
+            // Mas os BUFFERS na placa são os mesmos (_gpu): cada geometria aponta para os vértices e índices do modelo, enviados uma vez só.
+            // (Antes cada célula tinha a sua cópia: ~100 a 230 MB de vértices repetidos — na placa e na RAM —, o que derrubava celular de 4 GB.)
             const model = key.slice(0, key.indexOf('@')), n = g.length / 5;
             const mesh = new BABYLON.Mesh(`${name}_${model}${key.slice(key.indexOf('@'))}`, scene);
-            this._model(scene, model, lod).applyToMesh(mesh);
+            this._share(mesh, this._gpu(scene, model, lod));
             mesh.material = this.material(scene);
             mesh.useVertexColors = true;
             const mats = new Float32Array(n * 16);
@@ -130,6 +134,24 @@ const Trees3D = {
         return out;
     },
     _hash(x, z) { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); },
+    // Os buffers de um modelo na placa (posição, normal, cor e índices), criados UMA vez por modelo e detalhe.
+    _gpu(scene, model, lod) {
+        const C = this._gpuC || (this._gpuC = {}), key = model + '|' + lod;
+        if (C[key]) return C[key];
+        const vd = this._model(scene, model, lod), eng = scene.getEngine();
+        const vb = [['position', vd.positions, 3], ['normal', vd.normals, 3], ['color', vd.colors, 4]].map(([kind, d, size]) => [kind, new BABYLON.Buffer(eng, d, false, size), size]);
+        vb[0][1]._dmKeep = true;                                             // (as posições ficam na RAM: o terreno monta células novas jogando, e o Babylon lê a caixa delas)
+        const ib = eng.createIndexBuffer(vd.indices);
+        return (C[key] = { vb, ib, i32: vd.indices instanceof Uint32Array, nV: vd.positions.length / 3, nI: vd.indices.length });
+    },
+    // Liga a malha aos buffers do modelo: uma Geometry dela (o VAO fica nela), os dados na placa compartilhados.
+    _share(mesh, S) {
+        for (const [kind, buf, size] of S.vb) mesh.setVerticesBuffer(buf.createVertexBuffer(kind, 0, size));
+        S.ib.references++;                                                   // (o índice é de todos: descartar uma malha não o apaga)
+        S.ib.is32Bits = S.i32;
+        mesh.setIndexBuffer(S.ib, S.nV, S.nI);
+        S.ib.is32Bits = S.i32;                                               // (o Babylon decide 32 bits pelo nº de ÍNDICES; o buffer é do tipo dos dados)
+    },
 
     // ------------------------------------------------------------------ o material (o do jogo + vento)
     material(scene) {
@@ -253,7 +275,7 @@ const Trees3D = {
 
     // ------------------------------------------------------------------ os modelos (os vértices de cada um, prontos para cada malha)
     // Detalhe das copas: 2 = bolhas de icosfera com 2 subdivisões (copas redondas); 1 (preset Low) = a principal com 2, as outras com 1.
-    get lod() { return typeof Graphics !== 'undefined' && Graphics.level === 'low' ? 1 : 2; },
+    get lod() { return typeof Graphics !== 'undefined' && (Graphics.level === 'low' || Graphics.phoneOn) ? 1 : 2; },      // (celular modesto: a copa principal)
     _model(scene, model, lod = this.lod) {
         const C = this._models || (this._models = {}), key = model + '|' + lod, sMain = lod >= 1 ? 2 : 1, sAll = lod >= 2 ? 2 : 1;
         if (C[key]) return C[key];

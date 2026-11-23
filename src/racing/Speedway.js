@@ -271,6 +271,7 @@ const Speedway = {
 
     // Reparte um lote em pedaços de `size` m (pelo centro de cada triângulo) → [[chave, MeshBatch]].
     _split(b, size) {
+        if (b._unspill) b._unspill();                                   // (o lote inteiro em arrays: MeshBatch._spill)
         const out = new Map(), P = b.pos, A = b.anc;
         for (let t = 0; t < b.idx.length; t += 3) {
             const i0 = b.idx[t], i1 = b.idx[t + 1], i2 = b.idx[t + 2];
