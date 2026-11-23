@@ -69,6 +69,6 @@ const Facades3D = {
 	apply(m, tex) {
 		if (!tex) return;
 		m.bumpTexture = tex;
-		if (this.mode === 'recuo') { m.useParallax = true; m.useParallaxOcclusion = true; m.parallaxScaleBias = this.PARALLAX; }
+		if (this.mode === 'recuo') { m.useParallax = true; m.useParallaxOcclusion = !Config.perf.noPom; m.parallaxScaleBias = this.PARALLAX; }      // (celular modesto: só o deslocamento simples)
 	},
 };

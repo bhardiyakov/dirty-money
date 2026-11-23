@@ -1782,16 +1782,19 @@ class WorldBuilder {
             if (!caster || !this.shadow) continue;
             const pk = at < 0 ? '' : full.slice(at);
             let px = proxies.get(pk);
-            if (!px) proxies.set(pk, px = { pos: [], idx: [] });
-            const base = px.pos.length / 3;
-            for (let i = 0; i < batch.pos.length; i++) px.pos.push(batch.pos[i]);
-            for (let i = 0; i < batch.idx.length; i++) px.idx.push(batch.idx[i] + base);
+            if (!px) proxies.set(pk, px = { parts: [], nv: 0, ni: 0 });
+            px.parts.push([batch.pos, batch.idx]); px.nv += batch.pos.length / 3; px.ni += batch.idx.length;      // (emendados já tipados, abaixo)
         }
         if (this.shadow) {
             if (!this._ghost) { this._ghost = new BABYLON.StandardMaterial('shadowGhost', this.scene); this._ghost.disableColorWrite = true; this._ghost.disableDepthWrite = true; }
             for (const [pk, px] of proxies) {
                 const m = new BABYLON.Mesh('shadow' + pk, this.scene), vd = new BABYLON.VertexData();
-                vd.positions = new Float32Array(px.pos); vd.indices = px.pos.length / 3 > 65535 ? new Uint32Array(px.idx) : new Uint16Array(px.idx);      // (tipados: metade da memória)
+                // (direto em arrays tipados do tamanho certo: antes as posições de todas as paredes e telhados passavam por arrays comuns)
+                const P = new Float32Array(px.nv * 3), I = px.nv > 65535 ? new Uint32Array(px.ni) : new Uint16Array(px.ni);
+                let vo = 0, io = 0;
+                for (const [bp, bi] of px.parts) { P.set(bp, vo * 3); for (let i = 0; i < bi.length; i++) I[io + i] = bi[i] + vo; vo += bp.length / 3; io += bi.length; }
+                px.parts = null;
+                vd.positions = P; vd.indices = I;
                 vd.applyToMesh(m);
                 m.material = this._ghost; m.isPickable = false; m.receiveShadows = false; m.alwaysSelectAsActiveMesh = false; m.layerMask = 0x10000000;   // só sombra: fora da câmera
                 m.freezeWorldMatrix();

@@ -16,7 +16,38 @@ class MeshBatch {
         this.idx = [];
     }
 
-    get empty() { return !this.idx || this.idx.length === 0; }
+    get empty() { return !this.idx || (this.idx.length === 0 && !this._seg); }
+
+    // DESPEJO (memória da carga): o lote empilha em arrays comuns (rápidos de empilhar, mas 8 bytes por número e folga de crescimento)
+    // e o mundo inteiro fica nos lotes até o _flush — ~6 milhões de vértices vivos ao mesmo tempo, ~600 MB de arrays no pico da carga
+    // (o celular de 4 GB morria na tela de carregamento). A cada SPILL vértices o que já foi empilhado vira pedaços Float32/Uint32
+    // (menos da metade) e o empilhar recomeça; o build (ou quem precisa ler o lote inteiro: _unspill) emenda tudo, um lote por vez.
+    static SPILL = 2048;                                                 // (a maioria dos ~1.100 lotes do mundo tem poucos milhares de vértices)
+    _nv() { return (this._nv0 || 0) + this.pos.length / 3; }
+    _spill() {
+        const S = this._seg || (this._seg = { pos: [], nor: [], uv: [], col: [], idx: [], anc: [], nv: [] }), nv = this.pos.length / 3;
+        S.pos.push(new Float32Array(this.pos)); S.nor.push(new Float32Array(this.nor)); S.uv.push(new Float32Array(this.uv)); S.col.push(new Float32Array(this.col));
+        S.idx.push(new Uint32Array(this.idx));                              // (índices absolutos: contam os vértices dos pedaços anteriores)
+        S.anc.push(this.anc ? new Float32Array(this.anc) : null);
+        S.nv.push(nv);
+        this._nv0 = (this._nv0 || 0) + nv;
+        this.pos = []; this.nor = []; this.uv = []; this.col = []; this.idx = []; if (this.anc) this.anc = [];
+    }
+    // Volta a arrays comuns com tudo (pedaços + o que está empilhando): o build e quem lê o lote inteiro (Speedway._split).
+    _unspill() {
+        const S = this._seg;
+        if (!S) return;
+        const cat = (k) => { const out = []; for (const a of S[k]) for (let i = 0; i < a.length; i++) out.push(a[i]); const t = this[k]; for (let i = 0; i < t.length; i++) out.push(t[i]); return out; };
+        let anc = null;
+        if (this.anc || S.anc.some(Boolean)) {
+            anc = [];
+            S.anc.forEach((a, i) => { if (a) for (let j = 0; j < a.length; j++) anc.push(a[j]); else for (let j = 0; j < S.nv[i]; j++) anc.push(NaN); });
+            const tn = this.pos.length / 3;
+            if (this.anc) for (let j = 0; j < this.anc.length; j++) anc.push(this.anc[j]); else for (let j = 0; j < tn; j++) anc.push(NaN);
+        }
+        this.pos = cat('pos'); this.nor = cat('nor'); this.uv = cat('uv'); this.col = cat('col'); this.idx = cat('idx'); this.anc = anc;
+        this._seg = null; this._nv0 = 0;
+    }
 
     // RELEVO (map/Relief.js): enquanto MeshBatch.anchor = { h } estiver posto, o que os construtores empilham é uma CONSTRUÇÃO — no build,
     // ela sobe `h` INTEIRA, rígida (nenhuma parede estica: a casa tem as proporções de sempre; o pé dela é resolvido por quem a constrói —
@@ -33,7 +64,8 @@ class MeshBatch {
     // a,b,c,d: [x,y,z] | n: normal | uvs: [[u,v] x4] | color: [r,g,b] opcional (vertex color).
     // color: [r,g,b] para os 4 cantos, ou [[r,g,b] x4] (um por canto A,B,C,D) para degradês (sombreado do relevo).
     quad(a, b, c, d, n, uvs, color = [1, 1, 1]) {
-        const base = this.pos.length / 3;
+        if (this.pos.length >= MeshBatch.SPILL * 3) this._spill();
+        const base = this._nv();
         const per = Array.isArray(color[0]);
         // (sem `for (const p of [a, b, c, d])`: o array e o iterador eram lixo a cada quad — milhares por pedaço de terreno)
         this.pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2], d[0], d[1], d[2]);
@@ -55,7 +87,8 @@ class MeshBatch {
         const facing = -(cx * n[0] + cy * n[1] + cz * n[2]);          // a face visível tem normal = -cross(b-a, c-a)
         const per = Array.isArray(color[0]);
         if (facing < 0) { [b, c] = [c, b]; uvs = [uvs[0], uvs[2], uvs[1]]; if (per) color = [color[0], color[2], color[1]]; }
-        const base = this.pos.length / 3;
+        if (this.pos.length >= MeshBatch.SPILL * 3) this._spill();
+        const base = this._nv();
         this.pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
         this._anc(3);
         for (let k = 0; k < 3; k++) {
@@ -133,7 +166,8 @@ class MeshBatch {
         const cx = (B[1] - A[1]) * (C[2] - A[2]) - (B[2] - A[2]) * (C[1] - A[1]);
         const cy = (B[2] - A[2]) * (C[0] - A[0]) - (B[0] - A[0]) * (C[2] - A[2]);
         const cz = (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]);
-        const keep = -(cx * n[0] + cy * n[1] + cz * n[2]) >= 0, base = this.pos.length / 3;
+        if (this.pos.length >= MeshBatch.SPILL * 3) this._spill();
+        const keep = -(cx * n[0] + cy * n[1] + cz * n[2]) >= 0, base = this._nv();
         this.pos.push(A[0], A[1], A[2], B[0], B[1], B[2], C[0], C[1], C[2], D[0], D[1], D[2]);
         this._anc(4);
         for (let k = 0; k < 4; k++) { this.nor.push(n[0], n[1], n[2]); this.col.push(color[0], color[1], color[2], color.length > 3 ? color[3] : 1); this.uv.push(0, 0); }
@@ -250,6 +284,7 @@ class MeshBatch {
     // vértice a menos na placa de vídeo).
     build(name, scene, material, { vertexColors = false, receiveShadows = true, alwaysActive = true, relief = false, clamp = null, uvs = true } = {}) {
         if (this.empty) return null;
+        this._unspill();
         if (relief && typeof Relief !== 'undefined' && Relief.on) this._relief(clamp);
         this.anc = null;
         const mesh = new BABYLON.Mesh(name, scene);

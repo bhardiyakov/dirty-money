@@ -35,6 +35,7 @@ const Life = {
     level() {
         const c = this.choice(); if (c !== 'auto') return c;
         const q = typeof Graphics !== 'undefined' ? Graphics.level : 'high';
+        if (typeof Graphics !== 'undefined' && Graphics.phoneOn) return 'baixa';      // (celular modesto: menos gente extra e acontecimentos)
         return q === 'low' ? 'baixa' : q === 'medium' ? 'media' : 'alta';
     },
     mul() { return this.MUL[this.level()]; },

@@ -58,7 +58,7 @@ const Lighting = {
 		if (F.cor) {
 			const T = Config.light.gradeParams;
 			BABYLON.Effect.ShadersStore.luzCorFragmentShader = Lighting.GRADE_FS;
-			const soft = !(typeof location !== 'undefined' && /[?&]suave=0\b/.test(location.search));      // (`?suave=0`: sem o desfoque, para comparar)
+			const soft = !(typeof location !== 'undefined' && /[?&]suave=0\b/.test(location.search)) && !Config.perf.phone;      // (`?suave=0`: sem o desfoque, para comparar; celular modesto: sem — Graphics.PHONE)
 			const t = this.grade = new BABYLON.PostProcess('luzCor', 'luzCor', ['contrast', 'saturation', 'texel', 'soften', 'tilt', 'bloom', 'lift', 'roll', 'warm', 'vig', 'fx', 'horizon', 'crt', 'crtAb', 'screen', 'bloomK'], ['bloomSampler'], 1.0, cam, BABYLON.Texture.BILINEAR_SAMPLINGMODE, eng);
 			t.onApply = (e) => {
 				// (a mesma passada faz o desfoque do HORIZONTE — render/Trails.js — e a TV de tubo — render/CrtFilter.js —: antes eram

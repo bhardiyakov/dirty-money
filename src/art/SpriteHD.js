@@ -23,6 +23,7 @@ const SpriteHD = {
     // px de textura por px da arte (20 px/u).
     get Q() {
         const lvl = typeof Graphics !== 'undefined' ? Graphics.level : 'high';
+        if (typeof Graphics !== 'undefined' && Graphics.phoneOn) return 1.5;      // (celular modesto: tela pequena — 56% da memória dos atlas)
         return { low: 1.5, medium: 2, high: 2, hd: 3 }[lvl] || 2;
     },
     lastMs: 0,

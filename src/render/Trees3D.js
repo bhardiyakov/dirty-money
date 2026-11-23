@@ -61,7 +61,9 @@ const Trees3D = {
     // sombras, e cada malha delas era desenhada de novo nele (na favela, ~300 mil triângulos por quadro só nisso). No degrau de
     // economia do AutoQuality somem inteiras (setCover) — as árvores, arbustos e pedras ficam.
     COVER: new Set(['tuft', 'pebbles', 'roadside', 'dry', 'reed', 'fern', 'capim', 'rubble', 'trashpile', 'sansevieria', 'monstera']),
-    coverOn: true, _cover: [],
+    get coverOn() { return this._coverOn !== undefined ? this._coverOn : !(typeof Config !== 'undefined' && Config.perf && Config.perf.cover === false); },      // (celular modesto: começa sem as rasteiras)
+    set coverOn(v) { this._coverOn = v; },
+    _cover: [],
     setCover(on) {
         this.coverOn = !!on;
         this._cover = this._cover.filter((m) => !m.isDisposed());
@@ -70,7 +72,7 @@ const Trees3D = {
     wants(kind) { return this.on && !!this.KIND[kind]; },
     // As instâncias são agrupadas em células de CELL u (uma malha por modelo e célula): o descarte por frustum e a janela da sombra
     // deixam de fora o que está longe da tela (num pedaço de 128 u de mata são ~1.500 plantas; na tela cabem algumas centenas).
-    CELL: 128,
+    get CELL() { return typeof Config !== 'undefined' && Config.perf && Config.perf.phone ? 256 : 128; },      // (celular modesto: menos malhas — Graphics.PHONE)
     castShadows: true,
 
     // Uma planta: (x, z) no chão a y0, escala s (a do sprite).
@@ -273,7 +275,7 @@ const Trees3D = {
 
     // ------------------------------------------------------------------ os modelos (os vértices de cada um, prontos para cada malha)
     // Detalhe das copas: 2 = bolhas de icosfera com 2 subdivisões (copas redondas); 1 (preset Low) = a principal com 2, as outras com 1.
-    get lod() { return typeof Graphics !== 'undefined' && Graphics.level === 'low' ? 1 : 2; },
+    get lod() { return typeof Graphics !== 'undefined' && (Graphics.level === 'low' || Graphics.phoneOn) ? 1 : 2; },      // (celular modesto: a copa principal)
     _model(scene, model, lod = this.lod) {
         const C = this._models || (this._models = {}), key = model + '|' + lod, sMain = lod >= 1 ? 2 : 1, sAll = lod >= 2 ? 2 : 1;
         if (C[key]) return C[key];

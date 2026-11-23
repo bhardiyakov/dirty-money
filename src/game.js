@@ -186,11 +186,12 @@ class Game {
 		this.ui = new Hud(this);                     // interface em pixel art (arma, procurado, vida/colete, veículo, mensagens)
 		// Interface modules on their own clock, run after the scene is drawn (ui/UiLoop.js); the frame only says which ones are live.
 		this.uiLoop = new UiLoop();
-		this.uiLoop.add('minimap', 20, () => this._updateMinimap());
-		this.uiLoop.add('panel', 15, (elapsed) => this.ui.update(elapsed));
+		const uiK = Config.perf.phone ? 0.5 : 1;                                // (celular modesto: a interface na metade do ritmo — o minimapa a 10 Hz não se nota)
+		this.uiLoop.add('minimap', 20 * uiK, () => this._updateMinimap());
+		this.uiLoop.add('panel', 15 * uiK, (elapsed) => this.ui.update(elapsed));
 		this.uiLoop.add('objective', 4, () => Objective.update(this, 1));    // "o que fazer agora" (ui/Objective.js)
-		this.uiLoop.add('prompt', 10, () => this._updatePrompt());
-		this.uiLoop.add('hud', 10, () => this._updateHud());
+		this.uiLoop.add('prompt', 10 * uiK, () => this._updatePrompt());
+		this.uiLoop.add('hud', 10 * uiK, () => this._updateHud());
 		this.wheel = new WeaponWheel(this);          // roda de armas (Tab / LB / botão ARMA), como a do GTA V
 		this.gps = null;                             // destino marcado no mapa: { x, z, label } (só um marcador, sem rota)
 		this.showPrompts = true;
