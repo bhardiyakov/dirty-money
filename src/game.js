@@ -392,6 +392,7 @@ class Game {
 			await this.scene.whenReadyAsync();                       // todas as malhas ativas com shader compilado e texturas prontas
 			this.scene.render();                                     // aquece o pipeline (sombras, sprites, brilhos) fora da vista
 			this.scene.render();
+			this._releaseStatic();                                   // o mundo parado já está na placa: a cópia dos vértices na RAM sai
 			say('Pronto', 1, 300);
 		} catch (err) {
 			console.error('[BOOT] falha na pré-carga:', err);
@@ -484,6 +485,15 @@ class Game {
 
 	// Materiais do mundo que nunca mudam de estado de shader (defines): congela (não reavalia a cada quadro). A água entra também: a
 	// animação reescreve os pixels da MESMA textura (WorldBuilder.update), sem trocar textura nem offset.
+	// Depois da carga: solta a cópia na RAM dos vértices e índices do mundo estático (MeshBatch.releaseStatic) e os lotes do WorldBuilder
+	// que apontavam para eles. No celular a placa de vídeo usa a MESMA memória: cada vértice do mundo ocupava o dobro.
+	_releaseStatic() {
+		const wb = this.gameEngine.world;
+		if (wb && wb.batches) { for (const k in wb.batches) { const b = wb.batches[k]; b.pos = b.nor = b.uv = b.col = b.idx = b.anc = null; } wb.batches = {}; }
+		const bytes = MeshBatch.releaseStatic(this.scene);
+		console.log(`[CARGA] ${(bytes / 1048576).toFixed(0)} MB de vértices do mundo soltos da RAM (já estão na placa)`);
+	}
+
 	_freezeStaticMaterials() {
 		const world = this.gameEngine.world, list = [];
 		const walk = (o) => { for (const k of Object.keys(o)) { const m = o[k]; if (m instanceof BABYLON.Material) list.push(m); else if (m && typeof m === 'object' && !(m instanceof BABYLON.BaseTexture)) walk(m); } };

@@ -16,7 +16,7 @@ class MeshBatch {
         this.idx = [];
     }
 
-    get empty() { return this.idx.length === 0; }
+    get empty() { return !this.idx || this.idx.length === 0; }
 
     // RELEVO (map/Relief.js): enquanto MeshBatch.anchor = { h } estiver posto, o que os construtores empilham é uma CONSTRUÇÃO — no build,
     // ela sobe `h` INTEIRA, rígida (nenhuma parede estica: a casa tem as proporções de sempre; o pé dela é resolvido por quem a constrói —
@@ -258,12 +258,21 @@ class MeshBatch {
         // passa a apontar para ela — nada duplicado). O que não é usado (cor) é descartado.
         this.pos = new Float32Array(this.pos); this.nor = new Float32Array(this.nor); this.uv = new Float32Array(this.uv);
         this.idx = this.pos.length / 3 > 65535 ? new Uint32Array(this.idx) : new Uint16Array(this.idx);
+        if (vertexColors) this.col = new Float32Array(this.col); else this.col = null;
+        if (!uvs) this.uv = null;
+        // MUNDO ESTÁTICO ('world_…'): normal e cor em 8 bits normalizados (4 + 4 bytes em vez de 12 + 16 — o vértice cai de 40 para
+        // 20 bytes na placa e na RAM; no celular a placa É a RAM). A diferença não aparece: 1/127 na normal, 1/255 na cor. Só o mundo:
+        // quem reescreve vértices na CPU (bichos, pássaros, poças) continua em float.
+        if (MeshBatch.compact && name.startsWith('world_') && this._compactTo(mesh)) return this._finish(mesh, material, vertexColors, receiveShadows, alwaysActive);
         vd.positions = this.pos;
         vd.indices = this.idx;
         vd.normals = this.nor;
-        if (uvs) vd.uvs = this.uv; else this.uv = null;
-        if (vertexColors) { this.col = new Float32Array(this.col); vd.colors = this.col; } else this.col = null;
+        if (this.uv) vd.uvs = this.uv;
+        if (this.col) vd.colors = this.col;
         vd.applyToMesh(mesh);
+        return this._finish(mesh, material, vertexColors, receiveShadows, alwaysActive);
+    }
+    _finish(mesh, material, vertexColors, receiveShadows, alwaysActive) {
         mesh.material = material;
         mesh.useVertexColors = vertexColors;
         mesh.receiveShadows = receiveShadows;
@@ -272,7 +281,52 @@ class MeshBatch {
         mesh.freezeWorldMatrix();
         return mesh;
     }
+    // Vértices compactos (ver build). false = alguma cor fora de 0..1 (não cabe em 8 bits): fica em float.
+    _compactTo(mesh) {
+        const C = this.col;
+        if (C) for (let i = 0; i < C.length; i++) if (C[i] < 0 || C[i] > 1.0001) return false;
+        const eng = mesh.getScene().getEngine(), VB = BABYLON.VertexBuffer, n = this.pos.length / 3, N = this.nor;
+        mesh.setVerticesData(VB.PositionKind, this.pos, false, 3);
+        const nb = new Int8Array(n * 4);
+        for (let v = 0; v < n; v++) for (let k = 0; k < 3; k++) nb[v * 4 + k] = Math.round(Math.max(-1, Math.min(1, N[v * 3 + k])) * 127);
+        mesh.setVerticesBuffer(new VB(eng, nb, VB.NormalKind, false, false, 4, false, 0, 3, VB.BYTE, true, true));
+        if (C) {
+            const cb = new Uint8Array(n * 4);
+            for (let i = 0; i < cb.length; i++) cb[i] = Math.round(Math.min(1, C[i]) * 255);
+            mesh.setVerticesBuffer(new VB(eng, cb, VB.ColorKind, false, false, 4, false, 0, 4, VB.UNSIGNED_BYTE, true, true));
+        }
+        if (this.uv) mesh.setVerticesData(VB.UVKind, this.uv, false, 2);
+        mesh.setIndices(this.idx, n);
+        return true;
+    }
+    // Depois da carga (Game._releaseStatic): o mundo estático já está na placa — a cópia dos vértices e índices na RAM (a do Babylon e a
+    // deste lote) sai. Só malhas paradas (matriz congelada, sem esqueleto) cujos buffers não são atualizáveis; a geometria inteira, só se
+    // TODAS as malhas que a usam são assim. Devolve os bytes soltos.
+    static releaseStatic(scene) {
+        const uses = new Map();
+        for (const m of scene.meshes) {
+            const g = m.geometry;
+            if (!g) continue;
+            const ok = m.isWorldMatrixFrozen && !m.skeleton && !m.morphTargetManager && !m._dmKeepData;
+            uses.set(g, (uses.get(g) !== false) && ok);
+        }
+        let bytes = 0;
+        for (const [g, ok] of uses) {
+            if (!ok || g._dmReleased) continue;
+            // (os buffers de instâncias — as matrizes das árvores e das peças repetidas — e os atualizáveis ficam: o Babylon os reescreve)
+            const bufs = g.getVerticesDataKinds().map((k) => g.getVertexBuffer(k)).filter((vb) => vb && !vb.isUpdatable() && !vb.getIsInstanced());
+            for (const vb of bufs) { const B = vb._buffer; if (B && B._data && !B._dmKeep && !B.isUpdatable()) { bytes += B._data.byteLength || B._data.length * 8; B._data = null; } }
+            if (g._indices && g._indices.length && g._indexBuffer) {
+                bytes += g._indices.byteLength || g._indices.length * 8;
+                g._totalIndices = g._indices.length;                                  // (getTotalIndices continua certo sem o array)
+                g._indices = [];
+            }
+            g._dmReleased = true;
+        }
+        return bytes;
+    }
 }
+MeshBatch.compact = !(typeof location !== 'undefined' && /[?&]compacto=0\b/.test(location.search));      // `?compacto=0`: vértices em float, para comparar
 
 // ============================================================================
 // PropInstances — peças REPETIDAS (antenas, ar-condicionados…) como INSTÂNCIAS: cada tipo é montado UMA vez num MeshBatch, na origem
