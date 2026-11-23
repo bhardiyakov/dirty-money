@@ -58,6 +58,19 @@ const SceneProbe = {
 		if (typeof Smooth !== 'undefined') clearTimeout(Smooth._refreeze);
 	},
 
+	// Espera os shaders novos SÓ das malhas na tela (scene.whenReadyAsync compilaria os de todas as malhas ligadas, até as que nunca
+	// aparecem — e uma combinação dessas não compila: fachada com relevo numa malha sem coordenadas de textura).
+	async _settle(s) {
+		const t0 = performance.now();
+		while (performance.now() - t0 < 8000) {
+			await new Promise((r) => setTimeout(r, 120));
+			const A = s.getActiveMeshes();
+			let ok = true;
+			for (let i = 0; i < A.length && ok; i++) { const m = A.data[i]; if (m.material && m.subMeshes && m.subMeshes.length && !m.isReady(true)) ok = false; }
+			if (ok) return;
+		}
+	},
+
 	async run(g, look) {
 		if (this.running) return this.kept;
 		this.running = true; this.results = []; this.kept = null;
@@ -68,7 +81,7 @@ const SceneProbe = {
 			for (const id of this.ORDER) {
 				if (this.THAW[id]) this._thaw(g);
 				const undo = this.set(g, id);
-				await Promise.race([s.whenReadyAsync(), new Promise((r) => setTimeout(r, 8000))]);
+				await this._settle(s);
 				let v = '?';
 				for (let k = 0; k < 3 && v === '?'; k++) { s.render(); const b = look(); if (b !== null) v = b ? 'céu' : 'IMAGEM'; }
 				this.results.push([id, v]);
