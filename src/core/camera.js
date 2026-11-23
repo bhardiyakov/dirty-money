@@ -190,6 +190,8 @@ class CompassCamera {
 		if (sc.fogMode !== mode) sc.fogMode = mode;
 		if (!C.tilted) return;
 		if (!view) { sc.fogStart = CompassCamera.NO_FOG; sc.fogEnd = CompassCamera.NO_FOG + 1; return; }
+		const plain = typeof GpuCheck !== 'undefined' && GpuCheck.fogPlain;              // (a névoa do Babylon: só a de distância, na perseguição)
+		if (plain && !(this.persp && this.chase >= 0.5)) { sc.fogStart = CompassCamera.NO_FOG; sc.fogEnd = CompassCamera.NO_FOG + 1; return; }
 		if (this.persp && this.chase >= 0.5) {                                          // (perseguição: névoa de DISTÂNCIA, da cor do céu — EDGE_FOG,
 			sc.fogStart = this._chaseNear(); sc.fogEnd = this._chaseFar(); sc.fogDensity = -1000;  //  densidade −1000 = medir a distância do olho)
 			return;
@@ -633,6 +635,7 @@ float CalcFogFactor()
 }
 #endif
 `;
+CompassCamera.BJS_FOG = BABYLON.Effect.IncludesShadersStore.fogFragmentDeclaration;      // (a do Babylon: o modo compatível do core/GpuCheck.js volta a ela)
 BABYLON.Effect.IncludesShadersStore.fogFragmentDeclaration = CompassCamera.EDGE_FOG;
 
 CompassCamera.tiltDeg = 56;      // inclinação de agora (graus): os personagens em pé esticam 1/cos dela (SpriteActor.STAND_SCALE)
