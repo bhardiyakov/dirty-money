@@ -26,10 +26,10 @@ const Graphics = {
 	// (Low: 0,56 = os 75% de antes × os 75% que a TV de tubo tirava por cima, quando ela vinha ligada por padrão — o aparelho fraco
 	// continua desenhando a mesma quantidade de pixels com a imagem limpa.)
 	PRESETS: {
-		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6 },
-		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 60, chaseFar: 95, maxPx: 1.8e6 },
-		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6 },
-		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true },
+		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6, npc3d: 0, npc3dR: 0, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 1 },
+		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 2, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 1.8e6, npc3d: 6, npc3dR: 26, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 2 },
+		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 3, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6, npc3d: 12, npc3dR: 36, pom: true, pcf: 'medium', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
+		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true, npc3d: 24, npc3dR: 50, pom: true, pcf: 'high', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
 	},
 	// GPUs that cannot carry the high preset (WEBGL_debug_renderer_info): software rasterisers and old mobile/integrated chips.
 	// ("Microsoft Basic Render Driver" / WARP: o Windows sem driver de vídeo ou com a aceleração do navegador desligada — desenha na CPU)
@@ -78,6 +78,12 @@ const Graphics = {
 	PHONE: {
 		medium: { dprCap: 1.25, maxPx: 0.85e6, msaa: 2, bloom: false, shadows: false, npcDirs: 8, npcNear: 10, npcAA: 2, npcHalf: true, vramMB: 64, crowd: 0.5, fps: 30, chaseFar: 75 },
 		low: { vramMB: 48, chaseFar: 70, npcNear: 8 },
+	},
+	// Ajustes › Taxa de quadros: 'auto' (o do preset), 30 ou 60.
+	FPS_CHOICES: ['auto', 30, 60],
+	fpsChoice() {
+		const f = (typeof Store !== 'undefined' && (Store.getJSON('settings', null) || {}).fps);
+		return f === 30 || f === 60 ? f : 'auto';
 	},
 	_saved() {
 		const g = (Store.getJSON('settings', null) || {}).graphics;
@@ -154,22 +160,46 @@ const Graphics = {
 		const P = Config.perf, A = Config.art, desktopApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 		P.renderScale = p.renderScale; P.bloom = !!p.bloom; P.dprCap = p.dprCap || 1; P.maxPixels = p.maxPx || 0; P.autoScale = 1; P.shadows = p.shadows; P.shadowSize = p.shadowSize; P.colliderRadius = p.colliderRadius;
 		const fps60 = desktopApp || (typeof location !== 'undefined' && location.search.includes('fps60'));      // (PC app, or `?fps60` to test)
-		P.fpsCap = p.fps > 30 || (fps60 && this.level === 'high') ? 60 : 30;
+		// TETO DE FPS: o do preset (Medium e celular: 30 estáveis — 60 deixava notebook e celular no limite o tempo todo, quente e
+		// oscilando; High/HD: 60) ou a escolha em Ajustes › Taxa de quadros (settings.fps: 'auto' | 30 | 60).
+		const fpsPick = this.fpsChoice();
+		P.fpsCap = fpsPick === 30 ? 30 : fpsPick === 60 ? 60 : p.fps > 30 || (fps60 && this.level === 'high') ? 60 : 30;
 		P.lite = this.level === 'low' || this.level === 'medium';
+		// (Medium — notebook com vídeo integrado e celular: MSAA 2×, sombra com PCF baixo e fachadas sem a paralaxe de oclusão, que custa ~15
+		// leituras de textura por pixel de parede; High e HD mantêm)
+		P.noPom = !p.pom; A.pcf = p.pcf || 'medium';
 		A.smooth = p.smooth; A.msaa = p.msaa || 0; A.npcDirs = p.npcDirs; A.npcAA = p.npcAA || 1; A.vramMB = p.vramMB; A.uploadMB = p.uploadMB; A.npcHalf = !!p.npcHalf;
 		this._crowd(p.crowd);
 		// câmera de perseguição: até onde se vê dirigindo (a névoa de distância começa na metade) — o horizonte custa desenhos e triângulos
-		if (A.char3d && A.char3d.npc) A.char3d.npc.nearDist = p.npcNear || 17;      // (TODOS os NPCs em 3D — art/Char3D.js; o nível gráfico decide até onde vai o modelo cheio)
+		if (A.char3d && A.char3d.npc) A.char3d.npc.nearDist = p.npcNear || 17;
+		// NPCs EM 3D (bonecos de pontos — art/Char3D.js): só os mais perto. Cada um são milhares de quadradinhos com esqueleto no vertex
+		// shader; sem limite (antes: 999 num raio de 400 m) o centro tinha 84 deles e eles eram 57% do quadro. Os outros seguem no 2,5D
+		// (a arte de sempre: de longe não se vê a diferença). `?npc3d=N` troca o limite (para medir).
+		if (A.char3d && A.char3d.npc && p.npc3d !== undefined) {
+			const nq = typeof location !== 'undefined' && location.search.match(/[?&]npc3d=(\d+)/);
+			A.char3d.npc.max = nq ? +nq[1] : p.npc3d; A.char3d.npc.radius = p.npc3dR || 30;
+			A.char3d.npc.midDist = Math.min(A.char3d.npc.midDist || 32, Math.max(14, Math.round((p.npc3dR || 30) * 0.75)));
+		}      // (TODOS os NPCs em 3D — art/Char3D.js; o nível gráfico decide até onde vai o modelo cheio)
 		// (personagens em 3D: as folhas 2,5D só servem a quem ainda é desenhado nelas — pilotos de moto, o instante antes do modelo 3D
 		// chegar —, então o orçamento delas na placa cai para no máximo 128 MB; antes elas ocupavam ~630 MB no High sem ninguém ver)
 		if (A.char3d && A.char3d.on !== false && !/[?&]boneco=2d\b/.test(typeof location !== 'undefined' ? location.search : '')) A.vramMB = Math.min(A.vramMB, 128);
 		A.hdCar = !!p.hdCar;                                       // (o carro dirigido em alta definição: ~50 mil triângulos — Game._hdDrive)
 		if (p.chaseFar && Config.camera.chase) { Config.camera.chase.far = p.chaseFar; Config.camera.chase.near = Math.round(p.chaseFar * 0.45); }
+		// MENOS MALHAS no Low e no Medium (notebook, celular): acabamentos em pedaços de 128 u e vegetação em células de 256 u — medido, a
+		// CPU do render cai de 9,2 para 7,0 ms no centro e de 8,4 para 4,6 ms na favela (5.700 → 3.800 malhas; cada malha custa avaliar,
+		// ligar o material e desenhar). High/HD (placa dedicada: triângulo é barato) ficam nos pedaços menores. E a SOMBRA do Medium é
+		// redesenhada a cada 2 quadros (GameEngine.update: o sol só acompanha a câmera nesses quadros — sem desalinhar).
+		if (Config.world && p.trimChunk) Config.world.trimChunk = p.trimChunk;
+		P.vegCell = p.vegCell || 0; P.shadowEvery = p.shadowEvery || 1;
+		// (para medir: `?trim=N` pedaço dos acabamentos, `?celula=N` célula da vegetação 3D — em u)
+		const qs = typeof location !== 'undefined' ? location.search : '', num = (k) => { const m = qs.match(new RegExp('[?&]' + k + '=(\\d+)')); return m ? +m[1] : 0; };
+		if (num('trim') && Config.world) Config.world.trimChunk = num('trim');
+		if (num('celula')) P.vegCell = num('celula');
 		// celular modesto (PHONE): os cortes que não são números do preset
 		P.phone = !!this.phoneOn;
 		if (P.phone) {
 			const N = A.char3d && A.char3d.npc;
-			if (N) Object.assign(N, { max: 8, radius: 40, midDist: 22, farThin: 0.5, veryFarThin: 0.15 });      // (bonecos de pontos: só os 8 mais perto)
+			if (N) Object.assign(N, { max: 4, radius: 22, midDist: 16, farThin: 0.5, veryFarThin: 0.15 });      // (bonecos de pontos: só os 4 mais perto)
 			P.waterMirror = false;                                   // (o espelho redesenha prédios e árvores perto da água todo quadro)
 			P.noPom = true;                                          // (fachadas: a paralaxe de oclusão custa ~15 leituras de textura por pixel de parede)
 			P.cover = false;                                         // (vegetação rasteira: muitos desenhos pequenos)

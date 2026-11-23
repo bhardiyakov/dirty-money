@@ -1,6 +1,6 @@
 // CELULAR MODESTO (até 4 GB — core/Graphics.js, PHONE) e as economias de memória que valem para todos:
 //   • o perfil: 30 FPS, tela até 1,25×, sem sombras/brilho/espelho/paralaxe/rasteiras, MSAA 2×, atlas 2,5D em meia resolução com 64 MB,
-//     bonecos 3D só os 8 mais perto, malhas maiores (vegetação 256 u, acabamentos 128 u), vida da cidade baixa, interface na metade;
+//     bonecos 3D só os 4 mais perto, malhas maiores (vegetação 256 u, acabamentos 128 u), vida da cidade baixa, interface na metade;
 //   • vegetação 3D: as células dividem os buffers do modelo (render/Trees3D.js, _gpu/_share), cada uma com a sua Geometry;
 //   • mundo estático: normal e cor em 8 bits e a cópia na RAM solta depois da carga (map/MeshBatch.js: _compactTo, releaseStatic);
 //   • carga: o MeshBatch despeja o que empilhou em pedaços tipados (_spill) e emenda no build — o resultado é o mesmo.
@@ -28,7 +28,7 @@ module.exports = {
         });
         c.ok(p.on && p.level === 'medium' && p.fps === 30 && p.dpr === 1.25, `celular modesto no Medium: 30 FPS, tela até ${p.dpr}× (${p.level})`);
         c.ok(!p.shadows && !p.bloom && p.samples <= 2 && !p.mirror && p.pom === 0 && !p.trails && !p.bump, `sem sombras, brilho, espelho, paralaxe, borrão nem relevo do chão; MSAA ${p.samples}×`);
-        c.ok(p.half && p.vram === 64 && p.n3d === 8, `atlas 2,5D em meia resolução (${p.vram} MB) e bonecos 3D só os ${p.n3d} mais perto`);
+        c.ok(p.half && p.vram === 64 && p.n3d === 4, `atlas 2,5D em meia resolução (${p.vram} MB) e bonecos 3D só os ${p.n3d} mais perto`);
         c.ok(!p.cover && p.coverVis === 0 && p.cell === 256 && p.trim === 128, `menos malhas: vegetação em células de ${p.cell} u, acabamentos de ${p.trim} u, sem rasteiras`);
         c.ok(p.life === 'baixa' && p.mmHz === 10 && p.chaseFar === 75, `vida da cidade ${p.life}, minimapa a ${p.mmHz} Hz, névoa a ${p.chaseFar} m`);
 

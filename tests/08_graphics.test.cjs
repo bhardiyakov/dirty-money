@@ -16,7 +16,7 @@ module.exports = {
             };
         });
         c.eq(g.level, 'high', 'preset High pela URL');
-        c.eq(g.aa, 4, 'personagens com até 16 amostras por pixel (npcAA 4)');
+        c.eq(g.aa, 3, 'personagens com 3×3 amostras por pixel no High (npcAA 3: laço fixo — o 4×4 ficou só no HD)');
         c.ok(g.msaa >= 2, `MSAA da cena ligado (${g.msaa}×)`);
         c.ok(g.mats > 0 && g.ready === g.mats && g.aaDefine, `shader dos personagens com o supersampling compilado (${g.ready}/${g.mats} materiais)`);
         c.ok(g.sharp <= 1.2, `realce da ampliação brando com o antisserrilhado (${g.sharp.toFixed(2)})`);

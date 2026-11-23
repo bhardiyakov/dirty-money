@@ -17,7 +17,9 @@ module.exports = {
         const a = await boot(ctx);
         const d = await a.page.evaluate(look);
         c.ok(d.mode === 'recuo' && d.roofs, `padrão: janelas recuadas e telhados 3D (${d.mode}, telhado ${d.roofs})`);
-        c.ok(d.n > 0 && d.bump === d.n && d.pom === d.n, `relevo e paralaxe em todas as fachadas (${d.bump}/${d.n})`);
+        // (a paralaxe de OCLUSÃO — ~15 leituras por pixel de parede — só no High e no HD: Graphics.PRESETS[…].pom; o relevo, em todos)
+        const pomOn = await a.page.evaluate(() => !!Graphics.PRESETS[Graphics.level].pom);
+        c.ok(d.n > 0 && d.bump === d.n && d.pom === (pomOn ? d.n : 0), `relevo em todas as fachadas (${d.bump}/${d.n}); paralaxe de oclusão ${pomOn ? 'em todas' : 'fora neste preset'} (${d.pom})`);
         c.noErrors(a.errors, 'prédios com volume');
         await a.close();
         const b = await boot(ctx, { query: 'predios=0' });

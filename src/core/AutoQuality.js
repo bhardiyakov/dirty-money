@@ -22,6 +22,8 @@
 // ============================================================================
 
 class AutoQuality {
+	// Quadro LENTO = acima de SLOW_K × o tempo do teto de FPS (30 FPS: 38 ms — um quadro que perde a vez de 33 ms já passa disso).
+	static get SLOW_K() { return 1.15; }
 	// [id, o aviso, só com placa de vídeo?]
 	static get STEPS() {
 		return [
@@ -41,7 +43,7 @@ class AutoQuality {
 		this.g = game;
 		this.level = 0;
 		this.acc = 0; this.n = 0; this.nSlow = 0; this.bad = 0; this.cool = 6;        // 6 s de carência no início (carregamento e aquecimento de shaders)
-		this.slow = 1000 / Config.perf.fpsCap * 1.35;                  // média de ms por quadro acima disto = quadro "ruim"
+		this.slow = 1000 / Config.perf.fpsCap * AutoQuality.SLOW_K;                  // média de ms por quadro acima disto = quadro "ruim"
 		this.off = location.search.includes('full');
 		this.gpuSteps = !(typeof Graphics !== 'undefined' && Graphics.software);
 		this.skip = new Set();                                         // degraus que não valem neste preset
@@ -80,7 +82,9 @@ class AutoQuality {
 		// Janela ruim = a MAIORIA dos quadros lentos, não só a média: um engasgo isolado (carregar um pedaço do mapa, compilar um shader)
 		// puxa a média de uma máquina boa e não pode custar qualidade. Bem lento (menos da metade do ritmo, quase todo quadro) conta em
 		// dobro: desce em 2 s.
-		const slow = avg > this.slow && share >= 0.6, crawl = avg > this.slow * 1.8 && share >= 0.8;
+		// (antes: lento = acima de 1,35× o tempo alvo e 60% dos quadros — no teto de 30 FPS isso aceitava ficar em 22–29 FPS sem baixar nada:
+		// a 60 Hz um jogo que não cabe em 33 ms alterna quadros de 33 e 50 ms, e a média ficava abaixo de 45 ms)
+		const slow = avg > this.slow && share >= 0.5, crawl = avg > this.slow * 1.6 && share >= 0.8;
 		this.bad = crawl ? this.bad + 2 : slow ? this.bad + 1 : Math.max(0, this.bad - 1);
 		if (this.bad >= 4) { this.bad = 0; this.cool = crawl ? 3 : 5; this._down(); }
 	}
@@ -103,8 +107,8 @@ class AutoQuality {
 	_apply(level) {
 		const g = this.g, ge = g.gameEngine, id = AutoQuality.STEPS[level - 1][0];
 		const N3 = Config.art && Config.art.char3d && Config.art.char3d.npc;
-		if (id === 'npc3d') { if (N3) { N3.nearDist = Math.min(N3.nearDist || 17, 10); N3.midDist = 30; } }       // (os bonecos de pontos: os modelos detalhados só bem perto)
-		else if (id === 'npc3dOff') { if (N3) { N3.nearDist = 6; N3.midDist = 18; } }                               // (quase todos com o modelo bem leve — continuam 3D)
+		if (id === 'npc3d') { if (N3) { N3.nearDist = Math.min(N3.nearDist || 17, 10); N3.midDist = Math.min(N3.midDist || 30, 20); N3.max = Math.ceil((N3.max | 0) / 2); } }      // (os bonecos de pontos: metade deles, os detalhados só bem perto)
+		else if (id === 'npc3dOff') { if (N3) { N3.nearDist = 6; N3.midDist = 14; N3.max = Math.min(N3.max | 0, 2); } }                // (só os 2 mais perto, quase todos com o modelo leve)
 		else if (id === 'shadow512') { if (ge.shadowGenerator) ge.setShadowSize(512); }
 		else if (id === 'noShadow') this._shadowsOff();
 		else if (id === 'fill') {
@@ -129,7 +133,7 @@ class AutoQuality {
 		// Degrau zero (quem começa a 60 FPS): volta ao teto de 30 sem perder nada da imagem.
 		if (Config.perf.fpsCap > 30) {
 			Config.perf.fpsCap = 30;
-			this.slow = 1000 / Config.perf.fpsCap * 1.35;
+			this.slow = 1000 / Config.perf.fpsCap * AutoQuality.SLOW_K;
 			console.log('[QUALIDADE] desempenho baixo: teto de 60 → 30 FPS');
 			return;
 		}

@@ -442,3 +442,51 @@ software é maior que a de um driver de celular (cópias internas do SwiftShader
 **O que ainda pesa** (próximos cortes): o heap de ~300 MB é espalhado — ~4 mil malhas do Babylon (cada uma com matrizes, caixa
 e os defines do material: ~35 MB só em `PrepareDefinesForLight`), os 46 manifestos dos atlas 2,5D lidos inteiros na abertura
 (~12 MB), ~7 mil `TransformNode` de colisores (~14 MB, poderiam nascer só quando o `ColliderStreamer` os põe na física).
+
+## Notebook e celular sem segurar 30 FPS (novembro/2026)
+
+Relato: nem o notebook nem o S25 Ultra seguravam 30 FPS, e os dois esquentavam. Medido no navegador dos testes, preset Medium (o de
+notebook com vídeo integrado e de celular), câmera parada no centro, só o render, sincronizando com a GPU a cada quadro (`tools` em
+`scratchpad`: liga/desliga um recurso por vez e compara a mediana).
+
+**O que pesava**
+
+| Recurso | Custo no quadro (GPU simulada) |
+|---|---|
+| **NPCs em 3D** (bonecos de pontos, `max: 999` num raio de 400 m: **84 bonecos, 444 mil pontos** no centro) | **57%** |
+| Personagens 2,5D, chão, meia resolução, todo o resto | 0–13% cada (o resto dentro do ruído) |
+
+| Bonecos 3D | Quadro |
+|---|---|
+| 84 (sem limite) | 8,7 s |
+| 16 | 5,7 s |
+| 8 | 5,3 s |
+| 0 | 3,7 s |
+
+Cada boneco são milhares de quadradinhos instanciados com o esqueleto no vertex shader e `discard` no fragment (sem descarte
+antecipado de profundidade): caro em qualquer GPU, muito em celular e vídeo integrado.
+
+Além disso:
+- **Medium a 60 FPS**: notebook e celular no limite o tempo todo (o calor), oscilando entre 30 e 60.
+- **AutoQuality frouxo**: no teto de 30 só contava como lento quadro acima de 45 ms em 60% da janela — ficava em 22–29 FPS sem baixar
+  nada (a 60 Hz um jogo que não cabe em 33 ms alterna quadros de 33 e 50 ms).
+- **Antisserrilhado dos personagens 2,5D**: até 4×4 amostras com laços de tamanho vindo do pixel e `continue` — o Chrome no Windows
+  (Direct3D) desenrola e lê a textura em todas as voltas, sempre (até ~500 leituras por pixel de personagem).
+- CPU do render (o Babylon mandando o quadro): 8–9 ms no Medium, ~4 ms só da passada de sombra; no celular, 2–3× isso.
+
+**O que mudou**
+
+- NPCs 3D só os mais perto, por preset: Medium 6 (26 m), High 12 (36 m), HD 24 (50 m), Low 0, celular 4 (22 m). Os outros no 2,5D (a
+  arte de sempre). Os degraus de personagens do AutoQuality cortam a quantidade (metade; depois 2). `?npc3d=N` para medir.
+  Quadro do centro: **8,7 → 4,0 s**.
+- Medium a **30 FPS** estáveis por padrão; **Ajustes › Taxa de quadros** (automático / 30 / 60).
+- AutoQuality: lento = acima de **1,15×** o tempo alvo em **metade** dos quadros (30 FPS: 38 ms).
+- Medium: MSAA 2×, sombra com PCF baixo e **redesenhada a cada 2 quadros** (`Config.perf.shadowEvery`; o sol só anda nesses quadros —
+  `GameEngine.update` — e a sombra não desalinha), fachadas sem a paralaxe de oclusão (~15 leituras por pixel de parede).
+- Low e Medium: acabamentos em pedaços de 128 u e vegetação em células de 256 u — CPU do render **9,2 → 7,0 ms** (centro) e
+  **8,4 → 4,6 ms** (favela), 5.700 → 3.800 malhas. `?trim=N` e `?celula=N` para medir.
+- Personagens 2,5D: laços do antisserrilhado com tamanho fixo na compilação (`AAN`): 2×2 no Medium e no celular, 3×3 no High (era
+  4×4), 4×4 no HD; a média de longe em 2×2.
+
+**O que não foi medido.** O FPS num notebook e num celular de verdade. Para medir aí: `?perf` (painel com FPS, ms de GPU e de CPU,
+desenhos) ou `?bench&gfx=medium` (a tabela de rota fixa).

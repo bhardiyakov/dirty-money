@@ -176,9 +176,14 @@ class GameEngine {
 	update(dt, focus, ground, shadowFocus = focus) {
 		if (this.world) this.world.update(dt, focus);
 		if (this.sun && focus) {
-			this._shadowFocus = shadowFocus;
-			this.sun.position.copyFrom(shadowFocus).subtractInPlace(this.sunDir.scale(SUN_DIST));
-			this.sun.shadowFrustumSize = Math.max(60, Math.max(ground.x, ground.z) * 2 * 1.25);
+			// Sombra a cada N quadros (Config.perf.shadowEvery): o sol (a câmera da sombra) só anda no quadro em que o mapa é redesenhado —
+			// nos outros a sombra desenhada continua valendo onde está (o mapa é lido com a posição em que foi feito).
+			const sm = this.shadowGenerator && this.shadowGenerator.getShadowMap(), id = sm ? sm._currentRefreshId : -1;
+			if (!sm || sm.refreshRate <= 1 || id === -1 || id === sm.refreshRate) {
+				this._shadowFocus = shadowFocus;
+				this.sun.position.copyFrom(shadowFocus).subtractInPlace(this.sunDir.scale(SUN_DIST));
+				this.sun.shadowFrustumSize = Math.max(60, Math.max(ground.x, ground.z) * 2 * 1.25);
+			}
 		}
 	}
 
