@@ -9,16 +9,16 @@
 //   fog       a névoa (empurrada para o infinito)
 //   plugins   o plugin de material que vale para TODOS os materiais padrão (render/NightLights.js; os outros são só do mundo)
 //   lights    as luzes (fica só a cor própria/emissiva)
-//   textures  as texturas
+// (Sem "texturas": desligadas, o Babylon tira o relevo mas deixa a paralaxe das fachadas, e esse shader não compila.)
 // ============================================================================
 
 const SceneProbe = {
 	results: null,             // [[id, 'IMAGEM' | 'céu' | '?']]
 	kept: null,                // o id que ficou ligado
 	running: false,
-	NAMES: { rtt: 'texturas fora da tela', fog: 'névoa', plugins: 'o plugin de luz da noite nos materiais', lights: 'luzes', textures: 'texturas' },
-	ORDER: ['rtt', 'fog', 'plugins', 'lights', 'textures'],
-	THAW: { plugins: true, lights: true, textures: true },          // (trocam os defines: os materiais congelados do mundo precisam soltar)
+	NAMES: { rtt: 'texturas fora da tela', fog: 'névoa', plugins: 'o plugin de luz da noite nos materiais', lights: 'luzes' },
+	ORDER: ['rtt', 'fog', 'plugins', 'lights'],
+	THAW: { plugins: true, lights: true },          // (trocam os defines: os materiais congelados do mundo precisam soltar)
 
 	get label() {
 		if (this.running) return 'rodando…';
@@ -38,7 +38,6 @@ const SceneProbe = {
 			return () => { this.noFog = false; s.onBeforeRenderObservable.remove(o); s.fogStart = a; s.fogEnd = b; };
 		}
 		if (id === 'lights') { const v = s.lightsEnabled; s.lightsEnabled = false; return () => { s.lightsEnabled = v; }; }
-		if (id === 'textures') { const v = s.texturesEnabled; s.texturesEnabled = false; return () => { s.texturesEnabled = v; }; }
 		if (id === 'plugins') {                                                          // (o plugin que vale para TODOS os materiais padrão)
 			if (typeof NightLights === 'undefined') return () => {};
 			NightLights.off = true; s.markAllMaterialsAsDirty(BABYLON.Constants.MATERIAL_AllDirtyFlag);

@@ -538,8 +538,7 @@ viu "só céu" e desligou efeitos, personagens 3D e sombras, sem resolver. A cau
   1. texturas fora da tela (sombra, luz da noite, espelho d'água), que regravam a câmera da cena no meio do quadro;
   2. a névoa, empurrada para o infinito;
   3. o plugin de luz da noite, que vale para todos os materiais padrão;
-  4. as luzes;
-  5. as texturas.
+  4. as luzes.
 
   A primeira que faz o mundo aparecer fica, e o modo seguro lembra dela (degrau `x:…`).
 - Diagnóstico, linha "erros de desenho (1 quadro)": desenha um quadro e pergunta à placa (`gl.getError`) depois de cada malha. Assim
