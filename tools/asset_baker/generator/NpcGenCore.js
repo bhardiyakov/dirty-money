@@ -298,16 +298,21 @@ function NpcGenCore(G) {
     const hexrgb = (h) => { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
 
     // ------------------------------------------------------------------ estilo do desenho
-    // CARTUM (o padrão): contorno escuro suavizado, luz em 3 faixas chapadas, rosto marcado (olhos e sobrancelhas × face) — os campos
-    // em NpcGenRender._smooth. G.LINES = false e G.TOON = null = o visual "3D" sem contorno (antes de outubro/2026).
-    G.LINES = true;
-    G.TOON = { dark: 0.42, lit: 0.78, soft: 0.06, tex: 0.08, spec: 0.2, outline: 1.75, face: 1.4 };
+    // IGUAL AO 3D (o padrão desde novembro/2026): o mesmo do cartum — luz em 3 faixas, rosto marcado (olhos e sobrancelhas × face) —
+    // mas SEM CONTORNO: nem o externo (TOON.outline = 0) nem os traços onde uma parte passa na frente da outra (G.LINES = false: viram
+    // sombra de contato, e a silhueta sai antisserrilhada). É como o boneco 3D (src/art/Char3D.js, o mesmo gerador num Worker) aparece:
+    // na troca 3D ↔ 2,5D o personagem não "pula" de um desenho para outro. CARTUM (até novembro/2026; NPC_ESTILO=cartum): com o
+    // contorno escuro suavizado e os traços. G.LINES = false e G.TOON = null = o visual "3D" antigo (antes de outubro/2026).
+    G.LINES = false;
+    G.TOON = { dark: 0.42, lit: 0.78, soft: 0.06, tex: 0.08, spec: 0.2, outline: 0, face: 1.4 };
     // REALISTA (G.REAL, com G.TOON = null e G.LINES = false): o boneco iluminado como o mapa 3D — a luz vem de onde o sol do jogo vem
     // (Config.light.sunDir = [0,6, −1,8, −0,45]: noroeste e alto; aqui x = leste, y = norte, z = cima), céu por cima, oclusão mais funda,
     // quase sem a luz de recorte, brilho fraco, olhos sem o branco de desenho e a cabeça menor (ADULT.head 0,64). Em NpcGenRender._smooth.
     G.REAL = null;
+    G.STYLE = 'igual3d';
     G.STYLES = {
-        cartum: () => ({ LINES: true, TOON: G.TOON || { dark: 0.42, lit: 0.78, soft: 0.06, tex: 0.08, spec: 0.2, outline: 1.75, face: 1.4 }, REAL: null }),
+        igual3d: () => ({ LINES: false, TOON: { dark: 0.42, lit: 0.78, soft: 0.06, tex: 0.08, spec: 0.2, outline: 0, face: 1.4 }, REAL: null }),
+        cartum: () => ({ LINES: true, TOON: { dark: 0.42, lit: 0.78, soft: 0.06, tex: 0.08, spec: 0.2, outline: 1.75, face: 1.4 }, REAL: null }),
         real: () => ({ LINES: false, TOON: null, REAL: { L: [-0.31, 0.23, 0.92], amb: 0.12, sky: 0.22, sun: 0.7, wrap: 0.25, rim: 0.12, spec: 0.6, tex: 0.04 }, head: 0.64 }),
     };
     // Troca o estilo do desenho (antes de criar os renderizadores: a cabeça muda a malha assada).

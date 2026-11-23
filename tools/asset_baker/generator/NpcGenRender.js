@@ -166,7 +166,7 @@ function NpcGenRender(G) {
             const NXa = smooth ? new Float32Array(np_) : null, NYa = smooth ? new Float32Array(np_) : null, NZa = smooth ? new Float32Array(np_) : null, TN = smooth ? new Float32Array(np_) : null;
             // Visual 3D (sem traços): pixel de borda com qualquer cobertura entra, e a fração coberta vira o alfa (borda suavizada — COV).
             const aa = smooth && !G.LINES, COV = aa ? new Uint8Array(np_) : null;
-            const SM = smooth && G.TOON ? new Uint8Array(np_ * ss * ss) : null;      // (cartum: os subpixels cobertos — contorno suavizado)
+            const SM = smooth && G.TOON && G.TOON.outline > 0 ? new Uint8Array(np_ * ss * ss) : null;      // (cartum: os subpixels cobertos — contorno suavizado)
             const fillMin = aa ? 1 : (ss * ss) >> 1, weapMin = Math.ceil((ss * ss * 5) / 16), DMIN = ss === 2 && G.TOON ? DECAL_MIN2 : DECAL_MIN;
             const gcount = new Float64Array(NG), mcount = new Int32Array(NM);
             const subI = new Int16Array(ss * ss), subL = new Int32Array(ss * ss), subZ = new Float64Array(ss * ss);
@@ -430,7 +430,7 @@ function NpcGenRender(G) {
                 if (F[i] || !lines || toon) continue;
                 CO[i] = C.OUTLINE; AL[i] = 255; F[i] = 2;
             }
-            if (toon) this._toonOutline(c, CO, AL, UNDER, max(1.2, TOON.outline * kk / 2));      // (no mínimo 1,2 px: nas resoluções menores)
+            if (toon && TOON.outline > 0) this._toonOutline(c, CO, AL, UNDER, max(1.2, TOON.outline * kk / 2));      // (no mínimo 1,2 px; sem contorno: o estilo igual ao 3D)
             // luz em 64 níveis (bits altos) + cobertura da borda nos 2 bits baixos (0 = cheio, 1–3 = 75/50/25%: o jogo vira alfa)
             const COV = c.COV, sq = c.sq || 4;
             for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
