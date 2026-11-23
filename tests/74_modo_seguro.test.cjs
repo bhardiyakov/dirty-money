@@ -46,9 +46,12 @@ module.exports = {
         // 2) a regra de "tentar de novo": outra revisão, sem data ou mais de 14 dias
         const st = await page.evaluate(() => {
             const R = SafeMode.REV, now = Date.now();
-            return { old: SafeMode._stale({ steps: ['pp'] }), rev: SafeMode._stale({ rev: R - 1, when: now }), aged: SafeMode._stale({ rev: R, when: now - 15 * 864e5 }), fresh: SafeMode._stale({ rev: R, when: now - 3 * 864e5 }) };
+            const P = ['pp'];
+            return { old: SafeMode._stale({ steps: P }), rev: SafeMode._stale({ rev: R - 1, when: now, steps: P }), aged: SafeMode._stale({ rev: R, when: now - 15 * 864e5, steps: P }), fresh: SafeMode._stale({ rev: R, when: now - 3 * 864e5, steps: P }),
+                flagAged: SafeMode._stale({ rev: R, when: now - 60 * 864e5, steps: [], noParallel: true }), flagRev: SafeMode._stale({ rev: R - 1, when: now, steps: [], noParallel: true }) };
         });
         c.ok(st.old && st.rev && st.aged && !st.fresh, 'tenta de novo: sem revisão, revisão anterior ou guardado há 15 dias — guardado há 3 dias na revisão atual fica');
+        c.ok(!st.flagAged && st.flagRev, 'só os pedidos de abertura (sem compilação paralela…) não vencem pela data — só com uma revisão nova');
 
         // 3) tentando de novo e a imagem NÃO chega: o degrau volta e fica guardado com a revisão, a data e o motivo
         const t0 = await page.evaluate(() => {
