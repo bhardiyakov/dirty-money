@@ -26,10 +26,10 @@ const Graphics = {
 	// (Low: 0,56 = os 75% de antes × os 75% que a TV de tubo tirava por cima, quando ela vinha ligada por padrão — o aparelho fraco
 	// continua desenhando a mesma quantidade de pixels com a imagem limpa.)
 	PRESETS: {
-		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6, npc3d: 0, npc3dR: 0 },
-		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 1.8e6, npc3d: 6, npc3dR: 26 },
-		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 4, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6, npc3d: 12, npc3dR: 36 },
-		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true, npc3d: 24, npc3dR: 50 },
+		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6, npc3d: 0, npc3dR: 0, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 1 },
+		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 2, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 1.8e6, npc3d: 6, npc3dR: 26, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 2 },
+		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 3, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6, npc3d: 12, npc3dR: 36, pom: true, pcf: 'medium', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
+		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true, npc3d: 24, npc3dR: 50, pom: true, pcf: 'high', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
 	},
 	// GPUs that cannot carry the high preset (WEBGL_debug_renderer_info): software rasterisers and old mobile/integrated chips.
 	// ("Microsoft Basic Render Driver" / WARP: o Windows sem driver de vídeo ou com a aceleração do navegador desligada — desenha na CPU)
@@ -165,6 +165,9 @@ const Graphics = {
 		const fpsPick = this.fpsChoice();
 		P.fpsCap = fpsPick === 30 ? 30 : fpsPick === 60 ? 60 : p.fps > 30 || (fps60 && this.level === 'high') ? 60 : 30;
 		P.lite = this.level === 'low' || this.level === 'medium';
+		// (Medium — notebook com vídeo integrado e celular: MSAA 2×, sombra com PCF baixo e fachadas sem a paralaxe de oclusão, que custa ~15
+		// leituras de textura por pixel de parede; High e HD mantêm)
+		P.noPom = !p.pom; A.pcf = p.pcf || 'medium';
 		A.smooth = p.smooth; A.msaa = p.msaa || 0; A.npcDirs = p.npcDirs; A.npcAA = p.npcAA || 1; A.vramMB = p.vramMB; A.uploadMB = p.uploadMB; A.npcHalf = !!p.npcHalf;
 		this._crowd(p.crowd);
 		// câmera de perseguição: até onde se vê dirigindo (a névoa de distância começa na metade) — o horizonte custa desenhos e triângulos
@@ -182,6 +185,12 @@ const Graphics = {
 		if (A.char3d && A.char3d.on !== false && !/[?&]boneco=2d\b/.test(typeof location !== 'undefined' ? location.search : '')) A.vramMB = Math.min(A.vramMB, 128);
 		A.hdCar = !!p.hdCar;                                       // (o carro dirigido em alta definição: ~50 mil triângulos — Game._hdDrive)
 		if (p.chaseFar && Config.camera.chase) { Config.camera.chase.far = p.chaseFar; Config.camera.chase.near = Math.round(p.chaseFar * 0.45); }
+		// MENOS MALHAS no Low e no Medium (notebook, celular): acabamentos em pedaços de 128 u e vegetação em células de 256 u — medido, a
+		// CPU do render cai de 9,2 para 7,0 ms no centro e de 8,4 para 4,6 ms na favela (5.700 → 3.800 malhas; cada malha custa avaliar,
+		// ligar o material e desenhar). High/HD (placa dedicada: triângulo é barato) ficam nos pedaços menores. E a SOMBRA do Medium é
+		// redesenhada a cada 2 quadros (GameEngine.update: o sol só acompanha a câmera nesses quadros — sem desalinhar).
+		if (Config.world && p.trimChunk) Config.world.trimChunk = p.trimChunk;
+		P.vegCell = p.vegCell || 0; P.shadowEvery = p.shadowEvery || 1;
 		// (para medir: `?trim=N` pedaço dos acabamentos, `?celula=N` célula da vegetação 3D — em u)
 		const qs = typeof location !== 'undefined' ? location.search : '', num = (k) => { const m = qs.match(new RegExp('[?&]' + k + '=(\\d+)')); return m ? +m[1] : 0; };
 		if (num('trim') && Config.world) Config.world.trimChunk = num('trim');

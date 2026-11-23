@@ -81,11 +81,12 @@ module.exports = {
             return out;
         });
         c.ok(aq.softNow && aq.softStops, `rasterizador por software (os testes): só os degraus de sombra, sem mexer na resolução nem no MSAA (${aq.soft.join(' → ')})`);
-        c.ok(aq.steps.length === 7 && aq.seen.join() === '1,2,3,4,5,6,7' && aq.end, `com placa de vídeo desce os ${aq.steps.length} degraus e para (${aq.seen.join(' → ')})`);
-        c.ok(aq.noShadow && aq.msaa0 > 1 && aq.msaa === 1 && aq.pom0 > 0 && aq.pom === 0, `sem sombras, sem MSAA (${aq.msaa0}× → ${aq.msaa}×) e sem paralaxe nas fachadas (${aq.pom0} → ${aq.pom})`);
+        const N = aq.steps.length, all = Array.from({ length: N }, (_, i) => i + 1).join();      // (os degraus de AutoQuality.STEPS, todos, em ordem)
+        c.ok(N >= 7 && aq.seen.join() === all && aq.end, `com placa de vídeo desce os ${aq.steps.length} degraus e para (${aq.seen.join(' → ')})`);
+        c.ok(aq.noShadow && aq.msaa0 > 1 && aq.msaa === 1 && aq.pom === 0, `sem sombras, sem MSAA (${aq.msaa0}× → ${aq.msaa}×) e sem paralaxe nas fachadas (${aq.pom0} → ${aq.pom}; o Medium já começa sem ela)`);
         c.ok(Math.abs(aq.scale - 0.58) < 1e-6 && Math.abs(aq.lv - 1 / 0.58) < 0.02, `resolução a ${Math.round(aq.scale * 100)}% (escala do motor ×${aq.lv.toFixed(2)})`);
         c.ok(!aq.coverOn && aq.cover0 > 0 && aq.cover === 0 && aq.mirror >= 3, `sem vegetação rasteira (${aq.cover0} → ${aq.cover} malhas à vista) e o espelho da água a cada ${aq.mirror} quadros`);
-        c.ok(aq.saved === 7 && aq.resumeGpu && aq.resume === 6, `o degrau fica guardado (${aq.saved}) e a sessão seguinte começa um acima (${aq.resume})`);
+        c.ok(aq.saved === N && aq.resumeGpu && aq.resume === N - 1, `o degrau fica guardado (${aq.saved}) e a sessão seguinte começa um acima (${aq.resume})`);
 
         // 5) o jogo segue desenhando nessa configuração mínima, sem erro
         await gameWait(page, 2, 90000);

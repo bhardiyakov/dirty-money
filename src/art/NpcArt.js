@@ -603,27 +603,26 @@ const NpcArt = {
 				return mix(mix(tap(i * hs, R), tap((i + vec2(1.0, 0.0)) * hs, R), f.x), mix(tap((i + vec2(0.0, 1.0)) * hs, R), tap((i + vec2(1.0, 1.0)) * hs, R), f.x), f.y);
 			}
 			// o mesmo, de longe sem o antisserrilhado: a média de n×n texels sobre a pegada do pixel
+			// (laço de tamanho FIXO, 2×2: com o tamanho vindo do pixel e \`continue\`, o Chrome no Windows — Direct3D — desenrolava as 16
+			// voltas e lia a textura em todas, sempre)
 			vec4 sampleFrame(vec2 px, vec4 R) {
 				if (mini > 1.3) {
-					float n = min(4.0, ceil(mini));
 					vec4 acc = vec4(0.0);
-					for (int j = 0; j < 4; j++) for (int k = 0; k < 4; k++) {
-						if (float(k) >= n || float(j) >= n) continue;
-						acc += tap(floor(px + ((vec2(float(k), float(j)) + 0.5) / n - 0.5) * mini), R);
-					}
-					return acc / (n * n);
+					for (int j = 0; j < 2; j++) for (int k = 0; k < 2; k++) acc += tap(floor(px + ((vec2(float(k), float(j)) + 0.5) * 0.5 - 0.5) * mini), R);
+					return acc * 0.25;
 				}
 				return bilin(px, R);
 			}
 			#ifdef AA
 			// supersampling: n×n amostras na grade girada sobre a pegada do pixel (ex, ey: texels do atlas por pixel da tela)
+			// (AAN amostras por lado, FIXO na compilação: o custo é o mesmo em toda placa — antes o n vinha do pixel, e o Direct3D do
+			// Windows desenrolava 4×4 voltas lendo a textura em todas)
 			vec4 supersample() {
 				vec2 ex = dFdx(vPx), ey = dFdy(vPx);
-				float n = clamp(ceil(max(length(ex), length(ey)) * 1.4), 2.0, aa), z = vPx2.z;
-				bool both = n < 2.5 && z > 0.004;                                   // (só 4 amostras: a mistura exata, lendo os dois quadros)
+				float n = float(AAN), z = vPx2.z;
+				bool both = AAN == 2 && z > 0.004;                                  // (só 4 amostras: a mistura exata, lendo os dois quadros)
 				vec4 acc = vec4(0.0);
-				for (int j = 0; j < 4; j++) for (int k = 0; k < 4; k++) {
-					if (float(k) >= n || float(j) >= n) continue;
+				for (int j = 0; j < AAN; j++) for (int k = 0; k < AAN; k++) {
 					vec2 u = (vec2(float(k), float(j)) + 0.5) / n - 0.5;
 					u = vec2(u.x * 0.8944 - u.y * 0.4472, u.x * 0.4472 + u.y * 0.8944);      // girada 26,6° (atan ½)
 					vec2 o = ex * u.x + ey * u.y;
@@ -695,7 +694,7 @@ const NpcArt = {
 			attributes: ['position', 'color', 'fr', 'fr2'],
 			uniforms: ['world', 'viewProjection', 'ppu', 'lift', 'stand', 'atlasSize', 'hs', 'palRows', 'tint', 'shadeC', 'sharp', 'mini', 'aa', 'la', 'fmt', 'wt', 'clipA', 'clipB', 'silhouette', 'lfP', 'eye', 'fogP', 'fogC'],
 			samplers: ['atlas', 'palette', 'lfTex'],
-			defines: this.aa > 1 ? ['#define AA'] : [],
+			defines: this.aa > 1 ? ['#define AA', '#define AAN ' + this.aa] : [],
 			needAlphaBlending: true,
 		});
 		m.setFloat('aa', this.aa);
