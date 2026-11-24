@@ -23,7 +23,7 @@ const SafeMode = {
 		['char3d', 'personagens 3D'],
 		['shadows', 'sombras'],
 	],
-	REV: 2,                    // revisão do desenho (1 = antes do céu/brilho/sombras novos); suba ao mexer nos shaders de tela
+	REV: 3,                    // revisão do desenho (1 = antes do céu/brilho/sombras novos; 3 = compilação paralela testada); suba ao mexer nos shaders de tela
 	RETRY_DAYS: 14,
 	RETRY_UNKNOWN: 8,          // tentando de novo: 8 checagens sem veredito (tela escura) = volta aos degraus guardados
 	GOOD_N: 8,                 // checagens seguidas com imagem = está tudo bem (para de olhar; tentando de novo: esquece o modo seguro)
@@ -34,17 +34,21 @@ const SafeMode = {
 
 	_gpu() { try { const g = Graphics.gpu(); return (g.renderer || '?').slice(0, 160); } catch (e) { return '?'; } },
 	get active() { return this.applied.size > 0; },
-	_names(ids) { return this.STEPS.filter((s) => ids.includes(s[0])).map((s) => s[1]).join(', '); },
+	_names(ids) { return ids.map((id) => id.startsWith('x:') ? 'sem ' + ((typeof SceneProbe !== 'undefined' && SceneProbe.NAMES[id.slice(2)]) || id.slice(2)) : (this.STEPS.find((s) => s[0] === id) || [id, id])[1]).join(', '); },
 	describe() { return this.applied.size ? 'LIGADO — desligou: ' + this._names([...this.applied]) : 'desligado'; },
+	// Os pedidos para a ABERTURA desta placa (lidos pelo core/GpuCheck.js antes de qualquer shader): o que a escada não resolveu.
+	_flags(s) { return s ? [s.noParallel && 'sem compilação paralela', s.ubo0 && 'sem uniform buffers'].filter(Boolean) : []; },
 	// Para o diagnóstico: o que está ligado, desde quando, em que revisão — ou que esta abertura está tentando de novo.
 	detail() {
 		const day = (t) => { try { return new Date(t).toLocaleDateString('pt-BR'); } catch (e) { return '?'; } };
 		const from = (s) => (s.when ? ' desde ' + day(s.when) : ' (data desconhecida)') + ` · revisão ${s.rev || 1} (atual ${this.REV})` + (s.why ? ' · motivo: ' + s.why : '');
 		if (this.retry && !this.applied.size) return 'tentando de novo com tudo ligado (estava: ' + this._names(this.retry.steps || []) + from(this.retry) + ')';
-		return this.describe() + (this.applied.size && this.state ? from(this.state) : '');
+		const F = this._flags(this.state);
+		return this.describe() + (F.length ? (this.applied.size ? ' · ' : ' — ') + 'abre ' + F.join(' e ') : '') + ((this.applied.size || F.length) && this.state ? from(this.state) : '');
 	},
 	// Guardado numa revisão anterior do desenho, sem data ou há mais de RETRY_DAYS dias: vale tentar de novo.
-	_stale(s) { return (s.rev || 1) !== this.REV || !(Date.now() - (s.when || 0) < this.RETRY_DAYS * 864e5); },
+	// (Só os pedidos de abertura, sem degraus: não vencem pela data — o retry deles abriria a placa quebrada de novo; só uma revisão nova.)
+	_stale(s) { return (s.rev || 1) !== this.REV || ((s.steps || []).length > 0 && !(Date.now() - (s.when || 0) < this.RETRY_DAYS * 864e5)); },
 
 	// Na carga (Game, depois do pós-processamento montado): os degraus guardados para esta placa.
 	init(g) {
@@ -65,7 +69,8 @@ const SafeMode = {
 		if (this.applied.has(id)) return;
 		this.applied.add(id);
 		try {
-			if (id === 'pp') {
+			if (id.startsWith('x:')) { if (typeof SceneProbe !== 'undefined') SceneProbe.apply(g, id.slice(2)); }      // (o que o teste da cena achou)
+			else if (id === 'pp') {
 				const cam = g.camera.camera;
 				if (typeof Trails !== 'undefined') Trails.off = true;
 				if (g.crt && g.crt.enabled) g.crt.setEnabled(false);
@@ -104,6 +109,7 @@ const SafeMode = {
 				if (this.applied.size) console.warn('[SEGURO] modo seguro desta placa: ' + this.detail());
 				if (this.retry) console.warn('[SEGURO] ' + this.detail());
 			}
+			if (this._probing) return;                                                        // (o teste da cena está mexendo na cena)
 			if (now - last < 1000) return;
 			last = now;
 			const retrying = this.retry && !this.applied.size;
@@ -113,6 +119,19 @@ const SafeMode = {
 			if (blank) { bad++; good = 0; } else { good++; bad = 0; }
 			if (bad >= 4) {
 				bad = 0;
+				// 1º: o TESTE DA CENA (core/SceneProbe.js) — uma suspeita por vez na cena de verdade; a que faz o mundo aparecer fica
+				if (!this._probed && typeof SceneProbe !== 'undefined') {
+					this._probed = true; this._probing = true;
+					if (g._flash) g._flash('🛟 A imagem não está chegando à tela — testando o que resolve nesta placa…');
+					SceneProbe.run(g, () => this._blank(scene, eng)).then((id) => {
+						this._probing = false; last = performance.now();
+						if (!id) return;
+						this.applied.add('x:' + id); this._remember();
+						console.warn('[SEGURO] o mundo voltou sem ' + SceneProbe.NAMES[id] + ': fica assim nesta placa');
+						if (g._flash) g._flash('🛟 Modo seguro: a imagem voltou sem ' + SceneProbe.NAMES[id]);
+					});
+					return;
+				}
 				const next = this.STEPS.find((s) => !this.applied.has(s[0]));
 				if (next) {
 					this._apply(g, next[0]);
@@ -123,8 +142,10 @@ const SafeMode = {
 			}
 			if (this.retry && !this.applied.size && (good >= this.GOOD_N || late)) {          // (tentou de novo com tudo ligado: chegou?)
 				if (good >= this.GOOD_N || good >= few && !bad) {
-					console.warn('[SEGURO] tentei de novo com tudo ligado e a imagem chegou: modo seguro desligado nesta placa');
-					Store.remove(this.KEY);
+					const o = this.retry, F = o.rev === this.REV ? this._flags(o) : [];       // (os pedidos de abertura valeram nesta abertura: ficam)
+					console.warn('[SEGURO] tentei de novo com tudo ligado e a imagem chegou: ' + (F.length ? 'ficam só ' + F.join(' e ') : 'modo seguro desligado nesta placa'));
+					if (F.length) { this.state = { gpu: o.gpu, steps: [], rev: this.REV, when: Date.now(), why: o.why, noParallel: !!o.noParallel, ubo0: !!o.ubo0 }; Store.setJSON(this.KEY, this.state); }
+					else Store.remove(this.KEY);
 					this.retry = null;
 				} else { back(); return; }
 			}
@@ -164,7 +185,19 @@ const SafeMode = {
 	},
 
 	_giveUp(g) {
-		console.error('[SEGURO] mesmo com o modo seguro a imagem não aparece nesta placa');
-		if (typeof Diag !== 'undefined') Diag.open(g, '⚠️ A imagem do jogo não está aparecendo', 'O jogo está rodando, mas este navegador não está desenhando a imagem nesta placa de vídeo — mesmo com os efeitos, os personagens 3D e as sombras desligados. Tente: atualizar o navegador e o driver da placa de vídeo, ligar "Usar aceleração gráfica" nas configurações do navegador, ou abrir em outro navegador (Edge, Firefox). E mande este diagnóstico para quem cuida do jogo.');
+		console.error('[SEGURO] mesmo com o modo seguro a imagem não aparece nesta placa — teste da cena: ' + (typeof SceneProbe !== 'undefined' ? SceneProbe.label : '-'));
+		// ÚLTIMOS RECURSOS, um por abertura (core/GpuCheck.js lê o pedido antes de qualquer shader): 1) sem compilação paralela — no
+		// notebook Iris Xe o Firefox, sem ela, desenhava e o Chrome não —; 2) sem uniform buffers. Os degraus da escada não resolveram:
+		// saem (a próxima abertura vem com tudo ligado, mais o pedido).
+		const st = this.state || (this.state = { gpu: this._gpu(), steps: [], rev: this.REV, when: Date.now(), why: 'tela só com a cor do céu' });
+		const ask = typeof GpuCheck !== 'undefined' && GpuCheck.hadParallel && !st.noParallel ? 'noParallel' : !st.ubo0 ? 'ubo0' : null;
+		if (ask) {
+			st[ask] = true; st.steps = []; st.rev = this.REV; st.when = Date.now();
+			Store.setJSON(this.KEY, st);
+			console.warn('[SEGURO] na próxima abertura: ' + this._flags(st).join(' e '));
+			if (g._flash) g._flash('🛟 Feche e abra o jogo de novo: na próxima abertura ele tenta o modo compatível desta placa');
+		}
+		if (typeof Diag !== 'undefined' && ask) Diag.open(g, '⚠️ A imagem do jogo não está aparecendo', `O jogo está rodando, mas este navegador não desenha a imagem nesta placa de vídeo. FECHE E ABRA O JOGO DE NOVO: na próxima abertura ele tenta o modo compatível (${this._flags(st).join(' e ')}). Se ainda assim não aparecer, mande este diagnóstico para quem cuida do jogo.`);
+		else if (typeof Diag !== 'undefined') Diag.open(g, '⚠️ A imagem do jogo não está aparecendo', 'O jogo está rodando, mas este navegador não está desenhando a imagem nesta placa de vídeo — mesmo com os efeitos, os personagens 3D e as sombras desligados. Tente: atualizar o navegador e o driver da placa de vídeo, ligar "Usar aceleração gráfica" nas configurações do navegador, ou abrir em outro navegador (Edge, Firefox). E mande este diagnóstico para quem cuida do jogo.');
 	},
 };

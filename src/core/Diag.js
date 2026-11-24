@@ -57,7 +57,9 @@ const Diag = {
 		} else put('placa de vídeo', 'o motor não chegou a abrir');
 		put('preset', `${safe(() => Graphics.level)} (escolha: ${safe(() => g.menu.settings.graphics)}) · ajuste automático: degrau ${safe(() => g.autoQuality.level)}${safe(() => g.autoQuality.level ? ' — ' + AutoQuality.STEPS.slice(0, g.autoQuality.level).map((s) => s[0]).join(', ') : '', '')}`);
 		put('teste de desenho', safe(() => GpuCheck.label + (GpuCheck.result ? ` (${GpuCheck.result.ms} ms)` : ''), 'não rodou'));
-		put('modo seguro', safe(() => SafeMode.detail(), 'desligado'));
+		put('modo seguro', safe(() => SafeMode.detail() + (SafeMode.state && SafeMode.state.ubo0 ? ' · próxima abertura: sem uniform buffers' : ''), 'desligado'));
+		put('teste da cena', safe(() => SceneProbe.label, 'não rodou'));
+		put('erros de desenho (1 quadro)', safe(() => g && g.scene ? GpuCheck.frameErrors(g.scene) : '-', '?'));
 		put('pós-processamento', safe(() => g.camera.camera._postProcesses.filter(Boolean).map((p) => p.name).join(' > ') || 'nenhum'));
 		put('personagens 3D', safe(() => `${Char3D.on ? 'ligados' : 'DESLIGADOS'} · ${Char3D.npcs.size} na tela`));
 		put('carros 3D', safe(() => Config.art.cars3d ? 'ligados' : 'desligados'));

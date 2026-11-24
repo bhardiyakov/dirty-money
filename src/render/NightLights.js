@@ -48,7 +48,7 @@ const NightLights = {
 		class NightLightPlugin extends BABYLON.MaterialPluginBase {
 			constructor(m) { super(m, 'NightLight', 270, { NIGHTLF: false, NIGHTSEA: false }); this._sea = m.name === 'water'; this._enable(true); }
 			getClassName() { return 'NightLightPlugin'; }
-			prepareDefines(d) { d.NIGHTLF = true; d.NIGHTSEA = this._sea && NL.waterOn; }
+			prepareDefines(d) { d.NIGHTLF = !NL.off; d.NIGHTSEA = !NL.off && this._sea && NL.waterOn; }      // (off: core/SceneProbe.js)
 			getSamplers(s) { s.push('lfTex'); }
 			getUniforms() { return { ubo: [{ name: 'lfP', size: 4, type: 'vec4' }, { name: 'lfW', size: 4, type: 'vec4' }], fragment: 'uniform vec4 lfP;\nuniform vec4 lfW;' }; }
 			bindForSubMesh(ub) {

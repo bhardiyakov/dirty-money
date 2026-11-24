@@ -531,7 +531,31 @@ simples. Os materiais padrão recebem câmera, luz e malha por *uniform buffers*
 - A vigia do modo seguro agora lê uma grade fora do meio da tela, onde fica o jogador. Com efeitos de tela ligados, ela lê a cena
   antes da gradação de cor.
 
-**O que não foi confirmado.** A causa exata naquela placa: aqui só há o Chromium por software. O teste vai mostrar no diagnóstico do
-notebook qual modo desenhou.
+**Diagnóstico seguinte do notebook.** O teste de desenho deu ok: numa cena isolada o material padrão desenha. No jogo, a vigia nova
+viu "só céu" e desligou efeitos, personagens 3D e sombras, sem resolver. A causa está em algo que só a cena do jogo tem. Por isso:
+- `core/SceneProbe.js`: quando a vigia vê só céu, antes da escada de degraus, o jogo testa uma suspeita por vez na cena de verdade e
+  olha a tela depois de cada uma. As suspeitas, em ordem:
+  1. texturas fora da tela (sombra, luz da noite, espelho d'água), que regravam a câmera da cena no meio do quadro;
+  2. a névoa, empurrada para o infinito;
+  3. o plugin de luz da noite, que vale para todos os materiais padrão;
+  4. as luzes.
 
-Testes: `75_teste_desenho` (normal, falha simulada → sem uniform buffers com o esconderijo e a rua aparecendo) e `74_modo_seguro` (a vigia).
+  A primeira que faz o mundo aparecer fica, e o modo seguro lembra dela (degrau `x:…`).
+- Diagnóstico, linha "erros de desenho (1 quadro)": desenha um quadro e pergunta à placa (`gl.getError`) depois de cada malha. Assim
+  aparece qual desenho o Direct3D recusou e com que erro.
+- Último recurso: se nada resolve, a próxima abertura dessa placa vai sem uniform buffers (`ubo0` no estado do modo seguro, lido pelo
+  `GpuCheck`).
+
+Testes: `75_teste_desenho` (normal, falha simulada → sem uniform buffers com o esconderijo e a rua aparecendo) e `74_modo_seguro` (a vigia,
+o teste da cena simulado e as linhas do diagnóstico).
+
+**Chrome × Firefox no mesmo notebook.** O Firefox, na mesma placa e no mesmo Direct3D 11 (também via ANGLE), abre e roda o Medium a 25–30
+FPS. O Chrome não desenha o mundo. A diferença de pipeline entre os dois diagnósticos: o Chrome usa a **compilação paralela de
+shaders** (KHR_parallel_shader_compile) e o Firefox não. O teste de desenho desligava a compilação paralela enquanto rodava, e por isso
+passava no Chrome. Agora:
+- O teste de desenho roda como o jogo roda, com a compilação paralela (espera o shader ficar pronto). A primeira saída, se falhar, é
+  **sem compilação paralela**, como no Firefox; depois vem sem uniform buffers e a névoa padrão.
+- Os últimos recursos do modo seguro, um por abertura: sem compilação paralela, depois sem uniform buffers. Os degraus da escada que
+  não resolveram saem: a próxima abertura vem com tudo ligado, mais o pedido. Esses pedidos não vencem pela data, só com uma revisão
+  nova (`SafeMode.REV` = 3).
+- `?paralelo=0` força a compilação sem paralelismo.

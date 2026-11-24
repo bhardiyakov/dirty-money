@@ -84,8 +84,19 @@ class SpriteActor {
 	// 2.5D camera (CompassCamera.tilted): 2.5D characters STAND UP — a vertical quad turned to the camera (BILLBOARDMODE_Y), stretched by
 	// 1/cos(tilt) so the art, rendered at that same angle, shows 1:1 on screen. The top-down camera keeps them lying on the ground.
 	static standing() { return typeof CompassCamera !== 'undefined' && !!CompassCamera.tilted; }
-	// (a inclinação de AGORA: na perseguição a câmera desce e o boneco em pé estica menos — senão ficaria comprido)
-	static get STAND_SCALE() { return 1 / Math.cos(((typeof CompassCamera !== 'undefined' && CompassCamera.tiltDeg) || (typeof Config !== 'undefined' && Config.camera.tilt) || 56) * Math.PI / 180); }
+	// O MESMO TAMANHO DO BONECO 3D (src/art/Char3D.js) em qualquer inclinação da câmera, para a troca 3D ↔ 2,5D não mostrar um pulo.
+	// O desenho foi feito visto de cima a BAKE_TILT (56°): ele mostra a altura h encurtada (h cos e) mais o alto da cabeça e dos ombros
+	// (a espessura k·h, vista de cima: k·h sen e). O boneco 3D, visto de c, mede h cos c + k·h sen c na tela; o quadro em pé, esticado por
+	// s, mede (desenho) · s · cos c. Iguais: s = (1 + k tan c) / (cos e + k sen e). Na inclinação do desenho (c = e) dá 1/cos e — a câmera
+	// de cima continua igual —; na perseguição (a câmera desce: a pé 26–64°, dirigindo 45°) o boneco estica MAIS que o 1/cos c de antes
+	// (que o deixava ~20% menor que o 3D a 42°; medido). k = Config.art.standDepth (0,17: medido com o boneco 3D ao lado do 2,5D).
+	static get BAKE_TILT() { return 56; }
+	static get STAND_SCALE() {
+		const t = (typeof CompassCamera !== 'undefined' && CompassCamera.tiltDeg) || (typeof Config !== 'undefined' && Config.camera.tilt) || 56;
+		const c = Math.min(80, t) * Math.PI / 180, e = SpriteActor.BAKE_TILT * Math.PI / 180;
+		const k = typeof Config !== 'undefined' && Config.art && Config.art.standDepth !== undefined ? Config.art.standDepth : 0.17;
+		return (1 + k * Math.tan(c)) / (Math.cos(e) + k * Math.sin(e));
+	}
 
 	// O sprite gira no ângulo exato (clipe vetorial)? (CarLights e quem mais precisar da frente desenhada.)
 	get rotates() { return !!(this.clip && this.clip.vector); }

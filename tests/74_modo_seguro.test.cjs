@@ -46,9 +46,12 @@ module.exports = {
         // 2) a regra de "tentar de novo": outra revisão, sem data ou mais de 14 dias
         const st = await page.evaluate(() => {
             const R = SafeMode.REV, now = Date.now();
-            return { old: SafeMode._stale({ steps: ['pp'] }), rev: SafeMode._stale({ rev: R - 1, when: now }), aged: SafeMode._stale({ rev: R, when: now - 15 * 864e5 }), fresh: SafeMode._stale({ rev: R, when: now - 3 * 864e5 }) };
+            const P = ['pp'];
+            return { old: SafeMode._stale({ steps: P }), rev: SafeMode._stale({ rev: R - 1, when: now, steps: P }), aged: SafeMode._stale({ rev: R, when: now - 15 * 864e5, steps: P }), fresh: SafeMode._stale({ rev: R, when: now - 3 * 864e5, steps: P }),
+                flagAged: SafeMode._stale({ rev: R, when: now - 60 * 864e5, steps: [], noParallel: true }), flagRev: SafeMode._stale({ rev: R - 1, when: now, steps: [], noParallel: true }) };
         });
         c.ok(st.old && st.rev && st.aged && !st.fresh, 'tenta de novo: sem revisão, revisão anterior ou guardado há 15 dias — guardado há 3 dias na revisão atual fica');
+        c.ok(!st.flagAged && st.flagRev, 'só os pedidos de abertura (sem compilação paralela…) não vencem pela data — só com uma revisão nova');
 
         // 3) tentando de novo e a imagem NÃO chega: o degrau volta e fica guardado com a revisão, a data e o motivo
         const t0 = await page.evaluate(() => {
@@ -59,11 +62,11 @@ module.exports = {
             return Date.now();
         });
         await page.waitForFunction(() => SafeMode.applied.has('pp'), null, { timeout: 600000 });
-        const b = await page.evaluate(() => { SafeMode._blank = window.__blank; return { s: Store.getJSON('safeMode'), retry: SafeMode.retry, detail: SafeMode.detail(), steps: [...SafeMode.applied], pp: game.camera.camera._postProcesses.filter(Boolean).length }; });
+        const b = await page.evaluate(() => { SafeMode._blank = window.__blank; return { REV: SafeMode.REV, s: Store.getJSON('safeMode'), retry: SafeMode.retry, detail: SafeMode.detail(), steps: [...SafeMode.applied], pp: game.camera.camera._postProcesses.filter(Boolean).length }; });
         const S = b.s || {};
         c.ok(b.steps.join() === 'pp' && b.pp === 0 && !b.retry, `a imagem não chegou: desligou os efeitos de tela de novo (${b.steps.join(', ')})`);
-        c.ok(S.rev === 2 && S.when >= t0 && S.steps && S.steps.join() === 'pp' && /céu/.test(S.why || ''), `guardado com revisão ${S.rev}, data e motivo («${S.why}»)`);
-        c.ok(/desde \d/.test(b.detail) && /revisão 2/.test(b.detail), `o diagnóstico conta desde quando e por quê («${b.detail}»)`);
+        c.ok(S.rev === b.REV && S.when >= t0 && S.steps && S.steps.join() === 'pp' && /céu/.test(S.why || ''), `guardado com revisão ${S.rev}, data e motivo («${S.why}»)`);
+        c.ok(/desde \d/.test(b.detail) && b.detail.includes('revisão ' + b.REV), `o diagnóstico conta desde quando e por quê («${b.detail}»)`);
         await idle();
 
         // 4) tentando de novo sem dar para saber (tela escura): volta ao que estava guardado, sem apagar
@@ -82,6 +85,27 @@ module.exports = {
             return { r0, steps: [...SafeMode.applied], c3d: Char3D.on, kept: !!s && s.when === 1 && s.steps.join() === 'char3d', retry: SafeMode.retry };
         }, r0);
         c.ok(d.r0 && d.steps.join() === 'char3d' && !d.c3d && d.kept && !d.retry, `sem veredito: voltou ao guardado (${d.steps.join(', ')}) e tenta de novo na próxima abertura`);
+
+        // 5) o TESTE DA CENA (core/SceneProbe.js): simulado, o mundo só "aparece" sem névoa — uma suspeita por vez, a que resolve fica
+        const e = await page.evaluate(async () => {
+            const s = game.scene, cam = s.activeCamera;
+            const id = await SceneProbe.run(game, () => !SceneProbe.noFog);
+            return { id, order: SceneProbe.results.map((r) => r.join('=')).join(' '), fog: !SceneProbe.noFog, cam: s.activeCamera === cam, rtt: s.renderTargetsEnabled, nl: !NightLights.off, label: SceneProbe.label };
+        });
+        c.ok(e.id === 'fog' && e.order === 'rtt=céu fog=IMAGEM' && !e.fog, `teste da cena: ${e.order} → fica sem névoa`);
+        c.ok(e.cam && e.rtt && e.nl, 'as suspeitas que não resolveram voltaram como estavam (texturas fora da tela, luz da noite)');
+        // ...e pela vigia: acha sozinho, lembra o degrau e o diagnóstico conta
+        const f = await page.evaluate(() => {
+            SceneProbe.kept = null; SceneProbe.noFog = false;
+            SafeMode.applied = new Set(); SafeMode._probed = false; Store.remove('safeMode');
+            window.__blank = SafeMode._blank; SafeMode._blank = () => !SceneProbe.noFog;
+            SafeMode.init(game);
+        });
+        await page.waitForFunction(() => SafeMode.applied.has('x:fog'), null, { timeout: 600000 });
+        await idle();
+        const h = await page.evaluate(() => { SafeMode._blank = window.__blank; const st = Store.getJSON('safeMode'); return { steps: st && st.steps, fog: !SceneProbe.noFog, d: Diag.report(game), desc: SafeMode.describe() }; });
+        c.ok(h.steps && h.steps.join() === 'x:fog' && !h.fog && /sem névoa/.test(h.desc), `a vigia rodou o teste da cena e guardou o que resolveu (${h.desc})`);
+        c.ok(/teste da cena: o mundo voltou sem névoa/.test(h.d) && /erros de desenho \(1 quadro\): nenhum em \d+ desenhos/.test(h.d), 'o diagnóstico conta o teste da cena e os erros de desenho por malha');
 
         c.noErrors(errors, 'modo seguro');
         await close();
