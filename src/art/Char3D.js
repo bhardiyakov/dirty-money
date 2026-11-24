@@ -26,6 +26,15 @@ const Char3D = {
 		return !this.off && C.on !== false && q !== '2d' && typeof Worker === 'function' && typeof Wardrobe !== 'undefined';      // (off: disable() — erro repetido ou modo seguro)
 	},
 	get npcOn() { const N = this.C.npc; return this.on && !!N && N.on !== false && typeof NpcArt !== 'undefined' && !!NpcArt._pal; },
+	// LOW POLY: o corpo e o cabelo da malha em TRIÂNGULOS de face chapada (shader 'char3dPoly'; o Worker monta com G.lowBody — os índices
+	// simplificados do meshoptimizer) no lugar das dezenas de milhares de pontos; os pontos ficam só para os acessórios geométricos.
+	// Config.art.char3d.poly; ?poly=1 / ?poly=0 forçam.
+	get polyOn() {
+		const q = typeof location !== 'undefined' ? location.search : '';
+		if (/[?&]poly=1\b/.test(q)) return true;
+		if (/[?&]poly=0\b/.test(q)) return false;
+		return !!this.C.poly;
+	},
 	BONES: 16,
 	_shader() {
 		if (BABYLON.Effect.ShadersStore.char3dVertexShader) return;
@@ -124,6 +133,74 @@ const Char3D = {
 				vec3 c = mix(texture2D(palette, vec2((m * 8.0 + i0 + 0.5) / 256.0, y)).rgb, texture2D(palette, vec2((m * 8.0 + i1 + 0.5) / 256.0, y)).rgb, vLev - i0);
 				#else
 				vec3 c = texture2D(ramps, vec2((vLev + 0.5) / 5.0, (floor(vMt.x + 0.5) + 0.5) / 32.0)).rgb;
+				#endif
+				gl_FragColor = vec4(c * tint * shade, 1.0);
+			}`;
+		// LOW POLY: os mesmos ossos (B) e a mesma luz em faixas e cores da paleta, em TRIÂNGULOS: a normal da FACE vem das derivadas da
+		// posição no mundo (face chapada, sem normal por vértice). SIL (raio-X) e SHADOW (sombra projetada) como nos pontos.
+		BABYLON.Effect.ShadersStore.char3dPolyVertexShader = `
+			precision highp float;
+			attribute vec3 position;     // (= ip: a caixa da malha; o desenho usa os ossos)
+			attribute vec3 ip;           // canto no espaço do osso 1
+			attribute vec3 p2;           // … no do osso 2
+			attribute vec4 sk;           // osso 1, osso 2, peso do 2
+			attribute vec2 mt;           // material
+			uniform mat4 world;
+			uniform mat4 viewProjection;
+			uniform vec4 B[48];
+			uniform float unit;
+			uniform vec3 eye;
+			uniform vec3 sunL;
+			uniform float groundY;
+			varying vec3 vW;
+			varying vec2 vMt;
+			vec3 xp(int b, vec3 p) { vec4 r0 = B[b * 3], r1 = B[b * 3 + 1], r2 = B[b * 3 + 2]; return vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w); }
+			void main(void) {
+				int b1 = int(sk.x + 0.5), b2 = int(sk.y + 0.5);
+				vec3 p = xp(b1, ip);
+				if (sk.z > 0.0) p = mix(p, xp(b2, p2), sk.z);
+				vec4 wp = world * vec4(vec3(p.x, p.z, p.y) * unit, 1.0);
+				#ifdef SHADOW
+				wp.xyz -= sunL * ((wp.y - groundY) / max(sunL.y, 0.2));
+				#endif
+				#ifdef SIL
+				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vW = vec3(0.0); vMt = vec2(0.0); return; }
+				wp.xyz += normalize(eye - wp.xyz) * 0.06;
+				#endif
+				vW = wp.xyz; vMt = mt;
+				gl_Position = viewProjection * wp;
+			}`;
+		BABYLON.Effect.ShadersStore.char3dPolyFragmentShader = `
+			#extension GL_OES_standard_derivatives : enable
+			precision highp float;
+			varying vec3 vW;
+			varying vec2 vMt;
+			uniform sampler2D ramps;
+			uniform sampler2D palette;
+			uniform float palRows;
+			uniform float row;
+			uniform vec3 tint;
+			uniform float shade;
+			uniform vec4 silhouette;
+			uniform vec3 sunL;
+			uniform vec3 eye;
+			void main(void) {
+				#ifdef SIL
+				gl_FragColor = vec4(silhouette.rgb * silhouette.a, silhouette.a); return;
+				#endif
+				#ifdef SHADOW
+				gl_FragColor = vec4(0.0, 0.0, 0.0, silhouette.a); return;
+				#endif
+				vec3 V = normalize(eye - vW), n = normalize(cross(dFdx(vW), dFdy(vW)));
+				if (dot(n, V) < 0.0) n = -n;                                     // (a face virada para quem olha: os dois lados)
+				float d = dot(n, sunL);
+				float lev = 1.0 + smoothstep(-0.36, -0.24, d) + smoothstep(0.24, 0.36, d) + smoothstep(0.74, 0.86, d);
+				lev = clamp(lev + 0.35 * clamp(dot(n, V), 0.0, 1.0) - 0.15, 0.0, 4.0);      // (o que encara a câmera um pouco mais claro: volume)
+				#ifdef PAL
+				float m = floor(vMt.x + 0.5), i0 = floor(lev), i1 = min(i0 + 1.0, 4.0), y = (row + 0.5) / palRows;
+				vec3 c = mix(texture2D(palette, vec2((m * 8.0 + i0 + 0.5) / 256.0, y)).rgb, texture2D(palette, vec2((m * 8.0 + i1 + 0.5) / 256.0, y)).rgb, lev - i0);
+				#else
+				vec3 c = texture2D(ramps, vec2((lev + 0.5) / 5.0, (floor(vMt.x + 0.5) + 0.5) / 32.0)).rgb;
 				#endif
 				gl_FragColor = vec4(c * tint * shade, 1.0);
 			}`;
@@ -364,7 +441,7 @@ class Char3DModel {
 		let slot = '';
 		if (kind === 'npc' && npc) { let h = 0; for (let i = 0; i < npc.length; i++) h = (h * 31 + npc.charCodeAt(i)) | 0; slot = (h >>> 0) % 2 ? '_b' : ''; }
 		this.w = Char3D.worker(kind + slot);
-		this.w.postMessage({ type: 'char3d', job: 1, mid: this.mid, spec, npc, dmg, spacing });
+		this.w.postMessage({ type: 'char3d', job: 1, mid: this.mid, spec, npc, dmg, spacing, poly: Char3D.polyOn });
 	}
 	_msg(m) {
 		if (m.error) {
@@ -414,6 +491,19 @@ class Char3DModel {
 		mesh.setEnabled(false);
 		return mesh;
 	}
+	// LOW POLY: os triângulos do corpo (cantos sem índice compartilhado: face chapada), no espaço dos ossos como os pontos
+	_tris(name, P) {
+		const mesh = new BABYLON.Mesh(name, this.scene), n = P.n, vd = new BABYLON.VertexData(), idx = new Uint32Array(n);
+		for (let i = 0; i < n; i++) idx[i] = i;
+		vd.positions = P.p1; vd.indices = idx;
+		vd.applyToMesh(mesh, false);
+		const E = this.scene.getEngine(), vb = (data, kind, size) => mesh.setVerticesBuffer(new BABYLON.VertexBuffer(E, data, kind, false, false, size, false));
+		vb(P.p1, 'ip', 3); vb(P.p2, 'p2', 3); vb(P.sk, 'sk', 4); vb(P.mt, 'mt', 2);
+		mesh.isPickable = false; mesh._char3d = true;
+		mesh.alwaysSelectAsActiveMesh = true;                 // (no espaço dos ossos: a caixa não vale)
+		mesh.setEnabled(false);
+		return mesh;
+	}
 	_build(c) {
 		this.unit = (c.scale || 1) / ((Config.art && Config.art.npcPpu) || 26) / 2;          // (m por unidade: escala / (PPU / k 0,5))
 		if (c.ramps) {
@@ -421,11 +511,14 @@ class Char3DModel {
 			this.ramps.wrapU = this.ramps.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 		}
 		this.n = c.n;
-		if (this.thin < 1) this._shuffle(c);
-		this.body = this._points('c3d_corpo' + this.mid, c.n, c.p1, c.n1, c.p2, c.n2, c.sk, c.mt, c.fa, c.fb);
-		if (this.thin < 1) this.body.forcedInstanceCount = Math.max(1, Math.ceil(c.n * this.thin));
+		if (c.n > 0) {                                                                   // (low poly: os pontos são só os acessórios — pode não ter nenhum)
+			if (this.thin < 1) this._shuffle(c);
+			this.body = this._points('c3d_corpo' + this.mid, c.n, c.p1, c.n1, c.p2, c.n2, c.sk, c.mt, c.fa, c.fb);
+			if (this.thin < 1) this.body.forcedInstanceCount = Math.max(1, Math.ceil(c.n * this.thin));
+		} else this.body = null;
+		if (c.poly) { this.poly = this._tris('c3d_poly' + this.mid, c.poly); this.tris = c.poly.n / 3; }
 		this.ready = true;
-		this._data = c;                                                                  // (os pontos, até medir o chão: _groundFrom)
+		this._data = c.poly || c;                                                        // (o corpo — os triângulos ou os pontos —, até medir o chão: _groundFrom)
 		for (const k of ['idle:none', 'walk:none', 'run:none']) this.clip(k);          // (os clipes de sempre já vêm: ninguém espera em 2,5D)
 		// (o jogador: os de montar também — subindo na moto ou na bike ele não passa pelo desenho 2,5D)
 		if (this.kind === 'player') for (const k of ['ride_moto:none', 'ride_bike:none', 'ride_scooter:none', 'ride_jetski:none']) this.clip(k);
@@ -451,6 +544,7 @@ class Char3DModel {
 		for (const m of this.props.values()) m.dispose();
 		this.props.clear();
 		if (this.body) this.body.dispose();
+		if (this.poly) this.poly.dispose();
 		if (this.ramps) this.ramps.dispose();
 		this.ready = false;
 	}
@@ -479,9 +573,16 @@ class Char3DActor {
 	// As malhas do ator (clones das do modelo: a geometria é a mesma).
 	_buildMeshes() {
 		const M = this.model;
-		this.body = this._clone(M.body, this.name + '_corpo');
-		this.body.material = this.bodyMat = this._mat(this.name + '_mat');
-		this.bodyMat.onBindObservable.add(() => this._bindCommon(this.bodyMat, this._B));
+		if (M.body) {
+			this.body = this._clone(M.body, this.name + '_corpo');
+			this.body.material = this.bodyMat = this._mat(this.name + '_mat');
+			this.bodyMat.onBindObservable.add(() => this._bindCommon(this.bodyMat, this._B));
+		}
+		if (M.poly) {                                                                     // (low poly: o corpo em triângulos)
+			this.polyMesh = this._clone(M.poly, this.name + '_poly');
+			this.polyMesh.material = this.polyMat = this._mat(this.name + '_pmat', false, true);
+			this.polyMat.onBindObservable.add(() => this._bindCommon(this.polyMat, this._B));
+		}
 		if (this.wantXray) this._xrayBuild();
 		if (this.C.shadow !== false && (!this.pal || this.C.npcShadow)) this._shadowBuild();      // (sombra projetada: o jogador; os NPCs, só com npcShadow — a mancha macia basta, e corta metade dos pontos)
 		this._built = true;
@@ -495,13 +596,14 @@ class Char3DActor {
 		return m;
 	}
 	// sil: 'xray' (silhueta dourada) | 'shadow' (sombra projetada) | false (o desenho)
-	_mat(name, sil = false) {
+	_mat(name, sil = false, poly = false) {
 		const pal = this.pal && !sil, defines = [];
 		if (sil === 'shadow') defines.push('#define SHADOW');
 		else if (sil) defines.push('#define SIL');
 		if (pal) defines.push('#define PAL');
-		const m = new BABYLON.ShaderMaterial(name, this.scene, { vertex: 'char3d', fragment: 'char3d' }, {
-			attributes: ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
+		const sh = poly ? 'char3dPoly' : 'char3d';
+		const m = new BABYLON.ShaderMaterial(name, this.scene, { vertex: sh, fragment: sh }, {
+			attributes: poly ? ['position', 'ip', 'p2', 'sk', 'mt'] : ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
 			uniforms: ['world', 'viewProjection', 'B', 'unit', 'pScale', 'splat', 'eye', 'sunL', 'tint', 'shade', 'silhouette', 'palRows', 'row', 'expr', 'groundY', 'viewport'],
 			samplers: ['ramps', 'palette'],
 			defines,
@@ -538,23 +640,24 @@ class Char3DActor {
 	_xrayBuild() {
 		if (typeof XRaySilhouette === 'undefined') return;
 		const C = BABYLON.Constants, L = XRaySilhouette.DRAW_LAST;
-		XRaySilhouette.stencil(this.body, C.ALWAYS, 2, C.REPLACE);
-		this._xr = [[false, L, C.NOTEQUAL, 2, C.REPLACE, C.GREATER], [true, L + 1, C.EQUAL, 1, C.KEEP, C.ALWAYS]].map(([over, ai, func, ref, pass, depth]) => {
-			const m = this._clone(this.model.body, this.name + (over ? '_xrayC' : '_xray'));
+		const src = [[this.model.body, this.body, false], [this.model.poly, this.polyMesh, true]].filter((x) => x[0]);
+		for (const [, own] of src) XRaySilhouette.stencil(own, C.ALWAYS, 2, C.REPLACE);
+		this._xr = src.flatMap(([from, , poly]) => [[false, L, C.NOTEQUAL, 2, C.REPLACE, C.GREATER], [true, L + 1, C.EQUAL, 1, C.KEEP, C.ALWAYS]].map(([over, ai, func, ref, pass, depth]) => {
+			const m = this._clone(from, this.name + (over ? '_xrayC' : '_xray') + (poly ? 'P' : ''));
 			m.alphaIndex = ai;
-			const mat = m.material = this._mat(m.name + '_mat', 'xray');
+			const mat = m.material = this._mat(m.name + '_mat', 'xray', poly);
 			mat.depthFunction = depth;
 			mat.onBindObservable.add(() => this._bindCommon(mat, this._B));
 			XRaySilhouette.stencil(m, func, ref, pass);
 			m.setEnabled(false);
 			return m;
-		});
+		}));
 	}
 	// SOMBRA PROJETADA: os mesmos pontos, achatados no chão na direção do sol, em preto translúcido. O stencil (4) deixa cada pixel do chão
 	// escurecer uma vez só — sem ele, os pontos sobrepostos fariam manchas mais escuras.
 	_shadowBuild() {
-		const C = BABYLON.Constants, m = this._clone(this.model.body, this.name + '_sombra3d');
-		const mat = m.material = this._mat(m.name + '_mat', 'shadow');
+		const poly = !!this.model.poly, C = BABYLON.Constants, m = this._clone(poly ? this.model.poly : this.model.body, this.name + '_sombra3d');
+		const mat = m.material = this._mat(m.name + '_mat', 'shadow', poly);
 		mat.zOffset = -4;
 		mat.onBindObservable.add(() => this._bindCommon(mat, this._B));
 		if (typeof XRaySilhouette !== 'undefined') XRaySilhouette.stencil(m, C.NOTEQUAL, 4, C.REPLACE);
@@ -706,6 +809,7 @@ class Char3DActor {
 		if (this._xr) { for (const m of this._xr) { m.material.dispose(); m.dispose(); } this._xr = null; }
 		if (this._sh3) { this._sh3.material.dispose(); this._sh3.dispose(); this._sh3 = null; }
 		if (this.body) { this.body.dispose(); this.bodyMat.dispose(); this.body = null; }
+		if (this.polyMesh) { this.polyMesh.dispose(); this.polyMat.dispose(); this.polyMesh = null; }
 		this._built = false;
 	}
 	// Guardado na reserva (Char3D._free): escondido, o desenho 2,5D do ator de volta.
