@@ -559,3 +559,14 @@ passava no Chrome. Agora:
   não resolveram saem: a próxima abertura vem com tudo ligado, mais o pedido. Esses pedidos não vencem pela data, só com uma revisão
   nova (`SafeMode.REV` = 3).
 - `?paralelo=0` força a compilação sem paralelismo.
+
+**"WebGL not supported" (Chrome 158, mesmo notebook).** O navegador recusou o WebGL antes do jogo abrir. Isso acontece quando a placa
+de vídeo "travou" algumas vezes (o Chrome bloqueia o site até ser fechado por completo), com a aceleração gráfica desligada ou logo
+depois de uma atualização do navegador. As versões atuais do Chrome não têm mais WebGL por software como reserva. Agora:
+- A carga que falha por WebGL abre uma tela própria com os passos: fechar o navegador por completo, ligar a aceleração gráfica,
+  conferir `chrome://gpu` ou abrir em outro navegador.
+- O diagnóstico testa o WebGL do navegador (linha "WebGL do navegador").
+- Cada vez que a placa reinicia o jogo (`webglcontextlost`), isso é anotado entre aberturas (`gpuLost`, as últimas 10, com a placa)
+  e aparece no diagnóstico ("a placa reiniciou o jogo").
+- Depois de uma reinicialização nos últimos 7 dias, a próxima abertura dessa placa compila os shaders sem paralelismo, como o Firefox
+  (`GpuCheck`, modo "forçado"). `?paralelo=1` desliga essa proteção.

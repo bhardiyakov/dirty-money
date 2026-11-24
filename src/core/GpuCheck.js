@@ -36,6 +36,11 @@ const GpuCheck = {
 		let sm = null;
 		try { const s = Store.getJSON('safeMode'); if (s && s.rev === SafeMode.REV && s.gpu === SafeMode._gpu()) sm = s; } catch (e) { /* segue */ }
 		const forced = [];
+		// a placa de vídeo REINICIOU o jogo nos últimos 7 dias (engine.js anota): a próxima abertura compila sem paralelismo, como o
+		// Firefox — o Chrome bloqueia o WebGL do site depois de algumas reinicializações da placa ("WebGL not supported" até reabrir)
+		let lost = null;
+		try { const L = Store.getJSON('gpuLost', []) || [], me = SafeMode._gpu(); lost = L.filter((x) => x.gpu === me && Date.now() - x.t < 7 * 864e5); } catch (e) { /* segue */ }
+		if (lost && lost.length && par0 && !/[?&]paralelo=1\b/.test(q)) { caps.parallelShaderCompile = undefined; forced.push(`sem compilação paralela (a placa reiniciou o jogo ${lost.length}× em 7 dias)`); }
 		if (/[?&]paralelo=0\b/.test(q) || (sm && sm.noParallel)) { caps.parallelShaderCompile = undefined; forced.push('sem compilação paralela' + (sm && sm.noParallel ? ' (pedido pelo modo seguro)' : ' (?paralelo=0)')); }
 		if (/[?&]ubo=0\b/.test(q) || (sm && sm.ubo0)) { eng.disableUniformBuffers = true; forced.push('sem uniform buffers' + (sm && sm.ubo0 ? ' (pedido pelo modo seguro)' : ' (?ubo=0)')); }
 		if (forced.length) { this.result = { mode: 'forçado', tries: forced.map((f) => [f, '-']), ms: 0 }; return this.result; }

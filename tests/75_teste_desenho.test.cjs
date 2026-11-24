@@ -33,7 +33,27 @@ module.exports = {
             const a = await look(page);
             c.ok(a.r && a.r.mode === 'ok' && a.r.tries.length === 1 && a.r.tries[0][1] === 'vermelho' && a.ubo && a.par === a.had, `teste de desenho: ${a.label} em ${a.r && a.r.ms} ms (com a compilação paralela: ${a.had ? 'sim' : 'a placa não tem'}), uniform buffers ligados`);
             c.ok(a.drawn >= a.n * 0.8, `a cidade aparece (${a.drawn}/${a.n} pontos com desenho)`);
-            c.noErrors(errors, 'normal');
+            // a placa REINICIOU o jogo (contexto perdido): anotado entre aberturas; a próxima abertura desta placa compila sem
+            // paralelismo; o diagnóstico mostra; e "WebGL not supported" na carga abre a tela que explica o que fazer
+            const r = await page.evaluate(() => {
+                const probe = Diag.probeGL();
+                Store.remove('gpuLost');
+                game.gameEngine.canvas.dispatchEvent(new Event('webglcontextlost'));
+                const L = Store.getJSON('gpuLost', []), shown = !!document.getElementById('ctxLost');
+                const ov = document.getElementById('ctxLost'); if (ov) ov.remove();
+                const caps = { parallelShaderCompile: {} }, fake = { getCaps: () => caps, _gl: null, disableUniformBuffers: false };
+                const keep = GpuCheck.result; const res = GpuCheck.run(fake); GpuCheck.result = keep;
+                const rep = Diag.report(game);
+                Diag.fatal(new Error('WebGL not supported'));
+                const box = document.getElementById('dmDiag'), title = box ? box.textContent : ''; if (box) box.remove();
+                Store.remove('gpuLost');
+                return { probe, n: L.length, gpu: L[0] && L[0].gpu === SafeMode._gpu(), shown, mode: res.mode, why: res.tries.map((t) => t[0]).join(), par: caps.parallelShaderCompile, rep: /a placa reiniciou o jogo: 1×/.test(rep), title: /não liberou a placa de vídeo/.test(title) && /chrome:\/\/gpu/.test(title) };
+            });
+            c.ok(/WebGL 2: sim/.test(r.probe), `o diagnóstico testa o WebGL do navegador (${r.probe})`);
+            c.ok(r.n === 1 && r.gpu && r.shown && r.rep, 'a placa reiniciou o jogo: anotado (com a placa), aviso na tela e no diagnóstico');
+            c.ok(r.mode === 'forçado' && r.par === undefined && /reiniciou o jogo 1×/.test(r.why), `na próxima abertura desta placa: ${r.why}`);
+            c.ok(r.title, '"WebGL not supported" na carga: a tela explica (fechar o navegador, aceleração gráfica, chrome://gpu, outro navegador)');
+            c.noErrors(errors.filter((e) => !/PLACA|WebGL not supported|falha na carga/.test(e)), 'normal');
             await close();
         }
 

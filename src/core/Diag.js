@@ -48,6 +48,8 @@ const Diag = {
 		put('idioma / plataforma', `${navigator.language} / ${navigator.platform || '?'}`);
 		put('tela', `${screen.width}×${screen.height} · janela ${innerWidth}×${innerHeight} · densidade ${devicePixelRatio}`);
 		put('instalado', safe(() => (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches ? 'sim (app)' : 'não (aba)') + ' · service worker: ' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'ativo' : 'não') + ('__TAURI_INTERNALS__' in window ? ' · app de PC (Tauri)' : '')));
+		put('a placa reiniciou o jogo', safe(() => { const L = Store.getJSON('gpuLost', []) || []; if (!L.length) return 'nunca (anotado)'; const d = (t) => new Date(t).toLocaleString('pt-BR'); return `${L.length}× — última em ${d(L[L.length - 1].t)}, ${L[L.length - 1].up} s depois de abrir`; }, '?'));
+		put('WebGL do navegador', safe(() => this.probeGL(), '?'));
 		const eng = safe(() => g.gameEngine.engine, null);
 		if (eng) {
 			const C = eng.getCaps(), gpu = safe(() => Graphics.gpu(), {});
@@ -103,9 +105,17 @@ const Diag = {
 	},
 
 	// A carga falhou: o painel com o erro (a tela de abertura não fica parada para sempre).
+	// O navegador entrega WebGL? (uma tela à parte, pedindo um contexto — sem o jogo)
+	probeGL() {
+		const t = (kind, o) => { try { const c = document.createElement('canvas'), x = c.getContext(kind, o); if (!x) return 'não'; const lose = x.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); return 'sim'; } catch (e) { return 'erro'; } };
+		return `WebGL 2: ${t('webgl2')} · WebGL 1: ${t('webgl')} · sem exigir desempenho: ${t('webgl', { failIfMajorPerformanceCaveat: false })}`;
+	},
 	fatal(e) {
 		this._push('carga', [e]);
-		const el = this.open(window.game, '⚠️ O jogo não conseguiu abrir', 'Algo falhou na carga. Recarregue a página; se continuar, copie o diagnóstico abaixo e mande para quem cuida do jogo.');
+		const noGL = /webgl not supported|webgl/i.test(String(e && e.message || e));
+		const el = noGL
+			? this.open(window.game, '⚠️ O navegador não liberou a placa de vídeo (WebGL)', 'O navegador recusou o WebGL para o jogo. Isso acontece quando a placa de vídeo “travou” algumas vezes (o Chrome bloqueia o site até ser fechado por completo), quando a aceleração gráfica está desligada ou logo depois de uma atualização do navegador. Para resolver: 1) feche TODAS as janelas do navegador e abra de novo; 2) nas configurações (Sistema), ligue “Usar aceleração gráfica quando disponível” e reinicie; 3) no Chrome, chrome://gpu deve mostrar “WebGL: Hardware accelerated”; 4) se nada resolver, abra no Firefox ou no Edge. Se continuar, mande este diagnóstico.')
+			: this.open(window.game, '⚠️ O jogo não conseguiu abrir', 'Algo falhou na carga. Recarregue a página; se continuar, copie o diagnóstico abaixo e mande para quem cuida do jogo.');
 		const box = el.firstElementChild, b = document.createElement('button');
 		b.textContent = '↻ Recarregar';
 		b.style.cssText = 'border:0;border-radius:10px;padding:8px 14px;background:#334155;color:#e2e8f0;font-weight:700;cursor:pointer';
