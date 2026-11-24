@@ -5,7 +5,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const { simplify } = require('./simplify.cjs');
 const GEN_DIR = path.join(__dirname, '..', 'generator');
-const GEN = ['NpcGenCore.js', 'NpcGenChar.js', 'NpcGenRender.js', 'NpcGenAnims.js', 'NpcGenTypes.js', 'NpcGenBuild.js', 'malha3d.js', 'NpcGenMesh.js', 'veiculos_occ.js', 'armas_sprites.js'];
+const GEN = ['NpcGenCore.js', 'NpcGenChar.js', 'NpcGenRender.js', 'NpcGenAnims.js', 'NpcGenTypes.js', 'NpcGenBuild.js', 'malha3d.js', 'malha3d_low.js', 'NpcGenMesh.js', 'veiculos_occ.js', 'armas_sprites.js'];
 for (const f of GEN) vm.runInThisContext(fs.readFileSync(path.join(GEN_DIR, f), 'utf8'), { filename: path.join(GEN_DIR, f) });
 const G = vm.runInThisContext('(() => { const G = {}; NpcGenCore(G); NpcGenChar(G); NpcGenRender(G); NpcGenAnims(G); NpcGenTypes(G); NpcGenBuild(G); NpcGenMesh(G); return G; })()');
 
@@ -21,7 +21,16 @@ const dec = (e) => {
 const low = new Map();
 const all = [...D.chars.m.meshes, ...D.chars.f.meshes, ...Object.values(D.hairs)];
 for (const e of all) { const m = dec(e); low.set(e, simplify(m.pos, m.idx, Math.max(16, Math.round(m.idx.length / 3 * (e.mat === 'eye' ? 0.3 : RATIO))))); }
-const idxFor = (e) => low.get(e) || null;
+// LOWPOLY_SRC=meshopt: os índices assados com o meshoptimizer (generator/malha3d_low.js); senão, o simplificador próprio
+let idxFor = (e) => low.get(e) || null;
+if (process.env.LOWPOLY_SRC === 'meshopt') {
+	vm.runInThisContext(fs.readFileSync(path.join(GEN_DIR, 'malha3d_low.js'), 'utf8'));
+	const LW = vm.runInThisContext('NPC_MESH3D_LOW'), M2 = new Map();
+	const u16 = (s) => { const b = Buffer.from(s, 'base64'); return new Uint16Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); };
+	for (const k of Object.keys(D.chars)) for (const e of D.chars[k].meshes) if (LW.chars[k] && LW.chars[k][e.name]) M2.set(e, u16(LW.chars[k][e.name]));
+	for (const [n, e] of Object.entries(D.hairs)) if (LW.hairs[n]) M2.set(e, u16(LW.hairs[n]));
+	idxFor = (e) => M2.get(e) || null;
+}
 
 const res = [];
 types.forEach((type, k) => {

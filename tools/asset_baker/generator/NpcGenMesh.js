@@ -474,7 +474,21 @@ function NpcGenMesh(G) {
     // feminino têm o mesmo nome.)
     // Saída: triângulos SEM índice (cada canto é seu: faces chapadas, uma cor por face) no formato do boneco 3D: p1 (osso 1), p2 (osso 2),
     // sk = [osso 1, osso 2, peso do 2º], mat = o material da face (a maioria dos cantos). Ossos pela lista BONES deste arquivo.
-    function lowBody(spec, idxFor) {
+    // os índices assados (generator/malha3d_low.js, NPC_MESH3D_LOW — tools/asset_baker/lowpoly/bakelow.cjs, meshoptimizer), por entrada
+    let _low = null;
+    function lowIdx(e) {
+        if (!_low) {
+            _low = new Map();
+            const LW = typeof NPC_MESH3D_LOW !== 'undefined' ? NPC_MESH3D_LOW : null;
+            if (LW && DATA) {
+                const u16 = (s) => new Uint16Array(bytes(s).buffer);
+                for (const k of Object.keys(DATA.chars)) for (const m of DATA.chars[k].meshes) if (LW.chars[k] && LW.chars[k][m.name]) _low.set(m, u16(LW.chars[k][m.name]));
+                for (const [n, m] of Object.entries(DATA.hairs)) if (LW.hairs[n]) _low.set(m, u16(LW.hairs[n]));
+            }
+        }
+        return _low.get(e) || null;
+    }
+    function lowBody(spec, idxFor = lowIdx) {
         const s = G.fullSpec(spec), key = s.gender === 'f' ? 'f' : 'm';
         const F = fitFor(key), C = DATA.chars[key], mw = MORPH[s.body] || MORPH.normal;
         const tris = [];
@@ -509,10 +523,14 @@ function NpcGenMesh(G) {
                 vert.set(v, r);
                 return r;
             };
+            // a cor da face pela REGIÃO DO OSSO da maioria dos cantos (canela, coxa, braço…): a face toda fica de um lado da barra — a bermuda
+            // termina no joelho, a manga no ombro — em vez de misturar as cores dos cantos (o pacote não tem pele debaixo da roupa: a perna
+            // de bermuda e o braço de regata são a própria calça/camiseta pintada de pele, como nos pontos)
+            const part = (x) => x.b1.replace(/_[RL]$/, '');
             for (let t = 0; t < I.length; t += 3) {
                 const a = V(I[t]), b = V(I[t + 1]), c = V(I[t + 2]);
-                // a cor da face: o material de 2 ou 3 cantos (empate: o do 1º)
-                const mat = b.mat === c.mat ? b.mat : a.mat;
+                const pa = part(a), pb = part(b), pc = part(c), k = pa === pb || pa === pc ? pa : pb === pc ? pb : pa;
+                const own = [a, b, c].filter((x) => part(x) === k), mat = own.length >= 2 && own[0].mat !== own[1].mat && own[2] ? (own[1].mat === own[2].mat ? own[1].mat : own[0].mat) : own[0].mat;
                 tris.push([a, b, c, mat, kind]);
             }
         }

@@ -40,9 +40,9 @@ const fs = require('fs'), path = require('path'), vm = require('vm'), os = requi
 
 const HERE = __dirname, ROOT = path.resolve(HERE, '..', '..');
 const GEN_DIR = path.join(HERE, 'generator');
-// O gerador, na ordem de dependência (malha3d.js define NPC_MESH3D, que o NpcGenMesh lê; veiculos_occ.js, NPC_VEH_OCC: as motos 3D que
+// O gerador, na ordem de dependência (malha3d.js define NPC_MESH3D, que o NpcGenMesh lê, e malha3d_low.js os índices low poly dela; veiculos_occ.js, NPC_VEH_OCC: as motos 3D que
 // recortam os pilotos — tools/asset_baker/vehocc.cjs).
-const GEN = ['NpcGenCore.js', 'NpcGenChar.js', 'NpcGenRender.js', 'NpcGenAnims.js', 'NpcGenTypes.js', 'NpcGenBuild.js', 'malha3d.js', 'NpcGenMesh.js', 'veiculos_occ.js', 'armas_sprites.js'];
+const GEN = ['NpcGenCore.js', 'NpcGenChar.js', 'NpcGenRender.js', 'NpcGenAnims.js', 'NpcGenTypes.js', 'NpcGenBuild.js', 'malha3d.js', 'malha3d_low.js', 'NpcGenMesh.js', 'veiculos_occ.js', 'armas_sprites.js'];
 const WORKER_MAIN = path.join(HERE, 'wardrobe', 'worker-main.js');
 const { bakeUmbrella } = require('./props/umbrella.cjs');
 // The device store of the wardrobe looks: one schema for the game (which reads it) and the Worker (which writes it).
