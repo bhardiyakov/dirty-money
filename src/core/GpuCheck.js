@@ -40,7 +40,14 @@ const GpuCheck = {
 		// Firefox — o Chrome bloqueia o WebGL do site depois de algumas reinicializações da placa ("WebGL not supported" até reabrir)
 		let lost = null;
 		try { const L = Store.getJSON('gpuLost', []) || [], me = SafeMode._gpu(); lost = L.filter((x) => x.gpu === me && Date.now() - x.t < 7 * 864e5); } catch (e) { /* segue */ }
-		if (lost && lost.length && par0 && !/[?&]paralelo=1\b/.test(q)) { caps.parallelShaderCompile = undefined; forced.push(`sem compilação paralela (a placa reiniciou o jogo ${lost.length}× em 7 dias)`); }
+		// INTEL NO DIRECT3D 11 (Iris Xe, UHD… no Chrome e no Edge): já abre sem paralelismo. No notebook Iris Xe o Chrome (com ela) não
+		// desenhava o mundo, travou a placa até o Windows reiniciar o driver (a tela piscando) e acabou bloqueando o WebGL do site; o
+		// Firefox (que não tem a compilação paralela no Direct3D) rodava o Medium a 25–30 FPS. `?paralelo=1` liga mesmo assim.
+		let gpuName = '';
+		try { gpuName = SafeMode._gpu(); } catch (e) { /* segue */ }
+		const keepPar = /[?&]paralelo=1\b/.test(q);
+		if (par0 && !keepPar && this.noParallelFor(gpuName)) { caps.parallelShaderCompile = undefined; forced.push('sem compilação paralela (placa Intel no Direct3D 11: o modo do Firefox)'); }
+		else if (lost && lost.length && par0 && !keepPar) { caps.parallelShaderCompile = undefined; forced.push(`sem compilação paralela (a placa reiniciou o jogo ${lost.length}× em 7 dias)`); }
 		if (/[?&]paralelo=0\b/.test(q) || (sm && sm.noParallel)) { caps.parallelShaderCompile = undefined; forced.push('sem compilação paralela' + (sm && sm.noParallel ? ' (pedido pelo modo seguro)' : ' (?paralelo=0)')); }
 		if (/[?&]ubo=0\b/.test(q) || (sm && sm.ubo0)) { eng.disableUniformBuffers = true; forced.push('sem uniform buffers' + (sm && sm.ubo0 ? ' (pedido pelo modo seguro)' : ' (?ubo=0)')); }
 		if (forced.length) { this.result = { mode: 'forçado', tries: forced.map((f) => [f, '-']), ms: 0 }; return this.result; }
@@ -78,6 +85,10 @@ const GpuCheck = {
 		else if (mode !== 'ok') console.warn('[DESENHO] o material padrão não desenhava nesta placa — ' + this.label);
 		return this.result;
 	},
+
+	// Placas que abrem sem a compilação paralela de shaders: Intel traduzida para Direct3D 11 pelo ANGLE (o nome que o navegador dá:
+	// "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics … Direct3D11 …)").
+	noParallelFor(renderer) { return /intel/i.test(renderer || '') && /direct3d ?11|d3d11/i.test(renderer || ''); },
 
 	// ERROS DE DESENHO num quadro da cena do jogo: depois de CADA desenho de malha, pergunta à placa (gl.getError) se ele foi recusado —
 	// e anota qual malha. (O Chrome escreve esses erros só no console dele, que o jogo não lê.) Para o diagnóstico.
