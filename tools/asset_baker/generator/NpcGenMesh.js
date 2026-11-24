@@ -272,7 +272,10 @@ function NpcGenMesh(G) {
             return M.jeans;
         }
         if (kind === 'shoe') {
-            if (lp[2] < -3.7) return M.sole;
+            // (a sola pela altura no espaço do PÉ: a parte do calçado que segue a canela — o cano, o tornozelo — está no espaço dela, uns
+            // 11,4 acima; medida direto, virava "sola" e o chinelo ganhava meia preta até o meio da canela)
+            const z = part === 'shin' ? lp[2] - G.SKEL[bone.replace('shin', 'foot')][1][2] : lp[2];
+            if (z < -3.7) return M.sole;
             return s.shoes === 'flipflop' ? M.skin : M.shoe;
         }
         return M.skin;
@@ -469,7 +472,7 @@ function NpcGenMesh(G) {
     }
 
     // LOW POLY (estilo de cidade low poly: faces chapadas, cor da paleta por região): a MESMA malha, encaixe e regras de roupa do
-    // meshParts, mas por VÉRTICE e com os índices simplificados (tools/asset_baker/lowpoly/simplify.cjs: só vértices originais — os
+    // meshParts, mas por VÉRTICE e com os índices simplificados (o meshoptimizer, assado em malha3d_low.js: só vértices originais — os
     // pesos dos ossos, os portes e as cores continuam valendo). idxFor(entrada da malha em NPC_MESH3D) → índices simplificados (ou null: a malha inteira). (Por entrada, não por nome: o tênis masculino e o
     // feminino têm o mesmo nome.)
     // Saída: triângulos SEM índice (cada canto é seu: faces chapadas, uma cor por face) no formato do boneco 3D: p1 (osso 1), p2 (osso 2),
@@ -488,14 +491,16 @@ function NpcGenMesh(G) {
         }
         return _low.get(e) || null;
     }
-    function lowBody(spec, idxFor = lowIdx) {
+    function lowBody(spec, idxFor = lowIdx, acc = true) {
         const s = G.fullSpec(spec), key = s.gender === 'f' ? 'f' : 'm';
-        const F = fitFor(key), C = DATA.chars[key], mw = MORPH[s.body] || MORPH.normal;
+        const F = fitFor(key), C = DATA.chars[key], mw = MORPH[s.body] || MORPH.normal, sdf = G.buildParts(s);
         const tris = [];
         const P = [0, 0, 0], N = [0, 0, 0], o1 = new Float32Array(3), on1 = new Float32Array(3), o2 = new Float32Array(3), on2 = new Float32Array(3);
         const meshes = C.meshes.map((e) => [e, meshOf(e), e.mat]);
         const hairName = !s.hair || s.hair === 'bald' || s.mask === 'balaclava' ? null : HAIR[s.hair];
-        if (hairName && DATA.hairs[hairName]) meshes.push([DATA.hairs[hairName], meshOf(DATA.hairs[hairName]), 'hair']);
+        const meshHair = !!(hairName && DATA.hairs[hairName]);
+        if (meshHair) meshes.push([DATA.hairs[hairName], meshOf(DATA.hairs[hairName]), 'hair']);
+        const cut = s.head in G.HAT_CUT && G.HAT_CUT[s.head] < 90 ? G.HAT_CUT[s.head] : Infinity;      // (de chapéu: o cabelo acima dele sai, como nos pontos)
         for (const [e, m, kind] of meshes) {
             const pos = new Float32Array(m.pos);
             if (m.morph) for (let k = 0; k < 3; k++) if (mw[k]) { const D = m.morph[k]; for (let i = 0; i < pos.length; i++) pos[i] += mw[k] * D[i]; }
@@ -515,11 +520,14 @@ function NpcGenMesh(G) {
                 }
                 toBone(Fv, b1, P, N, o1, on1, 0); toBone(Fv, b2, P, N, o2, on2, 0);
                 if (kind === 'eye') { o1[1] += 1.1; o2[1] += 1.1; }
-                const mat = kind === 'hair' ? M.hair : kind === 'eye' ? M.eye : matFor(s, kind, b1, o1);      // (olho: escuro — o rosto pintado do 2,5D não existe por vértice)
+                const mat = kind === 'hair' ? M.hair : matFor(s, kind, b1, o1);      // (o globo do olho é pele, como nos pontos: o shader pinta nele o olho do desenho)
                 const sh1 = G.shapeFor(b1), sh2 = G.shapeFor(b2);
                 const p1 = sh1 ? [o1[0] * sh1[0], o1[1] * sh1[1], o1[2] * sh1[2]] : [o1[0], o1[1], o1[2]];
                 const p2 = sh2 ? [o2[0] * sh2[0], o2[1] * sh2[1], o2[2] * sh2[2]] : [o2[0], o2[1], o2[2]];
-                r = { p1, p2, b1, b2, w, mat };
+                // o: o canto no espaço do osso 1 SEM o esticão (as texturas procedurais e o dano usam esse espaço); h: o mesmo, na cabeça
+                // (1: o rosto) e no peito (2: a estampa), que o shader pinta por pixel
+                const sid = b1 === 'head' ? 1 : b1 === 'chest' && kind !== 'hair' ? 2 : 0;
+                r = { p1, p2, b1, b2, w, mat, o: [o1[0], o1[1], o1[2]], n: [on1[0], on1[1], on1[2]], h: sid ? [o1[0], o1[1], o1[2], sid] : null };
                 vert.set(v, r);
                 return r;
             };
@@ -531,24 +539,258 @@ function NpcGenMesh(G) {
                 const a = V(I[t]), b = V(I[t + 1]), c = V(I[t + 2]);
                 const pa = part(a), pb = part(b), pc = part(c), k = pa === pb || pa === pc ? pa : pb === pc ? pb : pa;
                 const own = [a, b, c].filter((x) => part(x) === k), mat = own.length >= 2 && own[0].mat !== own[1].mat && own[2] ? (own[1].mat === own[2].mat ? own[1].mat : own[0].mat) : own[0].mat;
-                tris.push([a, b, c, mat, kind]);
+                if (kind === 'hair' && (a.o[2] + b.o[2] + c.o[2]) / 3 > cut) continue;
+                // o centro e a normal da face no espaço (sem esticão) do osso da maioria: para a estampa, o dano e o sangue no cabelo
+                const bone = own[0].b1, mine = own.filter((x) => x.b1 === bone), cen = [0, 0, 0], nr = [0, 0, 0];
+                for (const x of mine) for (let q = 0; q < 3; q++) { cen[q] += x.o[q] / mine.length; nr[q] += x.n[q]; }
+                tris.push({ v: [a, b, c], mat, tone: 0, kind, bone, cen, nr });
             }
         }
-        // empacotado (por canto): ossos pelo índice de BONES
-        const n = tris.length * 3, p1 = new Float32Array(n * 3), p2 = new Float32Array(n * 3), sk = new Float32Array(n * 3), mt = new Float32Array(n);
-        let o = 0;
-        for (const [a, b, c, mat] of tris) for (const x of [a, b, c]) {
-            p1.set(x.p1, o * 3); p2.set(x.p2, o * 3);
-            sk[o * 3] = BI[x.b1]; sk[o * 3 + 1] = BI[x.b2]; sk[o * 3 + 2] = x.w; mt[o] = mat;
-            o++;
+        // ESTAMPA (a textura procedural de cada parte: listras da camisa, cadarço…; o rosto não — o shader pinta por pixel) e DANO (s.dmg:
+        // terra, cortes, sangue) por FACE, no centro dela: o mesmo desenho dos pontos, em pedaços do tamanho das faces
+        const byBone = new Map();
+        for (const t of tris) { const k = t.kind === 'hair' ? 'hair' : t.bone; let L = byBone.get(k); if (!L) byBone.set(k, (L = [])); L.push(t); }
+        for (const [k, L] of byBone) {
+            const n = L.length, cp = new Float32Array(n * 3), cn = new Float32Array(n * 3), mat = new Int16Array(n), tone = new Int16Array(n);
+            L.forEach((t, j) => { const l = Math.hypot(...t.nr) || 1; for (let q = 0; q < 3; q++) { cp[j * 3 + q] = t.cen[q]; cn[j * 3 + q] = t.nr[q] / l; } mat[j] = t.mat; });
+            const sp = sdf[k];
+            if (k !== 'head' && k !== 'hair' && sp && sp.tex) {
+                const m0 = Int16Array.from(mat), t2 = sp.tex(cp, cn, mat, new Int16Array(n), new Float64Array(n), new Float64Array(n).fill(1e9), n);
+                for (let j = 0; j < n; j++) tone[j] += t2[j];
+                // no peito, o que é fino demais para uma face (listras, flores, botões, zíper, corrente) volta ao tecido: o shader pinta por pixel
+                if (k === 'chest') for (let j = 0; j < n; j++) if (mat[j] !== m0[j] && FINE.has(mat[j])) mat[j] = m0[j];
+            }
+            if (k === 'hair') paintHairBlood(s, cp, cn, mat, tone, n);
+            else paintDamage(s, k, cp, cn, mat, tone, n);
+            L.forEach((t, j) => { t.mat = mat[j]; t.tone = max(-3, min(3, tone[j])); });
         }
-        return { bones: BONES, n, tris: tris.length, p1, p2, sk, mt, scale: s.scale || 1 };
+        // ACESSÓRIOS: as partes que continuam geométricas (chapéu, colete, bolsa, alça, os cabelos que a malha não tem) viram triângulos
+        // — a superfície da forma (polyPart: surface nets + simplificação) — com a cor e a estampa de cada face pela própria forma
+        if (acc) for (const [k, part] of Object.entries(sdf)) {
+            if (REPLACED.has(k) || (k === 'hair' && meshHair)) continue;
+            const L = polyPart(part, POLY_TARGET[k] || 240), sh = G.shapeFor(part.bone);
+            const corner = (x, y, z) => ({ p1: sh ? [x * sh[0], y * sh[1], z * sh[2]] : [x, y, z], b1: part.bone, b2: part.bone, w: 0, h: null });
+            for (let t = 0; t < L.tris; t++) {
+                const q = t * 9, v = [];
+                for (let c = 0; c < 3; c++) v.push(corner(L.pos[q + c * 3], L.pos[q + c * 3 + 1], L.pos[q + c * 3 + 2]));
+                tris.push({ v, mat: L.mat[t], tone: L.tone[t] });
+            }
+        }
+        // empacotado (por canto): ossos pelo índice de BONES. fp = o canto no espaço da cabeça ou do peito + qual (1 cabeça, 2 peito; as
+        // faces com os 3 cantos no mesmo; as outras, 0) — o shader pinta por PIXEL o rosto (a receita do makeTexHead: olhos, sobrancelhas,
+        // boca, barba, óculos, máscara e as expressões) e a estampa do peito (makeTexChest): numa malha de poucas faces, pintados por
+        // face, eles sumiriam ou virariam um mosaico. tn = o tom da face.
+        const n = tris.length * 3, p1 = new Float32Array(n * 3), p2 = new Float32Array(n * 3), sk = new Float32Array(n * 3), mt = new Float32Array(n), tn = new Float32Array(n), fp = new Float32Array(n * 4);
+        let o = 0;
+        for (const t of tris) {
+            const [a, b, c] = t.v, same = a.h && b.h && c.h && a.h[3] === b.h[3] && a.h[3] === c.h[3];
+            for (const x of t.v) {
+                p1.set(x.p1, o * 3); p2.set(x.p2 || x.p1, o * 3);
+                sk[o * 3] = BI[x.b1]; sk[o * 3 + 1] = BI[x.b2]; sk[o * 3 + 2] = x.w; mt[o] = t.mat; tn[o] = t.tone;
+                if (same) fp.set(x.h, o * 4);
+                o++;
+            }
+        }
+        return { bones: BONES, n, tris: tris.length, p1, p2, sk, mt, tn, fp, face: faceOf(s), scale: s.scale || 1 };
+    }
+
+    // ------------------------------------------------------------------ LOW POLY das partes GEOMÉTRICAS (acessórios)
+    // A superfície da forma (as primitivas unidas, Part.eval) por SURFACE NETS numa grade de passo h (um vértice por célula que o zero
+    // da distância cruza, na média dos cruzamentos das arestas e puxado para a superfície), depois simplificada (simplifyMesh) até
+    // ~target faces. Por face: o material e o tom da forma no centro dela (e a textura procedural da parte, com a normal da forma).
+    // → { tris, pos (9 por face: os 3 cantos, espaço do osso, sem o esticão), mat, tone }
+    const POLY_TARGET = { hat: 260, vest: 420, bag: 260, strap: 120, hair: 380 };
+    const _polyCache = new Map();
+    function polyPart(part, target = 240, h = 1.0) {
+        const sig = part.name + '|' + target + '|' + h + '|' + JSON.stringify(part.prims, (k, v) => (k === '_prep' ? undefined : v));
+        const hit = _polyCache.get(sig);
+        if (hit) return hit;
+        const nets = surfaceNets(part, h), idx = simplifyMesh(nets.pos, nets.idx, target), T = idx.length / 3, P = nets.pos;
+        const pos = new Float32Array(T * 9), cp = new Float32Array(T * 3), cn = new Float32Array(T * 3), mat = new Int16Array(T), tone = new Int16Array(T);
+        const pid = new Int16Array(T), d1 = new Float64Array(T), d2 = new Float64Array(T), tmp = {}, e = 0.04;
+        for (let t = 0; t < T; t++) {
+            for (let c = 0; c < 3; c++) for (let q = 0; q < 3; q++) pos[t * 9 + c * 3 + q] = P[idx[t * 3 + c] * 3 + q];
+            let x = 0, y = 0, z = 0;
+            for (let c = 0; c < 3; c++) { x += pos[t * 9 + c * 3] / 3; y += pos[t * 9 + c * 3 + 1] / 3; z += pos[t * 9 + c * 3 + 2] / 3; }
+            // a normal da forma no centro e o ponto da superfície mais perto dele
+            const gx = part.eval(x + e, y, z, tmp) - part.eval(x - e, y, z, tmp), gy = part.eval(x, y + e, z, tmp) - part.eval(x, y - e, z, tmp), gz = part.eval(x, y, z + e, tmp) - part.eval(x, y, z - e, tmp);
+            const gl = sqrt(gx * gx + gy * gy + gz * gz) || 1, d = part.eval(x, y, z, tmp);
+            x -= (d * gx) / gl; y -= (d * gy) / gl; z -= (d * gz) / gl;
+            part.eval(x, y, z, tmp, true);
+            cp[t * 3] = x; cp[t * 3 + 1] = y; cp[t * 3 + 2] = z; cn[t * 3] = gx / gl; cn[t * 3 + 1] = gy / gl; cn[t * 3 + 2] = gz / gl;
+            mat[t] = tmp.mat; tone[t] = tmp.tone; pid[t] = tmp.pid; d1[t] = tmp.d1; d2[t] = tmp.d2;
+        }
+        if (part.tex) { const t2 = part.tex(cp, cn, mat, pid, d1, d2, T); for (let t = 0; t < T; t++) tone[t] += t2[t]; }
+        const res = { tris: T, pos, mat, tone, cp, cn };
+        _polyCache.set(sig, res);
+        if (_polyCache.size > 48) _polyCache.delete(_polyCache.keys().next().value);
+        return res;
+    }
+    // SURFACE NETS: a grade de distâncias, um vértice por célula cruzada pela superfície e um quadrilátero (2 triângulos) por aresta da
+    // grade que a superfície corta. → { pos, idx }
+    function surfaceNets(part, h) {
+        const [lo, hi] = part.bounds(), tmp = {};
+        const nx = Math.ceil((hi[0] - lo[0]) / h) + 1, ny = Math.ceil((hi[1] - lo[1]) / h) + 1, nz = Math.ceil((hi[2] - lo[2]) / h) + 1;
+        const D = new Float32Array(nx * ny * nz), id = (i, j, k) => (k * ny + j) * nx + i;
+        for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) D[id(i, j, k)] = part.eval(lo[0] + i * h, lo[1] + j * h, lo[2] + k * h, tmp);
+        const Vx = new Int32Array(nx * ny * nz).fill(-1), P = [], c = new Float64Array(8);
+        for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+            let neg = 0;
+            for (let q = 0; q < 8; q++) { c[q] = D[id(i + (q & 1), j + ((q >> 1) & 1), k + ((q >> 2) & 1))]; if (c[q] < 0) neg++; }
+            if (!neg || neg === 8) continue;
+            let s = 0, x = 0, y = 0, z = 0;
+            for (const [a, b] of NET_EDGES) if ((c[a] < 0) !== (c[b] < 0)) {
+                const t = c[a] / (c[a] - c[b]), ax = a & 1, ay = (a >> 1) & 1, az = (a >> 2) & 1;
+                x += ax + ((b & 1) - ax) * t; y += ay + (((b >> 1) & 1) - ay) * t; z += az + (((b >> 2) & 1) - az) * t; s++;
+            }
+            let px = lo[0] + (i + x / s) * h, py = lo[1] + (j + y / s) * h, pz = lo[2] + (k + z / s) * h;
+            for (let it = 0; it < 2; it++) {                                       // (puxado para a superfície: as quinas da forma ficam)
+                const e = 0.05, d = part.eval(px, py, pz, tmp);
+                const gx = part.eval(px + e, py, pz, tmp) - part.eval(px - e, py, pz, tmp), gy = part.eval(px, py + e, pz, tmp) - part.eval(px, py - e, pz, tmp), gz = part.eval(px, py, pz + e, tmp) - part.eval(px, py, pz - e, tmp);
+                const gl = sqrt(gx * gx + gy * gy + gz * gz);
+                if (!(gl > 1e-9)) break;
+                const st = max(-h * 0.5, min(h * 0.5, d));
+                px -= (st * gx) / gl; py -= (st * gy) / gl; pz -= (st * gz) / gl;
+            }
+            Vx[id(i, j, k)] = P.length / 3; P.push(px, py, pz);
+        }
+        const I = [];
+        const quad = (a, b, c2, d, flip) => { if (a < 0 || b < 0 || c2 < 0 || d < 0) return; if (flip) I.push(a, c2, b, a, d, c2); else I.push(a, b, c2, a, c2, d); };
+        for (let k = 1; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+            const in0 = D[id(i, j, k)] < 0;
+            if (in0 !== D[id(i + 1, j, k)] < 0) quad(Vx[id(i, j - 1, k - 1)], Vx[id(i, j, k - 1)], Vx[id(i, j, k)], Vx[id(i, j - 1, k)], in0);
+            if (in0 !== D[id(i, j + 1, k)] < 0) quad(Vx[id(i - 1, j, k - 1)], Vx[id(i - 1, j, k)], Vx[id(i, j, k)], Vx[id(i, j, k - 1)], in0);
+            if (in0 !== D[id(i, j, k + 1)] < 0) quad(Vx[id(i - 1, j - 1, k)], Vx[id(i, j - 1, k)], Vx[id(i, j, k)], Vx[id(i - 1, j, k)], in0);
+        }
+        return { pos: Float32Array.from(P), idx: Uint32Array.from(I) };
+    }
+    const NET_EDGES = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+
+    // SIMPLIFICAÇÃO de malha (erro quadrático de Garland & Heckbert, colapso de MEIA aresta): um índice NOVO que só usa vértices
+    // ORIGINAIS (cada colapso junta um vértice no vizinho). Solda por posição antes (sem rachaduras); borda aberta pesa muito mais (o
+    // contorno da peça fica); colapso que vira um triângulo do avesso (ou o achata demais) é recusado. Sem dependências: roda no build e
+    // no Worker (os acessórios low poly, polyPart). (O corpo usa os índices do meshoptimizer, assados: tools/asset_baker/lowpoly/bakelow.cjs.)
+    function simplifyMesh(pos, idx, targetTris, { boundaryWeight = 40, weldEps = 1e-5 } = {}) {
+        const nv = pos.length / 3;
+        // ---------------------------------------------------------------- solda: um representante por posição
+        const rep = new Int32Array(nv), key = new Map(), q = 1 / weldEps;
+        for (let v = 0; v < nv; v++) {
+            const k = Math.round(pos[v * 3] * q) + ',' + Math.round(pos[v * 3 + 1] * q) + ',' + Math.round(pos[v * 3 + 2] * q);
+            const r = key.get(k);
+            if (r === undefined) { key.set(k, v); rep[v] = v; } else rep[v] = r;
+        }
+        let F = [];
+        for (let t = 0; t < idx.length; t += 3) {
+            const a = rep[idx[t]], b = rep[idx[t + 1]], c = rep[idx[t + 2]];
+            if (a !== b && b !== c && c !== a) F.push([a, b, c]);
+        }
+        const P = (v, k) => pos[v * 3 + k];
+        // ---------------------------------------------------------------- quádricas (10 coeficientes da matriz simétrica 4×4)
+        const Q = new Float64Array(nv * 10);
+        const addPlane = (v, a, b, c, d, w) => {
+            const o = v * 10;
+            Q[o] += w * a * a; Q[o + 1] += w * a * b; Q[o + 2] += w * a * c; Q[o + 3] += w * a * d;
+            Q[o + 4] += w * b * b; Q[o + 5] += w * b * c; Q[o + 6] += w * b * d;
+            Q[o + 7] += w * c * c; Q[o + 8] += w * c * d; Q[o + 9] += w * d * d;
+        };
+        const faceN = (f) => {
+            const [a, b, c] = f;
+            const ux = P(b, 0) - P(a, 0), uy = P(b, 1) - P(a, 1), uz = P(b, 2) - P(a, 2), vx = P(c, 0) - P(a, 0), vy = P(c, 1) - P(a, 1), vz = P(c, 2) - P(a, 2);
+            const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz);
+            return [nx, ny, nz, l];
+        };
+        for (const f of F) {
+            const [nx, ny, nz, l] = faceN(f);
+            if (l < 1e-12) continue;
+            const a = nx / l, b = ny / l, c = nz / l, d = -(a * P(f[0], 0) + b * P(f[0], 1) + c * P(f[0], 2)), w = l * 0.5;
+            for (const v of f) addPlane(v, a, b, c, d, w);
+        }
+        // borda aberta: um plano perpendicular à face, passando pela aresta (pesado)
+        const edgeCount = new Map(), ek = (a, b) => (a < b ? a * nv + b : b * nv + a);
+        for (const f of F) for (let i = 0; i < 3; i++) { const k = ek(f[i], f[(i + 1) % 3]); edgeCount.set(k, (edgeCount.get(k) || 0) + 1); }
+        for (const f of F) {
+            const [nx, ny, nz, l] = faceN(f);
+            if (l < 1e-12) continue;
+            for (let i = 0; i < 3; i++) {
+                const a = f[i], b = f[(i + 1) % 3];
+                if (edgeCount.get(ek(a, b)) !== 1) continue;
+                const ex = P(b, 0) - P(a, 0), ey = P(b, 1) - P(a, 1), ez = P(b, 2) - P(a, 2);
+                let px = ey * nz - ez * ny, py = ez * nx - ex * nz, pz = ex * ny - ey * nx;
+                const pl = Math.hypot(px, py, pz);
+                if (pl < 1e-12) continue;
+                px /= pl; py /= pl; pz /= pl;
+                const d = -(px * P(a, 0) + py * P(a, 1) + pz * P(a, 2)), w = boundaryWeight * Math.hypot(ex, ey, ez) ** 2;
+                addPlane(a, px, py, pz, d, w); addPlane(b, px, py, pz, d, w);
+            }
+        }
+        const err = (o, x, y, z) => Q[o] * x * x + 2 * Q[o + 1] * x * y + 2 * Q[o + 2] * x * z + 2 * Q[o + 3] * x + Q[o + 4] * y * y + 2 * Q[o + 5] * y * z
+            + 2 * Q[o + 6] * y + Q[o + 7] * z * z + 2 * Q[o + 8] * z + Q[o + 9];
+        // custo de juntar u em v (v fica): o erro das duas quádricas somadas na posição de v
+        const cost = (u, v) => { const o1 = u * 10, o2 = v * 10, x = P(v, 0), y = P(v, 1), z = P(v, 2); return err(o1, x, y, z) + err(o2, x, y, z); };
+        // ---------------------------------------------------------------- vizinhança: vértice → faces
+        const alive = F.map(() => true), vf = new Map();
+        F.forEach((f, i) => { for (const v of f) { let s = vf.get(v); if (!s) vf.set(v, s = new Set()); s.add(i); } });
+        const ver = new Int32Array(nv);
+        // heap de candidatos [custo, u, v, versão de u, versão de v]
+        const H = [];
+        const push = (e) => { H.push(e); let i = H.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (H[p][0] <= H[i][0]) break; [H[p], H[i]] = [H[i], H[p]]; i = p; } };
+        const pop = () => { const top = H[0], last = H.pop(); if (H.length) { H[0] = last; let i = 0; for (;;) { const l = i * 2 + 1, r = l + 1; let m = i; if (l < H.length && H[l][0] < H[m][0]) m = l; if (r < H.length && H[r][0] < H[m][0]) m = r; if (m === i) break; [H[m], H[i]] = [H[i], H[m]]; i = m; } } return top; };
+        const enqueue = (a, b) => { push([cost(a, b), a, b, ver[a], ver[b]]); push([cost(b, a), b, a, ver[b], ver[a]]); };
+        const seen = new Set();
+        for (const f of F) for (let i = 0; i < 3; i++) { const a = f[i], b = f[(i + 1) % 3], k = ek(a, b); if (seen.has(k)) continue; seen.add(k); enqueue(a, b); }
+        let live = F.length;
+        // ---------------------------------------------------------------- colapsos
+        while (live > targetTris && H.length) {
+            const [, u, v, vu, vv] = pop();
+            if (ver[u] !== vu || ver[v] !== vv) continue;                    // (algo mudou em volta: o candidato é velho)
+            const fu = vf.get(u);
+            if (!fu || !fu.size) continue;
+            // as faces de u que sobram (as que não têm v) não podem virar do avesso nem achatar
+            let ok = true;
+            for (const i of fu) {
+                const f = F[i];
+                if (f.includes(v)) continue;
+                const g = f.map((x) => (x === u ? v : x)), [ax, ay, az, la] = faceN(f), [bx, by, bz, lb] = faceN(g);
+                if (lb < 1e-12 || (ax * bx + ay * by + az * bz) < 0.2 * la * lb) { ok = false; break; }
+            }
+            if (!ok) continue;
+            let sv = vf.get(v);
+            if (!sv) vf.set(v, sv = new Set());
+            for (const i of fu) {
+                const f = F[i];
+                if (f.includes(v)) { alive[i] = false; live--; for (const x of f) if (x !== u) { const s = vf.get(x); if (s) s.delete(i); } continue; }
+                for (let k = 0; k < 3; k++) if (f[k] === u) f[k] = v;
+                sv.add(i);
+            }
+            vf.delete(u);
+            for (let k = 0; k < 10; k++) Q[v * 10 + k] += Q[u * 10 + k];
+            ver[u]++; ver[v]++;
+            const nb = new Set();
+            for (const i of sv) for (const x of F[i]) if (x !== v) nb.add(x);
+            for (const x of nb) enqueue(v, x);                                  // (só as arestas de v mudaram de custo: as outras seguem valendo)
+        }
+        const out = [];
+        F.forEach((f, i) => { if (alive[i]) out.push(f[0], f[1], f[2]); });
+        return Uint32Array.from(out);
+    }
+
+    // O rosto e a estampa da ficha para o shader low poly (src/art/Char3D.js, uniforms face, face2 e shirt): [cara fechada, feminino,
+    // barba (0 nada, 1 cheia, 2 cavanhaque, 3 bigode), óculos, máscara (0 nada, 1 touca ninja, 2 bandana), o tamanho do rosto do estilo
+    // (G.TOON.face), estampa (0 lisa, 1 listras horizontais, 2 verticais, 3 floral, 4 camisa de time, 5 logo), corrente, botões (1 de
+    // tecido, 2 de metal), zíper]
+    const FINE = new Set([M.accent, M.accent2, M.gold, M.chrome]);
+    function faceOf(s) {
+        const t = s.top;
+        return [s.eyes === 'angry' ? 1 : 0, s.gender === 'f' ? 1 : 0, { beard: 1, goatee: 2, mustache: 3 }[s.beard] || 0, s.glasses ? 1 : 0,
+            { balaclava: 1, bandana: 2 }[s.mask] || 0, (G.TOON && G.TOON.face) || 1,
+            { stripes_h: 1, stripes_v: 2, floral: 3, jersey: 4, logo: 5 }[s.pattern] || 0, s.chain ? 1 : 0,
+            t === 'polo' || t === 'social' ? 1 : t === 'uniform' || t === 'uniform_long' ? 2 : 0, t === 'hoodie' || s.zip ? 1 : 0];
     }
 
     // Partes do corpo trocadas pela malha (nome da parte geométrica).
     const REPLACED = new Set(Object.keys(PART_GROUP));
 
     G.paintHairBlood = paintHairBlood;
-    Object.assign(G, { MESH3D: !!DATA, meshUsable: usable, meshParts, meshFit: fitFor, MESH_REPLACED: REPLACED, MESH_HAIR: HAIR, lowBody, MESH_DATA: DATA });
+    Object.assign(G, { MESH3D: !!DATA, meshUsable: usable, meshParts, meshFit: fitFor, MESH_REPLACED: REPLACED, MESH_HAIR: HAIR, lowBody, polyPart, surfaceNets, simplifyMesh, MESH_DATA: DATA });
     return G;
 }

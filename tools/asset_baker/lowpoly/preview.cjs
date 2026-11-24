@@ -1,9 +1,8 @@
-// Prévia do visual LOW POLY dos personagens (protótipo): o gerador no Node, as malhas simplificadas (simplify.cjs), a pose parada de
+// Prévia do visual LOW POLY dos personagens (protótipo): o gerador no Node, as malhas simplificadas (G.simplifyMesh ou as do meshoptimizer), a pose parada de
 // cada tipo e as faces chapadas com a paleta da ficha. Grava um JSON por tipo (triângulos já posados, cor por face) para a página de
 // prévia desenhar.   node tools/asset_baker/lowpoly/preview.cjs SAIDA.json tipo1 tipo2 ...   (razão: LOWPOLY_RATIO, padrão 0,15)
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
-const { simplify } = require('./simplify.cjs');
 const GEN_DIR = path.join(__dirname, '..', 'generator');
 const GEN = ['NpcGenCore.js', 'NpcGenChar.js', 'NpcGenRender.js', 'NpcGenAnims.js', 'NpcGenTypes.js', 'NpcGenBuild.js', 'malha3d.js', 'malha3d_low.js', 'NpcGenMesh.js', 'veiculos_occ.js', 'armas_sprites.js'];
 for (const f of GEN) vm.runInThisContext(fs.readFileSync(path.join(GEN_DIR, f), 'utf8'), { filename: path.join(GEN_DIR, f) });
@@ -20,8 +19,8 @@ const dec = (e) => {
 };
 const low = new Map();
 const all = [...D.chars.m.meshes, ...D.chars.f.meshes, ...Object.values(D.hairs)];
-for (const e of all) { const m = dec(e); low.set(e, simplify(m.pos, m.idx, Math.max(16, Math.round(m.idx.length / 3 * (e.mat === 'eye' ? 0.3 : RATIO))))); }
-// LOWPOLY_SRC=meshopt: os índices assados com o meshoptimizer (generator/malha3d_low.js); senão, o simplificador próprio
+for (const e of all) { const m = dec(e); low.set(e, G.simplifyMesh(m.pos, m.idx, Math.max(16, Math.round(m.idx.length / 3 * (e.mat === 'eye' ? 0.3 : RATIO))))); }
+// LOWPOLY_SRC=meshopt: os índices assados com o meshoptimizer (generator/malha3d_low.js); senão, o simplificador próprio (G.simplifyMesh)
 let idxFor = (e) => low.get(e) || null;
 if (process.env.LOWPOLY_SRC === 'meshopt') {
 	vm.runInThisContext(fs.readFileSync(path.join(GEN_DIR, 'malha3d_low.js'), 'utf8'));
