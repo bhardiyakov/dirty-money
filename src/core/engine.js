@@ -22,6 +22,9 @@ class GameEngine {
 		}, false);
 		// Sem as cópias acima, um contexto perdido (driver reiniciou, aba em segundo plano no celular por muito tempo) não volta sozinho.
 		this.canvas.addEventListener('webglcontextlost', () => {
+			// (anotado entre aberturas: o diagnóstico mostra, e a próxima abertura desta placa vem mais leve — core/GpuCheck.js)
+			try { const L = Store.getJSON('gpuLost', []) || []; L.push({ t: Date.now(), up: Math.round(performance.now() / 1000), gpu: typeof SafeMode !== 'undefined' ? SafeMode._gpu() : '?' }); Store.setJSON('gpuLost', L.slice(-10)); } catch (e) { /* segue */ }
+			console.error('[PLACA] a placa de vídeo reiniciou o jogo (contexto WebGL perdido)');
 			if (document.getElementById('ctxLost')) return;
 			const d = document.createElement('div'); d.id = 'ctxLost';
 			d.style.cssText = 'position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(5,7,12,0.92);color:#f2f4f8;font:600 16px Inter,system-ui,sans-serif;text-align:center;padding:24px';
