@@ -26,6 +26,16 @@ const Char3D = {
 		return !this.off && C.on !== false && q !== '2d' && typeof Worker === 'function' && typeof Wardrobe !== 'undefined';      // (off: disable() — erro repetido ou modo seguro)
 	},
 	get npcOn() { const N = this.C.npc; return this.on && !!N && N.on !== false && typeof NpcArt !== 'undefined' && !!NpcArt._pal; },
+	// LOW POLY (o padrão desde novembro/2026): o boneco em TRIÂNGULOS de face chapada (shader 'char3dPoly'; o Worker monta com G.lowBody —
+	// o corpo e o cabelo da malha simplificados pelo meshoptimizer, os acessórios geométricos em triângulos, o rosto e a estampa do peito
+	// pintados por pixel) no lugar das dezenas de milhares de pontos. Os objetos na mão seguem em pontos.
+	// Config.art.char3d.poly; ?poly=1 / ?poly=0 forçam (?poly=0: os pontos de antes).
+	get polyOn() {
+		const q = typeof location !== 'undefined' ? location.search : '';
+		if (/[?&]poly=1\b/.test(q)) return true;
+		if (/[?&]poly=0\b/.test(q)) return false;
+		return !!this.C.poly;
+	},
 	BONES: 16,
 	_shader() {
 		if (BABYLON.Effect.ShadersStore.char3dVertexShader) return;
@@ -127,6 +137,168 @@ const Char3D = {
 				#endif
 				gl_FragColor = vec4(c * tint * shade, 1.0);
 			}`;
+		// LOW POLY: os mesmos ossos (B) e a mesma luz em faixas e cores da paleta, em TRIÂNGULOS: a normal da FACE vem das derivadas da
+		// posição no mundo (face chapada, sem normal por vértice). SIL (raio-X) e SHADOW (sombra projetada) como nos pontos.
+		BABYLON.Effect.ShadersStore.char3dPolyVertexShader = `
+			precision highp float;
+			attribute vec3 position;     // (= ip: a caixa da malha, o desenho usa os ossos)
+			attribute vec3 ip;           // canto no espaço do osso 1
+			attribute vec3 p2;           // … no do osso 2
+			attribute vec4 sk;           // osso 1, osso 2, peso do 2
+			attribute vec2 mt;           // material
+			attribute vec4 fp;           // o canto no espaço da cabeça ou do peito, sem o esticão, e qual (1 cabeça: o rosto, 2 peito: a estampa, 0 nenhum)
+			uniform mat4 world;
+			uniform mat4 viewProjection;
+			uniform vec4 B[48];
+			uniform float unit;
+			uniform vec3 eye;
+			uniform vec3 sunL;
+			uniform float groundY;
+			varying vec3 vW;
+			varying vec2 vMt;
+			varying vec3 vF;
+			varying float vS;
+			vec3 xp(int b, vec3 p) { vec4 r0 = B[b * 3], r1 = B[b * 3 + 1], r2 = B[b * 3 + 2]; return vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w); }
+			void main(void) {
+				int b1 = int(sk.x + 0.5), b2 = int(sk.y + 0.5);
+				vec3 p = xp(b1, ip);
+				if (sk.z > 0.0) p = mix(p, xp(b2, p2), sk.z);
+				vec4 wp = world * vec4(vec3(p.x, p.z, p.y) * unit, 1.0);
+				#ifdef SHADOW
+				wp.xyz -= sunL * ((wp.y - groundY) / max(sunL.y, 0.2));
+				#endif
+				#ifdef SIL
+				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vW = vec3(0.0); vMt = vec2(0.0); vF = vec3(0.0); vS = 0.0; return; }
+				wp.xyz += normalize(eye - wp.xyz) * 0.06;
+				#endif
+				vW = wp.xyz; vMt = mt; vF = fp.xyz; vS = fp.w;
+				gl_Position = viewProjection * wp;
+			}`;
+		BABYLON.Effect.ShadersStore.char3dPolyFragmentShader = `
+			#extension GL_OES_standard_derivatives : enable
+			precision highp float;
+			varying vec3 vW;
+			varying vec2 vMt;
+			uniform sampler2D ramps;
+			uniform sampler2D palette;
+			uniform float palRows;
+			uniform float row;
+			uniform vec3 tint;
+			uniform float shade;
+			uniform vec4 silhouette;
+			uniform vec3 sunL;
+			uniform vec3 eye;
+			varying vec3 vF;
+			varying float vS;
+			uniform vec4 face;           // a ficha: cara fechada, feminino, barba (1 cheia, 2 cavanhaque, 3 bigode), óculos
+			uniform vec2 face2;          // máscara (1 touca ninja, 2 bandana), tamanho do rosto (G.TOON.face)
+			uniform float expr;          // expressão do quadro (0 = a da ficha, 1–5 = G.FACES)
+			uniform vec4 shirt;          // estampa (1 listras horizontais, 2 verticais, 3 floral, 4 camisa de time, 5 logo), corrente, botões (1 de tecido, 2 de metal), zíper
+			const float M_SKIN = 1.0, M_HAIR = 2.0, M_SHIRT = 3.0, M_EYE = 12.0, M_EYEW = 13.0, M_MOUTH = 14.0, M_CHROME = 17.0, M_BROW = 18.0, M_HAT = 21.0, M_ACC = 22.0, M_BEARD = 23.0, M_GOLD = 24.0, M_LENS = 25.0, M_ACC2 = 29.0;
+			bool isM(float a, float b) { return abs(a - b) < 0.5; }
+			float sq(float a) { return a * a; }
+			// O ROSTO por pixel, a receita do NpcGenChar.makeTexHead (olhos, sobrancelhas, boca, barba, óculos, máscara e as expressões),
+			// no espaço da cabeça (P) com a normal da face nele (nf): o material do pixel e o tom
+			float faceMat(float m, vec3 P, vec3 nf, inout float tone) {
+				float x = P.x, y = P.y, z = P.z, ax = abs(x), fk = face2.y;
+				bool front = nf.y > 0.25, skin = isM(m, M_SKIN), female = face.y > 0.5;
+				float ey = expr > 0.5 ? expr : face.x;                         // (0 neutro, 1 cara fechada, 2 fúria, 3 susto, 4 dor, 5 olhos fechados)
+				bool angry = isM(ey, 1.0), mouth = false;
+				float ex = 5.4, ez = 10.2, rx = 3.0 * fk, rz = (angry ? 2.0 : 1.8) * fk, slope = angry ? 0.42 : 0.1, bw0 = (female ? 0.42 : 0.55) * fk * fk;
+				float ox = ax - ex, oz = z - ez;
+				if (skin && front && y > 6.0) {
+					if (isM(ey, 3.0)) {
+						if (ox * ox + oz * oz < sq(2.5 * fk)) m = sq(ox + 0.25) + sq(oz + 0.1) < sq(1.05 * fk) ? M_EYE : M_EYEW;
+						if (abs(z - (ez + 3.5 * fk - 0.32 * ox)) < bw0 && ax > 2.2 && ax < 7.8) m = M_BROW;
+						mouth = sq(x / 1.35) + sq((z - 3.0) / 1.15) < 1.0;
+					} else if (isM(ey, 4.0)) {
+						if (ox > -2.5 && ox < 2.5 && abs(abs(oz) - 0.25 * (ox + 2.5)) < 0.42 * fk) m = M_EYE;
+						if (abs(z - (ez + 2.6 * fk - 0.45 * ox)) < bw0 * 1.15 && ax > 2.2 && ax < 7.8) m = M_BROW;
+						mouth = ax < 2.3 && abs(z - 3.2) < 0.7;
+						if (mouth && ax < 1.9 && abs(z - 3.45) < 0.22) { m = M_EYEW; mouth = false; }
+					} else if (isM(ey, 5.0)) {
+						if (abs(ox) < 2.4 * fk && abs(oz + 0.5 + 0.08 * ox * ox) < 0.38 * fk) m = M_EYE;
+						if (abs(z - (ez + 2.9 * fk + 0.1 * ox)) < bw0 * 0.9 && ax > 2.2 && ax < 7.8) m = M_BROW;
+						mouth = ax < 1.2 && abs(z - 3.3) < 0.45;
+					} else {
+						bool rage = isM(ey, 2.0);
+						float sl = rage ? 0.7 : slope, lidZ = rage ? 0.35 : 0.95, ez2 = rage ? 2.0 * fk : rz;
+						if (sq(ox / rx) + sq(oz / ez2) < 1.0 && oz < lidZ + sl * ox) m = ox > 0.55 && oz > -0.9 ? M_EYEW : M_EYE;
+						float bz = ez + (rage ? 1.75 : angry ? 2.45 : 2.9) * fk + sl * ox;
+						if (abs(z - bz) < bw0 * (rage ? 1.3 : 1.0) && ax > 2.2 && ax < 7.8) m = M_BROW;
+						if (rage) {
+							mouth = ax < 2.5 && abs(z - 3.2 + 0.12 * ax) < 0.62;
+							if (mouth && ax < 2.1 && abs(z - 3.2 + 0.12 * ax) < 0.25) { m = M_EYEW; mouth = false; }
+						} else mouth = ax < (female ? 1.6 : 1.8) && abs(z - 3.4) < 0.5;
+					}
+				}
+				if (mouth) m = M_MOUTH;
+				if (skin && front && ax < 1.3 && z > 5.3 && z < 6.2 && y > 9.0) tone -= 1.0;
+				float bd = face.z;
+				if (isM(bd, 1.0) || isM(bd, 2.0)) {
+					bool jaw = isM(m, M_SKIN) && z < 6.6 && y > -1.5;
+					if (isM(bd, 2.0)) jaw = jaw && ax < 3.2 && z < 3.0; else jaw = jaw && !(ax < 2.4 && z > 3.9);
+					if (jaw) m = M_BEARD;
+				}
+				if ((isM(bd, 1.0) || isM(bd, 3.0)) && isM(m, M_SKIN) && front && ax < 3.0 && z > 3.9 && z < 5.1 && y > 8.0) m = M_BEARD;
+				if (face.w > 0.5) {
+					if (front && abs(z - (ez + 0.3)) < 1.75 && ax < 8.8 && y > 5.0 && !isM(m, M_HAIR)) { m = M_LENS; if (x < -5.0 && x > -6.4 && z > ez + 0.6) tone += 3.0; }
+					else if (z > 6.5 && (isM(m, M_EYE) || isM(m, M_EYEW))) m = M_SKIN;
+				}
+				if (isM(face2.x, 1.0)) {
+					bool hole = front && abs(z - ez) < 2.6 && ax < 8.8 && y > 4.0;
+					if (!hole && (isM(m, M_SKIN) || isM(m, M_MOUTH) || isM(m, M_BROW) || isM(m, M_EYEW) || isM(m, M_EYE))) m = M_HAT;
+				} else if (isM(face2.x, 2.0)) {
+					if (z < 6.4 && y > -3.0 && (isM(m, M_SKIN) || isM(m, M_MOUTH) || isM(m, M_BEARD) || isM(m, M_EYEW))) m = M_ACC;
+				}
+				return m;
+			}
+			// A ESTAMPA do peito por pixel, a receita do NpcGenChar.makeTexChest (listras, flores, camisa de time, logo, botões, zíper, corrente)
+			float shirtMat(float m, vec3 P, vec3 nf) {
+				float x = P.x, y = P.y, z = P.z, ax = abs(x), ny = nf.y;
+				if (isM(m, M_SHIRT)) {
+					if (shirt.z > 0.5 && ny > 0.6 && abs(x - 0.4) < 0.45 && z < 14.5 && abs(mod(z + 30.0, 3.2) - 1.6) < 0.5) m = shirt.z < 1.5 ? M_ACC : M_CHROME;
+					if (shirt.w > 0.5 && ny > 0.6 && abs(x - 0.3) < 0.4 && z < 16.0) m = M_CHROME;
+				}
+				if (isM(m, M_SHIRT)) {
+					float pt = shirt.x;
+					if (isM(pt, 1.0)) { if (mod(floor((z + 40.0) / 3.0), 2.0) < 0.5) m = M_ACC; }
+					else if (isM(pt, 2.0)) { if (mod(floor((x + 40.0) / 3.2), 2.0) < 0.5) m = M_ACC; }
+					else if (isM(pt, 3.0)) { float h = fract(sin(floor(x / 2.6) * 12.9898 + floor(z / 2.6) * 78.233 + floor(y / 2.6) * 37.719) * 43758.5453); if (h > 0.72) m = M_ACC; if (h < 0.12) m = M_ACC2; }
+					else if (isM(pt, 4.0)) { if (ax > 11.0 || z > 16.5) m = M_ACC; if (ny < -0.6 && ax < 3.2 && z > 2.5 && z < 11.5 && !(ax < 1.2 && z > 4.5 && z < 9.5)) m = M_ACC2; }
+					else if (isM(pt, 5.0)) { if (ny > 0.5 && sq(x - 0.5) / 20.0 + sq(z - 9.5) / 9.0 < 1.0) m = M_ACC; }
+				}
+				if (shirt.y > 0.5 && abs(z - (17.4 - 0.065 * x * x)) < 0.55 && y > 0.0 && ax < 7.5 && (isM(m, M_SHIRT) || isM(m, M_SKIN) || isM(m, M_ACC))) m = M_GOLD;
+				return m;
+			}
+			void main(void) {
+				#ifdef SIL
+				gl_FragColor = vec4(silhouette.rgb * silhouette.a, silhouette.a); return;
+				#endif
+				#ifdef SHADOW
+				gl_FragColor = vec4(0.0, 0.0, 0.0, silhouette.a); return;
+				#endif
+				vec3 fx = dFdx(vF), fy = dFdy(vF);                                // (fora de qualquer "if": derivadas valem em todo pixel)
+				vec3 V = normalize(eye - vW), n = normalize(cross(dFdx(vW), dFdy(vW)));
+				if (dot(n, V) < 0.0) n = -n;                                     // (a face virada para quem olha: os dois lados)
+				float d = dot(n, sunL);
+				float lev = 1.0 + smoothstep(-0.36, -0.24, d) + smoothstep(0.24, 0.36, d) + smoothstep(0.74, 0.86, d);
+				float mt0 = floor(vMt.x + 0.5), tone = vMt.y;                    // (tom da face: estampa, dano)
+				if (vS > 0.5) {                                                   // (cabeça: o rosto, peito: a estampa — por pixel)
+					vec3 nf = normalize(cross(fx, fy));
+					bool head = vS < 1.5;
+					if (dot(nf, vF - (head ? vec3(0.0, -2.0, 12.0) : vec3(0.0, 0.0, 9.0))) < 0.0) nf = -nf;      // (para fora)
+					if (head) mt0 = faceMat(mt0, vF, nf, tone); else mt0 = shirtMat(mt0, vF, nf);
+				}
+				lev = clamp(lev + 0.35 * clamp(dot(n, V), 0.0, 1.0) - 0.15 + clamp(tone, -1.5, 1.0), 0.0, 4.0);      // (o que encara a câmera um pouco mais claro: volume)
+				#ifdef PAL
+				float m = mt0, i0 = floor(lev), i1 = min(i0 + 1.0, 4.0), y = (row + 0.5) / palRows;
+				vec3 c = mix(texture2D(palette, vec2((m * 8.0 + i0 + 0.5) / 256.0, y)).rgb, texture2D(palette, vec2((m * 8.0 + i1 + 0.5) / 256.0, y)).rgb, lev - i0);
+				#else
+				vec3 c = texture2D(ramps, vec2((lev + 0.5) / 5.0, (mt0 + 0.5) / 32.0)).rgb;
+				#endif
+				gl_FragColor = vec4(c * tint * shade, 1.0);
+			}`;
 	},
 
 	// ---------------------------------------------------------------- Workers e modelos
@@ -154,6 +326,7 @@ const Char3D = {
 	// lod: 0 = perto (o modelo cheio), 1 = longe (menos pontos, maiores — farSpacing), 2 = bem longe (o leve com só uma parte dos pontos, maiores — veryFarThin):
 	// TODOS os NPCs ficam 3D; de longe, a diferença de detalhe não aparece e o custo cai muito.
 	typeModel(type, dmg = 0, lod = 0) {
+		if (this.polyOn) lod = 0;                                                         // (low poly: os triângulos não mudam com a distância — um modelo por tipo)
 		const key = type + '|' + dmg + '|' + lod, N = this.C.npc || {};
 		let M = this._types.get(key);
 		// (o bem leve é o leve com os pontos embaralhados e só uma parte deles desenhada, maiores: o gerador não monta o boneco com
@@ -364,7 +537,7 @@ class Char3DModel {
 		let slot = '';
 		if (kind === 'npc' && npc) { let h = 0; for (let i = 0; i < npc.length; i++) h = (h * 31 + npc.charCodeAt(i)) | 0; slot = (h >>> 0) % 2 ? '_b' : ''; }
 		this.w = Char3D.worker(kind + slot);
-		this.w.postMessage({ type: 'char3d', job: 1, mid: this.mid, spec, npc, dmg, spacing });
+		this.w.postMessage({ type: 'char3d', job: 1, mid: this.mid, spec, npc, dmg, spacing, poly: Char3D.polyOn });
 	}
 	_msg(m) {
 		if (m.error) {
@@ -414,6 +587,20 @@ class Char3DModel {
 		mesh.setEnabled(false);
 		return mesh;
 	}
+	// LOW POLY: os triângulos do corpo (cantos sem índice compartilhado: face chapada), no espaço dos ossos como os pontos
+	_tris(name, P) {
+		const mesh = new BABYLON.Mesh(name, this.scene), n = P.n, vd = new BABYLON.VertexData(), idx = new Uint32Array(n);
+		for (let i = 0; i < n; i++) idx[i] = i;
+		vd.positions = P.p1; vd.indices = idx;
+		vd.applyToMesh(mesh, false);
+		const E = this.scene.getEngine(), vb = (data, kind, size) => mesh.setVerticesBuffer(new BABYLON.VertexBuffer(E, data, kind, false, false, size, false));
+		vb(P.p1, 'ip', 3); vb(P.p2, 'p2', 3); vb(P.sk, 'sk', 4); vb(P.mt, 'mt', 2);
+		vb(P.fp || new Float32Array(n * 4), 'fp', 4);
+		mesh.isPickable = false; mesh._char3d = true;
+		mesh.alwaysSelectAsActiveMesh = true;                 // (no espaço dos ossos: a caixa não vale)
+		mesh.setEnabled(false);
+		return mesh;
+	}
 	_build(c) {
 		this.unit = (c.scale || 1) / ((Config.art && Config.art.npcPpu) || 26) / 2;          // (m por unidade: escala / (PPU / k 0,5))
 		if (c.ramps) {
@@ -421,11 +608,14 @@ class Char3DModel {
 			this.ramps.wrapU = this.ramps.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 		}
 		this.n = c.n;
-		if (this.thin < 1) this._shuffle(c);
-		this.body = this._points('c3d_corpo' + this.mid, c.n, c.p1, c.n1, c.p2, c.n2, c.sk, c.mt, c.fa, c.fb);
-		if (this.thin < 1) this.body.forcedInstanceCount = Math.max(1, Math.ceil(c.n * this.thin));
+		if (c.n > 0) {                                                                   // (low poly: os pontos são só os acessórios — pode não ter nenhum)
+			if (this.thin < 1) this._shuffle(c);
+			this.body = this._points('c3d_corpo' + this.mid, c.n, c.p1, c.n1, c.p2, c.n2, c.sk, c.mt, c.fa, c.fb);
+			if (this.thin < 1) this.body.forcedInstanceCount = Math.max(1, Math.ceil(c.n * this.thin));
+		} else this.body = null;
+		if (c.poly) { this.poly = this._tris('c3d_poly' + this.mid, c.poly); this.tris = c.poly.n / 3; this.face = c.poly.face || [0, 0, 0, 0, 0, 1, 0, 0, 0, 0]; }
 		this.ready = true;
-		this._data = c;                                                                  // (os pontos, até medir o chão: _groundFrom)
+		this._data = c.poly || c;                                                        // (o corpo — os triângulos ou os pontos —, até medir o chão: _groundFrom)
 		for (const k of ['idle:none', 'walk:none', 'run:none']) this.clip(k);          // (os clipes de sempre já vêm: ninguém espera em 2,5D)
 		// (o jogador: os de montar também — subindo na moto ou na bike ele não passa pelo desenho 2,5D)
 		if (this.kind === 'player') for (const k of ['ride_moto:none', 'ride_bike:none', 'ride_scooter:none', 'ride_jetski:none']) this.clip(k);
@@ -451,6 +641,7 @@ class Char3DModel {
 		for (const m of this.props.values()) m.dispose();
 		this.props.clear();
 		if (this.body) this.body.dispose();
+		if (this.poly) this.poly.dispose();
 		if (this.ramps) this.ramps.dispose();
 		this.ready = false;
 	}
@@ -479,9 +670,16 @@ class Char3DActor {
 	// As malhas do ator (clones das do modelo: a geometria é a mesma).
 	_buildMeshes() {
 		const M = this.model;
-		this.body = this._clone(M.body, this.name + '_corpo');
-		this.body.material = this.bodyMat = this._mat(this.name + '_mat');
-		this.bodyMat.onBindObservable.add(() => this._bindCommon(this.bodyMat, this._B));
+		if (M.body) {
+			this.body = this._clone(M.body, this.name + '_corpo');
+			this.body.material = this.bodyMat = this._mat(this.name + '_mat');
+			this.bodyMat.onBindObservable.add(() => this._bindCommon(this.bodyMat, this._B));
+		}
+		if (M.poly) {                                                                     // (low poly: o corpo em triângulos)
+			this.polyMesh = this._clone(M.poly, this.name + '_poly');
+			this.polyMesh.material = this.polyMat = this._mat(this.name + '_pmat', false, true);
+			this.polyMat.onBindObservable.add(() => this._bindCommon(this.polyMat, this._B));
+		}
 		if (this.wantXray) this._xrayBuild();
 		if (this.C.shadow !== false && (!this.pal || this.C.npcShadow)) this._shadowBuild();      // (sombra projetada: o jogador; os NPCs, só com npcShadow — a mancha macia basta, e corta metade dos pontos)
 		this._built = true;
@@ -495,14 +693,15 @@ class Char3DActor {
 		return m;
 	}
 	// sil: 'xray' (silhueta dourada) | 'shadow' (sombra projetada) | false (o desenho)
-	_mat(name, sil = false) {
+	_mat(name, sil = false, poly = false) {
 		const pal = this.pal && !sil, defines = [];
 		if (sil === 'shadow') defines.push('#define SHADOW');
 		else if (sil) defines.push('#define SIL');
 		if (pal) defines.push('#define PAL');
-		const m = new BABYLON.ShaderMaterial(name, this.scene, { vertex: 'char3d', fragment: 'char3d' }, {
-			attributes: ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
-			uniforms: ['world', 'viewProjection', 'B', 'unit', 'pScale', 'splat', 'eye', 'sunL', 'tint', 'shade', 'silhouette', 'palRows', 'row', 'expr', 'groundY', 'viewport'],
+		const sh = poly ? 'char3dPoly' : 'char3d';
+		const m = new BABYLON.ShaderMaterial(name, this.scene, { vertex: sh, fragment: sh }, {
+			attributes: poly ? ['position', 'ip', 'p2', 'sk', 'mt', 'fp'] : ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
+			uniforms: ['world', 'viewProjection', 'B', 'unit', 'pScale', 'splat', 'eye', 'sunL', 'tint', 'shade', 'silhouette', 'palRows', 'row', 'expr', 'groundY', 'viewport'].concat(poly ? ['face', 'face2', 'shirt'] : []),
 			samplers: ['ramps', 'palette'],
 			defines,
 			needAlphaBlending: !!sil,
@@ -515,6 +714,10 @@ class Char3DActor {
 		m.setVector3('eye', Char3D._view.eye);
 		m.setVector3('sunL', Char3D.sun);
 		m.setColor3('tint', typeof SpriteMaterial !== 'undefined' ? SpriteMaterial.sharedTint() : BABYLON.Color3.White());
+		if (poly) {                                                                       // (o rosto e a estampa da ficha: G.lowBody → faceOf)
+			const f = this.model.face || [0, 0, 0, 0, 0, 1, 0, 0, 0, 0];
+			m.setVector4('face', new BABYLON.Vector4(f[0], f[1], f[2], f[3])); m.setVector2('face2', new BABYLON.Vector2(f[4], f[5])); m.setVector4('shirt', new BABYLON.Vector4(f[6] || 0, f[7] || 0, f[8] || 0, f[9] || 0));
+		}
 		return m;
 	}
 	_bindCommon(m, B) {
@@ -538,23 +741,24 @@ class Char3DActor {
 	_xrayBuild() {
 		if (typeof XRaySilhouette === 'undefined') return;
 		const C = BABYLON.Constants, L = XRaySilhouette.DRAW_LAST;
-		XRaySilhouette.stencil(this.body, C.ALWAYS, 2, C.REPLACE);
-		this._xr = [[false, L, C.NOTEQUAL, 2, C.REPLACE, C.GREATER], [true, L + 1, C.EQUAL, 1, C.KEEP, C.ALWAYS]].map(([over, ai, func, ref, pass, depth]) => {
-			const m = this._clone(this.model.body, this.name + (over ? '_xrayC' : '_xray'));
+		const src = [[this.model.body, this.body, false], [this.model.poly, this.polyMesh, true]].filter((x) => x[0]);
+		for (const [, own] of src) XRaySilhouette.stencil(own, C.ALWAYS, 2, C.REPLACE);
+		this._xr = src.flatMap(([from, , poly]) => [[false, L, C.NOTEQUAL, 2, C.REPLACE, C.GREATER], [true, L + 1, C.EQUAL, 1, C.KEEP, C.ALWAYS]].map(([over, ai, func, ref, pass, depth]) => {
+			const m = this._clone(from, this.name + (over ? '_xrayC' : '_xray') + (poly ? 'P' : ''));
 			m.alphaIndex = ai;
-			const mat = m.material = this._mat(m.name + '_mat', 'xray');
+			const mat = m.material = this._mat(m.name + '_mat', 'xray', poly);
 			mat.depthFunction = depth;
 			mat.onBindObservable.add(() => this._bindCommon(mat, this._B));
 			XRaySilhouette.stencil(m, func, ref, pass);
 			m.setEnabled(false);
 			return m;
-		});
+		}));
 	}
 	// SOMBRA PROJETADA: os mesmos pontos, achatados no chão na direção do sol, em preto translúcido. O stencil (4) deixa cada pixel do chão
 	// escurecer uma vez só — sem ele, os pontos sobrepostos fariam manchas mais escuras.
 	_shadowBuild() {
-		const C = BABYLON.Constants, m = this._clone(this.model.body, this.name + '_sombra3d');
-		const mat = m.material = this._mat(m.name + '_mat', 'shadow');
+		const poly = !!this.model.poly, C = BABYLON.Constants, m = this._clone(poly ? this.model.poly : this.model.body, this.name + '_sombra3d');
+		const mat = m.material = this._mat(m.name + '_mat', 'shadow', poly);
 		mat.zOffset = -4;
 		mat.onBindObservable.add(() => this._bindCommon(mat, this._B));
 		if (typeof XRaySilhouette !== 'undefined') XRaySilhouette.stencil(m, C.NOTEQUAL, 4, C.REPLACE);
@@ -706,6 +910,7 @@ class Char3DActor {
 		if (this._xr) { for (const m of this._xr) { m.material.dispose(); m.dispose(); } this._xr = null; }
 		if (this._sh3) { this._sh3.material.dispose(); this._sh3.dispose(); this._sh3 = null; }
 		if (this.body) { this.body.dispose(); this.bodyMat.dispose(); this.body = null; }
+		if (this.polyMesh) { this.polyMesh.dispose(); this.polyMat.dispose(); this.polyMesh = null; }
 		this._built = false;
 	}
 	// Guardado na reserva (Char3D._free): escondido, o desenho 2,5D do ator de volta.

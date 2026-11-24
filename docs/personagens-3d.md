@@ -79,3 +79,36 @@ Os NPCs mais perto da câmera são bonecos 3D; os outros, desenhos 2,5D dos atla
   lado a lado (o mesmo NPC só em 3D e só em 2,5D, na mesma pose): 66 px e 66 px, com os pés na mesma linha.
 - **O que continua diferente.** O desenho 2,5D é sempre visto a 56°. Na câmera de perseguição, mais baixa, o 3D mostra menos do alto
   da cabeça. E o 2,5D tem 16 direções, enquanto o 3D vira o ângulo exato.
+
+## Low poly (o padrão desde novembro/2026)
+
+O boneco em **triângulos de face chapada** no lugar da nuvem de pontos, no estilo das cidades low poly. `Config.art.char3d.poly`
+(ligado); `?poly=0` na URL volta aos pontos, `?poly=1` força. Mesmo esqueleto, mesmos clipes, mesma paleta: só muda como o corpo é
+desenhado (shader `char3dPoly`). Teste: `tests/76_low_poly.test.cjs`.
+
+- **Corpo e cabelo**: a malha realista (MakeHuman, CC0, ~6,5 mil triângulos por peça de roupa) simplificada no build pelo
+  **meshoptimizer** (`tools/asset_baker/lowpoly/bakelow.cjs` → `generator/malha3d_low.js`, só os índices, 89 KB). Os pesos dos ossos
+  entram como atributos da simplificação: a barra da bermuda, da manga e da regata não escorrega para o outro lado do joelho/cotovelo.
+  Cada face tem a cor da região do osso da maioria dos cantos.
+- **Acessórios** (boné, capacete, colete, bolsa, alça, os cabelos que a malha não tem): a superfície da forma geométrica do gerador
+  por *surface nets* e simplificada (`G.polyPart` em `NpcGenMesh.js`, no Worker; 120 a 420 triângulos por peça).
+- **Rosto e estampa do peito**: pintados por PIXEL no shader com a mesma receita do 2,5D — o rosto (`makeTexHead`: olhos, sobrancelhas,
+  boca, barba, óculos, máscara e as expressões do clipe: raiva, fúria, medo, dor, olhos fechados; o globo do olho é pele, como nos
+  pontos, e recebe o olho do desenho) e a camisa (`makeTexChest`: listras, floral, camisa de time, logo, botões, zíper, corrente). O
+  Worker manda a posição de cada canto no espaço da cabeça ou do peito (`fp`, com qual dos dois) e a ficha (`face`). Pintados por face,
+  numa malha de poucas faces, eles sumiriam ou virariam um mosaico.
+- **O resto da estampa e o dano**: a textura procedural das outras partes (cadarço, dobras…) e o dano (terra, cortes, sangue) por face,
+  no centro dela.
+- **Atenção nos shaders**: o Babylon quebra a linha no `;` — um `;` num comentário depois do código vira código e o shader não compila
+  (o teste confere).
+- **Um modelo por tipo**: os triângulos não mudam com a distância (sem os 3 níveis de detalhe dos pontos).
+- **Ainda em pontos**: os objetos na mão (armas, garrafa, guarda-chuva) — poucos pontos, e o detalhe das armas é o desenho da folha.
+
+Peso: 2,0 a 3,2 mil triângulos por personagem (com os acessórios), contra 13,9 a 36 mil pontos (2 triângulos cada) no modo de pontos.
+Medido no jogo (SwiftShader, gráfico Alto, os mesmos 12 NPCs 3D na tela): tempo de placa de 5,8 s por quadro com os pontos e 1,2 s em
+low poly — e isso ainda com os acessórios em pontos (hoje eles também são triângulos). As chamadas de desenho quase não mudam (~300 na
+cena inteira; o boneco é 1 por personagem): instanciar os NPCs não compensa agora.
+
+**Calçado** (vale para os dois modos e o 2,5D): a parte do calçado que segue a canela (cano, tornozelo) media a altura da sola no espaço
+da canela e virava "sola" — o chinelo ganhava meia preta até o meio da canela. Agora a altura é medida no espaço do pé. Os atlas 2,5D
+pegam a correção quando forem renderizados de novo.

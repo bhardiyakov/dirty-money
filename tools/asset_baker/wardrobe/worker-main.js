@@ -185,9 +185,21 @@ function c3Model(m) {
 }
 // O esqueleto da ficha (proporções) para as poses — o que o rendererFor faz, sem assar o corpo de novo.
 function c3Rig(M) { const s = G.fullSpec(M.spec); G.setRig(G.rigFor(s)); G.CTX.rifle = s.rifle; G.CTX.scale = s.scale || 1; return s; }
+// LOW POLY (m.poly — src/art/Char3D.js com Config.art.char3d.poly / ?poly=1): o boneco inteiro em TRIÂNGULOS (G.lowBody): o corpo e o
+// cabelo da malha (os índices simplificados do generator/malha3d_low.js) e os acessórios geométricos (boné, colete, bolsa, alça, os
+// cabelos que a malha não tem: G.polyPart), face chapada com a cor da região, a estampa e o dano. Sem pontos.
+// poly: { n (cantos), p1, p2, sk (osso 1, osso 2, peso, 0), mt (material, tom), fp (o canto na cabeça ou no peito e qual: o rosto e a estampa por pixel), face }.
+function c3Poly(M, BI) {
+	if (!G.lowBody || !G.MESH3D || !G.meshUsable(G.fullSpec(M.spec))) return null;
+	const L = G.lowBody(M.spec), n = L.n, sk = new Float32Array(n * 4), mt = new Float32Array(n * 2), map = L.bones.map((b) => BI[b] | 0);
+	for (let i = 0; i < n; i++) { sk[i * 4] = map[L.sk[i * 3]]; sk[i * 4 + 1] = map[L.sk[i * 3 + 1]]; sk[i * 4 + 2] = L.sk[i * 3 + 2]; mt[i * 2] = L.mt[i]; mt[i * 2 + 1] = L.tn[i]; }
+	return { n, p1: L.p1, p2: L.p2, sk, mt, fp: L.fp, face: L.face };
+}
 function c3Body(m) {
-	const M = c3Model(m), s = G.fullSpec(M.spec), baked = G.loadBaked(s, M.spacing), BI = {}, parts = Object.values(baked.body);
+	const M = c3Model(m), s = G.fullSpec(M.spec), BI = {};
 	C3.BONES.forEach((b, i) => { BI[b] = i; });
+	const poly = m.poly ? c3Poly(M, BI) : null;
+	const parts = poly ? [] : Object.values(G.loadBaked(s, M.spacing).body);          // (low poly: tudo nos triângulos — nada a assar em pontos)
 	let n = 0;
 	for (const bk of parts) n += bk.n;
 	const p1 = new Float32Array(n * 3), n1 = new Float32Array(n * 3), p2 = new Float32Array(n * 3), n2 = new Float32Array(n * 3), sk = new Float32Array(n * 4), mt = new Float32Array(n * 2);
@@ -219,7 +231,7 @@ function c3Body(m) {
 		});
 		o += bk.n;
 	}
-	return { bones: C3.BONES, n, p1, n1, p2, n2, sk, mt, fa, fb, faces: FX, ramps: M.own ? c3Ramps(M.spec) : null, scale: s.scale || 1 };
+	return { bones: C3.BONES, n, p1, n1, p2, n2, sk, mt, fa, fb, faces: FX, ramps: M.own ? c3Ramps(M.spec) : null, scale: s.scale || 1, poly };
 }
 function c3Ramps(spec) {
 	const R = G.rampsFor(spec), out = new Uint8Array(32 * 5 * 4);
@@ -270,7 +282,7 @@ async function run(m) {
 		else if (m.type === 'preview') runPreview(m);
 		else if (m.type === 'clips') { await runClips(m); self.postMessage({ job: m.job, done: true }); }
 		else if (m.type === 'pack') self.postMessage({ job: m.job, packed: await runPack(m) });
-		else if (m.type === 'char3d') { const c = c3Body(m); self.postMessage({ job: m.job, mid: m.mid, char3d: c }, [c.p1.buffer, c.n1.buffer, c.p2.buffer, c.n2.buffer, c.sk.buffer, c.mt.buffer, c.fa.buffer, c.fb.buffer].concat(c.ramps ? [c.ramps.buffer] : [])); }
+		else if (m.type === 'char3d') { const c = c3Body(m); self.postMessage({ job: m.job, mid: m.mid, char3d: c }, (c.poly ? [c.poly.p1.buffer, c.poly.p2.buffer, c.poly.sk.buffer, c.poly.mt.buffer, c.poly.fp.buffer] : []).concat([c.p1.buffer, c.n1.buffer, c.p2.buffer, c.n2.buffer, c.sk.buffer, c.mt.buffer, c.fa.buffer, c.fb.buffer].concat(c.ramps ? [c.ramps.buffer] : []))); }
 		else if (m.type === 'char3dClip') { const c = c3Clip(m); self.postMessage({ job: m.job, mid: m.mid, clip3d: c }); }
 		else if (m.type === 'char3dDrop') C3.models.delete(m.mid);
 	} catch (err) {
