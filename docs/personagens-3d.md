@@ -63,3 +63,19 @@ de trás do próprio corpo virariam silhueta.
 
 A sombra projetada assume o chão plano na altura dos pés: em encosta, parte dela entra no terreno. Cápsulas, rastros de golpe e respingos
 d'água (os outros efeitos da pose) ainda não aparecem no 3D.
+
+## Troca 3D ↔ 2,5D sem "pulo" (novembro/2026)
+
+Os NPCs mais perto da câmera são bonecos 3D; os outros, desenhos 2,5D dos atlas. Na troca, o personagem não pode parecer que mudou:
+
+- **Sem contorno no 2,5D.** O gerador (`tools/asset_baker/generator/NpcGenCore.js`) agora usa por padrão o estilo `igual3d`: o mesmo
+  do cartum (luz em 3 faixas, rosto marcado), mas sem o contorno escuro externo (`TOON.outline = 0`) e sem os traços entre partes
+  (`G.LINES = false`). Os traços viram sombra de contato e a silhueta sai antisserrilhada, como no boneco 3D. Num atlas de
+  `civil_mano`, o contorno era o equivalente a 33% dos pixels do corpo; agora é zero. `NPC_ESTILO=cartum` volta ao de antes.
+- **A mesma altura.** O desenho é feito visto de cima a 56°, e o quadro em pé é esticado para a altura na tela bater com a do 3D
+  (`SpriteActor.STAND_SCALE`): `s = (1 + k·tan c) / (cos 56° + k·sen 56°)`, com `c` = inclinação da câmera e `k` =
+  `Config.art.standDepth` (0,17), a espessura que o desenho de cima mostra (alto da cabeça e ombros). Na câmera de cima (`c` = 56°)
+  dá o mesmo `1/cos 56°` de antes. Antes, com `1/cos c`, a 42° (perseguição a pé) o 2,5D ficava com uns 80% da altura do 3D. Medido
+  lado a lado (o mesmo NPC só em 3D e só em 2,5D, na mesma pose): 66 px e 66 px, com os pés na mesma linha.
+- **O que continua diferente.** O desenho 2,5D é sempre visto a 56°. Na câmera de perseguição, mais baixa, o 3D mostra menos do alto
+  da cabeça. E o 2,5D tem 16 direções, enquanto o 3D vira o ângulo exato.
