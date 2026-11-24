@@ -53,6 +53,15 @@ module.exports = {
             c.ok(r.n === 1 && r.gpu && r.shown && r.rep, 'a placa reiniciou o jogo: anotado (com a placa), aviso na tela e no diagnóstico');
             c.ok(r.mode === 'forçado' && r.par === undefined && /reiniciou o jogo 1×/.test(r.why), `na próxima abertura desta placa: ${r.why}`);
             c.ok(r.title, '"WebGL not supported" na carga: a tela explica (fechar o navegador, aceleração gráfica, chrome://gpu, outro navegador)');
+            // placa Intel no Direct3D 11 (o notebook Iris Xe): já abre sem compilação paralela; as outras, não
+            const np = await page.evaluate(() => ({
+                iris: GpuCheck.noParallelFor('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)'),
+                uhd: GpuCheck.noParallelFor('ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)'),
+                nv: GpuCheck.noParallelFor('ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)'),
+                mac: GpuCheck.noParallelFor('ANGLE (Intel Inc., Intel(R) Iris(TM) Plus Graphics, OpenGL 4.1)'),
+                sw: GpuCheck.noParallelFor(SafeMode._gpu()),
+            }));
+            c.ok(np.iris && np.uhd && !np.nv && !np.mac && !np.sw, 'Intel no Direct3D 11 (Iris Xe, UHD) abre sem compilação paralela; NVIDIA, Mac e o navegador dos testes não');
             c.noErrors(errors.filter((e) => !/PLACA|WebGL not supported|falha na carga/.test(e)), 'normal');
             await close();
         }

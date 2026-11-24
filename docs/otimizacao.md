@@ -570,3 +570,6 @@ depois de uma atualização do navegador. As versões atuais do Chrome não têm
   e aparece no diagnóstico ("a placa reiniciou o jogo").
 - Depois de uma reinicialização nos últimos 7 dias, a próxima abertura dessa placa compila os shaders sem paralelismo, como o Firefox
   (`GpuCheck`, modo "forçado"). `?paralelo=1` desliga essa proteção.
+- **Intel no Direct3D 11** (Iris Xe, UHD… no Chrome e no Edge): o jogo já abre sem compilação paralela, sem esperar um travamento
+  (`GpuCheck.noParallelFor`). No notebook Iris Xe, a placa travou até o Windows reiniciar o driver (a tela piscou) antes de o
+  Chrome bloquear o WebGL. `?paralelo=1` liga a compilação paralela mesmo assim.
