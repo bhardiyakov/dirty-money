@@ -468,10 +468,69 @@ function NpcGenMesh(G) {
         N[o] = nx / l; N[o + 1] = ny / l; N[o + 2] = nz / l;
     }
 
+    // LOW POLY (estilo de cidade low poly: faces chapadas, cor da paleta por região): a MESMA malha, encaixe e regras de roupa do
+    // meshParts, mas por VÉRTICE e com os índices simplificados (tools/asset_baker/lowpoly/simplify.cjs: só vértices originais — os
+    // pesos dos ossos, os portes e as cores continuam valendo). idxFor(entrada da malha em NPC_MESH3D) → índices simplificados (ou null: a malha inteira). (Por entrada, não por nome: o tênis masculino e o
+    // feminino têm o mesmo nome.)
+    // Saída: triângulos SEM índice (cada canto é seu: faces chapadas, uma cor por face) no formato do boneco 3D: p1 (osso 1), p2 (osso 2),
+    // sk = [osso 1, osso 2, peso do 2º], mat = o material da face (a maioria dos cantos). Ossos pela lista BONES deste arquivo.
+    function lowBody(spec, idxFor) {
+        const s = G.fullSpec(spec), key = s.gender === 'f' ? 'f' : 'm';
+        const F = fitFor(key), C = DATA.chars[key], mw = MORPH[s.body] || MORPH.normal;
+        const tris = [];
+        const P = [0, 0, 0], N = [0, 0, 0], o1 = new Float32Array(3), on1 = new Float32Array(3), o2 = new Float32Array(3), on2 = new Float32Array(3);
+        const meshes = C.meshes.map((e) => [e, meshOf(e), e.mat]);
+        const hairName = !s.hair || s.hair === 'bald' || s.mask === 'balaclava' ? null : HAIR[s.hair];
+        if (hairName && DATA.hairs[hairName]) meshes.push([DATA.hairs[hairName], meshOf(DATA.hairs[hairName]), 'hair']);
+        for (const [e, m, kind] of meshes) {
+            const pos = new Float32Array(m.pos);
+            if (m.morph) for (let k = 0; k < 3; k++) if (mw[k]) { const D = m.morph[k]; for (let i = 0; i < pos.length; i++) pos[i] += mw[k] * D[i]; }
+            const I = (idxFor && idxFor(e)) || m.idx, Fv = kind === 'hair' ? fitFor('m') : F;
+            const vert = new Map();
+            const V = (v) => {
+                let r = vert.get(v);
+                if (r) return r;
+                for (let k = 0; k < 3; k++) { P[k] = pos[v * 3 + k]; N[k] = m.nrm[v * 3 + k]; }
+                let b1 = 'head', b2 = 'head', w = 0;
+                if (kind !== 'hair') {
+                    let w1 = -1, ww2 = -1, i1 = 0, i2 = 0;
+                    for (let q = 0; q < 4; q++) { const wt = m.bw[v * 8 + 4 + q]; if (wt > w1) { ww2 = w1; i2 = i1; w1 = wt; i1 = q; } else if (wt > ww2) { ww2 = wt; i2 = q; } }
+                    b1 = BONES[m.bw[v * 8 + i1]]; b2 = BONES[m.bw[v * 8 + i2]];
+                    w = ww2 > 0 && b2 !== b1 ? ww2 / (w1 + ww2) : 0;
+                    if (w < 0.02) { w = 0; b2 = b1; }
+                }
+                toBone(Fv, b1, P, N, o1, on1, 0); toBone(Fv, b2, P, N, o2, on2, 0);
+                if (kind === 'eye') { o1[1] += 1.1; o2[1] += 1.1; }
+                const mat = kind === 'hair' ? M.hair : kind === 'eye' ? M.eye : matFor(s, kind, b1, o1);      // (olho: escuro — o rosto pintado do 2,5D não existe por vértice)
+                const sh1 = G.shapeFor(b1), sh2 = G.shapeFor(b2);
+                const p1 = sh1 ? [o1[0] * sh1[0], o1[1] * sh1[1], o1[2] * sh1[2]] : [o1[0], o1[1], o1[2]];
+                const p2 = sh2 ? [o2[0] * sh2[0], o2[1] * sh2[1], o2[2] * sh2[2]] : [o2[0], o2[1], o2[2]];
+                r = { p1, p2, b1, b2, w, mat };
+                vert.set(v, r);
+                return r;
+            };
+            for (let t = 0; t < I.length; t += 3) {
+                const a = V(I[t]), b = V(I[t + 1]), c = V(I[t + 2]);
+                // a cor da face: o material de 2 ou 3 cantos (empate: o do 1º)
+                const mat = b.mat === c.mat ? b.mat : a.mat;
+                tris.push([a, b, c, mat, kind]);
+            }
+        }
+        // empacotado (por canto): ossos pelo índice de BONES
+        const n = tris.length * 3, p1 = new Float32Array(n * 3), p2 = new Float32Array(n * 3), sk = new Float32Array(n * 3), mt = new Float32Array(n);
+        let o = 0;
+        for (const [a, b, c, mat] of tris) for (const x of [a, b, c]) {
+            p1.set(x.p1, o * 3); p2.set(x.p2, o * 3);
+            sk[o * 3] = BI[x.b1]; sk[o * 3 + 1] = BI[x.b2]; sk[o * 3 + 2] = x.w; mt[o] = mat;
+            o++;
+        }
+        return { bones: BONES, n, tris: tris.length, p1, p2, sk, mt, scale: s.scale || 1 };
+    }
+
     // Partes do corpo trocadas pela malha (nome da parte geométrica).
     const REPLACED = new Set(Object.keys(PART_GROUP));
 
     G.paintHairBlood = paintHairBlood;
-    Object.assign(G, { MESH3D: !!DATA, meshUsable: usable, meshParts, meshFit: fitFor, MESH_REPLACED: REPLACED, MESH_HAIR: HAIR });
+    Object.assign(G, { MESH3D: !!DATA, meshUsable: usable, meshParts, meshFit: fitFor, MESH_REPLACED: REPLACED, MESH_HAIR: HAIR, lowBody, MESH_DATA: DATA });
     return G;
 }
