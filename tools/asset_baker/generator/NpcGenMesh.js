@@ -58,7 +58,7 @@ function NpcGenMesh(G) {
         if (t) return t;
         const T = DATA.tex[name];
         if (!T) return null;
-        t = { w: T.w, h: T.h, c: T.c, d: bytes(T.d) };
+        t = { name, w: T.w, h: T.h, c: T.c, d: bytes(T.d) };
         let s = 0;                                         // luminância média (do que é opaco, no cabelo): referência das dobras/mechas
         let k = 0;
         for (let i = 0; i < T.w * T.h; i++) { if (T.c === 2 && t.d[i * 2] < 128) continue; s += t.d[i * T.c + T.c - 1]; k++; }
@@ -478,20 +478,35 @@ function NpcGenMesh(G) {
     // Saída: triângulos SEM índice (cada canto é seu: faces chapadas, uma cor por face) no formato do boneco 3D: p1 (osso 1), p2 (osso 2),
     // sk = [osso 1, osso 2, peso do 2º], mat = o material da face (a maioria dos cantos). Ossos pela lista BONES deste arquivo.
     // os índices assados (generator/malha3d_low.js, NPC_MESH3D_LOW — tools/asset_baker/lowpoly/bakelow.cjs, meshoptimizer), por entrada
-    let _low = null;
-    function lowIdx(e) {
-        if (!_low) {
-            _low = new Map();
-            const LW = typeof NPC_MESH3D_LOW !== 'undefined' ? NPC_MESH3D_LOW : null;
-            if (LW && DATA) {
-                const u16 = (s) => new Uint16Array(bytes(s).buffer);
-                for (const k of Object.keys(DATA.chars)) for (const m of DATA.chars[k].meshes) if (LW.chars[k] && LW.chars[k][m.name]) _low.set(m, u16(LW.chars[k][m.name]));
-                for (const [n, m] of Object.entries(DATA.hairs)) if (LW.hairs[n]) _low.set(m, u16(LW.hairs[n]));
-            }
-        }
-        return _low.get(e) || null;
+    // NÍVEIS (tools/asset_baker/lowpoly/bakelow.cjs): 'npc' (o de perto, ~2,5 mil triângulos), 'hero' (o jogador, ~5 mil) e 'far' (os de
+    // longe, ~1 mil — no lugar do desenho 2,5D). lowIdx = o 'npc'; lowIdxOf(nível) = a função de índices do nível.
+    let _low = null, _lowAO = null;
+    function lowLoad() {
+        if (_low) return;
+        _low = { npc: new Map(), hero: new Map(), far: new Map() }; _lowAO = new Map();
+        const LW = typeof NPC_MESH3D_LOW !== 'undefined' ? NPC_MESH3D_LOW : null;
+        if (!LW || !DATA) return;
+        const u16 = (s) => new Uint16Array(bytes(s).buffer);
+        const fill = (M, src) => {
+            if (!src) return;
+            for (const k of Object.keys(DATA.chars)) for (const m of DATA.chars[k].meshes) if (src.chars[k] && src.chars[k][m.name]) M.set(m, u16(src.chars[k][m.name]));
+            for (const [n, m] of Object.entries(DATA.hairs)) if (src.hairs[n]) M.set(m, u16(src.hairs[n]));
+        };
+        fill(_low.npc, LW);
+        for (const L of ['hero', 'far']) fill(_low[L], LW.lod && LW.lod[L]);
+        for (const k of Object.keys(DATA.chars)) for (const m of DATA.chars[k].meshes) if (LW.ao && LW.ao[k] && LW.ao[k][m.name]) _lowAO.set(m, bytes(LW.ao[k][m.name]));      // (a oclusão assada: 1 byte por vértice)
     }
-    function lowBody(spec, idxFor = lowIdx, acc = true) {
+    function lowIdx(e) { lowLoad(); return _low.npc.get(e) || null; }
+    lowIdx.baked = true;
+    const _lowOf = {};
+    function lowIdxOf(L) {
+        if (!L || L === 'npc') return lowIdx;
+        if (!_lowOf[L]) { _lowOf[L] = (e) => { lowLoad(); return (_low[L] && _low[L].get(e)) || _low.npc.get(e) || null; }; _lowOf[L].baked = true; }
+        return _lowOf[L];
+    }
+    const lowAO = (e) => { lowLoad(); return _lowAO.get(e) || null; };
+    function lowBody(spec, idxFor = lowIdx, acc = true, lod = 'npc') {
+        if (idxFor === lowIdx && lod !== 'npc') idxFor = lowIdxOf(lod);
         const s = G.fullSpec(spec), key = s.gender === 'f' ? 'f' : 'm';
         const F = fitFor(key), C = DATA.chars[key], mw = MORPH[s.body] || MORPH.normal, sdf = G.buildParts(s);
         const tris = [];
@@ -505,7 +520,10 @@ function NpcGenMesh(G) {
             const pos = new Float32Array(m.pos);
             if (m.morph) for (let k = 0; k < 3; k++) if (mw[k]) { const D = m.morph[k]; for (let i = 0; i < pos.length; i++) pos[i] += mw[k] * D[i]; }
             const I = (idxFor && idxFor(e)) || m.idx, Fv = kind === 'hair' ? fitFor('m') : F;
-            const vert = new Map();
+            const vert = new Map(), UVG = m.uv && m.tex ? uvGroups(m) : null, AOv = idxFor && idxFor.baked ? lowAO(e) : null;
+            // TEXTURA DE DETALHE (a do pacote: dobras da camiseta, desgaste e costuras do jeans, mechas do cabelo): só nas faces do tecido
+            // da própria peça (a perna de bermuda e o braço de regata são a calça/camiseta pintadas de pele: sem jeans na pele)
+            const slot = !UVG ? 0 : kind === 'hair' ? 2 : 1, cloth = kind === 'shirt' ? CLOTH_SHIRT : kind === 'jeans' ? CLOTH_JEANS : null;
             const V = (v) => {
                 let r = vert.get(v);
                 if (r) return r;
@@ -527,7 +545,8 @@ function NpcGenMesh(G) {
                 // o: o canto no espaço do osso 1 SEM o esticão (as texturas procedurais e o dano usam esse espaço); h: o mesmo, na cabeça
                 // (1: o rosto) e no peito (2: a estampa), que o shader pinta por pixel
                 const sid = b1 === 'head' ? 1 : b1 === 'chest' && kind !== 'hair' ? 2 : 0;
-                r = { p1, p2, b1, b2, w, mat, o: [o1[0], o1[1], o1[2]], n: [on1[0], on1[1], on1[2]], h: sid ? [o1[0], o1[1], o1[2], sid] : null };
+                // n1/n2: a NORMAL do vértice da malha (luz suave) no espaço de cada osso, com o esticão (a normal escala ao contrário)
+                r = { p1, p2, b1, b2, w, mat, o: [o1[0], o1[1], o1[2]], n: [on1[0], on1[1], on1[2]], h: sid ? [o1[0], o1[1], o1[2], sid] : null, n1: nScale(on1, sh1), n2: nScale(on2, sh2), ao: AOv ? AOv[v] / 255 : 0 };
                 vert.set(v, r);
                 return r;
             };
@@ -543,7 +562,9 @@ function NpcGenMesh(G) {
                 // o centro e a normal da face no espaço (sem esticão) do osso da maioria: para a estampa, o dano e o sangue no cabelo
                 const bone = own[0].b1, mine = own.filter((x) => x.b1 === bone), cen = [0, 0, 0], nr = [0, 0, 0];
                 for (const x of mine) for (let q = 0; q < 3; q++) { cen[q] += x.o[q] / mine.length; nr[q] += x.n[q]; }
-                tris.push({ v: [a, b, c], mat, tone: 0, kind, bone, cen, nr });
+                const T = { v: [a, b, c], mat, tone: 0, kind, bone, cen, nr };
+                if (slot && (slot === 2 || (cloth && cloth.has(mat)))) { T.uv = uvPick(m, UVG, I[t], I[t + 1], I[t + 2]); T.slot = slot; T.mean = texMean(m); T.tex = m.tex.name; }
+                tris.push(T);
             }
         }
         // ESTAMPA (a textura procedural de cada parte: listras da camisa, cadarço…; o rosto não — o shader pinta por pixel) e DANO (s.dmg:
@@ -568,11 +589,11 @@ function NpcGenMesh(G) {
         // — a superfície da forma (polyPart: surface nets + simplificação) — com a cor e a estampa de cada face pela própria forma
         if (acc) for (const [k, part] of Object.entries(sdf)) {
             if (REPLACED.has(k) || (k === 'hair' && meshHair)) continue;
-            const L = polyPart(part, POLY_TARGET[k] || 240), sh = G.shapeFor(part.bone);
-            const corner = (x, y, z) => ({ p1: sh ? [x * sh[0], y * sh[1], z * sh[2]] : [x, y, z], b1: part.bone, b2: part.bone, w: 0, h: null });
+            const L = polyPart(part, Math.round((POLY_TARGET[k] || 240) * (LOD_ACC[lod] || 1))), sh = G.shapeFor(part.bone);
+            const corner = (q) => { const x = L.pos[q], y = L.pos[q + 1], z = L.pos[q + 2], n = nScale(L.nrm.subarray(q, q + 3), sh); return { p1: sh ? [x * sh[0], y * sh[1], z * sh[2]] : [x, y, z], b1: part.bone, b2: part.bone, w: 0, h: null, n1: n, n2: n }; };
             for (let t = 0; t < L.tris; t++) {
-                const q = t * 9, v = [];
-                for (let c = 0; c < 3; c++) v.push(corner(L.pos[q + c * 3], L.pos[q + c * 3 + 1], L.pos[q + c * 3 + 2]));
+                const v = [];
+                for (let c = 0; c < 3; c++) v.push(corner(t * 9 + c * 3));
                 tris.push({ v, mat: L.mat[t], tone: L.tone[t] });
             }
         }
@@ -581,17 +602,59 @@ function NpcGenMesh(G) {
         // boca, barba, óculos, máscara e as expressões) e a estampa do peito (makeTexChest): numa malha de poucas faces, pintados por
         // face, eles sumiriam ou virariam um mosaico. tn = o tom da face.
         const n = tris.length * 3, p1 = new Float32Array(n * 3), p2 = new Float32Array(n * 3), sk = new Float32Array(n * 3), mt = new Float32Array(n), tn = new Float32Array(n), fp = new Float32Array(n * 4);
+        const nr1 = new Float32Array(n * 3), nr2 = new Float32Array(n * 3), ux = new Float32Array(n * 4), ao = new Float32Array(n), texs = {};
         let o = 0;
         for (const t of tris) {
             const [a, b, c] = t.v, same = a.h && b.h && c.h && a.h[3] === b.h[3] && a.h[3] === c.h[3];
             for (const x of t.v) {
-                p1.set(x.p1, o * 3); p2.set(x.p2 || x.p1, o * 3);
-                sk[o * 3] = BI[x.b1]; sk[o * 3 + 1] = BI[x.b2]; sk[o * 3 + 2] = x.w; mt[o] = t.mat; tn[o] = t.tone;
+                p1.set(x.p1, o * 3); p2.set(x.p2 || x.p1, o * 3); nr1.set(x.n1, o * 3); nr2.set(x.n2 || x.n1, o * 3);
+                if (t.slot) { const c = t.v.indexOf(x); ux[o * 4] = t.uv[c * 2]; ux[o * 4 + 1] = t.uv[c * 2 + 1]; ux[o * 4 + 2] = t.slot; ux[o * 4 + 3] = t.mean; texs[t.slot] = t.tex; }
+                sk[o * 3] = BI[x.b1]; sk[o * 3 + 1] = BI[x.b2]; sk[o * 3 + 2] = x.w; mt[o] = t.mat; tn[o] = t.tone; ao[o] = x.ao || 0;
                 if (same) fp.set(x.h, o * 4);
                 o++;
             }
         }
-        return { bones: BONES, n, tris: tris.length, p1, p2, sk, mt, tn, fp, face: faceOf(s), scale: s.scale || 1 };
+        return { bones: BONES, n, tris: tris.length, p1, p2, sk, mt, tn, fp, nr1, nr2, ux, ao, texs, face: faceOf(s), scale: s.scale || 1 };
+    }
+    // TEXTURA DE DETALHE no low poly. Os índices simplificados (bakelow.cjs) usam um vértice por POSIÇÃO (a solda antes de simplificar):
+    // numa costura do mapa UV, o mesmo lugar tem 2+ vértices com UVs diferentes. uvGroups: posição → os vértices dela; uvPick: para cada
+    // face, a combinação de UVs dos cantos que fica mais junta (a do mesmo pedaço do mapa) — sem a textura esticada de um lado ao outro.
+    const CLOTH_SHIRT = new Set([M.shirt, M.accent, M.accent2]), CLOTH_JEANS = new Set([M.jeans]);
+    function uvGroups(m) {
+        if (m._uvg) return m._uvg;
+        const key = new Map(), g = new Map();
+        for (let v = 0; v < m.n; v++) {
+            const k = Math.round(m.pos[v * 3] * 1e5) + ',' + Math.round(m.pos[v * 3 + 1] * 1e5) + ',' + Math.round(m.pos[v * 3 + 2] * 1e5);
+            const r = key.get(k);
+            if (r === undefined) { key.set(k, v); g.set(v, [v]); } else g.get(r).push(v);
+        }
+        return (m._uvg = g);
+    }
+    function uvPick(m, G2, a, b, c) {
+        const A = G2.get(a) || [a], B = G2.get(b) || [b], C = G2.get(c) || [c], U = m.uv;
+        const d = (i, j) => Math.hypot(U[i * 2] - U[j * 2], U[i * 2 + 1] - U[j * 2 + 1]);
+        let best = null, bd = Infinity;
+        for (const i of A) for (const j of B) for (const k of C) { const p = d(i, j) + d(j, k) + d(k, i); if (p < bd) { bd = p; best = [i, j, k]; } }
+        return [U[best[0] * 2], U[best[0] * 2 + 1], U[best[1] * 2], U[best[1] * 2 + 1], U[best[2] * 2], U[best[2] * 2 + 1]];
+    }
+    // a luminância média da textura NA PEÇA (a camiseta é clara, o jeans escuro: cada uma normaliza pela sua)
+    function texMean(m) {
+        if (m._tmean) return m._tmean;
+        const t = m.tex, U = m.uv, ch = t.c === 2 ? 1 : 0;
+        let s = 0, k = 0;
+        for (let v = 0; v < m.n; v++) {
+            const x = min(t.w - 1, max(0, floor(U[v * 2] * t.w))), y = min(t.h - 1, max(0, floor(U[v * 2 + 1] * t.h))), i = (y * t.w + x) * t.c;
+            if (t.c === 2 && t.d[i] < 128) continue;
+            s += t.d[i + ch]; k++;
+        }
+        return (m._tmean = max(1, s / max(k, 1)) / 255);
+    }
+    // os pixels de uma textura do pacote (para o Worker mandar ao jogo uma vez por nome): { w, h, c (1 = luz, 2 = alfa + luz), d }
+    G.meshTex = (name) => { const t = texOf(name); return t ? { w: t.w, h: t.h, c: t.c, d: t.d } : null; };
+    // a normal no espaço do osso com o esticão dele (escala ao contrário e normaliza)
+    function nScale(nv, sh) {
+        const x = sh ? nv[0] / sh[0] : nv[0], y = sh ? nv[1] / sh[1] : nv[1], z = sh ? nv[2] / sh[2] : nv[2], l = sqrt(x * x + y * y + z * z) || 1;
+        return [x / l, y / l, z / l];
     }
 
     // ------------------------------------------------------------------ LOW POLY das partes GEOMÉTRICAS (acessórios)
@@ -599,7 +662,7 @@ function NpcGenMesh(G) {
     // da distância cruza, na média dos cruzamentos das arestas e puxado para a superfície), depois simplificada (simplifyMesh) até
     // ~target faces. Por face: o material e o tom da forma no centro dela (e a textura procedural da parte, com a normal da forma).
     // → { tris, pos (9 por face: os 3 cantos, espaço do osso, sem o esticão), mat, tone }
-    const POLY_TARGET = { hat: 260, vest: 420, bag: 260, strap: 120, hair: 380 };
+    const POLY_TARGET = { hat: 260, vest: 420, bag: 260, strap: 120, hair: 380 }, LOD_ACC = { hero: 1.6, npc: 1, far: 0.4 };
     const _polyCache = new Map();
     function polyPart(part, target = 240, h = 1.0) {
         const sig = part.name + '|' + target + '|' + h + '|' + JSON.stringify(part.prims, (k, v) => (k === '_prep' ? undefined : v));
@@ -621,7 +684,15 @@ function NpcGenMesh(G) {
             mat[t] = tmp.mat; tone[t] = tmp.tone; pid[t] = tmp.pid; d1[t] = tmp.d1; d2[t] = tmp.d2;
         }
         if (part.tex) { const t2 = part.tex(cp, cn, mat, pid, d1, d2, T); for (let t = 0; t < T; t++) tone[t] += t2[t]; }
-        const res = { tris: T, pos, mat, tone, cp, cn };
+        // a normal de cada canto: o gradiente da forma ali (luz suave nos acessórios)
+        const nrm = new Float32Array(T * 9);
+        for (let q = 0; q < T * 9; q += 3) {
+            const x = pos[q], y = pos[q + 1], z = pos[q + 2];
+            const gx = part.eval(x + e, y, z, tmp) - part.eval(x - e, y, z, tmp), gy = part.eval(x, y + e, z, tmp) - part.eval(x, y - e, z, tmp), gz = part.eval(x, y, z + e, tmp) - part.eval(x, y, z - e, tmp);
+            const gl = sqrt(gx * gx + gy * gy + gz * gz) || 1;
+            nrm[q] = gx / gl; nrm[q + 1] = gy / gl; nrm[q + 2] = gz / gl;
+        }
+        const res = { tris: T, pos, mat, tone, cp, cn, nrm };
         _polyCache.set(sig, res);
         if (_polyCache.size > 48) _polyCache.delete(_polyCache.keys().next().value);
         return res;
@@ -791,6 +862,6 @@ function NpcGenMesh(G) {
     const REPLACED = new Set(Object.keys(PART_GROUP));
 
     G.paintHairBlood = paintHairBlood;
-    Object.assign(G, { MESH3D: !!DATA, meshUsable: usable, meshParts, meshFit: fitFor, MESH_REPLACED: REPLACED, MESH_HAIR: HAIR, lowBody, polyPart, surfaceNets, simplifyMesh, MESH_DATA: DATA });
+    Object.assign(G, { MESH3D: !!DATA, meshUsable: usable, meshParts, meshFit: fitFor, MESH_REPLACED: REPLACED, MESH_HAIR: HAIR, lowBody, lowIdxOf, polyPart, surfaceNets, simplifyMesh, MESH_DATA: DATA });
     return G;
 }

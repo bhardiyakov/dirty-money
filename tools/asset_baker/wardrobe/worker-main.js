@@ -171,7 +171,7 @@ function runPreview(m) {
 //   { type: 'char3d', job, mid, spec | npc (+ dmg), spacing } → { job, mid, char3d: { bones, n, p1, n1, p2, n2, sk, mt, fa, fb, faces, ramps?, scale } }
 //   { type: 'char3dClip', job, mid, key }                → { job, mid, clip3d: { key, fps, loop, n, B, sc, props, newProps, ex, fx } }
 //   { type: 'char3dDrop', mid }                          (o jogo largou o modelo)
-const C3 = { BONES: ['root', 'pelvis', 'chest', 'head', 'uarm_R', 'farm_R', 'hand_R', 'thigh_R', 'shin_R', 'foot_R', 'uarm_L', 'farm_L', 'hand_L', 'thigh_L', 'shin_L', 'foot_L'], models: new Map() };
+const C3 = { texSent: new Set(), BONES: ['root', 'pelvis', 'chest', 'head', 'uarm_R', 'farm_R', 'hand_R', 'thigh_R', 'shin_R', 'foot_R', 'uarm_L', 'farm_L', 'hand_L', 'thigh_L', 'shin_L', 'foot_L'], models: new Map() };
 function c3Model(m) {
 	let M = C3.models.get(m.mid);
 	if (!M) {
@@ -188,17 +188,32 @@ function c3Rig(M) { const s = G.fullSpec(M.spec); G.setRig(G.rigFor(s)); G.CTX.r
 // LOW POLY (m.poly — src/art/Char3D.js com Config.art.char3d.poly / ?poly=1): o boneco inteiro em TRIÂNGULOS (G.lowBody): o corpo e o
 // cabelo da malha (os índices simplificados do generator/malha3d_low.js) e os acessórios geométricos (boné, colete, bolsa, alça, os
 // cabelos que a malha não tem: G.polyPart), face chapada com a cor da região, a estampa e o dano. Sem pontos.
-// poly: { n (cantos), p1, p2, sk (osso 1, osso 2, peso, 0), mt (material, tom), fp (o canto na cabeça ou no peito e qual: o rosto e a estampa por pixel), face }.
-function c3Poly(M, BI) {
+// poly: { n (cantos), p1, p2, sk (osso 1, osso 2, peso, oclusão de ambiente), mt (material, tom), fp (o canto na cabeça ou no peito e qual: o rosto e a estampa por pixel), face }.
+function c3Poly(M, BI, level) {
 	if (!G.lowBody || !G.MESH3D || !G.meshUsable(G.fullSpec(M.spec))) return null;
-	const L = G.lowBody(M.spec), n = L.n, sk = new Float32Array(n * 4), mt = new Float32Array(n * 2), map = L.bones.map((b) => BI[b] | 0);
-	for (let i = 0; i < n; i++) { sk[i * 4] = map[L.sk[i * 3]]; sk[i * 4 + 1] = map[L.sk[i * 3 + 1]]; sk[i * 4 + 2] = L.sk[i * 3 + 2]; mt[i * 2] = L.mt[i]; mt[i * 2 + 1] = L.tn[i]; }
-	return { n, p1: L.p1, p2: L.p2, sk, mt, fp: L.fp, face: L.face };
+	const L = G.lowBody(M.spec, undefined, true, level || 'npc'), n = L.n, sk = new Float32Array(n * 4), mt = new Float32Array(n * 2), map = L.bones.map((b) => BI[b] | 0);
+	for (let i = 0; i < n; i++) { sk[i * 4] = map[L.sk[i * 3]]; sk[i * 4 + 1] = map[L.sk[i * 3 + 1]]; sk[i * 4 + 2] = L.sk[i * 3 + 2]; sk[i * 4 + 3] = L.ao ? L.ao[i] : 0; mt[i * 2] = L.mt[i]; mt[i * 2 + 1] = L.tn[i]; }
+	// as texturas de detalhe (tecido, cabelo) vão uma vez por nome, em RGBA (luz, luz, luz, alfa): o jogo guarda e reaproveita
+	const tex = {};
+	for (const name of Object.values(L.texs || {})) {
+		if (C3.texSent.has(name)) continue;
+		const t = G.meshTex(name);
+		if (!t) continue;
+		const d = new Uint8Array(t.w * t.h * 4);
+		for (let i = 0; i < t.w * t.h; i++) { const l = t.c === 2 ? t.d[i * 2 + 1] : t.d[i * t.c]; d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = l; d[i * 4 + 3] = t.c === 2 ? t.d[i * 2] : 255; }
+		tex[name] = { w: t.w, h: t.h, d };
+		C3.texSent.add(name);
+	}
+	return { n, p1: L.p1, p2: L.p2, n1: L.nr1, n2: L.nr2, sk, mt, fp: L.fp, ux: L.ux, texs: L.texs, tex, face: L.face };
 }
+// O ESTILO do boneco 3D (m.style — Config.art.char3d.style): 'real' (o padrão: proporções de gente, rosto sem o tamanho de desenho) ou
+// 'igual3d' (o mesmo dos desenhos 2,5D). Estes Workers só montam bonecos 3D: o estilo vale para todos os modelos deles; troca antes do 1º.
+function c3Style(m) { if (m.style && G.STYLES[m.style] && G.STYLE !== m.style) { G.setStyle(m.style); C3.models.clear(); } }
 function c3Body(m) {
+	c3Style(m);
 	const M = c3Model(m), s = G.fullSpec(M.spec), BI = {};
 	C3.BONES.forEach((b, i) => { BI[b] = i; });
-	const poly = m.poly ? c3Poly(M, BI) : null;
+	const poly = m.poly ? c3Poly(M, BI, m.level) : null;
 	const parts = poly ? [] : Object.values(G.loadBaked(s, M.spacing).body);          // (low poly: tudo nos triângulos — nada a assar em pontos)
 	let n = 0;
 	for (const bk of parts) n += bk.n;
@@ -245,7 +260,12 @@ function c3Ramps(spec) {
 function c3Clip(m) {
 	const M = c3Model(m), [name, w0] = m.key.split(':');
 	c3Rig(M);
-	const cd = G.clipDef(name, w0, M.type, { hand: M.spec.hand || null }), PR = G.bakeProps(M.spacing * 0.8);
+	// (m.fps: o 3D pede o clipe com mais quadros — 30 por segundo, até 48 — e a mesma duração: o gerador recalcula os de ciclo e reamostra
+	// as sequências; o desenho 2,5D, que custa por quadro, segue com os poucos do atlas)
+	let cd = G.clipDef(name, w0, M.type, { hand: M.spec.hand || null });
+	const want = m.fps > 0 ? Math.min(48, Math.round((cd.poses.length / (cd.fps || 10)) * m.fps)) : 0;
+	if (want > cd.poses.length) { try { cd = G.clipDef(name, w0, M.type, { hand: M.spec.hand || null, n: want }); } catch (e) { /* (fica com os quadros do atlas) */ } }
+	const PR = G.bakeProps(M.spacing * 0.8);
 	const n = cd.poses.length, NB = C3.BONES.length, B = new Float32Array(n * NB * 12), sc = new Float32Array(n), props = [], newProps = {};
 	const ex = new Int8Array(n), fx = [], FL = { flash: 1, casing: 2 };
 	cd.poses.forEach((pose, f) => {
@@ -282,7 +302,7 @@ async function run(m) {
 		else if (m.type === 'preview') runPreview(m);
 		else if (m.type === 'clips') { await runClips(m); self.postMessage({ job: m.job, done: true }); }
 		else if (m.type === 'pack') self.postMessage({ job: m.job, packed: await runPack(m) });
-		else if (m.type === 'char3d') { const c = c3Body(m); self.postMessage({ job: m.job, mid: m.mid, char3d: c }, (c.poly ? [c.poly.p1.buffer, c.poly.p2.buffer, c.poly.sk.buffer, c.poly.mt.buffer, c.poly.fp.buffer] : []).concat([c.p1.buffer, c.n1.buffer, c.p2.buffer, c.n2.buffer, c.sk.buffer, c.mt.buffer, c.fa.buffer, c.fb.buffer].concat(c.ramps ? [c.ramps.buffer] : []))); }
+		else if (m.type === 'char3d') { const c = c3Body(m); self.postMessage({ job: m.job, mid: m.mid, char3d: c }, (c.poly ? [c.poly.p1.buffer, c.poly.p2.buffer, c.poly.n1.buffer, c.poly.n2.buffer, c.poly.sk.buffer, c.poly.mt.buffer, c.poly.fp.buffer, c.poly.ux.buffer] : []).concat([c.p1.buffer, c.n1.buffer, c.p2.buffer, c.n2.buffer, c.sk.buffer, c.mt.buffer, c.fa.buffer, c.fb.buffer].concat(c.ramps ? [c.ramps.buffer] : []))); }
 		else if (m.type === 'char3dClip') { const c = c3Clip(m); self.postMessage({ job: m.job, mid: m.mid, clip3d: c }); }
 		else if (m.type === 'char3dDrop') C3.models.delete(m.mid);
 	} catch (err) {

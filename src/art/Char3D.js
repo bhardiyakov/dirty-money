@@ -36,7 +36,28 @@ const Char3D = {
 		if (/[?&]poly=0\b/.test(q)) return false;
 		return !!this.C.poly;
 	},
+	// O estilo do boneco 3D low poly: 'real' (o padrão — PS2 realista: proporções de gente, rosto sem o tamanho de desenho, luz suave)
+	// ou 'igual3d' (o dos desenhos 2,5D, luz em faixas). Config.art.char3d.style; ?estilo3d=igual3d força.
+	get style3d() {
+		const m = typeof location !== 'undefined' && /[?&]estilo3d=(\w+)/.exec(location.search);
+		return (m && m[1]) || this.C.style || 'real';
+	},
 	BONES: 16,
+	// TEXTURAS DE DETALHE do low poly (as do pacote da malha: tecido, mechas), uma por nome, compartilhadas por todos os modelos;
+	// sem textura: 1 pixel branco (o detalhe some, o recorte não corta nada)
+	_tex: new Map(),
+	texAdd(scene, name, t) {
+		if (this._tex.has(name)) return;
+		const T = new BABYLON.RawTexture(t.d, t.w, t.h, BABYLON.Engine.TEXTUREFORMAT_RGBA, scene, true, false, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
+		T.wrapU = T.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE; T.name = 'c3d_tex_' + name;
+		this._tex.set(name, T);
+	},
+	tex(scene, name) {
+		const T = name && this._tex.get(name);
+		if (T) return T;
+		if (!this._white || this._white.getScene() !== scene) this._white = new BABYLON.RawTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, BABYLON.Engine.TEXTUREFORMAT_RGBA, scene, false);
+		return this._white;
+	},
 	_shader() {
 		if (BABYLON.Effect.ShadersStore.char3dVertexShader) return;
 		BABYLON.Effect.ShadersStore.char3dVertexShader = `
@@ -144,9 +165,12 @@ const Char3D = {
 			attribute vec3 position;     // (= ip: a caixa da malha, o desenho usa os ossos)
 			attribute vec3 ip;           // canto no espaço do osso 1
 			attribute vec3 p2;           // … no do osso 2
-			attribute vec4 sk;           // osso 1, osso 2, peso do 2
+			attribute vec4 sk;           // osso 1, osso 2, peso do 2, oclusão de ambiente (assada por vértice: dobras, axilas, queixo)
 			attribute vec2 mt;           // material
 			attribute vec4 fp;           // o canto no espaço da cabeça ou do peito, sem o esticão, e qual (1 cabeça: o rosto, 2 peito: a estampa, 0 nenhum)
+			attribute vec4 ux;           // textura de detalhe: u, v, qual (1 tecido, 2 cabelo, 0 nenhuma), a luz média da peça nela
+			attribute vec3 in1;          // a normal do vértice no espaço do osso 1
+			attribute vec3 n2;           // ... no do osso 2
 			uniform mat4 world;
 			uniform mat4 viewProjection;
 			uniform vec4 B[48];
@@ -158,6 +182,10 @@ const Char3D = {
 			varying vec2 vMt;
 			varying vec3 vF;
 			varying float vS;
+			varying vec3 vN;
+			varying vec4 vX;
+			varying float vAo;
+			vec3 xn(int b, vec3 n) { return vec3(dot(B[b * 3].xyz, n), dot(B[b * 3 + 1].xyz, n), dot(B[b * 3 + 2].xyz, n)); }
 			vec3 xp(int b, vec3 p) { vec4 r0 = B[b * 3], r1 = B[b * 3 + 1], r2 = B[b * 3 + 2]; return vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w); }
 			void main(void) {
 				int b1 = int(sk.x + 0.5), b2 = int(sk.y + 0.5);
@@ -168,10 +196,13 @@ const Char3D = {
 				wp.xyz -= sunL * ((wp.y - groundY) / max(sunL.y, 0.2));
 				#endif
 				#ifdef SIL
-				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vW = vec3(0.0); vMt = vec2(0.0); vF = vec3(0.0); vS = 0.0; return; }
+				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vW = vec3(0.0); vMt = vec2(0.0); vF = vec3(0.0); vS = 0.0; vN = vec3(0.0, 1.0, 0.0); vX = vec4(0.0); vAo = 0.0; return; }
 				wp.xyz += normalize(eye - wp.xyz) * 0.06;
 				#endif
-				vW = wp.xyz; vMt = mt; vF = fp.xyz; vS = fp.w;
+				vW = wp.xyz; vMt = mt; vF = fp.xyz; vS = fp.w; vX = ux; vAo = sk.w;
+				vec3 nn = xn(b1, in1);
+				if (sk.z > 0.0) nn = mix(nn, xn(b2, n2), sk.z);
+				vN = (world * vec4(nn.x, nn.z, nn.y, 0.0)).xyz;                  // (direção: só a rotação do mundo)
 				gl_Position = viewProjection * wp;
 			}`;
 		BABYLON.Effect.ShadersStore.char3dPolyFragmentShader = `
@@ -190,6 +221,11 @@ const Char3D = {
 			uniform vec3 eye;
 			varying vec3 vF;
 			varying float vS;
+			varying vec3 vN;
+			varying vec4 vX;
+			varying float vAo;
+			uniform sampler2D clothTex;  // o detalhe do tecido do pacote (dobras, desgaste e costuras do jeans), em tons de cinza
+			uniform sampler2D hairTex;   // as mechas do cabelo, com o alfa do cartão
 			uniform vec4 face;           // a ficha: cara fechada, feminino, barba (1 cheia, 2 cavanhaque, 3 bigode), óculos
 			uniform vec2 face2;          // máscara (1 touca ninja, 2 bandana), tamanho do rosto (G.TOON.face)
 			uniform float expr;          // expressão do quadro (0 = a da ficha, 1–5 = G.FACES)
@@ -278,11 +314,26 @@ const Char3D = {
 				#ifdef SHADOW
 				gl_FragColor = vec4(0.0, 0.0, 0.0, silhouette.a); return;
 				#endif
+				// TEXTURA DE DETALHE: a luz do tecido/da mecha sobre a cor da paleta (a média da peça = 1), e o recorte do cartão de cabelo
+				float det = 1.0;
+				if (vX.z > 0.5) {
+					vec4 tx = vX.z < 1.5 ? texture2D(clothTex, vX.xy) : texture2D(hairTex, vX.xy);
+					if (tx.a < 0.5) discard;
+					det = clamp(tx.r / max(vX.w, 0.05), 0.55, 1.35);
+				}
 				vec3 fx = dFdx(vF), fy = dFdy(vF);                                // (fora de qualquer "if": derivadas valem em todo pixel)
-				vec3 V = normalize(eye - vW), n = normalize(cross(dFdx(vW), dFdy(vW)));
-				if (dot(n, V) < 0.0) n = -n;                                     // (a face virada para quem olha: os dois lados)
+				vec3 V = normalize(eye - vW);
+				#ifdef TOON
+				vec3 n = normalize(cross(dFdx(vW), dFdy(vW)));                   // (face chapada, luz em faixas: o estilo dos desenhos)
+				if (dot(n, V) < 0.0) n = -n;
 				float d = dot(n, sunL);
 				float lev = 1.0 + smoothstep(-0.36, -0.24, d) + smoothstep(0.24, 0.36, d) + smoothstep(0.74, 0.86, d);
+				#else
+				vec3 n = normalize(vN);                                          // (a normal do vértice: luz SUAVE, como num PS2)
+				if (dot(n, V) < 0.0) n = -n;                                     // (cartão de cabelo e o avesso: o lado que se vê)
+				float d = dot(n, sunL), dif = max((d + 0.25) / 1.25, 0.0), sky = n.y * 0.5 + 0.5;
+				float lev = 0.55 + 3.1 * (0.12 + 0.22 * sky + 0.7 * dif);         // (céu por cima, sol com a luz que dobra um pouco: 1,0 a 3,9 dos 5 tons)
+				#endif
 				float mt0 = floor(vMt.x + 0.5), tone = vMt.y;                    // (tom da face: estampa, dano)
 				if (vS > 0.5) {                                                   // (cabeça: o rosto, peito: a estampa — por pixel)
 					vec3 nf = normalize(cross(fx, fy));
@@ -290,14 +341,15 @@ const Char3D = {
 					if (dot(nf, vF - (head ? vec3(0.0, -2.0, 12.0) : vec3(0.0, 0.0, 9.0))) < 0.0) nf = -nf;      // (para fora)
 					if (head) mt0 = faceMat(mt0, vF, nf, tone); else mt0 = shirtMat(mt0, vF, nf);
 				}
-				lev = clamp(lev + 0.35 * clamp(dot(n, V), 0.0, 1.0) - 0.15 + clamp(tone, -1.5, 1.0), 0.0, 4.0);      // (o que encara a câmera um pouco mais claro: volume)
+				float occ = vAo * (vS > 0.5 && vS < 1.5 ? 0.35 : 1.0);           // (no rosto, pouca: a boca e as órbitas da malha são fundas, e o rosto é pintado)
+				lev = clamp(lev + 0.35 * clamp(dot(n, V), 0.0, 1.0) - 0.15 + clamp(tone, -1.5, 1.0) - 1.1 * occ, 0.0, 4.0);      // (o que encara a câmera um pouco mais claro: volume, e a oclusão escurece)
 				#ifdef PAL
 				float m = mt0, i0 = floor(lev), i1 = min(i0 + 1.0, 4.0), y = (row + 0.5) / palRows;
 				vec3 c = mix(texture2D(palette, vec2((m * 8.0 + i0 + 0.5) / 256.0, y)).rgb, texture2D(palette, vec2((m * 8.0 + i1 + 0.5) / 256.0, y)).rgb, lev - i0);
 				#else
 				vec3 c = texture2D(ramps, vec2((lev + 0.5) / 5.0, (mt0 + 0.5) / 32.0)).rgb;
 				#endif
-				gl_FragColor = vec4(c * tint * shade, 1.0);
+				gl_FragColor = vec4(c * det * tint * shade, 1.0);
 			}`;
 	},
 
@@ -326,14 +378,14 @@ const Char3D = {
 	// lod: 0 = perto (o modelo cheio), 1 = longe (menos pontos, maiores — farSpacing), 2 = bem longe (o leve com só uma parte dos pontos, maiores — veryFarThin):
 	// TODOS os NPCs ficam 3D; de longe, a diferença de detalhe não aparece e o custo cai muito.
 	typeModel(type, dmg = 0, lod = 0) {
-		if (this.polyOn) lod = 0;                                                         // (low poly: os triângulos não mudam com a distância — um modelo por tipo)
+		if (this.polyOn) lod = lod >= 2 ? 2 : 0;                                         // (low poly: 2 níveis — o de perto, ~2,5 mil triângulos, e o de longe, ~1 mil)
 		const key = type + '|' + dmg + '|' + lod, N = this.C.npc || {};
 		let M = this._types.get(key);
 		// (o bem leve é o leve com os pontos embaralhados e só uma parte deles desenhada, maiores: o gerador não monta o boneco com
 		// espaçamento acima de ~2,4 — a arma na mão fica sem ponto nenhum)
 		// (tipos cujo boneco o gerador não monta no espaçamento de longe — chapéu ou cabelo fino demais: "parte vazia" — usam o de perto)
 		const far = lod && !this._fineOnly.has(type);
-		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: far ? N.farSpacing || 2.2 : N.spacing || 1.3, thin: lod === 2 ? N.veryFarThin || 0.22 : lod === 1 ? (far ? N.farThin || 0.75 : 0.5) : 1, kind: 'npc' }); M._lod = lod; this._types.set(key, M); }
+		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: far ? N.farSpacing || 2.2 : N.spacing || 1.3, thin: lod === 2 ? N.veryFarThin || 0.22 : lod === 1 ? (far ? N.farThin || 0.75 : 0.5) : 1, kind: 'npc', level: lod === 2 ? 'far' : 'npc' }); M._lod = lod; this._types.set(key, M); }
 		M._used = performance.now();
 		return M;
 	},
@@ -394,7 +446,7 @@ const Char3D = {
 		const sig = JSON.stringify(spec);
 		if (!force && sig === this._pSig) return;
 		this._pSig = sig;
-		const M = new Char3DModel(this._scene, { spec, spacing: this.C.spacing || 1.0, kind: 'player' });
+		const M = new Char3DModel(this._scene, { spec, spacing: this.C.spacing || 1.0, kind: 'player', level: 'hero' });
 		M.onReady = () => { const old = P.model; P.setModel(M); if (old && old !== M) old.dispose(); };
 		this._pNext = M;
 	},
@@ -525,8 +577,50 @@ Char3D.flashMesh = function (scene, parent, group) {
 // ----------------------------------------------------------------------------
 // Uma ficha assada (pontos + clipes + objetos na mão), compartilhada por todos os atores que a usam.
 // ----------------------------------------------------------------------------
+// Quatérnios dos ossos (as poses do gerador são rotações puras, R linha a linha, + a posição): conversão de/para as linhas do uniform B
+// (3 linhas de 4: R e a posição na 4ª coluna) e a mistura normalizada (nlerp — entre quadros vizinhos e na transição, igual ao slerp).
+const C3Q = {
+	_q: new Float32Array(4), _p: new Float32Array(4),
+	// do R linha a linha (9 números a partir de o, passo s entre as linhas: 3 no clipe, 4 no uniform) para o quatérnio (x, y, z, w)
+	fromR(R, o, s, Q, j) {
+		const m00 = R[o], m01 = R[o + 1], m02 = R[o + 2], m10 = R[o + s], m11 = R[o + s + 1], m12 = R[o + s + 2], m20 = R[o + 2 * s], m21 = R[o + 2 * s + 1], m22 = R[o + 2 * s + 2];
+		const tr = m00 + m11 + m22;
+		let x, y, z, w;
+		if (tr > 0) { const k = 0.5 / Math.sqrt(tr + 1); w = 0.25 / k; x = (m21 - m12) * k; y = (m02 - m20) * k; z = (m10 - m01) * k; }
+		else if (m00 > m11 && m00 > m22) { const k = 2 * Math.sqrt(1 + m00 - m11 - m22); w = (m21 - m12) / k; x = 0.25 * k; y = (m01 + m10) / k; z = (m02 + m20) / k; }
+		else if (m11 > m22) { const k = 2 * Math.sqrt(1 + m11 - m00 - m22); w = (m02 - m20) / k; x = (m01 + m10) / k; y = 0.25 * k; z = (m12 + m21) / k; }
+		else { const k = 2 * Math.sqrt(1 + m22 - m00 - m11); w = (m10 - m01) / k; x = (m02 + m20) / k; y = (m12 + m21) / k; z = 0.25 * k; }
+		Q[j] = x; Q[j + 1] = y; Q[j + 2] = z; Q[j + 3] = w;
+	},
+	fromRows(out, d, Q, j) { this.fromR(out, d, 4, Q, j); },
+	toRows(q, out, d) {
+		const x = q[0], y = q[1], z = q[2], w = q[3];
+		out[d] = 1 - 2 * (y * y + z * z); out[d + 1] = 2 * (x * y - z * w); out[d + 2] = 2 * (x * z + y * w);
+		out[d + 4] = 2 * (x * y + z * w); out[d + 5] = 1 - 2 * (x * x + z * z); out[d + 6] = 2 * (y * z - x * w);
+		out[d + 8] = 2 * (x * z - y * w); out[d + 9] = 2 * (y * z + x * w); out[d + 10] = 1 - 2 * (x * x + y * y);
+	},
+	nlerp(A, a, B, b, t, q) {
+		const s = A[a] * B[b] + A[a + 1] * B[b + 1] + A[a + 2] * B[b + 2] + A[a + 3] * B[b + 3] < 0 ? -1 : 1, u = 1 - t;
+		const x = A[a] * u + B[b] * t * s, y = A[a + 1] * u + B[b + 1] * t * s, z = A[a + 2] * u + B[b + 2] * t * s, w = A[a + 3] * u + B[b + 3] * t * s;
+		const l = Math.hypot(x, y, z, w) || 1;
+		q[0] = x / l; q[1] = y / l; q[2] = z / l; q[3] = w / l;
+	},
+	// os quatérnios de todos os quadros de um clipe (uma vez por clipe)
+	ofClip(K) {
+		const NB = Char3D.BONES, n = K.n, Q = new Float32Array(n * NB * 4);
+		for (let f = 0; f < n; f++) for (let i = 0; i < NB; i++) {
+			const o = (f * NB + i) * 12;
+			let z = true;
+			for (let k = 0; k < 9 && z; k++) z = K.B[o + k] === 0;
+			if (z) { Q[(f * NB + i) * 4 + 3] = 1; continue; }                // (osso sem pose no quadro: identidade)
+			this.fromR(K.B, o, 3, Q, (f * NB + i) * 4);
+		}
+		return Q;
+	},
+};
+
 class Char3DModel {
-	constructor(scene, { spec = null, npc = null, dmg = 0, spacing = 1, thin = 1, kind = 'npc' }) {
+	constructor(scene, { spec = null, npc = null, dmg = 0, spacing = 1, thin = 1, kind = 'npc', level = 'npc' }) {
 		this.scene = scene; this.spacing = spacing; this.kind = kind; this.mid = ++Char3D._mid;
 		this.thin = Math.max(0.1, Math.min(1, thin)); this.splatK = 1 / Math.sqrt(this.thin);      // (fração dos pontos desenhada; os pontos crescem para cobrir)
 		this.clips = new Map();          // 'nome:arma' → clipe | 'wait' | 'fail'
@@ -537,7 +631,8 @@ class Char3DModel {
 		let slot = '';
 		if (kind === 'npc' && npc) { let h = 0; for (let i = 0; i < npc.length; i++) h = (h * 31 + npc.charCodeAt(i)) | 0; slot = (h >>> 0) % 2 ? '_b' : ''; }
 		this.w = Char3D.worker(kind + slot);
-		this.w.postMessage({ type: 'char3d', job: 1, mid: this.mid, spec, npc, dmg, spacing, poly: Char3D.polyOn });
+		// (low poly: o NÍVEL da malha — 'hero' o jogador, ~5 mil triângulos; 'npc' perto, ~2,5 mil; 'far' longe, ~1 mil)
+		this.w.postMessage({ type: 'char3d', job: 1, mid: this.mid, spec, npc, dmg, spacing, poly: Char3D.polyOn, style: Char3D.polyOn ? Char3D.style3d : undefined, level });
 	}
 	_msg(m) {
 		if (m.error) {
@@ -554,7 +649,7 @@ class Char3DModel {
 	// Clipe pronto (ou undefined/'wait' enquanto chega, 'fail' se o gerador não tem).
 	clip(key) {
 		const K = this.clips.get(key);
-		if (K === undefined && this.ready) { this.clips.set(key, 'wait'); this.w.postMessage({ type: 'char3dClip', job: 1, mid: this.mid, key }); }
+		if (K === undefined && this.ready) { this.clips.set(key, 'wait'); this.w.postMessage({ type: 'char3dClip', job: 1, mid: this.mid, key, fps: Char3D.C.clipFps || 30 }); }
 		return K;
 	}
 	// O CHÃO do modelo: no gerador a sola do pé fica abaixo do zero (o desenho 2,5D ajusta o pé pela imagem; aqui o boneco ficava ~15 cm
@@ -596,6 +691,8 @@ class Char3DModel {
 		const E = this.scene.getEngine(), vb = (data, kind, size) => mesh.setVerticesBuffer(new BABYLON.VertexBuffer(E, data, kind, false, false, size, false));
 		vb(P.p1, 'ip', 3); vb(P.p2, 'p2', 3); vb(P.sk, 'sk', 4); vb(P.mt, 'mt', 2);
 		vb(P.fp || new Float32Array(n * 4), 'fp', 4);
+		vb(P.n1 || new Float32Array(n * 3), 'in1', 3); vb(P.n2 || P.n1 || new Float32Array(n * 3), 'n2', 3);
+		vb(P.ux || new Float32Array(n * 4), 'ux', 4);
 		mesh.isPickable = false; mesh._char3d = true;
 		mesh.alwaysSelectAsActiveMesh = true;                 // (no espaço dos ossos: a caixa não vale)
 		mesh.setEnabled(false);
@@ -613,7 +710,11 @@ class Char3DModel {
 			this.body = this._points('c3d_corpo' + this.mid, c.n, c.p1, c.n1, c.p2, c.n2, c.sk, c.mt, c.fa, c.fb);
 			if (this.thin < 1) this.body.forcedInstanceCount = Math.max(1, Math.ceil(c.n * this.thin));
 		} else this.body = null;
-		if (c.poly) { this.poly = this._tris('c3d_poly' + this.mid, c.poly); this.tris = c.poly.n / 3; this.face = c.poly.face || [0, 0, 0, 0, 0, 1, 0, 0, 0, 0]; }
+		if (c.poly) {
+			this.poly = this._tris('c3d_poly' + this.mid, c.poly); this.tris = c.poly.n / 3; this.face = c.poly.face || [0, 0, 0, 0, 0, 1, 0, 0, 0, 0];
+			for (const [name, t] of Object.entries(c.poly.tex || {})) Char3D.texAdd(this.scene, name, t);
+			this.texs = c.poly.texs || {};
+		}
 		this.ready = true;
 		this._data = c.poly || c;                                                        // (o corpo — os triângulos ou os pontos —, até medir o chão: _groundFrom)
 		for (const k of ['idle:none', 'walk:none', 'run:none']) this.clip(k);          // (os clipes de sempre já vêm: ninguém espera em 2,5D)
@@ -665,7 +766,7 @@ class Char3DActor {
 	get C() { return Char3D.C; }
 	setModel(M) {
 		this._clear();
-		this.model = M; this._last = null; this._built = false;
+		this.model = M; this._last = null; this._built = false; this._curK = null; this._fadeT = -1;
 	}
 	// As malhas do ator (clones das do modelo: a geometria é a mesma).
 	_buildMeshes() {
@@ -698,11 +799,12 @@ class Char3DActor {
 		if (sil === 'shadow') defines.push('#define SHADOW');
 		else if (sil) defines.push('#define SIL');
 		if (pal) defines.push('#define PAL');
+		if (poly && Char3D.style3d !== 'real') defines.push('#define TOON');
 		const sh = poly ? 'char3dPoly' : 'char3d';
 		const m = new BABYLON.ShaderMaterial(name, this.scene, { vertex: sh, fragment: sh }, {
-			attributes: poly ? ['position', 'ip', 'p2', 'sk', 'mt', 'fp'] : ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
+			attributes: poly ? ['position', 'ip', 'p2', 'sk', 'mt', 'fp', 'in1', 'n2', 'ux'] : ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
 			uniforms: ['world', 'viewProjection', 'B', 'unit', 'pScale', 'splat', 'eye', 'sunL', 'tint', 'shade', 'silhouette', 'palRows', 'row', 'expr', 'groundY', 'viewport'].concat(poly ? ['face', 'face2', 'shirt'] : []),
-			samplers: ['ramps', 'palette'],
+			samplers: poly ? ['ramps', 'palette', 'clothTex', 'hairTex'] : ['ramps', 'palette'],
 			defines,
 			needAlphaBlending: !!sil,
 		});
@@ -717,6 +819,8 @@ class Char3DActor {
 		if (poly) {                                                                       // (o rosto e a estampa da ficha: G.lowBody → faceOf)
 			const f = this.model.face || [0, 0, 0, 0, 0, 1, 0, 0, 0, 0];
 			m.setVector4('face', new BABYLON.Vector4(f[0], f[1], f[2], f[3])); m.setVector2('face2', new BABYLON.Vector2(f[4], f[5])); m.setVector4('shirt', new BABYLON.Vector4(f[6] || 0, f[7] || 0, f[8] || 0, f[9] || 0));
+			const T = this.model.texs || {};
+			m.setTexture('clothTex', Char3D.tex(this.scene, T[1])); m.setTexture('hairTex', Char3D.tex(this.scene, T[2]));
 		}
 		return m;
 	}
@@ -803,6 +907,7 @@ class Char3DActor {
 		if (!a._ghost === !on) { a._ghost = !on; if (on && a._applyUV) a._applyUV(); }
 	}
 	_hide3d() {
+		this._curK = null; this._fadeT = -1;                      // (voltou do 2,5D: a pose entra direto, sem misturar com a de antes)
 		if (!this.shown) return;
 		this.shown = false;
 		this.root.setEnabled(false);
@@ -822,6 +927,8 @@ class Char3DActor {
 		if (K === 'fail' || ((K === undefined || K === 'wait') && !this._last)) { this._hide3d(); this._show2d(true); return; }
 		if (K && K !== 'wait') this._last = K;
 		else K = this._last;                                       // (o clipe novo ainda chegando: segura a última pose)
+		// TRANSIÇÃO: trocou de clipe com o boneco à mostra — a pose de agora vira o ponto de partida e a nova entra em fadeS segundos
+		if (K !== this._curK) { if (this._curK && this.shown && (this.C.fade !== 0)) this._fadeStart(); this._curK = K; }
 		this._pose(K, a, K.key === key || K.key.startsWith(c.name + ':'));
 		this._place(a);
 		if (!this.shown) { this.shown = true; this.root.setEnabled(true); }
@@ -838,18 +945,16 @@ class Char3DActor {
 		if (K.loop) { const x = ((u % n) + n) % n; f0 = Math.floor(x); f1 = (f0 + 1) % n; t = x - f0; }
 		else { const x = Math.max(0, Math.min(n - 1, u)); f0 = Math.floor(x); f1 = Math.min(n - 1, f0 + 1); t = x - f0; }
 		if (this.C.blend === false) t = 0;
-		const NB = Char3D.BONES, B = K.B, out = this._B;
+		// os ossos dos dois quadros vizinhos misturados por QUATÉRNIO (a rotação gira; a mistura de matrizes encolhia o membro no meio)
+		const NB = Char3D.BONES, B = K.B, out = this._B, Qk = K.Q || (K.Q = C3Q.ofClip(K)), q = C3Q._q;
 		for (let i = 0; i < NB; i++) {
 			const o0 = (f0 * NB + i) * 12, o1 = (f1 * NB + i) * 12, d = i * 12;
-			for (let r = 0; r < 3; r++) {
-				const o = d + r * 4;
-				out[o] = B[o0 + r * 3] + (B[o1 + r * 3] - B[o0 + r * 3]) * t;
-				out[o + 1] = B[o0 + r * 3 + 1] + (B[o1 + r * 3 + 1] - B[o0 + r * 3 + 1]) * t;
-				out[o + 2] = B[o0 + r * 3 + 2] + (B[o1 + r * 3 + 2] - B[o0 + r * 3 + 2]) * t;
-				out[o + 3] = B[o0 + 9 + r] + (B[o1 + 9 + r] - B[o0 + 9 + r]) * t;
-			}
+			C3Q.nlerp(Qk, (f0 * NB + i) * 4, Qk, (f1 * NB + i) * 4, t, q);
+			C3Q.toRows(q, out, d);
+			for (let r = 0; r < 3; r++) out[d + r * 4 + 3] = B[o0 + 9 + r] + (B[o1 + 9 + r] - B[o0 + 9 + r]) * t;
 		}
 		this._sc = K.sc[f0] + (K.sc[f1] - K.sc[f0]) * t;
+		this._fadeApply();
 		const fn = t < 0.5 ? f0 : f1;
 		this._expr = K.ex ? K.ex[fn] : 0;
 		this._fx(K.fx && K.fx[fn]);
@@ -864,6 +969,28 @@ class Char3DActor {
 			if (!P.mesh.isEnabled()) P.mesh.setEnabled(true);
 		}
 		for (const [name, P] of this.props) if (P && !on.has(name) && P.mesh.isEnabled()) P.mesh.setEnabled(false);
+	}
+	// TRANSIÇÃO entre clipes: guarda a pose de agora (rotação de cada osso em quatérnio, posição e escala) e, por fadeS segundos
+	// (Config.art.char3d.fade, 0,2 s), mistura a pose do clipe novo com ela — sem o "pulo" de uma pose para a outra.
+	_fadeStart() {
+		const NB = Char3D.BONES, out = this._B, F = this._fq || (this._fq = new Float32Array(NB * 4)), T = this._ftr || (this._ftr = new Float32Array(NB * 3));
+		for (let i = 0; i < NB; i++) { C3Q.fromRows(out, i * 12, F, i * 4); for (let r = 0; r < 3; r++) T[i * 3 + r] = out[i * 12 + r * 4 + 3]; }
+		this._fsc = this._sc || 1; this._fadeT = 0;
+	}
+	_fadeApply() {
+		if (this._fadeT === undefined || this._fadeT < 0) return;
+		const dur = this.C.fade === undefined ? 0.2 : this.C.fade;
+		this._fadeT += this.scene.getEngine().getDeltaTime() / 1000;
+		if (!(dur > 0) || this._fadeT >= dur) { this._fadeT = -1; return; }
+		const x = this._fadeT / dur, w = x * x * (3 - 2 * x), NB = Char3D.BONES, out = this._B, F = this._fq, T = this._ftr, q = C3Q._q, p = C3Q._p;
+		for (let i = 0; i < NB; i++) {
+			const d = i * 12;
+			C3Q.fromRows(out, d, p, 0);
+			C3Q.nlerp(F, i * 4, p, 0, w, q);
+			C3Q.toRows(q, out, d);
+			for (let r = 0; r < 3; r++) out[d + r * 4 + 3] = T[i * 3 + r] + (out[d + r * 4 + 3] - T[i * 3 + r]) * w;
+		}
+		this._sc = this._fsc + ((this._sc || 1) - this._fsc) * w;
 	}
 	// EFEITOS do quadro (no espaço do corpo): o CLARÃO do tiro na boca do cano — dois planos cruzados ao longo do disparo, brilho aditivo.
 	_fx(E) {
@@ -922,7 +1049,7 @@ class Char3DActor {
 	}
 	// Reaproveitado para outro ator do mesmo modelo.
 	rebind(actor) {
-		this.actor = actor; this._last = null; this._u = 0; this._expr = 0;
+		this.actor = actor; this._last = null; this._u = 0; this._expr = 0; this._curK = null; this._fadeT = -1;
 		const g = actor.mesh.renderingGroupId;
 		for (const m of this.root.getChildMeshes()) m.renderingGroupId = g;
 	}

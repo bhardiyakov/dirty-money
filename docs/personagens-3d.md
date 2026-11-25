@@ -31,7 +31,8 @@ Dois Workers: um do jogador (o visual dele nunca espera os NPCs) e um dos NPCs.
 | High | 14 |
 | HD | 20 |
 
-Os outros NPCs seguem 2,5D (de longe a diferença não aparece). O jogador **pilotando** (moto, bicicleta, jet ski) também: o piloto é outro
+Os outros NPCs seguem 2,5D (de longe a diferença não aparece). (Esses limites valem para os pontos, `?poly=0`; com o low poly — o
+padrão — todos os NPCs à vista ficam 3D: ver "Low poly" abaixo.) O jogador **pilotando** (moto, bicicleta, jet ski) também: o piloto é outro
 ator, e usa o modelo do visual dele — mesmo no Low.
 
 O `SpriteActor` continua sendo a lógica do personagem — clipe, fase, rumo, posição, pulo, visibilidade. O ator 3D só o lê a cada quadro
@@ -80,34 +81,59 @@ Os NPCs mais perto da câmera são bonecos 3D; os outros, desenhos 2,5D dos atla
 - **O que continua diferente.** O desenho 2,5D é sempre visto a 56°. Na câmera de perseguição, mais baixa, o 3D mostra menos do alto
   da cabeça. E o 2,5D tem 16 direções, enquanto o 3D vira o ângulo exato.
 
-## Low poly (o padrão desde novembro/2026)
+## Low poly (o padrão desde novembro/2026) — visual "PS2 realista"
 
-O boneco em **triângulos de face chapada** no lugar da nuvem de pontos, no estilo das cidades low poly. `Config.art.char3d.poly`
-(ligado); `?poly=0` na URL volta aos pontos, `?poly=1` força. Mesmo esqueleto, mesmos clipes, mesma paleta: só muda como o corpo é
-desenhado (shader `char3dPoly`). Teste: `tests/76_low_poly.test.cjs`.
+O boneco em **triângulos** no lugar da nuvem de pontos. `Config.art.char3d.poly` (ligado); `?poly=0` na URL volta aos pontos,
+`?poly=1` força. Mesmo esqueleto, mesmos clipes, mesma paleta (as variantes de cor continuam): só muda como o corpo é desenhado
+(shader `char3dPoly`). Teste: `tests/76_low_poly.test.cjs`.
 
-- **Corpo e cabelo**: a malha realista (MakeHuman, CC0, ~6,5 mil triângulos por peça de roupa) simplificada no build pelo
-  **meshoptimizer** (`tools/asset_baker/lowpoly/bakelow.cjs` → `generator/malha3d_low.js`, só os índices, 89 KB). Os pesos dos ossos
-  entram como atributos da simplificação: a barra da bermuda, da manga e da regata não escorrega para o outro lado do joelho/cotovelo.
-  Cada face tem a cor da região do osso da maioria dos cantos.
-- **Acessórios** (boné, capacete, colete, bolsa, alça, os cabelos que a malha não tem): a superfície da forma geométrica do gerador
-  por *surface nets* e simplificada (`G.polyPart` em `NpcGenMesh.js`, no Worker; 120 a 420 triângulos por peça).
-- **Rosto e estampa do peito**: pintados por PIXEL no shader com a mesma receita do 2,5D — o rosto (`makeTexHead`: olhos, sobrancelhas,
-  boca, barba, óculos, máscara e as expressões do clipe: raiva, fúria, medo, dor, olhos fechados; o globo do olho é pele, como nos
-  pontos, e recebe o olho do desenho) e a camisa (`makeTexChest`: listras, floral, camisa de time, logo, botões, zíper, corrente). O
-  Worker manda a posição de cada canto no espaço da cabeça ou do peito (`fp`, com qual dos dois) e a ficha (`face`). Pintados por face,
-  numa malha de poucas faces, eles sumiriam ou virariam um mosaico.
-- **O resto da estampa e o dano**: a textura procedural das outras partes (cadarço, dobras…) e o dano (terra, cortes, sangue) por face,
-  no centro dela.
+### Malha e níveis de detalhe
+
+- **Corpo, roupa, tênis, olhos e cabelo**: a malha realista (MakeHuman, CC0) simplificada no build pelo **meshoptimizer**
+  (`tools/asset_baker/lowpoly/bakelow.cjs` → `generator/malha3d_low.js`, só índices e a oclusão, ~270 KB). Os pesos dos ossos entram
+  como atributos (a barra da bermuda e da manga não escorrega). Antes de simplificar, o buffer é **compactado** nos vértices usados: as
+  cópias soldadas que sobravam travavam o meshoptimizer (a pele parava em ~1.100 triângulos qualquer que fosse o alvo).
+- **Três níveis**, como num jogo de PS2 (o protagonista mais detalhado que os pedestres):
+
+  | Nível | Quem | Triângulos (mediana / máx, com acessórios) |
+  | --- | --- | --- |
+  | `hero` | o jogador | 4.300 / 5.200 |
+  | `npc` | NPCs até a distância média | 2.500 / 3.100 |
+  | `far` | NPCs além dela | 800 / 1.000 |
+
+- **Acessórios** (boné, capacete, colete, bolsa, alça, os cabelos geométricos): a superfície da forma do gerador por *surface nets*,
+  simplificada no Worker (`G.polyPart`); o tamanho acompanha o nível (×1,6 no jogador, ×0,4 de longe).
+- **Todos os NPCs à vista em 3D** (`Graphics.PRESETS.npc3dPoly`/`npc3dPolyR`): Medium até 70 m, High 100 m, HD 130 m, sem limite de
+  quantidade; Low, os 12 mais perto até 40 m. O desenho 2,5D fica de reserva (o instante antes do modelo chegar, e além do raio).
+  Medido (SwiftShader, High, centro): 117 NPCs 3D (22 perto, 95 longe), 124 mil triângulos de personagem, 413 chamadas de desenho na
+  cena (~300 antes, com 12 NPCs 3D), tempo de placa de 0,75 s por quadro (era 1,2 s com 12 NPCs no nível antigo e 5,8 s com pontos).
+
+### Visual
+
+- **Estilo `real`** (`Config.art.char3d.style`; `?estilo3d=igual3d` volta ao do desenho 2,5D): proporções de gente (cabeça 0,64 em vez
+  de 0,72 do corpo adulto) e o rosto sem o tamanho de desenho. Os Workers do 3D só montam bonecos 3D: o estilo deles não mexe nos atlas.
+- **Luz suave**: a normal de cada vértice (dos dois ossos do skin, como a posição) no lugar da face chapada; céu por cima e o sol que
+  "dobra" um pouco (os 5 tons da paleta misturados de forma contínua). No estilo `igual3d`, a face chapada em faixas de antes.
+- **Textura de detalhe** (as do pacote da malha): dobras da camiseta, desgaste e costuras do jeans, mechas do cabelo com alfa (o cartão
+  recorta). A cor continua da paleta da variante; a textura multiplica pela luz dela (a média da peça = 1). Os índices simplificados usam
+  um vértice por posição, e numa costura do mapa UV o mesmo lugar tem 2 UVs: cada face escolhe a combinação de UVs mais junta.
+- **Oclusão de ambiente assada por vértice** (bakelow.cjs: raios no hemisfério contra o corpo simplificado, por gênero — a malha é a
+  mesma para todas as fichas): axilas, dobras, pescoço, entre as pernas. A pele só conta ela mesma (debaixo da roupa ela ficava
+  "fechada" e furava a peça em triângulos escuros); olhos sem; no rosto, atenuada.
+- **Rosto e estampa do peito por PIXEL** no shader, com a mesma receita do 2,5D — o rosto (`makeTexHead`: olhos, sobrancelhas, boca,
+  barba, óculos, máscara e as expressões do clipe; o globo do olho é pele e recebe o olho do desenho) e a camisa (`makeTexChest`:
+  listras, floral, camisa de time, logo, botões, zíper, corrente). Pintados por face, numa malha de poucas faces, eles sumiriam.
+- **O resto da estampa e o dano**: a textura procedural das outras partes e o dano (terra, cortes, sangue) por face.
+- **Ainda em pontos**: os objetos na mão (armas, garrafa, guarda-chuva) — poucos pontos, e o detalhe das armas é o desenho da folha.
 - **Atenção nos shaders**: o Babylon quebra a linha no `;` — um `;` num comentário depois do código vira código e o shader não compila
   (o teste confere).
-- **Um modelo por tipo**: os triângulos não mudam com a distância (sem os 3 níveis de detalhe dos pontos).
-- **Ainda em pontos**: os objetos na mão (armas, garrafa, guarda-chuva) — poucos pontos, e o detalhe das armas é o desenho da folha.
 
-Peso: 2,0 a 3,2 mil triângulos por personagem (com os acessórios), contra 13,9 a 36 mil pontos (2 triângulos cada) no modo de pontos.
-Medido no jogo (SwiftShader, gráfico Alto, os mesmos 12 NPCs 3D na tela): tempo de placa de 5,8 s por quadro com os pontos e 1,2 s em
-low poly — e isso ainda com os acessórios em pontos (hoje eles também são triângulos). As chamadas de desenho quase não mudam (~300 na
-cena inteira; o boneco é 1 por personagem): instanciar os NPCs não compensa agora.
+### Movimento
+
+- **Clipes a ~30 quadros por segundo** (até 48): o 3D pede ao gerador mais quadros com a mesma duração (o atlas 2,5D, que paga por
+  quadro desenhado, segue com 8 a 12); os ciclos são recalculados e as sequências reamostradas, com objetos e efeitos no lugar.
+- **Rotação por quatérnio** entre quadros (a mistura de matrizes encolhia o membro no meio do caminho).
+- **Transição de 0,2 s** entre clipes (`Config.art.char3d.fade`): a pose de agora é o ponto de partida e a nova entra suave.
 
 **Calçado** (vale para os dois modos e o 2,5D): a parte do calçado que segue a canela (cano, tornozelo) media a altura da sola no espaço
 da canela e virava "sola" — o chinelo ganhava meia preta até o meio da canela. Agora a altura é medida no espaço do pé. Os atlas 2,5D

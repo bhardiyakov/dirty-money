@@ -59,13 +59,17 @@ module.exports = {
             const P = game.player.char3d, N = [...Char3D.npcs.values()].filter((C) => C.shown), T = [...Char3D._types.keys()];
             return {
                 poly: Char3D.polyOn, player: !!(P && P.shown && P.polyMesh), ptris: P && P.model && P.model.tris, ppts: P && P.model && P.model.n,
-                npcs: N.length, npoly: N.filter((C) => C.polyMesh && !C.body).length, lods: T.filter((k) => !k.endsWith('|0')).length, types: T.length,
+                npcs: N.length, npoly: N.filter((C) => C.polyMesh && !C.body).length, lods: T.filter((k) => !/\|[02]$/.test(k)).length, types: T.length,
+                near: [...Char3D._types.entries()].filter(([k, M]) => k.endsWith('|0') && M.ready).map(([, M]) => M.tris),
+                far: [...Char3D._types.entries()].filter(([k, M]) => k.endsWith('|2') && M.ready).map(([, M]) => M.tris),
                 tris: N.map((C) => C.model.tris),
             };
         });
-        c.ok(st.poly && st.player && st.ptris > 1000 && !st.ppts, `jogador em triângulos (${st.ptris}), sem pontos`);
+        c.ok(st.poly && st.player && st.ptris > 3000 && !st.ppts, `jogador em triângulos, no nível mais detalhado (${st.ptris}), sem pontos`);
         c.ok(st.npcs > 0 && st.npoly === st.npcs, `NPCs 3D em triângulos, sem pontos: ${st.npoly}/${st.npcs} (${st.tris.join(', ')})`);
-        c.ok(st.types > 0 && st.lods === 0, `um modelo por tipo (${st.types} tipos, nenhum nível de detalhe extra)`);
+        c.ok(st.types > 0 && st.lods === 0, `só os 2 níveis do low poly por tipo (perto e longe): ${st.types} modelos`);
+        const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+        c.ok(st.far.length > 0 && avg(st.far) < 1400 && avg(st.near || []) > avg(st.far), `NPCs de longe no nível leve: ${Math.round(avg(st.far))} triângulos em média (perto: ${Math.round(avg(st.near))})`);
         // expressão do rosto: muda pelo uniform, sem recompilar o shader
         const ex = await page.evaluate(async () => {
             const P = game.player.char3d, e0 = P.polyMat.getEffect();
@@ -76,6 +80,24 @@ module.exports = {
             return { expr: !!(K && K.ex && Array.from(K.ex).some((e) => e > 0)), same: P.polyMat.getEffect() === e0, ready: !!(e0 && e0.isReady()) };
         });
         c.ok(ex.expr && ex.same && ex.ready, `expressão do clipe no shader low poly, sem recompilar (${JSON.stringify(ex)})`);
+        // FLUIDEZ: os clipes 3D chegam com ~30 quadros por segundo (o atlas 2,5D tem 8 a 12) e a troca de clipe passa por uma pose
+        // intermediária (transição de 0,2 s) em vez de pular — com 50 ms de quadro, a pose nova entra só um pouco
+        for (let k = 0; k < 6; k++) { const ok = await page.evaluate(() => ['idle:none', 'walk:none', 'run:none'].every((key) => typeof game.player.char3d.model.clips.get(key) === 'object')); if (ok) break; await gameWait(page, 2, 120000); }
+        const flu = await page.evaluate(() => {
+            const P = game.player.char3d, M = P.model, a = P.actor, E = P.scene.getEngine(), dt0 = E.getDeltaTime;
+            const K0 = M.clips.get('idle:none'), K1 = M.clips.get('run:none'), W = M.clips.get('walk:none');
+            if (!(K0 && K1 && W && typeof K1 === 'object')) return { missing: true };
+            const snap = () => Array.from(P._B), dist = (x, y) => Math.sqrt(x.reduce((s, v, i) => s + (v - y[i]) ** 2, 0));
+            E.getDeltaTime = () => 50;
+            try {
+                P._fadeT = -1; P._u = 0; P._pose(K1, a, false); const B = snap();
+                P._fadeT = -1; P._u = 0; P._pose(K0, a, false); const A = snap();
+                P._fadeStart(); P._u = 0; P._pose(K1, a, false); const Mid = snap();
+                return { walkN: W.n, walkFps: W.fps, runN: K1.n, ab: +dist(A, B).toFixed(2), am: +dist(A, Mid).toFixed(2), mb: +dist(Mid, B).toFixed(2) };
+            } finally { E.getDeltaTime = dt0; P._fadeT = -1; }
+        });
+        c.ok(!flu.missing && flu.walkN >= 20 && flu.walkFps >= 25, `clipes 3D a ~30 quadros por segundo (andar: ${flu.walkN} quadros a ${flu.walkFps}/s, correr: ${flu.runN})`);
+        c.ok(flu.am > 0.01 && flu.am < flu.ab && flu.mb < flu.ab, `troca parado → correndo passa por pose intermediária (${JSON.stringify(flu)})`);
         c.noErrors(errors, 'low poly');
         await close();
     },
