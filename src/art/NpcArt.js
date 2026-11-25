@@ -51,6 +51,9 @@ const NpcArt = {
 	now: 0,                        // relógio do jogo (s; NpcArt.tick): última vez que cada página foi desenhada (LRU)
 	stats: { decoded: 0, decodeMs: 0, uploads: 0, upMB: 0, upMs: 0, upMax: 0, evicted: 0, dropped: 0, failed: 0 },      // (up*: envio em faixas — _upStep)
 
+	// SEM 2,5D (Char3D.no2d — o padrão): todo personagem é 3D; as páginas nunca são buscadas, decodificadas nem enviadas à placa. Os
+	// manifestos (clipes, quadros, ritmo) e a paleta continuam: o SpriteActor toca os clipes por eles e o 3D pinta pela paleta.
+	get no2d() { return typeof Char3D !== 'undefined' && Char3D.no2d; },
 	// (?npc=0 na URL: volta aos bonecos antigos — comparar/depurar)
 	available() { return NpcData.ok && Object.keys(this.atlases).length > 0 && !/[?&]npc=0\b/.test(location.search); },
 
@@ -78,6 +81,7 @@ const NpcArt = {
 	// Põe na fila as páginas do protagonista (pares primeiro). (Os manifestos já foram lidos: boot.)
 	load() {
 		if (this.ready) return this.ready;
+		if (this.no2d) { console.log(`[NPCS] ${Object.keys(this.atlases).length} manifestos; sem desenhos 2,5D (personagens em 3D)`); return (this.ready = Promise.resolve()); }
 		const t0 = performance.now();
 		const hero = this.HERO.map((id) => this.atlases[id]).filter(Boolean);
 		for (const par of [0, 1]) for (const A of hero) for (const P of A.pages) if (P.par === par && !this.HERO_LATER.includes(P.g)) this._want(P);      // (natação e academia: só quando chegam perto — _heroNeeds)
@@ -121,6 +125,7 @@ const NpcArt = {
 	DECODERS: 3,                   // páginas sendo buscadas + decodificadas ao mesmo tempo (AtlasDecoder: 2 Workers)
 	_want(P, pri = this._pri(P)) {
 		if (P.tex) return true;
+		if (this.no2d) return false;                                           // (sem 2,5D: nenhuma página é pedida)
 		if (P.px) { if (this._scene) this._upload(P, pri); return !!P.tex; }       // (sobe em faixas: pronta numa das próximas vezes — _upStep)
 		if (P.dead || P.unused || !this._dirOk(P)) return false;
 		if (pri === 0 && this._pins().includes(P.A.id)) pri = -10;           // (the page the player shows right now decodes ahead of everyone; prefetch keeps its place)

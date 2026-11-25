@@ -26,6 +26,20 @@ const Char3D = {
 		return !this.off && C.on !== false && q !== '2d' && typeof Worker === 'function' && typeof Wardrobe !== 'undefined';      // (off: disable() — erro repetido ou modo seguro)
 	},
 	get npcOn() { const N = this.C.npc; return this.on && !!N && N.on !== false && typeof NpcArt !== 'undefined' && !!NpcArt._pal; },
+	// SEM 2,5D (o padrão desde nov/2026): todo personagem é 3D low poly, a qualquer distância (os níveis de detalhe seguram o custo); as
+	// páginas dos desenhos 2,5D nunca são buscadas, decodificadas nem desenhadas, e o visual do jogador não é desenhado no Worker. Elas só
+	// voltam se o 3D não puder rodar (desligado por erro repetido ou pelo modo seguro: disable) — ou com ?sprites2d=1 (comparar).
+	get no2d() { return this.on && this.polyOn && this.C.sprites2d !== true && !(typeof location !== 'undefined' && /[?&]sprites2d=1\b/.test(location.search)); },
+	// NÍVEIS DE DETALHE dos NPCs (low poly), como nos motores atuais: pelo TAMANHO NA TELA (a altura do boneco / a altura da tela), não
+	// pela distância — a câmera alta vê um boneco a 15 m bem menor que a de perseguição: L0 acima de 10% da altura da tela, L1 acima de
+	// 5,5%, L2 acima de 2,8%, L3 abaixo). L0 ~2,5 mil triângulos, L1 ~1,4 mil, L2 ~800,
+	// L3 ~350; o jogador, ~5 mil. Folga de 15% para não trocar para lá e para cá na borda. lodBias > 1 (AutoQuality, preset Low) baixa
+	// o detalhe mais cedo. De longe a pose é calculada a cada 2 (L2) ou 3 (L3) quadros.
+	LOD_LEVELS: ['npc', 'mid', 'far', 'tiny'],
+	LOD_SCREEN: [0.1, 0.055, 0.028],
+	LOD_EVERY: [1, 1, 2, 3],
+	lodBias: 1,
+	_frame: 0,
 	// LOW POLY (o padrão desde novembro/2026): o boneco em TRIÂNGULOS de face chapada (shader 'char3dPoly'; o Worker monta com G.lowBody —
 	// o corpo e o cabelo da malha simplificados pelo meshoptimizer, os acessórios geométricos em triângulos, o rosto e a estampa do peito
 	// pintados por pixel) no lugar das dezenas de milhares de pontos. Os objetos na mão seguem em pontos.
@@ -162,15 +176,15 @@ const Char3D = {
 		// posição no mundo (face chapada, sem normal por vértice). SIL (raio-X) e SHADOW (sombra projetada) como nos pontos.
 		BABYLON.Effect.ShadersStore.char3dPolyVertexShader = `
 			precision highp float;
-			attribute vec3 position;     // (= ip: a caixa da malha, o desenho usa os ossos)
-			attribute vec3 ip;           // canto no espaço do osso 1
+			// (atributos COMPACTOS — 56 bytes por canto em vez de 116: Char3DModel._tris)
+			attribute vec3 position;     // canto no espaço do osso 1
 			attribute vec3 p2;           // … no do osso 2
-			attribute vec4 sk;           // osso 1, osso 2, peso do 2, oclusão de ambiente (assada por vértice: dobras, axilas, queixo)
-			attribute vec2 mt;           // material
-			attribute vec4 fp;           // o canto no espaço da cabeça ou do peito, sem o esticão, e qual (1 cabeça: o rosto, 2 peito: a estampa, 0 nenhum)
-			attribute vec4 ux;           // textura de detalhe: u, v, qual (1 tecido, 2 cabelo, 0 nenhuma), a luz média da peça nela
-			attribute vec3 in1;          // a normal do vértice no espaço do osso 1
-			attribute vec3 n2;           // ... no do osso 2
+			attribute vec4 sk;           // bytes: osso 1, osso 2, peso do 2 × 255, oclusão de ambiente × 255 (assada: dobras, axilas, queixo)
+			attribute vec4 mt;           // bytes: material, tom
+			attribute vec4 fp;           // inteiros de 16 bits: o canto no espaço da cabeça ou do peito × 64, e qual (1 cabeça: o rosto, 2 peito: a estampa)
+			attribute vec4 ux;           // 16 bits normalizados: u, v, qual textura de detalhe ÷ 2 (1 tecido, 2 cabelo), a luz média da peça nela
+			attribute vec4 in1;          // bytes normalizados: a normal do vértice no espaço do osso 1
+			attribute vec4 n2;           // ... no do osso 2
 			uniform mat4 world;
 			uniform mat4 viewProjection;
 			uniform vec4 B[48];
@@ -190,8 +204,9 @@ const Char3D = {
 			vec3 xp(int b, vec3 p) { vec4 r0 = B[b * 3], r1 = B[b * 3 + 1], r2 = B[b * 3 + 2]; return vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w); }
 			void main(void) {
 				int b1 = int(sk.x + 0.5), b2 = int(sk.y + 0.5);
-				vec3 p = xp(b1, ip);
-				if (sk.z > 0.0) p = mix(p, xp(b2, p2), sk.z);
+				float w2 = sk.z / 255.0;
+				vec3 p = xp(b1, position);
+				if (w2 > 0.0) p = mix(p, xp(b2, p2), w2);
 				vec4 wp = world * vec4(vec3(p.x, p.z, p.y) * unit, 1.0);
 				#ifdef SHADOW
 				wp.xyz -= sunL * ((wp.y - groundY) / max(sunL.y, 0.2));
@@ -199,9 +214,9 @@ const Char3D = {
 				#ifdef SIL
 				wp.xyz += normalize(eye - wp.xyz) * 0.06;                        // (os pés rente ao chão: o fragmento corta — vZ)
 				#endif
-				vW = wp.xyz; vMt = mt; vF = fp.xyz; vS = fp.w; vX = ux; vAo = sk.w; vZ = p.z;
-				vec3 nn = xn(b1, in1);
-				if (sk.z > 0.0) nn = mix(nn, xn(b2, n2), sk.z);
+				vW = wp.xyz; vMt = mt.xy; vF = fp.xyz / 64.0; vS = fp.w; vX = vec4(ux.xy, floor(ux.z * 2.0 + 0.5), ux.w); vAo = sk.w / 255.0; vZ = p.z;
+				vec3 nn = xn(b1, in1.xyz);
+				if (w2 > 0.0) nn = mix(nn, xn(b2, n2.xyz), w2);
 				vN = (world * vec4(nn.x, nn.z, nn.y, 0.0)).xyz;                  // (direção: só a rotação do mundo)
 				gl_Position = viewProjection * wp;
 			}`;
@@ -381,14 +396,14 @@ const Char3D = {
 	// lod: 0 = perto (o modelo cheio), 1 = longe (menos pontos, maiores — farSpacing), 2 = bem longe (o leve com só uma parte dos pontos, maiores — veryFarThin):
 	// TODOS os NPCs ficam 3D; de longe, a diferença de detalhe não aparece e o custo cai muito.
 	typeModel(type, dmg = 0, lod = 0) {
-		if (this.polyOn) lod = lod >= 2 ? 2 : 0;                                         // (low poly: 2 níveis — o de perto, ~2,5 mil triângulos, e o de longe, ~1 mil)
+		if (this.polyOn) lod = Math.max(0, Math.min(3, lod | 0));                        // (low poly: 4 níveis — LOD_LEVELS)
 		const key = type + '|' + dmg + '|' + lod, N = this.C.npc || {};
 		let M = this._types.get(key);
 		// (o bem leve é o leve com os pontos embaralhados e só uma parte deles desenhada, maiores: o gerador não monta o boneco com
 		// espaçamento acima de ~2,4 — a arma na mão fica sem ponto nenhum)
 		// (tipos cujo boneco o gerador não monta no espaçamento de longe — chapéu ou cabelo fino demais: "parte vazia" — usam o de perto)
 		const far = lod && !this._fineOnly.has(type);
-		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: far ? N.farSpacing || 2.2 : N.spacing || 1.3, thin: lod === 2 ? N.veryFarThin || 0.22 : lod === 1 ? (far ? N.farThin || 0.75 : 0.5) : 1, kind: 'npc', level: lod === 2 ? 'far' : 'npc' }); M._lod = lod; this._types.set(key, M); }
+		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: far ? N.farSpacing || 2.2 : N.spacing || 1.3, thin: lod === 2 ? N.veryFarThin || 0.22 : lod === 1 ? (far ? N.farThin || 0.75 : 0.5) : 1, kind: 'npc', level: this.polyOn ? this.LOD_LEVELS[lod] : 'npc' }); M._lod = lod; this._types.set(key, M); }
 		M._used = performance.now();
 		return M;
 	},
@@ -443,6 +458,12 @@ const Char3D = {
 		console.warn('[Char3D] personagens 3D desligados nesta sessão (voltaram ao 2,5D)');
 	},
 	// O visual do jogador (guarda-roupa, bolsa, aparência): mudou → um modelo novo (o antigo some quando o novo fica pronto).
+	// O boneco 3D do jogador pronto (o modelo e a pose parada) — sem 2,5D a tela de carregamento espera por ele: não há desenho para
+	// mostrar enquanto isso. Desiste em `ms` (o jogo segue: ele aparece quando chegar).
+	playerReady(ms = 15000) {
+		const ok = () => { const P = this._game && this._game.player && this._game.player.char3d, M = P && (P.model || this._pNext); return !!(M && M.ready && typeof M.clips.get('idle:none') === 'object'); };
+		return new Promise((res) => { const t0 = performance.now(), k = () => (ok() || performance.now() - t0 > ms ? res(ok()) : setTimeout(k, 50)); k(); });
+	},
 	_playerSpec(force) {
 		const P = this._game.player.char3d, spec = JSON.parse(JSON.stringify(PlayerLook.spec())), dmg = PlayerLook.dmg ? PlayerLook.dmg() : 0;
 		if (dmg) spec.dmg = dmg;                 // (machucado: o sangue assado na roupa e no corpo, como os atlas de dano)
@@ -455,6 +476,7 @@ const Char3D = {
 	},
 	tick() {
 		const sc = this._scene, cam = sc.activeCamera, dt = sc.getEngine().getDeltaTime() / 1000, V = this._view;
+		this._frame++;
 		if (cam) {
 			V.eye.copyFrom(cam.globalPosition || cam.position);
 			const E = sc.getEngine();
@@ -480,7 +502,8 @@ const Char3D = {
 	// Os NPCs em 3D: TODOS os que estão à vista (até `max`, dentro de `radius` — limites de segurança bem largos); o detalhe cai com a
 	// distância (lodOf). Fica de fora: o próprio jogador, pilotos presos num veículo (o desenho deles é do veículo) e quem não é 2,5D.
 	_choose(pl) {
-		const N = this.C.npc || {}, max = pl ? (N.max | 0) : 0, R = N.radius || 38, cx = pl ? pl.position.x : 0, cz = pl ? pl.position.z : 0, cand = [];
+		// (sem 2,5D: TODOS — quem não for 3D não aparece; os níveis de detalhe e o corte fora da câmera seguram o custo)
+		const N = this.C.npc || {}, all = this.no2d, max = pl ? (all ? 1e6 : N.max | 0) : 0, R = all ? 1e5 : N.radius || 38, cx = pl ? pl.position.x : 0, cz = pl ? pl.position.z : 0, cand = [];
 		if (pl) for (const a of SpriteActor.live) {
 			const m = a.mesh, t = a.npcType;
 			if (!t || a === pl.actor || !a.clip || !a.clip.npc || !a._placed || m.isDisposed() || !m.isEnabled() || !(m.isVisible || a._npcWait)) continue;      // (_npcWait: invisível só porque a página 2,5D não chegou — o 3D não precisa dela)
@@ -499,8 +522,17 @@ const Char3D = {
 		// Perto (até nearDist m) o modelo cheio; até midDist, o leve; além, o bem leve. (Quem já está num nível fica nele até 25% além da
 		// borda: ninguém troca de modelo para lá e para cá.)
 		const near = N.nearDist || 17, mid = N.midDist || 45, d2 = new Map(cand.map(([d, a]) => [a, d]));
+		const poly = this.polyOn, V = this._view, cam = this._scene.activeCamera, m5 = cam ? cam.getProjectionMatrix().m[5] : 2;
 		const typeOf = (a) => String((a.sheet && a.sheet.baseId) || a.npcType).replace(/#d\d+$/, ''), lodOf = (a) => {
 			const C = this.npcs.get(a), L = C && C.model ? C.model._lod : -1, d = d2.get(a) || 0;
+			if (poly) {
+				// TAMANHO NA TELA: a altura do boneco (~1,8 m) sobre a altura da tela, pela distância à CÂMERA (LOD_SCREEN, com folga de 15%)
+				const p = a.mesh.getAbsolutePosition(), e = V.eye, dc = Math.max(0.5, Math.hypot(p.x - e.x, p.y + 0.9 - e.y, p.z - e.z));
+				const frac = (m5 * 0.9) / dc / this.lodBias, T = this.LOD_SCREEN;
+				let l = 3;
+				for (let i = 0; i < 3; i++) { const t = L >= 0 && L <= i ? T[i] / 1.15 : L > i ? T[i] * 1.15 : T[i]; if (frac >= t) { l = i; break; } }
+				return l;
+			}
 			const rn = L === 0 ? near * 1.25 : near, rm = L !== undefined && L <= 1 && L >= 0 ? mid * 1.25 : mid;
 			return d < rn * rn ? 0 : d < rm * rm ? 1 : 2;
 		};
@@ -512,12 +544,12 @@ const Char3D = {
 				for (const [k, X] of this._types) if (k.startsWith(t + '|') && X._lod > 0 && X.failed) { X.dispose(); this._types.delete(k); }
 				return null;
 			}
-			if (M.failed) { for (let l = 1; l >= 0; l--) { const X = this._types.get(typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|' + l); if (X && X.ready && !X.failed) return X; } return null; }
+			if (M.failed) { for (let l = poly ? 3 : 1; l >= 0; l--) { const X = this._types.get(typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|' + l); if (X && X.ready && !X.failed) return X; } return null; }
 			// (o modelo da outra distância ainda assando: fica com o que tem — sem voltar ao 2,5D no meio)
 			if (!M.ready) {
 				const C = this.npcs.get(a), O = C && C.model; if (O && O.ready && !O.failed && O._lod !== undefined) return O;
 				// (quem acabou de aparecer: qualquer nível pronto do mesmo tipo serve até o certo ficar pronto — ninguém espera em 2,5D)
-				for (let l = 2; l >= 0; l--) { const X = this._types.get(typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|' + l); if (X && X.ready && !X.failed) return X; }
+				for (let l = poly ? 3 : 2; l >= 0; l--) { const X = this._types.get(typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|' + l); if (X && X.ready && !X.failed) return X; }
 			}
 			return M;
 		};
@@ -525,9 +557,9 @@ const Char3D = {
 		let pre = 0;
 		for (const [, a] of cand) {
 			if (hero(a)) continue;
-			const key = typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|2';
+			const lb = poly ? 3 : 2, key = typeOf(a) + '|' + ((a.sheet && a.sheet.dmgLvl) | 0) + '|' + lb;
 			if (this._types.has(key)) { this._types.get(key)._used = performance.now(); continue; }
-			if (pre++ < 3) this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, 2);      // (no máximo 3 tipos novos por vez: sem rajada de assar e subir para a GPU)
+			if (pre++ < 3) this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, lb);      // (no máximo 3 tipos novos por vez: sem rajada de assar e subir para a GPU)
 		}
 		for (const a of keep) {
 			const C = this.npcs.get(a), M = modelOf(a);
@@ -686,16 +718,29 @@ class Char3DModel {
 		return mesh;
 	}
 	// LOW POLY: os triângulos do corpo (cantos sem índice compartilhado: face chapada), no espaço dos ossos como os pontos
+	// (atributos COMPACTOS na placa: 56 bytes por canto em vez de 116 — ossos, peso e oclusão em bytes, material e tom em bytes, normais
+	// em bytes normalizados, UV em 16 bits, a posição na cabeça/peito em inteiros de 16 bits ×64; a posição no osso 1 é a própria
+	// 'position' — antes ia duas vezes)
 	_tris(name, P) {
 		const mesh = new BABYLON.Mesh(name, this.scene), n = P.n, vd = new BABYLON.VertexData(), idx = new Uint32Array(n);
 		for (let i = 0; i < n; i++) idx[i] = i;
 		vd.positions = P.p1; vd.indices = idx;
 		vd.applyToMesh(mesh, false);
-		const E = this.scene.getEngine(), vb = (data, kind, size) => mesh.setVerticesBuffer(new BABYLON.VertexBuffer(E, data, kind, false, false, size, false));
-		vb(P.p1, 'ip', 3); vb(P.p2, 'p2', 3); vb(P.sk, 'sk', 4); vb(P.mt, 'mt', 2);
-		vb(P.fp || new Float32Array(n * 4), 'fp', 4);
-		vb(P.n1 || new Float32Array(n * 3), 'in1', 3); vb(P.n2 || P.n1 || new Float32Array(n * 3), 'n2', 3);
-		vb(P.ux || new Float32Array(n * 4), 'ux', 4);
+		const E = this.scene.getEngine(), VB = BABYLON.VertexBuffer;
+		const vb = (data, kind, size, type, norm) => mesh.setVerticesBuffer(new VB(E, data, kind, false, false, size, false, 0, size, type, !!norm));
+		const sk = new Uint8Array(n * 4), mt = new Int8Array(n * 4), fp = new Int16Array(n * 4), n1 = new Int8Array(n * 4), n2 = new Int8Array(n * 4), ux = new Uint16Array(n * 4);
+		const q8 = (v) => Math.max(-127, Math.min(127, Math.round(v * 127))), q16 = (v) => Math.max(0, Math.min(65535, Math.round(v * 65535)));
+		for (let i = 0; i < n; i++) {
+			const o = i * 4, o3 = i * 3;
+			sk[o] = P.sk[o]; sk[o + 1] = P.sk[o + 1]; sk[o + 2] = Math.round(Math.max(0, Math.min(1, P.sk[o + 2])) * 255); sk[o + 3] = Math.round(Math.max(0, Math.min(1, P.sk[o + 3] || 0)) * 255);
+			mt[o] = P.mt[i * 2]; mt[o + 1] = P.mt[i * 2 + 1];
+			if (P.fp) { fp[o] = Math.round(P.fp[o] * 64); fp[o + 1] = Math.round(P.fp[o + 1] * 64); fp[o + 2] = Math.round(P.fp[o + 2] * 64); fp[o + 3] = P.fp[o + 3]; }
+			const N1 = P.n1, N2 = P.n2 || P.n1;
+			if (N1) { n1[o] = q8(N1[o3]); n1[o + 1] = q8(N1[o3 + 1]); n1[o + 2] = q8(N1[o3 + 2]); n2[o] = q8(N2[o3]); n2[o + 1] = q8(N2[o3 + 1]); n2[o + 2] = q8(N2[o3 + 2]); }
+			if (P.ux) { ux[o] = q16(P.ux[o]); ux[o + 1] = q16(P.ux[o + 1]); ux[o + 2] = q16(P.ux[o + 2] / 2); ux[o + 3] = q16(P.ux[o + 3]); }
+		}
+		vb(P.p2, 'p2', 3, VB.FLOAT); vb(sk, 'sk', 4, VB.UNSIGNED_BYTE); vb(mt, 'mt', 4, VB.BYTE); vb(fp, 'fp', 4, VB.SHORT);
+		vb(n1, 'in1', 4, VB.BYTE, true); vb(n2, 'n2', 4, VB.BYTE, true); vb(ux, 'ux', 4, VB.UNSIGNED_SHORT, true);
 		mesh.isPickable = false; mesh._char3d = true;
 		mesh.alwaysSelectAsActiveMesh = true;                 // (no espaço dos ossos: a caixa não vale)
 		mesh.setEnabled(false);
@@ -762,6 +807,7 @@ class Char3DActor {
 		this.props = new Map();          // nome → { mesh, mat, B }
 		this.shown = false;
 		this._B = new Float32Array(48 * 4);
+		this._ph = (Char3D._nAct = (Char3D._nAct || 0) + 1) % 6;        // (fase da pose de longe: os bonecos não calculam todos no mesmo quadro)
 		if (xray) actor._c3 = this;      // (o raio-X do jogador usa o boneco 3D enquanto ele está à mostra)
 		this._shadow();
 		if (model) this.setModel(model);
@@ -805,7 +851,7 @@ class Char3DActor {
 		if (poly && Char3D.style3d !== 'real') defines.push('#define TOON');
 		const sh = poly ? 'char3dPoly' : 'char3d';
 		const m = new BABYLON.ShaderMaterial(name, this.scene, { vertex: sh, fragment: sh }, {
-			attributes: poly ? ['position', 'ip', 'p2', 'sk', 'mt', 'fp', 'in1', 'n2', 'ux'] : ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
+			attributes: poly ? ['position', 'p2', 'sk', 'mt', 'fp', 'in1', 'n2', 'ux'] : ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
 			uniforms: ['world', 'viewProjection', 'B', 'unit', 'pScale', 'splat', 'eye', 'sunL', 'tint', 'shade', 'silhouette', 'palRows', 'row', 'expr', 'groundY', 'viewport'].concat(poly ? ['face', 'face2', 'shirt'] : []),
 			samplers: poly ? ['ramps', 'palette', 'clothTex', 'hairTex'] : ['ramps', 'palette'],
 			defines,
@@ -904,10 +950,19 @@ class Char3DActor {
 	// O desenho 2,5D do ator: escondido enquanto o 3D está à mostra — e FANTASMA (SpriteActor._ghost): não pede nem desenha as páginas
 	// da folha 2,5D (decodificar e subir para a placa centenas de MB de sprites que ninguém vê). Voltou ao 2,5D: pede de novo.
 	_show2d(on) {
+		if (on && Char3D.no2d) on = false;                        // (sem 2,5D: o desenho nunca volta — sem modelo pronto, ninguém aparece um instante)
 		const a = this.actor, mask = on ? 0x0FFFFFFF : 0;
 		if (a.mesh.layerMask !== mask) a.mesh.layerMask = mask;
 		if (a._ov && a._ov.layerMask !== mask) a._ov.layerMask = mask;
 		if (!a._ghost === !on) { a._ghost = !on; if (on && a._applyUV) a._applyUV(); }
+	}
+	// Dentro da câmera? (uma esfera de 1,4 m em volta do boneco contra os planos do frustum da cena)
+	_inView(a) {
+		const F = this.scene.frustumPlanes;
+		if (!F || !F.length) return true;
+		const p = a.mesh.getAbsolutePosition(), x = p.x, y = p.y + 0.9, z = p.z;
+		for (const P of F) if (P.normal.x * x + P.normal.y * y + P.normal.z * z + P.d < -1.4) return false;
+		return true;
 	}
 	_hide3d() {
 		this._curK = null; this._fadeT = -1;                      // (voltou do 2,5D: a pose entra direto, sem misturar com a de antes)
@@ -920,6 +975,8 @@ class Char3DActor {
 		if (M && M.ready && !this._built) this._buildMeshes();
 		const c = a.clip, vis = !a.mesh.isDisposed() && a.mesh.isEnabled() && (a.mesh.isVisible || a._npcWait) && !!c;
 		if (!this._built || M.failed || !vis || !c.npc) { this._hide3d(); this._show2d(true); return; }
+		// FORA DA CÂMERA (NPCs): nem desenha nem calcula a pose (a malha está no espaço dos ossos, sem caixa útil: o corte é pela posição)
+		if (this.pal && !this._inView(a)) { this._hide3d(); this._show2d(false); return; }
 		const key = c.name + ':' + (c.weapon || 'none');
 		let K = M.clip(key);
 		// (o gerador não tem esse clipe com essa arma: o mesmo sem arma; nem esse, parado — continua 3D em vez de voltar ao 2,5D)
@@ -932,7 +989,9 @@ class Char3DActor {
 		else K = this._last;                                       // (o clipe novo ainda chegando: segura a última pose)
 		// TRANSIÇÃO: trocou de clipe com o boneco à mostra — a pose de agora vira o ponto de partida e a nova entra em fadeS segundos
 		if (K !== this._curK) { if (this._curK && this.shown && (this.C.fade !== 0)) this._fadeStart(); this._curK = K; }
-		this._pose(K, a, K.key === key || K.key.startsWith(c.name + ':'));
+		// (de longe — L2/L3 — a pose a cada 2 ou 3 quadros, cada boneco numa fase: o custo de CPU cai e ninguém nota o passo a passo)
+		const ev = this.pal && Char3D.polyOn ? Char3D.LOD_EVERY[M._lod | 0] || 1 : 1;
+		if (ev <= 1 || !this.shown || this._fadeT >= 0 || (Char3D._frame + this._ph) % ev === 0) this._pose(K, a, K.key === key || K.key.startsWith(c.name + ':'));
 		this._place(a);
 		if (!this.shown) { this.shown = true; this.root.setEnabled(true); }
 		this._show2d(false);

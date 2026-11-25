@@ -135,7 +135,7 @@ const ShopLife = {
 
     // Requests the pages of the cast of `shop` (all but the falls). true = all of them are already on the GPU.
     prefetch(shop) {
-        if (!this.FAMILY_OF[shop.style] || shop.home || shop.safehouse || !this.available()) return true;
+        if (!this.FAMILY_OF[shop.style] || shop.home || shop.safehouse || !this.available() || NpcArt.no2d) return true;      // (sem 2,5D: nada a buscar)
         const cast = this.castFor(shop);
         let ready = true;
         for (const type of cast.staff.concat(cast.customers)) {

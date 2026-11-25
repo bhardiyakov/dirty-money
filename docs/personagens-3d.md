@@ -93,20 +93,36 @@ O boneco em **triângulos** no lugar da nuvem de pontos. `Config.art.char3d.poly
   (`tools/asset_baker/lowpoly/bakelow.cjs` → `generator/malha3d_low.js`, só índices e a oclusão, ~270 KB). Os pesos dos ossos entram
   como atributos (a barra da bermuda e da manga não escorrega). Antes de simplificar, o buffer é **compactado** nos vértices usados: as
   cópias soldadas que sobravam travavam o meshoptimizer (a pele parava em ~1.100 triângulos qualquer que fosse o alvo).
-- **Três níveis**, como num jogo de PS2 (o protagonista mais detalhado que os pedestres):
+- **Níveis de detalhe**, como nos motores atuais: o jogador no mais detalhado e os NPCs em 4 níveis escolhidos pelo **tamanho na
+  tela** (a altura do boneco sobre a altura da tela, pela distância à câmera — `Char3D.LOD_SCREEN`), não pela distância ao jogador:
 
   | Nível | Quem | Triângulos (mediana / máx, com acessórios) |
   | --- | --- | --- |
   | `hero` | o jogador | 4.300 / 5.200 |
-  | `npc` | NPCs até a distância média | 2.500 / 3.100 |
-  | `far` | NPCs além dela | 800 / 1.000 |
+  | `npc` (L0) | NPC com mais de 10% da altura da tela | 2.500 / 3.100 |
+  | `mid` (L1) | de 5,5% a 10% | 1.400 / 1.800 |
+  | `far` (L2) | de 2,8% a 5,5% | 800 / 1.000 |
+  | `tiny` (L3) | abaixo de 2,8% | 350 / 480 |
+
+  Folga de 15% na borda (ninguém troca de nível para lá e para cá). `Char3D.lodBias` baixa o detalhe mais cedo: 1,7 no Low,
+  1,25 no Medium, 1 no High, 0,85 no HD; o `AutoQuality` multiplica (×1,5, ×2) em vez de cortar bonecos. Cada nível de cada tipo é um
+  modelo, montado quando alguém precisa dele (o L3 primeiro: é rápido e serve de ponte) e descartado depois de 90 s sem uso.
+- **Fora da câmera**, o boneco não é desenhado nem tem a pose calculada (uma esfera de 1,4 m contra o frustum: a malha está no espaço
+  dos ossos e não tem caixa útil). **De longe**, a pose é calculada a cada 2 (L2) ou 3 (L3) quadros, cada boneco numa fase.
+- **Atributos compactos** na placa: 56 bytes por canto em vez de 116 (ossos, peso e oclusão em bytes, material e tom em bytes, normais
+  em bytes normalizados, UV em 16 bits, a posição na cabeça/peito em inteiros de 16 bits ×64; a posição no osso 1 é a `position` — antes
+  ia duas vezes).
 
 - **Acessórios** (boné, capacete, colete, bolsa, alça, os cabelos geométricos): a superfície da forma do gerador por *surface nets*,
   simplificada no Worker (`G.polyPart`); o tamanho acompanha o nível (×1,6 no jogador, ×0,4 de longe).
-- **Todos os NPCs à vista em 3D** (`Graphics.PRESETS.npc3dPoly`/`npc3dPolyR`): Medium até 70 m, High 100 m, HD 130 m, sem limite de
-  quantidade; Low, os 12 mais perto até 40 m. O desenho 2,5D fica de reserva (o instante antes do modelo chegar, e além do raio).
-  Medido (SwiftShader, High, centro): 117 NPCs 3D (22 perto, 95 longe), 124 mil triângulos de personagem, 413 chamadas de desenho na
-  cena (~300 antes, com 12 NPCs 3D), tempo de placa de 0,75 s por quadro (era 1,2 s com 12 NPCs no nível antigo e 5,8 s com pontos).
+- **SEM 2,5D** (`Char3D.no2d`, o padrão): todo personagem é 3D a qualquer distância. As páginas dos desenhos 2,5D nunca são
+  buscadas, decodificadas nem enviadas à placa (`NpcArt._want`), o quad do `SpriteActor` fica fora do desenho (`_hide2d`) e o visual
+  do jogador não é desenhado no Worker do guarda-roupa (`PlayerLook`): o boneco 3D sai direto da ficha. Os **manifestos** dos atlas
+  (clipes, quadros, ritmo) e a paleta continuam — o `SpriteActor` toca os clipes por eles e o 3D pinta pela paleta. O 2,5D volta
+  sozinho só se o 3D não puder rodar (desligado por erro repetido ou pelo modo seguro: `Char3D.disable`); `?sprites2d=1` liga para
+  comparar. Medido (SwiftShader, High, centro): 127–162 NPCs 3D, só os ~12 dentro da câmera desenhados, 0 páginas na placa, 290
+  chamadas de desenho (413 antes do corte fora da câmera), tempo de placa de 0,62 s por quadro (0,75 s antes; 5,8 s com pontos).
+  Os limites `Graphics.PRESETS.npc3dPoly`/`npc3dPolyR` valem só com o 2,5D ligado.
 
 ### Visual
 

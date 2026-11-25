@@ -376,6 +376,7 @@ class Game {
 			await Promise.race([SpriteIO.ready, new Promise((r) => setTimeout(r, 15000))]);      // arte em PNG ainda baixando (rede lenta: segue procedural)
 			await CharArt.ready;                                                      // atlas dos personagens (decodificado desde a carga da página)
 			if (typeof NpcArt !== 'undefined' && NpcArt.ready) await NpcArt.ready;     // personagens 2,5D (assets/baked: o protagonista, decodificado durante a abertura)
+			if (typeof Char3D !== 'undefined' && Char3D.no2d) await Char3D.playerReady();   // (sem 2,5D: o boneco 3D do jogador — não há desenho para mostrar no lugar)
 			const s0 = performance.now();
 			for (let guard = 0; guard < 2000; guard++) {
 				const more = this.sprites.pump(40);                                   // (personagens e carros vêm dos atlas: quase nada a assar)

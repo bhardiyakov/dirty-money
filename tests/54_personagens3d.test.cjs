@@ -20,12 +20,19 @@ module.exports = {
                 player: !!(P && P.shown), mask: a.mesh.layerMask, n: P && P.model && P.model.n, max: cfg.max,
                 npcs: N.length, shown: N.filter((r) => r.shown).length, pal: N.filter((r) => r.pal).length,
                 far: N.filter((r) => Math.hypot(r.actor.mesh.position.x - game.player.position.x, r.actor.mesh.position.z - game.player.position.z) > cfg.radius * 1.2).length,
+                no2d: Char3D.no2d, sprites: [...SpriteActor.live].filter((a) => a.npcType && a.mesh.isEnabled() && a.mesh.layerMask && a.clip && a.clip.npc).length,
                 types: [...Char3D._types.values()].filter((M) => M.ready).length,
             };
         });
         c.ok(st.player && st.mask === 0, `o jogador em 3D (${st.n} pontos), o desenho 2,5D dele escondido (máscara ${st.mask})`);
-        c.ok(st.npcs > 0 && st.npcs <= st.max && st.shown > 0 && st.pal === st.npcs, `NPCs perto em 3D: ${st.shown}/${st.npcs} (limite ${st.max}), cor pela paleta`);
-        c.ok(st.far === 0, 'nenhum NPC 3D longe da câmera');
+        if (st.no2d) {
+            // (sem 2,5D: todo NPC é 3D — só os dentro da câmera desenhados — e nenhum desenho 2,5D aparece)
+            c.ok(st.npcs > 0 && st.shown > 0 && st.pal === st.npcs, `NPCs em 3D: ${st.shown} na câmera de ${st.npcs}, cor pela paleta`);
+            c.ok(st.sprites === 0, `nenhum desenho 2,5D de personagem na tela (${st.sprites})`);
+        } else {
+            c.ok(st.npcs > 0 && st.npcs <= st.max && st.shown > 0 && st.pal === st.npcs, `NPCs perto em 3D: ${st.shown}/${st.npcs} (limite ${st.max}), cor pela paleta`);
+            c.ok(st.far === 0, 'nenhum NPC 3D longe da câmera');
+        }
         c.note(`${st.types} tipos de NPC assados`);
 
         // clipe com arma: a pistola na mão

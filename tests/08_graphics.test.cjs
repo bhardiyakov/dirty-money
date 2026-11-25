@@ -5,7 +5,8 @@ const { boot, gameWait } = require('./lib.cjs');
 module.exports = {
     name: 'graphics',
     async run(ctx, c) {
-        const { page, errors, close } = await boot(ctx, { query: 'gfx=high' });
+        // (o shader dos desenhos 2,5D: só a RESERVA — o jogo é 3D sem 2,5D, Char3D.no2d; ?sprites2d=1 liga os desenhos para testá-lo)
+        const { page, errors, close } = await boot(ctx, { query: 'gfx=high&sprites2d=1' });
         await gameWait(page, 1.5);
         const g = await page.evaluate(() => {
             const mats = []; for (const A of Object.values(NpcArt.atlases)) for (const P of A.pages) if (P.mat) mats.push(P.mat);

@@ -589,7 +589,7 @@ const Interiors = {
 		if (this._later) for (let i = this._later.length - 1; i >= 0; i--) { const d = this._later[i]; d.t -= dt; if (d.t <= 0) { this._later.splice(i, 1); d.fn(); } }
 		if (typeof News !== 'undefined') News.tvUpdate(dt);
 		for (const x of this._actors) if (x.mesh.isEnabled()) x.update(dt, 1);
-		for (const x of this._gymActors || []) if (x.mesh.isEnabled() && x.mesh.isVisible) this._gymActor(x, dt);
+		for (const x of this._gymActors || []) if (x.mesh.isEnabled() && (x.mesh.isVisible || x._npcWait)) this._gymActor(x, dt);
 		if (ShopLife.active) {
 			try { ShopLife.update(dt, game); } catch (e) {                             // (clientela quebrou: a loja fica com os figurantes fixos)
 				console.error('[LOJAS] clientela:', e);

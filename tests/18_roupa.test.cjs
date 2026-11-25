@@ -6,7 +6,8 @@ const { boot, gameWait } = require('./lib.cjs');
 module.exports = {
     name: 'roupa',
     async run(ctx, c) {
-        const { page, errors, close } = await boot(ctx, { outside: false });
+        // (o visual 2,5D desenhado no guarda-roupa: só a RESERVA — sem 2,5D, Char3D.no2d, o jogador é o boneco 3D da ficha; ?sprites2d=1)
+        const { page, errors, close } = await boot(ctx, { outside: false, query: 'sprites2d=1' });
         await gameWait(page, 1);
         const live = () => page.evaluate(() => {
             const a = game.player.actor, L = PlayerLook.live, A = L && NpcArt.atlases[L.id];

@@ -62,17 +62,45 @@ module.exports = {
             const P = game.player.char3d, N = [...Char3D.npcs.values()].filter((C) => C.shown), T = [...Char3D._types.keys()];
             return {
                 poly: Char3D.polyOn, player: !!(P && P.shown && P.polyMesh), ptris: P && P.model && P.model.tris, ppts: P && P.model && P.model.n,
-                npcs: N.length, npoly: N.filter((C) => C.polyMesh && !C.body).length, lods: T.filter((k) => !/\|[02]$/.test(k)).length, types: T.length,
-                near: [...Char3D._types.entries()].filter(([k, M]) => k.endsWith('|0') && M.ready).map(([, M]) => M.tris),
-                far: [...Char3D._types.entries()].filter(([k, M]) => k.endsWith('|2') && M.ready).map(([, M]) => M.tris),
+                npcs: N.length, npoly: N.filter((C) => C.polyMesh && !C.body).length, lods: T.filter((k) => !/\|[0-3]$/.test(k)).length, types: T.length,
+                byLod: [0, 1, 2, 3].map((l) => [...Char3D._types.entries()].filter(([k, M]) => k.endsWith('|' + l) && M.ready).map(([, M]) => M.tris)),
+                no2d: Char3D.no2d, managed: Char3D.npcs.size, pages: Object.values(NpcArt.atlases).reduce((n, A) => n + A.pages.filter((P) => P.tex || P.st === 'queued' || P.st === 'loading').length, 0),
+                sprites: [...SpriteActor.live].filter((a) => a.npcType && a.mesh.isEnabled() && a.mesh.layerMask && a.clip && a.clip.npc).length,
                 tris: N.map((C) => C.model.tris),
             };
         });
         c.ok(st.poly && st.player && st.ptris > 3000 && !st.ppts, `jogador em triângulos, no nível mais detalhado (${st.ptris}), sem pontos`);
         c.ok(st.npcs > 0 && st.npoly === st.npcs, `NPCs 3D em triângulos, sem pontos: ${st.npoly}/${st.npcs} (${st.tris.join(', ')})`);
-        c.ok(st.types > 0 && st.lods === 0, `só os 2 níveis do low poly por tipo (perto e longe): ${st.types} modelos`);
-        const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
-        c.ok(st.far.length > 0 && avg(st.far) < 1400 && avg(st.near || []) > avg(st.far), `NPCs de longe no nível leve: ${Math.round(avg(st.far))} triângulos em média (perto: ${Math.round(avg(st.near))})`);
+        c.ok(st.types > 0 && st.lods === 0, `só os 4 níveis do low poly por tipo (L0 a L3): ${st.types} modelos`);
+        const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0), lv = st.byLod.map(avg).map(Math.round), got = lv.map((v, i) => [i, v]).filter(([, v]) => v > 0);
+        c.ok(got.length >= 2 && got.every(([, v], i) => i === 0 || v < got[i - 1][1]), `níveis em uso, cada um mais leve que o anterior: ${got.map(([i, v]) => 'L' + i + ' ' + v).join(', ')}`);
+        // SEM 2,5D: nenhuma página pedida nem desenho na tela; todo NPC é 3D, e só os dentro da câmera são desenhados
+        c.ok(st.no2d && st.pages === 0 && st.sprites === 0, `sem 2,5D: ${st.pages} páginas pedidas, ${st.sprites} desenhos de personagem na tela`);
+        c.ok(st.managed >= st.npcs, `todos os NPCs em 3D (${st.managed}), desenhados só os ${st.npcs} dentro da câmera`);
+        // NÍVEL PELO TAMANHO NA TELA: o mesmo NPC bem perto da câmera sobe para o L0; longe, desce para o L3
+        const lodAt = async (dist) => {
+            await page.evaluate((dist) => {
+                const sc = game.scene, pl = game.player.position;
+                let npc = window.__lodNpc;
+                if (!npc) {
+                    npc = window.__lodNpc = game.npcManager.npcs.find((n) => n.alive && !n.vehicle && Char3D.npcs.has(n.actor));
+                    if (npc) { npc.update = () => {}; sc.onBeforeRenderObservable.add(() => { const P = window.__lodP; if (P) { npc.transform.position.x = P.x; npc.transform.position.z = P.z; npc.actor.setPosition(P.x, P.z); } }); }
+                    window.__lodP = { x: pl.x + 2, z: pl.z + 2 };
+                }
+                // uma câmera de teste a `dist` m do NPC, olhando para ele (o nível sai do tamanho dele NA TELA desta câmera)
+                let cam = window.__lodCam;
+                if (!cam) { cam = window.__lodCam = new BABYLON.FreeCamera('lodcam', new BABYLON.Vector3(0, 0, 0), sc); cam.minZ = 0.1; cam.maxZ = 2000; cam.fov = 0.8; }
+                const P = window.__lodP, y = npc ? npc.actor.mesh.getAbsolutePosition().y : 0;
+                cam.position.set(P.x - dist * 0.7, y + 1.6 + dist * 0.15, P.z - dist * 0.7); cam.setTarget(new BABYLON.Vector3(P.x, y + 0.9, P.z));
+                sc.activeCamera = cam; Char3D._pick = 0;
+            }, dist);
+            let r = null;
+            for (let k = 0; k < 8; k++) { await gameWait(page, 1, 120000); r = await page.evaluate(() => { const n = window.__lodNpc, C = n && Char3D.npcs.get(n.actor); return C && C.model ? { lod: C.model._lod | 0, ready: C.model.ready, tris: C.model.tris, shown: C.shown } : null; }); }
+            return r;
+        };
+        const near = await lodAt(4), far = await lodAt(120);
+        await page.evaluate(() => { game.scene.activeCamera = game.camera.camera || game.scene.cameras[0]; });
+        c.ok(near && far && near.lod === 0 && far.lod === 3 && near.tris > far.tris && near.shown && far.shown, `perto da câmera o detalhe sobe, longe desce (a 4 m: L${near && near.lod} ${near && near.tris} triângulos, a 120 m: L${far && far.lod} ${far && far.tris})`);
         // expressão do rosto: muda pelo uniform, sem recompilar o shader
         const ex = await page.evaluate(async () => {
             const P = game.player.char3d, e0 = P.polyMat.getEffect();
