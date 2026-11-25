@@ -43,6 +43,21 @@ const Char3D = {
 		return (m && m[1]) || this.C.style || 'real';
 	},
 	BONES: 16,
+	// TEXTURAS DE DETALHE do low poly (as do pacote da malha: tecido, mechas), uma por nome, compartilhadas por todos os modelos;
+	// sem textura: 1 pixel branco (o detalhe some, o recorte não corta nada)
+	_tex: new Map(),
+	texAdd(scene, name, t) {
+		if (this._tex.has(name)) return;
+		const T = new BABYLON.RawTexture(t.d, t.w, t.h, BABYLON.Engine.TEXTUREFORMAT_RGBA, scene, true, false, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
+		T.wrapU = T.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE; T.name = 'c3d_tex_' + name;
+		this._tex.set(name, T);
+	},
+	tex(scene, name) {
+		const T = name && this._tex.get(name);
+		if (T) return T;
+		if (!this._white || this._white.getScene() !== scene) this._white = new BABYLON.RawTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, BABYLON.Engine.TEXTUREFORMAT_RGBA, scene, false);
+		return this._white;
+	},
 	_shader() {
 		if (BABYLON.Effect.ShadersStore.char3dVertexShader) return;
 		BABYLON.Effect.ShadersStore.char3dVertexShader = `
@@ -153,6 +168,7 @@ const Char3D = {
 			attribute vec4 sk;           // osso 1, osso 2, peso do 2
 			attribute vec2 mt;           // material
 			attribute vec4 fp;           // o canto no espaço da cabeça ou do peito, sem o esticão, e qual (1 cabeça: o rosto, 2 peito: a estampa, 0 nenhum)
+			attribute vec4 ux;           // textura de detalhe: u, v, qual (1 tecido, 2 cabelo, 0 nenhuma), a luz média da peça nela
 			attribute vec3 in1;          // a normal do vértice no espaço do osso 1
 			attribute vec3 n2;           // ... no do osso 2
 			uniform mat4 world;
@@ -167,6 +183,7 @@ const Char3D = {
 			varying vec3 vF;
 			varying float vS;
 			varying vec3 vN;
+			varying vec4 vX;
 			vec3 xn(int b, vec3 n) { return vec3(dot(B[b * 3].xyz, n), dot(B[b * 3 + 1].xyz, n), dot(B[b * 3 + 2].xyz, n)); }
 			vec3 xp(int b, vec3 p) { vec4 r0 = B[b * 3], r1 = B[b * 3 + 1], r2 = B[b * 3 + 2]; return vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w); }
 			void main(void) {
@@ -178,10 +195,10 @@ const Char3D = {
 				wp.xyz -= sunL * ((wp.y - groundY) / max(sunL.y, 0.2));
 				#endif
 				#ifdef SIL
-				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vW = vec3(0.0); vMt = vec2(0.0); vF = vec3(0.0); vS = 0.0; vN = vec3(0.0, 1.0, 0.0); return; }
+				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vW = vec3(0.0); vMt = vec2(0.0); vF = vec3(0.0); vS = 0.0; vN = vec3(0.0, 1.0, 0.0); vX = vec4(0.0); return; }
 				wp.xyz += normalize(eye - wp.xyz) * 0.06;
 				#endif
-				vW = wp.xyz; vMt = mt; vF = fp.xyz; vS = fp.w;
+				vW = wp.xyz; vMt = mt; vF = fp.xyz; vS = fp.w; vX = ux;
 				vec3 nn = xn(b1, in1);
 				if (sk.z > 0.0) nn = mix(nn, xn(b2, n2), sk.z);
 				vN = (world * vec4(nn.x, nn.z, nn.y, 0.0)).xyz;                  // (direção: só a rotação do mundo)
@@ -204,6 +221,9 @@ const Char3D = {
 			varying vec3 vF;
 			varying float vS;
 			varying vec3 vN;
+			varying vec4 vX;
+			uniform sampler2D clothTex;  // o detalhe do tecido do pacote (dobras, desgaste e costuras do jeans), em tons de cinza
+			uniform sampler2D hairTex;   // as mechas do cabelo, com o alfa do cartão
 			uniform vec4 face;           // a ficha: cara fechada, feminino, barba (1 cheia, 2 cavanhaque, 3 bigode), óculos
 			uniform vec2 face2;          // máscara (1 touca ninja, 2 bandana), tamanho do rosto (G.TOON.face)
 			uniform float expr;          // expressão do quadro (0 = a da ficha, 1–5 = G.FACES)
@@ -292,6 +312,13 @@ const Char3D = {
 				#ifdef SHADOW
 				gl_FragColor = vec4(0.0, 0.0, 0.0, silhouette.a); return;
 				#endif
+				// TEXTURA DE DETALHE: a luz do tecido/da mecha sobre a cor da paleta (a média da peça = 1), e o recorte do cartão de cabelo
+				float det = 1.0;
+				if (vX.z > 0.5) {
+					vec4 tx = vX.z < 1.5 ? texture2D(clothTex, vX.xy) : texture2D(hairTex, vX.xy);
+					if (tx.a < 0.5) discard;
+					det = clamp(tx.r / max(vX.w, 0.05), 0.55, 1.35);
+				}
 				vec3 fx = dFdx(vF), fy = dFdy(vF);                                // (fora de qualquer "if": derivadas valem em todo pixel)
 				vec3 V = normalize(eye - vW);
 				#ifdef TOON
@@ -319,7 +346,7 @@ const Char3D = {
 				#else
 				vec3 c = texture2D(ramps, vec2((lev + 0.5) / 5.0, (mt0 + 0.5) / 32.0)).rgb;
 				#endif
-				gl_FragColor = vec4(c * tint * shade, 1.0);
+				gl_FragColor = vec4(c * det * tint * shade, 1.0);
 			}`;
 	},
 
@@ -661,6 +688,7 @@ class Char3DModel {
 		vb(P.p1, 'ip', 3); vb(P.p2, 'p2', 3); vb(P.sk, 'sk', 4); vb(P.mt, 'mt', 2);
 		vb(P.fp || new Float32Array(n * 4), 'fp', 4);
 		vb(P.n1 || new Float32Array(n * 3), 'in1', 3); vb(P.n2 || P.n1 || new Float32Array(n * 3), 'n2', 3);
+		vb(P.ux || new Float32Array(n * 4), 'ux', 4);
 		mesh.isPickable = false; mesh._char3d = true;
 		mesh.alwaysSelectAsActiveMesh = true;                 // (no espaço dos ossos: a caixa não vale)
 		mesh.setEnabled(false);
@@ -678,7 +706,11 @@ class Char3DModel {
 			this.body = this._points('c3d_corpo' + this.mid, c.n, c.p1, c.n1, c.p2, c.n2, c.sk, c.mt, c.fa, c.fb);
 			if (this.thin < 1) this.body.forcedInstanceCount = Math.max(1, Math.ceil(c.n * this.thin));
 		} else this.body = null;
-		if (c.poly) { this.poly = this._tris('c3d_poly' + this.mid, c.poly); this.tris = c.poly.n / 3; this.face = c.poly.face || [0, 0, 0, 0, 0, 1, 0, 0, 0, 0]; }
+		if (c.poly) {
+			this.poly = this._tris('c3d_poly' + this.mid, c.poly); this.tris = c.poly.n / 3; this.face = c.poly.face || [0, 0, 0, 0, 0, 1, 0, 0, 0, 0];
+			for (const [name, t] of Object.entries(c.poly.tex || {})) Char3D.texAdd(this.scene, name, t);
+			this.texs = c.poly.texs || {};
+		}
 		this.ready = true;
 		this._data = c.poly || c;                                                        // (o corpo — os triângulos ou os pontos —, até medir o chão: _groundFrom)
 		for (const k of ['idle:none', 'walk:none', 'run:none']) this.clip(k);          // (os clipes de sempre já vêm: ninguém espera em 2,5D)
@@ -766,9 +798,9 @@ class Char3DActor {
 		if (poly && Char3D.style3d !== 'real') defines.push('#define TOON');
 		const sh = poly ? 'char3dPoly' : 'char3d';
 		const m = new BABYLON.ShaderMaterial(name, this.scene, { vertex: sh, fragment: sh }, {
-			attributes: poly ? ['position', 'ip', 'p2', 'sk', 'mt', 'fp', 'in1', 'n2'] : ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
+			attributes: poly ? ['position', 'ip', 'p2', 'sk', 'mt', 'fp', 'in1', 'n2', 'ux'] : ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
 			uniforms: ['world', 'viewProjection', 'B', 'unit', 'pScale', 'splat', 'eye', 'sunL', 'tint', 'shade', 'silhouette', 'palRows', 'row', 'expr', 'groundY', 'viewport'].concat(poly ? ['face', 'face2', 'shirt'] : []),
-			samplers: ['ramps', 'palette'],
+			samplers: poly ? ['ramps', 'palette', 'clothTex', 'hairTex'] : ['ramps', 'palette'],
 			defines,
 			needAlphaBlending: !!sil,
 		});
@@ -783,6 +815,8 @@ class Char3DActor {
 		if (poly) {                                                                       // (o rosto e a estampa da ficha: G.lowBody → faceOf)
 			const f = this.model.face || [0, 0, 0, 0, 0, 1, 0, 0, 0, 0];
 			m.setVector4('face', new BABYLON.Vector4(f[0], f[1], f[2], f[3])); m.setVector2('face2', new BABYLON.Vector2(f[4], f[5])); m.setVector4('shirt', new BABYLON.Vector4(f[6] || 0, f[7] || 0, f[8] || 0, f[9] || 0));
+			const T = this.model.texs || {};
+			m.setTexture('clothTex', Char3D.tex(this.scene, T[1])); m.setTexture('hairTex', Char3D.tex(this.scene, T[2]));
 		}
 		return m;
 	}
