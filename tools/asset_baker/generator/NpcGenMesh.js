@@ -527,7 +527,8 @@ function NpcGenMesh(G) {
                 // o: o canto no espaço do osso 1 SEM o esticão (as texturas procedurais e o dano usam esse espaço); h: o mesmo, na cabeça
                 // (1: o rosto) e no peito (2: a estampa), que o shader pinta por pixel
                 const sid = b1 === 'head' ? 1 : b1 === 'chest' && kind !== 'hair' ? 2 : 0;
-                r = { p1, p2, b1, b2, w, mat, o: [o1[0], o1[1], o1[2]], n: [on1[0], on1[1], on1[2]], h: sid ? [o1[0], o1[1], o1[2], sid] : null };
+                // n1/n2: a NORMAL do vértice da malha (luz suave) no espaço de cada osso, com o esticão (a normal escala ao contrário)
+                r = { p1, p2, b1, b2, w, mat, o: [o1[0], o1[1], o1[2]], n: [on1[0], on1[1], on1[2]], h: sid ? [o1[0], o1[1], o1[2], sid] : null, n1: nScale(on1, sh1), n2: nScale(on2, sh2) };
                 vert.set(v, r);
                 return r;
             };
@@ -569,10 +570,10 @@ function NpcGenMesh(G) {
         if (acc) for (const [k, part] of Object.entries(sdf)) {
             if (REPLACED.has(k) || (k === 'hair' && meshHair)) continue;
             const L = polyPart(part, POLY_TARGET[k] || 240), sh = G.shapeFor(part.bone);
-            const corner = (x, y, z) => ({ p1: sh ? [x * sh[0], y * sh[1], z * sh[2]] : [x, y, z], b1: part.bone, b2: part.bone, w: 0, h: null });
+            const corner = (q) => { const x = L.pos[q], y = L.pos[q + 1], z = L.pos[q + 2], n = nScale(L.nrm.subarray(q, q + 3), sh); return { p1: sh ? [x * sh[0], y * sh[1], z * sh[2]] : [x, y, z], b1: part.bone, b2: part.bone, w: 0, h: null, n1: n, n2: n }; };
             for (let t = 0; t < L.tris; t++) {
-                const q = t * 9, v = [];
-                for (let c = 0; c < 3; c++) v.push(corner(L.pos[q + c * 3], L.pos[q + c * 3 + 1], L.pos[q + c * 3 + 2]));
+                const v = [];
+                for (let c = 0; c < 3; c++) v.push(corner(t * 9 + c * 3));
                 tris.push({ v, mat: L.mat[t], tone: L.tone[t] });
             }
         }
@@ -581,17 +582,23 @@ function NpcGenMesh(G) {
         // boca, barba, óculos, máscara e as expressões) e a estampa do peito (makeTexChest): numa malha de poucas faces, pintados por
         // face, eles sumiriam ou virariam um mosaico. tn = o tom da face.
         const n = tris.length * 3, p1 = new Float32Array(n * 3), p2 = new Float32Array(n * 3), sk = new Float32Array(n * 3), mt = new Float32Array(n), tn = new Float32Array(n), fp = new Float32Array(n * 4);
+        const nr1 = new Float32Array(n * 3), nr2 = new Float32Array(n * 3);
         let o = 0;
         for (const t of tris) {
             const [a, b, c] = t.v, same = a.h && b.h && c.h && a.h[3] === b.h[3] && a.h[3] === c.h[3];
             for (const x of t.v) {
-                p1.set(x.p1, o * 3); p2.set(x.p2 || x.p1, o * 3);
+                p1.set(x.p1, o * 3); p2.set(x.p2 || x.p1, o * 3); nr1.set(x.n1, o * 3); nr2.set(x.n2 || x.n1, o * 3);
                 sk[o * 3] = BI[x.b1]; sk[o * 3 + 1] = BI[x.b2]; sk[o * 3 + 2] = x.w; mt[o] = t.mat; tn[o] = t.tone;
                 if (same) fp.set(x.h, o * 4);
                 o++;
             }
         }
-        return { bones: BONES, n, tris: tris.length, p1, p2, sk, mt, tn, fp, face: faceOf(s), scale: s.scale || 1 };
+        return { bones: BONES, n, tris: tris.length, p1, p2, sk, mt, tn, fp, nr1, nr2, face: faceOf(s), scale: s.scale || 1 };
+    }
+    // a normal no espaço do osso com o esticão dele (escala ao contrário e normaliza)
+    function nScale(nv, sh) {
+        const x = sh ? nv[0] / sh[0] : nv[0], y = sh ? nv[1] / sh[1] : nv[1], z = sh ? nv[2] / sh[2] : nv[2], l = sqrt(x * x + y * y + z * z) || 1;
+        return [x / l, y / l, z / l];
     }
 
     // ------------------------------------------------------------------ LOW POLY das partes GEOMÉTRICAS (acessórios)
@@ -621,7 +628,15 @@ function NpcGenMesh(G) {
             mat[t] = tmp.mat; tone[t] = tmp.tone; pid[t] = tmp.pid; d1[t] = tmp.d1; d2[t] = tmp.d2;
         }
         if (part.tex) { const t2 = part.tex(cp, cn, mat, pid, d1, d2, T); for (let t = 0; t < T; t++) tone[t] += t2[t]; }
-        const res = { tris: T, pos, mat, tone, cp, cn };
+        // a normal de cada canto: o gradiente da forma ali (luz suave nos acessórios)
+        const nrm = new Float32Array(T * 9);
+        for (let q = 0; q < T * 9; q += 3) {
+            const x = pos[q], y = pos[q + 1], z = pos[q + 2];
+            const gx = part.eval(x + e, y, z, tmp) - part.eval(x - e, y, z, tmp), gy = part.eval(x, y + e, z, tmp) - part.eval(x, y - e, z, tmp), gz = part.eval(x, y, z + e, tmp) - part.eval(x, y, z - e, tmp);
+            const gl = sqrt(gx * gx + gy * gy + gz * gz) || 1;
+            nrm[q] = gx / gl; nrm[q + 1] = gy / gl; nrm[q + 2] = gz / gl;
+        }
+        const res = { tris: T, pos, mat, tone, cp, cn, nrm };
         _polyCache.set(sig, res);
         if (_polyCache.size > 48) _polyCache.delete(_polyCache.keys().next().value);
         return res;

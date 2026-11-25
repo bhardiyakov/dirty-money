@@ -193,9 +193,13 @@ function c3Poly(M, BI) {
 	if (!G.lowBody || !G.MESH3D || !G.meshUsable(G.fullSpec(M.spec))) return null;
 	const L = G.lowBody(M.spec), n = L.n, sk = new Float32Array(n * 4), mt = new Float32Array(n * 2), map = L.bones.map((b) => BI[b] | 0);
 	for (let i = 0; i < n; i++) { sk[i * 4] = map[L.sk[i * 3]]; sk[i * 4 + 1] = map[L.sk[i * 3 + 1]]; sk[i * 4 + 2] = L.sk[i * 3 + 2]; mt[i * 2] = L.mt[i]; mt[i * 2 + 1] = L.tn[i]; }
-	return { n, p1: L.p1, p2: L.p2, sk, mt, fp: L.fp, face: L.face };
+	return { n, p1: L.p1, p2: L.p2, n1: L.nr1, n2: L.nr2, sk, mt, fp: L.fp, face: L.face };
 }
+// O ESTILO do boneco 3D (m.style — Config.art.char3d.style): 'real' (o padrão: proporções de gente, rosto sem o tamanho de desenho) ou
+// 'igual3d' (o mesmo dos desenhos 2,5D). Estes Workers só montam bonecos 3D: o estilo vale para todos os modelos deles; troca antes do 1º.
+function c3Style(m) { if (m.style && G.STYLES[m.style] && G.STYLE !== m.style) { G.setStyle(m.style); C3.models.clear(); } }
 function c3Body(m) {
+	c3Style(m);
 	const M = c3Model(m), s = G.fullSpec(M.spec), BI = {};
 	C3.BONES.forEach((b, i) => { BI[b] = i; });
 	const poly = m.poly ? c3Poly(M, BI) : null;
@@ -245,7 +249,12 @@ function c3Ramps(spec) {
 function c3Clip(m) {
 	const M = c3Model(m), [name, w0] = m.key.split(':');
 	c3Rig(M);
-	const cd = G.clipDef(name, w0, M.type, { hand: M.spec.hand || null }), PR = G.bakeProps(M.spacing * 0.8);
+	// (m.fps: o 3D pede o clipe com mais quadros — 30 por segundo, até 48 — e a mesma duração: o gerador recalcula os de ciclo e reamostra
+	// as sequências; o desenho 2,5D, que custa por quadro, segue com os poucos do atlas)
+	let cd = G.clipDef(name, w0, M.type, { hand: M.spec.hand || null });
+	const want = m.fps > 0 ? Math.min(48, Math.round((cd.poses.length / (cd.fps || 10)) * m.fps)) : 0;
+	if (want > cd.poses.length) { try { cd = G.clipDef(name, w0, M.type, { hand: M.spec.hand || null, n: want }); } catch (e) { /* (fica com os quadros do atlas) */ } }
+	const PR = G.bakeProps(M.spacing * 0.8);
 	const n = cd.poses.length, NB = C3.BONES.length, B = new Float32Array(n * NB * 12), sc = new Float32Array(n), props = [], newProps = {};
 	const ex = new Int8Array(n), fx = [], FL = { flash: 1, casing: 2 };
 	cd.poses.forEach((pose, f) => {
@@ -282,7 +291,7 @@ async function run(m) {
 		else if (m.type === 'preview') runPreview(m);
 		else if (m.type === 'clips') { await runClips(m); self.postMessage({ job: m.job, done: true }); }
 		else if (m.type === 'pack') self.postMessage({ job: m.job, packed: await runPack(m) });
-		else if (m.type === 'char3d') { const c = c3Body(m); self.postMessage({ job: m.job, mid: m.mid, char3d: c }, (c.poly ? [c.poly.p1.buffer, c.poly.p2.buffer, c.poly.sk.buffer, c.poly.mt.buffer, c.poly.fp.buffer] : []).concat([c.p1.buffer, c.n1.buffer, c.p2.buffer, c.n2.buffer, c.sk.buffer, c.mt.buffer, c.fa.buffer, c.fb.buffer].concat(c.ramps ? [c.ramps.buffer] : []))); }
+		else if (m.type === 'char3d') { const c = c3Body(m); self.postMessage({ job: m.job, mid: m.mid, char3d: c }, (c.poly ? [c.poly.p1.buffer, c.poly.p2.buffer, c.poly.n1.buffer, c.poly.n2.buffer, c.poly.sk.buffer, c.poly.mt.buffer, c.poly.fp.buffer] : []).concat([c.p1.buffer, c.n1.buffer, c.p2.buffer, c.n2.buffer, c.sk.buffer, c.mt.buffer, c.fa.buffer, c.fb.buffer].concat(c.ramps ? [c.ramps.buffer] : []))); }
 		else if (m.type === 'char3dClip') { const c = c3Clip(m); self.postMessage({ job: m.job, mid: m.mid, clip3d: c }); }
 		else if (m.type === 'char3dDrop') C3.models.delete(m.mid);
 	} catch (err) {
