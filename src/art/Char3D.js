@@ -378,14 +378,14 @@ const Char3D = {
 	// lod: 0 = perto (o modelo cheio), 1 = longe (menos pontos, maiores — farSpacing), 2 = bem longe (o leve com só uma parte dos pontos, maiores — veryFarThin):
 	// TODOS os NPCs ficam 3D; de longe, a diferença de detalhe não aparece e o custo cai muito.
 	typeModel(type, dmg = 0, lod = 0) {
-		if (this.polyOn) lod = 0;                                                         // (low poly: os triângulos não mudam com a distância — um modelo por tipo)
+		if (this.polyOn) lod = lod >= 2 ? 2 : 0;                                         // (low poly: 2 níveis — o de perto, ~2,5 mil triângulos, e o de longe, ~1 mil)
 		const key = type + '|' + dmg + '|' + lod, N = this.C.npc || {};
 		let M = this._types.get(key);
 		// (o bem leve é o leve com os pontos embaralhados e só uma parte deles desenhada, maiores: o gerador não monta o boneco com
 		// espaçamento acima de ~2,4 — a arma na mão fica sem ponto nenhum)
 		// (tipos cujo boneco o gerador não monta no espaçamento de longe — chapéu ou cabelo fino demais: "parte vazia" — usam o de perto)
 		const far = lod && !this._fineOnly.has(type);
-		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: far ? N.farSpacing || 2.2 : N.spacing || 1.3, thin: lod === 2 ? N.veryFarThin || 0.22 : lod === 1 ? (far ? N.farThin || 0.75 : 0.5) : 1, kind: 'npc' }); M._lod = lod; this._types.set(key, M); }
+		if (!M) { M = new Char3DModel(this._scene, { npc: type, dmg, spacing: far ? N.farSpacing || 2.2 : N.spacing || 1.3, thin: lod === 2 ? N.veryFarThin || 0.22 : lod === 1 ? (far ? N.farThin || 0.75 : 0.5) : 1, kind: 'npc', level: lod === 2 ? 'far' : 'npc' }); M._lod = lod; this._types.set(key, M); }
 		M._used = performance.now();
 		return M;
 	},
@@ -446,7 +446,7 @@ const Char3D = {
 		const sig = JSON.stringify(spec);
 		if (!force && sig === this._pSig) return;
 		this._pSig = sig;
-		const M = new Char3DModel(this._scene, { spec, spacing: this.C.spacing || 1.0, kind: 'player' });
+		const M = new Char3DModel(this._scene, { spec, spacing: this.C.spacing || 1.0, kind: 'player', level: 'hero' });
 		M.onReady = () => { const old = P.model; P.setModel(M); if (old && old !== M) old.dispose(); };
 		this._pNext = M;
 	},
@@ -620,7 +620,7 @@ const C3Q = {
 };
 
 class Char3DModel {
-	constructor(scene, { spec = null, npc = null, dmg = 0, spacing = 1, thin = 1, kind = 'npc' }) {
+	constructor(scene, { spec = null, npc = null, dmg = 0, spacing = 1, thin = 1, kind = 'npc', level = 'npc' }) {
 		this.scene = scene; this.spacing = spacing; this.kind = kind; this.mid = ++Char3D._mid;
 		this.thin = Math.max(0.1, Math.min(1, thin)); this.splatK = 1 / Math.sqrt(this.thin);      // (fração dos pontos desenhada; os pontos crescem para cobrir)
 		this.clips = new Map();          // 'nome:arma' → clipe | 'wait' | 'fail'
@@ -631,7 +631,8 @@ class Char3DModel {
 		let slot = '';
 		if (kind === 'npc' && npc) { let h = 0; for (let i = 0; i < npc.length; i++) h = (h * 31 + npc.charCodeAt(i)) | 0; slot = (h >>> 0) % 2 ? '_b' : ''; }
 		this.w = Char3D.worker(kind + slot);
-		this.w.postMessage({ type: 'char3d', job: 1, mid: this.mid, spec, npc, dmg, spacing, poly: Char3D.polyOn, style: Char3D.polyOn ? Char3D.style3d : undefined });
+		// (low poly: o NÍVEL da malha — 'hero' o jogador, ~5 mil triângulos; 'npc' perto, ~2,5 mil; 'far' longe, ~1 mil)
+		this.w.postMessage({ type: 'char3d', job: 1, mid: this.mid, spec, npc, dmg, spacing, poly: Char3D.polyOn, style: Char3D.polyOn ? Char3D.style3d : undefined, level });
 	}
 	_msg(m) {
 		if (m.error) {

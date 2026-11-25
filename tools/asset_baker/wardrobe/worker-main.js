@@ -189,9 +189,9 @@ function c3Rig(M) { const s = G.fullSpec(M.spec); G.setRig(G.rigFor(s)); G.CTX.r
 // cabelo da malha (os índices simplificados do generator/malha3d_low.js) e os acessórios geométricos (boné, colete, bolsa, alça, os
 // cabelos que a malha não tem: G.polyPart), face chapada com a cor da região, a estampa e o dano. Sem pontos.
 // poly: { n (cantos), p1, p2, sk (osso 1, osso 2, peso, oclusão de ambiente), mt (material, tom), fp (o canto na cabeça ou no peito e qual: o rosto e a estampa por pixel), face }.
-function c3Poly(M, BI) {
+function c3Poly(M, BI, level) {
 	if (!G.lowBody || !G.MESH3D || !G.meshUsable(G.fullSpec(M.spec))) return null;
-	const L = G.lowBody(M.spec), n = L.n, sk = new Float32Array(n * 4), mt = new Float32Array(n * 2), map = L.bones.map((b) => BI[b] | 0);
+	const L = G.lowBody(M.spec, undefined, true, level || 'npc'), n = L.n, sk = new Float32Array(n * 4), mt = new Float32Array(n * 2), map = L.bones.map((b) => BI[b] | 0);
 	for (let i = 0; i < n; i++) { sk[i * 4] = map[L.sk[i * 3]]; sk[i * 4 + 1] = map[L.sk[i * 3 + 1]]; sk[i * 4 + 2] = L.sk[i * 3 + 2]; sk[i * 4 + 3] = L.ao ? L.ao[i] : 0; mt[i * 2] = L.mt[i]; mt[i * 2 + 1] = L.tn[i]; }
 	// as texturas de detalhe (tecido, cabelo) vão uma vez por nome, em RGBA (luz, luz, luz, alfa): o jogo guarda e reaproveita
 	const tex = {};
@@ -213,7 +213,7 @@ function c3Body(m) {
 	c3Style(m);
 	const M = c3Model(m), s = G.fullSpec(M.spec), BI = {};
 	C3.BONES.forEach((b, i) => { BI[b] = i; });
-	const poly = m.poly ? c3Poly(M, BI) : null;
+	const poly = m.poly ? c3Poly(M, BI, m.level) : null;
 	const parts = poly ? [] : Object.values(G.loadBaked(s, M.spacing).body);          // (low poly: tudo nos triângulos — nada a assar em pontos)
 	let n = 0;
 	for (const bk of parts) n += bk.n;

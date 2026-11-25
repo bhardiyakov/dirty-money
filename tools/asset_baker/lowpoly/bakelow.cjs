@@ -6,15 +6,18 @@
 //   • Solda por posição antes (as costuras de textura duplicam vértices no mesmo lugar): sem rachaduras.
 //   • Os PESOS DOS OSSOS entram como atributos: a simplificação evita juntar o que está de lados diferentes de um joelho, cotovelo,
 //     punho ou ombro — as barras da bermuda, das mangas e da regata ficam onde a ficha as põe.
-//   node tools/asset_baker/lowpoly/bakelow.cjs [razão 0,15]
+//   node tools/asset_baker/lowpoly/bakelow.cjs [razão 0,3]
 // ============================================================================
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const { MeshoptSimplifier } = require('meshoptimizer');
 
 const GEN_DIR = path.join(__dirname, '..', 'generator');
-const RATIO = +(process.argv[2] || 0.15);
-const RATIO_OF = { eye: 0.3, hair: 0.12 };                     // (olhos: pequenos, guardam mais; cabelos: cartões densos, guardam menos)
+const RATIO = +(process.argv[2] || 0.3);
+const RATIO_OF = { eye: 0.35, hair: 0.14 };                    // (olhos: pequenos, guardam mais; cabelos: cartões densos, guardam menos)
+// NÍVEIS além do de NPC perto (o de cima): o JOGADOR (a câmera sempre perto: ~5 mil triângulos) e o de LONGE (~1 mil: os NPCs além da
+// distância média — no lugar do desenho 2,5D)
+const LODS = { hero: { ratio: 0.5, of: { eye: 0.6, hair: 0.26 }, err: 0.06 }, far: { ratio: 0.09, of: { eye: 0.1, hair: 0.05 }, err: 0.5 } };
 const Q16 = 2 / 32767;
 const W_BONE = +(process.env.LOW_WBONE || 0.25), W_CLOTH = +(process.env.LOW_WCLOTH || 4.0), MAX_ERR = +(process.env.LOW_ERR || 0.12);      // (peso dos ossos nos atributos; erro máximo, relativo ao tamanho da malha)
 
@@ -65,7 +68,7 @@ function aoFor(parts, R = 0.22, N = 40) {
 	};
 	const out = new Map();
 	for (const { e, m, idx } of parts) {
-		const ao = new Uint8Array(m.n), used = new Set(idx);
+		const ao = new Uint8Array(m.n), used = new Set(parts.used && parts.used.get(e) || idx);
 		if (e.mat === 'eye') { out.set(e, ao); continue; }
 		for (const v of used) {
 			const n = [m.nrm[v * 3], m.nrm[v * 3 + 1], m.nrm[v * 3 + 2]], o = [m.pos[v * 3] + n[0] * 0.006, m.pos[v * 3 + 1] + n[1] * 0.006, m.pos[v * 3 + 2] + n[2] * 0.006];
@@ -88,7 +91,7 @@ function aoFor(parts, R = 0.22, N = 40) {
 	return out;
 }
 
-function lowOf(e, nb, ratio) {
+function lowOf(e, nb, ratio, maxErr = MAX_ERR) {
 	const m = dec(e);
 	// solda: um representante por posição
 	const rep = new Uint32Array(m.n), key = new Map();
@@ -98,14 +101,21 @@ function lowOf(e, nb, ratio) {
 	}
 	const I = [];
 	for (let t = 0; t < m.idx.length; t += 3) { const a = rep[m.idx[t]], b = rep[m.idx[t + 1]], c = rep[m.idx[t + 2]]; if (a !== b && b !== c && c !== a) I.push(a, b, c); }
-	const idx = Uint32Array.from(I), target = Math.max(48, Math.round(idx.length * ratio / 3) * 3);
+	// COMPACTA: só os vértices que algum triângulo usa (as cópias soldadas que sobram, no mesmo lugar, o meshoptimizer trata como vértices
+	// presos — a pele parava em ~1.100 triângulos qualquer que fosse o alvo); os índices voltam aos vértices originais no fim
+	const back = [], fwd = new Map();
+	for (const v of I) if (!fwd.has(v)) { fwd.set(v, back.length); back.push(v); }
+	const nv = back.length, cpos = new Float32Array(nv * 3);
+	back.forEach((v, i) => { cpos[i * 3] = m.pos[v * 3]; cpos[i * 3 + 1] = m.pos[v * 3 + 1]; cpos[i * 3 + 2] = m.pos[v * 3 + 2]; });
+	const idx = Uint32Array.from(I, (v) => fwd.get(v)), target = Math.max(48, Math.round(idx.length * ratio / 3) * 3);
 	let out, err;
 	if (m.bw && nb) {
 		// atributos: o peso de cada osso (0..1)
-		const A = new Float32Array(m.n * nb);
-		for (let v = 0; v < m.n; v++) for (let q = 0; q < 4; q++) { const w = m.bw[v * 8 + 4 + q]; if (w) A[v * nb + m.bw[v * 8 + q]] += w / 255; }
-		[out, err] = MeshoptSimplifier.simplifyWithAttributes(idx, m.pos, 3, A, nb, new Array(nb).fill(e.mat === 'skin' ? W_BONE : W_CLOTH), null, target, MAX_ERR);      // (roupa: as divisas dos ossos pesam mais — as barras)
-	} else [out, err] = MeshoptSimplifier.simplify(idx, m.pos, 3, target, MAX_ERR);
+		const A = new Float32Array(nv * nb);
+		back.forEach((v, i) => { for (let q = 0; q < 4; q++) { const w = m.bw[v * 8 + 4 + q]; if (w) A[i * nb + m.bw[v * 8 + q]] += w / 255; } });
+		[out, err] = MeshoptSimplifier.simplifyWithAttributes(idx, cpos, 3, A, nb, new Array(nb).fill(e.mat === 'skin' ? W_BONE : W_CLOTH), null, target, maxErr);      // (roupa: as divisas dos ossos pesam mais — as barras)
+	} else [out, err] = MeshoptSimplifier.simplify(idx, cpos, 3, target, maxErr);
+	out = Uint32Array.from(out, (i) => back[i]);
 	// (os índices são de vértices originais: cabem em 16 bits — as malhas têm < 65.536 vértices)
 	if (m.n > 65535) throw new Error('malha grande demais para 16 bits: ' + e.name);
 	return { idx: Uint16Array.from(out), tris: out.length / 3, from: m.idx.length / 3, err, m };
@@ -114,16 +124,29 @@ function lowOf(e, nb, ratio) {
 (async () => {
 	await MeshoptSimplifier.ready;
 	MeshoptSimplifier.useExperimentalFeatures = true;
-	const D = load(), nb = D.bones.length, OUT = { v: 2, ratio: RATIO, chars: {}, hairs: {}, ao: {} };
+	const D = load(), nb = D.bones.length, OUT = { v: 3, ratio: RATIO, chars: {}, hairs: {}, ao: {}, lod: {} };
 	let a = 0, b = 0;
+	for (const L of Object.keys(LODS)) OUT.lod[L] = { chars: {}, hairs: {} };
 	for (const key of Object.keys(D.chars)) {
 		OUT.chars[key] = {}; OUT.ao[key] = {};
 		const parts = [];
+		parts.used = new Map();
 		for (const e of D.chars[key].meshes) {
 			const r = lowOf(e, nb, RATIO_OF[e.mat] || RATIO);
 			OUT.chars[key][e.name] = b64(r.idx); a += r.from; b += r.tris;
 			parts.push({ e, m: r.m, idx: r.idx });
-			console.log(`${key} ${e.name.padEnd(24)} ${String(r.from).padStart(5)} → ${String(r.tris).padStart(4)} triângulos (erro ${r.err.toFixed(4)})`);
+			const used = new Set(r.idx);
+			// os outros NÍVEIS (o jogador, mais detalhado; o de longe, mais leve): só os índices — a oclusão vale para os vértices de todos
+			const lv = [];
+			for (const [L, P] of Object.entries(LODS)) {
+				const q = lowOf(e, nb, P.of[e.mat] || P.ratio, P.err);
+				OUT.lod[L].chars[key] = OUT.lod[L].chars[key] || {};
+				OUT.lod[L].chars[key][e.name] = b64(q.idx);
+				for (const v of q.idx) used.add(v);
+				lv.push(`${L} ${q.tris}`);
+			}
+			parts.used.set(e, used);
+			console.log(`${key} ${e.name.padEnd(24)} ${String(r.from).padStart(5)} → ${String(r.tris).padStart(4)} triângulos (erro ${r.err.toFixed(4)}) · ${lv.join(' · ')}`);
 		}
 		const t0 = Date.now(), AO = aoFor(parts);
 		for (const [e, ao] of AO) OUT.ao[key][e.name] = b64(ao);
@@ -132,7 +155,9 @@ function lowOf(e, nb, ratio) {
 	for (const [name, e] of Object.entries(D.hairs)) {
 		const r = lowOf(e, 0, RATIO_OF.hair);
 		OUT.hairs[name] = b64(r.idx); a += r.from; b += r.tris;
-		console.log(`cabelo ${name.padEnd(20)} ${String(r.from).padStart(5)} → ${String(r.tris).padStart(4)}`);
+		const lv = [];
+		for (const [L, P] of Object.entries(LODS)) { const q = lowOf(e, 0, P.of.hair, P.err); OUT.lod[L].hairs[name] = b64(q.idx); lv.push(`${L} ${q.tris}`); }
+		console.log(`cabelo ${name.padEnd(20)} ${String(r.from).padStart(5)} → ${String(r.tris).padStart(4)} · ${lv.join(' · ')}`);
 	}
 	const file = path.join(GEN_DIR, 'malha3d_low.js');
 	fs.writeFileSync(file, '// GERADO por tools/asset_baker/lowpoly/bakelow.cjs (meshoptimizer) — os índices LOW POLY de cada malha de generator/malha3d.js.\n'

@@ -26,10 +26,10 @@ const Graphics = {
 	// (Low: 0,56 = os 75% de antes × os 75% que a TV de tubo tirava por cima, quando ela vinha ligada por padrão — o aparelho fraco
 	// continua desenhando a mesma quantidade de pixels com a imagem limpa.)
 	PRESETS: {
-		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6, npc3d: 0, npc3dR: 0, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 1 },
-		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 2, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 1.8e6, npc3d: 6, npc3dR: 26, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 2 },
-		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 3, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6, npc3d: 12, npc3dR: 36, pom: true, pcf: 'medium', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
-		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true, npc3d: 24, npc3dR: 50, pom: true, pcf: 'high', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
+		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6, npc3d: 0, npc3dR: 0, npc3dPoly: 12, npc3dPolyR: 40, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 1 },
+		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 2, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 1.8e6, npc3d: 6, npc3dR: 26, npc3dPoly: 999, npc3dPolyR: 70, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 2 },
+		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 3, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6, npc3d: 12, npc3dR: 36, npc3dPoly: 999, npc3dPolyR: 100, pom: true, pcf: 'medium', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
+		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true, npc3d: 24, npc3dR: 50, npc3dPoly: 999, npc3dPolyR: 130, pom: true, pcf: 'high', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
 	},
 	// GPUs that cannot carry the high preset (WEBGL_debug_renderer_info): software rasterisers and old mobile/integrated chips.
 	// ("Microsoft Basic Render Driver" / WARP: o Windows sem driver de vídeo ou com a aceleração do navegador desligada — desenha na CPU)
@@ -175,10 +175,14 @@ const Graphics = {
 		// NPCs EM 3D (bonecos de pontos — art/Char3D.js): só os mais perto. Cada um são milhares de quadradinhos com esqueleto no vertex
 		// shader; sem limite (antes: 999 num raio de 400 m) o centro tinha 84 deles e eles eram 57% do quadro. Os outros seguem no 2,5D
 		// (a arte de sempre: de longe não se vê a diferença). `?npc3d=N` troca o limite (para medir).
+		// LOW POLY (o padrão desde nov/2026: ~2,5 mil triângulos perto, ~1 mil longe — cerca de 5× mais barato na placa que os pontos):
+		// TODOS os NPCs à vista em 3D, até npc3dPolyR m; o desenho 2,5D fica só de reserva (o instante antes do modelo chegar, e além disso).
+		const poly = typeof Char3D !== 'undefined' ? Char3D.polyOn : !!(A.char3d && A.char3d.poly);
 		if (A.char3d && A.char3d.npc && p.npc3d !== undefined) {
 			const nq = typeof location !== 'undefined' && location.search.match(/[?&]npc3d=(\d+)/);
-			A.char3d.npc.max = nq ? +nq[1] : p.npc3d; A.char3d.npc.radius = p.npc3dR || 30;
-			A.char3d.npc.midDist = Math.min(A.char3d.npc.midDist || 32, Math.max(14, Math.round((p.npc3dR || 30) * 0.75)));
+			const n3 = poly && p.npc3dPoly !== undefined ? p.npc3dPoly : p.npc3d, r3 = poly && p.npc3dPolyR ? p.npc3dPolyR : p.npc3dR;
+			A.char3d.npc.max = nq ? +nq[1] : n3; A.char3d.npc.radius = r3 || 30;
+			A.char3d.npc.midDist = Math.min(A.char3d.npc.midDist || 32, Math.max(14, Math.round((r3 || 30) * 0.75)));
 		}      // (TODOS os NPCs em 3D — art/Char3D.js; o nível gráfico decide até onde vai o modelo cheio)
 		// (personagens em 3D: as folhas 2,5D só servem a quem ainda é desenhado nelas — pilotos de moto, o instante antes do modelo 3D
 		// chegar —, então o orçamento delas na placa cai para no máximo 128 MB; antes elas ocupavam ~630 MB no High sem ninguém ver)
