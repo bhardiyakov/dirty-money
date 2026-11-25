@@ -18,6 +18,9 @@ module.exports = {
         const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'art', 'Char3D.js'), 'utf8'), bad = [];
         for (const m of src.matchAll(/ShadersStore\.(\w+) = `([\s\S]*?)`;/g)) m[2].split('\n').forEach((l, i) => { const k = l.indexOf('//'); if (k > 0 && l.slice(0, k).trim() && l.slice(k).includes(';')) bad.push(m[1] + ':' + (i + 1)); });
         c.ok(!bad.length, `nenhum ";" em comentário depois do código nos shaders do Char3D (${bad.join(', ') || 'ok'})`);
+        // em TRIÂNGULOS, jogar um vértice para fora da tela estica a face até a borda (a faixa dourada do raio-X): o low poly corta por pixel
+        const polyVS = (src.match(/char3dPolyVertexShader = `([\s\S]*?)`;/) || [])[1] || '';
+        c.ok(polyVS && !/gl_Position\s*=\s*vec4\(2\.0/.test(polyVS), 'shader low poly: nenhum vértice jogado para fora da tela (o raio-X corta os pés por pixel)');
 
         // ---- o gerador (Node)
         const G = gen();

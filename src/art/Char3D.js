@@ -185,6 +185,7 @@ const Char3D = {
 			varying vec3 vN;
 			varying vec4 vX;
 			varying float vAo;
+			varying float vZ;            // a altura no corpo (raio-X: os pés rente ao chão não viram silhueta)
 			vec3 xn(int b, vec3 n) { return vec3(dot(B[b * 3].xyz, n), dot(B[b * 3 + 1].xyz, n), dot(B[b * 3 + 2].xyz, n)); }
 			vec3 xp(int b, vec3 p) { vec4 r0 = B[b * 3], r1 = B[b * 3 + 1], r2 = B[b * 3 + 2]; return vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w); }
 			void main(void) {
@@ -196,10 +197,9 @@ const Char3D = {
 				wp.xyz -= sunL * ((wp.y - groundY) / max(sunL.y, 0.2));
 				#endif
 				#ifdef SIL
-				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vW = vec3(0.0); vMt = vec2(0.0); vF = vec3(0.0); vS = 0.0; vN = vec3(0.0, 1.0, 0.0); vX = vec4(0.0); vAo = 0.0; return; }
-				wp.xyz += normalize(eye - wp.xyz) * 0.06;
+				wp.xyz += normalize(eye - wp.xyz) * 0.06;                        // (os pés rente ao chão: o fragmento corta — vZ)
 				#endif
-				vW = wp.xyz; vMt = mt; vF = fp.xyz; vS = fp.w; vX = ux; vAo = sk.w;
+				vW = wp.xyz; vMt = mt; vF = fp.xyz; vS = fp.w; vX = ux; vAo = sk.w; vZ = p.z;
 				vec3 nn = xn(b1, in1);
 				if (sk.z > 0.0) nn = mix(nn, xn(b2, n2), sk.z);
 				vN = (world * vec4(nn.x, nn.z, nn.y, 0.0)).xyz;                  // (direção: só a rotação do mundo)
@@ -224,6 +224,7 @@ const Char3D = {
 			varying vec3 vN;
 			varying vec4 vX;
 			varying float vAo;
+			varying float vZ;
 			uniform sampler2D clothTex;  // o detalhe do tecido do pacote (dobras, desgaste e costuras do jeans), em tons de cinza
 			uniform sampler2D hairTex;   // as mechas do cabelo, com o alfa do cartão
 			uniform vec4 face;           // a ficha: cara fechada, feminino, barba (1 cheia, 2 cavanhaque, 3 bigode), óculos
@@ -309,6 +310,8 @@ const Char3D = {
 			}
 			void main(void) {
 				#ifdef SIL
+				// (os pés rente ao chão: cortados POR PIXEL — jogar o vértice para fora da tela esticava o triângulo até a borda numa faixa)
+				if (vZ < 12.0) discard;
 				gl_FragColor = vec4(silhouette.rgb * silhouette.a, silhouette.a); return;
 				#endif
 				#ifdef SHADOW
