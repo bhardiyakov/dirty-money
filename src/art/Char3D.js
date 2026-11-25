@@ -165,7 +165,7 @@ const Char3D = {
 			attribute vec3 position;     // (= ip: a caixa da malha, o desenho usa os ossos)
 			attribute vec3 ip;           // canto no espaço do osso 1
 			attribute vec3 p2;           // … no do osso 2
-			attribute vec4 sk;           // osso 1, osso 2, peso do 2
+			attribute vec4 sk;           // osso 1, osso 2, peso do 2, oclusão de ambiente (assada por vértice: dobras, axilas, queixo)
 			attribute vec2 mt;           // material
 			attribute vec4 fp;           // o canto no espaço da cabeça ou do peito, sem o esticão, e qual (1 cabeça: o rosto, 2 peito: a estampa, 0 nenhum)
 			attribute vec4 ux;           // textura de detalhe: u, v, qual (1 tecido, 2 cabelo, 0 nenhuma), a luz média da peça nela
@@ -184,6 +184,7 @@ const Char3D = {
 			varying float vS;
 			varying vec3 vN;
 			varying vec4 vX;
+			varying float vAo;
 			vec3 xn(int b, vec3 n) { return vec3(dot(B[b * 3].xyz, n), dot(B[b * 3 + 1].xyz, n), dot(B[b * 3 + 2].xyz, n)); }
 			vec3 xp(int b, vec3 p) { vec4 r0 = B[b * 3], r1 = B[b * 3 + 1], r2 = B[b * 3 + 2]; return vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w); }
 			void main(void) {
@@ -195,10 +196,10 @@ const Char3D = {
 				wp.xyz -= sunL * ((wp.y - groundY) / max(sunL.y, 0.2));
 				#endif
 				#ifdef SIL
-				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vW = vec3(0.0); vMt = vec2(0.0); vF = vec3(0.0); vS = 0.0; vN = vec3(0.0, 1.0, 0.0); vX = vec4(0.0); return; }
+				if (p.z < 12.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vW = vec3(0.0); vMt = vec2(0.0); vF = vec3(0.0); vS = 0.0; vN = vec3(0.0, 1.0, 0.0); vX = vec4(0.0); vAo = 0.0; return; }
 				wp.xyz += normalize(eye - wp.xyz) * 0.06;
 				#endif
-				vW = wp.xyz; vMt = mt; vF = fp.xyz; vS = fp.w; vX = ux;
+				vW = wp.xyz; vMt = mt; vF = fp.xyz; vS = fp.w; vX = ux; vAo = sk.w;
 				vec3 nn = xn(b1, in1);
 				if (sk.z > 0.0) nn = mix(nn, xn(b2, n2), sk.z);
 				vN = (world * vec4(nn.x, nn.z, nn.y, 0.0)).xyz;                  // (direção: só a rotação do mundo)
@@ -222,6 +223,7 @@ const Char3D = {
 			varying float vS;
 			varying vec3 vN;
 			varying vec4 vX;
+			varying float vAo;
 			uniform sampler2D clothTex;  // o detalhe do tecido do pacote (dobras, desgaste e costuras do jeans), em tons de cinza
 			uniform sampler2D hairTex;   // as mechas do cabelo, com o alfa do cartão
 			uniform vec4 face;           // a ficha: cara fechada, feminino, barba (1 cheia, 2 cavanhaque, 3 bigode), óculos
@@ -339,7 +341,8 @@ const Char3D = {
 					if (dot(nf, vF - (head ? vec3(0.0, -2.0, 12.0) : vec3(0.0, 0.0, 9.0))) < 0.0) nf = -nf;      // (para fora)
 					if (head) mt0 = faceMat(mt0, vF, nf, tone); else mt0 = shirtMat(mt0, vF, nf);
 				}
-				lev = clamp(lev + 0.35 * clamp(dot(n, V), 0.0, 1.0) - 0.15 + clamp(tone, -1.5, 1.0), 0.0, 4.0);      // (o que encara a câmera um pouco mais claro: volume)
+				float occ = vAo * (vS > 0.5 && vS < 1.5 ? 0.35 : 1.0);           // (no rosto, pouca: a boca e as órbitas da malha são fundas, e o rosto é pintado)
+				lev = clamp(lev + 0.35 * clamp(dot(n, V), 0.0, 1.0) - 0.15 + clamp(tone, -1.5, 1.0) - 1.1 * occ, 0.0, 4.0);      // (o que encara a câmera um pouco mais claro: volume, e a oclusão escurece)
 				#ifdef PAL
 				float m = mt0, i0 = floor(lev), i1 = min(i0 + 1.0, 4.0), y = (row + 0.5) / palRows;
 				vec3 c = mix(texture2D(palette, vec2((m * 8.0 + i0 + 0.5) / 256.0, y)).rgb, texture2D(palette, vec2((m * 8.0 + i1 + 0.5) / 256.0, y)).rgb, lev - i0);

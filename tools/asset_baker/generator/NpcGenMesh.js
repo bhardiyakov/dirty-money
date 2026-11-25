@@ -478,19 +478,23 @@ function NpcGenMesh(G) {
     // Saída: triângulos SEM índice (cada canto é seu: faces chapadas, uma cor por face) no formato do boneco 3D: p1 (osso 1), p2 (osso 2),
     // sk = [osso 1, osso 2, peso do 2º], mat = o material da face (a maioria dos cantos). Ossos pela lista BONES deste arquivo.
     // os índices assados (generator/malha3d_low.js, NPC_MESH3D_LOW — tools/asset_baker/lowpoly/bakelow.cjs, meshoptimizer), por entrada
-    let _low = null;
+    let _low = null, _lowAO = null;
     function lowIdx(e) {
         if (!_low) {
-            _low = new Map();
+            _low = new Map(); _lowAO = new Map();
             const LW = typeof NPC_MESH3D_LOW !== 'undefined' ? NPC_MESH3D_LOW : null;
             if (LW && DATA) {
                 const u16 = (s) => new Uint16Array(bytes(s).buffer);
-                for (const k of Object.keys(DATA.chars)) for (const m of DATA.chars[k].meshes) if (LW.chars[k] && LW.chars[k][m.name]) _low.set(m, u16(LW.chars[k][m.name]));
+                for (const k of Object.keys(DATA.chars)) for (const m of DATA.chars[k].meshes) {
+                    if (LW.chars[k] && LW.chars[k][m.name]) _low.set(m, u16(LW.chars[k][m.name]));
+                    if (LW.ao && LW.ao[k] && LW.ao[k][m.name]) _lowAO.set(m, bytes(LW.ao[k][m.name]));          // (a oclusão assada: 1 byte por vértice)
+                }
                 for (const [n, m] of Object.entries(DATA.hairs)) if (LW.hairs[n]) _low.set(m, u16(LW.hairs[n]));
             }
         }
         return _low.get(e) || null;
     }
+    const lowAO = (e) => { lowIdx(e); return _lowAO.get(e) || null; };
     function lowBody(spec, idxFor = lowIdx, acc = true) {
         const s = G.fullSpec(spec), key = s.gender === 'f' ? 'f' : 'm';
         const F = fitFor(key), C = DATA.chars[key], mw = MORPH[s.body] || MORPH.normal, sdf = G.buildParts(s);
@@ -505,7 +509,7 @@ function NpcGenMesh(G) {
             const pos = new Float32Array(m.pos);
             if (m.morph) for (let k = 0; k < 3; k++) if (mw[k]) { const D = m.morph[k]; for (let i = 0; i < pos.length; i++) pos[i] += mw[k] * D[i]; }
             const I = (idxFor && idxFor(e)) || m.idx, Fv = kind === 'hair' ? fitFor('m') : F;
-            const vert = new Map(), UVG = m.uv && m.tex ? uvGroups(m) : null;
+            const vert = new Map(), UVG = m.uv && m.tex ? uvGroups(m) : null, AOv = idxFor === lowIdx ? lowAO(e) : null;
             // TEXTURA DE DETALHE (a do pacote: dobras da camiseta, desgaste e costuras do jeans, mechas do cabelo): só nas faces do tecido
             // da própria peça (a perna de bermuda e o braço de regata são a calça/camiseta pintadas de pele: sem jeans na pele)
             const slot = !UVG ? 0 : kind === 'hair' ? 2 : 1, cloth = kind === 'shirt' ? CLOTH_SHIRT : kind === 'jeans' ? CLOTH_JEANS : null;
@@ -531,7 +535,7 @@ function NpcGenMesh(G) {
                 // (1: o rosto) e no peito (2: a estampa), que o shader pinta por pixel
                 const sid = b1 === 'head' ? 1 : b1 === 'chest' && kind !== 'hair' ? 2 : 0;
                 // n1/n2: a NORMAL do vértice da malha (luz suave) no espaço de cada osso, com o esticão (a normal escala ao contrário)
-                r = { p1, p2, b1, b2, w, mat, o: [o1[0], o1[1], o1[2]], n: [on1[0], on1[1], on1[2]], h: sid ? [o1[0], o1[1], o1[2], sid] : null, n1: nScale(on1, sh1), n2: nScale(on2, sh2) };
+                r = { p1, p2, b1, b2, w, mat, o: [o1[0], o1[1], o1[2]], n: [on1[0], on1[1], on1[2]], h: sid ? [o1[0], o1[1], o1[2], sid] : null, n1: nScale(on1, sh1), n2: nScale(on2, sh2), ao: AOv ? AOv[v] / 255 : 0 };
                 vert.set(v, r);
                 return r;
             };
@@ -587,19 +591,19 @@ function NpcGenMesh(G) {
         // boca, barba, óculos, máscara e as expressões) e a estampa do peito (makeTexChest): numa malha de poucas faces, pintados por
         // face, eles sumiriam ou virariam um mosaico. tn = o tom da face.
         const n = tris.length * 3, p1 = new Float32Array(n * 3), p2 = new Float32Array(n * 3), sk = new Float32Array(n * 3), mt = new Float32Array(n), tn = new Float32Array(n), fp = new Float32Array(n * 4);
-        const nr1 = new Float32Array(n * 3), nr2 = new Float32Array(n * 3), ux = new Float32Array(n * 4), texs = {};
+        const nr1 = new Float32Array(n * 3), nr2 = new Float32Array(n * 3), ux = new Float32Array(n * 4), ao = new Float32Array(n), texs = {};
         let o = 0;
         for (const t of tris) {
             const [a, b, c] = t.v, same = a.h && b.h && c.h && a.h[3] === b.h[3] && a.h[3] === c.h[3];
             for (const x of t.v) {
                 p1.set(x.p1, o * 3); p2.set(x.p2 || x.p1, o * 3); nr1.set(x.n1, o * 3); nr2.set(x.n2 || x.n1, o * 3);
                 if (t.slot) { const c = t.v.indexOf(x); ux[o * 4] = t.uv[c * 2]; ux[o * 4 + 1] = t.uv[c * 2 + 1]; ux[o * 4 + 2] = t.slot; ux[o * 4 + 3] = t.mean; texs[t.slot] = t.tex; }
-                sk[o * 3] = BI[x.b1]; sk[o * 3 + 1] = BI[x.b2]; sk[o * 3 + 2] = x.w; mt[o] = t.mat; tn[o] = t.tone;
+                sk[o * 3] = BI[x.b1]; sk[o * 3 + 1] = BI[x.b2]; sk[o * 3 + 2] = x.w; mt[o] = t.mat; tn[o] = t.tone; ao[o] = x.ao || 0;
                 if (same) fp.set(x.h, o * 4);
                 o++;
             }
         }
-        return { bones: BONES, n, tris: tris.length, p1, p2, sk, mt, tn, fp, nr1, nr2, ux, texs, face: faceOf(s), scale: s.scale || 1 };
+        return { bones: BONES, n, tris: tris.length, p1, p2, sk, mt, tn, fp, nr1, nr2, ux, ao, texs, face: faceOf(s), scale: s.scale || 1 };
     }
     // TEXTURA DE DETALHE no low poly. Os índices simplificados (bakelow.cjs) usam um vértice por POSIÇÃO (a solda antes de simplificar):
     // numa costura do mapa UV, o mesmo lugar tem 2+ vértices com UVs diferentes. uvGroups: posição → os vértices dela; uvPick: para cada
