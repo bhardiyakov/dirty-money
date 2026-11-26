@@ -48,6 +48,8 @@ class WorldBuilder {
         this._groundBlend();
         this._favela();
         Rooftops.build();                     // helipontos no telhado (antes dos prédios: marca lot.helipad)
+        const poly = typeof Roofs3D !== 'undefined' && Roofs3D.on;
+        if (poly) Roofs3D.reset();
         this._buildings();
         this._shops();
         this._rural();
@@ -66,6 +68,7 @@ class WorldBuilder {
         Plantations.build(this);              // eucaliptais de beira de rodovia (world/Plantations.js)
         FavelaDetail.build(this);             // gatonet, ar-condicionado, ferros de laje, varais, fiação embolada, pedras com mato, lixo (world/FavelaDetail.js)
         if (typeof Wires !== 'undefined') Wires.build(this);
+        if (poly) for (const m of Roofs3D.build(this.scene)) this.meshes.push(m);      // telhados em polígonos (render/Roofs3D.js)
         this._flush();
         HouseView.build(this);                // a safe house do protagonista (paredes, telhado, porta e o corte do interior)
         this.street.addSigns(StreetDetail.signs);
@@ -844,8 +847,9 @@ class WorldBuilder {
                 this._batch('walls_' + lot.facade, x0, z0).walls(x0, z0, x1, z1, 0, H,
                     (s, y, f) => [(s + so) / 6 + ku + WorldBuilder.FACE_U[f], (H - y) / 6 + kv]);
 
-                // Telhado: tile de 8u.
-                this._batch('roof_' + lot.roof, x0, z0).top(x0, z0, x1, z1, H,
+                // Telhado: em polígonos (render/Roofs3D.js — o relevo, as peças e o nível de detalhe) ou o ladrilho de 8 u da textura.
+                if (typeof Roofs3D !== 'undefined' && Roofs3D.on) Roofs3D.add(lot, H + (MeshBatch.anchor ? MeshBatch.anchor.h : 0), blk.district === 'favela');
+                else this._batch('roof_' + lot.roof, x0, z0).top(x0, z0, x1, z1, H,
                     (x, z) => [x / 8 + ro, -z / 8 + ro]);
 
                 // Platibanda (parapeito de 0,5u). Na favela: só nas lajes de concreto (e mais baixa); zinco e lona não têm.

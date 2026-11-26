@@ -131,7 +131,7 @@ const TileFactory = {
         T.water = [tex(this.water(0))];
 
         T.roofs = {};
-        for (const key of Object.keys(this.roofStyles)) {
+        if (!(typeof Roofs3D !== 'undefined' && Roofs3D.on)) for (const key of Object.keys(this.roofStyles)) {      // (telhados em polígonos: nenhuma textura)
             T.roofs[key] = hd ? hd.make(scene, 'roof', key) : tex(this.roof(key));
         }
 
