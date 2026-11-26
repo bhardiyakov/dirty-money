@@ -587,6 +587,16 @@ ganhou nível de detalhe pela distância, como nos motores atuais.
 - a vegetação rasteira (tufos, capim, samambaia, cascalho, lixo) some além de 45 u (mesma escala);
 - a troca usa `isVisible`, não `setEnabled`: as lojas e interiores ligam e desligam as malhas da cidade com `setEnabled`.
 
+Medição (SwiftShader, Medium, o MESMO quadro com `Trees3D.lodOn` ligado e desligado na mesma sessão — ligado/desligado/ligado; duas
+aberturas diferentes não servem: na mata o terreno ainda está chegando e o mesmo lugar variou de 1,7 a 2,2 milhões de triângulos):
+
+| Cena | Triângulos (com → sem) | Desenhos | Quadro |
+|---|---|---|---|
+| mata | 1,44 M ← 1,72 M (−16%) | 217 ← 232 | −9% |
+| favela | 1,27 M ← 1,54 M (−17%) | 263 ← 281 | −8% |
+| centro | 1,22 M ← 1,28 M (−5%) | 290 ← 291 | igual (poucas plantas) |
+| Lagoa | 0,89 M ← 1,63 M (−46%) | 273 ← 325 | −15% |
+
 **Aves em 3D** (`world/Birds.js` + `art/Animals3D.js`, espécie `ave`): pombo, gaivota, rolinha e bem-te-vi viraram modelos de
 ~670 triângulos (corpo, cabeça, bico, olhos, rabo em leque, pernas e as asas), uma malha por espécie com instâncias. A asa é
 modelada aberta e o shader a dobra no corpo (encolhe, gira para trás, deita no lombo e desce até o rabo) quando a ave está pousada,
