@@ -29,7 +29,7 @@ def wheel(cx, cy, r, hub='metal'):
     return [Part(circle(cx, cy, r), 'rubber'), Part(circle(cx, cy, r * 0.45), hub, sep=False, outline=False)]
 
 import importlib                                                               # noqa: E402  (os desenhos se registram ao importar)
-for _m in ('ic_faces', 'ic_people', 'ic_hands', 'ic_food', 'ic_wear', 'ic_vehicles', 'ic_places', 'ic_objects', 'ic_symbols'):
+for _m in ('ic_faces', 'ic_people', 'ic_hands', 'ic_food', 'ic_wear', 'ic_vehicles', 'ic_places', 'ic_objects', 'ic_symbols', 'ic_extra'):
     try: importlib.import_module(_m)
     except ModuleNotFoundError as e:
         if e.name != _m: raise

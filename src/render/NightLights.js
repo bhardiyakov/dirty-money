@@ -167,11 +167,13 @@ const NightLights = {
 		for (const l of wb.streetLamps || []) add(l.hx, l.hz, { t: 0, l });
 		for (const s of wb.shopList || []) add(s.x, s.z, { t: 1, s });
 		for (const l of wb._favLamps || []) add(l.x, l.z, { t: 2, l });
+		for (const l of (typeof Walls3D !== 'undefined' && Walls3D.on && Walls3D.lamps) || []) add(l.x, l.z, { t: 3, l });      // lâmpada da porta e portaria (render/Walls3D.js)
 		this._grid = { G, C };
 	},
 
 	// Um quad de luz: centro (x, z), eixo (ax, az) de meia-largura `ra` e o perpendicular de meia-largura `rb`, cor × força.
 	_q: 0,
+	WARM: [1.0, 0.8, 0.52],
 	_quad(x, z, ax, az, ra, rb, r, g, b, k) {
 		if (this._q >= this.CAP || k <= 0.005) return;
 		const q = this._q++, P = this._pos, Cc = this._col, px = -az, pz = ax, o = q * 12, y = 0;
@@ -204,9 +206,10 @@ const NightLights = {
 				if (o.t === 0) {
 					// poste: a luz cai num oval ao longo da rua (a luminária fica sobre a beira da pista), um pouco para dentro dela
 					const l = o.l;
-					if (l.alive !== false && !l.dark) { const dx = l.hx - l.x, dz = l.hz - l.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d; this._quad(l.hx + ux * St.in, l.hz + uz * St.in, -uz, ux, St.along, St.across, 1.0, 0.8, 0.52, St.k); }
+					if (l.alive !== false && !l.dark) { const dx = l.hx - l.x, dz = l.hz - l.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d; const t = l.tint || this.WARM; this._quad(l.hx + ux * St.in, l.hz + uz * St.in, -uz, ux, St.along, St.across, t[0], t[1], t[2], St.k * (t[2] < 0.4 ? 1.15 : 1)); }
 				}
 				else if (o.t === 1) { if (o.s.dark) continue; const c = o.s.c; this._quad(o.s.x, o.s.z, 1, 0, 5, 5, 0.45 + c[0] * 0.55, 0.45 + c[1] * 0.55, 0.45 + c[2] * 0.55, 0.6); }
+				else if (o.t === 3) { const l = o.l; this._quad(l.x, l.z, l.ax, l.az, l.ra, l.rb, l.c[0], l.c[1], l.c[2], l.k); }
 				else { const l = o.l; this._quad(l.x, l.z, 1, 0, 7.5, 7.5, 1.0, 0.72, 0.38, (l.cur != null ? l.cur : 0.6) * 1.1); }
 			}
 		}

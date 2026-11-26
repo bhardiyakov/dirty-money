@@ -48,8 +48,9 @@ class WorldBuilder {
         this._groundBlend();
         this._favela();
         Rooftops.build();                     // helipontos no telhado (antes dos prédios: marca lot.helipad)
-        const poly = typeof Roofs3D !== 'undefined' && Roofs3D.on;
+        const poly = typeof Roofs3D !== 'undefined' && Roofs3D.on, wpoly = typeof Walls3D !== 'undefined' && Walls3D.on;
         if (poly) Roofs3D.reset();
+        if (wpoly) Walls3D.reset();
         this._buildings();
         this._shops();
         this._rural();
@@ -69,6 +70,7 @@ class WorldBuilder {
         FavelaDetail.build(this);             // gatonet, ar-condicionado, ferros de laje, varais, fiação embolada, pedras com mato, lixo (world/FavelaDetail.js)
         if (typeof Wires !== 'undefined') Wires.build(this);
         if (poly) for (const m of Roofs3D.build(this.scene)) this.meshes.push(m);      // telhados em polígonos (render/Roofs3D.js)
+        if (wpoly) for (const m of Walls3D.build(this.scene, this.shadow)) this.meshes.push(m);      // fachadas: janelas, sacadas, toldos, ar em 3D (render/Walls3D.js)
         this._flush();
         HouseView.build(this);                // a safe house do protagonista (paredes, telhado, porta e o corte do interior)
         this.street.addSigns(StreetDetail.signs);
@@ -126,6 +128,11 @@ class WorldBuilder {
         M.curb = this._mat('curb', null, { color: '#a4a9b0' });
         M.decal = RoadArt.decals(this.scene);          // marcas no asfalto: rachaduras, buracos, tinta gasta (StreetDetail)
         M.signs = RoadArt.signs(this.scene);           // faces das placas de trânsito e de nome de rua
+        // SOMBRA DE CONTATO assada (Config.light.contactAO): a faixa escura e macia no chão em volta do pé de cada prédio (_contactAO) —
+        // preto com o alfa no vértice, sem luz nem névoa (a névoa clarearia a faixa longe), um pouco à frente na profundidade.
+        M.ao = this._mat('contactAO', null);
+        M.ao.diffuseColor = BABYLON.Color3.Black(); M.ao.disableLighting = true; M.ao.fogEnabled = false;
+        M.ao.zOffset = -2; M.ao.zOffsetUnits = -4;
         M.solid = this._mat('solid', null);            // peças de cor sólida (vertex colors).
         M.solid.diffuseColor = BABYLON.Color3.White();
         M.hide = HideSprites.create(this.scene);       // topo dos esconderijos (caçamba, caixotes, latão)
@@ -146,6 +153,15 @@ class WorldBuilder {
         M.bcurb = RoofCut.apply(this._mat('bcurb', null, { color: '#a4a9b0' }));
         M.bsolid = RoofCut.apply(this._mat('bsolid', null));
         M.bsolid.diffuseColor = BABYLON.Color3.White();
+        // O CHÃO SEM PLANEJAMENTO (render/GroundVariety.js): asfalto novo, gasto e remendado, paralelepípedo, a calçada de cada quadra
+        // (placa, ladrilho hidráulico, pedra portuguesa, cimento quebrado), terra batida com brita, areia, cimento e grama variados.
+        if (typeof GroundVariety !== 'undefined' && GroundVariety.on) {
+            const GV = GroundVariety;
+            for (const k of ['road', 'asphalt', 'xroad', 'broad']) GV.apply(M[k], 'asphalt');
+            for (const k of ['sidewalk', 'xsidewalk', 'bsidewalk']) GV.apply(M[k], 'sidewalk');
+            GV.apply(M.plaza, 'plaza'); GV.apply(M.earth, 'earth'); GV.apply(M.dirt, 'earth'); GV.apply(M.concrete, 'concrete');
+            GV.apply(M.sand, 'sand'); GV.apply(M.grass, 'grass');
+        }
 
         // Divisas em degradê (render/GroundBlend.js): o piso de um lado espalhando por cima do outro, com a borda recortada por ruído.
         // (soft = a largura do DEGRADÊ: na terra, na areia e na terra vermelha ele é largo — o chão de um tipo vai rareando sobre o
@@ -161,7 +177,9 @@ class WorldBuilder {
         if (T.machine) { M.machtop = this._mat('machtop', T.machine.top); M.machside = this._mat('machside', T.machine.side); }      // casas de máquinas (HD)
 
         M.facades = {};
-        for (const k of Object.keys(T.facades)) {
+        if (typeof Walls3D !== 'undefined' && Walls3D.on) {                // fachadas em polígonos: o material pintado no shader, sem textura (render/Walls3D.js)
+            for (const k of new Set([...Object.keys(TileFactory.facadeStyles), ...Object.keys(Walls3D.STYLES)])) M.facades[k] = Walls3D.material(this.scene, k);
+        } else for (const k of Object.keys(T.facades)) {
             const F = T.facades[k], m = this._mat('facade_' + k, F.diffuse);
             WindowLights.apply(m, F.emissive, F.grid, F.occ);      // janelas acesas à noite, uma a uma, pela hora (render/WindowLights.js)
             Facades3D.apply(m, F.relief);                          // janelas em relevo / recuadas (etapa 4: art/Facades3D.js)
@@ -843,9 +861,14 @@ class WorldBuilder {
 
                 // Paredes: u = distância/6 (2 baias), v = (H - y)/6 (2 andares). Mais um deslocamento INTEIRO por prédio e por lado (o
                 // desenho é o mesmo, o ladrilho repete): a célula de cada janela na UV vira o sorteio da luz dela à noite (WindowLights).
+                // Em polígonos (render/Walls3D.js): a UV é a grade das janelas (baia e andar) e a cor do vértice, a tinta do prédio.
                 const ku = Math.floor(Pixel.hash(Math.round(x0 * 4), Math.round(z0 * 4), 911) * 509), kv = Math.floor(Pixel.hash(Math.round(z0 * 4), Math.round(x0 * 4), 913) * 251);
-                this._batch('walls_' + lot.facade, x0, z0).walls(x0, z0, x1, z1, 0, H,
+                if (typeof Walls3D !== 'undefined' && Walls3D.on) {
+                    this._batch('walls_' + lot.facade, x0, z0).walls(x0, z0, x1, z1, 0, H, Walls3D.uv(lot), Walls3D.colorOf(lot));
+                    Walls3D.add(lot, MeshBatch.anchor ? MeshBatch.anchor.h : 0);
+                } else this._batch('walls_' + lot.facade, x0, z0).walls(x0, z0, x1, z1, 0, H,
                     (s, y, f) => [(s + so) / 6 + ku + WorldBuilder.FACE_U[f], (H - y) / 6 + kv]);
+                if (Config.light.contactAO !== false) this._contactAO(lot, blk);
 
                 // Telhado: em polígonos (render/Roofs3D.js — o relevo, as peças e o nível de detalhe) ou o ladrilho de 8 u da textura.
                 if (typeof Roofs3D !== 'undefined' && Roofs3D.on) Roofs3D.add(lot, H + (MeshBatch.anchor ? MeshBatch.anchor.h : 0), blk.district === 'favela');
@@ -890,6 +913,29 @@ class WorldBuilder {
             }
         }
         MeshBatch.anchor = null;
+    }
+
+    // SOMBRA DE CONTATO (Config.light.contactAO): o céu não chega no pé da parede — uma faixa de 1,1 u no chão em volta do prédio, do
+    // escuro (alfa 0,42, encostado na parede) ao nada, com os cantos em leque. Assada na geometria: zero custo de luz por quadro, e o
+    // prédio "senta" no chão (antes parecia pousado em cima dele). A altura é a do chão em volta: a calçada (0,18), o pátio da quadra
+    // (0,1) ou, na favela e no relevo, rente ao terreno (cada vértice sobe a altura do morro).
+    _contactAO(lot, blk) {
+        const { x0, z0, x1, z1 } = lot, W = 1.1, A = 0.42, keep = MeshBatch.anchor;
+        const F = blk.foot, inFoot = (x, z) => F && x > F[0] && x < F[2] && z > F[1] && z < F[3];
+        const yAt = (x, z) => blk.organic || blk.open || blk.district === 'favela' ? 0.025 : (inFoot(x, z) ? 0.115 : Config.city.curbHeight + 0.012);
+        const bt = this._batch('ao', x0, z0), up = [0, 1, 0], z4 = [[0, 0], [0, 0], [0, 0], [0, 0]], k = (a) => [0, 0, 0, a];
+        MeshBatch.anchor = null;                                                     // (rente ao chão, não à laje do prédio)
+        const rect = (ax, az, bx, bz, c) => { const y = yAt((ax + bx) / 2, (az + bz) / 2); bt.quad([ax, y, bz], [bx, y, bz], [ax, y, az], [bx, y, az], up, z4, c); };
+        // (quad: cantos (x0, z1), (x1, z1), (x0, z0), (x1, z0) — as cores na mesma ordem)
+        rect(x0, z0 - W, x1, z0, [k(A), k(A), k(0), k(0)]);                       // sul
+        rect(x0, z1, x1, z1 + W, [k(0), k(0), k(A), k(A)]);                       // norte
+        rect(x0 - W, z0, x0, z1, [k(0), k(A), k(0), k(A)]);                       // oeste
+        rect(x1, z0, x1 + W, z1, [k(A), k(0), k(A), k(0)]);                       // leste
+        rect(x0 - W, z0 - W, x0, z0, [k(0), k(A), k(0), k(0)]);                   // cantos: o escuro só no canto do prédio
+        rect(x1, z0 - W, x1 + W, z0, [k(A), k(0), k(0), k(0)]);
+        rect(x0 - W, z1, x0, z1 + W, [k(0), k(0), k(0), k(A)]);
+        rect(x1, z1, x1 + W, z1 + W, [k(0), k(0), k(A), k(0)]);
+        MeshBatch.anchor = keep;
     }
 
     // TELHADOS COM VOLUME (etapa 4, Facades3D.roofs): o que a câmera alta vê de um prédio é sobretudo o telhado — as peças em 3D
@@ -1283,6 +1329,16 @@ class WorldBuilder {
 
         this.perches = lamps.map((l) => ({ x: l.hx, z: l.hz, y: 5.78 }));          // poleiros das aves (Birds): o topo da luminária (StreetFurniture.lamp)
         this.streetLamps = lamps;                                                     // (as fontes do campo de luz da noite: NightLights)
+        // A COR DA LÂMPADA pelo bairro (como no Rio de verdade): vapor de sódio laranja na favela, na zona industrial, no porto e no
+        // campo; LED branco (frio ou quente) no centro, no comércio, na orla e na Lagoa; nos bairros, uma mistura das duas (a troca
+        // pela metade). A cor vale para o brilho da luminária e para a luz no chão (NightLights).
+        const SOD = [1.0, 0.6, 0.27], LED = [0.88, 0.94, 1.0], WARM = [1.0, 0.85, 0.64];
+        for (const l of lamps) {
+            const bk = CityGrid._blockAtPoint(l.x, l.z) || CityGrid._blockAtPoint(l.hx, l.hz), d = bk ? bk.district : '';
+            const h = Pixel.hash(Math.round(l.x * 3), Math.round(l.z * 3), 517), h2 = Pixel.hash(Math.round(l.z * 3), Math.round(l.x * 3), 519);
+            const pLed = /^(downtown|commercial|resort|plaza|beach|lagoa|zonasul)$/.test(d) ? 0.88 : /^(favela|industrial|port|forest|roca|serra|rural)$/.test(d) ? 0.06 : 0.45;
+            l.tint = h < pLed ? (h2 < 0.35 ? WARM : LED) : SOD;
+        }
 
         // Brilhos: cabeçote (alto) + poça no chão, por poste.
         // Cores fixas (acesas); quem acende/apaga é a intensidade global do lote (setNight → setLevel). Poste quebrado = quad apagado.
@@ -1293,7 +1349,8 @@ class WorldBuilder {
             const ax = l.hx + (l.hx - l.x) * 0.07, az = l.hz + (l.hz - l.z) * 0.07, dy = typeof Relief !== 'undefined' && Relief.on ? Relief.at(l.x, l.z) - Relief.at(ax, az) : 0;
             this.lampGlow.place(a, ax, StreetFurniture.LAMP_Y - 0.12 + dy, az, 2.4);      // (no difusor da luminária)
             this.lampGlow.place(b, l.hx, WorldBuilder.POOL_Y, l.hz, 14);
-            this.lampGlow.color(a, 1.0, 0.86, 0.55, 0.9);
+            const t = l.tint || [1.0, 0.8, 0.5];
+            this.lampGlow.color(a, 0.35 + t[0] * 0.65, 0.35 + t[1] * 0.65, 0.35 + t[2] * 0.65, 0.9);      // (o difusor: a cor da lâmpada, quase branco no miolo)
             if (NightLights.on) this.lampGlow.off(b); else this.lampGlow.color(b, 1.0, 0.78, 0.42, 0.45);      // (luz de verdade: sem a poça pintada)
             l.glow = [a, b];
             return [a, b];
@@ -1745,6 +1802,7 @@ class WorldBuilder {
             if (key === 'curb') return M.curb;
             if (key === 'trim') return M.solid;
             if (key === 'hide_top') return M.hide;
+            if (key === 'ao') return M.ao;
             if (key === 'decal') return M.decal;
             if (key === 'signs') return M.signs;
             if (key === 'machtop' || key === 'machside') return M[key];
@@ -1766,8 +1824,8 @@ class WorldBuilder {
             const at = full.indexOf('@'), key0 = at < 0 ? full : full.slice(0, at);       // 'walls_brick0@1,-2' -> 'walls_brick0'
             const shaded = key0.endsWith('$'), key = shaded ? key0.slice(0, -1) : key0;      // 'sidewalk$' = chão tingido pelo relevo (vertex colors)
             const isTrim = key === 'trim' || key === 'xtrim' || key === 'btrim';
-            const isVeg = key.startsWith('veg_'), isBlend = key.startsWith('blend_');
-            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend, receiveShadows: !isVeg, alwaysActive: at < 0, relief: true, clamp: isBlend && typeof TerrainBuilder !== 'undefined' ? TerrainBuilder.roadCut : null, uvs: !isTrim });      // (degradê: rente ao terreno cortado junto da pista)
+            const isVeg = key.startsWith('veg_'), isBlend = key.startsWith('blend_') || key === 'ao', isWall3 = key.startsWith('walls_') && typeof Walls3D !== 'undefined' && Walls3D.on;
+            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend || isWall3, receiveShadows: !isVeg && key !== 'ao', alwaysActive: at < 0, relief: true, clamp: isBlend && typeof TerrainBuilder !== 'undefined' ? TerrainBuilder.roadCut : null, uvs: !isTrim });      // (degradê: rente ao terreno cortado junto da pista)
             this.meshes.push(mesh);
             if (isBlend) mesh.hasVertexAlpha = true;                                         // (o alfa por vértice é o degradê da faixa: GroundBlend)
             if (key === 'veg_hi') {                                                          // copas: desenham DEPOIS de pedestres, carros e sprites do chao (que nao escrevem profundidade), sempre por cima

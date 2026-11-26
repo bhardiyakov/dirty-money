@@ -642,3 +642,92 @@ triângulos (só a laje de concreto do centro somava 14.848). Medido na mesma se
 
 Com a placa, os telhados em polígonos custam o mesmo que as texturas, com relevo de perto e 32 MB a menos. Teste:
 `tests/78_telhados.test.cjs` (sem textura, números, as faixas acompanham a câmera e o painel de perto é desenhado depois de andar).
+
+## Fachadas em polígonos (novembro/2026)
+
+`render/Walls3D.js` (`Config.art.wallPoly`; `?fachadas=2d` volta às texturas). As texturas pintadas das fachadas saem — por estilo,
+o ladrilho de dia (`facade_*`), o da luz da noite (`win_*`) e o do relevo (`relief_*`), 480 px cada no High.
+
+- **A parede é pintada no shader** (`Wall3DPlugin`), sem textura: a UV da parede vira a GRADE DAS JANELAS (u = baia + posição na
+  baia, v = andar + posição no andar, com um deslocamento inteiro por lado do prédio) e a cor do vértice é a cor PRÓPRIA de cada prédio,
+  sorteada da paleta do estilo — o mesmo estilo não se repete igual em duas casas vizinhas.
+- **64 estilos** (eram 48 texturas, quase todas variações de cor): 14 materiais de parede (reboco pintado, reboco descascando sobre o
+  tijolo baiano, bloco aparente com pilar e viga de concreto, tijolo, concreto de fôrma, pele de vidro, chapa ondulada, tábua, pedra,
+  enxaimel, pastilha, azulejo português, granito, taipa), 14 tipos de janela (grade, vitrô basculante, folha de madeira, veneziana,
+  escritório, janelão, colonial com arco, de correr de alumínio, em fita, de galpão, cobogó, tábua pregada, a mistura da favela) e 6
+  térreos (porta, porta de aço com pichação, portaria de vidro, garagem, portão, a mistura da favela). Os bairros misturam estilos
+  (o centro tem torre de vidro ao lado do prédio de reboco e do de pastilha).
+- **Peças em 3D** (instâncias de 9 modelos): moldura com o vão (a janela fica de fato recuada; a moldura tem largura fixa em
+  qualquer tamanho — os cantos de dentro entram 8 cm no vertex shader), peitoril, verga, venezianas, ar-condicionado (split com
+  suporte e o de janela), toldo listrado, sacada (laje e guarda-corpo de vidro, grade de ferro recortada no shader ou mureta), floreira
+  com flores, brise (aleta vertical e lâmina horizontal), marquise, caixa da porta de aço, cano de descida, relógio de luz com o fio.
+  O lado colado no vizinho (as casas geminadas da favela) não ganha peça até a altura dele.
+- **O hash inteiro** (`Walls3D.ih` no JS e `w3i` no shader, a mesma conta exata) decide cada janela: o tipo na mistura da favela, a
+  folha fechada, a grade, o ar, o toldo, a sacada, a porta do térreo. O desenho e a peça 3D sempre combinam, e o desenho fica embaixo
+  da peça: quando ela some de longe, a moldura, o peitoril, o ar e as venezianas continuam desenhados no lugar.
+- **Nível de detalhe** por balde de 24 u, como nos telhados: perto (34 u × o preset) todas as peças; meio (95 u) só as grandes (toldo,
+  ar, sacada, brise, cano, marquise); longe só as sacadas e os brises (a silhueta das torres). As fatias de cada balde são geradas na
+  primeira vez e guardadas (as ~200 mais recentes de perto e do meio).
+- **O vidro reflete o céu** num termo próprio (não multiplicado pela luz do sol): a janela do lado da sombra continua clara de dia,
+  como de verdade, e o reflexo some à noite.
+- **À noite**: cada janela acende pela hora (`WindowLights.state`, casa ou escritório), com a luz dela (quente, neutra, fria ou a TV
+  piscando), o teto mais claro, o abajur, a cortina, o vulto dos móveis; o escritório com a linha das luminárias e as mesas; a luz
+  vaza na parede em volta; a portaria fica acesa e a lâmpada da porta acende em algumas casas.
+
+**Medição** (SwiftShader, Medium, na mesma sessão: as paredes ou as peças escondidas × à mostra; as cenas do `Bench`). As texturas das
+fachadas somavam 64 no Medium (~19 MB; o triplo no High) e saem todas:
+
+| Etapa | Favela: paredes | Favela: peças 3D | Centro: paredes | Centro: peças 3D |
+|---|---|---|---|---|
+| Texturas (antes) | ~5–140 ms (ruído) | — | ~0 | — |
+| 1ª versão (um shader com tudo; peças com sombra e sacadas no mapa inteiro) | ~433 ms | ~203 ms | ~0 | ~62 ms |
+| Um shader por estilo, peças sem sombra e com limite | ~276 ms | ~49 ms | ~55 ms | ~33 ms |
+| Menos ruído e as janelas numa conta só | ~250 ms | ~50 ms | ~80 ms | ~23 ms |
+
+As medições oscilam ±50–100 ms de uma rodada para outra (o quadro do software é longo). A parede da favela — o pior caso: a câmera
+no beco, com quase a tela toda de parede — ainda custa mais que a textura no renderizador por software; no centro e na mata o custo
+some no ruído. O próximo passo para ela é um atlas pequeno com o desenho das janelas (uma leitura no lugar das contas de caixilho,
+grade e tábuas), que mantém a variedade sem a conta por pixel.
+
+### Um shader por estilo (a lição da medição)
+
+A primeira versão tinha UM shader de parede com os 14 materiais e os 14 tipos de janela escolhidos por uniform (`if`). Na GPU de
+verdade um `if` num uniform é barato, mas o renderizador por software (SwiftShader — a referência das medições) executa TODOS os ramos
+em cada pixel, com máscara: a parede da favela custava ~440 ms por quadro contra ~70 ms com o código tirado pelo pré-processador
+(`Walls3D._lite`), e desligar o desenho pelo uniform (`Walls3D.shade = 0`) não mudava nada. Em celular, um shader enorme também pesa
+(registradores). Agora cada estilo compila SÓ o que usa: o material (`W3FAM`), os tipos de janela e de porta e os detalhes
+(peitoril, verga, ar, pichação, pilar) viram `#define` — 32 variantes para os 64 estilos, compiladas na tela de carga
+(`Walls3D.precompile`, e não na hora em que o bairro novo aparece). O mesmo vale para os telhados (`ROOFK`) e o chão (`GVKIND`).
+Também caíram os ruídos por pixel (o mesmo ruído serve ao tom, à mancha e à rachadura do reboco; pilar e escorrido por sorteio), as
+peças deixaram de projetar sombra em tempo real (o mapa de sombra redesenhava as milhares de instâncias) e as sacadas e brises
+longe têm limite (240 u × o preset; antes as torres de luxo do outro lado do mapa entravam no desenho).
+
+## Luz mais realista (novembro/2026)
+
+- **Sombra de contato assada** (`WorldBuilder._contactAO`, `Config.light.contactAO`): uma faixa escura e macia de 1,1 u no chão em
+  volta do pé de cada prédio (alfa no vértice, cantos em leque), na altura do chão em volta (calçada, pátio ou rente ao morro). O céu
+  não chega no pé da parede: o prédio "senta" no chão. Zero custo de luz por quadro (sem luz, sem névoa, sem receber sombra).
+- **A cor da lâmpada pelo bairro**: vapor de sódio laranja na favela, na zona industrial, no porto e no campo; LED branco (frio ou
+  quente) no centro, no comércio, na orla e na Lagoa; nos bairros, a mistura das duas. A cor vale para o difusor da luminária e para a
+  luz no chão (`NightLights`).
+- **A luz do térreo no chão**: a lâmpada da porta (a mesma que o shader da fachada acende) e a portaria acesa entram no campo de luz
+  da noite — a calçada em frente fica iluminada.
+- **O vidro reflete o céu** independente do sol (ver as fachadas) e a luz das janelas vaza na parede em volta.
+
+## O chão sem planejamento (novembro/2026)
+
+`render/GroundVariety.js` (`Config.art.groundVariety`; `?chao=0` desliga). Um MAPA DE ZONAS de 256 × 256 sobre o mundo inteiro
+(~10 u por texel, montado na carga pelo bairro de cada quadra, com ruído): a idade do asfalto, as zonas de paralelepípedo, o tipo de
+calçada de cada quadra e a sujeira. O shader do chão (por tipo, `GVKIND`) pinta por cima da textura de hoje: asfalto novo e preto ao
+lado do velho cinza e rachado (o couro de jacaré), REMENDOS retangulares (asfalto novo e cimento, com a junta), a brita aparente; ruas
+de PARALELEPÍPEDO em fiadas; a calçada de placas de cimento, de LADRILHO HIDRÁULICO sextavado, de PEDRA PORTUGUESA em ondas (a da
+orla) ou de cimento quebrado com terra e mato nas frestas; terra batida com manchas úmidas, brita solta e pedrinhas; areia com as
+ondinhas do vento; cimento com juntas e rachaduras; grama com manchas secas. As faixas pintadas da rua ficam. Custo medido na mesma
+sessão (com × sem o código, pelo pré-processador): favela ~0 (ruído), centro ~70 ms (~5%), mata ~0.
+
+## A mata de longe e a água (novembro/2026)
+
+- **Manto de copas** (`Trees3D`, terceiro nível de detalhe): além de `LOD.manto` (140 u × o preset) a planta vira a copa numa bolha
+  só, sem tronco nem cachos (20 triângulos por bolha) — de longe a mata é um manto. Não projeta sombra (fica além da janela dela).
+- **Reflexo da água só de perto** (`Water.NEAR`, 60 u): o espelho desenha só o que está em pé perto da água que aparece na tela (uma
+  grade 7 × 7 do chão visto); o resto da água reflete o céu pelo shader. As peças miúdas das fachadas ficam fora do espelho.

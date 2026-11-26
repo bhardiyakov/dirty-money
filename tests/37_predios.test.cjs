@@ -14,7 +14,7 @@ module.exports = {
                 tris: game.scene.meshes.filter((m) => /^world_trim/.test(m.name)).reduce((s, m) => s + (m.getTotalIndices() || 0) / 3, 0),
             };
         };
-        const a = await boot(ctx);
+        const a = await boot(ctx, { query: 'fachadas=2d' });      // (o relevo e a paralaxe são das fachadas em textura: a reserva das fachadas em polígonos — Walls3D)
         const d = await a.page.evaluate(look);
         c.ok(d.mode === 'recuo' && d.roofs, `padrão: janelas recuadas e telhados 3D (${d.mode}, telhado ${d.roofs})`);
         // (a paralaxe de OCLUSÃO — ~15 leituras por pixel de parede — só no High e no HD: Graphics.PRESETS[…].pom; o relevo, em todos)
@@ -22,7 +22,7 @@ module.exports = {
         c.ok(d.n > 0 && d.bump === d.n && d.pom === (pomOn ? d.n : 0), `relevo em todas as fachadas (${d.bump}/${d.n}); paralaxe de oclusão ${pomOn ? 'em todas' : 'fora neste preset'} (${d.pom})`);
         c.noErrors(a.errors, 'prédios com volume');
         await a.close();
-        const b = await boot(ctx, { query: 'predios=0' });
+        const b = await boot(ctx, { query: 'predios=0&fachadas=2d' });
         const o = await b.page.evaluate(look);
         c.ok(!o.mode && !o.roofs && o.bump === 0 && o.pom === 0, '?predios=0: as fachadas de antes');
         c.ok(d.tris > o.tris, `os telhados 3D somam peças (${Math.round(o.tris / 1000)} → ${Math.round(d.tris / 1000)} mil triângulos de acabamento)`);

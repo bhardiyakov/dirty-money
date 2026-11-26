@@ -139,7 +139,7 @@ const TileFactory = {
         else { const a = this.shopAtlas(); T.shops = { diffuse: tex(a.d, { aniso: 8, wrap: false }), emissive: tex(a.e, { aniso: 8, wrap: false }), cols: a.COLS, rows: a.ROWS }; }
         // Fachadas: { diffuse, emissive (as janelas acesas), grid (janelas no ladrilho, ver render/WindowLights.js), occ (casa/escritório) }.
         T.facades = {};
-        for (const key of Object.keys(this.facadeStyles)) {
+        if (typeof Walls3D === 'undefined' || !Walls3D.on) for (const key of Object.keys(this.facadeStyles)) {      // (em polígonos: nenhuma textura de fachada — render/Walls3D.js)
             if (hd) { T.facades[key] = hd.facade(scene, key); continue; }
             const f = this.facade(key);
             T.facades[key] = {

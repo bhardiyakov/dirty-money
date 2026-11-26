@@ -6,3 +6,4 @@ src-tauri/gen/
 dist-game/
 .vendor-cache/
 __pycache__/
+.claude/worktrees/

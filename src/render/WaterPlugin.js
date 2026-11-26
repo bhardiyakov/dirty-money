@@ -38,6 +38,7 @@ const Water = {
     // plano y = 0, o do mar e da Lagoa), com Fresnel. Os personagens 2,5D ficam de fora (são desenhos de um ângulo só). Resolução e
     // ritmo pelo preset (Low: 256 px, a cada 2 quadros); só é redesenhado com água na tela (update, conferido a cada ~0,5 s).
     mirror: null,
+    NEAR: 60,                            // u: até onde da água visível o que está em pé entra no espelho
     initMirror(game) {
         if (!this.reflect || !game.gameEngine.world) return;
         if (Config.perf.waterMirror === false) return;                       // (celular modesto: céu e sol na água, sem o espelho — Graphics.PHONE)
@@ -71,12 +72,21 @@ const Water = {
         if (!seen) return;
         // a lista do espelho: prédios, acabamentos, árvores 3D e carros 3D cuja caixa toca o chão visto (+ a altura do prédio mais alto,
         // que reflete mais longe) — o mapa inteiro eram ~1.500 malhas a cada quadro
-        const R = Math.hypot(gh.x, gh.z) + 30, L = mt.renderList, isWorld = /^(facade_|roof_|mach|trees3d|car3d)/;
+        // REFLEXO SÓ DE PERTO DA ÁGUA: só entra quem está a até NEAR u de um ponto de água visto (grade 7 × 7 do chão na tela) — o que fica
+        // longe da beira não aparece no espelho (a água ali reflete o céu, pelo shader); as peças miúdas das fachadas ficam de fora.
+        const R = Math.hypot(gh.x, gh.z) + 30, L = mt.renderList, isWorld = /^(facade_|roof_|mach|trees3d|car3d)/, W = [], NEAR = this.NEAR;
+        for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) {
+            const x = f.x + i * gh.x / 3, z = f.z + j * gh.z / 3;
+            if (WorldMap.waterDepth(x, z) > 0.2 || (typeof Lagoa !== 'undefined' && Lagoa.built && Lagoa.water(x, z, 1))) W.push(x, z);
+        }
         L.length = 0;
         for (const m of g.scene.meshes) {
             if (!m.material || !m.isEnabled() || !(isWorld.test(m.material.name) || m.name.startsWith('world_trim'))) continue;
-            const b = m.getBoundingInfo().boundingSphere, c = b.centerWorld;
-            if (Math.abs(c.x - f.x) < R + b.radiusWorld && Math.abs(c.z - f.z) < R + b.radiusWorld) L.push(m);
+            const b = m.getBoundingInfo().boundingSphere, c = b.centerWorld, r = b.radiusWorld;
+            if (Math.abs(c.x - f.x) >= R + r || Math.abs(c.z - f.z) >= R + r) continue;
+            let near = !W.length;
+            for (let k = 0; k < W.length && !near; k += 2) near = Math.abs(c.x - W[k]) < NEAR + r && Math.abs(c.z - W[k + 1]) < NEAR + r;
+            if (near) L.push(m);
         }
     },
     field: null,

@@ -1,6 +1,8 @@
 # Testes do jogo no Chromium (renderização por software, sem placa de vídeo): fumaça, celular, sistemas, todas as lojas,
 # longa duração (60 s de jogo por cenário) e primeiros passos. Roda em todo PR e em cada push na main.
-# Localmente: node tests/run.cjs (ou --quick). Ver tests/run.cjs.
+# Localmente: node tests/run.cjs (ou --quick; uma parte: --shard=3/8). Ver tests/run.cjs.
+# A suíte inteira (78 testes, ~3 h no runner) não cabe nos 60 min de um job: roda em 8 PARTES em paralelo (repartidas pelo tempo de
+# cada teste — PESO em tests/run.cjs) e o job "tests" no fim só fica verde se todas passarem (o mesmo nome de verificação de antes).
 # (YAML não aceita tab na indentação: este arquivo usa espaços.)
 name: Testes do jogo
 
@@ -14,9 +16,14 @@ permissions:
   contents: read
 
 jobs:
-  tests:
+  parte:
+    name: tests (${{ matrix.shard }}/8)
     runs-on: ubuntu-24.04            # (o Playwright 1.56 ainda não suporta o Ubuntu 26.04 do ubuntu-latest)
     timeout-minutes: 60
+    strategy:
+      fail-fast: false               # (uma parte vermelha não cancela as outras: o relatório sai inteiro)
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
 
@@ -29,5 +36,15 @@ jobs:
           npm i --no-save playwright@1.56.1
           npx playwright install --with-deps chromium
 
-      - name: Rodar os testes
-        run: node tests/run.cjs --quick
+      - name: Rodar os testes (parte ${{ matrix.shard }} de 8)
+        run: node tests/run.cjs --quick --shard=${{ matrix.shard }}/8
+
+  tests:
+    needs: parte
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Todas as partes passaram?
+        run: |
+          echo "resultado das partes: ${{ needs.parte.result }}"
+          test "${{ needs.parte.result }}" = "success"
