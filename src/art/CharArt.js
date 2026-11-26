@@ -32,7 +32,8 @@ const CharArt = {
 		this.ready = AtlasDecoder.png(CHAR_ATLAS.a).then((img) => {
 			this.decodeMs = Math.round(performance.now() - t0);
 			this._keepCpu(img.data);
-			if (this.tex) { this.tex.update(img.data); this._uploaded = true; } else this._px = img.data;
+			if (this._stub) { if (this._want) this._upload(img.data); }                     // (sem 2,5D: fica fora da placa — need())
+			else if (this.tex) { this.tex.update(img.data); this._uploaded = true; } else this._px = img.data;
 			console.log(`[PERSONAGENS] atlas ${CHAR_ATLAS.w}×${CHAR_ATLAS.h} ready in ${this.decodeMs} ms (decoded in a Worker)`);
 		}).catch((e) => console.warn('[PERSONAGENS] atlas: decoding failed', e));
 		return this.ready;
@@ -43,11 +44,42 @@ const CharArt = {
 		if (this.material && this._scene === scene) return;
 		this._scene = scene;
 		const D = this.data = CHAR_ATLAS;
-		this.tex = new BABYLON.RawTexture(this._px, D.w, D.h, BABYLON.Constants.TEXTUREFORMAT_RGBA, scene, false, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE, BABYLON.Constants.TEXTURETYPE_UNSIGNED_BYTE);
-		this.tex.wrapU = this.tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-		if (this._px) this._uploaded = true;
-		this._px = null;
+		// SEM 2,5D (Char3D.no2d — todo personagem é o boneco 3D): o atlas NÃO sobe para a placa (~15 MB de vídeo). O material fica com
+		// 1 pixel vazio (o quad sai transparente) e só um quad vetorial desenhado de fato pede o atlas (need(): decodifica de novo no
+		// Worker e sobe). As miniaturas do HUD saem da CPU (_keepCpu); a lista de quadros (data) fica, e é só metadado.
+		if (typeof Char3D !== 'undefined' && Char3D.no2d) {
+			this._stub = true;
+			this.tex = BABYLON.RawTexture.CreateRGBATexture(new Uint8Array(4), 1, 1, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
+			this._px = null;
+		} else {
+			this.tex = this._rawTex(this._px);
+			if (this._px) this._uploaded = true;
+			this._px = null;
+		}
 		this.material = this._makeMaterial(scene, palette);
+	},
+	_rawTex(px) {
+		const D = this.data, t = new BABYLON.RawTexture(px, D.w, D.h, BABYLON.Constants.TEXTUREFORMAT_RGBA, this._scene, false, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE, BABYLON.Constants.TEXTURETYPE_UNSIGNED_BYTE);
+		t.wrapU = t.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+		return t;
+	},
+	// Um quad vetorial vai ser desenhado (SpriteActor): o atlas sobe para a placa, se ainda não subiu.
+	need() {
+		if (!this._stub || this._want) return;
+		this._want = true;
+		console.log('[PERSONAGENS] um desenho 2D foi pedido: o atlas sobe para a placa');
+		if (this.ready && !this._decoding) {
+			this._decoding = true;
+			AtlasDecoder.png(CHAR_ATLAS.a).then((img) => this._upload(img.data)).catch((e) => console.warn('[PERSONAGENS] atlas: decoding failed', e));
+		}
+	},
+	_upload(px) {
+		if (!this._stub) return;
+		const old = this.tex;
+		this.tex = this._rawTex(px);
+		if (this.material) this.material.setTexture('atlas', this.tex);
+		this._stub = false; this._uploaded = true;
+		old.dispose();
 	},
 
 	// Quadros do clipe `key` ('nome:arma') da folha (ou da folha reserva, se a folha não tem esse clipe). null = não está no atlas.

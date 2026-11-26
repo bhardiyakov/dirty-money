@@ -497,7 +497,7 @@ class SpriteActor {
 	_applyUV() {
 		const c = this.clip;
 		if (!c) return;
-		if (c.vector) { this._setFr(this.mesh, c.pk, this.frame, this._fr); this._applyOverlay(); return; }
+		if (c.vector) { if (CharArt._stub && this.mesh.layerMask) CharArt.need(); this._setFr(this.mesh, c.pk, this.frame, this._fr); this._applyOverlay(); return; }
 		if (c.npc) {
 			if (NpcArt.no2d) { this._hide2d(); return; }                    // (sem 2,5D: o quad nunca aparece — o personagem é o boneco 3D)
 			if (this._no2d) { this._no2d = false; this._ghost = false; this.mesh.layerMask = 0x0FFFFFFF; if (this._ov) this._ov.layerMask = 0x0FFFFFFF; }      // (o 3D caiu: o 2,5D volta)
