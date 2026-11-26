@@ -60,6 +60,7 @@ const Config = {
 		// caixas-d'água, condensadoras, antenas). `?predios=0` volta aos de antes; `?predios=relevo` / `recuo` / `,telhado` para comparar.
 		facades3d: 'recuo',
 		roofs3d: true,
+		roofPoly: true,        // TELHADOS EM POLÍGONOS (render/Roofs3D.js): telha, zinco, lona, laje… em relevo e com as peças em cima, menos detalhe longe; `?telhados=2d` = as texturas
 		animals3d: true,       // bichos em 3D com animação (art/Animals3D.js — a folha de referência); `?bichos=2d` = os sprites de antes
 		trees3d: true,         // árvores e palmeiras em 3D em todos os presets (render/Trees3D.js, etapa 5); `?arvores=0` = as desenhadas de antes
 		npcHalf: false,        // páginas dos atlas 2,5D em MEIA resolução na GPU (um quarto da memória; NpcArt.half). Preset Low: true

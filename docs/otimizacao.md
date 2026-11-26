@@ -616,3 +616,29 @@ favela, centro, Lagoa e mata: zero malhas). Ele só é montado se algum tipo sem
 **Total**: ~45 MB a menos de textura na memória de vídeo (propsHD 23,4 + birdsHD 9,4 + helicóptero ~12,5), com o mesmo visual.
 Teste: `tests/77_poligonos.test.cjs` (aves dobrando/abrindo/batendo a asa, helicóptero sem textura, atlas não montado, plantas de
 longe no modelo leve e a rasteira sumindo longe).
+
+## Telhados em polígonos (novembro/2026)
+
+`render/Roofs3D.js` (`Config.art.roofPoly`; `?telhados=2d` volta às texturas). As 27 texturas `hd_roof` (~32 MB no High) saem.
+
+- **Relevo de verdade** nos painéis de ~2 × 2 u (instanciados: o modelo vai à placa uma vez por tipo e nível): telha colonial em
+  fiadas com a boca da telha, telha plana/ardósia/cedro com as juntas desencontradas, zinco ondulado, chapa com junta em pé, lona com
+  rugas, manta em faixas, telhado verde. O acabamento (tom de cada telha, musgo, ferrugem e escorridos, tábuas da fôrma, juntas,
+  desgaste da tinta, brita) é pintado no shader pela posição, sem textura; `Roofs3D.shade = 0` desliga para medir.
+- **Peças em cima** (instâncias): pneus, pedras e tijolos no zinco, cordas na lona, respiros e alçapão na manta e no concreto, vasos,
+  mesas com guarda-sol e cadeiras na laje do Mirante, baldes e tijolos na laje crua, arbustos no telhado verde, claraboia na chapa.
+- **Nível de detalhe por painel**: baldes de 24 u em três faixas pela câmera — perto (30 u × o preset) o relevo inteiro e as peças;
+  meio (95 u) o relevo simples; longe UMA placa lisa por telhado (as lajes são só a placa a qualquer distância).
+- As malhas mudam de lugar com a câmera, então ficam fora da grade estática do `RenderCuller` (`_cullAlways`) — arquivadas pela caixa
+  da carga, o painel de perto sumia em outras regiões.
+
+**A primeira versão era cara**: cada telhado longe era um painel liso por 2 × 2 u — dezenas de milhares de instâncias de 2
+triângulos (só a laje de concreto do centro somava 14.848). Medido na mesma sessão (telhados à mostra × escondidos, SwiftShader, Medium):
+
+| Cena | Texturas | Painéis lisos (1ª versão) | Placa por telhado |
+|---|---|---|---|
+| favela | ~110 ms | ~575 ms | ~112 ms |
+| centro | ~0 | ~725 ms | ~96 ms |
+
+Com a placa, os telhados em polígonos custam o mesmo que as texturas, com relevo de perto e 32 MB a menos. Teste:
+`tests/78_telhados.test.cjs` (sem textura, números, as faixas acompanham a câmera e o painel de perto é desenhado depois de andar).
