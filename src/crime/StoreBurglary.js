@@ -112,7 +112,7 @@ const Power = {
         for (const l of W.streetLamps || []) {
             if (!inside(l.x, l.z)) continue;
             if (!on) { l.dark = (l.dark || 0) + 1; if (LG && l.glow) LG.off(l.glow[0]); }
-            else { l.dark = Math.max(0, (l.dark || 0) - 1); if (!l.dark && l.alive !== false && LG && l.glow) LG.color(l.glow[0], 1.0, 0.86, 0.55, 0.9); }
+            else { l.dark = Math.max(0, (l.dark || 0) - 1); if (!l.dark && l.alive !== false && LG && l.glow) { const t = l.tint || [1.0, 0.8, 0.5]; LG.color(l.glow[0], 0.35 + t[0] * 0.65, 0.35 + t[1] * 0.65, 0.35 + t[2] * 0.65, 0.9); } }
         }
         if (LG) LG.flush();
         const SG = W.shopGlow;

@@ -392,6 +392,7 @@ class Game {
 			await frame();
 			this._update(1 / 30);                                    // 1º estado do jogo (carros, NPCs, luzes) para os materiais existirem
 			await this.scene.whenReadyAsync();                       // todas as malhas ativas com shader compilado e texturas prontas
+			if (typeof Walls3D !== 'undefined' && Walls3D.on) await Walls3D.precompile(this.scene);      // (as fachadas: os shaders de todos os estilos, não só os da vista)
 			this.scene.render();                                     // aquece o pipeline (sombras, sprites, brilhos) fora da vista
 			this.scene.render();
 			this._releaseStatic();                                   // o mundo parado já está na placa: a cópia dos vértices na RAM sai

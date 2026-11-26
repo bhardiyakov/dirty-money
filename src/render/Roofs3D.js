@@ -458,9 +458,11 @@ const Roofs3D = {
     },
     _plugin() {
         return class Roof3DPlugin extends BABYLON.MaterialPluginBase {
-            constructor(m, kind) { super(m, 'Roof3D', 125, { ROOF3D: false }); this.kind = kind; this._enable(true); }
+            // (ROOFK: cada tipo compila só o seu desenho — o shader com os 10 tipos era executado inteiro em cada pixel no renderizador
+            // por software)
+            constructor(m, kind) { super(m, 'Roof3D', 125, { ROOF3D: false, ROOFK: 0 }); this.kind = kind; this._enable(true); }
             getClassName() { return 'Roof3DPlugin'; }
-            prepareDefines(d) { d.ROOF3D = true; }
+            prepareDefines(d) { d.ROOF3D = true; d.ROOFK = this.kind; }
             getUniforms() { return { ubo: [{ name: 'rfK', size: 4, type: 'vec4' }], fragment: 'uniform vec4 rfK;' }; }
             bindForSubMesh(ub) { ub.updateFloat4('rfK', this.kind, Roofs3D.shade, 0, 0); }
             getCustomCode(type) {
@@ -506,19 +508,24 @@ const Roofs3D = {
                             float k = 1.0;
                             float big = rfN(W * 0.35 + sd) * 0.65 + rfN(W * 1.1 - sd) * 0.35;
                             if (rk < 1.5) {
+#if ROOFK == 1
                                 // telha colonial: o tom de cada telha, telhas trocadas, musgo e limo nas juntas
                                 vec2 c = floor(vec2((L.x + 1.0) * 2.5, (L.z + 1.0) * 2.5));
                                 float h = rfH(c + sd), h2 = rfH(c * 1.7 + sd + 3.1);
                                 k = mix(1.0, 0.8 + 0.36 * h, mid);
                                 baseColor.rgb *= mix(vec3(1.0), h2 > 0.86 ? vec3(1.12, 0.95, 0.86) : (h2 < 0.1 ? vec3(0.78, 0.74, 0.72) : vec3(1.0)), mid);
                                 baseColor.rgb = mix(baseColor.rgb, vec3(0.3, 0.33, 0.22), smoothstep(1.0 - 0.5 * rust, 1.0, big + 0.25) * 0.55);
+#endif
                             } else if (rk < 2.5) {
+#if ROOFK == 2
                                 // telha plana / ardósia / cedro: fiadas, juntas desencontradas e o tom de cada peça
                                 float row = floor((L.z + 1.0) * 3.5), u = (L.x + 1.0) * 2.6 + 0.5 * mod(row, 2.0), j = fract(u);
                                 float h = rfH(vec2(floor(u), row) + sd);
                                 k = mix(1.0, 0.84 + 0.3 * h, mid) * mix(1.0, 0.55, (1.0 - smoothstep(0.0, 0.05, j)) * fine);
                                 baseColor.rgb = mix(baseColor.rgb, vec3(0.28, 0.32, 0.22), smoothstep(1.0 - 0.45 * rust, 1.0, big + 0.2) * 0.5);
+#endif
                             } else if (rk < 3.5) {
+#if ROOFK == 3
                                 // zinco: chapa por chapa, a sobreposição no meio, ferrugem e escorridos no sentido da água
                                 float sheet = floor((L.x + 1.0) * 1.0), h = rfH(vec2(sheet, sd));
                                 k = 0.88 + 0.2 * h;
@@ -528,41 +535,56 @@ const Roofs3D = {
                                 float r = smoothstep(1.0 - 0.75 * rust, 1.05, big * 0.75 + st * 0.35);
                                 baseColor.rgb = mix(baseColor.rgb, vec3(0.5, 0.29, 0.14) * (0.75 + 0.4 * st), r);
                                 k *= mix(1.0, 0.86 + 0.14 * st, mid);
+#endif
                             } else if (rk < 4.5) {
+#if ROOFK == 4
                                 // chapa com junta em pé: a nervura clara, tom por chapa
                                 float s = abs(fract((L.x + 1.0) * 2.0) - 0.5);
                                 k = (0.92 + 0.14 * rfH(vec2(floor((L.x + 1.0) * 2.0), sd))) * mix(1.0, 1.15, (1.0 - smoothstep(0.02, 0.05, 0.5 - s)) * mid);
                                 baseColor.rgb = mix(baseColor.rgb, vec3(0.42, 0.26, 0.15), smoothstep(1.0 - 0.4 * rust, 1.05, big) * 0.6);
+#endif
                             } else if (rk < 5.5) {
+#if ROOFK == 5
                                 // lona: desbotada pelo sol em manchas, sujeira nas dobras
                                 float f = rfN(W * 0.8 + sd);
                                 baseColor.rgb = mix(baseColor.rgb, vec3(dot(baseColor.rgb, vec3(0.33)) * 1.25), smoothstep(0.55, 0.9, f) * 0.45);
                                 k = 0.94 + 0.12 * rfN(W * 3.0 - sd);
+#endif
                             } else if (rk < 6.5) {
+#if ROOFK == 6
                                 // laje crua: as tábuas da fôrma, manchas d'água, a emenda das placas
                                 float bd = (L.z + 1.0) * 4.0, seam = smoothstep(0.93, 1.0, abs(fract(bd) - 0.5) * 2.0);
                                 k = mix(1.0, 0.95 + 0.08 * rfH(vec2(floor(bd), sd)), mid) * mix(1.0, 0.88, seam * fine);
                                 k *= 0.9 + 0.2 * rfN(W * 1.7 + sd);
                                 k *= mix(1.0, 0.8 + 0.4 * rfH(floor(W * 30.0)), fine * 0.5);
                                 k *= mix(1.0, 0.7, smoothstep(0.62, 0.8, big) * dirt);
+#endif
                             } else if (rk < 7.5) {
+#if ROOFK == 7
                                 // manta asfáltica: brita e poças
                                 k = mix(1.0, 0.8 + 0.4 * rfH(floor(W * 40.0)), fine * 0.6) * mix(1.0, 0.72, smoothstep(0.6, 0.78, big) * dirt);
+#endif
                             } else if (rk < 8.5) {
+#if ROOFK == 8
                                 // concreto: as juntas das placas (a borda do painel), o tom de cada placa e as manchas
                                 float e = min(1.0 - abs(L.x), 1.0 - abs(L.z));
                                 k = (0.93 + 0.12 * rfH(vec2(sd, 1.0))) * mix(1.0, 0.62, (1.0 - smoothstep(0.004, 0.018, e)) * mid) * mix(1.0, 0.8, smoothstep(0.66, 0.82, big) * dirt);
+#endif
                             } else if (rk < 9.5) {
+#if ROOFK == 9
                                 // laje pintada: a tinta gasta (aparece o cimento) e as juntas
                                 float wv = smoothstep(0.62, 0.8, big * 0.7 + rfN(W * 2.2 + sd) * 0.3);
                                 baseColor.rgb = mix(baseColor.rgb, vec3(0.62, 0.61, 0.58), wv * 0.7);
                                 float e = min(1.0 - abs(L.x), 1.0 - abs(L.z));
                                 k = mix(1.0, 0.75, (1.0 - smoothstep(0.004, 0.02, e)) * mid);
+#endif
                             } else {
+#if ROOFK == 10
                                 // telhado verde: o gramado em tufos, manchas secas
                                 float gr = rfN(W * 3.5 + sd) * 0.6 + rfN(W * 9.0) * 0.4 * fine;
                                 k = 0.78 + 0.42 * gr;
                                 baseColor.rgb = mix(baseColor.rgb, vec3(0.62, 0.58, 0.3), smoothstep(0.7, 0.9, big) * 0.5);
+#endif
                             }
                             baseColor.rgb *= k * (1.0 + (rfH(floor(W * 24.0)) - 0.5) * 0.1 * fine);
                         }

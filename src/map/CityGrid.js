@@ -1197,15 +1197,15 @@ const CityGrid = {
     // Lotes (prédios alinhados aos eixos) empacotados na pegada de um quarteirão em polígono: o maior retângulo livre (grade de 1 u)
     // de cada vez, encostado na calçada, no tamanho e altura do bioma, com uma folga entre eles. Nenhum coube: pracinha.
     LOTS: {
-        downtown:    [{ min: 12, max: 40, gap: 3, fl: [8, 14], n: 4, fac: ['office0', 'office1', 'office2', 'concrete0', 'concrete1'], roof: ['conc0', 'conc1', 'tar0', 'metal1'] }],
-        commercial:  [{ min: 9, max: 34, gap: 3, fl: [3, 6], n: 5, fac: ['brick0', 'brick1', 'brick2', 'concrete0', 'concrete1', 'house2'], roof: ['tar0', 'tar1', 'conc0', 'conc1'] },
-                      { min: 9, max: 18, gap: 3, fl: [2, 5], n: 6, fac: ['brick0', 'brick1', 'brick2', 'concrete0', 'house2'], roof: ['tar0', 'tar1', 'conc0', 'conc1'] }],
-        residential: [{ min: 7, max: 10, gap: 3, fl: [2, 3], n: 12, fac: ['house0', 'house1', 'house2', 'house3', 'brick2'], roof: ['tile0', 'tile1', 'tar1'] },
-                      { min: 11, max: 30, gap: 3, fl: [4, 6], n: 3, fac: ['brick0', 'brick1', 'brick2'], roof: ['tar0', 'tar1', 'conc1', 'garden0'] }],
-        resort:      [{ min: 12, max: 30, gap: 5, fl: [6, 11], n: 3, fac: ['office0', 'office1', 'office2', 'concrete1'], roof: ['conc0', 'conc1', 'metal1'] },
-                      { min: 8, max: 13, gap: 4, fl: [3, 5], n: 6, fac: ['house0', 'house1', 'house3', 'concrete1'], roof: ['tile0', 'conc1', 'garden0'] }],
-        industrial:  [{ min: 12, max: 40, gap: 4, fl: [3, 4], n: 3, fac: ['metal0', 'metal1', 'concrete0'], roof: ['metal0', 'metal1', 'tar0'] }],
-        port:        [{ min: 12, max: 40, gap: 5, fl: [3, 4], n: 2, fac: ['metal0', 'metal1', 'concrete0'], roof: ['metal0', 'metal1', 'tar0'] }],
+        downtown:    [{ min: 12, max: 40, gap: 3, fl: [8, 14], n: 4, fac: ['office0', 'office1', 'office2', 'concrete0', 'concrete1', 'granito0', 'pastilha0', 'comercio0', 'reboco0', 'cobogo0', 'office0'], roof: ['conc0', 'conc1', 'tar0', 'metal1'] }],
+        commercial:  [{ min: 9, max: 34, gap: 3, fl: [3, 6], n: 5, fac: ['brick0', 'brick1', 'brick2', 'concrete0', 'concrete1', 'house2', 'reboco0', 'reboco2', 'pastilha1', 'comercio0', 'comercio1', 'colonial1'], roof: ['tar0', 'tar1', 'conc0', 'conc1'] },
+                      { min: 9, max: 18, gap: 3, fl: [2, 5], n: 6, fac: ['brick0', 'brick1', 'brick2', 'concrete0', 'house2', 'reboco2', 'colonial2', 'azulejo0', 'comercio1', 'reboco0'], roof: ['tar0', 'tar1', 'conc0', 'conc1'] }],
+        residential: [{ min: 7, max: 10, gap: 3, fl: [2, 3], n: 12, fac: ['house0', 'house1', 'house2', 'house3', 'brick2', 'modern0', 'modern1', 'colonial0', 'reboco1', 'house1', 'azulejo0'], roof: ['tile0', 'tile1', 'tar1'] },
+                      { min: 11, max: 30, gap: 3, fl: [4, 6], n: 3, fac: ['brick0', 'brick1', 'brick2', 'reboco3', 'pastilha2', 'pastilha1', 'reboco1'], roof: ['tar0', 'tar1', 'conc1', 'garden0'] }],
+        resort:      [{ min: 12, max: 30, gap: 5, fl: [6, 11], n: 3, fac: ['office0', 'office1', 'office2', 'concrete1', 'granito0', 'pastilha0'], roof: ['conc0', 'conc1', 'metal1'] },
+                      { min: 8, max: 13, gap: 4, fl: [3, 5], n: 6, fac: ['house0', 'house1', 'house3', 'concrete1', 'modern0', 'colonial0', 'modern1'], roof: ['tile0', 'conc1', 'garden0'] }],
+        industrial:  [{ min: 12, max: 40, gap: 4, fl: [3, 4], n: 3, fac: ['metal0', 'metal1', 'concrete0', 'galpao0', 'galpao0'], roof: ['metal0', 'metal1', 'tar0'] }],
+        port:        [{ min: 12, max: 40, gap: 5, fl: [3, 4], n: 2, fac: ['metal0', 'metal1', 'concrete0', 'galpao0'], roof: ['metal0', 'metal1', 'tar0'] }],
         // a Lagoa (map/Lagoa.js): torres residenciais de luxo, afastadas, com jardim em volta
         lagoa:       [{ min: 11, max: 20, gap: 5, fl: [8, 13], n: 3, fac: ['lux0', 'lux1', 'lux2', 'lux3'], roof: ['conc1', 'conc0'] },
                       { min: 12, max: 24, gap: 6, fl: [9, 14], n: 2, fac: ['lux0', 'lux1', 'lux2', 'lux3'], roof: ['conc1', 'conc0'] }],
@@ -1327,7 +1327,7 @@ const CityGrid = {
         if (lm) { this._landmark(block, lm); return; }
 
         if (block.biome === 'downtown') {
-            const facades = ['office0', 'office1', 'office2', 'concrete0', 'concrete1'];
+            const facades = ['office0', 'office1', 'office2', 'concrete0', 'concrete1', 'granito0', 'office0', 'pastilha0', 'comercio0', 'reboco0', 'cobogo0', 'concrete0'];      // (o centro sem plano: torres de vidro ao lado do prédio de reboco e de pastilha)
             const roofs = ['conc0', 'conc1', 'tar0', 'metal1'];
             if (rng() < 0.5) {
                 const lw = this._snap(w), ld = this._snap(d);
@@ -1357,7 +1357,7 @@ const CityGrid = {
                 // 2×2 casas com quintal.
                 const s = 9, gap = 3;
                 const ox = fx0 + (w - (2 * s + gap)) / 2, oz = fz0 + (d - (2 * s + gap)) / 2;
-                const facades = ['house0', 'house1', 'house2', 'house3', 'brick2'];
+                const facades = ['house0', 'house1', 'house2', 'house3', 'brick2', 'modern0', 'modern1', 'colonial0', 'reboco1', 'house1'];
                 const roofs = ['tile0', 'tile1', 'tar1'];
                 for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
                     const x0 = ox + a * (s + gap), z0 = oz + b * (s + gap);
@@ -1382,7 +1382,7 @@ const CityGrid = {
             }
         } else if (block.biome === 'commercial') {
             // Comércio: prédios de 3–6 andares (lojas embaixo), um ou dois por quarteirão, sem recuo.
-            const facades = ['brick0', 'brick1', 'brick2', 'concrete0', 'concrete1', 'house2'];
+            const facades = ['brick0', 'brick1', 'brick2', 'concrete0', 'concrete1', 'house2', 'reboco0', 'reboco1', 'reboco2', 'reboco3', 'pastilha1', 'pastilha2', 'comercio1', 'colonial1'];
             const roofs = ['tar0', 'tar1', 'conc0', 'conc1'];
             if (rng() < 0.45) {
                 const lw = this._snap(w - 1), ld = this._snap(d - 1);
@@ -1412,7 +1412,7 @@ const CityGrid = {
             }
         } else if (block.biome === 'favela') {
             // Favela: casinhas coladas umas nas outras (1–3 andares, tijolo aparente e reboco), em fileiras irregulares.
-            const facades = ['brick0', 'brick1', 'brick2', 'brick0', 'house0', 'house1', 'house2', 'house3', 'concrete0'];
+            const facades = ['brick0', 'brick1', 'brick2', 'brick0', 'house0', 'house1', 'house2', 'house3', 'concrete0', 'reboco2', 'colonial2', 'azulejo0', 'comercio0', 'reboco0'];
             const roofs = ['zinc0', 'zinc1', 'zinc0', 'tarp0', 'tarp1', 'tarp2', 'slab0', 'slab1', 'slab0', 'tile1', 'tile0'];
             // Fileiras de casas coladas (largura 4–8 u, vão de 0,5–1,6 u) separadas por vielas de 1,2–2,6 u; alguns lotes vazios (quintal/terreno).
             let z = fz0 + rng() * 0.8;
@@ -1432,7 +1432,7 @@ const CityGrid = {
             }
         } else {
             // industrial / port: galpões baixos + pátio de contêineres.
-            const facades = ['metal0', 'metal1', 'concrete0'];
+            const facades = ['metal0', 'metal1', 'concrete0', 'galpao0', 'galpao0'];
             const roofs = ['metal0', 'metal1', 'tar0'];
             const lw = this._snap(w);
             const ld = this._snap(block.biome === 'port' ? d * 0.4 : d * 0.55);

@@ -10,7 +10,9 @@ const { boot } = require('./lib.cjs');
 module.exports = {
     name: 'cidade_hd',
     async run(ctx, c) {
-        const { page, errors, close } = await boot(ctx);
+        // (as texturas pintadas da cidade: os telhados e as fachadas agora são polígonos — Roofs3D, Walls3D —, e as texturas deles ficam
+        // como a reserva de `?telhados=2d&fachadas=2d`: é ela que este teste confere)
+        const { page, errors, close } = await boot(ctx, { query: 'telhados=2d&fachadas=2d' });
         const r = await page.evaluate(() => {
             const out = { errs: [] }, W = game.gameEngine.world, M = W.mats;
             out.on = CityHD.on; out.Q = CityHD.Q; out.ms = Math.round(CityHD.lastMs);

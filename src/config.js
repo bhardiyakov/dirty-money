@@ -61,6 +61,8 @@ const Config = {
 		facades3d: 'recuo',
 		roofs3d: true,
 		roofPoly: true,        // TELHADOS EM POLÍGONOS (render/Roofs3D.js): telha, zinco, lona, laje… em relevo e com as peças em cima, menos detalhe longe; `?telhados=2d` = as texturas
+		wallPoly: true,        // FACHADAS EM POLÍGONOS (render/Walls3D.js): parede pintada no shader (64 estilos), janelas, sacadas, toldos e ar em 3D, luz da noite por janela; `?fachadas=2d` = as texturas
+		groundVariety: true,   // O CHÃO SEM PLANEJAMENTO (render/GroundVariety.js): asfaltos de idades diferentes, remendos, paralelepípedo, calçadas variadas, terra batida; `?chao=0` desliga
 		animals3d: true,       // bichos em 3D com animação (art/Animals3D.js — a folha de referência); `?bichos=2d` = os sprites de antes
 		trees3d: true,         // árvores e palmeiras em 3D em todos os presets (render/Trees3D.js, etapa 5); `?arvores=0` = as desenhadas de antes
 		npcHalf: false,        // páginas dos atlas 2,5D em MEIA resolução na GPU (um quarto da memória; NpcArt.half). Preset Low: true
@@ -220,6 +222,8 @@ const Config = {
 		nightGain: 1.0,
 		// A luz dos postes no chão (NightLights.STREET): 'antes' (disco de 7,5 u) | 'a' (oval mais largo) | 'b' (o padrão: oval ao longo da rua, mais largo e forte).
 		street: 'b',
+		// SOMBRA DE CONTATO assada no chão em volta do pé dos prédios (WorldBuilder._contactAO): o prédio "senta" no chão, custo ~zero.
+		contactAO: true,
 	},
 
 	player: {

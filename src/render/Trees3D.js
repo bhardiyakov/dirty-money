@@ -138,21 +138,25 @@ const Trees3D = {
             // rasteira some de vez além de LOD.cover
             const far = cover || !this.lodOn ? null : this._farMesh(scene, mesh, model, mats, lod);
             if (far) { if (shadow && this.castShadows && casts) shadow.addShadowCaster(far); out.push(far); }
-            if (this.lodOn) this._lodAdd(scene, mesh, far, cover);
+            // e o MANTO DE COPAS (bem longe): a copa numa bolha só, sem tronco nem cachos — a mata vira um manto (não projeta sombra:
+            // fica além da janela da sombra)
+            const manto = far ? this._farMesh(scene, far, model, mats, -1, -2) : null;
+            if (manto) out.push(manto);
+            if (this.lodOn) this._lodAdd(scene, mesh, far, cover, manto);
         }
         return out;
     },
     // ------------------------------------------------------------------ NÍVEL DE DETALHE pela distância à câmera (como nos motores atuais)
     // A planta de LONGE: o modelo da espécie no detalhe −1 (PARTS.far: menos cachos, troncos com menos lados, a icosfera mais simples),
     // com as mesmas instâncias. Só quando ele é bem mais leve (até 75% dos índices).
-    LOD: { far: 70, cover: 45 },
+    LOD: { far: 70, cover: 45, manto: 140 },
     get lodOn() { return this._lodSet !== undefined ? this._lodSet : !(typeof location !== 'undefined' && /[?&]plantalod=0\b/.test(location.search)); },      // (?plantalod=0: tudo no detalhe cheio — comparar)
     set lodOn(v) { this._lodSet = !!v; if (this._lod && this._lodScene) this._lodTick(this._lodScene); },      // (desliga/liga na hora: as gêmeas ficam, só escondidas)
     get lodScale() { const L = typeof Graphics !== 'undefined' ? Graphics.level : 'high'; return L === 'low' ? 0.65 : L === 'medium' ? 0.85 : L === 'hd' ? 1.3 : 1; },
-    _farMesh(scene, mesh, model, mats, lod) {
-        const F = this._gpu(scene, model, -1), N = this._gpu(scene, model, lod);
+    _farMesh(scene, mesh, model, mats, lod, level = -1) {
+        const F = this._gpu(scene, model, level), N = this._gpu(scene, model, lod);
         if (F.nI > N.nI * 0.75) return null;
-        const f = new BABYLON.Mesh(mesh.name + '_longe', scene);
+        const f = new BABYLON.Mesh(mesh.name + (level < -1 ? '_manto' : '_longe'), scene);
         this._share(f, F);
         f.material = mesh.material; f.useVertexColors = true;
         f.thinInstanceSetBuffer('matrix', mats, 16, false);
@@ -164,19 +168,20 @@ const Trees3D = {
     // Registra a planta (e a de longe) no laço do detalhe, que roda 5 vezes por segundo antes do desenho: perto = o modelo cheio; além de
     // LOD.far (× lodScale; folga de 10% na volta) = o de longe; a rasteira (cascalho, samambaia, capim…) só até LOD.cover.
     // (isVisible, não setEnabled: as lojas desligam e religam as malhas da cidade com setEnabled.)
-    _lodAdd(scene, near, far, cover) {
+    _lodAdd(scene, near, far, cover, manto = null) {
         if (!this._lod) {
             this._lod = []; this._lodScene = scene;
             let t = 0;
             scene.onBeforeRenderObservable.add(() => { const now = performance.now(); if (now - t < 200) return; t = now; this._lodTick(scene); });
         }
         if (this._lod.length > 4000) this._lod = this._lod.filter((e) => !e.m.isDisposed());
-        this._lod.push({ m: near, far, cover, isFar: false });
+        this._lod.push({ m: near, far, cover, manto, isFar: false, st: 0 });
     },
     _lodTick(scene) {
         const cam = scene.activeCamera;
         if (!cam) return;
         const P = cam.globalPosition || cam.position, k = this.lodScale, on = this.lodOn, FAR = on ? this.LOD.far * k : Infinity, COV = on ? this.LOD.cover * k : Infinity, covOn = this.coverOn;
+        const MANTO = on ? this.LOD.manto * k : Infinity;
         let dead = 0;
         for (const e of this._lod) {
             const m = e.m;
@@ -184,8 +189,12 @@ const Trees3D = {
             const S = m.getBoundingInfo().boundingSphere, c = S.centerWorld, d = Math.max(0, Math.hypot(c.x - P.x, c.y - P.y, c.z - P.z) - S.radiusWorld);
             if (e.cover) { const v = covOn && d < COV; if (m.isVisible !== v) m.isVisible = v; continue; }
             if (!e.far) continue;
-            const isFar = d > (e.isFar ? FAR * 0.9 : FAR);
-            if (isFar !== e.isFar || m.isVisible === isFar) { e.isFar = isFar; m.isVisible = !isFar; e.far.isVisible = isFar; }
+            const st = e.manto && d > (e.st === 2 ? MANTO * 0.9 : MANTO) ? 2 : d > (e.st >= 1 ? FAR * 0.9 : FAR) ? 1 : 0;
+            if (st !== e.st || m.isVisible !== (st === 0)) {
+                e.st = st; e.isFar = st >= 1;
+                m.isVisible = st === 0; e.far.isVisible = st === 1;
+                if (e.manto) e.manto.isVisible = st === 2;
+            }
         }
         if (dead > 200) this._lod = this._lod.filter((e) => !e.m.isDisposed());
     },
@@ -335,8 +344,28 @@ const Trees3D = {
     _model(scene, model, lod = this.lod) {
         const C = this._models || (this._models = {}), key = model + '|' + lod, sMain = lod >= 1 ? 2 : 1, sAll = lod >= 2 ? 2 : 1;
         if (C[key]) return C[key];
+        if (lod < -1) return (C[key] = this._mantoModel(scene, model));      // (−2: o MANTO — a copa numa bolha só)
         this.PARTS.far = lod < 0;                                            // (−1: a planta de LONGE — PARTS corta cachos e lados)
         try { return (C[key] = this._modelBuild(scene, model, sMain, sAll)); } finally { this.PARTS.far = false; }
+    },
+    // O MANTO DE COPAS: a folhagem da planta de longe (os vértices de folha e flor) numa bolha só, do tamanho dela e na cor média —
+    // 20 triângulos. Sem folhagem (pedra, planta rígida): a de longe mesmo (e o manto não é criado: não seria mais leve).
+    _mantoModel(scene, model) {
+        const F = this._model(scene, model, -1), P = F.positions, Co = F.colors;
+        let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity, n = 0, r = 0, gg = 0, b = 0;
+        for (let v = 0; v < P.length / 3; v++) {
+            const a = Co[v * 4 + 3];
+            if (a < 0.45) continue;                                          // (madeira e rígida: fora)
+            const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2];
+            if (x < x0) x0 = x; if (y < y0) y0 = y; if (z < z0) z0 = z; if (x > x1) x1 = x; if (y > y1) y1 = y; if (z > z1) z1 = z;
+            r += Co[v * 4]; gg += Co[v * 4 + 1]; b += Co[v * 4 + 2]; n++;
+        }
+        if (n < 12) return F;
+        const g = { p: [], n: [], c: [], i: [] };
+        this.PARTS.blob(g, [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], [(x1 - x0) * 0.47, (y1 - y0) * 0.47, (z1 - z0) * 0.47], [r / n, gg / n, b / n], this._rng(model.length * 31 + 7), 0.12, 1, 'leaf');
+        const vd = new BABYLON.VertexData();
+        vd.positions = new Float32Array(g.p); vd.normals = new Float32Array(g.n); vd.colors = new Float32Array(g.c); vd.indices = new Uint16Array(g.i);
+        return vd;
     },
     _modelBuild(scene, model, sMain, sAll) {
         const g = { p: [], n: [], c: [], i: [] }, R = this._rng(model.length * 977 + model.charCodeAt(0) * 31);

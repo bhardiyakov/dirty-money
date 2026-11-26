@@ -73,10 +73,15 @@ module.exports = {
             const both = F.filter((e) => e.m.isVisible && e.far.isVisible).length;
             const lighter = F.every((e) => e.far.getTotalIndices() < e.m.getTotalIndices());
             const C = L.filter((e) => e.cover), cHid = C.filter((e) => !e.m.isVisible).length;
-            return { n: L.length, pairs: F.length, nearOn, farOn, both, lighter, cover: C.length, cHid };
+            // o MANTO de copas (bem longe): a copa numa bolha só — nunca duas versões da mesma planta à mostra
+            const Mn = F.filter((e) => e.manto), mOn = Mn.filter((e) => e.manto.isVisible).length;
+            const two = F.filter((e) => (e.m.isVisible ? 1 : 0) + (e.far.isVisible ? 1 : 0) + (e.manto && e.manto.isVisible ? 1 : 0) > 1).length;
+            const mLight = Mn.every((e) => e.manto.getTotalIndices() < e.far.getTotalIndices());
+            return { n: L.length, pairs: F.length, nearOn, farOn, both, lighter, cover: C.length, cHid, manto: Mn.length, mOn, two, mLight };
         });
         c.ok(lod.pairs > 0 && lod.nearOn > 0 && lod.farOn > 0 && lod.both === 0 && lod.lighter, `plantas: ${lod.nearOn} perto no modelo cheio, ${lod.farOn} longe no leve (${lod.pairs} pares, nunca as duas)`);
         c.ok(lod.cover > 0 && lod.cHid > 0 && lod.cHid < lod.cover, `rasteira longe some (${lod.cHid} de ${lod.cover} malhas escondidas)`);
+        c.ok(lod.manto > 0 && lod.mLight && lod.two === 0, `manto de copas bem longe: ${lod.manto} malhas com o manto, ${lod.mOn} à mostra agora, mais leve que a de longe (${lod.two} com duas versões)`);
         c.noErrors(errors, 'polígonos');
         await close();
     },
