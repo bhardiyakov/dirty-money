@@ -157,16 +157,22 @@ module.exports = {
             p.setCrouch(false);
             const standing = Stealth.target(g) === n;
             p.setCrouch(true);
-            const mt = pm.units.map((u) => (u.mind ? u.mind.t : -1e9));
+            const mt = new Map(pm.units.map((u) => [u, u.mind ? u.mind.t : -1e9]));         // (por unidade: a lista muda — patrulha que sai, outra que entra)
             // (sem testemunha nem câmera nem polícia olhando — aqui só importa o barulho)
             const CE = CrimeExposure, keep = [CE._witnessSees, CE._cameraSees, CE._policeSees];
             CE._witnessSees = CE._cameraSees = CE._policeSees = () => false;
+            const ft = Stealth._findTick; Stealth._findTick = () => {};               // (nem o corpo achado por quem passa: isso liga para a polícia de propósito)
+            const alerts = [], an = pm.alertNear;
+            pm.alertNear = function (pos, r) { alerts.push({ r, d: Math.round(Math.hypot(pos.x - P.x, pos.z - P.z)), at: (new Error().stack.split('\n')[2] || '').trim().replace(/^at /, '').replace(/\(?https?:\/\/[^/]+\//, '').slice(0, 90) }); return an.apply(this, arguments); };
             const did = Stealth.interact(g);
             const out = { front: !!front, okBehind, standing: !!standing, did, ko: !!n.ko, alive: n.alive, clip: n.actor.clip && n.actor.clip.name, act: p.action && p.action.name };
             for (let i = 0; i < 24; i++) g._update(1 / 30);
             out.lie = n.actor.clip && n.actor.clip.name;
             [CE._witnessSees, CE._cameraSees, CE._policeSees] = keep;
-            out.heard = pm.units.some((u, i) => u.mind && u.mind.t !== mt[i] && u.mind.t > -1e8);
+            pm.alertNear = an; out.alerts = alerts; Stealth._findTick = ft;
+            const heard = pm.units.filter((u) => mt.has(u) && u.mind && u.mind.t !== mt.get(u) && u.mind.t > -1e8);
+            out.heard = heard.length > 0;
+            out.who = heard.map((u) => ({ d: Math.round(Math.hypot(u.position.x - P.x, u.position.z - P.z)), t: +u.mind.t.toFixed(2), was: mt.get(u), dispatched: !!u.mind.dispatched }));
             out.wanted = g.wanted.level;
             out.n = n.id;
             return out;
@@ -175,7 +181,7 @@ module.exports = {
             c.ok(!td.front && td.okBehind && !td.standing, `só por trás e agachado (de frente: ${td.front}; de pé: ${td.standing})`);
             c.ok(td.did && td.ko && !td.alive && /takedown|punch/.test(td.act || ''), `E: o mata-leão (${td.act}) — ele apaga`);
             c.ok(td.lie === 'lie', `cai desacordado, sem sangue (clipe ${td.lie})`);
-            c.ok(!td.heard && td.wanted === 0, 'em silêncio: nenhum policial ouviu (sem ninguém olhando, nenhuma estrela)');
+            c.ok(!td.heard && td.wanted === 0, `em silêncio: nenhum policial ouviu (sem ninguém olhando, nenhuma estrela)${td.heard || td.wanted ? ` — ${JSON.stringify({ who: td.who, wanted: td.wanted, alerts: td.alerts })}` : ''}`);
         }
         // o boneco 3D do jogador tem o clipe novo do gerador
         const k3 = await page.evaluate(async () => {
@@ -186,7 +192,7 @@ module.exports = {
             return { k: K && typeof K === 'object' ? K.n : K };
         });
         if (k3.skip) c.note('boneco 3D desligado neste perfil gráfico: clipe do gerador não conferido');
-        if (!k3.skip) c.ok(k3.k === 12, `o boneco 3D faz o mata-leão do gerador (${k3.k} quadros)`);
+        if (!k3.skip) c.ok(k3.k >= 12, `o boneco 3D faz o mata-leão do gerador (${k3.k} quadros)`);      // (12 no ritmo do 2,5D; os clipes 3D vêm a até 30 qps)
 
         // ------------------------------------------------------------------ arrastar e corpo achado
         const dr = await page.evaluate(() => {
