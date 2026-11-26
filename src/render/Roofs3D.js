@@ -35,6 +35,7 @@ const Roofs3D = {
     LOD: { near: 30, mid: 95 },    // u: até onde vai o relevo completo e o simples (× lodScale), da câmera à borda do balde
     get lodScale() { const L = typeof Graphics !== 'undefined' ? Graphics.level : 'high'; return L === 'low' ? 0.6 : L === 'medium' ? 0.8 : L === 'hd' ? 1.3 : 1; },
     KINDS: ['tile', 'shingle', 'zinc', 'metal', 'tarp', 'slab', 'tar', 'concrete', 'laje', 'garden'],
+    shade: 1,                      // 1 = o acabamento pintado no shader; 0 = só a cor e o relevo (medir o custo por pixel)
     _list: [],
     _built: null,
 
@@ -445,7 +446,7 @@ const Roofs3D = {
             getClassName() { return 'Roof3DPlugin'; }
             prepareDefines(d) { d.ROOF3D = true; }
             getUniforms() { return { ubo: [{ name: 'rfK', size: 4, type: 'vec4' }], fragment: 'uniform vec4 rfK;' }; }
-            bindForSubMesh(ub) { ub.updateFloat4('rfK', this.kind, 0, 0, 0); }
+            bindForSubMesh(ub) { ub.updateFloat4('rfK', this.kind, Roofs3D.shade, 0, 0); }
             getCustomCode(type) {
                 // (sem ponto e vírgula em comentário GLSL: o Babylon corta a linha ali)
                 if (type === 'vertex') return {
@@ -474,7 +475,7 @@ const Roofs3D = {
                         #endif`,
                     CUSTOM_FRAGMENT_BEFORE_LIGHTS: `
                         #ifdef ROOF3D
-                        {
+                        if (rfK.y > 0.5) {
                             float rk = rfK.x, sd = rfS.x * 97.0, code = floor(rfS.y + 0.5) - 1.0, rust = mod(code, 10.0) / 9.0, dirt = floor(code / 10.0) / 9.0;
                             vec3 L = rfL;
                             vec2 W = vPositionW.xz;
