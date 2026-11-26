@@ -769,6 +769,15 @@ os esconderijos, as casas de máquinas, o barraco do protagonista por fora, a to
   "SAÍDA" é textura, 256 × 80) e a SOMBRA DO AVIÃO (a silhueta — fuselagem, asas, empenagem — com a borda macia, no lugar da mancha
   redonda).
 
+**Medição** (SwiftShader, Medium, centro, as malhas das lojas escondidas × à mostra, na mesma sessão): com o atlas, ~97 ms de dia e
+~0 à noite (ruído); em polígonos, ~65 ms de dia e ~0 à noite — empate dentro do ruído (±50–100 ms num quadro de ~1,4 s), com a
+memória das vitrines caindo de ~7 MB (Medium; ~16 MB no High) para ~1,4 MB. As 745 lojas somam ~350 mil triângulos no mapa, mas em
+pedaços de 64 u: na tela entram só as de perto.
+
+**Bug antigo corrigido no caminho**: o GRAMADO do estádio nunca aparecia com o relevo ligado. O piso do estádio (o disco azul, 4 cm
+abaixo do campo) é um triângulo grande de chão que o MeshBatch subdivide para seguir o morro, e o gramado era uma malha plana fixa a
+0,46 m — ficava enterrado embaixo do disco. Agora o gramado também sai pelo MeshBatch com o relevo.
+
 **O que continua textura, e por quê**: o que é ESCRITA ou foto do chão. Os nomes das lojas, das placas de trânsito e de rua
 (`roadSigns`), "PARE" e "ÔNIBUS" no asfalto e as marcas de tinta gasta (`roadDecals`), os anúncios e o logo do autódromo, as placas dos
 pontos turísticos e o pôster do mototáxi — texto em polígonos seria milhares de triângulos por letra; o mapa do terreno (`TerrainSplat`:

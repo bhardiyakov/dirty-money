@@ -323,13 +323,16 @@ const Maracana = {
         // os placares (sob a borda da cobertura, nas pontas)
         for (const s of [-1, 1]) { const p = this.E(0.7, s > 0 ? Math.PI / 2 : -Math.PI / 2); mid.solid(p[0] - 5.5, p[1] - 0.3, p[0] + 5.5, p[1] + 0.3, S.h - 3.6, S.h - 0.6, c('#16181c')); }
         // o GRAMADO (textura própria: listras e as linhas)
-        const hx = S.rx * 0.36, hz = S.rz * 0.33, mesh = BABYLON.MeshBuilder.CreateGround('stadiumPitch', { width: hx * 2, height: hz * 2 }, wb.scene);
-        mesh.position.set(S.x, 0.46, S.z);
+        // (pelo MeshBatch, com o relevo: o piso do estádio — o disco azul, 4 cm abaixo — segue o chão do morro, e o gramado, uma malha
+        //  plana fixa a 0,46 m, ficava ENTERRADO embaixo dele; agora os dois seguem o mesmo relevo)
+        const hx = S.rx * 0.36, hz = S.rz * 0.33, pb = new MeshBatch();
+        pb.top(S.x - hx, S.z - hz, S.x + hx, S.z + hz, 0.46, (x, z) => [(x - S.x + hx) / (2 * hx), (z - S.z + hz) / (2 * hz)]);
         const m = new BABYLON.StandardMaterial('stadiumPitch', wb.scene);
         if (typeof ProcSurf !== 'undefined' && ProcSurf.on) ProcSurf.apply(m, 'pitch');         // (as faixas e as linhas no shader: render/ProcSurf.js)
         else m.diffuseTexture = Landmarks._pitchTex(wb.scene);
         m.specularColor = BABYLON.Color3.Black();
-        mesh.material = m; mesh.isPickable = false; mesh.receiveShadows = true; mesh.freezeWorldMatrix();
+        const mesh = pb.build('stadiumPitch', wb.scene, m, { relief: true, receiveShadows: true, alwaysActive: false });
+        mesh.isPickable = false;
         wb.meshes.push(mesh); wb.mats.stadiumPitch = m;
         // os portões: o portão sul (a entrada: marquise e a placa)
         const g = this.E(1, -Math.PI / 2), gb = wb._batch('trim', g[0], g[1]);
