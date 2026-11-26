@@ -19,7 +19,10 @@
 //
 // NÍVEL DE DETALHE POR PAINEL (como nos motores atuais): as instâncias ficam em baldes de BUCKET u; a cada ~0,25 s, se a câmera andou,
 // cada balde vai para a faixa dele pela distância — PERTO (LOD.near: o relevo completo e as peças), MEIO (LOD.mid: o relevo simples)
-// ou LONGE (a placa lisa) — e os buffers de instâncias das três malhas de cada tipo são remontados (cópia de fatias, só quando muda).
+// ou LONGE: a PLACA, UMA instância por telhado (o telhado inteiro liso; o desenho do shader sai do mundo, na grade de 2 u) — e os
+// buffers de instâncias das três malhas de cada tipo são remontados (cópia de fatias, só quando muda). As lajes (crua, pintada, de
+// concreto) são só a placa a qualquer distância. (Antes cada telhado longe era um painel liso por 2 × 2 u: dezenas de milhares de
+// instâncias de 2 triângulos, caras de desenhar — a placa por telhado é ~13× menos instâncias.)
 // Uma malha por tipo e faixa no mapa inteiro: poucos desenhos, sem descarte por pedaço (a de perto e a do meio têm a caixa da faixa).
 //   Roofs3D.on      ligado (Config.art.roofPoly; `?telhados=2d` = as texturas de antes)
 //   add(lot, y)     um telhado (y = a altura do topo no mundo)        build(scene) → malhas        stats()
@@ -73,7 +76,7 @@ const Roofs3D = {
 
     build(scene) {
         const t0 = performance.now(), B = this.BUCKET;
-        const per = {};                                                       // tipo → [[bucket, matriz(16), cor(4)]]
+        const per = {}, plates = {};                                          // tipo → [[balde, matriz(16), cor(4)]]: painéis e a placa de cada telhado
         const props = {};                                                     // peça → idem
         const put = (T, key, bk, m, c) => { (T[key] || (T[key] = [])).push([bk, m, c]); };
         const mat = (cx, y, cz, th, sx, sy, sz) => {                         // T · Ry(th) · S(sx, sy, sz): +X do modelo → (cos, -sen), +Z → (sen, cos)
@@ -94,35 +97,43 @@ const Roofs3D = {
             const na = Math.max(1, Math.round(la / this.PANEL)), nc = Math.max(1, Math.round(lc / this.PANEL)), ca = la / na, cc = lc / nc;
             const flip = rnd() < 0.5 ? Math.PI : 0, th = (alongX ? Math.PI / 2 : 0) + flip;
             const cx0 = (f.x0 + f.x1) / 2, cz0 = (f.z0 + f.z1) / 2, bk = Math.floor(cx0 / B) + ',' + Math.floor(cz0 / B);
-            for (let a = 0; a < na; a++) for (let c = 0; c < nc; c++) {
+            // (a cor leva no alfa o desgaste para o shader: 1 + ferrugem + 10·sujeira, +1000 na placa — lido no Roof3DPlugin)
+            const code = 1 + Math.round(wear[0] * 9) + Math.round(wear[1] * 9) * 10, lods = this.LODS[kind];
+            put(plates, kind, bk, mat(cx0, f.y, cz0, th, lc / 2, 1, la / 2), [ic[0], ic[1], ic[2], code + 1000]);      // a PLACA: o telhado inteiro, lisa (longe, e as lajes sempre)
+            if (lods[0] !== 2 || lods[1] !== 2) for (let a = 0; a < na; a++) for (let c = 0; c < nc; c++) {
                 const ua = -la / 2 + ca * (a + 0.5), uc = -lc / 2 + cc * (c + 0.5);
                 const px = cx0 + (alongX ? ua : uc), pz = cz0 + (alongX ? uc : ua);
-                // (o painel: x = de través = lc/nc, z = no sentido da água = la/na; a cor leva a ferrugem/sujeira no alfa: 1 + ferrugem·10 + sujeira·100 — lido no shader)
-                put(per, kind, bk, mat(px, f.y, pz, th, cc / 2, 1, ca / 2), [ic[0], ic[1], ic[2], 1 + Math.round(wear[0] * 9) + Math.round(wear[1] * 9) * 10]);
+                // (o painel: x = de través = lc/nc, z = no sentido da água = la/na)
+                put(per, kind, bk, mat(px, f.y, pz, th, cc / 2, 1, ca / 2), [ic[0], ic[1], ic[2], code]);
                 panels++;
             }
             nprops += this._props(f, kind, w, d, rnd, (key, x, yy, z, rot, s, c, sx, sz) => put(props, key, Math.floor(x / B) + ',' + Math.floor(z / B), mat(x, yy, z, rot, sx || s, s, sz || s), c || [1, 1, 1, 1]));
         }
-        // malhas: cada tipo/peça com as instâncias ordenadas por balde
+        // malhas: cada tipo/peça com as instâncias ordenadas por balde (cada balde guarda a fatia dos painéis e a das placas)
         const out = [], kinds = [], parts = [];
-        const sort = (L) => {
+        const sort = (L, keys) => {
             const by = new Map();
+            for (const k of keys || []) by.set(k, []);
             for (const e of L) { let g = by.get(e[0]); if (!g) by.set(e[0], g = []); g.push(e); }
-            const M = new Float32Array(L.length * 16), C = new Float32Array(L.length * 4), buckets = [];
+            const M = new Float32Array(Math.max(1, L.length) * 16), C = new Float32Array(Math.max(1, L.length) * 4), buckets = [];
             let i = 0;
             for (const [key, g] of by) {
                 const [bx, bz] = key.split(',').map(Number), s = i;
                 let y = 0;
                 for (const e of g) { M.set(e[1], i * 16); C.set(e[2], i * 4); y += e[1][13]; i++; }
-                buckets.push({ s, n: g.length, cx: (bx + 0.5) * B, cz: (bz + 0.5) * B, y: y / g.length, band: -1 });
+                buckets.push({ key, s, n: g.length, cx: (bx + 0.5) * B, cz: (bz + 0.5) * B, y: g.length ? y / g.length : 0, band: -1 });
             }
             return { M, C, buckets, n: L.length };
         };
-        for (const kind of Object.keys(per)) {
-            const D = sort(per[kind]), lods = this.LODS[kind] || [0, 0, 0];
-            const meshes = [0, 1, 2].map((L) => (L > 0 && lods[L] === lods[L - 1] ? null : this._mesh(scene, 'roof_3d_' + kind + '_' + L, this._panelGPU(scene, kind, lods[L]), this._mat(scene, kind), D.n)));
-            kinds.push({ kind, D, meshes });
-            for (const m of meshes) if (m) out.push(m);
+        for (const kind of Object.keys(plates)) {
+            const Q = sort(plates[kind]), P = sort(per[kind] || [], Q.buckets.map((b) => b.key)), lods = this.LODS[kind], mat = this._mat(scene, kind);
+            const m0 = lods[0] !== 2 ? this._mesh(scene, 'roof_3d_' + kind + '_perto', this._panelGPU(scene, kind, lods[0]), mat, P.n) : null;
+            const m1 = lods[1] !== 2 && lods[1] !== lods[0] ? this._mesh(scene, 'roof_3d_' + kind + '_meio', this._panelGPU(scene, kind, lods[1]), mat, P.n) : null;
+            const mp = this._mesh(scene, 'roof_3d_' + kind + '_placa', this._panelGPU(scene, kind, 2), mat, Q.n);
+            const byKey = new Map(P.buckets.map((b) => [b.key, b]));
+            for (const b of Q.buckets) b.p = byKey.get(b.key);                // (o mesmo balde nos painéis)
+            kinds.push({ kind, D: Q, P, meshes: [m0, m1, mp] });
+            for (const m of [m0, m1, mp]) if (m) out.push(m);
         }
         for (const key of Object.keys(props)) {
             const D = sort(props[key]), m = this._mesh(scene, 'roof_3d_peca_' + key, this._propGPU(scene, key), this._propMat(scene), D.n);
@@ -141,9 +152,9 @@ const Roofs3D = {
         const B = this._built;
         if (!B) return null;
         const lv = (m) => (m && m.isVisible ? m.thinInstanceCount : 0), tris = (m) => (m && m.isVisible ? m.thinInstanceCount * m.getTotalIndices() / 3 : 0);
-        const o = Object.assign({}, this._st, { near: 0, mid: 0, far: 0, propsOn: 0, tris: 0, draws: 0 });
-        for (const K of B.kinds) { o.near += lv(K.meshes[0]); o.mid += lv(K.meshes[1]); o.far += lv(K.meshes[2]); for (const m of K.meshes) { o.tris += tris(m); if (lv(m)) o.draws++; } }
-        for (const P of B.parts) { o.propsOn += lv(P.meshes[0]); o.tris += tris(P.meshes[0]); if (lv(P.meshes[0])) o.draws++; }
+        const o = Object.assign({}, this._st, { near: 0, mid: 0, far: 0, propsOn: 0, tris: 0, draws: 0, inst: 0 });
+        for (const K of B.kinds) { o.near += lv(K.meshes[0]); o.mid += lv(K.meshes[1]); o.far += lv(K.meshes[2]); for (const m of K.meshes) { o.tris += tris(m); o.inst += lv(m); if (lv(m)) o.draws++; } }
+        for (const P of B.parts) { o.propsOn += lv(P.meshes[0]); o.tris += tris(P.meshes[0]); o.inst += lv(P.meshes[0]); if (lv(P.meshes[0])) o.draws++; }
         o.tris = Math.round(o.tris);
         return o;
     },
@@ -188,18 +199,23 @@ const Roofs3D = {
             for (const b of D.buckets) {
                 let nb = band(b);
                 if (K.props) nb = nb === 0 ? 0 : -2;                                                // (peças: só perto)
-                else if (!M[nb]) nb = nb === 1 ? (M[2] ? 2 : 0) : nb === 2 ? (M[1] ? 1 : 0) : nb;      // (faixa sem malha própria: a vizinha)
+                else if (nb === 0 && !M[0]) nb = M[1] ? 1 : 2;                                      // (sem relevo de perto: o do meio ou a placa)
+                else if (nb === 1 && !M[1]) nb = 2;                                                 // (sem relevo do meio: a placa)
+                if (b.p && !b.p.n) nb = 2;                                                          // (balde sem painéis: a placa)
                 if (nb !== b.band) { b.band = nb; changed = true; }
             }
             if (!changed) continue;
             for (let L = 0; L < 3; L++) {
                 const m = M[L];
                 if (!m) continue;
+                const S = K.props || L === 2 ? D : K.P;                             // (perto e meio: os painéis; longe: as placas)
                 let n = 0, x0 = Infinity, z0 = Infinity, y0 = Infinity, x1 = -Infinity, z1 = -Infinity, y1 = -Infinity;
-                for (const b of D.buckets) {
-                    if (b.band !== L) continue;
-                    m._rfM.set(D.M.subarray(b.s * 16, (b.s + b.n) * 16), n * 16);
-                    m._rfC.set(D.C.subarray(b.s * 4, (b.s + b.n) * 4), n * 4);
+                for (const q of D.buckets) {
+                    if (q.band !== L) continue;
+                    const b = K.props || L === 2 ? q : q.p;
+                    if (!b || !b.n) continue;
+                    m._rfM.set(S.M.subarray(b.s * 16, (b.s + b.n) * 16), n * 16);
+                    m._rfC.set(S.C.subarray(b.s * 4, (b.s + b.n) * 4), n * 4);
                     n += b.n;
                     const h = this.BUCKET / 2 + 2;
                     if (b.cx - h < x0) x0 = b.cx - h; if (b.cx + h > x1) x1 = b.cx + h; if (b.cz - h < z0) z0 = b.cz - h; if (b.cz + h > z1) z1 = b.cz + h;
@@ -476,9 +492,11 @@ const Roofs3D = {
                     CUSTOM_FRAGMENT_BEFORE_LIGHTS: `
                         #ifdef ROOF3D
                         if (rfK.y > 0.5) {
-                            float rk = rfK.x, sd = rfS.x * 97.0, code = floor(rfS.y + 0.5) - 1.0, rust = mod(code, 10.0) / 9.0, dirt = floor(code / 10.0) / 9.0;
-                            vec3 L = rfL;
+                            float rk = rfK.x, sd = rfS.x * 97.0, code = floor(rfS.y + 0.5), plate = step(999.5, code);
+                            code = code - 1.0 - 1000.0 * plate;
+                            float rust = mod(code, 10.0) / 9.0, dirt = floor(code / 10.0) / 9.0;
                             vec2 W = vPositionW.xz;
+                            vec3 L = plate > 0.5 ? vec3(fract(W.x * 0.5) * 2.0 - 1.0, 0.0, fract(W.y * 0.5) * 2.0 - 1.0) : rfL;
                             #ifdef WEBGL2
                             float fw = length(fwidth(L.xz));
                             #else
