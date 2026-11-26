@@ -4,8 +4,9 @@
 const fs = require('fs'), path = require('path');
 const { ROOT, boot, gameWait } = require('./lib.cjs');
 
-// Símbolos de TEXTO nas mesmas faixas do Unicode (estrelas da procurado, naipes do truco, marcas): ficam com a fonte do texto.
-const TEXT = new Set([...'★☆✔✓✕✖✚✦♪♫♣♥♠♦♡☰♂']);
+// Símbolos de TEXTO nas mesmas faixas do Unicode (estrelas da procurado, naipes do truco, marcas, teclas e setas de texto): ficam com a
+// fonte do texto. (✗ = bônus perdido, ao lado da ★; ⌫ = o nome da tecla; ➤ = a seta do objetivo, girada pelo CSS.)
+const TEXT = new Set([...'★☆✔✓✕✖✗✚✦♪♫♣♥♠♦♡☰♂⌫➤']);
 const EMOJI = /(?:[\u{1F000}-\u{1FAFF}]|[⌚-⏿☀-➿⬀-⯿])️?(?:‍(?:[\u{1F000}-\u{1FAFF}]|[☀-➿])️?)*/gu;
 function stripComments(s) {
     let out = '', i = 0, q = null;
