@@ -238,13 +238,13 @@ class TerrainBuilder {
         const mk = (bt, name, mat, o) => { const m = bt.build(`terr_${ci}_${cj}_${name}`, this.scene, mat, Object.assign({ receiveShadows: false, alwaysActive: false, relief: true }, o)); if (m) chunk.meshes.push(m); return m; };
         yield; mk(ground, 'ground', this.ground, { vertexColors: true, clamp: TerrainBuilder.roadCut });
         yield;
-        const hi = mk(vegHi, 'vhi', wb.props.hiMaterial, { vertexColors: true });
+        const hi = mk(vegHi, 'vhi', vegHi.empty ? null : wb.props.hiMaterial, { vertexColors: true });      // (o material só é pedido se houver desenho: o atlas é sob demanda)
         if (hi) {                                                                 // copas por cima de tudo que anda no chao (ver WorldBuilder._flush)
             hi.renderingGroupId = 1; hi.alphaIndex = -1;
             const mk = XRaySilhouette.addMask(hi, wb.props.maskMaterial);         // (quem passa embaixo: a silhueta dourada)
             if (mk) chunk.meshes.push(mk);
         }
-        yield; mk(vegLo, 'vlo', wb.props.loMaterial, { vertexColors: true });
+        yield; mk(vegLo, 'vlo', vegLo.empty ? null : wb.props.loMaterial, { vertexColors: true });
         if (vegHi.trees || vegLo.trees) { yield; for (const m of Trees3D.build(this.scene, [vegHi, vegLo], `terr_${ci}_${cj}`, wb.shadow, { lod: 0, casts: false })) chunk.meshes.push(m); }      // árvores 3D (etapa 5)
         this._addColliders(chunk);
 

@@ -402,7 +402,9 @@ class PoliceManager {
     }
 
     spawn() {
-        HeliArt.body(this.scene, 6); HeliArt.rotor(this.scene, true); HeliArt.rotor(this.scene, false); HeliArt.shadow(this.scene);   // desenha o helicóptero já na carga (evita engasgo quando ele chega)
+        // monta o helicóptero já na carga (evita engasgo quando ele chega): em 3D só o disco e a sombra em polígonos; sem o modelo, as texturas
+        if (HeliArt.has3d()) { HeliArt.blurMesh(this.scene, 'heliWarm').dispose(); HeliArt.shadowMesh(this.scene, 'heliWarmSh').dispose(); }
+        else { HeliArt.body(this.scene, 6); HeliArt.rotor(this.scene, true); HeliArt.rotor(this.scene, false); HeliArt.shadow(this.scene); }
 
         // Viaturas de patrulha (física) — nas ruas.
         for (let i = 0; i < Config.police.patrolCars; i++) this._spawnPatrolCar(i);

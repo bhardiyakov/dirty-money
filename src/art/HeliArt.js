@@ -11,6 +11,12 @@
 //   • rotor: dois quads — as pás NÍTIDAS (parado/girando devagar) e o DISCO BORRADO (em rotação) — que se revezam pela rotação;
 //   • sombra: a silhueta do helicóptero (corpo + disco do rotor), desfocada, no chão, deslocada pelo sol e pela altura.
 // Texturas e materiais são criados uma vez por pintura e compartilhados (alguns poucos MB no total).
+//
+// EM POLÍGONOS (o padrão: o corpo e os rotores são o modelo 3D do CarArt3D — 'heli' / 'heli_policia'): o disco borrado e a sombra
+// também deixam de ser textura — HeliArt.blurMesh (um disco de polígonos com cor e transparência por vértice: o rastro escuro atrás
+// de cada pá, a borda clara) e HeliArt.shadowMesh (uma grade de polígonos cuja transparência por vértice é a silhueta do corpo +
+// o disco do rotor, amostrada uma vez de um canvas pequeno que é jogado fora). Zero textura de helicóptero na memória de vídeo; as
+// texturas acima (body/rotor/shadow) só existem sem o modelo 3D.
 // ============================================================================
 
 const HeliArt = {
@@ -210,6 +216,91 @@ const HeliArt = {
         g.beginPath(); g.arc(0, 0, 0.11, 0, Math.PI * 2); g.fillStyle = '#1b1e25'; g.fill();
     },
 
+    // ------------------------------------------------------------------ polígonos (com o modelo 3D)
+    has3d(id = 'heli_policia') { return typeof CarArt3D !== 'undefined' && CarArt3D.has(id); },
+    _vcMaterial(scene, name, emissive) {
+        const m = new BABYLON.StandardMaterial(name, scene);
+        m.disableLighting = true; m.emissiveColor = emissive || SpriteMaterial.sharedTint();      // (escurece à noite como o resto)
+        m.specularColor = BABYLON.Color3.Black(); m.backFaceCulling = false;
+        return m;
+    },
+    _vcMesh(scene, name, P, C, I, mat) {
+        const mesh = new BABYLON.Mesh(name, scene), vd = new BABYLON.VertexData();
+        vd.positions = new Float32Array(P); vd.colors = new Float32Array(C); vd.indices = I.length / 3 > 65535 ? new Uint32Array(I) : new Uint16Array(I);
+        vd.normals = new Float32Array(P.length); for (let i = 1; i < P.length; i += 3) vd.normals[i] = 1;
+        vd.applyToMesh(mesh, false);
+        mesh.hasVertexAlpha = true; mesh.useVertexColors = true;
+        mesh.material = mat; mesh.isPickable = false; mesh.alwaysSelectAsActiveMesh = true;
+        return mesh;
+    },
+    // Disco borrado do rotor (girando rápido): anéis × fatias; cada vértice = o tom claro do disco (mais forte na borda) com o rastro
+    // escuro das 4 pás por cima (~50° atrás de cada pá, mais escuro logo atrás dela) — o mesmo desenho do canvas, sem textura.
+    blurMesh(scene, name) {
+        if (!(this._blur && this._blur.getScene() === scene && !this._blur.isDisposed())) {
+            const R = this.R, NA = 96, RS = [0.35, R * 0.5, R * 0.72, R * 0.85, R * 0.93, R * 0.985, R], P = [], C = [], I = [];
+            const trail = 26 * 0.034;
+            for (let j = 0; j < RS.length; j++) {
+                const r = RS[j], f = r / R, ba = f < 0.85 ? 0.1 + 0.06 * f / 0.85 : 0.16 + 0.12 * (f - 0.85) / 0.15;
+                const ring = (j === 2 || j === 4) ? 0.06 : 0;                                            // (anéis de "velocidade")
+                for (let i = 0; i <= NA; i++) {
+                    const a = (i / NA) * Math.PI * 2;
+                    P.push(Math.cos(a) * r, 0, Math.sin(a) * r);
+                    let ph = (-a) % (Math.PI / 2); if (ph < 0) ph += Math.PI / 2;                      // (quanto atrás da pá mais próxima)
+                    const t = ph < trail ? 1 - ph / trail : 0, da = t > 0 && j > 0 && j < RS.length - 1 ? 0.05 + 0.13 * t * t : 0;
+                    const lA = Math.min(0.5, ba + ring), A = da + lA * (1 - da);                       // (o rastro por cima do disco claro)
+                    const k = A > 0 ? (lA * (1 - da)) / A : 0;
+                    C.push((0.08 + 0.78 * k), (0.086 + 0.78 * k), (0.12 + 0.8 * k), A);
+                }
+            }
+            for (let j = 0; j + 1 < RS.length; j++) for (let i = 0; i < NA; i++) {
+                const a = j * (NA + 1) + i, b = a + 1, c = a + NA + 1, d = c + 1;
+                I.push(a, c, b, b, c, d);
+            }
+            this._blur = this._vcMesh(scene, 'heliRotorBlurPoly', P, C, I, this._vcMaterial(scene, 'heliRotorBlurPolyMat'));
+            this._blur.setEnabled(false);
+        }
+        const m = this._blur.clone(name);
+        m.hasVertexAlpha = true; m.useVertexColors = true; m.renderingGroupId = 2;
+        return m;
+    },
+    // Sombra: grade de polígonos (0,27 m) com a silhueta (corpo + 35% do disco do rotor) na transparência dos vértices — borda macia
+    // pela interpolação. A silhueta é desenhada uma vez num canvas pequeno (o mesmo _drawBody do desenho antigo) e lida para os vértices.
+    shadowMesh(scene, name) {
+        if (!(this._shm && this._shm.getScene() === scene && !this._shm.isDisposed())) {
+            const S = this.SIZE, N = 48, PXs = 128, c = document.createElement('canvas');
+            c.width = c.height = PXs;
+            const g = c.getContext('2d'), k = PXs / S;
+            g.setTransform(k, 0, 0, k, PXs / 2, PXs / 2); g.lineJoin = 'round'; g.lineCap = 'round';
+            g.filter = `blur(${Math.max(1, Math.round(k * 0.12))}px)`;
+            this._drawBody(g, { paint: '#000000' }, false, true);
+            g.globalAlpha = 0.35; g.beginPath(); g.arc(0, 0, this.R, 0, Math.PI * 2); g.fillStyle = '#000'; g.fill();
+            const D = g.getImageData(0, 0, PXs, PXs).data;
+            const at = (u, v) => {                                                                       // alfa bilinear do canvas
+                const x = Math.max(0, Math.min(PXs - 1.001, u - 0.5)), y = Math.max(0, Math.min(PXs - 1.001, v - 0.5)), x0 = x | 0, y0 = y | 0, fx = x - x0, fy = y - y0;
+                const A = (i, j) => D[((y0 + j) * PXs + x0 + i) * 4 + 3] / 255;
+                return (A(0, 0) * (1 - fx) + A(1, 0) * fx) * (1 - fy) + (A(0, 1) * (1 - fx) + A(1, 1) * fx) * fy;
+            };
+            const P = [], C = [], I = [];
+            for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+                const x = (i / N - 0.5) * S, z = (j / N - 0.5) * S;
+                P.push(x, 0, z);
+                C.push(1, 1, 1, at(PXs / 2 + x * k, PXs / 2 + z * k));                               // (nariz em +Z = linha de baixo do canvas)
+            }
+            for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+                const a = j * (N + 1) + i, b = a + 1, cc = a + N + 1, d = cc + 1;
+                if (C[a * 4 + 3] + C[b * 4 + 3] + C[cc * 4 + 3] + C[d * 4 + 3] < 0.004) continue;     // (fora da silhueta: sem polígono)
+                I.push(a, cc, b, b, cc, d);
+            }
+            const m = this._vcMaterial(scene, 'heliShadowPolyMat', new BABYLON.Color3(0.02, 0.02, 0.04));
+            m.disableDepthWrite = true;
+            this._shm = this._vcMesh(scene, 'heliShadowPoly', P, C, I, m);
+            this._shm.setEnabled(false);
+        }
+        const m = this._shm.clone(name);
+        m.hasVertexAlpha = true; m.useVertexColors = true; m.alphaIndex = -98;
+        return m;
+    },
+
     // ------------------------------------------------------------------ GPU
     _material(scene, name, canvas, alpha = 1) {
         const tex = new BABYLON.DynamicTexture(name, canvas, scene, true, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
@@ -267,8 +358,9 @@ class HeliVisual {
             this.body = quad(name + 'Body', HeliArt.body(scene, variant), 2);
             this.blades = quad(name + 'Blades', HeliArt.rotor(scene, false), 2);
         }
-        this.blur = quad(name + 'RotorBlur', HeliArt.rotor(scene, true), 2);
-        this.shadow = quad(name + 'Shadow', HeliArt.shadow(scene), 0);
+        // (com o modelo 3D: o disco borrado e a sombra em polígonos — sem textura nenhuma)
+        this.blur = this.solid ? HeliArt.blurMesh(scene, name + 'RotorBlur') : quad(name + 'RotorBlur', HeliArt.rotor(scene, true), 2);
+        this.shadow = this.solid ? HeliArt.shadowMesh(scene, name + 'Shadow') : quad(name + 'Shadow', HeliArt.shadow(scene), 0);
         this.shadow.alphaIndex = -98;                                          // logo depois das marcas de chão
         this._rot = 0;
         this._prev = null; this._vel = { f: 0, r: 0 }; this._ph = 0;

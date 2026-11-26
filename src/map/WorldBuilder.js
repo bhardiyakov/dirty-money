@@ -1277,7 +1277,7 @@ class WorldBuilder {
             }
         }
 
-        this.perches = lamps.map((l) => ({ x: l.hx, z: l.hz, y: 5.75 }));          // poleiros das aves (Birds)
+        this.perches = lamps.map((l) => ({ x: l.hx, z: l.hz, y: 5.78 }));          // poleiros das aves (Birds): o topo da luminária (StreetFurniture.lamp)
         this.streetLamps = lamps;                                                     // (as fontes do campo de luz da noite: NightLights)
 
         // Brilhos: cabeçote (alto) + poça no chão, por poste.
@@ -1462,7 +1462,7 @@ class WorldBuilder {
         this._favPoleList = poles;                                     // (FavelaDetail: os fios do gato para as casas)
         this.perches = this.perches || [];
         for (const p of poles) {
-            this.perches.push({ x: p.x, z: p.z, y: 6.1 });
+            this.perches.push({ x: p.x, z: p.z, y: 6.0 });                         // (o topo do poste de madeira)
             const trim = this._batch('trim', p.x, p.z), ax = p.arm === 'x';
             // Poste de madeira torto (dois troncos emendados), travessa e remendos.
             trim.solid(p.x - 0.15, p.z - 0.15, p.x + 0.15, p.z + 0.15, 0, 6.0, WOOD);

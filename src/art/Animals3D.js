@@ -17,6 +17,9 @@
 //   Animals3D.on            ligado (Config.art.animals3d; `?bichos=2d` desliga)
 //   Animals3D.VAR[sp]       pelagens de cada espécie (nome)
 //   Animals3D.draw(lista)   desenha os bichos { sp, vr, x, z, h, ph, mv, run, gz, rs, dead, seed } (Livestock._render)
+//   Animals3D.draw(l, 'ave') as AVES da cidade (world/Birds.js): pombo, gaivota, rolinha e bem-te-vi — `y` = altura do voo/poleiro,
+//                           `rs` = asa aberta (0 dobrada no corpo … 1 aberta, as pernas recolhidas) e `flap` = o ângulo da batida
+//                           (radianos); cada grupo ('pasto', 'ave') zera e desenha só as malhas dele.
 // ============================================================================
 
 const Animals3D = {
@@ -34,6 +37,7 @@ const Animals3D = {
 		cabra: ['marrom', 'escura', 'creme'],
 		ovelha: ['la', 'carneiro', 'preta'],
 		cachorro: ['pastor', 'caramelo', 'preto', 'malhado'],
+		ave: ['pombo', 'gaivota', 'rolinha', 'bemtevi'],
 	},
 
 	// RIG de cada espécie (o shader): quadris e joelhos (y, z) da frente e de trás, pivô do pescoço e do rabo, amplitude do passo
@@ -46,6 +50,8 @@ const Animals3D = {
 		ovelha:   { hipF: [0.58, 0.32], hipB: [0.6, -0.33], kneeF: [0.3, 0.33], kneeB: [0.32, -0.39], neck: [0.65, 0.42], tail: [0.8, -0.52], stride: 0.34, knee: 0.75, bob: 0.025, drop: 0.36, graze: 1.5, wag: 0.3, lift: 0.2 },
 		cachorro: { hipF: [0.55, 0.3], hipB: [0.58, -0.3], kneeF: [0.28, 0.31], kneeB: [0.3, -0.42], neck: [0.7, 0.38], tail: [0.66, -0.4], stride: 0.42, knee: 0.95, bob: 0.02, drop: 0.36, graze: 0.9, wag: 1, lift: 0.6 },
 		galinha:  { hipF: [0.22, 0.0], hipB: [0.22, 0.0], kneeF: [0.22, 0.0], kneeB: [0.22, 0.0], neck: [0.3, 0.05], tail: [0.38, -0.14], stride: 0.55, knee: 0, bob: 0.015, drop: 0.13, graze: 1.5, wag: 0.2, lift: 0.3, bird: true, wing: [0.08, 0.36] },
+		// (as aves da cidade: a asa que VOA — código 13 — gira no ombro `wing` = [x, y, z]; a escala de cada espécie vem na instância)
+		ave:      { hipF: [0.11, 0.0], hipB: [0.11, 0.0], kneeF: [0.11, 0.0], kneeB: [0.11, 0.0], neck: [0.2, 0.12], tail: [0.17, -0.2], stride: 0.5, knee: 0, bob: 0.01, drop: 0, graze: 1.25, wag: 0, lift: 0, bird: true, wing: [0.078, 0.232, 0.02] },
 	},
 
 	SCALE: 1.15,                 // (um pouco acima do real: lado a lado com os personagens 2,5D, que são desenhados grandes)
@@ -57,15 +63,15 @@ const Animals3D = {
 	init(scene, shadow) { this._scene = scene; this._shadow = shadow || null; },
 
 	// ------------------------------------------------------------------ desenho (por quadro)
-	draw(list) {
+	draw(list, grp = 'pasto') {
 		const t = (performance.now() / 1000) % 600;
-		for (const E of this._meshes.values()) E.n = 0;
+		for (const E of this._meshes.values()) if (E.grp === grp) E.n = 0;
 		const Mx = BABYLON.Matrix, Q = BABYLON.Quaternion, V = BABYLON.Vector3, q = this._q || (this._q = new Q()), m = this._m || (this._m = new Mx());
 		const one = this._one || (this._one = new V(1, 1, 1)), tr = this._tr || (this._tr = new V());
 		for (const a of list) {
 			const key = a.sp + '|' + a.vr;
 			let E = this._meshes.get(key);
-			if (!E) { E = this._make(a.sp, a.vr); if (!E) continue; this._meshes.set(key, E); }
+			if (!E) { E = this._make(a.sp, a.vr); if (!E) continue; E.grp = grp; this._meshes.set(key, E); }
 			if (E.n >= E.cap) this._grow(E, E.cap * 2);
 			const k = E.n++, R = this.RIG[a.sp];
 			let y = typeof Relief !== 'undefined' ? Relief.at(a.x, a.z) : 0, pitch = 0, roll = 0, x = a.x, z = a.z;
@@ -73,16 +79,18 @@ const Animals3D = {
 				roll = Math.PI / 2 * (a.seed < 0.5 ? 1 : -1);
 				const cy = R.hipF[0] * 0.9 * this.SCALE, lift = E.half * this.SCALE;
 				x += Math.cos(a.h) * cy * Math.sign(roll); z -= Math.sin(a.h) * cy * Math.sign(roll); y += lift - 0.02;
-			} else if (typeof Relief !== 'undefined' && Relief.on) pitch = -Math.atan(Relief.slope(a.x, a.z, Math.sin(a.h), Math.cos(a.h))) * 0.8;      // (no morro: acompanha a encosta)
+			} else if (a.y > 0.05) y += a.y;                                    // (ave voando ou no poste)
+			else if (typeof Relief !== 'undefined' && Relief.on) pitch = -Math.atan(Relief.slope(a.x, a.z, Math.sin(a.h), Math.cos(a.h))) * 0.8;      // (no morro: acompanha a encosta)
 			Q.RotationYawPitchRollToRef(a.h, pitch, roll, q);
 			tr.set(x, y, z);
 			Mx.ComposeToRef(this._sc((a.scale || 1) * this.SCALE), q, tr, m);
 			m.copyToArray(E.M, k * 16);
 			const o = k * 4;
 			E.A[o] = a.ph || 0; E.A[o + 1] = a.dead ? 0 : a.mv || 0; E.A[o + 2] = a.dead ? 0 : a.run || 0; E.A[o + 3] = a.dead ? 0 : a.gz || 0;
-			E.B[o] = a.dead ? 0 : a.rs || 0; E.B[o + 1] = a.seed || 0; E.B[o + 2] = t; E.B[o + 3] = a.dead ? 1 : 0;
+			E.B[o] = a.dead ? 0 : a.rs || 0; E.B[o + 1] = a.seed || 0; E.B[o + 2] = t; E.B[o + 3] = a.dead ? 0 : a.flap || 0;
 		}
 		for (const E of this._meshes.values()) {
+			if (E.grp !== grp) continue;
 			E.mesh.thinInstanceCount = E.n;
 			E.mesh.setEnabled(E.n > 0);
 			if (E.n) {
@@ -92,7 +100,7 @@ const Animals3D = {
 		}
 	},
 	_sc(s) { const v = this._scv || (this._scv = new BABYLON.Vector3()); v.set(s, s, s); return v; },
-	clear() { for (const E of this._meshes.values()) { E.n = 0; E.mesh.thinInstanceCount = 0; E.mesh.setEnabled(false); } },
+	clear(grp = 'pasto') { for (const E of this._meshes.values()) if (E.grp === grp) { E.n = 0; E.mesh.thinInstanceCount = 0; E.mesh.setEnabled(false); } },
 
 	_make(sp, vr) {
 		if (!this._scene || !this.RIG[sp]) return null;
@@ -154,7 +162,7 @@ const Animals3D = {
 				ub.updateFloat4('anN', R.neck[0], R.neck[1], R.tail[0], R.tail[1]);
 				ub.updateFloat4('anG', R.stride, R.knee, R.bob, R.drop);
 				ub.updateFloat4('anX', R.graze, R.bird ? 1 : 0, R.wag, R.lift);
-				ub.updateFloat4('anW', w[0], w[1], 0, 0);
+				ub.updateFloat4('anW', w[0], w[1], w[2] || 0, 0);
 			}
 			getCustomCode(type) {
 				// (sem ponto e vírgula em comentário GLSL: o Babylon corta a linha ali)
@@ -175,7 +183,7 @@ const Animals3D = {
 						anO = position; anM = anP;
 						float anCode = floor(anP.x + 0.5);
 						float anPh = anA.x, anMv = anA.y, anRn = anA.z, anGz = anA.w, anRs = anB.x, anSd = anB.y, anTm = anB.z;
-						float anLH = 0.0, anLK = 0.0, anHp = 0.0, anHy = 0.0, anTy = 0.0, anTp = 0.0, anWg = 0.0, anRk = 0.0;
+						float anLH = 0.0, anLK = 0.0, anHp = 0.0, anHy = 0.0, anTy = 0.0, anTp = 0.0, anWg = 0.0, anRk = 0.0, anFo = 0.0, anFs = 0.0, anFa = 0.0;
 						float anBird = anX.y;
 						if (anCode > 0.5 && anCode < 8.5) {
 							float li = mod(anCode - 1.0, 4.0), fr = li < 1.5 ? 1.0 : 0.0, side = mod(li, 2.0);
@@ -209,6 +217,17 @@ const Animals3D = {
 							float sg = position.x > 0.0 ? 1.0 : -1.0;
 							anWg = sg * (anRn * 1.1 * (0.5 + 0.5 * sin(anTm * 24.0 + anSd * 5.0)) + 0.05 * anMv * sin(anPh));
 							positionUpdated = anRz(positionUpdated, vec2(sg * anW.x, anW.y), anWg);
+						} else if (anCode > 12.5 && anCode < 13.5) {
+							// ASA QUE VOA (as aves da cidade): modelada aberta, gira no ombro — bate (anB.w) com a asa aberta (anB.x) e,
+							// pousada, encolhe (as penas da ponta por baixo), vira para trás, deita no lombo e desce até o rabo
+							anFs = position.x > 0.0 ? 1.0 : -1.0; anFo = 1.0 - clamp(anRs, 0.0, 1.0); anFa = anFs * anB.w * (1.0 - anFo);
+							vec3 anC = vec3(anFs * anW.x, anW.y, anW.z), q = positionUpdated - anC;
+							q = anRz(q, vec2(0.0), anFa);
+							q.x *= mix(1.0, 0.42, anFo); q.z *= mix(1.0, 0.6, anFo);
+							q = anRy(q, vec2(0.0), anFs * 1.62 * anFo);
+							q = anRz(q, vec2(0.0), -anFs * 0.75 * anFo);
+							q = anRx(q, vec2(0.0), -0.32 * anFo);
+							positionUpdated = anC + q - vec3(anFs * 0.015 * anFo, 0.0, 0.0);
 						}
 						anRk = 0.08 * anRn * sin(anPh) * (1.0 - anBird);
 						positionUpdated = anRx(positionUpdated, vec2(anH.x, 0.0), anRk);
@@ -220,6 +239,7 @@ const Animals3D = {
 						else if (anCode > 8.5 && anCode < 9.5) { normalUpdated = anRx(normalUpdated, vec2(0.0), anHp); normalUpdated = anRy(normalUpdated, vec2(0.0), anHy); }
 						else if (anCode > 9.5 && anCode < 10.5) { normalUpdated = anRx(normalUpdated, vec2(0.0), anTp); normalUpdated = anRy(normalUpdated, vec2(0.0), anTy); }
 						else if (anCode > 11.5 && anCode < 12.5) normalUpdated = anRz(normalUpdated, vec2(0.0), anWg);
+						else if (anCode > 12.5 && anCode < 13.5) { normalUpdated = anRz(normalUpdated, vec2(0.0), anFa); normalUpdated = anRy(normalUpdated, vec2(0.0), anFs * 1.62 * anFo); normalUpdated = anRz(normalUpdated, vec2(0.0), -anFs * 0.75 * anFo); normalUpdated = anRx(normalUpdated, vec2(0.0), -0.32 * anFo); }
 						normalUpdated = anRx(normalUpdated, vec2(0.0), anRk);
 						#endif`,
 				};
@@ -394,7 +414,7 @@ const Animals3D = {
 	// ------------------------------------------------------------------ as espécies
 	model(sp, vr) {
 		const V = this.VAR[sp][vr] || this.VAR[sp][0];
-		const mudOf = { porco: { rosa: 0.3, sujo: 1.0, malhado: 0.55, caipira: 0.6 }, vaca: 0.35, cavalo: 0.25, cabra: 0.3, ovelha: 0.35, cachorro: 0.15, galinha: 0 };
+		const mudOf = { porco: { rosa: 0.3, sujo: 1.0, malhado: 0.55, caipira: 0.6 }, vaca: 0.35, cavalo: 0.25, cabra: 0.3, ovelha: 0.35, cachorro: 0.15, galinha: 0, ave: 0 };
 		const mo = mudOf[sp], g = this._G(typeof mo === 'object' ? mo[V] : mo);
 		const R = this.RIG[sp], eyeC = [0.05, 0.04, 0.035];
 		if (sp === 'vaca') {
@@ -607,6 +627,49 @@ const Animals3D = {
 				this.tube(g, [[s * 0.05, 0.02, 0.0, 0.006, 0.006], [s * 0.05, 0.01, -0.04, 0.004, 0.004]], 5, leg, 1 + li, 9);
 			}
 			g.half = 0.13;
+		} else if (sp === 'ave') {
+			// AVES DA CIDADE (world/Birds.js), em unidades da espécie (a escala vem na instância): corpo em gota, cabeça, bico, olhos,
+			// rabo em leque, pernas curtas e as ASAS modeladas ABERTAS (código 13: o shader dobra no corpo pousada e bate no voo).
+			const P = {
+				pombo:   { body: [0.55, 0.57, 0.61], belly: [0.65, 0.68, 0.71], head: [0.37, 0.48, 0.55], neck: [0.3, 0.5, 0.42], wing: [0.5, 0.52, 0.56], tip: [0.24, 0.25, 0.28], beak: [0.84, 0.72, 0.69], leg: [0.78, 0.36, 0.36], half: 0.46, bill: 0.03, bars: true },
+				gaivota: { body: [0.95, 0.95, 0.96], belly: [1, 1, 1], head: [0.97, 0.97, 0.98], neck: [0.96, 0.96, 0.97], wing: [0.78, 0.8, 0.84], tip: [0.13, 0.14, 0.17], beak: [0.95, 0.7, 0.12], leg: [0.85, 0.75, 0.55], half: 0.62, bill: 0.045, spots: true },
+				rolinha: { body: [0.66, 0.5, 0.37], belly: [0.82, 0.7, 0.58], head: [0.74, 0.6, 0.48], neck: [0.7, 0.55, 0.42], wing: [0.6, 0.45, 0.3], tip: [0.28, 0.21, 0.15], beak: [0.38, 0.33, 0.3], leg: [0.75, 0.45, 0.45], half: 0.42, bill: 0.025, dots: true },
+				bemtevi: { body: [0.45, 0.33, 0.2], belly: [0.95, 0.78, 0.1], head: [0.12, 0.11, 0.1], neck: [0.95, 0.94, 0.9], wing: [0.42, 0.29, 0.17], tip: [0.24, 0.17, 0.1], beak: [0.12, 0.12, 0.12], leg: [0.2, 0.19, 0.18], half: 0.41, bill: 0.035, kiskadee: true },
+			}[V];
+			const under = (p, n) => n[1] < -0.25 || (p[2] > 0.04 && n[1] < 0.35);                        // peito e barriga (o tom claro)
+			this.tube(g, [[0, 0.165, -0.2, 0.03, 0.02], [0, 0.17, -0.12, 0.072, 0.066], [0, 0.165, -0.02, 0.095, 0.09], [0, 0.175, 0.07, 0.085, 0.085], [0, 0.2, 0.13, 0.058, 0.062]], 10,
+				(p, n) => (under(p, n) ? P.belly : P.body), 0, 2);
+			this.blob(g, [0, 0.178, -0.25], [0.055, 0.011, 0.075], (p) => (p[2] < -0.29 ? P.tip : P.wing), 0, 0, { rings: 5, N: 8, tilt: 0.12 });      // rabo em leque
+			this.tube(g, [[0, 0.2, 0.12, 0.052, 0.054], [0, 0.245, 0.15, 0.043, 0.043]], 8, (p, n) => (P.kiskadee ? (n[1] < 0 || p[2] > 0.15 ? P.belly : P.body) : P.neck), 9, 2, { capA: false, capB: false });
+			const headC = (p, n) => {
+				if (P.kiskadee) { const y = p[1] - 0.278; return y > 0.03 ? P.head : (y > 0.008 ? P.neck : (y > -0.012 && n[1] > -0.4 ? P.head : P.neck)); }   // (bem-te-vi: a faixa branca)
+				return P.head;
+			};
+			this.blob(g, [0, 0.275, 0.165], [0.043, 0.043, 0.05], headC, 9, 2, { rings: 6, N: 9 });
+			for (const s of [-1, 1]) this.blob(g, [s * 0.031, 0.285, 0.183], [0.009, 0.01, 0.01], eyeC, 9, 5, { rings: 3, N: 6 });
+			this.tube(g, [[0, 0.272, 0.205, 0.011, 0.01], [0, 0.266, 0.21 + P.bill, 0.003, 0.003]], 6, P.beak, 9, 9, { capB: false });
+			for (const [li, s] of [[0, -1], [1, 1]]) {                                                      // pernas e dedos
+				this.tube(g, [[s * 0.03, 0.11, 0.0, 0.009, 0.009], [s * 0.03, 0.012, 0.01, 0.007, 0.007]], 5, P.leg, 1 + li, 9, { capA: false });
+				for (const a of [-0.45, 0, 0.45]) this.tube(g, [[s * 0.03, 0.01, 0.01, 0.005, 0.004], [s * 0.03 + Math.sin(a) * 0.035, 0.004, 0.01 + Math.cos(a) * 0.035, 0.003, 0.003]], 4, P.leg, 1 + li, 9, { capA: false, capB: false });
+			}
+			// ASAS (abertas): do ombro até a ponta, enflechadas e com diedro; corda larga no ombro, fina na ponta
+			const H = P.half, x0 = 0.045, Wr = this.RIG.ave.wing;
+			const wingC = (p) => {
+				const t = (Math.abs(p[0]) - x0) / (H - x0);
+				if (t > 0.74) return P.spots && t > 0.9 && Math.sin(p[2] * 90) > 0.6 ? [0.95, 0.95, 0.95] : P.tip;
+				if (P.bars && t > 0.25 && t < 0.62 && Math.abs(Math.sin((t * 9 + p[2] * 10))) > 0.88) return [0.18, 0.19, 0.22];    // (pombo: as duas faixas)
+				if (P.dots && this.noise(p[0] * 40, p[2] * 40, 3) > 0.72) return [0.22, 0.16, 0.11];                               // (rolinha: as pintas)
+				return P.wing;
+			};
+			for (const s of [-1, 1]) {
+				const Pt = [];
+				for (let k = 0; k <= 4; k++) {
+					const t = k / 4, x = s * (x0 + t * (H - x0));
+					Pt.push([x, Wr[1] + t * 0.025, Wr[2] + 0.005 - t * t * 0.07, 0.08 * (1 - t * t * 0.62), 0.012 * (1 - t * 0.5)]);
+				}
+				this.tube(g, Pt, 7, wingC, 13, 0);
+			}
+			g.half = 0.1;
 		}
 		return g;
 	},

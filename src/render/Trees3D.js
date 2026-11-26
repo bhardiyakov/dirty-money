@@ -11,9 +11,13 @@
 // mais forte com chuva). As árvores projetam e recebem a sombra do sol e escrevem profundidade: quem passa atrás delas aparece como a
 // silhueta dourada (XRaySilhouette), como atrás dos prédios.
 // Onde entram: WorldBuilder._spriteQuad (as plantas da cidade, dos parques, do Morro do Vigia, do Colosso e do mundo grande —
-// TerrainBuilder._plant) desvia as espécies daqui para batch.trees; quem monta a malha do batch chama build(). Capim, samambaia,
-// flores, juncos, mato seco, pedras e guarda-sóis continuam nos sprites.
+// TerrainBuilder._plant) desvia as espécies daqui para batch.trees; quem monta a malha do batch chama build(). TODO tipo do PropSprites
+// tem modelo aqui (capim, samambaia, flores, juncos, mato seco, pedras, guarda-sol, lixo, entulho, fardo, silo e a mancha do chão):
+// o atlas dos props não é nem montado (PropSprites.lazy).
 //   wants(kind)   add(batch, kind, x, y0, z, s)   build(scene, batches, name, shadow, { lod }) → malhas
+// NÍVEL DE DETALHE PELA DISTÂNCIA (LOD, _lodTick — `?plantalod=0` desliga para comparar): cada malha ganha a gêmea de LONGE (o modelo
+// no detalhe −1: um terço dos cachos da copa, maiores; troncos com metade dos lados; pedras na icosfera simples), trocada além de
+// LOD.far (70 u × o preset: Low 0,65, Medium 0,85, HD 1,3; 10% de folga na volta); a rasteira some além de LOD.cover (45 u).
 // DETALHE (lod): 2 = todas as bolhas da copa com 2 subdivisões (as árvores da cidade, preset Medium para cima); 1 = só a principal
 // (cidade no Low); 0 = todas com 1 (o mapa grande — mata, encostas, campo: milhares de árvores). `casts` = false: não entram no mapa
 // de sombras (o mapa grande: numa mata fechada o chão debaixo das copas quase não aparece, e a sombra dobrava os desenhos).
@@ -36,9 +40,9 @@ const Trees3D = {
         sansevieria: 'sansevieria', cactus: 'cactus', bamboo: 'bamboo', monstera: 'monstera',
         capim: 'capim', boulder: 'rock', rock: 'rock', pebbles: 'pebbles',
         // objetos do cenário que eram desenhos chapados (PropSprites): guarda-sol, monte de lixo, entulho, fardo de feno, silo
-        umbrella: 'parasol', trash: 'trashpile', debris: 'rubble', hay: 'haybale', silo: 'silo' },
+        umbrella: 'parasol', trash: 'trashpile', debris: 'rubble', hay: 'haybale', silo: 'silo', stain: 'stain' },
     // RÍGIDOS: não balançam com o vento (o alfa da cor = 0,2 — o shader pula o vento e pinta a cor lisa)
-    RIGID: new Set(['parasol', 'trashpile', 'rubble', 'haybale', 'silo']),
+    RIGID: new Set(['parasol', 'trashpile', 'rubble', 'haybale', 'silo', 'stain']),
     // altura do modelo na escala 1 (u): quem põe o canteiro e o desvio do vento usam
     TALL: { eucalyptus: 30, imperial: 14, silo: 9 },
     // A espécie de cada planta: algumas viram variações pelo lugar (sorteio estável por posição). Na cidade e nos bairros, o "carvalho"
@@ -60,7 +64,7 @@ const Trees3D = {
     // RASTEIRAS: tufos, capins, samambaias, cascalho, entulho e lixo. NÃO projetam sombra: a de um tufo de 40 cm não se lê no mapa de
     // sombras, e cada malha delas era desenhada de novo nele (na favela, ~300 mil triângulos por quadro só nisso). No degrau de
     // economia do AutoQuality somem inteiras (setCover) — as árvores, arbustos e pedras ficam.
-    COVER: new Set(['tuft', 'pebbles', 'roadside', 'dry', 'reed', 'fern', 'capim', 'rubble', 'trashpile', 'sansevieria', 'monstera']),
+    COVER: new Set(['tuft', 'pebbles', 'roadside', 'dry', 'reed', 'fern', 'capim', 'rubble', 'trashpile', 'sansevieria', 'monstera', 'stain']),
     get coverOn() { return this._coverOn !== undefined ? this._coverOn : !(typeof Config !== 'undefined' && Config.perf && Config.perf.cover === false); },      // (celular modesto: começa sem as rasteiras)
     set coverOn(v) { this._coverOn = v; },
     _cover: [],
@@ -130,8 +134,59 @@ const Trees3D = {
             if (cover) { if (this._cover.length > 400) this._cover = this._cover.filter((m) => !m.isDisposed()); this._cover.push(mesh); if (!this.coverOn) mesh.isVisible = false; }
             if (shadow && this.castShadows && casts && !cover) shadow.addShadowCaster(mesh);
             out.push(mesh);
+            // NÍVEL DE DETALHE (_lodTick): de longe, a mesma planta num modelo mais leve (menos cachos na copa, troncos com menos lados); a
+            // rasteira some de vez além de LOD.cover
+            const far = cover || !this.lodOn ? null : this._farMesh(scene, mesh, model, mats, lod);
+            if (far) { if (shadow && this.castShadows && casts) shadow.addShadowCaster(far); out.push(far); }
+            if (this.lodOn) this._lodAdd(scene, mesh, far, cover);
         }
         return out;
+    },
+    // ------------------------------------------------------------------ NÍVEL DE DETALHE pela distância à câmera (como nos motores atuais)
+    // A planta de LONGE: o modelo da espécie no detalhe −1 (PARTS.far: menos cachos, troncos com menos lados, a icosfera mais simples),
+    // com as mesmas instâncias. Só quando ele é bem mais leve (até 75% dos índices).
+    LOD: { far: 70, cover: 45 },
+    get lodOn() { return !(typeof location !== 'undefined' && /[?&]plantalod=0\b/.test(location.search)); },      // (?plantalod=0: tudo no detalhe cheio — comparar)
+    get lodScale() { const L = typeof Graphics !== 'undefined' ? Graphics.level : 'high'; return L === 'low' ? 0.65 : L === 'medium' ? 0.85 : L === 'hd' ? 1.3 : 1; },
+    _farMesh(scene, mesh, model, mats, lod) {
+        const F = this._gpu(scene, model, -1), N = this._gpu(scene, model, lod);
+        if (F.nI > N.nI * 0.75) return null;
+        const f = new BABYLON.Mesh(mesh.name + '_longe', scene);
+        this._share(f, F);
+        f.material = mesh.material; f.useVertexColors = true;
+        f.thinInstanceSetBuffer('matrix', mats, 16, false);
+        f.thinInstanceRefreshBoundingInfo(false);
+        f.alwaysSelectAsActiveMesh = false; f.receiveShadows = true; f.isPickable = false; f.freezeWorldMatrix();
+        f.isVisible = false;
+        return f;
+    },
+    // Registra a planta (e a de longe) no laço do detalhe, que roda 5 vezes por segundo antes do desenho: perto = o modelo cheio; além de
+    // LOD.far (× lodScale; folga de 10% na volta) = o de longe; a rasteira (cascalho, samambaia, capim…) só até LOD.cover.
+    // (isVisible, não setEnabled: as lojas desligam e religam as malhas da cidade com setEnabled.)
+    _lodAdd(scene, near, far, cover) {
+        if (!this._lod) {
+            this._lod = [];
+            let t = 0;
+            scene.onBeforeRenderObservable.add(() => { const now = performance.now(); if (now - t < 200) return; t = now; this._lodTick(scene); });
+        }
+        if (this._lod.length > 4000) this._lod = this._lod.filter((e) => !e.m.isDisposed());
+        this._lod.push({ m: near, far, cover, isFar: false });
+    },
+    _lodTick(scene) {
+        const cam = scene.activeCamera;
+        if (!cam) return;
+        const P = cam.globalPosition || cam.position, k = this.lodScale, FAR = this.LOD.far * k, COV = this.LOD.cover * k, covOn = this.coverOn;
+        let dead = 0;
+        for (const e of this._lod) {
+            const m = e.m;
+            if (m.isDisposed()) { dead++; continue; }
+            const S = m.getBoundingInfo().boundingSphere, c = S.centerWorld, d = Math.max(0, Math.hypot(c.x - P.x, c.y - P.y, c.z - P.z) - S.radiusWorld);
+            if (e.cover) { const v = covOn && d < COV; if (m.isVisible !== v) m.isVisible = v; continue; }
+            if (!e.far) continue;
+            const isFar = d > (e.isFar ? FAR * 0.9 : FAR);
+            if (isFar !== e.isFar || m.isVisible === isFar) { e.isFar = isFar; m.isVisible = !isFar; e.far.isVisible = isFar; }
+        }
+        if (dead > 200) this._lod = this._lod.filter((e) => !e.m.isDisposed());
     },
     _hash(x, z) { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); },
     // Os buffers de um modelo na placa (posição, normal, cor e índices), criados UMA vez por modelo e detalhe.
@@ -279,6 +334,10 @@ const Trees3D = {
     _model(scene, model, lod = this.lod) {
         const C = this._models || (this._models = {}), key = model + '|' + lod, sMain = lod >= 1 ? 2 : 1, sAll = lod >= 2 ? 2 : 1;
         if (C[key]) return C[key];
+        this.PARTS.far = lod < 0;                                            // (−1: a planta de LONGE — PARTS corta cachos e lados)
+        try { return (C[key] = this._modelBuild(scene, model, sMain, sAll)); } finally { this.PARTS.far = false; }
+    },
+    _modelBuild(scene, model, sMain, sAll) {
         const g = { p: [], n: [], c: [], i: [] }, R = this._rng(model.length * 977 + model.charCodeAt(0) * 31);
         const B = this.PARTS, trunk = [0.36, 0.27, 0.19], dark = [0.27, 0.21, 0.15];
         switch (model) {
@@ -415,6 +474,17 @@ const Trees3D = {
                 for (let k = 0; k < 2; k++) { const a = R() * 6.28; B.cyl(g, [Math.cos(a) * 0.6, 0.18, Math.sin(a) * 0.6], [-Math.cos(a) * 0.5, 0.3, -Math.sin(a) * 0.5], 0.05, 0.05, 4, [0.5, 0.38, 0.24], [0.42, 0.32, 0.2]); }
                 break;
             }
+            case 'stain': {                                                                // mancha de lama/óleo no chão: duas poças rasas e restos chatos
+                const mud = [0.22 + R() * 0.06, 0.18 + R() * 0.04, 0.14 + R() * 0.03];
+                B.blob(g, [0, 0.012, 0], [0.9 + R() * 0.3, 0.012, 0.6 + R() * 0.3], mud, R, 0.3, 1, 'wood');
+                B.blob(g, [0.5, 0.016, 0.2], [0.45, 0.012, 0.35], mud.map((v) => v * 0.85), R, 0.3, 1, 'wood');
+                for (let k = 0; k < 4; k++) {
+                    const c0 = g.c.length;
+                    B.rock(g, [(R() - 0.5) * 1.6, 0.025, (R() - 0.5) * 1.1], [0.1, 0.015, 0.08], R, 1);
+                    for (let q = c0; q < g.c.length; q += 4) { const v = 0.75 + 0.3 * R(); g.c[q] = 0.6 * v; g.c[q + 1] = 0.56 * v; g.c[q + 2] = 0.5 * v; }
+                }
+                break;
+            }
             case 'haybale': {                                                              // fardo de feno (rolo deitado)
                 B.cyl(g, [-0.62, 0.62, 0], [0.62, 0.62, 0], 0.62, 0.62, 12, [0.86, 0.72, 0.38], [0.78, 0.64, 0.32]);      // (o giro vem da instância)
                 for (const s of [-1, 1]) B.blob(g, [s * 0.63, 0.62, 0], [0.05, 0.6, 0.6], [0.8, 0.66, 0.34], R, 0.05, 1, 'wood');
@@ -494,7 +564,7 @@ const Trees3D = {
         const vd = new BABYLON.VertexData();
         vd.positions = new Float32Array(g.p); vd.normals = new Float32Array(g.n); vd.colors = new Float32Array(g.c);
         vd.indices = g.p.length / 3 > 65535 ? new Uint32Array(g.i) : new Uint16Array(g.i);
-        return (C[key] = vd);
+        return vd;
     },
     _rng(seed) { let s = seed >>> 0 || 1; return () => { s = Math.imul(s ^ (s >>> 15), 2246822519) ^ Math.imul(s ^ (s >>> 13), 3266489917); s >>>= 0; return (s & 0xffffff) / 0x1000000; }; },
 };
@@ -535,6 +605,7 @@ Trees3D.PARTS = {
     // CACHOS de folhagem na casca de um elipsoide (centro c, raios r): `n` bolhas de raio ~`s` espalhadas por igual (espiral de
     // Fibonacci, mais em cima que embaixo) — a copa ganha volume e contorno recortado
     clumps(g, c, r, n, s, col, R, sub = 1, mode = 'leaf') {
+        if (this.far) { n = Math.max(2, Math.round(n / 3)); s *= 1.35; }      // (de longe: um terço dos cachos, maiores — o volume da copa fica)
         for (let k = 0; k < n; k++) {
             const y = 1 - (k + 0.5) / n * 1.55, rad = Math.sqrt(Math.max(0, 1 - y * y)), a = k * 2.39996 + R() * 0.6;
             const q = s * (0.75 + 0.5 * R()) * (y < -0.2 ? 0.8 : 1);
@@ -543,6 +614,7 @@ Trees3D.PARTS = {
     },
     // Tronco cônico de a até b (raios ra → rb), `n` lados.
     cyl(g, a, b, ra, rb, n, col, colLow) {
+        if (this.far) n = Math.max(3, Math.ceil(n / 2));                   // (de longe: metade dos lados)
         const base = g.p.length / 3, dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], L = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
         const ax = [dx / L, dy / L, dz / L], t = Math.abs(ax[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
         const u = [ax[1] * t[2] - ax[2] * t[1], ax[2] * t[0] - ax[0] * t[2], ax[0] * t[1] - ax[1] * t[0]], ul = Math.hypot(...u);
@@ -563,7 +635,7 @@ Trees3D.PARTS = {
     // (pedra PEQUENA — cascalho, caco de tijolo, a pedra menor ao lado do bloco: 20 triângulos em vez de 80; com até meio metro a
     // diferença não se vê, e o cascalho sozinho somava 600 mil triângulos por quadro na mata)
     rock(g, c, sq, R, k = 1) {
-        const I = this.ico(Math.max(sq[0], sq[1], sq[2]) <= 0.5 ? 1 : 2), base = g.p.length / 3, ph = R() * 10, tint = [0.5 + R() * 0.08, 0.48 + R() * 0.06, 0.44 + R() * 0.05];
+        const I = this.ico(this.far || Math.max(sq[0], sq[1], sq[2]) <= 0.5 ? 1 : 2), base = g.p.length / 3, ph = R() * 10, tint = [0.5 + R() * 0.08, 0.48 + R() * 0.06, 0.44 + R() * 0.05];
         for (let i = 0; i < I.p.length; i += 3) {
             const x = I.p[i], y = I.p[i + 1], z = I.p[i + 2];
             const w = 1 + 0.22 * Math.sin(x * 4.1 + ph) * Math.sin(y * 3.3 + ph * 0.7) * Math.sin(z * 3.7 - ph) + (R() - 0.5) * 0.12 + (y > 0.55 ? -0.18 * (y - 0.55) : 0);      // (topo aplainado)
@@ -587,10 +659,12 @@ Trees3D.PARTS = {
     },
     // Moita de n lâminas num raio r, alturas até h.
     blades(g, n, r, h, w, col, colTip, R) {
+        if (this.far) n = Math.max(2, Math.round(n / 3));
         for (let k = 0; k < n; k++) { const a = R() * Math.PI * 2, d = Math.sqrt(R()) * r; this.blade(g, [Math.cos(a) * d * 0.5, 0, Math.sin(a) * d * 0.5], a, h * (0.55 + 0.45 * R()), w, 0.25 + R() * 0.35, col, colTip); }
     },
     // Cone de galhos (pinheiro): base de raio r em c, altura h.
     cone(g, c, r, h, n, col, R) {
+        if (this.far) n = Math.max(5, Math.ceil(n / 2));
         const base = g.p.length / 3;
         for (let k = 0; k < n; k++) {
             const an = k / n * Math.PI * 2, rr = r * (0.85 + 0.3 * R()), dy = (R() - 0.5) * 0.25;

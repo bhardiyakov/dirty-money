@@ -1,20 +1,22 @@
 // ============================================================================
-// Birds — aves da cidade: pombos, gaivotas, rolinhas e bem-te-vis, como sprites pixel art (mesmo SpriteBaker do resto do jogo).
+// Birds — aves da cidade: pombos, gaivotas, rolinhas e bem-te-vis. EM 3D (padrão — art/Animals3D.js, a espécie 'ave'): corpo,
+// cabeça, bico e as asas de polígonos, que dobram no corpo pousada e abrem e batem no voo, com a sombra de verdade (o mapa de sombra);
+// uma malha por espécie com instâncias. (`?bichos=2d` volta aos sprites antigos do SpriteBaker/SpriteHD — o atlas só existe nesse modo.)
 //   • Ficam no chão (bicando e andando) ou pousadas em postes/fios; de vez em quando trocam de lugar sozinhas.
 //   • FOGEM quando o jogador (ou um NPC, ou um carro, ou um tiro) chega perto: levantam voo batendo asa, voam alto (com sombra no chão)
 //     e pousam de novo mais longe — num poste, se houver um à frente, ou no chão.
 //   • Gaivotas vivem na orla e planam; pombos são da cidade (mais na favela); rolinhas e bem-te-vis, do mato e do campo.
 //   • Chuva forte e noite esvaziam o céu. Tudo numa única malha dinâmica (1 draw call), população em volta da câmera.
-// Atlas: colunas = 8 direções, linhas = espécie × 6 quadros (parada, bicando, 4 de voo) + 1 linha com o blob de sombra.
+// Atlas (só no modo 2D): colunas = 8 direções, linhas = espécie × 6 quadros (parada, bicando, 4 de voo) + 1 linha com o blob de sombra.
 // ============================================================================
 
 class Birds {
     static get SPECIES() {
         return [
-            { name: 'pombo',     S: 1.3,  span: 1.2, glide: false, pal: { body: '#8c929c', wing: '#7a808a', tip: '#454a54', head: '#5f7a8c', beak: '#d6b8b0', belly: '#a7adb6' } },
-            { name: 'gaivota',   S: 1.75, span: 2.1,  glide: true,  pal: { body: '#f1f3f5', wing: '#cdd2da', tip: '#262b34', head: '#f7f8fa', beak: '#f2b21e', belly: '#ffffff' } },
-            { name: 'rolinha',   S: 1.05, span: 0.9, glide: false, pal: { body: '#b08a66', wing: '#9a7650', tip: '#4a3a2a', head: '#c4a080', beak: '#6a5a50', belly: '#d8bea0' } },
-            { name: 'bem-te-vi', S: 1.1,  span: 0.9,  glide: false, pal: { body: '#7a5a3a', wing: '#6a4a2c', tip: '#3a2a1a', head: '#2a2420', beak: '#2a2a2a', belly: '#f2c81e' } },
+            { name: 'pombo',     S: 1.3,  s3: 0.72, span: 1.2, glide: false, pal: { body: '#8c929c', wing: '#7a808a', tip: '#454a54', head: '#5f7a8c', beak: '#d6b8b0', belly: '#a7adb6' } },
+            { name: 'gaivota',   S: 1.75, s3: 1.0, span: 2.1,  glide: true,  pal: { body: '#f1f3f5', wing: '#cdd2da', tip: '#262b34', head: '#f7f8fa', beak: '#f2b21e', belly: '#ffffff' } },
+            { name: 'rolinha',   S: 1.05, s3: 0.46, span: 0.9, glide: false, pal: { body: '#b08a66', wing: '#9a7650', tip: '#4a3a2a', head: '#c4a080', beak: '#6a5a50', belly: '#d8bea0' } },
+            { name: 'bem-te-vi', S: 1.1,  s3: 0.52, span: 0.9,  glide: false, pal: { body: '#7a5a3a', wing: '#6a4a2c', tip: '#3a2a1a', head: '#2a2420', beak: '#2a2a2a', belly: '#f2c81e' } },
         ];
     }
     static get SLOT() { return { body: 1, wing: 2, tip: 3, head: 4, beak: 5, belly: 6 }; }
@@ -60,9 +62,18 @@ class Birds {
         const poses = ['idle', 'peck', 'fly0', 'fly1', 'fly2', 'fly3'];
         const t0 = performance.now();
         this._W = W; this._H = H; this._rows = rows;
-        const material = typeof SpriteHD !== 'undefined' && SpriteHD.on ? this._atlasHD(poses) : this._atlasPixel(poses);
-        this._mesh(game, material);
-        console.log(`[AVES] ${SPS.length} espécies, ${SPS.length * PER * D} sprites${material.hd ? ' em alta definição' : ''} em ${(performance.now() - t0).toFixed(0)} ms, ${[...this.grid.values()].reduce((s, a) => s + a.length, 0)} poleiros`);
+        this.mode3d = typeof Animals3D !== 'undefined' && Animals3D.on;
+        this.cap = 56;                                                                    // (máximo de aves vivas: 2 quads cada no modo 2D)
+        let material = null;
+        if (this.mode3d) {
+            const w = game.gameEngine && game.gameEngine.world;
+            if (!Animals3D._scene) Animals3D.init(this.scene, w && w.shadow);
+        } else {
+            material = typeof SpriteHD !== 'undefined' && SpriteHD.on ? this._atlasHD(poses) : this._atlasPixel(poses);
+            this._mesh(game, material);
+        }
+        this._state(game);
+        console.log(`[AVES] ${SPS.length} espécies, ${this.mode3d ? 'em 3D (art/Animals3D.js)' : `${SPS.length * PER * D} sprites${material.hd ? ' em alta definição' : ''}`} em ${(performance.now() - t0).toFixed(0)} ms, ${[...this.grid.values()].reduce((s, a) => s + a.length, 0)} poleiros`);
     }
 
     // Atlas em alta definição (art/SpriteHD.js): penas, bico com brilho, sombra macia; o blob de sombra do voo é um degradê.
@@ -132,7 +143,6 @@ class Birds {
     _mesh(game, material) {
         // Duas malhas dinâmicas (2 quads por ave: corpo + sombra): BAIXA = aves no chão e sombras (desenha com o resto do mundo, ABAIXO das copas);
         // ALTA = aves voando ou pousadas em poste (grupo de render 1, depois das copas das árvores, que não escrevem profundidade).
-        this.cap = 56;
         const mk = (name, group) => {
             const n = this.cap * 2, pos = new Float32Array(n * 12), uv = new Float32Array(n * 8), col = new Float32Array(n * 16);
             const idx = new Uint32Array(n * 6);
@@ -152,7 +162,9 @@ class Birds {
         this.hi = mk('birdsHi', 1);
         this.scene.setRenderingAutoClearDepthStencil(1, false);
         this.mesh = this.lo.mesh;
+    }
 
+    _state(game) {
         // Poleiros: cabeças de postes de rua e topos dos postes da favela (WorldBuilder.perches), numa grade de 24 u.
         this.grid = new Map();
         for (const p of (game.gameEngine.world.perches || [])) {
@@ -299,7 +311,7 @@ class Birds {
             }
             this._step(b, dt, ctx, checkThreat);
         }
-        this._render();
+        if (this.mode3d) this._render3d(dt); else this._render();
     }
 
     _step(b, dt, ctx, think) {
@@ -464,6 +476,36 @@ class Birds {
     }
 
     // --------------------------------------------------------------- desenho
+    // 3D (art/Animals3D.js): a asa abre ao levantar voo e dobra ao pousar (suave), bate no ritmo da espécie (a gaivota bate e plana;
+    // pousando, bate rápido), o passo das pernas andando no chão, a bicada; a altura do voo/poleiro sobre o chão.
+    _render3d(dt) {
+        const L = this._list || (this._list = []), TAU = Math.PI * 2;
+        let n = 0;
+        for (const b of this.birds) {
+            const sp = Birds.SPECIES[b.sp], fly = b.state === 'fly';
+            let a = L[n];
+            if (!a) a = L[n] = { sp: 'ave', vr: 0, x: 0, z: 0, y: 0, h: 0, ph: 0, mv: 0, run: 0, gz: 0, rs: 0, flap: 0, seed: 0, scale: 1 };
+            n++;
+            b.wo = (b.wo || 0) + ((fly ? 1 : 0) - (b.wo || 0)) * Math.min(1, dt * (fly ? 12 : 7));
+            let flap = 0;
+            if (fly) {
+                const landing = b.target && b.y < b.target.y + 1.5;
+                const hz = landing ? 8 : (sp.glide ? 3 : 5.5);
+                const beat = !sp.glide || landing || (b.fl % 3.2) < 1.3;                              // (gaivota: bate asa e plana)
+                b.wp = ((b.wp || 0) + dt * hz * TAU) % TAU;
+                flap = beat ? 0.15 + 0.8 * Math.sin(b.wp + b.ph) : 0.1 + 0.04 * Math.sin(b.fl * 2);
+            }
+            a.vr = b.sp; a.x = b.x; a.z = b.z; a.h = b.h; a.seed = (b.ph / 6.3) % 1;
+            a.scale = sp.s3 / Animals3D.SCALE;                                                   // (perto do tamanho real: o pombo ~0,4 m)
+            a.y = b.state === 'ground' ? 0 : (b.state === 'perch' ? b.y : Math.max(0.06, b.y - 0.3 * (1 - Math.min(1, Math.max(0, (b.y - 0.3) / 2)))));
+            a.rs = b.wo; a.flap = flap;
+            a.mv = b.state === 'ground' && b.walk ? 1 : 0; a.ph = b.step * 3;
+            a.gz = b.state === 'ground' && b.peck > 0 ? 1 : 0;
+        }
+        L.length = n;
+        Animals3D.draw(L, 'ave');
+    }
+
     _render() {
         const L = this.lo, Hh = this.hi, F = Birds.FR, D = Birds.DIRS, PER = Birds.PER, W = this._W, H = this._H, ppu = Config.art.ppu;
         const sun = Config.light.sunDir, sk = 0.3 / Math.max(0.2, Math.abs(sun[1]));
