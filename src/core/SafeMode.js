@@ -20,7 +20,7 @@ const SafeMode = {
 	KEY: 'safeMode',
 	STEPS: [
 		['pp', 'efeitos de tela'],
-		['char3d', 'personagens 3D'],
+		['char3d', 'personagens 3D no modo simples'],
 		['shadows', 'sombras'],
 	],
 	REV: 3,                    // revisão do desenho (1 = antes do céu/brilho/sombras novos; 3 = compilação paralela testada); suba ao mexer nos shaders de tela
@@ -78,7 +78,7 @@ const SafeMode = {
 				cam._postProcesses.length = 0;
 				if (typeof Lighting !== 'undefined') { Lighting.grade = null; Lighting.crt = null; Lighting.horizon = null; Lighting.bloomFx = null; }
 				if (typeof Smooth !== 'undefined') Smooth.pp = null;
-			} else if (id === 'char3d') { if (typeof Char3D !== 'undefined' && Char3D.on) Char3D.disable(); }
+			} else if (id === 'char3d') { if (typeof Char3D !== 'undefined' && Char3D.on) Char3D.degrade('modo seguro'); }      // (não desliga: sem o 2,5D, ninguém apareceria)
 			else if (id === 'shadows') { if (g.autoQuality && g.autoQuality._shadowsOff) g.autoQuality._shadowsOff(); }
 		} catch (e) { console.warn('[SEGURO] degrau ' + id + ' falhou:', e); }
 	},

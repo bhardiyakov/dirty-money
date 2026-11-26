@@ -6,7 +6,8 @@
 // Node, e grava arquivos estáticos que o jogo só carrega — o navegador não gera mais nenhum desenho durante o jogo:
 //
 //   assets/baked/npcs/<tipo>.json         manifesto: clipes, retângulos dos quadros, páginas e as camadas de dano (formato abaixo)
-//   assets/baked/npcs/<tipo>/p<i>.webp    páginas do atlas (WebP sem perdas; R = byte 0, G = byte 1 do pixel de 2 bytes, B = 0)
+//   assets/baked/npcs/<tipo>/p<i>.webp    páginas do atlas — SÓ com --paginas: desde nov/2026 o jogo não tem desenhos 2,5D (os
+//                                         personagens são 3D) e elas saíram do projeto (WebP sem perdas; R = byte 0, G = byte 1, B = 0)
 //   assets/baked/npcs/<tipo>/d<n>p<i>.webp CAMADA DE DANO n (1 sujo, 2 machucado, 3 muito machucado) da página i: mesmo tamanho e mesmo
 //                                         layout da página base; pixel ≠ (0, 0) = o pixel machucado, (0, 0) = igual ao da base. Quase toda
 //                                         vazia (comprime para poucos KB) — o jogo junta base + camada na decodificação (NpcArt).
@@ -28,6 +29,8 @@
 //     --out PASTA         onde gravar (padrão: assets/baked do repositório)
 //     --dirs 8            no máximo 8 direções (só as pares)
 //     --dry               renderiza e codifica sem gravar (mede tempo e tamanho)
+//     --paginas           grava também as PÁGINAS (WebP) dos atlas. Desde nov/2026 o jogo não tem desenhos 2,5D (todo personagem é 3D:
+//                         src/art/Char3D.js): por padrão só os MANIFESTOS (clipes, quadros, ritmo — o SpriteActor toca por eles)
 //     --list              lista os tipos (clipes, quadros, quadros com dano) e sai
 //
 // Manifesto (<tipo>.json): { v, id, label, k, frame, pivot, scale, pages: [{ w, h, g, par, file, bytes }], clips: { "nome:arma": { fps,
@@ -96,7 +99,7 @@ async function webp(rg, w, h, effort) {
 // DIFERENÇA de cada quadro, no mesmo retângulo da página base (o dano só repinta a roupa e a pele: a geometria, o recorte e os quadros
 // repetidos são os mesmos). Devolve os números.
 async function buildType(G, job, progress) {
-	const { id, keys, k, dirs, out, dry, dmg, effort } = job, base = job.base || id, spec = G.BY_ID[base], t0 = Date.now();
+	const { id, keys, k, dirs, out, dry, dmg, effort } = job, pagesOn = !!job.pages, base = job.base || id, spec = G.BY_ID[base], t0 = Date.now();
 	const opts = dirs ? { hand: job.hand || null, dirs } : { hand: job.hand || null };
 	let R = G.rendererFor(spec, { k });
 	const tb = Date.now(), clips = [];
@@ -109,11 +112,11 @@ async function buildType(G, job, progress) {
 	const a = G.atlasOf(clips, k);
 	clips.length = 0;
 	const tr = Date.now(), dir = path.join(out, 'npcs', id), pages = [];
-	if (!dry) fs.mkdirSync(dir, { recursive: true });
+	if (!dry && pagesOn) fs.mkdirSync(dir, { recursive: true });
 	let bytes = 0, area = 0, frames = 0;
 	for (let i = 0; i < a.pages.length; i++) {
 		const P = a.pages[i], buf = await webp(P.data, P.w, P.h, effort), file = `${id}/p${i}.webp`;
-		if (!dry) fs.writeFileSync(path.join(out, 'npcs', file), buf);
+		if (!dry && pagesOn) fs.writeFileSync(path.join(out, 'npcs', file), buf);
 		bytes += buf.length; area += P.w * P.h;
 		pages.push({ w: P.w, h: P.h, g: P.g, par: P.par, file, bytes: buf.length });
 	}
@@ -154,7 +157,7 @@ async function buildType(G, job, progress) {
 		for (const [pi, O] of ov) {
 			if (!touched.has(pi)) continue;                              // (página sem nada machucado: a base serve)
 			const P = a.pages[pi], buf = await webp(O, P.w, P.h, effort), file = `${id}/d${lv}p${pi}.webp`;
-			if (!dry) fs.writeFileSync(path.join(out, 'npcs', file), buf);
+			if (!dry && pagesOn) fs.writeFileSync(path.join(out, 'npcs', file), buf);
 			L[pi] = file; stat.bytes += buf.length;
 		}
 	}
@@ -169,7 +172,7 @@ async function buildType(G, job, progress) {
 		fs.renameSync(tmp, path.join(out, 'npcs', id + '.json'));
 		const keep = new Set(pages.map((p) => path.basename(p.file)));
 		for (const L of Object.values(levels)) for (const f of Object.values(L)) keep.add(path.basename(f));
-		for (const f of fs.readdirSync(dir)) if (/\.webp$/.test(f) && !keep.has(f)) fs.unlinkSync(path.join(dir, f));      // páginas velhas
+		if (pagesOn) for (const f of fs.readdirSync(dir)) if (/\.webp$/.test(f) && !keep.has(f)) fs.unlinkSync(path.join(dir, f));      // páginas velhas
 	}
 	return { id, clips: Object.keys(a.clips).length, frames, pieces: a.pieces, pages: pages.length, area, bytes, dmg: stat, msBake: tb - t0, msRender: tr - tb, msEncode: te - tr, msDmg: td - te };
 }
@@ -265,7 +268,7 @@ function writeData(G, OUT, hash) {
 }
 
 // ---------------------------------------------------------------- linha de comando
-const argv = process.argv.slice(2), opt = { ids: [], workers: 0, clips: null, out: null, dirs: 0, dry: false, list: false, dmg: true, data: false, fast: false, props: false };
+const argv = process.argv.slice(2), opt = { ids: [], workers: 0, clips: null, out: null, dirs: 0, dry: false, list: false, dmg: true, data: false, fast: false, props: false, pages: false };
 // The header of this file, from its title down to the manifest format.
 function printHelp() {
 	const lines = fs.readFileSync(__filename, 'utf8').split('\n'), end = lines.findIndex((l) => l.startsWith('// Manifesto'));
@@ -282,6 +285,7 @@ for (let i = 0; i < argv.length; i++) {
 	else if (a === '--out') opt.out = path.resolve(val());
 	else if (a === '--dirs') opt.dirs = +val();
 	else if (a === '--dry') opt.dry = true;
+	else if (a === '--paginas') opt.pages = true;
 	else if (a === '--list') opt.list = true;
 	else if (a === '--no-dmg') opt.dmg = false;
 	else if (a === '--data') opt.data = true;
@@ -347,7 +351,7 @@ for (let w = 0; w < N; w++) {
 	const next = () => {
 		const t = queue.shift();
 		if (!t) { worker.terminate(); return; }
-		worker.postMessage({ id: t.id, base: t.base, hand: t.hand, keys: t.keys, k: K, dirs: opt.dirs, out: OUT, dry: opt.dry, dmg: opt.dmg, effort: EFFORT });
+		worker.postMessage({ id: t.id, base: t.base, hand: t.hand, keys: t.keys, k: K, dirs: opt.dirs, out: OUT, dry: opt.dry, dmg: opt.dmg, effort: EFFORT, pages: opt.pages });
 	};
 	worker.on('message', (m) => {
 		if (m.progress) { const [st, i, n, key] = m.progress; console.log(`  ${m.id}: ${st} ${i}/${n} (${key})`); return; }

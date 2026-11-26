@@ -22,14 +22,25 @@
 const Char3D = {
 	get C() { return (Config.art && Config.art.char3d) || {}; },
 	get on() {
-		const C = this.C, q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('boneco') : null;
-		return !this.off && C.on !== false && q !== '2d' && typeof Worker === 'function' && typeof Wardrobe !== 'undefined';      // (off: disable() — erro repetido ou modo seguro)
+		return !this.off && this.C.on !== false && typeof Worker === 'function' && typeof Wardrobe !== 'undefined';      // (off: disable() — só em último caso)
 	},
 	get npcOn() { const N = this.C.npc; return this.on && !!N && N.on !== false && typeof NpcArt !== 'undefined' && !!NpcArt._pal; },
-	// SEM 2,5D (o padrão desde nov/2026): todo personagem é 3D low poly, a qualquer distância (os níveis de detalhe seguram o custo); as
-	// páginas dos desenhos 2,5D nunca são buscadas, decodificadas nem desenhadas, e o visual do jogador não é desenhado no Worker. Elas só
-	// voltam se o 3D não puder rodar (desligado por erro repetido ou pelo modo seguro: disable) — ou com ?sprites2d=1 (comparar).
-	get no2d() { return this.on && this.polyOn && this.C.sprites2d !== true && !(typeof location !== 'undefined' && /[?&]sprites2d=1\b/.test(location.search)); },
+	// SEM 2,5D (desde nov/2026 — as páginas dos desenhos 2,5D nem existem mais): todo personagem é 3D, a qualquer distância (os níveis de
+	// detalhe seguram o custo). Erro repetido no quadro ou o modo seguro não desligam o 3D — sem desenho de reserva, todos sumiriam —:
+	// passam ao MODO SIMPLES (degrade).
+	get no2d() { return this.on; },
+	// MODO SIMPLES: todos os NPCs no nível mais leve, sem o rosto e a estampa por pixel, sem a textura de detalhe, sem derivadas no shader e
+	// sem transição entre clipes — o mínimo que ainda mostra as pessoas. Os bonecos refazem materiais e malhas no próximo quadro.
+	safe: false,
+	degrade(why = '') {
+		if (this.safe) return;
+		this.safe = true; this.lodBias = Math.max(this.lodBias || 1, 6);
+		const all = [...(this.npcs ? this.npcs.values() : [])];
+		if (this._game && this._game.player.char3d) all.push(this._game.player.char3d);
+		for (const C of all) { try { C._clear(); C._built = false; } catch (e) { /* segue */ } }
+		this._pick = 0;
+		console.warn('[Char3D] personagens 3D no modo simples' + (why ? ' (' + why + ')' : ''));
+	},
 	// NÍVEIS DE DETALHE dos NPCs (low poly), como nos motores atuais: pelo TAMANHO NA TELA (a altura do boneco / a altura da tela), não
 	// pela distância — a câmera alta vê um boneco a 15 m bem menor que a de perseguição: L0 acima de 10% da altura da tela, L1 acima de
 	// 5,5%, L2 acima de 2,8%, L3 abaixo). L0 ~2,5 mil triângulos, L1 ~1,4 mil, L2 ~800,
@@ -334,12 +345,14 @@ const Char3D = {
 				#endif
 				// TEXTURA DE DETALHE: a luz do tecido/da mecha sobre a cor da paleta (a média da peça = 1), e o recorte do cartão de cabelo
 				float det = 1.0;
+				#ifndef SAFE
 				if (vX.z > 0.5) {
 					vec4 tx = vX.z < 1.5 ? texture2D(clothTex, vX.xy) : texture2D(hairTex, vX.xy);
 					if (tx.a < 0.5) discard;
 					det = clamp(tx.r / max(vX.w, 0.05), 0.55, 1.35);
 				}
 				vec3 fx = dFdx(vF), fy = dFdy(vF);                                // (fora de qualquer "if": derivadas valem em todo pixel)
+				#endif
 				vec3 V = normalize(eye - vW);
 				#ifdef TOON
 				vec3 n = normalize(cross(dFdx(vW), dFdy(vW)));                   // (face chapada, luz em faixas: o estilo dos desenhos)
@@ -353,12 +366,14 @@ const Char3D = {
 				float lev = 0.55 + 3.1 * (0.12 + 0.22 * sky + 0.7 * dif);         // (céu por cima, sol com a luz que dobra um pouco: 1,0 a 3,9 dos 5 tons)
 				#endif
 				float mt0 = floor(vMt.x + 0.5), tone = vMt.y;                    // (tom da face: estampa, dano)
+				#ifndef SAFE
 				if (vS > 0.5) {                                                   // (cabeça: o rosto, peito: a estampa — por pixel)
 					vec3 nf = normalize(cross(fx, fy));
 					bool head = vS < 1.5;
 					if (dot(nf, vF - (head ? vec3(0.0, -2.0, 12.0) : vec3(0.0, 0.0, 9.0))) < 0.0) nf = -nf;      // (para fora)
 					if (head) mt0 = faceMat(mt0, vF, nf, tone); else mt0 = shirtMat(mt0, vF, nf);
 				}
+				#endif
 				float occ = vAo * (vS > 0.5 && vS < 1.5 ? 0.35 : 1.0);           // (no rosto, pouca: a boca e as órbitas da malha são fundas, e o rosto é pintado)
 				lev = clamp(lev + 0.35 * clamp(dot(n, V), 0.0, 1.0) - 0.15 + clamp(tone, -1.5, 1.0) - 1.1 * occ, 0.0, 4.0);      // (o que encara a câmera um pouco mais claro: volume, e a oclusão escurece)
 				#ifdef PAL
@@ -436,8 +451,10 @@ const Char3D = {
 		this._obs = this._scene.onBeforeRenderObservable.add(() => {
 			if (this.off) return;
 			try { this.tick(); this._errs = 0; } catch (e) {
-				console.error('[Char3D] erro no quadro:', e);
-				if (++this._errs >= 3) this.disable();
+				// (erro repetido: o modo simples — não desliga: sem o 2,5D, ninguém apareceria; depois dele, o aviso no máximo a cada 5 s)
+				const now = performance.now();
+				if (!this.safe || now - (this._errT || 0) > 5000) { this._errT = now; console.error('[Char3D] erro no quadro:', e); }
+				if (++this._errs >= 3 && !this.safe) { this.degrade('erro repetido no quadro'); this._errs = 0; }
 			}
 		});
 	},
@@ -848,7 +865,8 @@ class Char3DActor {
 		if (sil === 'shadow') defines.push('#define SHADOW');
 		else if (sil) defines.push('#define SIL');
 		if (pal) defines.push('#define PAL');
-		if (poly && Char3D.style3d !== 'real') defines.push('#define TOON');
+		if (poly && Char3D.safe) defines.push('#define SAFE');
+		else if (poly && Char3D.style3d !== 'real') defines.push('#define TOON');
 		const sh = poly ? 'char3dPoly' : 'char3d';
 		const m = new BABYLON.ShaderMaterial(name, this.scene, { vertex: sh, fragment: sh }, {
 			attributes: poly ? ['position', 'p2', 'sk', 'mt', 'fp', 'in1', 'n2', 'ux'] : ['position', 'ip', 'in1', 'p2', 'n2', 'sk', 'mt', 'fa', 'fb'],
@@ -988,7 +1006,7 @@ class Char3DActor {
 		if (K && K !== 'wait') this._last = K;
 		else K = this._last;                                       // (o clipe novo ainda chegando: segura a última pose)
 		// TRANSIÇÃO: trocou de clipe com o boneco à mostra — a pose de agora vira o ponto de partida e a nova entra em fadeS segundos
-		if (K !== this._curK) { if (this._curK && this.shown && (this.C.fade !== 0)) this._fadeStart(); this._curK = K; }
+		if (K !== this._curK) { if (this._curK && this.shown && this.C.fade !== 0 && !Char3D.safe) this._fadeStart(); this._curK = K; }
 		// (de longe — L2/L3 — a pose a cada 2 ou 3 quadros, cada boneco numa fase: o custo de CPU cai e ninguém nota o passo a passo)
 		const ev = this.pal && Char3D.polyOn ? Char3D.LOD_EVERY[M._lod | 0] || 1 : 1;
 		if (ev <= 1 || !this.shown || this._fadeT >= 0 || (Char3D._frame + this._ph) % ev === 0) this._pose(K, a, K.key === key || K.key.startsWith(c.name + ':'));

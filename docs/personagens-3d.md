@@ -115,14 +115,16 @@ O boneco em **triângulos** no lugar da nuvem de pontos. `Config.art.char3d.poly
 
 - **Acessórios** (boné, capacete, colete, bolsa, alça, os cabelos geométricos): a superfície da forma do gerador por *surface nets*,
   simplificada no Worker (`G.polyPart`); o tamanho acompanha o nível (×1,6 no jogador, ×0,4 de longe).
-- **SEM 2,5D** (`Char3D.no2d`, o padrão): todo personagem é 3D a qualquer distância. As páginas dos desenhos 2,5D nunca são
-  buscadas, decodificadas nem enviadas à placa (`NpcArt._want`), o quad do `SpriteActor` fica fora do desenho (`_hide2d`) e o visual
-  do jogador não é desenhado no Worker do guarda-roupa (`PlayerLook`): o boneco 3D sai direto da ficha. Os **manifestos** dos atlas
-  (clipes, quadros, ritmo) e a paleta continuam — o `SpriteActor` toca os clipes por eles e o 3D pinta pela paleta. O 2,5D volta
-  sozinho só se o 3D não puder rodar (desligado por erro repetido ou pelo modo seguro: `Char3D.disable`); `?sprites2d=1` liga para
-  comparar. Medido (SwiftShader, High, centro): 127–162 NPCs 3D, só os ~12 dentro da câmera desenhados, 0 páginas na placa, 290
+- **SEM 2,5D**: todo personagem é 3D a qualquer distância. As **páginas** dos desenhos 2,5D (1.336 WebP, ~424 MB) **saíram do
+  projeto** (`NpcArt.PAGES = false`; `bake.cjs` só as grava com `--paginas`). O quad do `SpriteActor` fica fora do desenho
+  (`_hide2d`) e o visual do jogador não é desenhado no Worker do guarda-roupa (`PlayerLook`): o boneco 3D sai direto da ficha, e a
+  tela de carregamento espera por ele (`Char3D.playerReady`). Os **manifestos** dos atlas (clipes, quadros, ritmo; 6 MB) e a paleta
+  continuam — o `SpriteActor` toca os clipes por eles e o 3D pinta pela paleta.
+- **Sem desenho de reserva, o 3D nunca desliga.** Erro repetido no quadro ou o modo seguro (degrau `char3d`) põem os personagens no
+  **modo simples** (`Char3D.degrade`): todos os NPCs no L3, sem o rosto e a estampa por pixel, sem a textura de detalhe, sem derivadas
+  no shader (`#define SAFE`) e sem transição entre clipes.
+  Medido (SwiftShader, High, centro): 127–162 NPCs 3D, só os ~12 dentro da câmera desenhados, 0 páginas na placa, 290
   chamadas de desenho (413 antes do corte fora da câmera), tempo de placa de 0,62 s por quadro (0,75 s antes; 5,8 s com pontos).
-  Os limites `Graphics.PRESETS.npc3dPoly`/`npc3dPolyR` valem só com o 2,5D ligado.
 
 ### Visual
 

@@ -51,9 +51,11 @@ const NpcArt = {
 	now: 0,                        // relógio do jogo (s; NpcArt.tick): última vez que cada página foi desenhada (LRU)
 	stats: { decoded: 0, decodeMs: 0, uploads: 0, upMB: 0, upMs: 0, upMax: 0, evicted: 0, dropped: 0, failed: 0 },      // (up*: envio em faixas — _upStep)
 
-	// SEM 2,5D (Char3D.no2d — o padrão): todo personagem é 3D; as páginas nunca são buscadas, decodificadas nem enviadas à placa. Os
-	// manifestos (clipes, quadros, ritmo) e a paleta continuam: o SpriteActor toca os clipes por eles e o 3D pinta pela paleta.
-	get no2d() { return typeof Char3D !== 'undefined' && Char3D.no2d; },
+	// SEM 2,5D (desde nov/2026): todo personagem é 3D (Char3D). As PÁGINAS dos desenhos 2,5D não existem mais (PAGES = false: saíram do
+	// projeto, ~424 MB); o código de páginas abaixo fica dormente. Os MANIFESTOS (clipes, quadros, ritmo) e a paleta continuam: o
+	// SpriteActor toca os clipes por eles e o 3D pinta pela paleta.
+	PAGES: false,
+	get no2d() { return !this.PAGES || (typeof Char3D !== 'undefined' && Char3D.no2d); },
 	// (?npc=0 na URL: volta aos bonecos antigos — comparar/depurar)
 	available() { return NpcData.ok && Object.keys(this.atlases).length > 0 && !/[?&]npc=0\b/.test(location.search); },
 

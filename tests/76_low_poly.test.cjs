@@ -129,6 +129,14 @@ module.exports = {
         });
         c.ok(!flu.missing && flu.walkN >= 20 && flu.walkFps >= 25, `clipes 3D a ~30 quadros por segundo (andar: ${flu.walkN} quadros a ${flu.walkFps}/s, correr: ${flu.runN})`);
         c.ok(flu.am > 0.01 && flu.am < flu.ab && flu.mb < flu.ab, `troca parado → correndo passa por pose intermediária (${JSON.stringify(flu)})`);
+        // MODO SIMPLES (erro repetido no quadro / modo seguro): o 3D não desliga — todos no L3, no shader SAFE, e continuam à mostra
+        await page.evaluate(() => Char3D.degrade('teste'));
+        await gameWait(page, 3, 120000);
+        const sf = await page.evaluate(() => {
+            const C = [...Char3D.npcs.values()].filter((x) => x.shown), P = game.player.char3d, mats = C.map((x) => x.polyMat).concat(P && P.polyMat ? [P.polyMat] : []).filter(Boolean);
+            return { on: Char3D.on, safe: Char3D.safe, shown: C.length, player: !!(P && P.shown), safeMats: mats.filter((m) => (m.options.defines || []).includes('#define SAFE')).length, mats: mats.length, ready: mats.filter((m) => m.isReady()).length, lods: [...new Set(C.map((x) => x.model._lod | 0))] };
+        });
+        c.ok(sf.on && sf.safe && sf.player && sf.shown > 0 && sf.safeMats === sf.mats && sf.ready === sf.mats && sf.lods.every((l) => l === 3), `modo simples: o 3D continua (jogador e ${sf.shown} NPCs à mostra, ${sf.safeMats}/${sf.mats} materiais simples, níveis ${sf.lods.join(',')})`);
         c.noErrors(errors, 'low poly');
         await close();
     },
