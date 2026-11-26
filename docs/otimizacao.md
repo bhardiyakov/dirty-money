@@ -683,11 +683,14 @@ fachadas somavam 64 no Medium (~19 MB; o triplo no High) e saem todas:
 | 1ª versão (um shader com tudo; peças com sombra e sacadas no mapa inteiro) | ~433 ms | ~203 ms | ~0 | ~62 ms |
 | Um shader por estilo, peças sem sombra e com limite | ~276 ms | ~49 ms | ~55 ms | ~33 ms |
 | Menos ruído e as janelas numa conta só | ~250 ms | ~50 ms | ~80 ms | ~23 ms |
+| **Atlas das janelas** (uma leitura no lugar das contas) | **~80 ms** | ~0–50 ms | ~12 ms | ~18 ms |
 
-As medições oscilam ±50–100 ms de uma rodada para outra (o quadro do software é longo). A parede da favela — o pior caso: a câmera
-no beco, com quase a tela toda de parede — ainda custa mais que a textura no renderizador por software; no centro e na mata o custo
-some no ruído. O próximo passo para ela é um atlas pequeno com o desenho das janelas (uma leitura no lugar das contas de caixilho,
-grade e tábuas), que mantém a variedade sem a conta por pixel.
+As medições oscilam ±50–100 ms de uma rodada para outra (o quadro do software é longo). O ATLAS DAS JANELAS (`Walls3D.atlas`: 1024 ×
+512, 21 desenhos de vão em ladrilhos de 128 px — grade, basculante, folha de madeira aberta/fechada/meio aberta, veneziana, escritório,
+janelão, colonial com o arco, de correr com e sem grade, fita, galpão, cruz, tábua pregada, porta de madeira, porta de aço, portão,
+portaria; R = barras, G = o que cobre o vão, B = o sombreado, A = fora do arco; desenhado em JS na carga, ~2,7 MB com os mipmaps) troca
+as contas de caixilho, grade, tábuas e chapa por UMA leitura de textura: a parede da favela — o pior caso, a câmera no beco com quase a
+tela toda de parede — caiu de ~250 para ~80 ms, na faixa das texturas de antes.
 
 ### Um shader por estilo (a lição da medição)
 
