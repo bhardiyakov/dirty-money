@@ -146,7 +146,8 @@ const Trees3D = {
     // A planta de LONGE: o modelo da espécie no detalhe −1 (PARTS.far: menos cachos, troncos com menos lados, a icosfera mais simples),
     // com as mesmas instâncias. Só quando ele é bem mais leve (até 75% dos índices).
     LOD: { far: 70, cover: 45 },
-    get lodOn() { return !(typeof location !== 'undefined' && /[?&]plantalod=0\b/.test(location.search)); },      // (?plantalod=0: tudo no detalhe cheio — comparar)
+    get lodOn() { return this._lodSet !== undefined ? this._lodSet : !(typeof location !== 'undefined' && /[?&]plantalod=0\b/.test(location.search)); },      // (?plantalod=0: tudo no detalhe cheio — comparar)
+    set lodOn(v) { this._lodSet = !!v; if (this._lod && this._lodScene) this._lodTick(this._lodScene); },      // (desliga/liga na hora: as gêmeas ficam, só escondidas)
     get lodScale() { const L = typeof Graphics !== 'undefined' ? Graphics.level : 'high'; return L === 'low' ? 0.65 : L === 'medium' ? 0.85 : L === 'hd' ? 1.3 : 1; },
     _farMesh(scene, mesh, model, mats, lod) {
         const F = this._gpu(scene, model, -1), N = this._gpu(scene, model, lod);
@@ -165,7 +166,7 @@ const Trees3D = {
     // (isVisible, não setEnabled: as lojas desligam e religam as malhas da cidade com setEnabled.)
     _lodAdd(scene, near, far, cover) {
         if (!this._lod) {
-            this._lod = [];
+            this._lod = []; this._lodScene = scene;
             let t = 0;
             scene.onBeforeRenderObservable.add(() => { const now = performance.now(); if (now - t < 200) return; t = now; this._lodTick(scene); });
         }
@@ -175,7 +176,7 @@ const Trees3D = {
     _lodTick(scene) {
         const cam = scene.activeCamera;
         if (!cam) return;
-        const P = cam.globalPosition || cam.position, k = this.lodScale, FAR = this.LOD.far * k, COV = this.LOD.cover * k, covOn = this.coverOn;
+        const P = cam.globalPosition || cam.position, k = this.lodScale, on = this.lodOn, FAR = on ? this.LOD.far * k : Infinity, COV = on ? this.LOD.cover * k : Infinity, covOn = this.coverOn;
         let dead = 0;
         for (const e of this._lod) {
             const m = e.m;
