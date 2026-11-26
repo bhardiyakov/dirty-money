@@ -13,6 +13,7 @@ const BASE = {
   plastico: { color: '#1d1e21', metal: 0, rough: 0.72 },
   plastico_cinza: { color: '#4a4d52', metal: 0, rough: 0.7 },
   chassi: { color: '#141416', metal: 0, rough: 0.9 },
+  forro: { color: '#2b2c30', metal: 0, rough: 0.85 },
   grade: { color: '#0b0c0d', metal: 0.2, rough: 0.55 },
   cromado: { color: '#eef1f4', metal: 1, rough: 0.1 },
   aluminio: { color: '#c3c7cc', metal: 1, rough: 0.27 },

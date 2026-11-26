@@ -69,6 +69,7 @@ export { mirror, handle, plate, wipers, sharkFin, exhaust, roundLamp, rrect, ell
 // ---------------------------------------------------------------------------
 // linhas de portas (frestas) nas laterais: lista de [xBaixo, yBaixo, xCima, yCima]
 export function doorLines(ctx, lines, o = {}) {
+  (ctx.seams || (ctx.seams = [])).push(...lines.map((l) => l.slice()));      // (as frestas: o build corta as PEÇAS por elas — build.js, segment)
   const rc = ctx.rc();
   for (const s of [1, -1])
     for (const [x0, y0, x1, y1] of lines)
