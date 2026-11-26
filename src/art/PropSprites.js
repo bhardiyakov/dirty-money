@@ -554,7 +554,43 @@ const PropSprites = {
     // ------------------------------------------------------------------- atlas
     // Atlas ESTÁTICO (todos os frames, parados) + 3 atlas ANIMADOS (um por modo de vento) só com as plantas que balançam: cada um com
     // ANIM_FRAMES cópias da grade. Devolve { materials, rect(i), animRect(i), pick(kind, rnd), setWind(t, modo), setFocus }.
+    //
+    // SOB DEMANDA (com as árvores 3D — render/Trees3D.js — que é o padrão): toda planta, pedra, lixo, guarda-sol, fardo e silo do mapa
+    // é um modelo 3D; nenhum quad usa o atlas. Então create() devolve a mesma interface SEM montar nada (pick funciona pela tabela de
+    // quadros) e o atlas (~23 MB no HD) só é montado se alguém pedir um retângulo ou um material — um tipo sem modelo 3D.
     create(scene) {
+        if (typeof Trees3D !== 'undefined' && Trees3D.on) return this.lazy(scene);
+        return this.build(scene);
+    },
+    lazy(scene) {
+        let real = null;
+        const get = () => {
+            if (!real) { real = this.build(scene); console.warn('[PROPS] atlas montado sob demanda (um tipo sem modelo 3D pediu o desenho)'); }
+            return real;
+        };
+        return {
+            lazy: true,
+            get built() { return !!real; },
+            frame: this.FRAME,
+            get hd() { return real ? !!real.hd : typeof SpriteHD !== 'undefined' && SpriteHD.on; },
+            get atlas() { return get().atlas; }, get anims() { return get().anims; }, get W() { return get().W; }, get H() { return get().H; },
+            get hiMaterial() { return get().hiMaterial; }, get loMaterial() { return get().loMaterial; }, get maskMaterial() { return get().maskMaterial; },
+            rect: (i) => get().rect(i),
+            animRect: (i) => get().animRect(i),
+            pick: (kind, rnd) => this.pick(kind, rnd),
+            setWind: (t, mode, dt) => { if (real) real.setWind(t, mode, dt); },
+            _bind: () => { if (real) real._bind(); },
+            materials: () => (real ? real.materials() : []),
+            setSharp: (v) => { if (real) real.setSharp(v); },
+        };
+    },
+    pick(kind, rnd) {
+        const idx = [];
+        this.FRAMES.forEach((fr, i) => { if (fr.kind === kind) idx.push(i); });
+        const i = idx[Math.min(idx.length - 1, Math.floor(rnd * idx.length))];
+        return { index: i, row: this.FRAMES[i].row, kind };
+    },
+    build(scene) {
         if (typeof SpriteHD !== 'undefined' && SpriteHD.on) return this.createHD(scene);
         const t0 = performance.now();
         const F = this.FRAME, cols = this.COLS, rows = Math.ceil(this.FRAMES.length / cols);
@@ -626,12 +662,7 @@ const PropSprites = {
                 return [u0, v0, u0 + F / AW, v0 + F / AH];
             },
             // Escolhe um frame aleatório do tipo (rnd em 0..1).
-            pick: (kind, rnd) => {
-                const idx = [];
-                this.FRAMES.forEach((fr, i) => { if (fr.kind === kind) idx.push(i); });
-                const i = idx[Math.min(idx.length - 1, Math.floor(rnd * idx.length))];
-                return { index: i, row: this.FRAMES[i].row, kind };
-            },
+            pick: (kind, rnd) => this.pick(kind, rnd),
             // t = tempo (s); mode = 0 leve | 1 forte | 2 intenso. Chamado todo quadro (WorldBuilder.update): também assa aos poucos o
             // atlas do modo pedido e solta os de vento forte depois de ~2 min de vento leve.
             setWind: (t, mode, dt = 1 / 30) => {
@@ -713,12 +744,7 @@ const PropSprites = {
             maskMaterial: mat('propsMask', true),
             rect: (i) => { const u0 = ((i % cols) * FP) / W, v0 = (Math.floor(i / cols) * FP) / H; return [u0, v0, u0 + FP / W, v0 + FP / H]; },
             animRect: () => null,
-            pick: (kind, rnd) => {
-                const idx = [];
-                this.FRAMES.forEach((fr, i) => { if (fr.kind === kind) idx.push(i); });
-                const i = idx[Math.min(idx.length - 1, Math.floor(rnd * idx.length))];
-                return { index: i, row: this.FRAMES[i].row, kind };
-            },
+            pick: (kind, rnd) => this.pick(kind, rnd),
             // vento: a intensidade do modo pedido chega devagar (rajada que aumenta, tempestade que passa) e a fase anda pelo tempo
             setWind: (t, mode, dt = 1 / 30) => {
                 const M = PropSprites.MODES[Math.max(0, Math.min(2, mode))], k = 1 - Math.exp(-Math.max(0, dt) * 0.7);

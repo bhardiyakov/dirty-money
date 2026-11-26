@@ -15,9 +15,14 @@ const { MeshoptSimplifier } = require('meshoptimizer');
 const GEN_DIR = path.join(__dirname, '..', 'generator');
 const RATIO = +(process.argv[2] || 0.3);
 const RATIO_OF = { eye: 0.35, hair: 0.14 };                    // (olhos: pequenos, guardam mais; cabelos: cartões densos, guardam menos)
-// NÍVEIS além do de NPC perto (o de cima): o JOGADOR (a câmera sempre perto: ~5 mil triângulos) e o de LONGE (~1 mil: os NPCs além da
-// distância média — no lugar do desenho 2,5D)
-const LODS = { hero: { ratio: 0.5, of: { eye: 0.6, hair: 0.26 }, err: 0.06 }, far: { ratio: 0.09, of: { eye: 0.1, hair: 0.05 }, err: 0.5 } };
+// NÍVEIS além do L0 (o de NPC perto, o de cima): o JOGADOR (a câmera sempre perto: ~5 mil triângulos) e os de NPC cada vez mais leves —
+// mid (L1, ~1,4 mil), far (L2, ~800) e tiny (L3, ~350) — escolhidos no jogo pelo tamanho do boneco na tela (Char3D.LOD_SCREEN)
+const LODS = {
+	hero: { ratio: 0.5, of: { eye: 0.6, hair: 0.26 }, err: 0.06 },
+	mid: { ratio: 0.17, of: { eye: 0.2, hair: 0.08 }, err: 0.25 },
+	far: { ratio: 0.09, of: { eye: 0.1, hair: 0.05 }, err: 0.5 },
+	tiny: { ratio: 0.04, of: { eye: 0.05, hair: 0.022 }, err: 1.0 },
+};
 const Q16 = 2 / 32767;
 const W_BONE = +(process.env.LOW_WBONE || 0.25), W_CLOTH = +(process.env.LOW_WCLOTH || 4.0), MAX_ERR = +(process.env.LOW_ERR || 0.12);      // (peso dos ossos nos atributos; erro máximo, relativo ao tamanho da malha)
 

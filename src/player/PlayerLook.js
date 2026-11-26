@@ -84,7 +84,9 @@ const PlayerLook = {
 		this._resolve(s, key, lvl, job).catch((e) => console.warn('[VISUAL]', e));
 	},
 	async _resolve(s, key, lvl, job) {
-		let look = this.isDefault(key) ? 'default' : this.looks.get(key) || (await this._load(key));
+		// (sem 2,5D: o jogador é o boneco 3D montado da ficha — Char3D._playerSpec; os atlas prontos só dão os clipes. Nada é desenhado
+		// no Worker nem lido do aparelho)
+		let look = NpcArt.no2d || this.isDefault(key) ? 'default' : this.looks.get(key) || (await this._load(key));
 		if (job !== this._job) return;
 		const W = typeof Wardrobe !== 'undefined' && Wardrobe.available() ? Wardrobe : null;
 		let live = null;
@@ -100,7 +102,7 @@ const PlayerLook = {
 			look = cur || 'default';
 			key = cur ? this.shown : this.defaultKey;
 		}
-		if (look !== 'default' && W && !this.want) W.ensure(key, s);         // (faltando só armas, bolsa ou machucados)
+		if (look !== 'default' && W && !this.want && !NpcArt.no2d) W.ensure(key, s);         // (faltando só armas, bolsa ou machucados)
 		const hand = s.hand ? await this._handAtlas(key, s.hand, look) : null;
 		const dmg = lvl && !live ? await this._dmgAtlases(key, lvl, look, hand) : [];      // (ao vivo: sem os machucados do visual anterior)
 		if (job !== this._job) return;

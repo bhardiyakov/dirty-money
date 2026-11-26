@@ -26,10 +26,10 @@ const Graphics = {
 	// (Low: 0,56 = os 75% de antes × os 75% que a TV de tubo tirava por cima, quando ela vinha ligada por padrão — o aparelho fraco
 	// continua desenhando a mesma quantidade de pixels com a imagem limpa.)
 	PRESETS: {
-		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6, npc3d: 0, npc3dR: 0, npc3dPoly: 12, npc3dPolyR: 40, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 1 },
-		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 2, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 1.8e6, npc3d: 6, npc3dR: 26, npc3dPoly: 999, npc3dPolyR: 70, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 2 },
+		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6, npc3d: 0, npc3dR: 0, npc3dPoly: 12, npc3dPolyR: 40, lodBias: 1.7, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 1 },
+		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 2, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 1.8e6, npc3d: 6, npc3dR: 26, npc3dPoly: 999, npc3dPolyR: 70, lodBias: 1.25, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 2 },
 		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 3, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6, npc3d: 12, npc3dR: 36, npc3dPoly: 999, npc3dPolyR: 100, pom: true, pcf: 'medium', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
-		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true, npc3d: 24, npc3dR: 50, npc3dPoly: 999, npc3dPolyR: 130, pom: true, pcf: 'high', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
+		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true, npc3d: 24, npc3dR: 50, npc3dPoly: 999, npc3dPolyR: 130, lodBias: 0.85, pom: true, pcf: 'high', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
 	},
 	// GPUs that cannot carry the high preset (WEBGL_debug_renderer_info): software rasterisers and old mobile/integrated chips.
 	// ("Microsoft Basic Render Driver" / WARP: o Windows sem driver de vídeo ou com a aceleração do navegador desligada — desenha na CPU)
@@ -183,10 +183,12 @@ const Graphics = {
 			const n3 = poly && p.npc3dPoly !== undefined ? p.npc3dPoly : p.npc3d, r3 = poly && p.npc3dPolyR ? p.npc3dPolyR : p.npc3dR;
 			A.char3d.npc.max = nq ? +nq[1] : n3; A.char3d.npc.radius = r3 || 30;
 			A.char3d.npc.midDist = Math.min(A.char3d.npc.midDist || 32, Math.max(14, Math.round((r3 || 30) * 0.75)));
+			// (o nível de detalhe dos NPCs 3D pelo tamanho na tela: no Low ele baixa mais cedo, no HD mais tarde — Char3D.lodBias)
+			if (typeof Char3D !== 'undefined') Char3D.lodBias = p.lodBias || 1;
 		}      // (TODOS os NPCs em 3D — art/Char3D.js; o nível gráfico decide até onde vai o modelo cheio)
 		// (personagens em 3D: as folhas 2,5D só servem a quem ainda é desenhado nelas — pilotos de moto, o instante antes do modelo 3D
 		// chegar —, então o orçamento delas na placa cai para no máximo 128 MB; antes elas ocupavam ~630 MB no High sem ninguém ver)
-		if (A.char3d && A.char3d.on !== false && !/[?&]boneco=2d\b/.test(typeof location !== 'undefined' ? location.search : '')) A.vramMB = Math.min(A.vramMB, 128);
+		if (A.char3d && A.char3d.on !== false) A.vramMB = Math.min(A.vramMB, 128);
 		A.hdCar = !!p.hdCar;                                       // (o carro dirigido em alta definição: ~50 mil triângulos — Game._hdDrive)
 		if (p.chaseFar && Config.camera.chase) { Config.camera.chase.far = p.chaseFar; Config.camera.chase.near = Math.round(p.chaseFar * 0.45); }
 		// MENOS MALHAS no Low e no Medium (notebook, celular): acabamentos em pedaços de 128 u e vegetação em células de 256 u — medido, a

@@ -1,7 +1,7 @@
 // Sprites do mapa em alta definição (art/SpriteHD.js) e o rastro de pneu na grama e na areia (world/TireTracks.js):
 //   • árvores, guarda-sóis, pedras e tufos de grama saem do assador HD (borda macia, sem os degraus da pixel art) e balançam no
 //     vento pelo shader (sem atlas de animação);
-//   • tufos de grama nos quarteirões de grama; pássaros e bichos da roça em HD (os bichos assados aos poucos, durante o jogo);
+//   • tufos de grama nos quarteirões de grama; pássaros em 3D (ou em HD no modo 2D) e bichos da roça em HD (os bichos assados aos poucos);
 //   • o chão do mundo grande em HD (atlas de perto + atlas de longe) e os pisos novos (mata, cerrado, brejo, roça) sem emenda;
 //   • o chão certo para o rastro: grama e areia sim; asfalto, calçada e água não;
 //   • um carro andando na areia deixa o rastro (e o quadro muda onde ele passou); no asfalto, nada.
@@ -25,7 +25,7 @@ module.exports = {
             out.tufts = 0;
             for (const b of CityGrid.blocks) for (const p of b.props || []) if (p.type === 'tuft') out.tufts++;
             const bm = (game.birds.mesh && game.birds.mesh.material) || game.birds.material;
-            out.birds = !!(bm && bm.hd);
+            out.birds = game.birds.mode3d ? 'em 3D' : (bm && bm.hd ? 'em HD' : '');               // (as aves são 3D — art/Animals3D.js; `?bichos=2d` = sprites HD)
             out.atlas2 = TerrainSplat.tex.atlas2 && TerrainSplat.tex.atlas2.getSize().width;
             out.arr = TerrainSplat.tex.arr ? TerrainSplat.tex.arr.getSize().width : 0;      // (chão realista: as fotos num texture array com mipmaps)
             out.atlas = TerrainSplat.tex.atlas && TerrainSplat.tex.atlas.getSize().width;
@@ -94,7 +94,7 @@ module.exports = {
         c.ok(r.tuftKind > 0, `tufos de grama no atlas (${r.tuftKind} quadros)`);
         c.ok(r.soft > 0.05, `bordas macias nos sprites HD (${(r.soft * 100).toFixed(0)}% de pixels semitransparentes por opaco)`);
         c.ok(r.tufts > 50, `tufos de grama nos quarteirões de grama (${r.tufts})`);
-        c.ok(r.birds, 'pássaros em HD');
+        c.ok(r.birds, `pássaros ${r.birds || 'sem modelo'}`);
         c.ok(r.arr >= 256 || (r.atlas2 > 0 && r.atlas2 * 2 === r.atlas), `chão do mundo em HD: ${r.arr ? `fotos de ${r.arr} px com mipmaps` : `atlas de perto ${r.atlas} px e de longe ${r.atlas2} px`}`);
         c.ok(!r.seams.length, `pisos do mundo sem emenda (${r.seams.join(' | ')})`);
         c.eq(r.surf.road, 0, 'asfalto: sem rastro');

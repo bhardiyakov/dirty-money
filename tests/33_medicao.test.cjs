@@ -36,10 +36,11 @@ module.exports = {
             for (const P of NpcArt._live) sum += NpcArt._bytes(P);
             const pin = NpcArt._pins(), need = NpcArt._heroNeeds(pin), held = [];
             for (const id of pin) { const A = NpcArt.atlases[id]; if (A) for (const P of A.pages) if (NpcArt._heroHolds(P, pin, need)) held.push(P.g); }
-            return { h: Array.from(h.data), hs: h.hs, half, full, bytesOk, resOk: sum === NpcArt._res, low: Graphics.level === 'low', npcHalf: NpcArt.half, held, water: need.groups.has('water'), arms: need.arms };
+            return { h: Array.from(h.data), hs: h.hs, half, full, bytesOk, resOk: sum === NpcArt._res, low: Graphics.level === 'low', npcHalf: NpcArt.half, held, water: need.groups.has('water'), arms: need.arms, no2d: Char3D.no2d };
         });
         c.eq(JSON.stringify(m.h), JSON.stringify([3, 200, 9, 40, 2, 255]), 'meia resolução: cada bloco 2×2 guarda o pixel mais opaco, inteiro');
-        if (m.low) {
+        if (m.no2d) c.ok(m.half + m.full === 0 && m.resOk, 'sem 2,5D: nenhuma página de personagem na placa (todos em 3D)');
+        else if (m.low) {
             c.ok(m.npcHalf && m.half > 0 && m.full === 0, `Low: páginas dos personagens em meia resolução (${m.half} na GPU)`);
             c.ok(m.bytesOk && m.resOk, 'Low: textura com metade do lado e a memória contada pelo tamanho real');
         } else c.note('o preset não é o Low: meia resolução não testada');

@@ -498,7 +498,12 @@ class SpriteActor {
 		const c = this.clip;
 		if (!c) return;
 		if (c.vector) { this._setFr(this.mesh, c.pk, this.frame, this._fr); this._applyOverlay(); return; }
-		if (c.npc) { if (!this._ghost) this._npcDraw(c); else if (this._wait) { this._wait = null; NpcArt._waiters.delete(this); } return; }      // (_ghost: desenhado em 3D — Char3D)
+		if (c.npc) {
+			if (NpcArt.no2d) { this._hide2d(); return; }                    // (sem 2,5D: o quad nunca aparece — o personagem é o boneco 3D)
+			if (this._no2d) { this._no2d = false; this._ghost = false; this.mesh.layerMask = 0x0FFFFFFF; if (this._ov) this._ov.layerMask = 0x0FFFFFFF; }      // (o 3D caiu: o 2,5D volta)
+			if (!this._ghost) this._npcDraw(c); else if (this._wait) { this._wait = null; NpcArt._waiters.delete(this); }
+			return;
+		}      // (_ghost: desenhado em 3D — Char3D)
 		const F = c.frame;
 		const u0 = (this.dir * F) / c.W, u1 = ((this.dir + 1) * F) / c.W;
 		const v0 = (this.frame * F) / c.H, v1 = ((this.frame + 1) * F) / c.H;
@@ -534,6 +539,16 @@ class SpriteActor {
 		this._pg = P; this._drawClip = c; this._drawDir = dd;
 		P.used = NpcArt.now;
 		this._setFr(this.mesh, c.pk, dd * c.pk.n + Math.min(this.frame, c.pk.n - 1), this._fr, true);
+		if (this._npcWait) { this._npcWait = false; this._vis(); }
+	}
+	// SEM 2,5D: o quad fica fora do desenho (layerMask 0) e "fantasma" (não pede páginas); não há página a esperar — o ator é visível
+	// para a lógica (isVisible) assim que posto no lugar, e o Char3D o desenha.
+	_hide2d() {
+		this._no2d = true;
+		if (!this._ghost) this._ghost = true;
+		if (this.mesh.layerMask) this.mesh.layerMask = 0;
+		if (this._ov && this._ov.layerMask) this._ov.layerMask = 0;
+		if (this._wait) { this._wait = null; NpcArt._waiters.delete(this); }
 		if (this._npcWait) { this._npcWait = false; this._vis(); }
 	}
 	// Uma página chegou (NpcArt._upload): quem esperava tenta desenhar de novo.

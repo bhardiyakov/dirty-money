@@ -107,8 +107,10 @@ class AutoQuality {
 	_apply(level) {
 		const g = this.g, ge = g.gameEngine, id = AutoQuality.STEPS[level - 1][0];
 		const N3 = Config.art && Config.art.char3d && Config.art.char3d.npc;
-		if (id === 'npc3d') { if (N3) { N3.nearDist = Math.min(N3.nearDist || 17, 10); N3.midDist = Math.min(N3.midDist || 30, 20); N3.max = Math.ceil((N3.max | 0) / 2); } }      // (os bonecos de pontos: metade deles, os detalhados só bem perto)
-		else if (id === 'npc3dOff') { if (N3) { N3.nearDist = 6; N3.midDist = 14; N3.max = Math.min(N3.max | 0, 2); } }                // (só os 2 mais perto, quase todos com o modelo leve)
+		// (sem 2,5D — Char3D.no2d: ninguém pode sumir; o degrau baixa o NÍVEL DE DETALHE mais cedo — lodBias — em vez de cortar bonecos)
+		const no2d = typeof Char3D !== 'undefined' && Char3D.no2d;
+		if (id === 'npc3d') { if (no2d) Char3D.lodBias *= 1.5; else if (N3) { N3.nearDist = Math.min(N3.nearDist || 17, 10); N3.midDist = Math.min(N3.midDist || 30, 20); N3.max = Math.ceil((N3.max | 0) / 2); } }      // (os bonecos de pontos: metade deles, os detalhados só bem perto)
+		else if (id === 'npc3dOff') { if (no2d) Char3D.lodBias *= 2; else if (N3) { N3.nearDist = 6; N3.midDist = 14; N3.max = Math.min(N3.max | 0, 2); } }                // (só os 2 mais perto, quase todos com o modelo leve)
 		else if (id === 'shadow512') { if (ge.shadowGenerator) ge.setShadowSize(512); }
 		else if (id === 'noShadow') this._shadowsOff();
 		else if (id === 'fill') {

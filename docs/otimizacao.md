@@ -573,3 +573,46 @@ depois de uma atualização do navegador. As versões atuais do Chrome não têm
 - **Intel no Direct3D 11** (Iris Xe, UHD… no Chrome e no Edge): o jogo já abre sem compilação paralela, sem esperar um travamento
   (`GpuCheck.noParallelFor`). No notebook Iris Xe, a placa travou até o Windows reiniciar o driver (a tela piscou) antes de o
   Chrome bloquear o WebGL. `?paralelo=1` liga a compilação paralela mesmo assim.
+
+## Plantas de longe, aves, helicóptero e o atlas dos props (novembro/2026)
+
+Continuação do mapa de polígonos (depois dos personagens low poly): o que ainda era desenho 2,5D virou polígono, e a vegetação
+ganhou nível de detalhe pela distância, como nos motores atuais.
+
+**Plantas com menos detalhe longe** (`render/Trees3D.js`, `?plantalod=0` desliga para comparar):
+- cada malha de planta (uma por espécie e célula, com instâncias) ganha uma gêmea de LONGE com o mesmo conjunto de instâncias: o
+  modelo no detalhe −1 (um terço dos cachos da copa, maiores; troncos com metade dos lados; pedras na icosfera simples);
+- a troca é feita 5 vezes por segundo pela distância da câmera à borda da célula: além de 70 u (× 0,65 no Low, 0,85 no Medium,
+  1,3 no HD) entra a de longe, com 10% de folga na volta para não piscar;
+- a vegetação rasteira (tufos, capim, samambaia, cascalho, lixo) some além de 45 u (mesma escala);
+- a troca usa `isVisible`, não `setEnabled`: as lojas e interiores ligam e desligam as malhas da cidade com `setEnabled`.
+
+Medição (SwiftShader, Medium, o MESMO quadro com `Trees3D.lodOn` ligado e desligado na mesma sessão — ligado/desligado/ligado; duas
+aberturas diferentes não servem: na mata o terreno ainda está chegando e o mesmo lugar variou de 1,7 a 2,2 milhões de triângulos):
+
+| Cena | Triângulos (com → sem) | Desenhos | Quadro |
+|---|---|---|---|
+| mata | 1,44 M ← 1,72 M (−16%) | 217 ← 232 | −9% |
+| favela | 1,27 M ← 1,54 M (−17%) | 263 ← 281 | −8% |
+| centro | 1,22 M ← 1,28 M (−5%) | 290 ← 291 | igual (poucas plantas) |
+| Lagoa | 0,89 M ← 1,63 M (−46%) | 273 ← 325 | −15% |
+
+**Aves em 3D** (`world/Birds.js` + `art/Animals3D.js`, espécie `ave`): pombo, gaivota, rolinha e bem-te-vi viraram modelos de
+~670 triângulos (corpo, cabeça, bico, olhos, rabo em leque, pernas e as asas), uma malha por espécie com instâncias. A asa é
+modelada aberta e o shader a dobra no corpo (encolhe, gira para trás, deita no lombo e desce até o rabo) quando a ave está pousada,
+e abre e bate no voo (o pombo bate rápido, a gaivota bate e plana, pousando todas batem rápido); a cabeça bica, as pernas andam e
+recolhem no voo. A sombra é a de verdade (mapa de sombras). Tamanho perto do real (o pombo com ~0,4 m). O atlas `birdsHD`
+(9,4 MB) não existe mais; `?bichos=2d` volta aos sprites.
+
+**Helicóptero sem textura**: o corpo e os rotores já eram o modelo 3D (`CarArt3D`); o disco borrado e a sombra agora também são
+polígonos (`HeliArt.blurMesh`: anéis com cor e transparência por vértice, o rastro escuro atrás de cada pá; `HeliArt.shadowMesh`:
+uma grade de 0,27 m com a silhueta do corpo e do disco na transparência dos vértices, lida uma vez de um canvas pequeno que é jogado
+fora). A carga da polícia também deixou de desenhar o corpo e as pás 2D que ninguém usava: −4 texturas de ~3 MB.
+
+**Atlas dos props sob demanda** (`PropSprites.lazy`): com as árvores 3D, nenhum quad do mapa usa o atlas dos props (conferido na
+favela, centro, Lagoa e mata: zero malhas). Ele só é montado se algum tipo sem modelo 3D pedir o desenho — e a mancha do chão
+(`stain`) ganhou modelo (`Trees3D`, duas poças rasas e restos chatos), então nenhum pede. −23,4 MB (`propsHD`).
+
+**Total**: ~45 MB a menos de textura na memória de vídeo (propsHD 23,4 + birdsHD 9,4 + helicóptero ~12,5), com o mesmo visual.
+Teste: `tests/77_poligonos.test.cjs` (aves dobrando/abrindo/batendo a asa, helicóptero sem textura, atlas não montado, plantas de
+longe no modelo leve e a rasteira sumindo longe).

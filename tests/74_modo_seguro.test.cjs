@@ -82,9 +82,9 @@ module.exports = {
         const d = await page.evaluate((r0) => {
             SafeMode._blank = window.__blank; SafeMode.RETRY_UNKNOWN = 8;
             const s = Store.getJSON('safeMode');
-            return { r0, steps: [...SafeMode.applied], c3d: Char3D.on, kept: !!s && s.when === 1 && s.steps.join() === 'char3d', retry: SafeMode.retry };
+            return { r0, steps: [...SafeMode.applied], c3d: Char3D.on, safe: Char3D.safe, kept: !!s && s.when === 1 && s.steps.join() === 'char3d', retry: SafeMode.retry };
         }, r0);
-        c.ok(d.r0 && d.steps.join() === 'char3d' && !d.c3d && d.kept && !d.retry, `sem veredito: voltou ao guardado (${d.steps.join(', ')}) e tenta de novo na próxima abertura`);
+        c.ok(d.r0 && d.steps.join() === 'char3d' && d.c3d && d.safe && d.kept && !d.retry, `sem veredito: voltou ao guardado (${d.steps.join(', ')}: os personagens 3D no modo simples, sem desligar) e tenta de novo na próxima abertura`);
 
         // 5) o TESTE DA CENA (core/SceneProbe.js): simulado, o mundo só "aparece" sem névoa — uma suspeita por vez, a que resolve fica
         const e = await page.evaluate(async () => {
