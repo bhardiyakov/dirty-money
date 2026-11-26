@@ -734,3 +734,43 @@ sessão (com × sem o código, pelo pré-processador): favela ~0 (ruído), centr
   só, sem tronco nem cachos (20 triângulos por bolha) — de longe a mata é um manto. Não projeta sombra (fica além da janela dela).
 - **Reflexo da água só de perto** (`Water.NEAR`, 60 u): o espelho desenha só o que está em pé perto da água que aparece na tela (uma
   grade 7 × 7 do chão visto); o resto da água reflete o céu pelo shader. As peças miúdas das fachadas ficam fora do espelho.
+
+## O resto em polígonos (novembro/2026)
+
+O inventário da memória de vídeo (todas as texturas da cena, com tamanho e quem usa) mostrou o que ainda era DESENHO: os atlas 2D de
+carros e de personagens (todos já são 3D), as vitrines das lojas, o calçadão, o gramado do estádio, a seta de saída dos interiores,
+os esconderijos, as casas de máquinas, o barraco do protagonista por fora, a torcida do autódromo e a sombra do avião. Agora:
+
+- **Atlas 2D fora da placa.** Carros (`CarArt`: 3 texturas de 1024², ~16 MB) e personagens (`CharArt`: 2048 × 1936, ~15 MB) não
+  sobem mais na carga: a miniatura do HUD sai da CPU e o atlas só vai para a placa se algum desenho 2D for de fato pedido (o lote 2D
+  de carros no primeiro ator 2D; o de personagens quando um quad vetorial aparece na tela — `CharArt.need`, que decodifica de novo no
+  Worker).
+- **A porta do carro 3D em 3D** (`CarDoors`): a folha na cor do carro (colunas, moldura, vidro escuro, maçaneta) gira na dobradiça
+  da frente, e o vão mostra o interior (soleira, assento, encosto). Duas malhas com instâncias para todas as portas abertas.
+- **Vitrines em polígonos** (`render/Shops3D.js`, `Config.art.shopPoly`; `?lojas=2d` = o atlas pintado de 2 × 1800 × 864, ~16 MB):
+  a frente de loja SALIENTE da parede — pilares e verga na cor da loja, rodapé de granito com a pingadeira, duas vitrines com o
+  caixilho de alumínio e o montante, e o vidro afastado do fundo: atrás dele a sala (o fundo, a bancada, duas prateleiras com a
+  mercadoria em caixinhas coloridas) aparece com paralaxe de verdade. A porta de vidro com o puxador e a soleira. Em cima, o LETREIRO,
+  uma caixa de luz saliente na cor da loja, com a moldura, o ícone e o nome — só o texto é textura (`shopText`, 512 × 1024 em
+  luminância + alfa, ~1,3 MB com os mipmaps). A oficina tem o portão de enrolar (as lâminas em degrau, o rolo, a luz escapando
+  embaixo). À NOITE a sala, a mercadoria e a caixa do letreiro acendem pelo alfa do vértice (`ShopGlow`) e o nome pelo
+  `WindowLights`. As baias do térreo atrás da loja ficam sem peça da fachada (`Walls3D`). As lojas entram nos pedaços de 64 u dos
+  acabamentos (só os que tocam a tela são desenhados); as caixinhas de dentro têm só a frente e o topo.
+- **Superfícies no shader** (`render/ProcSurf.js`, `Config.art.procSurf`; `?superficies=2d` = as texturas): o CALÇADÃO (as ondas de
+  pedra portuguesa preta sobre a branca, as pedrinhas e o rejunte; era 512 × 768), o GRAMADO DO ESTÁDIO (as faixas do corte e as
+  linhas do campo em distância, nítidas de perto; era 640 × 480) e o BARRACO por fora (o bloco com o reboco caído aos pedaços, a chapa
+  de zinco ondulada com as emendas e a ferrugem escorrida, as tábuas pintadas e descascadas, o telhado de zinco, o vidro e a porta; os
+  pneus, as pedras, as ripas, a caixa-d'água e o "gato" da luz do telhado viraram peças 3D).
+- **Em 3D**: os ESCONDERIJOS (a caçamba com a base, as rodinhas, as duas tampas com nervuras, o puxador e o lixo na fresta; os caixotes
+  com as tábuas em relevo, a moldura, a travessa em X e as quinas de metal; o latão com os aros e a tampa — no lugar das laterais
+  lisas com o topo pintado), as CASAS DE MÁQUINAS (a chapa, os montantes, a tampa com aba, a veneziana, a portinhola, a grelha de
+  exaustão), a TORCIDA do autódromo (cada pessoa sentada: o tronco na cor da camisa, a cabeça, o boné de alguns, os braços para cima
+  de outros, no banco colorido), a SETA DE SAÍDA dos interiores (o halo, a sombra, o contorno branco, o corpo em degradê; só a palavra
+  "SAÍDA" é textura, 256 × 80) e a SOMBRA DO AVIÃO (a silhueta — fuselagem, asas, empenagem — com a borda macia, no lugar da mancha
+  redonda).
+
+**O que continua textura, e por quê**: o que é ESCRITA ou foto do chão. Os nomes das lojas, das placas de trânsito e de rua
+(`roadSigns`), "PARE" e "ÔNIBUS" no asfalto e as marcas de tinta gasta (`roadDecals`), os anúncios e o logo do autódromo, as placas dos
+pontos turísticos e o pôster do mototáxi — texto em polígonos seria milhares de triângulos por letra; o mapa do terreno (`TerrainSplat`:
+o tipo de chão e a altura de cada célula, é dado, não desenho), as fotos do chão (asfalto, calçada, areia: o `GroundVariety` desenha por
+cima), as partículas (spray da água) e os interiores (montados só ao entrar).

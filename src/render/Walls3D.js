@@ -222,6 +222,12 @@ const Walls3D = {
                     const s = (i + 0.5) * f.bw, px = f.ox + f.tx * s + f.nx * 0.35, pz = f.oz + f.tz * s + f.nz * 0.35, t = topAt(px, pz, e);
                     hid[i] = t <= e.y ? 0 : Math.min(255, Math.floor((t - e.y + 0.4) / this.FH));
                 }
+                // a FRENTE DE LOJA em polígonos (render/Shops3D.js) cobre o térreo: as baias embaixo dela ficam sem peça e sem lâmpada
+                if (l.shops && l.shops.length && typeof Shops3D !== 'undefined' && Shops3D.on) for (const sh of l.shops) {
+                    if (sh.side.toLowerCase() !== key) continue;
+                    const s0 = key === 's' ? sh.a - l.x0 : key === 'n' ? l.x1 - sh.a - 6 : key === 'e' ? sh.a - l.z0 : l.z1 - sh.a - 6;
+                    for (let i = 0; i < f.n; i++) if ((i + 1) * f.bw > s0 + 0.05 && i * f.bw < s0 + 5.95) hid[i] = Math.max(hid[i], 1);
+                }
                 if (hid.every((h) => h >= floors)) continue;
                 // as luzes do térreo no chão (NightLights): a lâmpada da porta (a mesma do shader) e a portaria acesa
                 for (let i = 0; i < f.n; i++) {

@@ -480,7 +480,9 @@ const Landmarks = {
         vd.applyToMesh(mesh);
         // (a orientação de cada trecho depende do sentido da via: os dois lados)
         const m = new BABYLON.StandardMaterial('calcadao', scene);
-        m.diffuseTexture = this._calcadaoTex(scene); m.specularColor = BABYLON.Color3.Black(); m.backFaceCulling = false;
+        if (typeof ProcSurf !== 'undefined' && ProcSurf.on) ProcSurf.apply(m, 'calcadao');      // (as ondas desenhadas no shader: render/ProcSurf.js)
+        else m.diffuseTexture = this._calcadaoTex(scene);
+        m.specularColor = BABYLON.Color3.Black(); m.backFaceCulling = false;
         mesh.material = m; mesh.isPickable = false; mesh.receiveShadows = true; mesh.freezeWorldMatrix();
         wb.meshes.push(mesh); wb.mats.calcadao = m;
         // meio-fio do lado da areia; quiosques e postos de salva-vidas

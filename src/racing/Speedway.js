@@ -230,6 +230,7 @@ const Speedway = {
         this.built = true;
         const t0 = performance.now(), sc = game.scene, W = game.gameEngine && game.gameEngine.world;
         this._b = { ground: new MeshBatch(), solid: new MeshBatch(), crowd: new MeshBatch(), ads: new MeshBatch(), checker: new MeshBatch(), logo: new MeshBatch() };
+        this.polyCrowd = typeof ProcSurf !== 'undefined' && ProcSurf.on;                    // (a torcida em polígonos: _people)
         this.lamps = [];
         this._track(); this._kerbs(); this._barriers(); this._grid(); this._gantry(); this._pits(); this._stands(); this._covered();
         this._footbridge(); this._marshals(); this._towers(); this._paddock();
@@ -241,7 +242,7 @@ const Speedway = {
             if (emit) m.emissiveColor = new BABYLON.Color3(emit, emit, emit);
             return m;
         };
-        const tex = { crowd: this._crowdTex(sc), ads: this._adsTex(sc), checker: this._checkerTex(sc), logo: this._logoTex(sc), signs: RoadArt.signTex || (RoadArt.signs(sc), RoadArt.signTex) };
+        const tex = { crowd: this.polyCrowd ? null : this._crowdTex(sc), ads: this._adsTex(sc), checker: this._checkerTex(sc), logo: this._logoTex(sc), signs: RoadArt.signTex || (RoadArt.signs(sc), RoadArt.signTex) };
         this.meshes = [];
         const parts = [];
         for (const [name, b] of Object.entries(this._b)) {
@@ -525,6 +526,28 @@ const Speedway = {
     _signFaces() { return this._b.signs || (this._b.signs = new MeshBatch()); },
 
     // ---------------------------------------------------------------- público
+    // A TORCIDA EM POLÍGONOS (no lugar da textura speedwayCrowd): numa faixa de assentos (u0..u1 ao longo, va..vb o degrau, y = o
+    // piso do degrau), o assento colorido corrido e a gente sentada — o tronco (camisa), a cabeça (pele, às vezes o boné) e, em alguns, os
+    // braços para cima. dir = para onde o degrau sobe (a torcida olha para o outro lado, a pista).
+    _people(B, u0, u1, va, vb, y, dir, seat, seed) {
+        const SEATS = [[0.18, 0.37, 0.72], [0.78, 0.19, 0.16], [0.9, 0.76, 0.16]], sc = SEATS[seat % 3];
+        const SH = [[0.95, 0.95, 0.95], [0.85, 0.23, 0.18], [0.18, 0.39, 0.78], [0.95, 0.79, 0.16], [0.18, 0.63, 0.29], [0.11, 0.11, 0.13], [0.91, 0.42, 0.69], [1, 0.54, 0.12]];
+        const SK = [[0.79, 0.6, 0.45], [0.55, 0.35, 0.23], [0.91, 0.76, 0.63], [0.37, 0.23, 0.14]];
+        let r = (seed * 16807 + 7) % 2147483647 || 1;
+        const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
+        const vBack = va + (vb - va) * 0.72, box = (uA, uB, vA, vB, yA, yB, col) => { const p = this.local(uA, vA), q = this.local(uB, vB); B.solid(Math.min(p.x, q.x), Math.min(p.z, q.z), Math.max(p.x, q.x), Math.max(p.z, q.z), yA, yB, col); };
+        box(u0, u1, vBack - dir * 0.18, vBack + dir * 0.18, y, y + 0.36, sc);                                    // o banco corrido
+        for (let u = u0 + 0.2; u < u1 - 0.3; u += 0.55) {
+            if (rnd() < 0.28) continue;
+            const uc = u + rnd() * 0.12, sh = SH[Math.floor(rnd() * SH.length)], sk = SK[Math.floor(rnd() * SK.length)], lean = (rnd() - 0.5) * 0.08;
+            const vc = vBack - dir * 0.02 + lean;
+            box(uc - 0.19, uc + 0.19, vc - 0.12, vc + 0.12, y + 0.36, y + 0.88, sh);                              // o tronco
+            box(uc - 0.1, uc + 0.1, vc - 0.1, vc + 0.1, y + 0.9, y + 1.12, sk);                                    // a cabeça
+            const cap = rnd();
+            if (cap < 0.18) box(uc - 0.11, uc + 0.11, vc - 0.11 - dir * 0.06, vc + 0.11, y + 1.08, y + 1.15, SH[Math.floor(rnd() * SH.length)]);     // o boné
+            if (rnd() < 0.12) for (const s of [-1, 1]) box(uc + s * 0.2 - 0.04, uc + s * 0.2 + 0.04, vc - 0.04, vc + 0.04, y + 0.75, y + 1.32, sk);   // braços para cima
+        }
+    },
     // ARQUIBANCADA PRINCIPAL (descoberta) no miolo, de frente para a reta dos boxes: degraus de concreto com os assentos coloridos e a
     // torcida (textura), escadarias, a estrutura por trás e o guarda-corpo
     _standTiers(b, crowd, u0, u1, vFront, dir, N, step, rise, y0, seats) {
@@ -536,8 +559,11 @@ const Speedway = {
             for (let u = u0; u < u1 - 0.1; u += 12) {
                 const ue = Math.min(u1, u + 11), blk = Math.floor((u - u0) / 12), sc = seats[blk % seats.length], row = k / N;
                 const A = this.local(u + 0.5, va), B = this.local(ue - 0.5, va), C = this.local(ue - 0.5, vb), D = this.local(u + 0.5, vb), u0t = sc / 3, u1t = (sc + 1) / 3;
-                crowd.tri([A.x, yb, A.z], [B.x, yb, B.z], [C.x, yb, C.z], [0, 1, 0], [[u0t, row + 1 / N], [u1t, row + 1 / N], [u1t, row]], [1, 1, 1]);
-                crowd.tri([A.x, yb, A.z], [C.x, yb, C.z], [D.x, yb, D.z], [0, 1, 0], [[u0t, row + 1 / N], [u1t, row], [u0t, row]], [1, 1, 1]);
+                if (this.polyCrowd) this._people(crowd, u + 0.5, ue - 0.5, va, vb, yb, dir, sc, k * 131 + blk * 17);
+                else {
+                    crowd.tri([A.x, yb, A.z], [B.x, yb, B.z], [C.x, yb, C.z], [0, 1, 0], [[u0t, row + 1 / N], [u1t, row + 1 / N], [u1t, row]], [1, 1, 1]);
+                    crowd.tri([A.x, yb, A.z], [C.x, yb, C.z], [D.x, yb, D.z], [0, 1, 0], [[u0t, row + 1 / N], [u1t, row], [u0t, row]], [1, 1, 1]);
+                }
                 b.solid(Math.min(A.x, C.x), Math.min(A.z, C.z), Math.max(A.x, C.x), Math.max(A.z, C.z), ya, yb - 0.02, [0.6, 0.6, 0.58]);
             }
         }

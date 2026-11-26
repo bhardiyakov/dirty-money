@@ -326,7 +326,9 @@ const Maracana = {
         const hx = S.rx * 0.36, hz = S.rz * 0.33, mesh = BABYLON.MeshBuilder.CreateGround('stadiumPitch', { width: hx * 2, height: hz * 2 }, wb.scene);
         mesh.position.set(S.x, 0.46, S.z);
         const m = new BABYLON.StandardMaterial('stadiumPitch', wb.scene);
-        m.diffuseTexture = Landmarks._pitchTex(wb.scene); m.specularColor = BABYLON.Color3.Black();
+        if (typeof ProcSurf !== 'undefined' && ProcSurf.on) ProcSurf.apply(m, 'pitch');         // (as faixas e as linhas no shader: render/ProcSurf.js)
+        else m.diffuseTexture = Landmarks._pitchTex(wb.scene);
+        m.specularColor = BABYLON.Color3.Black();
         mesh.material = m; mesh.isPickable = false; mesh.receiveShadows = true; mesh.freezeWorldMatrix();
         wb.meshes.push(mesh); wb.mats.stadiumPitch = m;
         // os portões: o portão sul (a entrada: marquise e a placa)

@@ -272,6 +272,7 @@ const Interiors = {
 	// ------------------------------------------------------------------ seta de saída (HD)
 	_exitArrow(scene) {
 		if (this._arrow) return this._arrow;
+		if (typeof ProcSurf !== 'undefined' && ProcSurf.on) return (this._arrow = this._exitArrow3d(scene));
 		const W = 512, H = 640, tex = new BABYLON.DynamicTexture('exitArrowTex', { width: W, height: H }, scene, true);
 		const x = tex.getContext(), cx = W / 2;
 		x.clearRect(0, 0, W, H);
@@ -311,6 +312,63 @@ const Interiors = {
 		const mesh = BABYLON.MeshBuilder.CreatePlane('exitArrow', { width: 1.9, height: 2.375 }, scene);
 		mesh.rotation.x = Math.PI / 2; mesh.material = m; mesh.isPickable = false; mesh.alphaIndex = -9; mesh.setEnabled(false);      // (logo depois da sala)
 		return (this._arrow = mesh);
+	},
+	// A SETA EM POLÍGONOS (no lugar da textura de 512 × 640, ~1,7 MB): o mesmo desenho, nas mesmas medidas (o quadro de 1,9 × 2,375 m deitado
+	// no piso), feito de formas com a cor no vértice — o halo verde (anel que some para fora), a sombra, o contorno branco, o corpo em
+	// degradê e o brilho; a pílula "SAÍDA" com a borda e o halo. Só a palavra é textura (256 × 80, luminância + alfa; a faixa de baixo é
+	// branca e é dali que as formas tiram a cor). Uma malha, um material, a ordem dos índices é a ordem do desenho.
+	_exitArrow3d(scene) {
+		const TW = 256, TH = 80, cv = document.createElement('canvas'); cv.width = TW; cv.height = TH;
+		const g = cv.getContext('2d');
+		g.font = '900 52px Inter, "Segoe UI", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+		g.lineJoin = 'round'; g.lineWidth = 7; g.strokeStyle = 'rgba(0,0,0,0.9)'; g.strokeText('SAÍDA', TW / 2, 34); g.fillStyle = '#fff'; g.fillText('SAÍDA', TW / 2, 34);
+		g.fillStyle = '#fff'; g.fillRect(0, 72, TW, 8);
+		const img = g.getImageData(0, 0, TW, TH).data, D = new Uint8Array(TW * TH * 2);
+		for (let i = 0, j = 0; i < img.length; i += 4, j += 2) { D[j] = img[i]; D[j + 1] = img[i + 3]; }
+		const tex = new BABYLON.RawTexture(D, TW, TH, BABYLON.Constants.TEXTUREFORMAT_LUMINANCE_ALPHA, scene, true, false, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
+		tex.name = 'exitArrowWord'; tex.hasAlpha = true; tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+		const P = [], C = [], U = [], I = [], N = [], WU = [0.5, 76 / TH];
+		// px do desenho antigo (512 × 640) → o plano: x = (px − 256)/512 × 1,9, y = (320 − py)/640 × 2,375; z < 0 = mais para cima
+		const X = (px) => (px - 256) / 512 * 1.9, Y = (py) => (320 - py) / 640 * 2.375;
+		const vtx = (px, py, z, c, uv = WU) => { P.push(X(px), Y(py), z); C.push(c[0], c[1], c[2], c[3]); U.push(uv[0], uv[1]); N.push(0, 0, -1); return P.length / 3 - 1; };
+		const fan = (pts, z, colAt) => { const b = P.length / 3; for (const [x, y] of pts) vtx(x, y, z, colAt(x, y)); for (let k = 1; k < pts.length - 1; k++) I.push(b, b + k + 1, b + k); };
+		const ring = (inner, outer, z, ci, co) => {
+			const b = P.length / 3, n = inner.length;
+			for (let k = 0; k < n; k++) { vtx(inner[k][0], inner[k][1], z, ci); vtx(outer[k][0], outer[k][1], z, co); }
+			for (let k = 0; k < n; k++) { const a = b + 2 * k, c = b + 2 * ((k + 1) % n); I.push(a, c, a + 1, a + 1, c, c + 1); }
+		};
+		const cx = 256;
+		// a seta com folga e (convexa por partes: haste + ponta, cada uma em leque)
+		const shaft = (e, dy = 0) => [[cx - 80 - e, 200 - e + dy], [cx + 80 + e, 200 - e + dy], [cx + 80 + e, 380 + dy], [cx - 80 - e, 380 + dy]];
+		const head = (e, dy = 0) => [[cx - 196 - e * 1.6, 380 - e + dy], [cx + 196 + e * 1.6, 380 - e + dy], [cx, 600 + e * 1.8 + dy]];
+		const outline = (e) => [[cx - 80 - e, 200 - e], [cx + 80 + e, 200 - e], [cx + 80 + e, 380 - e], [cx + 196 + e * 1.6, 380 - e], [cx, 600 + e * 1.8], [cx - 196 - e * 1.6, 380 - e], [cx - 80 - e, 380 - e]];
+		const halo = [0.12, 0.78, 0.43, 0.5], halo0 = [0.12, 0.78, 0.43, 0];
+		ring(outline(10), outline(46), 0, halo, halo0);
+		const sh = () => [0, 0, 0, 0.45];
+		fan(shaft(0, 10), -0.002, sh); fan(head(0, 10), -0.002, sh);
+		const wh = () => [1, 1, 1, 1];
+		fan(shaft(11), -0.004, wh); fan(head(11), -0.004, wh);
+		const grad = (x, y) => { const t = (y - 200) / 400, A = [0.36, 1, 0.66], B = [0.09, 0.77, 0.42], Cc = [0.04, 0.54, 0.28]; const c = t < 0.55 ? A.map((v, i) => v + (B[i] - v) * t / 0.55) : B.map((v, i) => v + (Cc[i] - v) * (t - 0.55) / 0.45); return [c[0], c[1], c[2], 1]; };
+		fan(shaft(0), -0.006, grad); fan(head(0), -0.006, grad);
+		fan([[cx - 52, 206], [cx - 22, 206], [cx - 22, 374], [cx - 52, 374]], -0.008, () => [1, 1, 1, 0.28]);      // o brilho
+		// a pílula "SAÍDA": o halo, a borda branca, o corpo em degradê e a palavra
+		const pill = (x0, y0, w, h, r, e = 0) => { const out = []; x0 -= e; y0 -= e; w += 2 * e; h += 2 * e; r += e; for (const [qx, qy, a0] of [[x0 + w - r, y0 + r, -90], [x0 + w - r, y0 + h - r, 0], [x0 + r, y0 + h - r, 90], [x0 + r, y0 + r, 180]]) for (let k = 0; k <= 6; k++) { const a = (a0 + k * 15) * Math.PI / 180; out.push([qx + Math.cos(a) * r, qy + Math.sin(a) * r]); } return out; };
+		ring(pill(36, 24, 440, 138, 44, 6), pill(36, 24, 440, 138, 44, 36), 0, halo, halo0);
+		fan(pill(36, 24, 440, 138, 44, 6), -0.004, wh);
+		fan(pill(36, 24, 440, 138, 44, 0), -0.006, (x, y) => { const t = (y - 24) / 138; return [0.1 + (0.04 - 0.1) * t, 0.65 + (0.42 - 0.65) * t, 0.37 + (0.23 - 0.37) * t, 1]; });
+		const b = P.length / 3;
+		for (const [px, py, u, v] of [[cx - 210, 98 - 62, 0, 0], [cx + 210, 98 - 62, 1, 0], [cx + 210, 98 + 62, 1, 64 / TH], [cx - 210, 98 + 62, 0, 64 / TH]]) vtx(px, py, -0.008, [1, 1, 1, 1], [u, v]);
+		I.push(b, b + 2, b + 1, b, b + 3, b + 2);
+		const mesh = new BABYLON.Mesh('exitArrow', scene), vd = new BABYLON.VertexData();
+		vd.positions = P; vd.colors = C; vd.uvs = U; vd.indices = I; vd.normals = N;
+		vd.applyToMesh(mesh);
+		const m = new BABYLON.StandardMaterial('exitArrow', scene);
+		m.diffuseTexture = tex; m.useAlphaFromDiffuseTexture = true; m.emissiveColor = new BABYLON.Color3(1, 1, 1); m.diffuseColor = BABYLON.Color3.Black();
+		m.specularColor = BABYLON.Color3.Black(); m.disableLighting = true; m.backFaceCulling = false; m.disableDepthWrite = true;
+		m.transparencyMode = BABYLON.Material.MATERIAL_ALPHABLEND;
+		mesh.hasVertexAlpha = true; mesh.useVertexColors = true;
+		mesh.rotation.x = Math.PI / 2; mesh.material = m; mesh.isPickable = false; mesh.alphaIndex = -9; mesh.setEnabled(false);
+		return mesh;
 	},
 	// Por quadro (dentro): desliza para a porta e volta, pulsa; mais apagada com o jogador em cima ou de costas para a saída.
 	_tickArrow(game, dt) {
