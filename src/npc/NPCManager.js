@@ -191,7 +191,7 @@ class NPCManager {
             const E = this._entry(V);
             if (!E) break;
             const n = spare[i];
-            n.relocate(E.p, null, this._style(E.p, null));
+            n.relocate(E.p, null, this._style(E.p, null)); n._fresh = 3;
             const to = this.nav.closestPoint(new BABYLON.Vector3(E.to.x, 0, E.to.z), 6);
             if (to && n.gotoTarget) n.gotoTarget(to);                                         // (anda para dentro da cena)
             this.filled = (this.filled || 0) + 1;
@@ -250,7 +250,8 @@ class NPCManager {
                 // somado; o boneco segue o agente da navegação todo quadro (o passo continua liso, só a pose anda a 15 Hz)
                 if (halfFar && !npc.free) {
                     const dx = npc.position.x - fx, dz = npc.position.z - fz;
-                    if (dx * dx + dz * dz > hR2 && ((Zones.frame + (npc.id | 0)) & 1)) { npc._lodDt = (npc._lodDt || 0) + dt; npc.actor.setPosition(npc.transform.position.x, npc.transform.position.z); continue; }
+                    if (npc._fresh > 0) npc._fresh -= dt;                              // (quem acabou de entrar em cena pelo _fillView: lógica inteira por 3 s)
+                    else if (dx * dx + dz * dz > hR2 && ((Zones.frame + (npc.id | 0)) & 1)) { npc._lodDt = (npc._lodDt || 0) + dt; npc.actor.setPosition(npc.transform.position.x, npc.transform.position.z); continue; }
                 }
             }
             if (npc._lodDt) { npc.update(npc._lodDt + dt); npc._lodDt = 0; } else npc.update(dt);

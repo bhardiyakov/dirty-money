@@ -41,7 +41,7 @@ module.exports = {
             const VB = BABYLON.VertexBuffer, S = game.scene.meshes;
             const trim = S.find((x) => x.name.startsWith('world_trim') && x.geometry), wall = S.find((x) => x.name.startsWith('world_walls') && x.geometry);
             const nb = trim.getVertexBuffer(VB.NormalKind), cb = trim.getVertexBuffer(VB.ColorKind);
-            const veg = S.filter((x) => /^world_veg_hi.*_(oak|mango|palm|bush)@/.test(x.name) && x.geometry);
+            const veg = S.filter((x) => /^world_veg_hi.*_(oak|mango|palm|bush)@[-\d,]+$/.test(x.name) && x.geometry);      // (sem as variantes _longe/_manto: outro modelo)
             const byModel = new Map(); for (const v of veg) { const k = v.name.replace(/^.*_(\w+)@.*$/, '$1'); if (!byModel.has(k)) byModel.set(k, []); byModel.get(k).push(v); }
             let shared = 0, own = 0; for (const L of byModel.values()) if (L.length > 1) { if (L[0].getVertexBuffer(VB.PositionKind).getWrapperBuffer() === L[1].getVertexBuffer(VB.PositionKind).getWrapperBuffer()) shared++; if (L[0].geometry !== L[1].geometry) own++; }
             return { nType: nb.type, nStride: nb.byteStride, cType: cb && cb.type, cStride: cb && cb.byteStride, wallPos: wall.getVerticesData(VB.PositionKind), wallIdx: wall.getTotalIndices(), shared, own, models: [...byModel.keys()].length };

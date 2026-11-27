@@ -865,6 +865,47 @@ e desce a escada de processador em segundos, e aí **90% dos quadros ficam abaix
 Na máquina de referência (×1): 14–19 ms. Script: `tests/fraco.cjs` (`RATE=2 LOWRES=4 N=120`; `CPUL=1` = a escada aplicada).
 Na medição com a GPU emulada carregando a CPU, as mesmas cenas no ×2 ficam em 31–44 ms — o limite da GPU emulada, não do jogo.
 
+### Terceira rodada: o Low já abre leve e o nível Mínimo (celular de entrada)
+
+A qualidade automática resolvia os picos em segundos, mas a meta é 30 FPS **ao abrir**, sem esperar a escada. E ela só desce os
+degraus de processador com placa de vídeo de verdade. Então os degraus mais discretos passam a valer desde a carga no Low e no celular
+(`Graphics.apply`): a pose de quem está de meia distância para longe a cada 2, 3 e 4 quadros (`Config.perf.lodEvery` →
+`Char3D.LOD_EVERY`) e a lógica de longe em meia taxa a partir de 15 m (`halfFarR`; eram 22 m). Daí a escada continua descendo a partir
+desse ponto (pose a cada 2, 4 e 6 quadros; longe a partir de 12 m). Exceção: o pedestre que o `_fillView` acabou de trazer para a
+entrada da cena fica com a lógica inteira por 3 s. Com a lógica pela metade, a tela demorava a encher depois de girar a câmera
+(`tests/67_populacao`).
+
+Para os celulares de entrada (2–3 GB), um nível novo, **Mínimo** (`?gfx=min`, Ajustes › Gráficos e o submenu): é o Low com os
+cortes de processador já ligados. `Graphics.level` continua `'low'` (as tabelas por nível valem) e `Graphics.minimal` /
+`Config.perf.minimal` marcam o corte:
+
+| Mínimo (por cima do Low) | |
+|---|---|
+| Gente e trânsito | 30% da frota do Alto (o Low tem 50%) |
+| Névoa | 50 m; terreno carregado num raio de 130 m (Low: 170 m) |
+| Pessoas em 3D | até 32 m (além disso já é névoa); detalhe das pessoas 2,2; pose de longe a cada 2/3/4 quadros |
+| Peças miúdas | fachadas só com molduras e ar-condicionado, telhados sem peças em cima, sem pássaros, sem vegetação rasteira |
+| Lógica de longe | meia taxa a partir de 12 m |
+| Vida da cidade | baixa; resolução 50%; mata 40% |
+
+Escolha automática: tela de toque com até 2 GB informados pelo navegador (`detect()`; 3 GB também aparecem como 2). E, no
+automático, quando a qualidade automática esgota a escada de processador no Low, ela deixa o aviso `gfxMinNext` e a próxima abertura
+já vem no Mínimo (escolher o nível à mão apaga o aviso). Teste: `tests/85_minimo.test.cjs`.
+
+| Cena | Low + celular, CPU ×2, **ao abrir** (sem a escada): média / p90 | Mínimo, CPU ×3: média / p90 | Mínimo, CPU ×4: média / p90 |
+|---|---|---|---|
+| Favela a pé | 23,3 / **29,5 ms** | 32,7 / 46,8 ms | 41,3 / 56,3 ms |
+| Centro a pé | 22,6 / **29,9 ms** | 28,5 / 39,6 ms | 37,9 / 50,1 ms |
+| Dirigindo no centro | 23,9 / **32,7 ms** | 31,1 / 37,9 ms | 41,7 / 52,3 ms |
+| Mata | 21,8 / **30,2 ms** | 24,7 / 36,2 ms | 39,3 / 51,6 ms |
+
+Com a CPU 2× mais lenta, o Low agora abre com **90% dos quadros abaixo de 33 ms em todas as cenas** (antes, ao abrir: p90 31–37 ms),
+sem depender da escada. Com 3×, o Mínimo fica na média de 30 FPS (25–33 ms), mas com picos (p90 36–47 ms). Com 4×, roda a ~25 FPS.
+**Esses dois ainda não são 30 FPS estáveis.** Ressalva da medição: no ×3 e no ×4 a GPU emulada continua na mesma CPU, mesmo
+desenhando 1/16 dos pixels, e o "render (cena)" ainda carrega parte dela. Num aparelho com placa de verdade o número fica um pouco
+melhor, mas sem medir num celular de entrada real não dá para prometer 30. Rodadas: `RATE=2 LOWRES=4 N=120 node tests/fraco.cjs` e
+`Q='gfx=min&celular' RATE=3 LOWRES=4 N=120 node tests/fraco.cjs`.
+
 **Próximos passos com ganho real:** fundir os materiais das fachadas (cada estilo é um programa de shader: 10–18 desenhos só de paredes)
 e levar a IA do trânsito e a navegação para o worker (`src/sim/worker.js`).
 
@@ -877,7 +918,7 @@ volta; no toque, ◀ ▶ em cada linha.
 
 | Linha | Valores | Quando vale |
 |---|---|---|
-| Nível gráfico | Automático, Low, Medium, High, HD | ao reabrir |
+| Nível gráfico | Automático, Mínimo, Low, Medium, High, HD | ao reabrir |
 | Resolução | 50–100% | na hora (o que mais pesa na placa de vídeo) |
 | Distância de visão | 55–125 m | na hora (a névoa; menos prédios, carros e árvores por quadro) |
 | Sombras do sol | Desligadas, Baixas, Altas | desligar na hora; ligar/trocar o tamanho ao reabrir |

@@ -116,7 +116,7 @@ const Graphics = {
 		const nav = typeof navigator !== 'undefined' ? navigator : {}, mem = nav.deviceMemory || 8, cores = nav.hardwareConcurrency || 8;
 		const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 		const gpu = this.gpu();
-		if ((touch && mem <= 2) || cores <= 2) return 'min';                       // (celular de entrada: 2 GB, ou 2 núcleos)
+		if (touch && mem <= 2) return 'min';                                       // (celular de entrada: 2–3 GB — o navegador arredonda para 2)
 		if (this.WEAK_GPU.test(gpu.renderer) || gpu.maxTexture < 4096 || mem <= 2 || cores <= 2) return 'low';
 		if (touch || !gpu.webgl2 || mem <= 4 || cores <= 4 || this.MID_GPU.test(gpu.renderer)) return 'medium';
 		return 'high';
