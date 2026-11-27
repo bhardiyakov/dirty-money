@@ -827,6 +827,27 @@ candidatas, LOD das árvores, interface).
 | Detalhe das pessoas do Low (lodBias 1,7) | nunca aplicado (o Graphics roda antes do Char3D existir) | aplicado via `Config.perf.lodBias` |
 | (primeira leva) Char3D, pontos de ônibus, brilhos, helicóptero, mata | varredura de materiais "sujos" a cada boneco montado, troca de LOD remontando malhas, uma sombra-bolha por pessoa, 7 desenhos por ponto de ônibus, ~30 lotes de efeito desenhados apagados | bloqueio por material, conjuntos de malhas guardados (até 3), sombras numa malha só, pontos fundidos em 2 malhas, lote apagado fora do quadro; no Low o corte colado na névoa (`tightFar`), o detalhe miúdo antes dela (`fineCull`) e a mata menos densa (`vegDensity`) |
 
+### Resultado (trabalho de CPU por quadro, média de 45 quadros de 30 FPS, Low + celular)
+
+| Cena | antes, CPU ×2 | depois, CPU ×2 | depois, ×2 + escada de processador | depois, CPU ×1,5 | depois, CPU ×1 |
+|---|---|---|---|---|---|
+| Favela a pé | 51,8 ms | 44,1 ms | 38,8 ms | 30,7 ms | ~19 ms |
+| Centro a pé | 50,4 ms | **32,9 ms** | — | — | ~16 ms |
+| Dirigindo no centro | 46,3 ms | 39,4 ms | 38,9 ms (mediana) | 28,0 ms | ~18 ms |
+| Mata | 61,6 ms | **31,0 ms** | — | — | ~15 ms |
+| Malhas ativas (favela/centro/mata) | 185 / 196 / 251 | 127 / 118 / 90 | | | |
+
+Leitura: na máquina de referência (×1) todas as cenas ficam em 15–19 ms (30 FPS com folga de ~45%); com a CPU 1,5× mais lenta todas
+cabem nos 33 ms; com 2× mais lenta, o centro e a mata cabem e a favela e a direção ficam em ~39–44 ms (≈23–26 FPS) — a qualidade
+automática desce a escada de processador e chega a ~39 ms. A variação entre rodadas é de ±15–25% (a GPU emulada divide os núcleos,
+carga de terreno e compilação de shader durante a janela); os números são médias de rodadas inteiras.
+
+**O que falta para a favela e a direção no ×2:** o resto do quadro são dezenas de sistemas de 0,1–0,5 ms cada (pedestres, polícia,
+trânsito, mototáxis, luzes) e o custo fixo do Babylon por desenho (~40 µs por chamada no ×1, ~120 chamadas). Próximos passos com
+ganho real: fundir os materiais das fachadas (cada estilo é um programa de shader: 10–18 desenhos só de paredes), lógica dos
+pedestres e das viaturas longe da câmera a cada 2 quadros (hoje só os fora da tela são espaçados), e levar a IA do trânsito para o
+worker (`src/sim/worker.js`).
+
 ### Ajustes › Gráficos avançados (`src/ui/GraphicsMenu.js`)
 
 Uma linha nova em Ajustes ("🎛️ Gráficos avançados") abre um submenu — como o das Teclas — com o que a pessoa pode trocar para o
