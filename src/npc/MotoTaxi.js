@@ -88,7 +88,7 @@ class MotoTaxis {
                 }
             }
         }
-        if (this.list.length) this._gather(pos);
+        if (this.list.length && ((this._gN = (this._gN | 0) + 1) & 1)) this._gather(pos);      // (obstáculos a cada 2 quadros: a ~15 m/s, meio metro de diferença numa olhada de 12 m)
         for (let i = this.list.length - 1; i >= 0; i--) {
             const m = this.list[i], d = hypot(m.x - pos.x, m.z - pos.z);
             if (!near || d > 260) { this._remove(i); continue; }

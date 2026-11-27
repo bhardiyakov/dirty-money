@@ -115,7 +115,7 @@ class NPCManager {
             const dx = npc.position.x - f.x, dz = npc.position.z - f.z;
             if (dx * dx + dz * dz >= far2) far.push(npc);
         }
-        const n = Math.min(far.length, far.length > 12 ? 8 : 1), R = this._ring();       // (teleporte: 8 por vez; no dia a dia, um por vez)
+        const n = Math.min(far.length, far.length > 12 ? (Config.perf.halfFar ? 3 : 8) : 1), R = this._ring();       // (teleporte: 8 por vez — 3 no aparelho fraco, sem o pico; no dia a dia, um por vez)
         for (let i = 0; i < n; i++) {
             const close = R[0] < 40 && Math.random() < 0.65;                                  // (2 em 3 bem perto: a gente se concentra em volta de você)
             const { pos, role } = this._hidden(this._roleFor(Math.random()), R[0], close ? Math.min(R[1], 65) : R[1]);
@@ -230,6 +230,7 @@ class NPCManager {
         this._rain(dt);
         // Zonas (core/Spatial.js): pedestre na tela roda FSM/sprite todo quadro; perto da tela, a cada 3; longe ("dormindo"), a cada 8 —
         // escalonado por id, com o dt somado. O crowd do Recast continua movendo todos; só a lógica e a animação (invisíveis) espaçam.
+        const halfFar = Config.perf.halfFar, F = env && env.playerPos, fx = F ? F.x : Zones.cx, fz = F ? F.z : Zones.cz, hR = Config.perf.halfFarR || 22, hR2 = hR * hR;
         for (const npc of this.npcs) {
             if (npc.alive && !npc.rag && npc.state !== 'FLEE' && npc.state !== 'HURT') {
                 if (Zones.asleep(npc.position.x, npc.position.z)) {           // fora da bolha acordada: quase dorme — lógica ~1×/s (para continuar
@@ -244,6 +245,12 @@ class NPCManager {
                     if (!Zones.every(npc.id, tier)) continue;
                     npc.update(Math.min(npc._lodDt, 0.4)); npc._lodDt = 0;
                     continue;
+                }
+                // NA TELA mas longe do jogador (aparelho fraco — Config.perf.halfFar): a lógica e a animação a cada 2 quadros, com o dt
+                // somado; o boneco segue o agente da navegação todo quadro (o passo continua liso, só a pose anda a 15 Hz)
+                if (halfFar && !npc.free) {
+                    const dx = npc.position.x - fx, dz = npc.position.z - fz;
+                    if (dx * dx + dz * dz > hR2 && ((Zones.frame + (npc.id | 0)) & 1)) { npc._lodDt = (npc._lodDt || 0) + dt; npc.actor.setPosition(npc.transform.position.x, npc.transform.position.z); continue; }
                 }
             }
             if (npc._lodDt) { npc.update(npc._lodDt + dt); npc._lodDt = 0; } else npc.update(dt);

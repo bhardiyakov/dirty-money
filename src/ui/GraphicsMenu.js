@@ -18,19 +18,19 @@ const GraphicsMenu = {
 		const B = () => (typeof Graphics !== 'undefined' && Graphics.base) || {}, pct = (v) => Math.round(v * 100) + '%', onoff = (v) => (v ? 'Ligado' : 'Desligado');
 		return [
 			{ k: 'level', own: 'graphics', icon: '🖥️', label: 'Nível gráfico', hint: 'o ponto de partida de tudo abaixo (Low, Medium, High, HD)', C: () => Graphics.CHOICES, name: (v) => Graphics.label(v), live: false },
-			{ k: 'scale', icon: '🔍', label: 'Resolução', hint: 'quantos pixels são desenhados — o que mais pesa na placa de vídeo; menor = mais leve e menos nítido',
+			{ k: 'scale', icon: '📺', label: 'Resolução', hint: 'quantos pixels são desenhados — o que mais pesa na placa de vídeo; menor = mais leve e menos nítido',
 				C: () => ['auto', 0.5, 0.6, 0.7, 0.85, 1], name: pct, base: () => B().renderScale, live: true,
 				apply: (v, g) => { Config.perf.renderScale = v; const ge = g.gameEngine; ge.resize(); if (g.camera) { g.camera.fitPixelScale(ge.viewHeight); g.camera.onResize(); } } },
-			{ k: 'dist', icon: '🔭', label: 'Distância de visão', hint: 'até onde a cidade aparece antes da névoa — menos = menos prédios, carros e árvores por quadro',
+			{ k: 'dist', icon: '👀', label: 'Distância de visão', hint: 'até onde a cidade aparece antes da névoa — menos = menos prédios, carros e árvores por quadro',
 				C: () => ['auto', 55, 70, 85, 100, 125], name: (v) => v + ' m', base: () => B().chaseFar, live: true,
 				apply: (v) => { const H = Config.camera.chase; if (H) { H.far = v; H.near = Math.round(v * 0.45); } } },
-			{ k: 'shadows', icon: '🌗', label: 'Sombras do sol', hint: 'a sombra em tempo real de carros, pessoas e árvores (a dos prédios já vem pintada)',
+			{ k: 'shadows', icon: '🌙', label: 'Sombras do sol', hint: 'a sombra em tempo real de carros, pessoas e árvores (a dos prédios já vem pintada)',
 				C: () => ['auto', 'off', 'low', 'high'], name: (v) => ({ off: 'Desligadas', low: 'Baixas', high: 'Altas' })[v] || v,
 				base: () => (B().shadows ? (B().shadowSize >= 2048 ? 'high' : 'low') : 'off'),
 				// (desligar vale na hora; ligar ou mudar o tamanho precisa do mapa de sombras montado na carga)
 				live: (v, g) => v === 'off' || (!!g.gameEngine.shadowGenerator && GraphicsMenu._shadowSize(g) === v),
 				apply: (v, g) => { const sg = g.gameEngine.shadowGenerator, dn = g.dayNight; if (v === 'off') { if (dn) dn.forceNoShadows = true; if (sg) sg.getShadowMap().refreshRate = 0; } else if (sg && dn) { dn.forceNoShadows = false; dn._shadowRate = null; } } },
-			{ k: 'aa', icon: '🪚', label: 'Antisserrilhado', hint: 'suaviza as bordas serrilhadas (MSAA) — 4× e 8× pesam na placa de vídeo',
+			{ k: 'aa', icon: '🎨', label: 'Antisserrilhado', hint: 'suaviza as bordas serrilhadas (MSAA) — 4× e 8× pesam na placa de vídeo',
 				C: () => ['auto', 0, 2, 4, 8], name: (v) => (v ? v + '×' : 'Desligado'), base: () => B().msaa || 0, live: true,
 				apply: (v, g) => GraphicsMenu._aa(v, g) },
 			{ k: 'bloom', icon: '✨', label: 'Brilho das luzes', hint: 'o halo de faróis, postes e do sol (3 passadas a mais na tela)',
@@ -40,27 +40,27 @@ const GraphicsMenu = {
 				C: () => ['auto', true, false], name: onoff, base: () => B().waterMirror,
 				live: (v) => !v || (typeof Water !== 'undefined' && !!Water.mirror),
 				apply: (v) => { if (typeof Water !== 'undefined') { Water.off = !v; if (v) Water._chk = 0; } } },
-			{ k: 'pom', icon: '🧱', label: 'Relevo das fachadas', hint: 'tijolos e reboco em profundidade nas paredes (~15 leituras de textura por pixel)',
+			{ k: 'pom', icon: '🏠', label: 'Relevo das fachadas', hint: 'tijolos e reboco em profundidade nas paredes (~15 leituras de textura por pixel)',
 				C: () => ['auto', true, false], name: onoff, base: () => B().pom, live: false },
 			{ k: 'cover', icon: '🌿', label: 'Vegetação rasteira', hint: 'capim, samambaias, cascalho e entulho no chão (muitos desenhos pequenos)',
 				C: () => ['auto', true, false], name: onoff, base: () => B().cover, live: true,
 				apply: (v) => { Config.perf.cover = v; if (typeof Trees3D !== 'undefined' && Trees3D.setCover) Trees3D.setCover(v); } },
-			{ k: 'veg', icon: '🌳', label: 'Densidade da mata', hint: 'quantas árvores no mato e nos morros — vale para o terreno que carregar daqui em diante (todo ele ao reabrir)',
+			{ k: 'veg', icon: '🪴', label: 'Densidade da mata', hint: 'quantas árvores no mato e nos morros — vale para o terreno que carregar daqui em diante (todo ele ao reabrir)',
 				C: () => ['auto', 0.4, 0.6, 0.8, 1], name: pct, base: () => B().vegDensity, live: true,
 				apply: (v) => { Config.perf.vegDensity = v; } },
-			{ k: 'detail', icon: '🪴', label: 'Distância dos detalhes', hint: 'até onde aparecem os objetos miúdos (lixo, vasos, peças de fachada) antes do fim da névoa',
+			{ k: 'detail', icon: '🧩', label: 'Distância dos detalhes', hint: 'até onde aparecem os objetos miúdos (lixo, vasos, peças de fachada) antes do fim da névoa',
 				C: () => ['auto', 0.6, 0.75, 0.9, 0], name: (v) => (v ? pct(v) + ' da névoa' : 'Até o fim'), base: () => B().fineCull || 0, live: true,
 				apply: (v) => { Config.perf.fineCull = v; if (typeof AirLod !== 'undefined') { AirLod._evalT = 0; if (AirLod._lastEye) AirLod._lastEye.set(1e9, 0, 0); } } },
-			{ k: 'npc', icon: '🧍', label: 'Detalhe das pessoas', hint: 'a distância em que cada pessoa passa ao modelo mais leve',
+			{ k: 'npc', icon: '🚶', label: 'Detalhe das pessoas', hint: 'a distância em que cada pessoa passa ao modelo mais leve',
 				C: () => ['auto', 2.2, 1.7, 1.25, 1, 0.85], name: (v) => ({ 2.2: 'Mínimo', 1.7: 'Baixo', 1.25: 'Médio', 1: 'Alto', 0.85: 'Máximo' })[v] || v, base: () => B().lodBias || 1, live: true,
 				apply: (v) => { Config.perf.lodBias = v; if (typeof Char3D !== 'undefined' && !Char3D.safe) Char3D.lodBias = v; } },
-			{ k: 'clouds', icon: '☁️', label: 'Nuvens no voo', hint: 'as nuvens que se atravessam de avião e helicóptero', C: () => ['auto', true, false], name: onoff, base: () => true, live: true,
+			{ k: 'clouds', icon: '💨', label: 'Nuvens no voo', hint: 'as nuvens que se atravessam de avião e helicóptero', C: () => ['auto', true, false], name: onoff, base: () => true, live: true,
 				apply: (v) => { Config.perf.clouds = v; } },
 			{ k: 'life', own: 'life', icon: '🏙️', label: 'Vida da cidade', hint: 'pedestres extras no rush, acontecimentos de rua e movimento das lojas (pesa no processador)', C: () => Life.LEVELS, name: (v) => Life.label(v), live: true },
 			{ k: 'fps', own: 'fps', icon: '🎞️', label: 'Taxa de quadros', hint: '30 = estável e mais frio · 60 = mais fluido, esquenta mais', C: () => Graphics.FPS_CHOICES, name: (v) => (v === 30 ? '30 FPS' : v === 60 ? '60 FPS' : `Automático (${Config.perf.fpsCap})`), live: true },
-			{ k: 'showFps', icon: '📈', label: 'Mostrar FPS na tela', hint: 'o contador no canto: quadros por segundo e o tempo de cada quadro', C: () => [false, true], name: onoff, live: true,
+			{ k: 'showFps', icon: '📊', label: 'Mostrar FPS na tela', hint: 'o contador no canto: quadros por segundo e o tempo de cada quadro', C: () => [false, true], name: onoff, live: true,
 				apply: (v) => FpsMeter.setEnabled(v) },
-			{ k: 'autoQ', icon: '🤖', label: 'Qualidade automática', hint: 'baixa sombras, resolução e efeitos sozinha quando a máquina não dá conta', C: () => [true, false], name: onoff, live: true,
+			{ k: 'autoQ', icon: '⚙️', label: 'Qualidade automática', hint: 'baixa sombras, resolução e efeitos sozinha quando a máquina não dá conta', C: () => [true, false], name: onoff, live: true,
 				apply: (v, g) => { if (g.autoQuality) g.autoQuality.off = !v; } },
 		];
 	},
@@ -146,7 +146,7 @@ const GraphicsMenu = {
 			if (live) { try { o.apply(r, g); } catch (e) { /* segue */ } }
 		}
 		menu._saveSettings();
-		if (g._flash) g._flash('🎛️ Gráficos de volta ao padrão do nível');
+		if (g._flash) g._flash('🔧 Gráficos de volta ao padrão do nível');
 	},
 
 	// ------------------------------------------------------------------ desenho
@@ -165,7 +165,7 @@ const GraphicsMenu = {
 			if (changed) pending = true;
 			h += `<div class="pm-row ${i === this.row ? 'on' : ''}" data-i="${i}"><span>${o.icon} ${o.label} ${sub(o.hint)}</span><span style="display:flex;gap:8px;align-items:center">${tag(live)}${btn(-1, '◀')}<div class="pm-toggle is-on" style="min-width:118px;text-align:center">${shown}</div>${btn(1, '▶')}</span></div>`;
 		});
-		h += `<div class="pm-row ${this.row === n - 1 ? 'on' : ''}" data-i="${n - 1}"><span>↩️ Restaurar o padrão do nível ${sub('volta tudo acima para o automático do nível gráfico')}</span><span><div class="pm-toggle is-on">restaurar</div></span></div>`;
+		h += `<div class="pm-row ${this.row === n - 1 ? 'on' : ''}" data-i="${n - 1}"><span>🔄 Restaurar o padrão do nível ${sub('volta tudo acima para o automático do nível gráfico')}</span><span><div class="pm-toggle is-on">restaurar</div></span></div>`;
 		if (pending) h += `<div style="padding:10px 6px;color:#f2c230;font:600 12px var(--font)">⚠️ Há mudanças que só valem na próxima vez que o jogo abrir.</div>`;
 		el.innerHTML = h;
 		const on = el.querySelector('.pm-row.on'); if (on) on.scrollIntoView({ block: 'nearest' });

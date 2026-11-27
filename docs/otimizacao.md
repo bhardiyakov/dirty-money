@@ -827,26 +827,46 @@ candidatas, LOD das árvores, interface).
 | Detalhe das pessoas do Low (lodBias 1,7) | nunca aplicado (o Graphics roda antes do Char3D existir) | aplicado via `Config.perf.lodBias` |
 | (primeira leva) Char3D, pontos de ônibus, brilhos, helicóptero, mata | varredura de materiais "sujos" a cada boneco montado, troca de LOD remontando malhas, uma sombra-bolha por pessoa, 7 desenhos por ponto de ônibus, ~30 lotes de efeito desenhados apagados | bloqueio por material, conjuntos de malhas guardados (até 3), sombras numa malha só, pontos fundidos em 2 malhas, lote apagado fora do quadro; no Low o corte colado na névoa (`tightFar`), o detalhe miúdo antes dela (`fineCull`) e a mata menos densa (`vegDensity`) |
 
-### Resultado (trabalho de CPU por quadro, média de 45 quadros de 30 FPS, Low + celular)
+### Segunda rodada: picos e lógica de longe (aparelho fraco — `Config.perf.halfFar`, Low e celular)
 
-| Cena | antes, CPU ×2 | depois, CPU ×2 | depois, ×2 + escada de processador | depois, CPU ×1,5 | depois, CPU ×1 |
-|---|---|---|---|---|---|
-| Favela a pé | 51,8 ms | 44,1 ms | 38,8 ms | 30,7 ms | ~19 ms |
-| Centro a pé | 50,4 ms | **32,9 ms** | — | — | ~16 ms |
-| Dirigindo no centro | 46,3 ms | 39,4 ms | 38,9 ms (mediana) | 28,0 ms | ~18 ms |
-| Mata | 61,6 ms | **31,0 ms** | — | — | ~15 ms |
-| Malhas ativas (favela/centro/mata) | 185 / 196 / 251 | 127 / 118 / 90 | | | |
+| O quê | Antes | Depois |
+|---|---|---|
+| Pedestres e carros NA TELA mas longe do jogador (> 22 m) | lógica e IA todo quadro | a cada 2 quadros com o dt somado; o boneco segue o agente e o carro segue o corpo do Havok todo quadro (o movimento continua liso) |
+| Combate sem nada no ar | 72 balas e 96 faíscas apagadas varridas (~300 chamadas de brilho) + alvos e velocidades todo quadro | pula tudo; alvos/velocidades (mira assistida) a cada 3 quadros — 1,2 → 0,2 ms no ×2 |
+| Mototáxis | obstáculos juntados todo quadro | a cada 2 quadros |
+| Reciclagem do trânsito | um veículo NOVO (corpo + modelo 3D: 9–15 ms de uma vez) | 3 de cada 4 vezes o mesmo veículo é teleportado para o anel |
+| Rota de destino (Dijkstra na cidade inteira, ~5 ms) | vários carros no mesmo quadro (tranco de 20 ms) | no máximo 1 por quadro (1 a cada 0,25 s no aparelho fraco); sem rota agora, o carro sorteia esquinas e pede de novo |
+| Bonecos 3D novos | todos os que entram de uma vez | até 2 por escolha e 1 montagem de malhas por quadro |
+| Pedestres reciclados num teleporte | 8 por vez | 3 por vez |
+| Minimapa | pintura do terreno HD até 4 ms por atualização; camada redesenhada na hora | 1,5 ms; a camada é refeita no tempo ocioso entre quadros (`requestIdleCallback`) a 60% da folga, em menos pixels |
+| Terreno que chega com a distância | raio de 230 m (a câmera vê ~70), 5 ms por quadro | 170 m, 3 ms por quadro |
+| Itens no chão | animados até 110 u, relevo consultado todo quadro | até a névoa + 15 u, relevo guardado |
+| Escada de processador (qualidade automática) | animação, vida, distância | + peças miúdas (fachadas: só molduras e ar-condicionado; sem peças nos telhados nem pássaros) e lógica de longe a partir de 12 m |
 
-Leitura: na máquina de referência (×1) todas as cenas ficam em 15–19 ms (30 FPS com folga de ~45%); com a CPU 1,5× mais lenta todas
-cabem nos 33 ms; com 2× mais lenta, o centro e a mata cabem e a favela e a direção ficam em ~39–44 ms (≈23–26 FPS) — a qualidade
-automática desce a escada de processador e chega a ~39 ms. A variação entre rodadas é de ±15–25% (a GPU emulada divide os núcleos,
-carga de terreno e compilação de shader durante a janela); os números são médias de rodadas inteiras.
+### Resultado (trabalho de CPU por quadro, Low + celular, 30 FPS = 33 ms)
 
-**O que falta para a favela e a direção no ×2:** o resto do quadro são dezenas de sistemas de 0,1–0,5 ms cada (pedestres, polícia,
-trânsito, mototáxis, luzes) e o custo fixo do Babylon por desenho (~40 µs por chamada no ×1, ~120 chamadas). Próximos passos com
-ganho real: fundir os materiais das fachadas (cada estilo é um programa de shader: 10–18 desenhos só de paredes), lógica dos
-pedestres e das viaturas longe da câmera a cada 2 quadros (hoje só os fora da tela são espaçados), e levar a IA do trânsito para o
-worker (`src/sim/worker.js`).
+**Medir certo, parte 2:** no ×2 a GPU emulada (SwiftShader) roda na MESMA CPU e as esperas por ela também são multiplicadas pela
+desaceleração: medido, a favela dava 14,9 ms no ×1 e 39 ms no ×2 (fator 2,6). Para isolar o custo de CPU — o que um aparelho com placa de
+vídeo de verdade paga —, o ×2 é medido com a placa emulada aliviada (a tela desenhada em 1/16 dos pixels: `setHardwareScalingLevel` ×4).
+O trabalho de CPU é o mesmo (as mesmas malhas e chamadas de desenho; o detalhe dos bonecos não depende da resolução). Média, mediana e
+p90 de 90–120 quadros de 30 FPS.
+
+| Cena (CPU ×2) | antes: média / p90 | depois, ao abrir: média / p90 | depois, com a qualidade automática no degrau de processador |
+|---|---|---|---|
+| Favela a pé | 36,1 / 53,1 ms | 22,9–29,0 / 31,3–37,4 ms | **23,9 / 32,0 ms** |
+| Dirigindo no centro | 31,6 / 51,3 ms | 24,5–25,7 / 33,0–35,9 ms | **25,6 / 32,2 ms** |
+| Centro a pé | 33,0 / 43,4 ms | 23,8–25,4 / 32,1–33,8 ms | **20,2 / 26,6 ms** |
+| Mata | 31,6 / 38,4 ms | 21,6–23,2 / 28,8–31,2 ms | **19,3 / 26,2 ms** |
+| Malhas ativas (favela/carro/centro/mata) | 185 / 190 / 201 / 202 | 127 / 116 / 106–125 / 91–94 | 104 / 116 / 116 / 87 |
+
+(faixas = rodadas completas diferentes; o estado do jogo — briga de gangue, polícia, quantos bonecos estão perto — muda de uma para outra.)
+Com a CPU 2× mais lenta, o jogo abre com média de 22–29 ms; a qualidade automática (ligada por padrão) percebe o processador no limite
+e desce a escada de processador em segundos, e aí **90% dos quadros ficam abaixo de 33 ms em todas as cenas** — 30 FPS estáveis.
+Na máquina de referência (×1): 14–19 ms. Script: `tests/fraco.cjs` (`RATE=2 LOWRES=4 N=120`; `CPUL=1` = a escada aplicada).
+Na medição com a GPU emulada carregando a CPU, as mesmas cenas no ×2 ficam em 31–44 ms — o limite da GPU emulada, não do jogo.
+
+**Próximos passos com ganho real:** fundir os materiais das fachadas (cada estilo é um programa de shader: 10–18 desenhos só de paredes)
+e levar a IA do trânsito e a navegação para o worker (`src/sim/worker.js`).
 
 ### Ajustes › Gráficos avançados (`src/ui/GraphicsMenu.js`)
 

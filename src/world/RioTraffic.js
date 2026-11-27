@@ -154,6 +154,15 @@ const RioTraffic = {
 		const dest = this.pickDest(x, z);
 		return dest ? this.path(e.id * 2 + (fwd ? 0 : 1), dest) : null;
 	},
+	// Pode calcular uma rota AGORA? No máximo uma por quadro — e uma a cada 0,25 s no aparelho fraco: o Dijkstra na cidade inteira custa
+	// ~5 ms e vários carros reciclados no mesmo quadro davam um tranco de 20 ms. Sem rota agora, o carro sorteia umas esquinas e pede de
+	// novo (RoadNet).
+	budget() {
+		const now = performance.now(), fr = typeof Zones !== 'undefined' ? Zones.frame : 0;
+		if (fr === this._tripFr || (Config.perf && Config.perf.halfFar && now - (this._tripT || 0) < 250)) return false;
+		this._tripFr = fr; this._tripT = now;
+		return true;
+	},
 	hour() { const g = typeof window !== 'undefined' && window.game; return g && g.dayNight ? g.dayNight.hour : 12; },
 	// 'centro' (manhã), 'bairros' (fim da tarde) ou null (o resto do dia: para qualquer lugar)
 	peak(h = this.hour()) { return h >= 6.5 && h < 10 ? 'centro' : (h >= 16.5 && h < 20 ? 'bairros' : null); },

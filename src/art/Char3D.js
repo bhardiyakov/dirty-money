@@ -502,7 +502,7 @@ const Char3D = {
 	},
 	tick() {
 		const sc = this._scene, cam = sc.activeCamera, dt = sc.getEngine().getDeltaTime() / 1000, V = this._view;
-		this._frame++;
+		this._frame++; this._builds = 0;
 		if (cam) {
 			V.eye.copyFrom(cam.globalPosition || cam.position);
 			const E = sc.getEngine();
@@ -588,6 +588,10 @@ const Char3D = {
 			if (this._types.has(key)) { this._types.get(key)._used = performance.now(); continue; }
 			if (pre++ < 3) this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, lb);      // (no máximo 3 tipos novos por vez: sem rajada de assar e subir para a GPU)
 		}
+		// (aparelho fraco: no máximo 2 bonecos NOVOS por escolha — montar materiais e malhas de vários de uma vez era um pico de ~10 ms;
+		// os outros entram na escolha seguinte, 0,15 s depois, e quase sempre ainda fora da tela)
+		let made = 0;
+		const MADE = Config.perf.halfFar ? 2 : 1e9;
 		for (const a of keep) {
 			const C = this.npcs.get(a), M = modelOf(a);
 			if (C && M && C.model !== M) {
@@ -597,6 +601,8 @@ const Char3D = {
 			}
 			if (C && !M) { this._free(C); this.npcs.delete(a); continue; }
 			if (!C && M) {
+				const i0 = hero(a) ? -1 : this._pool.findIndex((P) => P.model === M);
+				if (i0 < 0 && !hero(a) && made++ >= MADE) continue;
 				// (um boneco guardado do mesmo modelo é reaproveitado: criar e destruir material e malha a cada 0,25 s, com NPCs entrando
 				// e saindo do raio, engasgava o jogo)
 				const i = hero(a) ? -1 : this._pool.findIndex((P) => P.model === M);
@@ -1087,7 +1093,8 @@ class Char3DActor {
 	}
 	update() {
 		const a = this.actor, M = this.model;
-		if (M && M.ready && !this._built) this._buildMeshes();
+		// (malhas montadas no máximo 1 por quadro no aparelho fraco: um modelo novo que fica pronto não monta todos os bonecos dele de uma vez)
+		if (M && M.ready && !this._built && (!Config.perf.halfFar || Char3D._builds++ < 1)) this._buildMeshes();
 		const c = a.clip, vis = !a.mesh.isDisposed() && a.mesh.isEnabled() && (a.mesh.isVisible || a._npcWait) && !!c;
 		if (!this._built || M.failed || !vis || !c.npc) { this._hide3d(); this._show2d(true); return; }
 		// FORA DA CÂMERA (NPCs): nem desenha nem calcula a pose (a malha está no espaço dos ossos, sem caixa útil: o corte é pela posição)

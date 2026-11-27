@@ -1130,7 +1130,7 @@ class PauseMenu {
 			hudScale: ['🔠 Tamanho do HUD ' + sub('vida, arma, dinheiro, procurado, mapa e metas'), `<div class="pm-toggle is-on">${Math.round((s.hudScale || 1) * 100)}%</div>`],
 			keys: ['⌨️ Teclas ' + sub(typeof KeyBinds !== 'undefined' && KeyBinds.changed() ? 'teclas trocadas — clique para ver ou voltar ao padrão' : 'trocar as teclas do teclado'), '<div class="pm-toggle is-on">trocar</div>'],
 			graphics: ['🖥️ ' + T('settings.graphics') + ' ' + sub(T('settings.graphics.hint', { level: Graphics.LABEL[Graphics.level] })), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
-			gfxMenu: ['🎛️ Gráficos avançados ' + sub('resolução, distância de visão, sombras, antisserrilhado, efeitos e detalhes: o que deixar mais leve na sua máquina'), '<div class="pm-toggle is-on">abrir</div>'],
+			gfxMenu: ['🔧 Gráficos avançados ' + sub('resolução, distância de visão, sombras, antisserrilhado, efeitos e detalhes: o que deixar mais leve na sua máquina'), '<div class="pm-toggle is-on">abrir</div>'],
 			fps: ['🎞️ Taxa de quadros ' + sub('30 = estável, frio e econômico (padrão no celular e no notebook) · 60 = mais fluido, esquenta mais'), `<div class="pm-toggle is-on">${s.fps === 30 ? '30 FPS' : s.fps === 60 ? '60 FPS' : `Automático (${Config.perf.fpsCap})`}</div>`],
 			tvFilter: ['📺 Filtro de TV antiga ' + sub('linhas e curvatura de tubo, com a resolução interna a 75% (mais leve para a placa de vídeo)'), tog(!!s.tvFilter)],
 			language: ['🌐 ' + T('settings.language') + ' ' + sub(T('settings.language.hint')), `<div class="pm-toggle is-on">${I18n.label(s.language || I18n.lang)}</div>`],

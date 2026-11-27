@@ -203,6 +203,11 @@ const Graphics = {
 		// APARELHO FRACO (Low; o celular modesto, abaixo): o recorte termina no fim da névoa (tightFar), o detalhe miúdo sai antes dela
 		// (fineCull: fração do fim da névoa da perseguição — lod/AirLod.js, no chão) e a mata do terreno é menos densa (vegDensity)
 		P.tightFar = !!p.tightFar; P.fineCull = p.fineCull || 0; P.vegDensity = p.vegDensity || 1;
+		// (aparelho fraco: pedestres e carros NA TELA mas longe do jogador com a lógica a cada 2 quadros — NPCManager/TrafficManager)
+		P.halfFar = this.level === 'low' || !!this.phoneOn;
+		// (e o terreno que chega com a distância: em fatias menores por quadro e carregado num raio menor — a câmera do Low vê ~70 m, o
+		// raio de 230 m montava pedaços que ninguém via, cada um um tranco de vários ms dirigindo)
+		if (P.halfFar && Config.world) { Config.world.buildBudgetMs = 3; Config.world.loadRadius = Math.min(Config.world.loadRadius, 170); }
 		// (para medir: `?trim=N` pedaço dos acabamentos, `?celula=N` célula da vegetação 3D — em u)
 		const qs = typeof location !== 'undefined' ? location.search : '', num = (k) => { const m = qs.match(new RegExp('[?&]' + k + '=(\\d+)')); return m ? +m[1] : 0; };
 		if (num('trim') && Config.world) Config.world.trimChunk = num('trim');

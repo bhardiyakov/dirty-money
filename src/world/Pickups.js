@@ -199,6 +199,8 @@ class Pickups {
     update(dt, playerPos, onFoot) {
         this.time += dt;
         const g = this.glow;
+        // (aparelho fraco — o corte da câmera colado na névoa: além dela o item nem aparece; antes eram 110 u para todos)
+        const H = Config.camera && Config.camera.chase, FR = Config.perf.tightFar && H ? Math.min(110, H.far + 15) : 110, FR2 = FR * FR;
         for (let i = this.items.length - 1; i >= 0; i--) {
             const it = this.items[i];
             const T = Pickups.TYPES[it.type];
@@ -206,7 +208,7 @@ class Pickups {
             if (!it.active) {                                     // coletado: espera para reaparecer em outro lugar
                 if (it.respawn && this.time >= it.respawnAt) {
                     const p = CityGrid.randomWalkablePoint();
-                    it.x = p.x; it.z = p.z; it.active = true;
+                    it.x = p.x; it.z = p.z; it.active = true; it._ry = undefined;
                     it.mesh.setEnabled(true); it.mesh.position.set(p.x, 0.25 + (typeof Relief !== 'undefined' ? Relief.at(p.x, p.z) : 0), p.z);
                 }
                 continue;
@@ -219,7 +221,7 @@ class Pickups {
 
             // Longe da câmera (> 110 u): sem malha, sem brilho, sem animação (o mundo tem centenas de itens).
             const fdx = playerPos.x - it.x, fdz = playerPos.z - it.z;
-            if (fdx * fdx + fdz * fdz > 12100) {
+            if (fdx * fdx + fdz * fdz > FR2) {
                 if (!it._far) { it._far = true; it.mesh.setEnabled(false); g.off(it.glow); }
                 continue;
             }
@@ -228,7 +230,8 @@ class Pickups {
             // Visual: o item GIRA e flutua (sobe e desce de leve); o brilho borrado pulsa entre a cor do tipo e o branco.
             const s =0.5 + 0.5 * Math.sin(this.time * 3.2 + it.phase);
             it.mesh.rotation.y = this.time * 1.6 + it.phase;
-            it.mesh.position.y = 0.25 + 0.09 * s + (typeof Relief !== 'undefined' ? Relief.at(it.x, it.z) : 0);
+            if (it._ry === undefined) it._ry = typeof Relief !== 'undefined' ? Relief.at(it.x, it.z) : 0;      // (o chão dali não muda: guardado)
+            it.mesh.position.y = 0.25 + 0.09 * s + it._ry;
             const blink = it.ttl > 0 && it.ttl < 8 && Math.floor(this.time * 6) % 2 === 0;
             it.mesh.setEnabled(!blink);
             const c = T.color, w = s * 0.18;

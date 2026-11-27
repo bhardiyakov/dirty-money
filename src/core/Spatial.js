@@ -171,15 +171,16 @@ class RenderCuller {
 		if (!inWorld(px, pz)) return { data: sc.meshes, length: sc.meshes.length };      // (câmera fora do mundo: o laço da grade não terminaria)
 		const c = this.cell, i0 = Math.floor((px - hx) / c), i1 = Math.floor((px + hx) / c), j0 = Math.floor((pz - hz) / c), j1 = Math.floor((pz + hz) / c);
 		const range = i0 + ',' + i1 + ',' + j0 + ',' + j1;
-		// QUADRO DO MEIO (a cada 2): só refiltra a lista do quadro anterior (~150 a 200 malhas) em vez de varrer as ~600 dinâmicas e a
-		// área de novo — medido, a varredura custava ~1 ms por quadro no Low (memória fria de centenas de malhas escondidas). Quem acabou
-		// de aparecer entra no quadro seguinte (33 ms); quem saiu do retângulo fica um quadro a mais (o frustum do Babylon descarta).
+		// QUADROS DO MEIO (2 de cada 3): só refiltram a lista anterior (~150 a 200 malhas) em vez de varrer as ~600 dinâmicas e a área
+		// de novo — medido, a varredura custava ~1 ms por quadro no Low (memória fria de centenas de malhas escondidas). Quem acabou de
+		// aparecer entra em até 2 quadros (66 ms, e os bonecos já ligam com folga fora da tela); quem saiu do retângulo fica até 2 quadros
+		// a mais (o frustum do Babylon descarta).
 		this._tick = (this._tick + 1) | 0;
-		if (this.filter >= 2 && (this._tick & 1) && range === this._range && this._full) {
+		if (this.filter >= 2 && this._tick % 3 !== 0 && range === this._range && this._full) {
 			const out = this.cand.data;
 			let k = 0;
 			for (let i = 0; i < this.cand.length; i++) { const m = out[i]; if (m.isVisible && m.layerMask !== 0 && m.visibility > 0 && m.isEnabled()) out[k++] = m; }
-			out.length = k; this.cand.length = k; this._full = false;
+			out.length = k; this.cand.length = k;
 			return this.cand;
 		}
 		this._full = true;

@@ -48,6 +48,8 @@ class AutoQuality {
 			['life', 'menos movimento na rua'],
 			['dist', 'distância de visão menor'],
 			['dist2', 'distância de visão bem menor'],
+			['pecas', 'menos peças miúdas nas casas e sem pássaros'],
+			['near', 'quem está longe se mexe com menos detalhe'],
 		];
 	}
 
@@ -89,6 +91,13 @@ class AutoQuality {
 		if (id === 'anim' && typeof Char3D !== 'undefined') { Char3D.LOD_EVERY = [1, 2, 3, 4]; if (!Char3D.safe) Char3D.lodBias *= 1.3; }
 		else if (id === 'life' && typeof Life !== 'undefined') Life.forceLow = true;
 		else if ((id === 'dist' || id === 'dist2') && H) { H.far = Math.max(50, Math.round(H.far * 0.85)); H.near = Math.round(H.far * 0.45); }
+		else if (id === 'pecas') {
+			const sc = this.g.scene;
+			if (typeof Walls3D !== 'undefined') { Walls3D.minimal = true; if (Walls3D._built) Walls3D._tick(sc, true); }
+			if (typeof Roofs3D !== 'undefined') { Roofs3D.noProps = true; if (Roofs3D._built) Roofs3D._tick(sc, true); }
+			if (this.g.birds) { this.g.birds.enabled = false; if (typeof Animals3D !== 'undefined') Animals3D.clear('ave'); }
+		}
+		else if (id === 'near') { Config.perf.halfFar = true; Config.perf.halfFarR = 12; }
 	}
 
 	// Chamado todo quadro com o dt REAL em segundos (antes do teto de 50 ms do jogo).
