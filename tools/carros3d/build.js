@@ -22,6 +22,7 @@ import { hex } from './gerador/math.js';
 import { simplify } from './simplify.js';
 import { STAMP } from './gerador/stamp.js';
 import { SPECS } from './gerador/catalog.js';
+import { segment, insides, toTyped } from './parts.js';
 
 export const KIND = { generic: 0, paint: 1, paint2: 2, glass: 3, metal: 4, tire: 5, head: 6, tail: 7, signal: 8, reverse: 9, sirenB: 10, sirenR: 11, sign: 12 };
 
@@ -162,9 +163,9 @@ function compact(mesh, keep) {
   const out = [];
   let nv = 0;
   for (let t = 0; t < nt; t++) if (keep(t)) for (let k = 0; k < 3; k++) { const i = Ix[t * 3 + k]; if (map[i] < 0) map[i] = nv++; out.push(map[i]); }
-  const P2 = new Float32Array(nv * 3), N2 = new Float32Array(nv * 3), M2 = new Uint8Array(nv);
-  for (let i = 0; i < mesh.nv; i++) if (map[i] >= 0) { const j = map[i]; P2.set(P.subarray(i * 3, i * 3 + 3), j * 3); N2.set(N.subarray(i * 3, i * 3 + 3), j * 3); M2[j] = Mt[i]; }
-  return { P: P2, N: N2, Mt: M2, Ix: nv > 65535 ? new Uint32Array(out) : new Uint16Array(out), nv, ni: out.length };
+  const P2 = new Float32Array(nv * 3), N2 = new Float32Array(nv * 3), M2 = new Uint8Array(nv), T2 = mesh.Pt ? new Uint8Array(nv) : null;
+  for (let i = 0; i < mesh.nv; i++) if (map[i] >= 0) { const j = map[i]; P2.set(P.subarray(i * 3, i * 3 + 3), j * 3); N2.set(N.subarray(i * 3, i * 3 + 3), j * 3); M2[j] = Mt[i]; if (T2) T2[j] = mesh.Pt[i]; }
+  return { P: P2, N: N2, Mt: M2, Pt: T2, Ix: nv > 65535 ? new Uint32Array(out) : new Uint16Array(out), nv, ni: out.length };
 }
 
 // Escreve uma malha nas seções do binário. q = escala da quantização das posições (m por unidade de Int16).
@@ -178,8 +179,9 @@ function pack(chunks, mesh, q) {
   chunks.push(new Uint8Array(pos.buffer)); pad();
   chunks.push(new Uint8Array(nor.buffer)); pad();
   chunks.push(mesh.Mt); pad();
+  if (mesh.Pt) { chunks.push(mesh.Pt); pad(); }                       // (a PEÇA de cada vértice: parts.js)
   chunks.push(new Uint8Array(mesh.Ix.buffer, mesh.Ix.byteOffset, mesh.Ix.byteLength)); pad();
-  return { at, nv: mesh.nv, ni: mesh.ni, i32: mesh.Ix instanceof Uint32Array };
+  return { at, nv: mesh.nv, ni: mesh.ni, i32: mesh.Ix instanceof Uint32Array, ...(mesh.Pt ? { pt: 1 } : {}), ...(mesh.nb ? { nb: mesh.nb } : {}) };
 }
 
 class Chunks { constructor() { this.list = []; this.size = 0; } push(u8) { this.list.push(u8); this.size += u8.byteLength; } bytes() { const o = new Uint8Array(this.size); let p = 0; for (const u of this.list) { o.set(u, p); p += u.byteLength; } return o; } }
@@ -208,12 +210,22 @@ export function buildModel(slug, chunks, { detail = 0.3, maxErr = 0.004, topOnly
   const part = (c) => c.name.startsWith('roda_') || c.name.startsWith('rotor_');
   const body = collect({ children: root.children.filter((c) => !part(c)) }, I4, []);
   const wheels = root.children.filter((c) => c.name.startsWith('roda_'));
-  const full = merge(simp(body), matIndex);
+  // CARRO: as PEÇAS (parts.js) — a malha simplificada é cortada nas frestas (o ponto novo da aresta é o mesmo dos dois lados: sem
+  // fresta aberta) e cada vértice ganha a peça
+  const isCar = !info.moto && !info.heli && !info.barco;
+  let seg = null, full;
+  if (isCar) {
+    seg = segment(merge(simp(body), matIndex), v, info, slug, used);
+    full = toTyped(seg.L, seg.Pt);
+  } else full = merge(simp(body), matIndex);
   // a simplificação mexe até maxErr na lataria e na estampa: a estampa sobe esse tanto a mais (some um eventual "afundar")
   for (let i = 0; i < full.nv; i++) if (used[full.Mt[i]].s) for (let k = 0; k < 3; k++) full.P[i * 3 + k] += full.N[i * 3 + k] * maxErr;
   // moto (deita nas curvas) e helicóptero (inclina no voo, visto de qualquer lado): sem o recorte do "só o que se vê de cima"
   const cull = topOnly && !info.moto && !info.heli;
-  const bodyMesh = cull ? visibleFromAbove(full) : full;
+  let bodyMesh = cull ? visibleFromAbove(full) : full;
+  if (seg && process.env.PARTS_DBG) console.log('  [peças]', slug, 'cortado', seg.L.I.length / 3, 'recortado', bodyMesh.ni / 3);
+  if (seg) bodyMesh = insides(bodyMesh, seg, matIndex, used);
+  if (seg && process.env.PARTS_DBG) console.log('  [peças]', slug, 'com o de dentro', bodyMesh.ni / 3, 'vértices', bodyMesh.nv);
   let wheelMesh = null, centers = [], R = 0, W = 0;
   if (wheels.length) {
     // gabarito: a roda dianteira DIREITA, sem a translação do cubo (o malha da direita não tem o giro de 180° da esquerda)
@@ -244,6 +256,7 @@ export function buildModel(slug, chunks, { detail = 0.3, maxErr = 0.004, topOnly
       name: info.nome, fixed, q, mats: used, body: b, wheel: w, wheels: centers, R: r3(R), tw: r3(W * 2),
       min: mn.map(r3), max: mx.map(r3), len: r3(mx[2] - mn[2]), wid: r3(info.largura), h: r3(mx[1]),
       ...(info.moto ? { kind: 'moto' } : info.heli ? { kind: 'heli', rotors } : info.barco ? { kind: 'boat' } : {}),
+      ...(seg ? { parts: seg.parts } : {}),
       // ponto do banco do piloto, nos eixos do jogo: [frente, altura, direita] (spec.seat do gerador: [x, y, z] do glTF)
       ...(spec.seat ? { seat: [r3(spec.seat[0]), r3(spec.seat[1]), r3(spec.seat[2] || 0)] } : {}),
     },

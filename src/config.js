@@ -62,6 +62,8 @@ const Config = {
 		roofs3d: true,
 		roofPoly: true,        // TELHADOS EM POLÍGONOS (render/Roofs3D.js): telha, zinco, lona, laje… em relevo e com as peças em cima, menos detalhe longe; `?telhados=2d` = as texturas
 		wallPoly: true,        // FACHADAS EM POLÍGONOS (render/Walls3D.js): parede pintada no shader (64 estilos), janelas, sacadas, toldos e ar em 3D, luz da noite por janela; `?fachadas=2d` = as texturas
+		procSurf: true,        // SUPERFÍCIES NO SHADER (render/ProcSurf.js): o calçadão em ondas de pedra portuguesa e as linhas do campo, sem textura; `?superficies=2d` = as texturas
+		shopPoly: true,        // VITRINES EM POLÍGONOS (render/Shops3D.js): frente de loja saliente, vitrine com a sala atrás do vidro, porta, letreiro de luz com o nome; `?lojas=2d` = o atlas pintado
 		groundVariety: true,   // O CHÃO SEM PLANEJAMENTO (render/GroundVariety.js): asfaltos de idades diferentes, remendos, paralelepípedo, calçadas variadas, terra batida; `?chao=0` desliga
 		animals3d: true,       // bichos em 3D com animação (art/Animals3D.js — a folha de referência); `?bichos=2d` = os sprites de antes
 		trees3d: true,         // árvores e palmeiras em 3D em todos os presets (render/Trees3D.js, etapa 5); `?arvores=0` = as desenhadas de antes
@@ -661,6 +663,18 @@ const Config = {
 	// Chuva NÃO é diária: cada dia do jogo sorteia se chove (rainDayChance); dia seco = céu limpo. Dia chuvoso tem 1–2 episódios
 	// (episodesPerRainyDay) de episodeHours horas do jogo (1 h = 30 s reais), em horas aleatórias, com pico sorteado por peakWeights
 	// (garoa → pico → garoa). O 1º dia chove com firstDayChance, logo no começo. boltEvery = intervalo dos raios na tempestade (s).
+	// LOD do voo (lod/AirLod.js): raios (m, do olho) das três camadas e quando ligam. Escala pelo nível gráfico (AirLod.scale).
+	lod: {
+		on: true,
+		onAlt: 45, offAlt: 30,         // liga acima de onAlt m do chão (com a câmera de voo), desliga abaixo de offAlt (histerese)
+		fine: 240,                     // detalhe miúdo (acabamento, meio-fio, vitrine, fios, postes, pontos de ônibus, brilhos)
+		mid: 520,                      // vegetação, pátios e degradês do chão
+		big: 950,                      // paredes, telhados, ruas e calçadas — além disto, o mapa de longe (lod/FarProxy.js)
+		buildMs: 3,                    // ms por quadro para montar o mapa de longe (em fatias, a partir da decolagem)
+		terrainAlt: 150, terrainMul: 0.65,     // acima de terrainAlt m o terreno em pedaços carrega em 65% do raio
+		physicsAlt: 40,                // acima disto o Havok para de ganhar colisores (o avião bate pela conta dele)
+	},
+
 	weather: {
 		start: 'clear',
 		rainDayChance: 0.3,
@@ -668,6 +682,8 @@ const Config = {
 		episodesPerRainyDay: [1, 2],
 		episodeHours: [1.5, 4],
 		peakWeights: { drizzle: 0.45, rain: 0.35, storm: 0.2 },
+		cloudyDayChance: 0.35, // dia seco: chance de um período nublado (sem chuva)
+		cloudyHours: [2, 5],   // duração do período nublado (h do jogo)
 		boltEvery: [3.5, 9],
 	},
 

@@ -1,7 +1,9 @@
 // ============================================================================
 // CarDoors — a porta do motorista/passageiro dos carros abrindo e fechando.
 // A porta aberta é a LÂMINA do atlas (CarArt) girando em volta da dobradiça, em qualquer ângulo, mais o vão escuro que ela deixa na
-// lateral — dois quads do lote de portas (CarArt.doors: uma chamada de desenho para todas). Aqui mora o estado: por carro com porta
+// lateral — dois quads do lote de portas (CarArt.doors: uma chamada de desenho para todas). CARRO 3D (CarArt3D — todos os modelos hoje):
+// a porta é a do PRÓPRIO MODELO (tools/carros3d/parts.js), girando na dobradiça dela — o forro, a borda e o interior aparecem
+// (CarParts.doorOpen; o modelo sem porta, como o ônibus, não anima nada). Aqui mora o estado: por carro com porta
 // mexendo há { sign, t, target, blade, gap }, onde t é a abertura (0 fechada … 1 toda aberta). Fechada de vez, os quads voltam ao lote.
 //   set(car, sign, open)   abre/fecha a porta do lado `sign` (-1 esquerda / +1 direita)
 //   whenShut(car, fn)      chama fn quando a porta daquele carro estiver fechada (já, se já está)
@@ -44,14 +46,19 @@ class CarDoors {
 
     isOpen(car) { const s = this.state.get(car); return !!s && s.target > 0; }
 
+    static is3d(car) { return typeof Car3DActor !== 'undefined' && car.visual instanceof Car3DActor; }
+
     set(car, sign, open) {
         if (car.isBike || car.wrecked || !car.visual || !car.visual.rotates) return;
         let s = this.state.get(car);
         if (!s) {
             if (!open) return;
-            const B = CarArt.doors;
-            s = { sign, t: 0, target: 0, gap: B.alloc(), blade: B.alloc(), shut: [] };
-            B.hide(s.gap); B.hide(s.blade);
+            if (CarDoors.is3d(car)) s = { sign, t: 0, target: 0, gap: null, blade: null, shut: [], d3: true };
+            else {
+                const B = CarArt.doors2d();
+                s = { sign, t: 0, target: 0, gap: B.alloc(), blade: B.alloc(), shut: [] };
+                B.hide(s.gap); B.hide(s.blade);
+            }
             this.state.set(car, s);
         }
         s.sign = sign;
@@ -72,7 +79,7 @@ class CarDoors {
         s.shut.push(fn);
     }
 
-    _release(s) { CarArt.doors.free(s.gap); CarArt.doors.free(s.blade); }
+    _release(s) { if (s.d3) return; CarArt.doors.free(s.gap); CarArt.doors.free(s.blade); }
 
     reset(car) {
         const s = this.state.get(car);
@@ -114,7 +121,9 @@ class CarDoors {
             if (s.t < s.target) s.t = Math.min(s.target, s.t + speed * dt);
             else if (s.t > s.target) s.t = Math.max(s.target, s.t - speed * 1.15 * dt);
 
-            if (s.t > 0.04) this._draw(car, s);
+            // carro 3D: a porta do PRÓPRIO modelo gira na dobradiça (CarParts — o forro, a borda e o interior aparecem)
+            if (s.d3) { if (typeof CarParts !== 'undefined') CarParts.doorOpen(car, s.sign, 1 - Math.pow(1 - s.t, 2)); }
+            else if (s.t > 0.04) this._draw(car, s);
             else { CarArt.doors.hide(s.gap); CarArt.doors.hide(s.blade); }
             if (s.t <= 0 && s.target === 0) {                         // fechou: devolve os quads e avisa quem esperava
                 const fns = s.shut, p = car.position;

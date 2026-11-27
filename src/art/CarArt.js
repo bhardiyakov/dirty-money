@@ -90,6 +90,19 @@ const CarArt = {
         if (!px) { px = { A: PNG.decode(this._bytes(D.a)).data, B: PNG.decode(this._bytes(D.b)).data, C: D.c ? PNG.decode(this._bytes(D.c)).data : null, ms: performance.now() - t0 }; how = 'na hora'; }
         this._px = null;
         const A = px.A, B = px.B;
+        this._preview = this._half(A, B, W, H);
+        this._scene = scene;
+        // (os veículos são todos 3D — CarArt3D: o atlas 2D só sobe para a placa se algum ator 2D for pedido — _init2d; ~16 MB de vídeo a
+        // menos. A miniatura do HUD — preview — sai da CPU, da metade do atlas acima.)
+        if (typeof CarArt3D !== 'undefined' && CarArt3D.available()) { this.stats = { decodeMs: Math.round(px.ms), async: how !== 'na hora', gpuMs: 0, models: Object.keys(D.models).length, lazy: true }; return; }
+        this._init2d(px);
+    },
+    // O atlas 2D na placa, os materiais e os lotes (ator 2D, porta 2D): sob demanda — decodifica de novo se preciso.
+    _init2d(px = null) {
+        if (this.cars) return;
+        const scene = this._scene || this.scene, D = this.data || CAR_ATLAS, W = D.w, H = D.h;
+        if (!px) px = { A: PNG.decode(this._bytes(D.a)).data, B: PNG.decode(this._bytes(D.b)).data, C: D.c ? PNG.decode(this._bytes(D.c)).data : null, ms: 0 };
+        const A = px.A, B = px.B, how = 'sob demanda';
         const t1 = performance.now();
         const tex = (data) => {
             const t = new BABYLON.RawTexture(data, W, H, BABYLON.Constants.TEXTUREFORMAT_RGBA, scene, true, false, BABYLON.Texture.TRILINEAR_SAMPLINGMODE, BABYLON.Constants.TEXTURETYPE_UNSIGNED_BYTE);
@@ -100,8 +113,6 @@ const CarArt = {
         // relevo: sem o atlas C, 1 pixel neutro (altura 0, normal para cima, sem vidro) — o carro sai plano, como antes
         const C = px.C ? tex(px.C) : BABYLON.RawTexture.CreateRGBATexture(new Uint8Array([0, 128, 128, 0]), 1, 1, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
         this._tex = { a: tex(A), b: tex(B), c: C, paints: this._paintTable(scene) };
-        this._preview = this._half(A, B, W, H);
-        this._scene = scene;
         this.material = this._makeMaterial(scene, 'carArt');
         this.doorMaterial = this._makeMaterial(scene, 'carArtDoors');
         this.cars = new CarBatch(scene, 256, 'carBatch', this.material, -3);
@@ -261,9 +272,13 @@ const CarArt = {
     // Sprite de um carro (CarActor) no lote — ou o carro em 3D (CarArt3D), se o modelo existe lá e os carros 3D estão ligados.
     actor(modelId, variant, scale = 1) {
         if (typeof CarArt3D !== 'undefined' && CarArt3D.has(modelId)) return CarArt3D.actor(modelId, variant, scale);
-        if (!this.cars) this.init(this.scene);
+        if (!this._scene) this.init(this.scene);
+        this._init2d();
         return new CarActor(this.cars, modelId, variant, scale);
     },
+
+    // O lote das portas 2D (o carro 2D, se algum dia houver um): sob demanda.
+    doors2d() { this._init2d(); return this.doors; },
 
     // Imagem de um modelo (nariz para a DIREITA) já pintada, na CPU — a mesma conta do shader. src: { w, a, b, k } pixels do atlas
     // (k = 1 resolução cheia, 2 = metade). paintRow: linha de PAINTS | dent: fase de amassado (0..3). Retorna { w, h, data (RGBA) }.

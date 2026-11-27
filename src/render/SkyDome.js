@@ -92,11 +92,12 @@ const SkyDome = {
 	},
 
 	// As cores do céu a partir dos parâmetros da hora (DayNight: P já com o tempo e a luz do céu) e da névoa (haze). hour: a hora do dia.
-	fromDay(P, haze, hour, weatherK) {
+	// weatherK: o quanto o céu fechado apaga o sol (Weather.gloom) · cover: a cobertura de nuvens (Weather.cover, 0..1)
+	fromDay(P, haze, hour, weatherK, cover = weatherK) {
 		// (o DayNight aplica todo quadro; a hora anda devagar: só refaz quando algo mudou de verdade)
-		const L = this._last || (this._last = [NaN, NaN, NaN, NaN, NaN]);
-		if (Math.abs(hour - L[0]) < 0.004 && Math.abs(weatherK - L[1]) < 0.002 && Math.abs(P.n - L[2]) < 0.002 && Math.abs(haze[0] - L[3]) < 0.0015 && Math.abs(P.sunC[0] - L[4]) < 0.002) return;
-		L[0] = hour; L[1] = weatherK; L[2] = P.n; L[3] = haze[0]; L[4] = P.sunC[0];
+		const L = this._last || (this._last = [NaN, NaN, NaN, NaN, NaN, NaN]);
+		if (Math.abs(hour - L[0]) < 0.004 && Math.abs(weatherK - L[1]) < 0.002 && Math.abs(P.n - L[2]) < 0.002 && Math.abs(haze[0] - L[3]) < 0.0015 && Math.abs(P.sunC[0] - L[4]) < 0.002 && Math.abs(cover - L[5]) < 0.002) return;
+		L[0] = hour; L[1] = weatherK; L[2] = P.n; L[3] = haze[0]; L[4] = P.sunC[0]; L[5] = cover;
 		const k = 1 - Math.min(1, P.n), cl = (v) => Math.max(0, Math.min(1, v));
 		const mix = (a, b, t) => a.map((x, i) => x + (b[i] - x) * t);
 		// o sol que se vê: no azimute das sombras (DayNight: luz para +x/−z), alto ao meio-dia e no horizonte às 6h e às 18h40
@@ -118,7 +119,7 @@ const SkyDome = {
 		const sea = [0.26, 0.47, 0.56].map((v, i) => v * P.tint[i] * lv * 0.55), seaSky = ws.slice(0, 3);      // (medido na foto: o mar de verdade perto da borda)
 		this.set({
 			zen, hor: haze.slice(0, 3), sunDir, sunCol: P.sunC.map((v) => v * 1.05), moonDir: [-0.42, 0.78, 0.46],
-			cloudLit, cloudDark, sea, seaSky, night: 1 - k, cover: 0.3 + 0.62 * cl(weatherK), sunVis,
+			cloudLit, cloudDark, sea, seaSky, night: 1 - k, cover: 0.18 + 0.78 * cl(cover), sunVis,
 		});
 	},
 

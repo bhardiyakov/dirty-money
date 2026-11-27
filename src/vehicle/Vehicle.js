@@ -779,6 +779,7 @@ class Vehicle {
         if (pv.h !== null) { let d = hd - pv.h; d = Math.atan2(Math.sin(d), Math.cos(d)); yr = d / dt; }
         pv.h = hd;
         if (this.visual.setFlat) this.visual.setFlat(this.flat);                             // carro 3D: pneu furado baixa aquele canto
+        this._aF = aF; this._aL = aL;                                   // (CarParts: o balanço das peças soltas)
         if (this.visual.animate) this.visual.animate(dt, aF, aL, this.wrecked || this.engineDead && !this.controlled ? 0 : this.lastSteer, this.isBike || this.spec.boat ? null : yr);
         if (this.spec.boat || this.wrecked || this._asleep || typeof SkidMarks === 'undefined') return;
         this._rimFx(dt);                                                                      // pneu furado: faíscas do aro

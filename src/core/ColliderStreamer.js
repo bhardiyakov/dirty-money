@@ -68,8 +68,19 @@ class ColliderStreamer {
 	// Salto (teleporte/respawn): só os corpos até `NEAR` u nascem na hora (o jogador não atravessa nada em volta); o resto nasce 40
 	// por quadro, e os que ficaram para trás saem 80 por quadro. Antes, o salto criava e destruía TUDO num quadro só (no centro da
 	// cidade: ~170 corpos novos + ~700 descartados, mais o terreno — o engasgo do respawn no hospital/delegacia).
+	// hold (lod/AirLod.js: a câmera lá no alto, voando): não cria corpo nenhum e descarta, aos poucos, os que existem (o avião bate pela
+	// conta dele). Ao soltar, conta como um salto (os de perto nascem na hora, o resto aos poucos).
 	update(dt, fx, fz) {
 		const NEAR = 40;
+		if (this.hold) {                                   // (voando alto: nenhum corpo serve — sai tudo, 80 a cada 0,25 s)
+			this._wasHold = true;
+			this._t -= dt;
+			if (this._t > 0) return;
+			this._t = 0.25;
+			for (let k = this.active.length - 1, n = 0; k >= 0 && n < 80; k--, n++) { const it = this.active[k]; it.agg.dispose(); it.agg = null; this.active.pop(); }
+			return;
+		}
+		if (this._wasHold) { this._wasHold = false; this._last = null; }
 		const jump = !this._last || Math.abs(fx - this._last.x) + Math.abs(fz - this._last.z) > 160;
 		if (jump) {
 			this._last = { x: fx, z: fz };

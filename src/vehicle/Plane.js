@@ -264,11 +264,43 @@ class PlaneVisual {
         body.emissiveColor = new BABYLON.Color3(0.08, 0.08, 0.09); body.backFaceCulling = false;
         const lit = new BABYLON.StandardMaterial('planeLights', scene);
         lit.disableLighting = true; lit.emissiveColor = BABYLON.Color3.White(); lit.diffuseColor = BABYLON.Color3.Black();
-        const sh = new BABYLON.StandardMaterial('planeShadow', scene);
-        const tex = new BABYLON.DynamicTexture('planeShadowTex', { width: 64, height: 64 }, scene, false), c = tex.getContext(), gr = c.createRadialGradient(32, 32, 4, 32, 32, 31);
-        gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(0, 0, 64, 64); tex.hasAlpha = true; tex.update();
-        sh.diffuseTexture = tex; sh.useAlphaFromDiffuseTexture = true; sh.disableLighting = true; sh.emissiveColor = BABYLON.Color3.Black(); sh.diffuseColor = BABYLON.Color3.Black(); sh.backFaceCulling = false;
+        let sh = null;
+        if (!(typeof ProcSurf !== 'undefined' && ProcSurf.on)) {                     // (em polígonos a sombra é a silhueta: _shadowMesh)
+            sh = new BABYLON.StandardMaterial('planeShadow', scene);
+            const tex = new BABYLON.DynamicTexture('planeShadowTex', { width: 64, height: 64 }, scene, false), c = tex.getContext(), gr = c.createRadialGradient(32, 32, 4, 32, 32, 31);
+            gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(0, 0, 64, 64); tex.hasAlpha = true; tex.update();
+            sh.diffuseTexture = tex; sh.useAlphaFromDiffuseTexture = true; sh.disableLighting = true; sh.emissiveColor = BABYLON.Color3.Black(); sh.diffuseColor = BABYLON.Color3.Black(); sh.backFaceCulling = false;
+        }
         return (scene._planeMats = { body, lit, sh });
+    }
+
+    // A SOMBRA EM POLÍGONOS: a silhueta do avião no chão (fuselagem, asas, empenagem), cada parte com a borda macia (um anel com o alfa
+    // indo a zero), no lugar da mancha redonda de textura. z = frente (len), x = envergadura (span), como o modelo.
+    static _shadowMesh(scene, M) {
+        const P = [], C = [], I = [], N = [], f = Math.max(0.25, M.len * 0.05);
+        const rect = (x0, z0, x1, z1) => {
+            const b = P.length / 3, inner = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], outer = [[x0 - f, z0 - f], [x1 + f, z0 - f], [x1 + f, z1 + f], [x0 - f, z1 + f]];
+            for (const [x, z] of inner) { P.push(x, 0, z); C.push(0, 0, 0, 1); N.push(0, 1, 0); }
+            for (const [x, z] of outer) { P.push(x, 0, z); C.push(0, 0, 0, 0); N.push(0, 1, 0); }
+            I.push(b, b + 2, b + 1, b, b + 3, b + 2);
+            for (let k = 0; k < 4; k++) { const a = b + k, c = b + (k + 1) % 4, A = a + 4, Cc = c + 4; I.push(a, Cc, A, a, c, Cc); }
+        };
+        const L = M.len, S = M.span, fw = Math.max(0.6, L * 0.055);
+        rect(-fw, -L * 0.46, fw, L * 0.46);                                         // a fuselagem
+        rect(-S * 0.48, L * 0.02, S * 0.48, L * 0.02 + Math.max(1.2, L * 0.14));    // as asas
+        rect(-S * 0.17, -L * 0.45, S * 0.17, -L * 0.45 + Math.max(0.7, L * 0.08));  // a empenagem
+        const m = new BABYLON.Mesh('planeShadow_' + M.id, scene), vd = new BABYLON.VertexData();
+        vd.positions = P; vd.colors = C; vd.indices = I; vd.normals = N;
+        vd.applyToMesh(m);
+        m.hasVertexAlpha = true; m.useVertexColors = true; m._poly = true;
+        return m;
+    }
+    static shadowMat(scene) {
+        if (scene._planeShadowPoly) return scene._planeShadowPoly;
+        const m = new BABYLON.StandardMaterial('planeShadowPoly', scene);
+        m.disableLighting = true; m.emissiveColor = BABYLON.Color3.Black(); m.diffuseColor = BABYLON.Color3.Black(); m.specularColor = BABYLON.Color3.Black();
+        m.backFaceCulling = false; m.disableDepthWrite = true; m.transparencyMode = BABYLON.Material.MATERIAL_ALPHABLEND;
+        return (scene._planeShadowPoly = m);
     }
 
     constructor(scene, M) {
@@ -290,8 +322,8 @@ class PlaneVisual {
             m.rotationQuaternion = null;
             return m;
         });
-        this.shadow = BABYLON.MeshBuilder.CreateGround('planeShadow_' + M.id, { width: M.span * 0.85, height: M.len * 0.9 }, scene);
-        this.shadow.material = mats.sh; this.shadow.isPickable = false; this.shadow.visibility = 0.4;
+        this.shadow = typeof ProcSurf !== 'undefined' && ProcSurf.on ? PlaneVisual._shadowMesh(scene, M) : BABYLON.MeshBuilder.CreateGround('planeShadow_' + M.id, { width: M.span * 0.85, height: M.len * 0.9 }, scene);
+        this.shadow.material = this.shadow._poly ? PlaneVisual.shadowMat(scene) : mats.sh; this.shadow.isPickable = false; this.shadow.visibility = 0.4;
         this.hl = M.len * 0.85;                                        // (câmera de perseguição: CompassCamera.follow lê hl e lampGeom.roof)
         this.lampGeom = { roof: M.id === 'jato' ? 3.4 : 2.6 };
         this._spin = 0;

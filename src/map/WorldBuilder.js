@@ -121,8 +121,13 @@ class WorldBuilder {
         M.concrete = this._mat('concrete', T.concrete);
         M.dirt = this._mat('dirt', T.dirt);
         M.rock = this._mat('rock', T.rock);
-        M.shop = this._mat('shop', T.shops.diffuse);
-        WindowLights.apply(M.shop, T.shops.emissive, [0, 0], 'shop');      // letreiro e vitrine acendem à noite (render/WindowLights.js)
+        if (typeof Shops3D !== 'undefined' && Shops3D.on) {               // vitrines em polígonos (render/Shops3D.js): sem o atlas pintado
+            const SM = Shops3D.materials(this.scene);
+            M.shop3 = SM.solid; M.shopglass = SM.glass; M.shoptext = SM.text;
+        } else {
+            M.shop = this._mat('shop', T.shops.diffuse);
+            WindowLights.apply(M.shop, T.shops.emissive, [0, 0], 'shop');  // letreiro e vitrine acendem à noite (render/WindowLights.js)
+        }
         M.earth = this._mat('earth', T.earth);
         M.plaza = this._mat('plaza', T.plaza);
         M.curb = this._mat('curb', null, { color: '#a4a9b0' });
@@ -135,7 +140,7 @@ class WorldBuilder {
         M.ao.zOffset = -2; M.ao.zOffsetUnits = -4;
         M.solid = this._mat('solid', null);            // peças de cor sólida (vertex colors).
         M.solid.diffuseColor = BABYLON.Color3.White();
-        M.hide = HideSprites.create(this.scene);       // topo dos esconderijos (caçamba, caixotes, latão)
+        if (!(typeof ProcSurf !== 'undefined' && ProcSurf.on)) M.hide = HideSprites.create(this.scene);       // topo dos esconderijos (caçamba, caixotes, latão) — em polígonos: _hide3d
 
         // Estruturas que podem ficar ACIMA do jogador/veículo (viaduto, túnel, cobertura de posto): mesmos materiais, mas com o corte
         // do teto (render/RoofCut.js: o trecho em cima dele some inteiro). Chaves de batch 'x…'.
@@ -903,6 +908,7 @@ class WorldBuilder {
                     const bw = 1.6 + rng() * 2.2, bd = 1.6 + rng() * 2.2, bh = 0.9 + rng() * 1.2;
                     const bx = x0 + 1.5 + rng() * Math.max(0.1, w - 3 - bw);
                     const bz = z0 + 1.5 + rng() * Math.max(0.1, d - 3 - bd);
+                    if (typeof ProcSurf !== 'undefined' && ProcSurf.on) { this._machine3d(trim, bx, bz, bw, bd, H, bh, k); continue; }      // (em polígonos)
                     if (!this.T.machine) { trim.solid(bx, bz, bx + bw, bz + bd, H, H + bh, hvac); continue; }
                     // HD: tampa de chapa (a textura inteira esticada na tampa) e laterais de veneziana (2 u por painel, altura toda)
                     this._batch('machtop', x0, z0).top(bx, bz, bx + bw, bz + bd, H + bh, (x, z) => [(x - bx) / bw, (bz + bd - z) / bd]);
@@ -976,15 +982,17 @@ class WorldBuilder {
     // Vitrines e toldos das lojas (CityGrid._addShops): um quad vertical por loja, com o UV do atlas, e o toldo listrado.
     _shops() {
         const SH = TileFactory.SHOPS, T = this.T.shops, eps = 0.03, y0 = 0.2, y1 = 3.0, AW = CityGrid.AWNING;
-        const awn = [[1, 1, 1], [0.92, 0.9, 0.84]];
+        const awn = [[1, 1, 1], [0.92, 0.9, 0.84]], poly = typeof Shops3D !== 'undefined' && Shops3D.on;
+        if (poly) Shops3D.stats = { shops: 0 };
         for (const blk of CityGrid.blocks) for (const l of blk.lots) {
             MeshBatch.anchor = l.shops && l.shops.length ? WorldBuilder.lotAnchor(l) : null;
             for (const s of l.shops || []) {
-                const S = SH[s.kind], u0 = (s.kind % T.cols) / T.cols, v0 = Math.floor(s.kind / T.cols) / T.rows, u1 = u0 + 1 / T.cols, v1 = v0 + 1 / T.rows;
-                const uv = [[u0, v0], [u1, v0], [u0, v1], [u1, v1]], a = s.a, b = s.a + 6;
-                const batch = this._batch('shop', l.x0, l.z0), trim = this._batch('trim', l.x0, l.z0);
+                const S = SH[s.kind], trim = this._batch('trim', l.x0, l.z0);
                 const c = Pixel.hex(S.sign), col = [c[0] / 255, c[1] / 255, c[2] / 255];
-                if (s.side === 'S') { const z = l.z0 - eps; batch.quad([a, y1, z], [b, y1, z], [a, y0, z], [b, y0, z], [0, 0, -1], uv); }
+                const uv = poly ? null : (() => { const u0 = (s.kind % T.cols) / T.cols, v0 = Math.floor(s.kind / T.cols) / T.rows, u1 = u0 + 1 / T.cols, v1 = v0 + 1 / T.rows; return [[u0, v0], [u1, v0], [u0, v1], [u1, v1]]; })();
+                const a = s.a, b = s.a + 6, batch = poly ? null : this._batch('shop', l.x0, l.z0);
+                if (poly) Shops3D.add(l, s, this._batch('shop3', l.x0, l.z0), this._batch('shopglass', l.x0, l.z0), this._batch('shoptext', l.x0, l.z0));
+                else if (s.side === 'S') { const z = l.z0 - eps; batch.quad([a, y1, z], [b, y1, z], [a, y0, z], [b, y0, z], [0, 0, -1], uv); }
                 else if (s.side === 'N') { const z = l.z1 + eps; batch.quad([b, y1, z], [a, y1, z], [b, y0, z], [a, y0, z], [0, 0, 1], uv); }
                 else if (s.side === 'W') { const x = l.x0 - eps; batch.quad([x, y1, b], [x, y1, a], [x, y0, b], [x, y0, a], [-1, 0, 0], uv); }
                 else { const x = l.x1 + eps; batch.quad([x, y1, a], [x, y1, b], [x, y0, a], [x, y0, b], [1, 0, 0], uv); }
@@ -1739,6 +1747,7 @@ class WorldBuilder {
                 }
                 if (p.type === 'hide') {
                     const x0 = p.x - p.w / 2, x1 = p.x + p.w / 2, z0 = p.z - p.d / 2, z1 = p.z + p.d / 2;
+                    if (typeof ProcSurf !== 'undefined' && ProcSurf.on) { this._hide3d(trimAt(x0, z0), p, x0, z0, x1, z1); continue; }      // (em polígonos: sem o atlas do topo)
                     trimAt(x0, z0).walls(x0, z0, x1, z1, 0.18, p.h, () => [0, 0], SIDE[p.kind]);
                     const [u0, v0, u1, v1] = HideSprites.rects[p.kind];
                     hideAt(x0, z0).top(x0, z0, x1, z1, p.h + 0.01, (x, z) => [u0 + ((x - x0) / (x1 - x0)) * (u1 - u0), v0 + ((z1 - z) / (z1 - z0)) * (v1 - v0)]);
@@ -1769,6 +1778,82 @@ class WorldBuilder {
         }
     }
 
+    // CASA DE MÁQUINAS em polígonos (no lugar das texturas machtop/machside): a caixa de chapa, os MONTANTES a cada ~1 u, o rufo claro
+    // em cima e a tampa com a aba, uma VENEZIANA (lâminas em degrau) e a PORTINHOLA de inspeção num lado, e a GRELHA de exaustão na tampa.
+    _machine3d(t, bx, bz, bw, bd, H, bh, k) {
+        const x1 = bx + bw, z1 = bz + bd, sheet = [0.74, 0.76, 0.79], post = [0.46, 0.49, 0.53], cap = [0.84, 0.86, 0.88], dark = [0.23, 0.25, 0.28];
+        t.solid(bx, bz, x1, z1, H, H + bh, sheet);
+        t.solid(bx - 0.06, bz - 0.06, x1 + 0.06, z1 + 0.06, H + bh, H + bh + 0.06, cap);                                   // a tampa com a aba
+        t.solid(bx - 0.02, bz - 0.02, x1 + 0.02, z1 + 0.02, H, H + 0.12, [0.5, 0.48, 0.44]);                              // a sujeira embaixo
+        for (const [ax, az, L, along] of [[bx, bz, bw, 'x'], [bx, z1, bw, 'x'], [bx, bz, bd, 'z'], [x1, bz, bd, 'z']]) {
+            const n = Math.max(1, Math.round(L));
+            for (let i = 1; i < n; i++) {
+                const c = (along === 'x' ? ax : az) + L * i / n;
+                if (along === 'x') t.solid(c - 0.03, az - 0.025, c + 0.03, az + 0.025, H + 0.12, H + bh, post);
+                else t.solid(ax - 0.025, c - 0.03, ax + 0.025, c + 0.03, H + 0.12, H + bh, post);
+            }
+        }
+        // a veneziana e a portinhola no lado sul (z = bz), a grelha na tampa
+        const lw = Math.min(0.9, bw * 0.35), lx = bx + 0.25, ly0 = H + bh * 0.25, ly1 = H + bh * 0.85;
+        t.solid(lx, bz - 0.03, lx + lw, bz, ly0, ly1, dark);
+        for (let y = ly0 + 0.05; y < ly1 - 0.03; y += 0.09) t.solid(lx + 0.03, bz - 0.06, lx + lw - 0.03, bz - 0.03, y, y + 0.04, [0.62, 0.65, 0.69]);
+        if (bw > 1.9) { const dx = x1 - 0.85; t.solid(dx, bz - 0.025, dx + 0.6, bz, H + 0.2, H + Math.min(bh - 0.1, 1.5), [0.66, 0.68, 0.71]); t.solid(dx + 0.48, bz - 0.05, dx + 0.53, bz - 0.025, H + 0.7, H + 0.85, dark); }
+        const gx = bx + bw * 0.33, gz = bz + bd * 0.3, gw = bw * 0.37, gd = bd * 0.27, gy = H + bh + 0.06;
+        t.solid(gx, gz, gx + gw, gz + gd, gy, gy + 0.05, dark);
+        for (let z = gz + 0.05; z < gz + gd - 0.03; z += 0.08) t.solid(gx + 0.03, z, gx + gw - 0.03, z + 0.035, gy + 0.05, gy + 0.08, [0.55, 0.58, 0.62]);
+    }
+
+    // ESCONDERIJO EM POLÍGONOS (no lugar das laterais lisas + o topo pintado do atlas HideSprites): a CAÇAMBA de lixo (o corpo verde, a base,
+    // as rodinhas, as duas tampas com nervuras, o puxador e o lixo aparecendo pela fresta), os CAIXOTES de madeira (tábuas em relevo nos
+    // lados, a moldura e a travessa em X em cima, as quinas de metal) e o LATÃO (o tambor com os aros, a tampa e o bocal).
+    _hide3d(t, p, x0, z0, x1, z1) {
+        const y0 = 0.18, h = p.h, alongX = x1 - x0 >= z1 - z0;
+        if (p.kind === 'dumpster') {
+            const g = [0.16, 0.33, 0.21], gD = [0.11, 0.22, 0.15], lid = [0.22, 0.45, 0.3], dark = [0.07, 0.08, 0.09];
+            t.solid(x0 + 0.06, z0 + 0.06, x1 - 0.06, z1 - 0.06, y0 + 0.14, h - 0.1, g);
+            t.solid(x0 + 0.02, z0 + 0.02, x1 - 0.02, z1 - 0.02, y0 + 0.1, y0 + 0.2, gD);                      // a base
+            t.solid(x0, z0, x1, z1, h - 0.12, h - 0.04, [0.2, 0.39, 0.26]);                                       // a borda de cima
+            for (const [cx, cz] of [[x0 + 0.18, z0 + 0.18], [x1 - 0.18, z0 + 0.18], [x0 + 0.18, z1 - 0.18], [x1 - 0.18, z1 - 0.18]]) t.solid(cx - 0.08, cz - 0.08, cx + 0.08, cz + 0.08, y0, y0 + 0.12, dark);
+            const half = (a0, a1) => {                                                                         // uma tampa (a0..a1 ao longo do lado comprido)
+                const r = alongX ? [a0, z0 + 0.05, a1, z1 - 0.05] : [x0 + 0.05, a0, x1 - 0.05, a1];
+                t.solid(r[0], r[1], r[2], r[3], h - 0.04, h + 0.03, lid);
+                for (let k = 1; k <= 3; k++) {
+                    const f = k / 4;
+                    if (alongX) { const z = r[1] + (r[3] - r[1]) * f; t.solid(r[0] + 0.08, z - 0.025, r[2] - 0.08, z + 0.025, h + 0.03, h + 0.055, [0.3, 0.58, 0.39]); }
+                    else { const x = r[0] + (r[2] - r[0]) * f; t.solid(x - 0.025, r[1] + 0.08, x + 0.025, r[3] - 0.08, h + 0.03, h + 0.055, [0.3, 0.58, 0.39]); }
+                }
+            };
+            const a0 = alongX ? x0 : z0, a1 = alongX ? x1 : z1, am = (a0 + a1) / 2;
+            half(a0 + 0.04, am - 0.03); half(am + 0.03, a1 - 0.04);
+            // o lixo aparecendo pela fresta do meio e o puxador na frente
+            if (alongX) { t.solid(am - 0.12, p.z - 0.25, am + 0.1, p.z - 0.05, h - 0.02, h + 0.06, [0.85, 0.82, 0.74]); t.solid(am - 0.06, p.z + 0.1, am + 0.12, p.z + 0.3, h - 0.02, h + 0.05, [0.78, 0.35, 0.24]); t.solid(am - 0.15, z0 - 0.04, am + 0.15, z0 + 0.02, h - 0.4, h - 0.3, dark); }
+            else { t.solid(p.x - 0.25, am - 0.12, p.x - 0.05, am + 0.1, h - 0.02, h + 0.06, [0.85, 0.82, 0.74]); t.solid(p.x + 0.1, am - 0.06, p.x + 0.3, am + 0.12, h - 0.02, h + 0.05, [0.78, 0.35, 0.24]); t.solid(x0 - 0.04, am - 0.15, x0 + 0.02, am + 0.15, h - 0.4, h - 0.3, dark); }
+        } else if (p.kind === 'crate' || p.kind === 'crate_big') {
+            const wood = [0.66, 0.46, 0.25], slat = [0.55, 0.37, 0.19], metal = [0.78, 0.8, 0.83];
+            t.solid(x0 + 0.03, z0 + 0.03, x1 - 0.03, z1 - 0.03, y0, h, wood);
+            const n = 3, H = h - y0;
+            for (let k = 0; k < n; k++) {                                                                     // as tábuas dos lados, em relevo
+                const ya = y0 + H * (k + 0.12) / n, yb = y0 + H * (k + 0.88) / n;
+                t.solid(x0, z0, x1, z0 + 0.03, ya, yb, slat); t.solid(x0, z1 - 0.03, x1, z1, ya, yb, slat);
+                t.solid(x0, z0 + 0.03, x0 + 0.03, z1 - 0.03, ya, yb, slat); t.solid(x1 - 0.03, z0 + 0.03, x1, z1 - 0.03, ya, yb, slat);
+            }
+            const b = 0.07;                                                                                    // a moldura de cima e a travessa em X
+            t.solid(x0, z0, x1, z0 + b, h, h + 0.03, slat); t.solid(x0, z1 - b, x1, z1, h, h + 0.03, slat);
+            t.solid(x0, z0 + b, x0 + b, z1 - b, h, h + 0.03, slat); t.solid(x1 - b, z0 + b, x1, z1 - b, h, h + 0.03, slat);
+            const hd = Math.hypot(x1 - x0, z1 - z0) / 2 - 0.08;
+            const q = Math.SQRT1_2;
+            t.obox(p.x, p.z, q, q, hd, 0.035, h, h + 0.028, slat); t.obox(p.x, p.z, q, -q, hd, 0.035, h, h + 0.028, slat);
+            for (const [cx, cz] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) t.solid(cx - 0.04, cz - 0.04, cx + 0.04, cz + 0.04, h - 0.06, h + 0.035, metal);
+        } else {
+            const r = Math.min(x1 - x0, z1 - z0) / 2, body = [0.36, 0.41, 0.47], rim = [0.28, 0.32, 0.37];
+            t.cyl(p.x, p.z, r * 0.94, y0, h, body, 14);
+            for (const f of [0.28, 0.72]) { const y = y0 + (h - y0) * f; t.cyl(p.x, p.z, r, y - 0.03, y + 0.03, rim, 14); }
+            t.cyl(p.x, p.z, r, h - 0.03, h + 0.01, rim, 14);
+            t.cyl(p.x, p.z, r * 0.78, h + 0.01, h + 0.02, [0.3, 0.34, 0.4], 14);
+            t.cyl(p.x - r * 0.45, p.z, 0.05, h + 0.01, h + 0.05, [0.22, 0.25, 0.29], 6);
+        }
+    }
+
     // Colisor só para a física: TransformNode (sem malha) não pesa na avaliação de
     // malhas ativas a cada frame, ao contrário de ~300 caixas invisíveis.
     _collider(name, x0, z0, x1, z1, h, mask = 0) {
@@ -1793,6 +1878,9 @@ class WorldBuilder {
             if (key === 'xcurb') return M.xcurb;
             if (key === 'xtrim') return M.xsolid;
             if (key === 'shop') return M.shop;
+            if (key === 'shop3') return M.shop3;
+            if (key === 'shopglass') return M.shopglass;
+            if (key === 'shoptext') return M.shoptext;
             if (key === 'road_dirt') return M.dirt;
             if (key === 'road_earth') return M.earth;
             if (key === 'road_concrete') return M.concrete;
@@ -1825,9 +1913,10 @@ class WorldBuilder {
             const shaded = key0.endsWith('$'), key = shaded ? key0.slice(0, -1) : key0;      // 'sidewalk$' = chão tingido pelo relevo (vertex colors)
             const isTrim = key === 'trim' || key === 'xtrim' || key === 'btrim';
             const isVeg = key.startsWith('veg_'), isBlend = key.startsWith('blend_') || key === 'ao', isWall3 = key.startsWith('walls_') && typeof Walls3D !== 'undefined' && Walls3D.on;
-            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend || isWall3, receiveShadows: !isVeg && key !== 'ao', alwaysActive: at < 0, relief: true, clamp: isBlend && typeof TerrainBuilder !== 'undefined' ? TerrainBuilder.roadCut : null, uvs: !isTrim });      // (degradê: rente ao terreno cortado junto da pista)
+            const isShop3 = key === 'shop3' || key === 'shopglass' || key === 'shoptext';
+            const mesh = batch.build('world_' + full, this.scene, matFor(key), { vertexColors: isTrim || isVeg || shaded || isBlend || isWall3 || isShop3, receiveShadows: !isVeg && key !== 'ao', alwaysActive: at < 0, relief: true, clamp: isBlend && typeof TerrainBuilder !== 'undefined' ? TerrainBuilder.roadCut : null, uvs: !isTrim });      // (degradê: rente ao terreno cortado junto da pista)
             this.meshes.push(mesh);
-            if (isBlend) mesh.hasVertexAlpha = true;                                         // (o alfa por vértice é o degradê da faixa: GroundBlend)
+            if (isBlend || key === 'shopglass') mesh.hasVertexAlpha = true;                  // (o alfa por vértice é o degradê da faixa: GroundBlend; e o vidro das vitrines)
             if (key === 'veg_hi') {                                                          // copas: desenham DEPOIS de pedestres, carros e sprites do chao (que nao escrevem profundidade), sempre por cima
                 mesh.renderingGroupId = 1; mesh.alphaIndex = -1;
                 const mk = XRaySilhouette.addMask(mesh, this.props.maskMaterial);           // (quem passa embaixo: a silhueta dourada)
@@ -1912,5 +2001,5 @@ class WorldBuilder {
 }
 memoStatics(WorldBuilder, 'GLYPHS');
 WorldBuilder.FACE_U = { n: 0, s: 127, e: 263, w: 389 };          // deslocamento inteiro da UV de cada lado do prédio (ver _buildings)
-WorldBuilder.DENSE = new Set(['trim', 'xtrim', 'btrim', 'curb', 'xcurb', 'bcurb']);
-WorldBuilder.TRIM = new Set(['trim', 'xtrim', 'btrim']);         // (os acabamentos: pedaços ainda menores — Config.world.trimChunk)
+WorldBuilder.DENSE = new Set(['trim', 'xtrim', 'btrim', 'curb', 'xcurb', 'bcurb', 'shop3', 'shopglass', 'shoptext']);
+WorldBuilder.TRIM = new Set(['trim', 'xtrim', 'btrim', 'shop3', 'shopglass', 'shoptext']);         // (os acabamentos: pedaços ainda menores — Config.world.trimChunk)

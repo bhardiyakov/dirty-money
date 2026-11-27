@@ -98,18 +98,26 @@ class CompassCamera {
 	get tiltDeg() { const C = Config.camera; return C.tilt + (this.chaseTilt - C.tilt) * this.chase; }
 	// Inclinação da perseguição: a do carro; na moto/bicicleta um pouco mais alta (o piloto é um desenho 2,5D, feito para ser visto de cima).
 	get chaseTilt() { const H = Config.camera.chase; if (this._chFoot && typeof FootCamera !== 'undefined' && FootCamera.on) return FootCamera.pitchDeg; return H.tilt + (this._chBike ? H.bikeTilt : 0) + ((this.airTilt || H.tilt) - H.tilt) * (this.airK || 0); }
-	// AVIÃO (Game: pilotando um vehicle/Plane): a câmera olha mais para a frente e a névoa se afasta com a altitude — lá de cima se vê a
-	// paisagem. k: 0..1 (entra e sai suave), alt: m acima do chão. Refaz o campo de visão e a névoa (barato: só números).
-	setAir(k, alt = 0) {
-		const kk = Math.max(0, Math.min(1, k)), a = Math.max(0, alt);
-		if (kk === (this.airK || 0) && Math.abs(a - (this.airAlt || 0)) < 0.5) return;
-		this.airK = kk; this.airAlt = a;
+	// AVIÃO (Game: pilotando um vehicle/Plane): a câmera olha mais para a frente e a névoa se afasta com a altitude e a velocidade —
+	// lá de cima se vê a paisagem (o longe é a malha única do mapa: lod/FarWorld.js). k: 0..1 (entra e sai suave), alt: m acima do
+	// chão, spd: m/s. Refaz o campo de visão e a névoa (barato: só números).
+	setAir(k, alt = 0, spd = 0) {
+		const kk = Math.max(0, Math.min(1, k)), a = Math.max(0, alt), v = Math.max(0, spd);
+		if (kk === (this.airK || 0) && Math.abs(a - (this.airAlt || 0)) < 0.5 && Math.abs(v - (this.airSpd || 0)) < 2) return;
+		this.airK = kk; this.airAlt = a; this.airSpd = v;
 		this.airTilt = 20 + Math.min(14, a / 14);
 		this._applyFov();
 	}
-	// Até onde se vê na perseguição (a névoa): no avião, bem mais longe (cresce com a altitude).
-	_chaseFar() { const H = Config.camera.chase, k = this.airK || 0; return H.far + k * (260 + (this.airAlt || 0) * 2.4); }
-	_chaseNear() { const H = Config.camera.chase, k = this.airK || 0; return H.near + k * (90 + (this.airAlt || 0) * 1.5); }      // (a pé: a altura do olhar da câmera de 3ª pessoa)
+	// Quanto da distância de visão sobra: o clima (Weather.fogMul — no chão pesa menos, a rua continua dirigível) e DENTRO de uma nuvem
+	// (render/CloudField.js: quase nada, o branco fecha). 1 = céu limpo.
+	_vis() {
+		const W = typeof Weather !== 'undefined' && Weather.cur, k = this.airK || 0;
+		const w = W ? 1 - (1 - W.fogMul) * (0.6 + 0.4 * k) : 1, c = typeof CloudField !== 'undefined' ? CloudField.inside : 0;
+		return w * (1 - 0.82 * c);
+	}
+	// Até onde se vê na perseguição (a névoa): no avião, bem mais longe (cresce com a altitude e com a velocidade).
+	_chaseFar() { const H = Config.camera.chase, k = this.airK || 0; return (H.far + k * (260 + (this.airAlt || 0) * 2.4 + (this.airSpd || 0) * 1.6)) * this._vis(); }
+	_chaseNear() { const H = Config.camera.chase, k = this.airK || 0, c = typeof CloudField !== 'undefined' ? CloudField.inside : 0; return (H.near + k * (90 + (this.airAlt || 0) * 1.5)) * this._vis() * (1 - 0.6 * c); }      // (a pé: a altura do olhar da câmera de 3ª pessoa)
 	setFlat(on) {
 		if (on === this.flat) return;
 		this.flat = on;
@@ -171,6 +179,9 @@ class CompassCamera {
 			cam.fov = fov;
 			const h = D * Math.sin(e);                                                  // (height of the camera: nothing comes nearer than the rooftops)
 			cam.minZ = k > 0 ? Math.max(C.chase.minZ, Math.max(1, (h - C.tallest - 6) * 0.8) * (1 - k)) : Math.max(1, (h - C.tallest - 6) * 0.8);
+			// (voando: o avião fica a 6+ m da câmera — o plano de perto em 4 m triplica a precisão da profundidade lá a 1–2 km, onde o mapa
+			// inteiro aparece: sem z-fighting entre chão, quadra e prédio de longe)
+			if (this.airK > 0) cam.minZ = Math.max(cam.minZ, 1.4 + 2.6 * this.airK);
 			cam.maxZ = D + 250 + this._chaseFar() * k + (this.airAlt || 0) * (this.airK || 0);
 			this._applyFog(v, a);
 			this._pose(this.focus.x, this.focus.z);
@@ -333,6 +344,8 @@ class CompassCamera {
 	// Acompanha o alvo (suavização independente de framerate; alta = colada). `vehicle`: dirigindo — modo bússola (ver o topo).
 	follow(targetPos, dt, vehicle = null, walker = null, onFoot = false) {
 		const C = Config.camera, wrap = CompassCamera.wrap;
+		const vis = this._vis();                                    // (o clima ou uma nuvem mudou a visibilidade: refaz a névoa e o alcance)
+		if (Math.abs(vis - (this._visL === undefined ? 1 : this._visL)) > 0.01) { this._visL = vis; this._applyFov(); }
 		let goalYaw = 0, goalLead = 0;
 		// Perseguição: dirigindo (carro, moto, barco) e A PÉ (H.foot), com a câmera em perspectiva, ela desce para trás de quem anda ou
 		// dirige; num interior volta para a alta. A velocidade (suavizada) recua a câmera e abre o campo de visão.

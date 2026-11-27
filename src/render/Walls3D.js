@@ -222,6 +222,12 @@ const Walls3D = {
                     const s = (i + 0.5) * f.bw, px = f.ox + f.tx * s + f.nx * 0.35, pz = f.oz + f.tz * s + f.nz * 0.35, t = topAt(px, pz, e);
                     hid[i] = t <= e.y ? 0 : Math.min(255, Math.floor((t - e.y + 0.4) / this.FH));
                 }
+                // a FRENTE DE LOJA em polígonos (render/Shops3D.js) cobre o térreo: as baias embaixo dela ficam sem peça e sem lâmpada
+                if (l.shops && l.shops.length && typeof Shops3D !== 'undefined' && Shops3D.on) for (const sh of l.shops) {
+                    if (sh.side.toLowerCase() !== key) continue;
+                    const s0 = key === 's' ? sh.a - l.x0 : key === 'n' ? l.x1 - sh.a - 6 : key === 'e' ? sh.a - l.z0 : l.z1 - sh.a - 6;
+                    for (let i = 0; i < f.n; i++) if ((i + 1) * f.bw > s0 + 0.05 && i * f.bw < s0 + 5.95) hid[i] = Math.max(hid[i], 1);
+                }
                 if (hid.every((h) => h >= floors)) continue;
                 // as luzes do térreo no chão (NightLights): a lâmpada da porta (a mesma do shader) e a portaria acesa
                 for (let i = 0; i < f.n; i++) {
@@ -572,8 +578,79 @@ const Walls3D = {
     },
 
     // ------------------------------------------------------------------ materiais
+    // O ATLAS DAS JANELAS (uma textura de 1024 × 512, 8 × 4 ladrilhos de 128 px, ~2,7 MB com os mipmaps): o DESENHO de cada tipo de vão
+    // — grade, basculante, folha de madeira aberta/fechada/meio aberta, veneziana aberta/fechada, escritório, janelão, colonial com o
+    // arco (com e sem a folha fechada), de correr (com e sem a grade), fita, galpão, cruz, tábua pregada, porta de madeira, porta de
+    // aço, portão, portaria. R = as barras e o caixilho, G = o que cobre o vão (tábuas, veneziana, chapa), B = o sombreado (×2: 0,5 =
+    // neutro), A = 0 fora do arco. O shader lê UMA vez no lugar das contas de cada tipo (que o renderizador por software executava
+    // todas, em cada pixel de parede). Desenhado na carga, em JS.
+    ATLAS: { T: 128, C: 8, R: 4 },
+    atlas(scene) {
+        if (this._at && this._at.getScene() === scene) return this._at;
+        const t0 = performance.now(), { T, C, R } = this.ATLAS, W = T * C, H = T * R, D = new Uint8Array(W * H * 4), px = 1 / T;
+        const sm = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+        const line = (x, c, w) => 1 - sm(w * 0.5 - px * 0.7, w * 0.5 + px * 0.7, Math.abs(x - c));
+        const per = (x, p, w) => { const f = x / p; return 1 - sm(w * 0.5 - px * 0.7, w * 0.5 + px * 0.7, Math.abs(f - Math.round(f)) * p); };
+        const hash = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
+        const fr = (x) => x - Math.floor(x);
+        const planks = (x, w, seed) => { const k = Math.floor(x / w), f = fr(x / w); return (0.82 + 0.25 * hash(k, seed)) * (1 - 0.45 * (1 - sm(0, 0.1, Math.min(f, 1 - f)))); };
+        const louver = (v) => 0.74 + 0.3 * sm(0.1, 0.5, fr(v * 28));
+        const arch = (u, v, o) => {                                              // a colonial: o arco abatido no alto (fora dele, a moldura)
+            const ah = 0.15;
+            if (v <= 1 - ah) return;
+            const e = Math.hypot((u - 0.5) / 0.5, (v - (1 - ah)) / ah);
+            if (e > 1) o.a = 0;
+            o.r = Math.max(o.r, 1 - sm(0.02, 0.09, Math.abs(e - 1)));
+        };
+        const TILES = [
+            (u, v, o) => { o.r = Math.max(per(u, 0.1, 0.014), line(v, 0.33, 0.016), line(v, 0.66, 0.016), line(u, 0.5, 0.02)); },                       // 0 grade
+            (u, v, o) => { o.r = Math.max(per(u, 1 / 3, 0.018), per(v, 1 / 4, 0.018)); const h = hash(Math.floor(u * 3), Math.floor(v * 4)); o.b = h < 0.3 ? 0.7 : h > 0.85 ? 1.2 : 1; },      // 1 basculante
+            (u, v, o) => { o.r = line(u, 0.5, 0.022); },                                                                                                  // 2 madeira aberta
+            (u, v, o) => { o.g = 1; o.b = planks(u, 0.1, 3) * (1 - 0.4 * line(u, 0.5, 0.03)); },                                                            // 3 madeira fechada
+            (u, v, o) => { o.g = sm(0.49, 0.51, u); o.b = u > 0.5 ? planks(u, 0.1, 4) : 1; o.r = line(u, 0.5, 0.022); },                                  // 4 meio aberta
+            (u, v, o) => { o.r = Math.max(line(u, 0.5, 0.018), line(v, 0.62, 0.018)); },                                                                   // 5 veneziana aberta
+            (u, v, o) => { o.g = 1; o.b = louver(v) * (1 - 0.3 * line(u, 0.5, 0.03)); },                                                                    // 6 veneziana fechada
+            (u, v, o) => { o.r = Math.max(line(v, 0.72, 0.022), line(u, 0.5, 0.018)); },                                                                   // 7 escritório
+            (u, v, o) => { o.r = line(u, 0.5, 0.022); },                                                                                                  // 8 janelão
+            (u, v, o) => { o.r = Math.max(line(u, 0.5, 0.016), line(v, 0.25, 0.016), line(v, 0.5, 0.016)); arch(u, v, o); },                             // 9 colonial
+            (u, v, o) => { o.r = Math.max(line(u, 0.5, 0.016), line(v, 0.25, 0.016), line(v, 0.5, 0.016)); if (u > 0.5 && v < 0.78) { o.g = 1; o.b = louver(v); } arch(u, v, o); },      // 10 colonial meio fechada
+            (u, v, o) => { o.r = line(u, 0.51, 0.036); o.b = u > 0.51 ? 0.88 : 1; },                                                                      // 11 de correr
+            (u, v, o) => { o.r = Math.max(line(u, 0.51, 0.036), per(u, 0.11, 0.014), per(v, 0.36, 0.014)); o.b = u > 0.51 ? 0.88 : 1; },                 // 12 de correr com grade
+            (u, v, o) => { o.r = Math.max(per(u, 1 / 3, 0.01), line(v, 0.7, 0.014)); },                                                                     // 13 em fita
+            (u, v, o) => { o.r = per(u, 0.25, 0.012); o.b = 0.92 - 0.14 * Math.max(per(u, 1 / 40, 0.006), per(v, 1 / 12, 0.02)); },                       // 14 galpão (vidro aramado)
+            (u, v, o) => { o.r = Math.max(line(u, 0.5, 0.018), line(v, 0.62, 0.018), line(v, 0.31, 0.014)); },                                            // 15 cruz (6 vidraças)
+            (u, v, o) => { const k = Math.floor(v / 0.17), f = fr(v / 0.17); o.g = 1; o.b = (0.7 + 0.4 * hash(k, 7)) * (1 - 0.6 * (1 - sm(0, 0.12, Math.min(f, 1 - f)))) * (f > 0.88 ? 0.25 : 1); },      // 16 tábua pregada
+            (u, v, o) => {                                                                                                                                  // 17 porta de madeira
+                o.g = 1; o.b = planks(u, 0.13, 9);
+                const pn = Math.max(line(Math.abs(u - 0.5), 0.32, 0.012), line(v, 0.55, 0.012)) * (v > 0.08 && v < 0.92 && Math.abs(u - 0.5) < 0.33 ? 1 : 0);
+                o.b *= 1 - 0.25 * pn;
+                if (Math.hypot((u - 0.82) / 0.03, (v - 0.47) / 0.014) < 1) o.b = 1.7;
+                o.b *= 1 - 0.3 * (1 - sm(0, 0.08, 1 - v));
+            },
+            (u, v, o) => { const r = fr(v * 29); o.g = 1; o.b = (0.76 + 0.3 * sm(0, 0.25, r) * (1 - sm(0.75, 1, r))) * (v < 0.03 ? 0.6 : 1) * (1 - 0.3 * (1 - sm(0, 0.1, 1 - v))); },      // 18 porta de aço
+            (u, v, o) => { o.g = 1; o.b = v > 0.78 ? 1 : 0.12; o.r = v < 0.78 ? Math.max(per(u, 1 / 14, 0.014), line(v, 0.78, 0.02)) : 0; },             // 19 portão
+            (u, v, o) => { o.r = Math.max(per(u, 1 / 3, 0.012), line(v, 0.82, 0.014)); },                                                                  // 20 portaria
+            () => {},                                                                                                                                       // 21 vazio (cobogó: o shader desenha)
+        ];
+        const o = { r: 0, g: 0, b: 1, a: 1 };
+        for (let t = 0; t < C * R; t++) {
+            const f = TILES[t] || TILES[21], tx = (t % C) * T, ty = Math.floor(t / C) * T;
+            for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) {
+                o.r = 0; o.g = 0; o.b = 1; o.a = 1;
+                f((x + 0.5) / T, (y + 0.5) / T, o);
+                const k = ((ty + y) * W + tx + x) * 4;
+                D[k] = o.r * 255; D[k + 1] = o.g * 255; D[k + 2] = Math.min(255, o.b * 127.5); D[k + 3] = o.a * 255;
+            }
+        }
+        const tex = new BABYLON.RawTexture(D, W, H, BABYLON.Constants.TEXTUREFORMAT_RGBA, scene, true, false, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
+        tex.wrapU = tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+        tex.name = 'walls3d_atlas';
+        this._atMs = Math.round(performance.now() - t0);
+        return (this._at = tex);
+    },
     // A parede de um estilo: StandardMaterial sem textura + o Wall3DPlugin com os números do estilo.
     material(scene, key) {
+        this.atlas(scene);
         const st = this.style(key), m = new BABYLON.StandardMaterial('facade_' + key, scene);
         m.specularColor = new BABYLON.Color3(0, 0, 0);
         if (!this._cls) this._cls = this._plugin();
@@ -684,6 +761,7 @@ const Walls3D = {
             constructor(m, P, st) { super(m, 'Wall3D', 124, Object.assign({ WALL3D: false, W3FAM: 0, W3NONIGHT: false, W3NOWIN: false }, Walls3D.FLAGS0)); this.P = P; this.st = st; this._enable(true); }
             getClassName() { return 'Wall3DPlugin'; }
             prepareDefinesBeforeAttributes(d) { d._needUVs = true; }
+            getSamplers(s) { s.push('w3At'); }
             prepareDefines(d) {
                 d.WALL3D = !Walls3D._lite;
                 d.W3FAM = Walls3D._dbgFam || this.st.famId;
@@ -703,6 +781,7 @@ const Walls3D = {
                 ub.updateFloat4('wfS', P[16], P[17], P[18], P[19]); ub.updateFloat4('wfM', P[20], P[21], P[22], P[23]);
                 ub.updateFloat4('wfP', P[24], P[25], P[26], P[27]); ub.updateFloat4('wfQ', P[28], P[29], P[30], P[31]);
                 ub.updateFloat4('wfK', s[0], s[1], s[2], s[3] + 10 * Walls3D.shade);
+                ub.setTexture('w3At', Walls3D._at);
             }
             getCustomCode(type) {
                 if (type === 'vertex') return {
@@ -741,6 +820,7 @@ const Walls3D = {
 Walls3D.GLSL_DEFS = `
 #ifdef WALL3D
 varying vec2 wlUV;
+uniform sampler2D w3At;
 float w3h(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 float w3n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(w3h(i), w3h(i + vec2(1.0, 0.0)), f.x), mix(w3h(i + vec2(0.0, 1.0)), w3h(i + vec2(1.0, 1.0)), f.x), f.y); }
 float w3i(float a, float b, float c) { float r = mod(a * 37.0 + b * 101.0 + c * 59.0 + a * b * 13.0 + a * a * 7.0 + c * b * 3.0, 97.0); return (r > 96.5 ? 0.0 : r) / 97.0; }
@@ -827,6 +907,9 @@ if (wfK.w > 5.0) {
     vec2 a = R.xz * sc, b = R.yw * sc, wsz = max(b - a, vec2(0.05));
     float d = w3box(p, a, b);
     vec2 q = (p - a) / wsz;
+    #ifdef WEBGL2
+    vec2 qdx = dFdx(q), qdy = dFdy(q);
+    #endif
     float FR = 0.08;
     float dB = w3det(0.06, fw), dM = w3det(0.25, fw);
 
@@ -1029,8 +1112,8 @@ if (wfK.w > 5.0) {
 #endif
         }
     } else {
-        // ---- o vão (janela ou porta): o vidro e, por cima, a grade/o caixilho, as tábuas ou a chapa canelada — UMA conta de cada,
-        // guiada pelos parâmetros do tipo (no renderizador por software cada ramo seria executado inteiro em cada pixel)
+        // ---- o vão (janela ou porta): o vidro e, por cima, o DESENHO do vão lido do ATLAS (Walls3D.atlas: barras, caixilho, tábuas,
+        // veneziana, chapa canelada, portão, o arco da colonial) — uma leitura de textura no lugar das contas de cada tipo
         float cs = clamp(abs(dot(normalW, viewDirectionW)), 0.0, 1.0), fres = (1.0 - cs) * (1.0 - cs);
         vec3 sky = mix(vec3(0.46, 0.56, 0.68), vec3(0.84, 0.88, 0.94), clamp(q.y * 0.75 + fres * 0.4, 0.0, 1.0));
         vec3 g = (wfG.rgb * 0.6 + 0.03) * (0.8 + 0.2 * smoothstep(0.0, 0.5, q.y));
@@ -1043,100 +1126,62 @@ if (wfK.w > 5.0) {
         float rvs = 1.0 - 0.42 * (1.0 - smoothstep(0.0, rv, b.y - p.y)) - 0.2 * (1.0 - smoothstep(0.0, rv * 0.6, p.x - a.x));
         g *= rvs; w3R *= rvs;
         col = g;
-        lightable = 1.0;
-        // os parâmetros do tipo: BV = a grade (período e largura das barras em x e em y, em u), BL = as linhas (duas travessas em q.y, o
-        // montante em q.x e a largura), surf = o que cobre o vão (1 tábuas, 2 chapa canelada, 3 portão, 4 veneziana, 5 cobogó), cover
-        // = quanto cobre, pane = o tom de cada vidraça
-        vec4 BV = vec4(0.0), BL = vec4(-1.0, -1.0, -1.0, 0.016);
-        float surf = 0.0, cover = 0.0, pane = 0.0, horiz = 0.0, plw = 0.1;
+        // o desenho do vão (o número do ladrilho no atlas) e a cor do que cobre o vão
+        float tile = 21.0;
         vec3 sC = wfS.rgb;
         if (door > 0.5) {
-            lightable = 0.0;
-            if (door < 1.5) { surf = 1.0; cover = 1.0; plw = 0.13; sC = h2 < 0.3 ? vec3(0.42, 0.27, 0.16) : (h2 < 0.5 ? wfS.rgb : (h2 < 0.72 ? vec3(0.86, 0.86, 0.84) : vec3(0.24, 0.34, 0.5))); }
-            else if (door < 2.5 || door > 4.5) { surf = 2.0; cover = 1.0; sC = h2 < 0.55 ? vec3(0.58, 0.6, 0.62) : (h2 < 0.75 ? wfS.rgb * 1.2 : vec3(0.36, 0.46, 0.58)); }
-            else if (door < 3.5) { surf = 3.0; cover = 1.0; BV = vec4(0.1, 0.014, 0.0, 0.0); barC = vec3(0.3, 0.31, 0.33); }
-            else { BV = vec4(1.2, 0.03, 0.0, 0.0); BL = vec4(0.82, -1.0, -1.0, 0.03); barC = vec3(0.3, 0.32, 0.35); lightable = 1.0; }
+            if (door < 1.5) { tile = 17.0; sC = h2 < 0.3 ? vec3(0.42, 0.27, 0.16) : (h2 < 0.5 ? wfS.rgb : (h2 < 0.72 ? vec3(0.86, 0.86, 0.84) : vec3(0.24, 0.34, 0.5))); }
+            else if (door < 2.5 || door > 4.5) { tile = 18.0; sC = h2 < 0.55 ? vec3(0.58, 0.6, 0.62) : (h2 < 0.75 ? wfS.rgb * 1.2 : vec3(0.36, 0.46, 0.58)); }
+            else if (door < 3.5) { tile = 19.0; sC = wfS.rgb * 0.9; barC = vec3(0.3, 0.31, 0.33); }
+            else { tile = 20.0; barC = vec3(0.3, 0.32, 0.35); }
         }
-        else if (wk < 1.5) { BV = vec4(0.11, 0.012, 0.0, 0.0); BL = vec4(0.33, 0.66, 0.5, 0.016); barC = vec3(0.13, 0.13, 0.14); }
-        else if (wk < 2.5) { BV = vec4(wsz.x / 3.0, 0.016, wsz.y / 4.0, 0.016); pane = 1.0; col = mix(col, vec3(0.62, 0.66, 0.66), 0.25); }
-        else if (wk < 3.5) { surf = 1.0; cover = h2 < 0.3 ? 1.0 : (h2 < 0.65 ? step(0.5, q.x) : 0.0); BL.z = 0.5; }
-        else if (wk < 4.5) { BL = vec4(0.62, -1.0, 0.5, 0.016); surf = 4.0; cover = shutClosed ? 1.0 : 0.0; }
-        else if (wk < 5.5) { BL = vec4(0.72, -1.0, 0.5, 0.02); barC = wfT.rgb; }
-        else if (wk < 6.5) { BL = vec4(-1.0, -1.0, 0.5, 0.02); barC = wfT.rgb; }
-        else if (wk < 7.5) { BL = vec4(0.25, 0.5, 0.5, 0.014); surf = 4.0; cover = h2 < 0.35 ? step(0.5, q.x) * step(q.y, 0.78) : 0.0; }
-        else if (wk < 8.5) { BL = vec4(-1.0, -1.0, 0.5, 0.035); pane = 0.5; }
-        else if (wk < 9.5) { BV = vec4(0.9, 0.02, 0.0, 0.0); BL = vec4(0.7, -1.0, -1.0, 0.016); barC = wfT.rgb; }
-        else if (wk < 10.5) { BV = vec4(0.75, 0.02, 0.0, 0.0); barC = wfT.rgb; col = mix(col, vec3(0.55, 0.62, 0.64), 0.35); }
-        else if (wk < 11.5) { surf = 5.0; cover = 1.0; }
-        else if (wk > 12.5 && wk < 13.5) { BL = vec4(0.62, 0.31, 0.5, 0.016); }
-        else { surf = 1.0; cover = 1.0; horiz = 1.0; plw = 0.17; sC = vec3(0.5, 0.4, 0.3); }
-        // o tom de cada vidraça (basculante: umas abertas, outras não, e na de correr a folha de trás mais escura)
-        vec2 pid = BV.x > 0.0 ? floor(qd / max(BV.xz, vec2(0.01))) : vec2(step(0.5, q.x), 0.0);
-        float pt = w3h(pid + hs * 10.0);
-        col *= 1.0 - pane * (pt < 0.3 ? 0.3 : (pt > 0.85 ? -0.2 : 0.0)) - pane * 0.24 * step(0.51, q.x) * step(pane, 0.6);
-        // as barras e o caixilho (nas divisas: múltiplos do período)
-        vec2 fb = abs(fract(qd / max(BV.xz, vec2(0.001)) + 0.5) - 0.5) * BV.xz;
-        bar = BV.x > 0.0 ? 1.0 - smoothstep(BV.y * 0.5, BV.y, fb.x) : 0.0;
-        if (BV.z > 0.0) bar = max(bar, 1.0 - smoothstep(BV.w * 0.5, BV.w, fb.y));
-        float bl = min(min(abs(q.y - BL.x), abs(q.y - BL.y)) * wsz.y, abs(q.x - BL.z) * wsz.x);
-        bar = max(bar, 1.0 - smoothstep(BL.w * 0.6, BL.w, bl));
-        #ifdef W3WL
-        if (wk > 7.5 && wk < 8.5 && j < 1.5 && w3i(ix + 2.0, j + 19.0, kk + 11.0) < wfS.w) {
-            vec2 gg = abs(fract(qd / vec2(0.12, 0.4)) - 0.5) * vec2(0.12, 0.4);
-            float gb = max(1.0 - smoothstep(0.006, 0.011, gg.x), 1.0 - smoothstep(0.006, 0.011, gg.y));
-            if (gb > 0.5) barC = vec3(0.12, 0.12, 0.13);
-            bar = max(bar, gb);
+        else if (wk < 1.5) { tile = 0.0; barC = vec3(0.13, 0.13, 0.14); }
+        else if (wk < 2.5) { tile = 1.0; col = mix(col, vec3(0.62, 0.66, 0.66), 0.25); }
+        else if (wk < 3.5) { tile = h2 < 0.3 ? 3.0 : (h2 < 0.65 ? 4.0 : 2.0); }
+        else if (wk < 4.5) { tile = shutClosed ? 6.0 : 5.0; }
+        else if (wk < 5.5) { tile = 7.0; barC = wfT.rgb; }
+        else if (wk < 6.5) { tile = 8.0; barC = wfT.rgb; }
+        else if (wk < 7.5) { tile = h2 < 0.35 ? 10.0 : 9.0; }
+        else if (wk < 8.5) { tile = 11.0; if (j < 1.5 && w3i(ix + 2.0, j + 19.0, kk + 11.0) < wfS.w) { tile = 12.0; barC = vec3(0.12, 0.12, 0.13); } }
+        else if (wk < 9.5) { tile = 13.0; barC = wfT.rgb; }
+        else if (wk < 10.5) { tile = 14.0; barC = wfT.rgb; col = mix(col, vec3(0.55, 0.62, 0.64), 0.35); }
+        else if (wk < 11.5) { tile = 21.0; }
+        else if (wk > 12.5 && wk < 13.5) { tile = 15.0; }
+        else { tile = 16.0; sC = vec3(0.5, 0.4, 0.3); }
+        vec2 auv = (vec2(mod(tile, 8.0), floor(tile / 8.0)) + clamp(q, 0.008, 0.992)) * vec2(0.125, 0.25);
+        #ifdef WEBGL2
+        vec4 AT = textureGrad(w3At, auv, qdx * vec2(0.125, 0.25), qdy * vec2(0.125, 0.25));
+        #else
+        vec4 AT = texture2D(w3At, auv);
+        #endif
+        float sh = AT.b * 2.0;
+        col = mix(col * sh, sC * sh, AT.g);
+        bar = AT.r;
+        lightable = (1.0 - AT.g) * step(0.5, AT.a) * (door > 3.5 && door < 4.5 ? 1.0 : step(door, 0.5));
+        if (AT.a < 0.5) col = frameC;
+        w3R *= (1.0 - AT.g) * step(0.5, AT.a);
+        #ifdef W3WK
+        if (wk > 10.5 && wk < 11.5) {
+            vec2 cg = fract(qd / 0.2) - 0.5;
+            float hole = 1.0 - smoothstep(0.26, 0.3, length(cg));
+            col = mix(base * (0.9 + 0.12 * w3h(floor(qd / 0.2))) * (1.0 - 0.25 * (1.0 - smoothstep(0.0, 0.03, 0.5 - max(abs(cg.x), abs(cg.y))))), vec3(0.05), hole * w3det(0.2, fw));
+            lightable = hole;
+            w3R = vec3(0.0);
         }
         #endif
-        #ifdef W3WC
-        if (wk > 6.5 && wk < 7.5) {
-            float ah = wsz.x * 0.3;
-            if (p.y > b.y - ah) {
-                float ell = length(vec2((p.x - cx) / (wsz.x * 0.5), (p.y - b.y + ah) / ah));
-                if (ell > 1.0) { col = frameC; lightable = 0.0; cover = 0.0; w3R = vec3(0.0); }
-                bar = max(bar, 1.0 - smoothstep(0.015, 0.025, abs(ell - 1.0) * ah));
-            }
+        #if defined(W3D2) || defined(W3D5)
+        if (door > 1.5 && door < 2.5 && h2 < 0.5 && wfQ.w > 0.1) {
+            float g1 = w3n(Wp * vec2(2.5, 3.5) + sd * 3.0);
+            vec3 gc = vec3(w3h(vec2(kk, 11.0)), w3h(vec2(kk, 12.0)), w3h(vec2(kk, 13.0))) * 0.8 + 0.1;
+            col = mix(col, gc, smoothstep(0.62, 0.66, g1) * (1.0 - smoothstep(0.7, 0.74, g1)) * dB * 0.9);
+            col = mix(col, vec3(0.06), (1.0 - smoothstep(0.015, 0.03, abs(g1 - 0.5))) * dB * 0.7);
         }
         #endif
-        // o que cobre o vão: tábuas (folha de madeira, porta, tábua pregada), chapa canelada (porta de aço), portão, veneziana, cobogó
-        if (cover > 0.0) {
-            float ax = horiz > 0.5 ? qd.y : qd.x, bd = floor(ax / plw), bf = fract(ax / plw);
-            vec3 pc = sC * (0.82 + 0.25 * w3h(vec2(bd, hs + surf)));
-            pc *= 1.0 - 0.45 * (1.0 - smoothstep(0.0, 0.1, min(bf, 1.0 - bf))) * dB;
-            if (surf > 1.5 && surf < 2.5) { float r = fract(p.y / 0.075); pc = sC * mix(1.0, 0.76 + 0.3 * smoothstep(0.0, 0.25, r) * (1.0 - smoothstep(0.75, 1.0, r)), w3det(0.075, fw)); }
-            if (surf > 2.5 && surf < 3.5) pc = mix(vec3(0.06, 0.06, 0.07), wfS.rgb * 0.9, step(0.78, q.y));
-            if (surf > 3.5 && surf < 4.5) pc = sC * (0.74 + 0.3 * smoothstep(0.1, 0.5, fract(p.y / 0.055)) * dB);
-            #ifdef W3WK
-            if (surf > 4.5) {
-                vec2 cg = fract(qd / 0.2) - 0.5;
-                float hole = 1.0 - smoothstep(0.26, 0.3, length(cg));
-                pc = mix(base * (0.9 + 0.12 * w3h(floor(qd / 0.2))) * (1.0 - 0.25 * (1.0 - smoothstep(0.0, 0.03, 0.5 - max(abs(cg.x), abs(cg.y))))), vec3(0.05), hole * w3det(0.2, fw));
-                lightable = hole;
-            }
-            #endif
-            col = mix(col, pc, cover);
-            if (surf < 4.5) lightable *= 1.0 - cover;
-            w3R *= 1.0 - cover;
-        }
-        if (door > 0.5) {
-            col *= 1.0 - 0.3 * (1.0 - smoothstep(0.0, 0.2, b.y - p.y));
-            #ifdef W3D1
-            col = mix(col, vec3(0.8, 0.72, 0.4), (1.0 - smoothstep(0.02, 0.03, length(vec2((q.x - 0.82) * wsz.x, (q.y - 0.47) * wsz.y)))) * dB * step(door, 1.5));
-            #endif
-            #if defined(W3D2) || defined(W3D5)
-            if (door > 1.5 && door < 2.5 && h2 < 0.5 && wfQ.w > 0.1) {
-                float g1 = w3n(Wp * vec2(2.5, 3.5) + sd * 3.0);
-                vec3 gc = vec3(w3h(vec2(kk, 11.0)), w3h(vec2(kk, 12.0)), w3h(vec2(kk, 13.0))) * 0.8 + 0.1;
-                col = mix(col, gc, smoothstep(0.62, 0.66, g1) * (1.0 - smoothstep(0.7, 0.74, g1)) * dB * 0.9);
-                col = mix(col, vec3(0.06), (1.0 - smoothstep(0.015, 0.03, abs(g1 - 0.5))) * dB * 0.7);
-            }
-            #endif
-        }
         #ifdef W3AC
         if (acWin && abs(p.x - cx) < 0.3 && p.y < a.y + 0.4) { col = vec3(0.86, 0.85, 0.8) * (0.75 + 0.25 * step(0.5, fract(p.x / 0.03))); lightable = 0.0; bar = 0.0; w3R = vec3(0.0); }
         #endif
-        col = mix(col, barC * (0.9 + 0.15 * step(0.5, q.y)), bar * dB);
-        w3R *= lightable * (1.0 - bar * dB);
+        col = mix(col, barC * (0.9 + 0.15 * step(0.5, q.y)), bar);
+        w3R *= 1.0 - bar;
     }
 
 #endif

@@ -629,6 +629,12 @@ class PoliceManager {
             const off = new PoliceOfficer(this.scene, this.nav, pos, this._nextId++, this.sprites, this, true, team ? team.kind : 'cop');
             this._inherit(off, car);
             this.officers.push(off);
+            // a porta do lado de quem desce abre e fecha logo depois (San Andreas)
+            const g = this.game, sg = side > 0 ? 1 : -1;
+            if (g && g.doors && !car.isBike && !car.destroyed) {
+                g.doors.set(car, sg, true);
+                if (g._delayed) g._delayed.push({ t: 1.1, fn: () => { if (!car.destroyed && g.activeCar !== car) g.doors.set(car, sg, false); } });
+            }
             if (team) { car.crewLeft--; car.dismountCd = 0.45; } else car.dismountCd = 9;
         }
     }

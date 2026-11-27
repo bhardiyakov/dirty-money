@@ -135,7 +135,8 @@ const TileFactory = {
             T.roofs[key] = hd ? hd.make(scene, 'roof', key) : tex(this.roof(key));
         }
 
-        if (hd) T.shops = hd.shopAtlas(scene);
+        if (typeof Shops3D !== 'undefined' && Shops3D.on) T.shops = null;      // (vitrines em polígonos: render/Shops3D.js)
+        else if (hd) T.shops = hd.shopAtlas(scene);
         else { const a = this.shopAtlas(); T.shops = { diffuse: tex(a.d, { aniso: 8, wrap: false }), emissive: tex(a.e, { aniso: 8, wrap: false }), cols: a.COLS, rows: a.ROWS }; }
         // Fachadas: { diffuse, emissive (as janelas acesas), grid (janelas no ladrilho, ver render/WindowLights.js), occ (casa/escritório) }.
         T.facades = {};
@@ -148,7 +149,7 @@ const TileFactory = {
                 grid: [0, 0], occ: 'home',                   // (pixel art: as janelas acesas já vêm sorteadas no desenho)
             };
         }
-        T.machine = hd ? hd.machine(scene) : null;          // casas de máquinas no telhado (sem o HD: caixas de cor lisa)
+        T.machine = hd && !(typeof ProcSurf !== 'undefined' && ProcSurf.on) ? hd.machine(scene) : null;          // casas de máquinas no telhado (sem o HD: caixas de cor lisa)
         if (hd) { hd.release(); console.log(`[CIDADE] texturas em alta definição (${hd.Q * Config.art.ppu} px/u) em ${Math.round(hd.lastMs)} ms (total ${Math.round(performance.now() - t0)} ms)`); }
         return T;
     },

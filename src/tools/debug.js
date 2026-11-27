@@ -227,7 +227,7 @@ const DebugTools = {
                 return g.vehicleManager.boats.filter((c) => !c.wrecked && (!kind || c.spec.id === kind) && (!mode || c.mode === mode))
                     .sort((a, b) => a.position.subtract(p).length() - b.position.subtract(p).length())[k];
             },
-            // Clima: dbg.weather('clear' | 'drizzle' | 'rain' | 'storm') troca na hora; sem argumento devolve o estado.
+            // Clima: dbg.weather('clear' | 'cloudy' | 'drizzle' | 'rain' | 'storm') troca na hora; sem argumento devolve o estado.
             weather(state = null) {
                 const w = g.weather;
                 if (state) w.set(state, true, true);

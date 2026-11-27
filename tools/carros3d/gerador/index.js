@@ -70,7 +70,7 @@ export function criarVeiculo(slug, opcoes = {}) {
     materialPintura: key,
     triangulos: tris,
   };
-  return { root: built.root, materials: mats, info, bounds: { min: mn, max: mx }, tris };
+  return { root: built.root, materials: mats, info, bounds: { min: mn, max: mx }, tris, ctx: built.ctx };
 }
 
 export function exportarGLB(slug, opcoes = {}) {

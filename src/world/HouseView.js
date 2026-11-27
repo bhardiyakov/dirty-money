@@ -34,15 +34,18 @@ const HouseView = {
 			if (opts.color) m.diffuseColor = BABYLON.Color3.FromHexString(opts.color);
 			return m;
 		};
+		// (SEM TEXTURA — render/ProcSurf.js: tijolo, zinco, tábua, telhado, vidro e porta desenhados no shader; os pneus, as pedras e a
+		//  caixa-d'água do telhado viram peças 3D, logo abaixo)
+		const PS = typeof ProcSurf !== 'undefined' && ProcSurf.on, surf = (name, kind, t) => (PS ? ProcSurf.apply(std(name, null), kind) : std(name, t()));
 		const mats = {
-			brick: std('hsBrick', tex('brick')),
-			zinc: std('hsZinc', tex('zinc')),
-			plank: std('hsPlank', tex('plank')),
+			brick: surf('hsBrick', 'brick', () => tex('brick')),
+			zinc: surf('hsZinc', 'zinc', () => tex('zinc')),
+			plank: surf('hsPlank', 'plank', () => tex('plank')),
 			cap: std('hsCap', null),
-			roofTop: std('hsRoofTop', tex('roof', false)),
+			roofTop: surf('hsRoofTop', 'roof', () => tex('roof', false)),
 			roofSlab: std('hsRoofSlab', null),
-			glass: std('hsGlass', tex('window', false)),
-			door: std('hsDoor', tex('door', false)),
+			glass: surf('hsGlass', 'glass', () => tex('window', false)),
+			door: surf('hsDoor', 'door', () => tex('door', false)),
 		};
 		mats.cap.diffuseColor = BABYLON.Color3.White(); mats.roofSlab.diffuseColor = BABYLON.Color3.White();
 		this.mats = mats;
@@ -117,10 +120,30 @@ const HouseView = {
 		const RB = new MeshBatch(), SL = new MeshBatch();
 		SL.solid(rx0, rz0, rx1, rz1, ry - 0.3, ry, [0.4, 0.37, 0.33]);
 		RB.top(rx0, rz0, rx1, rz1, ry + 0.012, (x, z) => [(x - rx0) / (rx1 - rx0), (rz1 - z) / (rz1 - rz0)]);
+		if (PS) {
+			// o que o desenho do telhado mostrava, agora em 3D: os pneus e as pedras segurando as chapas, as ripas, a caixa-d'água azul
+			// (500 L) no canto nordeste e o "gato" da luz chegando pelo telhado (fx, fz: frações do telhado, z a partir do norte)
+			const at = (fx, fz) => [rx0 + (rx1 - rx0) * fx, rz1 - (rz1 - rz0) * fz], y = ry + 0.012;
+			for (const f of [0.3, 0.7]) { const z = rz1 - (rz1 - rz0) * f; SL.solid(rx0 + 0.1, z - 0.06, rx1 - 0.1, z + 0.06, y, y + 0.05, [0.42, 0.31, 0.2]); }
+			for (const [fx, fz] of [[0.1, 0.15], [0.48, 0.12], [0.2, 0.82], [0.8, 0.85]]) {
+				const [x, z] = at(fx, fz);
+				SL.cyl(x, z, 0.45, y, y + 0.2, [0.08, 0.08, 0.09], 12);
+				SL.cyl(x, z, 0.24, y + 0.2, y + 0.205, [0.03, 0.03, 0.035], 10);
+			}
+			for (const [fx, fz, r] of [[0.35, 0.5, 0.22], [0.66, 0.6, 0.26], [0.9, 0.35, 0.2], [0.08, 0.5, 0.24]]) {
+				const [x, z] = at(fx, fz);
+				SL.obox(x, z, 0.8, 0.6, r, r * 0.8, y, y + r * 0.9, [0.47, 0.45, 0.41]);
+			}
+			const tx = rx1 - 1.3, tz = rz1 - 1.2;
+			SL.cyl(tx, tz, 0.8, y, y + 0.9, [0.13, 0.31, 0.55], 16);
+			SL.cyl(tx, tz, 0.72, y + 0.9, y + 0.98, [0.22, 0.47, 0.77], 16);
+			const [ax, az] = at(0, (rz1 - rz0 - 1.5) / (rz1 - rz0)), [bx, bz] = at(0.45, 0.5), [cx, cz] = at(1, 0.42);
+			SL.tube([ax, y + 0.06, az], [bx, y + 0.06, bz], 0.02, 0.02, [0.08, 0.08, 0.09], 4); SL.tube([bx, y + 0.06, bz], [cx, y + 0.06, cz], 0.02, 0.02, [0.08, 0.08, 0.09], 4);
+		}
 		const slab = SL.build('hs_roofSlab', scene, mats.roofSlab, { vertexColors: true, receiveShadows: true, relief: true });
 		const top = RB.build('hs_roofTop', scene, mats.roofTop, { receiveShadows: true, relief: true });
 		for (const m of [slab, top]) if (m) m.freezeWorldMatrix();
-		mats.roofTop.diffuseTexture.wrapU = mats.roofTop.diffuseTexture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+		if (mats.roofTop.diffuseTexture) mats.roofTop.diffuseTexture.wrapU = mats.roofTop.diffuseTexture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 
 		// --- porta (folha que gira na dobradiça) ---
 		const pivot = new BABYLON.TransformNode('hsDoorPivot', scene);

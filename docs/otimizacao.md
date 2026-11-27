@@ -683,11 +683,14 @@ fachadas somavam 64 no Medium (~19 MB; o triplo no High) e saem todas:
 | 1ª versão (um shader com tudo; peças com sombra e sacadas no mapa inteiro) | ~433 ms | ~203 ms | ~0 | ~62 ms |
 | Um shader por estilo, peças sem sombra e com limite | ~276 ms | ~49 ms | ~55 ms | ~33 ms |
 | Menos ruído e as janelas numa conta só | ~250 ms | ~50 ms | ~80 ms | ~23 ms |
+| **Atlas das janelas** (uma leitura no lugar das contas) | **~80 ms** | ~0–50 ms | ~12 ms | ~18 ms |
 
-As medições oscilam ±50–100 ms de uma rodada para outra (o quadro do software é longo). A parede da favela — o pior caso: a câmera
-no beco, com quase a tela toda de parede — ainda custa mais que a textura no renderizador por software; no centro e na mata o custo
-some no ruído. O próximo passo para ela é um atlas pequeno com o desenho das janelas (uma leitura no lugar das contas de caixilho,
-grade e tábuas), que mantém a variedade sem a conta por pixel.
+As medições oscilam ±50–100 ms de uma rodada para outra (o quadro do software é longo). O ATLAS DAS JANELAS (`Walls3D.atlas`: 1024 ×
+512, 21 desenhos de vão em ladrilhos de 128 px — grade, basculante, folha de madeira aberta/fechada/meio aberta, veneziana, escritório,
+janelão, colonial com o arco, de correr com e sem grade, fita, galpão, cruz, tábua pregada, porta de madeira, porta de aço, portão,
+portaria; R = barras, G = o que cobre o vão, B = o sombreado, A = fora do arco; desenhado em JS na carga, ~2,7 MB com os mipmaps) troca
+as contas de caixilho, grade, tábuas e chapa por UMA leitura de textura: a parede da favela — o pior caso, a câmera no beco com quase a
+tela toda de parede — caiu de ~250 para ~80 ms, na faixa das texturas de antes.
 
 ### Um shader por estilo (a lição da medição)
 
@@ -731,3 +734,63 @@ sessão (com × sem o código, pelo pré-processador): favela ~0 (ruído), centr
   só, sem tronco nem cachos (20 triângulos por bolha) — de longe a mata é um manto. Não projeta sombra (fica além da janela dela).
 - **Reflexo da água só de perto** (`Water.NEAR`, 60 u): o espelho desenha só o que está em pé perto da água que aparece na tela (uma
   grade 7 × 7 do chão visto); o resto da água reflete o céu pelo shader. As peças miúdas das fachadas ficam fora do espelho.
+
+## O resto em polígonos (novembro/2026)
+
+O inventário da memória de vídeo (todas as texturas da cena, com tamanho e quem usa) mostrou o que ainda era DESENHO: os atlas 2D de
+carros e de personagens (todos já são 3D), as vitrines das lojas, o calçadão, o gramado do estádio, a seta de saída dos interiores,
+os esconderijos, as casas de máquinas, o barraco do protagonista por fora, a torcida do autódromo e a sombra do avião. Agora:
+
+- **Atlas 2D fora da placa.** Carros (`CarArt`: 3 texturas de 1024², ~16 MB) e personagens (`CharArt`: 2048 × 1936, ~15 MB) não
+  sobem mais na carga: a miniatura do HUD sai da CPU e o atlas só vai para a placa se algum desenho 2D for de fato pedido (o lote 2D
+  de carros no primeiro ator 2D; o de personagens quando um quad vetorial aparece na tela — `CharArt.need`, que decodifica de novo no
+  Worker).
+- **A porta do carro 3D em 3D**: é a porta do PRÓPRIO modelo, recortada da lataria pelo gerador, girando na dobradiça dela no
+  shader, com o interior atrás (veja "Portas, capô, porta-malas e dano à la GTA" em `docs/carros.md`; a primeira versão, uma folha
+  genérica em duas malhas à parte, saiu).
+- **Vitrines em polígonos** (`render/Shops3D.js`, `Config.art.shopPoly`; `?lojas=2d` = o atlas pintado de 2 × 1800 × 864, ~16 MB):
+  a frente de loja SALIENTE da parede — pilares e verga na cor da loja, rodapé de granito com a pingadeira, duas vitrines com o
+  caixilho de alumínio e o montante, e o vidro afastado do fundo: atrás dele a sala (o fundo, a bancada, duas prateleiras com a
+  mercadoria em caixinhas coloridas) aparece com paralaxe de verdade. A porta de vidro com o puxador e a soleira. Em cima, o LETREIRO,
+  uma caixa de luz saliente na cor da loja, com a moldura, o ícone e o nome — só o texto é textura (`shopText`, 512 × 1024 em
+  luminância + alfa, ~1,3 MB com os mipmaps). A oficina tem o portão de enrolar (as lâminas em degrau, o rolo, a luz escapando
+  embaixo). À NOITE a sala, a mercadoria e a caixa do letreiro acendem pelo alfa do vértice (`ShopGlow`) e o nome pelo
+  `WindowLights`. As baias do térreo atrás da loja ficam sem peça da fachada (`Walls3D`). As lojas entram nos pedaços de 64 u dos
+  acabamentos (só os que tocam a tela são desenhados); as caixinhas de dentro têm só a frente e o topo.
+- **Superfícies no shader** (`render/ProcSurf.js`, `Config.art.procSurf`; `?superficies=2d` = as texturas): o CALÇADÃO (as ondas de
+  pedra portuguesa preta sobre a branca, as pedrinhas e o rejunte; era 512 × 768), o GRAMADO DO ESTÁDIO (as faixas do corte e as
+  linhas do campo em distância, nítidas de perto; era 640 × 480) e o BARRACO por fora (o bloco com o reboco caído aos pedaços, a chapa
+  de zinco ondulada com as emendas e a ferrugem escorrida, as tábuas pintadas e descascadas, o telhado de zinco, o vidro e a porta; os
+  pneus, as pedras, as ripas, a caixa-d'água e o "gato" da luz do telhado viraram peças 3D).
+- **Em 3D**: os ESCONDERIJOS (a caçamba com a base, as rodinhas, as duas tampas com nervuras, o puxador e o lixo na fresta; os caixotes
+  com as tábuas em relevo, a moldura, a travessa em X e as quinas de metal; o latão com os aros e a tampa — no lugar das laterais
+  lisas com o topo pintado), as CASAS DE MÁQUINAS (a chapa, os montantes, a tampa com aba, a veneziana, a portinhola, a grelha de
+  exaustão), a TORCIDA do autódromo (cada pessoa sentada: o tronco na cor da camisa, a cabeça, o boné de alguns, os braços para cima
+  de outros, no banco colorido), a SETA DE SAÍDA dos interiores (o halo, a sombra, o contorno branco, o corpo em degradê; só a palavra
+  "SAÍDA" é textura, 256 × 80) e a SOMBRA DO AVIÃO (a silhueta — fuselagem, asas, empenagem — com a borda macia, no lugar da mancha
+  redonda).
+
+**Medição** (SwiftShader, Medium, centro, as malhas das lojas escondidas × à mostra, na mesma sessão): com o atlas, ~97 ms de dia e
+~0 à noite (ruído); em polígonos, ~65 ms de dia e ~0 à noite — empate dentro do ruído (±50–100 ms num quadro de ~1,4 s), com a
+memória das vitrines caindo de ~7 MB (Medium; ~16 MB no High) para ~1,4 MB. As 745 lojas somam ~350 mil triângulos no mapa, mas em
+pedaços de 64 u: na tela entram só as de perto.
+
+**Bug antigo corrigido no caminho**: o GRAMADO do estádio nunca aparecia com o relevo ligado. O piso do estádio (o disco azul, 4 cm
+abaixo do campo) é um triângulo grande de chão que o MeshBatch subdivide para seguir o morro, e o gramado era uma malha plana fixa a
+0,46 m — ficava enterrado embaixo do disco. Agora o gramado também sai pelo MeshBatch com o relevo.
+
+**O que continua textura, e por quê**: o que é ESCRITA ou foto do chão. Os nomes das lojas, das placas de trânsito e de rua
+(`roadSigns`), "PARE" e "ÔNIBUS" no asfalto e as marcas de tinta gasta (`roadDecals`), os anúncios e o logo do autódromo, as placas dos
+pontos turísticos e o pôster do mototáxi — texto em polígonos seria milhares de triângulos por letra; o mapa do terreno (`TerrainSplat`:
+o tipo de chão e a altura de cada célula, é dado, não desenho), as fotos do chão (asfalto, calçada, areia: o `GroundVariety` desenha por
+cima), as partículas (spray da água) e os interiores (montados só ao entrar).
+
+## O voo: LOD de três camadas, nuvens e clima (novembro/2026)
+
+Lá do alto (avião, paraquedas) o frustum pegava a cidade inteira: 1.200–1.900 chamadas de desenho e até 2,5 milhões de triângulos
+por quadro, quase tudo detalhe que vira um pixel. Agora o detalhe miúdo sai além de ~240 m, a vegetação além de ~520 m e as paredes,
+telhados e ruas além de ~950 m, onde entra um mapa de longe em caixas (~30 pedaços); o terreno carrega num raio menor e o Havok para
+de ganhar colisores acima de 40 m. Resultado: 230–400 chamadas e 0,3–0,6 milhão de triângulos nas mesmas posições. Ganharam também as
+nuvens na faixa de voo (1 chamada), o estado nublado e as sombras que somem sob céu fechado. Detalhes, medição, armadilhas e o roteiro
+de integração em `docs/ceu-clima-voo.md`.
+
