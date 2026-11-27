@@ -49,6 +49,16 @@ const Trees3D = {
     // vira a árvore de rua brasileira (mangueira, flamboyant, jacarandá, quaresmeira); a palmeira, a imperial ou o coqueiro.
     variant(kind, x, z, h) {
         const urban = typeof CityGrid !== 'undefined' && CityGrid.inCity && CityGrid.inCity(x, z);
+        // APARELHO FRACO (Low; o celular): menos variações por espécie — cada espécie numa célula é uma chamada de desenho a mais
+        // (no centro eram ~38 só de árvores). O carvalho da rua fica em mangueira ou carvalho, o arbusto e a pedra em um só.
+        if (this.mantoNear) {
+            switch (kind) {
+                case 'oak': return urban ? (h < 0.55 ? 'mango' : 'oak') : 'oak';
+                case 'ipe': return h < 0.6 ? 'ipe' : 'ipeY';
+                case 'bush': return 'bush';
+                case 'rock': case 'boulder': return 'rock';
+            }
+        }
         switch (kind) {
             case 'ipe': return h < 0.4 ? 'ipe' : h < 0.85 ? 'ipeY' : 'jacaranda';
             case 'oak': return !urban ? (h < 0.6 ? 'oak' : 'mango') : h < 0.38 ? 'mango' : h < 0.78 ? 'oak' : h < 0.86 ? 'flamboyant' : h < 0.93 ? 'jacaranda' : 'quaresmeira';
@@ -140,7 +150,8 @@ const Trees3D = {
             if (far) { if (shadow && this.castShadows && casts) shadow.addShadowCaster(far); out.push(far); }
             // e o MANTO DE COPAS (bem longe): a copa numa bolha só, sem tronco nem cachos — a mata vira um manto (não projeta sombra:
             // fica além da janela da sombra)
-            const manto = far ? this._farMesh(scene, far, model, mats, -1, -2) : null;
+            // (o terreno monta as plantas no detalhe mais leve, sem a gêmea de longe: no aparelho fraco o manto sai direto dela)
+            const manto = far ? this._farMesh(scene, far, model, mats, -1, -2) : !cover && this.lodOn && this.mantoNear ? this._farMesh(scene, mesh, model, mats, lod, -2) : null;
             if (manto) out.push(manto);
             if (this.lodOn) this._lodAdd(scene, mesh, far, cover, manto);
         }
@@ -152,6 +163,10 @@ const Trees3D = {
     LOD: { far: 70, cover: 45, manto: 140 },
     get lodOn() { return this._lodSet !== undefined ? this._lodSet : !(typeof location !== 'undefined' && /[?&]plantalod=0\b/.test(location.search)); },      // (?plantalod=0: tudo no detalhe cheio — comparar)
     set lodOn(v) { this._lodSet = !!v; if (this._lod && this._lodScene) this._lodTick(this._lodScene); },      // (desliga/liga na hora: as gêmeas ficam, só escondidas)
+    // Aparelho fraco (Low; o celular): o manto de copas entra bem mais perto (na névoa curta dele o manto de 140 m nunca aparecia) — na
+    // mata a tela tinha ~650 mil triângulos só de árvores.
+    get mantoNear() { return typeof Graphics !== 'undefined' && (Graphics.level === 'low' || Graphics.phoneOn); },
+    get mantoDist() { return this.mantoNear ? 38 : this.LOD.manto * this.lodScale; },
     get lodScale() { const L = typeof Graphics !== 'undefined' ? Graphics.level : 'high'; return L === 'low' ? 0.65 : L === 'medium' ? 0.85 : L === 'hd' ? 1.3 : 1; },
     _farMesh(scene, mesh, model, mats, lod, level = -1) {
         const F = this._gpu(scene, model, level), N = this._gpu(scene, model, lod);
@@ -181,18 +196,22 @@ const Trees3D = {
         const cam = scene.activeCamera;
         if (!cam) return;
         const P = cam.globalPosition || cam.position, k = this.lodScale, on = this.lodOn, FAR = on ? this.LOD.far * k : Infinity, COV = on ? this.LOD.cover * k : Infinity, covOn = this.coverOn;
-        const MANTO = on ? this.LOD.manto * k : Infinity;
+        const MANTO = on ? this.mantoDist : Infinity;
         let dead = 0;
+        const px = P.x, py = P.y, pz = P.z;
         for (const e of this._lod) {
             const m = e.m;
             if (m.isDisposed()) { dead++; continue; }
-            const S = m.getBoundingInfo().boundingSphere, c = S.centerWorld, d = Math.max(0, Math.hypot(c.x - P.x, c.y - P.y, c.z - P.z) - S.radiusWorld);
+            // (a planta não anda: o centro e o raio da caixa ficam guardados na 1ª volta — antes cada volta lia a caixa de ~4.000 malhas e
+            // o laço custava ~15 ms de uma vez, a cada 200 ms: um engasgo no aparelho fraco)
+            if (e.cx === undefined) { const S = m.getBoundingInfo().boundingSphere, c = S.centerWorld; e.cx = c.x; e.cy = c.y; e.cz = c.z; e.r = S.radiusWorld; }
+            const dx = e.cx - px, dy = e.cy - py, dz = e.cz - pz, d = Math.max(0, Math.sqrt(dx * dx + dy * dy + dz * dz) - e.r);
             if (e.cover) { const v = covOn && d < COV; if (m.isVisible !== v) m.isVisible = v; continue; }
-            if (!e.far) continue;
-            const st = e.manto && d > (e.st === 2 ? MANTO * 0.9 : MANTO) ? 2 : d > (e.st >= 1 ? FAR * 0.9 : FAR) ? 1 : 0;
+            if (!e.far && !e.manto) continue;
+            const st = e.manto && d > (e.st === 2 ? MANTO * 0.9 : MANTO) ? 2 : e.far && d > (e.st >= 1 ? FAR * 0.9 : FAR) ? 1 : 0;
             if (st !== e.st || m.isVisible !== (st === 0)) {
                 e.st = st; e.isFar = st >= 1;
-                m.isVisible = st === 0; e.far.isVisible = st === 1;
+                m.isVisible = st === 0; if (e.far) e.far.isVisible = st === 1;
                 if (e.manto) e.manto.isVisible = st === 2;
             }
         }

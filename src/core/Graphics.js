@@ -26,8 +26,8 @@ const Graphics = {
 	// (Low: 0,56 = os 75% de antes × os 75% que a TV de tubo tirava por cima, quando ela vinha ligada por padrão — o aparelho fraco
 	// continua desenhando a mesma quantidade de pixels com a imagem limpa.)
 	PRESETS: {
-		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6, npc3d: 0, npc3dR: 0, npc3dPoly: 12, npc3dPolyR: 40, lodBias: 1.7, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 1 },
-		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 2, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 1.8e6, npc3d: 6, npc3dR: 26, npc3dPoly: 999, npc3dPolyR: 70, lodBias: 1.25, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 2 },
+		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6, npc3d: 0, npc3dR: 0, npc3dPoly: 12, npc3dPolyR: 40, lodBias: 1.7, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 1, tightFar: true, fineCull: 0.85, vegDensity: 0.6 },
+		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 2, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 1.8e6, npc3d: 6, npc3dR: 26, npc3dPoly: 999, npc3dPolyR: 70, lodBias: 1.25, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 2, fineCull: 1 },
 		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 3, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6, npc3d: 12, npc3dR: 36, npc3dPoly: 999, npc3dPolyR: 100, pom: true, pcf: 'medium', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
 		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true, npc3d: 24, npc3dR: 50, npc3dPoly: 999, npc3dPolyR: 130, lodBias: 0.85, pom: true, pcf: 'high', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
 	},
@@ -76,7 +76,7 @@ const Graphics = {
 	// cidade desenhada), atlas dos personagens 2,5D em meia resolução (um quarto da memória) e orçamento de 64 MB. Mais (Graphics.apply): personagens 3D só os mais perto, sem
 	// espelho na água, fachadas sem a paralaxe de ~15 leituras por pixel, árvores com menos detalhe, sem a vegetação rasteira.
 	PHONE: {
-		medium: { dprCap: 1.25, maxPx: 0.85e6, msaa: 2, bloom: false, shadows: false, npcDirs: 8, npcNear: 10, npcAA: 2, npcHalf: true, vramMB: 64, crowd: 0.5, fps: 30, chaseFar: 75 },
+		medium: { dprCap: 1.25, maxPx: 0.85e6, msaa: 2, bloom: false, shadows: false, npcDirs: 8, npcNear: 10, npcAA: 2, npcHalf: true, vramMB: 64, crowd: 0.5, fps: 30, chaseFar: 75, tightFar: true, fineCull: 0.9, vegDensity: 0.75 },
 		low: { vramMB: 48, chaseFar: 70, npcNear: 8 },
 	},
 	// Ajustes › Taxa de quadros: 'auto' (o do preset), 30 ou 60.
@@ -197,6 +197,9 @@ const Graphics = {
 		// redesenhada a cada 2 quadros (GameEngine.update: o sol só acompanha a câmera nesses quadros — sem desalinhar).
 		if (Config.world && p.trimChunk) Config.world.trimChunk = p.trimChunk;
 		P.vegCell = p.vegCell || 0; P.shadowEvery = p.shadowEvery || 1;
+		// APARELHO FRACO (Low; o celular modesto, abaixo): o recorte termina no fim da névoa (tightFar), o detalhe miúdo sai antes dela
+		// (fineCull: fração do fim da névoa da perseguição — lod/AirLod.js, no chão) e a mata do terreno é menos densa (vegDensity)
+		P.tightFar = !!p.tightFar; P.fineCull = p.fineCull || 0; P.vegDensity = p.vegDensity || 1;
 		// (para medir: `?trim=N` pedaço dos acabamentos, `?celula=N` célula da vegetação 3D — em u)
 		const qs = typeof location !== 'undefined' ? location.search : '', num = (k) => { const m = qs.match(new RegExp('[?&]' + k + '=(\\d+)')); return m ? +m[1] : 0; };
 		if (num('trim') && Config.world) Config.world.trimChunk = num('trim');

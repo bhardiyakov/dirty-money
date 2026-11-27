@@ -106,7 +106,7 @@ const HouseView = {
 		  for (const px of [x0 + 0.05, x0 + n * w - 0.17]) B.cap.solid(ox + px, oz - 1.0, ox + px + 0.12, oz - 0.88, 0, 2.5, WOOD); }
 
 		const build = (key, mat, opts = {}) => {
-			const mesh = B[key].build('hs_' + key, scene, mat, Object.assign({ receiveShadows: true, alwaysActive: true, relief: true }, opts));
+			const mesh = B[key].build('hs_' + key, scene, mat, Object.assign({ receiveShadows: true, alwaysActive: false, relief: true }, opts));
 			if (mesh) mesh.freezeWorldMatrix();
 			return mesh;
 		};

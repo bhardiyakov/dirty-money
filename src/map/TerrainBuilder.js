@@ -361,10 +361,10 @@ class TerrainBuilder {
         if (!table) return;
         if (typeof Lagoa !== 'undefined' && Lagoa.covers(cx, cz, 4)) return;                                  // (a Lagoa: orla e prédios)
         if (typeof Plantations !== 'undefined' && Plantations.covers(cx, cz, 2)) return;                      // (o eucaliptal: só eucalipto)
-        const c = this.W.cell, wb = this.wb;
+        const c = this.W.cell, wb = this.wb, dens = (Config.perf && Config.perf.vegDensity) || 1;      // (aparelho fraco: mata menos densa — Graphics)
         for (let t = 0; t < table.length; t++) {
             const [kind, p, s0, s1] = table[t];
-            let prob = p;
+            let prob = p * dens;
             if (kind === 'pine' && bio === B.FOREST) prob *= h > 8 ? 1.4 : 0.8;
             if (kind === 'oak' && bio === B.FOREST && h > 14) prob *= 0.3;
             if (Pixel.hash(gi, gj, 300 + t) >= prob) continue;
