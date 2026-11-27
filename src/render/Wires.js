@@ -39,7 +39,7 @@ const Wires = {
 		this.collecting = false;
 		const L = this._list;
 		this._list = [];
-		if (!L.length) return;
+		if (!L.length || Config.perf.minimal) return;                          // (Mínimo: sem a fiação — 3 desenhos na favela)
 		const C = Config.world.trimChunk || 64, groups = new Map();
 		for (const w of L) {
 			const m = (w.pts.length / 3) >> 1, k = Math.floor(w.pts[m * 3] / C) + ',' + Math.floor(w.pts[m * 3 + 2] / C);

@@ -102,7 +102,8 @@ const GraphicsMenu = {
 		const g = menu.g, s = menu.settings;
 		if (i === 0) { menu._gfxView = false; return 'back'; }
 		const L = this.OPTS, n = L.length + 1;
-		if (i === n) { this.reset(g, menu); return; }
+		if (i === n) { menu.close(); DeviceTest.run(g, 20); return; }                   // (o teste de desempenho: com a pausa fechada)
+		if (i === n + 1) { this.reset(g, menu); return; }
 		const o = L[i - 1], C = o.C(), cur = this.value(o, s);
 		let j = C.indexOf(cur); if (j < 0) j = 0;
 		if (cur === 'auto' && d !== 0 && o.base) {
@@ -151,7 +152,7 @@ const GraphicsMenu = {
 
 	// ------------------------------------------------------------------ desenho
 	render(el, menu) {
-		const s = menu.settings, g = menu.g, L = this.OPTS, n = L.length + 2;
+		const s = menu.settings, g = menu.g, L = this.OPTS, n = L.length + 3;
 		this.row = Math.max(0, Math.min(n - 1, this.row));
 		const sub = (t) => `<small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">${t}</small>`;
 		const tag = (live) => `<span style="font:600 10px var(--font);letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:6px;${live ? 'color:#7ee08a;border:1px solid #7ee08a55' : 'color:#f2c230;border:1px solid #f2c23055'}">${live ? 'na hora' : 'ao reabrir'}</span>`;
@@ -165,6 +166,8 @@ const GraphicsMenu = {
 			if (changed) pending = true;
 			h += `<div class="pm-row ${i === this.row ? 'on' : ''}" data-i="${i}"><span>${o.icon} ${o.label} ${sub(o.hint)}</span><span style="display:flex;gap:8px;align-items:center">${tag(live)}${btn(-1, '◀')}<div class="pm-toggle is-on" style="min-width:118px;text-align:center">${shown}</div>${btn(1, '▶')}</span></div>`;
 		});
+		const B = DeviceTest.last();
+		h += `<div class="pm-row ${this.row === n - 2 ? 'on' : ''}" data-i="${n - 2}"><span>⏱ Testar o desempenho deste aparelho ${sub(B ? `último teste (${B.nivel}): ${B.fps.toFixed(1)} FPS, ${B.ritmo}% dos quadros no ritmo — ${B.veredito}` : '20 s jogando: o FPS de verdade (com a placa de vídeo), o processador e a placa — e o que mudar')}</span><span><div class="pm-toggle is-on">testar</div></span></div>`;
 		h += `<div class="pm-row ${this.row === n - 1 ? 'on' : ''}" data-i="${n - 1}"><span>🔄 Restaurar o padrão do nível ${sub('volta tudo acima para o automático do nível gráfico')}</span><span><div class="pm-toggle is-on">restaurar</div></span></div>`;
 		if (pending) h += `<div style="padding:10px 6px;color:#f2c230;font:600 12px var(--font)">⚠️ Há mudanças que só valem na próxima vez que o jogo abrir.</div>`;
 		el.innerHTML = h;
@@ -181,15 +184,115 @@ const GraphicsMenu = {
 
 	// Teclado (e o controle, que chega aqui como teclas): true = tratou.
 	key(k, menu) {
-		const n = this.OPTS.length + 2;
+		const n = this.OPTS.length + 3;
 		if (k === 'escape' || k === 'backspace') { menu._gfxView = false; menu._renderSettings(); return true; }
 		if (k === 'arrowup') this.row = (this.row + n - 1) % n;
 		else if (k === 'arrowdown') this.row = (this.row + 1) % n;
-		else if (k === 'arrowleft' || k === 'arrowright') { if (this.row > 0 && this.row < n - 1) this.adjust(this.row, k === 'arrowleft' ? -1 : 1, menu); }
+		else if (k === 'arrowleft' || k === 'arrowright') { if (this.row > 0 && this.row < n - 2) this.adjust(this.row, k === 'arrowleft' ? -1 : 1, menu); }
 		else if (k === 'enter' || k === ' ') { if (this.adjust(this.row, 0, menu) === 'back') this.row = 0; }
 		else return false;
 		menu._renderSettings();
 		return true;
+	},
+};
+
+// ----------------------------------------------------------------------------
+// DeviceTest — TESTE DE DESEMPENHO NO APARELHO (Ajustes › Gráficos avançados › Testar): N segundos jogando, medindo no próprio
+// aparelho, com a placa de vídeo de verdade, o que os testes daqui só estimam: o intervalo real entre os quadros desenhados (o que a
+// pessoa vê: CPU e GPU juntas), o trabalho de CPU do quadro (Perf.frameMs) e, quando o navegador deixa (EXT_disjoint_timer_query), o
+// tempo da placa. Diz se o nível segura os 30 FPS e, se não, quem é o gargalo e o que mudar. O último resultado fica guardado.
+// ----------------------------------------------------------------------------
+const DeviceTest = {
+	KEY: 'gfxBench',
+	last() { try { return typeof Store !== 'undefined' ? Store.getJSON(this.KEY, null) : null; } catch (e) { return null; } },
+	run(g, secs = 20, done = null) {
+		if (this.on || !g || !g.gameEngine) return false;
+		this.on = true;
+		// (aquecimento: 1,5 s E 15 quadros — o 1º quadro depois de fechar a pausa leva segundos para retomar o desenho)
+		const eng = g.gameEngine.engine, iv = [], work = [], t0 = performance.now(), warm = 1500;
+		let last = 0, gpu = null, nWarm = 0;
+		// (o tempo da placa só com placa de verdade: no rasterizador por software a consulta trava cada quadro)
+		const soft = typeof Graphics !== 'undefined' && Graphics.gpu && /swiftshader|llvmpipe|software/i.test(Graphics.gpu().renderer || '');
+		try { if (!soft && this.gpuTime !== false && eng.getCaps && eng.getCaps().timerQuery && BABYLON.EngineInstrumentation) { gpu = new BABYLON.EngineInstrumentation(eng); gpu.captureGPUFrameTime = true; } } catch (e) { gpu = null; }
+		// (por quadro do JOGO: o fim de quadro do Perf — o laço do jogo é próprio, o onEndFrame do motor não passa em todo quadro)
+		const fe = Perf.frameEnd;
+		Perf.frameEnd = function () {
+			const r = fe.apply(this, arguments), t = performance.now();
+			if (t - t0 > warm && ++nWarm > 15) { if (last) iv.push(t - last); work.push(Perf.frameMs || 0); }
+			last = t;
+			return r;
+		};
+		const badge = this._badge();
+		const tick = setInterval(() => {
+			const left = secs - (performance.now() - t0) / 1000;
+			badge.textContent = `⏱ Medindo o desempenho… ${Math.max(0, Math.ceil(left))} s`;
+			if (left <= 0) finish();
+		}, 250);
+		const finish = () => {
+			clearInterval(tick); Perf.frameEnd = fe;
+			const r = this._result(iv, work, gpu);
+			this._raw = { iv, work };
+			if (gpu) { try { gpu.dispose(); } catch (e) { /* segue */ } }
+			this.on = false;
+			try { if (typeof Store !== 'undefined') Store.setJSON(this.KEY, r); } catch (e) { /* segue */ }
+			badge.textContent = `⏱ ${r.fps.toFixed(1)} FPS · ${r.ritmo}% no ritmo · ${r.veredito}`;
+			badge.style.color = r.ok ? '#9dff9d' : '#ffe27a';
+			setTimeout(() => { if (!this.on) badge.style.display = 'none'; }, 12000);
+			if (g._flash) g._flash(`⏱ ${r.veredito}${r.dica ? ' — ' + r.dica : ''}`);
+			console.log('[DESEMPENHO] teste no aparelho:', JSON.stringify(r));
+			if (done) done(r);
+		};
+		return true;
+	},
+	// `?devicetest` na URL (ex.: ?gfx=min&devicetest no celular): espera a carga e o jogo começar, roda 20 s e deixa o resultado na
+	// tela até um toque — com o nível, o aparelho (núcleos, memória, placa) e o veredito, para fotografar ou copiar.
+	auto(g) {
+		const t0 = performance.now();
+		const wait = setInterval(() => {
+			if (performance.now() - t0 > 600000) { clearInterval(wait); return; }
+			if (!g._loadingHidden || (g.menu && g.menu.isOpen) || this.on) return;
+			clearInterval(wait);
+			setTimeout(() => this.run(g, 20, (r) => {
+				const nav = typeof navigator !== 'undefined' ? navigator : {}, gp = typeof Graphics !== 'undefined' && Graphics.gpu ? Graphics.gpu() : {};
+				const box = document.createElement('div');
+				box.id = 'deviceTestResult';
+				box.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:200;max-width:min(92vw,560px);padding:14px 16px;border-radius:12px;background:rgba(8,10,14,0.92);color:#e6edf3;font:600 14px/1.5 var(--font, sans-serif)';
+				box.innerHTML = `<div style="font-size:16px;color:${r.ok ? '#9dff9d' : '#ffe27a'}">⏱ ${r.veredito}</div>`
+					+ `<div>${r.fps} FPS · ${r.ritmo}% dos quadros no ritmo · intervalo p90 ${r.p90} ms</div>`
+					+ `<div>CPU por quadro (p90): ${r.cpuP90} ms${r.gpuMs !== null ? ` · placa: ${r.gpuMs} ms` : ' · placa: o navegador não informa'}</div>`
+					+ `<div style="color:#9aa4b2;font-size:12px">nível ${r.nivel} · ${nav.hardwareConcurrency || '?'} núcleos · ${nav.deviceMemory ? nav.deviceMemory + ' GB' : '? GB'} · ${(gp.renderer || '?').slice(0, 80)}</div>`
+					+ (r.dica ? `<div style="color:#ffe27a">${r.dica}</div>` : '')
+					+ '<div style="color:#9aa4b2;font-size:12px">(toque para fechar)</div>';
+				box.addEventListener('click', () => box.remove());
+				document.body.appendChild(box);
+			}), 3000);
+		}, 500);
+	},
+	_pct(a, p) { if (!a.length) return 0; const b = a.slice().sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(b.length * p))]; },
+	_result(iv, work, gpu) {
+		const cap = (typeof Config !== 'undefined' && Config.perf.fpsCap) || 30, T = 1000 / cap, n = iv.length;
+		const sum = iv.reduce((a, b) => a + b, 0), fps = n ? 1000 / (sum / n) : 0;
+		const ritmo = n ? Math.round(iv.filter((x) => x <= T * 1.2).length / n * 100) : 0, p90 = this._pct(iv, 0.9), cpu90 = this._pct(work, 0.9);
+		let gpuMs = null;
+		try { if (gpu && gpu.gpuFrameTimeCounter && gpu.gpuFrameTimeCounter.count > 0) gpuMs = +(gpu.gpuFrameTimeCounter.average * 1e-6).toFixed(1); } catch (e) { gpuMs = null; }
+		const ok = fps >= cap * 0.95 && ritmo >= 90;
+		const nivel = typeof Graphics !== 'undefined' ? Graphics.levelName() + (Graphics.phoneOn ? ' · celular' : '') : '?';
+		// gargalo: o processador quando o trabalho do quadro passa de 85% do tempo dele; senão a placa (ou o navegador)
+		const cpuLim = cpu90 > T * 0.85, gpuLim = !cpuLim && (gpuMs !== null ? gpuMs > T * 0.85 : !ok);
+		const veredito = ok ? `${cap} FPS estáveis neste aparelho` : cpuLim ? 'o processador é o limite' : 'a placa de vídeo é o limite';
+		const min = typeof Graphics !== 'undefined' && Graphics.minimal;
+		const dica = ok ? '' : cpuLim ? (min ? 'diminua a distância de visão e o detalhe das pessoas' : 'escolha um nível gráfico abaixo (ou o Mínimo)') : 'diminua a resolução (ou escolha um nível abaixo)';
+		return { nivel, fps: +fps.toFixed(1), ritmo, p90: +p90.toFixed(1), cpuP90: +cpu90.toFixed(1), gpuMs, quadros: n, ok, gargalo: ok ? null : cpuLim ? 'cpu' : gpuLim ? 'gpu' : 'gpu', veredito, dica, quando: Date.now() };
+	},
+	_badge() {
+		let d = document.getElementById('benchBadge');
+		if (!d) {
+			d = document.createElement('div'); d.id = 'benchBadge';
+			d.style.cssText = 'position:fixed;top:30px;right:8px;z-index:41;pointer-events:none;font:700 13px/1.3 var(--font, sans-serif);color:#e8ffe8;background:rgba(0,0,0,.65);padding:5px 9px;border-radius:8px;max-width:70vw;text-shadow:0 1px 0 #000';
+			document.body.appendChild(d);
+		}
+		d.style.display = ''; d.style.color = '#e8ffe8';
+		return d;
 	},
 };
 

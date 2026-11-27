@@ -69,7 +69,9 @@ module.exports = {
             Graphics._gpu = Object.assign({}, realGpu, { renderer: 'ANGLE (NVIDIA, NVIDIA GeForce Teste Direct3D11 vs_5_0 ps_5_0, D3D11)' });
             const e = game.gameEngine.engine, lv0 = e.getHardwareScalingLevel(), F = Object.values(game.gameEngine.world.mats.facades);
             out.pom0 = F.filter((m) => m.useParallaxOcclusion).length; out.msaa0 = Smooth.pp ? Smooth.pp.samples : 0; out.cover0 = Trees3D._cover.filter((m) => m.isVisible).length;
-            q.off = false; q.gpuSteps = true; q.level = 0; out.seen = [];
+            // (placa no limite = CPU folgada: com o trabalho do quadro acima de 85% do tempo dele, a escada de processador viria antes)
+            const fa = Perf.frameAvg; Perf.frameAvg = 10;
+            q.off = false; q.gpuSteps = true; q.level = 0; q.cpuLevel = 0; out.seen = [];
             for (let i = 0; i < S.length; i++) { q._down(); out.seen.push(q.level); }
             out.msaa = Smooth.pp ? Smooth.pp.samples : 0; out.pom = F.filter((m) => m.useParallaxOcclusion).length;
             out.scale = Config.perf.autoScale; out.lv = e.getHardwareScalingLevel() / lv0;
@@ -78,7 +80,7 @@ module.exports = {
             out.saved = (Store.getJSON('autoQuality', null) || {}).level;
             q._down(); out.end = q.off;
             const r = new AutoQuality(game); out.resume = r.level; out.resumeGpu = r.gpuSteps;
-            Graphics._gpu = realGpu; q.off = true;
+            Graphics._gpu = realGpu; q.off = true; Perf.frameAvg = fa;
             return out;
         });
         c.ok(aq.softNow && aq.softStops, `rasterizador por software (os testes): só os degraus de sombra, sem mexer na resolução nem no MSAA (${aq.soft.join(' → ')})`);

@@ -900,14 +900,119 @@ já vem no Mínimo (escolher o nível à mão apaga o aviso). Teste: `tests/85_m
 | Mata | 21,8 / **30,2 ms** | 24,7 / 36,2 ms | 39,3 / 51,6 ms |
 
 Com a CPU 2× mais lenta, o Low agora abre com **90% dos quadros abaixo de 33 ms em todas as cenas** (antes, ao abrir: p90 31–37 ms),
-sem depender da escada. Com 3×, o Mínimo fica na média de 30 FPS (25–33 ms), mas com picos (p90 36–47 ms). Com 4×, roda a ~25 FPS.
-**Esses dois ainda não são 30 FPS estáveis.** Ressalva da medição: no ×3 e no ×4 a GPU emulada continua na mesma CPU, mesmo
-desenhando 1/16 dos pixels, e o "render (cena)" ainda carrega parte dela. Num aparelho com placa de verdade o número fica um pouco
-melhor, mas sem medir num celular de entrada real não dá para prometer 30. Rodadas: `RATE=2 LOWRES=4 N=120 node tests/fraco.cjs` e
-`Q='gfx=min&celular' RATE=3 LOWRES=4 N=120 node tests/fraco.cjs`.
+sem depender da escada. As colunas do ×3 e do ×4 acima foram medidas com a placa emulada ainda no caminho e estão erradas para mais.
+A medição certa e os cortes que vieram depois estão na quarta rodada, logo abaixo.
 
-**Próximos passos com ganho real:** fundir os materiais das fachadas (cada estilo é um programa de shader: 10–18 desenhos só de paredes)
-e levar a IA do trânsito e a navegação para o worker (`src/sim/worker.js`).
+### Quarta rodada: medir só a CPU, e o Mínimo a 3× e 4×
+
+**Medir certo, parte 3 (`NOGPU=1`).** No ×3 o mesmo código variava ±15% entre rodadas, e o custo saía 2,7 a 3,6 vezes o do ×1, quando
+devia ser 3. Um trace da thread principal mostrou o motivo: ela ficava **ociosa 60% do tempo**, e o jogo rodava a ~10 FPS reais,
+preso pela placa emulada. Mesmo com 1/16 dos pixels, o SwiftShader processa todos os vértices na CPU. Com 10 FPS reais, tudo o que é
+medido pelo relógio (o `_viewer` de 150 ms, o limite de rotas de 250 ms, a navegação) roda 3 vezes mais por quadro do que num
+aparelho a 30 FPS. O próprio estrangulamento de CPU não é a causa: um trabalho fixo de 8 ms dá p90 só 4% acima da média no ×3.
+O modo `NOGPU=1` do `tests/fraco.cjs` mantém todas as chamadas de desenho (a validação do WebGL e a fila de comandos, que são o que
+a CPU paga), mas com 0 primitivas. Assim o jogo roda no ritmo da CPU (~29 FPS reais no ×3), e o ×3 passa a custar 2,9 vezes o ×1.
+Nesse modo a vigia do modo seguro fica travada: ela veria só o céu e desligaria coisas, e a medição sairia errada.
+
+**Cortes desta rodada.**
+- **Fila opaca ordenada por programa de shader** (`RenderCuller.sortOpaque`, vale para todos os níveis). O Babylon desenha os
+  opacos na ordem da lista de ativas, sem ordenar, e cada troca de programa custava 45 a 90 µs contra ~20 µs de uma chamada que
+  repete o programa. Agrupar por programa e, dentro dele, por material cortou ~10% do tempo de desenho. Quem não grava profundidade
+  vai para o fim. A imagem fica igual: no máximo 0,03% dos pixels mudam, de leve (planos coincidentes).
+- **Mínimo, menos desenhos:** sem as antenas e os ar-condicionados instanciados da favela, sem a fiação e sem a faixa de sombra no pé
+  dos prédios (8 a 15 desenhos a menos na favela).
+- **Mínimo, cenário e gestão em quadros alternados** (`Config.perf.halfLogic` → `Game._update`). Relógio do céu, clima, semáforos,
+  a rua viva, festas, poças, ronco dos motores, fome, Maracanã e aeroporto rodam a 15 Hz, em dois grupos alternados, com o dt somado.
+  O que se move na tela (pessoas, carros, bichos, partículas, marcas de pneu) e o que lê os controles continua a cada quadro.
+- **Interface: um módulo por quadro, em rodízio** no aparelho fraco (`UiLoop.flush(1)`). O minimapa e um painel nunca caem no mesmo
+  quadro. No Mínimo a interface roda a 40% do ritmo (minimapa a 8 Hz).
+- **Mínimo:** 25% da gente do Alto, névoa a 45 m, lógica de longe a partir de 8 m. A escada da qualidade automática não aumenta mais a
+  névoa (antes o degrau "−15%" tinha piso de 50 m e, partindo de 45 m, aumentaria; agora o piso no Mínimo é 36 m e ele nunca aumenta).
+
+Com esses cortes, o Mínimo a 3× já ficava estável (p90 de 22 a 27 ms), mas a 4× o p90 ainda passava de 33 ms em parte das rodadas
+(30 a 37 ms na favela, dirigindo e na mata). Daí a quinta rodada.
+
+### Quinta rodada: o 4× estável
+
+Medindo cada sistema e cada malha do Mínimo, o que sobrava não era um vilão só, eram custos espalhados e picos. Cinco cortes fecharam o 4×:
+
+- **Recorte incremental** (`RenderCuller`, vale para todos os níveis). Qualquer malha que entrava ou saía da cena (pedaços de
+  terreno da mata vindo e indo com a distância, bonecos, faíscas) marcava a lista inteira como suja, e o quadro seguinte varria as
+  ~4.400 malhas da cena para refazer a lista dinâmica. Na mata isso acontecia o tempo todo: picos de 3 ms nas candidatas com a CPU 3×
+  mais lenta. Agora quem entra vai para uma fila e é classificado no quadro seguinte (grade ou dinâmica), quem sai é tirado da lista
+  dinâmica, e a cada 90 quadros a dinâmica (não a cena) é revista, para mandar para a grade quem congelou depois de entrar.
+  Conferido andando, dirigindo e na mata: toda malha da cena fica na grade ou na dinâmica, nenhuma perdida, duplicada ou destruída.
+- **Minimapa mais leve no quadro** (aparelho fraco). A pintura do terreno HD do radar vai para o `requestIdleCallback`, só com o
+  que sobra do prazo. A camada refeita quando um ladrilho fica pronto continua no quadro, mas agrupada: no máximo uma a cada 3 s, não
+  uma por ladrilho. No quadro, o minimapa custava ~0,9 ms por vez a 1× (~3,7 ms a 4×), num quadro de cada quatro. Refazer a camada no
+  tempo ocioso foi tentado e descartado: são até ~14 ms de uma vez, sem respeitar o prazo, e isso atrasava as mensagens da navegação
+  dos pedestres (o `67_populacao` passou a falhar 2 vezes em 4).
+- **Fachadas irmãs num material só** (Mínimo, `Walls3D.minKey`). Estilos com a mesma família, janela, grade e baia viram o material do
+  primeiro deles. A tinta de cada prédio vem da cor do vértice, então cada casa continua com a cor dela. Somem só as diferenças finas
+  (quanto descasca, a cor do friso). As 10 paredes da favela viram 2 desenhos (tijolo à vista e reboco).
+- **Telhados só na placa** (Mínimo, `Roofs3D.lodScale` 0): um desenho por estilo, sem o relevo de perto.
+- **Pose de longe a cada 2, 4 e 6 quadros** no Mínimo (`Char3D.LOD_EVERY`).
+
+**Resultado final** (`NOGPU=1`, ~210 quadros por cena, código final; Mínimo a 4× em duas rodadas completas, já com o filtro de
+instâncias da seção seguinte):
+
+| Cena | Low + celular, CPU ×2: média / p90 | Mínimo, CPU ×3: média / p90 | Mínimo, CPU ×4: média / p90 (2 rodadas) |
+|---|---|---|---|
+| Favela a pé | 13,4 / **17,0 ms** | 18,1 / **22,4 ms** | 20,9–23,4 / **25,5–29,3 ms** |
+| Centro a pé | 10,3 / **12,8 ms** | 14,9 / **20,5 ms** | 17,8 / **21,7–22,8 ms** |
+| Dirigindo no centro | 13,1 / **17,1 ms** | 18,6 / **24,8 ms** | 19,0–23,2 / **24,1–30,4 ms** |
+| Mata | 12,0 / **14,9 ms** | 24,0 / **31,0 ms** | 19,3–20,9 / **26,2–27,2 ms** |
+| Ritmo real | 29,9–30,1 FPS | 29,4–30,0 FPS | 29,0–29,9 FPS |
+
+- **CPU 4× mais lenta, Mínimo:** 90% dos quadros em 22 a 30 ms, em todas as cenas e nas duas rodadas: 30 FPS estáveis.
+- **CPU 3× mais lenta, Mínimo:** 20 a 31 ms. A mata desta rodada teve mais bonecos e malhas por perto: desenho 5,2 ms contra 4,0 nas
+  rodadas a 4×. A mata varia muito de uma rodada para outra.
+- **Low a 2×:** 13 a 17 ms. Antes desta etapa, ao abrir, eram 31 a 37 ms. No começo de tudo, 38 a 53 ms.
+
+Vale lembrar o que a medição cobre. É o trabalho de CPU de um aparelho com placa de vídeo de verdade (a placa emulada não entra). A
+placa de um celular de entrada fica por conta das opções do Mínimo: metade da resolução, sem sombras, sem brilho, sem espelho, menos
+desenhos. A qualidade automática segue descendo os degraus de placa se o aparelho precisar. Rodadas:
+`NOGPU=1 Q='gfx=min&celular' RATE=4 N=210 node tests/fraco.cjs` (e `RATE=3`, `Q='gfx=low&celular' RATE=2`).
+
+### A placa de vídeo do celular de entrada e o teste no aparelho
+
+**O que o Mínimo manda para a placa** (contado nas chamadas do WebGL, triângulos × instâncias; tela 1280×720):
+
+| Cena | Mínimo, antes do filtro | Mínimo, agora | Low + celular | High |
+|---|---|---|---|---|
+| Favela | 312 mil triângulos, 78 desenhos | **256 mil, 79** | 452 mil, 125 | 1,1 milhão, 275 |
+| Centro | 375 mil, 102 | **162 mil, 102** | 395 mil, 119 | 625 mil, 227 |
+| Mata | 506 mil, 72 | **239 mil, 68** | 667 mil, 90 | 1 milhão, 182 |
+
+Pixels desenhados: 0,23 Mpx no Mínimo (metade da resolução), contra 0,92 Mpx no High. Sem sombras nem brilho de verdade, 2
+passadas extras contra 7 do High.
+
+De onde vinham os triângulos a mais: as árvores e os postes são desenhados por célula (instâncias de 256 u e pedaços de 512 u).
+Com a névoa a 45 m, a célula entrava inteira. Na mata, ~270 eucaliptos por célula iam para a placa, e quase todos ficavam além da
+névoa: invisíveis, mas com todos os vértices processados. No Mínimo, o filtro de instâncias (`Trees3D._cullInst`, também para os
+postes via `Trees3D.cullAdd`) manda para a placa só as instâncias a até a névoa + 15 m. O filtro é refeito quando a câmera anda
+12 u, e só a parte usada do buffer sobe para a placa (a primeira versão refazia a cada 6 u e subia o buffer inteiro: dirigindo, isso
+custava 2 a 4 ms de CPU a 4×). Hoje ele custa ~0,3 ms. Célula toda além da névoa fica sem nenhuma instância. As árvores do centro caíram de 189 mil para 14 mil triângulos, e as da mata de 291 mil +
+107 mil para 95 mil + 50 mil. Os postes caíram de 40 mil para 7 mil. No Mínimo também saem os miúdos do chão da favela (pedras,
+tufos, sacos de lixo, entulho), os ferros de espera das lajes e os varais.
+
+**Teste no aparelho** (Ajustes › Gráficos avançados › ⏱ Testar o desempenho deste aparelho, `DeviceTest` em
+`src/ui/GraphicsMenu.js`). O que os testes daqui só estimam, ele mede no próprio celular, com a placa de verdade. A pausa fecha e
+o jogo roda 20 s (descartando 1,5 s e 15 quadros de aquecimento), medindo:
+- o intervalo real entre os quadros desenhados, que é o que a pessoa vê (CPU, placa e navegador juntos);
+- o trabalho de CPU de cada quadro (`Perf.frameMs`);
+- o tempo da placa, quando o navegador tem `EXT_disjoint_timer_query`. No rasterizador por software ele não é pedido, porque trava
+  cada quadro.
+
+No fim, o selo no canto e a linha do menu dizem se o nível segura os 30 FPS (média ≥ 95% do teto e 90% dos quadros no ritmo). Se
+não segura, dizem quem é o limite e o que mudar: com o processador acima de 85% do tempo do quadro, um nível abaixo (no Mínimo, a
+distância de visão e o detalhe das pessoas); senão, a resolução. O resultado fica guardado (`gfxBench`) e também vai para o
+console. Também roda sozinho pela URL: `?gfx=min&devicetest` (no celular, o endereço do jogo servido na rede local). Ele espera a
+carga, mede 20 s e deixa o resultado na tela, com o nível, os núcleos, a memória e a placa do aparelho, para fotografar. Aqui, com a placa emulada e a resolução cheia, ele mede ~2,5 FPS com CPU p90 de 27 ms e diz, certo, que o limite é a
+placa. Teste: `tests/84_graficos_menu.test.cjs`.
+
+**Próximos passos com ganho real:** física a 30 Hz no Mínimo (hoje são 2 passos do Havok por quadro, ~2 ms a 4×), fundir os estilos
+de telhado e levar a IA do trânsito e a navegação para o worker (`src/sim/worker.js`).
 
 ### Ajustes › Gráficos avançados (`src/ui/GraphicsMenu.js`)
 

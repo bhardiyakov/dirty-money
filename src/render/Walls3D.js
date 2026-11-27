@@ -182,6 +182,15 @@ const Walls3D = {
         const c = P[Math.floor(h * P.length) % P.length], v = 0.94 + 0.12 * h2, w = (this._hf(lot.x1, lot.z1, 3) - 0.5) * 0.05;
         return [Math.min(1, c[0] * v * (1 + w)), Math.min(1, c[1] * v), Math.min(1, c[2] * v * (1 - w))];
     },
+    // MÍNIMO: os estilos que dividem família, janela, grade e baia viram UM material (o primeiro deles) — a cor de cada prédio vem
+    // do vértice (colorOf), então a casa continua com a tinta dela; somem só as diferenças finas (quanto descasca, a cor do friso).
+    // Na favela, 10 desenhos de parede viram 2 (tijolo à vista e reboco).
+    minKey(key) {
+        const st = this.style(key);
+        if (!st) return key;
+        const sig = st.famId + '|' + st.winId + '|' + st.grId + '|' + st.bay, M = this._minRep || (this._minRep = {});
+        return M[sig] || (M[sig] = key);
+    },
     reset() { this._list = []; this._built = null; },
     add(lot, y) { (this._list || (this._list = [])).push({ lot, y }); },
 

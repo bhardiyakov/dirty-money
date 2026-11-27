@@ -29,7 +29,7 @@ const Graphics = {
 	// trânsito do Low, a névoa a 50 m, fachadas só com molduras e ar-condicionado, sem peças nos telhados nem pássaros, 3D das pessoas só
 	// até 32 m (além disso já é névoa), terreno num raio de 130 m. Escolhido sozinho em aparelho muito fraco (detect) ou quando a
 	// qualidade automática esgotou a escada de processador na sessão anterior (gfxMinNext).
-	MIN: { renderScale: 0.5, crowd: 0.3, chaseFar: 50, npc3dPolyR: 32, vegDensity: 0.4, fineCull: 0.75, colliderRadius: 140, vramMB: 48, lodBias: 2.2, npcNear: 6 },
+	MIN: { renderScale: 0.5, crowd: 0.25, chaseFar: 45, npc3dPolyR: 32, vegDensity: 0.4, fineCull: 0.75, colliderRadius: 140, vramMB: 48, lodBias: 2.2, npcNear: 6 },
 	// (Low: 0,56 = os 75% de antes × os 75% que a TV de tubo tirava por cima, quando ela vinha ligada por padrão — o aparelho fraco
 	// continua desenhando a mesma quantidade de pixels com a imagem limpa.)
 	PRESETS: {
@@ -221,9 +221,10 @@ const Graphics = {
 		// (aparelho fraco desde a abertura: a pose de quem está de meia distância para longe a cada 2, 3 e 4 quadros — Char3D.LOD_EVERY — e a
 		// lógica de longe a partir de 15 m; no Mínimo, 12 m e as peças miúdas fora — Walls3D, Roofs3D, Birds)
 		P.minimal = !!this.minimal;
-		P.lodEvery = P.halfFar ? [1, 2, 3, 4] : null;
-		P.halfFarR = P.minimal ? 12 : P.halfFar ? 15 : 22;
-		if (P.minimal) { P.cover = false; P.waterMirror = false; }
+		P.lodEvery = P.minimal ? [1, 2, 4, 6] : P.halfFar ? [1, 2, 3, 4] : null;
+		P.halfFarR = P.minimal ? 8 : P.halfFar ? 15 : 22;
+		if (P.minimal) { P.cover = false; P.waterMirror = false; if (Config.light) Config.light.contactAO = false; }      // (Mínimo: sem a faixa de sombra no pé dos prédios — 1 desenho)
+		P.halfLogic = P.minimal;                                                          // (cenário e gestão em quadros alternados — Game._update)
 		// (e o terreno que chega com a distância: em fatias menores por quadro e carregado num raio menor — a câmera do Low vê ~70 m, o
 		// raio de 230 m montava pedaços que ninguém via, cada um um tranco de vários ms dirigindo)
 		if (P.halfFar && Config.world) { Config.world.buildBudgetMs = 3; Config.world.loadRadius = Math.min(Config.world.loadRadius, P.minimal ? 130 : 170); }

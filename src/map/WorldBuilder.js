@@ -869,7 +869,7 @@ class WorldBuilder {
                 // Em polígonos (render/Walls3D.js): a UV é a grade das janelas (baia e andar) e a cor do vértice, a tinta do prédio.
                 const ku = Math.floor(Pixel.hash(Math.round(x0 * 4), Math.round(z0 * 4), 911) * 509), kv = Math.floor(Pixel.hash(Math.round(z0 * 4), Math.round(x0 * 4), 913) * 251);
                 if (typeof Walls3D !== 'undefined' && Walls3D.on) {
-                    this._batch('walls_' + lot.facade, x0, z0).walls(x0, z0, x1, z1, 0, H, Walls3D.uv(lot), Walls3D.colorOf(lot));
+                    this._batch('walls_' + (Config.perf.minimal ? Walls3D.minKey(lot.facade) : lot.facade), x0, z0).walls(x0, z0, x1, z1, 0, H, Walls3D.uv(lot), Walls3D.colorOf(lot));      // (Mínimo: estilos irmãos num material só)
                     Walls3D.add(lot, MeshBatch.anchor ? MeshBatch.anchor.h : 0);
                 } else this._batch('walls_' + lot.facade, x0, z0).walls(x0, z0, x1, z1, 0, H,
                     (s, y, f) => [(s + so) / 6 + ku + WorldBuilder.FACE_U[f], (H - y) / 6 + kv]);
