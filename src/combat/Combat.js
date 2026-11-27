@@ -481,8 +481,19 @@ class Combat {
 
     update(dt) {
         this._updateStrikes(dt);
+        // NADA NO AR (nenhuma bala, nenhuma faísca): sem varrer as 72 balas e 96 faíscas apagadas (~300 chamadas de brilho por quadro) e
+        // com a lista de alvos e a velocidade deles — que a mira assistida usa para adiantar o tiro — a cada 3 quadros (dt somado).
+        let live = false;
+        for (let i = 0; i < this.MAXB && !live; i++) if (this.bullets[i].on) live = true;
+        for (let i = 0; i < this.MAXS && !live; i++) if (this.sparks[i].on) live = true;
+        this._tvAcc = (this._tvAcc || 0) + dt;
+        if (!live && this._idle) {
+            if ((this._tvN = (this._tvN || 0) + 1) % 3 === 0) { this._trackVel(this._collectTargets(), this._tvAcc); this._tvAcc = 0; }
+            return;
+        }
+        this._idle = !live;                                                   // (este quadro ainda apaga o que sobrou; os seguintes pulam)
         const T = this._collectTargets();
-        this._trackVel(T, dt);
+        this._trackVel(T, this._tvAcc); this._tvAcc = 0;
         const g = this.glow;
 
         for (let i = 0; i < this.MAXB; i++) {

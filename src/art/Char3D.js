@@ -48,8 +48,8 @@ const Char3D = {
 	// o detalhe mais cedo. De longe a pose é calculada a cada 2 (L2) ou 3 (L3) quadros.
 	LOD_LEVELS: ['npc', 'mid', 'far', 'tiny'],
 	LOD_SCREEN: [0.1, 0.055, 0.028],
-	LOD_EVERY: [1, 1, 2, 3],
-	lodBias: 1,
+	LOD_EVERY: (typeof Config !== 'undefined' && Config.perf && Config.perf.lodEvery) || [1, 1, 2, 3],      // (aparelho fraco: [1, 2, 3, 4] — Graphics.apply)
+	lodBias: (typeof Config !== 'undefined' && Config.perf && Config.perf.lodBias) || 1,      // (o do nível gráfico: Graphics.apply roda antes deste arquivo existir)
 	_frame: 0,
 	// LOW POLY (o padrão desde novembro/2026): o boneco em TRIÂNGULOS de face chapada (shader 'char3dPoly'; o Worker monta com G.lowBody —
 	// o corpo e o cabelo da malha simplificados pelo meshoptimizer, os acessórios geométricos em triângulos, o rosto e a estampa do peito
@@ -458,6 +458,15 @@ const Char3D = {
 			}
 		});
 	},
+	// Onde o quad do ator está no mundo, sem recalcular a matriz: o pai dele é só o "elevador" do relevo (SpriteActor.lift, que sobe e
+	// desce em y). getAbsolutePosition() recalculava a matriz de mundo de ~100 atores por quadro (com a checagem de sincronia de cada
+	// um) — ~0,5 ms no Low. Com outro pai (montado em algo), o caminho de sempre.
+	posOf(a) {
+		const m = a.mesh, P = m.parent;
+		if (P && P !== a.lift) return m.getAbsolutePosition();
+		const o = this._pos || (this._pos = new BABYLON.Vector3());
+		return o.set(m.position.x, m.position.y + (P ? P.position.y : 0), m.position.z);
+	},
 	// Altura do chão acima do asfalto em (x, z): a calçada (Config.city.curbHeight) dentro de um quarteirão, fora da pista; 0 no resto.
 	surfaceAt(x, z) {
 		if (typeof CityGrid === 'undefined' || !CityGrid._blockAtPoint || typeof RoadPlan === 'undefined') return 0;
@@ -493,7 +502,7 @@ const Char3D = {
 	},
 	tick() {
 		const sc = this._scene, cam = sc.activeCamera, dt = sc.getEngine().getDeltaTime() / 1000, V = this._view;
-		this._frame++;
+		this._frame++; this._builds = 0;
 		if (cam) {
 			V.eye.copyFrom(cam.globalPosition || cam.position);
 			const E = sc.getEngine();
@@ -515,6 +524,7 @@ const Char3D = {
 			if ((this._gcT = (this._gcT || 0) - dt) <= 0) { this._gcT = 10; this._gc(); }
 			for (const [a, R] of this.npcs) R.update();
 		} else if (this.npcs.size) this._choose(null);
+		Char3DBlob.flush();
 	},
 	// Os NPCs em 3D: TODOS os que estão à vista (até `max`, dentro de `radius` — limites de segurança bem largos); o detalhe cai com a
 	// distância (lodOf). Fica de fora: o próprio jogador, pilotos presos num veículo (o desenho deles é do veículo) e quem não é 2,5D.
@@ -544,7 +554,7 @@ const Char3D = {
 			const C = this.npcs.get(a), L = C && C.model ? C.model._lod : -1, d = d2.get(a) || 0;
 			if (poly) {
 				// TAMANHO NA TELA: a altura do boneco (~1,8 m) sobre a altura da tela, pela distância à CÂMERA (LOD_SCREEN, com folga de 15%)
-				const p = a.mesh.getAbsolutePosition(), e = V.eye, dc = Math.max(0.5, Math.hypot(p.x - e.x, p.y + 0.9 - e.y, p.z - e.z));
+				const p = Char3D.posOf(a), e = V.eye, dc = Math.max(0.5, Math.hypot(p.x - e.x, p.y + 0.9 - e.y, p.z - e.z));
 				const frac = (m5 * 0.9) / dc / this.lodBias, T = this.LOD_SCREEN;
 				let l = 3;
 				for (let i = 0; i < 3; i++) { const t = L >= 0 && L <= i ? T[i] / 1.15 : L > i ? T[i] * 1.15 : T[i]; if (frac >= t) { l = i; break; } }
@@ -578,6 +588,10 @@ const Char3D = {
 			if (this._types.has(key)) { this._types.get(key)._used = performance.now(); continue; }
 			if (pre++ < 3) this.typeModel(typeOf(a), (a.sheet && a.sheet.dmgLvl) | 0, lb);      // (no máximo 3 tipos novos por vez: sem rajada de assar e subir para a GPU)
 		}
+		// (aparelho fraco: no máximo 2 bonecos NOVOS por escolha — montar materiais e malhas de vários de uma vez era um pico de ~10 ms;
+		// os outros entram na escolha seguinte, 0,15 s depois, e quase sempre ainda fora da tela)
+		let made = 0;
+		const MADE = Config.perf.halfFar ? 2 : 1e9;
 		for (const a of keep) {
 			const C = this.npcs.get(a), M = modelOf(a);
 			if (C && M && C.model !== M) {
@@ -587,6 +601,8 @@ const Char3D = {
 			}
 			if (C && !M) { this._free(C); this.npcs.delete(a); continue; }
 			if (!C && M) {
+				const i0 = hero(a) ? -1 : this._pool.findIndex((P) => P.model === M);
+				if (i0 < 0 && !hero(a) && made++ >= MADE) continue;
 				// (um boneco guardado do mesmo modelo é reaproveitado: criar e destruir material e malha a cada 0,25 s, com NPCs entrando
 				// e saindo do raio, engasgava o jogo)
 				const i = hero(a) ? -1 : this._pool.findIndex((P) => P.model === M);
@@ -816,6 +832,46 @@ class Char3DModel {
 // ----------------------------------------------------------------------------
 // Um personagem 3D que segue um SpriteActor (o modelo pode chegar depois: setModel).
 // ----------------------------------------------------------------------------
+// A mancha macia sob os pés de cada boneco 3D: um registro com a mesma cara de uma malha (position.y, isEnabled/setEnabled, dispose) que
+// entra numa malha compartilhada de instâncias finas (Char3DBlob.flush, no fim do Char3D.tick: o boneco à mostra e com a mancha ligada).
+class Char3DBlob {
+	static list = new Set();
+	static mesh = null;
+	static _buf = null;
+	constructor(root, scene, mat) {
+		this.root = root; this.position = { y: 0.04 }; this._on = true;
+		Char3DBlob.list.add(this);
+		if (!Char3DBlob.mesh || Char3DBlob.mesh.isDisposed()) {
+			const g = Char3DBlob.mesh = BABYLON.MeshBuilder.CreateGround('c3d_sombras', { width: 0.9, height: 0.9 }, scene);
+			g.material = mat; g.isPickable = false; g._char3d = true;
+			g.alwaysSelectAsActiveMesh = true;            // (instâncias pelo mundo todo: a caixa da malha não diz nada)
+			g.thinInstanceSetBuffer('matrix', Char3DBlob._buf = new Float32Array(16 * 64), 16, false);
+			g.thinInstanceCount = 0;
+		}
+	}
+	isEnabled() { return this._on; }
+	setEnabled(v) { this._on = !!v; }
+	dispose() { Char3DBlob.list.delete(this); }
+	static flush() {
+		const g = Char3DBlob.mesh;
+		if (!g || g.isDisposed()) return;
+		let n = 0;
+		for (const b of Char3DBlob.list) if (b._on && b.root.isEnabled()) n++;
+		if (n * 16 > Char3DBlob._buf.length) { Char3DBlob._buf = new Float32Array(16 * Math.max(n, Char3DBlob._buf.length / 8)); g.thinInstanceSetBuffer('matrix', Char3DBlob._buf, 16, false); }
+		const B = Char3DBlob._buf;
+		let i = 0;
+		for (const b of Char3DBlob.list) {
+			if (!b._on || !b.root.isEnabled()) continue;
+			const p = b.root.position, o = i * 16;
+			B[o] = 1; B[o + 1] = 0; B[o + 2] = 0; B[o + 3] = 0; B[o + 4] = 0; B[o + 5] = 1; B[o + 6] = 0; B[o + 7] = 0;
+			B[o + 8] = 0; B[o + 9] = 0; B[o + 10] = 1; B[o + 11] = 0; B[o + 12] = p.x; B[o + 13] = p.y + b.position.y; B[o + 14] = p.z; B[o + 15] = 1;
+			i++;
+		}
+		g.thinInstanceCount = n;
+		if (n) g.thinInstanceBufferUpdated('matrix');
+	}
+}
+
 class Char3DActor {
 	constructor(scene, actor, model, { name = 'char3d', pal = false, xray = false } = {}) {
 		this.scene = scene; this.actor = actor; this.name = name; this.pal = pal; this.wantXray = xray;
@@ -830,21 +886,59 @@ class Char3DActor {
 		if (model) this.setModel(model);
 	}
 	get C() { return Char3D.C; }
+	// Troca de modelo (o nível de detalhe pelo tamanho na tela, o dano, a roupa). A montagem do modelo de antes fica GUARDADA, desligada,
+	// e a do novo volta pronta se já foi montada: o boneco que cruza a borda de um nível e volta não clona malha nem cria material de
+	// novo (antes, cada travessia refazia tudo — ~1–1,6 ms por quadro no centro, no aparelho fraco). Até 4 montagens por boneco.
 	setModel(M) {
-		this._clear();
+		if (M === this.model) return;
+		this._stash();
 		this.model = M; this._last = null; this._built = false; this._curK = null; this._fadeT = -1;
+		if (this._sets && this._sets.has(M)) this._unstash(M);
+	}
+	_stash() {
+		if (!this._built || !this.model) { this._clear(); return; }
+		const set = { props: this.props, xr: this._xr, sh3: this._sh3, body: this.body, bodyMat: this.bodyMat, poly: this.polyMesh, polyMat: this.polyMat, on: [] };
+		for (const m of this._setMeshes(set)) { set.on.push([m, m.isEnabled(false)]); m.setEnabled(false); }
+		const S = this._sets || (this._sets = new Map());
+		S.delete(this.model); S.set(this.model, set);
+		while (S.size > 3) { const [k, old] = S.entries().next().value; S.delete(k); this._drop(old); }      // (a mais antiga sai)
+		this.props = new Map(); this._xr = null; this._sh3 = null; this.body = this.bodyMat = this.polyMesh = this.polyMat = null;
+		this._built = false;
+	}
+	_unstash(M) {
+		const set = this._sets.get(M);
+		this._sets.delete(M);
+		this.props = set.props; this._xr = set.xr; this._sh3 = set.sh3; this.body = set.body; this.bodyMat = set.bodyMat; this.polyMesh = set.poly; this.polyMat = set.polyMat;
+		for (const [m, on] of set.on) if (!m.isDisposed()) m.setEnabled(on);
+		this._built = true;
+	}
+	_setMeshes(set) {
+		const L = [];
+		if (set.body) L.push(set.body);
+		if (set.poly) L.push(set.poly);
+		if (set.sh3) L.push(set.sh3);
+		if (set.xr) for (const m of set.xr) L.push(m);
+		for (const P of set.props.values()) if (P) L.push(P.mesh);
+		return L;
+	}
+	_drop(set) {
+		for (const P of set.props.values()) if (P) { P.mesh.dispose(); P.mat.dispose(); }
+		if (set.xr) for (const m of set.xr) { m.material.dispose(); m.dispose(); }
+		if (set.sh3) { set.sh3.material.dispose(); set.sh3.dispose(); }
+		if (set.body) { set.body.dispose(); set.bodyMat.dispose(); }
+		if (set.poly) { set.poly.dispose(); set.polyMat.dispose(); }
 	}
 	// As malhas do ator (clones das do modelo: a geometria é a mesma).
 	_buildMeshes() {
 		const M = this.model;
 		if (M.body) {
 			this.body = this._clone(M.body, this.name + '_corpo');
-			this.body.material = this.bodyMat = this._mat(this.name + '_mat');
+			this.body.material = this.bodyMat = Char3DActor._ready(this._mat(this.name + '_mat'));
 			this.bodyMat.onBindObservable.add(() => this._bindCommon(this.bodyMat, this._B));
 		}
 		if (M.poly) {                                                                     // (low poly: o corpo em triângulos)
 			this.polyMesh = this._clone(M.poly, this.name + '_poly');
-			this.polyMesh.material = this.polyMat = this._mat(this.name + '_pmat', false, true);
+			this.polyMesh.material = this.polyMat = Char3DActor._ready(this._mat(this.name + '_pmat', false, true));
 			this.polyMat.onBindObservable.add(() => this._bindCommon(this.polyMat, this._B));
 		}
 		if (this.wantXray) this._xrayBuild();
@@ -875,6 +969,10 @@ class Char3DActor {
 			defines,
 			needAlphaBlending: !!sil,
 		});
+		// (material novo, ainda em nenhuma malha: cada propriedade que o Babylon marca como "suja" — backFaceCulling, alphaMode, zOffset… —
+		// varria TODAS as ~5.500 malhas da cena atrás de quem o usa. Travado até o fim da montagem: medido, ~1,9 ms por quadro no centro só
+		// de bonecos entrando na tela. Quem monta solta a trava com _ready(mat).)
+		m._blockDirtyMechanism = true;
 		m.setVector4('silhouette', sil === 'shadow' ? Char3D._shadowV : sil && typeof NpcArt !== 'undefined' ? NpcArt.SILHOUETTE : new BABYLON.Vector4(0, 0, 0, 0));
 		if (sil) { m.alphaMode = BABYLON.Engine.ALPHA_PREMULTIPLIED; m.disableDepthWrite = true; }
 		m.backFaceCulling = false;
@@ -891,6 +989,8 @@ class Char3DActor {
 		}
 		return m;
 	}
+	// Solta a trava do material novo (_mat) — direto no campo: pelo setter o Babylon varreria a cena uma vez à toa (ninguém o usa ainda).
+	static _ready(m) { m._blockDirtyMechanism = false; return m; }
 	_bindCommon(m, B) {
 		const e = m.getEffect(), M = this.model;
 		if (!e || !M) return;
@@ -919,6 +1019,7 @@ class Char3DActor {
 			m.alphaIndex = ai;
 			const mat = m.material = this._mat(m.name + '_mat', 'xray', poly);
 			mat.depthFunction = depth;
+			Char3DActor._ready(mat);
 			mat.onBindObservable.add(() => this._bindCommon(mat, this._B));
 			XRaySilhouette.stencil(m, func, ref, pass);
 			m.setEnabled(false);
@@ -931,6 +1032,7 @@ class Char3DActor {
 		const poly = !!this.model.poly, C = BABYLON.Constants, m = this._clone(poly ? this.model.poly : this.model.body, this.name + '_sombra3d');
 		const mat = m.material = this._mat(m.name + '_mat', 'shadow', poly);
 		mat.zOffset = -4;
+		Char3DActor._ready(mat);
 		mat.onBindObservable.add(() => this._bindCommon(mat, this._B));
 		if (typeof XRaySilhouette !== 'undefined') XRaySilhouette.stencil(m, C.NOTEQUAL, 4, C.REPLACE);
 		this._sh3 = m;
@@ -942,7 +1044,7 @@ class Char3DActor {
 		if (P !== undefined) return P;
 		const src = this.model.props.get(name);
 		if (!src) return null;
-		const mesh = this._clone(src, this.name + '_' + name), mat = this._mat(mesh.name + '_mat'), B = new Float32Array(48 * 4);
+		const mesh = this._clone(src, this.name + '_' + name), mat = Char3DActor._ready(this._mat(mesh.name + '_mat')), B = new Float32Array(48 * 4);
 		mesh.material = mat;
 		mat.onBindObservable.add(() => this._bindCommon(mat, B));
 		mesh.setEnabled(false);
@@ -960,8 +1062,9 @@ class Char3DActor {
 			m = Char3D._shMat = new BABYLON.StandardMaterial('c3d_sombraMat', this.scene);
 			m.diffuseTexture = t; m.useAlphaFromDiffuseTexture = true; m.disableLighting = true; m.emissiveColor = BABYLON.Color3.White(); m.zOffset = -2;
 		}
-		const s = this.shadowMesh = BABYLON.MeshBuilder.CreateGround(this.name + '_sombra', { width: 0.9, height: 0.9 }, this.scene);
-		s.material = m; s.isPickable = false; s.parent = this.root; s.position.y = 0.04; s._char3d = true;
+		// (a mancha de TODOS os bonecos numa malha só, instâncias finas reescritas por quadro — antes era uma malha por boneco: uma chamada
+		// de desenho a mais por personagem à vista)
+		this.shadowMesh = new Char3DBlob(this.root, this.scene, m);
 	}
 
 	// ---------------------------------------------------------------- a cada quadro
@@ -978,7 +1081,7 @@ class Char3DActor {
 	_inView(a) {
 		const F = this.scene.frustumPlanes;
 		if (!F || !F.length) return true;
-		const p = a.mesh.getAbsolutePosition(), x = p.x, y = p.y + 0.9, z = p.z;
+		const p = Char3D.posOf(a), x = p.x, y = p.y + 0.9, z = p.z;
 		for (const P of F) if (P.normal.x * x + P.normal.y * y + P.normal.z * z + P.d < -1.4) return false;
 		return true;
 	}
@@ -990,7 +1093,8 @@ class Char3DActor {
 	}
 	update() {
 		const a = this.actor, M = this.model;
-		if (M && M.ready && !this._built) this._buildMeshes();
+		// (malhas montadas no máximo 1 por quadro no aparelho fraco: um modelo novo que fica pronto não monta todos os bonecos dele de uma vez)
+		if (M && M.ready && !this._built && (!Config.perf.halfFar || Char3D._builds++ < 1)) this._buildMeshes();
 		const c = a.clip, vis = !a.mesh.isDisposed() && a.mesh.isEnabled() && (a.mesh.isVisible || a._npcWait) && !!c;
 		if (!this._built || M.failed || !vis || !c.npc) { this._hide3d(); this._show2d(true); return; }
 		// FORA DA CÂMERA (NPCs): nem desenha nem calcula a pose (a malha está no espaço dos ossos, sem caixa útil: o corte é pela posição)
@@ -1112,6 +1216,7 @@ class Char3DActor {
 	}
 	// As malhas do ator (não as do modelo).
 	_clear() {
+		if (this._sets) { for (const set of this._sets.values()) this._drop(set); this._sets.clear(); }
 		for (const P of this.props.values()) if (P) { P.mesh.dispose(); P.mat.dispose(); }
 		this.props.clear();
 		if (this._xr) { for (const m of this._xr) { m.material.dispose(); m.dispose(); } this._xr = null; }

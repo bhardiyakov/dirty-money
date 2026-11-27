@@ -385,8 +385,15 @@ class SpriteActor {
 		if (this._shadeTarget === undefined || Math.abs(this._shadeTarget - this.shade) < 0.004) return;
 		this.shade += (this._shadeTarget - this.shade) * Math.min(1, dt * 9);
 		for (let i = 1; i < 16; i += 4) this._colors[i] = this.shade;
-		this.mesh.updateVerticesData(BABYLON.VertexBuffer.ColorKind, this._colors);
+		this._pushColors();
 		if (this._ov && this._ov.isEnabled()) this._ovColors(this._ov);
+	}
+	// As cores do quad vão para a placa — menos com o ator desenhado em 3D (_ghost, Char3D): o quad está escondido e o 3D lê só
+	// this.shade; o envio fica para quando o 2,5D voltar (update). Antes eram ~100 envios de buffer por segundo à toa no Low.
+	_pushColors() {
+		if (this._ghost) { this._colDirty = true; return; }
+		this._colDirty = false;
+		this.mesh.updateVerticesData(BABYLON.VertexBuffer.ColorKind, this._colors);
 	}
 
 	// 2,5D: pés debaixo de um toldo/cobertura (MapGeo.coverAt) → a altura dele vai na cor do vértice (b) e o shader mantém o desenho
@@ -399,7 +406,7 @@ class SpriteActor {
 		if (h === this._cover) return;
 		this._cover = h;
 		for (let i = 2; i < 16; i += 4) this._colors[i] = h;
-		this.mesh.updateVerticesData(BABYLON.VertexBuffer.ColorKind, this._colors);
+		this._pushColors();
 	}
 
 	// 2,5D, vadeando: altura da água no corpo (m; 0 = seco). Vai na cor do vértice (a) e o shader do NpcArt afunda o que está abaixo
@@ -415,7 +422,7 @@ class SpriteActor {
 		const h = this._wl || 0;
 		if (!(this.clip && this.clip.npc) || this._colors[3] === h) return;
 		for (let i = 3; i < 16; i += 4) this._colors[i] = h;
-		this.mesh.updateVerticesData(BABYLON.VertexBuffer.ColorKind, this._colors);
+		this._pushColors();
 	}
 
 	update(dt, rate = 1) {
@@ -433,6 +440,7 @@ class SpriteActor {
 			if (this._wait && (this._waitT = (this._waitT || 0) + dt) >= 0.5) { this._waitT = 0; this._applyUV(); }    // (chegando, o NpcArt já avisa: _pageReady)
 		}
 		this._updateShade(dt);
+		if (this._colDirty && !this._ghost) this._pushColors();          // (voltou ao 2,5D: as cores adiadas)
 		if (c.npc) this._updateCover();
 		if (c.npc && this._stand !== SpriteActor.standing()) this._setStanding(SpriteActor.standing());      // (entered/left an interior)
 		if (this._stand && this.mesh.scaling.y !== SpriteActor.STAND_SCALE) this.mesh.scaling.y = SpriteActor.STAND_SCALE;      // (a câmera desceu/subiu)

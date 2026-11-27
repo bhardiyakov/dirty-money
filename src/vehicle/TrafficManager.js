@@ -244,7 +244,20 @@ class TrafficManager {
                     car.update(d, env); car._lodDt = 0;
                     continue;
                 }
+                // NA TELA mas longe do jogador (aparelho fraco — Config.perf.halfFar): a IA a cada 2 quadros, com o dt somado; o desenho
+                // segue o corpo do Havok todo quadro (syncVisual), então o carro anda liso — só a decisão de volante/freio é a 15 Hz.
+                if (Config.perf.halfFar && car.mode === 'drive' && !car.courier) {
+                    const dx = car.position.x - pp.x, dz = car.position.z - pp.z;
+                    const hR = (Config.perf.halfFarR || 22) + 3;
+                    if (dx * dx + dz * dz > hR * hR && ((Zones.frame + (car.id | 0)) & 1)) { car._lodDt = (car._lodDt || 0) + dt; car.syncVisual(dt); continue; }
+                }
+                const d0 = dt + (car._lodDt || 0);
                 car._lodDt = 0;
+                if (car.courier) Couriers.update(car, Math.min(d0, 0.1));
+                car.update(Math.min(d0, 0.1), env);
+                if (car.mode === 'drive' && !car.keep && car.stuck > 25 && hypot(car.position.x - pp.x, car.position.z - pp.z) > 30) this._relocate(car, 'drive');
+                if (car.mode === 'abandoned' && !car.keep && hypot(car.position.x - pp.x, car.position.z - pp.z) > Config.traffic.abandonDist) this._relocate(car, 'parked');
+                continue;
             }
             if (car.courier) Couriers.update(car, dt);
             car.update(dt, env);
@@ -324,6 +337,9 @@ class TrafficManager {
                 if (dx * dx + dz * dz < far2) continue;
             }
             const mode = car.baseMode === 'parked' ? 'parked' : 'drive';
+            // (aparelho fraco: 3 de cada 4 vezes o MESMO veículo vai para o anel — teleporte, quase de graça; criar um novo é montar corpo do
+            // Havok e modelo 3D, ~15 ms de uma vez no ×2. O tipo do lugar ainda vem a cada 4ª troca.)
+            if (Config.perf.halfFar && !car.courier && ((this._recN = (this._recN | 0) + 1) & 3) !== 0) { this._relocate(car, mode); return; }
             const fresh = car.courier ? this._spawnCourier() : car.isBike ? this._spawnBike(car.spec.id, mode) : this._spawnCar(mode);
             if (!fresh) { this._relocate(car, mode); return; }                 // sem lugar para o novo: ao menos reposiciona este
             const i = this.vm.vehicles.indexOf(car);

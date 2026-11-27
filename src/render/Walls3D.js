@@ -335,9 +335,12 @@ const Walls3D = {
         const cam = scene.activeCamera;
         if (!cam) return;
         const P = cam.globalPosition || cam.position;
-        if (!force && B.last && Math.hypot(P.x - B.last.x, P.y - B.last.y, P.z - B.last.z) < 2.5) return;
-        B.last = { x: P.x, y: P.y, z: P.z };
-        const k = this.lodScale, NEAR = this.LOD.near * k, MID = this.LOD.mid * k, FAR = this.LOD.far * k, R = this.BUCKET * 0.72;
+        // (a faixa longe termina no plano de corte da câmera — no Low ele fica colado na névoa, Config.perf.tightFar: lá a faixa longe ia a
+        // 144 m com o corte em ~86 m, peças que a placa processava e o recorte jogava fora)
+        const cut = cam.maxZ > 0 ? cam.maxZ + 6 : Infinity;
+        if (!force && B.last && Math.hypot(P.x - B.last.x, P.y - B.last.y, P.z - B.last.z) < 2.5 && (cut === B.last.cut || Math.abs(cut - B.last.cut) < 4)) return;
+        B.last = { x: P.x, y: P.y, z: P.z, cut };
+        const k = this.lodScale, NEAR = this.LOD.near * k, MID = this.LOD.mid * k, FAR = Math.min(this.LOD.far * k, cut), R = this.BUCKET * 0.72;
         let changed = force;
         for (const b of B.buckets) {
             const yc = Math.max(b.y0, Math.min(b.y1, P.y)), d = Math.max(0, Math.hypot(b.cx - P.x, yc - P.y, b.cz - P.z) - R);
@@ -371,7 +374,8 @@ const Walls3D = {
             }
         }
         for (const kd of kinds) {
-            const m = B.meshes[kd], n = cnt[kd];
+            // (minimal — a qualidade automática com o processador no limite: só as molduras e os ar-condicionados ficam)
+            const m = B.meshes[kd], n = (this.minimal || Config.perf.minimal) && kd !== 'frame' && kd !== 'ac' ? 0 : cnt[kd];
             m.thinInstanceCount = n;
             m.isVisible = n > 0;
             if (!n) continue;

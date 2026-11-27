@@ -106,8 +106,16 @@ class RenderCuller {
 		this._stamp = 0;
 		this.enabled = !location.search.includes('nocull');
 		this.stats = { static: 0, dynamic: 0, candidates: 0 };
+		this.filter = 2;
+		this._tick = 0; this._full = false;
 		scene.onNewMeshAddedObservable.add(() => { this._dynDirty = true; });
-		scene.onMeshRemovedObservable.add((m) => { this._dynDirty = true; if (this.staticSet.has(m)) { this.staticSet.delete(m); this._range = ''; } });
+		scene.onMeshRemovedObservable.add((m) => {
+			this._dynDirty = true;
+			if (!this.staticSet.has(m)) return;
+			this.staticSet.delete(m); this._range = '';
+			// (as que entraram na grade depois da carga — pedaços de terreno que vêm e vão — saem dela: a grade não segura malha destruída)
+			if (m._cullKeys) { for (const k of m._cullKeys) { const arr = this.grid.get(k), i = arr ? arr.indexOf(m) : -1; if (i >= 0) arr.splice(i, 1); } m._cullKeys = null; }
+		});
 	}
 
 	_key(i, j) { return (i + 4096) * 8192 + (j + 4096); }        // (cabe num inteiro pequeno do V8: a chave antiga passava de 2³¹ e cada Map.get ficava mais lento)
@@ -115,20 +123,8 @@ class RenderCuller {
 	// Registra as malhas estáticas que existem agora (fim da carga). Malhas com alwaysSelectAsActiveMesh ou gigantes (mar, lotes de
 	// brilho) ficam como dinâmicas: são candidatas sempre.
 	build() {
-		for (const m of this.scene.meshes) {
-			if (this.staticSet.has(m) || !m.isWorldMatrixFrozen || m.alwaysSelectAsActiveMesh || m.skeleton) continue;
-			const bb = m.getBoundingInfo().boundingBox, a = bb.minimumWorld, b = bb.maximumWorld;
-			if (b.x - a.x > 2400 || b.z - a.z > 2400) continue;
-			const c = this.cell;
-			for (let i = Math.floor(a.x / c); i <= Math.floor(b.x / c); i++) for (let j = Math.floor(a.z / c); j <= Math.floor(b.z / c); j++) {
-				const k = this._key(i, j);
-				let arr = this.grid.get(k);
-				if (!arr) this.grid.set(k, arr = []);
-				arr.push(m);
-			}
-			m._cullStamp = 0;
-			this.staticSet.add(m);
-		}
+		for (const m of this.scene.meshes) if (!this.staticSet.has(m)) this._insert(m, false);
+		this._built = true;
 		this._dynDirty = true; this._range = '';
 		this.stats.static = this.staticSet.size;
 		if (this.enabled && !this._hooked) {
@@ -137,13 +133,37 @@ class RenderCuller {
 		}
 	}
 
+	// Malha parada (matriz congelada, sem esqueleto, nem gigante, nem "sempre ativa") → nas células da grade que a caixa dela cobre.
+	// `late`: criada depois da carga (pedaços de terreno da mata, que vêm e vão com a distância): guarda as células para sair delas
+	// ao ser destruída, e só entra sem pai (vértices em coordenadas de mundo — a caixa de agora vale para sempre) e se for do terreno
+	// (terr_*) ou marcada `_cullGrid` (quem nunca mais se move: uma malha que descongela e anda depois ficaria presa às células velhas).
+	_insert(m, late) {
+		if (!m.isWorldMatrixFrozen || m.alwaysSelectAsActiveMesh || m.skeleton || (late && (m.parent || !(m._cullGrid || m.name.startsWith('terr_'))))) return false;
+		const bb = m.getBoundingInfo().boundingBox, a = bb.minimumWorld, b = bb.maximumWorld;
+		if (b.x - a.x > 2400 || b.z - a.z > 2400 || !Number.isFinite(a.x + a.z + b.x + b.z)) return false;
+		const c = this.cell, keys = late ? [] : null;
+		for (let i = Math.floor(a.x / c); i <= Math.floor(b.x / c); i++) for (let j = Math.floor(a.z / c); j <= Math.floor(b.z / c); j++) {
+			const k = this._key(i, j);
+			let arr = this.grid.get(k);
+			if (!arr) this.grid.set(k, arr = []);
+			arr.push(m);
+			if (keys) keys.push(k);
+		}
+		m._cullStamp = 0; m._cullKeys = keys;
+		this.staticSet.add(m);
+		return true;
+	}
+
 	_candidates() {
 		const sc = this.scene, cam = sc.activeCamera;
 		if (!cam || !this.enabled) return { data: sc.meshes, length: sc.meshes.length };
 		if (this._dynDirty) {
-			this._dynDirty = false;
+			this._dynDirty = false; this._full = false;
 			this.dynamic.length = 0;
-			for (const m of sc.meshes) if (!this.staticSet.has(m)) this.dynamic.push(m);
+			// (malha nova já parada — o terreno que chega com a distância: ~500 na mata, 290 delas com mais de 40 u, que entravam SEMPRE —
+			// vai para a grade; o resto é dinâmico)
+			for (const m of sc.meshes) if (!this.staticSet.has(m) && !(this._built && !m.isDisposed() && this._insert(m, true))) this.dynamic.push(m);
+			this.stats.static = this.staticSet.size;
 			this._range = '';
 		}
 		// Retângulo visto: o do jogo (Zones, que já tem a margem) ou, num palco/câmera diferente, o tamanho do frustum na altura do chão.
@@ -151,24 +171,44 @@ class RenderCuller {
 		if (!inWorld(px, pz)) return { data: sc.meshes, length: sc.meshes.length };      // (câmera fora do mundo: o laço da grade não terminaria)
 		const c = this.cell, i0 = Math.floor((px - hx) / c), i1 = Math.floor((px + hx) / c), j0 = Math.floor((pz - hz) / c), j1 = Math.floor((pz + hz) / c);
 		const range = i0 + ',' + i1 + ',' + j0 + ',' + j1;
+		// QUADROS DO MEIO (2 de cada 3): só refiltram a lista anterior (~150 a 200 malhas) em vez de varrer as ~600 dinâmicas e a área
+		// de novo — medido, a varredura custava ~1 ms por quadro no Low (memória fria de centenas de malhas escondidas). Quem acabou de
+		// aparecer entra em até 2 quadros (66 ms, e os bonecos já ligam com folga fora da tela); quem saiu do retângulo fica até 2 quadros
+		// a mais (o frustum do Babylon descarta).
+		this._tick = (this._tick + 1) | 0;
+		if (this.filter >= 2 && this._tick % 3 !== 0 && range === this._range && this._full) {
+			const out = this.cand.data;
+			let k = 0;
+			for (let i = 0; i < this.cand.length; i++) { const m = out[i]; if (m.isVisible && m.layerMask !== 0 && m.visibility > 0 && m.isEnabled()) out[k++] = m; }
+			out.length = k; this.cand.length = k;
+			return this.cand;
+		}
+		this._full = true;
+		const area = this._area || (this._area = []);
 		if (range !== this._range) {
 			this._range = range;
-			const out = this.cand.data; out.length = 0;
+			area.length = 0;
 			const st = ++this._stamp;
 			for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
 				const arr = this.grid.get(this._key(i, j));
 				if (!arr) continue;
-				for (const m of arr) if (m._cullStamp !== st && !m.isDisposed()) { m._cullStamp = st; out.push(m); }
+				for (const m of arr) if (m._cullStamp !== st && !m.isDisposed()) { m._cullStamp = st; area.push(m); }
 			}
-			this._nStatic = out.length;
 		}
 		// estáticas da área + dinâmicas cuja RAIZ (o nó que o jogo/física move) está no retângulo. Malha grande ou com vértices em
 		// coordenadas de mundo (raio local > 40 u) e as marcadas alwaysSelectAsActiveMesh entram sempre. (Quem fica de fora não tem a
 		// matriz recalculada pelo render, mas getAbsolutePosition() recalcula sob demanda: a IA continua lendo posições certas.)
+		// ESCONDIDAS ficam de fora já aqui (desligada, invisível ou sem camada: o Babylon não as desenharia) — eram 400 a 650 das ~600 a
+		// 1.000 candidatas no Low (bonecos fora da tela e guardados, pedaços de chão e mata cortados de longe, brilhos apagados), e cada
+		// uma passava pela avaliação inteira do Babylon a cada quadro.
 		const out = this.cand.data;
-		out.length = this._nStatic;
+		out.length = 0;
+		const F = this.filter;
+		if (F >= 2) for (let i = 0; i < area.length; i++) { const m = area[i]; if (m.isVisible && m.layerMask !== 0 && m.visibility > 0 && m.isEnabled()) out.push(m); }
+		else for (let i = 0; i < area.length; i++) out.push(area[i]);
 		const pad = 8, X0 = px, Z0 = pz;
 		for (const m of this.dynamic) {
+			if (F >= 1 && (!m.isVisible || m.layerMask === 0 || !(m.visibility > 0) || !m.isEnabled())) continue;      // (isEnabled: com os pais — guardado em cache pelo Babylon)
 			if (m.alwaysSelectAsActiveMesh || m._cullAlways) { out.push(m); continue; }
 			let r = m._cullR;
 			if (r === undefined) {

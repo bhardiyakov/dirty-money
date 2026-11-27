@@ -17,17 +17,24 @@
 // picture is drawn smaller and scaled up (GameEngine._applyScale). The AutoQuality still steps the
 // shadows down during play when the device cannot keep up. URL overrides for testing: `?gfx=low|medium|high|hd`; the old `?lite` =
 // medium and `?full` = high.
+// AJUSTES › GRÁFICOS AVANÇADOS (ui/GraphicsMenu.js): resolução, distância de visão, sombras, antisserrilhado, brilho, reflexo da água,
+// relevo das fachadas, vegetação, detalhes, pessoas, nuvens — cada um por cima do nível (settings.gfx, aplicados por último: _custom).
 // ============================================================================
 
 const Graphics = {
 	LEVELS: ['low', 'medium', 'high', 'hd'],
-	CHOICES: ['auto', 'low', 'medium', 'high', 'hd'],
-	LABEL: { auto: 'Automático', low: 'Low', medium: 'Medium', high: 'High', hd: 'HD' },
+	CHOICES: ['auto', 'min', 'low', 'medium', 'high', 'hd'],
+	LABEL: { auto: 'Automático', min: 'Mínimo', low: 'Low', medium: 'Medium', high: 'High', hd: 'HD' },
+	// MÍNIMO (celular de entrada — o Low com os cortes de processador já ligados; Graphics.level continua 'low'): metade da gente e do
+	// trânsito do Low, a névoa a 50 m, fachadas só com molduras e ar-condicionado, sem peças nos telhados nem pássaros, 3D das pessoas só
+	// até 32 m (além disso já é névoa), terreno num raio de 130 m. Escolhido sozinho em aparelho muito fraco (detect) ou quando a
+	// qualidade automática esgotou a escada de processador na sessão anterior (gfxMinNext).
+	MIN: { renderScale: 0.5, crowd: 0.3, chaseFar: 50, npc3dPolyR: 32, vegDensity: 0.4, fineCull: 0.75, colliderRadius: 140, vramMB: 48, lodBias: 2.2, npcNear: 6 },
 	// (Low: 0,56 = os 75% de antes × os 75% que a TV de tubo tirava por cima, quando ela vinha ligada por padrão — o aparelho fraco
 	// continua desenhando a mesma quantidade de pixels com a imagem limpa.)
 	PRESETS: {
-		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6, npc3d: 0, npc3dR: 0, npc3dPoly: 12, npc3dPolyR: 40, lodBias: 1.7, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 1 },
-		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 2, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 1.8e6, npc3d: 6, npc3dR: 26, npc3dPoly: 999, npc3dPolyR: 70, lodBias: 1.25, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 2 },
+		low: { renderScale: 0.56, smooth: false, shadows: false, shadowSize: 512, npcDirs: 8, npcNear: 8, npcAA: 1, npcHalf: true, vramMB: 160, uploadMB: 1, crowd: 0.5, colliderRadius: 160, fps: 30, chaseFar: 80, maxPx: 1.5e6, npc3d: 0, npc3dR: 0, npc3dPoly: 12, npc3dPolyR: 40, lodBias: 1.7, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 1, tightFar: true, fineCull: 0.85, vegDensity: 0.6 },
+		medium: { renderScale: 1, dprCap: 1.5, smooth: true, msaa: 2, bloom: true, shadows: true, shadowSize: 1024, npcDirs: 8, npcNear: 12, npcAA: 2, vramMB: 256, uploadMB: 1, crowd: 0.7, colliderRadius: 190, fps: 30, chaseFar: 95, maxPx: 1.8e6, npc3d: 6, npc3dR: 26, npc3dPoly: 999, npc3dPolyR: 70, lodBias: 1.25, pom: false, pcf: 'low', trimChunk: 128, vegCell: 256, shadowEvery: 2, fineCull: 1 },
 		high: { renderScale: 1, dprCap: 2, smooth: true, msaa: 4, bloom: true, shadows: true, shadowSize: 2048, npcDirs: 16, npcNear: 17, npcAA: 3, vramMB: 640, uploadMB: 3, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 110, hdCar: true, maxPx: 4.2e6, npc3d: 12, npc3dR: 36, npc3dPoly: 999, npc3dPolyR: 100, pom: true, pcf: 'medium', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
 		hd: { renderScale: 1, dprCap: 3, smooth: true, msaa: 8, bloom: true, shadows: true, shadowSize: 4096, npcDirs: 16, npcNear: 22, npcAA: 4, vramMB: 1024, uploadMB: 4, crowd: 1, colliderRadius: 220, fps: 60, chaseFar: 125, hdCar: true, npc3d: 24, npc3dR: 50, npc3dPoly: 999, npc3dPolyR: 130, lodBias: 0.85, pom: true, pcf: 'high', trimChunk: 64, vegCell: 128, shadowEvery: 1 },
 	},
@@ -48,16 +55,22 @@ const Graphics = {
 	init() {
 		const q = typeof location !== 'undefined' ? location.search : '';
 		this.choice = this._saved();
-		const forced = /[?&]gfx=(low|medium|high|hd)\b/.exec(q);
-		this.level = forced ? forced[1] : q.includes('lite') ? 'medium' : q.includes('full') ? 'high' : this.choice === 'auto' ? this.detect() : this.choice;
+		const forced = /[?&]gfx=(min|low|medium|high|hd)\b/.exec(q);
+		let lv = forced ? forced[1] : q.includes('lite') ? 'medium' : q.includes('full') ? 'high' : this.choice === 'auto' ? this.detect() : this.choice;
+		// (automático no Low e a sessão anterior esgotou a escada de processador: abre já no Mínimo)
+		if (lv === 'low' && !forced && this.choice === 'auto' && typeof Store !== 'undefined' && Store.getJSON('gfxMinNext', null)) lv = 'min';
+		this.minimal = lv === 'min';
+		this.level = this.minimal ? 'low' : lv;
 		// Desenho na CPU (SOFT_GPU) num navegador de gente (não o dos testes): o Low mesmo se outro foi escolhido à mão — High ali dá ~1 FPS.
 		// O aviso (softwareNotice) explica como ligar a placa de vídeo. `?gfx=` ainda força.
 		this.softCapped = !forced && this.level !== 'low' && this.realSoftware;
 		if (this.softCapped) this.level = 'low';
 		// CELULAR MODESTO (até 4 GB): o Low e o Medium ganham os cortes de PHONE (a escolha à mão de High/HD é respeitada)
 		this.phoneOn = this.phone && (this.level === 'low' || this.level === 'medium');
-		this.apply(this.phoneOn ? Object.assign({}, this.PRESETS[this.level], this.PHONE[this.level]) : this.PRESETS[this.level]);
-		console.log(`[GRÁFICOS] ${this.LABEL[this.level]}${this.phoneOn ? ' · celular' : ''}${this.choice === 'auto' && !forced ? ' (automático)' : ''}`);
+		let p = this.phoneOn ? Object.assign({}, this.PRESETS[this.level], this.PHONE[this.level]) : this.PRESETS[this.level];
+		if (this.minimal) p = Object.assign({}, p, this.MIN);
+		this.apply(p);
+		console.log(`[GRÁFICOS] ${this.minimal ? 'Mínimo' : this.LABEL[this.level]}${this.phoneOn ? ' · celular' : ''}${this.choice === 'auto' && !forced ? ' (automático)' : ''}`);
 	},
 	// CELULAR MODESTO: tela de toque com até 4 GB de RAM (navigator.deviceMemory: Chrome/Android; o Safari não informa). Num aparelho assim
 	// o navegador mata a aba bem antes de 1,5 GB e a placa de vídeo divide a memória com o resto: o Medium (2,2 GB no navegador dos
@@ -76,7 +89,7 @@ const Graphics = {
 	// cidade desenhada), atlas dos personagens 2,5D em meia resolução (um quarto da memória) e orçamento de 64 MB. Mais (Graphics.apply): personagens 3D só os mais perto, sem
 	// espelho na água, fachadas sem a paralaxe de ~15 leituras por pixel, árvores com menos detalhe, sem a vegetação rasteira.
 	PHONE: {
-		medium: { dprCap: 1.25, maxPx: 0.85e6, msaa: 2, bloom: false, shadows: false, npcDirs: 8, npcNear: 10, npcAA: 2, npcHalf: true, vramMB: 64, crowd: 0.5, fps: 30, chaseFar: 75 },
+		medium: { dprCap: 1.25, maxPx: 0.85e6, msaa: 2, bloom: false, shadows: false, npcDirs: 8, npcNear: 10, npcAA: 2, npcHalf: true, vramMB: 64, crowd: 0.5, fps: 30, chaseFar: 75, tightFar: true, fineCull: 0.9, vegDensity: 0.75 },
 		low: { vramMB: 48, chaseFar: 70, npcNear: 8 },
 	},
 	// Ajustes › Taxa de quadros: 'auto' (o do preset), 30 ou 60.
@@ -91,6 +104,7 @@ const Graphics = {
 	},
 	// The choice after `choice` in the settings button's cycle, and how the button names a choice (Automatic shows what it picks here).
 	next(choice) { return this.CHOICES[(this.CHOICES.indexOf(choice) + 1) % this.CHOICES.length]; },
+	levelName() { return this.minimal ? this.LABEL.min : this.LABEL[this.level]; },
 	label(choice) {
 		const c = this.CHOICES.includes(choice) ? choice : 'auto';
 		if (c !== 'auto') return this.LABEL[c];
@@ -102,6 +116,7 @@ const Graphics = {
 		const nav = typeof navigator !== 'undefined' ? navigator : {}, mem = nav.deviceMemory || 8, cores = nav.hardwareConcurrency || 8;
 		const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 		const gpu = this.gpu();
+		if (touch && mem <= 2) return 'min';                                       // (celular de entrada: 2–3 GB — o navegador arredonda para 2)
 		if (this.WEAK_GPU.test(gpu.renderer) || gpu.maxTexture < 4096 || mem <= 2 || cores <= 2) return 'low';
 		if (touch || !gpu.webgl2 || mem <= 4 || cores <= 4 || this.MID_GPU.test(gpu.renderer)) return 'medium';
 		return 'high';
@@ -185,6 +200,7 @@ const Graphics = {
 			A.char3d.npc.midDist = Math.min(A.char3d.npc.midDist || 32, Math.max(14, Math.round((r3 || 30) * 0.75)));
 			// (o nível de detalhe dos NPCs 3D pelo tamanho na tela: no Low ele baixa mais cedo, no HD mais tarde — Char3D.lodBias)
 			if (typeof Char3D !== 'undefined') Char3D.lodBias = p.lodBias || 1;
+			P.lodBias = p.lodBias || 1;                          // (Char3D lê este na carga: na abertura ele ainda não existe aqui)
 		}      // (TODOS os NPCs em 3D — art/Char3D.js; o nível gráfico decide até onde vai o modelo cheio)
 		// (personagens em 3D: as folhas 2,5D só servem a quem ainda é desenhado nelas — pilotos de moto, o instante antes do modelo 3D
 		// chegar —, então o orçamento delas na placa cai para no máximo 128 MB; antes elas ocupavam ~630 MB no High sem ninguém ver)
@@ -197,6 +213,20 @@ const Graphics = {
 		// redesenhada a cada 2 quadros (GameEngine.update: o sol só acompanha a câmera nesses quadros — sem desalinhar).
 		if (Config.world && p.trimChunk) Config.world.trimChunk = p.trimChunk;
 		P.vegCell = p.vegCell || 0; P.shadowEvery = p.shadowEvery || 1;
+		// APARELHO FRACO (Low; o celular modesto, abaixo): o recorte termina no fim da névoa (tightFar), o detalhe miúdo sai antes dela
+		// (fineCull: fração do fim da névoa da perseguição — lod/AirLod.js, no chão) e a mata do terreno é menos densa (vegDensity)
+		P.tightFar = !!p.tightFar; P.fineCull = p.fineCull || 0; P.vegDensity = p.vegDensity || 1;
+		// (aparelho fraco: pedestres e carros NA TELA mas longe do jogador com a lógica a cada 2 quadros — NPCManager/TrafficManager)
+		P.halfFar = this.level === 'low' || !!this.phoneOn;
+		// (aparelho fraco desde a abertura: a pose de quem está de meia distância para longe a cada 2, 3 e 4 quadros — Char3D.LOD_EVERY — e a
+		// lógica de longe a partir de 15 m; no Mínimo, 12 m e as peças miúdas fora — Walls3D, Roofs3D, Birds)
+		P.minimal = !!this.minimal;
+		P.lodEvery = P.halfFar ? [1, 2, 3, 4] : null;
+		P.halfFarR = P.minimal ? 12 : P.halfFar ? 15 : 22;
+		if (P.minimal) { P.cover = false; P.waterMirror = false; }
+		// (e o terreno que chega com a distância: em fatias menores por quadro e carregado num raio menor — a câmera do Low vê ~70 m, o
+		// raio de 230 m montava pedaços que ninguém via, cada um um tranco de vários ms dirigindo)
+		if (P.halfFar && Config.world) { Config.world.buildBudgetMs = 3; Config.world.loadRadius = Math.min(Config.world.loadRadius, P.minimal ? 130 : 170); }
 		// (para medir: `?trim=N` pedaço dos acabamentos, `?celula=N` célula da vegetação 3D — em u)
 		const qs = typeof location !== 'undefined' ? location.search : '', num = (k) => { const m = qs.match(new RegExp('[?&]' + k + '=(\\d+)')); return m ? +m[1] : 0; };
 		if (num('trim') && Config.world) Config.world.trimChunk = num('trim');
@@ -219,6 +249,31 @@ const Graphics = {
 			if (A.trails) A.trails.on = false;
 		}
 		if (P.lite && typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // (no frosted-glass panels: ver Theme)
+		// O NÍVEL como ficou (antes dos ajustes avançados): é o "Automático" de cada linha de Ajustes › Gráficos avançados
+		this.base = { renderScale: P.renderScale, chaseFar: Config.camera.chase ? Config.camera.chase.far : 80, shadows: !!P.shadows, shadowSize: P.shadowSize,
+			msaa: A.smooth ? A.msaa || 0 : 0, smooth: A.smooth !== false, bloom: !!P.bloom, waterMirror: P.waterMirror !== false, pom: !P.noPom, cover: P.cover !== false,
+			vegDensity: P.vegDensity, fineCull: P.fineCull, lodBias: P.lodBias || 1, clouds: true };
+		this._custom(P, A);
+	},
+	// AJUSTES › GRÁFICOS AVANÇADOS (ui/GraphicsMenu.js): o que a pessoa trocou por cima do nível — settings.gfx { chave: valor }; sem a
+	// chave (ou 'auto') vale o do nível. Aplicados aqui, por último, na abertura; os que valem na hora o menu aplica também na hora.
+	custom() { const g = typeof Store !== 'undefined' ? (Store.getJSON('settings', null) || {}).gfx : null; return g && typeof g === 'object' ? g : {}; },
+	_custom(P, A) {
+		const c = this.custom(), has = (k) => c[k] !== undefined && c[k] !== 'auto' && c[k] !== null;
+		this.bootCustom = Object.assign({}, c);
+		if (has('scale')) P.renderScale = Math.max(0.3, Math.min(1, +c.scale || 1));
+		if (has('dist') && Config.camera.chase) { Config.camera.chase.far = +c.dist; Config.camera.chase.near = Math.round(+c.dist * 0.45); }
+		if (has('shadows')) { P.shadows = c.shadows !== 'off'; if (c.shadows === 'low') P.shadowSize = 1024; else if (c.shadows === 'high') P.shadowSize = 2048; }
+		A.aaOff = false;
+		if (has('aa')) { const n = +c.aa || 0; A.aaOff = n === 0; if (n > 0) { A.msaa = n; A.smooth = true; } }      // (0 = sem antisserrilhado, o resto do visual suave fica)
+		if (has('bloom')) P.bloom = !!c.bloom;
+		if (has('water')) P.waterMirror = !!c.water;
+		if (has('pom')) P.noPom = !c.pom;
+		if (has('cover')) P.cover = !!c.cover;
+		if (has('veg')) P.vegDensity = +c.veg;
+		if (has('detail')) P.fineCull = +c.detail;
+		if (has('npc')) P.lodBias = +c.npc;
+		P.clouds = has('clouds') ? !!c.clouds : true;
 	},
 	// People and traffic in the living world: the light profile at medium, half of it at low.
 	_crowd(k) {

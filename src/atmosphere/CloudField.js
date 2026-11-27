@@ -113,7 +113,7 @@ const CloudField = {
 		if (!this.mesh) return;
 		const cam = game.scene.activeCamera, W = typeof Weather !== 'undefined' ? Weather.cur : null;
 		const air = (game.camera && game.camera.airK) || 0, camY = cam ? cam.globalPosition.y : 0;
-		const want = !!cam && !(typeof Interiors !== 'undefined' && Interiors.active) && (air > 0.02 || camY > 110);
+		const want = !!cam && Config.perf.clouds !== false && !(typeof Interiors !== 'undefined' && Interiors.active) && (air > 0.02 || camY > 110);      // (clouds: Ajustes › Gráficos avançados)
 		if (want !== this.on) { this.on = want; this.mesh.setEnabled(want); if (!want) this.inside = 0; }
 		const wind = W ? W.wind : 0.2;
 		this._drift += dt * (2.5 + 9 * wind);                                  // (m/s: o vento da chuva também empurra as nuvens)

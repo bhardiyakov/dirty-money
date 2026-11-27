@@ -230,7 +230,8 @@ const HeliArt = {
         vd.normals = new Float32Array(P.length); for (let i = 1; i < P.length; i += 3) vd.normals[i] = 1;
         vd.applyToMesh(mesh, false);
         mesh.hasVertexAlpha = true; mesh.useVertexColors = true;
-        mesh.material = mat; mesh.isPickable = false; mesh.alwaysSelectAsActiveMesh = true;
+        // (fora da câmera, o frustum descarta: antes as sombras e os discos dos ~5 helicópteros do mapa eram desenhados em qualquer lugar)
+        mesh.material = mat; mesh.isPickable = false;
         return mesh;
     },
     // Disco borrado do rotor (girando rápido): anéis × fatias; cada vértice = o tom claro do disco (mais forte na borda) com o rastro
@@ -348,7 +349,7 @@ class HeliVisual {
         const S = HeliArt.SIZE;
         const quad = (n, mat, group) => {
             const q = BABYLON.MeshBuilder.CreateGround(n, { width: S, height: S }, scene);
-            q.material = mat; q.renderingGroupId = group; q.isPickable = false; q.alwaysSelectAsActiveMesh = true;
+            q.material = mat; q.renderingGroupId = group; q.isPickable = false;
             return q;
         };
         const id = name === 'policeHeli' ? 'heli_policia' : 'heli';

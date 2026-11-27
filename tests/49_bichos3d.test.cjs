@@ -23,6 +23,7 @@ module.exports = {
             const P = Bairros.pens.find((q) => q.loose) || Bairros.pens[0], cx = (P.x0 + P.x1) / 2, cz = (P.z0 + P.z1) / 2;
             game.player.teleport(new BABYLON.Vector3(cx, 0, cz - 8)); game.camera.snapTo(game.player.position);
             game.livestock.enabled = false;
+            if (game.birds) { game.birds.enabled = false; Animals3D.clear('ave'); }      // (os pássaros vivos desenham nas mesmas malhas das aves: contariam junto)
             const list = []; let i = 0;
             for (const [sp, V] of Object.entries(Animals3D.VAR)) V.forEach((_, vr) => list.push({ sp, vr, x: cx - 10 + (i % 8) * 2.5, z: cz + Math.floor(i++ / 8) * 2.5, h: 0, ph: i, mv: i % 2, run: i % 3 === 0 ? 1 : 0, gz: 0, rs: i % 5 === 0 ? 1 : 0, dead: i % 7 === 0, seed: 0.3 }));
             window.__all = list;
@@ -31,6 +32,7 @@ module.exports = {
         await page.evaluate(() => { Animals3D.draw(window.__all); });
         await gameWait(page, 2, 120000);
         const r = await page.evaluate(() => {
+            Animals3D.clear('ave');                    // (as malhas das aves que os pássaros criaram são do grupo 'ave': o desenho do teste não as zera)
             Animals3D.draw(window.__all);
             const E = [...Animals3D._meshes.values()];
             const ready = E.every((e) => e.mesh.material.isReadyForSubMesh(e.mesh, e.mesh.subMeshes[0], true) || e.mesh.material.isReady(e.mesh, true));

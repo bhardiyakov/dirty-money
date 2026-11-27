@@ -183,6 +183,10 @@ class CompassCamera {
 			// inteiro aparece: sem z-fighting entre chão, quadra e prédio de longe)
 			if (this.airK > 0) cam.minZ = Math.max(cam.minZ, 1.4 + 2.6 * this.airK);
 			cam.maxZ = D + 250 + this._chaseFar() * k + (this.airAlt || 0) * (this.airK || 0);
+			// ALCANCE JUSTO (Config.perf.tightFar — Low e celular): na perseguição a névoa mede a distância do OLHO e o que passa do fim dela
+			// sai inteiro na cor do céu — invisível. O recorte termina logo depois (antes ia 250 m além: prédios, árvores e postes desenhados
+			// para sair da cor da névoa). O céu (SkyDome) é desenhado no fundo de qualquer jeito.
+			if (Config.perf.tightFar && k > 0) { const tight = this._chaseFar() * 1.05 + 12; cam.maxZ += (Math.min(cam.maxZ, tight) - cam.maxZ) * k; }
 			this._applyFog(v, a);
 			this._pose(this.focus.x, this.focus.z);
 			return;

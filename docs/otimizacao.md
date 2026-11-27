@@ -794,3 +794,158 @@ de ganhar colisores acima de 40 m. Resultado: 230–400 chamadas e 0,3–0,6 mil
 nuvens na faixa de voo (1 chamada), o estado nublado e as sombras que somem sob céu fechado. Detalhes, medição, armadilhas e o roteiro
 de integração em `docs/ceu-clima-voo.md`.
 
+
+## Aparelho fraco a 30 FPS e Ajustes › Gráficos avançados (novembro/2026)
+
+**Referência de "aparelho fraco":** nível Low no perfil de celular (`?gfx=low&celular`), com a CPU do navegador desacelerada 2×
+(`Emulation.setCPUThrottlingRate`, o Xeon de 2,3 GHz dos testes) — um celular intermediário/notebook básico. Meta: o trabalho do quadro
+(lógica + desenho + física, `Perf.frameMs`) ≤ 33 ms. A GPU de lá é software (SwiftShader), então o FPS medido aqui não diz nada; o
+que vale é o tempo de CPU do quadro, e os proxies de GPU (chamadas de desenho e triângulos).
+
+**Medir certo:** com a GPU emulada o jogo roda a ~3 FPS e todo temporizador do jogo dispara a cada quadro (o `_pick` dos bonecos a
+cada 0,15 s, a física em 3 passos), inflando o custo de um quadro. `Perf.fixedDt = 1/30` faz o laço andar 1/30 s de jogo por quadro
+(e o `engine.getDeltaTime` é fixado igual no script) — o custo medido é o de um quadro de 30 FPS. Scripts: `tests/perf.cjs` (por
+sistema) e o de bancada desta rodada (média/mediana do quadro, por seção e por função embrulhada: avaliação de malhas, desenho, Char3D,
+candidatas, LOD das árvores, interface).
+
+### O que foi cortado
+
+| O quê | Antes | Depois |
+|---|---|---|
+| Malhas candidatas por quadro (RenderCuller) | 580–990 (até 650 escondidas: bonecos fora da tela e guardados, chão e mata cortados de longe, brilhos apagados) | 130–180, nenhuma escondida; varredura completa a cada 2 quadros |
+| Terreno da mata criado depois da carga | 290 pedaços "sempre candidatos" (caixa > 40 u) + 200 testados um a um | na grade espacial como o resto (e saem dela ao serem descarregados) |
+| Telhados (placas da cidade inteira) e peças de fachada | desenhados até no meio da mata (a caixa cobria o mapa); faixa longe a 144 m com o corte em 86 m | o balde além do plano de corte sai — mata: 107 → 90 desenhos |
+| Marcadores de brilho (banco, joalheria, desmanche, tunagem, imóveis, itens, esconderijo…) | ~7 lotes desenhados em qualquer lugar | só com um marcador aceso ao alcance da câmera |
+| Telhado e degrau da casa segura | "sempre ativos": desenhados a 580 m | recorte normal |
+| Vegetação da cidade no Low | 6–8 espécies por célula (cada uma um desenho) | ipê, mangueira/carvalho, palmeira e arbusto — centro: 129 → 118 desenhos |
+| Materiais de telhados, fachadas, peças, árvores e fios | reavaliados a cada desenho (~25 µs cada) | congelados depois da carga |
+| Posição dos bonecos para LOD e "está na tela?" | `getAbsolutePosition()` (recalcula a matriz de ~100 atores) | lida direto do quad e do elevador do relevo |
+| Cores do desenho 2,5D com o boneco em 3D | reenviadas à placa ~100×/s à toa | adiadas até o 2,5D voltar |
+| LOD das árvores (~4.000 plantas) | todas de uma vez a cada 200 ms (pico de ~3 ms a cada 6 quadros) | um sexto por quadro |
+| Faróis e setas apagados de dia | reposicionados (e reenviados) todo quadro | só o que está aceso |
+| Pássaros | 30 | 15 com a Vida da cidade baixa (Low, celular) |
+| Detalhe das pessoas do Low (lodBias 1,7) | nunca aplicado (o Graphics roda antes do Char3D existir) | aplicado via `Config.perf.lodBias` |
+| (primeira leva) Char3D, pontos de ônibus, brilhos, helicóptero, mata | varredura de materiais "sujos" a cada boneco montado, troca de LOD remontando malhas, uma sombra-bolha por pessoa, 7 desenhos por ponto de ônibus, ~30 lotes de efeito desenhados apagados | bloqueio por material, conjuntos de malhas guardados (até 3), sombras numa malha só, pontos fundidos em 2 malhas, lote apagado fora do quadro; no Low o corte colado na névoa (`tightFar`), o detalhe miúdo antes dela (`fineCull`) e a mata menos densa (`vegDensity`) |
+
+### Segunda rodada: picos e lógica de longe (aparelho fraco — `Config.perf.halfFar`, Low e celular)
+
+| O quê | Antes | Depois |
+|---|---|---|
+| Pedestres e carros NA TELA mas longe do jogador (> 22 m) | lógica e IA todo quadro | a cada 2 quadros com o dt somado; o boneco segue o agente e o carro segue o corpo do Havok todo quadro (o movimento continua liso) |
+| Combate sem nada no ar | 72 balas e 96 faíscas apagadas varridas (~300 chamadas de brilho) + alvos e velocidades todo quadro | pula tudo; alvos/velocidades (mira assistida) a cada 3 quadros — 1,2 → 0,2 ms no ×2 |
+| Mototáxis | obstáculos juntados todo quadro | a cada 2 quadros |
+| Reciclagem do trânsito | um veículo NOVO (corpo + modelo 3D: 9–15 ms de uma vez) | 3 de cada 4 vezes o mesmo veículo é teleportado para o anel |
+| Rota de destino (Dijkstra na cidade inteira, ~5 ms) | vários carros no mesmo quadro (tranco de 20 ms) | no máximo 1 por quadro (1 a cada 0,25 s no aparelho fraco); sem rota agora, o carro sorteia esquinas e pede de novo |
+| Bonecos 3D novos | todos os que entram de uma vez | até 2 por escolha e 1 montagem de malhas por quadro |
+| Pedestres reciclados num teleporte | 8 por vez | 3 por vez |
+| Minimapa | pintura do terreno HD até 4 ms por atualização; camada redesenhada na hora | 1,5 ms; a camada é refeita no tempo ocioso entre quadros (`requestIdleCallback`) a 60% da folga, em menos pixels |
+| Terreno que chega com a distância | raio de 230 m (a câmera vê ~70), 5 ms por quadro | 170 m, 3 ms por quadro |
+| Itens no chão | animados até 110 u, relevo consultado todo quadro | até a névoa + 15 u, relevo guardado |
+| Escada de processador (qualidade automática) | animação, vida, distância | + peças miúdas (fachadas: só molduras e ar-condicionado; sem peças nos telhados nem pássaros) e lógica de longe a partir de 12 m |
+
+### Resultado (trabalho de CPU por quadro, Low + celular, 30 FPS = 33 ms)
+
+**Medir certo, parte 2:** no ×2 a GPU emulada (SwiftShader) roda na MESMA CPU e as esperas por ela também são multiplicadas pela
+desaceleração: medido, a favela dava 14,9 ms no ×1 e 39 ms no ×2 (fator 2,6). Para isolar o custo de CPU — o que um aparelho com placa de
+vídeo de verdade paga —, o ×2 é medido com a placa emulada aliviada (a tela desenhada em 1/16 dos pixels: `setHardwareScalingLevel` ×4).
+O trabalho de CPU é o mesmo (as mesmas malhas e chamadas de desenho; o detalhe dos bonecos não depende da resolução). Média, mediana e
+p90 de 90–120 quadros de 30 FPS.
+
+| Cena (CPU ×2) | antes: média / p90 | depois, ao abrir: média / p90 | depois, com a qualidade automática no degrau de processador |
+|---|---|---|---|
+| Favela a pé | 36,1 / 53,1 ms | 22,9–29,0 / 31,3–37,4 ms | **23,9 / 32,0 ms** |
+| Dirigindo no centro | 31,6 / 51,3 ms | 24,5–25,7 / 33,0–35,9 ms | **25,6 / 32,2 ms** |
+| Centro a pé | 33,0 / 43,4 ms | 23,8–25,4 / 32,1–33,8 ms | **20,2 / 26,6 ms** |
+| Mata | 31,6 / 38,4 ms | 21,6–23,2 / 28,8–31,2 ms | **19,3 / 26,2 ms** |
+| Malhas ativas (favela/carro/centro/mata) | 185 / 190 / 201 / 202 | 127 / 116 / 106–125 / 91–94 | 104 / 116 / 116 / 87 |
+
+(faixas = rodadas completas diferentes; o estado do jogo — briga de gangue, polícia, quantos bonecos estão perto — muda de uma para outra.)
+Com a CPU 2× mais lenta, o jogo abre com média de 22–29 ms; a qualidade automática (ligada por padrão) percebe o processador no limite
+e desce a escada de processador em segundos, e aí **90% dos quadros ficam abaixo de 33 ms em todas as cenas** — 30 FPS estáveis.
+Na máquina de referência (×1): 14–19 ms. Script: `tests/fraco.cjs` (`RATE=2 LOWRES=4 N=120`; `CPUL=1` = a escada aplicada).
+Na medição com a GPU emulada carregando a CPU, as mesmas cenas no ×2 ficam em 31–44 ms — o limite da GPU emulada, não do jogo.
+
+### Terceira rodada: o Low já abre leve e o nível Mínimo (celular de entrada)
+
+A qualidade automática resolvia os picos em segundos, mas a meta é 30 FPS **ao abrir**, sem esperar a escada. E ela só desce os
+degraus de processador com placa de vídeo de verdade. Então os degraus mais discretos passam a valer desde a carga no Low e no celular
+(`Graphics.apply`): a pose de quem está de meia distância para longe a cada 2, 3 e 4 quadros (`Config.perf.lodEvery` →
+`Char3D.LOD_EVERY`) e a lógica de longe em meia taxa a partir de 15 m (`halfFarR`; eram 22 m). Daí a escada continua descendo a partir
+desse ponto (pose a cada 2, 4 e 6 quadros; longe a partir de 12 m). Exceção: o pedestre que o `_fillView` acabou de trazer para a
+entrada da cena fica com a lógica inteira por 3 s. Com a lógica pela metade, a tela demorava a encher depois de girar a câmera
+(`tests/67_populacao`).
+
+Para os celulares de entrada (2–3 GB), um nível novo, **Mínimo** (`?gfx=min`, Ajustes › Gráficos e o submenu): é o Low com os
+cortes de processador já ligados. `Graphics.level` continua `'low'` (as tabelas por nível valem) e `Graphics.minimal` /
+`Config.perf.minimal` marcam o corte:
+
+| Mínimo (por cima do Low) | |
+|---|---|
+| Gente e trânsito | 30% da frota do Alto (o Low tem 50%) |
+| Névoa | 50 m; terreno carregado num raio de 130 m (Low: 170 m) |
+| Pessoas em 3D | até 32 m (além disso já é névoa); detalhe das pessoas 2,2; pose de longe a cada 2/3/4 quadros |
+| Peças miúdas | fachadas só com molduras e ar-condicionado, telhados sem peças em cima, sem pássaros, sem vegetação rasteira |
+| Lógica de longe | meia taxa a partir de 12 m |
+| Vida da cidade | baixa; resolução 50%; mata 40% |
+
+Escolha automática: tela de toque com até 2 GB informados pelo navegador (`detect()`; 3 GB também aparecem como 2). E, no
+automático, quando a qualidade automática esgota a escada de processador no Low, ela deixa o aviso `gfxMinNext` e a próxima abertura
+já vem no Mínimo (escolher o nível à mão apaga o aviso). Teste: `tests/85_minimo.test.cjs`.
+
+| Cena | Low + celular, CPU ×2, **ao abrir** (sem a escada): média / p90 | Mínimo, CPU ×3: média / p90 | Mínimo, CPU ×4: média / p90 |
+|---|---|---|---|
+| Favela a pé | 23,3 / **29,5 ms** | 32,7 / 46,8 ms | 41,3 / 56,3 ms |
+| Centro a pé | 22,6 / **29,9 ms** | 28,5 / 39,6 ms | 37,9 / 50,1 ms |
+| Dirigindo no centro | 23,9 / **32,7 ms** | 31,1 / 37,9 ms | 41,7 / 52,3 ms |
+| Mata | 21,8 / **30,2 ms** | 24,7 / 36,2 ms | 39,3 / 51,6 ms |
+
+Com a CPU 2× mais lenta, o Low agora abre com **90% dos quadros abaixo de 33 ms em todas as cenas** (antes, ao abrir: p90 31–37 ms),
+sem depender da escada. Com 3×, o Mínimo fica na média de 30 FPS (25–33 ms), mas com picos (p90 36–47 ms). Com 4×, roda a ~25 FPS.
+**Esses dois ainda não são 30 FPS estáveis.** Ressalva da medição: no ×3 e no ×4 a GPU emulada continua na mesma CPU, mesmo
+desenhando 1/16 dos pixels, e o "render (cena)" ainda carrega parte dela. Num aparelho com placa de verdade o número fica um pouco
+melhor, mas sem medir num celular de entrada real não dá para prometer 30. Rodadas: `RATE=2 LOWRES=4 N=120 node tests/fraco.cjs` e
+`Q='gfx=min&celular' RATE=3 LOWRES=4 N=120 node tests/fraco.cjs`.
+
+**Próximos passos com ganho real:** fundir os materiais das fachadas (cada estilo é um programa de shader: 10–18 desenhos só de paredes)
+e levar a IA do trânsito e a navegação para o worker (`src/sim/worker.js`).
+
+### Ajustes › Gráficos avançados (`src/ui/GraphicsMenu.js`)
+
+Uma linha nova em Ajustes ("🎛️ Gráficos avançados") abre um submenu — como o das Teclas — com o que a pessoa pode trocar para o
+jogo rodar melhor na máquina dela. Cada linha mostra o valor de agora ("Automático (…)" = o do nível) e uma etiqueta **na hora** ou
+**ao reabrir**; com algo pendente, um aviso no pé. ↑ ↓ escolhe, ← → troca (partindo do valor do nível), Enter/clique avança, Esc/B
+volta; no toque, ◀ ▶ em cada linha.
+
+| Linha | Valores | Quando vale |
+|---|---|---|
+| Nível gráfico | Automático, Mínimo, Low, Medium, High, HD | ao reabrir |
+| Resolução | 50–100% | na hora (o que mais pesa na placa de vídeo) |
+| Distância de visão | 55–125 m | na hora (a névoa; menos prédios, carros e árvores por quadro) |
+| Sombras do sol | Desligadas, Baixas, Altas | desligar na hora; ligar/trocar o tamanho ao reabrir |
+| Antisserrilhado | Desligado, 2×, 4×, 8× | na hora |
+| Brilho das luzes | Ligado/Desligado | na hora |
+| Reflexo na água | Ligado/Desligado | desligar na hora; ligar ao reabrir se o nível não tinha |
+| Relevo das fachadas | Ligado/Desligado | ao reabrir |
+| Vegetação rasteira | Ligado/Desligado | na hora |
+| Densidade da mata | 40–100% | na hora para o terreno que carregar; todo ele ao reabrir |
+| Distância dos detalhes | 60%, 75%, 90% da névoa ou até o fim | na hora |
+| Detalhe das pessoas | Mínimo … Máximo | na hora |
+| Nuvens no voo | Ligado/Desligado | na hora |
+| Vida da cidade, Taxa de quadros | (os de Ajustes) | na hora |
+| Mostrar FPS na tela | contador no canto: FPS e ms do quadro | na hora |
+| Qualidade automática | Ligado/Desligado | na hora |
+| Restaurar o padrão do nível | | na hora |
+
+Guardados em `settings.gfx`; na abertura `Graphics._custom` aplica tudo por cima do nível (`Graphics.base` guarda o nível puro, o
+"Automático" de cada linha). Teste: `tests/84_graficos_menu.test.cjs` (teclado, na hora, reabrir, restaurar, recorte sem escondidos).
+
+### Qualidade automática com escada de processador
+
+A qualidade automática (`src/core/AutoQuality.js`) só tinha degraus de placa de vídeo (resolução, sombras, antisserrilhado, brilho) —
+num aparelho com CPU fraca, o caso desta meta, eles não ajudam: ela descia tudo e o jogo continuava lento. Agora, quando o trabalho de
+CPU do quadro (`Perf.frameAvg`) passa de 85% do tempo do quadro, ela desce primeiro a **escada de processador**: a pose de quem está
+longe menos vezes (`Char3D.LOD_EVERY` 1/2/3/4 e o detalhe das pessoas um pouco mais cedo), menos movimento na rua (Vida da cidade
+baixa), a distância de visão −15% (duas vezes, até 50 m), as peças miúdas (fachadas só com molduras e ar-condicionado, sem peças nos
+telhados nem pássaros) e a lógica de quem está longe já a partir de 12 m. Desce também quando a média cabe mas ~1 quadro em 8 perde a
+vez por 3 s seguidos com a CPU como gargalo (os picos de quem está no limite) — a regra antiga só agia com a maioria dos quadros lentos. O degrau alcançado fica guardado como os outros (`autoQuality.cpu`). Só em
+placa de vídeo de verdade (no rasterizador por software dos testes nada disso dispara). Desliga em Ajustes › Gráficos avançados.

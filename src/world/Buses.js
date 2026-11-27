@@ -113,6 +113,7 @@ const Buses = {
 			this._shelter(g, S);
 			if (typeof CityGrid !== 'undefined' && CityGrid.addPoi) CityGrid.addPoi({ type: 'busstop', name: `${S.name} (${S.lines.map((L) => L.id).join(', ')})`, x: S.x, z: S.z });
 		}
+		this._mergeShelters(g);
 		const ms = (performance.now() - t0).toFixed(0);
 		console.log(`[ÔNIBUS] ${this.LINES.length} linhas, ${this.stops.length} pontos (${ms} ms): ` + this.LINES.map((L) => `${L.id} ${Math.round(L.len)} m/${L.stops.length} pontos`).join(' · '));
 	},
@@ -234,36 +235,56 @@ const Buses = {
 		L.route = ds; L.streets = streets;
 	},
 
-	// O abrigo do ponto: cobertura, fundo de vidro, banco e a placa (com a cor das linhas). Uma malha só por ponto (merge).
+	// O abrigo do ponto: cobertura, fundo de vidro, banco e a placa (com a cor das linhas). As peças de TODOS os pontos vão para DUAS
+	// malhas (_mergeShelters): as opacas, com a cor no vértice, e o vidro. Antes era uma malha por ponto com um material por peça — 6 a 8
+	// chamadas de desenho por ponto à vista (21 no centro, para 3 pontos); agora são 2 no mapa inteiro (~100 pontos × 13 caixas: poucos
+	// triângulos, e a malha fica sempre à mão).
 	_shelter(g, S) {
-		const sc = g.scene, M = this._mats || (this._mats = this._materials(sc)), parts = [];
-		const box = (w, h, d, x, y, z, m) => { const b = BABYLON.MeshBuilder.CreateBox('pontoP', { width: w, height: h, depth: d }, sc); b.position.set(x, y, z); b.material = m; parts.push(b); return b; };
-		box(3.4, 0.08, 1.5, 0, 2.45, 0, M.roof);                        // cobertura
-		box(3.3, 1.7, 0.05, 0, 1.25, -0.62, M.glass);                    // fundo de vidro
-		for (const x of [-1.6, 1.6]) box(0.08, 2.45, 0.08, x, 1.22, -0.6, M.post);
-		box(2.6, 0.08, 0.42, 0, 0.5, -0.38, M.bench);                    // banco
-		for (const x of [-1.1, 1.1]) box(0.06, 0.5, 0.36, x, 0.25, -0.38, M.post);
-		box(0.08, 2.9, 0.08, 2.15, 1.45, 0.45, M.post);                  // poste da placa
-		box(0.06, 0.62, 0.52, 2.15, 2.6, 0.45, M.sign);                  // a placa (ÔNIBUS)
-		S.lines.forEach((L, i) => box(0.07, 0.11, 0.48, 2.15, 2.18 - i * 0.13, 0.45, this._lineMat(sc, L)));     // uma faixa por linha
-		const m = BABYLON.Mesh.MergeMeshes(parts, true, true, undefined, false, true);
-		if (!m) return;
-		m.name = 'pontoOnibus' + S.id;
-		const y = Relief.at(S.x, S.z) + 0.16;
-		m.position.set(S.x, y, S.z); m.rotation.y = S.h;
-		m.isPickable = false; m.freezeWorldMatrix();
-		if (g.shadowGenerator) g.shadowGenerator.addShadowCaster(m);
-		S.mesh = m;
+		const sc = g.scene, M = this._mats || (this._mats = this._materials(sc)), P = this._parts || (this._parts = { solid: [], glass: [], nodes: [] });
+		const node = new BABYLON.TransformNode('pontoN', sc);
+		node.position.set(S.x, Relief.at(S.x, S.z) + 0.16, S.z); node.rotation.y = S.h;
+		P.nodes.push(node);
+		const box = (w, h, d, x, y, z, c) => {
+			const b = BABYLON.MeshBuilder.CreateBox('pontoP', { width: w, height: h, depth: d }, sc);
+			b.position.set(x, y, z); b.parent = node;
+			if (c) { const n = b.getTotalVertices(), C = new Float32Array(n * 4); for (let i = 0; i < n; i++) C.set(c, i * 4); b.setVerticesData(BABYLON.VertexBuffer.ColorKind, C); P.solid.push(b); } else P.glass.push(b);
+			return b;
+		};
+		box(3.4, 0.08, 1.5, 0, 2.45, 0, M.c.roof);                      // cobertura
+		box(3.3, 1.7, 0.05, 0, 1.25, -0.62, null);                       // fundo de vidro
+		for (const x of [-1.6, 1.6]) box(0.08, 2.45, 0.08, x, 1.22, -0.6, M.c.post);
+		box(2.6, 0.08, 0.42, 0, 0.5, -0.38, M.c.bench);                  // banco
+		for (const x of [-1.1, 1.1]) box(0.06, 0.5, 0.36, x, 0.25, -0.38, M.c.post);
+		box(0.08, 2.9, 0.08, 2.15, 1.45, 0.45, M.c.post);                // poste da placa
+		box(0.06, 0.62, 0.52, 2.15, 2.6, 0.45, M.c.sign);                // a placa (ÔNIBUS)
+		S.lines.forEach((L, i) => box(0.07, 0.11, 0.48, 2.15, 2.18 - i * 0.13, 0.45, this._lineColor(L)));     // uma faixa por linha
+	},
+	_mergeShelters(g) {
+		const P = this._parts;
+		if (!P) return;
+		const M = this._mats, mk = (list, name, mat) => {
+			if (!list.length) return null;
+			const m = BABYLON.Mesh.MergeMeshes(list, true, true);
+			if (!m) return null;
+			m.name = name; m.material = mat; m.isPickable = false; m.freezeWorldMatrix();
+			return m;
+		};
+		const solid = mk(P.solid, 'pontoOnibus', M.solid), glass = mk(P.glass, 'pontoOnibusVidro', M.glass);
+		for (const n of P.nodes) n.dispose();
+		if (solid && g.shadowGenerator) g.shadowGenerator.addShadowCaster(solid);
+		this.shelters = [solid, glass].filter(Boolean);
+		this._parts = null;
 	},
 	_materials(sc) {
-		const mk = (n, c, a = 1, e = null) => { const m = new BABYLON.StandardMaterial(n, sc); m.diffuseColor = BABYLON.Color3.FromHexString(c); m.specularColor = new BABYLON.Color3(0.15, 0.15, 0.15); if (a < 1) { m.alpha = a; } if (e) m.emissiveColor = BABYLON.Color3.FromHexString(e); return m; };
-		return { roof: mk('pontoTeto', '#cfd5dc'), glass: mk('pontoVidro', '#9fc4d8', 0.35), post: mk('pontoPoste', '#4a5058'), bench: mk('pontoBanco', '#7a5434'), sign: mk('pontoPlaca', '#1f4fa8', 1, '#0c1f44') };
+		const mk = (n, c, a = 1) => { const m = new BABYLON.StandardMaterial(n, sc); m.diffuseColor = BABYLON.Color3.FromHexString(c); m.specularColor = new BABYLON.Color3(0.15, 0.15, 0.15); if (a < 1) { m.alpha = a; } return m; };
+		const rgba = (hex, k = 1) => { const c = BABYLON.Color3.FromHexString(hex); return [Math.min(1, c.r * k), Math.min(1, c.g * k), Math.min(1, c.b * k), 1]; };
+		// (as peças opacas: a cor no vértice; a placa e as faixas das linhas um pouco mais claras, no lugar do brilho próprio de antes)
+		return { solid: mk('pontoOnibusMat', '#ffffff'), glass: mk('pontoVidro', '#9fc4d8', 0.35), rgba,
+			c: { roof: rgba('#cfd5dc'), post: rgba('#4a5058'), bench: rgba('#7a5434'), sign: rgba('#1f4fa8', 1.25) } };
 	},
-	_lineMat(sc, L) {
+	_lineColor(L) {
 		const P = CarSheet.PAINTS[L.paint] || CarSheet.PAINTS[1];
-		const k = 'pontoLinha' + L.id, m = sc.getMaterialByName(k) || new BABYLON.StandardMaterial(k, sc);
-		m.diffuseColor = BABYLON.Color3.FromHexString(P.paint); m.emissiveColor = BABYLON.Color3.FromHexString(P.paint).scale(0.35);
-		return m;
+		return this._mats.rgba(P.paint, 1.35);
 	},
 
 	// ------------------------------------------------------------------ horários

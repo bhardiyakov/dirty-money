@@ -52,7 +52,7 @@ const MotoStands = {
             this.stands.push(s);
             CityGrid.addPoi({ type: 'mototaxi', name: w.name, x: s.x, z: s.z });
         }
-        this.glow = new GlowBatch(g.scene, 8, 'mtStandGlow', 'glow');
+        this.glow = new GlowBatch(g.scene, 8, 'mtStandGlow', 'glow').markers();
         for (let i = 0; i < 8; i++) { this.glow.alloc(); this.glow.off(i); }
         this._t = 0;
     },

@@ -47,7 +47,7 @@ const AirLod = {
 		}
 		const on = !indoors && (this.active ? k > 0.3 && alt > C.offAlt : k > 0.5 && alt > C.onAlt);
 		if (on !== this.active) this._switch(on, game);
-		if (!on) return;
+		if (!on) { this._ground(dt, game, cam, indoors); return; }
 		if (!this.culler) this.culler = new DetailCuller(game.scene);
 		this.culler.scan(dt);
 		const E = this._eye || (this._eye = new BABYLON.Vector3()), L = this._lastEye || (this._lastEye = new BABYLON.Vector3(1e9, 0, 0));
@@ -64,10 +64,29 @@ const AirLod = {
 		this._stats();
 	},
 
+	// NO CHÃO (aparelho fraco — Config.perf.fineCull, Ajustes › Gráficos): na câmera de perseguição a névoa mede a distância do olho e
+	// apaga o longe; o detalhe miúdo (acabamento, meio-fio, fios, postes, pontos, brilhos) sai um pouco ANTES do fim dela, onde já está
+	// quase todo na cor do céu — na favela ~25% dos triângulos da tela eram isso. Só a faixa fina; o resto fica como está.
+	_ground(dt, game, cam, indoors) {
+		const f = Config.perf.fineCull || 0, chase = typeof CompassCamera !== 'undefined' && CompassCamera.chase >= 0.5;
+		const want = f > 0 && chase && !indoors, sc = game.scene;
+		if (!want) { if (this._groundOn) { this._groundOn = false; if (this.culler) this.culler.restoreAll(); } return; }
+		if (!this.culler) this.culler = new DetailCuller(sc);
+		this.culler.scan(dt);
+		const E = this._eye || (this._eye = new BABYLON.Vector3()), L = this._lastEye || (this._lastEye = new BABYLON.Vector3(1e9, 0, 0));
+		E.copyFrom(cam.globalPosition);
+		this._evalT -= dt;
+		const R = this.R, fine = Math.max(20, sc.fogEnd * f);
+		if (this._groundOn && this._evalT > 0 && BABYLON.Vector3.DistanceSquared(E, L) < 16 && Math.abs(fine - R.fine) < 2) return;
+		this._groundOn = true; this._evalT = 0.25; L.copyFrom(E);
+		R.fine = fine; R.mid = Infinity; R.big = Infinity;
+		this.culler.update(E, R);
+		this.stats.hidden = this.culler.stats.hidden; this.stats.items = this.culler.stats.items;
+	},
 	// Ligou: nada a fazer além da próxima avaliação. Desligou: devolve o detalhe, apaga o mapa de longe, o terreno e a física voltam.
 	_switch(on, game) {
 		this.active = on;
-		this._evalT = 0;
+		this._evalT = 0; this._groundOn = false;
 		if (this._lastEye) this._lastEye.set(1e9, 0, 0);
 		if (!on) {
 			if (this.culler) this.culler.restoreAll();

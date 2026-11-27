@@ -16,6 +16,9 @@ module.exports = {
 			Config.time.cycleSeconds = 1e12; game.dayNight.hour = 12; game.dayNight.apply(); Weather.cur.set('clear', true, true); Weather.cur.override = 1e9;
 			// (a qualidade automática desliga as sombras no SwiftShader, lento: aqui quem manda nelas é o clima)
 			if (game.autoQuality) game.autoQuality.off = true;
+			// (o corte do detalhe miúdo NO CHÃO do Low — Config.perf.fineCull, Ajustes › Gráficos avançados — fica de fora: aqui é o LOD do voo;
+			// o do chão tem o teste dele em 84_graficos_menu)
+			Config.perf.fineCull = 0;
 			game.dayNight.forceNoShadows = false; game.dayNight._shadowRate = null;
 			const dc = game.gameEngine.engine._drawCalls; let d0 = 0; window.__dc = 0;
 			game.scene.onBeforeRenderObservable.add(() => { d0 = dc.current; });

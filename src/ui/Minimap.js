@@ -42,7 +42,7 @@ class Minimap {
         this.ctx = this.canvas.getContext('2d');
         this.size = Config.minimap.size;
 
-        const dpr = window.devicePixelRatio || 1;
+        const dpr = Math.min(window.devicePixelRatio || 1, Config.perf.halfFar ? 1.25 : 4);      // (aparelho fraco: o radar em menos pixels — redesenhar a camada custa menos)
         this.canvas.width = this.size * dpr;
         this.canvas.height = this.size * dpr;
         this.canvas.style.width = this.size + 'px';
@@ -81,14 +81,24 @@ class Minimap {
 
         const B = this.baseSize, slack = B / 2 - S * Math.SQRT1_2 - 4;          // folga (px) até a borda da camada (cantos do radar girado)
         const opKey = typeof Standing !== 'undefined' && Standing.policeOp ? 1 : 0;
-        const fresh = MapPaint.work(4);                                     // terreno HD pintado aos poucos: um ladrilho novo pronto → refaz a camada
-        if (fresh || this._baseKey === null || this._baseKey !== opKey || Math.abs(center.x - this._bx) * k > slack || Math.abs(center.z - this._bz) * k > slack) {
-            this._bx = center.x; this._bz = center.z; this._baseKey = opKey;
+        const fresh = MapPaint.work(Config.perf.halfFar ? 1.5 : 4);         // terreno HD pintado aos poucos: um ladrilho novo pronto → refaz a camada (aparelho fraco: 1,5 ms por vez, sem pico)
+        const moved = Math.max(Math.abs(center.x - this._bx), Math.abs(center.z - this._bz)) * k;
+        const redraw = (x, z) => {
+            this._bx = x; this._bz = z; this._baseKey = opKey;
             const bc = this.baseCtx;
             bc.save(); bc.setLineDash([]);
             MapRenderer.drawView(bc, B, B, this._bx, this._bz, k, { defer: true, dpr: this.dpr });
             bc.restore();
+        };
+        if (fresh || this._baseKey === null || this._baseKey !== opKey || moved > slack) { this._idleJob = null; redraw(center.x, center.z); }
+        // APARELHO FRACO andando (dirigindo): a camada é refeita no tempo OCIOSO entre os quadros (requestIdleCallback — não atrasa o
+        // próximo), já a 60% da folga; só se a folga acabar antes ela é refeita na hora, como sempre. (Redesenhar o mapa vetorial inteiro
+        // de uma vez custava até ~14 ms num quadro no aparelho fraco.)
+        else if (moved > slack * 0.6 && !this._idleJob && Config.perf.halfFar && typeof requestIdleCallback === 'function') {
+            const job = this._idleJob = { x: center.x, z: center.z };
+            requestIdleCallback(() => { if (this._idleJob !== job) return; this._idleJob = null; const c = this._lastCenter || job; redraw(c.x, c.z); }, { timeout: 400 });
         }
+        this._lastCenter = this._lastCenter || { x: 0, z: 0 }; this._lastCenter.x = center.x; this._lastCenter.z = center.z;
         ctx.imageSmoothingEnabled = !!yaw;                                  // (girado: suaviza, senão os pixels serrilham)
         ctx.save();
         if (yaw) { ctx.translate(S / 2, S / 2); ctx.rotate(-yaw); ctx.translate(-S / 2, -S / 2); }

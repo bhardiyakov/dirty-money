@@ -59,7 +59,7 @@ const Tuning = {
             this.shops.push(s);
             CityGrid.addPoi({ type: 'tuning', name: `${s.name} — tunagem`, x: s.x, z: s.z });
         }
-        this.glow = new GlowBatch(game.scene, this.shops.length + 1, 'tuneGlow', 'glow');
+        this.glow = new GlowBatch(game.scene, this.shops.length + 1, 'tuneGlow', 'glow').markers();
         for (let i = 0; i <= this.shops.length; i++) { this.glow.alloc(); this.glow.off(i); }
         this._t = 0;
         console.log(`[TUNAGEM] ${this.shops.map((s) => `${s.name} (${s.region})`).join(' · ')}`);

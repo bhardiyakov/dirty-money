@@ -286,10 +286,12 @@ class Birds {
 
     // ---------------------------------------------------------------- por quadro
     update(dt) {
-        if (!this.enabled) return;
+        if (!this.enabled || Config.perf.minimal) return;                        // (Mínimo: sem pássaros)
         const g = this.g, tg = g.camera.target;
         const night = g.dayNight ? g.dayNight.night : 0, rain = typeof Weather !== 'undefined' && Weather.cur ? Weather.cur.k : 0;
-        const target = Math.round(30 * (1 - 0.75 * night) * (1 - 0.85 * rain));
+        // (Vida da cidade baixa — o Low e o celular, Ajustes: metade dos pássaros; cada um é atualizado e reenviado à placa todo quadro)
+        const lk = typeof Life !== 'undefined' ? Math.max(0.5, Life.mul()) : 1;
+        const target = Math.round(30 * lk * (1 - 0.75 * night) * (1 - 0.85 * rain));
 
         // População em volta da câmera.
         this._spawnT -= dt;

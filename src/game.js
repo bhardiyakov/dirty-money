@@ -503,6 +503,9 @@ class Game {
 		const world = this.gameEngine.world, list = [];
 		const walk = (o) => { for (const k of Object.keys(o)) { const m = o[k]; if (m instanceof BABYLON.Material) list.push(m); else if (m && typeof m === 'object' && !(m instanceof BABYLON.BaseTexture)) walk(m); } };
 		walk(world.mats);
+		// (e os das peças montadas fora do WorldBuilder que também nunca mudam: telhados, fachadas e suas peças, árvores, fios — sem
+		// congelar, cada desenho deles refazia a checagem dos defines a cada quadro; malha nova com eles monta o shader normalmente)
+		for (const m of this.scene.materials) if (!m.isFrozen && !list.includes(m) && /^(trees3d$|roof_3d_|walls3d_pecas$|facade_|wires$)/.test(m.name)) list.push(m);
 		for (const m of list) m.freeze();
 		console.log(`[CARGA] ${list.length} materiais congelados`);
 	}
@@ -528,7 +531,8 @@ class Game {
 			if (Pool.active || Truco.active || Porrinha.active || Domino.active) { last = now; return; }  // mini-jogos do bar: o mundo para por completo
 			HangProbe.mark('laço: AutoQuality');
 			this.autoQuality.tick((now - last) / 1000, this.menu.isOpen);
-			const dt = Math.min((now - last) / 1000 * (this.timeScale || 1), 0.05);
+			// (Perf.fixedDt: medição — cada quadro anda um tempo de jogo fixo, como se o jogo rodasse a 1/fixedDt FPS; ver tests/perf.cjs)
+			const dt = Math.min((Perf.fixedDt || (now - last) / 1000) * (this.timeScale || 1), 0.05);
 			last = now;
 			Perf.frameStart();
 			// Um erro em QUALQUER sistema não pode congelar o jogo: sem o try, a exceção subia até o laço do Babylon, que parava de

@@ -380,7 +380,7 @@ class Careers {
     gpsTo(x, z, label) { this.g.setGps(x, z, label); if (this.g.gps) this.g.gps._career = true; }
 
     mark(x, z, color = '#ffd23a') {
-        if (!this._glow) { this._glow = new GlowBatch(this.g.scene, 2, 'careerGlow', 'glow'); this._mk = this._glow.alloc(); }
+        if (!this._glow) { this._glow = new GlowBatch(this.g.scene, 2, 'careerGlow', 'glow').markers(); this._mk = this._glow.alloc(); }
         const c = BABYLON.Color3.FromHexString(color);
         this._mkPos = { x, z }; this._mkCol = c; this._mkOn = true;
         this._glow.place(this._mk, x, 0.25, z, 3.2);

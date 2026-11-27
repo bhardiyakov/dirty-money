@@ -189,19 +189,23 @@ const Roofs3D = {
         const cam = scene.activeCamera;
         if (!cam) return;
         const P = cam.globalPosition || cam.position;
-        if (!force && B.last && Math.hypot(P.x - B.last.x, P.y - B.last.y, P.z - B.last.z) < 2.5) return;
-        B.last = { x: P.x, y: P.y, z: P.z };
-        const k = this.lodScale, NEAR = this.LOD.near * k, MID = this.LOD.mid * k, R = this.BUCKET * 0.72;
-        const band = (b) => { const d = Math.max(0, Math.hypot(b.cx - P.x, b.y - P.y, b.cz - P.z) - R); return d < (b.band === 0 ? NEAR * 1.1 : NEAR) ? 0 : d < (b.band === 1 ? MID * 1.1 : MID) ? 1 : 2; };
+        // ALÉM DO PLANO DE CORTE da câmera (no Low ele fica colado na névoa — Config.perf.tightFar): o balde sai de todas as faixas. Antes
+        // as placas da cidade INTEIRA iam para a placa de vídeo a cada quadro (a caixa delas cobria o mapa, sempre no frustum) — até no
+        // meio da mata, longe de qualquer telhado: ~10 desenhos e milhares de instâncias que o recorte jogava fora depois.
+        const far = cam.maxZ > 0 ? cam.maxZ : Infinity;
+        if (!force && B.last && Math.hypot(P.x - B.last.x, P.y - B.last.y, P.z - B.last.z) < 2.5 && (far === B.last.far || Math.abs(far - B.last.far) < 4)) return;
+        B.last = { x: P.x, y: P.y, z: P.z, far };
+        const k = this.lodScale, NEAR = this.LOD.near * k, MID = this.LOD.mid * k, R = this.BUCKET * 0.72, FAR = far + 6;
+        const band = (b) => { const d = Math.max(0, Math.hypot(b.cx - P.x, b.y - P.y, b.cz - P.z) - R); return d > FAR ? 3 : d < (b.band === 0 ? NEAR * 1.1 : NEAR) ? 0 : d < (b.band === 1 ? MID * 1.1 : MID) ? 1 : 2; };
         for (const K of B.kinds.concat(B.parts)) {
             const D = K.D, M = K.meshes;
             let changed = force;
             for (const b of D.buckets) {
                 let nb = band(b);
-                if (K.props) nb = nb === 0 ? 0 : -2;                                                // (peças: só perto)
+                if (K.props) nb = nb === 0 && !this.noProps && !Config.perf.minimal ? 0 : -2;                              // (peças: só perto — e nenhuma com noProps, AutoQuality)
                 else if (nb === 0 && !M[0]) nb = M[1] ? 1 : 2;                                      // (sem relevo de perto: o do meio ou a placa)
                 else if (nb === 1 && !M[1]) nb = 2;                                                 // (sem relevo do meio: a placa)
-                if (b.p && !b.p.n) nb = 2;                                                          // (balde sem painéis: a placa)
+                if (b.p && !b.p.n && nb < 3) nb = 2;                                                // (balde sem painéis: a placa)
                 if (nb !== b.band) { b.band = nb; changed = true; }
             }
             if (!changed) continue;
