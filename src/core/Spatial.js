@@ -131,6 +131,24 @@ class RenderCuller {
 			this._hooked = true;
 			this.scene.getActiveMeshCandidates = () => this._candidates();
 		}
+		if (this.sortOpaque !== false && !this._sorted) { this._sorted = true; RenderCuller.sortOpaque(this.scene); }
+	}
+
+	// FILA OPACA ORDENADA POR PROGRAMA DE SHADER: o Babylon desenha os opacos na ordem da lista de ativas (sem ordenar), e cada troca
+	// de programa custa caro na CPU — medido no Mínimo, 45 a 90 µs por chamada que troca contra ~20 µs da que repete o programa.
+	// Agrupados pelo programa (e, dentro dele, pelo material: os uniformes já estão no lugar), as trocas caem para uma por programa.
+	// Quem não grava profundidade (decalques opacos, o fantasma da sombra) vai para o fim, na ordem do material. A fila de alpha-test
+	// (o céu) e a transparente (de trás para a frente) seguem como estavam.
+	static sortOpaque(scene) {
+		let n = 0;
+		const key = (sm) => {
+			const m = sm.getMaterial();
+			if (!m) return 0;
+			if (m.disableDepthWrite || m.disableColorWrite) return 2e9 + m.uniqueId;
+			const e = sm.effect;
+			return e ? (e._dmSort || (e._dmSort = ++n)) * 65536 + (m.uniqueId & 65535) : 1e9 + m.uniqueId;
+		};
+		scene.setRenderingOrder(0, (a, b) => key(a) - key(b), undefined, null);
 	}
 
 	// Malha parada (matriz congelada, sem esqueleto, nem gigante, nem "sempre ativa") → nas células da grade que a caixa dela cobre.

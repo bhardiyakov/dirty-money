@@ -22,7 +22,7 @@ const FavelaDetail = {
 		for (const l of lots) { const k = this._k((l.x0 + l.x1) / 2, (l.z0 + l.z1) / 2); (this._lotGrid.get(k) || this._lotGrid.set(k, []).get(k)).push(l); }
 		this.inst = new PropInstances();
 		this._roofs(W, lots, rng, st);
-		const nInst = this.inst.count, nMesh = this.inst.build(W, 'fav');
+		const nInst = this.inst.count, nMesh = Config.perf.minimal ? 0 : this.inst.build(W, 'fav');      // (Mínimo: sem antenas nem ar-condicionados — 8 a 11 desenhos na favela)
 		st.inst = `${nInst} antenas e ar-condicionados em ${nMesh} malhas instanciadas`;
 		this._wires(W, rng, st);
 		for (const F of Favelas.built) this._ground(W, F, rng, st);

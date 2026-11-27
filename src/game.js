@@ -187,7 +187,7 @@ class Game {
 		this.ui = new Hud(this);                     // interface em pixel art (arma, procurado, vida/colete, veículo, mensagens)
 		// Interface modules on their own clock, run after the scene is drawn (ui/UiLoop.js); the frame only says which ones are live.
 		this.uiLoop = new UiLoop();
-		const uiK = Config.perf.phone ? 0.5 : 1;                                // (celular modesto: a interface na metade do ritmo — o minimapa a 10 Hz não se nota)
+		const uiK = Config.perf.minimal ? 0.4 : Config.perf.phone ? 0.5 : 1;      // (celular modesto: a interface na metade do ritmo — o minimapa a 10 Hz não se nota; Mínimo: 40%, 8 Hz)
 		this.uiLoop.add('minimap', 20 * uiK, () => this._updateMinimap());
 		this.uiLoop.add('panel', 15 * uiK, (elapsed) => this.ui.update(elapsed));
 		this.uiLoop.add('objective', 4, () => Objective.update(this, 1));    // "o que fazer agora" (ui/Objective.js)
@@ -540,7 +540,7 @@ class Game {
 			// a cada 5 s, sem inundar) e o jogo segue.
 			try { this._update(dt); } catch (e) { this._frameError('update', e); }
 			try { this._render(dt); } catch (e) { this._frameError('render', e); }
-			try { this.uiLoop.flush(); } catch (e) { this._frameError('interface', e); }      // (a cena já foi entregue à GPU)
+			try { this.uiLoop.flush(Config.perf.halfFar ? 1 : Infinity); } catch (e) { this._frameError('interface', e); }      // (a cena já foi entregue à GPU)
 			Perf.lap('interface');
 			Perf.frameEnd();
 			HangProbe.mark('laço: fim do quadro');
@@ -695,7 +695,17 @@ class Game {
 		this.dev.update(dt);
 		Interiors.tickFade(dt);
 		Perf.lap('outros');
-		Needs.update(this, dt);                                                  // fome e cansaço (leves)
+		// MEIA TAXA (Mínimo — Config.perf.halfLogic): os sistemas de cenário e de gestão que não precisam de 30 Hz (relógio do céu, clima,
+		// semáforos, a rua viva, festas, poças, ronco dos motores, fome) rodam em quadros alternados — grupo A nos ímpares, B nos pares —,
+		// com o dt somado. O que se move na tela (pessoas, carros, bichos, partículas) e o que lê os controles fica a cada quadro.
+		let dA = dt, dB = dt;
+		if (Config.perf.halfLogic) {
+			const odd = (this._hlN = (this._hlN | 0) + 1) & 1;
+			this._hlA = (this._hlA || 0) + dt; this._hlB = (this._hlB || 0) + dt;
+			if (odd) { dA = Math.min(this._hlA, 0.1); this._hlA = 0; dB = 0; } else { dB = Math.min(this._hlB, 0.1); this._hlB = 0; dA = 0; }
+		}
+		this._dA = dA; this._dB = dB;
+		if (dA) Needs.update(this, dA);                                          // fome e cansaço (leves)
 		Phone.update(this, dt);                                                  // o celular: mensagens, compromissos, entregas
 		Hints.update(this, dt); Ledger.update(this, dt); Witnesses.update(this, dt); if (typeof StoreBurglary !== 'undefined') StoreBurglary.tick(dt, this); Calendar.update(this, dt); Personas.update(this, dt); Tutorial.update(this, dt); MobileUI.start(); Juice.update(this, dt); ScreenFx.update(this, dt); Daily.update(this, dt);                         // dicas de primeira vez; livro-caixa (de onde vem o dinheiro)
 		Perf.lap('mundo vivo (celular/festas/personagens)');
@@ -859,7 +869,7 @@ class Game {
 		this._updateGps(dt);
 		if (this.birds) this.birds.update(dt);
 		if (this.livestock) this.livestock.update(dt);
-		if (this.puddles) this.puddles.update(dt);
+		if (this.puddles && dA) this.puddles.update(dA);
 		if (this.vehicleManager && this.gameEngine.world.street) {
 			this.gameEngine.world.street.update(dt, this.carDamage.allCars(), this);       // (lista reaproveitada; barcos são ignorados lá)
 			if (typeof StreetDetail !== 'undefined') StreetDetail.update(dt, this.carDamage.allCars(), this);      // tranco do quebra-molas e dos buracos
@@ -887,14 +897,14 @@ class Game {
 
 		Perf.lap('rua (props/itens/pássaros)');
 		// --- Relógio do jogo (sol, ambiente, janelas, postes) ---
-		this.weather.update(dt);
+		if (dA) this.weather.update(dA);
 		if (this.input.consumePress('y')) this.weather.cycle();
 		Economy.tick(this.dayNight.hour);
 		Laundry.update(dt);
 		// --- Céu e voo: as nuvens (e o "dentro da nuvem", que fecha a névoa) antes da luz do dia; o LOD do voo pela altitude da câmera ---
 		if (typeof CloudField !== 'undefined') CloudField.update(dt, this);
 		if (typeof AirLod !== 'undefined') AirLod.update(dt, this);
-		this.dayNight.update(dt);
+		if (dA) this.dayNight.update(dA);
 		if (this.input.consumePress('t')) { this.dayNight.skip(2); this._flash(`Hora: ${this.dayNight.label}`); }
 
 		// --- Trânsito: IA dos carros (e sprites seguindo os corpos físicos) ---
@@ -908,7 +918,7 @@ class Game {
 		Perf.lap('barcos/colisores');
 		if (this.vehicleManager) { this.carDamage.update(dt); if (typeof CarParts !== 'undefined') CarParts.update(dt, this); Throwables.update(dt); Rockets.update(dt); this.collisions.update(dt); this.doors.update(dt); this._updateAlarms(dt); NearMiss.update(this, dt); }
 		Perf.lap('veículos (dano/colisão)');
-		if (this.vehicleManager) EngineAudio.update(this, dt);                 // ronco dos motores (o seu e o do trânsito perto)
+		if (this.vehicleManager && dB) EngineAudio.update(this, dB);                 // ronco dos motores (o seu e o do trânsito perto)
 		Footsteps.update(this, dt);                                            // passos (presos à animação de andar/correr)
 		for (let i = this.casualties.length - 1; i >= 0; i--) {
 			if (!this.casualties[i].update(dt)) { this.casualties[i].dispose(); this.casualties.splice(i, 1); }
@@ -930,7 +940,7 @@ class Game {
 		}
 
 		// --- Semáforos ---
-		this.signals.update(dt, this.camera.target);
+		if (dA) this.signals.update(dA, this.camera.target);
 		Perf.lap('luzes/semáforos');
 
 		// --- IA (pedestres) ---
@@ -966,18 +976,17 @@ class Game {
 			Perf.lap('favela (gangues/moto/missões)');
 			RivalArc.update(this, dt);                                          // o arco do Dentinho: bocas, capangas, emboscadas, o galpão
 			Perf.lap('Dentinho (bocas/capangas)');
-			if (this.watch) this.watch.update(dt, gs.pos);
+			if (this.watch && dB) this.watch.update(dB, gs.pos);
 			if (this.barricades) this.barricades.update(dt, this.op, Standing.nearFavela(gs.pos.x, gs.pos.z, 20));
-			Baile.update(dt, this);
-			NightLife.update(dt, this);                                  // a festa do Morro do Mirante (C.P.C), toda noite
+			if (dB) { Baile.update(dB, this); NightLife.update(dB, this); }                                 // a festa do Morro do Mirante (C.P.C), toda noite
 			Pelada.update(dt, this);                                     // o futebol dos meninos na quadra da favela (de dia)
 			Perf.lap('favela (gangues/moto/missões)');
-			StreetLife.update(this, dt);                                  // a rua viva: movimento por hora, acontecimentos, conversas
+			if (dB) StreetLife.update(this, dB);                                // a rua viva: movimento por hora, acontecimentos, conversas
 			Chaos.update(this, dt);                                       // pedestres entre si: esbarrão, roda de briga, dominó, bêbado, dança, desmaio, dinheiro voando
-			if (typeof StreetIdle !== 'undefined') StreetIdle.update(this, dt);      // mendigos no centro e na periferia (sentar, ponto e conversa: WanderState)
+			if (typeof StreetIdle !== 'undefined' && dB) StreetIdle.update(this, dB);     // mendigos no centro e na periferia (sentar, ponto e conversa: WanderState)
 			Rescue.update(this, dt);                                      // feridos sangrando, quem liga para o 192 e as ambulâncias
 			Buses.update(this, dt);                                       // as linhas de ônibus: pontos, horários, os ônibus perto da câmera e o embarque
-			Stands.update(this, dt);                                      // quiosques, café e barracas: o vendedor aparece de perto
+			if (dB) Stands.update(this, dB);                                    // quiosques, café e barracas: o vendedor aparece de perto
 			Perf.lap('rua viva');
 			if (this.motoTaxis) this.motoTaxis.update(dt, gs.pos);
 			MotoStands.update(dt, this, gs.pos); this.motoUI.update(dt);
@@ -987,8 +996,8 @@ class Game {
 			Laundry.syncMap(this, dt);                                                       // fachadas compradas → mapa e radar
 			Heists.build(this); Mechanic.build(this); Business.syncMap(this, dt);           // joalherias, oficinas, seus negócios no mapa
 			Dealers.build(this); Dealers.update(dt); Tuning.build(this); Tuning.update(dt); Garage.update(dt); PersonalBike.update(dt); this.carUI.update(dt);      // concessionárias (vitrine) e garagens (seus carros)
-			if (typeof Maracana !== 'undefined') Maracana.update(dt, this);                // o estacionamento do Colosso: carros de verdade nas vagas
-			if (typeof Airport !== 'undefined') Airport.update(dt, this);                  // as luzes da pista à noite, a biruta
+			if (typeof Maracana !== 'undefined' && dA) Maracana.update(dA, this);               // o estacionamento do Colosso: carros de verdade nas vagas
+			if (typeof Airport !== 'undefined' && dA) Airport.update(dA, this);                 // as luzes da pista à noite, a biruta
 			if (typeof Lagoa !== 'undefined') Lagoa.update(dt, this);                      // os ciclistas da ciclovia da Lagoa
 		}
 

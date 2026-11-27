@@ -29,10 +29,15 @@ class UiLoop {
 		}
 	}
 
-	// After the scene is drawn: runs the modules whose turn came. Returns how many ran.
-	flush() {
+	// After the scene is drawn: runs the modules whose turn came, at most `max` of them (weak device: 1 — the others stay due for the
+	// next frames, in turn, so the minimap and a panel never land on the same frame). Returns how many ran.
+	flush(max = Infinity) {
 		let ran = 0;
-		for (const t of this.tasks.values()) {
+		const T = this._list || (this._list = [...this.tasks.values()]), n = T.length;
+		if (n !== this.tasks.size) { this._list = null; return this.flush(max); }
+		const s = this._rr = ((this._rr | 0) + 1) % n;
+		for (let i = 0; i < n && ran < max; i++) {
+			const t = T[(s + i) % n];
 			if (!t.due) continue;
 			t.due = false;
 			const e = t.elapsed;
