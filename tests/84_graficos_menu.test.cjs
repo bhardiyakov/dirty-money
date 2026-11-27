@@ -4,7 +4,7 @@
 //     contador de FPS na tela, qualidade automática; o "Restaurar" volta tudo ao nível;
 //   • guardado: reabrindo o jogo, os ajustes valem desde a carga (Graphics._custom) — inclusive os que só valem ao reabrir;
 //   • Low: o detalhe das pessoas do nível (lodBias 1,7) vale de fato; o recorte da câmera tira os escondidos da lista de candidatas.
-const { boot, gameWait } = require('./lib.cjs');
+const { boot, gameWait, leave } = require('./lib.cjs');
 
 module.exports = {
 	name: 'graficos_menu',
@@ -73,6 +73,7 @@ module.exports = {
 		await page.waitForFunction(() => window.mainMenu, null, { timeout: 300000 });
 		await page.evaluate(() => window.mainMenu._start('new'));
 		await page.waitForFunction(() => window.game && window.game._loadingHidden, null, { timeout: 300000 });
+		await leave(page);
 		const re = await page.evaluate(() => ({ scale: Config.perf.renderScale, far: Config.camera.chase.far, pom: !Config.perf.noPom, cover: Trees3D.coverOn, bias: Char3D.lodBias, aq: game.autoQuality.off, meter: !!document.getElementById('fpsMeter') }));
 		c.ok(re.scale === 0.5 && re.far === 55 && re.pom && re.cover === false && re.bias === 2.2 && re.aq && re.meter, `reabrindo: os ajustes valem desde a carga (resolução ${re.scale}, visão ${re.far} m, relevo das fachadas ${re.pom ? 'ligado' : 'desligado'})`);
 
@@ -92,6 +93,18 @@ module.exports = {
 			return { n: cs.length, hidden, dyn: C.dynamic.length };
 		});
 		c.ok(cut.hidden === 0 && cut.n < cut.dyn, `candidatas do desenho: ${cut.n} (nenhuma escondida; ${cut.dyn} malhas dinâmicas no mapa)`);
+		// ------------------------------------------------------------------ qualidade automática: atrasos frequentes com a CPU no limite
+		// (no rasterizador por software ela não desce nada — gpuSteps: simula uma placa de verdade; 1 quadro em 6 perde a vez, média 25 ms)
+		const aq = await page.evaluate(() => {
+			const q = game.autoQuality, fa = Perf.frameAvg, lv = q.cpuLevel;
+			Object.assign(q, { off: false, gpuSteps: true, cool: 0, lateBad: 0, nLate: 0, acc: 0, n: 0, nSlow: 0, bad: 0 });
+			const run = () => { for (let i = 0; i < 34; i++) { Perf.frameAvg = 25; q.tick(i % 6 === 0 ? 0.04 : 0.03, false); } };
+			run(); run(); const two = q.cpuLevel; run();
+			const out = { lv, two, three: q.cpuLevel, every: Char3D.LOD_EVERY.join(',') };
+			Perf.frameAvg = fa; q.off = true;
+			return out;
+		});
+		c.ok(aq.two === aq.lv && aq.three === aq.lv + 1 && aq.every === '1,2,3,4', `qualidade automática: 1 quadro em 6 atrasado por 3 s com a CPU no limite desce um degrau de processador (${aq.lv} → ${aq.three}; pose de longe a cada ${aq.every} quadros)`);
 		c.noErrors(errors, 'gráficos avançados');
 		await close();
 	},

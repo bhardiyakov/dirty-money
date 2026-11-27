@@ -904,5 +904,7 @@ A qualidade automática (`src/core/AutoQuality.js`) só tinha degraus de placa d
 num aparelho com CPU fraca, o caso desta meta, eles não ajudam: ela descia tudo e o jogo continuava lento. Agora, quando o trabalho de
 CPU do quadro (`Perf.frameAvg`) passa de 85% do tempo do quadro, ela desce primeiro a **escada de processador**: a pose de quem está
 longe menos vezes (`Char3D.LOD_EVERY` 1/2/3/4 e o detalhe das pessoas um pouco mais cedo), menos movimento na rua (Vida da cidade
-baixa) e a distância de visão −15% (duas vezes, até 50 m). O degrau alcançado fica guardado como os outros (`autoQuality.cpu`). Só em
+baixa), a distância de visão −15% (duas vezes, até 50 m), as peças miúdas (fachadas só com molduras e ar-condicionado, sem peças nos
+telhados nem pássaros) e a lógica de quem está longe já a partir de 12 m. Desce também quando a média cabe mas ~1 quadro em 8 perde a
+vez por 3 s seguidos com a CPU como gargalo (os picos de quem está no limite) — a regra antiga só agia com a maioria dos quadros lentos. O degrau alcançado fica guardado como os outros (`autoQuality.cpu`). Só em
 placa de vídeo de verdade (no rasterizador por software dos testes nada disso dispara). Desliga em Ajustes › Gráficos avançados.

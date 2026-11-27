@@ -55,7 +55,7 @@ class AutoQuality {
 
 	constructor(game) {
 		this.g = game;
-		this.level = 0; this.cpuLevel = 0;
+		this.level = 0; this.cpuLevel = 0; this.nLate = 0; this.lateBad = 0;
 		this.acc = 0; this.n = 0; this.nSlow = 0; this.bad = 0; this.cool = 6;        // 6 s de carência no início (carregamento e aquecimento de shaders)
 		this.slow = 1000 / Config.perf.fpsCap * AutoQuality.SLOW_K;                  // média de ms por quadro acima disto = quadro "ruim"
 		this.off = location.search.includes('full') || ((typeof Store !== 'undefined' && (Store.getJSON('settings', null) || {}).gfx) || {}).autoQ === false;      // (Ajustes › Gráficos avançados)
@@ -85,6 +85,16 @@ class AutoQuality {
 	}
 	_remember() { if (this.gpuSteps && typeof Store !== 'undefined') Store.setJSON('autoQuality', { sig: this._sig(), level: this.level, cpu: this.cpuLevel }); }
 
+	// Desce um degrau da escada de processador (e avisa).
+	_cpuDown() {
+		const g = this.g, CS = AutoQuality.CPU_STEPS;
+		if (this.cpuLevel >= CS.length) return;
+		const [id, txt] = CS[this.cpuLevel++];
+		try { this._cpuApply(id); } catch (e) { console.warn('[QUALIDADE]', e); }
+		this._remember();
+		console.log(`[QUALIDADE] processador no limite (${typeof Perf !== 'undefined' ? Perf.frameAvg.toFixed(1) : '?'} ms por quadro): ${txt}`);
+		if (g._flash) g._flash(`Modo econômico: ${txt} para manter a fluidez`);
+	}
 	// Um degrau da escada de processador.
 	_cpuApply(id) {
 		const H = Config.camera && Config.camera.chase;
@@ -107,9 +117,16 @@ class AutoQuality {
 		if (this.cool > 0) { this.cool -= dtReal; return; }
 		const ms = dtReal * 1000;
 		this.acc += ms; this.n++; if (ms > this.slow) this.nSlow++;
+		if (ms > 1000 / Config.perf.fpsCap * 1.08) this.nLate = (this.nLate || 0) + 1;      // (perdeu a vez do quadro)
 		if (this.acc < 1000) return;                                   // janela de 1 s
-		const avg = this.acc / this.n, share = this.nSlow / this.n;
-		this.acc = 0; this.n = 0; this.nSlow = 0;
+		const avg = this.acc / this.n, share = this.nSlow / this.n, late = (this.nLate || 0) / this.n;
+		this.acc = 0; this.n = 0; this.nSlow = 0; this.nLate = 0;
+		// PROCESSADOR NO LIMITE, MAS SÓ ÀS VEZES: a média cabe e ~1 quadro em 8 perde a vez (os picos de quem está perto do limite). A
+		// regra de baixo (a maioria lenta) não pegaria isso; 3 s seguidos assim com a CPU como gargalo descem UM degrau da escada de
+		// processador — que é quase invisível — e o ritmo fica estável.
+		if (this.gpuSteps && late >= 0.12 && typeof Perf !== 'undefined' && Perf.frameAvg > 1000 / Config.perf.fpsCap * 0.6 && this.cpuLevel < AutoQuality.CPU_STEPS.length) {
+			if (++this.lateBad >= 3) { this.lateBad = 0; this.cool = 4; this._cpuDown(); return; }
+		} else this.lateBad = Math.max(0, (this.lateBad || 0) - 1);
 		// Janela ruim = a MAIORIA dos quadros lentos, não só a média: um engasgo isolado (carregar um pedaço do mapa, compilar um shader)
 		// puxa a média de uma máquina boa e não pode custar qualidade. Bem lento (menos da metade do ritmo, quase todo quadro) conta em
 		// dobro: desce em 2 s.
@@ -171,15 +188,7 @@ class AutoQuality {
 			return;
 		}
 		// CPU no limite (o trabalho do quadro passa de 85% do tempo dele): os degraus de processador primeiro — os de placa não ajudam
-		const CS = AutoQuality.CPU_STEPS;
-		if (this.gpuSteps && typeof Perf !== 'undefined' && Perf.frameAvg > 1000 / Config.perf.fpsCap * 0.85 && this.cpuLevel < CS.length) {
-			const [id, txt] = CS[this.cpuLevel++];
-			try { this._cpuApply(id); } catch (e) { console.warn('[QUALIDADE]', e); }
-			this._remember();
-			console.log(`[QUALIDADE] processador no limite (${Perf.frameAvg.toFixed(1)} ms por quadro): ${txt}`);
-			if (g._flash) g._flash(`Modo econômico: ${txt} para manter a fluidez`);
-			return;
-		}
+		if (this.gpuSteps && typeof Perf !== 'undefined' && Perf.frameAvg > 1000 / Config.perf.fpsCap * 0.85 && this.cpuLevel < AutoQuality.CPU_STEPS.length) { this._cpuDown(); return; }
 		const next = this._next();
 		if (!next) {
 			this.off = true;
