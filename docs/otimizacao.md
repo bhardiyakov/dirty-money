@@ -1007,7 +1007,8 @@ o jogo roda 20 s (descartando 1,5 s e 15 quadros de aquecimento), medindo:
 No fim, o selo no canto e a linha do menu dizem se o nível segura os 30 FPS (média ≥ 95% do teto e 90% dos quadros no ritmo). Se
 não segura, dizem quem é o limite e o que mudar: com o processador acima de 85% do tempo do quadro, um nível abaixo (no Mínimo, a
 distância de visão e o detalhe das pessoas); senão, a resolução. O resultado fica guardado (`gfxBench`) e também vai para o
-console. Aqui, com a placa emulada e a resolução cheia, ele mede ~2,5 FPS com CPU p90 de 27 ms e diz, certo, que o limite é a
+console. Também roda sozinho pela URL: `?gfx=min&devicetest` (no celular, o endereço do jogo servido na rede local). Ele espera a
+carga, mede 20 s e deixa o resultado na tela, com o nível, os núcleos, a memória e a placa do aparelho, para fotografar. Aqui, com a placa emulada e a resolução cheia, ele mede ~2,5 FPS com CPU p90 de 27 ms e diz, certo, que o limite é a
 placa. Teste: `tests/84_graficos_menu.test.cjs`.
 
 **Próximos passos com ganho real:** física a 30 Hz no Mínimo (hoje são 2 passos do Havok por quadro, ~2 ms a 4×), fundir os estilos

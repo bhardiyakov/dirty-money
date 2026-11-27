@@ -244,6 +244,30 @@ const DeviceTest = {
 		};
 		return true;
 	},
+	// `?devicetest` na URL (ex.: ?gfx=min&devicetest no celular): espera a carga e o jogo começar, roda 20 s e deixa o resultado na
+	// tela até um toque — com o nível, o aparelho (núcleos, memória, placa) e o veredito, para fotografar ou copiar.
+	auto(g) {
+		const t0 = performance.now();
+		const wait = setInterval(() => {
+			if (performance.now() - t0 > 600000) { clearInterval(wait); return; }
+			if (!g._loadingHidden || (g.menu && g.menu.isOpen) || this.on) return;
+			clearInterval(wait);
+			setTimeout(() => this.run(g, 20, (r) => {
+				const nav = typeof navigator !== 'undefined' ? navigator : {}, gp = typeof Graphics !== 'undefined' && Graphics.gpu ? Graphics.gpu() : {};
+				const box = document.createElement('div');
+				box.id = 'deviceTestResult';
+				box.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:200;max-width:min(92vw,560px);padding:14px 16px;border-radius:12px;background:rgba(8,10,14,0.92);color:#e6edf3;font:600 14px/1.5 var(--font, sans-serif)';
+				box.innerHTML = `<div style="font-size:16px;color:${r.ok ? '#9dff9d' : '#ffe27a'}">⏱ ${r.veredito}</div>`
+					+ `<div>${r.fps} FPS · ${r.ritmo}% dos quadros no ritmo · intervalo p90 ${r.p90} ms</div>`
+					+ `<div>CPU por quadro (p90): ${r.cpuP90} ms${r.gpuMs !== null ? ` · placa: ${r.gpuMs} ms` : ' · placa: o navegador não informa'}</div>`
+					+ `<div style="color:#9aa4b2;font-size:12px">nível ${r.nivel} · ${nav.hardwareConcurrency || '?'} núcleos · ${nav.deviceMemory ? nav.deviceMemory + ' GB' : '? GB'} · ${(gp.renderer || '?').slice(0, 80)}</div>`
+					+ (r.dica ? `<div style="color:#ffe27a">${r.dica}</div>` : '')
+					+ '<div style="color:#9aa4b2;font-size:12px">(toque para fechar)</div>';
+				box.addEventListener('click', () => box.remove());
+				document.body.appendChild(box);
+			}), 3000);
+		}, 500);
+	},
 	_pct(a, p) { if (!a.length) return 0; const b = a.slice().sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(b.length * p))]; },
 	_result(iv, work, gpu) {
 		const cap = (typeof Config !== 'undefined' && Config.perf.fpsCap) || 30, T = 1000 / cap, n = iv.length;

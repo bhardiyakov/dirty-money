@@ -522,6 +522,7 @@ class Game {
 		if (/[?&](perf|bench)\b/.test(q)) RenderStats.enable(this);
 		if (/[?&]perf\b/.test(q)) RenderStats.showHud();
 		if (/[?&]bench\b/.test(q)) Bench.auto(this);
+		if (/[?&]devicetest\b/.test(q)) DeviceTest.auto(this);                  // (o teste do aparelho sozinho depois da carga: ui/GraphicsMenu.js)
 		// Caixa-preta (core/HangProbe.js): marca também as bordas do quadro do motor, para separar "dentro" de "entre" quadros.
 		const eng = this.gameEngine.engine;
 		eng.onBeginFrameObservable.add(() => HangProbe.mark('motor: começo do quadro'));
