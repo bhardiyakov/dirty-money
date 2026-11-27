@@ -14,6 +14,9 @@ module.exports = {
 		await page.evaluate(() => {
 			Tutorial.skip(); Interiors.autoEnter = () => {}; game.player.invulnerable = true; CrimeExposure._witnessSees = () => false;
 			Config.time.cycleSeconds = 1e12; game.dayNight.hour = 12; game.dayNight.apply(); Weather.cur.set('clear', true, true); Weather.cur.override = 1e9;
+			// (a qualidade automática desliga as sombras no SwiftShader, lento: aqui quem manda nelas é o clima)
+			if (game.autoQuality) game.autoQuality.off = true;
+			game.dayNight.forceNoShadows = false; game.dayNight._shadowRate = null;
 			const dc = game.gameEngine.engine._drawCalls; let d0 = 0; window.__dc = 0;
 			game.scene.onBeforeRenderObservable.add(() => { d0 = dc.current; });
 			game.scene.onAfterRenderObservable.add(() => { window.__dc = dc.current - d0; });

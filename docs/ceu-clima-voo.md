@@ -185,6 +185,28 @@ agora vão a zero acima de 40 m.
 Para desligar qualquer parte: `?nuvens=0` (nuvens), `?lodvoo=0` ou `Config.lod.on = false` (LOD do voo; no ar, devolve tudo na hora),
 `?ceu=0` (o domo do céu).
 
+## Como testar e medir
+
+- `node tests/run.cjs ceu_clima_voo` (teste 83): nublado sem chuva; sombras somem na tempestade e voltam com o sol; a névoa encurta;
+  no alto o LOD liga (malhas escondidas, mapa de longe à mostra), as chamadas de desenho caem mais de 30% contra o LOD desligado na
+  mesma posição, o Havok não ganha corpos voando 700 m por cima da cidade; as nuvens: céu limpo × tempestade, e dentro de uma nuvem a
+  névoa fecha e abre ao sair; descendo, tudo volta (nenhuma malha ficou com a máscara zerada).
+- No navegador: `AirLod.stats` (camada ativa, malhas escondidas, pedaços do mapa de longe, terreno, física), `CloudField.stats`
+  (nuvens, bolhas, à mostra) e `CloudField.inside`.
+
+## Limites e próximos passos
+
+- **Helicóptero**: a câmera dele não usa o modo de voo (`setAir` é do avião e do paraquedas), então o LOD do voo não liga nele.
+  Ligar é chamar `camera.setAir(k, alt, v)` no `Chopper` como no `Plane`; a câmera do helicóptero mudaria junto (mais alta e olhando
+  mais longe), por isso ficou de fora desta etapa.
+- **Sem árvores no mapa de longe**: mata e parque são só a cor do chão. Um bloco de copas por célula de mata, numa instância fina, seria
+  barato se a falta incomodar.
+- **Sombra das nuvens no chão**: não tem. O caminho barato é uma textura de ruído rolando com o vento, lida pelo shader do chão (como o
+  `ProcSurf`), sem passada nova.
+- **Troca do detalhe para o mapa de longe** sem dissolução pontilhada: a histerese, a troca a ~950 m (já dentro da névoa) e o mapa de
+  longe escondido dentro do detalhe bastaram nas fotos. Dissolver o detalhe pediria um plugin em todos os materiais do mundo; se um
+  dia precisar, o lugar é um `MaterialPluginBase` com um uniforme de raio, como o `WindowLights`.
+
 ## Origem flutuante
 
 **Não é preciso agora, e por que.** O mundo vai de x = −1.500 a 1.000 e de z = −1.250 a 1.250 (o avião vira 140 m antes da borda);
