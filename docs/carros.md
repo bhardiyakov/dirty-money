@@ -160,10 +160,23 @@ src/vehicle/CarParts.js   o estado por carro: a batida por região, as peças so
 
 **Como vai para a placa**: um material só para todos os modelos; as dobradiças de cada modelo (pivô, eixo, ângulo máximo, tipo) são
 uniformes da malha, postos a cada desenho (`onBind`). Cada carro manda mais 12 números por instância (os ângulos das 10 peças, o
-amassado das 4 regiões); quais peças caíram e quais lâmpadas quebraram vão nos números que já existiam. O destroço é mais uma
-instância do mesmo modelo, que só desenha aquela peça, centrada no meio dela. Um carro inteiro e intacto custa o mesmo de antes.
+amassado das 4 regiões); quais peças caíram e quais lâmpadas quebraram vão nos números que já existiam. O destroço é uma instância
+de uma malha SÓ daquela peça (montada na primeira vez que ela cai, com o mesmo material e as mesmas dobradiças), girando em volta
+do meio dela.
 
-**Medição**: MEDIR
+**Medição** (SwiftShader, gráfico padrão, a mesma câmera de cima sobre ~11 carros parados; ruído de ±20 ms num quadro de ~300 ms):
+
+| | antes | agora |
+|---|---|---|
+| arquivo `carros3d.js` | 2,67 MB (1,94 MB gzip) | 3,56 MB (2,58 MB gzip) |
+| triângulos dos 39 modelos | 252 mil | 306 mil (+21%: a pele de dentro das peças, o interior, o motor) |
+| 11 carros intactos na tela | 317–328 ms | 307–316 ms (empate no ruído) |
+| os mesmos carros explodidos + 24 destroços | — | 313–324 ms (+5 mil triângulos; 1 chamada de desenho por peça caída) |
+| CPU do `CarParts.update` (10 carros batidos + 24 destroços) | — | 0,05 ms por quadro |
+
+Carro sem nada mexido não entra na lista do `CarParts` (custo zero de CPU); o shader só faz a conta do amassado quando a região tem
+amassado. A primeira versão do destroço desenhava o modelo INTEIRO e cortava o resto no shader (24 destroços = +80 mil triângulos
+processados); com a malha da peça, são ~5 mil.
 
 ## Motos, helicópteros e barcos em 3D (outubro/2026)
 

@@ -195,6 +195,36 @@ const CarArt3D = {
 		for (const { r, g } of rotors) put(g, false, r.c, r.axis === 'y' ? 5 : 6);
 		return (this._models[id] = this._mesh(id, D, W, pos, nor, col, pbr, wc, idx));
 	},
+	// Malha SÓ DA PEÇA `code` do modelo (o destroço: na 1ª vez que aquela peça cai) — os vértices da carroceria com aquela peça e os
+	// triângulos inteiros dela (a pele de fora, a de dentro, a borda). Assim o destroço não processa o carro inteiro só para cortá-lo.
+	_part(id, code) {
+		const key = id + '#p' + code;
+		if (this._models[key]) return this._models[key];
+		const no = this._noPart || (this._noPart = new Set());                   // (as peças que o modelo não tem: não procura de novo)
+		if (no.has(key)) return null;
+		const D = this._defs[id], body = D && this._read(D.body, D.q, D.pack);
+		if (!body || !body.T) { no.add(key); return null; }
+		const map = new Int32Array(body.nv).fill(-1), tri = [];
+		let nv = 0;
+		for (let i = 0; i + 2 < body.ni; i += 3) {
+			const a = body.I[i], b = body.I[i + 1], c = body.I[i + 2];
+			if (body.T[a] !== code || body.T[b] !== code || body.T[c] !== code) continue;
+			for (const x of [a, b, c]) { if (map[x] < 0) map[x] = nv++; tri.push(map[x]); }
+		}
+		if (!tri.length) { no.add(key); return null; }
+		const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 4), pbr = new Float32Array(nv * 4), wc = new Float32Array(nv * 4), mats = D.mats, q = body.q;
+		for (let i = 0; i < body.nv; i++) {
+			const v = map[i];
+			if (v < 0) continue;
+			const mt = mats[body.M[i]];
+			pos[v * 3] = body.P[i * 3] * q; pos[v * 3 + 1] = body.P[i * 3 + 1] * q; pos[v * 3 + 2] = body.P[i * 3 + 2] * q;
+			nor[v * 3] = body.N[i * 3] / 127; nor[v * 3 + 1] = body.N[i * 3 + 1] / 127; nor[v * 3 + 2] = body.N[i * 3 + 2] / 127;
+			col[v * 4] = mt.c[0]; col[v * 4 + 1] = mt.c[1]; col[v * 4 + 2] = mt.c[2]; col[v * 4 + 3] = mt.k;
+			pbr[v * 4] = mt.r; pbr[v * 4 + 1] = mt.m; pbr[v * 4 + 2] = mt.cc; pbr[v * 4 + 3] = mt.s || 0;
+			wc[v * 4 + 3] = code;
+		}
+		return (this._models[key] = this._mesh(key, D, D.wheels || [], pos, nor, col, pbr, wc, nv > 65535 ? new Uint32Array(tri) : new Uint16Array(tri)));
+	},
 	_mesh(id, D, W, pos, nor, col, pbr, wc, idx) {
 		const scene = this._scene, mesh = new BABYLON.Mesh('car3d_' + id, scene);
 		const vd = new BABYLON.VertexData();
@@ -862,7 +892,7 @@ const CarArt3D = {
 	// centrada no pivô — sem malha nova e sem desenho a mais. b = { model, k, variant, x, y, z, q: [x, y, z, w] (giro), s (escala), fade }.
 	debris: [],
 	_writeDebris(b) {
-		const m = this._models[b.model] || this._model(b.model);
+		const m = this._part(b.model, b.k + 7) || this._models[b.model] || this._model(b.model);
 		if (m.n >= m.cap) this._grow(m, m.cap * 2);
 		const i = m.n++, M = m.mat, o = i * 16, [qx, qy, qz, qw] = b.q, k = b.s * (b.fade === undefined ? 1 : b.fade);
 		M[o] = (1 - 2 * (qy * qy + qz * qz)) * k; M[o + 1] = 2 * (qx * qy + qz * qw) * k; M[o + 2] = 2 * (qx * qz - qy * qw) * k; M[o + 3] = 0;
