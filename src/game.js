@@ -132,6 +132,7 @@ class Game {
 		Lighting.init(this);                                 // luz física (etapa 2): a gradação de cor no fim da cadeia (a luz do céu é do DayNight)
 		NightLights.init(this);                              // luz de verdade à noite (etapa 6): o campo de luz dos postes, lojas e faróis
 		if (typeof SkyDome !== 'undefined') { SkyDome.init(this); this.dayNight.apply(); }      // o céu de verdade (degradê, sol, nuvens, lua, estrelas) na perseguição
+		if (typeof CloudField !== 'undefined') CloudField.init(this);                         // as nuvens da faixa de voo (atmosphere/CloudField.js)
 		Water.initMirror(this);                              // reflexo na água (etapa 7): prédios, árvores e carros espelhados
 		this.trails = Trails.attach(this.camera.camera, this.gameEngine.engine);      // o borrão do GTA SA (render/Trails.js) — antes do CRT
 		this.crt = CrtFilter.attach(this.camera.camera, this.gameEngine, { renderScale: 0.75 });      // TV de tubo + resolução interna reduzida (render/CrtFilter.js) — por último na cadeia
@@ -886,6 +887,9 @@ class Game {
 		if (this.input.consumePress('y')) this.weather.cycle();
 		Economy.tick(this.dayNight.hour);
 		Laundry.update(dt);
+		// --- Céu e voo: as nuvens (e o "dentro da nuvem", que fecha a névoa) antes da luz do dia; o LOD do voo pela altitude da câmera ---
+		if (typeof CloudField !== 'undefined') CloudField.update(dt, this);
+		if (typeof AirLod !== 'undefined') AirLod.update(dt, this);
 		this.dayNight.update(dt);
 		if (this.input.consumePress('t')) { this.dayNight.skip(2); this._flash(`Hora: ${this.dayNight.label}`); }
 
@@ -1598,7 +1602,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 			pl.root.rotation.y = ch.heading;
 			this.camera.setFlat(false);
 			this._camVeh = true;
-			if (ch.isPlane) { this.camera.footLift = Math.max(0, ch.alt); this.camera.setAir(Math.min(1, (this.camera.airK || 0) + dt * 1.5), ch.alt); this.camera.follow(ch.position, dt, ch); }      // (avião: a câmera de perseguição, na altura dele)
+			if (ch.isPlane) { this.camera.footLift = Math.max(0, ch.alt); this.camera.setAir(Math.min(1, (this.camera.airK || 0) + dt * 1.5), ch.alt, ch.v); this.camera.follow(ch.position, dt, ch); }      // (avião: a câmera de perseguição, na altura dele)
 			else this.camera.follow(ch.position, dt);
 		}
 	}

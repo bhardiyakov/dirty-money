@@ -61,10 +61,11 @@ class DayNight {
 		if (total >= 24 && typeof Economy !== 'undefined') Economy.passMidnight(Math.floor(total / 24));
 	}
 
-	// Tempo fechado (Weather): escurece o sol, esfria e acinzenta as cores, acende postes/janelas/faróis com chuva forte e, no
-	// relâmpago, ilumina o mundo por um instante. Devolve a intensidade do sol SEM o clarão (para o mapa de sombras).
+	// Tempo fechado (Weather): escurece o sol, esfria e acinzenta as cores (pelo `gloom`: chuva OU nublado), acende postes/janelas/
+	// faróis com chuva forte (pela chuva `k`) e, no relâmpago, ilumina o mundo por um instante. Devolve a intensidade do sol SEM o
+	// clarão (para o mapa de sombras).
 	_weather(P) {
-		const W = Weather.cur, k = W ? W.k : 0, fl = W ? W.flash : 0;
+		const W = Weather.cur, rain = W ? W.k : 0, k = W ? W.gloom : 0, fl = W ? W.flash : 0;
 		if (k <= 0.001 && fl <= 0.001) return P.sunI;
 		const to = (v, c, a) => v.map((x, i) => x + (c[i] - x) * a);
 		P.sunI = P.sunI >= 0.3 ? Math.max(0.27, P.sunI * (1 - 0.58 * k)) : P.sunI * (1 - 0.4 * k);
@@ -73,7 +74,7 @@ class DayNight {
 		P.hemiC = to(P.hemiC, [0.66, 0.72, 0.86], 0.5 * k);
 		P.tint = to(P.tint, [0.6, 0.66, 0.78], 0.55 * k).map((v) => v * (1 - 0.12 * k));
 		P.clear = to(P.clear, [0.08, 0.11, 0.16], 0.7 * k);
-		P.n = Math.max(P.n, 0.55 * k);
+		P.n = Math.max(P.n, 0.55 * rain);
 		const shadowI = P.sunI;
 		if (fl > 0.001) {                                       // relâmpago
 			P.hemiI += fl * 0.9; P.sunI += fl * 0.5;
@@ -111,15 +112,20 @@ class DayNight {
 		}
 		CarArt.setSun(dir, P.sunI, P.sunC);                 // relevo dos carros: iluminados pelo mesmo sol
 
-		// Sem sol (noite) a passada de sombra é custo à toa: congela o mapa de sombras.
-		const sm = ge.shadowGenerator.getShadowMap();
-		const wantShadows = shadowI >= 0.25 && !this.forceNoShadows;      // (forceNoShadows: AutoQuality, aparelho fraco)
-		if (this._shadowsOn !== wantShadows) { this._shadowsOn = wantShadows; sm.refreshRate = wantShadows ? (Config.perf.shadowEvery || 1) : 0; }      // (Medium: a cada 2 quadros)
-		// Chuva: sombras mais fracas. Ao anoitecer elas desvanecem (darkness -> 1 = invisivel) ANTES de congelar o mapa; senao o mapa
-		// congelado ficava pintado no chao como uma 'marca d'agua' de sombras velhas (e nao acompanhava mais sol nem camera).
-		const fade = this.forceNoShadows ? 0 : Math.max(0, Math.min(1, (shadowI - 0.25) / 0.17));
+		// Sem sol (noite) a passada de sombra é custo à toa: congela o mapa de sombras. Céu FECHADO (nublado forte, chuva forte,
+		// tempestade) também não tem sol direto: as sombras somem (desvanecem e o mapa para) — a passada de sombra inteira sai do quadro
+		// justo quando a chuva e as nuvens custam mais. Céu meio fechado: sombra fraca, refeita a cada 2 quadros a mais.
+		const sm = ge.shadowGenerator.getShadowMap(), gloom = Weather.cur ? Weather.cur.gloom : 0;
+		const overcast = Math.max(0, Math.min(1, (gloom - 0.55) / 0.3));
+		const fade = this.forceNoShadows ? 0 : Math.max(0, Math.min(1, (shadowI - 0.25) / 0.17)) * (1 - overcast);
+		const wantShadows = shadowI >= 0.25 && !this.forceNoShadows && fade > 0.005;      // (forceNoShadows: AutoQuality, aparelho fraco)
+		const every = Config.perf.shadowEvery || 1, rate = wantShadows ? (gloom > 0.4 ? every + 1 : every) : 0;      // (Medium: a cada 2 quadros)
+		if (this._shadowRate !== rate) { this._shadowRate = rate; sm.refreshRate = rate; }
+		this._shadowsOn = wantShadows;
+		// Chuva: sombras mais fracas. Ao anoitecer (e quando o céu fecha) elas desvanecem (darkness -> 1 = invisivel) ANTES de congelar
+		// o mapa; senao o mapa congelado ficava pintado no chao como uma 'marca d'agua' de sombras velhas (e nao acompanhava mais sol nem camera).
 		const base = P.shadowBase != null ? P.shadowBase : 0.4;
-		const dark = Math.round((1 - (1 - (base + (1 - base) * (2 / 3) * (Weather.cur ? Weather.cur.k : 0))) * fade) * 100) / 100;
+		const dark = Math.round((1 - (1 - (base + (1 - base) * (2 / 3) * gloom)) * fade) * 100) / 100;
 		if (this._shadowDark !== dark) { this._shadowDark = dark; ge.shadowGenerator.setDarkness(dark); }
 		if (typeof Lighting !== 'undefined' && typeof NpcArt !== 'undefined') NpcArt.setShadeColor(Lighting.shadeColor(P, dark));
 
@@ -132,7 +138,10 @@ class DayNight {
 			sky[i] = P.clear[i] * 0.55 + hz[i] * P.hemiC[i] * 0.8 * k + P.clear[i] * (1 - k) * 0.35;
 			haze[i] = Math.min(1, sky[i] * 0.8 + (P.sunC[i] * 0.5 + 0.3) * 0.25 * k + 0.02);
 		}
-		if (typeof SkyDome !== 'undefined' && SkyDome.mat) SkyDome.fromDay(P, haze, this.hour, Weather.cur ? Weather.cur.k : 0);
+		// dentro de uma nuvem (render/CloudField.js): a névoa vai para o branco-acinzentado da nuvem
+		const inC = typeof CloudField !== 'undefined' ? CloudField.inside : 0;
+		if (inC > 0.001) { const cc = CloudField.color; for (let i = 0; i < 3; i++) haze[i] += (cc[i] - haze[i]) * inC; }
+		if (typeof SkyDome !== 'undefined' && SkyDome.mat) SkyDome.fromDay(P, haze, this.hour, Weather.cur ? Weather.cur.gloom : 0, Weather.cur ? Weather.cur.cover : 0.12);
 		if (typeof CompassCamera !== 'undefined' && CompassCamera.chase >= 0.5) {
 			ge.scene.clearColor.set(Math.min(1, sky[0]), Math.min(1, sky[1]), Math.min(1, sky[2]), 1);
 			ge.scene.fogColor.set(haze[0], haze[1], haze[2]);

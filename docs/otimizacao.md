@@ -784,3 +784,13 @@ abaixo do campo) é um triângulo grande de chão que o MeshBatch subdivide para
 pontos turísticos e o pôster do mototáxi — texto em polígonos seria milhares de triângulos por letra; o mapa do terreno (`TerrainSplat`:
 o tipo de chão e a altura de cada célula, é dado, não desenho), as fotos do chão (asfalto, calçada, areia: o `GroundVariety` desenha por
 cima), as partículas (spray da água) e os interiores (montados só ao entrar).
+
+## O voo: LOD de três camadas, nuvens e clima (novembro/2026)
+
+Lá do alto (avião, paraquedas) o frustum pegava a cidade inteira: 1.200–1.900 chamadas de desenho e até 2,5 milhões de triângulos
+por quadro, quase tudo detalhe que vira um pixel. Agora o detalhe miúdo sai além de ~240 m, a vegetação além de ~520 m e as paredes,
+telhados e ruas além de ~950 m, onde entra um mapa de longe em caixas (~30 pedaços); o terreno carrega num raio menor e o Havok para
+de ganhar colisores acima de 40 m. Resultado: 230–400 chamadas e 0,3–0,6 milhão de triângulos nas mesmas posições. Ganharam também as
+nuvens na faixa de voo (1 chamada), o estado nublado e as sombras que somem sob céu fechado. Detalhes, medição, armadilhas e o roteiro
+de integração em `docs/ceu-clima-voo.md`.
+

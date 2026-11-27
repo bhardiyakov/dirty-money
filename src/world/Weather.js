@@ -1,11 +1,16 @@
 // ============================================================================
-// Weather — o clima da cidade. Quatro estados que se alternam sozinhos (e se misturam suavemente):
+// Weather — o clima da cidade. Cinco estados que se alternam sozinhos (e se misturam suavemente):
 //   clear    céu limpo
+//   cloudy   nublado       — céu fechado SEM chuva: luz difusa, sombras fracas (somem), nuvens baixas na faixa de voo
 //   drizzle  chuva fraca   — garoa fina, céu fechando, pouco vento
 //   rain     chuva forte   — pancadas, vento, pista molhada, visibilidade menor
 //   storm    tempestade    — chuva torrencial, vento forte, RELÂMPAGOS (clarão que ilumina tudo) e TROVÕES (som atrasado pela distância)
 //
-// `k` (0..1) é a intensidade atual, suavizada (a chuva engrossa e some devagar). O que ela muda:
+// `k` (0..1) é a intensidade da CHUVA, suavizada (engrossa e some devagar); `cover` (0..1) é a COBERTURA de nuvens, também suavizada
+// (o nublado tem cobertura alta e chuva zero). Derivados (lidos por quem desenha, uma conta só aqui):
+//   gloom   o quanto o céu fechado apaga o sol (DayNight: luz, cor, sombra; SkyDome: o azul vira cinza) — max(chuva, cobertura)
+//   fogMul  quanto da distância de visão sobra (CompassCamera: a névoa da perseguição e do voo encurta na chuva)
+// O que a chuva muda:
 //   • visual: a chuva caindo na cena 3D (render/RainFx: riscos com MSAA, inclinados pelo vento, atrás dos prédios) e, na chuva forte,
 //     pingos batendo no chão (anel + coroa de gotinhas); no canvas por cima, só o céu fechando nas bordas e o clarão dos raios;
 //   • luz: DayNight escurece o sol, esfria a cor e, com tempo fechado, acende postes, janelas e faróis mais cedo;
@@ -17,10 +22,11 @@
 class Weather {
 	static get STATES() {
 		return {
-			clear:   { k: 0,    label: 'Céu limpo',     msg: 'O céu abriu' },
-			drizzle: { k: 0.34, label: 'Chuva fraca',   msg: 'Começou a garoar' },
-			rain:    { k: 0.7,  label: 'Chuva forte',   msg: 'Chuva forte! A pista está escorregadia' },
-			storm:   { k: 1,    label: 'Tempestade',    msg: '⚡ Tempestade! Raios e trovões, visibilidade ruim' },
+			clear:   { k: 0,    cover: 0.12, label: 'Céu limpo',     msg: 'O céu abriu' },
+			cloudy:  { k: 0,    cover: 0.72, label: 'Nublado',       msg: 'O céu fechou' },
+			drizzle: { k: 0.34, cover: 0.8,  label: 'Chuva fraca',   msg: 'Começou a garoar' },
+			rain:    { k: 0.7,  cover: 0.9,  label: 'Chuva forte',   msg: 'Chuva forte! A pista está escorregadia' },
+			storm:   { k: 1,    cover: 1,    label: 'Tempestade',    msg: '⚡ Tempestade! Raios e trovões, visibilidade ruim' },
 		};
 	}
 
@@ -29,8 +35,11 @@ class Weather {
 		Weather.cur = this;
 		const C = Config.weather;
 		this.state = C.start;
-		this.k = Weather.STATES[this.state].k;          // intensidade suavizada
+		this.k = Weather.STATES[this.state].k;          // intensidade da chuva, suavizada
 		this.target = this.k;
+		this.cover = Weather.STATES[this.state].cover;  // cobertura de nuvens, suavizada
+		this.coverT = this.cover;
+		this.fogMul = 1;
 		this.override = 0; this.plan = null; this.rainyDay = false; this._lastHour = 0;
 		this.flash = 0;                                 // clarão de relâmpago (0..1)
 		this._boltT = 6; this._pulses = []; this._rumble = [];
@@ -61,6 +70,8 @@ class Weather {
 	_rand([a, b]) { return a + Math.random() * (b - a); }
 	get label() { return Weather.STATES[this.state].label; }
 	get raining() { return this.k > 0.03; }
+	// O céu fechado apagando o sol: a chuva, ou a cobertura (nublado ~0,4; a cobertura de céu limpo não conta).
+	get gloom() { return Math.max(this.k, Math.max(0, (this.cover - 0.2) / 0.8) * 0.62); }
 
 	// Efeitos de jogo derivados de k (lidos por Vehicle, TrafficCar, PoliceManager, Helicopter, Boat).
 	_derive() {
@@ -69,6 +80,7 @@ class Weather {
 		this.brakeMul = 1 - 0.4 * k;         // freia pior: a distância de parada cresce
 		this.sightMul = 1 - 0.3 * k;         // chuva e névoa: a polícia enxerga menos longe
 		this.trafficMul = 1 - 0.2 * k;       // motoristas mais cautelosos
+		this.fogMul = 1 - 0.5 * k - 0.12 * Math.max(0, this.cover - 0.3);     // visibilidade: tempestade ~0,44, nublado ~0,95
 	}
 
 	// Troca de estado (instant: sem suavizar). manual: troca pedida à mão (tecla Y / debug) — o calendário só volta a mandar 60 s depois.
@@ -77,8 +89,9 @@ class Weather {
 		const changed = state !== this.state;
 		this.state = state;
 		this.target = Weather.STATES[state].k;
+		this.coverT = Weather.STATES[state].cover;
 		if (manual) this.override = 60;
-		if (instant) { this.k = this.target; this._derive(); }
+		if (instant) { this.k = this.target; this.cover = this.coverT; this._derive(); }
 		if (state === 'storm') this._boltT = 2 + Math.random() * 3;
 		if (changed && this.g.ui && this.g._flash) this.g._flash(Weather.STATES[state].msg);
 		return state;
@@ -86,19 +99,26 @@ class Weather {
 
 	// Y: próximo clima da lista (para demonstrar).
 	cycle() {
-		const order = ['clear', 'drizzle', 'rain', 'storm'];
+		const order = ['clear', 'cloudy', 'drizzle', 'rain', 'storm'];
 		return this.set(order[(order.indexOf(this.state) + 1) % order.length], false, true);
 	}
 
 	// ----------------------------------------------------------- calendário
 	// Chuva NÃO é diária: a cada dia do jogo sorteia-se se é um dia de chuva (Config.weather.rainDayChance, ~30%). Dia seco = céu
-	// limpo o dia todo. Dia chuvoso tem 1–2 EPISÓDIOS em horas aleatórias do relógio do jogo: começa em garoa, sobe até o pico
-	// sorteado (garoa, chuva forte ou tempestade) e volta a garoar antes de abrir. `plan` = [{ s, e, peak }] em horas do jogo.
+	// limpo, às vezes com um período NUBLADO (Config.weather.cloudyDayChance). Dia chuvoso tem 1–2 EPISÓDIOS em horas aleatórias do
+	// relógio do jogo: o céu fecha (nublado), garoa, sobe até o pico sorteado (garoa, chuva forte ou tempestade), volta a garoar e
+	// fica nublado antes de abrir. `plan` = [{ s, e, peak }] em horas do jogo.
 	_planDay(first) {
 		const C = Config.weather, hour = this.g.dayNight ? this.g.dayNight.hour : 0;
 		this.plan = [];
 		this.rainyDay = Math.random() < (first ? C.firstDayChance : C.rainDayChance);
-		if (!this.rainyDay) return;
+		if (!this.rainyDay) {
+			if (!first && Math.random() < (C.cloudyDayChance || 0)) {
+				const len = this._rand(C.cloudyHours || [2, 5]), s = Math.random() * (24 - len);
+				this.plan.push({ s, e: s + len, peak: 'cloudy' });
+			}
+			return;
+		}
 		const n = Math.random() < 0.4 ? C.episodesPerRainyDay[1] : C.episodesPerRainyDay[0];
 		const W = C.peakWeights, total = Object.values(W).reduce((s, v) => s + v, 0);
 		for (let i = 0; i < n; i++) {
@@ -119,7 +139,8 @@ class Weather {
 		for (const p of this.plan) {
 			if (h < p.s || h >= p.e) continue;
 			const u = (h - p.s) / (p.e - p.s);
-			return u < 0.22 || u > 0.78 ? 'drizzle' : p.peak;
+			if (p.peak === 'cloudy') return 'cloudy';
+			return u < 0.08 || u > 0.92 ? 'cloudy' : u < 0.22 || u > 0.78 ? 'drizzle' : p.peak;
 		}
 		return 'clear';
 	}
@@ -136,6 +157,8 @@ class Weather {
 		}
 		this.k += (this.target - this.k) * Math.min(1, dt * 0.45);
 		if (Math.abs(this.target - this.k) < 0.002) this.k = this.target;
+		this.cover += (this.coverT - this.cover) * Math.min(1, dt * 0.3);          // (as nuvens chegam um pouco antes e vão embora depois da chuva)
+		if (Math.abs(this.coverT - this.cover) < 0.002) this.cover = this.coverT;
 		this._derive();
 		// Vento: vai e volta devagar; mais forte com a intensidade.
 		this._windT += dt;

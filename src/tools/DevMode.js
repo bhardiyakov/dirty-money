@@ -218,7 +218,7 @@ class DevMode {
         this._row = null;
         H('RELÓGIO'); T('Congelar o relógio', 'freezeTime', (v) => this._freezeTime(v)); B('+2h', () => g.dayNight.skip(2));
         H('CLIMA — ' + g.weather.label);
-        for (const [k, l] of [['clear', 'Céu limpo'], ['drizzle', 'Chuva fraca'], ['rain', 'Chuva forte'], ['storm', 'Tempestade']]) B(l, () => { g.weather.set(k, true, true); if (this.flags.lockWeather) g.weather.override = 1e9; }, g.weather.state === k);
+        for (const [k, l] of [['clear', 'Céu limpo'], ['cloudy', 'Nublado'], ['drizzle', 'Chuva fraca'], ['rain', 'Chuva forte'], ['storm', 'Tempestade']]) B(l, () => { g.weather.set(k, true, true); if (this.flags.lockWeather) g.weather.override = 1e9; }, g.weather.state === k);
         T('Travar o clima escolhido', 'lockWeather', (v) => this._lockWeather(v));
         B('⚡ Raio agora', () => g.weather._bolt(1, true));
         B('Sortear o dia (calendário)', () => { g.weather.override = 0; g.weather._planDay(false); g._flash(g.weather.rainyDay ? 'Hoje vai chover: ' + g.weather.plan.map((p) => `${p.s.toFixed(0)}h-${p.e.toFixed(0)}h`).join(', ') : 'Dia seco'); });

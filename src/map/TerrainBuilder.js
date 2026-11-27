@@ -47,13 +47,18 @@ class TerrainBuilder {
         for (const ch of this.chunks.values()) this._addColliders(ch);
     }
 
+    flushColliders() {
+        for (const c of this.chunks.values()) if (c.needCol) this._addColliders(c);
+    }
+
     _rectDist(ci, cj, x, z) {
         const W = this.W, x0 = W.minX + ci * W.chunk, z0 = W.minZ + cj * W.chunk;
         return hypot(Math.max(x0 - x, 0, x - (x0 + W.chunk)), Math.max(z0 - z, 0, z - (z0 + W.chunk)));
     }
 
+    // radiusMul (lod/AirLod.js): lá no alto o raio de carga encolhe — o mapa de longe (lod/FarProxy.js) cobre o resto.
     _refresh(focus) {
-        const W = this.W, R = W.loadRadius, ch = W.chunk;
+        const W = this.W, R = W.loadRadius * (this.radiusMul || 1), ch = W.chunk;
         this._last = { x: focus.x, z: focus.z };
         const i0 = Math.max(0, Math.floor((focus.x - R - W.minX) / ch)), i1 = Math.min(this.ncx - 1, Math.floor((focus.x + R - W.minX) / ch));
         const j0 = Math.max(0, Math.floor((focus.z - R - W.minZ) / ch)), j1 = Math.min(this.ncz - 1, Math.floor((focus.z + R - W.minZ) / ch));
@@ -112,8 +117,11 @@ class TerrainBuilder {
         this._removeColliders(c);
     }
 
+    // holdColliders (lod/AirLod.js: voando alto): o pedaço nasce sem os colisores dos paredões; flushColliders() os cria ao descer.
     _addColliders(c) {
         if (!this.physics || c.colliders.length) return;
+        if (this.holdColliders) { c.needCol = true; return; }
+        c.needCol = false;
         for (const r of this.cliffs.get(c.j * this.ncx + c.i) || []) {
             const node = new BABYLON.TransformNode('cliff', this.scene);
             node.position.set((r.x0 + r.x1) / 2, r.h / 2, (r.z0 + r.z1) / 2);
