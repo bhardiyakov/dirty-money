@@ -278,9 +278,12 @@ const CloudField = {
 				vec4 t = texture2D(puff, vUV);
 				float a = t.a * vD.x;
 				if (a < 0.008) discard;
-				float top = clamp(1.0 - vD.y * 0.85 + (vUV.y - 0.5) * 0.45, 0.0, 1.0);
-				vec3 col = mix(dark, lit, top * (0.62 + 0.38 * t.r));
+				// a luz: o topo e o que se vê de cima na luz da hora, só a base (vista de baixo ou de lado) na sombra — o cúmulo é branco
 				vec3 v = normalize(vW - eye);
+				float top = clamp(1.0 - vD.y * 0.7 + (vUV.y - 0.5) * 0.35, 0.0, 1.0);
+				float above = clamp(-v.y * 1.6, 0.0, 1.0);
+				float lt = clamp(0.3 + 0.7 * top + 0.35 * above, 0.0, 1.0) * (0.82 + 0.18 * t.r);
+				vec3 col = mix(dark, lit * 1.06, lt);
 				float sil = pow(max(dot(v, sunDir), 0.0), 8.0) * (1.0 - t.a);      // (o forro prateado: a borda fina contra o sol)
 				col += sunCol * sil * 0.55;
 				float f = clamp((vD.w - fogP.x) / max(1.0, fogP.y - fogP.x), 0.0, 1.0);
