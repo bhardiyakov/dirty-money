@@ -97,6 +97,7 @@ class StreetProps {
         mesh.thinInstanceRefreshBoundingInfo(false);
         mesh.unfreezeWorldMatrix(); mesh.freezeWorldMatrix();
         c.mesh = mesh;
+        if (Config.perf.minimal && typeof Trees3D !== 'undefined') Trees3D.cullAdd(mesh);      // (Mínimo: só os postes dentro da névoa vão para a placa)
         if (this.w.shadow) this.w.shadow.addShadowCaster(mesh);
         return true;
     }

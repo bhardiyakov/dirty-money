@@ -170,7 +170,8 @@ const Trees3D = {
     // mata a tela tinha ~650 mil triângulos só de árvores.
     get mantoNear() { return typeof Graphics !== 'undefined' && (Graphics.level === 'low' || Graphics.phoneOn); },
     get mantoDist() { return this.mantoNear ? 38 : this.LOD.manto * this.lodScale; },
-    get lodScale() { const L = typeof Graphics !== 'undefined' ? Graphics.level : 'high'; return L === 'low' ? 0.65 : L === 'medium' ? 0.85 : L === 'hd' ? 1.3 : 1; },
+    // (Mínimo: 0,35 — com a névoa a 45 m toda árvore à vista ficava no modelo cheio; a partir de ~25 m vai o simples)
+    get lodScale() { const L = typeof Graphics !== 'undefined' ? Graphics.level : 'high'; return L === 'low' ? (Graphics.minimal ? 0.35 : 0.65) : L === 'medium' ? 0.85 : L === 'hd' ? 1.3 : 1; },
     _farMesh(scene, mesh, model, mats, lod, level = -1) {
         const F = this._gpu(scene, model, level), N = this._gpu(scene, model, lod);
         if (F.nI > N.nI * 0.75) return null;
@@ -206,6 +207,11 @@ const Trees3D = {
         this._lodI = i1;
         const P = cam.globalPosition || cam.position, k = this.lodScale, on = this.lodOn, FAR = on ? this.LOD.far * k : Infinity, COV = on ? this.LOD.cover * k : Infinity, covOn = this.coverOn;
         const MANTO = on ? this.mantoDist : Infinity;
+        // MÍNIMO: só as árvores DENTRO da névoa vão para a placa (_cullInst) — a célula de vegetação tem 256 u e entrava inteira: na
+        // mata, ~270 eucaliptos por célula, a maioria além da névoa de 45 m (invisíveis, mas a placa processava todos os vértices)
+        // (R = o fim da névoa de agora + 15 u, na horizontal — a folga cobre os 12 u que a câmera anda até o próximo filtro; no voo a
+        // névoa vai longe e o raio acompanha)
+        const CULL = typeof Config !== 'undefined' && Config.perf.minimal && on, R = CULL ? (scene.fogMode && scene.fogEnd > 0 ? scene.fogEnd : (Config.camera.chase.far || 45)) + 15 : 0;
         let dead = 0;
         const px = P.x, py = P.y, pz = P.z;
         for (let i = i0; i < i1; i++) {
@@ -216,15 +222,52 @@ const Trees3D = {
             if (e.cx === undefined) { const S = m.getBoundingInfo().boundingSphere, c = S.centerWorld; e.cx = c.x; e.cy = c.y; e.cz = c.z; e.r = S.radiusWorld; }
             const dx = e.cx - px, dy = e.cy - py, dz = e.cz - pz, d = Math.max(0, Math.sqrt(dx * dx + dy * dy + dz * dz) - e.r);
             if (e.cover) { const v = covOn && d < COV; if (m.isVisible !== v) m.isVisible = v; continue; }
-            if (!e.far && !e.manto) continue;
+            if (!e.far && !e.manto) { if (CULL) this._cullInst(m, d, px, pz, R); continue; }
             const st = e.manto && d > (e.st === 2 ? MANTO * 0.9 : MANTO) ? 2 : e.far && d > (e.st >= 1 ? FAR * 0.9 : FAR) ? 1 : 0;
             if (st !== e.st || m.isVisible !== (st === 0)) {
                 e.st = st; e.isFar = st >= 1;
                 m.isVisible = st === 0; if (e.far) e.far.isVisible = st === 1;
                 if (e.manto) e.manto.isVisible = st === 2;
             }
+            if (CULL) this._cullInst(st === 0 ? m : st === 1 ? e.far : e.manto, d, px, pz, R);
         }
         if (dead > 200 / slices) { this._lod = this._lod.filter((e) => !e.m.isDisposed()); this._lodI = 0; }
+        // (outras malhas de instâncias no mesmo filtro — os postes de cada pedaço do mapa: cullAdd)
+        if (CULL && this._extra && this._extra.length) {
+            const X = this._extra, per2 = Math.ceil(X.length / slices);
+            let j0 = this._extraI || 0; if (j0 >= X.length) j0 = 0;
+            const j1 = Math.min(X.length, j0 + per2); this._extraI = j1;
+            for (let j = j0; j < j1; j++) {
+                const m = X[j];
+                if (m.isDisposed()) { X[j] = X[X.length - 1]; X.pop(); j--; continue; }
+                if (m._tcx === undefined) { const S = m.getBoundingInfo().boundingSphere, c = S.centerWorld; m._tcx = c.x; m._tcy = c.y; m._tcz = c.z; m._tcr = S.radiusWorld; }
+                const dx = m._tcx - px, dy = m._tcy - py, dz = m._tcz - pz;
+                this._cullInst(m, Math.max(0, Math.sqrt(dx * dx + dy * dy + dz * dz) - m._tcr), px, pz, R);
+            }
+        }
+    },
+    cullAdd(mesh) { if (mesh) (this._extra || (this._extra = [])).push(mesh); },
+    // As instâncias de uma malha de plantas a até R da câmera (as outras ficam fora do buffer da placa): refeito quando a câmera anda
+    // 12 u (só a parte usada do buffer sobe para a placa); célula toda além de R (mas ainda no recorte) → nenhuma. A lista completa fica na matriz original (dividida com as gêmeas
+    // de longe e o manto: cada uma ganha o seu buffer filtrado).
+    _cullInst(m, d, px, pz, R) {
+        if (!m || !m.isVisible || !m._thinInstanceDataStorage || !m._thinInstanceDataStorage.matrixData) return;
+        if (d > R) { if (m.thinInstanceCount) m.thinInstanceCount = 0; m._tiX = undefined; return; }
+        if (m._tiX !== undefined && Math.abs(px - m._tiX) < 12 && Math.abs(pz - m._tiZ) < 12) return;
+        m._tiX = px; m._tiZ = pz;
+        const src = m._tiSrc || (m._tiSrc = m._thinInstanceDataStorage.matrixData), n = src.length >> 4, R2 = R * R;
+        const dst = m._tiDst || (m._tiDst = new Float32Array(src.length));
+        let k = 0;
+        for (let i = 0; i < n; i++) {
+            const o = i << 4, dx = src[o + 12] - px, dz = src[o + 14] - pz;
+            if (dx * dx + dz * dz > R2) continue;
+            if (k !== i) dst.set(src.subarray(o, o + 16), k << 4); else if (dst !== src) dst.set(src.subarray(o, o + 16), o);
+            k++;
+        }
+        if (!m._tiOn) { m._tiOn = true; m.thinInstanceSetBuffer('matrix', dst, 16, false); }
+        else if (k) m.thinInstancePartialBufferUpdate('matrix', dst.subarray(0, k << 4), 0);
+        m.thinInstanceCount = k;
+        this.culled = (this.culled || 0) + (n - k);
     },
     _hash(x, z) { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); },
     // Os buffers de um modelo na placa (posição, normal, cor e índices), criados UMA vez por modelo e detalhe.

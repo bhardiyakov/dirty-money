@@ -25,7 +25,7 @@ const FavelaDetail = {
 		const nInst = this.inst.count, nMesh = Config.perf.minimal ? 0 : this.inst.build(W, 'fav');      // (Mínimo: sem antenas nem ar-condicionados — 8 a 11 desenhos na favela)
 		st.inst = `${nInst} antenas e ar-condicionados em ${nMesh} malhas instanciadas`;
 		this._wires(W, rng, st);
-		for (const F of Favelas.built) this._ground(W, F, rng, st);
+		if (!Config.perf.minimal) for (const F of Favelas.built) this._ground(W, F, rng, st);      // (Mínimo: sem pedras, tufos, sacos de lixo e entulho)
 		MeshBatch.anchor = null;
 		console.log(`[FAVELA] detalhe: ${st.dishes} antenas, ${st.acs} ar-condicionados, ${st.rebar} lajes com ferro, ${st.lines} varais, ${st.drops} fios de gato para as casas, ${st.across} fios cruzando becos, ${st.stones} pedras, ${st.tufts} tufos de mato, ${st.bags} sacos de lixo, ${st.debris} montes de entulho; ${st.inst} (${(performance.now() - t0).toFixed(0)} ms)`);
 	},
@@ -66,14 +66,14 @@ const FavelaDetail = {
 				st.acs++;
 			}
 			// laje: ferros de espera nos cantos (o andar que ainda vai subir) e varal com roupa
-			if (slab && rng() < 0.4) {
+			if (slab && rng() < 0.4 && !Config.perf.minimal) {                                   // (Mínimo: sem os ferros de espera)
 				for (const [px, pz] of [[x0 + 0.25, z0 + 0.25], [x1 - 0.25, z0 + 0.25], [x0 + 0.25, z1 - 0.25], [x1 - 0.25, z1 - 0.25]]) {
 					if (rng() < 0.2) continue;
 					for (let k = 0; k < 3; k++) { const ox = (rng() - 0.5) * 0.16, oz = (rng() - 0.5) * 0.16, hh = 0.6 + rng() * 0.7; b.tube([px + ox, H, pz + oz], [px + ox + (rng() - 0.5) * 0.12, H + hh, pz + oz + (rng() - 0.5) * 0.12], 0.014, 0.014, [0.36, 0.22, 0.14], 3); }
 				}
 				st.rebar++;
 			}
-			if (slab && rng() < 0.3 && w > 3 && d > 3) {
+			if (slab && rng() < 0.3 && w > 3 && d > 3 && !Config.perf.minimal) {                // (Mínimo: sem varal)
 				const along = w > d, a0 = along ? [x0 + 0.6, (z0 + z1) / 2 + (rng() - 0.5)] : [(x0 + x1) / 2 + (rng() - 0.5), z0 + 0.6], a1 = along ? [x1 - 0.6, a0[1]] : [a0[0], z1 - 0.6];
 				this.clothesline(b, [a0[0], H, a0[1]], [a1[0], H, a1[1]], 1.6, rng);
 				st.lines++;

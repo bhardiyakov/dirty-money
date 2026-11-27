@@ -105,6 +105,15 @@ module.exports = {
 			return out;
 		});
 		c.ok(aq.two === aq.lv && aq.three === aq.lv + 1 && aq.every === '1,2,4,6', `qualidade automática: 1 quadro em 6 atrasado por 3 s com a CPU no limite desce um degrau de processador (${aq.lv} → ${aq.three}; pose de longe a cada ${aq.every} quadros)`);
+		// ------------------------------------------------------------------ teste de desempenho no aparelho (DeviceTest, aqui com 8 s; a placa emulada desenha poucos quadros por segundo — e o teste tem de dizer que ela é o limite)
+		const bench = await page.evaluate(() => new Promise((ok) => {
+			const M = game.menu, K = PauseMenu.SET_KEYS; M.open('settings'); M.setRow = K.indexOf('gfxMenu'); M._setAdjust(0);
+			const txt = document.getElementById('pmSet').textContent; M.close();
+			DeviceTest.run(game, 8, (r) => ok({ r, txt, saved: Store.getJSON('gfxBench', null), badge: (document.getElementById('benchBadge') || {}).textContent || '' }));
+		}));
+		const R = bench.r;
+		c.ok(/Testar o desempenho/.test(bench.txt) && R.quadros >= 3 && R.fps > 0 && R.ritmo >= 0 && R.ritmo <= 100 && R.cpuP90 > 0 && (R.ok || (R.gargalo === 'gpu' && /placa/.test(R.veredito) && /resolução/.test(R.dica)) || (R.gargalo === 'cpu' && /processador/.test(R.veredito))) && bench.saved && bench.saved.fps === R.fps && /FPS/.test(bench.badge),
+			`teste no aparelho: ${R.fps} FPS, ${R.ritmo}% no ritmo, CPU p90 ${R.cpuP90} ms${R.gpuMs !== null ? ', placa ' + R.gpuMs + ' ms' : ''} — "${R.veredito}"${R.dica ? ' (' + R.dica + ')' : ''}`);
 		c.noErrors(errors, 'gráficos avançados');
 		await close();
 	},
