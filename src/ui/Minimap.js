@@ -81,7 +81,17 @@ class Minimap {
 
         const B = this.baseSize, slack = B / 2 - S * Math.SQRT1_2 - 4;          // folga (px) até a borda da camada (cantos do radar girado)
         const opKey = typeof Standing !== 'undefined' && Standing.policeOp ? 1 : 0;
-        const fresh = MapPaint.work(Config.perf.halfFar ? 1.5 : 4);         // terreno HD pintado aos poucos: um ladrilho novo pronto → refaz a camada (aparelho fraco: 1,5 ms por vez, sem pico)
+        // terreno HD pintado aos poucos: um ladrilho novo pronto → refaz a camada. APARELHO FRACO: a pintura vai para o tempo OCIOSO
+        // entre os quadros (requestIdleCallback, só com o que sobra do prazo — no quadro, o minimapa custava ~0,9 ms por vez no ×1, ≈ 3,7 ms
+        // com a CPU 4× mais lenta) e a camada refeita pelos ladrilhos novos fica no quadro, mas junta: no máximo uma a cada 3 s, não uma
+        // por ladrilho. (Refazer a camada no tempo ocioso não serve: são até ~14 ms de uma vez, que atrasam as mensagens da navegação.)
+        const weak = Config.perf.halfFar && typeof requestIdleCallback === 'function';
+        let fresh = false;
+        if (!weak) fresh = MapPaint.work(4);
+        else if (!this._paintJob) {
+            this._paintJob = true;
+            requestIdleCallback((d) => { this._paintJob = false; if (MapPaint.work(Math.max(0.5, Math.min(3, d.timeRemaining() - 1)))) this._freshIdle = true; }, { timeout: 1000 });
+        }
         const moved = Math.max(Math.abs(center.x - this._bx), Math.abs(center.z - this._bz)) * k;
         const redraw = (x, z) => {
             this._bx = x; this._bz = z; this._baseKey = opKey;
@@ -90,11 +100,13 @@ class Minimap {
             MapRenderer.drawView(bc, B, B, this._bx, this._bz, k, { defer: true, dpr: this.dpr });
             bc.restore();
         };
-        if (fresh || this._baseKey === null || this._baseKey !== opKey || moved > slack) { this._idleJob = null; redraw(center.x, center.z); }
+        const freshNow = weak && this._freshIdle && performance.now() - (this._freshAt || 0) > 3000;
+        if (freshNow) { this._freshIdle = false; this._freshAt = performance.now(); }
+        if (fresh || freshNow || this._baseKey === null || this._baseKey !== opKey || moved > slack) { this._idleJob = null; redraw(center.x, center.z); }
         // APARELHO FRACO andando (dirigindo): a camada é refeita no tempo OCIOSO entre os quadros (requestIdleCallback — não atrasa o
         // próximo), já a 60% da folga; só se a folga acabar antes ela é refeita na hora, como sempre. (Redesenhar o mapa vetorial inteiro
         // de uma vez custava até ~14 ms num quadro no aparelho fraco.)
-        else if (moved > slack * 0.6 && !this._idleJob && Config.perf.halfFar && typeof requestIdleCallback === 'function') {
+        else if (moved > slack * 0.6 && !this._idleJob && weak) {
             const job = this._idleJob = { x: center.x, z: center.z };
             requestIdleCallback(() => { if (this._idleJob !== job) return; this._idleJob = null; const c = this._lastCenter || job; redraw(c.x, c.z); }, { timeout: 400 });
         }

@@ -929,29 +929,53 @@ Nesse modo a vigia do modo seguro fica travada: ela veria só o céu e desligari
 - **Mínimo:** 25% da gente do Alto, névoa a 45 m, lógica de longe a partir de 8 m. A escada da qualidade automática não aumenta mais a
   névoa (antes o degrau "−15%" tinha piso de 50 m e, partindo de 45 m, aumentaria; agora o piso no Mínimo é 36 m e ele nunca aumenta).
 
-**Resultado** (`NOGPU=1`, 180 a 210 quadros por cena; no ×4, três rodadas completas, uma delas com a escada aplicada):
+Com esses cortes, o Mínimo a 3× já ficava estável (p90 de 22 a 27 ms), mas a 4× o p90 ainda passava de 33 ms em parte das rodadas
+(30 a 37 ms na favela, dirigindo e na mata). Daí a quinta rodada.
 
-| Cena | Low + celular, CPU ×2: média / p90 | Mínimo, CPU ×3: média / p90 | Mínimo, CPU ×4: média / p90 (faixa de 3 rodadas) |
+### Quinta rodada: o 4× estável
+
+Medindo cada sistema e cada malha do Mínimo, o que sobrava não era um vilão só, eram custos espalhados e picos. Cinco cortes fecharam o 4×:
+
+- **Recorte incremental** (`RenderCuller`, vale para todos os níveis). Qualquer malha que entrava ou saía da cena (pedaços de
+  terreno da mata vindo e indo com a distância, bonecos, faíscas) marcava a lista inteira como suja, e o quadro seguinte varria as
+  ~4.400 malhas da cena para refazer a lista dinâmica. Na mata isso acontecia o tempo todo: picos de 3 ms nas candidatas com a CPU 3×
+  mais lenta. Agora quem entra vai para uma fila e é classificado no quadro seguinte (grade ou dinâmica), quem sai é tirado da lista
+  dinâmica, e a cada 90 quadros a dinâmica (não a cena) é revista, para mandar para a grade quem congelou depois de entrar.
+  Conferido andando, dirigindo e na mata: toda malha da cena fica na grade ou na dinâmica, nenhuma perdida, duplicada ou destruída.
+- **Minimapa mais leve no quadro** (aparelho fraco). A pintura do terreno HD do radar vai para o `requestIdleCallback`, só com o
+  que sobra do prazo. A camada refeita quando um ladrilho fica pronto continua no quadro, mas agrupada: no máximo uma a cada 3 s, não
+  uma por ladrilho. No quadro, o minimapa custava ~0,9 ms por vez a 1× (~3,7 ms a 4×), num quadro de cada quatro. Refazer a camada no
+  tempo ocioso foi tentado e descartado: são até ~14 ms de uma vez, sem respeitar o prazo, e isso atrasava as mensagens da navegação
+  dos pedestres (o `67_populacao` passou a falhar 2 vezes em 4).
+- **Fachadas irmãs num material só** (Mínimo, `Walls3D.minKey`). Estilos com a mesma família, janela, grade e baia viram o material do
+  primeiro deles. A tinta de cada prédio vem da cor do vértice, então cada casa continua com a cor dela. Somem só as diferenças finas
+  (quanto descasca, a cor do friso). As 10 paredes da favela viram 2 desenhos (tijolo à vista e reboco).
+- **Telhados só na placa** (Mínimo, `Roofs3D.lodScale` 0): um desenho por estilo, sem o relevo de perto.
+- **Pose de longe a cada 2, 4 e 6 quadros** no Mínimo (`Char3D.LOD_EVERY`).
+
+**Resultado final** (`NOGPU=1`, ~210 quadros por cena, código final; o Mínimo a 4× em duas rodadas completas, e o p90 das rodadas
+de 4× anteriores, com o minimapa da versão descartada, ficou na mesma faixa: 21,9 a 28,1 ms):
+
+| Cena | Low + celular, CPU ×2: média / p90 | Mínimo, CPU ×3: média / p90 | Mínimo, CPU ×4: média / p90 (2 rodadas) |
 |---|---|---|---|
-| Favela a pé | 18,3 / **25,1 ms** | 19,6 / **26,4 ms** | 23,9–27,1 / 30,1–35,6 ms |
-| Centro a pé | 15,0 / **21,6 ms** | 16,9 / **23,4 ms** | 21,0–22,1 / **29,1–31,4 ms** |
-| Dirigindo no centro | 16,3 / **20,5 ms** | 19,9 / **26,6 ms** | 19,8–25,3 / 25,3–34,6 ms |
-| Mata | 12,0 / **16,4 ms** | 16,4 / **22,2 ms** | 22,6–27,1 / 30,3–37,2 ms |
-| Ritmo real | 29,7–29,9 FPS | 29,4–29,9 FPS | 27,4–29,5 FPS |
+| Favela a pé | 13,4 / **17,0 ms** | 14,9 / **19,1 ms** | 19,3–21,8 / **23,6–26,2 ms** |
+| Centro a pé | 10,3 / **12,8 ms** | 12,0 / **15,4 ms** | 16,2–18,1 / **22,6–24,0 ms** |
+| Dirigindo no centro | 13,1 / **17,1 ms** | 14,7 / **19,8 ms** | 17,4–19,2 / **22,3–24,6 ms** |
+| Mata | 12,0 / **14,9 ms** | 12,5 / **16,3 ms** | 16,7–20,3 / **23,9–27,5 ms** |
+| Ritmo real | 29,9–30,1 FPS | 29,9–30,1 FPS | 29,4–30,0 FPS |
 
-- **Celular de entrada (CPU 3× mais lenta), Mínimo:** 30 FPS estáveis, com folga. 90% dos quadros ficam em 22 a 27 ms.
-- **CPU 4× mais lenta:** a média cabe (20 a 27 ms) e o ritmo real fica em 27 a 29,5 FPS, mas o p90 passa de 33 ms em parte das rodadas
-  (favela, dirigindo, mata). É o limite: quase 30, sem garantia.
-- **Low a 2×:** 90% dos quadros em 16 a 25 ms.
+- **CPU 4× mais lenta, Mínimo:** 90% dos quadros em 22 a 28 ms, em todas as cenas e em todas as rodadas: 30 FPS estáveis, com 5 ms de
+  folga no pior caso.
+- **CPU 3× mais lenta, Mínimo:** 15 a 20 ms.
+- **Low a 2×:** 13 a 17 ms. Antes desta etapa, ao abrir, eram 31 a 37 ms. No começo de tudo, 38 a 53 ms.
 
-A escada da qualidade automática aplicada (`CPUL=1`) quase não muda o Mínimo a 4×, porque ele já vem com os degraus ligados. O que
-sobra no quadro do Mínimo a 4× (favela): render 14,7 ms (desenho 6,9; avaliação das malhas 3,1; Char3D 1,8; candidatas 0,8) e lógica
-~13 ms espalhada em 15 sistemas, nenhum acima de 1,6 ms. Rodadas: `NOGPU=1 Q='gfx=min&celular' RATE=3 N=180 node tests/fraco.cjs`
-(e `RATE=4`, `Q='gfx=low&celular' RATE=2`).
+Vale lembrar o que a medição cobre. É o trabalho de CPU de um aparelho com placa de vídeo de verdade (a placa emulada não entra). A
+placa de um celular de entrada fica por conta das opções do Mínimo: metade da resolução, sem sombras, sem brilho, sem espelho, menos
+desenhos. A qualidade automática segue descendo os degraus de placa se o aparelho precisar. Rodadas:
+`NOGPU=1 Q='gfx=min&celular' RATE=4 N=210 node tests/fraco.cjs` (e `RATE=3`, `Q='gfx=low&celular' RATE=2`).
 
-**Próximos passos com ganho real** (para o ×4 ficar estável): fundir os materiais das fachadas e dos telhados (cada estilo é um
-programa de shader: 10 desenhos de paredes e 10 de telhados na favela), física a 30 Hz no Mínimo (hoje são 2 passos do Havok por
-quadro, ~2 ms no ×4) e levar a IA do trânsito e a navegação para o worker (`src/sim/worker.js`).
+**Próximos passos com ganho real:** física a 30 Hz no Mínimo (hoje são 2 passos do Havok por quadro, ~2 ms a 4×), fundir os estilos
+de telhado e levar a IA do trânsito e a navegação para o worker (`src/sim/worker.js`).
 
 ### Ajustes › Gráficos avançados (`src/ui/GraphicsMenu.js`)
 

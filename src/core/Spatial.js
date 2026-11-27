@@ -108,9 +108,13 @@ class RenderCuller {
 		this.stats = { static: 0, dynamic: 0, candidates: 0 };
 		this.filter = 2;
 		this._tick = 0; this._full = false;
-		scene.onNewMeshAddedObservable.add(() => { this._dynDirty = true; });
+		// INCREMENTAL: malha nova entra numa fila (classificada no próximo quadro: grade ou dinâmica) e a que sai é tirada da lista
+		// dinâmica — antes, qualquer malha que entrava ou saía (pedaços de terreno da mata, bonecos, faíscas) fazia varrer as ~4.400
+		// malhas da cena de novo: picos de 3 ms nas candidatas com a CPU 3× mais lenta.
+		scene.onNewMeshAddedObservable.add((m) => { this._full = false; if (!this._dynDirty) (this._added || (this._added = [])).push(m); });
 		scene.onMeshRemovedObservable.add((m) => {
-			this._dynDirty = true;
+			this._full = false;
+			if (m._cullDyn) { m._cullDyn = false; this._dynGone = true; }
 			if (!this.staticSet.has(m)) return;
 			this.staticSet.delete(m); this._range = '';
 			// (as que entraram na grade depois da carga — pedaços de terreno que vêm e vão — saem dela: a grade não segura malha destruída)
@@ -180,9 +184,27 @@ class RenderCuller {
 			this.dynamic.length = 0;
 			// (malha nova já parada — o terreno que chega com a distância: ~500 na mata, 290 delas com mais de 40 u, que entravam SEMPRE —
 			// vai para a grade; o resto é dinâmico)
-			for (const m of sc.meshes) if (!this.staticSet.has(m) && !(this._built && !m.isDisposed() && this._insert(m, true))) this.dynamic.push(m);
+			for (const m of sc.meshes) if (!this.staticSet.has(m) && !(this._built && !m.isDisposed() && this._insert(m, true))) { m._cullDyn = true; this.dynamic.push(m); }
 			this.stats.static = this.staticSet.size;
-			this._range = '';
+			this._range = ''; this._added = null; this._dynGone = false;
+		} else {
+			const D = this.dynamic;
+			if (this._dynGone) { this._dynGone = false; let k = 0; for (let i = 0; i < D.length; i++) if (D[i]._cullDyn) D[k++] = D[i]; D.length = k; }
+			if (this._added) {
+				const A = this._added; this._added = null;
+				for (const m of A) {
+					if (m.isDisposed() || m._cullDyn || this.staticSet.has(m)) continue;
+					if (this._built && this._insert(m, true)) { this._range = ''; continue; }
+					m._cullDyn = true; D.push(m);
+				}
+			}
+			// (de vez em quando, a dinâmica é revista: quem congelou depois de entrar — terreno montado em mais de um quadro — vai para a grade)
+			if (this._built && ((this._rev = (this._rev | 0) + 1) % 90) === 0) {
+				let k = 0;
+				for (let i = 0; i < D.length; i++) { const m = D[i]; if (m.isWorldMatrixFrozen && !m.parent && !m.isDisposed() && (m._cullGrid || m.name.startsWith('terr_')) && this._insert(m, true)) { m._cullDyn = false; this._range = ''; } else D[k++] = m; }
+				D.length = k;
+			}
+			this.stats.static = this.staticSet.size;
 		}
 		// Retângulo visto: o do jogo (Zones, que já tem a margem) ou, num palco/câmera diferente, o tamanho do frustum na altura do chão.
 		const game = cam === Zones.camera, px = game ? Zones.cx : cam.position.x, pz = game ? Zones.cz : cam.position.z, hz = Zones.hz + 6, hx = Zones.hx + 6;

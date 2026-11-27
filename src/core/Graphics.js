@@ -221,7 +221,7 @@ const Graphics = {
 		// (aparelho fraco desde a abertura: a pose de quem está de meia distância para longe a cada 2, 3 e 4 quadros — Char3D.LOD_EVERY — e a
 		// lógica de longe a partir de 15 m; no Mínimo, 12 m e as peças miúdas fora — Walls3D, Roofs3D, Birds)
 		P.minimal = !!this.minimal;
-		P.lodEvery = P.halfFar ? [1, 2, 3, 4] : null;
+		P.lodEvery = P.minimal ? [1, 2, 4, 6] : P.halfFar ? [1, 2, 3, 4] : null;
 		P.halfFarR = P.minimal ? 8 : P.halfFar ? 15 : 22;
 		if (P.minimal) { P.cover = false; P.waterMirror = false; if (Config.light) Config.light.contactAO = false; }      // (Mínimo: sem a faixa de sombra no pé dos prédios — 1 desenho)
 		P.halfLogic = P.minimal;                                                          // (cenário e gestão em quadros alternados — Game._update)

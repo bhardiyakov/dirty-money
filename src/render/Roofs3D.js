@@ -36,7 +36,8 @@ const Roofs3D = {
     PANEL: 2,                      // u: o lado do painel (o modelo é [-1, 1]²; esticado para caber certinho no telhado)
     BUCKET: 24,                    // u: os baldes de instâncias (a faixa de detalhe é escolhida por balde)
     LOD: { near: 30, mid: 95 },    // u: até onde vai o relevo completo e o simples (× lodScale), da câmera à borda do balde
-    get lodScale() { const L = typeof Graphics !== 'undefined' ? Graphics.level : 'high'; return L === 'low' ? 0.6 : L === 'medium' ? 0.8 : L === 'hd' ? 1.3 : 1; },
+    // (Mínimo: 0 — todo telhado na placa: um desenho por estilo, em vez de um por estilo e faixa)
+    get lodScale() { const L = typeof Graphics !== 'undefined' ? Graphics.level : 'high'; return L === 'low' ? (Graphics.minimal ? 0 : 0.6) : L === 'medium' ? 0.8 : L === 'hd' ? 1.3 : 1; },
     KINDS: ['tile', 'shingle', 'zinc', 'metal', 'tarp', 'slab', 'tar', 'concrete', 'laje', 'garden'],
     shade: 1,                      // 1 = o acabamento pintado no shader; 0 = só a cor e o relevo (medir o custo por pixel)
     _list: [],
