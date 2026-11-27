@@ -202,6 +202,7 @@ const CarCare = {
     interact(game) {
         if (this.job) return true;
         const n = this.near(game); if (!n) return false;
+        if (typeof CarParts !== 'undefined' && !this.isMoto(n.car)) CarParts.lid(game, n.car, n.end);      // o capô / a tampa do PRÓPRIO modelo abre
         if (n.end === 'trunk') { game.stashUI.show('trunk', this.trunk(n.car), this.isMoto(n.car) ? 'BAÚ DA MOTO' : `PORTA-MALAS · ${n.car.spec.model}`); AudioFX.door(n.car.position.x, n.car.position.z, true); return true; }
         Mechanic.hood(game, n.car);
         return true;

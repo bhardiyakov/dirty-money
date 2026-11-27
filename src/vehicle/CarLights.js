@@ -93,13 +93,15 @@ class CarLights {
             const on = (alive || (car.controlled && !car.destroyed)) && (car.lightsOn || night > 0.3);
             const pedal = car.spec.bike === 'bike';                       // bicicleta: sem farol, sem luz no chão, sem freio aceso — só o refletor
             const hazard = !!car.hazard && !car.destroyed && !pedal;      // alarme tocando: pisca-alerta + faróis piscando
-            const hI = pedal ? 0 : hazard ? 0.9 : (on ? Math.min(1, (night - 0.15) / 0.5) : 0);
+            // farol / lanterna QUEBRADOS na batida (CarParts → vis.lampBits: 32768 farol esq., 65536 dir., 131072 lanterna esq., 262144 dir.)
+            const LB = (vis && vis.lampBits) || 0, hOK = [!(LB & 32768), !(LB & 65536)], tOK = [!(LB & 131072), !(LB & 262144)];
+            const hI = pedal || !(hOK[0] || hOK[1]) ? 0 : hazard ? 0.9 : (on ? Math.min(1, (night - 0.15) / 0.5) : 0);
             const el = car.elev || 0, hy = (G3 ? G3.y : 1.7) + el;
             const front = facing(fx, fz), rear = facing(-fx, -fz), out = 0.25 * gk;          // (the glow sits just outside the body)
             for (let k = 0; k < 2; k++) {
                 const sx = k === 0 ? -L.x : L.x;
                 g.place(s.hl[k], p.x + fx * (L.zF + out) + rx * sx, hy, p.z + fz * (L.zF + out) + rz * sx, 1.7 * gk);
-                if (hI * front > 0.02) g.color(s.hl[k], 1.0, 0.94, 0.75, 0.5 * hI * front); else g.off(s.hl[k]);
+                if (hI * front > 0.02 && hOK[k]) g.color(s.hl[k], 1.0, 0.94, 0.75, 0.5 * hI * front); else g.off(s.hl[k]);
             }
             // Um cone por farol, em "V" RETO: o vértice fica na própria lâmpada e o feixe abre simetricamente ao longo do vetor
             // frente do carro (o eixo do feixe é paralelo ao do carro, sem desviar para fora). Os dois se sobrepõem à frente.
@@ -122,12 +124,12 @@ class CarLights {
             // ---- Lanternas: vermelho fraco com os faróis ligados; forte e maior ao frear.
             const braking = car.braking && (alive || car.controlled) && !pedal;
             const tI = pedal ? (night > 0.3 ? 0.22 : 0) : braking ? 1.0 : (hI > 0.02 ? 0.5 * hI : (alive || car.controlled ? 0.18 : 0));
-            if (NL && night > 0.3 && tI > 0.1) LS.push({ kind: 'tail', x: p.x + fx * (L.zR - 1.2), z: p.z + fz * (L.zR - 1.2), k: tI });
+            if (NL && night > 0.3 && tI > 0.1 && (tOK[0] || tOK[1])) LS.push({ kind: 'tail', x: p.x + fx * (L.zR - 1.2), z: p.z + fz * (L.zR - 1.2), k: tI });
             for (let k = 0; k < 2; k++) {
                 const sx = k === 0 ? -L.x : L.x;
                 g.place(s.tl[k], p.x + fx * (L.zR - out) + rx * sx, hy, p.z + fz * (L.zR - out) + rz * sx, (braking ? 2.0 : 1.2) * gk);
                 // Seta traseira: o lado da curva pisca em âmbar no lugar da lanterna.
-                if (rear <= 0.02) g.off(s.tl[k]);
+                if (rear <= 0.02 || !tOK[k]) g.off(s.tl[k]);
                 else if (hazard) {
                     g.color(s.tl[k], 1.0, 0.62, 0.08, 0.95 * rear);
                 } else if (car.signal === (k === 0 ? -1 : 1) && alive && !pedal) {

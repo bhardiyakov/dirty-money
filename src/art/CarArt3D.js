@@ -155,14 +155,15 @@ const CarArt3D = {
 		const P = new Int16Array(buf, o, nv * 3); o += al(nv * 6);
 		const N = new Int8Array(buf, o, nv * 3); o += al(nv * 3);
 		const M = new Uint8Array(buf, o, nv); o += al(nv);
+		const T = sec.pt ? new Uint8Array(buf, o, nv) : null; if (sec.pt) o += al(nv);      // (a PEÇA de cada vértice: tools/carros3d/parts.js)
 		const I = sec.i32 ? new Uint32Array(buf, o, sec.ni) : new Uint16Array(buf, o, sec.ni);
-		return { nv, ni: sec.ni, P, N, M, I, q };
+		return { nv, ni: sec.ni, P, N, M, T, I, q };
 	},
 
 	// Malha do modelo (na 1ª vez que um carro dele aparece): carroceria + 4 cópias da roda (+ os rotores), atributos por vértice:
 	//   position/normal (eixos do jogo, m reais) | color = (cor sRGB, tipo) | pbr = (rugosidade, metal, verniz, estampa)
 	//   wc = (centro da roda / do rotor, qual parte: 0 carroceria, 1 diant. esq., 2 diant. dir., 3 tras. esq., 4 tras. dir.,
-	//        5 rotor principal, 6 rotor de cauda)
+	//        5 rotor principal, 6 rotor de cauda, 7..16 as PEÇAS da carroceria — PARTS)
 	_model(id) {
 		let m = this._models[id];
 		if (m) return m;
@@ -184,6 +185,7 @@ const CarArt3D = {
 				col[v * 4] = mt.c[0]; col[v * 4 + 1] = mt.c[1]; col[v * 4 + 2] = mt.c[2]; col[v * 4 + 3] = mt.k;
 				pbr[v * 4] = mt.r; pbr[v * 4 + 1] = mt.m; pbr[v * 4 + 2] = mt.cc; pbr[v * 4 + 3] = mt.s || 0;
 				if (c) { wc[v * 4] = c[0]; wc[v * 4 + 1] = c[1]; wc[v * 4 + 2] = c[2]; wc[v * 4 + 3] = part; }
+				else if (src.T) wc[v * 4 + 3] = src.T[i];                     // (peça da carroceria: 7 capô … 16 porta traseira dir.; o pivô vem do modelo)
 			}
 			for (let i = 0; i < src.ni; i++) idx[t++] = base + src.I[i];
 		};
@@ -204,6 +206,9 @@ const CarArt3D = {
 		const m = { id, mesh, n: 0, cap: 0, D, R: D.R || 0.3, zf: front.length ? front[0][2] : D.len * 0.3, zr: rear.length ? rear[0][2] : -D.len * 0.3 };
 		// (vai em cada instância: o material é um só; raio −1 = barco: o shader corta o que fica abaixo da linha d'água)
 		m.dims = [Math.max(D.max[2], -D.min[2]), D.h, D.wid / 2, D.kind === 'boat' ? -1 : D.R || 0.3];
+		// medidas e DOBRADIÇAS do modelo: uniformes da malha (o material é um só — postos a cada desenho, no onBind)
+		mesh._car = this._uniforms(D, m.dims, m);
+		m.parts = D.parts || null;
 		const air = D.kind === 'heli';
 		mesh.material = air ? this.materialAir : this.material;
 		mesh.freezeWorldMatrix();                  // (a malha fica na origem: a posição de cada carro está na instância)
@@ -213,6 +218,19 @@ const CarArt3D = {
 		mesh.doNotSyncBoundingInfo = true;
 		this._grow(m, 8);
 		return m;
+	},
+
+	// As peças do modelo nos uniformes: partP[k] = (pivô, ângulo máximo ou comprimento), partA[k] = (eixo, tipo), k = peça − 7.
+	PARTS: { hood: 7, trunk: 8, dFL: 9, dFR: 10, dRL: 11, dRR: 12, bumpF: 13, bumpR: 14, rearL: 15, rearR: 16 },
+	_uniforms(D, dims, m) {
+		const pp = new Float32Array(40), pa = new Float32Array(40);
+		for (const [code, P] of Object.entries(D.parts || {})) {
+			const k = (+code - 7) * 4;
+			if (k < 0 || k >= 40) continue;
+			pp[k] = P.p[0]; pp[k + 1] = P.p[1]; pp[k + 2] = P.p[2]; pp[k + 3] = P.t === 2 ? P.w : P.m;
+			pa[k] = P.a[0]; pa[k + 1] = P.a[1]; pa[k + 2] = P.a[2]; pa[k + 3] = P.t;
+		}
+		return { dims: new BABYLON.Vector4(dims[0], dims[1], dims[2], dims[3]), ax: new BABYLON.Vector4(m.zf, m.zr, D.max[2], D.min[2]), pp, pa };
 	},
 
 	// PEÇAS DA TUNAGEM em 3D: caixas montadas no próprio modelo, numa malha extra com os mesmos atributos do carro (sobe, desce e
@@ -348,15 +366,16 @@ const CarArt3D = {
 		});
 	},
 
-	// Capacidade de instâncias do modelo: as matrizes (thin instances do Babylon) e UM buffer com os 4 atributos por instância
-	// (ia, ib, ic, dm: 16 floats) — um envio por modelo por quadro.
+	// Capacidade de instâncias do modelo: as matrizes (thin instances do Babylon) e UM buffer com os 6 atributos por instância
+	// (ia, ib, ic, pa, pb, pc: 24 floats) — um envio por modelo por quadro. (As medidas do modelo são uniformes: _uniforms.)
+	STRIDE: 24,
 	_grow(m, cap) {
-		const g = (a, n) => { const b = new Float32Array(n); if (a) b.set(a.subarray(0, Math.min(a.length, n))); return b; };
-		m.mat = g(m.mat, cap * 16); m.inst = g(m.inst, cap * 16);
+		const g = (a, n) => { const b = new Float32Array(n); if (a) b.set(a.subarray(0, Math.min(a.length, n))); return b; }, S = this.STRIDE;
+		m.mat = g(m.mat, cap * 16); m.inst = g(m.inst, cap * S);
 		m.mesh.thinInstanceSetBuffer('matrix', m.mat, 16, false);
 		if (m.buf) m.buf.dispose();
-		m.buf = new BABYLON.Buffer(this._scene.getEngine(), m.inst, true, 16, false, true);
-		['ia', 'ib', 'ic', 'dm'].forEach((k, i) => m.mesh.setVerticesBuffer(m.buf.createVertexBuffer(k, i * 4, 4)));
+		m.buf = new BABYLON.Buffer(this._scene.getEngine(), m.inst, true, S, false, true);
+		['ia', 'ib', 'ic', 'pa', 'pb', 'pc'].forEach((k, i) => m.mesh.setVerticesBuffer(m.buf.createVertexBuffer(k, i * 4, 4)));
 		m.cap = cap;
 		m.mesh.thinInstanceCount = 0;
 	},
@@ -373,9 +392,15 @@ const CarArt3D = {
 			attribute vec4 ia;        // giro das rodas (rad), esterço (rad, + = direita), arfagem (+ = nariz desce), rolagem (+ = teto p/ esquerda)
 			attribute vec4 ib;        // sobe/desce (m), guinada da carroceria (rad), linha da pintura, fase do amassado
 			attribute vec4 ic;        // sombra de prédio (1 = sol), faróis, lanternas, bits (setas, ré, giroflex, pneus furados)
-			attribute vec4 dm;        // medidas do modelo: meio comprimento, altura, meia largura, raio da roda (m, sem a escala)
+			attribute vec4 pa;        // PEÇAS: o quanto abriu (rad) cada porta — diant. esq., diant. dir., tras. esq., tras. dir.
+			attribute vec4 pb;        // capô, porta-malas / tampa / portas de trás (rad, a porta que corre: fração), para-choque dianteiro e traseiro pendendo (rad, o sinal = o lado que soltou)
+			attribute vec4 pc;        // AMASSADO por região (0..1): frente, traseira, lado esquerdo, lado direito
 			#include<instancesDeclaration>
 			uniform mat4 viewProjection;
+			uniform vec4 dmU;         // medidas do modelo: meio comprimento, altura, meia largura, raio da roda (m, sem a escala)
+			uniform vec4 axU;         // eixo dianteiro (z), eixo traseiro (z), a ponta da frente (z), a ponta de trás (z)
+			uniform vec4 partP[10];   // as dobradiças do modelo (peça − 7): pivô + ângulo máximo (para-choque: a meia largura)
+			uniform vec4 partA[10];   // ... eixo (o ângulo positivo abre) + tipo (0 gira, 1 corre, 2 pende)
 			uniform float squash;     // profundidade achatada (ver o topo do arquivo)
 			varying vec4 vNK;         // normal (mundo) + tipo
 			varying vec4 vWS;         // posição (mundo) + sombra
@@ -399,18 +424,32 @@ const CarArt3D = {
 			vec3 ry(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x * c + v.z * s, v.y, v.z * c - v.x * s); }
 			vec3 rz(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x * c - v.y * s, v.x * s + v.y * c, v.z); }
 			float bit(float f, float n) { return mod(floor(f / n), 2.0); }
+			vec3 rotA(vec3 v, vec3 a, float t) { float c = cos(t), s = sin(t); return v * c + cross(a, v) * s + a * dot(a, v) * (1.0 - c); }
+			// o ângulo da peça k (= peça − 7) nesta instância
+			float pAng(float k) {
+				if (k < 0.5) return pb.x; if (k < 1.5) return pb.y; if (k < 2.5) return pa.x; if (k < 3.5) return pa.y;
+				if (k < 4.5) return pa.z; if (k < 5.5) return pa.w; if (k < 6.5) return pb.z; if (k < 7.5) return pb.w; return pb.y;
+			}
 
 			void main(void) {
 				#include<instancesVertex>
-				vec4 dims = dm;
+				vec4 dims = dmU;
 				vec3 p = position, n = normal;
 				float part = wc.w;
-				if (part > 4.5) {
+				// ib.w: fase do amassado + 4 × as peças que CAÍRAM (bit k = peça 7 + k), negativo = esta instância é o DESTROÇO da peça −ib.w−1
+				float code = ib.w, dbr = code < -0.5 ? -code - 1.0 : -1.0, gone = floor(max(code, 0.0) / 4.0), dent = max(code, 0.0) - gone * 4.0;
+				float pk = part > 6.5 ? part - 7.0 : -1.0;
+				if ((dbr > -0.5 && abs(pk - dbr) > 0.5) || (pk > -0.5 && dbr < -0.5 && bit(gone, exp2(pk)) > 0.5)) {
+					gl_Position = vec4(0.0, 0.0, 2.0, 1.0);                       // (a peça que não está aqui: fora do recorte)
+					vNK = vec4(0.0); vWS = vec4(0.0); vCR = vec4(0.0); vPD = vec4(0.0); vLP = vec4(0.0); vLt = vec4(0.0); vDm = dmU; vBase = 0.0;
+					return;
+				}
+				if (part > 4.5 && part < 6.5) {
 					// ROTOR do helicóptero: o principal gira em volta de Y (ângulo ia.x), o de cauda em volta do eixo lateral (ia.y)
 					if (part < 5.5) { p = ry(p, ia.x); n = ry(n, ia.x); } else { p = rx(p, ia.y); n = rx(n, ia.y); }
 					p += wc.xyz;
-				} else if (part > 0.5) {
-					// RODA: rola, esterça (dianteiras) e vai para o canto dela; pneu furado = o aro desce
+				} else if (part > 0.5 && part < 4.5) {
+					// RODA: rola, esterça (dianteiras) e vai para o canto dela, pneu furado = o aro desce
 					p = rx(p, ia.x); n = rx(n, ia.x);
 					if (part < 2.5) { p = ry(p, ia.y); n = ry(n, ia.y); }
 					float fl = bit(ic.w, 32.0 * pow(2.0, part - 1.0));
@@ -420,7 +459,28 @@ const CarArt3D = {
 					// CARROCERIA: amassados (no repouso), depois a suspensão (gira em volta do eixo das rodas)
 					// (profundidade de verdade — estúdio, ferramenta: a estampa e as lâmpadas saem um tico da superfície de baixo, sem brigar com ela)
 					if (squash < 0.5) { float kd = floor(color.a + 0.5); p += n * (pbr.w * 0.004 + (kd > 5.5 && kd < 9.5 ? 0.004 : 0.0)); }
-					float d = ib.w;
+					float d = dent;
+					// AMASSADO POR REGIÃO (Vice City: exagerado e legível de longe): a ponta batida encurta e enruga, o capô empena para
+					// cima no meio, a lateral afunda (mais no meio do carro, nas portas) — tudo no repouso, antes das peças e da suspensão
+					if (dot(pc, vec4(1.0)) > 0.001 && dbr < -0.5) {
+						// (o que encurta é o BALANÇO, do eixo para fora: a roda fica no lugar e a ponta não passa dela — o meio é a cabine)
+						float nz = vnoise(p * 3.1) * 0.65 + vnoise(p * 7.3) * 0.35, R = max(dims.w, 0.2);
+						float oF = max(axU.z - axU.x, 0.3), oR = max(axU.y - axU.w, 0.3);
+						float aF = smoothstep(axU.x - R * 0.4, axU.z, p.z), aR = smoothstep(-axU.y - R * 0.4, -axU.w, -p.z);
+						float fF = smoothstep(dims.x * 0.1, dims.x, p.z), fR = smoothstep(dims.x * 0.1, dims.x, -p.z);
+						float fL = smoothstep(dims.z * 0.05, dims.z, -p.x), fD = smoothstep(dims.z * 0.05, dims.z, p.x);
+						float top = smoothstep(dims.y * 0.3, dims.y * 0.6, p.y);
+						float mid = (1.0 - smoothstep(axU.x * 0.3, axU.x - R * 0.8, p.z)) * (1.0 - smoothstep(-axU.y * 0.3, -axU.y - R * 0.8, -p.z));
+						p.z -= pc.x * aF * oF * 0.5 * (0.7 + 0.6 * nz);
+						p.z += pc.y * aR * oR * 0.5 * (0.7 + 0.6 * nz);
+						p.y += (pc.x * fF * (1.0 - fF) + pc.y * fR * (1.0 - fR)) * 0.55 * top * (0.4 + nz);      // a chapa de cima empena
+						p.y -= (pc.x * aF * aF + pc.y * aR * aR) * 0.12;
+						p.x += pc.z * fL * (0.15 + 0.85 * mid) * dims.z * 0.32 * (0.7 + 0.6 * nz);
+						p.x -= pc.w * fD * (0.15 + 0.85 * mid) * dims.z * 0.32 * (0.7 + 0.6 * nz);
+						float amt = pc.x * fF + pc.y * fR + pc.z * fL + pc.w * fD;
+						p -= n * amt * (nz - 0.4) * 0.11;                                                         // as rugas
+						n = normalize(n + (vec3(vnoise(p * 6.0), vnoise(p * 6.0 + 7.1), vnoise(p * 6.0 + 3.3)) - 0.5) * 1.3 * min(1.0, amt));
+					}
 					if (d > 0.5) {
 						float fr = smoothstep(dims.x * 0.35, dims.x, p.z), rr = smoothstep(dims.x * 0.5, dims.x, -p.z) * 0.6;
 						float sd = smoothstep(dims.z * 0.55, dims.z, abs(p.x)) * 0.5, nz = vnoise(p * 3.3) * 0.7 + vnoise(p * 9.0) * 0.3;
@@ -432,12 +492,27 @@ const CarArt3D = {
 							n = normalize(n + (vec3(vnoise(p * 6.0), vnoise(p * 6.0 + 7.1), vnoise(p * 6.0 + 3.3)) - 0.5) * 0.9);
 						} else n = normalize(n + (vec3(vnoise(p * 6.0), vnoise(p * 6.0 + 7.1), vnoise(p * 6.0 + 3.3)) - 0.5) * 0.35 * d * max(fr, sd));
 					}
-					float py = max(dims.w, 0.0);
-					p.y -= py;
-					p = rx(p, ia.z); n = rx(n, ia.z);
-					p = rz(p, ia.w); n = rz(n, ia.w);
-					p = ry(p, ib.y); n = ry(n, ib.y);
-					p.y += py + ib.x;
+					// A PEÇA (porta, capô, tampa, para-choque): gira na dobradiça (ou corre, ou pende de um lado) — o destroço fica centrado no pivô
+					if (pk > -0.5) {
+						int ki = int(pk + 0.5);
+						vec4 P0 = partP[ki], A0 = partA[ki];
+						float ang = dbr > -0.5 ? 0.0 : pAng(pk);
+						if (A0.w < 0.5) { p = P0.xyz + rotA(p - P0.xyz, A0.xyz, ang); n = rotA(n, A0.xyz, ang); }
+						else if (A0.w < 1.5) p += A0.xyz * ang * P0.w + vec3(sign(P0.x) * 0.08 * min(1.0, ang * 6.0), 0.0, 0.0);
+						else if (abs(ang) > 0.0001) {
+							vec3 pv = P0.xyz + vec3(-sign(ang) * P0.w, 0.0, 0.0);
+							p = pv + rz(p - pv, -ang); n = rz(n, -ang);                   // (a ponta solta cai)
+						}
+						if (dbr > -0.5) p -= P0.xyz + pa.xyz;                                  // (o destroço: centrado no meio da peça)
+					}
+					if (dbr < -0.5) {
+						float py = max(dims.w, 0.0);
+						p.y -= py;
+						p = rx(p, ia.z); n = rx(n, ia.z);
+						p = rz(p, ia.w); n = rz(n, ia.w);
+						p = ry(p, ib.y); n = ry(n, ib.y);
+						p.y += py + ib.x;
+					}
 				}
 				vec4 wp = finalWorld * vec4(p, 1.0);
 				gl_Position = viewProjection * wp;
@@ -450,10 +525,10 @@ const CarArt3D = {
 				vNK = vec4(normalize((finalWorld * vec4(n, 0.0)).xyz), color.a);
 				vWS = vec4(wp.xyz, ic.x);
 				vCR = vec4(color.rgb, ib.z);
-				vPD = vec4(pbr.xyz, ib.w);
+				vPD = vec4(pbr.xyz, dent);
 				vLP = vec4(position, part);
 				vLt = vec4(ic.y, ic.z, ic.w, 0.0);
-				vDm = dm;
+				vDm = dmU;
 				vBase = finalWorld[3].y;
 			}`;
 		BABYLON.Effect.ShadersStore.car3dFragmentShader = `
@@ -492,7 +567,7 @@ const CarArt3D = {
 				}
 				return vec2(d1, d2);
 			}
-			// céu refletido: horizonte claro, zênite azul, chão escuro abaixo; o sol aparece como um brilho
+			// céu refletido: horizonte claro, zênite azul, chão escuro abaixo, o sol aparece como um brilho
 			// (com o domo do céu: as cores dele — o pôr do sol laranja e a noite azul-escura aparecem na lataria e nos vidros)
 			vec3 sky(vec3 r, float day) {
 				vec3 hz = mix(vec3(0.8, 0.86, 0.92) * (0.35 + 0.65 * day), skyH.rgb, skyH.w);
@@ -517,7 +592,7 @@ const CarArt3D = {
 				float glass = is(kind, 3.0) ? 1.0 : 0.0;
 				vec3 L = vLP.xyz;
 				// ---- VIDRO ESTILHAÇADO POR TIRO, um por um (Vehicle.breakGlass → bits 512.. de ic.w): 0 para-brisa, 1 traseiro, 2/3 janela
-				// da frente esq./dir., 4/5 de trás esq./dir. Qual vidro é este pixel: o lateral fica perto da lateral; o resto, na frente
+				// da frente esq./dir., 4/5 de trás esq./dir. Qual vidro é este pixel: o lateral fica perto da lateral, o resto, na frente
 				// ou atrás do meio. Quebrado: o buraco escuro do interior com as trincas (células de Worley) e cacos claros na moldura.
 				float broken = 0.0;
 				if (glass > 0.5 && vLt.z >= 511.5) {
@@ -534,14 +609,14 @@ const CarArt3D = {
 				if (dent > 0.5 && vLP.w < 0.5) {
 					float zone = max(smoothstep(dims.x * 0.3, dims.x, abs(L.z)), smoothstep(dims.z * 0.5, dims.z, abs(L.x)) * 0.7);
 					if (painted || is(kind, 0.0)) {
-						// riscos compridos (ao longo do carro), esparsos, mais nas pontas e nas laterais; manchas escuras da batida
+						// riscos compridos (ao longo do carro), esparsos, mais nas pontas e nas laterais, manchas escuras da batida
 						float st = n2(vec2(L.z * 2.5 + L.y * 1.3, (L.x + L.y) * 70.0));
 						float m = smoothstep(0.86 - dent * 0.025, 0.9 - dent * 0.025, st) * zone * min(1.0, dent * 0.5);
 						c = mix(c, c * 0.55 + vec3(0.13), m);
 						c *= 1.0 - 0.22 * (dent / 3.0) * zone * smoothstep(0.45, 0.85, n2(L.xz * 3.0 + L.y * 2.0));
 					}
 					if (glass > 0.5 && dent > 1.5 && broken < 0.5) {
-						// vidro estilhaçado: as bordas das células (Worley) viram trincas — em partes do vidro na fase 2; na 3 ele estourou
+						// vidro estilhaçado: as bordas das células (Worley) viram trincas — em partes do vidro na fase 2, na 3 ele estourou
 						vec2 w = worley(vec2(L.x + L.y * 0.7, L.z + L.y * 0.5) * 9.0);
 						float edge = 1.0 - smoothstep(0.0, 0.07, w.y - w.x);
 						if (dent > 2.5) { c = mix(vec3(0.05, 0.055, 0.06), vec3(0.55, 0.6, 0.62), edge * 0.6); glass = 0.15; }
@@ -578,7 +653,7 @@ const CarArt3D = {
 					rough = 0.95; metal = 0.0; coat = 0.0; glass *= 0.2;
 				}
 				// ---- luz: céu (hemisfério) + sol, relativa a uma superfície plana voltada para cima (o teto fica com a cor do material,
-				// como no desenho; as laterais e as rampas clareiam ou escurecem conforme o lado do sol)
+				// como no desenho, as laterais e as rampas clareiam ou escurecem conforme o lado do sol)
 				float sh = clamp((vWS.w - 0.62) / 0.38, 0.0, 1.0);
 				vec3 sun = sunC * sh;
 				float sunI = dot(sun, vec3(0.333)), day = clamp(dot(sunC, vec3(0.333)), 0.0, 1.0);
@@ -603,7 +678,7 @@ const CarArt3D = {
 					if (glass > 0.0) col = mix(col, c + env * 0.08, 0.5);
 				}
 				col *= tint * vWS.w;
-				// ---- luzes acesas (não escurecem com a noite); carcaça queimada não acende nada
+				// ---- luzes acesas (não escurecem com a noite), carcaça queimada não acende nada
 				float on = 0.0; vec3 ec = vec3(0.0);
 				float fl = vLt.z, siren = step(0.5, bit(fl, 8.0) + bit(fl, 16.0));       // giroflex ligado: a fase apagada ainda brilha um pouco
 				if (is(kind, 6.0)) { on = vLt.x; ec = vec3(1.0, 0.95, 0.82) * 1.5; }
@@ -614,6 +689,15 @@ const CarArt3D = {
 				else if (is(kind, 11.0)) { on = siren * (0.3 + 0.7 * bit(fl, 16.0)); ec = vec3(1.0, 0.2, 0.15) * 2.0; }
 				else if (is(kind, 12.0)) { on = vLt.x; ec = vCR.rgb * 1.4 + 0.1; }
 				if (dent > 2.5 && (is(kind, 6.0) || is(kind, 7.0))) on *= step(0.5, h2(floor(L.xz * 4.0)));    // lâmpada quebrada
+				// FAROL / LANTERNA QUEBRADOS (CarParts → bits 32768.. de ic.w: farol esq., dir., lanterna esq., dir.): apagado e estilhaçado
+				if ((is(kind, 6.0) || is(kind, 7.0) || is(kind, 8.0)) && fl >= 32767.5) {
+					float lb = bit(fl, (L.z > 0.0 ? 32768.0 : 131072.0) * (L.x < 0.0 ? 1.0 : 2.0));
+					if (lb > 0.5) {
+						on = 0.0;
+						vec2 w = worley(L.xy * 26.0 + L.z * 3.0);
+						col = mix(col * 0.3, vec3(0.5, 0.52, 0.55) * tint, (1.0 - smoothstep(0.0, 0.06, w.y - w.x)) * 0.8);
+					}
+				}
 				col = mix(col, ec, clamp(on, 0.0, 1.0) * (1.0 - fx.r));
 				if (fogP.z > 0.5) col = mix(col, fogC, clamp((length(vWS.xyz - eye) - fogP.x) / (fogP.y - fogP.x), 0.0, 1.0));      // (perseguição: a névoa de distância)
 				gl_FragColor = vec4(col, 1.0);
@@ -622,8 +706,8 @@ const CarArt3D = {
 
 	_material() {
 		const m = new BABYLON.ShaderMaterial('car3d', this._scene, { vertex: 'car3d', fragment: 'car3d' }, {
-			attributes: ['position', 'normal', 'color', 'pbr', 'wc', 'ia', 'ib', 'ic', 'dm'],
-			uniforms: ['world', 'viewProjection', 'squash', 'paintRows', 'eye', 'sunL', 'sunC', 'tint', 'fogP', 'fogC', 'skyZ', 'skyH'],
+			attributes: ['position', 'normal', 'color', 'pbr', 'wc', 'ia', 'ib', 'ic', 'pa', 'pb', 'pc'],
+			uniforms: ['world', 'viewProjection', 'squash', 'paintRows', 'eye', 'sunL', 'sunC', 'tint', 'fogP', 'fogC', 'skyZ', 'skyH', 'dmU', 'axU', 'partP', 'partA'],
 			samplers: ['paints'],
 		});
 		m.setTexture('paints', this._paints);
@@ -639,6 +723,12 @@ const CarArt3D = {
 		m.setVector4('skyH', new BABYLON.Vector4(0.8, 0.86, 0.92, 0));
 		m.backFaceCulling = true;
 		m.checkReadyOnlyOnce = true;               // (sem refazer a lista de defines a cada malha a cada quadro)
+		// (as medidas e as dobradiças de CADA modelo: uniformes postos a cada desenho — o material é um só para todos)
+		m.onBindObservable.add((mesh) => {
+			const e = m.getEffect(), c = mesh && mesh._car;
+			if (!e || !c) return;
+			e.setVector4('dmU', c.dims); e.setVector4('axU', c.ax); e.setArray4('partP', c.pp); e.setArray4('partA', c.pa);
+		});
 		return m;
 	},
 
@@ -672,6 +762,7 @@ const CarArt3D = {
 				if (a.kit) { const w = M[a.modelId + '#k' + a.kit] || this._kit(a.modelId, a.kit); if (w.n >= w.cap) this._grow(w, w.cap * 2); a._write(w, w.n++); }
 			}
 		}
+		for (const b of this.debris) if (!S) this._writeDebris(b);
 		const s = CarArt._sun, d = Config.light.sunDir, dl = Math.hypot(d[0], d[1], d[2]);
 		const tint = typeof SpriteMaterial !== 'undefined' ? SpriteMaterial.sharedTint() : null;
 		const u = this._u || (this._u = { l: new BABYLON.Vector3(), c: new BABYLON.Color3(), e: new BABYLON.Vector3() });
@@ -767,6 +858,24 @@ const CarArt3D = {
 		return n + 1;
 	},
 
+	// DESTROÇOS (CarParts): a peça que caiu é a MESMA malha do modelo, numa instância a mais em que só ela aparece (ib.w = −(k+1)),
+	// centrada no pivô — sem malha nova e sem desenho a mais. b = { model, k, variant, x, y, z, q: [x, y, z, w] (giro), s (escala), fade }.
+	debris: [],
+	_writeDebris(b) {
+		const m = this._models[b.model] || this._model(b.model);
+		if (m.n >= m.cap) this._grow(m, m.cap * 2);
+		const i = m.n++, M = m.mat, o = i * 16, [qx, qy, qz, qw] = b.q, k = b.s * (b.fade === undefined ? 1 : b.fade);
+		M[o] = (1 - 2 * (qy * qy + qz * qz)) * k; M[o + 1] = 2 * (qx * qy + qz * qw) * k; M[o + 2] = 2 * (qx * qz - qy * qw) * k; M[o + 3] = 0;
+		M[o + 4] = 2 * (qx * qy - qz * qw) * k; M[o + 5] = (1 - 2 * (qx * qx + qz * qz)) * k; M[o + 6] = 2 * (qy * qz + qx * qw) * k; M[o + 7] = 0;
+		M[o + 8] = 2 * (qx * qz + qy * qw) * k; M[o + 9] = 2 * (qy * qz - qx * qw) * k; M[o + 10] = (1 - 2 * (qx * qx + qy * qy)) * k; M[o + 11] = 0;
+		M[o + 12] = b.x; M[o + 13] = b.y; M[o + 14] = b.z; M[o + 15] = 1;
+		const A = m.inst, q = i * this.STRIDE;
+		for (let j = 0; j < this.STRIDE; j++) A[q + j] = 0;
+		A[q + 6] = b.variant; A[q + 7] = -(b.k + 1); A[q + 8] = b.shade === undefined ? 1 : b.shade;
+		if (b.off) { A[q + 12] = b.off[0]; A[q + 13] = b.off[1]; A[q + 14] = b.off[2]; }
+		if (b.dent) { A[q + 20] = b.dent; A[q + 21] = b.dent; }
+	},
+
 	// Quantos carros 3D estão na tela agora e em quantas chamadas de desenho (DevMode / medições).
 	count() { let n = 0, calls = 0; for (const id in this._models) { const m = this._models[id]; if (m.n) { n += m.n; calls++; } } return { cars: n, calls, live: this.live.size, models: Object.keys(this._models).length }; },
 };
@@ -825,6 +934,12 @@ class Car3DActor {
 		this.lower = 0;                              // rebaixamento da suspensão (m)
 		this.flatBits = 0;
 		this.glassBits = 0;
+		// PEÇAS (CarParts): o quanto cada uma abriu (rad), o amassado por região, as que caíram (bits) e os faróis/lanternas quebrados
+		this.pa = [0, 0, 0, 0];                     // portas: diant. esq., diant. dir., tras. esq., tras. dir.
+		this.pb = [0, 0, 0, 0];                     // capô, porta-malas/tampa/portas de trás, para-choque dianteiro e traseiro (pendendo)
+		this.pc = [0, 0, 0, 0];                     // amassado: frente, traseira, esquerda, direita (0..1)
+		this.gone = 0;                              // bit k = a peça 7 + k caiu
+		this.lampBits = 0;                          // 32768 farol esq., 65536 dir., 131072 lanterna esq., 262144 dir.
 		CarArt3D.live.add(this);
 	}
 
@@ -953,11 +1068,13 @@ class Car3DActor {
 			M[o + 8] = s * k; M[o + 9] = 0; M[o + 10] = c * k; M[o + 11] = 0;
 			M[o + 12] = this.x; M[o + 13] = this.y - 1.5; M[o + 14] = this.z; M[o + 15] = 1;
 		}
-		const A = m.inst, L = this.lamps, d = m.dims;
-		A[o] = this.spin; A[o + 1] = this.steer; A[o + 2] = this.pitch; A[o + 3] = this.roll;                       // ia
-		A[o + 4] = (this.heave - this.lower) / k; A[o + 5] = this.yaw; A[o + 6] = this.variant; A[o + 7] = this.dent;    // ib
-		A[o + 8] = this.shade; A[o + 9] = L.head; A[o + 10] = L.tail; A[o + 11] = L.bits + this.flatBits + this.glassBits;              // ic
-		A[o + 12] = d[0]; A[o + 13] = d[1]; A[o + 14] = d[2]; A[o + 15] = d[3];                                       // dm
+		const A = m.inst, L = this.lamps, q = i * CarArt3D.STRIDE, PA = this.pa, PB = this.pb, PC = this.pc;
+		A[q] = this.spin; A[q + 1] = this.steer; A[q + 2] = this.pitch; A[q + 3] = this.roll;                       // ia
+		A[q + 4] = (this.heave - this.lower) / k; A[q + 5] = this.yaw; A[q + 6] = this.variant; A[q + 7] = this.dent + 4 * this.gone;    // ib
+		A[q + 8] = this.shade; A[q + 9] = L.head; A[q + 10] = L.tail; A[q + 11] = L.bits + this.flatBits + this.glassBits + this.lampBits;      // ic
+		A[q + 12] = PA[0]; A[q + 13] = PA[1]; A[q + 14] = PA[2]; A[q + 15] = PA[3];                                 // pa
+		A[q + 16] = PB[0]; A[q + 17] = PB[1]; A[q + 18] = PB[2]; A[q + 19] = PB[3];                                 // pb
+		A[q + 20] = PC[0]; A[q + 21] = PC[1]; A[q + 22] = PC[2]; A[q + 23] = PC[3];                                 // pc
 	}
 
 	// RELEVO (map/Relief.js): o carro na altura do chão e DEITADO na encosta — a frente sobe/desce pela inclinação ao longo dele (pelo
@@ -1004,11 +1121,11 @@ class Car3DActor {
 		};
 		img(1, 0, 0, o); img(0, 1, 0, o + 4); img(0, 0, 1, o + 8);
 		M[o + 12] = this.x; M[o + 13] = this.y - (this.kind === 'boat' ? 0.8 : 1.5) + (this.fallen ? 0.06 : 0) + (this.kind === 'moto' && typeof Relief !== 'undefined' ? Relief.at(this.x, this.z) : 0); M[o + 14] = this.z; M[o + 15] = 1;
-		const A = m.inst, L = this.lamps, d = m.dims, air = this.kind === 'heli';
-		A[o] = air ? this.rotorA : this.spin; A[o + 1] = air ? this.rotorB : this.steer; A[o + 2] = 0; A[o + 3] = 0;    // ia
-		A[o + 4] = 0; A[o + 5] = 0; A[o + 6] = this.variant; A[o + 7] = this.dent;                                       // ib
-		A[o + 8] = this.shade; A[o + 9] = this.fallen ? 0 : L.head; A[o + 10] = this.fallen ? 0 : L.tail; A[o + 11] = L.bits + this.flatBits;      // ic
-		A[o + 12] = d[0]; A[o + 13] = d[1]; A[o + 14] = d[2]; A[o + 15] = d[3];                                          // dm
+		const A = m.inst, L = this.lamps, air = this.kind === 'heli', q = i * CarArt3D.STRIDE;
+		A[q] = air ? this.rotorA : this.spin; A[q + 1] = air ? this.rotorB : this.steer; A[q + 2] = 0; A[q + 3] = 0;    // ia
+		A[q + 4] = 0; A[q + 5] = 0; A[q + 6] = this.variant; A[q + 7] = this.dent;                                       // ib
+		A[q + 8] = this.shade; A[q + 9] = this.fallen ? 0 : L.head; A[q + 10] = this.fallen ? 0 : L.tail; A[q + 11] = L.bits + this.flatBits;      // ic
+		for (let j = 12; j < 24; j++) A[q + j] = 0;                                                                   // pa, pb, pc
 	}
 
 	dispose() {

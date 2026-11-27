@@ -184,6 +184,7 @@ class CarDamage {
 	// --------------------------------------------------------------- explosão
 	_explode(car) {
 		const g = this.g, p = car.position, x = p.x, z = p.z;
+		if (typeof CarParts !== 'undefined') CarParts.explode(car);         // o capô voa, as portas saem ou ficam penduradas
 		const playersCar = car === g.activeCar;
 		const src = (playersCar || car.lastHitBy === 'player') ? 'player' : (car.lastHitBy === 'police' ? 'police' : 'env');
 

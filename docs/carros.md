@@ -114,8 +114,8 @@ src/art/CarArt3D.js       carrega, monta as malhas, o shader e o ator (Car3DActo
 - **Profundidade achatada**: cada carro grava profundidade numa fatia fina logo acima do chão, então ele se esconde sob
   prédios, viadutos e copas, e os personagens 2,5D continuam passando por cima dele, como com o sprite. A geometria estampada
   (faróis, frisos, placas, letreiros) ganha uma pequena vantagem de profundidade e nunca afunda na lataria.
-- **Continua do atlas 2D**: a física e a sombra (caixas), as medidas do catálogo, a porta aberta (lâmina girando na dobradiça),
-  as miniaturas do HUD e a galeria.
+- **Continua do atlas 2D**: a física e a sombra (caixas), as medidas do catálogo, as miniaturas do HUD e a galeria. (A porta
+  aberta, que era uma lâmina do atlas, agora é a porta do próprio modelo — veja abaixo.)
 
 ### Mudar um carro 3D
 
@@ -124,6 +124,46 @@ src/art/CarArt3D.js       carrega, monta as malhas, o shader e o ator (Car3DActo
    câmera de cima vê") e confira na vista (pintura, amassado, luzes, câmera do jogo). **Salvar carros3d.js** grava o arquivo.
 3. Modelo novo: também no `MODELS`/`POOLS` do `CarSheet` e no atlas 2D (`tools/carros`), que segue dando as medidas, a porta e a
    miniatura.
+
+## Portas, capô, porta-malas e dano à la GTA (novembro/2026)
+
+Cada carro 3D agora tem as **peças do próprio modelo**: as portas (2 ou 4, onde o modelo tem as emendas), o capô, o porta-malas (a
+tampa do sedã, a tampa traseira do hatch/SUV, a tampa da caçamba da picape, as duas portas de trás do furgão), os dois para-choques
+e as portas laterais de correr das vans. Elas saem da própria lataria do gerador — não são caixas por cima — e giram na dobradiça do
+lugar certo. Base: GTA San Andreas (portas) e Vice City (amassado exagerado, peças caindo).
+
+```
+tools/carros3d/parts.js   recorta a malha nas emendas (portas, capô, tampa, para-choques), acha o pivô e o eixo de cada peça,
+                          dá a cada peça o lado de DENTRO (forro, a borda na cor do carro) e ao carro um interior simples
+                          (assoalho, painel, bancos, o cofre do motor com o motor, o fundo do porta-malas, o baú do furgão)
+src/art/CarArt3D.js       o shader gira / corre / pende cada peça, esconde as que caíram, amassa por região e desenha os destroços
+src/vehicle/CarParts.js   o estado por carro: a batida por região, as peças soltas balançando, caindo, os destroços, o conserto
+```
+
+- **Portas (San Andreas)**: ao entrar, a porta do motorista ABRE, a pessoa senta e ela FECHA; ao sair, abre e fecha; no roubo, a
+  porta do lado do ladrão abre para arrancar o motorista. Os NPCs também usam: a briga de trânsito (`RoadRage`), os policiais
+  descendo da viatura (`PoliceManager`) e quem é arrancado do carro. Pulando do carro andando, a porta do motorista fica aberta,
+  balançando. No **CarCare** (E no capô ou no porta-malas), a peça de verdade abre e fica aberta enquanto o jogador está a pé perto
+  do carro.
+- **Amassado por região (Vice City)**: a batida é dividida em frente, trás, esquerda e direita pelo ponto de impacto (a diferença
+  entre a velocidade do carro e a que ele queria ter). A frente batida ENCURTA — só o balanço, do eixo para fora: a roda fica no
+  lugar e o para-choque não passa dela —, a chapa de cima empena, a lateral afunda (mais no meio, nas portas), tudo com rugas e o
+  brilho quebrado. Os amassados antigos por fase (riscos, vidros trincados, teto afundado) continuam por cima.
+- **Peças**: cada peça tem vida. Batida na região dela tira vida; abaixo de ~55% ela SOLTA — a porta balança com o movimento do carro
+  (a freada abre, a arrancada fecha, a curva abre a de fora, o vento fecha), o capô levanta em velocidade, o para-choque pende de um
+  lado e, raspando no chão, acaba caindo. Sem vida, a peça CAI: vira um destroço que voa com a velocidade do carro, gira, quica no
+  chão (com o relevo), deita de chapa e some depois de 10 s (só visual, até 24 ao mesmo tempo). Faróis e lanternas QUEBRAM (apagam
+  no modelo e no brilho do `CarLights`). O blindado só amassa (não perde peça).
+- **Explosão**: tudo amassa, faróis e lanternas quebram, o capô voa alto e as outras peças voam ou ficam penduradas — sempre voa
+  alguma coisa.
+- **Conserto**: carro com a vida cheia e sem amassado (oficina, garagem, respawn) volta com todas as peças.
+
+**Como vai para a placa**: um material só para todos os modelos; as dobradiças de cada modelo (pivô, eixo, ângulo máximo, tipo) são
+uniformes da malha, postos a cada desenho (`onBind`). Cada carro manda mais 12 números por instância (os ângulos das 10 peças, o
+amassado das 4 regiões); quais peças caíram e quais lâmpadas quebraram vão nos números que já existiam. O destroço é mais uma
+instância do mesmo modelo, que só desenha aquela peça, centrada no meio dela. Um carro inteiro e intacto custa o mesmo de antes.
+
+**Medição**: MEDIR
 
 ## Motos, helicópteros e barcos em 3D (outubro/2026)
 

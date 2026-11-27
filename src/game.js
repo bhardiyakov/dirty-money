@@ -898,7 +898,7 @@ class Game {
 		if (this.boats) this.boats.update(dt, this);
 		if (this.colliderStream) this.colliderStream.update(dt, this.camera.target.x, this.camera.target.z);
 		Perf.lap('barcos/colisores');
-		if (this.vehicleManager) { this.carDamage.update(dt); Throwables.update(dt); Rockets.update(dt); this.collisions.update(dt); this.doors.update(dt); this._updateAlarms(dt); NearMiss.update(this, dt); }
+		if (this.vehicleManager) { this.carDamage.update(dt); if (typeof CarParts !== 'undefined') CarParts.update(dt, this); Throwables.update(dt); Rockets.update(dt); this.collisions.update(dt); this.doors.update(dt); this._updateAlarms(dt); NearMiss.update(this, dt); }
 		Perf.lap('veículos (dano/colisão)');
 		if (this.vehicleManager) EngineAudio.update(this, dt);                 // ronco dos motores (o seu e o do trânsito perto)
 		Footsteps.update(this, dt);                                            // passos (presos à animação de andar/correr)
@@ -2363,6 +2363,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		const start = new BABYLON.Vector3(c.x + ox * (car.halfW + 0.45), 0, c.z + oz * (car.halfW + 0.45));
 		car.setControlled(false);
 		if (car.isBike) { car.setRider(null); if (sp > 7) car.fall(); }  // a moto sem piloto tomba
+		else if (!car.isBoat) this.doors.set(car, -1, true);            // (San Andreas: a porta do motorista fica aberta, balançando)
 		this.player.teleport(start);
 		this.player.setVisible(true);
 		this.mode = 'player';
@@ -3000,6 +3001,7 @@ if (NightLife.on && NightLife.c) blips.push({ pos: NightLife.c, color: Math.floo
 		const ac = this.activeCar;
 		if (ac && car !== ac && BABYLON.Vector3.Distance(car.position, ac.position) < 5.5) src = 'player';
 		if (car.spec.fire !== false) car.takeDamage(dmg, src);             // (bicicleta: sem motor e sem lataria — batida não a estraga; quem cai é o ciclista)
+		if (typeof CarParts !== 'undefined') CarParts.hit(car, -dvx, -dvz, dmg);      // as PEÇAS: o lado batido amassa, solta e arranca (o oposto da variação de velocidade)
 		if (car.cond) CarCare.onImpact(car, dv, dmg, dvx, dvz);              // radiador, suspensão, vazamento de óleo (vehicle/CarCare.js)
 
 		// Bicicleta/moto: numa batida forte o piloto é ARREMESSADO (continua no sentido em que vinha) e o veículo tomba.

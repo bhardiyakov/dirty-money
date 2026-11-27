@@ -745,8 +745,9 @@ os esconderijos, as casas de máquinas, o barraco do protagonista por fora, a to
   sobem mais na carga: a miniatura do HUD sai da CPU e o atlas só vai para a placa se algum desenho 2D for de fato pedido (o lote 2D
   de carros no primeiro ator 2D; o de personagens quando um quad vetorial aparece na tela — `CharArt.need`, que decodifica de novo no
   Worker).
-- **A porta do carro 3D em 3D** (`CarDoors`): a folha na cor do carro (colunas, moldura, vidro escuro, maçaneta) gira na dobradiça
-  da frente, e o vão mostra o interior (soleira, assento, encosto). Duas malhas com instâncias para todas as portas abertas.
+- **A porta do carro 3D em 3D**: é a porta do PRÓPRIO modelo, recortada da lataria pelo gerador, girando na dobradiça dela no
+  shader, com o interior atrás (veja "Portas, capô, porta-malas e dano à la GTA" em `docs/carros.md`; a primeira versão, uma folha
+  genérica em duas malhas à parte, saiu).
 - **Vitrines em polígonos** (`render/Shops3D.js`, `Config.art.shopPoly`; `?lojas=2d` = o atlas pintado de 2 × 1800 × 864, ~16 MB):
   a frente de loja SALIENTE da parede — pilares e verga na cor da loja, rodapé de granito com a pingadeira, duas vitrines com o
   caixilho de alumínio e o montante, e o vidro afastado do fundo: atrás dele a sala (o fundo, a bancada, duas prateleiras com a

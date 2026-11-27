@@ -265,7 +265,7 @@ export function segment(full, v, info, slug, mats) {
 export function insides(mesh, seg, matIndex, used) {
   const { G, parts, flags } = seg;
   const P = Array.from(mesh.P), N = Array.from(mesh.N), M = Array.from(mesh.Mt), Pt = Array.from(mesh.Pt), I = Array.from(mesh.Ix);
-  const trim = matIndex('forro'), seat = matIndex('estofado_preto'), engine = matIndex('metal_escuro'), dark = matIndex('chassi'), paint = matIndex('pintura');
+  const trim = matIndex('forro'), seat = matIndex('estofado_preto'), engine = matIndex('metal'), radi = matIndex('metal_escuro'), cover = matIndex('motor'), dark = matIndex('chassi'), paint = matIndex('pintura');
   const vtx = (p, n, m, pt) => { P.push(p[0], p[1], p[2]); N.push(n[0], n[1], n[2]); M.push(m); Pt.push(pt); return P.length / 3 - 1; };
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const norm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
@@ -387,7 +387,8 @@ export function insides(mesh, seg, matIndex, used) {
   const hood = parts[7];
   if (hood) {                                                                // o cofre do motor e o motor
     const x = hood.h[0] * 0.88, z0 = hood.c[2] - hood.h[2] + 0.04, z1 = hood.c[2] + hood.h[2] - 0.12, y0 = Math.max(0.3, G.ySill + 0.1), y1 = hood.c[1] - 0.06;
-    if (z1 > z0 + 0.2 && y1 > y0 + 0.15) { tub(-x, y0, z0, x, y1, z1, dark); block(-x * 0.55, y0, z0 + 0.12, x * 0.45, y1 - 0.12, z1 - 0.15, engine); block(-x * 0.85, y0, z1 - 0.1, x * 0.85, y1 - 0.08, z1 - 0.04, engine); }
+    if (z1 > z0 + 0.2 && y1 > y0 + 0.15) { tub(-x, y0, z0, x, y1, z1, dark); block(-x * 0.55, y0, z0 + 0.12, x * 0.45, y1 - 0.12, z1 - 0.15, engine); block(-x * 0.4, y1 - 0.12, z0 + 0.22, x * 0.3, y1 - 0.07, z1 - 0.3, cover);
+      block(-x * 0.85, y0, z1 - 0.1, x * 0.85, y1 - 0.08, z1 - 0.04, radi); }
   }
   const tr = parts[8];
   if (tr && (flags.sedan || flags.hatch)) {                                   // o fundo do porta-malas

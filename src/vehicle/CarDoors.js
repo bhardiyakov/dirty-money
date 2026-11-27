@@ -2,8 +2,8 @@
 // CarDoors — a porta do motorista/passageiro dos carros abrindo e fechando.
 // A porta aberta é a LÂMINA do atlas (CarArt) girando em volta da dobradiça, em qualquer ângulo, mais o vão escuro que ela deixa na
 // lateral — dois quads do lote de portas (CarArt.doors: uma chamada de desenho para todas). CARRO 3D (CarArt3D — todos os modelos hoje):
-// a porta é de POLÍGONOS — a folha (a lataria na cor da pintura, o vidro em cima, a moldura) girando em volta da dobradiça e o vão
-// escuro na lateral do carro, instâncias de dois modelos (todas as portas abertas = 2 desenhos: _3d). Aqui mora o estado: por carro com porta
+// a porta é a do PRÓPRIO MODELO (tools/carros3d/parts.js), girando na dobradiça dela — o forro, a borda e o interior aparecem
+// (CarParts.doorOpen; o modelo sem porta, como o ônibus, não anima nada). Aqui mora o estado: por carro com porta
 // mexendo há { sign, t, target, blade, gap }, onde t é a abertura (0 fechada … 1 toda aberta). Fechada de vez, os quads voltam ao lote.
 //   set(car, sign, open)   abre/fecha a porta do lado `sign` (-1 esquerda / +1 direita)
 //   whenShut(car, fn)      chama fn quando a porta daquele carro estiver fechada (já, se já está)
@@ -114,74 +114,6 @@ class CarDoors {
         B.color(s.blade, v, sh, 0, 1);
     }
 
-    // ---- a porta em POLÍGONOS (carro 3D): os dois modelos (folha e vão), uma vez; as instâncias são remontadas a cada quadro
-    _3d(scene) {
-        if (this._m3 && !this._m3.leaf.isDisposed()) return this._m3;
-        const mk = (name, build, flat) => {
-            const b = new MeshBatch();
-            build(b);
-            const m = new BABYLON.Mesh(name, scene), vd = new BABYLON.VertexData();
-            vd.positions = b.pos; vd.normals = b.nor; vd.indices = b.idx; vd.colors = b.col;
-            vd.applyToMesh(m, false);
-            const mat = new BABYLON.StandardMaterial(name + 'Mat', scene);
-            mat.specularColor = new BABYLON.Color3(0.35, 0.35, 0.35); mat.specularPower = 48;
-            if (flat) { mat.disableLighting = true; mat.specularColor = BABYLON.Color3.Black(); mat.emissiveColor = BABYLON.Color3.White(); }      // (sem luz: a cor do vértice sai pela emissão)
-            m.material = mat; m.useVertexColors = true; m.isPickable = false; m.alwaysSelectAsActiveMesh = true;
-            m._cap = 4; m._M = new Float32Array(m._cap * 16); m._C = new Float32Array(m._cap * 4);
-            m.thinInstanceSetBuffer('matrix', m._M, 16, false);
-            m.thinInstanceSetBuffer('color', m._C, 4, false);
-            m.thinInstanceCount = 0; m.isVisible = false;
-            return m;
-        };
-        // folha: x de 0 (dobradiça) a 1 (ponta), y de 0 (soleira) a 1 (alto da janela), z de −0,5 a 0,5 (a espessura)
-        const leaf = mk('carDoor3d', (b) => {
-            b.solid(0, -0.5, 1, 0.5, 0, 0.6, [1, 1, 1]);                                  // a lataria (× a pintura)
-            b.solid(0, -0.5, 0.06, 0.5, 0.6, 0.97, [1, 1, 1]);                           // a coluna da frente
-            b.solid(0.94, -0.5, 1, 0.5, 0.6, 0.97, [1, 1, 1]);                           // a de trás
-            b.solid(0, -0.5, 1, 0.5, 0.97, 1.0, [1, 1, 1]);                              // a moldura de cima
-            b.solid(0.06, -0.25, 0.94, 0.25, 0.6, 0.97, [0.09, 0.11, 0.13]);             // o vidro (escuro: quase não pega a cor)
-            for (const z of [-0.75, 0.5]) b.solid(0.62, z, 0.74, z + 0.25, 0.42, 0.47, [0.75, 0.75, 0.76]);      // as maçanetas
-        });
-        // o vão: o de dentro do carro, sem luz — a soleira, o assento (o encosto mais para trás) e o escuro do alto (caixas lado a lado,
-        // sem se sobrepor: nada briga no mesmo plano)
-        const gap = mk('carDoorGap3d', (b) => {
-            const seat = [0.15, 0.13, 0.12], back = [0.12, 0.105, 0.1], dark = [0.035, 0.035, 0.04];
-            b.solid(0, -0.5, 1, 0.5, 0, 0.07, [0.24, 0.24, 0.25]);                      // a soleira
-            b.solid(0, -0.5, 1, 0.5, 0.07, 0.48, seat);                                  // o assento
-            b.solid(0, -0.5, 0.5, 0.5, 0.48, 1, dark);
-            b.solid(0.5, -0.5, 0.9, 0.5, 0.48, 0.86, back);                              // o encosto
-            b.solid(0.9, -0.5, 1, 0.5, 0.48, 0.86, dark);
-            b.solid(0.5, -0.5, 1, 0.5, 0.86, 1, dark);
-        }, true);
-        return (this._m3 = { leaf, gap, list: [] });
-    }
-    _put3d(car, s) {
-        const vis = car.visual, D3 = CarArt3D._defs[vis.modelId], spec = DoorSheet.SPEC[car.spec.id], A = CarDoors.axes(car), p = car.position;
-        const Hc = (D3 && D3.h ? D3.h : 1.4) * vis.k, road = vis.y - 1.5 - (vis.lower || 0), sg = s.sign;
-        const y0 = road + 0.24 * Hc, hd = 0.68 * Hc, L = spec.len, hx = sg * vis.hw * 0.985, hz = spec.h;
-        const Hx = p.x + A.fx * hz + A.rx * hx, Hz = p.z + A.fz * hz + A.rz * hx;
-        const ang = DoorSheet.MAX_ANGLE * (1 - Math.pow(1 - s.t, 2)), cs = Math.cos(ang), sn = Math.sin(ang);
-        const dx = -A.fx * cs + A.rx * sg * sn, dz = -A.fz * cs + A.rz * sg * sn;      // da dobradiça para a ponta (gira para fora)
-        const P = CarSheet.PAINTS[vis.variant] || CarSheet.PAINTS[0], h = parseInt(P.paint.slice(1), 16), col = [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255, 1];
-        // (z = x × y normalizado × espessura: o determinante é sempre positivo — as faces para fora dos dois lados do carro)
-        const M = (ox, oz, ax, az, len, ht, th) => { const cx = -az, cz = ax, l = Math.hypot(cx, cz) || 1; return [ax * len, 0, az * len, 0, 0, ht, 0, 0, cx / l * th, 0, cz / l * th, 0, ox, y0, oz, 1]; };
-        const T = 0.07, out = 0.012;
-        this._m3.list.push(['leaf', M(Hx + A.rx * sg * T * 0.5, Hz + A.rz * sg * T * 0.5, dx, dz, L, hd, T), col]);
-        this._m3.list.push(['gap', M(Hx + A.rx * sg * out, Hz + A.rz * sg * out, -A.fx, -A.fz, L * 0.94, hd * 0.96, 0.02), [1, 1, 1, 1]]);
-    }
-    _flush3d() {
-        const S = this._m3;
-        if (!S) return;
-        for (const key of ['leaf', 'gap']) {
-            const m = S[key], L = S.list.filter((e) => e[0] === key), n = L.length;
-            if (n > m._cap) { m._cap = Math.max(n, m._cap * 2); m._M = new Float32Array(m._cap * 16); m._C = new Float32Array(m._cap * 4); m.thinInstanceSetBuffer('matrix', m._M, 16, false); m.thinInstanceSetBuffer('color', m._C, 4, false); }
-            L.forEach((e, i) => { m._M.set(e[1], i * 16); m._C.set(e[2], i * 4); });
-            m.thinInstanceCount = n; m.isVisible = n > 0;
-            if (n) { m.thinInstanceBufferUpdated('matrix'); m.thinInstanceBufferUpdated('color'); }
-        }
-        S.list.length = 0;
-    }
-
     update(dt) {
         const speed = Config.theft.doorOpenSpeed;
         for (const [car, s] of this.state) {
@@ -189,7 +121,8 @@ class CarDoors {
             if (s.t < s.target) s.t = Math.min(s.target, s.t + speed * dt);
             else if (s.t > s.target) s.t = Math.max(s.target, s.t - speed * 1.15 * dt);
 
-            if (s.d3) { if (s.t > 0.04 && car.visual) { this._3d(this.g.scene); this._put3d(car, s); } }
+            // carro 3D: a porta do PRÓPRIO modelo gira na dobradiça (CarParts — o forro, a borda e o interior aparecem)
+            if (s.d3) { if (typeof CarParts !== 'undefined') CarParts.doorOpen(car, s.sign, 1 - Math.pow(1 - s.t, 2)); }
             else if (s.t > 0.04) this._draw(car, s);
             else { CarArt.doors.hide(s.gap); CarArt.doors.hide(s.blade); }
             if (s.t <= 0 && s.target === 0) {                         // fechou: devolve os quads e avisa quem esperava
@@ -200,6 +133,5 @@ class CarDoors {
                 for (const fn of fns) fn();
             }
         }
-        this._flush3d();
     }
 }

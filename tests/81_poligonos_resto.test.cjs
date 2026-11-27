@@ -1,6 +1,6 @@
 // O RESTO EM POLÍGONOS: as vitrines das lojas (render/Shops3D.js — a frente de loja, a sala atrás do vidro, o letreiro de luz; só o
 // nome é textura), as superfícies desenhadas no shader (render/ProcSurf.js — o calçadão, o gramado do estádio, o barraco por fora), os
-// esconderijos e as casas de máquinas em 3D, a seta de saída e a sombra do avião em polígonos, a porta do carro 3D em 3D, e os atlas 2D
+// esconderijos e as casas de máquinas em 3D, a seta de saída e a sombra do avião em polígonos, a porta do carro 3D (a do próprio modelo, que gira na dobradiça), e os atlas 2D
 // de carros e de personagens fora da placa de vídeo (todos são 3D). Confere: nenhuma das texturas antigas, os plugins nos materiais e o
 // shader pronto, os números das peças, que a vitrine ACENDE à noite e que a porta do carro abre em 3D.
 const { boot, gameWait } = require('./lib.cjs');
@@ -65,7 +65,7 @@ module.exports = {
         });
         c.ok(lum.on > lum.off * 1.08, `à noite a vitrine e o letreiro acendem (${lum.kind}: brilho ${lum.off.toFixed(1)} → ${lum.on.toFixed(1)})`);
 
-        // a porta do carro 3D abre em 3D (a folha na cor do carro e o vão com o interior)
+        // a porta do carro 3D abre em 3D: a porta do PRÓPRIO modelo gira na dobradiça (vehicle/CarParts.js, o ângulo vai para a instância)
         const d = await page.evaluate(() => {
             const P = game.player.position, list = (game.vehicleManager && game.vehicleManager.vehicles) || [];
             let car = null, bd = 1e9;
@@ -73,11 +73,11 @@ module.exports = {
             if (!car) return { err: 'sem carro estacionado' };
             window.__dcar = car;
             game.doors.set(car, 1, true);
-            return { is3d: CarDoors.is3d(car) };
+            return { is3d: CarDoors.is3d(car), parts: !!CarParts.parts(car) };
         });
         await gameWait(page, 1.2, 100000);
-        const d2 = await page.evaluate(() => { const S = game.doors._m3; return S ? { leaf: S.leaf.thinInstanceCount, gap: S.gap.thinInstanceCount, batch: !!CarArt.cars } : { leaf: 0, gap: 0 }; });
-        c.ok(d.is3d && d2.leaf >= 1 && d2.gap >= 1 && !d2.batch, `a porta do carro 3D abre em polígonos (${d2.leaf} folha, ${d2.gap} vão; sem o atlas 2D: ${!d2.batch})`);
+        const d2 = await page.evaluate(() => ({ ang: window.__dcar.visual.pa ? window.__dcar.visual.pa[1] : 0, batch: !!CarArt.cars }));
+        c.ok(d.is3d && d.parts && d2.ang > 0.8 && !d2.batch, `a porta do carro 3D abre em polígonos (a porta do modelo a ${d2.ang.toFixed(2)} rad; sem o atlas 2D: ${!d2.batch})`);
         c.noErrors(errors, 'polígonos');
         await close();
     },
