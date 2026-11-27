@@ -92,7 +92,7 @@ class ChopCareer extends Career {
         const y = this.yard; if (!y) return;
         this._yardOn = true;
         CityGrid.addPoi({ type: 'chop', name: 'Desmanche da favela', x: y.x, z: y.z });
-        const glow = this._glow = new GlowBatch(this.g.scene, 2, 'chopGlow', 'glow');
+        const glow = this._glow = new GlowBatch(this.g.scene, 2, 'chopGlow', 'glow').markers();
         const a = glow.alloc(), b = glow.alloc();
         glow.place(a, y.x, 0.2, y.z, 9); glow.color(a, 1, 0.5, 0.12, 1);         // área de entrega (≈ raio do "dentro do desmanche")
         glow.place(b, y.x, 0.25, y.z, 3.4); glow.color(b, 1, 0.75, 0.3, 1);

@@ -794,3 +794,74 @@ de ganhar colisores acima de 40 m. Resultado: 230–400 chamadas e 0,3–0,6 mil
 nuvens na faixa de voo (1 chamada), o estado nublado e as sombras que somem sob céu fechado. Detalhes, medição, armadilhas e o roteiro
 de integração em `docs/ceu-clima-voo.md`.
 
+
+## Aparelho fraco a 30 FPS e Ajustes › Gráficos avançados (novembro/2026)
+
+**Referência de "aparelho fraco":** nível Low no perfil de celular (`?gfx=low&celular`), com a CPU do navegador desacelerada 2×
+(`Emulation.setCPUThrottlingRate`, o Xeon de 2,3 GHz dos testes) — um celular intermediário/notebook básico. Meta: o trabalho do quadro
+(lógica + desenho + física, `Perf.frameMs`) ≤ 33 ms. A GPU de lá é software (SwiftShader), então o FPS medido aqui não diz nada; o
+que vale é o tempo de CPU do quadro, e os proxies de GPU (chamadas de desenho e triângulos).
+
+**Medir certo:** com a GPU emulada o jogo roda a ~3 FPS e todo temporizador do jogo dispara a cada quadro (o `_pick` dos bonecos a
+cada 0,15 s, a física em 3 passos), inflando o custo de um quadro. `Perf.fixedDt = 1/30` faz o laço andar 1/30 s de jogo por quadro
+(e o `engine.getDeltaTime` é fixado igual no script) — o custo medido é o de um quadro de 30 FPS. Scripts: `tests/perf.cjs` (por
+sistema) e o de bancada desta rodada (média/mediana do quadro, por seção e por função embrulhada: avaliação de malhas, desenho, Char3D,
+candidatas, LOD das árvores, interface).
+
+### O que foi cortado
+
+| O quê | Antes | Depois |
+|---|---|---|
+| Malhas candidatas por quadro (RenderCuller) | 580–990 (até 650 escondidas: bonecos fora da tela e guardados, chão e mata cortados de longe, brilhos apagados) | 130–180, nenhuma escondida; varredura completa a cada 2 quadros |
+| Terreno da mata criado depois da carga | 290 pedaços "sempre candidatos" (caixa > 40 u) + 200 testados um a um | na grade espacial como o resto (e saem dela ao serem descarregados) |
+| Telhados (placas da cidade inteira) e peças de fachada | desenhados até no meio da mata (a caixa cobria o mapa); faixa longe a 144 m com o corte em 86 m | o balde além do plano de corte sai — mata: 107 → 90 desenhos |
+| Marcadores de brilho (banco, joalheria, desmanche, tunagem, imóveis, itens, esconderijo…) | ~7 lotes desenhados em qualquer lugar | só com um marcador aceso ao alcance da câmera |
+| Telhado e degrau da casa segura | "sempre ativos": desenhados a 580 m | recorte normal |
+| Vegetação da cidade no Low | 6–8 espécies por célula (cada uma um desenho) | ipê, mangueira/carvalho, palmeira e arbusto — centro: 129 → 118 desenhos |
+| Materiais de telhados, fachadas, peças, árvores e fios | reavaliados a cada desenho (~25 µs cada) | congelados depois da carga |
+| Posição dos bonecos para LOD e "está na tela?" | `getAbsolutePosition()` (recalcula a matriz de ~100 atores) | lida direto do quad e do elevador do relevo |
+| Cores do desenho 2,5D com o boneco em 3D | reenviadas à placa ~100×/s à toa | adiadas até o 2,5D voltar |
+| LOD das árvores (~4.000 plantas) | todas de uma vez a cada 200 ms (pico de ~3 ms a cada 6 quadros) | um sexto por quadro |
+| Faróis e setas apagados de dia | reposicionados (e reenviados) todo quadro | só o que está aceso |
+| Pássaros | 30 | 15 com a Vida da cidade baixa (Low, celular) |
+| Detalhe das pessoas do Low (lodBias 1,7) | nunca aplicado (o Graphics roda antes do Char3D existir) | aplicado via `Config.perf.lodBias` |
+| (primeira leva) Char3D, pontos de ônibus, brilhos, helicóptero, mata | varredura de materiais "sujos" a cada boneco montado, troca de LOD remontando malhas, uma sombra-bolha por pessoa, 7 desenhos por ponto de ônibus, ~30 lotes de efeito desenhados apagados | bloqueio por material, conjuntos de malhas guardados (até 3), sombras numa malha só, pontos fundidos em 2 malhas, lote apagado fora do quadro; no Low o corte colado na névoa (`tightFar`), o detalhe miúdo antes dela (`fineCull`) e a mata menos densa (`vegDensity`) |
+
+### Ajustes › Gráficos avançados (`src/ui/GraphicsMenu.js`)
+
+Uma linha nova em Ajustes ("🎛️ Gráficos avançados") abre um submenu — como o das Teclas — com o que a pessoa pode trocar para o
+jogo rodar melhor na máquina dela. Cada linha mostra o valor de agora ("Automático (…)" = o do nível) e uma etiqueta **na hora** ou
+**ao reabrir**; com algo pendente, um aviso no pé. ↑ ↓ escolhe, ← → troca (partindo do valor do nível), Enter/clique avança, Esc/B
+volta; no toque, ◀ ▶ em cada linha.
+
+| Linha | Valores | Quando vale |
+|---|---|---|
+| Nível gráfico | Automático, Low, Medium, High, HD | ao reabrir |
+| Resolução | 50–100% | na hora (o que mais pesa na placa de vídeo) |
+| Distância de visão | 55–125 m | na hora (a névoa; menos prédios, carros e árvores por quadro) |
+| Sombras do sol | Desligadas, Baixas, Altas | desligar na hora; ligar/trocar o tamanho ao reabrir |
+| Antisserrilhado | Desligado, 2×, 4×, 8× | na hora |
+| Brilho das luzes | Ligado/Desligado | na hora |
+| Reflexo na água | Ligado/Desligado | desligar na hora; ligar ao reabrir se o nível não tinha |
+| Relevo das fachadas | Ligado/Desligado | ao reabrir |
+| Vegetação rasteira | Ligado/Desligado | na hora |
+| Densidade da mata | 40–100% | na hora para o terreno que carregar; todo ele ao reabrir |
+| Distância dos detalhes | 60%, 75%, 90% da névoa ou até o fim | na hora |
+| Detalhe das pessoas | Mínimo … Máximo | na hora |
+| Nuvens no voo | Ligado/Desligado | na hora |
+| Vida da cidade, Taxa de quadros | (os de Ajustes) | na hora |
+| Mostrar FPS na tela | contador no canto: FPS e ms do quadro | na hora |
+| Qualidade automática | Ligado/Desligado | na hora |
+| Restaurar o padrão do nível | | na hora |
+
+Guardados em `settings.gfx`; na abertura `Graphics._custom` aplica tudo por cima do nível (`Graphics.base` guarda o nível puro, o
+"Automático" de cada linha). Teste: `tests/84_graficos_menu.test.cjs` (teclado, na hora, reabrir, restaurar, recorte sem escondidos).
+
+### Qualidade automática com escada de processador
+
+A qualidade automática (`src/core/AutoQuality.js`) só tinha degraus de placa de vídeo (resolução, sombras, antisserrilhado, brilho) —
+num aparelho com CPU fraca, o caso desta meta, eles não ajudam: ela descia tudo e o jogo continuava lento. Agora, quando o trabalho de
+CPU do quadro (`Perf.frameAvg`) passa de 85% do tempo do quadro, ela desce primeiro a **escada de processador**: a pose de quem está
+longe menos vezes (`Char3D.LOD_EVERY` 1/2/3/4 e o detalhe das pessoas um pouco mais cedo), menos movimento na rua (Vida da cidade
+baixa) e a distância de visão −15% (duas vezes, até 50 m). O degrau alcançado fica guardado como os outros (`autoQuality.cpu`). Só em
+placa de vídeo de verdade (no rasterizador por software dos testes nada disso dispara). Desliga em Ajustes › Gráficos avançados.

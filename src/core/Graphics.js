@@ -17,6 +17,8 @@
 // picture is drawn smaller and scaled up (GameEngine._applyScale). The AutoQuality still steps the
 // shadows down during play when the device cannot keep up. URL overrides for testing: `?gfx=low|medium|high|hd`; the old `?lite` =
 // medium and `?full` = high.
+// AJUSTES › GRÁFICOS AVANÇADOS (ui/GraphicsMenu.js): resolução, distância de visão, sombras, antisserrilhado, brilho, reflexo da água,
+// relevo das fachadas, vegetação, detalhes, pessoas, nuvens — cada um por cima do nível (settings.gfx, aplicados por último: _custom).
 // ============================================================================
 
 const Graphics = {
@@ -185,6 +187,7 @@ const Graphics = {
 			A.char3d.npc.midDist = Math.min(A.char3d.npc.midDist || 32, Math.max(14, Math.round((r3 || 30) * 0.75)));
 			// (o nível de detalhe dos NPCs 3D pelo tamanho na tela: no Low ele baixa mais cedo, no HD mais tarde — Char3D.lodBias)
 			if (typeof Char3D !== 'undefined') Char3D.lodBias = p.lodBias || 1;
+			P.lodBias = p.lodBias || 1;                          // (Char3D lê este na carga: na abertura ele ainda não existe aqui)
 		}      // (TODOS os NPCs em 3D — art/Char3D.js; o nível gráfico decide até onde vai o modelo cheio)
 		// (personagens em 3D: as folhas 2,5D só servem a quem ainda é desenhado nelas — pilotos de moto, o instante antes do modelo 3D
 		// chegar —, então o orçamento delas na placa cai para no máximo 128 MB; antes elas ocupavam ~630 MB no High sem ninguém ver)
@@ -222,6 +225,31 @@ const Graphics = {
 			if (A.trails) A.trails.on = false;
 		}
 		if (P.lite && typeof document !== 'undefined') document.documentElement.classList.add('no-blur');      // (no frosted-glass panels: ver Theme)
+		// O NÍVEL como ficou (antes dos ajustes avançados): é o "Automático" de cada linha de Ajustes › Gráficos avançados
+		this.base = { renderScale: P.renderScale, chaseFar: Config.camera.chase ? Config.camera.chase.far : 80, shadows: !!P.shadows, shadowSize: P.shadowSize,
+			msaa: A.smooth ? A.msaa || 0 : 0, smooth: A.smooth !== false, bloom: !!P.bloom, waterMirror: P.waterMirror !== false, pom: !P.noPom, cover: P.cover !== false,
+			vegDensity: P.vegDensity, fineCull: P.fineCull, lodBias: P.lodBias || 1, clouds: true };
+		this._custom(P, A);
+	},
+	// AJUSTES › GRÁFICOS AVANÇADOS (ui/GraphicsMenu.js): o que a pessoa trocou por cima do nível — settings.gfx { chave: valor }; sem a
+	// chave (ou 'auto') vale o do nível. Aplicados aqui, por último, na abertura; os que valem na hora o menu aplica também na hora.
+	custom() { const g = typeof Store !== 'undefined' ? (Store.getJSON('settings', null) || {}).gfx : null; return g && typeof g === 'object' ? g : {}; },
+	_custom(P, A) {
+		const c = this.custom(), has = (k) => c[k] !== undefined && c[k] !== 'auto' && c[k] !== null;
+		this.bootCustom = Object.assign({}, c);
+		if (has('scale')) P.renderScale = Math.max(0.3, Math.min(1, +c.scale || 1));
+		if (has('dist') && Config.camera.chase) { Config.camera.chase.far = +c.dist; Config.camera.chase.near = Math.round(+c.dist * 0.45); }
+		if (has('shadows')) { P.shadows = c.shadows !== 'off'; if (c.shadows === 'low') P.shadowSize = 1024; else if (c.shadows === 'high') P.shadowSize = 2048; }
+		A.aaOff = false;
+		if (has('aa')) { const n = +c.aa || 0; A.aaOff = n === 0; if (n > 0) { A.msaa = n; A.smooth = true; } }      // (0 = sem antisserrilhado, o resto do visual suave fica)
+		if (has('bloom')) P.bloom = !!c.bloom;
+		if (has('water')) P.waterMirror = !!c.water;
+		if (has('pom')) P.noPom = !c.pom;
+		if (has('cover')) P.cover = !!c.cover;
+		if (has('veg')) P.vegDensity = +c.veg;
+		if (has('detail')) P.fineCull = +c.detail;
+		if (has('npc')) P.lodBias = +c.npc;
+		P.clouds = has('clouds') ? !!c.clouds : true;
 	},
 	// People and traffic in the living world: the light profile at medium, half of it at low.
 	_crowd(k) {

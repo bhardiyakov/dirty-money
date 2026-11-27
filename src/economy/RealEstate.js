@@ -120,7 +120,7 @@ const RealEstate = {
             CityGrid.addPoi({ type: 'imovel', name: `${type} · ${size} m² · ${this.owned[id] ? 'SEU' : brl(this.price(p))}`, x: p.x, z: p.z, prop: id });
         });
         // marcadores brilhantes na porta (só os próximos aparecem)
-        this.glow = new GlowBatch(game.scene, this.list.length + 4, 'imoveisGlow', 'glow');
+        this.glow = new GlowBatch(game.scene, this.list.length + 4, 'imoveisGlow', 'glow').markers();
         for (let i = 0; i < this.list.length + 4; i++) this.glow.alloc();
         for (let i = 0; i < this.list.length + 4; i++) this.glow.off(i);
         this._t = 0;

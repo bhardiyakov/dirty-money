@@ -252,7 +252,7 @@ const Garage = {
     // ---------------------------------------------------------------- vagas pintadas no chão (só as das suas casas, perto)
     _paint() {
         const g = this.game, P = g.camera.target;
-        if (!this.glow) { this.glow = new GlowBatch(g.scene, 24, 'garageGlow', 'glow'); for (let i = 0; i < 24; i++) { this.glow.alloc(); this.glow.off(i); } }
+        if (!this.glow) { this.glow = new GlowBatch(g.scene, 24, 'garageGlow', 'glow').markers(); for (let i = 0; i < 24; i++) { this.glow.alloc(); this.glow.off(i); } }
         let i = 0;
         for (const G of this.mine()) for (const s of G.slots) {
             if (i >= 24) break;

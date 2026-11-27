@@ -24,7 +24,7 @@ const Smooth = {
 		if (on === this.on && !!this.pp === on) return;
 		this.on = on;
 		if (ge && ge.resize) { ge.resize(); if (game.camera) { game.camera.fitPixelScale(ge.viewHeight); game.camera.onResize(); } }
-		if (game.camera) this._antialias(game.camera.camera, ge.engine, on);
+		if (game.camera) this._antialias(game.camera.camera, ge.engine, on && !Config.art.aaOff);      // (aaOff: Ajustes › Gráficos avançados, sem antisserrilhado)
 		this._textures(game.scene, on);
 		if (ge && ge.shadowGenerator) { const Q = BABYLON.ShadowGenerator, k = Config.art.pcf; ge.shadowGenerator.filteringQuality = !on || k === 'low' ? Q.QUALITY_LOW : k === 'high' ? Q.QUALITY_HIGH : Q.QUALITY_MEDIUM; }      // (o PCF do preset: Medium baixo, High médio, HD alto)
 		this._thaw(game.scene);

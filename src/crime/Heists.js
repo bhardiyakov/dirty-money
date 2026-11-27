@@ -71,7 +71,7 @@ const Heists = {
         mk(pick((d) => d.biome === 'downtown', 80) || pick(() => true, 80), this.MAISON, 'centro', 0);
         const prefs = [(d) => d.district === 'island', (d) => d.biome === 'commercial', (d) => d.biome === 'residential' || d.biome === 'commercial', () => true];
         this.STORE_NAMES.forEach((n, i) => mk(pick(prefs[i], 140) || pick(() => true, 90), n, 'bairro', 1 + (i % 2)));
-        this.glow = new GlowBatch(game.scene, this.list.length, 'jewelGlow', 'glow');
+        this.glow = new GlowBatch(game.scene, this.list.length, 'jewelGlow', 'glow').markers();
         for (const J of this.list) { const i = this.glow.alloc(); this.glow.place(i, J.x, 0.2, J.z, J.tier === 'centro' ? 4 : 3); this.glow.color(i, 0.75, 0.4, 0.95, 1); CityGrid.addPoi({ type: 'joalheria', name: J.name, x: J.x, z: J.z }); }
         this.glow.flush();
         Minimap._placesKey = null;

@@ -100,8 +100,8 @@ class CarLights {
             const front = facing(fx, fz), rear = facing(-fx, -fz), out = 0.25 * gk;          // (the glow sits just outside the body)
             for (let k = 0; k < 2; k++) {
                 const sx = k === 0 ? -L.x : L.x;
-                g.place(s.hl[k], p.x + fx * (L.zF + out) + rx * sx, hy, p.z + fz * (L.zF + out) + rz * sx, 1.7 * gk);
-                if (hI * front > 0.02 && hOK[k]) g.color(s.hl[k], 1.0, 0.94, 0.75, 0.5 * hI * front); else g.off(s.hl[k]);
+                // (só o quad ACESO é reposicionado: de dia os faróis e as setas apagados não reenviam posição à placa a cada quadro)
+                if (hI * front > 0.02 && hOK[k]) { g.place(s.hl[k], p.x + fx * (L.zF + out) + rx * sx, hy, p.z + fz * (L.zF + out) + rz * sx, 1.7 * gk); g.color(s.hl[k], 1.0, 0.94, 0.75, 0.5 * hI * front); } else g.off(s.hl[k]);
             }
             // Um cone por farol, em "V" RETO: o vértice fica na própria lâmpada e o feixe abre simetricamente ao longo do vetor
             // frente do carro (o eixo do feixe é paralelo ao do carro, sem desviar para fora). Os dois se sobrepõem à frente.
@@ -127,10 +127,10 @@ class CarLights {
             if (NL && night > 0.3 && tI > 0.1 && (tOK[0] || tOK[1])) LS.push({ kind: 'tail', x: p.x + fx * (L.zR - 1.2), z: p.z + fz * (L.zR - 1.2), k: tI });
             for (let k = 0; k < 2; k++) {
                 const sx = k === 0 ? -L.x : L.x;
-                g.place(s.tl[k], p.x + fx * (L.zR - out) + rx * sx, hy, p.z + fz * (L.zR - out) + rz * sx, (braking ? 2.0 : 1.2) * gk);
                 // Seta traseira: o lado da curva pisca em âmbar no lugar da lanterna.
-                if (rear <= 0.02 || !tOK[k]) g.off(s.tl[k]);
-                else if (hazard) {
+                if (rear <= 0.02 || !tOK[k]) { g.off(s.tl[k]); continue; }
+                g.place(s.tl[k], p.x + fx * (L.zR - out) + rx * sx, hy, p.z + fz * (L.zR - out) + rz * sx, (braking ? 2.0 : 1.2) * gk);
+                if (hazard) {
                     g.color(s.tl[k], 1.0, 0.62, 0.08, 0.95 * rear);
                 } else if (car.signal === (k === 0 ? -1 : 1) && alive && !pedal) {
                     if (blink) g.color(s.tl[k], 1.0, 0.62, 0.08, 0.95 * rear); else g.off(s.tl[k]);
@@ -141,8 +141,7 @@ class CarLights {
             // ---- Setas dianteiras: lado da curva, um pouco para fora do farol.
             for (let k = 0; k < 2; k++) {
                 const side = k === 0 ? -1 : 1;
-                g.place(s.sig[k], p.x + fx * (L.zF - 0.45) + rx * side * (L.x + 0.62), hy, p.z + fz * (L.zF - 0.45) + rz * side * (L.x + 0.62), 0.7 * gk);
-                if (front > 0.02 && (hazard || (car.signal === side && blink && alive && !pedal))) g.color(s.sig[k], 1.0, 0.62, 0.08, 0.95 * front); else g.off(s.sig[k]);
+                if (front > 0.02 && (hazard || (car.signal === side && blink && alive && !pedal))) { g.place(s.sig[k], p.x + fx * (L.zF - 0.45) + rx * side * (L.x + 0.62), hy, p.z + fz * (L.zF - 0.45) + rz * side * (L.x + 0.62), 0.7 * gk); g.color(s.sig[k], 1.0, 0.62, 0.08, 0.95 * front); } else g.off(s.sig[k]);
             }
 
             // ---- Giroflex (viaturas em perseguição) + reflexo colorido no chão.

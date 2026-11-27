@@ -49,7 +49,7 @@ const Char3D = {
 	LOD_LEVELS: ['npc', 'mid', 'far', 'tiny'],
 	LOD_SCREEN: [0.1, 0.055, 0.028],
 	LOD_EVERY: [1, 1, 2, 3],
-	lodBias: 1,
+	lodBias: (typeof Config !== 'undefined' && Config.perf && Config.perf.lodBias) || 1,      // (o do nível gráfico: Graphics.apply roda antes deste arquivo existir)
 	_frame: 0,
 	// LOW POLY (o padrão desde novembro/2026): o boneco em TRIÂNGULOS de face chapada (shader 'char3dPoly'; o Worker monta com G.lowBody —
 	// o corpo e o cabelo da malha simplificados pelo meshoptimizer, os acessórios geométricos em triângulos, o rosto e a estampa do peito
@@ -458,6 +458,15 @@ const Char3D = {
 			}
 		});
 	},
+	// Onde o quad do ator está no mundo, sem recalcular a matriz: o pai dele é só o "elevador" do relevo (SpriteActor.lift, que sobe e
+	// desce em y). getAbsolutePosition() recalculava a matriz de mundo de ~100 atores por quadro (com a checagem de sincronia de cada
+	// um) — ~0,5 ms no Low. Com outro pai (montado em algo), o caminho de sempre.
+	posOf(a) {
+		const m = a.mesh, P = m.parent;
+		if (P && P !== a.lift) return m.getAbsolutePosition();
+		const o = this._pos || (this._pos = new BABYLON.Vector3());
+		return o.set(m.position.x, m.position.y + (P ? P.position.y : 0), m.position.z);
+	},
 	// Altura do chão acima do asfalto em (x, z): a calçada (Config.city.curbHeight) dentro de um quarteirão, fora da pista; 0 no resto.
 	surfaceAt(x, z) {
 		if (typeof CityGrid === 'undefined' || !CityGrid._blockAtPoint || typeof RoadPlan === 'undefined') return 0;
@@ -545,7 +554,7 @@ const Char3D = {
 			const C = this.npcs.get(a), L = C && C.model ? C.model._lod : -1, d = d2.get(a) || 0;
 			if (poly) {
 				// TAMANHO NA TELA: a altura do boneco (~1,8 m) sobre a altura da tela, pela distância à CÂMERA (LOD_SCREEN, com folga de 15%)
-				const p = a.mesh.getAbsolutePosition(), e = V.eye, dc = Math.max(0.5, Math.hypot(p.x - e.x, p.y + 0.9 - e.y, p.z - e.z));
+				const p = Char3D.posOf(a), e = V.eye, dc = Math.max(0.5, Math.hypot(p.x - e.x, p.y + 0.9 - e.y, p.z - e.z));
 				const frac = (m5 * 0.9) / dc / this.lodBias, T = this.LOD_SCREEN;
 				let l = 3;
 				for (let i = 0; i < 3; i++) { const t = L >= 0 && L <= i ? T[i] / 1.15 : L > i ? T[i] * 1.15 : T[i]; if (frac >= t) { l = i; break; } }
@@ -1066,7 +1075,7 @@ class Char3DActor {
 	_inView(a) {
 		const F = this.scene.frustumPlanes;
 		if (!F || !F.length) return true;
-		const p = a.mesh.getAbsolutePosition(), x = p.x, y = p.y + 0.9, z = p.z;
+		const p = Char3D.posOf(a), x = p.x, y = p.y + 0.9, z = p.z;
 		for (const P of F) if (P.normal.x * x + P.normal.y * y + P.normal.z * z + P.d < -1.4) return false;
 		return true;
 	}

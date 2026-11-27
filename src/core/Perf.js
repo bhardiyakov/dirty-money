@@ -37,6 +37,7 @@ const Perf = {
         HangProbe.frameStart();
     },
     interval: 0,               // intervalo REAL entre quadros (ms): inclui a GPU e o navegador
+    fixedDt: 0,                // (medição) > 0: o laço do jogo anda esse tempo fixo por quadro (s), qualquer que seja o FPS real
     lap(name) {
         const n = performance.now();
         let s = this.sec[name];

@@ -246,7 +246,7 @@ const Airport = {
         for (let z = R.z - R.w / 2; z <= R.z + R.w / 2 + 0.1; z += 3.5) { L.push([R.x0 - 2, z, 0.3, 1, 0.4, 1.3]); L.push([R.x1 + 2, z, 1, 0.25, 0.2, 1.3]); }
         for (let x = T.x0; x <= T.x1 + 0.1; x += 25) for (const s of [-1, 1]) L.push([x, T.z + s * (T.w / 2 + 0.8), 0.3, 0.55, 1, 1.0]);
         L.push([this.TOWER.x, this.TOWER.z, 1, 0.15, 0.1, 2.2, this.TOWER.h + 9.2]);
-        const G = this._glow = new GlowBatch(wb.scene, L.length, 'airportGlow', 'glow');
+        const G = this._glow = new GlowBatch(wb.scene, L.length, 'airportGlow', 'glow').markers();
         L.forEach((q, i) => { G.alloc(); G.place(i, q[0], q[6] || 0.25, q[1], q[5]); G.color(i, q[2], q[3], q[4], 0); });
         G.flush();
         this._lvl = -1;

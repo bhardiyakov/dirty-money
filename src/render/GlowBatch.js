@@ -218,7 +218,38 @@ class GlowBatch {
     // A malha só entra no quadro com o nível aceso E algum quad aceso (_lit, contado em color()): os ~30 lotes de brilho e efeito do mapa
     // (fogo, fumaça, foguete, jatos d'água, brilho de lojas, cones de farol…) eram desenhados TODO quadro, mesmo sem nada aceso — uma
     // chamada de desenho e o shader de cada um por nada.
-    _vis() { const v = (this._level === undefined || this._level > 0) && this._lit > 0; if (this.mesh.isVisible !== v) this.mesh.isVisible = v; }
+    _vis() { const v = (this._level === undefined || this._level > 0) && this._lit > 0 && (!this._mk || this._near); if (this.mesh.isVisible !== v) this.mesh.isVisible = v; }
+
+    // MARCADORES FIXOS espalhados pelo mapa (bancos, joalherias, imóveis, lojas, desmanche, itens no chão…): a malha só entra no quadro
+    // com algum quad aceso ao alcance da câmera (o plano de corte + 20 u). A malha é "sempre ativa" (quads no mapa inteiro, sem caixa útil):
+    // eram ~7 lotes desenhados em qualquer lugar, a centenas de metros do marcador mais perto. Revisto a cada 8 quadros.
+    markers() {
+        this._mk = true; this._near = true;
+        (GlowBatch._mkList || (GlowBatch._mkList = [])).push(this);
+        if (!GlowBatch._mkObs) {
+            const sc = this.mesh.getScene();
+            let n = 0;
+            GlowBatch._mkObs = sc.onBeforeRenderObservable.add(() => { if ((n = (n + 1) & 7) === 0) GlowBatch._mkTick(sc); });
+        }
+        return this;
+    }
+    static _mkTick(sc) {
+        const cam = sc.activeCamera;
+        if (!cam) return;
+        const P = cam.globalPosition || cam.position, R = (cam.maxZ > 0 ? cam.maxZ : 1e6) + 20, R2 = R * R, L = GlowBatch._mkList;
+        for (let k = L.length - 1; k >= 0; k--) {
+            const b = L[k];
+            if (b.mesh.isDisposed()) { L.splice(k, 1); continue; }
+            const p = b.pos, c = b.col;
+            let near = false;
+            for (let i = 0; i < b.count && !near; i++) {
+                if (!(c[i * 16 + 3] > 0)) continue;
+                const q = i * 12, x = (p[q] + p[q + 9]) * 0.5 - P.x, y = (p[q + 1] + p[q + 10]) * 0.5 - P.y, z = (p[q + 2] + p[q + 11]) * 0.5 - P.z;
+                if (x * x + y * y + z * z < R2) near = true;
+            }
+            if (near !== b._near) { b._near = near; b._vis(); }
+        }
+    }
 
     // (Re)cria os buffers para `capacity` quads, preservando os que já existem (crescer o lote).
     _geometry(capacity) {

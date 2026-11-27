@@ -102,7 +102,7 @@ const Dealers = {
             const B = this.BOATS, models = B.models.slice().sort((a, z) => this.REF[a] - this.REF[z]);
             this.list.push({ id: B.id, kind: 'boat', name: 'Náutica Dirty Bay', tier: B, x: N.door.x, z: N.door.z, region: 'Marina', models, display: [], cars: [] });
         }
-        this.glow = new GlowBatch(game.scene, this.list.length + 1, 'dealerGlow', 'glow');
+        this.glow = new GlowBatch(game.scene, this.list.length + 1, 'dealerGlow', 'glow').markers();
         for (let i = 0; i <= this.list.length; i++) { this.glow.alloc(); this.glow.off(i); }
         this._t = 0;
         console.log(`[CONCESSIONÁRIAS] ${this.list.map((d) => `${d.name} (${d.tier.id}, ${d.region})`).join(' · ')}`);

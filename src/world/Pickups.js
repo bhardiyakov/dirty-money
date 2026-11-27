@@ -57,7 +57,7 @@ class Pickups {
         this.items = [];
         this.time = 0;
         const N = 700;
-        this.glow = new GlowBatch(scene, N, 'pickupGlow', 'glow');
+        this.glow = new GlowBatch(scene, N, 'pickupGlow', 'glow').markers();
         for (let i = 0; i < N; i++) this.glow.alloc();
         this._freeGlow = [];
         for (let i = N - 1; i >= 0; i--) this._freeGlow.push(i);

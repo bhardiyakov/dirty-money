@@ -15,7 +15,7 @@ class PauseMenu {
 	static get TABS() {
 		return [['map', '🗺️ Mapa'], ['inventory', '🎒 Inventário'], ['status', '📊 Status'], ['careers', '💼 Carreiras'], ['business', '🏪 Negócios'], ['empire', '👑 Império'], ['guide', '📖 Guia'], ['save', '💾 Salvar'], ['settings', '⚙️ Ajustes']];
 	}
-	static get SET_KEYS() { return ['volume', 'sfx', 'radio', 'minimap', 'prompts', 'camBounce', 'aimHelp', 'camSens', 'camInvX', 'camInvY', 'vibration', 'hudScale', 'keys', 'graphics', 'fps', 'tvFilter', 'language', ...(NativeMobile.touch ? ['tiltSteer', 'touchSize'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'autosave', ...(typeof SafeMode !== 'undefined' && (SafeMode.active || SafeMode.state) ? ['safe'] : []), 'diag', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
+	static get SET_KEYS() { return ['volume', 'sfx', 'radio', 'minimap', 'prompts', 'camBounce', 'aimHelp', 'camSens', 'camInvX', 'camInvY', 'vibration', 'hudScale', 'keys', 'graphics', 'gfxMenu', 'fps', 'tvFilter', 'language', ...(NativeMobile.touch ? ['tiltSteer', 'touchSize'] : []), 'cars3d', 'life', 'screenFx', 'hints', 'autosave', ...(typeof SafeMode !== 'undefined' && (SafeMode.active || SafeMode.state) ? ['safe'] : []), 'diag', 'dev']; }      // linhas de Ajustes, na ordem (giroscópio: só em tela de toque)
 	static get KEYS_HTML() {
 		return '<b>WASD</b> mover (trote) · <b>SHIFT</b> sprint (tocar repetido = mais rápido) · <b>ESPAÇO/CLIQUE</b> atacar · <b>BOTÃO DIREITO</b> arrastando: gira a câmera 360° (com arma de fogo ele mira — o cursor aponta — e o <b>BOTÃO DO MEIO</b> arrastando gira) · <b>E</b> assaltar (com arma)/esconder · <b>C</b> furtar · <b>V</b> pular grade / rolar · <b>Q</b> agachar / cobertura · <b>F</b> veículo (no carro: <b>ESPAÇO</b> freio de mão · <b>R</b> rádio) · <b>G</b> arrombar · <b>R</b> recarregar · <b>M</b> kit médico · <b>I</b> inventário · <b>O</b> carreiras · <b>K</b> máscara · <b>G</b> gritar (no assalto) · <b>E</b> na frente/atrás do carro: capô/porta-malas · <b>ESC</b> menu · <b>1-9</b> armas';
 	}
@@ -122,6 +122,7 @@ class PauseMenu {
 		if (this.g.dev) this.g.dev.setEnabled(s.dev);
 		if (typeof CarArt3D !== 'undefined' && !!s.cars3d !== CarArt3D.available()) this._applyCars3d(!!s.cars3d);
 		if (this.g.crt && typeof CrtFilter !== 'undefined' && !CrtFilter.forcedByUrl) this.g.crt.setEnabled(!!s.tvFilter);      // (TV de tubo: desligada por padrão)
+		if (!this._gfxBoot && typeof GraphicsMenu !== 'undefined') { this._gfxBoot = true; GraphicsMenu.boot(this.g, s); }      // (contador de FPS e qualidade automática guardados)
 
 	}
 
@@ -489,7 +490,7 @@ class PauseMenu {
 	close() {
 		if (!this.isOpen) return;
 		this.isOpen = false;
-		this._capAction = null; this._keysView = false; if (this.g.input) this.g.input.capture = null;      // (Ajustes › Teclas: para de esperar tecla)
+		this._capAction = null; this._keysView = false; this._gfxView = false; if (this.g.input) this.g.input.capture = null;      // (Ajustes › Teclas: para de esperar tecla)
 		this.root.classList.remove('show', 'mapfull', 'legend-on');
 		this._ptrs.clear(); this._pinch = null;
 		this.g.scene.physicsEnabled = true;
@@ -569,6 +570,7 @@ class PauseMenu {
 		if (!this.isOpen || e._dmCaptured) return;                             // (a tecla foi para Ajustes › Teclas)
 		const k = e.key.toLowerCase();
 		if (this._keysView && this.tab === 'settings' && (k === 'escape' || k === 'backspace')) { e.preventDefault(); this._keysView = false; this._renderSettings(); return; }
+		if (this._gfxView && this.tab === 'settings' && typeof GraphicsMenu !== 'undefined' && GraphicsMenu.key(k, this)) { e.preventDefault(); return; }      // (Ajustes › Gráficos avançados)
 		if (['tab', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'backspace'].includes(k)) e.preventDefault();
 		if (k === 'escape' || k === 'p') { this.close(); return; }
 		const tabs = PauseMenu.TABS.map((t) => t[0]), i = tabs.indexOf(this.tab);
@@ -1057,6 +1059,7 @@ class PauseMenu {
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'hudScale') s.hudScale = this._step([0.8, 0.9, 1, 1.15, 1.3], s.hudScale || 1, d);
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'touchSize') s.touchSize = this._step([0.85, 1, 1.15, 1.3], s.touchSize || 1, d);
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'keys') { if (d === 0) { this._keysView = true; this._renderSettings(); } return; }      // (abre a lista das teclas)
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'gfxMenu') { if (d === 0) { this._gfxView = true; GraphicsMenu.row = 0; this._renderSettings(); } return; }      // (abre os gráficos avançados)
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'diag') { if (d === 0) Diag.open(this.g); return; }      // (ação, não ajuste)
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'safe') { if (d === 0) SafeMode.reset(this.g); this._renderSettings(); return; }
 		else if (d === 0 || true) { const k = PauseMenu.SET_KEYS[this.setRow]; if (this.setRow > 0) s[k] = d === 0 ? !s[k] : d > 0; }
@@ -1111,6 +1114,7 @@ class PauseMenu {
 	_renderSettings() {
 		const s = this.settings, el = this.$('pmSet');
 		if (this._keysView && el && typeof KeyBinds !== 'undefined') { this._renderKeys(el); return; }
+		if (this._gfxView && el && typeof GraphicsMenu !== 'undefined') { GraphicsMenu.render(el, this); return; }
 		const T = (k, v) => I18n.t(k, v), tog = (v) => `<div class="pm-toggle ${v ? 'is-on' : ''}">${T(v ? 'common.on' : 'common.off')}</div>`;
 		const sub = (t) => `<small style="display:block;font-weight:500;color:var(--tx-3);font-size:12px">${t}</small>`;
 		const R = {
@@ -1126,6 +1130,7 @@ class PauseMenu {
 			hudScale: ['🔠 Tamanho do HUD ' + sub('vida, arma, dinheiro, procurado, mapa e metas'), `<div class="pm-toggle is-on">${Math.round((s.hudScale || 1) * 100)}%</div>`],
 			keys: ['⌨️ Teclas ' + sub(typeof KeyBinds !== 'undefined' && KeyBinds.changed() ? 'teclas trocadas — clique para ver ou voltar ao padrão' : 'trocar as teclas do teclado'), '<div class="pm-toggle is-on">trocar</div>'],
 			graphics: ['🖥️ ' + T('settings.graphics') + ' ' + sub(T('settings.graphics.hint', { level: Graphics.LABEL[Graphics.level] })), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
+			gfxMenu: ['🎛️ Gráficos avançados ' + sub('resolução, distância de visão, sombras, antisserrilhado, efeitos e detalhes: o que deixar mais leve na sua máquina'), '<div class="pm-toggle is-on">abrir</div>'],
 			fps: ['🎞️ Taxa de quadros ' + sub('30 = estável, frio e econômico (padrão no celular e no notebook) · 60 = mais fluido, esquenta mais'), `<div class="pm-toggle is-on">${s.fps === 30 ? '30 FPS' : s.fps === 60 ? '60 FPS' : `Automático (${Config.perf.fpsCap})`}</div>`],
 			tvFilter: ['📺 Filtro de TV antiga ' + sub('linhas e curvatura de tubo, com a resolução interna a 75% (mais leve para a placa de vídeo)'), tog(!!s.tvFilter)],
 			language: ['🌐 ' + T('settings.language') + ' ' + sub(T('settings.language.hint')), `<div class="pm-toggle is-on">${I18n.label(s.language || I18n.lang)}</div>`],
@@ -1202,6 +1207,7 @@ class PauseMenu {
 		if ((inp.usingPad ? inp.padType : '') !== this._hintsPad) this._renderHints();                                         // trocou teclado ↔ controle: refaz o rodapé
 		const tabs = PauseMenu.TABS.map((t) => t[0]), i = tabs.indexOf(this.tab);
 		this._padPrev = Array.from(p.buttons, (x) => !!(x && x.pressed));
+		if (edge(1) && this._gfxView && this.tab === 'settings') { this._gfxView = false; this._renderSettings(); return; }      // (B: volta dos gráficos avançados)
 		if (edge(1) || edge(9)) { FocusNav.clear(); this.close(); return; }
 		if (edge(4)) { FocusNav.clear(); this.setTab(tabs[(i + tabs.length - 1) % tabs.length]); return; }
 		if (edge(5)) { FocusNav.clear(); this.setTab(tabs[(i + 1) % tabs.length]); return; }

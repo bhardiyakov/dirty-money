@@ -140,8 +140,8 @@ const HouseView = {
 			const [ax, az] = at(0, (rz1 - rz0 - 1.5) / (rz1 - rz0)), [bx, bz] = at(0.45, 0.5), [cx, cz] = at(1, 0.42);
 			SL.tube([ax, y + 0.06, az], [bx, y + 0.06, bz], 0.02, 0.02, [0.08, 0.08, 0.09], 4); SL.tube([bx, y + 0.06, bz], [cx, y + 0.06, cz], 0.02, 0.02, [0.08, 0.08, 0.09], 4);
 		}
-		const slab = SL.build('hs_roofSlab', scene, mats.roofSlab, { vertexColors: true, receiveShadows: true, relief: true });
-		const top = RB.build('hs_roofTop', scene, mats.roofTop, { receiveShadows: true, relief: true });
+		const slab = SL.build('hs_roofSlab', scene, mats.roofSlab, { vertexColors: true, receiveShadows: true, relief: true, alwaysActive: false });
+		const top = RB.build('hs_roofTop', scene, mats.roofTop, { receiveShadows: true, relief: true, alwaysActive: false });
 		for (const m of [slab, top]) if (m) m.freezeWorldMatrix();
 		if (mats.roofTop.diffuseTexture) mats.roofTop.diffuseTexture.wrapU = mats.roofTop.diffuseTexture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 
@@ -158,7 +158,7 @@ const HouseView = {
 		const ST = new MeshBatch();
 		ST.solid(ox + d.x0 - 0.5, oz - 1.1, ox + d.x1 + 0.5, oz - 0.02, 0, 0.14, [0.52, 0.5, 0.46]);
 		world._footing(ox, oz, ox + W, oz + D, HA, ST);
-		const stoop = ST.build('hs_stoop', scene, world.mats.solid, { vertexColors: true, receiveShadows: true, relief: true });
+		const stoop = ST.build('hs_stoop', scene, world.mats.solid, { vertexColors: true, receiveShadows: true, relief: true, alwaysActive: false });
 		MeshBatch.anchor = null;
 		if (stoop) stoop.freezeWorldMatrix();
 
@@ -175,7 +175,7 @@ const HouseView = {
 		world._collider('hs_door', ox + d.x0, oz, ox + d.x1, oz + T, d.h);
 
 		// --- brilhos: luz saindo pela porta e pelas janelas ---
-		const G = new GlowBatch(scene, 8, 'houseGlow', 'glow').under();      // (sob os personagens: ver GlowBatch.under)
+		const G = new GlowBatch(scene, 8, 'houseGlow', 'glow').under().markers();      // (sob os personagens: ver GlowBatch.under)
 		this.glow = G;
 		this.g = { door: G.alloc(), doorCore: G.alloc(), win: [G.alloc(), G.alloc(), G.alloc()] };
 		const dc = S.doorWorld();

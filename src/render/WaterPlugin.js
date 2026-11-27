@@ -59,6 +59,8 @@ const Water = {
     updateMirror(dt) {
         const mt = this.mirror, g = this._g;
         if (!mt || !g) return;
+        // (desligado em Ajustes › Gráficos avançados: o espelho para e a água volta ao céu e ao sol do shader)
+        if (this.off) { if (this._seen) { this._seen = false; mt.refreshRate = 0; mt.renderList.length = 0; } this._chk = 0; return; }
         if ((this._chk -= dt) > 0) return;
         this._chk = 0.5;
         // (perseguição: o chão visto vai até a névoa — o espelho só vale para a água PERTO, à frente do veículo; a do horizonte some na névoa)

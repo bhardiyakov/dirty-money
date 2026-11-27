@@ -21,25 +21,28 @@ module.exports = {
         // as faixas: perto = relevo inteiro, longe = placa; quem está perto da câmera fica na faixa 0 e quem está longe na 2
         const bands = () => page.evaluate(() => {
             const cam = game.scene.activeCamera, P = cam.globalPosition, k = Roofs3D.lodScale, R = Roofs3D.BUCKET * 0.72;
-            const out = { nearOk: 0, nearBad: 0, farOk: 0, farBad: 0 };
+            // (além do plano de corte da câmera o balde sai de todas as faixas — band 3; com folga de 3 u: a faixa é revista a cada 2,5 u)
+            const cut = cam.maxZ > 0 ? cam.maxZ + 6 : Infinity;
+            const out = { nearOk: 0, nearBad: 0, farOk: 0, farBad: 0, cutOk: 0 };
             for (const K of Roofs3D._built.kinds) {
                 if (!K.meshes[0] || !K.meshes[1] || !K.meshes[2]) continue;          // (só os tipos com as três faixas)
                 for (const b of K.D.buckets) {
                     const d = Math.max(0, Math.hypot(b.cx - P.x, b.y - P.y, b.cz - P.z) - R);
-                    if (d < Roofs3D.LOD.near * k * 0.9) b.band === 0 ? out.nearOk++ : out.nearBad++;
-                    else if (d > Roofs3D.LOD.mid * k * 1.15) b.band === 2 ? out.farOk++ : out.farBad++;
+                    if (d > cut + 3) b.band === 3 ? out.cutOk++ : out.farBad++;
+                    else if (d < Roofs3D.LOD.near * k * 0.9) b.band === 0 ? out.nearOk++ : out.nearBad++;
+                    else if (d > Roofs3D.LOD.mid * k * 1.15 && d < cut - 3) b.band === 2 ? out.farOk++ : out.farBad++;
                 }
             }
             return out;
         });
         const b1 = await bands();
-        c.ok(b1.nearOk > 0 && b1.nearBad === 0 && b1.farOk > 0 && b1.farBad === 0, `faixas pela distância: ${b1.nearOk} baldes perto com o relevo inteiro, ${b1.farOk} longe na placa (${b1.nearBad + b1.farBad} errados)`);
+        c.ok(b1.nearOk > 0 && b1.nearBad === 0 && b1.farOk + b1.cutOk > 0 && b1.farBad === 0, `faixas pela distância: ${b1.nearOk} baldes perto com o relevo inteiro, ${b1.farOk} longe na placa, ${b1.cutOk} além do corte da câmera, fora (${b1.nearBad + b1.farBad} errados)`);
 
         // anda para o centro: as faixas acompanham a câmera
         await page.evaluate(() => { const S = Bench.SCENES.find((s) => s.id === 'centro'), p = S.at(); game.player.teleport(new BABYLON.Vector3(p.x, 0, p.z)); game.camera.snapTo(game.player.position); });
         await gameWait(page, 3, 200000);
         const b2 = await bands();
-        c.ok(b2.nearBad === 0 && b2.farBad === 0 && b2.farOk > 0, `depois de andar, as faixas acompanham (${b2.nearOk} perto, ${b2.farOk} longe, ${b2.nearBad + b2.farBad} errados)`);
+        c.ok(b2.nearBad === 0 && b2.farBad === 0 && b2.farOk + b2.cutOk > 0, `depois de andar, as faixas acompanham (${b2.nearOk} perto, ${b2.farOk} longe, ${b2.cutOk} fora, ${b2.nearBad + b2.farBad} errados)`);
 
         // a câmera em cima de um telhado de zinco e de um de lona da favela (depois de ir ao centro): o painel de perto é DESENHADO
         for (const kind of ['zinc', 'tarp', 'tile']) {

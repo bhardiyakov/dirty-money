@@ -51,7 +51,7 @@ const Banks = {
             this._convert(d, b, 'branch');
         }
         // marcadores na porta, na cor da marca
-        this.glow = new GlowBatch(game.scene, this.list.length, 'bankGlow', 'glow');
+        this.glow = new GlowBatch(game.scene, this.list.length, 'bankGlow', 'glow').markers();
         for (const bk of this.list) { const i = this.glow.alloc(), c = BABYLON.Color3.FromHexString(this.BRANDS[bk.brand].color); this.glow.place(i, bk.x, 0.2, bk.z, bk.tier === 'hq' ? 4.2 : 3); this.glow.color(i, c.r * 0.8, c.g * 0.8, c.b * 0.8, 1); }
         this.glow.flush();
         console.log(`[BANCOS] ${this.list.length} bancos (${this.list.filter((b) => b.tier === 'hq').length} sedes)`);

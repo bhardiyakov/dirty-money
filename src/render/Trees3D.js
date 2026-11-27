@@ -54,7 +54,10 @@ const Trees3D = {
         if (this.mantoNear) {
             switch (kind) {
                 case 'oak': return urban ? (h < 0.55 ? 'mango' : 'oak') : 'oak';
-                case 'ipe': return h < 0.6 ? 'ipe' : 'ipeY';
+                // (na cidade: um ipê só, o cipreste da praça vira carvalho e a palmeira uma só — no centro eram 6 a 8 espécies por célula)
+                case 'ipe': return urban || h < 0.6 ? 'ipe' : 'ipeY';
+                case 'cypress': if (urban) return 'oak'; break;
+                case 'palm': return 'palm';
                 case 'bush': return 'bush';
                 case 'rock': case 'boulder': return 'rock';
             }
@@ -186,21 +189,27 @@ const Trees3D = {
     _lodAdd(scene, near, far, cover, manto = null) {
         if (!this._lod) {
             this._lod = []; this._lodScene = scene;
-            let t = 0;
-            scene.onBeforeRenderObservable.add(() => { const now = performance.now(); if (now - t < 200) return; t = now; this._lodTick(scene); });
+            // (EM FATIAS: um sexto da lista por quadro — cada planta é revista a cada ~200 ms como antes, mas sem o pico de rever as ~4.000
+            // de uma vez a cada 6 quadros, que no aparelho fraco era um tranco de ~6 ms ritmado)
+            scene.onBeforeRenderObservable.add(() => this._lodTick(scene, 6));
         }
         if (this._lod.length > 4000) this._lod = this._lod.filter((e) => !e.m.isDisposed());
         this._lod.push({ m: near, far, cover, manto, isFar: false, st: 0 });
     },
-    _lodTick(scene) {
+    _lodTick(scene, slices = 1) {
         const cam = scene.activeCamera;
         if (!cam) return;
+        const L = this._lod, n = L.length, per = Math.ceil(n / slices);
+        let i0 = slices > 1 ? this._lodI || 0 : 0;      // (uma volta inteira: do começo — ligar/desligar o detalhe, testes)
+        if (i0 >= n) i0 = 0;
+        const i1 = Math.min(n, i0 + per);
+        this._lodI = i1;
         const P = cam.globalPosition || cam.position, k = this.lodScale, on = this.lodOn, FAR = on ? this.LOD.far * k : Infinity, COV = on ? this.LOD.cover * k : Infinity, covOn = this.coverOn;
         const MANTO = on ? this.mantoDist : Infinity;
         let dead = 0;
         const px = P.x, py = P.y, pz = P.z;
-        for (const e of this._lod) {
-            const m = e.m;
+        for (let i = i0; i < i1; i++) {
+            const e = L[i], m = e.m;
             if (m.isDisposed()) { dead++; continue; }
             // (a planta não anda: o centro e o raio da caixa ficam guardados na 1ª volta — antes cada volta lia a caixa de ~4.000 malhas e
             // o laço custava ~15 ms de uma vez, a cada 200 ms: um engasgo no aparelho fraco)
@@ -215,7 +224,7 @@ const Trees3D = {
                 if (e.manto) e.manto.isVisible = st === 2;
             }
         }
-        if (dead > 200) this._lod = this._lod.filter((e) => !e.m.isDisposed());
+        if (dead > 200 / slices) { this._lod = this._lod.filter((e) => !e.m.isDisposed()); this._lodI = 0; }
     },
     _hash(x, z) { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); },
     // Os buffers de um modelo na placa (posição, normal, cor e índices), criados UMA vez por modelo e detalhe.
