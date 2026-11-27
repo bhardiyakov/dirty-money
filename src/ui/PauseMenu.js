@@ -1046,7 +1046,7 @@ class PauseMenu {
 	_setAdjust(d) {
 		const s = this.settings;
 		if (this.setRow === 0) s.volume = Math.max(0, Math.min(1, Math.round((s.volume + d * 0.1) * 10) / 10));
-		else if (PauseMenu.SET_KEYS[this.setRow] === 'graphics') { this._cycle('graphics', Graphics.CHOICES, 'auto', d, (c) => I18n.t('settings.graphics.flash', { choice: Graphics.label(c) })); Store.remove('autoQuality'); }      // (escolha à mão: o degrau guardado do AutoQuality recomeça do alto)
+		else if (PauseMenu.SET_KEYS[this.setRow] === 'graphics') { this._cycle('graphics', Graphics.CHOICES, 'auto', d, (c) => I18n.t('settings.graphics.flash', { choice: Graphics.label(c) })); Store.remove('autoQuality'); Store.remove('gfxMinNext'); }      // (escolha à mão: o degrau guardado do AutoQuality recomeça do alto)
 		else if (PauseMenu.SET_KEYS[this.setRow] === 'fps') { const C = Graphics.FPS_CHOICES, i = Math.max(0, C.indexOf(s.fps || 'auto')); s.fps = d < 0 ? C[(i + C.length - 1) % C.length] : C[(i + 1) % C.length]; if (this.g._flash) this.g._flash(s.fps === 60 ? '🎞️ 60 FPS: mais fluido, mas esquenta e gasta mais bateria' : s.fps === 30 ? '🎞️ 30 FPS estáveis: mais frio e econômico' : '🎞️ Taxa de quadros automática (a do nível gráfico)');
 			const want = s.fps === 30 ? 30 : s.fps === 60 ? 60 : (Graphics.PRESETS[Graphics.level].fps > 30 ? 60 : 30), q = this.g.autoQuality;      // (vale na hora)
 			Config.perf.fpsCap = want; if (q) q.slow = 1000 / want * AutoQuality.SLOW_K; }
@@ -1129,7 +1129,7 @@ class PauseMenu {
 			vibration: ['📳 Vibração do controle ' + sub('tiros, batidas, golpes e dano'), tog(s.vibration !== false)],
 			hudScale: ['🔠 Tamanho do HUD ' + sub('vida, arma, dinheiro, procurado, mapa e metas'), `<div class="pm-toggle is-on">${Math.round((s.hudScale || 1) * 100)}%</div>`],
 			keys: ['⌨️ Teclas ' + sub(typeof KeyBinds !== 'undefined' && KeyBinds.changed() ? 'teclas trocadas — clique para ver ou voltar ao padrão' : 'trocar as teclas do teclado'), '<div class="pm-toggle is-on">trocar</div>'],
-			graphics: ['🖥️ ' + T('settings.graphics') + ' ' + sub(T('settings.graphics.hint', { level: Graphics.LABEL[Graphics.level] })), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
+			graphics: ['🖥️ ' + T('settings.graphics') + ' ' + sub(T('settings.graphics.hint', { level: Graphics.levelName() })), `<div class="pm-toggle is-on">${Graphics.label(s.graphics)}</div>`],
 			gfxMenu: ['🔧 Gráficos avançados ' + sub('resolução, distância de visão, sombras, antisserrilhado, efeitos e detalhes: o que deixar mais leve na sua máquina'), '<div class="pm-toggle is-on">abrir</div>'],
 			fps: ['🎞️ Taxa de quadros ' + sub('30 = estável, frio e econômico (padrão no celular e no notebook) · 60 = mais fluido, esquenta mais'), `<div class="pm-toggle is-on">${s.fps === 30 ? '30 FPS' : s.fps === 60 ? '60 FPS' : `Automático (${Config.perf.fpsCap})`}</div>`],
 			tvFilter: ['📺 Filtro de TV antiga ' + sub('linhas e curvatura de tubo, com a resolução interna a 75% (mais leve para a placa de vídeo)'), tog(!!s.tvFilter)],

@@ -48,7 +48,7 @@ const Char3D = {
 	// o detalhe mais cedo. De longe a pose é calculada a cada 2 (L2) ou 3 (L3) quadros.
 	LOD_LEVELS: ['npc', 'mid', 'far', 'tiny'],
 	LOD_SCREEN: [0.1, 0.055, 0.028],
-	LOD_EVERY: [1, 1, 2, 3],
+	LOD_EVERY: (typeof Config !== 'undefined' && Config.perf && Config.perf.lodEvery) || [1, 1, 2, 3],      // (aparelho fraco: [1, 2, 3, 4] — Graphics.apply)
 	lodBias: (typeof Config !== 'undefined' && Config.perf && Config.perf.lodBias) || 1,      // (o do nível gráfico: Graphics.apply roda antes deste arquivo existir)
 	_frame: 0,
 	// LOW POLY (o padrão desde novembro/2026): o boneco em TRIÂNGULOS de face chapada (shader 'char3dPoly'; o Worker monta com G.lowBody —

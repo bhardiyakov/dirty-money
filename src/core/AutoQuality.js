@@ -92,13 +92,15 @@ class AutoQuality {
 		const [id, txt] = CS[this.cpuLevel++];
 		try { this._cpuApply(id); } catch (e) { console.warn('[QUALIDADE]', e); }
 		this._remember();
+		// (a escada acabou no Low automático: a próxima abertura já vem no Mínimo — Graphics.init; escolher o nível à mão apaga o aviso)
+		if (this.cpuLevel >= CS.length && typeof Graphics !== 'undefined' && Graphics.level === 'low' && !Graphics.minimal && Graphics.choice === 'auto' && typeof Store !== 'undefined') Store.setJSON('gfxMinNext', 1);
 		console.log(`[QUALIDADE] processador no limite (${typeof Perf !== 'undefined' ? Perf.frameAvg.toFixed(1) : '?'} ms por quadro): ${txt}`);
 		if (g._flash) g._flash(`Modo econômico: ${txt} para manter a fluidez`);
 	}
 	// Um degrau da escada de processador.
 	_cpuApply(id) {
 		const H = Config.camera && Config.camera.chase;
-		if (id === 'anim' && typeof Char3D !== 'undefined') { Char3D.LOD_EVERY = [1, 2, 3, 4]; if (!Char3D.safe) Char3D.lodBias *= 1.3; }
+		if (id === 'anim' && typeof Char3D !== 'undefined') { Char3D.LOD_EVERY = Char3D.LOD_EVERY[1] > 1 ? [1, 2, 4, 6] : [1, 2, 3, 4]; if (!Char3D.safe) Char3D.lodBias *= 1.3; }
 		else if (id === 'life' && typeof Life !== 'undefined') Life.forceLow = true;
 		else if ((id === 'dist' || id === 'dist2') && H) { H.far = Math.max(50, Math.round(H.far * 0.85)); H.near = Math.round(H.far * 0.45); }
 		else if (id === 'pecas') {
@@ -107,7 +109,7 @@ class AutoQuality {
 			if (typeof Roofs3D !== 'undefined') { Roofs3D.noProps = true; if (Roofs3D._built) Roofs3D._tick(sc, true); }
 			if (this.g.birds) { this.g.birds.enabled = false; if (typeof Animals3D !== 'undefined') Animals3D.clear('ave'); }
 		}
-		else if (id === 'near') { Config.perf.halfFar = true; Config.perf.halfFarR = 12; }
+		else if (id === 'near') { Config.perf.halfFar = true; Config.perf.halfFarR = Math.min(Config.perf.halfFarR || 22, Config.perf.minimal ? 10 : 12); }
 	}
 
 	// Chamado todo quadro com o dt REAL em segundos (antes do teto de 50 ms do jogo).

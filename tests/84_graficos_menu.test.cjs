@@ -104,7 +104,7 @@ module.exports = {
 			Perf.frameAvg = fa; q.off = true;
 			return out;
 		});
-		c.ok(aq.two === aq.lv && aq.three === aq.lv + 1 && aq.every === '1,2,3,4', `qualidade automática: 1 quadro em 6 atrasado por 3 s com a CPU no limite desce um degrau de processador (${aq.lv} → ${aq.three}; pose de longe a cada ${aq.every} quadros)`);
+		c.ok(aq.two === aq.lv && aq.three === aq.lv + 1 && aq.every === '1,2,4,6', `qualidade automática: 1 quadro em 6 atrasado por 3 s com a CPU no limite desce um degrau de processador (${aq.lv} → ${aq.three}; pose de longe a cada ${aq.every} quadros)`);
 		c.noErrors(errors, 'gráficos avançados');
 		await close();
 	},

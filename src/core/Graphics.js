@@ -23,8 +23,13 @@
 
 const Graphics = {
 	LEVELS: ['low', 'medium', 'high', 'hd'],
-	CHOICES: ['auto', 'low', 'medium', 'high', 'hd'],
-	LABEL: { auto: 'Automático', low: 'Low', medium: 'Medium', high: 'High', hd: 'HD' },
+	CHOICES: ['auto', 'min', 'low', 'medium', 'high', 'hd'],
+	LABEL: { auto: 'Automático', min: 'Mínimo', low: 'Low', medium: 'Medium', high: 'High', hd: 'HD' },
+	// MÍNIMO (celular de entrada — o Low com os cortes de processador já ligados; Graphics.level continua 'low'): metade da gente e do
+	// trânsito do Low, a névoa a 50 m, fachadas só com molduras e ar-condicionado, sem peças nos telhados nem pássaros, 3D das pessoas só
+	// até 32 m (além disso já é névoa), terreno num raio de 130 m. Escolhido sozinho em aparelho muito fraco (detect) ou quando a
+	// qualidade automática esgotou a escada de processador na sessão anterior (gfxMinNext).
+	MIN: { renderScale: 0.5, crowd: 0.3, chaseFar: 50, npc3dPolyR: 32, vegDensity: 0.4, fineCull: 0.75, colliderRadius: 140, vramMB: 48, lodBias: 2.2, npcNear: 6 },
 	// (Low: 0,56 = os 75% de antes × os 75% que a TV de tubo tirava por cima, quando ela vinha ligada por padrão — o aparelho fraco
 	// continua desenhando a mesma quantidade de pixels com a imagem limpa.)
 	PRESETS: {
@@ -50,16 +55,22 @@ const Graphics = {
 	init() {
 		const q = typeof location !== 'undefined' ? location.search : '';
 		this.choice = this._saved();
-		const forced = /[?&]gfx=(low|medium|high|hd)\b/.exec(q);
-		this.level = forced ? forced[1] : q.includes('lite') ? 'medium' : q.includes('full') ? 'high' : this.choice === 'auto' ? this.detect() : this.choice;
+		const forced = /[?&]gfx=(min|low|medium|high|hd)\b/.exec(q);
+		let lv = forced ? forced[1] : q.includes('lite') ? 'medium' : q.includes('full') ? 'high' : this.choice === 'auto' ? this.detect() : this.choice;
+		// (automático no Low e a sessão anterior esgotou a escada de processador: abre já no Mínimo)
+		if (lv === 'low' && !forced && this.choice === 'auto' && typeof Store !== 'undefined' && Store.getJSON('gfxMinNext', null)) lv = 'min';
+		this.minimal = lv === 'min';
+		this.level = this.minimal ? 'low' : lv;
 		// Desenho na CPU (SOFT_GPU) num navegador de gente (não o dos testes): o Low mesmo se outro foi escolhido à mão — High ali dá ~1 FPS.
 		// O aviso (softwareNotice) explica como ligar a placa de vídeo. `?gfx=` ainda força.
 		this.softCapped = !forced && this.level !== 'low' && this.realSoftware;
 		if (this.softCapped) this.level = 'low';
 		// CELULAR MODESTO (até 4 GB): o Low e o Medium ganham os cortes de PHONE (a escolha à mão de High/HD é respeitada)
 		this.phoneOn = this.phone && (this.level === 'low' || this.level === 'medium');
-		this.apply(this.phoneOn ? Object.assign({}, this.PRESETS[this.level], this.PHONE[this.level]) : this.PRESETS[this.level]);
-		console.log(`[GRÁFICOS] ${this.LABEL[this.level]}${this.phoneOn ? ' · celular' : ''}${this.choice === 'auto' && !forced ? ' (automático)' : ''}`);
+		let p = this.phoneOn ? Object.assign({}, this.PRESETS[this.level], this.PHONE[this.level]) : this.PRESETS[this.level];
+		if (this.minimal) p = Object.assign({}, p, this.MIN);
+		this.apply(p);
+		console.log(`[GRÁFICOS] ${this.minimal ? 'Mínimo' : this.LABEL[this.level]}${this.phoneOn ? ' · celular' : ''}${this.choice === 'auto' && !forced ? ' (automático)' : ''}`);
 	},
 	// CELULAR MODESTO: tela de toque com até 4 GB de RAM (navigator.deviceMemory: Chrome/Android; o Safari não informa). Num aparelho assim
 	// o navegador mata a aba bem antes de 1,5 GB e a placa de vídeo divide a memória com o resto: o Medium (2,2 GB no navegador dos
@@ -93,6 +104,7 @@ const Graphics = {
 	},
 	// The choice after `choice` in the settings button's cycle, and how the button names a choice (Automatic shows what it picks here).
 	next(choice) { return this.CHOICES[(this.CHOICES.indexOf(choice) + 1) % this.CHOICES.length]; },
+	levelName() { return this.minimal ? this.LABEL.min : this.LABEL[this.level]; },
 	label(choice) {
 		const c = this.CHOICES.includes(choice) ? choice : 'auto';
 		if (c !== 'auto') return this.LABEL[c];
@@ -104,6 +116,7 @@ const Graphics = {
 		const nav = typeof navigator !== 'undefined' ? navigator : {}, mem = nav.deviceMemory || 8, cores = nav.hardwareConcurrency || 8;
 		const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 		const gpu = this.gpu();
+		if ((touch && mem <= 2) || cores <= 2) return 'min';                       // (celular de entrada: 2 GB, ou 2 núcleos)
 		if (this.WEAK_GPU.test(gpu.renderer) || gpu.maxTexture < 4096 || mem <= 2 || cores <= 2) return 'low';
 		if (touch || !gpu.webgl2 || mem <= 4 || cores <= 4 || this.MID_GPU.test(gpu.renderer)) return 'medium';
 		return 'high';
@@ -205,9 +218,15 @@ const Graphics = {
 		P.tightFar = !!p.tightFar; P.fineCull = p.fineCull || 0; P.vegDensity = p.vegDensity || 1;
 		// (aparelho fraco: pedestres e carros NA TELA mas longe do jogador com a lógica a cada 2 quadros — NPCManager/TrafficManager)
 		P.halfFar = this.level === 'low' || !!this.phoneOn;
+		// (aparelho fraco desde a abertura: a pose de quem está de meia distância para longe a cada 2, 3 e 4 quadros — Char3D.LOD_EVERY — e a
+		// lógica de longe a partir de 15 m; no Mínimo, 12 m e as peças miúdas fora — Walls3D, Roofs3D, Birds)
+		P.minimal = !!this.minimal;
+		P.lodEvery = P.halfFar ? [1, 2, 3, 4] : null;
+		P.halfFarR = P.minimal ? 12 : P.halfFar ? 15 : 22;
+		if (P.minimal) { P.cover = false; P.waterMirror = false; }
 		// (e o terreno que chega com a distância: em fatias menores por quadro e carregado num raio menor — a câmera do Low vê ~70 m, o
 		// raio de 230 m montava pedaços que ninguém via, cada um um tranco de vários ms dirigindo)
-		if (P.halfFar && Config.world) { Config.world.buildBudgetMs = 3; Config.world.loadRadius = Math.min(Config.world.loadRadius, 170); }
+		if (P.halfFar && Config.world) { Config.world.buildBudgetMs = 3; Config.world.loadRadius = Math.min(Config.world.loadRadius, P.minimal ? 130 : 170); }
 		// (para medir: `?trim=N` pedaço dos acabamentos, `?celula=N` célula da vegetação 3D — em u)
 		const qs = typeof location !== 'undefined' ? location.search : '', num = (k) => { const m = qs.match(new RegExp('[?&]' + k + '=(\\d+)')); return m ? +m[1] : 0; };
 		if (num('trim') && Config.world) Config.world.trimChunk = num('trim');

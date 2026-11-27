@@ -202,7 +202,7 @@ const Roofs3D = {
             let changed = force;
             for (const b of D.buckets) {
                 let nb = band(b);
-                if (K.props) nb = nb === 0 && !this.noProps ? 0 : -2;                              // (peças: só perto — e nenhuma com noProps, AutoQuality)
+                if (K.props) nb = nb === 0 && !this.noProps && !Config.perf.minimal ? 0 : -2;                              // (peças: só perto — e nenhuma com noProps, AutoQuality)
                 else if (nb === 0 && !M[0]) nb = M[1] ? 1 : 2;                                      // (sem relevo de perto: o do meio ou a placa)
                 else if (nb === 1 && !M[1]) nb = 2;                                                 // (sem relevo do meio: a placa)
                 if (b.p && !b.p.n && nb < 3) nb = 2;                                                // (balde sem painéis: a placa)

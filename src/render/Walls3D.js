@@ -375,7 +375,7 @@ const Walls3D = {
         }
         for (const kd of kinds) {
             // (minimal — a qualidade automática com o processador no limite: só as molduras e os ar-condicionados ficam)
-            const m = B.meshes[kd], n = this.minimal && kd !== 'frame' && kd !== 'ac' ? 0 : cnt[kd];
+            const m = B.meshes[kd], n = (this.minimal || Config.perf.minimal) && kd !== 'frame' && kd !== 'ac' ? 0 : cnt[kd];
             m.thinInstanceCount = n;
             m.isVisible = n > 0;
             if (!n) continue;

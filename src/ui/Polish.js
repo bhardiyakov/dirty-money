@@ -35,6 +35,7 @@ const Life = {
     level() {
         if (this.forceLow) return 'baixa';                                              // (AutoQuality: o processador no limite)
         const c = this.choice(); if (c !== 'auto') return c;
+        if (typeof Config !== 'undefined' && Config.perf && Config.perf.minimal) return 'baixa';
         const q = typeof Graphics !== 'undefined' ? Graphics.level : 'high';
         if (typeof Graphics !== 'undefined' && Graphics.phoneOn) return 'baixa';      // (celular modesto: menos gente extra e acontecimentos)
         return q === 'low' ? 'baixa' : q === 'medium' ? 'media' : 'alta';

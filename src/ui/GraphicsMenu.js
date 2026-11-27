@@ -17,7 +17,7 @@ const GraphicsMenu = {
 	get OPTS() {
 		const B = () => (typeof Graphics !== 'undefined' && Graphics.base) || {}, pct = (v) => Math.round(v * 100) + '%', onoff = (v) => (v ? 'Ligado' : 'Desligado');
 		return [
-			{ k: 'level', own: 'graphics', icon: '🖥️', label: 'Nível gráfico', hint: 'o ponto de partida de tudo abaixo (Low, Medium, High, HD)', C: () => Graphics.CHOICES, name: (v) => Graphics.label(v), live: false },
+			{ k: 'level', own: 'graphics', icon: '🖥️', label: 'Nível gráfico', hint: 'o ponto de partida de tudo abaixo (Mínimo, Low, Medium, High, HD)', C: () => Graphics.CHOICES, name: (v) => Graphics.label(v), live: false },
 			{ k: 'scale', icon: '📺', label: 'Resolução', hint: 'quantos pixels são desenhados — o que mais pesa na placa de vídeo; menor = mais leve e menos nítido',
 				C: () => ['auto', 0.5, 0.6, 0.7, 0.85, 1], name: pct, base: () => B().renderScale, live: true,
 				apply: (v, g) => { Config.perf.renderScale = v; const ge = g.gameEngine; ge.resize(); if (g.camera) { g.camera.fitPixelScale(ge.viewHeight); g.camera.onResize(); } } },
@@ -118,7 +118,7 @@ const GraphicsMenu = {
 	set(k, v, g, menu = g.menu) {
 		const s = menu.settings, o = this.OPTS.find((q) => q.k === k);
 		if (!o) return;
-		if (o.own === 'graphics') { s.graphics = v; Store.remove('autoQuality'); }      // (escolha à mão: o degrau guardado do AutoQuality recomeça do alto)
+		if (o.own === 'graphics') { s.graphics = v; Store.remove('autoQuality'); Store.remove('gfxMinNext'); }      // (escolha à mão: o degrau guardado do AutoQuality recomeça do alto)
 		else if (o.own === 'life') s.life = v;
 		else if (o.own === 'fps') {
 			s.fps = v;
@@ -157,7 +157,7 @@ const GraphicsMenu = {
 		const tag = (live) => `<span style="font:600 10px var(--font);letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:6px;${live ? 'color:#7ee08a;border:1px solid #7ee08a55' : 'color:#f2c230;border:1px solid #f2c23055'}">${live ? 'na hora' : 'ao reabrir'}</span>`;
 		const btn = (dir, ch) => `<div class="pm-toggle is-on" data-d="${dir}" style="min-width:28px;text-align:center;padding-left:8px;padding-right:8px">${ch}</div>`;
 		let pending = false;
-		let h = `<div class="pm-row ${this.row === 0 ? 'on' : ''}" data-i="0"><span>⬅️ Voltar ${sub(`nível ${Graphics.LABEL[Graphics.level]}${Graphics.phoneOn ? ' · celular' : ''} · ${Math.round(1000 / Math.max(1, Perf.interval || 33))} FPS agora · quadro ${Perf.frameAvg.toFixed(1)} ms`)}</span><span></span></div>`;
+		let h = `<div class="pm-row ${this.row === 0 ? 'on' : ''}" data-i="0"><span>⬅️ Voltar ${sub(`nível ${Graphics.levelName()}${Graphics.phoneOn ? ' · celular' : ''} · ${Math.round(1000 / Math.max(1, Perf.interval || 33))} FPS agora · quadro ${Perf.frameAvg.toFixed(1)} ms`)}</span><span></span></div>`;
 		L.forEach((o, k) => {
 			const i = k + 1, v = this.value(o, s), r = this.resolved(o, v), live = typeof o.live === 'function' ? o.live(r, g) : o.live;
 			const shown = v === 'auto' && o.base ? `Automático (${o.name(r)})` : o.name(v);
